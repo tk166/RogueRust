@@ -7,6 +7,13 @@ name = "rd-core"
 version = "0.1.0"
 
 [[package]]
+name = "rd-fightdump"
+version = "0.1.0"
+dependencies = [
+ "rd-core",
+]
+
+[[package]]
 name = "rd-hashdump"
 version = "0.1.0"
 

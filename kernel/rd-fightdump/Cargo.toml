@@ -1,0 +1,11 @@
+[package]
+name = "rd-fightdump"
+description = "Builds a real fight from the content image, drives it, and dumps a per-step hash trail."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# std is fine here: this binary only ever runs on the host. The kernel it drives (rd-core) stays
+# `no_std` - this crate does not add a single feature to it, it just links against it.
+[dependencies]
+rd-core = { path = "../rd-core" }
