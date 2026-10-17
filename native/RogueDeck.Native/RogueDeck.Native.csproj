@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- NativeAOT spike: compile RogueDeck.Core into a NATIVE shared library with a C ABI,
+       so Python can call the real engine through ctypes with no .NET runtime and no IPC.
+
+       This exists to answer one question before anyone commits weeks to a rewrite:
+       is .NET actually the bottleneck for a multi-instance RL training environment, or
+       is the only real friction the Python boundary?
+
+       Shared (not Exe) so it publishes a .dll/.so. Requires the MSVC linker, so it must
+       be built from a vcvars64 environment - see tools/dnaot.ps1. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <OptimizationPreference>Speed</OptimizationPreference>
+
+    <!-- Turn the AOT analyzers ON: any trim/AOT-hostile construct inside RogueDeck.Core
+         should surface here as a warning rather than as a silent runtime failure. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ref\RogueDeck-Core\src\RogueDeck.Core\RogueDeck.Core.csproj" />
+  </ItemGroup>
+
+</Project>

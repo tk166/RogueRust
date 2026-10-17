@@ -1,0 +1,45 @@
+# ── 构建产物：Rust ────────────────────────────────────────────────────────────
+# workspace 成员（`rd-firmware` 有自己的 `[workspace]`）各自会生成 target/。
+target/
+# 冷编译验证用的独立 target 目录（`--target-dir target-verify`）
+kernel/target-verify/
+
+# ── 构建产物：.NET / NativeAOT ────────────────────────────────────────────────
+[Bb]in/
+[Oo]bj/
+*.pdb
+*.ilk
+*.LIB
+*.EXP
+
+# ── 第三方依赖：参考实现的浅克隆（约 111 MB，按 commit 冻结，见 README）────────
+ref/RogueDeck-Core/
+
+# ── Python 缓存 ───────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+
+# ── 排障残留：日志、重定向输出、一次性探针的文本产物 ─────────────────────────
+# 这些文件是调查过程留下的，不是源码；`tools/` 下有一百多个。
+*.log
+*.err
+tools/*.out
+tools/_*.txt
+tools/_*.pid
+ref/*_out.txt
+native/rng_rust_out.txt
+# `hash_diff.py` / `make_corpus.py` 自己声明过：`_` 开头的是它们的旁路产物，会重新生成。
+corpus/hash_cases/**/_*.txt
+
+# ── 内容编译器的派生报告（镜像本体要入库，见 README）─────────────────────────
+tools/contentc/out/layout.txt
+tools/contentc/out/report.md
+tools/contentc/out/validate*.json
+tools/contentc/out/validate*.md
+
+# ── 编辑器 / 系统 ─────────────────────────────────────────────────────────────
+.vs/
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini

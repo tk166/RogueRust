@@ -1,0 +1,18 @@
+[
+  {"id": "strength",    "name": "力量",   "kind": "BUFF",   "decay": false,
+   "desc": "每层使你的攻击伤害 +1。"},
+  {"id": "dexterity",   "name": "敏捷",   "kind": "BUFF",   "decay": false,
+   "desc": "每层使你获得的格挡 +1。"},
+  {"id": "vulnerable",  "name": "易伤",   "kind": "DEBUFF", "decay": true,
+   "desc": "受到的攻击伤害 x1.5。回合结束时减 1 层。"},
+  {"id": "weak",        "name": "虚弱",   "kind": "DEBUFF", "decay": true,
+   "desc": "造成的攻击伤害 x0.75。回合结束时减 1 层。"},
+  {"id": "frail",       "name": "脆弱",   "kind": "DEBUFF", "decay": true,
+   "desc": "获得的格挡 x0.75。回合结束时减 1 层。"},
+  {"id": "thorns",      "name": "荆棘",   "kind": "BUFF",   "decay": false,
+   "desc": "被攻击时对攻击者造成等量伤害。"},
+  {"id": "ritual",      "name": "仪式",   "kind": "BUFF",   "decay": false,
+   "desc": "每回合结束时获得等量力量。"},
+  {"id": "metallicize", "name": "金属化", "kind": "BUFF",   "decay": false,
+   "desc": "每回合结束时获得等量格挡。"}
+]

@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = ["rd-core", "rd-rngdump", "rd-hashdump", "rd-sizeprobe"]
+# rd-firmware 是 `#![no_std] #![no_main]` 的裸机启动壳，**宿主上编译不出来**。
+# 把它排除在 workspace 之外，是为了让 `cargo test --workspace` 永远是绿的 —— 那条命令是
+# 其余模块的验收基线，不能因为多了一个只在 riscv 目标上存在的 crate 而变红。
+# 它有独立的 workspace 根，用 `--manifest-path rd-firmware/Cargo.toml` 单独构建。
+exclude = ["rd-firmware"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# The kernel is no_std by construction; nothing in this workspace may pull a crate that
+# needs an allocator, a filesystem or an OS. rd-rngdump is the one std member, and it only
+# exists so the differential test has something to run.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

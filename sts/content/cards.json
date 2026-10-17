@@ -1,0 +1,118 @@
+[
+  {
+    "id": "strike", "name": "打击", "type": "ATTACK", "cost": 1,
+    "target": "ENEMY", "rarity": "BASIC",
+    "levels": [
+      {"desc": "造成 6 点伤害。", "effects": [{"op": "damage", "amount": 6}]},
+      {"desc": "造成 9 点伤害。", "effects": [{"op": "damage", "amount": 9}]}
+    ]
+  },
+  {
+    "id": "defend", "name": "防御", "type": "SKILL", "cost": 1,
+    "target": "SELF", "rarity": "BASIC",
+    "levels": [
+      {"desc": "获得 5 点格挡。", "effects": [{"op": "block", "amount": 5}]},
+      {"desc": "获得 8 点格挡。", "effects": [{"op": "block", "amount": 8}]}
+    ]
+  },
+  {
+    "id": "bash", "name": "痛击", "type": "ATTACK", "cost": 2,
+    "target": "ENEMY", "rarity": "BASIC",
+    "levels": [
+      {"desc": "造成 8 点伤害，施加 2 层易伤。",
+       "effects": [{"op": "damage", "amount": 8},
+                   {"op": "status", "status": "vulnerable", "stacks": 2, "target": "target"}]},
+      {"desc": "造成 10 点伤害，施加 3 层易伤。",
+       "effects": [{"op": "damage", "amount": 10},
+                   {"op": "status", "status": "vulnerable", "stacks": 3, "target": "target"}]}
+    ]
+  },
+  {
+    "id": "iron_wave", "name": "铁斩", "type": "ATTACK", "cost": 1,
+    "target": "ENEMY", "rarity": "COMMON",
+    "levels": [
+      {"desc": "获得 5 点格挡，造成 5 点伤害。",
+       "effects": [{"op": "block", "amount": 5}, {"op": "damage", "amount": 5}]},
+      {"desc": "获得 7 点格挡，造成 7 点伤害。",
+       "effects": [{"op": "block", "amount": 7}, {"op": "damage", "amount": 7}]}
+    ]
+  },
+  {
+    "id": "cleave", "name": "顺劈", "type": "ATTACK", "cost": 1,
+    "target": "ALL_ENEMIES", "rarity": "COMMON",
+    "levels": [
+      {"desc": "对所有敌人造成 8 点伤害。",
+       "effects": [{"op": "damage", "amount": 8, "target": "all_enemies"}]},
+      {"desc": "对所有敌人造成 11 点伤害。",
+       "effects": [{"op": "damage", "amount": 11, "target": "all_enemies"}]}
+    ]
+  },
+  {
+    "id": "twin_strike", "name": "双重打击", "type": "ATTACK", "cost": 1,
+    "target": "ENEMY", "rarity": "COMMON",
+    "levels": [
+      {"desc": "造成 5 点伤害，2 次。",
+       "effects": [{"op": "damage", "amount": 5, "times": 2}]},
+      {"desc": "造成 7 点伤害，2 次。",
+       "effects": [{"op": "damage", "amount": 7, "times": 2}]}
+    ]
+  },
+  {
+    "id": "pommel_strike", "name": "柄击", "type": "ATTACK", "cost": 1,
+    "target": "ENEMY", "rarity": "COMMON",
+    "levels": [
+      {"desc": "造成 9 点伤害，抽 1 张牌。",
+       "effects": [{"op": "damage", "amount": 9}, {"op": "draw", "n": 1}]},
+      {"desc": "造成 10 点伤害，抽 2 张牌。",
+       "effects": [{"op": "damage", "amount": 10}, {"op": "draw", "n": 2}]}
+    ]
+  },
+  {
+    "id": "inflame", "name": "燃心", "type": "POWER", "cost": 1,
+    "target": "SELF", "rarity": "UNCOMMON",
+    "levels": [
+      {"desc": "获得 2 点力量。",
+       "effects": [{"op": "status", "status": "strength", "stacks": 2, "target": "self"}]},
+      {"desc": "获得 3 点力量。",
+       "effects": [{"op": "status", "status": "strength", "stacks": 3, "target": "self"}]}
+    ]
+  },
+  {
+    "id": "metallicize", "name": "金属化", "type": "POWER", "cost": 1,
+    "target": "SELF", "rarity": "UNCOMMON",
+    "levels": [
+      {"desc": "每回合结束时获得 3 点格挡。",
+       "effects": [{"op": "status", "status": "metallicize", "stacks": 3, "target": "self"}]},
+      {"desc": "每回合结束时获得 4 点格挡。",
+       "effects": [{"op": "status", "status": "metallicize", "stacks": 4, "target": "self"}]}
+    ]
+  },
+  {
+    "id": "thorns_body", "name": "荆棘之躯", "type": "POWER", "cost": 1,
+    "target": "SELF", "rarity": "UNCOMMON",
+    "levels": [
+      {"desc": "获得 3 点荆棘。",
+       "effects": [{"op": "status", "status": "thorns", "stacks": 3, "target": "self"}]},
+      {"desc": "获得 4 点荆棘。",
+       "effects": [{"op": "status", "status": "thorns", "stacks": 4, "target": "self"}]}
+    ]
+  },
+  {
+    "id": "shrug_it_off", "name": "耸肩", "type": "SKILL", "cost": 1,
+    "target": "SELF", "rarity": "COMMON",
+    "levels": [
+      {"desc": "获得 8 点格挡，抽 1 张牌。",
+       "effects": [{"op": "block", "amount": 8}, {"op": "draw", "n": 1}]},
+      {"desc": "获得 11 点格挡，抽 1 张牌。",
+       "effects": [{"op": "block", "amount": 11}, {"op": "draw", "n": 1}]}
+    ]
+  },
+  {
+    "id": "curse_pain", "name": "痛苦诅咒", "type": "CURSE", "cost": -2,
+    "target": "NONE", "rarity": "CURSE",
+    "levels": [
+      {"desc": "无法打出。", "effects": []},
+      {"desc": "无法打出。", "effects": []}
+    ]
+  }
+]

@@ -1,0 +1,16 @@
+[package]
+name = "rd-sizeprobe"
+description = "Builds the kernel for the bare-metal target so its code size can be measured."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "rd_sizeprobe"
+# staticlib, not bin: a bare-metal RISC-V executable would need an entry point, a linker
+# script and a memory layout, none of which exist yet. A staticlib links nothing, so the
+# object code can be measured today - which is the point of this crate.
+crate-type = ["staticlib"]
+
+[dependencies]
+rd-core = { path = "../rd-core" }

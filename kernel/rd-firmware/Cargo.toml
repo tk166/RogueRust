@@ -1,0 +1,25 @@
+[package]
+name = "rd-firmware"
+description = "Bare-metal link probe: turns the kernel staticlib into a real ELF image so that (a) linkability and (b) the post-gc-sections retained size can be measured."
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+# 自己的 workspace 根：本 crate 用 `#![no_std] #![no_main]`，宿主上根本编译不出来，
+# 所以**绝不能被拉进 kernel/ 的 workspace**（否则 `cargo test --workspace` 会当场炸，
+# 而那条命令正被三个并行 agent 当作验收基线）。父 workspace 里对它写了 `exclude`。
+[workspace]
+
+[dependencies]
+rd-core = { path = "../rd-core" }
+
+[[bin]]
+name = "rd-firmware"
+path = "src/main.rs"
+
+# 与父 workspace 的 release profile 保持一致 —— 尺寸数字只有在同样的优化设置下才可比。
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

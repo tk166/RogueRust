@@ -1,0 +1,232 @@
+{
+  "schema": "roguedeck-coverage-v1",
+  "corpora": [
+    "golden_v1.jsonl",
+    "golden_v2.jsonl",
+    "spec_vectors_v1.jsonl"
+  ],
+  "corpus": "golden_v1.jsonl + golden_v2.jsonl + spec_vectors_v1.jsonl（id 跨三个文件；ex_* 在 v2，v*_* 在 v1，modp-/cst-/eir- 在 spec_vectors_v1）",
+  "generated_by": "native/make_corpus.py",
+  "note": "机制 -> 真的把它跑起来的用例 id（id 原样取自各 jsonl 的 case 字段，无前缀）。ex_* 在 golden_v2.jsonl，v*_* 在 golden_v1.jsonl，其余（modp-/cst-/eir-）在 spec_vectors_v1.jsonl。",
+  "mechanisms": {
+    "card_play": [
+      "ex_dmg_plain",
+      "ex_dmg_free_card",
+      "ex_energy_drain_twice",
+      "ex_deck_cycle",
+      "ex_queue_deferred",
+      "ex_queue_resolved",
+      "cst-V11a",
+      "cst-V11b"
+    ],
+    "energy_cost": [
+      "ex_dmg_plain",
+      "ex_energy_drain_twice",
+      "ex_deck_cycle",
+      "ex_queue_deferred",
+      "ex_queue_resolved",
+      "cst-V11a",
+      "cst-V11b",
+      "cst-V13c"
+    ],
+    "damage": [
+      "ex_dmg_plain",
+      "ex_dmg_free_card",
+      "ex_dmg_kill",
+      "ex_mod_strength",
+      "ex_mod_weak",
+      "ex_mod_vulnerable",
+      "ex_multihit_4",
+      "ex_multihit_strength",
+      "ex_multi_enemy_3",
+      "ex_multi_enemy_enemy_acts",
+      "ex_block_absorbs",
+      "ex_defensive_pool_ward",
+      "ex_true_damage",
+      "ex_status_apply_many",
+      "ex_dot_kind",
+      "modp-01",
+      "modp-02",
+      "modp-03a",
+      "modp-03b",
+      "modp-04",
+      "modp-05",
+      "modp-06",
+      "modp-14"
+    ],
+    "block": [
+      "ex_mod_dexterity_frail",
+      "ex_block_gain",
+      "ex_block_absorbs",
+      "ex_defensive_pool_ward",
+      "ex_true_damage",
+      "modp-05",
+      "modp-15a",
+      "modp-15b",
+      "modp-15c"
+    ],
+    "status_apply": [
+      "ex_multi_enemy_status",
+      "ex_status_apply_many",
+      "modp-10",
+      "modp-10b",
+      "modp-11",
+      "modp-11b"
+    ],
+    "status_decay": [
+      "ex_status_decay",
+      "ex_status_decay_hero"
+    ],
+    "modifier_strength": [
+      "ex_mod_strength",
+      "ex_mod_all_three",
+      "ex_mod_dexterity_frail",
+      "ex_multihit_strength",
+      "ex_dot_kind",
+      "modp-01",
+      "modp-03a",
+      "modp-03b",
+      "modp-04",
+      "modp-06"
+    ],
+    "modifier_weak": [
+      "ex_mod_weak",
+      "ex_mod_all_three",
+      "modp-02",
+      "modp-03b",
+      "modp-06"
+    ],
+    "modifier_vulnerable": [
+      "ex_mod_vulnerable",
+      "ex_mod_all_three",
+      "ex_multi_enemy_status",
+      "modp-02",
+      "modp-05",
+      "modp-06",
+      "modp-07a"
+    ],
+    "multi_hit": [
+      "ex_multihit_4",
+      "ex_multihit_strength",
+      "modp-14"
+    ],
+    "multi_enemy": [
+      "ex_multi_enemy_3",
+      "ex_multi_enemy_status",
+      "ex_multi_enemy_enemy_acts",
+      "eir-V7",
+      "eir-V8a",
+      "eir-V8b"
+    ],
+    "defensive_pool": [
+      "ex_defensive_pool_ward",
+      "ex_true_damage",
+      "modp-07a",
+      "modp-07b"
+    ],
+    "pre_down_intercept": [
+      "modp-08a",
+      "modp-08b",
+      "modp-09"
+    ],
+    "triggered_effect": [
+      "modp-16a",
+      "modp-16b",
+      "eir-V10a",
+      "eir-V10b"
+    ],
+    "decree_turn": [
+      "cst-V13a",
+      "cst-V13b",
+      "cst-V13c",
+      "cst-V14"
+    ],
+    "decree_round": [
+      "cst-V2",
+      "ex_deck_cycle",
+      "cst-V13c"
+    ],
+    "rng_shuffle": [
+      "cst-V9a",
+      "cst-V9b"
+    ],
+    "control_flow": [
+      "ex_dmg_overkill_early_stop",
+      "ex_deck_cycle",
+      "ex_control_noop",
+      "ex_bookkeeping",
+      "ex_status_decay",
+      "ex_status_decay_hero",
+      "ex_queue_deferred",
+      "ex_queue_resolved",
+      "eir-V3a",
+      "eir-V3b",
+      "eir-V3c",
+      "eir-V5",
+      "eir-V6a",
+      "eir-V6b",
+      "eir-V6c",
+      "eir-V9a",
+      "eir-V9b",
+      "eir-V7",
+      "eir-V8a",
+      "eir-V8b",
+      "modp-17",
+      "cst-V1",
+      "cst-V2",
+      "cst-V3",
+      "cst-V12a",
+      "cst-V12b",
+      "cst-V12c"
+    ],
+    "death": [
+      "ex_dmg_kill",
+      "ex_dmg_overkill_early_stop",
+      "modp-14",
+      "modp-08b"
+    ]
+  },
+  "not_supported": [
+    "decree_round: engine has no round-level decree — CombatRule has only turn-level rules (MaxCardsPerTurn / MaxHandSize / UnspentResourceCarries / ...). 这一格里列的用例覆盖的是“一轮的定义”本身（回绕计数），不是轮次级法令；W1 的 SEMANTICS 应记为本版本不支持轮次级法令。"
+  ],
+  "uncovered": [],
+  "decree_round_note": "引擎的 CombatRule 枚举里**没有**轮次级法令（只有回合级的 MaxCardsPerTurn / MaxHandSize / UnspentResourceCarries / …）。这一格覆盖的是「一轮的定义」本身：回绕时 Round 1→2 且 Turn 回到 1（cst-V2），以及带法令走完整轮（cst-V13c / ex_deck_cycle）。",
+  "golden_v1_overlap": {
+    "card_play": [
+      "v0_s1_h30_c6_e12_d5",
+      "v0_s1_h30_c9_e20_d5",
+      "v0_s1_h50_c6_e40_d12",
+      "v0_s1_h20_c3_e8_d2"
+    ],
+    "energy_cost": [
+      "v2_s1_h30_c6_e12_d5",
+      "v2_s1_h30_c9_e20_d5",
+      "v2_s1_h50_c6_e40_d12",
+      "v2_s1_h20_c3_e8_d2"
+    ],
+    "damage": [
+      "v0_s1_h30_c6_e12_d5",
+      "v0_s1_h30_c9_e20_d5",
+      "v0_s1_h50_c6_e40_d12",
+      "v0_s1_h20_c3_e8_d2"
+    ],
+    "rng_shuffle": [
+      "v4_s1_h30_c6_e12_d5",
+      "v4_s1_h30_c9_e20_d5",
+      "v4_s1_h50_c6_e40_d12",
+      "v4_s1_h20_c3_e8_d2"
+    ],
+    "control_flow": [
+      "v3_s1_h30_c6_e12_d5",
+      "v3_s1_h30_c9_e20_d5",
+      "v3_s1_h50_c6_e40_d12",
+      "v3_s1_h20_c3_e8_d2"
+    ],
+    "death": [
+      "v2_s1_h30_c6_e12_d5",
+      "v2_s1_h30_c9_e20_d5",
+      "v2_s1_h20_c3_e8_d2",
+      "v2_s7_h30_c6_e12_d5"
+    ]
+  }
+}

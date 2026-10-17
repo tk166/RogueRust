@@ -1,0 +1,61 @@
+[
+  {
+    "id": "cultist", "name": "邪教徒", "hp": [48, 54], "weight": 1,
+    "moves": [
+      {"id": "incantation", "name": "吟唱", "intent": "BUFF", "weight": 1,
+       "first": true, "consecutive": 1,
+       "effects": [{"op": "status", "status": "ritual", "stacks": 3, "target": "self"}]},
+      {"id": "dark_strike", "name": "黑暗打击", "intent": "ATTACK", "weight": 1,
+       "consecutive": 2,
+       "effects": [{"op": "damage", "amount": 6, "target": "player"}]}
+    ]
+  },
+  {
+    "id": "jaw_worm", "name": "颚虫", "hp": [40, 44], "weight": 1,
+    "moves": [
+      {"id": "chomp", "name": "撕咬", "intent": "ATTACK", "weight": 1, "consecutive": 2,
+       "effects": [{"op": "damage", "amount": 11, "target": "player"}]},
+      {"id": "thrash", "name": "痛击", "intent": "ATTACK", "weight": 1, "consecutive": 2,
+       "effects": [{"op": "damage", "amount": 7, "target": "player"},
+                   {"op": "block", "amount": 5, "target": "self"}]},
+      {"id": "bellow", "name": "咆哮", "intent": "BUFF", "weight": 1, "consecutive": 1,
+       "effects": [{"op": "status", "status": "strength", "stacks": 3, "target": "self"},
+                   {"op": "block", "amount": 6, "target": "self"}]}
+    ]
+  },
+  {
+    "id": "acid_slime", "name": "酸液史莱姆", "hp": [32, 38], "weight": 1,
+    "moves": [
+      {"id": "corrosive_spit", "name": "腐蚀喷吐", "intent": "DEBUFF", "weight": 1,
+       "consecutive": 2,
+       "effects": [{"op": "damage", "amount": 7, "target": "player"},
+                   {"op": "status", "status": "weak", "stacks": 1, "target": "player"}]},
+      {"id": "tackle", "name": "撞击", "intent": "ATTACK", "weight": 1, "consecutive": 2,
+       "effects": [{"op": "damage", "amount": 10, "target": "player"}]},
+      {"id": "lick", "name": "舔舐", "intent": "DEBUFF", "weight": 1, "consecutive": 1,
+       "effects": [{"op": "status", "status": "weak", "stacks": 2, "target": "player"}]}
+    ]
+  },
+  {
+    "id": "louse", "name": "红虱", "hp": [10, 15], "weight": 2,
+    "moves": [
+      {"id": "bite", "name": "啃咬", "intent": "ATTACK", "weight": 1, "consecutive": 2,
+       "effects": [{"op": "damage", "amount": 6, "target": "player"}]},
+      {"id": "spit", "name": "吐丝", "intent": "DEBUFF", "weight": 1, "consecutive": 1,
+       "effects": [{"op": "status", "status": "weak", "stacks": 1, "target": "player"}]}
+    ]
+  },
+  {
+    "id": "guardian", "name": "守卫者", "hp": [140, 140], "boss": true, "weight": 0,
+    "moves": [
+      {"id": "charging_up", "name": "蓄能", "intent": "BUFF", "weight": 1,
+       "first": true, "consecutive": 1,
+       "effects": [{"op": "block", "amount": 20, "target": "self"},
+                   {"op": "status", "status": "strength", "stacks": 3, "target": "self"}]},
+      {"id": "whirlwind", "name": "旋风", "intent": "ATTACK", "weight": 1, "consecutive": 1,
+       "effects": [{"op": "damage", "amount": 5, "times": 3, "target": "player"}]},
+      {"id": "slam", "name": "猛击", "intent": "ATTACK", "weight": 1, "consecutive": 1,
+       "effects": [{"op": "damage", "amount": 32, "target": "player"}]}
+    ]
+  }
+]

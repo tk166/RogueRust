@@ -1,0 +1,9 @@
+[package]
+name = "rd-rngdump"
+description = "Emits shuffle sequences so the ported RNG can be diffed against the C# engine."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+rd-core = { path = "../rd-core" }

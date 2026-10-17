@@ -1,0 +1,32 @@
+id=oracle_ex
+seed=12345
+step=0
+result=0
+round=1
+turn=1
+phase=1
+active=knight
+status_num=7
+card_num=4
+chain_num=11
+exec_num=2
+turn_order=knight,foe0,foe1,
+c=knight def=knight team=player lc=0 hp=30/30
+res=standard.energy 2/3
+tags=
+c=foe0 def=foe0 team=enemy lc=0 hp=193/200
+s=status_000001 standard.strength stk=3 dur=0 chg=0 pol=0
+s=status_000002 standard.vulnerable stk=2 dur=0 chg=0 pol=1
+s=status_000003 standard.weak stk=1 dur=0 chg=0 pol=1
+tags=
+c=foe1 def=foe1 team=enemy lc=0 hp=200/200
+s=status_000004 standard.strength stk=3 dur=0 chg=0 pol=0
+s=status_000005 standard.vulnerable stk=2 dur=0 chg=0 pol=1
+s=status_000006 standard.weak stk=1 dur=0 chg=0 pol=1
+tags=
+cz=knight
+hand=card_000002 strike
+hand=card_000003 strike
+disc=card_000001 strike
+cz=foe0
+cz=foe1

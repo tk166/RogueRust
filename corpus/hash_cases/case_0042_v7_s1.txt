@@ -1,0 +1,33 @@
+id=oracle
+seed=1
+step=1
+result=0
+round=2
+turn=1
+phase=1
+active=knight
+status_num=1
+card_num=13
+chain_num=8
+exec_num=1
+turn_order=knight,ogre,
+c=knight def=knight team=player lc=0 hp=30/30
+res=standard.energy 3/3
+tags=
+c=ogre def=ogre team=enemy lc=0 hp=12/12
+res=standard.energy 3/3
+tags=
+cz=knight
+draw=card_000008 strike
+draw=card_000004 strike
+hand=card_000006 strike
+hand=card_000007 strike
+hand=card_000002 strike
+hand=card_000012 strike
+hand=card_000010 strike
+disc=card_000011 strike
+disc=card_000009 strike
+disc=card_000003 strike
+disc=card_000001 strike
+disc=card_000005 strike
+cz=ogre

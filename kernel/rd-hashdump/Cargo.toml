@@ -1,0 +1,16 @@
+[package]
+name = "rd-hashdump"
+description = "Hashes files with the kernel's SHA-256, so it can be diffed against the C# engine."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# ⚠ DELIBERATELY NO `rd-core` DEPENDENCY.
+#
+# rd-core is being written right now by another workstream, and a crate that is mid-edit does
+# not compile - which would take this verification tool down with it for reasons that have
+# nothing to do with the hasher. So src/main.rs pulls hash.rs in directly with #[path].
+#
+# It is NOT a copy: it is the same file on disk, so a change to the kernel's hasher changes
+# this binary too. That is the whole point - a copy would verify nothing.

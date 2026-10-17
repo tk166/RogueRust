@@ -1,0 +1,28 @@
+id=oracle_probe
+seed=12345
+step=0
+result=0
+round=1
+turn=2
+phase=1
+active=foe0
+status_num=1
+card_num=7
+chain_num=7
+exec_num=2
+turn_order=knight,foe0,
+c=knight def=knight team=player lc=0 hp=20/20
+res=standard.energy 3/3
+tags=
+c=foe0 def=foe0 team=enemy lc=0 hp=200/200
+res=standard.energy 3/3
+tags=
+cz=knight
+draw=card_000006 strike
+disc=card_000001 strike
+disc=card_000002 strike
+disc=card_000003 strike
+disc=card_000004 strike
+disc=card_000005 strike
+cz=foe0
+tr=oracle.rule.L4A2O0 RogueDeck.Core.Combat.DamageDealtCombatEvent act=inf expR=2 expT=2 owner=none inst=1.1

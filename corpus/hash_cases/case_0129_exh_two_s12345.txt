@@ -1,0 +1,26 @@
+id=oracle_probe
+seed=12345
+step=0
+result=0
+round=1
+turn=1
+phase=1
+active=knight
+status_num=1
+card_num=7
+chain_num=5
+exec_num=2
+turn_order=knight,foe0,
+c=knight def=knight team=player lc=0 hp=20/20
+res=standard.energy 3/3
+tags=
+c=foe0 def=foe0 team=enemy lc=0 hp=200/200
+tags=
+cz=knight
+draw=card_000006 strike
+hand=card_000004 strike
+hand=card_000005 strike
+disc=card_000001 strike
+exh=card_000002 strike
+exh=card_000003 strike
+cz=foe0

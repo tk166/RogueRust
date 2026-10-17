@@ -1,0 +1,2725 @@
+//! RDCF 内容镜像的读取器 —— 把 `tools/contentc/` 编出来的二进制解析成可借用的表。
+//!
+//! **规格**：`docs/spec/content-binary-format.md`（写端/读端共用的唯一事实来源）。
+//! 真实产物：`tools/contentc/out/content.core.rdcf`（85,616 B）与 `content.rdcf`（158,296 B），
+//! 各表的条目数见 `tools/contentc/out/manifest.json`。
+//!
+//! 设计约束（与内核其余部分一致）：
+//! * **零分配**：解析结果全部借用传入的字节切片，不复制、不分配。
+//! * **零 panic**：一切越界/畸形输入都走 `Result` 或 `Option`，绝不 `unwrap` 到 panic ——
+//!   镜像是构建期产物，但它坏了的表现必须是"拒绝加载"，不是"设备重启"。
+//! * 本模块**不依赖状态模型**（`state.rs`），所以它可以独立开发与验收。
+//!
+//! # 实测校准（spec / `reader.py` / 真实镜像三者对照的结论）
+//!
+//! 1. **目录项是 12 字节**：`offset:u32, bytes:u32, count:u32` 紧密排列（`reader.py` 与
+//!    `rdcfmt.unpack_dir()` 都是这么读的）。
+//! 2. **头部字段只占 28 字节**：spec §2 列的字段（magic…content_hash/reserved）加起来正好 28 B，
+//!    而 `HEADER_BYTES` = `dir_off` = 32 —— 第 28..31 字节**没有任何字段描述**（实测全 0）。
+//!    本模块按头里的 `dir_off` 找目录，不假设目录紧贴在"最后一个字段"后面。
+//! 3. **行宽是 `align4(2×格数)`，末尾填充不是格**：`CARD` 15 格 = 30 B → **stride 32**、
+//!    `STAT` 20 格 = 40 B → stride 40、`EACT` 7 格 = 14 B → 16、`ENCT` 8 格 = 16 B → 16、
+//!    `REL` 5 格 = 10 B → 12。与 `manifest.json` 的 `stride`、`rdcfmt.row_stride()` 完全一致。
+//! 4. **`IDX` 不是"id → 唯一实体"**：真实镜像里 `overfilled_inbox` 同时是卡牌（`CARD[42]`）
+//!    和遗物（`REL[33]`），两条相邻记录。`reader.py` 用 `setdefault` 静默保留**第一条**；
+//!    本模块的 `lookup` 采用同一规则，需要区分实体类别时用 `lookup_in(id, kind)`。
+//! 5. **保留 opcode 0..15 的 `opclass` 不都是 0**：0..7 实测是 `1`（"普通对象"），8..15 是全零空洞。
+//!    所以**必须先判 `op < 16` 再碰 `opclass`** —— `reader.py` 正是这么做的。
+//! 6. `reader.py::Rom.__init__` 要求 `len(blob) == header.total_size`；本模块只要求 `>=`：
+//!    MCU 上镜像常常躺在比它大的 flash 分区/PSRAM 缓冲里，`total_size` 才是权威边界
+//!    （所有段的区间都被限制在 `total_size` 之内，尾巴一律不看）。
+
+// ===========================================================================
+// 文件头与段目录
+// ===========================================================================
+
+/// 小端 `0x46434452`（文件头前 4 字节）。
+pub const MAGIC: u32 = 0x4643_4452;
+/// 头部字节数。
+pub const HEADER_BYTES: usize = 32;
+/// 目录项字节数：`(offset: u32, bytes: u32, count: u32)` 紧密排列，**不是 16 字节**。
+/// （这一条是实测出来的：见 `tools/rdcf_verify.py` 的注释。）
+pub const DIRECTORY_ENTRY_BYTES: usize = 12;
+/// 格式版本（头里 `version`）。
+pub const FORMAT_VERSION: u16 = 1;
+/// 目录项数（头里 `nsec`）。0..=14 有名字，15..19 保留。
+pub const SECTION_COUNT: usize = 20;
+/// 头部 `flags` 的 bit0：表现层已剥（`content.core.rdcf`）。
+pub const FLAG_PRESENTATION_STRIPPED: u16 = 1;
+
+// 段号。名字与 `rdcfmt.SEC_NAMES` 逐字一致。
+pub const S_STR: usize = 0;
+pub const S_STRO: usize = 1;
+pub const S_OPD: usize = 2;
+pub const S_OPF: usize = 3;
+pub const S_TRM: usize = 4;
+pub const S_TRW: usize = 5;
+pub const S_AUX: usize = 6;
+pub const S_CARD: usize = 7;
+pub const S_STAT: usize = 8;
+pub const S_EACT: usize = 9;
+pub const S_ENCT: usize = 10;
+pub const S_REL: usize = 11;
+pub const S_ROOT: usize = 12;
+pub const S_IDX: usize = 13;
+pub const S_TAGS: usize = 14;
+
+/// 段号 → 段名；15..19 是保留段，名字为空串。
+pub const SECTION_NAMES: [&str; SECTION_COUNT] = [
+    "STR", "STRO", "OPD", "OPF", "TRM", "TRW", "AUX", "CARD", "STAT", "EACT", "ENCT", "REL", "ROOT",
+    "IDX", "TAGS", "", "", "", "", "",
+];
+
+/// 段名 → 段号（大小写敏感，只认 spec 里的那 15 个名字）。
+/// 注意状态表的段名是 `STAT`（`rdcfmt.SEC_NAMES`），行 schema 的键才是 `STATUS`。
+#[must_use]
+pub fn section_id_by_name(name: &str) -> Option<usize> {
+    SECTION_NAMES
+        .iter()
+        .position(|n| !n.is_empty() && *n == name)
+}
+
+// 头部字段偏移（实测：见模块文档第 2 条）。
+const HDR_VERSION: usize = 4;
+const HDR_FLAGS: usize = 6;
+const HDR_TOTAL_SIZE: usize = 8;
+const HDR_DIR_OFF: usize = 12;
+const HDR_NSEC: usize = 16;
+const HDR_SCHEMA_VERSION: usize = 18;
+const HDR_CONTENT_HASH: usize = 20;
+
+// ===========================================================================
+// 段内词汇：opcode、字段类别、哨兵、实体类别
+// ===========================================================================
+
+// 保留 opcode（固定语义）。
+pub const OP_NULL: u16 = 0;
+pub const OP_STR: u16 = 1;
+pub const OP_INT: u16 = 2;
+pub const OP_BOOL: u16 = 3;
+pub const OP_ARR: u16 = 4;
+pub const OP_JSON: u16 = 5;
+pub const OP_WRAP_LOWER: u16 = 6;
+pub const OP_WRAP_UPPER: u16 = 7;
+/// 第一个动态分配的 opcode（≥ 此值的 opcode 才可能是 IR 节点或普通对象形状）。
+pub const OP_FIRST_DYNAMIC: u16 = 16;
+/// `OPD[op].opclass == 0`：IR 节点，结果形如 `{kind: name, value: {...}}`。
+pub const OPCLASS_IR: u8 = 0;
+/// `OPD[op].opclass == 1`：普通对象形状，结果就是那个字典。
+pub const OPCLASS_GENERIC: u8 = 1;
+
+// 字段类别（`OPF` 里的 `field_kind`）。
+pub const F_STR: u8 = 1;
+pub const F_INT: u8 = 2;
+pub const F_BOOL: u8 = 3;
+pub const F_TERM: u8 = 4;
+pub const F_TERMLIST: u8 = 5;
+pub const F_STRLIST: u8 = 6;
+pub const F_JSON: u8 = 7;
+
+/// 字段类别 → 占几个 u16 槽（下标即类别；`[0]` 是无效类别）。
+pub const FIELD_SLOTS: [u8; 8] = [0, 1, 1, 1, 1, 2, 2, 1];
+
+/// 字段类别 → 槽数；未知类别返回 `None`（**不 panic**，`reader.py` 在这种输入上会抛 `KeyError`）。
+#[must_use]
+pub fn field_slots(kind: u8) -> Option<u8> {
+    match FIELD_SLOTS.get(kind as usize) {
+        Some(&n) if n > 0 => Some(n),
+        _ => None,
+    }
+}
+
+/// 该字段的 JSON 值写成 `{"value": s}`（小写包装）。
+pub const FLAG_WRAP_LOWER: u8 = 1;
+/// 该字段的 JSON 值写成 `{"Value": s}`（大写包装）。
+pub const FLAG_WRAP_UPPER: u8 = 2;
+
+// 哨兵：让"键不存在"与"键存在且为 null"可区分。
+/// `F_STR` / `F_TERM` / `F_JSON` 的"键不存在"。
+pub const ABSENT16: u16 = 0xFFFF;
+/// `F_STR` / `F_TERM` / `F_JSON` 的"键存在且为 null"。
+pub const NULL16: u16 = 0xFFFE;
+/// `F_INT` 的"键不存在"（= -32768）。
+pub const ABSENT_INT: u16 = 0x8000;
+/// `F_INT` 的"键存在且为 null"（= -32767）。
+pub const NULL_INT: u16 = 0x8001;
+/// `F_BOOL` 的"键不存在"。
+pub const BOOL_ABSENT: u16 = 0;
+/// `F_BOOL` 的 false。
+pub const BOOL_FALSE: u16 = 1;
+/// `F_BOOL` 的 true。
+pub const BOOL_TRUE: u16 = 2;
+/// `F_BOOL` 的"键存在且为 null"。
+pub const BOOL_NULL: u16 = 3;
+/// `F_TERMLIST` / `F_STRLIST` 的"键不存在"（第二个槽）。
+pub const LIST_ABSENT: u16 = 0xFFFF;
+/// `F_TERMLIST` / `F_STRLIST` 的"键存在且为 null"。
+pub const LIST_NULL: u16 = 0xFFFE;
+
+// 实体类别（`IDX` 里的 `ekind`）。
+pub const EK_CARD: u8 = 1;
+pub const EK_STATUS: u8 = 2;
+pub const EK_EACTION: u8 = 3;
+pub const EK_ENCOUNTER: u8 = 4;
+pub const EK_RELIC: u8 = 5;
+pub const EK_MAPNODE: u8 = 6;
+pub const EK_EVENT: u8 = 7;
+pub const EK_SHOP: u8 = 8;
+pub const EK_CHARACTER: u8 = 9;
+
+/// 实体类别 → 名字（`card` / `status` / … / `character`）。
+#[must_use]
+pub fn entity_kind_name(kind: u8) -> Option<&'static str> {
+    match kind {
+        EK_CARD => Some("card"),
+        EK_STATUS => Some("status"),
+        EK_EACTION => Some("enemy_action"),
+        EK_ENCOUNTER => Some("encounter"),
+        EK_RELIC => Some("relic"),
+        EK_MAPNODE => Some("map_node"),
+        EK_EVENT => Some("event"),
+        EK_SHOP => Some("shop"),
+        EK_CHARACTER => Some("character"),
+        _ => None,
+    }
+}
+
+// ===========================================================================
+// 小工具（全部无 panic：一律 `get` + `checked_*`）
+// ===========================================================================
+
+const fn align4(n: u32) -> u32 {
+    (n + 3) & !3
+}
+
+fn u16_at(bytes: &[u8], off: usize) -> Option<u16> {
+    Some(u16::from_le_bytes([
+        *bytes.get(off)?,
+        *bytes.get(off + 1)?,
+    ]))
+}
+
+fn u32_at(bytes: &[u8], off: usize) -> Option<u32> {
+    Some(u32::from_le_bytes([
+        *bytes.get(off)?,
+        *bytes.get(off + 1)?,
+        *bytes.get(off + 2)?,
+        *bytes.get(off + 3)?,
+    ]))
+}
+
+/// 串号 → 串（`STR` 池 + `STRO` 偏移表）。串号 0 固定是空串。
+///
+/// 与 `reader.py::string_at` 同规则：取 `[STRO[i-1], STRO[i]-1)`，即丢掉结尾的 NUL。
+/// `STRO` 只有一项（空池）或串号越界 → `None`；非法 UTF-8 → `None`。
+fn string_at<'a>(pool: &'a [u8], stro: &'a [u8], index: u16) -> Option<&'a str> {
+    if index == 0 {
+        return Some("");
+    }
+    let entries = stro.len() / 4;
+    let i = index as usize;
+    if i >= entries {
+        return None;
+    }
+    let start = u32_at(stro, (i - 1) * 4)? as usize;
+    let end = u32_at(stro, i * 4)? as usize;
+    let stop = if end > start { end - 1 } else { start };
+    core::str::from_utf8(pool.get(start..stop)?).ok()
+}
+
+// ===========================================================================
+// 段视图 / 错误
+// ===========================================================================
+
+/// 一段表的只读视图。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Section<'a> {
+    pub offset: u32,
+    pub bytes: u32,
+    pub count: u32,
+    pub data: &'a [u8],
+}
+
+impl<'a> Section<'a> {
+    /// `data` 是否为空（空段的 `count == 0, bytes == 0`，`offset` 实测是 0）。
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
+    /// 本段最后一字节之后的位置。
+    #[must_use]
+    pub fn end(&self) -> u64 {
+        self.offset as u64 + self.bytes as u64
+    }
+
+    /// 第 `index` 个 u16（小端）。越界 `None`。
+    #[must_use]
+    pub fn u16_at(&self, index: usize) -> Option<u16> {
+        u16_at(self.data, index.checked_mul(2)?)
+    }
+
+    /// 第 `index` 个 u32（小端）。越界 `None`。
+    #[must_use]
+    pub fn u32_at(&self, index: usize) -> Option<u32> {
+        u32_at(self.data, index.checked_mul(4)?)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ContentError {
+    TooSmall,
+    BadMagic(u32),
+    UnsupportedVersion(u16),
+    /// 目录项里的 offset/bytes 落在文件之外。
+    SectionOutOfRange { index: usize },
+    /// 头部声明的段数与目录区放不下。
+    DirectoryTruncated,
+}
+
+/// `validate()` 的失败原因。
+///
+/// 比 `ContentError` 细：`ContentError` 是**冻结**的 6 个码（`parse` 用），塞不下
+/// "段重叠 / 未对齐 / count 与 bytes 不自洽"这三种只有结构自检才看得见的毛病。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValidationError {
+    /// 第 `index` 段的 `[offset, offset+bytes)` 不在镜像声明的 `total_size` 之内。
+    OutOfRange { index: usize },
+    /// 第 `index` 段的 `offset` 没有 4 字节对齐（spec：每段 4 字节对齐）。
+    Misaligned { index: usize },
+    /// 第 `index` 段声明 `count` 个元素、每个至少 `stride` 字节，但只有 `bytes` 字节。
+    CountExceedsBytes {
+        index: usize,
+        count: u32,
+        stride: u32,
+        bytes: u32,
+    },
+    /// 第 `a` 段与第 `b` 段的字节区间重叠（两段都非空）。
+    Overlap { a: usize, b: usize },
+    /// `STRO` 的第 `entry` 项不合规：不严格递增、越过池尾、或所指字符串没有 NUL 结尾。
+    BadStringIndex { entry: usize },
+    /// `STR`/`STRO` 的 `count` 与索引表长度对不上（串号空间自相矛盾）。
+    StringCountMismatch {
+        /// `STRO` 的实际项数（`bytes / 4`）。
+        entries: usize,
+        str_count: u32,
+        stro_count: u32,
+    },
+}
+
+// ===========================================================================
+// 镜像本体
+// ===========================================================================
+
+/// 一份已解析的镜像。所有表都是对 `blob` 的借用。
+pub struct Content<'a> {
+    blob: &'a [u8],
+    version: u16,
+    section_count: usize,
+}
+
+/// 只打摘要，**不打 blob**：这份结构通常会在日志/断言里出现，几十 KB 的字节数组没人想看。
+impl core::fmt::Debug for Content<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("Content")
+            .field("version", &self.version)
+            .field("section_count", &self.section_count)
+            .field("total_size", &self.total_size())
+            .field("buffer_len", &self.blob.len())
+            .finish()
+    }
+}
+
+impl<'a> Content<'a> {
+    /// 解析头部与段目录。**不校验段内语义** —— 那是 `validate` 与调用方的事。
+    ///
+    /// 这里只保证"拿得到段视图"这件事成立：头在、magic/版本对、`total_size` 真的在缓冲区里
+    /// （`blob.len() >= total_size`，截断 → `TooSmall`）、目录区在声明的镜像内、
+    /// 每个目录项都落在声明的镜像内（否则 `SectionOutOfRange`）。
+    pub fn parse(blob: &'a [u8]) -> Result<Self, ContentError> {
+        // 1. 头本身。
+        if blob.len() < HEADER_BYTES {
+            return Err(ContentError::TooSmall);
+        }
+        let magic = u32_at(blob, 0).ok_or(ContentError::TooSmall)?;
+        if magic != MAGIC {
+            return Err(ContentError::BadMagic(magic));
+        }
+        let version = u16_at(blob, HDR_VERSION).ok_or(ContentError::TooSmall)?;
+        if version != FORMAT_VERSION {
+            return Err(ContentError::UnsupportedVersion(version));
+        }
+
+        // 2. 头声明的总长必须真的在缓冲区里：短了就是被截断。
+        let total = u32_at(blob, HDR_TOTAL_SIZE).ok_or(ContentError::TooSmall)? as usize;
+        if total < HEADER_BYTES || blob.len() < total {
+            return Err(ContentError::TooSmall);
+        }
+
+        // 3. 目录区：不许压在文件头里，且必须落在**声明的**镜像之内。
+        //    `nsec` 上限是 `SECTION_COUNT`：本格式只有 20 段（15 个有名字 + 5 个保留），
+        //    多出来的头部直接判目录不合规 —— 也让后面所有循环天然有界（`reader.py` 会照单全收）。
+        let dir_off = u32_at(blob, HDR_DIR_OFF).ok_or(ContentError::TooSmall)? as usize;
+        let nsec = u16_at(blob, HDR_NSEC).ok_or(ContentError::TooSmall)? as usize;
+        if dir_off < HEADER_BYTES || nsec > SECTION_COUNT {
+            return Err(ContentError::DirectoryTruncated);
+        }
+        let dir_end = dir_off as u64 + (nsec as u64) * (DIRECTORY_ENTRY_BYTES as u64);
+        if dir_end > total as u64 {
+            return Err(ContentError::DirectoryTruncated);
+        }
+
+        // 4. 每个目录项都要落在声明的镜像之内。
+        let mut i = 0;
+        while i < nsec {
+            let base = dir_off + i * DIRECTORY_ENTRY_BYTES;
+            let offset = u32_at(blob, base).ok_or(ContentError::DirectoryTruncated)? as u64;
+            let bytes = u32_at(blob, base + 4).ok_or(ContentError::DirectoryTruncated)? as u64;
+            if offset + bytes > total as u64 {
+                return Err(ContentError::SectionOutOfRange { index: i });
+            }
+            i += 1;
+        }
+
+        Ok(Self {
+            blob,
+            version,
+            section_count: nsec,
+        })
+    }
+
+    #[must_use]
+    pub fn version(&self) -> u16 {
+        self.version
+    }
+
+    #[must_use]
+    pub fn section_count(&self) -> usize {
+        self.section_count
+    }
+
+    /// 按段号取表。越界返回 `None`。
+    #[must_use]
+    pub fn section(&self, index: usize) -> Option<Section<'a>> {
+        if index >= self.section_count {
+            return None;
+        }
+        let base = self
+            .directory_offset()?
+            .checked_add(index.checked_mul(DIRECTORY_ENTRY_BYTES)?)?;
+        let offset = u32_at(self.blob, base)?;
+        let bytes = u32_at(self.blob, base + 4)?;
+        let count = u32_at(self.blob, base + 8)?;
+        let start = offset as usize;
+        let end = start.checked_add(bytes as usize)?;
+        Some(Section {
+            offset,
+            bytes,
+            count,
+            data: self.blob.get(start..end)?,
+        })
+    }
+
+    /// 按段名取表（`STR`/`STRO`/`OPD`/`OPF`/`TRM`/`TRW`/`AUX`/`CARD`/`STAT`/`EACT`/`ENCT`/`REL`/`ROOT`/`IDX`/`TAGS`）。
+    /// 段名到段号的对应关系见 `docs/spec/content-binary-format.md`。
+    #[must_use]
+    pub fn section_by_name(&self, name: &str) -> Option<Section<'a>> {
+        self.section(section_id_by_name(name)?)
+    }
+
+    /// 字符串池取串（`STR` + `STRO`）。越界或非法 UTF-8 返回 `None`。
+    ///
+    /// 串号 0 是空串（`ABSENT16`/`NULL16` 这类哨兵**不是**串号，`string_count()` 之外的号一律 `None`）。
+    #[must_use]
+    pub fn string(&self, index: u16) -> Option<&'a str> {
+        let stro = self.section(S_STRO)?;
+        let pool = self.section(S_STR)?;
+        string_at(pool.data, stro.data, index)
+    }
+
+    // ---------------------------------------------------------------- 头部
+    /// 头部原始 `flags`（bit0 = 表现层已剥）。
+    #[must_use]
+    pub fn flags(&self) -> u16 {
+        u16_at(self.blob, HDR_FLAGS).unwrap_or(0)
+    }
+
+    /// `flags & 1`：这是 `content.core.rdcf` 那种剥掉表现层的镜像，`NameKey`/`Label` 不可假设存在。
+    #[must_use]
+    pub fn presentation_stripped(&self) -> bool {
+        self.flags() & FLAG_PRESENTATION_STRIPPED != 0
+    }
+
+    /// 头部声明的镜像字节数（段区间一律以它为准）。
+    #[must_use]
+    pub fn total_size(&self) -> u32 {
+        u32_at(self.blob, HDR_TOTAL_SIZE).unwrap_or(0)
+    }
+
+    /// 文档自己的 `SchemaVersion`（独立于 `FORMAT_VERSION`）。
+    #[must_use]
+    pub fn schema_version(&self) -> u16 {
+        u16_at(self.blob, HDR_SCHEMA_VERSION).unwrap_or(0)
+    }
+
+    /// 原文 JSON 的 FNV-1a-32（判镜像是否过期用）。
+    #[must_use]
+    pub fn content_hash(&self) -> u32 {
+        u32_at(self.blob, HDR_CONTENT_HASH).unwrap_or(0)
+    }
+
+    fn directory_offset(&self) -> Option<usize> {
+        u32_at(self.blob, HDR_DIR_OFF).map(|v| v as usize)
+    }
+
+    // ------------------------------------------------------------ 字符串池
+    /// 池内串数 = `STRO` 项数 - 1（串号 1..=此值有效；串号 0 是空串）。
+    #[must_use]
+    pub fn string_count(&self) -> usize {
+        self.section(S_STRO)
+            .map(|s| s.bytes as usize / 4)
+            .unwrap_or(0)
+            .saturating_sub(1)
+    }
+
+    /// 遍历串号 1..=`string_count()`。元素是 `Option`：池坏掉时该项是 `None` 而不是 panic。
+    #[must_use]
+    pub fn strings(&self) -> Strings<'a> {
+        let (stro, pool) = match (self.section(S_STRO), self.section(S_STR)) {
+            (Some(stro), Some(pool)) => (stro.data, pool.data),
+            _ => (&[][..], &[][..]),
+        };
+        Strings {
+            stro,
+            pool,
+            next: 0,
+            end: (stro.len() / 4).saturating_sub(1) as u32,
+        }
+    }
+
+    // ------------------------------------------------------ opcode / term
+    /// `OPD` 里的 opcode 条数（`bytes / 8`，本内容 = 130）。
+    #[must_use]
+    pub fn opcode_count(&self) -> usize {
+        self.section(S_OPD)
+            .map(|s| (s.bytes as usize / 8).min(s.count as usize))
+            .unwrap_or(0)
+    }
+
+    /// 取一条 opcode 描述（含它那 `nfields` 条字段描述）。越界 `None`。
+    #[must_use]
+    pub fn opcode(&self, op: u16) -> Option<Opcode<'a>> {
+        let opd = self.section(S_OPD)?;
+        if op as usize >= self.opcode_count() {
+            return None;
+        }
+        let base = (op as usize).checked_mul(8)?;
+        let name_str = u16_at(opd.data, base + 4)?;
+        let nfields = *opd.data.get(base + 6)?;
+        let opclass = *opd.data.get(base + 7)?;
+        let field_off = u32_at(opd.data, base)? as usize;
+        let opf = self.section(S_OPF)?;
+        let start = field_off;
+        let end = start.checked_add((nfields as usize).checked_mul(4)?)?;
+        Some(Opcode {
+            op,
+            name_str,
+            opclass,
+            fields: opf.data.get(start..end)?,
+        })
+    }
+
+    /// opcode 的名字（保留 opcode 是空串；越界 `None`）。
+    #[must_use]
+    pub fn opcode_name(&self, op: u16) -> Option<&'a str> {
+        self.string(self.opcode(op)?.name_str)
+    }
+
+    /// `TRW` 里的 term 条数（本内容 = 2143）。
+    #[must_use]
+    pub fn term_count(&self) -> usize {
+        self.section(S_TRW)
+            .map(|s| (s.bytes as usize / 2).min(s.count as usize))
+            .unwrap_or(0)
+    }
+
+    /// 取一条 term 记录：`op` + 按字段类别推出的 `nslots` 个槽。越界/描述不合法 `None`。
+    #[must_use]
+    pub fn term(&self, tid: u16) -> Option<Term<'a>> {
+        let trw = self.section(S_TRW)?;
+        let trm = self.section(S_TRM)?;
+        if tid as usize >= self.term_count() {
+            return None;
+        }
+        let word = trw.u16_at(tid as usize)? as usize;
+        let base = word.checked_mul(4)?;
+        let op = u16_at(trm.data, base)?;
+        let nslots = self.opcode(op)?.nslots()?;
+        let start = base.checked_add(2)?;
+        let end = start.checked_add(nslots.checked_mul(2)?)?;
+        Some(Term {
+            id: tid,
+            op,
+            slots: trm.data.get(start..end)?,
+        })
+    }
+
+    /// `AUX` 的格数（本内容 = 2078）。
+    #[must_use]
+    pub fn aux_cells(&self) -> usize {
+        self.section(S_AUX)
+            .map(|s| (s.bytes as usize / 2).min(s.count as usize))
+            .unwrap_or(0)
+    }
+
+    /// `AUX[index]`（`F_TERMLIST` / `F_STRLIST` 的列表体）。越界 `None`。
+    #[must_use]
+    pub fn aux(&self, index: u16) -> Option<u16> {
+        if index as usize >= self.aux_cells() {
+            return None;
+        }
+        self.section(S_AUX)?.u16_at(index as usize)
+    }
+
+    // ------------------------------------------------------------ 根指针
+    /// `ROOT` 的表项数（本内容的 core 镜像 = 16，full = 17）。
+    #[must_use]
+    pub fn root_count(&self) -> usize {
+        self.section(S_ROOT)
+            .map(|s| (s.bytes as usize / 4).min(s.count as usize))
+            .unwrap_or(0)
+    }
+
+    /// 第 `index` 个顶层键 → term。越界 `None`。
+    #[must_use]
+    pub fn root(&self, index: usize) -> Option<RootEntry<'a>> {
+        if index >= self.root_count() {
+            return None;
+        }
+        let root = self.section(S_ROOT)?;
+        let base = index.checked_mul(4)?;
+        let key_str = u16_at(root.data, base)?;
+        let term = u16_at(root.data, base + 2)?;
+        Some(RootEntry {
+            key: self.string(key_str)?,
+            term,
+        })
+    }
+
+    /// 按顶层键名取 term（线性扫 16/17 条；`Map`、`Events`、`Start`…）。
+    #[must_use]
+    pub fn root_by_name(&self, name: &str) -> Option<u16> {
+        (0..self.root_count())
+            .find_map(|i| self.root(i).filter(|r| r.key == name))
+            .map(|r| r.term)
+    }
+
+    // ---------------------------------------------------------- 符号表
+    /// `IDX` 的条目数（本内容 = 691）。
+    #[must_use]
+    pub fn id_count(&self) -> usize {
+        self.section(S_IDX)
+            .map(|s| (s.bytes as usize / 8).min(s.count as usize))
+            .unwrap_or(0)
+    }
+
+    /// 第 `index` 条 id 记录。越界或串号不可解析 → `None`。
+    #[must_use]
+    pub fn id_entry(&self, index: usize) -> Option<IdEntry<'a>> {
+        if index >= self.id_count() {
+            return None;
+        }
+        let idx = self.section(S_IDX)?;
+        let base = index.checked_mul(8)?;
+        let str_id = u16_at(idx.data, base)?;
+        let entity_kind = *idx.data.get(base + 2)?;
+        let flags = *idx.data.get(base + 3)?;
+        let row = u16_at(idx.data, base + 4)?;
+        Some(IdEntry {
+            position: index as u32,
+            id: self.string(str_id)?,
+            entity_kind,
+            flags,
+            index: row,
+        })
+    }
+
+    /// `IDX` 里第一个 `id >= 目标` 的位置（`IDX` 按字符串 id 排序，可二分）。
+    fn id_lower_bound(&self, id: &str) -> usize {
+        let n = self.id_count();
+        let (mut lo, mut hi) = (0usize, n);
+        while lo < hi {
+            let mid = lo + (hi - lo) / 2;
+            match self.id_entry(mid) {
+                Some(e) if e.id < id => lo = mid + 1,
+                Some(_) => hi = mid,
+                // 目录项由 `parse` 保证存在；真取不到就停在这里（不 panic）。
+                None => return lo,
+            }
+        }
+        lo
+    }
+
+    /// id 字符串 → 实体。找不到 `None`。
+    ///
+    /// **同一个 id 可以出现在多个实体类别里**（实测：`overfilled_inbox` 既是卡牌也是遗物），
+    /// 这时返回**最靠前的那一条** —— 与 `reader.py` 的 `setdefault` 语义一致；
+    /// 要指定类别请用 `lookup_in`。
+    #[must_use]
+    pub fn lookup(&self, id: &str) -> Option<IdEntry<'a>> {
+        let entry = self.id_entry(self.id_lower_bound(id))?;
+        if entry.id == id {
+            Some(entry)
+        } else {
+            None
+        }
+    }
+
+    /// id 字符串 + 实体类别 → 实体（处理同 id 跨类别的情况）。
+    #[must_use]
+    pub fn lookup_in(&self, id: &str, entity_kind: u8) -> Option<IdEntry<'a>> {
+        let n = self.id_count();
+        let mut p = self.id_lower_bound(id);
+        while p < n {
+            let entry = self.id_entry(p)?;
+            if entry.id != id {
+                return None;
+            }
+            if entry.entity_kind == entity_kind {
+                return Some(entry);
+            }
+            p += 1;
+        }
+        None
+    }
+
+    // ------------------------------------------------------------ 实体表
+    /// 定长实体表的一行。越界（行号 ≥ `count`，或字节不够）→ `None`。
+    #[must_use]
+    pub fn row(&self, table: Table, index: u32) -> Option<Row<'a>> {
+        let section = self.section(table.section_id())?;
+        if index >= section.count {
+            return None;
+        }
+        let stride = table.stride() as usize;
+        let start = (index as usize).checked_mul(stride)?;
+        let end = start.checked_add(stride)?;
+        Some(Row {
+            table,
+            index,
+            data: section.data.get(start..end)?,
+        })
+    }
+
+    /// 迭代表内所有行（行数取 `count` 与"字节装得下的行数"的较小者）。
+    #[must_use]
+    pub fn rows(&self, table: Table) -> Rows<'a> {
+        let stride = table.stride() as usize;
+        match self.section(table.section_id()) {
+            Some(section) if stride > 0 => Rows {
+                table,
+                data: section.data,
+                next: 0,
+                end: (section.count as usize).min(section.data.len() / stride) as u32,
+            },
+            _ => Rows {
+                table,
+                data: &[],
+                next: 0,
+                end: 0,
+            },
+        }
+    }
+
+    /// 卡牌行（`CARD`，stride 32）。
+    #[must_use]
+    pub fn card(&self, index: u32) -> Option<CardRow<'a>> {
+        CardRow::new(self.row(Table::Card, index)?)
+    }
+
+    /// 状态行（`STAT`，stride 40）。
+    #[must_use]
+    pub fn status(&self, index: u32) -> Option<StatusRow<'a>> {
+        StatusRow::new(self.row(Table::Status, index)?)
+    }
+
+    /// 敌人动作行（`EACT`，stride 16）。
+    #[must_use]
+    pub fn enemy_action(&self, index: u32) -> Option<EactRow<'a>> {
+        EactRow::new(self.row(Table::EnemyAction, index)?)
+    }
+
+    /// 遭遇行（`ENCT`，stride 16）。
+    #[must_use]
+    pub fn encounter(&self, index: u32) -> Option<EnctRow<'a>> {
+        EnctRow::new(self.row(Table::Encounter, index)?)
+    }
+
+    /// 遗物行（`REL`，stride 12）。
+    #[must_use]
+    pub fn relic(&self, index: u32) -> Option<RelRow<'a>> {
+        RelRow::new(self.row(Table::Relic, index)?)
+    }
+
+    /// 某表第 `index` 行的 `Id` 格（每张表的第 0 格都是 `F_STR` 的 `Id`）解出来的串。
+    #[must_use]
+    pub fn entity_id(&self, table: Table, index: u32) -> Option<&'a str> {
+        self.string(self.row(table, index)?.cell(0)?)
+    }
+
+    /// id → 行（只对五张定长表有意义；`map_node`/`event`/`shop`/`character` 没有表，返回 `None`）。
+    #[must_use]
+    pub fn resolve(&self, id: &str) -> Option<Row<'a>> {
+        let entry = self.lookup(id)?;
+        self.row(Table::from_entity_kind(entry.entity_kind)?, entry.index as u32)
+    }
+
+    // ------------------------------------------------------------ 结构自检
+    /// 结构自检：**每段都在镜像内、段间不重叠、`count × stride ≤ bytes`**，
+    /// 外加字符串池的自洽性（`STR`/`STRO` 的 `count` 与索引表长度、`STRO` 严格递增、
+    /// 每个偏移都指向池内且以 NUL 结尾）。
+    ///
+    /// 内核在加载镜像时调它；失败即"拒绝加载"。
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        let total = self.total_size() as u64;
+        let n = self.section_count();
+
+        // 1..3：逐段查范围、对齐、count × stride。
+        for i in 0..n {
+            let section = self.section(i).ok_or(ValidationError::OutOfRange { index: i })?;
+            if section.end() > total {
+                return Err(ValidationError::OutOfRange { index: i });
+            }
+            if section.offset % 4 != 0 {
+                return Err(ValidationError::Misaligned { index: i });
+            }
+            let stride = section_stride(i);
+            let need = (section.count as u64) * (stride as u64);
+            if need > section.bytes as u64 {
+                return Err(ValidationError::CountExceedsBytes {
+                    index: i,
+                    count: section.count,
+                    stride,
+                    bytes: section.bytes,
+                });
+            }
+        }
+
+        // 4：段间不重叠（空段不占字节，跳过）。
+        for a in 0..n {
+            let Some(sa) = self.section(a) else { continue };
+            if sa.bytes == 0 {
+                continue;
+            }
+            for b in (a + 1)..n {
+                let Some(sb) = self.section(b) else { continue };
+                if sb.bytes == 0 {
+                    continue;
+                }
+                if (sa.offset as u64) < sb.end() && (sb.offset as u64) < sa.end() {
+                    return Err(ValidationError::Overlap { a, b });
+                }
+            }
+        }
+
+        // 5：字符串池。
+        let stro = self.section(S_STRO).ok_or(ValidationError::OutOfRange {
+            index: S_STRO,
+        })?;
+        let pool = self.section(S_STR).ok_or(ValidationError::OutOfRange {
+            index: S_STR,
+        })?;
+        let entries = stro.bytes as usize / 4;
+        if entries > 0 && (pool.count as usize) != entries - 1 {
+            return Err(ValidationError::StringCountMismatch {
+                entries,
+                str_count: pool.count,
+                stro_count: stro.count,
+            });
+        }
+        let mut prev = 0u32;
+        for i in 0..entries {
+            let off = stro.u32_at(i).ok_or(ValidationError::BadStringIndex {
+                entry: i,
+            })?;
+            if i > 0 && off <= prev {
+                return Err(ValidationError::BadStringIndex { entry: i });
+            }
+            if off as usize > pool.bytes as usize {
+                return Err(ValidationError::BadStringIndex { entry: i });
+            }
+            // 串尾的 NUL（`string()` 会把它当分隔符丢掉，缺了就是半个串）。
+            if i > 0 && pool.data.get(off as usize - 1).copied() != Some(0) {
+                return Err(ValidationError::BadStringIndex { entry: i });
+            }
+            prev = off;
+        }
+
+        Ok(())
+    }
+}
+
+/// 段号 → 每元素最小字节数，用来做 `count × stride ≤ bytes` 这一条自检。
+///
+/// 定长表就是行宽；`STR` 是 blob（按 1 字节算）、`TRM` 的记录是变长的（最短 4 字节：
+/// `u16 op` + 补齐），`TAGS` 在真实镜像里是空段所以按 1 字节算。
+#[must_use]
+pub const fn section_stride(index: usize) -> u32 {
+    match index {
+        S_STR => 1,
+        S_STRO => 4,
+        S_OPD => 8,
+        S_OPF => 4,
+        S_TRM => 4,
+        S_TRW => 2,
+        S_AUX => 2,
+        S_CARD => 32,
+        S_STAT => 40,
+        S_EACT => 16,
+        S_ENCT => 16,
+        S_REL => 12,
+        S_ROOT => 4,
+        S_IDX => 8,
+        _ => 1,
+    }
+}
+
+// ===========================================================================
+// 五张定长实体表
+// ===========================================================================
+
+/// 卡牌 / 状态 / 敌人动作 / 遭遇 / 遗物。段号与行宽见 `section_id` / `stride`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Table {
+    Card,
+    Status,
+    EnemyAction,
+    Encounter,
+    Relic,
+}
+
+impl Table {
+    /// 全部五张表，顺序 = 段号顺序。
+    pub const ALL: [Table; 5] = [
+        Table::Card,
+        Table::Status,
+        Table::EnemyAction,
+        Table::Encounter,
+        Table::Relic,
+    ];
+
+    /// 段号（`rdcfmt.S_*`）。
+    #[must_use]
+    pub const fn section_id(self) -> usize {
+        match self {
+            Table::Card => S_CARD,
+            Table::Status => S_STAT,
+            Table::EnemyAction => S_EACT,
+            Table::Encounter => S_ENCT,
+            Table::Relic => S_REL,
+        }
+    }
+
+    /// 段名（`manifest.json` 里的 `name`）。
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Table::Card => "CARD",
+            Table::Status => "STAT",
+            Table::EnemyAction => "EACT",
+            Table::Encounter => "ENCT",
+            Table::Relic => "REL",
+        }
+    }
+
+    /// 行 schema 的键（`rdcfmt.ROW_SCHEMAS` 用的名字；状态表在这里叫 `STATUS`）。
+    #[must_use]
+    pub const fn schema_name(self) -> &'static str {
+        match self {
+            Table::Card => "CARD",
+            Table::Status => "STATUS",
+            Table::EnemyAction => "EACT",
+            Table::Encounter => "ENCT",
+            Table::Relic => "REL",
+        }
+    }
+
+    /// `IDX` 里的实体类别（`EK_*`）。
+    #[must_use]
+    pub const fn entity_kind(self) -> u8 {
+        match self {
+            Table::Card => EK_CARD,
+            Table::Status => EK_STATUS,
+            Table::EnemyAction => EK_EACTION,
+            Table::Encounter => EK_ENCOUNTER,
+            Table::Relic => EK_RELIC,
+        }
+    }
+
+    /// 实体类别 → 表（只有 `EK_*` 1..=5 有表）。
+    #[must_use]
+    pub const fn from_entity_kind(kind: u8) -> Option<Table> {
+        match kind {
+            EK_CARD => Some(Table::Card),
+            EK_STATUS => Some(Table::Status),
+            EK_EACTION => Some(Table::EnemyAction),
+            EK_ENCOUNTER => Some(Table::Encounter),
+            EK_RELIC => Some(Table::Relic),
+            _ => None,
+        }
+    }
+
+    /// 行 schema：`(JSON 键名, 字段类别, 包装 flags)`，顺序即格序。
+    #[must_use]
+    pub const fn schema(self) -> &'static [CellSpec] {
+        match self {
+            Table::Card => &CARD_SCHEMA,
+            Table::Status => &STATUS_SCHEMA,
+            Table::EnemyAction => &EACT_SCHEMA,
+            Table::Encounter => &ENCT_SCHEMA,
+            Table::Relic => &REL_SCHEMA,
+        }
+    }
+
+    /// 行内格数（不含 `stride` 末尾的对齐填充）。
+    #[must_use]
+    pub const fn cells(self) -> usize {
+        self.schema().len()
+    }
+
+    /// 行宽 = `align4(2 × 格数)`，与 `manifest.json` 的 `stride` 相同。
+    #[must_use]
+    pub const fn stride(self) -> u32 {
+        align4(2 * self.cells() as u32)
+    }
+}
+
+/// 一个格的 schema 项（写端 `rdcfmt.ROW_SCHEMAS` 的 Rust 版）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CellSpec {
+    /// JSON 键名（逐字抄 `rdcfmt.py`）。
+    pub name: &'static str,
+    /// 字段类别 `F_*`。
+    pub kind: u8,
+    /// `FLAG_WRAP_LOWER` / `FLAG_WRAP_UPPER`（`F_STR` 与 `F_STRLIST` 才有意义）。
+    pub flags: u8,
+}
+
+const fn cell(name: &'static str, kind: u8, flags: u8) -> CellSpec {
+    CellSpec { name, kind, flags }
+}
+
+/// `CARD` 的 15 个格（stride 32）。
+pub static CARD_SCHEMA: [CellSpec; 15] = [
+    cell("Id", F_STR, 0),
+    cell("Program", F_TERM, 0),
+    cell("Tags", F_TERM, 0),
+    cell("Costs", F_TERM, 0),
+    cell("LifecyclePrograms", F_TERM, 0),
+    cell("PlayCondition", F_TERM, 0),
+    cell("QueueOnPlay", F_TERM, 0),
+    cell("RetainInHandOnTurnEnd", F_BOOL, 0),
+    cell("IsAction", F_BOOL, 0),
+    cell("NameKey", F_STR, 0),
+    cell("DescriptionKey", F_STR, 0),
+    cell("PackageId", F_STR, 0),
+    cell("TurnEndHandDestinationZone", F_STR, 0),
+    cell("PlayedCardDestinationZone", F_STR, 0),
+    cell("extra", F_TERM, 0),
+];
+
+/// `STAT` 的 20 个格（stride 40）。
+pub static STATUS_SCHEMA: [CellSpec; 20] = [
+    cell("Id", F_STR, 0),
+    cell("NameKey", F_STR, 0),
+    cell("DescriptionKey", F_STR, 0),
+    cell("PackageId", F_STR, 0),
+    cell("Polarity", F_STR, 0),
+    cell("StackingBehavior", F_STR, 0),
+    cell("Tags", F_TERM, 0),
+    cell("Triggers", F_TERM, 0),
+    cell("PassiveModifiers", F_TERM, 0),
+    cell("CombatRules", F_TERM, 0),
+    cell("DeathPrevention", F_TERM, 0),
+    cell("DebuffBlock", F_TERM, 0),
+    cell("IncomingStatusDelay", F_TERM, 0),
+    cell("Disclosure", F_TERM, 0),
+    cell("Prevention", F_TERM, 0),
+    cell("Amplification", F_TERM, 0),
+    cell("UsesStacks", F_BOOL, 0),
+    cell("UsesDuration", F_BOOL, 0),
+    cell("UsesCharges", F_BOOL, 0),
+    cell("extra", F_TERM, 0),
+];
+
+/// `EACT` 的 7 个格（stride 16）。
+pub static EACT_SCHEMA: [CellSpec; 7] = [
+    cell("Id", F_STR, 0),
+    cell("NameKey", F_STR, 0),
+    cell("DescriptionKey", F_STR, 0),
+    cell("PackageId", F_STR, 0),
+    cell("Intent", F_TERM, 0),
+    cell("Program", F_TERM, 0),
+    cell("extra", F_TERM, 0),
+];
+
+/// `ENCT` 的 8 个格（stride 16）。注意 `Id` 用大写包装 `{"Value": s}`。
+pub static ENCT_SCHEMA: [CellSpec; 8] = [
+    cell("Id", F_STR, FLAG_WRAP_UPPER),
+    cell("Enemies", F_TERM, 0),
+    cell("HeroResources", F_TERM, 0),
+    cell("HeroStartingStatuses", F_TERM, 0),
+    cell("TriggeredEffects", F_TERM, 0),
+    cell("HeroDisplayName", F_STR, 0),
+    cell("CardsDrawnPerTurn", F_INT, 0),
+    cell("extra", F_TERM, 0),
+];
+
+/// `REL` 的 5 个格（stride 12）。
+pub static REL_SCHEMA: [CellSpec; 5] = [
+    cell("Id", F_STR, 0),
+    cell("DisplayName", F_STR, 0),
+    cell("RunPrograms", F_TERM, 0),
+    cell("CombatRules", F_TERM, 0),
+    cell("extra", F_TERM, 0),
+];
+
+// ===========================================================================
+// 行的借用视图
+// ===========================================================================
+
+/// 定长实体表的一行：`stride` 个字节的借用视图。
+///
+/// **只有 `cells()` 个格是数据**，末尾 `stride - 2×cells` 个字节是对齐填充。
+/// 格一律按小端 u16 读，**不解释哨兵**（`ABSENT16`/`NULL16`/`BOOL_*` 原样返回）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Row<'a> {
+    table: Table,
+    index: u32,
+    data: &'a [u8],
+}
+
+impl<'a> Row<'a> {
+    #[must_use]
+    pub fn table(&self) -> Table {
+        self.table
+    }
+
+    /// 表内行号（0 起）。
+    #[must_use]
+    pub fn index(&self) -> u32 {
+        self.index
+    }
+
+    /// 整行原始字节（`stride` 字节，含末尾填充）。
+    #[must_use]
+    pub fn bytes(&self) -> &'a [u8] {
+        self.data
+    }
+
+    /// 行内 u16 个数 = `stride / 2`（含末尾那 0/1 个对齐填充格）。
+    #[must_use]
+    pub fn u16_len(&self) -> usize {
+        self.data.len() / 2
+    }
+
+    /// 第 `cell` 格（0 起，**只有 `cells()` 个格存在**；末尾的对齐填充不是格）。越界 `None`。
+    #[must_use]
+    pub fn cell(&self, cell: u32) -> Option<u16> {
+        if cell as usize >= self.table.cells() {
+            return None;
+        }
+        u16_at(self.data, (cell as usize).checked_mul(2)?)
+    }
+
+    /// schema 里 `name` 落在第几格。
+    #[must_use]
+    pub fn cell_index(&self, name: &str) -> Option<usize> {
+        self.table.schema().iter().position(|c| c.name == name)
+    }
+
+    /// 按 schema 的键名取格（不解释哨兵）。
+    #[must_use]
+    pub fn cell_by_name(&self, name: &str) -> Option<u16> {
+        self.cell(self.cell_index(name)? as u32)
+    }
+
+    /// 第 `cell` 格的字段类别（`F_*`）；越界 `None`。
+    #[must_use]
+    pub fn cell_kind(&self, cell: usize) -> Option<u8> {
+        self.table.schema().get(cell).map(|c| c.kind)
+    }
+}
+
+/// 泛型行迭代器（`Content::rows`）。
+#[derive(Debug, Clone)]
+pub struct Rows<'a> {
+    table: Table,
+    data: &'a [u8],
+    next: u32,
+    end: u32,
+}
+
+impl<'a> Rows<'a> {
+    #[must_use]
+    pub fn table(&self) -> Table {
+        self.table
+    }
+
+    /// 还剩几行。
+    #[must_use]
+    pub fn remaining(&self) -> u32 {
+        self.end.saturating_sub(self.next)
+    }
+}
+
+impl<'a> Iterator for Rows<'a> {
+    type Item = Row<'a>;
+
+    fn next(&mut self) -> Option<Row<'a>> {
+        if self.next >= self.end {
+            return None;
+        }
+        let stride = self.table.stride() as usize;
+        let start = (self.next as usize).checked_mul(stride)?;
+        let end = start.checked_add(stride)?;
+        let data = self.data.get(start..end)?;
+        let index = self.next;
+        self.next += 1;
+        Some(Row {
+            table: self.table,
+            index,
+            data,
+        })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = self.remaining() as usize;
+        (n, Some(n))
+    }
+}
+
+impl<'a> ExactSizeIterator for Rows<'a> {}
+
+/// 生成一张表的行视图类型：`new` 收窄、`row()` 拿回通用视图、命名 getter 取格。
+macro_rules! entity_row {
+    (
+        $(#[$meta:meta])*
+        $name:ident, $table:ident, $stride:expr, $cells:expr,
+        { $( $(#[$cell_meta:meta])* $getter:ident => $cell:expr, )* }
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub struct $name<'a> {
+            row: Row<'a>,
+        }
+
+        impl<'a> $name<'a> {
+            /// 这张表。
+            pub const TABLE: Table = Table::$table;
+            /// 行宽（字节，= `manifest.json` 的 `stride`）。
+            pub const STRIDE: u32 = $stride;
+            /// 行内格数（不含末尾填充）。
+            pub const CELLS: usize = $cells;
+
+            /// 收窄成这一行；表不对返回 `None`。
+            #[must_use]
+            pub fn new(row: Row<'a>) -> Option<Self> {
+                if row.table() == Self::TABLE {
+                    Some(Self { row })
+                } else {
+                    None
+                }
+            }
+
+            /// 底下的通用行视图。
+            #[must_use]
+            pub fn row(&self) -> Row<'a> {
+                self.row
+            }
+
+            /// 行号（0 起）。
+            #[must_use]
+            pub fn index(&self) -> u32 {
+                self.row.index()
+            }
+
+            $(
+                $(#[$cell_meta])*
+                #[must_use]
+                pub fn $getter(&self) -> u16 {
+                    // 格号是本文件里的常量且 < CELLS，所以兜底值永远用不上。
+                    self.row.cell($cell).unwrap_or(ABSENT16)
+                }
+            )*
+        }
+
+        impl<'a> From<$name<'a>> for Row<'a> {
+            fn from(value: $name<'a>) -> Row<'a> {
+                value.row
+            }
+        }
+    };
+}
+
+entity_row!(
+    /// 卡牌行（`CARD`，stride 32，15 格）。
+    ///
+    /// 格序 = `CARD_SCHEMA`，与 `rdcfmt.CARD_ROW` 逐项一致。
+    CardRow, Card, 32, 15,
+    {
+        /// `Id`（串号）。
+        id => 0,
+        /// `Program`（term 句柄）。
+        program => 1,
+        /// `Tags`（term 句柄）。
+        tags => 2,
+        /// `Costs`（term 句柄）。
+        costs => 3,
+        /// `LifecyclePrograms`（term 句柄）。
+        lifecycle_programs => 4,
+        /// `PlayCondition`（term 句柄）。
+        play_condition => 5,
+        /// `QueueOnPlay`（term 句柄）。
+        queue_on_play => 6,
+        /// `RetainInHandOnTurnEnd`（`F_BOOL` 格：0=absent 1=false 2=true 3=null）。
+        retain_in_hand_on_turn_end => 7,
+        /// `IsAction`（`F_BOOL` 格）。
+        is_action => 8,
+        /// `NameKey`（串号）。
+        name_key => 9,
+        /// `DescriptionKey`（串号）。
+        description_key => 10,
+        /// `PackageId`（串号）。
+        package_id => 11,
+        /// `TurnEndHandDestinationZone`（串号）。
+        turn_end_hand_destination_zone => 12,
+        /// `PlayedCardDestinationZone`（串号）。
+        played_card_destination_zone => 13,
+        /// schema 不认识的键（`_obj` term 句柄；NULL16 = 没有）。
+        extra => 14,
+    }
+);
+
+entity_row!(
+    /// 状态行（`STAT`，stride 40，20 格）。
+    StatusRow, Status, 40, 20,
+    {
+        /// `Id`（串号）。
+        id => 0,
+        /// `NameKey`（串号）。
+        name_key => 1,
+        /// `DescriptionKey`（串号）。
+        description_key => 2,
+        /// `PackageId`（串号）。
+        package_id => 3,
+        /// `Polarity`（串号）。
+        polarity => 4,
+        /// `StackingBehavior`（串号）。
+        stacking_behavior => 5,
+        /// `Tags`（term 句柄）。
+        tags => 6,
+        /// `Triggers`（term 句柄）。
+        triggers => 7,
+        /// `PassiveModifiers`（term 句柄）。
+        passive_modifiers => 8,
+        /// `CombatRules`（term 句柄）。
+        combat_rules => 9,
+        /// `DeathPrevention`（term 句柄）。
+        death_prevention => 10,
+        /// `DebuffBlock`（term 句柄）。
+        debuff_block => 11,
+        /// `IncomingStatusDelay`（term 句柄）。
+        incoming_status_delay => 12,
+        /// `Disclosure`（term 句柄）。
+        disclosure => 13,
+        /// `Prevention`（term 句柄）。
+        prevention => 14,
+        /// `Amplification`（term 句柄）。
+        amplification => 15,
+        /// `UsesStacks`（`F_BOOL` 格）。
+        uses_stacks => 16,
+        /// `UsesDuration`（`F_BOOL` 格）。
+        uses_duration => 17,
+        /// `UsesCharges`（`F_BOOL` 格）。
+        uses_charges => 18,
+        /// schema 不认识的键（term 句柄）。
+        extra => 19,
+    }
+);
+
+entity_row!(
+    /// 敌人动作行（`EACT`，stride 16，7 格）。
+    EactRow, EnemyAction, 16, 7,
+    {
+        /// `Id`（串号）。
+        id => 0,
+        /// `NameKey`（串号）。
+        name_key => 1,
+        /// `DescriptionKey`（串号）。
+        description_key => 2,
+        /// `PackageId`（串号）。
+        package_id => 3,
+        /// `Intent`（term 句柄）。
+        intent => 4,
+        /// `Program`（term 句柄）。
+        program => 5,
+        /// schema 不认识的键（term 句柄）。
+        extra => 6,
+    }
+);
+
+entity_row!(
+    /// 遭遇行（`ENCT`，stride 16，8 格）。`Id` 的包装拼法是大写 `{"Value": s}`。
+    EnctRow, Encounter, 16, 8,
+    {
+        /// `Id`（串号；JSON 里写成 `{"Value": s}`）。
+        id => 0,
+        /// `Enemies`（term 句柄）。
+        enemies => 1,
+        /// `HeroResources`（term 句柄）。
+        hero_resources => 2,
+        /// `HeroStartingStatuses`（term 句柄）。
+        hero_starting_statuses => 3,
+        /// `TriggeredEffects`（term 句柄）。
+        triggered_effects => 4,
+        /// `HeroDisplayName`（串号）。
+        hero_display_name => 5,
+        /// `CardsDrawnPerTurn`（`F_INT` 格；`NULL_INT` 表示"存在且为 null"）。
+        cards_drawn_per_turn => 6,
+        /// schema 不认识的键（term 句柄）。
+        extra => 7,
+    }
+);
+
+entity_row!(
+    /// 遗物行（`REL`，stride 12，5 格）。
+    RelRow, Relic, 12, 5,
+    {
+        /// `Id`（串号）。
+        id => 0,
+        /// `DisplayName`（串号）。
+        display_name => 1,
+        /// `RunPrograms`（term 句柄）。
+        run_programs => 2,
+        /// `CombatRules`（term 句柄）。
+        combat_rules => 3,
+        /// schema 不认识的键（term 句柄）。
+        extra => 4,
+    }
+);
+
+// ===========================================================================
+// opcode / term / 根指针 / 符号表
+// ===========================================================================
+
+/// 一条 opcode 描述 + 它那 `nfields` 条 `OPF` 记录（裸字节，靠 `Field` 解释）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Opcode<'a> {
+    pub op: u16,
+    /// 名字串号（保留 opcode 是 0 = 空串）。
+    pub name_str: u16,
+    /// `OPCLASS_IR` 或 `OPCLASS_GENERIC`（**op < 16 时先按保留语义处理，别看这个**）。
+    pub opclass: u8,
+    fields: &'a [u8],
+}
+
+impl<'a> Opcode<'a> {
+    /// 逻辑字段数。
+    #[must_use]
+    pub fn nfields(&self) -> usize {
+        self.fields.len() / 4
+    }
+
+    /// 是不是 IR 节点（`{kind, value}` 信封）。
+    #[must_use]
+    pub fn is_ir(&self) -> bool {
+        self.opclass == OPCLASS_IR
+    }
+
+    /// 第 `j` 条字段描述。越界 `None`。
+    #[must_use]
+    pub fn field(&self, j: usize) -> Option<Field<'a>> {
+        let start = j.checked_mul(4)?;
+        let end = start.checked_add(4)?;
+        Some(Field {
+            raw: self.fields.get(start..end)?,
+        })
+    }
+
+    /// 遍历字段描述。
+    #[must_use]
+    pub fn fields(&self) -> Fields<'a> {
+        Fields {
+            raw: self.fields,
+            next: 0,
+        }
+    }
+
+    /// 本 opcode 的 term 记录有几个槽（= 各字段槽数之和）。
+    /// 字段类别不合法时 `None`（`reader.py` 在这种输入上会抛 `KeyError`）。
+    #[must_use]
+    pub fn nslots(&self) -> Option<usize> {
+        let mut n = 0usize;
+        for j in 0..self.nfields() {
+            n = n.checked_add(self.field(j)?.slots()? as usize)?;
+        }
+        Some(n)
+    }
+}
+
+/// `OPF` 里的一条 4 字节字段描述。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Field<'a> {
+    raw: &'a [u8],
+}
+
+impl<'a> Field<'a> {
+    /// JSON 键的串号（0 = 空串）。
+    #[must_use]
+    pub fn name_str(&self) -> u16 {
+        u16_at(self.raw, 0).unwrap_or(0)
+    }
+
+    /// 字段类别 `F_*`（越界/坏数据给 0，`field_slots` 会拒绝它）。
+    #[must_use]
+    pub fn kind(&self) -> u8 {
+        self.raw.get(2).copied().unwrap_or(0)
+    }
+
+    /// `FLAG_WRAP_*`。
+    #[must_use]
+    pub fn flags(&self) -> u8 {
+        self.raw.get(3).copied().unwrap_or(0)
+    }
+
+    /// 这个字段占几个 u16 槽。
+    #[must_use]
+    pub fn slots(&self) -> Option<u8> {
+        field_slots(self.kind())
+    }
+}
+
+/// `Opcode::fields()` 的迭代器。
+#[derive(Debug, Clone)]
+pub struct Fields<'a> {
+    raw: &'a [u8],
+    next: usize,
+}
+
+impl<'a> Iterator for Fields<'a> {
+    type Item = Field<'a>;
+
+    fn next(&mut self) -> Option<Field<'a>> {
+        let start = self.next.checked_mul(4)?;
+        let end = start.checked_add(4)?;
+        let raw = self.raw.get(start..end)?;
+        self.next += 1;
+        Some(Field { raw })
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = (self.raw.len() / 4).saturating_sub(self.next);
+        (n, Some(n))
+    }
+}
+
+/// 一条 term 记录：`u16 op` + 按 opcode 字段类别推出的槽。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Term<'a> {
+    pub id: u16,
+    pub op: u16,
+    slots: &'a [u8],
+}
+
+impl<'a> Term<'a> {
+    /// 槽的原始字节（`nslots × 2`）。
+    #[must_use]
+    pub fn slots_bytes(&self) -> &'a [u8] {
+        self.slots
+    }
+
+    /// 槽数。
+    #[must_use]
+    pub fn nslots(&self) -> usize {
+        self.slots.len() / 2
+    }
+
+    /// 第 `i` 个槽。越界 `None`。
+    #[must_use]
+    pub fn slot(&self, i: usize) -> Option<u16> {
+        u16_at(self.slots, i.checked_mul(2)?)
+    }
+}
+
+/// `STR` + `STRO` 的串迭代器（串号 1..=`string_count()`）。
+#[derive(Debug, Clone)]
+pub struct Strings<'a> {
+    stro: &'a [u8],
+    pool: &'a [u8],
+    next: u32,
+    end: u32,
+}
+
+impl<'a> Iterator for Strings<'a> {
+    /// 坏项是 `None`（**不 panic、不静默跳过**）。
+    type Item = Option<&'a str>;
+
+    fn next(&mut self) -> Option<Option<&'a str>> {
+        if self.next >= self.end {
+            return None;
+        }
+        self.next += 1;
+        Some(string_at(self.pool, self.stro, self.next as u16))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let n = self.end.saturating_sub(self.next) as usize;
+        (n, Some(n))
+    }
+}
+
+impl<'a> ExactSizeIterator for Strings<'a> {}
+
+/// `ROOT` 的一项：顶层键名 → term。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RootEntry<'a> {
+    pub key: &'a str,
+    pub term: u16,
+}
+
+/// `IDX` 的一项：id 字符串 → `(实体类别, 表内行号)`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdEntry<'a> {
+    /// 在 `IDX` 里的位置（0 起）。同 id 多条时给出稳定的区分依据。
+    pub position: u32,
+    pub id: &'a str,
+    /// `EK_*`。
+    pub entity_kind: u8,
+    /// `IDX` 的 flags 字节（真实镜像全是 0）。
+    pub flags: u8,
+    /// 表内行号（`map_node`/`event`/`shop`/`character` 没有表，意义由调用方定）。
+    pub index: u16,
+}
+
+#[cfg(test)]
+mod tests {
+    // 真实镜像不在仓库里（它是构建产物），所以测试按**绝对路径**找；找不到就 panic 并说明
+    // 怎么生成它 —— 一个在产物缺席时安静通过的测试，等于没有测试。
+    // 路径：tools/contentc/out/content.core.rdcf
+
+    use super::*;
+
+    const CORE_IMAGE: &str = r"D:\Vibe\sts-tui\tools\contentc\out\content.core.rdcf";
+    const FULL_IMAGE: &str = r"D:\Vibe\sts-tui\tools\contentc\out\content.rdcf";
+
+    /// `manifest.json` → `variants.core.sections`（逐字抄写，不改）。
+    const CORE_SECTIONS: [(usize, &str, u32, u32, u32); 15] = [
+        (0, "STR", 272, 31_051, 1_375),
+        (1, "STRO", 31_324, 5_504, 1_376),
+        (2, "OPD", 36_828, 1_040, 130),
+        (3, "OPF", 37_868, 1_412, 353),
+        (4, "TRM", 39_280, 20_760, 2_143),
+        (5, "TRW", 60_040, 4_286, 2_143),
+        (6, "AUX", 64_328, 4_156, 2_078),
+        (7, "CARD", 68_484, 1_984, 62),
+        (8, "STAT", 70_468, 920, 23),
+        (9, "EACT", 71_388, 6_304, 394),
+        (10, "ENCT", 77_692, 1_744, 109),
+        (11, "REL", 79_436, 588, 49),
+        (12, "ROOT", 80_024, 64, 16),
+        (13, "IDX", 80_088, 5_528, 691),
+        (14, "TAGS", 0, 0, 0),
+    ];
+
+    /// `manifest.json` → `variants.full.sections`。
+    const FULL_SECTIONS: [(usize, &str, u32, u32, u32); 15] = [
+        (0, "STR", 272, 76_799, 3_140),
+        (1, "STRO", 77_072, 12_564, 3_141),
+        (2, "OPD", 89_636, 1_112, 139),
+        (3, "OPF", 90_748, 2_996, 749),
+        (4, "TRM", 93_744, 34_004, 2_895),
+        (5, "TRW", 127_748, 5_790, 2_895),
+        (6, "AUX", 133_540, 7_620, 3_810),
+        (7, "CARD", 141_160, 1_984, 62),
+        (8, "STAT", 143_144, 920, 23),
+        (9, "EACT", 144_064, 6_304, 394),
+        (10, "ENCT", 150_368, 1_744, 109),
+        (11, "REL", 152_112, 588, 49),
+        (12, "ROOT", 152_700, 68, 17),
+        (13, "IDX", 152_768, 5_528, 691),
+        (14, "TAGS", 0, 0, 0),
+    ];
+
+    fn read_image(path: &str) -> Vec<u8> {
+        std::fs::read(path).unwrap_or_else(|e| {
+            panic!(
+                "RDCF 镜像缺失或读不到：{path}\n  {e}\n  它是 tools/contentc 的构建产物，\
+                 用 `python tools/contentc/compile.py` 生成（同时写出 content.rdcf 与 content.core.rdcf）"
+            )
+        })
+    }
+
+    fn with_core<T>(f: impl FnOnce(&Content<'_>, &[u8]) -> T) -> T {
+        let blob = read_image(CORE_IMAGE);
+        let content = Content::parse(&blob).expect("真实镜像必须能解析");
+        f(&content, &blob)
+    }
+
+    fn dir_base(index: usize) -> usize {
+        HEADER_BYTES + DIRECTORY_ENTRY_BYTES * index
+    }
+
+    fn patch32(blob: &mut [u8], at: usize, value: u32) {
+        let slot = blob
+            .get_mut(at..at + 4)
+            .unwrap_or_else(|| panic!("patch32 越界: {at}"));
+        slot.copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn patch16(blob: &mut [u8], at: usize, value: u16) {
+        let slot = blob
+            .get_mut(at..at + 2)
+            .unwrap_or_else(|| panic!("patch16 越界: {at}"));
+        slot.copy_from_slice(&value.to_le_bytes());
+    }
+
+    // ------------------------------------------------------------ 坏输入
+
+    #[test]
+    fn parse_rejects_short_buffers() {
+        assert_eq!(Content::parse(&[]).unwrap_err(), ContentError::TooSmall);
+        assert_eq!(
+            Content::parse(&[0u8; HEADER_BYTES - 1]).unwrap_err(),
+            ContentError::TooSmall
+        );
+        // 头是好的但声明了 85,616 字节，而缓冲区没那么长 → 截断。
+        let blob = read_image(CORE_IMAGE);
+        for cut in [HEADER_BYTES, 1_000, 40_000, blob.len() - 1] {
+            assert_eq!(
+                Content::parse(&blob[..cut]).unwrap_err(),
+                ContentError::TooSmall,
+                "截断到 {cut} 字节应当是 TooSmall"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_rejects_bad_magic() {
+        let mut blob = read_image(CORE_IMAGE);
+        blob[0] = b'X';
+        match Content::parse(&blob).unwrap_err() {
+            ContentError::BadMagic(m) => assert_eq!(m, 0x4643_4458),
+            other => panic!("应当是 BadMagic，实际 {other:?}"),
+        }
+
+        let mut blob = read_image(CORE_IMAGE);
+        patch32(&mut blob, 0, 0);
+        assert_eq!(
+            Content::parse(&blob).unwrap_err(),
+            ContentError::BadMagic(0)
+        );
+    }
+
+    #[test]
+    fn parse_rejects_an_unsupported_version() {
+        let mut blob = read_image(CORE_IMAGE);
+        assert_eq!(u16_at(&blob, HDR_VERSION), Some(FORMAT_VERSION));
+        patch16(&mut blob, HDR_VERSION, 2);
+        assert_eq!(
+            Content::parse(&blob).unwrap_err(),
+            ContentError::UnsupportedVersion(2)
+        );
+
+        patch16(&mut blob, HDR_VERSION, 0);
+        assert_eq!(
+            Content::parse(&blob).unwrap_err(),
+            ContentError::UnsupportedVersion(0)
+        );
+    }
+
+    #[test]
+    fn parse_rejects_a_section_outside_the_declared_size() {
+        // 把 IDX 段推到文件尾之外。
+        let mut blob = read_image(CORE_IMAGE);
+        patch32(&mut blob, dir_base(S_IDX), 85_000);
+        assert_eq!(
+            Content::parse(&blob).unwrap_err(),
+            ContentError::SectionOutOfRange { index: S_IDX }
+        );
+
+        // 截断成 40,000 字节并把 total_size 也改成 40,000：第一个越界的段是 TRM（39280+20760）。
+        let mut blob = read_image(CORE_IMAGE);
+        patch32(&mut blob, HDR_TOTAL_SIZE, 40_000);
+        assert_eq!(
+            Content::parse(&blob[..40_000]).unwrap_err(),
+            ContentError::SectionOutOfRange { index: S_TRM }
+        );
+
+        // offset + bytes 恰好越过 1 字节也算越界（不取巧、也不溢出）。
+        let mut blob = read_image(CORE_IMAGE);
+        patch32(&mut blob, dir_base(S_TAGS), 85_616);
+        patch32(&mut blob, dir_base(S_TAGS) + 4, 1);
+        patch32(&mut blob, dir_base(S_TAGS) + 8, 1);
+        assert_eq!(
+            Content::parse(&blob).unwrap_err(),
+            ContentError::SectionOutOfRange { index: S_TAGS }
+        );
+    }
+
+    #[test]
+    fn parse_rejects_a_directory_that_does_not_fit() {
+        // dir_off 指到文件外。
+        let mut blob = read_image(CORE_IMAGE);
+        patch32(&mut blob, HDR_DIR_OFF, 0x00FF_0000);
+        assert_eq!(
+            Content::parse(&blob).unwrap_err(),
+            ContentError::DirectoryTruncated
+        );
+
+        // dir_off 压在文件头里。
+        patch32(&mut blob, HDR_DIR_OFF, 0);
+        assert_eq!(
+            Content::parse(&blob).unwrap_err(),
+            ContentError::DirectoryTruncated
+        );
+
+        // nsec 超过本格式的 20 段。
+        let mut blob = read_image(CORE_IMAGE);
+        patch16(&mut blob, HDR_NSEC, SECTION_COUNT as u16 + 1);
+        assert_eq!(
+            Content::parse(&blob).unwrap_err(),
+            ContentError::DirectoryTruncated
+        );
+
+        // nsec 合法但目录区越过声明的 total_size。
+        let mut blob = read_image(CORE_IMAGE);
+        patch16(&mut blob, HDR_NSEC, 20);
+        patch32(&mut blob, HDR_TOTAL_SIZE, 271);
+        assert_eq!(
+            Content::parse(&blob[..271]).unwrap_err(),
+            ContentError::DirectoryTruncated
+        );
+    }
+
+    /// 畸形/被改坏的镜像走遍整个读接口，**一个 panic 都不许有**。
+    fn exercise(blob: &[u8]) {
+        let Ok(content) = Content::parse(blob) else {
+            return;
+        };
+        let _ = content.validate();
+
+        // 头部标量
+        let _ = (
+            content.version(),
+            content.flags(),
+            content.presentation_stripped(),
+            content.total_size(),
+            content.schema_version(),
+            content.content_hash(),
+            content.section_count(),
+            content.string_count(),
+            content.opcode_count(),
+            content.term_count(),
+            content.aux_cells(),
+            content.root_count(),
+            content.id_count(),
+        );
+
+        // 段视图：全部段号 + 全部段名 + 越界
+        for i in 0..=content.section_count() + 3 {
+            if let Some(section) = content.section(i) {
+                let _ = (section.is_empty(), section.end(), section.u16_at(0), section.u32_at(0));
+                let _ = section.u16_at(usize::MAX);
+                let _ = section.u32_at(usize::MAX);
+            }
+        }
+        for name in SECTION_NAMES {
+            let _ = content.section_by_name(name);
+        }
+        for name in ["", "STATUS", "stat", "STR ", "NOPE"] {
+            let _ = content.section_by_name(name);
+        }
+
+        // 串号：代表性采样 + 两个哨兵 + 越界
+        for id in (0..=u16::MAX).step_by(97) {
+            let _ = content.string(id);
+        }
+        for id in [0u16, 1, 2, 1_375, 1_376, 1_377, NULL16, ABSENT16] {
+            let _ = content.string(id);
+        }
+        let _ = content.strings().count();
+
+        // opcode / term / aux：采样 + 越界
+        for op in (0..u16::MAX).step_by(13) {
+            if let Some(descriptor) = content.opcode(op) {
+                let _ = descriptor.nslots();
+                let _ = descriptor.fields().count();
+                let _ = descriptor.field(usize::MAX);
+            }
+            let _ = content.opcode_name(op);
+        }
+        let _ = content.opcode_name(u16::MAX);
+        for tid in (0..3_000u16).step_by(7) {
+            if let Some(term) = content.term(tid) {
+                let _ = term.slot(usize::MAX);
+                let _ = term.nslots();
+                let _ = term.slots_bytes().len();
+            }
+        }
+        let _ = content.term(u16::MAX);
+        for cell in (0..3_000u16).step_by(11) {
+            let _ = content.aux(cell);
+        }
+        let _ = content.aux(u16::MAX);
+
+        // 根指针 / 符号表
+        for i in 0..content.root_count() + 2 {
+            let _ = content.root(i);
+        }
+        let _ = content.root(usize::MAX);
+        let _ = content.root_by_name("Map");
+        for i in (0..800).step_by(3) {
+            let _ = content.id_entry(i);
+        }
+        let _ = content.id_entry(usize::MAX);
+        let _ = content.lookup("paperwork");
+        let _ = content.lookup("");
+        let _ = content.lookup_in("overfilled_inbox", EK_RELIC);
+        let _ = content.resolve("paperwork");
+
+        // 实体表：每张表采样 + 越界（含 u32::MAX，检查乘法不会溢出）
+        for table in Table::ALL {
+            let _ = content.rows(table).count();
+            let _ = content.rows(table).last();
+            for index in (0..420u32).step_by(5) {
+                let _ = content.row(table, index);
+            }
+            let _ = content.row(table, u32::MAX);
+            let _ = content.rows(table).count();
+        }
+        for index in (0..420u32).step_by(5) {
+            let _ = content.card(index);
+            let _ = content.status(index);
+            let _ = content.enemy_action(index);
+            let _ = content.encounter(index);
+            let _ = content.relic(index);
+            let _ = content.entity_id(Table::Card, index);
+            let _ = content.entity_id(Table::EnemyAction, index);
+        }
+        let _ = content.card(u32::MAX);
+        let _ = content.status(u32::MAX);
+        let _ = content.enemy_action(u32::MAX);
+        let _ = content.encounter(u32::MAX);
+        let _ = content.relic(u32::MAX);
+    }
+
+    #[test]
+    fn readers_never_panic_on_mutated_images() {
+        let original = read_image(CORE_IMAGE);
+
+        // 截断扫描（含 0 与 31 这类比头还短的）。
+        let mut cut = 0usize;
+        while cut < original.len() {
+            exercise(&original[..cut]);
+            cut += 997;
+        }
+        exercise(&original);
+
+        // 头 + 目录区（前 272 字节）逐字节翻转：这里坏掉最危险。
+        for at in 0..(HEADER_BYTES + SECTION_COUNT * DIRECTORY_ENTRY_BYTES) {
+            let mut blob = original.clone();
+            blob[at] ^= 0xFF;
+            exercise(&blob);
+        }
+
+        // 段体内取样翻转（含 opcode/term/字符串池/五张表，都落在采样里）。
+        for at in (272..original.len()).step_by(1013) {
+            for mask in [0x01u8, 0x80, 0xFF] {
+                let mut blob = original.clone();
+                blob[at] ^= mask;
+                exercise(&blob);
+            }
+        }
+    }
+
+    // ------------------------------------------------------ 真实镜像：对照表
+
+    #[test]
+    fn the_core_image_matches_the_manifest() {
+        with_core(|content, blob| {
+            assert_eq!(blob.len(), 85_616);
+            assert_eq!(content.total_size() as usize, blob.len());
+            assert_eq!(content.version(), FORMAT_VERSION);
+            assert_eq!(content.flags(), 1);
+            assert!(content.presentation_stripped());
+            assert_eq!(content.schema_version(), 1);
+            assert_eq!(content.content_hash(), 0xD107_5DE5);
+            assert_eq!(content.section_count(), SECTION_COUNT);
+            assert_eq!(content.section_count(), 20, "头里 nsec = 20（15 有名字 + 5 保留）");
+
+            for (index, name, offset, bytes, count) in CORE_SECTIONS {
+                let by_id = content
+                    .section(index)
+                    .unwrap_or_else(|| panic!("段 {index} ({name}) 取不到"));
+                assert_eq!(by_id.offset, offset, "{name}.offset");
+                assert_eq!(by_id.bytes, bytes, "{name}.bytes");
+                assert_eq!(by_id.count, count, "{name}.count");
+                assert_eq!(by_id.data.len(), bytes as usize, "{name}.data.len()");
+
+                let by_name = content
+                    .section_by_name(name)
+                    .unwrap_or_else(|| panic!("段名 {name} 取不到"));
+                assert_eq!(by_name, by_id, "{name} 按名取和按号取必须一样");
+            }
+
+            // 目录 + 各段正好铺满文件：第一段从目录尾（272）开始，最后一段接到文件尾。
+            assert_eq!(content.section(S_STR).unwrap().offset, 272);
+            assert_eq!(
+                content.section(S_IDX).unwrap().end(),
+                content.total_size() as u64
+            );
+
+            // 表的派生量（`reader.py --stats` 的同一批数字）。
+            assert_eq!(content.string_count(), 1_375);
+            assert_eq!(content.opcode_count(), 130);
+            assert_eq!(content.term_count(), 2_143);
+            assert_eq!(content.aux_cells(), 2_078);
+            assert_eq!(content.root_count(), 16);
+            assert_eq!(content.id_count(), 691);
+            assert_eq!(content.section(S_TAGS).unwrap().count, 0);
+            assert!(content.section(S_TAGS).unwrap().is_empty());
+
+            // 段外越界：nsec 是 20，段号 20 起就没有了。
+            assert!(content.section(20).is_none());
+            assert!(content.section(usize::MAX).is_none());
+            assert!(content.section_by_name("NOPE").is_none());
+            assert!(content.section_by_name("").is_none());
+            assert!(content.section_by_name("status").is_none(), "段名大小写敏感");
+            assert!(
+                content.section_by_name("STATUS").is_none(),
+                "段名是 STAT；STATUS 只是行 schema 的键"
+            );
+        });
+    }
+
+    #[test]
+    fn the_full_image_also_reads() {
+        let blob = read_image(FULL_IMAGE);
+        assert_eq!(blob.len(), 158_296);
+        let content = Content::parse(&blob).expect("full 镜像必须能解析");
+        assert_eq!(content.flags(), 0);
+        assert!(!content.presentation_stripped());
+        assert_eq!(content.content_hash(), 0xD107_5DE5);
+        assert_eq!(content.section_count(), SECTION_COUNT);
+        for (index, name, offset, bytes, count) in FULL_SECTIONS {
+            let section = content
+                .section(index)
+                .unwrap_or_else(|| panic!("段 {index} ({name}) 取不到"));
+            assert_eq!((section.offset, section.bytes, section.count), (offset, bytes, count));
+            assert_eq!(content.section_by_name(name), Some(section));
+        }
+        assert_eq!(content.string_count(), 3_140);
+        assert_eq!(content.opcode_count(), 139);
+        assert_eq!(content.term_count(), 2_895);
+        assert_eq!(content.aux_cells(), 3_810);
+        assert_eq!(content.root_count(), 17);
+        assert_eq!(content.id_count(), 691);
+        assert_eq!(content.card(0).unwrap().row().table(), Table::Card);
+        assert_eq!(content.validate(), Ok(()));
+    }
+
+    // ------------------------------------------------------ 真实镜像：内容
+
+    #[test]
+    fn strings_match_the_reference_reader() {
+        // 期望值来自 `python reader.py out/content.core.rdcf --string N`（即 `reader.py` 读出的串）。
+        const EXPECTED: [(u16, &str); 11] = [
+            (0, ""),
+            (1, "(unnamed)"),
+            (2, "Action"),
+            (3, "Actions"),
+            (4, "AddFlat"),
+            (5, "AddPerStack"),
+            (10, "Balance"),
+            (100, "Max"),
+            (500, "city_normal_seal_08"),
+            (1_000, "queue_bell"),
+            (1_374, "your_number_is_fading"),
+        ];
+        with_core(|content, _| {
+            for (id, want) in EXPECTED {
+                assert_eq!(content.string(id), Some(want), "string({id})");
+            }
+            assert_eq!(content.string(1_375), Some("zero_cost"), "池里最后一条");
+            assert_eq!(content.string(1_376), None, "串号上界是 string_count()");
+            assert_eq!(content.string(NULL16), None, "0xFFFE 是哨兵，不是串号");
+            assert_eq!(content.string(ABSENT16), None, "0xFFFF 是哨兵，不是串号");
+            assert_eq!(content.string_count(), 1_375);
+        });
+    }
+
+    #[test]
+    fn the_string_pool_is_sorted_and_nul_terminated() {
+        with_core(|content, _| {
+            let stro = content.section(S_STRO).unwrap();
+            let pool = content.section(S_STR).unwrap();
+            assert_eq!(stro.count as usize, content.string_count() + 1);
+            assert_eq!(pool.count as usize, content.string_count());
+
+            let mut previous = "";
+            let mut seen = 0usize;
+            for (i, item) in content.strings().enumerate() {
+                let text = item.unwrap_or_else(|| panic!("串号 {} 读不出来", i + 1));
+                assert!(text >= previous, "池必须按字节序排：{previous:?} 之后是 {text:?}");
+                assert!(!text.contains('\0'), "串里不该有 NUL");
+                previous = text;
+                seen += 1;
+            }
+            assert_eq!(seen, 1_375);
+            assert_eq!(previous, "zero_cost", "按字节序最后一条");
+
+            // STRO 严格递增、首项为 0、末项正好是池长。
+            let mut offsets = Vec::new();
+            for i in 0..(stro.bytes as usize / 4) {
+                offsets.push(stro.u32_at(i).unwrap());
+            }
+            assert_eq!(offsets[0], 0);
+            assert_eq!(*offsets.last().unwrap(), pool.bytes);
+            assert!(offsets.windows(2).all(|w| w[0] < w[1]));
+            // 每条串的最后一个字节是 NUL —— 去掉它就是正文。
+            for off in offsets.iter().skip(1) {
+                assert_eq!(pool.data[*off as usize - 1], 0);
+            }
+        });
+    }
+
+    #[test]
+    fn entity_tables_decode_row_by_row() {
+        with_core(|content, _| {
+            // 行宽/格数：与 manifest 的 stride 和 rdcfmt 的 schema 一致。
+            assert_eq!(Table::Card.stride(), 32);
+            assert_eq!(Table::Status.stride(), 40);
+            assert_eq!(Table::EnemyAction.stride(), 16);
+            assert_eq!(Table::Encounter.stride(), 16);
+            assert_eq!(Table::Relic.stride(), 12);
+            assert_eq!(
+                (CardRow::STRIDE, CardRow::CELLS),
+                (32, 15),
+                "CARD 15 格 = 30 B，stride 是 align4 = 32（不是 28）"
+            );
+            assert_eq!((StatusRow::STRIDE, StatusRow::CELLS), (40, 20));
+            assert_eq!((EactRow::STRIDE, EactRow::CELLS), (16, 7));
+            assert_eq!((EnctRow::STRIDE, EnctRow::CELLS), (16, 8));
+            assert_eq!((RelRow::STRIDE, RelRow::CELLS), (12, 5));
+            for table in Table::ALL {
+                assert_eq!(table.stride(), align4(2 * table.cells() as u32));
+                assert_eq!(
+                    table.stride(),
+                    section_stride(table.section_id()),
+                    "{table:?} 的段 stride 必须与行 stride 一致"
+                );
+                assert_eq!(content.row(table, 0).unwrap().bytes().len(), table.stride() as usize);
+            }
+
+            // 行数 = IDX 里该类实体的条数 = manifest 的 count。
+            assert_eq!(content.rows(Table::Card).count(), 62);
+            assert_eq!(content.rows(Table::Status).count(), 23);
+            assert_eq!(content.rows(Table::EnemyAction).count(), 394);
+            assert_eq!(content.rows(Table::Encounter).count(), 109);
+            assert_eq!(content.rows(Table::Relic).count(), 49);
+            assert_eq!(content.rows(Table::Card).last().unwrap().index(), 61);
+
+            // 越界一律 `None`（含 u32::MAX：行号×行宽会溢出，必须走 checked）。
+            assert!(content.card(62).is_none());
+            assert!(content.status(23).is_none());
+            assert!(content.enemy_action(394).is_none());
+            assert!(content.encounter(109).is_none());
+            assert!(content.relic(49).is_none());
+            assert!(content.card(u32::MAX).is_none());
+            assert!(content.status(u32::MAX).is_none());
+            assert!(content.enemy_action(u32::MAX).is_none());
+            assert!(content.encounter(u32::MAX).is_none());
+            assert!(content.relic(u32::MAX).is_none());
+
+            // 具体行：格值抄自 `reader.py`（`--entity`）读出来的同一行。
+            let card = content.card(0).unwrap();
+            assert_eq!(card.index(), 0);
+            assert_eq!(card.row().u16_len(), 16, "15 格 + 1 格对齐填充");
+            assert_eq!(card.id(), 950);
+            assert_eq!(content.string(card.id()), Some("paper_cut"));
+            assert_eq!(card.program(), 4);
+            assert_eq!(card.tags(), 8);
+            assert_eq!(card.costs(), 10);
+            assert_eq!(card.lifecycle_programs(), 11);
+            assert_eq!(card.play_condition(), ABSENT16);
+            assert_eq!(card.queue_on_play(), ABSENT16);
+            assert_eq!(card.retain_in_hand_on_turn_end(), BOOL_FALSE);
+            assert_eq!(card.is_action(), BOOL_ABSENT, "键存在且为 false ≠ 键不存在");
+            assert_eq!(card.package_id(), 1_157);
+            assert_eq!(card.turn_end_hand_destination_zone(), 52);
+            assert_eq!(card.played_card_destination_zone(), 52);
+            assert_eq!(card.extra(), NULL16);
+            assert_eq!(content.entity_id(Table::Card, 0), Some("paper_cut"));
+            assert_eq!(content.entity_id(Table::Card, 42), Some("overfilled_inbox"));
+            assert_eq!(
+                content.entity_id(Table::Card, 61),
+                Some("approved_for_disposal+")
+            );
+            assert_eq!(content.entity_id(Table::Card, 62), None);
+
+            let status = content.status(0).unwrap();
+            assert_eq!(content.string(status.id()), Some("paperwork"));
+            assert_eq!(status.name_key(), ABSENT16);
+            assert_eq!(status.polarity(), 43);
+            assert_eq!(status.stacking_behavior(), 108);
+            assert_eq!(status.tags(), 264);
+            assert_eq!(status.triggers(), 58);
+            assert_eq!(status.uses_stacks(), BOOL_TRUE);
+            assert_eq!(status.uses_duration(), BOOL_FALSE);
+            assert_eq!(status.uses_charges(), BOOL_FALSE);
+            assert_eq!(status.extra(), NULL16);
+            assert_eq!(content.entity_id(Table::Status, 22), Some("sustained"));
+
+            let action = content.enemy_action(0).unwrap();
+            assert_eq!(
+                content.entity_id(Table::EnemyAction, 0),
+                Some("a_very_official_line.shuffle_forward")
+            );
+            assert_eq!(action.intent(), 422);
+            assert_eq!(action.program(), 425);
+            assert_eq!(action.extra(), NULL16);
+            assert_eq!(
+                content.entity_id(Table::EnemyAction, 393),
+                Some("sealed_spear.long_reach")
+            );
+
+            let encounter = content.encounter(0).unwrap();
+            assert_eq!(content.entity_id(Table::Encounter, 0), Some("city_easy_01"));
+            assert_eq!(encounter.enemies(), 767);
+            assert_eq!(encounter.hero_resources(), 769);
+            assert_eq!(encounter.hero_starting_statuses(), 771);
+            assert_eq!(encounter.triggered_effects(), 58);
+            assert_eq!(encounter.hero_display_name(), ABSENT16);
+            assert_eq!(
+                encounter.cards_drawn_per_turn(),
+                NULL_INT,
+                "32769 = -32767 = 「键存在且为 null」"
+            );
+            assert_eq!(encounter.extra(), NULL16);
+            assert_eq!(
+                content.entity_id(Table::Encounter, 108),
+                Some("city_easy_form_06")
+            );
+
+            let relic = content.relic(0).unwrap();
+            assert_eq!(content.entity_id(Table::Relic, 0), Some("self_inking_stamp"));
+            assert_eq!(relic.display_name(), ABSENT16);
+            assert_eq!(relic.run_programs(), 1_219);
+            assert_eq!(relic.combat_rules(), 58);
+            assert_eq!(relic.extra(), NULL16);
+            assert_eq!(content.entity_id(Table::Relic, 33), Some("overfilled_inbox"));
+            assert_eq!(
+                content.entity_id(Table::Relic, 48),
+                Some("bottomless_inbox_tray")
+            );
+
+            // 表不对 → 收窄失败。
+            let row = content.row(Table::Card, 0).unwrap();
+            assert!(CardRow::new(row).is_some());
+            assert!(RelRow::new(row).is_none());
+            assert_eq!(Row::from(content.card(0).unwrap()), row);
+        });
+    }
+
+    #[test]
+    fn row_accessors_agree_with_the_written_schema() {
+        with_core(|content, _| {
+            assert_eq!(Table::Card.schema_name(), "CARD");
+            assert_eq!(Table::Status.schema_name(), "STATUS");
+            assert_eq!(Table::Card.name(), "CARD");
+            assert_eq!(Table::Status.name(), "STAT");
+            assert_eq!(Table::Card.entity_kind(), EK_CARD);
+            assert_eq!(Table::from_entity_kind(EK_RELIC), Some(Table::Relic));
+            assert_eq!(Table::from_entity_kind(EK_EVENT), None);
+            assert_eq!(Table::from_entity_kind(0), None);
+            assert_eq!(entity_kind_name(EK_ENCOUNTER), Some("encounter"));
+            assert_eq!(entity_kind_name(0), None);
+
+            // schema 的格序与 `rdcfmt.ROW_SCHEMAS` 逐项相同（键名、类别、包装 flags）。
+            assert_eq!(CARD_SCHEMA[0], cell("Id", F_STR, 0));
+            assert_eq!(CARD_SCHEMA[14], cell("extra", F_TERM, 0));
+            assert_eq!(STATUS_SCHEMA[19], cell("extra", F_TERM, 0));
+            assert_eq!(ENCT_SCHEMA[0], cell("Id", F_STR, FLAG_WRAP_UPPER));
+            assert_eq!(ENCT_SCHEMA[6], cell("CardsDrawnPerTurn", F_INT, 0));
+            assert_eq!(EACT_SCHEMA[5], cell("Program", F_TERM, 0));
+            assert_eq!(REL_SCHEMA[2], cell("RunPrograms", F_TERM, 0));
+            assert_eq!(Table::Card.schema().len(), 15);
+            assert_eq!(Table::Status.schema().len(), 20);
+
+            // 命名 getter 取的就是 schema 里那一格。
+            let card = content.card(0).unwrap();
+            let row = card.row();
+            for (name, got) in [
+                ("Id", card.id()),
+                ("Program", card.program()),
+                ("Tags", card.tags()),
+                ("Costs", card.costs()),
+                ("LifecyclePrograms", card.lifecycle_programs()),
+                ("PlayCondition", card.play_condition()),
+                ("QueueOnPlay", card.queue_on_play()),
+                ("RetainInHandOnTurnEnd", card.retain_in_hand_on_turn_end()),
+                ("IsAction", card.is_action()),
+                ("NameKey", card.name_key()),
+                ("DescriptionKey", card.description_key()),
+                ("PackageId", card.package_id()),
+                ("TurnEndHandDestinationZone", card.turn_end_hand_destination_zone()),
+                ("PlayedCardDestinationZone", card.played_card_destination_zone()),
+                ("extra", card.extra()),
+            ] {
+                assert_eq!(row.cell_by_name(name), Some(got), "CARD.{name}");
+            }
+
+            let status = content.status(0).unwrap();
+            let row = status.row();
+            for (name, got) in [
+                ("Id", status.id()),
+                ("NameKey", status.name_key()),
+                ("DescriptionKey", status.description_key()),
+                ("PackageId", status.package_id()),
+                ("Polarity", status.polarity()),
+                ("StackingBehavior", status.stacking_behavior()),
+                ("Tags", status.tags()),
+                ("Triggers", status.triggers()),
+                ("PassiveModifiers", status.passive_modifiers()),
+                ("CombatRules", status.combat_rules()),
+                ("DeathPrevention", status.death_prevention()),
+                ("DebuffBlock", status.debuff_block()),
+                ("IncomingStatusDelay", status.incoming_status_delay()),
+                ("Disclosure", status.disclosure()),
+                ("Prevention", status.prevention()),
+                ("Amplification", status.amplification()),
+                ("UsesStacks", status.uses_stacks()),
+                ("UsesDuration", status.uses_duration()),
+                ("UsesCharges", status.uses_charges()),
+                ("extra", status.extra()),
+            ] {
+                assert_eq!(row.cell_by_name(name), Some(got), "STATUS.{name}");
+            }
+
+            let action = content.enemy_action(0).unwrap();
+            for (name, got) in [
+                ("Id", action.id()),
+                ("NameKey", action.name_key()),
+                ("DescriptionKey", action.description_key()),
+                ("PackageId", action.package_id()),
+                ("Intent", action.intent()),
+                ("Program", action.program()),
+                ("extra", action.extra()),
+            ] {
+                assert_eq!(action.row().cell_by_name(name), Some(got), "EACT.{name}");
+            }
+
+            let encounter = content.encounter(0).unwrap();
+            for (name, got) in [
+                ("Id", encounter.id()),
+                ("Enemies", encounter.enemies()),
+                ("HeroResources", encounter.hero_resources()),
+                ("HeroStartingStatuses", encounter.hero_starting_statuses()),
+                ("TriggeredEffects", encounter.triggered_effects()),
+                ("HeroDisplayName", encounter.hero_display_name()),
+                ("CardsDrawnPerTurn", encounter.cards_drawn_per_turn()),
+                ("extra", encounter.extra()),
+            ] {
+                assert_eq!(encounter.row().cell_by_name(name), Some(got), "ENCT.{name}");
+            }
+
+            let relic = content.relic(0).unwrap();
+            for (name, got) in [
+                ("Id", relic.id()),
+                ("DisplayName", relic.display_name()),
+                ("RunPrograms", relic.run_programs()),
+                ("CombatRules", relic.combat_rules()),
+                ("extra", relic.extra()),
+            ] {
+                assert_eq!(relic.row().cell_by_name(name), Some(got), "REL.{name}");
+            }
+
+            // schema 里没有的键 / 越界格。
+            assert_eq!(card.row().cell_by_name("Nope"), None);
+            assert_eq!(card.row().cell_index("extra"), Some(14));
+            assert_eq!(card.row().cell(15), None, "第 15 格是填充之外的越界");
+            assert_eq!(card.row().cell(u32::MAX), None);
+            assert_eq!(card.row().cell_kind(0), Some(F_STR));
+            assert_eq!(card.row().cell_kind(99), None);
+        });
+    }
+
+    #[test]
+    fn the_id_index_is_sorted_and_lookup_matches_the_reference() {
+        with_core(|content, _| {
+            assert_eq!(content.id_count(), 691);
+            assert!(content.id_entry(691).is_none());
+            assert!(content.id_entry(usize::MAX).is_none());
+
+            // 全表按 id 字符串非递减（`reader.py` 直接靠这一点二分）。
+            let mut previous = "";
+            for i in 0..content.id_count() {
+                let entry = content.id_entry(i).unwrap();
+                assert!(entry.position == i as u32);
+                assert!(entry.id >= previous, "IDX[{i}] 顺序坏了");
+                assert_eq!(entry.flags, 0, "真实镜像的 flags 字节全是 0");
+                previous = entry.id;
+            }
+
+            assert_eq!(content.id_entry(0).unwrap().id, "Bureaucrat");
+            assert_eq!(content.id_entry(0).unwrap().entity_kind, EK_CHARACTER);
+            // 同一个 index 被两个字符 id（只差大小写）指着。
+            assert_eq!(content.id_entry(75).unwrap().id, "bureaucrat");
+            assert_eq!(content.id_entry(75).unwrap().index, 0);
+
+            let paperwork = content.lookup("paperwork").unwrap();
+            assert_eq!(paperwork.entity_kind, EK_STATUS);
+            assert_eq!(paperwork.index, 0);
+            assert_eq!(content.id_entry(paperwork.position as usize), Some(paperwork));
+            assert!(content.lookup("NOPE").is_none());
+            assert!(content.lookup("").is_none());
+
+            // 同一个 id 既是卡牌又是遗物：`lookup` 取最靠前的一条（= reader.py 的 setdefault）。
+            let first = content.lookup("overfilled_inbox").unwrap();
+            assert_eq!(first.position, 479);
+            assert_eq!((first.entity_kind, first.index), (EK_CARD, 42));
+            let second = content.id_entry(480).unwrap();
+            assert_eq!(second.id, "overfilled_inbox");
+            assert_eq!((second.entity_kind, second.index), (EK_RELIC, 33));
+            assert_eq!(content.lookup_in("overfilled_inbox", EK_RELIC), Some(second));
+            assert_eq!(content.lookup_in("overfilled_inbox", EK_CARD), Some(first));
+            assert_eq!(content.lookup_in("overfilled_inbox", EK_MAPNODE), None);
+
+            // id → 行。
+            let row = content.resolve("paperwork").unwrap();
+            assert_eq!(row.table(), Table::Status);
+            assert_eq!(row.index(), 0);
+            assert!(content.resolve("NOPE").is_none());
+            // `Bureaucrat` 是 character，没有定长表。
+            assert!(content.resolve("Bureaucrat").is_none());
+        });
+    }
+
+    #[test]
+    fn every_entity_id_resolves_to_its_own_row() {
+        with_core(|content, _| {
+            let mut seen = [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+            for i in 0..content.id_count() {
+                let entry = content.id_entry(i).unwrap();
+                let Some(table) = Table::from_entity_kind(entry.entity_kind) else {
+                    continue;
+                };
+                let row = content
+                    .row(table, entry.index as u32)
+                    .unwrap_or_else(|| panic!("{}/{} 没有对应的行", entry.id, table.name()));
+                assert_eq!(row.table(), table);
+                assert_eq!(row.index(), entry.index as u32);
+                let row_id = content
+                    .entity_id(table, entry.index as u32)
+                    .unwrap_or_else(|| panic!("{}/{} 的 Id 格读不出来", entry.id, table.name()));
+                assert_eq!(row_id, entry.id, "IDX 与表里的 Id 必须一致");
+                seen[entry.entity_kind as usize - 1].push(entry.index);
+            }
+
+            // 每类实体的 index 恰好把表铺满：0..count 一个不多一个不少。
+            for (i, table) in Table::ALL.into_iter().enumerate() {
+                let mut indices = seen[i].clone();
+                indices.sort_unstable();
+                let expected: Vec<u16> = (0..content.section(table.section_id()).unwrap().count as u16)
+                    .collect();
+                assert_eq!(indices, expected, "{} 的索引不连续", table.name());
+                assert_eq!(indices.len(), content.rows(table).count());
+            }
+        });
+    }
+
+    #[test]
+    fn opcodes_terms_roots_and_aux_decode() {
+        with_core(|content, _| {
+            assert_eq!(content.opcode_count(), 130);
+            assert_eq!(content.term_count(), 2_143);
+            assert_eq!(content.aux_cells(), 2_078);
+            assert_eq!(content.root_count(), 16);
+
+            // 保留 opcode：名字是空串。字段数由各自的固定语义决定（op 0 无字段、1..7 各一个、
+            // 8..15 是空洞）。
+            for op in 0..=15u16 {
+                let descriptor = content.opcode(op).unwrap();
+                assert_eq!(descriptor.name_str, 0, "保留 opcode {op} 没有名字");
+                assert_eq!(content.opcode_name(op), Some(""));
+            }
+            assert_eq!(content.opcode(OP_NULL).unwrap().nfields(), 0);
+            assert_eq!(content.opcode(OP_NULL).unwrap().nslots(), Some(0));
+            assert_eq!(content.opcode(OP_STR).unwrap().nfields(), 1);
+            assert_eq!(content.opcode(OP_STR).unwrap().field(0).unwrap().kind(), F_STR);
+            assert_eq!(content.opcode(OP_ARR).unwrap().nslots(), Some(2), "TERMLIST 占两槽");
+            assert_eq!(
+                content.opcode(OP_JSON).unwrap().field(0).unwrap().kind(),
+                F_JSON
+            );
+            assert_eq!(
+                content.opcode(OP_WRAP_LOWER).unwrap().field(0).unwrap().flags(),
+                FLAG_WRAP_LOWER
+            );
+            assert_eq!(
+                content.opcode(OP_WRAP_UPPER).unwrap().field(0).unwrap().flags(),
+                FLAG_WRAP_UPPER
+            );
+            for op in 8..=15u16 {
+                let hole = content.opcode(op).unwrap();
+                assert_eq!((hole.nfields(), hole.nslots()), (0, Some(0)));
+                assert_eq!(hole.opclass, OPCLASS_IR, "空洞的 opclass 是 0");
+            }
+            // 0..7 的 opclass 是"普通对象"，8..15 才是 IR —— 所以 op < 16 必须先特判语义。
+            assert_eq!(content.opcode(OP_NULL).unwrap().opclass, OPCLASS_GENERIC);
+            assert_eq!(content.opcode(OP_STR).unwrap().opclass, OPCLASS_GENERIC);
+            assert_eq!(content.opcode(OP_WRAP_UPPER).unwrap().opclass, OPCLASS_GENERIC);
+
+            let add = content.opcode(16).unwrap();
+            assert_eq!(content.opcode_name(16), Some("add"));
+            assert!(add.is_ir());
+            assert_eq!(add.nfields(), 2);
+            assert_eq!(add.nslots(), Some(2));
+            assert_eq!(content.string(add.field(0).unwrap().name_str()), Some("Left"));
+            assert_eq!(content.string(add.field(1).unwrap().name_str()), Some("Right"));
+            assert_eq!(add.field(0).unwrap().kind(), F_TERM);
+            assert_eq!(add.field(0).unwrap().slots(), Some(1));
+            assert_eq!(add.fields().count(), 2);
+            assert!(add.field(2).is_none());
+            assert!(add.field(usize::MAX).is_none());
+
+            // 带包装 flag / 双槽字段的例子。
+            let add_status = content.opcode(52).unwrap();
+            assert_eq!(content.opcode_name(52), Some("node.applyStatus"));
+            assert_eq!(add_status.nfields(), 7);
+            assert_eq!(add_status.nslots(), Some(8));
+            let status_field = add_status
+                .fields()
+                .find(|f| content.string(f.name_str()) == Some("StatusDefinitionId"))
+                .unwrap();
+            assert_eq!(status_field.kind(), F_STR);
+            assert_eq!(status_field.flags(), FLAG_WRAP_LOWER);
+
+            // 普通对象形状（opclass = 1），nslots 由字段类别求和（TERMLIST 占 2 槽）。
+            let shape = content.opcode(129).unwrap();
+            assert_eq!(content.opcode_name(129), Some("_obj"));
+            assert!(!shape.is_ir());
+            assert_eq!((shape.nfields(), shape.nslots()), (2, Some(3)));
+
+            // opcode 越界。
+            assert!(content.opcode(130).is_none());
+            assert!(content.opcode(u16::MAX).is_none());
+            assert!(content.opcode_name(130).is_none());
+
+            // term：tid 0 是 `_null`（所以 0 是合法且永远存在的 term）。
+            let null = content.term(0).unwrap();
+            assert_eq!((null.id, null.op), (0, OP_NULL));
+            assert_eq!(null.nslots(), 0);
+            assert!(null.slots_bytes().is_empty());
+            assert_eq!(content.term(0).unwrap().slot(0), None);
+
+            let constant = content.term(1).unwrap();
+            assert_eq!(constant.op, 27);
+            assert_eq!(content.opcode_name(constant.op), Some("const"));
+            assert_eq!(constant.nslots(), 1);
+            assert_eq!(constant.slot(0), Some(6));
+            assert_eq!(constant.slot(1), None);
+
+            let selector = content.term(2).unwrap();
+            assert_eq!(selector.op, 80);
+            assert_eq!(content.opcode_name(selector.op), Some("sel.eventTarget"));
+            assert_eq!(
+                [selector.slot(0), selector.slot(1), selector.slot(2)],
+                [Some(213), Some(70), None]
+            );
+
+            let last = content.term(2_142).unwrap();
+            assert_eq!(last.op, 119);
+            assert_eq!(content.opcode_name(last.op), Some("_obj"));
+            assert_eq!([last.slot(0), last.slot(1)], [Some(6), Some(1)]);
+            assert!(content.term(2_143).is_none(), "term id 上界 = term_count()");
+            assert!(content.term(u16::MAX).is_none());
+
+            // AUX 的列表体。
+            assert_eq!(content.aux(0), Some(5));
+            assert_eq!(content.aux(7), Some(7));
+            assert_eq!(content.aux(2_078), None);
+            assert_eq!(content.aux(u16::MAX), None);
+
+            // ROOT：顶层键 → term。
+            assert_eq!(content.root_count(), 16);
+            assert_eq!(content.root_by_name("Map"), Some(2_124));
+            assert_eq!(content.root_by_name("Events"), Some(1_902));
+            assert_eq!(content.root_by_name("Start"), Some(1_440));
+            assert_eq!(content.root_by_name("Deck"), Some(1_447));
+            assert_eq!(
+                content.root_by_name("MapGeneration"),
+                Some(0),
+                "顶层键可以指向 `_null`（tid 0）"
+            );
+            assert!(content.root_by_name("Presentation").is_none(), "core 镜像剥了表现层");
+            assert_eq!(content.root(0).unwrap().key, "Balance");
+            assert_eq!(content.root(0).unwrap().term, 1_438);
+            assert!(content.root(16).is_none());
+            assert!(content.root(usize::MAX).is_none());
+            // 每个根指针都指向一条真实存在的 term。
+            for i in 0..content.root_count() {
+                let root = content.root(i).unwrap();
+                assert!(content.term(root.term).is_some(), "根 {} 悬空", root.key);
+            }
+        });
+    }
+
+    // ------------------------------------------------------------ 结构自检
+
+    #[test]
+    fn the_real_images_validate() {
+        with_core(|content, _| {
+            assert_eq!(content.validate(), Ok(()));
+        });
+    }
+
+    #[test]
+    fn validate_catches_every_structural_fault() {
+        let original = read_image(CORE_IMAGE);
+
+        // 段重叠：把 STRO 挪进 STR 里。
+        let mut blob = original.clone();
+        patch32(&mut blob, dir_base(S_STRO), 272);
+        let content = Content::parse(&blob).expect("parse 只管范围，重叠要由 validate 抓");
+        assert_eq!(
+            content.validate(),
+            Err(ValidationError::Overlap { a: S_STR, b: S_STRO })
+        );
+
+        // 未 4 字节对齐。
+        let mut blob = original.clone();
+        patch32(&mut blob, dir_base(S_STRO), 31_326);
+        let content = Content::parse(&blob).unwrap();
+        assert_eq!(
+            content.validate(),
+            Err(ValidationError::Misaligned { index: S_STRO })
+        );
+
+        // count × stride > bytes（CARD 声明 63 行，只有 62 行的字节）。
+        let mut blob = original.clone();
+        patch32(&mut blob, dir_base(S_CARD) + 8, 63);
+        let content = Content::parse(&blob).unwrap();
+        assert_eq!(
+            content.validate(),
+            Err(ValidationError::CountExceedsBytes {
+                index: S_CARD,
+                count: 63,
+                stride: 32,
+                bytes: 1_984,
+            })
+        );
+        // 但按字节取行仍然是安全的：第 63 行拿不到。
+        assert!(content.card(62).is_none());
+        assert_eq!(content.rows(Table::Card).count(), 62);
+
+        // 字符串池：STRO 不再严格递增。
+        let mut blob = original.clone();
+        patch32(&mut blob, 31_324, 100);
+        let content = Content::parse(&blob).unwrap();
+        assert_eq!(
+            content.validate(),
+            Err(ValidationError::BadStringIndex { entry: 1 })
+        );
+        // 坏池子读出来是空串（不是 panic、也不是越界读）。
+        assert_eq!(content.string(1), Some(""));
+
+        // 字符串池：STR 的 count 与索引表长度对不上。
+        let mut blob = original.clone();
+        patch32(&mut blob, dir_base(S_STR) + 8, 9_999);
+        let content = Content::parse(&blob).unwrap();
+        assert_eq!(
+            content.validate(),
+            Err(ValidationError::StringCountMismatch {
+                entries: 1_376,
+                str_count: 9_999,
+                stro_count: 1_376,
+            })
+        );
+
+        // 字符串池：末项越过池尾。
+        let mut blob = original.clone();
+        patch32(&mut blob, 31_324 + 4 * 1_375, 40_000);
+        let content = Content::parse(&blob).unwrap();
+        assert_eq!(
+            content.validate(),
+            Err(ValidationError::BadStringIndex { entry: 1_375 })
+        );
+
+        // 原始镜像是干净的。
+        let content = Content::parse(&original).unwrap();
+        assert_eq!(content.validate(), Ok(()));
+    }
+
+    #[test]
+    fn a_synthetic_minimal_image_parses() {
+        // 手搓一个小镜像：目录 7 项（段号 0..6 = STR…AUX），其中 STR/STRO 是空段
+        // （`count == 0, bytes == 0`，实测真实镜像的 TAGS 就是这个形状），AUX 有 2 个格。
+        const NSEC: usize = 7;
+        let mut blob = vec![0u8; HEADER_BYTES + DIRECTORY_ENTRY_BYTES * NSEC];
+        blob[0..4].copy_from_slice(&MAGIC.to_le_bytes());
+        blob[HDR_VERSION..HDR_VERSION + 2].copy_from_slice(&FORMAT_VERSION.to_le_bytes());
+        blob[HDR_NSEC..HDR_NSEC + 2].copy_from_slice(&(NSEC as u16).to_le_bytes());
+        blob[HDR_DIR_OFF..HDR_DIR_OFF + 4].copy_from_slice(&(HEADER_BYTES as u32).to_le_bytes());
+        blob[HDR_SCHEMA_VERSION..HDR_SCHEMA_VERSION + 2].copy_from_slice(&7u16.to_le_bytes());
+        let section_base = HEADER_BYTES + DIRECTORY_ENTRY_BYTES * NSEC;
+        let total = (section_base + 4) as u32;
+        blob[HDR_TOTAL_SIZE..HDR_TOTAL_SIZE + 4].copy_from_slice(&total.to_le_bytes());
+        blob.extend_from_slice(&[9, 0, 8, 0]); // AUX = [9, 8]
+
+        for (index, offset, bytes, count) in [
+            (S_STR, 0u32, 0u32, 0u32),   // 空段
+            (S_STRO, 0, 0, 0),           // 空段
+            (S_AUX, section_base as u32, 4, 2),
+        ] {
+            let base = dir_base(index);
+            blob[base..base + 4].copy_from_slice(&offset.to_le_bytes());
+            blob[base + 4..base + 8].copy_from_slice(&bytes.to_le_bytes());
+            blob[base + 8..base + 12].copy_from_slice(&count.to_le_bytes());
+        }
+
+        let content = Content::parse(&blob).expect("小镜像必须能解析");
+        assert_eq!(content.section_count(), NSEC);
+        assert_eq!(content.version(), FORMAT_VERSION);
+        assert_eq!(content.schema_version(), 7);
+        assert_eq!(content.total_size(), total);
+        assert_eq!(content.validate(), Ok(()));
+        assert!(
+            content.section_by_name("AUX").unwrap().data == [9u8, 0, 8, 0].as_slice(),
+            "AUX 是两个小端 u16：9 和 8"
+        );
+        assert_eq!(content.aux(0), Some(9));
+        assert_eq!(content.aux(1), Some(8));
+        assert_eq!(content.aux(2), None);
+        assert!(content.section(S_STR).unwrap().is_empty());
+        assert!(content.section_by_name("STR").unwrap().is_empty());
+        assert!(content.section(S_TRW).unwrap().is_empty(), "目录里没写的段是空的");
+        // 空池：只有串号 0。
+        assert_eq!(content.string_count(), 0);
+        assert_eq!(content.string(0), Some(""));
+        assert_eq!(content.string(1), None);
+        assert_eq!(content.strings().count(), 0);
+        // 缺席的表都是空的。
+        assert_eq!(content.id_count(), 0);
+        assert_eq!(content.term_count(), 0);
+        assert_eq!(content.root_count(), 0);
+        assert_eq!(content.opcode_count(), 0);
+        assert_eq!(content.rows(Table::Card).count(), 0);
+        assert!(content.card(0).is_none());
+        assert!(content.lookup("paperwork").is_none());
+        // 段号 7 不在目录里（nsec = 7）。
+        assert!(content.section(NSEC).is_none());
+        exercise(&blob);
+    }
+}

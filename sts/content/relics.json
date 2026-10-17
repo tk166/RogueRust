@@ -1,0 +1,12 @@
+[
+  {"id": "burning_blood", "name": "燃烧之血", "rarity": "STARTER",
+   "desc": "战斗结束后回复 6 点生命。"},
+  {"id": "vajra", "name": "金刚杵", "rarity": "COMMON",
+   "desc": "战斗开始时获得 1 点力量。"},
+  {"id": "anchor", "name": "锚", "rarity": "COMMON",
+   "desc": "战斗开始时获得 10 点格挡。"},
+  {"id": "oddly_smooth_stone", "name": "光滑的石头", "rarity": "COMMON",
+   "desc": "战斗开始时获得 1 点敏捷。"},
+  {"id": "blood_vial", "name": "血瓶", "rarity": "COMMON",
+   "desc": "战斗开始时回复 2 点生命。"}
+]

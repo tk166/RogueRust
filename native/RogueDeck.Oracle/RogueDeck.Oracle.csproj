@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Second NativeAOT spike: does the CONTENT layer (RogueDeck.Scenario - the authoring DSL,
+       the scenario runner) survive AOT as well as the combat core did?
+
+       This is the gating question for the conformance corpus generator. If it compiles, Python
+       can build scenarios, run them in-process at thousands per second, and read back a
+       golden state hash - which is exactly the oracle the ported kernel has to match.
+       If it does not, corpus generation has to go through the (much slower) CLI. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <PublishAot>true</PublishAot>
+    <NativeLib>Shared</NativeLib>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <IsAotCompatible>true</IsAotCompatible>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ref\RogueDeck-Core\src\RogueDeck.Core\RogueDeck.Core.csproj" />
+    <ProjectReference Include="..\..\ref\RogueDeck-Core\src\RogueDeck.Scenario\RogueDeck.Scenario.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,12 @@
+[package]
+name = "rd-core"
+description = "Ported RogueDeck combat kernel: no_std, integer-only, no allocator."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# Deliberately empty. Every dependency is a portability liability on a bare-metal target.
