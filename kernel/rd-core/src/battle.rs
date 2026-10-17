@@ -41,18 +41,24 @@
 //! 4. 参考的 `ScenarioReport` 持有一整份 `CombatState`；内核这边**状态由调用方提供**
 //!    （`&mut CombatState`），因为它在裸机上 180 KB，不该被复制来复制去。
 //!
-//! # 现在的状态：实现了，但有三处"冻结面没给够"（每一处都写在自己的小节里）
+//! # 现在的状态：实现了；两处冻结面的洞已按裁决补上（2026-10-18）
 //!
-//! `build_fight` / `run_fight` 已经照规格书逐行落地，测试全部接真实镜像
-//! （`tools/contentc/out/content.core.rdcf`）。落地过程中撞到**三个接口层面的洞**，
-//! 每一个都在下面那一节里写明"我怎么办的"以及"正确的修法是什么"：
+//! `build_fight` / `run_fight` 照规格书逐行落地，测试全部接真实镜像
+//! （`tools/contentc/out/content.core.rdcf`）。落地时撞到的两个**接口层面的洞**已经
+//! 由冻结方裁决修掉，历史记录在本文件底部 §"冻结面的四个洞（已裁决）"，现在的形状是：
 //!
-//! * [`FROZEN_GAP_TURN_CONFIG`] —— `run_fight` 收不到 `TurnConfig`，也收不到 `FightPlan`；
-//! * [`FROZEN_GAP_HERO_ID`] —— `run_fight` 收不到英雄 id；
-//! * [`FROZEN_GAP_RESULT`] —— 全仓**没有任何代码**算胜负（`state.result` 永远是 `Ongoing`）。
+//! * `run_fight` 收 **`&FightPlan`** ⇒ 抽牌数与补能配置有正规来路（不再是硬编码标准包）；
+//! * 英雄 id 取自 `plan.hero.id`（不再按队推断）；
+//! * [`Problem::StillHeroTurn`] 补上了（`:241` 与 `:248` 是两件修法相反的事）。
 //!
-//! 另外 [`Problem`] 少一个变体（参考 `ScenarioRunner.cs:241` 的 "it is still the hero's turn"
-//! 与 `:248` 的 "could not advance" 是**两条不同的**问题），见 [`FROZEN_GAP_PROBLEM`]。
+//! 仍然留着的两条（都是**参考实现里真实存在、而 v1 缺一层能力**的地方，见 [`DEVIATIONS`]）：
+//!
+//! * 胜负由本模块在**每次引擎调用之后**算（[`settle_result`]），因为全仓没有代码写
+//!   `state.result`；参考是在队列排空时算的 —— 粒度差异见 [`FROZEN_GAP_RESULT`]；
+//! * `Problem::HeroDowned` 在当前能力下**最多只能观测到一次**：v1 没有友军，英雄一倒
+//!   玩家队就没有活人 ⇒ 当场判 `Defeat` ⇒ 下一步先撞 `:40` 的终态门。参考要它持续
+//!   存在得有"a summoned ally keeps the team alive"（`:46-48` 的原注释）—— 那不是缺陷，
+//!   是这条分支可达性的上界。
 
 use crate::content::{Content, ABSENT16, EK_CARD, EK_EACTION, F_TERM, LIST_ABSENT, LIST_NULL, NULL16,
     OP_ARR, OP_WRAP_LOWER};
@@ -76,77 +82,42 @@ pub const MAX_STEPS: usize = 64;
 /// 参考里一步最多记 2～3 条；32 是"内容怎么坏都装得下"的取法，超了同样是响亮失败。
 pub const MAX_PROBLEMS_PER_STEP: usize = 32;
 
-/// 三条**接口层面的洞**的说明（冻结方 2026-10-18 交给执行方时留下的，执行方按现实实现）。
+/// 仍然存在的**偏差 / 可达上界**（裁决后剩下的两条）。
 ///
-/// 它们不是"注释"，是**已经发生的偏差**。任何读到本模块的人第一件该知道的事就是这三条。
-///
-/// # `FROZEN_GAP_TURN_CONFIG`
-///
-/// `run_fight` 的签名是 `(state, content, steps, host, out)` —— 里面**没有** `TurnConfig`，
-/// 也没有 `FightPlan`。而回合机三个入口（`start_current_turn` / `end_current_turn` /
-/// `end_current_turn_and_start_next`）**都要** `&TurnConfig`，参考那边这组数字来自标准包
-/// （`StandardCombatPackage.cs:7` 的抽牌数、`:124` 的能量补到几点）。
-///
-/// ⇒ 本模块用一份**硬编码的标准包配置** [`standard_turn_config`]。后果是
-/// [`FightPlan::cards_drawn_per_turn`] 与 [`FightPlan::turn_start_refills`] 这两个字段
-/// **到不了回合机** ⇒ `build_fight` 会把"蓝图要的和本模块会给的不一致"直接拒掉
-/// （[`check_turn_knobs`]），而不是静默按标准包跑。
-///
-/// **正确的修法**：给 `run_fight` 补一个 `config: &TurnConfig` 参数（或 `plan: &FightPlan`），
-/// 那时 [`check_turn_knobs`] 整段删掉。
-///
-/// 公开它是因为它要**打出来**：`rd-fightdump` 每个场景头上把这四条印成一行，
+/// 公开它是因为它要**打出来**：`rd-fightdump` 每个场景头上把这行印出来，
 /// 好让读输出的人第一眼知道"这份输出是在什么偏差下产生的"。
-pub const FROZEN_GAP_TURN_CONFIG: &str = "run_fight-cannot-see-TurnConfig";
+pub const DEVIATIONS: [&str; 2] = [
+    "result-settled-per-engine-call-not-per-queue-drain",
+    "hero-downed-observable-at-most-once-v1-has-no-allies",
+];
 
-/// # `FROZEN_GAP_HERO_ID`
-///
-/// 参考的 `Run` 先取一次 `compiled.Hero.CombatantId`（`ScenarioRunner.cs:29`），
-/// 之后每一步都在用它（`:102`、`:136`、`:172`、`:206`、`:239`）。内核的 `run_fight` 收不到
-/// 英雄 id，只看得到一个 `CombatState`。
-///
-/// ⇒ 本模块从**状态**里推：[`hero_of`] 取回合序里第一个 `team_id == "player"` 的单位。
-/// 这个推断在 `build_fight` 建出来的状态上**恰好正确**（英雄是第一个加进去的、队是 `player`），
-/// 但它是推断，不是契约。推不出来（没有 player 队）时**不报错**：参考在那种状态下走的是
-/// `:45-51` 的"英雄不在/已倒下"分支，本模块照抄（每步记一条 [`Problem::HeroDowned`]）。
-pub const FROZEN_GAP_HERO_ID: &str = "run_fight-cannot-see-hero-id";
-
-/// # `FROZEN_GAP_RESULT`
+/// # `FROZEN_GAP_RESULT` —— 仍在
 ///
 /// 参考的胜负由 `UpdateStandardCombatResultOnLifecycleChangedHandler`
 /// （`RogueDeck.Core/Combat/Effects/CombatStateEffects.cs:28-60`）在
-/// `CombatantLifecycleChanged` 事件上算，靠事件队列生效。
+/// `CombatantLifecycleChanged` 事件上算，靠事件队列在**下一次排空**时生效。
 ///
 /// 本内核**没有事件队列**，也没有那条 handler：`exec.rs` 把"扣到 0 转 `Downed`"就地做了，
 /// 但 `state.result` 全仓**没有任何生产代码**会写它（`host.rs:2900-2903` 的测试注释明确写着
 /// "本内核今天算不出胜负"）。⇒ 如果驱动层不算，`run_fight` 永远报 `Ongoing`，
 /// 规格书 §4 阶段 1 的那条判据（"整局能跑到 `Result != Ongoing`"）**不可能成立**。
 ///
-/// ⇒ 本模块在**每一步之后**调 [`settle_result`]（逐行照 `CombatStateEffects.cs:36-58`）。
-/// 这是本模块唯一一处"做了引擎该做的事"，理由与代价：
+/// ⇒ 本模块在**每一次引擎调用之后立刻**调 [`settle_result`]（逐行照
+/// `CombatStateEffects.cs:36-58`）。粒度是照参考的**守门点**取的：
 ///
-/// * 它是**参考实现里真实存在的语义**，不是发明 —— 只是它该住在宿主/事件层，而 v1 没有那一层；
-/// * 粒度更粗：参考在"生命周期变化"那一刻入队、在**下一次队列排空**时生效，本模块只在
-///   **步边界**算。对"一步 = 打一张牌"是可观察等价的（一张牌的程序跑完才排空队列）；
-///   对 `HeroEndsTurn` / `NextRound` 这类**一步里推好几次回合**的步则更粗 —— 见 §"未验证"。
+/// * `ScenarioRunner.cs:143`（`if (Result == Ongoing) EndCurrentTurnAndStartNextTurn`）、
+/// * `:206`（同一条形状，在 `NextRound` 里）、
+/// * `:211` 与 `:237`（两个 `while` 的条件里就带 `Result == Ongoing`）。
+///
+/// 也就是说"每推一次回合/每打一张牌/每执行一个敌人动作之后立刻判一次"，一旦不是
+/// `Ongoing` 就**停止本步内的后续推进**（已发生的状态不回滚 —— 参考也不回滚）。
+/// **比参考粗的唯一一格**：一次引擎调用**内部**（例如 `start_current_turn` 的七个处理器）
+/// 判不了，所以"某个 turn-start 处理器打死最后一个敌人"之后，同一次调用里剩下的处理器
+/// 仍会跑完（参考会在中间那次排空时停下）。这一格没有参考语义可抄，也没有测试。
 ///
 /// **正确的修法**：在 `host.rs` 里实现那条 handler（或给 `CombatState` 加事件队列），
 /// 那时 [`settle_result`] 整段删掉。
-pub const FROZEN_GAP_RESULT: &str = "no-code-computes-CombatResult";
-
-/// # `FROZEN_GAP_PROBLEM`
-///
-/// [`Problem`] 少一个变体：参考在 `AdvanceTurnsUntilActive` 里有**两条**不同的"推不到"：
-///
-/// * `:241` "It is still the hero's turn — call HeroEndsTurn before EnemyActs."（轮到英雄，
-///   驱动层不替英雄结束回合）；
-/// * `:248` "Could not advance to enemy …'s turn."（转了 `TurnOrder.Count + 1` 次还没轮到）。
-///
-/// 冻结的枚举只有 [`Problem::CannotReachEnemyTurn`] 一个桶，所以**两条都塌进它**。
-/// 对拍比"类别与条数"时这一条会少一个类别 —— 除非观察 `EnemyActs` 一步的具体条数
-/// （轮到英雄时是 **2 条**：`:241` 一条 + `:172` 的 "active 不是它" 一条）。
-/// 测试 `the_still_heroes_turn_problem_collapses_into_cannot_reach_enemy_turn` 把它钉住了。
-pub const FROZEN_GAP_PROBLEM: &str = "Problem-has-no-StillHeroTurn-variant";
+pub const FROZEN_GAP_RESULT: &str = "result-settled-per-engine-call-not-per-queue-drain";
 
 /// 蓝图里的一个战斗员。
 #[derive(Clone, Copy, Debug)]
@@ -173,9 +144,9 @@ pub struct DeckEntry<'a> {
 /// （`ir.rs` 是只读视图），所以**卡必须是镜像里真有的卡**。这是本模块与参考最大的一处
 /// 结构差异，也是"整局对拍"必须先在 C# 侧把同一张卡按镜像的 id 与程序 author 出来的原因。
 ///
-/// ⚠️ 另外两个字段今天**到不了回合机**（见 [`FROZEN_GAP_TURN_CONFIG`]）：
-/// `cards_drawn_per_turn` 与 `turn_start_refills` 只被 [`build_fight`] 用来**拒绝**
-/// 它所兑现不了的蓝图，`run_fight` 用的是标准包那一组数字。
+/// ⚠️ `cards_drawn_per_turn` 与 `turn_start_refills` 现在是**真的**喂给回合机的
+/// （[`turn_config_for`]）。后者有一处表达不了的形状：回合机只有一个能量资源
+/// （`TurnConfig::energy`），所以补能表**多于一条**会被响亮拒绝，而不是静默丢掉后面的。
 #[derive(Clone, Copy, Debug)]
 pub struct FightPlan<'a> {
     /// 战斗 id（进哈希）。
@@ -243,6 +214,14 @@ pub enum Problem {
     CardNotPlayed,
     /// 结束回合时行动者不是英雄（`:132-133`）。
     NotHeroTurnToEnd,
+    /// `EnemyActs` 推进时轮到**英雄**，驱动层不替英雄结束回合（`:239-243`）。
+    ///
+    /// ⚠️ 这个变体是 2026-10-18 冻结方补的（执行方报的缺口）。它与
+    /// [`Self::CannotReachEnemyTurn`] 必须分开，因为**修法相反**：
+    /// 这条是"脚本顺序写错了（先调 `HeroEndsTurn`）"，那条是"回合序没绕回它"。
+    /// 今天两条的参考原文分别是 `:241`（"It is still the hero's turn — call
+    /// HeroEndsTurn before EnemyActs."）与 `:248`（"Could not advance to enemy …'s turn."）。
+    StillHeroTurn,
     /// 指定敌人不存在（`:158-161`）。
     NoSuchEnemy,
     /// 战斗在敌人行动前就结束了（`:166-170`）。
@@ -272,6 +251,7 @@ impl Problem {
             Problem::CardNotInHand => "CardNotInHand",
             Problem::CardNotPlayed => "CardNotPlayed",
             Problem::NotHeroTurnToEnd => "NotHeroTurnToEnd",
+            Problem::StillHeroTurn => "StillHeroTurn",
             Problem::NoSuchEnemy => "NoSuchEnemy",
             Problem::CombatEndedBeforeEnemy => "CombatEndedBeforeEnemy",
             Problem::CannotReachEnemyTurn => "CannotReachEnemyTurn",
@@ -514,9 +494,9 @@ pub fn build_fight(
     // 步 6 的判定（`MoveInnateCardsToTop`）：参考的**挪牌**必须在洗牌之后（`:45-47`），
     // 但**判定**没有顺序依赖 ⇒ 提前到这里，失败时 state 还是干净的。
     reject_innate_deck(content, plan)?;
-    // 蓝图里那两个喂给回合机的旋钮（[`FROZEN_GAP_TURN_CONFIG`]）：拒绝兑现不了的蓝图，
-    // 别等到"跑起来了但抽牌数是错的"。
-    check_turn_knobs(plan)?;
+    // 蓝图里"喂回合机"的两项能不能被表达（抽牌数、补能表）—— 在这里先算一遍配置，
+    // 免得建完一局才发现那条路通向 `Turn(Host(Unsupported))`。
+    let _ = turn_config_for(plan)?;
     // 牌定义表（`:75`）。参考在这一步**不查**（它的注册表就是蓝图的一部分），
     // 内核的卡定义表**就是**镜像的 `CARD` 表，所以查不到必须响亮。
     for entry in plan.deck {
@@ -683,24 +663,42 @@ fn reject_innate_deck(content: &Content<'_>, plan: &FightPlan<'_>) -> Result<(),
     Ok(())
 }
 
-/// 蓝图里那两个"喂给回合机"的旋钮必须与 [`standard_turn_config`] 一致（见
-/// [`FROZEN_GAP_TURN_CONFIG`]）。
+/// 蓝图 → 回合机的 [`TurnConfig`]（`run_fight` 唯一一处把蓝图喂给回合机的地方）。
 ///
-/// 为什么**拒**而不是"照蓝图跑"：`run_fight` 收不到 `FightPlan`，它只能用标准包那一组数字。
-/// 于是"蓝图说抽 7 张、实际抽 5 张"会安静地发生 —— 而安静是这里最不能接受的失败。
-fn check_turn_knobs(plan: &FightPlan<'_>) -> Result<(), BattleError> {
-    if plan.cards_drawn_per_turn != CARDS_DRAWN_PER_TURN {
-        return Err(unsupported());
+/// 三项**由蓝图说了算**：`draw_per_turn` ← [`FightPlan::cards_drawn_per_turn`]；
+/// `energy` / `energy_refill` ← [`FightPlan::turn_start_refills`] 的第一条。
+/// 两项仍是标准包的：`block_pool` = `standard.block`、`max_hand_size` = `i32::MAX`
+/// （镜像里没有 `MaxHandSize` 法令，见 [`standard_turn_config`]）—— 蓝图没有这两个字段。
+///
+/// 三处如实说明（都不是"以后再说"，是**今天就是这样**）：
+///
+/// 1. **空补能表**：回合机没有"完全不补"这条路径（参考的标准包恒注册
+///    `RefillResourceOnTurnStartedHandler`，`StandardCombatPackage.cs:124`），所以空表
+///    保留标准包的 3。而只要蓝图给的能量池带 `max`，补到几点就由 `max` 决定
+///    （`turn.rs:438-449`：`let base = pool.pool.max.unwrap_or(config.energy_refill)`）
+///    ⇒ 那时这个字段**观察不可见**。"空 = 不补"这句蓝图文档因此只能近似表达。
+/// 2. **多于一条**：`TurnConfig` 只有一个能量资源（回合机只补一个池）⇒ 第二条及以后
+///    **表达不了**。静默丢掉等于让蓝图说谎，所以拒绝（[`unsupported`]）。
+/// 3. **负数抽牌**：`turn.rs:477-480` 把 `requested` 夹到 0（"一张都不抽"）；参考在
+///    `StandardCombatPackage.cs:9-11` 构造包时就抛。两者都不 panic，这里不额外拒绝。
+///
+/// # Errors
+///
+/// 补能资源 id 超容量 ⇒ [`BattleError::Capacity`]；补能表多于一条 ⇒ `Turn(Host(Unsupported))`。
+fn turn_config_for(plan: &FightPlan<'_>) -> Result<TurnConfig, BattleError> {
+    let mut config = standard_turn_config()?;
+    config.draw_per_turn = plan.cards_drawn_per_turn;
+    match plan.turn_start_refills {
+        // 空表：保留标准包那一组（理由见上第 1 条）。
+        [] => {}
+        [only] => {
+            config.energy = only.0;
+            config.energy_refill = only.1;
+        }
+        // 回合机只有一个能量资源，第二条表达不了。
+        _ => return Err(unsupported()),
     }
-    // 参考的 `RefillResourceOnTurnStartedHandler` 是**一个**处理器、一个资源、补到 3
-    // （`StandardCombatPackage.cs:124`）。蓝图给空表 = "不补"，那也是 run_fight 兑现不了的。
-    let [only] = plan.turn_start_refills else {
-        return Err(unsupported());
-    };
-    if only.0.as_str() != ENERGY || only.1 != ENERGY_REFILL {
-        return Err(unsupported());
-    }
-    Ok(())
+    Ok(config)
 }
 
 // =============================================================================================
@@ -863,6 +861,10 @@ impl Problems {
 /// 每一步的顺序照 `ScenarioRunner.Run`：取上下文 → 判断终态/英雄倒下 → 执行 →
 /// 记录这一步的问题。**任何一步的 `Problem` 都不中断循环**（参考就是这么做的）。
 ///
+/// 蓝图要两处信息：回合机的配置（[`turn_config_for`]）与**英雄 id**（`plan.hero.id`，
+/// 对应参考 `ScenarioRunner.cs:29` 的 `compiled.Hero.CombatantId`）。两者都只从蓝图来
+/// —— 不从状态里猜（"回合序里第一个 player 队"是 2026-10-18 之前那版的推断，已删）。
+///
 /// # 外壳逐行（`ScenarioRunner.cs:32-68`）
 ///
 /// ```text
@@ -882,8 +884,8 @@ impl Problems {
 /// # Errors
 ///
 /// 只有驱动层自己坏了才 `Err`：步数超 [`MAX_STEPS`] ⇒ [`BattleError::TooManySteps`]；
-/// 一步的问题超 [`MAX_PROBLEMS_PER_STEP`] ⇒ [`BattleError::TooManyProblems`]；以及
-/// `build_fight` 那一组（不会在这里出现）。
+/// 一步的问题超 [`MAX_PROBLEMS_PER_STEP`] ⇒ [`BattleError::TooManyProblems`]；蓝图里
+/// 读不出的东西（`plan.hero.id` 超容量、补能表多于一条）⇒ `Capacity` / `Turn(Host(..))`。
 ///
 /// ⚠️ **一步里抛出来的东西不算 `Err`**：参考把它们 catch 成 [`Problem::StepThrew`]
 /// 然后继续（`:52-63`）。本模块照抄 —— 所以回合机/出牌/敌人动作的 `TurnError`/`PlayError`
@@ -894,6 +896,7 @@ impl Problems {
 pub fn run_fight<H: TurnHost>(
     state: &mut CombatState,
     content: &Content<'_>,
+    plan: &FightPlan<'_>,
     steps: &[Step<'_>],
     host: &mut H,
     out: &mut FightOutcome,
@@ -901,8 +904,9 @@ pub fn run_fight<H: TurnHost>(
     if steps.len() > MAX_STEPS {
         return Err(BattleError::TooManySteps);
     }
-    let config = standard_turn_config()?;
-    let hero = hero_of(state);
+    let config = turn_config_for(plan)?;
+    // `ScenarioRunner.cs:29`：参考先取一次英雄 id，之后每一步都用它。
+    let hero = CombatantId::new(plan.hero.id)?;
     *out = FightOutcome::new();
     out.step_count = steps.len();
 
@@ -917,13 +921,13 @@ pub fn run_fight<H: TurnHost>(
             // `:40-44`
             problems.push(Problem::CombatAlreadyEnded)?;
             context_of(state)
-        } else if !hero.as_ref().is_some_and(|id| turn::is_alive(state, id)) {
-            // `:45-51`：英雄不在（`hero_of` 推不出来）或已倒下，都是这一条 —— 一字不差照抄。
+        } else if !turn::is_alive(state, &hero) {
+            // `:45` 是 `!TryGetCombatant(heroId, out hero) || !hero.IsAlive`。英雄是蓝图给的，
+            // 所以第一条只在"状态被别处改坏"时成立，仍然照抄：两者都记同一条。
             problems.push(Problem::HeroDowned)?;
             context_of(state)
         } else {
-            let hero = hero.as_ref();
-            match execute_step(state, content, &config, &step, host, hero, &mut problems) {
+            match execute_step(state, content, &config, &step, host, &hero, &mut problems) {
                 Ok(context) => context,
                 // 信封错误不许被吞成 StepThrew：那会把"问题记不下了"伪装成"这一步抛了"。
                 Err(BattleError::TooManyProblems) => return Err(BattleError::TooManyProblems),
@@ -934,10 +938,6 @@ pub fn run_fight<H: TurnHost>(
                 }
             }
         };
-
-        // 参考在 `CombatantLifecycleChanged` 上算胜负（`CombatStateEffects.cs:28-60`）。
-        // 本内核没有事件队列 ⇒ 在步边界补（[`FROZEN_GAP_RESULT`]，含代价说明）。
-        settle_result(state);
 
         let count = problems.count;
         out.steps[index] = StepOutcome {
@@ -985,7 +985,7 @@ fn execute_step<H: TurnHost>(
     config: &TurnConfig,
     step: &Step<'_>,
     host: &mut H,
-    hero: Option<&CombatantId>,
+    hero: &CombatantId,
     problems: &mut Problems,
 ) -> Result<Context, BattleError> {
     match *step {
@@ -1027,18 +1027,13 @@ fn hero_plays<H: TurnHost>(
     config: &TurnConfig,
     play: Play<'_>,
     host: &mut H,
-    hero: Option<&CombatantId>,
+    hero: &CombatantId,
     problems: &mut Problems,
 ) -> Result<Context, BattleError> {
     let Play { card, target } = play;
-    // 到这里英雄一定在、而且活着（外壳已经查过）。`None` 只为"没有 panic 路径"存在。
-    let Some(hero) = hero.copied() else {
-        problems.push(Problem::HeroDowned)?;
-        return Ok(context_of(state));
-    };
 
     // `:102-103`：行动者不是英雄 ⇒ 记一条，**但继续**（参考没有 return）。
-    if state.active_combatant_id.as_ref() != Some(&hero) {
+    if state.active_combatant_id.as_ref() != Some(hero) {
         problems.push(Problem::NotHeroTurn)?;
     }
 
@@ -1051,16 +1046,23 @@ fn hero_plays<H: TurnHost>(
 
     // `:109-111`：按**卡定义 id** 在手牌里找**第一张**。
     // ⚠️ 找不到 ≠ 定义不存在：这里只查手牌，不查内容注册表（参考也不查）。
-    let Some(instance) = first_card_in_hand(state, &hero, card) else {
+    let Some(instance) = first_card_in_hand(state, hero, card) else {
         problems.push(Problem::CardNotInHand)?; // `:113-117`
         return Ok(context);
     };
 
     // `:121-122`：入队 + 排空。内核没有队列，走**请求面**（拒绝 = no-op）：
     // 参考的请求面对"不合格"的处理正是 no-op（`play.rs:437-460`），no-op 之后才记 `:124`。
-    let request = PlayRequest::new(hero, instance, parse_target(target)?);
+    let request = PlayRequest::new(*hero, instance, parse_target(target)?);
     let report = play::try_play_card(state, Some(content), &request)?;
-    if !report.played {
+    // 一次出牌就是一次排空（参考在队列排空时判胜负，`CombatStateEffects.cs:28-60`）。
+    settle_result(state);
+    // `:124` 的原话是 `if (outcome.Value is { WasPlayed: false })` —— 它匹配的是 **false**，
+    // 不匹配 **null**。而"战斗在这一步里已经结束"时参考的队列循环
+    // （`CombatEventHandling.cs:99-111`）根本不会解析那个请求 ⇒ outcome 是 null ⇒
+    // **不记问题**。内核的请求面把这种"没解析"折成 `NOT_PLAYED`，所以这里必须再问一次
+    // "战斗是不是还在进行"，否则会凭空多记一条参考里没有的 `CardNotPlayed`。
+    if !report.played && state.result == CombatResult::Ongoing {
         problems.push(Problem::CardNotPlayed)?; // `:124-125`
     }
     Ok(context)
@@ -1071,11 +1073,11 @@ fn hero_ends_turn<H: TurnHost>(
     state: &mut CombatState,
     config: &TurnConfig,
     host: &mut H,
-    hero: Option<&CombatantId>,
+    hero: &CombatantId,
     problems: &mut Problems,
 ) -> Result<Context, BattleError> {
     // `:132-133`：记一条，但**继续**（参考没有 return）。
-    if hero.is_none_or(|id| state.active_combatant_id.as_ref() != Some(id)) {
+    if state.active_combatant_id.as_ref() != Some(hero) {
         problems.push(Problem::NotHeroTurnToEnd)?;
     }
 
@@ -1083,9 +1085,10 @@ fn hero_ends_turn<H: TurnHost>(
     let context = context_of(state); // `:140`（在推进之前！）
 
     // `:141-143`：开回合本身可能结束战斗（"turn-start 触发器打死最后一个敌人"），
-    // 那就**不要**在结束了的战斗上推回合。
+    // 那就**不要**在结束了的战斗上推回合。`state.result` 之所以是新的，是因为
+    // `ensure_turn_started` 之后立刻算过一次胜负（见 [`settle_result`]）。
     if state.result == CombatResult::Ongoing {
-        turn::end_current_turn_and_start_next(state, config, host)?; // `:144`
+        end_turn_and_start_next(state, config, host)?; // `:144`
     }
     Ok(context)
 }
@@ -1100,7 +1103,7 @@ fn enemy_acts<H: TurnHost>(
     config: &TurnConfig,
     mov: EnemyMove<'_>,
     host: &mut H,
-    hero: Option<&CombatantId>,
+    hero: &CombatantId,
     problems: &mut Problems,
 ) -> Result<Context, BattleError> {
     let EnemyMove {
@@ -1149,6 +1152,8 @@ fn enemy_acts<H: TurnHost>(
         parse_target(target)?,
     )
     .map_err(intent_failure)?;
+    // 敌人动作也是一次排空 ⇒ 立刻判一次胜负（英雄可能在这一下里倒下）。
+    settle_result(state);
     Ok(context)
 }
 
@@ -1176,27 +1181,28 @@ fn next_round<H: TurnHost>(
     state: &mut CombatState,
     config: &TurnConfig,
     host: &mut H,
-    hero: Option<&CombatantId>,
+    hero: &CombatantId,
     problems: &mut Problems,
 ) -> Result<Context, BattleError> {
     ensure_turn_started(state, config, host)?; // `:202`
     let context = context_of(state); // `:203`（在推进之前！）
 
     // `:206-207`：已经是英雄的回合 ⇒ 先结束它，这样"一整轮"才真的过去。
-    let hero_active = hero.is_some_and(|id| state.active_combatant_id.as_ref() == Some(id));
-    if hero_active && state.result == CombatResult::Ongoing {
-        turn::end_current_turn_and_start_next(state, config, host)?;
+    if state.active_combatant_id.as_ref() == Some(hero) && state.result == CombatResult::Ongoing {
+        end_turn_and_start_next(state, config, host)?;
     }
 
     // `:209-219`：只要还在进行中且行动者不是英雄，就一直结束+开始下一个。
     // `guard > TurnOrder.Count + 2` ⇒ 记一条并停（没有这个上限，一个"永远把下一个单位
     // 打死"的触发器会让这里转不出来）。
+    //
+    // ⚠️ 条件里的 `state.result == Ongoing` 每圈都**真的**是新的：`end_turn_and_start_next`
+    // 之后立刻算过一次胜负。这就是"某一步里第一次推回合就把敌人打死"之后**不再继续推**
+    // 的那个守门点（参考的 `:211` 同形）。
     let mut guard = 0i32;
     let max_steps = state.turn_order().len() as i32 + 2;
-    while state.result == CombatResult::Ongoing
-        && hero.is_none_or(|id| state.active_combatant_id.as_ref() != Some(id))
-    {
-        turn::end_current_turn_and_start_next(state, config, host)?;
+    while state.result == CombatResult::Ongoing && state.active_combatant_id.as_ref() != Some(hero) {
+        end_turn_and_start_next(state, config, host)?;
         guard += 1;
         if guard > max_steps {
             problems.push(Problem::CouldNotWrapToHero)?; // `:216`
@@ -1215,7 +1221,7 @@ fn advance_turns_until_active<H: TurnHost>(
     config: &TurnConfig,
     host: &mut H,
     target: &CombatantId,
-    hero: Option<&CombatantId>,
+    hero: &CombatantId,
     problems: &mut Problems,
 ) -> Result<(), BattleError> {
     ensure_turn_started(state, config, host)?; // `:233`
@@ -1225,12 +1231,12 @@ fn advance_turns_until_active<H: TurnHost>(
     while state.result == CombatResult::Ongoing && state.active_combatant_id.as_ref() != Some(target)
     {
         // `:239-243`：轮到英雄 ⇒ 记一条"这仍然是英雄的回合"并放弃。
-        // ⚠️ 参考这条与 `:248` 那条是**两条不同的问题**，内核只有一个桶（[`FROZEN_GAP_PROBLEM`]）。
-        if hero.is_some_and(|id| state.active_combatant_id.as_ref() == Some(id)) {
-            problems.push(Problem::CannotReachEnemyTurn)?;
+        // 与 `:248` 的"推不到"是**两条不同的问题**（修法相反），所以两个变体。
+        if state.active_combatant_id.as_ref() == Some(hero) {
+            problems.push(Problem::StillHeroTurn)?;
             return Ok(());
         }
-        turn::end_current_turn_and_start_next(state, config, host)?; // `:245`
+        end_turn_and_start_next(state, config, host)?; // `:245`
         guard += 1;
         if guard > max_steps {
             problems.push(Problem::CannotReachEnemyTurn)?; // `:248`
@@ -1244,15 +1250,34 @@ fn advance_turns_until_active<H: TurnHost>(
 ///
 /// 只在**还在进行中**且**阶段停在"等待开始"**时才开 —— 已经开始的回合再开一次，
 /// 参考的 `MarkTurnStarted` 会抛（`CombatState.cs:324-330`）。
+///
+/// 开完立刻判一次胜负：`ScenarioRunner.cs:141-143` 的注释说的正是这件事
+/// ——"starting the turn can end combat (a turn-start trigger downs the last enemy)"。
 fn ensure_turn_started<H: TurnHost>(
     state: &mut CombatState,
     config: &TurnConfig,
     host: &mut H,
-) -> Result<(), TurnError> {
+) -> Result<(), BattleError> {
     if state.result == CombatResult::Ongoing && state.turn_phase == CombatTurnPhase::WaitingToStartTurn
     {
         turn::start_current_turn(state, config, host)?;
+        settle_result(state);
     }
+    Ok(())
+}
+
+/// `EndCurrentTurnAndStartNextTurn` + **立刻判一次胜负**。
+///
+/// 单独包一层是 [`FROZEN_GAP_RESULT`] 的落点：参考在这条调用里会经过若干次队列排空，
+/// 排空点上胜负就得是新的（否则 `:143`/`:206`/`:211`/`:237` 那些守门点看到的全是旧值）。
+/// 内核没有队列，所以在**调用返回处**补一次 —— 这样上面四个守门点的判据与参考一致。
+fn end_turn_and_start_next<H: TurnHost>(
+    state: &mut CombatState,
+    config: &TurnConfig,
+    host: &mut H,
+) -> Result<(), BattleError> {
+    turn::end_current_turn_and_start_next(state, config, host)?;
+    settle_result(state);
     Ok(())
 }
 
@@ -1277,25 +1302,6 @@ fn first_card_in_hand(
     None
 }
 
-/// 英雄是谁：回合序里**第一个** `team_id == "player"` 的单位（[`FROZEN_GAP_HERO_ID`]）。
-///
-/// 推不出来 ⇒ `None`，`run_fight` 于是每步记 [`Problem::HeroDowned`] —— 那正是参考在
-/// "英雄不在状态里"时走的分支（`:45-51`），不是错误。
-fn hero_of(state: &CombatState) -> Option<CombatantId> {
-    state
-        .turn_order()
-        .iter()
-        .copied()
-        .find(|id| hero_team_matches(state, id))
-}
-
-/// 这个单位是不是"玩家队"的（`HasLivingCombatantsOnTeam(PlayerTeam)` 的判据那一半）。
-fn hero_team_matches(state: &CombatState, id: &CombatantId) -> bool {
-    state
-        .combatant(id)
-        .is_some_and(|c| c.team_id.as_str() == PLAYER_TEAM)
-}
-
 /// 算胜负（`UpdateStandardCombatResultOnLifecycleChangedHandler`，`CombatStateEffects.cs:28-60`）。
 ///
 /// 逐行：
@@ -1309,8 +1315,9 @@ fn hero_team_matches(state: &CombatState, id: &CombatantId) -> bool {
 /// ```
 ///
 /// ⚠️ 这是本模块**唯一**一处"做了引擎该做的事"，理由与粒度代价见 [`FROZEN_GAP_RESULT`]。
-/// 它在**每一步之后**被调一次；步内不调（参考的判决要等队列排空，而"一张牌的程序跑完"
-/// 就是一次排空 ⇒ 对单步 = 打一张牌是可观察等价的）。
+/// 调用点是**每一次引擎调用之后**（`ensure_turn_started` / `end_turn_and_start_next` /
+/// `try_play_card` / `intent::execute_action`），与参考的守门点
+/// （`:143`、`:206`、`:211`、`:237`）同粒度。
 fn settle_result(state: &mut CombatState) {
     if state.result != CombatResult::Ongoing {
         return; // `:36-37`
@@ -1361,7 +1368,7 @@ pub fn play_out<H: TurnHost>(
     out: &mut FightOutcome,
 ) -> Result<(), BattleError> {
     build_fight(state, content, plan)?;
-    run_fight(state, content, steps, host, out)
+    run_fight(state, content, plan, steps, host, out)
 }
 
 /// 蓝图里英雄的 id 是不是这个（参考的驱动层到处要它）。
@@ -1524,7 +1531,7 @@ mod tests {
         };
         for step in script {
             let mut out = FightOutcome::new();
-            run_fight(state, content, core::slice::from_ref(step), host, &mut out)
+            run_fight(state, content, plan, core::slice::from_ref(step), host, &mut out)
                 .expect("步进本身不该坏");
             assert_eq!(out.step_count, 1, "一次喂一步");
             let outcome = out.step(0).expect("第 0 步必须有观测");
@@ -1563,6 +1570,25 @@ mod tests {
 
     fn zone_count(state: &CombatState, who: &str, zone: CardZone) -> usize {
         state.card_zones(&cid(who)).map_or(0, |z| z.count(zone))
+    }
+
+    /// 手工给英雄挂一条**致死**的 `paperwork`（带 `damage_over_time` tag ⇒ turn-start 扣层数）。
+    ///
+    /// v1 的 `FightPlan` 没有"起始状态"字段（规格 §1 的取舍），所以"第一回合开场就被 DoT
+    /// 打死"这个前置条件只能这样造 —— 与 `a_downed_hero_…` 手工按倒英雄是同一类做法。
+    fn give_hero_lethal_paperwork(state: &mut CombatState, stacks: i32) {
+        use crate::state::{StatusDefinitionId, StatusInstance, StatusInstanceId, StatusPolarity};
+        let status = StatusInstance::new(
+            StatusInstanceId::new("manual_dot").expect("短"),
+            StatusDefinitionId::new("paperwork").expect("短"),
+            StatusPolarity::Debuff,
+        )
+        .with_stacks(stacks);
+        state
+            .combatant_mut(&cid("hero"))
+            .expect("英雄在")
+            .push_status(status)
+            .expect("状态槽够");
     }
 
     // ---------------------------------------------------------------- 一局真的能打完
@@ -2108,6 +2134,250 @@ mod tests {
         assert_eq!(health(&state, "queue_imp"), 22, "它自己没掉血");
     }
 
+    /// **裁决 2 的守门点**：一步里"第一次推回合就把最后一个敌人打死"之后，
+    /// 后面的推进**不再发生**。
+    ///
+    /// 场景（全真实内容）：敌人 5 血 + `permit_a38` 给 5 层 `paperwork`
+    /// （带 `damage_over_time`）⇒ 它的**回合一开始**就被 DoT 打死，而它是**最后一个**敌人
+    /// ⇒ 那一刻 `settle_result` 判 `Victory`。
+    ///
+    /// `NextRound` 此时还在它的 `while (Ongoing && active != hero)` 里。正确的实现
+    /// 在判负之后**不再推进**：停在"敌人回合、敌人已倒"。错误的实现（胜负只在步末算）
+    /// 会看不见终态，继续把敌人的回合也结束掉 ⇒ 绕回英雄的回合：
+    /// `round` 变 2、`turn` 变 1、英雄重新抽 5 张。
+    ///
+    /// 所以这条断言的三个数（`round` / `turn` / 英雄手牌）在两种实现下**都不一样** ——
+    /// 变异测试（把 `settle_result` 挪回步边界）会红。
+    #[test]
+    fn a_lethal_turn_start_stops_the_rest_of_that_steps_turn_advancement() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let enemies = [PlanCombatant {
+            id: "queue_imp",
+            max_health: 5,
+        }];
+        let deck = [DeckEntry {
+            card: "permit_a38",
+            count: 12,
+        }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "lethal_turn_start",
+            seed: 1,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 70,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let script = [
+            Step::HeroPlays {
+                card: "permit_a38",
+                target: Some("queue_imp"),
+            },
+            Step::NextRound,
+        ];
+
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
+        let mut host = Host::new(&content);
+        let trace = drive(&mut state, &content, &plan, &script, &mut host);
+
+        assert_eq!(trace.kinds(1), &[] as &[Problem], "推到它、开回合、DoT 打死它 —— 没有异常");
+        assert_eq!(health(&state, "queue_imp"), 0);
+        assert_eq!(trace.result, CombatResult::Victory);
+        // 守门点在 `end_current_turn_and_start_next` **之后**：敌人的回合确实开起来了
+        // （轮次没变、回合 2、行动者是它），但**没有**再被结束。
+        assert_eq!(state.current_round, 1, "没有绕回新一轮");
+        assert_eq!(state.current_turn, 2, "停在敌人那一回合");
+        assert_eq!(state.active_combatant_id, Some(cid("queue_imp")));
+        // 英雄的手牌在结束回合时被弃掉了，而且**没有**因为"又轮到英雄"而重抽 5 张。
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::Hand),
+            0,
+            "英雄没有重新抽牌 ⇒ 这一轮没绕回来"
+        );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::DrawPile),
+            7,
+            "12 张抽 5 张 ⇒ 还剩 7；错误实现会再抽 5 张、只剩 2"
+        );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::DiscardPile),
+            5,
+            "出了 1 张 + 回合末弃了手里 4 张"
+        );
+    }
+
+    /// **`CombatEndedBeforeEnemy`**（`:166-170`）：推进到敌人的路上战斗就结束了。
+    ///
+    /// 这条分支要求"最后一个活着的敌人在**推进内部**死掉"，所以场景必须精确：
+    ///
+    /// * 两个敌人各 2 血，各上 **2 层** `paperwork`（`form_12_b+`：0 费、2 层、消耗），
+    ///   而 DoT 金额 = 层数 ⇒ 谁在自己回合开场都会当场倒下；
+    /// * `HeroEndsTurn` 只推到**第一个**敌人（X）⇒ X 死在自己的回合开场，而 Y 还活着
+    ///   ⇒ 那一格必须仍是 `Ongoing`（否则走不到 `EnemyActs`）；
+    /// * 接着 `EnemyActs{Y}`：推进时先把"已经倒下但仍占着行动位"的 X 的回合结束掉，
+    ///   再开 Y 的回合 ⇒ Y 也倒在自己的回合开场，而它是**最后一个** ⇒ `Victory`。
+    ///
+    /// 判决发生在 `:163` 的推进**内部** ⇒ 回到 `:166` 时结果已不是 `Ongoing`
+    /// ⇒ 记 `CombatEndedBeforeEnemy`（不是 `:172` 的 `CannotReachEnemyTurn`，也不是
+    /// `:178` 的 `EnemyNotAlive`）。
+    #[test]
+    fn combat_can_end_while_advancing_to_the_enemy() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let enemies = [
+            PlanCombatant {
+                id: "queue_imp",
+                max_health: 2,
+            },
+            PlanCombatant {
+                id: "stamp_goblin",
+                max_health: 2,
+            },
+        ];
+        // 0 费、2 层、落区 ExhaustPile：两次都打得起（能量一点不动）。
+        let deck = [DeckEntry {
+            card: "form_12_b+",
+            count: 5,
+        }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "ends_while_advancing",
+            seed: 1,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 70,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let script = [
+            Step::HeroPlays {
+                card: "form_12_b+",
+                target: Some("queue_imp"),
+            },
+            Step::HeroPlays {
+                card: "form_12_b+",
+                target: Some("stamp_goblin"),
+            },
+            // 推到 X：X 死在自己的回合开场，Y 还活着 ⇒ Ongoing。
+            Step::HeroEndsTurn,
+            // 再从"已倒下的 X 还占着行动位"推进到 Y：Y 死在自己的回合开场 ⇒ 全灭。
+            Step::EnemyActs {
+                enemy: "stamp_goblin",
+                action: "stamp_goblin.rubber_stamp_rush",
+                target: Some("hero"),
+            },
+        ];
+
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
+        let mut host = Host::new(&content);
+        let trace = drive(&mut state, &content, &plan, &script, &mut host);
+
+        // 步 2（HeroEndsTurn）之后：X 倒了，但战斗还在继续 —— 这一步不该有终态。
+        // ⚠️ 中间态只能从 `trace` 取（`drive` 会把整个脚本跑完，`state` 是最后一步之后的样子）。
+        assert_eq!(trace.kinds(2), &[] as &[Problem]);
+        assert_eq!(trace.hp(2, "queue_imp"), 0);
+        assert_eq!(trace.hp(2, "stamp_goblin"), 2, "Y 还活着");
+        // 步 3：推进内部全灭 ⇒ `:166` 先命中。
+        assert_eq!(trace.kinds(3), &[Problem::CombatEndedBeforeEnemy]);
+        assert_eq!(trace.result, CombatResult::Victory);
+        assert_eq!(trace.hp(3, "stamp_goblin"), 0);
+        assert_eq!(trace.hp(3, "hero"), 70, "Y 的动作一下都没出");
+    }
+
+    /// **`HeroDowned` 之外的第二种"回合开场就结束战斗"**：英雄自己的回合一开始就被打死。
+    ///
+    /// v1 没有"起始状态"字段，所以只能手工挂一条 `paperwork`（70 层 ≥ 70 血）。
+    /// 这条测试钉住两件事，都是"变异不红 ⇒ 覆盖洞"的那种：
+    ///
+    /// 1. `ensure_turn_started` **之后**必须立刻算胜负 —— 否则 `HeroEndsTurn` 里
+    ///    `if (Result == Ongoing)`（`:141-143`）看到的仍是旧值，驱动层会替一个**已经倒下**的
+    ///    英雄把他的回合结束掉、把回合推给敌人（`turn` 变 2、行动者变敌人）。
+    /// 2. `HeroPlays` 在"战斗已在这一步里结束"时**不记** `CardNotPlayed`
+    ///    （参考 `:124` 的 `{ WasPlayed: false }` 不匹配 null：请求根本没被解析）。
+    #[test]
+    fn a_lethal_turn_start_on_the_hero_stops_the_driver_before_anything_else() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let enemies = [PlanCombatant {
+            id: "queue_imp",
+            max_health: 22,
+        }];
+        let deck = [DeckEntry {
+            card: "paper_cut",
+            count: 5,
+        }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "hero_dot",
+            seed: 1,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 70,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+
+        // ① 英雄的回合开场就被打死 ⇒ **不再**替他结束回合。
+        let script = [Step::HeroEndsTurn];
+        let mut state = CombatState::new(CombatId::new("dot_a").expect("短"), 0);
+        let mut host = Host::new(&content);
+        build_fight(&mut state, &content, &plan).expect("蓝图合法");
+        give_hero_lethal_paperwork(&mut state, 70);
+        let mut out = FightOutcome::new();
+        run_fight(&mut state, &content, &plan, &script, &mut host, &mut out)
+            .expect("步进不该坏");
+        assert_eq!(out.problems_of(0), &[] as &[Problem], "结束回合本身没有异常");
+        assert_eq!(health(&state, "hero"), 0);
+        assert_eq!(
+            out.result,
+            CombatResult::Defeat,
+            "英雄在自己的回合开场被打死 ⇒ 当场判负"
+        );
+        assert_eq!(state.current_turn, 1, "没有替倒下的英雄推回合");
+        assert_eq!(state.active_combatant_id, Some(cid("hero")));
+        assert_eq!(state.turn_phase, CombatTurnPhase::TurnInProgress);
+
+        // ② 同一时刻"打一张牌"：请求没被解析 ⇒ **没有** `CardNotPlayed`。
+        let script = [Step::HeroPlays {
+            card: "paper_cut",
+            target: Some("queue_imp"),
+        }];
+        let mut state = CombatState::new(CombatId::new("dot_b").expect("短"), 0);
+        let mut host = Host::new(&content);
+        build_fight(&mut state, &content, &plan).expect("蓝图合法");
+        give_hero_lethal_paperwork(&mut state, 70);
+        let mut out = FightOutcome::new();
+        run_fight(&mut state, &content, &plan, &script, &mut host, &mut out)
+            .expect("步进不该坏");
+        assert_eq!(
+            out.problems_of(0),
+            &[] as &[Problem],
+            "战斗在这一步里结束 ⇒ 参考连 `CardNotPlayed` 都不记（`outcome` 是 null 不是 false）"
+        );
+        assert_eq!(out.result, CombatResult::Defeat);
+        assert_eq!(health(&state, "queue_imp"), 22, "牌没打出去");
+    }
+
     /// 敌人**已经倒下**时 `EnemyActs` 记 `EnemyNotAlive`，且英雄不掉血（`:178-182`）。
     ///
     /// 要走到这一支必须满足两个条件，缺一不可：`active == 该敌人`（否则先卡在
@@ -2185,8 +2455,7 @@ mod tests {
 
     /// 敌人不存在 ⇒ `NoSuchEnemy`；动作没注册 ⇒ `UnknownEnemyAction`（`:157-161`、`:184-189`）。
     #[test]
-    fn a_missing_enemy_and_an_unregistered_action_are_distinct_problems() {
-        let blob = core_image();
+    fn a_missing_enemy_and_an_unregistered_action_are_distinct_problems() {        let blob = core_image();
         let content = parse(&blob);
         let enemies = [PlanCombatant {
             id: "queue_imp",
@@ -2241,10 +2510,12 @@ mod tests {
         assert_eq!(health(&state, "hero"), 70, "没注册的动作不许出手");
     }
 
-    /// 轮到英雄时 `EnemyActs`：参考记**两条**（`:241` 一条 + `:172` 一条），
-    /// 而内核只有一个桶 [`Problem::CannotReachEnemyTurn`]（[`FROZEN_GAP_PROBLEM`]）。
+    /// 轮到英雄时 `EnemyActs`：`:241` 记一条 [`Problem::StillHeroTurn`]（"先调 HeroEndsTurn"），
+    /// 然后 `:172` 再记一条 [`Problem::CannotReachEnemyTurn`]（"active 不是它"）。
+    ///
+    /// 两条必须**分得开**：一条是脚本顺序写错了，另一条是回合序没绕回它 —— 修法相反。
     #[test]
-    fn the_still_heroes_turn_problem_collapses_into_cannot_reach_enemy_turn() {
+    fn the_still_heroes_turn_problem_is_distinct_from_cannot_reach_enemy_turn() {
         let blob = core_image();
         let content = parse(&blob);
         let enemies = [PlanCombatant {
@@ -2283,22 +2554,22 @@ mod tests {
 
         assert_eq!(
             trace.kinds(0),
-            &[Problem::CannotReachEnemyTurn, Problem::CannotReachEnemyTurn],
-            "两条不同的参考问题塌进同一个桶（`:241` + `:172`）"
+            &[Problem::StillHeroTurn, Problem::CannotReachEnemyTurn],
+            "`:241` 的'轮到你该先调 HeroEndsTurn' + `:172` 的'active 不是它'，两条分开记"
         );
         assert_eq!(health(&state, "hero"), 70);
         // 英雄的回合没有被偷偷结束（`:239-243` 的原话：call HeroEndsTurn first）。
         assert_eq!(state.active_combatant_id, Some(cid("hero")));
     }
 
-    /// 英雄倒下的分支（`:45-51`）。**前置条件是手工造的**，而且**只可能被观测到一次**：
+    /// 英雄倒下的分支（`:45-51`）。**前置条件是手工造的**，因为 v1 没有友军：
+    /// 真实路径上英雄一倒玩家队就没活人 ⇒ 一次引擎调用之后 [`settle_result`] 当场判
+    /// `Defeat` ⇒ 下一步先撞 `:40` 的终态门（那条路径见下一条测试）。
     ///
-    /// * v1 没有友军，所以英雄一倒就没人守家 ⇒ [`settle_result`] 立刻判 `Defeat`；
-    /// * 下一步先撞上 `:40` 的 `Result != Ongoing` ⇒ 记 `CombatAlreadyEnded`。
-    ///
-    /// 参考也一样：`:46-48` 的注释说 `HeroDowned` 是给"a summoned ally keeps the team alive"
-    /// 那种情形用的。所以这条测试断言的是**分支本身**：结果仍是 `Ongoing` 而英雄已倒下 ⇒
-    /// 这一步不执行、记一条 `HeroDowned`；而从下一步起状态**彻底冻结**。
+    /// 所以这条测的是**分支本身**：`result` 仍是 `Ongoing`（因为本步没有回过引擎）而英雄
+    /// 已倒下 ⇒ 这一步不执行、记一条 `HeroDowned`，状态冻结。
+    /// 参考也一样：`:46-48` 的原注释说这条是给 "a summoned ally keeps the team alive" 用的
+    /// —— 也就是说 `HeroDowned` 的可达上界由"有没有友军"决定，v1 没有友军。
     #[test]
     fn a_downed_hero_is_a_problem_and_the_state_stops_moving() {
         let blob = core_image();
@@ -2344,25 +2615,22 @@ mod tests {
             Step::HeroEndsTurn,
         ];
         let mut out = FightOutcome::new();
-        run_fight(&mut state, &content, &script, &mut host, &mut out).expect("步进不该坏");
+        run_fight(&mut state, &content, &plan, &script, &mut host, &mut out)
+            .expect("步进不该坏");
+        // 两步都没有回过引擎（外壳在 `:45` 就早退了）⇒ 胜负没被重算 ⇒ 两步都记 HeroDowned。
         assert_eq!(out.problems_of(0), &[Problem::HeroDowned]);
-        assert_eq!(
-            out.problems_of(1),
-            &[Problem::CombatAlreadyEnded],
-            "英雄一倒就没有队友 ⇒ 第一步之后就被判成 Defeat ⇒ 下一步先撞上终态门"
-        );
-        // 结论：在 v1 里 `HeroDowned` 最多只能被观测到**一次**（它需要友军，而 v1 没有）。
+        assert_eq!(out.problems_of(1), &[Problem::HeroDowned]);
         assert_eq!(
             state.result,
-            CombatResult::Defeat,
-            "玩家队没有活人 ⇒ Defeat（`CombatStateEffects.cs:49-53`）"
+            CombatResult::Ongoing,
+            "没有引擎调用 ⇒ 胜负不变（参考只在生命周期事件上算）"
         );
-        // 判定之后状态彻底冻结：再跑一步，指纹不变。
         let frozen = state_hash(&state);
         let mut out = FightOutcome::new();
         run_fight(
             &mut state,
             &content,
+            &plan,
             &[Step::EnemyActs {
                 enemy: "queue_imp",
                 action: "queue_imp.desk_jab",
@@ -2372,8 +2640,78 @@ mod tests {
             &mut out,
         )
         .expect("步进不该坏");
-        assert_eq!(out.problems_of(0), &[Problem::CombatAlreadyEnded]);
-        assert_eq!(state_hash(&state), frozen, "终态之后的步一律不执行");
+        assert_eq!(out.problems_of(0), &[Problem::HeroDowned]);
+        assert_eq!(state_hash(&state), frozen, "英雄倒下的步一律不执行");
+    }
+
+    /// 真实路径：敌人的动作把英雄打死 ⇒ **同一步内**就判 `Defeat`（`CombatStateEffects.cs:49-53`），
+    /// 下一步先撞 `:40` 的终态门 ⇒ `CombatAlreadyEnded`。
+    ///
+    /// 这条也顺带钉住 [`settle_result`] 的**调用点**：如果它挪回"步边界"以外的地方
+    /// （例如只在步末算），`Defeat` 的时机会变，而这里断言的正是"敌动之后立刻就是 Defeat"。
+    #[test]
+    fn an_enemy_action_that_downs_the_hero_ends_the_fight_in_the_same_step() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let enemies = [PlanCombatant {
+            id: "queue_imp",
+            max_health: 22,
+        }];
+        let deck = [DeckEntry {
+            card: "paper_cut",
+            count: 2,
+        }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "hero_dies",
+            seed: 1,
+            // 5 血对 8 点伤害：`queue_imp.desk_jab` 一下就打死。
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 5,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let script = [
+            Step::HeroEndsTurn,
+            Step::EnemyActs {
+                enemy: "queue_imp",
+                action: "queue_imp.desk_jab",
+                target: Some("hero"),
+            },
+            Step::HeroPlays {
+                card: "paper_cut",
+                target: Some("queue_imp"),
+            },
+        ];
+
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
+        let mut host = Host::new(&content);
+        let mut out = FightOutcome::new();
+        play_out(&mut state, &content, &plan, &script, &mut host, &mut out).expect("步进不该坏");
+
+        assert_eq!(health(&state, "hero"), 0);
+        assert_eq!(
+            lifecycle(&state, "hero"),
+            CombatantLifecycleState::Downed
+        );
+        assert_eq!(out.problems_of(1), &[] as &[Problem], "这一动本身没问题");
+        assert_eq!(
+            out.result,
+            CombatResult::Defeat,
+            "敌动之后立刻判负 —— 不用等步末"
+        );
+        assert_eq!(
+            out.problems_of(2),
+            &[Problem::CombatAlreadyEnded],
+            "英雄已经倒下 ⇒ 下一步先撞终态门（HeroDowned 走不到）"
+        );
     }
 
     /// 卡打不出去（付不起）⇒ `CardNotPlayed`，卡留在手里、费用不动（`:124-125`）。
@@ -2570,9 +2908,84 @@ mod tests {
         );
     }
 
-    /// 蓝图里那两个喂回合机的旋钮，`run_fight` 兑现不了 ⇒ **响亮拒绝**（不是静默按 5 抽）。
+    /// `cards_drawn_per_turn` **现在真的生效**（成对，2026-10-18 裁决 1）。
+    ///
+    /// 抽 3 ⇒ 起手 3 张；抽 5（标准包）⇒ 起手 5 张。两条一起，才证明这个字段不是装饰品
+    /// —— 只测一条的话，"抽 3 张"可能只是"牌组里只有 3 张"。
     #[test]
-    fn turn_knobs_the_driver_cannot_honour_are_refused() {
+    fn cards_drawn_per_turn_is_the_blueprints_number_not_a_constant() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let enemies = [PlanCombatant {
+            id: "queue_imp",
+            max_health: 22,
+        }];
+        // 12 张牌，两张蓝图都用它 ⇒ 差异只能来自抽牌数。
+        let deck = [DeckEntry {
+            card: "paper_cut",
+            count: 12,
+        }];
+        let res = resources();
+        let refill = refills();
+        let base = FightPlan {
+            combat_id: "draw_count",
+            seed: 1,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 70,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: 3,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let script = [Step::HeroEndsTurn];
+
+        let mut state = CombatState::new(CombatId::new("three").expect("短"), 0);
+        let mut host = Host::new(&content);
+        let trace = drive(
+            &mut state,
+            &content,
+            &FightPlan {
+                cards_drawn_per_turn: 3,
+                ..base
+            },
+            &script,
+            &mut host,
+        );
+        // 步 0 结束英雄的回合之前，回合已经在步内被开起来 ⇒ 手牌是 3 张，然后被弃掉。
+        // 所以观测量取"弃牌堆 3 张 + 抽牌堆 9 张"（12 - 3）。
+        assert_eq!(trace.kinds(0), &[] as &[Problem]);
+        assert_eq!(zone_count(&state, "hero", CardZone::DiscardPile), 3);
+        assert_eq!(zone_count(&state, "hero", CardZone::DrawPile), 9);
+
+        let mut state = CombatState::new(CombatId::new("five").expect("短"), 0);
+        let mut host = Host::new(&content);
+        let trace = drive(
+            &mut state,
+            &content,
+            &FightPlan {
+                cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+                ..base
+            },
+            &script,
+            &mut host,
+        );
+        assert_eq!(trace.kinds(0), &[] as &[Problem]);
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::DiscardPile),
+            5,
+            "标准包 5 张（`StandardCombatPackage.cs:7`）"
+        );
+        assert_eq!(zone_count(&state, "hero", CardZone::DrawPile), 7);
+    }
+
+    /// 补能表**多于一条** ⇒ 拒绝：`TurnConfig` 只有一个能量资源
+    /// （回合机只补一个池），第二条**表达不了** —— 静默丢掉等于让蓝图说谎。
+    #[test]
+    fn a_second_refill_resource_is_refused_because_the_turn_machine_has_one() {
         let blob = core_image();
         let content = parse(&blob);
         let deck = [DeckEntry {
@@ -2597,20 +3010,21 @@ mod tests {
         };
         let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
 
-        // 抽 7 张：`run_fight` 只会抽 5，所以拒。
+        let two = [(energy(), 3), (energy(), 1)];
         let error = build_fight(
             &mut state,
             &content,
             &FightPlan {
-                cards_drawn_per_turn: 7,
+                turn_start_refills: &two,
                 ..base
             },
         )
-        .expect_err("抽牌数不一致必须被拒");
+        .expect_err("两条补能表达不了，必须拒");
         assert_eq!(error, unsupported());
 
-        // 空补能表 = "不补"，`run_fight` 会补到 3 ⇒ 也拒。
-        let error = build_fight(
+        // 对照：一条（标准那一份）能建；空表也能建（=[`turn_config_for`] 的"保留标准包"）。
+        build_fight(&mut state, &content, &base).expect("一条能建");
+        build_fight(
             &mut state,
             &content,
             &FightPlan {
@@ -2618,11 +3032,7 @@ mod tests {
                 ..base
             },
         )
-        .expect_err("补能表不一致必须被拒");
-        assert_eq!(error, unsupported());
-
-        // 对照：标准那一份能建（否则上面两条"拒绝"可能只是因为什么都建不出来）。
-        build_fight(&mut state, &content, &base).expect("标准旋钮必须能建");
+        .expect("空表能建（语义见 turn_config_for 的文档第 1 条）");
     }
 
     /// 标准包那五个数字是**规格**，不是随手写的（`StandardCombatPackage.cs:7,124` +

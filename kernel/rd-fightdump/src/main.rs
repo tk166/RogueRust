@@ -45,8 +45,8 @@ use std::fs;
 use std::process::ExitCode;
 
 use rd_core::battle::{
-    build_fight, run_fight, DeckEntry, FightOutcome, FightPlan, PlanCombatant, Step,
-    FROZEN_GAP_HERO_ID, FROZEN_GAP_PROBLEM, FROZEN_GAP_RESULT, FROZEN_GAP_TURN_CONFIG,
+    build_fight, run_fight, standard_turn_config, DeckEntry, FightOutcome, FightPlan,
+    PlanCombatant, Step, DEVIATIONS,
 };
 use rd_core::content::{Content, Table};
 use rd_core::hash::{sha256, to_hex_lower};
@@ -104,10 +104,8 @@ fn main() -> ExitCode {
         content.rows(Table::EnemyAction).remaining(),
         content.rows(Table::Encounter).remaining(),
     );
-    // 四条已知偏差先打出来：读输出的人第一眼就该知道"这份输出是在什么偏差下产生的"。
-    println!(
-        "gaps={FROZEN_GAP_TURN_CONFIG},{FROZEN_GAP_HERO_ID},{FROZEN_GAP_RESULT},{FROZEN_GAP_PROBLEM}"
-    );
+    // 仍在的偏差先打出来：读输出的人第一眼就该知道"这份输出是在什么偏差下产生的"。
+    println!("deviations={}", DEVIATIONS.join(","));
 
     for spec in scenarios() {
         if let Err(why) = run_scenario(&content, &spec) {
@@ -251,9 +249,9 @@ fn run_scenario(content: &Content<'_>, spec: &Scenario) -> Result<(), String> {
     let energy = ResourceId::new("standard.energy").map_err(|e| format!("{e}"))?;
     let resources = [(energy, 3, Some(3))];
     let refills = [(energy, 3)];
-    // 蓝图里这两个旋钮必须与驱动层会给的一致（`battle.rs` 的 `FROZEN_GAP_TURN_CONFIG`）：
-    // 直接从驱动的标准配置里取，而不是在这里再写一遍 3 和 5。
-    let standard = rd_core::battle::standard_turn_config().map_err(|e| format!("{e:?}"))?;
+    // 蓝图里的抽牌数从驱动的标准配置里取（**不是**在 CLI 里再写一遍 5）——
+    // 2026-10-18 的裁决 1 之后这个字段是真的会生效的，写死在这里就等于绕过它。
+    let standard = standard_turn_config().map_err(|e| format!("{e:?}"))?;
     let plan = FightPlan {
         combat_id: spec.combat,
         seed: spec.seed,
@@ -292,6 +290,7 @@ fn run_scenario(content: &Content<'_>, spec: &Scenario) -> Result<(), String> {
         run_fight(
             &mut state,
             content,
+            &plan,
             std::slice::from_ref(step),
             &mut host,
             &mut out,
