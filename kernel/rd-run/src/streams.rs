@@ -142,6 +142,19 @@ pub enum RunError {
     /// failure this project keeps paying for, and a map is generated once per run, so a red here
     /// is cheap and visible.
     MapGeneration,
+    /// A fixed-capacity container is full (`docs/spec/run-layer.md` §4.4).
+    ///
+    /// **Never** a truncation. StS decks grow past sixty cards in the late game, so the bound is a
+    /// capacity and the honest failure is a red, not a dropped card.
+    Capacity,
+    /// An id that is not ASCII, or longer than `rd_core::state::ID_CAP`.
+    BadId,
+    /// `RunState::enter_node` was handed a node that is not an edge out of the current one.
+    NotReachable,
+    /// A global node index that is not on the map.
+    BadNode,
+    /// A per-step invariant was violated (`run-layer.md` §6.2). The string names which one.
+    Invariant(&'static str),
 }
 
 /// The run's randomness: the run seed plus one counter per stream.

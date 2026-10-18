@@ -43,4 +43,5 @@ name = "rd-wasm"
 version = "0.1.0"
 dependencies = [
  "rd-core",
+ "rd-run",
 ]

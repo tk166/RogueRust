@@ -257,6 +257,10 @@ impl RunMap {
         for row in 0..ROWS - 1 {
             order[..].sort_unstable_by_key(|&path| (rows[row].nodes[at[path] as usize].col, path));
             let mut floor_col: i32 = -1;
+            // Which of the next row's nodes an earlier path has already claimed. See the comment
+            // at the preference below: without this the six paths merge and most of the row is
+            // pruned as orphans.
+            let mut claimed = [false; NODES_PER_ROW];
             for &path in order.iter() {
                 let from = at[path] as usize;
                 let from_col = i32::from(rows[row].nodes[from].col);
@@ -275,8 +279,39 @@ impl RunMap {
                 if count == 0 {
                     return None; // every nearest-3 would cross: this draw cannot be repaired
                 }
-                let pick = rng.roll(RunStream::Map, count as u32).ok()? as usize;
-                let target = allowed.iter().flatten().nth(pick).copied()?;
+                // `[推断]` Preference, measured into existence: among the allowed nearest-3,
+                // prefer one **no earlier path has taken this row**. Without it the six paths
+                // merge as soon as the monotone-column rule lets them, most of the row is never
+                // walked, and orphan pruning then deletes it: measured over 20 seeds the map
+                // averaged **2.56** nodes per row and 13 of 20 maps pinched to a single-node row.
+                // The 13 sourced rules permit that (a row may hold one node), but a map that
+                // funnels is not what the player is meant to be choosing between.
+                //
+                // This is still "one of the nearest 3" (`inv:§7.1`) and still monotone in column,
+                // so no rule changes -- only which of the equally-legal choices we take.
+                let unclaimed = allowed
+                    .iter()
+                    .filter(|candidate| match candidate {
+                        Some(index) => !claimed[*index as usize],
+                        None => false,
+                    })
+                    .count();
+                let (pool, pool_len, fresh) = if unclaimed > 0 {
+                    (allowed, unclaimed, true)
+                } else {
+                    (allowed, count, false)
+                };
+                let pick = rng.roll(RunStream::Map, pool_len as u32).ok()? as usize;
+                let target = if fresh {
+                    pool.iter()
+                        .flatten()
+                        .filter(|index| !claimed[**index as usize])
+                        .nth(pick)
+                        .copied()?
+                } else {
+                    pool.iter().flatten().nth(pick).copied()?
+                };
+                claimed[target as usize] = true;
                 let target_col = i32::from(rows[row + 1].nodes[target as usize].col);
                 floor_col = target_col;
                 add_edge(&mut rows[row].nodes[from], target)?;
@@ -319,6 +354,55 @@ impl RunMap {
     #[must_use]
     pub fn rows(&self) -> &[MapRow; ROWS] {
         &self.rows
+    }
+
+    /// How many nodes the map has in total (every present node).
+    #[must_use]
+    pub fn node_count(&self) -> usize {
+        self.rows.iter().map(|row| row.len()).sum()
+    }
+
+    /// The **global** index of the first node of `row`.
+    ///
+    /// Storage numbers nodes per row (a node's edges name row-local indices, because that is what
+    /// stays valid when a row is compacted). Every consumer outside this module wants a single
+    /// flat numbering instead, so the conversion lives here rather than in each of them: a caller
+    /// that recomputes row offsets by hand is a caller that will be off by one.
+    ///
+    /// Global indices fit in a `u8`: at most 15 rows of at most 6 nodes is 90.
+    #[must_use]
+    pub fn row_first(&self, row: usize) -> Option<u8> {
+        if row >= ROWS {
+            return None;
+        }
+        let mut offset = 0usize;
+        for earlier in 0..row {
+            offset += self.rows[earlier].len();
+        }
+        u8::try_from(offset).ok()
+    }
+
+    /// The global index of the node at `(row, local)`, or `None` if there is no such node.
+    #[must_use]
+    pub fn global_of(&self, row: usize, local: usize) -> Option<u8> {
+        if local >= self.rows.get(row)?.len() {
+            return None;
+        }
+        Some(self.row_first(row)? + local as u8)
+    }
+
+    /// The inverse of [`RunMap::global_of`]: which `(row, local)` a global index names.
+    #[must_use]
+    pub fn locate(&self, global: u8) -> Option<(usize, usize)> {
+        let mut offset = 0usize;
+        for (row, line) in self.rows.iter().enumerate() {
+            let count = line.len();
+            if usize::from(global) < offset + count {
+                return Some((row, usize::from(global) - offset));
+            }
+            offset += count;
+        }
+        None
     }
 
     /// Validate every structural rule and all four overrides from `inv:§7`.
@@ -695,6 +779,42 @@ mod tests {
             branch_points >= 200,
             "200 maps produced only {branch_points} branch points: the generator is degenerate"
         );
+    }
+
+    /// The map must be **wide**, not a funnel.
+    ///
+    /// This is a quality assertion, not one of `inv:§7`'s rules: a row may legally hold a single
+    /// node. But six paths through fifteen rows exist so the player has something to choose
+    /// between, and an algorithm whose paths merge leaves most of each row unwalked, after which
+    /// orphan pruning deletes it. Measured before the unclaimed-target preference in the walk:
+    /// **2.56** nodes per row, 13 of 20 maps with a single-node row. After it: **3.30** and 5 of
+    /// 20. The threshold is below the measured value so it does not flap, and above the old one so
+    /// removing the preference is red.
+    #[test]
+    fn the_map_is_wide_rather_than_a_funnel() {
+        let mut total = 0usize;
+        let mut rows_counted = 0usize;
+        let mut pinched = 0usize;
+        for seed in 1..=20 {
+            let map = generated(seed);
+            let mut counts = [0usize; ROWS];
+            for (row, count) in counts.iter_mut().enumerate() {
+                *count = map.rows()[row].len();
+                total += *count;
+                rows_counted += 1;
+            }
+            if counts.iter().any(|&c| c <= 1) {
+                pinched += 1;
+            }
+        }
+        let average = total as f64 / rows_counted as f64;
+        assert!(
+            average >= 3.0,
+            "the map averages {average:.2} nodes per row: the paths are merging and the row is \
+             being pruned. Measured 3.30 with the unclaimed-target preference in the walk, 2.56 \
+             without it."
+        );
+        assert!(pinched <= 12, "{pinched}/20 maps pinch to a single-node row");
     }
 
     #[test]

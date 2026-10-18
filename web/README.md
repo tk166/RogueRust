@@ -12,12 +12,21 @@ whole game state out of the 122 `i32`s that `rd_env_observe_buf()` points at.
 | `ui_render.js` | **the semantics**: observation layout + four pure describers (`RD_UI.describe`). Classic script, no build step | gate 15 |
 | `ui_test.mjs` | drives the describers with the real `.wasm` and compares **every printed quantity** with its observation cell | gate 15 |
 | `smoke.mjs` | the artifact is a fresh build; every script parses; only real exports are called; offsets tile | gates 13–14 |
+| `map.html` | the run/map page: the same `.wasm`, the other export family (`env-abi.md` §11) | gate 16 |
+| `map_render.js` | **the map's semantics**: run layout + node fields + `describeMap`/`svgMarkup`, both pure | gate 16 |
+| `map_test.mjs` | drives the map describers with the real `.wasm`, node by node, **after every step of a full walk** | gate 16 |
 | `rd_wasm.wasm` | build artifact, **git-ignored** | gates 13–14 |
 
 The split exists because of a measured hole: the page used to hold every "which number goes in
 which cell" decision inline, and **no gate could see a wrong cell** — writing `o[H.HP_MAX]` where
 `o[H.HP]` belongs kept all fourteen gates green. `docs/spec/ui-plan.md` U0 moved those decisions
 into `ui_render.js` so they can be asserted, and they are, cell by cell.
+
+`map.html` draws the Act 1 map: one `<circle>` per node, one `<path>` per edge, the reachable set
+lit, the cursor ringed, and a click walks the map. ⚠️ **It walks; it does not settle** — no fight
+starts, no rest site heals, no chest opens (`env-abi.md` §11.5 says so, and the page says so on
+screen). And it does **not** yet mark "walked but not settled", which §11.5 requires; that is a
+known debt.
 
 ⚠️ **The DOM half is still only checked by eye.** A refactor that renders perfectly but whose click
 handlers reference a variable that no longer exists passes all fifteen gates — that happened, and

@@ -159,7 +159,32 @@
 > 结论一句话：**"逐格 == 观察向量那一格"这一条才是主力**，前面那些具体断言只是把失败信息
 > 说得更清楚。只写具体断言（"血量应该是 68"）会漏掉所有"这次采样恰好相同"的常量。
 
-### U1 —— 地图页（SVG）
+### U1 —— 地图页（SVG）—— **已落地（2026-10-19）**
+
+> 形状：`web/map_render.js`（经典脚本挂 `RD_MAP`：run 观察布局 + 节点字段 + `describeMap`
+> 纯函数 + `svgMarkup` 纯函数 + `statusLine`）、`web/map.html`（只负责贴 DOM 与点处理器）、
+> `web/map_test.mjs`、闸门 16 `web-map`。
+>
+> **它同时是一次 ABI 扩展**（`env-abi.md` §11，先改文档再改代码）：`rd-wasm` 现在依赖
+> `rd-run`，并导出 `rd_run_start/seed/observe/map_len/map_rows/map_node/map_row_first/
+> action_count/action/action_arg/step/last_error*/kind_name*`。
+> `RunState` 的起始数值**从内容读**（新增 `Content::character_start_facts`，
+> 读 `Characters[0].Start` 的 `MaxHealth`/`StartingHealth`/`Resources.gold`），不是抄常数。
+>
+> **6 条变异全部真的红**：行读成列 / 可达集合改成"前 N 个节点" / 出边目标整体 +1 /
+> 页面自己编一套 kind 名 / 游标永不标记 / 页面不再调用 `svgMarkup`。
+> 其中**两条第一轮是绿的**，原因都是同一个：**"视图与模块对账"只在开局做了一次**，
+> 而那两个变异恰好在开局时与真值重合（floor 1 的"前 N 个节点"就是整行；开局还没有游标）。
+> ⇒ 修法是把对账写成一个 helper，**走完整张地图的每一步都跑一遍**，并且换第二个 seed 再跑一遍。
+>
+> **画出来之后才发现的算法问题**：地图会收窄成漏斗（见 `run-layer.md` §7.3 的实测补记），
+> 已修（平均每行 2.56 → 3.30 个节点）。
+>
+> ⚠️ 仍然只有真浏览器能验的那一半：SVG 上的点击处理器。真浏览器实测过：39 节点 / 47 边 →
+> 点第一个可走节点 → 游标移动、floor 1、光照集合变成该节点的出边 → 一路点到 floor 15
+> （可达 0）。**未做**：`?seed=`/`?debug` 之类的 URL 开关（§5 表里列了，属 U2）。
+
+#### U1 的原始任务书
 
 * **做什么**：一页地图，按 run 层的 `RunMap`（`run-layer.md` §4.3）画 15 行节点与边；
   节点类型用图标/颜色区分，当前位置高亮，可点可达节点。纵向滚动（StS 的地图是自下而上滚的）。
@@ -221,4 +246,5 @@
 | 日期 | 改动 | 谁因此要重跑 |
 |---|---|---|
 | 2026-10-19 | 初版（U0–U3；渲染技术裁决为 DOM + SVG + CSS，不引 three.js） | — |
+| 2026-10-19 | **U1 落地**：`map_render.js` + `map.html` + `map_test.mjs` + 闸门 16 `web-map`；同时是一次 ABI 扩展（`env-abi.md` §11）与一次地图算法修正（收窄） | 改任何地图渲染语义都会过一次闸门 16 |
 | 2026-10-19 | **U0 落地**：`web/ui_render.js` + `web/ui_test.mjs` + 闸门 15 `web-ui`；9 条变异全红，其中 2 条暴露出真缺口 | 改任何渲染语义都会过一次闸门 15 |

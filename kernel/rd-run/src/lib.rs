@@ -23,4 +23,5 @@
 #![forbid(unsafe_code)]
 
 pub mod map;
+pub mod state;
 pub mod streams;

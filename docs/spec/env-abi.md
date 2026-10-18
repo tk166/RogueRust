@@ -145,3 +145,106 @@ reward = 1000 * (敌人总生命损失) - 1000 * (英雄生命损失) - 10 * (�
 - **终止判定**：`done = 1` 当且仅当战斗已判出胜负 **或** 英雄已倒下。后者必须单列：英雄倒地而场上
   还有活着的友方单位时 `CombatResult` 仍是 `Ongoing`，此时既无可打之牌也不是英雄回合，动作表会空掉。
 
+
+---
+
+## 11. run 层导出（v1 追加，2026-10-19）—— 与 §3 那套**并列**，不是它的扩展
+
+> **为什么单列一套**：§3 的 `rd_env_*` 是"一场战斗"的环境（RL 用途，一个 `CombatState`）。
+> run 层是"一局"（地图 + 游标 + 牌组 + 金币），寿命、状态与消费方都不同
+> （`docs/spec/run-layer.md` §4.1 说明了为什么不塞进 `CombatState`）。
+> 两套共用"定长整数观察 + 动作表 + `-1` 表示缺失"的约定，但**互不调用**。
+
+### 11.1 签名
+
+```c
+/* 一局 */
+int rd_run_start(int seed);        /* 建一局：生成地图；游标在出发前（node = -1）；返回 0 */
+int rd_run_seed(void);             /* 当前一局的 seed（供 UI 显示与复现） */
+
+/* 地图：定长，节点按 (row, col) 升序编号 */
+int rd_run_map_len(void);          /* 节点总数（= 所有 present 节点） */
+int rd_run_map_rows(void);         /* 行数 */
+int rd_run_map_node(int index, int field);   /* 越界返回 INT_MIN；field 见 11.2 */
+int rd_run_map_row_first(int row); /* 该行第一个节点的全局下标；空行返回 -1 */
+
+/* 一局的观察 */
+int rd_run_observe_len(void);
+int rd_run_observe(int index);     /* 见 11.3；越界返回 INT_MIN */
+
+/* 动作 */
+int rd_run_action_count(void);
+int rd_run_action(int index);      /* kind，见 11.4；越界返回 -1 */
+int rd_run_action_arg(int index, int which);   /* which ∈ {0,1}；越界返回 -1 */
+int rd_run_step(int action_index); /* 0 接受；负值拒绝且**状态逐字节不变** */
+```
+
+### 11.2 `rd_run_map_node(index, field)`
+
+| field | 含义 |
+|---:|---|
+| 0 | `row`（0 基；floor = row + 1） |
+| 1 | `col` |
+| 2 | `kind`（与 `rd_run::map::NodeKind` 的判别值一致；**0 = Unassigned**，见 `run-layer.md` §7.2） |
+| 3 | `out_degree`（0..3；最后一行恒 0） |
+| 4 | 第 1 条出边的**全局节点下标**（没有则 `-1`） |
+| 5 | 第 2 条出边 |
+| 6 | 第 3 条出边 |
+| 7 | `reachable`：从**当前游标**这一步能不能进入它（1/0）。游标未出发（node = -1）时，floor 1 的节点全部可达 |
+
+**出边给的是全局下标，不是行内下标。** 原因：行内下标要求使用方自己维护每行偏移，
+那是把一个容易算错的映射推给每个消费者（`run-layer.md` §4.3 的存储用行内下标，
+是因为内核自己会重编号；对外的接口不该泄露这个选择）。
+
+### 11.3 `rd_run_observe(index)`
+
+| index | 含义 |
+|---:|---|
+| 0 | `floor`（1..=15 在地图上；0 = 还没出发） |
+| 1 | 当前节点的全局下标，`-1` = 还没出发 |
+| 2 | `health` |
+| 3 | `health_max` |
+| 4 | `gold` |
+| 5 | `deck_size` |
+| 6 | `relic_count` |
+| 7 | `potion_count` |
+| 8 | `map_len` |
+| 9..15 | 七条 RNG 流的计数器，**按 stream id 1..=7 升序**（`run-layer.md` §3.2） |
+| 16 | `reachable_count`（本步可进入的节点数） |
+| 17 | `removed_cards` |
+| 18 | 保留（置 0） |
+
+### 11.4 动作
+
+| kind | 含义 | arg0 | arg1 |
+|---:|---|---:|---|
+| 0 | 进入节点 | 目标节点的**全局下标** | `-1` |
+
+M1 的路径选择只有一个动作族（"沿哪条出边走"）；`run-layer.md` §6.1 里
+`ChooseCard`/`RestSite`/`OpenChest`/`TakeBossRelic` 的动作编码在它们各自落地时**追加**
+（kind 从 1 起，与 §5 的 kind 0/1/2 不冲突，因为两套 ABI 各自编号）。
+
+### 11.5 这一版的**能力边界**（必须写清，否则就是静默降级）
+
+这一版实现的是**游标在地图上走**：`rd_run_step` 校验"这条出边真的属于当前节点"、
+把游标移过去、`floor` 跟着走。它**不结算节点**：
+
+* 普通战斗、篝火、宝箱、`?` 房**都还没有结算逻辑**（`run-layer.md` §6 的 `RunAction` 全表）；
+* 也就是说 `rd_run_step` 的语义是"**走到**那个节点"，不是"**结算**那个节点"。
+  消费方（UI）必须把这一点显示出来 —— 判据：地图页上每个已走过的节点都要能看出
+  "这一步只走了、没结算"（`ui-plan.md` §6 U1 的验收串里有一条 `M1` 的降级标记）。
+
+⇒ 这一节在节点结算落地后**必须回来改**，写明哪些 kind 会真的结算、哪些仍然只走。
+把"只走不结算"写在这里而不是留给读者猜，是纪律第 12 条的用法。
+
+**落地实况（2026-10-19）**：`web/map.html` 就是这一节的消费者 —— 它用
+`rd_run_map_node` 画出一张 SVG（每节点一个圆、每条边一条 path），用
+`rd_run_action_arg(0)` 决定哪些节点可点，点一下就是一次 `rd_run_step`。
+判据是闸门 16 `web-map`（`node web/map_test.mjs` ⇒ `MAP_RENDER PASS`），它把
+`web/map_render.js` 的纯函数与真 `.wasm` **逐节点、逐边**对账，并且**走完整张地图的每一步
+都重新对账**（不是只在开局对一次）—— 第一版只对了一次，于是"可达集合改成前 N 个节点"与
+"游标永不标记"两个变异都溜过去了。
+
+⚠️ 页面**不画**"这一步只走了、没结算"的标记。§11.5 要求它可观察，而当前地图页只在
+`msg` 行里写角色状态，没有逐节点的"已走 / 已结算"区分。**这是一个已知的欠账**，
+写在这里以免"看得见地图"被当成"节点结算做了"。

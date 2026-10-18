@@ -14,7 +14,7 @@
 
 param(
   [switch]$SkipSlow,
-  [int]$UnitsFloor = 599
+  [int]$UnitsFloor = 617
 )
 
 $ErrorActionPreference = 'Stop'
@@ -103,7 +103,7 @@ Write-Output "`n[1/9] 单元测试 + 语料逐字节回环（Rust 内核）"
 # 于是"条数下限"必须对**两个 crate 加起来**比 —— 只取第一个 `N passed` 会让新 crate 的测试
 # 全绿或全红都对闸门没有影响（这就是"覆盖不到的地方看起来最绿"）。
 $r = Invoke-Gate -Name 'rust-units' -Exe $CARGO `
-  -ArgLine "test -p rd-core -p rd-run --release --target-dir `"$TARGET_DIR`"" -Workdir (Join-Path $ROOT 'kernel') `
+  -ArgLine "test -p rd-core -p rd-run -p rd-wasm --release --target-dir `"$TARGET_DIR`"" -Workdir (Join-Path $ROOT 'kernel') `
   -MustMatch 'test result: ok\. \d+ passed; 0 failed' -MustNotMatch 'test result: FAILED'
 $results += $r
 $passed = 0
@@ -127,7 +127,7 @@ $results += Invoke-Gate -Name 'rust-baremetal' -Exe $CARGO `
 
 Write-Output "[4/9] clippy"
 $results += Invoke-Gate -Name 'rust-clippy' -Exe $CARGO `
-  -ArgLine "clippy --all-targets -p rd-core -p rd-run --target-dir `"$TARGET_DIR`"" -Workdir (Join-Path $ROOT 'kernel') `
+  -ArgLine "clippy --all-targets -p rd-core -p rd-run -p rd-wasm --target-dir `"$TARGET_DIR`"" -Workdir (Join-Path $ROOT 'kernel') `
   -MustMatch 'Finished'
 
 Write-Output "[5/9] 真链接成裸机 ELF 镜像"
@@ -233,6 +233,19 @@ Write-Output "[+6] 界面渲染的**语义**（不是语法）：每一格显示
 # ⚠️ 它**不覆盖 DOM**：点击处理器、模板字符串、CSS 仍然只有真浏览器能验（见 web/README.md）。
 $results += Invoke-Gate -Name 'web-ui' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'web\ui_test.mjs') -Workdir $ROOT -MustMatch 'UI_RENDER PASS' -TimeoutSec 600
+
+Write-Output "[+7] 地图页：画出来的东西**就是** rd-run 生成的那张图（逐节点、逐边、逐格光照）"
+# 为什么这条闸门必须存在：闸门 15 盯的是**战斗**那一套导出（`rd_env_*`）。地图走的是
+# `env-abi.md` §11 的另一套（`rd_run_*`），所以上面 15 道闸门里**没有一道**看它 ——
+# 把"可达"改成"前 N 个节点"、把行读成列、把游标标记删掉，15 道闸门全绿。
+# 这条闸门把「哪一格画什么」搬进 `web/map_render.js`（纯函数：访问器 → 视图 → SVG 字符串），
+# 再用真 `.wasm` 驱动，并且**走完整张地图每一步都重新对账**（不是只在开局对一次）——
+# 第一版就只在开局对了一次，于是上面那两个变异溜过去了。
+# 6 条变异全部真的红：行读成列 / 可达集合改成"前 N 个" / 出边目标整体 +1 /
+# 页面自己编了一套 kind 名 / 游标永不标记 / 页面不再调用 svgMarkup。
+# ⚠️ 它**不覆盖 DOM**：SVG 上的点击处理器仍然只有真浏览器能验。
+$results += Invoke-Gate -Name 'web-map' -Exe 'C:\Program Files\nodejs\node.exe' `
+  -ArgLine (Join-Path $ROOT 'web\map_test.mjs') -Workdir $ROOT -MustMatch 'MAP_RENDER PASS' -TimeoutSec 600
 
 Write-Output "`n" + ("-" * 78)
 Write-Output ("{0,-18}{1,6}  {2,-22}{3}" -f '闸门', '退出', '证据', '备注')

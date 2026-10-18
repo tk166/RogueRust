@@ -14,6 +14,10 @@ crate-type = ["cdylib"]
 # Path dependency on the kernel. rd-core stays `no_std` + `forbid(unsafe_code)`; this crate is
 # the one allowed to use `std` and `unsafe` (it has to hold a 184 KB `CombatState` somewhere).
 rd-core = { path = "../rd-core" }
+# The run layer: the map, the cursor and the seven RNG substreams behind
+# `docs/spec/env-abi.md` §11. It depends on rd-core for `Ident` and `rng` only; it does not
+# read content, which is why this crate is the one that joins the two.
+rd-run = { path = "../rd-run" }
 
 # Deliberately no `wasm-bindgen`: it would drag in a CLI (`wasm-bindgen`) and a build-dependency
 # tree onto a machine whose shell environment is already hostile. Plain `extern "C"` exports plus

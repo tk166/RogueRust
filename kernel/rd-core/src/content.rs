@@ -1921,6 +1921,21 @@ pub enum DeckError {
     BadString(u16),
 }
 
+/// 角色起始的三个数值（`Characters[0].Start`，见
+/// [`Content::character_start_facts`]）。
+///
+/// 刻意**只有一个结构体、三个标量**：它存在的唯一目的是让 run 层不必认识内容格式，
+/// 而不是充当"内容里所有起始字段的镜像"。每多一格就多一处会和内容漂移的地方。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CharacterStart {
+    /// `Start.MaxHealth`。
+    pub max_health: i32,
+    /// `Start.StartingHealth`，缺席时等于 `max_health`。
+    pub starting_health: i32,
+    /// `Start.Resources.gold`，缺席时为 0。
+    pub gold: i32,
+}
+
 /// 一份起始牌组的借用视图（已按各自形态归一成"第 i 张牌的定义 id"）。
 #[derive(Debug, Clone, Copy)]
 pub struct StartDeck<'a> {
@@ -2023,6 +2038,52 @@ impl<'a> Content<'a> {
     /// 字段`Deck` **缺席**按参考的默认值处理（`RunStart.Deck = []`，`RunBlueprint.cs:214-216`）
     /// ⇒ 当成"这一处声明了空"，接着看下一处。**出现在场但类别不对**则是内容坏了
     /// （[`DeckError::Malformed`]）—— 两者的区别正是"参考写明的默认"与"我读错了"。
+    /// 角色起始的**数值**事实：`Characters[0].Start` 下的 `MaxHealth` / `StartingHealth` /
+    /// `Resources.gold`。
+    ///
+    /// 为什么要有它：run 层（`rd-run`）刻意不认识内容（它的模块头写了理由），
+    /// 所以"这一局从多少血、多少钱开始"必须由**内容**告诉他，而不是由调用方抄三个常数。
+    /// 实测 `tools/contentc/packages/sts` 里 `Characters[0].Start` 是
+    /// `{MaxHealth: 80, StartingHealth: 80, Resources: {gold: 0}, Deck: [...10 张...],
+    /// StartingRelics: []}`。
+    ///
+    /// ⚠️ **`StartingRelics` 是空的**，而 `inv:§2` 说起始遗物是 `Burning Blood`
+    /// （"战斗结束回 6 血"）—— 也就是说**这份内容还没把起始遗物写进去**。
+    /// 这一条不是本函数的缺陷，是内容的缺口，已记在 `docs/spec/run-layer.md` §4.5；
+    /// 在内容补上之前，run 层的 `Burning Blood` 效果没有来源可读，M1 的 HP 账就是错的。
+    ///
+    /// 缺席的语义：`MaxHealth` **缺席 ⇒ 响亮失败**（[`DeckError::Malformed`]）——
+    /// 一个没有最大生命的角色会让整局的 HP 账静默变成 0；`StartingHealth` 缺席则退回
+    /// `MaxHealth`（参考的默认是"满血开局"）；`Resources` / `Resources.gold` 缺席 ⇒ 0 金
+    /// （参考的默认是空资源表）。
+    pub fn character_start_facts(
+        &self,
+        roots: DeckRoots,
+    ) -> Result<Option<CharacterStart>, DeckError> {
+        let Some(term) = character_start(self, roots.characters)? else {
+            return Ok(None);
+        };
+        let hop = DeckOrigin::CharacterStart.path();
+        let node = crate::ir::NodeRef::new(self, term);
+        let max_health = node
+            .int_field("MaxHealth")
+            .map_err(|_| DeckError::Malformed(hop))?
+            .ok_or(DeckError::Malformed(hop))?;
+        let starting_health = node
+            .int_field("StartingHealth")
+            .map_err(|_| DeckError::Malformed(hop))?
+            .unwrap_or(max_health);
+        let gold = match node.node_field("Resources") {
+            Ok(Some(resources)) => resources.int_field("gold").ok().flatten().unwrap_or(0),
+            _ => 0,
+        };
+        Ok(Some(CharacterStart {
+            max_health,
+            starting_health,
+            gold,
+        }))
+    }
+
     pub fn start_deck(&self, roots: DeckRoots) -> Result<StartDeck<'_>, DeckError> {
         let mut seen_any = false;
         // 第 1 跳：花名册非空 ⇒ `Characters[0].Start`；第 2 跳：花名册为空 ⇒ 根 `Start`。

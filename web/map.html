@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rd-run · Act 1 map</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #191d25; --line: #2a3140; --ink: #d7dde8; --dim: #7d8798;
+    --ok: #59bb7a; --bad: #d8555f; --live: #e0c060; --here: #59bb7a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 16px; background: var(--bg); color: var(--ink);
+         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 2px; letter-spacing: .04em; }
+  .sub { color: var(--dim); font-size: 12px; margin-bottom: 12px; }
+  .sub code { color: var(--ink); }
+  .wrap { max-width: 760px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .09em; color: var(--dim);
+              margin: 0 0 8px; font-weight: 600; }
+  .status { font: 12px/1.7 var(--mono); color: var(--dim); }
+  .status b { color: var(--ink); }
+  .mapbox { margin-top: 12px; overflow: auto; border: 1px solid var(--line); border-radius: 10px;
+            background: #12151b; }
+  svg { display: block; }
+  .edge { stroke: #2f3949; stroke-width: 2; fill: none; }
+  .edge-live { stroke: var(--live); stroke-width: 3; }
+  .node circle { fill: #202634; stroke: #3a4657; stroke-width: 2; }
+  .node text { font: 13px var(--mono); fill: var(--ink); pointer-events: none; }
+  .node.reachable circle { stroke: var(--live); stroke-width: 3; cursor: pointer; }
+  .node.reachable:hover circle { fill: #2b3648; }
+  .node.here circle { stroke: var(--here); stroke-width: 4; }
+  .node.kind-combat circle { fill: #2a2230; }
+  .node.kind-elite circle { fill: #331f22; }
+  .node.kind-rest circle { fill: #222a30; }
+  .node.kind-shop circle { fill: #2a2a20; }
+  .node.kind-unknown circle { fill: #1e232c; }
+  .node.kind-treasure circle { fill: #1f2a2a; }
+  .node.kind-unassigned circle { fill: #3a1f1f; }
+  .floor { font: 10px var(--mono); fill: var(--dim); }
+  .msg { font: 12px/1.6 var(--mono); margin-top: 10px; min-height: 2.4em; }
+  .msg .err { color: var(--bad); }
+  .msg .good { color: var(--ok); }
+  .msg .dim { color: var(--dim); }
+  button.act { font: 600 13px system-ui, sans-serif; padding: 9px 16px; border-radius: 8px;
+               cursor: pointer; background: #2b3648; color: var(--ink); border: 1px solid var(--line); }
+  button.act:hover { border-color: #4a7ec0; }
+  pre { font: 11px/1.65 var(--mono); color: var(--dim); margin: 0; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<h1>rd-run → WebAssembly · Act 1 map</h1>
+<div class="sub">
+  同一份 <code>.wasm</code>，另一套导出（<code>docs/spec/env-abi.md</code> §11）。
+  地图是 <code>rd-run</code> 生成的（13 条规则 + 校验器），页面只把整数画成图形。
+  <br>
+  ⚠️ <b>这一版只“走”不“结算”</b>：点一个可走的节点会把游标移过去、<code>floor</code> 跟着走，
+  <b>不会</b>开始战斗、不会回血、不会开宝箱（<code>env-abi.md</code> §11.5 写明了这一点）。
+</div>
+
+<div class="wrap">
+  <div class="panel">
+    <h2>Run</h2>
+    <div class="status" id="status">载入中…</div>
+    <div class="mapbox" id="mapbox"></div>
+    <div class="msg" id="msg"></div>
+    <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="act" id="newRun">同一 seed 重开</button>
+      <button class="act" id="nextSeed">换一个 seed</button>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:12px;">
+    <h2>Notes</h2>
+    <pre id="notes"></pre>
+  </div>
+</div>
+
+<script src="./map_render.js"></script>
+<script>
+"use strict";
+
+let ex = null;
+let seed = 7;
+const WASM_CANDIDATES = ["./rd_wasm.wasm",
+                        "../kernel/target/wasm32-unknown-unknown/release/rd_wasm.wasm"];
+
+async function fetchWasm() {
+  let lastErr;
+  for (const url of WASM_CANDIDATES) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) { lastErr = new Error(url + " → HTTP " + res.status); continue; }
+      return await res.arrayBuffer();
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("no wasm candidate could be fetched");
+}
+
+function text(lenFn, intoFn, arg) {
+  const n = lenFn(arg);
+  if (n <= 0) return "";
+  const ptr = ex.rd_env_scratch_buf();
+  intoFn(arg, ptr);
+  const bytes = new Uint8Array(ex.memory.buffer, ptr, n).slice();
+  return new TextDecoder("utf-8").decode(bytes);
+}
+const lastRunError = () =>
+  text((_) => ex.rd_run_last_error_len(), (p) => ex.rd_run_last_error_into(p), 0);
+const kindName = (kind) =>
+  text((k) => ex.rd_run_kind_name_len(k), (k, p) => ex.rd_run_kind_name_into(k, p), kind);
+
+// The ABI surface, passed to the pure describer so it never touches a global.
+const io = {
+  obs: (i) => ex.rd_run_observe(i),
+  mapLen: () => ex.rd_run_map_len(),
+  rows: () => ex.rd_run_map_rows(),
+  node: (i, f) => ex.rd_run_map_node(i, f),
+  rowFirst: (r) => ex.rd_run_map_row_first(r),
+  actionCount: () => ex.rd_run_action_count(),
+  actionArg: (i, w) => ex.rd_run_action_arg(i, w),
+};
+
+let current = null;
+
+function render(verdict) {
+  current = RD_MAP.describeMap(io);
+  if (!current) {
+    document.getElementById("status").textContent = "没有一局（rd_run_start 失败）";
+    document.getElementById("mapbox").innerHTML = "";
+    return;
+  }
+  document.getElementById("status").innerHTML =
+    `${RD_MAP.statusLine(current)}<br>可达 <b>${current.actions.length}</b> 个节点`;
+  document.getElementById("mapbox").innerHTML = RD_MAP.svgMarkup(current);
+
+  const parts = [];
+  if (verdict === 0) parts.push(`<span class="good">走到了 floor ${current.status.floor}</span>`);
+  else if (verdict === -1) parts.push(`<span class="err">动作越界 · ${esc(lastRunError())}</span>`);
+  else if (verdict === -2) parts.push(`<span class="err">被拒 · ${esc(lastRunError())}</span>`);
+  if (current.cursor.reached && current.actions.length === 0) {
+    parts.push(`<span class="dim">地图走到底了（floor ${current.status.floor}）</span>`);
+  }
+  parts.push(`<span class="dim">seed ${ex.rd_run_seed()} · map ${current.status.mapLen} 节点 · ` +
+             `streams ${current.status.streams.join("/")}</span>`);
+  document.getElementById("msg").innerHTML = parts.join("<br>");
+
+  document.getElementById("notes").textContent =
+    `map_len = ${current.status.mapLen}\n` +
+    `rows    = ${ex.rd_run_map_rows()}\n` +
+    `row_first(row) = ${Array.from({ length: ex.rd_run_map_rows() }, (_, r) => io.rowFirst(r)).join(",")}\n` +
+    `kind names from the module: ` +
+    [0, 1, 2, 3, 4, 5, 6].map((k) => `${k}=${kindName(k)}`).join(" ");
+}
+
+function esc(s) { return String(s).replace(/[<>&]/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c])); }
+
+function startRun() {
+  const verdict = ex.rd_run_start(seed);
+  render(verdict);
+}
+
+(async () => {
+  try {
+    ex = await WebAssembly.instantiate(await fetchWasm(), {}).then((m) => m.instance.exports);
+    if (!ex.memory) throw new Error("module exports no memory — was it built as a cdylib?");
+    startRun();
+  } catch (e) {
+    document.getElementById("msg").innerHTML = `<span class="err">载入失败: ${esc(e)}</span>`;
+    throw e;
+  }
+
+  document.getElementById("mapbox").addEventListener("click", (ev) => {
+    const group = ev.target.closest("g.node.reachable");
+    if (!group || !current) return;
+    const target = Number(group.dataset.node);
+    const action = current.actions.indexOf(target);
+    if (action < 0) return; // not offered by the action table: do nothing rather than guess
+    render(ex.rd_run_step(action));
+  });
+  document.getElementById("newRun").addEventListener("click", startRun);
+  document.getElementById("nextSeed").addEventListener("click", () => { seed += 1; startRun(); });
+})();
+</script>
+</body>
+</html>

@@ -48,6 +48,8 @@
 //!   gets the round back. The old "plan has N enemies" guard is gone because the reason for it
 //!   is gone.
 
+mod run;
+
 use rd_core::battle::{
     build_fight_from_content, run_fight, standard_turn_config, FightOutcome, FightPlan,
     PlanCombatant, Step,
@@ -78,13 +80,13 @@ use rd_core::state::{
 /// labelled reason and the message strings, minus the payload). The measured difference is in the
 /// spike report — the point of the switch is that the number is reproducible rather than argued.
 #[cfg(not(rd_wasm_plain_errors))]
-fn detail<T: core::fmt::Debug>(value: &T) -> String {
+pub(crate) fn detail<T: core::fmt::Debug>(value: &T) -> String {
     format!("{value:?}")
 }
 
 /// See the sibling above.
 #[cfg(rd_wasm_plain_errors)]
-fn detail<T: core::fmt::Debug>(_value: &T) -> String {
+pub(crate) fn detail<T: core::fmt::Debug>(_value: &T) -> String {
     // `T`'s `Debug` impl is never instantiated on this path, which is exactly how its code
     // disappears from the module. The bound stays so the call sites do not have to change.
     "<detail off>".to_string()
@@ -107,7 +109,7 @@ fn detail<T: core::fmt::Debug>(_value: &T) -> String {
 /// it buys: every number on the page comes out of a document this repo can check, and the deck
 /// is the document's own rather than a list typed here. If the demo ever needs the big content,
 /// this is the one line to change — nothing else in the file knows which package it is looking at.
-static IMAGE: &[u8] = include_bytes!("../../../tools/contentc/packages/sts/out/content.sts.core.rdcf");
+pub(crate) static IMAGE: &[u8] = include_bytes!("../../../tools/contentc/packages/sts/out/content.sts.core.rdcf");
 
 /// Which `ENCT` encounter to fight. The id is looked up in the image's `SEC_IDX` (a missing id is
 /// a loud [`rd_core::content::EncounterError`], not an empty field).
