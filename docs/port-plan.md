@@ -3428,3 +3428,92 @@ Characters[].UnlockFlag
   冒烟方式：`node web/smoke.mjs` 读**提交的那份产物**，`WebAssembly.validate` + 无 import 实例化 +
   逐个检查导出 + 打完整局（`WEB_SMOKE PASS`）。⚠️ **没在真浏览器里跑过**：
   DOM、`Content-Type`、`instantiateStreaming` 这三样仍只有页面自己的 Measurements 面板能回答。
+
+---
+
+## 46. 第 36 轮：真浏览器里跑了一遍，页面补上「选目标」，验收从 12 道闸门长到 14 道
+
+> 这一节只追加。内核**零改动**（`kernel/rd-core/**` 一个字节没动）：558 条单测、四条对拍
+> 182/62/124/394、`CombatState` 213,224 B、`.wasm` 378,962 B 全部不变。
+> 这一轮的全部产出在 `web/**` 与 `tools/acceptance.ps1`。
+
+### 46.1 把"未验证"改成实测，而不是继续写在文档里
+
+`web/README.md` 从上一轮起就挂着一句"没在真浏览器里跑过：DOM、`Content-Type`、
+`instantiateStreaming` 这三样仍只有页面自己的 Measurements 面板能回答"。这一轮去回答了：
+
+| 冒烟测不到的一格 | 实测 |
+|---|---|
+| 服务器给的 `Content-Type` | `application/wasm`（python 的 `http.server` 认得 `.wasm`） |
+| 载入路径 | **`instantiateStreaming`**（快路径，不是 `arrayBuffer` 回退） |
+| fetch+实例化+首次观察 | 10–40 ms（冷/热缓存差 4 倍） |
+| 线性内存 | 1,408 KiB |
+| DOM | 排版正常，122 格落在正确位置，卡能点 |
+
+然后**用鼠标点**打完一局：21 击到 `Victory`（第 7 回合），第一次结束回合掉的血压根等于两条
+预告意图之和（7 + 5 = 12）。
+
+### 46.2 真浏览器抓到的两件事（任何闸门都抓不到）
+
+1. **出牌的目标从来没被传下去。** `env-abi.md` §5 是"每张卡 × 每个活着的敌人槽"各一条动作，
+   而页面取的是 `playByHand.get(h)` —— **第一条** —— 于是无论玩家想打谁，都打在 0 号敌人身上。
+   现在页面做了个目标选择器：动作多于一条的卡会把**它能打到的敌人**标出来，点敌人就花掉
+   "指名那个槽"的那条动作。实测：`strike` 点 1 号槽 ⇒ `spike_slime_s` 10 → 4，能量 3 → 2。
+2. **两个调试字段在屏幕上**：每张卡下面单独一行 `def_slot N`；以及原始的 reward 整数
+   （`-12030` —— 那是 `env-abi.md` §7 的 1/1000 单位，即 −12.03）。前者挪进 `title=`，
+   后者除以 1000。
+
+### 46.3 真正的教训：**`web/index.html` 没有任何闸门在看它**
+
+把它改坏（少一个 `}`）之后，**十二道闸门全绿** —— 因为每一道都止步于 `.wasm`。
+这和第 11 道（`rdcf_verify.py` 静默失效）、第 12 道（`sts` 包覆盖不到）是同一种形状：
+**覆盖不到的地方看起来最绿**。补成两道：
+
+* **闸门 13 `wasm-rebuild`**：`cargo build -p rd-wasm --release --target wasm32-unknown-unknown`。
+  为什么需要：`web/rd_wasm.wasm` **不在 cargo 的依赖图里**，源码改了不重编它照样绿。
+* **闸门 14 `web-package`**：`node web/smoke.mjs`，四条判据 ——
+  (a) `web/rd_wasm.wasm` 与刚才那次重编**逐字节相同**；
+  (b) `index.html` 的 `<script>` 能被 node 的解析器吃下；
+  (c) 它调用到的每个 `ex.xxx` 都是模块真有的导出（与 smoke 里那张手抄清单**互为反方向**）；
+  (d) 页面里硬编码的 122 格偏移还铺得满（`OFF_ENEMY = OFF_HERO_STATUS + 状态轴数`、
+      `OFF_HAND = OFF_ENEMY_STATUS + 4×5`、`OFF_PILES = OFF_HAND + 10×4`、`OFF_PILES+5 ≤ 122`）。
+
+四条各自变异一次，**全部真的红**：语法错 ⇒ `does not parse`；`OFF_HAND` 69→71 ⇒
+`OFF_HAND is 71, but every block before it ends at 69`；调 `ex.rd_env_reward_nope` ⇒
+`does not export`；产物末字节 +1 ⇒ `is NOT a fresh build`。恢复后绿，且恢复是**逐字节**校验过的。
+
+### 46.4 为什么判据是字节，不是 mtime
+
+实测到的两种"时间说谎"都在这台机器上发生过：
+
+* `Copy-Item` 恢复文件会把 **mtime 一起恢复** ⇒ cargo 复用旧 `.rlib`（§38 记录过）；
+* 这一轮反过来：`web/rd_wasm.wasm` 的 mtime 比 `kernel/rd-wasm/src/lib.rs` **早 76 秒**，
+  看起来陈旧，但**字节与现在这棵树重编的结果完全一致**（sha256 `686ba653…`，378,962 B）。
+
+⇒ 用 mtime 会红一次假的；用字节不会。代价是这条闸门必须**先重编**（增量 ~3 s），
+所以它拆成 13 + 14 两道，好让"编不过"和"页面坏了"不会混成同一条红。
+
+### 46.5 仍然没覆盖的（如实）
+
+**Rust ↔ 页面 的偏移漂移**：页面把 122 格排布硬编码了。内核若搬动某一段，页面会读错格子，
+而 smoke **看不出来**（它只能证明页面自身自洽）。真浏览器能看出来，但那是人工动作。
+要关掉这个洞，得把偏移通过 ABI 发布出来（`env-abi.md` 是冻结的，加一格要重新冻结）——
+**这一轮没做，写在这里当欠账。**
+
+### 46.6 这一轮的数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 12/12 | **14/14** |
+| 单测 | 558 | 558（内核零改动） |
+| 四条对拍 | 182 / 62 / 124 / 394 | 不变 |
+| `.wasm` | 378,962 B | 378,962 B（页面改动不进二进制） |
+| 真浏览器 | 未验证 | **Chrome 152，`instantiateStreaming`，点完一局** |
+
+### 46.7 下一站：M1
+
+`docs/spec/sts-act1-plan.md` 的 M0a / M0b / M0.5 到这里**全部关掉**（M0b 的判据是"手工打开页面
+能打出 bash → 易伤 → 意图正确 → 打赢"，本节 46.1/46.2 就是它的证据）。
+按同一份计划的顺序，下一站是 **M1「一条最短路径」**，它的进入条件还差三件：
+`currentHealth` 表达式（Hexaghost 的 Divider 要用）、`LifecyclePrograms`（Burn 要用）、
+以及**必须先定形状**的 `run_rng`（§5.4：单流会让"多抽一次药水改变整张地图"）。

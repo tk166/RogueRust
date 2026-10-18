@@ -6,13 +6,26 @@
 // the page actually fetches: that it validates, instantiates with no imports, exports what
 // `web/index.html` touches, and plays one real step of the content-built fight.
 //
+// It also proves two things that only became visible after a **real browser** session:
+//   * `web/rd_wasm.wasm` is byte-identical to a fresh build (位置陈旧 ≠ mtime 陈旧: a
+//     `Copy-Item` restores mtime, and a one-comment edit makes mtime lie in the other direction.
+//     Both happened on this machine, so the comparison is on **bytes**);
+//   * `web/index.html`'s inline script parses, only calls exports the module really has, and its
+//     observation offsets still tile. Before this section, editing the page was **ungated** —
+//     a syntax error in it passed every one of the 12 acceptance gates.
+//
 // ⚠️ This is **not** a browser. It cannot catch: a wrong `Content-Type`, `instantiateStreaming`
-// rejecting the response, the page's DOM/JS, or anything that needs `performance.now`. What it
-// does catch: a stale copy, a missing export, a module that needs an import nobody provides, and
-// numbers that no longer match what `index.html` assumes.
+// rejecting the response, the DOM, or anything that needs `performance.now`. It also cannot catch
+// **Rust ↔ page offset drift**: the page hard-codes the 122-slot layout, and only a real browser
+// (or a layout published over the ABI, which is not frozen that way today) shows the numbers
+// landing in the wrong cells. What it does catch: a stale copy, a missing export, a module that
+// needs an import nobody provides, a page that does not parse, and numbers that no longer match
+// what `index.html` assumes.
 
 import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const WASM = new URL("./rd_wasm.wasm", import.meta.url);
 const bytes = await readFile(WASM);
@@ -109,6 +122,78 @@ if (ex.rd_env_done() !== 1) fail("the fight did not terminate");
 if (ex.rd_env_result() !== 1) fail(`result ${ex.rd_env_result()}, expected 1 (victory)`);
 if (ex.rd_env_selfcheck(7, 40) !== 1) fail("selfcheck != 1");
 
+// =============================================================================================
+// (1) The artifact in `web/` must be **this tree's** build — compared on bytes, not on mtime.
+// =============================================================================================
+// mtime has lied twice on this machine: `Copy-Item` restoring a file also restores its mtime
+// (cargo then re-used a stale `.rlib`), and a one-line comment edit makes the artifact look old
+// while it is in fact current. Bytes have no such ambiguity.
+const BUILT = fileURLToPath(
+  new URL("../kernel/target/wasm32-unknown-unknown/release/rd_wasm.wasm", import.meta.url));
+let builtBytes;
+try {
+  builtBytes = await readFile(BUILT);
+} catch (e) {
+  fail(`no build to compare against at ${BUILT} (${e.code || e.message}).\n` +
+       `  & tools\\cargo.ps1 build -p rd-wasm --release --target wasm32-unknown-unknown\n` +
+       `  Copy-Item ${BUILT} ${fileURLToPath(WASM)}`);
+}
+const sha = (b) => createHash("sha256").update(b).digest("hex");
+if (builtBytes.length !== bytes.length || sha(builtBytes) !== sha(bytes)) {
+  fail(`web/rd_wasm.wasm is NOT a fresh build of this tree.\n` +
+       `  committed  ${bytes.length} B  sha256 ${sha(bytes)}\n` +
+       `  fresh      ${builtBytes.length} B  sha256 ${sha(builtBytes)}\n` +
+       `  Fix: Copy-Item "${BUILT}" "${fileURLToPath(WASM)}"`);
+}
+
+// =============================================================================================
+// (2) `web/index.html` — the page was the one thing no gate looked at.
+// =============================================================================================
+// A syntax error in the inline script used to pass all twelve acceptance gates, because every
+// gate stopped at the `.wasm`. Three checks, cheapest first: does it parse, does it call only
+// exports that exist, and do its hard-coded observation offsets still tile.
+const html = await readFile(fileURLToPath(new URL("./index.html", import.meta.url)), "utf8");
+const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+if (scripts.length !== 1) fail(`index.html has ${scripts.length} <script> blocks, expected exactly 1`);
+try {
+  new vm.Script(scripts[0], { filename: "index.html<script>" });
+} catch (e) {
+  fail("index.html's inline script does not parse: " + e.message);
+}
+
+// The direction that breaks when the ABI loses a symbol. (`REQUIRED` above is the other one: a
+// symbol the page should be using and is not.)
+const called = new Set([...scripts[0].matchAll(/\bex\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]));
+if (called.size < 20) fail(`only ${called.size} ex.* references found — the extraction broke, not the page`);
+for (const name of called) {
+  if (!(name in ex)) fail(`index.html calls ex.${name}, which the module does not export`);
+}
+
+// The 122-slot layout is hard-coded in the page. Re-derive it from its own parts: adding a status
+// axis or widening a block has to move every offset after it, or the page reads the wrong cells.
+const NUM = (name) => {
+  const m = new RegExp("const\\s+" + name + "\\s*=\\s*(\\d+)\\s*;").exec(scripts[0]);
+  if (!m) fail(`index.html no longer declares \`const ${name} = <number>;\``);
+  return Number(m[1]);
+};
+const axesMatch = /const\s+STATUS_AXES\s*=\s*\[([^\]]*)\]/.exec(scripts[0]);
+if (!axesMatch) fail("index.html no longer declares `const STATUS_AXES = [...]`");
+const axes = axesMatch[1].split(",").filter((s) => s.trim() !== "").length;
+
+const PAGE_HERO_STATUS = NUM("OFF_HERO_STATUS"), PAGE_ENEMY = NUM("OFF_ENEMY");
+const PAGE_ENEMY_STATUS = NUM("OFF_ENEMY_STATUS"), PAGE_HAND = NUM("OFF_HAND");
+const PAGE_PILES = NUM("OFF_PILES");
+const PAGE_ENEMY_SLOTS = NUM("MAX_ENEMY_SLOTS"), PAGE_HAND_SLOTS = NUM("MAX_HAND_SLOTS");
+for (const [name, got, want] of [
+  ["OFF_ENEMY", PAGE_ENEMY, PAGE_HERO_STATUS + axes],
+  ["OFF_ENEMY_STATUS", PAGE_ENEMY_STATUS, PAGE_ENEMY + PAGE_ENEMY_SLOTS * 8],
+  ["OFF_HAND", PAGE_HAND, PAGE_ENEMY_STATUS + PAGE_ENEMY_SLOTS * 5],
+  ["OFF_PILES", PAGE_PILES, PAGE_HAND + PAGE_HAND_SLOTS * 4],
+]) {
+  if (got !== want) fail(`${name} is ${got}, but every block before it ends at ${want}`);
+}
+if (PAGE_PILES + 5 > OBS_LEN) fail(`the piles block ends at ${PAGE_PILES + 5}, past observe_len ${OBS_LEN}`);
+
 console.log("WEB_SMOKE PASS");
 console.log(`  wasm bytes        ${bytes.length}`);
 console.log(`  observe_len       ${OBS_LEN} i32`);
@@ -116,4 +201,7 @@ console.log(`  enemies           ${names.map((n, i) => `${n} (${intents[i]})`).j
 console.log(`  round 1 preview   ${previewed} damage, and the fact matched it`);
 console.log(`  steps to victory  ${steps}`);
 console.log(`  CombatState       ${ex.rd_env_bench_sizes(0)} B (this build)`);
-console.log("  ⚠️  not a browser: no DOM, no Content-Type, no instantiateStreaming.");
+console.log(`  artifact          byte-identical to kernel/target/…/rd_wasm.wasm, sha256 ${sha(bytes).slice(0, 12)}…`);
+console.log(`  page              1 script parsed, ${called.size} exports cross-checked, ` +
+            `offsets tile to ${PAGE_PILES + 5}/${OBS_LEN}`);
+console.log("  ⚠️  not a browser: no DOM, no Content-Type, no instantiateStreaming, no Rust↔page offset check.");

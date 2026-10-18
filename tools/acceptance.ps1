@@ -196,6 +196,27 @@ $results += Invoke-Gate -Name 'sts-content' -Exe $PY `
   -MustMatch 'weak pool[\s\S]*inert keys[\s\S]*full roots[\s\S]*core SEC_IDX[\s\S]*STS_CONTENT PASS \(monsters \d+, encounters \d+, deck \d+, statuses \d+, cards \d+, enemy_actions \d+' `
   -TimeoutSec 300
 
+Write-Output "`n[+4] 重编网页那一份 .wasm（web/** 是仓库里唯一被手工 Copy-Item 进来的二进制产物）"
+# 为什么这条闸门必须存在：`web/rd_wasm.wasm` 被三方引用 —— index.html 硬编码的 122 格偏移、
+# smoke.mjs 的导出手抄清单、README 里钉死的字节数 —— 而它**不在 cargo 的依赖图里**：
+# 源码改了不重编，它照样绿。（真实测到的两种"时间说谎"：Copy-Item 恢复文件会把 mtime 一起
+# 恢复；而只改一行注释又会让产物看起来比新源码更旧。所以 [+5] 的判据是**字节**，不是时间。）
+$results += Invoke-Gate -Name 'wasm-rebuild' -Exe $CARGO `
+  -ArgLine "build -p rd-wasm --release --target wasm32-unknown-unknown" -Workdir (Join-Path $ROOT 'kernel') `
+  -MustMatch 'Finished' -TimeoutSec 600
+
+Write-Output "[+5] 页面 + 产物：字节同一 + 脚本能解析 + 只在真导出上调用 + 偏移仍铺满"
+# 为什么这条闸门必须存在：上面 13 道闸门**没有一道看 web/index.html**。实测过一次把页面改坏
+# （语法错），十二道闸门全绿 —— 因为所有闸门都止步于 .wasm。这条补的就是那一段：
+#   (a) web/rd_wasm.wasm 与刚才那次重编**逐字节相同**，不同就打印两边的 sha 与复制命令；
+#   (b) index.html 的 <script> 能被 node 的解析器吃下；
+#   (c) 它调用到的每个 ex.xxx 都是模块真有的导出（与 smoke.mjs 里那张手抄清单互为反方向）；
+#   (d) 页面硬编码的 122 格偏移还铺得满（加一个状态轴就得挪后面每一个偏移）。
+# 四条都各自变异过一遍并确认会红（语法错 / OFF_HAND 漂 2 / 调不存在的导出 / 产物改一个字节）。
+# ⚠️ 它仍然**不**能证明 Rust 侧的排布没搬过家：那一层只有真浏览器能看出来（见 smoke.mjs 头）。
+$results += Invoke-Gate -Name 'web-package' -Exe 'C:\Program Files\nodejs\node.exe' `
+  -ArgLine (Join-Path $ROOT 'web\smoke.mjs') -Workdir $ROOT -MustMatch 'WEB_SMOKE PASS' -TimeoutSec 600
+
 Write-Output "`n" + ("-" * 78)
 Write-Output ("{0,-18}{1,6}  {2,-22}{3}" -f '闸门', '退出', '证据', '备注')
 Write-Output ("-" * 78)

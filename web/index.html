@@ -43,6 +43,12 @@
   .card .cost { color: var(--energy); font-weight: 700; }
   .card .slot { color: var(--dim); font-size: 10px; }
   .card:disabled { opacity: .42; cursor: default; }
+  .card.picking { border-color: var(--energy); box-shadow: inset 0 0 0 1px var(--energy); }
+  .card .pick { color: var(--energy); font-size: 10px; }
+  .enemy-target { cursor: pointer; border-radius: 8px; padding: 6px; margin: -6px;
+                  border: 1px dashed transparent; }
+  .enemy-target:hover { background: #222a3a; border-color: var(--energy); }
+  .enemy-target .hint { color: var(--energy); font: 11px var(--mono); }
   button.act {
     font: 600 13px system-ui, sans-serif; padding: 9px 16px; border-radius: 8px; cursor: pointer;
     background: #2b3648; color: var(--ink); border: 1px solid var(--line);
@@ -141,6 +147,14 @@ let ex = null;          // exports
 let obs = null;         // Int32Array snapshot
 let bench = {};         // measurements, also mirrored to window.__bench
 
+// Play action table, rebuilt on every render: handIndex → [{ slot, actionIndex }].
+// `env-abi.md` §5 gives one action per (card × live enemy slot), so a card that *can* be aimed
+// has several entries and the page — not the ABI — decides how the player picks one.
+let playOptions = new Map();
+let pending = null;     // { hand } while the player is choosing a target
+// The verdict is not re-derivable from the observation, so it survives a target-picking re-render.
+let lastVerdict = null, lastReward = 0;
+
 // ---------------------------------------------------------------------------------------------
 // Loading. Two candidate URLs so the page works both "artifact copied next to the page" and
 // "serve the repo root and point at cargo's target dir" — a stale copy is the classic way a demo
@@ -236,9 +250,11 @@ function readActions() {
 }
 
 function step(actionIndex) {
+  pending = null;
   const verdict = ex.rd_env_step(actionIndex);
   obs = readObservation();
   const reward = ex.rd_env_reward();
+  lastVerdict = verdict; lastReward = reward;
   render(verdict, reward);
   return verdict;
 }
@@ -250,6 +266,19 @@ function esc(s) { return String(s).replace(/[<>&]/g, (c) => ({ "<":"&lt;", ">":"
 
 function render(verdict, reward) {
   const o = obs;
+  // The action table comes first: the enemy list has to know which enemies the card currently
+  // being aimed can actually reach, and the hand list needs it for the same reason.
+  const actions = readActions();
+  playOptions = new Map();
+  for (const a of actions) {
+    if (a.kind !== ACTION_PLAY) continue;
+    if (!playOptions.has(a.arg0)) playOptions.set(a.arg0, []);
+    playOptions.get(a.arg0).push({ slot: a.arg1, actionIndex: a.index });
+  }
+  // A pending choice can be invalidated by anything that changes the hand (a step, a reset).
+  if (pending && !playOptions.has(pending.hand)) pending = null;
+  const aimSlots = pending ? new Set(playOptions.get(pending.hand).map((p) => p.slot)) : new Set();
+  const aimCard = pending ? (cardName(pending.hand) || ("hand #" + pending.hand)) : "";
   document.getElementById("heroName").textContent = "hero";
   document.getElementById("heroHp").textContent = `${o[H.HP]} / ${o[H.HP_MAX]}`;
   document.getElementById("heroBar").style.width =
@@ -285,7 +314,9 @@ function render(verdict, reward) {
     const intent = alive
       ? `${esc(INTENT_KINDS[kind] || "?")}${dmg >= 0 ? " <b>" + dmg + "</b>" : ""}`
       : "—";
+    const aimable = aimSlots.has(e);
     enemies.push(`
+      <div ${aimable ? `class="enemy-target" data-target-slot="${e}"` : ""}>
       <div class="row"><span class="name">${esc(enemyName(e) || ("enemy #" + e))}${alive ? "" : " (down)"}</span>
         <span class="name">${hp} / ${hpMax}</span></div>
       <div class="bar"><i style="width:${Math.max(0, 100 * hp / Math.max(1, hpMax))}%"></i></div>
@@ -295,28 +326,34 @@ function render(verdict, reward) {
         <span>statuses <b>${o[b + 7]}</b></span>
       </div>
       <div class="stats"><span>next up · ${esc(intentText(e) || "—")}</span></div>
-      <div class="chips">${chips.join("")}</div>`);
+      <div class="chips">${chips.join("")}</div>
+      ${aimable ? `<div class="hint">▲ 点这里 · 把 ${esc(aimCard)} 打它</div>` : ""}
+      </div>`);
   }
   document.getElementById("enemies").innerHTML = enemies.join("<hr style='border:0;border-top:1px solid var(--line);margin:10px 0'>");
 
   // Hand. A card is a button iff the action table contains a play action for that hand slot;
   // otherwise it is greyed out — that greying-out *is* the ABI's affordability gate showing.
-  const actions = readActions();
-  const playByHand = new Map();
-  for (const a of actions) {
-    if (a.kind === ACTION_PLAY && !playByHand.has(a.arg0)) playByHand.set(a.arg0, a);
-  }
+  // Exactly one play action ⇒ clicking it plays it. More than one ⇒ the card arms the enemy list
+  // above (the ABI emits one action per live enemy slot); clicking an enemy spends the action that
+  // names that slot. `def_slot` moves to `title=` — it is a content-row index, not a rule.
   const hand = [];
   for (let h = 0; h < o[H.HAND]; h++) {
     const b = OFF_HAND + h * 4;
     const cost = o[b + 1], defSlot = o[b + 2];
-    const act = playByHand.get(h);
+    const opts = playOptions.get(h) || [];
+    const playable = opts.length > 0;
+    const armed = !!pending && pending.hand === h;
     const affordable = cost >= 0 && cost <= o[H.ENERGY];
+    const hint = !playable ? "出不了" : (armed ? "选一个敌人" : (opts.length > 1 ? "多目标" : ""));
+    const note = [!affordable ? "付不起" : "", hint].filter(Boolean).join(" · ");
     hand.push(`
-      <button class="card" data-action="${act ? act.index : -1}" ${act ? "" : "disabled"}>
+      <button class="card${armed ? " picking" : ""}" data-hand="${h}"
+              data-action="${opts.length === 1 ? opts[0].actionIndex : -1}"
+              title="card definition slot ${defSlot}" ${playable ? "" : "disabled"}>
         <div><span class="cost">${cost}</span> energy · slot ${h}</div>
         <div>${esc(cardName(h) || ("def#" + defSlot))}</div>
-        <div class="slot">def_slot ${defSlot}${affordable ? "" : " · 付不起"}</div>
+        ${note ? `<div class="slot pick">${esc(note)}</div>` : ""}
       </button>`);
   }
   if (!hand.length) hand.push(`<div class="stats">手牌为空 —— 第一次出牌/结束回合会开回合并抽牌。</div>`);
@@ -336,11 +373,14 @@ function render(verdict, reward) {
   parts.push(`<span>round <b>${o[H.ROUND]}</b> · turn <b>${o[H.TURN]}</b> · ` +
              `phase <b>${o[H.PHASE]}</b> · result <b>${RESULT_NAMES[o[H.RESULT]] || o[H.RESULT]}</b></span>`);
   if (done) parts.push(`<span class="good">战斗结束 · ${RESULT_NAMES[o[H.RESULT]]}</span>`);
-  if (typeof verdict === "number") {
-    if (verdict === 0) parts.push(`<span class="good">accepted · reward ${reward}</span>`);
-    else if (verdict === -1) parts.push(`<span class="err">rejected (-1) · ${esc(lastError())}</span>`);
-    else if (verdict === -2) parts.push(`<span class="dim">already finished (-2)</span>`);
-    else parts.push(`<span class="err">driver error (${verdict}) · ${esc(lastError())}</span>`);
+  // `reward` is in 1/1000 (`env-abi.md` §7) — print the unit it is actually in, not the integer.
+  const v = (typeof verdict === "number") ? verdict : lastVerdict;
+  const r = (typeof verdict === "number") ? reward : lastReward;
+  if (typeof v === "number") {
+    if (v === 0) parts.push(`<span class="good">accepted · reward ${(r / 1000).toFixed(2)}</span>`);
+    else if (v === -1) parts.push(`<span class="err">rejected (-1) · ${esc(lastError())}</span>`);
+    else if (v === -2) parts.push(`<span class="dim">already finished (-2)</span>`);
+    else parts.push(`<span class="err">driver error (${v}) · ${esc(lastError())}</span>`);
   }
   msgEl.innerHTML = parts.join("<br>");
 }
@@ -497,11 +537,26 @@ function measure() {
     throw e;
   }
 
+  // Clicking a card either plays it (one action in the table) or arms the target picker
+  // (several — one per live enemy slot). Clicking the same card again disarms it.
   document.getElementById("hand").addEventListener("click", (ev) => {
     const btn = ev.target.closest("button.card");
     if (!btn || btn.disabled) return;
-    const idx = Number(btn.dataset.action);
-    if (idx >= 0) step(idx);
+    const hand = Number(btn.dataset.hand);
+    const opts = playOptions.get(hand) || [];
+    if (opts.length === 1) { step(opts[0].actionIndex); return; }
+    if (!opts.length) return;
+    pending = (pending && pending.hand === hand) ? null : { hand };
+    render();
+  });
+  // The enemy panel is the picker's other half. Only enemies this card can reach are marked.
+  document.getElementById("enemies").addEventListener("click", (ev) => {
+    if (!pending) return;
+    const target = ev.target.closest("[data-target-slot]");
+    if (!target) return;
+    const slot = Number(target.dataset.targetSlot);
+    const opt = (playOptions.get(pending.hand) || []).find((p) => p.slot === slot);
+    if (opt) step(opt.actionIndex);
   });
   document.getElementById("endTurn").addEventListener("click", (ev) => {
     const idx = Number(ev.currentTarget.dataset.action);
@@ -509,6 +564,7 @@ function measure() {
   });
   document.getElementById("reset").addEventListener("click", () => {
     ex.rd_env_reset();
+    pending = null; lastVerdict = null; lastReward = 0;
     obs = readObservation();
     render(undefined, 0);
   });
