@@ -40,7 +40,7 @@
 //! | `AppliesToStatusId` | `F_TERM` | 恒 `NULL16`（0xFFFE）|
 //! | `Magnitude` | `F_INT` | 常量幅值；**槽是 i16**，`seal_intact` 的 `-4` 落盘是 65532 |
 //! | `Operation` | `F_STR` | `ScalePercent` / `AddPerStack` / `AddFlat` |
-//! | `Pipeline` | `F_STR` | `DamageDealt` / `DamageReceived` / `TurnStartDraw` |
+//! | `Pipeline` | `F_STR` | `DamageDealt` / `DamageReceived` / `TurnStartDraw`（**本内容**，实测）|
 //! | `Priority` | `F_INT` | 100 |
 //! | `RestrictDamageKind` | `F_STR` | `Direct` 或 `NULL16`（**实测只有这两种**；枚举本身有 3 个成员） |
 //! | `RestrictSourceCardTag` | `F_TERM` | 恒 `NULL16` |
@@ -54,6 +54,20 @@
 //! signature_pending  Buff    DamageReceived ScalePercent  75  100  Direct
 //! seal_intact        Buff    DamageReceived AddFlat       -4  100  Direct
 //! ```
+//!
+//! ## 第 4 种管线 `Block`（wire 串 `"BlockGain"`）—— 本内容里**一条都没有**
+//!
+//! 参考枚举有 6 个成员，第 3 个是 `BlockGain`（`PassiveModifiers.cs:20`，注释在 `:15`：
+//! "BlockGain, block being gained, read from the gaining combatant"）。线上那个**串**就是
+//! 成员名：内容走 `CombatJson`（`CombatJson.cs:159` `JsonStringEnumConverter`，**没有**命名策略
+//! 覆盖）⇒ `Enum.ToString()` 原样，也就是 `"BlockGain"`。⚠️ **不是 `"Block"`** ——
+//! 内核里折叠器的枚举（`modifiers::Pipeline::Block`）叫 `Block`，但那是**另一个枚举**，
+//! 拿它的变体名当 wire 串会得到一条永远匹配不上的 spec（最坏的静默）。
+//!
+//! 本内容镜像里 0 条（上表 5 条 spec 全在另外三个管线上），但**内容侧正在用它表达"脆弱"**：
+//! `standard.frail` 的参考定义就是 `BlockGain / ScalePercent 75 / Priority 200`
+//! （`StandardCombatPackage.cs:318-321`）。所以本层认它 —— 拒绝它等于"脆弱施加得上但毫无效果"，
+//! 那是内容逼出来的引擎缺口，不是本层的合理边界。
 //!
 //! # 为什么接口是"暂存区 + 条数"而不是 `StatusMeta { modifiers: &[PassiveModifier] }`
 //!
@@ -74,8 +88,8 @@
 //!
 //! # 本层**不做**的事（每一条都是响亮拒绝，不是静默忽略）
 //!
-//! * `Pipeline` 只认镜像里真出现的 3 种。`Block` / `Cost` / `OutgoingStatusApplicationStacks`
-//!   一律 [`BindError::Pipeline`]。
+//! * `Pipeline` 认 4 种：镜像里真出现的 3 种 + 参考的 `BlockGain`（[`Pipeline::Block`]，见上）。
+//!   `CardCost` / `OutgoingStatusApplicationStacks` 仍一律 [`BindError::Pipeline`]。
 //! * `Operation` 只认 3 种。`ClampMax` 一律 [`BindError::Operation`]。
 //! * `RestrictDamageKind` 只认参考 `DamageKind` 的 3 个成员（`Direct` / `DamageOverTime` / `Reflected`）。
 //!   **实测镜像里只出现 `Direct` 与 `null`**，另外两种今天一次都没出现 —— 但它们是参考里真有的
@@ -116,27 +130,44 @@ use crate::state::StatusPolarity;
 /// [`BindError::BufferTooSmall`]（响亮失败），**绝不静默丢掉第 5 条**。
 pub const MAX_MODIFIERS: usize = 4;
 
-/// 修饰器管线（`PassiveModifierPipeline`）—— 只列镜像里真出现的 3 种。
+/// 修饰器管线（`PassiveModifierPipeline`）—— 镜像里真出现的 3 种 **+ 参考的 `BlockGain`**。
 ///
 /// 与 `crate::modifiers::Pipeline` 同名不同义：后者是**折叠器**的管线（含 `Block` / `Cost`，
-/// 那是标准包的两张修饰表要的），本枚举是**内容数据**里的字符串。两者由调用方按语义映射。
+/// 那是标准包的两张修饰表要的），本枚举是**内容数据**里的字符串。两者由调用方按语义映射
+/// （`Block ⇒ modifiers::Pipeline::Block`，见 `exec.rs` 的 [`Pipeline::Block`] 用法与
+/// `play.rs` 的 `cost_pipeline_of`）。
+///
+/// ⚠️ 变体的 Rust 名字是 `Block`（跟折叠器对齐），**wire 串是 `"BlockGain"`**（跟参考的枚举
+/// 成员名对齐）。两者不一样是刻意的：改 wire 串就等于让内容里那条 `"BlockGain"` spec 变成
+/// 永远匹配不上的死数据。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pipeline {
     /// 造成的伤害 —— 从**出手者**读（`DamageModifierStage.Source`）。
     DamageDealt,
     /// 受到的伤害 —— 从**承受者**读（`DamageModifierStage.Target`）。
     DamageReceived,
+    /// 获得的格挡（**单阶段**，从**获得格挡的那一方**读，`PassiveModifiers.cs:257-269`）。
+    ///
+    /// `PassiveModifiers.cs:266` 的 `context.TargetCombatant` 就是"谁在获得格挡"
+    /// （`DeclarativePassiveBlockModifier` 没有 stage 轴，`:257-268` 只有一个
+    /// `IBlockAmountModifier`）。`damageKind: null`（`:267`）⇒ 伤害种类门整段跳过。
+    Block,
     /// 回合开始的抽牌数（`turn.rs` 的地盘，**不进伤害管线**）。
     TurnStartDraw,
 }
 
 impl Pipeline {
     /// 镜像里的字面串 → 变体。不认识的串返回 `None`（调用方报 [`BindError::Pipeline`]）。
+    ///
+    /// 4 个串都是参考枚举的成员名（`PassiveModifiers.cs:18-29`，经 `CombatJson.cs:159` 的
+    /// `JsonStringEnumConverter` 原样落盘）。**`"Block"` 不是其中之一** —— 那个名字是折叠器
+    /// 枚举的变体名，拿它当 wire 串是本层要挡的那种"看起来对"的错。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
         match name {
             "DamageDealt" => Some(Pipeline::DamageDealt),
             "DamageReceived" => Some(Pipeline::DamageReceived),
+            "BlockGain" => Some(Pipeline::Block),
             "TurnStartDraw" => Some(Pipeline::TurnStartDraw),
             _ => None,
         }
@@ -148,6 +179,7 @@ impl Pipeline {
         match self {
             Pipeline::DamageDealt => "DamageDealt",
             Pipeline::DamageReceived => "DamageReceived",
+            Pipeline::Block => "BlockGain",
             Pipeline::TurnStartDraw => "TurnStartDraw",
         }
     }
@@ -328,7 +360,8 @@ pub enum BindError {
     Missing(&'static str),
     /// `Polarity` 串不是 `Buff`/`Debuff`/`Neutral`。
     Polarity,
-    /// `Pipeline` 串不在本层认识的 3 种里。
+    /// `Pipeline` 串不在本层认识的 4 种里（`DamageDealt` / `DamageReceived` / `BlockGain` /
+    /// `TurnStartDraw`；`CardCost` / `OutgoingStatusApplicationStacks` 落在这里）。
     Pipeline,
     /// `Operation` 串不在本层认识的 3 种里（例如 `ClampMax`）。
     Operation,
@@ -367,8 +400,9 @@ impl From<IrError> for BindError {
 /// 既是 `CARD[42]` 又是 `REL[33]`），`resolve` 返回**最靠前**的那一条 —— 拿它当状态元数据
 /// 会读到一张卡的 15 格并按 `STATUS_SCHEMA` 解释，每一格都是错的。
 ///
-/// 查不到 ⇒ `None`。**这不是错误**：调用方（`exec.rs`）拿它区分"内容里没有这个状态"与
-/// "内容里有但这个状态的数据坏了"，前者的处置是回退，后者是报错。
+/// 查不到 ⇒ `None`。**本层不替调用方决定"查不到"该不该报错**：只解极性的 [`polarity`]
+/// 拿它当"没说过"（回退成 `Buff`），而**走修饰器管线**的调用方必须用 [`decode_required`]
+/// （那里"查不到"= 响亮失败，理由写在那条文档里）。
 #[must_use]
 pub fn status_row<'a>(content: &Content<'a>, status_id: &str) -> Option<StatusRow<'a>> {
     let entry = content.lookup_in(status_id, EK_STATUS)?;
@@ -523,7 +557,7 @@ fn arr_elements(
 
 /// 解一条状态的完整元数据（极性 + 修饰器），修饰器写进调用方的暂存区 `out`。
 ///
-/// * `Ok(None)`：内容里没有这个状态定义（**不是错误**）。
+/// * `Ok(None)`：内容里没有这个状态定义（**不是错误** —— 见 [`decode_required`] 的解释）。
 /// * `Ok(Some(status))`：`&out[..status.modifier_count]` 就是这条状态的修饰器，
 ///   `status.id` 是镜像里的定义 id（`&'a str`，指向镜像的串池）。
 /// * `Err(_)`：镜像里的这条状态数据坏了 / 用了本层表示不了的键 / `out` 太小。
@@ -551,6 +585,37 @@ pub fn decode<'a>(
         polarity,
         modifier_count,
     }))
+}
+
+/// [`decode`] 的**严格版**：内容里查不到这个状态定义 ⇒ [`BindError::Missing`]`("STAT row")`。
+///
+/// # 为什么这个版本才是"走管线"的那一版
+///
+/// "查不到定义"与"这个状态没有任何修饰器"在**解码层本来就已经分开了**
+/// （`Ok(None)` vs `Ok(Some)` 且 `modifier_count == 0`），但修本轮之前**没有一个管线调用方
+/// 利用这个区别**：`exec.rs` 的镜像折叠写的是 `let Some(decoded) = … else { continue }`，
+/// 于是"内容里根本没这个状态"与"这个状态不参与这条管线"落到了同一条静默分支上。
+/// 后果是最坏的那一档：内容用了自造的 id（例如 `sts_vulnerable`）而镜像的 `STAT` 表里没有它，
+/// **每个数字看着都合理**，只是那条状态从来不起作用。
+///
+/// 两种"查不到"的成因都不该静默：内核缺能力（`STAT` 那份元数据还读不出）与内容配错
+/// （id 拼错 / 定义没进内容包）都会被这一条挡住。
+///
+/// # 与 [`has_tag`] / [`uses_duration`] 的变体是同一个
+///
+/// 那两条读口早就是这个口径（`ok_or(BindError::Missing("STAT row"))?`），本函数只是把
+/// **修饰器管线**这条最重要的路对齐过去。**一个条件只有一种报法**：`Missing("STAT row")`。
+///
+/// # 什么时候该用 `decode`（软版）
+///
+/// 只有"查不到就等于没说过"的读口：今天只剩 [`polarity`]（`applyStatus` 只需要极性，
+/// 拿野 id 时按 `Buff` 兜底，那条偏差记在 `exec.rs` 的模块头）。
+pub fn decode_required<'a>(
+    content: &'a Content<'a>,
+    status_id: &str,
+    out: &mut [PassiveModifier],
+) -> Result<DecodedStatus<'a>, BindError> {
+    decode(content, status_id, out)?.ok_or(BindError::Missing("STAT row"))
 }
 
 // =============================================================================================
@@ -907,6 +972,47 @@ mod tests {
     }
 
     #[test]
+    fn the_strict_decoder_tells_an_unregistered_status_from_an_empty_one() {
+        // ★ 本轮 A/B 两件事的共同地基：**"查不到定义"与"定义在那儿但一条修饰器都没有"
+        // 在解码层就是两条不同的路**（软 `decode` 用 `Ok(None)` / `Ok(Some{count:0})` 分开），
+        // 本轮之前没有任何管线调用方利用这个区别（`exec.rs` 把它们都 `continue` 掉了）。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut buffer = [PassiveModifier {
+            pipeline: Pipeline::DamageDealt,
+            operation: ModifierOp::AddFlat,
+            magnitude: 0,
+            priority: 0,
+            restrict_damage_kind: None,
+        }; MAX_MODIFIERS];
+
+        // 一、查不到 ⇒ 响亮。三种成因同一种报法（自造 id / 标准包 id / 拼错）：
+        //     一律 `Missing("STAT row")`，与 `has_tag` / `uses_duration` 同一个变体
+        //     （`status_bind.rs` 里那两条读口早就是这个口径）。
+        for id in ["sts_vulnerable", "no_such_status", "standard.strength"] {
+            assert_eq!(
+                decode_required(&content, id, &mut buffer),
+                Err(BindError::Missing("STAT row")),
+                "{id} 不在镜像的 STAT 表里 ⇒ 走管线的调用方必须看到这条拒绝"
+            );
+            // 软版仍然 `Ok(None)`：那是**极性问题**的合法输入（`polarity` 要它回退）。
+            assert_eq!(decode(&content, id, &mut buffer), Ok(None), "{id} 软版");
+        }
+
+        // 二、定义在、修饰器为空 ⇒ **合法**，正常放行（`paperwork` 是纯声明式状态）。
+        let decoded = decode_required(&content, "paperwork", &mut buffer)
+            .expect("已知但空 modifiers 不许被拦下");
+        assert_eq!(decoded.id, "paperwork");
+        assert_eq!(decoded.modifier_count, 0);
+        assert_eq!(decoded.polarity, StatusPolarity::Debuff);
+
+        // 三、有修饰器的那条：严格版与软版给同一个答案（严格版不是另一个解码器）。
+        let strict = decode_required(&content, "doubt", &mut buffer).expect("doubt 必须查得到");
+        assert_eq!(strict.modifier_count, 1);
+        assert_eq!(buffer[0].pipeline, Pipeline::DamageDealt);
+    }
+
+    #[test]
     fn a_buffer_that_is_too_small_is_reported_instead_of_truncated() {
         let blob = core_image();
         let content = parse(&blob);
@@ -969,14 +1075,43 @@ mod tests {
     }
 
     #[test]
-    fn the_wire_names_are_exactly_the_three_plus_three_plus_one() {
+    fn the_wire_names_are_exactly_the_four_plus_three_plus_three() {
         // 面窄但钉死：本层只认这几串，别的必须 `None`（而不是"默认成第一个"）。
-        for name in ["DamageDealt", "DamageReceived", "TurnStartDraw"] {
+        // 4 条管线 × 3 种运算 × 3 种伤害种类。
+        for name in [
+            "DamageDealt",
+            "DamageReceived",
+            "BlockGain",
+            "TurnStartDraw",
+        ] {
             assert!(Pipeline::from_wire_name(name).is_some(), "{name}");
         }
-        assert_eq!(Pipeline::from_wire_name("Block"), None);
+        // ★ 本轮加的：格挡那条管线的 wire 串是参考的**枚举成员名** `"BlockGain"`，
+        // 不是折叠器枚举的变体名 `"Block"`。写成 `"Block"` 会让内容里那条 frail spec
+        // 永远匹配不上（`BindError::Pipeline` 反而还算好事，最坏的是有人顺手加了
+        // `"Block"` 分支而内容写的是 `"BlockGain"`）—— 两条分开钉。
+        assert_eq!(
+            Pipeline::from_wire_name("BlockGain"),
+            Some(Pipeline::Block)
+        );
+        assert_eq!(Pipeline::Block.wire_name(), "BlockGain");
+        assert_eq!(Pipeline::from_wire_name("Block"), None, "wire 串不是 Block");
         assert_eq!(Pipeline::from_wire_name("Cost"), None);
+        assert_eq!(Pipeline::from_wire_name("CardCost"), None);
         assert_eq!(Pipeline::from_wire_name("damageDealt"), None, "大小写敏感");
+        // 4 个变体 → 4 个串，一一对应（写回再读回，不许两个变体共用一个串）。
+        let all = [
+            Pipeline::DamageDealt,
+            Pipeline::DamageReceived,
+            Pipeline::Block,
+            Pipeline::TurnStartDraw,
+        ];
+        for (i, a) in all.iter().enumerate() {
+            assert_eq!(Pipeline::from_wire_name(a.wire_name()), Some(*a));
+            for b in &all[i + 1..] {
+                assert_ne!(a.wire_name(), b.wire_name(), "{a:?} 与 {b:?} 共用一个串");
+            }
+        }
 
         for name in ["AddPerStack", "AddFlat", "ScalePercent"] {
             assert!(ModifierOp::from_wire_name(name).is_some(), "{name}");

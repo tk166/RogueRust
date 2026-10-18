@@ -247,7 +247,7 @@ pub enum ExecError {
     ///
     /// 这是一个**新加的变体**（本轮任务之前没有）：它原来是挤在 [`Self::Modifier`] 里的 ——
     /// 而 `Modifier` 的语义是"修饰器管线拒绝了这次计算，本应不可达"，与"内容说了一件我们还不懂的
-    /// 事"（`Pipeline: Block`、`Operation: ClampMax`、非 null 的 `RestrictElement`…）
+    /// 事"（`Pipeline: "CardCost"`、`Operation: ClampMax`、非 null 的 `RestrictElement`…）
     /// 完全不是同一种拒绝。**合并变体会让"为什么不生效"变成猜谜**，所以单独给一个。
     Bind(BindError),
     /// 修饰器管线拒绝了这次计算（本应不可达；出现即说明 v1 的候选表构造有 bug）。
@@ -2501,6 +2501,14 @@ fn image_damage_stage<'a>(
 ///
 /// `damage_kind`：`Some(kind)` ⇒ 走 `:155` 的种类门；`None` ⇒ 门整段跳过
 /// （`TurnStartDraw` / 格挡那两条管线在参考里传的就是 null，`:267`、`CardTurnLifecycleEventHandlers.cs:27`）。
+///
+/// # 查不到定义 ⇒ **响亮失败**（[`BindError::Missing`]`("STAT row")`）
+///
+/// 本轮之前这里是 `let Some(decoded) = … else { continue }`：一个**不在镜像 `STAT` 表里**的
+/// 状态 id（自造 id、拼错、内容包没带这个定义）于是与"这个状态不参与这条管线"落进同一条静默分支。
+/// 那是最坏的一档失败 —— 内容写了它、引擎不生效、而**每个数字看着都合理**。
+/// 所以走 [`status_bind::decode_required`]：定义查不到就是拒绝。
+/// 已知定义 + 空 `PassiveModifiers`（`paperwork` 那 18 个）仍然正常放行，那是纯声明式状态。
 fn image_rows<'a>(
     content: &'a Content<'a>,
     statuses: &[StatusInstance],
@@ -2522,10 +2530,8 @@ fn image_rows<'a>(
         {
             continue;
         }
-        // 内容里没有这个定义 ⇒ 它对管线没有发言权（**不是**"猜一个标准包的同名行"）。
-        let Some(decoded) = status_bind::decode(content, id, &mut buffer)? else {
-            continue;
-        };
+        // 内容里没有这个定义 ⇒ **拒绝**（不是"猜一个标准包的同名行"，也不是"没意见"）。
+        let decoded = status_bind::decode_required(content, id, &mut buffer)?;
 
         for index in 0..decoded.modifier_count {
             let spec = *buffer.get(index).ok_or(ExecError::Modifier)?;
@@ -2626,7 +2632,7 @@ fn block_stage<'a>(
 ) -> Result<i32, ExecError> {
     let matching = StatusMatch::for_content(content);
     if let Some(content) = content {
-        return image_block_stage(amount, statuses, content);
+        return image_block_stage(amount, statuses, owner, content, matching);
     }
 
     let mut rows = [empty_row(); MAX_CANDIDATES];
@@ -2653,27 +2659,47 @@ fn block_stage<'a>(
     )
 }
 
-/// 镜像路径的格挡阶段：**今天恒等于原值**，但不说谎。
+/// 镜像路径的格挡阶段：真的走 `modifiers::apply` + `BlockGain` 管线的候选表。
 ///
-/// `status_bind::Pipeline` 只有镜像里真出现的 3 种，`Block` 不在里面 —— 所以镜像这一侧
-/// **没有任何一条 spec 会进格挡管线**（core 镜像实测：5 条 spec 全是 `DamageDealt` /
-/// `DamageReceived` / `TurnStartDraw`）。于是结果就是原值。
+/// # 参考的形状（`PassiveModifiers.cs:257-269` + `DefensivePoolEffects.cs:11-105`）
 ///
-/// 但"没有"和"读不出来"必须分得开：每一条在身状态照样要解码一遍，好让
-/// "某个状态带了本层表示不了的 spec（例如 `Pipeline: Block`）"变成
-/// [`ExecError::Bind`] 而不是**静默少加格挡**。代价是每个 `gainBlock` 多走 24 次查表
-/// （每次是 `IDX` 二分 + 两个 u16），换来的是"内容一用到 Block 管线就立刻报错"。
+/// * **单阶段**：`DeclarativePassiveBlockModifier` 只实现 `IBlockAmountModifier`，没有 stage 轴，
+///   它把 `context.TargetCombatant`（= **获得格挡的那一方**）交给折叠器，管线 `BlockGain`。
+///   ⇒ 本函数是 `block_stage` 的镜像分支，**读的是目标自己的状态**（`gain_block_node` 传进来的
+///   就是目标的快照），不读出手者 —— 与本文件里"伤害有两个阶段"的形状不同，别照着抄。
+/// * `damageKind: null`（`:267`）⇒ `:155` 的种类门整段跳过，`RestrictDamageKind` 在这条管线上
+///   无意义（`passive_modifiers` 里 `doubt` 那类 `Direct` 门不会挡掉格挡）。
+/// * `Apply` 的入口守卫 `amount <= 0 ⇒ 原值`（`:137-138`）由 [`fold`] 的同一条守卫表达。
+///
+/// # 本轮之前这里是"恒返原值"
+///
+/// 那时 `status_bind::Pipeline` 只有 3 种，`Block` 不在里面 ⇒ 镜像里**不可能**有一条 spec 进
+/// 格挡管线，于是"脆弱（格挡 ×75%）"这个参考里存在的东西（`StandardCombatPackage.cs:318-321`）
+/// 在内容侧表达不出来：`standard.frail` 施加得上，**但没有任何效果**。
+/// 现在 `Pipeline::Block`（wire 串 `"BlockGain"`）接上了，内容那条 spec 会照参考折叠。
 fn image_block_stage<'a>(
     amount: i32,
     statuses: &[StatusInstance],
+    owner: &CombatantId,
     content: &'a Content<'a>,
+    matching: StatusMatch,
 ) -> Result<i32, ExecError> {
-    let mut buffer = [EMPTY_PASSIVE_MODIFIER; status_bind::MAX_MODIFIERS];
-    for status in statuses {
-        // 返回值故意丢掉：能解码就不是我们的事；解不出来（含 `Pipeline: Block`）就往下传。
-        let _ = status_bind::decode(content, status.definition_id.as_str(), &mut buffer)?;
-    }
-    Ok(amount)
+    let mut rows = [empty_row(); MAX_CANDIDATES];
+    // `damage_kind: None` = 参考的 `damageKind: null`（见函数头）。
+    let count = image_rows(
+        content,
+        statuses,
+        status_bind::Pipeline::Block,
+        None,
+        &mut rows,
+    )?;
+    fold(
+        amount,
+        statuses,
+        rows.get(..count).unwrap_or(&[]),
+        owner,
+        matching,
+    )
 }
 
 /// `DamageModifierEntry` → [`Row`]。
@@ -2881,7 +2907,7 @@ fn block_pool(combatant: &Combatant) -> (i32, Option<i32>, bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::{Content, S_TRM, S_TRW};
+    use crate::content::{Content, S_STR, S_STRO, S_TRM, S_TRW};
     use crate::ir::Ir;
     use crate::state::{CombatId, CombatantDefinitionId, TeamId};
 
@@ -3221,6 +3247,59 @@ mod tests {
             .get_mut(at..at + 2)
             .unwrap_or_else(|| panic!("patch16 越界：{at}"));
         slot.copy_from_slice(&value.to_le_bytes());
+    }
+
+    /// 把镜像串池里的一条串**就地改名**（只允许变短），返回它的串号。
+    ///
+    /// 串池的形状（`content.rs:211-228` 的 `string_at`，与 `tools/contentc/reader.py` 同规则）：
+    /// `S_STR` 是一段 NUL 结尾的字节池，`S_STRO` 是一张 `u32` 偏移表，第 `i` 条串 =
+    /// `[STRO[i-1], STRO[i]-1)` —— **长度是偏移表的差，不是 NUL**。所以"改名成更短的串"是两件事：
+    /// 写前 `new.len()` 个字节、把**结束偏移**往前挪。
+    ///
+    /// ⚠️ 代价写在明处：紧跟在后面的那条串会吞掉剩下的字节（它的起点就是被挪走的那个偏移）。
+    /// `DamageReceived` 后面是 `DamageTaken`，本文件**一个字节都不读它**；要读就得整池重排，
+    /// 那已经超出"补丁测试"的份额。**只用它造镜像里不存在的形状**，别拿它当通用工具。
+    fn rename_string(blob: &mut [u8], old: &str, new: &str) -> u16 {
+        assert!(new.len() < old.len(), "只支持变短：{old} → {new}");
+        let u32_at = |data: &[u8], at: usize| {
+            u32::from_le_bytes([data[at], data[at + 1], data[at + 2], data[at + 3]])
+        };
+        let (id, start, end, pool_at, table_at) = {
+            let content = parse(blob);
+            let pool = content.section(S_STR).expect("STR 段（串字节池）");
+            let table = content.section(S_STRO).expect("STRO 段（偏移表）");
+            let id = (1..=content.string_count())
+                .map(|i| i as u16)
+                .find(|i| content.string(*i) == Some(old))
+                .unwrap_or_else(|| panic!("镜像串池里没有 `{old}`"));
+            let start = u32_at(table.data, (id as usize - 1) * 4) as usize;
+            let end = u32_at(table.data, id as usize * 4) as usize;
+            (
+                id,
+                start,
+                end,
+                pool.offset as usize,
+                table.offset as usize,
+            )
+        };
+        // 一条串在池里必须是 `old` + 恰好一个 NUL 字节（否则下面的算术就推不动了 ⇒ 响亮失败）。
+        assert_eq!(
+            end - start,
+            old.len() + 1,
+            "串池里的 `{old}` 应当是 {} 字节 + NUL，实际 [{} , {})",
+            old.len(),
+            start,
+            end
+        );
+        blob[pool_at + start..pool_at + start + new.len()].copy_from_slice(new.as_bytes());
+        blob[pool_at + start + new.len()] = 0;
+        let new_end = (start + new.len() + 1) as u32;
+        let at = table_at + id as usize * 4;
+        let slot = blob
+            .get_mut(at..at + 4)
+            .unwrap_or_else(|| panic!("偏移表越界：{at}"));
+        slot.copy_from_slice(&new_end.to_le_bytes());
+        id
     }
 
     // =========================================================================================
@@ -3768,6 +3847,80 @@ mod tests {
         give_block(&mut state, "hero", i32::MAX);
         run_card(&mut state, &ir, 2, Some("hero"), None).unwrap();
         assert_eq!(block_of(&state, "hero"), i32::MAX, "夹到 int.MaxValue（`:82`）");
+    }
+
+    #[test]
+    fn e2e_7e_a_block_gain_spec_in_the_image_truncates_the_block_like_frail() {
+        // ★ `Pipeline::Block`（wire 串 `"BlockGain"`）的**真实镜像路径**测试。
+        //
+        // 参考的"脆弱"就是这条管线：`BlockGain / ScalePercent 75 / Priority 200`
+        // （`StandardCombatPackage.cs:318-321`；数值对着 `BlockAmountModifierTests.cs:104-130`：
+        // 基础 5 ⇒ **3**）。本内容镜像里**一格 `BlockGain` 都没有**（5 条 spec 全在别的管线上），
+        // 所以这里按本文件的既定做法**就地补丁镜像字节**：把串池里的 `DamageReceived`
+        // 改名成 `BlockGain`，于是 `signature_pending` 那条（`ScalePercent 75`）成为"脆弱"的等价物。
+        //
+        // 走的全是真东西：真 `STAT` 表 + 真串池 + 真 `image_rows` + 真 `modifiers::apply`
+        // + 真 `gainBlock` 节点（CARD[2] = gainBlock 5 sel.source）。
+        let mut blob = core_image();
+        let id = rename_string(&mut blob, "DamageReceived", "BlockGain");
+        let content = parse(&blob);
+        assert_eq!(
+            content.string(id),
+            Some("BlockGain"),
+            "补丁之后那条串必须解出参考的 wire 名"
+        );
+        let ir = Ir::new(&content);
+
+        // 一、有"脆弱" ⇒ 5 × 75 / 100 = 3（**向零截断**，不是四舍五入）。
+        let mut state = arena();
+        give(&mut state, "hero", status("st_frail", "signature_pending", 0));
+        run_card_bound(&mut state, &content, &ir, 2, Some("hero"), None).unwrap();
+        assert_eq!(block_of(&state, "hero"), 3, "5*75/100 = 3.75 ⇒ 3");
+
+        // 二、成对：同一个补丁镜像、同一张牌，**没有那条 spec** ⇒ 一点都不缩。
+        let mut state = arena();
+        run_card_bound(&mut state, &content, &ir, 2, Some("hero"), None).unwrap();
+        assert_eq!(block_of(&state, "hero"), 5, "原值");
+
+        // 三、管线门：别的管线上有 spec 也不许碰格挡
+        //     （`panic` = TurnStartDraw / `doubt` = DamageDealt / `paperwork` = 空）。
+        for other in ["panic", "doubt", "paperwork"] {
+            let mut state = arena();
+            give(&mut state, "hero", status("st_other", other, 3));
+            run_card_bound(&mut state, &content, &ir, 2, Some("hero"), None).unwrap();
+            assert_eq!(
+                block_of(&state, "hero"),
+                5,
+                "{other} 不在 BlockGain 管线上 ⇒ 格挡不缩"
+            );
+        }
+
+        // 四、"向下截断"要能从**非整数倍**上看出来（2.25 ⇒ 2、5.25 ⇒ 5），而不是只测 3.75 那一格。
+        let statuses = [status("st_frail", "signature_pending", 0)];
+        for (base, expect) in [(7, 5), (5, 3), (3, 2), (1, 0), (0, 0)] {
+            assert_eq!(
+                block_stage(base, &statuses, &cid("hero"), Some(&content)),
+                Ok(expect),
+                "{base}*75/100 向零截断"
+            );
+        }
+        // 同一组基数、没有那条 spec ⇒ 原值（逐格成对，而不是"抽一个代表"）。
+        let none: [StatusInstance; 0] = [];
+        for base in [7, 5, 3, 1] {
+            assert_eq!(
+                block_stage(base, &none, &cid("hero"), Some(&content)),
+                Ok(base)
+            );
+        }
+
+        // 五、读者最关心的那一条：补丁没白打 —— 这条 spec 的管线**确实**解成了 `Block`。
+        let mut buffer = [EMPTY_PASSIVE_MODIFIER; status_bind::MAX_MODIFIERS];
+        let decoded =
+            status_bind::decode_required(&content, "signature_pending", &mut buffer).unwrap();
+        assert_eq!(decoded.modifier_count, 1);
+        assert_eq!(buffer[0].pipeline, status_bind::Pipeline::Block);
+        assert_eq!(buffer[0].operation, status_bind::ModifierOp::ScalePercent);
+        assert_eq!(buffer[0].magnitude, 75);
     }
 
     // =========================================================================================
@@ -5130,13 +5283,27 @@ mod tests {
         assert_eq!(StatusMatch::for_content(Some(&content)), StatusMatch::Exact);
 
         // 状态里放的是**标准包 id**（oracle 场景会这么写），但敌人用的是镜像：
-        // 镜像里没有这个定义 ⇒ 它对管线没有发言权 ⇒ 6。
+        // 镜像里没有这个定义 ⇒ **响亮拒绝**。
+        //
+        // ⚠️ 本轮改了这条断言的形状（原来钉的是"静默 6"）：从前 `image_rows` 写的是
+        // `let Some(decoded) = … else { continue }`，于是"内容里根本没这个状态"与
+        // "这个状态不参与这条管线"落进同一条静默分支 —— 而"桥关闭"的正确表达是**拒绝**，
+        // 不是"一点贡献都没有"（后者连拼错的 id 都一起放过去了）。
+        // 桥仍然关闭这一点由下面那半条断言（没有 content ⇒ 9）继续钉着。
         let mut state = arena();
         give(&mut state, "hero", status("st_std", "standard.strength", 3));
+        let mut ctx = ExecContext::new(
+            &mut state,
+            Some(cid("hero")),
+            Some(cid("enemy_a")),
+            None,
+            1024,
+        )
+        .with_content(&content);
         assert_eq!(
-            deal_bound(&mut state, &content, "enemy_a", 6, false),
-            (0, 6),
-            "桥关闭 ⇒ standard.strength 在镜像里查不到 ⇒ 点贡献都没有"
+            resolve_damage(&mut ctx, &cid("enemy_a"), 6, false),
+            Err(ExecError::Bind(BindError::Missing("STAT row"))),
+            "桥关闭 ⇒ standard.strength 在镜像里查不到 ⇒ 拒绝，不是静默 6"
         );
 
         // 同一个状态、不接镜像 ⇒ 桥开着 ⇒ 6+3 = 9（标准包路径的老行为，不许回归）。
@@ -5146,6 +5313,111 @@ mod tests {
             deal(&mut state, "enemy_a", 6, false),
             (0, 9),
             "没有 content ⇒ 桥生效，标准包那一行 +1/层"
+        );
+    }
+
+    #[test]
+    fn an_unknown_status_is_loud_on_every_image_pipeline_while_an_empty_one_is_fine() {
+        // ★ B：**"查不到这个 status 定义"一律响亮失败**，而"定义在、`PassiveModifiers` 为空"
+        // 是合法的（很多状态就是纯声明式的）。
+        //
+        // 现状（动手前量过的）：两条路在**解码层**本来就已经分开（软 `decode` 给
+        // `Ok(None)` / `Ok(Some{modifier_count:0})`），缺的只是"没有调用方利用这个区别" ——
+        // `exec.rs` 的镜像折叠把它们都 `continue` 掉了。所以本轮改的是**管线调用方**这一侧。
+        let blob = core_image();
+        let content = parse(&blob);
+        let loud = Err(ExecError::Bind(BindError::Missing("STAT row")));
+
+        // 一、查不到定义 ⇒ 镜像的四条管线全部拒绝，而且是**同一个变体**
+        //     （与 `has_tag` / `uses_duration` 的口径一致）。
+        //     `dexterity` 是标准包 id，`sts_vulnerable` 是"内容自造 id" —— 后者正是最坏那一档：
+        //     id 拼得挺像、数字看着都合理，引擎却一条都读不到。
+        for unknown in ["dexterity", "sts_vulnerable"] {
+            let statuses = [status("st_x", unknown, 2)];
+            assert_eq!(
+                damage_stage(
+                    6,
+                    &statuses,
+                    ModifierTarget::Source,
+                    &cid("hero"),
+                    Some(&content),
+                    BindDamageKind::Direct
+                ),
+                loud,
+                "{unknown}：伤害 Source 阶段"
+            );
+            assert_eq!(
+                damage_stage(
+                    6,
+                    &statuses,
+                    ModifierTarget::Target,
+                    &cid("hero"),
+                    Some(&content),
+                    BindDamageKind::Direct
+                ),
+                loud,
+                "{unknown}：伤害 Target 阶段"
+            );
+            assert_eq!(
+                block_stage(5, &statuses, &cid("hero"), Some(&content)),
+                loud,
+                "{unknown}：格挡管线"
+            );
+            assert_eq!(
+                fold_turn_start_draw(&statuses, &cid("hero"), 5, Some(&content)),
+                loud,
+                "{unknown}：回合开始抽牌"
+            );
+        }
+
+        // 二、成对：**已知 + 空 modifiers ⇒ 放行**（`paperwork` 那条纯声明式状态）。
+        //     拦它就是把"很多状态就是没有修饰器"当成内容错误 —— 会把正确内容一起打死。
+        let empty = [status("st_e", "paperwork", 3)];
+        assert_eq!(
+            damage_stage(
+                6,
+                &empty,
+                ModifierTarget::Source,
+                &cid("hero"),
+                Some(&content),
+                BindDamageKind::Direct
+            ),
+            Ok(6)
+        );
+        assert_eq!(
+            damage_stage(
+                6,
+                &empty,
+                ModifierTarget::Target,
+                &cid("hero"),
+                Some(&content),
+                BindDamageKind::Direct
+            ),
+            Ok(6)
+        );
+        assert_eq!(
+            block_stage(5, &empty, &cid("hero"), Some(&content)),
+            Ok(5)
+        );
+        assert_eq!(
+            fold_turn_start_draw(&empty, &cid("hero"), 5, Some(&content)),
+            Ok(5)
+        );
+
+        // 三、没有镜像 ⇒ 标准包路径根本不查 `STAT` 表（候选行来自 `status_catalog`，
+        //     实例 id 靠 5 条别名的桥匹配）⇒ "查不到"在那条路上不是问题，也不该报错。
+        let none: [StatusInstance; 0] = [];
+        assert_eq!(block_stage(5, &none, &cid("hero"), None), Ok(5));
+        assert_eq!(fold_turn_start_draw(&none, &cid("hero"), 5, None), Ok(5));
+
+        // 四、端到端：一个自造 id 在身时，真牌**打不出来**（而不是安静地少算一半）。
+        let ir = Ir::new(&content);
+        let mut state = arena();
+        give(&mut state, "hero", status("st_bad", "sts_vulnerable", 1));
+        assert_eq!(
+            run_card_bound(&mut state, &content, &ir, 0, Some("hero"), Some("enemy_a")),
+            Err(ExecError::Bind(BindError::Missing("STAT row"))),
+            "paper_cut 的伤害走过 Source 阶段 ⇒ 撞上那条查不到的定义"
         );
     }
 

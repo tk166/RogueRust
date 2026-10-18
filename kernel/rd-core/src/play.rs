@@ -1526,6 +1526,11 @@ const fn cost_pipeline_of(pipeline: status_bind::Pipeline) -> Option<ModifierPip
     match pipeline {
         status_bind::Pipeline::DamageDealt => Some(ModifierPipeline::DamageDealt),
         status_bind::Pipeline::DamageReceived => Some(ModifierPipeline::DamageReceived),
+        // ⚠️ 本轮被这条接缝逼着加的（`status_bind` 长出 `Block`，走格挡管线的那条路在
+        // `exec::block_stage` 里）。这里给 `Some(Block)` 是**如实回答**："它落在哪条管线上"；
+        // 本函数的**唯一调用方**（`declarative_cost` 上面那个 `== Some(Cost)` 的判定）因此
+        // 与从前一字不差 —— 一条 `BlockGain` spec 仍然不会被误当成费用 spec。
+        status_bind::Pipeline::Block => Some(ModifierPipeline::Block),
         status_bind::Pipeline::TurnStartDraw => None,
     }
 }
