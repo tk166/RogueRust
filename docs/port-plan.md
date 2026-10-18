@@ -3208,3 +3208,58 @@ A~E 只说明**每一块砖都在、都被测试钉住**，不说明**房子能�
 
 
 
+
+## 44. 第 34 轮：**62/62 张卡逐张与参考实现逐字节一致**
+
+### 44.1 结果（我自己独立复核过）
+
+```
+FIGHT_DIFF PASS (182/182)     ← 4 局完整战斗：18 个每步哈希 + 终局哈希
+CARD_DIFF  PASS (62/62)       ← 内容镜像里每一张卡，各一局，每步哈希
+聚合验收 9/9 / 518 条测试 / clippy 零告警 / 裸机 check EXIT 0
+```
+
+这是"这个内核到底对不对"这个问题第一次有了**跨语言的、覆盖整份内容的**答案。
+在此之前，858 份语料验的是**哈希器**（给一个状态算出正确的文本），不是"打一局"。
+
+### 44.2 逐卡对拍抓出两处内核真错误（都带行号）
+
+前面 2 张卡的 `FIGHT_DIFF` 全绿，**扩到 62 张立刻红了 6 张**，而且红得很隐蔽：
+**7 个观测量全同，只有哈希不同**。逐行对差定位到 `chain_num` 这一格，两个成因：
+
+| 卡 | 参考 | 内核（修前） |
+|---|---|---|
+| `red_tape` / `unsigned_form`（带 `unplayable` 标签） | **先入队**（`ScenarioRunner.cs:121` → `CombatState.cs:386` 建根链）再在校验器里拒绝 ⇒ **+1** | **+0** |
+| `archive_the_evidence` / `shredder_drawer`（节目把自己挪出手牌） | `CardPlay.cs:245-247` 的手牌守卫让搬区入队不发生 ⇒ **+2** | **+3** |
+
+`play.rs` 里原有一句"这条偏移在本内容上不可观察"—— **被 `red_tape` 证伪**。
+这是"我以为不可观察"和"真的不可观察"之间的差距，而它只能靠**跑遍全部内容**发现。
+
+### 44.3 三条冻结方描述被证伪
+
+1. **"约 9 种节点"** 这个说法太粗。实测按**用到它的卡数**：`sequence` 43 / `applyStatus` 32 /
+   `dealDamage` 18 / `gainBlock` 14 / `createCardInstance` 12 / `drawCards` 12 /
+   `forEachCardInZone` 4 / `moveCardToZone` 4 / `gainResource` 2。
+   而我列的 `conditional` / `setCombatantCounter` / `heal` / `loseResource` **一张卡都没用** ——
+   它们只出现在**状态触发器**和**敌人动作**里。⇒ "节点实现了"和"卡用到了"是两件事。
+2. **`Effects.*` 不只是"缺帮手"**：它缺 `createCardInstance` / `forEachCardInZone` /
+   `moveCardToZone` / `multiply` / `combatantStatusStacks`，而 `Effects.cs` 在只读的 `ref/` 里 ⇒
+   这 5 种只能在 oracle 侧**直接构造 typed node**。结论：**0 种 kind author 不出来**。
+3. **`doubt` 不是纯声明式**：它有 1 个触发器 + 1 个被动修饰（伤害 ×75%）。
+
+### 44.4 这一层的三道闸门（没有它们，"62/62" 可以造假）
+
+* **spec 陈旧**闸门：`card_specs.json` 与镜像**结构化对差**，报"哪张卡的哪个字段"；
+* **卡序索引**闸门：`card_index` 与镜像行序一致；
+* **内容 + 形状**闸门：一次比 842 条 + 12 条逐卡。
+  变异测试证明它们不是摆设：把 `strong_binder` 费用改成 2 ⇒
+  `spec.cards[4] (strong_binder).costs[0].amount: 磁盘 2 != 镜像 1`。
+
+### 44.5 仍然没覆盖的（这一层结论的边界）
+
+* 逐卡层**只打一步** ⇒ 跨回合的东西（DoT tick / 手牌回收 / 补能 / 重洗 /
+  `TurnEndHandDestinationZone` / 敌人动作）不在这一层，仍由 `FIGHT_DIFF` 的 4 局承担。
+* `doubt` 的触发器与 75% 被动在逐卡那一局里是**惰性**的（镜像里 doubt 只施加到敌人，
+  而伤害来源永远是英雄）⇒ 它被 author 了、被闸门核对了，但**没被行为验证**。
+* `TriggerActivity` 两侧都不进哈希文本 ⇒ **"哪个触发器跑过几次"不在任何对拍里**。
+* `problems` 仍只比条数不比文本。
