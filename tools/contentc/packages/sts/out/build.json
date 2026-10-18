@@ -1,21 +1,21 @@
 {
   "package": "sts",
-  "description": "Slay the Spire Act 1 (Ironclad) -- SKELETON ONLY.  Two hand-written statuses, no cards, no enemy actions, no encounters, no relics, no map.  It exists to prove that a second package travels the whole chain (source -> compile -> image -> reader round-trip) under its own file names, without touching the roguedeck baseline.  Nothing in this package is kernel-verified yet, so it has no expected_sha.txt pin.",
+  "description": "Slay the Spire Act 1 (Ironclad) -- the zero-new-ability (tier A) subset: 10 enemies, 3 weak encounters, the 10-card starting deck, 5 statuses.  No elite, no boss, no relic, no map, no event.  Every number is from docs/spec/sts-act1-inventory.md and is re-checked by native/sts_content_check.py (inv numbers + per-key round trip of both images + cross references).  Deliberately NOT pinned in expected_sha.txt: this package is meant to grow every milestone, so the gate is the inv contract, not a byte freeze.  Nothing here is kernel-verified yet (no fight has been driven from it).",
   "src": {
     "path": "tools/contentc/packages/sts/sts.roguedeck.json",
-    "bytes": 1137,
-    "sha256": "e2b41f330aabb19fa06f73e6ea44dc772e7f60ccfef6a76a061072affbff0fe9"
+    "bytes": 59004,
+    "sha256": "4a7b3867743f5414be64ed49e51eafcab0eec56a329e8c7dc2fc7cf9d7d8e182"
   },
   "images": {
     "full": {
       "file": "content.sts.rdcf",
-      "bytes": 1264,
-      "sha256": "445b5fd6d4463c1ccdd65ad5f0e33f8e9ffbf29d0e7b82e3b1f22760eb224fa4"
+      "bytes": 17020,
+      "sha256": "30344d5b8abc136c324dde278e180e18730560b8a8338681169c1da42be9e0c5"
     },
     "core": {
       "file": "content.sts.core.rdcf",
-      "bytes": 1092,
-      "sha256": "55640d62e473a86d8a1443a20fd67144a8bea54c64f3dbd077768e5674439077"
+      "bytes": 15456,
+      "sha256": "326d1fe512796536472e11c8ef671eb22821e400fa9e5fa13a436715a69d0393"
     }
   },
   "compiler": {

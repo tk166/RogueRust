@@ -2,17 +2,30 @@
   "SchemaVersion": 1,
   "Statuses": [
     {
-      "Id": "sts_strength",
+      "Id": "standard.strength",
       "PackageId": "sts",
       "NameKey": "Strength",
       "DescriptionKey": "Attacks deal 1 additional damage per stack.",
       "Polarity": "Buff",
-      "StackingBehavior": "MergeWithExistingInstance",
       "UsesStacks": true,
       "UsesDuration": false,
       "UsesCharges": false,
-      "Tags": ["buff", "strength"],
-      "PassiveModifiers": [],
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "strength"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "DamageDealt",
+          "Operation": "AddPerStack",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": "Direct",
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
       "Triggers": [],
       "DeathPrevention": null,
       "DebuffBlock": null,
@@ -20,22 +33,2084 @@
       "Disclosure": null
     },
     {
-      "Id": "sts_vulnerable",
+      "Id": "standard.vulnerable",
       "PackageId": "sts",
       "NameKey": "Vulnerable",
-      "DescriptionKey": "Takes 50% more damage from Attacks while Vulnerable.",
+      "DescriptionKey": "Takes 50% more attack damage. Loses 1 stack at the end of its own turn.",
       "Polarity": "Debuff",
-      "StackingBehavior": "MergeWithExistingInstance",
       "UsesStacks": true,
-      "UsesDuration": true,
+      "UsesDuration": false,
       "UsesCharges": false,
-      "Tags": ["debuff", "vulnerable"],
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "debuff",
+        "vulnerable"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "DamageReceived",
+          "Operation": "ScalePercent",
+          "Magnitude": 150,
+          "Priority": 300,
+          "RestrictDamageKind": "Direct",
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.modifyStatusStacks",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.vulnerable"
+                },
+                "Delta": {
+                  "kind": "const",
+                  "value": {
+                    "Value": -1
+                  }
+                },
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ],
+      "DeathPrevention": null,
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null,
+      "Disclosure": null
+    },
+    {
+      "Id": "standard.weak",
+      "PackageId": "sts",
+      "NameKey": "Weak",
+      "DescriptionKey": "Deals 25% less attack damage. Loses 1 stack at the end of its own turn.",
+      "Polarity": "Debuff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "debuff",
+        "weak"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "DamageDealt",
+          "Operation": "ScalePercent",
+          "Magnitude": 75,
+          "Priority": 200,
+          "RestrictDamageKind": "Direct",
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.modifyStatusStacks",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.weak"
+                },
+                "Delta": {
+                  "kind": "const",
+                  "value": {
+                    "Value": -1
+                  }
+                },
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ],
+      "DeathPrevention": null,
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null,
+      "Disclosure": null
+    },
+    {
+      "Id": "standard.frail",
+      "PackageId": "sts",
+      "NameKey": "Frail",
+      "DescriptionKey": "Gains 25% less Block. Loses 1 stack at the end of its own turn.",
+      "Polarity": "Debuff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "debuff",
+        "frail"
+      ],
       "PassiveModifiers": [],
-      "Triggers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.modifyStatusStacks",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.frail"
+                },
+                "Delta": {
+                  "kind": "const",
+                  "value": {
+                    "Value": -1
+                  }
+                },
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ],
+      "DeathPrevention": null,
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null,
+      "Disclosure": null
+    },
+    {
+      "Id": "ritual",
+      "PackageId": "sts",
+      "NameKey": "Ritual",
+      "DescriptionKey": "At the end of its own turn, gains Strength equal to its stacks.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "ritual"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.strength"
+                      },
+                      "Stacks": {
+                        "kind": "combatantStatusStacks",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "StatusId": {
+                            "value": "ritual"
+                          }
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "ritual_owner_turns"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ],
       "DeathPrevention": null,
       "DebuffBlock": null,
       "IncomingStatusDelay": null,
       "Disclosure": null
     }
-  ]
+  ],
+  "Cards": [
+    {
+      "Id": "strike",
+      "PackageId": "sts",
+      "NameKey": "Strike",
+      "DescriptionKey": "Deal 6 damage.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "basic"
+        },
+        {
+          "value": "strike"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 6
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "defend",
+      "PackageId": "sts",
+      "NameKey": "Defend",
+      "DescriptionKey": "Gain 5 Block.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "basic"
+        },
+        {
+          "value": "defend"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.gainBlock",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 5
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "bash",
+      "PackageId": "sts",
+      "NameKey": "Bash",
+      "DescriptionKey": "Deal 8 damage. Apply 2 Vulnerable.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "basic"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 8
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.vulnerable"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "slimed",
+      "PackageId": "sts",
+      "NameKey": "Slimed",
+      "DescriptionKey": "Unplayable.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "status"
+        },
+        {
+          "value": "unplayable"
+        },
+        {
+          "value": "junk"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": []
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "Hand",
+      "PlayedCardDestinationZone": "DiscardPile"
+    }
+  ],
+  "EnemyActions": [
+    {
+      "Id": "spike_slime_s.tackle",
+      "PackageId": "sts",
+      "NameKey": "Tackle",
+      "DescriptionKey": "Tackle — 5 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Tackle — 5 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 5
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "fat_gremlin.smash",
+      "PackageId": "sts",
+      "NameKey": "Smash",
+      "DescriptionKey": "Smash — 4 damage, Weak 1",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Smash — 4 damage, Weak 1"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 4
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.weak"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "sneaky_gremlin.puncture",
+      "PackageId": "sts",
+      "NameKey": "Puncture",
+      "DescriptionKey": "Puncture — 9 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Puncture — 9 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 9
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "blue_slaver.stab",
+      "PackageId": "sts",
+      "NameKey": "Stab",
+      "DescriptionKey": "Stab — 12 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Stab — 12 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 12
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "blue_slaver.rake",
+      "PackageId": "sts",
+      "NameKey": "Rake",
+      "DescriptionKey": "Rake — 7 damage, Weak 1",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Rake — 7 damage, Weak 1"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 7
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.weak"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "acid_slime_s.tackle",
+      "PackageId": "sts",
+      "NameKey": "Tackle",
+      "DescriptionKey": "Tackle — 3 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Tackle — 3 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "acid_slime_s.lick",
+      "PackageId": "sts",
+      "NameKey": "Lick",
+      "DescriptionKey": "Lick — Weak 1",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Lick — Weak 1"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.weak"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "acid_slime_m.corrosive_spit",
+      "PackageId": "sts",
+      "NameKey": "Corrosive Spit",
+      "DescriptionKey": "Corrosive Spit — 7 damage, shuffle 1 Slimed into your discard pile",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Corrosive Spit — 7 damage, shuffle 1 Slimed into your discard pile"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 7
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.createCardInstance",
+                "value": {
+                  "CardDefinitionId": {
+                    "value": "slimed"
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "ToZone": "DiscardPile",
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "acid_slime_m.tackle",
+      "PackageId": "sts",
+      "NameKey": "Tackle",
+      "DescriptionKey": "Tackle — 10 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Tackle — 10 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 10
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "acid_slime_m.lick",
+      "PackageId": "sts",
+      "NameKey": "Lick",
+      "DescriptionKey": "Lick — Weak 1",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Lick — Weak 1"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.weak"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "spike_slime_m.flame_tackle",
+      "PackageId": "sts",
+      "NameKey": "Flame Tackle",
+      "DescriptionKey": "Flame Tackle — 8 damage, shuffle 1 Slimed into your discard pile",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Flame Tackle — 8 damage, shuffle 1 Slimed into your discard pile"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 8
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.createCardInstance",
+                "value": {
+                  "CardDefinitionId": {
+                    "value": "slimed"
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "ToZone": "DiscardPile",
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "spike_slime_m.lick",
+      "PackageId": "sts",
+      "NameKey": "Lick",
+      "DescriptionKey": "Lick — Frail 1",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Lick — Frail 1"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.frail"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "jaw_worm.chomp",
+      "PackageId": "sts",
+      "NameKey": "Chomp",
+      "DescriptionKey": "Chomp — 11 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Chomp — 11 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 11
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "jaw_worm.thrash",
+      "PackageId": "sts",
+      "NameKey": "Thrash",
+      "DescriptionKey": "Thrash — 7 damage, 5 Block",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Thrash — 7 damage, 5 Block"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 7
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 5
+                    }
+                  },
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "jaw_worm.bellow",
+      "PackageId": "sts",
+      "NameKey": "Bellow",
+      "DescriptionKey": "Bellow — Strength 3, 6 Block",
+      "Intent": {
+        "Kind": "Buff",
+        "Label": "Bellow — Strength 3, 6 Block"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.strength"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 6
+                    }
+                  },
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "cultist.incantation",
+      "PackageId": "sts",
+      "NameKey": "Incantation",
+      "DescriptionKey": "Incantation — Ritual 3",
+      "Intent": {
+        "Kind": "Buff",
+        "Label": "Incantation — Ritual 3"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "ritual"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "cultist.dark_strike",
+      "PackageId": "sts",
+      "NameKey": "Dark Strike",
+      "DescriptionKey": "Dark Strike — 6 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Dark Strike — 6 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 6
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "gremlin_wizard.charging",
+      "PackageId": "sts",
+      "NameKey": "Charging",
+      "DescriptionKey": "Charging — no effect",
+      "Intent": {
+        "Kind": "Special",
+        "Label": "Charging — no effect"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": []
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "gremlin_wizard.ultimate_blast",
+      "PackageId": "sts",
+      "NameKey": "Ultimate Blast",
+      "DescriptionKey": "Ultimate Blast — 25 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Ultimate Blast — 25 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 25
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "gremlin_wizard_charges"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 0
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    }
+  ],
+  "Encounters": [
+    {
+      "Id": {
+        "Value": "enc_cultist"
+      },
+      "Enemies": [
+        {
+          "Id": "cultist",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "cultist.incantation"
+            },
+            {
+              "value": "cultist.dark_strike"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "ritual_owner_turns"
+                  },
+                  "Op": "GreaterOrEqual",
+                  "Value": 1
+                }
+              },
+              "Action": {
+                "value": "cultist.dark_strike"
+              },
+              "Priority": 10
+            }
+          ],
+          "DisplayName": "Cultist"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_jaw_worm"
+      },
+      "Enemies": [
+        {
+          "Id": "jaw_worm",
+          "MaxHealth": 40,
+          "Actions": [
+            {
+              "value": "jaw_worm.chomp"
+            },
+            {
+              "value": "jaw_worm.thrash"
+            },
+            {
+              "value": "jaw_worm.bellow"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Jaw Worm"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_small_slimes"
+      },
+      "Enemies": [
+        {
+          "Id": "acid_slime_m",
+          "MaxHealth": 28,
+          "Actions": [
+            {
+              "value": "acid_slime_m.corrosive_spit"
+            },
+            {
+              "value": "acid_slime_m.tackle"
+            },
+            {
+              "value": "acid_slime_m.lick"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Acid Slime (M)"
+        },
+        {
+          "Id": "spike_slime_s",
+          "MaxHealth": 10,
+          "Actions": [
+            {
+              "value": "spike_slime_s.tackle"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Spike Slime (S)"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    }
+  ],
+  "Monsters": [
+    {
+      "Id": "spike_slime_s",
+      "NameKey": "Spike Slime (S)",
+      "HpMin": 10,
+      "HpMax": 14,
+      "MaxHealth": 10,
+      "Actions": [
+        {
+          "value": "spike_slime_s.tackle"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "单一动作 ⇒ 无需 AI 桥，完全忠实（plan §3.2#1）"
+    },
+    {
+      "Id": "fat_gremlin",
+      "NameKey": "Fat Gremlin",
+      "HpMin": 13,
+      "HpMax": 17,
+      "MaxHealth": 13,
+      "Actions": [
+        {
+          "value": "fat_gremlin.smash"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "单一动作 ⇒ 完全忠实（plan §3.2#2）"
+    },
+    {
+      "Id": "sneaky_gremlin",
+      "NameKey": "Sneaky Gremlin",
+      "HpMin": 10,
+      "HpMax": 14,
+      "MaxHealth": 10,
+      "Actions": [
+        {
+          "value": "sneaky_gremlin.puncture"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "单一动作 ⇒ 完全忠实（plan §3.2#3）"
+    },
+    {
+      "Id": "blue_slaver",
+      "NameKey": "Blue Slaver",
+      "HpMin": 46,
+      "HpMax": 50,
+      "MaxHealth": 46,
+      "Actions": [
+        {
+          "value": "blue_slaver.stab"
+        },
+        {
+          "value": "blue_slaver.rake"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "原作 60/40、同招不能连三次（inv:§4.1）⇒ 两招交替满足约束，只有分布不同（plan §3.2#4）"
+    },
+    {
+      "Id": "acid_slime_s",
+      "NameKey": "Acid Slime (S)",
+      "HpMin": 8,
+      "HpMax": 12,
+      "MaxHealth": 8,
+      "Actions": [
+        {
+          "value": "acid_slime_s.tackle"
+        },
+        {
+          "value": "acid_slime_s.lick"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "原作首回合 50/50、之后两招交替（inv:§4.1）⇒ 固定首招 Tackle + 交替（plan §3.2#5）"
+    },
+    {
+      "Id": "acid_slime_m",
+      "NameKey": "Acid Slime (M)",
+      "HpMin": 28,
+      "HpMax": 32,
+      "MaxHealth": 28,
+      "Actions": [
+        {
+          "value": "acid_slime_m.corrosive_spit"
+        },
+        {
+          "value": "acid_slime_m.tackle"
+        },
+        {
+          "value": "acid_slime_m.lick"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "原作 30/40/30 且 Tackle/Lick 不能连续（inv:§4.1）⇒ 三步循环满足全部约束（plan §3.2#6）"
+    },
+    {
+      "Id": "spike_slime_m",
+      "NameKey": "Spike Slime (M)",
+      "HpMin": 28,
+      "HpMax": 32,
+      "MaxHealth": 28,
+      "Actions": [
+        {
+          "value": "spike_slime_m.flame_tackle"
+        },
+        {
+          "value": "spike_slime_m.lick"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "原作 30/70、同招不能连三次（inv:§4.1）⇒ 两招交替（plan §3.2#7）"
+    },
+    {
+      "Id": "jaw_worm",
+      "NameKey": "Jaw Worm",
+      "HpMin": 40,
+      "HpMax": 44,
+      "MaxHealth": 40,
+      "Actions": [
+        {
+          "value": "jaw_worm.chomp"
+        },
+        {
+          "value": "jaw_worm.thrash"
+        },
+        {
+          "value": "jaw_worm.bellow"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "首回合必定 Chomp；三步循环满足三条『不能连用』约束（inv:§4.1、plan §3.2#8）"
+    },
+    {
+      "Id": "cultist",
+      "NameKey": "Cultist",
+      "HpMin": 48,
+      "HpMax": 54,
+      "MaxHealth": 48,
+      "Actions": [
+        {
+          "value": "cultist.incantation"
+        },
+        {
+          "value": "cultist.dark_strike"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "ritual_owner_turns"
+              },
+              "Op": "GreaterOrEqual",
+              "Value": 1
+            }
+          },
+          "Action": {
+            "value": "cultist.dark_strike"
+          },
+          "Priority": 10
+        }
+      ],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "第 1 回合必定 Incantation、之后永远 Dark Strike（inv:§4.1）⇒ 回合计数器 + 一条 selfHasCounter 规则（plan §G7：桥是内容，不是内核）"
+    },
+    {
+      "Id": "gremlin_wizard",
+      "NameKey": "Gremlin Wizard",
+      "HpMin": 21,
+      "HpMax": 25,
+      "MaxHealth": 21,
+      "Actions": [
+        {
+          "value": "gremlin_wizard.charging"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "gremlin_wizard_charges"
+              },
+              "Op": "GreaterOrEqual",
+              "Value": 3
+            }
+          },
+          "Action": {
+            "value": "gremlin_wizard.ultimate_blast"
+          },
+          "Priority": 10
+        }
+      ],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "先充能 2 回合→Blast→之后每充能 3 回合一次 Blast（inv:§4.1）。HP 采信游戏文件的 21-25（inv:§0 瑕疵 4）。⚠️ 单条件/常量阈值 ⇒ 首次 Blast 落在第 4 回合（降级见 Notes.Deviations/gremlin-wizard-phase）"
+    }
+  ],
+  "EncounterTables": {
+    "PackageId": "sts",
+    "Weak": [
+      {
+        "Id": "enc_cultist",
+        "Weight": 25
+      },
+      {
+        "Id": "enc_jaw_worm",
+        "Weight": 25
+      },
+      {
+        "Id": "enc_small_slimes",
+        "Weight": 25
+      }
+    ],
+    "Note": "inv:§5.2：weak 池 4 项各 25%。ENCT 行没有权重格（rdcfmt.py:254-259）⇒ 权重只能住在这里，不参与任何镜像行为。第 4 项 enc_two_louses 未 author（要 louse_red/green，C 档）。"
+  },
+  "Start": {
+    "HeroName": "Ironclad",
+    "MaxHealth": 80,
+    "StartingHealth": 80,
+    "Resources": {
+      "gold": 0
+    },
+    "Deck": [
+      {
+        "value": "strike"
+      },
+      {
+        "value": "strike"
+      },
+      {
+        "value": "strike"
+      },
+      {
+        "value": "strike"
+      },
+      {
+        "value": "strike"
+      },
+      {
+        "value": "defend"
+      },
+      {
+        "value": "defend"
+      },
+      {
+        "value": "defend"
+      },
+      {
+        "value": "defend"
+      },
+      {
+        "value": "bash"
+      }
+    ],
+    "StartingRelics": [],
+    "StartingConsumables": [],
+    "StartingUnits": [],
+    "StartingParty": []
+  },
+  "Characters": [
+    {
+      "Id": "ironclad",
+      "Start": {
+        "HeroName": "Ironclad",
+        "MaxHealth": 80,
+        "StartingHealth": 80,
+        "Resources": {
+          "gold": 0
+        },
+        "Deck": [
+          {
+            "value": "strike"
+          },
+          {
+            "value": "strike"
+          },
+          {
+            "value": "strike"
+          },
+          {
+            "value": "strike"
+          },
+          {
+            "value": "strike"
+          },
+          {
+            "value": "defend"
+          },
+          {
+            "value": "defend"
+          },
+          {
+            "value": "defend"
+          },
+          {
+            "value": "defend"
+          },
+          {
+            "value": "bash"
+          }
+        ],
+        "StartingRelics": [],
+        "StartingConsumables": [],
+        "StartingUnits": [],
+        "StartingParty": []
+      },
+      "UnlockFlag": null
+    }
+  ],
+  "Deck": [
+    {
+      "value": "strike"
+    },
+    {
+      "value": "strike"
+    },
+    {
+      "value": "strike"
+    },
+    {
+      "value": "strike"
+    },
+    {
+      "value": "strike"
+    },
+    {
+      "value": "defend"
+    },
+    {
+      "value": "defend"
+    },
+    {
+      "value": "defend"
+    },
+    {
+      "value": "defend"
+    },
+    {
+      "value": "bash"
+    }
+  ],
+  "Notes": {
+    "PackageId": "sts",
+    "Scope": "M0a 内容基线：10 个零新能力（A 档）敌人 + 3 个 weak 遭遇 + Ironclad 起始牌组 + 按需状态。无精英、无 Boss、无遗物、无地图、无事件、无药水 —— 那些是 M1/M2 的范围。",
+    "InvariantSource": "docs/spec/sts-act1-inventory.md（锚定 Slay the Spire PC v2.3.4）；分档依据 docs/spec/sts-act1-plan.md §3.2/§3.3。本文件所有数值都引自前者。",
+    "StatusNamespace": "四个战斗数学状态直接用内核标准 id（standard.strength/vulnerable/weak/frail）：有镜像时 status_catalog 的两张修饰表**不参与**（exec.rs:2421-2426 走 image_damage_stage，候选行只来自每个在身状态自己的 PassiveModifiers），所以效果必须写在 STAT.PassiveModifiers 里，数值抄 status_catalog.rs:135-215。若改用自造 id 而不写 PassiveModifiers，力量/易伤会**静默不生效**（每个数字看起来都合理）。",
+    "Deviations": [
+      {
+        "Id": "ai-distribution",
+        "InvRef": "inv:§4.1",
+        "Ours": "确定性脚本：Actions 循环 + 至多一条 IntentRules(selfHasCounter)",
+        "Reference": "加权随机 + 不能连用 N 次",
+        "Why": "内核决策层零 RNG（intent.rs:21-24），EACT 也没有权重格",
+        "Detectable": "统计 1 万局的动作频率 vs 原作权重（今天没有原作数据）"
+      },
+      {
+        "Id": "hp-roll",
+        "InvRef": "inv:§4.1",
+        "Ours": "每只敌人固定为区间下界（Monsters[].MaxHealth == HpMin）",
+        "Reference": "在 [HpMin, HpMax] 上均匀掷",
+        "Why": "FightPlan 只有 (id, max_health) 一个整数（battle.rs:121-134）",
+        "Detectable": "任何一局敌人血量比原作少 0~6 点"
+      },
+      {
+        "Id": "gremlin-wizard-phase",
+        "InvRef": "inv:§4.1",
+        "Ours": "第一次 Ultimate Blast 落在第 4 回合，之后每 3 次充能一次（周期 4）",
+        "Reference": "第 3 回合第一次 Blast，之后每 3 次充能一次（首段只充能 2 回合）",
+        "Why": "只有一个 selfHasCounter 条件可求值、阈值是常量 ⇒ 首段与稳态段不能同时对上；选了稳态（长期行为）正确的那一侧",
+        "Detectable": "逐回合比对意图：第 3 回合原作是 Blast，我们是 Charging（此后整体晚 1 回合）"
+      },
+      {
+        "Id": "small-slimes-composition",
+        "InvRef": "inv:§5.2",
+        "Ours": "enc_small_slimes 固定 = Acid Slime (M) + Spike Slime (S)",
+        "Reference": "M 与 S 各自 50/50 酸/刺（4 种组合）",
+        "Why": "一条 ENCT 的 Enemies 名单是静态的，内核也没有随机选择器（sel.random 是 UnsupportedKind）",
+        "Detectable": "遇到 Spike (M)/Acid (S) 组合时"
+      },
+      {
+        "Id": "slimed-position",
+        "InvRef": "inv:§10",
+        "Ours": "createCardInstance 追加到弃牌堆（push_card 拿新槽位）",
+        "Reference": "洗入弃牌堆",
+        "Why": "没有『洗某张卡进某牌堆』的节点",
+        "Detectable": "下一次重洗之后的抽牌顺序"
+      },
+      {
+        "Id": "intent-kind-single",
+        "InvRef": "inv:§4.1",
+        "Ours": "每个动作只写一个 Intent.Kind（带伤害的写 Attack，纯上状态写 Debuff/Buff）",
+        "Reference": "界面上可以同时显示攻击与上状态两种意图",
+        "Why": "EACT.Intent 只有一个 Kind 格",
+        "Detectable": "UI 上的意图图标数量"
+      }
+    ],
+    "SingleSourceAndInferred": [
+      {
+        "Item": "gremlin_wizard 的 HP 取 21-25",
+        "Mark": "【单源】且来源冲突（采信游戏文件）",
+        "Detail": "inv:§0 瑕疵 4：wiki 信息框写 23-25，且同一框的 Asc 值 22-26 比基础值还低，自相矛盾"
+      },
+      {
+        "Item": "weak 池每项 25%",
+        "Mark": "【单源】wiki",
+        "Detail": "inv:§5.2；只写在 EncounterTables，不参与任何镜像行为"
+      },
+      {
+        "Item": "敌人 HP 区间的下界替身",
+        "Mark": "【推断】",
+        "Detail": "由『内核只有一个整数 HP』推出来的取舍，不是原作数据"
+      },
+      {
+        "Item": "enc_small_slimes 的固定组合",
+        "Mark": "【推断】",
+        "Detail": "原作是 50/50 × 50/50，固定组合是我们选的降级"
+      },
+      {
+        "Item": "敌人出招脚本（Actions 顺序本身）",
+        "Mark": "【推断】",
+        "Detail": "inv:§4.1 只给权重与『不能连用』约束，没给实现细节（inv:§12-2 未决）"
+      }
+    ],
+    "KernelGapsFound": [
+      {
+        "Id": "frail-block-pipeline",
+        "Detail": "内容侧表达不出『格挡 ×75』：status_bind::Pipeline 只有 DamageDealt/DamageReceived/TurnStartDraw（status_bind.rs:124-143），image_block_stage 恒返原值（exec.rs:2656-2677）⇒ standard.frail 施加得上但无效果；若给它写一条 Pipeline=Block 的 spec，每次 gainBlock 都会响亮报错（BindError::Pipeline）。plan §3.2 把 frail 算进 A 档是错的。",
+        "Where": "status_bind.rs:124-143 / exec.rs:2656-2677"
+      },
+      {
+        "Id": "no-monster-table",
+        "Detail": "敌人只能内联在 ENCT.Enemies 里，没有『怪物』行表。10 个 A 档敌人里只有 4 个被 3 个 weak 遭遇引用 ⇒ 另外 6 个只能住在根键 Monsters 里（内核今天不读它）。遭遇里的内联记录与 Monsters 的对应项由 native/sts_content_check.py 逐字段比对。",
+        "Where": "rdcfmt.py:254-259 / intent.rs:778-819"
+      },
+      {
+        "Id": "encounter-weight",
+        "Detail": "ENCT 行没有权重格 ⇒ inv:§5.2 的 25% 无处安放，只能写在 EncounterTables（纯文档）。",
+        "Where": "rdcfmt.py:254-259"
+      },
+      {
+        "Id": "slimed-hand-retention",
+        "Detail": "TurnEndHandDestinationZone 今天没人读：宿主的 turn_end_hand_destination 写死 DiscardPile（host.rs:1603-1618）⇒ Slimed 会在回合结束被弃掉，而原作是留在手里。",
+        "Where": "host.rs:1603-1618"
+      }
+    ],
+    "AuthoringConventions": [
+      "每个节点种类在本文件里用**固定的完整键集**书写（不写参考内容那套冗余 Children），所以每种 kind 只有一个 opcode、compile.py 的 absent_fields 为空。",
+      "层数一律落 Stacks；『回合时钟』用 status 的 TurnEnded 触发器 -1 层（plan §G10）。不用 DurationTurns：那边合并是 max，连加两次 2 层只会给 2 回合。",
+      "敌人的『脚本』= Actions 顺序（回合号取模）+ 至多一条 IntentRules(selfHasCounter) 规则；计数器由动作程序或状态触发器维护 —— 内核没有 intent.round。",
+      "升级版卡（strike+/defend+/bash+）不在本轮范围：run 层的『升级一张卡』要改实例的 definition_id，内核还没有那个节点（plan §6.5-2）。"
+    ],
+    "NotYetAuthored": [
+      "遗物：连起始遗物 Burning Blood 也不写（inv:§6 是 M2b；Start.StartingRelics = []）。",
+      "精英/Boss（sentry 差 G9、hexaghost 差 G3）、strong 池遭遇、地图、事件、药水、卡牌奖励池。",
+      "第 4 个 weak 遭遇 enc_two_louses（louse_red/green 是 C 档）。"
+    ]
+  }
 }
