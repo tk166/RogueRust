@@ -40,15 +40,25 @@ Clicking a card is one `rd_env_step`; **结束回合** is one `rd_env_step` with
 Copy-Item D:\Vibe\sts-tui\kernel\target\wasm32-unknown-unknown\release\rd_wasm.wasm D:\Vibe\sts-tui\web\
 ```
 
-`rd_wasm.wasm` next to this file is a **build artifact**: **378,962 B** (370.1 KiB) as committed,
-built from this tree (before this round it was 559,504 B of *roguedeck* content — the numbers below
-are the two levers that changed).
+`rd_wasm.wasm` next to this file is a **build artifact, and it is deliberately not in git**
+(`.gitignore` has `web/*.wasm`; the repository's first commit was told to exclude compiled
+binaries). So a clone has to run the two commands above once. Every byte count below is a
+*local* measurement, not something `git show` can produce.
+
+Current: **378,962 B** (370.1 KiB) built from this tree (before this round it was 559,504 B of
+*roguedeck* content — the table lists the levers).
 
 | build | bytes | what changed |
 |---|---:|---|
-| previous committed copy | 559,504 | stale artifact (546 KiB), `roguedeck` image, `NextRound` end-turn, no intent |
+| previous local copy | 559,504 | stale artifact (546 KiB), `roguedeck` image, `NextRound` end-turn, no intent |
 | same tree, `rd-wasm` before this round | 418,758 | rebuilt from `main`, still `roguedeck` (85,616 B image) |
-| **this round** | **378,962** | `sts` core image (9,580 B, −76,036 B of data) **+** intent/damage preview code **+** `EndOneTurn` loop |
+| this round | 378,962 | `sts` core image (9,580 B, −76,036 B of data) **+** intent/damage preview code **+** `EndOneTurn` loop |
+| this round, after `GOLDEN32` became `pub` | 378,962 | **same size, different sha256** — see the note below |
+
+⚠️ The last row is why the gate compares **bytes**: making one constant `pub` in `rd-core`
+changed nothing observable (the page still wins in 10 steps; the round-1 preview is still
+12 = the HP actually lost) yet reordered the data section. A size check and an mtime check
+would both have called the two builds identical.
 
 The image is the biggest single lever after `CombatState` itself (213,224 B of linear memory):
 embedding the `sts` mirror instead of the `roguedeck` one is what pays for the new code.
@@ -63,7 +73,7 @@ without the copy — and a stale copy is visible as a byte count mismatch in the
 node D:\Vibe\sts-tui\web\smoke.mjs
 ```
 
-It reads the **committed artifact**, checks `WebAssembly.validate`, instantiates it with **no
+It reads the **artifact sitting next to it** (a local, git-ignored build), checks `WebAssembly.validate`, instantiates it with **no
 imports**, asserts every export `index.html` touches exists, and plays the fight out (round-1
 preview must equal the HP actually lost — that is what proves *both* enemies acted). Then it checks
 the artifact is **byte-identical to a fresh build**, and checks the **page**: the inline script

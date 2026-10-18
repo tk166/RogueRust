@@ -10,7 +10,11 @@
 //! all of it. Index 0 is the outcome of the full pass, not of one draw.
 
 /// The 32-bit golden-ratio increment shared by Mulberry32 and the state mixing below.
-const GOLDEN32: u32 = 0x9E37_79B9;
+///
+/// `pub` because the run layer (`rd-run`) derives its **stream seeds** with the same increment
+/// (`docs/spec/run-layer.md` §3.3). Exporting it is the alternative to a second copy of the
+/// number: two copies of a constant is where drift starts.
+pub const GOLDEN32: u32 = 0x9E37_79B9;
 
 /// Derives the initial state from the run seed and the step counter.
 ///

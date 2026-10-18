@@ -1,0 +1,15 @@
+[package]
+name = "rd-run"
+description = "Run layer for StS Act 1: seven RNG substreams, map, floors, run_hash. no_std, integer-only."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# The only dependency, and it is for three things: `rng`'s primitives (`initial_state`,
+# `next_u32`, `shuffle_indexes`, `GOLDEN32`), `Ident` for deck/relic ids, and `hash` for
+# `run_hash`. Nothing here allocates.
+rd-core = { path = "../rd-core" }

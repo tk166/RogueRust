@@ -14,7 +14,7 @@
 
 param(
   [switch]$SkipSlow,
-  [int]$UnitsFloor = 558
+  [int]$UnitsFloor = 566
 )
 
 $ErrorActionPreference = 'Stop'
@@ -99,12 +99,17 @@ Write-Output "sts-tui 聚合验收"
 Write-Output ("=" * 78)
 
 Write-Output "`n[1/9] 单元测试 + 语料逐字节回环（Rust 内核）"
+# `-p rd-core -p rd-run`：run 层是新 crate，它自己的 8 条测试若不加进这条闸门，就没人跑它们。
+# 于是"条数下限"必须对**两个 crate 加起来**比 —— 只取第一个 `N passed` 会让新 crate 的测试
+# 全绿或全红都对闸门没有影响（这就是"覆盖不到的地方看起来最绿"）。
 $r = Invoke-Gate -Name 'rust-units' -Exe $CARGO `
-  -ArgLine "test -p rd-core --release --target-dir `"$TARGET_DIR`"" -Workdir (Join-Path $ROOT 'kernel') `
+  -ArgLine "test -p rd-core -p rd-run --release --target-dir `"$TARGET_DIR`"" -Workdir (Join-Path $ROOT 'kernel') `
   -MustMatch 'test result: ok\. \d+ passed; 0 failed' -MustNotMatch 'test result: FAILED'
 $results += $r
-$passed = [regex]::Match($r.Output, '(\d+) passed').Groups[1].Value
-if ($r.Ok -and $passed -and [int]$passed -lt $UnitsFloor) {
+$passed = 0
+foreach ($m in [regex]::Matches($r.Output, '(\d+) passed')) { $passed += [int]$m.Groups[1].Value }
+$r.Evidence = "$passed passed"
+if ($r.Ok -and [int]$passed -lt $UnitsFloor) {
   $r.Ok = $false; $r.Notes += "测试数 $passed < 下限 $UnitsFloor"
 }
 $results[-1] = $r
@@ -117,12 +122,12 @@ $results += $r
 
 Write-Output "[3/9] 裸机目标编译（riscv32imac-unknown-none-elf）"
 $results += Invoke-Gate -Name 'rust-baremetal' -Exe $CARGO `
-  -ArgLine "check --target riscv32imac-unknown-none-elf -p rd-core --release --target-dir `"$TARGET_DIR`"" `
+  -ArgLine "check --target riscv32imac-unknown-none-elf -p rd-core -p rd-run --release --target-dir `"$TARGET_DIR`"" `
   -Workdir (Join-Path $ROOT 'kernel') -MustMatch 'Finished'
 
 Write-Output "[4/9] clippy"
 $results += Invoke-Gate -Name 'rust-clippy' -Exe $CARGO `
-  -ArgLine "clippy --all-targets -p rd-core --target-dir `"$TARGET_DIR`"" -Workdir (Join-Path $ROOT 'kernel') `
+  -ArgLine "clippy --all-targets -p rd-core -p rd-run --target-dir `"$TARGET_DIR`"" -Workdir (Join-Path $ROOT 'kernel') `
   -MustMatch 'Finished'
 
 Write-Output "[5/9] 真链接成裸机 ELF 镜像"

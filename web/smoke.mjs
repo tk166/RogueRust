@@ -7,9 +7,12 @@
 // `web/index.html` touches, and plays one real step of the content-built fight.
 //
 // It also proves two things that only became visible after a **real browser** session:
-//   * `web/rd_wasm.wasm` is byte-identical to a fresh build (位置陈旧 ≠ mtime 陈旧: a
-//     `Copy-Item` restores mtime, and a one-comment edit makes mtime lie in the other direction.
-//     Both happened on this machine, so the comparison is on **bytes**);
+//   * `web/rd_wasm.wasm` is byte-identical to a fresh build. That file is a **local build
+//     product**: `.gitignore` has `web/*.wasm`, so a clone has to build it once. When it is
+//     missing or stale the failure prints the exact copy command. (位置陈旧 ≠ mtime 陈旧: a
+//     `Copy-Item` restores mtime, a one-comment edit makes mtime lie the other way, and — measured
+//     in this repo — a rebuild can change the bytes while the byte COUNT stays identical. All
+//     three happened here, so the comparison is on **bytes**);
 //   * `web/index.html`'s inline script parses, only calls exports the module really has, and its
 //     observation offsets still tile. Before this section, editing the page was **ungated** —
 //     a syntax error in it passed every one of the 12 acceptance gates.
@@ -28,8 +31,21 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const WASM = new URL("./rd_wasm.wasm", import.meta.url);
-const bytes = await readFile(WASM);
 const fail = (message) => { console.error("SMOKE FAIL: " + message); process.exit(1); };
+
+const COPY_HINT =
+  `  & tools\\cargo.ps1 build -p rd-wasm --release --target wasm32-unknown-unknown\n` +
+  `  Copy-Item "kernel\\target\\wasm32-unknown-unknown\\release\\rd_wasm.wasm" "web\\rd_wasm.wasm"`;
+
+let bytes;
+try {
+  bytes = await readFile(WASM);
+} catch (e) {
+  // Absent, not corrupt: `web/*.wasm` is git-ignored on purpose, so a clone has no artifact until
+  // it builds one. Silent-skip is not an option — the build commands are the message.
+  fail(`web/rd_wasm.wasm is missing (${e.code || e.message}). It is git-ignored by design; build it:\n` +
+       COPY_HINT);
+}
 
 if (!WebAssembly.validate(bytes)) fail("WebAssembly.validate() rejected the module");
 const { instance } = await WebAssembly.instantiate(bytes, {});
@@ -134,14 +150,12 @@ let builtBytes;
 try {
   builtBytes = await readFile(BUILT);
 } catch (e) {
-  fail(`no build to compare against at ${BUILT} (${e.code || e.message}).\n` +
-       `  & tools\\cargo.ps1 build -p rd-wasm --release --target wasm32-unknown-unknown\n` +
-       `  Copy-Item ${BUILT} ${fileURLToPath(WASM)}`);
+  fail(`no build to compare against at ${BUILT} (${e.code || e.message}).\n` + COPY_HINT);
 }
 const sha = (b) => createHash("sha256").update(b).digest("hex");
 if (builtBytes.length !== bytes.length || sha(builtBytes) !== sha(bytes)) {
   fail(`web/rd_wasm.wasm is NOT a fresh build of this tree.\n` +
-       `  committed  ${bytes.length} B  sha256 ${sha(bytes)}\n` +
+       `  on disk    ${bytes.length} B  sha256 ${sha(bytes)}\n` +
        `  fresh      ${builtBytes.length} B  sha256 ${sha(builtBytes)}\n` +
        `  Fix: Copy-Item "${BUILT}" "${fileURLToPath(WASM)}"`);
 }

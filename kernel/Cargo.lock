@@ -25,6 +25,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rd-run"
+version = "0.1.0"
+dependencies = [
+ "rd-core",
+]
+
+[[package]]
 name = "rd-sizeprobe"
 version = "0.1.0"
 dependencies = [
