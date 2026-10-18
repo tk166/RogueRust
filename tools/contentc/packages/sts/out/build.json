@@ -1,0 +1,25 @@
+{
+  "package": "sts",
+  "description": "Slay the Spire Act 1 (Ironclad) -- SKELETON ONLY.  Two hand-written statuses, no cards, no enemy actions, no encounters, no relics, no map.  It exists to prove that a second package travels the whole chain (source -> compile -> image -> reader round-trip) under its own file names, without touching the roguedeck baseline.  Nothing in this package is kernel-verified yet, so it has no expected_sha.txt pin.",
+  "src": {
+    "path": "tools/contentc/packages/sts/sts.roguedeck.json",
+    "bytes": 1137,
+    "sha256": "e2b41f330aabb19fa06f73e6ea44dc772e7f60ccfef6a76a061072affbff0fe9"
+  },
+  "images": {
+    "full": {
+      "file": "content.sts.rdcf",
+      "bytes": 1264,
+      "sha256": "445b5fd6d4463c1ccdd65ad5f0e33f8e9ffbf29d0e7b82e3b1f22760eb224fa4"
+    },
+    "core": {
+      "file": "content.sts.core.rdcf",
+      "bytes": 1092,
+      "sha256": "55640d62e473a86d8a1443a20fd67144a8bea54c64f3dbd077768e5674439077"
+    }
+  },
+  "compiler": {
+    "path": "tools/contentc/compile.py",
+    "sha256": "7ac8f43314c340f6f8faff9186dc06028483a9350eebd221a9eeab2360f6893a"
+  }
+}

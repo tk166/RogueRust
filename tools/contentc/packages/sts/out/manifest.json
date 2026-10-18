@@ -1,0 +1,294 @@
+{
+  "format": "RDCF",
+  "format_version": 1,
+  "magic": "0x46434452",
+  "source": {
+    "path": "D:\\Vibe\\sts-tui\\tools\\contentc\\packages\\sts\\sts.roguedeck.json",
+    "raw_bytes": 1137,
+    "content_hash_fnv1a32": "0x4A7A139C",
+    "schema_version": 1,
+    "compact_json_bytes": 846,
+    "compact_json_without_redundant_children": 846
+  },
+  "totals": {
+    "content.sts.rdcf": 1264,
+    "content.sts.core.rdcf": 1092
+  },
+  "header_bytes": 32,
+  "directory_bytes": 240,
+  "tables": {
+    "strings": {
+      "count": 33,
+      "blob_bytes": 435,
+      "offset_table_bytes": 136
+    },
+    "opcodes": {
+      "count": 10,
+      "ir_kinds": 0,
+      "object_shapes": 2
+    },
+    "terms": {
+      "distinct": 9,
+      "aux_cells": 4
+    },
+    "cards": {
+      "count": 0,
+      "stride": 32
+    },
+    "statuses": {
+      "count": 2,
+      "stride": 40
+    },
+    "enemy_actions": {
+      "count": 0,
+      "stride": 16
+    },
+    "encounters": {
+      "count": 0,
+      "stride": 16
+    },
+    "relics": {
+      "count": 0,
+      "stride": 12
+    },
+    "roots": {
+      "count": 1
+    },
+    "id_index": {
+      "count": 2
+    }
+  },
+  "variants": {
+    "full": {
+      "file": "content.sts.rdcf",
+      "bytes": 1264,
+      "flags": 0,
+      "sections": [
+        {
+          "id": 0,
+          "name": "STR",
+          "offset": 272,
+          "bytes": 435,
+          "count": 33
+        },
+        {
+          "id": 1,
+          "name": "STRO",
+          "offset": 708,
+          "bytes": 136,
+          "count": 34
+        },
+        {
+          "id": 2,
+          "name": "OPD",
+          "offset": 844,
+          "bytes": 144,
+          "count": 18
+        },
+        {
+          "id": 3,
+          "name": "OPF",
+          "offset": 988,
+          "bytes": 100,
+          "count": 25
+        },
+        {
+          "id": 4,
+          "name": "TRM",
+          "offset": 1088,
+          "bytes": 48,
+          "count": 9
+        },
+        {
+          "id": 5,
+          "name": "TRW",
+          "offset": 1136,
+          "bytes": 18,
+          "count": 9
+        },
+        {
+          "id": 6,
+          "name": "AUX",
+          "offset": 1156,
+          "bytes": 8,
+          "count": 4
+        },
+        {
+          "id": 7,
+          "name": "CARD",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
+        },
+        {
+          "id": 8,
+          "name": "STAT",
+          "offset": 1164,
+          "bytes": 80,
+          "count": 2
+        },
+        {
+          "id": 9,
+          "name": "EACT",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
+        },
+        {
+          "id": 10,
+          "name": "ENCT",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
+        },
+        {
+          "id": 11,
+          "name": "REL",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
+        },
+        {
+          "id": 12,
+          "name": "ROOT",
+          "offset": 1244,
+          "bytes": 4,
+          "count": 1
+        },
+        {
+          "id": 13,
+          "name": "IDX",
+          "offset": 1248,
+          "bytes": 16,
+          "count": 2
+        },
+        {
+          "id": 14,
+          "name": "TAGS",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
+        }
+      ]
+    },
+    "core": {
+      "file": "content.sts.core.rdcf",
+      "bytes": 1092,
+      "flags": 1,
+      "sections": [
+        {
+          "id": 0,
+          "name": "STR",
+          "offset": 272,
+          "bytes": 295,
+          "count": 27
+        },
+        {
+          "id": 1,
+          "name": "STRO",
+          "offset": 568,
+          "bytes": 112,
+          "count": 28
+        },
+        {
+          "id": 2,
+          "name": "OPD",
+          "offset": 680,
+          "bytes": 144,
+          "count": 18
+        },
+        {
+          "id": 3,
+          "name": "OPF",
+          "offset": 824,
+          "bytes": 92,
+          "count": 23
+        },
+        {
+          "id": 4,
+          "name": "TRM",
+          "offset": 916,
+          "bytes": 48,
+          "count": 9
+        },
+        {
+          "id": 5,
+          "name": "TRW",
+          "offset": 964,
+          "bytes": 18,
+          "count": 9
+        },
+        {
+          "id": 6,
+          "name": "AUX",
+          "offset": 984,
+          "bytes": 8,
+          "count": 4
+        },
+        {
+          "id": 7,
+          "name": "CARD",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
+        },
+        {
+          "id": 8,
+          "name": "STAT",
+          "offset": 992,
+          "bytes": 80,
+          "count": 2
+        },
+        {
+          "id": 9,
+          "name": "EACT",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
+        },
+        {
+          "id": 10,
+          "name": "ENCT",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
+        },
+        {
+          "id": 11,
+          "name": "REL",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
+        },
+        {
+          "id": 12,
+          "name": "ROOT",
+          "offset": 1072,
+          "bytes": 4,
+          "count": 1
+        },
+        {
+          "id": 13,
+          "name": "IDX",
+          "offset": 1076,
+          "bytes": 16,
+          "count": 2
+        },
+        {
+          "id": 14,
+          "name": "TAGS",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
+        }
+      ]
+    }
+  },
+  "timing_seconds": {
+    "json_load": 0.0001,
+    "derive": 0.0003,
+    "encode": 0.0002,
+    "serialize": 0.0007
+  },
+  "peak_heap_mib": 0.1
+}

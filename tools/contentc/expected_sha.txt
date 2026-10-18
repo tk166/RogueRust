@@ -1,0 +1,55 @@
+# expected_sha.txt -- RDCF byte-identity baseline (the "content pin").
+#
+# WHY THIS FILE EXISTS
+# --------------------
+# Every cross-language gate in this repo is pinned to ONE pair of binary images:
+#
+#     CARD_DIFF (62/62)   FIGHT_DIFF (182/182)   ENEMY_DIFF   corpus 85/85
+#     native/card_specs.json   coverage 19/19   golden 129
+#
+# ...and they all read `tools/contentc/out/content.core.rdcf` (see
+# native/fight_diff.py:139, native/gen_card_specs.py:51-52).  So the moment
+# `compile.py` changes -- e.g. to support StS content with event/potion/map
+# entity tables -- every one of those gates silently starts testing a
+# *different* content image.  They stay green.  That is the failure mode this
+# pin exists to make impossible: if the bytes move, this gate goes red and
+# names the byte offset.
+#
+# HOW TO CHECK (the gate)
+# -----------------------
+#     C:\Users\TK11\miniforge3\python.exe tools\contentc\verify_bytes.py
+#
+# It (a) verifies the source document hash, (b) recompiles the source into a
+# throwaway directory with the *current* compiler, and (c) requires both fresh
+# images AND the on-disk `out/` images to equal the SHA-256 values below.
+# `out/` is checked separately because a stale-but-correct `out/` would
+# otherwise hide a compiler regression (fresh compile compares to the pin, not
+# to `out/`), and a stale `out/` would otherwise hide a *source* change.
+#
+# HOW TO RE-PIN (deliberate act, reads as a diff in review)
+# ---------------------------------------------------------
+#     C:\Users\TK11\miniforge3\python.exe tools\contentc\verify_bytes.py --repin
+#
+# Re-pin only when you *mean* to change the content the kernel gates test
+# against, and say so in the commit message.  Re-pinning to make a red gate
+# green is how the safety net gets holes.
+#
+# PATHS are relative to the repository root, so this file survives a move.
+
+source_path = ref/RogueDeck-Core/src/RogueDeck.Sandbox.Run/SampleContent/bureaucrats.roguedeck.json
+source_sha256 = 96d064c2cced72d1d21d8eb7e09bf081709dc2f966bc9f93118dea5608124073
+source_bytes = 8291305
+
+full_name = content.rdcf
+full_sha256 = 648a1ff94929c31bd53879a4c77ff4972e75c2007afea3574eedcf1b07036bf7
+full_bytes = 158296
+
+core_name = content.core.rdcf
+core_sha256 = d14525dac306e64251b6975c5aa0148eaf903f224aaf4b0ea11414189fc9feb6
+core_bytes = 85616
+
+# The two images above were produced by compile.py at git HEAD (before the
+# multi-package change) and re-verified reproducible on 2026-10-20: a fresh
+# in-process compile from the untouched source reproduces both SHAs exactly
+# (manifest.json / report.md are NOT pinned -- they embed timings and the
+# absolute source path).

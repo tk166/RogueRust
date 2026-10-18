@@ -5,6 +5,7 @@ Pure Python 3 stdlib.  See `rdcfmt.py` for the frozen on-disk vocabulary and
 `docs/spec/content-binary-format.md` for the design rationale.
 
     python compile.py [--src <json>] [--out-dir <dir>] [--no-core] [--quiet]
+                      [--full-name <f>] [--core-name <f>]
 
 Produces, in the output directory:
     content.rdcf          full content (every byte of the source document)
@@ -12,6 +13,10 @@ Produces, in the output directory:
     manifest.json         section directory: offsets, counts, byte sizes, totals
     report.md             measured byte budget, before/after comparison, drops
     layout.txt            the derived opcode table (debugging aid)
+
+The two output names are overridable because several content packages coexist
+here (see `build.py` and `packages/`); the defaults reproduce the historic
+single-package behaviour exactly.
 
 Design in one paragraph
 -----------------------
@@ -988,21 +993,32 @@ def write_report(path, src_path, raw_len, doc, results, comp, t_load, peak_bytes
           % (key, n, cb, r.get("terms_exclusive", 0), r.get("strings_exclusive", 0)))
     a("| **shared (reached from >1 group)** | | | **%d** | **%d** |" % (shared_t, shared_s))
     a("")
-    a("Column sum %d B = compact %d B minus the %d B spent on the 22 top-level key"
-      % (total_c, compact, compact - total_c))
+    a("Column sum %d B = compact %d B minus the %d B spent on the %d top-level key"
+      % (total_c, compact, compact - total_c, len(doc)))
     a("names, their quotes and the surrounding braces.")
     a("")
-    enc_c = compact_bytes(doc.get("Encounters"))
-    a("`Encounters` alone is %d B (%.1f%% of the compact document) with a single"
-      % (enc_c, 100.0 * enc_c / compact))
-    a("encounter, `city_normal_ordinance_08`, taking %.0f%% of that section -- yet the"
-      % (100.0 * compact_bytes(max(doc["Encounters"],
-                                  key=lambda e: compact_bytes(e))) / enc_c))
-    a("whole encounter table plus everything it reaches costs about %d B exclusive,"
-      % (rows_attr.get("ENCT", {}).get("terms_exclusive", 0) +
-         rows_attr.get("ENCT", {}).get("strings_exclusive", 0)))
-    a("because its 31 trigger programs are 10 distinct bodies written 31 times and")
-    a("interning collapses them to 10 nodes.")
+    # The paragraph below is a measurement of the *reference* document's shape
+    # (one dominant encounter with many duplicated trigger programs).  It must
+    # not be printed for a package that has no `Encounters` table -- it used to
+    # be an unconditional `doc["Encounters"]`, which made the whole compiler
+    # raise KeyError on any second package.  Skipping it changes nothing about
+    # the image: `write_report` only writes `report.md`.
+    if doc.get("Encounters"):
+        enc_c = compact_bytes(doc["Encounters"])
+        a("`Encounters` alone is %d B (%.1f%% of the compact document) with a single"
+          % (enc_c, 100.0 * enc_c / compact))
+        a("encounter, `city_normal_ordinance_08`, taking %.0f%% of that section -- yet the"
+          % (100.0 * compact_bytes(max(doc["Encounters"],
+                                      key=lambda e: compact_bytes(e))) / enc_c))
+        a("whole encounter table plus everything it reaches costs about %d B exclusive,"
+          % (rows_attr.get("ENCT", {}).get("terms_exclusive", 0) +
+             rows_attr.get("ENCT", {}).get("strings_exclusive", 0)))
+        a("because its 31 trigger programs are 10 distinct bodies written 31 times and")
+        a("interning collapses them to 10 nodes.")
+    else:
+        a("This package declares no `Encounters` table, so the encounter-shape")
+        a("measurement that the reference report carries is skipped here.  Everything")
+        a("measured above and below is package-independent.")
     a("")
 
     a("## 3. What stopped being stored, and why that is safe")
@@ -1239,6 +1255,14 @@ def main():
                     default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))
     ap.add_argument("--no-core", action="store_true",
                     help="skip the presentation-stripped build")
+    # Multi-package support: several content packages coexist in this repo and
+    # each must land in its own file name.  The defaults reproduce the historic
+    # one-package behaviour byte for byte -- `tools/contentc/expected_sha.txt`
+    # makes that a checked claim rather than an assumption.
+    ap.add_argument("--full-name", default="content.rdcf",
+                    help="file name of the full image (default: content.rdcf)")
+    ap.add_argument("--core-name", default="content.core.rdcf",
+                    help="file name of the stripped image (default: content.core.rdcf)")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
@@ -1253,13 +1277,13 @@ def main():
 
     comp = compile_doc(doc)
     full_bytes, sections_full = comp["ser"].write(
-        os.path.join(args.out_dir, "content.rdcf"), chash, schema_version, 0)
+        os.path.join(args.out_dir, args.full_name), chash, schema_version, 0)
     results = {"full": {"bytes": full_bytes, "sections": sections_full}}
 
     if not args.no_core:
         comp_core = compile_doc(strip_presentation(doc))
         core_bytes, sections_core = comp_core["ser"].write(
-            os.path.join(args.out_dir, "content.core.rdcf"), chash, schema_version, 1)
+            os.path.join(args.out_dir, args.core_name), chash, schema_version, 1)
         results["core"] = {"bytes": core_bytes, "sections": sections_core}
     else:
         results["core"] = dict(results["full"])
@@ -1285,8 +1309,8 @@ def main():
             "compact_json_bytes": compact_bytes(doc),
             "compact_json_without_redundant_children": compact_bytes(prune_children(doc)),
         },
-        "totals": {"content.rdcf": results["full"]["bytes"],
-                   "content.core.rdcf": results["core"]["bytes"]},
+        "totals": {args.full_name: results["full"]["bytes"],
+                   args.core_name: results["core"]["bytes"]},
         "header_bytes": F.HEADER_SIZE,
         "directory_bytes": F.NSEC * 12,
         "tables": {
@@ -1304,7 +1328,7 @@ def main():
             "id_index": {"count": len(enc.idx)},
         },
         "variants": {
-            "full": {"file": "content.rdcf", "bytes": results["full"]["bytes"],
+            "full": {"file": args.full_name, "bytes": results["full"]["bytes"],
                      "flags": 0, "sections": sec_block(sections_full)},
         },
         "timing_seconds": {"json_load": round(t_load, 4),
@@ -1313,7 +1337,7 @@ def main():
     }
     if not args.no_core:
         manifest["variants"]["core"] = {
-            "file": "content.core.rdcf", "bytes": results["core"]["bytes"],
+            "file": args.core_name, "bytes": results["core"]["bytes"],
             "flags": 1, "sections": sec_block(sections_core)}
     with open(os.path.join(args.out_dir, "manifest.json"), "w", encoding="utf-8",
               newline="\n") as fh:
@@ -1345,8 +1369,8 @@ def main():
         print("source            : %s" % args.src)
         print("raw bytes         : %d" % len(raw))
         print("compact JSON      : %d" % compact_bytes(doc))
-        print("content.rdcf      : %d B" % results["full"]["bytes"])
-        print("content.core.rdcf : %d B" % results["core"]["bytes"])
+        print("%-17s : %d B" % (args.full_name, results["full"]["bytes"]))
+        print("%-17s : %d B" % (args.core_name, results["core"]["bytes"]))
         print("opcodes           : %d IR kinds + %d object shapes"
               % (len(comp["ir"]), len(comp["obj"])))
         print("distinct terms    : %d ; aux cells %d ; strings %d"

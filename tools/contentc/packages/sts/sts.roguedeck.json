@@ -1,0 +1,41 @@
+{
+  "SchemaVersion": 1,
+  "Statuses": [
+    {
+      "Id": "sts_strength",
+      "PackageId": "sts",
+      "NameKey": "Strength",
+      "DescriptionKey": "Attacks deal 1 additional damage per stack.",
+      "Polarity": "Buff",
+      "StackingBehavior": "MergeWithExistingInstance",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "Tags": ["buff", "strength"],
+      "PassiveModifiers": [],
+      "Triggers": [],
+      "DeathPrevention": null,
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null,
+      "Disclosure": null
+    },
+    {
+      "Id": "sts_vulnerable",
+      "PackageId": "sts",
+      "NameKey": "Vulnerable",
+      "DescriptionKey": "Takes 50% more damage from Attacks while Vulnerable.",
+      "Polarity": "Debuff",
+      "StackingBehavior": "MergeWithExistingInstance",
+      "UsesStacks": true,
+      "UsesDuration": true,
+      "UsesCharges": false,
+      "Tags": ["debuff", "vulnerable"],
+      "PassiveModifiers": [],
+      "Triggers": [],
+      "DeathPrevention": null,
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null,
+      "Disclosure": null
+    }
+  ]
+}

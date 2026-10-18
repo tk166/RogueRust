@@ -79,7 +79,7 @@ function Invoke-Gate {
 
   # 从输出里抓一个数字当"证据"（比如测试条数 / 语料份数），让人一眼看到它真的做了事。
   $evidence = ''
-  foreach ($pat in @('(\d+) case\(s\)', '(\d+)/19', '(\d+) passed')) {
+  foreach ($pat in @('(\d+) case\(s\)', '(\d+)/19', '(\d+) passed', '(\d+/\d+ images)')) {
     $m = [regex]::Match($out, $pat)
     if ($m.Success) { $evidence = $m.Value; break }
   }
@@ -151,6 +151,19 @@ Write-Output "[9/9] RL 环境冒烟（多开 + 确定性）"
 $results += Invoke-Gate -Name 'env-smoke' -Exe $PY -ArgLine '-m roguedeck_env.bench' `
   -Workdir (Join-Path $ROOT 'py') -MustMatch '多开吞吐与可复现性均通过' `
   -ExtraEnv @{ PYTHONPATH = (Join-Path $ROOT 'py') } -TimeoutSec 1800
+
+Write-Output "`n[+1] 内容镜像 byte-identity（用当前编译器重编源文档 == 钉死的 SHA）"
+# 为什么这条闸门必须存在：本文件上面的对拍闸门（CARD_DIFF / FIGHT_DIFF / ENEMY_DIFF /
+# corpus / coverage / golden）全部钉在 `tools/contentc/out/content.core.rdcf` 这一份镜像上。
+# 为了支持 StS 内容去改 compile.py，后果**不是**"某条测试变红"，而是所有对拍静默地改为
+# 比另一份内容、并继续报绿。所以这里钉死两个镜像 + 源文档的 SHA-256：
+#   源文档变了  -> 先说清楚是谁改的（ref/ 是只读镜像，本闸门不写它）
+#   编译器变了  -> 必须在同一个提交里要么修回去，要么显式 `verify_bytes.py --repin` 并说明理由
+#   只有 out/ 旧 -> python tools/contentc/build.py --package roguedeck
+# 失败时 verify_bytes.py 自己打印"期望 vs 实际"与首个差异字节落在哪个 section，并以非零退出。
+$results += Invoke-Gate -Name 'contentc-bytes' -Exe $PY `
+  -ArgLine (Join-Path $ROOT 'tools\contentc\verify_bytes.py') -Workdir $ROOT `
+  -MustMatch 'CONTENTC_BYTES PASS \(2/2 images, 1/1 source\)' -TimeoutSec 600
 
 Write-Output "`n" + ("-" * 78)
 Write-Output ("{0,-18}{1,6}  {2,-22}{3}" -f '闸门', '退出', '证据', '备注')

@@ -1,0 +1,10 @@
+{
+  "package": "sts",
+  "status": "skeleton",
+  "description": "Slay the Spire Act 1 (Ironclad) -- SKELETON ONLY.  Two hand-written statuses, no cards, no enemy actions, no encounters, no relics, no map.  It exists to prove that a second package travels the whole chain (source -> compile -> image -> reader round-trip) under its own file names, without touching the roguedeck baseline.  Nothing in this package is kernel-verified yet, so it has no expected_sha.txt pin.",
+  "src": "tools/contentc/packages/sts/sts.roguedeck.json",
+  "out_dir": "tools/contentc/packages/sts/out",
+  "full_name": "content.sts.rdcf",
+  "core_name": "content.sts.core.rdcf",
+  "pinned_by": null
+}

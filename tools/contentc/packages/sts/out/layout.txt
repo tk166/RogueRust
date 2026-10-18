@@ -1,0 +1,13 @@
+# opcode nfields nslots sizeB class name : fields
+ 16 16 19  40 OBJ _obj(DeathPrevention,DebuffBlock,DescriptionKey,Disclosure,Id,IncomingStatusDelay,NameKey,PackageId,PassiveModifiers,Polarity,StackingBehavior,Tags,Triggers,UsesCharges,UsesDuration,UsesStacks) : DeathPrevention:TERM DebuffBlock:TERM DescriptionKey:STR Disclosure:TERM Id:STR IncomingStatusDelay:TERM NameKey:STR PackageId:STR PassiveModifiers:STRLIST Polarity:STR StackingBehavior:STR Tags:STRLIST Triggers:STRLIST UsesCharges:BOOL UsesDuration:BOOL UsesStacks:BOOL
+ 17  2  3   8 OBJ _obj(SchemaVersion,Statuses)                                 : SchemaVersion:INT Statuses:TERMLIST
+
+# reserved opcodes:
+  0 reserved : (no fields)
+  1 reserved : STR
+  2 reserved : INT
+  3 reserved : BOOL
+  4 reserved : TERMLIST
+  5 reserved : JSON
+  6 reserved : STR
+  7 reserved : STR

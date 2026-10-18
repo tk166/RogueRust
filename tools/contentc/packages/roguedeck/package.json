@@ -1,0 +1,10 @@
+{
+  "package": "roguedeck",
+  "status": "baseline",
+  "description": "The RogueDeck sample content (bureaucrats.roguedeck.json).  This is the package every cross-language oracle gate is pinned to: CARD_DIFF, FIGHT_DIFF, ENEMY_DIFF, corpus 85, coverage 19/19, golden 129 all read tools/contentc/out/content.core.rdcf.  Its bytes are frozen by tools/contentc/expected_sha.txt.",
+  "src": "ref/RogueDeck-Core/src/RogueDeck.Sandbox.Run/SampleContent/bureaucrats.roguedeck.json",
+  "out_dir": "tools/contentc/out",
+  "full_name": "content.rdcf",
+  "core_name": "content.core.rdcf",
+  "pinned_by": "tools/contentc/expected_sha.txt"
+}
