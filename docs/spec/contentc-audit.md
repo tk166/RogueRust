@@ -530,3 +530,5 @@ manifest 的 `tables` 块 / `reader._rows` / `reader.document` / `reader.stats` 
 **未改**：`content.rdcf` / `content.core.rdcf`（闸门证明逐字节未变）、`kernel/`、`native/`、`ref/`。
 `out/manifest.json` / `out/report.md` / `out/layout.txt` 在验证 `build.py --all`（其中 roguedeck 一支）
 时被重写过一次，随后**从备份还原**（它们不在 pin 范围内；重写版本与仓库版本只差计时数字）。
+
+`InertKeys` / `Notes` 这类**构建元数据**是**文档键**（`compile.py` 的 `DOC_ROOT_KEYS`）：它们随源文档走（闸门从源文档读声明），但**两个镜像都不写** —— 所以 `Rom.document()` 复现的是「源文档减去文档键」，任何逐键回读的对照集都要照此扣除，而「它真的没进镜像」本身要作为一条断言，不能只写在提交信息里。

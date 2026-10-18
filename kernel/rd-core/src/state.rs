@@ -47,12 +47,20 @@
 //! | part | bytes |
 //! |---|---|
 //! | card pool (`MAX_CARD_INSTANCES` x `size_of::<CardInstance>()` = 224 x 440) | 98,560 |
-//! | combatants (12 x 3,872) | 46,464 |
-//! | piles (12 x 1,392) | 16,704 |
+//! | combatants (`MAX_COMBATANTS` x `size_of::<Combatant>()` = 12 x 4,832) | 57,984 |
+//! | piles (`MAX_COMBATANTS` x `size_of::<CardZones>()` = 12 x 1,392) | 16,704 |
+//! | **those three parts** | **173,248** |
+//! | residual: scalar fields, ids, `StatusInstance` arrays, resources, temporary rules | 11,400 |
 //! | **`size_of::<CombatState>()`** | **184,648 (180 KiB)** |
 //!
-//! ⚠️ 这张表是**实测量出来的**，不是估的；每次改 `CombatState` 的字段都要重新量并把这里改掉，
-//! 否则它就会变成一句谎（`state_fits_the_sram_plan` 只盯着上界，盯不住"表格里的数字过期"）。
+//! ⚠️ 这张表是**实测量出来的**，不是估的；每次改 `CombatState` 的字段都要重新核，核的是**每一行**
+//! 而不只是总量 —— 这张表就烂过一次：总量那行是对的，而 `combatants` 那行写着
+//! `12 x 3,872 = 46,464`（旧的 `size_of::<Combatant>()`），真值 `12 x 4,832 = 57,984`，
+//! 差 11,520 B 谁也看不出来，因为没有任何一行去和别的行对账。所以现在表里多了
+//! "三个分量之和" 与 "残差" 两行：前四行加不出总量就是当场可见的算术错误
+//! （`state_fits_the_sram_plan` 只盯着上界，盯不住"表格里的数字过期"）。
+//! 残差那一行是**总量减三个分量**推出来的，它不会单独过期，但它的含义（哪些字段住在残差里）
+//! 会随字段增删改变，所以它也要跟着看。
 //! 最近一次变化：`StatusInstance` 加了 `source_combatant_id: Option<CombatantId>`
 //! （DoT 要能归属出手方，见 `port-plan` §41.4），**171,848 → 184,648 B（+12.8 KB）**。
 //! 原因是 `Option<CombatantId>` = **42 B**（`Ident<40>` 是 41 B 且没有 niche，`Option` 多一个 tag），
@@ -2829,9 +2837,21 @@ mod tests {
             core::mem::size_of::<CardZones>(),
             MAX_COMBATANTS * core::mem::size_of::<CardZones>()
         );
+        // 上限本身是一份**带数字的决定**，不是一句"留点余量"：
+        //   192 KiB 是阶段一（无事件队列）的上界；事件队列的三档实测
+        //   （`docs/spec/event-queue-interface.md` §10）给出推荐中档 +28.52 KiB，
+        //   即 184,648 + 29,200 = **213,848 B**；224 KiB = 229,376 B，正好比它高 7.3%。
+        //   **忠实档 231,256 B（+45.52 KiB）故意留在上界之外**：它越界不是 bug，是
+        //   "要不要为了忠实档再谈一次内存预算/多开档位"的信号 —— 所以这个 assert 会红，
+        //   而红的时候该做的是回去读 §10，不是把这个常数往上调一个数。
+        // ⚠️ 今天 `CombatState` **还没有**队列字段，所以改这个上界**不改变任何实测尺寸**；
+        //   它只是把一件已经量过价的事提前合法化。两处必须一起改：
+        //   这里和 `kernel/rd-sizeprobe/src/lib.rs` 的
+        //   `the_state_model_fits_the_sram_budget_and_we_know_its_exact_size`。
         assert!(
-            size <= 192 * 1024,
-            "CombatState grew to {size} bytes, past the 192 KB ceiling this model was sized for"
+            size <= 224 * 1024,
+            "CombatState grew to {size} bytes, past the 224 KB ceiling this model was sized for \
+             (229,376 B = the 213,848 B mid-tier event-queue measurement + 7.3% headroom)"
         );
         // The reference's own packed estimate for the same fight is ~9 KB (spec §5.2); the
         // difference is the un-interned ASCII ids the task's D9 note schedules for later.

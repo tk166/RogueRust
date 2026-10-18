@@ -9,17 +9,17 @@
   "images": {
     "full": {
       "file": "content.sts.rdcf",
-      "bytes": 20944,
-      "sha256": "a67f6264dd55b4420577d6832cfd11703c50df742d71bd130d249ee713cf1b73"
+      "bytes": 11140,
+      "sha256": "555fd6219a2e06c6b1db3b369c7050275f58eff62f114da7c55e75b561405ab7"
     },
     "core": {
       "file": "content.sts.core.rdcf",
-      "bytes": 19380,
-      "sha256": "66a009a31914c66d141c8b8c61d1d127656989d5bf90aa0478d6a9a33b1952da"
+      "bytes": 9580,
+      "sha256": "acb14ac323d3b61bb36e98815a42284efbfa69497a451c36fb4fc1867e4aa2bd"
     }
   },
   "compiler": {
     "path": "tools/contentc/compile.py",
-    "sha256": "7ac8f43314c340f6f8faff9186dc06028483a9350eebd221a9eeab2360f6893a"
+    "sha256": "32072a0068d103b249b4b8ca40e59c329e876e386fa8b3032854b6644a00c4db"
   }
 }

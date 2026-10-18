@@ -13,7 +13,9 @@ WHY THREE LAYERS (each one alone is a false green)
           images with `reader.py` and compared per key against the source
           document -- **key presence included**, and a key the source does not
           have is a mismatch too (so "the image grew a fact nobody re-checked"
-          is red, not silent).
+          is red, not silent).  The one exception is the compiler's own
+          `DOC_ROOT_KEYS` (build metadata: `InertKeys`, `Notes`): those are
+          stored in neither image, and the gate *asserts* that absence.
           The core image's expectation is derived with `compile.py`'s own
           `strip_presentation`, not with a second copy of that rule: a copy is
           the classic "second source of truth rots" bug (`contentc-audit.md` §7).
@@ -53,7 +55,7 @@ sys.path.insert(0, CONTENTC)
 
 import rdcfmt as F            # noqa: E402  (the frozen on-disk vocabulary)
 import reader as rdcf_reader  # noqa: E402  (the reference reader)
-import compile as contentc_compile  # noqa: E402  (only for strip_presentation)
+import compile as contentc_compile  # noqa: E402  (strip_presentation + DOC_ROOT_KEYS)
 
 PKG_DIR = os.path.join(CONTENTC, "packages", "sts")
 SRC_PATH = os.path.join(PKG_DIR, "sts.roguedeck.json")
@@ -637,9 +639,10 @@ def check_weak_pool_table(doc):
 # loudly in the direction that matters and say which line/rule decided.
 
 KERNEL_DIR = os.path.join(ROOT, "kernel")
-# The declaration is this gate's input, not content: it is a root key so that it
-# travels with the document it describes (`check_roundtrip` still proves it
-# survives into both images), but it is not part of the inert-key universe.
+# The declaration is this gate's input, not content: it is a top-level key so that
+# it travels with the document it describes, but the compiler lists it in
+# `DOC_ROOT_KEYS` and therefore stores it in **neither image** (`check_roundtrip`
+# asserts that absence).  It is not part of the inert-key universe either.
 MANIFEST_ROOT_KEY = "InertKeys"
 INERT_SCOPES = ("root", "Statuses[]", "Program")
 _COMMENT_PREFIXES = ("//", "/*", "*")
@@ -832,15 +835,27 @@ def check_roundtrip(doc, rom, label, expected):
             if problems:
                 fail("%s/%s[%d]" % (label, table, index), problems[0])
         ok(label + " " + table, "%d rows, key presence included" % len(want))
-    want_roots = sorted(k for k in expected if k not in ROW_TABLES)
-    got_roots = sorted(k for k in image if k not in ROW_TABLES)
+    # Document keys (`DOC_ROOT_KEYS`, imported from the compiler -- not a second
+    # copy) are build metadata: they exist in the source and in *neither* image.
+    # So they leave the compared key set, and the fact that they really are absent
+    # becomes an assertion of its own -- otherwise "stripped" would be a claim in a
+    # commit message instead of something this gate can fail on.
+    doc_keys = contentc_compile.DOC_ROOT_KEYS
+    leaked = [k for k in doc_keys if k in image]
+    if leaked:
+        fail("%s/document-keys" % label,
+             "%s is declared a document key but reaches the image -- a documentation "
+             "block is being paid for as content" % ", ".join(repr(k) for k in leaked))
+    want_roots = sorted(k for k in expected if k not in ROW_TABLES and k not in doc_keys)
+    got_roots = sorted(k for k in image if k not in ROW_TABLES and k not in doc_keys)
     if want_roots != got_roots:
         fail("%s/root" % label, "keys %s != %s" % (got_roots, want_roots))
     for key in want_roots:
         problems = diff(expected[key], image.get(key), key)
         if problems:
             fail("%s/root.%s" % (label, key), problems[0])
-    ok(label + " roots", "%d keys, per key" % len(want_roots))
+    ok(label + " roots", "%d keys, per key, %d document keys not stored"
+       % (len(want_roots), len(doc_keys)))
 
 
 def check_idx(rom, label):

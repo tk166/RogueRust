@@ -55,6 +55,23 @@ ENTITY_SECTIONS = [("CARD", "Cards"), ("STATUS", "Statuses"), ("EACT", "EnemyAct
 SEC_OF = {"CARD": F.S_CARD, "STATUS": F.S_STAT, "EACT": F.S_EACT,
           "ENCT": F.S_ENCT, "REL": F.S_REL}
 
+# Document keys: top-level keys that are **build metadata, not game data**.
+#
+# They ride along in the source document (that is deliberate: `native/sts_content_check.py`
+# reads the inert-key declaration from the very file it describes, so the declaration cannot
+# drift away from the content) but they are NOT serialised into either image.  An image's
+# size is a budget line, and on the `sts` package these two keys were **nearly half** of the
+# image: the term DAG and the string pool were paying for a documentation block the kernel
+# can never read.  The per-key cost is *measured* and printed in `report.md` §2 (row tagged
+# "document key") -- do not copy a number here, it moves with the content.
+#
+# Consequence for every round-trip reader: `Rom.document()` reproduces the document *minus*
+# these keys.  That is why this tuple is the single source of truth -- `native/sts_content_check.py`
+# imports it instead of keeping a second copy (`contentc-audit.md` §7 discipline: one constant,
+# one place).  Adding a key here is a *content* decision, so it changes image bytes; `roguedeck`
+# has neither key, which is why its two pinned images must stay byte-identical.
+DOC_ROOT_KEYS = ("InertKeys", "Notes")
+
 # Sentinel values for the two "not a real value" states.  Keeping them distinct
 # is what lets `reader.py` reproduce the source's key *presence* exactly.
 _ABSENT = {F.F_INT: F.ABSENT_INT, F.F_BOOL: F.BOOL_ABSENT}
@@ -760,7 +777,7 @@ def compile_doc(doc):
         schema = F.ROW_SCHEMAS[sname]
         enc.rows[sname] = [enc.row(schema, rec) for rec in doc.get(sec) or []]
     for key in sorted(doc):
-        if key in dict(ENTITY_SECTIONS).values():
+        if key in dict(ENTITY_SECTIONS).values() or key in DOC_ROOT_KEYS:
             continue
         enc.root_entries.append((key, enc.generic(doc[key])))
 
@@ -989,13 +1006,26 @@ def write_report(path, src_path, raw_len, doc, results, comp, t_load, peak_bytes
         total_c += cb
         r = rows_attr.get("root:" + key, {})
         n = len(doc[key]) if isinstance(doc[key], (list, dict)) else 1
-        a("| `%s` | %s | %d | %d | %d |"
-          % (key, n, cb, r.get("terms_exclusive", 0), r.get("strings_exclusive", 0)))
+        # A document key stays in this table on purpose: it *is* a top-level key of the source,
+        # and the honest number for it is "costs N B of compact JSON, 0 B of image" because the
+        # root-entry loop skips it (`DOC_ROOT_KEYS`).  Dropping the row would hide the reason the
+        # column sum is smaller than the compact document.
+        tag = " *(document key -- not stored)*" if key in DOC_ROOT_KEYS else ""
+        a("| `%s`%s | %s | %d | %d | %d |"
+          % (key, tag, n, cb, r.get("terms_exclusive", 0), r.get("strings_exclusive", 0)))
     a("| **shared (reached from >1 group)** | | | **%d** | **%d** |" % (shared_t, shared_s))
     a("")
     a("Column sum %d B = compact %d B minus the %d B spent on the %d top-level key"
       % (total_c, compact, compact - total_c, len(doc)))
     a("names, their quotes and the surrounding braces.")
+    skipped = [k for k in DOC_ROOT_KEYS if k in doc]
+    if skipped:
+        a("")
+        a("`%s` above are **document keys**: build metadata that is serialised into neither"
+          % "` / `".join(skipped))
+        a("image (`DOC_ROOT_KEYS` in `compile.py`), so their `exclusive` columns are 0 B.  Their")
+        a("summary line in the source costs %d B of compact JSON and **0 B** of output."
+          % sum(compact_bytes(doc[k]) for k in skipped))
     a("")
     # The paragraph below is a measurement of the *reference* document's shape
     # (one dominant encounter with many duplicated trigger programs).  It must
@@ -1025,6 +1055,10 @@ def write_report(path, src_path, raw_len, doc, results, comp, t_load, peak_bytes
     a("")
     a("Nothing is *dropped* from `content.rdcf` -- `validate.py` proves the round trip")
     a("is structurally exact.  What disappears is **redundancy**:")
+    a("")
+    a("The one deliberate exception is the **document keys** (`DOC_ROOT_KEYS`): they are build")
+    a("metadata, not game data, so they are written into neither image and are therefore *not*")
+    a("part of the round trip (`Rom.document()` reproduces the source minus those keys).")
     a("")
     a("| redundancy | compact JSON bytes it occupies | how the binary avoids it |")
     a("|---|---|---|")

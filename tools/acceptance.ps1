@@ -193,7 +193,7 @@ Write-Output "`n[+3] StS 内容包自洽（不变量表 + 两份镜像逐键回�
 # 退出码 2 = 前提缺失或镜像比源文档旧（陈旧镜像是最贵的一种绿色）。
 $results += Invoke-Gate -Name 'sts-content' -Exe $PY `
   -ArgLine (Join-Path $ROOT 'native\sts_content_check.py') -Workdir $ROOT `
-  -MustMatch 'weak pool[\s\S]*full roots[\s\S]*core SEC_IDX[\s\S]*STS_CONTENT PASS \(monsters \d+, encounters \d+, deck \d+, statuses \d+, cards \d+, enemy_actions \d+' `
+  -MustMatch 'weak pool[\s\S]*inert keys[\s\S]*full roots[\s\S]*core SEC_IDX[\s\S]*STS_CONTENT PASS \(monsters \d+, encounters \d+, deck \d+, statuses \d+, cards \d+, enemy_actions \d+' `
   -TimeoutSec 300
 
 Write-Output "`n" + ("-" * 78)
