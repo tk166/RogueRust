@@ -402,9 +402,20 @@ pub struct PendingEvent {
 /// 续延 = "某个节目帧的某一支走完了"。**只允许是数据。**
 pub enum Continuation {
     /// 节点 `EnterContinuation` 的等价物：某帧的某条待续支线可以往前走了。
-    ProgramResume { frame: ProgramExecutionSlot, node: u16, ready: u8 },
-    /// 节目进入终态（Completed/Faulted/Cancelled）：跑 `onTerminal`。
-    ProgramTerminal { frame: ProgramExecutionSlot },
+    ///
+    /// ⚠️ **2026-10-19 批次 2 改过形状**：原冻结的是
+    /// `ProgramResume { frame, node, ready: u8 }` 与一个 `ProgramTerminal { frame }`。落地时两处都得改，
+    /// 而且都不是审美问题：
+    /// * `ready` 没用了：那是"待续支线的就绪计数"，而真正的计数住在**节点槽**上
+    ///   （`ProgramNodeSlot::remaining`，对应 `SequenceNodeExecutor` 捕获的 `var remaining`），
+    ///   续延只需要说"这个槽完成了"。留一个字段却没人读，迟早有人读错。
+    /// * `ProgramTerminal` **删掉了**：参考的终态回调是**同步**跑的（`MarkCompleted` →
+    ///   `RunTerminalCleanup`，`C:EffectProgramIdentity.cs:121-129, 104-111`）。塞进续延队列会把它
+    ///   挪到顶层（`C:CombatEventHandling.cs:107-111` 时 `CurrentEffectChain` 为 null）⇒ 它里面每次
+    ///   `EnqueueEffect`/`EnqueueEvent` 都 `?? CreateRootEffectChain()` ⇒ **每次出牌多一个 `chain_num`**。
+    ///   那不是"晚一点跑"，是**换了一条链**。⇒ 终态回调由 `exec.rs` 同步调用，它要的那点数据
+    ///   （谁的牌、落哪个区）作为**数据**存在帧上（`ProgramTerminalHook`）。
+    ProgramResume { frame: ProgramExecutionSlot, node: u16 },
     /// `Cards/CardPlay.cs:217 / :292` 的动作收尾。
     CloseAction { actor: CombatantId },
 }
@@ -491,6 +502,23 @@ pub enum CombatEvent {             // 参考的 41 个 ICombatEvent record
 ⇒ 因此"182/62/394/85 会不会绿"取决于**这些局面里有没有触发器**，而不是取决于"加不加队列"。
 `FIGHT_DIFF` 今天 182/182 绿 ⇒ 那 4 个场景里没有任何"今天不跑"的触发器（否则它今天就红了）
 ⇒ **它不该因为这一轮改动而漂；红了就说明改动伤到了别的东西**（V7 就是这条）。
+
+#### 4.2.1 风险段：上面那两笔"不会漂"是**推断**，各有边界（2026-10-19 批次 2 补）
+
+上面写的"基线会漂的地方只有两处"里，两条判断都不是从代码里读出来的**定理**，而是
+"按参考的代码形状推的、恰好被批次 1 的实测覆盖了一次"的**推断**。批次 1 实测确实一条基线都没动
+（§11.3），但**实测只覆盖了当时跑到的那 póker 局面**。两条推断各自的失效边界写在这里，
+因为下一批（效果队列有生产者之后）就会走到离边界更近的地方：
+
+| 推断 | 依据 | **失效边界**（具体到"哪一天会怎样"） |
+|---|---|---|
+| 触发器节目发的 `exec_num` **恰好 +1** | `C:EffectProgramExecution.cs:27`：`Execute` 每进一次就 `AllocateProgramExecutionId`，**包括触发器节目** | 它只保证"跑一个节目 = +1"。基线不漂还需要**第二个条件**：这一批新跑起来的节目，参考本来就在跑同一批。⇒ 一旦"触发器跑的次数"与参考不同（少跑/多跑一次），`exec_num` 就是差 1 而**不是**差 0，且这个差**不是**队列本身造成的 |
+| 四个回合事件的**根链笔数一进一出正好抵消** | `C:CombatState.cs:446`：`var chain = CurrentEffectChain ?? CreateRootEffectChain()` —— **只在没有环境链时才发号** | **只要哪天出现"触发器在没有环境链的地方跑"，`chain_num` 就会多一笔**：那一刻节目里任何 `EnqueueEffect`/`EnqueueEvent` 都走 `?? CreateRootEffectChain()` 那一支（`:386`/`:446`），而参考的同一次入队是在**某条链里**发生的（⇒ +0）。反方向也成立：一旦某个回合边界事件改成"在某条效果链的作用域内部入队"，它就从 +1 变成 **+0**（少一笔）。这条边界的具体形状是：**"入队时有没有环境链"是语义，`chain_num` 是它唯一的观察者** |
+
+⚠️ 还有一条：批次 1 的"一进一出抵消"只覆盖了**四条边界事件**（turn/round × started/ended）与
+`DamageDealt`（它在链里入队，与参考一致）。它**没有**覆盖"节目终态落在哪条链里"——
+那需要 `exec` 真的回报终态（批次 2），也正因为如此，`shredder_drawer` 那 2 格（§11.3 末）
+才在批次 1 之后仍然红：它们差的**不是**续延 FIFO，是"终态落在哪条链里"这个**回报**。
 
 ### 4.3 成本估算（`CombatState` 184,648 B / 30.5% SRAM → ?）
 
@@ -656,6 +684,16 @@ pub fn triggers_for(state: &CombatState, event: TriggerEventKey) -> impl Iterato
 
 ⚠️ **"能变可对照"≠"能变绿"**：绿还要求层数变化的**时点**与参考一致（§2.3 的 D1/D2）。
 本轮**没有**实测这一点（需要真跑），列为 §6.2 的 V1 向量。
+
+> **【2026-10-19 批次 1 实测纠正，方向错了】** 上面这段的**方向**是错的：实测那 10 格
+> **直接变绿**，不是"变成可对照然后再等时点对上"（§11.3："那 10 格是**变成一致**而不是
+> 变成可对照"，连 `chain_num`/`exec_num` 都逐字节相同）。真正脆的是**另一头**：
+> 绿了之后它**不会**再退化成 `NOT-COMPARABLE` —— `kernel_gap_for` 的判据是"卡把带未建模
+> 触发器的状态打到敌人身上**且**脚本里有敌人出手"，而触发器一旦有钩子，那条判据就不再成立
+> ⇒ 下次 raise 点挪一格（链作用域内外、落血前后、入队早一步晚一步），这 10 格会直接从
+> **绿**跳到**真 MISMATCH**，中间没有"可对照"这一站。
+> ⇒ 正确的担心是"**绿得很脆**"，而不是"可能只是可对照"。§6.2 的 V1 因此要读成
+> "把 raise 点挪进/挪出链作用域，那 10 格必须变红"。
 
 ### 5.4 推荐：**不做档 1（也不做档 1b），直接档 2**
 
@@ -1057,4 +1095,109 @@ size_of::<CombatState>() = 207712 bytes (202 KiB)      ← 34.3% of 606,208 B SR
 | 相位上限静默 `break` | `the_limits_are_loud_and_parameterised_so_they_can_be_reached` |
 | 两相位掉序（先事件后效果） | `the_effect_phase_runs_before_the_event_phase` |
 
+---
 
+## 12. 批次 2 落地实况（2026-10-19，**只追加**）
+
+> 这一节记录"做完了什么、量到了什么、哪里与上面的推理冲突"。**§0–§11 不改**（§4.1.3 的续延形状与
+> §5.3 的方向性错误已在原地改过 —— 那两处冻结的是**接口/结论**，不是历史记录）。
+
+### 12.1 落地形状：exec 真的拆成了"请求 + 解析"
+
+| 项 | 实况 | 依据 |
+|---|---|---|
+| 效果队列的**生产者** | **11 种产出型节点**全部改成"算好参数 → EnqueueEffect → 完成塞进续延"，**一个都不就地写状态** | C:EffectProgramNodeExecutors.cs 那 11 个 EnqueueEffect 调用点（:615/:658/:698/:738/:775/:835/:932/:990/:1015/:1404/:1480/:1936 一族） |
+| 效果队列的**解析器** | exec::resolve_effect：拆请求、重建 ExecContext、调既有的实体函数（esolve_damage_of_kind / gain_block_for / pply_one_status / draw_for / …）。**修饰器与极性在解析时读**（C:DamageEffects.cs:273-320） | 相位 1（C:CombatEffectQueueHandler.cs 一族） |
+| 节点级续延调度 | **真的调度**：帧 arena（8）+ 节点槽 arena（64）+ 循环快照 arena（4）。一条续延 = (帧槽, 节点槽)，节点槽带**父**与**计数**（= 参考闭包捕获的两样东西） | C:EffectProgramExecution.cs:91-160、:202-211、:496-504 |
+| "节目终态落在哪条链里" | **有了回报**：ProgramExecutionFrame::terminal_chain 记下终态那一刻的 current_chain；收尾那一笔发不发号**由它决定**（enqueue_effect / close_action 的 ??） | C:CombatState.cs:386/446 |
+| 出牌终态回调 | 从 play.rs 的手工账搬成**数据 + 同步调用**：ProgramTerminalHook::CardPlay{player, card, destination} + play::run_terminal_hook | C:Cards/CardPlay.cs:242-281 |
+| play.rs 的链号账 | **一笔都不手写**了：请求链（开场建一条并 with_chain）+ 落区/收尾（终态回调里的 ??）。批 1 那三行显式 create_root_effect_chain() 全删 | 同上 |
+| 续延形状 | ProgramResume{frame,node}（去掉 eady）、**删掉 ProgramTerminal** | 见 §4.1.3 的原位更正 |
+
+### 12.2 实测内存（**不是估算**）
+
+```
+size_of::<CombatState>() = 213224 B (208 KiB), 35.2% of 606208 B SRAM   ← 批次 1 是 207712
+  帧 arena    : 8   × 216 B = 1728 B
+  节点槽 arena: 64  ×  12 B =  768 B
+  循环快照    : 4   × 546 B = 2184 B      ← 目标 12×41+1 与卡 96×2+1 取大者 + 保存位
+  残差（对齐等）
+```
+
+⇒ **207,712 → 213,224 B（+5,512 B，+2.7%）**，SRAM 34.26% → **35.24%**。上界 **245,760 B 仍然成立**
+（余量 32,536 B）。⚠️ §11.2 那条提醒还在：CombatEvent 全集（492 B）比今天的 96 B 贵 ~24 KB，
+两者相加 ≈ 237 KB，**仍在 245,760 以内，但余量只剩 ~8 KB** —— 下一次抬界之前必须先回答
+"放大后行为会不会变"，而不是先看余量。
+
+### 12.3 对拍数字（四条基线，**全部按现实报**）
+
+| 层 | 批次 1 | 批次 2 | 变了吗 |
+|---|---|---|---|
+| FIGHT_DIFF | 182/182 | **182/182** | 没变 |
+| CARD_DIFF | 62/62 | **62/62** | 没变 |
+| CARD_MULTI | 122/124（2 MISMATCH） | **124/124（0 不可对照 + 0 MISMATCH）** | **那 2 格绿了** |
+| ENEMY_DIFF | 394/394 | **394/394** | 没变 |
+| 单测 | 547 | **549** | +2（新增两条机制钉子） |
+| 聚合验收 | 12/12 | **12/12** | 没变（golden/corpus 一格都没漂） |
+
+**那 2 格的机制（读完源码 + 现场可复现）**：shredder_drawer 的节目是
+sequence[forEachCardInZone(Hand, junk), dealDamage(9)]，牌组两张都是 junk。
+* 派发：orEach 先把第 1 趟的 Body 派发下去（:472），dealDamage 也派发（:615）⇒
+  续延队列 = [body₀完成, dealDamage 完成]；
+* 第 1 趟 Body 的续延把第 2 趟排到**队尾**（:502-503）⇒ 队列 = [dealDamage 完成, body₁完成]；
+* ⇒ **最后一个完成的是 forEach 循环本身**，而它在
+  using (c.EnterEffectChain(ctx.EffectChain!)) 里完成（:489-493 的 onComplete）
+  ⇒ 节目终态落在**节目链里** ⇒ onTerminal 里的 EnqueueEffect/EnqueueEvent **都不发号**
+  ⇒ 出牌合计 **+1**（只有请求那一笔）。
+* 对照 rchive_the_evidence（	akeFirst=1，只走 1 张）：最后完成的是兄弟 gainBlock
+  （它的续延在**顶层**跑）⇒ 终态在链外 ⇒ 收尾 **+1** ⇒ 出牌合计 **+2**。
+
+⇒ 这一格的绿**不是把 4 改成 3 试出来的**：play.rs 里那三笔手工账被整段删掉了，
+"发不发号"现在由 current_chain 在终态那一刻的取值决定，而那个取值由**谁最后完成**决定。
+
+### 12.4 这一轮**新的能力边界**（如实）
+
+1. **集合为空时参考是同步完成、内核排一条续延**（orEachTarget / orEachCardInZone 的空快照，
+   :489-493 在 Execute 的栈上跑）。差别只在"终态落在哪条链里"那一刻可见，本内容里没有这种局面。
+   **内容一来空集合它就会出现**（exec.rs::dispatch_for_each_* 各有一行注释指着这条）。
+2. **严格面（play_card）比参考少两个链号**：参考的 PlayCardCore 在顶层跑，CardCostPaid
+   （:138）与 CardPlayed（:144）各发一个号；本内核**没有这两个事件变体**。请求面
+   （	ry_play_card，全局对拍走的那条）不受影响。
+3. **exec::execute 是遗留入口**：它**不发号**（intent.rs 与旧调用方已经手工记过），只
+   dopt_root_chain() 把那条链建出来。⚠️ 它**也不排空事件**（本层没有触发器分派器）——
+   把事件出队丢掉会让 doubt 的 DamageDealt 触发器永远不跑（实测：CARD_MULTI 立刻退回 114/124）。
+4. **play.rs 的无节目分支**仍然手工入队（搬区 + CloseAction 续延），因为那台机器不经过节目帧。
+
+### 12.5 容量常量逐条（C1 那个问句的答案）
+
+| 常量 | 值 | 放大后行为会变吗 | 结论 |
+|---|---|---|---|
+| MAX_PROGRAM_FRAMES | 8 | **不会** —— 只把"同时有几个节目在飞"推远，超了 Full(ProgramFrames) 响亮失败 | 容量，不是语义 |
+| MAX_PROGRAM_NODE_SLOTS | 64 | **不会** —— 同上（节点槽 = 参考的闭包捕获） | 容量，不是语义 |
+| MAX_PROGRAM_LOOPS | 4 | **不会** —— 同上（循环快照 = 参考闭包捕获的 CardInstanceId[]） | 容量，不是语义 |
+| MAX_EVENT_ID_LIST | 24 | **会**（参考在这里无界） | **语义**，§10.5 的硬规则适用；本批没有动它 |
+| 三个队列 64 / MAX_LIVE_CHAINS 128 | — | **不会** | 本批没有动它们；链引用计数这一轮**才真正平衡**（见 12.6） |
+
+### 12.6 这一轮抓到的三处真 bug（都不是测试问题）
+
+1. **效果队列条目没有持链引用**（enqueue_effect_with_owner 漏了 cquire）⇒ 帧的引用一放，
+   条目手里的链就没了 ⇒ 下一次 cquire 报 Full(Chains)。**它伪装成"容量不够"**，
+   而调大 MAX_LIVE_CHAINS 会把这条静默吞掉。
+2. **ChainArena 的帧引用从未归还**（eap_frames 漏了 elease）⇒ 每跑一个节目漏一条链。
+3. **循环的"下一趟下标"读错了槽**（读了刚完成的那个子槽，它的 emaining 恒 0）⇒ 循环一直重跑
+   第 0 趟，第 2 趟搬同一张卡 ⇒ move_card_for 报 Modifier。**它伪装成"内容坏了"**。
+
+### 12.7 变异测试（6 条，全部**真的红**）
+
+| # | 变异 | 判红的测试 |
+|---|---|---|
+| M1 | 两相位掉序（事件相位排到效果相位之前） | host::the_effect_phase_runs_before_the_event_phase |
+| M2 | close_action 无条件发号（= 批次 1 的做法） | play::the_program_terminal_lands_in_the_chain_exactly_when_the_loop_finishes_last |
+| M3 | 循环走完**不重入**节目链 | 同上 |
+| M4 | Sequence 的"还剩几个"记成 0 | 同上 |
+| M5 | 帧回收时不还链引用 | exec::a_program_hands_back_the_chain_references_it_took |
+| M6 | 触发器入队的效果**当场**解析（"塌成同步"的字面版） | host::the_effect_phase_runs_before_the_event_phase |
+
+⇒ §11.4 那条"两相位塌成同步在批次 1 没有可观察后果"**在批次 2 之后有后果了**：
+M1 与 M6 都被同一条测试判红，而那条测试的判据是"两条 DamageDealt 事件分发时 doubt 还在不在"
+（exec_num 差 1）。

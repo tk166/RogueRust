@@ -52,7 +52,8 @@
 //! | **those three parts** | **173,248** |
 //! | event queues (批次 1)：effects 64x176 + effect chains 64x2 + effect owners 64x4 + events 64x96 + event chains 64x2 + continuations 64x44 + chain arena 128x16 | 23,040 |
 //! | residual: scalar fields, ids, `StatusInstance` arrays, resources, temporary rules, the six queues' `head`/`len`, `current_chain` | 11,424 |
-//! | **`size_of::<CombatState>()`** | **207,712 (202 KiB)** |
+//! | program frame arenas (批次 2): frames 8x216 + node slots 64x12 + loop snapshots 4x546 | 5,512 |
+//! | **`size_of::<CombatState>()`** | **213,224 (208 KiB)** |
 //!
 //! ⚠️ 这张表是**实测量出来的**，不是估的；每次改 `CombatState` 的字段都要重新核，核的是**每一行**
 //! 而不只是总量 —— 这张表就烂过一次：总量那行是对的，而 `combatants` 那行写着
@@ -72,6 +73,12 @@
 //!    SRAM 占比 30.5% → **34.3%**。分量逐列打在上面那张表的队列行里，算术：
 //!    64×(176+2+4) + 64×(96+2) + 64×44 + 128×16 = 23,040，余下 24 B 是六个队列的
 //!    `head`/`len`、`current_chain` 与结构体对齐（所以残差从 11,400 涨到 11,424）。
+//! 3. **事件队列批次 2**（节目帧 + 节点槽 + 循环快照）：**207,712 → 213,224 B（+5,512 B，+2.7%）**，
+//!    SRAM 34.3% → **35.2%**。分量逐项打在上面那行：8×216（帧：执行号 / 链 / 三个 id 槽 /
+//!    两个迭代绑定 / 计步 / 终态 / 终态回调）+ 64×12（节点槽：父 / 计数 / 快照号）+
+//!    4×546（循环快照：目标 12×41+1 与卡 96×2+1 取大者 + 两格保存位）。上界 245,760 仍然成立
+//!    （余量 32,536 B）。⚠️ 这三样**不进哈希**（参考把它们等同构在 GC 堆上）⇒ 基线不动。
+//!
 //!    ⚠️ 207,712 **小于** `event-queue-interface.md` §10.2 探针的**忠实档 231,256 B**：
 //!    探针按"事件枚举 = 参考全集 41 个变体"量形状，而批次 1 只声明了接了线的那 5 个变体
 //!    （`CombatEvent` 因此是 96 B 而不是 492 B）。差的是**还没有生产者的变体**，不是能力。
@@ -233,6 +240,17 @@ pub enum Container {
     Chains,
     /// 集合型事件携带的 id 列表（`MAX_EVENT_ID_LIST`）。**装满就是错误**（永不截断）。
     EventIdList,
+    // ---- 节目帧调度（批次 2）----
+    //
+    // 参考把这三样都存在 GC 堆上（帧对象、闭包里的计数数组、闭包捕获的迭代快照），
+    // 我们是定容数组。**三个都是"到顶就响亮失败"，不是预算杠杆** —— 放大它们
+    // 不会改变任何一个已能跑通的局面的行为，只会把"这个局面跑不了"推远。
+    /// 同时在飞的节目帧（`EffectProgramExecutionFrame`）。
+    ProgramFrames,
+    /// 同时在飞的"等完成"节点槽（参考是闭包捕获的 `remaining` 数组）。
+    ProgramNodeSlots,
+    /// 同时在飞的循环迭代快照（参考是闭包捕获的 `CardInstanceId[]` / `CombatantId[]`）。
+    ProgramLoops,
 }
 
 impl core::fmt::Display for CapacityError {
@@ -1412,6 +1430,15 @@ impl CardSlot {
     }
 }
 
+impl Empty for CardSlot {
+    /// 空槽 = 槽位 0（与 `Bounded` 的不变式"`len` 之后全是 `EMPTY`"配合）。
+    ///
+    /// ⚠️ 它**不是**"没有卡"的意思：`CardSlot` 是池下标，没有"空"的概念。
+    /// 本实现只为了让 `Bounded<CardSlot, N>` 能 `new()`（[`ProgramLoopList`] 的卡快照）。
+    /// 任何"用 `len` 判断有没有卡"的读者都必须看 `len`，不是看槽里的值。
+    const EMPTY: Self = Self(0);
+}
+
 /// Where a moved card lands in its destination pile (`ZonePlacement`, `Cards/CardZones.cs:27-31`).
 ///
 /// The distinction is load-bearing, not cosmetic: `Top` on the draw pile is what a tutor does, and
@@ -1811,23 +1838,29 @@ impl Default for ChainArena {
 /// "效果永远不会生效"配一个好听的类型名。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EffectRequest {
-    /// `DealDamageEffectRequest`。
+    /// `DealDamageEffectRequest`（`DamageEffects.cs:15-53`）。
+    ///
+    /// ⚠️ **必须带 `source`**：参考的请求里带着 `SourceCombatantId`，因为**修饰器在解析时
+    /// 才读**（来源侧的 `DamageDealt` 阶段）——`DamageEffects.cs:273-320` 用的是解析那一刻的
+    /// 状态，而不是派发那一刻。少了它，"先加力量再打"与"先打再加力量"就分不开了。
     DealDamage {
-        /// 目标选择器已解出的那个单位（`None` = 解出空集 ⇒ 参考跳过，不是错误）。
+        /// 目标（派发时已解出的那个单位；`None` = 解出空集 ⇒ 参考跳过，不是错误）。
         target: Option<CombatantId>,
-        /// 金额。
+        /// 金额（**派发时**求值的表达式结果）。
         amount: i32,
         /// `IgnoresBlock`。
         ignores_block: bool,
+        /// 出手方（修饰器来源阶段读它；也是 `DamageDealt` 事件的 `SourceCombatantId`）。
+        source: Option<CombatantId>,
     },
-    /// `GainBlockEffectRequest`。
+    /// `GainBlockEffectRequest`（`DefensivePoolEffects.cs:3-167`）。
     GainBlock {
         /// 目标。
         target: Option<CombatantId>,
         /// 金额。
         amount: i32,
     },
-    /// 状态施加（对应参考的状态施加请求，六段载荷）。
+    /// `ApplyStatusEffectRequest`（`StatusEffects.cs:12-326`）。
     ApplyStatus {
         /// 目标。
         target: Option<CombatantId>,
@@ -1837,12 +1870,14 @@ pub enum EffectRequest {
         stacks: i32,
         /// 持续回合（`0` = 不带时长）。
         duration: i32,
+        /// 充能。
+        charges: i32,
         /// 来源单位（`SourceCombatantId`）。
         source: Option<CombatantId>,
         /// 来源卡（`SourceCardId`）。
         source_card: Option<CardDefinitionId>,
     },
-    /// `ModifyStatusStacksEffectRequest`（`doubt` 的触发器就是这一种）。
+    /// `ModifyStatusStacksEffectRequest`（`StatusEffects.cs:806-874`；`doubt` 的触发器就是这一种）。
     ModifyStatusStacks {
         /// 目标。
         target: Option<CombatantId>,
@@ -1850,6 +1885,79 @@ pub enum EffectRequest {
         definition: StatusDefinitionId,
         /// 增量（可负）。
         delta: i32,
+    },
+    /// `HealEffectRequest`（`DamageEffects.cs:323-377`）。
+    Heal {
+        /// 目标。
+        target: Option<CombatantId>,
+        /// 金额。
+        amount: i32,
+    },
+    /// `SetCombatantCounterEffectRequest`（`CombatantCounterEffects.cs:6-…`）。
+    SetCombatantCounter {
+        /// 目标。
+        target: Option<CombatantId>,
+        /// 计数器。
+        key: CounterId,
+        /// 金额。
+        amount: i32,
+        /// `Relative`（缺席 ⇒ `true`，`EffectProgramNativeNodes.cs:670`）。
+        relative: bool,
+    },
+    /// `DrawCardsEffectRequest`（`CardZoneEffects.cs:3-107`）。
+    DrawCards {
+        /// 谁的抽牌堆。
+        owner: CombatantId,
+        /// 抽几张。
+        count: i32,
+    },
+    /// `GainResourceEffectRequest`。
+    GainResource {
+        /// 目标。
+        target: Option<CombatantId>,
+        /// 资源。
+        key: ResourceId,
+        /// 金额。
+        amount: i32,
+        /// `DefaultMax`（**派发时**求值的表达式；`None` = 镜像里那一格是 `null`）。
+        ///
+        /// 它必须跟着请求走：解析时"池不存在 ⇒ 建池，`current = min(amount, DefaultMax)`"
+        /// （`ResourceEffects.cs:157-168`）要用它，而那一刻已经离开了节点。
+        default_max: Option<i32>,
+    },
+    /// `LoseResourceEffectRequest`。
+    LoseResource {
+        /// 目标。
+        target: Option<CombatantId>,
+        /// 资源。
+        key: ResourceId,
+        /// 金额。
+        amount: i32,
+    },
+    /// `CreateCardInstanceEffectRequest`（`CardCreationEffects.cs:3-…`）。
+    CreateCardInstance {
+        /// 归属战斗员。
+        owner: CombatantId,
+        /// 卡定义。
+        definition: CardDefinitionId,
+        /// 张数。
+        count: i32,
+        /// 落到哪个区。
+        to_zone: CardZone,
+    },
+    /// `MoveCardToZoneEffectRequest`（`CardZoneEffects.cs:155-216`）。
+    ///
+    /// 来源有三个：出牌终态的落区（`Cards/CardPlay.cs:251-252`）、
+    /// `moveCardToZone` 节点、以及 `cardInstance.iterated` 的循环体。
+    MoveCardToZone {
+        /// 归属战斗员。
+        owner: CombatantId,
+        /// 哪一张实例。
+        card: CardInstanceId,
+        /// 落哪个区。
+        to_zone: CardZone,
+        /// 插入位置。
+        placement: ZonePlacement,
     },
 }
 
@@ -1935,19 +2043,16 @@ impl Empty for CombatEvent {
 /// 这条不是风格问题：写成闭包后裸机目标直接编不过（`acceptance.ps1` 的第 3/5/6 道闸门会红）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Continuation {
-    /// "某帧的某条待续支线可以往前走了"（`EffectProgramExecution.EnterContinuation` 的等价物）。
+    /// "某个节点槽的完成续延可以跑了"（`EffectProgramExecution.EnterContinuation` 的等价物）。
+    ///
+    /// ⚠️ **批次 2 的形状**：`node` 是**节点槽**下标（[`ProgramNodeSlot`]），不是 IR 节点下标 ——
+    /// 一个 IR 节点可以被派发多次（`forEachTarget` / `forEachCardInZone` 的每一趟都派发一次
+    /// `Body`），所以"哪一个**派发**完成了"只能由槽说，不能由节点说。
     ProgramResume {
-        /// 节目帧。
+        /// 节目帧槽。
         frame: ProgramExecutionSlot,
-        /// 节点下标。
+        /// 节点槽下标。
         node: u16,
-        /// 待续支线的就绪计数。
-        ready: u8,
-    },
-    /// 节目进入终态（Completed/Faulted/Cancelled）⇒ 跑它的 `onTerminal`。
-    ProgramTerminal {
-        /// 节目帧。
-        frame: ProgramExecutionSlot,
     },
     /// 出牌动作的收尾（`Cards/CardPlay.cs:217` / `:292` 的 `EnqueueContinuation(CloseAction)`）。
     ///
@@ -1960,10 +2065,517 @@ pub enum Continuation {
     },
 }
 
+/// ⚠️ **批次 2 删掉了 `ProgramTerminal` 这个变体。** 理由不是省内存，是它**做不到对的事**：
+///
+/// 参考的终态回调（`onTerminal`）是**同步**跑的 —— `MarkCompleted` → `RunTerminalCleanup`
+/// （`Effects/Programs/EffectProgramIdentity.cs:121-129, 104-111`），也就是在"最后一个节点完成"
+/// 那个续延体的**同一栈帧**里。把它塞进续延队列会把它挪到**顶层**（`CombatEventHandling.cs:107-111`
+/// 时 `CurrentEffectChain` 为 null），于是它里面每一次 `EnqueueEffect`/`EnqueueEvent` 都会
+/// `?? CreateRootEffectChain()` ⇒ **每次出牌多一个 `chain_num`**。
+/// 那不是"晚一点跑"，是**换了一条链**。⇒ 终态回调由 `exec.rs` 同步调用（见 `exec::finish_frame`），
+/// 它需要的那点数据（谁的牌、落哪个区）作为**数据**存在帧上（[`ProgramTerminalHook`]），
+// 不是闭包 —— §4.1.3 那条"续延只能是数据"仍然成立。
 impl Empty for Continuation {
     const EMPTY: Self = Self::CloseAction {
         actor: CombatantId::EMPTY,
     };
+}
+
+// =============================================================================================
+// 节目帧调度（批次 2）：帧 / 节点槽 / 循环快照
+// =============================================================================================
+//
+// # 参考里的三样东西，以及这里为什么是定容数组
+//
+// 参考把**完成**推迟成 `Action<CombatState>` 闭包塞进 `_pendingContinuations`
+// （`CombatState.cs:461-470`）：
+//
+// * 一个闭包捕获"我完成后要减谁的计数" —— 本模块用 [`ProgramNodeSlot::parent`]（显式父链）；
+// * `SequenceNodeExecutor` 捕获 `var remaining = new[] { children.Length }`（`EffectProgramNodeExecutors.cs:202`）
+//   —— 本模块用 [`ProgramNodeSlot::remaining`]；
+// * `ForEach*NodeExecutor` 捕获 `CardInstanceId[]` / `CombatantId[]` 快照
+//   （`:465`、`:386-388`）—— 本模块用 [`ProgramLoop`] 的定容列表。
+//
+// ⇒ 闭包**一个都不存**（`no_std` + 零分配 + `forbid(unsafe_code)` 下也存不了），
+// 存的是"闭包捕获了什么"这件事本身。语义上的等价物是：
+// **一个完成续延 = `(frame, 节点槽)`；节点槽带着父与计数。**
+
+/// 同时在飞的节目帧数上限（`EffectProgramExecutionFrame`）。
+///
+/// **不是预算杠杆**：放大它不改变任何一个已能跑通的局面的行为，只把"这个局面跑不了"推远。
+/// 需要 >1 的理由是**嵌套**：外层节目的效果还在队列里等解析时，那条效果的解析可以派发
+/// 一个触发器节目（`host.rs::run_damage_dealt_triggers`），两个帧同时活着。
+pub const MAX_PROGRAM_FRAMES: usize = 8;
+/// 同时在飞的"等完成"节点槽上限。一次节目派发**先把整棵树派发完**再开始完成
+/// （`EffectProgramNodeExecutors.cs:202-211`），所以峰值 ≈ 节目树节点数。
+/// 64 是当前镜像最大树（`_recon_card.py census`）的若干倍，**到顶响亮失败**。
+pub const MAX_PROGRAM_NODE_SLOTS: usize = 64;
+/// 同时在飞的循环迭代快照上限。每层 `forEach*` 占一个；嵌套循环 + 嵌套帧同时循环才 >1。
+pub const MAX_PROGRAM_LOOPS: usize = 4;
+
+/// "没有父节点槽"（= 这个节点直接挂在帧根上）。
+pub const NO_NODE_SLOT: u16 = u16::MAX;
+/// "没有循环快照"。
+pub const NO_LOOP: u8 = u8::MAX;
+
+/// 帧的生命周期状态（`EffectProgramExecutionState`，`EffectProgramIdentity.cs:5-14`）。
+///
+/// 只保留四个：`Created`/`Running` 在参考里区分的唯一后果是 `MarkRunning` 那条断言，
+/// 而 `WaitingFor*` 三个变体在 v1 的战斗路径上**没有生产者**（原生操作/反应边界还没移植）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProgramFrameState {
+    /// 在跑（还有节点槽没完成）。
+    Running,
+    /// 正常走完（`MarkCompleted`）。
+    Completed,
+    /// 战斗中途结束被取消（`CancelDueToCombatEnd`）。
+    Cancelled,
+    /// 节点/解析抛错（`MarkFaulted`）。
+    Faulted,
+}
+
+/// 帧的**终态回调**：参考的 `onTerminal`（`EffectProgramIdentity.cs:96-111`）。
+///
+/// 参考是闭包；这里是**数据**。今天唯一的生产者是出牌（`Cards/CardPlay.cs:242-263`）：
+/// 节目终态时把打出的那张牌落区、然后 `CloseAction`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProgramTerminalHook {
+    /// 没有终态回调（触发器节目、敌人动作节目都是这一类）。
+    None,
+    /// 出牌节目的落区回调（`Cards/CardPlay.cs:245-263`）。
+    CardPlay {
+        /// 谁打的。
+        player: CombatantId,
+        /// 哪一张实例。
+        card: CardInstanceId,
+        /// 落哪个区（`PlayedCardDestination`，`:298-302`）。
+        destination: CardZone,
+    },
+}
+
+impl Empty for ProgramTerminalHook {
+    const EMPTY: Self = Self::None;
+}
+
+/// 一个在飞的节目帧。
+///
+/// 字段与参考的对应关系（全部逐行读过）：
+/// * `execution_number` ← `EffectProgramExecutor.Execute` 里那次
+///   `AllocateProgramExecutionId()`（`EffectProgramExecution.cs:27`）；
+/// * `chain` ← `executionContext.EffectChain ??= combat.CurrentEffectChain ?? CreateRootEffectChain()`
+///   （`:31`）—— **程序自己的链**；`forEach*` 的下一趟在它里面接着跑（`:502`、`:244`）；
+/// * `steps` / `max_steps` ← `executionContext.ProgramStepCount` / `MaxProgramSteps`（`:109-114`）；
+/// * `source` / `target` / `iteration_target` / `iteration_card` ← 执行上下文里那几个槽
+///   （`ExecContext` 的同名字段；参考靠闭包捕获，我们靠帧）；
+/// * `state` / `terminal_chain` ← `State` 与"终态那一刻的 `CurrentEffectChain`"。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProgramExecutionFrame {
+    /// 已分配的执行号（`exec_num` 那一列）。**分配发生在帧建立时**，与参考同序。
+    pub execution_number: i64,
+    /// 节目根节点（IR 下标）。
+    pub root: u16,
+    /// 节目自己的效果链（arena 槽）。
+    pub chain: ChainSlot,
+    /// 出手方（`sel.source`）。
+    pub source: Option<CombatantId>,
+    /// 事件目标（`sel.eventTarget`）。
+    pub target: Option<CombatantId>,
+    /// 当前迭代目标（`sel.iterationTarget`）。
+    pub iteration_target: Option<CombatantId>,
+    /// **进来时**的迭代目标（`Execute` 那一刻的 `ctx.iteration_target`）。
+    ///
+    /// 用途只有一个：帧进入终态时把"当前"那两个字段还原成它 —— 参考里"作用域在 continuation
+    /// 里关闭"是**无条件**的（`EffectProgramNodeExecutors.cs:484-485`），异常路径上外层上下文
+    /// 原样保留。没有这两个字段，`forEachCardInZone` 的 Body 一报错就会把迭代卡**留在帧上**
+    /// （`e2e_19h` 的 (b) 半钉的正是这一条）。
+    pub entry_iteration_target: Option<CombatantId>,
+    /// **进来时**的迭代卡（同上）。
+    pub entry_iteration_card: Option<CardInstanceId>,
+    /// 当前迭代卡（`cardInstance.iterated`）。
+    ///
+    /// 与 `ExecContext::iteration_card` **同型**（`CardInstanceId`）：循环快照存的是**槽位**
+    /// （省内存），每一趟开始时再换成 id —— 换的那一刻卡必须还在池里（换不到 ⇒ `IrError::Slot`）。
+    pub iteration_card: Option<CardInstanceId>,
+    /// 已走的步数（`ProgramStepCount`）。
+    pub steps: u32,
+    /// 步数上限（信封上的 `MaxProgramSteps`）。
+    pub max_steps: u32,
+    /// 生命周期状态。
+    pub state: ProgramFrameState,
+    /// **终态那一刻**的环境链 —— 它是 `chain_num` 的唯一判据，见 `exec::finish_frame`。
+    pub terminal_chain: ChainSlot,
+    /// 终态回调。
+    pub hook: ProgramTerminalHook,
+    /// 槽是否在用。
+    pub live: bool,
+}
+
+impl Empty for ProgramExecutionFrame {
+    const EMPTY: Self = Self {
+        execution_number: 0,
+        root: 0,
+        chain: ChainSlot::NONE,
+        source: None,
+        target: None,
+        iteration_target: None,
+        iteration_card: None,
+        entry_iteration_target: None,
+        entry_iteration_card: None,
+        steps: 0,
+        max_steps: 0,
+        state: ProgramFrameState::Running,
+        terminal_chain: ChainSlot::NONE,
+        hook: ProgramTerminalHook::None,
+        live: false,
+    };
+}
+
+/// 帧 arena：定容数组 + `live` 标记（下标必须稳定 —— 续延里存的是下标）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProgramFrameArena {
+    frames: [ProgramExecutionFrame; MAX_PROGRAM_FRAMES],
+    len: u8,
+}
+
+impl ProgramFrameArena {
+    /// 空 arena。
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            frames: [ProgramExecutionFrame::EMPTY; MAX_PROGRAM_FRAMES],
+            len: 0,
+        }
+    }
+
+    /// 在用的帧数。
+    #[must_use]
+    pub fn live(&self) -> usize {
+        self.len as usize
+    }
+
+    /// 分配一帧。装不下 ⇒ `Full(Container::ProgramFrames)`（**不覆盖别人的帧**）。
+    pub fn alloc(&mut self, frame: ProgramExecutionFrame) -> StateResult<ProgramExecutionSlot> {
+        for (index, slot) in self.frames.iter_mut().enumerate() {
+            if slot.live {
+                continue;
+            }
+            *slot = ProgramExecutionFrame { live: true, ..frame };
+            self.len += 1;
+            return Ok(ProgramExecutionSlot::from_index(index));
+        }
+        Err(CapacityError::Full(Container::ProgramFrames))
+    }
+
+    /// 读一帧。
+    #[must_use]
+    pub fn get(&self, slot: ProgramExecutionSlot) -> Option<&ProgramExecutionFrame> {
+        self.frames.get(slot.index()).filter(|frame| frame.live)
+    }
+
+    /// 写一帧。
+    pub fn get_mut(&mut self, slot: ProgramExecutionSlot) -> Option<&mut ProgramExecutionFrame> {
+        self.frames.get_mut(slot.index()).filter(|frame| frame.live)
+    }
+
+    /// 回收一帧（下标可以被后来者复用）。
+    pub fn free(&mut self, slot: ProgramExecutionSlot) {
+        if let Some(frame) = self.frames.get_mut(slot.index()) {
+            if frame.live {
+                *frame = ProgramExecutionFrame::EMPTY;
+                self.len -= 1;
+            }
+        }
+    }
+
+    /// 清空。
+    pub fn clear(&mut self) {
+        self.frames = [ProgramExecutionFrame::EMPTY; MAX_PROGRAM_FRAMES];
+        self.len = 0;
+    }
+
+    /// 逐个在用帧（下标升序）。
+    pub fn iter_live(&self) -> impl Iterator<Item = (usize, &ProgramExecutionFrame)> {
+        self.frames
+            .iter()
+            .enumerate()
+            .filter(|(_, frame)| frame.live)
+    }
+}
+
+impl Default for ProgramFrameArena {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 一个"派发出去、还没完成"的节点。
+///
+/// 参考里它是闭包捕获的两样东西的合体：**父是谁**（谁数剩余）与**我自己数到几了**。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProgramNodeKind {
+    /// 空槽。
+    Free,
+    /// 叶子节点：它自己的完成 `EnqueueContinuation` 一发，就只剩"通知父"。
+    Leaf,
+    /// `Sequence`：`remaining` 是**还没完成的子节点数**（`:202-211`）。
+    Sequence,
+    /// 直通节点（`Conditional` 的分支、循环体）：完成即通知父。
+    Pass,
+    /// `forEach*` 循环：`remaining` 是**下一个要跑的下标**。
+    Loop,
+}
+
+/// 一个节点槽。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProgramNodeSlot {
+    /// 属于哪个帧（arena 下标）。
+    pub frame: u8,
+    /// 槽的种类。
+    pub kind: ProgramNodeKind,
+    /// 派发的那个 IR 节点（循环要重派 `Body` 时用它）。
+    pub node: u16,
+    /// 父槽；[`NO_NODE_SLOT`] = 直接挂在帧根上（它的完成 = 节目的完成）。
+    pub parent: u16,
+    /// `Sequence`：未完成子节点数；`Loop`：下一个下标。
+    pub remaining: u16,
+    /// `Loop`：迭代快照下标；[`NO_LOOP`] = 没有。
+    pub loop_at: u8,
+    /// 槽是否在用。
+    pub live: bool,
+}
+
+impl Empty for ProgramNodeSlot {
+    const EMPTY: Self = Self {
+        frame: 0,
+        kind: ProgramNodeKind::Free,
+        node: 0,
+        parent: NO_NODE_SLOT,
+        remaining: 0,
+        loop_at: NO_LOOP,
+        live: false,
+    };
+}
+
+/// 节点槽 arena。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProgramNodeArena {
+    slots: [ProgramNodeSlot; MAX_PROGRAM_NODE_SLOTS],
+    len: u8,
+}
+
+impl ProgramNodeArena {
+    /// 空 arena。
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            slots: [ProgramNodeSlot::EMPTY; MAX_PROGRAM_NODE_SLOTS],
+            len: 0,
+        }
+    }
+
+    /// 在用的槽数。
+    #[must_use]
+    pub fn live(&self) -> usize {
+        self.len as usize
+    }
+
+    /// 分配一个槽。
+    pub fn alloc(&mut self, slot: ProgramNodeSlot) -> StateResult<u16> {
+        for (index, cell) in self.slots.iter_mut().enumerate() {
+            if cell.live {
+                continue;
+            }
+            *cell = ProgramNodeSlot { live: true, ..slot };
+            self.len += 1;
+            return u16::try_from(index)
+                .map_err(|_| CapacityError::Full(Container::ProgramNodeSlots));
+        }
+        Err(CapacityError::Full(Container::ProgramNodeSlots))
+    }
+
+    /// 读一个槽。
+    #[must_use]
+    pub fn get(&self, index: u16) -> Option<&ProgramNodeSlot> {
+        self.slots.get(usize::from(index)).filter(|slot| slot.live)
+    }
+
+    /// 写一个槽。
+    pub fn get_mut(&mut self, index: u16) -> Option<&mut ProgramNodeSlot> {
+        self.slots
+            .get_mut(usize::from(index))
+            .filter(|slot| slot.live)
+    }
+
+    /// 回收一个槽。
+    pub fn free(&mut self, index: u16) {
+        if let Some(slot) = self.slots.get_mut(usize::from(index)) {
+            if slot.live {
+                *slot = ProgramNodeSlot::EMPTY;
+                self.len -= 1;
+            }
+        }
+    }
+
+    /// 回收某个帧的全部槽（帧结束时兜底；正常路径上它们已经各自完成）。
+    pub fn free_frame(&mut self, frame: u8) {
+        for index in 0..self.slots.len() {
+            let dead = self
+                .slots
+                .get(index)
+                .is_some_and(|slot| slot.live && slot.frame == frame);
+            if dead {
+                self.free(u16::try_from(index).unwrap_or(0));
+            }
+        }
+    }
+
+    /// 清空。
+    pub fn clear(&mut self) {
+        self.slots = [ProgramNodeSlot::EMPTY; MAX_PROGRAM_NODE_SLOTS];
+        self.len = 0;
+    }
+}
+
+impl Default for ProgramNodeArena {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 循环迭代的**快照**（参考在派发那一刻就 `ToArray()`，之后不再重解，`:465`、`:386-388`）。
+///
+/// 为什么必须快照、不能每轮重解：`forEachCardInZone` 的 Body 常常**把卡搬走**
+/// （`shredder_drawer` 把整只手进消耗堆），重解会让"第二趟"看到一张不同的牌区。
+/// 参考的注释把这件事写明在 `:447-448`。
+///
+/// ⚠️ `clippy::large_enum_variant`：两个变体的尺寸差就是**这一层的全部内容**
+/// （目标快照 12 × 41 B、卡快照 96 × 2 B）。压平它需要 `unsafe` 的 union
+/// （`#![forbid(unsafe_code)]` 禁止）或装箱（零分配禁止）⇒ 这里显式 allow，
+/// 并把"差多少"写出来而不是藏起来。
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProgramLoopList {
+    /// 空槽。
+    None,
+    /// 目标快照（`forEachTarget`，`CombatantId[]`）。
+    Targets(Bounded<CombatantId, MAX_COMBATANTS>),
+    /// 卡快照（`forEachCardInZone`，`CardInstanceId[]` 的槽位表示，见 `exec.rs` 的说明）。
+    Cards(Bounded<CardSlot, MAX_CARDS_PER_ZONE>),
+}
+
+impl ProgramLoopList {
+    /// 快照长度。
+    #[must_use]
+    pub fn len(&self) -> usize {
+        match self {
+            Self::None => 0,
+            Self::Targets(list) => list.len(),
+            Self::Cards(list) => list.len(),
+        }
+    }
+
+    /// 是否为空。
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+}
+
+/// 一层循环的迭代状态。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProgramLoop {
+    /// 快照。
+    pub list: ProgramLoopList,
+    /// 进循环前的迭代目标（`PushIterationTarget` 的旧值，`:419`）。
+    pub saved_target: Option<CombatantId>,
+    /// 进循环前的迭代卡（`PushIterationCard` 的旧值，`:495`）。
+    pub saved_card: Option<CardInstanceId>,
+    /// 迭代体（`Body` 的 IR 下标）。
+    pub body: u16,
+    /// 槽是否在用。
+    pub live: bool,
+}
+
+impl Empty for ProgramLoop {
+    const EMPTY: Self = Self {
+        list: ProgramLoopList::None,
+        saved_target: None,
+        saved_card: None,
+        body: 0,
+        live: false,
+    };
+}
+
+/// 循环快照 arena。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProgramLoopArena {
+    loops: [ProgramLoop; MAX_PROGRAM_LOOPS],
+    len: u8,
+}
+
+impl ProgramLoopArena {
+    /// 空 arena。
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            loops: [ProgramLoop::EMPTY; MAX_PROGRAM_LOOPS],
+            len: 0,
+        }
+    }
+
+    /// 在用的层数。
+    #[must_use]
+    pub fn live(&self) -> usize {
+        self.len as usize
+    }
+
+    /// 分配一层。
+    pub fn alloc(&mut self, entry: ProgramLoop) -> StateResult<u8> {
+        for (index, cell) in self.loops.iter_mut().enumerate() {
+            if cell.live {
+                continue;
+            }
+            *cell = ProgramLoop { live: true, ..entry };
+            self.len += 1;
+            return u8::try_from(index).map_err(|_| CapacityError::Full(Container::ProgramLoops));
+        }
+        Err(CapacityError::Full(Container::ProgramLoops))
+    }
+
+    /// 读一层。
+    #[must_use]
+    pub fn get(&self, index: u8) -> Option<&ProgramLoop> {
+        self.loops.get(usize::from(index)).filter(|entry| entry.live)
+    }
+
+    /// 写一层。
+    pub fn get_mut(&mut self, index: u8) -> Option<&mut ProgramLoop> {
+        self.loops
+            .get_mut(usize::from(index))
+            .filter(|entry| entry.live)
+    }
+
+    /// 回收一层。
+    pub fn free(&mut self, index: u8) {
+        if let Some(entry) = self.loops.get_mut(usize::from(index)) {
+            if entry.live {
+                *entry = ProgramLoop::EMPTY;
+                self.len -= 1;
+            }
+        }
+    }
+
+    /// 清空。
+    pub fn clear(&mut self) {
+        self.loops = [ProgramLoop::EMPTY; MAX_PROGRAM_LOOPS];
+        self.len = 0;
+    }
+}
+
+impl Default for ProgramLoopArena {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// **集合型事件**携带的 id 列表。容量 [`MAX_EVENT_ID_LIST`]，**超出响亮失败**。
@@ -2198,12 +2810,63 @@ pub struct CombatState {
     /// 它决定两件事：①入队时要不要**新建根链**（`CurrentEffectChain ?? CreateRootEffectChain()`，
     /// `:386`/`:446`）；②触发链的**父**是谁（`:492-498`）。
     ///
-    /// ⚠️ **批次 1 的现状要如实说**：程序是**就地**执行的（`exec.rs` 还没有"请求 + 解析"的拆分），
-    /// 所以出牌/敌人动作期间**没有**链作用域 ⇒ 那段时间里 `DamageDealt` 事件带的是
-    /// [`ChainSlot::NONE`]。这与参考**同数**（参考在那段时间里 `CurrentEffectChain` 非 null，
-    /// 于是也不发号），但不是**同因** —— 等批次 2 把效果队列接上，这个字段才会被
-    /// 队列条目真正填满。写在这里是因为"不发号"这个结论依赖它。
+    /// ⚠️ **批次 2 起这个字段真的被填满了**：出牌/敌动作的节目在
+    /// `with_chain(节目链, ..)` 里派发（`exec::begin`），效果的解析在
+    /// `with_chain(条目链, ..)` 里跑（`host.rs::resolve_pending_effects`），触发器分发同理。
+    /// 于是"入队要不要发号"这个判断（`CombatState.cs:386`/`:446` 的 `??`）在**每一步**都有
+    /// 真实输入 —— 不再是批次 1 那种"恒为 None、恰好同数"。
     current_chain: ChainSlot,
+    // ---- 节目帧调度（批次 2），见上面那一节的模块注释 ----
+    //
+    // 三样都**不进哈希、不进快照**（`CombatStateHasher.cs:26-72` 里没有它们）：参考把它们
+    // 等同构在 GC 堆上的帧对象/闭包里。⇒ 加它们不移动基线，除非它们的**后果**
+    // （`exec_num` / `chain_num`）变了。
+    program_frames: ProgramFrameArena,
+    program_nodes: ProgramNodeArena,
+    program_loops: ProgramLoopArena,
+}
+
+impl CombatState {
+    // ---- 节目帧调度（批次 2）------------------------------------------------------------------
+
+    /// 帧 arena（读）。
+    #[must_use]
+    pub fn program_frames(&self) -> &ProgramFrameArena {
+        &self.program_frames
+    }
+
+    /// 帧 arena（写）。
+    pub fn program_frames_mut(&mut self) -> &mut ProgramFrameArena {
+        &mut self.program_frames
+    }
+
+    /// 节点槽 arena（读）。
+    #[must_use]
+    pub fn program_nodes(&self) -> &ProgramNodeArena {
+        &self.program_nodes
+    }
+
+    /// 节点槽 arena（写）。
+    pub fn program_nodes_mut(&mut self) -> &mut ProgramNodeArena {
+        &mut self.program_nodes
+    }
+
+    /// 循环快照 arena（读）。
+    #[must_use]
+    pub fn program_loops(&self) -> &ProgramLoopArena {
+        &self.program_loops
+    }
+
+    /// 循环快照 arena（写）。
+    pub fn program_loops_mut(&mut self) -> &mut ProgramLoopArena {
+        &mut self.program_loops
+    }
+
+    /// 还有没有在飞的节目帧（诊断 + 排空循环用）。
+    #[must_use]
+    pub fn live_program_frames(&self) -> usize {
+        self.program_frames.live()
+    }
 }
 
 impl core::fmt::Debug for CombatState {
@@ -2263,6 +2926,9 @@ impl Empty for CombatState {
         pending_continuations: Fifo::new(),
         chains: ChainArena::new(),
         current_chain: ChainSlot::NONE,
+        program_frames: ProgramFrameArena::new(),
+        program_nodes: ProgramNodeArena::new(),
+        program_loops: ProgramLoopArena::new(),
     };
 }
 
@@ -2323,6 +2989,12 @@ impl CombatState {
         self.pending_continuations.clear();
         self.chains.clear();
         self.current_chain = ChainSlot::NONE;
+        // 节目帧调度（批次 2）：参考在静止点存档时"没有在飞的节目帧"
+        // （"no in-flight effect queue / program frames"，`CombatState.cs:718`）⇒ 一起清。
+        // 漏清一个会让上一局的帧被本局的续延 `ProgramResume` 撞上。
+        self.program_frames.clear();
+        self.program_nodes.clear();
+        self.program_loops.clear();
     }
 
     /// 一份全空的状态 —— [`Empty::EMPTY`] 的**逐字段**版本。
@@ -2357,6 +3029,9 @@ impl CombatState {
             pending_continuations: Fifo::new(),
             chains: ChainArena::new(),
             current_chain: ChainSlot::NONE,
+            program_frames: ProgramFrameArena::new(),
+            program_nodes: ProgramNodeArena::new(),
+            program_loops: ProgramLoopArena::new(),
         }
     }
 
@@ -2439,7 +3114,12 @@ impl CombatState {
     // 而它们今天各自已经发过一个号（`host.rs` 的四个钩子里那四行 `create_root_effect_chain`）——
     // 所以**链号一个都不多、一个都不少**，基线不动。
 
-    /// 入队一条效果：链 = 当前作用域链（没有就是 [`ChainSlot::NONE`]）。
+    /// 入队一条效果：链 = `CurrentEffectChain ?? CreateRootEffectChain()`（`CombatState.cs:382-392`）。
+    ///
+    /// ⚠️ **批次 2 起这条规则是照参考写的，不是"没有链就记 NONE"**。批次 1 那样写是因为
+    /// 队列当时没有生产者；现在有生产者了，`??` 那一支**真的会发生**（出牌终态的搬区
+    /// `Cards/CardPlay.cs:251-252` 就在顶层、没有环境链），而它**恰好是 `chain_num` 的一笔**。
+    /// 写成"没有链就 NONE"会让那一笔静默消失 —— 那正是本节要杀的那类静默。
     ///
     /// `owner` 是"谁在跑、解析失败时把帧绑回去"的那个槽位（§1.2 末）。
     pub fn enqueue_effect(&mut self, request: EffectRequest) -> StateResult<()> {
@@ -2457,14 +3137,26 @@ impl CombatState {
         if self.pending_effects.len() == MAX_PENDING_EFFECTS {
             return Err(CapacityError::Full(Container::PendingEffects));
         }
+        // `var chain = CurrentEffectChain ?? CreateRootEffectChain();`（`:386`）——
+        // **发号发生在检查三列之前**（参考也是先 `??` 再 `Enqueue`）。一个"队列满了"的入队
+        // 因此在参考里也已经消耗过一个链号；这里的顺序与它一致。
+        let chain = match self.current_chain {
+            ChainSlot::NONE => self.new_root_chain_in_arena()?,
+            chain => chain,
+        };
+        // ⚠️ **队列条目持一次链引用**。参考靠 GC（条目里的链对象有人指着就活着）；
+        // 我们靠 `ChainRecord::refs`。漏了这一句的后果不是"多一条链"，而是**链被提前回收**：
+        // 帧的引用一放（`reap_frames`）条目手里的链就没了，下一次 `acquire` 报
+        // `Full(Chains)` —— 实测在 `e2e_16` 上撞到过，而且它伪装成"容量不够"。
+        self.chains.acquire(chain)?;
         self.pending_effects.push(request, Container::PendingEffects)?;
-        let chain = self.current_chain;
         if let Err(e) = self
             .pending_effect_chains
             .push(chain, Container::PendingEffectChains)
         {
             // 回滚：主列已经进了一条，不撤销就会让三列错位（而错位是**静默**的语义漂移）。
             let _ = self.pending_effects.pop_front();
+            self.chains.release(chain);
             return Err(e);
         }
         if let Err(e) = self
@@ -2473,6 +3165,7 @@ impl CombatState {
         {
             let _ = self.pending_effect_chains.pop_front();
             let _ = self.pending_effects.pop_front();
+            self.chains.release(chain);
             return Err(e);
         }
         Ok(())
@@ -2674,6 +3367,15 @@ impl CombatState {
         self.current_chain
     }
 
+    /// 直接把作用域链设成 `chain`（`with_chain` 的**非闭包**形式）。
+    ///
+    /// 为什么需要两个：`with_chain` 要一个**立刻调用**的闭包，而节目派发那一半的函数全都
+    /// 收 `&mut ExecContext`（它自己握着 `&mut CombatState`）—— 闭包拿不到它。
+    /// 于是 `exec::begin` 采用"存旧值 → 设新值 → 派发 → 还原"，与 `with_chain` 逐字同效。
+    pub fn set_current_chain(&mut self, chain: ChainSlot) {
+        self.current_chain = chain;
+    }
+
     /// 在 `chain` 的作用域里跑 `f`，退出时**还原**（`CombatState.cs:500-511` 的 `using`）。
     ///
     /// ⚠️ 闭包**立刻调用**，不入队 —— 这是 §4.1.3 允许的那一种用法。
@@ -2691,6 +3393,24 @@ impl CombatState {
     /// 那边不需要链的内容）；这个既发号又建链，给"队列条目真的要带着一条链"用。
     pub fn new_root_chain_in_arena(&mut self) -> StateResult<ChainSlot> {
         let id = self.create_root_effect_chain();
+        self.chains.alloc(ChainRecord {
+            id,
+            parent: ChainSlot::NONE,
+            trigger: NO_TRIGGER,
+            depth: 0,
+            refs: 1,
+        })
+    }
+
+    /// 建一条根链，但**不发号**：`id` 沿用"调用方刚发掉的那个号"
+    /// （`next_effect_chain_number - 1`）。
+    ///
+    /// 只给 `exec::execute` 这个**遗留入口**用：`intent.rs::execute_action` / `exec` 的旧
+    /// 调用方已经手工记过"请求"那一笔（`create_root_effect_chain()`），参考里节目的链
+    /// **就是那条**（`EffectProgramExecution.cs:31` 的 `??=` 读到非空的 `CurrentEffectChain`）
+    /// ⇒ 再发一个号会让 `chain_num` 多 1（实测：`intent.rs:1853` 那条断言 3 vs 2）。
+    pub fn adopt_root_chain(&mut self) -> StateResult<ChainSlot> {
+        let id = self.next_effect_chain_number.saturating_sub(1);
         self.chains.alloc(ChainRecord {
             id,
             parent: ChainSlot::NONE,
@@ -2730,6 +3450,15 @@ impl CombatState {
             depth: next_depth,
             refs: 1,
         })
+    }
+
+    /// 拿一条链的一次引用（`ChainRecord::refs += 1`）。
+    ///
+    /// 谁持有链、谁就要 `acquire`/`release` 平衡：参考靠 GC，我们靠这个计数器。
+    /// 例：节目帧 `??=` 到一条**已经存在**的环境链时要 `acquire`（它不是我们建的），
+    /// 这样 `reap_frames` 的 `release` 才不会把别人的链弄没。
+    pub fn acquire_chain(&mut self, chain: ChainSlot) -> StateResult<()> {
+        self.chains.acquire(chain)
     }
 
     /// 放掉一条链的一次引用（归零即回收）。
@@ -4890,33 +5619,41 @@ mod tests {
         //    ⇒ 入队之后规范文本必须**逐字节相同**。
         // 2. `reset_in_place` **必须清它们**（否则上一局的残留会在下一局开打时分发出去）。
         let mut state = fight();
+        // ⚠️ 批次 2 起入队**在链作用域里**做：没有环境链的 `EnqueueEffect` /
+        // `EnqueueEvent` 会 `?? CreateRootEffectChain()`（`CombatState.cs:386`/`:446`），
+        // 于是 `chain_num` 会动 —— 那是**队列的后果**（下面成对断言），不是"队列内容进了哈希"。
+        // 所以基准文本取在"链已经建好"之后。
+        let chain = state.new_root_chain_in_arena().unwrap();
         let clean = canonical_text(&state);
 
-        state.enqueue_event(a_turn_started()).unwrap();
-        state
-            .enqueue_event(CombatEvent::DamageDealt {
-                target: hero_id(),
-                health_damage: 5,
-                blocked_damage: 0,
-                requested: 5,
-                source: None,
-            })
-            .unwrap();
-        state
-            .enqueue_continuation(Continuation::CloseAction { actor: hero_id() })
-            .unwrap();
-        state
-            .enqueue_effect(EffectRequest::DealDamage {
-                target: Some(hero_id()),
-                amount: 2,
-                ignores_block: false,
-            })
-            .unwrap();
+        state.with_chain(chain, |state| {
+            state.enqueue_event(a_turn_started()).unwrap();
+            state
+                .enqueue_event(CombatEvent::DamageDealt {
+                    target: hero_id(),
+                    health_damage: 5,
+                    blocked_damage: 0,
+                    requested: 5,
+                    source: None,
+                })
+                .unwrap();
+            state
+                .enqueue_continuation(Continuation::CloseAction { actor: hero_id() })
+                .unwrap();
+            state
+                .enqueue_effect(EffectRequest::DealDamage {
+                    target: Some(hero_id()),
+                    amount: 2,
+                    ignores_block: false,
+                    source: None,
+                })
+                .unwrap();
+        });
 
         assert_eq!(
             canonical_text(&state),
             clean,
-            "队列进了哈希 ⇒ 每条改动都会移动指纹（参考没这么做）"
+            "队列进了哈希 ⇒ 每条改动都会移动指纹（参考没这么做）；链作用域里的入队也不发号"
         );
         assert!(state.has_pending_queues());
 

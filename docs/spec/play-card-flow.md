@@ -711,7 +711,7 @@ pub trait PlayHost {
 
 | # | 风险 | 为什么危险 | 建议的钉子 |
 |---|---|---|---|
-| **1** | **"入队-排空" vs "就地执行"**：参考的 `dealDamage` 是**入队** effect request、之后由 `CombatQueueProcessor` 排空（`C:CombatEffectQueueProcessor.cs:7-58`）；内核 `K:exec.rs:412` 的 `execute` 是**就地**写状态。而且内核 `K:state.rs:1441-1453` 的 `CombatState` **根本没有**三队列字段（`PendingEffects`/`PendingEvents`/`PendingContinuations` 一个都没有） | 中间态可观察：`CardPlayed` 触发器在卡的伤害**之前**还是**之后**跑、卡在程序跑完前是否还在手牌（`T:CardPlayCompletionBoundaryTests.cs`）、`Faulted` 时卡是否已落区（§5.2）全都由这个模型决定 | 至少写 3 条向量：(a) 卡在程序第 1 步时仍在手牌；(b) `CardPlayed` 触发器的抽牌发生在卡的伤害之前；(c) Faulted 后卡在弃牌堆且**没有** `CardMovedToZone` 事件 |
+| **1** | ~~**"入队-排空" vs "就地执行"**~~ **【2026-10-19 已闭合，批次 2】**：这一行原来是"内核 `K:exec.rs` 的 `execute` 是**就地**写状态、`CombatState` 没有三个队列字段"。**现状反过来**：11 种产出型节点只造 `EffectRequest`（`exec.rs::*_node`），解析发生在排空循环的相位 1（`exec.rs::resolve_effect`），三个队列 + 节目帧/节点槽/循环快照都在 `CombatState` 里（`state.rs`）。⇒ 中间态（卡何时落区、触发器效果何时可见）现在**真的按参考的形状**发生；`CARD_MULTI` 124/124、四条基线零漂移是它的证据 | 中间态可观察：`CardPlayed` 触发器在卡的伤害**之前**还是**之后**跑、卡在程序跑完前是否还在手牌（`T:CardPlayCompletionBoundaryTests.cs`）、`Faulted` 时卡是否已落区（§5.2）全都由这个模型决定 | 至少写 3 条向量：(a) 卡在程序第 1 步时仍在手牌；(b) `CardPlayed` 触发器的抽牌发生在卡的伤害之前；(c) Faulted 后卡在弃牌堆且**没有** `CardMovedToZone` 事件 |
 | **2** | **两个入口的 `chain_num` 不一致**（§6.2） | 同一次出牌两条入口给出不同哈希；照抄错的那条会永久偏移 `chain_num=` 那一行 | 只实现 C/D 面；显式记"A/B 面不实现"，并为"一次出牌把 `chain_num` 推到多少"写死一条断言（U5：数字自己量） |
 | **3** | **legacy `Effects` 在本内容里为空**（§1.4） | 移植者会很自然地认为"卡只有 Program"、于是删掉 legacy 路径；一旦换成带 `Effects` 的内容就整块失效 | `play.rs` **保留** legacy 分支（哪怕默认空），并写一条"两个请求来源都进队列、legacy 在前"的测试 |
 | **4** | **校验器顺序**（注释与实现相反，§2.3） | 照抄注释 ⇒ 顺序错 ⇒ 报错文本变、副作用型的 PlayCondition 行为变 | 断言"5 个校验器的执行序 = stun, decree, play_condition, one_attack, unplayable" |

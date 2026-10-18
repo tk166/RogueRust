@@ -132,7 +132,7 @@ use crate::expr::ExprError;
 use crate::ir::{IrError, NodeRef};
 use crate::state::{
     CapacityError, CardSlot, CardZone, CombatEvent, CombatResult, CombatState,
-    CombatantId, Continuation, EffectItem, EventItem, StatusDefinitionId, StatusInstance,
+    CombatantId, Continuation, EventItem, StatusDefinitionId, StatusInstance,
     ZonePlacement, ID_CAP, MAX_CARDS_PER_ZONE, MAX_EFFECTS_PER_CYCLE, MAX_EVENTS_PER_CYCLE,
     MAX_QUEUE_CYCLES, MAX_STATUSES_PER_COMBATANT,
 };
@@ -848,8 +848,8 @@ impl<'a> Host<'a> {
             };
             let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
             let root = NodeRef::new(self.content, handle);
-            // `EffectProgramExecutor.Execute` 一进来就发号（`EffectProgramExecution.cs:27`）。
-            let _execution_id = state.allocate_program_execution_id();
+            // 执行号由 `exec::begin` 发（`EffectProgramExecution.cs:27`）。**这里不许再发一次**
+            // （`event-queue-interface.md` §5.2 末的"双倍发号"警告）。
             let outcome = execute_program(state, self.content, root, Some(*actor), None, steps);
             outcome.map_err(|e| self.record(HostError::Exec(e)))?;
         }
@@ -1017,7 +1017,6 @@ impl<'a> Host<'a> {
             // `:76-81`：没有节目 ⇒ 直接 Finish。
             let program = card_program_root(self.content, card_index)?;
             if let Some(root) = program {
-                let _execution_id = state.allocate_program_execution_id();
                 let steps = card_max_steps(self.content, card_index);
                 let outcome = execute_program(state, self.content, root, Some(*actor), target, steps);
                 if let Err(e) = outcome {
@@ -1527,7 +1526,6 @@ impl<'a> Host<'a> {
             };
             let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
             let root = NodeRef::new(self.content, handle);
-            let _execution_id = state.allocate_program_execution_id();
             let outcome = execute_program(state, self.content, root, Some(*actor), None, steps);
             outcome.map_err(|e| self.record(HostError::Exec(e)))?;
         }
@@ -1623,16 +1621,21 @@ impl Host<'_> {
             }
             cycles += 1;
         }
+        // 排空结束 ⇒ 回收所有已到终态的节目帧（帧槽的下标被续延引用着，只在**静止点**回收）。
+        exec::reap_frames(state);
         Ok(())
     }
 
     /// 相位 1：`ResolvePendingEffects`（`CombatEffectQueueProcessor.cs:20-60`）。
     ///
-    /// ⚠️ **批次 1 的现状（如实报告）**：效果队列**今天没有生产者** —— `exec.rs` 还是
-    /// "就地应用"，没有"造请求 + 解析"的拆分（那是批次 2）。所以这里一旦拿到条目就
-    /// **响亮失败**（[`HostError::Unsupported`]），而不是悄悄把它丢掉或假装解析过。
-    /// 丢掉一条效果与"这条效果不生效"是同一件事，而后者不会有任何观察者 —— 这正是
-    /// 本项目的硬规则第 16 条要杀的形态（"查不到就跳过"比没有检查更糟）。
+    /// 逐条：出队 → **进它自己的链作用域**（`CombatEffectQueueProcessor.cs:32` 的
+    /// `using (combat.EnterEffectChain(entry.EffectChain))`）→ 交给 `exec::resolve_effect`。
+    ///
+    /// 两个**必须在这里**（而不是在 `exec` 里）做的动作：
+    /// * 解析抛错 ⇒ 把帧绑回 `FaultDueToNativeHandler`（`EffectProgramIdentity.cs:156-162`）；
+    /// * 解析把战斗打完了 ⇒ `CancelDueToCombatEnd`（`CombatState.cs:358-367`）—— 而且要
+    ///   **带着这条效果的链**去取消：结果被设上那一刻的环境链就是那一条，Cancelled 的
+    ///   收尾笔数由它决定。
     fn resolve_pending_effects(
         &mut self,
         state: &mut CombatState,
@@ -1651,21 +1654,26 @@ impl Host<'_> {
                 break;
             };
             let chain = item.chain;
+            let content = self.content;
             // `using (combat.EnterEffectChain(entry.EffectChain))`（`:32`）：解析期间
             // `current_chain` 就是这条 —— 于是解析过程中入队的东西**不再发号**（§1.4）。
-            let outcome = state.with_chain(chain, |state| self.resolve_effect(state, &item));
+            let outcome = state.with_chain(chain, |state| {
+                exec::resolve_effect(state, &item, Some(content))
+            });
             // 出队即放掉"队列条目持着这条链"那一次引用。
             state.release_chain(chain);
-            outcome?;
+            if let Err(e) = outcome {
+                exec::fail_frame(state, item.owner)
+                    .map_err(|inner| self.record(HostError::Exec(inner)))?;
+                return Err(self.record(HostError::Exec(e)));
+            }
+            if state.result != CombatResult::Ongoing {
+                exec::cancel_live_frames(state, chain)
+                    .map_err(|e| self.record(HostError::Exec(e)))?;
+            }
             resolved += 1;
         }
         Ok(())
-    }
-
-    /// 解析一条效果。**批次 1：没有解析器**（见 [`Self::resolve_pending_effects`]）。
-    fn resolve_effect(&mut self, state: &mut CombatState, item: &EffectItem) -> Result<(), HostError> {
-        let _ = (state, item);
-        Err(self.record(HostError::Unsupported("EffectRequest")))
     }
 
     /// 相位 2：`ResolvePendingEvents`（`CombatEventHandling.cs:39-79`）。
@@ -1783,8 +1791,7 @@ impl Host<'_> {
             };
             let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
             let root = NodeRef::new(self.content, handle);
-            // `EffectProgramExecution.cs:27`：每跑一个节目发一次号（**包括触发器节目**）。
-            let _execution_id = state.allocate_program_execution_id();
+            // 执行号由 `exec::begin` 发（`EffectProgramExecution.cs:27`，**包括触发器节目**）。
             let outcome = execute_program(
                 state,
                 self.content,
@@ -1806,29 +1813,27 @@ impl Host<'_> {
     /// 会因此**建一条根链**（`CombatState.cs:442-452`）—— `play.rs` 今天用一句
     /// `create_root_effect_chain()` 手工记的就是这笔（`:785`、`:894` 的"账 2'"）。
     ///
-    /// 批次 1 只支持 `CloseAction`；另两个变体属于节点级续延调度（批次 2），
-    /// 到了这里就**响亮失败**，绝不"当它跑过了"。
+    /// 两个变体各自去哪里：
+    /// * `ProgramResume` ⇒ `exec::resume`（节点级续延调度，批次 2）；
+    /// * `CloseAction` ⇒ `play::close_action`（与 `apply_plan` / 终态回调用的是**同一个函数**）。
+    ///
+    /// ⚠️ **它跑在顶层**：调用点已经退出所有 `EnterEffectChain` 作用域。这个位置本身就是
+    /// 语义 —— 续延里每一次 `EnqueueEffect`/`EnqueueEvent` 会不会 `?? CreateRootEffectChain()`
+    /// 全看此刻 `current_chain` 是不是 `NONE`（`CombatState.cs:386`/`:446`）。
     fn run_continuation(
         &mut self,
         state: &mut CombatState,
         continuation: Continuation,
     ) -> Result<(), HostError> {
+        let anchor = NodeRef::new(self.content, 0);
         match continuation {
-            Continuation::CloseAction { actor } => {
-                let _ = actor;
-                // 参考里这一笔是 `EnqueueEvent(ActionResolved)`（`Cards/CardPlay.cs:306-312`），
-                // 而 `EnqueueEvent` 的链规则是 `CurrentEffectChain ?? CreateRootEffectChain()`
-                // （`CombatState.cs:446`）。写成"查 `current_chain`"而不是"无条件发号"有两个理由：
-                // ① 它是参考的规则本身；② 它让"续延真的跑在顶层"这件事**可被观测** ——
-                // 有人把相位 3 挪进相位 2 的链作用域里，这里就静默少一个号，
-                // `a_continuation_waits_for_the_drain_and_runs_at_the_top_level` 会红。
-                if state.current_chain().is_none() {
-                    let _wrap_up_chain = state.create_root_effect_chain();
-                }
-                Ok(())
+            Continuation::ProgramResume { frame, node } => {
+                exec::resume(state, Some(self.content), Some(anchor), frame, node)
+                    .map_err(|e| self.record(HostError::Exec(e)))
             }
-            Continuation::ProgramResume { .. } | Continuation::ProgramTerminal { .. } => {
-                Err(self.record(HostError::Unsupported("Continuation")))
+            Continuation::CloseAction { actor } => {
+                crate::play::close_action(state, actor);
+                Ok(())
             }
         }
     }
@@ -2076,6 +2081,10 @@ fn decode_trigger<'a>(
 /// 跑一个节目：`source` 与 `event_target` 就是参考 `CreateActionBuildContext` 的两个槽。
 ///
 /// `sel.source` / `sel.eventTarget` 由此解析；`iteration_target` 恒空（触发器上下文没有它）。
+/// ⚠️ **它只派发**（批次 2）：节目造出来的效果请求进队列，等外层的排空循环解析
+/// （`CombatEventHandling.cs:97-113` 的相位 1）。宿主**不在钩子里排空** —— 那是回合驱动
+/// （`turn.rs`）与场景驱动的活，参考也是这么分的（`CombatTurnProcessor` 自己调
+/// `ResolvePendingQueues`，`ScenarioRunner` 自己调）。
 fn execute_program(
     state: &mut CombatState,
     content: &Content<'_>,
@@ -2083,10 +2092,10 @@ fn execute_program(
     source: Option<CombatantId>,
     event_target: Option<CombatantId>,
     max_steps: u32,
-) -> Result<exec::ExecStats, exec::ExecError> {
+) -> Result<(), exec::ExecError> {
     let mut ctx = ExecContext::new(state, source, event_target, None, max_steps)
         .with_content(content);
-    exec::execute(root, &mut ctx)
+    exec::begin(root, &mut ctx, crate::state::ProgramTerminalHook::None).map(|_| ())
 }
 
 /// `CARD` 行按定义 id 查（内核的"卡定义表"就是镜像的 `CARD` 表，`play.rs:572-575`）。
@@ -3059,74 +3068,118 @@ mod tests {
     }
 
     #[test]
-    fn the_effect_queue_has_no_resolver_in_batch_one_so_it_fails_loudly() {
-        // 批次 1 的 `exec.rs` 还是"就地应用"，效果队列**没有生产者**。所以这里一旦拿到
-        // 条目就必须**报错**：把它丢掉等于"这条效果不生效"，而后者不会有任何观察者。
+    fn the_effect_phase_resolves_the_request_it_dequeues() {
+        // 批次 2：效果队列**有解析器**了。相位 1 出队一条 `GainBlock` 就必须真的加格挡
+        // —— "出队了但什么都没做"是这一层最坏的形态（没有观察者）。
         let blob = core_image();
         let content = parse(&blob);
         let mut host = Host::new(&content);
         let mut state = solo();
+        let chain = state.new_root_chain_in_arena().unwrap();
         state
-            .enqueue_effect(EffectRequest::GainBlock {
-                target: Some(cid("hero")),
-                amount: 3,
-            })
-            .unwrap();
-        assert_eq!(
-            host.try_resolve_pending_queues(&mut state),
-            Err(HostError::Unsupported("EffectRequest"))
-        );
+            .with_chain(chain, |state| {
+                state
+                    .enqueue_effect(EffectRequest::GainBlock {
+                        target: Some(cid("hero")),
+                        amount: 3,
+                    })
+                    .unwrap();
+            });
+        host.try_resolve_pending_queues(&mut state).unwrap();
         assert_eq!(
             state.pending_effect_count(),
             0,
-            "条目被弹出来报了错（不是留在队列里假装没事）"
+            "解析过的条目离开队列（不是留着下次再解析一次）"
+        );
+        assert_eq!(
+            block_of(&state, "hero"),
+            3,
+            "请求真的落地了"
         );
     }
 
     #[test]
     fn the_effect_phase_runs_before_the_event_phase() {
         // `CombatEventHandling.cs:104-105`：**先抽干效果队列，再抽干事件队列**。
-        // 批次 1 里能观测这条次序的东西只有一个：效果队列没有解析器 ⇒ 它**报错退出**，
-        // 而"报到哪一步"能由"事件有没有来得及分发"看出来（`exec_num`）。
-        //   正确次序 ⇒ 效果先撞墙 ⇒ 事件一条都没分发 ⇒ `exec_num` 不动；
-        //   两相位换序（或塌成"边入队边执行"）⇒ 事件先跑 ⇒ `exec_num` +1 之后才报错。
+        // 批次 1 这条次序没有可观察后果（效果队列没有生产者）；批次 2 有了。
+        //
+        // 场面（两个方向都能判）：
+        // * `hero` 身上**没有** `doubt`；
+        // * 效果队列里一条 `ApplyStatus(doubt, hero, 1)`；
+        // * 事件队列里一条 `DamageDealt{ source: hero }` —— `doubt` 的触发器认的是
+        //   **出手方戴不戴**（`DamageDealtSourceHasStatusTriggerFilter`）。
+        //
+        // * 正确次序（效果 → 事件）：状态先落地 ⇒ 事件分发时 hero 戴着 doubt ⇒ 触发器跑
+        //   ⇒ `exec_num +1`，而且它那一笔 `-1` 在**下一轮**相位 1 落地 ⇒ doubt 回到 0；
+        // * 掉序（事件 → 效果）：事件先分发，hero 还没戴 doubt ⇒ 触发器**收集不到**
+        //   ⇒ `exec_num +0`，效果随后落地 ⇒ doubt 停在 1。
+        //
+        // ⇒ 两个数（`exec_num` 与 doubt 层数）都分开，任一方向坏了都会红。
         let blob = core_image();
         let content = parse(&blob);
         let mut host = Host::new(&content);
         let mut state = arena();
-        give(&mut state, "hero", status("st_fat", "fatigue", 0)); // TurnStarted 触发器（镜像 3 条之一）
+
+        let chain = state.new_root_chain_in_arena().unwrap();
         state
-            .enqueue_effect(EffectRequest::GainBlock {
-                target: None,
-                amount: 1,
-            })
-            .unwrap();
+            .with_chain(chain, |state| {
+                state
+                    .enqueue_effect(EffectRequest::ApplyStatus {
+                        target: Some(cid("hero")),
+                        definition: StatusDefinitionId::new("doubt").unwrap(),
+                        stacks: 1,
+                        duration: 0,
+                        charges: 0,
+                        source: None,
+                        source_card: None,
+                    })
+                    .unwrap();
+                state
+                    .enqueue_event(CombatEvent::DamageDealt {
+                        target: cid("enemy_a"),
+                        health_damage: 1,
+                        blocked_damage: 0,
+                        requested: 1,
+                        source: Some(cid("hero")),
+                    })
+                    .unwrap();
+            });
+
+        // 第二条事件：它的触发器门禁读的是**同一条** doubt 的层数，所以它把
+        // "触发器入队的效果是不是当场落地了"也一起钉住（见下面的 README 段落）。
         state
-            .enqueue_event_at_root(CombatEvent::TurnStarted {
-                combatant: cid("hero"),
+            .enqueue_event(CombatEvent::DamageDealt {
+                target: cid("enemy_a"),
+                health_damage: 1,
+                blocked_damage: 0,
+                requested: 1,
+                source: Some(cid("hero")),
             })
             .unwrap();
 
         let exec_before = state.next_program_execution_id;
+        host.try_resolve_pending_queues(&mut state).unwrap();
         assert_eq!(
-            host.try_resolve_pending_queues(&mut state),
-            Err(HostError::Unsupported("EffectRequest"))
+            state.next_program_execution_id,
+            exec_before + 2,
+            "两条事件分发时 doubt 都必须还在身上：相位 1 的落地排在相位 2 **之后**"
         );
         assert_eq!(
-            state.next_program_execution_id, exec_before,
-            "效果相位必须排在事件相位之前（`:104-105`）—— 事件先跑就说明两相位掉序了"
-        );
-        assert_eq!(
-            state.pending_event_count(),
-            1,
-            "事件还在队列里（它轮到的时候已经很晚了）"
+            stacks_of(&state, "hero", "doubt"),
+            0,
+            "两笔 -1 都在**下一轮**相位 1 落地：1 → 0（第二笔是 no-op）"
         );
     }
 
     #[test]
-    fn a_node_level_continuation_fails_loudly_instead_of_pretending_to_resume() {
-        // `ProgramResume` / `ProgramTerminal` 属于批次 2 的节点级续延调度。
-        // 今天它们到了排空循环就**响亮失败** —— 假装跑过会让"节目提前结束"静默发生。
+    fn a_stale_node_level_continuation_is_dropped_and_a_live_one_runs() {
+        // 批次 2 起 `ProgramResume` 真的会被恢复（节点级续延调度）。这里的两个方向：
+        //
+        // 1. **陈旧**续延（帧已经不在）⇒ 静默丢弃。这是参考的明确规定：
+        //    `EffectProgramExecution.cs:51-54`"A stale completion can arrive after the frame
+        //    was cancelled … ignore it"。
+        // 2. **活着的**帧 ⇒ 走 `exec::resume` 并推进节目（那条路在 `exec.rs` 侧有专门测试，
+        //    这里只钉"排空循环认识它、不报 Unsupported"）。
         let blob = core_image();
         let content = parse(&blob);
         let mut host = Host::new(&content);
@@ -3135,13 +3188,14 @@ mod tests {
             .enqueue_continuation(Continuation::ProgramResume {
                 frame: ProgramExecutionSlot::from_index(1),
                 node: 0,
-                ready: 1,
             })
             .unwrap();
         assert_eq!(
             host.try_resolve_pending_queues(&mut state),
-            Err(HostError::Unsupported("Continuation"))
+            Ok(()),
+            "帧不在 ⇒ 陈旧续延，丢弃而不是报错"
         );
+        assert_eq!(state.pending_continuation_count(), 0);
     }
 
     #[test]
@@ -3890,6 +3944,9 @@ mod tests {
         );
         // `sel.source` 是**拥有者**（`CreateCardPlayBuildContext(combat, card.Id, owner, target)`）。
         host.try_resolve_card_queue(&mut state, &cid("hero")).unwrap();
+        // ⚠️ 批次 2：`execute_program` 只**派发**，请求要等外层的相位 1 才落地
+        // （参考的 `QueueResolution` 也一样：它自己不开排空循环）。
+        host.try_resolve_pending_queues(&mut state).unwrap();
         assert_eq!(block_of(&state, "hero"), 5);
         assert_eq!(zone_count(&state, "hero", CardZone::DiscardPile), 1);
     }
