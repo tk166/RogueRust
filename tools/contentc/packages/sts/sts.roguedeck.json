@@ -1,5 +1,71 @@
 {
   "SchemaVersion": 1,
+  "InertKeys": [
+    {
+      "Path": "root:Characters",
+      "Why": "编译期只取 `Id` 造一条 SEC_IDX character 条目（compile.py:787-788），`Start`/`UnlockFlag` 没人读；内核按 id 查得到 ironclad→EK_CHARACTER（check_idx 断言），但没有任何规则代码按**名字**读根键。"
+    },
+    {
+      "Path": "root:Deck",
+      "Why": "起始牌组的第三份副本：compile.py 不读它（ENTITY_SECTIONS 只收 Cards/Statuses/EnemyActions/Encounters/Relics），内核也没有根键读取路径；真正进战斗的牌组由 Start.Deck / Characters[0].Start.Deck 与驱动层给出，三份一致只由 check_relations 守着。"
+    },
+    {
+      "Path": "root:EncounterTables",
+      "Why": "遭遇权重表：内核没有普通/精英/弱者池的概念，Weak[].Weight 只被 check_weak_pool_table 读。"
+    },
+    {
+      "Path": "root:Monsters",
+      "Why": "怪物名册：compile.py 不读它；ENCT 的敌人载荷是遭遇自带的 inline 记录，名册与 inline 的逐字段一致由 check_relations 守着。"
+    },
+    {
+      "Path": "root:Notes",
+      "Why": "作者散文（范围/锚点/偏差）：Notes.Deviations、KernelGapsFound 只给人看，任何代码都不读 —— 它是唯一**以文档身份**进镜像的根键。"
+    },
+    {
+      "Path": "root:SchemaVersion",
+      "Why": "编译器把它写进镜像头 HDR_SCHEMA_VERSION（compile.py:1276），而内核只用 FORMAT_VERSION 做格式门（content.rs:349）；schema_version() 访问器没有消费者。"
+    },
+    {
+      "Path": "root:Start",
+      "Why": "编译器只取它的 HeroName 造 SEC_IDX 的 character 条目（compile.py:789）；MaxHealth/StartingHealth/Resources/StartingRelics 全都没人读（起手资源在 ENCT.HeroResources 与驱动层）。"
+    },
+    {
+      "Path": "Statuses[]:DeathPrevention",
+      "Why": "参考的状态规则钩子（STATUS 第 10 列）：内核没有这个能力，规则代码里零 `.death_prevention(` 调用点；内容里恒 null，填任何值都不生效也不报错。"
+    },
+    {
+      "Path": "Statuses[]:DebuffBlock",
+      "Why": "参考的状态规则钩子（STATUS 第 11 列）：内核零 `.debuff_block(` 调用点，内容里恒 null。"
+    },
+    {
+      "Path": "Statuses[]:IncomingStatusDelay",
+      "Why": "参考的状态规则钩子（STATUS 第 12 列）：内核零 `.incoming_status_delay(` 调用点，内容里恒 null。"
+    },
+    {
+      "Path": "Statuses[]:Disclosure",
+      "Why": "参考的状态规则钩子（STATUS 第 13 列）：内核零 `.disclosure(` 调用点，内容里恒 null。"
+    },
+    {
+      "Path": "Statuses[]:PackageId",
+      "Why": "包归属：strip_presentation 把它留在 core 镜像里，但内核零消费者（没有 `.package_id(` 调用点）—— 它是给多包工具与表现层用的。"
+    },
+    {
+      "Path": "Statuses[]:StackingBehavior",
+      "Why": "参考的叠加策略字符串（本内容全为 MergeWithExistingInstance）：内核叠加走自己的规则（status_bind），这一格零调用点 —— 改它不改任何行为。"
+    },
+    {
+      "Path": "Statuses[]:UsesCharges",
+      "Why": "参考的充能元数据：内核没有充能概念，零 `.uses_charges(` 调用点。"
+    },
+    {
+      "Path": "Statuses[]:UsesStacks",
+      "Why": "参考的“层数就是钟”元数据：内核只读 UsesDuration（status_bind.rs:491）；层数衰减是由 STAT 自己的 TurnEnded 触发器 + modifyStatusStacks(-1) 表达的（见本闸门的 INV_DECAYING）。"
+    },
+    {
+      "Path": "Program:MaxNodeDepth",
+      "Why": "节目信封的节点深度上限：内核用**自己的常量** exec.rs::MAX_NODE_DEPTH = 64（host.rs:1697-1698 写明“本层不用”），本内容 394/394 都是 64，与常量一致纯属巧合；同信封的 MaxProgramSteps 是**真读**的（host.rs:1700 / intent.rs:745 / play.rs:1735）。"
+    }
+  ],
   "Statuses": [
     {
       "Id": "standard.strength",

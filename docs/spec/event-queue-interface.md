@@ -795,3 +795,160 @@ pub fn triggers_for(state: &CombatState, event: TriggerEventKey) -> impl Iterato
 6. **`status_bind::DamageKind` 现在的实际变体集**（`battle-loop-hooks.md` §5.4 说只有 `Direct`，
    而 §8 说 DoT 管线已独立 —— 两者至少有一个过期，本轮没去核）。
 7. **`CombatState.cs` 是否有第四个 `CreateRootEffectChain` 调用点**：我用的是 grep 而非全文通读。
+
+---
+
+## 10. 实测内存（2026-10-19）
+
+> 本节**只追加**，不改上面任何一行。§4.3 的三档数字从今天起是**历史估算**：
+> 它的结论（三档都越过 192 KiB）被实测证实了，但分量要对上账 —— 总额吻合是两处反向误差
+> 几乎抵消出来的（§10.4）。
+> 实测手段是给 `CombatState` 加一段**临时**的字段形状（只建字段，不实现任何队列逻辑），
+> 量完还原：`state.rs` 的 sha256 与实验前逐字节相同（`F1080EBB…FABDB1`），
+> `git status --porcelain` 为空。
+
+### 10.1 基线真值（不是估算）
+
+```
+$ tools\cargo.ps1 test -p rd-core --release state_fits_the_sram_plan '--' --nocapture
+size_of::<CombatState>() = 184648 bytes (180 KiB)
+  card pool  : 224 x 440 = 98560 bytes
+  combatants : 12 x 4832 = 57984 bytes
+  piles      : 12 x 1392 = 16704 bytes
+test result: ok. 1 passed; 0 failed; … 531 filtered out
+```
+
+⇒ **184,648 B = 606,208 B SRAM 的 30.46%**，与 §0.1 ⑤ / §4.3 的基线一致（这一条估算是对的）。
+两个"抄了第二份"的数字同时过期，本轮已改成指路（不再复制）：
+
+| 位置 | 原值 | 现实 |
+|---|---|---|
+| `kernel/rd-sizeprobe/src/lib.rs` 的 `the_state_model_fits_the_sram_budget…` 注释 | "当前实测 171,848 B" | 184,648 B（差 12,800 B，从 `StatusInstance.source_combatant_id` 那次起就没跟上；上界 192 KiB 没报警，因为 184,648 还没到） |
+| `tools/size_probe.py` 末行 | "171,848 B = 28.3%" | 同上 |
+
+⚠️ **`state.rs` 模块头那张表也烂了一行**（本轮**没有**改它，按任务书 `state.rs` 只用于实验）：
+`combatants (12 × 3,872 = 46,464)` 与实测 `12 × 4,832 = 57,984` 差 **11,520 B**；
+`size_of::<CombatState>()` 那一行（184,648）反倒是新的。⇒ 表里的总数跟着改过，行没跟着改。
+
+### 10.2 三档实测（同一段形状，只改容量）
+
+实验块的形状（照 §4.1.2–§4.1.5；载荷用内核**真实** id 类型，`CombatantId`/`StatusDefinitionId`
+41 B、`StatusInstanceId`/`CardInstanceId` 17 B）：
+
+| 探针类型 | 字段 |
+|---|---|
+| `EffectRequest` | 4 变体；最大 = `ApplyStatus{target,status,stacks,duration,source,source_card}`（六段，对应参考的状态施加请求） |
+| `PendingEffect` | `{request, chain: u16, owner: Option<u32>}` |
+| `CombatEvent` | 7 变体；集合型 3 个用 `Bounded<Id, MAX_EVENT_ID_LIST>`（`StatusRemoved` / `CardsDrawn` / `CardsMovedBetweenZones`） |
+| `PendingEvent` | `{event, chain: u16}` |
+| `Continuation` | §4.1.3 原样：`ProgramResume{frame,node,ready}` / `ProgramTerminal{frame}` / **`CloseAction{actor: CombatantId}`** |
+| `ChainRecord` | `{id: i64, parent: Option<u16>, trigger: u16, depth: u8, refs: u8}` |
+
+每档各跑一次 `probe_queue_memory`（打印条目尺寸 + 总量）：
+
+```
+PROBE tier: effects=32 events=32 conts=32 chains=64 idlist=8      ← 保守
+PROBE EffectRequest                = 160
+PROBE PendingEffect                = 172
+PROBE CombatEvent                  = 220
+PROBE PendingEvent                 = 224
+PROBE Continuation                 = 44
+PROBE ChainRecord                  = 16
+PROBE CombatState               = 199768
+
+PROBE tier: effects=64 events=64 conts=64 chains=64 idlist=8      ← 中
+PROBE CombatState               = 213848
+
+PROBE tier: effects=64 events=64 conts=64 chains=64 idlist=24     ← 忠实
+PROBE CombatEvent                  = 492
+PROBE PendingEvent                 = 496
+PROBE CombatState               = 231256
+```
+
+| 档 | 效果/事件/续延 | `MAX_EVENT_ID_LIST` | 增量 | **实测总量** | SRAM | §4.3 估算 | 误差 |
+|---|---|---|---|---|---|---|---|
+| 基线 | — | — | — | **184,648** | 30.46% | 184,648 | 0 |
+| 保守 | 32 / 32 / 32 | 8 | **+15,120 B (+14.77 KiB, +8.19%)** | **199,768** | 32.95% | 199,600 | +168 B (**+0.08%**) |
+| 中 | 64 / 64 / 64 | 8 | **+29,200 B (+28.52 KiB, +15.81%)** | **213,848** | 35.28% | 213,500 | +348 B (**+0.16%**) |
+| 忠实 | 64 / 64 / 64 | 24 | **+46,608 B (+45.52 KiB, +25.24%)** | **231,256** | 38.15% | 230,700 | +556 B (**+0.24%**) |
+
+`MAX_LIVE_CHAINS` 三档都取 64（§4.1.1 的常数），它只占 1,024 B，**不是杠杆**。
+⇒ **V5（"差 < 15%"）以 0.24% 的最大偏差通过。**
+
+### 10.3 结论：三档**全部**越过 192 KiB
+
+`state_fits_the_sram_plan`（`state.rs:2833`）与 `rd-sizeprobe` 的同名断言都是
+`size <= 192 * 1024` = **196,608 B**。连最便宜的保守档都比它高 **3,160 B**。
+⇒ 加队列**必然**要动这道上界；这不是"可能超"，是"一定超"。
+
+**"几开"的账**（SRAM 606,208 B；RL 环境要多实例）：
+
+| 档 | 单实例 | 2 开 | 3 开 |
+|---|---|---|---|
+| 基线 | 184,648 (30.5%) | 369,296 (60.9%) | 553,944 (91.4%) —— 已不可能 |
+| 保守 | 199,768 (33.0%) | 399,536 (65.9%) | 599,304 (**98.9%**) |
+| 中 | 213,848 (35.3%) | 427,696 (70.6%) | 641,544 (**105.8%**，超总预算) |
+| 忠实 | 231,256 (38.1%) | 462,512 (76.3%) | 693,768 (114.4%) |
+
+⚠️ **队列不是"几开"的杠杆**：三档都是"2 开可行、3 开不可行"，而这个结论在**加队列之前**
+就已经成立（基线 3 开 = 91.4%，再留固件/栈/堆就没地方了）。真正的杠杆是 §3-D9 的
+id intern（98,560 B 的卡池 + 57,984 B 的战斗员），以及它顺带把队列载荷从
+`Ident<40>`(41 B) 压到 `u16`（`StatusInstanceId` 一旦 intern，`CombatEvent` 的集合型变体
+会从 220/492 B 掉到几十字节）。**别把"加了队列所以开不了多实例"当成结论**。
+
+### 10.4 与 §4.3 的估算逐项比对：**总额对上了，分量没对上**
+
+| 项 | 实测 | §4.3 估算 | 差 | 说明 |
+|---|---|---|---|---|
+| `EffectRequest`（最大变体 `ApplyStatus`） | **160** | 192 | −32 | 估算取的是 `DealDamage` 144 与 `ApplyStatus` 180 的"取 192"；实测六段载荷 160 B 就够 |
+| `PendingEffect` | **172** | 202 | −30 | 160 + chain 2 + owner 8 = 170 → 对齐 172 |
+| `CombatEvent`（idlist=8） | **220** | 224 | −4 | 估算的 `ids[17;8] = 136` 与 §4.3 一样用对了 `INSTANCE_ID_CAP=16` ⇒ 17 B/个 |
+| `PendingEvent` | **224** | 226 | −2 | |
+| `Continuation` | **44** | **8** | **+36** | ← **唯一真错**，而且**被本文自己的 §4.1.3 推翻**：`CloseAction { actor: CombatantId }` 带一个 41 B 的内联 id，枚举大小由它决定，不是"u16+u16+u8 ≈ 8" |
+| `ChainRecord` | **16** | 16 | 0 | |
+| **合计（中档）** | **29,200 B** | 28,877 B（28.2 KiB） | +323 B | 两处反向误差几乎抵消（−30×64 与 +36×64） |
+
+⇒ 教训只有一句：**总额吻合不等于分量吻合**。这里 −2,048 B（效果区 −1,920 + 事件区 −128）
+与 +2,304 B（续延区）互相抵消，净 +256 B，剩余 +67 B 是结构体对齐 —— 也就是说
+"28.2 KiB 的估算"能对上，**靠的是两个反方向的错**。若 `Continuation` 那一处到落地时才被发现，
+它会变成一个"+2.25 KiB 的意外"。下一版估算请把**条目级**的数也写出来并对账，别只对总额。
+
+### 10.5 推荐：**中档（64/64/64，`MAX_EVENT_ID_LIST = 8`）**，上界改成 **224 KiB（229,376 B）**
+
+| 选择 | 理由 |
+|---|---|
+| **中档 = 213,848 B** | ①它就是 §4.1.1 已经冻的六队列容量，选它**不改接口**（选保守档要改 5 个常量，是一份新的冻结物）；②比保守档多花 14,080 B（SRAM 的 2.3%），买到的是"队列满"这条**新增的响亮失败**的余量 —— 32 深度的队列在 StS 内容（一次消耗整手 = 10 条事件）上会先撞墙；③中档与忠实的差额是 46.6 KB 换 8 → 24 的集合上限，而 §4.3 自己已经写明"今天够，M2a 会不够"，那时该做的是 intern 而不是加宽数组 |
+| **上界 224 KiB** | 213,848 → 229,376 是 **+7.3% 余量**（够再加一两个小字段）。它同时是**故意的旅行线**：忠实档 231,256 > 229,376 会被它拦下 —— 谁要抬 `MAX_EVENT_ID_LIST`，就必须先看本节。**别抬到 232 KiB 以上**，那样忠实档会静悄悄通过 |
+| 要改两处 | `kernel/rd-core/src/state.rs:2833`（`state_fits_the_sram_plan`）与 `kernel/rd-sizeprobe/src/lib.rs:151`（同一条断言），**必须一起改**，否则裸机侧和宿主侧会各说各话 |
+| 同一提交里顺手做 | `state.rs` 模块头的内存表：加一行队列、把 `combatants` 那一行改成 57,984（§10.1）；`EMPTY` 常量会从 184,648 涨到 213,848（若有人 `*state = EMPTY` 就付一次 213 KB memcpy）【未实测】 |
+| **不**推荐 | 保守档（省 14 KB 但改接口 + 32 深度先撞墙）；忠实档（现在多付 17.4 KB 换一个今天用不到的集合上限，而且它**故意**留在上界之外） |
+
+### 10.6 本轮实测与本文冲突的地方（以现实为准）
+
+1. **§4.3 的 `Continuation ≈ 8 B` 与 §4.1.3 的冻结算术冲突**：按 §4.1.3 写出来的枚举是 **44 B**
+   （`CloseAction { actor: CombatantId }` ⇒ 41 B 的 `Ident<40>` + tag + 对齐）。§4.3 那一行
+   的 0.5 KiB 应为 **2.75 KiB**。本文没有改 §4.3 的原文，但实现者请按 44 B 记账。
+2. **"`state_fits_the_sram_plan` 的上界与状态模型的真值在同一条断言里"是个假安全感**：
+   断言只看到总量（184,648 ≤ 192 KiB），看不到模块头那张表里 `combatants` 那行已经错了 11,520 B。
+   §10.1 记了这一条 —— "上界没红"不等于"文档里的数字是对的"。
+3. **`rd-sizeprobe` 与 `size_probe.py` 各抄了一份总量**（171,848 B），与 `state.rs` 的真值脱节。
+   已改成"指路 + 唯一出处"（`state_fits_the_sram_plan` 的 println / `COMBAT_STATE_BYTES`）。
+4. **`MAX_LIVE_CHAINS = 64` 在三档里都不是杠杆**（1,024 B）。§4.1.1 把它和三个队列容量并列，
+   容易让人以为"档位也调它"——调它只值 ±512 B。
+5. **`PendingEffect` 的 `owner: Option<ProgramExecutionSlot>` 是真的贵**：`Option<u32>` = 8 B，
+   64 条就是 512 B；而唯一的用途是"效果解析抛异常时把帧绑回去"（§1.2 末）。
+   若落地时发现 `forbid(unsafe_code)` 下没有异常路径，这 512 B 可以省 —— 但那要等 §4.4 的
+   错误类型定下来，本节不建议提前省。
+
+### 10.7 复现方法（别从 §4.3 的估算抄，从这里抄）
+
+1. 备份 `kernel/rd-core/src/state.rs`（记下 sha256）。
+2. 在 `// The state` 段前插入探针类型（§10.2 表的六个 struct/enum + 5 个常量）。
+3. 给 `CombatState` 加 4 个字段（`pending_effects/events/continuations` 用 `Bounded<…, N>`，
+   外加 `chains`），并在 `impl Empty for CombatState` 的 `EMPTY` 与 `fn blank()` 里各补 4 行
+   `Bounded::new()` —— **三处都要改**，少一处编译不过（这也说明"加字段"不是一处改动）。
+4. 加一个打印 `size_of::<…>()` 的 `#[test]`，`tools\cargo.ps1 test -p rd-core --release <测试名> '--' --nocapture`。
+5. 改常量换档，重跑。还原时用备份覆盖，**然后 `touch` 一次源文件**（`Copy-Item` 会把 mtime
+   一起恢复，cargo 会拿旧 rlib 复用，于是量到的是上一档的数 —— 这条坑本项目踩过）。
+6. 还原后必须 `cargo test -p rd-core --release` 全绿（本轮 **532 passed**）再看 `git status`。
+

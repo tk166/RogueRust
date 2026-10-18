@@ -8,17 +8,17 @@ come from re-serialising the parsed document with each item removed.
 
 | quantity | bytes | vs raw | vs compact |
 |---|---|---|---|
-| source on disk (pretty-printed JSON) | 59587 | 1.00x | — |
-| source, compact JSON | 33436 | 1.8x | 1.00x |
-| source, compact + redundant `Children` removed | 33436 | 1.8x | 1.00x |
-| source, compact + `Children` + presentation removed | 30540 | 2.0x | 1.09x |
-| **RDCF binary, full** | **17368** | **3.4x** | **1.9x** |
-| **RDCF binary, presentation stripped** | **15808** | **3.8x** | **2.1x** |
+| source on disk (pretty-printed JSON) | 63527 | 1.00x | — |
+| source, compact JSON | 36953 | 1.7x | 1.00x |
+| source, compact + redundant `Children` removed | 36953 | 1.7x | 1.00x |
+| source, compact + `Children` + presentation removed | 34057 | 1.9x | 1.09x |
+| **RDCF binary, full** | **20944** | **3.0x** | **1.8x** |
+| **RDCF binary, presentation stripped** | **19380** | **3.3x** | **1.9x** |
 
 ### The answer to "how many bytes after pre-compiling"
 
-* `out/content.rdcf` -- complete, exact content image: **17368 B (17.0 KiB)**
-* `out/content.core.rdcf` -- same minus presentation: **15808 B (15.4 KiB)**
+* `out/content.rdcf` -- complete, exact content image: **20944 B (20.5 KiB)**
+* `out/content.core.rdcf` -- same minus presentation: **19380 B (18.9 KiB)**
 
 Against the ESP32-P4 budget of 592 KiB of usable SRAM: the full image is
 3% of SRAM, the core image 3%.  Neither has to live in SRAM at all.
@@ -29,26 +29,26 @@ PSRAM), with SRAM holding only the interpreter's registers and node cursor.
 
 | id | section | offset | bytes | count | unit |
 |---|---|---|---|---|---|
-| 0 | `STR` | 272 | 10872 | 352 | bytes of blob |
-| 1 | `STRO` | 11144 | 1412 | 353 | u32 offsets |
-| 2 | `OPD` | 12556 | 416 | 52 | 8-byte opcode descs |
-| 3 | `OPF` | 12972 | 704 | 176 | 4-byte field descs |
-| 4 | `TRM` | 13676 | 2052 | 193 | term records |
-| 5 | `TRW` | 15728 | 386 | 193 | u16 word offsets |
-| 6 | `AUX` | 16116 | 280 | 140 | u16 cells |
-| 7 | `CARD` | 16396 | 128 | 4 | card rows (32 B each) |
-| 8 | `STAT` | 16524 | 200 | 5 | status rows (40 B each) |
-| 9 | `EACT` | 16724 | 304 | 19 | enemy-action rows (16 B each) |
-| 10 | `ENCT` | 17028 | 48 | 3 | encounter rows (16 B each) |
-| 12 | `ROOT` | 17076 | 28 | 7 | root pointers |
-| 13 | `IDX` | 17104 | 264 | 33 | 8-byte id entries |
+| 0 | `STR` | 272 | 14086 | 386 | bytes of blob |
+| 1 | `STRO` | 14360 | 1548 | 387 | u32 offsets |
+| 2 | `OPD` | 15908 | 424 | 53 | 8-byte opcode descs |
+| 3 | `OPF` | 16332 | 716 | 179 | 4-byte field descs |
+| 4 | `TRM` | 17048 | 2188 | 210 | term records |
+| 5 | `TRW` | 19236 | 420 | 210 | u16 word offsets |
+| 6 | `AUX` | 19656 | 312 | 156 | u16 cells |
+| 7 | `CARD` | 19968 | 128 | 4 | card rows (32 B each) |
+| 8 | `STAT` | 20096 | 200 | 5 | status rows (40 B each) |
+| 9 | `EACT` | 20296 | 304 | 19 | enemy-action rows (16 B each) |
+| 10 | `ENCT` | 20600 | 48 | 3 | encounter rows (16 B each) |
+| 12 | `ROOT` | 20648 | 32 | 8 | root pointers |
+| 13 | `IDX` | 20680 | 264 | 33 | 8-byte id entries |
 | — | header + directory | 0 | 272 | — | — |
 
 Padding to 4-byte alignment: 2 B.
 
-Three sections carry almost everything: the string pool (`STR`+`STRO` = 12284 B,
-71%), the interned term DAG (`TRM`+`TRW`+`AUX` = 2718 B, 16%), and the
-fixed entity tables (680 B, 4%).
+Three sections carry almost everything: the string pool (`STR`+`STRO` = 15634 B,
+75%), the interned term DAG (`TRM`+`TRW`+`AUX` = 2920 B, 14%), and the
+fixed entity tables (680 B, 3%).
 
 ## 2. Where the source bytes went (measured per top-level key)
 
@@ -66,16 +66,17 @@ under *shared*.  So the columns do not add up to the file size, by design.
 | `Characters` | 1 | 407 | 16 | 20 |
 | `Deck` | 10 | 189 | 12 | 5 |
 | `EncounterTables` | 3 | 357 | 36 | 231 |
+| `InertKeys` | 16 | 3504 | 136 | 3209 |
 | `Monsters` | 10 | 3846 | 344 | 1290 |
 | `Notes` | 9 | 6654 | 200 | 5729 |
 | `SchemaVersion` | 1 | 1 | 4 | 14 |
 | `Start` | 9 | 361 | 0 | 6 |
 | **shared (reached from >1 group)** | | | **164** | **781** |
 
-Column sum 33300 B = compact 33436 B minus the 136 B spent on the 11 top-level key
+Column sum 36804 B = compact 36953 B minus the 149 B spent on the 12 top-level key
 names, their quotes and the surrounding braces.
 
-`Encounters` alone is 1647 B (4.9% of the compact document) with a single
+`Encounters` alone is 1647 B (4.5% of the compact document) with a single
 encounter, `city_normal_ordinance_08`, taking 38% of that section -- yet the
 whole encounter table plus everything it reaches costs about 136 B exclusive,
 because its 31 trigger programs are 10 distinct bodies written 31 times and
@@ -88,7 +89,7 @@ is structurally exact.  What disappears is **redundancy**:
 
 | redundancy | compact JSON bytes it occupies | how the binary avoids it |
 |---|---|---|
-| object key names (1375 occurrences, 123 distinct) | 15226 | an opcode's field descriptors spell each key once, not per occurrence |
+| object key names (1408 occurrences, 125 distinct) | 15446 | an opcode's field descriptors spell each key once, not per occurrence |
 | `{"kind":..,"value":..}` discriminant envelope | 3537 | the opcode *is* the kind |
 | redundant `Children` second copies | 0 | subtree interning: a repeated child is one u16 handle |
 | byte-identical program bodies | 0 | the same interning |
@@ -133,19 +134,19 @@ Sources of truth for each of those claims:
   * `Events[].situations[].TextKey`, `...Choices[].TextKey`, `Shops[].Offers[].TextKey`
   * the whole `Presentation` object (4 B compact)
 
-  Measured effect: compact 33436 -> 30540 B; binary 17368 -> 15808 B (saves 1560 B, 9.0%).
+  Measured effect: compact 36953 -> 34057 B; binary 20944 -> 19380 B (saves 1564 B, 7.5%).
 
 ## 4. Derived tables
 
 | | count |
 |---|---|
 | distinct IR `kind` values | 12 |
-| distinct plain-object shapes | 24 |
-| opcodes (8 reserved + dynamic) | 44 |
-| distinct interned terms in the DAG | 193 |
-| aux cells | 140 |
-| pooled strings | 352 |
-| string blob | 10872 B |
+| distinct plain-object shapes | 25 |
+| opcodes (8 reserved + dynamic) | 45 |
+| distinct interned terms in the DAG | 210 |
+| aux cells | 156 |
+| pooled strings | 386 |
+| string blob | 14086 B |
 | content integer range on the wire | [-1, 1024] vs storable [-32766, 32767] |
 | (opcode, field) pairs that are absent in some instances | 0 |
 

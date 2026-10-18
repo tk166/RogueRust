@@ -22,6 +22,11 @@ WHY THREE LAYERS (each one alone is a false green)
           duplicate of the encounter's inline record), roster -> enemy actions,
           every status a program names -> a STAT row, every id -> the right
           entity kind in `SEC_IDX`.
+4. INERT  a key the kernel never reads must be *declared* inert in the
+          document's `InertKeys` block, with the reason it can stay.  The
+          round-trip layer is blind to this class: "the image agrees with the
+          source" is true for a key nobody consumes.  Derivation and the two
+          rot directions are in §2b.
 
 Plus two failure modes that are cheap to forget:
 * an image older than its source document is red (`build.py --package sts`),
@@ -38,6 +43,7 @@ no source, stale image).
 import argparse
 import json
 import os
+import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -584,6 +590,233 @@ def check_weak_pool_table(doc):
     ok("weak pool", "%d entries x %d%%" % (len(table), INV_WEAK_WEIGHT))
 
 
+# =============================================================================
+# 2b.  the fourth layer -- a key that looks like data but is only documentation
+# =============================================================================
+#
+# WHY THIS LAYER EXISTS (measured, not guessed)
+# ---------------------------------------------
+# The content format has keys that the kernel **never reads**: the storage layer
+# keeps them (they round-trip through both images like everything else), so
+# filling them in changes *nothing* and reports *nothing*.  Three examples that
+# were verified by hand: `STATUS.DeathPrevention` (a reference rule hook with no
+# kernel capability), `Program.MaxNodeDepth` (the kernel uses its own
+# `MAX_NODE_DEPTH` constant instead), and the root key `Monsters` (the encounter
+# carries its own inline copy, which is what reaches `ENCT`).
+#
+# A round-trip gate cannot see this by construction: "the image agrees with the
+# source" is true for an inert key too.  So the rule is a *declaration*:
+# every key with no kernel consumer must be listed in the document's
+# `InertKeys` block with the reason it can stay.  That turns "silently inert"
+# into "explicitly inert", and it makes the two failures that actually happen
+# observable:
+#   * someone adds a key nobody reads -> red (you must wire it up or declare it);
+#   * a declaration outlives its key, or the kernel grows a reader for a
+#     declared-inert key -> red (the manifest is not allowed to rot either way).
+#
+# WHAT IS DERIVED, AND FROM WHERE (no second copy of the truth)
+# -------------------------------------------------------------
+# "The kernel reads this key" is *derived* by scanning `kernel/**/*.rs`:
+#   * accessor calls `.<snake_case>(`  (e.g. `status.polarity()`),
+#   * quoted literals `"<Key>"`        (envelopes take cells by name:
+#     `int_field("MaxProgramSteps")`).
+# `kernel/rd-core/src/content.rs` is excluded: it holds the row-schema mirror and
+# the accessors themselves (`death_prevention => 10`), so counting it would make
+# every key look consumed.  Test modules are excluded for the same reason --
+# `content.rs:2690-2755` asserts that each accessor returns its cell, which
+# proves "the cell is readable", not "somebody uses it".  Comment lines are
+# dropped so a doc comment mentioning a key cannot fake a consumer.
+# Root keys are the exception: the kernel resolves them by *index* (S_CARD,
+# S_STAT, ...), so only `root_by_name("<Key>")` counts, and the compiler is the
+# thing that decides which root key becomes a row table (`ENTITY_SECTIONS`).
+#
+# DIRECTION OF THE APPROXIMATION (stated so it cannot be misread): the derived
+# rule is **permissive** -- a same-named accessor for another type also counts as
+# a consumer.  So it can under-report (fail to demand a declaration), never
+# over-report (never call a consumed key inert).  The two checks below fail
+# loudly in the direction that matters and say which line/rule decided.
+
+KERNEL_DIR = os.path.join(ROOT, "kernel")
+# The declaration is this gate's input, not content: it is a root key so that it
+# travels with the document it describes (`check_roundtrip` still proves it
+# survives into both images), but it is not part of the inert-key universe.
+MANIFEST_ROOT_KEY = "InertKeys"
+INERT_SCOPES = ("root", "Statuses[]", "Program")
+_COMMENT_PREFIXES = ("//", "/*", "*")
+_KERNEL_CODE = {}
+
+
+def snake_case(name):
+    """`MaxNodeDepth` -> `max_node_depth`, the kernel's accessor spelling."""
+    out = []
+    for index, ch in enumerate(name):
+        if ch.isupper() and index and (
+                not name[index - 1].isupper()
+                or (index + 1 < len(name) and name[index + 1].islower())):
+            out.append("_")
+        out.append(ch.lower())
+    return "".join(out)
+
+
+def kernel_rule_code():
+    """`kernel/**/*.rs` minus test modules and comment lines, keyed by repo path."""
+    if not _KERNEL_CODE:
+        for base, dirs, files in os.walk(KERNEL_DIR):
+            dirs[:] = sorted(d for d in dirs if d != "target")
+            for name in sorted(files):
+                if not name.endswith(".rs"):
+                    continue
+                path = os.path.join(base, name)
+                with open(path, "r", encoding="utf-8", errors="replace") as fh:
+                    text = fh.read()
+                cut = re.search(r"^#\[cfg\(test\)\]", text, re.M)
+                if cut:
+                    text = text[:cut.start()]
+                # Blank comment lines instead of dropping them: the failure messages
+                # quote `file:line`, and a message that points at the wrong line is
+                # worse than no line at all (this repo has been bitten by that).
+                kept = ["" if line.lstrip().startswith(_COMMENT_PREFIXES) else line
+                        for line in text.splitlines()]
+                _KERNEL_CODE[rel(path)] = "\n".join(kept)
+    return _KERNEL_CODE
+
+
+def kernel_reads(key):
+    """(bool, where) -- does kernel *rule* code consume this key?"""
+    code = kernel_rule_code()
+    call = re.compile(r"\.%s\(" % re.escape(snake_case(key)))
+    literal = re.compile(r'"%s"' % re.escape(key))
+    for path, text in sorted(code.items()):
+        if path.endswith("rd-core/src/content.rs"):
+            continue
+        for pattern in (call, literal):
+            hit = pattern.search(text)
+            if hit:
+                return True, "%s:%d" % (path, text.count("\n", 0, hit.start()) + 1)
+    return False, ""
+
+
+def root_read_by_name(key):
+    """(bool, where) -- does any non-test kernel code call `root_by_name("<Key>")`?"""
+    pattern = re.compile(r'root_by_name\(\s*"%s"\s*\)' % re.escape(key))
+    for path, text in sorted(kernel_rule_code().items()):
+        hit = pattern.search(text)
+        if hit:
+            return True, "%s:%d" % (path, text.count("\n", 0, hit.start()) + 1)
+    return False, ""
+
+
+def scope_keys(doc):
+    """The inert-key universe, per scope, straight out of the source document."""
+    row_tables = {section for _name, section in contentc_compile.ENTITY_SECTIONS}
+    root = [key for key in doc if key not in row_tables and key != MANIFEST_ROOT_KEY]
+    statuses, programs = [], []
+    for record in doc.get("Statuses") or []:
+        for key in record:
+            if key not in statuses:
+                statuses.append(key)
+    for record in list(doc.get("Cards") or []) + list(doc.get("EnemyActions") or []):
+        program = record.get("Program")
+        if isinstance(program, dict):
+            for key in program:
+                if key not in programs:
+                    programs.append(key)
+    return {"root": root, "Statuses[]": statuses, "Program": programs}
+
+
+def presentation_keys(doc, scope):
+    """Keys the *compiler* strips (`strip_presentation`) -- a consumer, not inert.
+
+    Derived from the compiler's own function, never from a second copy of the
+    presentation rule (`contentc-audit.md` §7).
+    """
+    stripped = contentc_compile.strip_presentation(doc)
+    return set(scope_keys(doc)[scope]) - set(scope_keys(stripped)[scope])
+
+
+def check_inert_keys(doc):
+    print("[6b] inert-key declarations (%s)" % MANIFEST_ROOT_KEY)
+    entries = doc.get(MANIFEST_ROOT_KEY)
+    if entries is None:
+        fail(MANIFEST_ROOT_KEY,
+             "the declaration block is missing -- every key without a kernel consumer "
+             "has to be declared here (see the module docstring of this gate)")
+        entries = []
+    elif not isinstance(entries, list):
+        fail(MANIFEST_ROOT_KEY, "must be a list, got %s" % type(entries).__name__)
+        entries = []
+
+    declared = {}
+    for index, entry in enumerate(entries):
+        where = "%s[%d]" % (MANIFEST_ROOT_KEY, index)
+        if not isinstance(entry, dict):
+            fail(where, "must be an object with Path/Why, got %s" % type(entry).__name__)
+            continue
+        extra = sorted(set(entry) - {"Path", "Why"})
+        if extra:
+            fail(where, "unexpected key(s) %s (only Path/Why)" % extra)
+        path, why = entry.get("Path"), entry.get("Why")
+        if not isinstance(path, str) or ":" not in path:
+            fail(where, "Path must be '<scope>:<Key>', got %r" % (path,))
+            continue
+        scope, key = path.split(":", 1)
+        if scope not in INERT_SCOPES:
+            fail(where, "unknown scope %r (known: %s)" % (scope, ", ".join(INERT_SCOPES)))
+            continue
+        if not key:
+            fail(where, "empty key in Path %r" % path)
+            continue
+        if path in declared:
+            fail(where, "duplicate Path %r" % path)
+            continue
+        if not isinstance(why, str) or len(why.strip()) < 12:
+            fail(where, "%s: `Why` must state why the key can stay inert" % path)
+            continue
+        declared[path] = why
+
+    keys = scope_keys(doc)
+
+    # (1) A declaration must not outlive its key: a manifest that names something
+    # the content no longer has is a lie that reads like coverage.
+    for path in sorted(declared):
+        scope, key = path.split(":", 1)
+        if key not in keys[scope]:
+            fail("inert.stale", "%s is declared inert but does not appear in the content "
+                 "-- the declaration outlived its key" % path)
+
+    # (2) Every key with no kernel consumer must be declared.
+    for scope in INERT_SCOPES:
+        presentation = presentation_keys(doc, scope)
+        for key in keys[scope]:
+            path = "%s:%s" % (scope, key)
+            if path in declared or key in presentation:
+                continue
+            if scope == "root":
+                reads, where = root_read_by_name(key)
+                rule = "no `root_by_name(\"%s\")` call in kernel rule code" % key
+            else:
+                reads, where = kernel_reads(key)
+                rule = "no `.`+`%s(` and no \"%s\" literal in kernel rule code" % (
+                    snake_case(key), key)
+            if not reads:
+                fail("inert.undeclared", "%s is not read by the kernel (%s) and is not "
+                     "declared in %s -- wire it up, or declare it and say why it is "
+                     "documentation" % (path, rule, MANIFEST_ROOT_KEY))
+
+    # (3) A declaration must not rot the other way either: if the kernel grew a
+    # consumer, the "inert" claim is now false and has to be deleted.
+    for path in sorted(declared):
+        scope, key = path.split(":", 1)
+        reads, where = root_read_by_name(key) if scope == "root" else kernel_reads(key)
+        if reads:
+            fail("inert.rotted", "%s is declared inert but the kernel reads it at %s -- "
+                 "delete the declaration" % (path, where))
+
+    ok("inert keys", "%d declared, %d root / %d status / %d envelope keys checked"
+       % (len(declared), len(keys["root"]), len(keys["Statuses[]"]),
+          len(keys["Program"])))
+
+
 def check_roundtrip(doc, rom, label, expected):
     """Source document vs image, per key, on every entity and every root key."""
     print("[7] round trip: %s" % label)
@@ -664,6 +897,7 @@ def main():
     check_statuses(doc)
     check_relations(doc)
     check_weak_pool_table(doc)
+    check_inert_keys(doc)
     check_roundtrip(doc, full, "full", doc)
     # The core image's expectation comes from the compiler's own strip rule --
     # a copy of it here would be a second truth that rots (contentc-audit §7).

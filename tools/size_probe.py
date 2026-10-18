@@ -214,7 +214,13 @@ def main():
     print(f"\n  ⚠ 归档里另有 {floor:,} B 来自 vendored `core`（未链接，真链接后大部分会被 --gc-sections 回收）。")
     print("     要得到真实固件占用，需要一个最终链接（链接脚本 + 内存布局），属于 W4 的工作。")
     print(f"\n  参考：内容表 core 版 85,616 B（应放**闪存**，不是 SRAM）")
-    print(f"  参考：一个战斗实例 171,848 B = 606,208 B SRAM 的 28.3%")
+    # 这里原来写着"一个战斗实例 171,848 B = 28.3%"，而真实值已经是 184,648 B —— 一句
+    # 抄了第二份的数字，静静过期了一年。数字的**唯一出处**是 rd-core 的
+    # `state_fits_the_sram_plan`（每次 `cargo test` 都打印实测值，并断言 ≤192 KiB），
+    # rd-sizeprobe 的 `COMBAT_STATE_BYTES` 是同一个常量。所以这里不再抄数字，只指路。
+    print("  参考：一个战斗实例的 SRAM 占用 = size_of::<CombatState>()，**唯一出处**是")
+    print("     kernel/rd-core/src/state.rs 的 `state_fits_the_sram_plan`（打印实测值），")
+    print("     以及 kernel/rd-sizeprobe 的 COMBAT_STATE_BYTES。本脚本不再复制这个数。")
     return 0
 
 
