@@ -64,7 +64,7 @@
 //! | `resolve_card_queue` | 否（内容侧） | 62/62 卡 `QueueOnPlay` 为空 **且** 全镜像 0 条 `node.queueCard`；解析器本身是真的 |
 //! | `resolve_pending_queues` | 否 | 本宿主每个钩子都**就地**把效果写进状态（`exec::execute` 是同步递归的） |
 //! | `damage_over_time` | **是** | 2 个状态带 `damage_over_time`：`paperwork` / `poison` |
-//! | `hand_turn_end_lifecycle` | 否 | 62/62 卡 `LifecyclePrograms = {}`（实测是 0 字段的 `_obj`，term 11） |
+//! | `hand_turn_end_lifecycle` | 否（内容侧） | **机制是真的**（跑 `CARD.LifecyclePrograms[TurnEndInHand]`，`CardLifecyclePrograms.cs:21-46`），但 62/62 卡 `LifecyclePrograms = {}`（实测是 0 字段的 `_obj`，term 11）⇒ 一条节目都不跑 |
 //! | `run_turn_ended_triggers` | **是** | `TurnEnded` 触发器 **6** 条；**poison 的层数衰减就在这条路上** |
 //! | `decrease_timed_statuses` | 否 | 23/23 状态 `UsesDuration = false`（`F_BOOL` 原始值 1） |
 //! | `hand_is_retained` | 否 | 23/23 状态不带 `retain_hand` 标签（`status_bind::has_tag` 逐条读过） |
@@ -126,10 +126,10 @@
 
 use core::cell::Cell;
 
-use crate::content::{Content, ABSENT16, EK_CARD, OP_ARR, NULL16};
+use crate::content::{Content, ABSENT16, EK_CARD, NULL16};
 use crate::exec::{self, ExecContext};
 use crate::expr::ExprError;
-use crate::ir::{IrError, NodeRef};
+use crate::ir::{IrError, NodeRef, Value};
 use crate::state::{
     CapacityError, CardSlot, CardZone, CombatEvent, CombatResult, CombatState,
     CombatantId, Continuation, EventItem, StatusDefinitionId, StatusInstance,
@@ -203,9 +203,15 @@ pub enum HostError {
     Capacity(CapacityError),
     /// **内核还没做到**：内容真的用到了 v1 没实现的那条路。载荷点名是哪一样。
     ///
-    /// 今天真正的取值只有一个：`"CardLifecyclePrograms"`（卡在手里过回合的节目，
-    /// `CardLifecyclePrograms.cs:21-46`）。镜像 62/62 卡都是空，所以它今天不可达 ——
-    /// 但内容一用就必须响亮，而不是让"烧牌/流血/悔恨"这类卡永远不发作。
+    /// 今天真正的取值只有一个：`"CardLifecycleTrigger"`（`CARD.LifecyclePrograms` 里出现了
+    /// `TurnEndInHand` 之外的键 —— 参考的 `CardLifecycleTrigger` 枚举今天只有那一个成员，
+    /// `CardLifecyclePrograms.cs:8-11`，见 [`card_lifecycle_turn_end_program`]）。
+    /// 它今天不可达（62/62 卡的 `LifecyclePrograms` 是 `{}`），但内容一用就必须响亮。
+    ///
+    /// ⚠️ **2026-10-19 之前**这里唯一的取值是 `"CardLifecyclePrograms"`：那时候"卡在手里
+    /// 过回合的节目"整条路都是拒绝的。现在它是**真实现**
+    /// （[`Host::try_hand_turn_end_lifecycle`]）—— 拒绝换成了"解不出来才拒绝"，
+    /// 因为一个静默 `Ok(())` 会让"烧牌/悔恨"这类卡永远不发作且没有任何信号。
     ///
     /// ⚠️ 另有两条"内核还没做到"走的是 [`Self::Exec`]，因为**拒绝发生在 `exec.rs` 里**，
     /// 而它已经有自己的词表了：`"cardsPlayedLastTurn"`（表达式求值器缺这个 int 表达式，
@@ -1179,42 +1185,177 @@ impl<'a> Host<'a> {
         Ok(())
     }
 
-    /// turn-end 处理器 #1：牌在手里过回合的生命周期节目
+    /// turn-end 处理器 #1：牌在手里过回合的**生命周期节目**
     /// （`CardLifecyclePrograms.cs:21-46`，注册在 `StandardCombatPackage.cs:135`）。
     ///
-    /// **今天无活可做**：62/62 卡的 `LifecyclePrograms` 是 `{}`（实测：`CARD` 行的这一格
-    /// 是一个 **0 字段的 `_obj`**，term 11 —— 不是 `_arr`、不是哨兵，所以"空"的判据是
-    /// `nfields() == 0`，见 [`card_lifecycle_program_count`]）。
+    /// 这就是 Burn / Decay / Regret 那一类"在手里就会发作"的卡的机制：行为挂在**卡定义**上
+    /// （`CardDefinition.LifecyclePrograms`，`CardDefinitions.cs:24-26`），不是一个按卡 id
+    /// 过滤的全局触发规则。
     ///
-    /// ⇒ 实现为**可判定的空**：真的去查每一张手牌的 `LifecyclePrograms`，非空就
-    /// [`HostError::Unsupported`]（**静默 `Ok(())` 会让"烧牌/流血/悔恨"这类卡永远不发作
-    /// 且没有任何信号** —— 那是本项目反复踩的"工具说成功、对象没干活"）。
+    /// # 参考做什么（逐行读过，行号可查）
+    ///
+    /// 1. `TryGetCombatant(combatEvent.CombatantId)` 失败 ⇒ 返回（`CardLifecyclePrograms.cs:28-29`）。
+    /// 2. `foreach (var card in combat.GetCardZones(combatEvent.CombatantId).GetCardsInZone(CardZone.Hand))`
+    ///    （`:31`）—— **正在结束回合的那个战斗员的 `Hand`**，手牌序。
+    /// 3. 定义查不到 ⇒ `continue`（`:33-34`）。
+    /// 4. `definition.LifecyclePrograms.TryGetValue(CardLifecycleTrigger.TurnEndInHand, out var program)`
+    ///    失败 ⇒ `continue`（`:35-36`）。`CardLifecycleTrigger` 今天**只有这一个成员**
+    ///    （`:8-11`，【已验证】读过那 4 行）。
+    /// 5. `EffectProgramExecutor.Execute(program, new CardLifecycleContext(definition, card.Id, owner.Id),
+    ///    CardLifecycleTriggeredEffectSupport.CreateActionBuildContext(combat, owner), …)`（`:38-43`）。
+    ///    那份上下文是 `Source = owner`、`EventTargetId = owner.Id`
+    ///    （`Effects/CardLifecycleTriggeredEffects.cs:49-55`，【已验证】）
+    ///    ⇒ 节目里的 `sel.source` **和** `sel.eventTarget` 都是正在结束回合的那个人。
+    ///
+    /// # 三条与参考对齐的细节
+    ///
+    /// * **跑的是 `LifecyclePrograms[TurnEndInHand]`，不是卡的 `Program`**（`:35` 那一格）。
+    ///   镜像里它们是 `CARD` 行的**两格**（第 1 格 `Program` / 第 4 格 `LifecyclePrograms`，
+    ///   `content.rs:1330`、`:1336`）⇒ 混用会让"每张在手里的卡都按出牌节目发作"。
+    /// * **每个节目 +1 执行号，但 +0 链号**：执行号由 `Execute` 里发
+    ///   （`Programs/EffectProgramExecution.cs:27`）；而处理器跑在 `TurnEndedCombatEvent` 的
+    ///   **分发**里，那一刻 `CurrentEffectChain` 是事件自己那条链
+    ///   （`CombatEventHandling.cs:60` 的 `using (combat.EnterEffectChain(entry.EffectChain))`），
+    ///   所以节目链的 `??=`（`:31`）不会建新根链。内核把 `TurnEnded` 那**一个**链号发在
+    ///   [`Self::try_run_turn_ended_triggers`] 里，而本钩子跑在它之前 ⇒ 这里用
+    ///   [`CombatState::adopt_root_chain`]（**只建链、不推进 `next_effect_chain_number`**）
+    ///   表达"复用一条已经发过号的链"。
+    ///   ⚠️ 那条链的 **id** 在参考里是 TurnEnded 事件的号，内核此刻还没有它，拿到的是
+    ///   "上一个已发的号"。id **不进哈希**（哈希里是 `chain_num` 计数器，`snapshot.rs:165`），
+    ///   也没有任何按 id 的查表（`ChainRecord.id` 只被 `create_triggered_chain` 继承，
+    ///   `state.rs:3441`）⇒ 可观察量（`chain_num`）与参考一致。
+    /// * **节目只派发、不排空**（`Execute` 就是"派发"，`:38-43`）：Burn 的 2 点伤害在
+    ///   [`Self::try_run_turn_ended_triggers`] 的排空里落地，与参考"整批 turn-end 处理器
+    ///   跑完之后才排空"同构。
+    ///
+    /// # 今天的量（实测）
+    ///
+    /// 62/62 卡 `LifecyclePrograms = {}`（`CARD` 行第 4 格指向一个 **0 字段的 `_obj`**，term 11）
+    /// ⇒ 真实内容上本钩子**一个节目都不跑**：不改一格状态、不发执行号、不建链。
+    /// 那条"空"路径是 [`card_lifecycle_turn_end_program`] 的两次格读取，**不是特判**：
+    /// 有节目的卡走的是同一条解码路。
+    ///
+    /// # 偏离参考的地方（都写在这里，别让它们变成隐藏假设）
+    ///
+    /// 1. **定义查不到 ⇒ 响亮失败**（[`HostError::Content`]），参考是 `continue`（`:33-34`）。
+    ///    理由：手牌里有一张定义不在内容里的卡是**状态坏了**；静默跳过正好是"这张卡永远不发作
+    ///    且没有任何信号"。真实内容走不到这一支（每张手牌的定义都在 `CARD` 表里）。
+    /// 2. **节目上下文的"卡槽"没有对应物**：参考的 `CardLifecycleContext` 带
+    ///    `(CardDefinition, CardInstanceId, OwnerId)`（`:15`），而 [`ExecContext`] 只有一个卡槽
+    ///    `iteration_card`，它的语义被钉死为 `forEachCardInZone` 的迭代卡（`exec.rs:305-310`）
+    ///    ⇒ **故意不绑**（绑了会让 `cardInstance.iterated` 静默读到这张卡，而参考里那个槽指的是
+    ///    别的东西）。读卡槽的表达式在 `expr.rs::eval_card` 上得到
+    ///    `ExprError::NoTarget`（**响亮**），与出牌那条路一致（`play.rs:1239` 同样传 `None`）。
+    /// 3. **先快照手牌槽位**再逐个跑：参考的注释（`:17-20`）说"we snapshot the hand first"，
+    ///    但 `:31` 的 `foreach` 里**没有**显式 `.ToArray()`，`CardZones.GetCardsInZone` 返回
+    ///    拷贝还是活视图 **【未验证】**（没读 `CardZones.cs`）。选快照是因为"节目把自己的卡
+    ///    搬走"在活视图下会让 C# 的 `foreach` 抛，而参考的注释明确说那种节目是合法的。
+    /// 4. **先解码全部手牌、再跑第一个节目**：参考是边跑边解（第一张跑了一半才发现第二张的
+    ///    节目坏了）。这里选"先全解"是 `exec` 的预检纪律（不留半执行的痕迹），只在"内容坏了"
+    ///    时可观察。
+    /// 5. **"已结束"就不跑**：`state.result != Ongoing` 时直接返回。参考里这条事件根本不会被
+    ///    分发（排空循环条件 `CombatEventHandling.cs:97`），效果等价。
+    ///
+    /// 栈上两张 96 格的表（`hand` 192 B + `programs` ≈1.5 KB，32 位目标）—— 与 `state.rs` /
+    /// `exec.rs` 里既有的 `[_; MAX_CARDS_PER_ZONE]` 缓冲同一量级；`CombatState` 自己是 207 KB，
+    /// 所以这不是新量级的开销。写在这里是为了它别变成隐藏假设。
     ///
     /// 时点：它在 turn-end 处理器序里是**第 1 位**（`:135`），在弃手牌（`:136`）之前 ——
     /// 参考的注释（`:17-20`）说得很清楚：「before the end-of-turn discard, which is deferred」。
-    /// 本内核的 `end_current_turn` 正是这个顺序（`turn.rs:711-715`）。
+    /// 本内核的 `end_current_turn` 正是这个顺序（`turn.rs:747-751`）。
     pub fn try_hand_turn_end_lifecycle(
         &mut self,
         state: &mut CombatState,
         actor: &CombatantId,
     ) -> Result<(), HostError> {
         self.flush_deferred()?;
-        let Some(zones) = state.card_zones(actor) else {
-            return Ok(());
+        let content = self.content;
+        if state.result != CombatResult::Ongoing {
+            return Ok(()); // 偏离 5：战斗已结束 ⇒ 这条事件不会被分发
+        }
+
+        // 1. 快照手牌的**槽位**（`CardSlot` 是牌池下标，节目搬牌也不会让它漂）。
+        //    `count` 装不下是不可能的：一个区的上限就是 `MAX_CARDS_PER_ZONE`。真超了照样响亮。
+        let mut hand: [Option<CardSlot>; MAX_CARDS_PER_ZONE] = [None; MAX_CARDS_PER_ZONE];
+        let count = {
+            let Some(zones) = state.card_zones(actor) else {
+                return Ok(()); // `:28-29`：战斗员不在场 ⇒ 返回
+            };
+            let mut count = 0usize;
+            for index in 0..zones.count(CardZone::Hand) {
+                let Some(slot) = zones.slot_at(CardZone::Hand, index) else {
+                    continue;
+                };
+                let Some(cell) = hand.get_mut(count) else {
+                    return Err(self.record(HostError::Capacity(CapacityError::Full(
+                        crate::state::Container::CardsInZone(CardZone::Hand),
+                    ))));
+                };
+                *cell = Some(slot);
+                count += 1;
+            }
+            count
         };
-        for index in 0..zones.count(CardZone::Hand) {
-            let Some(slot) = zones.slot_at(CardZone::Hand, index) else {
+
+        // 2. 解码每一张的 `TurnEndInHand` 节目（**纯读**，不动状态）。
+        let mut programs: [Option<LifecycleProgram<'_>>; MAX_CARDS_PER_ZONE] =
+            [None; MAX_CARDS_PER_ZONE];
+        let mut runs = 0usize;
+        for index in 0..count {
+            let Some(Some(slot)) = hand.get(index).copied() else {
                 continue;
             };
             let Some(instance) = state.card(slot) else {
                 continue;
             };
             let definition = instance.definition_id;
-            if card_lifecycle_program_count(self.content, definition.as_str())? > 0 {
-                return Err(self.record(HostError::Unsupported("CardLifecyclePrograms")));
+            if let Some(program) = card_lifecycle_turn_end_program(content, definition.as_str())? {
+                if let Some(cell) = programs.get_mut(index) {
+                    *cell = Some(program);
+                }
+                runs += 1;
             }
         }
-        Ok(())
+        if runs == 0 {
+            // 真实内容的日常路径（62/62 卡没有节目）：**一格状态都不动**、不发号、不建链。
+            return Ok(());
+        }
+
+        // 3. 跑。链号：见上面"三条与参考对齐的细节"第 2 条 —— 复用一条已发过号的链，
+        //    不推进 `next_effect_chain_number`（参考：这一批 turn-end 只有事件那一个号）。
+        let chain = state
+            .adopt_root_chain()
+            .map_err(|e| self.record(HostError::Capacity(e)))?;
+        let saved = state.current_chain();
+        state.set_current_chain(chain);
+        let mut failure: Option<HostError> = None;
+        for index in 0..count {
+            if state.result != CombatResult::Ongoing {
+                break; // 参考的排空条件（`CombatEventHandling.cs:97`）：判了就停
+            }
+            let Some(Some(program)) = programs.get(index).copied() else {
+                continue;
+            };
+            // `sel.source` / `sel.eventTarget` = 正在结束回合的那个人（`:49-55`）。
+            let outcome = execute_program(
+                state,
+                content,
+                program.root,
+                Some(*actor),
+                Some(*actor),
+                program.max_steps,
+            );
+            if let Err(e) = outcome {
+                failure = Some(self.record(HostError::Exec(e)));
+                break;
+            }
+        }
+        state.set_current_chain(saved);
+        state.release_chain(chain);
+        match failure {
+            Some(e) => Err(e),
+            None => Ok(()),
+        }
     }
 
     /// turn-end 处理器 #3：触发程序（镜像 6 条）。
@@ -2166,45 +2307,117 @@ fn card_max_steps(content: &Content<'_>, index: u32) -> u32 {
     }
 }
 
-/// `CARD.LifecyclePrograms` 有几条（0 ⇒ 这张卡没有"在手里过回合"的节目）。
+/// `CardLifecycleTrigger` 的唯一成员（`Cards/CardLifecyclePrograms.cs:8-11`，【已验证】）。
+///
+/// JSON/镜像里的**键名**。参考的枚举今天只有它一个值 ⇒ 别的键 = 内容用了内核没有的路。
+const TURN_END_IN_HAND: &str = "TurnEndInHand";
+
+/// 同一个触发器的**第二种可能的拼法**：枚举序数（`TurnEndInHand` 的序数是 0）。
+///
+/// ⚠️ **【未验证】** 哪一种拼法会真的出现在镜像里：`LifecyclePrograms` 在 62/62 卡上都是
+/// `{}`（空对象，一个键都没有），所以**没有任何实例能观察键名**。两种拼法都要么是
+/// `System.Text.Json` 对"枚举键字典"的默认输出（序数），要么是挂了
+/// `JsonStringEnumConverter` 之后的输出（名字）；`tools/contentc/compile.py` 按 JSON 的键名
+/// 原样派生 `_obj(键…)` 的字段名。两种都接受、并且**两个同时出现就报错**（同一个触发器
+/// 两条节目是内容自相矛盾）；两个都不是 ⇒ 响亮失败（见 [`HostError::Unsupported`]）。
+const TURN_END_IN_HAND_ORDINAL: &str = "0";
+
+/// `CARD.LifecyclePrograms[TurnEndInHand]` 的一个节目（`EffectProgram<CardLifecycleContext>`）。
+#[derive(Clone, Copy)]
+struct LifecycleProgram<'a> {
+    /// 节目根（信封里的 `Root`）。
+    root: NodeRef<'a>,
+    /// 信封里的 `MaxProgramSteps`（缺席 ⇒ 1024）。
+    max_steps: u32,
+}
+
+/// 解一张卡的 `TurnEndInHand` 生命周期节目：`Ok(None)` = 这张卡没有那条节目。
 ///
 /// # 实测形状（二进制层面量的）
 ///
 /// 62/62 卡这一格都指向 **term 11**：`op = 89`（`_obj`，opclass 通用）**零个字段**。
-/// 也就是说空的编码是"0 字段的 `_obj`"，**不是** `_arr`、**不是**哨兵 ——
-/// 用"是不是 `_arr` 且 count == 0"去判会把它误判成"非空"，而反过来用 `nfields()` 判
-/// 才对。三种形状都接：
+/// 也就是说"空"的编码是**0 字段的 `_obj`** —— 不是 `_arr`、不是哨兵 ⇒ 判据是
+/// `opcode.nfields() == 0`（字段数是 **opcode** 的属性，不是 term 的，`content.rs:1427-1432`）。
 ///
-/// * 哨兵（`ABSENT16` / `NULL16`）⇒ 0；
-/// * `_arr` ⇒ 它的 count（`LIST_ABSENT` / `LIST_NULL` 也算 0）；
-/// * 动态对象 ⇒ `nfields()`。
-fn card_lifecycle_program_count(
-    content: &Content<'_>,
+/// # 非空时它长什么样（**推导，不是实测**）
+///
+/// 参考的类型是 `IReadOnlyDictionary<CardLifecycleTrigger, EffectProgram<CardLifecycleContext>>`
+/// （`Cards/CardDefinitions.cs:26`）⇒ JSON 里是一个**对象**，键 = 触发器名，值 = 节目信封。
+/// `tools/contentc/compile.py` 给每个"普通对象形状"派生一个 `_obj(排序后的键…)` opcode
+/// （`rdcfmt.py:90-94`），所以镜像里就是 `_obj(TurnEndInHand)`，它那一格是 `F_TERM`，
+/// 指向与卡自己的 `Program` **同一个**信封形状（`{Id, MaxNodeDepth, MaxProgramSteps, Root}`，
+/// 见 `ir.rs::card_program_root`）。
+/// ⇒ 本条解码路今天在真实内容上**永远走不到非空分支**（62/62 是 `{}`）；
+/// 它是按"编译器的派生规则 + 参考的类型"写的，接线正确性靠 `host.rs` 测试里那几张
+/// **手搓镜像**的卡（`burn`/`burn_dual`/`weird`…）钉住。
+///
+/// # 四条"响亮"（一条都不许静默当作没有）
+///
+/// * 卡定义不在 `CARD` 表里 ⇒ [`HostError::Content`]（偏离参考的 `continue`，理由写在
+///   [`Host::try_hand_turn_end_lifecycle`] 的偏离 1）；
+/// * 这一格不是动态对象（`_arr` / 标量）⇒ [`HostError::Content`]：参考的类型是字典，
+///   `_arr` 不是它的编码（旧版本这里接 `_arr` 的 count，那是按"可能是列表"猜的）；
+/// * 键名不是那两种拼法之一 ⇒ [`HostError::Unsupported`]（**内核缺能力**：参考的枚举今天
+///   只有 `TurnEndInHand` 一个成员，别的键 = 内容用了 v1 没实现的生命周期触发器）；
+/// * 值是 null、或信封里没有 `Root` ⇒ [`HostError::Content`]（前者参考会拿 null 节目去
+///   `Execute` = 空引用；后者是坏信封）。
+fn card_lifecycle_turn_end_program<'a>(
+    content: &'a Content<'a>,
     definition_id: &str,
-) -> Result<usize, HostError> {
+) -> Result<Option<LifecycleProgram<'a>>, HostError> {
     let row = card_row(content, definition_id).ok_or(HostError::Content("CARD row"))?;
     let handle = row.lifecycle_programs();
     if handle == ABSENT16 || handle == NULL16 {
-        return Ok(0);
+        // 整格缺席 / 显式 null ⇒ 参考那边是空字典 ⇒ 没有节目。
+        return Ok(None);
     }
     let term = content
         .term(handle)
         .ok_or(HostError::Content("LifecyclePrograms"))?;
-    if term.op == OP_ARR {
-        let raw = term.slot(1).unwrap_or(0);
-        if raw == crate::content::LIST_ABSENT || raw == crate::content::LIST_NULL {
-            return Ok(0);
-        }
-        return Ok(usize::from(raw));
+    if term.op < crate::content::OP_FIRST_DYNAMIC {
+        // `_arr`/`_str`/`_int`… 都不是"字典"的编码。
+        return Err(HostError::Content("LifecyclePrograms"));
     }
-    if term.op >= crate::content::OP_FIRST_DYNAMIC {
-        // 字段数是 **opcode** 的属性，不是 term 的（`content.rs:1427-1432`）。
-        let opcode = content
-            .opcode(term.op)
+    let opcode = content
+        .opcode(term.op)
+        .ok_or(HostError::Content("LifecyclePrograms"))?;
+    let node = NodeRef::new(content, handle);
+    let mut program: Option<NodeRef<'a>> = None;
+    for index in 0..opcode.nfields() {
+        let field = opcode
+            .field(index)
             .ok_or(HostError::Content("LifecyclePrograms"))?;
-        return Ok(opcode.nfields());
+        let name = content
+            .string(field.name_str())
+            .ok_or(HostError::Content("LifecyclePrograms"))?;
+        if name != TURN_END_IN_HAND && name != TURN_END_IN_HAND_ORDINAL {
+            return Err(HostError::Unsupported("CardLifecycleTrigger"));
+        }
+        if program.is_some() {
+            // 两种拼法同时出现 ⇒ 同一个触发器写了两条节目。
+            return Err(HostError::Content("LifecyclePrograms"));
+        }
+        match node.field(name)? {
+            // `F_TERM` 的缺席哨兵 ⇒ 这个键没写。
+            None | Some(Value::Absent) => {}
+            Some(Value::Null) => return Err(HostError::Content("LifecyclePrograms")),
+            Some(Value::Node(inner)) => program = Some(inner),
+            // 声明成 `F_TERM` 却装了标量：`field()` 已经在这里报过错了，这一支不可达。
+            Some(_) => return Err(HostError::Content("LifecyclePrograms")),
+        }
     }
-    Err(HostError::Content("LifecyclePrograms"))
+    let Some(program) = program else {
+        // 0 字段的 `_obj`：真实内容 62/62 卡就是这一支。
+        return Ok(None);
+    };
+    let root = program
+        .node_field("Root")?
+        .ok_or(HostError::Content("LifecyclePrograms"))?;
+    let max_steps = match program.int_field("MaxProgramSteps")? {
+        Some(value) if value > 0 => u32::try_from(value).unwrap_or(DEFAULT_MAX_PROGRAM_STEPS),
+        _ => DEFAULT_MAX_PROGRAM_STEPS,
+    };
+    Ok(Some(LifecycleProgram { root, max_steps }))
 }
 
 // =============================================================================================
@@ -2217,7 +2430,7 @@ fn card_lifecycle_program_count(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::content::Content;
+    use crate::content::{Content, FORMAT_VERSION, MAGIC, OP_ARR};
     use crate::exec::ExecError;
     use crate::expr::ExprError;
     use crate::state::{
@@ -2277,6 +2490,19 @@ mod tests {
         state.add_combatant(unit("hero", "player", 70, 70)).unwrap();
         state.add_combatant(unit("enemy_a", "enemy", 20, 20)).unwrap();
         state.add_combatant(unit("enemy_b", "enemy", 10, 10)).unwrap();
+        state
+    }
+
+    /// 英雄 + **一个**敌人（`foe`）：回合末推进到 `foe` 时 `nxt > cur` ⇒ **不绕回**，
+    /// 于是没有 RoundEnded / RoundStarted 两条事件混进链号账里（那两条是别的测试的观察对象）。
+    ///
+    /// `hero_health` 是初始血量（致命那一条用 2）。
+    fn duel(hero_health: i32) -> CombatState {
+        let mut state = CombatState::new(CombatId::new("c1").unwrap(), 42);
+        state
+            .add_combatant(unit("hero", "player", hero_health, 70))
+            .unwrap();
+        state.add_combatant(unit("foe", "enemy", 20, 20)).unwrap();
         state
     }
 
@@ -2501,6 +2727,398 @@ mod tests {
         out.into_bytes()
     }
 
+    // =========================================================== 手搓镜像（生命周期节目）
+    //
+    // 真实镜像 **62/62 卡 `LifecyclePrograms = {}`** ⇒ "节目真的跑了"这件事在真实内容上
+    // **没有观察对象**。所以这里手搓一份最小 RDCF 镜像，给 `try_hand_turn_end_lifecycle`
+    // 用：一张"在手里过回合扣自己 2 点"的卡 —— 就是参考测试里的 `curse.burn`
+    // （`ref/…/tests/RogueDeck.Core.Tests/Combat/CardLifecycleProgramTests.cs:13-29`）。
+    //
+    // 格式的权威是两头，都逐条对过：
+    // * 写盘方 `tools/contentc/rdcfmt.py`（段号/行宽/`F_*` 的槽编码/哨兵值）；
+    // * 读盘方 `content.rs`（`parse` 验目录，`validate` 验段内自洽）。
+    //
+    // ⚠️ 这份镜像是**测试脚手架**，不是"内容规范"：它只放断言需要的那 6 张卡、24 个 opcode、
+    // 16 条 term。谁改它，`the_hand_rolled_burn_image_is_a_well_formed_mirror` 会先把
+    // `validate()` 的每个码摆在面前。
+
+    /// 动态 opcode 的下标（保留块 `0..=15` 之后按声明序，`rdcfmt.py:90-94`）。
+    const OP_LIFECYCLE_OBJ: u16 = 16; // `_obj(TurnEndInHand)`：生命周期节目的键
+    const OP_ENVELOPE: u16 = 17; // `_obj(MaxProgramSteps, Root)`：节目信封
+    const OP_DEAL_DAMAGE: u16 = 18; // `node.dealDamage`
+    const OP_GAIN_BLOCK: u16 = 19; // `node.gainBlock`
+    const OP_CONST: u16 = 20; // `const`
+    const OP_SEL_SOURCE: u16 = 21; // `sel.source`
+    const OP_EMPTY_OBJ: u16 = 22; // 0 字段的 `_obj`（= 真实镜像 term 11 的形状）
+    const OP_DRAWN_OBJ: u16 = 23; // `_obj(Drawn)`：内核没有的生命周期触发器
+
+    /// `F_*` 字段类别（`rdcfmt.py:176`）。
+    const F_STR: u8 = 1;
+    const F_INT: u8 = 2;
+    const F_BOOL: u8 = 3;
+    const F_TERM: u8 = 4;
+    const F_TERMLIST: u8 = 5;
+    const F_JSON: u8 = 7;
+
+    /// `F_BOOL` 的四个值（`rdcfmt.py:191`）。
+    const BOOL_FALSE: u16 = 1;
+    const BOOL_TRUE: u16 = 2;
+
+    fn push_u16(out: &mut Vec<u8>, value: u16) {
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn push_u32(out: &mut Vec<u8>, value: u32) {
+        out.extend_from_slice(&value.to_le_bytes());
+    }
+
+    /// 一条 `OPF` 字段描述：`u16 name_str, u8 kind, u8 flags`（`rdcfmt.py:69-73`）。
+    fn push_field(out: &mut Vec<u8>, name: u16, kind: u8) {
+        push_u16(out, name);
+        out.push(kind);
+        out.push(0); // FLAG_WRAP_*
+    }
+
+    /// 手搓镜像。卡与节目一览（下面的测试按这张表挑卡）：
+    ///
+    /// | 定义 id | `Program`（出牌） | `LifecyclePrograms[TurnEndInHand]` | 用途 |
+    /// |---|---|---|---|
+    /// | `curse.burn` | 缺席 | `dealDamage{2, sel.source}` | 参考的 Burn 本体 |
+    /// | `curse.burn_dual` | `dealDamage{7, sel.source}` | `dealDamage{2, sel.source}` | 读错格子（`Program` vs `LifecyclePrograms`）⇒ 7 |
+    /// | `curse.burn_block` | 缺席 | `gainBlock{5, sel.source}` | 排空在判负那一刻**停住**（这一条不会落地） |
+    /// | `curse.burn_retained` | 缺席 | `dealDamage{2, sel.source}`，`RetainInHandOnTurnEnd = true` | 保留标志与节目无关 |
+    /// | `curse.weird` | 缺席 | `_obj{Drawn: …}` | 未知触发器 ⇒ **响亮** |
+    /// | `plain.card` | `dealDamage{2, sel.source}` | `{}`（0 字段 `_obj`） | 空生命周期节目 **不跑** |
+    fn burn_image() -> Vec<u8> {
+        // ---- 字符串池：UTF-8 字节序（`rdcfmt.py:25`），串号 0 是空串 ----
+        let mut strings: Vec<&'static str> = vec![
+            "_null",
+            "_str",
+            "_int",
+            "_bool",
+            "_arr",
+            "_json",
+            "_wrap_lower",
+            "_wrap_upper",
+            "_obj",
+            "node.dealDamage",
+            "node.gainBlock",
+            "const",
+            "sel.source",
+            "TurnEndInHand",
+            "MaxProgramSteps",
+            "Root",
+            "Amount",
+            "TargetSelector",
+            "Value",
+            "Drawn",
+            "curse.burn",
+            "curse.burn_block",
+            "curse.burn_dual",
+            "curse.burn_retained",
+            "curse.weird",
+            "plain.card",
+        ];
+        strings.sort();
+        let sid = |name: &str| -> u16 {
+            if name.is_empty() {
+                return 0;
+            }
+            let mut index = 0usize;
+            while index < strings.len() {
+                if strings[index] == name {
+                    return (index + 1) as u16;
+                }
+                index += 1;
+            }
+            panic!("手搓镜像里没有这个串：{name}")
+        };
+        // `string(i)` 取 `pool[STRO[i-1] .. STRO[i]-1)`（`content.rs::string_at`，
+        // 与 `reader.py` 同规则）⇒ STRO 有 `n+1` 项，末项是池尾，池里**没有**前导 NUL。
+        let mut pool: Vec<u8> = Vec::new();
+        let mut stro: Vec<u8> = Vec::new();
+        for text in &strings {
+            push_u32(&mut stro, pool.len() as u32);
+            pool.extend_from_slice(text.as_bytes());
+            pool.push(0);
+        }
+        push_u32(&mut stro, pool.len() as u32); // 末项 = 池尾
+
+        // ---- opcode 表：保留块 0..=15 + 8 个动态 ----
+        // (名字, 每个字段的 kind)。保留块的字段名一律串号 0（内核不按名字查它们，
+        // 只有 0 号 `_null` 会被 `content.term(0)` 用到，它 0 字段）。
+        let reserved: [(&str, &[u8]); 16] = [
+            ("_null", &[]),
+            ("_str", &[F_STR]),
+            ("_int", &[F_INT]),
+            ("_bool", &[F_BOOL]),
+            ("_arr", &[F_TERMLIST]),
+            ("_json", &[F_JSON]),
+            ("_wrap_lower", &[F_STR]),
+            ("_wrap_upper", &[F_STR]),
+            ("", &[]),
+            ("", &[]),
+            ("", &[]),
+            ("", &[]),
+            ("", &[]),
+            ("", &[]),
+            ("", &[]),
+            ("", &[]),
+        ];
+        // (名字, opclass（0 = IR 节点 / 1 = 普通对象）, 字段表 [(名字, kind)])
+        type FieldSpec = (&'static str, u8);
+        type OpcodeSpec = (&'static str, u8, &'static [FieldSpec]);
+        let dynamic: [OpcodeSpec; 8] = [
+            ("_obj", 1, &[("TurnEndInHand", F_TERM)]),
+            ("_obj", 1, &[("MaxProgramSteps", F_INT), ("Root", F_TERM)]),
+            (
+                "node.dealDamage",
+                0,
+                &[("Amount", F_TERM), ("TargetSelector", F_TERM)],
+            ),
+            (
+                "node.gainBlock",
+                0,
+                &[("Amount", F_TERM), ("TargetSelector", F_TERM)],
+            ),
+            ("const", 0, &[("Value", F_INT)]),
+            ("sel.source", 0, &[]),
+            ("_obj", 1, &[]),
+            ("_obj", 1, &[("Drawn", F_TERM)]),
+        ];
+        let mut opd: Vec<u8> = Vec::new();
+        let mut opf: Vec<u8> = Vec::new();
+        let mut opcode_count = 0usize;
+        for (name, kinds) in reserved {
+            push_u32(&mut opd, opf.len() as u32); // field_off
+            push_u16(&mut opd, sid(name)); // name_str
+            opd.push(kinds.len() as u8); // nfields
+            opd.push(1); // opclass = generic
+            for kind in kinds {
+                push_field(&mut opf, 0, *kind);
+            }
+            opcode_count += 1;
+        }
+        for (name, opclass, fields) in dynamic {
+            push_u32(&mut opd, opf.len() as u32);
+            push_u16(&mut opd, sid(name));
+            opd.push(fields.len() as u8);
+            opd.push(opclass);
+            for (field_name, kind) in fields {
+                push_field(&mut opf, sid(field_name), *kind);
+            }
+            opcode_count += 1;
+        }
+        assert_eq!(opcode_count, 24, "保留块 16 + 动态 8");
+        let opf_cells = (opf.len() / 4) as u32;
+
+        // ---- term 表 ----
+        // 一条 term = `u16 op` + 按字段类别的槽；记录 4 字节对齐，`TRW[i]` = 记录起点 / 4。
+        // 槽序 = opcode 字段表序（`ir.rs::field_spec` 就是这么累加的）。
+        let mut terms: Vec<(u16, Vec<u16>)> = Vec::new();
+        // t0 = `_null`：排空循环拿 `NodeRef::new(content, 0)` 当 anchor，必须是条合法 term。
+        terms.push((0, vec![]));
+        let t_source = terms.len() as u16;
+        terms.push((OP_SEL_SOURCE, vec![]));
+        let t_two = terms.len() as u16;
+        terms.push((OP_CONST, vec![2]));
+        let t_five = terms.len() as u16;
+        terms.push((OP_CONST, vec![5]));
+        let t_seven = terms.len() as u16;
+        terms.push((OP_CONST, vec![7]));
+        let t_damage_two = terms.len() as u16;
+        terms.push((OP_DEAL_DAMAGE, vec![t_two, t_source]));
+        let t_damage_seven = terms.len() as u16;
+        terms.push((OP_DEAL_DAMAGE, vec![t_seven, t_source]));
+        let t_block_five = terms.len() as u16;
+        terms.push((OP_GAIN_BLOCK, vec![t_five, t_source]));
+        // 节目信封：`{MaxProgramSteps, Root}`（真实镜像里还有 `Id` / `MaxNodeDepth`，这里不需要）
+        let t_envelope_two = terms.len() as u16;
+        terms.push((OP_ENVELOPE, vec![1024, t_damage_two]));
+        let t_envelope_seven = terms.len() as u16;
+        terms.push((OP_ENVELOPE, vec![1024, t_damage_seven]));
+        let t_envelope_block = terms.len() as u16;
+        terms.push((OP_ENVELOPE, vec![1024, t_block_five]));
+        let t_lifecycle_two = terms.len() as u16;
+        terms.push((OP_LIFECYCLE_OBJ, vec![t_envelope_two]));
+        let t_lifecycle_block = terms.len() as u16;
+        terms.push((OP_LIFECYCLE_OBJ, vec![t_envelope_block]));
+        let t_lifecycle_drawn = terms.len() as u16;
+        terms.push((OP_DRAWN_OBJ, vec![t_envelope_two]));
+        let t_lifecycle_empty = terms.len() as u16;
+        terms.push((OP_EMPTY_OBJ, vec![]));
+
+        let mut trm: Vec<u8> = Vec::new();
+        let mut trw: Vec<u8> = Vec::new();
+        for (op, slots) in &terms {
+            assert_eq!(trm.len() % 4, 0, "term 记录必须 4 字节对齐");
+            push_u16(&mut trw, (trm.len() / 4) as u16);
+            push_u16(&mut trm, *op);
+            for slot in slots {
+                push_u16(&mut trm, *slot);
+            }
+            while !trm.len().is_multiple_of(4) {
+                trm.push(0);
+            }
+        }
+
+        // ---- CARD 行（15 格，stride 32；`rdcfmt.py:229-237` / `content.rs:1321-1358`）----
+        let card = |id: u16, program: u16, lifecycle: u16, retain: u16| -> [u16; 15] {
+            [
+                id,        // Id
+                program,   // Program（出牌节目）
+                ABSENT16,  // Tags
+                ABSENT16,  // Costs
+                lifecycle, // LifecyclePrograms
+                ABSENT16,  // PlayCondition
+                ABSENT16,  // QueueOnPlay
+                retain,    // RetainInHandOnTurnEnd（F_BOOL）
+                BOOL_FALSE, // IsAction
+                0,         // NameKey
+                0,         // DescriptionKey
+                0,         // PackageId
+                NULL16,    // TurnEndHandDestinationZone（Host 走默认 = DiscardPile）
+                NULL16,    // PlayedCardDestinationZone
+                NULL16,    // extra
+            ]
+        };
+        let cards: [(&str, [u16; 15]); 6] = [
+            (
+                "curse.burn",
+                card(sid("curse.burn"), ABSENT16, t_lifecycle_two, BOOL_FALSE),
+            ),
+            (
+                "curse.burn_block",
+                card(sid("curse.burn_block"), ABSENT16, t_lifecycle_block, BOOL_FALSE),
+            ),
+            (
+                "curse.burn_dual",
+                card(sid("curse.burn_dual"), t_envelope_seven, t_lifecycle_two, BOOL_FALSE),
+            ),
+            (
+                "curse.burn_retained",
+                card(sid("curse.burn_retained"), ABSENT16, t_lifecycle_two, BOOL_TRUE),
+            ),
+            (
+                "curse.weird",
+                card(sid("curse.weird"), ABSENT16, t_lifecycle_drawn, BOOL_FALSE),
+            ),
+            (
+                "plain.card",
+                card(sid("plain.card"), t_envelope_two, t_lifecycle_empty, BOOL_FALSE),
+            ),
+        ];
+        let mut card_bytes: Vec<u8> = Vec::new();
+        let mut idx: Vec<u8> = Vec::new();
+        for (row, (id, cells)) in cards.iter().enumerate() {
+            for cell in cells {
+                push_u16(&mut card_bytes, *cell);
+            }
+            card_bytes.extend_from_slice(&[0, 0]); // 15 × 2 = 30 → 32（`row_stride`）
+            // IDX 项 8 B：`{u16 str, u8 ekind, u8 flags, u16 index, u16 rsvd}`（`rdcfmt.py:38`）。
+            // 表按 id 的字节序**有序**（`content.rs::id_lower_bound` 是二分查找）。
+            push_u16(&mut idx, sid(id));
+            idx.push(1); // EK_CARD
+            idx.push(0);
+            push_u16(&mut idx, row as u16);
+            push_u16(&mut idx, 0);
+        }
+
+        // ---- 目录 + 组装 ----
+        const HEADER: usize = 32;
+        const DIR_ENTRY: usize = 12;
+        const NSEC: usize = 15;
+        let dir_end = HEADER + DIR_ENTRY * NSEC;
+        let mut blob = vec![0u8; dir_end];
+        blob[0..4].copy_from_slice(&MAGIC.to_le_bytes());
+        blob[4..6].copy_from_slice(&FORMAT_VERSION.to_le_bytes());
+        blob[12..16].copy_from_slice(&(HEADER as u32).to_le_bytes()); // dir_off
+        blob[16..18].copy_from_slice(&(NSEC as u16).to_le_bytes());
+        blob[18..20].copy_from_slice(&7u16.to_le_bytes()); // SchemaVersion
+
+        let sections: [(usize, Vec<u8>, u32); 10] = [
+            (0, pool, strings.len() as u32),                      // STR
+            (1, stro, (strings.len() + 1) as u32),               // STRO
+            (2, opd, opcode_count as u32),                        // OPD
+            (3, opf, opf_cells),                                  // OPF
+            (4, trm, terms.len() as u32),                         // TRM
+            (5, trw, terms.len() as u32),                         // TRW
+            (6, Vec::new(), 0),                                   // AUX（没有列表）
+            (7, card_bytes, cards.len() as u32),                  // CARD
+            (13, idx, cards.len() as u32),                        // IDX
+            (14, Vec::new(), 0),                                  // TAGS（真实镜像里也是空段）
+        ];
+        let mut offset = dir_end;
+        for (index, bytes, count) in sections {
+            let base = HEADER + DIR_ENTRY * index;
+            blob[base..base + 4].copy_from_slice(&(offset as u32).to_le_bytes());
+            blob[base + 4..base + 8].copy_from_slice(&(bytes.len() as u32).to_le_bytes());
+            blob[base + 8..base + 12].copy_from_slice(&count.to_le_bytes());
+            blob.extend_from_slice(&bytes);
+            while !blob.len().is_multiple_of(4) {
+                blob.push(0);
+            }
+            offset = blob.len();
+        }
+        let total = blob.len();
+        blob[8..12].copy_from_slice(&(total as u32).to_le_bytes()); // total_size
+        blob
+    }
+
+    /// 这份手搓镜像自己必须是**自洽的**（`validate()` 的每个码都要绿）。
+    ///
+    /// 没有这一条，任何"测试红"都会先让人怀疑是镜像写坏了 —— 而有了它，红只有一种可能：
+    /// 被测的那段代码。
+    #[test]
+    fn the_hand_rolled_burn_image_is_a_well_formed_mirror() {
+        let blob = burn_image();
+        let content = Content::parse(&blob).expect("手搓镜像必须能解析");
+        assert_eq!(content.validate(), Ok(()), "手搓镜像必须自洽");
+        assert_eq!(content.section_count(), 15);
+        assert_eq!(content.opcode_count(), 24);
+        assert_eq!(content.term_count(), 15);
+        assert_eq!(content.rows(crate::content::Table::Card).count(), 6);
+        // 六张卡的解码结果**逐张**（这张表就是上面 `burn_image` 文档里那张表的机器版）：
+        // 四张有 `TurnEndInHand` 节目、`plain.card` 是空 `{}`、`curse.weird` 只有一个
+        // 内核没有的触发器 ⇒ 响亮。
+        for (id, has_program) in [
+            ("curse.burn", true),
+            ("curse.burn_block", true),
+            ("curse.burn_dual", true),
+            ("curse.burn_retained", true),
+            ("plain.card", false),
+        ] {
+            assert_eq!(
+                card_lifecycle_turn_end_program(&content, id)
+                    .unwrap_or_else(|e| panic!("`{id}` 必须解得出来：{e:?}"))
+                    .is_some(),
+                has_program,
+                "`{id}` 的 `TurnEndInHand` 节目是否存在"
+            );
+        }
+        // `LifecycleProgram` 没有 `PartialEq/Debug`（`NodeRef` 的身份是 term id，`match` 更诚实）。
+        match card_lifecycle_turn_end_program(&content, "curse.weird") {
+            Err(HostError::Unsupported("CardLifecycleTrigger")) => {}
+            other => panic!(
+                "`curse.weird` 只有 `Drawn`（内核没有的触发器）⇒ 必须响亮，实际 {:?}",
+                other.map(|p| p.map(|p| p.root.id()))
+            ),
+        }
+        // `curse.burn_dual` 的生命周期节目是 `dealDamage{2}`，而它的**出牌**节目是
+        // `dealDamage{7}` —— 两格的 term 必须不同，否则"读错格子"那条测试就没有区分力。
+        let lifecycle = card_lifecycle_turn_end_program(&content, "curse.burn_dual")
+            .unwrap()
+            .expect("有节目");
+        let card_program = crate::ir::Ir::new(&content)
+            .card_program_root(2)
+            .expect("出牌节目");
+        assert_ne!(
+            lifecycle.root.id(),
+            card_program.id(),
+            "两格必须指向不同的 term"
+        );
+    }
+
     // ---------------------------------------------------------------- 错误面
 
     #[test]
@@ -2511,7 +3129,7 @@ mod tests {
             HostError::Exec(ExecError::UnsupportedNode),
             HostError::Bind(BindError::Polarity),
             HostError::Capacity(CapacityError::MissingCombatant),
-            HostError::Unsupported("CardLifecyclePrograms"),
+            HostError::Unsupported("CardLifecycleTrigger"),
             HostError::Content("TriggerEvent"),
             HostError::TooManyTriggers { needed: 9, have: 8 },
         ];
@@ -2549,7 +3167,7 @@ mod tests {
             ),
             // 内核缺能力。
             (
-                HostError::Unsupported("CardLifecyclePrograms"),
+                HostError::Unsupported("CardLifecycleTrigger"),
                 TurnError::Host(HostFailure::Unsupported),
             ),
             (
@@ -4082,9 +4700,13 @@ mod tests {
     }
 
     #[test]
-    fn hand_turn_end_lifecycle_does_nothing_because_no_card_has_programs() {
+    fn the_real_image_has_no_lifecycle_program_on_any_of_its_62_cards() {
         // 实测依据：62/62 卡 `LifecyclePrograms = {}`（0 字段的 `_obj`，term 11）。
-        // 顺手把整张表扫一遍 —— 这条既是钩子的"今天无为"，也是那个解码器的验证。
+        //
+        // ⚠️ 这条**不是**"钩子是空实现"的证据（那个机制是真的，见下面 `burn` 那组手搓镜像的
+        // 测试）；它证明的是**真实内容今天一个节目都没有**，所以四条对拍层的逐字节相等
+        // 与这个钩子无关。它的第二条职责是**解码器在真实镜像上的回归闸门**：
+        // 谁把"空"判错了（例如把 0 字段的 `_obj` 当成"有一条节目"），这里立刻红。
         let blob = core_image();
         let content = parse(&blob);
         let mut host = Host::new(&content);
@@ -4110,12 +4732,301 @@ mod tests {
                 continue;
             };
             cards += 1;
-            if card_lifecycle_program_count(&content, id).unwrap() > 0 {
+            if card_lifecycle_turn_end_program(&content, id)
+                .unwrap()
+                .is_some()
+            {
                 with_programs += 1;
             }
         }
         assert_eq!(cards, 62);
         assert_eq!(with_programs, 0, "62/62 LifecyclePrograms = {{}}");
+    }
+
+    // ------------------------------------- 生命周期节目真的会跑（手搓镜像上的 6 条）
+
+    /// Burn 的机制：牌在手里过回合 ⇒ 对**持有者**扣 2 点，**每回合末恰好一次**。
+    ///
+    /// 参考：`CardLifecycleProgramTests.cs:39-50`（`A_burn_held_at_turn_end_damages_its_owner`），
+    /// 节目是 `dealDamage{TargetSelector: sel.source, Amount: 2}`（`:21-27`）。
+    ///
+    /// 判据能区分三种错实现：跑两次 ⇒ 66；一次都没跑 ⇒ 70；跑成**出牌**节目 ⇒ 70
+    /// （`curse.burn` 没有出牌节目）。走完整回合末（`turn::end_current_turn`）而不是直接打钩子
+    /// —— 这条同时钉住"钩子在回合机的第 1 位"。
+    #[test]
+    fn a_burn_card_in_hand_deals_two_to_its_bearer_once_per_turn_end() {
+        let blob = burn_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(70);
+        give_card(&mut state, "hero", CardZone::Hand, "burn1", "curse.burn", None);
+        turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+        assert_eq!(health(&state, "hero"), 70, "开局满血（非平凡）");
+
+        turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+        assert_eq!(health(&state, "hero"), 68, "恰好一次 2 点");
+        assert_eq!(zone_count(&state, "hero", CardZone::Hand), 0, "回合末照样弃手牌");
+        assert_eq!(zone_count(&state, "hero", CardZone::DiscardPile), 1);
+    }
+
+    /// 读的是 `LifecyclePrograms` 那一格，**不是**卡的出牌节目 `Program`。
+    ///
+    /// `curse.burn_dual` 两格都写了：出牌 `dealDamage{7}`、生命周期 `dealDamage{2}`。
+    /// 读错格子 ⇒ 63；正解 68。镜像里这是 `CARD` 行的第 1 格与第 4 格（`content.rs:1330/:1336`）。
+    #[test]
+    fn the_lifecycle_program_runs_instead_of_the_card_play_program() {
+        let blob = burn_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(70);
+        give_card(&mut state, "hero", CardZone::Hand, "dual1", "curse.burn_dual", None);
+
+        host.try_hand_turn_end_lifecycle(&mut state, &cid("hero"))
+            .unwrap();
+        host.try_resolve_pending_queues(&mut state).unwrap();
+        assert_eq!(health(&state, "hero"), 68, "跑的是 LifecyclePrograms 那一格");
+    }
+
+    /// 没有生命周期节目的卡**什么都不跑** —— 哪怕它有出牌节目。
+    ///
+    /// 两个镜像各来一张，判据都是"一格状态都不许动 + 不发执行号"：
+    /// * 真实镜像 `paper_cut` 的出牌节目是 `node.dealDamage{Amount: 6, TargetSelector: sel.eventTarget}`
+    ///   （`exec.rs:4242` 的实测注释），而本钩子上下文里 `sel.eventTarget` **就是持有者**
+    ///   ⇒ 读错格子会立刻打 6 点；
+    /// * 手搓镜像 `plain.card` = 出牌 `dealDamage{2, sel.source}`、生命周期 `{}`（0 字段的 `_obj`）。
+    #[test]
+    fn a_card_with_no_lifecycle_program_runs_nothing_even_though_it_has_one_on_play() {
+        // (a) 真实镜像：62/62 卡都是这一支。
+        let real = core_image();
+        let real_content = parse(&real);
+        let mut host = Host::new(&real_content);
+        let mut state = duel(70);
+        give_card(&mut state, "hero", CardZone::Hand, "c1", "paper_cut", None);
+        let before = state_text(&state);
+        host.try_hand_turn_end_lifecycle(&mut state, &cid("hero"))
+            .unwrap();
+        host.try_resolve_pending_queues(&mut state).unwrap();
+        assert_eq!(
+            state_text(&state),
+            before,
+            "空 LifecyclePrograms ⇒ 一格都不动（含 chain_num / exec_num）"
+        );
+
+        // (b) 手搓镜像：同一份内容里"有出牌节目、没有生命周期节目"的卡。
+        let blob = burn_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(70);
+        give_card(&mut state, "hero", CardZone::Hand, "p1", "plain.card", None);
+        let before = state_text(&state);
+        host.try_hand_turn_end_lifecycle(&mut state, &cid("hero"))
+            .unwrap();
+        host.try_resolve_pending_queues(&mut state).unwrap();
+        assert_eq!(
+            state_text(&state),
+            before,
+            "0 字段的 `_obj` 不是「有一条节目」"
+        );
+        assert_eq!(health(&state, "hero"), 70);
+    }
+
+    /// **每一张**有节目的手牌都跑（不是只跑第一张）。
+    ///
+    /// 两张 Burn ⇒ 68 - 4 = 66。只跑第一张的实现在这里给 68。
+    #[test]
+    fn every_hand_card_with_a_program_runs_once() {
+        let blob = burn_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(70);
+        give_card(&mut state, "hero", CardZone::Hand, "burn1", "curse.burn", None);
+        give_card(&mut state, "hero", CardZone::Hand, "burn2", "curse.burn", None);
+
+        host.try_hand_turn_end_lifecycle(&mut state, &cid("hero"))
+            .unwrap();
+        host.try_resolve_pending_queues(&mut state).unwrap();
+        assert_eq!(health(&state, "hero"), 66, "两张各扣 2 点");
+    }
+
+    /// 只在**手牌**里发作：抽牌堆 / 弃牌堆里的同一张卡不跑。
+    ///
+    /// "对手里所有卡都跑" 的实现会扣 6（这里 68）；只认手牌 ⇒ 68。
+    #[test]
+    fn a_burn_card_outside_the_hand_does_not_fire() {
+        let blob = burn_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(70);
+        give_card(&mut state, "hero", CardZone::Hand, "burn1", "curse.burn", None);
+        give_card(&mut state, "hero", CardZone::DrawPile, "burn2", "curse.burn", None);
+        give_card(&mut state, "hero", CardZone::DiscardPile, "burn3", "curse.burn", None);
+
+        host.try_hand_turn_end_lifecycle(&mut state, &cid("hero"))
+            .unwrap();
+        host.try_resolve_pending_queues(&mut state).unwrap();
+        assert_eq!(health(&state, "hero"), 68, "只有手牌那一张");
+    }
+
+    /// 生命周期节目**可以致死**，而且死了之后排空就停：后面排队的东西不落地、回合不推进。
+    ///
+    /// 编排：英雄 2 点血，手里一张 `curse.burn`（扣 2）在前、一张 `curse.burn_block`
+    /// （加 5 格挡）在后。两个节目都会跑（参考也是先把整批节目派发完），于是效果队列里
+    /// 先有 `dealDamage 2`、后有 `gainBlock 5`。
+    /// 排空的第一条就把英雄打到 0 ⇒ `Result != Ongoing` ⇒ 循环退出 ⇒ **格挡那条永远不落地**。
+    ///
+    /// 判据：`hp == 0`（而不是 -2：血量饱和在 0）、`block == 0`（排空没越过判负）、
+    /// `result == Defeat`、回合没推进（`active_combatant_id` 还是英雄）。
+    /// 一个不看 `Result` 的排空循环会在死后继续加 5 格挡 ⇒ `block == 5` 当场红。
+    #[test]
+    fn a_lethal_lifecycle_program_ends_the_fight_and_the_rest_of_the_drain_never_lands() {
+        let blob = burn_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(2);
+        give_card(&mut state, "hero", CardZone::Hand, "burn1", "curse.burn", None);
+        give_card(
+            &mut state,
+            "hero",
+            CardZone::Hand,
+            "blk1",
+            "curse.burn_block",
+            None,
+        );
+        turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+        let turn_before = state.current_turn;
+
+        turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+
+        assert_eq!(state.result, CombatResult::Defeat, "Burn 是致命的");
+        assert_eq!(health(&state, "hero"), 0, "2 - 2 = 0（血量饱和，不会到 -2）");
+        assert_eq!(
+            state
+                .combatant(&cid("hero"))
+                .unwrap()
+                .lifecycle_state,
+            crate::state::CombatantLifecycleState::Downed
+        );
+        assert_eq!(
+            block_of(&state, "hero"),
+            0,
+            "判负之后的排空必须停住 ⇒ 后面那条 gainBlock 5 不落地"
+        );
+        assert_eq!(
+            state.active_combatant_id,
+            Some(cid("hero")),
+            "回合没有推进（`end_current_turn` 的 ②）"
+        );
+        assert_eq!(state.current_turn, turn_before);
+        assert_eq!(
+            state.turn_phase,
+            crate::state::CombatTurnPhase::WaitingToStartTurn
+        );
+    }
+
+    /// 一个节目 = **执行号 +1、链号 +0**。
+    ///
+    /// 参考：执行号在 `EffectProgramExecutor.Execute` 里发（`EffectProgramExecution.cs:27`）；
+    /// 链号不发，因为处理器跑在 `TurnEndedCombatEvent` 的分支里、那一刻 `CurrentEffectChain`
+    /// 是事件自己那条链（`CombatEventHandling.cs:60`）。内核把 `TurnEnded` 的那一个号发在
+    /// `try_run_turn_ended_triggers` 里，所以这里用 `adopt_root_chain`（建链、不推进计数器）。
+    ///
+    /// 三种错实现分别给：`new_root_chain` ⇒ 链号 +1；`exec::execute`（遗留入口）⇒ 执行号 +0；
+    /// 什么都不跑 ⇒ 两个都不动（最后一条被"非平凡"那句挡住）。
+    #[test]
+    fn a_lifecycle_program_advances_the_execution_number_but_not_the_chain_number() {
+        let blob = burn_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(70);
+        give_card(&mut state, "hero", CardZone::Hand, "burn1", "curse.burn", None);
+        // `start_current_turn` 自己会 +1 链号（TurnStarted 那一条），先把它跑掉。
+        turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+        let chain = state.next_effect_chain_number;
+        let exec = state.next_program_execution_id;
+        let live_chains = state.live_chain_count();
+
+        host.try_hand_turn_end_lifecycle(&mut state, &cid("hero"))
+            .unwrap();
+        assert_eq!(
+            state.next_effect_chain_number, chain,
+            "链号不动：参考在 TurnEnded 事件链里跑（`CombatEventHandling.cs:60`）"
+        );
+        assert_eq!(
+            state.next_program_execution_id,
+            exec + 1,
+            "执行号 +1（`EffectProgramExecution.cs:27`）"
+        );
+
+        host.try_resolve_pending_queues(&mut state).unwrap();
+        assert_eq!(health(&state, "hero"), 68, "非平凡：节目真的跑了");
+        // 链 arena 不许漏：节目帧拿了链、排空把它们放掉，钩子自己那一次引用也要还。
+        // 漏一次的后果不是"看起来错"，而是**第 128 个回合末**才 `Capacity(Full(Chains))` ——
+        // 那种迟到 128 步的失败，只有当场断言 live 数才能提前看见。
+        assert_eq!(
+            state.live_chain_count(),
+            live_chains,
+            "生命周期节目不许在链 arena 里留引用"
+        );
+    }
+
+    /// 生命周期触发器不认识的键 ⇒ **响亮**（`HostError::Unsupported`），不是"跳过当没有"。
+    ///
+    /// 参考的 `CardLifecycleTrigger` 今天只有 `TurnEndInHand` 一个成员
+    /// （`CardLifecyclePrograms.cs:8-11`），所以 `_obj{Drawn: …}` 意味着"内容用了内核没有的路"。
+    /// 静默忽略会让那张卡**永远不发作且没有任何信号**。成对：同一份镜像里 `curse.burn` 不报错。
+    #[test]
+    fn a_lifecycle_trigger_other_than_turn_end_in_hand_is_loud() {
+        let blob = burn_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(70);
+        give_card(&mut state, "hero", CardZone::Hand, "w1", "curse.weird", None);
+        assert_eq!(
+            host.try_hand_turn_end_lifecycle(&mut state, &cid("hero")),
+            Err(HostError::Unsupported("CardLifecycleTrigger")),
+            "未知的生命周期触发器必须响亮"
+        );
+
+        let mut other = duel(70);
+        give_card(&mut other, "hero", CardZone::Hand, "b1", "curse.burn", None);
+        assert_eq!(
+            host.try_hand_turn_end_lifecycle(&mut other, &cid("hero")),
+            Ok(())
+        );
+    }
+
+    /// `RetainInHandOnTurnEnd` 与生命周期节目**互不影响**：那张卡照样只发作一次。
+    ///
+    /// 参考里这条处理器只读手牌与卡定义（`CardLifecyclePrograms.cs:21-46`），
+    /// `RetainInHandOnTurnEnd` 是**下一个**处理器（弃手牌，`CardZoneEffects.cs:419-425`）才读的
+    /// ⇒ 一条 `retain` 分支都**不该有**。把保留的卡排除掉的实现会在这里给 70。
+    ///
+    /// ⚠️ **顺带发现的缺口（不是本钩子的）**：`Host::card_stays_in_hand_at_turn_end` 恒返回
+    /// `false`（理由是"62/62 卡 `RetainInHandOnTurnEnd = false`"），所以这份手搓镜像里
+    /// **真的** `true` 的 `curse.burn_retained` 回合末照样被弃。最后那句断言把缺口摆出来：
+    /// 它一旦变红，说明那个钩子开始读内容了 —— 那时这条断言该按新语义改，别当成回归。
+    #[test]
+    fn a_retained_burn_card_still_fires_exactly_once() {
+        let blob = burn_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(70);
+        give_card(
+            &mut state,
+            "hero",
+            CardZone::Hand,
+            "keep1",
+            "curse.burn_retained",
+            None,
+        );
+        turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+        turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+        assert_eq!(health(&state, "hero"), 68, "保留标志不改变发作次数");
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::DiscardPile),
+            1,
+            "缺口：`card_stays_in_hand_at_turn_end` 不读 `RetainInHandOnTurnEnd`（见文档）"
+        );
     }
 
     // ---------------------------------------------------------------- 策略钩子

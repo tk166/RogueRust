@@ -3517,6 +3517,15 @@ Characters[].UnlockFlag
 按同一份计划的顺序，下一站是 **M1「一条最短路径」**，它的进入条件还差三件：
 `currentHealth` 表达式（Hexaghost 的 Divider 要用）、`LifecyclePrograms`（Burn 要用）、
 以及**必须先定形状**的 `run_rng`（§5.4：单流会让"多抽一次药水改变整张地图"）。
+
+> **2026-10-19 补注**：本节是第 46 轮当时的现状。三件里**第一件已经关掉** ——
+> `currentHealth` / `maxHealth` 已实现（字段名 `Selector`，见 `kernel/rd-core/src/expr.rs`
+> 模块头第 4 条与 `docs/spec/sts-act1-plan.md` §9-4）。剩下 `run_rng`。
+>
+> **2026-10-19 第二补注**：`LifecyclePrograms` **也已经关掉** —— `host::try_hand_turn_end_lifecycle`
+> 现在真的解 `CARD.LifecyclePrograms[TurnEndInHand]` 并派发节目（Burn 的机制），
+> 记录在 `docs/spec/battle-loop-hooks.md` §2.5。镜像 62/62 卡是 `{}`，所以那一步是"内容侧的事"了。
+
 ---
 
 ## 47. 第 37 轮：M1 的地基 —— `run_rng` 形状冻结、`rd-run` 出生，以及"同尺寸不同字节"的实测
@@ -3643,3 +3652,172 @@ web/*.wasm
 然后 `RunState` + `run_hash`（含 §5.4 的逐字段扰动），然后篝火/宝箱/Boss。
 并行可以派出去的是两件**与 run 层无关**的内核小缺口：`currentHealth` 表达式（Hexaghost 的
 Divider 要用）与 `LifecyclePrograms`（Burn 要用）。
+
+> **2026-10-19 补注**：`currentHealth`（连带 `maxHealth`）**已完成**，字段名 `Selector`；见
+> `kernel/rd-core/src/expr.rs` 模块头第 4 条。
+>
+> **2026-10-19 第二补注**：`LifecyclePrograms` 也**已完成**（`host::try_hand_turn_end_lifecycle`，
+> 见 `docs/spec/battle-loop-hooks.md` §2.5）。这一句点名的两个缺口现在是零个。
+
+---
+
+## 48. 第 38 轮：地图生成器落地 —— 13 条规则、8 条"必须被拒"的测试，以及规则 11 与固定层的真冲突
+
+> 这一轮全在 `kernel/rd-run` 里：新增 `map.rs`，crate 从 8 条测试长到 **25 条**。
+> `rd-core` 一个字节没动（并行还有两个代理在改 `expr.rs` 与 `host.rs`，那是另外两件事）。
+
+### 48.1 生成器和校验器**分开**，因为只有一半的规则能被"生成"测到
+
+`RunMap::generate` 必须产出 `RunMap::check` 接受的地图，但五条覆写的**判据**是 `check`，
+测试对着 `check` 写 —— 一半是 200 个 seed 的真地图，另一半是**手搓的违规地图**：
+
+| 测试 | 破坏的是哪一条 | 期望 |
+|---|---|---|
+| `check_rejects_a_wrong_fixed_floor` | `inv:§7.2` | `FixedFloor{row:0}` |
+| `check_rejects_an_elite_on_floor_2` | `§7.4#1` | `TooEarly{row:1}` |
+| `check_rejects_a_rest_on_floor_14` | `§7.4#4` | `RestBeforeBossRest{row:13}` |
+| `check_rejects_two_adjacent_rest_sites` | `§7.4#2` | `Consecutive{row:5}` |
+| `check_rejects_two_identical_siblings` | `§7.4#3` | `Siblings` |
+| `check_rejects_a_crossing` | `§7.1` 不交叉 | `Crossing{row:0}` |
+| `check_rejects_a_dead_end` | `§7.1` 出边 ≥1 | `DeadEnd{row:3,index:0}` |
+| `check_rejects_an_unrolled_node` | 未掷点 | `Unrolled{row:9,index:0}` |
+| `check_rejects_an_edge_target_outside_the_next_row` | 结构 | `Structure` |
+
+只有"生成"那一半会全绿的情形是具体存在的：**一个只会生成一条直路的实现**满足所有结构规则
+（`sts-act1-plan.md` §4 M1 风险行点名的就是它）。所以还加了一条**产量**断言：
+200 张图里 `out_degree >= 2` 的节点数 **≥ 200**（平均每张至少一个岔口）。
+
+### 48.2 实现时才暴露的真冲突：规则 11 与固定层不可能同时成立
+
+第 9 层全是宝箱、第 15 层全是篝火（`inv:§7.2`），而 `inv:§7.4#3` 要求"一个节点若有 ≥2 条出边，
+其所有目的节点类型必须互不相同"。第 8 层的一个三岔口，三个目的节点**必然**都是宝箱。
+
+`[推断]` 裁决：**固定层豁免规则 11**。理由写进了 `run-layer.md` §7.1 的引用块和
+`map.rs::check` 的注释：规则 7 是有来源的事实，规则 11 的目的是让岔口成为"选择"；
+让固定层赢，冲突消失。反过来（让规则 11 赢）等于要求第 8 层的分叉点只能有一条出边，
+把"Boss 前必进宝箱"压成单行道。
+
+⚠️ 这条裁决把 `check_rejects_two_identical_siblings` 的构造限制住了：它必须挑一个**目的层
+不是固定层**的岔口，否则它测的是"豁免"而不是"规则"。第一版就是这样踩的 —— 它用了
+`Shop` 两次，结果先撞上 `§7.4#2`（商店不能连续），测试红得像是规则根本没实现。改成
+`Unknown`（唯一不在 `§7.4#2` 里的类型）之后才是真的在测规则 11。
+
+### 48.3 哪些是 `[推断]`（逐条点名，因为它们全都可能错）
+
+| 项 | 我们的做法 | 为什么是推断 |
+|---|---|---|
+| 六点在 7 列上的位置 | `index*(COLS-1)/(NODES-1)` ⇒ 列 `0,1,2,3,4,6` | wiki 只说"7 列、每行最多 6 个"，没说怎么摆 |
+| "最近的 3 个" | 按列距升序、同距取列小者，取前三个 | wiki 没说平局怎么办，也没说是否只算"可用"节点 |
+| 路径之间的次序 | 每层按当前列排序，后一条只能落到不左于前一条的列 | 这是"不交叉"的一种等价表述，但不是唯一一种 |
+| 重掷上限 | 每节点 64 次、整张图 64 次，超了**响亮失败** | 上限是选的；超限放宽约束是最坏的静默，所以选择失败 |
+| 起点 | 每条路径独立滚，仅强制前两条不同（`inv:§7.1` 只要求这一条） | 六条路径可以有相同起点 |
+
+### 48.4 变异测试（5 条，全部**真的红**）
+
+| # | 变异 | 判红的测试 |
+|---|---|---|
+| M1 | 关掉不交叉检查 | `check_rejects_a_crossing` |
+| M2 | 类型掷点恒返回普通战斗 | 17 条（生成器内部断言先炸，级联） |
+| M3 | 第 15 层不再固定成篝火 | `shape_and_fixed_floors_match_the_inventory` |
+| M4 | 七条流共用一个计数器与一个 seed | `r1a` / `r1b` / `r3` / `shuffle_is_per_stream...` |
+| M5 | 掷点时不套 `§7.4#1`（前 5 层无精英/篝火） | `override_1_...` / `override_4_...` / `all_five_...` / `every_seed_...` |
+
+恢复后重跑全绿（脚本里逐字节还原）。
+
+### 48.5 这一轮的数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| `rd-run` 模块数 | 1（`streams`） | **2**（+`map`） |
+| `rd-run` 测试 | 8 | **25** |
+| `map.rs` | — | **978 行**（含 325 行测试） |
+| `RunMap` 尺寸 | — | 15 × (1 + 6 × 6) = **555 B**（`Copy`，无分配） |
+| `rd-core` | — | 零改动 |
+
+### 48.6 还没做的（下一轮）
+
+`RunState`（§4 的字段 + 8 KiB 的 tripwire）、`run_hash`（§5 的规范文本 + 逐字段扰动）、
+篝火/宝箱/Boss 的结算、以及 §8 的 **A3 分布闸门**（固定 200 个 seed、带容差、
+并先断言"样本里存在三岔口"）。地图这一层目前只有"结构合法 + 产量不退化"，
+**没有分布判据** —— 也就是说 53/8/12/5/22 的**实际比例**还没被测过。
+
+---
+
+## 49. 第 39 轮：M1 缺的两件内核能力落地（`currentHealth` / 卡的生命周期节目），并行两个代理
+
+> 与 §48 同时进行（我写地图生成器，两个代理各领一件内核小缺口）。三个工作流各自的
+> 变异测试都跑过一遍，四个对拍层零漂移，聚合验收 **14/14**。
+
+### 49.1 `currentHealth` / `maxHealth`（`expr.rs`）
+
+Hexaghost 的 Divider = `(目标当前 HP / 12) + 1`，没有这两个表达式它根本写不出来。
+
+**字段名不是编的。** `expr.rs` 原来的结论是"线上没有选择器 ⇒ 语义无从确定"，但实现时先量了
+一次产物：OPD/OPF 表里**已经有 11 个 opcode 带 `Selector: F_TERM`**（op 20/21/22/23/24/25/32/
+38/43/44/45），其中三个（`combatantStatusStacks` 25 / `combatantCounter` 23 /
+`combatantCurrentResource` 24）正是本模块已实现的单目标标量读，走的就是 `child(node, "Selector")`。
+⇒ `Selector` 是产物自己用给这个概念的名字，`sts-act1-plan.md` §9-4 那句"定义权在我们"
+只是**追认**了它。
+
+⚠️ **顺带记一条容易翻车的**：op id **不是稳定的**。它是按 kind 名字排序分配的，所以
+`roguedeck` 镜像里 `currentHealth` 是 op 28/48，而在一份带这个键的 `sts` 草稿镜像里它是 **op 19**。
+内核任何地方都**不许硬编码 op 号**（这条以前只是惯例，现在写进了 `expr.rs` 的头注释）。
+
+* 6 条成对测试（`expr` 模块 24 → 30）；5 条变异里 **4 条真的红**；
+  **1 条（`single_target` 的"解析出 ≥2 个"分支）报为「未钉住」**——静态基数表是按变体写死的
+  （`targets.rs:301-306`），"静态 ≤1 但解析出 ≥2"在这个格式里无法表达；该缺口**先于本次改动存在**。
+* 内容侧零点火验证：把 `Selector` 写进一份**草稿副本**后，`compile.py` **零改动**推导出
+  `currentHealth: nfields=1, Selector: F_TERM`，读回也是同一个形状。`packages/**` 一个字节没动。
+
+### 49.2 卡的生命周期节目（`host.rs`，Burn 的机制）
+
+原来是"响亮的空"（有节目就 `Unsupported`），现在是真实现：解码
+`CARD.LifecyclePrograms[TurnEndInHand]`、快照手牌槽位、逐张走 `exec` 派发、`sel.source` 与
+`sel.eventTarget` 都绑"正在结束回合的那个人"，跑在 turn-end 处理器序**第 1 位**（弃手牌之前）。
+
+* **链号 +0、执行号 +1**：参考里这条处理器跑在 `TurnEndedCombatEvent` 的**分发**里，
+  那一刻 `CurrentEffectChain` 是事件自己那条链（`CombatEventHandling.cs:60`）⇒ 节目的
+  `EffectChain ??=` 不发号。内核用 `CombatState::adopt_root_chain`（建链、不推进计数器）表达它。
+  **`battle-loop-hooks.md` 里原来把 `chain_num` 列进"必然变化"是错的，已原地更正**。
+* 10 条新测试。观察对象是**手搓的最小 RDCF 镜像**（`burn` / `burn_dual` / `burn_block` /
+  `burn_retained` / `weird` / `plain`）—— 因为真实镜像 62/62 卡的 `LifecyclePrograms` 都是 `{}`，
+  "节目真的跑了"这件事在真实内容上**不可观察**。
+* 5 条**偏离**逐条写在函数文档里（定义查不到⇒响亮失败、卡槽故意不绑、先全解再跑、已结束不跑、
+  快照手牌），每条都带理由。
+* ⚠️ **顺带钉住了另一个缺口**：`host.rs::card_stays_in_hand_at_turn_end` 恒返回 `false`
+  （理由写的是"62/62 卡 `RetainInHandOnTurnEnd = false`"）。手搓镜像里那张**真的** `true` 的卡
+  证明"内容一旦用这个字段就会被静默忽略"。测试**把这个缺口断言出来了**并写明"它变红那天说明
+  那个钩子开始读内容了，别当成回归" —— 这是纪律第 11 条的用法：**把"我不知道"改成"否"是最危险的撤销**，
+  所以要留一条会红的断言在那儿，而不是留一句注释。
+
+### 49.3 三个工作流各自的数字
+
+| 工作流 | 新测试 | 变异 | 结论 |
+|---|---:|---|---|
+| 地图生成器（§48） | 17 | 5 条全红 | 生成器 + 校验器分开，8 条"必须被拒" |
+| `currentHealth`/`maxHealth` | 6 | 4 红 + **1 未钉住**（写明理由） | 字段名有 11 个先例 |
+| 生命周期节目 | 10 | 见 §49.2 | 5 条偏离逐条记录 |
+
+合计：`rd-core` 558 → **574**，`rd-run` 0 → **25**，聚合验收下限 `-UnitsFloor` 566 → **599**。
+
+### 49.4 并行三个工作流的**代价**（记下来，下次别再犯）
+
+我让两个代理同时改 `rd-core`（一个 `expr.rs`、一个 `host.rs`）。文件不冲突，但**它们都要编译
+整个 crate** ⇒ 任一方的半成品都会让另一方的测试变红。实测到：`expr` 代理报告"全量跑出现
+572~573 passed、1~2 个 `host::tests` 失败"，而那是**另一个工作流的中间状态**，不是它的回归。
+两边都识别对了，但这是运气 + 它们各自的谨慎，不是流程保证。
+
+**下次的做法**：同 crate 的并行任务要么让代理**各用一条 git worktree / 独立拷贝**，
+要么串行。判据是"这个改动会不会让整个 crate 暂时编不过" —— 会，就不要并行。
+
+### 49.5 这一轮的数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 单测 | 558（rd-core） | **574 + 25 = 599** |
+| 聚合验收 | 14/14 | **14/14**（`-UnitsFloor` 599） |
+| 四条对拍 | 182 / 62 / 124 / 394 | 不变（本轮实测） |
+| `CombatState` | 213,224 B | 213,224 B |
+| `.wasm` | 378,962 B | **382,995 B**（+4,033，新内核代码） |
+| clippy / 裸机 | 零告警 / EXIT 0 | 零告警 / EXIT 0 |
+

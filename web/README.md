@@ -45,7 +45,7 @@ Copy-Item D:\Vibe\sts-tui\kernel\target\wasm32-unknown-unknown\release\rd_wasm.w
 binaries). So a clone has to run the two commands above once. Every byte count below is a
 *local* measurement, not something `git show` can produce.
 
-Current: **378,962 B** (370.1 KiB) built from this tree (before this round it was 559,504 B of
+Current: **382,995 B** (374.0 KiB) built from this tree (before this round it was 559,504 B of
 *roguedeck* content — the table lists the levers).
 
 | build | bytes | what changed |
@@ -54,6 +54,7 @@ Current: **378,962 B** (370.1 KiB) built from this tree (before this round it wa
 | same tree, `rd-wasm` before this round | 418,758 | rebuilt from `main`, still `roguedeck` (85,616 B image) |
 | this round | 378,962 | `sts` core image (9,580 B, −76,036 B of data) **+** intent/damage preview code **+** `EndOneTurn` loop |
 | this round, after `GOLDEN32` became `pub` | 378,962 | **same size, different sha256** — see the note below |
+| after `currentHealth`/`maxHealth` + card lifecycle programs | **382,995** | +4,033 B of real kernel code; `CombatState` unchanged at 213,224 B, and the page still wins in 10 steps with round-1 preview 12 = HP lost |
 
 ⚠️ The last row is why the gate compares **bytes**: making one constant `pub` in `rd-core`
 changed nothing observable (the page still wins in 10 steps; the round-1 preview is still

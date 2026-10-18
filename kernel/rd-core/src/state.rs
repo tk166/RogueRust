@@ -3405,10 +3405,21 @@ impl CombatState {
     /// 建一条根链，但**不发号**：`id` 沿用"调用方刚发掉的那个号"
     /// （`next_effect_chain_number - 1`）。
     ///
-    /// 只给 `exec::execute` 这个**遗留入口**用：`intent.rs::execute_action` / `exec` 的旧
-    /// 调用方已经手工记过"请求"那一笔（`create_root_effect_chain()`），参考里节目的链
-    /// **就是那条**（`EffectProgramExecution.cs:31` 的 `??=` 读到非空的 `CurrentEffectChain`）
-    /// ⇒ 再发一个号会让 `chain_num` 多 1（实测：`intent.rs:1853` 那条断言 3 vs 2）。
+    /// 两个调用点，同一件事："参考在这里**没有**建新根链"：
+    ///
+    /// * `exec::execute`（**遗留入口**）：`intent.rs::execute_action` / `exec` 的旧调用方已经
+    ///   手工记过"请求"那一笔（`create_root_effect_chain()`），参考里节目的链
+    ///   **就是那条**（`EffectProgramExecution.cs:31` 的 `??=` 读到非空的 `CurrentEffectChain`）
+    ///   ⇒ 再发一个号会让 `chain_num` 多 1（实测：`intent.rs:1853` 那条断言 3 vs 2）。
+    /// * `host::try_hand_turn_end_lifecycle`（2026-10-19 加的）：卡的生命周期节目跑在
+    ///   参考的 `TurnEndedCombatEvent` 分发里，那一刻 `CurrentEffectChain` 是**事件自己那条链**
+    ///   （`CombatEventHandling.cs:60` 的 `using (EnterEffectChain(…))`）⇒ 节目里的 `??=` 不发号。
+    ///   内核把 `TurnEnded` 的那一个号发在 `try_run_turn_ended_triggers` 里（在本钩子之后）
+    ///   ⇒ 这里同样只能"建链、不发号"。
+    ///
+    /// ⚠️ 它的 `id` 是**上一个已发的号**，不是参考里那条事件链的号。链 id 不进哈希
+    /// （哈希里是 `chain_num` 计数器，`snapshot.rs:165`），也没有按 id 的查表
+    /// （`ChainRecord.id` 只被 [`Self::create_triggered_chain`] 继承）⇒ 可观察量一致。
     pub fn adopt_root_chain(&mut self) -> StateResult<ChainSlot> {
         let id = self.next_effect_chain_number.saturating_sub(1);
         self.chains.alloc(ChainRecord {

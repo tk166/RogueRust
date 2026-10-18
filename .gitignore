@@ -3,6 +3,9 @@
 target/
 # 冷编译验证用的独立 target 目录（`--target-dir target-verify`）
 kernel/target-verify/
+# 每个并行代理/变异测试各带一个 --target-dir，避免共享 target 目录的锁竞争。
+# 少了这条，它们会以未跟踪目录的形式出现在 git status 里，和真正的产物混在一起。
+kernel/target-*/
 
 # ── 构建产物：.NET / NativeAOT ────────────────────────────────────────────────
 [Bb]in/

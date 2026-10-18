@@ -136,6 +136,12 @@ pub enum RunError {
     /// `roll(stream, 0)` — a zero-sized range is a content bug. Returning `0` would look like a
     /// legitimate roll.
     EmptyRange,
+    /// Map generation could not satisfy `inv:§7`'s override rules within `MAX_ATTEMPTS`.
+    ///
+    /// Deliberately an error and not "a slightly looser map": relaxing a rule is the silent
+    /// failure this project keeps paying for, and a map is generated once per run, so a red here
+    /// is cheap and visible.
+    MapGeneration,
 }
 
 /// The run's randomness: the run seed plus one counter per stream.

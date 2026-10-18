@@ -9,7 +9,10 @@
 //!
 //! 下面两列是**两种不同的计数**，混用会得出假的覆盖率：
 //!
-//! * 「源」= 内容源 JSON（`tools/_core_dump.json`）里的**出现次数**（同一个 term 复用几次算几次）；
+//! * 「源」= 内容源 JSON 里的**出现次数**（同一个 term 复用几次算几次）。源文件是
+//!   `ref/RogueDeck-Core/src/RogueDeck.Sandbox.Run/SampleContent/bureaucrats.roguedeck.json`；
+//!   本行原来写的是 `tools/_core_dump.json`，那是它的一次性转储，**仓库里没有这个文件**
+//!   （2026-10-19 实测 `Test-Path` = False），所以出处改指源文件本身；
 //! * 「镜像」= `tools/contentc/out/content.core.rdcf` 里 **term DAG 的去重条数**
 //!   （内容寻址：`const{Value:6}` 全镜像只有一条 term）。
 //!
@@ -26,8 +29,14 @@
 //! | `min` | 12 | 8 | ✅ |
 //! | `max` | **0** | **0** | ✅（实现了，但镜像里一条都没有） |
 //! | `divide` | 10（5+5 两种拼法） | 4（2+2） | ✅ 见下 |
+//! | `currentHealth` | 7 | 1 | ⚠️ **要 `Selector` 字段**，镜像里那 1 条没有 ⇒ 见下面第 4 条 |
+//! | `maxHealth` | 5 | 1 | ⚠️ 同上（同一个 opcode 形状问题） |
 //! | `or` | 4 | 4 | ✅ |
 //! | `combatantCurrentResource` | 1 | 1 | ✅ |
+//!
+//! 这张表只统计**镜像里出现过的** kind。`missingHealth` 不在表里：它**在镜像里连 opcode 都没有**
+//! （源 JSON 0 次，opcode 表里也没有这个名字），而且它等于 `subtract(maxHealth, currentHealth)`，
+//! 所以它仍然报 `UnsupportedKind` —— 那不是缺口，是"这条内容还没写过"。
 //!
 //! ⚠️ **`max` 的两处数字都是 0**。本模块头原来写的「`max` 12」是把 `add`/`min` 的 12 抄错了一行；
 //! 实测源 JSON 里 `max` **一次都没出现**（`min` 12、`add` 12、`max` 0）。
@@ -37,11 +46,14 @@
 //!   `firstCardPlayedHasTag` —— 需要**每回合出牌统计**，内核没有（`CardPlayTurnStats` 整块未移植）；
 //! * `cardInstance.iterated` / `card.upgradeLevel` —— 需要卡实例表达式上下文；
 //! * `eventAmount` / `event.bool` / `intent.*` —— 需要**触发事件上下文**，v1 的效果执行还没有事件队列；
-//! * `currentHealth` / `maxHealth` —— **线上没有选择器**，语义无从确定，见下面第 4 条；
 //! * `fx.*` / `reward.*` / `meta.*` / `tpl.*` —— run 层；
 //! * `abs` / `negate` / `remainder` / `clamp` —— 参考实现里有（`EffectProgramExpressions.cs:219/532/587/622`），
 //!   但**镜像里一条都没有**，字段名（`Operand` / `Inner` / `Value,Min,Max`）无法用真实数据核实，
 //!   编一个字段名就是编一个语义 —— 所以留 `UnsupportedKind`。
+//!
+//! **这张表里没有 `currentHealth` / `maxHealth`**：它们实现了（字段名 `Selector` 由我们定，
+//! 见下面第 4 条）。`missingHealth` 仍然 `UnsupportedKind`（它连 opcode 都没有，而且等价于
+//! `subtract(maxHealth, currentHealth)`）。
 //!
 //! ## 四条**从真实产物里读出来**的坑（每条都带行号与实测出处）
 //!
@@ -76,26 +88,57 @@
 //!    ⇒ [`single_target`] 先查静态基数（对照构造期那道闸），再查解出的个数（对照求值期那道闸）；
 //!    两道都用 [`ExprError::SelectorNotSingle`]。
 //!
-//! 4. **`currentHealth` / `maxHealth` 在线上没有选择器 —— 所以 v1 不实现。**
-//!    实测：这两个 opcode 的字段表 **`nfields = 0`**（op 28 / op 48），term 1527 / 1728 的
-//!    body 都是空 `{}`。但参考实现的这两个类**必须**带选择器：
-//!    `CombatantCurrentHealthExpression(ICombatantTargetSelector selector)`
-//!    （`EffectProgramExpressions.cs:661`）与 `CombatantMaxHealthExpression(...)`（`:681`），
-//!    构造期就 `RequireSingleSelector(selector)`（`:664` / `:684`）。
-//!    两边不一致 ⇒ 线上这个字段是**丢了**，不是「可选」。线索指向 run 层：
-//!    这两个 term 只被 run 层用到 —— `1527` 的祖先是
-//!    `fx.computedDamage.Amount` ← `situations.act_1_shop`，
-//!    `1728/1731/1733` 的祖先是 `fx.computedHeal.Amount` ← `clerks_tea_break` 与 `rest:act_1_d09_n00`；
-//!    run 层有自己的一对**无选择器**实现（`RunExpressions.cs:85-93`，读的是 `context.Run.Health`）。
-//!    本内核没有 run 状态，也没有任何 CARD/STATUS/EACT/ENCT/REL 行引用它们
-//!    （实测扫了全部 5 张表的每一行）。
-//!    ⇒ `UnsupportedKind`。**猜一个目标等于让 `maxHealth*10` 安静算错**，这是最坏的一类错。
-//!    另外：`compounded_penalty`（CARD[20]）**不需要**它们 —— 它的 `Amount` 是
-//!    `multiply{combatantStatusStacks(eventTarget, paperwork), 4}`，纯战斗层。
+//! 4. **`currentHealth` / `maxHealth`：实现了；字段名 `Selector` 是**我们定的**，不是从镜像里读出来的。**
+//!
+//!    * **镜像的事实没变**：这两个 opcode 的字段表仍然 **`nfields = 0`**（op 28 / op 48；
+//!      2026-10-19 直接读 `OPD` 实测 `field_off=100/nfields=0` 与 `field_off=240/nfields=0`），
+//!      term 1527 / 1728 的 body 都是空 `{}`。
+//!      ⚠️ **op 28 / op 48 只是这份镜像里的编号**：opcode 号由编译器按 kind 名字排序派生
+//!      （`compile.py` 的 `LayoutDeriver`），换一份内容就会变（实测：给 sts 包加一条带
+//!      `Selector` 的 `currentHealth` 之后它是 **op 19**）。⇒ 内核里**任何地方都不许把这两个
+//!      数字写死**，认的一直是 `OPD[op].name` 这个串。
+//!      参考实现的这两个类**必须**带选择器：
+//!      `CombatantCurrentHealthExpression`（类声明 `EffectProgramExpressions.cs:656`，
+//!      构造函数 `:661-665` 里 `RequireSingleSelector`）、`CombatantMaxHealthExpression`
+//!      （类声明 `:676`，构造函数 `:681-685`）。⇒ 线上这个字段是**丢了**，不是「可选」。
+//!    * **丢在哪一层已经查清**：这两个 term **只**从 ROOT 的 `Events`（term 1902，run 层事件表）
+//!      可达；1527 的祖先链是 `subtract.Left ← min.Right ← fx.computedDamage.Amount ←
+//!      situations.{act_1_shop, lost_and_found_desk, misfiling_cabinet, witness_queue,
+//!      certified_copy_drawer, clerk_who_almost_helps, sealed_back_door}`，1728 的是
+//!      `multiply.Left ← add.Left ← divide.Left ← fx.computedHeal.Amount ←
+//!      situations.{clerks_tea_break, rest:act_1_d09_n00…n03}`（**验证过**：2026-10-19 遍历全部
+//!      2143 条 term 的 `F_TERM`/`F_TERMLIST` 槽建父指针）。run 层有自己的一对**无选择器**实现
+//!      （`RunExpressions.cs:85-93`，读的是 `context.Run.Health`）⇒ **`{}` 是 run 层那对类的
+//!      合法形状**，不是"战斗层这个类丢了字段"的产物。所以把 `{}` 解读成"没有选择器的战斗层读"
+//!      本来就是错的 —— 我们的 `Selector` 是**另一条**（战斗层的）编码，两者不冲突。
+//!    * **字段名为什么是 `Selector`**：同一份镜像里**已经有 11 个 opcode** 用 `Selector`
+//!      （op 20/21/22/23/24/25/32/38/43/44/45，全部 `Selector: F_TERM`），其中三个正是本模块
+//!      已经在读的单目标标量读：`combatantStatusStacks`（op 25）、`combatantCounter`（op 23）、
+//!      `combatantCurrentResource`（op 24）。[`read_single_target`] 读的就是这个键
+//!      （`child(node, "Selector")`，本文件）。⇒ 这不是新发明的名字，是**镜像自己**给同一个
+//!      概念用的名字。定义权归属见 `docs/spec/sts-act1-plan.md` §9-4
+//!      （"不存在于镜像 ⇒ 定义权在我们"）。
+//!      **编译器不用改**（实测 2026-10-19）：给 `sts` 包的一份**临时拷贝**加一条
+//!      `{"kind":"currentHealth","value":{"Selector":{…}}}`，`compile.py` **零改动**就派生出
+//!      `currentHealth: nfields=1, Selector:F_TERM`，`reader.py` 解回来正是这个形状
+//!      （`packages/**` 一个字节都没动；命令见本轮报告的"内容侧 smoke"）。
+//!    * **对 `roguedeck` 这份内容的后果**：CARD/STATUS/EACT/ENCT/REL 五张表
+//!      （62/23/394/109/49 行）**一行都到不了** term 1527 / 1728（**自己扫的**，2026-10-19：
+//!      从全部 5 张表的每个 `F_TERM`/`F_TERMLIST` 槽出发做可达集，1527/1728 都不在里面）。
+//!      所以在这份内容里，这两个 term 依然**响亮失败**：
+//!      `ExprError::Ir(IrError::Missing("Selector"))` —— 键不在字段表里，与"键在、值是
+//!      `ABSENT16`"在 [`NodeRef::field`] 里是同一个答案（两者都表示"这个节点没有选择器"）。
+//!      **不新增变体**：这与 `combatantStatusStacks` 缺 `Selector` 走的是同一条路、同一种错。
+//!      给 0 或退回英雄都是错的：前者让 `maxHealth*10` 安静算成 0，后者算成"英雄血量的 10 倍"。
+//!    * **什么会让旧结论重新成立**：若将来某份内容里出现"op 28 的 `nfields` 还是 0，而某个
+//!      CARD / STATUS / EACT / ENCT / REL 行真的引用了它"，就说明我们猜错了名字（或参考里还有
+//!      第三种形状）—— 那时**不许**改成"取第一个"或"取英雄"，要先问出那份内容把选择器放在了哪里。
+//!    * 另外：`compounded_penalty`（CARD[20]）**不需要**它们 —— 它的 `Amount` 是
+//!      `multiply{combatantStatusStacks(eventTarget, paperwork), 4}`，纯战斗层。
 
 use crate::ir::{IrError, NodeRef};
 use crate::sel::{CompiledSelector, SelError};
-use crate::state::{CardInstanceId, CombatState, CombatantId, MAX_COMBATANTS};
+use crate::state::{CardInstanceId, CombatState, Combatant, CombatantId, MAX_COMBATANTS};
 use crate::targets::{self, SelectionContext};
 
 /// 求值错误。**全部是"这棵树我读不懂/不支持"，不是"游戏规则拒绝"**。
@@ -272,8 +315,9 @@ enum Class {
 
 /// 求值为 `i32` 的 kind（参考实现里 `ICombatExpression<_, int>` 的那些）。
 ///
-/// 表里**有**但没实现的（`currentHealth` 等）走 `UnsupportedKind` —— 表的意义只是
-/// "它的值类别是 int"，让 `eval_bool` 能给出 `WrongValueKind` 而不是 `UnsupportedKind`。
+/// 表里**有**但没实现的（`abs` / `eventAmount` / `card.upgradeLevel` 等）走 `UnsupportedKind` ——
+/// 表的意义是"它的值类别是 int"，让 `eval_bool` 能给出 `WrongValueKind` 而不是
+/// `UnsupportedKind`（问错了问题 ≠ 还没实现）。
 const INT_KINDS: &[&str] = &[
     "const",
     "add",
@@ -454,7 +498,15 @@ pub fn eval_int<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, Exp
             Ok(0)
         }
 
-        // 其余（`currentHealth` / `eventAmount` / `cardsPlayedThisTurn` / `card.upgradeLevel` …）
+        // `CombatantCurrentHealthExpression.Evaluate`（`:667-673`）：`Health.Current`。
+        // 字段名 `Selector` 是**我们定的**（模块头第 4 条），不是镜像带给我们的：
+        // 那份内容的 op 28 是 `nfields = 0`，所以那里**必然**走 `Missing("Selector")`。
+        "currentHealth" => Ok(health_target(node, ctx)?.map_or(0, |c| c.health_current)),
+
+        // `CombatantMaxHealthExpression.Evaluate`（`:687-693`）：`Health.Max`。
+        "maxHealth" => Ok(health_target(node, ctx)?.map_or(0, |c| c.health_max)),
+
+        // 其余（`eventAmount` / `cardsPlayedThisTurn` / `card.upgradeLevel` / `missingHealth` …）
         // —— 值类别是 int，但 v1 没有它需要的上下文。**绝不返回 0**。
         _ => Err(ExprError::UnsupportedKind),
     }
@@ -595,6 +647,29 @@ fn read_single_target<'c>(
     single_target(selector, ctx, &mut buf)
 }
 
+/// `Selector` 字段 → **一个战斗员**（`currentHealth` / `maxHealth` 用的单目标读）。
+///
+/// 参考的两个类是逐行同构的，差别只在最后取哪个字段：
+/// `CombatantCurrentHealthExpression.Evaluate`（`EffectProgramExpressions.cs:667-673`）与
+/// `CombatantMaxHealthExpression.Evaluate`（`:687-693`）都是
+/// `ResolveTargets` → `Count == 0 ⇒ 0`（`:671` / `:691`）→ `RequireSingle`（`:28-36`，多于一个**抛**）
+/// → `TryGetCombatant` 失败 ⇒ 0（`:672` / `:692`）→ `Health.Current` / `Health.Max`。
+/// 所以这里只把"选择器 → 单位"这一段抽出来，`None` 覆盖两个"给 0"的分支
+/// （没有目标 / 状态里查不到这个 id）；**取哪个字段由调用方两行分别写死**，
+/// 免得一个 `bool` 参数让 `maxHealth` 读成 `currentHealth` 时没人看得出来。
+///
+/// 键缺席 ⇒ [`ExprError::Ir`]`(IrError::Missing("Selector"))`，与 `combatantStatusStacks`
+/// 那条路完全一样（不是新变体）；**绝不退回英雄、绝不给 0** —— 见模块头第 4 条。
+fn health_target<'c, 's>(
+    node: NodeRef<'c>,
+    ctx: &ExprContext<'s>,
+) -> Result<Option<&'s Combatant>, ExprError> {
+    let Some(target) = read_single_target(node, ctx)? else {
+        return Ok(None); // 零个目标 ⇒ 调用方给 0（`:671` / `:691`）
+    };
+    Ok(ctx.state.combatant(&target)) // 查不到 ⇒ 也是 0（`:672` / `:692`）
+}
+
 /// 一个单目标读要用的目标：把选择器解出来，要求恰好/至多一个。
 ///
 /// 参考实现的单目标读都带一个 `Selector`（`combatantStatusStacks` 等），且要求
@@ -674,7 +749,7 @@ mod tests {
     // 与 `sel.rs` 的补丁测试同一套做法：字段首槽偏移由字段表顺序算出，写 2 字节。
     // =========================================================================================
 
-    use crate::content::{Content, S_TRM, S_TRW};
+    use crate::content::{Content, F_TERM, S_OPD, S_OPF, S_TRM, S_TRW};
     use crate::ir::Ir;
     use crate::state::{
         CombatId, Combatant, CombatantDefinitionId, CounterId, ResourceId, StatusDefinitionId,
@@ -743,6 +818,82 @@ mod tests {
     fn patch16(blob: &mut [u8], at: usize, value: u16) {
         let slot = blob.get_mut(at..at + 2).unwrap_or_else(|| panic!("patch16 越界：{at}"));
         slot.copy_from_slice(&value.to_le_bytes());
+    }
+
+    fn patch32(blob: &mut [u8], at: usize, value: u32) {
+        let slot = blob.get_mut(at..at + 4).unwrap_or_else(|| panic!("patch32 越界：{at}"));
+        slot.copy_from_slice(&value.to_le_bytes());
+    }
+
+    /// `OPD[op]` 的 `(field_off, nfields)`。8 字节一条：
+    /// `field_off:u32` +0、`name_str:u16` +4、`nfields:u8` +6、`opclass:u8` +7
+    /// （`content.rs` 的 `opcode()` 就是这么解的）。`field_off` 是 **`OPF` 段内**的字节下标。
+    fn opd_field_span(content: &Content<'_>, op: u16) -> (u32, usize) {
+        let opd = content.section(S_OPD).expect("OPD 段");
+        let base = usize::from(op) * 8;
+        let raw = opd.data.get(base..base + 8).unwrap_or_else(|| panic!("OPD[{op}] 越界"));
+        (u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]), usize::from(raw[6]))
+    }
+
+    /// 某 opcode 的某个字段在 `OPF` 段里的**记录**偏移 —— 与 `OPD.field_off` 同一套坐标。
+    /// 每条记录固定 4 字节（`u16` 串号 + `u8` 类别 + `u8` 标志），与字段的槽宽无关。
+    fn opf_record_offset(content: &Content<'_>, op: u16, key: &str) -> u32 {
+        let (field_off, nfields) = opd_field_span(content, op);
+        let opcode = content.opcode(op).expect("opcode 必须存在");
+        for j in 0..nfields {
+            let field = opcode.field(j).expect("字段描述越界");
+            if content.string(field.name_str()) == Some(key) {
+                return field_off + u32::try_from(j).expect("字段下标不超 u32") * 4;
+            }
+        }
+        panic!("op {op} 没有字段 {key}");
+    }
+
+    /// 给 `currentHealth`（op 28）/ `maxHealth`（op 48）的 opcode **补上一个 `Selector` 字段**，
+    /// 并把这个 term 的槽指到 `selector_term`。
+    ///
+    /// 为什么必须打补丁：真实镜像里这两个 opcode 的字段表是**空的**（`nfields = 0`，模块头第 4 条），
+    /// 所以"带选择器"的形状在线上不存在 —— 补丁造出来的正是**我们定义的新格式**该有的样子。
+    ///
+    /// 三处字节，每一处都有实测出处（2026-10-19）：
+    /// * `OPD[op].field_off` → **借** op 25（`combatantStatusStacks`）那条 `Selector:F_TERM` 记录
+    ///   （实测在 `OPF` 的 76 号字节）。借来的记录同时决定**字段名** = `Selector`；
+    /// * `OPD[op].nfields` → 1；
+    /// * 该 term 记录的**填充槽** `TRM[word*4 + 2]` → 选择器 term id。0 槽 term 的记录是
+    ///   `align4(2 + 0) = 4` 字节（`compile.py:178` 的 `record_size`），后 2 字节是**填充**；
+    ///   且 `TRW` 的 word 下标**严格递增**（实测 2143 条里 0 处非递增）⇒ 这个槽不与别的 term 共享。
+    ///
+    /// 偏移一律在**原镜像**上算：`blob` 可能已经被 `patched()` 改过，但改的都是槽值，不动表结构。
+    fn patch_in_selector(blob: &mut [u8], op: u16, tid: u16, selector_term: u16) {
+        let pristine = core_image();
+        let content = parse(&pristine);
+        let opd = content.section(S_OPD).expect("OPD 段");
+        let entry = opd.offset as usize + usize::from(op) * 8;
+        let borrowed = opf_record_offset(&content, 25, "Selector");
+        // 借来的记录必须**真的是** `Selector: F_TERM`：记录布局是
+        // `name_str:u16 +0, kind:u8 +2, flags:u8 +3`。少了这条断言，镜像一换就可能把
+        // 2 字节写进一个 `F_STR` 槽里，而测试会**安静地**测到别的东西（这是本项目
+        // "工具骗人"那一类，不是假想的风险）。
+        let opf = content.section(S_OPF).expect("OPF 段");
+        let record = opf
+            .data
+            .get(borrowed as usize..borrowed as usize + 4)
+            .expect("OPF 记录越界");
+        assert_eq!(record[2], F_TERM, "借来的 OPF 记录必须是 F_TERM");
+        assert_eq!(record[3], 0, "借来的 OPF 记录不能带 wrap 标志");
+        patch32(blob, entry, borrowed);
+        *blob.get_mut(entry + 6).expect("OPD nfields 越界") = 1;
+        let trw = content.section(S_TRW).expect("TRW 段");
+        let trm = content.section(S_TRM).expect("TRM 段");
+        let word = usize::from(trw.u16_at(usize::from(tid)).expect("TRW 项越界"));
+        patch16(blob, trm.offset as usize + word * 4 + 2, selector_term);
+    }
+
+    /// 某个单目标读节点的 `Selector` **子 term 的 id**（测试要把它塞进 `currentHealth` 的槽里）。
+    fn selector_term(content: &Content<'_>, tid: u16) -> u16 {
+        child(node(content, tid), "Selector")
+            .expect("这个 term 必须有 Selector")
+            .id()
     }
 
     /// 造一份**打过补丁**的镜像：`edits` 是 `(term, 字段名, 新的槽值 u16)`。
@@ -853,6 +1004,26 @@ mod tests {
             source: Some(cid("hero")),
             event_target: Some(cid("enemy_a")),
             iteration_target: Some(cid("enemy_b")),
+            iteration_card: None,
+        }
+    }
+
+    /// 只有一个 hero 的战斗，血量由参数给。
+    ///
+    /// `arena()` 的 hero 固定 30/50，读不出"当前值变了没有"；血量类的测试要自己指定 `(current, max)`。
+    fn hero_at(current: i32, max: i32) -> CombatState {
+        let mut state = CombatState::new(CombatId::new("c_hp").unwrap(), 11);
+        state.add_combatant(unit("hero", "player", current, max)).unwrap();
+        state
+    }
+
+    /// `source = hero`、其余两个目标槽都空着（选择器用 `sel.source` 时用这个）。
+    fn source_ctx(state: &CombatState) -> ExprContext<'_> {
+        ExprContext {
+            state,
+            source: Some(cid("hero")),
+            event_target: None,
+            iteration_target: None,
             iteration_card: None,
         }
     }
@@ -1098,6 +1269,245 @@ mod tests {
             single_target(selector, &ctx, &mut small),
             Err(ExprError::Ir(IrError::List))
         );
+    }
+
+    // =========================================================================================
+    // 3b. `currentHealth` / `maxHealth`：字段名是我们定的（`Selector`），语义是参考的
+    //
+    // 真实镜像里这两个 opcode 的字段表是 **空的**（`nfields = 0`，模块头第 4 条），所以
+    // "带选择器"的形状**在线上不存在** —— 只能像 `sel.rs` 那样**补丁镜像字节**造出来：
+    // 给 opcode 补一条 `Selector:F_TERM` 记录 + 把这个 0 槽 term 的**填充槽**写成选择器 id。
+    // 补丁的每一处字节都在 `patch_in_selector` 的注释里说明了出处。
+    // =========================================================================================
+
+    #[test]
+    fn current_health_reads_the_live_value_after_damage() {
+        // term 1527 = `currentHealth`（镜像里唯一一条，op 28）。补上 `Selector = sel.source`
+        // （= hero）之后，这一条同时钉住三件事：
+        //   * 读到的是 `health_current`（30）而不是 `health_max`（50）—— **把 current 读成 max
+        //     的实现会红**；
+        //   * 把目标真的打一顿之后再读就是新值 —— **把数值缓存在节点上（或缓存成满血）的实现会红**；
+        //   * 读的确实是 `sel.source` 那个单位：event_target（enemy_a）是 20、iteration_target
+        //     （enemy_b）是 10、max 是 50，四个数互不相同 ⇒ 接错槽也藏不住。
+        let source_sel = {
+            let blob = core_image();
+            let content = parse(&blob);
+            selector_term(&content, 296) // t296 = combatantStatusStacks{sel.source, paperwork}
+        };
+        let mut blob = core_image();
+        patch_in_selector(&mut blob, 28, 1527, source_sel);
+        let content = parse(&blob);
+
+        let mut state = arena(); // hero 30/50、enemy_a 20/20、enemy_b 10/10
+        assert_eq!(eval_int(node(&content, 1527), &full_ctx(&state)), Ok(30));
+        // 打它 —— 改的是**同一份状态**里的那个字段，不是另造一个 arena。
+        state.combatant_mut(&cid("hero")).expect("hero").health_current = 11;
+        assert_eq!(eval_int(node(&content, 1527), &full_ctx(&state)), Ok(11));
+        state.combatant_mut(&cid("hero")).expect("hero").health_current = 11 + 1;
+        assert_eq!(eval_int(node(&content, 1527), &full_ctx(&state)), Ok(12));
+        // 成对：`health_max` 一次都没被碰过 ⇒ 上面三个数只可能来自 current。
+        assert_eq!(
+            state.combatant(&cid("hero")).expect("hero").health_max,
+            50
+        );
+    }
+
+    #[test]
+    fn max_health_and_current_health_read_two_different_fields() {
+        // 同一份状态、同一个选择器：current = 30、max = 50。**两个 kind 读同一个字段的实现
+        // 会红**（30 ≠ 50）。
+        //
+        // ⚠️ 注意**满血**那一格（current == max）**区分不出任何东西**：读 current、读 max、
+        // 两个都读同一个字段，三种实现都能过它。所以判据必须是受伤的状态；满血那一格留在这里
+        // 只是为了让"为什么不能拿它当判据"变成可复现的，而不是一句口头纪律。
+        let source_sel = {
+            let blob = core_image();
+            let content = parse(&blob);
+            selector_term(&content, 296)
+        };
+        let mut blob = core_image();
+        patch_in_selector(&mut blob, 28, 1527, source_sel);
+        patch_in_selector(&mut blob, 48, 1728, source_sel);
+        let content = parse(&blob);
+
+        let mut state = arena(); // hero 30/50
+        assert_eq!(eval_int(node(&content, 1527), &full_ctx(&state)), Ok(30));
+        assert_eq!(eval_int(node(&content, 1728), &full_ctx(&state)), Ok(50));
+        assert_ne!(
+            eval_int(node(&content, 1527), &full_ctx(&state)),
+            eval_int(node(&content, 1728), &full_ctx(&state)),
+            "两个 kind 必须是两个字段"
+        );
+
+        // 受伤只动 current：max 读出来必须**还是** 50。
+        state.combatant_mut(&cid("hero")).expect("hero").health_current = 7;
+        assert_eq!(eval_int(node(&content, 1527), &full_ctx(&state)), Ok(7));
+        assert_eq!(eval_int(node(&content, 1728), &full_ctx(&state)), Ok(50));
+
+        // 满血那一格：两者相等（**不能当判据**，见上）。
+        let full = hero_at(50, 50);
+        assert_eq!(eval_int(node(&content, 1527), &source_ctx(&full)), Ok(50));
+        assert_eq!(eval_int(node(&content, 1728), &source_ctx(&full)), Ok(50));
+    }
+
+    #[test]
+    fn a_health_read_with_no_target_is_zero() {
+        // 参考：`if (targets.Count == 0) return 0;`（`EffectProgramExpressions.cs:671` / `:691`）。
+        // 选择器用 `sel.eventTarget`（静态基数 ZeroOrOne ⇒ 过得了静态那道闸），上下文里不给它。
+        let event_target_sel = {
+            let blob = core_image();
+            let content = parse(&blob);
+            selector_term(&content, 92) // t92 = combatantStatusStacks{sel.eventTarget, paperwork}
+        };
+        let mut blob = core_image();
+        patch_in_selector(&mut blob, 28, 1527, event_target_sel);
+        patch_in_selector(&mut blob, 48, 1728, event_target_sel);
+        let content = parse(&blob);
+
+        let mut state = arena();
+        // 把 event_target 打成 12/20 ⇒ 下面"不是 0"的那两个数是**两个不同的**非零值，
+        // 于是"零目标给 0"这条也顺带证明了 current / max 没有接反。
+        state.combatant_mut(&cid("enemy_a")).expect("enemy_a").health_current = 12;
+
+        let no_target = ExprContext {
+            state: &state,
+            source: Some(cid("hero")),
+            event_target: None,
+            iteration_target: Some(cid("enemy_b")),
+            iteration_card: None,
+        };
+        assert_eq!(eval_int(node(&content, 1527), &no_target), Ok(0));
+        assert_eq!(eval_int(node(&content, 1728), &no_target), Ok(0));
+
+        // 成对：同一个 term、同一份状态，只要槽里有人（enemy_a 12/20）就不是 0。
+        let ctx = full_ctx(&state);
+        assert_eq!(eval_int(node(&content, 1527), &ctx), Ok(12));
+        assert_eq!(eval_int(node(&content, 1728), &ctx), Ok(20));
+    }
+
+    #[test]
+    fn a_health_read_with_a_multi_target_selector_is_selector_not_single() {
+        // term 182 = `sel.allEnemies`（静态基数 ZeroOrMore，场上 2 个敌人）。参考在**构造期**
+        // 就 `RequireSingleSelector` 拒绝（`EffectProgramExpressions.cs:16-26`），求值期还有
+        // `RequireSingle`（`:28-36`，注释明说「不要静默用第一个」）。
+        // ⇒ 必须报 `SelectorNotSingle`，不许悄悄读 enemy_a（20）。
+        let mut blob = core_image();
+        patch_in_selector(&mut blob, 28, 1527, 182);
+        patch_in_selector(&mut blob, 48, 1728, 182);
+        let content = parse(&blob);
+        let state = arena();
+        let ctx = full_ctx(&state);
+        assert_eq!(
+            eval_int(node(&content, 1527), &ctx),
+            Err(ExprError::SelectorNotSingle)
+        );
+        assert_eq!(
+            eval_int(node(&content, 1728), &ctx),
+            Err(ExprError::SelectorNotSingle)
+        );
+        assert_ne!(eval_int(node(&content, 1527), &ctx), Ok(20), "不许取第一个");
+
+        // 成对：同一份状态、同两个 term，选择器换成 `sel.eventTarget`（ZeroOrOne）就正常。
+        let event_target_sel = {
+            let blob = core_image();
+            let content = parse(&blob);
+            selector_term(&content, 92)
+        };
+        let mut blob = core_image();
+        patch_in_selector(&mut blob, 28, 1527, event_target_sel);
+        patch_in_selector(&mut blob, 48, 1728, event_target_sel);
+        let content = parse(&blob);
+        assert_eq!(eval_int(node(&content, 1527), &ctx), Ok(20));
+        assert_eq!(eval_int(node(&content, 1728), &ctx), Ok(20));
+    }
+
+    #[test]
+    fn a_health_read_without_a_selector_is_a_loud_missing_field_error() {
+        // **真实镜像**（不打补丁）的 op 28 / op 48 就是 `nfields = 0`（模块头第 4 条），
+        // 所以这两个 term 今天在任何内容里都读不出来 —— 这正是要的行为：**给 0 或退回英雄都是错的**
+        // （前者让 `maxHealth*10` 安静算成 0，后者算成"英雄血量的 10 倍"）。
+        // 断言的是**具体那个错**，不是 `is_err()`：`Ir(Missing("Selector"))` 与
+        // `UnsupportedKind` / `WrongValueKind` / `SelectorNotSingle` 必须分得开。
+        let blob = core_image();
+        let content = parse(&blob);
+        let state = arena(); // hero 30/50、enemy_a 20/20、enemy_b 10/10
+        let ctx = full_ctx(&state);
+        // 先把"这两个 term id 确实是这两个 kind"钉住：下面那些断言的数字全靠它对，
+        // 而 term id 只在**这一份**镜像里有效（换内容就变）。
+        assert_eq!(node(&content, 1527).kind_str(), Ok("currentHealth"));
+        assert_eq!(node(&content, 1728).kind_str(), Ok("maxHealth"));
+        for tid in [1527u16, 1728] {
+            assert_eq!(
+                eval_int(node(&content, tid), &ctx),
+                Err(ExprError::Ir(IrError::Missing("Selector"))),
+                "term {tid}：字段表里没有 Selector（`nfields = 0`）"
+            );
+            // 三种"猜"逐个排除（它们在**这份状态**里各有不同的数字，所以每一条都不是空断言）。
+            assert_ne!(eval_int(node(&content, tid), &ctx), Ok(0), "不许静默给 0");
+            assert_ne!(eval_int(node(&content, tid), &ctx), Ok(30), "不许退回英雄的当前血量");
+            assert_ne!(eval_int(node(&content, tid), &ctx), Ok(50), "不许退回英雄的最大血量");
+        }
+        // 值类别仍然是 int：当 bool 问 ⇒ `WrongValueKind`（问错了问题），不是"还没实现"。
+        assert_eq!(
+            eval_bool(node(&content, 1527), &ctx),
+            Err(ExprError::WrongValueKind)
+        );
+        // 外层树也不许悄悄算出别的数：term 1731 = add{ multiply{maxHealth, 10}, const 99 }。
+        // 这条补上了原来那条"`maxHealth*10+99` 不许变成 99"的断言 —— 现在它连 99 都算不出来，
+        // 而是把同一个 `Missing("Selector")` 顶上来。
+        assert_eq!(
+            eval_int(node(&content, 1731), &ctx),
+            Err(ExprError::Ir(IrError::Missing("Selector")))
+        );
+        assert_ne!(eval_int(node(&content, 1731), &ctx), Ok(99), "不许悄悄变成 99");
+    }
+
+    #[test]
+    fn divider_is_current_health_divided_by_twelve_plus_one() {
+        // 这条是整件事的动机：Hexaghost 的 Divider = `(目标当前 HP / 12) + 1`
+        // （`docs/spec/sts-act1-plan.md` §2 G3）。整棵树用镜像里现成的 term 拼：
+        //   term 307 = add{ Left, Right }                     ← Right 本来就是 const 1（term 29）
+        //   Left → term 650 = divide{Dividend, Divisor, ZeroPolicy:ReturnZero}
+        //   Dividend → term 1527 = currentHealth{Selector: sel.source}（Selector 由补丁加上）
+        //   Divisor  → term 39   = const 2（Value 补丁成 12）
+        // 三个 HP 点卡在除法边界上：11 → 1、12 → 2、143 → 12。
+        // 这三个数把四种错实现都杀掉：漏 +1（11→0）、四舍五入而非截断（143→13）、
+        // current 读成 max（11/50 → 5；143/160 → 14）、零目标给 0（这里选择器是有目标的）。
+        let source_sel = {
+            let blob = core_image();
+            let content = parse(&blob);
+            selector_term(&content, 296)
+        };
+        let mut blob = patched(&[
+            (39, "Value", 12),        // const 2 → 12
+            (650, "Dividend", 1527),  // 战斗层拼法的被除数 → currentHealth
+            (650, "Divisor", 39),     // 除数 → const 12
+            (307, "Left", 650),       // add.Left → divide
+        ]);
+        patch_in_selector(&mut blob, 28, 1527, source_sel);
+        let content = parse(&blob);
+        // 先确认拼出来的形状就是上面写的那棵树（否则循环里的数字可能是别的原因凑出来的）。
+        assert_eq!(node(&content, 307).kind_str(), Ok("add"));
+        assert_eq!(node(&content, 650).kind_str(), Ok("divide"));
+        assert_eq!(node(&content, 650).str_field("ZeroPolicy"), Ok(Some("ReturnZero")));
+        assert_eq!(node(&content, 29).int_field("Value"), Ok(Some(1)), "右支是 const 1");
+        assert_eq!(node(&content, 39).int_field("Value"), Ok(Some(12)));
+
+        let mut results = [0i32; 3];
+        for (i, (hp, max, want)) in [(11, 50, 1), (12, 50, 2), (143, 160, 12)]
+            .into_iter()
+            .enumerate()
+        {
+            let state = hero_at(hp, max);
+            let ctx = source_ctx(&state);
+            // 叶子、中间量、整棵树三层各钉一次："商"必须是截断除法，"+1"在外面。
+            assert_eq!(eval_int(node(&content, 1527), &ctx), Ok(hp), "HP={hp}");
+            assert_eq!(eval_int(node(&content, 650), &ctx), Ok(hp / 12), "商（HP={hp}）");
+            assert_eq!(eval_int(node(&content, 307), &ctx), Ok(want), "Divider（HP={hp}）");
+            results[i] = want;
+        }
+        // 三个点必须是**三个不同的数**（否则"整棵树就是常数"也能过上面三条）。
+        assert_eq!(results, [1, 2, 12]);
     }
 
     // =========================================================================================
@@ -1444,11 +1854,27 @@ mod tests {
         }
         // 它们嵌在别的表达式里也一样（term 987 = compare{cardsPlayedThisTurn, Equal, 1}）。
         assert_eq!(eval_bool(node(&content, 987), &ctx), Err(ExprError::UnsupportedKind));
-        // `currentHealth` / `maxHealth` 也是这一档：线上没有选择器，见模块头第 4 条。
-        assert_eq!(eval_int(node(&content, 1527), &ctx), Err(ExprError::UnsupportedKind));
-        assert_eq!(eval_int(node(&content, 1728), &ctx), Err(ExprError::UnsupportedKind));
-        // 但 `maxHealth*10+99` 这种外层树**不许**悄悄变成 99（那正是猜错的形状）。
-        assert_eq!(eval_int(node(&content, 1731), &ctx), Err(ExprError::UnsupportedKind));
+        // ⚠️ **`currentHealth` / `maxHealth` 不再是这一档**（2026-10-19 改了本文件：
+        // 它们实现了，字段名 `Selector` 由我们定，见模块头第 4 条）。这条断言原来写的是
+        // `UnsupportedKind`，现在改成**更具体的那种错** —— 真实镜像的 op 28 / op 48
+        // `nfields = 0`，所以键缺席 ⇒ `Ir(Missing("Selector"))`（那两条 term 仍然读不出来，
+        // 但理由是"没有选择器"而不是"还没实现"）。细节与成对断言见
+        // `a_health_read_without_a_selector_is_a_loud_missing_field_error`。
+        assert_eq!(
+            eval_int(node(&content, 1527), &ctx),
+            Err(ExprError::Ir(IrError::Missing("Selector")))
+        );
+        assert_eq!(
+            eval_int(node(&content, 1728), &ctx),
+            Err(ExprError::Ir(IrError::Missing("Selector")))
+        );
+        // `maxHealth*10+99` 这种外层树仍然**不许**悄悄变成 99（那正是猜错的形状）：
+        // 错误从被乘数一路冒上来，而不是被"某个默认值"盖掉。
+        assert_eq!(
+            eval_int(node(&content, 1731), &ctx),
+            Err(ExprError::Ir(IrError::Missing("Selector")))
+        );
+        assert_ne!(eval_int(node(&content, 1731), &ctx), Ok(99));
     }
 
     // =========================================================================================
@@ -1565,8 +1991,32 @@ mod tests {
         // 而是被 `skipped_card` 单独计数 —— 下面这条断言就是在钉这件事。
         assert_eq!(total, 170, "候选表达式条数（去重后的 term 条数）");
         assert_eq!(ok, 117, "v1 求得出值的");
-        assert_eq!(unsupported, 53, "UnsupportedKind（见上面的按 kind 分布）");
-        assert_eq!(other, 0, "其它错误（结构错/选择器错）—— 一条都不该有");
+        // 53 → 40：`currentHealth`(t1527) 与 `maxHealth`(t1728) 不再是 `UnsupportedKind`
+        // （它们实现了，只是**这份内容**里没有 `Selector` 字段），它们的 11 个祖先也跟着变了
+        // —— 见下面那条 id 清单。
+        assert_eq!(unsupported, 40, "UnsupportedKind（见上面的按 kind 分布）");
+        // 0 → 13：**两片叶子 + 它们的 11 个祖先**。这条断言的价值是把"其它错误"从 0 变成
+        // **一个可以逐条念出来的清单**：
+        //   * 叶子：1527 `currentHealth`、1728 `maxHealth`（`nfields = 0` ⇒ 缺 `Selector`）；
+        //   * 祖先：1528 `subtract` → 1529 `min`（作用于 1527），1729 `multiply` → 1731 `add`
+        //     → 1733 `divide`（作用于 1728），以及另外三处 `min`（1707/1721/1867）和
+        //     1858/1859/1860（1731 那个形状的第二份拷贝）。
+        // 换句话说：**错误一路冒到树顶**，没有任何一层把它盖成 0 或默认值 —— 这正是要的。
+        // 将来多出第十四条 ⇒ 红，逼人先决定它是哪一种（而不是让它混进计数里）。
+        assert_eq!(other, 13, "其它错误只允许是那 13 条缺 Selector 的树");
+        for (tid, kind, err) in &others {
+            assert_eq!(
+                *err,
+                ExprError::Ir(IrError::Missing("Selector")),
+                "term {tid}（{kind}）的错必须是缺 `Selector` —— 不是别的结构错"
+            );
+        }
+        let error_ids: Vec<u16> = others.iter().map(|(tid, _, _)| *tid).collect();
+        assert_eq!(
+            error_ids,
+            vec![1527u16, 1528, 1529, 1707, 1721, 1728, 1729, 1731, 1733, 1858, 1859, 1860, 1867],
+            "`roguedeck` 这份镜像里，缺 `Selector` 只可能有这 13 条 term（2 片叶子 + 11 个祖先）"
+        );
         // 少掉的那一条必须恰好落在"卡实例表达式"这一格里，而不是凭空蒸发。
         assert_eq!(skipped_card, 1, "镜像里只有 t152 一种是卡实例表达式");
         assert_eq!(total + skipped_card, 171, "两条账加起来必须还是 171");

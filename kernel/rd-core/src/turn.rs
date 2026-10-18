@@ -194,7 +194,11 @@ pub trait TurnHost {
         actor: &CombatantId,
     ) -> Result<(), TurnError>;
 
-    /// turn-end：牌在手里过回合的生命周期钩子（`CardTurnLifecycleEventHandlers.cs`）。
+    /// turn-end：牌在手里过回合的**生命周期节目**（`CardLifecyclePrograms.cs:21-46`）。
+    ///
+    /// ⚠️ 2026-10-19 更正：这里原来写的是 `CardTurnLifecycleEventHandlers.cs` —— 那是弃手牌
+    /// 与抽牌的文件；生命周期节目（Burn/Decay 的机制）在 `CardLifecyclePrograms.cs`。
+    /// 真实实现见 `host::try_hand_turn_end_lifecycle`（镜像 62/62 卡是 `{}` ⇒ 今天恒空转）。
     fn hand_turn_end_lifecycle(
         &mut self,
         state: &mut CombatState,
@@ -740,10 +744,16 @@ pub fn end_current_turn<H: TurnHost>(
 
     // `EnqueueEvent(TurnEndedCombatEvent(...))`（`:61-65`）+ `ResolvePendingQueues`（`:67-70`）。
     // 该事件的注册序（规格书 §3.1 的 "TurnEndedCombatEvent 顺序"，`:135-138`）：
-    //   ① 牌在手里过回合的生命周期钩子（`Cards/CardTurnLifecycleEventHandlers.cs`）
+    //   ① 牌在手里过回合的生命周期节目（`Cards/CardLifecyclePrograms.cs:21-46`
+    //      —— ⚠️ 2026-10-19 更正：这里原来写的是 `CardTurnLifecycleEventHandlers.cs`，那是
+    //      **弃手牌**与**抽牌**所在的文件，放生命周期节目的是 `CardLifecyclePrograms.cs`）
     //   ② **弃手牌**，被 `RetainHandTag` 抑制 —— 本内核走 `host.hand_is_retained`
     //   ③ turn-end 触发程序
     //   ④ 按时长的状态减 1（`Effects/StatusEffects.cs:390-404`）
+    //
+    // ⚠️ ① 在参考里是**同一个事件的分发**里的一个处理器，所以它不花链号（整批只花事件那一个）；
+    // 本内核把 ② ③ ④ 拆成了钩子/直接调用，① 仍然排在最前（Burn 的伤害因此在弃手牌**之前**
+    // 就进了效果队列 —— 与参考"before the end-of-turn discard, which is deferred"同构）。
     host.hand_turn_end_lifecycle(state, &actor)?;
     if stopped(state) {
         return Ok(());

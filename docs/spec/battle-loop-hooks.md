@@ -66,7 +66,7 @@
 | `run_turn_started_triggers` | **是**（3 条 TurnStarted 触发器：`fatigue` / `bookworm` / `queue_advances`） | 否（标准包没有状态触发器） | **真活**，且是最大的一块（需要新的触发器解码） |
 | `resolve_pending_queues` | 取决于「宿主走不走入队模型」（§4.3） | 同 | **空实现就够，但前提是第 5 步真的没人需要** —— 见 §5.2，今天 QueuePile 无人解析 |
 | `damage_over_time` | **是**（2 条带 `damage_over_time` 标签：`paperwork` / `poison`） | **是**（`standard.poison`，`C:StandardCombatPackage.cs:263-264`） | **真活**，且卡在一个缺参数上（§5.4） |
-| `hand_turn_end_lifecycle` | **否**（62/62 卡 `LifecyclePrograms` = `{}`） | 否 | **空实现就够**（但必须是"响亮的空"：将来内容一用就得能跑，见 §2.5） |
+| `hand_turn_end_lifecycle` | **否**（62/62 卡 `LifecyclePrograms` = `{}`） | 否 | **已实现**（2026-10-19，见 §2.5）；内容一有 Burn 就走 |
 | `run_turn_ended_triggers` | **是**（6 条 TurnEnded 触发器：`panic`/`poison`/`paper_seals_wax`/`one_remaining_seal`/`your_number_is_fading`/`counterclaim`） | 否 | **真活**。注意 **`poison` 的层数衰减就靠它**（§4.4） |
 | `decrease_timed_statuses` | **否**（23/23 状态 `UsesDuration` = false） | **是**（16 个标准状态里 7 个 duration=true） | **今天空实现就够；跑标准包时必须实现** |
 | `hand_is_retained` | **否**（无状态带 `retain_hand` 标签） | 否（`K:status_catalog.rs:1278` 的测试逐行钉住 16 个都没有） | **默认 `false` 就够** |
@@ -413,14 +413,19 @@ while ((HasPendingEffects || HasPendingEvents || HasPendingContinuations) && Res
 | 必然变化 | 必然不变 |
 |---|---|
 | 节目产出的效果的真值 | `cz=` 牌区行**只有节目自己动了牌才变**；普通卡（无 lifecycle program）**一个字节都不变** |
-| `exec_num=`（每跑一个节目 +1）、`chain_num=` | `s=` / `res=` / `dp=` / `hp=` |
-| | `phase=` 已经在 turn-end 之前变成 `WaitingToStartTurn`（`K:turn.rs:644` / 参考 `C:CombatState.cs:332-338`） |
+| `exec_num=`（每跑一个节目 +1） | `chain_num=` —— ⚠️ **2026-10-19 更正**：本表原来把 `chain_num` 也列在"必然变化"里，那是错的。处理器跑在 `TurnEndedCombatEvent` 的分发里，那一刻 `CurrentEffectChain` 是事件自己那条链（`C:CombatEventHandling.cs:60` 的 `using (EnterEffectChain(entry.EffectChain))`）⇒ `Execute` 里 `EffectChain ??= CurrentEffectChain ?? CreateRootEffectChain()`（`C:Programs/EffectProgramExecution.cs:31`）**不会**建新根链、**不发号**。整批 turn-end 处理器只花事件那一个号 |
+| | `s=` / `res=` / `dp=` / `hp=` |
+| | `phase=` 已经在 turn-end 之前变成 `WaitingToStartTurn`（`K:turn.rs:739` / 参考 `C:CombatState.cs:332-338`） |
 
-**内核现状与缺口**：
+**内核现状（2026-10-19 实现，`K:host.rs::try_hand_turn_end_lifecycle`）**：
 
-- 镜像内容：**62/62 卡的 `LifecyclePrograms` 是 `{}`**（实测；字段全集 = `Costs/Id/LifecyclePrograms/PackageId/PlayedCardDestinationZone/Program/RetainInHandOnTurnEnd/Tags/TurnEndHandDestinationZone`）。
-- ⇒ **空实现就够**，今天没有任何卡会走这里。
-- **但"空实现"必须是可判定的空**：契约要求"将来内容一用就得能跑，否则响亮失败"。今天内核连 `LifecyclePrograms` 这个格都没解（`K:content.rs` 的 `CardRow` 里我未见到；见 §6.2 未验证项）。建议的最低限度：**实现为 `Err(TurnError::…)` 当内容存在非空 `LifecyclePrograms` 时**，而不是静默 `Ok(())`。**静默 `Ok(())` 会让"烧牌/流血/悔恨"这类卡永远不发作且没有任何信号**——这正是本项目反复踩的"工具说成功、对象没干活"。
+- 镜像内容：**62/62 卡的 `LifecyclePrograms` 是 `{}`**（实测；字段全集 = `Costs/Id/LifecyclePrograms/PackageId/PlayedCardDestinationZone/Program/RetainInHandOnTurnEnd/Tags/TurnEndHandDestinationZone`）⇒ 真实内容上**一条节目都不跑**：不改一格状态、不发执行号、不建链。那条"空"路径是解码器的两次格读取（哨兵 / 0 字段的 `_obj`），**不是特判**。
+- **机制是真的**：解码 `CARD.LifecyclePrograms[TurnEndInHand]`（键名两种拼法都收：`"TurnEndInHand"` 与枚举序数 `"0"` —— 哪一种会真的出现在镜像里 **【未验证】**，因为 62/62 卡是 `{}`、没有任何实例能观察键名），走 `exec::begin` 派发，`sel.source` / `sel.eventTarget` 都绑正在结束回合的那个人（`C:CardLifecycleTriggeredEffects.cs:49-55`）。
+- **链号 +0**：内核把 `TurnEnded` 的那**一个**号发在 `try_run_turn_ended_triggers` 里（在本钩子之后），所以这里用 `CombatState::adopt_root_chain`（建链、不推进 `next_effect_chain_number`）表达"复用一条已经发过号的链"。链的 **id** 拿到的是"上一个已发的号"（参考里是事件那条链的号），但 id 不进哈希、也没有按 id 的查表 ⇒ 可观察量（`chain_num`）一致。
+- 三条**偏离**（都写在函数的文档里）：① 定义查不到 ⇒ 响亮失败（参考是 `continue`）；② 节目上下文的"卡槽"没有对应物（`ExecContext` 只有一个 `forEachCardInZone` 的迭代卡槽，**故意不绑**）⇒ 读卡槽的表达式得到 `ExprError::NoTarget`（响亮）；③ 先解码全部手牌再跑（参考边跑边解，只在内容坏了时可观察）。
+- 缺失的**观测对象**：真实镜像没有一张带节目的卡，所以"节目跑起来了"这件事由 `K:host.rs` 测试里那份**手搓 RDCF 镜像**当观察对象（`burn` / `burn_dual` / `burn_block` / `burn_retained` / `weird` / `plain`）。
+- ⚠️ **顺带发现的另一个缺口（不在本钩子里）**：`K:host.rs::card_stays_in_hand_at_turn_end` 恒返回 `false`，理由写的是"62/62 卡 `RetainInHandOnTurnEnd = false`（实测）"。手搓镜像里那张 `true` 的卡证明：**内容一旦真的用这个字段，它会被静默忽略**（卡照样在回合末被弃）。
+
 
 **时点**：它在 turn-end 处理器序里是**第 1 位**（`:135`），在弃手牌（`:136`）之前。参考的注释（`:17-20`）解释了原因：「before the end-of-turn discard, which is deferred (enqueued), so the hand is intact here」。
 
@@ -887,6 +892,8 @@ combat.EnqueueEffect(new MoveHandCardsOnTurnEndEffectRequest(e.CombatantId));
 ### 6.2 未验证（11 条，按重要性排序）
 
 1. **`Hand` 的活跃视图语义**：`C:Cards\CardLifecyclePrograms.cs:17-20` 的注释说"we snapshot the hand first"，但 `:31` 的 `foreach` 直接遍历活视图、**代码里没有显式快照**。`GetCardsInZone` 返回的是拷贝还是视图，我**没读** `C:Cards\CardZones.cs` 的实现。⇒ "`TurnEndInHand` 节目把这张牌移出牌区后，循环会不会崩/会不会跳过下一张"**未知**。（本项目没有 `List` 并发修改异常的问题吗？C# 的 `List` 在 `foreach` 中修改会抛 `InvalidOperationException`。如果 `GetCardsInZone` 是视图，那"移牌的节目"就会**抛**——这与注释说的"a program that moves the card is fine"矛盾。**这是一条真实的疑点，需要有人读 `CardZones.GetCardsInZone`**。）
+   > **2026-10-19 补注**：这条**仍然未验证**（还是没读 `CardZones.cs`）。内核那一侧的选择是**先快照手牌槽位**再逐个跑（`K:host.rs::try_hand_turn_end_lifecycle`），理由是参考的注释明确说"移牌的节目是合法的"，而活视图会让 C# 的 `foreach` 抛。如果将来有人读了 `CardZones.GetCardsInZone` 发现它其实是活视图（且移牌真的会抛），那参考的注释就是错的，本内核的快照反而是**更宽**的行为 —— 那时要在 §2.5 记一笔。
+
 2. **`Comparer<string>.Default` 是否等价于字节序**：`ThenBy(d => d.Id.value)` 用的是 culture-sensitive 比较（`C:Effects\TriggeredProgramDefinition.cs:92`）。对 `{slug}_trigger{n}` 这种纯 ASCII，多数情况一致，但 culture 比较会忽略/重排某些标点与大小写。**我没有验证**当前 25 条触发器在这种比较下的真实次序。
 3. **`_pendingContinuations` 与"程序真正结束"的等价性**：我确认了"每轮只跑一个续延"（`C:CombatEventHandling.cs:107-111`），但**没有**验证"没有续延可跑 ⇒ 所有节目都结束了"这条不变量在所有节点种类下成立（`forEachTarget` 的多层续延尤其可疑）。
 4. **`ir.rs` 能否从 `Content` 解出 `STAT.Triggers` 的完整结构**：我验证了 cell 索引（`K:content.rs:1322-1323`）与 `Content::term` 的存在（`:548`），但**没有**尝试用现有 API 真的走通一遍；`Triggers` 元素的确切 term 形状（`_obj{Event, Program}` vs 别的拼法）我只从 JSON dump 反推，**没有在二进制层核对**（这正是 FACT.md 里"二进制层的拼法可能与 JSON dump 不同"的那个坑）。

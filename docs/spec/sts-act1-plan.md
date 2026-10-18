@@ -29,15 +29,15 @@
 | # | 事实 | 锚点（我实际读到的） |
 |---|---|---|
 | 1 | 节点执行器 **15 种**，全部实现 | `kernel/rd-core/src/ir.rs:82-112`（`NodeKind` 15 个变体）、`exec.rs:898`（`dispatch` 穷尽） |
-| 2 | 表达式：`const/compare/add/subtract/multiply/divide/min/max/and/or/not/combatantCounter/combatantStatusStacks/combatantCurrentResource` 等已实现 | `expr.rs:280-308`（kind 白名单）、`expr.rs:374-459` |
-| 3 | `currentHealth` / `maxHealth` / `missingHealth` **在白名单里但实现是 `UnsupportedKind`** | `expr.rs:289-291` vs `expr.rs:457-459`；理由见 `expr.rs:79-92`（线上该 opcode `nfields=0`） |
+| 2 | 表达式：`const/compare/add/subtract/multiply/divide/min/max/and/or/not/combatantCounter/combatantStatusStacks/combatantCurrentResource` 等已实现 | `expr.rs:321`（`INT_KINDS` 白名单）、`eval_int`（`expr.rs:408` 起） |
+| 3 | `currentHealth` / `maxHealth` **已实现**（2026-10-19）；字段名 `Selector`，是镜像自己给同一个概念用的名字（11 个 opcode 在用，其中 3 个是已在读的单目标标量读）。`missingHealth` 仍 `UnsupportedKind`（镜像里连 opcode 都没有，且等于 `subtract(maxHealth, currentHealth)`） | `expr.rs` 模块头第 4 条；实现是 `eval_int` 的两个分支（`expr.rs:504`/`:507`，都走 `health_target` 那个单目标读）；测试 `expr::tests::divider_is_current_health_divided_by_twelve_plus_one` |
 | 4 | 选择器 **10 种**（`sel.source/eventTarget/iterationTarget/allAllies/allEnemies/allCombatants/lowestHealthEnemy/alliesWithStatus/enemiesWithStatus/withStatus`）；`sel.random` **不支持** | `sel.rs:344-353`；`sel.rs:991` |
 | 5 | 敌方动作选择：入参 `(遭遇, 槽位)`、`Priority` 降序、落回 `Actions[(round-1) % count]`、**零 RNG、不写状态** | `intent.rs:509`（`select_action`）、模块头 `intent.rs:13-24`、`intent.rs:99`（D6） |
 | 6 | 触发事件**只有 4 个**接了钩子：`TurnStarted` / `TurnEnded` / `RoundStarted` / `RoundEnded`；其余 21 个（`DamageTaken`/`DamageDealt`/`CardPlayed`/`Downed`/`BlockGained`…）解析成功但归 `NotHandled` | `host.rs:300-331` |
 | 7 | 意图**不进状态**：没有"当前意图"字段可打断 | `state.rs` 无 `intent` 字段；`snapshot.rs:91`（`IntentKey` 在"未建模"清单里） |
 | 8 | `TurnHost` 9 个必做钩子 + 8 个默认钩子（回合起 7 步 / 回合末 4 步的顺序就长在这上面） | `turn.rs:150-279` |
 | 9 | 出牌校验器**硬编码 5 个**：`Stun / Decree / PlayCondition / OneAttackPerTurn / Unplayable` | `play.rs:936-988` |
-| 10 | `LifecyclePrograms`（"牌在手里过回合"节目）**非空即响亮拒绝** | `host.rs:1147-1165` |
+| 10 | `LifecyclePrograms`（"牌在手里过回合"节目）**已实现**（2026-10-19）：解 `CARD.LifecyclePrograms[TurnEndInHand]` 并派发节目；镜像 62/62 卡是 `{}` ⇒ 今天一条都不跑 | `host.rs::try_hand_turn_end_lifecycle`；`host.rs::card_lifecycle_turn_end_program` |
 | 11 | 建战斗入口 `FightPlan` 只有 `(id, max_health)`；**没有起始状态、没有 innate 卡**（两处都响亮拒绝） | `battle.rs:121-134`、`battle.rs:553-560`、`battle.rs:645-653` |
 | 12 | 敌人**动作程序**可以跑（`execute_action`）、`setCombatantCounter` 支持**相对加**（`Relative` 默认 true） | `intent.rs:725`、`exec.rs:1153-1215` |
 | 13 | 内容编译器把 `*.roguedeck.json` 编成 RDCF，**opcode 表由文档本身派生**（一个 kind / 一种对象形状 = 一个 opcode），opcode 是 **u8** ⇒ 硬上限 256 | `tools/contentc/compile.py:204`（`LayoutDeriver`）、`compile.py:281`（超限 `SystemExit`） |
@@ -52,7 +52,7 @@
 |---|---|---|
 | C1 | "`native\fight_diff.py` 已有**三层**" | **四层**：`FIGHT_DIFF`(182 条) / `CARD_DIFF`(逐卡) / `CARD_MULTI`(逐卡跨回合) / `ENEMY_DIFF`(逐敌动作)。`fight_diff.py:1634-1667` |
 | C2 | "`rd-wasm` 的 Gap 1：`content.rs` 没有 encounter→actions 读器" | **已过期**。`content.rs:754` 有 `encounter()` 行读器，`intent.rs` 能自己从 ENCT 行里读敌人名单并选动作。真正缺的只是 **wasm 里的接线**（`rd-wasm/src/lib.rs:545-546` 仍写死 `-1`） |
-| C3 | "`currentHealth` 等 3 个表达式在 kind 表白名单里" | 白名单 ≠ 可用：`eval_int` 对它们返回 `UnsupportedKind`（见 §1 第 3 行）。**不要照着白名单写内容** —— 会响亮失败（这算好的），可怕的是反过来把"没实现"当"已实现"去设计 |
+| C3 | "`currentHealth` 等 3 个表达式在 kind 表白名单里" | **已过期（2026-10-19 更正）**：`currentHealth` / `maxHealth` **实现了**，字段名 `Selector`（§9-4、`expr.rs` 模块头第 4 条）。只有 `missingHealth` 仍然"白名单里但 `UnsupportedKind`"——它连 opcode 都没有，而且等于 `subtract(maxHealth, currentHealth)`，所以**别写它**，写那两个减法。上一版本行说的是"不要照着白名单写内容（会响亮失败）"——这句话对 `missingHealth` 仍然成立 |
 | C4 | "`inv` §3.5 说卡牌奖励池按'是否第一幕'筛" | `inv:§3.5` 自己已经标了这条更正（**只有角色 + 稀有度两维**）。本文照 `inv`。 |
 | C5 | 现有 `sts/` 目录像是"半成品 run 层" | `status_catalog.rs:552` 的注释写明：那是 **plan B，已放弃**。可当**格式先例**引用（`sts/content/cards.json` 的扁平 `{"op":…}` DSL），**不可当语义来源**（它的时钟是层数、不是 `DurationTurns`）。顺带：内核目录里**已经有这 8 个原型状态**的元数据（`status_catalog.rs:563`、查询入口 `:630`），`metallicize`/`ritual` 这种"参考包里没有、StS 才有"的 id 已经能查到 ⇒ 内容侧有现成模板 |
 
@@ -91,9 +91,9 @@
 | 项 | 内容 |
 |---|---|
 | **具体到谁** | `hexaghost` 的 `Divider = 6 × (1 + floor(玩家当前HP / 12))`（`inv:§4.3`）；顺带它的"绿火计数"驱动 7 步序列（`inv:§4.3`） |
-| **为什么是"小"** | `multiply` / `add` / `divide` 都已实现（`expr.rs:280-308`），缺的只有 `currentHealth`：**一个表达式 + 一个目标字段**。今天 `UnsupportedKind` 的唯一理由是**镜像里那个 opcode 的字段表是空的**（`expr.rs:79-92`）—— 而 StS 内容是我们自己 authored，**字段名由我们自己定** ⇒ "测不出来"这个理由在这里不成立 |
-| **最小可行** | 实现 `currentHealth` / `maxHealth` / `missingHealth` 三兄弟，各带一个 `TargetSelector` 子字段（名字例如 `Target`，**这是新内容格式的一部分，必须写进格式契约**）。≈40 行 + 一条"字段缺席 ⇒ 响亮拒绝"的测试（不许默认取英雄：猜目标的代价是 `maxHealth*10` 安静算错） |
-| **能不能对拍** | 不能（镜像里没有非空形状）⇒ 规则测试：`Divider` 在 HP=12/24/25 三个点的期望值 12/18/24 |
+| **为什么是"小"** | `multiply` / `add` / `divide` 都已实现（`expr.rs` 的 `int_pair` / `divide`），缺的只有 `currentHealth`：**一个表达式 + 一个目标字段**。当初 `UnsupportedKind` 的唯一理由是**镜像里那个 opcode 的字段表是空的**（`expr.rs` 模块头第 4 条）—— 而 StS 内容是我们自己 authored，**字段名由我们自己定** ⇒ "测不出来"这个理由在这里不成立。**2026-10-19：做完了** |
+| **最小可行（已落地）** | `currentHealth` / `maxHealth` 两个，目标字段名 = **`Selector`**（不是"例如 `Target`"：镜像里 11 个 opcode 已经在用 `Selector` 表示同一个概念，其中 3 个是本内核已在读的单目标标量读 ⇒ 用它不是发明新名字）。实测 ≈30 行 + 6 条测试（其中一条把 `(currentHealth / 12) + 1` 整棵树在 HP=11/12/143 三点上钉住）。**`missingHealth` 没做**：镜像里没有它的 opcode，而且它等于 `subtract(maxHealth, currentHealth)` |
+| **能不能对拍** | 不能（镜像里没有非空形状）⇒ 规则测试。已落地的那一种拼法是 `(currentHealth / 12) + 1`，在 HP=**11/12/143** 三点上期望 **1/2/12**（`expr::tests::divider_is_current_health_divided_by_twelve_plus_one`）。⚠️ **本文上一版这一格写的是"HP=12/24/25 ⇒ 12/18/24"，与它自己写的 `6×(1+floor(HP/12))` 公式不自洽**：floor 下 25 ⇒ `6×3 = 18`，只有**向上取整**才能得到 24（`6×(1+ceil(25/12))`）。原作到底是 floor 还是 ceil **未验证**（`inv:§4.3` 的表述没定这一点）⇒ M1 写内容前必须先在实机/权威资料上确认，**不许照这一行抄数字** |
 
 ### G4 战斗中途改阵容（Split）
 
@@ -249,7 +249,7 @@
 | 条件收益 | `dropkick` `uppercut` | **A** | `conditional` + `combatantStatusStacks` |
 | Power（永久被动） | `inflame` `metallicize` `demon_form` | **A** | 做成"带 `TurnStarted`/`TurnEnded` 触发器的状态"（C# 参考实现没有 Power 概念，StS 的 Power 就是状态） |
 | 消耗手牌 / 摸到手就触发 | `second_wind` `fiend_fire` `true_grit` | **A**（消耗）/ **C**（"消耗时触发"） | 前者靠 `forEachCardInZone`；后者要 G2 |
-| Ethereal / 回合末在手里受伤 | `carnage` `ghostly_armor` `Burn` | **B** | `LifecyclePrograms` 今天**响亮拒绝**（`host.rs:1147-1165`），钩子已在、内容已带 ⇒ 补"跑节目"这一小步 |
+| Ethereal / 回合末在手里受伤 | `carnage` `ghostly_armor` `Burn` | **A** | `LifecyclePrograms` **已实现**（2026-10-19，`host.rs::try_hand_turn_end_lifecycle`）：`dealDamage{2, sel.source}` 这种节目直接可跑。剩余的是**内容侧**：把节目写进 `*.roguedeck.json` 并重编镜像 |
 | 战斗中升级 / 永久成长 | `armaments` `rampage` `searing_blow` | **C** | 本内容里"升级"是**另一张 CARD 行**（`paper_cut` vs `paper_cut+`，`rd-wasm/src/lib.rs` Gap 5）⇒ 要就地改 `definition_id`。`searing_blow` 多级升级 `inv:§12-5` 更是 `【待补】` |
 | X 费 / 随机目标 | `whirlwind` / `sword_boomerang` `juggernaut` | **C** / **B** | 见 G8 |
 | 特殊修饰 | `heavy_blade`（力量 ×3）`perfected_strike`（数"Strike"字样）`blood_for_blood`（失 HP 降价） | **B/C** | 都需要"按卡定制的修饰器"或"扫描牌堆"，不在标准管线里 |
@@ -304,7 +304,8 @@
 
 | 项 | 内容 |
 |---|---|
-| **进入条件** | M0a 绿 + M0.5 冻完；G3 的 `currentHealth`（小）与 `LifecyclePrograms`（小）就位；**`run_rng` 的形状已定**（见 §5.4，这条不能后补） |
+| **进入条件** | M0a 绿 + M0.5 冻完；G3 的 `currentHealth`（小）**已就位（2026-10-19，`maxHealth` 顺带）**、`LifecyclePrograms`（小）**已就位（2026-10-19，`host.rs::try_hand_turn_end_lifecycle`）**；**`run_rng` 的形状已定**（见 §5.4，这条不能后补） |
+
 | **做什么** | ① 地图生成（`inv:§7.1-§7.4`）：7×15、6 路径、不交叉、前两起点不同、固定层 1/9/15/16/17、类型掷点 + 5 条覆写；② 战斗节点（池 = §3.4 的全 A 遭遇 + Hexaghost）；③ 篝火（Rest 30% / Smith，`inv:§8.1`）；④ 宝箱（三箱型 + Boss 宝箱 3 选 1，`inv:§8.3`）；⑤ Boss = **`hexaghost`** |
 | **为什么 Boss 是 Hexaghost**（三条理由，可反驳） | ① **不需要事件队列**：它没有任何"受伤/出牌/死亡"触发（`inv:§4.3`），机制是"自身固定序列 + 一个纯函数伤害"；② **不需要改阵容**（Guardian 与 Slime Boss 各要一项"大"）；③ 它需要的三个小能力里有 **两个是纯内容侧**（绿火计数 = counter + 8 条规则；Burn→Burn+ 可以用"第一次 Inferno 之后就造 Burn+"来近似，差异只在玩家牌堆里已有的 Burn —— 起手牌组里没有 Burn，`inv:§2.1`）。⇒ **它是"能把 M1 关掉"的唯一 Boss** |
 | **完成判据** | ① **确定性回归**：`sts_run --seed 7 --script a.json` 跑两遍 ⇒ `run_hash` 序列逐字节相同；② **规则单测**：`inv:§7.4` 的 5 条覆写各一条，且每条都成对（"合法图通过" + "构造的违规图被拒"）；③ **分布闸门**：固定 200 个 seed，断言"精英 8%±2 / 篝火 12%±2 / 商店 5%±1 / ? 22%±2 / 战斗 53%±2"（**带容差、固定 seed 列表**，否则 flaky），并先断言"样本里存在 ≥1 个三岔口"（否则"从不生成三岔口"的实现也能过）；④ **端到端**：一条脚本从 floor1 打到 floor16 赢 Hexaghost，输出 `STS_M1 PASS (floors=16 fights=N)`；⑤ `acceptance.ps1` 9/9 |
@@ -432,9 +433,12 @@
 ### 6.4 翻译器必须做的两件"拒绝"（否则是最危险的静默）
 
 1. **事件白名单**：写出 `DamageTaken`/`CardPlayed`/`Downed` 等（今天 `NotHandled`，`host.rs:323-328`）⇒ **硬失败**。
-2. **能力白名单**：写出 `sel.random` / `currentHealth` / `X 费` / 战斗中升级 ⇒ **硬失败**并指向本文的 §2 编号。
+2. **能力白名单**：写出 `sel.random` / `missingHealth` / `X 费` / 战斗中升级 ⇒ **硬失败**并指向本文的 §2 编号。
    理由：它们今天都是"响亮失败"或"根本不存在"，而**内容层最容易绕过响亮失败**（例如把"随机取 6–7"
    写成常量 6 —— 这必须是**显式的 `{"deviates":"§7#3"}` 字段**，不能是默默写 6）。
+   > 2026-10-19 更正：这一条原来写的是 `currentHealth`。`currentHealth` / `maxHealth` 已经**实现**
+   > （字段名 `Selector`，§9-4 + `expr.rs` 模块头第 4 条），所以从这张表里换成 `missingHealth`
+   > （它没有 opcode，写它就会响亮失败；需要"缺多少血"时写 `subtract(maxHealth, currentHealth)`）。
 
 ### 6.5 格式契约里必须写死的三条语义约定（否则数值会静默偏）
 
@@ -501,7 +505,7 @@
 | 1 | 事件抽取权重 | 等概率，标 `inferred` | **无处可查**（`inv:§12-1` 三源皆无）⇒ 需要实机观测或社区逆向 |
 | 2 | 敌人 AI 的取整/回退（"不能连用 N 次"在边界上的实际做法） | 确定性脚本绕开 | `inv:§12-2`；需要实机采样 |
 | 3 | Boss/精英/遭遇是否真等概率 | 按等概率实现，标 `inferred` | `inv:§12-4` |
-| 4 | `currentHealth` 的目标字段名 | 由内容格式**我们定**（新格式的一部分） | 不存在于镜像 ⇒ 定义权在我们 |
+| 4 | `currentHealth` 的目标字段名 | **已定：`Selector`**（2026-10-19）。不是拍脑袋：同一份镜像里 **11 个 opcode** 已用 `Selector: F_TERM` 表示这个概念（op 20/21/22/23/24/25/32/38/43/44/45），其中 `combatantStatusStacks`(25) / `combatantCounter`(23) / `combatantCurrentResource`(24) 正是内核已在读的单目标标量读。`missingHealth` 没有 opcode ⇒ 继续不支持（用 `subtract` 写） | 镜像里**不存在**这两个字段（`nfields=0`）⇒ 定义权在我们；落地见 `expr.rs` 模块头第 4 条 + `compile.py` 零改动派生出该字段的实测（临时拷贝） |
 | 5 | `Searing Blow` 逐级升级值 | M2 前不支持战斗中升级 | `inv:§12-5`（【单源】） |
 | 6 | 诅咒卡清单（Regret/Injury/Doubt/Parasite/Pain/Decay）的精确机制 | 事件效果无法结算 ⇒ M2b 前这些分支标"未实现" | `inv:§12-6` |
 | 7 | `Wheel of Change` 6 格是否等概率 | 等概率 + `inferred` | `inv:§12-7` |
@@ -516,3 +520,4 @@
 | 日期 | 版本 | 改动 |
 |---|---|---|
 | 2026-10-18 | v1 | 初版：17 条现状锚点 + 5 条对输入的更正、G1–G10 能力矩阵、25 敌人分档（10/4/11）、M0a/M0b/M0.5/M1/M2a/M2b、run 层 12 条判据、内容管线建议、6 行降级表 |
+| 2026-10-19 | v1.1 | **G3 的 `currentHealth` / `maxHealth` 落地**（字段名 `Selector`，不是 §2 G3 原写的"例如 `Target`"）。原地改了：§1 第 3 行、§1.1 C3、§2 G3 两行、§6.4-2（白名单里把 `currentHealth` 换成 `missingHealth`）、§9-4（定案）、§4 M1 进入条件。**另更正两处旧错误**：①§2 G3 的"HP=25 ⇒ 24"与它自己的 floor 公式不自洽（floor 下是 18，只有 ceil 才是 24）—— 原作取整方式**未验证**；②`expr.rs` 模块头里 `tools/_core_dump.json` 这个出处文件**不存在**（改指源 JSON）。`missingHealth` 仍未实现（镜像里没有它的 opcode），理由写进 §2 G3 |
