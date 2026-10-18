@@ -80,6 +80,7 @@ public static partial class OracleExports
     private static SpecStatus[] _statusSpecs = [];
     private static string _cardSteps = string.Empty;
     private static string _cardFacts = string.Empty;
+    private static SpecEnemyAction[] _enemySpecs = [];
 
     // ── the spec model (mirrors native/gen_card_specs.py's output, nothing else) ─────────────────────
 
@@ -119,7 +120,19 @@ public static partial class OracleExports
         bool UsesDuration,
         bool UsesCharges,
         SpecModifier[] Modifiers,
-        SpecTrigger[] Triggers);
+        SpecTrigger[] Triggers,
+        string[] UsedBy);
+
+    /// <summary>One `EACT` row: which enemy owns it, its intent, its program, and the statuses that program needs.</summary>
+    private sealed record SpecEnemyAction(
+        int Index,
+        string Id,
+        string Enemy,
+        bool Listed,
+        string Package,
+        string Intent,
+        SpecProgram Program,
+        string[] Statuses);
 
     /// <summary>One registered status trigger, kept so the facts can be rendered from the object that runs.</summary>
     private sealed record AuthoredTrigger(
@@ -179,11 +192,12 @@ public static partial class OracleExports
         var root = _cardSpecsDoc.RootElement;
         if (root.ValueKind != JsonValueKind.Object)
             throw new InvalidOperationException("card specs must be a json object at the root.");
-        RejectUnknownKeys(root, ["format", "image", "image_bytes", "card_count", "statuses", "cards"], "spec");
+        RejectUnknownKeys(root, ["format", "image", "image_bytes", "card_count", "enemy_action_count",
+            "statuses", "cards", "enemy_actions"], "spec");
         var format = Field(root, "format", "spec").GetInt32();
-        if (format != 1)
+        if (format != 2)
             throw new InvalidOperationException(
-                $"card specs format {format} — this build only understands format 1.");
+                $"card specs format {format} — this build only understands format 2.");
 
         var statuses = new List<SpecStatus>();
         var statusIndex = 0;
@@ -194,6 +208,11 @@ public static partial class OracleExports
         var cardIndex = 0;
         foreach (var element in Field(root, "cards", "spec").EnumerateArray())
             cards.Add(ReadCard(element, $"spec.cards[{cardIndex++}]"));
+
+        var enemies = new List<SpecEnemyAction>();
+        var enemyIndex = 0;
+        foreach (var element in Field(root, "enemy_actions", "spec").EnumerateArray())
+            enemies.Add(ReadEnemyAction(element, $"spec.enemy_actions[{enemyIndex++}]"));
 
         var declared = Field(root, "card_count", "spec").GetInt32();
         if (declared != cards.Count)
@@ -207,17 +226,44 @@ public static partial class OracleExports
                 throw new InvalidOperationException(
                     $"card specs card #{index} carries index={cards[index].Index} — the list order and the index disagree.");
 
+        // Same rule for the enemy actions: 394 rows, index == position, or `enemy=<id>` and the hash pair up wrong.
+        var declaredEnemies = Field(root, "enemy_action_count", "spec").GetInt32();
+        if (declaredEnemies != enemies.Count)
+            throw new InvalidOperationException(
+                $"card specs say enemy_action_count={declaredEnemies} but carry {enemies.Count} actions.");
+        for (var index = 0; index < enemies.Count; index++)
+            if (enemies[index].Index != index)
+                throw new InvalidOperationException(
+                    $"card specs enemy action #{index} carries index={enemies[index].Index} — the list order and the index disagree.");
+
         _cardSpecs = [.. cards];
         _statusSpecs = [.. statuses];
+        _enemySpecs = [.. enemies];
         _error = string.Empty;
         return _cardSpecs.Length;
+    }
+
+    /// <summary>One `EACT` row. `statuses` is the transitive closure that row's program needs.</summary>
+    private static SpecEnemyAction ReadEnemyAction(JsonElement element, string where)
+    {
+        RequireKind(element, JsonValueKind.Object, where);
+        RejectUnknownKeys(element, ["index", "id", "enemy", "listed", "package", "intent", "program", "statuses"], where);
+        return new SpecEnemyAction(
+            Int(element, "index", where),
+            Str(element, "id", where),
+            Str(element, "enemy", where),
+            Bool(element, "listed", where),
+            Str(element, "package", where),
+            Str(element, "intent", where),
+            ReadProgram(Field(element, "program", where), where + ".program"),
+            Strings(element, "statuses", where));
     }
 
     private static SpecStatus ReadStatus(JsonElement element, string where)
     {
         RequireKind(element, JsonValueKind.Object, where);
         RejectUnknownKeys(element, ["id", "package", "polarity", "stacking", "tags", "uses_stacks",
-            "uses_duration", "uses_charges", "passive_modifiers", "triggers"], where);
+            "uses_duration", "uses_charges", "passive_modifiers", "triggers", "used_by"], where);
         var modifiers = new List<SpecModifier>();
         var modifierIndex = 0;
         foreach (var item in Field(element, "passive_modifiers", where).EnumerateArray())
@@ -236,7 +282,8 @@ public static partial class OracleExports
             Bool(element, "uses_duration", where),
             Bool(element, "uses_charges", where),
             [.. modifiers],
-            [.. triggers]);
+            [.. triggers],
+            Strings(element, "used_by", where));
     }
 
     private static SpecModifier ReadModifier(JsonElement element, string where)
@@ -414,6 +461,9 @@ public static partial class OracleExports
 
         foreach (var spec in _statusSpecs)
         {
+            // 这一层只 author 卡程序引用到的状态；敌人动作那一侧有它自己的一份（`used_by` 说得很清楚）。
+            if (Array.IndexOf(spec.UsedBy, "cards") < 0)
+                continue;
             var where = "status(" + spec.Id + ")";
             var status = new StatusBlueprint(spec.Id)
             {
@@ -445,7 +495,7 @@ public static partial class OracleExports
                         $"{triggerWhere}: trigger event `{trigger.Event}` is not authored by this build "
                         + "(only DamageDealt is; add the adapter here before letting the content through).");
                 var program = new EffectProgram<DamageDealtTriggeredEffectContext>(
-                    AuthorTriggerNode(trigger.Program.Root, triggerWhere + ".program.root"),
+                    AuthorNode<DamageDealtTriggeredEffectContext>(trigger.Program.Root, triggerWhere + ".program.root"),
                     trigger.Program.Depth,
                     trigger.Program.Steps,
                     new EffectProgramId(trigger.Program.Id));
@@ -473,10 +523,25 @@ public static partial class OracleExports
     }
 
     private static EffectProgram<CardPlayContext> ProgramOf(SpecProgram program, string where) =>
-        new(AuthorNode(program.Root, where + ".program.root"), program.Depth, program.Steps,
+        new(AuthorNode<CardPlayContext>(program.Root, where + ".program.root"), program.Depth, program.Steps,
             new EffectProgramId(program.Id));
 
-    private static IEffectNode<CardPlayContext> AuthorNode(JsonElement node, string where)
+    /// <summary>
+    /// One IR node → the engine's typed node object, for ANY effect context.
+    ///
+    /// <para>
+    /// Generic over <typeparamref name="TContext"/> (every node class is `SomeNode&lt;TContext&gt;`) because the
+    /// three layers here author three different contexts: card plays, enemy actions, and status triggers
+    /// (DamageDealt / TurnStarted / TurnEnded). One translator means "the per-card layer and the enemy layer
+    /// read the image the same way", which is the whole point of this file.
+    /// </para>
+    /// <para>
+    /// Strict by design: an unknown node kind, a field it cannot author, or a result key THROWS with the card /
+    /// action id and the json path. Skipping would turn a hole into a green number.
+    /// </para>
+    /// </summary>
+    internal static IEffectNode<TContext> AuthorNode<TContext>(JsonElement node, string where)
+        where TContext : class
     {
         RequireKind(node, JsonValueKind.Object, where);
         var kind = Str(node, "kind", where);
@@ -484,24 +549,24 @@ public static partial class OracleExports
         {
             case "noop":
                 RejectUnknownKeys(node, ["kind"], where);
-                return new NoOpEffectNode<CardPlayContext>();
+                return new NoOpEffectNode<TContext>();
             case "sequence":
             {
                 RejectUnknownKeys(node, ["kind", "children"], where);
-                var children = new List<IEffectNode<CardPlayContext>>();
+                var children = new List<IEffectNode<TContext>>();
                 var index = 0;
                 foreach (var child in Field(node, "children", where).EnumerateArray())
-                    children.Add(AuthorNode(child, $"{where}.children[{index++}]"));
-                return new SequenceEffectNode<CardPlayContext>(children);
+                    children.Add(AuthorNode<TContext>(child, $"{where}.children[{index++}]"));
+                return new SequenceEffectNode<TContext>(children);
             }
             case "dealDamage":
             {
                 RejectUnknownKeys(node, ["kind", "amount", "element", "ignoresBlock", "damageKind", "resultKey", "target"], where);
                 RequireNoResultKey(node, where);
                 var element = OptString(node, "element", where);
-                return new DealDamageNode<CardPlayContext>(
+                return new DealDamageNode<TContext>(
                     AuthorSelector(Field(node, "target", where), where + ".target"),
-                    AuthorExpression(Field(node, "amount", where), where + ".amount"),
+                    AuthorExpression<TContext>(Field(node, "amount", where), where + ".amount"),
                     resultKey: null,
                     ignoresBlock: Bool(node, "ignoresBlock", where),
                     element: element is null ? null : new ElementId(element),
@@ -512,10 +577,10 @@ public static partial class OracleExports
                 RejectUnknownKeys(node, ["kind", "charges", "duration", "resultKey", "source", "stacks", "status", "target"], where);
                 RequireNoResultKey(node, where);
                 var source = OptObject(node, "source", where);
-                return new ApplyStatusNode<CardPlayContext>(
+                return new ApplyStatusNode<TContext>(
                     AuthorSelector(Field(node, "target", where), where + ".target"),
                     new StatusDefinitionId(Str(node, "status", where)),
-                    AuthorExpression(Field(node, "stacks", where), where + ".stacks"),
+                    AuthorExpression<TContext>(Field(node, "stacks", where), where + ".stacks"),
                     durationTurns: Int(node, "duration", where),
                     charges: Int(node, "charges", where),
                     resultKey: null,
@@ -525,18 +590,18 @@ public static partial class OracleExports
             {
                 RejectUnknownKeys(node, ["kind", "amount", "resultKey", "target"], where);
                 RequireNoResultKey(node, where);
-                return new GainBlockNode<CardPlayContext>(
+                return new GainBlockNode<TContext>(
                     AuthorSelector(Field(node, "target", where), where + ".target"),
-                    AuthorExpression(Field(node, "amount", where), where + ".amount"),
+                    AuthorExpression<TContext>(Field(node, "amount", where), where + ".amount"),
                     resultKey: null);
             }
             case "drawCards":
             {
                 RejectUnknownKeys(node, ["kind", "count", "resultKey", "target"], where);
                 RequireNoResultKey(node, where);
-                return new DrawCardsNode<CardPlayContext>(
+                return new DrawCardsNode<TContext>(
                     AuthorSelector(Field(node, "target", where), where + ".target"),
-                    AuthorExpression(Field(node, "count", where), where + ".count"),
+                    AuthorExpression<TContext>(Field(node, "count", where), where + ".count"),
                     resultKey: null);
             }
             case "gainResource":
@@ -544,22 +609,32 @@ public static partial class OracleExports
                 RejectUnknownKeys(node, ["kind", "amount", "defaultMax", "resource", "resultKey", "target"], where);
                 RequireNoResultKey(node, where);
                 var defaultMax = OptInt(node, "defaultMax", where);
-                return new GainResourceNode<CardPlayContext>(
+                return new GainResourceNode<TContext>(
                     AuthorSelector(Field(node, "target", where), where + ".target"),
                     new ResourceId(Str(node, "resource", where)),
-                    AuthorExpression(Field(node, "amount", where), where + ".amount"),
+                    AuthorExpression<TContext>(Field(node, "amount", where), where + ".amount"),
                     defaultMax: defaultMax,
+                    resultKey: null);
+            }
+            case "loseResource":
+            {
+                RejectUnknownKeys(node, ["kind", "amount", "resource", "resultKey", "target"], where);
+                RequireNoResultKey(node, where);
+                return new LoseResourceNode<TContext>(
+                    AuthorSelector(Field(node, "target", where), where + ".target"),
+                    new ResourceId(Str(node, "resource", where)),
+                    AuthorExpression<TContext>(Field(node, "amount", where), where + ".amount"),
                     resultKey: null);
             }
             case "createCardInstance":
             {
                 RejectUnknownKeys(node, ["kind", "card", "count", "resultKey", "target", "toZone"], where);
                 RequireNoResultKey(node, where);
-                return new CreateCardInstanceNode<CardPlayContext>(
+                return new CreateCardInstanceNode<TContext>(
                     AuthorSelector(Field(node, "target", where), where + ".target"),
                     new CardDefinitionId(Str(node, "card", where)),
                     EnumValue<CardZone>(Str(node, "toZone", where), where + ".toZone"),
-                    AuthorExpression(Field(node, "count", where), where + ".count"),
+                    AuthorExpression<TContext>(Field(node, "count", where), where + ".count"),
                     resultKey: null);
             }
             case "forEachCardInZone":
@@ -568,10 +643,10 @@ public static partial class OracleExports
                 var definitionFilter = OptString(node, "definitionFilter", where);
                 var tagFilter = OptString(node, "tagFilter", where);
                 var takeFirst = OptInt(node, "takeFirst", where);
-                return new ForEachCardInZoneNode<CardPlayContext>(
+                return new ForEachCardInZoneNode<TContext>(
                     AuthorSelector(Field(node, "owner", where), where + ".owner"),
                     EnumValue<CardZone>(Str(node, "zone", where), where + ".zone"),
-                    AuthorNode(Field(node, "body", where), where + ".body"),
+                    AuthorNode<TContext>(Field(node, "body", where), where + ".body"),
                     definitionFilter: definitionFilter is null ? null : new CardDefinitionId(definitionFilter),
                     maxIterations: Int(node, "maxIterations", where),
                     tagFilter: tagFilter is null ? null : new TagId(tagFilter),
@@ -581,9 +656,9 @@ public static partial class OracleExports
             {
                 RejectUnknownKeys(node, ["kind", "card", "owner", "placement", "resultKey", "toZone"], where);
                 RequireNoResultKey(node, where);
-                return new MoveCardToZoneNode<CardPlayContext>(
+                return new MoveCardToZoneNode<TContext>(
                     AuthorSelector(Field(node, "owner", where), where + ".owner"),
-                    AuthorCardExpression(Field(node, "card", where), where + ".card"),
+                    AuthorCardExpression<TContext>(Field(node, "card", where), where + ".card"),
                     EnumValue<CardZone>(Str(node, "toZone", where), where + ".toZone"),
                     resultKey: null,
                     placement: EnumValue<ZonePlacement>(Str(node, "placement", where), where + ".placement"));
@@ -592,54 +667,55 @@ public static partial class OracleExports
             {
                 RejectUnknownKeys(node, ["kind", "delta", "resultKey", "status", "target"], where);
                 RequireNoResultKey(node, where);
-                return new ModifyStatusStacksNode<CardPlayContext>(
+                return new ModifyStatusStacksNode<TContext>(
                     AuthorSelector(Field(node, "target", where), where + ".target"),
                     new StatusDefinitionId(Str(node, "status", where)),
-                    AuthorExpression(Field(node, "delta", where), where + ".delta"),
+                    AuthorExpression<TContext>(Field(node, "delta", where), where + ".delta"),
                     resultKey: null);
+            }
+            case "setCombatantCounter":
+            {
+                RejectUnknownKeys(node, ["kind", "amount", "counter", "relative", "target"], where);
+                return new SetCombatantCounterNode<TContext>(
+                    AuthorSelector(Field(node, "target", where), where + ".target"),
+                    new CounterId(Str(node, "counter", where)),
+                    AuthorExpression<TContext>(Field(node, "amount", where), where + ".amount"),
+                    relative: Bool(node, "relative", where));
+            }
+            case "conditional":
+            {
+                RejectUnknownKeys(node, ["kind", "condition", "then", "else"], where);
+                var elseNode = Field(node, "else", where);
+                return new ConditionalEffectNode<TContext>(
+                    AuthorCondition<TContext>(Field(node, "condition", where), where + ".condition"),
+                    AuthorNode<TContext>(Field(node, "then", where), where + ".then"),
+                    elseNode.ValueKind == JsonValueKind.Null
+                        ? null
+                        : AuthorNode<TContext>(elseNode, where + ".else"));
             }
             default:
                 throw new InvalidOperationException(
                     $"{where}: node kind `{kind}` is not authored by this build — add it to OracleExports.Cards.cs "
-                    + "(and to native/gen_card_specs.py's node_text) instead of skipping the card.");
+                    + "(and to native/gen_card_specs.py's node_text / NODE_FIELDS) instead of skipping the entity.");
         }
     }
 
-    private static IEffectNode<DamageDealtTriggeredEffectContext> AuthorTriggerNode(JsonElement node, string where)
+    /// <summary>Card-instance side of `moveCardToZone`; only "the card this loop is on" occurs in the mirror.</summary>
+    internal static ICardInstanceExpression<TContext> AuthorCardExpression<TContext>(JsonElement expression, string where)
+        where TContext : class
     {
-        RequireKind(node, JsonValueKind.Object, where);
-        var kind = Str(node, "kind", where);
-        switch (kind)
+        RequireKind(expression, JsonValueKind.Object, where);
+        RejectUnknownKeys(expression, ["kind"], where);
+        return Str(expression, "kind", where) switch
         {
-            case "noop":
-                RejectUnknownKeys(node, ["kind"], where);
-                return new NoOpEffectNode<DamageDealtTriggeredEffectContext>();
-            case "sequence":
-            {
-                RejectUnknownKeys(node, ["kind", "children"], where);
-                var children = new List<IEffectNode<DamageDealtTriggeredEffectContext>>();
-                var index = 0;
-                foreach (var child in Field(node, "children", where).EnumerateArray())
-                    children.Add(AuthorTriggerNode(child, $"{where}.children[{index++}]"));
-                return new SequenceEffectNode<DamageDealtTriggeredEffectContext>(children);
-            }
-            case "modifyStatusStacks":
-            {
-                RejectUnknownKeys(node, ["kind", "delta", "resultKey", "status", "target"], where);
-                RequireNoResultKey(node, where);
-                return new ModifyStatusStacksNode<DamageDealtTriggeredEffectContext>(
-                    AuthorSelector(Field(node, "target", where), where + ".target"),
-                    new StatusDefinitionId(Str(node, "status", where)),
-                    AuthorTriggerExpression(Field(node, "delta", where), where + ".delta"),
-                    resultKey: null);
-            }
-            default:
-                throw new InvalidOperationException(
-                    $"{where}: trigger node kind `{kind}` is not authored by this build.");
-        }
+            "iterated" => new IteratedCardExpression<TContext>(),
+            var other => throw new InvalidOperationException(
+                $"{where}: card expression `{other}` is not authored by this build."),
+        };
     }
 
-    private static ICombatExpression<CardPlayContext, int> AuthorExpression(JsonElement expression, string where)
+    internal static ICombatExpression<TContext, int> AuthorExpression<TContext>(JsonElement expression, string where)
+        where TContext : class
     {
         RequireKind(expression, JsonValueKind.Object, where);
         var kind = Str(expression, "kind", where);
@@ -647,37 +723,67 @@ public static partial class OracleExports
         {
             case "const":
                 RejectUnknownKeys(expression, ["kind", "value"], where);
-                return new ConstantExpression<CardPlayContext>(Int(expression, "value", where));
+                return new ConstantExpression<TContext>(Int(expression, "value", where));
             case "multiply":
                 RejectUnknownKeys(expression, ["kind", "left", "right"], where);
-                return new MultiplyExpression<CardPlayContext>(
-                    AuthorExpression(Field(expression, "left", where), where + ".left"),
-                    AuthorExpression(Field(expression, "right", where), where + ".right"));
+                return new MultiplyExpression<TContext>(
+                    AuthorExpression<TContext>(Field(expression, "left", where), where + ".left"),
+                    AuthorExpression<TContext>(Field(expression, "right", where), where + ".right"));
+            case "add":
+                RejectUnknownKeys(expression, ["kind", "left", "right"], where);
+                return new AddExpression<TContext>(
+                    AuthorExpression<TContext>(Field(expression, "left", where), where + ".left"),
+                    AuthorExpression<TContext>(Field(expression, "right", where), where + ".right"));
+            case "subtract":
+                RejectUnknownKeys(expression, ["kind", "left", "right"], where);
+                return new SubtractExpression<TContext>(
+                    AuthorExpression<TContext>(Field(expression, "left", where), where + ".left"),
+                    AuthorExpression<TContext>(Field(expression, "right", where), where + ".right"));
+            case "min":
+                RejectUnknownKeys(expression, ["kind", "left", "right"], where);
+                return new MinExpression<TContext>(
+                    AuthorExpression<TContext>(Field(expression, "left", where), where + ".left"),
+                    AuthorExpression<TContext>(Field(expression, "right", where), where + ".right"));
+            case "divide":
+                RejectUnknownKeys(expression, ["kind", "dividend", "divisor", "zero_policy"], where);
+                return new DivideExpression<TContext>(
+                    AuthorExpression<TContext>(Field(expression, "dividend", where), where + ".dividend"),
+                    AuthorExpression<TContext>(Field(expression, "divisor", where), where + ".divisor"),
+                    EnumValue<DivideByZeroPolicy>(Str(expression, "zero_policy", where), where + ".zero_policy"));
             case "combatantStatusStacks":
                 RejectUnknownKeys(expression, ["kind", "selector", "status"], where);
-                return new CombatantStatusStacksExpression<CardPlayContext>(
+                return new CombatantStatusStacksExpression<TContext>(
                     AuthorSelector(Field(expression, "selector", where), where + ".selector"),
                     new StatusDefinitionId(Str(expression, "status", where)));
+            case "combatantCounter":
+                RejectUnknownKeys(expression, ["kind", "counter", "selector"], where);
+                return new CombatantCounterExpression<TContext>(
+                    AuthorSelector(Field(expression, "selector", where), where + ".selector"),
+                    new CounterId(Str(expression, "counter", where)));
             default:
                 throw new InvalidOperationException(
                     $"{where}: expression `{kind}` is not authored by this build.");
         }
     }
 
-    private static ICombatExpression<DamageDealtTriggeredEffectContext, int> AuthorTriggerExpression(
-        JsonElement expression, string where)
+    /// <summary>`node.conditional`'s condition — one bool expression, `compare`.</summary>
+    internal static ICombatExpression<TContext, bool> AuthorCondition<TContext>(JsonElement condition, string where)
+        where TContext : class
     {
-        RequireKind(expression, JsonValueKind.Object, where);
-        var kind = Str(expression, "kind", where);
-        if (kind == "const")
+        RequireKind(condition, JsonValueKind.Object, where);
+        var kind = Str(condition, "kind", where);
+        if (kind == "compare")
         {
-            RejectUnknownKeys(expression, ["kind", "value"], where);
-            return new ConstantExpression<DamageDealtTriggeredEffectContext>(Int(expression, "value", where));
+            RejectUnknownKeys(condition, ["kind", "left", "op", "right"], where);
+            return new ComparisonExpression<TContext>(
+                AuthorExpression<TContext>(Field(condition, "left", where), where + ".left"),
+                EnumValue<ComparisonOperator>(Str(condition, "op", where), where + ".op"),
+                AuthorExpression<TContext>(Field(condition, "right", where), where + ".right"));
         }
-        throw new InvalidOperationException($"{where}: trigger expression `{kind}` is not authored by this build.");
+        throw new InvalidOperationException($"{where}: condition expression `{kind}` is not authored by this build.");
     }
 
-    private static ICombatantTargetSelector AuthorSelector(JsonElement selector, string where)
+    internal static ICombatantTargetSelector AuthorSelector(JsonElement selector, string where)
     {
         RequireKind(selector, JsonValueKind.Object, where);
         RejectUnknownKeys(selector, ["kind"], where);
@@ -686,19 +792,8 @@ public static partial class OracleExports
             "eventTarget" => CombatantTargetSelectors.EventTarget,
             "source" => CombatantTargetSelectors.Source,
             "allEnemies" => CombatantTargetSelectors.AllEnemiesOfSource,
+            "allAllies" => CombatantTargetSelectors.AllAlliesOfSource,
             var other => throw new InvalidOperationException($"{where}: selector `{other}` is not authored by this build."),
-        };
-    }
-
-    private static ICardInstanceExpression<CardPlayContext> AuthorCardExpression(JsonElement expression, string where)
-    {
-        RequireKind(expression, JsonValueKind.Object, where);
-        RejectUnknownKeys(expression, ["kind"], where);
-        return Str(expression, "kind", where) switch
-        {
-            "iterated" => new IteratedCardExpression<CardPlayContext>(),
-            var other => throw new InvalidOperationException(
-                $"{where}: card expression `{other}` is not authored by this build."),
         };
     }
 

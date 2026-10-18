@@ -51,7 +51,7 @@ CONTENTC = os.path.join(ROOT, "tools", "contentc")
 IMAGE_REL = "tools/contentc/out/content.core.rdcf"
 IMAGE = os.path.join(ROOT, "tools", "contentc", "out", "content.core.rdcf")
 OUT = os.path.join(ROOT, "native", "card_specs.json")
-SPEC_FORMAT = 1
+SPEC_FORMAT = 2
 
 if CONTENTC not in sys.path:
     sys.path.insert(0, CONTENTC)
@@ -112,10 +112,17 @@ def enum_of(body, key, allowed, where):
 # 但**字段集合**是契约：C# 侧按同一张表翻译，少一个字段就是少一条语义。
 # ===========================================================================
 
-SELECTORS = {"sel.eventTarget": "eventTarget", "sel.source": "source", "sel.allEnemies": "allEnemies"}
+SELECTORS = {"sel.eventTarget": "eventTarget", "sel.source": "source", "sel.allEnemies": "allEnemies",
+             "sel.allAllies": "allAllies"}
 SELECTOR_FIELDS = {"Cardinality", "RequiredContextCapabilities"}
 
 # 每种节点**允许**出现的字段。镜像省略与默认值相等的键，所以可选字段在这里是"允许但不要求"。
+#
+# ⚠️ `node.conditional` / `node.loseResource` 的 `Children`：参考的 `IEffectNode.Children`
+# 是**第二个视图**（`ConditionalEffectNode` 的 `Children` 就是 `[Then]` 或 `[Then, Else]`，
+# `CombatJson.cs:150-197` 只在"构造函数收 children"的类型上写它）。所以 spec 不把它当独立语义，
+# 而是**校验它确实是 Then/Else 的投影**（见 `node()`）：丢掉一个和树矛盾的 `Children` 会让
+# "两侧程序一样"这句话变成假的。
 NODE_FIELDS = {
     "node.noop": set(),
     "node.sequence": {"Children"},
@@ -125,30 +132,53 @@ NODE_FIELDS = {
     "node.gainBlock": {"Amount", "ResultKey", "TargetSelector"},
     "node.drawCards": {"Count", "ResultKey", "TargetSelector"},
     "node.gainResource": {"Amount", "DefaultMax", "ResourceId", "ResultKey", "TargetSelector"},
+    "node.loseResource": {"Amount", "Children", "ResourceId", "ResultKey", "TargetSelector"},
     "node.createCardInstance": {"CardDefinitionId", "Count", "ResultKey", "TargetSelector", "ToZone"},
     "node.forEachCardInZone": {"Body", "DefinitionFilter", "MaxIterations", "OwnerSelector",
                                "TagFilter", "TakeFirst", "Zone"},
     "node.moveCardToZone": {"CardExpression", "OwnerSelector", "Placement", "ResultKey", "ToZone"},
     "node.modifyStatusStacks": {"Children", "Delta", "ResultKey", "StatusDefinitionId", "TargetSelector"},
+    "node.setCombatantCounter": {"Amount", "CounterId", "Relative", "TargetSelector"},
+    "node.conditional": {"Children", "Condition", "Else", "Then"},
 }
 EXPRESSION_FIELDS = {
     "const": {"Value"},
     "multiply": {"Left", "Right"},
+    "add": {"Left", "Right"},
+    "subtract": {"Left", "Right"},
+    "min": {"Left", "Right"},
+    # `DivideExpression`（`EffectProgramExpressions.cs:551`）的两个操作数叫
+    # Dividend/Divisor，还有个 `ZeroPolicy`（`expr.rs:236` 的 `check_zero_policy`）。
+    "divide": {"Dividend", "Divisor", "ZeroPolicy"},
     "combatantStatusStacks": {"Selector", "StatusId"},
+    "combatantCounter": {"CounterId", "Selector"},
+}
+# 布尔表达式（`node.conditional` 的 `Condition`）。参考用同一个 `ICombatExpression<TContext, bool>`
+# 注册表（`CombatJson.cs` 的 `Register("compare", typeof(ComparisonExpression<>))`）。
+CONDITION_FIELDS = {
+    "compare": {"Left", "Op", "Right"},
 }
 CARD_EXPRESSION_FIELDS = {"cardInstance.iterated": set()}
 
-# 镜像里每个选择器都带 `Cardinality` / `RequiredContextCapabilities` 两格。
-# 它们不是"我们授权的参数"，而是这三种选择器在参考实现里的固定属性
-# （`CombatantTargetSelectors.cs:77/115/154`：Source/EventTarget 都是 ZeroOrOne），
-# 所以这里**钉住**它们：换成一个别的选择器混进来，闸门要立刻砸下来。
+# 镜像里每个选择器都带 `Cardinality` / `RequiredContextCapabilities` 两格 —— 但**不是每个**：
+# `sel.rs:133` 的实测是"24 条 `sel.*` 里只有 4 条带这个字段"。这两格不是"我们授权的参数"，
+# 而是选择器在参考实现里的固定属性（`CombatantTargetSelectors.cs:77/115/154`：Source/EventTarget
+# 都是 ZeroOrOne；`AllAlliesOfSourceCombatantTargetSelector` 在镜像里**一个字段都不写**）。
+# 所以这里**钉住**它们：`None` 表示"这两格必须缺席"，写成别的形状立刻砸下来。
 SELECTOR_CAPABILITIES = {
     "eventTarget": ("ZeroOrOne", "EventTarget"),
     "source": ("ZeroOrOne", "Source"),
     "allEnemies": ("ZeroOrOne", "AllEnemiesOfSource"),
+    "allAllies": (None, None),
 }
 
+# `IntentKind`（参考 `IntentKind` 枚举：Unknown/Attack/Defend/Buff/Debuff/Special`）。
+INTENT_KINDS = {"Unknown", "Attack", "Defend", "Buff", "Debuff", "Special"}
 DAMAGE_KINDS = {"Direct", "DamageOverTime"}
+# `DivideByZeroPolicy`（`EffectProgramExpressions.cs:549`；内核 `expr.rs:200-206`）。缺席 = ReturnZero。
+ZERO_POLICIES = {"ReturnZero", "Fault"}
+# `ComparisonOperator`（`EffectProgramExpressions.cs:360-368`）。
+COMPARE_OPS = {"Equal", "NotEqual", "Less", "LessOrEqual", "Greater", "GreaterOrEqual"}
 # `CardZone`（`Cards/CardZones.cs:3-22`）的全部成员。
 CARD_ZONES = {"DrawPile", "Hand", "DiscardPile", "ExhaustPile", "BanishedPile", "QueuePile", "SetAsidePile"}
 PLACEMENTS = {"Bottom", "Top"}
@@ -166,6 +196,13 @@ def selector(value, where):
     body = value.get("value") or {}
     want_fields(body, SELECTOR_FIELDS, where + "(" + kind + ")")
     want_card, want_cap = SELECTOR_CAPABILITIES[name]
+    if want_card is None:
+        # "这两格必须缺席"——镜像写了就意味着出现了一种新的选择器形态，先弄清它再放行。
+        if body:
+            raise SpecError(
+                f"{where}: 选择器 `{kind}` 在镜像里**不带** Cardinality/RequiredContextCapabilities，"
+                f"这里却有 {sorted(body)} —— 镜像是新形态，先核对参考实现再放行")
+        return {"kind": name}
     got_card = optional(body, "Cardinality", want_card)
     got_cap = optional(body, "RequiredContextCapabilities", want_cap)
     if (got_card, got_cap) != (want_card, want_cap):
@@ -187,15 +224,44 @@ def expression(value, where):
     want_fields(body, allowed, f"{where}({kind})")
     if kind == "const":
         return {"kind": "const", "value": int(get(body, "Value", where))}
-    if kind == "multiply":
-        return {"kind": "multiply",
+    if kind in ("multiply", "add", "subtract", "min"):
+        return {"kind": kind,
                 "left": expression(get(body, "Left", where), where + ".Left"),
                 "right": expression(get(body, "Right", where), where + ".Right")}
+    if kind == "divide":
+        return {"kind": "divide",
+                "dividend": expression(get(body, "Dividend", where), where + ".Dividend"),
+                "divisor": expression(get(body, "Divisor", where), where + ".Divisor"),
+                # 缺席 = `ReturnZero`（`EffectProgramExpressions.cs:561` 的接口默认值，内核 `expr.rs:236` 同）。
+                "zero_policy": enum_of(body, "ZeroPolicy", ZERO_POLICIES, where)
+                               if "ZeroPolicy" in body else "ReturnZero"}
     if kind == "combatantStatusStacks":
         return {"kind": "combatantStatusStacks",
                 "selector": selector(get(body, "Selector", where), where + ".Selector"),
                 "status": str(unwrap(get(body, "StatusId", where)))}
+    if kind == "combatantCounter":
+        return {"kind": "combatantCounter",
+                "counter": str(unwrap(get(body, "CounterId", where))),
+                "selector": selector(get(body, "Selector", where), where + ".Selector")}
     raise SpecError(f"{where}: 不认识的表达式 `{kind}`")
+
+
+def condition(value, where):
+    """`ICombatExpression<TContext, bool>` —— 只有 `compare` 出现在本镜像里。"""
+    if value is None:
+        raise SpecError(f"{where}: 条件是 null（`node.conditional` 没有 Then 之外的一半语义）")
+    kind = get(value, "kind", where)
+    body = value.get("value") or {}
+    allowed = CONDITION_FIELDS.get(kind)
+    if allowed is None:
+        raise SpecError(f"{where}: 不认识的条件表达式 `{kind}`（已知：{sorted(CONDITION_FIELDS)}）")
+    want_fields(body, allowed, f"{where}({kind})")
+    if kind == "compare":
+        return {"kind": "compare",
+                "left": expression(get(body, "Left", where), where + ".Left"),
+                "op": enum_of(body, "Op", COMPARE_OPS, where),
+                "right": expression(get(body, "Right", where), where + ".Right")}
+    raise SpecError(f"{where}: 不认识的条件表达式 `{kind}`")
 
 
 def card_expression(value, where):
@@ -219,7 +285,8 @@ def node(value, where):
     allowed = NODE_FIELDS.get(kind)
     if allowed is None:
         raise SpecError(f"{where}: 不认识的节点种类 `{kind}`（已知：{sorted(NODE_FIELDS)}）")
-    want_fields(body, allowed, f"{where}({kind})", allow_empty_children=kind != "node.sequence")
+    want_fields(body, allowed, f"{where}({kind})",
+                allow_empty_children=kind not in ("node.sequence", "node.conditional"))
 
     def path(field):
         return where + "." + field
@@ -317,6 +384,43 @@ def node(value, where):
             "status": str(unwrap(get(body, "StatusDefinitionId", where))),
             "target": selector(get(body, "TargetSelector", where), path("TargetSelector")),
         }
+    if kind == "node.loseResource":
+        if get(body, "Children", where):
+            raise SpecError(f"{where}: `loseResource` 是叶子节点，`Children` 却有内容")
+        return {
+            "kind": "loseResource",
+            "amount": expression(get(body, "Amount", where), path("Amount")),
+            "resource": str(unwrap(get(body, "ResourceId", where))),
+            "resultKey": None if optional(body, "ResultKey", None) is None else "set",
+            "target": selector(get(body, "TargetSelector", where), path("TargetSelector")),
+        }
+    if kind == "node.setCombatantCounter":
+        # `SetCombatantCounterNode`（`EffectProgramNativeNodes.cs:655-690`）：
+        # `Relative` 的接口默认是 true（`relative = true`），镜像写 `false` 就表示"置位"。
+        return {
+            "kind": "setCombatantCounter",
+            "amount": expression(get(body, "Amount", where), path("Amount")),
+            "counter": str(unwrap(get(body, "CounterId", where))),
+            "relative": bool(optional(body, "Relative", True)),
+            "target": selector(get(body, "TargetSelector", where), path("TargetSelector")),
+        }
+    if kind == "node.conditional":
+        then_branch = node(get(body, "Then", where), path("Then"))
+        else_branch = node(optional(body, "Else", None), path("Else"))
+        # `Children` 是 Then/Else 的**第二个视图**（`ConditionalEffectNode.Children`），
+        # 丢掉它不丢语义 —— 但前提是它确实是那个投影。断言它，而不是默默忽略。
+        projection = [then_branch] + ([else_branch] if else_branch is not None else [])
+        raw_children = get(body, "Children", where)
+        if len(raw_children) not in (1, len(projection)):
+            raise SpecError(
+                f"{where}: `conditional.Children` 有 {len(raw_children)} 项，而 Then/Else 的投影是 "
+                f"{len(projection)} 项 —— 镜像的 `Children` 不再是 Then/Else 的视图了")
+        return {
+            "kind": "conditional",
+            "condition": condition(get(body, "Condition", where), path("Condition")),
+            "then": then_branch,
+            "else": else_branch,
+        }
     raise SpecError(f"{where}: 不认识的节点种类 `{kind}`")
 
 
@@ -336,14 +440,29 @@ def expression_text(value):
     kind = value["kind"]
     if kind == "const":
         return "const(%d)" % value["value"]
-    if kind == "multiply":
-        return "multiply(%s,%s)" % (expression_text(value["left"]), expression_text(value["right"]))
+    if kind in ("multiply", "add", "subtract", "min"):
+        return "%s(%s,%s)" % (kind, expression_text(value["left"]), expression_text(value["right"]))
+    if kind == "divide":
+        return "divide(%s,%s,%s)" % (expression_text(value["dividend"]),
+                                     expression_text(value["divisor"]), value["zero_policy"])
     if kind == "combatantStatusStacks":
         return "combatantStatusStacks(selector=%s;status=%s)" % (
             selector_text(value["selector"]), value["status"])
+    if kind == "combatantCounter":
+        return "combatantCounter(counter=%s;selector=%s)" % (
+            value["counter"], selector_text(value["selector"]))
     if kind == "iterated":
         return "iterated"
     raise SpecError("expression_text: 不认识 %r" % (kind,))
+
+
+def condition_text(value):
+    if value is None:
+        return "none"
+    if value["kind"] == "compare":
+        return "compare(left=%s;op=%s;right=%s)" % (
+            expression_text(value["left"]), value["op"], expression_text(value["right"]))
+    raise SpecError("condition_text: 不认识 %r" % (value["kind"],))
 
 
 def bool_text(value):
@@ -407,6 +526,17 @@ def node_text(value):
         return "modifyStatusStacks(delta=%s;result_key=%s;status=%s;target=%s)" % (
             expression_text(value["delta"]), result_key_text(value["resultKey"]), value["status"],
             selector_text(value["target"]))
+    if kind == "loseResource":
+        return "loseResource(amount=%s;resource=%s;result_key=%s;target=%s)" % (
+            expression_text(value["amount"]), value["resource"], result_key_text(value["resultKey"]),
+            selector_text(value["target"]))
+    if kind == "setCombatantCounter":
+        return "setCombatantCounter(amount=%s;counter=%s;relative=%s;target=%s)" % (
+            expression_text(value["amount"]), value["counter"], bool_text(value["relative"]),
+            selector_text(value["target"]))
+    if kind == "conditional":
+        return "conditional(condition=%s;else=%s;then=%s)" % (
+            condition_text(value["condition"]), node_text(value["else"]), node_text(value["then"]))
     raise SpecError("node_text: 不认识 %r" % (kind,))
 
 
@@ -444,6 +574,94 @@ def _created_cards(value, into):
     elif isinstance(value, list):
         for item in value:
             _created_cards(item, into)
+
+
+def status_closure(rom, roots, where):
+    """一组程序根 → 它们引用到的状态的**传递闭包**（`status_id -> status_spec`）。
+
+    为什么要闭包：状态自己的触发器程序还会引用状态（`bookworm` 的 TurnStarted 触发器改
+    `paperwork`）。漏一层就会在 C# 注册表编译时报"未知状态"，而那时离原因已经很远。
+    """
+    cache = {}
+    queue = []
+    for root in roots:
+        _status_refs(root, queue)
+    while queue:
+        status_id = queue.pop()
+        if status_id in cache:
+            continue
+        spec = status_spec(rom, status_id, where)
+        for trigger in spec["triggers"]:
+            _status_refs(trigger["program"]["root"], queue)
+        cache[status_id] = spec
+    return cache
+
+
+def enemy_actions(rom):
+    """镜像的 `EACT` 全表 → 规范描述列表（**一条都不许跳过**），并逐个查清归属敌人。
+
+    归属靠两条事实交叉确认：
+
+    * 动作 id 的前缀（`<敌人>.<动作>`）必须是某个真实敌人 id —— 镜像里没有"敌人表"，
+      敌人只作为 `ENCT` 记录里嵌的对象存在；
+    * 如果这条动作被某个敌人的 `Actions` 列表点名，点名者必须**就是**那个前缀。
+
+    5 条动作只被 `IntentRules` 引用、不在任何 `Actions` 列表里（例如 `minute_moth.wingbeat_delay`）：
+    它们仍然有前缀，所以照样归到那个敌人名下，并把这条差别记成 `listed=false` 而不是猜。
+    """
+    owners = {}
+    enemy_ids = set()
+    for enc in rom._rows("ENCT"):
+        for enemy in enc.get("Enemies") or []:
+            enemy_id = enemy.get("Id")
+            if not isinstance(enemy_id, str):
+                raise SpecError(f"ENCT `{unwrap(enc.get('Id'))}`: 敌人没有字符串 Id（{enemy_id!r}）")
+            enemy_ids.add(enemy_id)
+            for action in enemy.get("Actions") or []:
+                action_id = unwrap(action)
+                owners.setdefault(action_id, set()).add(enemy_id)
+
+    out = []
+    for index, rec in enumerate(rom._rows("EACT")):
+        where = f"enemy_action[{index}]"
+        want_fields(rec, {"Id", "Intent", "PackageId", "Program"}, where)
+        action_id = str(unwrap(get(rec, "Id", where)))
+        where = f"enemy_action({action_id})"
+        if "." not in action_id:
+            raise SpecError(f"{where}: 动作 id 里没有 `.`，推不出归属敌人")
+        owner = action_id.split(".")[0]
+        if owner not in enemy_ids:
+            raise SpecError(
+                f"{where}: 前缀 `{owner}` 不是镜像里任何敌人 id（敌人只存在于 ENCT 的 Enemies 里）")
+        named = owners.get(action_id, set())
+        if named and owner not in named:
+            raise SpecError(
+                f"{where}: 前缀说是 `{owner}`，但 ENCT 里点名这条动作的敌人是 {sorted(named)} —— "
+                f"归属不再能从 id 前提取，先弄清它")
+
+        intent = get(rec, "Intent", where)
+        want_fields(intent, {"Kind"}, where + ".Intent")
+        program = optional(rec, "Program", None)
+        if program is None:
+            raise SpecError(f"{where}: `Program` 是 null —— 没有程序的动作不算「已 author」")
+
+        out.append({
+            "index": index,
+            "id": action_id,
+            "enemy": owner,
+            "listed": bool(named),
+            "package": optional(rec, "PackageId", "scenario"),
+            "intent": enum_of(intent, "Kind", INTENT_KINDS, where + ".Intent"),
+            "program": program_spec(program, where),
+            "statuses": [],
+        })
+
+    # 每条动作需要哪些状态定义（传递闭包）：C# 侧只 author 它自己那条动作要的，
+    # 这样"少 author 一个状态"不会被别处的定义掩盖。
+    for action in out:
+        closure = status_closure(rom, [action["program"]["root"]], "status")
+        action["statuses"] = sorted(closure)
+    return out
 
 
 def status_spec(rom, status_id, where):
@@ -585,20 +803,19 @@ def derive(rom):
 
     # 卡程序引用到的状态（含触发器程序里引用的）。触发器自己引用的状态也要递归进来 ——
     # 否则 authoring 会在注册表编译时报"未知状态"，而报错点离真正的原因很远。
-    wanted = []
-    queue = []
-    for card in cards:
-        _status_refs(card["program"]["root"], queue)
-    while queue:
-        status_id = queue.pop()
-        if status_id in wanted:
-            continue
-        wanted.append(status_id)
-        spec = status_spec(rom, status_id, "status")
-        for trigger in spec["triggers"]:
-            _status_refs(trigger["program"]["root"], queue)
+    card_statuses = status_closure(rom, [card["program"]["root"] for card in cards], "status")
 
-    statuses = [status_spec(rom, status_id, "status") for status_id in sorted(wanted)]
+    actions = enemy_actions(rom)
+
+    used_by = {status_id: ["cards"] for status_id in card_statuses}
+    for action in actions:
+        for status_id in action["statuses"]:
+            used_by.setdefault(status_id, []).append("enemy_actions")
+    statuses = []
+    for status_id in sorted(used_by):
+        spec = card_statuses.get(status_id) or status_spec(rom, status_id, "status")
+        spec["used_by"] = sorted(set(used_by[status_id]))
+        statuses.append(spec)
 
     # 被 createCardInstance 造出来的卡 id 必须是镜像里真有的卡 —— 否则 C# authoring 会静默少一张定义。
     known = {card["id"] for card in cards}
@@ -615,8 +832,10 @@ def derive(rom):
         "image": IMAGE_REL.replace("\\", "/"),
         "image_bytes": os.path.getsize(IMAGE),
         "card_count": len(cards),
+        "enemy_action_count": len(actions),
         "statuses": statuses,
         "cards": cards,
+        "enemy_actions": actions,
     }
 
 

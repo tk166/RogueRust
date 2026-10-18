@@ -58,6 +58,36 @@ Rust 侧的程序来自镜像；C# 侧没有 RDCF 读取器，只能按 `native/
 逐张卡自己的失败（C# 侧 author 不出来、或哈希不同）不是闸门失败：它记成一行 `MISMATCH` 并计入
 `k/62`。**"62/62" 必须是真数** —— 一张 author 不出来的卡也算在分母里。
 
+# 第 1 层扩展：逐卡 × 跨回合（CARD_MULTI）
+
+`CARD_DIFF` 每张卡只打一步 ⇒ 弃手牌 / 抽回来 / 重洗 / 补能 / DoT tick / 敌人出手全都照不到。
+这一层每张卡跑 **2 个变体、每个变体 4 步**，比每步哈希（不是只比终局）：
+
+    变体 play_again      打它 → 结束回合 → 转过一整轮 → 再打它      （牌组 2 张 ⇒ 必然重洗）
+    变体 enemy_then_wrap 打它 → 结束回合 → 敌人动作 → 转回英雄回合   （牌组 1 张 ⇒ 重洗取决于落区）
+
+    一行一个变体：    card=<卡 id>  index=<行号>  variant=<名字>  steps=<n>  hash=<12hex>..  OK|MISMATCH
+                      …/NOT-COMPARABLE  内核缺钩子：<哪个状态的哪个触发器>
+    结论：            CARD_MULTI PASS (n/m)   或   CARD_MULTI FAIL (k/m) + 每个失败变体的原因
+
+`NOT-COMPARABLE` 是**明确的第三种结果**，不是跳过：它要求两个条件都成立 —— 卡的程序把带
+**内核未建模触发器**的状态打到敌人身上，**并且**这一局的脚本里敌人真的出手。那时两侧必然不同，
+原因逐行打出来并**计入分母**（`kernel_gap_for`；内核那一侧的依据是 `host.rs` 的 `not_handled=12`）。
+
+# 第 2 层：逐敌人动作（ENEMY_DIFF）
+
+镜像里每一条 `EACT` 各一局固定形状的短战斗：**它所属的敌人** + 英雄（牌组为空），脚本两步
+（结束英雄回合、让它执行这条动作）。在那之前 394 条里只有 `desk_jab` 一条被执行过。
+
+    一行一条：        enemy=<动作 id>  index=<行号>  steps=<n>  hash=<12hex>..  OK|MISMATCH
+                      enemy=<动作 id>  index=<行号>  NOT-AUTHORED  <oracle 说为什么 author 不出来>
+    结论：            ENEMY_DIFF PASS (n/394)   或   ENEMY_DIFF FAIL (k/394) + 每条的原因
+
+`NOT-AUTHORED` 同样计入分母：C# 侧遇到本 build 不认识的节点/表达式/选择器时会**抛错并带上位置**，
+本脚本把它记成一行而不是"这张跳过"。今天 394 条全部可 author（`setCombatantCounter`、
+`add`/`min`/`divide`/`combatantCounter`、`sel.allAllies`、`conditional`+`compare`、
+`loseResource`、三种触发器上下文都在这一轮补上了）。
+
 命令行开关：
 
 * `--verbose` —— 把闸门逐键比对的内容也打出来（默认只打一行 `GATE ok: …`）；
@@ -65,22 +95,31 @@ Rust 侧的程序来自镜像；C# 侧没有 RDCF 读取器，只能按 `native/
   `rd_oracle_hash_input_ok` 自检过"这段文本确实哈希成那个哈希"）。哈希不一致而观测量一致时，
   把它和内核 `kernel/rd-core/src/snapshot.rs` 的 `write_hash_input` 逐行对差，就能定位到具体那一行。
 
-# 这份对拍覆盖不到的东西
-
-* 脚本步的**内容**（不是条数）两侧没有机器可比的形式：Rust 只把每步的 (round, turn, problems) 印出来。
-  步内容要是不一样，阶段 A/B 会红，但**红的位置不指向脚本**。
-* 参考实现的 `problems` 是整句英文，内核是枚举；这里只比**条数**与"有没有"。
-* C# 侧每步哈希来自**前缀重放**（`ScenarioRunner` 没有游标），见 `OracleExports.Fight.cs` 的类注释；
-  导出里自带一条"最长前缀 == 整跑"的自检。
-* 哈希只覆盖 `CombatState`；卡定义里的 tags / 费用 / 程序**不进哈希** —— 它们只能靠闸门与行为差异发现。
-* **逐卡这一层只打一步**（只有 `HeroPlays`），所以它**不覆盖**跨回合的东西：DoT 在回合开始的 tick、
-  手牌回收、能量补能、抽牌堆重洗、`TurnEndHandDestinationZone`、以及敌人动作本身。
-  那些由 `FIGHT_DIFF` 那四局负责（`dot_kill` 覆盖 DoT、`enemy_hits` 覆盖敌人出手）。
-* 逐卡这一层里 `doubt` 的 `DamageDealt` 触发器与"伤害 ×75%"被动**不会触发**：镜像里 `doubt` 只被
-  施加到 `sel.eventTarget`（敌人），而伤害的来源永远是英雄（见 `native/card_specs.json` 的
-  applyStatus 矩阵）。它们被**如实 author**（闸门逐字核对），但在这一局里是惰性的。
-* `CombatState.TriggerActivity` 两侧都不进哈希文本（`CombatStateHasher.cs:26-71` 里没有它，
-  `snapshot.rs:144-205` 也没有），所以"哪个触发器跑过几次"**不在任何一条对拍里**。
+# 这份对拍覆盖不到的东西（2026-10-19 更新：前两条原来的盲区已经被新加的两层部分覆盖）
+#
+# * 逐卡这一层（`CARD_DIFF`）只打一步 ⇒ 它不覆盖跨回合的东西。那一半现在归 `CARD_MULTI`
+#   （每张卡 2 个 4 步变体：弃手牌 / 抽回来 / 重洗 / 补能 / 敌人出手）。
+# * 敌人动作：`ENEMY_DIFF` 让镜像里**全部** `EACT` 各跑一局 —— 在那之前只有 `desk_jab` 一条被执行过。
+#
+# 仍然没覆盖的：
+#
+# * 脚本步的**内容**（不是条数）两侧没有机器可比的形式。每步会打 (round, turn, problems, chain, exec)，
+#   步内容要是不一样，阶段 A/B 会红，但**红的位置不指向脚本**。
+# * 参考实现的 `problems` 是整句英文，内核是枚举；这里只比**条数**与"有没有"。
+# * C# 侧每步哈希来自**前缀重放**（`ScenarioRunner` 没有游标），见 `OracleExports.Fight.cs` 的类注释；
+#   每个导出里都自带一条"最长前缀 == 整跑"的自检。
+# * 哈希只覆盖 `CombatState`；卡定义里的 tags / 费用 / 程序**不进哈希** —— 它们只能靠闸门与行为差异发现。
+# * **内核缺钩子**的触发器事件（`kernel/rd-core/src/host.rs:2299-2302`：6 种，`DamageDealt` 在里面；
+#   同文件的测试把它钉成 `not_handled=12`）。内容里凡是"戴着这种状态去触发那个事件"的局面，两侧**必然**
+#   不同 —— 那不是对拍能回答的问题。`CARD_MULTI` 把这类局面逐行打成 `NOT-COMPARABLE` 并**计入分母**
+#   （不静默、也不算绿）；`ENEMY_DIFF` 今天 394/394 全一致，说明那 394 条动作没有一条真的让它发生。
+# * `CombatState.TriggerActivity` 两侧都不进哈希文本（`CombatStateHasher.cs:26-71` 里没有它，
+#   `snapshot.rs:144-205` 也没有），所以"哪个触发器跑过几次"**不在任何一条对拍里**。这是两侧的
+#   **共同盲区**（不是偏差）：一侧多跑一次触发器，只要最终状态相同，哈希就相同。
+# * `doubt` 的"伤害 ×75%"被动在 `ENEMY_DIFF` 里仍是惰性的：那 10 条施加它的动作把 doubt 打到**英雄**
+#   身上，而这一局里英雄不再出手。`CARD_MULTI` 的变体 B 才真的让它在**敌人**身上生效 —— 但那里同时
+#   撞上上面那条 `DamageDealt` 钩子缺口，所以"被动生效"与"触发器不 fire"今天混在同一格里，
+#   只能整体记成不可对照（见 `kernel_gap_for`）。
 """
 
 from __future__ import annotations
@@ -152,6 +191,27 @@ CARD_FUNCS = {
 NAME_W = 34
 VALUE_W = 66
 
+# 逐卡多层（`CARD_MULTI`）与逐敌人动作（`ENEMY_DIFF`）要的导出
+# （`native/RogueDeck.Oracle/OracleExports.Layers.cs`）。同样一个都不许缺。
+MULTI_FUNCS = {
+    "rd_oracle_card_multi_run": 2,
+    "rd_oracle_card_multi_steps_len": 0,
+    "rd_oracle_card_multi_steps_char": 1,
+    "rd_oracle_card_multi_facts_len": 0,
+    "rd_oracle_card_multi_facts_char": 1,
+}
+ENEMY_FUNCS = {
+    "rd_oracle_enemy_action_count": 0,
+    "rd_oracle_enemy_run": 2,
+    "rd_oracle_enemy_steps_len": 0,
+    "rd_oracle_enemy_steps_char": 1,
+    "rd_oracle_enemy_facts_len": 0,
+    "rd_oracle_enemy_facts_char": 1,
+}
+ALL_FUNCS = {}
+for _table in (FIGHT_FUNCS, CARD_FUNCS, MULTI_FUNCS, ENEMY_FUNCS):
+    ALL_FUNCS.update(_table)
+
 
 class ABIMissing(RuntimeError):
     """oracle 还没被构建出来（或构建出来的是旧版本）。这不是"跳过"的理由，是必须报的错。"""
@@ -187,22 +247,17 @@ class Oracle(object):
     def __init__(self) -> None:
         self.path = _find_dll()
         self.lib = ctypes.CDLL(self.path)
-        missing = [name for name in FIGHT_FUNCS if not hasattr(self.lib, name)]
-        missing += [name for name in CARD_FUNCS if not hasattr(self.lib, name)]
+        missing = [name for name in ALL_FUNCS if not hasattr(self.lib, name)]
         if not hasattr(self.lib, "rd_oracle_card_specs_load"):
             missing.append("rd_oracle_card_specs_load")
         if missing:
             raise ABIMissing(
                 f"{os.path.basename(self.path)} 缺少对拍导出：{', '.join(sorted(set(missing)))}\n"
-                f"  共缺 {len(set(missing))}/{len(FIGHT_FUNCS) + len(CARD_FUNCS) + 1} 个。它们由 "
-                f"native/RogueDeck.Oracle/OracleExports.Fight.cs 与 OracleExports.Cards.cs 提供；重建 oracle 即可"
+                f"  共缺 {len(set(missing))}/{len(ALL_FUNCS) + 1} 个。它们由 "
+                f"native/RogueDeck.Oracle/OracleExports.Fight.cs / .Cards.cs / .Layers.cs 提供；重建 oracle 即可"
                 f"（& tools\\dnaot.ps1 publish native/RogueDeck.Oracle/RogueDeck.Oracle.csproj "
                 f"-c Release -r win-x64）。")
-        for name, nargs in FIGHT_FUNCS.items():
-            fn = getattr(self.lib, name)
-            fn.restype = ctypes.c_int
-            fn.argtypes = [ctypes.c_int] * nargs
-        for name, nargs in CARD_FUNCS.items():
+        for name, nargs in ALL_FUNCS.items():
             fn = getattr(self.lib, name)
             fn.restype = ctypes.c_int
             fn.argtypes = [ctypes.c_int] * nargs
@@ -261,6 +316,31 @@ class Oracle(object):
 
     def card_steps(self) -> list:
         return [parse_kv(line) for line in self.text("rd_oracle_card_steps").splitlines() if line]
+
+    # ---- 逐卡多层这一层 ----
+
+    def card_multi_run(self, index: int, variant: int) -> int:
+        return self.lib.rd_oracle_card_multi_run(index, variant)
+
+    def card_multi_facts(self) -> dict:
+        return parse_facts(self.text("rd_oracle_card_multi_facts"))
+
+    def card_multi_steps(self) -> list:
+        return [parse_kv(line) for line in self.text("rd_oracle_card_multi_steps").splitlines() if line]
+
+    # ---- 逐敌人动作这一层 ----
+
+    def enemy_action_count(self) -> int:
+        return self.lib.rd_oracle_enemy_action_count()
+
+    def enemy_run(self, index: int, seed: int) -> int:
+        return self.lib.rd_oracle_enemy_run(index, seed)
+
+    def enemy_facts(self) -> dict:
+        return parse_facts(self.text("rd_oracle_enemy_facts"))
+
+    def enemy_steps(self) -> list:
+        return [parse_kv(line) for line in self.text("rd_oracle_enemy_steps").splitlines() if line]
 
     def observables(self) -> dict:
         result = self.lib.rd_oracle_result()
@@ -836,6 +916,10 @@ def card_layer_expected(spec: dict, mirror: "Mirror") -> dict:
 
     trigger_count = 0
     for status in spec["statuses"]:
+        # 逐卡这一层只 author 卡程序引用到的状态（spec 里 `used_by` 说得明白）；敌人动作那一侧
+        # 需要的状态由那一层自己 author、自己核对。
+        if "cards" not in status["used_by"]:
+            continue
         prefix = "status." + status["id"]
         expected[prefix + ".package"] = status["package"]
         expected[prefix + ".polarity"] = status["polarity"]
@@ -965,33 +1049,7 @@ def card_layer(oracle: Oracle, mirror: Mirror, verbose: bool) -> tuple:
     继续跑下去只会产出 62 个没有意义的哈希比较。逐张卡自己的失败（author 不出来、哈希不同）
     才记成一行 FAIL —— 那种时候**别的卡仍然可信**，而这正是"n/62"要表达的东西。
     """
-    spec = gen_card_specs.derive(mirror.rom)
-    rendered = gen_card_specs.render(spec)
-
-    # ── 闸门 0：磁盘上的 spec 不能陈旧。它是 C# 侧的输入，而它的真相是镜像。
-    if not os.path.isfile(SPEC_JSON):
-        raise GateFailure(f"{SPEC_JSON} 不存在 —— 它由镜像派生，生成命令：\n"
-                          f"    python native/gen_card_specs.py")
-    with open(SPEC_JSON, "r", encoding="utf-8", newline="") as handle:
-        on_disk = handle.read()
-    if on_disk != rendered:
-        try:
-            drift = spec_drift(json.loads(on_disk), spec)
-        except ValueError as broken:
-            drift = [f"磁盘上的 json 根本解析不了：{broken}"]
-        raise GateFailure(
-            f"{SPEC_JSON} 与镜像不一致（陈旧产物，{len(on_disk)} B vs {len(rendered)} B）。\n"
-            + "".join(f"  {line}\n" for line in drift)
-            + "  镜像变了就要重生成：\n    python native/gen_card_specs.py")
-
-    # ── 闸门 1：oracle 读进来的必须就是这份字节（不是它旁边某个同名旧文件）
-    code = oracle.load_card_specs(SPEC_JSON)
-    if code <= 0:
-        raise RuntimeError(f"rd_oracle_card_specs_load({SPEC_JSON}) -> {code}；{oracle.error()}")
-    loaded = oracle.card_specs_text()
-    if loaded != on_disk:
-        raise GateFailure(
-            f"oracle 读进来的 spec 与磁盘上的不是同一份字节（{len(loaded)} B vs {len(on_disk)} B）")
+    spec = load_spec(oracle, mirror)
     count = oracle.card_count()
     if count != len(spec["cards"]):
         raise GateFailure(f"oracle 说 spec 里有 {count} 张卡，镜像派生出来的是 {len(spec['cards'])} 张")
@@ -1128,6 +1186,425 @@ def card_layer(oracle: Oracle, mirror: Mirror, verbose: bool) -> tuple:
 
     return passed, len(blocks), failures
 
+def load_spec(oracle: Oracle, mirror: Mirror) -> dict:
+    """三道前置闸门里与"这份 spec 是不是镜像现在的样子"有关的那两道。
+
+    返回从镜像派生出来的 spec（C# 侧读到的必须是它的**同一份字节**）。抽出来是因为三层都要它：
+    多层与敌人层不能各自再写一遍"陈旧就报错"—— 那两份会漂。
+    """
+    spec = gen_card_specs.derive(mirror.rom)
+    rendered = gen_card_specs.render(spec)
+
+    # ── 闸门 0：磁盘上的 spec 不能陈旧。它是 C# 侧的输入，而它的真相是镜像。
+    if not os.path.isfile(SPEC_JSON):
+        raise GateFailure(f"{SPEC_JSON} 不存在 —— 它由镜像派生，生成命令：\n"
+                          f"    python native/gen_card_specs.py")
+    with open(SPEC_JSON, "r", encoding="utf-8", newline="") as handle:
+        on_disk = handle.read()
+    if on_disk != rendered:
+        try:
+            drift = spec_drift(json.loads(on_disk), spec)
+        except ValueError as broken:
+            drift = [f"磁盘上的 json 根本解析不了：{broken}"]
+        raise GateFailure(
+            f"{SPEC_JSON} 与镜像不一致（陈旧产物，{len(on_disk)} B vs {len(rendered)} B）。\n"
+            + "".join(f"  {line}\n" for line in drift)
+            + "  镜像变了就要重生成：\n    python native/gen_card_specs.py")
+
+    # ── 闸门 1：oracle 读进来的必须就是这份字节（不是它旁边某个同名旧文件）
+    code = oracle.load_card_specs(SPEC_JSON)
+    if code <= 0:
+        raise RuntimeError(f"rd_oracle_card_specs_load({SPEC_JSON}) -> {code}；{oracle.error()}")
+    loaded = oracle.card_specs_text()
+    if loaded != on_disk:
+        raise GateFailure(
+            f"oracle 读进来的 spec 与磁盘上的不是同一份字节（{len(loaded)} B vs {len(on_disk)} B）")
+    return spec
+
+
+def status_expected(status: dict) -> dict:
+    """一个状态 → C# 侧该报出来的每一条事实（拼写与 `OracleExports.Fight.cs` 的 `StatusFacts` 逐字相同）。"""
+    prefix = "status." + status["id"]
+    out = {
+        prefix + ".package": status["package"],
+        prefix + ".polarity": status["polarity"],
+        prefix + ".stacking": status["stacking"],
+        prefix + ".tags": ",".join(status["tags"]),
+        prefix + ".uses_stacks": gen_card_specs.bool_text(status["uses_stacks"]),
+        prefix + ".uses_duration": gen_card_specs.bool_text(status["uses_duration"]),
+        prefix + ".uses_charges": gen_card_specs.bool_text(status["uses_charges"]),
+        prefix + ".passive_modifiers": str(len(status["passive_modifiers"])),
+        prefix + ".incoming_delay": "none",
+        prefix + ".disclosure": "none",
+    }
+    for index, modifier in enumerate(status["passive_modifiers"]):
+        out["%s.modifier.%d" % (prefix, index)] = "%s:%s:%d:%d:%s" % (
+            modifier["pipeline"], modifier["operation"], modifier["magnitude"], modifier["priority"],
+            "none" if modifier["restrictDamageKind"] is None else modifier["restrictDamageKind"])
+    for index, trigger in enumerate(status["triggers"]):
+        out["%s.trigger.%d.event" % (prefix, index)] = trigger["event"]
+        out["%s.trigger.%d.program" % (prefix, index)] = gen_card_specs.node_text(trigger["program"]["root"])
+    return out
+
+
+def compare_steps(problems: list, rust_steps: list, csharp_steps: list, final: dict, side: dict) -> None:
+    """每步的 (round, turn, problems, 血量, 哈希) + 终局观测量 + 终局哈希。三层共用一份。
+
+    `chain` / `exec` 只在**两侧都打**的时候比（逐卡那层的 C# 侧不打它们）：它们在哈希文本里，
+    但"哪一步的哪一格开始偏"这件事，只有逐个步边界打出来才看得见 —— 光比哈希只能说"这步之后不同"。
+    """
+    if len(rust_steps) != len(csharp_steps):
+        problems.append(f"dump_steps: rust={len(rust_steps)} csharp={len(csharp_steps)}")
+    for position, rust_step in enumerate(rust_steps):
+        if position >= len(csharp_steps):
+            problems.append(f"step{position}: rust 有、csharp 没有")
+            continue
+        step = csharp_steps[position]
+        for key in STEP_OBSERVABLES:
+            if rust_step.get(key) != step.get(key):
+                problems.append(f"step{position}.{key}: rust={rust_step.get(key)} "
+                                f"csharp={step.get(key)}")
+        for key in ("chain", "exec"):
+            if key in step and key in rust_step and rust_step[key] != step[key]:
+                problems.append(f"step{position}.{key}: rust={rust_step[key]} csharp={step[key]}")
+        if rust_step.get("hash") != step.get("hash"):
+            problems.append(f"step{position}.hash: rust={rust_step.get('hash')} "
+                            f"csharp={step.get('hash')}")
+    for key in FINAL_OBSERVABLES:
+        if key == "enemy_hp":
+            rust_value = rust_steps[-1].get("enemy_hp") if rust_steps else None
+        else:
+            rust_value = final.get(key)
+        if str(rust_value) != str(side.get(key)):
+            problems.append(f"final.{key}: rust={rust_value} csharp={side.get(key)}")
+    rust_final_hash = rust_steps[-1].get("hash") if rust_steps else None
+    if rust_final_hash != side.get("hash"):
+        problems.append(f"final_hash: rust={rust_final_hash} csharp={side.get('hash')}")
+
+
+# ===========================================================================
+# 逐卡多层（CARD_MULTI）
+#
+# `CARD_DIFF` 每张卡只打一步，所以它照不到跨回合的那一半：结束时弃手牌、下回合抽回来、
+# 抽牌堆空时重洗（`random_step` 前进一格）、回合开始的补能、DoT 在回合开始的 tick、
+# `TurnEndHandDestinationZone` / `RetainInHandOnTurnEnd`、以及敌人真的出手。
+# 这一层每张卡跑两个变体、每个变体 4 步，两条路都跨过至少一个回合边界。
+# ===========================================================================
+
+# 与 `kernel/rd-fightdump` 的 `CARD_MULTI_*`、`OracleExports.Layers.cs` 的 `CardMulti*` 是三份常量。
+MULTI_SHAPE = {
+    "combat": "card_multi",
+    "seed": "1",
+    "shuffle": "false",
+    "hero": "hero/70",
+    "enemies": "queue_imp/500",
+    "energy": "standard.energy:3/3",
+    "energy_refill": "3",
+}
+MULTI_ENEMY = "queue_imp"
+MULTI_ACTION = "queue_imp.desk_jab"
+
+# 内核**没有钩子接**的触发器事件（`kernel/rd-core/src/host.rs:2299-2302`：25 条触发器里
+# 12 条属于 6 种这类事件，同文件的测试把它钉成 `assert_eq!(not_handled, 12)`；`DamageDealt` 就在里面）。
+# 内容里凡是有这类触发器的状态，只要**那一局真的让事件发生**，两侧就必然不同 —— 这不是对拍能回答
+# 的问题，也不是 oracle author 错了。这种情况必须**逐行打印原因**并计入分母，不许算成"绿"。
+KERNEL_UNMODELLED_TRIGGER_EVENTS = (
+    "DamageTaken", "DamageDealt", "StatusApplied", "StatusMerged", "StatusStacksChanged", "StatusRemoved",
+)
+
+
+def applied_to_event_target(node, into: list) -> list:
+    """程序树里 `applyStatus` 到 `sel.eventTarget` 的状态 id（= 打到**敌人**身上的那些）。"""
+    if isinstance(node, dict):
+        if node.get("kind") == "applyStatus" and (node.get("target") or {}).get("kind") == "eventTarget":
+            into.append(node["status"])
+        for key in sorted(node):
+            applied_to_event_target(node[key], into)
+    elif isinstance(node, list):
+        for item in node:
+            applied_to_event_target(item, into)
+    return into
+
+
+def kernel_gap_for(card: dict, variant_steps: list, spec: dict) -> list:
+    """这一局里"内核缺钩子"能不能被触发 → 触发了就返回原因列表（空 = 这一局能照）。
+
+    两个条件都要成立，缺一不可：
+    1. 卡的程序把**带未建模触发器**的状态打到 `sel.eventTarget`（= 敌人）身上；
+    2. 这一局的脚本里**有敌人出手**（那个动作会打出伤害 ⇒ `DamageDealt` 真的会发生）。
+    只把"卡打了 doubt"当理由是不够的 —— 变体 A 里敌人根本不出手，那时两侧必须一致。
+    """
+    if not any(step.startswith("enemy_acts:") for step in variant_steps):
+        return []
+    statuses = {status["id"]: status for status in spec["statuses"]}
+    reasons = []
+    for status_id in applied_to_event_target(card["program"]["root"], []):
+        for trigger in statuses.get(status_id, {}).get("triggers", []):
+            if trigger["event"] in KERNEL_UNMODELLED_TRIGGER_EVENTS:
+                reasons.append("%s 的 %s 触发器（内核 host.rs 的 not_handled 里有这一种）"
+                               % (status_id, trigger["event"]))
+    return reasons
+# (变体号, 名字, 牌组张数, 4 步脚本)。步的拼写与 C# 的 `StepTextOf` 一致。
+MULTI_VARIANTS = (
+    (0, "play_again", 2, ["play:{card}:" + MULTI_ENEMY, "end_turn", "next_round",
+                          "play:{card}:" + MULTI_ENEMY]),
+    (1, "enemy_then_wrap", 1, ["play:{card}:" + MULTI_ENEMY, "end_turn",
+                               "enemy_acts:%s:%s:hero" % (MULTI_ENEMY, MULTI_ACTION), "next_round"]),
+)
+
+
+def multi_layer_shape(card_id: str, variant: int, deck_count: int, steps: list) -> dict:
+    """多层这一层的形状事实（C# 侧报告什么，本脚本就期望什么）。
+
+    ⚠️ 这一层**不**重比内容事实：C# 侧的多层用的就是逐卡那层同一个 `AuthorBlueprint`（62 卡 + 卡程序
+    引用到的状态 + `desk_jab`），内容闸门已经在 `CARD_DIFF` 里逐键跑过了。这里多一份内容期望表只会
+    变成"第二份真相"。这一层比的是**形状 + 每步哈希**：形状不对（牌组张数、能量、脚本）就是两边不是
+    同一局，那种绿是无意义的绿。
+    """
+    shape = {
+        "shape.combat": MULTI_SHAPE["combat"],
+        "shape.seed": MULTI_SHAPE["seed"],
+        "shape.shuffle": MULTI_SHAPE["shuffle"],
+        "shape.hero": MULTI_SHAPE["hero"],
+        "shape.enemies": MULTI_SHAPE["enemies"],
+        "shape.deck": card_id + ":" + str(deck_count),
+        "shape.energy": MULTI_SHAPE["energy"],
+        "shape.energy_refill": MULTI_SHAPE["energy_refill"],
+        "shape.variant": str(variant),
+        "shape.steps": str(len(steps)),
+    }
+    for index, step in enumerate(steps):
+        shape["shape.step." + str(index)] = step.format(card=card_id)
+    return shape
+
+
+def card_multi_layer(oracle: Oracle, mirror: Mirror, spec: dict) -> tuple:
+    """逐卡 × 多层对拍。返回 (通过, 总数, [失败明细])。"""
+    info, blocks = parse_rust(run_rust_dump(["--cards-multi"]), block_key="cardmulti")
+    if info.get("cards") != str(len(spec["cards"])):
+        raise GateFailure(f"rd-fightdump 说镜像里有 {info.get('cards')} 张卡，spec 里是 "
+                          f"{len(spec['cards'])} 张 —— 两边读的不是同一份镜像")
+    want_blocks = len(spec["cards"]) * len(MULTI_VARIANTS)
+    if len(blocks) != want_blocks:
+        raise GateFailure(
+            f"rd-fightdump 打了 {len(blocks)} 个多层块，而 {len(spec['cards'])} 张卡 × "
+            f"{len(MULTI_VARIANTS)} 个变体 = {want_blocks} —— 少打就是跳过，这个脚本不接受")
+
+    print()
+    print(f"# 逐卡多层（CARD_MULTI）：{len(spec['cards'])} 张卡 × {len(MULTI_VARIANTS)} 个变体，"
+          f"每变体 4 步（跨回合：弃手牌 / 抽回来 / 重洗 / 补能{' / 敌人出手' if len(MULTI_VARIANTS) > 1 else ''}）")
+
+    passed = 0
+    failures = []
+    not_comparable = []
+    for position, block in enumerate(blocks):
+        card = spec["cards"][position // len(MULTI_VARIANTS)]
+        variant, name, deck_count, steps = MULTI_VARIANTS[position % len(MULTI_VARIANTS)]
+        header = block["header"]
+        if header.get("cardmulti") != card["id"]:
+            raise GateFailure(f"第 {position} 个多层块打的是 `{header.get('cardmulti')}`，"
+                              f"按顺序该是 `{card['id']}`（{name}）—— 两边的卡序不同")
+        if header.get("index") != str(card["index"]):
+            raise GateFailure(f"`{card['id']}` 的多层块 index={header.get('index')}，该是 {card['index']}")
+        if header.get("variant") != str(variant):
+            raise GateFailure(f"`{card['id']}` 的多层块 variant={header.get('variant')}，该是 {variant}")
+
+        shape = multi_layer_shape(card["id"], variant, deck_count, steps)
+        seed = int(header["seed"])
+        code = oracle.card_multi_run(card["index"], variant)
+        if code <= 0:
+            failures.append((f"{card['id']}/{name}", f"C# 侧 author 不出来：{oracle.error()}"))
+            print(f"card={card['id']:<24} index={card['index']:<2} variant={name:<16} "
+                  f"FAIL  C# author 失败（{oracle.error()}）")
+            continue
+
+        facts = oracle.card_multi_facts()
+        expected = dict(shape)
+        expected["selected.index"] = str(card["index"])
+        expected["selected.id"] = card["id"]
+        problems = compare_facts(facts, expected, "facts")
+
+        for key in ("combat", "seed", "shuffle", "hero", "enemies", "deck", "energy"):
+            want = shape.get("shape." + key)
+            got = header.get(key)
+            if got != want:
+                problems.append(f"header: `{key}` rust={got!r} != 约定 {want!r}")
+        if header.get("variant") != shape["shape.variant"]:
+            problems.append(f"header: `variant` rust={header.get('variant')!r} != 约定 {shape['shape.variant']!r}")
+
+        side = oracle.observables()
+        compare_steps(problems, block["steps"], oracle.card_multi_steps(), block["final"] or {}, side)
+        if len(block["steps"]) != len(steps):
+            problems.append(f"steps: rust 打了 {len(block['steps'])} 步，约定 {len(steps)} 步")
+
+        if problems:
+            gap = kernel_gap_for(card, steps, spec) if problems else []
+            if gap:
+                not_comparable.append((f"{card['id']}/{name}", "; ".join(gap)))
+                print(f"card={card['id']:<24} index={card['index']:<2} variant={name:<16} "
+                      f"steps={len(block['steps'])} NOT-COMPARABLE  内核缺钩子："
+                      + "; ".join(gap))
+                # ⚠️ 这条分类只说"**有**一个已知原因可以让两侧不同"，不等于"差异**只**由它造成"。
+                # 所以首个差异仍然打出来（人要看一眼），别把它当成"这格不用管"。
+                for problem in problems[:3]:
+                    print(f"    - 差异：{problem}")
+            else:
+                failures.append((f"{card['id']}/{name}", problems[0]))
+                print(f"card={card['id']:<24} index={card['index']:<2} variant={name:<16} "
+                      f"steps={len(block['steps'])} MISMATCH")
+                for problem in problems[:8]:
+                    print(f"    - {problem}")
+        else:
+            passed += 1
+            last_hash = block["steps"][-1].get("hash") if block["steps"] else None
+            print(f"card={card['id']:<24} index={card['index']:<2} variant={name:<16} "
+                  f"steps={len(block['steps'])} hash={str(last_hash)[:12]}.. OK")
+    return passed, len(blocks), failures, not_comparable
+
+
+# ===========================================================================
+# 逐敌人动作（ENEMY_DIFF）
+#
+# 镜像里 394 条 `EACT`，在这一层之前**一条都没被执行过**（`FIGHT_DIFF` 那四局只用 `desk_jab`）。
+# 每条一局：它所属的敌人 + 英雄（牌组为空）、脚本两步（结束英雄回合、让它执行这条动作）。
+# 一条都**不许跳过**：C# 侧 author 不出来（本 build 不支持那个节点/表达式/选择器）也算在分母里，
+# 并打印一行带原因的 `NOT-AUTHORED`。
+# ===========================================================================
+
+ENEMY_SHAPE = {
+    "combat": "enemy_diff",
+    "seed": "1",
+    "shuffle": "false",
+    "hero": "hero/70",
+    "energy": "standard.energy:3/3",
+    "energy_refill": "3",
+}
+ENEMY_HERO = "hero"
+ENEMY_HP = 60
+ENEMY_CONTENT_PINS = (
+    ("content.allies", "0"),
+    ("content.pre_down_interceptors", "0"),
+    ("content.status_application_interceptors", "0"),
+    ("content.defensive_pools", "0"),
+    ("content.turn_start_refills", "0"),
+    ("content.cards_drawn_per_turn", "5"),
+    ("content.cell_exclusive", "false"),
+    ("content.simultaneous_team_turns", "false"),
+)
+
+
+def spec_program_text(program: dict) -> str:
+    """canonical 程序文本（`gen_card_specs.node_text` 那一套，与 C# 的泛型 `NodeTextOf` 逐字节相同）。
+
+    ⚠️ 不要用本文件上面那几个手写的 `program_text` / `node_text`：它们是给**整局那四局**的两个手抄卡
+    准备的，只认得 3 种节点（多一种就打成 `unsupported(...)`）。敌人动作里出现了 5 种节点、7 种表达式，
+    拿那套去比会得到"两边都是 unsupported 但字面不同"的假红（或者更糟：两个 unsupported 恰好相同 ⇒ 假绿）。
+    """
+    return ("program(id=" + program["id"]
+            + ";depth=" + str(program["depth"])
+            + ";steps=" + str(program["steps"])
+            + ";root=" + gen_card_specs.node_text(program["root"]) + ")")
+
+
+def enemy_layer_expected(action: dict, spec: dict, mirror: Mirror) -> dict:
+    """一条敌人动作 → C# 侧该报出来的每一条事实。状态与形状都从 spec（= 镜像）派生。"""
+    statuses = {status["id"]: status for status in spec["statuses"]}
+    trigger_count = 0
+    expected = {
+        "selected.index": str(action["index"]),
+        "selected.id": action["id"],
+        "selected.enemy": action["enemy"],
+        "selected.listed": gen_card_specs.bool_text(action["listed"]),
+        "enemy_action." + action["id"] + ".package": action["package"],
+        "enemy_action." + action["id"] + ".intent": action["intent"],
+        "enemy_action." + action["id"] + ".program": spec_program_text(action["program"]),
+    }
+    for status_id in action["statuses"]:
+        if status_id not in statuses:
+            raise GateFailure(f"动作 `{action['id']}` 需要状态 `{status_id}`，但 spec 里没有它")
+        expected.update(status_expected(statuses[status_id]))
+        trigger_count += len(statuses[status_id]["triggers"])
+    for key, value in ENEMY_CONTENT_PINS:
+        expected[key] = value
+    expected["content.triggered_programs"] = str(trigger_count)
+    expected.update({
+        "shape.combat": ENEMY_SHAPE["combat"],
+        "shape.seed": ENEMY_SHAPE["seed"],
+        "shape.shuffle": ENEMY_SHAPE["shuffle"],
+        "shape.hero": ENEMY_SHAPE["hero"],
+        "shape.enemies": "%s/%d" % (action["enemy"], ENEMY_HP),
+        "shape.deck": "",           # 空牌组：这一层问的是动作本身
+        "shape.energy": ENEMY_SHAPE["energy"],
+        "shape.energy_refill": ENEMY_SHAPE["energy_refill"],
+        "shape.steps": "2",
+        "shape.step.0": "end_turn",
+        "shape.step.1": "enemy_acts:%s:%s:%s" % (action["enemy"], action["id"], ENEMY_HERO),
+    })
+    return expected
+
+
+def enemy_layer(oracle: Oracle, mirror: Mirror, spec: dict) -> tuple:
+    """逐敌人动作对拍。返回 (通过, 总数, [MISMATCH], [不可对照])。"""
+    actions = spec["enemy_actions"]
+    info, blocks = parse_rust(run_rust_dump(["--enemies"]), block_key="enemy")
+    if len(blocks) != len(actions):
+        raise GateFailure(
+            f"rd-fightdump 打了 {len(blocks)} 条敌人动作，镜像里有 {len(actions)} 条 —— "
+            f"少打就是跳过，这个脚本不接受")
+    if info.get("enemy_actions") != str(len(actions)):
+        raise GateFailure(f"rd-fightdump 说镜像里有 {info.get('enemy_actions')} 条敌人动作，"
+                          f"spec 里是 {len(actions)} 条 —— 两边读的不是同一份镜像")
+
+    count = oracle.enemy_action_count()
+    if count != len(actions):
+        raise GateFailure(f"oracle 说 spec 里有 {count} 条敌人动作，镜像派生出来的是 {len(actions)} 条")
+
+    print()
+    print(f"# 逐敌人动作（ENEMY_DIFF）：{len(actions)} 条 EACT 各一局（该动作所属敌人 + 英雄，牌组为空）")
+
+    passed = 0
+    failures = []
+    unavailable = []
+    for position, block in enumerate(blocks):
+        action = actions[position]
+        header = block["header"]
+        if header.get("enemy") != action["id"]:
+            raise GateFailure(f"第 {position} 条敌人动作打的是 `{header.get('enemy')}`，"
+                              f"按顺序该是 `{action['id']}` —— 两边的动作序不同")
+        if header.get("index") != str(action["index"]):
+            raise GateFailure(f"`{action['id']}` 的头行 index={header.get('index')}，该是 {action['index']}")
+        seed = int(header["seed"])
+        code = oracle.enemy_run(action["index"], seed)
+        if code <= 0:
+            reason = oracle.error()
+            unavailable.append((action["id"], reason))
+            print(f"enemy={action['id']:<56} index={action['index']:<3} NOT-AUTHORED  {reason}")
+            continue
+
+        expected = enemy_layer_expected(action, spec, mirror)
+        problems = compare_facts(oracle.enemy_facts(), expected, "facts")
+        for key in ("combat", "seed", "shuffle", "hero", "enemies", "deck", "energy"):
+            want = expected.get("shape." + key)
+            got = header.get(key)
+            if got != want:
+                problems.append(f"header: `{key}` rust={got!r} != 约定 {want!r}")
+
+        side = oracle.observables()
+        compare_steps(problems, block["steps"], oracle.enemy_steps(), block["final"] or {}, side)
+
+        if problems:
+            failures.append((action["id"], problems[0]))
+            print(f"enemy={action['id']:<56} index={action['index']:<3} MISMATCH")
+            for problem in problems[:8]:
+                print(f"    - {problem}")
+        else:
+            passed += 1
+            last_hash = block["steps"][-1].get("hash") if block["steps"] else None
+            print(f"enemy={action['id']:<56} index={action['index']:<3} "
+                  f"steps={len(block['steps'])} hash={str(last_hash)[:12]}.. OK")
+    return passed, len(actions), failures, unavailable
+
+
 def main(argv: list) -> int:
     verbose = "--verbose" in argv or "-v" in argv
     dump_text = "--dump-text" in argv
@@ -1202,6 +1679,8 @@ def main(argv: list) -> int:
 
     # ── 逐卡这一层（保留上面那层：它打的是整局流程，这一层打的是每一张卡自己的效果）──────────
     card_passed, card_total, card_failures = card_layer(oracle, mirror, verbose)
+    # 后面两层要用同一份 spec（卡层已经把它读进来、也核对过字节了）。
+    spec = load_spec(oracle, mirror)
 
     print()
     if card_passed == card_total:
@@ -1211,7 +1690,35 @@ def main(argv: list) -> int:
         for card_id, reason in card_failures:
             print(f"  - {card_id}: {reason}")
 
-    return 0 if (fight_ok and card_passed == card_total) else 1
+    # ── 第 1 层扩展：逐卡 × 跨回合 ─────────────────────────────────────────────────────────────
+    multi_passed, multi_total, multi_failures, multi_gaps = card_multi_layer(oracle, mirror, spec)
+    print()
+    print(f"# CARD_MULTI 汇总：一致 {multi_passed}/{multi_total}，不可对照 {len(multi_gaps)}"
+          f"（内核缺钩子，逐行原因见上，计入分母），MISMATCH {len(multi_failures)}")
+    if multi_passed + len(multi_gaps) == multi_total and not multi_failures:
+        print(f"CARD_MULTI PASS ({multi_passed}/{multi_total})")
+    else:
+        print(f"CARD_MULTI FAIL ({multi_total - multi_passed - len(multi_gaps)}/{multi_total})")
+        for label, reason in multi_failures:
+            print(f"  - {label}: {reason}")
+
+    # ── 第 2 层：每一条敌人动作 ────────────────────────────────────────────────────────────────
+    enemy_passed, enemy_total, enemy_failures, enemy_unavailable = enemy_layer(oracle, mirror, spec)
+    print()
+    if enemy_passed + len(enemy_unavailable) == enemy_total and not enemy_failures:
+        print(f"ENEMY_DIFF PASS ({enemy_passed}/{enemy_total})"
+              + (f"  不可对照 {len(enemy_unavailable)} 条（逐行原因见上，计入分母）"
+                 if enemy_unavailable else ""))
+    else:
+        matched = enemy_passed
+        print(f"ENEMY_DIFF FAIL ({enemy_total - matched - len(enemy_unavailable)}/{enemy_total})")
+        for action_id, reason in enemy_failures:
+            print(f"  - {action_id}: {reason}")
+
+    return 0 if (fight_ok and card_passed == card_total
+                 and multi_passed + len(multi_gaps) == multi_total and not multi_failures
+                 and not enemy_failures
+                 and enemy_passed + len(enemy_unavailable) == enemy_total) else 1
 
 
 if __name__ == "__main__":
@@ -1222,10 +1729,12 @@ if __name__ == "__main__":
         print("GATE FAIL")
         print(str(failure))
         print()
-        # 闸门可能是在逐卡那一层砸下来的（那时整局那层已经跑完了），但两者都没拿到 PASS ——
+        # 闸门可能是在后面几层砸下来的（那时前面的层已经跑完了），但那一层都没拿到 PASS ——
         # 一行 PASS 都没打出来才是机器能可靠读到的东西。
         print("FIGHT_DIFF FAIL (gate)")
         print("CARD_DIFF FAIL (gate)")
+        print("CARD_MULTI FAIL (gate)")
+        print("ENEMY_DIFF FAIL (gate)")
         sys.exit(1)
     except ABIMissing as failure:
         print()
@@ -1234,6 +1743,8 @@ if __name__ == "__main__":
         print()
         print("FIGHT_DIFF FAIL (abi)")
         print("CARD_DIFF FAIL (abi)")
+        print("CARD_MULTI FAIL (abi)")
+        print("ENEMY_DIFF FAIL (abi)")
         sys.exit(1)
     except RuntimeError as failure:
         print()
@@ -1242,4 +1753,6 @@ if __name__ == "__main__":
         print()
         print("FIGHT_DIFF FAIL (error)")
         print("CARD_DIFF FAIL (error)")
+        print("CARD_MULTI FAIL (error)")
+        print("ENEMY_DIFF FAIL (error)")
         sys.exit(1)

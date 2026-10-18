@@ -90,7 +90,11 @@ def read_elf32(path):
 
 def newest_source_mtime():
     newest, path = 0.0, None
-    for pat in ("*/src/**/*.rs", "*/Cargo.toml", "Cargo.toml", "*/link.x"):
+    # ⚠️ 只扫**固件真正依赖**的两个 crate。原来是 `*/src/**/*.rs`，会把 `rd-fightdump`
+    # 这类诊断二进制的源码算成固件源码 ⇒ 改它们就判"ELF 陈旧"、聚合验收假红 8/9（实测踩过）。
+    # 固件依赖 rd-core（rd-firmware 自己的 workspace 里以 path 依赖它）与自身。
+    for pat in ("rd-core/src/**/*.rs", "rd-core/Cargo.toml",
+                "rd-firmware/src/**/*.rs", "rd-firmware/Cargo.toml", "rd-firmware/link.x"):
         for p in glob.glob(os.path.join(ROOT, "kernel", pat), recursive=True):
             m = os.path.getmtime(p)
             if m > newest:

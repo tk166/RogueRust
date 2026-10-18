@@ -20,7 +20,8 @@
 //! gaps=<四条已知偏差，见 battle.rs 的 FROZEN_GAP_*>
 //! scenario=<名字> combat=<id> seed=<n> shuffle=<true|false> hero=<id>/<hp> enemies=<id>/<hp>,…
 //!                 deck=<卡:id>,… energy=<当前>/<上限>
-//! step=<i> round=<r> turn=<t> problems=<n> kinds=<A,B|none> hero_hp=<n> enemy_hp=<n,…> hash=<64 hex>
+//! step=<i> round=<r> turn=<t> problems=<n> kinds=<A,B|none> hero_hp=<n> enemy_hp=<n,…>
+//!       chain=<n> exec=<n> hash=<64 hex>
 //! …
 //! final result=<Ongoing|Victory|Defeat|Draw|Aborted> steps=<n> round=<r> turn=<t> random_step=<n>
 //!       hero_hp=<n> energy=<n> hand=<n> draw=<n> discard=<n> exhaust=<n>
@@ -30,6 +31,16 @@
 //! 脚本只有"打出它"），头行的键名换成 `card=<卡 id> index=<行号>`，其余逐字节相同。
 //! 一条卡一行、一张都不跳过。它的对拍目标不是整局语义，而是**每张卡自己的效果**
 //! （`native/fight_diff.py` 的 `CARD_DIFF`）。
+//!
+//! `--cards-multi` 是同一张表的**跨回合**版本：每张卡两个变体、每个变体 4 步
+//! （`cardmulti=<卡 id> index=<行号> variant=<0|1>`）。它管的是"打一步"照不到的那一半语义：
+//! 回合结束弃手牌、下回合抽回来、抽牌堆空时重洗（`random_step` 会前进一格）、回合开始的补能、
+//! 以及敌人真的出手。头行的 `deck` / `energy` 与 `CARD_MULTI_*` 常量一一对应。
+//!
+//! `--enemies` 把场景表换成**逐敌人动作**表：镜像里 394 条 `EACT` 各一局（该动作所属敌人 + 英雄，
+//! 牌组为空），头行键名 `enemy=<动作 id> index=<行号>`。动作的归属敌人取 id 前缀
+//! （`<敌人>.<动作>`）—— 前缀是不是真的敌人、与 `ENCT` 的 `Actions` 是否一致，由
+//! `native/fight_diff.py` 的闸门从镜像核对（内核这边只有扁平的 `EACT` 表，读不到嵌套的敌人记录）。
 //!
 //! `round`/`turn` 是**执行前**的值（`ScenarioRunner.cs:106,140,164,203`）；
 //! `hash` 是**执行后**的状态指纹。两者一起才能定位"是哪一步把状态推歪了"。
@@ -75,15 +86,22 @@ fn default_image_path() -> String {
 }
 
 fn main() -> ExitCode {
-    // 参数：`rd-fightdump [镜像路径] [--cards] [--text]`。`--cards` 换成逐卡模式（镜像里每一张卡一局）；
-    // `--text` 在每局之后把规范文本（哈希喂的那份）一行一行打出来，用于"哈希不同但观测量相同"时的逐行对差。
-    // 两种模式**不混跑**：逐卡模式的输出是给 `native/fight_diff.py` 的卡片闸门按 `card=` 分块解析的，
-    // 混进整局场景只会让解析器更脆。
+    // 参数：`rd-fightdump [镜像路径] [--cards|--cards-multi|--enemies] [--text]`。
+    // 三种模式**互斥**（一次只跑一种）：它们的输出是给 `native/fight_diff.py` 的不同闸门按不同
+    // 块键（`card=` / `cardmulti=` / `enemy=`）分块解析的，混跑只会让解析器更脆。
     let mut raw: Vec<String> = env::args().skip(1).collect();
     let cards_mode = raw.iter().any(|arg| arg == "--cards");
+    let cards_multi_mode = raw.iter().any(|arg| arg == "--cards-multi");
+    let enemies_mode = raw.iter().any(|arg| arg == "--enemies");
     let text_mode = raw.iter().any(|arg| arg == "--text");
-    raw.retain(|arg| arg != "--cards" && arg != "--text");
+    raw.retain(|arg| {
+        arg != "--cards" && arg != "--cards-multi" && arg != "--enemies" && arg != "--text"
+    });
     let path = raw.first().cloned().unwrap_or_else(default_image_path);
+    if [cards_mode, cards_multi_mode, enemies_mode].iter().filter(|on| **on).count() > 1 {
+        eprintln!("--cards / --cards-multi / --enemies 一次只能给一个：它们是三种不同的场景表");
+        return ExitCode::from(2);
+    }
 
     let blob = match fs::read(&path) {
         Ok(blob) => blob,
@@ -128,6 +146,22 @@ fn main() -> ExitCode {
                 return ExitCode::from(2);
             }
         }
+    } else if cards_multi_mode {
+        match card_multi_scenarios(&content) {
+            Ok(table) => table,
+            Err(why) => {
+                eprintln!("逐卡多层场景表建不起来：{why}");
+                return ExitCode::from(2);
+            }
+        }
+    } else if enemies_mode {
+        match enemy_scenarios(&content) {
+            Ok(table) => table,
+            Err(why) => {
+                eprintln!("逐敌人动作场景表建不起来：{why}");
+                return ExitCode::from(2);
+            }
+        }
     } else {
         scenarios()
     };
@@ -147,10 +181,12 @@ fn main() -> ExitCode {
 /// 多一条并行的执行路径就多一处会悄悄不一致的地方。
 struct Scenario<'a> {
     label: &'static str,
-    /// 场景名（整局）或卡定义 id（逐卡）。
+    /// 场景名（整局）/ 卡定义 id（逐卡、逐卡多层）/ 敌人动作 id（逐敌人动作）。
     name: &'a str,
-    /// 只给逐卡模式：镜像里 `CARD` 的行号（闸门用它把三边的顺序钉在一起）。
-    card_index: Option<u32>,
+    /// 镜像表的行号（`CARD` / `EACT`）：闸门用它把三边的顺序钉在一起。整局场景没有行号。
+    row_index: Option<u32>,
+    /// 只给逐卡多层：变体号。头行会多打一格 `variant=<n>`。
+    variant: Option<u32>,
     combat: &'a str,
     seed: i32,
     hero: PlanCombatant<'a>,
@@ -197,7 +233,8 @@ fn card_scenarios<'a>(content: &Content<'a>) -> Result<Vec<Scenario<'a>>, String
         out.push(Scenario {
             label: "card",
             name: card,
-            card_index: Some(index),
+            row_index: Some(index),
+            variant: None,
             combat: CARD_COMBAT,
             seed: CARD_SEED,
             hero: PlanCombatant {
@@ -215,6 +252,159 @@ fn card_scenarios<'a>(content: &Content<'a>) -> Result<Vec<Scenario<'a>>, String
                 card,
                 target: Some(CARD_ENEMY),
             }],
+        });
+    }
+    Ok(out)
+}
+
+/// 逐卡多层场景的固定形状（`CARD_MULTI`）。三份常量（Rust / C# / `native/fight_diff.py`）
+/// 描述同一局战斗，改一处另外两处就红。
+///
+/// 为什么与逐卡那层不同形：
+/// * 能量 **3/3**（不是 10/10）—— 跨回合才会**补能**，而 10/10 的池子补到 10 是恒等，
+///   那个机制就永远是绿的；镜像里最贵的卡是 2，所以 3 还是够付。
+/// * 牌组给 **2 张**（变体 A）/ **1 张**（变体 B）—— 一张卡一张牌组，第二回合抽牌时
+///   抽牌堆必然空、弃牌堆非空 ⇒ 真的走一次重洗（`random_step` 前进一格）。
+const CARD_MULTI_COMBAT: &str = "card_multi";
+const CARD_MULTI_SEED: i32 = 1;
+const CARD_MULTI_HERO: &str = "hero";
+const CARD_MULTI_HERO_HP: i32 = 70;
+const CARD_MULTI_ENEMY: &str = "queue_imp";
+const CARD_MULTI_ENEMY_HP: i32 = 500;
+const CARD_MULTI_ENERGY: i32 = 3;
+/// 逐卡多层用的敌人动作：让"敌人真的出手"这一格有内容（镜像里它就是对英雄 8 点）。
+const CARD_MULTI_ACTION: &str = "queue_imp.desk_jab";
+
+/// 变体 A：打出它 → 结束回合 → 转过一整轮 → 再打出它（4 步）。
+const MULTI_VARIANT_PLAY_AGAIN: u32 = 0;
+/// 变体 B：打出它 → 结束回合 → 敌人动作 → 转回英雄回合（4 步）。
+const MULTI_VARIANT_ENEMY_THEN_WRAP: u32 = 1;
+const MULTI_VARIANTS: u32 = 2;
+
+/// 逐卡多层：镜像里**每一张**卡 × 2 个变体，每个变体 4 步，跨过至少一个回合边界。
+///
+/// 与 `--cards` 那张表的关系：那一层问"这张卡做了什么"（1 步），这一层问"跨回合之后两侧
+/// 还一样吗"（丢弃手牌 / 抽回来 / 重洗 / 补能 / 敌人出手 / DoT tick）。一张卡都不许跳过。
+fn card_multi_scenarios<'a>(content: &Content<'a>) -> Result<Vec<Scenario<'a>>, String> {
+    let total = content.rows(Table::Card).remaining();
+    if total == 0 {
+        return Err("镜像里一张卡都没有 —— 逐卡多层对拍无事可做（这不是『通过』）".to_string());
+    }
+    let mut out = Vec::with_capacity(total as usize * MULTI_VARIANTS as usize);
+    for index in 0..total {
+        let card = content
+            .entity_id(Table::Card, index)
+            .ok_or_else(|| format!("CARD[{index}] 取不到 Id（镜像形态变了？）"))?;
+        for variant in 0..MULTI_VARIANTS {
+            let play = Step::HeroPlays {
+                card,
+                target: Some(CARD_MULTI_ENEMY),
+            };
+            let (deck, steps) = match variant {
+                MULTI_VARIANT_PLAY_AGAIN => (
+                    // 两张：第一回合抽到两张、打掉一张，第二回合重洗后还能再打一张。
+                    vec![DeckEntry { card, count: 2 }],
+                    vec![play, Step::HeroEndsTurn, Step::NextRound, play],
+                ),
+                MULTI_VARIANT_ENEMY_THEN_WRAP => (
+                    // 一张：第二回合的重洗**取决于这张卡落在哪个区**（弃牌堆 ⇒ 重洗，
+                    // 消耗堆 ⇒ 不重洗）。镜像里 48 张弃牌堆 / 14 张消耗堆，这条分岔真的有内容。
+                    vec![DeckEntry { card, count: 1 }],
+                    vec![
+                        play,
+                        Step::HeroEndsTurn,
+                        Step::EnemyActs {
+                            enemy: CARD_MULTI_ENEMY,
+                            action: CARD_MULTI_ACTION,
+                            target: Some(CARD_MULTI_HERO),
+                        },
+                        Step::NextRound,
+                    ],
+                ),
+                _ => return Err(format!("未知的逐卡多层变体号 {variant}（0..{MULTI_VARIANTS} 之外）")),
+            };
+            out.push(Scenario {
+                label: "cardmulti",
+                name: card,
+                row_index: Some(index),
+                variant: Some(variant),
+                combat: CARD_MULTI_COMBAT,
+                seed: CARD_MULTI_SEED,
+                hero: PlanCombatant {
+                    id: CARD_MULTI_HERO,
+                    max_health: CARD_MULTI_HERO_HP,
+                },
+                enemies: vec![PlanCombatant {
+                    id: CARD_MULTI_ENEMY,
+                    max_health: CARD_MULTI_ENEMY_HP,
+                }],
+                deck,
+                shuffle: false,
+                energy: (CARD_MULTI_ENERGY, CARD_MULTI_ENERGY),
+                steps,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// 逐敌人动作场景的固定形状（`ENEMY_DIFF`）。
+///
+/// 牌组**为空**：这一层问的是"这条动作做了什么"，英雄有没有牌无关；空牌组也让 C# 侧不必
+/// author 任何一张卡。能量 3/3 与英雄 70 点沿用整局那层的数字。
+const ENEMY_COMBAT: &str = "enemy_diff";
+const ENEMY_SEED: i32 = 1;
+const ENEMY_HERO: &str = "hero";
+const ENEMY_HERO_HP: i32 = 70;
+/// 敌人在这一层是"靶子也是施法者"：够高到不吃一条动作的自伤就死（镜像里最高单次 24）。
+const ENEMY_HP: i32 = 60;
+const ENEMY_ENERGY: i32 = 3;
+
+/// 逐敌人动作：镜像里**每一条** `EACT` 一局。
+///
+/// 脚本两步：结束英雄回合（把行动位让出去）+ 让它执行这条动作。归属敌人取动作 id 的前缀
+/// `<敌人>.<动作>` —— 内核只有扁平的 `EACT` 表，读不到 `ENCT` 里嵌套的敌人记录；
+/// 前缀到底是不是真的敌人、与 `ENCT` 的 `Actions` 是否一致，由 `native/fight_diff.py`
+/// 的闸门从镜像核对（核不上就整体红，而不是让这一层安静地打错敌人）。
+fn enemy_scenarios<'a>(content: &Content<'a>) -> Result<Vec<Scenario<'a>>, String> {
+    let total = content.rows(Table::EnemyAction).remaining();
+    if total == 0 {
+        return Err("镜像里一条敌人动作都没有 —— 这一层无事可做（这不是『通过』）".to_string());
+    }
+    let mut out = Vec::with_capacity(total as usize);
+    for index in 0..total {
+        let action = content
+            .entity_id(Table::EnemyAction, index)
+            .ok_or_else(|| format!("EACT[{index}] 取不到 Id（镜像形态变了？）"))?;
+        let (enemy, _) = action
+            .split_once('.')
+            .ok_or_else(|| format!("敌人动作 `{action}` 的 id 里没有 `.`，推不出归属敌人"))?;
+        out.push(Scenario {
+            label: "enemy",
+            name: action,
+            row_index: Some(index),
+            variant: None,
+            combat: ENEMY_COMBAT,
+            seed: ENEMY_SEED,
+            hero: PlanCombatant {
+                id: ENEMY_HERO,
+                max_health: ENEMY_HERO_HP,
+            },
+            enemies: vec![PlanCombatant {
+                id: enemy,
+                max_health: ENEMY_HP,
+            }],
+            deck: Vec::new(),
+            shuffle: false,
+            energy: (ENEMY_ENERGY, ENEMY_ENERGY),
+            steps: vec![
+                Step::HeroEndsTurn,
+                Step::EnemyActs {
+                    enemy,
+                    action,
+                    target: Some(ENEMY_HERO),
+                },
+            ],
         });
     }
     Ok(out)
@@ -242,7 +432,8 @@ fn scenarios() -> Vec<Scenario<'static>> {
         Scenario {
             label: "scenario",
             name: "finish",
-            card_index: None,
+            row_index: None,
+            variant: None,
             combat: "city_easy_01",
             seed: 7,
             hero,
@@ -259,7 +450,8 @@ fn scenarios() -> Vec<Scenario<'static>> {
         Scenario {
             label: "scenario",
             name: "enemy_hits",
-            card_index: None,
+            row_index: None,
+            variant: None,
             combat: "enemy_hits",
             seed: 1,
             hero,
@@ -283,7 +475,8 @@ fn scenarios() -> Vec<Scenario<'static>> {
         Scenario {
             label: "scenario",
             name: "refusals",
-            card_index: None,
+            row_index: None,
+            variant: None,
             combat: "refusals",
             seed: 1,
             hero,
@@ -312,7 +505,8 @@ fn scenarios() -> Vec<Scenario<'static>> {
         Scenario {
             label: "scenario",
             name: "dot_kill",
-            card_index: None,
+            row_index: None,
+            variant: None,
             combat: "dot_kill",
             seed: 1,
             hero,
@@ -381,8 +575,11 @@ fn run_scenario(content: &Content<'_>, spec: &Scenario<'_>, text_mode: bool) -> 
         "{}={} ",
         spec.label, spec.name
     );
-    if let Some(index) = spec.card_index {
+    if let Some(index) = spec.row_index {
         plan_line.push_str(&format!("index={index} "));
+    }
+    if let Some(variant) = spec.variant {
+        plan_line.push_str(&format!("variant={variant} "));
     }
     plan_line.push_str(&format!(
         "combat={} seed={} shuffle={} hero={}/{} enemies=",
@@ -436,13 +633,15 @@ fn run_scenario(content: &Content<'_>, spec: &Scenario<'_>, text_mode: bool) -> 
             .collect::<Vec<_>>()
             .join(",");
         println!(
-            "step={index} round={} turn={} problems={} kinds={} hero_hp={} enemy_hp={} hash={}",
+            "step={index} round={} turn={} problems={} kinds={} hero_hp={} enemy_hp={} chain={} exec={} hash={}",
             outcome.round,
             outcome.turn,
             outcome.problems,
             kinds,
             health(&state, spec.hero.id),
             enemies,
+            state.next_effect_chain_number,
+            state.next_program_execution_id,
             state_hash(&state)?,
         );
     }
