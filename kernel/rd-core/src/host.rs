@@ -88,8 +88,41 @@
 //!
 //! 每跑一次节目本宿主都调一次 [`CombatState::allocate_program_execution_id`]
 //! （参考在 `EffectProgramExecutor.Execute` 里就做，`Programs/EffectProgramExecution.cs:27`）。
-//! **`chain_num` 不会前进**：它只在"没有当前链时入队"时发号，而本宿主从不入队
-//! （规格书 §5.5 记的这条偏差仍然成立）。
+//!
+//! **`chain_num` 也会前进**（2026-10-19 的整局对拍修正了本节旧说法"不会前进"）。
+//! 参考只在"顶层入队"时建根链：`CombatState.cs:386`/`:446` 的
+//! `CurrentEffectChain ?? CreateRootEffectChain()`，而 `ResolvePendingEffects` /
+//! `ResolvePendingEvents` 都在 `using (combat.EnterEffectChain(entry.EffectChain))` 里跑
+//! （`CombatEffectQueueProcessor.cs:32`、`CombatEventHandling.cs:60`），所以**一次排空
+//! 内部的入队全部复用外层链、不发号**。
+//!
+//! 内核没有队列 ⇒ 等价物是"回合机把这条事件交给处理器"的那一刻。逐条对齐：
+//!
+//! | 参考的顶层入队 | 它的处理器 | 内核的落点 | 实测 Δchain |
+//! |---|---|---|---|
+//! | `EnqueueEvent(TurnStartedCombatEvent)`（`CombatTurnProcessor.cs:28-32`） | 7 个 turn-start 处理器（含 [`Host::try_damage_over_time`]） | [`TurnHost::run_turn_started_triggers`] | +1 |
+//! | `EnqueueEvent(TurnEndedCombatEvent)`（`:61-65`） | 弃手牌 / turn-end 触发器 / 时长 | [`TurnHost::run_turn_ended_triggers`] | +1 |
+//! | `EnqueueEvent(RoundEndedCombatEvent)`（`:192-195`） | round-end 触发器 | [`TurnHost::on_round_ended`] | +1 |
+//! | `EnqueueEvent(RoundStartedCombatEvent)`（`:199-200`） | round-start 触发器 | [`TurnHost::on_round_started`] | +1 |
+//!
+//! 依据是**数据**不是猜想：四个场景 14 个步边界，每步的 `(chain_num, exec_num)` 都由
+//! "把 C# 规范文本里的这两个数改成候选值再算 SHA-256"反推出**唯一解**，
+//! 而"每个 turn 事件 +1、回合绕回再 +2（RoundEnded + RoundStarted）"这套计数把
+//! 14 个点**全部**对上（`finish` 的 `AdvanceToNextRound` 一步 +6：结束英雄回合 +1、
+//! 开敌方回合 +1、结束敌方回合 +1、RoundEnded +1、RoundStarted +1、开英雄新回合 +1）。
+//!
+//! **证据强度**：上表右列那个"+1"是**每步总数**（实测且唯一）减去别的账之后剩下的量，
+//! 而"一条事件恰好一个号"的依据是 `CombatState.cs:386`/`:446` 的 `??` 写法
+//! （**我真的读过那两行**）。逐条的归属没有被单独观测过 —— 例如"TurnStarted 那 +1 到底
+//! 挂在哪个处理器上"在内核里是**由本模块选的**：它挂在 `run_turn_started_triggers` 上而不是
+//! `damage_over_time` 上，因为参考的 DoT 是同一个事件里的第 7 个处理器。
+//! 反过来，`dot_kill` 的 step1 只 +2（TurnEnded + TurnStarted）这件事**直接把它钉住了**：
+//! 如果 DoT 也发号，那一步会是 +3。
+//!
+//! ⚠️ 一个**没有**对应的：`resolve_pending_queues`（内核里恒 no-op）、
+//! `resolve_card_queue`（本内容 62/62 卡 `QueueOnPlay` 为空）、`activate_pending_statuses`
+//! （23/23 状态 `IncomingStatusDelay = null`）都**不是**独立事件，是同一批处理器里的步骤，
+//! 所以它们**不许**发号 —— 发了就会把上面那张表全部推歪。
 
 use core::cell::Cell;
 
@@ -1453,6 +1486,11 @@ impl TurnHost for Host<'_> {
         state: &mut CombatState,
         actor: &CombatantId,
     ) -> Result<(), TurnError> {
+        // 回合机把 `TurnStartedCombatEvent` 交给了处理器 ⇒ 参考的顶层入队已经发生
+        // （`CombatTurnProcessor.cs:28-32`）⇒ 根链 +1。**在这里、且只在第一次**
+        // （这一条是 turn-start 七个处理器里的第 4 个，但事件只有一条）。
+        // 详见模块头"`chain_num` / `exec_num`"那张表。
+        let _turn_started_chain = state.create_root_effect_chain();
         self.try_run_turn_started_triggers(state, actor)
             .map_err(|e| bridge(self.record(e)))
     }
@@ -1494,6 +1532,8 @@ impl TurnHost for Host<'_> {
         state: &mut CombatState,
         actor: &CombatantId,
     ) -> Result<(), TurnError> {
+        // `TurnEndedCombatEvent` 的顶层入队已经发生（`CombatTurnProcessor.cs:61-65`）⇒ +1。
+        let _turn_ended_chain = state.create_root_effect_chain();
         self.try_run_turn_ended_triggers(state, actor)
             .map_err(|e| bridge(self.record(e)))
     }
@@ -1514,11 +1554,17 @@ impl TurnHost for Host<'_> {
     // ── 带默认值的策略钩子 ──────────────────────────────────────────────────────────────────
 
     fn on_round_ended(&mut self, state: &mut CombatState, ended_round: i32) -> Result<(), TurnError> {
+        // `RoundEndedCombatEvent` 的顶层入队已经发生（`CombatTurnProcessor.cs:192-195`）⇒ +1。
+        // ⚠️ **只有真的绕回**才有这条事件：`advance_to_next_combatant` 只在 `nxt <= cur`
+        // 时调这个钩子，而参考也只在同一个分支里入队（`:190-201`）—— 两边的条件是同一条。
+        let _round_ended_chain = state.create_root_effect_chain();
         self.try_on_round_ended(state, ended_round)
             .map_err(|e| bridge(self.record(e)))
     }
 
     fn on_round_started(&mut self, state: &mut CombatState, new_round: i32) -> Result<(), TurnError> {
+        // `RoundStartedCombatEvent`（`CombatTurnProcessor.cs:199-200`）⇒ +1。
+        let _round_started_chain = state.create_root_effect_chain();
         self.try_on_round_started(state, new_round)
             .map_err(|e| bridge(self.record(e)))
     }
@@ -2897,10 +2943,11 @@ mod tests {
         // 参考的排空循环条件是 `while (hasPending) && Result == Ongoing`
         // （`CombatEventHandling.cs:97`）⇒ 战斗一结束，后面入队的 tick 不再落地。
         //
-        // ⚠️ **本内核今天算不出胜负**：`UpdateStandardCombatResultOnLifecycleChangedHandler`
-        // 没有移植（全仓只有测试与 `snapshot` 恢复会写 `state.result`）。所以"DoT 打死目标"
-        // 在这里只表现为 `lifecycle_state = Downed`，`result` 仍然是 `Ongoing` ——
-        // 这条测试因此**手动**把 result 设成终态，测的是"钩子认这个条件"。
+        // ⚠️ 这一条测的是"钩子**认**这个条件"，所以它**手动**把 `result` 设成终态。
+        // 从 2026-10-19 起 `result` 也会被真实路径写（`exec::update_standard_combat_result`
+        // 在目标倒下那一行判），"DoT 真的打死最后一个敌人"那条真实路径的测试是
+        // `a_lethal_tick_downs_the_target_and_the_combat_result_is_computed_right_there`。
+        // 两条互补：一条隔离条件判定，一条证明条件真的会出现。
         let blob = core_image();
         let content = parse(&blob);
 
@@ -2920,11 +2967,19 @@ mod tests {
     }
 
     #[test]
-    fn a_lethal_tick_downs_the_target_and_the_result_is_not_computed_by_this_kernel() {
-        // "DoT 打死目标"如实测到的形状：`resolve_damage` 把 HP 写到 0 并转 `Downed`
-        // （`CombatantLifecycleEffects.cs` 的那条 handler，本内核同步做），
-        // **但 `result` 不动** —— 判胜负的 handler 还没移植。这不是我的钩子该补的事，
-        // 但必须写明，否则"打死了但战斗没结束"看起来像 bug。
+    fn a_lethal_tick_downs_the_target_and_the_combat_result_is_computed_right_there() {
+        // "DoT 打死目标"的完整形状：`resolve_damage` 把 HP 写到 0 并转 `Downed`
+        // （`CombatantLifecycleEffects.cs:29-43` 的那条 handler，本内核同步做），
+        // 紧接着**就在那一行**判胜负（`CombatStateEffects.cs:36-58`）。
+        //
+        // ⚠️ 2026-10-19 之前这条测试断言的是"`result` **不动**"，并把那条缺口写成
+        // "判胜负的 handler 还没移植"。整局对拍（`native/fight_diff.py`）证明那个期望
+        // **本身就是错的**：参考是"倒下即判、判了就停"，而"打死了但战斗没结束"
+        // 正是 `play.rs` 的 Cancelled 分支不可达的根因。所以期望改了，不是实现错了。
+        //
+        // `solo()` 只有英雄一个人 ⇒ 他没有队友、而这一局也**没有敌人** ⇒
+        // 两边都没有活人 ⇒ `Draw`（`CombatStateEffects.cs:43-47`）。这个"看起来怪"的
+        // 结果恰恰是规则逐行照抄的证据：不是 Defeat（`:49-53` 要求"敌人还有活人"）。
         let blob = core_image();
         let content = parse(&blob);
         let mut host = Host::new(&content);
@@ -2939,9 +2994,24 @@ mod tests {
         );
         assert_eq!(
             state.result,
-            CombatResult::Ongoing,
-            "⚠️ 已知缺口：判胜负的 handler 没移植（全仓只有测试写 result）"
+            CombatResult::Draw,
+            "两边都没有活人 ⇒ Draw（`CombatStateEffects.cs:43-47`）"
         );
+
+        // 成对：同一个钩子在有敌人、且倒下的是**敌人**时给 `Victory`
+        // （`CombatStateEffects.cs:55-58`）—— 没有这一条，上面那个 `Draw` 可能只是
+        // "不管死谁都判 Draw"。
+        let mut state = arena();
+        state.combatant_mut(&cid("enemy_a")).unwrap().health_current = 2;
+        state.combatant_mut(&cid("enemy_b")).unwrap().health_current = 2;
+        give(&mut state, "enemy_a", status("st_a", "poison", 5));
+        give(&mut state, "enemy_b", status("st_b", "poison", 5));
+        let mut host = Host::new(&content);
+        host.try_damage_over_time(&mut state, &cid("enemy_a")).unwrap();
+        assert_eq!(state.result, CombatResult::Ongoing, "敌人_b 还活着");
+        host.try_damage_over_time(&mut state, &cid("enemy_b")).unwrap();
+        assert_eq!(health(&state, "enemy_b"), 0);
+        assert_eq!(state.result, CombatResult::Victory, "最后一个敌人倒下");
     }
 
     // ---------------------------------------------------------------- 钩子 9：QueuePile
@@ -3089,6 +3159,56 @@ mod tests {
         // 三个 `&self` 判据也必须是"今天正确的默认值"。
         assert!(!host.hand_is_retained_detail(&state, &cid("hero")));
         assert!(!host.block_is_retained_detail(&state, &cid("hero")));
+    }
+
+    /// #1 的回归闸门：**四条回合事件各发一个链号**，而**同一批处理器里的步骤一个都不发**。
+    ///
+    /// 依据全是数据（见模块头那张表 + `native/fight_diff.py` 四个场景 14 个步边界的唯一解）：
+    /// `finish` 的 `AdvanceToNextRound` 一步 `chain_num +6`，正好是
+    /// "结束英雄回合 / 开敌方回合 / 结束敌方回合 / RoundEnded / RoundStarted / 开英雄新回合" 六条；
+    /// `dot_kill` 的 `HeroEndsTurn` 一步 `+2`，其中 DoT 那一跳**一次都不发号** ——
+    /// 所以这条测试把"DoT 不发号"钉成硬断言，它是 `dot_kill` 能不能逐字节对上的分界线。
+    #[test]
+    fn the_four_turn_events_each_allocate_one_effect_chain_and_the_other_steps_allocate_none() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        let actor = cid("hero");
+
+        // 四步"处理器内部步骤"：一条 turn-start 事件里的 2/3/5a/5b 与 turn-end 里的 ①/④。
+        // 它们**不是**独立事件（参考里都是同一次排空里的处理器），所以不许发号。
+        let chain = state.next_effect_chain_number;
+        host.activate_pending_statuses(&mut state, &actor).unwrap();
+        host.resolve_card_queue(&mut state, &actor).unwrap();
+        host.resolve_pending_queues(&mut state).unwrap();
+        host.hand_turn_end_lifecycle(&mut state, &actor).unwrap();
+        host.decrease_timed_statuses(&mut state, &actor).unwrap();
+        assert_eq!(
+            state.next_effect_chain_number, chain,
+            "同一批处理器里的步骤不发号（发了 `finish` 就不是 +6 而是 +10 以上）"
+        );
+
+        // DoT 那一跳：它是 turn-start 处理器列表里的**第 7 个**，不是独立事件 ⇒ 不发号。
+        give(&mut state, "hero", status("st_poi", "poison", 1));
+        let chain = state.next_effect_chain_number;
+        host.damage_over_time(&mut state, &actor).unwrap();
+        assert_eq!(health(&state, "hero"), 69, "非平凡：这一跳真的落地了");
+        assert_eq!(
+            state.next_effect_chain_number, chain,
+            "`dot_kill` 的 step1 只 +2（TurnEnded + TurnStarted）；DoT 要是发号就不止"
+        );
+
+        // 四条回合事件：各 +1。
+        let chain = state.next_effect_chain_number;
+        host.run_turn_started_triggers(&mut state, &actor).unwrap();
+        assert_eq!(state.next_effect_chain_number, chain + 1, "TurnStarted");
+        host.run_turn_ended_triggers(&mut state, &actor).unwrap();
+        assert_eq!(state.next_effect_chain_number, chain + 2, "TurnEnded");
+        host.on_round_ended(&mut state, 1).unwrap();
+        assert_eq!(state.next_effect_chain_number, chain + 3, "RoundEnded");
+        host.on_round_started(&mut state, 2).unwrap();
+        assert_eq!(state.next_effect_chain_number, chain + 4, "RoundStarted");
     }
 
     #[test]

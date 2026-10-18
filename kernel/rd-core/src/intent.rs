@@ -681,6 +681,47 @@ pub fn enemy_action_program_root<'a>(
 ///   它也不进快照/哈希（`play.rs` 的偏离 D5 同一条）。
 /// * `standard.action_fails` 那条"先宣布"分支（`EnemyActionEffects.cs:33-62`）：要事件队列，
 ///   v1 不可达（规格书 §6.2 自己写了"所以这条分支在内核 v1 里必然不可达"）。
+///
+/// # `exec_num` / `chain_num` 两条发号器（2026-10-19 的整局对拍实测）
+///
+/// 参考的 `EffectProgramExecutor.Execute` 第一件事就是分配执行号
+/// （`Effects/Programs/EffectProgramExecution.cs:27` 的 `combat.AllocateProgramExecutionId()`
+/// —— **我读过那一行**），出牌与敌动作走**同一个**执行器。出牌侧内核早就分了
+/// （`play.rs` 的 `apply_plan`），敌动作侧**漏了**，后果是 `exec_num` 少 1、指纹必然发散。
+///
+/// 数据（`native/fight_diff.py` + 用"改 C# 规范文本一个字段再 sha256"反推出每步的唯一解）：
+///
+/// | 场景·步 | 事件 | C# `(chain, exec)` | 修正前内核 |
+/// |---|---|---|---|
+/// | `enemy_hits` 0 | 开回合 + 结束回合 + 开敌方回合 | (4, 1) | (1, 1) |
+/// | `enemy_hits` 1 | `desk_jab` 一次 | (6, 2) | (1, 1) |
+/// | `refusals` 3 | 敌方动作**没**发生（还是英雄回合） | (8, 3) | (1, 3) |
+///
+/// ⇒ 一次**真的执行了的**敌方动作让 `exec_num +1`、`chain_num +2`。
+///
+/// **证据强度**：那两个增量是**实测且唯一**的（每步的 `(chain, exec)` 只有一组解）；
+/// 拆成"请求 +1 / 收尾 +1"是读下面两段源码拆的，**没有逐笔单独观测**（内核没有队列，
+/// 造不出"只发生第一笔"的局面）。`exec_num +1` 那一半是硬证据：它只可能来自
+/// `EffectProgramExecution.cs:27`，而且出牌侧一直是对的、敌动作侧一直少 1。
+///
+/// `chain_num +2` 的来源（`CombatState.cs` 的 `CreateRootEffectChain` 是唯一的自增点，
+/// 一共三个调用口：`:386` `EnqueueEffect`、`:446` `EnqueueEvent`、`:495`
+/// `CreateTriggeredEffectChain`，外加 `EffectProgramExecution.cs:31`）：
+///
+/// 1. `ScenarioRunner.cs:191` 的 `combat.EnqueueEffect(new ExecuteEnemyActionEffectRequest(…))`
+///    —— 顶层入队，`CurrentEffectChain` 为空 ⇒ 建根链 **+1**；
+/// 2. 节目跑完之后 `onTerminal` → `CombatCardPlayProcessor.CloseAction` →
+///    `EnqueueEvent(ActionResolvedCombatEvent)`（`EnemyActionEffects.cs:121`），
+///    而 `onTerminal` 是**从续延里**跑的（`ResolvePendingQueues` 的
+///    `TryDequeueContinuation`，`CombatEventHandling.cs:107-111`，在 `EnterEffectChain`
+///    的 `using` 之外）⇒ 又一次顶层入队 **+1**。
+///
+/// 内核没有队列，所以这两次自增写成两行显式的
+/// [`CombatState::create_root_effect_chain`] 调用，位置就是"受理这次请求"/"动作收尾"。
+/// ⚠️ 三种**不涨**的情况也都对得上数据：action 没发出去（`enemy.IsAlive` / 注册表 /
+/// 回合归属任一条挡在前面 —— 参考的 `ScenarioRunner.cs:163-189` 是在入队**之前**挡的）、
+/// 节目跑到一半战斗结束（Cancelled，`CloseAction` 那次入队落在还开着的链里 ⇒ +0）、
+/// 节目 fault（`MarkFaulted` 在节点的 `using (EnterEffectChain)` 里跑 ⇒ +0）。
 pub fn execute_action(
     state: &mut CombatState,
     content: &Content<'_>,
@@ -692,6 +733,10 @@ pub fn execute_action(
         // §6.1 `:20-21`：死掉的 actor 是**静默 no-op**。
         return Ok(ExecStats::default());
     }
+    // ① 受理这次请求（`ScenarioRunner.cs:191` 的顶层入队）⇒ 根链 +1。
+    //    放在读信封之前：请求已经入队了才轮到处理器读内容，与参考同序。
+    let _request_chain = state.create_root_effect_chain();
+
     let envelope = envelope(content, action_row)?;
     let root = envelope
         .node_field("Root")?
@@ -701,8 +746,23 @@ pub fn execute_action(
         Some(value) if value > 0 => value as u32,
         _ => DEFAULT_MAX_PROGRAM_STEPS,
     };
-    let mut context = ExecContext::new(state, Some(*actor), target, None, steps).with_content(content);
-    Ok(exec::execute(root, &mut context)?)
+    // ② 执行号（`EffectProgramExecution.cs:27`）。与 `play.rs` 的 D3 是**同一条**偏差：
+    //    参考是"预检 → 分配"（`:23` 早于 `:25-28`），内核把分配放在 `exec::execute`
+    //    之前、预检之外。本内容 394/394 个敌动作程序都过预检，所以今天不可达。
+    let _execution_id = state.allocate_program_execution_id();
+    let stats = {
+        let mut context =
+            ExecContext::new(state, Some(*actor), target, None, steps).with_content(content);
+        exec::execute(root, &mut context)?
+    };
+
+    // ③ 收尾（`EnemyActionEffects.cs:121` 的 `CloseAction` ⇒ `EnqueueEvent(ActionResolved)`）。
+    //    只有"节目正常跑完、战斗还在进行"才是参考那次**续延里的**顶层入队；
+    //    Cancelled 那次入队落在还开着的链上（+0），fault 同理（错误已经在上面 `?` 出去了）。
+    if state.result == crate::state::CombatResult::Ongoing {
+        let _wrap_up_chain = state.create_root_effect_chain();
+    }
+    Ok(stats)
 }
 
 // ===========================================================================
@@ -1699,6 +1759,10 @@ mod tests {
         let mut state = arena(actor.as_str());
         state.combatant_mut(&actor).unwrap().lifecycle_state = CombatantLifecycleState::Dead;
         let hero_health = state.combatant(&cid("hero")).unwrap().health_current;
+        // 成对（2026-10-19 加）：死掉的 actor **连号都不发** —— 参考的
+        // `ScenarioRunner.cs:178-189` 是在入队**之前**挡掉 `!enemy.IsAlive` 的。
+        let chain_before = state.next_effect_chain_number;
+        let exec_before = state.next_program_execution_id;
 
         let stats = execute_action(&mut state, &content, &actor, 0, Some(cid("hero"))).unwrap();
         // `nodes == 0` 就是"什么都没做"的可观察信号（偏离 D4）。
@@ -1708,6 +1772,47 @@ mod tests {
             state.combatant(&cid("hero")).unwrap().health_current,
             hero_health,
             "死掉的敌人不许伤到任何人"
+        );
+        assert_eq!(
+            state.next_effect_chain_number, chain_before,
+            "没入队的请求不发链号（`ScenarioRunner.cs:178-189` 在入队之前就 return）"
+        );
+        assert_eq!(
+            state.next_program_execution_id, exec_before,
+            "没跑节目就不发执行号"
+        );
+    }
+
+    /// #2 的回归闸门：一次**真的执行了**的敌方动作让 `exec_num +1`、`chain_num +2`。
+    ///
+    /// 修正之前这里只 +1/+1（出牌侧分了执行号、敌动作侧漏了），整局对拍里表现为
+    /// `enemy_hits` 的 `exec_num` 少 1。三个数的出处（都是实测，见 [`execute_action`] 的文档）：
+    ///
+    /// * `exec +1`：`EffectProgramExecution.cs:27` 每次 `Execute` 一个号；
+    /// * `chain +1`：`ScenarioRunner.cs:191` 的顶层 `EnqueueEffect`；
+    /// * `chain +1`：节目跑完 `CloseAction` → `EnqueueEvent(ActionResolved)`
+    ///   （`EnemyActionEffects.cs:121`），从续延里跑 ⇒ 又一次顶层入队。
+    #[test]
+    fn an_enemy_action_allocates_one_execution_id_and_two_effect_chains() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let actor = cid("a_very_official_line");
+        let mut state = arena(actor.as_str());
+        let chain_before = state.next_effect_chain_number;
+        let exec_before = state.next_program_execution_id;
+
+        let stats = execute_action(&mut state, &content, &actor, 0, Some(cid("hero"))).unwrap();
+        assert!(stats.nodes > 0, "这条动作真的跑了节点");
+        assert!(stats.effects > 0, "而且真的对目标发起了效果（不是空跑）");
+        assert_eq!(
+            state.next_program_execution_id,
+            exec_before + 1,
+            "`EffectProgramExecution.cs:27`：跑一次节目发一个号（出牌与敌动作同一个执行器）"
+        );
+        assert_eq!(
+            state.next_effect_chain_number,
+            chain_before + 2,
+            "请求入队 +1、动作收尾 +1（见本测试的文档）"
         );
     }
 

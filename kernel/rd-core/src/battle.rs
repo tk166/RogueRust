@@ -53,8 +53,10 @@
 //!
 //! 仍然留着的两条（都是**参考实现里真实存在、而 v1 缺一层能力**的地方，见 [`DEVIATIONS`]）：
 //!
-//! * 胜负由本模块在**每次引擎调用之后**算（[`settle_result`]），因为全仓没有代码写
-//!   `state.result`；参考是在队列排空时算的 —— 粒度差异见 [`FROZEN_GAP_RESULT`]；
+//! * 胜负**在战斗员倒下那一行**由 [`exec::update_standard_combat_result`] 判（2026-10-19 起，
+//!   与参考的 `Downed → CombatantLifecycleChanged → SetCombatResult` 同粒度），本模块
+//!   **另外**在每次引擎调用之后用 [`settle_result`] 幂等复核一次（参考的驱动层也这么复核，
+//!   `ScenarioRunner.cs:143/206/211/237`）—— 剩下的粒度差异见 [`FROZEN_GAP_RESULT`]；
 //! * `Problem::HeroDowned` 在当前能力下**最多只能观测到一次**：v1 没有友军，英雄一倒
 //!   玩家队就没有活人 ⇒ 当场判 `Defeat` ⇒ 下一步先撞 `:40` 的终态门。参考要它持续
 //!   存在得有"a summoned ally keeps the team alive"（`:46-48` 的原注释）—— 那不是缺陷，
@@ -62,13 +64,14 @@
 
 use crate::content::{Content, ABSENT16, EK_CARD, EK_EACTION, F_TERM, LIST_ABSENT, LIST_NULL, NULL16,
     OP_ARR, OP_WRAP_LOWER};
+use crate::exec;
 use crate::intent;
 use crate::play::{self, PlayError, PlayRequest};
 use crate::rng;
 use crate::state::{
     CapacityError, CardDefinitionId, CardInstance, CardInstanceId, CardSlot, CardZone, CombatId,
     CombatResult, CombatState, CombatTurnPhase, Combatant, CombatantDefinitionId, CombatantId,
-    CombatantLifecycleState, DefensivePoolId, ResourceId, TeamId, ZonePlacement, MAX_CARDS_PER_ZONE,
+    DefensivePoolId, ResourceId, TeamId, ZonePlacement, MAX_CARDS_PER_ZONE,
 };
 use crate::turn::{self, HostFailure, TurnConfig, TurnError, TurnHost};
 
@@ -91,32 +94,28 @@ pub const DEVIATIONS: [&str; 2] = [
     "hero-downed-observable-at-most-once-v1-has-no-allies",
 ];
 
-/// # `FROZEN_GAP_RESULT` —— 仍在
+/// # `FROZEN_GAP_RESULT` —— 已收窄（2026-10-19），但仍然在
 ///
 /// 参考的胜负由 `UpdateStandardCombatResultOnLifecycleChangedHandler`
 /// （`RogueDeck.Core/Combat/Effects/CombatStateEffects.cs:28-60`）在
-/// `CombatantLifecycleChanged` 事件上算，靠事件队列在**下一次排空**时生效。
+/// `CombatantLifecycleChanged` 事件上算，靠事件队列在**下一次排空**时生效；
+/// `SetResult` 又会立刻取消在飞帧（`CombatState.cs:358-367`），所以"倒下即判、判了就停"。
 ///
-/// 本内核**没有事件队列**，也没有那条 handler：`exec.rs` 把"扣到 0 转 `Downed`"就地做了，
-/// 但 `state.result` 全仓**没有任何生产代码**会写它（`host.rs:2900-2903` 的测试注释明确写着
-/// "本内核今天算不出胜负"）。⇒ 如果驱动层不算，`run_fight` 永远报 `Ongoing`，
-/// 规格书 §4 阶段 1 的那条判据（"整局能跑到 `Result != Ongoing`"）**不可能成立**。
+/// **2026-10-19 的整局对拍把这条修掉了**（`native/fight_diff.py` 的 `finish` 场景）：
+/// 原来本内核只在每次引擎调用之后算，于是 `play::play_card` 执行期间 `state.result`
+/// 一直是 `Ongoing` —— 程序打死最后一个敌人那一下没人立刻知道，`play.rs` 的
+/// "Cancelled ⇒ 卡不搬"分支**从来没有被真实路径走到过**。现在判定点在
+/// [`exec::update_standard_combat_result`]，就在 `exec.rs` 把目标打成 `Downed` 的那一行。
 ///
-/// ⇒ 本模块在**每一次引擎调用之后立刻**调 [`settle_result`]（逐行照
-/// `CombatStateEffects.cs:36-58`）。粒度是照参考的**守门点**取的：
+/// 剩下的粒度差异：本模块**仍然**在每次引擎调用之后用 [`settle_result`] 幂等复核一次
+/// （参考的驱动层同样复核，`ScenarioRunner.cs:143`、`:206`、`:211`、`:237`）。复核本身
+/// 不会掩盖漏判 —— 它只在 `Result == Ongoing` 时动手，而"程序中途停下来"只能来自
+/// 下判点那一次。真正仍比参考粗的一格是**内容层**的：一个不经"打倒"就改结果的节点
+/// （`node.setCombatResult`，`EffectProgramNodeExecutors.cs:1968`）本内核没有实现，
+/// 镜像里也 0 条 —— 那时它会被预检拒，而不是被算错。
 ///
-/// * `ScenarioRunner.cs:143`（`if (Result == Ongoing) EndCurrentTurnAndStartNextTurn`）、
-/// * `:206`（同一条形状，在 `NextRound` 里）、
-/// * `:211` 与 `:237`（两个 `while` 的条件里就带 `Result == Ongoing`）。
-///
-/// 也就是说"每推一次回合/每打一张牌/每执行一个敌人动作之后立刻判一次"，一旦不是
-/// `Ongoing` 就**停止本步内的后续推进**（已发生的状态不回滚 —— 参考也不回滚）。
-/// **比参考粗的唯一一格**：一次引擎调用**内部**（例如 `start_current_turn` 的七个处理器）
-/// 判不了，所以"某个 turn-start 处理器打死最后一个敌人"之后，同一次调用里剩下的处理器
-/// 仍会跑完（参考会在中间那次排空时停下）。这一格没有参考语义可抄，也没有测试。
-///
-/// **正确的修法**：在 `host.rs` 里实现那条 handler（或给 `CombatState` 加事件队列），
-/// 那时 [`settle_result`] 整段删掉。
+/// 测试：`a_lethal_play_leaves_the_card_in_hand_and_the_combat_over`（battle.rs）钉住
+/// "程序中途结束 ⇒ 卡留手牌 + `landed == None` + 费用已付"。
 pub const FROZEN_GAP_RESULT: &str = "result-settled-per-engine-call-not-per-queue-drain";
 
 /// 蓝图里的一个战斗员。
@@ -1304,7 +1303,19 @@ fn first_card_in_hand(
 
 /// 算胜负（`UpdateStandardCombatResultOnLifecycleChangedHandler`，`CombatStateEffects.cs:28-60`）。
 ///
-/// 逐行：
+/// # ⚠️ 它**不再是唯一通道**（2026-10-19 改）
+///
+/// 规则本体现在在 [`exec::update_standard_combat_result`]，因为它必须在**战斗员倒下那一行**
+/// 生效 —— 参考的链路是"`Downed` → `CombatantLifecycleChanged` 事件 → `SetCombatResult`
+/// （`CombatStateEffects.cs:36-58`）→ `SetResult` 取消在飞帧（`CombatState.cs:358-367`）"，
+/// 所以程序打死最后一个敌人时会**立刻**判胜、并且**立刻**停住后续节点。
+///
+/// 本函数保留的理由只剩一条：它是**幂等的复核**。参考的驱动层同样在每次引擎调用之后重算
+/// 一次（`ScenarioRunner.cs:143`、`:206`、`:211`、`:237`），粒度见 [`FROZEN_GAP_RESULT`]。
+/// 复核不会掩盖"漏判"：`settle_result` 只会在 `Result == Ongoing` 时动手，而
+/// "程序中途停下来"这件事**只能**来自下判点那一次调用。
+///
+/// 逐行（与 `exec::update_standard_combat_result` 同一份，那里有完整出处）：
 /// ```text
 /// :36  Result != Ongoing            → return（只在"还没结束"时算）
 /// :39  hasLivingPlayer = 玩家队还有活人
@@ -1313,34 +1324,8 @@ fn first_card_in_hand(
 /// :49  没有玩家                      → Defeat
 /// :55  没有敌人                      → Victory
 /// ```
-///
-/// ⚠️ 这是本模块**唯一**一处"做了引擎该做的事"，理由与粒度代价见 [`FROZEN_GAP_RESULT`]。
-/// 调用点是**每一次引擎调用之后**（`ensure_turn_started` / `end_turn_and_start_next` /
-/// `try_play_card` / `intent::execute_action`），与参考的守门点
-/// （`:143`、`:206`、`:211`、`:237`）同粒度。
 fn settle_result(state: &mut CombatState) {
-    if state.result != CombatResult::Ongoing {
-        return; // `:36-37`
-    }
-    let mut player_alive = false;
-    let mut enemy_alive = false;
-    for combatant in state.combatants() {
-        if combatant.lifecycle_state != CombatantLifecycleState::Alive {
-            continue;
-        }
-        if combatant.team_id.as_str() == PLAYER_TEAM {
-            player_alive = true;
-        } else if combatant.team_id.as_str() == ENEMY_TEAM {
-            enemy_alive = true;
-        }
-    }
-    if !player_alive && !enemy_alive {
-        state.result = CombatResult::Draw; // `:43-47`
-    } else if !player_alive {
-        state.result = CombatResult::Defeat; // `:49-53`
-    } else if !enemy_alive {
-        state.result = CombatResult::Victory; // `:55-58`
-    }
+    exec::update_standard_combat_result(state);
 }
 
 /// 脚本里的目标 id → [`CombatantId`]（参考的 `ParseTarget`，`:263-264`）。
@@ -1393,6 +1378,7 @@ mod tests {
     use crate::hash::{sha256, to_hex_lower};
     use crate::host::Host;
     use crate::snapshot;
+    use crate::state::CombatantLifecycleState;
     use crate::writer::TextWriter;
 
     const CORE_IMAGE_REL: &str = "../../tools/contentc/out/content.core.rdcf";
@@ -3131,5 +3117,174 @@ mod tests {
         assert_eq!(ids, vec!["card_000001", "card_000002", "card_000003"]);
         assert_eq!(state.next_card_instance_number, 4, "先取号再自增");
         assert_eq!(card_instance_id(1).map(|id| id.as_str().to_string()), Ok("card_000001".to_string()));
+    }
+
+    // ---------------------------------------------------------------- 倒下即判、判了就停
+    //
+    // 这一节是跨语言整局对拍（`native/fight_diff.py`）定位出的第三处偏差的闸门：
+    // 参考实现在目标倒下那一行就把胜负判上（`CombatStateEffects.cs:36-58`），所以
+    // `play::play_card` 执行期间 `state.result` **会**变成非 `Ongoing`，
+    // 它的 Cancelled 分支"卡不搬"因此是**真实可达**的。内核原来是"每次引擎调用之后"才算，
+    // 于是这一击总是被判成 Completed：卡被搬走，整局终局的 `hand`/`discard` 各差 1。
+
+    /// 打死**最后一个敌人**的那一击：卡**留手牌**、不搬区、费用已付、战斗判胜。
+    ///
+    /// 数据依据（`native/fight_diff.py` 的 `finish` 场景，C# 侧是
+    /// `CombinedStateHasher` 逐字节复现的规范文本）：C# 终局 `hand=5 discard=5`，
+    /// 而修正前的内核是 `hand=4 discard=6` —— 差的正是这一张 `card_000006`。
+    #[test]
+    fn a_lethal_play_leaves_the_card_in_hand_and_the_combat_is_over() {
+        let blob = core_image();
+        let content = parse(&blob);
+        // 敌人只有 5 血、`paper_cut` 打 6 ⇒ 第一张就打死（不必凑三张）。
+        let enemies = [PlanCombatant {
+            id: "queue_imp",
+            max_health: 5,
+        }];
+        let deck = [DeckEntry {
+            card: "paper_cut",
+            count: 3,
+        }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "lethal_play",
+            seed: 1,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 70,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let script = [Step::HeroPlays {
+            card: "paper_cut",
+            target: Some("queue_imp"),
+        }];
+
+        let mut state = CombatState::new(CombatId::new("lethal_play").expect("短"), 1);
+        let mut host = Host::new(&content);
+        let trace = drive(&mut state, &content, &plan, &script, &mut host);
+
+        assert_eq!(trace.kinds(0), &[] as &[Problem], "打出去的牌不该记问题");
+        assert_eq!(health(&state, "queue_imp"), 0, "这一击真的打死了");
+        assert_eq!(lifecycle(&state, "queue_imp"), CombatantLifecycleState::Downed);
+        assert_eq!(
+            state.result,
+            CombatResult::Victory,
+            "倒下即判（`CombatStateEffects.cs:55-58`）：不再是 `Ongoing`"
+        );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::Hand),
+            3,
+            "Cancelled ⇒ 卡**留在手牌**（`Cards/CardPlay.cs:240-241`、`:262`）"
+        );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::DiscardPile),
+            0,
+            "一张都没落区（成对：手牌 3 里含那张被打出去的）"
+        );
+        let pool = state
+            .combatant(&cid("hero"))
+            .and_then(|c| c.resources().iter().find(|p| p.key == energy()).copied())
+            .expect("英雄必须有能量池");
+        assert_eq!(pool.pool.current, 2, "费用**已经付过**（付款早于跑节目）");
+    }
+
+    /// 同一件事的另一半：战斗结束之后，程序里**剩下的节点一个都不再派发**。
+    ///
+    /// `counter_signature` 实测：费用 0、节目 = `sequence(dealDamage 3 @eventTarget,
+    /// drawCards 1 @source)` —— 第二个节点**与那个死掉的敌人无关**（抽牌打的是自己），
+    /// 所以它是这条判据唯一能区分的形状。
+    ///
+    /// ⚠️ **别换成 `stamp_barrage` / `compliance_review`**（`dmg + applyStatus paperwork`）：
+    /// 那两个看着更自然，但抓不到这个 bug —— `applyStatus` 的目标是 `sel.eventTarget`，
+    /// 而目标选择器**本来就会把已倒下的单位滤掉**（`targets.rs`，
+    /// `exec.rs` 的 `a_downed_target_is_filtered_out_by_the_selector` 钉着），
+    /// 于是"节点跑了但选到空集"与"节点没跑"在状态上一样。我第一版就是那么写的，
+    /// 变异测试里它**照样绿**（覆盖洞），改成抽牌才真的红。
+    ///
+    /// 参考：`SetResult` 取消在飞帧（`CombatState.cs:358-367`）＋排空循环
+    /// `while (… && Result == Ongoing)`（`CombatEventHandling.cs:97`）。
+    #[test]
+    fn a_program_stops_dispatching_nodes_once_the_combat_is_over() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let enemies = [PlanCombatant {
+            id: "queue_imp",
+            max_health: 3,
+        }];
+        // 6 张 ⇒ 起手 5、抽牌堆剩 1。第二个节点要是跑了就会把最后那张抽进手里。
+        let deck = [DeckEntry {
+            card: "counter_signature",
+            count: 6,
+        }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "stop_midway",
+            seed: 1,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 70,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let script = [Step::HeroPlays {
+            card: "counter_signature",
+            target: Some("queue_imp"),
+        }];
+
+        let mut state = CombatState::new(CombatId::new("stop_midway").expect("短"), 1);
+        let mut host = Host::new(&content);
+        drive(&mut state, &content, &plan, &script, &mut host);
+
+        assert_eq!(health(&state, "queue_imp"), 0, "第一个节点打死了它（3 血 - 3 伤）");
+        assert_eq!(state.result, CombatResult::Victory);
+        // 区分点是**抽牌堆**：起手 5 张之后还剩 1 张。第二个节点跑了就会把它抽走。
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::DrawPile),
+            1,
+            "第二个节点（drawCards 1）**不许执行** —— 抽牌堆最后一张还在"
+        );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::Hand),
+            5,
+            "手牌 5：Cancelled ⇒ 那张牌没落区所以没少（成对见下面的对照）"
+        );
+
+        // 对照：同一条链在战斗还在进行时两个节点都跑（否则上面那个 1 可能只是
+        // "这条动作本来就不抽牌"）。注意这里的 `hand` 也是 5 —— 因为那张牌打出去了 ⇒
+        // **手牌数区分不出这两种局面，抽牌堆才区分得出**。写在这里免得下一个人以为
+        // 加一条 `hand == 5` 就够了。
+        let alive = [PlanCombatant {
+            id: "queue_imp",
+            max_health: 9,
+        }];
+        let mut ongoing = CombatState::new(CombatId::new("stop_midway2").expect("短"), 1);
+        let mut host = Host::new(&content);
+        let plan_alive = FightPlan {
+            enemies: &alive,
+            ..plan
+        };
+        drive(&mut ongoing, &content, &plan_alive, &script, &mut host);
+        assert_eq!(health(&ongoing, "queue_imp"), 6);
+        assert_eq!(ongoing.result, CombatResult::Ongoing);
+        assert_eq!(zone_count(&ongoing, "hero", CardZone::DrawPile), 0, "抽牌真的发生了");
+        assert_eq!(zone_count(&ongoing, "hero", CardZone::Hand), 5);
+        assert_eq!(
+            zone_count(&ongoing, "hero", CardZone::ExhaustPile),
+            1,
+            "这张牌正常落区（它实测的落区是 ExhaustPile 而不是 DiscardPile；Cancelled 那一半里它还在手里）"
+        );
     }
 }

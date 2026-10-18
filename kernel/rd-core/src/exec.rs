@@ -670,15 +670,82 @@ pub fn resolve_damage_of_kind(
     combatant.health_current = health_after;
     // S8 的 `DamageDealt` 事件 → `MarkCombatantDownedOnZeroHealthHandler`
     // （`CombatantLifecycleEffects.cs`）：只有**真的掉了血**且落到 0 才转 Downed。
-    if health_lost > 0
+    let went_down = health_lost > 0
         && health_after == 0
-        && combatant.lifecycle_state == CombatantLifecycleState::Alive
-    {
+        && combatant.lifecycle_state == CombatantLifecycleState::Alive;
+    if went_down {
         combatant.lifecycle_state = CombatantLifecycleState::Downed;
+    }
+
+    // ── 倒下就判胜负（`CombatStateEffects.cs:36-58`）。
+    // 参考在同一个排空循环里把 `Downed` 变成 `CombatantLifecycleChanged` 事件、
+    // 再变成 `SetCombatResult`；内核没有队列，所以在**这一行**同步判一次。
+    // 这一句是 #3 的全部：没有它，程序打死最后一个敌人时 `state.result` 仍是
+    // `Ongoing`，`play.rs` 的 Cancelled 分支永远不可达，卡会被搬进弃牌堆。
+    if went_down {
+        update_standard_combat_result(ctx.state);
     }
 
     Ok((blocked, health_lost))
 }
+
+/// 标准包的胜负判定：**有人倒下就立刻判**（`Effects/CombatStateEffects.cs:28-60`）。
+///
+/// # 它为什么住在 `exec.rs` 而不是 `battle.rs`
+///
+/// 2026-10-19 的整局对拍（`native/fight_diff.py`）证明：参考实现是**倒下即判、判了即停**，
+/// 内核原来是"步边界/每次引擎调用之后"才算（`battle.rs` 的 `settle_result`），于是
+/// `play::play_card` 执行期间 `state.result` 一直是 `Ongoing` —— 程序打死最后一个敌人那一下
+/// **没人立刻知道**，`play.rs` 里"Cancelled ⇒ 卡不搬"的分支因此从来没有被真实路径走到过。
+///
+/// 参考的链路是三步，逐行（我读过这三段源码，行号对得上）：
+///
+/// 1. 伤害把目标扣到 0 ⇒ `MarkCombatantDownedOnZeroHealthHandler` 把生命周期改成 `Downed`
+///    （`Effects/CombatantLifecycleEffects.cs:29-43`：`SetLifecycleState` 之后
+///    `EnqueueEvent(CombatantLifecycleChangedCombatEvent)`）；
+/// 2. 那个事件进队列，处理器 [`UpdateStandardCombatResultOnLifecycleChangedHandler`] 就在
+///    **同一次排空里** `EnqueueEffect(SetCombatResultEffectRequest(…))`（`:36-58`）；
+/// 3. 下一次排空把 `Result` 设上，而 `CombatState.SetResult` 会**立刻取消在飞帧**
+///    （`CombatState.cs:358-367` 的 `CancelDueToCombatEnd`）—— 这就是"判了就停"。
+///
+/// 内核没有三队列，所以 1+2+3 合并成"在 `Downed` 那一行同步判一次"。顺序与参考**同粒度**：
+/// 都在"伤害已经落地、程序的后续节点还没派发"这个时刻。
+///
+/// 幂等：`Result != Ongoing` 时**什么都不做**（参考 `:36-37`）。
+pub fn update_standard_combat_result(state: &mut CombatState) {
+    if state.result != CombatResult::Ongoing {
+        return; // `CombatStateEffects.cs:36-37`
+    }
+    let mut player_alive = false;
+    let mut enemy_alive = false;
+    for combatant in state.combatants() {
+        if combatant.lifecycle_state != CombatantLifecycleState::Alive {
+            continue;
+        }
+        if combatant.team_id.as_str() == PLAYER_TEAM {
+            player_alive = true;
+        } else if combatant.team_id.as_str() == ENEMY_TEAM {
+            enemy_alive = true;
+        }
+    }
+    if !player_alive && !enemy_alive {
+        state.result = CombatResult::Draw; // `:43-47`
+    } else if !player_alive {
+        state.result = CombatResult::Defeat; // `:49-53`
+    } else if !enemy_alive {
+        state.result = CombatResult::Victory; // `:55-58`
+    }
+}
+
+/// `StandardCombatIds.PlayerTeam`（`StandardCombatIds.cs`：`new("player")`）。
+///
+/// 与 `battle.rs` 的两个同名常量**是同一份事实**：那个模块用它们建战斗，
+/// 这里用它们判胜负。放在两处是因为 `battle.rs` 依赖 `exec.rs`（反向依赖会把
+/// "驱动层"塞进"执行层"）；两条串在 `update_standard_combat_result` 与
+/// `build_fight` 里都被真实用到，所以没有"常量没人读"的风险。
+const PLAYER_TEAM: &str = "player";
+/// `StandardCombatIds.EnemyTeam`（同上）。
+const ENEMY_TEAM: &str = "enemy";
 
 // =============================================================================================
 // 预检 / 执行骨架
@@ -796,6 +863,20 @@ fn run(
     walk: &mut Walk,
     stats: &mut ExecStats,
 ) -> Result<(), ExecError> {
+    // 参考：`Result != Ongoing` 之后，`SetResult` 已经把在飞帧取消
+    // （`CombatState.cs:358-367` → `CancelDueToCombatEnd`），排空循环也停下来
+    // （`CombatEventHandling.cs:97` 的 `&& Result == Ongoing`）⇒ **后续节点一个都不派发**。
+    // 内核没有帧，等价物就是"每进一个节点先看战斗还在不在"。
+    //
+    // 放在计步**之前**：被取消的帧不让 `ProgramStepCount` 前进 —— 参考的
+    // `ExecuteNode` 在 `frame.IsTerminal` 时直接 return（`EffectProgramExecution.cs:104-105`），
+    // 同样不计数。这一条不写的话，程序在敌人倒下之后仍会跑完剩下的节点（而参考不会），
+    // 而它恰恰是 #3 的另一半：只把 `result` 判上、不拦住后续节点，就等于"卡留手牌"
+    // 但"伤害照打"，两边都不对。
+    if ctx.state.result != CombatResult::Ongoing {
+        return Ok(());
+    }
+
     walk.steps = walk.steps.saturating_add(1);
     // 参考：`ctx.ProgramStepCount++; if > MaxProgramSteps: THROW`（`EffectProgramExecution.cs:109-114`）。
     if walk.steps > ctx.max_steps {

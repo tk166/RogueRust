@@ -77,7 +77,7 @@
 //! | # | 偏离 | 为什么 |
 //! |---|---|---|
 //! | D1 | 落区**就地**搬（参考 Completed 是"入队一条 MoveCardToZone"、Faulted 是直接搬） | 内核没有效果队列。Completed 与 Faulted 因此在**状态层面**同形，只差"是否 fire 事件"（参考 Faulted 也不 fire，`Cards/CardPlay.cs:254-261` vs `Cards/CardZoneEffects.cs:207-211`）—— 所以这条偏差今天**没有可观察后果** |
-//! | D2 | `next_effect_chain_number` **不动** | 走的是 C/D 面（游戏真实路径）：`ResolvePendingEffects` 在 `EnterEffectChain` 里跑，`Enqueue*` 全部复用外层链 ⇒ **+0**（§6.2）。v1 根本没有 `Enqueue*`，结论相同 |
+//! | D2 | `next_effect_chain_number` 按参考的**顶层入队**记账（+1 / +2 / +3，见 [`apply_plan`] 的表） | ⚠️ 这一行原来写的是"**不动**、+0"，2026-10-19 的整局对拍**证伪**了它：C# 规范文本里一次正常出牌让 `chain_num` +3、一次 Cancelled 出牌 +1。原因是参考的每一次**顶层**入队都建根链（`CombatState.cs:386`/`:446`），而"一次排空内部的入队不发号"只对**排空内部**成立 —— 出牌的请求、搬区、动作收尾这三笔都发生在排空内部之外（后两笔在续延里，`CombatEventHandling.cs:107-111`）。内核没有队列，所以这三笔写成三行显式发号 |
 //! | D3 | `next_program_execution_id` 在 `exec::execute` **之前**分配 | 参考是"预检 → 分配"（`Effects/Programs/EffectProgramExecution.cs:23` 早于 `:25-28`），风险 #9 要求同序；但 `exec::preflight` 是私有的，本模块拿不到"先验后跑"的缝。**后果**：一个在预检被拒的节目会白吃一个执行号（参考不会）。本内容 62 张卡**全部过预检**（`exec.rs` 的 `every_card_program_in_the_image_runs_because_no_kind_is_refused` 钉着），所以今天不可达 |
 //! | D4 | 预检失败与运行期 fault **无法区分** ⇒ 两者都按 Faulted 处理（卡仍落区） | 参考里预检抛异常时终态回调**还没装上**，卡会留在手牌。`exec::execute` 把两件事合成了一个 `Err`。今天不可达（同 D3） |
 //! | D5 | 行动作用域（`BeginActionScope`/`CloseAction`）不实现 | `CombatState` 里没有作用域存储，`CombatStateHasher` 也不写它（`CombatState.cs:95` 注释原话："deliberately not part of the snapshot or the state hash"） |
@@ -99,6 +99,12 @@
 //!    `plan_play` → 手动把 `state.result` 改成非 `Ongoing` → `apply_plan` 来构造
 //!    "程序跑到一半战斗结束"，不需要 `exec.rs` 配合。见
 //!    `a_cancelled_play_leaves_the_card_in_hand_and_pays` 与它的成对反例。
+//!
+//!    ⚠️ 2026-10-19 之后这条分支**真实可达**了：胜负判定搬到了
+//!    `exec::update_standard_combat_result`（就在目标倒下那一行），所以"这一击打死最后
+//!    一个敌人"会让程序中途停下、卡留手牌。上面那对手工测试仍然留着 —— 它隔离的是
+//!    "`apply_plan` 认不认 `result`"，与"真实路径能不能走到"是两条不同的判据；
+//!    后者的测试在 `battle.rs`（`a_lethal_play_leaves_the_card_in_hand_and_the_combat_is_over`）。
 //!
 //! ## 三处**规格书有误**（都已按现实实现，并报回冻结方）
 //!
@@ -431,7 +437,7 @@ pub fn play_card(
     req: &PlayRequest,
 ) -> Result<PlayReport, PlayError> {
     let plan = plan_play(state, content, req)?;
-    apply_plan(state, &plan)
+    apply_plan(state, &plan, Face::Strict)
 }
 
 /// 请求面（**游戏真实路径**）：拒绝 = `Ok(PlayReport::NOT_PLAYED)`。
@@ -439,9 +445,10 @@ pub fn play_card(
 /// 参考的命令面把 `PlayCardCommand` 改写成 `PlayCardEffectRequest` 再排空
 /// （`CombatReplayRunner.cs:29-36`），请求面对"不合格"的处理是 **no-op 而不是抛**。
 ///
-/// 实现上**直接复用**[`play_card`]：严格面对每一条拒绝都保证状态不变，所以
-/// "先按严格面跑一遍、再把正常拒绝折成 NOT_PLAYED"与参考的 no-op 逐位同构，
-/// 而且两份语义**不可能漂移**（纪律 1 的可执行形状）。
+/// 实现上**直接复用**[`play_card`] 的同一个 `plan_play` + `apply_plan`，只把
+/// [`Face`] 标成 `Queued` —— "先按严格面跑一遍、再把正常拒绝折成 NOT_PLAYED"与参考的
+/// no-op 逐位同构，而且两份语义**不可能漂移**（纪律 1 的可执行形状）。
+/// 唯一的差别就是 [`Face`] 文档里那一次顶层入队（+1 个链号）。
 ///
 /// # Errors
 ///
@@ -452,11 +459,21 @@ pub fn try_play_card(
     content: Option<&Content<'_>>,
     req: &PlayRequest,
 ) -> Result<PlayReport, PlayError> {
-    match play_card(state, content, req) {
+    match play_card_queued(state, content, req) {
         Ok(report) => Ok(report),
         Err(error) if is_normal_refusal(&error) => Ok(PlayReport::NOT_PLAYED),
         Err(error) => Err(error),
     }
+}
+
+/// [`try_play_card`] 的那条路：与 [`play_card`] **同一份** plan/apply，只把面标对。
+fn play_card_queued(
+    state: &mut CombatState,
+    content: Option<&Content<'_>>,
+    req: &PlayRequest,
+) -> Result<PlayReport, PlayError> {
+    let plan = plan_play(state, content, req)?;
+    apply_plan(state, &plan, Face::Queued)
 }
 
 /// dry-run：只回答"能不能打"，**绝不动状态**。
@@ -512,6 +529,24 @@ const fn is_normal_refusal(error: &PlayError) -> bool {
 // ===========================================================================
 // 计划（纯读）与执行（写状态）
 // ===========================================================================
+
+/// 这一次出牌走的是参考的**哪一面** —— 两面只差一处记账：请求面会先**入队**一条请求。
+///
+/// * `Queued`：`ScenarioRunner.cs:121`（以及 `CombatReplayRunner.cs:31`）那一层的
+///   `combat.EnqueueEffect(new PlayCardEffectRequest(…))`。那一刻没有环境链 ⇒
+///   `CurrentEffectChain ?? CreateRootEffectChain()`（`CombatState.cs:386`）⇒ **根链 +1**。
+/// * `Strict`：`CombatCardPlayProcessor.PlayCard` / `PlayCardInstance` 被直接调用
+///   （`Cards/CardPlay.cs:17-68`），没有那次入队 ⇒ +0。
+///
+/// 这一处差别**不是我推的，是量出来的**：整局对拍里内核每张牌少 3 个链号，
+/// 拆开正好是"请求 +1、节目跑完的搬区 +1、动作收尾 +1"（后两个见 [`apply_plan`]）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Face {
+    /// 严格面：直接调处理器，没有任何顶层入队。
+    Strict,
+    /// 请求面：先入队一条 `PlayCardEffectRequest`（+1 个链号），再由处理器排空。
+    Queued,
+}
 
 /// 一次出牌的**计划**：算得出来就能打，算不出来就是拒绝。
 ///
@@ -640,7 +675,54 @@ fn plan_play<'c>(
 /// 把计划落到状态上。**这是唯一会写状态的地方**。
 ///
 /// 顺序逐字照 `Cards/CardPlay.cs:123-294`：付费 → （分配执行号）→ 跑节目 → 终态落区。
-fn apply_plan(state: &mut CombatState, plan: &PlayPlan<'_>) -> Result<PlayReport, PlayError> {
+///
+/// # `next_effect_chain_number` 的四笔账（2026-10-19 整局对拍实测）
+///
+/// 参考只在**顶层入队**时建根链（`CombatState.cs:386`/`:446` 的
+/// `CurrentEffectChain ?? CreateRootEffectChain()`），而效果/事件的解析都在
+/// `using (EnterEffectChain(entry.EffectChain))` 里跑（`CombatEffectQueueProcessor.cs:32`、
+/// `CombatEventHandling.cs:60`），所以**一次排空里的入队不再发号**。
+///
+/// 一次出牌因此有 3 笔（严格面 2 笔），每一笔都能指出参考的哪一行：
+///
+/// | 笔 | 参考 | 什么时候发生 | Δchain |
+/// |---|---|---|---|
+/// | 请求 | `ScenarioRunner.cs:121` 的 `EnqueueEffect(PlayCardEffectRequest)` | [`Face::Queued`] | +1 |
+/// | 搬区 | `Cards/CardPlay.cs:251-252` 的 `EnqueueEffect(MoveCardToZone)`，由 `onTerminal` 触发，而 `onTerminal` 是**从续延里**跑的（`CombatEventHandling.cs:107-111`，在 `EnterEffectChain` 之外） | Completed | +1 |
+/// | 收尾 | `:280` 的 `CloseAction` ⇒ `EnqueueEvent(ActionResolved)`（`:311`），同一个 `onTerminal` | Completed | +1 |
+///
+/// ⇒ 一张**正常打完**的牌 = +3；**Cancelled**（程序中途战斗结束）= **+1**
+/// （`CloseAction` 那次入队落在还开着的链上 ⇒ +0，搬区根本不发生）；
+/// **Faulted** = +1（搬区是**直接搬**，`:254-261`；`MarkFaulted` 在节点的
+/// `using (EnterEffectChain)` 里跑 ⇒ 收尾 +0）；**无节目的卡** = +2
+/// （`:286` 的搬区在链里 +0，`:292` 的 `CloseAction` 从续延里跑 +1）。
+///
+/// **证据强度（别把这两层混起来读）**：
+/// * **总数是实测的、且唯一**：四个场景 14 个步边界的 `chain_num` 由"把 C# 规范文本里
+///   这一个数改成候选值再算 SHA-256"反推出**每组唯一解**；`+3 / +1 / +2` 是那些数相减得到的。
+/// * **拆成三笔是读源码拆的、没有逐笔单独验证**：内核没有队列，无法让"只发生第一笔"的
+///   局面出现一次，所以"请求 / 搬区 / 收尾"各占 1 这件事的依据是 `CombatState.cs:386`、
+///   `Cards/CardPlay.cs:251`、`:311` 与 `CombatEventHandling.cs:107-111`（续延跑在
+///   `EnterEffectChain` 之外）—— **我读过这几段，但"每笔恰好 1"只由总数反证**。
+///   如果将来出现一个总数对不上的场景，第一个该怀疑的就是这个拆法。
+///
+/// ⚠️ **一处做不到**（如实记录）：参考在**入队那一刻**就发了号，所以一个被校验器/付不起
+/// 拒掉的出牌**仍然 +1**。内核的拒绝发生在 [`plan_play`] 里、`apply_plan` 之前 ⇒ +0。
+/// 这条偏移在本内容上**不可观察**：唯一被拒的出牌是"卡不在手牌"，而参考的
+/// `ScenarioRunner.cs:109-117` 是在**入队之前**用 `FirstOrDefault` 挡掉的（也是 +0）；
+/// 校验器拒绝（stun / decree / play_condition / one_attack / unplayable）与付不起
+/// 在四个对拍场景里一次都没出现。要修它得把 `plan_play` 拆成"实例面 / 规则面"两段，
+/// 那是一次接口改动，不该由一次对拍顺手做掉。
+fn apply_plan(
+    state: &mut CombatState,
+    plan: &PlayPlan<'_>,
+    face: Face,
+) -> Result<PlayReport, PlayError> {
+    // ── 账 1：请求面那一次顶层入队（见本函数的表）。
+    if face == Face::Queued {
+        let _request_chain = state.create_root_effect_chain();
+    }
+
     // `:125` EnsureCostsCanBePaid 已经在计划里做过；`:126` PayCosts。
     // 这里再查一次是**防御式**的（计划与付款之间不可能有别人插进来，但"半付"是
     // 最脏的一种中间态，多一次只读检查换它不出现）。
@@ -653,6 +735,9 @@ fn apply_plan(state: &mut CombatState, plan: &PlayPlan<'_>) -> Result<PlayReport
     // 参考在这里入队一条 MoveCardToZone 再关作用域；本内核就地搬（D1）。
     let Some(root) = plan.program else {
         let landed = settle_card(state, plan)?;
+        // 账 2'：`:292` 的 `EnqueueContinuation(CloseAction)` —— 续延在 `EnterEffectChain`
+        // 之外跑 ⇒ 那一次 `EnqueueEvent(ActionResolved)` 建根链。搬区那次（`:286`）在链里 ⇒ +0。
+        let _wrap_up_chain = state.create_root_effect_chain();
         return Ok(PlayReport {
             played: true,
             paid: plan.paid,
@@ -686,6 +771,11 @@ fn apply_plan(state: &mut CombatState, plan: &PlayPlan<'_>) -> Result<PlayReport
     //   `T:CardProgramTerminalCleanupTests.cs:62-78` 断言卡仍在 Hand）。
     // * Completed：正常落区。
     // * Faulted：**仍然落区**（`:254-261`），错误照实透传。
+    //
+    // ⚠️ `cancelled` 从 2026-10-19 起**真的会**为真：胜负判定搬到了
+    // `exec::update_standard_combat_result`，就在目标倒下那一行（见那里与
+    // `battle.rs` 的 `FROZEN_GAP_RESULT`）。在那之前这一支只有手工改 `state.result`
+    // 才走得到。
     let cancelled = state.result != CombatResult::Ongoing;
     match outcome {
         Ok(_) if cancelled => Ok(PlayReport {
@@ -696,6 +786,10 @@ fn apply_plan(state: &mut CombatState, plan: &PlayPlan<'_>) -> Result<PlayReport
         }),
         Ok(_) => {
             let landed = settle_card(state, plan)?;
+            // 账 2 + 账 3：`onTerminal(Completed)` 里的两次入队（`:251-252` 的搬区、
+            // `:280` 的 `CloseAction`）。两次都在续延里跑 ⇒ 各建一条根链。
+            let _move_chain = state.create_root_effect_chain();
+            let _wrap_up_chain = state.create_root_effect_chain();
             Ok(PlayReport {
                 played: true,
                 paid: plan.paid,
@@ -705,6 +799,7 @@ fn apply_plan(state: &mut CombatState, plan: &PlayPlan<'_>) -> Result<PlayReport
         }
         Err(error) => {
             // ⚠️ 这一支**会写状态**（卡落区），然后才把错误还回去 —— 规格书 §5.2/§7.1 定的。
+            // 落区是**直接搬**（`:256` 的 `zones.MoveCardToZone`），不入队 ⇒ 不建根链。
             settle_card(state, plan)?;
             Err(PlayError::Effect(error))
         }
@@ -2614,16 +2709,20 @@ mod tests {
         // **什么都不做**，卡留在手牌；`PlayReport.landed` 如实是 `None`。
         // 测试 `T:CardProgramTerminalCleanupTests.cs:62-78` 断言 Result=Victory 且卡仍在 Hand。
         //
-        // ⚠️ 为什么只能这样构造：`exec.rs` 里**没有任何节点**写 `state.result`
-        // （我 grep 过：`:492`/`:1242`/`:1387` 只读，唯一一处 `:3796` 的写入在测试里），
-        // 所以真实内容下这条分支不可达。测试与 `apply_plan` 同文件 ⇒ 直接
-        // `plan_play` → 手动改 `result` → `apply_plan`，就是"跑到一半结束"的等价物。
+        // ⚠️ 为什么在这里构造：`arena()` 里没有"这一击会打死最后一个敌人"的场面（两个敌人
+        // 各 20/10 血，`paper_cut` 打 6），所以这份单元测试用"手动把 `result` 改掉"复刻
+        // `SetResult` 取消在飞帧那一下（`CombatState.cs:358-359`）。
+        //
+        // **但这条分支 2026-10-19 起是真的可达的**（在此之前不可达，本注释原来写着
+        // "真实内容下不可达"）：胜负判定搬到了 `exec::update_standard_combat_result`，
+        // 就在目标倒下那一行。真实路径的覆盖在 `battle.rs` 的
+        // `a_lethal_play_leaves_the_card_in_hand_and_the_combat_is_over`。
         let blob = core_image();
         let content = parse(&blob);
         let (mut state, plan) = plan_for(&content, "card_h1", "paper_cut");
 
         state.result = CombatResult::Victory; // ← `SetResult` 取消在飞帧（`CombatState.cs:358-359`）
-        let report = apply_plan(&mut state, &plan).expect("Cancelled 不是错误");
+        let report = apply_plan(&mut state, &plan, Face::Queued).expect("Cancelled 不是错误");
 
         assert!(report.played, "牌**已经打出去了**（费用付了、CardPlayed 也 fire 了）");
         assert_eq!(report.landed, None, "§5.2 Cancelled：`landed` 必须是 None");
@@ -2649,7 +2748,7 @@ mod tests {
         let (mut state, plan) = plan_for(&content, "card_h1", "paper_cut");
         assert_eq!(state.result, CombatResult::Ongoing, "默认就是进行中");
 
-        let report = apply_plan(&mut state, &plan).expect("Completed 不是错误");
+        let report = apply_plan(&mut state, &plan, Face::Queued).expect("Completed 不是错误");
 
         assert!(report.played);
         assert_eq!(report.landed, Some(CardZone::DiscardPile));
@@ -2665,32 +2764,81 @@ mod tests {
     // ------------------------------------------------------------- 21. 两个发号器
 
     #[test]
-    fn a_play_advances_the_execution_id_but_not_the_effect_chain() {
-        // §6.1：有节目的出牌让 `next_program_execution_id` **+1**。
-        // §6.2：游戏真实路径（C/D 面）在 `EnterEffectChain` 里跑，`Enqueue*` 全部复用外层链
-        //       ⇒ `next_effect_chain_number` **+0**。v1 根本没有队列，结论相同（模块头 D2）。
+    fn a_play_advances_both_counters_and_the_two_faces_differ_by_exactly_one() {
+        // ⚠️ 这条测试的名字原来是 `…_but_not_the_effect_chain`，断言 `chain_num` **+0**。
+        // 2026-10-19 的整局对拍（`native/fight_diff.py`）证明那个期望是错的：
+        // C# 规范文本里一次正常出牌让 `chain_num` **+3**，一次 Cancelled 出牌 **+1**。
+        // 反推依据见 `apply_plan` 文档里那张三笔账的表（每笔都带参考行号）。
+        //
+        // 这里同时钉两件事：
+        // * 严格面（直接调处理器）**2 笔**：搬区 + 动作收尾；
+        // * 请求面（先入队一条 `PlayCardEffectRequest`）**3 笔**：再多请求那一笔。
+        //
+        // 只钉"变了"是不够的 —— 那对"硬加一个 +1"也成立；钉成 2 和 3 才能把
+        // "链号是不是恰好按参考那三笔走"变成可证伪的断言。
         let blob = core_image();
         let content = parse(&blob);
-        let mut state = arena();
-        give_card(&mut state, "hero", CardZone::Hand, "card_h1", "paper_cut");
-        let chain_before = state.next_effect_chain_number;
-        let execution_before = state.next_program_execution_id;
 
+        let mut strict = arena();
+        give_card(&mut strict, "hero", CardZone::Hand, "card_h1", "paper_cut");
+        let chain_before = strict.next_effect_chain_number;
+        let execution_before = strict.next_program_execution_id;
         play_card(
-            &mut state,
+            &mut strict,
             Some(&content),
             &request("card_h1", Some("enemy_a")),
         )
         .expect("paper_cut 必须打得出去");
-
         assert_eq!(
-            state.next_program_execution_id,
+            strict.next_program_execution_id,
             execution_before + 1,
-            "§6.1：节目执行一次发一个号"
+            "§6.1：节目执行一次发一个号（`EffectProgramExecution.cs:27`）"
         );
         assert_eq!(
-            state.next_effect_chain_number, chain_before,
-            "§6.2：C/D 面不新建效果链"
+            strict.next_effect_chain_number,
+            chain_before + 2,
+            "严格面：搬区 `Cards/CardPlay.cs:251` + 动作收尾 `:311`，两次都在续延里（顶层入队）"
+        );
+
+        let mut queued = arena();
+        give_card(&mut queued, "hero", CardZone::Hand, "card_h1", "paper_cut");
+        let chain_before = queued.next_effect_chain_number;
+        let execution_before = queued.next_program_execution_id;
+        try_play_card(
+            &mut queued,
+            Some(&content),
+            &request("card_h1", Some("enemy_a")),
+        )
+        .expect("请求面同样打得出去");
+        assert_eq!(
+            queued.next_program_execution_id,
+            execution_before + 1,
+            "请求面与严格面的执行号一致"
+        );
+        assert_eq!(
+            queued.next_effect_chain_number,
+            chain_before + 3,
+            "请求面多一笔：`ScenarioRunner.cs:121` 的 EnqueueEffect"
+        );
+        // 两侧打出的是**同一张卡的同一段程序**（否则上面那个 +3 可能只是"多打了一次"）。
+        assert_eq!(health_of(&strict, "enemy_a"), health_of(&queued, "enemy_a"));
+
+        // 成对：卡不在手牌 ⇒ **两个号都不动**（参考的 `ScenarioRunner.cs:109-117` 在入队之前就挡了，
+        // 这一点被 `refusals` 场景 step 0 的数据钉着：C# 那边 `chain_num` 只 +1，来自开回合）。
+        let mut refused = arena();
+        let chain_before = refused.next_effect_chain_number;
+        let execution_before = refused.next_program_execution_id;
+        let report = try_play_card(
+            &mut refused,
+            Some(&content),
+            &request("card_h1", Some("enemy_a")),
+        )
+        .expect("拒绝不是错误");
+        assert!(!report.played);
+        assert_eq!(refused.next_effect_chain_number, chain_before, "拒绝不动链号");
+        assert_eq!(
+            refused.next_program_execution_id, execution_before,
+            "拒绝不动执行号"
         );
     }
 }
