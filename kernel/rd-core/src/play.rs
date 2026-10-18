@@ -472,8 +472,32 @@ fn play_card_queued(
     content: Option<&Content<'_>>,
     req: &PlayRequest,
 ) -> Result<PlayReport, PlayError> {
-    let plan = plan_play(state, content, req)?;
-    apply_plan(state, &plan, Face::Queued)
+    match plan_play(state, content, req) {
+        Ok(plan) => apply_plan(state, &plan, Face::Queued),
+        Err(error) => {
+            // ⚠️ **被拒的那次出牌也发一个链号**（2026-10-19 逐卡对拍实测）。
+            //
+            // 参考的请求面是"先入队、后校验"：`ScenarioRunner.cs:121` 的
+            // `EnqueueEffect(new PlayCardEffectRequest(…))` 在没有环境链时立刻
+            // `CreateRootEffectChain()`（`CombatState.cs:386`），而**拒绝发生在 handler 里**
+            // （`Cards/PlayCardEffects.cs:54-58` 的 unplayable tag、`:64-69` 的
+            // `IsCardPlayAllowed`、`:74-82` 的付不起）⇒ 那次发号**已经发生过**。
+            //
+            // 两个例外，都在入队**之前**就被挡掉了，所以是 +0：
+            // * `CardNotInHand`：`ScenarioRunner.cs:113-117` 用 `FirstOrDefault` 先找卡；
+            // * `NotOngoing`：`ScenarioRunner.cs:40-44` 根本不下发这一步。
+            //
+            // 这条偏移原来被记成"在本内容上不可观察"，理由是"唯一被拒的出牌是卡不在手牌"。
+            // **实测证伪**：`red_tape` / `unsigned_form` 带着 `unplayable` 标签，它们的出牌
+            // 走的是校验器那一支，参考 +1、内核原来是 +0 ⇒ `chain_num` 差 1。
+            if is_normal_refusal(&error)
+                && !matches!(error, PlayError::CardNotInHand | PlayError::NotOngoing)
+            {
+                let _refused_request_chain = state.create_root_effect_chain();
+            }
+            Err(error)
+        }
+    }
 }
 
 /// dry-run：只回答"能不能打"，**绝不动状态**。
@@ -706,13 +730,21 @@ fn plan_play<'c>(
 ///   `EnterEffectChain` 之外）—— **我读过这几段，但"每笔恰好 1"只由总数反证**。
 ///   如果将来出现一个总数对不上的场景，第一个该怀疑的就是这个拆法。
 ///
-/// ⚠️ **一处做不到**（如实记录）：参考在**入队那一刻**就发了号，所以一个被校验器/付不起
-/// 拒掉的出牌**仍然 +1**。内核的拒绝发生在 [`plan_play`] 里、`apply_plan` 之前 ⇒ +0。
-/// 这条偏移在本内容上**不可观察**：唯一被拒的出牌是"卡不在手牌"，而参考的
-/// `ScenarioRunner.cs:109-117` 是在**入队之前**用 `FirstOrDefault` 挡掉的（也是 +0）；
-/// 校验器拒绝（stun / decree / play_condition / one_attack / unplayable）与付不起
-/// 在四个对拍场景里一次都没出现。要修它得把 `plan_play` 拆成"实例面 / 规则面"两段，
-/// 那是一次接口改动，不该由一次对拍顺手做掉。
+/// ⚠️ **2026-10-19 修正（逐卡对拍实测）**：这一节原来的两处记账都是错的，两处都已改掉：
+///
+/// 1. 原来写"被校验器/付不起拒掉的出牌 **+0**，因为内核在 [`plan_play`] 里就拒了"。**错**。
+///    参考在 `ScenarioRunner.cs:121` 先入队（`CombatState.cs:386` 建根链），拒绝发生在
+///    handler 里面 ⇒ **+1**。现在 [`play_card_queued`] 在正常拒绝时补发一个链号
+///    （`CardNotInHand` / `NotOngoing` 除外 —— 那两个参考在入队前就挡掉了）。
+///    证据：`red_tape` / `unsigned_form`（带 `unplayable` 标签）的规范文本 `chain_num`。
+/// 2. 原来写"Completed ⇒ 搬区 +1"。**只在卡还在手牌时对**：`onTerminal` 的守卫
+///    （`Cards/CardPlay.cs:245-247`）在卡已被自己的节目挪出手牌时直接 return，那次入队
+///    不发生 ⇒ +0。证据：`archive_the_evidence` / `shredder_drawer`（`forEachCardInZone`
+///    → `moveCardToZone`）的 `chain_num` 原来比参考多 1。
+///
+/// 今天实测的四笔账：**正常打完 = +3**（请求 / 搬区 / 收尾）；**Cancelled** = +1；
+/// **Faulted** = +1（搬区是直接搬，`Cards/CardPlay.cs:254-261`）；**无节目的卡** = +2
+/// （`:286` 的搬区在链里 +0，`:292` 的 `CloseAction` 从续延里跑 +1）；**被校验器拒绝** = +1。
 fn apply_plan(
     state: &mut CombatState,
     plan: &PlayPlan<'_>,
@@ -734,14 +766,14 @@ fn apply_plan(
     // ── 无节目分支（`Cards/CardPlay.cs:283-293`，5.12）。
     // 参考在这里入队一条 MoveCardToZone 再关作用域；本内核就地搬（D1）。
     let Some(root) = plan.program else {
-        let landed = settle_card(state, plan)?;
+        let settled = settle_card(state, plan)?;
         // 账 2'：`:292` 的 `EnqueueContinuation(CloseAction)` —— 续延在 `EnterEffectChain`
         // 之外跑 ⇒ 那一次 `EnqueueEvent(ActionResolved)` 建根链。搬区那次（`:286`）在链里 ⇒ +0。
         let _wrap_up_chain = state.create_root_effect_chain();
         return Ok(PlayReport {
             played: true,
             paid: plan.paid,
-            landed,
+            landed: settled.landed,
             counted_as_card_played,
         });
     };
@@ -785,15 +817,19 @@ fn apply_plan(
             counted_as_card_played,
         }),
         Ok(_) => {
-            let landed = settle_card(state, plan)?;
+            let settled = settle_card(state, plan)?;
             // 账 2 + 账 3：`onTerminal(Completed)` 里的两次入队（`:251-252` 的搬区、
-            // `:280` 的 `CloseAction`）。两次都在续延里跑 ⇒ 各建一条根链。
-            let _move_chain = state.create_root_effect_chain();
+            // `:280` 的 `CloseAction`）。两次都在续延里跑 ⇒ 各建一条根链 ——
+            // **但搬区那笔要先过 `:245-247` 的手牌守卫**：卡被自己的节目挪走了，参考就
+            // 直接 return，不会入队，所以这里也不发号（逐卡对拍实测：无条件发号会多 1）。
+            if settled.moved {
+                let _move_chain = state.create_root_effect_chain();
+            }
             let _wrap_up_chain = state.create_root_effect_chain();
             Ok(PlayReport {
                 played: true,
                 paid: plan.paid,
-                landed,
+                landed: settled.landed,
                 counted_as_card_played,
             })
         }
@@ -1545,15 +1581,33 @@ fn zone_from_wire_name(name: &str) -> Option<CardZone> {
 ///
 /// 搬不动（目的区满）⇒ [`PlayError::Capacity`]。**不静默留在手牌**：那是"打出去了但没落地"，
 /// 一张牌就此消失。
+/// 落区（`Cards/CardPlay.cs:242-263` 的 `onTerminal`）。
+///
+/// `moved` 不是"卡最终在哪"，而是"参考那次入队**会不会发生**"：`onTerminal` 一进来就守着
+///
+/// ```text
+/// var zones = c.GetCardZones(capturedPlayerId);
+/// if (!zones.ContainsCard(capturedCardId) ||
+///     zones.GetCard(capturedCardId).Zone != CardZone.Hand)
+///     return;
+/// ```
+///
+/// （`Cards/CardPlay.cs:245-247`）⇒ 卡被**它自己的节目**挪出手牌之后（`archive_the_evidence` /
+/// `shredder_drawer` 的 `forEachCardInZone → moveCardToZone` 就是干这个），那次
+/// `EnqueueEffect(MoveCardToZoneEffectRequest)`（`:251-252`）根本不发生，**链号也不发**。
+/// 内核无条件发号会让 `chain_num` 比参考多 1 —— 2026-10-19 的逐卡对拍实测到的就是这个。
 fn settle_card(
     state: &mut CombatState,
     plan: &PlayPlan<'_>,
-) -> Result<Option<CardZone>, PlayError> {
+) -> Result<Settled, PlayError> {
     let Some((zone, slot)) = find_card_slot(state, &plan.source, &plan.instance) else {
-        return Ok(None);
+        return Ok(Settled {
+            landed: None,
+            moved: false,
+        });
     };
     if zone != CardZone::Hand {
-        return Ok(Some(zone));
+        return Ok(Settled { landed: Some(zone), moved: false });
     }
     state.move_card(
         &plan.source,
@@ -1562,7 +1616,13 @@ fn settle_card(
         slot,
         ZonePlacement::Bottom,
     )?;
-    Ok(Some(plan.destination))
+    Ok(Settled { landed: Some(plan.destination), moved: true })
+}
+
+/// [`settle_card`] 的结果：卡落在哪，以及那次搬区入队**会不会真的发生**。
+struct Settled {
+    landed: Option<CardZone>,
+    moved: bool,
 }
 
 // ===========================================================================
@@ -1816,6 +1876,24 @@ mod tests {
             &CardInstanceId::new(instance).unwrap(),
         )
         .map(|(zone, _)| zone)
+    }
+
+    /// 指纹里去掉 `chain_num=` / `exec_num=` 两行之后的其余字节。
+    ///
+    /// 用来断言"除了发号器，状态逐字节不变"：这种断言比"整段文本相等"弱一点，但比"字段逐个比"
+    /// 强得多（它仍然覆盖牌区顺序、状态顺序、计数器、临时规则……）。发号器必须**单独**断言
+    /// （数字要精确到 +1 / +2），否则这一层就成了"什么都能过"的橡皮图章。
+    fn strip_generator_lines(text: &[u8]) -> Vec<u8> {
+        let text = std::str::from_utf8(text).expect("指纹一定是 UTF-8");
+        let mut out = String::new();
+        for line in text.lines() {
+            if line.starts_with("chain_num=") || line.starts_with("exec_num=") {
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        out.into_bytes()
     }
 
     /// 逐字节指纹：`snapshot::write_hash_input` 写出来的就是哈希的输入文本
@@ -2339,7 +2417,10 @@ mod tests {
         let blob = core_image();
         let content = parse(&blob);
 
-        // (a) 付不起 ⇒ no-op（`Cards/PlayCardEffects.cs:74-82`），状态逐字节不变。
+        // (a) 付不起 ⇒ no-op（`Cards/PlayCardEffects.cs:74-82`）。
+        // ⚠️ 这条原来断言"状态**逐字节**不变"，2026-10-19 的逐卡对拍证伪了它：参考在
+        // `ScenarioRunner.cs:121` 就入队了（`CombatState.cs:386` 建根链），付不起是 handler 里
+        // 才发现的 ⇒ **链号会动一格**。所以这里改成"只有链号动"：多一格不许，少一格也不许。
         let mut state = arena();
         state
             .combatant_mut(&cid("hero"))
@@ -2348,6 +2429,7 @@ mod tests {
             .unwrap();
         give_card(&mut state, "hero", CardZone::Hand, "card_h1", "paper_cut");
         let before = state_text(&state);
+        let chain_before = state.next_effect_chain_number;
         let report = try_play_card(
             &mut state,
             Some(&content),
@@ -2355,7 +2437,16 @@ mod tests {
         )
         .expect("请求面不抛");
         assert_eq!(report, PlayReport::NOT_PLAYED, "WasPlayed=false");
-        assert_eq!(state_text(&state), before);
+        assert_eq!(
+            state.next_effect_chain_number,
+            chain_before + 1,
+            "拒绝之前那次入队已经发过号（`ScenarioRunner.cs:121` → `CombatState.cs:386`）"
+        );
+        assert_eq!(
+            strip_generator_lines(&state_text(&state)),
+            strip_generator_lines(&before),
+            "除了那一格链号，状态逐字节不变（没付费、没落区、没跑节目）"
+        );
 
         // (b) 战斗已结束 ⇒ 也是 no-op（外层队列循环只是不再调用它）。
         state.result = CombatResult::Victory;
@@ -2839,6 +2930,60 @@ mod tests {
         assert_eq!(
             refused.next_program_execution_id, execution_before,
             "拒绝不动执行号"
+        );
+
+        // ⚠️ 另一半（2026-10-19 逐卡对拍补的）：卡**在**手里但被校验器拒绝（`red_tape` 带
+        // `unplayable` 标签）⇒ 参考那次入队已经发过号了 ⇒ **链号 +1**、执行号 +0。
+        // 这一条与上面那条配对：两条一起才把 "+0 还是 +1" 变成可证伪的断言
+        // （只测其中一条，把规则写成"一律 +0"或"一律 +1"都能通过）。
+        let mut unplayable = arena();
+        give_card(&mut unplayable, "hero", CardZone::Hand, "card_h1", "red_tape");
+        let chain_before = unplayable.next_effect_chain_number;
+        let execution_before = unplayable.next_program_execution_id;
+        let report = try_play_card(
+            &mut unplayable,
+            Some(&content),
+            &request("card_h1", Some("enemy_a")),
+        )
+        .expect("校验器拒绝不是错误");
+        assert!(!report.played, "unplayable ⇒ WasPlayed=false");
+        assert_eq!(
+            unplayable.next_effect_chain_number,
+            chain_before + 1,
+            "校验器拒绝发生在入队之后（`ScenarioRunner.cs:121` → `Cards/PlayCardEffects.cs:54-58`）"
+        );
+        assert_eq!(
+            unplayable.next_program_execution_id, execution_before,
+            "节目一步都没跑 ⇒ 执行号不动"
+        );
+
+        // ⚠️ 第三笔账（同一次实测补的）：卡被**它自己的节目**挪出手牌时，参考 `onTerminal`
+        // 的手牌守卫（`Cards/CardPlay.cs:245-247`）让那次搬区入队根本不发生 ⇒ 只 +2，不是 +3。
+        let mut self_moving = arena();
+        give_card(
+            &mut self_moving,
+            "hero",
+            CardZone::Hand,
+            "card_h1",
+            "archive_the_evidence",
+        );
+        let chain_before = self_moving.next_effect_chain_number;
+        let report = try_play_card(
+            &mut self_moving,
+            Some(&content),
+            &request("card_h1", Some("enemy_a")),
+        )
+        .expect("归档证据打得出去");
+        assert!(report.played);
+        assert_eq!(
+            zone_of(&self_moving, "hero", "card_h1"),
+            Some(CardZone::ExhaustPile),
+            "节目里的 forEachCardInZone → moveCardToZone 把它自己搬去了 ExhaustPile"
+        );
+        assert_eq!(
+            self_moving.next_effect_chain_number,
+            chain_before + 2,
+            "搬区那笔不发号（`:245-247` 的守卫），只剩请求 + 收尾"
         );
     }
 }

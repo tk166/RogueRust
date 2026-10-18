@@ -614,8 +614,77 @@ public static partial class OracleExports
             + ";stacks=" + AmountText(status.Stacks)
             + ";status=" + status.StatusDefinitionId.value
             + ";target=" + SelectorText(status.TargetSelector) + ")",
+        // ── the kinds the 62-card mirror actually uses (see native/card_specs.json) ──────────────────
+        // Every field is spelled out, defaults included, because the image omits default-valued keys and
+        // "absent" must equal "explicitly default". The order is alphabetical on purpose: the python side
+        // (native/gen_card_specs.py's node_text) renders from the decoded term tree and cannot see the
+        // order the constructor arguments happen to be in.
+        GainBlockNode<CardPlayContext> block =>
+            "gainBlock(amount=" + AmountText(block.Amount)
+            + ";result_key=" + (block.ResultKey is null ? "none" : "set")
+            + ";target=" + SelectorText(block.TargetSelector) + ")",
+        DrawCardsNode<CardPlayContext> draw =>
+            "drawCards(count=" + AmountText(draw.Count)
+            + ";result_key=" + (draw.ResultKey is null ? "none" : "set")
+            + ";target=" + SelectorText(draw.TargetSelector) + ")",
+        GainResourceNode<CardPlayContext> resource =>
+            "gainResource(amount=" + AmountText(resource.Amount)
+            + ";default_max=" + (resource.DefaultMax?.ToString() ?? "none")
+            + ";resource=" + resource.ResourceId.value
+            + ";result_key=" + (resource.ResultKey is null ? "none" : "set")
+            + ";target=" + SelectorText(resource.TargetSelector) + ")",
+        CreateCardInstanceNode<CardPlayContext> create =>
+            "createCardInstance(card=" + create.CardDefinitionId.value
+            + ";count=" + AmountText(create.Count)
+            + ";result_key=" + (create.ResultKey is null ? "none" : "set")
+            + ";target=" + SelectorText(create.TargetSelector)
+            + ";to_zone=" + create.ToZone + ")",
+        ForEachCardInZoneNode<CardPlayContext> loop =>
+            "forEachCardInZone(body=" + NodeText(loop.Body)
+            + ";definition_filter=" + (loop.DefinitionFilter?.value ?? "none")
+            + ";max_iterations=" + loop.MaxIterations
+            + ";owner=" + SelectorText(loop.OwnerSelector)
+            + ";tag_filter=" + (loop.TagFilter?.value ?? "none")
+            + ";take_first=" + (loop.TakeFirst?.ToString() ?? "none")
+            + ";zone=" + loop.Zone + ")",
+        MoveCardToZoneNode<CardPlayContext> move =>
+            "moveCardToZone(card=" + CardExpressionText(move.CardExpression)
+            + ";owner=" + SelectorText(move.OwnerSelector)
+            + ";placement=" + move.Placement
+            + ";result_key=" + (move.ResultKey is null ? "none" : "set")
+            + ";to_zone=" + move.ToZone + ")",
+        ModifyStatusStacksNode<CardPlayContext> stacks =>
+            "modifyStatusStacks(delta=" + AmountText(stacks.Delta)
+            + ";result_key=" + (stacks.ResultKey is null ? "none" : "set")
+            + ";status=" + stacks.StatusDefinitionId.value
+            + ";target=" + SelectorText(stacks.TargetSelector) + ")",
         // An unmapped node is a MISMATCH, not a silent pass: the diff compares texts.
         _ => "unsupported(" + node.GetType().Name + ")",
+    };
+
+    /// <summary>
+    /// A status trigger's program root, in the same canonical shape. Only the kinds a status trigger uses in
+    /// this mirror are mapped; anything else renders `unsupported(…)` and goes red in the gate.
+    /// </summary>
+    private static string TriggerNodeText(IEffectNode<DamageDealtTriggeredEffectContext>? node) => node switch
+    {
+        null => "none",
+        NoOpEffectNode<DamageDealtTriggeredEffectContext> => "noop",
+        SequenceEffectNode<DamageDealtTriggeredEffectContext> sequence =>
+            "sequence(" + string.Join(",", sequence.Children.Select(TriggerNodeText)) + ")",
+        ModifyStatusStacksNode<DamageDealtTriggeredEffectContext> stacks =>
+            "modifyStatusStacks(delta=" + AmountText(stacks.Delta)
+            + ";result_key=" + (stacks.ResultKey is null ? "none" : "set")
+            + ";status=" + stacks.StatusDefinitionId.value
+            + ";target=" + SelectorText(stacks.TargetSelector) + ")",
+        _ => "unsupported(" + node.GetType().Name + ")",
+    };
+
+    /// <summary>The card-instance side of a card op: only "the card this loop is on" occurs in the mirror.</summary>
+    private static string CardExpressionText(ICardInstanceExpression<CardPlayContext> expression) => expression switch
+    {
+        IteratedCardExpression<CardPlayContext> => "iterated",
+        _ => "unsupported(" + expression.GetType().Name + ")",
     };
 
     private static string NodeText(IEffectNode<EnemyActionContext>? node) => node switch
@@ -637,6 +706,11 @@ public static partial class OracleExports
     private static string AmountText(ICombatExpression<CardPlayContext, int> expression) => expression switch
     {
         ConstantExpression<CardPlayContext> constant => "const(" + constant.Value + ")",
+        MultiplyExpression<CardPlayContext> multiply =>
+            "multiply(" + AmountText(multiply.Left) + "," + AmountText(multiply.Right) + ")",
+        CombatantStatusStacksExpression<CardPlayContext> stacks =>
+            "combatantStatusStacks(selector=" + SelectorText(stacks.Selector)
+            + ";status=" + stacks.StatusId.value + ")",
         _ => "unsupported(" + expression.GetType().Name + ")",
     };
 
@@ -645,6 +719,13 @@ public static partial class OracleExports
         ConstantExpression<EnemyActionContext> constant => "const(" + constant.Value + ")",
         _ => "unsupported(" + expression.GetType().Name + ")",
     };
+
+    private static string AmountText(ICombatExpression<DamageDealtTriggeredEffectContext, int> expression) =>
+        expression switch
+        {
+            ConstantExpression<DamageDealtTriggeredEffectContext> constant => "const(" + constant.Value + ")",
+            _ => "unsupported(" + expression.GetType().Name + ")",
+        };
 
     private static string SelectorText(ICombatantTargetSelector selector) =>
         ReferenceEquals(selector, CombatantTargetSelectors.Source) ? "source"

@@ -34,6 +34,30 @@
     一行一个观测量：  <name>  rust=<值>  csharp=<值>  OK|MISMATCH
     最后一行：       FIGHT_DIFF PASS (n/n)   或   FIGHT_DIFF FAIL (k/n)
 
+# 两层：整局流程（FIGHT_DIFF）与逐卡（CARD_DIFF）
+
+上面那四局打的是**整局流程**，只覆盖 2 张卡。`CARD_DIFF` 是它的补充层：镜像里**每一张**卡
+（今天 62 张）各一局固定形状的短战斗 —— 牌组里只有它自己、能量给足、敌人血量高到一张卡打不死、
+脚本只有"打出它" —— 两侧比每步哈希与终局哈希，并逐键核对"两边打的是同一张卡"。
+
+    一行一张卡：      card=<卡 id>  index=<行号>  steps=<n>  facts=<n>  hash=<12hex>..  OK|MISMATCH
+    最后一层结论：    CARD_DIFF PASS (n/62)   或   CARD_DIFF FAIL (k/62) + 每张失败卡的原因
+
+卡程序**不进哈希**（进哈希的是卡定义 id），所以逐卡这一层的前提是"两边 author 的是同一张卡"。
+Rust 侧的程序来自镜像；C# 侧没有 RDCF 读取器，只能按 `native/card_specs.json`（由
+`native/gen_card_specs.py` 从镜像派生）把它翻译成引擎的 typed node。三道闸门守这个前提：
+
+* **陈旧闸门** —— 磁盘上的 `card_specs.json` 必须与"现在从镜像重新派生一遍"逐字节相同
+  （镜像变了而 spec 没重生成 ⇒ 红）。顺带核对 oracle 读进来的就是这份字节。
+* **顺序闸门** —— `card=<id>`、`index=<行号>` 与镜像的 `CARD` 行号必须一一对上
+  （两边卡序不同 ⇒ 红；否则会拿 A 的哈希比 B 的哈希）。
+* **内容闸门** —— C# 侧报出来的每一条事实（每张卡的费用/tags/落区/程序的规范文本、每个状态的
+  极性/叠加/被动修饰/触发器程序、敌人动作、以及**战斗形状**）与镜像逐键比对；C# 侧多报一条
+  "闸门不知道怎么核对"的事实也算失败。
+
+逐张卡自己的失败（C# 侧 author 不出来、或哈希不同）不是闸门失败：它记成一行 `MISMATCH` 并计入
+`k/62`。**"62/62" 必须是真数** —— 一张 author 不出来的卡也算在分母里。
+
 命令行开关：
 
 * `--verbose` —— 把闸门逐键比对的内容也打出来（默认只打一行 `GATE ok: …`）；
@@ -49,12 +73,21 @@
 * C# 侧每步哈希来自**前缀重放**（`ScenarioRunner` 没有游标），见 `OracleExports.Fight.cs` 的类注释；
   导出里自带一条"最长前缀 == 整跑"的自检。
 * 哈希只覆盖 `CombatState`；卡定义里的 tags / 费用 / 程序**不进哈希** —— 它们只能靠闸门与行为差异发现。
+* **逐卡这一层只打一步**（只有 `HeroPlays`），所以它**不覆盖**跨回合的东西：DoT 在回合开始的 tick、
+  手牌回收、能量补能、抽牌堆重洗、`TurnEndHandDestinationZone`、以及敌人动作本身。
+  那些由 `FIGHT_DIFF` 那四局负责（`dot_kill` 覆盖 DoT、`enemy_hits` 覆盖敌人出手）。
+* 逐卡这一层里 `doubt` 的 `DamageDealt` 触发器与"伤害 ×75%"被动**不会触发**：镜像里 `doubt` 只被
+  施加到 `sel.eventTarget`（敌人），而伤害的来源永远是英雄（见 `native/card_specs.json` 的
+  applyStatus 矩阵）。它们被**如实 author**（闸门逐字核对），但在这一局里是惰性的。
+* `CombatState.TriggerActivity` 两侧都不进哈希文本（`CombatStateHasher.cs:26-71` 里没有它，
+  `snapshot.rs:144-205` 也没有），所以"哪个触发器跑过几次"**不在任何一条对拍里**。
 """
 
 from __future__ import annotations
 
 import ctypes
 import glob
+import json
 import os
 import re
 import subprocess
@@ -66,6 +99,11 @@ ORACLE_PUB = os.path.join(ROOT, "native", "RogueDeck.Oracle", "bin", "x64", "Rel
 CARGO_PS1 = os.path.join(ROOT, "tools", "cargo.ps1")
 IMAGE = os.path.join(ROOT, "tools", "contentc", "out", "content.core.rdcf")
 CONTENTC = os.path.join(ROOT, "tools", "contentc")
+
+# `native/gen_card_specs.py` 是 spec 的生成器，也是本脚本核对"磁盘上的 spec 是否陈旧"的那把尺子。
+# 它就在本文件隔壁，所以不引入任何新依赖。
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import gen_card_specs  # noqa: E402
 
 # 必需导出：缺一个就拒绝工作（一个"找不到就跳过"的包装层会让对拍在没有对拍的情况下"通过"）。
 FIGHT_FUNCS = {
@@ -98,6 +136,18 @@ FIGHT_FUNCS = {
 }
 
 RESULT_NAMES = ["Ongoing", "Victory", "Defeat", "Draw", "Aborted"]
+
+# 逐卡这一层要的导出（`native/RogueDeck.Oracle/OracleExports.Cards.cs`）。同样是一个都不许缺。
+CARD_FUNCS = {
+    "rd_oracle_card_specs_text_len": 0,
+    "rd_oracle_card_specs_text_char": 1,
+    "rd_oracle_card_count": 0,
+    "rd_oracle_card_run": 2,
+    "rd_oracle_card_steps_len": 0,
+    "rd_oracle_card_steps_char": 1,
+    "rd_oracle_card_facts_len": 0,
+    "rd_oracle_card_facts_char": 1,
+}
 
 NAME_W = 34
 VALUE_W = 66
@@ -138,17 +188,28 @@ class Oracle(object):
         self.path = _find_dll()
         self.lib = ctypes.CDLL(self.path)
         missing = [name for name in FIGHT_FUNCS if not hasattr(self.lib, name)]
+        missing += [name for name in CARD_FUNCS if not hasattr(self.lib, name)]
+        if not hasattr(self.lib, "rd_oracle_card_specs_load"):
+            missing.append("rd_oracle_card_specs_load")
         if missing:
             raise ABIMissing(
-                f"{os.path.basename(self.path)} 缺少对拍导出：{', '.join(sorted(missing))}\n"
-                f"  共缺 {len(missing)}/{len(FIGHT_FUNCS)} 个。它们由 "
-                f"native/RogueDeck.Oracle/OracleExports.Fight.cs 提供；重建 oracle 即可"
+                f"{os.path.basename(self.path)} 缺少对拍导出：{', '.join(sorted(set(missing)))}\n"
+                f"  共缺 {len(set(missing))}/{len(FIGHT_FUNCS) + len(CARD_FUNCS) + 1} 个。它们由 "
+                f"native/RogueDeck.Oracle/OracleExports.Fight.cs 与 OracleExports.Cards.cs 提供；重建 oracle 即可"
                 f"（& tools\\dnaot.ps1 publish native/RogueDeck.Oracle/RogueDeck.Oracle.csproj "
                 f"-c Release -r win-x64）。")
         for name, nargs in FIGHT_FUNCS.items():
             fn = getattr(self.lib, name)
             fn.restype = ctypes.c_int
             fn.argtypes = [ctypes.c_int] * nargs
+        for name, nargs in CARD_FUNCS.items():
+            fn = getattr(self.lib, name)
+            fn.restype = ctypes.c_int
+            fn.argtypes = [ctypes.c_int] * nargs
+        # 唯一一个指针参数：spec 的 UTF-8 路径。它显式传进来（而不是由 dll 猜自己的相对路径），
+        # 是为了让"读的是哪份 spec"变成调用方的一句话，而不是一段运气。
+        self.lib.rd_oracle_card_specs_load.restype = ctypes.c_int
+        self.lib.rd_oracle_card_specs_load.argtypes = [ctypes.c_char_p]
 
     # ---- 薄封装 ----
 
@@ -180,6 +241,26 @@ class Oracle(object):
     def enemy_hps(self) -> str:
         count = self.lib.rd_oracle_enemy_count()
         return ",".join(str(self.lib.rd_oracle_enemy_hp_at(i)) for i in range(count))
+
+    # ---- 逐卡这一层 ----
+
+    def load_card_specs(self, path: str) -> int:
+        return self.lib.rd_oracle_card_specs_load(path.encode("utf-8"))
+
+    def card_specs_text(self) -> str:
+        return self.text("rd_oracle_card_specs_text")
+
+    def card_count(self) -> int:
+        return self.lib.rd_oracle_card_count()
+
+    def card_run(self, index: int, seed: int) -> int:
+        return self.lib.rd_oracle_card_run(index, seed)
+
+    def card_facts(self) -> dict:
+        return parse_facts(self.text("rd_oracle_card_facts"))
+
+    def card_steps(self) -> list:
+        return [parse_kv(line) for line in self.text("rd_oracle_card_steps").splitlines() if line]
 
     def observables(self) -> dict:
         result = self.lib.rd_oracle_result()
@@ -493,13 +574,20 @@ def powershell() -> str:
     return candidate if os.path.isfile(candidate) else "powershell.exe"
 
 
-def run_rust_dump() -> list:
-    """跑 `cargo run -p rd-fightdump --release`（经 tools/cargo.ps1，位置参数），返回输出行。"""
+def run_rust_dump(extra=()) -> list:
+    """跑 `cargo run -p rd-fightdump --release`（经 tools/cargo.ps1，位置参数），返回输出行。
+
+    `extra` 是喂给二进制的参数（`--cards`）；cargo 自己的 `--` 之后才轮到它。
+    """
     if not os.path.isfile(CARGO_PS1):
         raise RuntimeError(f"找不到 {CARGO_PS1}")
+    command = [powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", CARGO_PS1,
+               "run", "-p", "rd-fightdump", "--release"]
+    if extra:
+        command.append("--")
+        command.extend(extra)
     proc = subprocess.run(
-        [powershell(), "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", CARGO_PS1,
-         "run", "-p", "rd-fightdump", "--release"],
+        command,
         cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out = proc.stdout.decode("utf-8", "replace")
     err = proc.stderr.decode("utf-8", "replace")
@@ -516,11 +604,13 @@ def run_rust_dump() -> list:
     return lines
 
 
-def parse_rust(lines: list) -> tuple:
-    """→ (info, [scenario dict])。认不出来的行 = 失败（不静默忽略）。
+def parse_rust(lines: list, block_key: str = "scenario") -> tuple:
+    """→ (info, [block dict])。认不出来的行 = 失败（不静默忽略）。
 
     `cargo.ps1` 把 cargo 自己的 stderr（无害的 `unused config key http.no_proxy` 之类）接在
     `=== STDERR ===` 之后 —— 那不是 dump 的输出，解析到那里就停。
+
+    `block_key` 是块头行的键名：整局场景是 `scenario=`，逐卡是 `card=`。另一个键名出现就是格式错了。
     """
     info = {}
     scenarios = []
@@ -542,18 +632,18 @@ def parse_rust(lines: list) -> tuple:
         if line.startswith("deviations="):
             info["deviations"] = line[len("deviations="):]
             continue
-        if line.startswith("scenario="):
+        if line.startswith(block_key + "="):
             current = {"header": parse_kv(line), "steps": [], "final": None}
             scenarios.append(current)
             continue
         if line.startswith("step="):
             if current is None:
-                raise RuntimeError(f"step 行出现在任何 scenario 之前：{line!r}")
+                raise RuntimeError(f"step 行出现在任何 {block_key} 之前：{line!r}")
             current["steps"].append(parse_kv(line))
             continue
         if line.startswith("final "):
             if current is None:
-                raise RuntimeError(f"final 行出现在任何 scenario 之前：{line!r}")
+                raise RuntimeError(f"final 行出现在任何 {block_key} 之前：{line!r}")
             current["final"] = parse_kv(line[len("final "):])
             continue
         raise RuntimeError(f"rd-fightdump 打了一行本脚本不认识的东西：{line!r}")
@@ -677,8 +767,366 @@ def stage_b(table: Table, item: list) -> None:
 
 
 # ===========================================================================
-# main
+# 逐卡这一层（CARD_DIFF）
+#
+# 上面那四局打的是"整局流程"；这一层打的是**每一张卡自己的效果**：镜像里 62 张卡各一局，
+# 牌组里只有它自己，脚本只有"打出它"。卡程序不进哈希（进哈希的是卡定义 id），所以两侧必须打
+# 同一张卡、同一段程序 —— Rust 侧读镜像，C# 侧按 `native/card_specs.json` author，
+# 本脚本把两边的东西逐键对差。
 # ===========================================================================
+
+SPEC_JSON = os.path.join(ROOT, "native", "card_specs.json")
+
+# 逐卡战斗的固定形状。**与 kernel/rd-fightdump 的 CARD_* 常量、OracleExports.Cards.cs 的
+# Card* 常量是三份**，各处都钉住同一个数：改任意一处，这里就红。这不是冗余，是"三边必须一致"
+# 这条要求的可执行形式。
+CARD_SHAPE = {
+    "combat": "card_diff",
+    "seed": "1",
+    "shuffle": "false",
+    "hero": "hero/70",
+    "enemies": "queue_imp/500",
+    "energy": "standard.energy:10/10",
+    "energy_refill": "3",
+    "steps": "1",
+}
+CARD_ENEMY = "queue_imp"
+CARD_ACTION = "queue_imp.desk_jab"
+
+# 逐卡这一层**不** author 的东西（与整局那层同一套钉，唯独 triggered_programs 不同 ——
+# 卡程序引用到的状态自带触发器，条数由镜像算出来，见 card_layer_expected）。
+CARD_CONTENT_PINS = (
+    ("content.allies", "0"),
+    ("content.pre_down_interceptors", "0"),
+    ("content.status_application_interceptors", "0"),
+    ("content.defensive_pools", "0"),
+    ("content.turn_start_refills", "0"),
+    ("content.cards_drawn_per_turn", "5"),
+    ("content.cell_exclusive", "false"),
+    ("content.simultaneous_team_turns", "false"),
+)
+
+
+def card_layer_expected(spec: dict, mirror: "Mirror") -> dict:
+    """从镜像派生的卡描述 → C# 侧应该报出来的每一条事实。"""
+    expected = {}
+    for card in spec["cards"]:
+        index = card["index"]
+        expected[f"cards.{index}.index"] = str(index)
+        expected[f"cards.{index}.id"] = card["id"]
+
+        prefix = "card." + card["id"]
+        expected[prefix + ".package"] = card["package"]
+        expected[prefix + ".costs"] = "+".join(
+            cost["resource"] + ":" + str(cost["amount"]) for cost in card["costs"])
+        expected[prefix + ".tags"] = ",".join(card["tags"])
+        program = card["program"]
+        expected[prefix + ".program"] = ("program(id=" + program["id"]
+                                         + ";depth=" + str(program["depth"])
+                                         + ";steps=" + str(program["steps"])
+                                         + ";root=" + gen_card_specs.node_text(program["root"]) + ")")
+        expected[prefix + ".played_zone"] = card["played_zone"]
+        expected[prefix + ".turn_end_zone"] = card["turn_end_zone"]
+        expected[prefix + ".retain"] = gen_card_specs.bool_text(card["retain"])
+        expected[prefix + ".is_action"] = gen_card_specs.bool_text(card["is_action"])
+        expected[prefix + ".queue_on_play"] = gen_card_specs.bool_text(card["queue_on_play"])
+        expected[prefix + ".lifecycle"] = str(card["lifecycle"])
+        expected[prefix + ".play_condition"] = ("none" if card["play_condition"] is None else "set")
+    expected["card_count"] = str(len(spec["cards"]))
+
+    trigger_count = 0
+    for status in spec["statuses"]:
+        prefix = "status." + status["id"]
+        expected[prefix + ".package"] = status["package"]
+        expected[prefix + ".polarity"] = status["polarity"]
+        expected[prefix + ".stacking"] = status["stacking"]
+        expected[prefix + ".tags"] = ",".join(status["tags"])
+        expected[prefix + ".uses_stacks"] = gen_card_specs.bool_text(status["uses_stacks"])
+        expected[prefix + ".uses_duration"] = gen_card_specs.bool_text(status["uses_duration"])
+        expected[prefix + ".uses_charges"] = gen_card_specs.bool_text(status["uses_charges"])
+        expected[prefix + ".passive_modifiers"] = str(len(status["passive_modifiers"]))
+        for position, modifier in enumerate(status["passive_modifiers"]):
+            expected["%s.modifier.%d" % (prefix, position)] = "%s:%s:%d:%d:%s" % (
+                modifier["pipeline"], modifier["operation"], modifier["magnitude"],
+                modifier["priority"], modifier["restrictDamageKind"])
+        expected[prefix + ".incoming_delay"] = "none"
+        expected[prefix + ".disclosure"] = "none"
+        for position, trigger in enumerate(status["triggers"]):
+            trigger_prefix = "%s.trigger.%d" % (prefix, position)
+            expected[trigger_prefix + ".event"] = trigger["event"]
+            # 触发器程序只比**根节点**的文本：C# 注册时会把程序 id 换成 `trigger:<id>`，
+            # 而镜像里是 `(unnamed)` —— 拿整段 program(...) 去比，比到的是一个作者侧的细节。
+            expected[trigger_prefix + ".program"] = gen_card_specs.node_text(trigger["program"]["root"])
+            trigger_count += 1
+    expected["content.triggered_programs"] = str(trigger_count)
+
+    # 敌人动作：与整局那层同一个 id、同一段程序（它只是为了让敌人有动作，不是这一层的主角）。
+    expected.update(mirror_enemy_action_facts(mirror, CARD_ACTION))
+    return expected
+
+
+def card_layer_shape(card_id: str) -> dict:
+    """逐卡战斗的**形状事实**：C# 侧报告什么，本脚本就期望什么。"""
+    return {
+        "shape.combat": CARD_SHAPE["combat"],
+        "shape.seed": CARD_SHAPE["seed"],
+        "shape.shuffle": CARD_SHAPE["shuffle"],
+        "shape.hero": CARD_SHAPE["hero"],
+        "shape.enemies": CARD_SHAPE["enemies"],
+        "shape.deck": card_id + ":1",
+        "shape.energy": CARD_SHAPE["energy"],
+        "shape.energy_refill": CARD_SHAPE["energy_refill"],
+        "shape.steps": CARD_SHAPE["steps"],
+        "shape.step.0": "play:" + card_id + ":" + CARD_ENEMY,
+    }
+
+
+def compare_facts(facts: dict, expected: dict, label: str, limit: int = 8) -> list:
+    """逐键比对事实表。多一条、少一条、值不同 —— 三种都算不一致。
+
+    "C# 侧声明了闸门不知道怎么核对的事实"单独成一条：那说明 authoring 又往前走了一步而闸门没跟上，
+    比不一致更值得处理（它是未来静默偏差的入口）。
+    """
+    problems = []
+    for key in sorted(expected):
+        want = expected[key]
+        if key not in facts:
+            problems.append(f"{label}: `{key}` 镜像说 {want!r}，C# 侧没有这条事实")
+        elif facts[key] != want:
+            problems.append(f"{label}: `{key}` C# 侧 {facts[key]!r} != 镜像 {want!r}")
+        if len(problems) >= limit:
+            problems.append(f"{label}: ……（还有更多，先修上面这些）")
+            return problems
+    for key in sorted(facts):
+        if key not in expected:
+            problems.append(f"{label}: `{key}` 是 C# 侧声明、闸门不知道怎么核对的事实"
+                            f"（值 {facts[key]!r}；先教会闸门，再让它通过）")
+            if len(problems) >= limit:
+                return problems
+    return problems
+
+
+def spec_drift(on_disk: dict, fresh: dict, limit: int = 8) -> list:
+    """两份卡描述之间**具体差在哪**（路径 + 两边的值）。
+
+    陈旧闸门如果只说"文件过时了"，读的人还得自己去比 64 KB 的 json。这里直接指到
+    `cards[4] (strong_binder).costs[0].amount` 这一级 —— 变异测试就是靠它说出"是哪张卡"。
+    """
+    problems = []
+
+    def label(path: str, root) -> str:
+        """给路径加个名字：卡/状态的下标看不出是哪一张。"""
+        for kind in ("cards", "statuses"):
+            marker = kind + "["
+            if marker in path:
+                head, _, tail = path.partition(marker)
+                index_text, _, rest = tail.partition("]")
+                name = "?"
+                try:
+                    name = root[kind][int(index_text)]["id"]
+                except (ValueError, IndexError, KeyError, TypeError):
+                    pass
+                return f"{head}{kind}[{index_text}] ({name}){rest}"
+        return path
+
+    def walk(left, right, path, where):
+        if len(problems) >= limit:
+            return
+        if type(left) is not type(right):
+            problems.append(f"{label(path, where)}: 磁盘 {left!r} != 镜像 {right!r}")
+            return
+        if isinstance(left, dict):
+            for key in sorted(set(left) | set(right)):
+                if key not in left:
+                    problems.append(f"{label(path + '.' + key, where)}: 磁盘缺这条，镜像说 {right[key]!r}")
+                elif key not in right:
+                    problems.append(f"{label(path + '.' + key, where)}: 磁盘多这条（{left[key]!r}）")
+                else:
+                    walk(left[key], right[key], path + "." + key, where)
+            return
+        if isinstance(left, list):
+            if len(left) != len(right):
+                problems.append(f"{label(path, where)}: 长度 磁盘 {len(left)} != 镜像 {len(right)}")
+                return
+            for index, (a, b) in enumerate(zip(left, right)):
+                walk(a, b, f"{path}[{index}]", where)
+            return
+        if left != right:
+            problems.append(f"{label(path, where)}: 磁盘 {left!r} != 镜像 {right!r}")
+
+    walk(on_disk, fresh, "spec", fresh if isinstance(fresh, dict) else {})
+    return problems
+
+
+def card_layer(oracle: Oracle, mirror: Mirror, verbose: bool) -> tuple:
+    """逐卡对拍。返回 (通过张数, 总张数, [失败明细])。
+
+    闸门（形状/内容/顺序）失败是**抛 GateFailure**：它意味着"两边打的不是同一张卡"，
+    继续跑下去只会产出 62 个没有意义的哈希比较。逐张卡自己的失败（author 不出来、哈希不同）
+    才记成一行 FAIL —— 那种时候**别的卡仍然可信**，而这正是"n/62"要表达的东西。
+    """
+    spec = gen_card_specs.derive(mirror.rom)
+    rendered = gen_card_specs.render(spec)
+
+    # ── 闸门 0：磁盘上的 spec 不能陈旧。它是 C# 侧的输入，而它的真相是镜像。
+    if not os.path.isfile(SPEC_JSON):
+        raise GateFailure(f"{SPEC_JSON} 不存在 —— 它由镜像派生，生成命令：\n"
+                          f"    python native/gen_card_specs.py")
+    with open(SPEC_JSON, "r", encoding="utf-8", newline="") as handle:
+        on_disk = handle.read()
+    if on_disk != rendered:
+        try:
+            drift = spec_drift(json.loads(on_disk), spec)
+        except ValueError as broken:
+            drift = [f"磁盘上的 json 根本解析不了：{broken}"]
+        raise GateFailure(
+            f"{SPEC_JSON} 与镜像不一致（陈旧产物，{len(on_disk)} B vs {len(rendered)} B）。\n"
+            + "".join(f"  {line}\n" for line in drift)
+            + "  镜像变了就要重生成：\n    python native/gen_card_specs.py")
+
+    # ── 闸门 1：oracle 读进来的必须就是这份字节（不是它旁边某个同名旧文件）
+    code = oracle.load_card_specs(SPEC_JSON)
+    if code <= 0:
+        raise RuntimeError(f"rd_oracle_card_specs_load({SPEC_JSON}) -> {code}；{oracle.error()}")
+    loaded = oracle.card_specs_text()
+    if loaded != on_disk:
+        raise GateFailure(
+            f"oracle 读进来的 spec 与磁盘上的不是同一份字节（{len(loaded)} B vs {len(on_disk)} B）")
+    count = oracle.card_count()
+    if count != len(spec["cards"]):
+        raise GateFailure(f"oracle 说 spec 里有 {count} 张卡，镜像派生出来的是 {len(spec['cards'])} 张")
+
+    expected = card_layer_expected(spec, mirror)
+    for key, want in CARD_CONTENT_PINS:
+        expected[key] = want
+    if verbose:
+        for key in sorted(expected):
+            print(f"  gate-card {key} = {expected[key]}")
+
+    # ── 内核这一侧：一次进程把 62 张卡全打出来
+    info, blocks = parse_rust(run_rust_dump(["--cards"]), block_key="card")
+    if info.get("cards") != str(len(spec["cards"])):
+        raise GateFailure(f"rd-fightdump 说镜像里有 {info.get('cards')} 张卡，spec 里是 "
+                          f"{len(spec['cards'])} 张 —— 两边读的不是同一份镜像")
+    if len(blocks) != len(spec["cards"]):
+        raise GateFailure(
+            f"rd-fightdump 打了 {len(blocks)} 张卡，镜像里有 {len(spec['cards'])} 张 —— "
+            f"少打就是跳过，这个脚本不接受")
+
+    print()
+    print(f"# 逐卡（CARD_DIFF）：{len(blocks)} 张卡，每张一局固定形状的短战斗"
+          f"（combat={CARD_SHAPE['combat']} seed={CARD_SHAPE['seed']} "
+          f"hero={CARD_SHAPE['hero']} enemies={CARD_SHAPE['enemies']} "
+          f"energy={CARD_SHAPE['energy']}）")
+
+    # ── 闸门 2：**内容**。62 张卡 author 的是同一份内容（全部 62 张卡 + 2 个状态 + 敌人动作），
+    # 所以内容不对时"两边打的是同一张卡"这个前提已经不成立 —— 那是闸门失败，不是 62 条一样的
+    # 卡片失败。跑一次就够：内容事实与选哪张卡无关。
+    content_seed = int(blocks[0]["header"]["seed"])
+    code = oracle.card_run(0, content_seed)
+    if code <= 0:
+        raise GateFailure(f"C# 侧连第 0 张卡都 author 不出来：{oracle.error()}")
+    content_facts = {key: value for key, value in oracle.card_facts().items()
+                     if not key.startswith(("selected.", "shape."))}
+    problems = compare_facts(content_facts, expected, "内容闸门")
+    if problems:
+        raise GateFailure(
+            f"C# 侧 author 的**内容**与镜像不一致（{len(problems)} 处以上）：\n  "
+            + "\n  ".join(problems)
+            + "\n  逐卡对拍的前提是两边打同一张卡、同一段程序；先修好 authoring，再谈哈希。")
+    if verbose:
+        print(f"  内容闸门 ok：{len(expected)} 条事实（{len(spec['cards'])} 卡 / "
+              f"{len(spec['statuses'])} 状态 / 1 敌人动作）")
+
+    passed = 0
+    failures = []
+    checked = len(expected)
+    for index, block in enumerate(blocks):
+        want_card = spec["cards"][index]
+        header = block["header"]
+        rust_card = header.get("card")
+        if rust_card != want_card["id"]:
+            raise GateFailure(
+                f"第 {index} 张卡对不上：rd-fightdump 打的是 `{rust_card}`，"
+                f"镜像的 CARD[{index}] 是 `{want_card['id']}` —— 两边的卡序不同，逐卡比较就没有意义")
+        if header.get("index") != str(index):
+            raise GateFailure(
+                f"`{rust_card}` 的头行 index={header.get('index')}，但它在输出里是第 {index} 个 —— "
+                f"顺序与索引不同，逐卡比较就没有意义")
+
+        shape = card_layer_shape(want_card["id"])
+        shape["selected.index"] = str(index)
+        shape["selected.id"] = want_card["id"]
+        seed = int(header["seed"])
+        code = oracle.card_run(index, seed)
+        if code <= 0:
+            failures.append((want_card["id"], f"C# 侧 author 不出来：{oracle.error()}"))
+            print(f"card={want_card['id']:<24} index={index:<2} {'':>28} FAIL  "
+                  f"C# author 失败（{oracle.error()}）")
+            continue
+
+        facts = oracle.card_facts()
+        # 每张卡只比**自己的**那几条（内容那 800 多条刚在闸门 2 比过）。
+        # 但"键的集合"仍然整份比：C# 多报一条闸门不认识的事实必须被发现，
+        # 而只看 shape.* 就会把它当成合法的形状事实漏过去。
+        problems = []
+        missing = (set(expected) | set(shape)) - set(facts)
+        extra = set(facts) - (set(expected) | set(shape))
+        if missing:
+            problems.append(f"facts: C# 侧少了 {sorted(missing)[:4]}")
+        if extra:
+            problems.append(f"facts: C# 侧多报了闸门不知道怎么核对的事实 {sorted(extra)[:4]}")
+        problems += compare_facts({key: facts[key] for key in shape if key in facts}, shape, "facts")
+
+        # 头行：两边必须是同一局（同一个 combat id / seed / 血量 / 牌组 / 能量）
+        for key in ("combat", "seed", "shuffle", "hero", "enemies", "deck", "energy"):
+            want = shape.get("shape." + key)
+            got = header.get(key)
+            if got != want:
+                problems.append(f"header: `{key}` rust={got!r} != 约定 {want!r}")
+
+        side = oracle.observables()
+        steps = oracle.card_steps()
+        rust_steps = block["steps"]
+        final = block["final"] or {}
+
+        if len(rust_steps) != len(steps):
+            problems.append(f"dump_steps: rust={len(rust_steps)} csharp={len(steps)}")
+        for position, rust_step in enumerate(rust_steps):
+            if position >= len(steps):
+                problems.append(f"step{position}: rust 有、csharp 没有")
+                continue
+            step = steps[position]
+            for key in STEP_OBSERVABLES:
+                if rust_step.get(key) != step.get(key):
+                    problems.append(f"step{position}.{key}: rust={rust_step.get(key)} "
+                                    f"csharp={step.get(key)}")
+            if rust_step.get("hash") != step.get("hash"):
+                problems.append(f"step{position}.hash: rust={rust_step.get('hash')} "
+                                f"csharp={step.get('hash')}")
+        for key in FINAL_OBSERVABLES:
+            if key == "enemy_hp":
+                rust_value = rust_steps[-1].get("enemy_hp") if rust_steps else None
+            else:
+                rust_value = final.get(key)
+            if str(rust_value) != str(side.get(key)):
+                problems.append(f"final.{key}: rust={rust_value} csharp={side.get(key)}")
+        rust_final_hash = rust_steps[-1].get("hash") if rust_steps else None
+        if rust_final_hash != side.get("hash"):
+            problems.append(f"final_hash: rust={rust_final_hash} csharp={side.get('hash')}")
+
+        if problems:
+            failures.append((want_card["id"], problems[0]))
+            print(f"card={want_card['id']:<24} index={index:<2} steps={len(rust_steps)} "
+                  f"facts={checked + len(shape):<4} MISMATCH")
+            for problem in problems[:8]:
+                print(f"    - {problem}")
+        else:
+            passed += 1
+            print(f"card={want_card['id']:<24} index={index:<2} steps={len(rust_steps)} "
+                  f"facts={checked + len(shape):<4} hash={str(rust_final_hash)[:12]}.. OK")
+
+    return passed, len(blocks), failures
 
 def main(argv: list) -> int:
     verbose = "--verbose" in argv or "-v" in argv
@@ -746,11 +1194,24 @@ def main(argv: list) -> int:
             print("# ---- 文本结束 ----")
 
     print()
-    if table.bad == 0:
+    fight_ok = table.bad == 0
+    if fight_ok:
         print(f"FIGHT_DIFF PASS ({table.total}/{table.total})")
-        return 0
-    print(f"FIGHT_DIFF FAIL ({table.bad}/{table.total})")
-    return 1
+    else:
+        print(f"FIGHT_DIFF FAIL ({table.bad}/{table.total})")
+
+    # ── 逐卡这一层（保留上面那层：它打的是整局流程，这一层打的是每一张卡自己的效果）──────────
+    card_passed, card_total, card_failures = card_layer(oracle, mirror, verbose)
+
+    print()
+    if card_passed == card_total:
+        print(f"CARD_DIFF PASS ({card_passed}/{card_total})")
+    else:
+        print(f"CARD_DIFF FAIL ({card_total - card_passed}/{card_total})")
+        for card_id, reason in card_failures:
+            print(f"  - {card_id}: {reason}")
+
+    return 0 if (fight_ok and card_passed == card_total) else 1
 
 
 if __name__ == "__main__":
@@ -761,7 +1222,10 @@ if __name__ == "__main__":
         print("GATE FAIL")
         print(str(failure))
         print()
+        # 闸门可能是在逐卡那一层砸下来的（那时整局那层已经跑完了），但两者都没拿到 PASS ——
+        # 一行 PASS 都没打出来才是机器能可靠读到的东西。
         print("FIGHT_DIFF FAIL (gate)")
+        print("CARD_DIFF FAIL (gate)")
         sys.exit(1)
     except ABIMissing as failure:
         print()
@@ -769,6 +1233,7 @@ if __name__ == "__main__":
         print(str(failure))
         print()
         print("FIGHT_DIFF FAIL (abi)")
+        print("CARD_DIFF FAIL (abi)")
         sys.exit(1)
     except RuntimeError as failure:
         print()
@@ -776,4 +1241,5 @@ if __name__ == "__main__":
         print(str(failure))
         print()
         print("FIGHT_DIFF FAIL (error)")
+        print("CARD_DIFF FAIL (error)")
         sys.exit(1)

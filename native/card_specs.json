@@ -1,0 +1,3528 @@
+{
+ "card_count": 62,
+ "cards": [
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "paper_cut",
+   "index": 0,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "amount": {
+      "kind": "const",
+      "value": 6
+     },
+     "damageKind": "Direct",
+     "element": null,
+     "ignoresBlock": false,
+     "kind": "dealDamage",
+     "resultKey": null,
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "action"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "paper_cut+",
+   "index": 1,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "amount": {
+      "kind": "const",
+      "value": 8
+     },
+     "damageKind": "Direct",
+     "element": null,
+     "ignoresBlock": false,
+     "kind": "dealDamage",
+     "resultKey": null,
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "upgraded",
+    "action"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "cower_behind_a_desk",
+   "index": 2,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "amount": {
+      "kind": "const",
+      "value": 5
+     },
+     "kind": "gainBlock",
+     "resultKey": null,
+     "target": {
+      "kind": "source"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "block",
+    "cowardice",
+    "office",
+    "action"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "cower_behind_a_desk+",
+   "index": 3,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "amount": {
+      "kind": "const",
+      "value": 7
+     },
+     "kind": "gainBlock",
+     "resultKey": null,
+     "target": {
+      "kind": "source"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "block",
+    "cowardice",
+    "office",
+    "upgraded",
+    "action"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "strong_binder",
+   "index": 4,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 7
+       },
+       "kind": "gainBlock",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 1
+       },
+       "status": "doubt",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "block",
+    "argument",
+    "doubt",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "strong_binder+",
+   "index": 5,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 9
+       },
+       "kind": "gainBlock",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 2
+       },
+       "status": "doubt",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "block",
+    "argument",
+    "doubt",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 2,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "permit_a38",
+   "index": 6,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "charges": 0,
+     "duration": 0,
+     "kind": "applyStatus",
+     "resultKey": null,
+     "source": null,
+     "stacks": {
+      "kind": "const",
+      "value": 5
+     },
+     "status": "paperwork",
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "permit_a38+",
+   "index": 7,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "charges": 0,
+     "duration": 0,
+     "kind": "applyStatus",
+     "resultKey": null,
+     "source": null,
+     "stacks": {
+      "kind": "const",
+      "value": 5
+     },
+     "status": "paperwork",
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "red_tape",
+   "index": 8,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "junk",
+    "unplayable",
+    "generated",
+    "bureaucracy",
+    "curse"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "duplicate_copy",
+   "index": 9,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "junk",
+    "generated",
+    "bureaucracy",
+    "exhaust",
+    "curse"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "misfiled_paper",
+   "index": 10,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "count": {
+      "kind": "const",
+      "value": 1
+     },
+     "kind": "drawCards",
+     "resultKey": null,
+     "target": {
+      "kind": "source"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "junk",
+    "generated",
+    "bureaucracy",
+    "exhaust",
+    "curse"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "unsigned_form",
+   "index": 11,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "junk",
+    "unplayable",
+    "generated",
+    "bureaucracy",
+    "curse"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "administrative_notice",
+   "index": 12,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "charges": 0,
+     "duration": 0,
+     "kind": "applyStatus",
+     "resultKey": null,
+     "source": null,
+     "stacks": {
+      "kind": "const",
+      "value": 3
+     },
+     "status": "paperwork",
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "setup",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "administrative_notice+",
+   "index": 13,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "charges": 0,
+     "duration": 0,
+     "kind": "applyStatus",
+     "resultKey": null,
+     "source": null,
+     "stacks": {
+      "kind": "const",
+      "value": 4
+     },
+     "status": "paperwork",
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "setup",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "compliance_review",
+   "index": 14,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 5
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 2
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "setup",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "compliance_review+",
+   "index": 15,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 7
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 3
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "setup",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "missing_attachment",
+   "index": 16,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 2
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "drawCards",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "draw",
+    "setup",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "missing_attachment+",
+   "index": 17,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 3
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "drawCards",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "draw",
+    "setup",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "permit_denied",
+   "index": 18,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "charges": 0,
+     "duration": 0,
+     "kind": "applyStatus",
+     "resultKey": null,
+     "source": null,
+     "stacks": {
+      "kind": "const",
+      "value": 5
+     },
+     "status": "paperwork",
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "setup",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "permit_denied+",
+   "index": 19,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "charges": 0,
+     "duration": 0,
+     "kind": "applyStatus",
+     "resultKey": null,
+     "source": null,
+     "stacks": {
+      "kind": "const",
+      "value": 7
+     },
+     "status": "paperwork",
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "setup",
+    "upgraded",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 2,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "compounded_penalty",
+   "index": 20,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "amount": {
+      "kind": "multiply",
+      "left": {
+       "kind": "combatantStatusStacks",
+       "selector": {
+        "kind": "eventTarget"
+       },
+       "status": "paperwork"
+      },
+      "right": {
+       "kind": "const",
+       "value": 4
+      }
+     },
+     "damageKind": "Direct",
+     "element": null,
+     "ignoresBlock": false,
+     "kind": "dealDamage",
+     "resultKey": null,
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "payoff",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 2,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "compounded_penalty+",
+   "index": 21,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "amount": {
+      "kind": "multiply",
+      "left": {
+       "kind": "combatantStatusStacks",
+       "selector": {
+        "kind": "eventTarget"
+       },
+       "status": "paperwork"
+      },
+      "right": {
+       "kind": "const",
+       "value": 5
+      }
+     },
+     "damageKind": "Direct",
+     "element": null,
+     "ignoresBlock": false,
+     "kind": "dealDamage",
+     "resultKey": null,
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "payoff",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "final_reminder",
+   "index": 22,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 4
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 2
+       },
+       "status": "doubt",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "doubt",
+    "setup",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "final_reminder+",
+   "index": 23,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 5
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 3
+       },
+       "status": "doubt",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "doubt",
+    "setup",
+    "upgraded",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "form_12_b",
+   "index": 24,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "charges": 0,
+     "duration": 0,
+     "kind": "applyStatus",
+     "resultKey": null,
+     "source": null,
+     "stacks": {
+      "kind": "const",
+      "value": 1
+     },
+     "status": "paperwork",
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "form",
+    "exhaust",
+    "zero_cost"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "form_12_b+",
+   "index": 25,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "charges": 0,
+     "duration": 0,
+     "kind": "applyStatus",
+     "resultKey": null,
+     "source": null,
+     "stacks": {
+      "kind": "const",
+      "value": 2
+     },
+     "status": "paperwork",
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "form",
+    "exhaust",
+    "zero_cost",
+    "upgraded"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "temporary_authorization",
+   "index": 26,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "amount": {
+      "kind": "const",
+      "value": 4
+     },
+     "kind": "gainBlock",
+     "resultKey": null,
+     "target": {
+      "kind": "source"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "block",
+    "form",
+    "exhaust",
+    "zero_cost"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "temporary_authorization+",
+   "index": 27,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "amount": {
+      "kind": "const",
+      "value": 6
+     },
+     "kind": "gainBlock",
+     "resultKey": null,
+     "target": {
+      "kind": "source"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "block",
+    "form",
+    "exhaust",
+    "zero_cost",
+    "upgraded"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "counter_signature",
+   "index": 28,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 3
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "drawCards",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "draw",
+    "form",
+    "exhaust",
+    "zero_cost"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "counter_signature+",
+   "index": 29,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 5
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "drawCards",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "draw",
+    "form",
+    "exhaust",
+    "zero_cost",
+    "upgraded"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "expedited_stamp",
+   "index": 30,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 2
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "card": "duplicate_copy",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "DiscardPile"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "junk",
+    "form",
+    "exhaust",
+    "zero_cost"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "expedited_stamp+",
+   "index": 31,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 3
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "card": "duplicate_copy",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "DiscardPile"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "junk",
+    "form",
+    "exhaust",
+    "zero_cost",
+    "upgraded"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "internal_memo",
+   "index": 32,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "drawCards",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "card": "misfiled_paper",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "DiscardPile"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "draw",
+    "junk",
+    "form",
+    "exhaust",
+    "zero_cost"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "internal_memo+",
+   "index": 33,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "count": {
+        "kind": "const",
+        "value": 2
+       },
+       "kind": "drawCards",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "card": "misfiled_paper",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "DiscardPile"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "draw",
+    "junk",
+    "form",
+    "exhaust",
+    "zero_cost",
+    "upgraded"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "provisional_approval",
+   "index": 34,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 1
+       },
+       "defaultMax": null,
+       "kind": "gainResource",
+       "resource": "standard.energy",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "card": "red_tape",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "Hand"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "energy",
+    "junk",
+    "form",
+    "exhaust",
+    "zero_cost"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [],
+   "id": "provisional_approval+",
+   "index": 35,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "ExhaustPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 1
+       },
+       "defaultMax": null,
+       "kind": "gainResource",
+       "resource": "standard.energy",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "drawCards",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "card": "red_tape",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "Hand"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "energy",
+    "draw",
+    "junk",
+    "form",
+    "exhaust",
+    "zero_cost",
+    "upgraded"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "archive_the_evidence",
+   "index": 36,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "body": {
+        "card": {
+         "kind": "iterated"
+        },
+        "kind": "moveCardToZone",
+        "owner": {
+         "kind": "source"
+        },
+        "placement": "Bottom",
+        "resultKey": null,
+        "toZone": "ExhaustPile"
+       },
+       "definitionFilter": null,
+       "kind": "forEachCardInZone",
+       "maxIterations": 64,
+       "owner": {
+        "kind": "source"
+       },
+       "tagFilter": "junk",
+       "takeFirst": 1,
+       "zone": "Hand"
+      },
+      {
+       "amount": {
+        "kind": "const",
+        "value": 8
+       },
+       "kind": "gainBlock",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "junk",
+    "block",
+    "exhaust_payoff",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "archive_the_evidence+",
+   "index": 37,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "body": {
+        "card": {
+         "kind": "iterated"
+        },
+        "kind": "moveCardToZone",
+        "owner": {
+         "kind": "source"
+        },
+        "placement": "Bottom",
+        "resultKey": null,
+        "toZone": "ExhaustPile"
+       },
+       "definitionFilter": null,
+       "kind": "forEachCardInZone",
+       "maxIterations": 64,
+       "owner": {
+        "kind": "source"
+       },
+       "tagFilter": "junk",
+       "takeFirst": 1,
+       "zone": "Hand"
+      },
+      {
+       "amount": {
+        "kind": "const",
+        "value": 12
+       },
+       "kind": "gainBlock",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "junk",
+    "block",
+    "exhaust_payoff",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "shredder_drawer",
+   "index": 38,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "body": {
+        "card": {
+         "kind": "iterated"
+        },
+        "kind": "moveCardToZone",
+        "owner": {
+         "kind": "source"
+        },
+        "placement": "Bottom",
+        "resultKey": null,
+        "toZone": "ExhaustPile"
+       },
+       "definitionFilter": null,
+       "kind": "forEachCardInZone",
+       "maxIterations": 64,
+       "owner": {
+        "kind": "source"
+       },
+       "tagFilter": "junk",
+       "takeFirst": null,
+       "zone": "Hand"
+      },
+      {
+       "amount": {
+        "kind": "const",
+        "value": 9
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "junk",
+    "exhaust_payoff",
+    "action"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "shredder_drawer+",
+   "index": 39,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "body": {
+        "card": {
+         "kind": "iterated"
+        },
+        "kind": "moveCardToZone",
+        "owner": {
+         "kind": "source"
+        },
+        "placement": "Bottom",
+        "resultKey": null,
+        "toZone": "ExhaustPile"
+       },
+       "definitionFilter": null,
+       "kind": "forEachCardInZone",
+       "maxIterations": 64,
+       "owner": {
+        "kind": "source"
+       },
+       "tagFilter": "junk",
+       "takeFirst": null,
+       "zone": "Hand"
+      },
+      {
+       "amount": {
+        "kind": "const",
+        "value": 14
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "junk",
+    "exhaust_payoff",
+    "upgraded",
+    "action"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "cross_reference",
+   "index": 40,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "count": {
+        "kind": "const",
+        "value": 2
+       },
+       "kind": "drawCards",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "card": "duplicate_copy",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "DiscardPile"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "draw",
+    "junk",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "cross_reference+",
+   "index": 41,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "count": {
+        "kind": "const",
+        "value": 3
+       },
+       "kind": "drawCards",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "card": "duplicate_copy",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "DiscardPile"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "draw",
+    "junk",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 2,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "overfilled_inbox",
+   "index": 42,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 3
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "allEnemies"
+       }
+      },
+      {
+       "card": "unsigned_form",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "Hand"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "junk",
+    "aoe",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 2,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "overfilled_inbox+",
+   "index": 43,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 4
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "allEnemies"
+       }
+      },
+      {
+       "card": "unsigned_form",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "Hand"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "paperwork",
+    "junk",
+    "aoe",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "please_take_a_number",
+   "index": 44,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 2
+       },
+       "status": "doubt",
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 1
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "doubt",
+    "paperwork",
+    "queue",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "please_take_a_number+",
+   "index": 45,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 3
+       },
+       "status": "doubt",
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 2
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "doubt",
+    "paperwork",
+    "queue",
+    "upgraded",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "queue_management",
+   "index": 46,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 6
+       },
+       "kind": "gainBlock",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 1
+       },
+       "status": "doubt",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "block",
+    "doubt",
+    "queue",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "queue_management+",
+   "index": 47,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 9
+       },
+       "kind": "gainBlock",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 2
+       },
+       "status": "doubt",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "block",
+    "doubt",
+    "queue",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "processing_delay",
+   "index": 48,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 8
+       },
+       "kind": "gainBlock",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 2
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "block",
+    "paperwork",
+    "queue",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "processing_delay+",
+   "index": 49,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 10
+       },
+       "kind": "gainBlock",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 3
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "block",
+    "paperwork",
+    "queue",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 2,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "come_back_tomorrow",
+   "index": 50,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 18
+       },
+       "kind": "gainBlock",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "card": "red_tape",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "Hand"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "block",
+    "junk",
+    "queue",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 2,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "come_back_tomorrow+",
+   "index": 51,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 24
+       },
+       "kind": "gainBlock",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      },
+      {
+       "card": "red_tape",
+       "count": {
+        "kind": "const",
+        "value": 1
+       },
+       "kind": "createCardInstance",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       },
+       "toZone": "Hand"
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "block",
+    "junk",
+    "queue",
+    "upgraded",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "under_consideration",
+   "index": 52,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 3
+       },
+       "status": "doubt",
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "count": {
+        "kind": "const",
+        "value": 2
+       },
+       "kind": "drawCards",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "doubt",
+    "draw",
+    "queue",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "under_consideration+",
+   "index": 53,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 4
+       },
+       "status": "doubt",
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "count": {
+        "kind": "const",
+        "value": 3
+       },
+       "kind": "drawCards",
+       "resultKey": null,
+       "target": {
+        "kind": "source"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "bureaucracy",
+    "doubt",
+    "draw",
+    "queue",
+    "upgraded",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "rubber_stamp",
+   "index": 54,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 7
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 1
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "stamp",
+    "action"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "rubber_stamp+",
+   "index": 55,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 10
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 2
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "stamp",
+    "upgraded",
+    "action"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "stamp_barrage",
+   "index": 56,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 3
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "allEnemies"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 1
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "allEnemies"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "stamp",
+    "aoe",
+    "action"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "stamp_barrage+",
+   "index": 57,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 5
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "allEnemies"
+       }
+      },
+      {
+       "charges": 0,
+       "duration": 0,
+       "kind": "applyStatus",
+       "resultKey": null,
+       "source": null,
+       "stacks": {
+        "kind": "const",
+        "value": 2
+       },
+       "status": "paperwork",
+       "target": {
+        "kind": "allEnemies"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "stamp",
+    "aoe",
+    "upgraded",
+    "action"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "invalidated",
+   "index": 58,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "amount": {
+      "kind": "multiply",
+      "left": {
+       "kind": "combatantStatusStacks",
+       "selector": {
+        "kind": "eventTarget"
+       },
+       "status": "paperwork"
+      },
+      "right": {
+       "kind": "const",
+       "value": 3
+      }
+     },
+     "damageKind": "Direct",
+     "element": null,
+     "ignoresBlock": false,
+     "kind": "dealDamage",
+     "resultKey": null,
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "stamp",
+    "payoff",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 1,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "invalidated+",
+   "index": 59,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "amount": {
+      "kind": "multiply",
+      "left": {
+       "kind": "combatantStatusStacks",
+       "selector": {
+        "kind": "eventTarget"
+       },
+       "status": "paperwork"
+      },
+      "right": {
+       "kind": "const",
+       "value": 4
+      }
+     },
+     "damageKind": "Direct",
+     "element": null,
+     "ignoresBlock": false,
+     "kind": "dealDamage",
+     "resultKey": null,
+     "target": {
+      "kind": "eventTarget"
+     }
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "stamp",
+    "payoff",
+    "upgraded",
+    "argument"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 2,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "approved_for_disposal",
+   "index": 60,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 12
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "amount": {
+        "kind": "multiply",
+        "left": {
+         "kind": "combatantStatusStacks",
+         "selector": {
+          "kind": "eventTarget"
+         },
+         "status": "paperwork"
+        },
+        "right": {
+         "kind": "const",
+         "value": 2
+        }
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "stamp",
+    "payoff",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  },
+  {
+   "costs": [
+    {
+     "amount": 2,
+     "resource": "standard.energy"
+    }
+   ],
+   "id": "approved_for_disposal+",
+   "index": 61,
+   "is_action": false,
+   "lifecycle": 0,
+   "package": "scenario",
+   "play_condition": null,
+   "played_zone": "DiscardPile",
+   "program": {
+    "depth": 64,
+    "id": "(unnamed)",
+    "root": {
+     "children": [
+      {
+       "amount": {
+        "kind": "const",
+        "value": 16
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      },
+      {
+       "amount": {
+        "kind": "multiply",
+        "left": {
+         "kind": "combatantStatusStacks",
+         "selector": {
+          "kind": "eventTarget"
+         },
+         "status": "paperwork"
+        },
+        "right": {
+         "kind": "const",
+         "value": 3
+        }
+       },
+       "damageKind": "Direct",
+       "element": null,
+       "ignoresBlock": false,
+       "kind": "dealDamage",
+       "resultKey": null,
+       "target": {
+        "kind": "eventTarget"
+       }
+      }
+     ],
+     "kind": "sequence"
+    },
+    "steps": 1024
+   },
+   "queue_on_play": false,
+   "retain": false,
+   "tags": [
+    "attack",
+    "bureaucracy",
+    "paperwork",
+    "stamp",
+    "payoff",
+    "upgraded",
+    "form"
+   ],
+   "turn_end_zone": "DiscardPile"
+  }
+ ],
+ "format": 1,
+ "image": "tools/contentc/out/content.core.rdcf",
+ "image_bytes": 85616,
+ "statuses": [
+  {
+   "id": "doubt",
+   "package": "scenario",
+   "passive_modifiers": [
+    {
+     "magnitude": 75,
+     "operation": "ScalePercent",
+     "pipeline": "DamageDealt",
+     "priority": 100,
+     "restrictDamageKind": "Direct"
+    }
+   ],
+   "polarity": "Debuff",
+   "stacking": "MergeWithExistingInstance",
+   "tags": [],
+   "triggers": [
+    {
+     "event": "DamageDealt",
+     "program": {
+      "depth": 64,
+      "id": "(unnamed)",
+      "root": {
+       "delta": {
+        "kind": "const",
+        "value": -1
+       },
+       "kind": "modifyStatusStacks",
+       "resultKey": null,
+       "status": "doubt",
+       "target": {
+        "kind": "source"
+       }
+      },
+      "steps": 1024
+     }
+    }
+   ],
+   "uses_charges": false,
+   "uses_duration": false,
+   "uses_stacks": true
+  },
+  {
+   "id": "paperwork",
+   "package": "scenario",
+   "passive_modifiers": [],
+   "polarity": "Debuff",
+   "stacking": "MergeWithExistingInstance",
+   "tags": [
+    "damage_over_time"
+   ],
+   "triggers": [],
+   "uses_charges": false,
+   "uses_duration": false,
+   "uses_stacks": true
+  }
+ ]
+}
