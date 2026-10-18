@@ -1088,10 +1088,16 @@ fn hero_plays<H: TurnHost>(
         return Ok(context);
     };
 
-    // `:121-122`：入队 + 排空。内核没有队列，走**请求面**（拒绝 = no-op）：
-    // 参考的请求面对"不合格"的处理正是 no-op（`play.rs:437-460`），no-op 之后才记 `:124`。
+    // `:121-122`：入队 + 排空。内核的**请求面**替掉了"入队一条 PlayCard 请求"
+    // （`ScenarioRunner.cs:121` 的 `EnqueueEffect(PlayCardEffectRequest)`，见 `play.rs` 的四笔账），
+    // 但**排空是真的**：出牌期间 `exec.rs` 会把 `DamageDealt` 入队（`DamageEffects.cs:186-194`），
+    // 那批事件必须在这里排掉 —— 参考的 `ExecuteHeroPlays` 也是"入队/执行一步，然后排空"。
     let request = PlayRequest::new(*hero, instance, parse_target(target)?);
     let report = play::try_play_card(state, Some(content), &request)?;
+    // 排空：`DamageDealt` 的触发器（`doubt` 就在这上面）在这里跑。
+    // ⚠️ 顺序是 `排空 → settle_result`：参考的队列循环条件是 `Result == Ongoing`
+    // （`CombatEventHandling.cs:97`），而胜负可能**在排空里**被触发器节目决定。
+    host.resolve_pending_queues(state)?;
     // 一次出牌就是一次排空（参考在队列排空时判胜负，`CombatStateEffects.cs:28-60`）。
     settle_result(state);
     // `:124` 的原话是 `if (outcome.Value is { WasPlayed: false })` —— 它匹配的是 **false**，
@@ -1180,7 +1186,10 @@ fn enemy_acts<H: TurnHost>(
         problems.push(Problem::UnknownEnemyAction)?;
         return Ok(context);
     };
-    // `:191-192`：入队 + 排空 ⇒ 内核就地执行（`intent::execute_action` 与参考同一个执行器）。
+    // `:191-192`：入队 + 排空 ⇒ 内核就地执行动作节目（`intent::execute_action` 与参考同一个执行器），
+    // 再在这里**排空**它入队的事件。这一步是 `CARD_MULTI` 那 10 格的根因：
+    // 敌人出手 ⇒ `exec.rs` 入队 `DamageDealt`（`DamageEffects.cs:186-194`）⇒
+    // 戴着 `doubt` 的敌人（= 出手方）触发 `modifyStatusStacks(doubt, -1)`。
     intent::execute_action(
         state,
         content,
@@ -1189,6 +1198,7 @@ fn enemy_acts<H: TurnHost>(
         parse_target(target)?,
     )
     .map_err(intent_failure)?;
+    host.resolve_pending_queues(state)?;
     // 敌人动作也是一次排空 ⇒ 立刻判一次胜负（英雄可能在这一下里倒下）。
     settle_result(state);
     Ok(context)

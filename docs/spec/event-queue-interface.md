@@ -363,7 +363,7 @@ pub const MAX_PENDING_EFFECTS:       usize = 64;
 pub const MAX_PENDING_EVENTS:        usize = 64;
 pub const MAX_PENDING_CONTINUATIONS: usize = 64;
 pub const MAX_LIVE_CHAINS:           usize = 64;  // 见 4.1.4
-pub const MAX_EVENT_ID_LIST:         usize = 8;   // 集合型事件的截断上限，见 4.3
+pub const MAX_EVENT_ID_LIST:         usize = 24;  // 集合型事件的**容量**（不是截断上限）：超出=响亮失败，见 4.3 末
 // ---- 参考自己的上限，照抄 ----
 pub const MAX_QUEUE_CYCLES:       u32 = 1024;  // C:CombatExecutionLimits.cs:12
 pub const MAX_EFFECTS_PER_CYCLE:  u32 = 1024;  // :13
@@ -521,10 +521,25 @@ pub enum CombatEvent {             // 参考的 41 个 ICombatEvent record
 （`C:CombatEvents.cs:66-71` `CardInstanceCreated`、`:72-77` `CardCostPaid`、`:85-88` `CardsDrawn`、`:90-93` `Shuffled`、`:95-98` `HandDiscarded`、`:100-105` `CardsMovedBetweenZones`、`:246-250` `StatusesRemovedByPolarity`、`:251-255` `StatusRemoved` —— **共 8 条**）。内联成数组后，`MAX_EVENT_ID_LIST` 每 +8
 就是每事件 +136 B ⇒ 64 个事件的容量下 **+8.7 KiB**。
 
-⇒ **建议 `MAX_EVENT_ID_LIST = 8`，并写清"内容一来它就失效"的条件**：
-任何一次调用里"删除/抽/弃/搬"超过 8 张牌的**单条事件**。今天镜像的最大集合是
-`StatusesRemovedByPolarity`（≤24），但内容里没有一张卡会一次删 8 个以上状态；
-StS 侧的 `Fiend Fire`/`Second Wind` 会（一次消耗整手，最多 10 张）⇒ **M2a 之前必须复核这一条**。
+⇒ **`MAX_EVENT_ID_LIST` 定为 `24`（忠实档：集合型事件不截断）。** 2026-10-19 冻结方推翻了本文
+原先的"建议 `8`"。**否决理由不是内存不够，是治理性的**：`8` 截断的对象是**集合型事件携带的
+id 列表**，而参考在这里是 `IReadOnlyCollection`、**无界**（`C:CombatEvents.cs:85-105, 246-255`
+那 8 条）。超出容量的那部分会**静默消失** —— 不报错、没有测试会红、没有计数器会动。
+**那是语义降级，不是实现选择**；省下的 17 KB 是这条降级的**价格**，不是它的**理由**。
+
+> **硬规则（原文照抄，不做解释）**：**"一个容量常量放大后行为会变 ⇒ 它是语义，不是实现选择；不许拿它去换预算，也不许作为推荐方案出现在取舍里。"**
+
+⇒ **任何集合型事件超出容量时必须响亮失败，永不静默截断**，而且**只用现有的变体**（不发明新的）：
+
+| 溢出的东西 | 用哪个变体 | 先例 |
+|---|---|---|
+| 集合型事件的 id 列表（`StatusRemoved` / `CardsDrawn` / …） | `BindError::BufferTooSmall { needed, have }`（`K:status_bind.rs:378`） | 同一个变体今天就在给"触发器句柄暂存区"用，注释原文："**不截断**：少读几条触发器等于内容静默不发作"（`K:status_bind.rs:505`）——**同一种静默，同一个理由** |
+| 三个队列 / 链 arena 本身满了 | `ExecError::Capacity(CapacityError::Full(Container::…))`（`K:state.rs:151` 起） | 内核所有定容容器都走这一条，`Container` 加三个成员即可 |
+
+"内容温和所以今天撞不到"是**观察，不是保证**：今天镜像最大集合是 `StatusesRemovedByPolarity`（≤24），
+StS 侧 `Fiend Fire` / `Second Wind` 一次消耗整手（最多 10 张）。`24` 让这两条**不再越界**，
+但 M2a 一进来内容就可能带 25 个 id ⇒ **这一条仍要在 M2a 复核**，且复核的方式是"溢出会不会红"，
+不是"够不够用"。
 
 **【估算标注】**：以上全部是**算术估算，未编译实测**。实测口径已存在：`rd-sizeprobe`
 （`K:rd-sizeprobe/src/lib.rs:39, 144` 打印 `size_of::<CombatState>()` 与 SRAM 百分比）
@@ -714,8 +729,9 @@ pub fn triggers_for(state: &CombatState, event: TriggerEventKey) -> impl Iterato
    `C:EffectProgramExecution.cs:31` 还有一个 `?? CreateRootEffectChain()`：
    任何"节目在没有当前链的地方启动"的路径都会发号。我列出了三个发号点，**不敢说没有第四个**。
 3. **`MAX_EVENT_ID_LIST = 8`** —— 这是**为了内存选的数**，不是从参考推出来的数。
-   参考在这里**无界**。它今天不红是因为内容温和（最大集合 ≤4 张），StS 的
-   `Second Wind` 一来就会推翻它。
+   参考在这里**无界**。它今天不红是因为内容温和（最大集合 ≤4 张）。
+   ⚠️ **已兑现（2026-10-19）**：它没有被 `Second Wind` 推翻，而是被**治理规则**推翻 ——
+   "放大后行为会变 ⇒ 它是语义，不是实现选择"。现在 `= 24`，超出必须响亮失败（§4.3 末、§10.5）。
 
 ---
 
@@ -791,6 +807,7 @@ pub fn triggers_for(state: &CombatState, event: TriggerEventKey) -> impl Iterato
    是**读源码推的**（`play.rs:875-876` 自己也这么说）。
 3. **§4.3 的所有字节数**：算术估算，未编译。`rd-sizeprobe` 一跑就知道（V5）。
 4. **`MAX_EVENT_ID_LIST = 8` 是否够**：今天够，StS M2a 会不够（§4.3 末段）。
+   ⚠️ **已定案（2026-10-19）**：不用"够不够"回答，改成 `24` + 溢出响亮失败（§4.3 末、§10.5）。
 5. **`StringComparer.Ordinal` vs 默认 comparer 的差别**：对镜像 id 一致；对别的 id 形状没有实测。
 6. **`status_bind::DamageKind` 现在的实际变体集**（`battle-loop-hooks.md` §5.4 说只有 `Direct`，
    而 §8 说 DoT 管线已独立 —— 两者至少有一个过期，本轮没去核）。
@@ -913,15 +930,26 @@ id intern（98,560 B 的卡池 + 57,984 B 的战斗员），以及它顺带把�
 "28.2 KiB 的估算"能对上，**靠的是两个反方向的错**。若 `Continuation` 那一处到落地时才被发现，
 它会变成一个"+2.25 KiB 的意外"。下一版估算请把**条目级**的数也写出来并对账，别只对总额。
 
-### 10.5 推荐：**中档（64/64/64，`MAX_EVENT_ID_LIST = 8`）**，上界改成 **224 KiB（229,376 B）**
+### 10.5 决议：**忠实档（64/64/64，`MAX_EVENT_ID_LIST = 24`，集合型事件不截断）**，上界改成 **240 KiB（245,760 B）**
 
-| 选择 | 理由 |
-|---|---|
-| **中档 = 213,848 B** | ①它就是 §4.1.1 已经冻的六队列容量，选它**不改接口**（选保守档要改 5 个常量，是一份新的冻结物）；②比保守档多花 14,080 B（SRAM 的 2.3%），买到的是"队列满"这条**新增的响亮失败**的余量 —— 32 深度的队列在 StS 内容（一次消耗整手 = 10 条事件）上会先撞墙；③中档与忠实的差额是 46.6 KB 换 8 → 24 的集合上限，而 §4.3 自己已经写明"今天够，M2a 会不够"，那时该做的是 intern 而不是加宽数组 |
-| **上界 224 KiB** | 213,848 → 229,376 是 **+7.3% 余量**（够再加一两个小字段）。它同时是**故意的旅行线**：忠实档 231,256 > 229,376 会被它拦下 —— 谁要抬 `MAX_EVENT_ID_LIST`，就必须先看本节。**别抬到 232 KiB 以上**，那样忠实档会静悄悄通过 |
-| 要改两处 | `kernel/rd-core/src/state.rs:2833`（`state_fits_the_sram_plan`）与 `kernel/rd-sizeprobe/src/lib.rs:151`（同一条断言），**必须一起改**，否则裸机侧和宿主侧会各说各话 |
-| 同一提交里顺手做 | `state.rs` 模块头的内存表：加一行队列、把 `combatants` 那一行改成 57,984（§10.1）；`EMPTY` 常量会从 184,648 涨到 213,848（若有人 `*state = EMPTY` 就付一次 213 KB memcpy）【未实测】 |
-| **不**推荐 | 保守档（省 14 KB 但改接口 + 32 深度先撞墙）；忠实档（现在多付 17.4 KB 换一个今天用不到的集合上限，而且它**故意**留在上界之外） |
+> **本节原来的结论是"推荐中档（`MAX_EVENT_ID_LIST = 8`）+ 上界 224 KiB"。那个结论已被推翻，
+> 且不是因为算错了账（账是对的）。** 保留这段被推翻的记录，因为**否决理由本身就是一条规则**。
+
+| 项 | 决议 | 理由 |
+|---|---|---|
+| **档位 = 忠实档 231,256 B** | `MAX_EVENT_ID_LIST = 24`，集合型事件**不截断** | **`MAX_EVENT_ID_LIST` 不是预算参数，是语义**：它放大后行为会变（参考在这里无界，`C:CombatEvents.cs:85-105, 246-255`），所以它是语义，不是实现选择 —— **不许拿它去换预算**。`8` 的真实代价是"超出部分静默消失、没有测试会红"，即**语义降级**；17.4 KiB 是这条降级的价格标签，不是选它的理由 |
+| **中档已否决** | 不采纳 213,848 B / 上界 224 KiB | 否决理由同上一条，**不是**"忠实档更省"（它多花 17.4 KiB）。附带事实：省下的这 17.4 KiB **只省片上 SRAM** —— `CombatState` 是 POD（`Copy`、无指针、无内部引用），ESP32-P4 有 **16/32 MB PSRAM**，真要多开该做的是 §3-D9 的 id intern（98,560 B 卡池 + 57,984 B 战斗员），不是砍事件的集合上限 |
+| **硬规则（原文照抄）** | — | **"一个容量常量放大后行为会变 ⇒ 它是语义，不是实现选择；不许拿它去换预算，也不许作为推荐方案出现在取舍里。"** |
+| **超出容量怎么办** | `BindError::BufferTooSmall { needed, have }`（id 列表）/ `ExecError::Capacity(CapacityError::Full(Container::…))`（队列本身） | **永不静默截断**（§4.3 末给了两张表和先例；两个变体都是**现有**的，不新发明） |
+| **上界 240 KiB（245,760 B）** | 231,256 → 245,760 是 **+6.3% 余量**（够再加一两个小字段） | **这次抬界换的是语义完整性，不是"让测试过"**：224 KiB 那条线本来就是为了拦住忠实档而设的（§10.5 旧文原话："谁要抬 `MAX_EVENT_ID_LIST`，就必须先看本节"）—— 现在看过了，结论是抬。**别再把它当成弹性预算**：下一次抬上界必须同样给出"放大后行为会变吗"的答案 |
+| **要改两处** | `kernel/rd-core/src/state.rs` 的 `state_fits_the_sram_plan` 与 `kernel/rd-sizeprobe/src/lib.rs` 的同一条断言，**必须一起改** | 否则裸机侧和宿主侧会各说各话 |
+| **同一提交里顺手做** | `state.rs` 模块头的内存表：加一行队列、把 `combatants` 那一行改成 57,984（§10.1）；`EMPTY` 从 184,648 涨到 231,256（若有人 `*state = EMPTY` 就付一次 231 KB memcpy）【未实测】 | — |
+
+**为什么"中档"当初看起来是对的、而它其实错了**：旧论证的三条里，①"选它不改接口"是对的（`8` 是
+§4.1.1 冻的常量）—— 但那说明**接口本来就冻错了**，不说明 `8` 对；②"32 深度会先撞墙"是对的，
+它支持 64 而**不支持 8**；③"忠实档多付 17.4 KiB 换一个今天用不到的集合上限，那时该做 intern"
+—— 这一条把"今天用不到"当成了"不会静默降级"。**"用不到"和"静默丢"是两件事**：前者是概率，
+后者是已经发生的语义变化，只是没有观察者在看。
 
 ### 10.6 本轮实测与本文冲突的地方（以现实为准）
 
@@ -951,4 +979,82 @@ id intern（98,560 B 的卡池 + 57,984 B 的战斗员），以及它顺带把�
 5. 改常量换档，重跑。还原时用备份覆盖，**然后 `touch` 一次源文件**（`Copy-Item` 会把 mtime
    一起恢复，cargo 会拿旧 rlib 复用，于是量到的是上一档的数 —— 这条坑本项目踩过）。
 6. 还原后必须 `cargo test -p rd-core --release` 全绿（本轮 **532 passed**）再看 `git status`。
+
+---
+
+## 11. 批次 1 落地实况（2026-10-19，**只追加**）
+
+> 这一节记录**做完了什么、量到了什么**。上面 §0–§10 的推理不改（§10.5 的档位决议已在原地改过）。
+> 凡是本节与上面的估算冲突，以本节为准。
+
+### 11.1 落地形状
+
+| 项 | 实况 | 与冻结文档的差异 |
+|---|---|---|
+| 六个队列 | **有**：`pending_effects` / `pending_effect_chains` / `pending_effect_owners` / `pending_events` / `pending_event_chains` / `pending_continuations`，每列一个 `Fifo<T, 64>`（环形缓冲） | **照参考的三列并行数组 + 两条对齐断言**（任务书要求），而不是 §4.1.2 建议的"合成一条记录"。断言是**真的检查**（`ensure_effect_queue_aligned` / `ensure_event_queue_aligned`，每次出队前跑），不是 `debug_assert!` |
+| 链 arena | `ChainArena`：`128 × ChainRecord(16 B)` = 2,048 B，`refs` 归零即回收 | `MAX_LIVE_CHAINS` 从 64 → **128**：最坏局面是"事件队列装满（64 条各持一条链）+ 正在分发那条派生出的触发链（+1）"⇒ 65，取 2 倍余量。**它是"到顶就响亮失败"的容量，不是预算杠杆** |
+| 档位 | **忠实档**：`MAX_EVENT_ID_LIST = 24`，集合型事件**不截断**（`EventIdList::push` 超了返回 `Full(Container::EventIdList)`） | 与 §10.5 的决议一致 |
+| 上界 | **240 KiB（245,760 B）**，`state.rs` 与 `rd-sizeprobe` 两处一起改 | 一致 |
+| 排空循环 | `Host::resolve_pending_queues_with(state, QueueLimits)`：`while has_pending && Result == Ongoing` → 相位 1 抽干效果 → 相位 2 抽干事件 → 相位 3 只跑**一个**续延（且前两相都空） | 逐行照 `CombatEventHandling.cs:97-113`。三个上限（1024/1024/1024）做成 `QueueLimits` **参数**，于是测试能把它们当场撞出来 |
+| 四个回合事件 | `TurnStarted` / `TurnEnded` / `RoundStarted` / `RoundEnded` 都走 `enqueue_event_at_root` + 排空；**链号笔数不变**（那一笔从 `TurnHost` 适配器挪进了入队，一进一出抵消） | 一致 |
+| `DamageDealt` | **接了**：`exec.rs::resolve_damage_of_kind` 在落血/判胜负之后入队（`DamageEffects.cs:186-194`）；`host.rs` 按 **Bearer = 出手方**（`StatusDataRebuild.cs:53-55`）收集并跑触发器，上下文 `sel.source = SourceCombatant`、`eventTarget = TargetCombatantId` | `not_handled` 12 → **11**（`DamageDealt` 那 1 行不再是缺口） |
+| 续延 | 队列 + 相位 3 + `CloseAction` 的**执行**（`current_chain` 为空才发号）；`ProgramResume` / `ProgramTerminal` **响亮失败** | **节点级续延调度（`exec.rs` 拆成"请求 + 解析"）留到批次 2**。`play.rs` 的两处 `EnqueueContinuation(CloseAction)` 仍是手工发号（`:785`/`:894`），搬进队列会改变 `play.rs` 自己那些"发号笔数"断言的可观察点 |
+| 效果队列 | **没有生产者**（`exec.rs` 仍是就地应用）⇒ 相位 1 拿到条目就 `HostError::Unsupported("EffectRequest")` | 批次 2 补解析器 |
+
+### 11.2 实测内存（**不是估算**）
+
+```
+size_of::<CombatState>() = 207712 bytes (202 KiB)      ← 34.3% of 606,208 B SRAM
+  card pool  : 224 x 440 = 98560 bytes
+  combatants : 12 x 4832 = 57984 bytes
+  piles      : 12 x 1392 = 16704 bytes
+  queue      : effects 64 x 176 | events 64 x 96 | conts 64 x 44 | chains 128 x 16 = 23040 B
+```
+
+⇒ **184,648 → 207,712 B（+23,064 B，+11.2%）**，SRAM 30.46% → **34.26%**。
+
+⚠️ **它比 §10.2 探针的忠实档 231,256 B 小 23,544 B**，原因只有一个：探针按
+"`CombatEvent` = 参考全集 41 个变体、集合型按 `idlist=24` ⇒ 492 B"量形状，
+而**批次 1 只声明了接了线的那 5 个变体**（`CombatEvent` = **96 B**）。
+差额是**还没有生产者的变体**，不是能力 —— 批次 2/3 每接一种事件，`CombatEvent` 会往
+那个 492 B 长一段，`CombatState` 跟着长。**240 KiB 上界对两条都成立**（对 231,256 余 6.3%，
+对 207,712 余 15.5%），它存在的理由是"别让全集形状静悄悄越界"。
+
+### 11.3 对拍数字（四条基线，**全部按现实报**）
+
+| 层 | 批次 1 之前 | 之后 | 变了吗 |
+|---|---|---|---|
+| `FIGHT_DIFF` | 182/182 | **182/182** | 没变 |
+| `CARD_DIFF` | 62/62 | **62/62** | 没变 |
+| `CARD_MULTI` | 112/124（10 不可对照 + 2 MISMATCH） | **122/124（0 不可对照 + 2 MISMATCH）** | 那 10 格变成**一致**（不是"变成真 MISMATCH"） |
+| `ENEMY_DIFF` | 394/394 | **394/394** | 没变 |
+| 单测 | 532 | **547** | +15 |
+| 聚合验收 | 12/12 | **12/12** | 没变 |
+
+**"没有基线漂移"这件事是结论，不是运气**：`DamageDealt` 的触发器节目**发号**（`exec_num` +1/节目）、
+四个回合事件**建根链**（`chain_num` +1/事件）—— 这两笔在参考里本来就这么记，内核算出来的
+数目与参考**逐字节相同**。⇒ §4.2 那条"队列内容不进哈希、只有它的后果会漂"得到了正面验证：
+后果也对得上，所以一条基线都没动。
+
+**那 10 格是"变成一致"而不是"变成可对照"**：`doubt` 的层数变化**时点**也与参考一致
+（§5.3 的 D1/D2 那半条本来标着"未验证"，现在有了 10 个观测点的正面证据）。
+
+**剩下 2 格（`shredder_drawer` / `shredder_drawer+` 的 `play_again`，step0 `chain_num` 4/3）
+与续延无关**：它要的是"节目终态落在哪条链里"这个**回报**（批次 2 的 `exec.rs` 拆分），
+不是"续延 FIFO"。⇒ 批次 1 的合格线（122/124）**不需要节点级续延**就已经达到。
+
+### 11.4 这一轮**没能**用变异测试钉住的东西
+
+"两相位塌成同步"（效果一入队就解析）在批次 1 **没有可观察后果**：效果队列没有生产者，
+而且内核没有战斗日志。能钉住的是它的三个可观察的**近邻**，三个都已被变异测试判红：
+
+| 变异 | 判红的测试 |
+|---|---|
+| 排空循环漏掉 `Result == Ongoing` 守卫 | `the_loop_condition_is_re_read_every_cycle_not_checked_once_at_the_door`（红在 1024 轮上限上） |
+| 续延改成"入队即执行" | `a_continuation_waits_for_the_drain_and_runs_at_the_top_level`（①） |
+| 续延无条件发号（= 不承认"跑在顶层"） | 同上（③ 的反例） |
+| 队满静默丢弃 | `a_full_queue_refuses_the_65th_entry_instead_of_dropping_it` |
+| 相位上限静默 `break` | `the_limits_are_loud_and_parameterised_so_they_can_be_reached` |
+| 两相位掉序（先事件后效果） | `the_effect_phase_runs_before_the_event_phase` |
+
 

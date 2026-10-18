@@ -88,6 +88,15 @@ Rust 侧的程序来自镜像；C# 侧没有 RDCF 读取器，只能按 `native/
 `add`/`min`/`divide`/`combatantCounter`、`sel.allAllies`、`conditional`+`compare`、
 `loseResource`、三种触发器上下文都在这一轮补上了）。
 
+一条命令重跑基线（四层全跑、每层数字都打、结论再汇总一遍）：
+
+    $env:PYTHONIOENCODING='utf-8'; C:\\Users\\TK11\\miniforge3\\python.exe native\\fight_diff.py
+
+    # 先决条件：`native/RogueDeck.Oracle/bin/x64/Release/native/*.dll` 存在（缺了会以 ABIMissing
+    # 响亮失败并打印重建命令：`& tools\\dnaot.ps1 publish native/RogueDeck.Oracle/RogueDeck.Oracle.csproj
+    # -c Release -r win-x64`）。C# 侧是**参考**，改内核不需要重建它。
+    # 看结果用这一条：`Select-String -Path <日志> -Pattern '^# SUM '`
+
 命令行开关：
 
 * `--verbose` —— 把闸门逐键比对的内容也打出来（默认只打一行 `GATE ok: …`）；
@@ -1715,10 +1724,24 @@ def main(argv: list) -> int:
         for action_id, reason in enemy_failures:
             print(f"  - {action_id}: {reason}")
 
+    multi_ok = multi_passed + len(multi_gaps) == multi_total and not multi_failures
+    enemy_ok = enemy_passed + len(enemy_unavailable) == enemy_total and not enemy_failures
+
+    # 四层结论再汇总一遍。**为什么要有这一段**：上面每个 PASS 行之间隔着 100~1000 行明细，
+    # 一条 grep（`^# SUM `）拿全四个数比"翻日志找 PASS"稳 —— 而且汇总里的 PASS/FAIL 是
+    # **同一批布尔**算出来的，不是第二份判据（"抄第二份"是这份项目腐烂的老路）。
+    print()
+    print("# ---- 四层汇总（`^# SUM ` 一条 grep 拿全；明细见上）----")
+    print(f"# SUM FIGHT_DIFF  {'PASS' if fight_ok else 'FAIL'} ({table.total - table.bad}/{table.total})")
+    print(f"# SUM CARD_DIFF   {'PASS' if card_passed == card_total else 'FAIL'} "
+          f"({card_passed}/{card_total})")
+    print(f"# SUM CARD_MULTI  {'PASS' if multi_ok else 'FAIL'} (一致 {multi_passed}/{multi_total}, "
+          f"不可对照 {len(multi_gaps)}, MISMATCH {len(multi_failures)})")
+    print(f"# SUM ENEMY_DIFF  {'PASS' if enemy_ok else 'FAIL'} ({enemy_passed}/{enemy_total}, "
+          f"不可对照 {len(enemy_unavailable)})")
+
     return 0 if (fight_ok and card_passed == card_total
-                 and multi_passed + len(multi_gaps) == multi_total and not multi_failures
-                 and not enemy_failures
-                 and enemy_passed + len(enemy_unavailable) == enemy_total) else 1
+                 and multi_ok and enemy_ok) else 1
 
 
 if __name__ == "__main__":

@@ -131,8 +131,10 @@ use crate::exec::{self, ExecContext};
 use crate::expr::ExprError;
 use crate::ir::{IrError, NodeRef};
 use crate::state::{
-    CapacityError, CardSlot, CardZone, CombatResult, CombatState, CombatantId, StatusDefinitionId,
-    StatusInstance, ZonePlacement, ID_CAP, MAX_CARDS_PER_ZONE, MAX_STATUSES_PER_COMBATANT,
+    CapacityError, CardSlot, CardZone, CombatEvent, CombatResult, CombatState,
+    CombatantId, Continuation, EffectItem, EventItem, StatusDefinitionId, StatusInstance,
+    ZonePlacement, ID_CAP, MAX_CARDS_PER_ZONE, MAX_EFFECTS_PER_CYCLE, MAX_EVENTS_PER_CYCLE,
+    MAX_QUEUE_CYCLES, MAX_STATUSES_PER_COMBATANT,
 };
 use crate::status_bind::{self, BindError, DamageKind};
 use crate::turn::{HostFailure, TurnError, TurnHost};
@@ -222,6 +224,29 @@ pub enum HostError {
         /// 调用方给了几格。
         have: usize,
     },
+    /// 排空循环没能在上限内收敛（参考在这里**抛**，`CombatEventHandling.cs:99-102`）。
+    ///
+    /// 这是参考自己的上限（`MaxQueueCycles` = 1024），不是移植引入的：**卡在循环里**
+    /// 与**队列满**是两种不同的响亮失败，所以分成两个变体（后者是
+    /// [`capacity`](Self::Capacity) + [`CapacityError::Full`]）。
+    /// 参考的抛出消息还带 `WhatIsLooping(combat)`（`:121-141`，把三个队列的现场打出来）；
+    /// 内核的载荷只留**类别与轮数**，现场读 [`Host::last_failure`] 与三个
+    /// `pending_*_count()` —— 不是因为现场没用，而是因为 `HostError` 是 `Copy` 的窄枚举。
+    QueueCycleLimit {
+        /// 已经跑了几轮。
+        cycles: u32,
+        /// 上限（`MAX_QUEUE_CYCLES` 或调用方给的值）。
+        limit: u32,
+    },
+    /// 单相位的解析条数超限（同一上限族的另外两个：`MaxEffectsPerCycle` / `MaxEventsPerCycle`）。
+    QueuePhaseLimit {
+        /// `"effect"` 或 `"event"`。
+        phase: &'static str,
+        /// 这一相位已经解析了几条。
+        resolved: u32,
+        /// 上限。
+        limit: u32,
+    },
 }
 
 impl From<exec::ExecError> for HostError {
@@ -275,6 +300,10 @@ fn bridge(e: HostError) -> TurnError {
         HostError::TooManyTriggers { .. } => TurnError::Host(HostFailure::Unsupported),
         HostError::Content(_) => TurnError::Host(HostFailure::Content),
         HostError::Bind(_) => TurnError::Host(HostFailure::Content),
+        // 一个转不出来的排空循环是**内容**写的循环（参考把它当异常抛，排查方向是"谁在互相喂"），
+        // 不是"内核缺能力" —— 所以归 `Content` 那一档，载荷留在 `last_failure` 里。
+        HostError::QueueCycleLimit { .. } => TurnError::Host(HostFailure::Content),
+        HostError::QueuePhaseLimit { .. } => TurnError::Host(HostFailure::Content),
         HostError::Exec(exec::ExecError::UnsupportedNode) => {
             TurnError::Host(HostFailure::Unsupported)
         }
@@ -291,11 +320,11 @@ fn bridge(e: HostError) -> TurnError {
 
 /// 参考的 `TriggerEvent`（**Sandbox 层**的枚举，`SB:EffectVocabulary.cs:29-71`，25 个成员）。
 ///
-/// 本模块只处理其中 4 个能对应到 `TurnHost` 钩子的（回合开始/结束、轮次开始/结束），
-/// 其余 21 个名字**必须认得**：认不出来就会把"内容写了一条 `DamageTaken` 触发器"
+/// 本模块处理其中 5 个有钩子接的（回合开始/结束、轮次开始/结束、**以及 `DamageDealt`**），
+/// 其余 20 个名字**必须认得**：认不出来就会把"内容写了一条 `DamageTaken` 触发器"
 /// 误报成"内容配错了"，而真相是"这个事件今天没有钩子接"。
 ///
-/// ⇒ 认识的 21 个归 [`Self::NotHandled`]，**不认识的串**才是 [`HostError::Content`]。
+/// ⇒ 认识的 20 个归 [`Self::NotHandled`]，**不认识的串**才是 [`HostError::Content`]。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TriggerEvent {
     /// `TurnStarted` —— 拥有者回合开始（`SB:StatusDataRebuild.cs:39-42`）。
@@ -306,7 +335,14 @@ pub enum TriggerEvent {
     RoundStarted,
     /// `RoundEnded` —— 每轮结束（`:123-124`，同上）。镜像里 4 条（`sustained` 等）。
     RoundEnded,
-    /// 参考有、但今天的 `TurnHost` 没有对应钩子的 21 个成员之一。
+    /// `DamageDealt` —— 有人造成伤害（`DamageEffects.cs:186-194` 入队）。
+    ///
+    /// **Bearer 是"出手方"**，不是承受者：`StatusDataRebuild.cs:53-55` 给这个事件挂的
+    /// Bearer 过滤器是 `DamageDealtSourceHasStatusTriggerFilter`（`Scope` 默认值是 `Bearer`，
+    /// 而镜像 25 条触发器**一个 `Scope` 都没出现**）。`doubt` 的触发器就长在这上面：
+    /// 敌人戴着 doubt 打人 ⇒ 触发 ⇒ `modifyStatusStacks(doubt, -1)` 落到 `sel.source`。
+    DamageDealt,
+    /// 参考有、但今天的 `TurnHost` 没有对应钩子的 20 个成员之一。
     NotHandled,
 }
 
@@ -319,8 +355,9 @@ impl TriggerEvent {
             "TurnEnded" => Some(TriggerEvent::TurnEnded),
             "RoundStarted" => Some(TriggerEvent::RoundStarted),
             "RoundEnded" => Some(TriggerEvent::RoundEnded),
-            // ── 参考有、本内核今天没有钩子接的 21 个（按 `EffectVocabulary.cs` 的声明序）──
-            "DamageTaken" | "DamageDealt" | "Healed" | "CardPlayed" | "Downed" | "StatusExpired"
+            "DamageDealt" => Some(TriggerEvent::DamageDealt),
+            // ── 参考有、本内核今天没有钩子接的 20 个（按 `EffectVocabulary.cs` 的声明序）──
+            "DamageTaken" | "Healed" | "CardPlayed" | "Downed" | "StatusExpired"
             | "ResourceGained" | "CardCostPaid" | "StatusApplied" | "StatusRemoved"
             | "StatusMerged" | "StatusStacksChanged" | "BlockGained" | "CardsDrawn"
             | "CardMovedToZone" | "CardInstanceCreated" | "StatusApplicationPrevented"
@@ -338,6 +375,7 @@ impl TriggerEvent {
             TriggerEvent::TurnEnded => "TurnEnded",
             TriggerEvent::RoundStarted => "RoundStarted",
             TriggerEvent::RoundEnded => "RoundEnded",
+            TriggerEvent::DamageDealt => "DamageDealt",
             TriggerEvent::NotHandled => "",
         }
     }
@@ -859,13 +897,29 @@ impl<'a> Host<'a> {
     }
 
     /// turn-start 处理器 #4：全部 turn-start 触发器（镜像 3 条）。
+    ///
+    /// ⚠️ **批次 1 起改走事件队列**（`CombatTurnProcessor.cs:28-32` 的
+    /// `EnqueueEvent(TurnStartedCombatEvent)` + `:34-37` 的 `ResolvePendingQueues`）：
+    ///
+    /// 1. 顶层入队 ⇒ 建一条根链（`CombatState.cs:446` 的 `CurrentEffectChain ?? CreateRoot…`）
+    ///    ⇒ **链号 +1**。这一笔以前写在本函数的 `TurnHost` 适配器里（`let _turn_started_chain`），
+    ///    现在挪进 [`CombatState::enqueue_event_at_root`] —— **笔数不变，位置更诚实**。
+    /// 2. 立刻排空：本事件此刻是队列里唯一一条，所以"谁在什么时候跑触发器"没有变
+    ///    （参考的 turn-start 七个处理器里，第 4 个就是同一个 handler 体）。
+    /// 3. 排空会把**这个处理器期间**入队的东西也消化掉 —— 数组里 3 条触发器各跑一个节目，
+    ///    `exec_num` 仍然一个节目 +1。
     pub fn try_run_turn_started_triggers(
         &mut self,
         state: &mut CombatState,
         actor: &CombatantId,
     ) -> Result<(), HostError> {
         self.flush_deferred()?;
-        self.run_triggers(state, actor, TriggerEvent::TurnStarted)
+        state
+            .enqueue_event_at_root(CombatEvent::TurnStarted {
+                combatant: *actor,
+            })
+            .map_err(|e| self.record(HostError::Capacity(e)))?;
+        self.try_resolve_pending_queues(state)
     }
 
     /// turn-start 处理器 #5：卡牌队列（`QueueResolution.cs:18-138`）。
@@ -996,27 +1050,23 @@ impl<'a> Host<'a> {
         Ok(())
     }
 
-    /// **任何**入队之后的排空 —— 恒 no-op，而且这是**可证**的。
+    /// **任何**入队之后的排空：三相位排空循环。
     ///
-    /// 参考实现排空三个队列（效果 / 事件 / 续延，`CombatEventHandling.cs:81-115`）。
-    /// 规格书 §2.3 给出的"空实现就够"的准确条件是：
+    /// 参考实现排空三个队列（效果 / 事件 / 续延，`CombatEventHandling.cs:81-115`）；
+    /// 语义与逐行对照写在 [`Self::resolve_pending_queues_with`] 的文档里，这里只是
+    /// "用参考的默认上限调它"。
     ///
-    /// > 如果宿主**不在钩子之间保留任何待处理队列**（即每个钩子在返回前就把自己的效果
-    /// > 直接写进状态），那么 `resolve_pending_queues` 的调用永远是 no-op。
-    ///
-    /// 本宿主正是那种宿主：`exec::execute` 是**同步递归**的（每个节点当场生效、当场返回），
-    /// 触发器也是当场跑完的，`Finish` 的搬牌是就地做的。三条队列在这里**没有对应的东西**，
-    /// 所以 `while` 条件第一次就不成立。
+    /// ⚠️ **2026-10-19 之前这个函数是恒 no-op，而且文档论证过它为什么可以**：
+    /// "本宿主不在钩子之间保留任何待处理队列"（`exec::execute` 同步递归、触发器当场跑完）。
+    /// 那个论证在批次 1 **失效了** —— 事件队列现在真的有内容（四个回合边界 + `DamageDealt`），
+    /// 所以它必须真的排空。留下的结论只有一半：`exec` 仍然是同步递归的 ⇒
+    /// **效果队列没有生产者**（见 [`Self::resolve_pending_effects`]）。
     ///
     /// ⚠️ 它**不**解析 `CardZone::QueuePile`（那是 [`Self::try_resolve_card_queue`]）——
     /// `turn.rs:130-152` 把这两件事分成了两个钩子，正是为了防止"同一个函数名两个语义"。
-    ///
-    /// 这条"没有遗留"的说法**不是断言，是被测的**：`resolve_pending_queues_is_a_no_op...`
-    /// 那两条测试比对调用前后的哈希输入文本（逐字节），一致才通过。
     pub fn try_resolve_pending_queues(&mut self, state: &mut CombatState) -> Result<(), HostError> {
         self.flush_deferred()?;
-        let _ = state;
-        Ok(())
+        self.resolve_pending_queues_with(state, QueueLimits::DEFAULT)
     }
 
     /// turn-start 最后一步：DoT 结算（`StatusEffects.cs:449-510`）。
@@ -1169,13 +1219,23 @@ impl<'a> Host<'a> {
     }
 
     /// turn-end 处理器 #3：触发程序（镜像 6 条）。
+    /// turn-end 处理器 #3：全部 turn-end 触发器（镜像里 2 条）。
+    ///
+    /// 批次 1 起走事件队列，形状与 [`Self::try_run_turn_started_triggers`] 完全一致
+    /// （`CombatTurnProcessor.cs:61-65` 入队 + `:67-70` 排空 ⇒ 链号 +1，位置从
+    /// `TurnHost` 适配器挪到这里）。
     pub fn try_run_turn_ended_triggers(
         &mut self,
         state: &mut CombatState,
         actor: &CombatantId,
     ) -> Result<(), HostError> {
         self.flush_deferred()?;
-        self.run_triggers(state, actor, TriggerEvent::TurnEnded)
+        state
+            .enqueue_event_at_root(CombatEvent::TurnEnded {
+                combatant: *actor,
+            })
+            .map_err(|e| self.record(HostError::Capacity(e)))?;
+        self.try_resolve_pending_queues(state)
     }
 
     /// turn-end 处理器 #4：按时长的状态减 1（`StatusEffects.cs:379-406` + `:333-377`）。
@@ -1371,12 +1431,19 @@ impl<'a> Host<'a> {
         state: &mut CombatState,
         ended_round: i32,
     ) -> Result<(), HostError> {
-        let _ = ended_round;
         self.flush_deferred()?;
-        let Some(actor) = state.active_combatant_id else {
-            return Ok(());
-        };
-        self.run_round_triggers(state, &actor, TriggerEvent::RoundEnded)
+        // `EnqueueEvent(new RoundEndedCombatEvent(round, LastActiveCombatantId))`
+        // （`CombatTurnProcessor.cs:192-195`）：`LastActiveCombatantId` 是**入队那一刻**的
+        // 行动者。`turn.rs:809-812` 在自增轮次**之前**调本钩子，所以 `active_combatant_id`
+        // 还是它 —— 但载荷从哪里来是语义：事件**带着**那个 id（`TriggeredProgramContextAdapters.cs:74-82`
+        // 拿的就是 `e.LastActiveCombatantId`），所以在这里快照进事件，而不是在分发时去读当前值。
+        state
+            .enqueue_event_at_root(CombatEvent::RoundEnded {
+                round: ended_round,
+                last_active: state.active_combatant_id,
+            })
+            .map_err(|e| self.record(HostError::Capacity(e)))?;
+        self.try_resolve_pending_queues(state)
     }
 
     /// `RoundStartedCombatEvent` 的触发器（`:199-200`）。
@@ -1394,12 +1461,13 @@ impl<'a> Host<'a> {
         state: &mut CombatState,
         new_round: i32,
     ) -> Result<(), HostError> {
-        let _ = new_round;
         self.flush_deferred()?;
-        let Some(actor) = state.active_combatant_id else {
-            return Ok(());
-        };
-        self.run_round_triggers(state, &actor, TriggerEvent::RoundStarted)
+        // `EnqueueEvent(new RoundStartedCombatEvent(CurrentRound))`（`:199-200`）⇒ 顶层入队 ⇒ 链号 +1。
+        // 上下文读**当前** `ActiveCombatantId`（分发时读，见 `dispatch_event` 的注释）。
+        state
+            .enqueue_event_at_root(CombatEvent::RoundStarted { round: new_round })
+            .map_err(|e| self.record(HostError::Capacity(e)))?;
+        self.try_resolve_pending_queues(state)
     }
 
     /// 轮次事件的触发器：**不收 Bearer 过滤**（见 [`Self::try_on_round_ended`]）。
@@ -1468,6 +1536,305 @@ impl<'a> Host<'a> {
 }
 
 // =============================================================================================
+// 排空循环（`ResolvePendingQueues`，`CombatEventHandling.cs:81-115`）
+// =============================================================================================
+
+/// 排空的上限族（参考的 `CombatExecutionLimits`，`CombatExecutionLimits.cs:7-14`）。
+///
+/// 为什么做成**参数**而不是直接读常量：上限是"卡在循环里"的唯一出口，而"卡住"这种局面
+/// 用真内容造不出来（要么转不出来，要么要等 1024 轮）。做成参数，测试就能用
+/// `max_cycles: 0` / `max_events_per_cycle: 0` 把它**当场**撞出来 —— 那正是
+/// `docs/spec/event-queue-interface.md` §6.2 的 V4 想证伪的东西（"队列满/超限必须响亮"）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QueueLimits {
+    /// `MaxQueueCycles`（`:12`，默认 1024）。
+    pub max_cycles: u32,
+    /// `MaxEffectsPerCycle`（`:13`）。
+    pub max_effects_per_cycle: u32,
+    /// `MaxEventsPerCycle`（`:14`）。
+    pub max_events_per_cycle: u32,
+}
+
+impl QueueLimits {
+    /// 参考的默认值（三个 1024）。
+    pub const DEFAULT: Self = Self {
+        max_cycles: MAX_QUEUE_CYCLES,
+        max_effects_per_cycle: MAX_EFFECTS_PER_CYCLE,
+        max_events_per_cycle: MAX_EVENTS_PER_CYCLE,
+    };
+}
+
+impl Default for QueueLimits {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl Host<'_> {
+    /// **排空循环**：`ResolvePendingQueues`（`CombatEventHandling.cs:81-115`）。
+    ///
+    /// 三相位，逐行照参考：
+    ///
+    /// ```text
+    /// while ((HasPendingEffects || HasPendingEvents || HasPendingContinuations)
+    ///        && Result == Ongoing)                          // :97  ← 两条条件**都在**
+    /// {
+    ///     if (resolvedCycles >= MaxQueueCycles) throw;       // :99-102
+    ///     ResolvePendingEffects(...);                        // :104  相位 1：**抽干**
+    ///     ResolvePendingEvents(...);                         // :105  相位 2：**抽干**
+    ///     if (!HasPendingEffects && !HasPendingEvents
+    ///         && TryDequeueContinuation(out var c)) c(combat); // :107-111 相位 3：**只跑一个**
+    ///     resolvedCycles++;                                  // :113
+    /// }
+    /// ```
+    ///
+    /// 三条**不是风格**的细节：
+    ///
+    /// 1. **相位是"抽干"不是"一条"**：效果队列全空才轮到事件队列（`:104-105`）。所以
+    ///    触发器节目入队的效果**晚于同批所有事件**生效 —— 把两相位塌成"入队即执行"
+    ///    会让多段攻击的第二段读到第一段改过的状态（§2.3 的 D1/D2）。
+    /// 2. **续延每轮只跑一个，且必须等前两相都空**（`:107-111`）。所以"续延永远晚于它
+    ///    派生的效果"—— 这是"节目真的结束了"的定义。
+    /// 3. **`Result == Ongoing` 是循环条件，不是入口检查**：战斗一结束，已经排队的条目
+    ///    **不会再落地**（`run_triggers` 里那条 `break` 是同一件事的内层表达）。
+    ///    实现成"入口查一次"会让战斗结束后仍分发事件 —— 表现是 `exec_num` 多涨。
+    pub fn resolve_pending_queues_with(
+        &mut self,
+        state: &mut CombatState,
+        limits: QueueLimits,
+    ) -> Result<(), HostError> {
+        let mut cycles = 0u32;
+        while state.has_pending_queues() && state.result == CombatResult::Ongoing {
+            if cycles >= limits.max_cycles {
+                return Err(self.record(HostError::QueueCycleLimit {
+                    cycles,
+                    limit: limits.max_cycles,
+                }));
+            }
+            // 相位 1：效果队列抽干。
+            self.resolve_pending_effects(state, limits)?;
+            // 相位 2：事件队列抽干。
+            self.resolve_pending_events(state, limits)?;
+            // 相位 3：**只跑一个**续延，且只有前两相都空了才跑。
+            if !state.has_pending_effects() && !state.has_pending_events() {
+                if let Some(continuation) = state.try_dequeue_continuation() {
+                    self.run_continuation(state, continuation)?;
+                }
+            }
+            cycles += 1;
+        }
+        Ok(())
+    }
+
+    /// 相位 1：`ResolvePendingEffects`（`CombatEffectQueueProcessor.cs:20-60`）。
+    ///
+    /// ⚠️ **批次 1 的现状（如实报告）**：效果队列**今天没有生产者** —— `exec.rs` 还是
+    /// "就地应用"，没有"造请求 + 解析"的拆分（那是批次 2）。所以这里一旦拿到条目就
+    /// **响亮失败**（[`HostError::Unsupported`]），而不是悄悄把它丢掉或假装解析过。
+    /// 丢掉一条效果与"这条效果不生效"是同一件事，而后者不会有任何观察者 —— 这正是
+    /// 本项目的硬规则第 16 条要杀的形态（"查不到就跳过"比没有检查更糟）。
+    fn resolve_pending_effects(
+        &mut self,
+        state: &mut CombatState,
+        limits: QueueLimits,
+    ) -> Result<(), HostError> {
+        let mut resolved = 0u32;
+        while state.has_pending_effects() && state.result == CombatResult::Ongoing {
+            if resolved >= limits.max_effects_per_cycle {
+                return Err(self.record(HostError::QueuePhaseLimit {
+                    phase: "effect",
+                    resolved,
+                    limit: limits.max_effects_per_cycle,
+                }));
+            }
+            let Some(item) = state.dequeue_effect().map_err(HostError::Capacity)? else {
+                break;
+            };
+            let chain = item.chain;
+            // `using (combat.EnterEffectChain(entry.EffectChain))`（`:32`）：解析期间
+            // `current_chain` 就是这条 —— 于是解析过程中入队的东西**不再发号**（§1.4）。
+            let outcome = state.with_chain(chain, |state| self.resolve_effect(state, &item));
+            // 出队即放掉"队列条目持着这条链"那一次引用。
+            state.release_chain(chain);
+            outcome?;
+            resolved += 1;
+        }
+        Ok(())
+    }
+
+    /// 解析一条效果。**批次 1：没有解析器**（见 [`Self::resolve_pending_effects`]）。
+    fn resolve_effect(&mut self, state: &mut CombatState, item: &EffectItem) -> Result<(), HostError> {
+        let _ = (state, item);
+        Err(self.record(HostError::Unsupported("EffectRequest")))
+    }
+
+    /// 相位 2：`ResolvePendingEvents`（`CombatEventHandling.cs:39-79`）。
+    ///
+    /// 逐条：出队 → **进它自己的链作用域**（`:60` 的 `using (EnterEffectChain(...))`）→
+    /// 按注册序派发 handler。本内核每个事件类型**只有一个** handler（触发器分发），
+    /// 所以"注册序"退化成"这个事件的那一个 handler"。
+    ///
+    /// ⚠️ 循环内部**再查一次** `Result == Ongoing`：相位 2 的每一条都可能结束战斗
+    /// （触发器节目打死最后一个敌人），而参考的 `while` 也是逐圈读的（`:49-50`）。
+    fn resolve_pending_events(
+        &mut self,
+        state: &mut CombatState,
+        limits: QueueLimits,
+    ) -> Result<(), HostError> {
+        let mut resolved = 0u32;
+        while state.has_pending_events() && state.result == CombatResult::Ongoing {
+            if resolved >= limits.max_events_per_cycle {
+                return Err(self.record(HostError::QueuePhaseLimit {
+                    phase: "event",
+                    resolved,
+                    limit: limits.max_events_per_cycle,
+                }));
+            }
+            let Some(item) = state.dequeue_event().map_err(HostError::Capacity)? else {
+                break;
+            };
+            let chain = item.chain;
+            let outcome = state.with_chain(chain, |state| self.dispatch_event(state, &item));
+            state.release_chain(chain);
+            outcome?;
+            resolved += 1;
+        }
+        Ok(())
+    }
+
+    /// 分发一条事件：按**事件类型**找它那一个 handler。
+    ///
+    /// 五个变体对应参考的五条事件链，行号写在各自的臂上。没有 `_` 臂 —— 加变体时
+    /// 编译器会在这里**拦住**（与 `exec.rs` 的分派同一条纪律）。
+    pub fn dispatch_event(&mut self, state: &mut CombatState, item: &EventItem) -> Result<(), HostError> {
+        match item.event {
+            // `TurnStartedTriggeredEffects`（`SB:StatusDataRebuild.cs:39-42`，Bearer = 行动者）。
+            CombatEvent::TurnStarted { combatant } => {
+                self.run_triggers(state, &combatant, TriggerEvent::TurnStarted)
+            }
+            // `TurnEndedTriggeredEffects`（`:43-46`，Bearer = 行动者）。
+            CombatEvent::TurnEnded { combatant } => {
+                self.run_triggers(state, &combatant, TriggerEvent::TurnEnded)
+            }
+            // `RoundStartedTriggeredEffects`（`:121-122`）：**没有 gate、没有过滤器**，
+            // 上下文读**当前** `ActiveCombatantId`（`TriggeredProgramContextAdapters.cs:66-70`）。
+            CombatEvent::RoundStarted { .. } => {
+                let Some(actor) = state.active_combatant_id else {
+                    return Ok(());
+                };
+                self.run_round_triggers(state, &actor, TriggerEvent::RoundStarted)
+            }
+            // `RoundEndedTriggeredEffects`（`:123-124`）：同上，但上下文读事件里的
+            // `LastActiveCombatantId`（`TriggeredProgramContextAdapters.cs:74-82`）——
+            // 所以它从**事件载荷**取，而不是从当前 `active_combatant_id` 取。
+            CombatEvent::RoundEnded { last_active, .. } => {
+                let Some(actor) = last_active else {
+                    return Ok(());
+                };
+                self.run_round_triggers(state, &actor, TriggerEvent::RoundEnded)
+            }
+            // `DamageDealtTriggeredEffects`（`:53-55`）：Bearer = **出手方**。
+            CombatEvent::DamageDealt { target, source, .. } => {
+                self.run_damage_dealt_triggers(state, &target, source)
+            }
+        }
+    }
+
+    /// `DamageDealt` 的触发器（`SB:StatusDataRebuild.cs:53-55`）。
+    ///
+    /// 三道与参考对齐的门，顺序是规格：
+    ///
+    /// 1. **上下文工厂**：承受者必须在场，否则返回 null ⇒ 跳过
+    ///    （`TriggeredProgramContextAdapters.cs:89-97`）。出手方**可以为 null**（上下文欢迎它），
+    ///    但下面第 3 条随即会拒。
+    /// 2. **gating**：没人戴着这个状态就跳过（`TriggeredProgramDefinition.cs:139-144`）。
+    ///    本层的 `collect_triggers` 是"从**佩戴者**的状态出发收集"，两条合成一步。
+    /// 3. **Bearer 过滤器**：`DamageDealtSourceHasStatusTriggerFilter` —— **出手方**戴着它
+    ///    （`DamageDealtTriggeredEffects.cs` 的 `Matches`：`SourceCombatant is not null &&
+    ///    SourceCombatant.Statuses.Any(...)`）。出手方为 null ⇒ 不匹配。
+    ///
+    /// 节目上下文（`DamageDealtTriggeredEffectTargetResolver.CreateSelectionContext`）：
+    /// `sel.source = SourceCombatant ?? TargetCombatant`、`EventTargetId = TargetCombatantId`。
+    /// ⇒ `doubt` 的 `modifyStatusStacks(doubt, -1)` 落在**出手方**身上，不是承受者。
+    fn run_damage_dealt_triggers(
+        &mut self,
+        state: &mut CombatState,
+        target: &CombatantId,
+        source: Option<CombatantId>,
+    ) -> Result<(), HostError> {
+        // 第 1 道：承受者不在场 ⇒ 上下文工厂返回 null（`:89-92`）。
+        if state.combatant(target).is_none() {
+            return Ok(());
+        }
+        // 第 2+3 道：Bearer = 出手方；它要是没戴着这个状态，收集出来就是空的。
+        let Some(bearer) = source else {
+            return Ok(());
+        };
+        let mut batch = TriggerBatch::new();
+        self.collect_triggers(state, &bearer, TriggerEvent::DamageDealt, &mut batch)?;
+        batch.sort();
+
+        for i in 0..batch.len {
+            if state.result != CombatResult::Ongoing {
+                break;
+            }
+            let Some(handle) = batch.root.get(i).copied() else {
+                break;
+            };
+            let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
+            let root = NodeRef::new(self.content, handle);
+            // `EffectProgramExecution.cs:27`：每跑一个节目发一次号（**包括触发器节目**）。
+            let _execution_id = state.allocate_program_execution_id();
+            let outcome = execute_program(
+                state,
+                self.content,
+                root,
+                Some(bearer),
+                Some(*target),
+                steps,
+            );
+            outcome.map_err(|e| self.record(HostError::Exec(e)))?;
+        }
+        Ok(())
+    }
+
+    /// 跑一条续延（`CombatEventHandling.cs:107-111` 的 `c(combat)`）。
+    ///
+    /// ⚠️ **它跑在顶层**：`resolve_pending_queues_with` 在调用它之前把效果/事件两相都抽空了，
+    /// 而且 `with_chain` 的作用域已经退出 ⇒ 此刻 `current_chain` 是 `NONE`。
+    /// 这个位置本身就是语义：`CloseAction` 里那次 `EnqueueEvent(ActionResolved)`
+    /// 会因此**建一条根链**（`CombatState.cs:442-452`）—— `play.rs` 今天用一句
+    /// `create_root_effect_chain()` 手工记的就是这笔（`:785`、`:894` 的"账 2'"）。
+    ///
+    /// 批次 1 只支持 `CloseAction`；另两个变体属于节点级续延调度（批次 2），
+    /// 到了这里就**响亮失败**，绝不"当它跑过了"。
+    fn run_continuation(
+        &mut self,
+        state: &mut CombatState,
+        continuation: Continuation,
+    ) -> Result<(), HostError> {
+        match continuation {
+            Continuation::CloseAction { actor } => {
+                let _ = actor;
+                // 参考里这一笔是 `EnqueueEvent(ActionResolved)`（`Cards/CardPlay.cs:306-312`），
+                // 而 `EnqueueEvent` 的链规则是 `CurrentEffectChain ?? CreateRootEffectChain()`
+                // （`CombatState.cs:446`）。写成"查 `current_chain`"而不是"无条件发号"有两个理由：
+                // ① 它是参考的规则本身；② 它让"续延真的跑在顶层"这件事**可被观测** ——
+                // 有人把相位 3 挪进相位 2 的链作用域里，这里就静默少一个号，
+                // `a_continuation_waits_for_the_drain_and_runs_at_the_top_level` 会红。
+                if state.current_chain().is_none() {
+                    let _wrap_up_chain = state.create_root_effect_chain();
+                }
+                Ok(())
+            }
+            Continuation::ProgramResume { .. } | Continuation::ProgramTerminal { .. } => {
+                Err(self.record(HostError::Unsupported("Continuation")))
+            }
+        }
+    }
+}
+
+// =============================================================================================
 // `TurnHost`：错误**类别**的适配器（见模块头"错误面"）
 // =============================================================================================
 
@@ -1486,11 +1853,11 @@ impl TurnHost for Host<'_> {
         state: &mut CombatState,
         actor: &CombatantId,
     ) -> Result<(), TurnError> {
-        // 回合机把 `TurnStartedCombatEvent` 交给了处理器 ⇒ 参考的顶层入队已经发生
-        // （`CombatTurnProcessor.cs:28-32`）⇒ 根链 +1。**在这里、且只在第一次**
-        // （这一条是 turn-start 七个处理器里的第 4 个，但事件只有一条）。
-        // 详见模块头"`chain_num` / `exec_num`"那张表。
-        let _turn_started_chain = state.create_root_effect_chain();
+        // ⚠️ 这里**不再**手工发号：`try_run_turn_started_triggers` 现在真的
+        // `enqueue_event_at_root(TurnStarted)`（`CombatTurnProcessor.cs:28-32`），
+        // 号在那里发（`CombatState.cs:446` 的 `?? CreateRootEffectChain()`）。
+        // 曾经是"这里发号 + 处理器直接跑"，那是**没有队列时**的等价写法；
+        // 两处都发就是双倍发号（`event-queue-interface.md` §5.2 末的落地顺序警告）。
         self.try_run_turn_started_triggers(state, actor)
             .map_err(|e| bridge(self.record(e)))
     }
@@ -1532,8 +1899,7 @@ impl TurnHost for Host<'_> {
         state: &mut CombatState,
         actor: &CombatantId,
     ) -> Result<(), TurnError> {
-        // `TurnEndedCombatEvent` 的顶层入队已经发生（`CombatTurnProcessor.cs:61-65`）⇒ +1。
-        let _turn_ended_chain = state.create_root_effect_chain();
+        // 号在 `try_run_turn_ended_triggers` 的入队里发（同 turn-start 那条注释）。
         self.try_run_turn_ended_triggers(state, actor)
             .map_err(|e| bridge(self.record(e)))
     }
@@ -1554,17 +1920,15 @@ impl TurnHost for Host<'_> {
     // ── 带默认值的策略钩子 ──────────────────────────────────────────────────────────────────
 
     fn on_round_ended(&mut self, state: &mut CombatState, ended_round: i32) -> Result<(), TurnError> {
-        // `RoundEndedCombatEvent` 的顶层入队已经发生（`CombatTurnProcessor.cs:192-195`）⇒ +1。
+        // 号在 `try_on_round_ended` 的入队里发（同 turn-start 那条注释）。
         // ⚠️ **只有真的绕回**才有这条事件：`advance_to_next_combatant` 只在 `nxt <= cur`
         // 时调这个钩子，而参考也只在同一个分支里入队（`:190-201`）—— 两边的条件是同一条。
-        let _round_ended_chain = state.create_root_effect_chain();
         self.try_on_round_ended(state, ended_round)
             .map_err(|e| bridge(self.record(e)))
     }
 
     fn on_round_started(&mut self, state: &mut CombatState, new_round: i32) -> Result<(), TurnError> {
-        // `RoundStartedCombatEvent`（`CombatTurnProcessor.cs:199-200`）⇒ +1。
-        let _round_started_chain = state.create_root_effect_chain();
+        // 号在 `try_on_round_started` 的入队里发（同 turn-start 那条注释）。
         self.try_on_round_started(state, new_round)
             .map_err(|e| bridge(self.record(e)))
     }
@@ -1849,7 +2213,8 @@ mod tests {
     use crate::expr::ExprError;
     use crate::state::{
         CardDefinitionId, CardInstance, CardInstanceId, CombatId, Combatant, CombatantDefinitionId,
-        CounterId, DefensivePoolId, ResourceId, StatusInstanceId, StatusPolarity, TeamId,
+        CounterId, DefensivePoolId, EffectRequest, ProgramExecutionSlot, ResourceId,
+        StatusInstanceId, StatusPolarity, TeamId,
     };
     use crate::turn::{self, TurnConfig};
     use std::vec::Vec;
@@ -2106,6 +2471,27 @@ mod tests {
         w.as_str().as_bytes().to_vec()
     }
 
+    /// 规范文本去掉两个**计数器**行（`chain_num=` / `exec_num=`），其余逐字节保留。
+    ///
+    /// 用来写"这一笔只许动这两个数"那种断言：把它们抹掉再比，剩下的任何差异都是真差异。
+    /// ⚠️ 不能反过来用（"抹掉之后相等 ⇒ 只有它们变了"），所以抹掉的**行数**在函数里另有一条断言
+    /// —— 少了那一句，两行都被挤掉时这条判据就自证其说。
+    fn strip_counters(text: &[u8]) -> Vec<u8> {
+        let haystack = core::str::from_utf8(text).unwrap_or_default();
+        let mut out = String::new();
+        let mut dropped = 0usize;
+        for line in haystack.lines() {
+            if line.starts_with("chain_num=") || line.starts_with("exec_num=") {
+                dropped += 1;
+                continue;
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+        assert_eq!(dropped, 2, "规范文本里应该正好有 chain_num 与 exec_num 各一行");
+        out.into_bytes()
+    }
+
     // ---------------------------------------------------------------- 错误面
 
     #[test]
@@ -2261,6 +2647,7 @@ mod tests {
         let mut turn_ended = 0usize;
         let mut round_ended = 0usize;
         let mut round_started = 0usize;
+        let mut damage_dealt = 0usize;
         let mut not_handled = 0usize;
         let mut with_triggers = 0usize;
         let mut statuses = 0usize;
@@ -2283,6 +2670,7 @@ mod tests {
                     TriggerEvent::TurnEnded => turn_ended += 1,
                     TriggerEvent::RoundEnded => round_ended += 1,
                     TriggerEvent::RoundStarted => round_started += 1,
+                    TriggerEvent::DamageDealt => damage_dealt += 1,
                     TriggerEvent::NotHandled => not_handled += 1,
                 }
                 // 信封上的步数预算：实测 25/25 都是 1024。
@@ -2296,9 +2684,12 @@ mod tests {
         assert_eq!(turn_ended, 6);
         assert_eq!(round_ended, 4);
         assert_eq!(round_started, 0);
-        // 剩下 12 条是 6 种"参考有、本内核没有钩子接"的事件：`DamageTaken` 1 / `DamageDealt` 1 /
+        // `DamageDealt` 那 1 条**不再是缺口**（批次 1 接了钩子，见 `TriggerEvent::DamageDealt`）：
+        // `doubt` 的触发器就在这一条上，它正是 `CARD_MULTI` 那 10 格 NOT-COMPARABLE 的根因。
+        assert_eq!(damage_dealt, 1, "doubt 的 DamageDealt 触发器");
+        // 剩下 11 条是 5 种"参考有、本内核没有钩子接"的事件：`DamageTaken` 1 /
         // `StatusApplied` 3 / `StatusMerged` 3 / `StatusStacksChanged` 2 / `StatusRemoved` 2。
-        assert_eq!(not_handled, 12);
+        assert_eq!(not_handled, 11);
     }
 
     #[test]
@@ -2558,9 +2949,383 @@ mod tests {
         assert_eq!(stacks_of(&other, "hero", "strength"), 3);
     }
 
+    // ---------------------------------------------------------------------------------------
+    // 排空循环（批次 1）：`ResolvePendingQueues`，`CombatEventHandling.cs:81-115`
+    // ---------------------------------------------------------------------------------------
+    //
+    // 这一组是**变异测试的靶子**：三条最容易被"顺手简化"的规则，每条都有单独一条测试。
+    //   M1 把 `while … && Result == Ongoing` 退化成"入口查一次" ⇒ `the_loop_condition…` 红
+    //   M2 把续延改成"入队即执行" ⇒ `a_continuation_waits…` 红
+    //   M3 把队列满了/超限改成"丢掉"或"跳过" ⇒ `a_full_queue…`（state.rs）
+    //      与 `the_limits_are_loud…` 各红一面
+
     #[test]
-    fn a_turn_ended_trigger_can_delete_the_instance_and_that_is_not_the_same_as_zero_stacks() {
-        // V4：`poison 1` ⇒ 回合末 0 ⇒ **实例被删**（`modifyStatusStacks` 的 0 层删实例规则，
+    fn the_loop_condition_is_re_read_every_cycle_not_checked_once_at_the_door() {
+        // 参考的循环条件是 `while (hasPending…) && Result == Ongoing`（`:97`）——
+        // `Result` **每一圈都重读**。写成"入口查一次"的后果不是崩，是"战斗结束之后
+        // 排队的事件照样分发"：多跑一个触发器节目 ⇒ `exec_num` 多 1，指纹静默发散。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+
+        // 半边 1：战斗已结束 ⇒ 队列里那条事件**不许**落地，但也**不许**被丢掉。
+        let mut dead = arena();
+        give(&mut dead, "hero", status("st_fat", "fatigue", 0)); // TurnStarted 触发器（镜像 3 条之一）
+        dead.enqueue_event_at_root(CombatEvent::TurnStarted {
+            combatant: cid("hero"),
+        })
+        .unwrap();
+        dead.result = CombatResult::Victory;
+        let exec_before = dead.next_program_execution_id;
+        host.try_resolve_pending_queues(&mut dead).unwrap();
+        assert_eq!(
+            dead.next_program_execution_id, exec_before,
+            "战斗结束之后排队的事件不许再分发（`Result == Ongoing` 是**循环**条件）"
+        );
+        assert_eq!(
+            dead.pending_event_count(),
+            1,
+            "它们只是没人捡，不是被丢掉 —— 丢掉会让'少跑一个触发器'变成不可观测"
+        );
+
+        // 半边 2（成对）：同一条事件，`Ongoing` 时它**会**跑。少了这一半，
+        // 上面那条在"分发整个坏了"时也照样绿。
+        let mut live = arena();
+        give(&mut live, "hero", status("st_fat", "fatigue", 0));
+        live.enqueue_event_at_root(CombatEvent::TurnStarted {
+            combatant: cid("hero"),
+        })
+        .unwrap();
+        let exec_before = live.next_program_execution_id;
+        host.try_resolve_pending_queues(&mut live).unwrap();
+        assert_eq!(
+            live.next_program_execution_id,
+            exec_before + 1,
+            "event 分发 ⇒ 那个触发器节目发了一次执行号"
+        );
+        assert_eq!(live.pending_event_count(), 0, "排空之后队列干净");
+    }
+
+    #[test]
+    fn a_continuation_waits_for_the_drain_and_runs_at_the_top_level() {
+        // 参考：`Queue<Action<CombatState>>`（`CombatState.cs:10`）里的东西**入队时不跑**，
+        // 排到相位 3（`:107-111`）才跑，而且那时 `CurrentEffectChain` 为 null
+        // ⇒ 它内部那次 `EnqueueEvent(ActionResolved)` 建一条根链（`:442-452`）。
+        //
+        // 三件事分开断言，任何一件坏了都会红：
+        //   ① 入队**不执行**（`chain_num` 不动）
+        //   ② 排空之后它跑了（`chain_num` +1）
+        //   ③ 它跑在**链作用域之外**（所以 +1 而不是 +0）
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = solo();
+
+        let before = state.next_effect_chain_number;
+        state
+            .enqueue_continuation(Continuation::CloseAction { actor: cid("hero") })
+            .unwrap();
+        assert_eq!(
+            state.next_effect_chain_number, before,
+            "① 入队不许执行它（参考入队的是闭包，不是调用）"
+        );
+        assert_eq!(state.pending_continuation_count(), 1);
+
+        host.try_resolve_pending_queues(&mut state).unwrap();
+        assert_eq!(
+            state.next_effect_chain_number,
+            before + 1,
+            "② ③ 排空之后跑了，且跑在顶层（链作用域为空 ⇒ 自己发一个号）"
+        );
+        assert_eq!(state.pending_continuation_count(), 0);
+
+        // ③ 的**反例**（这条才让 ③ 有内容）：把同一条续延放进链作用域里跑，
+        // 它落在 `current_chain` 里 ⇒ **不发号**。如果实现里"无条件发号"，这一半会红。
+        let mut scoped = solo();
+        let chain = scoped.new_root_chain_in_arena().unwrap();
+        let before = scoped.next_effect_chain_number;
+        scoped
+            .with_chain(chain, |state| {
+                let mut ctx_host = Host::new(&content);
+                state
+                    .enqueue_continuation(Continuation::CloseAction { actor: cid("hero") })
+                    .unwrap();
+                ctx_host.try_resolve_pending_queues(state).unwrap();
+            });
+        assert_eq!(
+            scoped.next_effect_chain_number, before,
+            "链作用域里跑 ⇒ 参考的 `CurrentEffectChain ?? …` 不会新建根链"
+        );
+    }
+
+    #[test]
+    fn the_effect_queue_has_no_resolver_in_batch_one_so_it_fails_loudly() {
+        // 批次 1 的 `exec.rs` 还是"就地应用"，效果队列**没有生产者**。所以这里一旦拿到
+        // 条目就必须**报错**：把它丢掉等于"这条效果不生效"，而后者不会有任何观察者。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = solo();
+        state
+            .enqueue_effect(EffectRequest::GainBlock {
+                target: Some(cid("hero")),
+                amount: 3,
+            })
+            .unwrap();
+        assert_eq!(
+            host.try_resolve_pending_queues(&mut state),
+            Err(HostError::Unsupported("EffectRequest"))
+        );
+        assert_eq!(
+            state.pending_effect_count(),
+            0,
+            "条目被弹出来报了错（不是留在队列里假装没事）"
+        );
+    }
+
+    #[test]
+    fn the_effect_phase_runs_before_the_event_phase() {
+        // `CombatEventHandling.cs:104-105`：**先抽干效果队列，再抽干事件队列**。
+        // 批次 1 里能观测这条次序的东西只有一个：效果队列没有解析器 ⇒ 它**报错退出**，
+        // 而"报到哪一步"能由"事件有没有来得及分发"看出来（`exec_num`）。
+        //   正确次序 ⇒ 效果先撞墙 ⇒ 事件一条都没分发 ⇒ `exec_num` 不动；
+        //   两相位换序（或塌成"边入队边执行"）⇒ 事件先跑 ⇒ `exec_num` +1 之后才报错。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "hero", status("st_fat", "fatigue", 0)); // TurnStarted 触发器（镜像 3 条之一）
+        state
+            .enqueue_effect(EffectRequest::GainBlock {
+                target: None,
+                amount: 1,
+            })
+            .unwrap();
+        state
+            .enqueue_event_at_root(CombatEvent::TurnStarted {
+                combatant: cid("hero"),
+            })
+            .unwrap();
+
+        let exec_before = state.next_program_execution_id;
+        assert_eq!(
+            host.try_resolve_pending_queues(&mut state),
+            Err(HostError::Unsupported("EffectRequest"))
+        );
+        assert_eq!(
+            state.next_program_execution_id, exec_before,
+            "效果相位必须排在事件相位之前（`:104-105`）—— 事件先跑就说明两相位掉序了"
+        );
+        assert_eq!(
+            state.pending_event_count(),
+            1,
+            "事件还在队列里（它轮到的时候已经很晚了）"
+        );
+    }
+
+    #[test]
+    fn a_node_level_continuation_fails_loudly_instead_of_pretending_to_resume() {
+        // `ProgramResume` / `ProgramTerminal` 属于批次 2 的节点级续延调度。
+        // 今天它们到了排空循环就**响亮失败** —— 假装跑过会让"节目提前结束"静默发生。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = solo();
+        state
+            .enqueue_continuation(Continuation::ProgramResume {
+                frame: ProgramExecutionSlot::from_index(1),
+                node: 0,
+                ready: 1,
+            })
+            .unwrap();
+        assert_eq!(
+            host.try_resolve_pending_queues(&mut state),
+            Err(HostError::Unsupported("Continuation"))
+        );
+    }
+
+    #[test]
+    fn the_limits_are_loud_and_parameterised_so_they_can_be_reached() {
+        // 参考的三个上限（`CombatExecutionLimits.cs:12-14`）到顶都是**抛**，不是"跑一点试试"。
+        // 它们做成参数（`QueueLimits`）就是为了让这条测试能把它们当场撞出来 ——
+        // 用真内容撞 1024 轮要跑很久，而且"跑很久"本身不是断言。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+
+        // 轮数上限：队列非空 + `max_cycles = 0` ⇒ 一条都不许跑。
+        let mut state = solo();
+        state
+            .enqueue_event(CombatEvent::RoundStarted { round: 2 })
+            .unwrap();
+        let limits = QueueLimits {
+            max_cycles: 0,
+            ..QueueLimits::DEFAULT
+        };
+        assert_eq!(
+            host.resolve_pending_queues_with(&mut state, limits),
+            Err(HostError::QueueCycleLimit { cycles: 0, limit: 0 })
+        );
+
+        // 事件相位上限：`max_events_per_cycle = 0` ⇒ 同样是**报错**，不是"这一相位跳过"。
+        let mut state = solo();
+        state
+            .enqueue_event(CombatEvent::RoundStarted { round: 2 })
+            .unwrap();
+        let limits = QueueLimits {
+            max_events_per_cycle: 0,
+            ..QueueLimits::DEFAULT
+        };
+        assert_eq!(
+            host.resolve_pending_queues_with(&mut state, limits),
+            Err(HostError::QueuePhaseLimit {
+                phase: "event",
+                resolved: 0,
+                limit: 0,
+            })
+        );
+
+        // 效果相位上限同理（它先跑，所以报的是 effect）。
+        let mut state = solo();
+        state
+            .enqueue_effect(EffectRequest::GainBlock {
+                target: None,
+                amount: 1,
+            })
+            .unwrap();
+        let limits = QueueLimits {
+            max_effects_per_cycle: 0,
+            ..QueueLimits::DEFAULT
+        };
+        assert_eq!(
+            host.resolve_pending_queues_with(&mut state, limits),
+            Err(HostError::QueuePhaseLimit {
+                phase: "effect",
+                resolved: 0,
+                limit: 0,
+            })
+        );
+
+        // 成对：默认上限下同样的队列**不报错**（否则上面三条只是证明"这个函数总报错"）。
+        let mut state = solo();
+        state
+            .enqueue_event(CombatEvent::RoundStarted { round: 2 })
+            .unwrap();
+        assert_eq!(
+            host.resolve_pending_queues_with(&mut state, QueueLimits::DEFAULT),
+            Ok(())
+        );
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // `DamageDealt` + 触发器：批次 1 真正换来的东西（`CARD_MULTI` 那 10 格的根因）
+    // ---------------------------------------------------------------------------------------
+
+    /// 用 `exec` 的伤害管线打一下（这是 `battle.rs` 之外唯一能造出 `DamageDealt` 的入口）。
+    fn strike(state: &mut CombatState, content: &Content<'_>, source: &str, target: &str, amount: i32) {
+        let mut ctx = crate::exec::ExecContext::new(
+            state,
+            Some(cid(source)),
+            None,
+            None,
+            64,
+        )
+        .with_content(content);
+        crate::exec::resolve_damage(&mut ctx, &cid(target), amount, false).unwrap();
+    }
+
+    #[test]
+    fn damage_dealt_runs_the_bearers_trigger_and_takes_one_doubt_stack_from_the_source() {
+        // `doubt` 的触发器（`bureaucrats.roguedeck.json`）：`DamageDealt` →
+        // `modifyStatusStacks(doubt, -1)` 到 `sel.source`。Bearer 是**出手方**
+        // （`SB:StatusDataRebuild.cs:53-55` 的 `DamageDealtSourceHasStatusTriggerFilter`）。
+        //
+        // 这条测试钉的是整条链路：伤害落地 ⇒ `exec` 入队 `DamageDealt`（`DamageEffects.cs:186-194`）
+        // ⇒ 排空 ⇒ 收集（Bearer = 出手方）⇒ 跑一个节目（`exec_num` +1）⇒ 出手方少一层 doubt。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("st_dbt", "doubt", 2));
+
+        strike(&mut state, &content, "enemy_a", "hero", 5);
+        assert_eq!(
+            state.pending_event_count(),
+            1,
+            "伤害落地就该入队一条 `DamageDealt`（参考在 `:186` 入队）"
+        );
+
+        let exec_before = state.next_program_execution_id;
+        host.try_resolve_pending_queues(&mut state).unwrap();
+        assert_eq!(
+            state.next_program_execution_id,
+            exec_before + 1,
+            "触发器节目发了一次执行号（`EffectProgramExecution.cs:27`）"
+        );
+        assert_eq!(
+            stacks_of(&state, "enemy_a", "doubt"),
+            1,
+            "出手方（戴着 doubt 的那个）少一层"
+        );
+        assert_eq!(
+            stacks_of(&state, "hero", "doubt"),
+            0,
+            "承受者身上没被写（`sel.source` 是出手方，不是 `eventTarget`）"
+        );
+    }
+
+    #[test]
+    fn the_damage_dealt_bearer_filter_reads_the_source_not_the_target() {
+        // 成对的两个反例。少了它们，上面那条在"Bearer 写成承受者/写成任何人"时**照样绿**
+        // —— 而 `doubt` 的被动（伤害 ×75%）恰好就是"看出手方"的，两者混了会静默算错。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+
+        // 反例 1：doubt 戴在**承受者**（hero）身上，出手方（enemy_a）没戴 ⇒ 不触发。
+        let mut target_side = arena();
+        give(&mut target_side, "hero", status("st_dbt", "doubt", 2));
+        strike(&mut target_side, &content, "enemy_a", "hero", 5);
+        let exec_before = target_side.next_program_execution_id;
+        host.try_resolve_pending_queues(&mut target_side).unwrap();
+        assert_eq!(
+            target_side.next_program_execution_id, exec_before,
+            "戴在承受者身上不该触发（Bearer = 出手方）"
+        );
+        assert_eq!(stacks_of(&target_side, "hero", "doubt"), 2, "一层都不该少");
+
+        // 反例 2：doubt 戴在**旁观者**（enemy_b）身上 ⇒ 也不触发。
+        let mut bystander = arena();
+        give(&mut bystander, "enemy_b", status("st_dbt", "doubt", 2));
+        strike(&mut bystander, &content, "enemy_a", "hero", 5);
+        let exec_before = bystander.next_program_execution_id;
+        host.try_resolve_pending_queues(&mut bystander).unwrap();
+        assert_eq!(
+            bystander.next_program_execution_id, exec_before,
+            "旁观者戴着不该触发（Bearer 是出手方，不是'场上有人戴'）"
+        );
+        assert_eq!(stacks_of(&bystander, "enemy_b", "doubt"), 2);
+
+        // 反例 3：**没有出手方**的伤害（`source: None`）⇒ 也不触发。
+        // 参考的过滤器第一句就是 `SourceCombatant is not null`。
+        let mut sourceless = arena();
+        give(&mut sourceless, "hero", status("st_dbt", "doubt", 2));
+        {
+            let mut ctx =
+                crate::exec::ExecContext::new(&mut sourceless, None, None, None, 64)
+                    .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("hero"), 5, false).unwrap();
+        }
+        let exec_before = sourceless.next_program_execution_id;
+        host.try_resolve_pending_queues(&mut sourceless).unwrap();
+        assert_eq!(
+            sourceless.next_program_execution_id, exec_before,
+            "没有出手方的伤害不该触发任何 `DamageDealt` 触发器"
+        );
+    }
+
+    #[test]
+    fn a_turn_ended_trigger_can_delete_the_instance_and_that_is_not_the_same_as_zero_stacks() {        // V4：`poison 1` ⇒ 回合末 0 ⇒ **实例被删**（`modifyStatusStacks` 的 0 层删实例规则，
         // `StatusEffects.cs:830-838`）。"留一条 0 层实例"不是等价物：它会进 `s=` 行、
         // 进 `statuses()`、并占一格 24 条容量（`exec.rs:1066-1079`）。
         let blob = core_image();
@@ -2605,17 +3370,44 @@ mod tests {
     }
 
     #[test]
-    fn round_started_has_no_triggers_in_this_image_so_the_hook_is_a_no_op() {
-        // 实测 0 条 `RoundStarted` 触发器。钩子仍然实现（与 RoundEnded 共用同一段代码），
-        // 但今天调用它一个字节都不该改 —— 这条把"今天无为"钉成断言。
+    fn round_started_has_no_triggers_in_this_image_so_the_hook_only_advances_the_chain_number() {
+        // 实测 0 条 `RoundStarted` 触发器。钩子仍然实现（与 RoundEnded 共用同一段代码）。
+        //
+        // ⚠️ **2026-10-19（事件队列批次 1）改了这条断言，理由要写清**：以前它钉的是
+        // "调用它一个字节都不该改"。那句话在**旧形状**下成立，但成立的方式是错的 ——
+        // 链号当时在 `TurnHost` 的适配器里发（`let _round_started_chain = …`），
+        // 所以直接调 `try_` 这个入口**看不到**那一笔。现在发号搬进了
+        // `try_on_round_started`（参考的 `EnqueueEvent`，`CombatTurnProcessor.cs:199-200`
+        // 的 `?? CreateRootEffectChain()`），于是入口处就能看见它。
+        //
+        // ⇒ 新断言**更强**：这场钩子只准动 `chain_num`（+1），`exec_num` 一个都不许动
+        // （动了 = 有触发器跑了，而这场内容里一条都没有）。成对写：+1 与 +0 各一半，
+        // 单看任何一半都可能是"恰好没变"。
         let blob = core_image();
         let content = parse(&blob);
         let mut host = Host::new(&content);
         let mut state = solo();
         give(&mut state, "hero", status("st_sus", "sustained", 0));
-        let before = state_text(&state);
+        let chain_before = state.next_effect_chain_number;
+        let exec_before = state.next_program_execution_id;
+        let before = strip_counters(&state_text(&state));
+
         host.try_on_round_started(&mut state, 2).unwrap();
-        assert_eq!(state_text(&state), before);
+
+        assert_eq!(
+            state.next_effect_chain_number,
+            chain_before + 1,
+            "顶层入队一条事件 = 一条根链（CombatState.cs:446）"
+        );
+        assert_eq!(
+            state.next_program_execution_id, exec_before,
+            "这条事件在这份镜像上没有触发器 ⇒ 一个节目都不该跑"
+        );
+        assert_eq!(
+            strip_counters(&state_text(&state)),
+            before,
+            "除那两个计数器以外，钩子不该动任何东西"
+        );
     }
 
     #[test]

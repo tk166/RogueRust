@@ -686,6 +686,31 @@ pub fn resolve_damage_of_kind(
         update_standard_combat_result(ctx.state);
     }
 
+    // ── S8：`DamageDealt` 事件（`DamageEffects.cs:186-194`，参考在**这里**入队）。
+    //
+    // 顺序照参考：先落血、再判 Downed/胜负、**最后**入队事件。入队不动状态，
+    // 所以它与"先判胜负"之间没有可观察的耦合；但事件里的四个数字都是**结算后**的
+    // （`HealthDamage` 是实际掉血、`BlockedDamage` 是实际吸收、`RequestedAmount` 是请求额），
+    // 提前入队会拿错数。
+    //
+    // ⚠️ 它**不会**在这里被分发：排空发生在引擎调用的边界（`battle.rs` 的 `hero_plays` /
+    // `enemy_acts`，以及 `turn.rs` 的五个 `resolve_pending_queues` 点）。这正是两相位的意义
+    // —— 触发器节目入队的效果要等到**整批**效果解析完才落地（`CombatEventHandling.cs:104-105`）。
+    //
+    // ⚠️ 参考还入队一条 `DamageReceivedCombatEvent`（`:196-204`，承受者侧）。本内核的
+    // 镜像里**没有**一条 `DamageTaken` 触发器（`host.rs` 的 `not_handled` 里那一行是
+    // 未建模的，不是"有触发器没钩子"），所以那条事件今天没有观察者 —— 它跟着它的
+    // 第一批触发器一起进来（批次 2 的接线表）。
+    ctx.state
+        .enqueue_event(crate::state::CombatEvent::DamageDealt {
+            target: *target,
+            health_damage: health_lost,
+            blocked_damage: blocked,
+            requested: amount,
+            source: ctx.source,
+        })
+        .map_err(ExecError::Capacity)?;
+
     Ok((blocked, health_lost))
 }
 

@@ -50,8 +50,9 @@
 //! | combatants (`MAX_COMBATANTS` x `size_of::<Combatant>()` = 12 x 4,832) | 57,984 |
 //! | piles (`MAX_COMBATANTS` x `size_of::<CardZones>()` = 12 x 1,392) | 16,704 |
 //! | **those three parts** | **173,248** |
-//! | residual: scalar fields, ids, `StatusInstance` arrays, resources, temporary rules | 11,400 |
-//! | **`size_of::<CombatState>()`** | **184,648 (180 KiB)** |
+//! | event queues (批次 1)：effects 64x176 + effect chains 64x2 + effect owners 64x4 + events 64x96 + event chains 64x2 + continuations 64x44 + chain arena 128x16 | 23,040 |
+//! | residual: scalar fields, ids, `StatusInstance` arrays, resources, temporary rules, the six queues' `head`/`len`, `current_chain` | 11,424 |
+//! | **`size_of::<CombatState>()`** | **207,712 (202 KiB)** |
 //!
 //! ⚠️ 这张表是**实测量出来的**，不是估的；每次改 `CombatState` 的字段都要重新核，核的是**每一行**
 //! 而不只是总量 —— 这张表就烂过一次：总量那行是对的，而 `combatants` 那行写着
@@ -61,12 +62,21 @@
 //! （`state_fits_the_sram_plan` 只盯着上界，盯不住"表格里的数字过期"）。
 //! 残差那一行是**总量减三个分量**推出来的，它不会单独过期，但它的含义（哪些字段住在残差里）
 //! 会随字段增删改变，所以它也要跟着看。
-//! 最近一次变化：`StatusInstance` 加了 `source_combatant_id: Option<CombatantId>`
-//! （DoT 要能归属出手方，见 `port-plan` §41.4），**171,848 → 184,648 B（+12.8 KB）**。
-//! 原因是 `Option<CombatantId>` = **42 B**（`Ident<40>` 是 41 B 且没有 niche，`Option` 多一个 tag），
-//! 乘上约 300 个状态槽。SRAM 占比 28.3% → **30.5%**。
+//! 最近两次变化：
 //!
-//! That is 30.5% of the P4's 592 KiB of SRAM in the worst case, and about 6x the reference's *packed*
+//! 1. `StatusInstance` 加了 `source_combatant_id: Option<CombatantId>`
+//!    （DoT 要能归属出手方，见 `port-plan` §41.4），**171,848 → 184,648 B（+12.8 KB）**。
+//!    原因是 `Option<CombatantId>` = **42 B**（`Ident<40>` 是 41 B 且没有 niche，`Option` 多一个 tag），
+//!    乘上约 300 个状态槽。SRAM 占比 28.3% → **30.5%**。
+//! 2. **事件队列批次 1**（六队列 + 链 arena）：**184,648 → 207,712 B（+23,064 B，+11.2%）**，
+//!    SRAM 占比 30.5% → **34.3%**。分量逐列打在上面那张表的队列行里，算术：
+//!    64×(176+2+4) + 64×(96+2) + 64×44 + 128×16 = 23,040，余下 24 B 是六个队列的
+//!    `head`/`len`、`current_chain` 与结构体对齐（所以残差从 11,400 涨到 11,424）。
+//!    ⚠️ 207,712 **小于** `event-queue-interface.md` §10.2 探针的**忠实档 231,256 B**：
+//!    探针按"事件枚举 = 参考全集 41 个变体"量形状，而批次 1 只声明了接了线的那 5 个变体
+//!    （`CombatEvent` 因此是 96 B 而不是 492 B）。差的是**还没有生产者的变体**，不是能力。
+//!
+//! That is 34.3% of the P4's 592 KiB of SRAM in the worst case, and about 7x the reference's *packed*
 //! estimate of ~9 KB for the same 4v3/200-card fight (spec §5.2) - because §5.2 assumes interned
 //! `u16` ids and 24 B per card, while this stage stores **ASCII strings** (the task's stage-1
 //! instruction, §3-D9) and pays both per-card mark arrays in full: of a card's 440 B, 280 B are the
@@ -163,6 +173,30 @@ pub enum CapacityError {
     DuplicateCombatant,
     /// A card or zone was addressed to a combatant the state does not know.
     MissingCombatant,
+    /// The queue's parallel columns have different lengths.
+    ///
+    /// This is the reference's `EnsureEffectQueueMetadataAligned` / `EnsureEventQueueMetadataAligned`
+    /// (`CombatState.cs:401-406, 436-440`) as a **real** check, not a `debug_assert!`: the release
+    /// build is what runs on the bare-metal target, and misaligned metadata means "this effect got
+    /// someone else's chain" - which the hash reports only as a different number.
+    QueueMetadataMisaligned {
+        /// `"effect"` or `"event"`.
+        column: &'static str,
+        /// Length of the record column.
+        records: usize,
+        /// Length of the chain column.
+        chains: usize,
+        /// Length of the owner column (equals `chains` for the event column, which has no owners).
+        owners: usize,
+    },
+    /// A triggered chain was asked for a parent that is not live.
+    ///
+    /// Unreachable in the reference (`CurrentEffectChain` is non-null when a triggered chain is
+    /// created, `CombatEffectChain.cs:12, 492-498`) and unreachable here today (batch 1 creates no
+    /// triggered chains at all). **Deliberately loud rather than defaulted**: `ChainRecord::id` is
+    /// the hashed `chain_num`, so inventing a fallback id would make "where did this chain number
+    /// come from" unaccountable.
+    ChainHasNoParent,
 }
 
 /// Which container overflowed. Separate from [`CapacityError`] so callers can tell a full pool
@@ -183,6 +217,22 @@ pub enum Container {
     Marks,
     MarkCounters,
     TemporaryRules,
+    // ---- 事件队列（批次 1）----
+    //
+    // ⚠️ 这七个是**新增的响亮失败点**，不是新增的静默截断点：参考的三个 `Queue<T>` 无界
+    // （`CombatState.cs:5-10`，全仓没有 `new Queue<T>(capacity)`），所以"队列满"是移植
+    // **独有**的错误。它必须和参考自己的 1024 轮超限同级（`CombatEventHandling.cs:99-102`
+    // 抛 `InvalidOperationException`），而不是"满了就丢"。
+    PendingEffects,
+    PendingEffectChains,
+    PendingEffectOwners,
+    PendingEvents,
+    PendingEventChains,
+    PendingContinuations,
+    /// 效果链 arena（`MAX_LIVE_CHAINS`）。参考靠 GC 回收链，我们靠 `ChainRecord::refs`。
+    Chains,
+    /// 集合型事件携带的 id 列表（`MAX_EVENT_ID_LIST`）。**装满就是错误**（永不截断）。
+    EventIdList,
 }
 
 impl core::fmt::Display for CapacityError {
@@ -194,6 +244,17 @@ impl core::fmt::Display for CapacityError {
             Self::DuplicateKey => f.write_str("key already present"),
             Self::DuplicateCombatant => f.write_str("combatant id already present"),
             Self::MissingCombatant => f.write_str("no such combatant"),
+            Self::QueueMetadataMisaligned {
+                column,
+                records,
+                chains,
+                owners,
+            } => write!(
+                f,
+                "{column} queue columns are not aligned: records {records}, chains {chains}, \
+                 owners {owners}"
+            ),
+            Self::ChainHasNoParent => f.write_str("triggered chain without a live parent chain"),
         }
     }
 }
@@ -1489,6 +1550,611 @@ impl CardZones {
 }
 
 // ---------------------------------------------------------------------------------------------
+// 事件队列（批次 1）：六个队列 + 效果链 arena + 续延
+// ---------------------------------------------------------------------------------------------
+//
+// 参考实现在 `CombatState` 上挂了**六个**队列（`CombatState.cs:5-10`，【验证】，逐行读过）：
+//
+// | # | 字段 | 类型 | 与谁并列 |
+// |---|---|---|---|
+// | 1 | `_pendingEffects` | `Queue<IEffectRequest>` | 效果列（主） |
+// | 2 | `_pendingEffectChains` | `Queue<CombatEffectChainContext>` | 效果列（元数据） |
+// | 3 | `_pendingEffectOwners` | `Queue<EffectProgramExecutionId?>` | 效果列（元数据） |
+// | 4 | `_pendingEvents` | `Queue<ICombatEvent>` | 事件列（主） |
+// | 5 | `_pendingEventChains` | `Queue<CombatEffectChainContext>` | 事件列（元数据） |
+// | 6 | `_pendingContinuations` | `Queue<Action<CombatState>>` | 续延列（独） |
+//
+// 三列**并行数组**是 C# 的表示问题（`Queue<T>` 装不了元组，且作者不想装箱），不是语义问题 ——
+// 但它带了两条**断言不变式**（`EnsureEffectQueueMetadataAligned` / `EnsureEventQueueMetadataAligned`，
+// `CombatState.cs:401-406, 436-440`），那两条是语义的守门人：三列长度不一致就意味着
+// "某条效果拿到了别人的链"。本模块照参考保**三列 + 两条断言**（批次 1 的任务书要求），
+// 断言在**每次出队前**跑（同参考），而不是只在 `debug_assert!` 里 —— 发布版也要红。
+//
+// 第六个队列**做不到照抄**：`Queue<Action<CombatState>>` 在 `no_std` + 零分配 +
+// `forbid(unsafe_code)` 下不存在 ⇒ 续延必须是**数据**（[`Continuation`]）。这是
+// `docs/spec/event-queue-interface.md` §4.1.3 唯一一条"最重要"的结论。
+
+/// 待解析的**效果**队列容量（参考无界，见模块头）。
+pub const MAX_PENDING_EFFECTS: usize = 64;
+/// 待分发**事件**的容量（同上）。
+pub const MAX_PENDING_EVENTS: usize = 64;
+/// 待跑**续延**的容量（同上）。
+pub const MAX_PENDING_CONTINUATIONS: usize = 64;
+/// 活跃效果链的 arena 容量。
+///
+/// 为什么是队列容量的 **2 倍**而不是相等：最坏局面是"事件队列装满（64 条，每条各持一条链）
+/// **加**正在分发的那一条派生出的触发链（+1）" ⇒ 65。取 128 是给这条 +1 留出整倍余量，
+/// 而且它只值 128 × 16 B = 2,048 B。**这个常量的作用是"到顶就响亮失败"，不是"省内存"**
+/// —— 调小它会把本来正确的局面变成 `CapacityError::Full(Chains)`。
+pub const MAX_LIVE_CHAINS: usize = 128;
+/// **集合型事件**携带的 id 列表容量。**不是截断上限。**
+///
+/// 参考在这里是 `IReadOnlyCollection<…>`、**无界**（`CombatEvents.cs:85-105, 246-255` 那 8 条）。
+/// 超出容量必须**响亮失败**（[`EventIdList::push`] 返回错误），永不静默截断 ——
+/// 静默截断是**语义降级**，不是实现选择（`docs/spec/event-queue-interface.md` §4.3 末的硬规则）。
+/// 24 = `MAX_STATUSES_PER_COMBATANT`：一条"按极性移除状态"的事件最多带走一个战斗员的全部状态。
+pub const MAX_EVENT_ID_LIST: usize = 24;
+/// 排空循环的轮数上限（参考 `CombatExecutionLimits.cs:12`，默认 1024，**超限抛**）。
+pub const MAX_QUEUE_CYCLES: u32 = 1024;
+/// 单轮效果相位里最多解析多少条（`CombatExecutionLimits.cs:13`）。
+pub const MAX_EFFECTS_PER_CYCLE: u32 = 1024;
+/// 单轮事件相位里最多分发多少条（`CombatExecutionLimits.cs:14`）。
+pub const MAX_EVENTS_PER_CYCLE: u32 = 1024;
+/// 触发器嵌套深度上限（`CombatEffectChain.cs:10` 的 `MaximumTriggerDepth`）。
+///
+/// ⚠️ 与 `exec.rs::MAX_NODE_DEPTH = 64` **是两件事**（节目树深度 vs 触发器嵌套深度），
+/// 参考里也是两个独立的数。**不许共用同一个常量**（`event-queue-interface.md` §4.1.1）。
+pub const MAX_TRIGGER_DEPTH: u8 = 64;
+
+/// 效果链在 arena 里的槽位。**只存槽位，不存整条链**（§4.1.4：整条链是值类型就是灾难）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChainSlot(u16);
+
+impl ChainSlot {
+    /// "没有链"（顶层入队时 `CurrentEffectChain` 为 null 的那些路径，或还没建立链作用域）。
+    ///
+    /// 用**哨兵值**而不是 `Option<ChainSlot>`：`Option<u16>` 是 4 B，而队列每条都要带一个，
+    /// 差值会直接进 SRAM 预算（`PendingEvent` 每条约 2 B × 64）。
+    pub const NONE: Self = Self(u16::MAX);
+
+    /// 由 arena 下标构造。
+    #[must_use]
+    pub const fn from_index(index: usize) -> Self {
+        Self(index as u16)
+    }
+
+    /// arena 下标。
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+
+    /// 是否"没有链"。
+    #[must_use]
+    pub const fn is_none(self) -> bool {
+        self.0 == u16::MAX
+    }
+}
+
+impl Empty for ChainSlot {
+    const EMPTY: Self = Self::NONE;
+}
+
+/// 节目执行帧的**槽位**（参考的 `EffectProgramExecutionId?`，`CombatState.cs:7`）。
+///
+/// 存槽位而不是 64 位的 id：它唯一的用途是"效果解析抛错时把帧绑回去"
+/// （`CombatEffectQueueProcessor.cs:35-49`），**不排序、不进哈希**（§1.2 末）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProgramExecutionSlot(u32);
+
+impl ProgramExecutionSlot {
+    /// 由下标构造。
+    #[must_use]
+    pub const fn from_index(index: usize) -> Self {
+        Self(index as u32)
+    }
+
+    /// 下标。
+    #[must_use]
+    pub const fn index(self) -> usize {
+        self.0 as usize
+    }
+}
+
+/// `Option<ProgramExecutionSlot>` 的空槽就是 `None`（"这条效果不是任何帧发起的"）。
+impl Empty for Option<ProgramExecutionSlot> {
+    const EMPTY: Self = None;
+}
+
+/// 一条效果链：**持久化链表**（父指针 + 自己这个触发器），语义等价于参考的不可变快照
+/// （`CombatEffectChain.cs:8-41`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChainRecord {
+    /// `chain_num` 那个数字（哈希行）。**只在建根链时自增**（`CombatState.cs:545-555`）。
+    pub id: i64,
+    /// 父链槽位；根链是 [`ChainSlot::NONE`]。
+    pub parent: ChainSlot,
+    /// 触发这个子链的触发器（intern 序号）；根链是 `NO_TRIGGER`。
+    pub trigger: u16,
+    /// `= parent.depth + 1`，冗余存一份免得走链（参考 `CombatEffectChain.cs:16`）。
+    pub depth: u8,
+    /// 引用计数（队列条目 + 作用域栈）。归零可回收 —— 参考靠 GC，我们没有。
+    pub refs: u8,
+}
+
+/// `ChainRecord::trigger` 的"不是触发链"。
+pub const NO_TRIGGER: u16 = u16::MAX;
+
+impl Empty for ChainRecord {
+    const EMPTY: Self = Self {
+        id: 0,
+        parent: ChainSlot::NONE,
+        trigger: NO_TRIGGER,
+        depth: 0,
+        refs: 0,
+    };
+}
+
+/// 效果链 arena：定容数组 + "refs == 0 即空槽"。
+///
+/// 为什么不是 [`Bounded`]：链会被**中途**回收（引用计数归零），而 `Bounded` 只能 push/pop/retain，
+/// 且下标必须稳定（队列条目里存的是下标）。所以这里用"扫空槽"分配。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChainArena {
+    records: [ChainRecord; MAX_LIVE_CHAINS],
+    len: u8,
+}
+
+impl ChainArena {
+    /// 空的 arena。
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            records: [ChainRecord::EMPTY; MAX_LIVE_CHAINS],
+            len: 0,
+        }
+    }
+
+    /// 在用的链条数（`refs > 0`）。
+    #[must_use]
+    pub fn live(&self) -> usize {
+        self.records.iter().filter(|r| r.refs > 0).count()
+    }
+
+    /// 分配一条链。**装不下就报错，不覆盖任何人**。
+    pub fn alloc(&mut self, record: ChainRecord) -> StateResult<ChainSlot> {
+        for index in 0..MAX_LIVE_CHAINS {
+            let Some(slot) = self.records.get_mut(index) else {
+                continue;
+            };
+            if slot.refs != 0 {
+                continue;
+            }
+            *slot = record;
+            self.len = self.len.saturating_add(1);
+            return Ok(ChainSlot::from_index(index));
+        }
+        Err(CapacityError::Full(Container::Chains))
+    }
+
+    /// 读一条链。
+    #[must_use]
+    pub fn get(&self, slot: ChainSlot) -> Option<&ChainRecord> {
+        if slot.is_none() {
+            return None;
+        }
+        self.records.get(slot.index()).filter(|r| r.refs > 0)
+    }
+
+    /// 写一条链（调用方已经确认槽位有效）。
+    #[must_use]
+    pub fn get_mut(&mut self, slot: ChainSlot) -> Option<&mut ChainRecord> {
+        if slot.is_none() {
+            return None;
+        }
+        let record = self.records.get_mut(slot.index())?;
+        if record.refs == 0 { None } else { Some(record) }
+    }
+
+    /// 加一次引用（"还有一条队列条目 / 一层作用域持着它"）。
+    pub fn acquire(&mut self, slot: ChainSlot) -> StateResult<()> {
+        let Some(record) = self.get_mut(slot) else {
+            return Err(CapacityError::Full(Container::Chains));
+        };
+        // u8 上限不可达：`MAX_PENDING_EVENTS` + 作用域深度 ≤ 66。
+        record.refs = record.refs.saturating_add(1);
+        Ok(())
+    }
+
+    /// 放一次引用；归零即回收（把槽写回 `EMPTY`，与 `Bounded` 的"腾出的槽是空值"同一条不变式）。
+    pub fn release(&mut self, slot: ChainSlot) {
+        if slot.is_none() {
+            return;
+        }
+        let Some(index) = self.records.get(slot.index()).map(|_| slot.index()) else {
+            return;
+        };
+        let Some(record) = self.records.get_mut(index) else {
+            return;
+        };
+        if record.refs == 0 {
+            return;
+        }
+        record.refs -= 1;
+        if record.refs == 0 {
+            *record = ChainRecord::EMPTY;
+            self.len = self.len.saturating_sub(1);
+        }
+    }
+
+    /// 清空。
+    pub fn clear(&mut self) {
+        self.records = [ChainRecord::EMPTY; MAX_LIVE_CHAINS];
+        self.len = 0;
+    }
+}
+
+impl Empty for ChainArena {
+    const EMPTY: Self = Self::new();
+}
+
+impl Default for ChainArena {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 一条**待解析的效果**。参考的 `IEffectRequest`。
+///
+/// ⚠️ 批次 1 只声明**会被解析的四种**（也是本内容最常产生的那四种）。其余变体随
+/// 解析器一起落地（§4.1.5 那张表的其余行）—— 声明一个没有解析器的变体，等于给
+/// "效果永远不会生效"配一个好听的类型名。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EffectRequest {
+    /// `DealDamageEffectRequest`。
+    DealDamage {
+        /// 目标选择器已解出的那个单位（`None` = 解出空集 ⇒ 参考跳过，不是错误）。
+        target: Option<CombatantId>,
+        /// 金额。
+        amount: i32,
+        /// `IgnoresBlock`。
+        ignores_block: bool,
+    },
+    /// `GainBlockEffectRequest`。
+    GainBlock {
+        /// 目标。
+        target: Option<CombatantId>,
+        /// 金额。
+        amount: i32,
+    },
+    /// 状态施加（对应参考的状态施加请求，六段载荷）。
+    ApplyStatus {
+        /// 目标。
+        target: Option<CombatantId>,
+        /// 状态定义。
+        definition: StatusDefinitionId,
+        /// 层数。
+        stacks: i32,
+        /// 持续回合（`0` = 不带时长）。
+        duration: i32,
+        /// 来源单位（`SourceCombatantId`）。
+        source: Option<CombatantId>,
+        /// 来源卡（`SourceCardId`）。
+        source_card: Option<CardDefinitionId>,
+    },
+    /// `ModifyStatusStacksEffectRequest`（`doubt` 的触发器就是这一种）。
+    ModifyStatusStacks {
+        /// 目标。
+        target: Option<CombatantId>,
+        /// 状态定义。
+        definition: StatusDefinitionId,
+        /// 增量（可负）。
+        delta: i32,
+    },
+}
+
+impl Empty for EffectRequest {
+    const EMPTY: Self = Self::ModifyStatusStacks {
+        target: None,
+        definition: StatusDefinitionId::EMPTY,
+        delta: 0,
+    };
+}
+
+/// 一条**待分发的事件**。参考的 `ICombatEvent`（39 + 2 条 `record`）。
+///
+/// ⚠️ 批次 1 只声明**接了线的那五种**（批次 1 的接线范围：四个回合边界 + `DamageDealt`）。
+/// 变体是**数据形状**，接线是**行为**：接口按全集冻（41 个），但一个"没有任何生产者、
+/// 也没有分发器"的变体只是噪声 —— 所以它跟着它的 raise 点一起进来（§4.1.5 末）。
+///
+/// **不带 `Kind`（伤害种类）**：参考的 `DamageDealtCombatEvent.Kind` 只被
+/// `DamageDealtDamageKindTriggerFilter` 读，而触发器滤镜在本内核里**整体没有建模**
+/// （镜像的 `Triggers[i]` 只有 `Event` + `Program`，没有 `Filters`、也没有 `Scope` ——
+/// 见 `host.rs::decode_trigger` 的注释）。不带它意味着"按伤害种类过滤"**不可表达**，
+/// 而不是"按错的种类过滤"；补它时要连滤镜层一起补。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CombatEvent {
+    /// `TurnStartedCombatEvent`（`CombatTurnProcessor.cs:28-32`）。
+    TurnStarted {
+        /// 谁的回合开始了。
+        combatant: CombatantId,
+    },
+    /// `TurnEndedCombatEvent`（`:61-65`）。
+    TurnEnded {
+        /// 谁的回合结束了。
+        combatant: CombatantId,
+    },
+    /// `RoundStartedCombatEvent`（`:199-200`）。
+    RoundStarted {
+        /// 新的轮次号。
+        round: i32,
+    },
+    /// `RoundEndedCombatEvent`（`:190-195`）。上下文读的是 `LastActiveCombatantId`。
+    RoundEnded {
+        /// 结束的轮次号。
+        round: i32,
+        /// 那一轮最后的行动者（参考的 `LastActiveCombatantId`）。
+        last_active: Option<CombatantId>,
+    },
+    /// `DamageDealtCombatEvent`（`DamageEffects.cs:186-194` 的入队点）。
+    ///
+    /// 四个数字是参考的四个参数（`CombatEvents.cs:120-128`）：`HealthDamage` / `BlockedDamage` /
+    /// `RequestedAmount` / `SourceCombatantId`。`SourceCardId` 今天没有读者（滤镜没建模），
+    /// 所以不带 —— 它一进枚举就值 42 B/条。
+    DamageDealt {
+        /// 承受者（`TargetCombatantId`；上下文里的 `EventTargetId`）。
+        target: CombatantId,
+        /// 真的掉了几点血。
+        health_damage: i32,
+        /// 被防御池吸收了几点。
+        blocked_damage: i32,
+        /// 请求的金额（吸收前）。
+        requested: i32,
+        /// 出手方（`SourceCombatantId`）。`None` = 没有来源（选择器解出空集 / DoT 没有归属）。
+        source: Option<CombatantId>,
+    },
+}
+
+impl Empty for CombatEvent {
+    /// 空槽 = 一条"谁的回合开始了、那个人是空 id"的 `TurnStarted`。
+    ///
+    /// 它**不会被分发**：队列的 `len` 之后不会有条目，而 `pop_front` 只在 `len > 0` 时取值。
+    /// 选这个变体是因为它是枚举里最大的几个之一（`CombatantId` 41 B），占位不会让
+    /// `size_of::<Fifo<CombatEvent, 64>>()` 变小 —— 免得"空槽特别小"掩盖一条真实条目的尺寸。
+    const EMPTY: Self = Self::TurnStarted {
+        combatant: CombatantId::EMPTY,
+    };
+}
+
+/// **续延**：参考的 `Queue<Action<CombatState>>` 的**数据**替代物（§4.1.3）。
+///
+/// 参考把闭包塞进队列，靠 GC 活着；内核是 `no_std` + 零分配 + `forbid(unsafe_code)`，
+/// 装不下 `Box<dyn FnMut>`。⇒ 每一种"等会儿再做"都必须能写成数据。
+///
+/// ⚠️ **允许**把闭包当参数传进来立刻调用（`with_chain`）；**禁止**把闭包存进队列。
+/// 这条不是风格问题：写成闭包后裸机目标直接编不过（`acceptance.ps1` 的第 3/5/6 道闸门会红）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Continuation {
+    /// "某帧的某条待续支线可以往前走了"（`EffectProgramExecution.EnterContinuation` 的等价物）。
+    ProgramResume {
+        /// 节目帧。
+        frame: ProgramExecutionSlot,
+        /// 节点下标。
+        node: u16,
+        /// 待续支线的就绪计数。
+        ready: u8,
+    },
+    /// 节目进入终态（Completed/Faulted/Cancelled）⇒ 跑它的 `onTerminal`。
+    ProgramTerminal {
+        /// 节目帧。
+        frame: ProgramExecutionSlot,
+    },
+    /// 出牌动作的收尾（`Cards/CardPlay.cs:217` / `:292` 的 `EnqueueContinuation(CloseAction)`）。
+    ///
+    /// 它跑在**顶层**（`CombatEventHandling.cs:107-111`，此时 `CurrentEffectChain` 为 null）
+    /// ⇒ 它内部那次 `EnqueueEvent(ActionResolved)` 会**建一条根链**（`CombatState.cs:442-452`）。
+    /// 内核批次 1 用它表达的就是"这一笔发号"，见 `host.rs::run_continuation`。
+    CloseAction {
+        /// 收尾的是谁的动作。
+        actor: CombatantId,
+    },
+}
+
+impl Empty for Continuation {
+    const EMPTY: Self = Self::CloseAction {
+        actor: CombatantId::EMPTY,
+    };
+}
+
+/// **集合型事件**携带的 id 列表。容量 [`MAX_EVENT_ID_LIST`]，**超出响亮失败**。
+///
+/// 为什么元素是 `Ident<INSTANCE_ID_CAP>`（17 B）而不是各事件的真实 id 类型：集合型事件带的是
+/// `StatusInstanceId` / `CardInstanceId` 两种（参考的 `IReadOnlyCollection<CardInstanceId>` 等），
+/// 两者的线上形状都是 `status_%06d` / `card_%06d`（≤16 B）。合成一个 17 B 的元素，
+/// 就让"一条事件的集合载荷"有**一个**尺寸，而不是每个事件各带一份。真需要类型区分时
+/// 由**事件自己的变体**区分（`StatusRemoved` 里的 id 一定是状态实例号）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EventIdList {
+    ids: [Ident<INSTANCE_ID_CAP>; MAX_EVENT_ID_LIST],
+    len: u8,
+}
+
+impl EventIdList {
+    /// 空列表。
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            ids: [Ident::EMPTY; MAX_EVENT_ID_LIST],
+            len: 0,
+        }
+    }
+
+    /// 已有几条。
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.len as usize
+    }
+
+    /// 是否为空。
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// 用到的前缀。
+    #[must_use]
+    pub fn as_slice(&self) -> &[Ident<INSTANCE_ID_CAP>] {
+        &self.ids[..self.len as usize]
+    }
+
+    /// 追加一个 id。**装不下就是错误，永不截断、永不覆盖**（§4.3 末的硬规则）。
+    ///
+    /// 调用方（事件的生产者）该把 `CapacityError::Full(Container::EventIdList)` 映射成
+    /// `BindError::BufferTooSmall { needed, have }` —— 那个变体的注释原文就是
+    /// "**不截断**：少读几条触发器等于内容静默不发作"（`status_bind.rs:378`）。
+    pub fn push(&mut self, id: Ident<INSTANCE_ID_CAP>) -> StateResult<()> {
+        let at = self.len as usize;
+        if at == MAX_EVENT_ID_LIST {
+            return Err(CapacityError::Full(Container::EventIdList));
+        }
+        let Some(slot) = self.ids.get_mut(at) else {
+            return Err(CapacityError::Full(Container::EventIdList));
+        };
+        *slot = id;
+        self.len += 1;
+        Ok(())
+    }
+}
+
+impl Empty for EventIdList {
+    const EMPTY: Self = Self::new();
+}
+
+impl Default for EventIdList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 定容 **FIFO 队列**：环形缓冲（`head` + `len`），语义逐字对照 `Queue<T>`。
+///
+/// 为什么不是 [`Bounded`]：`Bounded` 是 push-only（只有 `pop` 从**尾部**取），而队列必须从
+/// **头部**取（`Queue<T>.Dequeue`，`CombatState.cs:429-440` / `:480-490`）。用 `Bounded` 的
+/// `remove(0)` 会让每次出队搬 64 条 × 176 B ≈ 11 KB —— 在裸机上那是"能跑但很蠢"。
+///
+/// `N` 必须是 ≤ 255：`head`/`len` 是 `u8`（与 `Bounded` 同一条约定，省 14 B/队列）。
+/// ⚠️ 这条约束**由下面的 `const` 断言守**，不是靠注释：把容量调到 300 时 `self.len += 1`
+/// 会在 255 处**回绕**，于是队列"看起来没满"却覆盖第 0 条 —— 又一个静默截断。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Fifo<T, const N: usize> {
+    items: [T; N],
+    head: u8,
+    len: u8,
+}
+
+// 三条队列的实际容量必须在 `u8` 范围内（见上）。放成 `const _` ⇒ **编译期**失败，
+// 而不是运行时静默回绕。
+const _: () = assert!(
+    MAX_PENDING_EFFECTS <= u8::MAX as usize
+        && MAX_PENDING_EVENTS <= u8::MAX as usize
+        && MAX_PENDING_CONTINUATIONS <= u8::MAX as usize,
+    "Fifo 的 head/len 是 u8：队列容量一旦超过 255，`len += 1` 会回绕成 0"
+);
+
+impl<T: Empty, const N: usize> Fifo<T, N> {
+    /// 空队列。
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            items: [T::EMPTY; N],
+            head: 0,
+            len: 0,
+        }
+    }
+
+    /// 已有几条。
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.len as usize
+    }
+
+    /// 是否为空。
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// 入队（尾部）。满了返回 [`CapacityError::Full`] —— **不丢条目**。
+    pub fn push(&mut self, value: T, what: Container) -> StateResult<()> {
+        if self.len as usize == N {
+            return Err(CapacityError::Full(what));
+        }
+        let at = (usize::from(self.head) + usize::from(self.len)) % N;
+        let Some(slot) = self.items.get_mut(at) else {
+            return Err(CapacityError::Full(what));
+        };
+        *slot = value;
+        self.len += 1;
+        Ok(())
+    }
+
+    /// 出队（头部）。腾出的槽写回 `T::EMPTY`（与 `Bounded::pop` 同一条不变式）。
+    pub fn pop_front(&mut self) -> Option<T> {
+        if self.len == 0 {
+            return None;
+        }
+        let at = usize::from(self.head);
+        let value = *self.items.get(at)?;
+        if let Some(slot) = self.items.get_mut(at) {
+            *slot = T::EMPTY;
+        }
+        self.head = ((at + 1) % N) as u8;
+        self.len -= 1;
+        Some(value)
+    }
+
+    /// 清空（**整块**写回空值，不只是把 `len` 归零）。
+    pub fn clear(&mut self) {
+        self.items = [T::EMPTY; N];
+        self.head = 0;
+        self.len = 0;
+    }
+}
+
+impl<T: Empty, const N: usize> Empty for Fifo<T, N> {
+    const EMPTY: Self = Self::new();
+}
+
+impl<T: Empty, const N: usize> Default for Fifo<T, N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// 出队的一条效果（参考的 `PendingEffectQueueEntry`，`CombatEffectChain.cs:86-88`）。
+///
+/// 参考把三列分开存；出队时合成**一条记录**再交给解析器 —— 本模块的
+/// [`CombatState::dequeue_effect`] 就是那一步。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EffectItem {
+    /// 请求本体。
+    pub request: EffectRequest,
+    /// 它属于哪条链（`ChainSlot::NONE` = 顶层、没有链）。
+    pub chain: ChainSlot,
+    /// 解析失败时要绑回去的节目帧（`None` = 不是任何帧发起的）。
+    pub owner: Option<ProgramExecutionSlot>,
+}
+
+/// 出队的一条事件（参考的 `PendingEventQueueEntry`，`CombatEffectChain.cs:89-91`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EventItem {
+    /// 事件本体。
+    pub event: CombatEvent,
+    /// 它属于哪条链。
+    pub chain: ChainSlot,
+}
+
+// ---------------------------------------------------------------------------------------------
 // The state
 // ---------------------------------------------------------------------------------------------
 
@@ -1513,6 +2179,31 @@ pub struct CombatState {
     card_zones: Bounded<CardZones, MAX_COMBATANTS>,
     cards: Bounded<CardInstance, MAX_CARD_INSTANCES>,
     temporary_rules: Bounded<TemporaryRule, MAX_TEMPORARY_RULES>,
+    // ---- 事件队列（批次 1）。**六个队列 + 一条拿链的作用域**，见上面那一节的模块注释。 ----
+    //
+    // 六个队列**都不进哈希、不进快照**（`CombatStateHasher.cs:26-72` 里没有它们，
+    // `CombatStateSnapshot.cs:120-151` 也没有）：参考自己把它们划成**输出**
+    // （"Excludes transient execution queues"，`CombatStateSnapshot.cs:94`）。
+    // ⇒ 加这些字段**不移动任何基线**，除非它们的**后果**（`exec_num` / `chain_num`）变了。
+    pending_effects: Fifo<EffectRequest, MAX_PENDING_EFFECTS>,
+    pending_effect_chains: Fifo<ChainSlot, MAX_PENDING_EFFECTS>,
+    pending_effect_owners: Fifo<Option<ProgramExecutionSlot>, MAX_PENDING_EFFECTS>,
+    pending_events: Fifo<CombatEvent, MAX_PENDING_EVENTS>,
+    pending_event_chains: Fifo<ChainSlot, MAX_PENDING_EVENTS>,
+    pending_continuations: Fifo<Continuation, MAX_PENDING_CONTINUATIONS>,
+    chains: ChainArena,
+    /// `EnterEffectChain` 的作用域（`CombatState.cs:500-511`）。
+    ///
+    /// 参考是 `CurrentEffectChain { get; private set; }`，只在 `using (EnterEffectChain(c))` 里非 null。
+    /// 它决定两件事：①入队时要不要**新建根链**（`CurrentEffectChain ?? CreateRootEffectChain()`，
+    /// `:386`/`:446`）；②触发链的**父**是谁（`:492-498`）。
+    ///
+    /// ⚠️ **批次 1 的现状要如实说**：程序是**就地**执行的（`exec.rs` 还没有"请求 + 解析"的拆分），
+    /// 所以出牌/敌人动作期间**没有**链作用域 ⇒ 那段时间里 `DamageDealt` 事件带的是
+    /// [`ChainSlot::NONE`]。这与参考**同数**（参考在那段时间里 `CurrentEffectChain` 非 null，
+    /// 于是也不发号），但不是**同因** —— 等批次 2 把效果队列接上，这个字段才会被
+    /// 队列条目真正填满。写在这里是因为"不发号"这个结论依赖它。
+    current_chain: ChainSlot,
 }
 
 impl core::fmt::Debug for CombatState {
@@ -1564,6 +2255,14 @@ impl Empty for CombatState {
         card_zones: Bounded::new(),
         cards: Bounded::new(),
         temporary_rules: Bounded::new(),
+        pending_effects: Fifo::new(),
+        pending_effect_chains: Fifo::new(),
+        pending_effect_owners: Fifo::new(),
+        pending_events: Fifo::new(),
+        pending_event_chains: Fifo::new(),
+        pending_continuations: Fifo::new(),
+        chains: ChainArena::new(),
+        current_chain: ChainSlot::NONE,
     };
 }
 
@@ -1613,6 +2312,17 @@ impl CombatState {
         self.card_zones.clear();
         self.cards.clear();
         self.temporary_rules.clear();
+        // 六个队列 + 链 arena + 作用域。**参考在静止点存档时队列是空的**
+        // （"no in-flight effect queue / program frames"，`CombatState.cs:718`、`:795-796`），
+        // 所以"重置 = 队列全空"与参考一致；漏清一个会让上一局的残留事件在下一局开打时被分发。
+        self.pending_effects.clear();
+        self.pending_effect_chains.clear();
+        self.pending_effect_owners.clear();
+        self.pending_events.clear();
+        self.pending_event_chains.clear();
+        self.pending_continuations.clear();
+        self.chains.clear();
+        self.current_chain = ChainSlot::NONE;
     }
 
     /// 一份全空的状态 —— [`Empty::EMPTY`] 的**逐字段**版本。
@@ -1639,6 +2349,14 @@ impl CombatState {
             card_zones: Bounded::new(),
             cards: Bounded::new(),
             temporary_rules: Bounded::new(),
+            pending_effects: Fifo::new(),
+            pending_effect_chains: Fifo::new(),
+            pending_effect_owners: Fifo::new(),
+            pending_events: Fifo::new(),
+            pending_event_chains: Fifo::new(),
+            pending_continuations: Fifo::new(),
+            chains: ChainArena::new(),
+            current_chain: ChainSlot::NONE,
         }
     }
 
@@ -1704,6 +2422,331 @@ impl CombatState {
         let id = self.next_effect_chain_number;
         self.next_effect_chain_number += 1;
         id
+    }
+
+    // ---- 事件队列（批次 1）：入队 / 出队 / 链作用域 -------------------------------------------
+    //
+    // 三条入队规则逐字照 `CombatState.cs`：
+    //   * `EnqueueEffect`（`:382-392`）与 `EnqueueEvent`（`:442-452`）都是
+    //     `var chain = CurrentEffectChain ?? CreateRootEffectChain();`
+    //   * `EnqueueContinuation`（`:461-470`）**不带链**（`Queue<Action<CombatState>>` 没有链字段）。
+    //   * `CreateTriggeredEffectChain`（`:492-498`）**不发号**：父链 id 不变、深度 +1。
+    //
+    // ⚠️ 本模块把"当前有没有链"做成**显式参数**而不是"读 `current_chain` 再兜底"：
+    // 无链时**不建根链**，条目带 `ChainSlot::NONE`。这不是省一个号 —— 是照实说
+    // "这段时间没有链"。谁要发号，调 [`Self::enqueue_event_at_root`]（那是参考的
+    // `?? CreateRootEffectChain()` 分支，明确写出来）。批次 1 只有四个回合边界事件走那条路，
+    // 而它们今天各自已经发过一个号（`host.rs` 的四个钩子里那四行 `create_root_effect_chain`）——
+    // 所以**链号一个都不多、一个都不少**，基线不动。
+
+    /// 入队一条效果：链 = 当前作用域链（没有就是 [`ChainSlot::NONE`]）。
+    ///
+    /// `owner` 是"谁在跑、解析失败时把帧绑回去"的那个槽位（§1.2 末）。
+    pub fn enqueue_effect(&mut self, request: EffectRequest) -> StateResult<()> {
+        self.enqueue_effect_with_owner(request, None)
+    }
+
+    /// 同 [`Self::enqueue_effect`]，但带上归属节目帧。
+    pub fn enqueue_effect_with_owner(
+        &mut self,
+        request: EffectRequest,
+        owner: Option<ProgramExecutionSlot>,
+    ) -> StateResult<()> {
+        // 三列**一起**进：任何一列失败都不许留下"多出来的那一列"（否则下一次出队的
+        // 对齐断言会红在一个完全无关的地方）。所以先查容量，再三列同推。
+        if self.pending_effects.len() == MAX_PENDING_EFFECTS {
+            return Err(CapacityError::Full(Container::PendingEffects));
+        }
+        self.pending_effects.push(request, Container::PendingEffects)?;
+        let chain = self.current_chain;
+        if let Err(e) = self
+            .pending_effect_chains
+            .push(chain, Container::PendingEffectChains)
+        {
+            // 回滚：主列已经进了一条，不撤销就会让三列错位（而错位是**静默**的语义漂移）。
+            let _ = self.pending_effects.pop_front();
+            return Err(e);
+        }
+        if let Err(e) = self
+            .pending_effect_owners
+            .push(owner, Container::PendingEffectOwners)
+        {
+            let _ = self.pending_effect_chains.pop_front();
+            let _ = self.pending_effects.pop_front();
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    /// 入队一条事件：链 = 当前作用域链（没有就是 [`ChainSlot::NONE`]）。
+    pub fn enqueue_event(&mut self, event: CombatEvent) -> StateResult<()> {
+        let chain = self.current_chain;
+        self.enqueue_event_with_chain(event, chain)
+    }
+
+    /// 入队一条事件，并**建一条根链**（参考的 `CurrentEffectChain ?? CreateRootEffectChain()`）。
+    ///
+    /// 这是"顶层入队"那一支：回合机把 `TurnStartedCombatEvent` 交给处理器
+    /// （`CombatTurnProcessor.cs:28-32`）时没有环境链 ⇒ `+1`。
+    pub fn enqueue_event_at_root(&mut self, event: CombatEvent) -> StateResult<()> {
+        let chain = self.new_root_chain_in_arena()?;
+        self.enqueue_event_with_chain(event, chain)
+    }
+
+    /// 入队一条事件，链由调用方给。
+    pub fn enqueue_event_with_chain(
+        &mut self,
+        event: CombatEvent,
+        chain: ChainSlot,
+    ) -> StateResult<()> {
+        if self.pending_events.len() == MAX_PENDING_EVENTS {
+            return Err(CapacityError::Full(Container::PendingEvents));
+        }
+        // 先拿到"这条链还在"的引用，再改两列 —— 反过来的话，`acquire` 失败会留下
+        // 一条**已入队但没持引用的**事件（链可能被回收，而队列里还指着它）。
+        if !chain.is_none() {
+            self.chains.acquire(chain)?;
+        }
+        self.pending_events.push(event, Container::PendingEvents)?;
+        if let Err(e) = self
+            .pending_event_chains
+            .push(chain, Container::PendingEventChains)
+        {
+            let _ = self.pending_events.pop_front();
+            self.chains.release(chain);
+            return Err(e);
+        }
+        Ok(())
+    }
+
+    /// 入队一条续延。**不带链**（`EnqueueContinuation`，`CombatState.cs:461-470`）。
+    ///
+    /// ⚠️ 入队**不会**执行它（那是"立刻跑"的变异，见 `host.rs` 的排空循环与它的测试）。
+    pub fn enqueue_continuation(&mut self, continuation: Continuation) -> StateResult<()> {
+        self.pending_continuations
+            .push(continuation, Container::PendingContinuations)
+    }
+
+    /// 出队一条效果（连带它的链与归属帧）。**出队前先跑对齐断言**（`CombatState.cs:429-440`）。
+    pub fn dequeue_effect(&mut self) -> StateResult<Option<EffectItem>> {
+        self.ensure_effect_queue_aligned()?;
+        let Some(request) = self.pending_effects.pop_front() else {
+            return Ok(None);
+        };
+        // 对齐断言刚刚过了 ⇒ 这两次 pop 一定拿得到。**但仍然不用 `unwrap_or`**：
+        // 用兜底值的话，"断言被删掉/被破坏"那天这里会静默把链换成 `NONE`，
+        // 而 `NONE` 恰好是一个合法值 —— 于是错位的效果会被当成"顶层效果"照常跑。
+        let Some(chain) = self.pending_effect_chains.pop_front() else {
+            return Err(self.misaligned("effect"));
+        };
+        let Some(owner) = self.pending_effect_owners.pop_front() else {
+            return Err(self.misaligned("effect"));
+        };
+        Ok(Some(EffectItem {
+            request,
+            chain,
+            owner,
+        }))
+    }
+
+    fn misaligned(&self, column: &'static str) -> CapacityError {
+        CapacityError::QueueMetadataMisaligned {
+            column,
+            records: self.pending_effects.len(),
+            chains: self.pending_effect_chains.len(),
+            owners: self.pending_effect_owners.len(),
+        }
+    }
+
+    /// 出队一条事件（连带它的链）。**出队前先跑对齐断言**（`CombatState.cs:480-490`）。
+    pub fn dequeue_event(&mut self) -> StateResult<Option<EventItem>> {
+        self.ensure_event_queue_aligned()?;
+        let Some(event) = self.pending_events.pop_front() else {
+            return Ok(None);
+        };
+        // 同 `dequeue_effect`：不用兜底值，见那里的注释。
+        let Some(chain) = self.pending_event_chains.pop_front() else {
+            return Err(CapacityError::QueueMetadataMisaligned {
+                column: "event",
+                records: self.pending_events.len(),
+                chains: self.pending_event_chains.len(),
+                owners: self.pending_event_chains.len(),
+            });
+        };
+        Ok(Some(EventItem { event, chain }))
+    }
+
+    /// 出队一条续延（`TryDequeueContinuation`，`CombatState.cs:472-473`）。
+    pub fn try_dequeue_continuation(&mut self) -> Option<Continuation> {
+        self.pending_continuations.pop_front()
+    }
+
+    // ---- 两条对齐断言 ------------------------------------------------------------------------
+    //
+    // 参考用两条断言守"三列并行数组"这条不变式（`EnsureEffectQueueMetadataAligned`
+    // `CombatState.cs:401-406`；`EnsureEventQueueMetadataAligned` `:436-440`）。
+    // 它们的意义不是"防御性编程"：三列长度不一致就意味着**某条效果拿到了别人的链**，
+    // 而那种错误在哈希里看起来只是一串不同的链号。所以它们必须是**真的检查**，
+    // 不是 `debug_assert!`（发布版会把它们编掉，而裸机跑的就是发布版）。
+
+    /// 效果列三列必须等长。
+    pub fn ensure_effect_queue_aligned(&self) -> StateResult<()> {
+        let effects = self.pending_effects.len();
+        let chains = self.pending_effect_chains.len();
+        let owners = self.pending_effect_owners.len();
+        if effects == chains && effects == owners {
+            return Ok(());
+        }
+        Err(CapacityError::QueueMetadataMisaligned {
+            column: "effect",
+            records: effects,
+            chains,
+            owners,
+        })
+    }
+
+    /// 事件列两列必须等长。
+    pub fn ensure_event_queue_aligned(&self) -> StateResult<()> {
+        let events = self.pending_events.len();
+        let chains = self.pending_event_chains.len();
+        if events == chains {
+            return Ok(());
+        }
+        Err(CapacityError::QueueMetadataMisaligned {
+            column: "event",
+            records: events,
+            chains,
+            owners: chains,
+        })
+    }
+
+    // ---- 队列的可观察面 ---------------------------------------------------------------------
+
+    /// 效果队列深度（对应参考的 `PendingEffectCount`，`CombatState.cs:192-194`）。
+    #[must_use]
+    pub fn pending_effect_count(&self) -> usize {
+        self.pending_effects.len()
+    }
+
+    /// 事件队列深度（`PendingEventCount`，`:196-198`）。
+    #[must_use]
+    pub fn pending_event_count(&self) -> usize {
+        self.pending_events.len()
+    }
+
+    /// 续延队列深度。
+    #[must_use]
+    pub fn pending_continuation_count(&self) -> usize {
+        self.pending_continuations.len()
+    }
+
+    /// 三个队列有没有活（`HasPendingEffects || HasPendingEvents || HasPendingContinuations`，`:97`）。
+    #[must_use]
+    pub fn has_pending_queues(&self) -> bool {
+        !self.pending_effects.is_empty()
+            || !self.pending_events.is_empty()
+            || !self.pending_continuations.is_empty()
+    }
+
+    /// 效果队列是否为空。
+    #[must_use]
+    pub fn has_pending_effects(&self) -> bool {
+        !self.pending_effects.is_empty()
+    }
+
+    /// 事件队列是否为空。
+    #[must_use]
+    pub fn has_pending_events(&self) -> bool {
+        !self.pending_events.is_empty()
+    }
+
+    /// 续延队列是否为空。
+    #[must_use]
+    pub fn has_pending_continuations(&self) -> bool {
+        !self.pending_continuations.is_empty()
+    }
+
+    // ---- 链作用域（`EnterEffectChain`） -------------------------------------------------------
+
+    /// 当前作用域链。
+    #[must_use]
+    pub const fn current_chain(&self) -> ChainSlot {
+        self.current_chain
+    }
+
+    /// 在 `chain` 的作用域里跑 `f`，退出时**还原**（`CombatState.cs:500-511` 的 `using`）。
+    ///
+    /// ⚠️ 闭包**立刻调用**，不入队 —— 这是 §4.1.3 允许的那一种用法。
+    pub fn with_chain<R>(&mut self, chain: ChainSlot, f: impl FnOnce(&mut Self) -> R) -> R {
+        let saved = self.current_chain;
+        self.current_chain = chain;
+        let out = f(self);
+        self.current_chain = saved;
+        out
+    }
+
+    /// 建一条根链并**放进 arena**（引用计数 1），返回槽位。
+    ///
+    /// 与 [`Self::create_root_effect_chain`] 的分工：那个只发号（给 `play.rs` 的显式记账用，
+    /// 那边不需要链的内容）；这个既发号又建链，给"队列条目真的要带着一条链"用。
+    pub fn new_root_chain_in_arena(&mut self) -> StateResult<ChainSlot> {
+        let id = self.create_root_effect_chain();
+        self.chains.alloc(ChainRecord {
+            id,
+            parent: ChainSlot::NONE,
+            trigger: NO_TRIGGER,
+            depth: 0,
+            refs: 1,
+        })
+    }
+
+    /// 建一条**触发**链：父链不变、深度 +1、**不发号**（`CombatState.cs:492-498`）。
+    ///
+    /// 深度到顶 ⇒ 响亮失败（参考的 `EnsureCanAppendTriggeredEffectDefinition` **抛**，
+    /// `CombatEffectChain.cs:64-72`，不是跳过）。
+    pub fn create_triggered_chain(
+        &mut self,
+        parent: ChainSlot,
+        trigger: u16,
+    ) -> StateResult<ChainSlot> {
+        // **父链必须还在**。参考里 `CurrentEffectChain` 恒非 null（入队那一刻兜底建了根链，
+        // `CombatState.cs:446`），所以"没有父链"在参考里不可达；内核今天不可达的原因是
+        // 批次 1 里根本没人建触发链（`exec.rs` 还没拆成"请求 + 解析"）。
+        //
+        // ⚠️ 这里**不给兜底 id**：`ChainRecord::id` 就是哈希里的 `chain_num`，瞎填一个 0
+        // 会让"链号从哪来"变成不可对账的一笔。宁可响亮失败。
+        let Some(record) = self.chains.get(parent) else {
+            return Err(CapacityError::ChainHasNoParent);
+        };
+        let (id, depth) = (record.id, record.depth);
+        let next_depth = depth.saturating_add(1);
+        if next_depth > MAX_TRIGGER_DEPTH {
+            return Err(CapacityError::Full(Container::Chains));
+        }
+        self.chains.alloc(ChainRecord {
+            id,
+            parent,
+            trigger,
+            depth: next_depth,
+            refs: 1,
+        })
+    }
+
+    /// 放掉一条链的一次引用（归零即回收）。
+    pub fn release_chain(&mut self, chain: ChainSlot) {
+        self.chains.release(chain);
+    }
+
+    /// 在用的链条数（诊断用：`refs > 0` 的槽位数）。
+    #[must_use]
+    pub fn live_chain_count(&self) -> usize {
+        self.chains.live()
+    }
+
+    /// 读一条链（触发链的父/深度）。
+    #[must_use]
+    pub fn chain_record(&self, chain: ChainSlot) -> Option<&ChainRecord> {
+        self.chains.get(chain)
     }
 
     // ---- reads -------------------------------------------------------------------------------
@@ -2837,21 +3880,54 @@ mod tests {
             core::mem::size_of::<CardZones>(),
             MAX_COMBATANTS * core::mem::size_of::<CardZones>()
         );
+        // 事件队列这一块（批次 1）。**逐列打**，因为"总量对、分量烂"是这张账本栽过的坑：
+        // 六个队列 + 链 arena 加起来必须能和"总量 − 上面三个分量"对上。
+        std::println!(
+            "  queue      : effects {} x {} | events {} x {} | conts {} x {} | chains {} x {} = {} B",
+            MAX_PENDING_EFFECTS,
+            core::mem::size_of::<EffectRequest>(),
+            MAX_PENDING_EVENTS,
+            core::mem::size_of::<CombatEvent>(),
+            MAX_PENDING_CONTINUATIONS,
+            core::mem::size_of::<Continuation>(),
+            MAX_LIVE_CHAINS,
+            core::mem::size_of::<ChainRecord>(),
+            MAX_PENDING_EFFECTS
+                * (core::mem::size_of::<EffectRequest>()
+                    + core::mem::size_of::<ChainSlot>()
+                    + core::mem::size_of::<Option<ProgramExecutionSlot>>())
+                + MAX_PENDING_EVENTS
+                    * (core::mem::size_of::<CombatEvent>() + core::mem::size_of::<ChainSlot>())
+                + MAX_PENDING_CONTINUATIONS * core::mem::size_of::<Continuation>()
+                + MAX_LIVE_CHAINS * core::mem::size_of::<ChainRecord>()
+        );
         // 上限本身是一份**带数字的决定**，不是一句"留点余量"：
-        //   192 KiB 是阶段一（无事件队列）的上界；事件队列的三档实测
-        //   （`docs/spec/event-queue-interface.md` §10）给出推荐中档 +28.52 KiB，
-        //   即 184,648 + 29,200 = **213,848 B**；224 KiB = 229,376 B，正好比它高 7.3%。
-        //   **忠实档 231,256 B（+45.52 KiB）故意留在上界之外**：它越界不是 bug，是
-        //   "要不要为了忠实档再谈一次内存预算/多开档位"的信号 —— 所以这个 assert 会红，
-        //   而红的时候该做的是回去读 §10，不是把这个常数往上调一个数。
-        // ⚠️ 今天 `CombatState` **还没有**队列字段，所以改这个上界**不改变任何实测尺寸**；
-        //   它只是把一件已经量过价的事提前合法化。两处必须一起改：
-        //   这里和 `kernel/rd-sizeprobe/src/lib.rs` 的
+        //   192 KiB 是阶段一（无事件队列）的上界；224 KiB 是"中档"（`MAX_EVENT_ID_LIST = 8`）
+        //   那一版决议的上界；**现在是 240 KiB**，换掉的是**忠实档**（集合型事件不截断）。
+        //
+        // ⚠️ **这次抬界换的是语义完整性，不是"让测试过"**。`MAX_EVENT_ID_LIST = 8` 会把
+        //   集合型事件携带的 id 列表**静默截断**（参考在这里无界），而"一个容量常量放大后
+        //   行为会变 ⇒ 它是语义，不是实现选择；不许拿它去换预算"（
+        //   `docs/spec/event-queue-interface.md` §4.3 末的硬规则）。省下的 17.4 KiB 是那条
+        //   降级的价格标签，不是它的理由。
+        //
+        // 余量：实测 `size_of::<CombatState>()` 见本测试的 println（诚实读数，不抄第二份）。
+        //   决议的参照点是 §10.2 探针的**忠实档 231,256 B**（那是"事件枚举按参考全集 41 个
+        //   变体"的形状）；批次 1 只声明了接了线的那 5 个变体，所以实测**小于**它 ——
+        //   240 KiB = 245,760 B 对两者都成立（对探针值余 6.3%，对实测值余更多）。
+        //
+        // 既有事实（不是这次的论据，但每次抬界都该看一眼）：`CombatState` 是 **POD**
+        //   （`Copy`、无指针、无内部引用），ESP32-P4 有 **16/32 MB PSRAM** ⇒ 省这些字节
+        //   省的只是**片上** SRAM，而不是"这东西放不下"。真要多开，杠杆是 §3-D9 的 id intern
+        //   （98,560 B 卡池 + 57,984 B 战斗员），不是砍事件的集合上限。
+        //
+        // 两处必须一起改：这里和 `kernel/rd-sizeprobe/src/lib.rs` 的
         //   `the_state_model_fits_the_sram_budget_and_we_know_its_exact_size`。
         assert!(
-            size <= 224 * 1024,
-            "CombatState grew to {size} bytes, past the 224 KB ceiling this model was sized for \
-             (229,376 B = the 213,848 B mid-tier event-queue measurement + 7.3% headroom)"
+            size <= 240 * 1024,
+            "CombatState grew to {size} bytes, past the 240 KB ceiling this model was sized for \
+             (245,760 B = the 231,256 B faithful-tier event-queue measurement + 6.3% headroom, \
+              and the ceiling is a *semantic* decision - see the comment above)"
         );
         // The reference's own packed estimate for the same fight is ~9 KB (spec §5.2); the
         // difference is the un-interned ASCII ids the task's D9 note schedules for later.
@@ -3601,5 +4677,263 @@ mod tests {
             canonical_text(&CombatState::blank()),
             canonical_text(&fight())
         );
+    }
+
+    // ---------------------------------------------------------------------------------------
+    // 事件队列（批次 1）
+    // ---------------------------------------------------------------------------------------
+    //
+    // 这一组测试的分工：**每一条都在瞄准一个"坏了也不会有人喊"的形态**。
+    // 队列的默认失效模式是"少了一条、早了一条、多了一个号" —— 三种都不报错，
+    // 只在几万步之后表现为一个哈希不同。所以这里成对写（满/未满、跑/不跑、发号/不发号）。
+
+    fn hero_id() -> CombatantId {
+        cid("hero")
+    }
+
+    fn a_turn_started() -> CombatEvent {
+        CombatEvent::TurnStarted {
+            combatant: hero_id(),
+        }
+    }
+
+    #[test]
+    fn a_full_queue_refuses_the_65th_entry_instead_of_dropping_it() {
+        // 参考的 `Queue<T>` 无界；移植有界 ⇒ "满了"是**新增的**错误。它必须是 `Err`，
+        // 而且队列深度必须**停在 64**（既不是 65，也不是 0 —— 后者等于把整队丢了）。
+        let mut state = fight();
+        for i in 0..MAX_PENDING_EVENTS {
+            state
+                .enqueue_event(a_turn_started())
+                .unwrap_or_else(|e| panic!("第 {i} 条就该进得去：{e:?}"));
+        }
+        assert_eq!(state.pending_event_count(), MAX_PENDING_EVENTS);
+        assert_eq!(
+            state.enqueue_event(a_turn_started()),
+            Err(CapacityError::Full(Container::PendingEvents))
+        );
+        assert_eq!(
+            state.pending_event_count(),
+            MAX_PENDING_EVENTS,
+            "满了之后深度不许变（多 1 = 覆盖别人，到 0 = 整队丢了）"
+        );
+        // 成对：腾一格之后**进得去**，证明拒绝的是"满了"这件事，不是"入队坏了"。
+        assert!(state.dequeue_event().unwrap().is_some());
+        assert_eq!(state.enqueue_event(a_turn_started()), Ok(()));
+        assert_eq!(state.pending_event_count(), MAX_PENDING_EVENTS);
+    }
+
+    #[test]
+    fn the_fifo_wraps_around_and_still_pops_in_push_order() {
+        // 环形缓冲的经典坏法：下标忘了取模 ⇒ 转第二圈时开始读垃圾。
+        // 这里把一条 64 容量的队列真的转两整圈，顺序必须逐条对上。
+        let mut state = fight();
+        for round_base in [0i32, MAX_PENDING_EVENTS as i32] {
+            for offset in 0..MAX_PENDING_EVENTS {
+                state
+                    .enqueue_event(CombatEvent::RoundStarted {
+                        round: round_base + offset as i32,
+                    })
+                    .expect("没满");
+            }
+            for offset in 0..MAX_PENDING_EVENTS {
+                let item = state.dequeue_event().expect("没空").expect("有货");
+                match item.event {
+                    CombatEvent::RoundStarted { round } => assert_eq!(
+                        round,
+                        round_base + offset as i32,
+                        "第 {offset} 条的顺序错了（环形下标没取模就是这样）"
+                    ),
+                    other => panic!("出队拿到了别的事件：{other:?}"),
+                }
+            }
+            assert!(!state.has_pending_queues(), "抽干一圈之后必须干净");
+        }
+    }
+
+    #[test]
+    fn the_effect_columns_are_checked_on_every_dequeue_not_just_in_debug() {
+        // 参考的两条 `Ensure*QueueMetadataAligned`（`CombatState.cs:401-406/436-440`）是
+        // **语义守门人**：三列错位 = "这条效果拿到了别人的链"，而它在哈希里只表现为一串不同的号。
+        // ⇒ 这条测试亲手把一列掰歪，断言出队**响亮失败**（而不是照旧发出错位的记录）。
+        let mut state = fight();
+        state
+            .enqueue_effect(EffectRequest::GainBlock {
+                target: Some(hero_id()),
+                amount: 3,
+            })
+            .unwrap();
+        assert!(state.ensure_effect_queue_aligned().is_ok());
+
+        // 掰歪：多推一条链（模拟"某处只推了元数据列"）。
+        state
+            .pending_effect_chains
+            .push(ChainSlot::NONE, Container::PendingEffectChains)
+            .unwrap();
+        assert_eq!(
+            state.dequeue_effect(),
+            Err(CapacityError::QueueMetadataMisaligned {
+                column: "effect",
+                records: 1,
+                chains: 2,
+                owners: 1,
+            })
+        );
+
+        // 事件列同理（它只有两列）。
+        let mut events = fight();
+        events.enqueue_event(a_turn_started()).unwrap();
+        events
+            .pending_event_chains
+            .push(ChainSlot::NONE, Container::PendingEventChains)
+            .unwrap();
+        assert_eq!(
+            events.dequeue_event(),
+            Err(CapacityError::QueueMetadataMisaligned {
+                column: "event",
+                records: 1,
+                chains: 2,
+                owners: 2,
+            })
+        );
+    }
+
+    #[test]
+    fn an_event_id_list_refuses_the_25th_id_instead_of_truncating_it() {
+        // 这是第 0 步那条硬规则的**可执行版本**：集合型事件的 id 列表容量放大后行为会变
+        // ⇒ 它是语义。第 25 个 id 必须**报错**，而且已经进去的 24 个必须原样还在。
+        let mut list = EventIdList::new();
+        for i in 0..MAX_EVENT_ID_LIST {
+            let id = Ident::<INSTANCE_ID_CAP>::new(&format!("card_{i:06}")).unwrap();
+            list.push(id).unwrap_or_else(|e| panic!("第 {i} 个该进得去：{e:?}"));
+        }
+        assert_eq!(list.len(), MAX_EVENT_ID_LIST);
+        let extra = Ident::<INSTANCE_ID_CAP>::new("card_999999").unwrap();
+        assert_eq!(
+            list.push(extra),
+            Err(CapacityError::Full(Container::EventIdList))
+        );
+        assert_eq!(list.len(), MAX_EVENT_ID_LIST, "满了之后长度不许动");
+        assert_eq!(list.as_slice()[0].as_str(), "card_000000", "旧条目不许被覆盖");
+    }
+
+    #[test]
+    fn a_root_chain_costs_one_number_and_a_triggered_chain_costs_none() {
+        // `CombatState.cs:545-555`（建根链发号）与 `:492-498`（建触发链**不发号**，深度 +1）。
+        // 这一对是整份"链号记账"的地基：反了就会让每个触发器偷偷把一个号用掉。
+        let mut state = fight();
+        let before = state.next_effect_chain_number;
+
+        let root = state.new_root_chain_in_arena().unwrap();
+        assert_eq!(state.next_effect_chain_number, before + 1);
+        assert_eq!(state.chain_record(root).map(|r| r.depth), Some(0));
+        assert_eq!(state.chain_record(root).map(|r| r.trigger), Some(NO_TRIGGER));
+
+        let child = state.create_triggered_chain(root, 7).unwrap();
+        assert_eq!(
+            state.next_effect_chain_number,
+            before + 1,
+            "触发链**不发号**"
+        );
+        assert_eq!(state.chain_record(child).map(|r| r.depth), Some(1));
+        assert_eq!(state.chain_record(child).map(|r| r.trigger), Some(7));
+        assert_eq!(
+            state.chain_record(child).map(|r| r.id),
+            state.chain_record(root).map(|r| r.id),
+            "父子同 id：链号是链的，不是节点的"
+        );
+
+        // 回收：`refs` 归零才回收（否则父子会指向同一槽）。
+        state.release_chain(child);
+        assert!(state.chain_record(child).is_none());
+        assert!(state.chain_record(root).is_some());
+        state.release_chain(root);
+        assert_eq!(state.live_chain_count(), 0);
+        assert!(state.chain_record(root).is_none());
+    }
+
+    #[test]
+    fn the_trigger_depth_limit_is_loud() {
+        // `CombatEffectChain.cs:64-72`：深度到顶**抛**，不是"跳过这个触发器"。
+        let mut state = fight();
+        let mut chain = state.new_root_chain_in_arena().unwrap();
+        for _ in 0..MAX_TRIGGER_DEPTH {
+            chain = state.create_triggered_chain(chain, 1).expect("还没到顶");
+        }
+        assert_eq!(
+            state.chain_record(chain).map(|r| r.depth),
+            Some(MAX_TRIGGER_DEPTH)
+        );
+        assert_eq!(
+            state.create_triggered_chain(chain, 1),
+            Err(CapacityError::Full(Container::Chains)),
+            "第 {} 层必须报错（参考抛 `EnsureCanAppendTriggeredEffectDefinition`）",
+            MAX_TRIGGER_DEPTH + 1
+        );
+
+        // 另一面：**没有父链**也必须响亮失败。填一个兜底 id 会让"链号从哪来"变成
+        // 不可对账的一笔（`ChainRecord::id` 就是哈希里的 `chain_num`）。
+        assert_eq!(
+            state.create_triggered_chain(ChainSlot::from_index(MAX_LIVE_CHAINS - 1), 1),
+            Err(CapacityError::ChainHasNoParent)
+        );
+        assert_eq!(
+            state.create_triggered_chain(ChainSlot::NONE, 1),
+            Err(CapacityError::ChainHasNoParent)
+        );
+    }
+
+    #[test]
+    fn the_queues_are_cleared_by_reset_and_are_not_in_the_hash() {
+        // 两件事一起钉，因为它们是同一条结论的两面：
+        // 1. 队列**不进哈希**（参考把三个队列划成输出，`CombatStateSnapshot.cs:94`）
+        //    ⇒ 入队之后规范文本必须**逐字节相同**。
+        // 2. `reset_in_place` **必须清它们**（否则上一局的残留会在下一局开打时分发出去）。
+        let mut state = fight();
+        let clean = canonical_text(&state);
+
+        state.enqueue_event(a_turn_started()).unwrap();
+        state
+            .enqueue_event(CombatEvent::DamageDealt {
+                target: hero_id(),
+                health_damage: 5,
+                blocked_damage: 0,
+                requested: 5,
+                source: None,
+            })
+            .unwrap();
+        state
+            .enqueue_continuation(Continuation::CloseAction { actor: hero_id() })
+            .unwrap();
+        state
+            .enqueue_effect(EffectRequest::DealDamage {
+                target: Some(hero_id()),
+                amount: 2,
+                ignores_block: false,
+            })
+            .unwrap();
+
+        assert_eq!(
+            canonical_text(&state),
+            clean,
+            "队列进了哈希 ⇒ 每条改动都会移动指纹（参考没这么做）"
+        );
+        assert!(state.has_pending_queues());
+
+        // 成对：**顶层入队**多一个链号 —— 那是队列的**后果**（`CombatState.cs:446` 的
+        // `?? CreateRootEffectChain()`），不是队列内容进了哈希。两者必须分开断言，
+        // 否则"链号 +1"会被误当成"队列进了哈希"的证据。
+        let chain_before = state.next_effect_chain_number;
+        state.enqueue_event_at_root(a_turn_started()).unwrap();
+        assert_eq!(state.next_effect_chain_number, chain_before + 1);
+
+        state.reset_in_place(CombatId::new("c2").unwrap(), 7);
+        assert!(!state.has_pending_queues(), "reset 必须清六个队列");
+        assert_eq!(state.live_chain_count(), 0, "reset 必须清链 arena");
+        assert_eq!(state.current_chain(), ChainSlot::NONE);
+        // 成对：清干净之后与"刚建好的状态"逐字节相同
+        // （与 `reset_in_place_matches_new_field_for_field` 同一条不变式）。
+        let fresh = CombatState::new(CombatId::new("c2").unwrap(), 7);
+        assert_eq!(canonical_text(&state), canonical_text(&fresh));
     }
 }
