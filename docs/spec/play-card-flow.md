@@ -221,10 +221,10 @@
 | `PassiveModifierPipeline` 枚举有 6 条：`DamageDealt`/`DamageReceived`/`BlockGain`/**`CardCost`**/`OutgoingStatusApplicationStacks`/`TurnStartDraw` | `C:Effects\PassiveModifiers.cs:16-30`（`CardCost` 在 `:21`） |
 | **费用走的是 `CardCost`** | `C:Effects\PassiveModifiers.cs:286`（`DeclarativePassiveCostModifier` 传 `PassiveModifierPipeline.CardCost`） |
 | 内核侧**已经**有对应变体：`Pipeline::Cost` | `K:modifiers.rs:44` |
-| ⚠ 但内核的 `status_bind::Pipeline::from_wire_name` **只认 3 个串**（`DamageDealt`/`DamageReceived`/`TurnStartDraw`），`"CardCost"`/`"BlockGain"` 会返回 `None` ⇒ 调用方报 `BindError::Pipeline` | `K:status_bind.rs:122-140` |
+| ⚠ 内核的 `status_bind::Pipeline::from_wire_name` 认 **4 个串**：`DamageDealt`/`DamageReceived`/`TurnStartDraw` + **`"BlockGain"`**（格挡管线，变体名是 `Pipeline::Block`、wire 串却是参考枚举的成员名 `BlockGain`）；返回 `None` 的是 `"CardCost"`/`"OutgoingStatusApplicationStacks"`，**以及 `"Block"`** —— 那是折叠器枚举的变体名，不是 wire 串 ⇒ 调用方报 `BindError::Pipeline` | `K:status_bind.rs:166-174`（`Pipeline::Block` 在 `:149-154`；写回用的 `wire_name` 在 `:178-185`）、`C:Effects\PassiveModifiers.cs:20` |
 | **本镜像里 0 条 `CardCost` spec**（`PassiveModifiers` 的 pipeline 直方图：`DamageDealt` 2 / `TurnStartDraw` 1 / `DamageReceived` 2，共 5 条） | 【实跑】dump |
 
-⇒ **移植结论**：枚举不用动；但 `status_bind` 的那 3 条串表将来一定要扩成 6 条，否则一旦内容里出现 `"CardCost"` 的 spec，**费用会静默按印刷价结算**（`BindError` 只在真的读到那条 spec 时才出现，而阅读路径在 `status_bind` 里）。今天不挡路，因为本内容 0 条。
+⇒ **移植结论**：枚举不用动；但 `status_bind` 的那 4 条串表将来一定要扩成 6 条，否则一旦内容里出现 `"CardCost"` 的 spec，**费用会静默按印刷价结算**（`BindError` 只在真的读到那条 spec 时才出现，而阅读路径在 `status_bind` 里）。今天不挡路，因为本内容 0 条。
 
 ### 3.3 六个 cost modifier 的**执行顺序**（升序重排后）
 

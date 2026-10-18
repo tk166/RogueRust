@@ -119,6 +119,13 @@
 //!    `status_bind::Pipeline` 只有 3 条串**（`status_bind.rs:134-140`），而 `status_bind::decode`
 //!    遇到 `"CardCost"` 会报 `BindError::Pipeline` —— 这正是本模块"费用不静默按印刷价结算"的闸门
 //!    （见 `declarative_cost`），不是缺口。
+//!
+//!    2026-10-19 补上同一族里的**第二道**（当时是最后一道）：`declarative_cost` 从前用软版
+//!    `status_bind::decode` + `Ok(None) => continue`，"内容里查不到这个状态定义"因此安静地
+//!    按印刷价结算。现在走 `decode_required` ⇒ `BindError::Missing("STAT row")` ⇒
+//!    `PlayError::Effect(ExecError::Bind(..))`，与伤害 Source/Target / 格挡 / 回合抽牌
+//!    那四条管线**同一个变体、同一句话**。成对反例是 `paperwork`（定义在、修饰器 0 条）：
+//!    它必须**照常放行**，否则这两件事又被合成了一件。
 
 use crate::content::{
     CardRow, Content, ABSENT16, BOOL_TRUE, EK_CARD, LIST_ABSENT, LIST_NULL, NULL16, OP_ARR,
@@ -1468,9 +1475,18 @@ fn run_cost_stage(
 ///
 /// # 本内容下它为什么是恒等，以及**为什么"恒等"不是猜的**
 ///
-/// 1. 逐条把来源身上每个状态的 `PassiveModifiers` 交给 [`status_bind::decode`]。
-///    镜像里能解出的 5 条 spec 全是 `DamageDealt`/`DamageReceived`/`TurnStartDraw`，
+/// 1. 逐条把来源身上每个状态的 `PassiveModifiers` 交给 [`status_bind::decode_required`]
+///    （**严格版**）。镜像里能解出的 5 条 spec 全是 `DamageDealt`/`DamageReceived`/`TurnStartDraw`，
 ///    **0 条 `CardCost`**（§3.2 实跑）。所以候选表恒空。
+///
+///    ⚠️ **本来这一行写的是软版 `decode` + `Ok(None) => continue`，2026-10-19 改掉**：
+///    那条分支把"内容里根本没这个状态定义"与"定义在、但没有修饰器"合成了一条，
+///    而后者**合法**（`paperwork` 就是 0 条的）。严格版把前者变成
+///    `BindError::Missing("STAT row")` ⇒ [`PlayError::Effect`]`(ExecError::Bind(..))`，
+///    与伤害（Source/Target）/ 格挡 / 回合抽牌那四条管线**同一个变体、同一句话**；
+///    而且这句话不是靠复制字符串对齐的 —— `decode_required` 本身就是
+///    `decode(..)?.ok_or(BindError::Missing("STAT row"))`（`status_bind.rs:613-619`）。
+///    **这是本模块最后堵掉的一条"查不到就跳过"。**
 /// 2. 一旦内容里真的出现 `"CardCost"`，`status_bind::Pipeline::from_wire_name` 会返回 `None`
 ///    （`status_bind.rs:134-140` 只认 3 个串）⇒ `BindError::Pipeline` ⇒ **这里响亮失败**。
 ///    **这是本模块最重要的一条闸门**：费用静默按印刷价结算，是这个项目里最难发现的错之一
@@ -1485,23 +1501,30 @@ fn declarative_cost(
 ) -> Result<i32, PlayError> {
     // 先扫一遍"内容声明了什么"，**再**动折叠器 —— 顺序上先拒绝、后计算。
     let mut buffer = [NO_SPEC; status_bind::MAX_MODIFIERS];
-    if let Ok(combatant) = source_of(state, &card.source) {
-        for status in combatant.statuses() {
-            match status_bind::decode(card.content, status.definition_id.as_str(), &mut buffer) {
-                // 内容里没有这个状态定义 ⇒ 没有 spec（参考：未注册的定义没有修饰器）。
-                Ok(None) => continue,
-                Ok(Some(decoded)) => {
-                    for spec in &buffer[..decoded.modifier_count] {
-                        if cost_pipeline_of(spec.pipeline) == Some(ModifierPipeline::Cost) {
-                            // 结构上不可达（`status_bind::Pipeline` 没有 `Cost` 变体）；
-                            // 写出来是因为"`status_bind` 读不懂某条费用 spec"必须响亮，
-                            // 绝不能落进下面的恒等折叠里。
-                            return Err(unsupported_content("CardCost"));
-                        }
-                    }
-                }
-                // `BindError::Pipeline` 就是"内容声明了一条本层读不懂的管线"（含 `"CardCost"`）。
-                Err(error) => return Err(PlayError::Effect(exec::ExecError::Bind(error))),
+    // 来源必须**在**。这里从前写的是 `if let Ok(combatant) = source_of(..)` —— 缺人时
+    // 静默按印刷价结算。那是同一族"查不到就跳过"（只不过查的是战斗状态、不是镜像），
+    // 而且与另外五个费用阶段（全写 `source_of(..)?`）不一致；本轮一并改成传入。
+    let combatant = source_of(state, &card.source)?;
+    for status in combatant.statuses() {
+        // ★ 严格版解码（2026-10-19）：镜像的 `STAT` 表里**查不到这个状态定义** ⇒
+        //   `BindError::Missing("STAT row")` ⇒ 出牌响亮失败。
+        //   软版的 `Ok(None)` 与"定义在、但一条修饰器都没有"（`paperwork`）在解码层是
+        //   **两条不同的路**，合并它们就等于让"内容自造 id / id 拼错 / 内核缺元数据"
+        //   统统安静地按印刷价结算 —— 那正是 §8.3 说的"哈希对拍会通过"的错。
+        //   `BindError::Pipeline` 那条既有拒绝没有变：它是"内容声明了一条本层读不懂的
+        //   管线"（含 `"CardCost"`），同样从这一个 `map_err` 出口出去。
+        let decoded = status_bind::decode_required(
+            card.content,
+            status.definition_id.as_str(),
+            &mut buffer,
+        )
+        .map_err(|error| PlayError::Effect(exec::ExecError::Bind(error)))?;
+        for spec in &buffer[..decoded.modifier_count] {
+            if cost_pipeline_of(spec.pipeline) == Some(ModifierPipeline::Cost) {
+                // 结构上不可达（`status_bind::Pipeline` 没有 `Cost` 变体）；
+                // 写出来是因为"`status_bind` 读不懂某条费用 spec"必须响亮，
+                // 绝不能落进下面的恒等折叠里。
+                return Err(unsupported_content("CardCost"));
             }
         }
     }
@@ -1731,13 +1754,40 @@ fn card_program<'a>(card: &CardOnTable<'a>) -> Result<(Option<NodeRef<'a>>, u32)
 /// 这次出牌就**响亮失败**，而不是按"没有法令"照算（§8.3 说的正是这种静默错）。
 ///
 /// ⇒ 接法令时该做的是**补这一个函数 + 那 5 个读点**，不是改流水线。
+///
+/// # ⚠️ 本函数里那处 `status_row(..)` 的 `None => continue` 是**同一族**，但故意没改
+///
+/// 2026-10-19：这一族的其它五处（伤害 Source/Target、格挡、回合抽牌、声明式费用）都已
+/// 改成"镜像里查不到状态定义 ⇒ `BindError::Missing("STAT row")`"。**这里没跟着改**，
+/// 而且不是漏了 —— 是本文件（甚至本 crate 的 `pub` 面）今天做不到：
+///
+/// * 本函数里的状态实例 id 有两个**合法的命名世界**。参考的实现里状态定义来自注册表，
+///   `standard.stun` / `standard.free_next_card` 这些**标准包 id 是真的存在**的；而本镜像
+///   是**场景包**内容（23/23 状态 `PackageId == "scenario"`，`standard.stun` 在整张串表里
+///   NOT FOUND，用 `reader.py --find standard.stun` 实测过）。`play.rs` 自己那五个状态常量
+///   （`STUN_STATUS` 等，`:398-406`）全用标准包 id ⇒ 一个带 `standard.stun` 的实例
+///   **必然**查不到 `STAT` 行，而它是合法的。
+/// * 把 `None` 改成响亮 ⇒ 现有的校验器顺序测试
+///   （`an_unplayable_card_is_refused_after_stun_because_of_the_real_validator_order`）
+///   再也写不出来：它必须往 hero 身上放一条 `standard.stun`。
+/// * 唯一现成的桥是 `exec::NAMESPACE_BRIDGE`，而它有两条硬约束：**只有 5 条**
+///   （`"不做通用前缀剥离"`）、**有 `content` 时一条都不许用**（`exec.rs:131-146`、`:459-471`）。
+///   两处都不能在本文件里放宽。
+///
+/// ⇒ 这条静默的**残余后果是有限的**：未知 id 的牌只要走过算费，就已经被
+/// [`declarative_cost`] 响亮拒掉（`refuse_if_any_decree` 在它**前面**跑，只是先一步跳过）；
+/// 而本函数漏掉的那种情况（未知 id + 有 `CombatRules` 的内容）需要"内容声明了法令 **且**
+/// 状态没进镜像"同时成立 —— 那时算费也会响。**真正的修法是把两个命名世界合掉**
+/// （让 `play.rs` 的状态常量跟 `applyStatus` 落进实例的 id 一个世界），那要动
+/// `exec.rs` / `content.rs` 或冻结面，不在"只准改 play.rs"的范围内。
 fn refuse_if_any_decree(state: &CombatState, card: &CardOnTable<'_>) -> Result<(), PlayError> {
     let Ok(combatant) = source_of(state, &card.source) else {
         return Ok(());
     };
     for status in combatant.statuses() {
         let Some(row) = status_bind::status_row(card.content, status.definition_id.as_str()) else {
-            // 内容里没有这个状态定义 ⇒ 它当然也没有法令。
+            // 内容里没有这个状态定义 ⇒ 它当然也没有法令。**这一支是"查不到就跳过"**，
+            // 保留的理由见函数文档（两个命名世界 + `NAMESPACE_BRIDGE` 的两条硬约束）。
             continue;
         };
         let handle = row.combat_rules();
@@ -2638,6 +2688,121 @@ mod tests {
             "读不懂的费用管线必须响亮，不许静默按印刷价"
         );
         assert_eq!(state_text(&state), before, "算费阶段拒绝 ⇒ 状态不变");
+    }
+
+    /// 手搓一张"在桌上的卡"（`plan_play` 造它的那 8 行抄一份，只为能**直接**调
+    /// [`declarative_cost`]）。
+    ///
+    /// 为什么不一律走出牌路径：判决闸门（[`refuse_if_any_decree`]）在校验器与算费**之前**
+    /// 扫同一批状态，所以"未知状态 id"那条用例在端到端路径上会被两处同时挡住 ——
+    /// 那样就分不清"费用管线响了"还是"法令闸门响了"。直接调 `declarative_cost` 才能把
+    /// 变异测试钉在**这一行**上（把它改回 `continue` ⇒ 下面 (a) 必须红）。
+    fn card_on_table<'a>(
+        content: &'a Content<'a>,
+        definition: &str,
+        source: &str,
+        instance: &str,
+    ) -> CardOnTable<'a> {
+        let entry = content
+            .lookup_in(definition, EK_CARD)
+            .unwrap_or_else(|| panic!("CARD 表里没有 {definition}"));
+        let row = content
+            .card(u32::from(entry.index))
+            .unwrap_or_else(|| panic!("{definition} 的 CARD 行读不出来"));
+        CardOnTable {
+            content,
+            row,
+            source: cid(source),
+            instance: CardInstanceId::new(instance).unwrap(),
+            target: None,
+            is_action: false,
+            is_attack: card_has_tag(content, row, ATTACK_TAG).expect("Tags 可解"),
+            is_skill: card_has_tag(content, row, SKILL_TAG).expect("Tags 可解"),
+        }
+    }
+
+    #[test]
+    fn the_cost_pipeline_refuses_an_unregistered_status_but_passes_an_empty_one() {
+        // ★ 成对（本轮 A/B 两件事）：
+        //   (a) 状态 id 不在镜像的 `STAT` 表里 ⇒ 与伤害/格挡/抽牌那四条管线**同一个变体、
+        //       同一句话**（`BindError::Missing("STAT row")`）。从前这里是 `Ok(None) => continue`
+        //       ⇒ 费用静默按印刷价结算（§8.3 那个"哈希对拍会通过"的错）。
+        //   (b) 定义在、但 `PassiveModifiers` 是**真的 0 条**（`paperwork`，镜像实测）⇒
+        //       **照常放行**且原值返回。这两件事在解码层是两条不同的路，不许一起拦。
+        //   (c) 顺手钉住"已知**且有**修饰器"的也放行（`doubt` 那 1 条是 `DamageDealt`，
+        //       不是 `Cost` 管线）—— 否则"把所有带修饰器的状态都拒了"也能骗过 (b)。
+        let blob = core_image();
+        let content = parse(&blob);
+        let card = card_on_table(&content, "paper_cut", "hero", "card_h1");
+        let missing = Err(PlayError::Effect(exec::ExecError::Bind(
+            status_bind::BindError::Missing("STAT row"),
+        )));
+
+        // (a) 未知 id：两种成因同一个报法（自造 id / 标准包 id —— 后者也**不在**这个镜像里，
+        //     实测 `--find standard.stun` 是 NOT FOUND；镜像 23/23 状态的 `PackageId` 都是
+        //     `scenario`）。这里用最坏的一档 `sts_vulnerable`：看着像标准包，实际谁都没有。
+        for unknown in ["sts_vulnerable", "no_such_status", "standard.strength"] {
+            let mut state = arena();
+            give_status(&mut state, "hero", unknown);
+            assert_eq!(
+                declarative_cost(&state, &card, 1),
+                missing,
+                "{unknown} 不在镜像的 STAT 表里 ⇒ 费用管线必须响亮，不许按印刷价"
+            );
+        }
+        // 一条都没有状态时照常恒等（别把"没状态"也当成错误）。
+        assert_eq!(declarative_cost(&arena(), &card, 2), Ok(2));
+
+        // (b) 已知但 0 条修饰器 ⇒ 放行。
+        let mut state = arena();
+        give_status(&mut state, "hero", "paperwork");
+        assert_eq!(
+            declarative_cost(&state, &card, 1),
+            Ok(1),
+            "定义在、修饰器 0 条 = 合法（不许被 (a) 一起拦）"
+        );
+        assert_eq!(declarative_cost(&state, &card, 4), Ok(4), "恒等，不是夹到 0");
+
+        // (c) 已知且 1 条修饰器（`DamageDealt`）⇒ 也放行。
+        let mut state = arena();
+        give_status(&mut state, "hero", "doubt");
+        assert_eq!(
+            declarative_cost(&state, &card, 2),
+            Ok(2),
+            "`doubt` 的唯一 spec 是 DamageDealt，不是 Cost 管线 ⇒ 费用不动"
+        );
+    }
+
+    #[test]
+    fn playing_with_an_unregistered_status_on_the_source_fails_loudly() {
+        // 端到端：同一条拒绝必须**也是**公开路径上的答案（`play_card` 的错误面），
+        // 而且算费在付款之前 ⇒ 状态逐字节不变。
+        //
+        // ⚠️ 这条测试**不**单独证明费用管线响了：`refuse_if_any_decree` 在校验器与算费之前
+        // 扫同一批状态（它今天对未知 id 仍是软跳过，理由写在那个函数上）。所以要钉住
+        // "费用这一行"的是上面那条直接调用的测试。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut state = arena();
+        give_status(&mut state, "hero", "sts_vulnerable");
+        give_card(&mut state, "hero", CardZone::Hand, "card_h1", "paper_cut");
+        let before = state_text(&state);
+
+        let error = play_card(
+            &mut state,
+            Some(&content),
+            &request("card_h1", Some("enemy_a")),
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            error,
+            PlayError::Effect(exec::ExecError::Bind(status_bind::BindError::Missing(
+                "STAT row"
+            ))),
+            "来源身上有个镜像里查不到的状态 ⇒ 出牌响亮失败（不许按印刷价照算）"
+        );
+        assert_eq!(state_text(&state), before, "拒绝发生在付费之前 ⇒ 状态不变");
     }
 
     // ------------------------------------------------------------- 15. 法令闸门

@@ -161,7 +161,15 @@ INV_STATUSES = {
     "standard.strength": [("DamageDealt", "AddPerStack", 1, 100, "Direct")],
     "standard.vulnerable": [("DamageReceived", "ScalePercent", 150, 300, "Direct")],
     "standard.weak": [("DamageDealt", "ScalePercent", 75, 200, "Direct")],
-    "standard.frail": [],      # no block pipeline in status_bind::Pipeline
+    # `frail` is the only status on the *block* pipeline.  The wire string is
+    # "BlockGain" -- the reference enum member name (`PassiveModifiers.cs:20`),
+    # **not** "Block" (that is the kernel's *variant* name, not a wire string).  The numbers
+    # come from the reference declaration (`StandardCombatPackage.cs:318-321`:
+    # BlockGain / ScalePercent / 75 / Priority 200) and are folded by
+    # `DeclarativePassiveBlockModifier` (`PassiveModifiers.cs:257-269`), which
+    # reads the *gaining* combatant and passes `damageKind: null` -- hence the
+    # None in the last slot.  Single stage, no priority-per-stage axis.
+    "standard.frail": [("BlockGain", "ScalePercent", 75, 200, None)],
     "ritual": [],
 }
 # Statuses whose stacks decay at the owner's turn end (inv:§10).

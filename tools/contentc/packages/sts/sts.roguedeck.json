@@ -174,7 +174,17 @@
         "debuff",
         "frail"
       ],
-      "PassiveModifiers": [],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "BlockGain",
+          "Operation": "ScalePercent",
+          "Magnitude": 75,
+          "Priority": 200,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
       "Triggers": [
         {
           "Event": "TurnEnded",
@@ -2082,8 +2092,8 @@
     "KernelGapsFound": [
       {
         "Id": "frail-block-pipeline",
-        "Detail": "内容侧表达不出『格挡 ×75』：status_bind::Pipeline 只有 DamageDealt/DamageReceived/TurnStartDraw（status_bind.rs:124-143），image_block_stage 恒返原值（exec.rs:2656-2677）⇒ standard.frail 施加得上但无效果；若给它写一条 Pipeline=Block 的 spec，每次 gainBlock 都会响亮报错（BindError::Pipeline）。plan §3.2 把 frail 算进 A 档是错的。",
-        "Where": "status_bind.rs:124-143 / exec.rs:2656-2677"
+        "Detail": "【已解决，不再是 gap】引擎已支持格挡管线：status_bind::Pipeline 有 Block 变体、**wire 串是 \"BlockGain\"**（status_bind.rs:144-190；变体名跟随折叠器、串名跟随参考的枚举成员名，两者故意不同），exec.rs 的 image_block_stage 已经真的折叠。standard.frail 因此照参考写成 Pipeline=\"BlockGain\" / ScalePercent / 75 / Priority 200 / RestrictDamageKind=null（单阶段，读获得格挡那一方）。参考依据：PassiveModifiers.cs:20（枚举成员 BlockGain）、:257-269（DeclarativePassiveBlockModifier 传 BlockGain + damageKind: null + 读 context.TargetCombatant）、StandardCombatPackage.cs:318-321（frail 的定义本体）。",
+        "Where": "status_bind.rs:144-190 / exec.rs:2656-2677"
       },
       {
         "Id": "no-monster-table",
