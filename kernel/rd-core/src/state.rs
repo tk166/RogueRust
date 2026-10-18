@@ -1532,6 +1532,10 @@ impl core::fmt::Debug for CombatState {
     }
 }
 
+/// ⚠️ **别拿它做“整体重置”**（`*state = CombatState::EMPTY` / `*state = CombatState::new(..)`）：
+/// 184,648 B 的常量值会原样进 `.wasm` 的 rodata，并被 `memcpy` 一次。要重置请用
+/// [`CombatState::reset_in_place`]。这个常量本身仍然有用（`Bounded`/`Default` 那条路要它，
+/// 而且 `blank_matches_empty` 拿它当基准），只是**不该被复制**。
 impl Empty for CombatState {
     const EMPTY: Self = Self {
         id: CombatId::EMPTY,
@@ -1559,23 +1563,95 @@ impl CombatState {
     /// A fresh fight: round 1, turn 1, waiting to start the first turn, ongoing, and every
     /// generator at 1 - matching the reference's constructor and field initialisers
     /// (`CombatState.cs:12-13,150-152,202-222`).
+    ///
+    /// ⚠️ **别把它写回 `Self { …, ..Self::EMPTY }`**（也别写 `let mut s = Self::EMPTY;`）。
+    /// 那个形状会让整份“空状态”（184,648 B）被编成**一块 rodata 常量模板**，于是每一次
+    /// `new()` 都是一次 184 KB 的 `memcpy`，而且那块模板**留在 `.wasm` 文件里** ——
+    /// 实测 `web/rd_wasm.wasm` 里就是一段 184,651 B 的连续零，占整个文件的 33%。
+    /// 现在 `new()` 走 [`Self::blank`]（逐字段给出）+ [`Self::reset_scalars`]，与
+    /// [`Self::reset_in_place`] 共用同一份定义，编译结果里没有那块模板。
     #[must_use]
     pub fn new(id: CombatId, random_seed: i32) -> Self {
+        let mut state = Self::blank();
+        state.reset_scalars(id, random_seed);
+        state
+    }
+
+    /// **就地重置**：语义（以及**字节**）等价于 `*self = CombatState::new(id, random_seed)`，
+    /// 但**不产生**那 184 KB 的常量模板。
+    ///
+    /// 为什么要这个入口：调用方（`battle::build_fight`、`rd-wasm` 的 `rd_env_reset`）手里
+    /// 已经有一份状态，唯一的诉求是“把它变回刚开局的样子”。整体赋值 `*self = new(..)` 在
+    /// 语义上完全正确，代价是把 `new()` 的 const 值当成 rodata 再 `memcpy` 回来 ——
+    /// 在 `wasm32-unknown-unknown` 上那 184 KB 会**原样进产物**（占 `.wasm` 的 33%），
+    /// 而任何调用方都躲不掉它。就地重置没有这个代价：逐字段赋值 + 逐个容器 `clear()`。
+    ///
+    /// **为什么是字节等价、不只是可观察等价**：`Bounded` 的不变式是“`len` 之后的槽全是
+    /// `T::EMPTY`”（`push` 只写在 `len` 上，`pop`/`retain` 把腾出来的槽写回 `T::EMPTY`），
+    /// 所以 `clear()` 之后每个容器与刚构造的一模一样，`len` 之后的尾巴也是零 ——
+    /// 与 `new()` 逐字节相同（`reset_in_place_matches_new_field_for_field` 钉住。
+    ///
+    /// 语义边界（与 `new()` 完全一致，别在这里加东西）：
+    /// * `round` / `turn` 回到 1，`turn_phase` 回到 `WaitingToStartTurn`（**不**开第一回合）；
+    /// * 四个发号器回到 1（参考的构造函数就是这个初值，见 `CombatState.cs:202-222`）；
+    /// * 回合序、战斗员、牌区/牌池、全局状态、临时规则**全部清空**。
+    pub fn reset_in_place(&mut self, id: CombatId, random_seed: i32) {
+        self.reset_scalars(id, random_seed);
+        // 顺序无所谓（六个容器互不相干），但**一个都不能漏**：漏掉 `cards` 会让
+        // `card_num=` 与牌区槽位带着上一局的残留进哈希。
+        self.turn_order.clear();
+        self.combatants.clear();
+        self.global_statuses.clear();
+        self.card_zones.clear();
+        self.cards.clear();
+        self.temporary_rules.clear();
+    }
+
+    /// 一份全空的状态 —— [`Empty::EMPTY`] 的**逐字段**版本。
+    ///
+    /// 两个必须永远一致（`blank_matches_empty` 钉住）：拆成函数写是为了让 `new()` 的
+    /// 机器码里出现的是“逐字段赋值”而不是“从只读段拷一整块常量”。
+    fn blank() -> Self {
         Self {
-            id,
-            random_seed,
+            id: CombatId::EMPTY,
+            random_seed: 0,
             random_step: 0,
             result: CombatResult::Ongoing,
-            current_round: 1,
-            current_turn: 1,
+            current_round: 0,
+            current_turn: 0,
             turn_phase: CombatTurnPhase::WaitingToStartTurn,
             active_combatant_id: None,
-            next_status_instance_number: 1,
-            next_card_instance_number: 1,
-            next_effect_chain_number: 1,
-            next_program_execution_id: 1,
-            ..Self::EMPTY
+            next_status_instance_number: 0,
+            next_card_instance_number: 0,
+            next_effect_chain_number: 0,
+            next_program_execution_id: 0,
+            turn_order: Bounded::new(),
+            combatants: Bounded::new(),
+            global_statuses: Bounded::new(),
+            card_zones: Bounded::new(),
+            cards: Bounded::new(),
+            temporary_rules: Bounded::new(),
         }
+    }
+
+    /// `new()` 与 `reset_in_place()` 共用的那 `12` 个标量（**唯一**一处定义它们的初值）。
+    ///
+    /// 初值的出处：`CombatState.cs:12-13`（`_nextCombatantNumber` 等）、`:150-152`、
+    /// `:202-222` —— 四个发号器都从 **1** 开始，而且发号器**返回自增前的值**，
+    /// 所以第一张卡的实例号是 `card_000001` 而不是 `card_000000`。
+    fn reset_scalars(&mut self, id: CombatId, random_seed: i32) {
+        self.id = id;
+        self.random_seed = random_seed;
+        self.random_step = 0;
+        self.result = CombatResult::Ongoing;
+        self.current_round = 1;
+        self.current_turn = 1;
+        self.turn_phase = CombatTurnPhase::WaitingToStartTurn;
+        self.active_combatant_id = None;
+        self.next_status_instance_number = 1;
+        self.next_card_instance_number = 1;
+        self.next_effect_chain_number = 1;
+        self.next_program_execution_id = 1;
     }
 
     /// Builder: RNG stream position.
@@ -3329,5 +3405,181 @@ mod tests {
         assert!(c.remove_status(0));
         assert!(c.statuses().is_empty());
         assert!(!c.remove_status(0), "空表再删也是 false");
+    }
+
+    // ---- 就地重置（`.wasm` 里那 184 KB 常量模板的替代品）-------------------------------------
+
+    /// 状态的规范文本（`snapshot::write_hash_input`）—— 逐字段等价的最短判据。
+    ///
+    /// 用它而不是逐字段 `assert_eq!`：`CombatState` 有 18 个字段、其中 6 个是定容容器，
+    /// 逐字段手写一份“等价”很难确认自己没漏；规范文本**本来就是**“什么进哈希”的定义
+    /// （`snapshot.rs:144-205`），它相等即哈希相等。
+    fn canonical_text(state: &CombatState) -> String {
+        use crate::writer::TextWriter;
+        let mut buf = vec![0u8; 1 << 20]; // 状态 184 KB，文本实测 ~3 KB
+        let mut writer = TextWriter::new(&mut buf);
+        crate::snapshot::write_hash_input(&mut writer, state);
+        assert!(!writer.overflowed(), "规范文本缓冲不够");
+        assert!(!writer.is_empty(), "规范文本不能是空的");
+        writer.as_str().to_string()
+    }
+
+    /// `reset_in_place` 之后的状态与 `new(同 id, 同 seed)` **逐字段等价**。
+    ///
+    /// 场景要把**六个容器全部**弄脏，否则“漏清一个容器”这种错误（最典型的是漏 `cards`：
+    /// `card_num=` 会带着上一局的残留，而任何只比“容器长度”的断言都看不见）不会变红。
+    #[test]
+    fn reset_in_place_matches_new_field_for_field() {
+        let mut state = CombatState::new(CombatId::new("dirty").unwrap(), 99);
+
+        // 战斗员 + 资源 + 状态 + 计数器 + tag（`combatants` 容器）
+        let mut a = hero();
+        a.set_resource(rid("standard.energy"), 2, Some(3)).unwrap();
+        a.push_status(
+            StatusInstance::new(siid("st_a"), sdid("paperwork"), StatusPolarity::Debuff)
+                .with_stacks(3)
+                .with_duration_turns(2),
+        )
+        .unwrap();
+        a.set_counter(cnt("queue_position"), 7).unwrap();
+        a.add_tag(tag("debuff")).unwrap();
+        state.add_combatant(a).unwrap();
+        state
+            .add_combatant(Combatant::new(cid("imp"), def("imp"), team("enemy"), 9, 9))
+            .unwrap();
+
+        // 全局状态（`global_statuses` 容器）
+        state
+            .push_global_status(
+                StatusInstance::new(siid("st_g"), sdid("weather"), StatusPolarity::Neutral)
+                    .with_stacks(1),
+            )
+            .unwrap();
+
+        // 牌区 + 牌池（`card_zones` / `cards` 两个容器）
+        for number in 0..3i32 {
+            let instance = CardInstance::new(
+                ciid(&format!("card_{:06}", number + 1)),
+                cdid("paper_cut"),
+            );
+            state.push_card(&cid("hero"), CardZone::Hand, instance).unwrap();
+        }
+        state
+            .push_card(
+                &cid("hero"),
+                CardZone::DrawPile,
+                CardInstance::new(ciid("card_000004"), cdid("permit_a38")),
+            )
+            .unwrap();
+
+        // 临时规则（`temporary_rules` 容器）
+        state
+            .add_temporary_rule(
+                TemporaryRule::new(
+                    TriggeredEffectDefinitionId::new("rule_1").unwrap(),
+                    EventTypeName::new("TurnStarted").unwrap(),
+                    5,
+                    3,
+                )
+                .with_remaining_activations(2),
+            )
+            .unwrap();
+
+        // 把标量也推离初值（否则“忘了重置某个标量”测不出来）。
+        state.random_step = 4;
+        state.current_round = 5;
+        state.current_turn = 3;
+        state.result = CombatResult::Victory;
+        state.turn_phase = CombatTurnPhase::TurnInProgress;
+        state.active_combatant_id = Some(cid("imp"));
+        state.next_status_instance_number = 11;
+        state.next_card_instance_number = 12;
+        state.next_effect_chain_number = 13;
+        state.next_program_execution_id = 14;
+
+        // 先确认这份“脏”状态真的脏 —— 否则下面那次相等是在比两份空状态。
+        let dirty = canonical_text(&state);
+        assert!(dirty.contains("card_num=12"), "发号器要被推离初值");
+        assert!(dirty.contains("round=5"), "轮次要被推离初值");
+        assert_eq!(state.card_count(), 4, "牌池里要真有牌");
+
+        state.reset_in_place(CombatId::new("c1").unwrap(), 42);
+        let after = canonical_text(&state);
+        let fresh = canonical_text(&CombatState::new(CombatId::new("c1").unwrap(), 42));
+        assert_eq!(after, fresh, "reset_in_place 之后必须与 new(同 id, 同 seed) 逐字段等价");
+
+        // 与“脏”状态相比当然也不同（成对：上一条相等不能是“两边都没重置”）。
+        assert_ne!(after, dirty);
+        // 六个容器都空了。
+        assert_eq!(state.combatants().len(), 0);
+        assert_eq!(state.turn_order().len(), 0);
+        assert_eq!(state.global_statuses().len(), 0);
+        assert_eq!(state.card_count(), 0);
+        assert!(state.card_zones(&cid("hero")).is_none());
+        assert_eq!(state.temporary_rules().len(), 0);
+    }
+
+    /// 重置**之后**再往里塞东西，读到的必须只有新塞的 —— 尾巴上的残留不许漏出来。
+    ///
+    /// 这条盯的是“`clear()` 只降 `len`、不动元素”那种实现：本模块的 `Bounded` 不变式
+    /// 让 `pop()` 顺手把腾出来的槽写回 `T::EMPTY`，所以不该有残留；但要真漏了，
+    /// 这里第一张卡就会读到上一局的牌。
+    #[test]
+    fn a_reset_state_does_not_leak_what_the_previous_state_held() {
+        let mut state = CombatState::new(CombatId::new("dirty").unwrap(), 3);
+        state.add_combatant(hero()).unwrap();
+        for number in 0..5i32 {
+            state
+                .push_card(
+                    &cid("hero"),
+                    CardZone::Hand,
+                    CardInstance::new(
+                        ciid(&format!("card_{:06}", number + 1)),
+                        cdid("paper_cut"),
+                    ),
+                )
+                .unwrap();
+        }
+        assert_eq!(state.zone_cards(&cid("hero"), CardZone::Hand).count(), 5);
+
+        state.reset_in_place(CombatId::new("clean").unwrap(), 0);
+        // 新的一局：加一个新战斗员、塞一张牌。
+        state
+            .add_combatant(Combatant::new(cid("other"), def("other"), team("player"), 5, 5))
+            .unwrap();
+        state
+            .push_card(
+                &cid("other"),
+                CardZone::DrawPile,
+                CardInstance::new(ciid("card_000001"), cdid("permit_a38")),
+            )
+            .unwrap();
+
+        assert_eq!(state.combatants().len(), 1, "只该有新加的那一个战斗员");
+        assert_eq!(state.combatant(&cid("hero")), None, "旧的战斗员不许留下");
+        assert_eq!(state.card_count(), 1, "只该有新塞的那一张牌");
+        let cards: std::vec::Vec<&str> = state
+            .zone_cards(&cid("other"), CardZone::DrawPile)
+            .map(|card| card.definition_id.as_str())
+            .collect();
+        assert_eq!(cards, ["permit_a38"], "读到旧的 `paper_cut` 就是尾巴漏了");
+    }
+
+    /// `blank()` 与 `Empty::EMPTY` 必须描述同一个“空状态”。
+    ///
+    /// 为什么值得一条测试：`new()` 走 `blank()`，而 `EMPTY` 仍是公开常量（`Default` 那条路
+    /// 与测试基准都用它）。两边一旦漂开，`new()` 与 `*state = CombatState::EMPTY` 就不再是
+    /// 同一件事 —— 而那种偏差不会报错，只会让某个字段悄悄从 1 变 0。
+    #[test]
+    fn blank_matches_empty() {
+        assert_eq!(
+            canonical_text(&CombatState::blank()),
+            canonical_text(&CombatState::EMPTY)
+        );
+        // 成对：`blank()` 不是 `new()`（两者的发号器不同）。
+        assert_ne!(
+            canonical_text(&CombatState::blank()),
+            canonical_text(&fight())
+        );
     }
 }

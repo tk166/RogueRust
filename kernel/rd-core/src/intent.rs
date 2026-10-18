@@ -1665,6 +1665,52 @@ mod tests {
         assert_eq!(resolved, 149 * 5 - 5);
     }
 
+    /// 内容侧新加的 `Content::encounter_enemies` 借用视图与这里的**私有读器**必须读到同一批记录。
+    ///
+    /// 两处各自实现了同一个二进制形状（`ENCT.Enemies` 格 → `_arr` → AUX 里的 term id）：
+    /// `content.rs` 那份是给外部（`rd-wasm` / `rd-fightdump`）用的，本模块这份是给选择器用的。
+    /// 任何一边漂开，两条路就会看到**不同的敌人名单** —— 那种偏差不会报错，只会让
+    /// "UI 上显示的敌人"与"内核推进回合用的敌人"错位。
+    #[test]
+    fn the_content_view_and_the_private_reader_agree_on_every_record() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut seen = 0usize;
+        for row in content.rows(Table::Encounter) {
+            let index = row.index();
+            let view = content
+                .encounter_enemies(index)
+                .expect("视图必须能读每条遭遇");
+            let mut ids = [0u16; MAX_ENEMIES];
+            let count = encounter_enemy_ids(&content, index, &mut ids).unwrap();
+            assert_eq!(count, view.len(), "ENCT[{index}] 的敌人数");
+            for (slot, element) in ids.iter().take(count).enumerate() {
+                let private = enemy_record(
+                    &content,
+                    EnemySlot {
+                        encounter: index,
+                        index: u16::try_from(slot).unwrap(),
+                    },
+                )
+                .unwrap();
+                assert_eq!(private.id(), *element, "ENCT[{index}][{slot}] 的 term");
+                let spec = view.get(slot).expect("视图必须能读这一槽");
+                assert_eq!(spec.term(), *element, "ENCT[{index}][{slot}] 的 term");
+                // `Id` 是两边都要解的那一格；`MaxHealth` 与 `Actions` 的条数是动作选择的输入。
+                assert_eq!(spec.id().unwrap(), private.str_field("Id").unwrap().unwrap());
+                let mut actions = [0u16; MAX_ACTIONS];
+                let private_actions = private.str_list_field("Actions", &mut actions).unwrap();
+                assert_eq!(spec.actions().unwrap().len(), private_actions);
+                assert!(
+                    matches!(spec.max_health().unwrap(), Some(hp) if hp >= 1),
+                    "MaxHealth 必须是正数（实测 11..=132）"
+                );
+                seen += 1;
+            }
+        }
+        assert_eq!(seen, 149, "109 条遭遇共 149 条 enemy record");
+    }
+
     #[test]
     fn every_enemy_record_id_fits_a_combatant_id() {
         // 宿主必须能用 `CombatantId`（`Ident<40>`）装敌人 id —— `CombatState` 按它建表。

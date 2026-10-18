@@ -40,7 +40,14 @@
 //! `--enemies` 把场景表换成**逐敌人动作**表：镜像里 394 条 `EACT` 各一局（该动作所属敌人 + 英雄，
 //! 牌组为空），头行键名 `enemy=<动作 id> index=<行号>`。动作的归属敌人取 id 前缀
 //! （`<敌人>.<动作>`）—— 前缀是不是真的敌人、与 `ENCT` 的 `Actions` 是否一致，由
-//! `native/fight_diff.py` 的闸门从镜像核对（内核这边只有扁平的 `EACT` 表，读不到嵌套的敌人记录）。
+//! `native/fight_diff.py` 的闸门从镜像核对。
+//!
+//! `--one-turn` 把场景表换成**多敌人 / 一步一回合**的小表（头行键名 `oneturn=<场景名>`）。
+//! 它专门演示 `Step::EndOneTurn`（"只结束一个回合，让下一个存活战斗员上场"）：
+//! 两个敌人时一步只能让**一个**敌人出手。⚠️ 这一层**没有 C# 对拍物**（参考实现的三个脚本步
+//! 都带着目标，没有"只推一步"这种步），所以它是**自证层**：跑两遍必须逐字节相同。
+//! 它也因此**不**进默认场景表 —— 默认表由 `native/fight_diff.py` 的 `FIGHT_DIFF` 逐键比对，
+//! 多一个 C# 侧没有的场景名会让那条闸门整体红。
 //!
 //! `round`/`turn` 是**执行前**的值（`ScenarioRunner.cs:106,140,164,203`）；
 //! `hash` 是**执行后**的状态指纹。两者一起才能定位"是哪一步把状态推歪了"。
@@ -86,20 +93,32 @@ fn default_image_path() -> String {
 }
 
 fn main() -> ExitCode {
-    // 参数：`rd-fightdump [镜像路径] [--cards|--cards-multi|--enemies] [--text]`。
-    // 三种模式**互斥**（一次只跑一种）：它们的输出是给 `native/fight_diff.py` 的不同闸门按不同
-    // 块键（`card=` / `cardmulti=` / `enemy=`）分块解析的，混跑只会让解析器更脆。
+    // 参数：`rd-fightdump [镜像路径] [--cards|--cards-multi|--enemies|--one-turn] [--text]`。
+    // 四种模式**互斥**（一次只跑一种）：它们的输出是给 `native/fight_diff.py` 的不同闸门按不同
+    // 块键（`card=` / `cardmulti=` / `enemy=` / `oneturn=`）分块解析的，混跑只会让解析器更脆。
     let mut raw: Vec<String> = env::args().skip(1).collect();
     let cards_mode = raw.iter().any(|arg| arg == "--cards");
     let cards_multi_mode = raw.iter().any(|arg| arg == "--cards-multi");
     let enemies_mode = raw.iter().any(|arg| arg == "--enemies");
+    let one_turn_mode = raw.iter().any(|arg| arg == "--one-turn");
     let text_mode = raw.iter().any(|arg| arg == "--text");
     raw.retain(|arg| {
-        arg != "--cards" && arg != "--cards-multi" && arg != "--enemies" && arg != "--text"
+        arg != "--cards"
+            && arg != "--cards-multi"
+            && arg != "--enemies"
+            && arg != "--one-turn"
+            && arg != "--text"
     });
     let path = raw.first().cloned().unwrap_or_else(default_image_path);
-    if [cards_mode, cards_multi_mode, enemies_mode].iter().filter(|on| **on).count() > 1 {
-        eprintln!("--cards / --cards-multi / --enemies 一次只能给一个：它们是三种不同的场景表");
+    if [cards_mode, cards_multi_mode, enemies_mode, one_turn_mode]
+        .iter()
+        .filter(|on| **on)
+        .count()
+        > 1
+    {
+        eprintln!(
+            "--cards / --cards-multi / --enemies / --one-turn 一次只能给一个：它们是四种不同的场景表"
+        );
         return ExitCode::from(2);
     }
 
@@ -162,6 +181,8 @@ fn main() -> ExitCode {
                 return ExitCode::from(2);
             }
         }
+    } else if one_turn_mode {
+        one_turn_scenarios()
     } else {
         scenarios()
     };
@@ -408,6 +429,96 @@ fn enemy_scenarios<'a>(content: &Content<'a>) -> Result<Vec<Scenario<'a>>, Strin
         });
     }
     Ok(out)
+}
+
+/// `--one-turn` 那一层的场景表：**多敌人 / 一步一回合**（`Step::EndOneTurn` 的演示与回归）。
+///
+/// 为什么单独一张表而不是塞进默认表：
+/// * 默认表的每个场景名都要在 C# oracle 的场景表里存在（`native/fight_diff.py` 的
+///   `collect()` 找不到就 `GateFailure`），而参考实现的三个脚本步都得带目标，
+///   没有"只结束一个回合"这种步 ⇒ **这一层永远不可能有 C# 对拍物**；
+/// * 所以它是**自证层**：同一份输出跑两遍必须逐字节相同（终局语义由
+///   `battle.rs` 的 `one_end_one_turn_step_puts_exactly_one_combatant_on_stage` 钉住）。
+///
+/// 两个场景：
+/// * `two_enemies` —— 一步只让**一个**敌人上场：`EndOneTurn` → `queue_imp` 出手 8 点 →
+///   `EndOneTurn` → `stamp_goblin` 出手 5 点。如果 `EndOneTurn` 退化成 `NextRound`，
+///   第二次 `EndOneTurn` 会绕过 goblin 直接回到英雄（第 3 步的 `round`/`turn`/`hero_hp` 全变）。
+/// * `dot_kill` —— 推进到"下一个战斗员的回合开场"时战斗就结束：停在那一格，不继续推。
+fn one_turn_scenarios() -> Vec<Scenario<'static>> {
+    let hero = PlanCombatant {
+        id: "hero",
+        max_health: 70,
+    };
+    let imp = PlanCombatant {
+        id: "queue_imp",
+        max_health: 22,
+    };
+    let goblin = PlanCombatant {
+        id: "stamp_goblin",
+        max_health: 22,
+    };
+    vec![
+        Scenario {
+            label: "oneturn",
+            name: "two_enemies",
+            row_index: None,
+            variant: None,
+            combat: "one_turn_two_enemies",
+            seed: 1,
+            hero,
+            enemies: vec![imp, goblin],
+            deck: vec![DeckEntry {
+                card: "paper_cut",
+                count: 2,
+            }],
+            shuffle: false,
+            energy: (3, 3),
+            // 4 步 ⇒ 行动位走 英雄 → imp → goblin（`turn` 1/2/3）。
+            steps: vec![
+                Step::EndOneTurn,
+                Step::EnemyActs {
+                    enemy: "queue_imp",
+                    action: "queue_imp.desk_jab",
+                    target: Some("hero"),
+                },
+                Step::EndOneTurn,
+                Step::EnemyActs {
+                    enemy: "stamp_goblin",
+                    action: "stamp_goblin.rubber_stamp_rush",
+                    target: Some("hero"),
+                },
+            ],
+        },
+        Scenario {
+            label: "oneturn",
+            name: "dot_kill",
+            row_index: None,
+            variant: None,
+            combat: "one_turn_dot_kill",
+            seed: 1,
+            hero,
+            // 5 血 + `permit_a38` 的 5 层 `paperwork`（带 `damage_over_time`）⇒
+            // 它的回合**一开始**就被 DoT 打死，而它是最后一个敌人 ⇒ `Victory`。
+            enemies: vec![PlanCombatant {
+                id: "queue_imp",
+                max_health: 5,
+            }],
+            deck: vec![DeckEntry {
+                card: "permit_a38",
+                count: 5,
+            }],
+            shuffle: false,
+            energy: (3, 3),
+            steps: vec![
+                Step::HeroPlays {
+                    card: "permit_a38",
+                    target: Some("queue_imp"),
+                },
+                Step::EndOneTurn,
+            ],
+        },
+    ]
 }
 
 /// 写死的场景表。

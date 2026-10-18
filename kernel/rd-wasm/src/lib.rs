@@ -25,17 +25,20 @@
 //!
 //! # Gaps (what this ABI implementation does **not** do)
 //!
-//! 1. **No enemy intent.** `intent_kind` / `intent_damage` are always `-1`. Choosing an enemy
-//!    action needs the `ENCT` encounter record's nested `IntentRules`, and `rd-core` only has the
-//!    flat `EACT` table (`content.rs` has no encounter→actions reader). The spike therefore
-//!    hard-codes `queue_imp.desk_jab`; the intent *display* is not wired.
+//! 1. **No enemy intent.** `intent_kind` / `intent_damage` are always `-1`. The *reader* this gap
+//!    was waiting on now exists (`content::Content::encounter_enemies`, which walks
+//!    `ENCT[i].Enemies[j]` → `Actions` / `IntentRules` / `StartingStatuses`), and
+//!    `intent::select_action` takes `(encounter, slot)` — so what is left is only the **wiring
+//!    here**: find the slot whose `Id` matches the active combatant, call `select_action`, read the
+//!    `EACT` program's damage. Until that is done the spike hard-codes `queue_imp.desk_jab`.
 //! 2. **No handle.** See above.
 //! 3. **No hero self-actions (ABI kind 2).** `FightPlan` has no `actions` field, so the driver
 //!    layer cannot express one.
-//! 4. **One enemy may act per end-turn step.** The driver exposes `NextRound` ("end turns until
-//!    it is the hero's turn again") but no "end exactly one turn", so with two enemies the second
-//!    one would be skipped. The spike's scenario has one enemy; the code checks and refuses
-//!    loudly instead of silently skipping.
+//! 4. **One enemy may act per end-turn step.** ⚠️ **The kernel side of this gap is closed**
+//!    (`battle::Step::EndOneTurn`: end exactly one turn, stop at the next *living* combatant,
+//!    stop early if the fight ends). This spike still calls `NextRound` in
+//!    [`Session::step_end_turn`], so the behaviour below is unchanged — switching that call to
+//!    `EndOneTurn` is the remaining work, and it is a one-line change plus a re-measure.
 //! 5. **`upgraded` is always 0.** In this content "upgraded" is a *different card definition*
 //!    (`paper_cut` vs `paper_cut+`), not a flag on an instance — `CardInstance` has no such bit.
 //! 6. **`hero_ward` / `enemy.ward` are always `-1`.** No `ward` resource exists in the content
@@ -720,6 +723,10 @@ impl Session {
     /// kind 1. The driver exposes no "advance one combatant", so the whole enemy phase is driven
     /// here: end the hero turn → let the (single) enemy act → `NextRound` wraps back to the hero.
     /// Gap 4: with two enemies the second one is skipped, so this refuses instead.
+    ///
+    /// ⚠️ The kernel half of Gap 4 is **closed** (`battle::Step::EndOneTurn`); this spike still
+    /// routes through `NextRound` at the bottom, which is why the guard below is still needed.
+    /// Switching that one call to `EndOneTurn` (and dropping the guard) is the remaining work.
     fn step_end_turn(&mut self) -> Result<(), String> {
         let Some(hero) = self.hero_id() else {
             return Err("hero id is not constructible".to_string());

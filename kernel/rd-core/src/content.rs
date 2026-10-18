@@ -755,6 +755,62 @@ impl<'a> Content<'a> {
         EnctRow::new(self.row(Table::Encounter, index)?)
     }
 
+    /// 一条遭遇的**敌人名单**（`ENCT[index].Enemies`，每条是 id / 生命 / 动作 / 起始状态 / 规则）。
+    ///
+    /// 这是 `intent::select_action` 那个 `(遭遇, 槽位)` 入参的**内容侧来路**：
+    /// 扁平 `EACT` 表只给"动作库"，"哪只敌人按什么顺序用哪些动作"只在 `ENCT` 里。
+    ///
+    /// 形状不对（`Enemies` 格缺席/为 null、指到的 term 不是 `_arr`、列表越界）⇒
+    /// `Err(EncounterError)`，**绝不**静默返回一个空名单 —— 空名单在下游会变成
+    /// "这只敌人这一回合什么都不做"，而那种错误看起来完全正常。
+    pub fn encounter_enemies(&self, index: u32) -> Result<EncounterEnemies<'_>, EncounterError> {
+        let row = self
+            .encounter(index)
+            .ok_or(EncounterError::NoSuchEncounter(index))?;
+        // `EnctRow` 的格号来自 schema，但**类别**还是核一遍：镜像被改坏时格号仍在、
+        // 类别可以变，而按错的类别硬读会给出一个像模像样的越界值。
+        let cell = row
+            .row()
+            .cell_index("Enemies")
+            .ok_or(EncounterError::MissingField("Enemies"))?;
+        if row.row().cell_kind(cell) != Some(F_TERM) {
+            return Err(EncounterError::WrongFieldKind("Enemies"));
+        }
+        let array = match row.enemies() {
+            ABSENT16 | NULL16 => return Err(EncounterError::MissingEnemies),
+            id => id,
+        };
+        let term = self
+            .term(array)
+            .ok_or(EncounterError::NotAnArray(array))?;
+        if term.op != OP_ARR {
+            return Err(EncounterError::NotAnArray(array));
+        }
+        let start = term
+            .slot(0)
+            .ok_or(EncounterError::MalformedList("Enemies"))?;
+        let count = term
+            .slot(1)
+            .ok_or(EncounterError::MalformedList("Enemies"))?;
+        if count == LIST_ABSENT || count == LIST_NULL {
+            // `_arr` 的两个槽是 `(AUX 起址, 个数)`；个数是哨兵 ⇒ 列表根本不存在。
+            // 本内容 109/109 条遭遇都有敌人，所以这里响亮失败。
+            return Err(EncounterError::MissingEnemies);
+        }
+        let end = usize::from(start)
+            .checked_add(usize::from(count))
+            .ok_or(EncounterError::MalformedList("Enemies"))?;
+        if end > self.aux_cells() {
+            return Err(EncounterError::MalformedList("Enemies"));
+        }
+        Ok(EncounterEnemies {
+            content: self,
+            encounter: index,
+            start,
+            count,
+        })
+    }
+
     /// 遗物行（`REL`，stride 12）。
     #[must_use]
     pub fn relic(&self, index: u32) -> Option<RelRow<'a>> {
@@ -1408,6 +1464,360 @@ entity_row!(
         extra => 4,
     }
 );
+
+// ===========================================================================
+// 遭遇里的敌人记录（`ENCT[i].Enemies[j]`）
+// ===========================================================================
+//
+// **形状是量出来的，不是从 JSON 抄的**（`reader.py` 的 dump + 真实镜像互相印证；
+// `intent.rs` 也独立量过同一件事）。照 JSON 视图写会静默读错三处：
+//
+// | 位置 | JSON 视图 | 二进制真实形状 |
+// |---|---|---|
+// | `ENCT.Enemies` 格 | `F_TERM` | 格是 `F_TERM`，但**指向的 term 是 `_arr`（op 4）**，它唯一的字段是 `F_TERMLIST` ⇒ 两个槽是 `(AUX 起址, 个数)`，每个 `AUX` 格是 **term id** |
+// | enemy record 的 `Actions` | "term 列表，元素是 `{"value": id}`" | **`F_STRLIST` + `FLAG_WRAP_LOWER`** ⇒ `AUX` 里装的是**串号**，一个 `_wrap_lower` term 都没有 |
+// | enemy record 的 `IntentRules` / `StartingStatuses` | term 列表 | `F_TERMLIST` ⇒ `AUX` 里装的是 **term id** |
+//
+// enemy record 是 op **91** 的普通对象，6 个键恒存在（149/149）：
+// `Actions`(`F_STRLIST`) / `Id`(`F_STR`) / `IntentRules`(`F_TERMLIST`) / `MaxHealth`(`F_INT`) /
+// `Position`(`F_TERM`，149/149 是 `NULL16`) / `StartingStatuses`(`F_TERMLIST`)。
+// **没有** `DisplayName`。
+//
+// 实测分布（core 镜像，109 条遭遇 / 149 条敌人记录 / 480 条动作）：
+// 每遭遇敌人数 `{1:76, 2:26, 3:7}`；每敌人动作数 `{1:1, 2:9, 3:107, 4:20, 5:12}`；
+// **3** 条记录带 `IntentRules`（`a_very_official_line` / `contradictory_signpost` /
+// `minute_moth`）、**20** 条记录带 `StartingStatuses`。这些数由
+// `every_encounter_enemy_record_reads` 逐条钉住（多一条少一条都红）。
+
+/// 读一条遭遇的敌人记录时可能的失败。
+///
+/// **每一种都是"内容形态变了/我读错了"**，不是"这条遭遇恰好没有敌人"：
+/// 后者在驱动层会被当成"这回合它不做任何事"，而那正是本项目最恨的静默。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EncounterError {
+    /// `ENCT` 行号越界（本内容 109 条）。
+    NoSuchEncounter(u32),
+    /// `Enemies` 下标越界。
+    NoSuchEnemy {
+        /// 遭遇行号。
+        encounter: u32,
+        /// `Enemies` 列表下标。
+        index: u16,
+    },
+    /// `Enemies` 格缺席 / 为 null / 列表的个数是哨兵 —— **不是**"这条遭遇没有敌人"。
+    MissingEnemies,
+    /// `Enemies` 指到的 term 不是 `_arr`（换成 `_wrap_lower` 之类就是形态变了）。
+    NotAnArray(u16),
+    /// 敌人记录 / 规则记录不是对象（`op < 16` 的标量 term）。
+    NotAnObject(u16),
+    /// 字段表里没有这个键，或字段表本身读不出来。
+    MissingField(&'static str),
+    /// 字段类别不是期望的那一种（例如 `Actions` 不是 `F_STRLIST`）。
+    WrongFieldKind(&'static str),
+    /// 列表的 `(起址, 个数)` 落在 `AUX` 之外（会退化成静默的 `None`）。
+    MalformedList(&'static str),
+    /// 串号解不出串。
+    BadString(u16),
+}
+
+/// 一段槽列表（`F_TERMLIST` 或 `F_STRLIST`）的借用视图：`(AUX 起址, 个数)`。
+///
+/// ⚠️ **两种 kind 的格含义不同**：`F_STRLIST` 的格是**串号**（用 [`Self::string`]），
+/// `F_TERMLIST` 的格是 **term id**（用 [`Self::term`]）。本视图不替调用方猜 —— 两个入口
+/// 都给，[`Self::kind`] 说明这一段是哪种。
+#[derive(Debug, Clone, Copy)]
+pub struct SlotList<'a> {
+    content: &'a Content<'a>,
+    start: u16,
+    count: u16,
+    kind: u8,
+}
+
+impl<'a> SlotList<'a> {
+    /// 项数。
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.count as usize
+    }
+
+    /// 是不是空的。
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    /// 这一段是哪种列表（`F_TERMLIST` / `F_STRLIST`）。
+    #[must_use]
+    pub const fn kind(&self) -> u8 {
+        self.kind
+    }
+
+    /// 第 `index` 格的原始值（**不解释含义**）。越界 `None`。
+    #[must_use]
+    pub fn cell(&self, index: usize) -> Option<u16> {
+        if index >= self.len() {
+            return None;
+        }
+        let offset = usize::from(self.start).checked_add(index)?;
+        let offset = u16::try_from(offset).ok()?;
+        self.content.aux(offset)
+    }
+
+    /// `F_STRLIST` 的第 `index` 项，解成 `&str`。串号坏了 ⇒ `None`（不编一个空串出来）。
+    #[must_use]
+    pub fn string(&self, index: usize) -> Option<&'a str> {
+        self.content.string(self.cell(index)?)
+    }
+
+    /// `F_TERMLIST` 的第 `index` 项（term id）。
+    #[must_use]
+    pub fn term(&self, index: usize) -> Option<u16> {
+        self.cell(index)
+    }
+}
+
+/// `ENCT` 里一个敌人记录（`ENCT[i].Enemies[j]`）的借用视图。
+#[derive(Debug, Clone, Copy)]
+pub struct EnemySpec<'a> {
+    content: &'a Content<'a>,
+    term: u16,
+}
+
+impl<'a> EnemySpec<'a> {
+    /// 这个记录的 term id（要交给 `ir::NodeRef::new` 时用）。
+    #[must_use]
+    pub const fn term(&self) -> u16 {
+        self.term
+    }
+
+    /// `Id`（`F_STR`）。**这就是回合序/查表用的那个 id**，缺席 ⇒ `MissingField`。
+    pub fn id(&self) -> Result<&'a str, EncounterError> {
+        let (kind, at) = self.field_at("Id")?;
+        if kind != F_STR {
+            return Err(EncounterError::WrongFieldKind("Id"));
+        }
+        match self.slot(at)? {
+            ABSENT16 | NULL16 => Err(EncounterError::MissingField("Id")),
+            index => self.content.string(index).ok_or(EncounterError::BadString(index)),
+        }
+    }
+
+    /// `MaxHealth`（`F_INT`，槽是 **i16**）。缺席 / 为 null ⇒ `Ok(None)`。
+    ///
+    /// ⚠️ `raw as i32` 会把 `-1` 读成 65535（`content-binary-format.md` 的实测结论）。
+    pub fn max_health(&self) -> Result<Option<i32>, EncounterError> {
+        let (kind, at) = self.field_at("MaxHealth")?;
+        if kind != F_INT {
+            return Err(EncounterError::WrongFieldKind("MaxHealth"));
+        }
+        match self.slot(at)? {
+            ABSENT_INT | NULL_INT => Ok(None),
+            raw => Ok(Some(i32::from(raw as i16))),
+        }
+    }
+
+    /// `Actions`（**`F_STRLIST`**）：动作 id 列表。元素是**串号**，用 [`SlotList::string`] 解。
+    ///
+    /// 列表顺序就是循环分支的取用顺序（`Actions[(round - 1) % count]`）。
+    pub fn actions(&self) -> Result<SlotList<'a>, EncounterError> {
+        self.list("Actions", F_STRLIST)
+    }
+
+    /// `IntentRules`（`F_TERMLIST`）：规则记录（op 90，键 `Action`/`Condition`/`Priority`）。
+    pub fn intent_rules(&self) -> Result<SlotList<'a>, EncounterError> {
+        self.list("IntentRules", F_TERMLIST)
+    }
+
+    /// `StartingStatuses`（`F_TERMLIST`）：起始状态的 spec 对象
+    /// （键 `Stacks` / `DurationTurns` / `Charges` / `Status`）。
+    pub fn starting_statuses(&self) -> Result<SlotList<'a>, EncounterError> {
+        self.list("StartingStatuses", F_TERMLIST)
+    }
+
+    /// 这个记录的 term（opcode 的字段表决定了"键 → 槽"的映射）。
+    fn record(&self) -> Result<Term<'a>, EncounterError> {
+        let term = self
+            .content
+            .term(self.term)
+            .ok_or(EncounterError::NotAnObject(self.term))?;
+        if term.op < OP_FIRST_DYNAMIC {
+            return Err(EncounterError::NotAnObject(term.op));
+        }
+        Ok(term)
+    }
+
+    /// 一个键的 `(字段类别, 首槽下标)`。
+    ///
+    /// 槽位是**按字段表顺序累加**出来的（`content-binary-format.md` §5）：没有名字索引表。
+    fn field_at(&self, key: &'static str) -> Result<(u8, usize), EncounterError> {
+        let term = self.record()?;
+        let opcode = self
+            .content
+            .opcode(term.op)
+            .ok_or(EncounterError::NotAnObject(term.op))?;
+        let mut at = 0usize;
+        for index in 0..opcode.nfields() {
+            let field = opcode.field(index).ok_or(EncounterError::MissingField(key))?;
+            let width = usize::from(
+                field
+                    .slots()
+                    .ok_or(EncounterError::WrongFieldKind(key))?,
+            );
+            let name = self
+                .content
+                .string(field.name_str())
+                .ok_or(EncounterError::MissingField(key))?;
+            if name == key {
+                return Ok((field.kind(), at));
+            }
+            at = at.checked_add(width).ok_or(EncounterError::MissingField(key))?;
+        }
+        Err(EncounterError::MissingField(key))
+    }
+
+    /// 一个字段的原始槽值（越界 ⇒ `MissingField`）。
+    fn slot(&self, at: usize) -> Result<u16, EncounterError> {
+        self.record()?
+            .slot(at)
+            .ok_or(EncounterError::MissingField("slot"))
+    }
+
+    /// 一个列表字段 → [`SlotList`]。
+    ///
+    /// ⚠️ **空列表在这份镜像里的拼法是"个数 = 哨兵"**（`LIST_ABSENT` / `LIST_NULL`），
+    /// **不是** `count == 0`：实测 149 条敌人记录里 146 条 `IntentRules` 用的是哨兵，
+    /// 只有 3 条真的带规则。所以哨兵 ⇒ **空列表**，两种拼法都收（`ir.rs:364-394` 的
+    /// `list_field` 同一条读法）。把哨兵当"形态坏了"会当场拒掉 146 条合法记录 ——
+    /// 这一点是被 `every_encounter_enemy_record_reads` 的 149 条逐条读抓出来的。
+    fn list(&self, key: &'static str, want: u8) -> Result<SlotList<'a>, EncounterError> {
+        let (kind, at) = self.field_at(key)?;
+        if kind != want {
+            return Err(EncounterError::WrongFieldKind(key));
+        }
+        let term = self.record()?;
+        let start = term.slot(at).ok_or(EncounterError::MalformedList(key))?;
+        let count = term
+            .slot(at.checked_add(1).ok_or(EncounterError::MalformedList(key))?)
+            .ok_or(EncounterError::MalformedList(key))?;
+        let count = if count == LIST_ABSENT || count == LIST_NULL {
+            0
+        } else {
+            count
+        };
+        // 每一格都真的在 `AUX` 里：否则 `SlotList::cell` 会静默给 `None`。
+        // 空列表**不查**：个数是哨兵时起址槽是垃圾值（实测 146 条 `IntentRules`
+        // 就是这么存的），拿它去比 `AUX` 长度等于用一个没人会读的槽判失败。
+        if count > 0 {
+            let end = usize::from(start)
+                .checked_add(usize::from(count))
+                .ok_or(EncounterError::MalformedList(key))?;
+            if end > self.content.aux_cells() {
+                return Err(EncounterError::MalformedList(key));
+            }
+        }
+        Ok(SlotList {
+            content: self.content,
+            start,
+            count,
+            kind,
+        })
+    }
+}
+
+/// 一条遭遇的敌人名单（`ENCT[index].Enemies`）。
+///
+/// **列表顺序 = 上场序 = 回合序**（`Encounters.cs:211-220` 按 `foreach (var spec in
+/// encounter.Enemies)` 追加；`ScenarioCombatFactory.cs:19-24` 再按 `[Hero, Allies…, Enemies…]`
+/// 建回合序）。所以 `intent::select_action` 的 `EnemySlot.index` 与这里的下标是同一个东西。
+#[derive(Debug, Clone, Copy)]
+pub struct EncounterEnemies<'a> {
+    content: &'a Content<'a>,
+    encounter: u32,
+    start: u16,
+    count: u16,
+}
+
+impl<'a> EncounterEnemies<'a> {
+    /// 这是第几行 `ENCT`。
+    #[must_use]
+    pub const fn encounter(&self) -> u32 {
+        self.encounter
+    }
+
+    /// 敌人个数。
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.count as usize
+    }
+
+    /// 有没有敌人。
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.count == 0
+    }
+
+    /// 第 `index` 个敌人记录。越界 ⇒ `NoSuchEnemy`（不是 `None`，也不是空记录）。
+    pub fn get(&self, index: usize) -> Result<EnemySpec<'a>, EncounterError> {
+        let index = u16::try_from(index).map_err(|_| EncounterError::NoSuchEnemy {
+            encounter: self.encounter,
+            index: u16::MAX,
+        })?;
+        if index >= self.count {
+            return Err(EncounterError::NoSuchEnemy {
+                encounter: self.encounter,
+                index,
+            });
+        }
+        let offset = usize::from(self.start)
+            .checked_add(usize::from(index))
+            .ok_or(EncounterError::MalformedList("Enemies"))?;
+        let offset = u16::try_from(offset).map_err(|_| EncounterError::MalformedList("Enemies"))?;
+        let term = self
+            .content
+            .aux(offset)
+            .ok_or(EncounterError::MalformedList("Enemies"))?;
+        Ok(EnemySpec {
+            content: self.content,
+            term,
+        })
+    }
+
+    /// 逐个敌人记录（每一项都是 `Result`：坏掉的那一条**不会**被跳过）。
+    #[must_use]
+    pub fn iter(&self) -> EncounterEnemiesIter<'a> {
+        EncounterEnemiesIter {
+            list: *self,
+            next: 0,
+        }
+    }
+}
+
+/// [`EncounterEnemies::iter`] 的迭代器。
+#[derive(Debug, Clone)]
+pub struct EncounterEnemiesIter<'a> {
+    list: EncounterEnemies<'a>,
+    next: usize,
+}
+
+impl<'a> Iterator for EncounterEnemiesIter<'a> {
+    type Item = Result<EnemySpec<'a>, EncounterError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next >= self.list.len() {
+            return None;
+        }
+        let index = self.next;
+        self.next += 1;
+        Some(self.list.get(index))
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let left = self.list.len().saturating_sub(self.next);
+        (left, Some(left))
+    }
+}
+
+impl<'a> ExactSizeIterator for EncounterEnemiesIter<'a> {}
 
 // ===========================================================================
 // opcode / term / 根指针 / 符号表
@@ -2721,5 +3131,327 @@ mod tests {
         // 段号 7 不在目录里（nsec = 7）。
         assert!(content.section(NSEC).is_none());
         exercise(&blob);
+    }
+
+    // ------------------------------------------------------- ENCT → 敌人记录（借用视图）
+
+    /// 某段的文件偏移（= 目录项里的 `offset`）。
+    fn section_offset(blob: &[u8], index: usize) -> usize {
+        u32_at(blob, dir_base(index)).expect("目录项在镜像内") as usize
+    }
+
+    /// 一条敌人在**内容里**的坐标 + 读出来的一切（测试里要逐个比对的东西）。
+    #[derive(Debug, PartialEq, Eq)]
+    struct EnemyRow {
+        id: String,
+        max_health: Option<i32>,
+        actions: Vec<String>,
+        starting_statuses: usize,
+        intent_rules: usize,
+    }
+
+    fn enemy_rows(content: &Content<'_>, encounter: u32) -> Vec<EnemyRow> {
+        let list = content
+            .encounter_enemies(encounter)
+            .unwrap_or_else(|e| panic!("ENCT[{encounter}].Enemies 必须能读：{e:?}"));
+        let mut out = Vec::with_capacity(list.len());
+        for spec in list.iter() {
+            let spec = spec.unwrap_or_else(|e| panic!("ENCT[{encounter}] 的敌人记录必须能读：{e:?}"));
+            let actions = spec.actions().expect("Actions 必须能读");
+            out.push(EnemyRow {
+                id: spec.id().expect("Id 必须能读").to_string(),
+                max_health: spec.max_health().expect("MaxHealth 必须能读"),
+                actions: (0..actions.len())
+                    .map(|i| {
+                        actions
+                            .string(i)
+                            .unwrap_or_else(|| panic!("Actions[{i}] 的串号解不出串"))
+                            .to_string()
+                    })
+                    .collect(),
+                starting_statuses: spec
+                    .starting_statuses()
+                    .expect("StartingStatuses 必须能读")
+                    .len(),
+                intent_rules: spec.intent_rules().expect("IntentRules 必须能读").len(),
+            });
+        }
+        out
+    }
+
+    /// 逐条读 **109 条遭遇**的敌人名单，并与 `reader.py` 的 dump 交叉核对。
+    ///
+    /// 期望值全部是量出来的（`reader.py` 对 `content.core.rdcf` 的 dump + `manifest.json`）：
+    ///
+    /// | 量 | 值 |
+    /// |---|---|
+    /// | `ENCT` 行数 | **109**（`manifest.json`：`ENCT count=109`） |
+    /// | 敌人记录总数 | **149** |
+    /// | `Actions` 总条数 | **480** |
+    /// | 每遭遇敌人数 | `{1:76, 2:26, 3:7}` |
+    /// | 每敌人动作数 | `{1:1, 2:9, 3:107, 4:20, 5:12}` |
+    /// | 带 `IntentRules` 的记录 | **3**（`a_very_official_line` / `contradictory_signpost` / `minute_moth`） |
+    /// | 带 `StartingStatuses` 的记录 | **20** |
+    ///
+    /// **"总数 + 分布 + 抽样"三样一起比才有区分力**：只比抽样 → "少读一半遭遇"照样绿；
+    /// 只比总数 → "两条记录互相搬了位置"照样绿；只比分布 → 抽样的 id/动作串错位看不出来。
+    #[test]
+    fn every_encounter_enemy_record_reads() {
+        with_core(|content, _blob| {
+            assert_eq!(content.rows(Table::Encounter).count(), 109, "ENCT 行数");
+
+            let mut encounters = 0usize;
+            let mut enemies = 0usize;
+            let mut actions = 0usize;
+            let mut with_rules = Vec::new();
+            let mut with_statuses = 0usize;
+            let mut enemies_per_encounter = [0usize; 4]; // 下标 = 敌人数（1..=3）
+            let mut actions_per_enemy = [0usize; 6]; // 下标 = 动作数（1..=5）
+
+            for row in content.rows(Table::Encounter) {
+                let index = row.index();
+                let list = content
+                    .encounter_enemies(index)
+                    .unwrap_or_else(|e| panic!("ENCT[{index}] 的 Enemies 必须能读：{e:?}"));
+                encounters += 1;
+                assert!(
+                    (1..=3).contains(&list.len()),
+                    "ENCT[{index}] 有 {} 个敌人（实测最多 3 个）",
+                    list.len()
+                );
+                enemies_per_encounter[list.len()] += 1;
+
+                for (slot, spec) in list.iter().enumerate() {
+                    let spec = spec.unwrap_or_else(|e| panic!("ENCT[{index}][{slot}]：{e:?}"));
+                    let id = spec.id().expect("Id");
+                    // 每遭遇内**不重名**（参考的 `ToDictionary(e => e.CombatantId)` 靠这条不抛）。
+                    for other in 0..slot {
+                        let previous = list.get(other).expect("前面的槽").id().expect("Id");
+                        assert_ne!(previous, id, "ENCT[{index}] 里 `{id}` 出现了两次");
+                    }
+                    enemies += 1;
+                    let count = spec.actions().expect("Actions").len();
+                    assert!((1..=5).contains(&count), "`{id}` 有 {count} 条动作（实测 1..=5）");
+                    actions_per_enemy[count] += 1;
+                    actions += count;
+                    let rules = spec.intent_rules().expect("IntentRules").len();
+                    if rules > 0 {
+                        with_rules.push((id.to_string(), rules));
+                    }
+                    if !spec.starting_statuses().expect("StartingStatuses").is_empty() {
+                        with_statuses += 1;
+                    }
+                    // `MaxHealth` 在实测里恒存在（11..=132）。
+                    let hp = spec.max_health().expect("MaxHealth").expect("实测 149/149 有值");
+                    assert!((11..=132).contains(&hp), "`{id}` 的生命 {hp} 越出实测区间");
+                }
+            }
+
+            assert_eq!(encounters, 109, "一条遭遇都不许跳过");
+            assert_eq!(enemies, 149, "敌人记录总数（reader.py dump）");
+            assert_eq!(actions, 480, "动作总条数（reader.py dump）");
+            assert_eq!(enemies_per_encounter[1..], [76, 26, 7], "每遭遇敌人数分布");
+            assert_eq!(actions_per_enemy[1..], [1, 9, 107, 20, 12], "每敌人动作数分布");
+            assert_eq!(with_statuses, 20, "带起始状态的记录数");
+            with_rules.sort();
+            assert_eq!(
+                with_rules,
+                // 3 条：两条 `selfHasCounter`、一条 `opponentCardsPlayed`（后者今天求不出值，
+                // 但**读**得出来 —— 能不能求值不在这一层）。
+                [
+                    ("a_very_official_line".to_string(), 1),
+                    ("contradictory_signpost".to_string(), 3),
+                    ("minute_moth".to_string(), 1),
+                ],
+                "带 IntentRules 的记录"
+            );
+
+            // ---- 抽样：id / 生命 / 动作串**逐字**对（`Actions` 是 F_STRLIST 的串号，
+            //      错当成 term id 会读到不相干的串 —— 只有逐字比能抓到那种错）。
+            assert_eq!(
+                enemy_rows(content, 0),
+                [EnemyRow {
+                    id: "a_very_official_line".to_string(),
+                    max_health: Some(29),
+                    actions: [
+                        "a_very_official_line.shuffle_forward",
+                        "a_very_official_line.compress_the_queue",
+                        "a_very_official_line.shuffle_backward",
+                    ]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+                    starting_statuses: 1,
+                    intent_rules: 1,
+                }],
+                "ENCT[0]"
+            );
+            assert_eq!(
+                enemy_rows(content, 3)
+                    .iter()
+                    .map(|row| (row.id.as_str(), row.max_health, row.actions.len()))
+                    .collect::<Vec<_>>(),
+                [("queue_imp", Some(22), 3), ("stamp_goblin", Some(22), 3)],
+                "ENCT[3] 是两个敌人"
+            );
+            assert_eq!(
+                enemy_rows(content, 17),
+                [EnemyRow {
+                    id: "iron_warrant_avatar".to_string(),
+                    max_health: Some(92),
+                    actions: [
+                        "iron_warrant_avatar.warrant_ignites",
+                        "iron_warrant_avatar.iron_authority",
+                        "iron_warrant_avatar.served_in_steel",
+                        "iron_warrant_avatar.binding_order",
+                        "iron_warrant_avatar.final_service",
+                    ]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+                    starting_statuses: 0,
+                    intent_rules: 0,
+                }],
+                "ENCT[17] 是那条 5 动作记录（顺序也是语义：`Actions[(round-1)%5]`）"
+            );
+            assert_eq!(
+                enemy_rows(content, 18)
+                    .iter()
+                    .map(|row| (row.id.as_str(), row.max_health, row.actions.len()))
+                    .collect::<Vec<_>>(),
+                [
+                    ("seizure_marshal", Some(42), 4),
+                    ("inventory_lantern", Some(26), 4),
+                    ("lock_cart", Some(34), 4)
+                ],
+                "ENCT[18] 是三条记录的精英战"
+            );
+            // 末条遭遇（索引与 id 的对齐不能错位一行）。
+            assert_eq!(
+                enemy_rows(content, 108)
+                    .iter()
+                    .map(|row| (row.id.as_str(), row.max_health, row.actions.len()))
+                    .collect::<Vec<_>>(),
+                [("folded_affidavit_bat", Some(30), 3)],
+                "ENCT[108]"
+            );
+            assert_eq!(
+                content.entity_id(Table::Encounter, 108),
+                Some("city_easy_form_06")
+            );
+        });
+    }
+
+    /// 形状不对时**响亮失败**，绝不静默给一个空名单。
+    ///
+    /// 三个坏形状各一条（在内存里改镜像，不动磁盘上的产物）：
+    /// 1. `Enemies` 格写成 `NULL16` ⇒ `MissingEnemies`；
+    /// 2. `Enemies` 指到的 term 不是 `_arr`（把它的 op 改成 `_null`）⇒ `NotAnArray`；
+    /// 3. 列表个数超出 `AUX`（改成 4000 > 2078 格）⇒ `MalformedList`。
+    ///
+    /// 还有两条"下标越界"：遭遇号越界、敌人槽越界。
+    #[test]
+    fn a_broken_encounter_shape_is_an_error_not_an_empty_list() {
+        let original = read_image(CORE_IMAGE);
+
+        // 0. 原始镜像是好的，而且**不是**空名单（否则下面的断言可能全在比两个空值）。
+        {
+            let content = Content::parse(&original).unwrap();
+            let list = content.encounter_enemies(0).unwrap();
+            assert_eq!(list.len(), 1);
+            assert_eq!(list.encounter(), 0);
+            assert!(!list.is_empty());
+        }
+
+        let enct = section_offset(&original, S_ENCT);
+        // 第 0 行第 1 格 = `Enemies`（ENCT stride 16，每格 2 字节）。
+        let enemies_cell = enct + 2;
+        let array_term = u16_at(&original, enemies_cell).expect("格在镜像内");
+        assert_ne!(array_term, NULL16, "实测这一格指着 `_arr`");
+
+        // 1. `Enemies` 格 = null。
+        let mut blob = original.clone();
+        patch16(&mut blob, enemies_cell, NULL16);
+        let content = Content::parse(&blob).unwrap();
+        assert_eq!(
+            content.encounter_enemies(0).unwrap_err(),
+            EncounterError::MissingEnemies
+        );
+
+        // 2. 把那个 term 的 op 从 `_arr`(4) 改成 `_null`(0)。
+        let trw = section_offset(&original, S_TRW);
+        let trm = section_offset(&original, S_TRM);
+        let word = u16_at(&original, trw + 2 * usize::from(array_term)).expect("TRW 有这一项");
+        let record = trm + 4 * usize::from(word);
+        assert_eq!(
+            u16_at(&original, record),
+            Some(OP_ARR),
+            "实测 ENCT[0].Enemies 指着一个 `_arr`"
+        );
+        let mut blob = original.clone();
+        patch16(&mut blob, record, OP_NULL);
+        let content = Content::parse(&blob).unwrap();
+        assert_eq!(
+            content.encounter_enemies(0).unwrap_err(),
+            EncounterError::NotAnArray(array_term)
+        );
+
+        // 3. 列表个数 4000 > `AUX` 的 2078 格。
+        let mut blob = original.clone();
+        patch16(&mut blob, record + 4, 4_000);
+        let content = Content::parse(&blob).unwrap();
+        assert_eq!(
+            content.encounter_enemies(0).unwrap_err(),
+            EncounterError::MalformedList("Enemies")
+        );
+
+        // 4. 下标越界：遭遇号、敌人槽。
+        let content = Content::parse(&original).unwrap();
+        assert_eq!(
+            content.encounter_enemies(109).unwrap_err(),
+            EncounterError::NoSuchEncounter(109)
+        );
+        assert_eq!(
+            content.encounter_enemies(0).unwrap().get(1).unwrap_err(),
+            EncounterError::NoSuchEnemy {
+                encounter: 0,
+                index: 1
+            }
+        );
+    }
+
+    /// 同一个 id 可能是**另一种实体**：`overfilled_inbox` 既是卡牌（`CARD[42]`）也是遗物
+    /// （`REL[33]`），而它**不是**遭遇。
+    ///
+    /// 为什么值得一条测试：`ENCT` 读器的调用方（wasm / fightdump）会拿一个 id 去`lookup`。
+    /// 用不带类别的 [`Content::lookup`] 拿到"第一条"再把行号当遭遇行号用，就会读到
+    /// **另一张表**的同一行号 —— 数据合法、语义全错。这条测试把"必须带类别查"钉住。
+    #[test]
+    fn an_id_that_is_a_card_and_a_relic_is_not_an_encounter() {
+        with_core(|content, _blob| {
+            let card = content
+                .lookup_in("overfilled_inbox", EK_CARD)
+                .expect("它是卡牌");
+            let relic = content
+                .lookup_in("overfilled_inbox", EK_RELIC)
+                .expect("它也是遗物");
+            assert!(
+                card.index != relic.index || card.entity_kind != relic.entity_kind,
+                "两条记录必须是不同的实体（不是同一条被读了两次）"
+            );
+            assert_eq!(content.entity_id(Table::Card, u32::from(card.index)), Some("overfilled_inbox"));
+            assert_eq!(content.entity_id(Table::Relic, u32::from(relic.index)), Some("overfilled_inbox"));
+            // 它不是遭遇 —— 而"按 id 找遭遇"这件事**没有**入口（`encounter_enemies` 只收行号），
+            // 所以调用方必须自己先 `lookup_in(id, EK_ENCOUNTER)`。
+            assert_eq!(content.lookup_in("overfilled_inbox", EK_ENCOUNTER), None);
+            // 不带类别的 `lookup` 给的是最靠前那条（`reader.py` 的 `setdefault` 语义）。
+            assert_eq!(content.lookup("overfilled_inbox").map(|e| e.entity_kind), Some(EK_CARD));
+            // 而真正的遭遇在 `EK_ENCOUNTER` 下能查到，行号也真的指向那条 `ENCT` 行。
+            let encounter = content
+                .lookup_in("city_easy_01", EK_ENCOUNTER)
+                .expect("它是遭遇");
+            assert_eq!(u32::from(encounter.index), 0);
+            assert_eq!(content.encounter_enemies(u32::from(encounter.index)).unwrap().len(), 1);
+        });
     }
 }

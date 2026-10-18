@@ -191,6 +191,30 @@ pub enum Step<'a> {
     },
     /// `AdvanceToNextRound`：结束英雄回合并把回合序推到下一个英雄回合。
     NextRound,
+    /// **只结束一个回合**：把行动位交给回合序里下一个**活着**的战斗员，然后停下。
+    ///
+    /// # 为什么需要它
+    ///
+    /// `HeroEndsTurn` / `EnemyActs` / `NextRound` 三个都回答不了"让**下一个**敌人出手"：
+    /// * `HeroEndsTurn` 只把行动位交给**一个**战斗员（回合机的 `AdvanceToNextCombatant`
+    ///   一次只前进一步），所以两个敌人时它只解锁第一个；
+    /// * `EnemyActs` 是"推进到**指定**敌人"，调用方得先知道轮到谁；
+    /// * `NextRound` 是"一直结束到英雄回合"，会跨过所有敌人 —— 中间的敌人一次都轮不到
+    ///   （`rd-wasm` 的 Gap 4 就是这件事：一次"结束回合"只让一个敌人行动）。
+    ///
+    /// 参考实现里承担这件事的是 `ScenarioRunner.cs:226-252` 的
+    /// `AdvanceTurnsUntilActive`：**逐个** `EndCurrentTurnAndStartNextTurn`，每一跳之后
+    /// 都看结果。本变体是它的"没有指定目标"版本 —— 推**一步**就停。
+    ///
+    /// # 语义（严格按参考，别在这里加战斗语义）
+    ///
+    /// 1. `EnsureTurnStarted`（与 `HeroEndsTurn` / `NextRound` 同一个入口）；
+    /// 2. **先推一格**（这一步的语义就是"结束当前这一回合"，当前上场的是英雄也一样）；
+    ///    之后只在接手的战斗员**已倒下**（它自己的 turn-start 触发器/DoT 把它打死了）时
+    ///    继续推 —— 这就是"跳过已倒下的"；轮到活着的战斗员 ⇒ 停（一步只让一个上场）；
+    /// 3. **每一跳之后立刻复核胜负**（[`end_turn_and_start_next`]，见 [`FROZEN_GAP_RESULT`]）：
+    ///    战斗一结束就停，绝不把终局之后的回合推下去。
+    EndOneTurn,
 }
 
 /// 一条"这是引擎的真实反应"的观测（对应参考的 `problems` 字符串）。
@@ -233,6 +257,13 @@ pub enum Problem {
     UnknownEnemyAction,
     /// `NextRound` 没能转回英雄回合（`:214-218`）。
     CouldNotWrapToHero,
+    /// [`Step::EndOneTurn`] 在 `turn_order.len() + 2` 圈的守卫内没停住（参考 `:236`/`:248`
+    /// 那两处守卫的同形物）。
+    ///
+    /// **今天不可达**：每一圈要么停、要么把行动位往前推一格，而 `advance_to_next_combatant`
+    /// 保证落到一个活着的战斗员上。它存在是因为"转不出来"必须响亮 —— 与
+    /// [`Self::CouldNotWrapToHero`] 同一个理由。
+    CouldNotEndOneTurn,
 }
 
 impl Problem {
@@ -257,6 +288,7 @@ impl Problem {
             Problem::EnemyNotAlive => "EnemyNotAlive",
             Problem::UnknownEnemyAction => "UnknownEnemyAction",
             Problem::CouldNotWrapToHero => "CouldNotWrapToHero",
+            Problem::CouldNotEndOneTurn => "CouldNotEndOneTurn",
         }
     }
 }
@@ -462,10 +494,11 @@ fn content_error() -> BattleError {
 /// | 7 | 起始状态（走真管线） | `:51-57` | 无字段 ⇒ 天然为空 |
 /// | 8 | 开局临时规则 | `:59-61` | 无字段 ⇒ 天然为空 |
 ///
-/// 第 1 步为什么要**整体重置**：参考在那一行**新建**一份状态，而内核的电牌面是"调用方提供
+/// 第 1 步为什么要**重置**：参考在那一行**新建**一份状态，而内核的电牌面是"调用方提供
 /// 存储"。不重置的话 `card_num=` / `random_step=` / `status_num=` 会带着别处的残留进哈希
-/// —— 那种偏差不会报错，只会让指纹对不上。`CombatState` 的容器字段是私有的，
-/// 所以只能整体赋值。
+/// —— 那种偏差不会报错，只会让指纹对不上。`CombatState` 的容器字段是私有的，所以走
+/// [`CombatState::reset_in_place`]（**不是**整体赋值 `*state = CombatState::new(..)`：
+/// 后者会把 184 KB 的常量模板带进 `.wasm`，见 `state.rs` 里那个方法的注释）。
 ///
 /// # Errors
 ///
@@ -507,7 +540,11 @@ pub fn build_fight(
     // ── 步 1：`new CombatState(combatId, seed)`（`:13-17`）=====================
     // `CellExclusive` / `SimultaneousTeamTurns` 不进内核模型（规格 §1 的取舍），
     // 它们是**同时回合/格子战斗**的开关，v1 一个都不支持；蓝图里也没有这两个字段。
-    *state = CombatState::new(combat_id, plan.seed);
+    //
+    // ⚠️ 这里**不**写 `*state = CombatState::new(..)`：语义一样，但那样会把 184 KB 的
+    // 空状态常量模板带进 `.wasm`（实测占 `rd_wasm.wasm` 的 33%）。`reset_in_place`
+    // 逐字段清零，字节等价（`state.rs` 的 `reset_in_place_matches_new_field_for_field`）。
+    state.reset_in_place(combat_id, plan.seed);
 
     // ── 步 2：战斗员（`:19-24`）==============================================
     add_combatant(state, &hero_id, plan.hero.max_health, PLAYER_TEAM)?;
@@ -1016,6 +1053,7 @@ fn execute_step<H: TurnHost>(
             problems,
         ),
         Step::NextRound => next_round(state, config, host, hero, problems),
+        Step::EndOneTurn => end_one_turn(state, config, host, problems),
     }
 }
 
@@ -1205,6 +1243,59 @@ fn next_round<H: TurnHost>(
         guard += 1;
         if guard > max_steps {
             problems.push(Problem::CouldNotWrapToHero)?; // `:216`
+            break;
+        }
+    }
+    Ok(context)
+}
+
+/// [`Step::EndOneTurn`]：**只**结束一个回合，停在下一个活着的战斗员身上。
+///
+/// 参考里没有"只推一步"这个脚本步（`ScenarioRunner` 的三个步进都得带着目标），但它的
+/// **推进本身**是逐跳的：`AdvanceTurnsUntilActive`（`:226-252`）就是
+/// `while (Ongoing && active != target) EndCurrentTurnAndStartNextTurn()`，
+/// 每一跳之后重新读 `Result`。本函数是同一段循环，只是判据从"轮到 target 了吗"
+/// 换成"轮到一个**活着**的战斗员了吗" —— 因此它**不新增任何战斗语义**。
+///
+/// 三条守门点（都在循环里，顺序就是语义）：
+/// 1. `state.result != Ongoing` ⇒ 停（`:230` 的条件前一半）；
+/// 2. **第一圈总是推一格**（这一步的语义就是"结束当前这一回合"，无论当前上场的是英雄
+///    还是敌人）；之后的圈只在接手的战斗员**已倒下**时继续推 —— 那就是"跳过已倒下的"；
+/// 3. 每一跳都走 [`end_turn_and_start_next`]（它内部立刻复核胜负），所以第 1 条看到的是
+///    **新值** —— "某个敌人的 turn-start 触发器把最后一个敌人打死"之后不会再往前推。
+///
+/// 守卫（`turn_order.len() + 2`）与 `NextRound` 的 `:214-218` 同形：正常情况下不可达，
+/// 但"转不出来"必须留一条响亮的路（[`Problem::CouldNotEndOneTurn`]），不许安静地停。
+fn end_one_turn<H: TurnHost>(
+    state: &mut CombatState,
+    config: &TurnConfig,
+    host: &mut H,
+    problems: &mut Problems,
+) -> Result<Context, BattleError> {
+    ensure_turn_started(state, config, host)?; // 与 `HeroEndsTurn` / `NextRound` 同一入口
+    let context = context_of(state); // 执行**前**的上下文（`ScenarioRunner.cs:203` 同形）
+
+    let max_steps = state.turn_order().len() as i32 + 2;
+    let mut guard = 0i32;
+    loop {
+        if state.result != CombatResult::Ongoing {
+            break;
+        }
+        // `active_combatant_id == None`（状态被别处改坏）**不在这里兜底**：让回合机的
+        // `ensure_active_combatant` 去响亮失败，别把"没有行动者"伪装成"没什么可推的"。
+        let skip_dead = match state.active_combatant_id {
+            Some(active) => !turn::is_alive(state, &active),
+            None => true,
+        };
+        // 第一圈**总是**推（这一步的语义就是"结束当前这一回合"）；之后的圈只在
+        // 接手的战斗员已经倒下时继续推（"跳过已倒下的"）。
+        if guard > 0 && !skip_dead {
+            break;
+        }
+        end_turn_and_start_next(state, config, host)?;
+        guard += 1;
+        if guard > max_steps {
+            problems.push(Problem::CouldNotEndOneTurn)?;
             break;
         }
     }
@@ -2282,6 +2373,190 @@ mod tests {
         assert_eq!(trace.result, CombatResult::Victory);
         assert_eq!(trace.hp(3, "stamp_goblin"), 0);
         assert_eq!(trace.hp(3, "hero"), 70, "Y 的动作一下都没出");
+    }
+
+    /// **`Step::EndOneTurn` 的核心判据**：一步只让**一个**战斗员上场（多敌人战斗的地基）。
+    ///
+    /// 场景（全真实内容；`queue_imp.desk_jab` = 8 伤、`stamp_goblin.rubber_stamp_rush` = 5 伤，
+    /// 都是实测的 `dealDamage{const}`）：
+    ///
+    /// ```text
+    /// 步 0  EndOneTurn                 英雄回合结束 ⇒ 行动位给 queue_imp（回合 2）
+    /// 步 1  EnemyActs{queue_imp}       英雄 70 - 8 = 62
+    /// 步 2  EndOneTurn                 **只**结束 imp 的回合 ⇒ 行动位给 goblin（回合 3），
+    ///                                  英雄一滴血都不该掉（goblin 还没出手）
+    /// 步 3  EnemyActs{stamp_goblin}    英雄 62 - 5 = 57
+    /// ```
+    ///
+    /// 三种错误实现都会红，而且各自红的数不同：
+    /// * 把 `EndOneTurn` 实现成 `NextRound`（一路推回英雄）⇒ 步 2 之后 `round=2`/`turn=1`、
+    ///   行动者变回英雄，步 3 撞 `StillHeroTurn`，英雄停在 62；
+    /// * 把它实现成"什么都不做"⇒ 步 3 的 `EnemyActs{goblin}` 会先自己推一格（那是
+    ///   `AdvanceTurnsUntilActive` 的活），英雄照样掉到 57 —— 所以**必须**同时断言
+    ///   步 2 之后行动者与回合号（步 3 的结果区分不出这两者）；
+    /// * 让它推两步以上 ⇒ 步 2 会绕过 goblin 回到英雄，`round`/`turn` 直接不对。
+    #[test]
+    fn one_end_one_turn_step_puts_exactly_one_combatant_on_stage() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let enemies = [
+            PlanCombatant {
+                id: "queue_imp",
+                max_health: 22,
+            },
+            PlanCombatant {
+                id: "stamp_goblin",
+                max_health: 22,
+            },
+        ];
+        let deck = [DeckEntry {
+            card: "paper_cut",
+            count: 2,
+        }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "one_turn_step",
+            seed: 1,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 70,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let script = [
+            Step::EndOneTurn,
+            Step::EnemyActs {
+                enemy: "queue_imp",
+                action: "queue_imp.desk_jab",
+                target: Some("hero"),
+            },
+            Step::EndOneTurn,
+            Step::EnemyActs {
+                enemy: "stamp_goblin",
+                action: "stamp_goblin.rubber_stamp_rush",
+                target: Some("hero"),
+            },
+        ];
+
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
+        let mut host = Host::new(&content);
+        let trace = drive(&mut state, &content, &plan, &script, &mut host);
+
+        // 步 0：英雄的回合真的走完了（一步 = 一个战斗员），英雄自己没掉血。
+        assert_eq!(trace.kinds(0), &[] as &[Problem], "EndOneTurn 不该记问题");
+        assert_eq!(trace.hp(0, "hero"), 70);
+        assert_eq!(trace.hp(1, "hero"), 62, "desk_jab 是 8 点");
+
+        // 步 2：**一步只放一个敌人上场** —— 这是整个变体存在的理由。
+        assert_eq!(trace.kinds(2), &[] as &[Problem], "EndOneTurn 不该记问题");
+        assert_eq!(
+            trace.hp(2, "hero"),
+            62,
+            "goblin 还没有出手（错误实现会在这里再掉 5 点）"
+        );
+        assert_eq!(trace.hp(2, "queue_imp"), 22, "敌人自己不掉血");
+        assert_eq!(trace.hp(2, "stamp_goblin"), 22, "另一个敌人的血不许动");
+        assert_eq!(
+            (trace.steps[2].round, trace.steps[2].turn, trace.steps[2].problems),
+            // 上下文取在**执行前**（`ScenarioRunner.cs:203` 同形）：执行前还是 imp 的回合。
+            (1, 2, 0)
+        );
+
+        // 步 3：第二个敌人这才出手 ⇒ 62 - 5 = 57。
+        assert_eq!(trace.hp(3, "hero"), 57, "rubber_stamp_rush 是 5 点");
+        assert_eq!(trace.kinds(3), &[] as &[Problem]);
+
+        // 终局：还在第一轮、回合号是 goblin 那一格（1 英雄 → 2 imp → 3 goblin）。
+        assert_eq!(trace.result, CombatResult::Ongoing);
+        assert_eq!(state.current_round, 1, "一次都没绕回新一轮");
+        assert_eq!(state.current_turn, 3, "英雄 1 → imp 2 → goblin 3");
+        assert_eq!(state.active_combatant_id, Some(cid("stamp_goblin")));
+        // "状态不变"的另一半：两个敌人都没被挂上任何状态。
+        for who in ["queue_imp", "stamp_goblin"] {
+            assert!(
+                state.combatant(&cid(who)).expect("敌人在").statuses().is_empty(),
+                "`{who}` 不该被挂状态"
+            );
+        }
+    }
+
+    /// **`Step::EndOneTurn` 第二守门点**：推进到"下一个战斗员的回合开场"时战斗就结束了 ⇒
+    /// 停，绝不把终局之后的回合推下去。
+    ///
+    /// 场景：敌人 5 血 + `permit_a38` 给 5 层 `paperwork`（`damage_over_time`）⇒
+    /// 它的回合一开始就被 DoT 打死，而它是唯一的敌人 ⇒ `Victory`。
+    ///
+    /// 判据与 `a_lethal_turn_start_stops_the_rest_of_that_steps_turn_advancement` 同一组数
+    /// （`round`/`turn`/手牌/抽牌堆/弃牌堆），只是入口换成 `EndOneTurn`：一个"不看 Result
+    /// 就继续推"的实现在这里会**绕过**终态、把回合推回英雄（`round=2`、手牌重抽 5 张）。
+    #[test]
+    fn end_one_turn_stops_the_loop_when_the_combat_ends() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let enemies = [PlanCombatant {
+            id: "queue_imp",
+            max_health: 5,
+        }];
+        let deck = [DeckEntry {
+            card: "permit_a38",
+            count: 12,
+        }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "one_turn_stops",
+            seed: 1,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 70,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let script = [
+            Step::HeroPlays {
+                card: "permit_a38",
+                target: Some("queue_imp"),
+            },
+            Step::EndOneTurn,
+        ];
+
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
+        let mut host = Host::new(&content);
+        let trace = drive(&mut state, &content, &plan, &script, &mut host);
+
+        assert_eq!(trace.kinds(1), &[] as &[Problem], "推到它、开回合、DoT 打死它 —— 无异常");
+        assert_eq!(trace.hp(1, "queue_imp"), 0);
+        assert_eq!(trace.result, CombatResult::Victory);
+        // 停在"敌人死在自己的回合开场"那一格，没有继续结束它的回合。
+        assert_eq!(state.current_round, 1, "没有绕回新一轮");
+        assert_eq!(state.current_turn, 2, "停在敌人那一回合");
+        assert_eq!(state.active_combatant_id, Some(cid("queue_imp")));
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::Hand),
+            0,
+            "英雄没有重新抽牌 ⇒ 这一轮没绕回来"
+        );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::DrawPile),
+            7,
+            "12 张抽 5 张 ⇒ 还剩 7；错误实现会再抽 5 张、只剩 2"
+        );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::DiscardPile),
+            5,
+            "出了 1 张 + 回合末弃了手里 4 张"
+        );
     }
 
     /// **`HeroDowned` 之外的第二种"回合开场就结束战斗"**：英雄自己的回合一开始就被打死。
