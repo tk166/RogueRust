@@ -1,0 +1,31 @@
+[package]
+name = "rd-wasm"
+description = "The rd-core combat kernel behind the env ABI, compiled to WebAssembly."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# `cdylib` only: this crate exists to be `WebAssembly.instantiate`d by a browser, not to be
+# linked into anything else.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Path dependency on the kernel. rd-core stays `no_std` + `forbid(unsafe_code)`; this crate is
+# the one allowed to use `std` and `unsafe` (it has to hold a 184 KB `CombatState` somewhere).
+rd-core = { path = "../rd-core" }
+
+# Deliberately no `wasm-bindgen`: it would drag in a CLI (`wasm-bindgen`) and a build-dependency
+# tree onto a machine whose shell environment is already hostile. Plain `extern "C"` exports plus
+# the `memory` that a `cdylib` exports by default are enough for `WebAssembly.instantiate`.
+#
+# `lto`/`opt-level`/`panic` come from the workspace `[profile.release]`; the size experiments in
+# the spike report vary them through `CARGO_PROFILE_RELEASE_*` env vars rather than by editing
+# `kernel/Cargo.toml`, so the other crates never build under a profile nobody measured.
+
+[lints.rust]
+# `--cfg rd_wasm_plain_errors` is a documented size lever (see `detail()` in src/lib.rs). It is a
+# rustflag rather than a Cargo feature on purpose: a feature would have to be plumbed through the
+# dependency graph, and this switch must never reach rd-core.
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(rd_wasm_plain_errors)"] }
+

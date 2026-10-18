@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rd-core · WASM env ABI spike</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #191d25; --line: #2a3140; --ink: #d7dde8; --dim: #7d8798;
+    --hp: #d8555f; --block: #5d8fd8; --energy: #e0c060; --ok: #59bb7a; --bad: #d8555f;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px; background: var(--bg); color: var(--ink);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 2px; letter-spacing: .04em; }
+  .sub { color: var(--dim); font-size: 12px; margin-bottom: 14px; }
+  .sub code { color: var(--ink); }
+  .board { display: grid; gap: 12px; grid-template-columns: 1fr; max-width: 980px; }
+  @media (min-width: 720px) { .board { grid-template-columns: 1fr 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .09em;
+              color: var(--dim); margin: 0 0 8px; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .name { font-family: var(--mono); font-size: 13px; }
+  .bar { height: 8px; border-radius: 4px; background: #0b0d11; overflow: hidden; margin: 6px 0 4px; }
+  .bar > i { display: block; height: 100%; background: var(--hp); transition: width .18s ease; }
+  .stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-family: var(--mono); font-size: 12px; color: var(--dim); }
+  .stats b { color: var(--ink); font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .chip { font: 11px var(--mono); padding: 1px 6px; border: 1px solid var(--line);
+          border-radius: 99px; color: var(--dim); }
+  .hand { display: flex; flex-wrap: wrap; gap: 8px; }
+  .card {
+    font: 12px/1.35 var(--mono); text-align: left; cursor: pointer; color: var(--ink);
+    background: #202634; border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 10px; min-width: 128px; transition: border-color .12s, transform .08s;
+  }
+  .card:hover:not(:disabled) { border-color: #4a7ec0; }
+  .card:active:not(:disabled) { transform: translateY(1px); }
+  .card .cost { color: var(--energy); font-weight: 700; }
+  .card .slot { color: var(--dim); font-size: 10px; }
+  .card:disabled { opacity: .42; cursor: default; }
+  button.act {
+    font: 600 13px system-ui, sans-serif; padding: 9px 16px; border-radius: 8px; cursor: pointer;
+    background: #2b3648; color: var(--ink); border: 1px solid var(--line);
+  }
+  button.act:hover:not(:disabled) { border-color: #4a7ec0; }
+  button.act:disabled { opacity: .4; cursor: default; }
+  .msg { font: 12px/1.6 var(--mono); margin-top: 10px; min-height: 2.4em; }
+  .msg .err { color: var(--bad); }
+  .msg .good { color: var(--ok); }
+  pre {
+    font: 11px/1.65 var(--mono); color: var(--dim); margin: 0;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  pre b { color: var(--ink); font-weight: 600; }
+  .over { color: var(--energy); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<h1>rd-core → WebAssembly · env ABI spike</h1>
+<div class="sub">
+  一个静态页面 + 一个 <code>.wasm</code>，全局没有 CDN、没有 worker、没有 <code>SharedArrayBuffer</code>。
+  状态全部来自 <code>rd_env_observe_buf()</code> 那 122 个 <code>i32</code>；每次点击 = 一次 <code>rd_env_step</code>。
+</div>
+
+<div class="board">
+  <div class="panel">
+    <h2>Hero</h2>
+    <div class="row"><span class="name" id="heroName">hero</span><span id="heroHp" class="name">–</span></div>
+    <div class="bar"><i id="heroBar" style="width:0%"></i></div>
+    <div class="stats">
+      <span>energy <b id="energy">–</b></span>
+      <span>block <b id="block">–</b></span>
+      <span>hand <b id="handCount">–</b></span>
+      <span>deck <b id="pile">–</b></span>
+    </div>
+    <div class="chips" id="heroStatus"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Enemies</h2>
+    <div id="enemies"></div>
+  </div>
+
+  <div class="panel" style="grid-column: 1 / -1;">
+    <h2>Hand</h2>
+    <div class="hand" id="hand"></div>
+    <div class="msg" id="msg"></div>
+    <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="act" id="endTurn">结束回合</button>
+      <button class="act" id="reset">重开</button>
+    </div>
+  </div>
+
+  <div class="panel" style="grid-column: 1 / -1;">
+    <h2>Measurements</h2>
+    <pre id="bench">测量中…</pre>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ---------------------------------------------------------------------------------------------
+// Observation layout — mirrors kernel/rd-wasm/src/lib.rs. The ABI says the caller must ask for
+// the length instead of hard-coding it, so OBS_LEN comes from rd_env_observe_len() at runtime and
+// is only used below as an index base that the Rust side publishes in the same order.
+// ---------------------------------------------------------------------------------------------
+const OFF_HERO_STATUS  = 12;
+const OFF_ENEMY        = 17;   // 4 slots × 8
+const OFF_ENEMY_STATUS = 49;   // 4 slots × 5
+const OFF_HAND         = 69;   // 10 slots × 4
+const OFF_PILES        = 109;  // 5
+const MAX_ENEMY_SLOTS  = 4;
+const MAX_HAND_SLOTS   = 10;
+const STATUS_AXES = ["str", "vuln", "weak", "dex", "frail"];
+
+const H = { ROUND:0, TURN:1, PHASE:2, RESULT:3, HP:4, HP_MAX:5, BLOCK:6, WARD:7,
+            ENERGY:8, ENERGY_MAX:9, HAND:10, ENEMIES:11 };
+
+const RESULT_NAMES = ["Ongoing", "Victory", "Defeat", "Draw", "Aborted"];
+const ACTION_PLAY = 0;
+const ACTION_END_TURN = 1;
+
+let ex = null;          // exports
+let obs = null;         // Int32Array snapshot
+let bench = {};         // measurements, also mirrored to window.__bench
+
+// ---------------------------------------------------------------------------------------------
+// Loading. Two candidate URLs so the page works both "artifact copied next to the page" and
+// "serve the repo root and point at cargo's target dir" — a stale copy is the classic way a demo
+// shows numbers from a build you no longer have.
+// ---------------------------------------------------------------------------------------------
+const WASM_CANDIDATES = [
+  "./rd_wasm.wasm",
+  "../kernel/target/wasm32-unknown-unknown/release/rd_wasm.wasm",
+];
+
+const tLoad0 = performance.now();
+let wasmBytes = 0, contentType = "(none)", loaderPath = "(none)";
+
+async function fetchWasm() {
+  let lastErr;
+  for (const url of WASM_CANDIDATES) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) { lastErr = new Error(url + " → HTTP " + res.status); continue; }
+      contentType = res.headers.get("content-type") || "(none)";
+      const buf = await res.arrayBuffer();
+      wasmBytes = buf.byteLength;
+      return buf;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("no wasm candidate could be fetched");
+}
+
+async function instantiate(buf) {
+  // `instantiateStreaming` is the fast path and needs `Content-Type: application/wasm`. Python's
+  // `http.server` on Windows often guesses `application/octet-stream`, so the fallback is not
+  // theoretical — it is the normal path on machines whose registry does not know `.wasm`.
+  // `WebAssembly.Instance` carries the functions on `.exports`, not on itself.
+  if (typeof WebAssembly.instantiateStreaming === "function") {
+    try {
+      const url = new URL(WASM_CANDIDATES[0], location.href).href;
+      const res = await fetch(url, { cache: "no-store" });
+      if (res.ok) {
+        const m = await WebAssembly.instantiateStreaming(res, {});
+        loaderPath = "instantiateStreaming";
+        return m.instance.exports;
+      }
+    } catch (_) { /* fall through to the arrayBuffer path */ }
+  }
+  loaderPath = "instantiate(arrayBuffer) fallback";
+  const { instance } = await WebAssembly.instantiate(buf, {});
+  return instance.exports;
+}
+
+function memI32(ptr, len) {
+  // The view must be re-created on every read: growing the wasm memory detaches the old
+  // ArrayBuffer, and a cached view then throws or reads zeros.
+  return new Int32Array(ex.memory.buffer, ptr, len).slice();
+}
+
+function readObservation() {
+  const len = ex.rd_env_observe_len();
+  return memI32(ex.rd_env_observe_buf(), len);
+}
+
+function readText(lenFn, intoFn, index) {
+  const scratch = ex.rd_env_scratch_buf();
+  const n = lenFn(index);
+  if (n <= 0) return "";
+  intoFn(scratch, index === undefined ? undefined : index);
+  // Re-derive the view every time: the memory can grow between calls.
+  const bytes = new Uint8Array(ex.memory.buffer, scratch, n).slice();
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
+const lastError = () =>
+  readText((_) => ex.rd_env_last_error_len(), (p) => ex.rd_env_last_error_into(p));
+const cardName = (h) =>
+  readText((i) => ex.rd_env_card_name_len(i), (p, i) => ex.rd_env_card_name_into(i, p), h);
+
+// ---------------------------------------------------------------------------------------------
+// Actions
+// ---------------------------------------------------------------------------------------------
+function readActions() {
+  const n = ex.rd_env_action_count();
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push({ index: i, kind: ex.rd_env_action_kind(i),
+               arg0: ex.rd_env_action_arg(i, 0), arg1: ex.rd_env_action_arg(i, 1) });
+  }
+  return out;
+}
+
+function step(actionIndex) {
+  const verdict = ex.rd_env_step(actionIndex);
+  obs = readObservation();
+  const reward = ex.rd_env_reward();
+  render(verdict, reward);
+  return verdict;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------------------------
+function esc(s) { return String(s).replace(/[<>&]/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c])); }
+
+function render(verdict, reward) {
+  const o = obs;
+  document.getElementById("heroName").textContent = "hero";
+  document.getElementById("heroHp").textContent = `${o[H.HP]} / ${o[H.HP_MAX]}`;
+  document.getElementById("heroBar").style.width =
+    Math.max(0, Math.min(100, 100 * o[H.HP] / Math.max(1, o[H.HP_MAX]))) + "%";
+  document.getElementById("energy").textContent = `${o[H.ENERGY]} / ${o[H.ENERGY_MAX]}`;
+  document.getElementById("block").textContent = o[H.BLOCK];
+  document.getElementById("handCount").textContent = o[H.HAND];
+  document.getElementById("pile").textContent =
+    `${o[OFF_PILES]}d ${o[OFF_PILES + 2]}x ${o[OFF_PILES + 3]}e`;
+
+  const heroChips = [];
+  for (let a = 0; a < STATUS_AXES.length; a++) {
+    const v = o[OFF_HERO_STATUS + a];
+    if (v) heroChips.push(`<span class="chip">${STATUS_AXES[a]} ${v}</span>`);
+  }
+  document.getElementById("heroStatus").innerHTML = heroChips.join("");
+
+  // Enemies
+  const enemies = [];
+  const enemyCount = o[H.ENEMIES];
+  for (let e = 0; e < Math.min(enemyCount, MAX_ENEMY_SLOTS); e++) {
+    const b = OFF_ENEMY + e * 8;
+    const alive = o[b], hp = o[b + 1], hpMax = o[b + 2], blk = o[b + 3];
+    const chips = [];
+    for (let a = 0; a < STATUS_AXES.length; a++) {
+      const v = o[OFF_ENEMY_STATUS + e * 5 + a];
+      if (v) chips.push(`<span class="chip">${STATUS_AXES[a]} ${v}</span>`);
+    }
+    enemies.push(`
+      <div class="row"><span class="name">queue_imp #${e}${alive ? "" : " (down)"}</span>
+        <span class="name">${hp} / ${hpMax}</span></div>
+      <div class="bar"><i style="width:${Math.max(0, 100 * hp / Math.max(1, hpMax))}%"></i></div>
+      <div class="stats">
+        <span>block <b>${blk}</b></span>
+        <span>intent <b>n/a</b></span>
+        <span>statuses <b>${o[b + 7]}</b></span>
+      </div>
+      <div class="chips">${chips.join("")}</div>`);
+  }
+  document.getElementById("enemies").innerHTML = enemies.join("<hr style='border:0;border-top:1px solid var(--line);margin:10px 0'>");
+
+  // Hand. A card is a button iff the action table contains a play action for that hand slot;
+  // otherwise it is greyed out — that greying-out *is* the ABI's affordability gate showing.
+  const actions = readActions();
+  const playByHand = new Map();
+  for (const a of actions) {
+    if (a.kind === ACTION_PLAY && !playByHand.has(a.arg0)) playByHand.set(a.arg0, a);
+  }
+  const hand = [];
+  for (let h = 0; h < o[H.HAND]; h++) {
+    const b = OFF_HAND + h * 4;
+    const cost = o[b + 1], defSlot = o[b + 2];
+    const act = playByHand.get(h);
+    const affordable = cost >= 0 && cost <= o[H.ENERGY];
+    hand.push(`
+      <button class="card" data-action="${act ? act.index : -1}" ${act ? "" : "disabled"}>
+        <div><span class="cost">${cost}</span> energy · slot ${h}</div>
+        <div>${esc(cardName(h) || ("def#" + defSlot))}</div>
+        <div class="slot">def_slot ${defSlot}${affordable ? "" : " · 付不起"}</div>
+      </button>`);
+  }
+  if (!hand.length) hand.push(`<div class="stats">手牌为空 —— 第一次出牌/结束回合会开回合并抽牌。</div>`);
+  const handEl = document.getElementById("hand");
+  handEl.innerHTML = hand.join("");
+
+  // End turn
+  const endAction = actions.find((a) => a.kind === ACTION_END_TURN);
+  const endBtn = document.getElementById("endTurn");
+  endBtn.disabled = !endAction;
+  endBtn.dataset.action = endAction ? endAction.index : -1;
+
+  // Status message
+  const msgEl = document.getElementById("msg");
+  const done = ex.rd_env_done();
+  const parts = [];
+  parts.push(`<span>round <b>${o[H.ROUND]}</b> · turn <b>${o[H.TURN]}</b> · ` +
+             `phase <b>${o[H.PHASE]}</b> · result <b>${RESULT_NAMES[o[H.RESULT]] || o[H.RESULT]}</b></span>`);
+  if (done) parts.push(`<span class="good">战斗结束 · ${RESULT_NAMES[o[H.RESULT]]}</span>`);
+  if (typeof verdict === "number") {
+    if (verdict === 0) parts.push(`<span class="good">accepted · reward ${reward}</span>`);
+    else if (verdict === -1) parts.push(`<span class="err">rejected (-1) · ${esc(lastError())}</span>`);
+    else if (verdict === -2) parts.push(`<span class="dim">already finished (-2)</span>`);
+    else parts.push(`<span class="err">driver error (${verdict}) · ${esc(lastError())}</span>`);
+  }
+  msgEl.innerHTML = parts.join("<br>");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Measurements
+// ---------------------------------------------------------------------------------------------
+function measure() {
+  const lines = [];
+  const push = (k, v) => lines.push(`${k.padEnd(30)} ${v}`);
+  push("wasm bytes", `${wasmBytes} (${(wasmBytes / 1024).toFixed(1)} KiB)`);
+  push("Content-Type served", contentType);
+  push("loader path", loaderPath);
+  push("observe_len", ex.rd_env_observe_len() + " i32");
+  push("linear memory", (ex.memory.buffer.byteLength / 1024).toFixed(0) + " KiB");
+  push("instantiate+first observe", `${bench.initMs.toFixed(1)} ms`);
+
+  // --- one step, 1000 times ---------------------------------------------------------------
+  // A step mutates the fight, and this fight ends in ~10 steps, so a reset is part of the loop.
+  // The reset is timed **separately and subtracted**: it rebuilds a 184 KB `CombatState` and is
+  // not "a step". (The first version of this bench said "excluded" in a comment while including
+  // it in the timed region — the number was 3× the truth.)
+  ex.rd_env_reset();
+  const N = 1000;
+  let resets = 0, accepted = 0, refused = 0, resetMs = 0;
+  const t0 = performance.now();
+  for (let i = 0; i < N; i++) {
+    if (ex.rd_env_done()) {
+      const r0 = performance.now();
+      ex.rd_env_reset();
+      resetMs += performance.now() - r0;
+      resets++;
+    }
+    const v = ex.rd_env_step(0);
+    // Read the observation the way a real consumer must (this is the cost the UI actually pays).
+    const ptr = ex.rd_env_observe_buf();
+    const view = new Int32Array(ex.memory.buffer, ptr, ex.rd_env_observe_len());
+    if (view[H.RESULT] >= 0) accepted++;
+    if (v !== 0) refused++;
+  }
+  const tStep = performance.now() - t0 - resetMs;
+  push("1000 × step (reset excluded)", `${tStep.toFixed(1)} ms, ${(tStep / N * 1000).toFixed(2)} µs/step`);
+  push("  accepted / refused", `${accepted - refused} / ${refused} (fights restarted: ${resets})`);
+  push("1000 × reset (for scale)", `${resetMs.toFixed(1)} ms, ${(resetMs / Math.max(1, resets) * 1000).toFixed(1)} µs/reset`);
+
+  // --- what is inside one step ------------------------------------------------------------
+  // The step is: 1 engine call + envelope + 2 bookkeeping refreshes. Split them.
+  //
+  // ⚠️ The bookkeeping refresh calls `can_play_card` once per hand card, so it MUST be measured
+  // with a full hand. Right after a reset the hand is empty (the turn machine starts lazily —
+  // `ScenarioRunner.cs:105`), and measuring there reports 0.4 µs, which is a different code path
+  // wearing the same name. So: reset, take one END_TURN step (which draws the next hand), then
+  // measure — and publish the hand size alongside the number so the two cannot drift apart.
+  ex.rd_env_reset();
+  ex.rd_env_step(0); // the only legal action on a fresh fight is END_TURN → draws a hand
+  const handAtBench = readObservation()[H.HAND];
+  const tB0 = performance.now();
+  for (let i = 0; i < N; i++) ex.rd_env_bench_bookkeeping();
+  const tBook = performance.now() - tB0;
+  push(`1000 × bookkeeping (hand=${handAtBench})`, `${tBook.toFixed(1)} ms, ${(tBook / N * 1000).toFixed(2)} µs`);
+  const tE0 = performance.now();
+  for (let i = 0; i < N; i++) ex.rd_env_bench_envelope();
+  const tEnv = performance.now() - tE0;
+  push("1000 × fight envelope only", `${tEnv.toFixed(1)} ms, ${(tEnv / N * 1000).toFixed(2)} µs`);
+  const tO0 = performance.now();
+  for (let i = 0; i < N; i++) ex.rd_env_step(9999);  // out of range → returns before any work
+  const tOut = performance.now() - tO0;
+  push("1000 × refused call (overhead)", `${tOut.toFixed(1)} ms, ${(tOut / N * 1000).toFixed(2)} µs`);
+
+  // The kernel's own share: same action, no observation/action-table refresh at all.
+  ex.rd_env_reset();
+  ex.rd_env_step(0);            // reach a state with a hand
+  let rawResets = 0, rawMs = 0;
+  const tR0 = performance.now();
+  for (let i = 0; i < N; i++) {
+    if (ex.rd_env_done()) {
+      const r0 = performance.now();
+      ex.rd_env_reset(); ex.rd_env_step(0);
+      rawMs += performance.now() - r0;
+      rawResets++;
+    }
+    ex.rd_env_bench_step_raw();
+  }
+  const tRaw = performance.now() - tR0 - rawMs;
+  push("1000 × fight only (no refresh)", `${tRaw.toFixed(1)} ms, ${(tRaw / N * 1000).toFixed(2)} µs`);
+  ex.rd_env_reset();
+
+  // --- observation read only, 1000 times --------------------------------------------------
+  const t1 = performance.now();
+  for (let i = 0; i < N; i++) {
+    const ptr = ex.rd_env_observe_buf();
+    const view = new Int32Array(ex.memory.buffer, ptr, ex.rd_env_observe_len());
+    if (view[0] === -12345) throw new Error("unreachable");
+  }
+  const tRead = performance.now() - t1;
+  push("1000 × observe (zero-copy view)", `${tRead.toFixed(1)} ms, ${(tRead / N * 1000).toFixed(2)} µs/read`);
+
+  // --- observe_into (the copying half of the ABI), 1000 times ------------------------------
+  const scratchPtr = ex.rd_env_scratch_buf();
+  const t2 = performance.now();
+  for (let i = 0; i < N; i++) ex.rd_env_observe_into(scratchPtr);
+  const tInto = performance.now() - t2;
+  push("1000 × observe_into (488 B)", `${tInto.toFixed(1)} ms, ${(tInto / N * 1000).toFixed(2)} µs/call`);
+
+  // --- determinism self-check -------------------------------------------------------------
+  push("selfcheck(seed=7, 40 steps)", String(ex.rd_env_selfcheck(7, 40)));
+
+  bench = { wasmBytes, contentType, loaderPath, initMs: bench.initMs,
+            stepTotalMs: tStep, stepUs: tStep / N * 1000, accepted, refused, resets,
+            resetUs: resetMs / Math.max(1, resets) * 1000,
+            bookkeepingUs: tBook / N * 1000, handAtBench,
+            envelopeUs: tEnv / N * 1000,
+            fightOnlyUs: tRaw / N * 1000,
+            overheadUs: tOut / N * 1000,
+            readTotalMs: tRead, readUs: tRead / N * 1000,
+            intoTotalMs: tInto, intoUs: tInto / N * 1000,
+            selfcheck: ex.rd_env_selfcheck(7, 40) };
+  window.__bench = bench;
+
+  ex.rd_env_reset();
+  obs = readObservation();
+  render(undefined, 0);
+  document.getElementById("bench").innerHTML = lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------------------------
+(async () => {
+  try {
+    const buf = await fetchWasm();
+    ex = await instantiate(buf);
+    window.ex = ex;   // handy in devtools: `ex.rd_env_bench_sizes(1)` answers "how big is the envelope"
+    if (!ex.memory) throw new Error("module exports no `memory` — was it built as a cdylib?");
+    // Touch every export once so a missing one shows up as a named error, not a silent no-op.
+    for (const fn of ["rd_env_observe_len", "rd_env_observe_buf", "rd_env_action_count",
+                      "rd_env_action_kind", "rd_env_action_arg", "rd_env_step", "rd_env_done",
+                      "rd_env_result", "rd_env_reset", "rd_env_reward", "rd_env_selfcheck",
+                      "rd_env_scratch_buf", "rd_env_card_name_len", "rd_env_card_name_into",
+                      "rd_env_last_error_len", "rd_env_last_error_into",
+                      "rd_env_bench_bookkeeping", "rd_env_bench_envelope",
+                      "rd_env_bench_step_raw"]) {
+      if (typeof ex[fn] !== "function") throw new Error("missing export: " + fn);
+    }
+    obs = readObservation();
+    bench.initMs = performance.now() - tLoad0;
+    render(undefined, 0);
+    measure();
+  } catch (e) {
+    document.getElementById("bench").textContent = "载入失败: " + (e && e.message ? e.message : e);
+    document.getElementById("msg").innerHTML = `<span class="err">载入失败: ${esc(e)}</span>`;
+    throw e;
+  }
+
+  document.getElementById("hand").addEventListener("click", (ev) => {
+    const btn = ev.target.closest("button.card");
+    if (!btn || btn.disabled) return;
+    const idx = Number(btn.dataset.action);
+    if (idx >= 0) step(idx);
+  });
+  document.getElementById("endTurn").addEventListener("click", (ev) => {
+    const idx = Number(ev.currentTarget.dataset.action);
+    if (idx >= 0) step(idx);
+  });
+  document.getElementById("reset").addEventListener("click", () => {
+    ex.rd_env_reset();
+    obs = readObservation();
+    render(undefined, 0);
+  });
+})();
+</script>
+</body>
+</html>

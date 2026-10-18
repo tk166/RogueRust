@@ -43,3 +43,6 @@ tools/contentc/out/validate*.md
 .idea/
 Thumbs.db
 desktop.ini
+
+# ── Web/wasm 构建产物（一条 cargo 命令即可重建，见 web/README.md）────────────
+web/*.wasm
