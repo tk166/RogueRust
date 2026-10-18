@@ -2,14 +2,6 @@
   "SchemaVersion": 1,
   "InertKeys": [
     {
-      "Path": "root:Characters",
-      "Why": "编译期只取 `Id` 造一条 SEC_IDX character 条目（compile.py:787-788），`Start`/`UnlockFlag` 没人读；内核按 id 查得到 ironclad→EK_CHARACTER（check_idx 断言），但没有任何规则代码按**名字**读根键。"
-    },
-    {
-      "Path": "root:Deck",
-      "Why": "起始牌组的第三份副本：compile.py 不读它（ENTITY_SECTIONS 只收 Cards/Statuses/EnemyActions/Encounters/Relics），内核也没有根键读取路径；真正进战斗的牌组由 Start.Deck / Characters[0].Start.Deck 与驱动层给出，三份一致只由 check_relations 守着。"
-    },
-    {
       "Path": "root:EncounterTables",
       "Why": "遭遇权重表：内核没有普通/精英/弱者池的概念，Weak[].Weight 只被 check_weak_pool_table 读。"
     },
@@ -24,10 +16,6 @@
     {
       "Path": "root:SchemaVersion",
       "Why": "编译器把它写进镜像头 HDR_SCHEMA_VERSION（compile.py:1276），而内核只用 FORMAT_VERSION 做格式门（content.rs:349）；schema_version() 访问器没有消费者。"
-    },
-    {
-      "Path": "root:Start",
-      "Why": "编译器只取它的 HeroName 造 SEC_IDX 的 character 条目（compile.py:789）；MaxHealth/StartingHealth/Resources/StartingRelics 全都没人读（起手资源在 ENCT.HeroResources 与驱动层）。"
     },
     {
       "Path": "Statuses[]:DeathPrevention",

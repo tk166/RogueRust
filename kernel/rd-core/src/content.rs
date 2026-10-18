@@ -1820,6 +1820,390 @@ impl<'a> Iterator for EncounterEnemiesIter<'a> {
 impl<'a> ExactSizeIterator for EncounterEnemiesIter<'a> {}
 
 // ===========================================================================
+// 起始牌组（三份副本：`Characters[i].Start.Deck` / `Start.Deck` / 根 `Deck`）
+// ===========================================================================
+//
+// WHY THIS ACCESSOR EXISTS
+// ------------------------
+// 内容文档里有**三处**写着起始牌组，而且它们互相是 gated 的（`native/sts_content_check.py`
+// 的 `check_relations` 逐条比对）。参考实现只读其中一处，另外两处是回退：
+//
+// | # | 位置 | 什么时候读 | 参考出处 |
+// |---|---|---|---|
+// | 1 | `Characters[0].Start.Deck` | 花名册非空（**选中角色自己的牌组**） | `RunBlueprint.cs:167-176`（`ResolveStart` 有花名册时返回 `Characters[0].Start`）、`RunSetup.cs:44`（`start.Deck.Count > 0 ? start.Deck : blueprint.Deck`） |
+// | 2 | `Start.Deck` | 花名册**为空**（老式单人蓝图） | `RunBlueprint.cs:169-170`（`if (Characters.Count == 0) return Start;`）+ 同一条 `:44` |
+// | 3 | 根 `Deck` | 1/2 的牌组**为空**（"声明了没有"） | `RunSetup.cs:44` 的 `: blueprint.Deck` 分支 |
+//
+// 三条都验证过（`git grep` 于钉死的 commit `fd43e68`）。`RunStart.Deck` 的文档注释把这条
+// 规则写成了散文（`RunBlueprint.cs:214-216`：*"Empty (the default) ⇒ fall back to the
+// blueprint's shared Deck … A character roster gives each character its own deck here; that
+// is what makes character selection meaningful."*），所以"空 = 没声明"是**参考自己的约定**，
+// 不是我发明的哨兵。
+//
+// WHY THE ROOT-KEY NAMES ARE *NOT* HERE
+// -------------------------------------
+// 三处候选的根键名由调用方按名字查好后用 [`DeckRoots`] 传进来。原因不是洁癖：
+// `native/sts_content_check.py` 第 4 层（INERT）判定"内核读了这个根键"的**唯一**证据是
+// 内核规则代码里出现 `root_by_name("<Key>")`，而 `content.rs` 被那条闸门**排除**在扫描之外
+// （它自己就是那一堆 `root_by_name` 的实现）。把名字写在这里 ⇒ 闸门永远看不见消费者 ⇒
+// 清单里"内核零消费者"那几条会一直是**假话**。
+//
+// MEASURED SHAPES（两份镜像实测，2026-10-19；⚠️ 三份**值相等、形态不等**）
+// ----------------------------------------------------------------
+// | 拼法 | 形态 | 实测 |
+// |---|---|---|
+// | 根 `Deck` | `F_TERMLIST`（元素是 **`_wrap_lower`，op 6**，1 槽 = 串号） | sts `[75, 10]`、roguedeck `[1521, 10]`；元素 term 的 op 全是 6 |
+// | `Start.Deck` | `F_STRLIST`（元素**直接是串号**） | sts `[64, 10]`、roguedeck `[1510, 10]` |
+// | `Characters[0].Start.Deck` | **同一个 term**（`Characters[0].Start` 指向的 term id == 根 `Start` 的 term id：sts 140/140、roguedeck 1440/1440） | 两份镜像都如此 |
+//
+// 所以"等价"只在**值**上成立：三份都是 `strike×5, defend×4, bash×1`（sts）/
+// `paper_cut×4, cower_behind_a_desk×4, strong_binder, permit_a38`（roguedeck）。
+// 形态不同意味着**读法必须不同** —— 把 `Start.Deck` 当 `F_TERMLIST` 读会得到一个非法的
+// term id，把根 `Deck` 当 `F_STRLIST` 读会拿到一堆串号恰好落不进串池的整数。所以
+// [`StartDeck`] 记着自己是哪种拼法（[`StartDeck::origin`]）并按那一份的形态解。
+
+/// 起始牌组读的是**哪一份副本**（见本节头部的三行表）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeckOrigin {
+    /// `Characters[0].Start.Deck` —— 花名册非空时的**优先**项。
+    CharacterStart,
+    /// 根键 `Start.Deck` —— 只在花名册为空时看它（`RunBlueprint.cs:169-170`）。
+    RootStart,
+    /// 根键 `Deck` —— 参考的 `blueprint.Deck` 回退（`RunSetup.cs:44`）。
+    RootDeck,
+}
+
+impl DeckOrigin {
+    /// 这份副本在源文档里的位置（报告/断言里用，别在这里第二份维护"哪一份优先"）。
+    #[must_use]
+    pub const fn path(self) -> &'static str {
+        match self {
+            Self::CharacterStart => "Characters[0].Start.Deck",
+            Self::RootStart => "Start.Deck",
+            Self::RootDeck => "Deck",
+        }
+    }
+}
+
+/// 三个候选根键的 term id（`None` = 镜像里**没有**这个根键）。
+///
+/// 名字由调用方（`battle.rs`）用 `root_by_name("…")` 查 —— 理由见本节头部
+/// "WHY THE ROOT-KEY NAMES ARE *NOT* HERE"。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeckRoots {
+    /// 根键 `Characters`（`F_TERMLIST`：花名册）。
+    pub characters: Option<u16>,
+    /// 根键 `Start`（对象：`Deck` / `HeroName` / `MaxHealth` / …）。
+    pub start: Option<u16>,
+    /// 根键 `Deck`（`F_TERMLIST`：蓝图共享牌组）。
+    pub deck: Option<u16>,
+}
+
+/// 读起始牌组时可能的失败。
+///
+/// **每一种都是"内容形态变了 / 我读错了"**，不是"这个角色没有起始牌组"：后者参考有明确的
+/// 写法（空列表 ⇒ 回退），在本类型里表现为"接着看下一处候选"。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeckError {
+    /// 三处候选**一个都没出现**（镜像里既没有 `Characters`/`Start`，也没有 `Deck` 根键）。
+    ///
+    /// 不是"空牌组"：空牌组要 [自己长这样](Self::EmptyDeck)。
+    NoDeckKey,
+    /// 三处候选都在，但**全解析成空**。参考允许（`Array.Empty<CardDefinitionId>()`），
+    /// 但那意味着这一局一张牌都没有 —— 对"从内容建一局"来说这是内容缺陷，所以响亮。
+    EmptyDeck,
+    /// 某一跳的结构读不出来（不是对象 / 字段缺 / 字段类别不对 / 列表越界）。
+    ///
+    /// 带的是**那一跳的名字**（`"Characters"` / `"Characters[0].Start"` / `"Start"` /
+    /// `"Deck"`），因为"内容坏了"这条消息一旦不说坏在哪，人就得从头挖一遍。
+    Malformed(&'static str),
+    /// 槽里的串号解不出串（串池被改坏）。
+    BadString(u16),
+}
+
+/// 一份起始牌组的借用视图（已按各自形态归一成"第 i 张牌的定义 id"）。
+#[derive(Debug, Clone, Copy)]
+pub struct StartDeck<'a> {
+    content: &'a Content<'a>,
+    origin: DeckOrigin,
+    list: SlotList<'a>,
+    /// `true` ⇒ 元素是 `_obj(value: F_STR)` 的 **term id**（根 `Deck` 的形态）；
+    /// `false` ⇒ 元素**直接是串号**（`Start.Deck` 的形态）。见本节头部的形态表。
+    wrapped: bool,
+}
+
+impl<'a> StartDeck<'a> {
+    /// 这份牌组来自哪一处副本（[`DeckOrigin`]）。
+    #[must_use]
+    pub const fn origin(&self) -> DeckOrigin {
+        self.origin
+    }
+
+    /// 牌数（**不含**"牌组为空"之外的任何裁剪：这里没有容量概念）。
+    #[must_use]
+    pub const fn len(&self) -> usize {
+        self.list.len()
+    }
+
+    /// 有没有牌。
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.list.is_empty()
+    }
+
+    /// 第 `index` 张牌的定义 id。
+    ///
+    /// `index` 由调用方保证 `< len()`：越界也只可能是调用方算错了，所以它和
+    /// "内容形态坏了"共用 [`DeckError::Malformed`]（不 panic、不返回空串）。
+    pub fn get(&self, index: usize) -> Result<&'a str, DeckError> {
+        let hop = self.origin.path();
+        if index >= self.len() {
+            return Err(DeckError::Malformed(hop));
+        }
+        let cell = self.list.cell(index).ok_or(DeckError::Malformed(hop))?;
+        if !self.wrapped {
+            return self.content.string(cell).ok_or(DeckError::BadString(cell));
+        }
+        let term = self
+            .content
+            .term(cell)
+            .ok_or(DeckError::Malformed(hop))?;
+        // 根 `Deck` 的元素有两种形态（实测）：
+        // * `_wrap_lower`（**op 6**，1 个空名字段 / `F_STR` / `FLAG_WRAP_LOWER`）——
+        //   `{"value": "strike"}` 被编译器降级之后的样子，槽 0 **就是串号**
+        //   （`card_has_tag` 读 `Tags` 元素用的是同一条实测形状）；两份镜像都是它。
+        // * 真对象（op ≥ 16）：字段表里有一个叫 `value` 的 `F_STR` 字段 —— 按**名字**找，
+        //   因为对象可以有别的键、位置会漂。
+        if term.op == OP_WRAP_LOWER || term.op == OP_WRAP_UPPER {
+            let string = term.slot(0).ok_or(DeckError::Malformed(hop))?;
+            return self
+                .content
+                .string(string)
+                .ok_or(DeckError::BadString(string));
+        }
+        if term.op < OP_FIRST_DYNAMIC {
+            return Err(DeckError::Malformed(hop));
+        }
+        let opcode = self
+            .content
+            .opcode(term.op)
+            .ok_or(DeckError::Malformed(hop))?;
+        let mut at = 0usize;
+        for position in 0..opcode.nfields() {
+            let field = opcode.field(position).ok_or(DeckError::Malformed(hop))?;
+            let width = usize::from(field.slots().ok_or(DeckError::Malformed(hop))?);
+            let name = self
+                .content
+                .string(field.name_str())
+                .ok_or(DeckError::Malformed(hop))?;
+            if name == "value" {
+                if field.kind() != F_STR {
+                    return Err(DeckError::Malformed(hop));
+                }
+                let string = term.slot(at).ok_or(DeckError::Malformed(hop))?;
+                return self
+                    .content
+                    .string(string)
+                    .ok_or(DeckError::BadString(string));
+            }
+            at = at.checked_add(width).ok_or(DeckError::Malformed(hop))?;
+        }
+        Err(DeckError::Malformed(hop))
+    }
+}
+
+impl<'a> Content<'a> {
+    /// 内容声明的**起始牌组**，按参考 `RunSetup.CreateInitialRun` 的顺序解析
+    /// （三行表在本节头部，含每一跳的行号）。
+    ///
+    /// 规则逐字：**花名册非空** ⇒ 看 `Characters[0].Start.Deck`，空了才退到根 `Deck`；
+    /// **花名册为空** ⇒ 看 `Start.Deck`，空了才退到根 `Deck`。第三处不会再退 ——
+    /// 参考的 `blueprint.Deck` 就是最后一个回退项。
+    ///
+    /// 字段`Deck` **缺席**按参考的默认值处理（`RunStart.Deck = []`，`RunBlueprint.cs:214-216`）
+    /// ⇒ 当成"这一处声明了空"，接着看下一处。**出现在场但类别不对**则是内容坏了
+    /// （[`DeckError::Malformed`]）—— 两者的区别正是"参考写明的默认"与"我读错了"。
+    pub fn start_deck(&self, roots: DeckRoots) -> Result<StartDeck<'_>, DeckError> {
+        let mut seen_any = false;
+        // 第 1 跳：花名册非空 ⇒ `Characters[0].Start`；第 2 跳：花名册为空 ⇒ 根 `Start`。
+        let start = match character_start(self, roots.characters)? {
+            Some(term) => {
+                seen_any = true;
+                Some((DeckOrigin::CharacterStart, term))
+            }
+            None => roots.start.map(|term| {
+                seen_any = true;
+                (DeckOrigin::RootStart, term)
+            }),
+        };
+        if let Some((origin, term)) = start {
+            if let Some(list) = deck_field(self, term, origin.path())? {
+                if !list.is_empty() {
+                    return Ok(StartDeck {
+                        content: self,
+                        origin,
+                        wrapped: list.kind() == F_TERMLIST,
+                        list,
+                    });
+                }
+            }
+        }
+        // 第 3 跳：根 `Deck`（参考的 `blueprint.Deck`）。
+        if let Some(term) = roots.deck {
+            seen_any = true;
+            let list = deck_root(self, term, DeckOrigin::RootDeck.path())?;
+            if !list.is_empty() {
+                return Ok(StartDeck {
+                    content: self,
+                    origin: DeckOrigin::RootDeck,
+                    wrapped: list.kind() == F_TERMLIST,
+                    list,
+                });
+            }
+        }
+        if seen_any {
+            Err(DeckError::EmptyDeck)
+        } else {
+            Err(DeckError::NoDeckKey)
+        }
+    }
+}
+
+/// 花名册第 0 人的 `Start` 对象 term（`RunBlueprint.cs:171-174`：`Characters[0].Start`）。
+///
+/// `Ok(None)` = **花名册为空 / 没有这个根键**（⇒ 走根 `Start`）；`Ok(Some(t))` = 有。
+/// ⚠️ 花名册**非空但第 0 项没有 `Start`** 是形态坏了（`Malformed`），不是"没有花名册"：
+/// 把前者当成后者会让内核悄悄改用 `Start.Deck`（内容一漂就选错牌组，而且看不出来）。
+fn character_start<'a>(
+    content: &'a Content<'a>,
+    characters: Option<u16>,
+) -> Result<Option<u16>, DeckError> {
+    const HOP: &str = "Characters";
+    let Some(term_id) = characters else {
+        return Ok(None);
+    };
+    let list = deck_root(content, term_id, HOP)?;
+    if list.is_empty() {
+        return Ok(None);
+    }
+    let first = list.cell(0).ok_or(DeckError::Malformed(HOP))?;
+    let term = content.term(first).ok_or(DeckError::Malformed(HOP))?;
+    if term.op < OP_FIRST_DYNAMIC {
+        return Err(DeckError::Malformed(HOP));
+    }
+    let opcode = content
+        .opcode(term.op)
+        .ok_or(DeckError::Malformed(HOP))?;
+    let mut at = 0usize;
+    for position in 0..opcode.nfields() {
+        let field = opcode.field(position).ok_or(DeckError::Malformed(HOP))?;
+        let width = usize::from(field.slots().ok_or(DeckError::Malformed(HOP))?);
+        let name = content
+            .string(field.name_str())
+            .ok_or(DeckError::Malformed(HOP))?;
+        if name == "Start" {
+            if field.kind() != F_TERM {
+                return Err(DeckError::Malformed(HOP));
+            }
+            let start = term.slot(at).ok_or(DeckError::Malformed(HOP))?;
+            if start == ABSENT16 || start == NULL16 {
+                return Err(DeckError::Malformed("Characters[0].Start"));
+            }
+            return Ok(Some(start));
+        }
+        at = at.checked_add(width).ok_or(DeckError::Malformed(HOP))?;
+    }
+    Err(DeckError::Malformed("Characters[0].Start"))
+}
+
+/// 一个对象 term 的 `Deck` 字段 → [`SlotList`]；字段**缺席** ⇒ `Ok(None)`（参考的空默认）。
+fn deck_field<'a>(
+    content: &'a Content<'a>,
+    term_id: u16,
+    hop: &'static str,
+) -> Result<Option<SlotList<'a>>, DeckError> {
+    let term = content.term(term_id).ok_or(DeckError::Malformed(hop))?;
+    if term.op < OP_FIRST_DYNAMIC {
+        return Err(DeckError::Malformed(hop));
+    }
+    let opcode = content
+        .opcode(term.op)
+        .ok_or(DeckError::Malformed(hop))?;
+    let mut at = 0usize;
+    for position in 0..opcode.nfields() {
+        let field = opcode.field(position).ok_or(DeckError::Malformed(hop))?;
+        let width = usize::from(field.slots().ok_or(DeckError::Malformed(hop))?);
+        let name = content
+            .string(field.name_str())
+            .ok_or(DeckError::Malformed(hop))?;
+        if name == "Deck" {
+            return slot_list(content, &term, at, field.kind(), hop).map(Some);
+        }
+        at = at.checked_add(width).ok_or(DeckError::Malformed(hop))?;
+    }
+    Ok(None)
+}
+
+/// 一个**根键**本身的列表读数（`F_TERMLIST` / `F_STRLIST`）。
+///
+/// 根键的列表没有"外层对象"：term 自己的 opcode 只有一条匿名字段，两个槽就是
+/// `(AUX 起址, 个数)`（实测根 `Deck` = `[75, 10]` / `[1521, 10]`，根 `Characters` = `[74, 1]`）。
+fn deck_root<'a>(
+    content: &'a Content<'a>,
+    term_id: u16,
+    hop: &'static str,
+) -> Result<SlotList<'a>, DeckError> {
+    let term = content.term(term_id).ok_or(DeckError::Malformed(hop))?;
+    let opcode = content
+        .opcode(term.op)
+        .ok_or(DeckError::Malformed(hop))?;
+    let field = opcode.field(0).ok_or(DeckError::Malformed(hop))?;
+    slot_list(content, &term, 0, field.kind(), hop)
+}
+
+/// `(AUX 起址, 个数)` 两个槽 → [`SlotList`]，并把"个数是哨兵"读成空列表。
+///
+/// ⚠️ 空列表在镜像里是**个数 = 哨兵**（`LIST_ABSENT` / `LIST_NULL`），不是 `count == 0`：
+/// 与 [`EnemySpec::list`] 同一条读法（那边 149 条记录里 146 条是哨兵）。两种拼法都收，
+/// 因为参考的"空 = 没声明"必须两种都能表达，否则一份合法内容会被当成形态坏了。
+fn slot_list<'a>(
+    content: &'a Content<'a>,
+    term: &Term<'a>,
+    at: usize,
+    kind: u8,
+    hop: &'static str,
+) -> Result<SlotList<'a>, DeckError> {
+    if kind != F_STRLIST && kind != F_TERMLIST {
+        return Err(DeckError::Malformed(hop));
+    }
+    let start = term.slot(at).ok_or(DeckError::Malformed(hop))?;
+    let count = term
+        .slot(at.checked_add(1).ok_or(DeckError::Malformed(hop))?)
+        .ok_or(DeckError::Malformed(hop))?;
+    let count = if count == LIST_ABSENT || count == LIST_NULL {
+        0
+    } else {
+        count
+    };
+    // 每一格都必须真的在 `AUX` 里，否则 `SlotList::cell` 会静默给 `None`
+    // （空列表不查：个数是哨兵时起址槽是垃圾值，与 `EnemySpec::list` 同理）。
+    if count > 0 {
+        let end = usize::from(start)
+            .checked_add(usize::from(count))
+            .ok_or(DeckError::Malformed(hop))?;
+        if end > content.aux_cells() {
+            return Err(DeckError::Malformed(hop));
+        }
+    }
+    Ok(SlotList {
+        content,
+        start,
+        count,
+        kind,
+    })
+}
+
+// ===========================================================================
 // opcode / term / 根指针 / 符号表
 // ===========================================================================
 

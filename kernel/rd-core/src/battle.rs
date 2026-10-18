@@ -51,6 +51,20 @@
 //! * 英雄 id 取自 `plan.hero.id`（不再按队推断）；
 //! * [`Problem::StillHeroTurn`] 补上了（`:241` 与 `:248` 是两件修法相反的事）。
 //!
+//! # 牌组从内容来（2026-10-19，"内容到一局"的最后一米）
+//!
+//! [`build_fight_from_content`] 把内容文档里声明的**起始牌组**接进一局：三处副本按参考
+//! `RunSetup.CreateInitialRun` 的顺序解析（`Characters[0].Start.Deck` → `Start.Deck` →
+//! 根 `Deck`，行号见那个函数的文档），调用方显式给的 [`FightPlan::deck`] 仍然**优先**。
+//! [`build_fight`] 的语义**一字未变**（空牌组就是 0 张，不会去内容里找）。
+//!
+//! 为什么它是第二条入口而不是 `FightPlan` 的一个新字段：加字段会让每一个
+//! `FightPlan { … }` 字面量都要跟着改，而 `rd-fightdump` / `rd-wasm` 里各有一处、本轮冻结。
+//!
+//! ⚠️ `docs/` 本轮冻结，所以 `docs/port-plan.md` 里**没有**对应的 §（下一轮补）；
+//! 这一段与 [`crate::content::Content::start_deck`] 的节头（三行表 + 实测形态表）就是
+//! 这件事的**当下权威描述**。
+//!
 //! 仍然留着的两条（都是**参考实现里真实存在、而 v1 缺一层能力**的地方，见 [`DEVIATIONS`]）：
 //!
 //! * 胜负**在战斗员倒下那一行**由 [`exec::update_standard_combat_result`] 判（2026-10-19 起，
@@ -62,8 +76,8 @@
 //!   存在得有"a summoned ally keeps the team alive"（`:46-48` 的原注释）—— 那不是缺陷，
 //!   是这条分支可达性的上界。
 
-use crate::content::{Content, ABSENT16, EK_CARD, EK_EACTION, F_TERM, LIST_ABSENT, LIST_NULL, NULL16,
-    OP_ARR, OP_WRAP_LOWER};
+use crate::content::{Content, ABSENT16, DeckError, DeckRoots, EK_CARD, EK_EACTION, F_TERM,
+    LIST_ABSENT, LIST_NULL, NULL16, OP_ARR, OP_WRAP_LOWER, StartDeck};
 use crate::exec;
 use crate::intent;
 use crate::play::{self, PlayError, PlayRequest};
@@ -382,6 +396,12 @@ pub enum BattleError {
     TooManyProblems,
     /// 建战斗时用到的卡定义在镜像里不存在。
     UnknownCard(CardDefinitionId),
+    /// 内容里声明的**起始牌组**读不出来（[`build_fight_from_content`]）。
+    ///
+    /// 没有并进 `Turn(Host(HostFailure::Content))`：那个桶的文档是"内容配错了"这个**结论**，
+    /// 而这里要把"坏在哪一跳、坏成什么样"（[`crate::content::DeckError`]）带出去 ——
+    /// 一个只报"内容错了"的失败要人把整条解析链重新挖一遍。
+    Deck(DeckError),
     /// 牌组容量/状态容器装不下。
     Capacity(crate::state::CapacityError),
     /// 回合机报错。
@@ -509,10 +529,82 @@ fn content_error() -> BattleError {
 /// ⚠️ **失败时 `state` 是半成品**这件事被尽量推到边上：凡是**纯读**就能做的检查
 /// 全在"步 0"里做（`state` 一个字节都还没改）。只有容量类错误可能发生在动手之后
 /// —— 参考在这些位置是 `List.Add`/`Dictionary.Add` 永远成功，内核是定容容器会满。
+///
+/// # 牌组从哪来
+///
+/// **这一条入口的牌组就是 [`FightPlan::deck`]，一个字节的语义都没变**：空就是空
+/// （0 张牌的局），**不会**去内容里找。要"从内容读牌组"请用
+/// [`build_fight_from_content`] —— 两条入口分开是刻意的，见那边的"为什么不合并"。
 pub fn build_fight(
     state: &mut CombatState,
     content: &Content<'_>,
     plan: &FightPlan<'_>,
+) -> Result<(), BattleError> {
+    build_fight_with(state, content, plan, DeckPath::new_plan(plan.deck))
+}
+
+/// 同一局战斗，但**牌组从内容镜像里读**（`battle.rs` 接上"内容到一局"的最后一米）。
+///
+/// # 读哪一份副本（三条都带行号，`ref/RogueDeck-Core` 钉死 commit `fd43e68`）
+///
+/// 内容文档里有三处写着起始牌组，参考只读其中一处、另外两处是回退：
+///
+/// | 顺序 | 位置 | 什么时候读 | 参考 |
+/// |---|---|---|---|
+/// | 1 | `Characters[0].Start.Deck` | 花名册非空 | `RunBlueprint.cs:167-176`（`ResolveStart`）+ `RunSetup.cs:44` |
+/// | 2 | `Start.Deck` | 花名册**为空** | `RunBlueprint.cs:169-170` + `RunSetup.cs:44` |
+/// | 3 | 根 `Deck` | 上两者**为空**（"声明了没有"） | `RunSetup.cs:44` 的 `: blueprint.Deck` |
+///
+/// "空 = 没声明、接着看下一处"不是我发明的哨兵，是参考自己的约定
+/// （`RunBlueprint.cs:214-216`：*Empty (the default) ⇒ fall back to the blueprint's shared
+/// Deck*）。解析本身在 [`Content::start_deck`]，形态差异（根 `Deck` 是 `F_TERMLIST`、
+/// `Start.Deck` 是 `F_STRLIST`）在那里逐格解释。
+///
+/// # 调用方显式给的牌组**优先**
+///
+/// `plan.deck` 非空 ⇒ 走 [`build_fight`]，**内容里的牌组一个字节都不读**。这与参考同形
+/// （`RunSetup.cs:44` 的 `start.Deck.Count > 0 ? start.Deck : …`：非空的声明词赢），
+/// 也是"549 条手写牌组的测试一条都不许坏"的落地方式。
+///
+/// # 为什么不给 [`FightPlan`] 加一个字段
+///
+/// 加字段会让 `FightPlan { … }` 的**每一个字面量**都要跟着改（`rd-fightdump` 与
+/// `rd-wasm` 各一处，本轮冻结）。所以"牌组来自内容"做成了第二条入口：它只多认出
+/// 一个事实（"这次牌组从内容来"），不改 [`FightPlan`] 的形状。
+///
+/// # Errors
+///
+/// 内容里的起始牌组读不出来 ⇒ [`BattleError::Deck`]（三处候选都没有 / 都是空的 /
+/// 某一跳形态坏了）；内容里点名的卡在 `CARD` 表里查不到 ⇒ [`BattleError::UnknownCard`]
+/// （与手写牌组同一条闸门）；其余同 [`build_fight`]。
+pub fn build_fight_from_content(
+    state: &mut CombatState,
+    content: &Content<'_>,
+    plan: &FightPlan<'_>,
+) -> Result<(), BattleError> {
+    // 显式牌组优先（见上一节）。
+    if !plan.deck.is_empty() {
+        return build_fight(state, content, plan);
+    }
+    // 三处候选的**根键名**留在这里而不是 `content.rs`：`native/sts_content_check.py` 的
+    // 第 4 层（INERT）判定"内核读了这个根键"的唯一证据，就是内核规则代码里出现
+    // `root_by_name("<Key>")`。把这三个名字挪进 `content.rs`（那一层把它排除在扫描之外）
+    // ⇒ 闸门再也看不见消费者 ⇒ 清单里"内核零消费者"那三条会一直**是假话**。
+    let roots = DeckRoots {
+        characters: content.root_by_name("Characters"),
+        start: content.root_by_name("Start"),
+        deck: content.root_by_name("Deck"),
+    };
+    let deck = content.start_deck(roots).map_err(BattleError::Deck)?;
+    build_fight_with(state, content, plan, DeckPath::new_content(deck))
+}
+
+/// 建战斗的**唯一**实现体：两条入口只差 `deck` 这一格。
+fn build_fight_with(
+    state: &mut CombatState,
+    content: &Content<'_>,
+    plan: &FightPlan<'_>,
+    deck: DeckPath<'_>,
 ) -> Result<(), BattleError> {
     // ── 步 0：纯校验（**一个字节都不改 `state`**）==============================
     // 参考在第 1 步新建一份状态、错了就抛；内核的存储是调用方的，所以先做的检查越多，
@@ -525,15 +617,20 @@ pub fn build_fight(
     }
     // 步 6 的判定（`MoveInnateCardsToTop`）：参考的**挪牌**必须在洗牌之后（`:45-47`），
     // 但**判定**没有顺序依赖 ⇒ 提前到这里，失败时 state 还是干净的。
-    reject_innate_deck(content, plan)?;
+    reject_innate_deck(content, &deck)?;
     // 蓝图里"喂回合机"的两项能不能被表达（抽牌数、补能表）—— 在这里先算一遍配置，
     // 免得建完一局才发现那条路通向 `Turn(Host(Unsupported))`。
     let _ = turn_config_for(plan)?;
     // 牌定义表（`:75`）。参考在这一步**不查**（它的注册表就是蓝图的一部分），
     // 内核的卡定义表**就是**镜像的 `CARD` 表，所以查不到必须响亮。
-    for entry in plan.deck {
-        if content.lookup_in(entry.card, EK_CARD).is_none() {
-            return Err(BattleError::UnknownCard(CardDefinitionId::new(entry.card)?));
+    //
+    // ⚠️ 这条闸门对**两条入口都是同一条**：内容里点名的卡查不到也一样响亮失败
+    // （那份内容自己点了一个不存在的卡 ⇒ 内容缺陷，不是"这张牌跳过"）。
+    let mut declared = deck;
+    while let Some(item) = declared.next_entry() {
+        let (card, _count) = item?;
+        if content.lookup_in(card, EK_CARD).is_none() {
+            return Err(BattleError::UnknownCard(CardDefinitionId::new(card)?));
         }
     }
 
@@ -569,9 +666,11 @@ pub fn build_fight(
     state.active_combatant_id = Some(hero_id);
 
     // ── 步 4：DealDeck（`:31`、`:67-77`）=====================================
-    for entry in plan.deck {
-        let definition = CardDefinitionId::new(entry.card)?;
-        for _ in 0..entry.count {
+    let mut to_deal = deck;
+    while let Some(item) = to_deal.next_entry() {
+        let (card, count) = item?;
+        let definition = CardDefinitionId::new(card)?;
+        for _ in 0..count {
             // `combat.CreateNextCardInstanceId()`（`:75`）：**先取号、再自增**
             // （`CombatState.cs:689-696`）。与 `exec.rs:1719-1723` 同形（那边也是"先读号、
             // 建实例、推号"），这样两张卡不可能是同一个 id。
@@ -688,15 +787,82 @@ fn shuffle_draw_pile(state: &mut CombatState, owner: &CombatantId) -> Result<(),
 /// 判据是**镜像**（牌的 tag 只有镜像说了算），不是蓝图。
 /// 实测今天不可达：`innate` 这个串**不在** core 镜像的串池里，62/62 卡的 `Tags` 都没有它
 /// （测试 `no_card_in_the_image_is_innate_today` 钉住，且成对断言 tag 读取器**不是**恒假）。
-fn reject_innate_deck(content: &Content<'_>, plan: &FightPlan<'_>) -> Result<(), BattleError> {
-    for entry in plan.deck {
-        match card_has_tag(content, entry.card, INNATE_TAG) {
+///
+/// ⚠️ 它吃的是 [`DeckPath`] 而不是 `FightPlan`：**两条入口**（手写牌组 / 内容牌组）都必须过
+/// 这条闸门 —— 内容里带一张 innate 卡与手写里带一张是同一件事。
+fn reject_innate_deck(content: &Content<'_>, deck: &DeckPath<'_>) -> Result<(), BattleError> {
+    let mut cursor = *deck;
+    while let Some(item) = cursor.next_entry() {
+        let (card, _count) = item?;
+        match card_has_tag(content, card, INNATE_TAG) {
             Ok(false) => {}
             Ok(true) => return Err(unsupported()),
             Err(()) => return Err(content_error()),
         }
     }
     Ok(())
+}
+
+/// 建战斗时牌组的**实际来源** —— [`build_fight`] 与 [`build_fight_from_content`]
+/// 唯一的差别就是这一格。
+///
+/// 两项都只用**借用**表示（`&[DeckEntry]` / [`StartDeck`]），所以这个枚举不占
+/// `CombatState` 的任何一个字节：SRAM 上界（`state.rs` 的 `state_fits_the_sram_plan`）
+/// 与本轮之前**逐字节相同**。
+#[derive(Clone, Copy, Debug)]
+enum DeckPath<'a> {
+    /// 调用方手写（[`FightPlan::deck`]）：一项 = `(卡定义 id, 张数)`。
+    Plan {
+        /// 蓝图里的 `(定义, 张数)` 项。
+        entries: &'a [DeckEntry<'a>],
+        /// 已取到第几项。
+        next: usize,
+    },
+    /// 内容声明的起始牌组（[`Content::start_deck`]）：一项 = **一张牌**（张数恒 1）。
+    Content {
+        /// 内容里的那份牌组。
+        deck: StartDeck<'a>,
+        /// 已取到第几张。
+        next: usize,
+    },
+}
+
+impl<'a> DeckPath<'a> {
+    /// 手写牌组。
+    const fn new_plan(entries: &'a [DeckEntry<'a>]) -> Self {
+        Self::Plan { entries, next: 0 }
+    }
+
+    /// 内容牌组。
+    const fn new_content(deck: StartDeck<'a>) -> Self {
+        Self::Content { deck, next: 0 }
+    }
+
+    /// 下一项：`(卡定义 id, 张数)`。`None` = 读完了；`Some(Err(..))` = 内容形态坏了。
+    ///
+    /// 取两份（`let mut cursor = deck;`）就是从头再读一遍：这个类型是 `Copy`，
+    /// 建战斗要过三遍（innate 判定 / 定义是否存在 / 真正发牌）而每一遍都不能共享游标。
+    fn next_entry(&mut self) -> Option<Result<(&'a str, u16), BattleError>> {
+        match self {
+            Self::Plan { entries, next } => {
+                let entry = entries.get(*next)?;
+                *next = next.saturating_add(1);
+                Some(Ok((entry.card, entry.count)))
+            }
+            Self::Content { deck, next } => {
+                if *next >= deck.len() {
+                    return None;
+                }
+                let index = *next;
+                *next = next.saturating_add(1);
+                Some(
+                    deck.get(index)
+                        .map(|card| (card, 1u16))
+                        .map_err(BattleError::Deck),
+                )
+            }
+        }
+    }
 }
 
 /// 蓝图 → 回合机的 [`TurnConfig`]（`run_fight` 唯一一处把蓝图喂给回合机的地方）。
@@ -1476,6 +1642,7 @@ pub fn is_hero(plan: &FightPlan<'_>, id: &CombatantId) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::content::{DeckError, DeckOrigin};
     use crate::hash::{sha256, to_hex_lower};
     use crate::host::Host;
     use crate::snapshot;
@@ -3571,5 +3738,399 @@ mod tests {
             1,
             "这张牌正常落区（它实测的落区是 ExhaustPile 而不是 DiscardPile；Cancelled 那一半里它还在手里）"
         );
+    }
+
+    // =========================================================================================
+    // 牌组从内容来（`build_fight_from_content`）
+    // =========================================================================================
+    //
+    // 这一组全部接 **sts 包的真实镜像**（`tools/contentc/packages/sts/`），而不是上面那些
+    // 测试用的 roguedeck 镜像：sts 那 10 张起始牌组（`inv:§2.1` strike×5 / defend×4 / bash×1）
+    // 正是被 `native/sts_content_check.py` 的 InertKeys 闸门盯着的那三处副本。
+
+    /// sts 包的 core 镜像。
+    const STS_IMAGE_REL: &str = "../../tools/contentc/packages/sts/out/content.sts.core.rdcf";
+
+    fn sts_image() -> Vec<u8> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(STS_IMAGE_REL);
+        std::fs::read(&path).unwrap_or_else(|e| {
+            panic!(
+                "sts 内容镜像缺失或读不到：{}\n  {e}\n  它是构建产物，生成命令：\n    \
+                 python tools/contentc/build.py --package sts",
+                path.display()
+            )
+        })
+    }
+
+    /// sts 的起始牌组按 `inv:§2.1` 展开成 10 个 id（**顺序就是内容里的顺序**）。
+    fn sts_deck_ids() -> Vec<String> {
+        let mut ids: Vec<String> = vec!["strike".to_string(); 5];
+        ids.extend(vec!["defend".to_string(); 4]);
+        ids.push("bash".to_string());
+        ids
+    }
+
+    /// 按名字查那三个根键（与 `build_fight_from_content` 里的三行**故意分开写**）：
+    /// 它在这里的身份是"这份内容确实有这三处候选"的**期望**，而不是实现的一部分。
+    fn sts_roots(content: &Content<'_>) -> DeckRoots {
+        DeckRoots {
+            characters: content.root_by_name("Characters"),
+            start: content.root_by_name("Start"),
+            deck: content.root_by_name("Deck"),
+        }
+    }
+
+    /// 抽牌堆里的卡定义 id（按堆序）。
+    fn draw_pile_definitions(state: &CombatState, who: &str) -> Vec<String> {
+        state
+            .zone_cards(&cid(who), CardZone::DrawPile)
+            .map(|card| card.definition_id.as_str().to_string())
+            .collect()
+    }
+
+    /// 用 sts 的镜像建一局（英雄 80 血、敌人 `cultist` 48 血 = `inv:§4.1` 的 HpMin）。
+    ///
+    /// `deck` 传空 = "牌组从内容来"；传非空 = 显式牌组（那条路必须仍然有效且优先）。
+    fn build_sts_fight(
+        blob: &[u8],
+        deck: &[DeckEntry<'_>],
+        shuffle: bool,
+    ) -> Result<CombatState, BattleError> {
+        let content = parse(blob);
+        let enemies = [PlanCombatant {
+            id: "cultist",
+            max_health: 48,
+        }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "sts_ironclad",
+            seed: 3,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 80,
+            },
+            enemies: &enemies,
+            deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: shuffle,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短 id"), 0);
+        build_fight_from_content(&mut state, &content, &plan)?;
+        Ok(state)
+    }
+
+    /// `term` 的第 `slot` 个槽在**镜像字节**里的绝对偏移。
+    ///
+    /// 之所以用"`slots_bytes()` 的指针 − `blob` 的指针"而不是手抄 `TRM`/`TRW` 的布局：
+    /// 本项目已经因为"手抄第二份布局常量"腐烂过一次（`tools/rdcf_verify.py` 的 stride）。
+    fn term_slot_offset(blob: &[u8], content: &Content<'_>, term_id: u16, slot: usize) -> usize {
+        let term = content.term(term_id).expect("term 必须存在");
+        let base = term.slots_bytes().as_ptr() as usize - blob.as_ptr() as usize;
+        assert!(base < blob.len(), "term 的槽必须落在镜像里");
+        base + slot * 2
+    }
+
+    fn patch16(blob: &mut [u8], at: usize, value: u16) {
+        blob[at..at + 2].copy_from_slice(&value.to_le_bytes());
+    }
+
+    /// 从 `sts` 包读到的牌组**真的进了抽牌堆**，且顺序与内容声明的一致。
+    #[test]
+    fn the_sts_content_deck_reaches_the_draw_pile_in_the_declared_order() {
+        let blob = sts_image();
+        let state = build_sts_fight(&blob, &[], false).expect("内容里的牌组必须读得出来");
+
+        assert_eq!(zone_count(&state, "hero", CardZone::DrawPile), 10);
+        assert_eq!(
+            draw_pile_definitions(&state, "hero"),
+            sts_deck_ids(),
+            "牌数与顺序都必须是内容里那 10 张（`inv:§2.1`）"
+        );
+        // 成对：不开洗牌 ⇒ 一次随机数都没抽，所以上面那条"顺序"断言测的是**读牌组**，
+        // 不是洗牌恰好把序洗回了原样。
+        assert_eq!(state.random_step, 0, "不洗牌 ⇒ random_step 不动");
+        // 别的堆都空着：这条排除"10 张里有一部分是从别处漏进来的"。
+        for zone in [CardZone::Hand, CardZone::DiscardPile, CardZone::ExhaustPile] {
+            assert_eq!(zone_count(&state, "hero", zone), 0, "{zone:?} 应当是空的");
+        }
+    }
+
+    /// 内容那三处候选里，**优先读的是角色自己那份**（`Characters[0].Start.Deck`）。
+    #[test]
+    fn the_content_deck_is_read_through_the_character_copy_first() {
+        let blob = sts_image();
+        let content = parse(&blob);
+        let deck = content
+            .start_deck(sts_roots(&content))
+            .expect("三处候选都在，且都读得出来");
+
+        assert_eq!(
+            deck.origin(),
+            DeckOrigin::CharacterStart,
+            "花名册非空 ⇒ 参考 `RunBlueprint.cs:174` 取 `Characters[0].Start`"
+        );
+        assert_eq!(deck.len(), 10);
+        let ids: Vec<String> = (0..deck.len())
+            .map(|index| deck.get(index).expect("下标在 len 内").to_string())
+            .collect();
+        assert_eq!(ids, sts_deck_ids());
+        // 成对：`get(len)` 越界必须响亮（不是"给个空串"）—— 否则上面的逐张断言可能
+        // 在长度算错时仍然全绿。
+        assert!(deck.get(deck.len()).is_err());
+    }
+
+    /// **调用方显式给的牌组优先**，不被内容覆盖。
+    #[test]
+    fn an_explicit_deck_wins_over_the_content_deck() {
+        let blob = sts_image();
+        let explicit = [DeckEntry {
+            card: "strike",
+            count: 1,
+        }];
+        let state = build_sts_fight(&blob, &explicit, false).expect("显式牌组必须仍然有效");
+        assert_eq!(
+            draw_pile_definitions(&state, "hero"),
+            vec!["strike".to_string()],
+            "显式牌组**不被内容覆盖**（内容那份是 10 张）"
+        );
+        // 成对：同一张蓝图、只是牌组留空 ⇒ 10 张。少了这一半，"1 张"可能来自别处。
+        let from_content = build_sts_fight(&blob, &[], false).expect("内容牌组");
+        assert_eq!(zone_count(&from_content, "hero", CardZone::DrawPile), 10);
+    }
+
+    /// 角色**声明了空的**牌组 ⇒ 回退到根 `Deck`（参考的 `blueprint.Deck` 分支）。
+    ///
+    /// 造法：`Start` 与 `Characters[0].Start` 在镜像里是**同一个 term**（实测 sts 140/140），
+    /// 所以把它的 `Deck` 个数槽写成 0 会同时清空这两处 —— 正是"角色声明了没有"。
+    /// 如果内核把根 `Deck` 误当成同一份 STRLIST 读，它会读到 0 张（`EmptyDeck`）而不是 10 张。
+    #[test]
+    fn the_fallback_walks_to_the_blueprint_deck_when_the_character_declares_none() {
+        // 空列表有两种拼法，仓库里两种都出现过（`Start.StartingRelics` 是 `count = 0`，
+        // 而 149 条敌人记录里 146 条的 `IntentRules` 是**哨兵**）—— 两种都必须读成
+        // "声明了没有"并接着往下找，不能读成"内容坏了"。
+        for empty in [0u16, LIST_NULL, LIST_ABSENT] {
+            let mut blob = sts_image();
+            let start_count = {
+                let content = parse(&blob);
+                let start = content.root_by_name("Start").expect("sts 有 Start");
+                term_slot_offset(&blob, &content, start, 1) // `Deck` 的个数槽
+            };
+            patch16(&mut blob, start_count, empty);
+
+            let content = parse(&blob);
+            let deck = content
+                .start_deck(sts_roots(&content))
+                .expect("还有根 Deck");
+            assert_eq!(
+                deck.origin(),
+                DeckOrigin::RootDeck,
+                "两处 Start 都空（{empty:#06x}）⇒ 参考 `RunSetup.cs:44` 的 `: blueprint.Deck`"
+            );
+            let state = build_sts_fight(&blob, &[], false).expect("根 Deck 读得出来");
+            assert_eq!(
+                draw_pile_definitions(&state, "hero"),
+                sts_deck_ids(),
+                "根 `Deck` 是另一份 term：值必须与 Start.Deck 相同（{empty:#06x}）"
+            );
+        }
+    }
+
+    /// 花名册**为空** ⇒ 回退到根 `Start.Deck`（参考 `RunBlueprint.cs:169-170`）。
+    #[test]
+    fn the_fallback_walks_to_start_when_the_roster_is_empty() {
+        let mut blob = sts_image();
+        let roster_count = {
+            let content = parse(&blob);
+            let characters = content
+                .root_by_name("Characters")
+                .expect("sts 有 Characters");
+            term_slot_offset(&blob, &content, characters, 1)
+        };
+        patch16(&mut blob, roster_count, 0);
+
+        let content = parse(&blob);
+        let deck = content
+            .start_deck(sts_roots(&content))
+            .expect("Start.Deck 还在");
+        assert_eq!(
+            deck.origin(),
+            DeckOrigin::RootStart,
+            "花名册空 ⇒ 第 2 跳（`RunBlueprint.cs:169-170`），**不是**直接跳到根 `Deck`"
+        );
+        let state = build_sts_fight(&blob, &[], false).expect("Start.Deck 读得出来");
+        assert_eq!(draw_pile_definitions(&state, "hero"), sts_deck_ids());
+    }
+
+    /// 三处候选**全是空的** ⇒ 响亮失败（不是"一局 0 张牌的安静战斗"）。
+    #[test]
+    fn a_content_with_no_starting_deck_at_all_is_a_loud_failure() {
+        let mut blob = sts_image();
+        let offsets = {
+            let content = parse(&blob);
+            let characters = content.root_by_name("Characters").expect("Characters");
+            let start = content.root_by_name("Start").expect("Start");
+            let deck = content.root_by_name("Deck").expect("Deck");
+            (
+                term_slot_offset(&blob, &content, characters, 1),
+                term_slot_offset(&blob, &content, start, 1),
+                term_slot_offset(&blob, &content, deck, 1),
+            )
+        };
+        patch16(&mut blob, offsets.0, 0);
+        patch16(&mut blob, offsets.1, 0);
+        patch16(&mut blob, offsets.2, 0);
+
+        let content = parse(&blob);
+        assert_eq!(
+            content.start_deck(sts_roots(&content)).err(),
+            Some(DeckError::EmptyDeck),
+            "三处都在但都是空的 ⇒ `EmptyDeck`"
+        );
+        assert_eq!(
+            build_sts_fight(&blob, &[], false).err(),
+            Some(BattleError::Deck(DeckError::EmptyDeck))
+        );
+        // 成对：三处候选**一个都没有**（不是"都空"）是另一条错误 —— 它才是"这份内容
+        // 根本没写牌组"，而 `EmptyDeck` 是"写了但没写牌"。两者都被 `BattleError::Deck` 带出去。
+        let none = DeckRoots {
+            characters: None,
+            start: None,
+            deck: None,
+        };
+        assert_eq!(content.start_deck(none).err(), Some(DeckError::NoDeckKey));
+    }
+
+    /// 内容点名的卡在 `CARD` 表里查不到 ⇒ [`BattleError::UnknownCard`]（与手写牌组同一条闸门）。
+    ///
+    /// **成对实验**：`sts` 那份内容里三处牌组点名的都是真卡，所以这条闸门在真内容上不可达
+    /// ⇒ 只能把镜像里第一张牌的**串号**改成另一个真实存在的串（`ironclad`，它是
+    /// `EK_CHARACTER` 不是 `EK_CARD`）。只改一个 `AUX` 格，其余字节与真镜像一致。
+    #[test]
+    fn a_content_deck_naming_a_card_with_no_row_is_a_loud_failure() {
+        let mut blob = sts_image();
+        let (aux_offset, first_card_cell, not_a_card) = {
+            let content = parse(&blob);
+            let start = content.root_by_name("Start").expect("sts 有 Start");
+            let deck_start = content
+                .term(start)
+                .expect("Start 是对象")
+                .slot(0)
+                .expect("Deck 的起址槽");
+            let aux = content.section(crate::content::S_AUX).expect("AUX 段");
+            // 串号 = `Strings` 的位置 + 1（串号 0 是空串）。
+            let string_id = content
+                .strings()
+                .position(|s| s == Some("ironclad"))
+                .expect("串池里必须有 ironclad（它是 `Characters[0].Id`）")
+                + 1;
+            (aux.offset as usize, usize::from(deck_start) * 2, string_id)
+        };
+        assert!(
+            content_lookup_is_not_a_card(&blob, "ironclad"),
+            "成对前提：`ironclad` 真的不是一张卡（否则这条测试什么也没测）"
+        );
+        patch16(&mut blob, aux_offset + first_card_cell, not_a_card as u16);
+
+        assert_eq!(
+            build_sts_fight(&blob, &[], false).err(),
+            Some(BattleError::UnknownCard(
+                CardDefinitionId::new("ironclad").expect("短")
+            )),
+            "内容点名了一个没有 CARD 行的 id ⇒ 响亮失败（不是跳过这张牌）"
+        );
+    }
+
+    /// `id` 在镜像里**不是**一张卡（成对前提用）。
+    fn content_lookup_is_not_a_card(blob: &[u8], id: &str) -> bool {
+        let content = parse(blob);
+        content.lookup_in(id, EK_CARD).is_none() && content.lookup(id).is_some()
+    }
+
+    /// 从内容牌组建出来的一局**真的能打**：开回合抽 5、`strike` 打 6 点（`inv:§3.1`）。
+    ///
+    /// 前面那些测试只证明"牌进了抽牌堆"；这一条证明那份牌组是一局**能推进**的战斗的输入
+    /// （回合机能起来、费用付得掉、节目跑得动、伤害落到敌人身上）。
+    #[test]
+    fn a_fight_built_from_the_content_deck_can_play_a_strike() {
+        let blob = sts_image();
+        let content = parse(&blob);
+        let enemies = [PlanCombatant {
+            id: "cultist",
+            max_health: 48,
+        }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "sts_ironclad",
+            seed: 3,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 80,
+            },
+            enemies: &enemies,
+            deck: &[],
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短 id"), 0);
+        build_fight_from_content(&mut state, &content, &plan).expect("内容牌组");
+
+        let mut host = Host::new(&content);
+        let mut out = FightOutcome::new();
+        let script = [Step::HeroPlays {
+            card: "strike",
+            target: Some("cultist"),
+        }];
+        run_fight(&mut state, &content, &plan, &script, &mut host, &mut out)
+            .expect("step 本身不该坏");
+
+        assert_eq!(out.problems_of(0), &[] as &[Problem], "这一步不该记问题");
+        assert_eq!(health(&state, "cultist"), 42, "strike 6 点（`inv:§3.1`）");
+        // 不洗牌 ⇒ 起手是内容里的前 5 张全 strike；打掉 1 张之后：手 4 / 抽牌堆 5 / 弃牌 1。
+        assert_eq!(zone_count(&state, "hero", CardZone::Hand), 4);
+        assert_eq!(zone_count(&state, "hero", CardZone::DrawPile), 5);
+        assert_eq!(zone_count(&state, "hero", CardZone::DiscardPile), 1);
+    }
+
+    /// **反过来的成对**：老入口 [`build_fight`] 的"空牌组"就是 0 张 —— 它**不会**去内容里找。
+    ///
+    /// 这一条钉的是"没有静默降级"。把"空 = 去内容里找"这种方便的后门塞进 `build_fight`，
+    /// 会让上面 549 条手写牌组的测试里"牌组为空"的那几条**含义变了却仍然全绿**（它们都
+    /// 显式给牌，所以一条都不会变红）—— 所以"空就是空"必须有自己的钉子。
+    #[test]
+    fn build_fight_still_treats_an_empty_deck_as_empty() {
+        let blob = sts_image();
+        let content = parse(&blob);
+        let enemies = [PlanCombatant {
+            id: "cultist",
+            max_health: 48,
+        }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "sts_ironclad",
+            seed: 3,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 80,
+            },
+            enemies: &enemies,
+            deck: &[],
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: true,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短 id"), 0);
+        build_fight(&mut state, &content, &plan).expect("空牌组是合法的蓝图");
+
+        assert_eq!(state.card_count(), 0, "老入口不读内容里的牌组");
+        assert_eq!(zone_count(&state, "hero", CardZone::DrawPile), 0);
+        assert_eq!(state.random_step, 0, "0 张 ⇒ 连洗牌都不发生");
     }
 }
