@@ -27,8 +27,12 @@ WHY THREE LAYERS (each one alone is a false green)
 4. INERT  a key the kernel never reads must be *declared* inert in the
           document's `InertKeys` block, with the reason it can stay.  The
           round-trip layer is blind to this class: "the image agrees with the
-          source" is true for a key nobody consumes.  Derivation and the two
-          rot directions are in §2b.
+          source" is true for a key nobody consumes.  Derivation and the rot
+          directions are in §2b.  A `root:` declaration may name a **sub-key**
+          (`root:Start.MaxHealth`, `root:Characters[].UnlockFlag`) because the
+          unit of the fact is "which field of that object is unused", not "the
+          whole object is unused" -- root-key granularity lost five facts the
+          moment the kernel learned to read `Start.Deck`.
 
 Plus two failure modes that are cheap to forget:
 * an image older than its source document is red (`build.py --package sts`),
@@ -637,6 +641,60 @@ def check_weak_pool_table(doc):
 # a consumer.  So it can under-report (fail to demand a declaration), never
 # over-report (never call a consumed key inert).  The two checks below fail
 # loudly in the direction that matters and say which line/rule decided.
+#
+# SUB-KEY PATHS (why root-key granularity was not enough -- measured, 2026-10-19)
+# ------------------------------------------------------------------------------
+# The `root:` scope started at root-key granularity, so "declare the whole key
+# inert" was the only way to record a fact.  That is the wrong unit the moment
+# the kernel grows a reader for *one field* of that object: wiring `Start` (the
+# deck comes from `Start.Deck` / `Characters[0].Start.Deck`) forced the three
+# declarations `root:Start` / `root:Characters` / `root:Deck` to be deleted, and
+# the facts hanging under them -- `Start.MaxHealth`, `Start.StartingHealth`,
+# `Start.Resources`, `Start.StartingRelics`, `Characters[].UnlockFlag` -- went
+# with them.  They did not become false, they became **unrecorded**: the only
+# place left for them was prose in an ad-hoc document, and prose is not a gate.
+#
+# So a `root:` declaration may now name a **sub-key path**:
+#
+#   root:<Parent>.<Field>       one field of the object under root key <Parent>
+#   root:<Parent>[].<Field>     one field of every object element of that list
+#
+# `Statuses[]:` and `Program:` stay flat: those scopes are already per-record key
+# sets, so the record *is* the unit.
+#
+# WHAT COUNTS AS READING A SUB-KEY (two rules, both derived from the kernel)
+# -------------------------------------------------------------------------
+#   1. a **hop spelling**: a literal that names this hop, `"<Parent>.<Field>"` or
+#      `"<Parent>[<digits>].<Field>"`.  The kernel writes its own paths as data
+#      (`DeckOrigin::path()` returns `"Characters[0].Start.Deck"` / `"Start.Deck"`
+#      / `"Deck"`; `DeckError::Malformed` carries `"Start"`), so a hop it can
+#      describe is a hop it reads.
+#   2. an **object-field lookup by name**: `name == "<Field>"`.  This is the only
+#      way the kernel addresses a content key of a *generic* object (it walks the
+#      opcode field table and compares the stored name).
+# `content.rs` is **included** for both rules, which is the opposite of the rule
+# above and is deliberate: what is excluded there is the *schema mirror*
+# (`death_prevention => 10`, `cell("Id", F_STR, 0)`) and the typed accessors, but
+# the deck reader and every `name == "..."` comparison are genuine rule code
+# living in the same file.
+#
+# ⚠️ NOT counted, on purpose: `field_at("<Field>")` and `.<snake_case>(`.  Those
+# are **typed** accessors -- `EnemySpec::max_health` reads `MaxHealth` off an
+# *enemy* record.  Counting them would make `Start.MaxHealth` look consumed (the
+# key would then be undeclarable) while the truth is that nothing reads the
+# `Start` object's `MaxHealth`: the hero's HP comes from `FightPlan`.  A name
+# that two different record types share is exactly where a name-based rule
+# cannot decide, and the honest resolution is to keep the yes/no at the
+# granularity the kernel can answer (`name ==`, i.e. "the object I am looking at
+# must have this field").
+#
+# ⇒ The known hole, stated so it cannot be discovered as a surprise: if someone
+# adds a *typed* reader over the `Start` object (`impl StartRow { fn max_health(&self) { self.field_at("MaxHealth") } }`)
+# and calls it, the gate stays green with `root:Start.MaxHealth` declared inert.
+# `tests/mutation` for this gate therefore uses `Start.Deck` (rule 1 + 2 both have
+# a line for it), not `MaxHealth`.  What would close the hole is a per-type
+# reader index in the kernel; there is none, and inventing one in the gate would
+# be a second copy of the truth.
 
 KERNEL_DIR = os.path.join(ROOT, "kernel")
 # The declaration is this gate's input, not content: it is a top-level key so that
@@ -645,6 +703,9 @@ KERNEL_DIR = os.path.join(ROOT, "kernel")
 # asserts that absence).  It is not part of the inert-key universe either.
 MANIFEST_ROOT_KEY = "InertKeys"
 INERT_SCOPES = ("root", "Statuses[]", "Program")
+# `root:<Parent>.<Field>` / `root:<Parent>[].<Field>` -- see "SUB-KEY PATHS" above.
+SUBKEY_SCOPES = ("root",)
+SUBKEY_PATH = re.compile(r"^(?P<parent>[A-Za-z_][A-Za-z0-9_]*)(?P<list>\[\])?\.(?P<field>[A-Za-z_][A-Za-z0-9_]*)$")
 _COMMENT_PREFIXES = ("//", "/*", "*")
 _KERNEL_CODE = {}
 
@@ -727,6 +788,66 @@ def scope_keys(doc):
     return {"root": root, "Statuses[]": statuses, "Program": programs}
 
 
+def root_subkey_universe(doc):
+    """`{path: (parent, is_list, field)}` for every **sub-key** the document has.
+
+    The unit is one level: the fields of the object stored under a root key, or
+    the union of the fields of the objects inside a root list.  One level is what
+    the facts are about -- `Characters[].Start.Deck` and `Start.Deck` are the same
+    term in both images (measured: `content.rs`'s "MEASURED SHAPES" table), so a
+    second level would record the same fact twice under two spellings.
+
+    Root keys are **not** filtered here: a sub-key of a wholly-inert root is
+    still "present" (so it cannot masquerade as stale), it is only *covered* --
+    see `check_inert_keys` (4).
+    """
+    row_tables = {section for _name, section in contentc_compile.ENTITY_SECTIONS}
+    out = {}
+    for parent, value in doc.items():
+        if parent in row_tables or parent == MANIFEST_ROOT_KEY:
+            continue
+        fields, is_list = [], False
+        if isinstance(value, dict):
+            fields = list(value)
+        elif isinstance(value, list):
+            is_list = True
+            for element in value:
+                if isinstance(element, dict):
+                    for field in element:
+                        if field not in fields:
+                            fields.append(field)
+        for field in fields:
+            path = "root:%s%s.%s" % (parent, "[]" if is_list else "", field)
+            out[path] = (parent, is_list, field)
+    return out
+
+
+def subkey_reads(parent, field):
+    """(bool, where) -- does kernel rule code read `<Parent>`'s `<Field>`?
+
+    Two rules, both from `kernel/**/*.rs` **including** `content.rs` (which the
+    whole-key rule excludes) -- see "WHAT COUNTS AS READING A SUB-KEY" above:
+    the hop spelled as data, and an object-field lookup by name.  Both are
+    reported when both hit: the `name` hit is the reader, the `hop` hit is the
+    line that spells the path, and a message with only one of them sends the
+    reader to the wrong kind of evidence.
+    """
+    patterns = (
+        ("name", re.compile(r'name\s*==\s*"%s"' % re.escape(field))),
+        ("hop", re.compile(r'"%s(?:\[\d*\])?\.%s(?![A-Za-z0-9_])'
+                           % (re.escape(parent), re.escape(field)))),
+    )
+    found = []
+    for rule, pattern in patterns:
+        for path, text in sorted(kernel_rule_code().items()):
+            hit = pattern.search(text)
+            if hit:
+                found.append("%s:%d (%s rule)"
+                             % (path, text.count("\n", 0, hit.start()) + 1, rule))
+                break
+    return (bool(found), ", ".join(found))
+
+
 def presentation_keys(doc, scope):
     """Keys the *compiler* strips (`strip_presentation`) -- a consumer, not inert.
 
@@ -749,6 +870,9 @@ def check_inert_keys(doc):
         fail(MANIFEST_ROOT_KEY, "must be a list, got %s" % type(entries).__name__)
         entries = []
 
+    keys = scope_keys(doc)
+    subs = root_subkey_universe(doc)
+
     declared = {}
     for index, entry in enumerate(entries):
         where = "%s[%d]" % (MANIFEST_ROOT_KEY, index)
@@ -760,7 +884,8 @@ def check_inert_keys(doc):
             fail(where, "unexpected key(s) %s (only Path/Why)" % extra)
         path, why = entry.get("Path"), entry.get("Why")
         if not isinstance(path, str) or ":" not in path:
-            fail(where, "Path must be '<scope>:<Key>', got %r" % (path,))
+            fail(where, "Path must be '<scope>:<Key>' (or `root:<Parent>.<Field>` / "
+                 "`root:<Parent>[].<Field>`), got %r" % (path,))
             continue
         scope, key = path.split(":", 1)
         if scope not in INERT_SCOPES:
@@ -775,19 +900,55 @@ def check_inert_keys(doc):
         if not isinstance(why, str) or len(why.strip()) < 12:
             fail(where, "%s: `Why` must state why the key can stay inert" % path)
             continue
-        declared[path] = why
+        # Whole key, or (root only) a sub-key path.  "Is this a whole key?" is
+        # decided by the document, not by the spelling, so a root key whose name
+        # happens to contain a dot stays declarable.
+        parent = field = None
+        if key not in keys[scope]:
+            shape = SUBKEY_PATH.match(key) if scope in SUBKEY_SCOPES else None
+            if shape is None:
+                fail(where, "Path %r is neither a %r key of the content nor a sub-key "
+                     "path (`<Parent>.<Field>` / `<Parent>[].<Field>`)"
+                     % (path, scope))
+                continue
+            parent, field = shape.group("parent"), shape.group("field")
+        declared[path] = {"why": why, "scope": scope, "key": key,
+                          "parent": parent, "field": field}
 
-    keys = scope_keys(doc)
+    def subkeys_of(path):
+        return declared[path]["parent"] is not None
+
+    # Which whole root keys are declared inert: their sub-keys are **covered**, so
+    # (2) does not demand them and (4) rejects naming them anyway.
+    root_inert = {entry["key"] for path, entry in declared.items()
+                  if entry["scope"] == "root" and entry["parent"] is None}
 
     # (1) A declaration must not outlive its key: a manifest that names something
     # the content no longer has is a lie that reads like coverage.
     for path in sorted(declared):
-        scope, key = path.split(":", 1)
+        scope, key = declared[path]["scope"], declared[path]["key"]
+        if subkeys_of(path):
+            if path in subs:
+                continue
+            parent, field = declared[path]["parent"], declared[path]["field"]
+            if parent not in keys[scope]:
+                why = "its parent root key %r is not in the content" % parent
+            elif not any(p == parent for p, _l, _f in subs.values()):
+                why = ("root key %r is not an object (nor a list of objects), so it "
+                       "has no sub-keys" % parent)
+            else:
+                why = ("root key %r has no field %r (it has: %s)"
+                       % (parent, field,
+                          ", ".join(sorted(f for p, _l, f in subs.values() if p == parent))))
+            fail("inert.stale", "%s is declared inert but %s -- the declaration "
+                 "outlived its key" % (path, why))
+            continue
         if key not in keys[scope]:
             fail("inert.stale", "%s is declared inert but does not appear in the content "
                  "-- the declaration outlived its key" % path)
 
-    # (2) Every key with no kernel consumer must be declared.
+    # (2) Every key with no kernel consumer must be declared.  Same rule for whole
+    # keys and for sub-keys; only the "where does a consumer show up" test differs.
     for scope in INERT_SCOPES:
         presentation = presentation_keys(doc, scope)
         for key in keys[scope]:
@@ -805,19 +966,50 @@ def check_inert_keys(doc):
                 fail("inert.undeclared", "%s is not read by the kernel (%s) and is not "
                      "declared in %s -- wire it up, or declare it and say why it is "
                      "documentation" % (path, rule, MANIFEST_ROOT_KEY))
+    for path, (parent, is_list, field) in sorted(subs.items()):
+        if parent in root_inert or path in declared:
+            continue
+        reads, where = subkey_reads(parent, field)
+        if not reads:
+            hop = "%s[].%s" % (parent, field) if is_list else "%s.%s" % (parent, field)
+            fail("inert.undeclared",
+                 "%s is not read by the kernel (no hop spelling of `%s` and no "
+                 "`name == \"%s\"` in kernel rule code) and is not declared in %s -- "
+                 "wire it up, or declare it and say why it is documentation"
+                 % (path, hop, field, MANIFEST_ROOT_KEY))
 
     # (3) A declaration must not rot the other way either: if the kernel grew a
     # consumer, the "inert" claim is now false and has to be deleted.
     for path in sorted(declared):
-        scope, key = path.split(":", 1)
-        reads, where = root_read_by_name(key) if scope == "root" else kernel_reads(key)
+        scope, key = declared[path]["scope"], declared[path]["key"]
+        if subkeys_of(path):
+            reads, where = subkey_reads(declared[path]["parent"], declared[path]["field"])
+        else:
+            reads, where = root_read_by_name(key) if scope == "root" else kernel_reads(key)
         if reads:
             fail("inert.rotted", "%s is declared inert but the kernel reads it at %s -- "
                  "delete the declaration" % (path, where))
 
-    ok("inert keys", "%d declared, %d root / %d status / %d envelope keys checked"
-       % (len(declared), len(keys["root"]), len(keys["Statuses[]"]),
-          len(keys["Program"])))
+    # (4) A sub-key of a wholly-inert root key is **already** covered by that
+    # root's declaration: naming it again is noise that reads like extra coverage
+    # (and would let a manifest list `Monsters[]` fields as if it checked them).
+    # Stricter than the original three checks, never looser.
+    for path in sorted(declared):
+        if not subkeys_of(path):
+            continue
+        parent = declared[path]["parent"]
+        if parent in root_inert:
+            fail("inert.redundant", "%s names a sub-key of root:%s, which is already "
+                 "declared inert as a whole -- pick one granularity" % (path, parent))
+
+    declared_sub = sum(1 for path in declared if subkeys_of(path))
+    covered = sum(1 for parent, _l, _f in subs.values() if parent in root_inert)
+    checked_sub = len(subs) - covered
+    ok("inert keys",
+       "%d declared (%d whole / %d root sub-key), %d root / %d root sub-key / "
+       "%d status / %d envelope keys checked"
+       % (len(declared), len(declared) - declared_sub, declared_sub, len(keys["root"]),
+          checked_sub, len(keys["Statuses[]"]), len(keys["Program"])))
 
 
 def check_roundtrip(doc, rom, label, expected):

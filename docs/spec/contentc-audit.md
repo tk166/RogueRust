@@ -532,3 +532,31 @@ manifest 的 `tables` 块 / `reader._rows` / `reader.document` / `reader.stats` 
 时被重写过一次，随后**从备份还原**（它们不在 pin 范围内；重写版本与仓库版本只差计时数字）。
 
 `InertKeys` / `Notes` 这类**构建元数据**是**文档键**（`compile.py` 的 `DOC_ROOT_KEYS`）：它们随源文档走（闸门从源文档读声明），但**两个镜像都不写** —— 所以 `Rom.document()` 复现的是「源文档减去文档键」，任何逐键回读的对照集都要照此扣除，而「它真的没进镜像」本身要作为一条断言，不能只写在提交信息里。
+
+> ⚠️ 一个精确化的补充（2026-10-19 实测）：文档键的**内容**不进镜像，但镜像头里有一个**源文档指纹**（`content.sts.core.rdcf` 偏移 20–23 那 4 字节）。所以在源文档里改 `InertKeys`（哪怕只是加一条声明）也会让镜像**字节变化**，`build.py` 的 sha 会变，而 `check_roundtrip` 逐键回读仍然全绿 —— 这两件事不矛盾：变的是指纹，不是载荷。凡是"改了文档 ⇒ 必须重编"的场合，这条都适用。
+
+---
+
+## 10. `InertKeys` 的路径语法（子键声明，本轮新增）
+
+`InertKeys` 的 `Path` 有四种形状，作用域之外的两种是**整键**，`root:` 的两种是**子键**：
+
+| `Path` | 单位 | 例 |
+|---|---|---|
+| `root:<Key>` | 整个根键 | `root:Monsters` |
+| `Statuses[]:<Key>` / `Program:<Key>` | 整条记录的一个键（这两个作用域本来就按记录算） | `Statuses[]:UsesStacks` |
+| `root:<Parent>.<Field>` | 某个根键**对象**的一个字段 | `root:Start.MaxHealth` |
+| `root:<Parent>[].<Field>` | 某个根键**对象列表**的每个元素的同名字段 | `root:Characters[].UnlockFlag` |
+
+规则（闸门侧，`native/sts_content_check.py` §2b 有完整推导）：
+
+* 整键声明 ⇒ 覆盖该键**整棵子树**；再单独声明它的子键是 `inert.redundant`（两种粒度选一个）。
+* 子键的"内核读了吗"由两条**从内核代码派生**的规则判：内核把这一跳拼成过串
+  （`DeckOrigin::path()` 的 `"Start.Deck"` / `"Characters[0].Start.Deck"`），或内核按名字取过这个字段
+  （`name == "<Field>"`）。两条都**包含** `content.rs`。
+* **typed accessor 不算**（`field_at("<Field>")`、`.<snake>(`）：`EnemySpec::max_health` 读的是
+  **敌人**记录的 `MaxHealth`，把它算进来会让 `Start.MaxHealth` 变成"不可声明"，而那个键真的没人读。
+  ⇒ 已知漏洞（写在闸门注释里）：有人给 `Start` 加一个 typed 读取器时，这条声明会**假绿**。
+
+只支持一层（`Start.MaxHealth`，不支持 `Characters[].Start.MaxHealth`）：`Characters[0].Start` 与根 `Start`
+在**两份镜像里都是同一个 term**（`content.rs` 的 "MEASURED SHAPES" 表），第二层只是同一个事实的第二种拼法。

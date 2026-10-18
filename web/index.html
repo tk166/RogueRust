@@ -66,6 +66,13 @@
 <div class="sub">
   一个静态页面 + 一个 <code>.wasm</code>，全局没有 CDN、没有 worker、没有 <code>SharedArrayBuffer</code>。
   状态全部来自 <code>rd_env_observe_buf()</code> 那 122 个 <code>i32</code>；每次点击 = 一次 <code>rd_env_step</code>。
+  <br>
+  这一局是**从内容镜像建的**：<code>content.sts.core.rdcf</code>（9,580 B，嵌在模块里）→
+  <code>build_fight_from_content</code>：牌组是内容里的 <code>Characters[0].Start.Deck</code>，
+  敌人是内容里的遭遇 <code>enc_small_slimes</code>（<code>acid_slime_m</code> + <code>spike_slime_s</code>），
+  敌人意图用 <code>intent::select_action</code> 现算 + 从 <code>EACT</code> 程序里读伤害。
+  <br>
+  一次「结束回合」= 英雄回合结束 → **每个**敌人各自走一个回合（<code>Step::EndOneTurn</code>）→ 回到英雄。
 </div>
 
 <div class="board">
@@ -124,6 +131,9 @@ const H = { ROUND:0, TURN:1, PHASE:2, RESULT:3, HP:4, HP_MAX:5, BLOCK:6, WARD:7,
             ENERGY:8, ENERGY_MAX:9, HAND:10, ENEMIES:11 };
 
 const RESULT_NAMES = ["Ongoing", "Victory", "Defeat", "Draw", "Aborted"];
+// `EACT.Intent.Kind` → the observation's small integer, in the reference enum's order
+// (`ActionIntent.cs:5-13`; the core mirror has no `Label`, so the category is all there is).
+const INTENT_KINDS = ["Unknown", "Attack", "Defend", "Buff", "Debuff", "Special"];
 const ACTION_PLAY = 0;
 const ACTION_END_TURN = 1;
 
@@ -205,6 +215,12 @@ const lastError = () =>
   readText((_) => ex.rd_env_last_error_len(), (p) => ex.rd_env_last_error_into(p));
 const cardName = (h) =>
   readText((i) => ex.rd_env_card_name_len(i), (p, i) => ex.rd_env_card_name_into(i, p), h);
+// Both of these are presentation-only exports (the numbers live in the observation): the enemy id
+// comes from `ENCT`, the intent text from `EACT` + the program's own damage.
+const enemyName = (e) =>
+  readText((i) => ex.rd_env_enemy_name_len(i), (p, i) => ex.rd_env_enemy_name_into(i, p), e);
+const intentText = (e) =>
+  readText((i) => ex.rd_env_intent_len(i), (p, i) => ex.rd_env_intent_into(i, p), e);
 
 // ---------------------------------------------------------------------------------------------
 // Actions
@@ -251,26 +267,34 @@ function render(verdict, reward) {
   }
   document.getElementById("heroStatus").innerHTML = heroChips.join("");
 
-  // Enemies
+  // Enemies. The name and the intent both come out of the content image: `ENCT[enc].Enemies[j]`
+  // gives the id, `intent::select_action` + the `EACT` program give the numbers (obs +5/+6).
   const enemies = [];
   const enemyCount = o[H.ENEMIES];
   for (let e = 0; e < Math.min(enemyCount, MAX_ENEMY_SLOTS); e++) {
     const b = OFF_ENEMY + e * 8;
     const alive = o[b], hp = o[b + 1], hpMax = o[b + 2], blk = o[b + 3];
+    const kind = o[b + 5], dmg = o[b + 6];
     const chips = [];
     for (let a = 0; a < STATUS_AXES.length; a++) {
       const v = o[OFF_ENEMY_STATUS + e * 5 + a];
       if (v) chips.push(`<span class="chip">${STATUS_AXES[a]} ${v}</span>`);
     }
+    // A downed enemy's seat keeps its last intent in the observation (the reference asks the
+    // selector about dead enemies too), so the page is what decides not to advertise it.
+    const intent = alive
+      ? `${esc(INTENT_KINDS[kind] || "?")}${dmg >= 0 ? " <b>" + dmg + "</b>" : ""}`
+      : "—";
     enemies.push(`
-      <div class="row"><span class="name">queue_imp #${e}${alive ? "" : " (down)"}</span>
+      <div class="row"><span class="name">${esc(enemyName(e) || ("enemy #" + e))}${alive ? "" : " (down)"}</span>
         <span class="name">${hp} / ${hpMax}</span></div>
       <div class="bar"><i style="width:${Math.max(0, 100 * hp / Math.max(1, hpMax))}%"></i></div>
       <div class="stats">
         <span>block <b>${blk}</b></span>
-        <span>intent <b>n/a</b></span>
+        <span>intent <b>${intent}</b></span>
         <span>statuses <b>${o[b + 7]}</b></span>
       </div>
+      <div class="stats"><span>next up · ${esc(intentText(e) || "—")}</span></div>
       <div class="chips">${chips.join("")}</div>`);
   }
   document.getElementById("enemies").innerHTML = enemies.join("<hr style='border:0;border-top:1px solid var(--line);margin:10px 0'>");
@@ -456,6 +480,8 @@ function measure() {
                       "rd_env_action_kind", "rd_env_action_arg", "rd_env_step", "rd_env_done",
                       "rd_env_result", "rd_env_reset", "rd_env_reward", "rd_env_selfcheck",
                       "rd_env_scratch_buf", "rd_env_card_name_len", "rd_env_card_name_into",
+                      "rd_env_enemy_name_len", "rd_env_enemy_name_into",
+                      "rd_env_intent_len", "rd_env_intent_into",
                       "rd_env_last_error_len", "rd_env_last_error_into",
                       "rd_env_bench_bookkeeping", "rd_env_bench_envelope",
                       "rd_env_bench_step_raw"]) {

@@ -3263,3 +3263,168 @@ CARD_DIFF  PASS (62/62)       ← 内容镜像里每一张卡，各一局，每�
   而伤害来源永远是英雄）⇒ 它被 author 了、被闸门核对了，但**没被行为验证**。
 * `TriggerActivity` 两侧都不进哈希文本 ⇒ **"哪个触发器跑过几次"不在任何对拍里**。
 * `problems` 仍只比条数不比文本。
+---
+
+## 45. 第 35 轮：事件队列落地（批次 1 + 2）、牌组接内容，以及"内容 → 一局 → 浏览器"这最后一米
+
+> 这一节只追加。前面 §1–§44 里被推翻的地方已在原地改过（每处都写了"被测出来的"），
+> 这里记的是**这一轮到底落地了什么、量到了什么**。内核这一轮**零改动**：
+> `kernel/rd-core/**` 一个字节都没动，558 条单测 / 四条对拍 / 聚合验收 12/12 全部保持。
+
+### 45.1 批次 1：六个队列 + 链 arena（`CombatState` 从"就地应用"变成"排队 + 排空"）
+
+参考的三列并行数组被照抄成**六个队列**，每一列一个 `Fifo<T, 64>`：
+
+| 列 | 元素 | 元素大小 | 队列 |
+|---|---|---:|---|
+| 效果 | `pending_effects` | 176 B | 64 |
+| 效果链 | `pending_effect_chains` | 2 B | 64 |
+| 效果链所有者 | `pending_effect_owners` | 4 B | 64 |
+| 事件 | `pending_events` | 96 B | 64 |
+| 事件链 | `pending_event_chains` | 2 B | 64 |
+| 续延 | `pending_continuations` | 44 B | 64 |
+
+加上链 arena（`128 × 16 B`，引用归零回收）一共 **23,040 B**，占 `CombatState` 的 11%。
+两条对齐断言（`ensure_effect_queue_aligned` / `ensure_event_queue_aligned`）在**每次出队前**跑，
+而且**不是 `debug_assert!`** —— 裸机跑的是发布版，`debug_assert!` 在那边等于没写。
+
+排空（`Host::resolve_pending_queues_with`）照 `CombatEventHandling.cs:97` 的
+`while (hasPending…) && Result == Ongoing` 分成**三个相位**：效果全抽干 → 事件全抽干 →
+**只跑一个**续延（且前两相都空）。相位上限是**参数**（`QueueLimits`），所以测试能传 0 当场撞上限。
+
+第一版只接了 4 个**回合边界**事件（`TurnStarted` / `TurnEnded` / `RoundStarted` / `RoundEnded`，
+`enqueue_event_at_root`，链号笔数不变），随后补上 `DamageDealt`（`exec.rs::resolve_damage_of_kind`
+落血判胜负之后入队，`DamageEffects.cs:186-194`）—— 于是闸门里 `not_handled` 从 12 降到 11。
+
+`DamageDealt` 的 **Bearer 是出手方**（`StatusDataRebuild.cs:53-55`，上下文 `sel.source = SourceCombatant`、
+`eventTarget = TargetCombatantId`）⇒ `doubt` 的 `modifyStatusStacks(-1)` 落回出手者身上。
+这一条正好是"触发器解码只认 `Event` + `Program`"那条既有缺口的对照组：镜像里 25 条触发器
+**一个 `Scope`、一个 `Filters` 都没出现**，所以内核实现的是默认 Bearer 语义。
+
+`CARD_MULTI` 在批次 1 从 **112/124 → 122/124**：那 10 格原先是 NOT-COMPARABLE，现在变成**一致**。
+
+### 45.2 批次 2：续延调度落地，**CARD_MULTI 124/124**
+
+批次 2 补齐的是"节点级续延"：帧 arena（8 槽 × 216 B）+ 节点槽 arena（64 × 12 B）+ 循环快照
+arena（4 × 546 B）。一条续延 = `(帧槽, 节点槽)`，节点槽带**父**与**剩余计数** —— 这两样正是参考闭包里捕获的东西
+（`EffectProgramExecution.cs:91-160`、`:202-211`）。
+
+关键回报是 `ProgramExecutionFrame::terminal_chain`：**终态那一刻 `current_chain` 是什么**，
+决定了收尾那一笔入队发不发链号（`CombatState.cs:386/446` 的 `??`）。
+
+于是 `CARD_MULTI` **122 → 124/124**。⚠️ 那 2 格是**机制绿，不是调参绿**：
+
+| 卡 | 节目 | 谁最后完成 | 终态落在 | 出牌合计链号 |
+|---|---|---|---|---|
+| `shredder_drawer` / `+` | `sequence[forEachCardInZone(Hand, junk), dealDamage(9)]` | **循环本身**（第 1 趟的续延把第 2 趟排到队尾 ⇒ dealDamage 先完成，循环最后完成，而它在 `using (EnterEffectChain)` 里完成） | 节目链**里** | **+1**（只有请求那一笔） |
+| `archive_the_evidence` | `forEachCardInZone(takeFirst=1)` + 兄弟 `gainBlock` | 兄弟 `gainBlock`（它的续延在**顶层**跑） | 链**外** | **+2** |
+
+⇒ "发不发号"现在是 `current_chain` 的取值决定的，而那个取值由**"谁最后完成"**决定。
+这一格不是把 4 试成 3 试出来的 —— `play.rs` 里那三笔显式 `create_root_effect_chain()`
+**被整段删除**（请求链在开场建一条并 `with_chain`；落区/收尾在终态回调里由 `??` 决定）。
+
+### 45.3 `exec` 真的拆成了"请求 + 解析"
+
+| 项 | 实况 |
+|---|---|
+| 效果队列的**生产者** | 11 种产出型节点全部改成"算好参数 → `EnqueueEffect` → 完成塞进续延"，**一个都不就地写状态** |
+| 效果队列的**解析器** | `exec::resolve_effect`：拆请求、重建 `ExecContext`、调既有的实体函数；**修饰器与极性在解析时读**（`DamageEffects.cs:273-320`） |
+| 出牌终态 | 从 `play.rs` 的手工账搬成**数据 + 同步调用**：`ProgramTerminalHook::CardPlay` + `play::run_terminal_hook` |
+| `play.rs` 的链号账 | **一笔都不手写**（请求链 / 落区 / 收尾三笔全部由上面的机器产生） |
+
+这一节的最短证据链：`play.rs` 里那张"`next_effect_chain_number` 的账"表（+3 / +1 / +0 / +2）
+仍然在文档里，但**实现里已经没有对应的加减法了** —— 表只解释"为什么是这个数"。
+
+### 45.4 `CombatState` 的三次测量，与那个"余量只剩 ~8 KB"的事实
+
+| 时点 | `size_of::<CombatState>()` | 占 606,208 B SRAM | 上界 |
+|---|---:|---:|---:|
+| 队列落地前 | 184,648 | 30.46% | 240 KiB |
+| 批次 1（六队列 + arena） | **207,712** | 34.26% | 240 KiB（抬界，理由写进两处断言） |
+| 批次 2（三个 arena） | **213,224** | 35.2% | 240 KiB |
+
+**上界有两处，永远要一起改**：`state.rs::state_fits_the_sram_plan` 与
+`kernel/rd-sizeprobe/src/lib.rs` 的同一条断言，现在都是 `240 * 1024 = 245,760`。
+抬界的理由是"忠实档实测 + 6.3% 余量"，**换的是语义完整性**，不是"让测试过"。
+
+⚠️ 必须一起记住的那笔账：**事件全集（参考 41 个变体、集合型 id 列表 ⇒ `CombatEvent` 492 B）
+比今天声明并接了线的 5 个变体（96 B）贵约 24 KB**。两者相加 ≈ **237 KB**，
+**仍在 245,760 以内，但余量只剩 ~8 KB**。所以本节之后任何"再塞一个字段"都要先回答
+C1 那个问句，再看余量 —— 顺序不能反。
+
+### 45.5 牌组接内容 + `InertKeys` 从"整键"下沉到"子键"
+
+`battle.rs::build_fight_from_content` 是"内容 → 一局"的那一米：`plan.deck` 非空 ⇒ 走老路
+（手写牌组那些测试一条都不动）；为空 ⇒ 按参考的三处候选解析
+（`RunBlueprint.cs:167-176` / `RunSetup.cs:44`）：
+
+| # | 位置 | 什么时候读 | 形态（实测） |
+|---|---|---|---|
+| 1 | `Characters[0].Start.Deck` | 花名册非空 | `F_STRLIST`（元素直接是串号） |
+| 2 | `Start.Deck` | 花名册为空 | 同一个 term（`Characters[0].Start` 与根 `Start` 指同一个 term） |
+| 3 | 根 `Deck` | 上两处都是空表 | `F_TERMLIST`（元素是 `_wrap_lower`，1 槽 = 串号） |
+
+**三份的值相同、形态不同** ⇒ 读法必须按形态分（把 `Start.Deck` 当 `F_TERMLIST` 读会拿到非法 term id）。
+"空 = 没声明、接着看下一处"不是新哨兵，是参考自己的约定（`RunBlueprint.cs:214-216`）。
+
+接线的代价是可测量的：`InertKeys` 里 `root:Characters` / `root:Start` / `root:Deck` 三条整键声明
+**必须删掉**（内核现在真的读它们了，闸门先红给你看），声明数 **16 → 13**。
+⚠️ 但整键粒度把挂在它们下面的**五条**"内核零消费者"记录一起带走了：
+
+```
+Start.MaxHealth / Start.StartingHealth / Start.Resources / Start.StartingRelics
+Characters[].UnlockFlag
+```
+
+它们没有变假，只是**没地方记**了 —— 而散文不是闸门。所以闸门的 `root:` 作用域支持了**子键路径**：
+
+* `root:<Parent>.<Field>`（对象的字段）、`root:<Parent>[].<Field>`（对象列表各元素的字段）；
+* "内核读了没有"由两条**从内核代码派生**的规则判：① 内核自己把这一跳**拼成过串**
+  （`DeckOrigin::path()` 返回 `"Characters[0].Start.Deck"` / `"Start.Deck"`）；
+  ② 内核按**名字**取过这个字段（`name == "<Field>"`）。⭐ 两条都**包含** `content.rs`
+  （被排除的是那边的 schema 镜像与 typed accessor，而牌组读取器和 `name ==` 都在同一个文件里）；
+* **不算**读：`field_at("<Field>")` 与 `.<snake>(` —— 那是**typed** accessor，
+  `EnemySpec::max_health` 读的是**敌人**记录的 `MaxHealth`。把它算进来会让 `Start.MaxHealth`
+  变成"不可声明"，而这个键真的没人读（英雄血量来自 `FightPlan`）。
+
+落地后：**声明数 13 → 23**（13 整键 + 10 子键），子键宇宙 13 个，其中 3 个被读
+（`Start.Deck` / `Characters[].Start` / `Deck[].value`）、10 个被声明。
+这 10 条里有 5 条是任务书没点到的（`Start.HeroName` / `StartingConsumables` / `StartingUnits` /
+`StartingParty` / `Characters[].Id`）—— 粒度一沉下去它们就自己冒出来了，这才是"闸门在数"的意思。
+
+### 45.6 仍然差的边界（`docs/spec/event-queue-interface.md` §12.4，**四条，不是三条**）
+
+1. **集合为空时参考是同步完成、内核排一条续延**（`forEachTarget` / `forEachCardInZone` 的空快照）。
+   差别只在"终态落在哪条链里"那一刻可见，本内容里没有这种局面 ⇒ **内容一来空集合它就会出现**。
+2. **严格面（`play_card`）比参考少两个链号**：`PlayCardCore` 在顶层跑，`CardCostPaid` 与 `CardPlayed`
+   各发一个号，而内核**没有这两个事件变体**。请求面（`try_play_card`，全局对拍走的那条）不受影响。
+3. **`exec::execute` 是遗留入口**：它不发号、也不排空事件 —— 把事件出队丢掉会让 `doubt` 的
+   `DamageDealt` 触发器永远不跑（实测：`CARD_MULTI` 立刻退回 114/124）。
+4. **`play.rs` 的无节目分支**仍然手工入队（搬区 + `CloseAction` 续延），因为那台机器不经过节目帧。
+
+另外两条**不属于队列但同样没钉住**的：`TriggerActivity` 两侧都不进哈希文本；
+`problems` 只比条数不比文本。
+
+### 45.7 最后十厘米：`.wasm` 与页面现在跑的是**真内容**
+
+`kernel/rd-wasm` 从"写死一局 `queue_imp`"改成**从内容建局**：
+
+* 嵌入的镜像是 **`tools/contentc/packages/sts/out/content.sts.core.rdcf`（9,580 B）**，
+  不是 `tools/contentc/out/content.core.rdcf`（85,616 B，`roguedeck` 包）。
+  取舍写在 `lib.rs` 的 `IMAGE` 文档里：`sts` 才是"有源文档 + 有 inventory + 有四层闸门"的那份内容，
+  而且这一换就是 **−76,036 B** 的数据段；代价是这一局很小（4 张卡定义、2 个敌人、1 条遭遇）。
+* `build_fight_from_content` + **空 `plan.deck`** ⇒ 牌组来自 `Characters[0].Start.Deck`，
+  敌人来自 `ENCT` 的 `enc_small_slimes`（`acid_slime_m` 28 + `spike_slime_s` 10，两条敌人是**故意**的：
+  一条敌人分辨不出 `NextRound` 和 `EndOneTurn`）。
+* **Gap 1（敌人意图）关掉**：`content::encounter_enemies` + `intent::locate_enemy` +
+  `intent::select_action`（用 `state.current_round`，照 `InteractiveCombat.cs:122` 的**预告**路径），
+  伤害是把 `EACT` 程序里的 `node.dealDamage` 的 `const` 金额加起来；**非 `const` 一律 `-1`**
+  （"不猜"比"猜得像个数"重要）。观察向量的 `intent_kind` / `intent_damage` 两格从此是真值。
+* **Gap 4（一次结束回合只让一个敌人动）关掉**：`step_end_turn` 改成 `Step::EndOneTurn` 的循环
+  （英雄回合结束 → 每个敌人各走一个回合 → 回到英雄），那条 "plan has N enemies" 的守卫连同它的理由一起删了。
+  新测试的判据是**"第 1 回合的预告伤害之和 == 这一回合英雄实际掉的血"**：只让一个敌人动就立刻不等。
+* `.wasm` 体积：上一份提交的副本 559,504 B（546 KiB，`roguedeck` 内容 + 旧逻辑）→
+  同一棵树的干净重建 418,758 B → **现在 378,962 B**。
+  冒烟方式：`node web/smoke.mjs` 读**提交的那份产物**，`WebAssembly.validate` + 无 import 实例化 +
+  逐个检查导出 + 打完整局（`WEB_SMOKE PASS`）。⚠️ **没在真浏览器里跑过**：
+  DOM、`Content-Type`、`instantiateStreaming` 这三样仍只有页面自己的 Measurements 面板能回答。

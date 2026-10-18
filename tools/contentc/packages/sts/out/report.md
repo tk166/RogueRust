@@ -8,12 +8,12 @@ come from re-serialising the parsed document with each item removed.
 
 | quantity | bytes | vs raw | vs compact |
 |---|---|---|---|
-| source on disk (pretty-printed JSON) | 62610 | 1.00x | — |
-| source, compact JSON | 36114 | 1.7x | 1.00x |
-| source, compact + redundant `Children` removed | 36114 | 1.7x | 1.00x |
-| source, compact + `Children` + presentation removed | 33218 | 1.9x | 1.09x |
-| **RDCF binary, full** | **11140** | **5.6x** | **3.2x** |
-| **RDCF binary, presentation stripped** | **9580** | **6.5x** | **3.8x** |
+| source on disk (pretty-printed JSON) | 65110 | 1.00x | — |
+| source, compact JSON | 38354 | 1.7x | 1.00x |
+| source, compact + redundant `Children` removed | 38354 | 1.7x | 1.00x |
+| source, compact + `Children` + presentation removed | 35458 | 1.8x | 1.08x |
+| **RDCF binary, full** | **11140** | **5.8x** | **3.4x** |
+| **RDCF binary, presentation stripped** | **9580** | **6.8x** | **4.0x** |
 
 ### The answer to "how many bytes after pre-compiling"
 
@@ -66,21 +66,21 @@ under *shared*.  So the columns do not add up to the file size, by design.
 | `Characters` | 1 | 407 | 16 | 20 |
 | `Deck` | 10 | 189 | 12 | 5 |
 | `EncounterTables` | 3 | 357 | 36 | 231 |
-| `InertKeys` *(document key -- not stored)* | 13 | 2665 | 0 | 0 |
+| `InertKeys` *(document key -- not stored)* | 23 | 4905 | 0 | 0 |
 | `Monsters` | 10 | 3846 | 344 | 1300 |
 | `Notes` *(document key -- not stored)* | 9 | 6654 | 0 | 0 |
 | `SchemaVersion` | 1 | 1 | 4 | 14 |
 | `Start` | 9 | 361 | 0 | 6 |
 | **shared (reached from >1 group)** | | | **164** | **771** |
 
-Column sum 35965 B = compact 36114 B minus the 149 B spent on the 12 top-level key
+Column sum 38205 B = compact 38354 B minus the 149 B spent on the 12 top-level key
 names, their quotes and the surrounding braces.
 
 `InertKeys` / `Notes` above are **document keys**: build metadata that is serialised into neither
 image (`DOC_ROOT_KEYS` in `compile.py`), so their `exclusive` columns are 0 B.  Their
-summary line in the source costs 9319 B of compact JSON and **0 B** of output.
+summary line in the source costs 11559 B of compact JSON and **0 B** of output.
 
-`Encounters` alone is 1647 B (4.6% of the compact document) with a single
+`Encounters` alone is 1647 B (4.3% of the compact document) with a single
 encounter, `city_normal_ordinance_08`, taking 38% of that section -- yet the
 whole encounter table plus everything it reaches costs about 136 B exclusive,
 because its 31 trigger programs are 10 distinct bodies written 31 times and
@@ -97,7 +97,7 @@ part of the round trip (`Rom.document()` reproduces the source minus those keys)
 
 | redundancy | compact JSON bytes it occupies | how the binary avoids it |
 |---|---|---|
-| object key names (1402 occurrences, 125 distinct) | 15407 | an opcode's field descriptors spell each key once, not per occurrence |
+| object key names (1422 occurrences, 125 distinct) | 15537 | an opcode's field descriptors spell each key once, not per occurrence |
 | `{"kind":..,"value":..}` discriminant envelope | 3537 | the opcode *is* the kind |
 | redundant `Children` second copies | 0 | subtree interning: a repeated child is one u16 handle |
 | byte-identical program bodies | 0 | the same interning |
@@ -142,7 +142,7 @@ Sources of truth for each of those claims:
   * `Events[].situations[].TextKey`, `...Choices[].TextKey`, `Shops[].Offers[].TextKey`
   * the whole `Presentation` object (4 B compact)
 
-  Measured effect: compact 36114 -> 33218 B; binary 11140 -> 9580 B (saves 1560 B, 14.0%).
+  Measured effect: compact 38354 -> 35458 B; binary 11140 -> 9580 B (saves 1560 B, 14.0%).
 
 ## 4. Derived tables
 
@@ -172,11 +172,11 @@ contains no raw JSON text at all.
 
 | step | seconds |
 |---|---|
-| `json.loads` of 0.1 MiB source | 0.001 |
+| `json.loads` of 0.1 MiB source | 0.005 |
 | derive | 0.004 |
 | encode | 0.004 |
 | serialize | 0.005 |
-| total, one build | 0.014 |
+| total, one build | 0.018 |
 
 Peak Python heap during the whole run (both builds, tracemalloc): **0.6 MiB**.
 The document is parsed once and never copied; the encoder holds the parsed

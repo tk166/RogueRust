@@ -2,6 +2,14 @@
   "SchemaVersion": 1,
   "InertKeys": [
     {
+      "Path": "root:Characters[].Id",
+      "Why": "花名册第 0 人的**身份串**：内核只从 `Characters[0]` 取 `Start`（content.rs:2104 的 `name == \"Start\"`），没有角色选择，所以没有任何代码读这个 Id —— 队伍/名字都由 FightPlan 给。"
+    },
+    {
+      "Path": "root:Characters[].UnlockFlag",
+      "Why": "参考的解锁标记（`UnlockFlag`）：内核没有解锁/账号概念，零消费者。这一条是 2026-10-19 随 `root:Characters` 整键声明被一起删掉的那批之一，现在记在子键上。"
+    },
+    {
       "Path": "root:EncounterTables",
       "Why": "遭遇权重表：内核没有普通/精英/弱者池的概念，Weak[].Weight 只被 check_weak_pool_table 读。"
     },
@@ -16,6 +24,38 @@
     {
       "Path": "root:SchemaVersion",
       "Why": "编译器把它写进镜像头 HDR_SCHEMA_VERSION（compile.py:1276），而内核只用 FORMAT_VERSION 做格式门（content.rs:349）；schema_version() 访问器没有消费者。"
+    },
+    {
+      "Path": "root:Start.HeroName",
+      "Why": "角色显示名：内核不显示任何名字（页面的 `hero` 来自 FightPlan 的 combatant id），`Start` 对象里只有 `Deck` 有消费者。"
+    },
+    {
+      "Path": "root:Start.MaxHealth",
+      "Why": "英雄最大生命来自**蓝图**（`battle.rs` 的 `plan.hero.max_health`），不是内容：内核零 `.max_health(` 调用点作用于 `Start`（`EnemySpec::max_health` 读的是敌人记录，content.rs:1609）。本内容写 80，与 `rd-wasm` 的 FIGHT_PLAN 常量同值纯属巧合。"
+    },
+    {
+      "Path": "root:Start.Resources",
+      "Why": "开局金币等资源：内核的开局资源逐条来自 `plan.resources`（battle.rs:656-661），`Start.Resources` 零消费者 —— `standard.energy` 那一格也在 ENCT 的 `HeroResources` 里另有一份。"
+    },
+    {
+      "Path": "root:Start.StartingConsumables",
+      "Why": "参考的起始消耗品：内核没有消耗品概念，零 `.starting_consumables(` 调用点，内容里恒空表。"
+    },
+    {
+      "Path": "root:Start.StartingHealth",
+      "Why": "起始当前生命：`add_combatant` 按参考的 `CurrentHealth ?? MaxHealth` 取满血（battle.rs 的 `Combatant::new(max,max)`），读的是蓝图给的值，不读这一格。"
+    },
+    {
+      "Path": "root:Start.StartingParty",
+      "Why": "参考的起始队伍：内核没有队友/AI 概念（FightPlan 只有英雄 + 敌人），零消费者，内容里恒空表。"
+    },
+    {
+      "Path": "root:Start.StartingRelics",
+      "Why": "起始遗物：内核没有遗物能力（`REL` 表本内容 0 行），零 `.starting_relics(` 调用点，内容里是 `count = 0` 的空表。"
+    },
+    {
+      "Path": "root:Start.StartingUnits",
+      "Why": "参考的起始单位：与 `StartingParty` 同理，内核的战场成员只来自 FightPlan，零消费者，内容里恒空表。"
     },
     {
       "Path": "Statuses[]:DeathPrevention",

@@ -6,8 +6,11 @@
 //! A **spike**: it answers "can the browser UI speak the same protocol as the future RL
 //! environment?", not "is this the product". So:
 //!
-//! * the scenario is **hard-coded** (hero 70 HP, one `queue_imp` at 22 HP, 8 cards) — the task's
-//!   "先写死一个最小场景";
+//! * the **content** is real and comes out of the `sts` package (`content.sts.core.rdcf`);
+//!   the **fight** is built from it with `build_fight_from_content` — the deck is the content's
+//!   own (`Characters[0].Start.Deck`) and the enemies are the content's own (`ENCT` encounter
+//!   `enc_few_slimes`); the hero, the seed and "which encounter" are the only things this file
+//!   picks. See [`IMAGE`] for why the `sts` mirror and not `roguedeck`'s.
 //! * the exports are the ABI minus the handle parameter: one module instance = one environment.
 //!   The frozen ABI is handle-based *because it wants 16+ environments in one process*; a
 //!   browser page has exactly one fight on screen, so a single global session is the honest
@@ -25,32 +28,35 @@
 //!
 //! # Gaps (what this ABI implementation does **not** do)
 //!
-//! 1. **No enemy intent.** `intent_kind` / `intent_damage` are always `-1`. The *reader* this gap
-//!    was waiting on now exists (`content::Content::encounter_enemies`, which walks
-//!    `ENCT[i].Enemies[j]` → `Actions` / `IntentRules` / `StartingStatuses`), and
-//!    `intent::select_action` takes `(encounter, slot)` — so what is left is only the **wiring
-//!    here**: find the slot whose `Id` matches the active combatant, call `select_action`, read the
-//!    `EACT` program's damage. Until that is done the spike hard-codes `queue_imp.desk_jab`.
+//! 1. **No enemy *actions* chosen by the driver for heroes** (ABI kind 2): `FightPlan` has no
+//!    `actions` field, so a hero self-action cannot be expressed.
 //! 2. **No handle.** See above.
-//! 3. **No hero self-actions (ABI kind 2).** `FightPlan` has no `actions` field, so the driver
-//!    layer cannot express one.
-//! 4. **One enemy may act per end-turn step.** ⚠️ **The kernel side of this gap is closed**
-//!    (`battle::Step::EndOneTurn`: end exactly one turn, stop at the next *living* combatant,
-//!    stop early if the fight ends). This spike still calls `NextRound` in
-//!    [`Session::step_end_turn`], so the behaviour below is unchanged — switching that call to
-//!    `EndOneTurn` is the remaining work, and it is a one-line change plus a re-measure.
-//! 5. **`upgraded` is always 0.** In this content "upgraded" is a *different card definition*
-//!    (`paper_cut` vs `paper_cut+`), not a flag on an instance — `CardInstance` has no such bit.
-//! 6. **`hero_ward` / `enemy.ward` are always `-1`.** No `ward` resource exists in the content
+//! 3. **`upgraded` is always 0.** In this content "upgraded" is a *different card definition*,
+//!    not a flag on an instance — `CardInstance` has no such bit.
+//! 4. **`hero_ward` / `enemy.ward` are always `-1`.** No `ward` resource exists in the content
 //!    image (the standard package's pool is `standard.block`); `-1` says "this implementation
 //!    does not produce this quantity", which is the truth.
+//! 5. **`intent_damage` is `-1` when the amount is not a literal.** The preview reads the
+//!    `EACT` program and sums the `dealDamage` nodes whose `Amount` is `const`; an amount that
+//!    depends on state (a `multiply`, a status modifier) is **not** guessed at.
+//!
+//! Two gaps closed in this round (they were gaps *here*, not in the kernel):
+//! * **enemy intent** used to be `-1`; it is now `intent::locate_enemy` + `intent::select_action`
+//!   over `content::Content::encounter_enemies`, with the damage read out of the `EACT` program.
+//! * **one enemy per end-turn step**: `Session::step_end_turn` now drives
+//!   `battle::Step::EndOneTurn` in a loop, so every enemy acts in its own turn before the hero
+//!   gets the round back. The old "plan has N enemies" guard is gone because the reason for it
+//!   is gone.
 
 use rd_core::battle::{
-    build_fight, run_fight, standard_turn_config, DeckEntry, FightOutcome, FightPlan, PlanCombatant,
-    Step,
+    build_fight_from_content, run_fight, standard_turn_config, FightOutcome, FightPlan,
+    PlanCombatant, Step,
 };
-use rd_core::content::{Content, ABSENT16, EK_CARD, LIST_ABSENT, LIST_NULL, NULL16, OP_ARR};
+use rd_core::content::{
+    Content, ABSENT16, EK_CARD, EK_ENCOUNTER, LIST_ABSENT, LIST_NULL, NULL16, OP_ARR,
+};
 use rd_core::host::Host;
+use rd_core::intent::{enemy_action_program_root, locate_enemy, select_action, ActionChoice, IntentKind};
 use rd_core::ir::NodeRef;
 use rd_core::play::can_play_card;
 use rd_core::state::{
@@ -59,7 +65,7 @@ use rd_core::state::{
 };
 
 // =============================================================================================
-// The hard-coded scenario
+// The content image, and the little the spike still picks for itself
 // =============================================================================================
 
 /// Error-detail formatting, behind a build-time switch — and it is a **size lever**, not a taste
@@ -84,49 +90,44 @@ fn detail<T: core::fmt::Debug>(_value: &T) -> String {
     "<detail off>".to_string()
 }
 
-/// The content image, embedded at compile time. 85,616 B — a browser has no filesystem, so the
-/// image has to travel inside the module. It is the same `content.core.rdcf` every native binary
-/// reads (`tools/contentc/compile.py` produces it); if it is missing the build fails loudly here
-/// rather than producing a module that cannot start a fight.
-static IMAGE: &[u8] = include_bytes!("../../../tools/contentc/out/content.core.rdcf");
+/// The content image, embedded at compile time: the **`sts` package's core mirror**, 9,580 B
+/// (`tools/contentc/packages/sts/out/content.sts.core.rdcf`).
+///
+/// # Why this mirror and not `tools/contentc/out/content.core.rdcf` (85,616 B)
+///
+/// The two are different *content*, not two versions of one: `content.core.rdcf` is the
+/// `roguedeck` package (188-ish cards, 109 encounters, 85,616 B), `content.sts.core.rdcf` is the
+/// hand-authored Slay-the-Spire act-1 slice (4 cards, 3 encounters, 9,580 B). This crate is the
+/// last metre of the pipeline "content → one fight → browser", and the content that has a
+/// source document, an inventory and a four-layer gate behind it is the `sts` package. Embedding
+/// it also removes **76,036 B** from the module: the `.wasm` is almost entirely the image plus
+/// `CombatState`, so the image is the biggest single lever after the state itself.
+///
+/// What that costs: the fight is small (4 card definitions, 2 enemies, 1 act-1 encounter). What
+/// it buys: every number on the page comes out of a document this repo can check, and the deck
+/// is the document's own rather than a list typed here. If the demo ever needs the big content,
+/// this is the one line to change — nothing else in the file knows which package it is looking at.
+static IMAGE: &[u8] = include_bytes!("../../../tools/contentc/packages/sts/out/content.sts.core.rdcf");
 
-/// RNG seed. `paper_cut` decks + `shuffle: true` makes this observable (`random_step` moves).
+/// Which `ENCT` encounter to fight. The id is looked up in the image's `SEC_IDX` (a missing id is
+/// a loud [`rd_core::content::EncounterError`], not an empty field).
+///
+/// `enc_small_slimes` = `acid_slime_m` (28 HP) + `spike_slime_s` (10 HP). Two enemies on purpose:
+/// one enemy cannot tell `NextRound` from `EndOneTurn`, so a one-enemy scenario cannot show that
+/// the multi-enemy turn works.
+const ENCOUNTER: &str = "enc_small_slimes";
+
+/// RNG seed. The content deck + `shuffle: true` makes this observable (`random_step` moves).
 const SEED: i32 = 7;
 const COMBAT_ID: &str = "rd_wasm_spike";
 const HERO: &str = "hero";
-const HERO_HP: i32 = 70;
-const ENEMY: &str = "queue_imp";
-const ENEMY_HP: i32 = 22;
-/// `EACT` id of the one action this enemy is allowed to take. Hard-coded because enemy *action
-/// selection* is not reachable (Gap 1). `queue_imp.desk_jab` = `dealDamage 8 -> sel.eventTarget`.
-const ENEMY_ACTION: &str = "queue_imp.desk_jab";
+/// Hero max HP for the **plan**. ⚠️ Not read from the content: `Start.MaxHealth` has no kernel
+/// consumer (`native/sts_content_check.py` declares it inert, and the gate fails if anybody
+/// starts reading it). The content says 80; this constant says 80; that agreement is a
+/// coincidence, not a wire — which is exactly why the declaration exists.
+const HERO_HP: i32 = 80;
 /// Starting / per-turn energy (the standard package's `3`).
 const ENERGY: i32 = 3;
-
-/// `PlanCombatant` is `Copy` and holds only `&'static str`, so a `static` array is the clean way
-/// to get the `&'static [PlanCombatant<'static>]` that `FightPlan` demands.
-static ENEMIES: [PlanCombatant<'static>; 1] = [PlanCombatant {
-    id: ENEMY,
-    max_health: ENEMY_HP,
-}];
-static DECK: [DeckEntry<'static>; 3] = [
-    // 5×6 damage: three per turn fits exactly the 3 starting energy, so the enemy dies on turn 2
-    // and the page gets a real Victory without the player having to think.
-    DeckEntry {
-        card: "paper_cut",
-        count: 5,
-    },
-    // A block card, so "hero block" is a number that actually moves.
-    DeckEntry {
-        card: "cower_behind_a_desk",
-        count: 2,
-    },
-    // A 2-cost card, so the energy gate in the action list is observable.
-    DeckEntry {
-        card: "permit_a38",
-        count: 1,
-    },
-];
 
 // =============================================================================================
 // The observation vector (`docs/spec/env-abi.md` §4) — 12 + 5 + 4×8 + 4×5 + 10×4 + 5 + 8 = 122
@@ -183,6 +184,118 @@ struct Action {
 }
 
 // =============================================================================================
+// Enemy intent (the "what is it about to do" column)
+// =============================================================================================
+
+/// How deep the damage preview walks a program. `EACT` programs in this content are 1–2 levels
+/// (`dealDamage`, or `sequence([dealDamage, …])`); the cap is here so a cyclic/crazy tree in a
+/// future image cannot hang the page.
+const MAX_PREVIEW_DEPTH: usize = 8;
+/// Same cap the kernel's own pre-check uses for `Children` (`exec.rs`'s `MAX_CHILDREN`).
+const MAX_PREVIEW_CHILDREN: usize = 32;
+
+/// `IntentKind` → the ABI's small integer, **in the reference enum's own order**
+/// (`ActionIntent.cs:5-13`): `Unknown=0, Attack=1, Defend=2, Buff=3, Debuff=4, Special=5`.
+/// `-1` = the cell is absent (`Intent.Kind` missing), which is the ABI's "not produced".
+fn intent_kind_code(kind: Option<IntentKind>) -> i32 {
+    match kind {
+        None => -1,
+        Some(kind) => IntentKind::ALL
+            .iter()
+            .position(|candidate| *candidate == kind)
+            .map_or(-1, |index| index as i32),
+    }
+}
+
+/// One enemy's telegraph, read back out of the content every time the observation is rebuilt.
+///
+/// Three separate things, and the page needs them separate:
+/// * `kind` — `EACT.Intent.Kind`. The **core** mirror has no `Label`/`NameKey`
+///   (`docs/spec/enemy-intent.md` §2.6), so the display cannot be "Rubber Stamp Rush · 5 dmg";
+///   the category is all there is.
+/// * `damage` — the sum of the program's `const` `dealDamage` amounts, or `-1` when an amount is
+///   not a literal (then it is *not* guessed at).
+/// * `text` — what the page prints, assembled here so the page owns no game knowledge.
+#[derive(Clone, Debug)]
+struct Intent {
+    kind: i32,
+    damage: i32,
+    text: String,
+}
+
+impl Intent {
+    fn unknown(note: &str) -> Self {
+        Self {
+            kind: -1,
+            damage: -1,
+            text: note.to_string(),
+        }
+    }
+}
+
+/// How much damage an `EACT` row's program deals, read out of the program itself.
+///
+/// The rule is narrow on purpose: sum the `const` amounts of the `dealDamage` nodes reachable
+/// through `node.sequence.Children`, and answer `-1` for anything that would need the *state* to
+/// evaluate (`multiply`, a status modifier) or that sits behind a branch
+/// (`conditional`/`forEach*`). `-1` here means "this implementation does not produce this
+/// quantity", which is the ABI's own vocabulary for it (`env-abi.md` §4) — a plausible-looking
+/// guess would be worse than the hole.
+fn program_damage(content: &'static Content<'static>, action_row: u32) -> i32 {
+    let Ok(root) = enemy_action_program_root(content, action_row) else {
+        return -1;
+    };
+    let mut total = 0i32;
+    if !walk_damage(root, 0, &mut total) {
+        return -1;
+    }
+    total
+}
+
+/// Depth-first walk behind [`program_damage`]; `false` = "cannot be answered statically".
+fn walk_damage(node: NodeRef<'static>, depth: usize, total: &mut i32) -> bool {
+    if depth > MAX_PREVIEW_DEPTH {
+        return false;
+    }
+    let Ok(kind) = node.kind_str() else {
+        return false;
+    };
+    match kind {
+        "node.dealDamage" => {
+            let Some(amount) = node.node_field("Amount").ok().flatten() else {
+                return false;
+            };
+            if amount.kind_str() != Ok("const") {
+                return false; // 依赖状态 ⇒ 不猜
+            }
+            let Ok(Some(value)) = amount.int_field("Value") else {
+                return false;
+            };
+            *total = total.saturating_add(value);
+            true
+        }
+        "node.sequence" => {
+            let mut ids = [0u16; MAX_PREVIEW_CHILDREN];
+            let Ok(count) = node.term_list_field("Children", &mut ids) else {
+                return false;
+            };
+            for id in ids.iter().take(count) {
+                if !walk_damage(node.child(*id), depth + 1, total) {
+                    return false;
+                }
+            }
+            true
+        }
+        // These three can hide damage behind a condition/target list ⇒ not statically answerable.
+        "node.conditional" | "node.forEachTarget" | "node.forEachCardInZone" => false,
+        // Everything else is a node that cannot deal damage (`applyStatus`, `gainBlock`,
+        // `heal`, `drawCards`, `setCombatantCounter`, `gainResource`, …): contributes 0, and
+        // saying so is exact rather than a guess.
+        _ => true,
+    }
+}
+
+// =============================================================================================
 // The session
 // =============================================================================================
 
@@ -202,6 +315,15 @@ struct Session {
     hand_costs: Vec<i32>,
     /// The action table, rebuilt by the last [`Session::reobserve`].
     actions: Vec<Action>,
+    /// `ENCT` row of the encounter being fought (`locate_enemy` wants the row, not the id).
+    encounter: u32,
+    /// Enemy slot (`plan.enemies` index) → this round's intent, as read back from the content.
+    ///
+    /// Rebuilt by [`Session::refresh_intents`] on every observation, because the reference's
+    /// preview is a **pure function of (state, content) that is recomputed every time it is
+    /// asked** (`docs/spec/enemy-intent.md` §2.3) — there is no "select once, store, consume"
+    /// step to copy, and `CombatantState.IntentKey` is a dead field there.
+    intents: Vec<Intent>,
     /// `run_fight`'s "problems" for the last step, by `wire_name`. Observations, not failures.
     problems: Vec<&'static str>,
     /// Human-readable reason for the last non-`Ok` return.
@@ -244,6 +366,37 @@ fn build_session(seed: i32) -> Result<Session, String> {
     let content: &'static Content<'static> =
         Box::leak(Box::new(Content::parse(IMAGE).map_err(|e| format!("RDCF 镜像解析失败: {}", detail(&e)))?));
 
+    // ── The enemies come out of the encounter, not out of this file ──────────────────────────
+    // `ENCT[enc].Enemies[j]` is the **only** place that says "these enemies, in this order"
+    // (`Encounters.cs:211-220`; the flat `EACT` table is just the action library). The order is
+    // also the turn order, and it is the order `intent::locate_enemy` indexes into.
+    let entry = content
+        .lookup_in(ENCOUNTER, EK_ENCOUNTER)
+        .ok_or_else(|| format!("内容镜像里没有遭遇 `{ENCOUNTER}`"))?;
+    let encounter: u32 = u32::from(entry.index);
+    let mut enemies: Vec<PlanCombatant<'static>> = Vec::new();
+    for spec in content
+        .encounter_enemies(encounter)
+        .map_err(|e| format!("encounter_enemies: {}", detail(&e)))?
+        .iter()
+    {
+        let spec = spec.map_err(|e| format!("ENCT enemy record: {}", detail(&e)))?;
+        let id: &'static str = spec.id().map_err(|e| format!("ENCT enemy id: {}", detail(&e)))?;
+        // `MaxHealth` 缺席 ⇒ 响亮失败。参考在这里有默认值吗？没有可靠出处 ⇒ 不编一个。
+        let max_health = spec
+            .max_health()
+            .map_err(|e| format!("ENCT enemy MaxHealth: {}", detail(&e)))?
+            .ok_or_else(|| format!("`{id}` has no MaxHealth in the encounter"))?;
+        enemies.push(PlanCombatant { id, max_health });
+    }
+    if enemies.is_empty() {
+        return Err(format!("遭遇 `{ENCOUNTER}` 里没有敌人"));
+    }
+    // `FightPlan` borrows the slice for the session's whole life; a browser page builds one
+    // session per reset, so leaking two small slices is the cheapest honest answer (the alternative
+    // is const-generic plumbing through `FightPlan`, which is frozen).
+    let enemies: &'static [PlanCombatant<'static>] = Box::leak(enemies.into_boxed_slice());
+
     // The standard package's turn config is the authority for the resource id and the draw count
     // (`StandardCombatPackage.cs:7,124`); re-typing "standard.energy"/5/3 here would be a second
     // source of truth that can drift from the kernel's.
@@ -263,8 +416,12 @@ fn build_session(seed: i32) -> Result<Session, String> {
             id: HERO,
             max_health: HERO_HP,
         },
-        enemies: &ENEMIES,
-        deck: &DECK,
+        enemies,
+        // **Empty on purpose**: an empty `deck` is what makes `build_fight_from_content` read the
+        // deck out of the content (`Characters[0].Start.Deck` → `Start.Deck` → root `Deck`; the
+        // three-line table is in `content.rs`'s header). A non-empty slice here would silently
+        // take the hard-coded path and the page would stop exercising the content.
+        deck: &[],
         cards_drawn_per_turn: standard.draw_per_turn,
         // `true` on purpose: shuffling is what advances `random_step`, and "the RNG really ran"
         // is worth being able to see from the page.
@@ -278,7 +435,8 @@ fn build_session(seed: i32) -> Result<Session, String> {
         seed,
     ));
     let host = Host::new(content);
-    build_fight(&mut state, content, &plan).map_err(|e| format!("build_fight: {}", detail(&e)))?;
+    build_fight_from_content(&mut state, content, &plan)
+        .map_err(|e| format!("build_fight_from_content: {}", detail(&e)))?;
 
     let mut session = Session {
         content,
@@ -289,6 +447,8 @@ fn build_session(seed: i32) -> Result<Session, String> {
         hand_defs: Vec::new(),
         hand_costs: Vec::new(),
         actions: Vec::new(),
+        encounter,
+        intents: Vec::new(),
         problems: Vec::new(),
         error: String::new(),
         reward: 0,
@@ -312,9 +472,70 @@ impl Session {
     fn reobserve(&mut self) {
         self.before.copy_from_slice(&self.after);
         self.refresh_hand();
+        self.refresh_intents();
         self.after = self.compute_observation();
         self.publish();
         self.actions = self.compute_actions();
+    }
+
+    /// Re-ask every enemy slot what it intends to do, and how hard.
+    ///
+    /// The layout follows the reference's *preview* path, not its *execution* path:
+    /// `InteractiveCombat.cs:122` asks the selector with `_combat.CurrentRound` **during the
+    /// hero's turn**, so that is the round this uses. `docs/spec/enemy-intent.md` §2.4 fork 2 is
+    /// the honest caveat: the state between the preview and the moment the enemy actually acts
+    /// (hero turn-end, then the enemy's turn-start: block cleared, DoT eaten) can flip a
+    /// condition, so a preview is a prediction and not a promise. Nothing here caches it — the
+    /// reference recomputes on every ask, and so does this.
+    fn refresh_intents(&mut self) {
+        let content = self.content;
+        let round = self.state.current_round;
+        let mut intents = Vec::with_capacity(self.plan.enemies.len());
+        for slot in 0..self.plan.enemies.len().min(MAX_ENEMY_SLOTS) {
+            let raw_id = self.plan.enemies[slot].id;
+            let Ok(id) = CombatantId::new(raw_id) else {
+                intents.push(Intent::unknown("combatant id 不合法"));
+                continue;
+            };
+            // §2.4 fork 3: the reference asks the selector about dead enemies too (`EnemyIntentRules`
+            // 的 lambda 不检查 IsAlive), so this does too. The page decides whether to show it.
+            let choice: Result<Option<ActionChoice<'static>>, _> =
+                match locate_enemy(content, self.encounter, &id) {
+                    Ok(Some(at)) => select_action(&self.state, content, at, &id, round),
+                    Ok(None) => {
+                        intents.push(Intent::unknown("不在这条遭遇的敌人名单里"));
+                        continue;
+                    }
+                    Err(error) => Err(error),
+                };
+            let intent = match choice {
+                Ok(Some(choice)) => {
+                    let damage = program_damage(content, choice.action_row);
+                    let kind = intent_kind_code(choice.intent_kind);
+                    let mut text = choice.action_id.to_string();
+                    text.push_str(" | ");
+                    text.push_str(match kind {
+                        0 => "Unknown",
+                        1 => "Attack",
+                        2 => "Defend",
+                        3 => "Buff",
+                        4 => "Debuff",
+                        5 => "Special",
+                        _ => "(no kind)",
+                    });
+                    if damage >= 0 {
+                        text.push_str(&format!(" | {damage} dmg"));
+                    } else {
+                        text.push_str(" | 伤害非字面量");
+                    }
+                    Intent { kind, damage, text }
+                }
+                Ok(None) => Intent::unknown("没有 authored 动作"),
+                Err(error) => Intent::unknown(&format!("intent 读不出来: {}", detail(&error))),
+            };
+            intents.push(intent);
+        }
+        self.intents = intents;
     }
 
     /// Walk the hero's hand and remember each slot's definition id and printed cost.
@@ -545,8 +766,11 @@ impl Session {
                 .find(|p| p.key.as_str() == "standard.block")
                 .map_or(0, |p| p.pool.current);
             obs[base + 4] = -1; // ward: not produced (see header)
-            obs[base + 5] = -1; // intent_kind: Gap 1
-            obs[base + 6] = -1; // intent_damage: Gap 1
+            // `intent_kind` / `intent_damage`: the content's own answer, recomputed by
+            // `refresh_intents` (which `reobserve` runs **before** this).
+            let intent = self.intents.get(slot_index);
+            obs[base + 5] = intent.map_or(-1, |intent| intent.kind);
+            obs[base + 6] = intent.map_or(-1, |intent| intent.damage);
             obs[base + 7] = combatant.statuses().len() as i32;
             for (axis, status_id) in STATUS_AXES.iter().enumerate() {
                 obs[OFF_ENEMY_STATUS + slot_index * 5 + axis] = combatant
@@ -720,13 +944,29 @@ impl Session {
         self.exec(&[Step::HeroPlays { card, target }])
     }
 
-    /// kind 1. The driver exposes no "advance one combatant", so the whole enemy phase is driven
-    /// here: end the hero turn → let the (single) enemy act → `NextRound` wraps back to the hero.
-    /// Gap 4: with two enemies the second one is skipped, so this refuses instead.
+    /// kind 1: end the hero's turn and let **every** enemy take its own turn, then give the round
+    /// back to the hero.
     ///
-    /// ⚠️ The kernel half of Gap 4 is **closed** (`battle::Step::EndOneTurn`); this spike still
-    /// routes through `NextRound` at the bottom, which is why the guard below is still needed.
-    /// Switching that one call to `EndOneTurn` (and dropping the guard) is the remaining work.
+    /// # Why a loop and not one call
+    ///
+    /// `Step::EndOneTurn` ends **exactly one** turn: the action seat moves to the next *living*
+    /// combatant and stops there (its whole point — a multi-enemy fight where each enemy gets a
+    /// turn instead of `NextRound` skipping over them). So one click is:
+    ///
+    /// ```text
+    /// EndOneTurn                      hero's turn ends → enemy[0] is active
+    /// loop while the active seat is not the hero:
+    ///     EnemyActs{active, action, hero}   ← the action comes from the content, not from here
+    ///     EndOneTurn                        that enemy's turn ends → enemy[1] … or the hero
+    /// ```
+    ///
+    /// Two things are *not* done here on purpose:
+    /// * the action is not chosen from `self.intents` (the preview) — it is asked again, now, with
+    ///   the state the enemy actually starts its turn with. §2.4 fork 2 of
+    ///   `docs/spec/enemy-intent.md`: the preview is computed during the hero's turn, and
+    ///   turn-end/turn-start (block cleared, DoT eaten, statuses expiring) can change an answer.
+    ///   Reusing the preview would make the page *look* consistent and be wrong.
+    /// * no "plan has N enemies" refusal: the reason for it was `NextRound`, which is gone.
     fn step_end_turn(&mut self) -> Result<(), String> {
         let Some(hero) = self.hero_id() else {
             return Err("hero id is not constructible".to_string());
@@ -737,49 +977,58 @@ impl Session {
             self.error = "it is not the hero's turn".to_string();
             return Ok(());
         }
-        if self.plan.enemies.len() > 1 {
-            return Err(format!(
-                "Gap 4: this driver can let at most one enemy act per end-turn step, plan has {}",
-                self.plan.enemies.len()
-            ));
-        }
 
-        self.exec(&[Step::HeroEndsTurn])?;
-        if self.state.result != CombatResult::Ongoing {
-            return Ok(());
+        self.exec(&[Step::EndOneTurn])?;
+        // `plan.enemies.len() + 2` turns is the whole round plus the hero's own two hops; if the
+        // seat is still not the hero after that, the turn order is not making progress and that
+        // must be loud rather than a hang in the browser.
+        let mut hops = 0usize;
+        let limit = self.plan.enemies.len() + 2;
+        while self.state.result == CombatResult::Ongoing {
+            let Some(active) = self.state.active_combatant_id else {
+                return Err("回合机没有活跃战斗员".to_string());
+            };
+            if active.as_str() == HERO {
+                return Ok(());
+            }
+            hops += 1;
+            if hops > limit {
+                return Err(format!("结束回合在 {limit} 跳内没有回到英雄身上"));
+            }
+            let raw_id: &'static str = self
+                .plan
+                .enemies
+                .iter()
+                .map(|enemy| enemy.id)
+                .find(|id| *id == active.as_str())
+                .ok_or_else(|| format!("活跃战斗员 `{}` 不在 plan.enemies 里", active.as_str()))?;
+            let action = self.action_for(&active)?;
+            // `None` = this enemy has no authored action (`Actions` empty and no rule matched).
+            // The reference has nothing to execute either; the turn still ends — it does not get
+            // to act twice, and skipping the whole turn would be a different rule.
+            if let Some(choice) = action {
+                self.exec(&[Step::EnemyActs {
+                    enemy: raw_id,
+                    action: choice,
+                    target: Some(HERO),
+                }])?;
+                if self.state.result != CombatResult::Ongoing {
+                    return Ok(());
+                }
+            }
+            self.exec(&[Step::EndOneTurn])?;
         }
-
-        // Whose turn is it now? Only `ENEMY` is expressible (see `Step::EnemyActs`'s `&'static`
-        // requirement and Gap 1).
-        let active_is_enemy = match self.state.active_combatant_id.as_ref() {
-            Some(id) => id.as_str() != HERO,
-            None => false,
-        };
-        if !active_is_enemy {
-            return Ok(());
-        }
-        let active = self
-            .state
-            .active_combatant_id
-            .as_ref()
-            .map(|id| id.as_str().to_string())
-            .unwrap_or_default();
-        if active != ENEMY {
-            return Err(format!(
-                "Gap 1/4: enemy `{active}` has no authored action in this spike (only `{ENEMY}`)"
-            ));
-        }
-
-        self.exec(&[Step::EnemyActs {
-            enemy: ENEMY,
-            action: ENEMY_ACTION,
-            target: Some(HERO),
-        }])?;
-        if self.state.result != CombatResult::Ongoing {
-            return Ok(());
-        }
-        self.exec(&[Step::NextRound])?;
         Ok(())
+    }
+
+    /// The `EACT` id this combatant will use **now** (nil = no authored action).
+    fn action_for(&self, actor: &CombatantId) -> Result<Option<&'static str>, String> {
+        let at = locate_enemy(self.content, self.encounter, actor)
+            .map_err(|error| format!("locate_enemy: {}", detail(&error)))?
+            .ok_or_else(|| format!("`{}` 不在这条遭遇的敌人名单里", actor.as_str()))?;
+        let choice = select_action(&self.state, self.content, at, actor, self.state.current_round)
+            .map_err(|error| format!("select_action: {}", detail(&error)))?;
+        Ok(choice.map(|choice| choice.action_id))
     }
 
     /// `env-abi.md` §7 + §10: `1000*(enemy hp lost) - 1000*(hero hp lost) - 10*(wasted energy)`.
@@ -1070,6 +1319,74 @@ pub unsafe extern "C" fn rd_env_card_name_into(index: i32, ptr: *mut u8) -> i32 
     name.len() as i32
 }
 
+/// The intent text of enemy slot `index` — `rd_env_intent_len(index)`.
+///
+/// Not in the frozen ABI, for the same reason as `rd_env_card_name_*`: the *numbers* are in the
+/// observation (`intent_kind` / `intent_damage`), this is the presentation half a human needs to
+/// see that they are real (`acid_slime_m.tackle | Attack | 10 dmg`).
+#[no_mangle]
+pub extern "C" fn rd_env_intent_len(index: i32) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    session
+        .intents
+        .get(index.max(0) as usize)
+        .map_or(-1, |intent| intent.text.len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_intent_len(index)` writable bytes in linear memory.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_intent_into(index: i32, ptr: *mut u8) -> i32 {
+    if ptr.is_null() {
+        return -1;
+    }
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    let Some(intent) = session.intents.get(index.max(0) as usize) else {
+        return -1;
+    };
+    std::ptr::copy_nonoverlapping(intent.text.as_ptr(), ptr, intent.text.len());
+    intent.text.len() as i32
+}
+
+/// The id of the enemy in wall slot `index` — `rd_env_enemy_name_len(index)`.
+///
+/// Presentation only, like `rd_env_card_name_*`: the observation carries slots and numbers, and a
+/// page that can only print "enemy #1" cannot show that the names came out of `ENCT`.
+#[no_mangle]
+pub extern "C" fn rd_env_enemy_name_len(index: i32) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    session
+        .plan
+        .enemies
+        .get(index.max(0) as usize)
+        .map_or(-1, |enemy| enemy.id.len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_enemy_name_len(index)` writable bytes in linear memory.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_enemy_name_into(index: i32, ptr: *mut u8) -> i32 {
+    if ptr.is_null() {
+        return -1;
+    }
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    let Some(enemy) = session.plan.enemies.get(index.max(0) as usize) else {
+        return -1;
+    };
+    std::ptr::copy_nonoverlapping(enemy.id.as_ptr(), ptr, enemy.id.len());
+    enemy.id.len() as i32
+}
+
 /// Benchmark hook: rebuild the observation + action table **without** stepping the fight.
 ///
 /// Not part of the ABI. It exists because "how long does one `rd_env_step` take" is not the same
@@ -1231,13 +1548,49 @@ mod tests {
         out
     }
 
-    /// The ABI works end to end on the host: the hand really gets drawn, a `paper_cut` really
-    /// costs 1 energy, the enemy really dies, and a rejected step really changes nothing.
+    /// The intent text of an enemy slot, the way the page reads it.
+    fn intent_text(slot: i32) -> String {
+        let len = rd_env_intent_len(slot);
+        if len <= 0 {
+            return String::new();
+        }
+        let mut bytes = vec![0u8; len as usize];
+        let written = unsafe { rd_env_intent_into(slot, bytes.as_mut_ptr()) };
+        assert_eq!(written, len, "intent_len / intent_into disagree");
+        String::from_utf8(bytes).expect("intent text is UTF-8")
+    }
+
+    /// "Play the first card that deals damage, otherwise end the turn" — the policy needs *some*
+    /// opinion, because the content deck (`strike`×5, `defend`×4, `bash`×1) will happily let a
+    /// "play whatever comes first" bot stack block forever.
+    fn play_an_attack_or_end_turn() -> i32 {
+        let session = ensure_session().expect("session");
+        let actions = session.actions.clone();
+        for (index, action) in actions.iter().enumerate() {
+            if action.kind != ACTION_PLAY {
+                continue;
+            }
+            let Some(name) = session.hand_defs.get(action.arg0.max(0) as usize) else {
+                continue;
+            };
+            if name == "strike" || name == "bash" {
+                return index as i32;
+            }
+        }
+        actions
+            .iter()
+            .position(|action| action.kind == ACTION_END_TURN)
+            .map_or(-1, |index| index as i32)
+    }
+
+    /// The ABI works end to end on the host, on **content**: the deck comes out of the image, the
+    /// enemies come out of the encounter, the intent column is real, every enemy takes a turn per
+    /// end-turn step, and a rejected step really changes nothing.
     #[test]
     fn the_spike_scenario_is_playable_through_the_env_abi() {
         assert_eq!(rd_env_reset(), 0);
         // Pin the size attribution the spike report makes, so it cannot rot silently:
-        // the 184 KB is the *state*, and the driver's envelope is a few KB, not a data-section
+        // the 213 KB is the *state*, and the driver's envelope is a few KB, not a data-section
         // blob. If `Problem` ever grows a payload variant this fires and whoever added it gets to
         // redo the numbers in the report.
         assert_eq!(rd_env_bench_sizes(2), 1, "`Problem` must stay fieldless (1 byte)");
@@ -1249,11 +1602,18 @@ mod tests {
             rd_env_bench_sizes(0) > 180_000,
             "CombatState is the 184 KB structure"
         );
+        assert_eq!(rd_env_bench_sizes(4), OBS_LEN as i32, "observe_len is published");
+
+        // The fight is built from the content: two enemies from `enc_small_slimes`, and a hero
+        // whose HP comes from the *plan* (80 here) rather than from `Start.MaxHealth`.
+        let fresh = exported_observation();
+        assert_eq!(fresh[H_ENEMY_COUNT], 2, "the encounter's enemy count");
+        assert_eq!(fresh[H_HERO_HP_MAX], HERO_HP, "hero HP is the plan's, not the content's");
 
         // Before the first step the hero has not started its turn, so the hand is empty — this is
         // `ScenarioRunner.cs:105`'s `EnsureTurnStarted` being *lazy*, and it is worth pinning
         // because "the hand is empty on load" looks like a bug from the outside.
-        assert_eq!(observation()[H_HAND_COUNT], 0, "hand before the first turn");
+        assert_eq!(fresh[H_HAND_COUNT], 0, "hand before the first turn");
         assert_eq!(rd_env_done(), 0);
 
         // The exported buffer and the internal snapshot must be the same vector. This is the
@@ -1265,7 +1625,7 @@ mod tests {
         );
         // ... and it is not accidentally all zeros, which would also satisfy `==` if both sides
         // were zero: `round` is 1 on a fresh fight.
-        assert_eq!(exported_observation()[H_ROUND], 1, "round on a fresh fight");
+        assert_eq!(fresh[H_ROUND], 1, "round on a fresh fight");
 
         // A play action must exist even though the hand is empty? No — nothing to play yet, so the
         // only legal action is "end turn". That is the honest table, and it is why the page's end
@@ -1273,45 +1633,78 @@ mod tests {
         assert_eq!(rd_env_action_count(), 1);
         assert_eq!(rd_env_action_kind(0), ACTION_END_TURN);
 
-        // Ending the first turn must leave the hero holding a drawn hand: `NextRound` wraps to the
-        // hero, and wrapping *starts* its turn, and starting it draws.
+        // ── the intent column is content, not a constant ─────────────────────────────────────
+        // Every living enemy answers with an `EACT` id, a kind and a literal damage amount
+        // (`acid_slime_m.corrosive_spit` = 7, `spike_slime_s.tackle` = 5 in this content).
+        let mut previewed_damage = 0;
+        for slot in 0..2 {
+            let base = OFF_ENEMY + slot * 8;
+            assert_eq!(fresh[base], 1, "enemy {slot} alive");
+            assert!(fresh[base + 5] > 0, "enemy {slot} intent_kind must be real");
+            assert!(fresh[base + 6] > 0, "enemy {slot} intent_damage must be real");
+            let text = intent_text(slot as i32);
+            assert!(text.contains(" | "), "intent text for {slot}: {text:?}");
+            assert!(text.contains("dmg"), "intent text for {slot}: {text:?}");
+            previewed_damage += fresh[base + 6];
+        }
+        assert_eq!(rd_env_intent_len(9), -1, "no such enemy slot");
+
+        // ── one end-turn step lets **every** enemy act ──────────────────────────────────────
+        // The discriminator: with the old `NextRound` path only the first enemy would act, so the
+        // hero would lose one enemy's worth of HP instead of both. Pinning the sum is what makes
+        // this assertion about the turn machinery rather than about the number 12.
+        let hp_before = fresh[H_HERO_HP];
         assert_eq!(rd_env_step(0), 0);
+        let after_end_turn = exported_observation();
         assert_eq!(
-            exported_observation()[H_HAND_COUNT],
-            5,
-            "a full hand after wrapping back to the hero's turn"
+            hp_before - after_end_turn[H_HERO_HP],
+            previewed_damage,
+            "both enemies must act, and round 1's preview must equal the fact"
         );
+        assert_eq!(
+            after_end_turn[H_HAND_COUNT],
+            5,
+            "a full hand after the round comes back to the hero"
+        );
+        assert_eq!(after_end_turn[H_ROUND], 2, "the round advanced");
         // The drawn cards must carry real costs out of the image (not the `-1` "could not read").
         for hand_index in 0..5 {
             let base = OFF_HAND + hand_index * 4;
-            let obs = exported_observation();
-            assert_eq!(obs[base], 1, "hand slot {hand_index} occupied");
-            assert!(obs[base + 1] >= 0, "hand slot {hand_index} cost is unreadable");
-            assert!(obs[base + 2] >= 0, "hand slot {hand_index} def_slot is unreadable");
+            assert_eq!(after_end_turn[base], 1, "hand slot {hand_index} occupied");
+            assert!(after_end_turn[base + 1] >= 0, "hand slot {hand_index} cost is unreadable");
+            assert!(after_end_turn[base + 2] >= 0, "hand slot {hand_index} def_slot is unreadable");
         }
 
         // Out-of-range actions are refused, and refusal must not move the state.
         let before = observation();
-        assert_eq!(rd_env_step(7), -1, "out-of-range step");
+        let out_of_range = rd_env_action_count() + 5;
+        assert_eq!(rd_env_step(out_of_range), -1, "out-of-range step");
         assert_eq!(observation(), before, "a rejected step moved the observation");
 
-        // Now actually play. Greedy: first enumerated action each time, until the fight ends.
+        // ── play the fight out ──────────────────────────────────────────────────────────────
         let mut steps = 0;
         while rd_env_done() == 0 && steps < 200 {
-            assert!(rd_env_action_count() > 0, "stuck with no legal actions");
-            let verdict = rd_env_step(0);
-            assert_eq!(verdict, 0, "step {steps} was refused");
+            let action = play_an_attack_or_end_turn();
+            assert!(action >= 0, "stuck with no legal action at step {steps}");
+            assert_eq!(rd_env_step(action), 0, "step {steps} was refused");
             steps += 1;
         }
         assert!(steps > 0, "the fight never advanced");
         assert_eq!(rd_env_done(), 1, "the fight did not terminate");
-        assert_eq!(rd_env_result(), 1, "the greedy policy should have won");
+        assert_eq!(
+            rd_env_result(),
+            1,
+            "an attack-first policy must win the `enc_small_slimes` fight"
+        );
 
-        // The enemy is at 0 and the hero is still standing.
+        // Every enemy is down and the hero is still standing.
         let obs = observation();
         assert_eq!(obs[H_RESULT], 1);
-        assert_eq!(obs[OFF_ENEMY + 1], 0, "enemy hp");
-        assert_eq!(obs[OFF_ENEMY], 0, "enemy should be down, not alive");
+        for slot in 0..2 {
+            let base = OFF_ENEMY + slot * 8;
+            assert_eq!(obs[base], 0, "enemy {slot} should be down, not alive");
+            assert_eq!(obs[base + 1], 0, "enemy {slot} hp");
+        }
         assert!(obs[H_HERO_HP] > 0, "hero hp");
 
         // Determinism (`env-abi.md` §8.1): same seed + same policy ⇒ same observation stream.
