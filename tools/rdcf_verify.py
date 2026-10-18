@@ -8,13 +8,35 @@
   * magic / 文件大小 / 段目录能否被解出来
   * 段目录里的 offset/count/bytes 是否与 manifest 自述一致
   * 每一段是否落在文件内、段之间是否重叠
-  * count × stride 是否与段字节数自洽（对定长表）
+  * 5 张定长表（CARD/STAT/EACT/ENCT/REL）的 count × stride 是否与段字节数自洽
   * 重建后 manifest 是否已过期（文件变了但 manifest 没更新）
 
 我**不能**验证的（需要格式语义，属于另一路工作）：段内编码是否正确、语义是否等价于源 JSON。
 那部分应该由编译器的 validate/reader 与 golden 回归来回答。
 
-用法:  C:\\Users\\TK11\\miniforge3\\python.exe rdcf_verify.py
+--------------------------------------------------------------------------------
+2026-10-19：这个脚本自己腐烂过一次，两处**同时**坏了、并且互相掩盖。修法记在这里，
+因为下一次把同样的写法抄回来是很容易的事。
+
+  ① `tables` 在 manifest **顶层**（compile.py:1316），旧代码却写成 `info.get("tables")`
+     —— `info` 是 `mf["variants"][name]`，那里根本没有 `tables`。结果是 5 张表的
+     count×stride 检查**一次都没跑成**，而脚本只记一条"观察"，照旧 exit 0。
+     现在：读顶层；并且**查不到就是失败**（"查不到就跳过"的检查比没有检查更糟，
+     它会伪装成通过）。
+  ② 旧代码在这里抄了一份 stride 常量 28/36/16/20/12，其中 **3 个错**
+     （CARD 28→32、STAT 36→40、ENCT 20→16；EACT 16 与 REL 12 恰好是对的）。
+     抄常量正是腐烂的根源，所以现在 `from rdcfmt import row_stride` —— 常量只允许有
+     一个出处（`tools/contentc/rdcfmt.py` 的 ROW_SCHEMAS）。只修 ① 不修 ② 会立刻假红：
+     ENCT 1744 B < 109×20。
+     ⚠ 注意段名与 schema 名不同：段叫 `STAT`，schema 叫 `STATUS`；`row_stride()` 吃的是后者。
+
+独立性没有因此丢失：count 与 bytes 来自"manifest 自述"与"我自己从字节里解出来的段目录"，
+stride 是**格式定义**（schema 有几个 u16 槽）而不是编码器行为，不属于"相信生成器"的范畴。
+
+用法:  C:\\Users\\TK11\\miniforge3\\python.exe rdcf_verify.py [manifest.json]
+       （参数省略时用 tools/contentc/out/manifest.json；给参数是为了能做变异测试：
+        喂它一份手改过的 manifest 副本，确认它真的会红。）
+       设 PYTHONIOENCODING=utf-8，否则本机 PowerShell 会把中文输出解码成乱码。
 """
 import hashlib
 import json
@@ -25,15 +47,25 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 OUT = os.path.join(ROOT, "tools", "contentc", "out")
+CONTENTC = os.path.join(HERE, "contentc")
 
-# 定长表 -> (在 manifest 里声明的 stride 字段, 期望的条目数取处)
+# stride 只有一个出处：格式定义本身。**不要**在这里再抄一份常量。
+sys.path.insert(0, CONTENTC)
+try:
+    from rdcfmt import row_stride, ROW_SCHEMAS
+except Exception as exc:                                  # pragma: no cover
+    print(f"!! 无法从 {os.path.join(CONTENTC, 'rdcfmt.py')} 导入 row_stride: {exc}")
+    print("   前缺失 ⇒ 定长表检查无法执行，本脚本不作判定（退出码 2，不等于通过）。")
+    sys.exit(2)
+
+# 段名 -> (manifest 顶层 tables 里的键, row_stride 用的 schema 名)
 # 用来交叉检查 "段字节数 == count × stride"。
 STRIDED = {
-    "CARD": ("cards", 28),
-    "STAT": ("statuses", 36),
-    "EACT": ("enemy_actions", 16),
-    "ENCT": ("encounters", 20),
-    "REL": ("relics", 12),
+    "CARD": ("cards", "CARD"),
+    "STAT": ("statuses", "STATUS"),
+    "EACT": ("enemy_actions", "EACT"),
+    "ENCT": ("encounters", "ENCT"),
+    "REL": ("relics", "REL"),
 }
 
 
@@ -55,13 +87,60 @@ def parse_directory(blob, header_bytes, n_entries):
     return entries, True
 
 
-def check_variant(name, info, failures, notes):
+def check_strided_tables(name, declared, tables, failures):
+    """5 张定长表：段字节数 == count × row_stride()，且段 count == manifest 的行数。
+
+    返回 (真正跑成的检查项数, 覆盖的表行数)。跑成 0 项由调用方报失败。
+    """
+    ran = 0
+    rows = 0
+    for s in declared:
+        if s["name"] not in STRIDED:
+            continue
+        key, schema = STRIDED[s["name"]]
+        stride = row_stride(schema)                 # 唯一出处，见模块文档 ②
+        entry = tables.get(key) if isinstance(tables, dict) else None
+        if not isinstance(entry, dict) or "count" not in entry:
+            # 不许静默跳过：manifest 结构一变，这项覆盖就悄悄变空 —— 这正是上次腐烂的形状。
+            failures.append(
+                f"{name}:{s['name']} 段：manifest 顶层没有 tables.{key}.count ⇒ "
+                f"这张表的 count×stride 自洽检查**无法执行**（不许静默跳过）")
+            print(f"   !! {s['name']} 段：manifest 顶层缺 tables.{key}.count，检查无法执行")
+            continue
+
+        ran += 1
+        declared_count = entry["count"]
+        rows += declared_count
+        expect = declared_count * stride
+        mf_stride = entry.get("stride")
+        print(f"   · {s['name']} 段 {s['bytes']:,} B / {declared_count} 行 × stride {stride} B"
+              f"（期待 {expect:,} B；manifest 自述 count={declared_count}"
+              f" stride={mf_stride}）")
+        if s["count"] != declared_count:
+            failures.append(
+                f"{name}:{s['name']} 段 count {s['count']} != tables.{key}.count {declared_count}")
+        if mf_stride is not None and mf_stride != stride:
+            failures.append(
+                f"{name}:tables.{key}.stride {mf_stride} != rdcfmt.row_stride('{schema}') {stride}"
+                f" —— manifest 与格式定义已经不一致")
+        if s["bytes"] != expect:
+            # 编译器逐行写 raw + 补零到 stride（compile.py:608-615），所以一个字节都不许余。
+            kind = "小于" if s["bytes"] < expect else "大于"
+            failures.append(
+                f"{name}:{s['name']} 段 {s['bytes']} B {kind} {declared_count} 行 × stride {stride}"
+                f" = {expect} B（差 {s['bytes'] - expect:+d} B）")
+            print(f"   !! {s['name']} 段字节数 {kind} count×stride：{s['bytes']} vs {expect}")
+    return ran, rows
+
+
+def check_variant(name, info, tables, failures):
+    """校验一个变体。返回 (定长表检查项数, 定长表覆盖行数)。"""
     path = os.path.join(OUT, os.path.basename(info["file"]))
     print(f"\n── 变体 {name}: {os.path.basename(info['file'])} ──")
     if not os.path.exists(path):
         failures.append(f"{name}: 文件不存在 {path}")
         print("   !! 文件不存在")
-        return
+        return 0, 0
 
     with open(path, "rb") as fh:
         blob = fh.read()
@@ -85,7 +164,7 @@ def check_variant(name, info, failures, notes):
     entries, ok = parse_directory(blob, 32, len(declared))
     if not ok:
         failures.append(f"{name}: 段目录解不出来")
-        return
+        return 0, 0
 
     # 目录解出来了吗？与 manifest 的段一一对齐比较（manifest 的段顺序 = 目录顺序）。
     mismatches = 0
@@ -126,72 +205,66 @@ def check_variant(name, info, failures, notes):
     used = 32 + 240 + sum(s["bytes"] for s in declared)
     print(f"   header32+dir240+段合计 = {used:,} B，文件 {size:,} B，差 {size - used:,} B")
 
-    # 定长表的 count × stride 自洽性。
-    # ⚠ 一个"查不到就跳过"的检查比没有检查更糟：它会伪装成通过。所以这里显式统计
-    # 真正跑过的检查数，一个都没跑就报出来，而不是安静地什么也不做。
-    tables = info.get("tables", {})
-    strided_checks = 0
-    for s in declared:
-        if s["name"] not in STRIDED:
-            continue
-        key, stride = STRIDED[s["name"]]
-        entry = tables.get(key)
-        if not isinstance(entry, dict) or "count" not in entry:
-            print(f"   ? {s['name']} 段：manifest 里没有 tables.{key}.count，**这项检查未执行**")
-            continue
-        strided_checks += 1
-        declared_count = entry["count"]
-        expect = declared_count * stride
-        if s["count"] and s["bytes"] < expect:
-            failures.append(
-                f"{name}:{s['name']} 段 {s['bytes']} B < count {s['count']} × stride {stride} = {expect} B")
-            print(f"   !! {s['name']} 段小于 count×stride（{s['bytes']} < {expect}）")
-        else:
-            extra = s["bytes"] - expect
-            print(f"   · {s['name']} 段 {s['bytes']} B = count×stride {expect} B + 额外 {extra} B")
-        if s["count"] != declared_count:
-            failures.append(f"{name}:{s['name']} 段 count {s['count']} != tables.{key}.count {declared_count}")
-    if strided_checks == 0:
-        notes.append(f"{name}: 定长表的 count×stride 自洽性检查**一次都没跑成**"
-                     "（manifest 的 tables 结构变了？）——这部分覆盖是空的")
+    # 定长表的 count × stride 自洽性（tables 从 manifest **顶层**取，见模块文档 ①）。
+    ran, rows = check_strided_tables(name, declared, tables, failures)
+    if ran == 0:
+        failures.append(f"{name}: 定长表的 count×stride 自洽性检查**一次都没跑成**"
+                        "（manifest 顶层的 tables 结构变了？）—— 这部分覆盖是空的")
+    else:
+        print(f"   定长表     {ran}/{len(STRIDED)} 张表跑成 count×stride 检查，覆盖 {rows} 行")
+    return ran, rows
 
 
-def main():
+def main(argv):
     print("=" * 78)
     print("RDCF 独立校验（只读字节，不读生成它的代码）")
     print("=" * 78)
 
-    mpath = os.path.join(OUT, "manifest.json")
+    mpath = argv[1] if len(argv) > 1 else os.path.join(OUT, "manifest.json")
+    mpath = os.path.abspath(mpath)
     if not os.path.exists(mpath):
         print(f"!! 找不到 {mpath}")
         return 2
     with open(mpath, encoding="utf-8") as fh:
         mf = json.load(fh)
-    print(f"  manifest: format={mf.get('format')} v{mf.get('format_version')} magic={mf.get('magic')}")
+    print(f"  manifest: {mpath}")
+    print(f"  format={mf.get('format')} v{mf.get('format_version')} magic={mf.get('magic')}")
     print(f"  源: {mf['source']['raw_bytes']:,} B -> 紧凑 {mf['source']['compact_json_bytes']:,} B"
           f" -> 剥冗余 {mf['source']['compact_json_without_redundant_children']:,} B")
 
-    failures, notes = [], []
+    failures = []
+    tables = mf.get("tables")
+    if not isinstance(tables, dict):
+        failures.append("manifest 顶层没有 tables 段 —— 5 张定长表的 count×stride 检查无法执行"
+                        "（不许静默跳过）")
+        tables = {}
+
+    print("\n  本次会检查的定长表（stride 来自 rdcfmt.row_stride，不是抄来的常量）：")
+    for sname, (key, schema) in STRIDED.items():
+        print(f"    {sname:<5} 段 <- tables.{key} 行数 × stride {row_stride(schema)} B"
+              f"  (schema {schema}: {len(ROW_SCHEMAS[schema])} 个 u16 槽)")
+
+    total_ran, total_rows, nvar = 0, 0, 0
     for name, info in mf.get("variants", {}).items():
-        check_variant(name, info, failures, notes)
+        ran, rows = check_variant(name, info, tables, failures)
+        total_ran += ran
+        total_rows += rows
+        nvar += 1
 
     print("\n" + "=" * 78)
-    if notes:
-        print("观察（不视为失败）:")
-        for n in notes:
-            print(f"  · {n}")
     if failures:
-        print(f"\n!! 校验失败 {len(failures)} 项:")
+        print(f"!! 校验失败 {len(failures)} 项:")
         for f in failures:
             print(f"  - {f}")
         return 1
+    print(f"RDCF_VERIFY PASS ({nvar}/{len(mf.get('variants', {}))} variants, "
+          f"{len(STRIDED)}/{len(STRIDED)} tables, {total_ran} count×stride checks, "
+          f"{total_rows} table rows)")
     print("\n✓ 通过的结构不变量：magic 正确、段都落在文件内、段间无重叠、manifest 与磁盘字节一致、"
-          "段目录可被独立解出且与 manifest 逐字段相符。")
-    print("  未执行/不在范围内的：")
-    print("    · 段内编码是否正确、语义是否等价于源 JSON —— 需由编译器的 reader/validate 回答；")
-    print("    · 定长表 count×stride 自洽性 —— 见上方 '?' 行，本次一次都没跑成。")
+          "段目录可被独立解出且与 manifest 逐字段相符、5 张定长表的段字节数恰为 行数 × stride。")
+    print("  不在范围内的：段内编码是否正确、语义是否等价于源 JSON —— 需由编译器的 reader/validate 回答。")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv))

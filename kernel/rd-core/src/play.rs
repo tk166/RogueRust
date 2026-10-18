@@ -741,6 +741,12 @@ fn plan_play<'c>(
 ///    （`Cards/CardPlay.cs:245-247`）在卡已被自己的节目挪出手牌时直接 return，那次入队
 ///    不发生 ⇒ +0。证据：`archive_the_evidence` / `shredder_drawer`（`forEachCardInZone`
 ///    → `moveCardToZone`）的 `chain_num` 原来比参考多 1。
+/// 3. **已知偏差、故意留着红（2026-10-19 逐卡多层对拍）**：上面那张表的"收尾 +1"也不是无条件的。
+///    节目里的 `forEachCardInZone` 走过 **≥2** 张牌时（卡把自己和另一张一起搬出去），
+///    参考的**收尾也不发号** ⇒ 出牌只 +1。`shredder_drawer` / `shredder_drawer+` 的
+///    `play_again` 变体（牌组 2 张）因此在 `CARD_MULTI` 里有 2 格红（step0 `chain_num`
+///    4 / 3）。**内核没有跟着改** —— 依据强度、机制（续延调度次序）与"为什么不改"全写在
+///    [`apply_plan`] 里账 2/账 3 那一段的 `⚠️⚠️ 已知偏差` 注释里，改之前先读它。
 ///
 /// 今天实测的四笔账：**正常打完 = +3**（请求 / 搬区 / 收尾）；**Cancelled** = +1；
 /// **Faulted** = +1（搬区是直接搬，`Cards/CardPlay.cs:254-261`）；**无节目的卡** = +2
@@ -822,6 +828,59 @@ fn apply_plan(
             // `:280` 的 `CloseAction`）。两次都在续延里跑 ⇒ 各建一条根链 ——
             // **但搬区那笔要先过 `:245-247` 的手牌守卫**：卡被自己的节目挪走了，参考就
             // 直接 return，不会入队，所以这里也不发号（逐卡对拍实测：无条件发号会多 1）。
+            //
+            // ⚠️⚠️ **已知偏差，故意留着红（2026-10-19）**：`CARD_MULTI` 里
+            // `shredder_drawer` / `shredder_drawer+` 的 `play_again` 变体在这一笔上与参考差 1 ——
+            // 牌组 2 张（两张都带 `junk`、开局都在手牌）、节目把**两张**都搬进消耗堆时：
+            // step0 `chain_num` 内核 **4** / 参考 **3**，规范文本其余 23 行逐字节相同
+            // （牌区也对：两张都在 `ExhaustPile`，`enemy_hp` 491）。只差这 1 个链号，
+            // 而且它从 step0 一直带到底（step1 6/5、step2 10/9）。
+            // 复现：`python native\_diag_card_multi.py 38 0 --full`
+            //（`%39` 是它的 `+` 版，同一格；只差 index）。
+            //
+            // 参考的**实测**账（全 62 卡 × 2 变体的 `chain_num` 读出来的，已扣掉"开回合 +1"
+            // 这个常量；下面三个数都是**结果实测**，不是推的）：
+            //   | 节目形状 | forEach 走牌次数 | 出牌合计 Δchain | 拆开 |
+            //   |---|---|---|---|
+            //   | 没有 `forEachCardInZone`（如 `paper_cut`） | 0 | **+3** | 请求 / 搬区 / 收尾 |
+            //   | 走牌 + 卡把自己搬出去（`archive_the_evidence`：`takeFirst=1`，牌组 2 张也只走 1 次） | 1 | **+2** | 请求 / ~~搬区~~ / 收尾 |
+            //   | 走牌 + 把**两张**都搬出去（`shredder_drawer` 牌组 2） | ≥2 | **+1** | 请求 / ~~搬区~~ / ~~收尾~~ |
+            // 第三个 **+1（不是 +2）** 就是本内核与参考差的那 1：搬区被守卫吃掉（内核一致），
+            // 但**连收尾也不发号**了。
+            //
+            // **为什么收尾会变成 0**（这一半是读源码推的，见下面"依据强度"）：
+            // 收尾是 `onTerminal` → `CloseAction` → `EnqueueEvent(ActionResolved)`
+            // （`Cards/CardPlay.cs:277-281`、`:306-312`），它**本身不建根链** —— 建不建取决于
+            // 那一刻 `CurrentEffectChain` 是不是 null（`CombatState.cs:442-452`；搬区那条
+            // `EnqueueEffect` 同理，`:382-392`）。而 `onTerminal` 是在节目帧进入终态时跑的
+            // （`Effects/Programs/EffectProgramIdentity.cs:104-111`、`:121-129`），
+            // 所以问题变成"节目是在**哪一段代码里**到达终态的"：
+            //   * `ForEachCardInZoneNodeExecutor.ExecuteIteration` 在**续延里**用
+            //     `using (c.EnterEffectChain(ctx.EffectChain!))` 接着走剩下的迭代
+            //     （`EffectProgramNodeExecutors.cs:496-504`）⇒ 走牌**走完**那一刻，链**在**；
+            //   * 兄弟节点自己的完成是 `EnqueueContinuation(onComplete)`
+            //     （`dealDamage` `:638-641` / `gainBlock` `:779`），而续延在**顶层**跑
+            //     （`CombatEventHandling.cs:97-113`）⇒ 兄弟完成那一刻，链**不在**；
+            //   * `SequenceNodeExecutor` 是**先把所有子节点都派发下去**、再数剩余个数
+            //     （`:202-211`），于是"最后一个完成的是谁"决定了终态落在链里还是链外：
+            //     走 1 次时最后完成的是兄弟节点（收尾 +1）；走 ≥2 次时（续延 FIFO：
+            //     兄弟的续延在走牌第二趟之前）最后完成的是走牌循环本身（终态在链里 ⇒ 收尾 +0）。
+            //
+            // **依据强度（别把这两层混起来读）**：
+            // * "1 次 ⇒ +2、≥2 次 ⇒ +1"是**实测的**：同一张卡、同一段节目，牌组 1 张时
+            //   `chain_num`=4（+2，内核绿）、牌组 2 张时 =3（+1，内核多 1）；
+            //   `archive_the_evidence` 的 `takeFirst=1` 让它在牌组 2 张时仍走 1 次 ⇒ 仍是 +2（绿）。
+            //   "≥2"里的"2"只有这一个观测点，机制预测 ≥3 也一样，但**没有第三个变体量过**
+            //   （`native/fight_diff.py` 的 `MULTI_VARIANTS` 只有牌组 2 与 1 两个）。
+            // * "续延 FIFO 决定谁最后完成"这一段是**读源码推的、没有逐行验证**：参考运行时的
+            //   续延排队次序无法在不改 `native/` 的前提下观测。
+            //
+            // **为什么内核不改（保留这 2 格红）**：要表达"收尾发不发号"，就得在内核里复现参考的
+            // **续延调度次序**。内核没有队列，`exec` 也不报告"节目终态落在哪一段链里"；在
+            // `apply_plan` 里唯一够得着的判据是"这次节目里那个 forEach 走了几张"这种**形状判断**——
+            // 那等于把参考的一个调度副作用硬编码成内容形状规则，也正是"把 4 改成 3 试出来的绿"。
+            // 真要修，正路是让 `exec` 回报"节目终态是否落在某条在用的链里"，那是另一个文件、
+            // 另一轮的事（本轮硬约束只准动 `play.rs`）。
             if settled.moved {
                 let _move_chain = state.create_root_effect_chain();
             }

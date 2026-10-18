@@ -79,7 +79,8 @@ function Invoke-Gate {
 
   # 从输出里抓一个数字当"证据"（比如测试条数 / 语料份数），让人一眼看到它真的做了事。
   $evidence = ''
-  foreach ($pat in @('(\d+) case\(s\)', '(\d+)/19', '(\d+) passed', '(\d+/\d+ images)')) {
+  foreach ($pat in @('(\d+) case\(s\)', '(\d+)/19', '(\d+) passed', '(\d+/\d+ images)',
+                     '(\d+/\d+ tables)')) {
     $m = [regex]::Match($out, $pat)
     if ($m.Success) { $evidence = $m.Value; break }
   }
@@ -164,6 +165,19 @@ Write-Output "`n[+1] 内容镜像 byte-identity（用当前编译器重编源文
 $results += Invoke-Gate -Name 'contentc-bytes' -Exe $PY `
   -ArgLine (Join-Path $ROOT 'tools\contentc\verify_bytes.py') -Workdir $ROOT `
   -MustMatch 'CONTENTC_BYTES PASS \(2/2 images, 1/1 source\)' -TimeoutSec 600
+
+Write-Output "[+2] 内容镜像结构不变量（独立解读字节：段目录 + 5 张定长表的 count×stride）"
+# 为什么这条闸门必须存在：tools/rdcf_verify.py 曾经**静默失效** —— 它从 variants[name] 里取
+# tables（tables 其实在 manifest 顶层），于是 5 张表的 count×stride 检查一次都没跑成，
+# 脚本只记一条"观察"并 exit 0；而它自己抄的那份 stride 常量（28/36/16/20）也是错的。
+# 修好之后"通过"有两条缺一不可的条件：
+#   * 退出码 0；
+#   * 输出里有 5/5 tables 与 10 count×stride checks —— 少一张表就是少一项检查，
+#     不许用"跳过"换来绿色。喂它一份手改过的 manifest 副本（tables.cards.count=61 之类）
+#     会以非零退出并指名是哪张表。
+$results += Invoke-Gate -Name 'rdcf-verify' -Exe $PY `
+  -ArgLine (Join-Path $ROOT 'tools\rdcf_verify.py') -Workdir $ROOT `
+  -MustMatch 'RDCF_VERIFY PASS \(2/2 variants, 5/5 tables, 10 count×stride checks' -TimeoutSec 300
 
 Write-Output "`n" + ("-" * 78)
 Write-Output ("{0,-18}{1,6}  {2,-22}{3}" -f '闸门', '退出', '证据', '备注')
