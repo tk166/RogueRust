@@ -80,7 +80,7 @@ function Invoke-Gate {
   # 从输出里抓一个数字当"证据"（比如测试条数 / 语料份数），让人一眼看到它真的做了事。
   $evidence = ''
   foreach ($pat in @('(\d+) case\(s\)', '(\d+)/19', '(\d+) passed', '(\d+/\d+ images)',
-                     '(\d+/\d+ tables)')) {
+                     '(\d+/\d+ tables)', '(\d+ monsters)')) {
     $m = [regex]::Match($out, $pat)
     if ($m.Success) { $evidence = $m.Value; break }
   }
@@ -178,6 +178,23 @@ Write-Output "[+2] 内容镜像结构不变量（独立解读字节：段目录 
 $results += Invoke-Gate -Name 'rdcf-verify' -Exe $PY `
   -ArgLine (Join-Path $ROOT 'tools\rdcf_verify.py') -Workdir $ROOT `
   -MustMatch 'RDCF_VERIFY PASS \(2/2 variants, 5/5 tables, 10 count×stride checks' -TimeoutSec 300
+
+Write-Output "`n[+3] StS 内容包自洽（不变量表 + 两份镜像逐键回读 + 交叉引用）"
+# 为什么这条闸门必须存在：第 10 道 verify_bytes.py **只钉 `packages/roguedeck/**`**。
+# 于是 `packages/sts/**` 的源文档被改坏时，上面已知的 11 道闸门一条都不会红 ——
+# 这正是"覆盖不到的地方看起来最绿"。三层各补一种假绿（native/sts_content_check.py
+# 顶部写了完整理由，这里只重复结论）：
+#   INV   源文档里每个数字对 `docs/spec/sts-act1-inventory.md`。改源文档 + 重编镜像
+#         （两者互相一致、一起错）只有这一层能红 —— 所以下面的 MustMatch 除了 PASS
+#         行还钉住 weak pool / full roots / core SEC_IDX：某个 check 被删掉时输出里
+#         少一行 `ok`，光看退出码看不出来。
+#   ROUND 两份镜像逐键读回源文档，键的存在性也算（镜像多出一个事实也是红）。
+#   XREF  deck/encounter/roster/action/STAT/SEC_IDX 互相闭合。
+# 退出码 2 = 前提缺失或镜像比源文档旧（陈旧镜像是最贵的一种绿色）。
+$results += Invoke-Gate -Name 'sts-content' -Exe $PY `
+  -ArgLine (Join-Path $ROOT 'native\sts_content_check.py') -Workdir $ROOT `
+  -MustMatch 'weak pool[\s\S]*full roots[\s\S]*core SEC_IDX[\s\S]*STS_CONTENT PASS \(monsters \d+, encounters \d+, deck \d+, statuses \d+, cards \d+, enemy_actions \d+' `
+  -TimeoutSec 300
 
 Write-Output "`n" + ("-" * 78)
 Write-Output ("{0,-18}{1,6}  {2,-22}{3}" -f '闸门', '退出', '证据', '备注')
