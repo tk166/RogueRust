@@ -222,6 +222,18 @@ Write-Output "[+5] 页面 + 产物：字节同一 + 脚本能解析 + 只在真�
 $results += Invoke-Gate -Name 'web-package' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'web\smoke.mjs') -Workdir $ROOT -MustMatch 'WEB_SMOKE PASS' -TimeoutSec 600
 
+Write-Output "[+6] 界面渲染的**语义**（不是语法）：每一格显示的数 == 观察向量里那一格"
+# 为什么这条闸门必须存在：上面 14 道闸门里，闸门 14 只证明页面**能解析、只在真导出上调用、
+# 偏移铺得满**。它证明不了任何一格显示得对 —— 把 `o[H.HP]` 写成 `o[H.HP_MAX]`，14 道闸门全绿。
+# 实测过一次：把渲染里的血量格改成读上限，整套验收没有任何一条会红。
+# 这一条把"哪一格显示什么"从 `web/index.html` 搬进 `web/ui_render.js`（纯函数），
+# 再用真 `.wasm` 驱动它们，逐格与观察向量比对。9 条变异各红一次：
+#   血量格读上限 / 敌人血量格读上限 / 意图伤害恒 null / 卡名恒占位 / 双目标走直打快路 /
+#   页面不再调用 describe / 状态计数恒 0 / 敌人恒 alive / 能量格读上限。
+# ⚠️ 它**不覆盖 DOM**：点击处理器、模板字符串、CSS 仍然只有真浏览器能验（见 web/README.md）。
+$results += Invoke-Gate -Name 'web-ui' -Exe 'C:\Program Files\nodejs\node.exe' `
+  -ArgLine (Join-Path $ROOT 'web\ui_test.mjs') -Workdir $ROOT -MustMatch 'UI_RENDER PASS' -TimeoutSec 600
+
 Write-Output "`n" + ("-" * 78)
 Write-Output ("{0,-18}{1,6}  {2,-22}{3}" -f '闸门', '退出', '证据', '备注')
 Write-Output ("-" * 78)

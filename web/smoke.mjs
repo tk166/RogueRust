@@ -164,34 +164,69 @@ if (builtBytes.length !== bytes.length || sha(builtBytes) !== sha(bytes)) {
 // (2) `web/index.html` — the page was the one thing no gate looked at.
 // =============================================================================================
 // A syntax error in the inline script used to pass all twelve acceptance gates, because every
-// gate stopped at the `.wasm`. Three checks, cheapest first: does it parse, does it call only
-// exports that exist, and do its hard-coded observation offsets still tile.
+// gate stopped at the `.wasm`. Four checks, cheapest first: is there exactly one **inline** script,
+// does every script (inline or `src=`) parse, does the code call only exports that exist, and do
+// the hard-coded observation offsets still tile.
+//
+// Where the layout lives moved on 2026-10-19: the constants below are declared by
+// `web/ui_render.js`, not by the page (`docs/spec/ui-plan.md` U0). So the tiling check reads the
+// file that declares them, and the page's own job is checked to be "loads it and calls it".
 const html = await readFile(fileURLToPath(new URL("./index.html", import.meta.url)), "utf8");
-const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
-if (scripts.length !== 1) fail(`index.html has ${scripts.length} <script> blocks, expected exactly 1`);
-try {
-  new vm.Script(scripts[0], { filename: "index.html<script>" });
-} catch (e) {
-  fail("index.html's inline script does not parse: " + e.message);
+
+const tags = [...html.matchAll(/<script([^>]*)>([\s\S]*?)<\/script>/g)]
+  .map((m) => ({ attrs: m[1], body: m[2] }));
+const inline = tags.filter((t) => !/\ssrc\s*=/.test(t.attrs));
+const external = tags
+  .map((t) => (/\ssrc\s*=\s*"([^"]+)"/.exec(t.attrs) || [])[1])
+  .filter(Boolean);
+if (inline.length !== 1) {
+  fail(`index.html has ${inline.length} inline <script> blocks, expected exactly 1`);
+}
+
+// Every file the page loads must exist and parse. Missing is a loud failure with the path, because
+// a 404 on a script tag is otherwise a page that silently half-works.
+const sources = new Map(); // path -> text, for the checks that follow
+for (const src of external) {
+  if (!src.startsWith("./")) fail(`script src "${src}" is not relative to the page`);
+  const path = fileURLToPath(new URL(src, new URL("./index.html", import.meta.url)));
+  try {
+    sources.set(src, await readFile(path, "utf8"));
+  } catch (e) {
+    fail(`index.html loads "${src}", which does not exist (${e.code || e.message})`);
+  }
+}
+for (const [name, text] of [...sources, ["index.html<script>", inline[0].body]]) {
+  try {
+    new vm.Script(text, { filename: name });
+  } catch (e) {
+    fail(`${name} does not parse: ${e.message}`);
+  }
+}
+if (!html.includes("RD_UI.describe(")) {
+  fail("index.html loads scripts but never calls RD_UI.describe() — the render layer is bypassed");
 }
 
 // The direction that breaks when the ABI loses a symbol. (`REQUIRED` above is the other one: a
 // symbol the page should be using and is not.)
-const called = new Set([...scripts[0].matchAll(/\bex\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]));
+const allCode = [inline[0].body, ...sources.values()].join("\n");
+const called = new Set([...allCode.matchAll(/\bex\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]));
 if (called.size < 20) fail(`only ${called.size} ex.* references found — the extraction broke, not the page`);
 for (const name of called) {
-  if (!(name in ex)) fail(`index.html calls ex.${name}, which the module does not export`);
+  if (!(name in ex)) fail(`the page calls ex.${name}, which the module does not export`);
 }
 
-// The 122-slot layout is hard-coded in the page. Re-derive it from its own parts: adding a status
-// axis or widening a block has to move every offset after it, or the page reads the wrong cells.
+// The 122-slot layout is declared once, in the file that owns it. Re-derive it from that file's own
+// parts: adding a status axis or widening a block has to move every offset after it.
+const layoutFile = [...sources.entries()].find(([, text]) => /const\s+OFF_HAND\s*=/.test(text));
+if (!layoutFile) fail("no loaded script declares the observation layout (OFF_HAND) — where did it move?");
+const layout = layoutFile[1];
 const NUM = (name) => {
-  const m = new RegExp("const\\s+" + name + "\\s*=\\s*(\\d+)\\s*;").exec(scripts[0]);
-  if (!m) fail(`index.html no longer declares \`const ${name} = <number>;\``);
+  const m = new RegExp("const\\s+" + name + "\\s*=\\s*(\\d+)\\s*;").exec(layout);
+  if (!m) fail(`${layoutFile[0]} no longer declares \`const ${name} = <number>;\``);
   return Number(m[1]);
 };
-const axesMatch = /const\s+STATUS_AXES\s*=\s*\[([^\]]*)\]/.exec(scripts[0]);
-if (!axesMatch) fail("index.html no longer declares `const STATUS_AXES = [...]`");
+const axesMatch = /const\s+STATUS_AXES\s*=\s*\[([^\]]*)\]/.exec(layout);
+if (!axesMatch) fail(`${layoutFile[0]} no longer declares \`const STATUS_AXES = [...]\``);
 const axes = axesMatch[1].split(",").filter((s) => s.trim() !== "").length;
 
 const PAGE_HERO_STATUS = NUM("OFF_HERO_STATUS"), PAGE_ENEMY = NUM("OFF_ENEMY");
@@ -216,6 +251,6 @@ console.log(`  round 1 preview   ${previewed} damage, and the fact matched it`);
 console.log(`  steps to victory  ${steps}`);
 console.log(`  CombatState       ${ex.rd_env_bench_sizes(0)} B (this build)`);
 console.log(`  artifact          byte-identical to kernel/target/…/rd_wasm.wasm, sha256 ${sha(bytes).slice(0, 12)}…`);
-console.log(`  page              1 script parsed, ${called.size} exports cross-checked, ` +
-            `offsets tile to ${PAGE_PILES + 5}/${OBS_LEN}`);
+console.log(`  page              ${1 + sources.size} scripts parsed, ${called.size} exports cross-checked, ` +
+            `layout from ${layoutFile[0]}, offsets tile to ${PAGE_PILES + 5}/${OBS_LEN}`);
 console.log("  ⚠️  not a browser: no DOM, no Content-Type, no instantiateStreaming, no Rust↔page offset check.");

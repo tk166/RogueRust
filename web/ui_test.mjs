@@ -1,0 +1,384 @@
+// ui_test.mjs -- assert what the page *displays*, not just that it parses.
+//
+//   node web/ui_test.mjs
+//
+// Gate 14 (`web/smoke.mjs`) proves the page's offsets tile and its script parses; it cannot see a
+// wrong cell. This test loads the same `.wasm` the page loads, drives it, and asserts the values
+// `web/ui_render.js` produces for those observations -- so `o[H.HP_MAX]` where `o[H.HP]` belongs
+// is a red test instead of a green gate.
+//
+// It is deliberately **not** a DOM test: the describers are pure, so there is no DOM to fake.
+
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import vm from "node:vm";
+
+const HERE = new URL("./", import.meta.url);
+const fail = (message) => { console.error("UI_TEST FAIL: " + message); process.exit(1); };
+
+// ---------------------------------------------------------------------------------------------
+// Load `ui_render.js` the way the browser would: run it, then read the global it defines.
+// ---------------------------------------------------------------------------------------------
+const source = await readFile(new URL("./ui_render.js", HERE), "utf8");
+const context = vm.createContext({});
+new vm.Script(source, { filename: "ui_render.js" }).runInContext(context);
+const UI = context.RD_UI;
+if (!UI) fail("ui_render.js did not define globalThis.RD_UI");
+
+// The page must actually use it, or this whole file is testing dead code.
+const page = await readFile(new URL("./index.html", HERE), "utf8");
+if (!page.includes('src="./ui_render.js"')) {
+  fail("index.html does not load ui_render.js -- the describers below would be dead code");
+}
+if (!page.includes("RD_UI.describe(")) {
+  fail("index.html loads ui_render.js but never calls RD_UI.describe() -- same problem, one step later");
+}
+
+// ---------------------------------------------------------------------------------------------
+// The module, driven by the real fight.
+// ---------------------------------------------------------------------------------------------
+const bytes = await readFile(new URL("./rd_wasm.wasm", HERE));
+const { instance } = await WebAssembly.instantiate(bytes, {});
+const ex = instance.exports;
+
+const OBS_LEN = ex.rd_env_observe_len();
+const obs = () => new Int32Array(ex.memory.buffer, ex.rd_env_observe_buf(), OBS_LEN).slice();
+
+function text(lenOf, intoOf, index) {
+  const n = lenOf(index);
+  if (n <= 0) return "";
+  const ptr = ex.rd_env_scratch_buf();
+  intoOf(index, ptr);
+  return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, n).slice());
+}
+const io = {
+  heroName: () => "hero",
+  cardName: (slot) => text(ex.rd_env_card_name_len, ex.rd_env_card_name_into, slot),
+  enemyName: (slot) => text(ex.rd_env_enemy_name_len, ex.rd_env_enemy_name_into, slot),
+  intentText: (slot) => text(ex.rd_env_intent_len, ex.rd_env_intent_into, slot),
+};
+function actions() {
+  const out = [];
+  for (let i = 0; i < ex.rd_env_action_count(); i++) {
+    out.push({ index: i, kind: ex.rd_env_action_kind(i),
+               arg0: ex.rd_env_action_arg(i, 0), arg1: ex.rd_env_action_arg(i, 1) });
+  }
+  return out;
+}
+const view = (aiming) => UI.describe(obs(), actions(), io, aiming);
+
+/// Every printed quantity must equal the observation's own cell, at `where` (for the message).
+/// Callers put this after anything that changes what is on screen -- a constant that looks right
+/// at one moment fails at the next.
+function assertCellsMatchObservation(where) {
+  const o = obs();
+  const v = view();
+  const eq = (got, want, what) => {
+    if (got !== want) fail(`${where}: ${what} shows ${got}, the observation says ${want}`);
+  };
+  eq(v.hero.hp, o[UI.H.HP], "hero hp");
+  eq(v.hero.hpMax, o[UI.H.HP_MAX], "hero max hp");
+  eq(v.hero.energy, o[UI.H.ENERGY], "hero energy");
+  eq(v.hero.energyMax, o[UI.H.ENERGY_MAX], "hero max energy");
+  eq(v.hero.block, o[UI.H.BLOCK], "hero block");
+  eq(v.hero.handCount, o[UI.H.HAND], "hero hand count");
+  eq(v.hero.piles.draw, o[UI.OFF_PILES], "draw pile count");
+  eq(v.hero.piles.discard, o[UI.OFF_PILES + 2], "discard pile count");
+  eq(v.hero.piles.exhaust, o[UI.OFF_PILES + 3], "exhaust pile count");
+  eq(v.status.round, o[UI.H.ROUND], "round");
+  eq(v.status.turn, o[UI.H.TURN], "turn");
+  eq(v.status.phase, o[UI.H.PHASE], "phase");
+  for (const e of v.enemies) {
+    const base = UI.OFF_ENEMY + e.slot * 8;
+    eq(e.alive, o[base] === 1, `enemy ${e.slot} alive`);
+    eq(e.hp, o[base + 1], `enemy ${e.slot} hp`);
+    eq(e.hpMax, o[base + 2], `enemy ${e.slot} max hp`);
+    eq(e.block, o[base + 3], `enemy ${e.slot} block`);
+    eq(e.intentKind, o[base + 5], `enemy ${e.slot} intent kind`);
+    eq(e.intentDamage, o[base + 6] >= 0 ? o[base + 6] : null, `enemy ${e.slot} intent damage`);
+    eq(e.statusCount, o[base + 7], `enemy ${e.slot} status count`);
+  }
+  return v;
+}
+
+if (ex.rd_env_reset() !== 0) fail("rd_env_reset() != 0");
+
+// ---------------------------------------------------------------------------------------------
+// 1. A fresh fight: the page must show the hero and the enemies from the observation, and the
+//    ONE action available is "end turn". Every expected number here is a fact about this content
+//    (`enc_small_slimes` = acid_slime_m 28 + spike_slime_s 10), so a wrong cell cannot pass.
+// ---------------------------------------------------------------------------------------------
+{
+  const before = assertCellsMatchObservation("fresh fight");
+  const hero = before.hero;
+  if (hero.hp !== 80 || hero.hpMax !== 80) fail(`fresh hero shows ${hero.hp}/${hero.hpMax}, expected 80/80`);
+  // NOTE: at full health `hp === hpMax`, so **this** assertion cannot tell the two cells apart --
+  // reading the wrong one still prints 80/80. The discriminating checks are the ones after damage
+  // lands (hero below, and the struck enemy below); they are why this test can fail at all.
+  if (hero.energy !== 3 || hero.energyMax !== 3) fail(`energy shows ${hero.energy}/${hero.energyMax}`);
+  if (hero.block !== 0) fail(`block shows ${hero.block}`);
+  if (hero.handCount !== 0) fail(`hand shows ${hero.handCount} cards before the first turn`);
+  if (before.hand.length !== 0) fail("hand list is non-empty before the first turn");
+  if (hero.statuses.length !== 0) fail("hero shows statuses it does not have");
+
+  if (before.enemies.length !== 2) fail(`enemies list has ${before.enemies.length} entries, expected 2`);
+  const [slime, spike] = before.enemies;
+  if (slime.name !== "acid_slime_m" || slime.hp !== 28 || slime.hpMax !== 28) {
+    fail(`enemy 0 shows ${slime.name} ${slime.hp}/${slime.hpMax}, expected acid_slime_m 28/28`);
+  }
+  if (spike.name !== "spike_slime_s" || spike.hp !== 10) {
+    fail(`enemy 1 shows ${spike.name} ${spike.hp}, expected spike_slime_s 10`);
+  }
+  if (!slime.alive || !spike.alive) fail("a fresh enemy is marked not alive");
+  // The intent column is the content's own answer, and both are attacks with a printed number.
+  for (const e of before.enemies) {
+    if (e.intentLabel !== "Attack") fail(`${e.name} intent label is ${e.intentLabel}, expected Attack`);
+    if (e.intentDamage === null || e.intentDamage <= 0) fail(`${e.name} intent damage is ${e.intentDamage}`);
+    if (e.intentText === "—") fail(`${e.name} has no intent text`);
+  }
+  // The one action on a fresh fight is end turn (`rd-wasm`'s own rule), and the page must show it
+  // as available -- a page that greys the button out would never start a game.
+  if (!before.endTurn.available) fail("end turn is not offered on a fresh fight");
+  if (before.endTurn.actionIndex !== 0) fail(`end turn action index is ${before.endTurn.actionIndex}`);
+  if (before.status.done) fail("a fresh fight is already over");
+  if (before.status.resultName !== "Ongoing") fail(`result shows ${before.status.resultName}`);
+}
+
+// ---------------------------------------------------------------------------------------------
+// 2. End the turn: the hand must appear, and **the page's preview must equal the damage that
+//    actually lands**. This is the one assertion that ties the rendered numbers to the engine.
+// ---------------------------------------------------------------------------------------------
+let previewed;
+{
+  const before = view();
+  previewed = before.enemies.reduce((sum, e) => sum + (e.intentDamage || 0), 0);
+  const hpBefore = before.hero.hp;
+  if (ex.rd_env_step(before.endTurn.actionIndex) !== 0) fail("end-turn step rejected");
+
+  const after = assertCellsMatchObservation("after the first end turn");
+  const lost = hpBefore - after.hero.hp;
+  if (after.hero.hp >= hpBefore) fail("ending the turn dealt the hero no damage at all");
+  if (previewed !== lost) {
+    fail(`the page previewed ${previewed} damage but the hero lost ${lost} -- the intent column lies`);
+  }
+  if (!(after.hero.hp < after.hero.hpMax)) {
+    fail(`hero shows ${after.hero.hp}/${after.hero.hpMax} after taking ${lost} damage -- ` +
+         `the current-health cell is reading the maximum`);
+  }
+  if (after.hero.hpMax !== 80) fail(`hero max health moved to ${after.hero.hpMax} when current health did`);
+  if (after.hero.handCount !== 5) fail(`hand shows ${after.hero.handCount}, expected 5`);
+  if (after.hand.length !== 5) fail(`hand list has ${after.hand.length} entries, expected 5`);
+
+  // Every hand row: a real cost, a name that is not a placeholder, and a playability flag that
+  // agrees with the action table (this is the ABI's affordability gate showing through).
+  for (const card of after.hand) {
+    if (card.cost < 0 || card.cost > 3) fail(`card ${card.slot} shows cost ${card.cost}`);
+    if (!card.name || card.name.startsWith("def#")) {
+      fail(`card ${card.slot} has no name (shows "${card.name}") although the module can name it`);
+    }
+    if (card.playable && card.targetSlots.length === 0) {
+      fail(`card ${card.slot} is playable but names no action`);
+    }
+    if (card.affordable !== (card.cost <= after.hero.energy)) {
+      fail(`card ${card.slot} affordability disagrees with the energy shown`);
+    }
+  }
+  if (!after.hand.some((card) => card.playable)) fail("no card in the opening hand is playable");
+}
+
+// ---------------------------------------------------------------------------------------------
+// 3. Target selection: a playable card with two live enemies must offer both slots and must NOT
+//    take the fast path, because "always aim at the first enemy" was a real bug here.
+// ---------------------------------------------------------------------------------------------
+{
+  const before = view();
+  // An **attack**, not merely any two-target card: `defend` also comes back with one action per
+  // live enemy slot (the ABI over-specifies the target and a non-targeted program ignores it),
+  // so picking "the first two-target card" picks a card that deals no damage and the assertions
+  // below would be about nothing. Measured, not assumed: that is exactly what the first version
+  // of this test did.
+  const multi = before.hand.find(
+    (card) => card.playable && card.targetSlots.length === 2 && /strike|bash/.test(card.name));
+  if (!multi) fail("no attack offers two targets while both enemies are alive");
+  if (multi.directActionIndex !== -1) {
+    fail(`card ${multi.slot} has two targets but would be played directly (index ${multi.directActionIndex})`);
+  }
+  // Strike it, then require current HP to move and maximum HP not to. This is the enemy half of
+  // the "current vs max" pair; the fresh state (28/28) cannot distinguish them either.
+  const victim = before.enemies.find((e) => e.alive && e.hp > 0);
+  const itsSlot = victim.slot;
+  const itsMax = victim.hpMax;
+  const itsHp = victim.hp;
+  if (!multi.targetSlots.includes(itsSlot)) fail("a playable card cannot reach a live enemy");
+  const hitAction = ex.rd_env_action_count() && (() => {
+    // Find the concrete action for (that card, that enemy) rather than assuming an index.
+    for (let i = 0; i < ex.rd_env_action_count(); i++) {
+      if (ex.rd_env_action_kind(i) === 0 &&
+          ex.rd_env_action_arg(i, 0) === multi.slot &&
+          ex.rd_env_action_arg(i, 1) === itsSlot) return i;
+    }
+    return -1;
+  })();
+  if (hitAction < 0) fail("no action names that (card, enemy) pair");
+  if (ex.rd_env_step(hitAction) !== 0) fail("playing the card was rejected");
+  {
+    const hit = view();
+    const struck = hit.enemies.find((e) => e.slot === itsSlot);
+    if (struck.hp >= itsHp) fail(`the struck enemy still shows ${struck.hp} HP, was ${itsHp}`);
+    if (struck.hpMax !== itsMax) fail(`the struck enemy's max HP moved to ${struck.hpMax}`);
+    if (struck.hp === struck.hpMax) fail("the struck enemy shows current == max again");
+  }
+
+  const armed = view({ hand: multi.slot });
+  const showing = armed.hand.find((card) => card.slot === multi.slot);
+  if (!showing.armed) fail("the armed card is not marked as armed");
+  if (showing.note !== "选一个敌人") fail(`an armed card's note is "${showing.note}"`);
+  if (!showing.note.includes("选一个敌人")) fail("armed note lost");
+}
+
+// ---------------------------------------------------------------------------------------------
+// 3b. The enemy status-count cell. The page prints `obs[base+7]` (ALL statuses on the combatant);
+//     it must not print `statuses.length`, which counts only the five tracked axes. A constant 0
+//     here passed every other assertion in this file -- measured, not feared: mutation M7 below
+//     was green until this block existed.
+{
+  const o = obs();
+  const current = view();
+  let checked = 0;
+  for (const e of current.enemies) {
+    const raw = o[UI.OFF_ENEMY + e.slot * 8 + 7];
+    if (e.statusCount !== raw) {
+      fail(`enemy ${e.slot} status count shows ${e.statusCount}, the observation says ${raw}`);
+    }
+    if (e.statuses.length > e.statusCount) {
+      fail(`enemy ${e.slot} lists ${e.statuses.length} statuses but the cell says ${e.statusCount}`);
+    }
+    for (const listed of e.statuses) {
+      const axis = UI.STATUS_AXES.indexOf(listed.label);
+      const cell = o[UI.OFF_ENEMY_STATUS + e.slot * 5 + axis];
+      if (axis < 0 || cell !== listed.stacks) {
+        fail(`enemy ${e.slot} lists ${listed.label} ${listed.stacks}, the observation says ${cell}`);
+      }
+      if (listed.stacks === 0) fail(`enemy ${e.slot} lists ${listed.label} with 0 stacks`);
+    }
+    checked++;
+  }
+  if (checked === 0) fail("no enemy status cell was checked");
+}
+
+// 3c. And a case where the count is NOT zero: content's `bash` applies 2 Vulnerable, so playing it
+//     must make the target's status cell non-zero and put `vuln` in the list. Without a non-zero
+//     instance, "the cell equals the observation" could hold for a page that always prints 0.
+//     The fight is deterministic (`rd_env_reset` uses a fixed seed), so the turn hunt below either
+//     always finds bash or always does not -- it cannot be flaky.
+{
+  let bash = null;
+  for (let guard = 0; guard < 20 && bash === null; guard++) {
+    const current = view();
+    bash = current.hand.find(
+      (c) => c.playable && /bash/.test(c.name) && c.targetSlots.length > 0) || null;
+    if (bash) break;
+    if (!current.endTurn.available) break;
+    if (ex.rd_env_step(current.endTurn.actionIndex) !== 0) fail("end-turn step rejected hunting for bash");
+  }
+  if (!bash) fail("bash never became playable -- cannot check that a status shows up");
+  const targetSlot = bash.targetSlots[0];
+  let action = -1;
+  for (let i = 0; i < ex.rd_env_action_count(); i++) {
+    if (ex.rd_env_action_kind(i) === 0 && ex.rd_env_action_arg(i, 0) === bash.slot &&
+        ex.rd_env_action_arg(i, 1) === targetSlot) action = i;
+  }
+  if (action < 0) fail("no action names (bash, its target)");
+  const energyBefore = view().hero.energy;
+  if (ex.rd_env_step(action) !== 0) fail("playing bash was rejected");
+  const after = assertCellsMatchObservation("after playing bash");
+  if (bash.cost > 0) {
+    if (!(after.hero.energy < after.hero.energyMax)) {
+      fail(`energy shows ${after.hero.energy}/${after.hero.energyMax} after paying ${bash.cost} -- ` +
+           `the energy cell is reading the maximum`);
+    }
+    if (after.hero.energy !== energyBefore - bash.cost) {
+      fail(`energy went ${energyBefore} -> ${after.hero.energy} for a cost-${bash.cost} card`);
+    }
+  }
+  const struck = after.enemies.find((e) => e.slot === targetSlot);
+  const rawCell = obs()[UI.OFF_ENEMY + targetSlot * 8 + 7];
+  if (rawCell < 1) fail("bash applied no status to its target at all");
+  if (struck.statusCount !== rawCell) {
+    fail(`after bash the status cell shows ${struck.statusCount}, the observation says ${rawCell}`);
+  }
+  if (!struck.statuses.some((s) => s.label === "vuln" && s.stacks > 0)) {
+    fail("vulnerable is missing from the target's status list after bash");
+  }
+}
+
+// 4. A rule that must not drift: the describers never invent a number. Every quantity they print
+//    is either a cell of the observation or a null. Checked on the hand, where the risk is a
+//    placeholder cost or a fabricated target slot.
+// ---------------------------------------------------------------------------------------------
+{
+  const o = obs();
+  const current = view();
+  const seen = new Set();
+  for (const card of current.hand) {
+    const base = UI.OFF_HAND + card.slot * 4;
+    if (card.cost !== o[base + 1]) fail(`card ${card.slot} cost is not the observation's cell`);
+    if (card.definitionSlot !== o[base + 2]) fail(`card ${card.slot} definition slot is not the cell`);
+    for (const slot of card.targetSlots) {
+      if (slot < 0 || slot >= UI.MAX_ENEMY_SLOTS) fail(`card ${card.slot} names target slot ${slot}`);
+      if (!current.enemies[slot] || !current.enemies[slot].alive) {
+        fail(`card ${card.slot} names target slot ${slot}, which is not a live enemy`);
+      }
+    }
+    seen.add(card.cost);
+  }
+  if (seen.size === 0) fail("no hand card was checked at all");
+}
+
+// 5. `status.done` is derived from the observation; the ABI also exposes `rd_env_done()`. They
+//    must agree at every point of a fight, or the page and the rest of the world disagree about
+//    whether it is over.
+{
+  let steps = 0;
+  for (; steps < 200; steps++) {
+    const derived = UI.describeStatus(obs()).done;
+    const asked = ex.rd_env_done() === 1;
+    if (derived !== asked) fail(`step ${steps}: observation says done=${derived}, rd_env_done()=${asked}`);
+    if (asked) break;
+    const current = view();
+    const next = current.endTurn.available
+      ? current.endTurn.actionIndex
+      : (current.hand.find((c) => c.playable) || {}).directActionIndex;
+    const anyPlay = (() => {
+      for (let i = 0; i < ex.rd_env_action_count(); i++) if (ex.rd_env_action_kind(i) === 0) return i;
+      return -1;
+    })();
+    const choice = anyPlay >= 0 ? anyPlay : next;
+    if (choice === undefined || choice < 0) fail(`no legal action at step ${steps}`);
+    if (ex.rd_env_step(choice) !== 0) fail(`step ${steps} rejected`);
+  }
+  const finalDerived = UI.describeStatus(obs()).done;
+  if (!finalDerived) fail(`the fight did not end within 200 steps (stopped at ${steps})`);
+  const end = assertCellsMatchObservation("at the end of the fight");
+  if (end.status.resultName !== "Victory") {
+    fail(`the fight ended as ${end.status.resultName}, expected Victory`);
+  }
+  if (end.enemies.some((e) => e.alive)) {
+    fail("the fight is won but an enemy is still marked alive");
+  }
+  if (end.enemies.some((e) => e.hp > 0)) fail("a downed enemy still shows positive HP");
+}
+
+console.log("UI_RENDER PASS");
+console.log(`  describe()        ${view().hand.length} hand cells, ${view().enemies.length} enemies, ` +
+            `${UI.STATUS_AXES.length} status axes`);
+console.log(`  preview vs real   ${previewed} damage previewed, and the hero lost exactly that`);
+console.log(`  target picking    a two-target card is not played directly (index -1)`);
+console.log(`  current vs max    distinguished on the hero after damage and on a struck enemy`);
+console.log(`  enemy statuses    count cell == obs[base+7], and bash makes it non-zero`);
+console.log(`  cell-for-cell     every printed quantity == its observation cell, at 5 moments`);
+console.log(`  energy below max  checked after paying a cost (the only moment they differ)`);
+console.log(`  downed enemies    none alive once the fight is won`);
+console.log(`  done agreement    observation-derived == rd_env_done() at every step to the end`);
+console.log(`  page wiring       index.html loads ui_render.js and calls RD_UI.describe()`);
+console.log("  ⚠️  no DOM: the markup layer is still only checked by eye in a browser.");

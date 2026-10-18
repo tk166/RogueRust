@@ -116,6 +116,7 @@
   </div>
 </div>
 
+<script src="./ui_render.js"></script>
 <script>
 "use strict";
 
@@ -124,33 +125,21 @@
 // the length instead of hard-coding it, so OBS_LEN comes from rd_env_observe_len() at runtime and
 // is only used below as an index base that the Rust side publishes in the same order.
 // ---------------------------------------------------------------------------------------------
-const OFF_HERO_STATUS  = 12;
-const OFF_ENEMY        = 17;   // 4 slots × 8
-const OFF_ENEMY_STATUS = 49;   // 4 slots × 5
-const OFF_HAND         = 69;   // 10 slots × 4
-const OFF_PILES        = 109;  // 5
-const MAX_ENEMY_SLOTS  = 4;
-const MAX_HAND_SLOTS   = 10;
-const STATUS_AXES = ["str", "vuln", "weak", "dex", "frail"];
-
-const H = { ROUND:0, TURN:1, PHASE:2, RESULT:3, HP:4, HP_MAX:5, BLOCK:6, WARD:7,
-            ENERGY:8, ENERGY_MAX:9, HAND:10, ENEMIES:11 };
-
-const RESULT_NAMES = ["Ongoing", "Victory", "Defeat", "Draw", "Aborted"];
-// `EACT.Intent.Kind` → the observation's small integer, in the reference enum's order
-// (`ActionIntent.cs:5-13`; the core mirror has no `Label`, so the category is all there is).
-const INTENT_KINDS = ["Unknown", "Attack", "Defend", "Buff", "Debuff", "Special"];
-const ACTION_PLAY = 0;
-const ACTION_END_TURN = 1;
+// The observation layout and every "which number goes in which cell" decision live in
+// `ui_render.js`, so that `node web/ui_test.mjs` can assert them against the real `.wasm`.
+// This page is only the markup layer on top of it.
+const {
+  OFF_HERO_STATUS, OFF_ENEMY, OFF_ENEMY_STATUS, OFF_HAND, OFF_PILES,
+  MAX_ENEMY_SLOTS, MAX_HAND_SLOTS, STATUS_AXES, H,
+  RESULT_NAMES, INTENT_KINDS, ACTION_PLAY, ACTION_END_TURN,
+} = RD_UI;
 
 let ex = null;          // exports
 let obs = null;         // Int32Array snapshot
 let bench = {};         // measurements, also mirrored to window.__bench
 
-// Play action table, rebuilt on every render: handIndex → [{ slot, actionIndex }].
-// `env-abi.md` §5 gives one action per (card × live enemy slot), so a card that *can* be aimed
-// has several entries and the page — not the ABI — decides how the player picks one.
-let playOptions = new Map();
+// The play action table lives in `ui_render.js` (`RD_UI.playOptions`); the page keeps only the
+// player's in-progress choice.
 let pending = null;     // { hand } while the player is choosing a target
 // The verdict is not re-derivable from the observation, so it survives a target-picking re-render.
 let lastVerdict = null, lastReward = 0;
@@ -265,114 +254,82 @@ function step(actionIndex) {
 function esc(s) { return String(s).replace(/[<>&]/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c])); }
 
 function render(verdict, reward) {
-  const o = obs;
-  // The action table comes first: the enemy list has to know which enemies the card currently
-  // being aimed can actually reach, and the hand list needs it for the same reason.
   const actions = readActions();
-  playOptions = new Map();
-  for (const a of actions) {
-    if (a.kind !== ACTION_PLAY) continue;
-    if (!playOptions.has(a.arg0)) playOptions.set(a.arg0, []);
-    playOptions.get(a.arg0).push({ slot: a.arg1, actionIndex: a.index });
-  }
   // A pending choice can be invalidated by anything that changes the hand (a step, a reset).
-  if (pending && !playOptions.has(pending.hand)) pending = null;
-  const aimSlots = pending ? new Set(playOptions.get(pending.hand).map((p) => p.slot)) : new Set();
-  const aimCard = pending ? (cardName(pending.hand) || ("hand #" + pending.hand)) : "";
-  document.getElementById("heroName").textContent = "hero";
-  document.getElementById("heroHp").textContent = `${o[H.HP]} / ${o[H.HP_MAX]}`;
-  document.getElementById("heroBar").style.width =
-    Math.max(0, Math.min(100, 100 * o[H.HP] / Math.max(1, o[H.HP_MAX]))) + "%";
-  document.getElementById("energy").textContent = `${o[H.ENERGY]} / ${o[H.ENERGY_MAX]}`;
-  document.getElementById("block").textContent = o[H.BLOCK];
-  document.getElementById("handCount").textContent = o[H.HAND];
-  document.getElementById("pile").textContent =
-    `${o[OFF_PILES]}d ${o[OFF_PILES + 2]}x ${o[OFF_PILES + 3]}e`;
+  if (pending && !RD_UI.playOptions(actions).has(pending.hand)) pending = null;
+  const view = RD_UI.describe(obs, actions,
+    { heroName: () => "hero", cardName, enemyName, intentText }, pending);
 
-  const heroChips = [];
-  for (let a = 0; a < STATUS_AXES.length; a++) {
-    const v = o[OFF_HERO_STATUS + a];
-    if (v) heroChips.push(`<span class="chip">${STATUS_AXES[a]} ${v}</span>`);
-  }
-  document.getElementById("heroStatus").innerHTML = heroChips.join("");
+  const hero = view.hero;
+  document.getElementById("heroName").textContent = hero.name;
+  document.getElementById("heroHp").textContent = `${hero.hp} / ${hero.hpMax}`;
+  document.getElementById("heroBar").style.width =
+    Math.max(0, Math.min(100, 100 * hero.hp / Math.max(1, hero.hpMax))) + "%";
+  document.getElementById("energy").textContent = `${hero.energy} / ${hero.energyMax}`;
+  document.getElementById("block").textContent = hero.block;
+  document.getElementById("handCount").textContent = hero.handCount;
+  document.getElementById("pile").textContent =
+    `${hero.piles.draw}d ${hero.piles.discard}x ${hero.piles.exhaust}e`;
+  document.getElementById("heroStatus").innerHTML =
+    hero.statuses.map((s) => `<span class="chip">${esc(s.label)} ${s.stacks}</span>`).join("");
 
   // Enemies. The name and the intent both come out of the content image: `ENCT[enc].Enemies[j]`
   // gives the id, `intent::select_action` + the `EACT` program give the numbers (obs +5/+6).
-  const enemies = [];
-  const enemyCount = o[H.ENEMIES];
-  for (let e = 0; e < Math.min(enemyCount, MAX_ENEMY_SLOTS); e++) {
-    const b = OFF_ENEMY + e * 8;
-    const alive = o[b], hp = o[b + 1], hpMax = o[b + 2], blk = o[b + 3];
-    const kind = o[b + 5], dmg = o[b + 6];
-    const chips = [];
-    for (let a = 0; a < STATUS_AXES.length; a++) {
-      const v = o[OFF_ENEMY_STATUS + e * 5 + a];
-      if (v) chips.push(`<span class="chip">${STATUS_AXES[a]} ${v}</span>`);
-    }
+  const aimSlots = new Set(pending ? (RD_UI.playOptions(actions).get(pending.hand) || []).map((p) => p.slot) : []);
+  const aimCard = pending ? (cardName(pending.hand) || ("hand #" + pending.hand)) : "";
+  const enemies = view.enemies.map((e) => {
+    const aimable = aimSlots.has(e.slot);
     // A downed enemy's seat keeps its last intent in the observation (the reference asks the
     // selector about dead enemies too), so the page is what decides not to advertise it.
-    const intent = alive
-      ? `${esc(INTENT_KINDS[kind] || "?")}${dmg >= 0 ? " <b>" + dmg + "</b>" : ""}`
+    const intent = e.alive
+      ? `${esc(e.intentLabel)}${e.intentDamage !== null ? " <b>" + e.intentDamage + "</b>" : ""}`
       : "—";
-    const aimable = aimSlots.has(e);
-    enemies.push(`
-      <div ${aimable ? `class="enemy-target" data-target-slot="${e}"` : ""}>
-      <div class="row"><span class="name">${esc(enemyName(e) || ("enemy #" + e))}${alive ? "" : " (down)"}</span>
-        <span class="name">${hp} / ${hpMax}</span></div>
-      <div class="bar"><i style="width:${Math.max(0, 100 * hp / Math.max(1, hpMax))}%"></i></div>
+    const chips = e.statuses.map((s) => `<span class="chip">${esc(s.label)} ${s.stacks}</span>`).join("");
+    return `
+      <div ${aimable ? `class="enemy-target" data-target-slot="${e.slot}"` : ""}>
+      <div class="row"><span class="name">${esc(e.name)}${e.alive ? "" : " (down)"}</span>
+        <span class="name">${e.hp} / ${e.hpMax}</span></div>
+      <div class="bar"><i style="width:${Math.max(0, 100 * e.hp / Math.max(1, e.hpMax))}%"></i></div>
       <div class="stats">
-        <span>block <b>${blk}</b></span>
+        <span>block <b>${e.block}</b></span>
         <span>intent <b>${intent}</b></span>
-        <span>statuses <b>${o[b + 7]}</b></span>
+        <span>statuses <b>${e.statusCount}</b></span>
       </div>
-      <div class="stats"><span>next up · ${esc(intentText(e) || "—")}</span></div>
-      <div class="chips">${chips.join("")}</div>
+      <div class="stats"><span>next up · ${esc(e.intentText)}</span></div>
+      <div class="chips">${chips}</div>
       ${aimable ? `<div class="hint">▲ 点这里 · 把 ${esc(aimCard)} 打它</div>` : ""}
-      </div>`);
-  }
-  document.getElementById("enemies").innerHTML = enemies.join("<hr style='border:0;border-top:1px solid var(--line);margin:10px 0'>");
+      </div>`;
+  });
+  document.getElementById("enemies").innerHTML =
+    enemies.join("<hr style='border:0;border-top:1px solid var(--line);margin:10px 0'>");
 
   // Hand. A card is a button iff the action table contains a play action for that hand slot;
   // otherwise it is greyed out — that greying-out *is* the ABI's affordability gate showing.
   // Exactly one play action ⇒ clicking it plays it. More than one ⇒ the card arms the enemy list
   // above (the ABI emits one action per live enemy slot); clicking an enemy spends the action that
   // names that slot. `def_slot` moves to `title=` — it is a content-row index, not a rule.
-  const hand = [];
-  for (let h = 0; h < o[H.HAND]; h++) {
-    const b = OFF_HAND + h * 4;
-    const cost = o[b + 1], defSlot = o[b + 2];
-    const opts = playOptions.get(h) || [];
-    const playable = opts.length > 0;
-    const armed = !!pending && pending.hand === h;
-    const affordable = cost >= 0 && cost <= o[H.ENERGY];
-    const hint = !playable ? "出不了" : (armed ? "选一个敌人" : (opts.length > 1 ? "多目标" : ""));
-    const note = [!affordable ? "付不起" : "", hint].filter(Boolean).join(" · ");
-    hand.push(`
-      <button class="card${armed ? " picking" : ""}" data-hand="${h}"
-              data-action="${opts.length === 1 ? opts[0].actionIndex : -1}"
-              title="card definition slot ${defSlot}" ${playable ? "" : "disabled"}>
-        <div><span class="cost">${cost}</span> energy · slot ${h}</div>
-        <div>${esc(cardName(h) || ("def#" + defSlot))}</div>
-        ${note ? `<div class="slot pick">${esc(note)}</div>` : ""}
+  const hand = view.hand.map((card) => `
+      <button class="card${card.armed ? " picking" : ""}" data-hand="${card.slot}"
+              data-action="${card.directActionIndex}"
+              title="card definition slot ${card.definitionSlot}" ${card.playable ? "" : "disabled"}>
+        <div><span class="cost">${card.cost}</span> energy · slot ${card.slot}</div>
+        <div>${esc(card.name)}</div>
+        ${card.note ? `<div class="slot pick">${esc(card.note)}</div>` : ""}
       </button>`);
-  }
   if (!hand.length) hand.push(`<div class="stats">手牌为空 —— 第一次出牌/结束回合会开回合并抽牌。</div>`);
-  const handEl = document.getElementById("hand");
-  handEl.innerHTML = hand.join("");
+  document.getElementById("hand").innerHTML = hand.join("");
 
   // End turn
-  const endAction = actions.find((a) => a.kind === ACTION_END_TURN);
   const endBtn = document.getElementById("endTurn");
-  endBtn.disabled = !endAction;
-  endBtn.dataset.action = endAction ? endAction.index : -1;
+  endBtn.disabled = !view.endTurn.available;
+  endBtn.dataset.action = view.endTurn.available ? view.endTurn.actionIndex : -1;
 
   // Status message
-  const msgEl = document.getElementById("msg");
-  const done = ex.rd_env_done();
   const parts = [];
-  parts.push(`<span>round <b>${o[H.ROUND]}</b> · turn <b>${o[H.TURN]}</b> · ` +
-             `phase <b>${o[H.PHASE]}</b> · result <b>${RESULT_NAMES[o[H.RESULT]] || o[H.RESULT]}</b></span>`);
-  if (done) parts.push(`<span class="good">战斗结束 · ${RESULT_NAMES[o[H.RESULT]]}</span>`);
+  const st = view.status;
+  parts.push(`<span>round <b>${st.round}</b> · turn <b>${st.turn}</b> · ` +
+             `phase <b>${st.phase}</b> · result <b>${esc(st.resultName)}</b></span>`);
+  if (st.done) parts.push(`<span class="good">战斗结束 · ${esc(st.resultName)}</span>`);
   // `reward` is in 1/1000 (`env-abi.md` §7) — print the unit it is actually in, not the integer.
   const v = (typeof verdict === "number") ? verdict : lastVerdict;
   const r = (typeof verdict === "number") ? reward : lastReward;
@@ -382,7 +339,7 @@ function render(verdict, reward) {
     else if (v === -2) parts.push(`<span class="dim">already finished (-2)</span>`);
     else parts.push(`<span class="err">driver error (${v}) · ${esc(lastError())}</span>`);
   }
-  msgEl.innerHTML = parts.join("<br>");
+  document.getElementById("msg").innerHTML = parts.join("<br>");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -543,7 +500,7 @@ function measure() {
     const btn = ev.target.closest("button.card");
     if (!btn || btn.disabled) return;
     const hand = Number(btn.dataset.hand);
-    const opts = playOptions.get(hand) || [];
+    const opts = RD_UI.playOptions(readActions()).get(hand) || [];
     if (opts.length === 1) { step(opts[0].actionIndex); return; }
     if (!opts.length) return;
     pending = (pending && pending.hand === hand) ? null : { hand };
@@ -555,7 +512,8 @@ function measure() {
     const target = ev.target.closest("[data-target-slot]");
     if (!target) return;
     const slot = Number(target.dataset.targetSlot);
-    const opt = (playOptions.get(pending.hand) || []).find((p) => p.slot === slot);
+    const opt = (RD_UI.playOptions(readActions()).get(pending.hand) || [])
+      .find((p) => p.slot === slot);
     if (opt) step(opt.actionIndex);
   });
   document.getElementById("endTurn").addEventListener("click", (ev) => {

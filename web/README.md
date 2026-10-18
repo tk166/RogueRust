@@ -4,6 +4,25 @@ A **single static file**, `index.html`, with inline CSS and JS and **no CDN, no 
 `SharedArrayBuffer`**. It loads `rd_wasm.wasm` with a plain `WebAssembly.instantiate` and reads the
 whole game state out of the 122 `i32`s that `rd_env_observe_buf()` points at.
 
+## Files
+
+| file | what it is | tested by |
+|---|---|---|
+| `index.html` | the page: markup, CSS, click handlers, measurements. Loads `ui_render.js` first | gates 14 and 15 |
+| `ui_render.js` | **the semantics**: observation layout + four pure describers (`RD_UI.describe`). Classic script, no build step | gate 15 |
+| `ui_test.mjs` | drives the describers with the real `.wasm` and compares **every printed quantity** with its observation cell | gate 15 |
+| `smoke.mjs` | the artifact is a fresh build; every script parses; only real exports are called; offsets tile | gates 13–14 |
+| `rd_wasm.wasm` | build artifact, **git-ignored** | gates 13–14 |
+
+The split exists because of a measured hole: the page used to hold every "which number goes in
+which cell" decision inline, and **no gate could see a wrong cell** — writing `o[H.HP_MAX]` where
+`o[H.HP]` belongs kept all fourteen gates green. `docs/spec/ui-plan.md` U0 moved those decisions
+into `ui_render.js` so they can be asserted, and they are, cell by cell.
+
+⚠️ **The DOM half is still only checked by eye.** A refactor that renders perfectly but whose click
+handlers reference a variable that no longer exists passes all fifteen gates — that happened, and
+only clicking in a browser found it. `ui_test.mjs` prints this warning itself.
+
 ## What is on the page
 
 The fight is **built from content**, not typed into the Rust file: the module embeds
@@ -85,7 +104,8 @@ the artifact sha, and the page's export/offset tally.
 It is gate 14 of `tools\acceptance.ps1` (gate 13 is the rebuild it compares against), and each of
 its four page/artifact checks has been shown to go red by a deliberate mutation — a one-character
 syntax error, `OFF_HAND` drifting by 2, calling a non-existent export, and flipping one byte of the
-artifact.
+artifact. It now loads **every** script the page references (inline and `src=`) and reads the
+observation layout from whichever file declares it — which since U0 is `ui_render.js`, not the page.
 
 ⚠️ It is not a browser: no DOM, no `Content-Type`, no `instantiateStreaming`, no `performance.now`,
 and **no Rust ↔ page offset check** — see the end of the next section.
@@ -114,6 +134,12 @@ Served by `python -m http.server 8765 --bind 127.0.0.1`, opened in
 Then the fight was **played by clicking**, not by script: 21 clicks to `Victory` in round 7, and the
 HP lost on the first end-turn matched the two previewed intents (7 + 5 = 12) exactly.
 
+Re-run after the U0 split (`ui_render.js` + the rewired click handlers): **22 clicks to `Victory`
+in round 7**, both enemies showing `(down)`, `reward 4.00` — the same fight, with the rendering
+layer swapped out underneath it. That second run is also what caught the click handlers still
+reading the deleted module-level `playOptions`: the page rendered perfectly and every gate was
+green, but **no click did anything at all**.
+
 Two things the session found that no gate could have:
 
 1. **The card target was never sent.** `env-abi.md` §5 emits one play action per *(card × live
@@ -125,7 +151,8 @@ Two things the session found that no gate could have:
    `reward` integer (`-12030`, which is −12.03 in the 1/1000 unit `env-abi.md` §7 defines). The
    first moved to `title=`, the second is now divided by 1000.
 
-Both are fixed. The deeper lesson is the one that became gates 13 and 14 of `tools\acceptance.ps1`:
+Both are fixed. The deeper lesson is the one that became gates 13, 14 and (later) 15 of
+`tools\acceptance.ps1`:
 **`web/index.html` was not looked at by anything.** A syntax error in it passed all twelve gates,
 because every gate stopped at the `.wasm`. `smoke.mjs` now also parses the page's inline script,
 cross-checks every `ex.*` the page calls against the module's real exports, re-derives the 122-slot
