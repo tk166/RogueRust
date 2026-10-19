@@ -49,6 +49,10 @@ pub const NODES_PER_ROW: usize = 6;
 pub const MIN_NODES_PER_ROW: usize = 3;
 /// Exactly six paths (`inv:§7.1`).
 pub const PATHS: usize = 6;
+
+/// The most nodes a map can hold: every row at its widest. Used for the fixed-size traversal
+/// buffers the connectivity check needs (this crate has no allocator).
+pub const MAX_MAP_NODES: usize = ROWS * NODES_PER_ROW;
 /// One to three out-edges per node (`inv:§7.1`).
 pub const MAX_OUT_EDGES: usize = 3;
 /// Per-node reroll cap before the whole attempt is abandoned. Chosen, not derived: exceed it and
@@ -202,6 +206,13 @@ pub enum MapViolation {
     /// A row with fewer than [`MIN_NODES_PER_ROW`] nodes. Not an `inv:§7` rule -- see that
     /// constant -- but a floor with one node is a floor with one move.
     TooNarrow { row: u8, count: u8 },
+    /// The map is more than one connected piece.
+    ///
+    /// Also not an `inv:§7` rule, and it took looking at a picture to notice: six paths that never
+    /// share a node are six parallel lanes, and a lane is a floor with one move -- the same defect
+    /// as [`MapViolation::TooNarrow`], arrived at from the other side. A player who picks lane A
+    /// can never reach a node of lane B, so the map is not one map.
+    Disconnected,
     /// `inv:§7.2` — a fixed floor has the wrong kind.
     FixedFloor { row: u8 },
     /// `inv:§7.4` #1 — elite or rest below floor 6.
@@ -254,63 +265,85 @@ impl RunMap {
     /// all sixty-four attempts die. Letting the walk decide the row and rejecting the thin ones is
     /// both simpler and feasible.)
     fn attempt(rng: &mut RunRng) -> Option<Self> {
+        Self::attempt_with(rng, false)
+    }
+
+    /// `relaxed` skips the two rules that are ours rather than `inv`'s (`TooNarrow` and
+    /// `Disconnected`), so a test can see **what the draws look like** before they are rejected.
+    /// Without it the only observable is "generation failed", which says nothing about which rule
+    /// binds -- and the two pull in opposite directions.
+    fn attempt_with(rng: &mut RunRng, relaxed: bool) -> Option<Self> {
         let mut rows = [MapRow::blank(); ROWS];
-        // `[推断]` placement: the six nodes span the seven columns end to end, so the grid width is
-        // real rather than decorative. With COLS=7 that is columns 0,1,2,3,4,6.
-        for row in rows.iter_mut() {
-            row.count = NODES_PER_ROW as u8;
-            for (index, node) in row.nodes.iter_mut().enumerate() {
-                *node = MapNode::empty(column_of(index));
-            }
-        }
 
-        // Six starts, spread over floor 1 so every row-1 node is walked from and the floor keeps
-        // its width. `inv:§7.1`'s "the first two starts differ" holds because a row has six nodes.
-        let mut shuffled: [u8; NODES_PER_ROW] = [0, 1, 2, 3, 4, 5];
-        rng.shuffle(RunStream::Map, &mut shuffled);
-        let mut start = [0u8; PATHS];
-        for (path, slot) in start.iter_mut().enumerate() {
-            *slot = shuffled[path % NODES_PER_ROW];
-        }
-
-        // Walk. Paths are ordered by their current column each row, and each one may only move to a
-        // column at or right of the previous path's choice -- that is what "no crossing" means when
-        // the destination is what can cross.
-        let mut at = start;
-        let mut order: [usize; PATHS] = [0, 1, 2, 3, 4, 5];
-        for row in 0..ROWS - 1 {
-            order[..].sort_unstable_by_key(|&path| (rows[row].nodes[at[path] as usize].col, path));
-            let mut floor_col: i32 = -1;
-            // Which nodes of the next row an earlier path has already claimed this row.
-            let mut claimed = [false; NODES_PER_ROW];
-            for &path in order.iter() {
-                let from = at[path] as usize;
-                let from_col = i32::from(rows[row].nodes[from].col);
-                let candidates = nearest_three(&rows[row + 1], from_col);
-                let allowed: [Option<u8>; MAX_OUT_EDGES] = core::array::from_fn(|slot| {
-                    candidates[slot].filter(|index| {
-                        i32::from(rows[row + 1].nodes[*index as usize].col) >= floor_col
-                    })
-                });
-                let target = choose_target(rng, &allowed, &claimed)?;
-                claimed[target as usize] = true;
-                floor_col = i32::from(rows[row + 1].nodes[target as usize].col);
-                add_edge(&mut rows[row].nodes[from], target)?;
-                at[path] = target;
-            }
-        }
-
-        prune(&mut rows)?;
-
-        // The rule this whole function is arranged around: a floor with fewer than
-        // [`MIN_NODES_PER_ROW`] nodes offers almost nothing to choose, so such a draw is dead.
+        // Step 1: each row's width and columns. `[推断]`: the inventory fixes only the upper bound,
+        // so the width is uniform over `MIN..=MAX` and the columns are a random subset, sorted so
+        // the row reads left to right.
+        let mut columns = [0u8; COLS];
         for row in 0..ROWS {
-            if rows[row].len() < MIN_NODES_PER_ROW {
+            let span = (NODES_PER_ROW - MIN_NODES_PER_ROW + 1) as u32;
+            let width = MIN_NODES_PER_ROW + rng.roll(RunStream::Map, span).ok()? as usize;
+            for (index, slot) in columns.iter_mut().enumerate() {
+                *slot = index as u8;
+            }
+            rng.shuffle(RunStream::Map, &mut columns);
+            let mut chosen = columns;
+            chosen[..width].sort_unstable();
+            rows[row].count = width as u8;
+            for (index, col) in chosen[..width].iter().enumerate() {
+                rows[row].nodes[index] = MapNode::empty(*col);
+            }
+        }
+
+        // Step 2: connect adjacent rows.
+        //
+        // # Why this is not a walk of six paths any more, and what that costs
+        //
+        // `inv:§7.1` describes StS building the map by walking six paths upward, each step going to
+        // one of the three nearest nodes of the next row. That is what this code used to do, and it
+        // **cannot** satisfy both of the properties a map needs:
+        //
+        // * keep every row at least [`MIN_NODES_PER_ROW`] wide, and
+        // * be one connected graph (which is what makes it one map rather than several).
+        //
+        // Measured over 320 draws (`measure_rejected_draws`): forcing the paths apart for width gave
+        // six parallel lanes (60 of 60 maps with more than one component); letting them merge for
+        // connectivity left rows of one or two nodes. **Zero of 320 draws had both.**
+        //
+        // So the connection is built the other way round: each row's nodes are partitioned into
+        // **contiguous, non-decreasing ranges of the next row that overlap by one node**, one range
+        // per source node. Overlapping is the whole trick -- the shared node is what chains two
+        // sources together (connectivity) and what gives a node two in-edges and, in the next step,
+        // more than one out-edge (a junction).
+        //
+        // Every `inv:§7.1` structural rule still holds: out-degree 1..=3 (range size), every
+        // destination within the source's range, no crossings (ranges are monotone), no orphans
+        // (the ranges and their overlaps cover every node). What is **not** preserved is "the
+        // destinations are the nearest 3 to the source": they are a contiguous column neighbourhood
+        // instead. That is a recorded deviation -- see `docs/spec/run-layer.md` §7.3.
+        connect_rows(&mut rows)?;
+        // `inv:§7.1` prunes orphans. Nothing is an orphan now -- every node has an out-edge (it is
+        // a source) and an in-edge (the ranges cover every node) -- so this deletes nothing, and if
+        // it ever does, this draw is wrong rather than "slightly different".
+        let before: [usize; ROWS] = core::array::from_fn(|row| rows[row].len());
+        prune(&mut rows)?;
+        for row in 0..ROWS {
+            if rows[row].len() != before[row] {
                 return None;
             }
         }
 
-        // Types, with the four overrides applied per node by rerolling.
+        // Step 3: the rules that are ours. `TooNarrow` now holds by construction (the widths are
+        // chosen), and `Disconnected` by the overlaps; both are still checked, because "by
+        // construction" is a claim and `check` is the thing that can falsify it.
+        if !relaxed {
+            for row in 0..ROWS {
+                if rows[row].len() < MIN_NODES_PER_ROW {
+                    return None;
+                }
+            }
+        }
+
+        // Step 4: types, with the four overrides applied per node by rerolling.
         for row in 0..ROWS {
             let floor = row as u8 + 1; // 1-based, matching `inv`'s floor numbering
             let fixed = fixed_floor_kind(floor);
@@ -324,7 +357,13 @@ impl RunMap {
         }
 
         let map = Self { rows };
-        if map.check().is_err() {
+        let verdict = map.check();
+        if relaxed {
+            match verdict {
+                Ok(()) | Err(MapViolation::TooNarrow { .. }) | Err(MapViolation::Disconnected) => {}
+                Err(_) => return None,
+            }
+        } else if verdict.is_err() {
             return None;
         }
         Some(map)
@@ -532,14 +571,57 @@ impl RunMap {
                 }
             }
         }
+        // --- one connected map (see `Disconnected`) ------------------------------------------
+        //
+        // Breadth-first over the **undirected** graph. Fixed buffers on the stack (`MAX_MAP_NODES`
+        // is 90), no allocation.
+        let n = self.node_count();
+        if n == 0 || n > MAX_MAP_NODES {
+            return Err(MapViolation::Structure);
+        }
+        let mut seen = [false; MAX_MAP_NODES];
+        let mut stack = [0u8; MAX_MAP_NODES];
+        let mut top = 1usize;
+        stack[0] = 0;
+        seen[0] = true;
+        let mut visited = 1usize;
+        while top > 0 {
+            top -= 1;
+            let current = stack[top];
+            for other in 0..n {
+                let (row, local) = self.locate(other as u8).ok_or(MapViolation::Structure)?;
+                let node = self
+                    .rows
+                    .get(row)
+                    .and_then(|line| line.node(local))
+                    .ok_or(MapViolation::Structure)?;
+                for &edge in node.out_targets() {
+                    let target = self
+                        .global_of(row + 1, edge as usize)
+                        .ok_or(MapViolation::Structure)?;
+                    // Undirected: the edge counts from either end.
+                    let neighbour = if other as u8 == current {
+                        target
+                    } else if target == current {
+                        other as u8
+                    } else {
+                        continue;
+                    };
+                    if !seen[neighbour as usize] {
+                        seen[neighbour as usize] = true;
+                        stack[top] = neighbour;
+                        top += 1;
+                        visited += 1;
+                    }
+                }
+            }
+        }
+        if visited != n {
+            return Err(MapViolation::Disconnected);
+        }
+
         Ok(())
     }
-}
-
-/// `[推断]` — the six nodes of a row span the seven columns end to end.
-const fn column_of(index: usize) -> u8 {
-    // (index * (COLS - 1)) / (NODES_PER_ROW - 1) with NODES_PER_ROW > 1: 0,1,2,3,4,6.
-    ((index * (COLS - 1)) / (NODES_PER_ROW - 1)) as u8
 }
 
 /// The kinds `inv:§7.2` fixes by floor, or `None` for a rolled floor.
@@ -553,90 +635,62 @@ pub const fn fixed_floor_kind(floor: u8) -> Option<NodeKind> {
     }
 }
 
-/// The three nodes of `row` whose columns are closest to `from_col`, nearest first. `None` slots
-/// mean the row has fewer than three nodes.
+/// Connect every row to the next one.
 ///
-/// Ties break towards the smaller column so the function is total and deterministic; `[推断]`
-/// because the wiki says "the nearest 3" without saying how ties break.
-fn nearest_three(row: &MapRow, from_col: i32) -> [Option<u8>; MAX_OUT_EDGES] {
-    let mut order = [usize::MAX; NODES_PER_ROW];
-    let count = row.len();
-    for (index, slot) in order.iter_mut().take(count).enumerate() {
-        *slot = index;
-    }
-    // Insertion sort over at most six items, keyed by (distance, column). No allocation.
-    for i in 1..count {
-        let key = order[i];
-        let key_key = {
-            let col = i32::from(row.nodes[key].col);
-            ((col - from_col).abs(), col)
-        };
-        let mut j = i;
-        while j > 0 {
-            let previous = order[j - 1];
-            let previous_col = i32::from(row.nodes[previous].col);
-            if ((previous_col - from_col).abs(), previous_col) <= key_key {
-                break;
+/// Each node of row `r` gets a **contiguous** range `[lo, hi]` of row `r+1`'s nodes, with
+/// `1 <= hi - lo + 1 <= MAX_OUT_EDGES`, the ranges in index order, and consecutive ranges
+/// **overlapping by exactly one node**. The overlap is what makes the graph one piece: the shared
+/// node is reached from two sources, so those two sources are connected through it, and the chain
+/// of overlaps links every source in the row. Nodes are stored in column order, so "range in index
+/// order" is also "no crossings".
+///
+/// The two ends of the walk are pinned (`lo_0 = 0`, the last range ends at the last node) so that
+/// the ranges cover every node of the next row: a node nobody can enter is not a room.
+///
+/// `[推断]` Greedy split, with the remainder spread by `ceil(targets_left / sources_left)` and then
+/// clamped to the out-degree bound. A different split gives a different map with the same
+/// properties; this one is chosen because it is total (it always covers, for every pair of widths
+/// in `MIN..=MAX`) and short enough to read.
+fn connect_rows(rows: &mut [MapRow; ROWS]) -> Option<()> {
+    for row in 0..ROWS - 1 {
+        let sources = rows[row].len();
+        let targets = rows[row + 1].len();
+        if sources == 0 || targets == 0 {
+            return None;
+        }
+        let mut lo = 0usize;
+        for source in 0..sources {
+            let sources_left = sources - source;
+            let targets_left = targets - lo;
+            // Spread what is left over the sources that are left, then bound it by the out-degree
+            // rule and by what the remaining sources must still be able to cover.
+            let spread = targets_left.div_ceil(sources_left).clamp(1, MAX_OUT_EDGES);
+            // The rest of the row needs at least one target each, so this range may not eat them
+            // all. With `sources_left - 1` sources left and at least one target each, the most this
+            // one may take is `targets_left - (sources_left - 1)`.
+            let reserve = sources_left - 1;
+            let allowed = targets_left.saturating_sub(reserve).clamp(1, MAX_OUT_EDGES);
+            let size = spread.min(allowed).max(1);
+            let hi = (lo + size - 1).min(targets - 1);
+            for target in lo..=hi {
+                add_edge(&mut rows[row].nodes[source], target as u8)?;
             }
-            order[j] = previous;
-            j -= 1;
+            lo = hi;
+            // The next source starts where this one ended: that node is the overlap, and the
+            // overlap is what makes the graph one piece.
         }
-        order[j] = key;
-    }
-    let mut out = [None; MAX_OUT_EDGES];
-    for (slot, &index) in out.iter_mut().zip(order.iter()) {
-        if index != usize::MAX {
-            *slot = Some(index as u8);
-        }
-    }
-    out
-}
-
-/// Pick which of `allowed` (already monotone-filtered, nearest-first) this path takes.
-///
-/// Three tiers, all `[推断]` -- `inv:§7.1` says "one of the nearest 3" and nothing about which:
-/// 1. among the **unclaimed** candidates, the two nearest straight ahead;
-/// 2. any unclaimed candidate;
-/// 3. anything allowed -- the row is fully claimed, so the paths must merge.
-///
-/// Tier 1 rather than "any unclaimed" is what stops the six paths piling onto one node while still
-/// leaving the choice random: two candidates, one roll. Tier 3 keeps merging possible, which real
-/// maps do.
-fn choose_target(
-    rng: &mut RunRng,
-    allowed: &[Option<u8>; MAX_OUT_EDGES],
-    claimed: &[bool; NODES_PER_ROW],
-) -> Option<u8> {
-    let unclaimed: [Option<u8>; MAX_OUT_EDGES] =
-        core::array::from_fn(|slot| allowed[slot].filter(|index| !claimed[*index as usize]));
-    let tight: [Option<u8>; MAX_OUT_EDGES] = {
-        let mut out = [None; MAX_OUT_EDGES];
-        let mut taken = 0usize;
-        for value in unclaimed.iter().flatten() {
-            if taken < 2 {
-                out[taken] = Some(*value);
-                taken += 1;
+        // Every target must now be enterable.
+        let mut entered = [false; NODES_PER_ROW];
+        for source in 0..sources {
+            for &target in rows[row].nodes[source].out_targets() {
+                entered[target as usize] = true;
             }
         }
-        out
-    };
-    let pool = if tight.iter().any(|slot| slot.is_some()) {
-        tight
-    } else {
-        unclaimed
-    };
-    let count = pool.iter().filter(|slot| slot.is_some()).count();
-    if count > 0 {
-        let pick = rng.roll(RunStream::Map, count as u32).ok()? as usize;
-        return pool.iter().flatten().nth(pick).copied();
+        if entered.iter().take(targets).any(|hit| !*hit) {
+            return None; // a room nobody can enter: this draw is dead
+        }
     }
-    // Everything allowed is claimed: the row is saturated and paths merge from here.
-    let count = allowed.iter().filter(|slot| slot.is_some()).count();
-    if count == 0 {
-        return None;
-    }
-    let pick = rng.roll(RunStream::Map, count as u32).ok()? as usize;
-    allowed.iter().flatten().nth(pick).copied()
+    Some(())
 }
 
 /// Add an edge unless it already exists. Returns `None` when the node is full, which the caller
@@ -842,6 +896,50 @@ mod tests {
     ///
     /// Measured 2026-10-19 over seeds 1..=300: 0 failures, narrowest row **4**, average 4.62 nodes
     /// per row. Before the rule: 2.56 per row with 13 of 20 maps pinching to a single node.
+    /// Measurement, not a gate: what do the rejected draws look like?
+    ///
+    /// Run with `--ignored --nocapture`. It exists because "generation fails" is not a diagnosis:
+    /// the width rule and the connectivity rule pull against each other (paths that merge connect
+    /// the graph and narrow the rows), so the useful question is *how often* a draw satisfies
+    /// which.
+    #[test]
+    #[ignore]
+    fn measure_rejected_draws() {
+        let mut both = 0usize;
+        let mut wide_only = 0usize;
+        let mut connected_only = 0usize;
+        let mut neither = 0usize;
+        let mut attempts = 0usize;
+        let mut widths: Vec<usize> = Vec::new();
+        for seed in 1..=40 {
+            let mut rng = RunRng::new(seed);
+            for _ in 0..8 {
+                attempts += 1;
+                let Some(map) = RunMap::attempt_with(&mut rng, true) else {
+                    continue;
+                };
+                let wide = (0..ROWS).all(|row| map.rows()[row].len() >= MIN_NODES_PER_ROW);
+                let connected = !matches!(map.check(), Err(MapViolation::Disconnected));
+                if wide {
+                    widths.extend((0..ROWS).map(|row| map.rows()[row].len()));
+                }
+                match (wide, connected) {
+                    (true, true) => both += 1,
+                    (true, false) => wide_only += 1,
+                    (false, true) => connected_only += 1,
+                    (false, false) => neither += 1,
+                }
+            }
+        }
+        let average = widths.iter().sum::<usize>() as f64 / widths.len().max(1) as f64;
+        println!(
+            "attempts {attempts}: wide+connected {both}, wide-only {wide_only}, \
+             connected-only {connected_only}, neither {neither}; \
+             average row width of the wide ones {average:.2}"
+        );
+        assert!(attempts > 0);
+    }
+
     #[test]
     fn every_floor_is_wide_enough_to_be_a_choice() {
         let mut narrowest = usize::MAX;
@@ -902,6 +1000,63 @@ mod tests {
             matches!(actual, Err(MapViolation::TooNarrow { row: 13, .. })),
             "expected TooNarrow for floor 14, got {actual:?}"
         );
+    }
+
+    /// The map is **one map**: every node reachable from every other.
+    ///
+    /// This was the defect that looking at a picture exposed and no rule covered: six paths that
+    /// never share a node are six parallel lanes, and a player who enters lane A can never reach
+    /// lane B. Measured before the fix: 60 of 60 maps had more than one component (seed 7:
+    /// 15,15,24,15). Now `connect_rows` overlaps each source's range with the next one's, and the
+    /// overlap is exactly what chains them.
+    #[test]
+    fn every_seed_is_a_single_connected_map() {
+        for seed in 1..=200 {
+            let map = generated(seed);
+            assert_eq!(map.check(), Ok(()), "seed {seed}");
+            assert_ne!(
+                map.check(),
+                Err(MapViolation::Disconnected),
+                "seed {seed} is more than one piece"
+            );
+        }
+    }
+
+    /// The rejection half of the connectivity rule.
+    ///
+    /// Built so the split is **provable** rather than hoped for: every source in the left half of a
+    /// row enters only the *first* node of the next row, and every source in the right half only
+    /// the *middle* one. (Rows have different widths, so a plain "diagonal" is ill-defined, and the
+    /// first version of this test tried one and asserted the wrong thing.) Nothing in the left half
+    /// can ever reach a node only the right half points at, so there are exactly two pieces.
+    ///
+    /// Kinds are forced to `Combat` on the rolled floors first: the override-2 loop runs *before*
+    /// the connectivity check, so a stray `Rest` next to a `Rest` would report `Consecutive` and
+    /// this test would be asserting the wrong rule.
+    #[test]
+    fn check_rejects_a_map_in_pieces() {
+        let mut map = generated(7);
+        for row in 0..ROWS {
+            if fixed_floor_kind(row as u8 + 1).is_none() {
+                for index in 0..map.rows[row].len() {
+                    map.rows[row].nodes[index].kind = NodeKind::Combat;
+                }
+            }
+        }
+        for row in 0..ROWS - 1 {
+            let sources = map.rows[row].len();
+            let targets = map.rows[row + 1].len();
+            let middle = targets / 2;
+            assert!(middle >= 1, "a row needs at least two nodes for this construction");
+            for index in 0..sources {
+                let target = if index < sources / 2 { 0 } else { middle };
+                let node = &mut map.rows[row].nodes[index];
+                node.out_degree = 1;
+                node.out[0] = target as u8;
+            }
+        }
+        let actual = map.check();
+        assert_eq!(actual, Err(MapViolation::Disconnected), "expected Disconnected");
     }
 
     #[test]

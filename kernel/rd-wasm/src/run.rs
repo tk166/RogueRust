@@ -462,13 +462,15 @@ mod tests {
         // the generator, the weights or the reroll caps moves it, and that should be noticed rather
         // than absorbed. (`index 9` is the `Map` stream, `run-layer.md` §3.2.)
         //
-        // Three values in one day, and each move is the point of pinning it:
+        // Four values in one day, and each move is the point of pinning it:
         //   141 -> 128: the walk learned to prefer an unclaimed target in the next row.
-        //   128 -> 148: `MIN_NODES_PER_ROW` became a rule. Rejecting a thin draw and retrying
-        //               **costs** draws (the rejected attempt is not rewound), so seed 7's accepted
-        //               draw now happens later in the stream.
+        //   128 -> 148: `MIN_NODES_PER_ROW` became a rule; rejected draws are not rewound, so the
+        //               accepted draw happens later in the stream.
+        //   148 -> 135: the six-path walk was replaced by "choose the rows, then connect them"
+        //               (`map.rs::connect_rows`), because the walk could not be both wide enough
+        //               and connected.
         // A change here means the generator changed. That is information, not an inconvenience.
-        assert_eq!(o[9], 148, "map generation draw count for seed 7");
+        assert_eq!(o[9], 135, "map generation draw count for seed 7");
         assert_eq!(o.len(), RUN_OBS_LEN);
     }
 
