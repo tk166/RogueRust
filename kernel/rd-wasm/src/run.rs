@@ -462,11 +462,13 @@ mod tests {
         // the generator, the weights or the reroll caps moves it, and that should be noticed rather
         // than absorbed. (`index 9` is the `Map` stream, `run-layer.md` §3.2.)
         //
-        // 141 -> 128 on 2026-10-19, when the walk learned to **prefer an unclaimed target** in the
-        // next row: paths stop merging, rows stop being pruned down to a funnel (measured 2.56 ->
-        // 3.30 nodes per row), and the different choice costs a different number of draws. The
-        // change of this number is the point of the assertion, not an inconvenience.
-        assert_eq!(o[9], 128, "map generation draw count for seed 7");
+        // Three values in one day, and each move is the point of pinning it:
+        //   141 -> 128: the walk learned to prefer an unclaimed target in the next row.
+        //   128 -> 148: `MIN_NODES_PER_ROW` became a rule. Rejecting a thin draw and retrying
+        //               **costs** draws (the rejected attempt is not rewound), so seed 7's accepted
+        //               draw now happens later in the stream.
+        // A change here means the generator changed. That is information, not an inconvenience.
+        assert_eq!(o[9], 148, "map generation draw count for seed 7");
         assert_eq!(o.len(), RUN_OBS_LEN);
     }
 

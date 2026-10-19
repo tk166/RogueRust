@@ -37,6 +37,16 @@ pub const ROWS: usize = 15;
 pub const COLS: usize = 7;
 /// At most six usable nodes in a row (`inv:§7.1`).
 pub const NODES_PER_ROW: usize = 6;
+
+/// **At least three nodes in a row.** This is not from `inv:§7` — the inventory states only the
+/// upper bound — it is a domain correction from the person who plays the game: *"StS never has a
+/// floor with only one node"*. It is a rule rather than a preference because a funnel is not a
+/// choice, and a one-node floor offers exactly one move.
+///
+/// It replaced a preference that only *encouraged* spreading: measured over twenty seeds that
+/// preference left 5 of 20 maps with a single-node row, and seed 7 averaged 2.40 nodes per row.
+/// Encouragement is not a rule; this is.
+pub const MIN_NODES_PER_ROW: usize = 3;
 /// Exactly six paths (`inv:§7.1`).
 pub const PATHS: usize = 6;
 /// One to three out-edges per node (`inv:§7.1`).
@@ -137,6 +147,15 @@ pub struct MapRow {
 }
 
 impl MapRow {
+    /// A row with no nodes yet. Used by generation before the sizes are rolled.
+    #[must_use]
+    pub const fn blank() -> Self {
+        Self {
+            count: 0,
+            nodes: [MapNode::empty(0); NODES_PER_ROW],
+        }
+    }
+
     /// How many nodes this row has.
     #[must_use]
     pub const fn count(&self) -> u8 {
@@ -180,6 +199,9 @@ pub enum MapViolation {
     DeadEnd { row: u8, index: u8 },
     /// `inv:§7.1` — paths cross: two edges from row `r` to `r+1` swap left/right order.
     Crossing { row: u8 },
+    /// A row with fewer than [`MIN_NODES_PER_ROW`] nodes. Not an `inv:§7` rule -- see that
+    /// constant -- but a floor with one node is a floor with one move.
+    TooNarrow { row: u8, count: u8 },
     /// `inv:§7.2` — a fixed floor has the wrong kind.
     FixedFloor { row: u8 },
     /// `inv:§7.4` #1 — elite or rest below floor 6.
@@ -220,109 +242,73 @@ impl RunMap {
     }
 
     /// One attempt. `None` means "this draw could not be made legal" — the caller retries.
+    ///
+    /// Six nodes go into every row, six paths are walked through them, and whatever the paths
+    /// missed is pruned (that is `inv:§7.1`). A draw whose pruning leaves any row thinner than
+    /// [`MIN_NODES_PER_ROW`] is **rejected** and retried -- see that constant for why a floor with
+    /// one node is a bug rather than a style.
+    ///
+    /// (An earlier attempt at this put a *chosen* number of nodes in each row and demanded the walk
+    /// cover all of them. It never generated anything: with three to six randomly placed nodes the
+    /// "nearest 3, and never left of the previous path" rule has no legal target often enough that
+    /// all sixty-four attempts die. Letting the walk decide the row and rejecting the thin ones is
+    /// both simpler and feasible.)
     fn attempt(rng: &mut RunRng) -> Option<Self> {
-        let mut rows = [MapRow {
-            count: NODES_PER_ROW as u8,
-            nodes: [MapNode::empty(0); NODES_PER_ROW],
-        }; ROWS];
-        // `[推断]` placement: the six nodes span the seven columns end to end, so the grid width
-        // is real rather than decorative. With COLS=7 that is columns 0,1,2,3,4,6.
+        let mut rows = [MapRow::blank(); ROWS];
+        // `[推断]` placement: the six nodes span the seven columns end to end, so the grid width is
+        // real rather than decorative. With COLS=7 that is columns 0,1,2,3,4,6.
         for row in rows.iter_mut() {
+            row.count = NODES_PER_ROW as u8;
             for (index, node) in row.nodes.iter_mut().enumerate() {
                 *node = MapNode::empty(column_of(index));
             }
         }
 
-        // Six starts; the first two must differ (`inv:§7.1`).
+        // Six starts, spread over floor 1 so every row-1 node is walked from and the floor keeps
+        // its width. `inv:§7.1`'s "the first two starts differ" holds because a row has six nodes.
+        let mut shuffled: [u8; NODES_PER_ROW] = [0, 1, 2, 3, 4, 5];
+        rng.shuffle(RunStream::Map, &mut shuffled);
         let mut start = [0u8; PATHS];
-        for path in 0..PATHS {
-            let mut chosen = None;
-            for _ in 0..MAX_REROLLS {
-                let candidate = u8::try_from(rng.roll(RunStream::Map, NODES_PER_ROW as u32).ok()?)
-                    .ok()?;
-                if path == 1 && candidate == start[0] {
-                    continue;
-                }
-                chosen = Some(candidate);
-                break;
-            }
-            start[path] = chosen?;
+        for (path, slot) in start.iter_mut().enumerate() {
+            *slot = shuffled[path % NODES_PER_ROW];
         }
 
-        // Walk. Paths are ordered by their current column each row, and each one may only move to
-        // a column at or right of the previous path's choice — that is what "no crossing" means
-        // when the destination is what can cross.
+        // Walk. Paths are ordered by their current column each row, and each one may only move to a
+        // column at or right of the previous path's choice -- that is what "no crossing" means when
+        // the destination is what can cross.
         let mut at = start;
         let mut order: [usize; PATHS] = [0, 1, 2, 3, 4, 5];
         for row in 0..ROWS - 1 {
             order[..].sort_unstable_by_key(|&path| (rows[row].nodes[at[path] as usize].col, path));
             let mut floor_col: i32 = -1;
-            // Which of the next row's nodes an earlier path has already claimed. See the comment
-            // at the preference below: without this the six paths merge and most of the row is
-            // pruned as orphans.
+            // Which nodes of the next row an earlier path has already claimed this row.
             let mut claimed = [false; NODES_PER_ROW];
             for &path in order.iter() {
                 let from = at[path] as usize;
                 let from_col = i32::from(rows[row].nodes[from].col);
-                let candidates = nearest_three(from_col, rows[row + 1].len());
-                let allowed: [Option<u8>; MAX_OUT_EDGES] = {
-                    let mut slots = [None; MAX_OUT_EDGES];
-                    for (slot, &candidate) in slots.iter_mut().zip(candidates.iter()) {
-                        let col = i32::from(rows[row + 1].nodes[candidate as usize].col);
-                        if col >= floor_col {
-                            *slot = Some(candidate);
-                        }
-                    }
-                    slots
-                };
-                let count = allowed.iter().filter(|s| s.is_some()).count();
-                if count == 0 {
-                    return None; // every nearest-3 would cross: this draw cannot be repaired
-                }
-                // `[推断]` Preference, measured into existence: among the allowed nearest-3,
-                // prefer one **no earlier path has taken this row**. Without it the six paths
-                // merge as soon as the monotone-column rule lets them, most of the row is never
-                // walked, and orphan pruning then deletes it: measured over 20 seeds the map
-                // averaged **2.56** nodes per row and 13 of 20 maps pinched to a single-node row.
-                // The 13 sourced rules permit that (a row may hold one node), but a map that
-                // funnels is not what the player is meant to be choosing between.
-                //
-                // This is still "one of the nearest 3" (`inv:§7.1`) and still monotone in column,
-                // so no rule changes -- only which of the equally-legal choices we take.
-                let unclaimed = allowed
-                    .iter()
-                    .filter(|candidate| match candidate {
-                        Some(index) => !claimed[*index as usize],
-                        None => false,
+                let candidates = nearest_three(&rows[row + 1], from_col);
+                let allowed: [Option<u8>; MAX_OUT_EDGES] = core::array::from_fn(|slot| {
+                    candidates[slot].filter(|index| {
+                        i32::from(rows[row + 1].nodes[*index as usize].col) >= floor_col
                     })
-                    .count();
-                let (pool, pool_len, fresh) = if unclaimed > 0 {
-                    (allowed, unclaimed, true)
-                } else {
-                    (allowed, count, false)
-                };
-                let pick = rng.roll(RunStream::Map, pool_len as u32).ok()? as usize;
-                let target = if fresh {
-                    pool.iter()
-                        .flatten()
-                        .filter(|index| !claimed[**index as usize])
-                        .nth(pick)
-                        .copied()?
-                } else {
-                    pool.iter().flatten().nth(pick).copied()?
-                };
+                });
+                let target = choose_target(rng, &allowed, &claimed)?;
                 claimed[target as usize] = true;
-                let target_col = i32::from(rows[row + 1].nodes[target as usize].col);
-                floor_col = target_col;
+                floor_col = i32::from(rows[row + 1].nodes[target as usize].col);
                 add_edge(&mut rows[row].nodes[from], target)?;
                 at[path] = target;
             }
         }
 
-        // Prune orphans (`inv:§7.1`): a node no path touches has no edge at all, so "used" and
-        // "has an edge" coincide. Removing them renumbers the next row, which is why the edge
-        // rewrite has to happen in the same pass, top-down.
         prune(&mut rows)?;
+
+        // The rule this whole function is arranged around: a floor with fewer than
+        // [`MIN_NODES_PER_ROW`] nodes offers almost nothing to choose, so such a draw is dead.
+        for row in 0..ROWS {
+            if rows[row].len() < MIN_NODES_PER_ROW {
+                return None;
+            }
+        }
 
         // Types, with the four overrides applied per node by rerolling.
         for row in 0..ROWS {
@@ -415,6 +401,12 @@ impl RunMap {
             let floor = row as u8 + 1;
             if line.is_empty() || line.len() > NODES_PER_ROW {
                 return Err(MapViolation::Structure);
+            }
+            if line.len() < MIN_NODES_PER_ROW {
+                return Err(MapViolation::TooNarrow {
+                    row: row as u8,
+                    count: line.len() as u8,
+                });
             }
             if let Some(want) = fixed_floor_kind(floor) {
                 for index in 0..line.len() {
@@ -546,7 +538,7 @@ impl RunMap {
 
 /// `[推断]` — the six nodes of a row span the seven columns end to end.
 const fn column_of(index: usize) -> u8 {
-    // (index * (COLS - 1)) / (NODES_PER_ROW - 1) with NODES_PER_ROW > 1.
+    // (index * (COLS - 1)) / (NODES_PER_ROW - 1) with NODES_PER_ROW > 1: 0,1,2,3,4,6.
     ((index * (COLS - 1)) / (NODES_PER_ROW - 1)) as u8
 }
 
@@ -561,23 +553,29 @@ pub const fn fixed_floor_kind(floor: u8) -> Option<NodeKind> {
     }
 }
 
-/// The three row-local indices whose columns are closest to `from_col`, nearest first.
+/// The three nodes of `row` whose columns are closest to `from_col`, nearest first. `None` slots
+/// mean the row has fewer than three nodes.
 ///
 /// Ties break towards the smaller column so the function is total and deterministic; `[推断]`
 /// because the wiki says "the nearest 3" without saying how ties break.
-fn nearest_three(from_col: i32, count: usize) -> [u8; MAX_OUT_EDGES] {
-    let mut order: [u8; NODES_PER_ROW] = [0, 1, 2, 3, 4, 5];
+fn nearest_three(row: &MapRow, from_col: i32) -> [Option<u8>; MAX_OUT_EDGES] {
+    let mut order = [usize::MAX; NODES_PER_ROW];
+    let count = row.len();
+    for (index, slot) in order.iter_mut().take(count).enumerate() {
+        *slot = index;
+    }
     // Insertion sort over at most six items, keyed by (distance, column). No allocation.
     for i in 1..count {
         let key = order[i];
-        let key_col = i32::from(column_of(key as usize));
+        let key_key = {
+            let col = i32::from(row.nodes[key].col);
+            ((col - from_col).abs(), col)
+        };
         let mut j = i;
         while j > 0 {
             let previous = order[j - 1];
-            let previous_col = i32::from(column_of(previous as usize));
-            let previous_key = ((previous_col - from_col).abs(), previous_col);
-            let this_key = ((key_col - from_col).abs(), key_col);
-            if previous_key <= this_key {
+            let previous_col = i32::from(row.nodes[previous].col);
+            if ((previous_col - from_col).abs(), previous_col) <= key_key {
                 break;
             }
             order[j] = previous;
@@ -585,7 +583,60 @@ fn nearest_three(from_col: i32, count: usize) -> [u8; MAX_OUT_EDGES] {
         }
         order[j] = key;
     }
-    [order[0], order[1], order[2]]
+    let mut out = [None; MAX_OUT_EDGES];
+    for (slot, &index) in out.iter_mut().zip(order.iter()) {
+        if index != usize::MAX {
+            *slot = Some(index as u8);
+        }
+    }
+    out
+}
+
+/// Pick which of `allowed` (already monotone-filtered, nearest-first) this path takes.
+///
+/// Three tiers, all `[推断]` -- `inv:§7.1` says "one of the nearest 3" and nothing about which:
+/// 1. among the **unclaimed** candidates, the two nearest straight ahead;
+/// 2. any unclaimed candidate;
+/// 3. anything allowed -- the row is fully claimed, so the paths must merge.
+///
+/// Tier 1 rather than "any unclaimed" is what stops the six paths piling onto one node while still
+/// leaving the choice random: two candidates, one roll. Tier 3 keeps merging possible, which real
+/// maps do.
+fn choose_target(
+    rng: &mut RunRng,
+    allowed: &[Option<u8>; MAX_OUT_EDGES],
+    claimed: &[bool; NODES_PER_ROW],
+) -> Option<u8> {
+    let unclaimed: [Option<u8>; MAX_OUT_EDGES] =
+        core::array::from_fn(|slot| allowed[slot].filter(|index| !claimed[*index as usize]));
+    let tight: [Option<u8>; MAX_OUT_EDGES] = {
+        let mut out = [None; MAX_OUT_EDGES];
+        let mut taken = 0usize;
+        for value in unclaimed.iter().flatten() {
+            if taken < 2 {
+                out[taken] = Some(*value);
+                taken += 1;
+            }
+        }
+        out
+    };
+    let pool = if tight.iter().any(|slot| slot.is_some()) {
+        tight
+    } else {
+        unclaimed
+    };
+    let count = pool.iter().filter(|slot| slot.is_some()).count();
+    if count > 0 {
+        let pick = rng.roll(RunStream::Map, count as u32).ok()? as usize;
+        return pool.iter().flatten().nth(pick).copied();
+    }
+    // Everything allowed is claimed: the row is saturated and paths merge from here.
+    let count = allowed.iter().filter(|slot| slot.is_some()).count();
+    if count == 0 {
+        return None;
+    }
+    let pick = rng.roll(RunStream::Map, count as u32).ok()? as usize;
+    allowed.iter().flatten().nth(pick).copied()
 }
 
 /// Add an edge unless it already exists. Returns `None` when the node is full, which the caller
@@ -781,40 +832,76 @@ mod tests {
         );
     }
 
-    /// The map must be **wide**, not a funnel.
+    /// Every floor must be wide enough to be a choice.
     ///
-    /// This is a quality assertion, not one of `inv:§7`'s rules: a row may legally hold a single
-    /// node. But six paths through fifteen rows exist so the player has something to choose
-    /// between, and an algorithm whose paths merge leaves most of each row unwalked, after which
-    /// orphan pruning deletes it. Measured before the unclaimed-target preference in the walk:
-    /// **2.56** nodes per row, 13 of 20 maps with a single-node row. After it: **3.30** and 5 of
-    /// 20. The threshold is below the measured value so it does not flap, and above the old one so
-    /// removing the preference is red.
+    /// This is a **rule** ([`MIN_NODES_PER_ROW`]), not a tendency: the assertion is per row, over
+    /// 300 seeds, with no tolerance. It also pins that generation never gives up -- the rule is
+    /// enforced by rejecting thin draws and retrying, so a rule that made generation infeasible
+    /// would show up as `MapGeneration` rather than as a narrow row, and both failures are covered
+    /// here.
+    ///
+    /// Measured 2026-10-19 over seeds 1..=300: 0 failures, narrowest row **4**, average 4.62 nodes
+    /// per row. Before the rule: 2.56 per row with 13 of 20 maps pinching to a single node.
     #[test]
-    fn the_map_is_wide_rather_than_a_funnel() {
+    fn every_floor_is_wide_enough_to_be_a_choice() {
+        let mut narrowest = usize::MAX;
         let mut total = 0usize;
-        let mut rows_counted = 0usize;
-        let mut pinched = 0usize;
-        for seed in 1..=20 {
+        let mut counted = 0usize;
+        for seed in 1..=300 {
             let map = generated(seed);
-            let mut counts = [0usize; ROWS];
-            for (row, count) in counts.iter_mut().enumerate() {
-                *count = map.rows()[row].len();
-                total += *count;
-                rows_counted += 1;
-            }
-            if counts.iter().any(|&c| c <= 1) {
-                pinched += 1;
+            for row in 0..ROWS {
+                let width = map.rows()[row].len();
+                assert!(
+                    width >= MIN_NODES_PER_ROW,
+                    "seed {seed}: floor {} has {width} nodes, the minimum is {MIN_NODES_PER_ROW}",
+                    row + 1
+                );
+                assert!(width <= NODES_PER_ROW);
+                narrowest = narrowest.min(width);
+                total += width;
+                counted += 1;
             }
         }
-        let average = total as f64 / rows_counted as f64;
+        let average = total as f64 / counted as f64;
+        assert!(narrowest >= MIN_NODES_PER_ROW);
+        // A floor for the average as well: the rule alone would allow an average of exactly 3, and
+        // 4.62 is what the spreading preference buys. Below 4 means the preference was weakened.
         assert!(
-            average >= 3.0,
-            "the map averages {average:.2} nodes per row: the paths are merging and the row is \
-             being pruned. Measured 3.30 with the unclaimed-target preference in the walk, 2.56 \
-             without it."
+            average >= 4.0,
+            "the map averages {average:.2} nodes per row; measured 4.62 with the rule and the \
+             spreading preference"
         );
-        assert!(pinched <= 12, "{pinched}/20 maps pinch to a single-node row");
+    }
+
+    /// The rejection half: `check` must refuse a floor that is too narrow, so that the rule is
+    /// enforced by the validator and not only by the generator that happens to honour it.
+    ///
+    /// The row is narrowed to `MIN_NODES_PER_ROW - 1` **and** every edge that pointed into the
+    /// removed tail is re-pointed at a surviving node. Without that, the row above reports
+    /// `Structure` ("edge target outside the next row") first, and the test would be asserting the
+    /// wrong rule -- which is exactly what the first version of it did.
+    #[test]
+    fn check_rejects_a_floor_that_is_too_narrow() {
+        let mut map = generated(7);
+        let row = 13usize; // floor 14: rolled, so no fixed-floor rule is in the way
+        let keep = MIN_NODES_PER_ROW - 1;
+        assert!(map.rows[row].len() > keep);
+        map.rows[row].count = keep as u8;
+        for earlier in 0..row {
+            for index in 0..map.rows[earlier].len() {
+                let degree = map.rows[earlier].nodes[index].out_degree as usize;
+                for slot in 0..degree {
+                    if map.rows[earlier].nodes[index].out[slot] as usize >= keep {
+                        map.rows[earlier].nodes[index].out[slot] = 0;
+                    }
+                }
+            }
+        }
+        let actual = map.check();
+        assert!(
+            matches!(actual, Err(MapViolation::TooNarrow { row: 13, .. })),
+            "expected TooNarrow for floor 14, got {actual:?}"
+        );
     }
 
     #[test]
