@@ -107,6 +107,7 @@
     font: 700 12px var(--mono); float: left; margin-right: 6px;
   }
   .card .title { font-weight: 600; }
+  .card .text { color: #b9c3d4; font-size: 11px; margin-top: 4px; line-height: 1.35; }
   .card .meta { color: var(--dim); font-size: 10px; margin-top: 4px; }
   .log { font: 12px/1.7 var(--mono); max-height: 190px; overflow-y: auto; }
   .log div { border-bottom: 1px solid #202634; padding: 1px 0; }
@@ -140,7 +141,8 @@
   一个静态页面 + 一个 <code>.wasm</code>，全局没有 CDN、没有 worker、没有 <code>SharedArrayBuffer</code>。
   状态全部来自 <code>rd_env_observe_buf()</code> 那 122 个 <code>i32</code>；每次点击 = 一次 <code>rd_env_step</code>。
   <br>
-  这一局是**从内容镜像建的**：<code>content.sts.core.rdcf</code>（9,580 B，嵌在模块里）→
+  这一局是**从内容镜像建的**：<code>content.sts.rdcf</code>（11,140 B，嵌在模块里；用完整镜像而不是
+  9,580 B 的 core 镜像，因为卡面的标题与描述就住在 core 版被剥掉的那两格里）→
   <code>build_fight_from_content</code>：牌组是内容里的 <code>Characters[0].Start.Deck</code>，
   敌人是内容里的遭遇 <code>enc_small_slimes</code>（<code>acid_slime_m</code> + <code>spike_slime_s</code>），
   敌人意图用 <code>intent::select_action</code> 现算 + 从 <code>EACT</code> 程序里读伤害。
@@ -291,6 +293,13 @@ const lastError = () =>
   readText((_) => ex.rd_env_last_error_len(), (p) => ex.rd_env_last_error_into(p));
 const cardName = (h) =>
   readText((i) => ex.rd_env_card_name_len(i), (p, i) => ex.rd_env_card_name_into(i, p), h);
+// The card's own title and description, out of `CARD.NameKey` / `CARD.DescriptionKey` in the
+// content image. Not a table in this file: the text is the content's, so a card cannot
+// describe itself as something it does not do.
+const cardTitle = (h) =>
+  readText((i) => ex.rd_env_card_title_len(i), (p, i) => ex.rd_env_card_title_into(i, p), h);
+const cardText = (h) =>
+  readText((i) => ex.rd_env_card_text_len(i), (p, i) => ex.rd_env_card_text_into(i, p), h);
 // Both of these are presentation-only exports (the numbers live in the observation): the enemy id
 // comes from `ENCT`, the intent text from `EACT` + the program's own damage.
 const enemyName = (e) =>
@@ -634,7 +643,8 @@ function render(verdict, reward) {
               data-action="${card.directActionIndex}"
               style="animation-delay:${order * 40}ms"
               title="card definition slot ${card.definitionSlot}" ${card.playable ? "" : "disabled"}>
-        <div><span class="cost-badge">${card.cost}</span><span class="title">${esc(card.name)}</span></div>
+        <div><span class="cost-badge">${card.cost}</span><span class="title">${esc(cardTitle(card.slot) || card.name)}</span></div>
+        ${cardText(card.slot) ? `<div class="text">${esc(cardText(card.slot))}</div>` : ""}
         <div class="meta">slot ${card.slot}${card.note ? ` · ${esc(card.note)}` : ""}</div>
       </button>`);
   if (!hand.length) hand.push(`<div class="stats">手牌为空 —— 第一次出牌/结束回合会开回合并抽牌。</div>`);
@@ -798,6 +808,8 @@ function measure() {
                       "rd_env_action_kind", "rd_env_action_arg", "rd_env_step", "rd_env_done",
                       "rd_env_result", "rd_env_reset", "rd_env_reward", "rd_env_selfcheck",
                       "rd_env_scratch_buf", "rd_env_card_name_len", "rd_env_card_name_into",
+                      "rd_env_card_title_len", "rd_env_card_title_into",
+                      "rd_env_card_text_len", "rd_env_card_text_into",
                       "rd_env_enemy_name_len", "rd_env_enemy_name_into",
                       "rd_env_intent_len", "rd_env_intent_into",
                       "rd_env_last_error_len", "rd_env_last_error_into",

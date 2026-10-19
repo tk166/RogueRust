@@ -4295,3 +4295,70 @@ E6 是第 54 轮 D9 的同族：**纯函数全在、只是没人用**，所以"�
 | 变异 | 6 + 9 + 9 | **6 + 9 + 15** |
 | `kernel/**` | — | **零改动** |
 | 仓库里的音频文件 | 0 | **0** |
+---
+
+## 56. 第 46 轮：卡面有字了（U2 第三部分）—— 以及"core 镜像把文案剥掉了"这个真发现
+
+> 上一轮结束时卡面只有**名字 + 费用**。这一轮把它补齐，并且没有新增一行内容、没有改编译器。
+
+### 56.1 文案一直在内容里，只是页面没问过
+
+`CARD` 行有 `NameKey` / `DescriptionKey` 两格，而且 `tools/contentc/packages/sts` 里**已经有真人写的句子**：
+
+| Id | NameKey | DescriptionKey |
+|---|---|---|
+| `strike` | `Strike` | `Deal 6 damage.` |
+| `defend` | `Defend` | `Gain 5 Block.` |
+| `bash` | `Bash` | `Deal 8 damage. Apply 2 Vulnerable.` |
+| `slimed` | `Slimed` | `Unplayable.` |
+
+页面以前只问 `rd_env_card_name_*`（返回 **id**：`"strike"`），所以卡面只能写 `strike`。
+新增四个导出（`rd_env_card_title_*` / `rd_env_card_text_*`）之后，卡面是
+**费用 + 标题 + 描述**：`1 | Defend | Gain 5 Block.`
+
+**为什么读内容的句子而不是从程序树推导**：推导出来的文案是机械的（`dealDamage 6`），
+而手写一份就是**第二个会漂的地方**；内容里的这一句**就是这张卡说的话**，
+它不可能和卡实际做的事不一致。
+
+### 56.2 真发现：模块嵌的是 **core 镜像**，而 core 版把这两格剥掉了
+
+第一版读出来**全是空串**。原因不是我的读取代码，而是**镜像的选择**：
+
+* `content.sts.core.rdcf`（9,580 B，模块原本嵌的）把 `NameKey` / `DescriptionKey` 写成
+  **`ABSENT16`** —— core 版的用途是内核语义，它**故意剥掉面向人的字符串**。
+* `content.sts.rdcf`（11,140 B，完整镜像）里这两格有值。
+
+⇒ 换成完整镜像，代价 **+1,560 B**。`.wasm` 430,404 → **434,617 B**。
+理由写在 `rd-wasm` 的 `IMAGE` 文档注释里（"这是本文件唯一需要完整镜像的地方；哪天页面不再
+需要文案，这一行改回 core 镜像"），并且有测试钉住：
+
+`card_text_tests::the_text_is_the_contents_own` —— 断言手牌里每张卡都有标题，且
+`(标题, 描述)` 是那四张卡之一（**把内容的文案钉成字面量**，内容一改这里就红）；
+`the_title_is_not_the_definition_id` —— 标题必须是 `Strike` 而不是 `strike`，
+否则"标题接成了 id"这个 bug 会全绿。
+
+### 56.3 顺手修掉的三处（都是真问题）
+
+1. **文档谎报镜像**：`lib.rs` 的模块头与 `IMAGE` 注释都写着 `content.sts.core.rdcf`（9,580 B），
+   页面副标题也这么写。改成完整镜像后三处一起改。
+2. **clippy `not_unsafe_ptr_arg_deref`**（deny-by-default）：我新加的两个 `_into` 导出是
+   `pub extern "C" fn` 却在写裸指针。兄弟导出 `rd_env_card_name_into` 本来就是
+   `pub unsafe extern "C" fn`，照它改。
+3. 两个"循环变量只用来索引"的循环改成迭代器。
+
+### 56.4 没做的（点名）
+
+卡面**没有类型**（Attack/Skill/Power）：我们的内容把它放在 `CARD.Tags` 里
+（`"attack"`），而 `Tags` 是 `TERM` 句柄指向一个**带包装的列表**（`[{"value": "attack"}]`），
+读它要按标签遍历，不是读一格字符串。`status_bind::has_tag` 有现成的遍历，但它是给
+`STAT` 行的；照抄一份给 `CARD` 是下一步的事 —— 写在这里，而不是假装卡面已经完整。
+
+### 56.5 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16**（连跑两遍确认稳定） |
+| 单测 | 620 | **623**（rd-wasm 9 → 12） |
+| 页面交叉核对的导出 | 25 | **29** |
+| `.wasm` | 430,404 B | **434,617 B**（+4,213：完整镜像 1,560 + 新导出代码） |
+| 内容/编译器 | — | **零改动** |

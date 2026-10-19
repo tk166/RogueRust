@@ -44,9 +44,22 @@ covers everything visible, and it cannot recover one thing: whether a Block decr
 reported separately rather than merged into a number that would be wrong half the time. A real
 event stream would be better; it is a recorded follow-up.
 
-⚠️ **Card faces are name + cost only.** The ABI names cards and prints their cost; card *type* and
-*text* are not exported, so "6 伤害" cannot be shown without a second ABI extension. That is the
-next thing U2 needs, and it is written down rather than approximated.
+### Card faces
+
+A card shows its cost, its **title** and its **description** — `Defend` / `Gain 5 Block.` — plus
+whether it can be played and whether it is being aimed. Both strings come out of the content
+image: `rd_env_card_title_*` reads `CARD.NameKey` and `rd_env_card_text_*` reads
+`CARD.DescriptionKey`. They are **the content's own sentences**, not a table in the page, so a card
+cannot end up describing something it does not do.
+
+⚠️ That is also why the module embeds the **full** `content.sts.rdcf` (11,140 B) rather than its
+9,580 B core mirror: the core build **strips those two cells** (`ABSENT16`), so every card face came
+back empty until the image was switched. Measured, not assumed — see the `IMAGE` doc comment in
+`kernel/rd-wasm/src/lib.rs`. The cost is +1,560 B of wasm.
+
+⚠️ Still missing from a card face: the **type** (Attack/Skill/Power). Our content carries it as a
+tag (`"attack"` in `CARD.Tags`), which is a `TERM` handle to a wrapped list, and reading it needs a
+tag walker rather than a string cell. Written down, not approximated.
 
 ### Playing a card: click *and* drag
 

@@ -40,6 +40,8 @@ for (const [needle, why] of [
   ["appendLog(diff);", "the battle log is computed and then never shown"],
   ['id="log"', "there is no log panel for it to append to"],
   ['id="floats"', "there is no layer for the damage numbers to float in"],
+  ["rd_env_card_title_len", "the card face would never show the content's title"],
+  ["rd_env_card_text_len", "the card face would never show the content's description"],
   ["RD_UI.actionFor(", "a drop would never consult the decision function"],
   ["RD_UI.soundPlan(", "the sound plan is computed and then never played"],
   ['addEventListener("pointerdown"', "the drag is never wired up"],

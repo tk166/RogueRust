@@ -279,7 +279,7 @@ impl RunMap {
         // so the width is uniform over `MIN..=MAX` and the columns are a random subset, sorted so
         // the row reads left to right.
         let mut columns = [0u8; COLS];
-        for row in 0..ROWS {
+        for line in rows.iter_mut() {
             let span = (NODES_PER_ROW - MIN_NODES_PER_ROW + 1) as u32;
             let width = MIN_NODES_PER_ROW + rng.roll(RunStream::Map, span).ok()? as usize;
             for (index, slot) in columns.iter_mut().enumerate() {
@@ -288,9 +288,9 @@ impl RunMap {
             rng.shuffle(RunStream::Map, &mut columns);
             let mut chosen = columns;
             chosen[..width].sort_unstable();
-            rows[row].count = width as u8;
+            line.count = width as u8;
             for (index, col) in chosen[..width].iter().enumerate() {
-                rows[row].nodes[index] = MapNode::empty(*col);
+                line.nodes[index] = MapNode::empty(*col);
             }
         }
 
@@ -335,12 +335,8 @@ impl RunMap {
         // Step 3: the rules that are ours. `TooNarrow` now holds by construction (the widths are
         // chosen), and `Disconnected` by the overlaps; both are still checked, because "by
         // construction" is a claim and `check` is the thing that can falsify it.
-        if !relaxed {
-            for row in 0..ROWS {
-                if rows[row].len() < MIN_NODES_PER_ROW {
-                    return None;
-                }
-            }
+        if !relaxed && rows.iter().any(|line| line.len() < MIN_NODES_PER_ROW) {
+            return None;
         }
 
         // Step 4: types, with the four overrides applied per node by rerolling.

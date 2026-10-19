@@ -6,7 +6,8 @@
 //! A **spike**: it answers "can the browser UI speak the same protocol as the future RL
 //! environment?", not "is this the product". So:
 //!
-//! * the **content** is real and comes out of the `sts` package (`content.sts.core.rdcf`);
+//! * the **content** is real and comes out of the `sts` package (`content.sts.rdcf` -- the full
+//!   image, not the core mirror: the card text lives in the cells the core build strips);
 //!   the **fight** is built from it with `build_fight_from_content` — the deck is the content's
 //!   own (`Characters[0].Start.Deck`) and the enemies are the content's own (`ENCT` encounter
 //!   `enc_few_slimes`); the hero, the seed and "which encounter" are the only things this file
@@ -92,14 +93,26 @@ pub(crate) fn detail<T: core::fmt::Debug>(_value: &T) -> String {
     "<detail off>".to_string()
 }
 
-/// The content image, embedded at compile time: the **`sts` package's core mirror**, 9,580 B
-/// (`tools/contentc/packages/sts/out/content.sts.core.rdcf`).
+/// The content image, embedded at compile time: the **`sts` package's full image**, 11,140 B
+/// (`tools/contentc/packages/sts/out/content.sts.rdcf`).
+///
+/// # Why the full image and not its core mirror (9,580 B)
+///
+/// The core mirror is the same content with the **human-facing strings stripped** — and those are
+/// exactly what a card face needs. `CARD.NameKey` (cell 9) and `CARD.DescriptionKey` (cell 10) are
+/// `ABSENT16` in the core build and carry `"Strike"` / `"Deal 6 damage."` in the full one, which
+/// `card_text_tests::the_text_is_the_contents_own` pins. Measured: switching back to the core
+/// mirror makes every card's title and description come back empty.
+///
+/// So this file pays **+1,560 B** for the card text, and it is the only reason it embeds the full
+/// image. The kernel never reads those cells — the semantics are identical in both builds — so if a
+/// day comes when the page stops needing the text, this one line goes back to the core mirror.
 ///
 /// # Why this mirror and not `tools/contentc/out/content.core.rdcf` (85,616 B)
 ///
 /// The two are different *content*, not two versions of one: `content.core.rdcf` is the
-/// `roguedeck` package (188-ish cards, 109 encounters, 85,616 B), `content.sts.core.rdcf` is the
-/// hand-authored Slay-the-Spire act-1 slice (4 cards, 3 encounters, 9,580 B). This crate is the
+/// `roguedeck` package (188-ish cards, 109 encounters, 85,616 B), `content.sts.rdcf` is the
+/// hand-authored Slay-the-Spire act-1 slice (4 cards, 3 encounters, 11,140 B). This crate is the
 /// last metre of the pipeline "content → one fight → browser", and the content that has a
 /// source document, an inventory and a four-layer gate behind it is the `sts` package. Embedding
 /// it also removes **76,036 B** from the module: the `.wasm` is almost entirely the image plus
@@ -109,7 +122,7 @@ pub(crate) fn detail<T: core::fmt::Debug>(_value: &T) -> String {
 /// it buys: every number on the page comes out of a document this repo can check, and the deck
 /// is the document's own rather than a list typed here. If the demo ever needs the big content,
 /// this is the one line to change — nothing else in the file knows which package it is looking at.
-pub(crate) static IMAGE: &[u8] = include_bytes!("../../../tools/contentc/packages/sts/out/content.sts.core.rdcf");
+pub(crate) static IMAGE: &[u8] = include_bytes!("../../../tools/contentc/packages/sts/out/content.sts.rdcf");
 
 /// Which `ENCT` encounter to fight. The id is looked up in the image's `SEC_IDX` (a missing id is
 /// a loud [`rd_core::content::EncounterError`], not an empty field).
@@ -1287,6 +1300,128 @@ pub unsafe extern "C" fn rd_env_last_error_into(ptr: *mut u8) -> i32 {
     len as i32
 }
 
+// =============================================================================================
+// Card text -- the title and the description the content already carries
+// =============================================================================================
+//
+// `CARD` has had `NameKey` (cell 9) and `DescriptionKey` (cell 10) all along; the page only ever
+// asked for the *id* (`rd_env_card_name_*`), so a card face could say "strike" and nothing else.
+// The content's own strings are the authoritative description -- `"Deal 6 damage."`,
+// `"Gain 5 Block."` -- and reading them beats deriving the text from the program tree: a derived
+// string is mechanical ("dealDamage 6") and a hand-written one is a second place to lie, while
+// this one *is* what the card says.
+//
+// These are presentation exports like `rd_env_card_name_*`: the observation vector still carries
+// `def_slot`, and nothing in the kernel's semantics depends on them.
+
+/// The `CARD` row behind hand slot `index`, or `None` if the slot is empty or its definition is
+/// not in the image.
+fn card_row_at(session: &Session, index: usize) -> Option<rd_core::content::CardRow<'static>> {
+    let definition = session.hand_defs.get(index)?;
+    let entry = session.content.lookup_in(definition, rd_core::content::EK_CARD)?;
+    let row = session.content.row(rd_core::content::Table::Card, entry.index as u32)?;
+    rd_core::content::CardRow::new(row)
+}
+
+/// A string cell of a card row, resolved through the string pool. `None` when the cell is absent
+/// (an absent cell is `ABSENT16`, which is not a valid string index).
+fn card_cell(
+    session: &Session,
+    row: &rd_core::content::CardRow<'static>,
+    cell: usize,
+) -> Option<&'static str> {
+    session.content.string(row.row().cell(cell as u32)?)
+}
+
+/// The card's **title** (`NameKey`). `None` when the content does not carry one -- the page falls
+/// back to the definition id, which it already has, rather than this inventing a placeholder.
+fn card_title(session: &Session, index: usize) -> Option<&'static str> {
+    let row = card_row_at(session, index)?;
+    card_cell(session, &row, 9)
+}
+
+/// The card's **description** (`DescriptionKey`). `None` when the card has none, which the page
+/// shows as "no text" instead of inventing one.
+fn card_text(session: &Session, index: usize) -> Option<&'static str> {
+    let row = card_row_at(session, index)?;
+    card_cell(session, &row, 10).filter(|text| !text.is_empty())
+}
+
+/// Copy `text` into `ptr`, returning the bytes written.
+///
+/// # Safety
+///
+/// `ptr` must point at `text.len()` writable bytes in linear memory; the JS side always passes the
+/// buffer it sized from the matching `_len` call.
+unsafe fn copy_text_out(text: &str, ptr: *mut u8) -> i32 {
+    if ptr.is_null() {
+        return 0;
+    }
+    let bytes = text.as_bytes();
+    for (offset, &byte) in bytes.iter().enumerate() {
+        *ptr.add(offset) = byte;
+    }
+    bytes.len() as i32
+}
+
+/// The title of the card in hand slot `index` — `rd_env_card_title_len(index)`.
+#[no_mangle]
+pub extern "C" fn rd_env_card_title_len(index: i32) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    if index < 0 {
+        return -1;
+    }
+    card_title(session, index as usize).map_or(-1, |text| text.len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_card_title_len(index)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_card_title_into(index: i32, ptr: *mut u8) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return 0;
+    };
+    if index < 0 {
+        return 0;
+    }
+    match card_title(session, index as usize) {
+        Some(text) => unsafe { copy_text_out(text, ptr) },
+        None => 0,
+    }
+}
+
+/// The description of the card in hand slot `index` — `rd_env_card_text_len(index)`.
+#[no_mangle]
+pub extern "C" fn rd_env_card_text_len(index: i32) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    if index < 0 {
+        return -1;
+    }
+    card_text(session, index as usize).map_or(-1, |text| text.len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_card_text_len(index)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_card_text_into(index: i32, ptr: *mut u8) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return 0;
+    };
+    if index < 0 {
+        return 0;
+    }
+    match card_text(session, index as usize) {
+        Some(text) => unsafe { copy_text_out(text, ptr) },
+        None => 0,
+    }
+}
+
 /// The name of the card in hand slot `index` — `rd_env_card_name_len(index)`.
 ///
 /// Not in the frozen ABI (§6's `def_slot` → name mapping is optional). Present because a UI that
@@ -1720,3 +1855,111 @@ mod tests {
     }
 }
 
+#[cfg(test)]
+mod card_text_tests {
+    //! The card face's text comes from the **content**, not from a table in the page.
+    //!
+    //! Pinned on purpose: `"Deal 6 damage."` is what `tools/contentc/packages/sts` says, and a card
+    //! whose description silently changes to something the card no longer does is exactly the kind
+    //! of drift a UI cannot notice.
+
+    use super::*;
+
+    fn read_text(
+        len: extern "C" fn(i32) -> i32,
+        into: unsafe extern "C" fn(i32, *mut u8) -> i32,
+        slot: i32,
+    ) -> String {
+        let n = len(slot);
+        if n <= 0 {
+            return String::new();
+        }
+        let mut buffer = vec![0u8; n as usize];
+        unsafe { into(slot, buffer.as_mut_ptr()) };
+        String::from_utf8(buffer).expect("the content's strings are UTF-8")
+    }
+
+    fn title(slot: i32) -> String {
+        read_text(rd_env_card_title_len, rd_env_card_title_into, slot)
+    }
+
+    fn text(slot: i32) -> String {
+        read_text(rd_env_card_text_len, rd_env_card_text_into, slot)
+    }
+
+    /// The hand size out of the observation vector (index 10 -- `H.HAND` in `env-abi.md` §4).
+    fn hand_count() -> i32 {
+        let len = rd_env_observe_len();
+        assert!(len > 10);
+        let ptr = rd_env_observe_buf();
+        assert!(!ptr.is_null());
+        unsafe { *ptr.add(10) }
+    }
+
+    /// A hand with cards in it: the fight starts with an empty hand (`ScenarioRunner.cs:105`), so
+    /// one end-turn is what draws.
+    fn open_the_hand() {
+        assert_eq!(rd_env_reset(), 0);
+        assert_eq!(rd_env_step(0), 0, "the only action on a fresh fight is end turn");
+    }
+
+    #[test]
+    fn the_text_is_the_contents_own() {
+        open_the_hand();
+        let hand = hand_count();
+        assert_eq!(hand, 5, "the opening hand should be five cards");
+
+        // Every card in the hand has a title and a description, and the pair is one of the three
+        // definitions the starting deck holds. The exact strings are the content's, so a change to
+        // `sts.roguedeck.json` shows up here rather than on screen.
+        const EXPECTED: [(&str, &str); 4] = [
+            ("Strike", "Deal 6 damage."),
+            ("Defend", "Gain 5 Block."),
+            ("Bash", "Deal 8 damage. Apply 2 Vulnerable."),
+            ("Slimed", "Unplayable."),
+        ];
+        let mut seen = 0;
+        for slot in 0..hand {
+            let (t, d) = (title(slot), text(slot));
+            assert!(!t.is_empty(), "slot {slot} has no title");
+            if d.is_empty() {
+                continue; // a card may legitimately describe itself with nothing
+            }
+            assert!(
+                EXPECTED.iter().any(|(want_t, want_d)| *want_t == t && *want_d == d),
+                "slot {slot} reads {t:?} / {d:?}, which is not one of the content's cards"
+            );
+            seen += 1;
+        }
+        assert!(seen >= 5, "only {seen} of {hand} cards had both a title and a description");
+    }
+
+    #[test]
+    fn an_empty_or_bogus_slot_is_minus_one_not_an_empty_card() {
+        open_the_hand();
+        // Past the end of the hand, and negative: both are "no such card", and the page must be
+        // able to tell that from "a card with no text".
+        for slot in [hand_count() + 3, -1, 99] {
+            assert_eq!(rd_env_card_title_len(slot), -1, "slot {slot} title length");
+            assert_eq!(rd_env_card_text_len(slot), -1, "slot {slot} text length");
+        }
+    }
+
+    #[test]
+    fn the_title_is_not_the_definition_id() {
+        open_the_hand();
+        // `rd_env_card_name_*` returns the id (`"strike"`); the title is the content's `NameKey`
+        // (`"Strike"`). A page that shows only ids is what this pair exists to fix, so the two must
+        // be observably different -- otherwise the test would pass with the title wired to the id.
+        let id = {
+            let n = rd_env_card_name_len(0);
+            assert!(n > 0);
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_env_card_name_into(0, buffer.as_mut_ptr()) };
+            String::from_utf8(buffer).unwrap()
+        };
+        let t = title(0);
+        assert_ne!(t, id, "the title is the id again");
+        assert_eq!(t.to_lowercase(), id.to_lowercase(), "the title should name the same card");
+    }
+}
