@@ -114,6 +114,21 @@
   .log .gain { color: var(--ok); }
   .log .dim { color: var(--dim); }
   .log .turn { color: var(--energy); font-weight: 600; }
+  /* ---- drag to play ---------------------------------------------------------------------
+     Dragging is a second way to play a card, not a replacement: a click still plays a
+     single-option card and arms the picker otherwise. `touch-action: none` on the cards is what
+     stops a touch drag from scrolling the page instead of moving the card. */
+  .card { touch-action: none; }
+  .card.pressing { transform: translateY(-4px) scale(1.02); }
+  .hand.dragging .card { opacity: .55; }
+  .hand.dragging .card.pressing { opacity: 1; }
+  .enemy-panel.drop-ok { border: 1px dashed var(--energy); border-radius: 8px; cursor: grabbing; }
+  .enemy-panel.drop-ok:hover { background: #222a3a; }
+  .ghost {
+    position: fixed; z-index: 50; pointer-events: none;
+    padding: 6px 10px; border-radius: 8px; background: #202634; border: 1px solid var(--energy);
+    font: 600 12px var(--mono); color: var(--ink); transform: translate(-50%, -140%);
+  }
   .grid2 { display: grid; gap: 12px; grid-template-columns: 1fr; }
   @media (min-width: 720px) { .grid2 { grid-template-columns: 1fr 1fr; } }
 </style>
@@ -368,6 +383,7 @@ function flash(class_, at) {
 }
 
 function animate(diff) {
+  Sound.playPlan(RD_UI.soundPlan(diff));
   for (const item of RD_UI.animationPlan(diff, currentView)) {
     switch (item.effect) {
       case "float":
@@ -387,6 +403,140 @@ function animate(diff) {
         break; // draw / cards-left-hand / turn are visible from the re-render itself
     }
   }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Sound. Procedural, from Web Audio -- no files, so the page stays a single directory with no
+// assets. `RD_UI.soundPlan(diff)` decides *what* to play; this only plays it.
+// ---------------------------------------------------------------------------------------------
+const Sound = {
+  ctx: null,
+  enabled: true,
+  // Browsers refuse to start audio without a gesture, so the context is created on the first one.
+  arm() {
+    if (this.ctx) return this.ctx;
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) { this.enabled = false; return null; }
+    this.ctx = new Ctor();
+    return this.ctx;
+  },
+  /// One short blip. `slide` bends the frequency, which is enough for a hit versus a pickup.
+  blip(freq, duration, type, gain, slide) {
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const amp = ctx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    if (slide) osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * slide), now + duration);
+    amp.gain.setValueAtTime(0.0001, now);
+    amp.gain.exponentialRampToValueAtTime(gain, now + 0.008);
+    amp.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    osc.connect(amp).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + duration + 0.02);
+  },
+  play(id) {
+    if (!this.enabled || !this.ctx) return;
+    switch (id) {
+      case "hit-hero": this.blip(180, 0.16, "sawtooth", 0.07, 0.55); break;
+      case "hit-enemy": this.blip(320, 0.10, "square", 0.05, 0.6); break;
+      case "block": this.blip(520, 0.09, "triangle", 0.05, 1.2); break;
+      case "heal": this.blip(660, 0.14, "sine", 0.05, 1.35); break;
+      case "death": this.blip(140, 0.34, "sawtooth", 0.07, 0.4); break;
+      case "cost": this.blip(760, 0.05, "sine", 0.03, 1); break;
+      case "draw": this.blip(440, 0.05, "sine", 0.03, 1.1); break;
+      case "whoosh": this.blip(300, 0.07, "triangle", 0.03, 0.7); break;
+      case "turn": this.blip(392, 0.12, "sine", 0.04, 1.06); break;
+      case "victory":
+        this.blip(523, 0.12, "sine", 0.06, 1); setTimeout(() => this.blip(659, 0.12, "sine", 0.06, 1), 130);
+        setTimeout(() => this.blip(784, 0.22, "sine", 0.06, 1), 260); break;
+      case "defeat":
+        this.blip(330, 0.18, "sawtooth", 0.06, 0.8); setTimeout(() => this.blip(220, 0.34, "sawtooth", 0.06, 0.7), 170); break;
+      default: break;
+    }
+  },
+  playPlan(ids) { for (const id of ids) this.play(id); },
+};
+
+// ---------------------------------------------------------------------------------------------
+// Drag to play. `RD_UI.actionFor` decides what a drop means; this is only the pointer plumbing.
+// A drag that ends on nothing legal does nothing -- it must never fall back to "the first enemy",
+// which is the bug the README records.
+// ---------------------------------------------------------------------------------------------
+let drag = null;         // { hand, x0, y0, moved, ghost }
+let suppressClick = false;
+
+function clearDropMarks() {
+  for (const panel of document.querySelectorAll(".enemy-panel.drop-ok")) {
+    panel.classList.remove("drop-ok");
+  }
+  document.getElementById("hand").classList.remove("dragging");
+  // Sweep the DOM rather than reaching through `drag`: `onPointerUp` clears `drag` before it gets
+  // here, so the first version left the ghost stuck on screen for the rest of the fight. Found by
+  // driving a real drag in the browser -- nothing in the Node test can see a leaked element.
+  for (const ghost of document.querySelectorAll(".ghost")) ghost.remove();
+  if (drag) drag.ghost = null;
+}
+
+function markDropMarks(handSlot) {
+  const options = RD_UI.playOptions(readActions());
+  const slots = RD_UI.dropSlots(options, handSlot);
+  document.getElementById("hand").classList.add("dragging");
+  if (!slots.length) return; // a card with no choice: dropping it anywhere is fine
+  for (const slot of slots) {
+    const panel = document.querySelector(`#enemies [data-enemy-panel="${slot}"]`);
+    if (panel) panel.classList.add("drop-ok");
+  }
+}
+
+function onPointerDown(ev) {
+  const button = ev.target.closest("button.card");
+  if (!button || button.disabled) return;
+  Sound.arm(); // the first gesture is also the moment audio may start
+  drag = {
+    hand: Number(button.dataset.hand),
+    x0: ev.clientX, y0: ev.clientY,
+    moved: false,
+    ghost: null,
+    button,
+  };
+  button.classList.add("pressing");
+}
+
+function onPointerMove(ev) {
+  if (!drag) return;
+  const dx = ev.clientX - drag.x0;
+  const dy = ev.clientY - drag.y0;
+  if (!drag.moved && Math.hypot(dx, dy) > 8) {
+    drag.moved = true;
+    markDropMarks(drag.hand);
+    drag.ghost = document.createElement("div");
+    drag.ghost.className = "ghost";
+    drag.ghost.textContent = cardName(drag.hand) || `slot ${drag.hand}`;
+    document.body.appendChild(drag.ghost);
+  }
+  if (drag.moved && drag.ghost) {
+    drag.ghost.style.left = `${ev.clientX}px`;
+    drag.ghost.style.top = `${ev.clientY}px`;
+  }
+}
+
+function onPointerUp(ev) {
+  if (!drag) return;
+  const finished = drag;
+  drag = null;
+  finished.button.classList.remove("pressing");
+  clearDropMarks();
+  if (!finished.moved) return; // a plain click: the click handler owns that path
+  // The real drag happened, so swallow the click that is about to follow.
+  suppressClick = true;
+  const under = document.elementFromPoint(ev.clientX, ev.clientY);
+  const panel = under && under.closest("[data-enemy-panel]");
+  const targetSlot = panel ? Number(panel.dataset.enemyPanel) : -1;
+  const action = RD_UI.actionFor(RD_UI.playOptions(readActions()), finished.hand, targetSlot);
+  if (action >= 0) step(action);
 }
 
 function appendLog(diff) {
@@ -665,11 +815,20 @@ function measure() {
     throw e;
   }
 
+  // Drag to play: pointer events, so a mouse and a finger take the same path.
+  document.getElementById("hand").addEventListener("pointerdown", onPointerDown);
+  document.addEventListener("pointermove", onPointerMove);
+  document.addEventListener("pointerup", onPointerUp);
+  document.addEventListener("pointercancel", () => { drag = null; clearDropMarks(); });
+
   // Clicking a card either plays it (one action in the table) or arms the target picker
   // (several — one per live enemy slot). Clicking the same card again disarms it.
   document.getElementById("hand").addEventListener("click", (ev) => {
+    // A drag also fires a click on release; that click must not play a second card.
+    if (suppressClick) { suppressClick = false; return; }
     const btn = ev.target.closest("button.card");
     if (!btn || btn.disabled) return;
+    Sound.arm();
     const hand = Number(btn.dataset.hand);
     const opts = RD_UI.playOptions(readActions()).get(hand) || [];
     if (opts.length === 1) { step(opts[0].actionIndex); return; }
@@ -688,6 +847,7 @@ function measure() {
     if (opt) step(opt.actionIndex);
   });
   document.getElementById("endTurn").addEventListener("click", (ev) => {
+    Sound.arm();
     const idx = Number(ev.currentTarget.dataset.action);
     if (idx >= 0) step(idx);
   });

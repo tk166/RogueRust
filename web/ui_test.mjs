@@ -40,6 +40,10 @@ for (const [needle, why] of [
   ["appendLog(diff);", "the battle log is computed and then never shown"],
   ['id="log"', "there is no log panel for it to append to"],
   ['id="floats"', "there is no layer for the damage numbers to float in"],
+  ["RD_UI.actionFor(", "a drop would never consult the decision function"],
+  ["RD_UI.soundPlan(", "the sound plan is computed and then never played"],
+  ['addEventListener("pointerdown"', "the drag is never wired up"],
+  ['addEventListener("pointerup"', "the drag is never wired up"],
 ]) {
   if (!page.includes(needle)) fail(`index.html does not use ${needle}: ${why}`);
 }
@@ -552,6 +556,99 @@ if (ex.rd_env_reset() !== 0) fail("reset before the diff blocks failed");
   if (!seenResult) fail("the end of the fight produced no result event");
 }
 
+// ---------------------------------------------------------------------------------------------
+// 7. Dropping a card on a target. The pointer plumbing is browser-only; the *decision* is here.
+// ---------------------------------------------------------------------------------------------
+// The block above played the fight to its end; a hand to drop cards from needs a fresh one, and
+// this time the hand has to exist, so the reset is followed by one end-turn (which draws).
+if (ex.rd_env_reset() !== 0) fail("reset before the drop block failed");
+if (ex.rd_env_step(view().endTurn.actionIndex) !== 0) fail("the opening end-turn was rejected");
+
+{
+  const current = view();
+  const options = UI.playOptions(actions());
+
+  // A card that cannot be played accepts no drop at all.
+  const dead = current.hand.find((card) => !card.playable);
+  if (dead) {
+    if (UI.actionFor(options, dead.slot, 0) !== -1) fail("an unplayable card accepted a drop");
+    if (UI.actionFor(options, dead.slot, -1) !== -1) fail("an unplayable card accepted a drop in space");
+  }
+
+  // A two-target attack: the drop must name the enemy, and dropping on nothing must do nothing.
+  const aimed = current.hand.find((card) => card.playable && card.targetSlots.length === 2);
+  if (!aimed) fail("no two-target card to test dropping with");
+  const [first, second] = aimed.targetSlots;
+  const a = UI.actionFor(options, aimed.slot, first);
+  const b = UI.actionFor(options, aimed.slot, second);
+  if (a < 0 || b < 0) fail("a legal drop on a live enemy was refused");
+  if (a === b) fail("dropping on two different enemies resolved to the same action");
+  if (UI.actionFor(options, aimed.slot, -1) !== -1) {
+    fail("dropping a two-target card on empty space picked a target anyway");
+  }
+  if (UI.actionFor(options, aimed.slot, 99) !== -1) fail("a drop on a nonexistent slot was accepted");
+  // And the actions must be real: they index the action table, and both play the same card.
+  const table = actions();
+  if (table[a].kind !== UI.ACTION_PLAY || table[b].kind !== UI.ACTION_PLAY) {
+    fail("a resolved drop is not a play action");
+  }
+  if (table[a].arg0 !== aimed.slot || table[b].arg0 !== aimed.slot) {
+    fail("a resolved drop plays the wrong hand slot");
+  }
+  if (table[a].arg1 !== first || table[b].arg1 !== second) {
+    fail("a resolved drop sends the wrong target");
+  }
+
+  // A single-option card ignores where it was dropped.
+  const single = current.hand.find(
+    (card) => card.playable && card.targetSlots.length === 1 && card.directActionIndex >= 0);
+  if (single) {
+    const anywhere = [sameSlot(), 0, -1, 99];
+    for (const spot of anywhere) {
+      if (UI.actionFor(options, single.slot, spot) !== single.directActionIndex) {
+        fail(`a single-option card did not resolve for a drop at ${spot}`);
+      }
+    }
+  }
+
+  // `dropSlots` says which enemies light up: the reachable ones, and none for a single-option card.
+  const lit = UI.dropSlots(options, aimed.slot);
+  if (lit.length !== aimed.targetSlots.length) fail("dropSlots disagrees with targetSlots");
+  if (!lit.every((slot) => aimed.targetSlots.includes(slot))) fail("dropSlots invented a slot");
+  if (UI.dropSlots(options, aimed.slot).some((slot) => slot < 0)) {
+    fail("dropSlots offered a negative slot as a drop target");
+  }
+
+  function sameSlot() { return aimed.slot; }
+}
+
+// ---------------------------------------------------------------------------------------------
+// 8. Sound: which cues a step asks for, as ids. No files, and no calls from the pure layer.
+// ---------------------------------------------------------------------------------------------
+{
+  const before = obs().slice();
+  const silent = UI.soundPlan(UI.diffObservations(before, before, false));
+  if (silent.length !== 0) fail(`a no-op step asked for ${silent.length} sounds`);
+
+  if (ex.rd_env_reset() !== 0) fail("reset before the sound block failed");
+  const preview = view().enemies.reduce((sum, e) => sum + (e.intentDamage || 0), 0);
+  const snap = obs().slice();
+  if (ex.rd_env_step(view().endTurn.actionIndex) !== 0) fail("end-turn step rejected");
+  const diff = UI.diffObservations(snap, obs(), true);
+  const plan = UI.soundPlan(diff);
+  if (preview > 0 && !plan.includes("hit-hero")) fail(`no hero hit cue in ${JSON.stringify(plan)}`);
+  if (!plan.includes("draw")) fail(`no draw cue in ${JSON.stringify(plan)}`);
+  if (!plan.includes("turn")) fail(`no turn cue in ${JSON.stringify(plan)}`);
+
+  // A finished fight asks for exactly one sound: the end of the fight is not a pile-up of hits.
+  const result = UI.soundPlan({ result: 1, events: [{ kind: "result" }], hits: [{ side: "enemy" }] });
+  if (result.length !== 1 || result[0] !== "victory") {
+    fail(`the end of a fight asked for ${JSON.stringify(result)}`);
+  }
+  const defeat = UI.soundPlan({ result: 2, events: [{ kind: "result" }], hits: [] });
+  if (defeat[0] !== "defeat") fail("a defeat asked for the wrong cue");
+}
+
 console.log("UI_RENDER PASS");
 console.log(`  describe()        ${view().hand.length} hand cells, ${view().enemies.length} enemies, ` +
             `${UI.STATUS_AXES.length} status axes`);
@@ -566,5 +663,7 @@ console.log(`  done agreement    observation-derived == rd_env_done() at every s
 console.log(`  step diff          damage == the intents previewed; energy == the card cost`);
 console.log(`  block vs clear     a block gain, then the end-of-turn clear (not "absorbed")`);
 console.log(`  terminal events    an enemy death and the result are both reported`);
+console.log(`  dropping a card   two targets => two actions; empty space => nothing`);
+console.log(`  sound cues        no-op silent; a hit/draw/turn each ask for their own; one cue at the end`);
 console.log(`  page wiring       index.html loads ui_render.js and calls describe/animationPlan/appendLog`);
 console.log("  ⚠️  no DOM: the markup layer is still only checked by eye in a browser.");

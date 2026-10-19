@@ -48,6 +48,26 @@ event stream would be better; it is a recorded follow-up.
 *text* are not exported, so "6 伤害" cannot be shown without a second ABI extension. That is the
 next thing U2 needs, and it is written down rather than approximated.
 
+### Playing a card: click *and* drag
+
+A click still works: a single-option card plays, a card with several options arms the enemy picker.
+Dragging is the second path and it goes through **one decision function** —
+`RD_UI.actionFor(options, handSlot, targetSlot)` — which returns `-1` for a drop that means nothing.
+That `-1` is load-bearing: a drop that misses every enemy a card can reach must do **nothing**,
+because "pick a target for the player" is the exact bug this page shipped once already (above).
+The pointer plumbing is ~40 lines; which enemy lights up is `RD_UI.dropSlots`, also pure.
+
+A drag also fires a click on release, so the page swallows exactly one click after a real drag —
+otherwise every drag would play two cards.
+
+### Sound: no files
+
+`RD_UI.soundPlan(diff)` returns ids (`hit-hero`, `hit-enemy`, `block`, `heal`, `death`, `cost`,
+`draw`, `whoosh`, `turn`, and a single `victory`/`defeat` that *replaces* the rest). The page
+renders them with Web Audio oscillators — a short frequency-swept blip each, so there is **not one
+audio file in the repository** and the page stays a single directory. `AudioContext` is created on
+the first gesture, because browsers refuse earlier than that.
+
 ⚠️ **The DOM half is still only checked by eye.** A refactor that renders perfectly but whose click
 handlers reference a variable that no longer exists passes all fifteen gates — that happened, and
 only clicking in a browser found it. `ui_test.mjs` prints this warning itself.

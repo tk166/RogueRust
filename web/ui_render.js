@@ -407,6 +407,67 @@
     return plan;
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // Dragging a card onto a target.
+  //
+  // The decision "this drop means that action" is a pure function so that the *interaction* can be
+  // asserted in Node even though the pointer plumbing can only be checked in a browser -- the same
+  // split as the log and the animation plan.
+  // ---------------------------------------------------------------------------------------------
+
+  /// Which action a drop on `targetSlot` means.
+  ///
+  /// `-1` = "not a legal drop": either the card is not playable, or it can be aimed and the drop
+  /// missed every enemy it can reach. Returning `-1` rather than "the first action" is the whole
+  /// point -- picking a target for the player is exactly the bug that shipped once already
+  /// (`web/README.md`, "the card target was never sent").
+  ///
+  /// A card with a single option (no target, or only one reachable enemy) ignores where it was
+  /// dropped, because there is nothing to choose.
+  function actionFor(options, handSlot, targetSlot) {
+    const list = options.get(handSlot) || [];
+    if (list.length === 0) return -1;
+    const exact = list.find((option) => option.slot === targetSlot);
+    if (exact) return exact.actionIndex;
+    if (list.length === 1) return list[0].actionIndex;
+    return -1;
+  }
+
+  /// The enemy slots a card may be dropped on. Empty means "drop anywhere".
+  function dropSlots(options, handSlot) {
+    const list = options.get(handSlot) || [];
+    if (list.length <= 1) return [];
+    return list.map((option) => option.slot).filter((slot) => slot >= 0);
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Sound, as a list of ids rather than as calls.
+  //
+  // Same reason as the rest: "which sound plays" is a decision about the game, so it is a pure
+  // function of the step diff and the browser only renders it. No audio files anywhere -- the
+  // page has no assets and is going to keep it that way (`ui-plan.md` §4).
+  // ---------------------------------------------------------------------------------------------
+  function soundPlan(diff) {
+    const ids = [];
+    if (diff.result !== 0 && diff.events.some((e) => e.kind === "result")) {
+      ids.push(diff.result === 1 ? "victory" : "defeat");
+      return ids; // one sound for the end of the fight, not the whole queue behind it
+    }
+    for (const hit of diff.hits) {
+      ids.push(hit.side === "hero" ? "hit-hero" : "hit-enemy");
+    }
+    for (const event of diff.events) {
+      if (event.kind === "block") ids.push("block");
+      if (event.kind === "heal") ids.push("heal");
+      if (event.kind === "down") ids.push("death");
+      if (event.kind === "energy") ids.push("cost");
+      if (event.kind === "draw") ids.push("draw");
+      if (event.kind === "leftHand") ids.push("whoosh");
+      if (event.kind === "turn") ids.push("turn");
+    }
+    return ids;
+  }
+
   root.RD_UI = {
     // layout (gate 14 checks these tile)
     OFF_HERO_STATUS, OFF_ENEMY, OFF_ENEMY_STATUS, OFF_HAND, OFF_PILES,
@@ -416,5 +477,6 @@
     playOptions, endTurnAction,
     describeHero, describeEnemies, describeHand, describeStatus, describe,
     handSlots, diffObservations, logLines, animationPlan, LOG_ORDER,
+    actionFor, dropSlots, soundPlan,
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);
