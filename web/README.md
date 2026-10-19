@@ -28,6 +28,17 @@ starts, no rest site heals, no chest opens (`env-abi.md` §11.5 says so, and the
 screen). And it does **not** yet mark "walked but not settled", which §11.5 requires; that is a
 known debt.
 
+### Layout: one column, a hero bar, a row of enemies
+
+Everything stacks in reading order — hero, enemies, hand, log, measurements — because the hero is a
+single horizontal bar and the enemies are a row of targets, so a two-column grid left one tall panel
+beside half an empty screen.
+
+The enemies are laid out **in a row** (`flex` + `wrap`, each one bordered like a card) for one
+reason: the interaction is "drag a card onto one of them". A row puts every enemy the same short
+distance from the hand and lines the drop targets up with the cards; the column it replaced made the
+first and second enemy different distances away.
+
 ### The battle animation (U2)
 
 Every step is turned into an **event list** by `RD_UI.diffObservations(before, after, wasEndTurn)`:
