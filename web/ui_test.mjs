@@ -33,6 +33,16 @@ if (!page.includes('src="./ui_render.js"')) {
 if (!page.includes("RD_UI.describe(")) {
   fail("index.html loads ui_render.js but never calls RD_UI.describe() -- same problem, one step later");
 }
+// And the U2 surfaces: a pure function nobody calls is dead code, and the mutation sweep proved this
+// needs saying -- deleting `appendLog(diff)` from the page left every assertion above green.
+for (const [needle, why] of [
+  ["RD_UI.animationPlan(", "the animation plan is computed and then never drawn"],
+  ["appendLog(diff);", "the battle log is computed and then never shown"],
+  ['id="log"', "there is no log panel for it to append to"],
+  ['id="floats"', "there is no layer for the damage numbers to float in"],
+]) {
+  if (!page.includes(needle)) fail(`index.html does not use ${needle}: ${why}`);
+}
 
 // ---------------------------------------------------------------------------------------------
 // The module, driven by the real fight.
@@ -66,6 +76,18 @@ function actions() {
   return out;
 }
 const view = (aiming) => UI.describe(obs(), actions(), io, aiming);
+
+/// The `io` the log wants: definition slot -> name, resolvable for cards currently in hand.
+const logIo = () => ({
+  cardNameOfDefinition: (definitionSlot) => {
+    for (let slot = 0; slot < obs()[UI.H.HAND]; slot++) {
+      if (obs()[UI.OFF_HAND + slot * 4 + 2] === definitionSlot) {
+        return io.cardName(slot);
+      }
+    }
+    return "";
+  },
+});
 
 /// Every printed quantity must equal the observation's own cell, at `where` (for the message).
 /// Callers put this after anything that changes what is on screen -- a constant that looks right
@@ -369,6 +391,167 @@ let previewed;
   if (end.enemies.some((e) => e.hp > 0)) fail("a downed enemy still shows positive HP");
 }
 
+// ---------------------------------------------------------------------------------------------
+// 6. The step diff -- "what just happened", which is what the animation and the log are built on.
+//    Every assertion here is against the real fight, so a diff that reports a made-up number fails.
+// ---------------------------------------------------------------------------------------------
+{
+  const before = obs().slice();
+  // A refused step changes nothing, so it must produce no events: an animation for nothing is
+  // exactly the kind of lie this layer exists to prevent.
+  const refused = UI.diffObservations(before, before, false);
+  if (refused.events.length !== 0) fail(`a no-op diff produced ${refused.events.length} events`);
+  if (UI.logLines(refused, logIo()).length !== 0) fail("a no-op diff produced log lines");
+  if (UI.animationPlan(refused, view()).length !== 0) {
+    fail("a no-op diff produced an animation plan");
+  }
+}
+
+// Everything above has already played this fight to its end, so the diff blocks below start from a
+// fresh one. Stated explicitly because "the state is whatever the previous block left behind" is
+// exactly how a test ends up asserting something it did not mean to.
+if (ex.rd_env_reset() !== 0) fail("reset before the diff blocks failed");
+
+{
+  // The end-turn step that follows the reset: the hero is hit for exactly the previewed damage.
+  const preview = view().enemies.reduce((sum, e) => sum + (e.intentDamage || 0), 0);
+  const before = obs().slice();
+  const hpBefore = before[UI.H.HP];
+  if (ex.rd_env_step(view().endTurn.actionIndex) !== 0) fail("end-turn step rejected");
+  const diff = UI.diffObservations(before, obs(), true);
+
+  if (diff.hero.hpLost !== preview) {
+    fail(`the diff says the hero lost ${diff.hero.hpLost}, the intents previewed ${preview}`);
+  }
+  const hits = diff.hits.filter((h) => h.side === "hero");
+  if (hits.length !== 1) fail(`${hits.length} hero damage events, expected one`);
+  if (hits[0].amount !== preview) fail(`the hero damage event says ${hits[0].amount}`);
+  // Block is *cleared* at the end of a turn, and that must not be reported as damage absorbed --
+  // the two are indistinguishable from the vectors alone, which is why the diff needs to know
+  // which kind of step it is looking at.
+  if (hits[0].blocked !== 0) fail(`an end-turn step reported ${hits[0].blocked} blocked`);
+  if (diff.drawn !== 5) fail(`the diff says ${diff.drawn} cards were drawn, the hand has 5`);
+  if (diff.hero.hpLost + hpBefore !== before[UI.H.HP] + preview) {
+    fail("the damage does not add up");
+  }
+  const lines = UI.logLines(diff, logIo());
+  if (!lines.some((l) => l.includes(`受到 ${preview} 点伤害`))) {
+    fail(`no damage line in ${JSON.stringify(lines)}`);
+  }
+  if (!lines.some((l) => l.includes("抽 5 张牌"))) fail(`no draw line in ${JSON.stringify(lines)}`);
+  const plan = UI.animationPlan(diff, view());
+  if (!plan.some((p) => p.effect === "float" && p.at === "hero" && p.text === `-${preview}`)) {
+    fail(`no damage float in ${JSON.stringify(plan)}`);
+  }
+  if (!plan.some((p) => p.effect === "shake" && p.at === "hero")) fail("no shake for the hero hit");
+}
+
+{
+  // Playing an attack: the enemy loses exactly the damage, and the energy falls by the cost.
+  const current = view();
+  const attack = current.hand.find(
+    (c) => c.playable && c.targetSlots.length > 0 && /strike|bash/.test(c.name));
+  if (!attack) fail("no attack in hand to diff");
+  const targetSlot = attack.targetSlots[0];
+  let action = -1;
+  for (let i = 0; i < ex.rd_env_action_count(); i++) {
+    if (ex.rd_env_action_kind(i) === 0 && ex.rd_env_action_arg(i, 0) === attack.slot &&
+        ex.rd_env_action_arg(i, 1) === targetSlot) action = i;
+  }
+  if (action < 0) fail("no action for the attack");
+  const before = obs().slice();
+  const hpBefore = before[UI.OFF_ENEMY + targetSlot * 8 + 1];
+  if (ex.rd_env_step(action) !== 0) fail("playing the attack was rejected");
+  const diff = UI.diffObservations(before, obs(), false);
+
+  const hit = diff.hits.find((h) => h.side === "enemy" && h.slot === targetSlot);
+  if (!hit) fail(`no enemy damage event in ${JSON.stringify(diff.hits)}`);
+  if (hit.amount <= 0) fail("the enemy took no damage");
+  if (hpBefore - hit.amount !== obs()[UI.OFF_ENEMY + targetSlot * 8 + 1]) {
+    fail("the reported damage does not match the health cell");
+  }
+  if (diff.hero.energySpent !== attack.cost) {
+    fail(`the diff says ${diff.hero.energySpent} energy was spent, the card costs ${attack.cost}`);
+  }
+  if (diff.leftHand.length !== 1) fail(`${diff.leftHand.length} cards left the hand, expected 1`);
+  // The reading order: the card leaves, then the cost, then the damage -- not the order the vector
+  // happens to be walked in.
+  const lines = UI.logLines(diff, logIo());
+  const at = (needle) => lines.findIndex((line) => line.includes(needle));
+  if (at("手牌离开") < 0 || at("消耗") < 0 || at("受到") < 0) {
+    fail(`expected a leave/cost/damage trio, got ${JSON.stringify(lines)}`);
+  }
+  if (!(at("手牌离开") < at("消耗") && at("消耗") < at("受到"))) {
+    fail(`the log reads out of order: ${JSON.stringify(lines)}`);
+  }
+  const plan = UI.animationPlan(diff, view());
+  if (!plan.some((p) => p.effect === "float" && p.at === `enemy:${targetSlot}`)) {
+    fail("no float on the struck enemy");
+  }
+}
+
+{
+  // A card that grants Block: the diff reports the gain, and the *end of that turn* reports the
+  // clear rather than absorbed damage. This is the one case the observation cannot tell apart, so
+  // it is the one worth pinning.
+  let guard = 0;
+  let defend = null;
+  while (guard++ < 12 && !defend) {
+    const current = view();
+    defend = current.hand.find((c) => c.playable && /defend/.test(c.name)) || null;
+    if (defend || !current.endTurn.available) break;
+    if (ex.rd_env_step(current.endTurn.actionIndex) !== 0) fail("end-turn step rejected");
+  }
+  if (!defend) fail("never drew a defend to check block handling");
+  const before = obs().slice();
+  let action = -1;
+  for (let i = 0; i < ex.rd_env_action_count(); i++) {
+    if (ex.rd_env_action_kind(i) === 0 && ex.rd_env_action_arg(i, 0) === defend.slot) action = i;
+  }
+  if (action < 0) fail("no action for defend");
+  if (ex.rd_env_step(action) !== 0) fail("playing defend was rejected");
+  const gain = UI.diffObservations(before, obs(), false);
+  if (gain.hero.blockGained <= 0) fail("defend reported no block gained");
+  if (gain.hero.absorbed !== 0) fail("a fresh block gain reported absorbed damage");
+
+  const beforeEnd = obs().slice();
+  const blockHeld = beforeEnd[UI.H.BLOCK];
+  if (!(blockHeld > 0)) fail(`expected to be holding block, holding ${blockHeld}`);
+  const endAction = view().endTurn;
+  if (!endAction.available) fail("cannot end the turn to check the block clear");
+  if (ex.rd_env_step(endAction.actionIndex) !== 0) fail("end-turn step rejected");
+  const cleared = UI.diffObservations(beforeEnd, obs(), true);
+  if (cleared.hero.blockCleared !== blockHeld) {
+    fail(`the end-turn step says ${cleared.hero.blockCleared} block cleared, held ${blockHeld}`);
+  }
+  if (cleared.hero.absorbed !== 0) fail("the end-turn clear was reported as absorbed damage");
+}
+
+{
+  // Slide the fight to its end and check the two terminal events: the death of an enemy, and the
+  // result. A diff that never reports `down` would animate a corpse.
+  let seenDown = false;
+  let seenResult = false;
+  let guard = 0;
+  while (guard++ < 400 && ex.rd_env_done() === 0) {
+    const before = obs().slice();
+    let action = -1;
+    for (let i = 0; i < ex.rd_env_action_count(); i++) {
+      if (ex.rd_env_action_kind(i) === 0) { action = i; break; }
+    }
+    if (action < 0) action = view().endTurn.actionIndex;
+    if (action < 0) break;
+    const wasEndTurn = ex.rd_env_action_kind(action) === 1;
+    if (ex.rd_env_step(action) !== 0) fail(`step ${guard} rejected`);
+    const diff = UI.diffObservations(before, obs(), wasEndTurn);
+    if (diff.deaths.length) seenDown = true;
+    if (diff.events.some((e) => e.kind === "result")) seenResult = true;
+  }
+  if (ex.rd_env_done() !== 1) fail("the fight did not finish");
+  if (!seenDown) fail("no enemy death was ever reported by the diff");
+  if (!seenResult) fail("the end of the fight produced no result event");
+}
+
 console.log("UI_RENDER PASS");
 console.log(`  describe()        ${view().hand.length} hand cells, ${view().enemies.length} enemies, ` +
             `${UI.STATUS_AXES.length} status axes`);
@@ -380,5 +563,8 @@ console.log(`  cell-for-cell     every printed quantity == its observation cell,
 console.log(`  energy below max  checked after paying a cost (the only moment they differ)`);
 console.log(`  downed enemies    none alive once the fight is won`);
 console.log(`  done agreement    observation-derived == rd_env_done() at every step to the end`);
-console.log(`  page wiring       index.html loads ui_render.js and calls RD_UI.describe()`);
+console.log(`  step diff          damage == the intents previewed; energy == the card cost`);
+console.log(`  block vs clear     a block gain, then the end-of-turn clear (not "absorbed")`);
+console.log(`  terminal events    an enemy death and the result are both reported`);
+console.log(`  page wiring       index.html loads ui_render.js and calls describe/animationPlan/appendLog`);
 console.log("  ⚠️  no DOM: the markup layer is still only checked by eye in a browser.");

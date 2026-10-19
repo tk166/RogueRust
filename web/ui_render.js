@@ -175,6 +175,238 @@
     };
   }
 
+
+  // ---------------------------------------------------------------------------------------------
+  // Step diff -- "what just happened", for the animation and the battle log.
+  //
+  // ⚠️ **Derived from the observation, not from engine events.** `env-abi.md` §4 gives two
+  // snapshot vectors per step and no event stream, so this reconstructs the events by subtraction.
+  // That is enough for every *visible* thing (health, block, energy, hand, statuses, deaths) and it
+  // cannot recover one thing: whether a Block decrease was damage absorbed or the end-of-turn
+  // clear. The caller says which step it was (`wasEndTurn`), and the two are reported separately
+  // rather than merged into a number that would be wrong half the time.
+  //
+  // A real event stream would be better and is a recorded follow-up (`docs/spec/ui-plan.md` U2);
+  // this exists so the animation can be built and tested now instead of after that.
+  // ---------------------------------------------------------------------------------------------
+
+  /// Multiset of hand definition slots (`def_slot` per occupied hand slot).
+  function handSlots(o) {
+    const out = [];
+    for (let slot = 0; slot < o[H.HAND]; slot++) {
+      out.push(o[OFF_HAND + slot * 4 + 2]);
+    }
+    out.sort((a, b) => a - b);
+    return out;
+  }
+
+  /// Elements of `a` not matched in `b`, as a multiset difference.
+  function missingFrom(a, b) {
+    const pool = b.slice();
+    const out = [];
+    for (const value of a) {
+      const at = pool.indexOf(value);
+      if (at >= 0) pool.splice(at, 1);
+      else out.push(value);
+    }
+    return out;
+  }
+
+  /// Every visible change between two observations, as a list of events plus per-side shortcuts.
+  function diffObservations(before, after, wasEndTurn) {
+    const events = [];
+    const push = (event) => { events.push(event); return event; };
+
+    // ---- hero --------------------------------------------------------------------------------
+    const heroHpLost = Math.max(0, before[H.HP] - after[H.HP]);
+    const heroHpGained = Math.max(0, after[H.HP] - before[H.HP]);
+    const heroBlockBefore = Math.max(0, before[H.BLOCK]);
+    const heroBlockAfter = Math.max(0, after[H.BLOCK]);
+    const heroBlockLost = Math.max(0, heroBlockBefore - heroBlockAfter);
+    const heroBlockGained = Math.max(0, heroBlockAfter - heroBlockBefore);
+    // A Block decrease is absorbed damage mid-turn and the end-of-turn clear otherwise.
+    const heroAbsorbed = wasEndTurn ? 0 : heroBlockLost;
+    const heroCleared = wasEndTurn ? heroBlockLost : 0;
+    if (heroHpLost || heroAbsorbed) {
+      push({ kind: "damage", side: "hero", amount: heroHpLost, blocked: heroAbsorbed });
+    }
+    if (heroHpGained) push({ kind: "heal", side: "hero", amount: heroHpGained });
+    if (heroBlockGained) push({ kind: "block", side: "hero", amount: heroBlockGained });
+    if (heroCleared) push({ kind: "blockCleared", side: "hero", amount: heroCleared });
+
+    const energySpent = Math.max(0, before[H.ENERGY] - after[H.ENERGY]);
+    if (energySpent) push({ kind: "energy", spent: energySpent });
+
+    // ---- enemies -----------------------------------------------------------------------------
+    const slots = Math.max(before[H.ENEMIES], after[H.ENEMIES]);
+    for (let slot = 0; slot < slots; slot++) {
+      const b = OFF_ENEMY + slot * 8;
+      const wasAlive = before[b] === 1;
+      const isAlive = after[b] === 1;
+      if (!wasAlive && !isAlive) continue; // an empty seat, or one that was already down
+      const hpLost = Math.max(0, before[b + 1] - after[b + 1]);
+      const hpGained = Math.max(0, after[b + 1] - before[b + 1]);
+      const blockLost = Math.max(0, Math.max(0, before[b + 3]) - Math.max(0, after[b + 3]));
+      const blockGained = Math.max(0, Math.max(0, after[b + 3]) - Math.max(0, before[b + 3]));
+      // An enemy never clears its own Block at end of turn the way the hero does, so a decrease
+      // here is absorbed damage either way.
+      const absorbed = wasAlive && isAlive ? blockLost : 0;
+      if (hpLost || absorbed) {
+        push({ kind: "damage", side: "enemy", slot, amount: hpLost, blocked: absorbed });
+      }
+      if (hpGained) push({ kind: "heal", side: "enemy", slot, amount: hpGained });
+      if (blockGained) push({ kind: "block", side: "enemy", slot, amount: blockGained });
+      if (wasAlive && !isAlive) push({ kind: "down", slot });
+    }
+
+    // ---- statuses ----------------------------------------------------------------------------
+    for (let axis = 0; axis < STATUS_AXES.length; axis++) {
+      const heroDelta = after[OFF_HERO_STATUS + axis] - before[OFF_HERO_STATUS + axis];
+      if (heroDelta) {
+        push({ kind: "status", side: "hero", axis: STATUS_AXES[axis],
+               label: STATUS_AXES[axis], delta: heroDelta,
+               stacks: after[OFF_HERO_STATUS + axis] });
+      }
+    }
+    for (let slot = 0; slot < slots; slot++) {
+      for (let axis = 0; axis < STATUS_AXES.length; axis++) {
+        const at = OFF_ENEMY_STATUS + slot * 5 + axis;
+        const delta = after[at] - before[at];
+        if (delta) {
+          push({ kind: "status", side: "enemy", slot, axis: STATUS_AXES[axis],
+                 label: STATUS_AXES[axis], delta, stacks: after[at] });
+        }
+      }
+    }
+
+    // ---- cards -------------------------------------------------------------------------------
+    const discarded = Math.max(0, after[OFF_PILES + 2] - before[OFF_PILES + 2]);
+    const exhausted = Math.max(0, after[OFF_PILES + 3] - before[OFF_PILES + 3]);
+    const leftHand = missingFrom(handSlots(before), handSlots(after));
+    const joinedHand = missingFrom(handSlots(after), handSlots(before));
+    // `hand_after = hand_before + drawn - left`, so this is drawn. **Not** the draw pile's delta:
+    // drawing takes cards *out* of the draw pile, so its delta is negative and the first version
+    // of this reported "0 cards drawn" for a hand that had just gone from empty to five.
+    const drawn = Math.max(0, after[H.HAND] - before[H.HAND] + leftHand.length);
+    if (drawn) push({ kind: "draw", count: drawn, defSlots: joinedHand });
+    if (leftHand.length) {
+      push({ kind: "leftHand", count: leftHand.length, defSlots: leftHand, discarded, exhausted });
+    }
+
+    // ---- turn and result ---------------------------------------------------------------------
+    const turnChanged = before[H.ROUND] !== after[H.ROUND] || before[H.TURN] !== after[H.TURN];
+    if (turnChanged) {
+      push({ kind: "turn", round: after[H.ROUND], turn: after[H.TURN] });
+    }
+    if (before[H.RESULT] === 0 && after[H.RESULT] !== 0) {
+      push({ kind: "result", result: after[H.RESULT], name: RESULT_NAMES[after[H.RESULT]] });
+    }
+
+    return {
+      events,
+      hero: { hpLost: heroHpLost, hpGained: heroHpGained, absorbed: heroAbsorbed,
+              blockGained: heroBlockGained, blockCleared: heroCleared, energySpent },
+      drawn, discarded, exhausted,
+      leftHand, joinedHand,
+      turnChanged,
+      result: after[H.RESULT],
+      hits: events.filter((event) => event.kind === "damage"),
+      deaths: events.filter((event) => event.kind === "down").map((event) => event.slot),
+    };
+  }
+
+  /// How the log reads, which is not the order the diff computes things in.
+  ///
+  /// `diffObservations` walks the vector top-down (hero, enemies, statuses, cards, turn), so a card
+  /// play came out as "消耗 1 点能量 / 敌人 0 受到 6 点伤害 / 手牌离开：strike" -- the cost before the
+  /// card. The reading order is a separate decision, so it is made separately and can be asserted.
+  const LOG_ORDER = {
+    turn: 0, result: 1, draw: 2, leftHand: 3, energy: 4, block: 5, blockCleared: 6,
+    damage: 7, heal: 8, status: 9, down: 10,
+  };
+
+  /// The same diff, as lines a player can read. Chinese to match the rest of the page.
+  function logLines(diff, io) {
+    const lines = [];
+    const ordered = diff.events
+      .map((event, index) => ({ event, index }))
+      .sort((a, b) => {
+        const pa = LOG_ORDER[a.event.kind] ?? 99;
+        const pb = LOG_ORDER[b.event.kind] ?? 99;
+        return pa - pb || a.index - b.index; // stable within a kind
+      })
+      .map((pair) => pair.event);
+    for (const event of ordered) {
+      switch (event.kind) {
+        case "damage": {
+          const who = event.side === "hero" ? "英雄" : `敌人 ${event.slot}`;
+          const absorbed = event.blocked ? `（格挡挡下 ${event.blocked}）` : "";
+          if (event.amount) lines.push(`${who} 受到 ${event.amount} 点伤害${absorbed}`);
+          else lines.push(`${who} 的格挡挡下 ${event.blocked} 点伤害`);
+          break;
+        }
+        case "heal": lines.push(`${event.side === "hero" ? "英雄" : `敌人 ${event.slot}`} 回复 ${event.amount} 点生命`); break;
+        case "block": lines.push(`${event.side === "hero" ? "英雄" : `敌人 ${event.slot}`} 获得 ${event.amount} 点格挡`); break;
+        case "blockCleared": lines.push("回合结束，格挡清空"); break;
+        case "down": lines.push(`敌人 ${event.slot} 被击倒`); break;
+        case "energy": lines.push(`消耗 ${event.spent} 点能量`); break;
+        case "draw": lines.push(`抽 ${event.count} 张牌`); break;
+        case "leftHand": {
+          const names = event.defSlots.map((slot) => io.cardNameOfDefinition(slot)).filter(Boolean);
+          const what = names.length ? names.join("、") : `${event.count} 张牌`;
+          lines.push(`手牌离开：${what}`);
+          break;
+        }
+        case "status": {
+          const who = event.side === "hero" ? "英雄" : `敌人 ${event.slot}`;
+          const sign = event.delta > 0 ? "+" : "";
+          lines.push(`${who} ${event.label} ${sign}${event.delta}`);
+          break;
+        }
+        case "turn": lines.push(`—— 第 ${event.round} 回合 · ${event.turn} ——`); break;
+        case "result": lines.push(`战斗结束：${event.name}`); break;
+        default: break;
+      }
+    }
+    return lines;
+  }
+
+  /// The animation script for one step: what to flash, shake and float, and where.
+  ///
+  /// Separate from `logLines` because the two answer different questions -- "what does the player
+  /// read" and "what moves". Keeping them apart is what lets the log be asserted without a DOM.
+  function animationPlan(diff, view) {
+    const plan = [];
+    for (const hit of diff.hits) {
+      const amount = hit.amount + hit.blocked;
+      if (hit.side === "hero") plan.push({ effect: "float", at: "hero", text: `-${amount}`, damage: true });
+      else plan.push({ effect: "float", at: `enemy:${hit.slot}`, text: `-${amount}`, damage: true });
+      if (hit.blocked) {
+        plan.push({ effect: "float-at-block", at: hit.side === "hero" ? "hero" : `enemy:${hit.slot}`,
+                    text: `格挡 ${hit.blocked}` });
+      }
+    }
+    for (const event of diff.events) {
+      if (event.kind === "block") {
+        plan.push({ effect: "float", at: event.side === "hero" ? "hero" : `enemy:${event.slot}`,
+                    text: `+${event.amount} 格挡` });
+      }
+      if (event.kind === "heal") {
+        plan.push({ effect: "float", at: event.side === "hero" ? "hero" : `enemy:${event.slot}`,
+                    text: `+${event.amount}`, heal: true });
+      }
+      if (event.kind === "down") plan.push({ effect: "collapse", at: `enemy:${event.slot}` });
+    }
+    for (const hit of diff.hits) {
+      plan.push({ effect: "shake", at: hit.side === "hero" ? "hero" : `enemy:${hit.slot}` });
+    }
+    if (diff.drawn) plan.push({ effect: "draw", count: diff.drawn });
+    if (diff.leftHand.length) plan.push({ effect: "cards-left-hand", count: diff.leftHand.length });
+    if (diff.turnChanged) plan.push({ effect: "turn", round: diff.turn });
+    void view;
+    return plan;
+  }
+
   root.RD_UI = {
     // layout (gate 14 checks these tile)
     OFF_HERO_STATUS, OFF_ENEMY, OFF_ENEMY_STATUS, OFF_HAND, OFF_PILES,
@@ -183,5 +415,6 @@
     // pure describers
     playOptions, endTurnAction,
     describeHero, describeEnemies, describeHand, describeStatus, describe,
+    handSlots, diffObservations, logLines, animationPlan, LOG_ORDER,
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

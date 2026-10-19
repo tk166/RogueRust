@@ -9,7 +9,7 @@ whole game state out of the 122 `i32`s that `rd_env_observe_buf()` points at.
 | file | what it is | tested by |
 |---|---|---|
 | `index.html` | the page: markup, CSS, click handlers, measurements. Loads `ui_render.js` first | gates 14 and 15 |
-| `ui_render.js` | **the semantics**: observation layout + four pure describers (`RD_UI.describe`). Classic script, no build step | gate 15 |
+| `ui_render.js` | **the semantics**: observation layout, four describers (`RD_UI.describe`), the **step diff** (`diffObservations`), its log (`logLines`) and its animation plan (`animationPlan`). Classic script, no build step | gate 15 |
 | `ui_test.mjs` | drives the describers with the real `.wasm` and compares **every printed quantity** with its observation cell | gate 15 |
 | `smoke.mjs` | the artifact is a fresh build; every script parses; only real exports are called; offsets tile | gates 13–14 |
 | `map.html` | the run/map page: the same `.wasm`, the other export family (`env-abi.md` §11) | gate 16 |
@@ -27,6 +27,26 @@ lit, the cursor ringed, and a click walks the map. ⚠️ **It walks; it does no
 starts, no rest site heals, no chest opens (`env-abi.md` §11.5 says so, and the page says so on
 screen). And it does **not** yet mark "walked but not settled", which §11.5 requires; that is a
 known debt.
+
+### The battle animation (U2)
+
+Every step is turned into an **event list** by `RD_UI.diffObservations(before, after, wasEndTurn)`:
+damage (with the Block it was absorbed by), heals, Block gains, the end-of-turn Block clear,
+deaths, energy spent, cards drawn and cards that left the hand, status changes, turn changes and
+the result. `logLines` turns that into the battle log, and `animationPlan` into "float this number
+there, shake that panel, collapse that enemy" -- both pure, both asserted against the real fight in
+gate 15, and each with a mutation that makes it red (9 of them).
+
+⚠️ **The events are derived from the observation, not from an engine event stream.** `env-abi.md`
+§4 gives two vectors per step and no events, so the diff reconstructs them by subtraction. That
+covers everything visible, and it cannot recover one thing: whether a Block decrease was damage
+*absorbed* or the end-of-turn *clear*. The caller says which kind of step it was, and the two are
+reported separately rather than merged into a number that would be wrong half the time. A real
+event stream would be better; it is a recorded follow-up.
+
+⚠️ **Card faces are name + cost only.** The ABI names cards and prints their cost; card *type* and
+*text* are not exported, so "6 伤害" cannot be shown without a second ABI extension. That is the
+next thing U2 needs, and it is written down rather than approximated.
 
 ⚠️ **The DOM half is still only checked by eye.** A refactor that renders perfectly but whose click
 handlers reference a variable that no longer exists passes all fifteen gates — that happened, and

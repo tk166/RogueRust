@@ -64,6 +64,58 @@
   }
   pre b { color: var(--ink); font-weight: 600; }
   .over { color: var(--energy); font-weight: 700; }
+
+  /* ---- animation layer -------------------------------------------------------------------
+     The effects are driven by `RD_UI.animationPlan(diff)` -- a pure list of "float this at
+     that target", "shake this", "collapse that" -- so the *semantics* of what moved are
+     asserted in `ui_test.mjs` and only the drawing is left to the browser. */
+  .battle { position: relative; }
+  .float-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+  .float {
+    position: absolute; transform: translate(-50%, -50%);
+    font: 700 18px/1 var(--mono); color: var(--bad); text-shadow: 0 2px 6px #000;
+    animation: float-up 900ms cubic-bezier(.2,.7,.3,1) forwards;
+  }
+  .float.block { color: var(--block); font-size: 15px; }
+  .float.heal { color: var(--ok); }
+  @keyframes float-up {
+    0%   { opacity: 0; transform: translate(-50%, -30%) scale(.7); }
+    18%  { opacity: 1; transform: translate(-50%, -60%) scale(1.12); }
+    100% { opacity: 0; transform: translate(-50%, -190%) scale(1); }
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    15% { transform: translateX(-6px); } 30% { transform: translateX(5px); }
+    45% { transform: translateX(-4px); } 60% { transform: translateX(3px); }
+    80% { transform: translateX(-1px); }
+  }
+  .shake { animation: shake 320ms ease-out; }
+  @keyframes hit-flash { 0% { box-shadow: inset 0 0 0 2px var(--bad); } 100% { box-shadow: none; } }
+  .hit { animation: hit-flash 420ms ease-out; }
+  @keyframes collapse { to { opacity: .25; filter: grayscale(1); } }
+  .collapsed { animation: collapse 520ms ease-in forwards; }
+  @keyframes deal-in {
+    from { opacity: 0; transform: translateY(14px) rotate(-2deg); }
+    to   { opacity: 1; transform: none; }
+  }
+  .card { animation: deal-in 220ms ease-out backwards; }
+  .card:active:not(:disabled) { transform: translateY(-6px) scale(1.03); }
+  .card .cost-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: #2b3648; border: 1px solid var(--energy); color: var(--energy);
+    font: 700 12px var(--mono); float: left; margin-right: 6px;
+  }
+  .card .title { font-weight: 600; }
+  .card .meta { color: var(--dim); font-size: 10px; margin-top: 4px; }
+  .log { font: 12px/1.7 var(--mono); max-height: 190px; overflow-y: auto; }
+  .log div { border-bottom: 1px solid #202634; padding: 1px 0; }
+  .log .hurt { color: var(--bad); }
+  .log .gain { color: var(--ok); }
+  .log .dim { color: var(--dim); }
+  .log .turn { color: var(--energy); font-weight: 600; }
+  .grid2 { display: grid; gap: 12px; grid-template-columns: 1fr; }
+  @media (min-width: 720px) { .grid2 { grid-template-columns: 1fr 1fr; } }
 </style>
 </head>
 <body>
@@ -81,8 +133,9 @@
   一次「结束回合」= 英雄回合结束 → **每个**敌人各自走一个回合（<code>Step::EndOneTurn</code>）→ 回到英雄。
 </div>
 
-<div class="board">
-  <div class="panel">
+<div class="board battle">
+  <div class="float-layer" id="floats"></div>
+  <div class="panel" id="heroPanel">
     <h2>Hero</h2>
     <div class="row"><span class="name" id="heroName">hero</span><span id="heroHp" class="name">–</span></div>
     <div class="bar"><i id="heroBar" style="width:0%"></i></div>
@@ -108,6 +161,11 @@
       <button class="act" id="endTurn">结束回合</button>
       <button class="act" id="reset">重开</button>
     </div>
+  </div>
+
+  <div class="panel" style="grid-column: 1 / -1;">
+    <h2>战斗日志 · Battle log</h2>
+    <div class="log" id="log"></div>
   </div>
 
   <div class="panel" style="grid-column: 1 / -1;">
@@ -238,14 +296,117 @@ function readActions() {
   return out;
 }
 
+// Definition slot -> a name we have seen for it. The ABI names cards by **hand slot**, so a card
+// that has already left the hand can only be named if we remembered it earlier; `logLines` falls
+// back to a count when it cannot, rather than printing a definition number at the player.
+const defSlotNames = new Map();
+const LOG_LIMIT = 120;
+
 function step(actionIndex) {
   pending = null;
+  const wasEndTurn = wasEndTurnAction(actionIndex);
+  const before = obs.slice();
   const verdict = ex.rd_env_step(actionIndex);
   obs = readObservation();
   const reward = ex.rd_env_reward();
   lastVerdict = verdict; lastReward = reward;
+  // The diff is computed from the two observation vectors, so a **refused** step (unchanged
+  // observation) yields no events and therefore no animation and no log line -- which is the
+  // honest outcome, since nothing happened.
+  const diff = RD_UI.diffObservations(before, obs, wasEndTurn);
   render(verdict, reward);
+  animate(diff);
+  appendLog(diff);
   return verdict;
+}
+
+function wasEndTurnAction(actionIndex) {
+  const action = readActions().find((a) => a.index === actionIndex);
+  return !!action && action.kind === ACTION_END_TURN;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Animation. `RD_UI.animationPlan(diff)` says *what* moves and *at which target*; this only draws
+// it, so the semantics stay testable in Node and the browser part stays small.
+// ---------------------------------------------------------------------------------------------
+function targetElement(at) {
+  if (at === "hero") return document.getElementById("heroPanel");
+  if (at.startsWith("enemy:")) {
+    const slot = at.slice("enemy:".length);
+    return document.querySelector(`#enemies [data-enemy-panel="${slot}"]`);
+  }
+  return null;
+}
+
+function floats() { return document.getElementById("floats"); }
+
+function spawnFloat(at, text, className) {
+  const layer = floats();
+  const target = targetElement(at);
+  if (!layer || !target) return;
+  const layerBox = layer.getBoundingClientRect();
+  const box = target.getBoundingClientRect();
+  // Random horizontal jitter so two numbers on the same target do not overlap exactly.
+  const jitter = (Math.random() - 0.5) * 34;
+  const node = document.createElement("div");
+  node.className = "float" + (className ? " " + className : "");
+  node.textContent = text;
+  node.style.left = `${box.left - layerBox.left + box.width / 2 + jitter}px`;
+  node.style.top = `${box.top - layerBox.top + 14}px`;
+  node.addEventListener("animationend", () => node.remove());
+  layer.appendChild(node);
+}
+
+function flash(class_, at) {
+  const target = targetElement(at);
+  if (!target) return;
+  const cls = class_;
+  target.classList.remove(cls);
+  void target.offsetWidth; // restart the animation if it is already running
+  target.classList.add(cls);
+  target.addEventListener("animationend", () => target.classList.remove(cls), { once: true });
+}
+
+function animate(diff) {
+  for (const item of RD_UI.animationPlan(diff, currentView)) {
+    switch (item.effect) {
+      case "float":
+        spawnFloat(item.at, item.text, item.damage ? "" : (item.heal ? "heal" : "block"));
+        break;
+      case "float-at-block":
+        spawnFloat(item.at, item.text, "block");
+        break;
+      case "shake":
+        flash("shake", item.at);
+        flash("hit", item.at);
+        break;
+      case "collapse":
+        flash("collapsed", item.at);
+        break;
+      default:
+        break; // draw / cards-left-hand / turn are visible from the re-render itself
+    }
+  }
+}
+
+function appendLog(diff) {
+  const lines = RD_UI.logLines(diff, {
+    cardNameOfDefinition: (slot) => defSlotNames.get(slot) || "",
+  });
+  if (!lines.length) return;
+  const log = document.getElementById("log");
+  const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 4;
+  for (const line of lines) {
+    const row = document.createElement("div");
+    row.className = line.startsWith("——") ? "turn"
+      : /受到|挡下|被击倒/.test(line) ? "hurt"
+      : /回复|获得/.test(line) ? "gain"
+      : "dim";
+    row.textContent = line;
+    log.appendChild(row);
+  }
+  while (log.childElementCount > LOG_LIMIT) log.removeChild(log.firstChild);
+  if (atBottom) log.scrollTop = log.scrollHeight;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -253,14 +414,22 @@ function step(actionIndex) {
 // ---------------------------------------------------------------------------------------------
 function esc(s) { return String(s).replace(/[<>&]/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c])); }
 
+let currentView = null;
+
 function render(verdict, reward) {
   const actions = readActions();
   // A pending choice can be invalidated by anything that changes the hand (a step, a reset).
   if (pending && !RD_UI.playOptions(actions).has(pending.hand)) pending = null;
   const view = RD_UI.describe(obs, actions,
     { heroName: () => "hero", cardName, enemyName, intentText }, pending);
+  currentView = view;
 
   const hero = view.hero;
+  // Remember every (definition slot -> name) we see: the ABI names cards by hand slot, so this is
+  // the only way a later log line can name a card that has already left the hand.
+  for (const card of view.hand) {
+    if (card.name && !card.name.startsWith("def#")) defSlotNames.set(card.definitionSlot, card.name);
+  }
   document.getElementById("heroName").textContent = hero.name;
   document.getElementById("heroHp").textContent = `${hero.hp} / ${hero.hpMax}`;
   document.getElementById("heroBar").style.width =
@@ -279,6 +448,7 @@ function render(verdict, reward) {
   const aimCard = pending ? (cardName(pending.hand) || ("hand #" + pending.hand)) : "";
   const enemies = view.enemies.map((e) => {
     const aimable = aimSlots.has(e.slot);
+    const down = e.alive ? "" : " collapsed";
     // A downed enemy's seat keeps its last intent in the observation (the reference asks the
     // selector about dead enemies too), so the page is what decides not to advertise it.
     const intent = e.alive
@@ -286,7 +456,8 @@ function render(verdict, reward) {
       : "—";
     const chips = e.statuses.map((s) => `<span class="chip">${esc(s.label)} ${s.stacks}</span>`).join("");
     return `
-      <div ${aimable ? `class="enemy-target" data-target-slot="${e.slot}"` : ""}>
+      <div class="enemy-panel${down}${aimable ? " enemy-target" : ""}"
+           data-enemy-panel="${e.slot}" ${aimable ? `data-target-slot="${e.slot}"` : ""}>
       <div class="row"><span class="name">${esc(e.name)}${e.alive ? "" : " (down)"}</span>
         <span class="name">${e.hp} / ${e.hpMax}</span></div>
       <div class="bar"><i style="width:${Math.max(0, 100 * e.hp / Math.max(1, e.hpMax))}%"></i></div>
@@ -308,13 +479,13 @@ function render(verdict, reward) {
   // Exactly one play action ⇒ clicking it plays it. More than one ⇒ the card arms the enemy list
   // above (the ABI emits one action per live enemy slot); clicking an enemy spends the action that
   // names that slot. `def_slot` moves to `title=` — it is a content-row index, not a rule.
-  const hand = view.hand.map((card) => `
+  const hand = view.hand.map((card, order) => `
       <button class="card${card.armed ? " picking" : ""}" data-hand="${card.slot}"
               data-action="${card.directActionIndex}"
+              style="animation-delay:${order * 40}ms"
               title="card definition slot ${card.definitionSlot}" ${card.playable ? "" : "disabled"}>
-        <div><span class="cost">${card.cost}</span> energy · slot ${card.slot}</div>
-        <div>${esc(card.name)}</div>
-        ${card.note ? `<div class="slot pick">${esc(card.note)}</div>` : ""}
+        <div><span class="cost-badge">${card.cost}</span><span class="title">${esc(card.name)}</span></div>
+        <div class="meta">slot ${card.slot}${card.note ? ` · ${esc(card.note)}` : ""}</div>
       </button>`);
   if (!hand.length) hand.push(`<div class="stats">手牌为空 —— 第一次出牌/结束回合会开回合并抽牌。</div>`);
   document.getElementById("hand").innerHTML = hand.join("");
@@ -524,6 +695,8 @@ function measure() {
     ex.rd_env_reset();
     pending = null; lastVerdict = null; lastReward = 0;
     obs = readObservation();
+    document.getElementById("log").innerHTML = "";
+    document.getElementById("floats").innerHTML = "";
     render(undefined, 0);
   });
 })();
