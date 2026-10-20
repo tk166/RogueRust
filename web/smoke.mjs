@@ -63,6 +63,12 @@ const REQUIRED = [
   "rd_env_enemy_name_into", "rd_env_intent_len", "rd_env_intent_into",
   "rd_env_last_error_len", "rd_env_last_error_into", "rd_env_bench_bookkeeping",
   "rd_env_bench_envelope", "rd_env_bench_step_raw", "rd_env_bench_sizes",
+  // The run layer (`env-abi.md` §11) -- the map page is the consumer.
+  "rd_run_start", "rd_run_seed", "rd_run_observe_len", "rd_run_observe", "rd_run_map_len",
+  "rd_run_map_rows", "rd_run_map_node", "rd_run_map_row_first", "rd_run_action_count",
+  "rd_run_action", "rd_run_action_arg", "rd_run_step", "rd_run_last_error_len",
+  "rd_run_last_error_into", "rd_run_kind_name_len", "rd_run_kind_name_into",
+  "rd_run_relic_name_len", "rd_run_relic_name_into", "rd_run_relic_id_len", "rd_run_relic_id_into",
 ];
 for (const name of REQUIRED) {
   if (!(name in ex)) fail(`missing export ${name}`);

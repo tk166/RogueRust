@@ -128,6 +128,13 @@
         removed: io.obs(RUN_REMOVED),
         streams: Array.from({ length: RUN_STREAM_COUNT }, (_, k) => io.obs(RUN_STREAM_FIRST + k)),
       },
+      // Each relic with the name the content gives it. `io.relicName` is part of the accessor so
+      // this file still touches no global; an empty name is reported as such rather than dropped,
+      // because a relic the page cannot name is a fact worth seeing.
+      relics: Array.from({ length: Math.max(0, io.obs(RUN_RELICS)) }, (_, index) => ({
+        index,
+        name: (io.relicName ? io.relicName(index) : "") || `relic #${index}`,
+      })),
       layout: LAYOUT,
     };
   }
@@ -194,6 +201,12 @@
       `</svg>`);
   }
 
+  /// The relics as one line, or a dash when the run holds none.
+  function relicLine(view) {
+    if (!view || !view.relics.length) return "—";
+    return view.relics.map((relic) => relic.name).join(" · ");
+  }
+
   /// One line of status, so the page and the test agree about what the header says.
   function statusLine(view) {
     if (!view) return "no run";
@@ -211,6 +224,6 @@
     NODE_ROW, NODE_COL, NODE_KIND, NODE_OUT_DEGREE, NODE_EDGE0, NODE_REACHABLE,
     KIND_NAMES, KIND_LABELS, LAYOUT,
     // pure functions
-    position, describeMap, svgMarkup, statusLine,
+    position, describeMap, svgMarkup, statusLine, relicLine,
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

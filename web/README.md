@@ -28,6 +28,18 @@ starts, no rest site heals, no chest opens (`env-abi.md` §11.5 says so, and the
 screen). And it does **not** yet mark "walked but not settled", which §11.5 requires; that is a
 known debt.
 
+### Relics
+
+The run page shows `遗物 Burning Blood`, read from `REL.DisplayName` through
+`rd_run_relic_name_*`. That cell is on the compiler's presentation-strip list, so — like the card
+text — **it only exists in the full image**; the core mirror has it absent.
+
+⚠️ The *effect* is not data: this kernel executes neither `REL.RunPrograms` nor `REL.CombatRules`,
+so each relic's effect is an explicit rule in `rd-run`'s `RunState::end_of_combat`. The boundary is
+loud in both directions: the run refuses to start if a relic declares a program or combat rule, and
+`end_of_combat` returns an error for an id it has no rule for. `burning_blood` (+6 HP at the end of a
+fight, capped) is the one implemented.
+
 ### Layout: one column, a hero bar, a row of enemies
 
 Everything stacks in reading order — hero, enemies, hand, log, measurements — because the hero is a

@@ -224,6 +224,47 @@ fn draw(&mut self, stream: RunStream) -> (i32, i32) { … }
 
 ---
 
+## 4.6 遗物（2026-10-19 加）
+
+### 4.6.1 形状：`REL` 行 + `Start.StartingRelics`
+
+`REL` 表在格式里一直存在（stride 12：`Id` / `DisplayName` / `RunPrograms` / `CombatRules` /
+`extra`），内容里一直是 **0 行**。现在有了第一行 `burning_blood`，并挂到
+`Characters[0].Start.StartingRelics`（`Start.StartingRelics` 是同一份的第二副本，闸门要求两者一致）。
+
+`Content::start_relics(roots)` 的两跳规则与 `start_deck` **逐字相同**（花名册非空看
+`Characters[0].Start`，否则看根 `Start`）；返回 `Ok(None)` = 没声明，不是错误。
+
+### 4.6.2 效果**不是**数据 —— 这是一条必须说清的边界
+
+`REL.RunPrograms` / `REL.CombatRules` **本内核一行都不执行**：没有 run 层的节目解释器，
+也没有 `CombatRules` 注册表（这份内容里 23/23 状态都是 ABSENT，所以那个注册表从来没建过）。
+
+⇒ 效果是**按 id 逐条实现的规则**，住在 `RunState::end_of_combat`。已实现：
+
+| 遗物 | 效果 | 依据 |
+|---|---|---|
+| `burning_blood` | 战斗结束回 6 HP（**上限封顶**，`heal_after_combat` 就是那个原语） | `inv:§2` |
+
+**而且这个边界是响亮的**，两道闸：
+
+1. **内容侧**：`rd_run_start` 读遗物时，若该行声明了 `RunPrograms` 或 `CombatRules`（非空），
+   **拒绝开局**并说明原因 —— 收下再来个静默不做，正是这个项目反复踩的坑。
+2. **状态侧**：`end_of_combat` 遇到没有规则的 id 返回 `RunError::UnsupportedRelic { index }`，
+   **不是空操作**。有一条测试专门用一个"真 StS 遗物但没实现"的 id（`vajra`）钉住它。
+
+### 4.6.3 还没接上的那一跳
+
+`end_of_combat` **今天没有被 wasm 调用** —— 因为 run 层与战斗层之间**还没有结算**
+（`run-layer.md` §6 的 `RunAction` 全表、`env-abi.md` §11.5 的"只走不结算"）。
+效果本身有单测（`burning_blood_heals_six_at_the_end_of_a_fight`），缺的是**调用点**；
+节点结算落地时，那一步就是它的第一个调用者。**写在这里，而不是让"遗物有了"看起来像"遗物能用了"。**
+
+### 4.6.4 `DisplayName` 只在完整镜像里
+
+`DisplayName` 在编译器的 `PRESENTATION_KEYS`（`compile.py:688`）里 ⇒ **core 镜像会把它剥掉**。
+这与卡面文案（§57）是同一个机制：页面要显示名字，就得嵌完整镜像。`rd-wasm` 现在嵌的就是完整镜像。
+
 ## 5. `run_hash` 规范文本
 
 ### 5.1 为什么需要它（而不是"比较两个结构体"）
@@ -497,6 +538,7 @@ wiki 给的是**约束**（§7.1 的 13 条），没给过程。我们按约束�
 | 2026-10-19 | 初版冻结 | — |
 | 2026-10-19 | §3 落地为 `kernel/rd-run/src/streams.rs`；§3.6 拆成 R1a/R1b（R1b 要等地图生成器），新增 R2b（字面量钉死）与 R4（0 号流与零范围） | 无（本 crate 尚无 golden） |
 | 2026-10-19 | §7 的走法加"优先选未被占用"的 `[推断]` 偏好（平均每行 2.56 → 3.30）；`Map` 流的抽取次数随之改变（seed 7: 141 → 128） | 任何依赖地图确定性的 golden（目前没有） |
+| 2026-10-19 | **遗物系统第一版**：`REL` 表有第一行 `burning_blood` + `Start.StartingRelics`；`Content::start_relics`；`RunState::end_of_combat` 实现回血 6 且**未知遗物是错误不是空操作**；两道响亮闸（内容声明节目/法令 ⇒ 拒绝开局；未知 id ⇒ `UnsupportedRelic`）；`start.StartingRelics` 的 `InertKeys` 声明**已移除**（内核真的读了） | 内容侧改遗物要重编镜像；run 层加了 2 条测试 |
 | 2026-10-19 | **连接方式换成 `connect_rows`（先定行、再连段、相邻段共享一个节点）**，这是一次有记录的规格偏离：规则 4b（"最近的 3 个" → 连续列区间）与 5b（"6 条路径" → 不再是生成过程）都改了。原因：走 6 条路径**做不到**同时满足"每层 ≥3"与"整张图连通"，实测 320 次抽样里两者同时成立的为 **0**；换掉之后 60/60 张图连通、宽度平均 4.53 | 地图的确定性 golden（目前没有）；`rd-wasm` 里钉着的抽取次数 148 → 135 |
 | 2026-10-19 | **新增规则 1b：每行 ≥ 3 个节点**（用户的领域知识；`check()` 的 `TooNarrow`；太窄的抽样整次作废）。实测 300 seed 失败 0 次、最窄 4、平均 4.62；`Map` 流抽取次数 128 → 148 | 同上 |
 | 2026-10-19 | §7 落地为 `kernel/rd-run/src/map.rs`（15 行 / 6 条路径 / 13 条规则 / 校验器与生成器分开）；**规则 11 与固定层冲突，裁决"固定层豁免"**（见 §7.1 的引用块）；R1b 随之落地 | 无（本 crate 尚无 golden） |

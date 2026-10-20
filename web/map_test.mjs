@@ -47,6 +47,13 @@ const io = {
   rowFirst: (r) => ex.rd_run_map_row_first(r),
   actionCount: () => ex.rd_run_action_count(),
   actionArg: (i, w) => ex.rd_run_action_arg(i, w),
+  relicName: (i) => {
+    const n = ex.rd_run_relic_name_len(i);
+    if (n < 0) return "";
+    const ptr = ex.rd_env_scratch_buf();
+    ex.rd_run_relic_name_into(i, ptr);
+    return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, n).slice());
+  },
 };
 const view = () => M.describeMap(io);
 
@@ -282,6 +289,27 @@ function assertViewAgreesWithModule(where) {
   assertViewAgreesWithModule("seed 4242, after one step");
 }
 
+// ---------------------------------------------------------------------------------------------
+// 7. The relics the run holds. `inv:§2`: the Ironclad starts with one, and its name is the
+//    content's `REL.DisplayName` -- in the full image only, because `DisplayName` is on the
+//    compiler's presentation-strip list.
+// ---------------------------------------------------------------------------------------------
+{
+  const v = view();
+  if (!v.relics) fail("describeMap does not report the relics");
+  const held = io.obs(M.RUN_RELICS);
+  if (v.relics.length !== held) fail(`${v.relics.length} relics in the view, ${held} in the run`);
+  if (held !== 1) fail(`the run holds ${held} relics, expected 1 (inv:§2)`);
+  if (v.relics[0].name !== "Burning Blood") {
+    fail(`the relic is named ${JSON.stringify(v.relics[0].name)}, expected "Burning Blood"`);
+  }
+  if (M.relicLine(v) !== "Burning Blood") fail(`relicLine says ${JSON.stringify(M.relicLine(v))}`);
+  // The page has to use it, or this is dead code: the same lesson as `appendLog(diff);`.
+  if (!page.includes("rd_run_relic_name_len")) {
+    fail("map.html never asks for the relic name");
+  }
+}
+
 console.log("MAP_RENDER PASS");
 console.log(`  nodes              ${view().nodes.length} drawn, one circle and one group each`);
 console.log(`  edges              each path crosses exactly one row`);
@@ -289,5 +317,6 @@ console.log(`  lit == actions     the highlighted set and the action table agree
 console.log(`  walking            floor climbs to ${M.LAYOUT.rows} and the lit set follows the cursor`);
 console.log(`  kind names         the page's vocabulary is the module's (rd_run_kind_name_*)`);
 console.log(`  seed sensitivity   two seeds, two maps`);
+console.log(`  relics            ${view().relics.map((r) => r.name).join(", ") || "none"}, named by the content`);
 console.log(`  view == module     re-checked after every step of a full walk, on two seeds`);
 console.log("  ⚠️  no DOM: the click handler on the SVG is still only checked by eye in a browser.");

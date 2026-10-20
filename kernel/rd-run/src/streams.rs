@@ -155,6 +155,13 @@ pub enum RunError {
     BadNode,
     /// A per-step invariant was violated (`run-layer.md` §6.2). The string names which one.
     Invariant(&'static str),
+    /// A relic whose effect is not implemented (`RunState::end_of_combat`).
+    ///
+    /// **This is the loud boundary of the relic system.** Effects are implemented one at a time, by
+    /// id; this kernel has no relic-program interpreter, so a relic it cannot run has to be an
+    /// error rather than a relic that silently does nothing. `index` is its slot in `relics()`, so
+    /// the caller can print the id.
+    UnsupportedRelic { index: u8 },
 }
 
 /// The run's randomness: the run seed plus one counter per stream.

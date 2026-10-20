@@ -4395,3 +4395,82 @@ E6 是第 54 轮 D9 的同族：**纯函数全在、只是没人用**，所以"�
 `actionFor` / `soundPlan`），所以闸门 15 的 12 个断言块原样通过；`.wasm` 也没重编。
 **版面本身仍然只有真浏览器能验** —— 这一轮就是靠它：三个坐标（英雄 y=170、敌人 y=299 同一行、
 手牌 y=479）加上一次真实拖拽。
+---
+
+## 58. 第 48 轮：遗物系统（第一版）—— 肉鸽的灵魂，先给一副能跑的骨架
+
+> 用户："还差一个很重要的东西，遗物系统，肉鸽游戏的灵魂。"
+> 这一轮不做"140 件遗物"，先让**一件遗物从内容一路走到屏幕上**，并且把"做不到的部分"变成
+> 响亮失败而不是静默。
+
+### 58.1 `REL` 表一直存在，只是 0 行
+
+格式里 `REL` 行的格子是 `Id / DisplayName / RunPrograms / CombatRules / extra`（stride 12），
+内核也早有 `RelRow`。内容里一直是 `count = 0` —— 所以这一轮加的是**内容 + 接线**，不是格式。
+
+* 内容：`Relics: [{Id: burning_blood, DisplayName: "Burning Blood"}]`，
+  `Characters[0].Start.StartingRelics: [{value: burning_blood}]`。
+* `Content::start_relics(roots)`：两跳规则与 `start_deck` **逐字相同**（花名册非空看
+  `Characters[0].Start`，否则根 `Start`），返回 `Ok(None)` = 没声明。
+* `RunState` 早就有 `relics[]`，`rd_run_start` 现在从内容往里填。
+
+### 58.2 效果**不是数据** —— 这是这一轮最该记住的一句
+
+`REL.RunPrograms` / `REL.CombatRules` **内核对它们一行都不执行**：run 层没有节目解释器，
+`CombatRules` 注册表从来没建过（这份内容里 23/23 状态都是 ABSENT）。所以：
+
+⇒ 效果是**按 id 逐条实现的规则**（`rd-run` 的 `RunState::end_of_combat`）。
+已实现一件：`burning_blood` 战斗结束回 **6** HP，**上限封顶**。
+
+**而且两道闸都是响亮的**：
+
+1. **内容侧**：遗物行若声明了 `RunPrograms` / `CombatRules`，`rd_run_start` **拒绝开局**并说清原因
+   —— 收下再来个静默不做，正是这个项目反复踩的坑。
+2. **状态侧**：`end_of_combat` 遇到没有规则的 id 返回 `RunError::UnsupportedRelic { index }`。
+   测试里专门用一个"真 StS 遗物但没实现"的 id（`vajra`）钉住它。
+
+### 58.3 它顺手抓到两处"声明与现实不符"
+
+* `InertKeys` 里**声明**过 `root:Start.StartingRelics` 是惰性的，理由写着"内核没有遗物能力
+  （`REL` 表本内容 0 行）"。内核真的开始读它之后，闸门 12 立刻报 `inert.undeclared` ——
+  声明**必须跟着现实走**，于是删掉那条声明。
+* 闸门还要求 `Start.StartingRelics` 与 `Characters[0].Start.StartingRelics` **一致**
+  （同一份起始块的两次副本）。第一次只改了 `Characters[0]` 那份，闸门当场报
+  `list length 0 vs 1`。
+
+这两条都不是我想到的，是**闸门想到的** —— 这正是第 12 道闸门存在的理由。
+
+### 58.4 `DisplayName` 只在完整镜像里（与卡面文案同一个机制）
+
+`DisplayName` 在编译器的 `PRESENTATION_KEYS`（`compile.py:688`）里 ⇒ **core 镜像会剥掉它**。
+页面要显示名字就只能读完整镜像 —— 上一轮为卡面文案换镜像时留下的那条注释，这一轮又救了一次。
+
+### 58.5 判据
+
+| 测试 | 钉住什么 |
+|---|---|
+| `the_starting_relic_comes_out_of_the_content` | 内容 → 镜像 → `start_relics` → `RunState` → `REL.DisplayName` → 导出，**整条链**（顺带：`DisplayName` 不是 id 的大写化） |
+| `burning_blood_heals_at_the_end_of_the_fight` | 回 6、封顶、满血时回 0 |
+| `burning_blood_heals_six_at_the_end_of_a_fight`（rd-run） | 同上，在 run 层 |
+| `a_relic_with_no_implemented_effect_is_an_error`（rd-run） | 未知 id **报错**、无遗物则 `Ok(0)` |
+| `map_test.mjs` | 页面上写着 `Burning Blood`，且 `map.html` 真的调了 `rd_run_relic_name_len` |
+
+⚠️ 我自己写的测试也错过一次：`_into` 的缓冲区比字符串长，我用固定 16 字节去 `from_utf8`，
+比较时把尾部 NUL 一起比了 —— `"burning_blood\0\0\0"` vs `"burning_blood"`。改成按**返回长度**切。
+
+### 58.6 还没接上的那一跳（说清楚，不让"有了"像"能用了"）
+
+`end_of_combat` **今天没有被 wasm 调用**：run 层与战斗层之间还没有**结算**
+（`env-abi.md` §11.5 的"只走不结算"）。效果有单测，缺的是调用点 —— 节点结算落地时它就是
+第一个调用者。同样没做：遗物在**战斗内**的触发效果（需要 `CombatRules` 注册表，那是另一个子系统）、
+遗物获取/丢弃/商店、Boss 宝箱三选一。
+
+### 58.7 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 623 | **627**（rd-run 37 → 39，rd-wasm 12 → 14） |
+| `sts` 镜像 | 11,140 / 9,580 B | **11,272 / 9,688 B**（多一行 `REL` + 起始遗物列表） |
+| `.wasm` | 434,617 B | **439,087 B** |
+| 内容 | 无 `Relics` 键 | **`Relics` 1 行，起始遗物已声明** |

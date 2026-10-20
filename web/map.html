@@ -112,6 +112,11 @@ const lastRunError = () =>
   text((_) => ex.rd_run_last_error_len(), (p) => ex.rd_run_last_error_into(p), 0);
 const kindName = (kind) =>
   text((k) => ex.rd_run_kind_name_len(k), (k, p) => ex.rd_run_kind_name_into(k, p), kind);
+// The relic's name out of the content's `REL.DisplayName`. That cell is in the compiler's
+// presentation-strip list, so it only exists in the full image -- the same reason the card text
+// does (see `kernel/rd-wasm/src/lib.rs`, `IMAGE`).
+const relicName = (index) =>
+  text((i) => ex.rd_run_relic_name_len(i), (i, p) => ex.rd_run_relic_name_into(i, p), index);
 
 // The ABI surface, passed to the pure describer so it never touches a global.
 const io = {
@@ -122,6 +127,7 @@ const io = {
   rowFirst: (r) => ex.rd_run_map_row_first(r),
   actionCount: () => ex.rd_run_action_count(),
   actionArg: (i, w) => ex.rd_run_action_arg(i, w),
+  relicName,
 };
 
 let current = null;
@@ -134,7 +140,9 @@ function render(verdict) {
     return;
   }
   document.getElementById("status").innerHTML =
-    `${RD_MAP.statusLine(current)}<br>可达 <b>${current.actions.length}</b> 个节点`;
+    `${RD_MAP.statusLine(current)}<br>` +
+    `遗物 <b>${esc(RD_MAP.relicLine(current))}</b> · ` +
+    `可达 <b>${current.actions.length}</b> 个节点`;
   document.getElementById("mapbox").innerHTML = RD_MAP.svgMarkup(current);
 
   const parts = [];

@@ -50,10 +50,6 @@
       "Why": "参考的起始队伍：内核没有队友/AI 概念（FightPlan 只有英雄 + 敌人），零消费者，内容里恒空表。"
     },
     {
-      "Path": "root:Start.StartingRelics",
-      "Why": "起始遗物：内核没有遗物能力（`REL` 表本内容 0 行），零 `.starting_relics(` 调用点，内容里是 `count = 0` 的空表。"
-    },
-    {
       "Path": "root:Start.StartingUnits",
       "Why": "参考的起始单位：与 `StartingParty` 同理，内核的战场成员只来自 FightPlan，零消费者，内容里恒空表。"
     },
@@ -1975,6 +1971,14 @@
     ],
     "Note": "inv:§5.2：weak 池 4 项各 25%。ENCT 行没有权重格（rdcfmt.py:254-259）⇒ 权重只能住在这里，不参与任何镜像行为。第 4 项 enc_two_louses 未 author（要 louse_red/green，C 档）。"
   },
+  "Relics": [
+    {
+      "Id": "burning_blood",
+      "DisplayName": "Burning Blood",
+      "RunPrograms": null,
+      "CombatRules": null
+    }
+  ],
   "Start": {
     "HeroName": "Ironclad",
     "MaxHealth": 80,
@@ -2014,7 +2018,11 @@
         "value": "bash"
       }
     ],
-    "StartingRelics": [],
+    "StartingRelics": [
+      {
+        "value": "burning_blood"
+      }
+    ],
     "StartingConsumables": [],
     "StartingUnits": [],
     "StartingParty": []
@@ -2061,7 +2069,11 @@
             "value": "bash"
           }
         ],
-        "StartingRelics": [],
+        "StartingRelics": [
+          {
+            "value": "burning_blood"
+          }
+        ],
         "StartingConsumables": [],
         "StartingUnits": [],
         "StartingParty": []

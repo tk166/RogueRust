@@ -30,6 +30,9 @@ pub const MAX_RUN_DECK: usize = 60;
 pub const MAX_RUN_RELICS: usize = 24;
 /// The potion belt (`inv:§9.3`: hold at most 3).
 pub const MAX_RUN_POTIONS: usize = 3;
+
+/// `Burning Blood`: "At the end of combat, heal 6 HP" (`inv:§2`).
+pub const BURNING_BLOOD_HEAL: i32 = 6;
 /// The most nodes one step can offer: the first floor is chosen freely among a whole row.
 pub const MAX_STEP_TARGETS: usize = NODES_PER_ROW;
 
@@ -271,6 +274,39 @@ impl RunState {
         self.potions[slot] = id;
         self.potions_len += 1;
         Ok(())
+    }
+
+    /// What the relics do when a fight ends.
+    ///
+    /// # The design, stated once
+    ///
+    /// A relic's effect is **not** data in this kernel: `REL.RunPrograms` and `REL.CombatRules` are
+    /// never executed (there is no run-level program interpreter and no `CombatRules` registry), so
+    /// every effect is an explicit rule here, keyed on the id. That is a real limitation and it is
+    /// made loud instead of quiet: an id this function does not know is
+    /// [`RunError::UnsupportedRelic`], never "a relic that does nothing".
+    ///
+    /// Returns the health actually restored, so a caller can show "+6".
+    pub fn end_of_combat(&mut self) -> Result<i32, RunError> {
+        let mut healed = 0i32;
+        for slot in 0..self.relics_len as usize {
+            let id = self.relics[slot].as_str();
+            match id {
+                // `inv:§2`: "At the end of combat, heal 6 HP." The heal is capped at the maximum,
+                // so `heal_after_combat` is the right primitive (it clamps).
+                "burning_blood" => {
+                    let before = self.health;
+                    self.heal_after_combat(BURNING_BLOOD_HEAL);
+                    healed += self.health - before;
+                }
+                _ => {
+                    return Err(RunError::UnsupportedRelic {
+                        index: slot as u8,
+                    })
+                }
+            }
+        }
+        Ok(healed)
     }
 
     /// Take the `Burning Blood` heal (`inv:§2`: +6 HP at the end of combat). **Capped at the
@@ -544,6 +580,45 @@ mod tests {
         assert_eq!(run.gold(), 0);
         run.adjust_gold(25);
         assert_eq!(run.gold(), 25);
+    }
+
+    /// `Burning Blood` heals 6 at the end of a fight, capped at the maximum, and reports what it
+    /// actually restored. The cap matters: a run at 78/80 gains 2, and a caller that prints "+6"
+    /// there would be lying.
+    #[test]
+    fn burning_blood_heals_six_at_the_end_of_a_fight() {
+        let mut run = ironclad();
+        run.push_relic("burning_blood").unwrap();
+        run.adjust_health(-20);
+        assert_eq!(run.health(), 60);
+        assert_eq!(run.end_of_combat(), Ok(6));
+        assert_eq!(run.health(), 66);
+        // No second heal from one call, and none when the fight did not end.
+        assert_eq!(run.health(), 66);
+        // At the cap it restores only what fits, and still reports the truth.
+        run.adjust_health(1000);
+        assert_eq!(run.health(), 80);
+        run.adjust_health(-1);
+        assert_eq!(run.end_of_combat(), Ok(1));
+        assert_eq!(run.health(), 80);
+    }
+
+    /// A relic whose effect this kernel cannot run is an **error**, not a no-op. This is the loud
+    /// boundary of the whole relic system: `REL.RunPrograms`/`CombatRules` are not executed, so an
+    /// unknown id must fail rather than quietly do nothing.
+    #[test]
+    fn a_relic_with_no_implemented_effect_is_an_error() {
+        let mut run = ironclad();
+        run.push_relic("vajra").unwrap(); // a real StS relic, whose effect is not implemented
+        assert_eq!(
+            run.end_of_combat(),
+            Err(RunError::UnsupportedRelic { index: 0 }),
+            "a relic with no rule must not be silently inert"
+        );
+        // And a run with no relics has nothing to do, which is not an error.
+        let mut bare = ironclad();
+        assert_eq!(bare.end_of_combat(), Ok(0));
+        assert_eq!(bare.health(), 80);
     }
 
     #[test]

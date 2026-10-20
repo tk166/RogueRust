@@ -2130,6 +2130,41 @@ impl<'a> Content<'a> {
     }
 }
 
+impl<'a> Content<'a> {
+    /// 起始遗物（`Start.StartingRelics`，两跳规则与 [`Content::start_deck`] 逐字相同：
+    /// 花名册非空就看 `Characters[0].Start`，否则看根 `Start`）。
+    ///
+    /// 返回 `Ok(None)` = **这份内容没有声明起始遗物** —— 与"有声明但是空表"同义，
+    /// 因为参考的"空 = 没声明"两种拼法都表示同一件事（`content-schema.md` §2.2）。
+    /// 内容坏了（花名册非空而第 0 项没有 `Start`、字段类别不对）才是错误。
+    ///
+    /// 为什么复用 [`StartDeck`] 这个类型：它就是一个"借用视图 + 按序取 id"的东西，
+    /// 与遗物列表的形状完全一样；再写一个同构的结构体只会多一处会漂的地方。
+    pub fn start_relics(&self, roots: DeckRoots) -> Result<Option<StartDeck<'_>>, DeckError> {
+        // 这一跳的名字进所有错误消息（与 `DeckOrigin::path()` 同一惯例：不说坏在哪，人要挖一遍）。
+        const HOP: &str = "Start.StartingRelics";
+        let start = match character_start(self, roots.characters)? {
+            Some(term) => Some((DeckOrigin::CharacterStart, term)),
+            None => roots.start.map(|term| (DeckOrigin::RootStart, term)),
+        };
+        let Some((origin, term)) = start else {
+            return Ok(None);
+        };
+        let Some(list) = list_field(self, term, "StartingRelics", HOP)? else {
+            return Ok(None);
+        };
+        if list.is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(StartDeck {
+            content: self,
+            origin,
+            wrapped: list.kind() == F_TERMLIST,
+            list,
+        }))
+    }
+}
+
 /// 花名册第 0 人的 `Start` 对象 term（`RunBlueprint.cs:171-174`：`Characters[0].Start`）。
 ///
 /// `Ok(None)` = **花名册为空 / 没有这个根键**（⇒ 走根 `Start`）；`Ok(Some(t))` = 有。
@@ -2183,6 +2218,18 @@ fn deck_field<'a>(
     term_id: u16,
     hop: &'static str,
 ) -> Result<Option<SlotList<'a>>, DeckError> {
+    list_field(content, term_id, "Deck", hop)
+}
+
+/// 一个对象 term 的任意 `F_STRLIST` / `F_TERMLIST` 字段 → [`SlotList`]；字段**缺席** ⇒
+/// `Ok(None)`。按**字段名**找，不按位置：镜像里的字段表是按名字排序派生的（`_obj(...)` 的
+/// 字段字母序），所以位置会随内容变化，名字不会。
+fn list_field<'a>(
+    content: &'a Content<'a>,
+    term_id: u16,
+    wanted: &str,
+    hop: &'static str,
+) -> Result<Option<SlotList<'a>>, DeckError> {
     let term = content.term(term_id).ok_or(DeckError::Malformed(hop))?;
     if term.op < OP_FIRST_DYNAMIC {
         return Err(DeckError::Malformed(hop));
@@ -2197,7 +2244,7 @@ fn deck_field<'a>(
         let name = content
             .string(field.name_str())
             .ok_or(DeckError::Malformed(hop))?;
-        if name == "Deck" {
+        if name == wanted {
             return slot_list(content, &term, at, field.kind(), hop).map(Some);
         }
         at = at.checked_add(width).ok_or(DeckError::Malformed(hop))?;

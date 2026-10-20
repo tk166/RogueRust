@@ -95,6 +95,51 @@ fn describe(error: &RunError) -> String {
 // Lifecycle
 // =============================================================================================
 
+/// An empty `F_TERM` cell: the field is unset. `ABSENT` and `NULL` are two encodings of "nothing"
+/// (`content-schema.md` §2.2) and both mean the same thing here.
+fn cell_is_empty(cell: u16) -> bool {
+    cell == rd_core::content::ABSENT16 || cell == rd_core::content::NULL16
+}
+
+/// The `REL` row for a relic id.
+fn relic_row(
+    content: &'static Content<'static>,
+    id: &str,
+) -> Option<rd_core::content::RelRow<'static>> {
+    let entry = content.lookup_in(id, rd_core::content::EK_RELIC)?;
+    let row = content.row(rd_core::content::Table::Relic, entry.index as u32)?;
+    rd_core::content::RelRow::new(row)
+}
+
+/// The relic's `DisplayName`, falling back to its id.
+fn relic_name<'a>(content: &'static Content<'static>, id: &'a str) -> Option<&'a str> {
+    let row = relic_row(content, id)?;
+    content.string(row.display_name()).or(Some(id))
+}
+
+/// Which declared-but-unexecuted field a relic carries, if any.
+///
+/// `REL` rows have `RunPrograms` and `CombatRules`, and **this kernel executes neither** (there is
+/// no run-level program interpreter and no `CombatRules` registry — `rd-run`'s
+/// `RunState::end_of_combat` implements effects one id at a time instead). A relic that declares
+/// one of them would therefore be accepted and quietly do nothing, which is the exact failure this
+/// project keeps paying for. So the run refuses to start instead.
+fn relic_unrunnable_field(
+    content: &'static Content<'static>,
+    id: &str,
+) -> Result<Option<&'static str>, String> {
+    let Some(row) = relic_row(content, id) else {
+        return Err(std::format!("内容镜像里没有遗物 `{id}`（REL 表查不到）"));
+    };
+    if !cell_is_empty(row.run_programs()) {
+        return Ok(Some("RunPrograms"));
+    }
+    if !cell_is_empty(row.combat_rules()) {
+        return Ok(Some("CombatRules"));
+    }
+    Ok(None)
+}
+
 /// `env-abi.md` §11.1: start a run. Returns 0, or a negative value with the reason in the error
 /// buffer.
 #[no_mangle]
@@ -152,6 +197,46 @@ pub extern "C" fn rd_run_start(seed: i32) -> i32 {
     // `StartingHealth` may be below the maximum; `adjust_health` is the clamped way to say so.
     state.adjust_health(facts.starting_health - facts.max_health);
 
+    // Starting relics, out of the content (`Start.StartingRelics`). A relic whose declared effect
+    // this kernel cannot run is refused here rather than loaded and ignored.
+    match content.start_relics(roots) {
+        Ok(Some(list)) => {
+            for index in 0..list.len() {
+                let id = match list.get(index) {
+                    Ok(id) => id,
+                    Err(e) => {
+                        set_error(&std::format!("start_relics[{index}]: {}", detail(&e)));
+                        return -7;
+                    }
+                };
+                match relic_unrunnable_field(content, id) {
+                    Ok(None) => {}
+                    Ok(Some(field)) => {
+                        set_error(&std::format!(
+                            "遗物 `{id}` 声明了 `{field}`，但本内核不执行遗物节目/法令 \
+                             （效果是按 id 逐条实现的，见 rd-run 的 RunState::end_of_combat）—— \
+                             与其静默地什么都不做，不如拒绝开局"
+                        ));
+                        return -8;
+                    }
+                    Err(message) => {
+                        set_error(&message);
+                        return -9;
+                    }
+                }
+                if let Err(e) = state.push_relic(id) {
+                    set_error(&std::format!("push_relic({id}): {}", describe(&e)));
+                    return -10;
+                }
+            }
+        }
+        Ok(None) => {} // the content declares no starting relics, which is legal
+        Err(e) => {
+            set_error(&std::format!("start_relics: {}", detail(&e)));
+            return -11;
+        }
+    }
+
     *run_slot() = Some(RunSession {
         state,
         error: String::new(),
@@ -169,6 +254,87 @@ pub extern "C" fn rd_run_seed() -> i32 {
 #[no_mangle]
 pub extern "C" fn rd_run_observe_len() -> i32 {
     RUN_OBS_LEN as i32
+}
+
+/// The **name** of relic `index` (`REL.DisplayName`, falling back to the id), or `-1`.
+#[no_mangle]
+pub extern "C" fn rd_run_relic_name_len(index: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    if index < 0 {
+        return -1;
+    }
+    let Some(id) = session.state.relics().get(index as usize) else {
+        return -1;
+    };
+    relic_name(content(), id.as_str()).map_or(-1, |name| name.len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_relic_name_len(index)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_relic_name_into(index: i32, ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return 0;
+    };
+    if index < 0 {
+        return 0;
+    }
+    let Some(id) = session.state.relics().get(index as usize) else {
+        return 0;
+    };
+    match relic_name(content(), id.as_str()) {
+        Some(name) if !ptr.is_null() => {
+            let bytes = name.as_bytes();
+            for (offset, &byte) in bytes.iter().enumerate() {
+                *ptr.add(offset) = byte;
+            }
+            bytes.len() as i32
+        }
+        _ => 0,
+    }
+}
+
+/// The **id** of relic `index` — what the effect rules are keyed on, useful for diagnostics.
+#[no_mangle]
+pub extern "C" fn rd_run_relic_id_len(index: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    if index < 0 {
+        return -1;
+    }
+    session
+        .state
+        .relics()
+        .get(index as usize)
+        .map_or(-1, |id| id.as_str().len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_relic_id_len(index)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_relic_id_into(index: i32, ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return 0;
+    };
+    if index < 0 {
+        return 0;
+    }
+    let Some(id) = session.state.relics().get(index as usize) else {
+        return 0;
+    };
+    if ptr.is_null() {
+        return 0;
+    }
+    let bytes = id.as_str().as_bytes();
+    for (offset, &byte) in bytes.iter().enumerate() {
+        *ptr.add(offset) = byte;
+    }
+    bytes.len() as i32
 }
 
 /// `env-abi.md` §11.3. Out of range is `i32::MIN`, matching the combat ABI's convention.
@@ -613,6 +779,50 @@ mod tests {
             .map(|i| (rd_run_map_node(i, NODE_FIELD_KIND), rd_run_map_node(i, NODE_FIELD_OUT_DEGREE)))
             .collect::<Vec<_>>();
         assert_ne!(first, second, "the seed must reach the exported map");
+    }
+
+    /// The relic the content declares actually reaches the run, with its own display name, and the
+    /// effect rule that `rd-run` implements fires on it.
+    ///
+    /// The chain under test is content → image → `Content::start_relics` → `RunState::relics` →
+    /// `REL.DisplayName` → the export. Every link is somebody else's decision, which is why this is
+    /// one test rather than four.
+    #[test]
+    fn the_starting_relic_comes_out_of_the_content() {
+        reset(7);
+        let o = obs();
+        assert_eq!(o[6], 1, "`inv:§2`: the Ironclad starts with one relic");
+        assert_eq!(rd_run_relic_id_len(0), "burning_blood".len() as i32);
+        let mut buffer = vec![0u8; 64];
+        // Slice by the length the export returns: the buffer is longer than the string, so a fixed
+        // slice would fold trailing NULs into the comparison (this test did exactly that first).
+        let written = unsafe { rd_run_relic_id_into(0, buffer.as_mut_ptr()) } as usize;
+        let id = String::from_utf8(buffer[..written].to_vec()).unwrap();
+        assert_eq!(id, "burning_blood");
+
+        // The display name is the content's `DisplayName`, not a title-cased id -- and it lives in
+        // the **full** image (`DisplayName` is in `PRESENTATION_KEYS`, so the core mirror strips
+        // it), which is the same reason the card text needs the full image.
+        assert_eq!(rd_run_relic_name_len(0), "Burning Blood".len() as i32);
+        let mut name = vec![0u8; 32];
+        let written = unsafe { rd_run_relic_name_into(0, name.as_mut_ptr()) } as usize;
+        assert_eq!(String::from_utf8(name[..written].to_vec()).unwrap(), "Burning Blood");
+
+        // Out of range is `-1`, not an empty name.
+        assert_eq!(rd_run_relic_name_len(1), -1);
+        assert_eq!(rd_run_relic_id_len(-1), -1);
+    }
+
+    /// The effect fires, and it is capped: `Burning Blood` heals 6 but never past the maximum.
+    #[test]
+    fn burning_blood_heals_at_the_end_of_the_fight() {
+        reset(7);
+        let session = run_slot().as_mut().expect("session");
+        session.state.adjust_health(-20);
+        assert_eq!(session.state.end_of_combat(), Ok(6));
+        assert_eq!(session.state.health(), 66);
+        session.state.adjust_health(1000);
+        assert_eq!(session.state.end_of_combat(), Ok(0), "nothing to heal at full health");
     }
 
     #[test]
