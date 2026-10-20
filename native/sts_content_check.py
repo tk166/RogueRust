@@ -102,6 +102,15 @@ INV_CARDS = {
              "Facts": [("damage", 8, "event"), ("status", "standard.vulnerable", 2, "event")]},
     # inv:§10 -- a status card created by two enemies (not part of the deck).
     "slimed": {"Cost": 1, "Tags": ["status", "unplayable", "junk"], "Facts": []},
+    # inv:§2.1 "升级后" -- the upgraded rows. They are **separate CARD rows**, not a flag on the base
+    # card (`sts-act1-plan.md` §6.5-2), and their numbers are the inventory's second column:
+    # strike+ 9 damage, defend+ 8 Block, bash+ 10 damage + 3 Vulnerable.
+    "strike+": {"Cost": 1, "Tags": ["attack", "basic", "strike"],
+                "Facts": [("damage", 9, "event")]},
+    "defend+": {"Cost": 1, "Tags": ["skill", "basic", "defend"],
+                "Facts": [("block", 8, "source")]},
+    "bash+": {"Cost": 2, "Tags": ["attack", "basic"],
+              "Facts": [("damage", 10, "event"), ("status", "standard.vulnerable", 3, "event")]},
 }
 
 # inv:§4.1 -- the 10 zero-new-ability enemies: (hp_min, hp_max, action ids).

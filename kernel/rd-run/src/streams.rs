@@ -155,6 +155,24 @@ pub enum RunError {
     BadNode,
     /// A per-step invariant was violated (`run-layer.md` §6.2). The string names which one.
     Invariant(&'static str),
+    /// The node the cursor stands on cannot be settled by this build.
+    ///
+    /// `inv:§7.2` has eight node kinds; M1 settles four (`Combat`, `Rest`, `Shop`, `Treasure`).
+    /// `Elite` and `Unknown` are named in the milestone as "not in M1", so reaching one is an error
+    /// rather than a silent walk-past -- the whole point of `env-abi.md` §11.5 saying the map page
+    /// only *walks*.
+    NodeNotSettleable(u8),
+    /// An action that does not fit what the current node is waiting for (paying at a rest site,
+    /// resting in a shop, ...). Never a silent no-op: an out-of-order action is a caller bug.
+    WrongPhase,
+    /// Not enough gold for the purchase.
+    NotEnoughGold { price: i32, gold: i32 },
+    /// A slot that holds nothing (already bought, or past the end of the stock).
+    EmptyOffer(u8),
+    /// A card index that is not in the deck.
+    BadCard(u8),
+    /// A pool the content-side caller handed in that is empty, where the mechanic needs one.
+    EmptyPool(&'static str),
     /// A relic whose effect is not implemented (`RunState::end_of_combat`).
     ///
     /// **This is the loud boundary of the relic system.** Effects are implemented one at a time, by

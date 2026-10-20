@@ -20,7 +20,7 @@
 use rd_core::state::{Ident, ID_CAP};
 
 use crate::map::{RunMap, NODES_PER_ROW, ROWS};
-use crate::streams::{RunError, RunRng};
+use crate::streams::{RunError, RunRng, RunStream};
 
 /// The most cards a run's deck may hold. See the module docs: exceeding it is an error, never a
 /// truncation.
@@ -33,6 +33,101 @@ pub const MAX_RUN_POTIONS: usize = 3;
 
 /// `Burning Blood`: "At the end of combat, heal 6 HP" (`inv:§2`).
 pub const BURNING_BLOOD_HEAL: i32 = 6;
+
+/// Card slots a merchant shows (`inv:§8.2`: five coloured cards; the two colourless ones are not
+/// modelled -- this content has no colourless pool).
+pub const MAX_SHOP_CARDS: usize = 5;
+/// Relic slots a merchant shows (`inv:§8.2`: three).
+pub const MAX_SHOP_RELICS: usize = 3;
+/// Card-removal price the first time (`inv:§8.2`).
+pub const SHOP_REMOVE_BASE: i32 = 75;
+/// ...and how much it grows per use, across shops in the same run (`inv:§8.2`).
+pub const SHOP_REMOVE_STEP: i32 = 25;
+/// `inv:§8.1`: a rest site heals 30% of maximum HP, rounded down.
+pub const REST_HEAL_PERCENT: i32 = 30;
+/// The pools a shop or a chest draws from are caller-supplied (this crate knows no content), so the
+/// walk below needs a bound. Exceeding it is [`RunError::EmptyPool`]'s sibling: a loud error.
+pub const MAX_POOL: usize = 64;
+
+/// What the node under the cursor is waiting for.
+///
+/// A node is not settled by walking onto it (`env-abi.md` §11.5): walking sets the cursor, and
+/// [`RunState::begin_node`] declares what the node then needs. Keeping the two apart is what lets
+/// the map page walk a whole Act without pretending a fight happened.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[repr(u8)]
+pub enum Pending {
+    /// Nothing to settle: a fight the caller is running, or a node already dealt with.
+    #[default]
+    None = 0,
+    /// [`RunState::rest`] or [`RunState::smith`].
+    Rest = 1,
+    /// [`RunState::buy_card`] / [`RunState::buy_relic`] / [`RunState::remove_card`] / [`RunState::leave`].
+    Shop = 2,
+    /// [`RunState::open_chest`].
+    Chest = 3,
+}
+
+/// One thing a merchant is selling. `price < 0` means "already sold".
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Offer {
+    /// The card or relic id.
+    pub id: RunId,
+    /// Price in gold, or `-1` once bought.
+    pub price: i32,
+}
+
+impl Offer {
+    const EMPTY: Self = Self {
+        id: RunId::EMPTY,
+        price: -1,
+    };
+}
+
+/// A merchant's stock. Fixed size: five cards and three relics (`inv:§8.2`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct ShopStock {
+    cards: [Offer; MAX_SHOP_CARDS],
+    cards_len: u8,
+    relics: [Offer; MAX_SHOP_RELICS],
+    relics_len: u8,
+}
+
+impl ShopStock {
+    /// An empty shelf.
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self {
+            cards: [Offer::EMPTY; MAX_SHOP_CARDS],
+            cards_len: 0,
+            relics: [Offer::EMPTY; MAX_SHOP_RELICS],
+            relics_len: 0,
+        }
+    }
+
+    /// The card offers.
+    #[must_use]
+    pub fn cards(&self) -> &[Offer] {
+        &self.cards[..self.cards_len as usize]
+    }
+
+    /// The relic offers.
+    #[must_use]
+    pub fn relics(&self) -> &[Offer] {
+        &self.relics[..self.relics_len as usize]
+    }
+}
+
+/// What opening a chest gave.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct ChestOutcome {
+    /// 0 small, 1 medium, 2 large (`inv:§8.3`).
+    pub chest: u8,
+    /// Gold, or 0 when the roll declined to give any (`inv:§8.3` has a per-chest chance).
+    pub gold: i32,
+    /// The relic, if the pool had one.
+    pub relic: Option<RunId>,
+}
 /// The most nodes one step can offer: the first floor is chosen freely among a whole row.
 pub const MAX_STEP_TARGETS: usize = NODES_PER_ROW;
 
@@ -119,6 +214,10 @@ pub struct RunState {
     rng: RunRng,
     /// `?` room cumulative odds (`inv:§7.5`), three counters, reset at the start of an act.
     unknown: [i32; 3],
+    /// What the node under the cursor is waiting for.
+    pending: Pending,
+    /// The merchant's stock while standing in a shop.
+    shop: ShopStock,
 }
 
 impl RunState {
@@ -152,6 +251,8 @@ impl RunState {
             map,
             rng,
             unknown: [0; 3],
+            pending: Pending::None,
+            shop: ShopStock::empty(),
         };
         for id in starting_deck {
             state.push_card(id)?;
@@ -380,6 +481,266 @@ impl RunState {
         self.node = i32::from(target);
         self.floor = row as i32 + 1;
         self.check_invariants()
+    }
+
+    // ---- settling a node -------------------------------------------------------------------
+
+    /// What the node under the cursor is waiting for.
+    #[must_use]
+    pub const fn pending(&self) -> Pending {
+        self.pending
+    }
+
+    /// The merchant's stock (empty unless [`Pending::Shop`]).
+    #[must_use]
+    pub const fn shop(&self) -> &ShopStock {
+        &self.shop
+    }
+
+    /// What a rest would restore: 30% of maximum HP, rounded down (`inv:§8.1`).
+    #[must_use]
+    pub const fn rest_heal(&self) -> i32 {
+        self.health_max * REST_HEAL_PERCENT / 100
+    }
+
+    /// What removing a card costs right now: 75, then +25 per removal already made this run
+    /// (`inv:§8.2` -- "此后每次使用时 +25，跨店累计").
+    #[must_use]
+    pub const fn remove_card_price(&self) -> i32 {
+        SHOP_REMOVE_BASE + SHOP_REMOVE_STEP * self.removed_cards
+    }
+
+    /// Declare what the node under the cursor needs. `card_pool` / `relic_pool` are the content's
+    /// candidate ids -- this crate reads no content, so the caller supplies them.
+    ///
+    /// Returns the node's kind so a caller can branch without re-reading the map.
+    pub fn begin_node(
+        &mut self,
+        card_pool: &[&str],
+        relic_pool: &[&str],
+    ) -> Result<crate::map::NodeKind, RunError> {
+        if self.node < 0 {
+            return Err(RunError::WrongPhase);
+        }
+        let Some((row, local)) = self.map.locate(self.node as u8) else {
+            return Err(RunError::BadNode);
+        };
+        let Some(kind) = self
+            .map
+            .row(row)
+            .and_then(|line| line.node(local))
+            .map(|node| node.kind)
+        else {
+            return Err(RunError::BadNode);
+        };
+        use crate::map::NodeKind;
+        self.pending = match kind {
+            // A fight is the caller's business: it runs the combat session and calls
+            // `end_of_combat` when it is done. Nothing to settle here.
+            NodeKind::Combat => Pending::None,
+            NodeKind::Rest => Pending::Rest,
+            NodeKind::Treasure => Pending::Chest,
+            NodeKind::Shop => {
+                self.stock_shop(card_pool, relic_pool)?;
+                Pending::Shop
+            }
+            // `Elite` and `Unknown` are named as "not in M1" (`sts-act1-plan.md` §4), so reaching
+            // one is loud instead of a silent walk-past.
+            other => return Err(RunError::NodeNotSettleable(other as u8)),
+        };
+        Ok(kind)
+    }
+
+    /// Rest at a rest site: heal 30% of maximum HP and leave.
+    ///
+    /// Returns the health actually restored (a run at 79/80 gains 1, not 24).
+    pub fn rest(&mut self) -> Result<i32, RunError> {
+        if self.pending != Pending::Rest {
+            return Err(RunError::WrongPhase);
+        }
+        let before = self.health;
+        self.heal_after_combat(self.rest_heal());
+        self.pending = Pending::None;
+        Ok(self.health - before)
+    }
+
+    /// Smith at a rest site: replace a deck card with its upgraded row.
+    ///
+    /// `upgraded_id` comes from the caller: in this content an upgrade is **another CARD row**
+    /// (`sts-act1-plan.md` §6.5-2), and which row is the caller's mapping (`strike` → `strike+`).
+    /// This crate owns no content, so it does not guess a `+` suffix.
+    pub fn smith(&mut self, card: usize, upgraded_id: &str) -> Result<(), RunError> {
+        if self.pending != Pending::Rest {
+            return Err(RunError::WrongPhase);
+        }
+        if card >= self.deck_len as usize {
+            return Err(RunError::BadCard(card as u8));
+        }
+        let id = RunId::new(upgraded_id).map_err(|_| RunError::BadId)?;
+        // Already upgraded? Then the "upgrade" is a no-op the caller should not have asked for.
+        if self.deck[card] == id {
+            return Err(RunError::BadCard(card as u8));
+        }
+        self.deck[card] = id;
+        self.pending = Pending::None;
+        Ok(())
+    }
+
+    /// Open the chest under the cursor.
+    ///
+    /// Chest type and gold follow `inv:§8.3` exactly (50/33/17 by type; a per-type chance of gold;
+    /// the ranges 23–27 / 45–55 / 68–82). The relic is drawn from the caller's pool.
+    pub fn open_chest(&mut self, relic_pool: &[&str]) -> Result<ChestOutcome, RunError> {
+        if self.pending != Pending::Chest {
+            return Err(RunError::WrongPhase);
+        }
+        let roll = self.rng.roll(RunStream::Chest, 100)?;
+        let (chest, gold_chance, low, high) = match roll {
+            0..=49 => (0u8, 50u32, 23, 27),   // 50%
+            50..=82 => (1, 35, 45, 55),       // 33%
+            _ => (2, 50, 68, 82),             // 17%
+        };
+        let mut gold = 0;
+        if self.rng.roll(RunStream::Chest, 100)? < gold_chance {
+            let span = (high - low + 1) as u32;
+            gold = low + self.rng.roll(RunStream::Chest, span)? as i32;
+        }
+        self.adjust_gold(gold);
+        // A chest always holds a relic in `inv:§8.3`; an empty pool is a content problem, not "an
+        // empty chest".
+        let relic = if relic_pool.is_empty() {
+            None
+        } else {
+            let index = self.rng.roll(RunStream::Chest, relic_pool.len() as u32)? as usize;
+            let id = RunId::new(relic_pool[index]).map_err(|_| RunError::BadId)?;
+            self.push_relic(relic_pool[index])?;
+            Some(id)
+        };
+        self.pending = Pending::None;
+        Ok(ChestOutcome { chest, gold, relic })
+    }
+
+    /// Fill the merchant's shelves. Prices are `[推断]`: the content carries no rarity, so every
+    /// card is priced in the Common band and every relic likewise (`inv:§8.2`'s ranges are by
+    /// rarity, and this content does not have one to look at).
+    fn stock_shop(&mut self, card_pool: &[&str], relic_pool: &[&str]) -> Result<(), RunError> {
+        if card_pool.is_empty() {
+            return Err(RunError::EmptyPool("cards"));
+        }
+        self.shop = ShopStock::empty();
+        let mut order = [0u8; MAX_POOL];
+        let n = card_pool.len().min(MAX_POOL);
+        for (index, slot) in order.iter_mut().take(n).enumerate() {
+            *slot = index as u8;
+        }
+        self.rng.shuffle(RunStream::Shop, &mut order[..n]);
+        let cards = MAX_SHOP_CARDS.min(n);
+        for slot in 0..cards {
+            let id = card_pool[order[slot] as usize];
+            // Common 45–55 (`inv:§8.2`).
+            let price = 45 + self.rng.roll(RunStream::Shop, 11)? as i32;
+            self.shop.cards[slot] = Offer {
+                id: RunId::new(id).map_err(|_| RunError::BadId)?,
+                price,
+            };
+        }
+        self.shop.cards_len = cards as u8;
+
+        let relics = MAX_SHOP_RELICS.min(relic_pool.len());
+        for (slot, source) in relic_pool.iter().take(relics).enumerate() {
+            // Common 143–157.
+            let price = 143 + self.rng.roll(RunStream::Shop, 15)? as i32;
+            self.shop.relics[slot] = Offer {
+                id: RunId::new(source).map_err(|_| RunError::BadId)?,
+                price,
+            };
+        }
+        self.shop.relics_len = relics as u8;
+        Ok(())
+    }
+
+    /// Buy the card in `slot`. The id stays readable through [`RunState::shop`].
+    pub fn buy_card(&mut self, slot: usize) -> Result<(), RunError> {
+        if self.pending != Pending::Shop {
+            return Err(RunError::WrongPhase);
+        }
+        let offer = *self
+            .shop
+            .cards()
+            .get(slot)
+            .ok_or(RunError::EmptyOffer(slot as u8))?;
+        if offer.price < 0 {
+            return Err(RunError::EmptyOffer(slot as u8));
+        }
+        if self.gold < offer.price {
+            return Err(RunError::NotEnoughGold {
+                price: offer.price,
+                gold: self.gold,
+            });
+        }
+        self.adjust_gold(-offer.price);
+        self.push_card(offer.id.as_str())?;
+        self.shop.cards[slot].price = -1;
+        Ok(())
+    }
+
+    /// Buy the relic in `slot`.
+    pub fn buy_relic(&mut self, slot: usize) -> Result<(), RunError> {
+        if self.pending != Pending::Shop {
+            return Err(RunError::WrongPhase);
+        }
+        let offer = *self
+            .shop
+            .relics()
+            .get(slot)
+            .ok_or(RunError::EmptyOffer(slot as u8))?;
+        if offer.price < 0 {
+            return Err(RunError::EmptyOffer(slot as u8));
+        }
+        if self.gold < offer.price {
+            return Err(RunError::NotEnoughGold {
+                price: offer.price,
+                gold: self.gold,
+            });
+        }
+        self.adjust_gold(-offer.price);
+        self.push_relic(offer.id.as_str())?;
+        self.shop.relics[slot].price = -1;
+        Ok(())
+    }
+
+    /// Pay to remove a card from the deck. Returns the price paid.
+    pub fn remove_card(&mut self, card: usize) -> Result<i32, RunError> {
+        if self.pending != Pending::Shop {
+            return Err(RunError::WrongPhase);
+        }
+        if card >= self.deck_len as usize {
+            return Err(RunError::BadCard(card as u8));
+        }
+        let price = self.remove_card_price();
+        if self.gold < price {
+            return Err(RunError::NotEnoughGold {
+                price,
+                gold: self.gold,
+            });
+        }
+        self.adjust_gold(-price);
+        // Shift the tail down; deck order is observable, so the order of the survivors is kept.
+        for index in card..(self.deck_len as usize - 1) {
+            self.deck[index] = self.deck[index + 1];
+        }
+        self.deck_len -= 1;
+        self.removed_cards += 1;
+        Ok(price)
+    }
+
+    /// Walk away from whatever is pending.
+    pub fn leave(&mut self) -> Result<(), RunError> {
+        if self.pending == Pending::None {
+            return Err(RunError::WrongPhase);
+        }
+        self.pending = Pending::None;
+        Ok(())
     }
 
     /// The per-step invariants from `run-layer.md` §6.2. A **real** check: the release build is what
@@ -619,6 +980,238 @@ mod tests {
         let mut bare = ironclad();
         assert_eq!(bare.end_of_combat(), Ok(0));
         assert_eq!(bare.health(), 80);
+    }
+
+    // ---- settling a node ---------------------------------------------------------------------
+
+    /// Walk the cursor to some node of `want`, breadth-first over the map's upward edges.
+    ///
+    /// A test that wants to be *in* a shop has to actually walk there: `enter_node` only accepts
+    /// edges, and the map's kinds are the generator's. This also proves the map is traversable to
+    /// every kind a test needs.
+    fn walk_to(run: &mut RunState, want: NodeKind) -> bool {
+        const CAP: usize = 128;
+        let n = run.map().node_count();
+        assert!(n < CAP);
+        let mut seen = [false; CAP];
+        let mut parent = [usize::MAX; CAP];
+        let mut queue = [0u8; CAP];
+        let mut head = 0usize;
+        let mut tail = 0usize;
+        for index in 0..n {
+            let (row, _) = run.map().locate(index as u8).unwrap();
+            if row == 0 {
+                seen[index] = true;
+                queue[tail] = index as u8;
+                tail += 1;
+            }
+        }
+        let mut target = usize::MAX;
+        while head < tail {
+            let current = queue[head] as usize;
+            head += 1;
+            let (row, local) = run.map().locate(current as u8).unwrap();
+            let node = run.map().rows()[row].nodes()[local];
+            if node.kind == want {
+                target = current;
+                break;
+            }
+            for &edge in node.out_targets() {
+                let next = run.map().global_of(row + 1, edge as usize).unwrap() as usize;
+                if !seen[next] {
+                    seen[next] = true;
+                    parent[next] = current;
+                    queue[tail] = next as u8;
+                    tail += 1;
+                }
+            }
+        }
+        if target == usize::MAX {
+            return false;
+        }
+        let mut path = [0u8; CAP];
+        let mut len = 0usize;
+        let mut at = target;
+        while parent[at] != usize::MAX {
+            path[len] = at as u8;
+            len += 1;
+            at = parent[at];
+        }
+        path[len] = at as u8;
+        len += 1;
+        for step in (0..len).rev() {
+            run.enter_node(path[step]).unwrap();
+        }
+        true
+    }
+
+    // Seven, like the content after the three upgraded rows were added: a pool smaller than
+    // MAX_SHOP_CARDS would leave the cap untested (the shop shows min(pool, 5)).
+    const CARDS: [&str; 7] = [
+        "strike", "defend", "bash", "slimed", "strike+", "defend+", "bash+",
+    ];
+    const RELICS: [&str; 1] = ["burning_blood"];
+
+    #[test]
+    fn a_rest_site_heals_thirty_percent_and_then_it_is_done() {
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Rest), "the map has no rest site");
+        assert_eq!(run.begin_node(&CARDS, &RELICS), Ok(NodeKind::Rest));
+        assert_eq!(run.pending(), Pending::Rest);
+        // 30% of 80, rounded down (`inv:§8.1`).
+        assert_eq!(run.rest_heal(), 24);
+        run.adjust_health(-40);
+        assert_eq!(run.health(), 40);
+        assert_eq!(run.rest(), Ok(24));
+        assert_eq!(run.health(), 64);
+        assert_eq!(run.pending(), Pending::None);
+        // A second rest from the same site is an out-of-order action, not a free heal.
+        assert_eq!(run.rest(), Err(RunError::WrongPhase));
+        assert_eq!(run.health(), 64);
+    }
+
+    #[test]
+    fn smithing_replaces_the_card_with_its_upgraded_row() {
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Rest));
+        run.begin_node(&CARDS, &RELICS).unwrap();
+        // The deck's first card is a `strike`; the upgrade is another CARD row, and the mapping is
+        // the caller's (`sts-act1-plan.md` §6.5-2 -- this crate owns no content).
+        assert_eq!(run.deck()[0].as_str(), "strike");
+        run.smith(0, "strike+").unwrap();
+        assert_eq!(run.deck()[0].as_str(), "strike+");
+        assert_eq!(run.pending(), Pending::None);
+        // Bad index, and "upgrading" to what is already there.
+        run.pending = Pending::Rest;
+        assert_eq!(run.smith(99, "strike+"), Err(RunError::BadCard(99)));
+        assert_eq!(run.smith(0, "strike+"), Err(RunError::BadCard(0)));
+        assert_eq!(run.pending(), Pending::Rest, "a refused smith must not consume the node");
+    }
+
+    #[test]
+    fn a_chest_gives_gold_in_range_and_a_relic() {
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Treasure), "the map has no treasure room");
+        let gold_before = run.gold();
+        assert_eq!(run.begin_node(&CARDS, &RELICS), Ok(NodeKind::Treasure));
+        assert_eq!(run.pending(), Pending::Chest);
+        let outcome = run.open_chest(&RELICS).unwrap();
+        // `inv:§8.3`: the three chest types and their gold ranges.
+        let (low, high) = match outcome.chest {
+            0 => (23, 27),
+            1 => (45, 55),
+            _ => (68, 82),
+        };
+        assert!(
+            outcome.gold == 0 || (outcome.gold >= low && outcome.gold <= high),
+            "chest {} gave {} gold, which is not in its range",
+            outcome.chest,
+            outcome.gold
+        );
+        assert_eq!(run.gold(), gold_before + outcome.gold);
+        assert_eq!(
+            outcome.relic.map(|id| id.as_str().to_string()),
+            Some("burning_blood".to_string())
+        );
+        assert_eq!(run.relics().len(), 1);
+        assert_eq!(run.pending(), Pending::None);
+        assert_eq!(run.open_chest(&RELICS), Err(RunError::WrongPhase));
+    }
+
+    #[test]
+    fn a_shop_stocks_five_cards_and_three_relics_with_prices_in_range() {
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Shop), "the map has no merchant");
+        run.adjust_gold(500);
+        assert_eq!(run.begin_node(&CARDS, &RELICS), Ok(NodeKind::Shop));
+        assert_eq!(run.pending(), Pending::Shop);
+        assert_eq!(run.shop().cards().len(), MAX_SHOP_CARDS);
+        assert_eq!(run.shop().relics().len(), MAX_SHOP_RELICS.min(RELICS.len()));
+        for offer in run.shop().cards() {
+            // `[推断]`: no rarity in this content, so every card sits in the Common band.
+            assert!(
+                (45..=55).contains(&offer.price),
+                "card {} costs {}",
+                offer.id.as_str(),
+                offer.price
+            );
+            assert!(CARDS.contains(&offer.id.as_str()));
+        }
+        for offer in run.shop().relics() {
+            assert!((143..=157).contains(&offer.price), "relic price {}", offer.price);
+        }
+    }
+
+    #[test]
+    fn buying_and_removing_are_paid_for_and_never_silent() {
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Shop));
+        run.adjust_gold(120);
+        run.begin_node(&CARDS, &RELICS).unwrap();
+
+        // A purchase moves gold one way and a card the other.
+        // Owned, not borrowed: the next call takes `&mut run`.
+        let (id, price) = {
+            let offer = run.shop().cards()[0];
+            (offer.id.as_str().to_string(), offer.price)
+        };
+        let deck_before = run.deck().len();
+        let gold_before = run.gold();
+        assert_eq!(run.buy_card(0), Ok(()));
+        assert_eq!(run.gold(), gold_before - price);
+        assert_eq!(run.deck().len(), deck_before + 1);
+        assert_eq!(run.deck()[deck_before].as_str(), id);
+        // The same slot twice is an empty offer, not a second card.
+        assert_eq!(run.buy_card(0), Err(RunError::EmptyOffer(0)));
+        assert_eq!(run.deck().len(), deck_before + 1);
+
+        // Removal: 75 the first time (`inv:§8.2`), and the deck keeps its order.
+        let gold_before = run.gold();
+        let second = run.deck()[1].as_str().to_string();
+        assert_eq!(run.remove_card_price(), 75);
+        assert_eq!(run.remove_card(0), Ok(75));
+        assert_eq!(run.gold(), gold_before - 75);
+        assert_eq!(run.deck().len(), deck_before);
+        assert_eq!(run.deck()[0].as_str(), second, "the survivors keep their order");
+        assert_eq!(run.remove_card_price(), 100, "+25 per use, across shops");
+
+        // And the price has to be payable: an empty purse refuses and changes nothing.
+        run.adjust_gold(-9999);
+        assert_eq!(run.gold(), 0);
+        let deck_now: Vec<String> = run.deck().iter().map(|id| id.as_str().to_string()).collect();
+        assert!(matches!(
+            run.remove_card(0).unwrap_err(),
+            RunError::NotEnoughGold { price: 100, gold: 0 }
+        ));
+        let deck_after: Vec<String> = run.deck().iter().map(|id| id.as_str().to_string()).collect();
+        assert_eq!(deck_now, deck_after, "a refused purchase must not change the deck");
+    }
+
+    #[test]
+    fn the_nodes_m1_does_not_settle_are_loud() {
+        // `Elite` and `Unknown` are named as "not in M1" (`sts-act1-plan.md` §4). Walking onto one
+        // must be an error, not a silent no-op -- that is the promise `env-abi.md` §11.5 makes.
+        for kind in [NodeKind::Elite, NodeKind::Unknown] {
+            let mut run = ironclad();
+            if !walk_to(&mut run, kind) {
+                continue; // this seed's map has none of that kind
+            }
+            assert_eq!(
+                run.begin_node(&CARDS, &RELICS),
+                Err(RunError::NodeNotSettleable(kind as u8)),
+                "{kind:?} was accepted"
+            );
+        }
+        // A fight is the caller's business: no error, nothing pending.
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Combat));
+        assert_eq!(run.begin_node(&CARDS, &RELICS), Ok(NodeKind::Combat));
+        assert_eq!(run.pending(), Pending::None);
+        // And every settling action refuses when nothing is pending.
+        assert_eq!(run.rest(), Err(RunError::WrongPhase));
+        assert_eq!(run.open_chest(&RELICS), Err(RunError::WrongPhase));
+        assert_eq!(run.buy_card(0), Err(RunError::WrongPhase));
+        assert_eq!(run.leave(), Err(RunError::WrongPhase));
     }
 
     #[test]
