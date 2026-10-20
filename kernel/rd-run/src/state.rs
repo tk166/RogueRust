@@ -998,10 +998,10 @@ mod tests {
         let mut queue = [0u8; CAP];
         let mut head = 0usize;
         let mut tail = 0usize;
-        for index in 0..n {
+        for (index, is_seen) in seen.iter_mut().enumerate().take(n) {
             let (row, _) = run.map().locate(index as u8).unwrap();
             if row == 0 {
-                seen[index] = true;
+                *is_seen = true;
                 queue[tail] = index as u8;
                 tail += 1;
             }

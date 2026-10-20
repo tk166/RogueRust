@@ -140,6 +140,67 @@ fn relic_unrunnable_field(
     Ok(None)
 }
 
+/// The content's card ids, in table order -- the pool a merchant draws from.
+///
+/// Walked rather than listed: a list here would be a second copy of a content fact, and the whole
+/// point of `Content` is that there is one copy.
+fn card_pool(content: &'static Content<'static>) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    let mut index = 0u32;
+    while let Some(row) = content.row(rd_core::content::Table::Card, index) {
+        if let Some(card) = rd_core::content::CardRow::new(row) {
+            if let Some(id) = content.string(card.id()) {
+                out.push(id);
+            }
+        }
+        index += 1;
+    }
+    out
+}
+
+/// The content's relic ids, in table order.
+fn relic_pool(content: &'static Content<'static>) -> Vec<&'static str> {
+    let mut out = Vec::new();
+    let mut index = 0u32;
+    while let Some(row) = content.row(rd_core::content::Table::Relic, index) {
+        if let Some(relic) = rd_core::content::RelRow::new(row) {
+            if let Some(id) = content.string(relic.id()) {
+                out.push(id);
+            }
+        }
+        index += 1;
+    }
+    out
+}
+
+fn write_out(text: &str, ptr: *mut u8) -> i32 {
+    if ptr.is_null() {
+        return 0;
+    }
+    let bytes = text.as_bytes();
+    for (offset, &byte) in bytes.iter().enumerate() {
+        unsafe { *ptr.add(offset) = byte };
+    }
+    bytes.len() as i32
+}
+
+/// A helper that turns a `Result<_, RunError>` into the ABI's convention: `0` ok, `-2` refused, and
+/// the message in the error buffer. Kept in one place so every new action reports the same way.
+fn finish(session: &mut RunSession, result: Result<i32, RunError>) -> i32 {
+    match result {
+        Ok(value) => {
+            session.error.clear();
+            value
+        }
+        Err(error) => {
+            let message = describe(&error);
+            session.error.clear();
+            session.error.push_str(&message);
+            -2
+        }
+    }
+}
+
 /// `env-abi.md` §11.1: start a run. Returns 0, or a negative value with the reason in the error
 /// buffer.
 #[no_mangle]
@@ -511,6 +572,440 @@ pub extern "C" fn rd_run_step(action_index: i32) -> i32 {
 }
 
 // =============================================================================================
+// Settling the node under the cursor (`env-abi.md` §11.6)
+// =============================================================================================
+//
+// `rd_run_step` only *walks*; these settle. The split is `run-layer.md` §4.7.1 and it is what lets
+// the map page draw a whole Act without pretending a fight happened.
+
+/// What the node under the cursor is waiting for (`Pending` as an integer).
+#[no_mangle]
+pub extern "C" fn rd_run_pending() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |s| s.state.pending() as u8 as i32)
+}
+
+/// The kind of the node under the cursor, or `-1`.
+#[no_mangle]
+pub extern "C" fn rd_run_node_kind() -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    let node = session.state.node();
+    if node < 0 {
+        return -1;
+    }
+    session
+        .state
+        .map()
+        .locate(node as u8)
+        .and_then(|(row, local)| {
+            session
+                .state
+                .map()
+                .row(row)
+                .and_then(|line| line.node(local))
+                .map(|node| node.kind as i32)
+        })
+        .unwrap_or(-1)
+}
+
+/// Declare what the node under the cursor needs. `0` = done, `-2` = refused (see the error buffer).
+#[no_mangle]
+pub extern "C" fn rd_run_begin_node() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let content = content();
+    let cards = card_pool(content);
+    let relics = relic_pool(content);
+    let outcome = session.state.begin_node(&cards, &relics).map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// Rest: heal 30% of maximum HP. Returns the health restored, or `-2`.
+#[no_mangle]
+pub extern "C" fn rd_run_rest() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let outcome = session.state.rest();
+    finish(session, outcome)
+}
+
+/// Smith: replace deck card `index` with its upgraded row.
+#[no_mangle]
+pub extern "C" fn rd_run_smith(index: i32) -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    if index < 0 {
+        return -1;
+    }
+    // The upgrade mapping is the content's: `strike` -> `strike+` is a convention of the document
+    // (`run-layer.md` §4.7.4), so it is resolved here, where the content is reachable, and never
+    // inside `rd-run`.
+    let Some(current) = session.state.deck().get(index as usize).map(|id| id.as_str()) else {
+        return -1;
+    };
+    let upgraded = std::format!("{current}+");
+    let content = content();
+    if content
+        .lookup_in(&upgraded, rd_core::content::EK_CARD)
+        .is_none()
+    {
+        set_error(&std::format!("`{current}` 没有升级行（内容里没有 `{upgraded}`）"));
+        return -2;
+    }
+    let outcome = session.state.smith(index as usize, &upgraded.clone()).map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// Open the chest under the cursor. `0` = done; the gold and relic are in the run observation and
+/// `rd_run_relic_*`.
+#[no_mangle]
+pub extern "C" fn rd_run_open_chest() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let relics = relic_pool(content());
+    let outcome = session.state.open_chest(&relics).map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// Walk away from whatever is pending.
+#[no_mangle]
+pub extern "C" fn rd_run_leave() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let outcome = session.state.leave().map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// How many cards the merchant is selling.
+#[no_mangle]
+pub extern "C" fn rd_run_shop_card_count() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(0, |s| s.state.shop().cards().len() as i32)
+}
+
+/// The **id** of shop card `slot`.
+#[no_mangle]
+pub extern "C" fn rd_run_shop_card_id_len(slot: i32) -> i32 {
+    shop_offer(run_slot().as_ref(), slot, true).map_or(-1, |offer| offer.id.as_str().len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_shop_card_id_len(slot)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_shop_card_id_into(slot: i32, ptr: *mut u8) -> i32 {
+    match shop_offer(run_slot().as_ref(), slot, true) {
+        Some(offer) => write_out(offer.id.as_str(), ptr),
+        None => 0,
+    }
+}
+
+/// The price of shop card `slot`; `-1` once sold.
+#[no_mangle]
+pub extern "C" fn rd_run_shop_card_price(slot: i32) -> i32 {
+    shop_offer(run_slot().as_ref(), slot, true).map_or(-1, |offer| offer.price)
+}
+
+/// How many relics the merchant is selling.
+#[no_mangle]
+pub extern "C" fn rd_run_shop_relic_count() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(0, |s| s.state.shop().relics().len() as i32)
+}
+
+/// The **id** of shop relic `slot`.
+#[no_mangle]
+pub extern "C" fn rd_run_shop_relic_id_len(slot: i32) -> i32 {
+    shop_offer(run_slot().as_ref(), slot, false).map_or(-1, |offer| offer.id.as_str().len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_shop_relic_id_len(slot)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_shop_relic_id_into(slot: i32, ptr: *mut u8) -> i32 {
+    match shop_offer(run_slot().as_ref(), slot, false) {
+        Some(offer) => write_out(offer.id.as_str(), ptr),
+        None => 0,
+    }
+}
+
+/// The price of shop relic `slot`; `-1` once sold.
+#[no_mangle]
+pub extern "C" fn rd_run_shop_relic_price(slot: i32) -> i32 {
+    shop_offer(run_slot().as_ref(), slot, false).map_or(-1, |offer| offer.price)
+}
+
+fn shop_offer(
+    session: Option<&RunSession>,
+    slot: i32,
+    cards: bool,
+) -> Option<rd_run::state::Offer> {
+    let session = session?;
+    if slot < 0 {
+        return None;
+    }
+    let stock = session.state.shop();
+    let list = if cards {
+        stock.cards()
+    } else {
+        stock.relics()
+    };
+    list.get(slot as usize).copied()
+}
+
+/// What removing a card costs right now (`inv:§8.2`: 75, then +25 per removal).
+#[no_mangle]
+pub extern "C" fn rd_run_remove_price() -> i32 {
+    run_slot().as_ref().map_or(-1, |s| s.state.remove_card_price())
+}
+
+/// Buy shop card `slot`.
+#[no_mangle]
+pub extern "C" fn rd_run_buy_card(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    if slot < 0 {
+        return -1;
+    }
+    let outcome = session.state.buy_card(slot as usize).map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// Buy shop relic `slot`.
+#[no_mangle]
+pub extern "C" fn rd_run_buy_relic(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    if slot < 0 {
+        return -1;
+    }
+    let outcome = session.state.buy_relic(slot as usize).map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// Pay to remove deck card `index`. Returns the price paid.
+#[no_mangle]
+pub extern "C" fn rd_run_remove_card(index: i32) -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    if index < 0 {
+        return -1;
+    }
+    let outcome = session.state.remove_card(index as usize);
+    finish(session, outcome)
+}
+
+// =============================================================================================
+// The deck (`env-abi.md` §11.7) -- the "all cards" panel
+// =============================================================================================
+
+/// How many cards the run's deck holds.
+#[no_mangle]
+pub extern "C" fn rd_run_deck_count() -> i32 {
+    run_slot().as_ref().map_or(0, |s| s.state.deck().len() as i32)
+}
+
+/// Deck card `index`'s **definition id**.
+#[no_mangle]
+pub extern "C" fn rd_run_deck_id_len(index: i32) -> i32 {
+    deck_card(run_slot().as_ref(), index).map_or(-1, |id| id.as_str().len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_deck_id_len(index)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_deck_id_into(index: i32, ptr: *mut u8) -> i32 {
+    match deck_card(run_slot().as_ref(), index) {
+        Some(id) => write_out(id.as_str(), ptr),
+        None => 0,
+    }
+}
+
+/// Deck card `index`'s **title** (`CARD.NameKey`, falling back to the id).
+#[no_mangle]
+pub extern "C" fn rd_run_deck_title_len(index: i32) -> i32 {
+    match deck_card(run_slot().as_ref(), index) {
+        Some(id) => deck_title(content(), id.as_str())
+            .unwrap_or(id.as_str())
+            .len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_deck_title_len(index)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_deck_title_into(index: i32, ptr: *mut u8) -> i32 {
+    match deck_card(run_slot().as_ref(), index) {
+        Some(id) => write_out(deck_title(content(), id.as_str()).unwrap_or(id.as_str()), ptr),
+        None => 0,
+    }
+}
+
+fn deck_card(session: Option<&RunSession>, index: i32) -> Option<rd_run::state::RunId> {
+    if index < 0 {
+        return None;
+    }
+    let session = session?;
+    session.state.deck().get(index as usize).copied()
+}
+
+/// A card's title out of the content. `None` when the content has no `NameKey` for it, which the
+/// callers turn into "use the id".
+fn deck_title(content: &'static Content<'static>, id: &str) -> Option<&'static str> {
+    content
+        .lookup_in(id, rd_core::content::EK_CARD)
+        .and_then(|entry| content.row(rd_core::content::Table::Card, entry.index as u32))
+        .and_then(rd_core::content::CardRow::new)
+        .and_then(|row| content.string(row.name_key()))
+        .filter(|title| !title.is_empty())
+}
+
+// =============================================================================================
+// Fight <- run and fight -> run (`env-abi.md` §11.8)
+// =============================================================================================
+//
+// This is the seam the run layer did not have. A fight in the run is **the run's** fight: the deck
+// is the run's deck and the hero's maximum health is the run's. When it ends, the health and the
+// result go back into the run, and `end_of_combat` runs the relic effects.
+//
+// The enemy side comes from one `ENCT` row chosen by the `Combat` stream. `inv:§5.2/§5.3` splits
+// encounters into a weak pool (floor 1 + the first three fights) and a strong one, and this content
+// does not carry that split -- so the choice is "any encounter in the image", which is written down
+// as a gap in `run-layer.md` rather than dressed up as the weak/strong rule.
+
+/// Start the fight for the node under the cursor. `0` = a fight is now installed in the combat
+/// session; `-2` = refused (wrong node, no encounter, content problem).
+#[no_mangle]
+pub extern "C" fn rd_run_fight_begin() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    // Only a combat node starts a fight.
+    if session.state.node() < 0 {
+        set_error("还没有走到任何节点");
+        return -2;
+    }
+    let kind = rd_run_node_kind();
+    if kind != 1 {
+        // 1 = `NodeKind::Combat` (`run-layer.md` §7.2)
+        set_error(&std::format!("当前节点不是战斗（kind {kind}）"));
+        return -2;
+    }
+
+    let content = content();
+    // Pick an encounter with the `Combat` stream -- the stream exists for exactly this
+    // (`run-layer.md` §3.2) and using it now means the per-fight seed and the encounter choice are
+    // two draws from one reserved stream rather than a constant.
+    let mut encounters: Vec<&'static str> = Vec::new();
+    let mut index = 0u32;
+    while let Some(row) = content.row(rd_core::content::Table::Encounter, index) {
+        // `ENCT` cell 0 is the `Id` (`rdcfmt.ENCT_ROW`), like every entity table.
+        if let Some(id) = row.cell(0).and_then(|cell| content.string(cell)) {
+            encounters.push(id);
+        }
+        index += 1;
+    }
+    if encounters.is_empty() {
+        set_error("内容镜像里没有任何遭遇");
+        return -2;
+    }
+    let pick = match session.state.rng_mut().roll(RunStream::Combat, encounters.len() as u32) {
+        Ok(value) => value as usize,
+        Err(e) => {
+            let message = describe(&e);
+            set_error(&message);
+            return -2;
+        }
+    };
+    let fight_seed = match session.state.rng_mut().roll(RunStream::Combat, i32::MAX as u32) {
+        Ok(value) => value as i32,
+        Err(e) => {
+            let message = describe(&e);
+            set_error(&message);
+            return -2;
+        }
+    };
+
+    // The run's deck, compressed into (id, count) entries. Leaked because `FightPlan` borrows them
+    // for the session's lifetime -- one small slice per fight, same trade as `build_session`.
+    let mut counts: Vec<(&'static str, u16)> = Vec::new();
+    for id in session.state.deck() {
+        let id = id.as_str();
+        match counts.iter_mut().find(|(name, _)| *name == id) {
+            Some((_, count)) => *count += 1,
+            None => counts.push((id, 1)),
+        }
+    }
+    let entries: &'static [rd_core::battle::DeckEntry<'static>] =
+        Box::leak(
+            counts
+                .into_iter()
+                .map(|(card, count)| rd_core::battle::DeckEntry { card, count })
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        );
+
+    let max_health = session.state.health_max();
+    match crate::build_session_with(fight_seed, encounters[pick], max_health, Some(entries)) {
+        Ok(combat) => {
+            crate::install_session(combat);
+            // The fight is built at the hero's maximum; a run usually enters wounded.
+            crate::set_combat_hero_health(session.state.health());
+            0
+        }
+        Err(message) => {
+            set_error(&message);
+            -2
+        }
+    }
+}
+
+/// Finish the fight and fold its result back into the run.
+///
+/// Returns the combat result (`1` victory, `2` defeat, ...), or `-1` when no fight is installed.
+#[no_mangle]
+pub extern "C" fn rd_run_fight_end() -> i32 {
+    let Some(result) = crate::combat_result() else {
+        set_error("没有正在进行的战斗");
+        return -1;
+    };
+    let hero_hp = crate::combat_hero_health().unwrap_or(0);
+    crate::take_session();
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    // The fight is over: the run's health becomes the hero's.
+    let delta = hero_hp - session.state.health();
+    session.state.adjust_health(delta);
+    if result == 1 {
+        // `Burning Blood` and friends (`inv:§2`), now with a call site.
+        if let Err(e) = session.state.end_of_combat() {
+            let message = describe(&e);
+            set_error(&message);
+            return -2;
+        }
+    }
+    0.max(result)
+}
+
+// =============================================================================================
 // Diagnosis
 // =============================================================================================
 
@@ -594,6 +1089,7 @@ fn kind_name(kind: i32) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{rd_env_pile_card_title_into, rd_env_pile_card_title_len, rd_env_pile_len};
     use rd_run::map::{RunMap, NODES_PER_ROW};
     use rd_run::state::{MAX_RUN_POTIONS, MAX_RUN_RELICS};
     use rd_run::streams::RunRng;
@@ -823,6 +1319,89 @@ mod tests {
         assert_eq!(session.state.health(), 66);
         session.state.adjust_health(1000);
         assert_eq!(session.state.end_of_combat(), Ok(0), "nothing to heal at full health");
+    }
+
+    /// The link the run layer did not have: a fight is **the run's** fight, and its result goes back.
+    ///
+    /// `inv:§7.2` fixes floor 1 to be all combat, so the first step lands on one -- no search.
+    #[test]
+    fn a_fight_is_the_runs_fight_and_the_result_goes_back() {
+        reset(7);
+        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_node_kind(), 1, "floor 1 is all combat (inv:§7.2)");
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_pending(), 0, "a fight has nothing for the run layer to settle");
+
+        // The hero enters wounded, and the fight has to know that.
+        {
+            let session = run_slot().as_mut().unwrap();
+            session.state.adjust_health(-20);
+            assert_eq!(session.state.health(), 60);
+        }
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+        assert_eq!(
+            crate::combat_hero_health(),
+            Some(60),
+            "the fight starts at the run's health, not at full"
+        );
+        // The fight's deck is the run's deck: every card is in one of the three piles.
+        let piles: i32 = (0..3).map(|zone| rd_env_pile_len(zone)).sum();
+        assert_eq!(piles, rd_run_deck_count(), "the fight's cards are the run's cards");
+        assert_eq!(piles, 10, "inv:§2.1: a ten-card starting deck");
+
+        // Ending it folds the health back and drops the session.
+        assert_eq!(rd_run_fight_end(), 0, "a fight still in progress ends as Ongoing");
+        assert_eq!(rd_run_fight_end(), -1, "there is no second fight to end");
+        let session = run_slot().as_ref().unwrap();
+        assert_eq!(session.state.health(), 60, "the fight did not change the run's health");
+    }
+
+    /// The three pile exports read the fight's piles, and the observation only carries counts.
+    #[test]
+    fn the_piles_can_be_listed_not_just_counted() {
+        reset(7);
+        assert_eq!(rd_run_step(0), 0);
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0);
+        // Before the first turn everything is in the draw pile.
+        let draw = rd_env_pile_len(0);
+        assert_eq!(draw, 10);
+        assert_eq!(rd_env_pile_len(1), 0);
+        assert_eq!(rd_env_pile_len(2), 0);
+        // Every card can be named, and the name is the content's `NameKey`.
+        for index in 0..draw {
+            let n = rd_env_pile_card_title_len(0, index);
+            assert!(n > 0, "draw pile card {index} has no title");
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_env_pile_card_title_into(0, index, buffer.as_mut_ptr()) };
+            let title = String::from_utf8(buffer).unwrap();
+            assert!(
+                ["Strike", "Defend", "Bash"].contains(&title.as_str()),
+                "draw pile card {index} is {title:?}"
+            );
+        }
+        assert_eq!(rd_env_pile_len(9), -1, "no such zone");
+        assert_eq!(rd_env_pile_card_title_len(0, 99), -1, "past the end");
+    }
+
+    /// The deck exports: ids and titles, straight out of the content.
+    #[test]
+    fn the_deck_can_be_listed_with_the_contents_titles() {
+        reset(7);
+        assert_eq!(rd_run_deck_count(), 10);
+        let mut titles = Vec::new();
+        for index in 0..rd_run_deck_count() {
+            let n = rd_run_deck_title_len(index);
+            assert!(n > 0);
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_run_deck_title_into(index, buffer.as_mut_ptr()) };
+            titles.push(String::from_utf8(buffer).unwrap());
+        }
+        assert_eq!(titles.iter().filter(|t| *t == "Strike").count(), 5, "inv:§2.1");
+        assert_eq!(titles.iter().filter(|t| *t == "Defend").count(), 4);
+        assert_eq!(titles.iter().filter(|t| *t == "Bash").count(), 1);
+        assert_eq!(rd_run_deck_title_len(99), -1);
+        assert_eq!(rd_run_deck_id_len(-1), -1);
     }
 
     #[test]

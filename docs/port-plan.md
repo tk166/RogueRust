@@ -4541,3 +4541,79 @@ begin_node(card_pool, relic_pool) -> Result<NodeKind>
 | `sts` 镜像 | 11,272 / 9,688 B | **11,604 / 9,908 B** |
 | `.wasm` | 439,087 B | **441,560 B** |
 | `RunState` | — | 加了 `Pending`(1 B) + `ShopStock`(≈362 B)，tripwire 8 KiB 仍有余量 |
+---
+
+## 60. 第 50 轮：把 run 层摊成 ABI —— 战斗第一次接到局上，以及"牌堆能列出来"（**页面还没串起来**）
+
+> 用户："把战斗、商店、休息和地图串联起来，全局显示遗物，全局多个按钮点开显示卡片情况"。
+> 这一轮做**接口那一半**：run 层的每个动作都有导出了，**战斗第一次真的是"这一局的战斗"**。
+> **页面还只有一半** —— 下面 §60.5 逐条说清哪一半没做。
+
+### 60.1 战斗接到局上：`rd_run_fight_begin` / `rd_run_fight_end`
+
+这是 run 层一直缺的那条缝。`build_session` 被参数化成 `build_session_with(seed, encounter,
+hero_hp, deck)`：
+
+* **牌组是本局的牌组**（`rd-run` 的 `deck` 压成 `(id, count)` 交给 `FightPlan.deck`，
+  `build_fight_from_content` 的"显式牌组优先"那条路正好用上）；
+* **英雄从本局的血量进场**（战斗按上限建，再 `combatant_mut` 把当前血量压到本局的值）；
+* **打完之后血量写回局上**，胜利则调 `end_of_combat` —— **遗物的效果至此有了调用点**
+  （第 48 轮那句"效果有单测、缺调用点"在这一轮关掉）。
+
+敌人一侧：用 `Combat` 子流从镜像里挑一条 `ENCT`。⚠️ **`[推断]`**：`inv:§5.2/§5.3` 把遭遇分成
+weak / strong 两池（第 1 层与前 3 场用 weak），**这份内容没有这个划分**，所以现在是"镜像里任意一条"。
+这写成 `run-layer.md` §4.7 的欠账，而不是假装 weak/strong 已经实现。
+
+### 60.2 一串新导出（`env-abi.md` §11.6–§11.8）
+
+| 组 | 导出 |
+|---|---|
+| 节点 | `rd_run_pending` / `rd_run_node_kind` / `rd_run_begin_node` / `rd_run_rest` / `rd_run_smith` / `rd_run_open_chest` / `rd_run_leave` |
+| 商店 | `rd_run_shop_card_count` / `_id_len` / `_id_into` / `_price`，relic 同理，`rd_run_remove_price` / `rd_run_buy_card` / `rd_run_buy_relic` / `rd_run_remove_card` |
+| 牌组 | `rd_run_deck_count` / `_id_len` / `_id_into` / `_title_len` / `_title_into` |
+| 牌堆 | `rd_env_pile_len` / `rd_env_pile_card_id_len` / `_id_into` / `_title_len` / `_title_into`（0=抽 1=弃 2=消耗） |
+| 战斗 | `rd_run_fight_begin` / `rd_run_fight_end` |
+
+⚠️ **`rd_env_pile_*` 是必须的**：122 格观察量只带牌堆**计数**（`env-abi.md` §4）——
+对策略够用，对"看看弃牌堆里有什么"完全不够。所以牌堆**内容**单独读。
+
+### 60.3 三条新测试（都钉整条链，不是钉一个函数）
+
+| 测试 | 钉住什么 |
+|---|---|
+| `a_fight_is_the_runs_fight_and_the_result_goes_back` | 第 1 层必是战斗（`inv:§7.2`，所以不用搜索地图）⇒ 开局 → 掉 20 血 ⇒ 开战 ⇒ **战斗里英雄是 60 血**、**三个牌堆加起来 == 本局牌组 10 张** ⇒ 收兵 ⇒ 没有第二场可收 |
+| `the_piles_can_be_listed_not_just_counted` | 未开回合时 10 张全在抽牌堆；每张都能取到**内容里的标题**（Strike/Defend/Bash）；坏 zone 与越界都是 `-1` |
+| `the_deck_can_be_listed_with_the_contents_titles` | 5 Strike / 4 Defend / 1 Bash（`inv:§2.1`），标题来自 `CARD.NameKey` |
+
+### 60.4 页面上已经能看到的：遗物 + 所有牌
+
+`map.html`（run 页）现在有两样东西是**全局**的：
+
+* `遗物 Burning Blood`（第 48 轮就有）；
+* **`所有牌（10）`** 按钮 → 展开牌组：`Strike strike` ×5、`Defend defend` ×4、`Bash bash`。
+  标题与 id 都来自内容，页面上没有一张硬编码的卡名。
+
+判据：`map_test.mjs` 第 8 块（10 张、5/4/1、标题来自 `CARD.NameKey`、且 `map.html` 真的调了
+`rd_run_deck_title_len`）。
+
+### 60.5 **没做的（这一轮只交付了接口，别把它读成"串起来了"）**
+
+1. **页面还是两页**：`map.html` 是 run（地图/遗物/牌组），`index.html` 是战斗 demo。
+   **没有"一页里从地图走进战斗再回到地图"** —— 那需要把 run 会话与战斗会话放进同一个页面的
+   状态机里，是下一轮的正题。
+2. **节点面板没有界面**：`begin_node`/`rest`/`smith`/`chest`/`buy_*` 全都**有导出、有测试，
+   但页面一个都没调**。所以篝火、商店、宝箱现在**看不见**。
+3. **三个牌堆按钮**（抽牌/弃牌/消耗）的导出有了，但**没有页面**：它们只在战斗里有内容，
+   而战斗页还没接进 run。
+
+⇒ 一句话：**接口这一半完成了，交互那一半（一个页面串起四个场景）是下一轮。**
+
+### 60.6 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 633 | **636**（rd-wasm 14 → 17） |
+| 新导出 | — | **21 个**（节点 7 / 商店 8 / 牌组 5 / 牌堆 5 / 战斗 2，含 `_into` 成对） |
+| `.wasm` | 441,560 B | **466,444 B**（+24.9 KB：`build_session_with` + 牌堆读取 + 21 个导出） |
+| `smoke.mjs` 要求的导出 | 44 | **65** |

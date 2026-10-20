@@ -52,7 +52,7 @@
 mod run;
 
 use rd_core::battle::{
-    build_fight_from_content, run_fight, standard_turn_config, FightOutcome, FightPlan,
+    build_fight_from_content, run_fight, standard_turn_config, DeckEntry, FightOutcome, FightPlan,
     PlanCombatant, Step,
 };
 use rd_core::content::{
@@ -364,8 +364,53 @@ static mut SCRATCH: [u8; 1024] = [0; 1024];
 /// value lives in the module's BSS for the module's whole lifetime — so a `static mut` with one
 /// accessor is sound. (This is the only `unsafe` in the crate besides the raw-pointer writes.)
 #[allow(static_mut_refs)]
-fn slot() -> &'static mut Option<Session> {
+pub(crate) fn slot() -> &'static mut Option<Session> {
     unsafe { &mut SESSION }
+}
+
+/// Put a session in the combat slot (the run layer builds one from its own deck).
+pub(crate) fn install_session(session: Session) {
+    *slot() = Some(session);
+}
+
+/// Drop the combat session, returning nothing if there was none.
+pub(crate) fn take_session() -> Option<Session> {
+    slot().take()
+}
+
+/// The fight's result as the ABI's small integer (`env-abi.md` §3), or `None` with no fight.
+pub(crate) fn combat_result() -> Option<i32> {
+    slot().as_ref().map(|session| match session.state.result {
+        CombatResult::Ongoing => 0,
+        CombatResult::Victory => 1,
+        CombatResult::Defeat => 2,
+        CombatResult::Draw => 3,
+        CombatResult::Aborted => 4,
+    })
+}
+
+/// The hero's current health in the installed fight.
+pub(crate) fn combat_hero_health() -> Option<i32> {
+    let session = slot().as_ref()?;
+    let hero = session.hero_id()?;
+    session
+        .state
+        .combatant(&hero)
+        .map(|combatant| combatant.health_current)
+}
+
+/// Put the hero at `value` health.
+///
+/// Needed because the fight is built at the hero's **maximum** (`build_fight_from_content` uses
+/// `PlanCombatant.max_health` and starts there), while a run's hero usually enters wounded.
+pub(crate) fn set_combat_hero_health(value: i32) {
+    if let Some(session) = slot().as_mut() {
+        if let Ok(id) = CombatantId::new(HERO) {
+            if let Some(combatant) = session.state.combatant_mut(&id) {
+                combatant.health_current = value;
+            }
+        }
+    }
 }
 
 fn ensure_session() -> Result<&'static mut Session, String> {
@@ -378,6 +423,20 @@ fn ensure_session() -> Result<&'static mut Session, String> {
 }
 
 fn build_session(seed: i32) -> Result<Session, String> {
+    build_session_with(seed, ENCOUNTER, HERO_HP, None)
+}
+
+/// Build a fight from explicit parameters instead of the constants, so the run layer can hand in
+/// **its own deck and its own health**.
+///
+/// `deck` is `None` for "let the content decide" (`Characters[0].Start.Deck`), which is what the
+/// standalone demo does; `Some` is the run's deck, compressed into `(card, count)` entries.
+fn build_session_with(
+    seed: i32,
+    encounter_name: &str,
+    hero_hp: i32,
+    deck: Option<&'static [DeckEntry<'static>]>,
+) -> Result<Session, String> {
     let content: &'static Content<'static> =
         Box::leak(Box::new(Content::parse(IMAGE).map_err(|e| format!("RDCF 镜像解析失败: {}", detail(&e)))?));
 
@@ -386,8 +445,8 @@ fn build_session(seed: i32) -> Result<Session, String> {
     // (`Encounters.cs:211-220`; the flat `EACT` table is just the action library). The order is
     // also the turn order, and it is the order `intent::locate_enemy` indexes into.
     let entry = content
-        .lookup_in(ENCOUNTER, EK_ENCOUNTER)
-        .ok_or_else(|| format!("内容镜像里没有遭遇 `{ENCOUNTER}`"))?;
+        .lookup_in(encounter_name, EK_ENCOUNTER)
+        .ok_or_else(|| format!("内容镜像里没有遭遇 `{encounter_name}`"))?;
     let encounter: u32 = u32::from(entry.index);
     let mut enemies: Vec<PlanCombatant<'static>> = Vec::new();
     for spec in content
@@ -405,7 +464,7 @@ fn build_session(seed: i32) -> Result<Session, String> {
         enemies.push(PlanCombatant { id, max_health });
     }
     if enemies.is_empty() {
-        return Err(format!("遭遇 `{ENCOUNTER}` 里没有敌人"));
+        return Err(format!("遭遇 `{encounter_name}` 里没有敌人"));
     }
     // `FightPlan` borrows the slice for the session's whole life; a browser page builds one
     // session per reset, so leaking two small slices is the cheapest honest answer (the alternative
@@ -429,14 +488,14 @@ fn build_session(seed: i32) -> Result<Session, String> {
         seed,
         hero: PlanCombatant {
             id: HERO,
-            max_health: HERO_HP,
+            max_health: hero_hp,
         },
         enemies,
-        // **Empty on purpose**: an empty `deck` is what makes `build_fight_from_content` read the
-        // deck out of the content (`Characters[0].Start.Deck` → `Start.Deck` → root `Deck`; the
-        // three-line table is in `content.rs`'s header). A non-empty slice here would silently
-        // take the hard-coded path and the page would stop exercising the content.
-        deck: &[],
+        // **Empty means "let the content decide"**: `build_fight_from_content` then reads the deck
+        // out of the document (`Characters[0].Start.Deck` → `Start.Deck` → root `Deck`; the
+        // three-line table is in `content.rs`'s header). The run layer passes its own deck here
+        // instead, which is what makes a fight in the run *the run's* fight.
+        deck: deck.unwrap_or(&[]),
         cards_drawn_per_turn: standard.draw_per_turn,
         // `true` on purpose: shuffling is what advances `random_step`, and "the RNG really ran"
         // is worth being able to see from the page.
@@ -1420,6 +1479,128 @@ pub unsafe extern "C" fn rd_env_card_text_into(index: i32, ptr: *mut u8) -> i32 
         Some(text) => unsafe { copy_text_out(text, ptr) },
         None => 0,
     }
+}
+
+// =============================================================================================
+// Pile contents (the page's "draw / discard / exhaust" panels)
+// =============================================================================================
+//
+// The 122-slot observation carries pile **counts** only (`env-abi.md` §4), which is right for a
+// policy and useless for a player who wants to know *what* is in the discard pile. These read the
+// piles directly. Zone ids match `ui_render.js`: 0 = draw, 1 = discard, 2 = exhaust.
+
+fn pile_zone(zone: i32) -> Option<CardZone> {
+    match zone {
+        0 => Some(CardZone::DrawPile),
+        1 => Some(CardZone::DiscardPile),
+        2 => Some(CardZone::ExhaustPile),
+        _ => None,
+    }
+}
+
+/// How many cards are in `zone` (0 = draw, 1 = discard, 2 = exhaust); `-1` for a bad zone.
+#[no_mangle]
+pub extern "C" fn rd_env_pile_len(zone: i32) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    let Some(zone) = pile_zone(zone) else {
+        return -1;
+    };
+    let Some(hero) = session.hero_id() else {
+        return -1;
+    };
+    session
+        .state
+        .card_zones(&hero)
+        .map_or(-1, |zones| zones.count(zone) as i32)
+}
+
+/// The definition id of card `index` in `zone`.
+#[no_mangle]
+pub extern "C" fn rd_env_pile_card_id_len(zone: i32, index: i32) -> i32 {
+    match pile_card_id(zone, index) {
+        Some(id) => id.len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_pile_card_id_len(zone, index)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_pile_card_id_into(zone: i32, index: i32, ptr: *mut u8) -> i32 {
+    match pile_card_id(zone, index) {
+        Some(id) => {
+            let bytes = id.as_bytes();
+            for (offset, &byte) in bytes.iter().enumerate() {
+                *ptr.add(offset) = byte;
+            }
+            bytes.len() as i32
+        }
+        None => 0,
+    }
+}
+
+/// The **title** of card `index` in `zone` (`CARD.NameKey`, falling back to the id).
+#[no_mangle]
+pub extern "C" fn rd_env_pile_card_title_len(zone: i32, index: i32) -> i32 {
+    match pile_card_id(zone, index) {
+        Some(id) => card_display_title(id).len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_pile_card_title_len(zone, index)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_pile_card_title_into(zone: i32, index: i32, ptr: *mut u8) -> i32 {
+    match pile_card_id(zone, index) {
+        Some(id) => {
+            let title = card_display_title(id);
+            let bytes = title.as_bytes();
+            for (offset, &byte) in bytes.iter().enumerate() {
+                *ptr.add(offset) = byte;
+            }
+            bytes.len() as i32
+        }
+        None => 0,
+    }
+}
+
+fn pile_card_id(zone: i32, index: i32) -> Option<&'static str> {
+    if index < 0 {
+        return None;
+    }
+    let session = ensure_session().ok()?;
+    let zone = pile_zone(zone)?;
+    let hero = session.hero_id()?;
+    let (_, card) = session
+        .state
+        .zone_cards(&hero, zone)
+        .enumerate()
+        .find(|(position, _)| *position == index as usize)?;
+    Some(card.definition_id.as_str())
+}
+
+/// A card's `NameKey` out of the content, or its id when the document has none.
+fn card_display_title(id: &'static str) -> &'static str {
+    let Ok(session) = ensure_session() else {
+        return id;
+    };
+    session
+        .content
+        .lookup_in(id, EK_CARD)
+        .and_then(|entry| {
+            session
+                .content
+                .row(rd_core::content::Table::Card, entry.index as u32)
+        })
+        .and_then(rd_core::content::CardRow::new)
+        .and_then(|row| session.content.string(row.name_key()))
+        .filter(|title| !title.is_empty())
+        .unwrap_or(id)
 }
 
 /// The name of the card in hand slot `index` — `rd_env_card_name_len(index)`.

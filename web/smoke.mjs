@@ -69,6 +69,15 @@ const REQUIRED = [
   "rd_run_action", "rd_run_action_arg", "rd_run_step", "rd_run_last_error_len",
   "rd_run_last_error_into", "rd_run_kind_name_len", "rd_run_kind_name_into",
   "rd_run_relic_name_len", "rd_run_relic_name_into", "rd_run_relic_id_len", "rd_run_relic_id_into",
+  "rd_run_pending", "rd_run_node_kind", "rd_run_begin_node", "rd_run_rest", "rd_run_smith",
+  "rd_run_open_chest", "rd_run_leave", "rd_run_shop_card_count", "rd_run_shop_card_id_len",
+  "rd_run_shop_card_id_into", "rd_run_shop_card_price", "rd_run_shop_relic_count",
+  "rd_run_shop_relic_id_len", "rd_run_shop_relic_id_into", "rd_run_shop_relic_price",
+  "rd_run_remove_price", "rd_run_buy_card", "rd_run_buy_relic", "rd_run_remove_card",
+  "rd_run_deck_count", "rd_run_deck_id_len", "rd_run_deck_id_into", "rd_run_deck_title_len",
+  "rd_run_deck_title_into", "rd_run_fight_begin", "rd_run_fight_end",
+  "rd_env_pile_len", "rd_env_pile_card_id_len", "rd_env_pile_card_id_into",
+  "rd_env_pile_card_title_len", "rd_env_pile_card_title_into",
 ];
 for (const name of REQUIRED) {
   if (!(name in ex)) fail(`missing export ${name}`);

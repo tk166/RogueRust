@@ -310,6 +310,30 @@ function assertViewAgreesWithModule(where) {
   }
 }
 
+// ---------------------------------------------------------------------------------------------
+// 8. The deck panel. `inv:§2.1`: five strikes, four defends, one bash -- and the titles are the
+//    content's `NameKey`, not the ids.
+// ---------------------------------------------------------------------------------------------
+{
+  const count = ex.rd_run_deck_count();
+  if (count !== 10) fail(`the run's deck has ${count} cards, expected 10`);
+  const titles = [];
+  for (let index = 0; index < count; index++) {
+    const n = ex.rd_run_deck_title_len(index);
+    if (n <= 0) fail(`deck card ${index} has no title`);
+    const ptr = ex.rd_env_scratch_buf();
+    ex.rd_run_deck_title_into(index, ptr);
+    titles.push(new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, n).slice()));
+  }
+  const of = (want) => titles.filter((title) => title === want).length;
+  if (of("Strike") !== 5 || of("Defend") !== 4 || of("Bash") !== 1) {
+    fail(`the deck reads ${JSON.stringify(titles)}`);
+  }
+  if (!page.includes("rd_run_deck_title_len")) {
+    fail("map.html never lists the deck it claims to show");
+  }
+}
+
 console.log("MAP_RENDER PASS");
 console.log(`  nodes              ${view().nodes.length} drawn, one circle and one group each`);
 console.log(`  edges              each path crosses exactly one row`);
@@ -318,5 +342,6 @@ console.log(`  walking            floor climbs to ${M.LAYOUT.rows} and the lit s
 console.log(`  kind names         the page's vocabulary is the module's (rd_run_kind_name_*)`);
 console.log(`  seed sensitivity   two seeds, two maps`);
 console.log(`  relics            ${view().relics.map((r) => r.name).join(", ") || "none"}, named by the content`);
+console.log(`  deck panel        ${ex.rd_run_deck_count()} cards, titles from CARD.NameKey`);
 console.log(`  view == module     re-checked after every step of a full walk, on two seeds`);
 console.log("  ⚠️  no DOM: the click handler on the SVG is still only checked by eye in a browser.");
