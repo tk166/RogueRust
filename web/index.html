@@ -180,6 +180,9 @@
   .deck .card { font: 12px/1.3 var(--mono); padding: 5px 9px; border-radius: 6px;
                 background: #202634; border: 1px solid var(--line); color: var(--ink); }
   .deck .card span { color: var(--dim); font-size: 10px; }
+  /* The picker reuses `.card`, but its entries are buttons: they need to look pressable. */
+  button.card.pick { cursor: pointer; text-align: left; }
+  button.card.pick:hover { background: #2b3648; border-color: var(--energy); }
   .grid2 { display: grid; gap: 12px; grid-template-columns: 1fr; }
   @media (min-width: 720px) { .grid2 { grid-template-columns: 1fr 1fr; } }
 </style>
@@ -581,7 +584,9 @@ function renderNode() {
       `<button class="act" id="smithBtn">打铁（第一张）</button> ` +
       `<button class="act" id="restLeave">离开</button>`;
     document.getElementById("restBtn").onclick = () => act(() => ex.rd_run_rest(), "休息");
-    document.getElementById("smithBtn").onclick = () => act(() => ex.rd_run_smith(0), "打铁");
+    document.getElementById("smithBtn").onclick = () =>
+      showDeckPicker("打铁：选一张升级", (index) =>
+        act(() => ex.rd_run_smith(index), "打铁"));
     document.getElementById("restLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
     return;
   }
@@ -614,7 +619,8 @@ function renderNode() {
       button.onclick = () => act(() => ex.rd_run_buy_relic(Number(button.dataset.buyrelic)), "买遗物");
     });
     document.getElementById("removeBtn").onclick = () =>
-      act(() => ex.rd_run_remove_card(0), "删卡");
+      showDeckPicker("删卡：选一张移除", (index) =>
+        act(() => ex.rd_run_remove_card(index), "删卡"));
     document.getElementById("shopLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
     return;
   }
@@ -753,6 +759,36 @@ function endFight() {
   document.getElementById("msg").innerHTML = result > 0
     ? `<span class="good">战斗结束 · ${RESULT_NAMES[result] || result}</span>`
     : `<span class="err">战斗收尾失败 · ${esc(runError())}</span>`;
+}
+
+/// Pick one card from the run's deck. `onPick(index)` gets the deck index the kernel wants.
+///
+/// Smith and card-removal used to be hard-wired to "the first card", which is not a choice -- the
+/// player has a deck and both of those mechanics are *about* choosing. The entries are buttons, so
+/// the same markup the pile view uses becomes a picker.
+function showDeckPicker(title, onPick) {
+  const body = document.getElementById("modalBody");
+  document.getElementById("modalTitle").textContent = title;
+  body.innerHTML = "";
+  const count = ex.rd_run_deck_count();
+  if (count <= 0) {
+    body.innerHTML = `<span class="dim">牌组是空的</span>`;
+    document.getElementById("modal").hidden = false;
+    return;
+  }
+  for (let index = 0; index < count; index++) {
+    const button = document.createElement("button");
+    button.className = "card pick";
+    button.dataset.pick = String(index);
+    button.innerHTML = `${esc(deckTitle(index) || deckId(index))} ` +
+      `<span>${esc(deckId(index))}${kindChip(runKind(0, index))}</span>`;
+    button.onclick = () => {
+      document.getElementById("modal").hidden = true;
+      onPick(index);
+    };
+    body.appendChild(button);
+  }
+  document.getElementById("modal").hidden = false;
 }
 
 function showPile(title, entries) {
@@ -1298,6 +1334,23 @@ function measure() {
   document.getElementById("modal").addEventListener("click", (ev) => {
     if (ev.target.id === "modal") document.getElementById("modal").hidden = true;
   });
+
+  // `?debug` exposes the page's own pieces so a browser can drive what the seed will not hand you.
+  // The UI plan borrows this switch from Slay the Web; here it earns its keep immediately: reaching
+  // a rest site needs floor 15 (`inv:§7.2`), so the smith picker cannot be clicked from a fresh run.
+  if (new URLSearchParams(location.search).has("debug")) {
+    window.RD_DEBUG = {
+      showDeckPicker,
+      showPile,
+      deckEntries,
+      deckId,
+      deckTitle,
+      runKind,
+      kindChip,
+      esc,
+      view: () => RD_MAP.describeMap(runRead),
+    };
+  }
 
   // Drag to play: pointer events, so a mouse and a finger take the same path.
   document.getElementById("hand").addEventListener("pointerdown", onPointerDown);

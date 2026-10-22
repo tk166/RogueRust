@@ -1823,6 +1823,47 @@ mod tests {
         }
     }
 
+    /// Smith and removal take an **index**, and the UI now passes the one the player clicked. The
+    /// old page hard-wired index 0 ("the first card"), so an implementation that ignored the
+    /// argument would have looked correct -- this pins that it does not.
+    #[test]
+    fn smithing_a_middle_card_leaves_the_others_alone() {
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Rest));
+        run.begin_node(&basic_pool(), &RELICS).expect("a rest site");
+        let before: Vec<String> = run.deck().iter().map(|id| id.as_str().to_string()).collect();
+        assert_eq!(before[2], "strike");
+        run.smith(2, "strike+").expect("smith the third card");
+        let after: Vec<String> = run.deck().iter().map(|id| id.as_str().to_string()).collect();
+        assert_eq!(after[2], "strike+");
+        assert_eq!(after.len(), before.len());
+        for index in 0..before.len() {
+            if index != 2 {
+                assert_eq!(after[index], before[index], "card {index} changed");
+            }
+        }
+    }
+
+    /// Removing a middle card keeps the order of the survivors (`run_hash` writes the deck in
+    /// order, so this is observable).
+    #[test]
+    fn removing_a_middle_card_keeps_the_order_of_the_survivors() {
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Shop));
+        run.adjust_gold(500);
+        run.begin_node(&common_pool(), &RELICS).expect("a merchant");
+        let before: Vec<String> = run.deck().iter().map(|id| id.as_str().to_string()).collect();
+        let expected: Vec<String> = before
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| *index != 3)
+            .map(|(_, id)| id.clone())
+            .collect();
+        run.remove_card(3).expect("remove the fourth card");
+        let after: Vec<String> = run.deck().iter().map(|id| id.as_str().to_string()).collect();
+        assert_eq!(after, expected);
+    }
+
     /// A node pays **once**. Without this, a combat node could be fought again from where you stand
     /// and a campfire would heal on every click -- the page showed exactly that before the guard.
     #[test]

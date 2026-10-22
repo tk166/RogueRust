@@ -51,6 +51,13 @@ for (const [needle, why] of [
   ["rd_run_rest(", "the rest site has no button behind it"],
   ["rd_run_buy_card(", "the merchant cannot sell anything"],
   ["rd_run_take_card(", "the reward screen has no way to take the card"],
+  // Smith and removal are *choices*: a page that calls them with a literal 0 has turned them back
+  // into "the first card". The picker's click path needs a real browser with a rest node (floor 15
+  // is the only guaranteed one), so what is asserted here is the wiring: the page builds a picker
+  // and calls both exports with the index it was handed.
+  ["showDeckPicker(", "there is no card picker for smith or removal"],
+  ["rd_run_smith(index)", "smith does not use the card the player picked"],
+  ["rd_run_remove_card(index)", "card removal does not use the card the player picked"],
   ["rd_run_skip_reward(", "the reward screen cannot be declined"],
   ["rd_run_deck_title_len", "the deck panel would list ids instead of titles"],
   ["rd_env_pile_card_title_len", "the pile panels would list nothing"],
