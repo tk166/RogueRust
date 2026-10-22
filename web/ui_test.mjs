@@ -42,6 +42,7 @@ for (const [needle, why] of [
   ['id="floats"', "there is no layer for the damage numbers to float in"],
   ["rd_env_card_title_len", "the card face would never show the content's title"],
   ["rd_env_card_text_len", "the card face would never show the content's description"],
+  ["rd_env_card_kind(", "no card would say whether it is an attack or a skill"],
   ["RD_UI.actionFor(", "a drop would never consult the decision function"],
   ["RD_UI.soundPlan(", "the sound plan is computed and then never played"],
   ["rd_run_fight_begin(", "the page never starts a fight from the run"],

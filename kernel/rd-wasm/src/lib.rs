@@ -1584,6 +1584,43 @@ fn pile_card_id(zone: i32, index: i32) -> Option<&'static str> {
     Some(card.definition_id.as_str())
 }
 
+/// What kind of card this is, from its `Tags`: 0 none, 1 attack, 2 skill, 3 power, 4 status,
+/// 5 curse; `-1` when the tags cannot be read.
+///
+/// The order matters: `slimed` is `status`/`unplayable`/`junk` and must not be reported as an
+/// attack, so attack and skill are asked first and status only after both said no. A card that
+/// answers "cannot tell" is **not** silently "no type" -- `-1` travels to the page, which shows the
+/// card without a chip rather than with the wrong one.
+pub(crate) fn card_kind(content: &'static Content<'static>, id: &str) -> i32 {
+    for (tag, kind) in [("attack", 1), ("skill", 2), ("power", 3), ("status", 4), ("curse", 5)] {
+        match content.card_has_tag(id, tag) {
+            Some(true) => return kind,
+            Some(false) => {}
+            None => return -1,
+        }
+    }
+    0
+}
+
+/// The **kind** of the card in hand slot `index` (`rd_env_card_kind`): 0 none, 1 attack, 2 skill,
+/// 3 power, 4 status, 5 curse, `-1` unknown.
+///
+/// The observation vector carries a card's `def_slot` and nothing else, so a page that wants
+/// "Attack"/"Skill" has to ask. This is presentation, like the name and text exports.
+#[no_mangle]
+pub extern "C" fn rd_env_card_kind(index: i32) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    if index < 0 {
+        return -1;
+    }
+    let Some(id) = session.hand_defs.get(index as usize) else {
+        return -1;
+    };
+    card_kind(session.content, id.as_str())
+}
+
 /// A card's `NameKey` out of the content, or its id when the document has none.
 fn card_display_title(id: &'static str) -> &'static str {
     let Ok(session) = ensure_session() else {
@@ -2082,6 +2119,32 @@ mod card_text_tests {
     fn open_the_hand() {
         assert_eq!(rd_env_reset(), 0);
         assert_eq!(rd_env_step(0), 0, "the only action on a fresh fight is end turn");
+    }
+
+    /// The card **kind** is derived from `CARD.Tags`, and the order of the questions matters:
+    /// `slimed` carries `status`/`unplayable`/`junk`, so asking "attack" first and "status" last is
+    /// what keeps it from being reported as an attack.
+    #[test]
+    fn the_card_kind_comes_from_the_tags() {
+        open_the_hand();
+        let hand = hand_count();
+        assert!(hand > 0);
+        // Every card in the opening hand is a Strike or a Defend: attack (1) or skill (2).
+        for slot in 0..hand {
+            let kind = super::rd_env_card_kind(slot);
+            assert!(kind == 1 || kind == 2, "hand slot {slot} has kind {kind}");
+        }
+        // Out of range and negative are `-1`, not "no type".
+        assert_eq!(super::rd_env_card_kind(hand + 5), -1);
+        assert_eq!(super::rd_env_card_kind(-1), -1);
+
+        // The junk card is a status, not an attack -- the case that would go wrong if the order of
+        // the tag questions were different.
+        let content = ensure_session().expect("session").content;
+        assert_eq!(super::card_kind(content, "strike"), 1);
+        assert_eq!(super::card_kind(content, "defend"), 2);
+        assert_eq!(super::card_kind(content, "slimed"), 4);
+        assert_eq!(super::card_kind(content, "no_such_card"), -1);
     }
 
     #[test]

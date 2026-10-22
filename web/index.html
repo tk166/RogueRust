@@ -131,6 +131,7 @@
   }
   .card .title { font-weight: 600; }
   .card .text { color: #b9c3d4; font-size: 11px; margin-top: 4px; line-height: 1.35; }
+  .kind { color: var(--dim); font-size: 10px; margin-left: 6px; }
   .card .meta { color: var(--dim); font-size: 10px; margin-top: 4px; }
   .log { font: 12px/1.7 var(--mono); max-height: 190px; overflow-y: auto; }
   .log div { border-bottom: 1px solid #202634; padding: 1px 0; }
@@ -467,6 +468,18 @@ const rewardTitle = (slot) =>
   readText((k) => ex.rd_run_reward_card_title_len(k),
            (p, k) => ex.rd_run_reward_card_title_into(k, p), slot);
 
+// 0 none / 1 attack / 2 skill / 3 power / 4 status / 5 curse / -1 unknown. The chip is the
+// player-facing half of a kernel fact: the type is a `Tags` lookup, not a field.
+const KIND_NAMES = ["", "攻击", "技能", "能力", "状态", "诅咒"];
+const kindName = (kind) => KIND_NAMES[kind] || "";
+const handKind = (slot) => ex.rd_env_card_kind(slot);
+const runKind = (context, index) => ex.rd_run_card_kind(context, index);
+/// The chip for a kind, or "" when there is nothing to say (`-1` unknown / `0` none).
+const kindChip = (kind) => {
+  const name = kindName(kind);
+  return name ? `<span class="kind">${name}</span>` : "";
+};
+
 const pileTitle = (zone, index) =>
   readText((k) => ex.rd_env_pile_card_title_len(zone, k),
            (p, k) => ex.rd_env_pile_card_title_into(zone, k, p), index);
@@ -562,7 +575,8 @@ function renderNode() {
     const cards = [];
     for (let slot = 0; slot < ex.rd_run_shop_card_count(); slot++) {
       const price = ex.rd_run_shop_card_price(slot);
-      cards.push(`<div class="shop-item"><span>${esc(shopCardId(slot))}</span>` +
+      cards.push(`<div class="shop-item"><span>${esc(shopCardId(slot))}` +
+        `${kindChip(runKind(2, slot))}</span>` +
         `<span class="price">${price < 0 ? "已售" : price + " 金"}</span>` +
         `<button class="act" data-buycard="${slot}" ${price < 0 ? "disabled" : ""}>买</button></div>`);
     }
@@ -594,7 +608,8 @@ function renderNode() {
     // The reward screen (`inv:§5`): gold is already in hand, the card is the choice.
     const cards = [];
     for (let slot = 0; slot < ex.rd_run_reward_card_count(); slot++) {
-      cards.push(`<div class="shop-item"><span>${esc(rewardTitle(slot) || rewardId(slot))}</span>` +
+      cards.push(`<div class="shop-item"><span>${esc(rewardTitle(slot) || rewardId(slot))}` +
+        `${kindChip(runKind(1, slot))}</span>` +
         `<span class="price">${esc(rewardId(slot))}</span>` +
         `<button class="act" data-take="${slot}">拿这张</button></div>`);
     }
@@ -674,7 +689,7 @@ function deckEntries() {
   const out = [];
   for (let index = 0; index < ex.rd_run_deck_count(); index++) {
     out.push(`<div class="card">${esc(deckTitle(index) || deckId(index))} ` +
-             `<span>${esc(deckId(index))}</span></div>`);
+             `<span>${esc(deckId(index))}${kindChip(runKind(0, index))}</span></div>`);
   }
   return out;
 }
@@ -981,7 +996,8 @@ function render(verdict, reward) {
               data-action="${card.directActionIndex}"
               style="animation-delay:${order * 40}ms"
               title="card definition slot ${card.definitionSlot}" ${card.playable ? "" : "disabled"}>
-        <div><span class="cost-badge">${card.cost}</span><span class="title">${esc(cardTitle(card.slot) || card.name)}</span></div>
+        <div><span class="cost-badge">${card.cost}</span><span class="title">${esc(cardTitle(card.slot) || card.name)}</span>${
+          kindChip(handKind(card.slot))}</div>
         ${cardText(card.slot) ? `<div class="text">${esc(cardText(card.slot))}</div>` : ""}
         <div class="meta">slot ${card.slot}${card.note ? ` · ${esc(card.note)}` : ""}</div>
       </button>`);

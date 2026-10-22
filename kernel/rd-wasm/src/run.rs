@@ -1171,6 +1171,45 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     0.max(result)
 }
 
+/// The **kind** of a card the run is showing, so the deck / reward / merchant lists can say
+/// "Attack" instead of nothing.
+///
+/// `context`: 0 = the deck, 1 = the reward screen, 2 = the merchant's cards. `index` is the slot in
+/// that list. Returns 0 none, 1 attack, 2 skill, 3 power, 4 status, 5 curse, `-1` unknown/absent.
+///
+/// One export rather than three: the three lists differ only in where the id comes from, and three
+/// copies of "read the id, ask the content" is three places to forget.
+#[no_mangle]
+pub extern "C" fn rd_run_card_kind(context: i32, index: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    if index < 0 {
+        return -1;
+    }
+    let id = match context {
+        0 => session.state.deck().get(index as usize).map(|id| id.as_str()),
+        1 => session
+            .state
+            .reward()
+            .cards()
+            .get(index as usize)
+            .map(|id| id.as_str()),
+        // The merchant's shelf holds Offers, not bare ids.
+        2 => session
+            .state
+            .shop()
+            .cards()
+            .get(index as usize)
+            .map(|offer| offer.id.as_str()),
+        _ => None,
+    };
+    match id {
+        Some(id) => crate::card_kind(content(), id),
+        None => -1,
+    }
+}
+
 // =============================================================================================
 // Diagnosis
 // =============================================================================================

@@ -4890,3 +4890,65 @@ SHA、很可能还要重跑语料与 golden 基线。那是一个独立迁移的
 | 单测 | 642 | **644**（rd-run 48 → 50） |
 | `.wasm` | 473,608 B | **475,137 B** |
 | 镜像 | — | `sts` 与 `roguedeck` 的 SHA **全部回到原值**（`CONTENTC_BYTES PASS`） |
+---
+
+## 65. 第 55 轮：把稀有度迁移**又试了一次**（还是不行，两个具体拦路），改交付"卡牌类型"
+
+> 用户："继续完成这些功能细节。" 我列的三件事（稀有度迁移 / 药水 / 精英 Boss）全卡在内容或格式上，
+> 所以先把最想要的那件再试一次，把拦路石钉成具体的东西，然后交付一件**真的**能做的。
+
+### 65.1 稀有度迁移：这次读对了症状，撞到两个新的具体障碍
+
+上一轮我把"重建后大小一字节没变（85,616 B）"读成"重建没生效"。**错**：第 16 格正好落在
+15 格行本来就有的**对齐填充**里（`align4(2×15) = align4(2×16) = 32`），**大小本来就不可能变**。
+这次照规矩走了一遍（改 → 重建两个包 → **看 sha** → 再决定），看到的是闸门自己印出来的话：
+
+```
+content.rdcf (fresh compile)   648a1ff9… → 3a86d3e3…      ← 字节真的动了
+content.rdcf (checked-in out/) 648a1ff9… → 3a86d3e3…
+编译器变了 -> compile.py 改动了旧内容产物的字节，必须在改编译器的同一个提交里要么修回去，
+              要么显式 --repin 并说明理由
+```
+
+于是撞到两个**具体**障碍：
+
+1. **`verify_bytes.py --repin` 崩溃**：`FileNotFoundError`，
+   `…\Temp\rdcf-fresh-xxxx\content.rdcf` 不存在 —— repin 路径自己在临时目录里找文件，
+   而那份临时产物已经被清掉/没生成。**那条"显式 repin"的路现在是坏的。**
+2. **两条内核守卫是按 roguedeck 的期望写死的**：`CARD.Rarity` 一格加进去之后，
+   `row_accessors_agree_with_the_written_schema` 断言 `cell_by_name("Rarity")` 等于
+   `card.rarity()`，而 `cell_by_name` 是从**镜像自己的字段表**取名字的 —— roguedeck 的文档里
+   没有 `Rarity` 这个键，所以它是 `None` 而格子是 `ABSENT16`。两条守卫都得先想清楚
+   "按文档派生的名字" 与 "内核固定的格号" 该怎么对齐。
+
+⇒ **再次撤回**（`git checkout` 三个源文件 → 重建 → `CONTENTC_BYTES PASS` 仍是原两个 sha），
+并把这两个障碍写进计划。**这不是"懒"，是"这一轮不该既校准又迁移"的同一条纪律再走一遍**：
+迁移需要一个能用的 repin、两条守卫的新判据、以及（很可能）语料与 golden 的重定基线。
+
+### 65.2 真正交付的：卡牌类型（Attack / Skill / Power）
+
+上一轮为 `slimed` 写的 `Content::card_has_tag` 正好够用，**零格式改动**：
+
+* `rd_env_card_kind(slot)`（手牌）与 `rd_run_card_kind(context, index)`（0 牌组 / 1 奖励 / 2 商店），
+  返回 `0 none / 1 attack / 2 skill / 3 power / 4 status / 5 curse / -1 未知`。
+* **问的顺序是语义**：先 attack、再 skill、最后 status —— `slimed` 的标签是
+  `status/unplayable/junk`，顺序反了它就会被报成攻击。
+* **"读不出来"不是"没有类型"**：`card_has_tag` 返回 `None` 时这里返回 `-1`，页面就不显示类型
+  徽章，而不是显示一个错的。
+
+浏览器实测：手牌 `1 Defend 技能 Gain 5 Block.`、`1 Strike 攻击 Deal 6 damage.`；
+牌组列表 `Strike strike 攻击`；`rd_env_card_kind` 五个槽 = `[2,1,1,1,2]`。
+
+判据：`the_card_kind_comes_from_the_tags`（手牌非 1 即 2、越界与负数是 −1、
+`strike`=1 / `defend`=2 / **`slimed`=4** / 不存在的卡 = −1）；
+`ui_test.mjs` 新增一条 `rd_env_card_kind(` 的接线断言。
+
+### 65.3 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 644 | **645**（rd-wasm 19 → 20） |
+| 新导出 | — | **2 个**（`rd_env_card_kind` / `rd_run_card_kind`） |
+| `.wasm` | 475,137 B | **476,487 B** |
+| 镜像 | — | 两个 SHA **仍在原值**（`CONTENTC_BYTES PASS`） |
