@@ -81,7 +81,7 @@ const REQUIRED = [
   "rd_run_reward_gold", "rd_run_reward_card_count", "rd_run_reward_card_id_len",
   "rd_run_reward_card_id_into", "rd_run_reward_card_title_len", "rd_run_reward_card_title_into",
   "rd_run_take_card", "rd_run_skip_reward",
-  "rd_env_card_kind", "rd_run_card_kind",
+  "rd_env_card_kind", "rd_run_card_kind", "rd_run_node_resolved",
 ];
 for (const name of REQUIRED) {
   if (!(name in ex)) fail(`missing export ${name}`);

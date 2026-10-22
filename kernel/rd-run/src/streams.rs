@@ -176,6 +176,9 @@ pub enum RunError {
     /// A pool too small to fill a reward screen with **distinct** cards (`inv:§3.5`: three, all
     /// different). Silently repeating a card would be a reward you cannot pick twice by accident.
     PoolTooSmall { pool: usize, need: usize },
+    /// The node under the cursor is already settled. A node pays once: without this, standing on a
+    /// combat node and pressing "fight" again would farm it, and a rest site would heal for ever.
+    NodeResolved,
     /// A relic whose effect is not implemented (`RunState::end_of_combat`).
     ///
     /// **This is the loud boundary of the relic system.** Effects are implemented one at a time, by

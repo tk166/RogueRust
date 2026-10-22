@@ -441,6 +441,12 @@ function wasEndTurnAction(actionIndex) {
 // ---------------------------------------------------------------------------------------------
 let mode = "run";
 let runSeed = 7;
+/// The run is finished. Two ways to get here, and only one of them exists yet: **defeat** (the
+/// hero's health reached 0). There is no boss encounter in this content, so a run cannot be won --
+/// the end of the act says so instead of pretending.
+let runOver = false;
+/// Why it ended, for the summary.
+let runOverWhy = "";
 
 const runRead = {
   obs: (i) => ex.rd_run_observe(i),
@@ -553,6 +559,12 @@ function renderNode() {
   const pending = ex.rd_run_pending();
   const kind = ex.rd_run_node_kind();
   if (pending === 0 && kind === 1) {
+    if (ex.rd_run_node_resolved() === 1) {
+      // The node paid already. Offering the button again is what let a fight be farmed; the panel
+      // says so instead.
+      panel.innerHTML = `<span class="dim">这个节点已结算 · 点亮的节点往前走</span>`;
+      return;
+    }
     // A fight: the run built it, the battle view shows it.
     panel.innerHTML = `<span class="dim">战斗节点</span> ` +
       `<button class="act" id="fightBtn">开始战斗</button>`;
@@ -631,7 +643,46 @@ function renderNode() {
     document.getElementById("chestLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
     return;
   }
-  panel.innerHTML = `<span class="dim">${kind < 0 ? "还没出发" : "这个节点没有可做的事"}</span>`;
+  if (runOver) {
+    panel.innerHTML =
+      `<div class="stats err">这一局结束了 · ${esc(runOverWhy)}</div>` +
+      `<div class="stats">floor <b>${ex.rd_run_observe(0)}</b> · ` +
+      `hp <b>${ex.rd_run_observe(2)}/${ex.rd_run_observe(3)}</b> · ` +
+      `gold <b>${ex.rd_run_observe(4)}</b> · deck <b>${ex.rd_run_deck_count()}</b> · ` +
+      `relics <b>${ex.rd_run_observe(6)}</b></div>` +
+      `<div class="row" style="margin-top:8px">` +
+      `<button class="act" id="againBtn">再来一局（同一 seed）</button>` +
+      `<button class="act" id="nextSeedBtn">换一个 seed</button></div>`;
+    document.getElementById("againBtn").onclick = () => startRun();
+    document.getElementById("nextSeedBtn").onclick = () => {
+      runSeed += 1;
+      startRun();
+    };
+    return;
+  }
+  if (kind >= 0 && ex.rd_run_action_count() === 0 && pending === 0) {
+    // The last row is a rest row (`inv:§7.2`: floor 15 is all campfires) and floor 16 -- the boss --
+    // has no encounter in this content, so the act stops here. Saying so beats an empty panel that
+    // looks like a bug.
+    panel.innerHTML =
+      `<span class="dim">第一幕到此为止（本内容没有 Boss 遭遇，跑不到第 16 层）</span> ` +
+      `<button class="act" id="actDoneBtn">就到这里</button>`;
+    document.getElementById("actDoneBtn").onclick = () => {
+      runOver = true;
+      runOverWhy = "走到第一幕尽头（Boss 未实现）";
+      renderNode();
+    };
+    return;
+  }
+  panel.innerHTML = `<span class="dim">${kind < 0 ? "还没出发 · 点亮的节点可以走" : "这个节点没有可做的事"}</span>`;
+}
+
+/// What the cursor is standing on, as one line: the map marks it, the panel names it.
+function nodeLine() {
+  const kind = ex.rd_run_node_kind();
+  if (kind < 0) return "";
+  const names = ["", "战斗", "精英", "篝火", "商人", "未知", "宝箱", "未分配"];
+  return `floor ${ex.rd_run_observe(0)} · ${names[kind] || `kind ${kind}`}`;
 }
 
 /// Run a kernel action, then refresh. `0` and positive values are success; negative is a refusal
@@ -666,9 +717,34 @@ function beginFight() {
 }
 
 /// The fight is over: fold it back into the run and return to the map.
+/// The one path that begins a run: the summary panel's buttons, the reset button and the boot all
+/// go through it, so `runOver` cannot be left set by accident. Declared (not assigned) so the boot,
+/// which runs before the wiring block, can call it.
+function startRun() {
+  runOver = false;
+  runOverWhy = "";
+  if (ex.rd_run_start(runSeed) !== 0) {
+    document.getElementById("msg").innerHTML =
+      `<span class="err">开局失败 · ${esc(runError())}</span>`;
+    return;
+  }
+  document.getElementById("log").innerHTML = "";
+  document.getElementById("floats").innerHTML = "";
+  setMode("run");
+  renderMap();
+  renderNode();
+  renderTopBar();
+}
+
 function endFight() {
   const result = ex.rd_run_fight_end();
   setMode("run");
+  // Defeat is the end of the run, not a return to the map: the health came back as 0 and there is
+  // nothing to walk with.
+  if (result === 2 || ex.rd_run_observe(2) <= 0) {
+    runOver = true;
+    runOverWhy = `第 ${ex.rd_run_observe(0)} 层战败`;
+  }
   renderMap();
   renderNode();
   renderTopBar();
@@ -1178,13 +1254,10 @@ function measure() {
     // demo fight over the map and leave its session in the slot.
     measure();
     // Then the page opens on the **run**: a fight is entered from the map and built from this run.
-    if (ex.rd_run_start(runSeed) !== 0) {
-      throw new Error("rd_run_start failed: " + runError());
+    startRun();
+    if (ex.rd_run_node_kind() !== -1) {
+      throw new Error("a fresh run should not be standing on a node");
     }
-    setMode("run");
-    renderMap();
-    renderNode();
-    renderTopBar();
   } catch (e) {
     document.getElementById("bench").textContent = "载入失败: " + (e && e.message ? e.message : e);
     document.getElementById("msg").innerHTML = `<span class="err">载入失败: ${esc(e)}</span>`;
@@ -1195,7 +1268,7 @@ function measure() {
   // what the node needs (a fight, a rest, a shop, a chest, or a refusal for the kinds M1 skips).
   document.getElementById("mapbox").addEventListener("click", (ev) => {
     const group = ev.target.closest("g.node.reachable");
-    if (!group || mode !== "run") return;
+    if (!group || mode !== "run" || runOver) return;
     const target = Number(group.dataset.node);
     const view = RD_MAP.describeMap(runRead);
     const action = view.actions.indexOf(target);
@@ -1263,13 +1336,7 @@ function measure() {
   document.getElementById("reset").addEventListener("click", () => {
     // "重开" is a new **run**, not a new fight: the fight is a consequence of walking into one.
     pending = null; lastVerdict = null; lastReward = 0;
-    ex.rd_run_start(runSeed);
-    setMode("run");
-    document.getElementById("log").innerHTML = "";
-    document.getElementById("floats").innerHTML = "";
-    renderMap();
-    renderNode();
-    renderTopBar();
+    startRun();
   });
 })();
 </script>

@@ -403,6 +403,9 @@ pub struct RunState {
     shop: ShopStock,
     /// The card choice after a won fight.
     reward: Reward,
+    /// Which nodes have paid out. A node settles **once** -- a second visit is an error, which is
+    /// what stops a fight from being farmed and a campfire from healing on every click.
+    resolved: [u64; 2],
     /// The rare-card pity offset (`inv:§3.5`): starts at −5%, +1% per non-rare reward roll, reset to
     /// −5% on a rare, capped at +40%. Only **combat reward** rolls move it.
     rarity_offset: i32,
@@ -442,6 +445,7 @@ impl RunState {
             pending: Pending::None,
             shop: ShopStock::empty(),
             reward: Reward::empty(),
+            resolved: [0; 2],
             rarity_offset: RARITY_OFFSET_START,
         };
         for id in starting_deck {
@@ -675,6 +679,30 @@ impl RunState {
 
     // ---- settling a node -------------------------------------------------------------------
 
+    /// Has the node under the cursor already paid out?
+    #[must_use]
+    pub fn node_resolved(&self) -> bool {
+        let node = self.node;
+        if node < 0 {
+            return false;
+        }
+        let bit = node as usize;
+        self.resolved[bit / 64] & (1u64 << (bit % 64)) != 0
+    }
+
+    /// Mark the node under the cursor as settled. Called by every action that finishes one **and**
+    /// by the fight's epilogue (`rd_run_fight_end`), because a fight is settled outside this crate.
+    pub fn mark_resolved(&mut self) {
+        let node = self.node;
+        if node < 0 {
+            return;
+        }
+        let bit = node as usize;
+        if bit < 128 {
+            self.resolved[bit / 64] |= 1u64 << (bit % 64);
+        }
+    }
+
     /// What the node under the cursor is waiting for.
     #[must_use]
     pub const fn pending(&self) -> Pending {
@@ -711,6 +739,9 @@ impl RunState {
     ) -> Result<crate::map::NodeKind, RunError> {
         if self.node < 0 {
             return Err(RunError::WrongPhase);
+        }
+        if self.node_resolved() {
+            return Err(RunError::NodeResolved);
         }
         let Some((row, local)) = self.map.locate(self.node as u8) else {
             return Err(RunError::BadNode);
@@ -751,6 +782,7 @@ impl RunState {
         let before = self.health;
         self.heal_after_combat(self.rest_heal());
         self.pending = Pending::None;
+        self.mark_resolved();
         Ok(self.health - before)
     }
 
@@ -773,6 +805,7 @@ impl RunState {
         }
         self.deck[card] = id;
         self.pending = Pending::None;
+        self.mark_resolved();
         Ok(())
     }
 
@@ -807,6 +840,7 @@ impl RunState {
             Some(id)
         };
         self.pending = Pending::None;
+        self.mark_resolved();
         Ok(ChestOutcome { chest, gold, relic })
     }
 
@@ -1072,6 +1106,7 @@ impl RunState {
         }
         self.push_card(id.as_str())?;
         self.pending = Pending::None;
+        self.mark_resolved();
         Ok(())
     }
 
@@ -1081,6 +1116,7 @@ impl RunState {
             return Err(RunError::WrongPhase);
         }
         self.pending = Pending::None;
+        self.mark_resolved();
         Ok(())
     }
 
@@ -1090,6 +1126,7 @@ impl RunState {
             return Err(RunError::WrongPhase);
         }
         self.pending = Pending::None;
+        self.mark_resolved();
         Ok(())
     }
 
@@ -1348,12 +1385,20 @@ mod tests {
         let mut queue = [0u8; CAP];
         let mut head = 0usize;
         let mut tail = 0usize;
-        for (index, is_seen) in seen.iter_mut().enumerate().take(n) {
-            let (row, _) = run.map().locate(index as u8).unwrap();
-            if row == 0 {
-                *is_seen = true;
-                queue[tail] = index as u8;
-                tail += 1;
+        // Start where the cursor is; a fresh run has none, so start at floor 1.
+        let cursor = run.node();
+        if cursor >= 0 {
+            seen[cursor as usize] = true;
+            queue[tail] = cursor as u8;
+            tail += 1;
+        } else {
+            for (index, is_seen) in seen.iter_mut().enumerate().take(n) {
+                let (row, _) = run.map().locate(index as u8).unwrap();
+                if row == 0 {
+                    *is_seen = true;
+                    queue[tail] = index as u8;
+                    tail += 1;
+                }
             }
         }
         let mut target = usize::MAX;
@@ -1390,6 +1435,11 @@ mod tests {
         path[len] = at as u8;
         len += 1;
         for step in (0..len).rev() {
+            // The last element is the seed, and the seed may be the node we are standing on --
+            // entering that again is not an edge, so it is skipped.
+            if cursor >= 0 && step == len - 1 {
+                continue;
+            }
             run.enter_node(path[step]).unwrap();
         }
         true
@@ -1767,6 +1817,30 @@ mod tests {
                 offer.price
             );
         }
+    }
+
+    /// A node pays **once**. Without this, a combat node could be fought again from where you stand
+    /// and a campfire would heal on every click -- the page showed exactly that before the guard.
+    #[test]
+    fn a_node_pays_once() {
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Rest));
+        assert!(!run.node_resolved(), "a fresh node is not resolved");
+        run.begin_node(&basic_pool(), &RELICS).expect("a rest site");
+        run.rest().expect("rest");
+        assert!(run.node_resolved());
+
+        // The second visit is refused rather than healed again.
+        assert_eq!(
+            run.begin_node(&basic_pool(), &RELICS),
+            Err(RunError::NodeResolved)
+        );
+        assert_eq!(run.rest(), Err(RunError::WrongPhase));
+
+        // A different node is still fine.
+        assert!(walk_to(&mut run, NodeKind::Combat));
+        assert!(!run.node_resolved());
+        assert_eq!(run.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Combat));
     }
 
     #[test]

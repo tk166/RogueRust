@@ -867,6 +867,18 @@ pub extern "C" fn rd_run_remove_card(index: i32) -> i32 {
 // The reward screen (`env-abi.md` §11.9)
 // =============================================================================================
 
+/// Has the node under the cursor already paid out? `1` yes, `0` no, `-1` no cursor.
+#[no_mangle]
+pub extern "C" fn rd_run_node_resolved() -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    if session.state.node() < 0 {
+        return -1;
+    }
+    i32::from(session.state.node_resolved())
+}
+
 /// The gold the last won fight paid; `0` when there is nothing on the table.
 #[no_mangle]
 pub extern "C" fn rd_run_reward_gold() -> i32 {
@@ -1068,6 +1080,11 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         let message = std::format!("当前节点不是战斗（kind {kind}）");
         return fail(session, &message);
     }
+    // A node pays once (`run-layer.md` §4.7.5). This is the check that stops a fight from being
+    // farmed by pressing the button again from where you stand.
+    if session.state.node_resolved() {
+        return fail(session, "这个节点已经结算过了");
+    }
 
     let content = content();
     // Pick an encounter with the `Combat` stream -- the stream exists for exactly this
@@ -1175,6 +1192,8 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
             return fail(session, &message);
         }
     }
+    // The fight is settled -- win or lose -- so the node has paid.
+    session.state.mark_resolved();
     0.max(result)
 }
 
