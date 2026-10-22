@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>rd-core · WASM env ABI spike</title>
+
+<link rel="stylesheet" href="./map.css">
 <style>
   :root {
     --bg: #0f1115; --panel: #191d25; --line: #2a3140; --ink: #d7dde8; --dim: #7d8798;
@@ -17,6 +19,9 @@
   }
   h1 { font-size: 15px; font-weight: 600; margin: 0 0 2px; letter-spacing: .04em; }
   .sub { color: var(--dim); font-size: 12px; margin-bottom: 14px; }
+  .sub summary { cursor: pointer; }
+  .sub summary:hover { color: var(--ink); }
+  .sub[open] { line-height: 1.6; }
   .sub code { color: var(--ink); }
   /* One column, always: the hero is a single bar rather than a box, and the enemies are a row
      rather than a list, so the two-column layout was leaving a tall empty panel beside a short
@@ -157,7 +162,7 @@
   .topbar .stats b { color: var(--ink); }
   .topbar .act { padding: 5px 10px; font-size: 12px; }
   .chips .chip.relic { border-color: var(--energy); color: var(--energy); }
-  .mapbox { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: #12151b; max-height: 620px; }
+  /* `.mapbox` itself is in `map.css`, together with the rest of the map's look. */
   .node-panel { margin-top: 12px; }
   .node-panel .row { justify-content: flex-start; gap: 10px; }
   .shop-item { display: flex; align-items: center; gap: 10px; font: 12px var(--mono);
@@ -180,8 +185,9 @@
 </head>
 <body>
 
-<h1>rd-core → WebAssembly · env ABI spike</h1>
-<div class="sub">
+<h1>rd-core → WebAssembly · 一局 Slay the Spire 式的游戏</h1>
+<details class="sub">
+  <summary>这一页是什么（点开）</summary>
   一个静态页面 + 一个 <code>.wasm</code>，全局没有 CDN、没有 worker、没有 <code>SharedArrayBuffer</code>。
   状态全部来自 <code>rd_env_observe_buf()</code> 那 122 个 <code>i32</code>；每次点击 = 一次 <code>rd_env_step</code>。
   <br>
@@ -192,7 +198,7 @@
   敌人意图用 <code>intent::select_action</code> 现算 + 从 <code>EACT</code> 程序里读伤害。
   <br>
   一次「结束回合」= 英雄回合结束 → **每个**敌人各自走一个回合（<code>Step::EndOneTurn</code>）→ 回到英雄。
-</div>
+</details>
 
 <div class="topbar">
   <span class="stats" id="runStats">——</span>

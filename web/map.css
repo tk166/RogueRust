@@ -1,0 +1,50 @@
+/* map.css -- the Act 1 map's look, in **one** place.
+ *
+ * This used to live inside `map.html`'s <style>, which meant the game page (`index.html`) rendered
+ * the same markup with no rules at all: black circles, no edges, no reachable highlight. The markup
+ * came from `map_render.js`, the *look* came from a page -- so the second page got the first
+ * page's absence. Both pages link this file now.
+ */
+
+/* The two highlight colours the map owns. Declared here so a page that does not define them still
+ * gets a usable map; a page that does (map.html) wins because `:root` rules are equal and the
+ * later file is the one that defines them... so this file is linked *before* the page's own style. */
+:root {
+  --live: #e0c060;
+  --here: #59bb7a;
+}
+
+.mapbox {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #12151b;
+  /* No `max-height`: the whole Act has to be visible without scrolling. A clipped map hides the
+   * node you are standing on, which is the one thing it must never do. */
+  overflow: auto;
+}
+
+/* `viewBox` is set by the renderer, so scaling keeps the geometry exact. Both dimensions are pinned
+ * and `preserveAspectRatio` does the rest: the **whole Act** then fits, which is the point -- a map
+ * you have to scroll hides the node you are standing on. */
+.mapbox svg {
+  display: block;
+  width: 100%;
+  height: min(74vh, 780px);
+}
+
+.edge { stroke: #2f3949; stroke-width: 2; fill: none; }
+.edge-live { stroke: var(--live); stroke-width: 3; }
+
+.node circle { fill: #202634; stroke: #3a4657; stroke-width: 2; }
+.node text { font: 13px var(--mono, ui-monospace, monospace); fill: var(--ink); pointer-events: none; }
+.node.reachable circle { stroke: var(--live); stroke-width: 3; cursor: pointer; }
+.node.reachable:hover circle { fill: #2b3648; }
+.node.here circle { stroke: var(--here); stroke-width: 4; }
+
+.node.kind-combat circle { fill: #2a2230; }
+.node.kind-elite circle { fill: #331f22; }
+.node.kind-rest circle { fill: #222a30; }
+.node.kind-shop circle { fill: #2a2a20; }
+.node.kind-unknown circle { fill: #1e232c; }
+.node.kind-treasure circle { fill: #1f2a2a; }
+.node.kind-unassigned circle { fill: #3a1f1f; }

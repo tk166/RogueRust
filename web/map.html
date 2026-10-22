@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>rd-run · Act 1 map</title>
+<link rel="stylesheet" href="./map.css">
 <style>
   :root {
     --bg: #0f1115; --panel: #191d25; --line: #2a3140; --ink: #d7dde8; --dim: #7d8798;
@@ -22,23 +23,9 @@
               margin: 0 0 8px; font-weight: 600; }
   .status { font: 12px/1.7 var(--mono); color: var(--dim); }
   .status b { color: var(--ink); }
-  .mapbox { margin-top: 12px; overflow: auto; border: 1px solid var(--line); border-radius: 10px;
-            background: #12151b; }
-  svg { display: block; }
-  .edge { stroke: #2f3949; stroke-width: 2; fill: none; }
-  .edge-live { stroke: var(--live); stroke-width: 3; }
-  .node circle { fill: #202634; stroke: #3a4657; stroke-width: 2; }
-  .node text { font: 13px var(--mono); fill: var(--ink); pointer-events: none; }
-  .node.reachable circle { stroke: var(--live); stroke-width: 3; cursor: pointer; }
-  .node.reachable:hover circle { fill: #2b3648; }
-  .node.here circle { stroke: var(--here); stroke-width: 4; }
-  .node.kind-combat circle { fill: #2a2230; }
-  .node.kind-elite circle { fill: #331f22; }
-  .node.kind-rest circle { fill: #222a30; }
-  .node.kind-shop circle { fill: #2a2a20; }
-  .node.kind-unknown circle { fill: #1e232c; }
-  .node.kind-treasure circle { fill: #1f2a2a; }
-  .node.kind-unassigned circle { fill: #3a1f1f; }
+  /* The map's own look lives in `map.css`, shared with the game page: it used to live here, and the
+     game page rendered the same markup as black circles with no edges. */
+  .mapbox { margin-top: 12px; }
   .floor { font: 10px var(--mono); fill: var(--dim); }
   .msg { font: 12px/1.6 var(--mono); margin-top: 10px; min-height: 2.4em; }
   .msg .err { color: var(--bad); }

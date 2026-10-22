@@ -25,6 +25,7 @@ const M = context.RD_MAP;
 if (!M) fail("map_render.js did not define globalThis.RD_MAP");
 
 const page = await readFile(new URL("./map.html", import.meta.url), "utf8");
+const game = await readFile(new URL("./index.html", import.meta.url), "utf8");
 if (!page.includes('src="./map_render.js"')) {
   fail("map.html does not load map_render.js -- everything below would be dead code");
 }
@@ -331,6 +332,21 @@ function assertViewAgreesWithModule(where) {
   }
   if (!page.includes("rd_run_deck_title_len")) {
     fail("map.html never lists the deck it claims to show");
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// 9. The map's **look** must not live in one page. It used to be a <style> block in `map.html`, so
+//    the game page rendered the same markup as black circles with no edges: the markup came from a
+//    shared module, the look did not. `map.css` is the single copy, both pages link it, and neither
+//    may re-declare the rules.
+// ---------------------------------------------------------------------------------------------
+for (const [name, html] of [["map.html", page], ["index.html", game]]) {
+  // The *link tag*, not the string: the comment above says "map.css" too, and a substring check was
+  // satisfied by it while the page had no stylesheet at all.
+  if (!/<link[^>]+map\.css/.test(html)) fail(`${name} does not link map.css`);
+  for (const rule of [".edge {", ".node circle", ".node.kind-combat"]) {
+    if (html.includes(rule)) fail(`${name} re-declares ${rule} -- that is the second copy`);
   }
 }
 
