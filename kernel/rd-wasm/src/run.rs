@@ -56,6 +56,18 @@ fn run_slot() -> &'static mut Option<RunSession> {
     unsafe { &mut RUN }
 }
 
+/// Write the error into a session the caller already holds.
+///
+/// `set_error` re-takes the global slot, so calling it while holding `run_slot().as_mut()` aliases
+/// the same `static mut` -- two live references to one object, which is undefined behaviour. It
+/// showed up as an **access violation** in `rust-units` (exit 0xC0000005) rather than as a wrong
+/// answer, which is the only good thing about it.
+fn fail(session: &mut RunSession, message: &str) -> i32 {
+    session.error.clear();
+    session.error.push_str(message);
+    -2
+}
+
 fn set_error(message: &str) {
     if let Some(session) = run_slot().as_mut() {
         session.error.clear();
@@ -655,8 +667,8 @@ pub extern "C" fn rd_run_smith(index: i32) -> i32 {
         .lookup_in(&upgraded, rd_core::content::EK_CARD)
         .is_none()
     {
-        set_error(&std::format!("`{current}` 没有升级行（内容里没有 `{upgraded}`）"));
-        return -2;
+        let message = std::format!("`{current}` 没有升级行（内容里没有 `{upgraded}`）");
+        return fail(session, &message);
     }
     let outcome = session.state.smith(index as usize, &upgraded.clone()).map(|_| 0i32);
     finish(session, outcome)
@@ -897,16 +909,29 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
-    // Only a combat node starts a fight.
-    if session.state.node() < 0 {
-        set_error("还没有走到任何节点");
-        return -2;
+    // Only a combat node starts a fight. The kind is read off the session we are already holding:
+    // calling `rd_run_node_kind()` here would take the slot a second time (see `fail`).
+    let node = session.state.node();
+    if node < 0 {
+        return fail(session, "还没有走到任何节点");
     }
-    let kind = rd_run_node_kind();
+    let kind = session
+        .state
+        .map()
+        .locate(node as u8)
+        .and_then(|(row, local)| {
+            session
+                .state
+                .map()
+                .row(row)
+                .and_then(|line| line.node(local))
+                .map(|node| node.kind as i32)
+        })
+        .unwrap_or(-1);
     if kind != 1 {
         // 1 = `NodeKind::Combat` (`run-layer.md` §7.2)
-        set_error(&std::format!("当前节点不是战斗（kind {kind}）"));
-        return -2;
+        let message = std::format!("当前节点不是战斗（kind {kind}）");
+        return fail(session, &message);
     }
 
     let content = content();
@@ -923,23 +948,20 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         index += 1;
     }
     if encounters.is_empty() {
-        set_error("内容镜像里没有任何遭遇");
-        return -2;
+        return fail(session, "内容镜像里没有任何遭遇");
     }
     let pick = match session.state.rng_mut().roll(RunStream::Combat, encounters.len() as u32) {
         Ok(value) => value as usize,
         Err(e) => {
             let message = describe(&e);
-            set_error(&message);
-            return -2;
+            return fail(session, &message);
         }
     };
     let fight_seed = match session.state.rng_mut().roll(RunStream::Combat, i32::MAX as u32) {
         Ok(value) => value as i32,
         Err(e) => {
             let message = describe(&e);
-            set_error(&message);
-            return -2;
+            return fail(session, &message);
         }
     };
 
@@ -971,7 +993,8 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
             0
         }
         Err(message) => {
-            set_error(&message);
+            session.error.clear();
+            session.error.push_str(&message);
             -2
         }
     }
@@ -983,7 +1006,10 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
 #[no_mangle]
 pub extern "C" fn rd_run_fight_end() -> i32 {
     let Some(result) = crate::combat_result() else {
-        set_error("没有正在进行的战斗");
+        if let Some(session) = run_slot().as_mut() {
+            session.error.clear();
+            session.error.push_str("没有正在进行的战斗");
+        }
         return -1;
     };
     let hero_hp = crate::combat_hero_health().unwrap_or(0);
@@ -998,8 +1024,7 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
         // `Burning Blood` and friends (`inv:§2`), now with a call site.
         if let Err(e) = session.state.end_of_combat() {
             let message = describe(&e);
-            set_error(&message);
-            return -2;
+            return fail(session, &message);
         }
     }
     0.max(result)
@@ -1089,7 +1114,15 @@ fn kind_name(kind: i32) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{rd_env_pile_card_title_into, rd_env_pile_card_title_len, rd_env_pile_len};
+
+    // Every test in this module drives the crate's two global sessions, and `cargo test` runs tests
+    // in one process, in parallel. A mutex was tried and **deadlocked** (a lock taken twice in one
+    // thread); the honest answer is that this crate's tests are not parallel-safe, so the gate runs
+    // them with `--test-threads=1` (see `tools/acceptance.ps1`) and this module says so.
+    use crate::{
+        rd_env_action_count, rd_env_action_kind, rd_env_done, rd_env_pile_card_title_into,
+        rd_env_pile_card_title_len, rd_env_pile_len, rd_env_result, rd_env_step,
+    };
     use rd_run::map::{RunMap, NODES_PER_ROW};
     use rd_run::state::{MAX_RUN_POTIONS, MAX_RUN_RELICS};
     use rd_run::streams::RunRng;
@@ -1354,6 +1387,64 @@ mod tests {
         assert_eq!(rd_run_fight_end(), -1, "there is no second fight to end");
         let session = run_slot().as_ref().unwrap();
         assert_eq!(session.state.health(), 60, "the fight did not change the run's health");
+    }
+
+    /// Winning folds the health back **and** runs the relics: `Burning Blood` heals 6.
+    ///
+    /// This is the path the browser run exposed as untested -- the previous test ended a fight that
+    /// was still ongoing, which takes the "no heal" branch. `end_of_combat` had a call site but no
+    /// test that the call site was *reached*.
+    #[test]
+    fn winning_heals_through_the_relic() {
+        reset(7);
+        assert_eq!(rd_run_step(0), 0);
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0);
+        let start = run_slot().as_ref().unwrap().state.health();
+        assert_eq!(start, 80);
+
+        // Play the fight out the way a policy would: any play action, else end the turn.
+        let mut guard = 0;
+        while rd_env_done() == 0 && guard < 400 {
+            let mut choice = -1;
+            for index in 0..rd_env_action_count() {
+                if rd_env_action_kind(index) == 0 {
+                    choice = index;
+                    break;
+                }
+            }
+            if choice < 0 {
+                choice = rd_env_action_index_of_end_turn();
+            }
+            assert!(choice >= 0, "no legal action at step {guard}");
+            assert_eq!(rd_env_step(choice), 0, "step {guard} rejected");
+            guard += 1;
+        }
+        assert_eq!(rd_env_done(), 1, "the fight did not finish");
+        assert_eq!(rd_env_result(), 1, "the fight was not won");
+        let fight_hp = crate::combat_hero_health().expect("hero health");
+        assert!(fight_hp < start, "the fight did no damage at all");
+
+        assert_eq!(rd_run_fight_end(), 1, "the run must report a victory");
+        let session = run_slot().as_ref().unwrap();
+        // `Burning Blood`: +6, capped at the maximum (`inv:§2`).
+        let expected = (fight_hp + rd_run::state::BURNING_BLOOD_HEAL).min(start);
+        assert_eq!(
+            session.state.health(),
+            expected,
+            "the relic did not heal: fight ended at {fight_hp}, run reads {}",
+            session.state.health()
+        );
+    }
+
+    /// The end-turn action's index, or `-1`.
+    fn rd_env_action_index_of_end_turn() -> i32 {
+        for index in 0..rd_env_action_count() {
+            if rd_env_action_kind(index) == 1 {
+                return index;
+            }
+        }
+        -1
     }
 
     /// The three pile exports read the fight's piles, and the observation only carries counts.

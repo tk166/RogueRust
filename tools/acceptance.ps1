@@ -14,7 +14,7 @@
 
 param(
   [switch]$SkipSlow,
-  [int]$UnitsFloor = 636
+  [int]$UnitsFloor = 637
 )
 
 $ErrorActionPreference = 'Stop'
@@ -103,7 +103,7 @@ Write-Output "`n[1/9] 单元测试 + 语料逐字节回环（Rust 内核）"
 # 于是"条数下限"必须对**两个 crate 加起来**比 —— 只取第一个 `N passed` 会让新 crate 的测试
 # 全绿或全红都对闸门没有影响（这就是"覆盖不到的地方看起来最绿"）。
 $r = Invoke-Gate -Name 'rust-units' -Exe $CARGO `
-  -ArgLine "test -p rd-core -p rd-run -p rd-wasm --release --target-dir `"$TARGET_DIR`"" -Workdir (Join-Path $ROOT 'kernel') `
+  -ArgLine "test -p rd-core -p rd-run -p rd-wasm --release --target-dir `"$TARGET_DIR`" -- --test-threads=1" -Workdir (Join-Path $ROOT 'kernel') `
   -MustMatch 'test result: ok\. \d+ passed; 0 failed' -MustNotMatch 'test result: FAILED'
 $results += $r
 $passed = 0

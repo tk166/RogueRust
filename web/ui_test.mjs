@@ -44,6 +44,15 @@ for (const [needle, why] of [
   ["rd_env_card_text_len", "the card face would never show the content's description"],
   ["RD_UI.actionFor(", "a drop would never consult the decision function"],
   ["RD_UI.soundPlan(", "the sound plan is computed and then never played"],
+  ["rd_run_fight_begin(", "the page never starts a fight from the run"],
+  ["rd_run_fight_end(", "a finished fight is never folded back into the run"],
+  ["rd_run_begin_node(", "walking onto a node never asks what it needs"],
+  ["rd_run_rest(", "the rest site has no button behind it"],
+  ["rd_run_buy_card(", "the merchant cannot sell anything"],
+  ["rd_run_deck_title_len", "the deck panel would list ids instead of titles"],
+  ["rd_env_pile_card_title_len", "the pile panels would list nothing"],
+  ['id="mapbox"', "there is no map on the page"],
+  ['id="nodePanel"', "there is no node panel for a rest site or a merchant"],
   ['addEventListener("pointerdown"', "the drag is never wired up"],
   ['addEventListener("pointerup"', "the drag is never wired up"],
 ]) {
@@ -667,5 +676,6 @@ console.log(`  block vs clear     a block gain, then the end-of-turn clear (not 
 console.log(`  terminal events    an enemy death and the result are both reported`);
 console.log(`  dropping a card   two targets => two actions; empty space => nothing`);
 console.log(`  sound cues        no-op silent; a hit/draw/turn each ask for their own; one cue at the end`);
-console.log(`  page wiring       index.html loads ui_render.js and calls describe/animationPlan/appendLog`);
+console.log(`  page wiring       one page: run + fight, deck/pile panels, node panels, drag`);
+console.log(`  run <-> fight     started by rd_run_fight_begin, folded back by rd_run_fight_end`);
 console.log("  ⚠️  no DOM: the markup layer is still only checked by eye in a browser.");

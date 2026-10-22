@@ -148,6 +148,32 @@
     padding: 6px 10px; border-radius: 8px; background: #202634; border: 1px solid var(--energy);
     font: 600 12px var(--mono); color: var(--ink); transform: translate(-50%, -140%);
   }
+  /* ---- the run: a top bar that is always visible, a map, and node panels --------------------
+     The page is one page now: `mode` is `run` or `fight`, and the bar above both shows the things
+     that belong to the *run* rather than to a fight (health, gold, floor, relics, the deck). */
+  .topbar { display: flex; align-items: center; gap: 8px 14px; flex-wrap: wrap; margin-bottom: 12px;
+            padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+  .topbar .stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-family: var(--mono); font-size: 12px; color: var(--dim); }
+  .topbar .stats b { color: var(--ink); }
+  .topbar .act { padding: 5px 10px; font-size: 12px; }
+  .chips .chip.relic { border-color: var(--energy); color: var(--energy); }
+  .mapbox { overflow: auto; border: 1px solid var(--line); border-radius: 10px; background: #12151b; max-height: 620px; }
+  .node-panel { margin-top: 12px; }
+  .node-panel .row { justify-content: flex-start; gap: 10px; }
+  .shop-item { display: flex; align-items: center; gap: 10px; font: 12px var(--mono);
+               padding: 4px 0; border-bottom: 1px solid #202634; }
+  .shop-item .price { color: var(--energy); }
+  .shop-item button { padding: 3px 8px; font-size: 11px; }
+  .modal { position: fixed; inset: 0; background: #0009; display: flex; align-items: center;
+           justify-content: center; z-index: 60; }
+  .modal[hidden] { display: none; }
+  .modal-box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+               padding: 14px; max-width: 720px; max-height: 70vh; overflow-y: auto; }
+  .modal-box h3 { font-size: 13px; margin: 0 0 10px; letter-spacing: .05em; }
+  .deck { display: flex; flex-wrap: wrap; gap: 6px; }
+  .deck .card { font: 12px/1.3 var(--mono); padding: 5px 9px; border-radius: 6px;
+                background: #202634; border: 1px solid var(--line); color: var(--ink); }
+  .deck .card span { color: var(--dim); font-size: 10px; }
   .grid2 { display: grid; gap: 12px; grid-template-columns: 1fr; }
   @media (min-width: 720px) { .grid2 { grid-template-columns: 1fr 1fr; } }
 </style>
@@ -168,8 +194,32 @@
   一次「结束回合」= 英雄回合结束 → **每个**敌人各自走一个回合（<code>Step::EndOneTurn</code>）→ 回到英雄。
 </div>
 
+<div class="topbar">
+  <span class="stats" id="runStats">——</span>
+  <span class="chips" id="relicChips"></span>
+  <span style="flex:1"></span>
+  <button class="act" id="deckBtn">所有牌 <span id="deckCount">–</span></button>
+  <button class="act" id="drawBtn">抽牌 <span id="pileDraw">–</span></button>
+  <button class="act" id="discardBtn">弃牌 <span id="pileDiscard">–</span></button>
+  <button class="act" id="exhaustBtn">消耗 <span id="pileExhaust">–</span></button>
+</div>
+
+<div id="modal" class="modal" hidden>
+  <div class="modal-box">
+    <h3 id="modalTitle">牌</h3>
+    <div class="deck" id="modalBody"></div>
+  </div>
+</div>
+
 <div class="board battle">
   <div class="float-layer" id="floats"></div>
+
+  <div class="panel" id="runPanel" style="grid-column: 1 / -1;">
+    <h2>Act 1 · 地图</h2>
+    <div class="mapbox" id="mapbox"></div>
+    <div class="node-panel" id="nodePanel"></div>
+  </div>
+
   <div class="panel" id="heroPanel">
     <h2>Hero</h2>
     <div class="hero-bar">
@@ -186,12 +236,12 @@
     <div class="chips" id="heroStatus"></div>
   </div>
 
-  <div class="panel">
+  <div class="panel" id="enemiesPanel">
     <h2>Enemies</h2>
     <div id="enemies" class="enemy-row"></div>
   </div>
 
-  <div class="panel" style="grid-column: 1 / -1;">
+  <div class="panel" id="handPanel" style="grid-column: 1 / -1;">
     <h2>Hand</h2>
     <div class="hand" id="hand"></div>
     <div class="msg" id="msg"></div>
@@ -201,7 +251,7 @@
     </div>
   </div>
 
-  <div class="panel" style="grid-column: 1 / -1;">
+  <div class="panel" id="logPanel" style="grid-column: 1 / -1;">
     <h2>战斗日志 · Battle log</h2>
     <div class="log" id="log"></div>
   </div>
@@ -213,6 +263,7 @@
 </div>
 
 <script src="./ui_render.js"></script>
+<script src="./map_render.js"></script>
 <script>
 "use strict";
 
@@ -362,12 +413,247 @@ function step(actionIndex) {
   render(verdict, reward);
   animate(diff);
   appendLog(diff);
+  renderTopBar();
+  // A finished fight goes back to the run: the health and the relics are the run's business.
+  if (ex.rd_env_done() === 1) endFight();
   return verdict;
 }
 
 function wasEndTurnAction(actionIndex) {
   const action = readActions().find((a) => a.index === actionIndex);
   return !!action && action.kind === ACTION_END_TURN;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The run. `mode` is `run` or `fight`: one page, two views, one state machine.
+//
+// The run owns the map, the relics and the deck; the fight is built **from the run** by
+// `rd_run_fight_begin` and folded back by `rd_run_fight_end`. All the *decisions* are exports from
+// the kernel (settling a node, prices, which cards the piles hold), so this file only draws and
+// routes -- the same split as `ui_render.js`.
+// ---------------------------------------------------------------------------------------------
+let mode = "run";
+let runSeed = 7;
+
+const runRead = {
+  obs: (i) => ex.rd_run_observe(i),
+  mapLen: () => ex.rd_run_map_len(),
+  rows: () => ex.rd_run_map_rows(),
+  node: (i, f) => ex.rd_run_map_node(i, f),
+  rowFirst: (r) => ex.rd_run_map_row_first(r),
+  actionCount: () => ex.rd_run_action_count(),
+  actionArg: (i, w) => ex.rd_run_action_arg(i, w),
+  relicName: (i) =>
+    readText((k) => ex.rd_run_relic_name_len(k), (p, k) => ex.rd_run_relic_name_into(k, p), i),
+};
+
+const deckTitle = (i) =>
+  readText((k) => ex.rd_run_deck_title_len(k), (p, k) => ex.rd_run_deck_title_into(k, p), i);
+const deckId = (i) =>
+  readText((k) => ex.rd_run_deck_id_len(k), (p, k) => ex.rd_run_deck_id_into(k, p), i);
+const shopCardId = (slot) =>
+  readText((k) => ex.rd_run_shop_card_id_len(k), (p, k) => ex.rd_run_shop_card_id_into(k, p), slot);
+const shopRelicId = (slot) =>
+  readText((k) => ex.rd_run_shop_relic_id_len(k), (p, k) => ex.rd_run_shop_relic_id_into(k, p), slot);
+const pileTitle = (zone, index) =>
+  readText((k) => ex.rd_env_pile_card_title_len(zone, k),
+           (p, k) => ex.rd_env_pile_card_title_into(zone, k, p), index);
+
+function runError() {
+  const n = ex.rd_run_last_error_len();
+  if (n <= 0) return "";
+  const ptr = ex.rd_env_scratch_buf();
+  ex.rd_run_last_error_into(ptr);
+  return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, n).slice());
+}
+
+/// Show one of the two views. Everything the other view owns is hidden, so a stale fight can never
+/// be clicked while the map is up.
+function setMode(next) {
+  mode = next;
+  document.getElementById("runPanel").hidden = next !== "run";
+  for (const id of ["heroPanel", "enemiesPanel", "handPanel", "logPanel"]) {
+    const element = document.getElementById(id);
+    if (element) element.hidden = next !== "fight";
+  }
+  renderTopBar();
+}
+
+function renderTopBar() {
+  const o = runRead.obs(0) === undefined ? null : null;
+  void o;
+  const floor = ex.rd_run_observe(0);
+  const hp = ex.rd_run_observe(2);
+  const hpMax = ex.rd_run_observe(3);
+  const gold = ex.rd_run_observe(4);
+  const deck = ex.rd_run_deck_count();
+  const relics = ex.rd_run_observe(6);
+  document.getElementById("runStats").innerHTML =
+    `floor <b>${floor}</b> · hp <b>${hp}/${hpMax}</b> · gold <b>${gold}</b> · deck <b>${deck}</b>`;
+  const chips = [];
+  for (let index = 0; index < relics; index++) {
+    chips.push(`<span class="chip relic">${esc(runRead.relicName(index) || "relic")}</span>`);
+  }
+  document.getElementById("relicChips").innerHTML = chips.join("");
+  document.getElementById("deckCount").textContent = String(Math.max(0, deck));
+  // The piles belong to a fight; in the run there is no draw / discard / exhaust.
+  const inFight = mode === "fight";
+  for (const [id, zone] of [["pileDraw", 0], ["pileDiscard", 1], ["pileExhaust", 2]]) {
+    const element = document.getElementById(id);
+    element.textContent = inFight ? String(Math.max(0, ex.rd_env_pile_len(zone))) : "–";
+    element.parentElement.disabled = !inFight;
+  }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The map, the node panels, and the modal
+// ---------------------------------------------------------------------------------------------
+function renderMap(verdict) {
+  const view = RD_MAP.describeMap(runRead);
+  document.getElementById("mapbox").innerHTML = view ? RD_MAP.svgMarkup(view) : "";
+  if (!view) return;
+  const parts = [];
+  if (typeof verdict === "number" && verdict === 0) {
+    parts.push(`<span class="good">走到了 floor ${view.status.floor}</span>`);
+  } else if (typeof verdict === "number" && verdict < 0) {
+    parts.push(`<span class="err">走不过去 · ${esc(runError())}</span>`);
+  }
+  parts.push(`<span class="dim">可达 ${view.actions.length} 个节点</span>`);
+  document.getElementById("nodePanel").innerHTML = parts.join(" · ");
+}
+
+/// What the node under the cursor needs, as buttons. Every button is one kernel export.
+function renderNode() {
+  const panel = document.getElementById("nodePanel");
+  const pending = ex.rd_run_pending();
+  const kind = ex.rd_run_node_kind();
+  if (pending === 0 && kind === 1) {
+    // A fight: the run built it, the battle view shows it.
+    panel.innerHTML = `<span class="dim">战斗节点</span> ` +
+      `<button class="act" id="fightBtn">开始战斗</button>`;
+    document.getElementById("fightBtn").onclick = beginFight;
+    return;
+  }
+  if (pending === 1) {
+    const heal = ex.rd_run_observe(3) * 30 / 100;
+    panel.innerHTML =
+      `<span class="dim">篝火 · 回复 ${heal}</span> ` +
+      `<button class="act" id="restBtn">休息</button> ` +
+      `<button class="act" id="smithBtn">打铁（第一张）</button> ` +
+      `<button class="act" id="restLeave">离开</button>`;
+    document.getElementById("restBtn").onclick = () => act(() => ex.rd_run_rest(), "休息");
+    document.getElementById("smithBtn").onclick = () => act(() => ex.rd_run_smith(0), "打铁");
+    document.getElementById("restLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
+    return;
+  }
+  if (pending === 2) {
+    const cards = [];
+    for (let slot = 0; slot < ex.rd_run_shop_card_count(); slot++) {
+      const price = ex.rd_run_shop_card_price(slot);
+      cards.push(`<div class="shop-item"><span>${esc(shopCardId(slot))}</span>` +
+        `<span class="price">${price < 0 ? "已售" : price + " 金"}</span>` +
+        `<button class="act" data-buycard="${slot}" ${price < 0 ? "disabled" : ""}>买</button></div>`);
+    }
+    const relics = [];
+    for (let slot = 0; slot < ex.rd_run_shop_relic_count(); slot++) {
+      const price = ex.rd_run_shop_relic_price(slot);
+      relics.push(`<div class="shop-item"><span>${esc(shopRelicId(slot))}</span>` +
+        `<span class="price">${price < 0 ? "已售" : price + " 金"}</span>` +
+        `<button class="act" data-buyrelic="${slot}" ${price < 0 ? "disabled" : ""}>买</button></div>`);
+    }
+    panel.innerHTML =
+      `<div class="stats">商店 · 删卡 ${ex.rd_run_remove_price()} 金</div>` +
+      cards.join("") + relics.join("") +
+      `<div class="row" style="margin-top:8px">` +
+      `<button class="act" id="removeBtn">删除第一张牌</button>` +
+      `<button class="act" id="shopLeave">离开</button></div>`;
+    panel.querySelectorAll("[data-buycard]").forEach((button) => {
+      button.onclick = () => act(() => ex.rd_run_buy_card(Number(button.dataset.buycard)), "买卡");
+    });
+    panel.querySelectorAll("[data-buyrelic]").forEach((button) => {
+      button.onclick = () => act(() => ex.rd_run_buy_relic(Number(button.dataset.buyrelic)), "买遗物");
+    });
+    document.getElementById("removeBtn").onclick = () =>
+      act(() => ex.rd_run_remove_card(0), "删卡");
+    document.getElementById("shopLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
+    return;
+  }
+  if (pending === 3) {
+    panel.innerHTML = `<span class="dim">宝箱</span> ` +
+      `<button class="act" id="chestBtn">开箱</button> ` +
+      `<button class="act" id="chestLeave">离开</button>`;
+    document.getElementById("chestBtn").onclick = () => act(() => ex.rd_run_open_chest(), "开箱");
+    document.getElementById("chestLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
+    return;
+  }
+  panel.innerHTML = `<span class="dim">${kind < 0 ? "还没出发" : "这个节点没有可做的事"}</span>`;
+}
+
+/// Run a kernel action, then refresh. `0` and positive values are success; negative is a refusal
+/// whose reason the kernel put in its error buffer.
+function act(call, label) {
+  const verdict = call();
+  if (verdict < 0) {
+    document.getElementById("msg").innerHTML =
+      `<span class="err">${esc(label)} 被拒 · ${esc(runError())}</span>`;
+    return;
+  }
+  if (mode === "run") {
+    renderMap(verdict);
+    renderNode();
+    renderTopBar();
+  }
+}
+
+function beginFight() {
+  const verdict = ex.rd_run_fight_begin();
+  if (verdict < 0) {
+    document.getElementById("nodePanel").innerHTML =
+      `<span class="err">开战被拒 · ${esc(runError())}</span>`;
+    return;
+  }
+  obs = readObservation();
+  document.getElementById("log").innerHTML = "";
+  document.getElementById("floats").innerHTML = "";
+  setMode("fight");
+  lastVerdict = null;
+  render(undefined, 0);
+}
+
+/// The fight is over: fold it back into the run and return to the map.
+function endFight() {
+  const result = ex.rd_run_fight_end();
+  setMode("run");
+  renderMap();
+  renderNode();
+  document.getElementById("msg").innerHTML = result > 0
+    ? `<span class="good">战斗结束 · ${RESULT_NAMES[result] || result}</span>`
+    : `<span class="err">战斗收尾失败 · ${esc(runError())}</span>`;
+}
+
+function showPile(title, entries) {
+  document.getElementById("modalTitle").textContent = title;
+  document.getElementById("modalBody").innerHTML = entries.length
+    ? entries.join("")
+    : `<span class="dim">空</span>`;
+  document.getElementById("modal").hidden = false;
+}
+
+function deckEntries() {
+  const out = [];
+  for (let index = 0; index < ex.rd_run_deck_count(); index++) {
+    out.push(`<div class="card">${esc(deckTitle(index) || deckId(index))} ` +
+             `<span>${esc(deckId(index))}</span></div>`);
+  }
+  return out;
+}
+
+function pileEntries(zone) {
+  const out = [];
+  for (let index = 0; index < ex.rd_env_pile_len(zone); index++) {
+    out.push(`<div class="card">${esc(pileTitle(zone, index))}</div>`);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -840,13 +1126,56 @@ function measure() {
     }
     obs = readObservation();
     bench.initMs = performance.now() - tLoad0;
-    render(undefined, 0);
+    // `measure()` reads the combat ABI (it steps a fight a thousand times), so it runs **before**
+    // the run starts and before the page switches to the run view -- otherwise it would render a
+    // demo fight over the map and leave its session in the slot.
     measure();
+    // Then the page opens on the **run**: a fight is entered from the map and built from this run.
+    if (ex.rd_run_start(runSeed) !== 0) {
+      throw new Error("rd_run_start failed: " + runError());
+    }
+    setMode("run");
+    renderMap();
+    renderNode();
+    renderTopBar();
   } catch (e) {
     document.getElementById("bench").textContent = "载入失败: " + (e && e.message ? e.message : e);
     document.getElementById("msg").innerHTML = `<span class="err">载入失败: ${esc(e)}</span>`;
     throw e;
   }
+
+  // Walking the map: a click on a reachable node is one `rd_run_step`, then `begin_node` decides
+  // what the node needs (a fight, a rest, a shop, a chest, or a refusal for the kinds M1 skips).
+  document.getElementById("mapbox").addEventListener("click", (ev) => {
+    const group = ev.target.closest("g.node.reachable");
+    if (!group || mode !== "run") return;
+    const target = Number(group.dataset.node);
+    const view = RD_MAP.describeMap(runRead);
+    const action = view.actions.indexOf(target);
+    if (action < 0) return;
+    const verdict = ex.rd_run_step(action);
+    if (verdict < 0) {
+      renderMap(verdict);
+      return;
+    }
+    const began = ex.rd_run_begin_node();
+    renderMap(verdict);
+    if (began < 0) {
+      document.getElementById("nodePanel").innerHTML =
+        `<span class="err">这个节点本版不结算 · ${esc(runError())}</span>`;
+      return;
+    }
+    renderNode();
+    renderTopBar();
+  });
+
+  document.getElementById("deckBtn").onclick = () => showPile("所有牌", deckEntries());
+  document.getElementById("drawBtn").onclick = () => showPile("抽牌堆", pileEntries(0));
+  document.getElementById("discardBtn").onclick = () => showPile("弃牌堆", pileEntries(1));
+  document.getElementById("exhaustBtn").onclick = () => showPile("消耗堆", pileEntries(2));
+  document.getElementById("modal").addEventListener("click", (ev) => {
+    if (ev.target.id === "modal") document.getElementById("modal").hidden = true;
+  });
 
   // Drag to play: pointer events, so a mouse and a finger take the same path.
   document.getElementById("hand").addEventListener("pointerdown", onPointerDown);
@@ -885,12 +1214,15 @@ function measure() {
     if (idx >= 0) step(idx);
   });
   document.getElementById("reset").addEventListener("click", () => {
-    ex.rd_env_reset();
+    // "重开" is a new **run**, not a new fight: the fight is a consequence of walking into one.
     pending = null; lastVerdict = null; lastReward = 0;
-    obs = readObservation();
+    ex.rd_run_start(runSeed);
+    setMode("run");
     document.getElementById("log").innerHTML = "";
     document.getElementById("floats").innerHTML = "";
-    render(undefined, 0);
+    renderMap();
+    renderNode();
+    renderTopBar();
   });
 })();
 </script>
