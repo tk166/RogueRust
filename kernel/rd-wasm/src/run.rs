@@ -1601,10 +1601,16 @@ mod tests {
             Some(60),
             "the fight starts at the run's health, not at full"
         );
-        // The fight's deck is the run's deck: every card is in one of the three piles.
+        // The fight's deck is the run's deck: every card is in a pile **or in hand** -- the fight
+        // starts at turn 1 now, so five of the ten are drawn.
         let piles: i32 = (0..3).map(|zone| rd_env_pile_len(zone)).sum();
-        assert_eq!(piles, rd_run_deck_count(), "the fight's cards are the run's cards");
-        assert_eq!(piles, 10, "inv:§2.1: a ten-card starting deck");
+        let hand = 5;
+        assert_eq!(
+            piles + hand,
+            rd_run_deck_count(),
+            "the fight's cards are the run's cards"
+        );
+        assert_eq!(piles + hand, 10, "inv:§2.1: a ten-card starting deck");
 
         // Ending it folds the health back and drops the session.
         assert_eq!(rd_run_fight_end(), 0, "a fight still in progress ends as Ongoing");
@@ -1881,9 +1887,9 @@ mod tests {
         assert_eq!(rd_run_step(0), 0);
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_fight_begin(), 0);
-        // Before the first turn everything is in the draw pile.
+        // Turn 1 has begun, so five cards are in hand and five are still in the draw pile.
         let draw = rd_env_pile_len(0);
-        assert_eq!(draw, 10);
+        assert_eq!(draw, 5, "five drawn, five left");
         assert_eq!(rd_env_pile_len(1), 0);
         assert_eq!(rd_env_pile_len(2), 0);
         // Every card can be named, and the name is the content's `NameKey`.

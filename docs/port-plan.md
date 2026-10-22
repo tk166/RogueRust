@@ -5222,3 +5222,62 @@ StS 里是"一个定义 + 三个实例"，本内容的遭遇记录只带 `Id`、
 | 内容 | 11 怪 / 4 遭遇 | **13 怪 / 4 遭遇**（sentry ×3） |
 | `sts` 镜像 | 12,632 / 10,852 B | **13,384 / 11,592 B**（重钉） |
 | `.wasm` | 479,842 B | **482,979 B** |
+---
+
+## 70. 第 60 轮：**"回合 1 手牌为空"是 bug** —— 参考的脚手架不是游戏流程
+
+> 用户："round1 手牌为空这个是故意这样的吗，如果是真实游戏流程是bug了。" 他判断对了。
+
+### 70.1 查清：它忠于**参考的 scenario 驱动器**，不忠于 StS
+
+`ref/RogueDeck-Core/src/RogueDeck.Scenario/Scripting/ScenarioRunner.cs:105`：
+
+```csharp
+EnsureTurnStarted(combat, registry); // starts the hero's turn (and draws its hand) on the first play
+```
+
+引擎里有真正的 `CombatTurnPhase.WaitingToStartTurn` 与 `_turns.StartCurrentTurn`，但**驱动器只在第一次
+出牌时**才开回合。内核的 `build_fight` 忠实照搬了这一点（`battle.rs:502` 明写"**不**替调用方开始第一回合"），
+四层对拍（`FIGHT_DIFF` 182 例）比的就是"同样步骤序列、两边一致"，所以构建语义必须与它对齐。
+
+**但 StS 不是这样**：战斗一开始英雄的第 1 回合就开始了，玩家立刻看到 5 张手牌。
+⇒ **参考那套 DSL 是给对拍用的脚手架，不是游戏流程**；而"回合 1 空手牌"从外面看**就是一个 bug**。
+
+### 70.2 修法：把"开始第一回合"做成**驱动器**的选择
+
+* `rd-core`：新增公开入口 `battle::start_first_turn()`（就是 `ensure_turn_started` 的包装，幂等）。
+  它**不**进 `build_fight` —— 否则四层对拍的两边就不一样了。
+* `rd-wasm`：`build_session_with` 在构建之后调一次 ⇒ **面向玩家的战斗从回合 1 开始**。
+* 文档里把这条分工写清：`build_fight` 停在 `WaitingToStartTurn`（对拍用），驱动器负责开始（游戏用）。
+
+### 70.3 一次性暴露了 6 处"把旧起始态钉死"的判据
+
+它们全部通过，只是因为**旧行为是错的**。这正是"判据写死了现象而不是不变量"的形状：
+
+| 位置 | 旧判据 | 现在 |
+|---|---|---|
+| `lib.rs` spike 场景 | `hand == 0`（注释还写"从外面看像 bug"，它**就是**） | `hand == 5` |
+| `lib.rs` `open_the_hand()` | reset + 结束回合来抽牌 | 只 reset（结束回合现在会**出牌**） |
+| `lib.rs` 动作表 | `action_count == 1` 且 `kind(0) == END_TURN` | 有 play 也有 end-turn，按**kind**找 |
+| `lib.rs` 那一步 | `step(0)` 当成结束回合 | 按 kind 找 end-turn 的**下标** |
+| `rd-wasm` 牌堆 | 三堆合计 == 10 | 三堆 **+ 手牌** == 10，且手牌 == 5 |
+| `web/smoke.mjs` | 手牌 0、唯一动作是结束回合、`step(0)` | 手牌 5、按 kind 找结束回合 |
+| `web/ui_test.mjs` | `endTurn.actionIndex === 0`；`diff.drawn === 5`；日志 `抽 5 张牌` | 下标随表走；`drawn` 与两个向量**自洽**（`hand_after = hand_before + drawn - left`）；日志按 diff 的张数 |
+
+⚠️ 最后一条值得单说：`drawn` **不能再钉 5**。手牌满进满出时，diff 只能看见**变了的槽位**（这一局是 2），
+所以判据改成"diff 的数字 == 两个向量蕴含的数字"——**这条仍然会在公式退化时报红**，而钉死 5 只会
+把旧的空手牌起始态钉住。
+
+### 70.4 浏览器实测
+
+战斗一开就是 **5 张手牌**（Defend/Defend/Strike/Strike/Defend）、`round 1 · turn 1 · phase 1`、
+energy 3/3，动作表 `[0,0,0,0,0,1]`（5 个出牌 + 结束回合），顶栏 `抽牌 5`。
+
+### 70.5 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 650 | **650**（数字没变：改的是起始态与判据） |
+| `.wasm` | 483,990 B | **483,990 B** |
+| 语料 / golden | 85 / 129 | **85 / 129（未动）** —— `build_fight` 的语义没碰 |

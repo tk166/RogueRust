@@ -52,7 +52,8 @@
 mod run;
 
 use rd_core::battle::{
-    build_fight_from_content, run_fight, standard_turn_config, DeckEntry, FightOutcome, FightPlan,
+    build_fight_from_content, run_fight, standard_turn_config, start_first_turn, DeckEntry,
+    FightOutcome, FightPlan,
     PlanCombatant, Step,
 };
 use rd_core::content::{
@@ -529,6 +530,16 @@ fn build_session_with(
         before: vec![0; OBS_LEN],
         after: vec![0; OBS_LEN],
     };
+    // **StS starts the hero's first turn when the combat starts**: the player sees five cards
+    // immediately. `build_fight_from_content` deliberately stops at `WaitingToStartTurn` because the
+    // reference's *scenario driver* starts the turn on the first play (`ScenarioRunner.cs:105`), and
+    // the four-layer diff harness compares step sequences on that basis. The browser is a game
+    // driver, not the harness, so it does what StS does.
+    //
+    // Without this, round 1 rendered as an empty hand -- faithful to the reference DSL, wrong for the
+    // game, and it looked exactly like a bug.
+    start_first_turn(&mut session.state, &standard, &mut session.host)
+        .map_err(|e| format!("start_first_turn: {}", detail(&e)))?;
     session.reobserve();
     // `run_fight` needs a `&mut Host`; keep it warm so the first step does not allocate.
     let _ = session.host.take_failure();
@@ -1968,7 +1979,12 @@ mod tests {
         // Before the first step the hero has not started its turn, so the hand is empty — this is
         // `ScenarioRunner.cs:105`'s `EnsureTurnStarted` being *lazy*, and it is worth pinning
         // because "the hand is empty on load" looks like a bug from the outside.
-        assert_eq!(fresh[H_HAND_COUNT], 0, "hand before the first turn");
+        // The reference's *scenario driver* starts the turn on the first play (`ScenarioRunner.cs:105`)
+        // and the diff harness still exercises that path, so `build_fight_from_content` stops at
+        // `WaitingToStartTurn`. The **browser** driver starts it (`start_first_turn`), because StS
+        // begins the hero's first turn with the combat -- and "the hand is empty on load" does look
+        // like a bug from the outside, because for a game it was one.
+        assert_eq!(fresh[H_HAND_COUNT], 5, "hand at combat start");
         assert_eq!(rd_env_done(), 0);
 
         // The exported buffer and the internal snapshot must be the same vector. This is the
@@ -1985,8 +2001,20 @@ mod tests {
         // A play action must exist even though the hand is empty? No — nothing to play yet, so the
         // only legal action is "end turn". That is the honest table, and it is why the page's end
         // turn button is what draws the first hand.
-        assert_eq!(rd_env_action_count(), 1);
-        assert_eq!(rd_env_action_kind(0), ACTION_END_TURN);
+        // The fight starts at turn 1, so the table leads with **play** actions and still offers
+        // end-turn. (It used to be a single end-turn action, because the hand was empty until the
+        // page pressed it -- faithful to the reference DSL, wrong for a game.)
+        let kinds: Vec<i32> = (0..rd_env_action_count())
+            .map(|index| rd_env_action_kind(index))
+            .collect();
+        assert!(
+            kinds.iter().any(|kind| *kind == ACTION_END_TURN),
+            "end turn must always be offered"
+        );
+        assert!(
+            kinds.iter().any(|kind| *kind != ACTION_END_TURN),
+            "five cards in hand means play actions: {kinds:?}"
+        );
 
         // ── the intent column is content, not a constant ─────────────────────────────────────
         // Every living enemy answers with an `EACT` id, a kind and a literal damage amount
@@ -2008,8 +2036,13 @@ mod tests {
         // The discriminator: with the old `NextRound` path only the first enemy would act, so the
         // hero would lose one enemy's worth of HP instead of both. Pinning the sum is what makes
         // this assertion about the turn machinery rather than about the number 12.
+        // Ask for the end-turn action by **kind**, not by index: the table leads with play actions
+        // once the hand is not empty, and step(0) would play a card.
+        let end_turn = (0..rd_env_action_count())
+            .find(|index| rd_env_action_kind(*index) == ACTION_END_TURN)
+            .expect("end turn must be offered");
         let hp_before = fresh[H_HERO_HP];
-        assert_eq!(rd_env_step(0), 0);
+        assert_eq!(rd_env_step(end_turn), 0);
         let after_end_turn = exported_observation();
         assert_eq!(
             hp_before - after_end_turn[H_HERO_HP],
@@ -2114,11 +2147,12 @@ mod card_text_tests {
         unsafe { *ptr.add(10) }
     }
 
-    /// A hand with cards in it: the fight starts with an empty hand (`ScenarioRunner.cs:105`), so
-    /// one end-turn is what draws.
+    /// A hand with cards in it. No step is needed any more: the fight starts with the hero's first
+    /// turn already begun (`start_first_turn`), so the draw has happened. The old version ended a
+    /// turn here -- which now *plays a card*, because the action table leads with play actions once
+    /// the hand is not empty.
     fn open_the_hand() {
         assert_eq!(rd_env_reset(), 0);
-        assert_eq!(rd_env_step(0), 0, "the only action on a fresh fight is end turn");
     }
 
     /// The card **kind** is derived from `CARD.Tags`, and the order of the questions matters:

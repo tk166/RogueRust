@@ -105,10 +105,18 @@ const enemyName = (slot) => text(ex.rd_env_enemy_name_len, ex.rd_env_enemy_name_
 
 if (ex.rd_env_reset() !== 0) fail("rd_env_reset() != 0");
 const fresh = obs().slice();
-if (fresh[H.HAND] !== 0) fail(`hand before the first turn is ${fresh[H.HAND]}, expected 0`);
+// The fight starts at turn 1 (`start_first_turn` in the builder): StS draws the opening hand when
+// combat begins. The reference's scenario DSL waits for the first play (`ScenarioRunner.cs:105`) and
+// that path is what the diff harness covers, so this is a *driver* difference, not a kernel one.
+if (fresh[H.HAND] !== 5) fail(`hand at combat start is ${fresh[H.HAND]}, expected 5`);
 if (fresh[H.ENEMIES] !== 2) fail(`enemy_count is ${fresh[H.ENEMIES]}, expected 2 (enc_small_slimes)`);
-if (ex.rd_env_action_count() !== 1) fail("a fresh fight must offer exactly one action (end turn)");
-if (ex.rd_env_action_kind(0) !== 1) fail("that one action must be kind 1 (end turn)");
+// With a hand there are play actions; end-turn must still be among them.
+{
+  const kinds = [];
+  for (let index = 0; index < ex.rd_env_action_count(); index++) kinds.push(ex.rd_env_action_kind(index));
+  if (!kinds.includes(1)) fail(`no end-turn action in ${JSON.stringify(kinds)}`);
+  if (kinds.every((kind) => kind === 1)) fail("five cards in hand but no play action is offered");
+}
 
 // Intent: real content, not a placeholder.
 const names = [], intents = [];
@@ -126,8 +134,15 @@ if (names.some((n) => n === "")) fail("enemy name is empty (ENCT not read?)");
 
 // One end-turn step must let BOTH enemies act: the HP drop equals the sum of the previewed
 // damages. With the old single-enemy path this would be one enemy's worth.
+// The end-turn action is found by **kind**: with a hand, index 0 is a *play*, so the old
+// `step(0)` ended up playing a card and no enemy ever acted.
+let endTurn = -1;
+for (let index = 0; index < ex.rd_env_action_count(); index++) {
+  if (ex.rd_env_action_kind(index) === 1) { endTurn = index; break; }
+}
+if (endTurn < 0) fail("no end-turn action to step with");
 const hpBefore = fresh[H.HP];
-if (ex.rd_env_step(0) !== 0) fail(`end-turn step rejected: ${text(ex.rd_env_last_error_len, ex.rd_env_last_error_into, undefined)}`);
+if (ex.rd_env_step(endTurn) !== 0) fail(`end-turn step rejected: ${text(ex.rd_env_last_error_len, ex.rd_env_last_error_into, undefined)}`);
 const after = obs().slice();
 if (hpBefore - after[H.HP] !== previewed) {
   fail(`hero lost ${hpBefore - after[H.HP]} HP, previewed ${previewed} -> not every enemy acted`);

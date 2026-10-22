@@ -1519,6 +1519,27 @@ fn advance_turns_until_active<H: TurnHost>(
 ///
 /// 开完立刻判一次胜负：`ScenarioRunner.cs:141-143` 的注释说的正是这件事
 /// ——"starting the turn can end combat (a turn-start trigger downs the last enemy)"。
+/// 开始当前回合（若还停在 `WaitingToStartTurn`）。
+///
+/// # 为什么这是一个**公开**入口，而不是 `build_fight` 的一部分
+///
+/// `build_fight` 故意停在 `WaitingToStartTurn`（见文件头 §1），因为参考的 scenario 驱动器
+/// （`ScenarioRunner.cs:105` `EnsureTurnStarted`）就是**第一次出牌时**才开始回合并抽手牌 ——
+/// 四层对拍（`FIGHT_DIFF` 182 例）比的就是"同样的步骤序列，两边状态一致"，所以构建语义必须与它对齐。
+///
+/// 但 **StS 不是这样**：战斗一开始英雄的第 1 回合就开始了，玩家立刻看到 5 张手牌。参考那套
+/// DSL 是给对拍用的脚手架，不是游戏流程。⇒ 面向玩家的驱动器（浏览器那一侧）在构建之后调一次
+/// 本函数，就把"回合 1 空手牌"这个只在参考 DSL 里成立的中间态消掉了。
+///
+/// 幂等：不在 `WaitingToStartTurn` 时什么也不做。
+pub fn start_first_turn<H: TurnHost>(
+    state: &mut CombatState,
+    config: &TurnConfig,
+    host: &mut H,
+) -> Result<(), BattleError> {
+    ensure_turn_started(state, config, host)
+}
+
 fn ensure_turn_started<H: TurnHost>(
     state: &mut CombatState,
     config: &TurnConfig,

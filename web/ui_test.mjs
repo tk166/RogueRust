@@ -157,8 +157,9 @@ if (ex.rd_env_reset() !== 0) fail("rd_env_reset() != 0");
   // lands (hero below, and the struck enemy below); they are why this test can fail at all.
   if (hero.energy !== 3 || hero.energyMax !== 3) fail(`energy shows ${hero.energy}/${hero.energyMax}`);
   if (hero.block !== 0) fail(`block shows ${hero.block}`);
-  if (hero.handCount !== 0) fail(`hand shows ${hero.handCount} cards before the first turn`);
-  if (before.hand.length !== 0) fail("hand list is non-empty before the first turn");
+  // Turn 1 is already under way at combat start (StS behaviour; see the note in smoke.mjs).
+  if (hero.handCount !== 5) fail(`hand shows ${hero.handCount} cards at combat start, expected 5`);
+  if (before.hand.length !== 5) fail(`hand list has ${before.hand.length} entries, expected 5`);
   if (hero.statuses.length !== 0) fail("hero shows statuses it does not have");
 
   if (before.enemies.length !== 2) fail(`enemies list has ${before.enemies.length} entries, expected 2`);
@@ -179,7 +180,9 @@ if (ex.rd_env_reset() !== 0) fail("rd_env_reset() != 0");
   // The one action on a fresh fight is end turn (`rd-wasm`'s own rule), and the page must show it
   // as available -- a page that greys the button out would never start a game.
   if (!before.endTurn.available) fail("end turn is not offered on a fresh fight");
-  if (before.endTurn.actionIndex !== 0) fail(`end turn action index is ${before.endTurn.actionIndex}`);
+  // The index is whatever the action table says -- it leads with play actions now that turn 1 has
+  // begun, so pinning it to 0 would pin the old empty-hand start state.
+  if (before.endTurn.actionIndex < 0) fail(`end turn has no action index (${before.endTurn.actionIndex})`);
   if (before.status.done) fail("a fresh fight is already over");
   if (before.status.resultName !== "Ongoing") fail(`result shows ${before.status.resultName}`);
 }
@@ -448,7 +451,18 @@ if (ex.rd_env_reset() !== 0) fail("reset before the diff blocks failed");
   // the two are indistinguishable from the vectors alone, which is why the diff needs to know
   // which kind of step it is looking at.
   if (hits[0].blocked !== 0) fail(`an end-turn step reported ${hits[0].blocked} blocked`);
-  if (diff.drawn !== 5) fail(`the diff says ${diff.drawn} cards were drawn, the hand has 5`);
+  // `drawn` used to be pinned to a literal 5, which was only true while the hand started empty
+  // (0 -> 5 = five new slots). Turn 1 now begins at combat start, so the hand is full **before** the
+  // end-turn too and the diff can only see the slots that actually changed -- the identity of the
+  // cards, not their count. The honest check is that the diff's number is the one the two vectors
+  // imply: `hand_after = hand_before + drawn - left`.
+  const handAfter = obs()[UI.H.HAND];
+  if (handAfter !== 5) fail(`after an end-turn the hand is ${handAfter}, expected 5`);
+  const left = (diff.events.find((e) => e.kind === "leftHand") || { count: 0 }).count;
+  const implied = Math.max(0, handAfter - before[UI.H.HAND] + left);
+  if (diff.drawn !== implied) {
+    fail(`the diff says ${diff.drawn} cards were drawn; the vectors imply ${implied}`);
+  }
   if (diff.hero.hpLost + hpBefore !== before[UI.H.HP] + preview) {
     fail("the damage does not add up");
   }
@@ -456,7 +470,11 @@ if (ex.rd_env_reset() !== 0) fail("reset before the diff blocks failed");
   if (!lines.some((l) => l.includes(`受到 ${preview} 点伤害`))) {
     fail(`no damage line in ${JSON.stringify(lines)}`);
   }
-  if (!lines.some((l) => l.includes("抽 5 张牌"))) fail(`no draw line in ${JSON.stringify(lines)}`);
+  // The line names the count the diff saw, not a literal: with a full hand before the end-turn the
+  // diff can only report the slots that changed (see the note on `drawn` above).
+  if (!lines.some((l) => l.includes(`抽 ${diff.drawn} 张牌`))) {
+    fail(`no draw line in ${JSON.stringify(lines)}`);
+  }
   const plan = UI.animationPlan(diff, view());
   if (!plan.some((p) => p.effect === "float" && p.at === "hero" && p.text === `-${preview}`)) {
     fail(`no damage float in ${JSON.stringify(plan)}`);
