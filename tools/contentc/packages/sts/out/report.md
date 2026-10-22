@@ -8,17 +8,17 @@ come from re-serialising the parsed document with each item removed.
 
 | quantity | bytes | vs raw | vs compact |
 |---|---|---|---|
-| source on disk (pretty-printed JSON) | 70090 | 1.00x | — |
-| source, compact JSON | 40730 | 1.7x | 1.00x |
-| source, compact + redundant `Children` removed | 40730 | 1.7x | 1.00x |
-| source, compact + `Children` + presentation removed | 37624 | 1.9x | 1.08x |
-| **RDCF binary, full** | **11604** | **6.0x** | **3.5x** |
-| **RDCF binary, presentation stripped** | **9908** | **7.1x** | **4.1x** |
+| source on disk (pretty-printed JSON) | 70266 | 1.00x | — |
+| source, compact JSON | 40850 | 1.7x | 1.00x |
+| source, compact + redundant `Children` removed | 40850 | 1.7x | 1.00x |
+| source, compact + `Children` + presentation removed | 37744 | 1.9x | 1.08x |
+| **RDCF binary, full** | **11640** | **6.0x** | **3.5x** |
+| **RDCF binary, presentation stripped** | **9944** | **7.1x** | **4.1x** |
 
 ### The answer to "how many bytes after pre-compiling"
 
-* `out/content.rdcf` -- complete, exact content image: **11604 B (11.3 KiB)**
-* `out/content.core.rdcf` -- same minus presentation: **9908 B (9.7 KiB)**
+* `out/content.rdcf` -- complete, exact content image: **11640 B (11.4 KiB)**
+* `out/content.core.rdcf` -- same minus presentation: **9944 B (9.7 KiB)**
 
 Against the ESP32-P4 budget of 592 KiB of usable SRAM: the full image is
 2% of SRAM, the core image 2%.  Neither has to live in SRAM at all.
@@ -29,25 +29,25 @@ PSRAM), with SRAM holding only the interpreter's registers and node cursor.
 
 | id | section | offset | bytes | count | unit |
 |---|---|---|---|---|---|
-| 0 | `STR` | 272 | 5332 | 301 | bytes of blob |
-| 1 | `STRO` | 5604 | 1208 | 302 | u32 offsets |
-| 2 | `OPD` | 6812 | 432 | 54 | 8-byte opcode descs |
-| 3 | `OPF` | 7244 | 736 | 184 | 4-byte field descs |
-| 4 | `TRM` | 7980 | 1908 | 182 | term records |
-| 5 | `TRW` | 9888 | 364 | 182 | u16 word offsets |
-| 6 | `AUX` | 10252 | 242 | 121 | u16 cells |
-| 7 | `CARD` | 10496 | 224 | 7 | card rows (32 B each) |
-| 8 | `STAT` | 10720 | 200 | 5 | status rows (40 B each) |
-| 9 | `EACT` | 10920 | 304 | 19 | enemy-action rows (16 B each) |
-| 10 | `ENCT` | 11224 | 48 | 3 | encounter rows (16 B each) |
-| 11 | `REL` | 11272 | 12 | 1 | relic rows (12 B each) |
-| 12 | `ROOT` | 11284 | 24 | 6 | root pointers |
-| 13 | `IDX` | 11308 | 296 | 37 | 8-byte id entries |
+| 0 | `STR` | 272 | 5352 | 304 | bytes of blob |
+| 1 | `STRO` | 5624 | 1220 | 305 | u32 offsets |
+| 2 | `OPD` | 6844 | 432 | 54 | 8-byte opcode descs |
+| 3 | `OPF` | 7276 | 740 | 185 | 4-byte field descs |
+| 4 | `TRM` | 8016 | 1908 | 182 | term records |
+| 5 | `TRW` | 9924 | 364 | 182 | u16 word offsets |
+| 6 | `AUX` | 10288 | 242 | 121 | u16 cells |
+| 7 | `CARD` | 10532 | 224 | 7 | card rows (32 B each) |
+| 8 | `STAT` | 10756 | 200 | 5 | status rows (40 B each) |
+| 9 | `EACT` | 10956 | 304 | 19 | enemy-action rows (16 B each) |
+| 10 | `ENCT` | 11260 | 48 | 3 | encounter rows (16 B each) |
+| 11 | `REL` | 11308 | 12 | 1 | relic rows (12 B each) |
+| 12 | `ROOT` | 11320 | 24 | 6 | root pointers |
+| 13 | `IDX` | 11344 | 296 | 37 | 8-byte id entries |
 | — | header + directory | 0 | 272 | — | — |
 
 Padding to 4-byte alignment: 2 B.
 
-Three sections carry almost everything: the string pool (`STR`+`STRO` = 6540 B,
+Three sections carry almost everything: the string pool (`STR`+`STRO` = 6572 B,
 56%), the interned term DAG (`TRM`+`TRW`+`AUX` = 2514 B, 22%), and the
 fixed entity tables (788 B, 7%).
 
@@ -59,7 +59,7 @@ under *shared*.  So the columns do not add up to the file size, by design.
 
 | top-level key | items | compact B | exclusive term B | exclusive string B |
 |---|---|---|---|---|
-| `Cards` *(table)* | 7 | 5306 | 200 | 258 |
+| `Cards` *(table)* | 7 | 5426 | 200 | 271 |
 | `Statuses` *(table)* | 5 | 4757 | 360 | 502 |
 | `EnemyActions` *(table)* | 19 | 12186 | 584 | 654 |
 | `Encounters` *(table)* | 3 | 1647 | 136 | 0 |
@@ -74,7 +74,7 @@ under *shared*.  So the columns do not add up to the file size, by design.
 | `Start` | 9 | 386 | 0 | 6 |
 | **shared (reached from >1 group)** | | | **212** | **785** |
 
-Column sum 40567 B = compact 40730 B minus the 163 B spent on the 13 top-level key
+Column sum 40687 B = compact 40850 B minus the 163 B spent on the 13 top-level key
 names, their quotes and the surrounding braces.
 
 `InertKeys` / `Notes` above are **document keys**: build metadata that is serialised into neither
@@ -98,7 +98,7 @@ part of the round trip (`Rom.document()` reproduces the source minus those keys)
 
 | redundancy | compact JSON bytes it occupies | how the binary avoids it |
 |---|---|---|
-| object key names (1551 occurrences, 128 distinct) | 17090 | an opcode's field descriptors spell each key once, not per occurrence |
+| object key names (1558 occurrences, 129 distinct) | 17153 | an opcode's field descriptors spell each key once, not per occurrence |
 | `{"kind":..,"value":..}` discriminant envelope | 3919 | the opcode *is* the kind |
 | redundant `Children` second copies | 0 | subtree interning: a repeated child is one u16 handle |
 | byte-identical program bodies | 0 | the same interning |
@@ -143,7 +143,7 @@ Sources of truth for each of those claims:
   * `Events[].situations[].TextKey`, `...Choices[].TextKey`, `Shops[].Offers[].TextKey`
   * the whole `Presentation` object (4 B compact)
 
-  Measured effect: compact 40730 -> 37624 B; binary 11604 -> 9908 B (saves 1696 B, 14.6%).
+  Measured effect: compact 40850 -> 37744 B; binary 11640 -> 9944 B (saves 1696 B, 14.6%).
 
 ## 4. Derived tables
 
@@ -154,8 +154,8 @@ Sources of truth for each of those claims:
 | opcodes (8 reserved + dynamic) | 46 |
 | distinct interned terms in the DAG | 182 |
 | aux cells | 121 |
-| pooled strings | 301 |
-| string blob | 5332 B |
+| pooled strings | 304 |
+| string blob | 5352 B |
 | content integer range on the wire | [-1, 1024] vs storable [-32766, 32767] |
 | (opcode, field) pairs that are absent in some instances | 0 |
 
@@ -173,11 +173,11 @@ contains no raw JSON text at all.
 
 | step | seconds |
 |---|---|
-| `json.loads` of 0.1 MiB source | 0.001 |
+| `json.loads` of 0.1 MiB source | 0.005 |
 | derive | 0.005 |
 | encode | 0.004 |
 | serialize | 0.005 |
-| total, one build | 0.015 |
+| total, one build | 0.019 |
 
 Peak Python heap during the whole run (both builds, tracemalloc): **0.7 MiB**.
 The document is parsed once and never copied; the encoder holds the parsed

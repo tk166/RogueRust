@@ -465,7 +465,8 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Basic"
     },
     {
       "Id": "defend",
@@ -520,7 +521,8 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Basic"
     },
     {
       "Id": "bash",
@@ -605,7 +607,8 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Basic"
     },
     {
       "Id": "slimed",
@@ -647,7 +650,8 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "Hand",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Status"
     },
     {
       "Id": "strike+",
@@ -704,7 +708,8 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Basic"
     },
     {
       "Id": "defend+",
@@ -759,7 +764,8 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Basic"
     },
     {
       "Id": "bash+",
@@ -844,7 +850,8 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Basic"
     }
   ],
   "EnemyActions": [

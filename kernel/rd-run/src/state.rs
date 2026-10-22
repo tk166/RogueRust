@@ -39,6 +39,19 @@ pub const BURNING_BLOOD_HEAL: i32 = 6;
 pub const MAX_SHOP_CARDS: usize = 5;
 /// Relic slots a merchant shows (`inv:§8.2`: three).
 pub const MAX_SHOP_RELICS: usize = 3;
+/// What a card costs by rarity (`inv:§8.2`): Common 45–55, Uncommon 68–82, Rare 135–165.
+///
+/// `Basic` / `Status` / `Curse` are not things a merchant sells; if one reaches the shelf it is
+/// priced in the Common band, which is the closest thing to a documented answer.
+#[must_use]
+pub const fn card_price_band(rarity: Rarity) -> (i32, i32) {
+    match rarity {
+        Rarity::Common | Rarity::Basic | Rarity::Status | Rarity::Curse => (45, 55),
+        Rarity::Uncommon => (68, 82),
+        Rarity::Rare => (135, 165),
+    }
+}
+
 /// Card-removal price the first time (`inv:§8.2`).
 pub const SHOP_REMOVE_BASE: i32 = 75;
 /// ...and how much it grows per use, across shops in the same run (`inv:§8.2`).
@@ -693,7 +706,7 @@ impl RunState {
     /// Returns the node's kind so a caller can branch without re-reading the map.
     pub fn begin_node(
         &mut self,
-        card_pool: &[&str],
+        card_pool: &[PoolCard<'_>],
         relic_pool: &[&str],
     ) -> Result<crate::map::NodeKind, RunError> {
         if self.node < 0 {
@@ -800,7 +813,7 @@ impl RunState {
     /// Fill the merchant's shelves. Prices are `[推断]`: the content carries no rarity, so every
     /// card is priced in the Common band and every relic likewise (`inv:§8.2`'s ranges are by
     /// rarity, and this content does not have one to look at).
-    fn stock_shop(&mut self, card_pool: &[&str], relic_pool: &[&str]) -> Result<(), RunError> {
+    fn stock_shop(&mut self, card_pool: &[PoolCard<'_>], relic_pool: &[&str]) -> Result<(), RunError> {
         if card_pool.is_empty() {
             return Err(RunError::EmptyPool("cards"));
         }
@@ -813,11 +826,12 @@ impl RunState {
         self.rng.shuffle(RunStream::Shop, &mut order[..n]);
         let cards = MAX_SHOP_CARDS.min(n);
         for slot in 0..cards {
-            let id = card_pool[order[slot] as usize];
-            // Common 45–55 (`inv:§8.2`).
-            let price = 45 + self.rng.roll(RunStream::Shop, 11)? as i32;
+            let card = card_pool[order[slot] as usize];
+            // `inv:§8.2`: the band follows the card's rarity.
+            let (low, high) = card_price_band(card.rarity);
+            let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
             self.shop.cards[slot] = Offer {
-                id: RunId::new(id).map_err(|_| RunError::BadId)?,
+                id: RunId::new(card.id).map_err(|_| RunError::BadId)?,
                 price,
             };
         }
@@ -1398,7 +1412,7 @@ mod tests {
     fn a_rest_site_heals_thirty_percent_and_then_it_is_done() {
         let mut run = ironclad();
         assert!(walk_to(&mut run, NodeKind::Rest), "the map has no rest site");
-        assert_eq!(run.begin_node(&CARDS, &RELICS), Ok(NodeKind::Rest));
+        assert_eq!(run.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Rest));
         assert_eq!(run.pending(), Pending::Rest);
         // 30% of 80, rounded down (`inv:§8.1`).
         assert_eq!(run.rest_heal(), 24);
@@ -1416,7 +1430,7 @@ mod tests {
     fn smithing_replaces_the_card_with_its_upgraded_row() {
         let mut run = ironclad();
         assert!(walk_to(&mut run, NodeKind::Rest));
-        run.begin_node(&CARDS, &RELICS).unwrap();
+        run.begin_node(&basic_pool(), &RELICS).unwrap();
         // The deck's first card is a `strike`; the upgrade is another CARD row, and the mapping is
         // the caller's (`sts-act1-plan.md` §6.5-2 -- this crate owns no content).
         assert_eq!(run.deck()[0].as_str(), "strike");
@@ -1435,7 +1449,7 @@ mod tests {
         let mut run = ironclad();
         assert!(walk_to(&mut run, NodeKind::Treasure), "the map has no treasure room");
         let gold_before = run.gold();
-        assert_eq!(run.begin_node(&CARDS, &RELICS), Ok(NodeKind::Treasure));
+        assert_eq!(run.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Treasure));
         assert_eq!(run.pending(), Pending::Chest);
         let outcome = run.open_chest(&RELICS).unwrap();
         // `inv:§8.3`: the three chest types and their gold ranges.
@@ -1465,19 +1479,21 @@ mod tests {
         let mut run = ironclad();
         assert!(walk_to(&mut run, NodeKind::Shop), "the map has no merchant");
         run.adjust_gold(500);
-        assert_eq!(run.begin_node(&CARDS, &RELICS), Ok(NodeKind::Shop));
+        assert_eq!(run.begin_node(&common_pool(), &RELICS), Ok(NodeKind::Shop));
         assert_eq!(run.pending(), Pending::Shop);
         assert_eq!(run.shop().cards().len(), MAX_SHOP_CARDS);
         assert_eq!(run.shop().relics().len(), MAX_SHOP_RELICS.min(RELICS.len()));
         for offer in run.shop().cards() {
-            // `[推断]`: no rarity in this content, so every card sits in the Common band.
+            // All five are Commons, so they sit in the Common band (`inv:§8.2`) -- no more
+            // `[推断]`: the band now comes from the card's rarity.
+            let (low, high) = card_price_band(Rarity::Common);
             assert!(
-                (45..=55).contains(&offer.price),
+                (low..=high).contains(&offer.price),
                 "card {} costs {}",
                 offer.id.as_str(),
                 offer.price
             );
-            assert!(CARDS.contains(&offer.id.as_str()));
+            assert!(common_pool().iter().any(|card| card.id == offer.id.as_str()));
         }
         for offer in run.shop().relics() {
             assert!((143..=157).contains(&offer.price), "relic price {}", offer.price);
@@ -1489,7 +1505,7 @@ mod tests {
         let mut run = ironclad();
         assert!(walk_to(&mut run, NodeKind::Shop));
         run.adjust_gold(120);
-        run.begin_node(&CARDS, &RELICS).unwrap();
+        run.begin_node(&basic_pool(), &RELICS).unwrap();
 
         // A purchase moves gold one way and a card the other.
         // Owned, not borrowed: the next call takes `&mut run`.
@@ -1539,7 +1555,7 @@ mod tests {
                 continue; // this seed's map has none of that kind
             }
             assert_eq!(
-                run.begin_node(&CARDS, &RELICS),
+                run.begin_node(&basic_pool(), &RELICS),
                 Err(RunError::NodeNotSettleable(kind as u8)),
                 "{kind:?} was accepted"
             );
@@ -1547,7 +1563,7 @@ mod tests {
         // A fight is the caller's business: no error, nothing pending.
         let mut run = ironclad();
         assert!(walk_to(&mut run, NodeKind::Combat));
-        assert_eq!(run.begin_node(&CARDS, &RELICS), Ok(NodeKind::Combat));
+        assert_eq!(run.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Combat));
         assert_eq!(run.pending(), Pending::None);
         // And every settling action refuses when nothing is pending.
         assert_eq!(run.rest(), Err(RunError::WrongPhase));
@@ -1638,6 +1654,29 @@ mod tests {
         ]
     }
 
+    /// Five Commons: a full shelf, all in one price band.
+    fn common_pool() -> [PoolCard<'static>; 5] {
+        [
+            PoolCard { id: "c1", rarity: Rarity::Common },
+            PoolCard { id: "c2", rarity: Rarity::Common },
+            PoolCard { id: "c3", rarity: Rarity::Common },
+            PoolCard { id: "c4", rarity: Rarity::Common },
+            PoolCard { id: "c5", rarity: Rarity::Common },
+        ]
+    }
+
+    /// A pool with all three rarities, for the band arithmetic the real content cannot exercise yet.
+    fn mixed_pool() -> [PoolCard<'static>; 6] {
+        [
+            PoolCard { id: "c1", rarity: Rarity::Common },
+            PoolCard { id: "c2", rarity: Rarity::Common },
+            PoolCard { id: "u1", rarity: Rarity::Uncommon },
+            PoolCard { id: "u2", rarity: Rarity::Uncommon },
+            PoolCard { id: "r1", rarity: Rarity::Rare },
+            PoolCard { id: "r2", rarity: Rarity::Rare },
+        ]
+    }
+
     /// The band arithmetic, pinned to the table the wiki prints (`Card Rewards`, "Actual at reset"
     /// and the "next-slot rare chance after a rare hit" rows).
     ///
@@ -1698,6 +1737,36 @@ mod tests {
             run.roll_reward(&basic_pool(), FightKind::Normal).unwrap();
         }
         assert!(run.rarity_offset() <= RARITY_OFFSET_CAP, "offset {} escaped the cap", run.rarity_offset());
+    }
+
+    /// `inv:§8.2`: the merchant's prices follow the card's rarity -- 45–55 / 68–82 / 135–165.
+    ///
+    /// This is the row that used to say `[推断]`（"all cards priced as Common, because the content
+    /// carries no rarity"）. The content carries one now, so the bands are the documented ones.
+    #[test]
+    fn the_merchants_prices_follow_the_rarity_bands() {
+        assert_eq!(card_price_band(Rarity::Common), (45, 55));
+        assert_eq!(card_price_band(Rarity::Uncommon), (68, 82));
+        assert_eq!(card_price_band(Rarity::Rare), (135, 165));
+
+        let mut run = RunState::new(5, 80, 0, &DECK).expect("a run");
+        assert!(walk_to(&mut run, NodeKind::Shop), "the map has no merchant");
+        run.begin_node(&mixed_pool(), &RELICS).expect("a shop");
+        assert_eq!(run.shop().cards().len(), MAX_SHOP_CARDS.min(mixed_pool().len()));
+        for offer in run.shop().cards() {
+            let rarity = mixed_pool()
+                .iter()
+                .find(|card| card.id == offer.id.as_str())
+                .map(|card| card.rarity)
+                .expect("the offer came from the pool");
+            let (low, high) = card_price_band(rarity);
+            assert!(
+                offer.price >= low && offer.price <= high,
+                "{} ({rarity:?}) costs {}, outside {low}..={high}",
+                offer.id.as_str(),
+                offer.price
+            );
+        }
     }
 
     #[test]

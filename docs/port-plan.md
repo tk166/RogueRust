@@ -4952,3 +4952,89 @@ content.rdcf (checked-in out/) 648a1ff9… → 3a86d3e3…
 | 新导出 | — | **2 个**（`rd_env_card_kind` / `rd_run_card_kind`） |
 | `.wasm` | 475,137 B | **476,487 B** |
 | 镜像 | — | 两个 SHA **仍在原值**（`CONTENTC_BYTES PASS`） |
+---
+
+## 66. 第 56 轮：两个问题一起修 —— repin 修好了，格表只剩**一份**，schema 变更开始**响亮**
+
+> 用户问："是门禁问题还是 core 的缺陷？" 答案是一半一半。这一轮把两半都修了。
+
+### 66.1 门禁侧：`--repin` 读一个已经被删掉的临时文件
+
+`verify_bytes.py` 的 repin 分支在 `finally` **之后**跑，却调用
+`os.path.getsize(images["full"]["fresh"])` —— 那个临时目录已经没了 ⇒ `FileNotFoundError`。
+**唯一一条"故意改编译器之后必须能用"的路，是坏的。** 修法：用编译期间已经量好的
+`images[...]["fresh_bytes"]`。修完实测 `REPINNED …` + 闸门 PASS。
+
+### 66.2 core 侧之一：一张表被声明了**两遍**，而我把它们合并成了一遍
+
+`content.rs` 里每张表都有两份声明：
+
+* `pub static CARD_SCHEMA: [CellSpec; N]` —— 名字 + 类别 + 包装标志；
+* `entity_row!(CardRow, Card, 32, N, { getter => 格号 })` —— 格号 + 取值器。
+
+加 `CARD.Rarity` 时我只改了后者，于是 `cell_index("Rarity")` 是 `None`（它查的是前者），
+两条守卫当场报红。**守卫是对的，漂的是我。**
+
+现在 `entity_row!` **从同一份列表里同时生成格表和取值器**：
+
+```rust
+entity_row!(
+    EnctRow, Encounter, ENCT_SCHEMA, 16, 8, {
+        ("Id", F_STR, FLAG_WRAP_UPPER) => id => 0,
+        ("Enemies", F_TERM, 0) => enemies => 1,
+        ...
+    }
+);
+```
+
+`$cells` 还是手写的，所以宏里加了一行 `const _: () = assert!([格号列表].len() == $cells);` 钉住它。
+**加一格从此只改一处**（外加编译器那份 `rdcfmt.CARD_ROW`，两份之间由 §66.4 的守卫钉住）。
+
+⚠️ 过程中我差点报一个假 bug：合并脚本说"`ENCT_SCHEMA` 7 格、`EnctRow` 8 格"。
+那是**我正则的错** —— `cell("Id", F_STR, FLAG_WRAP_UPPER)` 第三个参数是符号不是数字，我写成了
+`\d+`。内核本来是一致的。**先怀疑自己的解析器，再怀疑被测对象。**
+
+### 66.3 core 侧之二：schema 变更对镜像格式是**不可见**的
+
+内核的格表是**固定**的，而镜像既不记格数、版本号也不随 schema 动。所以 15 格的旧镜像配 16 格的
+新内核会**解析成功并读出垃圾**：第 14 格本来的 `extra` 被当 `Rarity` 读，`content.string(那个 term)`
+若碰巧落在合法串号上就返回一段像样的文本。
+
+⇒ `FORMAT_VERSION` **1 → 2**（编译器与内核同改），旧镜像现在在 `parse()` 就被
+`UnsupportedVersion` 拒掉。判据 `card_rarity_is_readable_and_the_schema_moved_the_version`
+顺带钉住 `FORMAT_VERSION == 2` 与 `content.version() == FORMAT_VERSION`。
+
+### 66.4 于是 `Rarity` 真的落地了，商店价格也真的按稀有度分档
+
+* `CARD.Rarity` 第 16 格（**stride 仍是 32**）；`strike`/`defend`/`bash` 及升级版 = `Basic`、
+  `slimed` = `Status`。
+* `card_price_band(rarity)`：Common 45–55 / Uncommon 68–82 / Rare 135–165（`inv:§8.2`）——
+  **`sts-act1-plan.md` 降级表第 7 行（商店价格那条 `[推断]`）就此消除**。
+* 奖励池按稀有度集结，`Status`/`Curse` 在 roll 里被剔除（`slimed` 不再出现）。
+
+### 66.5 一条被证实的预测
+
+我上一轮担心"格式迁移会让语料与 golden 基线重定"。**实测：没有。**
+`corpus-roundtrip 85 case(s)` 与 `golden-baseline 129 行` 在 `FORMAT_VERSION = 2`、`CARD` 16 格
+之后**照旧通过** —— 哈希的规范文本不含这一格，所以"内容没变"这件事被两个闸门独立确认了。
+
+### 66.6 判据
+
+| 测试 | 钉住什么 |
+|---|---|
+| `card_rarity_is_readable_and_the_schema_moved_the_version` | `strike`=Basic / `slimed`=Status / 不在镜像里=None；`(STRIDE, CELLS) == (32, 16)`；**`FORMAT_VERSION == 2`**；roguedeck 镜像（无 `Rarity` 键）读出来是 `None` 而不是错误 |
+| `row_accessors_agree_with_the_written_schema` | `CARD_SCHEMA[14]` 是 `Rarity`、`[15]` 是 `extra`；`schema().len() == 16` |
+| `parse_rejects_an_unsupported_version` | 改成 `FORMAT_VERSION + 1`（写死 `2` 的旧测试在版本升到 2 之后会**变成通过**——那正是它要防的失效） |
+| `the_merchants_prices_follow_the_rarity_bands`（rd-run） | 三档边界 + 随机货架的每张卡都落在**它自己稀有度**的带内 |
+| `verify_bytes.py --repin` | 实测可用（闸门自身的修复由"REPINNED + PASS"证明） |
+
+### 66.7 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 645 | **647**（rd-core 575→576、rd-run 50→51） |
+| 镜像 | v1 | **v2**，两个包都重钉（`contentc-bytes` PASS） |
+| 语料 / golden | 85 / 129 | **85 / 129（未动）** |
+| `.wasm` | 476,487 B | **477,846 B** |
+| 声明份数（每张表） | **2**（`*_SCHEMA` + `entity_row!`） | **1** |

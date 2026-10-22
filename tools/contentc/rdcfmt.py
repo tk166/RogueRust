@@ -155,7 +155,10 @@ cell rather than a bit in a packed flag word (a packed bit could not tell
 import struct
 
 MAGIC = 0x46434452          # b'RDCF'
-FORMAT_VERSION = 1
+# 2: `CARD` gained a `Rarity` cell (stride unchanged -- the cell fits the existing padding).
+# A schema change must be visible to a reader that has a *fixed* cell table, otherwise an old
+# image decodes as garbage instead of failing.
+FORMAT_VERSION = 2
 HEADER_SIZE = 32
 NSEC = 20
 
@@ -233,6 +236,9 @@ CARD_ROW = [
     ("RetainInHandOnTurnEnd", F_BOOL, 0), ("IsAction", F_BOOL, 0),
     ("NameKey", F_STR, 0), ("DescriptionKey", F_STR, 0), ("PackageId", F_STR, 0),
     ("TurnEndHandDestinationZone", F_STR, 0), ("PlayedCardDestinationZone", F_STR, 0),
+    # `inv:§3.5`: rewards and merchant prices are both **by rarity**. The 16th cell costs nothing in
+    # layout (`align4(2*15) == align4(2*16) == 32`); what it costs is a format version bump.
+    ("Rarity", F_STR, 0),
     ("extra", F_TERM, 0),
 ]
 STATUS_ROW = [

@@ -334,9 +334,13 @@ def main():
         write_pin({"source_path": rel(src).replace("\\", "/"),
                    "source_sha256": src_sha, "source_bytes": src_len,
                    "full_name": pin["full_name"], "full_sha256": images["full"]["fresh_sha"],
-                   "full_bytes": os.path.getsize(images["full"]["fresh"]),
+                   # `fresh_bytes` was measured while the temp dir still existed. This used to
+                   # call `os.path.getsize` on the temp path, which the `finally` had already
+                   # removed -- so `--repin`, the one path that *must* work after a deliberate
+                   # compiler change, crashed with FileNotFoundError instead.
+                   "full_bytes": images["full"]["fresh_bytes"],
                    "core_name": pin["core_name"], "core_sha256": images["core"]["fresh_sha"],
-                   "core_bytes": os.path.getsize(images["core"]["fresh"])})
+                   "core_bytes": images["core"]["fresh_bytes"]})
         print("REPINNED %s\n  full=%s\n  core=%s"
               % (rel(args.pin), images["full"]["fresh_sha"],
                  images["core"]["fresh_sha"]))

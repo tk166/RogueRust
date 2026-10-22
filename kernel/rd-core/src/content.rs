@@ -41,7 +41,12 @@ pub const HEADER_BYTES: usize = 32;
 /// （这一条是实测出来的：见 `tools/rdcf_verify.py` 的注释。）
 pub const DIRECTORY_ENTRY_BYTES: usize = 12;
 /// 格式版本（头里 `version`）。
-pub const FORMAT_VERSION: u16 = 1;
+/// 2: `CARD` gained a `Rarity` cell（stride 没变 —— 那一格落在原有对齐填充里）。
+///
+/// 内核的格表是**固定**的，而镜像原本既不记格数、也不随 schema 动版本号 ⇒ 15 格的旧镜像
+/// 配 16 格的新内核会**解析成功并读出垃圾**（把旧的 `extra` 当 `Rarity`，`content.string`
+/// 碰巧拿到合法串号就返回一段像样的文本）。schema 变更必须响亮，所以版本号跟着 schema 走。
+pub const FORMAT_VERSION: u16 = 2;
 /// 目录项数（头里 `nsec`）。0..=14 有名字，15..19 保留。
 pub const SECTION_COUNT: usize = 20;
 /// 头部 `flags` 的 bit0：表现层已剥（`content.core.rdcf`）。
@@ -1065,81 +1070,6 @@ const fn cell(name: &'static str, kind: u8, flags: u8) -> CellSpec {
     CellSpec { name, kind, flags }
 }
 
-/// `CARD` 的 15 个格（stride 32）。
-pub static CARD_SCHEMA: [CellSpec; 15] = [
-    cell("Id", F_STR, 0),
-    cell("Program", F_TERM, 0),
-    cell("Tags", F_TERM, 0),
-    cell("Costs", F_TERM, 0),
-    cell("LifecyclePrograms", F_TERM, 0),
-    cell("PlayCondition", F_TERM, 0),
-    cell("QueueOnPlay", F_TERM, 0),
-    cell("RetainInHandOnTurnEnd", F_BOOL, 0),
-    cell("IsAction", F_BOOL, 0),
-    cell("NameKey", F_STR, 0),
-    cell("DescriptionKey", F_STR, 0),
-    cell("PackageId", F_STR, 0),
-    cell("TurnEndHandDestinationZone", F_STR, 0),
-    cell("PlayedCardDestinationZone", F_STR, 0),
-    cell("extra", F_TERM, 0),
-];
-
-/// `STAT` 的 20 个格（stride 40）。
-pub static STATUS_SCHEMA: [CellSpec; 20] = [
-    cell("Id", F_STR, 0),
-    cell("NameKey", F_STR, 0),
-    cell("DescriptionKey", F_STR, 0),
-    cell("PackageId", F_STR, 0),
-    cell("Polarity", F_STR, 0),
-    cell("StackingBehavior", F_STR, 0),
-    cell("Tags", F_TERM, 0),
-    cell("Triggers", F_TERM, 0),
-    cell("PassiveModifiers", F_TERM, 0),
-    cell("CombatRules", F_TERM, 0),
-    cell("DeathPrevention", F_TERM, 0),
-    cell("DebuffBlock", F_TERM, 0),
-    cell("IncomingStatusDelay", F_TERM, 0),
-    cell("Disclosure", F_TERM, 0),
-    cell("Prevention", F_TERM, 0),
-    cell("Amplification", F_TERM, 0),
-    cell("UsesStacks", F_BOOL, 0),
-    cell("UsesDuration", F_BOOL, 0),
-    cell("UsesCharges", F_BOOL, 0),
-    cell("extra", F_TERM, 0),
-];
-
-/// `EACT` 的 7 个格（stride 16）。
-pub static EACT_SCHEMA: [CellSpec; 7] = [
-    cell("Id", F_STR, 0),
-    cell("NameKey", F_STR, 0),
-    cell("DescriptionKey", F_STR, 0),
-    cell("PackageId", F_STR, 0),
-    cell("Intent", F_TERM, 0),
-    cell("Program", F_TERM, 0),
-    cell("extra", F_TERM, 0),
-];
-
-/// `ENCT` 的 8 个格（stride 16）。注意 `Id` 用大写包装 `{"Value": s}`。
-pub static ENCT_SCHEMA: [CellSpec; 8] = [
-    cell("Id", F_STR, FLAG_WRAP_UPPER),
-    cell("Enemies", F_TERM, 0),
-    cell("HeroResources", F_TERM, 0),
-    cell("HeroStartingStatuses", F_TERM, 0),
-    cell("TriggeredEffects", F_TERM, 0),
-    cell("HeroDisplayName", F_STR, 0),
-    cell("CardsDrawnPerTurn", F_INT, 0),
-    cell("extra", F_TERM, 0),
-];
-
-/// `REL` 的 5 个格（stride 12）。
-pub static REL_SCHEMA: [CellSpec; 5] = [
-    cell("Id", F_STR, 0),
-    cell("DisplayName", F_STR, 0),
-    cell("RunPrograms", F_TERM, 0),
-    cell("CombatRules", F_TERM, 0),
-    cell("extra", F_TERM, 0),
-];
-
 // ===========================================================================
 // 行的借用视图
 // ===========================================================================
@@ -1261,9 +1191,20 @@ impl<'a> ExactSizeIterator for Rows<'a> {}
 macro_rules! entity_row {
     (
         $(#[$meta:meta])*
-        $name:ident, $table:ident, $stride:expr, $cells:expr,
-        { $( $(#[$cell_meta:meta])* $getter:ident => $cell:expr, )* }
+        $name:ident, $table:ident, $schema:ident, $stride:expr, $cells:expr,
+        { $( $(#[$cell_meta:meta])* ($cell_name:literal, $cell_kind:expr, $cell_flag:expr)
+             => $getter:ident => $cell:expr, )* }
     ) => {
+        /// 这张表的格表：**名字 + 类别 + 包装标志 + 格号**。
+        ///
+        /// 与下面那些 getter 出自**同一份列表** —— 加一格只改一处。以前这里和 getter 各有一份，
+        /// 加 `CARD.Rarity` 时只改了一份，两条"格表不许漂"的守卫立刻报红。
+        pub static $schema: [CellSpec; $cells] =
+            [ $( cell($cell_name, $cell_kind, $cell_flag) ),* ];
+
+        // `$cells` 还是手写的，所以钉住它和列表长度一致。
+        const _: () = assert!([ $( $cell ),* ].len() == $cells);
+
         $(#[$meta])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub struct $name<'a> {
@@ -1322,146 +1263,146 @@ entity_row!(
     /// 卡牌行（`CARD`，stride 32，15 格）。
     ///
     /// 格序 = `CARD_SCHEMA`，与 `rdcfmt.CARD_ROW` 逐项一致。
-    CardRow, Card, 32, 15,
-    {
+    CardRow, Card, CARD_SCHEMA, 32, 16, {
         /// `Id`（串号）。
-        id => 0,
+        ("Id", F_STR, 0) => id => 0,
         /// `Program`（term 句柄）。
-        program => 1,
+        ("Program", F_TERM, 0) => program => 1,
         /// `Tags`（term 句柄）。
-        tags => 2,
+        ("Tags", F_TERM, 0) => tags => 2,
         /// `Costs`（term 句柄）。
-        costs => 3,
+        ("Costs", F_TERM, 0) => costs => 3,
         /// `LifecyclePrograms`（term 句柄）。
-        lifecycle_programs => 4,
+        ("LifecyclePrograms", F_TERM, 0) => lifecycle_programs => 4,
         /// `PlayCondition`（term 句柄）。
-        play_condition => 5,
+        ("PlayCondition", F_TERM, 0) => play_condition => 5,
         /// `QueueOnPlay`（term 句柄）。
-        queue_on_play => 6,
+        ("QueueOnPlay", F_TERM, 0) => queue_on_play => 6,
         /// `RetainInHandOnTurnEnd`（`F_BOOL` 格：0=absent 1=false 2=true 3=null）。
-        retain_in_hand_on_turn_end => 7,
+        ("RetainInHandOnTurnEnd", F_BOOL, 0) => retain_in_hand_on_turn_end => 7,
         /// `IsAction`（`F_BOOL` 格）。
-        is_action => 8,
+        ("IsAction", F_BOOL, 0) => is_action => 8,
         /// `NameKey`（串号）。
-        name_key => 9,
+        ("NameKey", F_STR, 0) => name_key => 9,
         /// `DescriptionKey`（串号）。
-        description_key => 10,
+        ("DescriptionKey", F_STR, 0) => description_key => 10,
         /// `PackageId`（串号）。
-        package_id => 11,
+        ("PackageId", F_STR, 0) => package_id => 11,
         /// `TurnEndHandDestinationZone`（串号）。
-        turn_end_hand_destination_zone => 12,
+        ("TurnEndHandDestinationZone", F_STR, 0) => turn_end_hand_destination_zone => 12,
         /// `PlayedCardDestinationZone`（串号）。
-        played_card_destination_zone => 13,
+        ("PlayedCardDestinationZone", F_STR, 0) => played_card_destination_zone => 13,
+        /// `Rarity`（串号）：`Basic` / `Common` / `Uncommon` / `Rare` / `Status` / `Curse`。
+        ///
+        /// 加这一格**没有改动 stride**（`align4(2×15) = align4(2×16) = 32`），但它改了 schema，
+        /// 所以 `FORMAT_VERSION` 一起从 1 变成 2。
+        ("Rarity", F_STR, 0) => rarity => 14,
         /// schema 不认识的键（`_obj` term 句柄；NULL16 = 没有）。
-        extra => 14,
+        ("extra", F_TERM, 0) => extra => 15,
     }
 );
 
 entity_row!(
     /// 状态行（`STAT`，stride 40，20 格）。
-    StatusRow, Status, 40, 20,
-    {
+    StatusRow, Status, STATUS_SCHEMA, 40, 20, {
         /// `Id`（串号）。
-        id => 0,
+        ("Id", F_STR, 0) => id => 0,
         /// `NameKey`（串号）。
-        name_key => 1,
+        ("NameKey", F_STR, 0) => name_key => 1,
         /// `DescriptionKey`（串号）。
-        description_key => 2,
+        ("DescriptionKey", F_STR, 0) => description_key => 2,
         /// `PackageId`（串号）。
-        package_id => 3,
+        ("PackageId", F_STR, 0) => package_id => 3,
         /// `Polarity`（串号）。
-        polarity => 4,
+        ("Polarity", F_STR, 0) => polarity => 4,
         /// `StackingBehavior`（串号）。
-        stacking_behavior => 5,
+        ("StackingBehavior", F_STR, 0) => stacking_behavior => 5,
         /// `Tags`（term 句柄）。
-        tags => 6,
+        ("Tags", F_TERM, 0) => tags => 6,
         /// `Triggers`（term 句柄）。
-        triggers => 7,
+        ("Triggers", F_TERM, 0) => triggers => 7,
         /// `PassiveModifiers`（term 句柄）。
-        passive_modifiers => 8,
+        ("PassiveModifiers", F_TERM, 0) => passive_modifiers => 8,
         /// `CombatRules`（term 句柄）。
-        combat_rules => 9,
+        ("CombatRules", F_TERM, 0) => combat_rules => 9,
         /// `DeathPrevention`（term 句柄）。
-        death_prevention => 10,
+        ("DeathPrevention", F_TERM, 0) => death_prevention => 10,
         /// `DebuffBlock`（term 句柄）。
-        debuff_block => 11,
+        ("DebuffBlock", F_TERM, 0) => debuff_block => 11,
         /// `IncomingStatusDelay`（term 句柄）。
-        incoming_status_delay => 12,
+        ("IncomingStatusDelay", F_TERM, 0) => incoming_status_delay => 12,
         /// `Disclosure`（term 句柄）。
-        disclosure => 13,
+        ("Disclosure", F_TERM, 0) => disclosure => 13,
         /// `Prevention`（term 句柄）。
-        prevention => 14,
+        ("Prevention", F_TERM, 0) => prevention => 14,
         /// `Amplification`（term 句柄）。
-        amplification => 15,
+        ("Amplification", F_TERM, 0) => amplification => 15,
         /// `UsesStacks`（`F_BOOL` 格）。
-        uses_stacks => 16,
+        ("UsesStacks", F_BOOL, 0) => uses_stacks => 16,
         /// `UsesDuration`（`F_BOOL` 格）。
-        uses_duration => 17,
+        ("UsesDuration", F_BOOL, 0) => uses_duration => 17,
         /// `UsesCharges`（`F_BOOL` 格）。
-        uses_charges => 18,
+        ("UsesCharges", F_BOOL, 0) => uses_charges => 18,
         /// schema 不认识的键（term 句柄）。
-        extra => 19,
+        ("extra", F_TERM, 0) => extra => 19,
     }
 );
 
 entity_row!(
     /// 敌人动作行（`EACT`，stride 16，7 格）。
-    EactRow, EnemyAction, 16, 7,
-    {
+    EactRow, EnemyAction, EACT_SCHEMA, 16, 7, {
         /// `Id`（串号）。
-        id => 0,
+        ("Id", F_STR, 0) => id => 0,
         /// `NameKey`（串号）。
-        name_key => 1,
+        ("NameKey", F_STR, 0) => name_key => 1,
         /// `DescriptionKey`（串号）。
-        description_key => 2,
+        ("DescriptionKey", F_STR, 0) => description_key => 2,
         /// `PackageId`（串号）。
-        package_id => 3,
+        ("PackageId", F_STR, 0) => package_id => 3,
         /// `Intent`（term 句柄）。
-        intent => 4,
+        ("Intent", F_TERM, 0) => intent => 4,
         /// `Program`（term 句柄）。
-        program => 5,
+        ("Program", F_TERM, 0) => program => 5,
         /// schema 不认识的键（term 句柄）。
-        extra => 6,
+        ("extra", F_TERM, 0) => extra => 6,
     }
 );
 
 entity_row!(
     /// 遭遇行（`ENCT`，stride 16，8 格）。`Id` 的包装拼法是大写 `{"Value": s}`。
-    EnctRow, Encounter, 16, 8,
-    {
+    EnctRow, Encounter, ENCT_SCHEMA, 16, 8, {
         /// `Id`（串号；JSON 里写成 `{"Value": s}`）。
-        id => 0,
+        ("Id", F_STR, FLAG_WRAP_UPPER) => id => 0,
         /// `Enemies`（term 句柄）。
-        enemies => 1,
+        ("Enemies", F_TERM, 0) => enemies => 1,
         /// `HeroResources`（term 句柄）。
-        hero_resources => 2,
+        ("HeroResources", F_TERM, 0) => hero_resources => 2,
         /// `HeroStartingStatuses`（term 句柄）。
-        hero_starting_statuses => 3,
+        ("HeroStartingStatuses", F_TERM, 0) => hero_starting_statuses => 3,
         /// `TriggeredEffects`（term 句柄）。
-        triggered_effects => 4,
+        ("TriggeredEffects", F_TERM, 0) => triggered_effects => 4,
         /// `HeroDisplayName`（串号）。
-        hero_display_name => 5,
+        ("HeroDisplayName", F_STR, 0) => hero_display_name => 5,
         /// `CardsDrawnPerTurn`（`F_INT` 格；`NULL_INT` 表示"存在且为 null"）。
-        cards_drawn_per_turn => 6,
+        ("CardsDrawnPerTurn", F_INT, 0) => cards_drawn_per_turn => 6,
         /// schema 不认识的键（term 句柄）。
-        extra => 7,
+        ("extra", F_TERM, 0) => extra => 7,
     }
 );
 
 entity_row!(
     /// 遗物行（`REL`，stride 12，5 格）。
-    RelRow, Relic, 12, 5,
-    {
+    RelRow, Relic, REL_SCHEMA, 12, 5, {
         /// `Id`（串号）。
-        id => 0,
+        ("Id", F_STR, 0) => id => 0,
         /// `DisplayName`（串号）。
-        display_name => 1,
+        ("DisplayName", F_STR, 0) => display_name => 1,
         /// `RunPrograms`（term 句柄）。
-        run_programs => 2,
+        ("RunPrograms", F_TERM, 0) => run_programs => 2,
         /// `CombatRules`（term 句柄）。
-        combat_rules => 3,
+        ("CombatRules", F_TERM, 0) => combat_rules => 3,
         /// schema 不认识的键（term 句柄）。
-        extra => 4,
+        ("extra", F_TERM, 0) => extra => 4,
     }
 );
 
@@ -2221,6 +2162,20 @@ impl<'a> Content<'a> {
     }
 }
 
+impl<'a> Content<'a> {
+    /// 这张卡的 `Rarity`。`None` = 没声明或读不出来。
+    #[must_use]
+    pub fn card_rarity(&self, card: &str) -> Option<&'a str> {
+        let entry = self.lookup_in(card, EK_CARD)?;
+        let row = CardRow::new(self.row(Table::Card, entry.index as u32)?)?;
+        let cell = row.rarity();
+        if cell == ABSENT16 || cell == NULL16 {
+            return None;
+        }
+        self.string(cell)
+    }
+}
+
 /// 花名册第 0 人的 `Start` 对象 term（`RunBlueprint.cs:171-174`：`Characters[0].Start`）。
 ///
 /// `Ok(None)` = **花名册为空 / 没有这个根键**（⇒ 走根 `Start`）；`Ok(Some(t))` = 有。
@@ -2683,10 +2638,13 @@ mod tests {
     fn parse_rejects_an_unsupported_version() {
         let mut blob = read_image(CORE_IMAGE);
         assert_eq!(u16_at(&blob, HDR_VERSION), Some(FORMAT_VERSION));
-        patch16(&mut blob, HDR_VERSION, 2);
+        // Not a literal: the point of the test is "a version this build does not speak", and `2`
+        // *is* the version now that `CARD.Rarity` moved it.
+        let other = FORMAT_VERSION + 1;
+        patch16(&mut blob, HDR_VERSION, other);
         assert_eq!(
             Content::parse(&blob).unwrap_err(),
-            ContentError::UnsupportedVersion(2)
+            ContentError::UnsupportedVersion(other)
         );
 
         patch16(&mut blob, HDR_VERSION, 0);
@@ -3063,8 +3021,8 @@ mod tests {
             assert_eq!(Table::Relic.stride(), 12);
             assert_eq!(
                 (CardRow::STRIDE, CardRow::CELLS),
-                (32, 15),
-                "CARD 15 格 = 30 B，stride 是 align4 = 32（不是 28）"
+                (32, 16),
+                "CARD 16 格 = 32 B（15 格时 30 B 也取整到 32：那一格是免费的）"
             );
             assert_eq!((StatusRow::STRIDE, StatusRow::CELLS), (40, 20));
             assert_eq!((EactRow::STRIDE, EactRow::CELLS), (16, 7));
@@ -3103,7 +3061,7 @@ mod tests {
             // 具体行：格值抄自 `reader.py`（`--entity`）读出来的同一行。
             let card = content.card(0).unwrap();
             assert_eq!(card.index(), 0);
-            assert_eq!(card.row().u16_len(), 16, "15 格 + 1 格对齐填充");
+            assert_eq!(card.row().u16_len(), 16, "16 格，没有对齐填充");
             assert_eq!(card.id(), 950);
             assert_eq!(content.string(card.id()), Some("paper_cut"));
             assert_eq!(card.program(), 4);
@@ -3206,13 +3164,14 @@ mod tests {
 
             // schema 的格序与 `rdcfmt.ROW_SCHEMAS` 逐项相同（键名、类别、包装 flags）。
             assert_eq!(CARD_SCHEMA[0], cell("Id", F_STR, 0));
-            assert_eq!(CARD_SCHEMA[14], cell("extra", F_TERM, 0));
+            assert_eq!(CARD_SCHEMA[14], cell("Rarity", F_STR, 0));
+            assert_eq!(CARD_SCHEMA[15], cell("extra", F_TERM, 0));
             assert_eq!(STATUS_SCHEMA[19], cell("extra", F_TERM, 0));
             assert_eq!(ENCT_SCHEMA[0], cell("Id", F_STR, FLAG_WRAP_UPPER));
             assert_eq!(ENCT_SCHEMA[6], cell("CardsDrawnPerTurn", F_INT, 0));
             assert_eq!(EACT_SCHEMA[5], cell("Program", F_TERM, 0));
             assert_eq!(REL_SCHEMA[2], cell("RunPrograms", F_TERM, 0));
-            assert_eq!(Table::Card.schema().len(), 15);
+            assert_eq!(Table::Card.schema().len(), 16);
             assert_eq!(Table::Status.schema().len(), 20);
 
             // 命名 getter 取的就是 schema 里那一格。
@@ -3233,6 +3192,7 @@ mod tests {
                 ("PackageId", card.package_id()),
                 ("TurnEndHandDestinationZone", card.turn_end_hand_destination_zone()),
                 ("PlayedCardDestinationZone", card.played_card_destination_zone()),
+                ("Rarity", card.rarity()),
                 ("extra", card.extra()),
             ] {
                 assert_eq!(row.cell_by_name(name), Some(got), "CARD.{name}");
@@ -3305,8 +3265,9 @@ mod tests {
 
             // schema 里没有的键 / 越界格。
             assert_eq!(card.row().cell_by_name("Nope"), None);
-            assert_eq!(card.row().cell_index("extra"), Some(14));
-            assert_eq!(card.row().cell(15), None, "第 15 格是填充之外的越界");
+            assert_eq!(card.row().cell_index("Rarity"), Some(14));
+            assert_eq!(card.row().cell_index("extra"), Some(15));
+            assert_eq!(card.row().cell(16), None, "第 16 格越界（16 格都在行内）");
             assert_eq!(card.row().cell(u32::MAX), None);
             assert_eq!(card.row().cell_kind(0), Some(F_STR));
             assert_eq!(card.row().cell_kind(99), None);
@@ -3567,6 +3528,31 @@ mod tests {
     }
 
     #[test]
+    /// `Rarity` is cell 14 of `CARD`, it cost no layout (`align4(2*15) == align4(2*16) == 32`), and
+    /// it moved `FORMAT_VERSION` to 2 -- a schema change has to be visible to a reader whose cell
+    /// table is fixed, or an old image decodes as garbage instead of failing.
+    #[test]
+    fn card_rarity_is_readable_and_the_schema_moved_the_version() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&bytes).expect("the image parses");
+        assert_eq!(content.card_rarity("strike"), Some("Basic"));
+        assert_eq!(content.card_rarity("bash"), Some("Basic"));
+        assert_eq!(content.card_rarity("slimed"), Some("Status"));
+        assert_eq!(content.card_rarity("no_such_card"), None);
+        assert_eq!((CardRow::STRIDE, CardRow::CELLS), (32, 16));
+        assert_eq!(FORMAT_VERSION, 2);
+        assert_eq!(content.version(), FORMAT_VERSION);
+        // The roguedeck image has no `Rarity` key at all: the cell is there and reads as absent,
+        // which is `None` rather than an error.
+        let core = std::fs::read(CORE_IMAGE).expect("the roguedeck image");
+        let core = Content::parse(&core).expect("parses");
+        assert_eq!(core.card_rarity("paper_cut"), None);
+    }
+
     fn the_real_images_validate() {
         with_core(|content, _| {
             assert_eq!(content.validate(), Ok(()));

@@ -1,6 +1,6 @@
 {
   "format": "RDCF",
-  "format_version": 1,
+  "format_version": 2,
   "magic": "0x46434452",
   "source": {
     "path": "D:\\Vibe\\sts-tui\\ref\\RogueDeck-Core\\src\\RogueDeck.Sandbox.Run\\SampleContent\\bureaucrats.roguedeck.json",
@@ -285,10 +285,10 @@
     }
   },
   "timing_seconds": {
-    "json_load": 0.0771,
-    "derive": 0.2332,
-    "encode": 0.3037,
-    "serialize": 0.0729
+    "json_load": 0.0751,
+    "derive": 0.1975,
+    "encode": 0.3317,
+    "serialize": 0.0628
   },
   "peak_heap_mib": 26.7
 }

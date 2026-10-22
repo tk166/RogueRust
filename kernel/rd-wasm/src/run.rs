@@ -177,30 +177,34 @@ fn card_pool(content: &'static Content<'static>) -> Vec<&'static str> {
 /// a term the kernel cannot walk for `CARD` rows yet (`status_bind::has_tag` does that walk for
 /// `STATUS` rows only), so a tag filter here would be a guess. Written down in the plan's downgrade
 /// table rather than papered over.
-fn reward_pool(
+/// Every card with its rarity -- what the merchant draws from.
+fn full_pool(
     content: &'static Content<'static>,
 ) -> Result<Vec<rd_run::state::PoolCard<'static>>, String> {
     let mut pool = Vec::new();
     for id in card_pool(content) {
-        // `inv:§3.5`: Act 1 never offers an upgraded card (upgrade probability 0%).
+        let rarity = match content.card_rarity(id) {
+            Some(name) => rd_run::state::Rarity::from_name(name)
+                .ok_or_else(|| std::format!("卡 `{id}` 的 Rarity `{name}` 不认识"))?,
+            None => return Err(std::format!("卡 `{id}` 没有 Rarity")),
+        };
+        pool.push(rd_run::state::PoolCard { id, rarity });
+    }
+    Ok(pool)
+}
+
+/// The reward pool: the same cards minus the upgraded rows (`inv:§3.5`: Act 1 never offers one).
+fn reward_pool(
+    content: &'static Content<'static>,
+) -> Result<Vec<rd_run::state::PoolCard<'static>>, String> {
+    let mut pool = Vec::new();
+    for card in full_pool(content)? {
+        let id = card.id;
         if id.ends_with('+') {
             continue;
         }
-        // `slimed` is a junk card, not a reward. The filter is by **tag** because this image has no
-        // `CARD.Rarity` yet -- adding that cell is a format migration of its own (it invalidates the
-        // pinned `roguedeck` image), so the reward roll's rarity machinery is in place and every card
-        // in this image enters it as `Basic` (`inv:§3.5`'s buckets, one of them populated).
-        match content.card_has_tag(id, "status") {
-            Some(true) => continue,
-            Some(false) => {}
-            // "Cannot tell" must not become "not a status card" -- that is the bug this filter
-            // exists for (a reward screen offering `slimed`).
-            None => return Err(std::format!("读不出卡 `{id}` 的 Tags")),
-        }
-        pool.push(rd_run::state::PoolCard {
-            id,
-            rarity: rd_run::state::Rarity::Basic,
-        });
+        // `rd-run` drops `Status`/`Curse` from the roll itself -- one rule, one owner.
+        pool.push(card);
     }
     Ok(pool)
 }
@@ -665,7 +669,10 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
         return -1;
     };
     let content = content();
-    let cards = card_pool(content);
+    let cards = match full_pool(content) {
+        Ok(cards) => cards,
+        Err(message) => return fail(session, &message),
+    };
     let relics = relic_pool(content);
     let outcome = session.state.begin_node(&cards, &relics).map(|_| 0i32);
     finish(session, outcome)
