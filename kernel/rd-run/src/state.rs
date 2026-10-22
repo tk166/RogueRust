@@ -403,6 +403,9 @@ pub struct RunState {
     shop: ShopStock,
     /// The card choice after a won fight.
     reward: Reward,
+    /// Has the act been **cleared**? Set when the boss dies (`inv:§7.2`: the boss is the end of the
+    /// act). Until this existed a run could not be won, only lost.
+    boss_beaten: bool,
     /// Which nodes have paid out. A node settles **once** -- a second visit is an error, which is
     /// what stops a fight from being farmed and a campfire from healing on every click.
     resolved: [u64; 2],
@@ -445,6 +448,7 @@ impl RunState {
             pending: Pending::None,
             shop: ShopStock::empty(),
             reward: Reward::empty(),
+            boss_beaten: false,
             resolved: [0; 2],
             rarity_offset: RARITY_OFFSET_START,
         };
@@ -643,7 +647,15 @@ impl RunState {
         }
         let target_row = self.floor as usize; // 0-based row *after* the current one
         if target_row >= ROWS {
-            return out; // floor 15 is the last row; there is nowhere to walk
+            // Floor 15 is the last row. `inv:§7.2` puts the boss at floor 16 -- off the map, so it
+            // is offered as the sentinel rather than as an edge. It is the **only** way forward,
+            // which is what makes an act completable.
+            // Not while standing on it: the boss is the end of the walk, and offering it again
+            // would let a caller walk into the fight it is already in.
+            if !self.boss_beaten && self.node != i32::from(crate::map::BOSS_NODE) {
+                out.push(crate::map::BOSS_NODE);
+            }
+            return out;
         }
         let Some(row) = self.map.row(target_row - 1) else {
             return out;
@@ -669,6 +681,12 @@ impl RunState {
         if !self.reachable().contains(target) {
             return Err(RunError::NotReachable);
         }
+        if target == crate::map::BOSS_NODE {
+            // `inv:§7.2`: the boss is floor 16, one row past the map's last.
+            self.node = i32::from(target);
+            self.floor = ROWS as i32 + 1;
+            return self.check_invariants();
+        }
         let Some((row, _)) = self.map.locate(target) else {
             return Err(RunError::BadNode);
         };
@@ -678,6 +696,19 @@ impl RunState {
     }
 
     // ---- settling a node -------------------------------------------------------------------
+
+    /// Has the act been cleared (the boss is dead)?
+    #[must_use]
+    pub const fn boss_beaten(&self) -> bool {
+        self.boss_beaten
+    }
+
+    /// Record the act clear. Called by the fight epilogue when the boss falls -- the fight is
+    /// settled outside this crate, so the caller has to say so (same shape as `mark_resolved`).
+    pub fn mark_boss_beaten(&mut self) {
+        self.boss_beaten = true;
+        self.mark_resolved();
+    }
 
     /// Has the node under the cursor already paid out?
     #[must_use]
@@ -742,6 +773,11 @@ impl RunState {
         }
         if self.node_resolved() {
             return Err(RunError::NodeResolved);
+        }
+        if self.node == i32::from(crate::map::BOSS_NODE) {
+            // A fight like the others; the caller knows it must use the boss pool.
+            self.pending = Pending::None;
+            return Ok(crate::map::NodeKind::Boss);
         }
         let Some((row, local)) = self.map.locate(self.node as u8) else {
             return Err(RunError::BadNode);
@@ -1137,7 +1173,11 @@ impl RunState {
     /// runs on the device, and a `debug_assert!` would leave the device unchecked.
     pub fn check_invariants(&self) -> Result<(), RunError> {
         self.map.check().map_err(|_| RunError::MapGeneration)?;
-        if self.floor < 0 || self.floor as usize > ROWS {
+        // The boss lives at floor `ROWS + 1` (`inv:§7.2`: floor 16), off the map -- so the ceiling is
+        // one higher when the cursor is on it.
+        let at_boss = self.node == i32::from(crate::map::BOSS_NODE);
+        let top_floor = if at_boss { ROWS as i32 + 1 } else { ROWS as i32 };
+        if self.floor < 0 || self.floor > top_floor {
             return Err(RunError::Invariant("floor out of range"));
         }
         if self.health < 0 || self.health > self.health_max {
@@ -1152,6 +1192,11 @@ impl RunState {
         if self.node < 0 {
             if self.floor != 0 {
                 return Err(RunError::Invariant("floor set before the first step"));
+            }
+        } else if at_boss {
+            // The sentinel has no map row; its floor is fixed.
+            if self.floor != ROWS as i32 + 1 {
+                return Err(RunError::Invariant("the boss is floor ROWS + 1"));
             }
         } else {
             let Some((row, _)) = self.map.locate(self.node as u8) else {
@@ -1249,7 +1294,10 @@ mod tests {
             assert_eq!(run.check_invariants(), Ok(()));
         }
         assert_eq!(run.floor(), ROWS as i32);
-        assert!(run.reachable().is_empty(), "the last row has nowhere to go");
+        // The last row leads to the boss (inv:§7.2: floor 16, off the map) and to nothing else.
+        let tail = run.reachable();
+        assert_eq!(tail.len(), 1, "the last row has exactly one exit");
+        assert_eq!(tail.get(0), Some(crate::map::BOSS_NODE), "and it is the boss");
     }
 
     #[test]

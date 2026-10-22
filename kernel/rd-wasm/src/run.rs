@@ -39,6 +39,9 @@ struct RunSession {
     state: Box<RunState>,
     /// Human-readable reason for the last non-`Ok` return.
     error: String,
+    /// Was this fight started from the **boss**? Same reason as `elite_fight`, and it also decides
+    /// whether winning clears the act.
+    boss_fight: bool,
     /// Was this fight started from an **elite** node? `fight_end` needs it for the reward tier
     /// (`inv:§5`: elite pays 25–35 gold, rare 10/40/50) and the cursor no longer says so.
     elite_fight: bool,
@@ -356,6 +359,7 @@ pub extern "C" fn rd_run_start(seed: i32) -> i32 {
         state,
         error: String::new(),
         elite_fight: false,
+        boss_fight: false,
     });
     0
 }
@@ -651,6 +655,10 @@ pub extern "C" fn rd_run_node_kind() -> i32 {
     if node < 0 {
         return -1;
     }
+    // The boss is a **sentinel cursor**, not a map index (inv:§7.2: floor 16 is off the map).
+    if node == i32::from(rd_run::map::BOSS_NODE) {
+        return i32::from(rd_run::map::NodeKind::Boss as u8);
+    }
     session
         .state
         .map()
@@ -871,6 +879,15 @@ pub extern "C" fn rd_run_remove_card(index: i32) -> i32 {
 // The reward screen (`env-abi.md` §11.9)
 // =============================================================================================
 
+/// Has the act been cleared? `1` yes, `0` no, `-1` no run.
+#[no_mangle]
+pub extern "C" fn rd_run_boss_beaten() -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    i32::from(session.state.boss_beaten())
+}
+
 /// Has the node under the cursor already paid out? `1` yes, `0` no, `-1` no cursor.
 #[no_mangle]
 pub extern "C" fn rd_run_node_resolved() -> i32 {
@@ -1066,7 +1083,12 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     if node < 0 {
         return fail(session, "还没有走到任何节点");
     }
-    let kind = session
+    // The boss is a sentinel cursor rather than a map index (inv:§7.2: floor 16 is off the map),
+    // so it is answered before the map lookup -- the same rule rd_run_node_kind applies.
+    let kind = if node == i32::from(rd_run::map::BOSS_NODE) {
+        i32::from(rd_run::map::NodeKind::Boss as u8)
+    } else {
+        session
         .state
         .map()
         .locate(node as u8)
@@ -1078,9 +1100,10 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
                 .and_then(|line| line.node(local))
                 .map(|node| node.kind as i32)
         })
-        .unwrap_or(-1);
-    // 1 = `NodeKind::Combat`, 2 = `NodeKind::Elite` (`run-layer.md` §7.2).
-    if kind != 1 && kind != 2 {
+        .unwrap_or(-1)
+    };
+    // 1 = Combat, 2 = Elite, 7 = Boss (`run-layer.md` §7.2; the boss is floor 16, off the map).
+    if kind != 1 && kind != 2 && kind != 7 {
         let message = std::format!("当前节点不是战斗（kind {kind}）");
         return fail(session, &message);
     }
@@ -1100,7 +1123,12 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // The pool follows the node (`inv:§5.2` weak / `inv:§5.3` elite) -- before this the only rule
     // was "any encounter in the image", which would send an elite into a slime fight.
     session.elite_fight = kind == 2;
-    let pool_name = if kind == 2 { "Elite" } else { "Weak" };
+    session.boss_fight = kind == 7;
+    let pool_name = match kind {
+        2 => "Elite",
+        7 => "Boss",
+        _ => "Weak",
+    };
     let encounters: Vec<&'static str> = match content.encounter_pool(pool_name) {
         Some(ids) => ids.iter().filter(|id| !id.is_empty()).copied().collect(),
         None => {
@@ -1176,6 +1204,7 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     let hero_hp = crate::combat_hero_health().unwrap_or(0);
     // Captured before the run is borrowed mutably below.
     let elite_fight = run_slot().as_ref().is_some_and(|s| s.elite_fight);
+    let boss_fight = run_slot().as_ref().is_some_and(|s| s.boss_fight);
     crate::take_session();
     let Some(session) = run_slot().as_mut() else {
         return -1;
@@ -1184,7 +1213,10 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     let delta = hero_hp - session.state.health();
     session.state.adjust_health(delta);
     // `inv:§5`: the tier follows what was fought, and it moves gold and rarity together.
-    let fight_kind = if elite_fight {
+    // `inv:§4.3`: a boss pays 95-105 and its reward is always rare.
+    let fight_kind = if boss_fight {
+        rd_run::state::FightKind::Boss
+    } else if elite_fight {
         rd_run::state::FightKind::Elite
     } else {
         rd_run::state::FightKind::Normal
@@ -1211,6 +1243,10 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     }
     // The fight is settled -- win or lose -- so the node has paid.
     session.state.mark_resolved();
+    // `inv:§7.2`: killing the boss **clears the act**. This is the only way a run can be won.
+    if result == 1 && boss_fight {
+        session.state.mark_boss_beaten();
+    }
     0.max(result)
 }
 
@@ -1329,6 +1365,7 @@ fn kind_name(kind: i32) -> Option<&'static str> {
         4 => NodeKind::Shop,
         5 => NodeKind::Unknown,
         6 => NodeKind::Treasure,
+        7 => NodeKind::Boss,
         _ => return None,
     };
     Some(kind.name())
@@ -1509,15 +1546,22 @@ mod tests {
             steps += 1;
         }
         assert_eq!(steps, ROWS, "one step per floor");
-        assert_eq!(obs()[16], 0, "nowhere left to go");
-        assert_eq!(rd_run_action_count(), 0);
+        // The last row's only way forward is the boss (`inv:§7.2`: floor 16, off the map).
+        assert_eq!(obs()[16], 1, "one offer from the last row");
+        assert_eq!(rd_run_action_count(), 1, "and it is the boss");
+        assert_eq!(
+            rd_run_action_arg(0, 0),
+            i32::from(rd_run::map::BOSS_NODE),
+            "the offer is the boss sentinel"
+        );
     }
 
     #[test]
     fn the_kind_names_come_from_the_map_enum() {
         assert_eq!(rd_run_kind_name_len(1), "combat".len() as i32);
         assert_eq!(rd_run_kind_name_len(6), "treasure".len() as i32);
-        assert_eq!(rd_run_kind_name_len(7), -1, "no such kind");
+        assert_eq!(rd_run_kind_name_len(7), "boss".len() as i32, "kind 7 is the boss");
+        assert_eq!(rd_run_kind_name_len(8), -1, "no such kind");
         assert_eq!(rd_run_kind_name_len(-1), -1);
     }
 
@@ -1878,6 +1922,104 @@ mod tests {
         rd_run_last_error_into(ptr);
         let buffer = unsafe { std::slice::from_raw_parts(ptr as *const u8, n as usize) };
         String::from_utf8_lossy(buffer).to_string()
+    }
+
+    /// **The act is completable**: after the last row the boss is the only way forward, it is the
+    /// slime boss, and killing it clears the act.
+    ///
+    /// Walking is *not* settling (`env-abi.md` §11.5), so the test walks to the last row without
+    /// fighting anything -- that makes it deterministic and fast. (The previous version fought its
+    /// way up, died on some seeds, and `return`ed early: a green that meant nothing. Silent skips are
+    /// the exact shape this project keeps banning.)
+    #[test]
+    fn the_boss_is_offered_at_floor_16_and_clears_the_act() {
+        reset(7);
+        // Walk to the last row, settling nothing.
+        for _ in 0..32 {
+            if rd_run_observe(0) >= 15 {
+                break;
+            }
+            let mut choice = -1;
+            for action in 0..rd_run_action_count() {
+                let node = rd_run_action_arg(action, 0);
+                if node >= 0 && node < i32::from(rd_run::map::BOSS_NODE) {
+                    choice = action;
+                    break;
+                }
+            }
+            assert!(choice >= 0, "nowhere to walk from floor {}", rd_run_observe(0));
+            assert_eq!(rd_run_step(choice), 0, "walk");
+        }
+        assert_eq!(rd_run_observe(0), 15, "walked to the last row");
+
+        // From the last row the boss is the *only* offer (`inv:§7.2`: floor 16, off the map).
+        assert_eq!(rd_run_action_count(), 1, "the boss must be the only way forward");
+        assert_eq!(
+            rd_run_action_arg(0, 0),
+            i32::from(rd_run::map::BOSS_NODE),
+            "the single offer is the boss"
+        );
+
+        assert_eq!(rd_run_step(0), 0, "walk into the boss");
+        assert_eq!(rd_run_observe(0), 16, "the boss is floor 16");
+        assert_eq!(rd_run_node_kind(), 7, "kind Boss");
+        assert_eq!(rd_run_begin_node(), 0, "the boss settles as a fight");
+        assert_eq!(rd_run_boss_beaten(), 0, "not cleared before the fight");
+        assert_eq!(
+            rd_run_fight_begin(),
+            0,
+            "the boss fight must start; kernel said {:?}",
+            run_error_text()
+        );
+
+        let mut names = Vec::new();
+        let mut index = 0;
+        while rd_env_enemy_name_len(index) >= 0 {
+            let n = rd_env_enemy_name_len(index);
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_env_enemy_name_into(index, buffer.as_mut_ptr()) };
+            names.push(String::from_utf8(buffer).unwrap_or_default());
+            index += 1;
+        }
+        assert_eq!(names.len(), 1, "one boss; got {names:?}");
+        assert!(
+            names[0].to_lowercase().contains("slime_boss"),
+            "the boss is the slime boss; got {names:?}"
+        );
+
+        // Fight it out. The assertion is that the *mechanism* is consistent in both directions --
+        // clearing the act if and only if the boss dies -- not that this particular bot wins.
+        let mut guard = 0;
+        while rd_env_done() == 0 && guard < 2000 {
+            let mut action = -1;
+            for i in 0..rd_env_action_count() {
+                if rd_env_action_kind(i) == 0 {
+                    action = i;
+                    break;
+                }
+            }
+            if action < 0 {
+                action = rd_env_action_index_of_end_turn();
+            }
+            if action < 0 {
+                break;
+            }
+            assert_eq!(rd_env_step(action), 0);
+            guard += 1;
+        }
+        let result = rd_run_fight_end();
+        println!("boss fight: result={result} steps={guard} hp={}", rd_run_observe(2));
+        if result == 1 {
+            assert_eq!(rd_run_boss_beaten(), 1, "a won boss fight clears the act");
+            let gold = rd_run_reward_gold();
+            assert!(
+                (95..=105).contains(&gold),
+                "a boss pays 95-105 (inv:§5), got {gold}"
+            );
+        } else {
+            assert_eq!(result, 2, "the only other ending is defeat");
+            assert_eq!(rd_run_boss_beaten(), 0, "losing does not clear the act");
+        }
     }
 
     /// The three pile exports read the fight's piles, and the observation only carries counts.

@@ -41,8 +41,13 @@
 
   // `run-layer.md` §7.2. The names are the kernel's own (`NodeKind::name`); the page must not
   // invent a second vocabulary, so the test cross-checks these against `rd_run_kind_name_*`.
+  /// The kernel's "the boss" sentinel (`rd-run`'s `BOSS_NODE`). It is **not** a map index: the map
+  /// has 15 rows and the boss is floor 16, off the grid. The map still has to *draw* it, because a
+  /// player who cannot see where they are going is looking at a bug.
+  const BOSS_NODE = 100;
+
   const KIND_NAMES = [
-    "unassigned", "combat", "elite", "rest", "shop", "unknown", "treasure",
+    "unassigned", "combat", "elite", "rest", "shop", "unknown", "treasure", "boss",
   ];
 
   // Presentation only. Colour is by kind; `unassigned` is deliberately ugly because seeing one is
@@ -55,6 +60,7 @@
     shop: "$",
     unknown: "?",
     treasure: "💎",
+    boss: "👑",
   };
 
   const LAYOUT = {
@@ -104,6 +110,7 @@
       });
     }
     const cursor = io.obs(RUN_NODE);
+    const actionsPre = [];
     // The action table is the authority on "what can I do now"; the `reachable` flag above is the
     // same set seen from the map's side. Asserting the two agree is the test's job, not a choice
     // made here -- so both are reported and neither is derived from the other.
@@ -111,9 +118,32 @@
     for (let index = 0; index < io.actionCount(); index++) {
       actions.push(io.actionArg(index, 0));
     }
+    // The boss row: one node, centred, drawn only when the run offers it (or stands on it). The
+    // kernel reports it as a **sentinel** id, so `reachable` cannot come from the map -- it is
+    // "offered" exactly when the action table lists it.
+    const offersBoss = actions.includes(BOSS_NODE);
+    const onBoss = cursor === BOSS_NODE;
+    if (offersBoss || onBoss) {
+      nodes.push({
+        id: BOSS_NODE,
+        row: LAYOUT.rows,
+        col: Math.floor(LAYOUT.columns / 2),
+        kind: 7,
+        kindName: "boss",
+        label: KIND_LABELS.boss,
+        degree: 0,
+        out: [],
+        reachable: offersBoss && !onBoss,
+      });
+    }
+
     return {
       nodes,
-      cursor: { node: cursor, reached: cursor >= 0, row: cursor >= 0 ? io.node(cursor, NODE_ROW) : -1 },
+      cursor: {
+        node: cursor,
+        reached: cursor >= 0,
+        row: cursor === BOSS_NODE ? LAYOUT.rows : cursor >= 0 ? io.node(cursor, NODE_ROW) : -1,
+      },
       actions,
       status: {
         floor: io.obs(RUN_FLOOR),
@@ -151,7 +181,9 @@
     if (!view) return "";
     const { rows } = LAYOUT;
     const width = LAYOUT.marginX * 2 + LAYOUT.columns * LAYOUT.colWidth;
-    const height = LAYOUT.marginY * 2 + rows * LAYOUT.rowHeight;
+    // One extra row when the boss is drawn (`view.nodes` carries it with `row === rows`).
+    const extra = view.nodes.some((node) => node.row >= rows) ? 1 : 0;
+    const height = LAYOUT.marginY * 2 + (rows + extra) * LAYOUT.rowHeight;
     const byId = new Map(view.nodes.map((node) => [node.id, node]));
 
     const edges = [];
@@ -224,6 +256,6 @@
     NODE_ROW, NODE_COL, NODE_KIND, NODE_OUT_DEGREE, NODE_EDGE0, NODE_REACHABLE,
     KIND_NAMES, KIND_LABELS, LAYOUT,
     // pure functions
-    position, describeMap, svgMarkup, statusLine, relicLine,
+    BOSS_NODE, position, describeMap, svgMarkup, statusLine, relicLine,
   };
 })(typeof globalThis !== "undefined" ? globalThis : this);

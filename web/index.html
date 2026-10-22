@@ -563,14 +563,14 @@ function renderNode() {
   const kind = ex.rd_run_node_kind();
   // 1 = combat, 2 = elite (`run-layer.md` §7.2). Both are fights; the elite draws from the elite
   // pool and pays the elite tier, and neither is the page's business -- the kernel decides.
-  if (pending === 0 && (kind === 1 || kind === 2)) {
+  if (pending === 0 && (kind === 1 || kind === 2 || kind === 7)) {
     if (ex.rd_run_node_resolved() === 1) {
       // The node paid already. Offering the button again is what let a fight be farmed; the panel
       // says so instead.
       panel.innerHTML = `<span class="dim">这个节点已结算 · 点亮的节点往前走</span>`;
       return;
     }
-    const label = kind === 2 ? "精英节点（3 × Sentry）" : "战斗节点";
+    const label = kind === 7 ? "Boss · Slime Boss" : kind === 2 ? "精英节点（3 × Sentry）" : "战斗节点";
     panel.innerHTML = `<span class="dim">${label}</span> ` +
       `<button class="act" id="fightBtn">开始战斗</button>`;
     document.getElementById("fightBtn").onclick = beginFight;
@@ -651,6 +651,24 @@ function renderNode() {
     document.getElementById("chestLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
     return;
   }
+  if (!runOver && ex.rd_run_boss_beaten() === 1) {
+    // `inv:§7.2`: the boss is the end of the act, so this is the one **win** state there is.
+    panel.innerHTML =
+      `<div class="stats good">第一幕通关 · Slime Boss 已击败</div>` +
+      `<div class="stats">floor <b>${ex.rd_run_observe(0)}</b> · ` +
+      `hp <b>${ex.rd_run_observe(2)}/${ex.rd_run_observe(3)}</b> · ` +
+      `gold <b>${ex.rd_run_observe(4)}</b> · deck <b>${ex.rd_run_deck_count()}</b> · ` +
+      `relics <b>${ex.rd_run_observe(6)}</b></div>` +
+      `<div class="row" style="margin-top:8px">` +
+      `<button class="act" id="againBtn">再打一局（同一 seed）</button>` +
+      `<button class="act" id="nextSeedBtn">换一个 seed</button></div>`;
+    document.getElementById("againBtn").onclick = () => startRun();
+    document.getElementById("nextSeedBtn").onclick = () => {
+      runSeed += 1;
+      startRun();
+    };
+    return;
+  }
   if (runOver) {
     panel.innerHTML =
       `<div class="stats err">这一局结束了 · ${esc(runOverWhy)}</div>` +
@@ -689,7 +707,7 @@ function renderNode() {
 function nodeLine() {
   const kind = ex.rd_run_node_kind();
   if (kind < 0) return "";
-  const names = ["", "战斗", "精英", "篝火", "商人", "未知", "宝箱", "未分配"];
+  const names = ["", "战斗", "精英", "篝火", "商人", "未知", "宝箱", "Boss"];
   return `floor ${ex.rd_run_observe(0)} · ${names[kind] || `kind ${kind}`}`;
 }
 

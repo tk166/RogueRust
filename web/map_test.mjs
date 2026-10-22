@@ -73,13 +73,14 @@ if (ex.rd_run_start(7) !== 0) {
 {
   const v = view();
   if (!v) fail("describeMap returned null for a started run");
-  if (v.nodes.length !== ex.rd_run_map_len()) {
-    fail(`view has ${v.nodes.length} nodes, the module has ${ex.rd_run_map_len()}`);
+  const onMap = v.nodes.filter((node) => node.id < M.BOSS_NODE);
+  if (onMap.length !== ex.rd_run_map_len()) {
+    fail(`view has ${onMap.length} map nodes, the module has ${ex.rd_run_map_len()}`);
   }
   if (v.nodes.length < 15) fail(`only ${v.nodes.length} nodes: a 15-row map cannot be this small`);
   let edges = 0;
-  for (const node of v.nodes) {
-    if (node.id !== v.nodes.indexOf(node)) fail("node ids are not their own indices");
+  for (const node of onMap) {
+    if (node.id !== onMap.indexOf(node)) fail("node ids are not their own indices");
     if (node.row !== io.node(node.id, M.NODE_ROW)) fail(`node ${node.id} row`);
     if (node.col !== io.node(node.id, M.NODE_COL)) fail(`node ${node.id} col`);
     if (node.kind !== io.node(node.id, M.NODE_KIND)) fail(`node ${node.id} kind`);
@@ -199,10 +200,14 @@ if (ex.rd_run_start(7) !== 0) {
     guard++;
   }
   const end = view();
-  if (end.status.floor !== M.LAYOUT.rows) {
-    fail(`walking stopped at floor ${end.status.floor}, expected ${M.LAYOUT.rows}`);
+  // The last map row's only exit is the boss (`inv:§7.2`: floor ROWS + 1), so a full walk ends
+  // there -- one floor past the map.
+  if (end.status.floor !== M.LAYOUT.rows + 1) {
+    fail(`walking stopped at floor ${end.status.floor}, expected ${M.LAYOUT.rows + 1}`);
   }
-  if (end.actions.length !== 0) fail("the last row still offers a step");
+  if (end.actions.length !== 0) fail("the boss still offers a step");
+  // Standing on the boss, nothing is lit *and* nothing is on offer -- the boss node itself is the
+  // cursor, not an offer.
   if (end.nodes.some((n) => n.reachable)) fail("a node is lit although nowhere can be entered");
 }
 
@@ -243,10 +248,22 @@ if (ex.rd_run_start(7) !== 0) {
 function assertViewAgreesWithModule(where) {
   const v = M.describeMap(io);
   if (!v) fail(`${where}: describeMap returned null`);
-  if (v.nodes.length !== io.mapLen()) {
-    fail(`${where}: ${v.nodes.length} nodes in the view, ${io.mapLen()} in the module`);
+  // The view is the map's nodes **plus at most the synthetic boss row** (`inv:§7.2`: floor 16 is
+  // off the grid but still has to be drawn).
+  const onMap = v.nodes.filter((node) => node.id < M.BOSS_NODE).length;
+  const bossRows = v.nodes.length - onMap;
+  if (onMap !== io.mapLen() || bossRows > 1) {
+    fail(`${where}: ${onMap} map nodes (+${bossRows} boss) in the view, ${io.mapLen()} in the module`);
   }
   for (const node of v.nodes) {
+    if (node.id === M.BOSS_NODE) {
+      // The boss has no map row, col or flag: it is synthesised on the row below the grid and is
+      // "offered" exactly when the action table lists its sentinel (which the `lit` check below
+      // already compares).
+      if (node.row !== M.LAYOUT.rows) fail(`${where}: the boss is not on the synthetic row`);
+      if (node.kindName !== "boss") fail(`${where}: the boss node's kind is ${node.kindName}`);
+      continue;
+    }
     if (node.row !== io.node(node.id, M.NODE_ROW)) fail(`${where}: node ${node.id} row`);
     if (node.col !== io.node(node.id, M.NODE_COL)) fail(`${where}: node ${node.id} col`);
     if (node.kind !== io.node(node.id, M.NODE_KIND)) fail(`${where}: node ${node.id} kind`);
@@ -280,7 +297,7 @@ function assertViewAgreesWithModule(where) {
     steps++;
     assertViewAgreesWithModule(`after step ${steps} (floor ${io.obs(M.RUN_FLOOR)})`);
   }
-  if (io.obs(M.RUN_FLOOR) !== M.LAYOUT.rows) {
+  if (io.obs(M.RUN_FLOOR) !== M.LAYOUT.rows + 1) {
     fail(`walking stopped at floor ${io.obs(M.RUN_FLOOR)} after ${steps} steps`);
   }
   // A different seed, checked the same way: the helper must not be passing by coincidence.

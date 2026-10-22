@@ -306,6 +306,24 @@
 
 > 三只 Boss 各自独立随机（不是"同一个种子固定三只"）：进入第 16 层时从 3 只里等概率选 1 只。【推断】（wiki 只说"三选一"，未给权重；`spire-archive` 不含遭遇表）
 
+#### 4.3.1 本项目先做哪一只：**Slime Boss**（2026-10-22）
+
+三只 Boss 各有一处**内核还表达不了**的机制，所以"先做一只"是选择**哪一处降级可以接受**：
+
+| Boss | 缺的机制 | 为什么现在做不到 |
+|---|---|---|
+| The Guardian | **Mode Shift 30** + 防御态循环 | 需要"受到 HP 伤害时计数、归零则打断当前意图并切形态"的**受伤触发器 + 形态状态机** |
+| Hexaghost | **Inferno 把所有 Burn 升级成 Burn+** | 需要"升级牌堆里的卡"这个节点；Divider 的 `6 × (floor(HP/12) + 1)` 反而**可以**做（`currentHealth` 已实现） |
+| **Slime Boss** | **Split**（HP ≤ 50% 分裂成 Acid/Spike Slime L） | 需要"战斗中途生成敌人"；`CombatState` 的战斗员集合在建战斗时定下 |
+
+选 Slime Boss：它的**循环**（Goop Spray → Preparing → Slam）三个动作都能照原样表达，
+而 Split 是一次性的形态转换 —— 降级后它仍是"会塞 Slimed、会砸 35 的大怪"。
+
+> ⚠️ **降级写在明处**：这一版 **Slime Boss 不分裂**。它不是等价的 Slime Boss，是一场
+> 同名前度的简化仗。`enc_slime_boss` 是 `EncounterTables.Boss` 的唯一一项，因为另两只的机制都缺。
+
+> `inv:§4.3` 说三只等概率三选一【推断】；本内容只有一只，所以"三选一"这一层现在无从体现。
+
 ---
 
 ## 5. 遭遇编成（Encounter）

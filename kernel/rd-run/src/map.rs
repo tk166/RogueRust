@@ -81,7 +81,14 @@ pub enum NodeKind {
     Unknown = 5,
     /// Treasure room (`inv:§7.2`: floor 9 is all treasure).
     Treasure = 6,
+    /// The act boss (`inv:§7.2`: floor 16, **not on the map** -- a single fixed encounter after the
+    /// last row). Reached through [`BOSS_NODE`], not through an edge.
+    Boss = 7,
 }
+
+/// The cursor value that means "the boss". Not a map index: the map has at most
+/// `MAX_MAP_NODES` (90) nodes, and every real index is below this. `i32` cursors can hold it.
+pub const BOSS_NODE: u8 = 100;
 
 impl NodeKind {
     /// The spelling used by `run_hash`.
@@ -95,6 +102,7 @@ impl NodeKind {
             NodeKind::Shop => "shop",
             NodeKind::Unknown => "unknown",
             NodeKind::Treasure => "treasure",
+            NodeKind::Boss => "boss",
         }
     }
 

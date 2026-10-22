@@ -75,11 +75,11 @@ CORE_PATH = os.path.join(PKG_DIR, "out", "content.sts.core.rdcf")
 
 # inv:§1 -- the counts this milestone promises (the task's quantity gate).
 INV_COUNTS = {
-    # 10 tier-A monsters + the three sentry **rows** (one per instance: a combatant id must be
-    # unique, and the encounter record has no instance number -- see inv:§4.2).
-    "monsters": 13,
-    # 3 weak-pool encounters + 1 elite encounter (`enc_three_sentries`).
-    "encounters": 4,
+    # 10 tier-A monsters + three sentry **rows** (one per instance: a combatant id must be unique
+    # and the encounter record has no instance number, inv:§4.2) + the boss.
+    "monsters": 14,
+    # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
+    "encounters": 5,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     "statuses": 5,       # inv:§10 the ones this subset actually needs
 }
@@ -137,6 +137,9 @@ INV_MONSTERS = [
     ("sentry_1", 38, 42, ["sentry.bolt", "sentry.beam"]),
     ("sentry_2", 38, 42, ["sentry.bolt", "sentry.beam"]),
     ("sentry_3", 38, 42, ["sentry.bolt", "sentry.beam"]),
+    # inv:§4.3 -- the act-1 boss. **Downgraded in writing**: no Split (the kernel cannot add
+    # combatants mid-fight), which is the fight's identity; the three-move cycle is faithful.
+    ("slime_boss", 140, 140, ["slime_boss.goop_spray", "slime_boss.preparing", "slime_boss.slam"]),
 ]
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
@@ -164,6 +167,9 @@ INV_ACTIONS = {
     "cultist.incantation": ("Buff", [("status", "ritual", 3, "source")]),
     "cultist.dark_strike": ("Attack", [("damage", 6, "event")]),
     "gremlin_wizard.charging": ("Special", []),
+    "slime_boss.goop_spray": ("Special", [("card", "slimed", 3, "DiscardPile", "event")]),
+    "slime_boss.preparing": ("Special", []),
+    "slime_boss.slam": ("Attack", [("damage", 35, "event")]),
     "sentry.bolt": ("Attack", [("damage", 10, "event")]),
     "sentry.beam": ("Attack", [("damage", 9, "event")]),
     "gremlin_wizard.ultimate_blast": ("Attack", [
@@ -188,6 +194,12 @@ INV_WEAK_WEIGHT = 25   # inv:§5.2 每项 25%
 # in the document carries it, and this is what the check compares that against.
 INV_ELITE_POOL = {
     "enc_three_sentries": ["sentry_1", "sentry_2", "sentry_3"],
+}
+
+# inv:§4.3 -- the boss pool. `inv:§4.3` says the three act-1 bosses are picked equiprobably; this
+# content authors one of them (Slime Boss) and says why in the document.
+INV_BOSS_POOL = {
+    "enc_slime_boss": ["slime_boss"],
 }
 
 # inv:§10 -- the 5 statuses, with the modifier the damage/block pipeline needs.
@@ -396,7 +408,7 @@ def check_quantities(doc):
     if roster_ids != inv_ids:
         fail("roster.ids", "roster %s != inv %s" % (roster_ids, inv_ids))
     # Both pools: the weak one (`inv:§5.2`) and the elite one (`inv:§5.3`).
-    declared = sorted(set(INV_WEAK_POOL) | set(INV_ELITE_POOL))
+    declared = sorted(set(INV_WEAK_POOL) | set(INV_ELITE_POOL) | set(INV_BOSS_POOL))
     if sorted(doc.get("Encounters") and [e["Id"]["Value"] for e in doc["Encounters"]]) \
             != declared:
         fail("encounters.ids", "encounter ids %s != inv %s"
@@ -561,10 +573,15 @@ def check_relations(doc):
     # every encounter's inline enemy record must equal the roster's, field by field
     for enc in doc.get("Encounters") or []:
         eid = enc["Id"]["Value"]
-        pool = INV_WEAK_POOL if eid in INV_WEAK_POOL else INV_ELITE_POOL
+        if eid in INV_WEAK_POOL:
+            pool = INV_WEAK_POOL
+        elif eid in INV_ELITE_POOL:
+            pool = INV_ELITE_POOL
+        else:
+            pool = INV_BOSS_POOL
         if eid not in pool:
             fail("encounter." + eid,
-                 "not in the inventory's weak (inv:§5.2) or elite (inv:§5.3) pool")
+                 "not in the inventory's weak (inv:§5.2), elite (inv:§5.3) or boss (inv:§4.3) pool")
         listed = [e["Id"] for e in enc.get("Enemies") or []]
         if listed != pool.get(eid):
             fail("encounter." + eid, "enemies %s, the inventory says %s"
@@ -631,6 +648,13 @@ def check_weak_pool_table(doc):
         fail("encounter-tables", "Elite %s != inv %s"
              % (sorted(e["Id"] for e in elite), sorted(INV_ELITE_POOL)))
     ok("elite pool", "%d entry" % len(elite))
+    boss = (doc.get("EncounterTables") or {}).get("Boss")
+    if boss is None:
+        fail("encounter-tables", "EncounterTables.Boss is missing (inv:§4.3)")
+    if sorted(e["Id"] for e in boss) != sorted(INV_BOSS_POOL):
+        fail("encounter-tables", "Boss %s != inv %s"
+             % (sorted(e["Id"] for e in boss), sorted(INV_BOSS_POOL)))
+    ok("boss pool", "%d entry" % len(boss))
 
 
 # =============================================================================

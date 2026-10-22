@@ -2191,6 +2191,7 @@ impl<'a> Content<'a> {
         let hop = match pool {
             "Weak" => "EncounterTables.Weak",
             "Elite" => "EncounterTables.Elite",
+            "Boss" => "EncounterTables.Boss",
             _ => return None,
         };
         let root = self.root_by_name("EncounterTables")?;
@@ -3642,7 +3643,17 @@ mod tests {
         assert!(weak.contains(&"enc_small_slimes"));
         assert_eq!(elite, vec!["enc_three_sentries"], "elite: {elite:?}");
         // A pool the document does not have is `None`, not an empty set.
-        assert_eq!(content.encounter_pool("Boss"), None);
+        // The boss pool (inv:§4.3): one entry, because this content authors one of the three.
+        let boss: Vec<&str> = content
+            .encounter_pool("Boss")
+            .expect("a boss pool")
+            .iter()
+            .filter(|id| !id.is_empty())
+            .copied()
+            .collect();
+        assert_eq!(boss, vec!["enc_slime_boss"]);
+        // A pool the document does not have is None, not an empty set.
+        assert_eq!(content.encounter_pool("Sideboard"), None);
     }
 
     fn the_real_images_validate() {

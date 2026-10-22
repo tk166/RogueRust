@@ -5328,3 +5328,80 @@ http://127.0.0.1:8765/web/index.html?debug   →   window.RD_DEBUG = { showDeckP
 | 单测 | 650 | **652**（rd-run 52 → 54） |
 | 页面接线断言 | 11 条 | **14 条** |
 | `.wasm` | 483,990 B | **483,990 B**（这一轮只动页面与测试） |
+---
+
+## 72. 第 62 轮：第一幕**有 Boss 了** —— 而且它是我现在打不过的
+
+> 目标（用户已授权我连续做完）：**让第一幕可以完整通关**。这一轮先把"通关"的那一头接上。
+
+### 72.1 内容：**Slime Boss** 进了内容，Split 是唯一降级
+
+三只第一幕 Boss 各有一处内核表达不了的机制，所以"先做一只"其实是选**哪一处降级可以接受**
+（表在 `inv:§4.3.1`）：
+
+| Boss | 缺的机制 |
+|---|---|
+| The Guardian | **Mode Shift 30** + 防御态循环：要"受伤计数器 + 打断当前意图 + 切形态"的状态机 |
+| Hexaghost | **Inferno 把所有 Burn 升级成 Burn+**：要"升级牌堆里的卡"的节点（Divider 的 `6×(floor(HP/12)+1)` 反而能做，`currentHealth` 已实现） |
+| **Slime Boss** | **Split**（HP ≤ 50% 分裂）：要"战斗中途生成敌人"，而 `CombatState` 的战斗员集合在建战斗时定下 |
+
+选 Slime Boss：循环（Goop Spray → Preparing → Slam）三个动作都能照原样表达，Split 是一次性形态转换。
+⚠️ **降级写在清单里**：这一版**不分裂**，它不是等价的 Slime Boss。
+
+### 72.2 run 层：Boss 是**第 16 层**，不在图上
+
+`inv:§7.2` 说第 16 层是 Boss、不在网格里。所以 run 层加了一个**哨兵游标** `BOSS_NODE = 100`
+（地图最多 90 个节点，索引恒小于它），并让：
+
+* `reachable()` 在**最后一行**只给这一个出口（而且**站在它上面时不再给**——否则可以"走进自己正在打的仗"）；
+* `enter_node()` 认这个哨兵，`floor` 置为 `ROWS + 1`；
+* `check_invariants()` 的两条（"floor 越界"、"floor 必须等于节点所在行"）对 Boss 各放宽一格 ——
+  这是**真**修：不修的话走进去立刻 `Invariant` 失败；
+* `begin_node()` 把 Boss 当成一场仗（`Pending::None`，返回 `NodeKind::Boss`）；
+* `RunState::mark_boss_beaten()`：**击杀 Boss 才算通关**。这是"一局能赢"的唯一路径。
+
+### 72.3 wasm 与页面
+
+* `fight_begin` 接受 kind 7，池选 `Boss`，奖励档 `FightKind::Boss`（金币 **95–105**、稀有度 **100% Rare**）；
+* 新导出 `rd_run_boss_beaten()`；
+* 地图页现在**画出 Boss 这一行**（`map_render.js` 合成一个 `row = 15` 的节点，`👑`），
+  因为"看不见自己要去哪"本身就是 bug；宽度/高度随之多一行；
+* 面板：`Boss · Slime Boss` + 开始战斗；胜利后出现 **"第一幕通关 · Slime Boss 已击败"** 结算。
+
+### 72.4 判据
+
+| 测试 | 钉住什么 |
+|---|---|
+| `the_boss_is_offered_at_floor_16_and_clears_the_act`（wasm） | 走到第 15 层后**唯一**的出口是 Boss；走进去 floor=16、kind=7；开战；敌人是 `slime_boss`；**赢了才 `boss_beaten==1` 且金币 95–105，输了必须是 0** |
+| `the_encounter_pools_are_readable`（rd-core） | Boss 池 = `["enc_slime_boss"]`；不存在的池仍是 `None` |
+| `walking_follows_edges_and_never_teleports` | 最后一行**恰好一个**出口，且是 Boss |
+| `map_test.mjs` | Boss 是合成的第 16 行，`reachable` 与动作表仍逐项相等 |
+
+⚠️ 这一轮一次性暴露了 **6 处**"最后一行无处可去 / 只有 7 种节点"的旧判据（rd-run、rd-wasm、smoke、
+map_test 各若干）。它们全都通过，只因为**旧世界里 Boss 不存在**。
+
+### 72.5 一个必须说清的结果：**现在打不过**
+
+`the_boss_is_offered_at_floor_16_and_clears_the_act` 打印了实测：
+
+```
+boss fight: result=2 steps=32 hp=0
+```
+
+即：机制通了（Boss 开局、敌人正确、输了不通关），但**机器人打不赢**。原因不是 Boss 太强，是
+**牌组永远长不大**：奖励池里只有 Basic 卡（内容里没有 Common/Uncommon），所以第 16 层还是那 10~16 张
+基本牌，打 140 HP / 每 3 回合 35 伤害的 Boss 差得多。
+
+⇒ 下一轮的题目就是这个：**往内容里放真正的铁甲战士卡（Common/Uncommon）**，让"奖励"真的让牌组变强，
+顺便让第 54 轮做的稀有度权重与偏移第一次有东西可称。
+
+### 72.6 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 652 | **653**（rd-wasm 21 → 22） |
+| 内容 | 13 怪 / 4 遭遇 / 21 动作 | **14 怪 / 5 遭遇 / 24 动作** |
+| `sts` 镜像 | 12,632 / 10,852 B | **14,684 / 12,712 B**（重钉） |
+| `.wasm` | 483,990 B | **491,315 B** |
+| 地图 | 15 行 | **15 行 + Boss 行**（绘制） |

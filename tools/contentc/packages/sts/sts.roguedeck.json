@@ -1873,6 +1873,121 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "slime_boss.goop_spray",
+      "PackageId": "sts",
+      "NameKey": "Goop Spray",
+      "DescriptionKey": "Goop Spray — shuffle 3 Slimed into your discard pile",
+      "Intent": {
+        "Kind": "Special",
+        "Label": "Goop Spray — shuffle 3 Slimed into your discard pile"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.createCardInstance",
+                "value": {
+                  "CardDefinitionId": {
+                    "value": "slimed"
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "ToZone": "DiscardPile",
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "slime_boss.preparing",
+      "PackageId": "sts",
+      "NameKey": "Preparing",
+      "DescriptionKey": "Preparing — no effect",
+      "Intent": {
+        "Kind": "Special",
+        "Label": "Preparing — no effect"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": []
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "slime_boss.slam",
+      "PackageId": "sts",
+      "NameKey": "Slam",
+      "DescriptionKey": "Slam — 35 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Slam — 35 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 35
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -2072,6 +2187,45 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Sentry"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_slime_boss"
+      },
+      "Enemies": [
+        {
+          "Id": "slime_boss",
+          "MaxHealth": 140,
+          "Actions": [
+            {
+              "value": "slime_boss.goop_spray"
+            },
+            {
+              "value": "slime_boss.preparing"
+            },
+            {
+              "value": "slime_boss.slam"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Slime Boss"
         }
       ],
       "HeroResources": [
@@ -2377,6 +2531,29 @@
       "Tier": "A",
       "InvRef": "inv:§4.2",
       "AiNote": "3 只同名 Sentry 的第 3 只。内核要求战斗员 id 唯一（`Capacity(DuplicateCombatant)`），而本内容的遭遇记录只有 `Id`、没有实例号 ⇒ 三个实例只能写成三行（`NameKey` 都是 Sentry，玩家看到的三只没有区别）。⚠️ 两处降级见 §4.2：Beam 少 Dazed、缺 Artifact。"
+    },
+    {
+      "Id": "slime_boss",
+      "NameKey": "Slime Boss",
+      "HpMin": 140,
+      "HpMax": 140,
+      "MaxHealth": 140,
+      "Actions": [
+        {
+          "value": "slime_boss.goop_spray"
+        },
+        {
+          "value": "slime_boss.preparing"
+        },
+        {
+          "value": "slime_boss.slam"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Boss",
+      "InvRef": "inv:§4.3",
+      "AiNote": "固定循环 Goop Spray → Preparing → Slam。⚠️ **一处降级，且是本 Boss 的身份所在**：原作在 HP ≤ 50% 时**分裂**成 Acid Slime (L) + Spike Slime (L)，各带分裂瞬间的当前 HP。内核没有「战斗中途生成敌人」的能力（`CombatState` 的战斗员集合在建战斗时定下），所以这一版**不会分裂**。⇒ 它是一场「会塞 Slimed、会砸 35 的大怪」，不是等价的 Slime Boss。"
     }
   ],
   "EncounterTables": {
@@ -2395,10 +2572,16 @@
         "Weight": 25
       }
     ],
-    "Note": "inv:§5.2：weak 池 4 项各 25%。ENCT 行没有权重格（rdcfmt.py:254-259）⇒ 权重只能住在这里，不参与任何镜像行为。第 4 项 enc_two_louses 未 author（要 louse_red/green，C 档）。 Elite 池由本内容补上（3 × sentry）；raw weights are documentation only -- `ENCT` has no weight cell (`rdcfmt.py`), so a single entry means 'the only elite'.",
+    "Note": "inv:§5.2：weak 池 4 项各 25%。ENCT 行没有权重格（rdcfmt.py:254-259）⇒ 权重只能住在这里，不参与任何镜像行为。第 4 项 enc_two_louses 未 author（要 louse_red/green，C 档）。 Elite 池由本内容补上（3 × sentry）；raw weights are documentation only -- `ENCT` has no weight cell (`rdcfmt.py`), so a single entry means 'the only elite'. Boss 池由本内容补上（slime_boss）。`inv:§4.3` 说三只 Boss 等概率三选一 —— 本内容只 author 了 Slime Boss，另两只（The Guardian 的 Mode Shift、Hexaghost 的 Burn 升级）都还需要内核新机制。",
     "Elite": [
       {
         "Id": "enc_three_sentries",
+        "Weight": 1
+      }
+    ],
+    "Boss": [
+      {
+        "Id": "enc_slime_boss",
         "Weight": 1
       }
     ]

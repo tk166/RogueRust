@@ -48,3 +48,4 @@
 .node.kind-unknown circle { fill: #1e232c; }
 .node.kind-treasure circle { fill: #1f2a2a; }
 .node.kind-unassigned circle { fill: #3a1f1f; }
+.node.kind-boss circle { fill: #3a2438; }
