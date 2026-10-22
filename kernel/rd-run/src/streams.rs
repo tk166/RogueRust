@@ -173,6 +173,9 @@ pub enum RunError {
     BadCard(u8),
     /// A pool the content-side caller handed in that is empty, where the mechanic needs one.
     EmptyPool(&'static str),
+    /// A pool too small to fill a reward screen with **distinct** cards (`inv:§3.5`: three, all
+    /// different). Silently repeating a card would be a reward you cannot pick twice by accident.
+    PoolTooSmall { pool: usize, need: usize },
     /// A relic whose effect is not implemented (`RunState::end_of_combat`).
     ///
     /// **This is the loud boundary of the relic system.** Effects are implemented one at a time, by

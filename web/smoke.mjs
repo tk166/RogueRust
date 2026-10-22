@@ -78,6 +78,9 @@ const REQUIRED = [
   "rd_run_deck_title_into", "rd_run_fight_begin", "rd_run_fight_end",
   "rd_env_pile_len", "rd_env_pile_card_id_len", "rd_env_pile_card_id_into",
   "rd_env_pile_card_title_len", "rd_env_pile_card_title_into",
+  "rd_run_reward_gold", "rd_run_reward_card_count", "rd_run_reward_card_id_len",
+  "rd_run_reward_card_id_into", "rd_run_reward_card_title_len", "rd_run_reward_card_title_into",
+  "rd_run_take_card", "rd_run_skip_reward",
 ];
 for (const name of REQUIRED) {
   if (!(name in ex)) fail(`missing export ${name}`);

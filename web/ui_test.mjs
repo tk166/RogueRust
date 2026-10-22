@@ -49,6 +49,8 @@ for (const [needle, why] of [
   ["rd_run_begin_node(", "walking onto a node never asks what it needs"],
   ["rd_run_rest(", "the rest site has no button behind it"],
   ["rd_run_buy_card(", "the merchant cannot sell anything"],
+  ["rd_run_take_card(", "the reward screen has no way to take the card"],
+  ["rd_run_skip_reward(", "the reward screen cannot be declined"],
   ["rd_run_deck_title_len", "the deck panel would list ids instead of titles"],
   ["rd_env_pile_card_title_len", "the pile panels would list nothing"],
   ['id="mapbox"', "there is no map on the page"],

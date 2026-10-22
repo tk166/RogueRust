@@ -45,6 +45,10 @@ pub const SHOP_REMOVE_BASE: i32 = 75;
 pub const SHOP_REMOVE_STEP: i32 = 25;
 /// `inv:§8.1`: a rest site heals 30% of maximum HP, rounded down.
 pub const REST_HEAL_PERCENT: i32 = 30;
+/// `inv:§3.5`: a reward screen shows three cards, all different.
+pub const MAX_REWARD_CARDS: usize = 3;
+/// `inv:§5`: a normal fight pays 10–20 gold (elite 25–35, boss 95–105).
+pub const NORMAL_FIGHT_GOLD: (i32, i32) = (10, 20);
 /// The pools a shop or a chest draws from are caller-supplied (this crate knows no content), so the
 /// walk below needs a bound. Exceeding it is [`RunError::EmptyPool`]'s sibling: a loud error.
 pub const MAX_POOL: usize = 64;
@@ -66,6 +70,45 @@ pub enum Pending {
     Shop = 2,
     /// [`RunState::open_chest`].
     Chest = 3,
+    /// [`RunState::take_card`] or [`RunState::skip_reward`] -- the screen after a won fight.
+    Reward = 4,
+}
+
+/// What a won fight pays (`inv:§5`): gold already granted, plus the cards on offer.
+///
+/// The three cards are **mutually distinct** (`inv:§3.5`: rolled one at a time, a later roll never
+/// repeats an earlier one). The rarity weights of `inv:§3.5` are not applied: this content carries
+/// no rarity, so every card in the pool is treated as one bucket -- the same `[推断]` the merchant's
+/// prices carry, and it is recorded in `sts-act1-plan.md`'s downgrade table.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Reward {
+    gold: i32,
+    cards: [RunId; MAX_REWARD_CARDS],
+    cards_len: u8,
+}
+
+impl Reward {
+    /// Nothing on the table.
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self {
+            gold: 0,
+            cards: [RunId::EMPTY; MAX_REWARD_CARDS],
+            cards_len: 0,
+        }
+    }
+
+    /// The gold this fight paid (already added to the run).
+    #[must_use]
+    pub const fn gold(&self) -> i32 {
+        self.gold
+    }
+
+    /// The cards on offer.
+    #[must_use]
+    pub fn cards(&self) -> &[RunId] {
+        &self.cards[..self.cards_len as usize]
+    }
 }
 
 /// One thing a merchant is selling. `price < 0` means "already sold".
@@ -218,6 +261,8 @@ pub struct RunState {
     pending: Pending,
     /// The merchant's stock while standing in a shop.
     shop: ShopStock,
+    /// The card choice after a won fight.
+    reward: Reward,
 }
 
 impl RunState {
@@ -253,6 +298,7 @@ impl RunState {
             unknown: [0; 3],
             pending: Pending::None,
             shop: ShopStock::empty(),
+            reward: Reward::empty(),
         };
         for id in starting_deck {
             state.push_card(id)?;
@@ -734,6 +780,92 @@ impl RunState {
         Ok(price)
     }
 
+    /// What a won fight is offering.
+    #[must_use]
+    pub const fn reward(&self) -> &Reward {
+        &self.reward
+    }
+
+    /// Roll the reward for a won fight: gold now (`inv:§5`: 10–20 for a normal fight), then three
+    /// **distinct** cards from `card_pool` (`inv:§3.5`).
+    ///
+    /// Gold is granted here rather than on "take" because `inv:§5` gives it on victory -- there is
+    /// no way to decline it, so a `take_gold` action would be a button that is always pressed.
+    pub fn roll_reward(
+        &mut self,
+        card_pool: &[&str],
+        gold: (i32, i32),
+    ) -> Result<(), RunError> {
+        if card_pool.len() < MAX_REWARD_CARDS {
+            return Err(RunError::PoolTooSmall {
+                pool: card_pool.len(),
+                need: MAX_REWARD_CARDS,
+            });
+        }
+        let (low, high) = gold;
+        let span = (high - low + 1).max(1) as u32;
+        let paid = low + self.rng.roll(RunStream::Reward, span)? as i32;
+        self.adjust_gold(paid);
+
+        // Three distinct cards. The pool is bounded by `MAX_POOL`, so a fixed ledger of used
+        // indices is enough and nothing is allocated.
+        let mut used = [false; MAX_POOL];
+        let mut cards = [RunId::EMPTY; MAX_REWARD_CARDS];
+        let mut picked = 0usize;
+        let mut guard = 0usize;
+        while picked < MAX_REWARD_CARDS && guard < MAX_POOL * 4 {
+            guard += 1;
+            let index = self.rng.roll(RunStream::Reward, card_pool.len() as u32)? as usize;
+            if used[index] {
+                continue;
+            }
+            used[index] = true;
+            cards[picked] = RunId::new(card_pool[index]).map_err(|_| RunError::BadId)?;
+            picked += 1;
+        }
+        // The guard is a bound on rerolls, not a licence to return a short screen: a pool of three
+        // or more distinct ids always yields three after `pool * 4` draws with overwhelming
+        // probability, but "overwhelming probability" is not "always", so a short screen is loud.
+        if picked < MAX_REWARD_CARDS {
+            return Err(RunError::PoolTooSmall {
+                pool: card_pool.len(),
+                need: MAX_REWARD_CARDS,
+            });
+        }
+        self.reward = Reward {
+            gold: paid,
+            cards,
+            cards_len: MAX_REWARD_CARDS as u8,
+        };
+        self.pending = Pending::Reward;
+        Ok(())
+    }
+
+    /// Take card `slot` from the reward screen and leave it.
+    pub fn take_card(&mut self, slot: usize) -> Result<(), RunError> {
+        if self.pending != Pending::Reward {
+            return Err(RunError::WrongPhase);
+        }
+        let Some(id) = self.reward.cards().get(slot).copied() else {
+            return Err(RunError::EmptyOffer(slot as u8));
+        };
+        if id == RunId::EMPTY {
+            return Err(RunError::EmptyOffer(slot as u8));
+        }
+        self.push_card(id.as_str())?;
+        self.pending = Pending::None;
+        Ok(())
+    }
+
+    /// Decline the card (gold is already in hand; `inv:§3.5` says a reward can be skipped).
+    pub fn skip_reward(&mut self) -> Result<(), RunError> {
+        if self.pending != Pending::Reward {
+            return Err(RunError::WrongPhase);
+        }
+        self.pending = Pending::None;
+        Ok(())
+    }
+
     /// Walk away from whatever is pending.
     pub fn leave(&mut self) -> Result<(), RunError> {
         if self.pending == Pending::None {
@@ -1051,6 +1183,12 @@ mod tests {
         "strike", "defend", "bash", "slimed", "strike+", "defend+", "bash+",
     ];
     const RELICS: [&str; 1] = ["burning_blood"];
+    /// The starting deck (inv:§2.1), in order.
+    const DECK: [&str; 10] = [
+        "strike", "strike", "strike", "strike", "strike",
+        "defend", "defend", "defend", "defend",
+        "bash",
+    ];
 
     #[test]
     fn a_rest_site_heals_thirty_percent_and_then_it_is_done() {
@@ -1212,6 +1350,75 @@ mod tests {
         assert_eq!(run.open_chest(&RELICS), Err(RunError::WrongPhase));
         assert_eq!(run.buy_card(0), Err(RunError::WrongPhase));
         assert_eq!(run.leave(), Err(RunError::WrongPhase));
+    }
+
+    /// `inv:§5` + `inv:§3.5`: gold in range, three cards, **all different**.
+    ///
+    /// Distinctness is the property worth a test: rolling three cards from a pool with a duplicate
+    /// is easy to write and hard to notice -- the screen would look fine and simply offer the same
+    /// card twice.
+    #[test]
+    fn a_reward_pays_gold_in_range_and_three_different_cards() {
+        for seed in 0..25 {
+            let mut run = RunState::new(seed, 80, 0, &DECK).expect("a run");
+            let gold_before = run.gold();
+            run.roll_reward(&CARDS, NORMAL_FIGHT_GOLD).expect("a reward");
+            let reward = run.reward();
+            let (low, high) = NORMAL_FIGHT_GOLD;
+            assert!(
+                reward.gold() >= low && reward.gold() <= high,
+                "seed {seed}: {} gold is outside {low}..={high}",
+                reward.gold()
+            );
+            assert_eq!(run.gold(), gold_before + reward.gold(), "seed {seed}");
+            let cards: Vec<&str> = reward.cards().iter().map(RunId::as_str).collect();
+            assert_eq!(cards.len(), MAX_REWARD_CARDS);
+            let mut sorted = cards.clone();
+            sorted.sort_unstable();
+            sorted.dedup();
+            assert_eq!(sorted.len(), cards.len(), "seed {seed}: {cards:?} has a repeat");
+            for card in &cards {
+                assert!(CARDS.contains(card), "seed {seed}: {card} is not in the pool");
+            }
+            assert_eq!(run.pending(), Pending::Reward);
+        }
+    }
+
+    /// Taking a card adds exactly one and leaves the phase; skipping adds none. Both are one-shot.
+    #[test]
+    fn taking_and_skipping_a_reward() {
+        let mut run = RunState::new(3, 80, 0, &DECK).expect("a run");
+        run.roll_reward(&CARDS, NORMAL_FIGHT_GOLD).unwrap();
+        let wanted = run.reward().cards()[1].as_str().to_string();
+        let deck_before = run.deck().len();
+        run.take_card(1).expect("take the second card");
+        assert_eq!(run.deck().len(), deck_before + 1);
+        assert_eq!(run.deck()[deck_before].as_str(), wanted);
+        assert_eq!(run.pending(), Pending::None);
+        // A second take from the same screen is an out-of-order action.
+        assert_eq!(run.take_card(0), Err(RunError::WrongPhase));
+
+        // Skipping takes nothing.
+        run.roll_reward(&CARDS, NORMAL_FIGHT_GOLD).unwrap();
+        let deck_before = run.deck().len();
+        run.skip_reward().expect("skip");
+        assert_eq!(run.deck().len(), deck_before);
+        assert_eq!(run.pending(), Pending::None);
+        assert_eq!(run.skip_reward(), Err(RunError::WrongPhase));
+    }
+
+    /// A pool too small to fill three distinct slots is an **error**, not a short or repeating
+    /// screen.
+    #[test]
+    fn a_pool_too_small_for_three_distinct_cards_is_loud() {
+        let mut run = RunState::new(3, 80, 0, &DECK).expect("a run");
+        let two = ["strike", "defend"];
+        assert_eq!(
+            run.roll_reward(&two, NORMAL_FIGHT_GOLD),
+            Err(RunError::PoolTooSmall { pool: 2, need: 3 })
+        );
+        assert_eq!(run.pending(), Pending::None, "a refused roll leaves no phase behind");
+        assert_eq!(run.gold(), 0, "and pays no gold");
     }
 
     #[test]

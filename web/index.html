@@ -461,6 +461,12 @@ const shopCardId = (slot) =>
   readText((k) => ex.rd_run_shop_card_id_len(k), (p, k) => ex.rd_run_shop_card_id_into(k, p), slot);
 const shopRelicId = (slot) =>
   readText((k) => ex.rd_run_shop_relic_id_len(k), (p, k) => ex.rd_run_shop_relic_id_into(k, p), slot);
+const rewardId = (slot) =>
+  readText((k) => ex.rd_run_reward_card_id_len(k), (p, k) => ex.rd_run_reward_card_id_into(k, p), slot);
+const rewardTitle = (slot) =>
+  readText((k) => ex.rd_run_reward_card_title_len(k),
+           (p, k) => ex.rd_run_reward_card_title_into(k, p), slot);
+
 const pileTitle = (zone, index) =>
   readText((k) => ex.rd_env_pile_card_title_len(zone, k),
            (p, k) => ex.rd_env_pile_card_title_into(zone, k, p), index);
@@ -584,6 +590,24 @@ function renderNode() {
     document.getElementById("shopLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
     return;
   }
+  if (pending === 4) {
+    // The reward screen (`inv:§5`): gold is already in hand, the card is the choice.
+    const cards = [];
+    for (let slot = 0; slot < ex.rd_run_reward_card_count(); slot++) {
+      cards.push(`<div class="shop-item"><span>${esc(rewardTitle(slot) || rewardId(slot))}</span>` +
+        `<span class="price">${esc(rewardId(slot))}</span>` +
+        `<button class="act" data-take="${slot}">拿这张</button></div>`);
+    }
+    panel.innerHTML =
+      `<div class="stats">战斗奖励 · 已得 <b>${ex.rd_run_reward_gold()}</b> 金 · 选一张牌</div>` +
+      cards.join("") +
+      `<div class="row" style="margin-top:8px"><button class="act" id="skipReward">跳过</button></div>`;
+    panel.querySelectorAll("[data-take]").forEach((button) => {
+      button.onclick = () => act(() => ex.rd_run_take_card(Number(button.dataset.take)), "拿牌");
+    });
+    document.getElementById("skipReward").onclick = () => act(() => ex.rd_run_skip_reward(), "跳过");
+    return;
+  }
   if (pending === 3) {
     panel.innerHTML = `<span class="dim">宝箱</span> ` +
       `<button class="act" id="chestBtn">开箱</button> ` +
@@ -632,6 +656,7 @@ function endFight() {
   setMode("run");
   renderMap();
   renderNode();
+  renderTopBar();
   document.getElementById("msg").innerHTML = result > 0
     ? `<span class="good">战斗结束 · ${RESULT_NAMES[result] || result}</span>`
     : `<span class="err">战斗收尾失败 · ${esc(runError())}</span>`;

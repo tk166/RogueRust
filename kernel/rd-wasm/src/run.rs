@@ -170,6 +170,32 @@ fn card_pool(content: &'static Content<'static>) -> Vec<&'static str> {
     out
 }
 
+/// The cards a **reward screen** may offer.
+///
+/// `inv:§3.5`: Act 1 never offers an upgraded card (upgrade probability 0%), so the `x+` rows are
+/// out. The status cards (`slimed`) *should* also be out and are not: this content's `Tags` cell is
+/// a term the kernel cannot walk for `CARD` rows yet (`status_bind::has_tag` does that walk for
+/// `STATUS` rows only), so a tag filter here would be a guess. Written down in the plan's downgrade
+/// table rather than papered over.
+fn reward_pool(content: &'static Content<'static>) -> Result<Vec<&'static str>, String> {
+    let mut pool = Vec::new();
+    for id in card_pool(content) {
+        // `inv:§3.5`: Act 1 never offers an upgraded card (upgrade probability 0%).
+        if id.ends_with('+') {
+            continue;
+        }
+        match content.card_has_tag(id, "status") {
+            Some(true) => continue, // `slimed` is a junk card, not a reward
+            Some(false) => pool.push(id),
+            // Reading a card's tags can fail only on a malformed image. Refusing is right:
+            // "cannot tell" must not become "not a status card", which would put Slimed back on the
+            // reward screen -- exactly the bug this filter exists for.
+            None => return Err(std::format!("读不出卡 `{id}` 的 Tags")),
+        }
+    }
+    Ok(pool)
+}
+
 /// The content's relic ids, in table order.
 fn relic_pool(content: &'static Content<'static>) -> Vec<&'static str> {
     let mut out = Vec::new();
@@ -822,6 +848,99 @@ pub extern "C" fn rd_run_remove_card(index: i32) -> i32 {
 }
 
 // =============================================================================================
+// The reward screen (`env-abi.md` §11.9)
+// =============================================================================================
+
+/// The gold the last won fight paid; `0` when there is nothing on the table.
+#[no_mangle]
+pub extern "C" fn rd_run_reward_gold() -> i32 {
+    run_slot().as_ref().map_or(0, |s| s.state.reward().gold())
+}
+
+/// How many cards the reward screen offers (`0` when there is no screen).
+#[no_mangle]
+pub extern "C" fn rd_run_reward_card_count() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(0, |s| s.state.reward().cards().len() as i32)
+}
+
+/// Reward card `slot`'s **definition id**.
+#[no_mangle]
+pub extern "C" fn rd_run_reward_card_id_len(slot: i32) -> i32 {
+    reward_card(slot).map_or(-1, |id| id.as_str().len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_reward_card_id_len(slot)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_reward_card_id_into(slot: i32, ptr: *mut u8) -> i32 {
+    match reward_card(slot) {
+        Some(id) => write_out(id.as_str(), ptr),
+        None => 0,
+    }
+}
+
+/// Reward card `slot`'s **title** (`CARD.NameKey`, falling back to the id).
+#[no_mangle]
+pub extern "C" fn rd_run_reward_card_title_len(slot: i32) -> i32 {
+    match reward_card(slot) {
+        Some(id) => deck_title(content(), id.as_str())
+            .unwrap_or(id.as_str())
+            .len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_reward_card_title_len(slot)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_reward_card_title_into(slot: i32, ptr: *mut u8) -> i32 {
+    match reward_card(slot) {
+        Some(id) => write_out(deck_title(content(), id.as_str()).unwrap_or(id.as_str()), ptr),
+        None => 0,
+    }
+}
+
+fn reward_card(slot: i32) -> Option<rd_run::state::RunId> {
+    if slot < 0 {
+        return None;
+    }
+    let session = run_slot().as_ref()?;
+    session
+        .state
+        .reward()
+        .cards()
+        .get(slot as usize)
+        .copied()
+}
+
+/// Take reward card `slot`.
+#[no_mangle]
+pub extern "C" fn rd_run_take_card(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    if slot < 0 {
+        return -1;
+    }
+    let outcome = session.state.take_card(slot as usize).map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// Decline the reward card.
+#[no_mangle]
+pub extern "C" fn rd_run_skip_reward() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let outcome = session.state.skip_reward().map(|_| 0i32);
+    finish(session, outcome)
+}
+
+// =============================================================================================
 // The deck (`env-abi.md` §11.7) -- the "all cards" panel
 // =============================================================================================
 
@@ -1023,6 +1142,19 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     if result == 1 {
         // `Burning Blood` and friends (`inv:§2`), now with a call site.
         if let Err(e) = session.state.end_of_combat() {
+            let message = describe(&e);
+            return fail(session, &message);
+        }
+        // Then the reward screen (`inv:§5` gold, `inv:§3.5` three distinct cards). A reward that
+        // could not be rolled is a refusal, not a silent victory with no spoils.
+        let pool = match reward_pool(content()) {
+            Ok(pool) => pool,
+            Err(message) => return fail(session, &message),
+        };
+        if let Err(e) = session
+            .state
+            .roll_reward(&pool, rd_run::state::NORMAL_FIGHT_GOLD)
+        {
             let message = describe(&e);
             return fail(session, &message);
         }
@@ -1445,6 +1577,87 @@ mod tests {
             }
         }
         -1
+    }
+
+    /// Winning leaves a **reward screen**: gold already paid, three distinct cards on the table.
+    ///
+    /// This is the second half of "the fight is the run's": before it, a won fight healed and paid
+    /// nothing.
+    #[test]
+    fn winning_leaves_a_reward_screen() {
+        reset(7);
+        assert_eq!(rd_run_step(0), 0);
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0);
+        let gold_before = run_slot().as_ref().unwrap().state.gold();
+        let deck_before = rd_run_deck_count();
+
+        let mut guard = 0;
+        while rd_env_done() == 0 && guard < 400 {
+            let mut choice = -1;
+            for index in 0..rd_env_action_count() {
+                if rd_env_action_kind(index) == 0 {
+                    choice = index;
+                    break;
+                }
+            }
+            if choice < 0 {
+                choice = rd_env_action_index_of_end_turn();
+            }
+            assert!(choice >= 0);
+            assert_eq!(rd_env_step(choice), 0);
+            guard += 1;
+        }
+        assert_eq!(rd_env_result(), 1, "the fight was not won");
+        assert_eq!(rd_run_fight_end(), 1);
+
+        // `inv:§5`: 10-20 gold for a normal fight, added on victory.
+        let gold = rd_run_reward_gold();
+        assert!(
+            (10..=20).contains(&gold),
+            "the fight paid {gold} gold, which is not the normal-fight range"
+        );
+        assert_eq!(
+            run_slot().as_ref().unwrap().state.gold(),
+            gold_before + gold,
+            "the gold on the screen is not the gold in the purse"
+        );
+        assert_eq!(rd_run_pending(), 4, "the reward screen must be waiting");
+
+        // `inv:§3.5`: three cards, all different.
+        let count = rd_run_reward_card_count();
+        assert_eq!(count, 3);
+        let mut ids = Vec::new();
+        for slot in 0..count {
+            let n = rd_run_reward_card_id_len(slot);
+            assert!(n > 0);
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_run_reward_card_id_into(slot, buffer.as_mut_ptr()) };
+            let id = String::from_utf8(buffer).unwrap();
+            // `inv:§3.5`: Act 1 never offers an upgraded card.
+            assert!(!id.ends_with('+'), "the reward offered the upgraded card {id}");
+            ids.push(id);
+        }
+        let mut sorted = ids.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), 3, "the reward offered a duplicate: {ids:?}");
+
+        // Taking one adds exactly that card and closes the screen.
+        let wanted = ids[2].clone();
+        assert_eq!(rd_run_take_card(2), 0);
+        assert_eq!(rd_run_deck_count(), deck_before + 1);
+        assert_eq!(rd_run_pending(), 0);
+        let last = {
+            let n = rd_run_deck_id_len(rd_run_deck_count() - 1);
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_run_deck_id_into(rd_run_deck_count() - 1, buffer.as_mut_ptr()) };
+            String::from_utf8(buffer).unwrap()
+        };
+        assert_eq!(last, wanted);
+
+        // And skipping is a way out of the screen, not a stuck state.
+        assert_eq!(rd_run_skip_reward(), -2, "there is no screen to skip");
     }
 
     /// The three pile exports read the fight's piles, and the observation only carries counts.

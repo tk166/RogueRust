@@ -4741,3 +4741,74 @@ weak / strong 两池（第 1 层与前 3 场用 weak），**这份内容没有�
 | 新增文件 | — | **`web/map.css`**（外观的唯一一份） |
 | 闸门 16 | 8 块断言 | **9 块**（外观不许只住在一个页面里） |
 | 单测 | 637 | **637**（这一轮只动页面与闸门） |
+---
+
+## 63. 第 53 轮：战斗奖励 + 3 选 1 —— 以及"我按文档猜了一个编码，然后读出来全是空"
+
+### 63.1 形状
+
+打赢一场之后多了一个相位 `Pending::Reward`：
+
+* **金币**在胜利那一刻就进袋（`inv:§5`：普通战斗 **10–20**）—— 没有"拒绝金币"这个动作，
+  所以不给它一个按钮。
+* **三张牌，互不相同**（`inv:§3.5`：逐张掷，后掷的不与前面重复），可跳过。
+* `rd_run_fight_end` 里的顺序是：血量写回 → `end_of_combat`（遗物）→ `roll_reward`。
+  任何一步拒绝都是一个**响亮的失败**，不是"打赢了什么都没给"。
+
+### 63.2 奖励池：`inv:§3.5` 的两条规则
+
+* **Act 1 不出升级版**（升级概率 0%）⇒ 池子里滤掉 `x+`。
+* **不能出现状态卡**（`slimed`）。这一条一开始**做不到**，只好先记进降级表 —— 然后浏览器里
+  第一次跑就看见奖励界面在卖 **Slimed**。这就是"记下来"和"做对"的差别：玩家一眼就能看出荒谬。
+
+⇒ 于是补了 `Content::card_has_tag`（`CARD.Tags` 的读者）。
+
+### 63.3 一个按文档猜编码的错误（值得单开一节）
+
+我照 `layout.txt` 写的是 `Tags: STRLIST(wrap)`，于是以为元素是 `_obj{value: "attack"}`，
+按**字段名**找 `value`。实测（`#[test] dbg_card_tags` 打印）：
+
+```
+tags cell = 8, term.op = 4 (OP_ARR), count = 3
+element[0] op = 6, 一条**无名**字段, kind = 1 (F_STR), slot0 = 222
+```
+
+元素**不是** `_obj`，是"op 6 + 一条无名 `F_STR` 字段" —— 名字根本不存在，所以按名字找
+**一个标签都读不出来**，`card_has_tag` 全线返回 `None`（不是 `false`，这也正是当初让 `None`
+表示"读不出来"而不是"没有"的价值：它把错误暴露成错误）。
+
+修法：元素是 `OP_STR` 就取字符串，否则取 **字段 0**，并要求它的 kind 是 `F_STR`。
+修完之后实测：`strike` = attack/basic/strike ✓，`slimed` = status ✓，奖励池变成
+`defend / strike / bash`（三张全不同，没有 Slimed）。
+
+### 63.4 判据
+
+| 测试 | 钉住什么 |
+|---|---|
+| `a_reward_pays_gold_in_range_and_three_different_cards`（rd-run，**25 个 seed**） | 金币在 10–20；**三张互不相同**（去重后仍是 3）；都在池子里 |
+| `taking_and_skipping_a_reward` | 拿一张 +1 且该卡就是那一张；再拿一次是 `WrongPhase`；跳过一张不多 |
+| `a_pool_too_small_for_three_distinct_cards_is_loud` | 池子只有 2 张 ⇒ `PoolTooSmall { pool: 2, need: 3 }`，**不发金币、不留相位** |
+| `winning_leaves_a_reward_screen`（wasm，打进胜利） | 金币==奖励界面上的金币==钱包增量；三张不同；**没有 `x+`**；拿一张后牌组 +1 且 pending 归零 |
+| `card_tags_are_readable_and_a_junk_card_is_not_a_reward`（rd-core，真镜像） | 上面那组标签真值；不在镜像里的卡是 `None` 而不是 `Some(false)` |
+
+### 63.5 又一次自己踩自己
+
+删掉诊断测试时，我按 `fn ...() {` 切文本，**把 `the_real_images_validate` 的 `#[test]` 一起切走了**
+—— 那个测试从此**静默不跑**。是 clippy 的 `function is never used` 报出来的。
+⇒ 与 §62 那条同类：**改完要读回文件确认结构**，静态检查（clippy）是这类伤害的第一道防线。
+
+### 63.6 还没做的
+
+* **稀有度权重 3/37/60 与偏移 −5%→+40%** 没有实现：这份内容没有稀有度字段（与商店定价是同一个
+  降级行）。`inv:§3.5` 的"逐张不重复"实现了，权重没有。
+* 药水掉落（`inv:§5` 的 40% 基准）、遗物掉落没有接。
+* 精英/ Boss 的金币档（25–35 / 95–105）写好了常量位，但 M1 还没有精英与 Boss 节点。
+
+### 63.7 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 637 | **642**（rd-core 574→575，rd-run 45→48，rd-wasm 18→19） |
+| 新导出 | — | **8 个**（`rd_run_reward_*` + `rd_run_take_card` + `rd_run_skip_reward`） |
+| `.wasm` | 466,443 B | **473,608 B** |

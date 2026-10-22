@@ -2165,6 +2165,62 @@ impl<'a> Content<'a> {
     }
 }
 
+impl<'a> Content<'a> {
+    /// 这张卡的 `Tags` 里有没有 `tag`。
+    ///
+    /// `Some(false)` = 没有（`Tags` 缺席、空表、或者读完了都没有）。`None` = **读不出来**
+    /// （卡不在镜像里、`Tags` 不是 `_arr`、元素不是字符串也不是带 `value` 的对象）——
+    /// 调用方必须把 `None` 当错误，不能当"没有这个标签"：那正是"静默降级"的形状。
+    ///
+    /// 元素两种拼法都收：裸字符串，或**一字段包装**（`STRLIST(wrap)`，`layout.txt` 第 37 行）。
+    /// ⚠️ 后者在镜像里**不是** `_obj{value: "..."}`，而是"op 6 + 一条无名 `F_STR` 字段"
+    /// —— 按名字找 `value` 会一个标签都读不出来（实测，见下面的注释）。
+    #[must_use]
+    pub fn card_has_tag(&self, card: &str, tag: &str) -> Option<bool> {
+        let entry = self.lookup_in(card, EK_CARD)?;
+        let row = CardRow::new(self.row(Table::Card, entry.index as u32)?)?;
+        let handle = row.tags();
+        if handle == ABSENT16 || handle == NULL16 {
+            return Some(false);
+        }
+        let term = self.term(handle)?;
+        if term.op != OP_ARR {
+            return None;
+        }
+        let start = term.slot(0)?;
+        let count = term.slot(1)?;
+        if count == LIST_ABSENT || count == LIST_NULL {
+            return Some(false);
+        }
+        for index in 0..count {
+            let cell = start.checked_add(index)?;
+            let element = self.aux(cell)?;
+            let element_term = self.term(element)?;
+            // Two encodings, both measured on this image:
+            //   * a bare string (`OP_STR`, value in slot 0);
+            //   * the `{"value": "..."}` wrapper, which the compiler collapses into a **one-field
+            //     term with an unnamed `F_STR` field** (measured: op 6, one field, kind `F_STR`,
+            //     value in slot 0) -- *not* an `_obj` with a field called `value`, which is what
+            //     the document suggests and what I assumed first. That assumption made every card
+            //     tag unreadable (`None`), and the reward screen offered `slimed`.
+            let text = if element_term.op == OP_STR {
+                self.string(element_term.slot(0)?)?
+            } else {
+                let opcode = self.opcode(element_term.op)?;
+                let field = opcode.field(0)?;
+                if field.kind() != F_STR {
+                    return None;
+                }
+                self.string(element_term.slot(0)?)?
+            };
+            if text == tag {
+                return Some(true);
+            }
+        }
+        Some(false)
+    }
+}
+
 /// 花名册第 0 人的 `Start` 对象 term（`RunBlueprint.cs:171-174`：`Characters[0].Start`）。
 ///
 /// `Ok(None)` = **花名册为空 / 没有这个根键**（⇒ 走根 `Start`）；`Ok(Some(t))` = 有。
@@ -3479,6 +3535,36 @@ mod tests {
     }
 
     // ------------------------------------------------------------ 结构自检
+
+    /// `CARD.Tags` is a wrapped strlist (`STRLIST(wrap)`, `layout.txt` line 37), so reading it means
+    /// looking through the wrapper. Without this the reward screen offers `slimed` -- a junk status
+    /// card -- as a card you can pick.
+    #[test]
+    fn card_tags_are_readable_and_a_junk_card_is_not_a_reward() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&bytes).expect("the image parses");
+
+        // `inv:§3.1`: strike is attack/basic/strike, defend is skill/basic/defend.
+        for tag in ["attack", "basic", "strike"] {
+            assert_eq!(content.card_has_tag("strike", tag), Some(true), "strike/{tag}");
+        }
+        assert_eq!(content.card_has_tag("strike", "skill"), Some(false));
+        assert_eq!(content.card_has_tag("defend", "skill"), Some(true));
+        assert_eq!(content.card_has_tag("defend", "attack"), Some(false));
+        // The upgraded rows keep their base card's tags.
+        assert_eq!(content.card_has_tag("strike+", "attack"), Some(true));
+
+        // The one that mattered: `slimed` is a status card, so a reward must be able to exclude it.
+        assert_eq!(content.card_has_tag("slimed", "status"), Some(true));
+        assert_eq!(content.card_has_tag("slimed", "attack"), Some(false));
+
+        // A card that is not in the image is `None`, not `Some(false)`.
+        assert_eq!(content.card_has_tag("no_such_card", "attack"), None);
+    }
 
     #[test]
     fn the_real_images_validate() {
