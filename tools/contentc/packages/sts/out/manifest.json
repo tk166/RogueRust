@@ -285,7 +285,7 @@
     }
   },
   "timing_seconds": {
-    "json_load": 0.005,
+    "json_load": 0.0047,
     "derive": 0.0045,
     "encode": 0.0042,
     "serialize": 0.005

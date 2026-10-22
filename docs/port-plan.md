@@ -4812,3 +4812,81 @@ element[0] op = 6, 一条**无名**字段, kind = 1 (F_STR), slot0 = 222
 | 单测 | 637 | **642**（rd-core 574→575，rd-run 45→48，rd-wasm 18→19） |
 | 新导出 | — | **8 个**（`rd_run_reward_*` + `rd_run_take_card` + `rd_run_skip_reward`） |
 | `.wasm` | 466,443 B | **473,608 B** |
+---
+
+## 64. 第 54 轮：按 StS Wiki 校准奖励与稀有度 —— 三处修正、一套机制、一次撤回
+
+> 用户："检索网络上的 StS Wiki 校准对齐本地的设计。" 这一轮先校准，再实现，最后**撤回**了一件
+> 看起来最便宜的改动。
+
+### 64.1 校准结果：三条数值被修正，其余对上
+
+来源：`spire-codex.com/mechanics/card-rarity`（页面标题 `Card Rarity Odds`）与
+`slaythespire.wiki.gg/wiki/Potions`。
+
+| 项 | 我们原先写的 | 校准后 | 影响 |
+|---|---|---|---|
+| 保底偏移的触发 | "每掷出一次 **Common** +1%" | **"否则 +1%"** —— **Uncommon 也会 tick** | 真 bug：按旧写法，一块 Uncommon 之后偏移不动，保底会比原作慢 |
+| 掷点方式 | 隐含"三次独立 roll" | **叠加带**：一个 0–99 的数；Rare 带 = `基础值+偏移`（下限 0）；Uncommon 带是**固定宽度贴在上面**；剩余是 Common | 刚重置（正常战 3−5=−2）的真实概率是 **0 / 35 / 65**；把 Rare 夹到 0 却给 Uncommon 37% 的实现**过得了"大致 3/37/60"的检验但是错的** |
+| Boss 奖励 | 未记 | **不读偏移**（恒 100% Rare）**但会重置它** | 照抄通用公式会算出 95% |
+| 升级概率 | 第一幕 0% | 0% / 25% / 50%（第一/二/三幕），**Rare 卡永不自动升级** | 补记 |
+| 药水稀有度 / 掉落 | 65/25/10、40% 基准 | **一致**；掉落"出了就 −10%、没出就 +10%，每幕重置" | 无需改 |
+
+⚠️ 提醒：`spire-codex` 那个页面是 **StS2** 站点的机制页；上述数值与 StS1 的多源记载一致，所以按它
+校准。**两者若分叉，以 StS1 为准**——这句也写进了 `sts-act1-inventory.md` §3.5 的校准注。
+
+### 64.2 实现的机制（`rd-run`，纯函数 + 状态）
+
+* `FightKind::{Normal, Elite, Boss}`：三个金币档（10–20 / 25–35 / 95–105）+ Rare 基础值
+  （3 / 10 / 100）+ Uncommon 固定带宽（37 / 40 / 0）。
+* `reward_bands(kind, offset) -> (rare_top, uncommon_top)`：**上面那张叠加带**的实现。
+* `rarity_offset` 状态：初始 −5%，**每张牌掷完 tick 一次**，Rare 重置、上限 +40%。
+* `Rarity` / `PoolCard`：奖励池现在按稀有度集结（`Status`/`Curse` 在 roll 里就被剔除）。
+
+判据（`the_reward_bands_are_the_wikis`，逐格对齐 wiki 的表）：
+
+```
+Normal, offset -5  -> (0, 35)      Elite, offset -5 -> (5, 45)      Boss -> (100, 100)
+Normal, offset  0  -> (3, 40)      Elite, offset  0 -> (10, 50)
+Normal, offset 40  -> (43, 80)
+```
+
+`Elite, offset -5 = 5` 正是 wiki 那张"精英奖励里第二/三槽的 Rare 概率 **5%**"的表行 —— 一条公式
+同时对上两张表，这比"跑分布看差不多"强。
+
+`the_pity_offset_ticks_every_card_and_resets_on_a_rare`：三张牌 tick 三次（−5→−2）；Boss 三张
+全 Rare ⇒ 重置回 −5；连做 20 轮也压不过 +40。
+
+### 64.3 **撤回**：`CARD.Rarity` 那一格
+
+我给 `rdcfmt.CARD_ROW` 加了第 16 格 `Rarity`。这件事在**布局上是免费的**：
+`align4(2×15) = align4(2×16) = 32`，stride 不变。内容侧也做了（`strike`/`defend`/`bash` = Basic、
+`slimed` = Status），`sts` 镜像正常多出 36 B，闸门 12 过；内核两条"格表不许漂"的测试**立刻抓住了
+我把格号写成 15 而编译器写在 14** 的错误 —— 那道防线工作得很好。
+
+**但撤回的原因是构建路径**：内核测试读的是 `tools/contentc/out/content.core.rdcf`，而
+`build.py --package roguedeck` 重建它时**大小一字节没变**（85,616 B），说明那处镜像并不是这次
+重建的产物（另有一套旧的 out 目录）。⇒ 加一格**不是"改两行"**，它要求：重建全部镜像、重新钉
+SHA、很可能还要重跑语料与 golden 基线。那是一个独立迁移的规模，不该塞进校准这一轮。
+
+⇒ 于是撤回格式与内容（`sts` 两个镜像的 SHA 已回到原值、`CONTENTC_BYTES PASS` 仍是
+`2/2 images, 1/1 source`），**保留机制**：`PoolCard` 仍然存在，只是这张镜像里每张卡都以
+`Basic` 进来（`slimed` 由 `Tags` 过滤，`card_has_tag` 是上一轮为它写的）。等 `Rarity` 真的进了
+内容，只需要把 `reward_pool` 里那一行 `Rarity::Basic` 换成读格。
+
+**说清楚这一轮交付了什么**：机制、判据、校准三条修正；**没有**交付"这份内容里的卡有稀有度"。
+
+### 64.4 还没做的
+
+* `CARD.Rarity` 的格式迁移（见上，独立一轮）。
+* 药水：格式里没有 `POT` 表，内容也没有药水 —— 掉落机制（40% ±10%、65/25/10）无处落地。
+* 精英 / Boss 节点：金币档与 Rare 100% 的常量都在，但 M1 里进了精英节点是**响亮拒绝**。
+
+### 64.5 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 642 | **644**（rd-run 48 → 50） |
+| `.wasm` | 473,608 B | **475,137 B** |
+| 镜像 | — | `sts` 与 `roguedeck` 的 SHA **全部回到原值**（`CONTENTC_BYTES PASS`） |

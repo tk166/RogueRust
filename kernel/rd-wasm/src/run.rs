@@ -177,21 +177,30 @@ fn card_pool(content: &'static Content<'static>) -> Vec<&'static str> {
 /// a term the kernel cannot walk for `CARD` rows yet (`status_bind::has_tag` does that walk for
 /// `STATUS` rows only), so a tag filter here would be a guess. Written down in the plan's downgrade
 /// table rather than papered over.
-fn reward_pool(content: &'static Content<'static>) -> Result<Vec<&'static str>, String> {
+fn reward_pool(
+    content: &'static Content<'static>,
+) -> Result<Vec<rd_run::state::PoolCard<'static>>, String> {
     let mut pool = Vec::new();
     for id in card_pool(content) {
         // `inv:§3.5`: Act 1 never offers an upgraded card (upgrade probability 0%).
         if id.ends_with('+') {
             continue;
         }
+        // `slimed` is a junk card, not a reward. The filter is by **tag** because this image has no
+        // `CARD.Rarity` yet -- adding that cell is a format migration of its own (it invalidates the
+        // pinned `roguedeck` image), so the reward roll's rarity machinery is in place and every card
+        // in this image enters it as `Basic` (`inv:§3.5`'s buckets, one of them populated).
         match content.card_has_tag(id, "status") {
-            Some(true) => continue, // `slimed` is a junk card, not a reward
-            Some(false) => pool.push(id),
-            // Reading a card's tags can fail only on a malformed image. Refusing is right:
-            // "cannot tell" must not become "not a status card", which would put Slimed back on the
-            // reward screen -- exactly the bug this filter exists for.
+            Some(true) => continue,
+            Some(false) => {}
+            // "Cannot tell" must not become "not a status card" -- that is the bug this filter
+            // exists for (a reward screen offering `slimed`).
             None => return Err(std::format!("读不出卡 `{id}` 的 Tags")),
         }
+        pool.push(rd_run::state::PoolCard {
+            id,
+            rarity: rd_run::state::Rarity::Basic,
+        });
     }
     Ok(pool)
 }
@@ -1153,7 +1162,7 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
         };
         if let Err(e) = session
             .state
-            .roll_reward(&pool, rd_run::state::NORMAL_FIGHT_GOLD)
+            .roll_reward(&pool, rd_run::state::FightKind::Normal)
         {
             let message = describe(&e);
             return fail(session, &message);

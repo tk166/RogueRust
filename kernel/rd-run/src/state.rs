@@ -49,6 +49,10 @@ pub const REST_HEAL_PERCENT: i32 = 30;
 pub const MAX_REWARD_CARDS: usize = 3;
 /// `inv:§5`: a normal fight pays 10–20 gold (elite 25–35, boss 95–105).
 pub const NORMAL_FIGHT_GOLD: (i32, i32) = (10, 20);
+/// `inv:§3.5`: the pity offset starts at −5%, ticks +1% per non-rare roll, resets on a rare.
+pub const RARITY_OFFSET_START: i32 = -5;
+/// ...and its ceiling.
+pub const RARITY_OFFSET_CAP: i32 = 40;
 /// The pools a shop or a chest draws from are caller-supplied (this crate knows no content), so the
 /// walk below needs a bound. Exceeding it is [`RunError::EmptyPool`]'s sibling: a loud error.
 pub const MAX_POOL: usize = 64;
@@ -72,6 +76,129 @@ pub enum Pending {
     Chest = 3,
     /// [`RunState::take_card`] or [`RunState::skip_reward`] -- the screen after a won fight.
     Reward = 4,
+}
+
+/// A card's rarity (`inv:§3.5`; the six buckets StS uses).
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[repr(u8)]
+pub enum Rarity {
+    /// The starting deck's cards. Never offered by StS as a reward, but this content has nothing
+    /// else, so the reward screen does offer them (see the fall-through in `roll_reward`).
+    Basic = 0,
+    /// ...
+    Common = 1,
+    /// ...
+    Uncommon = 2,
+    /// ...
+    Rare = 3,
+    /// Junk cards (`slimed`).
+    Status = 4,
+    /// Not in this content.
+    Curse = 5,
+}
+
+impl Rarity {
+    /// The name the content carries in `CARD.Rarity`.
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "Basic" => Some(Self::Basic),
+            "Common" => Some(Self::Common),
+            "Uncommon" => Some(Self::Uncommon),
+            "Rare" => Some(Self::Rare),
+            "Status" => Some(Self::Status),
+            "Curse" => Some(Self::Curse),
+            _ => None,
+        }
+    }
+
+    fn index(self) -> usize {
+        self as u8 as usize
+    }
+}
+
+/// A card as the reward roll sees it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct PoolCard<'a> {
+    /// The definition id.
+    pub id: &'a str,
+    /// Its rarity, from the content.
+    pub rarity: Rarity,
+}
+
+/// Which fight paid. `inv:§5` / `inv:§3.5` differ per kind in **both** gold and rarity.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum FightKind {
+    /// A normal fight: 10–20 gold, rare base 3%, uncommon band 37%.
+    Normal,
+    /// An elite: 25–35 gold, rare base 10%, uncommon band 40%.
+    Elite,
+    /// A boss: 95–105 gold, **always rare**.
+    Boss,
+}
+
+impl FightKind {
+    /// The gold range `inv:§5`.
+    #[must_use]
+    pub const fn gold(self) -> (i32, i32) {
+        match self {
+            Self::Normal => (10, 20),
+            Self::Elite => (25, 35),
+            Self::Boss => (95, 105),
+        }
+    }
+
+    /// `base rare%` at offset 0 (`inv:§3.5`; wiki `Card Rewards`).
+    #[must_use]
+    pub const fn rare_base(self) -> i32 {
+        match self {
+            Self::Normal => 3,
+            Self::Elite => 10,
+            Self::Boss => 100,
+        }
+    }
+
+    /// The uncommon band's **fixed width** (`inv:§3.5`: 37% normal, 40% elite).
+    ///
+    /// It is a width, not a probability: the band sits directly on top of the rare band, so it moves
+    /// with it. See [`reward_bands`].
+    #[must_use]
+    pub const fn uncommon_width(self) -> i32 {
+        match self {
+            Self::Normal => 37,
+            Self::Elite => 40,
+            Self::Boss => 0,
+        }
+    }
+}
+
+/// The two band edges for one card roll, out of one 0–99 roll.
+///
+/// # This is the part a naive implementation gets wrong
+///
+/// The three rarities are **not** three independent chances. One number is rolled and checked
+/// against bands stacked in order: rare first, then uncommon on top, then common gets the rest.
+///
+/// * the rare band is `base + offset`, **floored at 0**;
+/// * the uncommon band is a fixed width that sits on top of it -- so when the rare band is
+///   *negative*, the part of the uncommon band below 0 is clipped off and **goes to common**, not
+///   to uncommon.
+///
+/// At a fresh normal-fight reset (`base 3 + offset -5 = -2`) that gives rare 0%, uncommon 35%,
+/// common 65% -- the wiki states exactly that ("Actual at reset (offset -5%)"). An implementation
+/// that clamps the rare band to 0 *and keeps uncommon at 37%* would quietly hand the 2% to uncommon.
+#[must_use]
+pub fn reward_bands(kind: FightKind, offset: i32) -> (i32, i32) {
+    // A boss reward is rare at 100% and **does not read the offset** -- but it does *reset* it
+    // (wiki `Card Rewards`, the "What doesn't update the pity counter" table: boss reads `no`,
+    // updates `yes`). Applying the offset here would make a boss hand out a 95% rare roll.
+    if kind == FightKind::Boss {
+        return (100, 100);
+    }
+    let banded = kind.rare_base() + offset;
+    let rare_top = banded.max(0);
+    let uncommon_top = banded.max(0) + kind.uncommon_width() - (-banded).max(0);
+    (rare_top, uncommon_top)
 }
 
 /// What a won fight pays (`inv:§5`): gold already granted, plus the cards on offer.
@@ -263,6 +390,9 @@ pub struct RunState {
     shop: ShopStock,
     /// The card choice after a won fight.
     reward: Reward,
+    /// The rare-card pity offset (`inv:§3.5`): starts at −5%, +1% per non-rare reward roll, reset to
+    /// −5% on a rare, capped at +40%. Only **combat reward** rolls move it.
+    rarity_offset: i32,
 }
 
 impl RunState {
@@ -299,6 +429,7 @@ impl RunState {
             pending: Pending::None,
             shop: ShopStock::empty(),
             reward: Reward::empty(),
+            rarity_offset: RARITY_OFFSET_START,
         };
         for id in starting_deck {
             state.push_card(id)?;
@@ -791,46 +922,66 @@ impl RunState {
     ///
     /// Gold is granted here rather than on "take" because `inv:§5` gives it on victory -- there is
     /// no way to decline it, so a `take_gold` action would be a button that is always pressed.
-    pub fn roll_reward(
-        &mut self,
-        card_pool: &[&str],
-        gold: (i32, i32),
-    ) -> Result<(), RunError> {
-        if card_pool.len() < MAX_REWARD_CARDS {
+    pub fn roll_reward(&mut self, card_pool: &[PoolCard<'_>], kind: FightKind) -> Result<(), RunError> {
+        // Status and curse cards are never a reward (`inv:§3.5`; `slimed` is a Status).
+        let mut eligible = [0usize; MAX_POOL];
+        let mut eligible_len = 0usize;
+        for index in 0..card_pool.len().min(MAX_POOL) {
+            if !matches!(card_pool[index].rarity, Rarity::Status | Rarity::Curse) {
+                eligible[eligible_len] = index;
+                eligible_len += 1;
+            }
+        }
+        if eligible_len < MAX_REWARD_CARDS {
             return Err(RunError::PoolTooSmall {
-                pool: card_pool.len(),
+                pool: eligible_len,
                 need: MAX_REWARD_CARDS,
             });
         }
-        let (low, high) = gold;
+        let eligible = &eligible[..eligible_len];
+        let (low, high) = kind.gold();
         let span = (high - low + 1).max(1) as u32;
         let paid = low + self.rng.roll(RunStream::Reward, span)? as i32;
         self.adjust_gold(paid);
 
-        // Three distinct cards. The pool is bounded by `MAX_POOL`, so a fixed ledger of used
-        // indices is enough and nothing is allocated.
         let mut used = [false; MAX_POOL];
         let mut cards = [RunId::EMPTY; MAX_REWARD_CARDS];
-        let mut picked = 0usize;
-        let mut guard = 0usize;
-        while picked < MAX_REWARD_CARDS && guard < MAX_POOL * 4 {
-            guard += 1;
-            let index = self.rng.roll(RunStream::Reward, card_pool.len() as u32)? as usize;
-            if used[index] {
-                continue;
+        for slot in 0..MAX_REWARD_CARDS {
+            // One roll, banded -- see `reward_bands`.
+            let (rare_top, uncommon_top) = reward_bands(kind, self.rarity_offset);
+            let roll = self.rng.roll(RunStream::Reward, 100)? as i32;
+            let band = if roll < rare_top {
+                Rarity::Rare
+            } else if roll < uncommon_top {
+                Rarity::Uncommon
+            } else {
+                Rarity::Common
+            };
+            // A band with no cards falls through: first to `Basic` (this image's only populated
+            // bucket), then to anything left. It is a *documented* deviation -- StS would never
+            // offer a Basic card -- and it disappears the moment the content has Common+ cards.
+            let mut picked = self.pick_of(card_pool, eligible, &used, Some(band))?;
+            if picked.is_none() {
+                picked = self.pick_of(card_pool, eligible, &used, Some(Rarity::Basic))?;
             }
+            if picked.is_none() {
+                picked = self.pick_of(card_pool, eligible, &used, None)?;
+            }
+            let Some(index) = picked else {
+                return Err(RunError::PoolTooSmall {
+                    pool: eligible_len,
+                    need: MAX_REWARD_CARDS,
+                });
+            };
             used[index] = true;
-            cards[picked] = RunId::new(card_pool[index]).map_err(|_| RunError::BadId)?;
-            picked += 1;
-        }
-        // The guard is a bound on rerolls, not a licence to return a short screen: a pool of three
-        // or more distinct ids always yields three after `pool * 4` draws with overwhelming
-        // probability, but "overwhelming probability" is not "always", so a short screen is loud.
-        if picked < MAX_REWARD_CARDS {
-            return Err(RunError::PoolTooSmall {
-                pool: card_pool.len(),
-                need: MAX_REWARD_CARDS,
-            });
+            cards[slot] = RunId::new(card_pool[index].id).map_err(|_| RunError::BadId)?;
+            // `inv:§3.5`: the pity offset moves after **every** roll -- reset on a rare, +1%
+            // otherwise (the wiki says "otherwise", not "on a common": an uncommon also ticks it).
+            if band == Rarity::Rare {
+                self.rarity_offset = RARITY_OFFSET_START;
+            } else {
+                self.rarity_offset = (self.rarity_offset + 1).min(RARITY_OFFSET_CAP);
+            }
         }
         self.reward = Reward {
             gold: paid,
@@ -839,6 +990,59 @@ impl RunState {
         };
         self.pending = Pending::Reward;
         Ok(())
+    }
+
+    /// The current pity offset (`inv:§3.5`). Exposed because a UI may want to show it, and because a
+    /// test that only checks the odds cannot see a counter that never moves.
+    #[must_use]
+    pub const fn rarity_offset(&self) -> i32 {
+        self.rarity_offset
+    }
+
+    /// A uniformly chosen **unused** card of `wanted`, or `None` when that bucket has none left.
+    fn pick_of(
+        &mut self,
+        pool: &[PoolCard<'_>],
+        eligible: &[usize],
+        used: &[bool; MAX_POOL],
+        wanted: Option<Rarity>,
+    ) -> Result<Option<usize>, RunError> {
+        let mut count = 0u32;
+        for index in eligible {
+            if used[*index] {
+                continue;
+            }
+            let rarity = pool[*index].rarity;
+            let ok = match wanted {
+                Some(rarity_wanted) => rarity == rarity_wanted,
+                None => true,
+            };
+            if ok {
+                count += 1;
+            }
+        }
+        if count == 0 {
+            return Ok(None);
+        }
+        let mut target = self.rng.roll(RunStream::Reward, count)? as u32;
+        for index in eligible {
+            if used[*index] {
+                continue;
+            }
+            let rarity = pool[*index].rarity;
+            let ok = match wanted {
+                Some(rarity_wanted) => rarity == rarity_wanted,
+                None => true,
+            };
+            if !ok {
+                continue;
+            }
+            if target == 0 {
+                return Ok(Some(*index));
+            }
+            target -= 1;
+        }
+        Ok(None)
     }
 
     /// Take card `slot` from the reward screen and leave it.
@@ -1362,9 +1566,9 @@ mod tests {
         for seed in 0..25 {
             let mut run = RunState::new(seed, 80, 0, &DECK).expect("a run");
             let gold_before = run.gold();
-            run.roll_reward(&CARDS, NORMAL_FIGHT_GOLD).expect("a reward");
+            run.roll_reward(&basic_pool(), FightKind::Normal).expect("a reward");
             let reward = run.reward();
-            let (low, high) = NORMAL_FIGHT_GOLD;
+            let (low, high) = FightKind::Normal.gold();
             assert!(
                 reward.gold() >= low && reward.gold() <= high,
                 "seed {seed}: {} gold is outside {low}..={high}",
@@ -1388,7 +1592,7 @@ mod tests {
     #[test]
     fn taking_and_skipping_a_reward() {
         let mut run = RunState::new(3, 80, 0, &DECK).expect("a run");
-        run.roll_reward(&CARDS, NORMAL_FIGHT_GOLD).unwrap();
+        run.roll_reward(&basic_pool(), FightKind::Normal).unwrap();
         let wanted = run.reward().cards()[1].as_str().to_string();
         let deck_before = run.deck().len();
         run.take_card(1).expect("take the second card");
@@ -1399,7 +1603,7 @@ mod tests {
         assert_eq!(run.take_card(0), Err(RunError::WrongPhase));
 
         // Skipping takes nothing.
-        run.roll_reward(&CARDS, NORMAL_FIGHT_GOLD).unwrap();
+        run.roll_reward(&basic_pool(), FightKind::Normal).unwrap();
         let deck_before = run.deck().len();
         run.skip_reward().expect("skip");
         assert_eq!(run.deck().len(), deck_before);
@@ -1412,13 +1616,88 @@ mod tests {
     #[test]
     fn a_pool_too_small_for_three_distinct_cards_is_loud() {
         let mut run = RunState::new(3, 80, 0, &DECK).expect("a run");
-        let two = ["strike", "defend"];
+        let two: [PoolCard<'_>; 2] = [
+            PoolCard { id: "strike", rarity: Rarity::Basic },
+            PoolCard { id: "defend", rarity: Rarity::Basic },
+        ];
         assert_eq!(
-            run.roll_reward(&two, NORMAL_FIGHT_GOLD),
+            run.roll_reward(&two, FightKind::Normal),
             Err(RunError::PoolTooSmall { pool: 2, need: 3 })
         );
         assert_eq!(run.pending(), Pending::None, "a refused roll leaves no phase behind");
         assert_eq!(run.gold(), 0, "and pays no gold");
+    }
+
+    /// This image's pool: three Basics plus the junk card (which must be filtered out).
+    fn basic_pool() -> [PoolCard<'static>; 4] {
+        [
+            PoolCard { id: "strike", rarity: Rarity::Basic },
+            PoolCard { id: "defend", rarity: Rarity::Basic },
+            PoolCard { id: "bash", rarity: Rarity::Basic },
+            PoolCard { id: "slimed", rarity: Rarity::Status },
+        ]
+    }
+
+    /// The band arithmetic, pinned to the table the wiki prints (`Card Rewards`, "Actual at reset"
+    /// and the "next-slot rare chance after a rare hit" rows).
+    ///
+    /// The subtle one is `(0, 35)` for a normal fight at a fresh reset: the rare band is
+    /// `3 + (−5) = −2`, so it floors to 0 **and the 2% it lost is taken off the bottom of the
+    /// uncommon band**, not handed to it. An implementation that clamps rare to 0 and keeps
+    /// uncommon at 37% would pass every "roughly 3/37/60" test and be wrong.
+    #[test]
+    fn the_reward_bands_are_the_wikis() {
+        // Normal fight: rare base 3, uncommon width 37.
+        assert_eq!(reward_bands(FightKind::Normal, -5), (0, 35), "fresh reset");
+        assert_eq!(reward_bands(FightKind::Normal, 0), (3, 40), "offset back to 0");
+        assert_eq!(reward_bands(FightKind::Normal, 40), (43, 80), "offset capped at +40");
+
+        // Elite: rare base 10, uncommon width 40. After a rare resets to −5 the next slot's rare
+        // chance is 10 − 5 = 5%, which is the wiki's "Elite reward, second/third slot: 5%" row.
+        assert_eq!(reward_bands(FightKind::Elite, -5), (5, 45));
+        assert_eq!(reward_bands(FightKind::Elite, 0), (10, 50));
+
+        // Boss: always rare, whatever the offset says.
+        for offset in [-5, 0, 40] {
+            assert_eq!(reward_bands(FightKind::Boss, offset), (100, 100));
+        }
+
+        // `inv:§5` gold, all three tiers.
+        assert_eq!(FightKind::Normal.gold(), (10, 20));
+        assert_eq!(FightKind::Elite.gold(), (25, 35));
+        assert_eq!(FightKind::Boss.gold(), (95, 105));
+    }
+
+    /// The pity offset ticks **once per card rolled** -- including the ones a player skips, because
+    /// the screen is generated up front -- and a rare resets it.
+    ///
+    /// The wiki's wording is "otherwise +1%", not "on a common +1%": an uncommon ticks it too.
+    #[test]
+    fn the_pity_offset_ticks_every_card_and_resets_on_a_rare() {
+        let mut run = RunState::new(11, 80, 0, &DECK).expect("a run");
+        assert_eq!(run.rarity_offset(), RARITY_OFFSET_START);
+
+        // Every bucket but `Basic` is empty in this pool, so no roll can come out Rare: three cards
+        // therefore tick the offset three times.
+        run.roll_reward(&basic_pool(), FightKind::Normal).unwrap();
+        assert_eq!(run.rarity_offset(), -2, "three ticks from -5");
+
+        // A boss reward is always Rare, so every card resets it back to the floor.
+        let rare_pool: [PoolCard<'_>; 3] = [
+            PoolCard { id: "a", rarity: Rarity::Rare },
+            PoolCard { id: "b", rarity: Rarity::Rare },
+            PoolCard { id: "c", rarity: Rarity::Rare },
+        ];
+        run.skip_reward().unwrap();
+        run.roll_reward(&rare_pool, FightKind::Boss).unwrap();
+        assert_eq!(run.rarity_offset(), RARITY_OFFSET_START, "a rare resets the pity");
+
+        // The cap holds: 45 more non-rare cards cannot push it past +40.
+        for _ in 0..20 {
+            run.skip_reward().unwrap();
+            run.roll_reward(&basic_pool(), FightKind::Normal).unwrap();
+        }
+        assert!(run.rarity_offset() <= RARITY_OFFSET_CAP, "offset {} escaped the cap", run.rarity_offset());
     }
 
     #[test]
