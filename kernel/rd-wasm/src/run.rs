@@ -1075,8 +1075,9 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
                 .map(|node| node.kind as i32)
         })
         .unwrap_or(-1);
+    // 1 = `NodeKind::Combat` (`run-layer.md` §7.2). An elite is refused upstream (`begin_node`);
+    // see `docs/port-plan.md` §68.3 for why its wiring is not finished.
     if kind != 1 {
-        // 1 = `NodeKind::Combat` (`run-layer.md` §7.2)
         let message = std::format!("当前节点不是战斗（kind {kind}）");
         return fail(session, &message);
     }
@@ -1090,15 +1091,19 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // Pick an encounter with the `Combat` stream -- the stream exists for exactly this
     // (`run-layer.md` §3.2) and using it now means the per-fight seed and the encounter choice are
     // two draws from one reserved stream rather than a constant.
-    let mut encounters: Vec<&'static str> = Vec::new();
-    let mut index = 0u32;
-    while let Some(row) = content.row(rd_core::content::Table::Encounter, index) {
-        // `ENCT` cell 0 is the `Id` (`rdcfmt.ENCT_ROW`), like every entity table.
-        if let Some(id) = row.cell(0).and_then(|cell| content.string(cell)) {
-            encounters.push(id);
+    // The document says which pool a fight comes from (`inv:§5.2` weak / `inv:§5.3` elite). Until
+    // this existed the only rule was "any encounter in the image", which would have sent an elite
+    // node into a slime fight.
+    // The weak pool, out of the document (`inv:§5.2`). Before this the only rule was "any encounter
+    // in the image", which is not what the inventory says.
+    let pool_name = "Weak";
+    let encounters: Vec<&'static str> = match content.encounter_pool(pool_name) {
+        Some(ids) => ids.iter().filter(|id| !id.is_empty()).copied().collect(),
+        None => {
+            let message = std::format!("内容里没有 `EncounterTables.{pool_name}` 池");
+            return fail(session, &message);
         }
-        index += 1;
-    }
+    };
     if encounters.is_empty() {
         return fail(session, "内容镜像里没有任何遭遇");
     }
@@ -1172,6 +1177,8 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     // The fight is over: the run's health becomes the hero's.
     let delta = hero_hp - session.state.health();
     session.state.adjust_health(delta);
+    // `inv:§5`: a normal fight. The elite tier is wired but unreachable until §68.3 is understood.
+    let fight_kind = rd_run::state::FightKind::Normal;
     if result == 1 {
         // `Burning Blood` and friends (`inv:§2`), now with a call site.
         if let Err(e) = session.state.end_of_combat() {
@@ -1186,7 +1193,7 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
         };
         if let Err(e) = session
             .state
-            .roll_reward(&pool, rd_run::state::FightKind::Normal)
+            .roll_reward(&pool, fight_kind)
         {
             let message = describe(&e);
             return fail(session, &message);

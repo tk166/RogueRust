@@ -765,8 +765,15 @@ impl RunState {
                 self.stock_shop(card_pool, relic_pool)?;
                 Pending::Shop
             }
-            // `Elite` and `Unknown` are named as "not in M1" (`sts-act1-plan.md` §4), so reaching
-            // one is loud instead of a silent walk-past.
+            // `Elite` and `Unknown` are "not in M1" (`sts-act1-plan.md` §4), so reaching one is loud
+            // instead of a silent walk-past.
+            //
+            // ⚠️ The **content** for an elite now exists (`enc_three_sentries`, `inv:§4.2`) and
+            // `Content::encounter_pool("Elite")` reads the pool, but the wiring is not done: with the
+            // `NodeKind::Elite => Pending::None` arm in place, `rd_run_fight_begin` returns `-2` with
+            // an **empty** error buffer on an elite node, and I could not find why in this round. See
+            // `docs/port-plan.md` §68.3 for what was checked. Until that is understood, an elite node
+            // refuses here rather than offering a fight that cannot start.
             other => return Err(RunError::NodeNotSettleable(other as u8)),
         };
         Ok(kind)

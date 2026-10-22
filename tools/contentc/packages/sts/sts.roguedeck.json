@@ -10,10 +10,6 @@
       "Why": "参考的解锁标记（`UnlockFlag`）：内核没有解锁/账号概念，零消费者。这一条是 2026-10-19 随 `root:Characters` 整键声明被一起删掉的那批之一，现在记在子键上。"
     },
     {
-      "Path": "root:EncounterTables",
-      "Why": "遭遇权重表：内核没有普通/精英/弱者池的概念，Weak[].Weight 只被 check_weak_pool_table 读。"
-    },
-    {
       "Path": "root:Monsters",
       "Why": "怪物名册：compile.py 不读它；ENCT 的敌人载荷是遭遇自带的 inline 记录，名册与 inline 的逐字段一致由 check_relations 守着。"
     },
@@ -88,6 +84,14 @@
     {
       "Path": "Program:MaxNodeDepth",
       "Why": "节目信封的节点深度上限：内核用**自己的常量** exec.rs::MAX_NODE_DEPTH = 64（host.rs:1697-1698 写明“本层不用”），本内容 394/394 都是 64，与常量一致纯属巧合；同信封的 MaxProgramSteps 是**真读**的（host.rs:1700 / intent.rs:745 / play.rs:1735）。"
+    },
+    {
+      "Path": "root:EncounterTables.Note",
+      "Why": "说明串：记录 weak 池每项 25% 的出处（`inv:§5.2`）与未 author 的第 4 项。内核不读它——`ENCT` 行没有权重格，权重本来就不参与任何镜像行为。"
+    },
+    {
+      "Path": "root:EncounterTables.PackageId",
+      "Why": "包标识：与其它每一行的 `PackageId` 一样只做来源标注，内核按 id 取实体，不按包名筛。"
     }
   ],
   "Statuses": [
@@ -1779,6 +1783,96 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "sentry.bolt",
+      "PackageId": "sts",
+      "NameKey": "Bolt",
+      "DescriptionKey": "Bolt — 10 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Bolt — 10 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "sentry.beam",
+      "PackageId": "sts",
+      "NameKey": "Beam",
+      "DescriptionKey": "Beam — 9 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Beam — 9 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 9
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -1910,6 +2004,74 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Spike Slime (S)"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_three_sentries"
+      },
+      "Enemies": [
+        {
+          "Id": "sentry",
+          "MaxHealth": 38,
+          "Actions": [
+            {
+              "value": "sentry.bolt"
+            },
+            {
+              "value": "sentry.beam"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Sentry"
+        },
+        {
+          "Id": "sentry",
+          "MaxHealth": 38,
+          "Actions": [
+            {
+              "value": "sentry.bolt"
+            },
+            {
+              "value": "sentry.beam"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Sentry"
+        },
+        {
+          "Id": "sentry",
+          "MaxHealth": 38,
+          "Actions": [
+            {
+              "value": "sentry.bolt"
+            },
+            {
+              "value": "sentry.beam"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Sentry"
         }
       ],
       "HeroResources": [
@@ -2155,6 +2317,26 @@
       "Tier": "A",
       "InvRef": "inv:§4.1",
       "AiNote": "先充能 2 回合→Blast→之后每充能 3 回合一次 Blast（inv:§4.1）。HP 采信游戏文件的 21-25（inv:§0 瑕疵 4）。⚠️ 单条件/常量阈值 ⇒ 首次 Blast 落在第 4 回合（降级见 Notes.Deviations/gremlin-wizard-phase）"
+    },
+    {
+      "Id": "sentry",
+      "NameKey": "Sentry",
+      "HpMin": 38,
+      "HpMax": 42,
+      "MaxHealth": 38,
+      "Actions": [
+        {
+          "value": "sentry.bolt"
+        },
+        {
+          "value": "sentry.beam"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "A",
+      "InvRef": "inv:§4.2",
+      "AiNote": "Bolt/Beam 交替（两招循环，同 blue_slaver 的写法）。⚠️ 两处降级：① Beam 少了「shuffle 2 Dazed」——本内容没有 dazed 卡，而 Ethereal（回合末在手则消耗）虽有计划钩子但没有任何行用过；② 少了 Artifact 1（内核没有 Artifact 状态，也没有「抵消一次 debuff」的触发）。⇒ 这个精英比原作**容易**，不是等价替换。"
     }
   ],
   "EncounterTables": {
@@ -2173,7 +2355,13 @@
         "Weight": 25
       }
     ],
-    "Note": "inv:§5.2：weak 池 4 项各 25%。ENCT 行没有权重格（rdcfmt.py:254-259）⇒ 权重只能住在这里，不参与任何镜像行为。第 4 项 enc_two_louses 未 author（要 louse_red/green，C 档）。"
+    "Note": "inv:§5.2：weak 池 4 项各 25%。ENCT 行没有权重格（rdcfmt.py:254-259）⇒ 权重只能住在这里，不参与任何镜像行为。第 4 项 enc_two_louses 未 author（要 louse_red/green，C 档）。 Elite 池由本内容补上（3 × sentry）；raw weights are documentation only -- `ENCT` has no weight cell (`rdcfmt.py`), so a single entry means 'the only elite'.",
+    "Elite": [
+      {
+        "Id": "enc_three_sentries",
+        "Weight": 1
+      }
+    ]
   },
   "Relics": [
     {

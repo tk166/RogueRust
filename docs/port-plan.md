@@ -5097,3 +5097,70 @@ entity_row!(
 | 新导出 | — | **1 个**（`rd_run_node_resolved`） |
 | `RunState` | — | + `resolved: [u64; 2]`（16 B） |
 | `.wasm` | 477,846 B | **478,874 B** |
+---
+
+## 68. 第 58 轮：补内容 —— 第一个**精英**进了内容，奖励池也有了读者；它的接线**没接通**
+
+> 用户："继续补充这些内容实现吧。" 这一轮补的是内容 + 一个真实缺口，但**精英的战斗接线没做完**，
+> 下面把能证的与没证的都写清。
+
+### 68.1 先摸清"内容侧到底缺什么"
+
+| 想知道 | 结果 |
+|---|---|
+| 精英怪 | 内容里 **0 个**（10 个全是普通怪，`Tier` 都是 A） |
+| Boss | **0 个**（Hexaghost / Guardian / Slime Boss 都没有） |
+| 事件表 | **格式里没有 `EV`/事件表**（`ROW_SCHEMAS` 只有 CARD/STATUS/EACT/ENCT/REL） |
+| 遭遇池 | `EncounterTables` **文档里写了**（Weak 3 项 + Note），但**内核从来没读过它** —— 所以"遭遇选择"一直是"镜像里任意一条" |
+
+⇒ `?` 房需要格式迁移（新表），Boss 需要新机制（分裂/相位），两者都不是一轮能做的。**精英是唯一能做的**。
+
+### 68.2 做了什么：3 × Sentry 进了内容，`EncounterTables` 有了读者
+
+* **内容**：`sentry.bolt`（10 伤害）、`sentry.beam`（9 伤害）、`sentry`（HP 38–42、两招循环——
+  与 `blue_slaver` 同一写法）、`enc_three_sentries`（3 只）、`EncounterTables.Elite`。
+* **rd-core**：`Content::encounter_pool("Weak"|"Elite")` —— 读 `EncounterTables` 的对象字段、
+  再读列表里每个 `_obj` 的 `Id`。**这是 `inv:§5.2/§5.3` 第一次真的被实现**；
+  `rd_run_fight_begin` 现在从 **Weak 池**抽正常战斗，而不是"镜像里任意一条"。
+* **闸门与清单一起动**：`sts_content_check.py` 的 `INV_COUNTS`/`INV_MONSTERS`/`INV_ACTIONS`
+  加了 sentry，`INV_WEAK_POOL` 旁边加了 `INV_ELITE_POOL`，`EncounterTables.Elite` 也纳入比较；
+  `sts-act1-inventory.md` 新增 **§4.2 精英**，把两处降级写在表里。
+
+⚠️ **两处降级，都写进清单了**：① `Beam` 少了「洗 2 张 Dazed」——本内容没有 `dazed` 卡，
+也没有任何一行用 Ethereal 那个钩子；② 少了 **Artifact 1**（内核没有该状态，也没有"抵消一次 debuff"）。
+⇒ 这个精英**比原作容易**，不是等价替换。
+
+### 68.3 **没完成**：精英节点的战斗接线
+
+`NodeKind::Elite => Pending::None` 之后，`rd_run_fight_begin()` 在精英节点上返回 **-2，而错误缓冲是空的**。
+这一轮**没能查出原因**，已核过的事实：
+
+* 运行会话存在（`run_slot().is_some()` 断言通过），`begin_node()` 返回 **0**；
+* 新 id 确实在镜像里（字节里能搜到 `sentry` 4 次、`enc_three_sentries` 1 次）；
+* `Content::encounter_pool("Elite")` 在 rd-core 的单测里读出来是 `["enc_three_sentries"]`；
+* 空错误串说明拒绝**不是**走 `fail()` 的路径 —— 那两条路径都会写文字。这条线索留给下一轮的第一件事。
+
+⇒ 于是把 `NodeKind::Elite` **改回拒绝**，并让 `fight_begin` 只接受 kind 1：宁可"精英节点说本版不结算"，
+也不要"给一个按不动的开始战斗按钮"。**内容与读者留下**（闸门绿、单测绿），等接线通了就是现成的。
+
+### 68.4 顺手修的两个"声明不符实"
+
+* `InertKeys` 里 `root:EncounterTables` 声明"零消费者"——**内核开始读它了**，闸门 `inert.rotted` 当场报出，删掉。
+* 删掉之后暴露出它的**子键**：`Note`/`PackageId` 确实是文档（补声明）；`Weak`/`Elite` 是被读的，
+  但闸门靠"代码里出现 `EncounterTables.Weak` 这个字面量"来判定 ⇒ 把 hop 串写成字面量
+  （同时也进错误消息）。顺带修掉一个**假阳性**：我的 `sub_name == "Id"` 命中了闸门的
+  `name == "Id"` 规则，让它以为内核读了 `Characters[].Id`；字段名改成常量。
+
+### 68.5 判据与数字
+
+| 测试 | 钉住什么 |
+|---|---|
+| `the_encounter_pools_are_readable`（rd-core） | Weak 3 项、Elite = `["enc_three_sentries"]`、不存在的池是 `None` 而不是空集 |
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 648 | **649**（rd-core 576→577） |
+| 内容 | 10 怪 / 3 遭遇 / 19 动作 | **11 怪 / 4 遭遇 / 21 动作** |
+| `sts` 镜像 | 11,640 / 9,944 B | **12,632 / 10,852 B**（重钉） |
+| `.wasm` | 478,874 B | **479,842 B** |

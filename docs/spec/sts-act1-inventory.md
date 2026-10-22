@@ -244,6 +244,26 @@
 
 约定：HP 给 **A0（无进阶）** 区间；行动给 **A0** 数值，进阶改动不在 v1 范围（§11）。
 
+### 4.2 精英（第一幕 3 种，本项目先做 1 种）
+
+原作第一幕有 3 个精英：Gremlin Nob（Enrage：打出技能时 +2 力量）、Lagavulin（睡 3 回合 + Metallicize
+8）、**3 × Sentry**（Bolt 10 伤害 / Beam 9 伤害 + 洗 2 张 Dazed 进弃牌堆，各自带 Artifact 1）。
+
+选 Sentry 是因为它是三者里**唯一能用现有节点表达**的：两个招式交替就是 `Actions` 的两项循环
+（`blue_slaver` 同一写法），不需要新触发。
+
+| 项 | 值 | 来源 / 降级 |
+|---|---|---|
+| `sentry` HP | 38–42 | wiki |
+| `sentry.bolt` | 10 伤害 | wiki |
+| `sentry.beam` | 9 伤害 | wiki；⚠️ **原作还会洗 2 张 `Dazed`** —— 本内容没有该卡，也没有 Ethereal（回合末在手则消耗）的任何一行在用那个钩子 |
+| `enc_three_sentries` | 3 × sentry | §5.3 精英池 |
+| Artifact 1 | **未实现** | 内核没有 Artifact 状态，也没有"抵消一次 debuff"的触发 |
+
+> ⚠️ 结论写在这里而不是藏起来：**这个精英比原作容易**。少了 Dazed 的牌堆污染与 Artifact 的
+> debuff 免疫，它是"同一只怪、更弱的一场仗"，不是等价替换。等 `Dazed`（含 Ethereal）与 Artifact
+> 有了，这两处要补回来。
+
 ### 4.1 普通敌人（19 种实体）
 
 | `id` | name | hp | 行动（A0） | AI 权重 / 限制（A0） | 特殊机制 |

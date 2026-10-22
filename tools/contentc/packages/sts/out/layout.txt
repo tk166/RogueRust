@@ -29,12 +29,12 @@
  43  3  3   8 OBJ _obj(Detail,Id,Where)                                        : Detail:STR Id:STR Where:STR
  44  3  3   8 OBJ _obj(Detail,Item,Mark)                                       : Detail:STR Item:STR Mark:STR
  45  6  6  16 OBJ _obj(Detectable,Id,InvRef,Ours,Reference,Why)                : Detectable:STR Id:STR InvRef:STR Ours:STR Reference:STR Why:STR
- 46  2  2   8 OBJ _obj(Event,Program)                                          : Event:STR Program:TERM
- 47  4  4  12 OBJ _obj(Id,MaxNodeDepth,MaxProgramSteps,Root)                   : Id:STR(Wrap) MaxNodeDepth:INT MaxProgramSteps:INT Root:TERM
- 48  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
- 49  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
- 50  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
- 51  3  4  12 OBJ _obj(Note,PackageId,Weak)                                    : Note:STR PackageId:STR Weak:TERMLIST
+ 46  4  6  16 OBJ _obj(Elite,Note,PackageId,Weak)                              : Elite:TERMLIST Note:STR PackageId:STR Weak:TERMLIST
+ 47  2  2   8 OBJ _obj(Event,Program)                                          : Event:STR Program:TERM
+ 48  4  4  12 OBJ _obj(Id,MaxNodeDepth,MaxProgramSteps,Root)                   : Id:STR(Wrap) MaxNodeDepth:INT MaxProgramSteps:INT Root:TERM
+ 49  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
+ 50  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
+ 51  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
  52  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
  53  1  1   4 OBJ _obj(gold)                                                   : gold:INT
 

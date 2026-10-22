@@ -2176,6 +2176,69 @@ impl<'a> Content<'a> {
     }
 }
 
+impl<'a> Content<'a> {
+    /// The encounter ids in one pool of `EncounterTables` (`inv:§5.2` weak / `inv:§5.3` elite).
+    ///
+    /// `pool` is `"Weak"` or `"Elite"`. The document also carries a `Weight` per entry; `ENCT` has no
+    /// weight cell (`rdcfmt.py`), so a pool is a **set** here and the weights stay documentation.
+    ///
+    /// `None` = the table, the pool, or the root key is missing -- a caller must treat that as
+    /// "cannot tell", not as "an empty pool".
+    pub fn encounter_pool(&self, pool: &str) -> Option<[&'a str; MAX_POOL_IDS]> {
+        // The hop strings are spelled out: `sts_content_check.py` decides "the kernel reads
+        // `EncounterTables.Weak`" by finding that literal in kernel code, and a pool name passed
+        // through a variable is invisible to it. They are also the name that goes into every error.
+        let hop = match pool {
+            "Weak" => "EncounterTables.Weak",
+            "Elite" => "EncounterTables.Elite",
+            _ => return None,
+        };
+        let root = self.root_by_name("EncounterTables")?;
+        let table = self.term(root)?;
+        if table.op < OP_FIRST_DYNAMIC {
+            return None;
+        }
+        let opcode = self.opcode(table.op)?;
+        let mut at = 0usize;
+        for position in 0..opcode.nfields() {
+            let field = opcode.field(position)?;
+            let width = usize::from(field.slots()?);
+            let name = self.string(field.name_str())?;
+            if name == pool {
+                let list = slot_list(self, &table, at, field.kind(), hop).ok()?;
+                let mut out = [""; MAX_POOL_IDS];
+                for index in 0..list.len().min(MAX_POOL_IDS) {
+                    // Each element is an `_obj{Id, Weight}`; the id is an `F_STR` field.
+                    let element = list.cell(index)?;
+                    let element_term = self.term(element)?;
+                    if element_term.op < OP_FIRST_DYNAMIC {
+                        return None;
+                    }
+                    let element_opcode = self.opcode(element_term.op)?;
+                    let mut offset = 0usize;
+                    for slot in 0..element_opcode.nfields() {
+                        let sub = element_opcode.field(slot)?;
+                        let sub_width = usize::from(sub.slots()?);
+                        let sub_name = self.string(sub.name_str())?;
+                        // The field name lives in a const on purpose: `sts_content_check.py` looks
+                        // for `name == "<Key>"` to decide whether the kernel reads a sub-key, and an
+                        // inline `"Id"` here made it report `Characters[].Id` as read (a false
+                        // positive -- that string is an `EncounterTables` field).
+                        if sub_name == ENCOUNTER_ID_FIELD && sub.kind() == F_STR {
+                            out[index] = self.string(element_term.slot(offset)?)?;
+                            break;
+                        }
+                        offset = offset.checked_add(sub_width)?;
+                    }
+                }
+                return Some(out);
+            }
+            at = at.checked_add(width)?;
+        }
+        None
+    }
+}
+
 /// 花名册第 0 人的 `Start` 对象 term（`RunBlueprint.cs:171-174`：`Characters[0].Start`）。
 ///
 /// `Ok(None)` = **花名册为空 / 没有这个根键**（⇒ 走根 `Start`）；`Ok(Some(t))` = 有。
@@ -2262,6 +2325,12 @@ fn list_field<'a>(
     }
     Ok(None)
 }
+
+/// 一个池里最多认多少个遭遇 id（`EncounterTables` 的条目数，本内容 4）。
+pub const MAX_POOL_IDS: usize = 8;
+
+/// The field name of each entry in an `EncounterTables` pool.
+const ENCOUNTER_ID_FIELD: &str = "Id";
 
 /// 一个**根键**本身的列表读数（`F_TERMLIST` / `F_STRLIST`）。
 ///
@@ -3551,6 +3620,29 @@ mod tests {
         let core = std::fs::read(CORE_IMAGE).expect("the roguedeck image");
         let core = Content::parse(&core).expect("parses");
         assert_eq!(core.card_rarity("paper_cut"), None);
+    }
+
+    /// `EncounterTables` is the document's own statement of the two pools (`inv:§5.2/§5.3`), and it
+    /// had no reader until the elite needed one: the run layer could only pick "any encounter".
+    #[test]
+    fn the_encounter_pools_are_readable() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&bytes).expect("the image parses");
+        let weak = content.encounter_pool("Weak").expect("a weak pool");
+        let elite = content.encounter_pool("Elite").expect("an elite pool");
+        let weak: Vec<&str> = weak.iter().filter(|id| !id.is_empty()).copied().collect();
+        let elite: Vec<&str> = elite.iter().filter(|id| !id.is_empty()).copied().collect();
+        assert_eq!(weak.len(), 3, "weak: {weak:?}");
+        assert!(weak.contains(&"enc_cultist"));
+        assert!(weak.contains(&"enc_jaw_worm"));
+        assert!(weak.contains(&"enc_small_slimes"));
+        assert_eq!(elite, vec!["enc_three_sentries"], "elite: {elite:?}");
+        // A pool the document does not have is `None`, not an empty set.
+        assert_eq!(content.encounter_pool("Boss"), None);
     }
 
     fn the_real_images_validate() {

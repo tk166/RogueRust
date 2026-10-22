@@ -75,8 +75,10 @@ CORE_PATH = os.path.join(PKG_DIR, "out", "content.sts.core.rdcf")
 
 # inv:§1 -- the counts this milestone promises (the task's quantity gate).
 INV_COUNTS = {
-    "monsters": 10,      # inv:§3.3 tier A = 10 of 25 entities
-    "encounters": 3,     # inv:§5.2 weak pool, the 3 that use only tier-A enemies
+    # 10 tier-A monsters + the sentry, which is the first **elite** authored (inv:§4.2).
+    "monsters": 11,
+    # 3 weak-pool encounters + 1 elite encounter (`enc_three_sentries`).
+    "encounters": 4,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     "statuses": 5,       # inv:§10 the ones this subset actually needs
 }
@@ -128,6 +130,9 @@ INV_MONSTERS = [
     # inv:§0 flaw 4 -- the game files say 21-25, the wiki infobox says 23-25 and
     # its own Ascension value (22-26) is lower than the base one.  We take 21-25.
     ("gremlin_wizard", 21, 25, ["gremlin_wizard.charging"]),
+    # inv:§4.2 -- the first elite. **Downgraded on purpose and in writing**: no `Dazed` card
+    # (so Beam is 9 damage and nothing else) and no `Artifact 1` (the kernel has no such status).
+    ("sentry", 38, 42, ["sentry.bolt", "sentry.beam"]),
 ]
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
@@ -155,6 +160,8 @@ INV_ACTIONS = {
     "cultist.incantation": ("Buff", [("status", "ritual", 3, "source")]),
     "cultist.dark_strike": ("Attack", [("damage", 6, "event")]),
     "gremlin_wizard.charging": ("Special", []),
+    "sentry.bolt": ("Attack", [("damage", 10, "event")]),
+    "sentry.beam": ("Attack", [("damage", 9, "event")]),
     "gremlin_wizard.ultimate_blast": ("Attack", [
         ("damage", 25, "event"),
         # the AI turn counter is reset by the blast itself; it is the content-side
@@ -172,6 +179,12 @@ INV_WEAK_POOL = {
     "enc_small_slimes": ["acid_slime_m", "spike_slime_s"],
 }
 INV_WEAK_WEIGHT = 25   # inv:§5.2 每项 25%
+
+# inv:§5.3 -- the elite pool. One entry, so there is no weight question yet; `EncounterTables.Elite`
+# in the document carries it, and this is what the check compares that against.
+INV_ELITE_POOL = {
+    "enc_three_sentries": ["sentry", "sentry", "sentry"],
+}
 
 # inv:§10 -- the 5 statuses, with the modifier the damage/block pipeline needs.
 # `None` = the content cannot express it today (see Notes.KernelGapsFound).
@@ -378,11 +391,13 @@ def check_quantities(doc):
     inv_ids = sorted(m[0] for m in INV_MONSTERS)
     if roster_ids != inv_ids:
         fail("roster.ids", "roster %s != inv %s" % (roster_ids, inv_ids))
+    # Both pools: the weak one (`inv:§5.2`) and the elite one (`inv:§5.3`).
+    declared = sorted(set(INV_WEAK_POOL) | set(INV_ELITE_POOL))
     if sorted(doc.get("Encounters") and [e["Id"]["Value"] for e in doc["Encounters"]]) \
-            != sorted(INV_WEAK_POOL):
+            != declared:
         fail("encounters.ids", "encounter ids %s != inv %s"
              % (sorted(e["Id"]["Value"] for e in doc["Encounters"]),
-                sorted(INV_WEAK_POOL)))
+                declared))
     if sorted(s["Id"] for s in doc.get("Statuses") or []) != sorted(INV_STATUSES):
         fail("statuses.ids", "%s != %s"
              % (sorted(s["Id"] for s in doc["Statuses"] or []), sorted(INV_STATUSES)))
@@ -542,12 +557,14 @@ def check_relations(doc):
     # every encounter's inline enemy record must equal the roster's, field by field
     for enc in doc.get("Encounters") or []:
         eid = enc["Id"]["Value"]
-        if eid not in INV_WEAK_POOL:
-            fail("encounter." + eid, "not in the inventory's weak pool (inv:§5.2)")
+        pool = INV_WEAK_POOL if eid in INV_WEAK_POOL else INV_ELITE_POOL
+        if eid not in pool:
+            fail("encounter." + eid,
+                 "not in the inventory's weak (inv:§5.2) or elite (inv:§5.3) pool")
         listed = [e["Id"] for e in enc.get("Enemies") or []]
-        if listed != INV_WEAK_POOL.get(eid):
-            fail("encounter." + eid, "enemies %s, inv:§5.2 says %s"
-                 % (listed, INV_WEAK_POOL.get(eid)))
+        if listed != pool.get(eid):
+            fail("encounter." + eid, "enemies %s, the inventory says %s"
+                 % (listed, pool.get(eid)))
         # `CardsDrawnPerTurn` null = the per-turn draw default, which inv:§2 says
         # is 5.  Writing a number here would be a second place the draw count lives.
         if enc.get("CardsDrawnPerTurn") is not None:
@@ -603,6 +620,13 @@ def check_weak_pool_table(doc):
         fail("EncounterTables.Weak", "%s != %s (each 25%%, inv:§5.2)"
              % (got, {eid: INV_WEAK_WEIGHT for eid in INV_WEAK_POOL}))
     ok("weak pool", "%d entries x %d%%" % (len(table), INV_WEAK_WEIGHT))
+    elite = (doc.get("EncounterTables") or {}).get("Elite")
+    if elite is None:
+        fail("encounter-tables", "EncounterTables.Elite is missing (inv:§5.3)")
+    if sorted(e["Id"] for e in elite) != sorted(INV_ELITE_POOL):
+        fail("encounter-tables", "Elite %s != inv %s"
+             % (sorted(e["Id"] for e in elite), sorted(INV_ELITE_POOL)))
+    ok("elite pool", "%d entry" % len(elite))
 
 
 # =============================================================================
