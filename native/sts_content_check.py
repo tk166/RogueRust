@@ -75,8 +75,9 @@ CORE_PATH = os.path.join(PKG_DIR, "out", "content.sts.core.rdcf")
 
 # inv:§1 -- the counts this milestone promises (the task's quantity gate).
 INV_COUNTS = {
-    # 10 tier-A monsters + the sentry, which is the first **elite** authored (inv:§4.2).
-    "monsters": 11,
+    # 10 tier-A monsters + the three sentry **rows** (one per instance: a combatant id must be
+    # unique, and the encounter record has no instance number -- see inv:§4.2).
+    "monsters": 13,
     # 3 weak-pool encounters + 1 elite encounter (`enc_three_sentries`).
     "encounters": 4,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
@@ -130,9 +131,12 @@ INV_MONSTERS = [
     # inv:§0 flaw 4 -- the game files say 21-25, the wiki infobox says 23-25 and
     # its own Ascension value (22-26) is lower than the base one.  We take 21-25.
     ("gremlin_wizard", 21, 25, ["gremlin_wizard.charging"]),
-    # inv:§4.2 -- the first elite. **Downgraded on purpose and in writing**: no `Dazed` card
-    # (so Beam is 9 damage and nothing else) and no `Artifact 1` (the kernel has no such status).
-    ("sentry", 38, 42, ["sentry.bolt", "sentry.beam"]),
+    # inv:§4.2 -- the first elite, one row per instance. **Downgraded on purpose and in writing**:
+    # no `Dazed` card (so Beam is 9 damage and nothing else) and no `Artifact 1` (the kernel has no
+    # such status).
+    ("sentry_1", 38, 42, ["sentry.bolt", "sentry.beam"]),
+    ("sentry_2", 38, 42, ["sentry.bolt", "sentry.beam"]),
+    ("sentry_3", 38, 42, ["sentry.bolt", "sentry.beam"]),
 ]
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
@@ -183,7 +187,7 @@ INV_WEAK_WEIGHT = 25   # inv:§5.2 每项 25%
 # inv:§5.3 -- the elite pool. One entry, so there is no weight question yet; `EncounterTables.Elite`
 # in the document carries it, and this is what the check compares that against.
 INV_ELITE_POOL = {
-    "enc_three_sentries": ["sentry", "sentry", "sentry"],
+    "enc_three_sentries": ["sentry_1", "sentry_2", "sentry_3"],
 }
 
 # inv:§10 -- the 5 statuses, with the modifier the damage/block pipeline needs.

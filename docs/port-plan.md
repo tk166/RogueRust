@@ -5164,3 +5164,61 @@ entity_row!(
 | 内容 | 10 怪 / 3 遭遇 / 19 动作 | **11 怪 / 4 遭遇 / 21 动作** |
 | `sts` 镜像 | 11,640 / 9,944 B | **12,632 / 10,852 B**（重钉） |
 | `.wasm` | 478,874 B | **479,842 B** |
+---
+
+## 69. 第 59 轮：精英真的打得起来了 —— 那个"空错误串"是**我的测试**，不是内核
+
+> 用户："先修复然后继续完善游戏内容。" 修复只花了一次诊断，因为错误串从来不是空的。
+
+### 69.1 真因：`DuplicateCombatant` —— 三只 Sentry 共用一个战斗员 id
+
+诊断测试（`#[ignore]` 的 `dbg_elite`，逐步打印 kind / begin / fight_begin / 错误串）第一次跑就给出：
+
+```
+on elite: kind=2 resolved=0
+begin_node=0 err="<empty, len=0>"
+fight_begin=-2 err="build_fight_from_content: Capacity(DuplicateCombatant)" len=54
+```
+
+**错误串一直是有的**（54 字节）。上一轮我看到"空"，是因为我那个 `last_refusal()` 辅助函数当时
+写的是 `String::from_utf8_lossy(&vec![0u8; 0])` —— **一个永远返回空串的表达式**。
+⇒ 教训归到这一条：**"闸门/测试报出来的现象"也可能是测试自己的 bug**，而这正是上一轮我在
+`readText`（指针与下标互换）上踩过的同一个坑：**观测工具出错时，它给你的是"另一个合法值"**。
+
+真因在内容侧：三只 Sentry 的 `Id` 都是 `sentry`，而内核要求战斗员 id 唯一。
+StS 里是"一个定义 + 三个实例"，本内容的遭遇记录只带 `Id`、**没有实例号** ⇒ 三个实例只能写成
+三行（`sentry_1/2/3`，`NameKey` 都是 `Sentry`）。这是**模型差异**，写进清单 §4.2。
+
+### 69.2 修复的三处 + 一处过期判据
+
+1. **rd-run 一行**：`NodeKind::Elite => Pending::None`（精英就是一场仗，池与档位都在调用方）。
+2. **rd-wasm 三段**：`fight_begin` 接受 kind 2；`pool_name` 按 kind 选 `Elite`/`Weak`；
+   `RunSession.elite_fight` 记住"这场是精英"，`fight_end` 据此用 `FightKind::Elite`
+   （`inv:§5`：金币 **25–35**、稀有度 10/40/50）。
+3. **内容**：`sentry` → `sentry_1/2/3` 三行 + 遭遇三只；闸门的 `INV_MONSTERS`/`INV_ELITE_POOL` 跟上
+   （怪物数 11 → 13）。
+4. **过期判据**：`the_nodes_m1_does_not_settle_are_loud` 还在断言"精英被拒绝"，改成只断言 `Unknown`。
+
+### 69.3 浏览器实测
+
+地图上走到精英节点 ⇒ 面板写 **"精英节点（3 × Sentry）"** ⇒ 开始战斗 ⇒ 敌人面板三只
+`sentry_1 / sentry_2 / sentry_3`，各 38/38、`Attack 10`，走位如常。
+（截图见本轮记录：floor 7、hp 19/80、gold 43，说明前面的普通战斗与奖励都照常结算。）
+
+### 69.4 判据
+
+| 测试 | 钉住什么 |
+|---|---|
+| `an_elite_node_fights_the_sentries_and_pays_the_elite_tier`（wasm） | 走到精英 ⇒ `begin_node` 收下 ⇒ **`fight_begin` 起得来** ⇒ **3 只、名字含 sentry** ⇒ 打赢则金币落在 **25–35** |
+| `the_encounter_pools_are_readable`（rd-core） | Weak 3 项 / Elite = `["enc_three_sentries"]` / 不存在的池是 `None` |
+| `the_merchants_prices_follow_the_rarity_bands` | 上一轮的价格分档仍然成立 |
+
+### 69.5 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 649 | **650**（rd-wasm 20 → 21） |
+| 内容 | 11 怪 / 4 遭遇 | **13 怪 / 4 遭遇**（sentry ×3） |
+| `sts` 镜像 | 12,632 / 10,852 B | **13,384 / 11,592 B**（重钉） |
+| `.wasm` | 479,842 B | **482,979 B** |

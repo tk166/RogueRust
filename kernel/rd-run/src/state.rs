@@ -765,15 +765,11 @@ impl RunState {
                 self.stock_shop(card_pool, relic_pool)?;
                 Pending::Shop
             }
-            // `Elite` and `Unknown` are "not in M1" (`sts-act1-plan.md` §4), so reaching one is loud
-            // instead of a silent walk-past.
-            //
-            // ⚠️ The **content** for an elite now exists (`enc_three_sentries`, `inv:§4.2`) and
-            // `Content::encounter_pool("Elite")` reads the pool, but the wiring is not done: with the
-            // `NodeKind::Elite => Pending::None` arm in place, `rd_run_fight_begin` returns `-2` with
-            // an **empty** error buffer on an elite node, and I could not find why in this round. See
-            // `docs/port-plan.md` §68.3 for what was checked. Until that is understood, an elite node
-            // refuses here rather than offering a fight that cannot start.
+            // An elite is a fight like any other: what differs is the pool it draws from and what
+            // it pays (`inv:§5.3`), and both live in the caller -- nothing to settle here.
+            NodeKind::Elite => Pending::None,
+            // `Unknown` (`?`) is still "not in M1" -- the event system does not exist, so reaching
+            // one is loud instead of a silent walk-past.
             other => return Err(RunError::NodeNotSettleable(other as u8)),
         };
         Ok(kind)
@@ -1606,7 +1602,8 @@ mod tests {
     fn the_nodes_m1_does_not_settle_are_loud() {
         // `Elite` and `Unknown` are named as "not in M1" (`sts-act1-plan.md` §4). Walking onto one
         // must be an error, not a silent no-op -- that is the promise `env-abi.md` §11.5 makes.
-        for kind in [NodeKind::Elite, NodeKind::Unknown] {
+        // Elite settles as a fight since the sentries exist (inv:§4.2); only Unknown is left.
+        for kind in [NodeKind::Unknown] {
             let mut run = ironclad();
             if !walk_to(&mut run, kind) {
                 continue; // this seed's map has none of that kind

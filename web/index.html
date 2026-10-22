@@ -558,15 +558,17 @@ function renderNode() {
   const panel = document.getElementById("nodePanel");
   const pending = ex.rd_run_pending();
   const kind = ex.rd_run_node_kind();
-  if (pending === 0 && kind === 1) {
+  // 1 = combat, 2 = elite (`run-layer.md` §7.2). Both are fights; the elite draws from the elite
+  // pool and pays the elite tier, and neither is the page's business -- the kernel decides.
+  if (pending === 0 && (kind === 1 || kind === 2)) {
     if (ex.rd_run_node_resolved() === 1) {
       // The node paid already. Offering the button again is what let a fight be farmed; the panel
       // says so instead.
       panel.innerHTML = `<span class="dim">这个节点已结算 · 点亮的节点往前走</span>`;
       return;
     }
-    // A fight: the run built it, the battle view shows it.
-    panel.innerHTML = `<span class="dim">战斗节点</span> ` +
+    const label = kind === 2 ? "精英节点（3 × Sentry）" : "战斗节点";
+    panel.innerHTML = `<span class="dim">${label}</span> ` +
       `<button class="act" id="fightBtn">开始战斗</button>`;
     document.getElementById("fightBtn").onclick = beginFight;
     return;

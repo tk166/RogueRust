@@ -2026,7 +2026,7 @@
       },
       "Enemies": [
         {
-          "Id": "sentry",
+          "Id": "sentry_1",
           "MaxHealth": 38,
           "Actions": [
             {
@@ -2042,7 +2042,7 @@
           "DisplayName": "Sentry"
         },
         {
-          "Id": "sentry",
+          "Id": "sentry_2",
           "MaxHealth": 38,
           "Actions": [
             {
@@ -2058,7 +2058,7 @@
           "DisplayName": "Sentry"
         },
         {
-          "Id": "sentry",
+          "Id": "sentry_3",
           "MaxHealth": 38,
           "Actions": [
             {
@@ -2319,7 +2319,7 @@
       "AiNote": "先充能 2 回合→Blast→之后每充能 3 回合一次 Blast（inv:§4.1）。HP 采信游戏文件的 21-25（inv:§0 瑕疵 4）。⚠️ 单条件/常量阈值 ⇒ 首次 Blast 落在第 4 回合（降级见 Notes.Deviations/gremlin-wizard-phase）"
     },
     {
-      "Id": "sentry",
+      "Id": "sentry_1",
       "NameKey": "Sentry",
       "HpMin": 38,
       "HpMax": 42,
@@ -2336,7 +2336,47 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.2",
-      "AiNote": "Bolt/Beam 交替（两招循环，同 blue_slaver 的写法）。⚠️ 两处降级：① Beam 少了「shuffle 2 Dazed」——本内容没有 dazed 卡，而 Ethereal（回合末在手则消耗）虽有计划钩子但没有任何行用过；② 少了 Artifact 1（内核没有 Artifact 状态，也没有「抵消一次 debuff」的触发）。⇒ 这个精英比原作**容易**，不是等价替换。"
+      "AiNote": "3 只同名 Sentry 的第 1 只。内核要求战斗员 id 唯一（`Capacity(DuplicateCombatant)`），而本内容的遭遇记录只有 `Id`、没有实例号 ⇒ 三个实例只能写成三行（`NameKey` 都是 Sentry，玩家看到的三只没有区别）。⚠️ 两处降级见 §4.2：Beam 少 Dazed、缺 Artifact。"
+    },
+    {
+      "Id": "sentry_2",
+      "NameKey": "Sentry",
+      "HpMin": 38,
+      "HpMax": 42,
+      "MaxHealth": 38,
+      "Actions": [
+        {
+          "value": "sentry.bolt"
+        },
+        {
+          "value": "sentry.beam"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "A",
+      "InvRef": "inv:§4.2",
+      "AiNote": "3 只同名 Sentry 的第 2 只。内核要求战斗员 id 唯一（`Capacity(DuplicateCombatant)`），而本内容的遭遇记录只有 `Id`、没有实例号 ⇒ 三个实例只能写成三行（`NameKey` 都是 Sentry，玩家看到的三只没有区别）。⚠️ 两处降级见 §4.2：Beam 少 Dazed、缺 Artifact。"
+    },
+    {
+      "Id": "sentry_3",
+      "NameKey": "Sentry",
+      "HpMin": 38,
+      "HpMax": 42,
+      "MaxHealth": 38,
+      "Actions": [
+        {
+          "value": "sentry.bolt"
+        },
+        {
+          "value": "sentry.beam"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "A",
+      "InvRef": "inv:§4.2",
+      "AiNote": "3 只同名 Sentry 的第 3 只。内核要求战斗员 id 唯一（`Capacity(DuplicateCombatant)`），而本内容的遭遇记录只有 `Id`、没有实例号 ⇒ 三个实例只能写成三行（`NameKey` 都是 Sentry，玩家看到的三只没有区别）。⚠️ 两处降级见 §4.2：Beam 少 Dazed、缺 Artifact。"
     }
   ],
   "EncounterTables": {

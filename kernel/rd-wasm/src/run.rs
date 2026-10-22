@@ -39,6 +39,9 @@ struct RunSession {
     state: Box<RunState>,
     /// Human-readable reason for the last non-`Ok` return.
     error: String,
+    /// Was this fight started from an **elite** node? `fight_end` needs it for the reward tier
+    /// (`inv:§5`: elite pays 25–35 gold, rare 10/40/50) and the cursor no longer says so.
+    elite_fight: bool,
 }
 
 static mut RUN: Option<RunSession> = None;
@@ -352,6 +355,7 @@ pub extern "C" fn rd_run_start(seed: i32) -> i32 {
     *run_slot() = Some(RunSession {
         state,
         error: String::new(),
+        elite_fight: false,
     });
     0
 }
@@ -1075,9 +1079,8 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
                 .map(|node| node.kind as i32)
         })
         .unwrap_or(-1);
-    // 1 = `NodeKind::Combat` (`run-layer.md` §7.2). An elite is refused upstream (`begin_node`);
-    // see `docs/port-plan.md` §68.3 for why its wiring is not finished.
-    if kind != 1 {
+    // 1 = `NodeKind::Combat`, 2 = `NodeKind::Elite` (`run-layer.md` §7.2).
+    if kind != 1 && kind != 2 {
         let message = std::format!("当前节点不是战斗（kind {kind}）");
         return fail(session, &message);
     }
@@ -1094,9 +1097,10 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // The document says which pool a fight comes from (`inv:§5.2` weak / `inv:§5.3` elite). Until
     // this existed the only rule was "any encounter in the image", which would have sent an elite
     // node into a slime fight.
-    // The weak pool, out of the document (`inv:§5.2`). Before this the only rule was "any encounter
-    // in the image", which is not what the inventory says.
-    let pool_name = "Weak";
+    // The pool follows the node (`inv:§5.2` weak / `inv:§5.3` elite) -- before this the only rule
+    // was "any encounter in the image", which would send an elite into a slime fight.
+    session.elite_fight = kind == 2;
+    let pool_name = if kind == 2 { "Elite" } else { "Weak" };
     let encounters: Vec<&'static str> = match content.encounter_pool(pool_name) {
         Some(ids) => ids.iter().filter(|id| !id.is_empty()).copied().collect(),
         None => {
@@ -1170,6 +1174,8 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
         return -1;
     };
     let hero_hp = crate::combat_hero_health().unwrap_or(0);
+    // Captured before the run is borrowed mutably below.
+    let elite_fight = run_slot().as_ref().is_some_and(|s| s.elite_fight);
     crate::take_session();
     let Some(session) = run_slot().as_mut() else {
         return -1;
@@ -1177,8 +1183,12 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     // The fight is over: the run's health becomes the hero's.
     let delta = hero_hp - session.state.health();
     session.state.adjust_health(delta);
-    // `inv:§5`: a normal fight. The elite tier is wired but unreachable until §68.3 is understood.
-    let fight_kind = rd_run::state::FightKind::Normal;
+    // `inv:§5`: the tier follows what was fought, and it moves gold and rarity together.
+    let fight_kind = if elite_fight {
+        rd_run::state::FightKind::Elite
+    } else {
+        rd_run::state::FightKind::Normal
+    };
     if result == 1 {
         // `Burning Blood` and friends (`inv:§2`), now with a call site.
         if let Err(e) = session.state.end_of_combat() {
@@ -1333,8 +1343,9 @@ mod tests {
     // thread); the honest answer is that this crate's tests are not parallel-safe, so the gate runs
     // them with `--test-threads=1` (see `tools/acceptance.ps1`) and this module says so.
     use crate::{
-        rd_env_action_count, rd_env_action_kind, rd_env_done, rd_env_pile_card_title_into,
-        rd_env_pile_card_title_len, rd_env_pile_len, rd_env_result, rd_env_step,
+        rd_env_action_count, rd_env_action_kind, rd_env_done, rd_env_enemy_name_into,
+        rd_env_enemy_name_len, rd_env_pile_card_title_into, rd_env_pile_card_title_len,
+        rd_env_pile_len, rd_env_result, rd_env_step,
     };
     use rd_run::map::{RunMap, NODES_PER_ROW};
     use rd_run::state::{MAX_RUN_POTIONS, MAX_RUN_RELICS};
@@ -1739,6 +1750,128 @@ mod tests {
 
         // And skipping is a way out of the screen, not a stuck state.
         assert_eq!(rd_run_skip_reward(), -2, "there is no screen to skip");
+    }
+
+    /// The kind of a node, read off the map.
+    fn node_kind(node: i32) -> i32 {
+        let Some(session) = run_slot().as_ref() else {
+            return -1;
+        };
+        session
+            .state
+            .map()
+            .locate(node as u8)
+            .and_then(|(row, local)| {
+                session
+                    .state
+                    .map()
+                    .row(row)
+                    .and_then(|line| line.node(local))
+                    .map(|node| node.kind as i32)
+            })
+            .unwrap_or(-1)
+    }
+
+    /// An **elite** node fights the elite pool and pays the elite tier.
+    ///
+    /// `inv:§5.3` + `inv:§5`: 25–35 gold instead of 10–20. Two things had to be true for this to
+    /// start at all, and both were wrong before: the node kind was refused, and the three sentry
+    /// instances shared one combatant id (`Capacity(DuplicateCombatant)`).
+    #[test]
+    fn an_elite_node_fights_the_sentries_and_pays_the_elite_tier() {
+        reset(7);
+        let mut reached = false;
+        for _ in 0..80 {
+            let mut choice = -1;
+            for action in 0..rd_run_action_count() {
+                let node = rd_run_action_arg(action, 0);
+                if node >= 0 && node_kind(node) == 2 {
+                    choice = action;
+                    break;
+                }
+            }
+            if choice >= 0 {
+                assert_eq!(rd_run_step(choice), 0);
+                reached = true;
+                break;
+            }
+            // Advance through the earlier floors: fight what fights, settle what settles.
+            assert_eq!(rd_run_step(0), 0, "walk");
+            let kind = rd_run_node_kind();
+            let began = rd_run_begin_node();
+            if began == 0 && kind == 1 {
+                if rd_run_fight_begin() == 0 {
+                    let _ = rd_run_fight_end();
+                }
+            }
+        }
+        assert!(reached, "no elite reachable from seed 7 within 80 steps");
+
+        assert_eq!(rd_run_node_kind(), 2, "standing on an elite");
+        assert_eq!(rd_run_begin_node(), 0, "an elite settles as a fight");
+        assert_eq!(
+            rd_run_fight_begin(),
+            0,
+            "the elite fight must start; the kernel said {:?}",
+            run_error_text()
+        );
+
+        // Three sentries, not the weak pool's slimes.
+        let mut names = Vec::new();
+        let mut index = 0;
+        while rd_env_enemy_name_len(index) >= 0 {
+            let n = rd_env_enemy_name_len(index);
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_env_enemy_name_into(index, buffer.as_mut_ptr()) };
+            names.push(String::from_utf8(buffer).unwrap_or_default());
+            index += 1;
+        }
+        assert_eq!(names.len(), 3, "3 sentries; got {names:?}");
+        assert!(
+            names.iter().all(|name| name.to_lowercase().contains("sentry")),
+            "the elite fought {names:?}"
+        );
+
+        // Play it out, then check the tier: `inv:§5` pays an elite 25-35 gold.
+        let mut guard = 0;
+        while rd_env_done() == 0 && guard < 600 {
+            let mut action = -1;
+            for i in 0..rd_env_action_count() {
+                if rd_env_action_kind(i) == 0 {
+                    action = i;
+                    break;
+                }
+            }
+            if action < 0 {
+                action = rd_env_action_index_of_end_turn();
+            }
+            if action < 0 {
+                break;
+            }
+            assert_eq!(rd_env_step(action), 0);
+            guard += 1;
+        }
+        let result = rd_run_fight_end();
+        if result == 1 {
+            let gold = rd_run_reward_gold();
+            assert!(
+                (25..=35).contains(&gold),
+                "an elite paid {gold} gold, which is not inv:§5's elite band"
+            );
+        }
+    }
+
+    /// The kernel's last refusal as text -- `""` means "no refusal", and a length of 0 with a
+    /// negative return is itself a bug worth seeing.
+    fn run_error_text() -> String {
+        let n = rd_run_last_error_len();
+        if n <= 0 {
+            return format!("<no text, len={n}>");
+        }
+        let ptr = crate::rd_env_scratch_buf();
+        rd_run_last_error_into(ptr);
+        let buffer = unsafe { std::slice::from_raw_parts(ptr as *const u8, n as usize) };
+        String::from_utf8_lossy(buffer).to_string()
     }
 
     /// The three pile exports read the fight's piles, and the observation only carries counts.
