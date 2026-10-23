@@ -289,6 +289,7 @@
 
 <script src="./ui_render.js"></script>
 <script src="./map_render.js"></script>
+<script src="./ui_panels.js"></script>
 <script>
 "use strict";
 
@@ -618,205 +619,178 @@ function renderMap(verdict) {
   document.getElementById("msg").innerHTML = parts.join(" · ");
 }
 
-/// What the node under the cursor needs, as buttons. Every button is one kernel export.
+/// The run, as **plain data**. Every field comes from one kernel export; the panel's decisions all
+/// happen in `rd_panels.js` against this, which is why that file can be tested without a browser.
+function runSnapshot() {
+  const pending = ex.rd_run_pending();
+  const snapshot = {
+    mode,
+    runOver,
+    runOverWhy,
+    cleared: !runOver && ex.rd_run_boss_beaten() === 1,
+    pending,
+    kind: ex.rd_run_node_kind(),
+    resolved: ex.rd_run_node_resolved() === 1,
+    actionCount: ex.rd_run_action_count(),
+    floor: ex.rd_run_observe(0),
+    hp: ex.rd_run_observe(2),
+    hpMax: ex.rd_run_observe(3),
+    gold: ex.rd_run_observe(4),
+    deckCount: ex.rd_run_deck_count(),
+    relicCount: ex.rd_run_observe(6),
+    bossName: "Slime Boss",
+    offers: [],
+    shopCards: [],
+    shopRelics: [],
+    rewardCards: [],
+    choices: [],
+    rewardPotion: null,
+    restHeal: 0,
+    removePrice: 0,
+    rewardGold: 0,
+    eventText: "",
+  };
+  switch (pending) {
+    case 6:
+      for (let slot = 0; slot < 2; slot++) {
+        snapshot.offers.push({
+          name: offerName(startOffer(slot)),
+          gain: ex.rd_run_start_gain(slot),
+          gainAmount: ex.rd_run_start_gain_amount(slot),
+          cost: ex.rd_run_start_cost(slot),
+          costAmount: ex.rd_run_start_cost_amount(slot),
+        });
+      }
+      break;
+    case 1:
+      snapshot.restHeal = Math.floor((snapshot.hpMax * 30) / 100);
+      break;
+    case 2:
+      snapshot.removePrice = ex.rd_run_remove_price();
+      for (let slot = 0; slot < ex.rd_run_shop_card_count(); slot++) {
+        snapshot.shopCards.push({
+          id: shopCardId(slot),
+          // No title export exists for shop stock; `describe` falls back to the id.
+          title: "",
+          chip: kindChip(runKind(2, slot)),
+          price: ex.rd_run_shop_card_price(slot),
+        });
+      }
+      for (let slot = 0; slot < ex.rd_run_shop_relic_count(); slot++) {
+        snapshot.shopRelics.push({
+          id: shopRelicId(slot),
+          title: "",
+          price: ex.rd_run_shop_relic_price(slot),
+        });
+      }
+      break;
+    case 4:
+      snapshot.rewardGold = ex.rd_run_reward_gold();
+      for (let slot = 0; slot < ex.rd_run_reward_card_count(); slot++) {
+        snapshot.rewardCards.push({
+          id: rewardId(slot),
+          title: rewardTitle(slot),
+          chip: kindChip(runKind(1, slot)),
+        });
+      }
+      if (ex.rd_run_reward_potion_len() > 0) {
+        snapshot.rewardPotion = readText(
+          () => ex.rd_run_reward_potion_len(),
+          (ptr) => ex.rd_run_reward_potion_into(ptr)
+        );
+      }
+      break;
+    case 5:
+      snapshot.eventText = eventText();
+      for (let slot = 0; slot < 2; slot++) {
+        snapshot.choices.push({
+          label: eventLabel(slot),
+          effect: ex.rd_run_event_effect(slot),
+          amount: ex.rd_run_event_amount(slot),
+        });
+      }
+      break;
+    default:
+      break;
+  }
+  return snapshot;
+}
+
+/// One kernel call per action kind -- **the only place** a button's meaning lives. The description
+/// says `{kind, slot}`; adding a state never means touching this file's HTML again.
+const PANEL_ACTIONS = {
+  restart: () => startRun(),
+  next_seed: () => {
+    runSeed += 1;
+    startRun();
+  },
+  choose_start: (a) => act(() => ex.rd_run_choose_start(a.slot), "祝福"),
+  begin_fight: () => beginFight(),
+  rest: () => act(() => ex.rd_run_rest(), "休息"),
+  smith: () =>
+    showDeckPicker("打铁：选一张升级", (index) => act(() => ex.rd_run_smith(index), "打铁")),
+  leave: () => act(() => ex.rd_run_leave(), "离开"),
+  open_chest: () => act(() => ex.rd_run_open_chest(), "开箱"),
+  buy_card: (a) => act(() => ex.rd_run_buy_card(a.slot), "买卡"),
+  buy_relic: (a) => act(() => ex.rd_run_buy_relic(a.slot), "买遗物"),
+  remove_card: () =>
+    showDeckPicker("删卡：选一张移除", (index) => act(() => ex.rd_run_remove_card(index), "删卡")),
+  take_card: (a) => act(() => ex.rd_run_take_card(a.slot), "拿牌"),
+  take_potion: () => act(() => ex.rd_run_take_potion(), "拿药水"),
+  skip_reward: () => act(() => ex.rd_run_skip_reward(), "跳过"),
+  event_choice: (a) => act(() => ex.rd_run_choose(a.slot), "选择"),
+  end_act: () => {
+    runOver = true;
+    runOverWhy = "走到第一幕尽头";
+    renderNode();
+  },
+};
+
+/// What the node under the cursor needs. **`RD_PANELS.describe` decides; this only draws and wires.**
+/// `#nodePanel` has exactly one writer, which is the rule that broke twice (`port-plan.md` §89, §90).
 function renderNode() {
   const panel = document.getElementById("nodePanel");
-  const pending = ex.rd_run_pending();
-  const kind = ex.rd_run_node_kind();
-  if (!runOver && ex.rd_run_boss_beaten() === 1) {
-    // `inv:§7.2`: the boss is the end of the act, so this is the one **win** state there is.
-    panel.innerHTML =
-      `<div class="stats good">第一幕通关 · Slime Boss 已击败</div>` +
-      `<div class="stats">floor <b>${ex.rd_run_observe(0)}</b> · ` +
-      `hp <b>${ex.rd_run_observe(2)}/${ex.rd_run_observe(3)}</b> · ` +
-      `gold <b>${ex.rd_run_observe(4)}</b> · deck <b>${ex.rd_run_deck_count()}</b> · ` +
-      `relics <b>${ex.rd_run_observe(6)}</b></div>` +
-      `<div class="row" style="margin-top:8px">` +
-      `<button class="act" id="againBtn">再打一局（同一 seed）</button>` +
-      `<button class="act" id="nextSeedBtn">换一个 seed</button></div>`;
-    document.getElementById("againBtn").onclick = () => startRun();
-    document.getElementById("nextSeedBtn").onclick = () => {
-      runSeed += 1;
-      startRun();
-    };
-    return;
+  const description = RD_PANELS.describe(runSnapshot());
+  const parts = [];
+  // Actions are held **by index**, not serialised into the markup: `esc()` would double-escape the
+  // JSON and `JSON.parse` would then choke on the entity text.
+  const specs = [];
+  if (description.title) {
+    const tone = description.tone ? ` ${description.tone}` : "";
+    parts.push(`<div class="stats${tone}">${esc(description.title)}</div>`);
   }
-  // 1 = combat, 2 = elite (`run-layer.md` §7.2). Both are fights; the elite draws from the elite
-  // pool and pays the elite tier, and neither is the page's business -- the kernel decides.
-  // Kinds 1/2/7 are fights and kind 5 is an event: all four can be *settled*, so all four say so
-  // once they are (the rest of the panel used to call a finished ? room "nothing to do").
-  if (pending === 0 && (kind === 1 || kind === 2 || kind === 5 || kind === 7)) {
-    if (ex.rd_run_node_resolved() === 1) {
-      // The node paid already. Offering the button again is what let a fight be farmed; the panel
-      // says so instead.
-      panel.innerHTML = `<span class="dim">这个节点已结算 · 点亮的节点往前走</span>`;
-      return;
-    }
-    const label = kind === 7 ? "Boss · Slime Boss" : kind === 2 ? "精英节点（3 × Sentry）" : "战斗节点";
-    panel.innerHTML = `<span class="dim">${label}</span> ` +
-      `<button class="act" id="fightBtn">开始战斗</button>`;
-    document.getElementById("fightBtn").onclick = beginFight;
-    return;
+  for (const line of description.lines) parts.push(`<span class="dim">${esc(line)}</span> `);
+  for (const row of description.rows) {
+    const extra = row.sub ? ` ${row.sub}` : "";
+    parts.push(
+      `<div class="shop-item"><span>${esc(row.label)}${extra}</span>` +
+        `<span class="price">${esc(row.value)}</span>` +
+        `<button class="act" data-panel-action="${specs.push(row.button.action) - 1}" ` +
+        `${row.disabled ? "disabled" : ""}>${esc(row.button.label)}</button></div>`
+    );
   }
-  if (pending === 1) {
-    const heal = ex.rd_run_observe(3) * 30 / 100;
-    panel.innerHTML =
-      `<span class="dim">篝火 · 回复 ${heal}</span> ` +
-      `<button class="act" id="restBtn">休息</button> ` +
-      `<button class="act" id="smithBtn">打铁（第一张）</button> ` +
-      `<button class="act" id="restLeave">离开</button>`;
-    document.getElementById("restBtn").onclick = () => act(() => ex.rd_run_rest(), "休息");
-    document.getElementById("smithBtn").onclick = () =>
-      showDeckPicker("打铁：选一张升级", (index) =>
-        act(() => ex.rd_run_smith(index), "打铁"));
-    document.getElementById("restLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
-    return;
-  }
-  if (pending === 2) {
-    const cards = [];
-    for (let slot = 0; slot < ex.rd_run_shop_card_count(); slot++) {
-      const price = ex.rd_run_shop_card_price(slot);
-      cards.push(`<div class="shop-item"><span>${esc(shopCardId(slot))}` +
-        `${kindChip(runKind(2, slot))}</span>` +
-        `<span class="price">${price < 0 ? "已售" : price + " 金"}</span>` +
-        `<button class="act" data-buycard="${slot}" ${price < 0 ? "disabled" : ""}>买</button></div>`);
-    }
-    const relics = [];
-    for (let slot = 0; slot < ex.rd_run_shop_relic_count(); slot++) {
-      const price = ex.rd_run_shop_relic_price(slot);
-      relics.push(`<div class="shop-item"><span>${esc(shopRelicId(slot))}</span>` +
-        `<span class="price">${price < 0 ? "已售" : price + " 金"}</span>` +
-        `<button class="act" data-buyrelic="${slot}" ${price < 0 ? "disabled" : ""}>买</button></div>`);
-    }
-    panel.innerHTML =
-      `<div class="stats">商店 · 删卡 ${ex.rd_run_remove_price()} 金</div>` +
-      cards.join("") + relics.join("") +
-      `<div class="row" style="margin-top:8px">` +
-      `<button class="act" id="removeBtn">删除第一张牌</button>` +
-      `<button class="act" id="shopLeave">离开</button></div>`;
-    panel.querySelectorAll("[data-buycard]").forEach((button) => {
-      button.onclick = () => act(() => ex.rd_run_buy_card(Number(button.dataset.buycard)), "买卡");
-    });
-    panel.querySelectorAll("[data-buyrelic]").forEach((button) => {
-      button.onclick = () => act(() => ex.rd_run_buy_relic(Number(button.dataset.buyrelic)), "买遗物");
-    });
-    document.getElementById("removeBtn").onclick = () =>
-      showDeckPicker("删卡：选一张移除", (index) =>
-        act(() => ex.rd_run_remove_card(index), "删卡"));
-    document.getElementById("shopLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
-    return;
-  }
-  if (pending === 4) {
-    // The reward screen (`inv:§5`): gold is already in hand, the card is the choice.
-    const cards = [];
-    for (let slot = 0; slot < ex.rd_run_reward_card_count(); slot++) {
-      cards.push(`<div class="shop-item"><span>${esc(rewardTitle(slot) || rewardId(slot))}` +
-        `${kindChip(runKind(1, slot))}</span>` +
-        `<span class="price">${esc(rewardId(slot))}</span>` +
-        `<button class="act" data-take="${slot}">拿这张</button></div>`);
-    }
-    // `inv:§9.3`: a potion drops from 40% of fights, and it is its own offer -- taking the card and
-    // taking the potion are separate choices.
-    const potionLen = ex.rd_run_reward_potion_len();
-    const potion = potionLen > 0
-      ? `<div class="shop-item"><span>药水 ${esc(readText(() => ex.rd_run_reward_potion_len(),
-          (p) => ex.rd_run_reward_potion_into(p)))}</span>` +
-        `<span class="price">${potionLen} 字节</span>` +
-        `<button class="act" id="takePotion">拿起</button></div>`
-      : "";
-    panel.innerHTML =
-      `<div class="stats">战斗奖励 · 已得 <b>${ex.rd_run_reward_gold()}</b> 金 · 选一张牌</div>` +
-      cards.join("") +
-      (potion === "" ? "" : `<div class="stats">这一场掉了一瓶药水</div>` + potion) +
-      `<div class="row" style="margin-top:8px"><button class="act" id="skipReward">跳过</button></div>`;
-    panel.querySelectorAll("[data-take]").forEach((button) => {
-      button.onclick = () => act(() => ex.rd_run_take_card(Number(button.dataset.take)), "拿牌");
-    });
-    if (document.getElementById("takePotion")) {
-      document.getElementById("takePotion").onclick =
-        () => act(() => ex.rd_run_take_potion(), "拿药水");
-    }
-    document.getElementById("skipReward").onclick = () => act(() => ex.rd_run_skip_reward(), "跳过");
-    return;
-  }
-  if (pending === 6) {
-    // A run opens on a blessing choice; nothing else is legal until one is taken.
-    const buttons = [];
-    for (let slot = 0; slot < 2; slot++) {
-      const gain = offerText(ex.rd_run_start_gain(slot), ex.rd_run_start_gain_amount(slot));
-      const cost = offerText(ex.rd_run_start_cost(slot), ex.rd_run_start_cost_amount(slot));
-      const detail = cost === "" ? gain : `${gain}，代价 ${cost}`;
-      buttons.push(
-        `<button class="act" data-start="${slot}">${esc(offerName(startOffer(slot)))}<br><small>${esc(detail)}</small></button>`
+  if (description.buttons.length) {
+    parts.push('<div class="row" style="margin-top:8px">');
+    for (const button of description.buttons) {
+      const sub = button.sub ? `<br><small>${esc(button.sub)}</small>` : "";
+      parts.push(
+        `<button class="act" data-panel-action="${specs.push(button.action) - 1}" ` +
+          `${button.disabled ? "disabled" : ""}>${esc(button.label)}${sub}</button>`
       );
     }
-    panel.innerHTML =
-      `<div class="stats">塔底 · 选择一项祝福（选完才能出发）</div>` +
-      `<div class="row" style="margin-top:8px">${buttons.join(" ")}</div>`;
-    panel.querySelectorAll("[data-start]").forEach((button) => {
-      button.onclick = () => act(() => ex.rd_run_choose_start(Number(button.dataset.start)), "祝福");
-    });
-    return;
+    parts.push("</div>");
   }
-  if (pending === 5) {
-    // A `?` room (`inv:§7.3`): the kernel picked an event, the content supplies the text and the two
-    // choices, and the choice is what the kernel applies.
-    const choices = [];
-    for (let slot = 0; slot < 2; slot++) {
-      const effect = ex.rd_run_event_effect(slot);
-      const amount = ex.rd_run_event_amount(slot);
-      const name = EVENT_EFFECTS[effect] || "?";
-      const suffix = effect === 5 || effect < 0 ? "" : ` · ${name} ${amount}`;
-      choices.push(`<button class="act" data-choose="${slot}">${esc(eventLabel(slot))}${esc(suffix)}</button>`);
+  panel.innerHTML = parts.join("");
+  panel.querySelectorAll("[data-panel-action]").forEach((button) => {
+    const action = specs[Number(button.dataset.panelAction)];
+    const handler = PANEL_ACTIONS[action.kind];
+    if (!handler) {
+      button.disabled = true;
+      button.textContent = `${button.textContent}（未接线）`;
+      return;
     }
-    panel.innerHTML =
-      `<div class="stats">未知房间 · ${esc(eventText())}</div>` +
-      `<div class="row" style="margin-top:8px">${choices.join(" ")}</div>`;
-    panel.querySelectorAll("[data-choose]").forEach((button) => {
-      button.onclick = () => act(() => ex.rd_run_choose(Number(button.dataset.choose)), "选择");
-    });
-    return;
-  }
-  if (pending === 3) {
-    panel.innerHTML = `<span class="dim">宝箱</span> ` +
-      `<button class="act" id="chestBtn">开箱</button> ` +
-      `<button class="act" id="chestLeave">离开</button>`;
-    document.getElementById("chestBtn").onclick = () => act(() => ex.rd_run_open_chest(), "开箱");
-    document.getElementById("chestLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
-    return;
-  }
-  if (runOver) {
-    panel.innerHTML =
-      `<div class="stats err">这一局结束了 · ${esc(runOverWhy)}</div>` +
-      `<div class="stats">floor <b>${ex.rd_run_observe(0)}</b> · ` +
-      `hp <b>${ex.rd_run_observe(2)}/${ex.rd_run_observe(3)}</b> · ` +
-      `gold <b>${ex.rd_run_observe(4)}</b> · deck <b>${ex.rd_run_deck_count()}</b> · ` +
-      `relics <b>${ex.rd_run_observe(6)}</b></div>` +
-      `<div class="row" style="margin-top:8px">` +
-      `<button class="act" id="againBtn">再来一局（同一 seed）</button>` +
-      `<button class="act" id="nextSeedBtn">换一个 seed</button></div>`;
-    document.getElementById("againBtn").onclick = () => startRun();
-    document.getElementById("nextSeedBtn").onclick = () => {
-      runSeed += 1;
-      startRun();
-    };
-    return;
-  }
-  if (kind >= 0 && ex.rd_run_action_count() === 0 && pending === 0) {
-    // The last row is a rest row (`inv:§7.2`: floor 15 is all campfires) and floor 16 -- the boss --
-    // has no encounter in this content, so the act stops here. Saying so beats an empty panel that
-    // looks like a bug.
-    panel.innerHTML =
-      `<span class="dim">第一幕到此为止（本内容没有 Boss 遭遇，跑不到第 16 层）</span> ` +
-      `<button class="act" id="actDoneBtn">就到这里</button>`;
-    document.getElementById("actDoneBtn").onclick = () => {
-      runOver = true;
-      runOverWhy = "走到第一幕尽头（Boss 未实现）";
-      renderNode();
-    };
-    return;
-  }
-  panel.innerHTML = `<span class="dim">${kind < 0 ? "还没出发 · 点亮的节点可以走" : "这个节点没有可做的事"}</span>`;
+    button.onclick = () => handler(action);
+  });
 }
 
 /// What the cursor is standing on, as one line: the map marks it, the panel names it.

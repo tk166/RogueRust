@@ -17,6 +17,15 @@ const HERE = new URL("./", import.meta.url);
 const fail = (message) => { console.error("UI_TEST FAIL: " + message); process.exit(1); };
 
 // ---------------------------------------------------------------------------------------------
+// Every node-panel state, as a **literal snapshot**. This is the payoff of `ui_panels.js`: the panel
+// has ten states and each one is a pure function of data, so all ten can be asserted here without a
+// browser. Before the refactor this file could only check "the page mentions the export".
+//
+// The rule for a new state: add a case to `RD_PANELS.describe`, add a row here. If the row is missing
+// the state is simply untested, which `STATE_IDS` below makes visible.
+// ---------------------------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------------------------
 // Load `ui_render.js` the way the browser would: run it, then read the global it defines.
 // ---------------------------------------------------------------------------------------------
 const source = await readFile(new URL("./ui_render.js", HERE), "utf8");
@@ -24,6 +33,100 @@ const context = vm.createContext({});
 new vm.Script(source, { filename: "ui_render.js" }).runInContext(context);
 const UI = context.RD_UI;
 if (!UI) fail("ui_render.js did not define globalThis.RD_UI");
+
+// `ui_panels.js` is the second pure module: the node panel's decisions, as data.
+const panelsSource = await readFile(new URL("./ui_panels.js", HERE), "utf8");
+new vm.Script(panelsSource, { filename: "ui_panels.js" }).runInContext(context);
+const P = context.RD_PANELS;
+if (!P) fail("ui_panels.js did not define RD_PANELS");
+
+const BASE = {
+  mode: "run", runOver: false, runOverWhy: "", cleared: false, pending: 0, kind: -1,
+  resolved: false, actionCount: 0, floor: 0, hp: 80, hpMax: 80, gold: 0, deckCount: 10,
+  relicCount: 1, bossName: "Slime Boss", offers: [], shopCards: [], shopRelics: [],
+  rewardCards: [], choices: [], rewardPotion: null,
+};
+
+const PANEL_STATES = [
+  ["blessing", {
+      ...BASE,
+      pending: 6,
+      offers: [
+        { name: "治疗", gain: 1, gainAmount: 25, cost: 5, costAmount: 0 },
+        { name: "财宝", gain: 2, gainAmount: 100, cost: 3, costAmount: 7 },
+      ],
+    }, ["choose_start", "choose_start"], ["治疗", "财宝"], "塔底"],
+  ["fight", { ...BASE, kind: 1, actionCount: 1 }, ["begin_fight"], ["开始战斗"], "战斗节点"],
+  ["fight settled", { ...BASE, kind: 1, resolved: true }, [], [], "已结算"],
+  ["boss", { ...BASE, kind: 7, actionCount: 1 }, ["begin_fight"], ["开始战斗"], "Boss"],
+  ["rest", { ...BASE, kind: 3, pending: 1, hpMax: 80 }, ["rest", "smith", "leave"],
+    ["休息", "打铁", "离开"], "篝火"],
+  ["chest", { ...BASE, kind: 6, pending: 3 }, ["open_chest", "leave"], ["开箱", "离开"], "宝箱"],
+  ["shop", { ...BASE, kind: 4, pending: 2, removePrice: 75, shopCards: [
+      { id: "anger", title: "", chip: "", price: 50 }, { id: "uppercut", title: "", chip: "", price: -1 }],
+      shopRelics: [{ id: "burning_blood", title: "", price: 150 }] },
+    // The buys are **rows**, not footer buttons -- their actions are asserted below.
+    ["remove_card", "leave"], ["删一张牌", "离开"], "商店"],
+  ["reward", { ...BASE, kind: 1, pending: 4, rewardGold: 17, rewardCards: [
+      { id: "anger", title: "Anger", chip: "" }, { id: "uppercut", title: "Uppercut", chip: "" }] },
+    // The cards are rows too; only the skip is a footer button.
+    ["skip_reward"], ["跳过"], "战斗奖励"],
+  ["reward with potion", { ...BASE, kind: 1, pending: 4, rewardGold: 12,
+      rewardCards: [{ id: "anger", title: "Anger", chip: "" }], rewardPotion: "fire_potion" },
+    ["skip_reward"], ["跳过"], "药水"],
+  ["event", { ...BASE, kind: 5, pending: 5, eventText: "old_shrine — A shrine",
+      choices: [{ label: "Pray", effect: 1, amount: 15 }, { label: "Leave", effect: 5, amount: 0 }] },
+    ["event_choice", "event_choice"], ["Pray", "Leave"], "未知房间"],
+  ["cleared", { ...BASE, cleared: true, kind: 7, floor: 16 },
+    ["restart", "next_seed"], ["再打一局", "换一个 seed"], "第一幕通关"],
+  ["run over", { ...BASE, runOver: true, runOverWhy: "倒了", floor: 7 },
+    ["restart", "next_seed"], ["再来一局", "换一个 seed"], "结束了"],
+  ["idle before start", { ...BASE }, [], [], "还没出发"],
+];
+
+{
+  for (const [name, snapshot, kinds, labels, titlePart] of PANEL_STATES) {
+    const d = P.describe(snapshot);
+    const gotKinds = (d.buttons || []).map((b) => b.action.kind);
+    if (gotKinds.join(",") !== kinds.join(",")) {
+      fail(`panel "${name}": actions [${gotKinds}] but expected [${kinds}]`);
+    }
+    for (let i = 0; i < labels.length; i++) {
+      if (!String(d.buttons[i].label).includes(labels[i])) {
+        fail(`panel "${name}": button ${i} is "${d.buttons[i].label}", expected "${labels[i]}"`);
+      }
+    }
+    // The whole visible text: a row label is as visible as the heading, and a state may
+    // carry its information in either.
+    const heading = [
+      d.title,
+      ...(d.lines || []),
+      ...(d.rows || []).map((r) => `${r.label} ${r.value}`),
+    ]
+      .join(" ")
+      .trim();
+    if (!heading.includes(titlePart)) {
+      fail(`panel "${name}": heading "${heading}" does not mention "${titlePart}"`);
+    }
+    // A button whose action the page cannot wire is a dead button; `PANEL_ACTIONS` is checked below.
+    for (const b of d.buttons) {
+      if (!b.action || typeof b.action.kind !== "string") {
+        fail(`panel "${name}": a button has no action kind`);
+      }
+    }
+  }
+  // The two row-buttons of the shop are rows, not footer buttons: they must still carry actions.
+  const shop = P.describe(PANEL_STATES.find((s) => s[0] === "shop")[1]);
+  if (shop.rows.length !== 3) fail(`shop has ${shop.rows.length} rows, expected 3`);
+  for (const row of shop.rows) {
+    if (!row.button || !row.button.action || typeof row.button.action.kind !== "string") {
+      fail("a shop row has no action");
+    }
+  }
+  if (shop.rows[1].disabled !== true) fail("a sold-out shop row must be disabled");
+  console.log(`  panels: ${PANEL_STATES.length} states, actions and headings agree`);
+}
+
 
 // The page must actually use it, or this whole file is testing dead code.
 const page = await readFile(new URL("./index.html", HERE), "utf8");
