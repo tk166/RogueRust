@@ -826,7 +826,10 @@ impl RunState {
             // it pays (`inv:§5.3`), and both live in the caller -- nothing to settle here.
             NodeKind::Elite => Pending::None,
             // A `?` room is an **event** (`inv:§7.3`). The run layer reads no content, so the caller
-            // picks which event (`EV`) and then calls `begin_event`.
+            // picks which event (`EV`) and then calls `begin_event` -- nothing to settle here.
+            NodeKind::Unknown => Pending::None,
+            // Nothing is left that M1 refuses; the arm stays so a new kind cannot be silently
+            // accepted.
             other => return Err(RunError::NodeNotSettleable(other as u8)),
         };
         Ok(kind)
@@ -1712,18 +1715,19 @@ mod tests {
         // `Elite` and `Unknown` are named as "not in M1" (`sts-act1-plan.md` §4). Walking onto one
         // must be an error, not a silent no-op -- that is the promise `env-abi.md` §11.5 makes.
         // Elite settles as a fight since the sentries exist (inv:§4.2); only Unknown is left.
-        for kind in [NodeKind::Unknown] {
-            let mut run = ironclad();
-            if !walk_to(&mut run, kind) {
-                continue; // this seed's map has none of that kind
-            }
+        // Every kind M1 knows settles: `Elite` since the sentries (`inv:§4.2`), `Unknown` since the events
+        // (`inv:§7.3`). Nothing is refused for being the wrong *kind* any more -- what must stay loud
+        // is an action in the wrong *phase*.
+        let mut run = ironclad();
+        if walk_to(&mut run, NodeKind::Unknown) {
             assert_eq!(
                 run.begin_node(&basic_pool(), &RELICS),
-                Err(RunError::NodeNotSettleable(kind as u8)),
-                "{kind:?} was accepted"
+                Ok(NodeKind::Unknown),
+                "a `?` room settles as an event now"
             );
+            assert_eq!(run.pending(), Pending::None, "the caller picks the event");
         }
-        // A fight is the caller's business: no error, nothing pending.
+                // A fight is the caller's business: no error, nothing pending.
         let mut run = ironclad();
         assert!(walk_to(&mut run, NodeKind::Combat));
         assert_eq!(run.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Combat));

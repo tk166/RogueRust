@@ -2188,6 +2188,85 @@ mod tests {
         }
     }
 
+    /// A `?` room opens one of the four events, offers **two** choices, and the chosen one applies.
+    ///
+    /// The room was refused outright until the missing `NodeKind::Unknown` arm was added -- a bug that
+    /// survived a whole round because the *comment* said `Unknown` settles while the catch-all arm
+    /// still refused it. 7 of 8 seeds were unwinnable because of it (`port-plan.md` §73.3).
+    #[test]
+    fn an_unknown_room_opens_an_event_and_resolves_it() {
+        reset(7);
+        let mut found = false;
+        for _ in 0..40 {
+            let mut choice = -1;
+            for action in 0..rd_run_action_count() {
+                let node = rd_run_action_arg(action, 0);
+                if node >= 0 && node_kind(node) == 5 {
+                    choice = action;
+                    break;
+                }
+            }
+            if choice >= 0 {
+                assert_eq!(rd_run_step(choice), 0, "walk into the unknown room");
+                found = true;
+                break;
+            }
+            assert_eq!(rd_run_step(0), 0, "walk");
+        }
+        assert!(found, "no unknown room reachable from seed 7");
+
+        assert_eq!(rd_run_node_kind(), 5, "standing on an unknown room");
+        assert_eq!(
+            rd_run_begin_node(),
+            0,
+            "the unknown room must open an event; kernel said {:?}",
+            run_error_text()
+        );
+        assert_eq!(rd_run_pending(), 5, "Pending::Event");
+
+        let text = {
+            let n = rd_run_event_text_len();
+            assert!(n > 0, "the event has no text");
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_run_event_text_into(buffer.as_mut_ptr()) };
+            String::from_utf8(buffer).unwrap()
+        };
+        assert!(text.contains(" — "), "event text should read `id - body`: {text:?}");
+        for slot in 0..2 {
+            assert!(rd_run_event_label_len(slot) > 0, "choice {slot} has no label");
+            let effect = rd_run_event_effect(slot);
+            assert!((1..=5).contains(&effect), "choice {slot} effect {effect}");
+        }
+        assert_eq!(rd_run_event_label_len(2), -1, "only two choices");
+
+        let gold_before = rd_run_observe(4);
+        let hp_before = rd_run_observe(2);
+        let hp_max_before = rd_run_observe(3);
+        let effect = rd_run_event_effect(0);
+        let amount = rd_run_event_amount(0);
+        assert_eq!(rd_run_choose(0), 0, "choosing must be accepted");
+        assert_eq!(rd_run_pending(), 0, "the room is settled");
+        match effect {
+            1 => assert_eq!(
+                rd_run_observe(2),
+                (hp_before + amount).min(hp_max_before),
+                "heal"
+            ),
+            2 => assert_eq!(rd_run_observe(4), gold_before + amount, "gold"),
+            3 => assert_eq!(rd_run_observe(2), hp_before - amount, "damage"),
+            4 => assert_eq!(rd_run_observe(3), hp_max_before + amount, "max hp"),
+            5 => {
+                assert_eq!(rd_run_observe(2), hp_before, "nothing heals");
+                assert_eq!(rd_run_observe(4), gold_before, "nothing pays");
+            }
+            other => panic!("unexpected effect code {other}"),
+        }
+        assert_eq!(rd_run_node_resolved(), 1, "the room paid once");
+        // A second choice is a **wrong-phase** refusal (-2 with text), not "no such
+        // choice" (-1): the event is still on record, it is the phase that is gone.
+        assert_eq!(rd_run_choose(0), -2, "a second choice is refused");
+    }
+
     /// **Balance probe, not a gate.** Plays a whole act with the dumbest reasonable policy and
     /// prints what happens: floors walked, cards taken, how the boss went.
     ///
@@ -2223,9 +2302,6 @@ mod tests {
                         continue;
                     }
                     let kind = node_kind(node);
-                    if kind == 5 {
-                        continue;
-                    }
                     if hurt && kind == 3 {
                         choice = action;
                         break;
@@ -2267,6 +2343,10 @@ mod tests {
                     }
                     4 => {
                         let _ = rd_run_leave();
+                    }
+                    // A `?` room is an event: take the first choice (whatever it is).
+                    5 => {
+                        let _ = rd_run_choose(0);
                     }
                     _ => {}
                 }

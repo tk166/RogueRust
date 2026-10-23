@@ -471,6 +471,13 @@ const shopCardId = (slot) =>
   readText((k) => ex.rd_run_shop_card_id_len(k), (p, k) => ex.rd_run_shop_card_id_into(k, p), slot);
 const shopRelicId = (slot) =>
   readText((k) => ex.rd_run_shop_relic_id_len(k), (p, k) => ex.rd_run_shop_relic_id_into(k, p), slot);
+// The open `?`-room event: one line of text and two choices, all out of the content (`EV`).
+const eventText = () =>
+  readText(() => ex.rd_run_event_text_len(), (p) => ex.rd_run_event_text_into(p));
+const eventLabel = (slot) =>
+  readText((k) => ex.rd_run_event_label_len(k), (p, k) => ex.rd_run_event_label_into(k, p), slot);
+const EVENT_EFFECTS = ["", "回复", "金币", "受伤", "最大 HP", "什么也不做"];
+
 const rewardId = (slot) =>
   readText((k) => ex.rd_run_reward_card_id_len(k), (p, k) => ex.rd_run_reward_card_id_into(k, p), slot);
 const rewardTitle = (slot) =>
@@ -561,9 +568,29 @@ function renderNode() {
   const panel = document.getElementById("nodePanel");
   const pending = ex.rd_run_pending();
   const kind = ex.rd_run_node_kind();
+  if (!runOver && ex.rd_run_boss_beaten() === 1) {
+    // `inv:§7.2`: the boss is the end of the act, so this is the one **win** state there is.
+    panel.innerHTML =
+      `<div class="stats good">第一幕通关 · Slime Boss 已击败</div>` +
+      `<div class="stats">floor <b>${ex.rd_run_observe(0)}</b> · ` +
+      `hp <b>${ex.rd_run_observe(2)}/${ex.rd_run_observe(3)}</b> · ` +
+      `gold <b>${ex.rd_run_observe(4)}</b> · deck <b>${ex.rd_run_deck_count()}</b> · ` +
+      `relics <b>${ex.rd_run_observe(6)}</b></div>` +
+      `<div class="row" style="margin-top:8px">` +
+      `<button class="act" id="againBtn">再打一局（同一 seed）</button>` +
+      `<button class="act" id="nextSeedBtn">换一个 seed</button></div>`;
+    document.getElementById("againBtn").onclick = () => startRun();
+    document.getElementById("nextSeedBtn").onclick = () => {
+      runSeed += 1;
+      startRun();
+    };
+    return;
+  }
   // 1 = combat, 2 = elite (`run-layer.md` §7.2). Both are fights; the elite draws from the elite
   // pool and pays the elite tier, and neither is the page's business -- the kernel decides.
-  if (pending === 0 && (kind === 1 || kind === 2 || kind === 7)) {
+  // Kinds 1/2/7 are fights and kind 5 is an event: all four can be *settled*, so all four say so
+  // once they are (the rest of the panel used to call a finished ? room "nothing to do").
+  if (pending === 0 && (kind === 1 || kind === 2 || kind === 5 || kind === 7)) {
     if (ex.rd_run_node_resolved() === 1) {
       // The node paid already. Offering the button again is what let a fight be farmed; the panel
       // says so instead.
@@ -643,30 +670,31 @@ function renderNode() {
     document.getElementById("skipReward").onclick = () => act(() => ex.rd_run_skip_reward(), "跳过");
     return;
   }
+  if (pending === 5) {
+    // A `?` room (`inv:§7.3`): the kernel picked an event, the content supplies the text and the two
+    // choices, and the choice is what the kernel applies.
+    const choices = [];
+    for (let slot = 0; slot < 2; slot++) {
+      const effect = ex.rd_run_event_effect(slot);
+      const amount = ex.rd_run_event_amount(slot);
+      const name = EVENT_EFFECTS[effect] || "?";
+      const suffix = effect === 5 || effect < 0 ? "" : ` · ${name} ${amount}`;
+      choices.push(`<button class="act" data-choose="${slot}">${esc(eventLabel(slot))}${esc(suffix)}</button>`);
+    }
+    panel.innerHTML =
+      `<div class="stats">未知房间 · ${esc(eventText())}</div>` +
+      `<div class="row" style="margin-top:8px">${choices.join(" ")}</div>`;
+    panel.querySelectorAll("[data-choose]").forEach((button) => {
+      button.onclick = () => act(() => ex.rd_run_choose(Number(button.dataset.choose)), "选择");
+    });
+    return;
+  }
   if (pending === 3) {
     panel.innerHTML = `<span class="dim">宝箱</span> ` +
       `<button class="act" id="chestBtn">开箱</button> ` +
       `<button class="act" id="chestLeave">离开</button>`;
     document.getElementById("chestBtn").onclick = () => act(() => ex.rd_run_open_chest(), "开箱");
     document.getElementById("chestLeave").onclick = () => act(() => ex.rd_run_leave(), "离开");
-    return;
-  }
-  if (!runOver && ex.rd_run_boss_beaten() === 1) {
-    // `inv:§7.2`: the boss is the end of the act, so this is the one **win** state there is.
-    panel.innerHTML =
-      `<div class="stats good">第一幕通关 · Slime Boss 已击败</div>` +
-      `<div class="stats">floor <b>${ex.rd_run_observe(0)}</b> · ` +
-      `hp <b>${ex.rd_run_observe(2)}/${ex.rd_run_observe(3)}</b> · ` +
-      `gold <b>${ex.rd_run_observe(4)}</b> · deck <b>${ex.rd_run_deck_count()}</b> · ` +
-      `relics <b>${ex.rd_run_observe(6)}</b></div>` +
-      `<div class="row" style="margin-top:8px">` +
-      `<button class="act" id="againBtn">再打一局（同一 seed）</button>` +
-      `<button class="act" id="nextSeedBtn">换一个 seed</button></div>`;
-    document.getElementById("againBtn").onclick = () => startRun();
-    document.getElementById("nextSeedBtn").onclick = () => {
-      runSeed += 1;
-      startRun();
-    };
     return;
   }
   if (runOver) {
