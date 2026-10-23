@@ -1479,6 +1479,14 @@ function measure() {
       kindChip,
       esc,
       view: () => RD_MAP.describeMap(runRead),
+      // A chosen seed, so a browser check does not have to hope a 40% potion drop shows up.
+      startWithSeed: (seed) => {
+        runSeed = seed;
+        startRun();
+      },
+      // The page re-renders inside ct, which may be asynchronous: a checker that clicks and reads
+      // the DOM in the same tick sees the **previous** frame. This awaits one turn.
+      settle: () => new Promise((resolve) => setTimeout(resolve, 0)),
     };
   }
 
