@@ -178,9 +178,9 @@ const H_PHASE: usize = 2;
 const H_RESULT: usize = 3;
 const H_HERO_HP: usize = 4;
 const H_HERO_HP_MAX: usize = 5;
-const H_HERO_BLOCK: usize = 6;
+pub(crate) const H_HERO_BLOCK: usize = 6;
 const H_HERO_WARD: usize = 7;
-const H_ENERGY: usize = 8;
+pub(crate) const H_ENERGY: usize = 8;
 const H_ENERGY_MAX: usize = 9;
 const H_HAND_COUNT: usize = 10;
 const H_ENEMY_COUNT: usize = 11;
@@ -554,6 +554,16 @@ impl Session {
     /// The first version rebuilt them inside `compute_actions`, i.e. *after* publishing the
     /// observation, so every hand slot came out as `occupied = -1` while `hand_count` said 5 —
     /// a self-contradicting vector that no test noticed until one did.
+    /// The same refresh, for a mutation that did **not** go through rd_env_step.
+    ///
+    /// A potion is exactly that: it writes to the combat state from outside the action loop. Without
+    /// this, rd_env_observe_into kept serving the snapshot taken *before* the potion --
+    /// measured:
+    /// the write landed (read back on the combatant) and the observation still said 0 Block.
+    pub(crate) fn reobserve_after_external_change(&mut self) {
+        self.reobserve();
+    }
+
     fn reobserve(&mut self) {
         self.before.copy_from_slice(&self.after);
         self.refresh_hand();

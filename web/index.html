@@ -571,8 +571,11 @@ function renderTopBar() {
   const potions = ex.rd_run_potion_count();
   for (let index = 0; index < Math.max(0, potions); index++) {
     const id = runRead.potionName(index) || "potion";
+    // Using a potion only means something inside a fight (the kernel refuses otherwise with a
+    // readable reason), so the button only appears there.
+    const use = mode === "fight" ? `<button class="drop" data-use-potion="${index}" title="使用">用</button>` : "";
     chips.push(
-      `<span class="chip potion">${esc(id)}` +
+      `<span class="chip potion">${esc(id)}${use}` +
         `<button class="drop" data-drop-potion="${index}" title="丢弃">×</button></span>`
     );
   }
@@ -580,6 +583,9 @@ function renderTopBar() {
   document.querySelectorAll("[data-drop-potion]").forEach((button) => {
     button.onclick = () =>
       act(() => ex.rd_run_drop_potion(Number(button.dataset.dropPotion)), "丢弃药水");
+  });
+  document.querySelectorAll("[data-use-potion]").forEach((button) => {
+    button.onclick = () => act(() => ex.rd_env_use_potion(Number(button.dataset.usePotion)), "用药水");
   });
   document.getElementById("deckCount").textContent = String(Math.max(0, deck));
   // The piles belong to a fight; in the run there is no draw / discard / exhaust.

@@ -5973,3 +5973,55 @@ if self.pending == Pending::Start { return Err(RunError::WrongPhase); }
 |---|---|
 | 聚合验收 | **16/16**（本轮只改文档） |
 | 单测 | **660** |
+---
+
+## 84. 第 74 轮：药水**能用**了 —— 并且挖出一个"观察是缓存快照"的真 bug
+
+### 84.1 `rd_env_use_potion(slot)`：格挡与能量真的生效
+
+* `combat_block` → `Combatant::set_defensive_pool("standard.block", current + 12, None)`；
+* `combat_energy` → `Combatant::set_resource("standard.energy", current + 2, None)`
+  （**上限给 `None`**：能量药水本来就该超过每回合上限；第一版把池子上限传进去，增益被**夹掉了**）；
+* `combat_damage` → **响亮拒绝**，并在消息里写清原因与去处（`resolve_damage` 要 `ExecContext`）。
+* 成功才 `drop_potion(slot)` —— **拒绝不许吃掉药水**（测试钉住）。
+
+### 84.2 挖出来的真 bug：**观察向量是缓存快照**
+
+第一版写完，格挡读到 `0`，能量读到 `3`，而**写法本身是对的**。在写入之后立刻从同一个战斗员读回
+（`after != current + amount` 就拒绝）——读回是 **12**，说明**写进去了**，是**观察**不动。
+
+根因：`rd_env_observe_into` 只是把 `Session::publish()` 拷过来的 `OBS` 交出去，而 `OBS` 来自
+`self.after`，只在 `reobserve()`（`rd_env_step` 的尾巴）里重建。**药水不走 `rd_env_step`，所以快照
+一直是药水之前的。**
+
+修法：`rd_env_use_potion` 在写完之后调 `Session::reobserve_after_external_change()`
+（新加的 `pub(crate)` 包装，内部就是 `reobserve()`）。
+
+⚠️ 这条 bug 的形状值得记：**写入返回 Ok、读回正确、观察不动**。如果没有那个"读回"断言，我会以为是
+内核的写接口有问题，然后在错误的层里改半天。
+
+### 84.3 判据
+
+`a_potion_can_be_used_in_a_fight`（wasm，端到端、**没有静默跳过**）：
+
+* 走图打到掉药水为止（40% 掉落），**专门等到一瓶 `block_potion`**（否则算术断言可能根本没跑）；
+* 走进下一场战斗 → `rd_env_use_potion(slot)` → 断言 **Block 恰好 +12**、腰带少一格；
+* 其它药水（`fire_potion`）断言 **-2 且腰带不变**。
+
+### 84.4 还没做的（诚实）
+
+* **`fire_potion` 不生效**：伤害要走 `resolve_damage(ctx, …)`，需要一个 `ExecContext` ——
+  也就是"带一个节目进来"的入口。这是目标 ① 唯一还缺的一块，写在 §83 的两条路里。
+* **`energy_potion` 没有被端到端断言覆盖**：实现的臂里有"读回不符就拒绝"的自检，测试却只等到
+  `block_potion`，所以能量的 +2 只是**代码里有、测试没钉**。下一轮要么补一瓶能量的用例，要么
+  把测试改成"三瓶都试一遍"。
+* **页面**多了"用"按钮（只在战斗里出现）与"×"丢弃按钮，`smoke`/`ui_test` 断言它们接线；
+  **真浏览器里点"用"还没验**（上一轮的腰带外观也仍未验）。
+
+### 84.5 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 660 | **661**（rd-core 579 / rd-run 57 / rd-wasm 25） |
+| `.wasm` | — | **509,315 B**（重编；警告：闸门抓到过一次陈旧产物） |

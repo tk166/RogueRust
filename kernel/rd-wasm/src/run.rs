@@ -1052,6 +1052,135 @@ fn effect_from(effect: &str, amount: i32) -> Option<rd_run::state::EventEffect> 
     })
 }
 
+/// **Use** potion `slot` in the fight that is running.
+///
+/// Two of the three effects are applied through **public kernel APIs** (`set_defensive_pool` for
+/// Block, `set_resource` for energy). The third, `combat_damage`, needs the program pipeline
+/// (`exec::resolve_damage` wants an `ExecContext`), which is not reachable from here yet -- so it
+/// **refuses loudly** rather than doing nothing. `port-plan.md` §83 carries the two ways to close it.
+///
+/// Returns `0`, `-1` when there is no such slot / no fight, or `-2` with text.
+#[no_mangle]
+pub extern "C" fn rd_env_use_potion(slot: i32) -> i32 {
+    if slot < 0 {
+        return -1;
+    }
+    // The id has to be copied out: the run slot is borrowed again at the end to consume it.
+    let Some(id) = run_slot()
+        .as_ref()
+        .and_then(|run| run.state.potions().get(slot as usize))
+        .map(|id| id.as_str().to_string())
+    else {
+        return -1;
+    };
+    let image = content();
+    let Some(potion) = (0..image.potion_count())
+        .filter_map(|index| image.potion(index))
+        .find(|potion| potion.id == id)
+    else {
+        return refuse(&std::format!("药水 `{id}` 不在内容的 `POT` 表里"));
+    };
+
+    let Some(session) = crate::slot().as_mut() else {
+        return refuse("不在战斗里 —— 药水的效果只能作用于一场战斗");
+    };
+    let Some(hero) = session.hero_id() else {
+        return refuse("战斗里找不到英雄");
+    };
+    let amount = i32::from(potion.amount);
+    match potion.effect {
+        "combat_block" => {
+            let Ok(key) = rd_core::state::DefensivePoolId::new("standard.block") else {
+                return refuse("`standard.block` 不是合法的防守池 id");
+            };
+            let Some(combatant) = session.state.combatant_mut(&hero) else {
+                return refuse("拿不到英雄的战斗员");
+            };
+            let current = combatant
+                .defensive_pools()
+                .iter()
+                .find(|pool| pool.key.as_str() == "standard.block")
+                .map_or(0, |pool| pool.pool.current);
+            if let Err(e) = combatant.set_defensive_pool(key, current + amount, None) {
+                return refuse(&std::format!("加格挡失败：{e:?}"));
+            }
+            // Read it straight back on the same combatant: this distinguishes "the write failed" from
+            // "the observation is a stale snapshot" without guessing (see §84).
+            let after = combatant
+                .defensive_pools()
+                .iter()
+                .find(|pool| pool.key.as_str() == "standard.block")
+                .map_or(-1, |pool| pool.pool.current);
+            if after != current + amount {
+                return refuse(&std::format!(
+                    "格挡写进去读到 {after}，期望 {}",
+                    current + amount
+                ));
+            }
+        }
+        "combat_energy" => {
+            let Ok(key) = rd_core::state::ResourceId::new("standard.energy") else {
+                return refuse("`standard.energy` 不是合法的资源 id");
+            };
+            let Some(combatant) = session.state.combatant_mut(&hero) else {
+                return refuse("拿不到英雄的战斗员");
+            };
+            let current = combatant
+                .resources()
+                .iter()
+                .find(|pool| pool.key.as_str() == "standard.energy")
+                .map_or(0, |pool| pool.pool.current);
+            // `None` for the cap: an Energy Potion pushes energy **past** the per-turn maximum. (The
+            // first version passed the pool's own cap and the gain was clamped away -- and *that*
+            // was compounded by the stale observation, which is why it looked like the write failed.)
+            if let Err(e) = combatant.set_resource(key, current + amount, None) {
+                return refuse(&std::format!("加能量失败：{e:?}"));
+            }
+            let after = combatant
+                .resources()
+                .iter()
+                .find(|pool| pool.key.as_str() == "standard.energy")
+                .map_or(-1, |pool| pool.pool.current);
+            if after != current + amount {
+                return refuse(&std::format!(
+                    "能量写进去读到 {after}，期望 {}",
+                    current + amount
+                ));
+            }
+        }
+        "combat_damage" => {
+            return refuse(
+                "伤害药水还没接通：`resolve_damage` 需要一个 `ExecContext`（节目执行的上下文），                 本内核还没有从外面带节目进来的入口 —— 见 docs/port-plan.md §83",
+            )
+        }
+        other => return refuse(&std::format!("未知的药水效果 `{other}`")),
+    }
+
+    // The observation is a **cached snapshot** (Session::publish), and a potion does not go through
+    // d_env_step, so it has to be refreshed here or the page shows the pre-potion numbers.
+    session.reobserve_after_external_change();
+
+    // Consumed only after it worked: a refusal must not eat the potion.
+    let Some(run) = run_slot().as_mut() else {
+        return -1;
+    };
+    match run.state.drop_potion(slot as usize) {
+        Ok(()) => 0,
+        Err(e) => {
+            let message = describe(&e);
+            fail(run, &message)
+        }
+    }
+}
+
+/// A refusal that has nothing to do with the run slot's own error text.
+fn refuse(message: &str) -> i32 {
+    match run_slot().as_mut() {
+        Some(session) => fail(session, message),
+        None => -1,
+    }
+}
+
 /// The pre-run blessing's `slot` id (`max_hp` / `gold` / ...), `""` when no choice is pending.
 #[no_mangle]
 pub extern "C" fn rd_run_start_offer_len(slot: i32) -> i32 {
@@ -2429,6 +2558,141 @@ mod tests {
             assert_eq!(result, 2, "the only other ending is defeat");
             assert_eq!(rd_run_boss_beaten(), 0, "losing does not clear the act");
         }
+    }
+
+    /// **Using a potion in a fight, end to end**: win a fight, take the potion it dropped, walk into
+    /// the next fight, and use it.
+    ///
+    /// The three effects are handled differently on purpose: Block and energy go through public
+    /// kernel APIs and must move the number; `combat_damage` has no entry point yet
+    /// (`port-plan.md` §83) and must **refuse without eating the potion**.
+    #[test]
+    fn a_potion_can_be_used_in_a_fight() {
+        reset(4);
+        let mut belt = 0;
+        // Walk the map, settling whatever is on the way, and fights are played out -- the potion has
+        // to come from a real won fight, which is the whole point.
+        for _ in 0..20 {
+            assert!(
+                rd_run_action_count() > 0,
+                "the walk ran out of moves before a potion dropped"
+            );
+            let mut combat = -1;
+            for action in 0..rd_run_action_count() {
+                let node = rd_run_action_arg(action, 0);
+                if node >= 0 && node_kind(node) == 1 {
+                    combat = action;
+                    break;
+                }
+            }
+            let chosen = if combat >= 0 { combat } else { 0 };
+            assert_eq!(rd_run_step(chosen), 0, "walk");
+            let kind = rd_run_node_kind();
+            if kind == 1 {
+                assert_eq!(rd_run_begin_node(), 0, "begin_node");
+                assert_eq!(rd_run_fight_begin(), 0, "fight_begin: {:?}", run_error_text());
+                play_to_the_end();
+                assert_eq!(rd_run_fight_end(), 1, "the bot must survive these fights");
+                if rd_run_reward_potion_len() > 0 {
+                    assert_eq!(rd_run_take_potion(), 0, "take the dropped potion");
+                    belt = rd_run_potion_count();
+                    let _ = rd_run_take_card(0);
+                    // Keep hunting until the belt holds a **block** potion, so the arithmetic in
+                    // this test actually runs instead of depending on the drop.
+                    let mut has_block = false;
+                    for slot in 0..belt {
+                        let n = rd_run_potion_id_len(slot as i32);
+                        let mut buffer = vec![0u8; n as usize];
+                        unsafe { rd_run_potion_id_into(slot as i32, buffer.as_mut_ptr()) };
+                        if String::from_utf8_lossy(&buffer) == "block_potion" {
+                            has_block = true;
+                        }
+                    }
+                    if has_block || belt >= 3 {
+                        break;
+                    }
+                }
+                let _ = rd_run_take_card(0);
+            } else {
+                settle_here();
+            }
+        }
+        assert!(belt > 0, "twenty fights and not one potion: the 40% drop is not firing");
+
+        // Find a fight to use it in: walk, settling what is not a fight, stop at the first one.
+        let mut started = false;
+        for _ in 0..20 {
+            assert!(rd_run_action_count() > 0, "no fight left to use the potion in");
+            let mut combat = -1;
+            for action in 0..rd_run_action_count() {
+                let node = rd_run_action_arg(action, 0);
+                if node >= 0 && node_kind(node) == 1 {
+                    combat = action;
+                    break;
+                }
+            }
+            let chosen = if combat >= 0 { combat } else { 0 };
+            assert_eq!(rd_run_step(chosen), 0, "walk");
+            if rd_run_node_kind() == 1 {
+                assert_eq!(rd_run_begin_node(), 0, "begin_node");
+                assert_eq!(rd_run_fight_begin(), 0, "fight_begin: {:?}", run_error_text());
+                started = true;
+                break;
+            }
+            settle_here();
+        }
+        assert!(started, "never reached a fight to use the potion in");
+
+        // Which slot holds the block potion (there may be other potions in front of it).
+        let mut slot = -1;
+        for index in 0..belt {
+            let n = rd_run_potion_id_len(index as i32);
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_run_potion_id_into(index as i32, buffer.as_mut_ptr()) };
+            if String::from_utf8_lossy(&buffer) == "block_potion" {
+                slot = index as i32;
+            }
+        }
+        let id = {
+            let n = rd_run_potion_id_len(if slot >= 0 { slot } else { 0 });
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_run_potion_id_into(if slot >= 0 { slot } else { 0 }, buffer.as_mut_ptr()) };
+            String::from_utf8(buffer).unwrap()
+        };
+        let block_before = hero_block();
+        let energy_before = hero_energy();
+        let outcome = rd_env_use_potion(if slot >= 0 { slot } else { 0 });
+        match id.as_str() {
+            "block_potion" => {
+                assert_eq!(outcome, 0, "block potion: {:?}", run_error_text());
+                assert_eq!(hero_block(), block_before + 12, "12 Block");
+                assert_eq!(rd_run_potion_count(), belt - 1, "the potion is consumed");
+            }
+            "energy_potion" => {
+                assert_eq!(outcome, 0, "energy potion: {:?}", run_error_text());
+                assert_eq!(hero_energy(), energy_before + 2, "2 energy past the cap");
+                assert_eq!(rd_run_potion_count(), belt - 1, "the potion is consumed");
+            }
+            other => {
+                assert_eq!(outcome, -2, "{other} must be refused, not silently ignored");
+                assert!(run_error_text().contains("伤害药水"), "{:?}", run_error_text());
+                assert_eq!(rd_run_potion_count(), belt, "a refusal must not eat the potion");
+            }
+        }
+    }
+
+    /// The hero's Block, off the combat observation.
+    fn hero_block() -> i32 {
+        let mut buffer = vec![0i32; crate::rd_env_observe_len() as usize];
+        unsafe { crate::rd_env_observe_into(buffer.as_mut_ptr()) };
+        buffer[crate::H_HERO_BLOCK]
+    }
+
+    /// The hero's energy, off the same observation.
+    fn hero_energy() -> i32 {
+        let mut buffer = vec![0i32; crate::rd_env_observe_len() as usize];
+        unsafe { crate::rd_env_observe_into(buffer.as_mut_ptr()) };
+        buffer[crate::H_ENERGY]
     }
 
     /// **The run opens on a blessing choice** (`inv:§7.1`): two distinct offers, no move legal until
