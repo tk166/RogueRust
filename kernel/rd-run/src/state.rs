@@ -94,7 +94,50 @@ pub enum Pending {
     Reward = 4,
     /// [`RunState::resolve_event`] -- a `?` room, waiting for a choice.
     Event = 5,
+    /// [`RunState::choose_start`] -- the pre-run blessing, before floor 1.
+    Start = 6,
 }
+
+/// The pre-run choice (StS's Neow, `inv:§7.1`): the player picks one blessing from a rolled pair.
+///
+/// A blessing is a **gain and a cost**, both from [`EventEffect`]'s closed vocabulary -- that is how
+/// "swap 10% of your max HP for 100 gold" is expressible without a program interpreter.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct StartOffer {
+    /// The id (`max_hp`, `gold`, ...), for the UI and for the run hash.
+    pub id: &'static str,
+    /// What the player gets.
+    pub gain: EventEffect,
+    /// What it costs. [`EventEffect::Nothing`] for the free blessings.
+    pub cost: EventEffect,
+}
+
+/// Neow's pool for act 1. Four entries so a pair is always available and distinct.
+///
+/// ⚠️ **This is not the wiki's pool**: StS draws from eight or so blessings with rarity weights.
+/// Four, unweighted, is what this content can honour -- recorded in `inv:§7.1` rather than implied.
+pub const START_OFFERS: [StartOffer; 4] = [
+    StartOffer {
+        id: "max_hp",
+        gain: EventEffect::GainMaxHealth(8),
+        cost: EventEffect::Nothing,
+    },
+    StartOffer {
+        id: "gold",
+        gain: EventEffect::Gold(100),
+        cost: EventEffect::LoseHealth(7),
+    },
+    StartOffer {
+        id: "heal",
+        gain: EventEffect::Heal(25),
+        cost: EventEffect::Nothing,
+    },
+    StartOffer {
+        id: "blood_money",
+        gain: EventEffect::Gold(150),
+        cost: EventEffect::LoseHealth(14),
+    },
+];
 
 /// What an event's choice does. The vocabulary is **closed** and comes from the content
 /// (`EV.Effect0` / `EV.Effect1`); anything else is [`RunError::UnsupportedEventEffect`].
@@ -436,6 +479,8 @@ pub struct RunState {
     resolved: [u64; 2],
     /// The `?`-room event under the cursor, while `Pending::Event`.
     event: RunId,
+    /// Which two blessings were rolled, as indices into [`START_OFFERS`].
+    start_offers: [u8; 2],
     /// The rare-card pity offset (`inv:§3.5`): starts at −5%, +1% per non-rare reward roll, reset to
     /// −5% on a rare, capped at +40%. Only **combat reward** rolls move it.
     rarity_offset: i32,
@@ -477,6 +522,8 @@ impl RunState {
             reward: Reward::empty(),
             boss_beaten: false,
             event: RunId::EMPTY,
+            // Rolled by `offer_start_choice`; until then the pair is not a choice anyone can take.
+            start_offers: [0, 1],
             resolved: [0; 2],
             rarity_offset: RARITY_OFFSET_START,
         };
@@ -715,6 +762,10 @@ impl RunState {
         // then step straight onto the next node" from being a legal move.
         if self.node >= 0 && !self.node_resolved() {
             return Err(RunError::NodeNotSettled);
+        }
+        // Nothing is legal before the pre-run blessing is chosen (`inv:§7.1`).
+        if self.pending == Pending::Start {
+            return Err(RunError::WrongPhase);
         }
         if target == crate::map::BOSS_NODE {
             // `inv:§7.2`: the boss is floor 16, one row past the map's last.
@@ -1036,6 +1087,52 @@ impl RunState {
         Ok(price)
     }
 
+    /// Roll the pre-run pair and enter [`Pending::Start`].
+    ///
+    /// Called by the driver right after the run is created: **no move is legal until the blessing is
+    /// chosen**, which is the same rule as `NodeNotSettled` one level up.
+    pub fn offer_start_choice(&mut self) -> Result<(), RunError> {
+        let span = START_OFFERS.len() as u32;
+        let first = self.rng.roll(RunStream::Event, span)? as u8;
+        let mut second = self.rng.roll(RunStream::Event, span - 1)? as u8;
+        // Pick a *distinct* second by mapping into the pool with the first one removed.
+        if second >= first {
+            second += 1;
+        }
+        self.start_offers = [first, second];
+        self.pending = Pending::Start;
+        Ok(())
+    }
+
+    /// The two rolled blessings, or `None` when no choice is pending.
+    #[must_use]
+    pub fn start_offers(&self) -> Option<[StartOffer; 2]> {
+        if self.pending != Pending::Start {
+            return None;
+        }
+        Some([
+            START_OFFERS[self.start_offers[0] as usize],
+            START_OFFERS[self.start_offers[1] as usize],
+        ])
+    }
+
+    /// Take blessing `slot` (`0` or `1`): its gain, then its cost.
+    pub fn choose_start(&mut self, slot: usize) -> Result<(), RunError> {
+        if self.pending != Pending::Start {
+            return Err(RunError::WrongPhase);
+        }
+        let Some(offers) = self.start_offers() else {
+            return Err(RunError::WrongPhase);
+        };
+        let Some(offer) = offers.get(slot) else {
+            return Err(RunError::NoSuchOffer);
+        };
+        self.apply_event_effect(offer.gain)?;
+        self.apply_event_effect(offer.cost)?;
+        self.pending = Pending::None;
+        Ok(())
+    }
+
     /// Open event `id` in the `?` room under the cursor.
     pub fn begin_event(&mut self, id: &str) -> Result<(), RunError> {
         if self.node_resolved() {
@@ -1061,6 +1158,15 @@ impl RunState {
         if self.pending != Pending::Event {
             return Err(RunError::WrongPhase);
         }
+        self.apply_event_effect(effect)?;
+        self.pending = Pending::None;
+        self.mark_resolved();
+        Ok(())
+    }
+
+    /// One closed-vocabulary effect. Shared by `?` rooms and by the pre-run blessing, so the two
+    /// cannot drift.
+    fn apply_event_effect(&mut self, effect: EventEffect) -> Result<(), RunError> {
         match effect {
             EventEffect::Heal(n) => self.heal_after_combat(n),
             EventEffect::Gold(n) => self.adjust_gold(n),
@@ -1071,8 +1177,6 @@ impl RunState {
             }
             EventEffect::Nothing => {}
         }
-        self.pending = Pending::None;
-        self.mark_resolved();
         Ok(())
     }
 

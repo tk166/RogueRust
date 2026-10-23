@@ -355,6 +355,13 @@ pub extern "C" fn rd_run_start(seed: i32) -> i32 {
         }
     }
 
+    // `inv:§7.1`: a run opens on a blessing choice, not on floor 1. No move is legal until it is
+    // taken, which is the same discipline as `NodeNotSettled` one level up.
+    let mut state = state;
+    if let Err(e) = state.offer_start_choice() {
+        set_error(&std::format!("offer_start_choice: {}", describe(&e)));
+        return -12;
+    }
     *run_slot() = Some(RunSession {
         state,
         error: String::new(),
@@ -1045,6 +1052,96 @@ fn effect_from(effect: &str, amount: i32) -> Option<rd_run::state::EventEffect> 
     })
 }
 
+/// The pre-run blessing's `slot` id (`max_hp` / `gold` / ...), `""` when no choice is pending.
+#[no_mangle]
+pub extern "C" fn rd_run_start_offer_len(slot: i32) -> i32 {
+    match start_offer(slot) {
+        Some(offer) => offer.id.len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_start_offer_len(slot)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_start_offer_into(slot: i32, ptr: *mut u8) -> i32 {
+    match start_offer(slot) {
+        Some(offer) => write_out(offer.id, ptr),
+        None => 0,
+    }
+}
+
+/// The blessing's **gain** as the ABI's small integer (`1` heal, `2` gold, `3` lose health,
+/// `4` max health, `5` nothing), `-1` for no such slot.
+#[no_mangle]
+pub extern "C" fn rd_run_start_gain(slot: i32) -> i32 {
+    start_offer(slot).map_or(-1, |offer| effect_code_of(offer.gain))
+}
+
+/// How much the gain is worth.
+#[no_mangle]
+pub extern "C" fn rd_run_start_gain_amount(slot: i32) -> i32 {
+    start_offer(slot).map_or(0, |offer| effect_amount(offer.gain))
+}
+
+/// The blessing's **cost** in the same integers, and its amount. A cost of `5` (`nothing`) means
+/// the blessing is free.
+#[no_mangle]
+pub extern "C" fn rd_run_start_cost(slot: i32) -> i32 {
+    start_offer(slot).map_or(-1, |offer| effect_code_of(offer.cost))
+}
+
+/// How much the cost is.
+#[no_mangle]
+pub extern "C" fn rd_run_start_cost_amount(slot: i32) -> i32 {
+    start_offer(slot).map_or(0, |offer| effect_amount(offer.cost))
+}
+
+/// Take blessing `slot`. Returns `0`, or `-2` with text (wrong phase / no such slot).
+#[no_mangle]
+pub extern "C" fn rd_run_choose_start(slot: i32) -> i32 {
+    if slot < 0 || slot > 1 {
+        return -1;
+    }
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let outcome = session.state.choose_start(slot as usize).map(|_| 0i32);
+    finish(session, outcome)
+}
+
+fn start_offer(slot: i32) -> Option<rd_run::state::StartOffer> {
+    if slot < 0 || slot > 1 {
+        return None;
+    }
+    let session = run_slot().as_ref()?;
+    session.state.start_offers().map(|offers| offers[slot as usize])
+}
+
+/// `EventEffect` as the same small integers the event ABI uses.
+fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
+    use rd_run::state::EventEffect;
+    match effect {
+        EventEffect::Heal(_) => 1,
+        EventEffect::Gold(_) => 2,
+        EventEffect::LoseHealth(_) => 3,
+        EventEffect::GainMaxHealth(_) => 4,
+        EventEffect::Nothing => 5,
+    }
+}
+
+fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
+    use rd_run::state::EventEffect;
+    match effect {
+        EventEffect::Heal(n)
+        | EventEffect::Gold(n)
+        | EventEffect::LoseHealth(n)
+        | EventEffect::GainMaxHealth(n) => n,
+        EventEffect::Nothing => 0,
+    }
+}
+
 /// How many potions the belt holds.
 #[no_mangle]
 pub extern "C" fn rd_run_potion_count() -> i32 {
@@ -1639,6 +1736,7 @@ mod tests {
 
     fn reset(seed: i32) {
         assert_eq!(rd_run_start(seed), 0, "rd_run_start({seed}) failed");
+        assert_eq!(rd_run_choose_start(0), 0, "taking blessing 0");
     }
 
     fn obs() -> Vec<i32> {
@@ -1658,9 +1756,18 @@ mod tests {
         assert_eq!(o[0], 0, "floor is 0 before the first step");
         assert_eq!(o[1], -1, "the cursor starts off the map");
         // `rd_run_start` **generates the map**, and generation draws from the `Map` stream, so that
-        // counter is not zero. The other six are untouched -- which is the substream property
-        // (`run-layer.md` §3.6) observed from the outside.
+        // counter is not zero. Every other counter is untouched by generation -- which is the
+        // substream property (`run-layer.md` §3.6) observed from the outside -- with one documented
+        // exception: the **blessing roll** (`inv:§7.1`) happens at start too and draws twice from
+        // the `Event` stream, so that one reads 2 and nothing else may move.
         for (index, value) in o.iter().enumerate().take(16).skip(10) {
+            if index == 12 {
+                assert_eq!(
+                    *value, 2,
+                    "the blessing roll is two draws from the `Event` stream"
+                );
+                continue;
+            }
             assert_eq!(*value, 0, "stream counter {index} must be untouched by map generation");
         }
         // Pinned on purpose: this is how many draws map generation costs for seed 7. A change to
@@ -2309,6 +2416,77 @@ mod tests {
             assert_eq!(result, 2, "the only other ending is defeat");
             assert_eq!(rd_run_boss_beaten(), 0, "losing does not clear the act");
         }
+    }
+
+    /// **The run opens on a blessing choice** (`inv:§7.1`): two distinct offers, no move legal until
+    /// one is taken, and the taken one applies its gain *and* its cost.
+    #[test]
+    fn the_blessing_is_offered_and_applied() {
+        assert_eq!(rd_run_start(7), 0);
+        assert_eq!(rd_run_pending(), 6, "Pending::Start before floor 1");
+
+        // Two offers, both real, and distinct.
+        let mut ids = std::vec::Vec::new();
+        for slot in 0..2 {
+            let n = rd_run_start_offer_len(slot);
+            assert!(n > 0, "blessing {slot} has no id");
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_run_start_offer_into(slot, buffer.as_mut_ptr()) };
+            ids.push(String::from_utf8(buffer).unwrap());
+            let gain = rd_run_start_gain(slot);
+            assert!((1..=5).contains(&gain), "blessing {slot} gain {gain}");
+            let cost = rd_run_start_cost(slot);
+            assert!((1..=5).contains(&cost), "blessing {slot} cost {cost}");
+        }
+        assert_ne!(ids[0], ids[1], "the two offers must differ");
+        assert_eq!(rd_run_start_offer_len(2), -1, "only two offers");
+
+        // No move is legal yet.
+        assert_eq!(
+            rd_run_step(0),
+            -2,
+            "walking before the blessing must be refused"
+        );
+        assert_eq!(rd_run_observe(0), 0, "and the floor must not move");
+
+        // Take the first: gain then cost, exactly.
+        let gold_before = rd_run_observe(4);
+        let hp_before = rd_run_observe(2);
+        let max_before = rd_run_observe(3);
+        let gain = rd_run_start_gain(0);
+        let gain_amount = rd_run_start_gain_amount(0);
+        let cost = rd_run_start_cost(0);
+        let cost_amount = rd_run_start_cost_amount(0);
+        assert_eq!(rd_run_choose_start(0), 0, "taking blessing 0");
+        assert_eq!(rd_run_pending(), 0, "the choice is settled");
+
+        // Gain first, then cost, so a cost that would be lethal is still paid on the gained HP.
+        let mut gold = gold_before;
+        let mut hp = hp_before;
+        let mut max = max_before;
+        if gain == 2 {
+            gold += gain_amount;
+        } else if gain == 1 {
+            hp = (hp + gain_amount).min(max);
+        } else if gain == 3 {
+            hp -= gain_amount;
+        } else if gain == 4 {
+            max += gain_amount;
+            hp += gain_amount;
+        }
+        if cost == 3 {
+            hp -= cost_amount;
+        } else if cost == 2 {
+            gold += cost_amount;
+        }
+        assert_eq!(rd_run_observe(4), gold, "gold after gain and cost");
+        assert_eq!(rd_run_observe(2), hp, "health after gain and cost");
+        assert_eq!(rd_run_observe(3), max, "max health after gain and cost");
+
+        // And now the walk is legal.
+        assert!(rd_run_action_count() > 0, "the map opens up");
+        assert_eq!(rd_run_step(0), 0, "the first step is legal");
+        assert_eq!(rd_run_choose_start(0), -2, "the blessing cannot be taken twice");
     }
 
     /// A `?` room opens one of the four events, offers **two** choices, and the chosen one applies.

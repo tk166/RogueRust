@@ -5838,3 +5838,65 @@ if self.node >= 0 && !self.node_resolved() {
 | 内容 | 12 卡 / 4 事件 | **+ 3 药水**（`POT` 3 行） |
 | `sts` 镜像 | 16,164 / 13,924 B | **16,504 / 14,264 B**（重钉） |
 | 格式版本 | 3 | **4** |
+---
+
+## 81. 第 71 轮：塔底的初始奖励/惩罚（Neow）—— 选完才能出发
+
+> 用户："还有进游戏塔底的初始奖励惩罚变换界面。" 目标第 ② 项，做完。
+
+### 81.1 形状：一个祝福 = **收益 + 代价**，都用事件的闭词表
+
+```rust
+pub struct StartOffer { id: &'static str, gain: EventEffect, cost: EventEffect }
+```
+
+`EventEffect` 是 `?` 房那套（`heal/gold/lose_health/max_hp/nothing`），所以"100 金币换 7 点血"
+不需要任何新解释器 —— `choose_start` 先 `gain` 再 `cost`，**顺序有意义**（代价要能花掉刚得的血）。
+
+四张（`START_OFFERS`）：`max_hp` +8 最大 HP、`gold` +100 金 / 代价 −7 HP、`heal` 回 25、
+`blood_money` +150 金 / 代价 −14 HP。开局掷**两个不重复**的（`Event` 子流两次：`first`、再在"去掉
+first 的池子"里取 `second`）。
+
+⚠️ **这不是 wiki 的池子**：StS 从八个左右按稀有度权重抽，这里是四个等概率。已写进 `inv:§7.1`
+而不是让它隐含。
+
+### 81.2 规则：选完才出发
+
+`Pending::Start = 6`，`rd_run_start` 建好 run 之后立刻 `offer_start_choice()`。`enter_node` 多一条：
+
+```rust
+if self.pending == Pending::Start { return Err(RunError::WrongPhase); }
+```
+
+与 `NodeNotSettled` 同一条纪律：**当前该做的事没做完，别的动作一律拒绝**（浏览器里点节点会看到
+`走不过去 · WrongPhase`）。
+
+### 81.3 判据
+
+| 测试 | 钉住什么 |
+|---|---|
+| `the_blessing_is_offered_and_applied`（wasm） | `pending == 6`；两个 offer 的 id 非空且**互不相同**；gain/cost 都在 `1..=5`；**走一步被拒且 floor 不动**；选完 `pending == 0`、金币/血量/最大值**逐项等于"先 gain 再 cost"的独立推算**；之后第一步合法；**再选一次是 -2** |
+| `a_run_starts_from_the_content_not_from_constants` | 七个 RNG 子流的计数仍然可以逐项解释 —— 现在 `Event` 流是 **2**（祝福掷两次），其余 0 |
+
+⚠️ 最后那条是这一轮**唯一让老测试变红**的地方：它原来断言"除 Map 外全部为 0"。祝福是开局的合法消耗，
+所以它改成"Event 恰好 2，别的必须 0"。这正是"一个允许失败的节点，它的次数本身就是断言"。
+
+### 81.4 页面：塔底面板
+
+`pending === 6` 时出两个按钮，标题 `塔底 · 选择一项祝福（选完才能出发）`，每个按钮两行：
+名字（`治疗` / `财宝`）+ 收益与代价（`金币 100，代价 受伤 7`）。
+
+**实测**（真浏览器，不注入）：两个按钮 `治疗 回复 25` / `财宝 金币 100，代价 受伤 7`；点第二个 ⇒
+金币 `0 → 100`、HP `80 → 73`（正好是代价）、`pending → 0`、面板变成"还没出发 · 点亮的节点可以走"。
+
+⚠️ 又踩了同一个坑两次：`const OFFER_NAMES` 在面板渲染时仍在**暂时性死区**，于是名字**静默变空**。
+换成 `function offerName()`（函数声明会提升）才对 —— 与 `startRun` 那次完全同形。**"页面没报错但少了东西"
+比"页面报错"更难发现。**
+
+### 81.5 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 658 | **659**（rd-wasm 23 → 24） |
+| 开局 | 直接进第一层 | **先选祝福** |

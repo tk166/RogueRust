@@ -478,6 +478,20 @@ const eventLabel = (slot) =>
   readText((k) => ex.rd_run_event_label_len(k), (p, k) => ex.rd_run_event_label_into(k, p), slot);
 const EVENT_EFFECTS = ["", "回复", "金币", "受伤", "最大 HP", "什么也不做"];
 
+// The pre-run blessing (`inv:§7.1`): two offers, each a gain and a (possibly empty) cost.
+const startOffer = (slot) =>
+  readText((k) => ex.rd_run_start_offer_len(k), (p, k) => ex.rd_run_start_offer_into(k, p), slot);
+// Presentation only: the run layer hands out ids, the page gives them names.
+// Presentation only: the run layer hands out ids, the page gives them names. A
+// **function declaration** on purpose -- a `const` here is still in the temporal
+// dead zone while the panel renders, which silently produced an empty label.
+function offerName(id) {
+  const names = { max_hp: "更坚的体魄", gold: "财宝", heal: "治疗", blood_money: "血钱" };
+  return names[id] || id;
+}
+const offerText = (code, amount) =>
+  code === 5 || code < 0 ? "" : `${EVENT_EFFECTS[code]} ${amount}`;
+
 const rewardId = (slot) =>
   readText((k) => ex.rd_run_reward_card_id_len(k), (p, k) => ex.rd_run_reward_card_id_into(k, p), slot);
 const rewardTitle = (slot) =>
@@ -668,6 +682,25 @@ function renderNode() {
       button.onclick = () => act(() => ex.rd_run_take_card(Number(button.dataset.take)), "拿牌");
     });
     document.getElementById("skipReward").onclick = () => act(() => ex.rd_run_skip_reward(), "跳过");
+    return;
+  }
+  if (pending === 6) {
+    // A run opens on a blessing choice; nothing else is legal until one is taken.
+    const buttons = [];
+    for (let slot = 0; slot < 2; slot++) {
+      const gain = offerText(ex.rd_run_start_gain(slot), ex.rd_run_start_gain_amount(slot));
+      const cost = offerText(ex.rd_run_start_cost(slot), ex.rd_run_start_cost_amount(slot));
+      const detail = cost === "" ? gain : `${gain}，代价 ${cost}`;
+      buttons.push(
+        `<button class="act" data-start="${slot}">${esc(offerName(startOffer(slot)))}<br><small>${esc(detail)}</small></button>`
+      );
+    }
+    panel.innerHTML =
+      `<div class="stats">塔底 · 选择一项祝福（选完才能出发）</div>` +
+      `<div class="row" style="margin-top:8px">${buttons.join(" ")}</div>`;
+    panel.querySelectorAll("[data-start]").forEach((button) => {
+      button.onclick = () => act(() => ex.rd_run_choose_start(Number(button.dataset.start)), "祝福");
+    });
     return;
   }
   if (pending === 5) {

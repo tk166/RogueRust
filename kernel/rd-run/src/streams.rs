@@ -185,6 +185,8 @@ pub enum RunError {
     UnsupportedEventEffect,
     /// The event under the cursor is not one the content declared.
     NoSuchEvent,
+    /// No such blessing slot (there are two).
+    NoSuchOffer,
     /// There is no potion to take (the reward offered none).
     NoSuchPotion,
     /// You tried to walk on before settling the node you are standing on.

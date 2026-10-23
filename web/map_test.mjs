@@ -59,6 +59,13 @@ const io = {
 
 // "You settle a node before you walk on" (`RunError::NodeNotSettled`), so a walk has to finish each
 // node. This is the same shape the game page uses; a fight is started and folded straight back.
+// The run opens on a blessing choice; take the first, the way the page does. Declared with
+// `function` so the calls above it work (a `const` arrow would be in the temporal dead zone).
+function takeBlessing() {
+  if (ex.rd_run_pending() === 6) return ex.rd_run_choose_start(0);
+  return 0;
+}
+
 const settleHere = () => {
   if (ex.rd_run_node_kind() < 0) return;
   const kind = ex.rd_run_node_kind();
@@ -79,6 +86,7 @@ if (ex.rd_run_start(7) !== 0) {
   fail("rd_run_start(7) failed: " +
        new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, n).slice()));
 }
+takeBlessing();
 
 // ---------------------------------------------------------------------------------------------
 // 1. The view is the module's own map, node for node. A renderer that invented a node, dropped
@@ -244,8 +252,10 @@ if (ex.rd_run_start(7) !== 0) {
 // ---------------------------------------------------------------------------------------------
 {
   if (ex.rd_run_start(7) !== 0) fail("restarting seed 7 failed");
+  takeBlessing();
   const seven = view().nodes.map((n) => `${n.row}:${n.col}:${n.kind}`).join("|");
   if (ex.rd_run_start(1234) !== 0) fail("starting seed 1234 failed");
+  takeBlessing();
   const other = view().nodes.map((n) => `${n.row}:${n.col}:${n.kind}`).join("|");
   if (seven === other) fail("two different seeds produced the same map");
 }
@@ -318,6 +328,7 @@ function assertViewAgreesWithModule(where) {
   }
   // A different seed, checked the same way: the helper must not be passing by coincidence.
   if (ex.rd_run_start(4242) !== 0) fail("starting seed 4242 failed");
+  takeBlessing();
   assertViewAgreesWithModule("seed 4242, fresh");
   if (ex.rd_run_step(0) !== 0) fail("the first step of seed 4242 was refused");
   assertViewAgreesWithModule("seed 4242, after one step");

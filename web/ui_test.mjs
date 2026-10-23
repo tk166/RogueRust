@@ -51,6 +51,8 @@ for (const [needle, why] of [
   ["rd_run_rest(", "the rest site has no button behind it"],
   ["rd_run_buy_card(", "the merchant cannot sell anything"],
   ["rd_run_take_card(", "the reward screen has no way to take the card"],
+  ["rd_run_start_offer_len", "the run would open with no blessing to choose"],
+  ["rd_run_choose_start(", "the blessing could never be taken"],
   ["rd_run_event_text_len", "an unknown room would show no event"],
   ["rd_run_choose(", "an event choice could never be taken"],
   // Smith and removal are *choices*: a page that calls them with a literal 0 has turned them back
