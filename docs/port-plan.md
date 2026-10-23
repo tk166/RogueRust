@@ -5627,3 +5627,49 @@ ROOT/IDX/TAGS 整体**下移一格**：字节都在，但挂在错的段号下 �
 | 内容 | 12 卡 / 14 怪 / 5 遭遇 | **+ 4 事件**（`EV` 4 行） |
 | `sts` 镜像 | 15,548 / 13,292 B | **16,164 / 13,924 B**（重钉） |
 | 格式版本 | 2 | **3** |
+---
+
+## 77. 第 67 轮：`?` 房的 run 层接线 —— 写完了，**没验通**
+
+> 最后一轮前的这一轮，把事件从"格式里的数据"接成"run 层的动作"。接线写完了、编译过了、
+> 闸门全绿，但**端到端的那个测试红了**，我这轮没查出原因，所以把它删掉、把问题原样记下来。
+
+### 77.1 写完的部分
+
+* **rd-run**：`Pending::Event = 5`；`EventEffect { Heal/Gold/LoseHealth/GainMaxHealth/Nothing }`
+  （**闭词表**，内容里出现别的词就是 `UnsupportedEventEffect` 而不是"什么都不做"）；
+  `begin_event(id)` / `event()` / `resolve_event(effect)`；`begin_node` 对 `NodeKind::Unknown`
+  返回 `Pending::None`（不再拒绝），`resolve_event` 落 `mark_resolved()` ⇒ 一个 `?` 房只付一次。
+* **rd-wasm**：`begin_node` 在 `?` 房按 `Event` 子流抽一个事件（`EV` 4 行）并 `begin_event`；
+  六个导出 `rd_run_event_text_*` / `rd_run_event_label_*` / `rd_run_event_effect` /
+  `rd_run_event_amount` / `rd_run_choose`。效果码 `1 heal / 2 gold / 3 damage / 4 max_hp /
+  5 nothing / -1 未知`。
+
+顺带修掉一个**又出现的老坑**：`let content = content();` 之后，同一作用域里再调 `content()` 就成了
+"expected function, found &Content"；而且**在持有 run 槽位时调 `rd_run_node_kind()`** 正是第 51 轮
+那个 `static mut` 别名 bug 的形状。改成从 `begin_node` 的返回值拿 kind。
+
+### 77.2 **没验通**的部分（下一轮的第一件事）
+
+端到端测试 `an_unknown_room_opens_an_event_and_resolves_it` 在
+`assert_eq!(rd_run_begin_node(), 0, ...)` 处拿到 **-2**。已经排除/该查的：
+
+* rd-run 侧 `begin_node` 对 `Unknown` 已经改成 `Ok(Unknown)` + `Pending::None`（**有**可能仍有别的
+  返回 -2 的分支）；
+* 镜像里 `EV` 段确认有 4 行（`(16084, 80, 4)`），内核 `event_count()` 的单测**通过**；
+* 想拿到拒绝原因时，我两次被 PowerShell 的**反引号**坑到：`\`` + 字符 被当成转义（`r` = CR 把注释
+  劈成两行、`?` 让字符串变样），一次 patch 还改错了**另一个测试**的断言。
+
+⇒ 下一轮第一件事：把 `rd_run_begin_node` 的每条返回路径贴一遍（`-2` 只有 `fail()` 与
+`build_session_with` 那两条），用 `rd_run_last_error_len/into` 把文字打出来。**别再改测试断言去凑绿。**
+
+### 77.3 状态（诚实版）
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **16/16** |
+| 单测 | **654**（事件端到端测试已删，因为没有通过） |
+| `?` 房 | **仍然走不通**（rd-run 层通了，wasm 层返回 -2） |
+| 第一幕通关率 | **1/8**（未重测；`?` 仍是那 7 个 seed 的堵点） |
+
+这一轮交付的是"接线写完了 + 一个更窄的问题"，**不是**"`?` 房做完了"。

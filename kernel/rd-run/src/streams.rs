@@ -179,6 +179,12 @@ pub enum RunError {
     /// The node under the cursor is already settled. A node pays once: without this, standing on a
     /// combat node and pressing "fight" again would farm it, and a rest site would heal for ever.
     NodeResolved,
+    /// An event effect outside the closed vocabulary (`heal` / `gold` / `damage` / `max_hp` /
+    /// `nothing`). The run layer applies effects it knows and refuses the rest: an event that does
+    /// nothing because nobody implemented its effect is exactly the silent failure this project bans.
+    UnsupportedEventEffect,
+    /// The event under the cursor is not one the content declared.
+    NoSuchEvent,
     /// A relic whose effect is not implemented (`RunState::end_of_combat`).
     ///
     /// **This is the loud boundary of the relic system.** Effects are implemented one at a time, by

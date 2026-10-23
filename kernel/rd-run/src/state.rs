@@ -89,6 +89,24 @@ pub enum Pending {
     Chest = 3,
     /// [`RunState::take_card`] or [`RunState::skip_reward`] -- the screen after a won fight.
     Reward = 4,
+    /// [`RunState::resolve_event`] -- a `?` room, waiting for a choice.
+    Event = 5,
+}
+
+/// What an event's choice does. The vocabulary is **closed** and comes from the content
+/// (`EV.Effect0` / `EV.Effect1`); anything else is [`RunError::UnsupportedEventEffect`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EventEffect {
+    /// Restore HP, capped at the maximum.
+    Heal(i32),
+    /// Add gold.
+    Gold(i32),
+    /// Lose HP -- an event can hurt.
+    LoseHealth(i32),
+    /// Raise the maximum, and the current HP with it.
+    GainMaxHealth(i32),
+    /// Nothing at all -- a real, declared choice, not a missing one.
+    Nothing,
 }
 
 /// A card's rarity (`inv:§3.5`; the six buckets StS uses).
@@ -409,6 +427,8 @@ pub struct RunState {
     /// Which nodes have paid out. A node settles **once** -- a second visit is an error, which is
     /// what stops a fight from being farmed and a campfire from healing on every click.
     resolved: [u64; 2],
+    /// The `?`-room event under the cursor, while `Pending::Event`.
+    event: RunId,
     /// The rare-card pity offset (`inv:§3.5`): starts at −5%, +1% per non-rare reward roll, reset to
     /// −5% on a rare, capped at +40%. Only **combat reward** rolls move it.
     rarity_offset: i32,
@@ -449,6 +469,7 @@ impl RunState {
             shop: ShopStock::empty(),
             reward: Reward::empty(),
             boss_beaten: false,
+            event: RunId::EMPTY,
             resolved: [0; 2],
             rarity_offset: RARITY_OFFSET_START,
         };
@@ -804,8 +825,8 @@ impl RunState {
             // An elite is a fight like any other: what differs is the pool it draws from and what
             // it pays (`inv:§5.3`), and both live in the caller -- nothing to settle here.
             NodeKind::Elite => Pending::None,
-            // `Unknown` (`?`) is still "not in M1" -- the event system does not exist, so reaching
-            // one is loud instead of a silent walk-past.
+            // A `?` room is an **event** (`inv:§7.3`). The run layer reads no content, so the caller
+            // picks which event (`EV`) and then calls `begin_event`.
             other => return Err(RunError::NodeNotSettleable(other as u8)),
         };
         Ok(kind)
@@ -996,6 +1017,46 @@ impl RunState {
         self.deck_len -= 1;
         self.removed_cards += 1;
         Ok(price)
+    }
+
+    /// Open event `id` in the `?` room under the cursor.
+    pub fn begin_event(&mut self, id: &str) -> Result<(), RunError> {
+        if self.node_resolved() {
+            return Err(RunError::NodeResolved);
+        }
+        let id = RunId::new(id).map_err(|_| RunError::NoSuchEvent)?;
+        self.event = id;
+        self.pending = Pending::Event;
+        Ok(())
+    }
+
+    /// The event under the cursor (empty until [`RunState::begin_event`]).
+    #[must_use]
+    pub fn event(&self) -> &str {
+        self.event.as_str()
+    }
+
+    /// Take one choice of the open event.
+    ///
+    /// `effect` is what the **content** declared for that choice; the run layer applies it and
+    /// refuses anything it does not know. Every choice is answerable, including "nothing".
+    pub fn resolve_event(&mut self, effect: EventEffect) -> Result<(), RunError> {
+        if self.pending != Pending::Event {
+            return Err(RunError::WrongPhase);
+        }
+        match effect {
+            EventEffect::Heal(n) => self.heal_after_combat(n),
+            EventEffect::Gold(n) => self.adjust_gold(n),
+            EventEffect::LoseHealth(n) => self.adjust_health(-n),
+            EventEffect::GainMaxHealth(n) => {
+                self.health_max += n;
+                self.adjust_health(n);
+            }
+            EventEffect::Nothing => {}
+        }
+        self.pending = Pending::None;
+        self.mark_resolved();
+        Ok(())
     }
 
     /// What a won fight is offering.

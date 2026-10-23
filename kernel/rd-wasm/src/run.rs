@@ -686,8 +686,43 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
         Err(message) => return fail(session, &message),
     };
     let relics = relic_pool(content);
-    let outcome = session.state.begin_node(&cards, &relics).map(|_| 0i32);
-    finish(session, outcome)
+    // The kind comes back from `begin_node` itself: calling `rd_run_node_kind()` here would take the
+    // run slot a second time while `session` is already borrowed (the aliasing bug from round 51).
+    let kind = match session.state.begin_node(&cards, &relics) {
+        Ok(kind) => kind,
+        Err(e) => {
+            let message = describe(&e);
+            return fail(session, &message);
+        }
+    };
+    // A `?` room needs an event, and the events live in the content (`EV`) -- so the pick happens
+    // here, where both sides are reachable. The `Event` stream is what `run-layer.md` §3.2 reserves
+    // for exactly this.
+    if kind == rd_run::map::NodeKind::Unknown {
+        let image = content;
+        let count = image.event_count();
+        if count == 0 {
+            return fail(
+                session,
+                "内容里没有事件（`EV` 0 行）—— `?` 房无处可去",
+            );
+        }
+        let pick = match session.state.rng_mut().roll(RunStream::Event, count) {
+            Ok(value) => value,
+            Err(e) => {
+                let message = describe(&e);
+                return fail(session, &message);
+            }
+        };
+        let Some((id, _, _)) = image.event(pick) else {
+            return fail(session, "事件读不出来");
+        };
+        if let Err(e) = session.state.begin_event(id) {
+            let message = describe(&e);
+            return fail(session, &message);
+        }
+    }
+    0
 }
 
 /// Rest: heal 30% of maximum HP. Returns the health restored, or `-2`.
@@ -878,6 +913,137 @@ pub extern "C" fn rd_run_remove_card(index: i32) -> i32 {
 // =============================================================================================
 // The reward screen (`env-abi.md` §11.9)
 // =============================================================================================
+
+/// The open event's body text (`EV.DescriptionKey`) and its name, as one line: `"<name> — <text>"`.
+#[no_mangle]
+pub extern "C" fn rd_run_event_text_len() -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    match open_event(session) {
+        Some(text) => text.len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_event_text_len()` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_event_text_into(ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return 0;
+    };
+    match open_event(session) {
+        Some(text) => write_out(&text, ptr),
+        None => 0,
+    }
+}
+
+/// Choice `slot`'s button text.
+#[no_mangle]
+pub extern "C" fn rd_run_event_label_len(slot: i32) -> i32 {
+    match event_choice(slot) {
+        Some(choice) => choice.label.len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_event_label_len(slot)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_event_label_into(slot: i32, ptr: *mut u8) -> i32 {
+    match event_choice(slot) {
+        Some(choice) => write_out(choice.label, ptr),
+        None => 0,
+    }
+}
+
+/// Choice `slot`'s effect, as the ABI's small integer: 1 heal, 2 gold, 3 lose health, 4 max health,
+/// 5 nothing, `-1` unknown. A caller that sees `-1` must not guess.
+#[no_mangle]
+pub extern "C" fn rd_run_event_effect(slot: i32) -> i32 {
+    let Some(choice) = event_choice(slot) else {
+        return -1;
+    };
+    effect_code(choice.effect)
+}
+
+/// Choice `slot`'s amount.
+#[no_mangle]
+pub extern "C" fn rd_run_event_amount(slot: i32) -> i32 {
+    event_choice(slot).map_or(0, |choice| i32::from(choice.amount))
+}
+
+/// Take choice `slot` of the open event.
+#[no_mangle]
+pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
+    let Some(choice) = event_choice(slot) else {
+        return -1;
+    };
+    let Some(effect) = effect_from(choice.effect, i32::from(choice.amount)) else {
+        return -1;
+    };
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let outcome = session.state.resolve_event(effect).map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// The open event's choices, from the content.
+fn event_choice(slot: i32) -> Option<rd_core::content::EventChoice<'static>> {
+    let session = run_slot().as_ref()?;
+    if slot < 0 || slot > 1 {
+        return None;
+    }
+    let (_, _, choices) = lookup_event(session)?;
+    Some(choices[slot as usize])
+}
+
+fn open_event(session: &RunSession) -> Option<String> {
+    let (id, text, _) = lookup_event(session)?;
+    Some(std::format!("{id} — {text}"))
+}
+
+fn lookup_event(
+    session: &RunSession,
+) -> Option<(&'static str, &'static str, [rd_core::content::EventChoice<'static>; 2])> {
+    let wanted = session.state.event();
+    let image = content();
+    for index in 0..image.event_count() {
+        let event = image.event(index)?;
+        if event.0 == wanted {
+            return Some(event);
+        }
+    }
+    None
+}
+
+/// The content's closed vocabulary, as integers.
+fn effect_code(effect: &str) -> i32 {
+    match effect {
+        "heal" => 1,
+        "gold" => 2,
+        "damage" => 3,
+        "max_hp" => 4,
+        "nothing" => 5,
+        _ => -1,
+    }
+}
+
+fn effect_from(effect: &str, amount: i32) -> Option<rd_run::state::EventEffect> {
+    use rd_run::state::EventEffect;
+    Some(match effect {
+        "heal" => EventEffect::Heal(amount),
+        "gold" => EventEffect::Gold(amount),
+        "damage" => EventEffect::LoseHealth(amount),
+        "max_hp" => EventEffect::GainMaxHealth(amount),
+        "nothing" => EventEffect::Nothing,
+        _ => return None,
+    })
+}
 
 /// Has the act been cleared? `1` yes, `0` no, `-1` no run.
 #[no_mangle]
