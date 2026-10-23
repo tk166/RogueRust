@@ -247,6 +247,9 @@ PROBLEMS = []
 # The five entity tables.  `reader.document()` always emits all five (as lists,
 # possibly empty) while the source document may simply not have the key at all;
 # so they are compared row by row, never as root keys.
+# The document keys the compiler turns into **entity rows** (not root keys). UnknownRooms is the
+# ?-room table (EV); the key is named that way because the reference document uses Events for a
+# dict of its own shape and ENTITY_SECTIONS is a global mapping.
 ROW_TABLES = ("Cards", "Statuses", "EnemyActions", "Encounters", "Relics")
 
 

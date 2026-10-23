@@ -3279,5 +3279,51 @@
       "精英/Boss（sentry 差 G9、hexaghost 差 G3）、strong 池遭遇、地图、事件、药水、卡牌奖励池。",
       "第 4 个 weak 遭遇 enc_two_louses（louse_red/green 是 C 档）。"
     ]
-  }
+  },
+  "UnknownRooms": [
+    {
+      "Id": "golden_idol",
+      "NameKey": "Golden Idol",
+      "DescriptionKey": "An idol of gold sits on a mossy altar.",
+      "Label0": "Take it",
+      "Effect0": "gold",
+      "Amount0": 30,
+      "Label1": "Leave it",
+      "Effect1": "nothing",
+      "Amount1": 0
+    },
+    {
+      "Id": "shining_light",
+      "NameKey": "Shining Light",
+      "DescriptionKey": "A shaft of light falls through the ceiling.",
+      "Label0": "Step into it",
+      "Effect0": "max_hp",
+      "Amount0": 2,
+      "Label1": "Walk on",
+      "Effect1": "nothing",
+      "Amount1": 0
+    },
+    {
+      "Id": "old_shrine",
+      "NameKey": "Old Shrine",
+      "DescriptionKey": "A shrine that still answers.",
+      "Label0": "Pray",
+      "Effect0": "heal",
+      "Amount0": 15,
+      "Label1": "Leave",
+      "Effect1": "nothing",
+      "Amount1": 0
+    },
+    {
+      "Id": "scrap_pile",
+      "NameKey": "Scrap Pile",
+      "DescriptionKey": "A heap of bent metal.",
+      "Label0": "Dig through",
+      "Effect0": "gold",
+      "Amount0": 45,
+      "Label1": "Leave",
+      "Effect1": "nothing",
+      "Amount1": 0
+    }
+  ]
 }

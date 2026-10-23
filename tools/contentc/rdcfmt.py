@@ -158,22 +158,31 @@ MAGIC = 0x46434452          # b'RDCF'
 # 2: `CARD` gained a `Rarity` cell (stride unchanged -- the cell fits the existing padding).
 # A schema change must be visible to a reader that has a *fixed* cell table, otherwise an old
 # image decodes as garbage instead of failing.
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 HEADER_SIZE = 32
 NSEC = 20
 
 # ------------------------------------------------------------------ sections
 S_STR, S_STRO, S_OPD, S_OPF, S_TRM, S_TRW, S_AUX = 0, 1, 2, 3, 4, 5, 6
 S_CARD, S_STAT, S_EACT, S_ENCT, S_REL = 7, 8, 9, 10, 11
+S_EV = 15
 S_ROOT, S_IDX = 12, 13
 S_TAGS = 14
 SEC_NAMES = {
     S_STR: "STR", S_STRO: "STRO", S_OPD: "OPD", S_OPF: "OPF", S_TRM: "TRM",
     S_TRW: "TRW", S_AUX: "AUX", S_CARD: "CARD", S_STAT: "STAT", S_EACT: "EACT",
-    S_ENCT: "ENCT", S_REL: "REL", S_ROOT: "ROOT", S_IDX: "IDX", S_TAGS: "TAGS",
+    S_ENCT: "ENCT", S_REL: "REL", S_EV: "EV", S_ROOT: "ROOT", S_IDX: "IDX", S_TAGS: "TAGS",
 }
+# Every section the writer can emit, **in section-id order**.
+#
+# ⚠️ Two invariants live in this list, and both are silent when broken:
+#   * a table added to `ROW_SCHEMAS` but not here is counted and never written;
+#   * `compile.py` writes the directory **by position** (`enumerate(dir_entries)`), so a section id
+#     must equal its index here. Inserting `S_EV = 15` between `S_REL` (11) and `S_ROOT` (12) shifted
+#     ROOT/IDX/TAGS down one slot: the image kept the right *bytes* under the wrong *ids*, and the
+#     kernel read 0 events while the manifest said 4.
 SEC_ORDER = [S_STR, S_STRO, S_OPD, S_OPF, S_TRM, S_TRW, S_AUX,
-             S_CARD, S_STAT, S_EACT, S_ENCT, S_REL, S_ROOT, S_IDX, S_TAGS]
+             S_CARD, S_STAT, S_EACT, S_ENCT, S_REL, S_ROOT, S_IDX, S_TAGS, S_EV]
 
 # --------------------------------------------------------------- field kinds
 F_STR, F_INT, F_BOOL, F_TERM, F_TERMLIST, F_STRLIST, F_JSON = 1, 2, 3, 4, 5, 6, 7
@@ -267,8 +276,16 @@ REL_ROW = [
     ("Id", F_STR, 0), ("DisplayName", F_STR, 0), ("RunPrograms", F_TERM, 0),
     ("CombatRules", F_TERM, 0), ("extra", F_TERM, 0),
 ]
+EV_ROW = [
+    ("Id", F_STR, 0), ("NameKey", F_STR, 0), ("DescriptionKey", F_STR, 0),
+    # Two choices as **fixed cells** (no TERM walk): the effect is a closed vocabulary word.
+    ("Label0", F_STR, 0), ("Effect0", F_STR, 0), ("Amount0", F_INT, 0),
+    ("Label1", F_STR, 0), ("Effect1", F_STR, 0), ("Amount1", F_INT, 0),
+    ("extra", F_TERM, 0),
+]
+
 ROW_SCHEMAS = {"CARD": CARD_ROW, "STATUS": STATUS_ROW, "EACT": EACT_ROW,
-               "ENCT": ENCT_ROW, "REL": REL_ROW}
+               "ENCT": ENCT_ROW, "REL": REL_ROW, "EV": EV_ROW}
 
 
 def align4(n):

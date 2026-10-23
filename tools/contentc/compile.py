@@ -51,9 +51,11 @@ DEFAULT_SRC = (r"D:\Vibe\sts-tui\ref\RogueDeck-Core\src\RogueDeck.Sandbox.Run"
                r"\SampleContent\bureaucrats.roguedeck.json")
 
 ENTITY_SECTIONS = [("CARD", "Cards"), ("STATUS", "Statuses"), ("EACT", "EnemyActions"),
-                   ("ENCT", "Encounters"), ("REL", "Relics")]
+                   ("ENCT", "Encounters"), ("REL", "Relics"),
+    # **Not** `Events`: the reference document uses that key for a dict of its own shape.
+    ("EV", "UnknownRooms")]
 SEC_OF = {"CARD": F.S_CARD, "STATUS": F.S_STAT, "EACT": F.S_EACT,
-          "ENCT": F.S_ENCT, "REL": F.S_REL}
+          "ENCT": F.S_ENCT, "REL": F.S_REL, "EV": F.S_EV}
 
 # Document keys: top-level keys that are **build metadata, not game data**.
 #
@@ -70,7 +72,10 @@ SEC_OF = {"CARD": F.S_CARD, "STATUS": F.S_STAT, "EACT": F.S_EACT,
 # imports it instead of keeping a second copy (`contentc-audit.md` §7 discipline: one constant,
 # one place).  Adding a key here is a *content* decision, so it changes image bytes; `roguedeck`
 # has neither key, which is why its two pinned images must stay byte-identical.
-DOC_ROOT_KEYS = ("InertKeys", "Notes")
+DOC_ROOT_KEYS = ("InertKeys", "Notes",
+    # the `?`-room entity table (`EV`); an entity key, so never a root key
+    "UnknownRooms",
+)
 
 # Sentinel values for the two "not a real value" states.  Keeping them distinct
 # is what lets `reader.py` reproduce the source's key *presence* exactly.
@@ -600,6 +605,10 @@ class Serializer(object):
         # ---- entity tables
         for _, sname, schema, rows in self._row_groups():
             self.sections[SEC_OF[sname]] = self.build_rows(sname, schema, rows)
+            if os.environ.get("RDCF_DEBUG_SECTIONS"):
+                import sys as _sys
+                _sys.stderr.write("ENC %s -> sec %s: rows=%d bytes=%d\n" % (
+                    sname, SEC_OF[sname], len(rows), len(self.sections[SEC_OF[sname]])))
 
         # ---- root table
         r = io.BytesIO()
@@ -650,6 +659,11 @@ class Serializer(object):
         }
         for _, sname, _, rows in self._row_groups():
             counts[SEC_OF[sname]] = len(rows)
+        if os.environ.get("RDCF_DEBUG_SECTIONS"):
+            print("[] row_groups:", [(sname, SEC_OF[sname]) for _, sname, _, _ in self._row_groups()])
+            print("[] payload keys:", sorted(payload))
+            print("[] counts:", sorted(counts.items()))
+            print("[] sections:", sorted(self.sections.items(), key=lambda kv: kv[0])[:30])
         dir_size = F.NSEC * 12
         dir_entries = []
         off = F.align4(F.HEADER_SIZE + dir_size)
@@ -955,6 +969,7 @@ def write_report(path, src_path, raw_len, doc, results, comp, t_load, peak_bytes
             F.S_EACT: "enemy-action rows (%d B each)" % F.row_stride("EACT"),
             F.S_ENCT: "encounter rows (%d B each)" % F.row_stride("ENCT"),
             F.S_REL: "relic rows (%d B each)" % F.row_stride("REL"),
+        F.S_EV: "event rows (%d B each)" % F.row_stride("EV"),
             F.S_ROOT: "root pointers", F.S_IDX: "8-byte id entries"}
     for sec, off, size, cnt in results["full"]["sections"]:
         if not size:
@@ -975,9 +990,9 @@ def write_report(path, src_path, raw_len, doc, results, comp, t_load, peak_bytes
          100.0 * (len(ser.sec_trm) + len(ser.sec_trw) + len(ser.sec_aux)) / full_bytes))
     a("fixed entity tables (%d B, %.0f%%)."
       % (sum(s[2] for s in results["full"]["sections"]
-             if s[0] in (F.S_CARD, F.S_STAT, F.S_EACT, F.S_ENCT, F.S_REL)),
+             if s[0] in (F.S_CARD, F.S_STAT, F.S_EACT, F.S_ENCT, F.S_REL, F.S_EV)),
          100.0 * sum(s[2] for s in results["full"]["sections"]
-                     if s[0] in (F.S_CARD, F.S_STAT, F.S_EACT, F.S_ENCT, F.S_REL))
+                     if s[0] in (F.S_CARD, F.S_STAT, F.S_EACT, F.S_ENCT, F.S_REL, F.S_EV))
          / full_bytes))
     a("")
 
@@ -1358,6 +1373,7 @@ def main():
             "enemy_actions": {"count": len(enc.rows["EACT"]), "stride": F.row_stride("EACT")},
             "encounters": {"count": len(enc.rows["ENCT"]), "stride": F.row_stride("ENCT")},
             "relics": {"count": len(enc.rows["REL"]), "stride": F.row_stride("REL")},
+        "events": {"count": len(enc.rows.get("EV", [])), "stride": F.row_stride("EV")},
             "roots": {"count": len(enc.root_entries)},
             "id_index": {"count": len(enc.idx)},
         },

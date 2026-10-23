@@ -46,7 +46,7 @@ pub const DIRECTORY_ENTRY_BYTES: usize = 12;
 /// 内核的格表是**固定**的，而镜像原本既不记格数、也不随 schema 动版本号 ⇒ 15 格的旧镜像
 /// 配 16 格的新内核会**解析成功并读出垃圾**（把旧的 `extra` 当 `Rarity`，`content.string`
 /// 碰巧拿到合法串号就返回一段像样的文本）。schema 变更必须响亮，所以版本号跟着 schema 走。
-pub const FORMAT_VERSION: u16 = 2;
+pub const FORMAT_VERSION: u16 = 3;
 /// 目录项数（头里 `nsec`）。0..=14 有名字，15..19 保留。
 pub const SECTION_COUNT: usize = 20;
 /// 头部 `flags` 的 bit0：表现层已剥（`content.core.rdcf`）。
@@ -65,6 +65,9 @@ pub const S_STAT: usize = 8;
 pub const S_EACT: usize = 9;
 pub const S_ENCT: usize = 10;
 pub const S_REL: usize = 11;
+/// The `?`-room table (`EV`). `rdcfmt.S_EV`, same number -- and, like every section id, it must be
+/// the index of its entry in `rdcfmt.SEC_ORDER`.
+pub const S_EV: usize = 15;
 pub const S_ROOT: usize = 12;
 pub const S_IDX: usize = 13;
 pub const S_TAGS: usize = 14;
@@ -957,6 +960,8 @@ pub enum Table {
     EnemyAction,
     Encounter,
     Relic,
+    /// The `?` room's content (`EV`, from the document key `UnknownRooms`).
+    Event,
 }
 
 impl Table {
@@ -978,6 +983,7 @@ impl Table {
             Table::EnemyAction => S_EACT,
             Table::Encounter => S_ENCT,
             Table::Relic => S_REL,
+            Table::Event => S_EV,
         }
     }
 
@@ -990,6 +996,7 @@ impl Table {
             Table::EnemyAction => "EACT",
             Table::Encounter => "ENCT",
             Table::Relic => "REL",
+            Table::Event => "EV",
         }
     }
 
@@ -1002,6 +1009,7 @@ impl Table {
             Table::EnemyAction => "EACT",
             Table::Encounter => "ENCT",
             Table::Relic => "REL",
+            Table::Event => "EV",
         }
     }
 
@@ -1014,6 +1022,9 @@ impl Table {
             Table::EnemyAction => EK_EACTION,
             Table::Encounter => EK_ENCOUNTER,
             Table::Relic => EK_RELIC,
+            // Events are found through their own list, never through `SEC_IDX` -- which is why
+            // `from_entity_kind(EK_EVENT)` stays `None`.
+            Table::Event => EK_EVENT,
         }
     }
 
@@ -1039,6 +1050,7 @@ impl Table {
             Table::EnemyAction => &EACT_SCHEMA,
             Table::Encounter => &ENCT_SCHEMA,
             Table::Relic => &REL_SCHEMA,
+            Table::Event => &EV_SCHEMA,
         }
     }
 
@@ -1387,6 +1399,22 @@ entity_row!(
         ("CardsDrawnPerTurn", F_INT, 0) => cards_drawn_per_turn => 6,
         /// schema 不认识的键（term 句柄）。
         ("extra", F_TERM, 0) => extra => 7,
+    }
+);
+
+entity_row!(
+    /// `?` 房事件行（`EV`，stride 20，10 格）。
+    EvRow, Event, EV_SCHEMA, 20, 10, {
+        ("Id", F_STR, 0) => id => 0,
+        ("NameKey", F_STR, 0) => name_key => 1,
+        ("DescriptionKey", F_STR, 0) => description_key => 2,
+        ("Label0", F_STR, 0) => label0 => 3,
+        ("Effect0", F_STR, 0) => effect0 => 4,
+        ("Amount0", F_INT, 0) => amount0 => 5,
+        ("Label1", F_STR, 0) => label1 => 6,
+        ("Effect1", F_STR, 0) => effect1 => 7,
+        ("Amount1", F_INT, 0) => amount1 => 8,
+        ("extra", F_TERM, 0) => extra => 9,
     }
 );
 
@@ -2237,6 +2265,69 @@ impl<'a> Content<'a> {
             at = at.checked_add(width)?;
         }
         None
+    }
+}
+
+/// One choice of a `?`-room event: the button text, the effect's name, and its amount.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct EventChoice<'a> {
+    /// What the button says.
+    pub label: &'a str,
+    /// `heal` / `gold` / `damage` / `max_hp` / `nothing` -- a **closed** vocabulary, because the run
+    /// layer has no program interpreter.
+    pub effect: &'a str,
+    /// How much of it.
+    pub amount: i16,
+}
+
+impl<'a> Content<'a> {
+    /// The `?`-room events in the image, in table order: `(id, choices)`.
+    ///
+    /// `count` is the table's row count; a row whose id cannot be read is skipped rather than
+    /// reported as an empty event -- `usize::MAX` marks "unreadable" so a caller cannot mistake it
+    /// for a valid event with no text.
+    #[must_use]
+    pub fn event_count(&self) -> u32 {
+        self.section(S_EV).map_or(0, |section| section.count)
+    }
+
+    /// Event `index`: its id, its body text, and its two choices. `None` when the row is unusable.
+    #[must_use]
+    pub fn event(&self, index: u32) -> Option<(&'a str, &'a str, [EventChoice<'a>; 2])> {
+        let row = EvRow::new(self.row(Table::Event, index)?)?;
+        let id = self.string(row.id())?;
+        let text = self
+            .string(row.description_key())
+            .filter(|text| !text.is_empty())
+            .unwrap_or("");
+        let mut choices = [EventChoice {
+            label: "",
+            effect: "nothing",
+            amount: 0,
+        }; 2];
+        for (slot, (label_cell, effect_cell, amount_cell)) in [
+            (row.label0(), row.effect0(), row.amount0()),
+            (row.label1(), row.effect1(), row.amount1()),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            choices[slot] = EventChoice {
+                label: self.string(label_cell).unwrap_or(""),
+                effect: self.string(effect_cell).unwrap_or("nothing"),
+                amount: self.amount(amount_cell),
+            };
+        }
+        Some((id, text, choices))
+    }
+
+    /// An `F_INT` cell as a number. `ABSENT16` / `NULL16` are zero; everything else is `i16`.
+    fn amount(&self, cell: u16) -> i16 {
+        if cell == ABSENT16 || cell == NULL16 {
+            0
+        } else {
+            cell as i16
+        }
     }
 }
 
@@ -3614,7 +3705,7 @@ mod tests {
         assert_eq!(content.card_rarity("slimed"), Some("Status"));
         assert_eq!(content.card_rarity("no_such_card"), None);
         assert_eq!((CardRow::STRIDE, CardRow::CELLS), (32, 16));
-        assert_eq!(FORMAT_VERSION, 2);
+        assert_eq!(FORMAT_VERSION, 3);
         assert_eq!(content.version(), FORMAT_VERSION);
         // The roguedeck image has no `Rarity` key at all: the cell is there and reads as absent,
         // which is `None` rather than an error.
@@ -3654,6 +3745,53 @@ mod tests {
         assert_eq!(boss, vec!["enc_slime_boss"]);
         // A pool the document does not have is None, not an empty set.
         assert_eq!(content.encounter_pool("Sideboard"), None);
+    }
+
+    /// The `?` room's four events, read out of the image: ids, body text, and both choices.
+    #[test]
+    fn the_unknown_room_events_are_readable() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&bytes).expect("the image parses");
+        assert_eq!(content.event_count(), 4, "four events");
+        let mut ids = Vec::new();
+        for index in 0..content.event_count() {
+            let (id, text, choices) = content.event(index).expect("event {index}");
+            ids.push(id);
+            assert!(!text.is_empty(), "{id} has no body text");
+            assert!(!choices[0].label.is_empty(), "{id} choice 0 has no label");
+            assert!(!choices[1].label.is_empty(), "{id} choice 1 has no label");
+            // The vocabulary is closed: anything else is a content error the run layer would have to
+            // refuse, so it must not appear here.
+            for choice in &choices {
+                assert!(
+                    ["heal", "gold", "damage", "max_hp", "nothing"].contains(&choice.effect),
+                    "{id}: unknown effect {:?}",
+                    choice.effect
+                );
+            }
+        }
+        ids.sort_unstable();
+        assert_eq!(
+            ids,
+            vec!["golden_idol", "old_shrine", "scrap_pile", "shining_light"]
+        );
+        // Spot-check one: the golden idol pays 30 gold, and leaving it does nothing.
+        let index = (0..content.event_count())
+            .find(|index| content.event(*index).map(|e| e.0) == Some("golden_idol"))
+            .expect("golden_idol");
+        let (_, _, choices) = content.event(index).unwrap();
+        assert_eq!(choices[0].effect, "gold");
+        assert_eq!(choices[0].amount, 30);
+        assert_eq!(choices[1].effect, "nothing");
+
+        // The roguedeck image has **no** `UnknownRooms` key, so it has no events -- not an error.
+        let core = std::fs::read(CORE_IMAGE).expect("the roguedeck image");
+        let core = Content::parse(&core).expect("parses");
+        assert_eq!(core.event_count(), 0, "roguedeck has no events");
     }
 
     fn the_real_images_validate() {

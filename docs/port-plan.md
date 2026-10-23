@@ -5567,3 +5567,63 @@ EV_ROW = Id, NameKey, DescriptionKey, Label0, Effect0, Amount0, Label1, Effect1,
 2. `write()` 里 `counts`/`payload` 对 EV 的两套账 —— 待查。
 
 `?` 房**仍未接通**，因此第一幕目前仍是"能通关但 7/8 个 seed 会被 `?` 堵死"。
+---
+
+## 76. 第 66 轮：`?` 房的事件表**进了格式** —— 真正的 bug 是"目录按位置写"
+
+> 上一轮留下的线索是"两套账"。这一轮把它查到底，结论是一个**格式不变量**，不是记账笔误。
+
+### 76.1 真因：目录按**位置**写，所以段号必须等于它在 `SEC_ORDER` 里的下标
+
+`compile.py` 写目录的方式是：
+
+```python
+dir_entries = []                       # 按 F.SEC_ORDER 顺序 append
+for sec in F.SEC_ORDER: ...
+for i, (sec, o, size, cnt) in enumerate(dir_entries):
+    struct.pack_into("<III", buf, F.HEADER_SIZE + 12 * i, o, size, cnt)
+```
+
+**槽位号就是 `i`**，不是 `sec`。我把 `S_EV = 15` 插在 `S_REL(11)` 与 `S_ROOT(12)` 之间，于是
+ROOT/IDX/TAGS 整体**下移一格**：字节都在，但挂在错的段号下 —— 读第 15 段自然读到 0 行，而 manifest
+（读 `enc.rows`）说 4 行。这就是"两套账"的全部内容。
+
+⇒ 修法一行：`S_EV` 放到 `SEC_ORDER` **末尾**。并在那行留下注释，写明这条不变量与它坏掉时的样子。
+
+排查过程里还有两个**会骗人的东西**，都记下来了：
+* `build.py` 用 `subprocess.run(..., stdout=PIPE)` 调编译器，**成功时把 stdout 吞掉**，所以我打在
+  编译器里的探针一行都看不见；要看得直接跑 `compile.py` 复刻它的参数。
+* 探针打印 `payload keys` 时我只看**键**不看**值** —— 键在、值是 `b""`，于是误判成"写进去了"。
+
+### 76.2 于是事件表真的落地了
+
+* **格式**：`S_EV = 15`，`EV_ROW` 十格固定（`Id/NameKey/DescriptionKey/Label0/Effect0/Amount0/
+  Label1/Effect1/Amount1/extra`），`FORMAT_VERSION` **2 → 3**。
+* **编译器**：`("EV", "UnknownRooms")`；`UnknownRooms` 进 `DOC_ROOT_KEYS`（实体键不落成根键）。
+  键名**不叫 `Events`**：参考文档用那名字装一个 20 项的 dict，而 `ENTITY_SECTIONS` 是全局映射。
+* **内核**：`Table::Event` + `EvRow` + `Content::event_count()/event(index)`，`EK_EVENT` 只做
+  `entity_kind()` 的返回值、**不进 `SEC_IDX`**（所以 `from_entity_kind(EK_EVENT)` 仍是 `None`，
+  那条老测试原样通过）。
+* **内容**：4 个事件（`golden_idol` +30 金 / `shining_light` +2 最大 HP / `old_shrine` 回 15 /
+  `scrap_pile` +45 金），每个两个选项，`Effect` 是**闭词表** `heal/gold/damage/max_hp/nothing` ——
+  因为 run 层没有节目解释器。
+
+判据 `the_unknown_room_events_are_readable`（rd-core，真镜像）：4 个事件、每个都有正文与两个带文字的
+选项、**效果词表闭集**、id 集合正确、`golden_idol` 的第一个选项是 `gold/30`；并且 **roguedeck 镜像
+0 个事件**（它没有 `UnknownRooms` 键，不报错也不编）。
+
+### 76.3 还没接的：`?` 房仍然被拒绝
+
+格式、编译器、内核三层的球都到位了，**但 run 层还没用它**：`NodeKind::Unknown` 仍返回
+`NodeNotSettleable`。所以第一幕现在还是"能通关，但 8 个 seed 里 7 个被 `?` 堵死"。
+下一轮（最后一轮）就是它：`Pending::Event` + `begin_event`/`resolve_event` + ABI + 事件面板 + 浏览器验证。
+
+### 76.4 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 653 | **654**（rd-core 577 → 578） |
+| 内容 | 12 卡 / 14 怪 / 5 遭遇 | **+ 4 事件**（`EV` 4 行） |
+| `sts` 镜像 | 15,548 / 13,292 B | **16,164 / 13,924 B**（重钉） |
+| 格式版本 | 2 | **3** |
