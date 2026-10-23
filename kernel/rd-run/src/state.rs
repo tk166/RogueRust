@@ -728,6 +728,13 @@ impl RunState {
     #[must_use]
     pub fn reachable(&self) -> Reachable {
         let mut out = Reachable::default();
+        // **Nothing is legal while a choice is pending** -- the pre-run blessing (inv:§7.1), a won
+        // fight's reward, a shop, a campfire, an event. Offering steps here is what let a map click
+        // overwrite the choice panel with a refusal, which left the player with no way forward at
+        // all (found by hand, 2026-10-22: "第一个节点就点不进去").
+        if self.pending != Pending::None {
+            return out;
+        }
         if self.node < 0 {
             let Some(first) = self.map.row_first(0) else {
                 return out;

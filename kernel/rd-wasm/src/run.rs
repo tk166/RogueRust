@@ -2832,11 +2832,11 @@ mod tests {
         assert_eq!(rd_run_start_offer_len(2), -1, "only two offers");
 
         // No move is legal yet.
-        assert_eq!(
-            rd_run_step(0),
-            -2,
-            "walking before the blessing must be refused"
-        );
+        // No legal move exists yet: the action table is empty, so there is no index 0 at all. (It
+        // used to be -2 WrongPhase with five lit nodes on the map -- which the page drew, and a
+        // click then overwrote the blessing panel with the refusal.)
+        assert_eq!(rd_run_action_count(), 0, "no node is offered before the blessing");
+        assert_ne!(rd_run_step(0), 0, "and stepping anyway is refused");
         assert_eq!(rd_run_observe(0), 0, "and the floor must not move");
 
         // Take the first: gain then cost, exactly.

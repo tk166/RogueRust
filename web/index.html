@@ -831,6 +831,10 @@ function act(call, label) {
   if (verdict < 0) {
     document.getElementById("msg").innerHTML =
       `<span class="err">${esc(label)} 被拒 · ${esc(runError())}</span>`;
+    // Re-render anyway: a refusal must never eat a pending choice. The player clicked something the
+    // kernel would not take, and the panel it replaced (a blessing, a shop, an event) has to come
+    // back -- otherwise the only way out is a reload.
+    renderNode();
     return;
   }
   // **Both modes.** The first version only refreshed in run mode, so a potion used *in a fight*
