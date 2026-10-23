@@ -605,6 +605,9 @@ function renderMap(verdict) {
   const view = RD_MAP.describeMap(runRead);
   document.getElementById("mapbox").innerHTML = view ? RD_MAP.svgMarkup(view) : "";
   if (!view) return;
+  // **`#nodePanel` belongs to `renderNode` alone.** This used to write the status line into it,
+  // which meant a refused map click wiped the buttons of the node you are standing on -- the
+  // "开始战斗" button vanished and the only way out was a reload (found by hand, 2026-10-22).
   const parts = [];
   if (typeof verdict === "number" && verdict === 0) {
     parts.push(`<span class="good">走到了 floor ${view.status.floor}</span>`);
@@ -612,7 +615,7 @@ function renderMap(verdict) {
     parts.push(`<span class="err">走不过去 · ${esc(runError())}</span>`);
   }
   parts.push(`<span class="dim">可达 ${view.actions.length} 个节点</span>`);
-  document.getElementById("nodePanel").innerHTML = parts.join(" · ");
+  document.getElementById("msg").innerHTML = parts.join(" · ");
 }
 
 /// What the node under the cursor needs, as buttons. Every button is one kernel export.
@@ -1446,6 +1449,13 @@ function measure() {
   // Walking the map: a click on a reachable node is one `rd_run_step`, then `begin_node` decides
   // what the node needs (a fight, a rest, a shop, a chest, or a refusal for the kinds M1 skips).
   document.getElementById("mapbox").addEventListener("click", (ev) => {
+    // Clicking the node you are standing on is not a move -- it is "show me what this node wants",
+    // which must always work even after a refused click somewhere else.
+    const here = ev.target.closest("g.node.here");
+    if (here && mode === "run" && !runOver) {
+      renderNode();
+      return;
+    }
     const group = ev.target.closest("g.node.reachable");
     if (!group || mode !== "run" || runOver) return;
     const target = Number(group.dataset.node);
@@ -1454,14 +1464,18 @@ function measure() {
     if (action < 0) return;
     const verdict = ex.rd_run_step(action);
     if (verdict < 0) {
+      // The refusal goes to the message strip; the node panel is rebuilt from state so it can
+      // never be left holding an error message instead of its buttons.
       renderMap(verdict);
+      renderNode();
       return;
     }
     const began = ex.rd_run_begin_node();
     renderMap(verdict);
     if (began < 0) {
-      document.getElementById("nodePanel").innerHTML =
+      document.getElementById("msg").innerHTML =
         `<span class="err">这个节点本版不结算 · ${esc(runError())}</span>`;
+      renderNode();
       return;
     }
     renderNode();
