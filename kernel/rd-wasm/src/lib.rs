@@ -411,6 +411,11 @@ pub(crate) fn set_combat_hero_health(value: i32) {
                 combatant.health_current = value;
             }
         }
+        // **Re-observe after the write.** The published vector is what the page reads, and the page's
+        // battle log is a *diff of two observations* -- a stale baseline made the first card's log
+        // entry claim a hit that happened before the fight ever started. Reported by hand: "bash 打出
+        // 后英雄受到 7 点伤害", where the 7 was the tower blessing's cost.
+        session.reobserve_after_external_change();
     }
 }
 
@@ -1184,6 +1189,15 @@ pub extern "C" fn rd_env_observe_buf() -> *const i32 {
 pub unsafe extern "C" fn rd_env_observe_into(ptr: *mut i32) -> i32 {
     if ptr.is_null() {
         return -1;
+    }
+    // **Recompute before copying.** `OBS` used to be a snapshot published only by `rd_env_step`, so
+    // *any* mutation made outside that path left the vector stale -- a potion use, the fight's
+    // starting health, and (the visible bug) the page's battle log, which is a diff of two
+    // observations and therefore blamed the first card for damage that happened before the fight.
+    // Patched three times at three call sites; this is the fix that makes the class impossible: the
+    // observation is now derived at read time, so it cannot disagree with the state.
+    if let Some(session) = slot().as_mut() {
+        session.reobserve_after_external_change();
     }
     #[allow(static_mut_refs)]
     {

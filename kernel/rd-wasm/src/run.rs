@@ -2879,6 +2879,74 @@ mod tests {
         assert_eq!(rd_run_choose_start(0), -2, "the blessing cannot be taken twice");
     }
 
+    /// **A fight starts at the run's health, and the observation says so.**
+    ///
+    /// The page's battle log is a diff of two observation vectors. When the fight-start vector still
+    /// carried the pre-blessing HP, the *first card played* was blamed for the blessing's cost
+    /// (reported by hand). The fix is that `set_combat_hero_health` now re-observes; this pins it.
+    #[test]
+    fn a_fight_starts_at_the_runs_health_and_the_observation_agrees() {
+        // Find a seed whose blessing costs health, so the run is wounded before the fight.
+        let mut wounded = false;
+        for seed in 1..=40 {
+            assert_eq!(rd_run_start(seed), 0, "starting seed {seed}");
+            let mut slot = -1;
+            for candidate in 0..2 {
+                if rd_run_start_cost(candidate) == 3 && rd_run_start_cost_amount(candidate) > 0 {
+                    slot = candidate;
+                }
+            }
+            if slot < 0 {
+                // No damaging blessing here: take one (so the run is playable) and move on.
+                assert_eq!(rd_run_choose_start(0), 0);
+                continue;
+            }
+            assert_eq!(rd_run_choose_start(slot), 0, "taking the damaging blessing");
+            if rd_run_observe(2) < rd_run_observe(3) {
+                wounded = true;
+                break;
+            }
+        }
+        assert!(wounded, "no seed offered a blessing that costs health");
+
+        // Walk to a fight and start it.
+        let mut began = false;
+        for _ in 0..20 {
+            assert!(rd_run_action_count() > 0, "no move to a fight");
+            let mut combat = -1;
+            for action in 0..rd_run_action_count() {
+                let node = rd_run_action_arg(action, 0);
+                if node >= 0 && node_kind(node) == 1 {
+                    combat = action;
+                    break;
+                }
+            }
+            let chosen = if combat >= 0 { combat } else { 0 };
+            assert_eq!(rd_run_step(chosen), 0, "walk");
+            if rd_run_node_kind() == 1 {
+                assert_eq!(rd_run_begin_node(), 0);
+                assert_eq!(rd_run_fight_begin(), 0, "fight_begin: {:?}", run_error_text());
+                began = true;
+                break;
+            }
+            settle_here();
+        }
+        assert!(began, "never reached a fight");
+
+        let run_hp = rd_run_observe(2);
+        let mut buffer = vec![0i32; crate::rd_env_observe_len() as usize];
+        unsafe { crate::rd_env_observe_into(buffer.as_mut_ptr()) };
+        assert_eq!(
+            buffer[4], run_hp,
+            "the fight's published HP must be the run's, not the maximum"
+        );
+        assert!(
+            run_hp < buffer[5],
+            "and this seed must actually be wounded ({run_hp}/{})",
+            buffer[5]
+        );
+    }
+
     /// A `?` room opens one of the four events, offers **two** choices, and the chosen one applies.
     ///
     /// The room was refused outright until the missing `NodeKind::Unknown` arm was added -- a bug that
