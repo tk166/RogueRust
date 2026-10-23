@@ -5405,3 +5405,64 @@ boss fight: result=2 steps=32 hp=0
 | `sts` 镜像 | 12,632 / 10,852 B | **14,684 / 12,712 B**（重钉） |
 | `.wasm` | 483,990 B | **491,315 B** |
 | 地图 | 15 行 | **15 行 + Boss 行**（绘制） |
+---
+
+## 73. 第 63 轮：牌组终于能长大 —— 而且**第一幕真的通了**（1/8）
+
+> 上一轮结尾说"打不过 Boss，因为牌组永远长不大"。这一轮补上能长大的部分，并**量**了一遍。
+
+### 73.1 五张真正的铁甲战士卡进了内容
+
+选卡标准：**只用现有节点就能表达**（`dealDamage` / `gainBlock` / `applyStatus` /
+`createCardInstance`），凡是"身份依赖新机制"的一律不做，并在注释里点名：
+
+| 卡 | 稀有度 | 效果 | 需要的节点 |
+|---|---|---|---|
+| `twin_strike` | Common | 5 伤害 ×2 | `dealDamage` ×2 |
+| `iron_wave` | Common | 5 Block + 5 伤害 | `gainBlock` + `dealDamage` |
+| `clothesline` | Common | 12 伤害 + 2 Weak | `dealDamage` + `applyStatus` |
+| `anger` | Common | 6 伤害 + 复制一张进弃牌堆 | `dealDamage` + `createCardInstance`（与 Slimed 同一个） |
+| `uppercut` | Uncommon | 13 伤害 + 1 Weak + 1 Vulnerable | `dealDamage` + `applyStatus` ×2 |
+
+**没做的（点名）**：Heavy Blade（力量倍率）、Body Slam（格挡当伤害）、Shrug It Off（抽牌）、
+Armaments（升级牌）—— 它们的身份各要一个新机制，写进注释而不是糊一个近似。
+
+⇒ 奖励池从 3 张 Basic 变成 **3 Basic + 4 Common + 1 Uncommon**：第 54 轮做的稀有度权重与保底偏移
+**第一次有东西可称**；"拿奖励"也第一次真的让牌组变强。
+
+### 73.2 决定性的一量：**第一幕通得了**
+
+新加一个 `#[ignore]` 的**基准探针** `balance_probe_full_run`（它不是闸门：把一个"这个机器人必须赢"
+写成断言，说的是机器人，不是游戏）。八个 seed 的实测：
+
+```
+seed 1: floor=1  hp=77/80 deck=11 fights=1  cards=1  boss_beaten=0
+seed 2: floor=6  hp=49/80 deck=15 fights=5  cards=5  boss_beaten=0
+seed 4: floor=4  hp=58/80 deck=12 fights=2  cards=2  boss_beaten=0
+seed 5: floor=16 hp=45/80 deck=22 fights=12 cards=12 boss_beaten=1   ← 通关
+seed 8: floor=5  hp=50/80 deck=15 fights=5  cards=5  boss_beaten=0
+cleared 1/8 acts
+```
+
+⇒ **"第一幕可以完整通关"这句话现在有实测支撑**：seed 5 从第 1 层打到第 16 层、打 12 场仗、
+牌组从 10 长到 22、最后击败 Slime Boss。
+
+### 73.3 但另外 7 个 seed **卡在第 1~6 层**，原因也量出来了
+
+不是打不过，是**走不动**：机器人会跳过 `?` 房（未实现），而有时一行的可达节点**全是 `?`**
+⇒ 没有合法出路，run 停在原地。`inv:§7.3` 说 `?` 房占 **22%**，所以这不是小概率。
+
+⇒ 这条把"`?` 房"从"最好有"变成**通关的必要条件**：真实 StS 里 `?` 房是**事件房，永远能进**。
+下一轮就是它 —— 需要一次格式扩展（事件表）与一套**事件效果词表**（heal / gold / card / nothing），
+因为 run 层没有节目解释器（`REL.RunPrograms` 就是那个缺口）。
+
+### 73.4 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 653 | **653**（+1 探针，但它 `#[ignore]`） |
+| 内容 | 7 卡 / 14 怪 / 5 遭遇 | **12 卡** / 14 怪 / 5 遭遇 |
+| `sts` 镜像 | 14,684 / 12,712 B | **15,548 / 13,292 B**（重钉） |
+| `.wasm` | 491,315 B | **492,000 B** 量级（探针不进 wasm） |
+| 通关率（同一机器人） | 0/8 | **1/8** |

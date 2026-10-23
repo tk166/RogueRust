@@ -2022,6 +2022,133 @@ mod tests {
         }
     }
 
+    /// **Balance probe, not a gate.** Plays a whole act with the dumbest reasonable policy and
+    /// prints what happens: floors walked, cards taken, how the boss went.
+    ///
+    /// `#[ignore]`d on purpose: it is a *measurement*. Making it a gate would mean encoding "this bot
+    /// must win", which is a statement about the bot, not about the game. Run it with
+    /// `--ignored --nocapture` after any content or balance change.
+    #[test]
+    #[ignore]
+    fn balance_probe_full_run() {
+        let mut cleared = 0;
+        let seeds = 8;
+        for seed in 1..=seeds {
+            reset(seed);
+            let mut fights = 0;
+            let mut cards_taken = 0;
+            let mut dead = false;
+
+            // Walk and settle until the boss or death.
+            for _ in 0..60 {
+                if rd_run_observe(2) <= 0 {
+                    dead = true;
+                    break;
+                }
+                if rd_run_observe(0) >= 16 {
+                    break;
+                }
+                let mut choice = -1;
+                // Prefer a rest site when hurt, else anything but an unknown room.
+                let hurt = rd_run_observe(2) * 2 < rd_run_observe(3);
+                for action in 0..rd_run_action_count() {
+                    let node = rd_run_action_arg(action, 0);
+                    if node < 0 {
+                        continue;
+                    }
+                    let kind = node_kind(node);
+                    if kind == 5 {
+                        continue;
+                    }
+                    if hurt && kind == 3 {
+                        choice = action;
+                        break;
+                    }
+                    if choice < 0 {
+                        choice = action;
+                    }
+                }
+                if choice < 0 {
+                    break;
+                }
+                if rd_run_step(choice) != 0 {
+                    break;
+                }
+                let kind = rd_run_node_kind();
+                if rd_run_begin_node() != 0 {
+                    continue;
+                }
+                match kind {
+                    1 | 2 | 7 => {
+                        if rd_run_fight_begin() != 0 {
+                            continue;
+                        }
+                        fights += 1;
+                        play_to_the_end();
+                        let result = rd_run_fight_end();
+                        if result == 1 {
+                            // Take whatever the reward offers, first slot: the deck has to grow.
+                            if rd_run_reward_card_count() > 0 && rd_run_take_card(0) == 0 {
+                                cards_taken += 1;
+                            }
+                        }
+                    }
+                    3 => {
+                        let _ = rd_run_rest();
+                    }
+                    6 => {
+                        let _ = rd_run_open_chest();
+                    }
+                    4 => {
+                        let _ = rd_run_leave();
+                    }
+                    _ => {}
+                }
+            }
+
+            let beaten = rd_run_boss_beaten();
+            if beaten == 1 {
+                cleared += 1;
+            }
+            println!(
+                "seed {seed}: floor={} hp={}/{} gold={} deck={} fights={fights} cards={cards_taken} \
+                 boss_beaten={beaten}{}",
+                rd_run_observe(0),
+                rd_run_observe(2),
+                rd_run_observe(3),
+                rd_run_observe(4),
+                rd_run_deck_count(),
+                if dead { " (died)" } else { "" }
+            );
+        }
+        println!("cleared {cleared}/{seeds} acts");
+        assert_eq!(cleared, cleared, "the probe only reports; it does not assert");
+    }
+
+    /// Play the current fight out: first playable card, first living enemy, else end turn.
+    fn play_to_the_end() {
+        let mut guard = 0;
+        while rd_env_done() == 0 && guard < 2000 {
+            let mut action = -1;
+            for index in 0..rd_env_action_count() {
+                if rd_env_action_kind(index) == 0 {
+                    action = index;
+                    break;
+                }
+            }
+            if action < 0 {
+                action = rd_env_action_index_of_end_turn();
+            }
+            if action < 0 {
+                break;
+            }
+            if rd_env_step(action) != 0 {
+                break;
+            }
+            guard += 1;
+        }
+    }
+
     /// The three pile exports read the fight's piles, and the observation only carries counts.
     #[test]
     fn the_piles_can_be_listed_not_just_counted() {

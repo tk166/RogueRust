@@ -114,6 +114,19 @@ INV_CARDS = {
                 "Facts": [("block", 8, "source")]},
     "bash+": {"Cost": 2, "Tags": ["attack", "basic"],
               "Facts": [("damage", 10, "event"), ("status", "standard.vulnerable", 3, "event")]},
+    # The first **non-Basic** cards: the deck has to be able to grow, and an act-1 boss cannot be
+    # beaten with ten starter cards (see docs/port-plan.md §72.5).
+    "twin_strike": {"Cost": 1, "Tags": ["attack", "strike"],
+                    "Facts": [("damage", 5, "event"), ("damage", 5, "event")]},
+    "iron_wave": {"Cost": 1, "Tags": ["attack", "block"],
+                  "Facts": [("block", 5, "source"), ("damage", 5, "event")]},
+    "clothesline": {"Cost": 2, "Tags": ["attack"],
+                    "Facts": [("damage", 12, "event"), ("status", "standard.weak", 2, "event")]},
+    "anger": {"Cost": 0, "Tags": ["attack"],
+              "Facts": [("damage", 6, "event"), ("card", "anger", 1, "DiscardPile", "event")]},
+    "uppercut": {"Cost": 2, "Tags": ["attack"],
+                 "Facts": [("damage", 13, "event"), ("status", "standard.weak", 1, "event"),
+                           ("status", "standard.vulnerable", 1, "event")]},
 }
 
 # inv:§4.1 -- the 10 zero-new-ability enemies: (hp_min, hp_max, action ids).
