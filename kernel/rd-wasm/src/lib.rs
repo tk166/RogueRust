@@ -2250,4 +2250,64 @@ mod card_text_tests {
         assert_ne!(t, id, "the title is the id again");
         assert_eq!(t.to_lowercase(), id.to_lowercase(), "the title should name the same card");
     }
+    /// **Uppercut hits the enemy, not the hero.** Reported by hand as "uppercut 让自己和敌人同时受到了
+    /// 伤害"; the content says `dealDamage 13 @ eventTarget` + `weak` + `vulnerable` on the same target,
+    /// so the only way the hero could be hurt is if the target selector resolved to the source.
+    ///
+    /// The starting deck has no Uppercut, so the fight is **built with a deck that is all Uppercut** --
+    /// which is also why this is a kernel test and not a browser one.
+    #[test]
+    fn uppercut_hurts_the_enemy_and_not_the_hero() {
+        let deck: &'static [rd_core::battle::DeckEntry<'static>] =
+            Box::leak(vec![
+                rd_core::battle::DeckEntry { card: "uppercut", count: 10 },
+            ].into_boxed_slice());
+        let mut session = build_session_with(7, "enc_jaw_worm", 80, Some(deck)).expect("a fight");
+        let standard = standard_turn_config().expect("a turn config");
+        start_first_turn(&mut session.state, &standard, &mut session.host).expect("turn 1");
+        session.reobserve();
+        *slot() = Some(session);
+
+        let hero_before = combat_hero_health();
+        let enemy_before = first_enemy_health();
+        assert!(hero_before > 0 && enemy_before > 0, "both alive: {hero_before}/{enemy_before}");
+
+        // Play the first Uppercut at the first living enemy.
+        let action = (0..rd_env_action_count())
+            .find(|i| rd_env_action_kind(*i) == 0)
+            .expect("a card to play");
+        assert_eq!(rd_env_step(action), 0, "playing Uppercut");
+        let _ = action;
+
+        assert_eq!(
+            combat_hero_health(),
+            hero_before,
+            "Uppercut must not damage the hero"
+        );
+        assert_eq!(
+            first_enemy_health(),
+            enemy_before - 13,
+            "Uppercut deals 13 to the enemy"
+        );
+    }
+
+    /// The hero's health, straight off the combat state.
+    fn combat_hero_health() -> i32 {
+        let Some(session) = slot().as_ref() else { return -1 };
+        session
+            .hero_id()
+            .and_then(|id| session.state.combatant(&id))
+            .map_or(-1, |c| c.health_current)
+    }
+
+    /// The first enemy's health, straight off the combat state.
+    fn first_enemy_health() -> i32 {
+        let Some(session) = slot().as_ref() else { return -1 };
+        let Some(enemy) = session.plan.enemies.first() else { return -1 };
+        CombatantId::new(enemy.id)
+            .ok()
+            .and_then(|id| session.state.combatant(&id))
+            .map_or(-1, |c| c.health_current)
+    }
+
 }

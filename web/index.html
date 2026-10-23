@@ -553,11 +553,16 @@ function setMode(next) {
 }
 
 function renderTopBar() {
-  const o = runRead.obs(0) === undefined ? null : null;
-  void o;
   const floor = ex.rd_run_observe(0);
-  const hp = ex.rd_run_observe(2);
-  const hpMax = ex.rd_run_observe(3);
+  // **In a fight the health that matters is the fight's**, not the run's: the run's health only moves
+  // when a fight is folded back (rd_run_fight_end), so reading it here made the top bar say
+  // "80/80" for the whole fight no matter what hit the hero -- reported by hand as "每一回合开始都是
+  // 满血".
+  // obs is an Int32Array, not an Array -- Array.isArray would be false and the fix would
+  // silently do nothing (which is exactly what the first attempt did).
+  const fighting = mode === "fight" && obs != null && obs.length > 5;
+  const hp = fighting ? obs[4] : ex.rd_run_observe(2);
+  const hpMax = fighting ? obs[5] : ex.rd_run_observe(3);
   const gold = ex.rd_run_observe(4);
   const deck = ex.rd_run_deck_count();
   const relics = ex.rd_run_observe(6);
