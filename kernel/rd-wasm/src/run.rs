@@ -1061,7 +1061,7 @@ fn effect_from(effect: &str, amount: i32) -> Option<rd_run::state::EventEffect> 
 ///
 /// Returns `0`, `-1` when there is no such slot / no fight, or `-2` with text.
 #[no_mangle]
-pub extern "C" fn rd_env_use_potion(slot: i32) -> i32 {
+pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
     if slot < 0 {
         return -1;
     }
@@ -1149,9 +1149,39 @@ pub extern "C" fn rd_env_use_potion(slot: i32) -> i32 {
             }
         }
         "combat_damage" => {
-            return refuse(
-                "伤害药水还没接通：`resolve_damage` 需要一个 `ExecContext`（节目执行的上下文），                 本内核还没有从外面带节目进来的入口 —— 见 docs/port-plan.md §83",
+            // **Through the existing damage pipeline** (`exec::resolve_damage`), so Block, Vulnerable
+            // and every other damage modifier apply exactly as they do for a card. `target` is an
+            // enemy slot; `-1` means "the first living enemy".
+            let slot_index = if target >= 0 {
+                target as usize
+            } else {
+                (0..session.plan.enemies.len())
+                    .find(|index| {
+                        let id = session.plan.enemies[*index].id;
+                        rd_core::state::CombatantId::new(id)
+                            .ok()
+                            .and_then(|cid| session.state.combatant(&cid))
+                            .is_some_and(|c| c.health_current > 0)
+                    })
+                    .unwrap_or(usize::MAX)
+            };
+            let Some(plan_enemy) = session.plan.enemies.get(slot_index) else {
+                return refuse("药水没有目标：这一侧没有活着的敌人");
+            };
+            let Ok(target_id) = rd_core::state::CombatantId::new(plan_enemy.id) else {
+                return refuse("敌人的战斗员 id 不合法");
+            };
+            let mut ctx = rd_core::exec::ExecContext::new(
+                &mut session.state,
+                Some(hero.clone()),
+                Some(target_id.clone()),
+                None,
+                64,
             )
+            .with_content(image);
+            if let Err(e) = rd_core::exec::resolve_damage(&mut ctx, &target_id, amount, false) {
+                return refuse(&std::format!("伤害药水失败：{e:?}"));
+            }
         }
         other => return refuse(&std::format!("未知的药水效果 `{other}`")),
     }
@@ -2601,6 +2631,7 @@ mod tests {
                     // this test actually runs instead of depending on the drop.
                     let mut has_block = false;
                     let mut has_energy = false;
+                    let mut has_fire = false;
                     for slot in 0..belt {
                         let n = rd_run_potion_id_len(slot as i32);
                         let mut buffer = vec![0u8; n as usize];
@@ -2608,12 +2639,13 @@ mod tests {
                         match String::from_utf8_lossy(&buffer).as_ref() {
                             "block_potion" => has_block = true,
                             "energy_potion" => has_energy = true,
+                            "fire_potion" => has_fire = true,
                             _ => {}
                         }
                     }
                     // Both, so neither arm of the assertion below is skipped. The belt holds three,
                     // so this stops as soon as it cannot make progress.
-                    if (has_block && has_energy) || belt >= 3 {
+                    if (has_block && has_energy && has_fire) || belt >= 3 {
                         break;
                     }
                 }
@@ -2666,7 +2698,8 @@ mod tests {
         };
         let block_before = hero_block();
         let energy_before = hero_energy();
-        let outcome = rd_env_use_potion(if slot >= 0 { slot } else { 0 });
+        let fire_target_before = first_enemy_hp();
+        let outcome = rd_env_use_potion(if slot >= 0 { slot } else { 0 }, -1);
         match id.as_str() {
             "block_potion" => {
                 assert_eq!(outcome, 0, "block potion: {:?}", run_error_text());
@@ -2686,7 +2719,7 @@ mod tests {
                 }
                 assert!(energy_slot >= 0, "the belt must hold the energy potion we hunted for");
                 let energy_before_use = hero_energy();
-                let energy_outcome = rd_env_use_potion(energy_slot);
+                let energy_outcome = rd_env_use_potion(energy_slot, -1);
                 assert_eq!(
                     energy_outcome, 0,
                     "energy potion: {:?}",
@@ -2697,11 +2730,33 @@ mod tests {
                     energy_before_use + 2,
                     "2 energy, past the per-turn cap"
                 );
+                let after_energy = rd_run_potion_count();
                 assert_eq!(
-                    rd_run_potion_count(),
+                    after_energy,
                     after_block - 1,
                     "the energy potion is consumed too"
                 );
+
+                // ...and the damage potion, which goes through `exec::resolve_damage`.
+                let mut fire_slot = -1;
+                for index in 0..after_energy {
+                    let n = rd_run_potion_id_len(index as i32);
+                    let mut buffer = vec![0u8; n as usize];
+                    unsafe { rd_run_potion_id_into(index as i32, buffer.as_mut_ptr()) };
+                    if String::from_utf8_lossy(&buffer) == "fire_potion" {
+                        fire_slot = index as i32;
+                    }
+                }
+                assert!(fire_slot >= 0, "the belt must hold the fire potion we hunted for");
+                let enemy_before = first_enemy_hp();
+                let fire_outcome = rd_env_use_potion(fire_slot, -1);
+                assert_eq!(fire_outcome, 0, "fire potion: {:?}", run_error_text());
+                assert_eq!(
+                    first_enemy_hp(),
+                    enemy_before - 20,
+                    "20 damage through the pipeline"
+                );
+                assert_eq!(rd_run_potion_count(), after_energy - 1);
             }
             "energy_potion" => {
                 // The hunt stops on a belt holding both, and the block arm uses the energy potion
@@ -2709,11 +2764,18 @@ mod tests {
                 assert_eq!(outcome, 0, "energy potion: {:?}", run_error_text());
                 assert_eq!(hero_energy(), energy_before + 2, "2 energy past the cap");
             }
-            other => {
-                assert_eq!(outcome, -2, "{other} must be refused, not silently ignored");
-                assert!(run_error_text().contains("伤害药水"), "{:?}", run_error_text());
-                assert_eq!(rd_run_potion_count(), belt, "a refusal must not eat the potion");
+            "fire_potion" => {
+                // 20 damage through the **existing pipeline**: the enemy loses 20 HP (it has no Block
+                // on the first turn of a fight it has not acted in yet).
+                assert_eq!(outcome, 0, "fire potion: {:?}", run_error_text());
+                assert_eq!(
+                    first_enemy_hp(),
+                    fire_target_before - 20,
+                    "20 damage through the damage pipeline"
+                );
+                assert_eq!(rd_run_potion_count(), belt - 1, "the potion is consumed");
             }
+            other => panic!("the content offers no potion called {other}"),
         }
     }
 
@@ -2722,6 +2784,21 @@ mod tests {
         let mut buffer = vec![0i32; crate::rd_env_observe_len() as usize];
         unsafe { crate::rd_env_observe_into(buffer.as_mut_ptr()) };
         buffer[crate::H_HERO_BLOCK]
+    }
+
+    /// The first enemy's HP, read off the kernel's own fight state: the assertion is about what
+    /// the damage pipeline did, not about the shape of the observation vector.
+    fn first_enemy_hp() -> i32 {
+        let Some(session) = crate::slot().as_ref() else {
+            return -1;
+        };
+        let Some(enemy) = session.plan.enemies.first() else {
+            return -1;
+        };
+        rd_core::state::CombatantId::new(enemy.id)
+            .ok()
+            .and_then(|id| session.state.combatant(&id))
+            .map_or(-1, |c| c.health_current)
     }
 
     /// The hero's energy, off the same observation.

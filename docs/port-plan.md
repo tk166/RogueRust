@@ -6178,3 +6178,50 @@ else { obs = readObservation(); render(undefined, 0); }
 |---|---|
 | 聚合验收 | **16/16** |
 | 单测 | **661** |
+---
+
+## 88. 第 78 轮：`fire_potion` 也通了 —— **三瓶药水全部生效**
+
+### 88.1 伤害走的是**真的**伤害管线
+
+上一轮的结论是"`combat_damage` 缺入口"。这一轮找到了：`ExecContext::new(...)` 与
+`exec::resolve_damage(ctx, target, base, ignores_block)` **都是 `pub`**。所以：
+
+```rust
+let mut ctx = ExecContext::new(&mut session.state, Some(hero), Some(target), None, 64)
+    .with_content(image);
+resolve_damage(&mut ctx, &target, amount, false)?;
+```
+
+⇒ 药水的 20 点伤害**和卡牌走同一条路**：格挡、易伤、以及所有伤害修饰都照常作用。
+目标选择用 `target` 参数（敌人槽位，`-1` = 第一个活着的敌人），页面传 `-1`。
+
+### 88.2 测试：三瓶**依次都用掉**
+
+`a_potion_can_be_used_in_a_fight` 的猎取条件改成"腰带里三瓶都有"（腰带正好三格），然后：
+
+| 顺序 | 药水 | 断言 |
+|---|---|---|
+| 1 | `block_potion` | **Block 恰好 +12** |
+| 2 | `energy_potion` | **能量恰好 +2**（超过每回合上限 3） |
+| 3 | `fire_potion` | **第一个敌人 HP 恰好 −20**，且是**走管线**扣的 |
+
+每一步之后都断言腰带少一格。⇒ 三瓶药水都**真的用掉了**，不是"掉哪瓶验哪瓶"。
+
+### 88.3 一处必须说清的措辞差别
+
+目标原话是"战斗内的药水效果**走现有节目管线**"。实际情况要分开讲：
+
+* **伤害** → `exec::resolve_damage`，**就是**那条管线 ✓；
+* **格挡 / 能量** → `Combatant::set_defensive_pool` / `set_resource`。这两个是**管线内部用的同一对写入**，
+  但我没有把它们包成一段节目。差别在于：目前没有"给一个战斗员加格挡"的节目节点可以单独执行
+  （`node.gainBlock` 走的是完整执行器，需要节目根 + 上下文）。**这是一个已知的、说明了的不对称**，
+  不是悄悄绕过。
+
+### 88.4 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **16/16** |
+| 单测 | **661** |
+| `.wasm` | 重编并 `Copy-Item`（闸门这次没抓到陈旧产物） |
