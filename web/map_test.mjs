@@ -56,6 +56,20 @@ const io = {
     return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, n).slice());
   },
 };
+
+// "You settle a node before you walk on" (`RunError::NodeNotSettled`), so a walk has to finish each
+// node. This is the same shape the game page uses; a fight is started and folded straight back.
+const settleHere = () => {
+  if (ex.rd_run_node_kind() < 0) return;
+  const kind = ex.rd_run_node_kind();
+  if (ex.rd_run_begin_node() !== 0) return;
+  if (kind === 1 || kind === 2 || kind === 7) { ex.rd_run_fight_begin(); ex.rd_run_fight_end(); }
+  else if (kind === 3) ex.rd_run_rest();
+  else if (kind === 4) ex.rd_run_leave();
+  else if (kind === 5) ex.rd_run_choose(0);
+  else if (kind === 6) ex.rd_run_open_chest();
+};
+
 const view = () => M.describeMap(io);
 
 if (ex.rd_run_start(7) !== 0) {
@@ -196,6 +210,7 @@ if (ex.rd_run_start(7) !== 0) {
   let guard = 0;
   while (view().actions.length > 0 && guard < 40) {
     const step = view();
+    settleHere();
     if (ex.rd_run_step(0) !== 0) fail(`step at floor ${step.status.floor} was refused`);
     guard++;
   }
@@ -293,6 +308,7 @@ function assertViewAgreesWithModule(where) {
   assertViewAgreesWithModule("fresh run");
   let steps = 0;
   while (io.actionCount() > 0 && steps < 40) {
+    settleHere();
     if (ex.rd_run_step(0) !== 0) fail(`step ${steps} refused`);
     steps++;
     assertViewAgreesWithModule(`after step ${steps} (floor ${io.obs(M.RUN_FLOOR)})`);

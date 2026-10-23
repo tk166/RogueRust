@@ -702,6 +702,13 @@ impl RunState {
         if !self.reachable().contains(target) {
             return Err(RunError::NotReachable);
         }
+        // **You settle a node before you walk on.** A fight is settled by `mark_resolved()` when it
+        // ends (the caller does that), an event by `resolve_event`, a rest/shop/chest by their own
+        // actions -- so this one check covers all of them, and it is what stops "step onto a fight,
+        // then step straight onto the next node" from being a legal move.
+        if self.node >= 0 && !self.node_resolved() {
+            return Err(RunError::NodeNotSettled);
+        }
         if target == crate::map::BOSS_NODE {
             // `inv:§7.2`: the boss is floor 16, one row past the map's last.
             self.node = i32::from(target);
@@ -1352,6 +1359,9 @@ mod tests {
             let reachable = run.reachable();
             assert!(!reachable.is_empty(), "floor {} has no exit", run.floor());
             let next = reachable.get(0).unwrap();
+            // **You settle before you walk on**, so this test settles the way a finished fight does.
+            // (`the_cheat_of_skipping_a_node` below is what pins the rule itself.)
+            run.mark_resolved();
             run.enter_node(next).unwrap();
             steps += 1;
             assert_eq!(run.floor() as usize, steps);
@@ -1549,12 +1559,17 @@ mod tests {
         }
         path[len] = at as u8;
         len += 1;
+        // The node the cursor is on must be settled before the first hop (the new rule).
+        if cursor >= 0 {
+            run.mark_resolved();
+        }
         for step in (0..len).rev() {
             // The last element is the seed, and the seed may be the node we are standing on --
             // entering that again is not an edge, so it is skipped.
             if cursor >= 0 && step == len - 1 {
                 continue;
             }
+            run.mark_resolved();
             run.enter_node(path[step]).unwrap();
         }
         true
@@ -1979,6 +1994,27 @@ mod tests {
 
     /// A node pays **once**. Without this, a combat node could be fought again from where you stand
     /// and a campfire would heal on every click -- the page showed exactly that before the guard.
+    /// **You cannot walk on before settling the node you are on.** Found by clicking: step onto a
+    /// fight, then step onto the next node, and the fight never happens.
+    #[test]
+    fn you_cannot_walk_on_before_settling() {
+        let mut run = ironclad();
+        let first = run.reachable().get(0).unwrap();
+        run.enter_node(first).expect("step onto the first node");
+        let next = run.reachable().get(0).unwrap();
+        assert_eq!(
+            run.enter_node(next),
+            Err(RunError::NodeNotSettled),
+            "walking away from an unsettled node must be refused"
+        );
+        assert_eq!(run.node(), i32::from(first), "and the cursor must not move");
+
+        // Settle it the way a finished fight does, and now the step is legal.
+        run.mark_resolved();
+        assert_eq!(run.enter_node(next), Ok(()));
+        assert_eq!(run.node(), i32::from(next));
+    }
+
     #[test]
     fn a_node_pays_once() {
         let mut run = ironclad();

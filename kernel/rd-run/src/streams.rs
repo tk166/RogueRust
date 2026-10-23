@@ -185,6 +185,12 @@ pub enum RunError {
     UnsupportedEventEffect,
     /// The event under the cursor is not one the content declared.
     NoSuchEvent,
+    /// You tried to walk on before settling the node you are standing on.
+    ///
+    /// Without this a caller could step onto a fight and immediately step onto the next node --
+    /// skipping the fight, the shop, the campfire. It is a cheat at the keyboard and an exploit in
+    /// an RL environment, and it was found by clicking.
+    NodeNotSettled,
     /// A relic whose effect is not implemented (`RunState::end_of_combat`).
     ///
     /// **This is the loud boundary of the relic system.** Effects are implemented one at a time, by

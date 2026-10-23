@@ -1708,7 +1708,8 @@ mod tests {
         while obs()[0] < ROWS as i32 {
             let offer = obs()[16];
             assert!(offer >= 1, "floor {} has no exit", obs()[0]);
-            assert_eq!(rd_run_step(0), 0, "step {steps} refused");
+            settle_here();
+        assert_eq!(rd_run_step(0), 0, "step {steps} refused");
             steps += 1;
         }
         assert_eq!(steps, ROWS, "one step per floor");
@@ -1968,6 +1969,41 @@ mod tests {
         assert_eq!(rd_run_skip_reward(), -2, "there is no screen to skip");
     }
 
+    /// Settle whatever is under the cursor, through the ABI, the way a player would.
+    ///
+    /// Needed since "you settle a node before you walk on" (`RunError::NodeNotSettled`): a test that
+    /// walks the map has to finish each node first, and doing it through the ABI is what keeps these
+    /// tests about *walking* rather than about the run layer's internals.
+    fn settle_here() {
+        if rd_run_node_kind() < 0 {
+            return;
+        }
+        let kind = rd_run_node_kind();
+        if rd_run_begin_node() != 0 {
+            return;
+        }
+        match kind {
+            // A fight: start it and fold it straight back (the epilogue marks the node resolved).
+            1 | 2 | 7 => {
+                let _ = rd_run_fight_begin();
+                let _ = rd_run_fight_end();
+            }
+            3 => {
+                let _ = rd_run_rest();
+            }
+            4 => {
+                let _ = rd_run_leave();
+            }
+            5 => {
+                let _ = rd_run_choose(0);
+            }
+            6 => {
+                let _ = rd_run_open_chest();
+            }
+            _ => {}
+        }
+    }
+
     /// The kind of a node, read off the map.
     fn node_kind(node: i32) -> i32 {
         let Some(session) = run_slot().as_ref() else {
@@ -1998,6 +2034,7 @@ mod tests {
         reset(7);
         let mut reached = false;
         for _ in 0..80 {
+            settle_here();
             let mut choice = -1;
             for action in 0..rd_run_action_count() {
                 let node = rd_run_action_arg(action, 0);
@@ -2105,6 +2142,7 @@ mod tests {
             if rd_run_observe(0) >= 15 {
                 break;
             }
+            settle_here();
             let mut choice = -1;
             for action in 0..rd_run_action_count() {
                 let node = rd_run_action_arg(action, 0);
@@ -2126,6 +2164,8 @@ mod tests {
             "the single offer is the boss"
         );
 
+        // The last row has to be settled too -- you settle a node before you walk on.
+        settle_here();
         assert_eq!(rd_run_step(0), 0, "walk into the boss");
         assert_eq!(rd_run_observe(0), 16, "the boss is floor 16");
         assert_eq!(rd_run_node_kind(), 7, "kind Boss");
@@ -2198,6 +2238,7 @@ mod tests {
         reset(7);
         let mut found = false;
         for _ in 0..40 {
+            settle_here();
             let mut choice = -1;
             for action in 0..rd_run_action_count() {
                 let node = rd_run_action_arg(action, 0);
