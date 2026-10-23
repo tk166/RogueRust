@@ -5776,3 +5776,65 @@ if self.node >= 0 && !self.node_resolved() {
 | 聚合验收 | 16/16 | **16/16** |
 | 单测 | 655 | **656**（rd-run 54 → 55） |
 | 作弊路径 | 可走 | **`NodeNotSettled`** |
+---
+
+## 80. 第 70 轮：药水进了格式与内容（`POT` 表），并会从战斗里掉
+
+> 用户："继续加上药水的内容吧。" 目标第 ① 项。这一轮做完的是**数据层 + run 层的取得**，
+> **使用**（战斗内效果）与页面槽位还没接。
+
+### 80.1 格式：`S_POT = 16`，`FORMAT_VERSION 3 → 4`
+
+`POT_ROW` 七格：`Id / NameKey / DescriptionKey / Effect / Amount / Rarity / extra`（stride 16）。
+`Effect` 是**闭词表** `combat_damage / combat_block / combat_energy / heal` —— run 层没有节目解释器，
+词表外的效果必须响亮拒绝，而不是"什么都不做"。
+
+⚠️ `S_POT` 放在 `SEC_ORDER` **末尾**：上一轮学到的——**目录按位置写，段号必须等于下标**。
+
+`Potions` 这个文档键在**参考文档里不存在**（先查过：`REF lacks Potions`），所以这次没有 `Events`
+那种键名冲突。
+
+### 80.2 内容：三张第一幕药水
+
+| id | 效果 | 数量 | 稀有度 |
+|---|---|---|---|
+| `fire_potion` | `combat_damage` | 20 | Common |
+| `block_potion` | `combat_block` | 12 | Common |
+| `energy_potion` | `combat_energy` | 2 | Uncommon |
+
+### 80.3 run 层：40% 掉落 + 三条槽 + 满槽响亮失败
+
+`roll_reward` 多接一个 `potion_pool`，在 `Potion` 子流上先掷 40%（`inv:§9.3`，只有一幕所以不建模
+±10%），掷中就在同一子流上挑一张。`Reward` 带 `potion: RunId`，`take_potion()` 把它塞进腰带；
+**腰带满了是 `RunError::Capacity`，不是静默丢弃**——玩家刚被给了东西又悄悄没了，正是本项目反复禁止的形状。
+
+（`RunState` 本来就有 `potions: [RunId; 3]` 与 `push_potion`，这一轮才第一次有生产者。）
+
+### 80.4 判据
+
+| 测试 | 钉住什么 |
+|---|---|
+| `the_potions_are_readable`（rd-core，真镜像） | 3 张、名字非空、数量 > 0、**效果词表闭集**、稀有度三选一、id 集合；`fire_potion` 是 `combat_damage/20`；**roguedeck 镜像 0 张** |
+| `a_won_fight_drops_a_potion_and_the_belt_takes_it`（rd-run） | 400 次战斗的掉落率落在 25~55%（约 40%）；拿走 ⇒ 进腰带、报价清空、**再拿是 `NoSuchPotion`**；**满槽是 `Capacity`** |
+
+### 80.5 还没做的（下一轮）
+
+* **使用**：药水在战斗里要用现有节目管线（`combat_damage` 要指定敌人 ⇒ env ABI 的动作空间要多一种
+  "用药水"），以及 `rd_run_use_potion(index, target)`；
+* **页面**：三条槽、使用/丢弃按钮、奖励屏的"拿药水"。
+
+### 80.6 一个观察到的问题（记下来，没修）
+
+`rdcf-verify` 的证据仍写 **`5/5 tables`**：那个校验器有自己的表清单，不读 `ROW_SCHEMAS`，所以
+`EV`/`POT` 两段它**看不见**。也就是说这条闸门的"5/5"现在是**少报**。真正的覆盖来自 rd-core 的两个
+读镜像测试，但闸门本身的数字应该改成"跟着 `ROW_SCHEMAS` 走"。
+
+### 80.7 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 656 | **658**（rd-core 579 / rd-run 56 / rd-wasm 23） |
+| 内容 | 12 卡 / 4 事件 | **+ 3 药水**（`POT` 3 行） |
+| `sts` 镜像 | 16,164 / 13,924 B | **16,504 / 14,264 B**（重钉） |
+| 格式版本 | 3 | **4** |

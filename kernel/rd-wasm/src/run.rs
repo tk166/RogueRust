@@ -1045,6 +1045,80 @@ fn effect_from(effect: &str, amount: i32) -> Option<rd_run::state::EventEffect> 
     })
 }
 
+/// How many potions the belt holds.
+#[no_mangle]
+pub extern "C" fn rd_run_potion_count() -> i32 {
+    run_slot().as_ref().map_or(-1, |s| s.state.potions().len() as i32)
+}
+
+/// The id of belt slot `index`.
+#[no_mangle]
+pub extern "C" fn rd_run_potion_id_len(index: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    if index < 0 {
+        return -1;
+    }
+    match session.state.potions().get(index as usize) {
+        Some(id) => id.as_str().len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_potion_id_len(index)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_potion_id_into(index: i32, ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return 0;
+    };
+    if index < 0 {
+        return 0;
+    }
+    match session.state.potions().get(index as usize) {
+        Some(id) => write_out(id.as_str(), ptr),
+        None => 0,
+    }
+}
+
+/// The potion the reward screen is offering (empty when none), for display.
+#[no_mangle]
+pub extern "C" fn rd_run_reward_potion_len() -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    match session.state.reward_potion() {
+        Some(id) => id.len() as i32,
+        None => 0,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_reward_potion_len()` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_reward_potion_into(ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return 0;
+    };
+    match session.state.reward_potion() {
+        Some(id) => write_out(id, ptr),
+        None => 0,
+    }
+}
+
+/// Take the offered potion.
+#[no_mangle]
+pub extern "C" fn rd_run_take_potion() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let outcome = session.state.take_potion().map(|_| 0i32);
+    finish(session, outcome)
+}
+
 /// Has the act been cleared? `1` yes, `0` no, `-1` no run.
 #[no_mangle]
 pub extern "C" fn rd_run_boss_beaten() -> i32 {
@@ -1395,13 +1469,22 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
         }
         // Then the reward screen (`inv:§5` gold, `inv:§3.5` three distinct cards). A reward that
         // could not be rolled is a refusal, not a silent victory with no spoils.
-        let pool = match reward_pool(content()) {
+        let image = content();
+        let pool = match reward_pool(image) {
             Ok(pool) => pool,
             Err(message) => return fail(session, &message),
         };
+        // The potion the fight may drop (`inv:§9.3`) is one of the image's own potions. A package
+        // without a `POT` table simply never offers one.
+        let mut potion_ids = std::vec::Vec::new();
+        for index in 0..image.potion_count() {
+            if let Some(potion) = image.potion(index) {
+                potion_ids.push(potion.id);
+            }
+        }
         if let Err(e) = session
             .state
-            .roll_reward(&pool, fight_kind)
+            .roll_reward(&pool, &potion_ids, fight_kind)
         {
             let message = describe(&e);
             return fail(session, &message);

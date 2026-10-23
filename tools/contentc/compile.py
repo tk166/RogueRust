@@ -53,9 +53,11 @@ DEFAULT_SRC = (r"D:\Vibe\sts-tui\ref\RogueDeck-Core\src\RogueDeck.Sandbox.Run"
 ENTITY_SECTIONS = [("CARD", "Cards"), ("STATUS", "Statuses"), ("EACT", "EnemyActions"),
                    ("ENCT", "Encounters"), ("REL", "Relics"),
     # **Not** `Events`: the reference document uses that key for a dict of its own shape.
-    ("EV", "UnknownRooms")]
+    ("EV", "UnknownRooms"),
+    # `Potions` is free in the reference document (checked: it has no such key).
+    ("POT", "Potions")]
 SEC_OF = {"CARD": F.S_CARD, "STATUS": F.S_STAT, "EACT": F.S_EACT,
-          "ENCT": F.S_ENCT, "REL": F.S_REL, "EV": F.S_EV}
+          "ENCT": F.S_ENCT, "REL": F.S_REL, "EV": F.S_EV, "POT": F.S_POT}
 
 # Document keys: top-level keys that are **build metadata, not game data**.
 #
@@ -75,6 +77,8 @@ SEC_OF = {"CARD": F.S_CARD, "STATUS": F.S_STAT, "EACT": F.S_EACT,
 DOC_ROOT_KEYS = ("InertKeys", "Notes",
     # the `?`-room entity table (`EV`); an entity key, so never a root key
     "UnknownRooms",
+    # the potion entity table (`POT`); an entity key, so never a root key
+    "Potions",
 )
 
 # Sentinel values for the two "not a real value" states.  Keeping them distinct
@@ -970,6 +974,7 @@ def write_report(path, src_path, raw_len, doc, results, comp, t_load, peak_bytes
             F.S_ENCT: "encounter rows (%d B each)" % F.row_stride("ENCT"),
             F.S_REL: "relic rows (%d B each)" % F.row_stride("REL"),
         F.S_EV: "event rows (%d B each)" % F.row_stride("EV"),
+        F.S_POT: "potion rows (%d B each)" % F.row_stride("POT"),
             F.S_ROOT: "root pointers", F.S_IDX: "8-byte id entries"}
     for sec, off, size, cnt in results["full"]["sections"]:
         if not size:
@@ -990,9 +995,9 @@ def write_report(path, src_path, raw_len, doc, results, comp, t_load, peak_bytes
          100.0 * (len(ser.sec_trm) + len(ser.sec_trw) + len(ser.sec_aux)) / full_bytes))
     a("fixed entity tables (%d B, %.0f%%)."
       % (sum(s[2] for s in results["full"]["sections"]
-             if s[0] in (F.S_CARD, F.S_STAT, F.S_EACT, F.S_ENCT, F.S_REL, F.S_EV)),
+             if s[0] in (F.S_CARD, F.S_STAT, F.S_EACT, F.S_ENCT, F.S_REL, F.S_EV, F.S_POT)),
          100.0 * sum(s[2] for s in results["full"]["sections"]
-                     if s[0] in (F.S_CARD, F.S_STAT, F.S_EACT, F.S_ENCT, F.S_REL, F.S_EV))
+                     if s[0] in (F.S_CARD, F.S_STAT, F.S_EACT, F.S_ENCT, F.S_REL, F.S_EV, F.S_POT))
          / full_bytes))
     a("")
 
@@ -1374,6 +1379,7 @@ def main():
             "encounters": {"count": len(enc.rows["ENCT"]), "stride": F.row_stride("ENCT")},
             "relics": {"count": len(enc.rows["REL"]), "stride": F.row_stride("REL")},
         "events": {"count": len(enc.rows.get("EV", [])), "stride": F.row_stride("EV")},
+        "potions": {"count": len(enc.rows.get("POT", [])), "stride": F.row_stride("POT")},
             "roots": {"count": len(enc.root_entries)},
             "id_index": {"count": len(enc.idx)},
         },

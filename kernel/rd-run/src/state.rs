@@ -30,6 +30,9 @@ pub const MAX_RUN_DECK: usize = 60;
 pub const MAX_RUN_RELICS: usize = 24;
 /// The potion belt (`inv:§9.3`: hold at most 3).
 pub const MAX_RUN_POTIONS: usize = 3;
+/// `inv:§9.3`: a potion drops from 40% of fights (the act-1 reset value; the ±10% per act is not
+/// modelled because there is one act).
+pub const POTION_DROP_PERCENT: u32 = 40;
 
 /// `Burning Blood`: "At the end of combat, heal 6 HP" (`inv:§2`).
 pub const BURNING_BLOOD_HEAL: i32 = 6;
@@ -243,6 +246,9 @@ pub struct Reward {
     gold: i32,
     cards: [RunId; MAX_REWARD_CARDS],
     cards_len: u8,
+    /// The potion this fight dropped, if any (`inv:§9.3`: 40% of fights, and a full belt simply
+    /// means the offer cannot be taken).
+    potion: RunId,
 }
 
 impl Reward {
@@ -253,6 +259,7 @@ impl Reward {
             gold: 0,
             cards: [RunId::EMPTY; MAX_REWARD_CARDS],
             cards_len: 0,
+            potion: RunId::EMPTY,
         }
     }
 
@@ -1080,7 +1087,12 @@ impl RunState {
     ///
     /// Gold is granted here rather than on "take" because `inv:§5` gives it on victory -- there is
     /// no way to decline it, so a `take_gold` action would be a button that is always pressed.
-    pub fn roll_reward(&mut self, card_pool: &[PoolCard<'_>], kind: FightKind) -> Result<(), RunError> {
+    pub fn roll_reward(
+        &mut self,
+        card_pool: &[PoolCard<'_>],
+        potion_pool: &[&str],
+        kind: FightKind,
+    ) -> Result<(), RunError> {
         // Status and curse cards are never a reward (`inv:§3.5`; `slimed` is a Status).
         let mut eligible = [0usize; MAX_POOL];
         let mut eligible_len = 0usize;
@@ -1101,6 +1113,9 @@ impl RunState {
         let span = (high - low + 1).max(1) as u32;
         let paid = low + self.rng.roll(RunStream::Reward, span)? as i32;
         self.adjust_gold(paid);
+
+        // `inv:§9.3`: a potion drops from 40% of fights, on the `Potion` stream.
+        let drop = self.rng.roll(RunStream::Potion, 100)? < POTION_DROP_PERCENT;
 
         let mut used = [false; MAX_POOL];
         let mut cards = [RunId::EMPTY; MAX_REWARD_CARDS];
@@ -1141,12 +1156,48 @@ impl RunState {
                 self.rarity_offset = (self.rarity_offset + 1).min(RARITY_OFFSET_CAP);
             }
         }
+        // Which potion: the content's own list, picked on the same stream. `potion_pool` is empty
+        // when the image declares none (roguedeck), and then no potion is offered at all.
+        let potion = if drop && !potion_pool.is_empty() {
+            let index = self.rng.roll(RunStream::Potion, potion_pool.len() as u32)? as usize;
+            RunId::new(potion_pool[index]).map_err(|_| RunError::BadId)?
+        } else {
+            RunId::EMPTY
+        };
         self.reward = Reward {
             gold: paid,
             cards,
             cards_len: MAX_REWARD_CARDS as u8,
+            potion,
         };
         self.pending = Pending::Reward;
+        Ok(())
+    }
+
+    /// The potion this fight dropped, or `None`.
+    #[must_use]
+    pub fn reward_potion(&self) -> Option<&str> {
+        let id = self.reward.potion.as_str();
+        if id.is_empty() {
+            None
+        } else {
+            Some(id)
+        }
+    }
+
+    /// Take the potion off the reward table. A **full belt is an error**, not a silent discard:
+    /// dropping what the player was just offered without telling them is the kind of quiet loss
+    /// this project keeps banning.
+    pub fn take_potion(&mut self) -> Result<(), RunError> {
+        if self.pending != Pending::Reward {
+            return Err(RunError::WrongPhase);
+        }
+        let id = self.reward.potion;
+        if id.as_str().is_empty() {
+            return Err(RunError::NoSuchPotion);
+        }
+        self.push_potion(id.as_str())?;
+        self.reward.potion = RunId::EMPTY;
         Ok(())
     }
 
@@ -1764,7 +1815,7 @@ mod tests {
         for seed in 0..25 {
             let mut run = RunState::new(seed, 80, 0, &DECK).expect("a run");
             let gold_before = run.gold();
-            run.roll_reward(&basic_pool(), FightKind::Normal).expect("a reward");
+            run.roll_reward(&basic_pool(), &[], FightKind::Normal).expect("a reward");
             let reward = run.reward();
             let (low, high) = FightKind::Normal.gold();
             assert!(
@@ -1790,7 +1841,7 @@ mod tests {
     #[test]
     fn taking_and_skipping_a_reward() {
         let mut run = RunState::new(3, 80, 0, &DECK).expect("a run");
-        run.roll_reward(&basic_pool(), FightKind::Normal).unwrap();
+        run.roll_reward(&basic_pool(), &[], FightKind::Normal).unwrap();
         let wanted = run.reward().cards()[1].as_str().to_string();
         let deck_before = run.deck().len();
         run.take_card(1).expect("take the second card");
@@ -1801,7 +1852,7 @@ mod tests {
         assert_eq!(run.take_card(0), Err(RunError::WrongPhase));
 
         // Skipping takes nothing.
-        run.roll_reward(&basic_pool(), FightKind::Normal).unwrap();
+        run.roll_reward(&basic_pool(), &[], FightKind::Normal).unwrap();
         let deck_before = run.deck().len();
         run.skip_reward().expect("skip");
         assert_eq!(run.deck().len(), deck_before);
@@ -1819,7 +1870,7 @@ mod tests {
             PoolCard { id: "defend", rarity: Rarity::Basic },
         ];
         assert_eq!(
-            run.roll_reward(&two, FightKind::Normal),
+            run.roll_reward(&two, &[], FightKind::Normal),
             Err(RunError::PoolTooSmall { pool: 2, need: 3 })
         );
         assert_eq!(run.pending(), Pending::None, "a refused roll leaves no phase behind");
@@ -1900,7 +1951,7 @@ mod tests {
 
         // Every bucket but `Basic` is empty in this pool, so no roll can come out Rare: three cards
         // therefore tick the offset three times.
-        run.roll_reward(&basic_pool(), FightKind::Normal).unwrap();
+        run.roll_reward(&basic_pool(), &[], FightKind::Normal).unwrap();
         assert_eq!(run.rarity_offset(), -2, "three ticks from -5");
 
         // A boss reward is always Rare, so every card resets it back to the floor.
@@ -1910,13 +1961,13 @@ mod tests {
             PoolCard { id: "c", rarity: Rarity::Rare },
         ];
         run.skip_reward().unwrap();
-        run.roll_reward(&rare_pool, FightKind::Boss).unwrap();
+        run.roll_reward(&rare_pool, &[], FightKind::Boss).unwrap();
         assert_eq!(run.rarity_offset(), RARITY_OFFSET_START, "a rare resets the pity");
 
         // The cap holds: 45 more non-rare cards cannot push it past +40.
         for _ in 0..20 {
             run.skip_reward().unwrap();
-            run.roll_reward(&basic_pool(), FightKind::Normal).unwrap();
+            run.roll_reward(&basic_pool(), &[], FightKind::Normal).unwrap();
         }
         assert!(run.rarity_offset() <= RARITY_OFFSET_CAP, "offset {} escaped the cap", run.rarity_offset());
     }
@@ -1996,6 +2047,74 @@ mod tests {
     /// and a campfire would heal on every click -- the page showed exactly that before the guard.
     /// **You cannot walk on before settling the node you are on.** Found by clicking: step onto a
     /// fight, then step onto the next node, and the fight never happens.
+    /// `inv:§9.3`: a won fight drops a potion from 40% of fights, taking it lands it on the belt, and
+    /// a **full belt refuses loudly** rather than quietly dropping what the player was offered.
+    #[test]
+    fn a_won_fight_drops_a_potion_and_the_belt_takes_it() {
+        let pool = ["fire_potion", "block_potion", "energy_potion"];
+        let mut run = ironclad();
+        let mut drops = 0;
+        let trials = 400;
+        let mut offer: Option<String> = None;
+        for _ in 0..trials {
+            run.roll_reward(&basic_pool(), &pool, FightKind::Normal)
+                .expect("a reward");
+            if let Some(id) = run.reward_potion() {
+                drops += 1;
+                if offer.is_none() {
+                    offer = Some(id.to_string());
+                }
+            }
+        }
+        // 40% of 400 with a wide band: this is a rate check, not a distribution test.
+        let percent = drops * 100 / trials;
+        assert!(
+            (25..=55).contains(&percent),
+            "a potion dropped {percent}% of the time, not about 40%"
+        );
+
+        // Take one: it lands on the belt and the offer is consumed.
+        let mut run = ironclad();
+        let mut gave = false;
+        for _ in 0..60 {
+            run.roll_reward(&basic_pool(), &pool, FightKind::Normal)
+                .expect("a reward");
+            if run.reward_potion().is_some() {
+                gave = true;
+                break;
+            }
+        }
+        assert!(gave, "no potion in 60 fights: the 40% drop is not firing");
+        let wanted = run.reward_potion().unwrap().to_string();
+        assert_eq!(run.potions().len(), 0, "the belt starts empty");
+        run.take_potion().expect("take it");
+        assert_eq!(run.potions().len(), 1);
+        assert_eq!(run.potions()[0].as_str(), wanted);
+        assert!(run.reward_potion().is_none(), "the offer is consumed");
+        assert_eq!(
+            run.take_potion(),
+            Err(RunError::NoSuchPotion),
+            "taking twice must not conjure a second potion"
+        );
+
+        // A full belt is a refusal, not a silent discard.
+        while run.potions().len() < MAX_RUN_POTIONS {
+            run.push_potion("fire_potion").expect("space");
+        }
+        for _ in 0..60 {
+            run.roll_reward(&basic_pool(), &pool, FightKind::Normal)
+                .expect("a reward");
+            if run.reward_potion().is_some() {
+                assert_eq!(
+                    run.take_potion(),
+                    Err(RunError::Capacity),
+                    "a full belt must refuse the offer"
+                );
+                return;
+            }
+        }
+    }
+
     #[test]
     fn you_cannot_walk_on_before_settling() {
         let mut run = ironclad();

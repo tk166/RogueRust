@@ -3325,5 +3325,31 @@
       "Effect1": "nothing",
       "Amount1": 0
     }
+  ],
+  "Potions": [
+    {
+      "Id": "fire_potion",
+      "NameKey": "Fire Potion",
+      "DescriptionKey": "Deal 20 damage to the chosen enemy.",
+      "Effect": "combat_damage",
+      "Amount": 20,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "block_potion",
+      "NameKey": "Block Potion",
+      "DescriptionKey": "Gain 12 Block.",
+      "Effect": "combat_block",
+      "Amount": 12,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "energy_potion",
+      "NameKey": "Energy Potion",
+      "DescriptionKey": "Gain 2 Energy.",
+      "Effect": "combat_energy",
+      "Amount": 2,
+      "Rarity": "Uncommon"
+    }
   ]
 }

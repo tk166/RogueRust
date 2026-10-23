@@ -46,7 +46,7 @@ pub const DIRECTORY_ENTRY_BYTES: usize = 12;
 /// 内核的格表是**固定**的，而镜像原本既不记格数、也不随 schema 动版本号 ⇒ 15 格的旧镜像
 /// 配 16 格的新内核会**解析成功并读出垃圾**（把旧的 `extra` 当 `Rarity`，`content.string`
 /// 碰巧拿到合法串号就返回一段像样的文本）。schema 变更必须响亮，所以版本号跟着 schema 走。
-pub const FORMAT_VERSION: u16 = 3;
+pub const FORMAT_VERSION: u16 = 4;
 /// 目录项数（头里 `nsec`）。0..=14 有名字，15..19 保留。
 pub const SECTION_COUNT: usize = 20;
 /// 头部 `flags` 的 bit0：表现层已剥（`content.core.rdcf`）。
@@ -68,6 +68,9 @@ pub const S_REL: usize = 11;
 /// The `?`-room table (`EV`). `rdcfmt.S_EV`, same number -- and, like every section id, it must be
 /// the index of its entry in `rdcfmt.SEC_ORDER`.
 pub const S_EV: usize = 15;
+/// The potion table (`POT`). `rdcfmt.S_POT`, and -- like every section id -- the index of its entry
+/// in `rdcfmt.SEC_ORDER`.
+pub const S_POT: usize = 16;
 pub const S_ROOT: usize = 12;
 pub const S_IDX: usize = 13;
 pub const S_TAGS: usize = 14;
@@ -174,6 +177,9 @@ pub const EK_MAPNODE: u8 = 6;
 pub const EK_EVENT: u8 = 7;
 pub const EK_SHOP: u8 = 8;
 pub const EK_CHARACTER: u8 = 9;
+/// Potions. Not indexed in `SEC_IDX` (they are looked up in their own table), so
+/// `Table::from_entity_kind` keeps returning `None` for it.
+pub const EK_POTION: u8 = 10;
 
 /// 实体类别 → 名字（`card` / `status` / … / `character`）。
 #[must_use]
@@ -962,6 +968,8 @@ pub enum Table {
     Relic,
     /// The `?` room's content (`EV`, from the document key `UnknownRooms`).
     Event,
+    /// Potions (`POT`, from the document key `Potions`).
+    Potion,
 }
 
 impl Table {
@@ -984,6 +992,7 @@ impl Table {
             Table::Encounter => S_ENCT,
             Table::Relic => S_REL,
             Table::Event => S_EV,
+            Table::Potion => S_POT,
         }
     }
 
@@ -997,6 +1006,7 @@ impl Table {
             Table::Encounter => "ENCT",
             Table::Relic => "REL",
             Table::Event => "EV",
+            Table::Potion => "POT",
         }
     }
 
@@ -1010,6 +1020,7 @@ impl Table {
             Table::Encounter => "ENCT",
             Table::Relic => "REL",
             Table::Event => "EV",
+            Table::Potion => "POT",
         }
     }
 
@@ -1025,6 +1036,7 @@ impl Table {
             // Events are found through their own list, never through `SEC_IDX` -- which is why
             // `from_entity_kind(EK_EVENT)` stays `None`.
             Table::Event => EK_EVENT,
+            Table::Potion => EK_POTION,
         }
     }
 
@@ -1051,6 +1063,7 @@ impl Table {
             Table::Encounter => &ENCT_SCHEMA,
             Table::Relic => &REL_SCHEMA,
             Table::Event => &EV_SCHEMA,
+            Table::Potion => &POT_SCHEMA,
         }
     }
 
@@ -1399,6 +1412,22 @@ entity_row!(
         ("CardsDrawnPerTurn", F_INT, 0) => cards_drawn_per_turn => 6,
         /// schema 不认识的键（term 句柄）。
         ("extra", F_TERM, 0) => extra => 7,
+    }
+);
+
+entity_row!(
+    /// 药水行（`POT`，stride 16，7 格）。
+    ///
+    /// `Effect` 是**闭词表**（`combat_damage` / `combat_block` / `combat_energy` / `heal`）：run 层
+    /// 没有节目解释器，遇到词表外的效果必须响亮拒绝。
+    PotRow, Potion, POT_SCHEMA, 16, 7, {
+        ("Id", F_STR, 0) => id => 0,
+        ("NameKey", F_STR, 0) => name_key => 1,
+        ("DescriptionKey", F_STR, 0) => description_key => 2,
+        ("Effect", F_STR, 0) => effect => 3,
+        ("Amount", F_INT, 0) => amount => 4,
+        ("Rarity", F_STR, 0) => rarity => 5,
+        ("extra", F_TERM, 0) => extra => 6,
     }
 );
 
@@ -2265,6 +2294,49 @@ impl<'a> Content<'a> {
             at = at.checked_add(width)?;
         }
         None
+    }
+}
+
+/// One potion, as the content declares it.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Potion<'a> {
+    /// The id (`fire_potion` ...).
+    pub id: &'a str,
+    /// Display name.
+    pub name: &'a str,
+    /// What it does, in the closed vocabulary.
+    pub effect: &'a str,
+    /// How much of it.
+    pub amount: i16,
+    /// `Common` / `Uncommon` / `Rare` (`inv:§9`).
+    pub rarity: &'a str,
+}
+
+impl<'a> Content<'a> {
+    /// How many potions the image declares.
+    #[must_use]
+    pub fn potion_count(&self) -> u32 {
+        self.section(S_POT).map_or(0, |section| section.count)
+    }
+
+    /// Potion `index`. `None` when the row is unusable.
+    #[must_use]
+    pub fn potion(&self, index: u32) -> Option<Potion<'a>> {
+        let row = PotRow::new(self.row(Table::Potion, index)?)?;
+        Some(Potion {
+            id: self.string(row.id()).filter(|id| !id.is_empty())?,
+            name: self.string(row.name_key()).unwrap_or(""),
+            effect: self.string(row.effect()).unwrap_or(""),
+            amount: {
+                let cell = row.amount();
+                if cell == ABSENT16 || cell == NULL16 {
+                    0
+                } else {
+                    cell as i16
+                }
+            },
+            rarity: self.string(row.rarity()).unwrap_or(""),
+        })
     }
 }
 
@@ -3705,7 +3777,7 @@ mod tests {
         assert_eq!(content.card_rarity("slimed"), Some("Status"));
         assert_eq!(content.card_rarity("no_such_card"), None);
         assert_eq!((CardRow::STRIDE, CardRow::CELLS), (32, 16));
-        assert_eq!(FORMAT_VERSION, 3);
+        assert_eq!(FORMAT_VERSION, 4);
         assert_eq!(content.version(), FORMAT_VERSION);
         // The roguedeck image has no `Rarity` key at all: the cell is there and reads as absent,
         // which is `None` rather than an error.
@@ -3792,6 +3864,51 @@ mod tests {
         let core = std::fs::read(CORE_IMAGE).expect("the roguedeck image");
         let core = Content::parse(&core).expect("parses");
         assert_eq!(core.event_count(), 0, "roguedeck has no events");
+    }
+
+    /// The three potions, read out of the image, with the **closed effect vocabulary** enforced:
+    /// a potion whose effect the run layer cannot apply must fail here rather than do nothing.
+    #[test]
+    fn the_potions_are_readable() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&bytes).expect("the image parses");
+        assert_eq!(content.potion_count(), 3, "three potions");
+        let mut ids = Vec::new();
+        for index in 0..content.potion_count() {
+            let potion = content.potion(index).expect("potion {index}");
+            ids.push(potion.id);
+            assert!(!potion.name.is_empty(), "{} has no name", potion.id);
+            assert!(potion.amount > 0, "{} has no amount", potion.id);
+            assert!(
+                ["combat_damage", "combat_block", "combat_energy", "heal"].contains(&potion.effect),
+                "{}: unknown effect {:?}",
+                potion.id,
+                potion.effect
+            );
+            assert!(
+                ["Common", "Uncommon", "Rare"].contains(&potion.rarity),
+                "{}: unknown rarity {:?}",
+                potion.id,
+                potion.rarity
+            );
+        }
+        ids.sort_unstable();
+        assert_eq!(ids, vec!["block_potion", "energy_potion", "fire_potion"]);
+        let index = (0..content.potion_count())
+            .find(|index| content.potion(*index).map(|p| p.id) == Some("fire_potion"))
+            .expect("fire_potion");
+        let fire = content.potion(index).unwrap();
+        assert_eq!(fire.effect, "combat_damage");
+        assert_eq!(fire.amount, 20);
+
+        // roguedeck has no `Potions` key: zero rows, and that is not an error.
+        let core = std::fs::read(CORE_IMAGE).expect("the roguedeck image");
+        let core = Content::parse(&core).expect("parses");
+        assert_eq!(core.potion_count(), 0, "roguedeck has no potions");
     }
 
     fn the_real_images_validate() {

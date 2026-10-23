@@ -158,7 +158,7 @@ MAGIC = 0x46434452          # b'RDCF'
 # 2: `CARD` gained a `Rarity` cell (stride unchanged -- the cell fits the existing padding).
 # A schema change must be visible to a reader that has a *fixed* cell table, otherwise an old
 # image decodes as garbage instead of failing.
-FORMAT_VERSION = 3
+FORMAT_VERSION = 4
 HEADER_SIZE = 32
 NSEC = 20
 
@@ -166,12 +166,14 @@ NSEC = 20
 S_STR, S_STRO, S_OPD, S_OPF, S_TRM, S_TRW, S_AUX = 0, 1, 2, 3, 4, 5, 6
 S_CARD, S_STAT, S_EACT, S_ENCT, S_REL = 7, 8, 9, 10, 11
 S_EV = 15
+S_POT = 16
 S_ROOT, S_IDX = 12, 13
 S_TAGS = 14
 SEC_NAMES = {
     S_STR: "STR", S_STRO: "STRO", S_OPD: "OPD", S_OPF: "OPF", S_TRM: "TRM",
     S_TRW: "TRW", S_AUX: "AUX", S_CARD: "CARD", S_STAT: "STAT", S_EACT: "EACT",
-    S_ENCT: "ENCT", S_REL: "REL", S_EV: "EV", S_ROOT: "ROOT", S_IDX: "IDX", S_TAGS: "TAGS",
+    S_ENCT: "ENCT", S_REL: "REL", S_EV: "EV", S_POT: "POT", S_ROOT: "ROOT",
+    S_IDX: "IDX", S_TAGS: "TAGS",
 }
 # Every section the writer can emit, **in section-id order**.
 #
@@ -182,7 +184,7 @@ SEC_NAMES = {
 #     ROOT/IDX/TAGS down one slot: the image kept the right *bytes* under the wrong *ids*, and the
 #     kernel read 0 events while the manifest said 4.
 SEC_ORDER = [S_STR, S_STRO, S_OPD, S_OPF, S_TRM, S_TRW, S_AUX,
-             S_CARD, S_STAT, S_EACT, S_ENCT, S_REL, S_ROOT, S_IDX, S_TAGS, S_EV]
+             S_CARD, S_STAT, S_EACT, S_ENCT, S_REL, S_ROOT, S_IDX, S_TAGS, S_EV, S_POT]
 
 # --------------------------------------------------------------- field kinds
 F_STR, F_INT, F_BOOL, F_TERM, F_TERMLIST, F_STRLIST, F_JSON = 1, 2, 3, 4, 5, 6, 7
@@ -284,8 +286,17 @@ EV_ROW = [
     ("extra", F_TERM, 0),
 ]
 
+# A potion: what it is called, what it does, how much, how rare. `Effect` is a **closed vocabulary**
+# the run layer can apply without a program interpreter (`combat_damage` / `combat_block` /
+# `combat_energy` / `heal`); anything else must be refused loudly.
+POT_ROW = [
+    ("Id", F_STR, 0), ("NameKey", F_STR, 0), ("DescriptionKey", F_STR, 0),
+    ("Effect", F_STR, 0), ("Amount", F_INT, 0), ("Rarity", F_STR, 0),
+    ("extra", F_TERM, 0),
+]
+
 ROW_SCHEMAS = {"CARD": CARD_ROW, "STATUS": STATUS_ROW, "EACT": EACT_ROW,
-               "ENCT": ENCT_ROW, "REL": REL_ROW, "EV": EV_ROW}
+               "ENCT": ENCT_ROW, "REL": REL_ROW, "EV": EV_ROW, "POT": POT_ROW}
 
 
 def align4(n):

@@ -1,6 +1,6 @@
 {
   "format": "RDCF",
-  "format_version": 3,
+  "format_version": 4,
   "magic": "0x46434452",
   "source": {
     "path": "D:\\Vibe\\sts-tui\\ref\\RogueDeck-Core\\src\\RogueDeck.Sandbox.Run\\SampleContent\\bureaucrats.roguedeck.json",
@@ -54,6 +54,10 @@
     "events": {
       "count": 0,
       "stride": 20
+    },
+    "potions": {
+      "count": 0,
+      "stride": 16
     },
     "roots": {
       "count": 17
@@ -179,6 +183,13 @@
           "offset": 0,
           "bytes": 0,
           "count": 0
+        },
+        {
+          "id": 16,
+          "name": "POT",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
         }
       ]
     },
@@ -298,15 +309,22 @@
           "offset": 0,
           "bytes": 0,
           "count": 0
+        },
+        {
+          "id": 16,
+          "name": "POT",
+          "offset": 0,
+          "bytes": 0,
+          "count": 0
         }
       ]
     }
   },
   "timing_seconds": {
-    "json_load": 0.0839,
-    "derive": 0.2168,
-    "encode": 0.3185,
-    "serialize": 0.0723
+    "json_load": 0.0819,
+    "derive": 0.1894,
+    "encode": 0.2718,
+    "serialize": 0.0611
   },
   "peak_heap_mib": 26.7
 }
