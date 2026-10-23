@@ -5938,3 +5938,38 @@ if self.pending == Pending::Start { return Err(RunError::WrongPhase); }
 |---|---|---|
 | 聚合验收 | 16/16 | **16/16** |
 | 单测 | 659 | **660**（rd-run 57） |
+---
+
+## 83. 第 73 轮：药水使用 —— **找到两个入口，第三个还缺**（只落文档，不落半截代码）
+
+上一轮我写的是"内核没有给战斗员加格挡/能量的公开入口"。**这一轮查清楚了：那句话只对一半。**
+
+### 83.1 三个效果各自的真实入口
+
+| 效果 | 入口 | 状态 |
+|---|---|---|
+| `combat_block` | `Combatant::defensive_pools()` 读 + `Combatant::set_defensive_pool(id, current, None)` 写 —— 两个都是 **`pub`**（`exec.rs` 的测试助手 `give_block` 就是调它） | **可以做** |
+| `combat_energy` | `CombatState::set_resource(key, current, Some(max))` 是 **`pub`**；读是 `combatant(&id).resources()` 里按 `"standard.energy"` 找（wasm 的 `energy_now()` 已经这么读） | **可以做** |
+| `combat_damage` | 只有 `exec::resolve_damage(ctx: &mut ExecContext, target, base, ignores_block)` —— 需要一个 `ExecContext`，那是**节目执行**的上下文 | **缺一个入口** |
+
+⇒ 三个药水里**两个这一轮就能做完**，第三个需要"把伤害送进管线"，有两条路：
+1. 给 rd-core 加一个 `pub fn apply_program(state, host, root, target)` 之类的小入口，让调用方带着
+   **内容节目**进来（目标原话就是"战斗内的药水效果走现有节目管线"，所以这条更贴）；
+2. 给药水换形状：`POT` 行带一个 `Program`（像 `EACT`），这样"药水 = 一段节目"，
+   伤害、格挡、能量**全部**走同一条路，`Effect/Amount` 那两格退役。
+
+**我倾向 2**：它一次性解决三类效果，且不会引出"第二套效果语义"。代价是 `POT` 再改一次形状
+（`FORMAT_VERSION 5`），并且 `fire_potion` 的目标要在执行时由玩家指定 —— 这正好接上 env ABI 的选目标步骤。
+
+### 83.2 为什么这一轮只落文档
+
+会话上下文已经接近用尽，而"药水改形状"会牵动 `rdcfmt / compile / content / content.rs / run / wasm / 页面`
+七处，中途停下就会留下一棵红的树。**留一个精确的下一步，好过留一棵红的树。**（这也是这个项目一贯的
+纪律：不知道怎么做完的时候，把"到哪一步了、下一步第一件事是什么"钉住。）
+
+### 83.3 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **16/16**（本轮只改文档） |
+| 单测 | **660** |
