@@ -832,10 +832,16 @@ function act(call, label) {
       `<span class="err">${esc(label)} 被拒 · ${esc(runError())}</span>`;
     return;
   }
+  // **Both modes.** The first version only refreshed in run mode, so a potion used *in a fight*
+  // changed the run and left the belt chip on screen -- the player uses a potion and it appears to
+  // stay. Found by driving the page (port-plan.md §86).
+  renderTopBar();
   if (mode === "run") {
     renderMap(verdict);
     renderNode();
-    renderTopBar();
+  } else {
+    obs = readObservation();
+    render(undefined, 0);
   }
 }
 
