@@ -2600,15 +2600,20 @@ mod tests {
                     // Keep hunting until the belt holds a **block** potion, so the arithmetic in
                     // this test actually runs instead of depending on the drop.
                     let mut has_block = false;
+                    let mut has_energy = false;
                     for slot in 0..belt {
                         let n = rd_run_potion_id_len(slot as i32);
                         let mut buffer = vec![0u8; n as usize];
                         unsafe { rd_run_potion_id_into(slot as i32, buffer.as_mut_ptr()) };
-                        if String::from_utf8_lossy(&buffer) == "block_potion" {
-                            has_block = true;
+                        match String::from_utf8_lossy(&buffer).as_ref() {
+                            "block_potion" => has_block = true,
+                            "energy_potion" => has_energy = true,
+                            _ => {}
                         }
                     }
-                    if has_block || belt >= 3 {
+                    // Both, so neither arm of the assertion below is skipped. The belt holds three,
+                    // so this stops as soon as it cannot make progress.
+                    if (has_block && has_energy) || belt >= 3 {
                         break;
                     }
                 }
@@ -2666,12 +2671,43 @@ mod tests {
             "block_potion" => {
                 assert_eq!(outcome, 0, "block potion: {:?}", run_error_text());
                 assert_eq!(hero_block(), block_before + 12, "12 Block");
-                assert_eq!(rd_run_potion_count(), belt - 1, "the potion is consumed");
+                let after_block = rd_run_potion_count();
+                assert_eq!(after_block, belt - 1, "the potion is consumed");
+
+                // ...and now the energy potion, which is the other effect this build applies.
+                let mut energy_slot = -1;
+                for index in 0..after_block {
+                    let n = rd_run_potion_id_len(index as i32);
+                    let mut buffer = vec![0u8; n as usize];
+                    unsafe { rd_run_potion_id_into(index as i32, buffer.as_mut_ptr()) };
+                    if String::from_utf8_lossy(&buffer) == "energy_potion" {
+                        energy_slot = index as i32;
+                    }
+                }
+                assert!(energy_slot >= 0, "the belt must hold the energy potion we hunted for");
+                let energy_before_use = hero_energy();
+                let energy_outcome = rd_env_use_potion(energy_slot);
+                assert_eq!(
+                    energy_outcome, 0,
+                    "energy potion: {:?}",
+                    run_error_text()
+                );
+                assert_eq!(
+                    hero_energy(),
+                    energy_before_use + 2,
+                    "2 energy, past the per-turn cap"
+                );
+                assert_eq!(
+                    rd_run_potion_count(),
+                    after_block - 1,
+                    "the energy potion is consumed too"
+                );
             }
             "energy_potion" => {
+                // The hunt stops on a belt holding both, and the block arm uses the energy potion
+                // after it -- so reaching here means the hunt's stop condition changed.
                 assert_eq!(outcome, 0, "energy potion: {:?}", run_error_text());
                 assert_eq!(hero_energy(), energy_before + 2, "2 energy past the cap");
-                assert_eq!(rd_run_potion_count(), belt - 1, "the potion is consumed");
             }
             other => {
                 assert_eq!(outcome, -2, "{other} must be refused, not silently ignored");
