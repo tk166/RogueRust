@@ -5517,3 +5517,53 @@ TypeError: string indices must be integers, not 'str'
 | 单测 | **653** |
 | 镜像 | 两个都回到原 sha（`CONTENTC_BYTES PASS`） |
 | `?` 房 | **仍被拒绝**（这一轮没交付它，只交付了"为什么现在不能这么做"） |
+---
+
+## 75. 第 65 轮：`?` 房（续）—— 键名冲突解决了，写出链路还有一处断
+
+> 上一轮撤回的根因是"全局表→键映射"撞上参考文档的 `Events`（一个 dict）。这一轮先把它解决掉，
+> 然后撞到第二个更窄的问题。
+
+### 75.1 解决了：换一个参考文档不用的键
+
+`("EV", "UnknownRooms")` —— `UnknownRooms` 精确地就是这张表喂的东西（`?` 房），而且没有任何包用它。
+于是 **两个包都能编译**（`sts` 4 行事件、`roguedeck` 0 行），冲突消失。
+
+顺带把事件的行形状定成**固定格**而不是 TERM 列表：
+
+```
+EV_ROW = Id, NameKey, DescriptionKey, Label0, Effect0, Amount0, Label1, Effect1, Amount1, extra
+```
+
+理由：`Choices` 用 TERM 列表就要写"读一个对象列表、再读每个对象的一个命名字段"的遍历
+（`encounter_pool` 已经长过一次那种代码），而固定格一格都不用。代价写清楚：**一个事件恰好两个选项**
+（我们这 4 个都是如此；StS 允许 1–3）。`Effect` 是**闭词表** `heal/gold/damage/max_hp/nothing` ——
+因为 run 层没有节目解释器，`REL.RunPrograms` 就是那个缺口。
+
+内容的 4 个事件：`golden_idol`（+30 金 / 走开）、`shining_light`（+2 最大 HP / 走开）、
+`old_shrine`（回 15 / 走开）、`scrap_pile`（+45 金 / 走开）。
+
+### 75.2 第二个问题：**编译器数得到、写不出来**
+
+加完 `S_EV` 之后第一版：`manifest.json` 说 `events: {count: 4}`，而镜像里第 15 段是 `(0, 0, 0)` ——
+**0 行**。原因之一当场找到并修掉：
+
+> `rdcfmt.SEC_ORDER` 是**写出器真正遍历的那份**列表。表加进 `ROW_SCHEMAS` 而不加进 `SEC_ORDER`，
+> 编译器就会"数得到、写不出"：manifest 对、镜像空。已加进去，并在那行留下注释说明这个坑。
+
+但修完 `SEC_ORDER` 之后**仍然是 0 行**（`total_size` 从 15548 长到 16164，说明字节写进去了，
+可目录项还是 `(0,0,0)` 且 count 0）。也就是说 `counts[SEC_OF[sname]]` / `payload` 这条路上，
+"EV" 仍然没被算进去 —— 而 `enc.rows["EV"]` 明确有 4 条。
+
+**这就是下一轮的第一条线索**：`_row_groups()` 与 `SEC_OF` 在 `write()` 里看到的 EV，和
+`enc.rows` 在 manifest 里看到的 EV，是两套账。
+
+### 75.3 状态
+
+已全部撤回，`git status` 干净、单测 **653**、聚合验收 **16/16**、两个镜像回到原 sha。
+本轮交付的是**两个精确的下一步**，不是代码：
+
+1. `SEC_ORDER`（已修，撤回时一并回退了，下一轮要重新加）；
+2. `write()` 里 `counts`/`payload` 对 EV 的两套账 —— 待查。
+
+`?` 房**仍未接通**，因此第一幕目前仍是"能通关但 7/8 个 seed 会被 `?` 堵死"。
