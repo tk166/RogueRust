@@ -163,6 +163,21 @@
   .topbar .stats b { color: var(--ink); }
   .topbar .act { padding: 5px 10px; font-size: 12px; }
   .chips .chip.relic { border-color: var(--energy); color: var(--energy); }
+.chip.potion {
+  border-color: #3f6b52;
+  color: #b9f0cf;
+}
+.chip .drop {
+  background: none;
+  border: 0;
+  color: #8fb7a4;
+  cursor: pointer;
+  padding: 0 0 0 6px;
+  font-size: 12px;
+}
+.chip .drop:hover {
+  color: #ff8f8f;
+}
   /* `.mapbox` itself is in `map.css`, together with the rest of the map's look. */
   .node-panel { margin-top: 12px; }
   .node-panel .row { justify-content: flex-start; gap: 10px; }
@@ -461,6 +476,8 @@ const runRead = {
   actionArg: (i, w) => ex.rd_run_action_arg(i, w),
   relicName: (i) =>
     readText((k) => ex.rd_run_relic_name_len(k), (p, k) => ex.rd_run_relic_name_into(k, p), i),
+  potionName: (i) =>
+    readText((k) => ex.rd_run_potion_id_len(k), (p, k) => ex.rd_run_potion_id_into(k, p), i),
 };
 
 const deckTitle = (i) =>
@@ -549,7 +566,21 @@ function renderTopBar() {
   for (let index = 0; index < relics; index++) {
     chips.push(`<span class="chip relic">${esc(runRead.relicName(index) || "relic")}</span>`);
   }
+  // The potion belt (`inv:§9.3`, three slots). Each held potion is a chip with a drop button;
+  // using one in a fight comes later, and the button says so instead of doing nothing.
+  const potions = ex.rd_run_potion_count();
+  for (let index = 0; index < Math.max(0, potions); index++) {
+    const id = runRead.potionName(index) || "potion";
+    chips.push(
+      `<span class="chip potion">${esc(id)}` +
+        `<button class="drop" data-drop-potion="${index}" title="丢弃">×</button></span>`
+    );
+  }
   document.getElementById("relicChips").innerHTML = chips.join("");
+  document.querySelectorAll("[data-drop-potion]").forEach((button) => {
+    button.onclick = () =>
+      act(() => ex.rd_run_drop_potion(Number(button.dataset.dropPotion)), "丢弃药水");
+  });
   document.getElementById("deckCount").textContent = String(Math.max(0, deck));
   // The piles belong to a fight; in the run there is no draw / discard / exhaust.
   const inFight = mode === "fight";
@@ -674,13 +705,27 @@ function renderNode() {
         `<span class="price">${esc(rewardId(slot))}</span>` +
         `<button class="act" data-take="${slot}">拿这张</button></div>`);
     }
+    // `inv:§9.3`: a potion drops from 40% of fights, and it is its own offer -- taking the card and
+    // taking the potion are separate choices.
+    const potionLen = ex.rd_run_reward_potion_len();
+    const potion = potionLen > 0
+      ? `<div class="shop-item"><span>药水 ${esc(readText(() => ex.rd_run_reward_potion_len(),
+          (p) => ex.rd_run_reward_potion_into(p)))}</span>` +
+        `<span class="price">${potionLen} 字节</span>` +
+        `<button class="act" id="takePotion">拿起</button></div>`
+      : "";
     panel.innerHTML =
       `<div class="stats">战斗奖励 · 已得 <b>${ex.rd_run_reward_gold()}</b> 金 · 选一张牌</div>` +
       cards.join("") +
+      (potion === "" ? "" : `<div class="stats">这一场掉了一瓶药水</div>` + potion) +
       `<div class="row" style="margin-top:8px"><button class="act" id="skipReward">跳过</button></div>`;
     panel.querySelectorAll("[data-take]").forEach((button) => {
       button.onclick = () => act(() => ex.rd_run_take_card(Number(button.dataset.take)), "拿牌");
     });
+    if (document.getElementById("takePotion")) {
+      document.getElementById("takePotion").onclick =
+        () => act(() => ex.rd_run_take_potion(), "拿药水");
+    }
     document.getElementById("skipReward").onclick = () => act(() => ex.rd_run_skip_reward(), "跳过");
     return;
   }

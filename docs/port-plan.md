@@ -5900,3 +5900,41 @@ if self.pending == Pending::Start { return Err(RunError::WrongPhase); }
 | 聚合验收 | 16/16 | **16/16** |
 | 单测 | 658 | **659**（rd-wasm 23 → 24） |
 | 开局 | 直接进第一层 | **先选祝福** |
+---
+
+## 82. 第 72 轮：药水的**丢弃**与腰带显示（使用还差内核一个钩子）
+
+### 82.1 做完的
+
+* **rd-run**：`drop_potion(index)` —— 幸存者保序（腰带是**列表不是集合**），越界是 `NoSuchPotion`
+  而不是空操作。这也让 `take_potion` 的 `Capacity` 从"死路"变成"可行动"：腰带满了可以先丢一瓶。
+* **wasm**：`rd_run_drop_potion(index)`。
+* **页面**：顶栏遗物旁边多一排**药水 chip**（`runRead.potionName` → `rd_run_potion_id_*`），
+  每个带一个 `×` 丢弃按钮；**奖励屏**多出"这一场掉了一瓶药水 / 拿起"一行（`rd_run_take_potion`）。
+
+### 82.2 判据
+
+| 测试 | 钉住什么 |
+|---|---|
+| `dropping_a_potion_keeps_the_order_of_the_survivors`（rd-run） | 三瓶丢中间那瓶 ⇒ `["fire_potion","energy_potion"]`；再丢 ⇒ 剩一瓶；**越界是 `NoSuchPotion`**；丢空后仍报错 |
+| `smoke.mjs` | 六个药水导出必须真的存在（`potion_count` / `potion_id_*` / `drop_potion` / `reward_potion_*` / `take_potion`） |
+| `ui_test.mjs` | 页面必须调 `rd_run_potion_count` 与 `rd_run_drop_potion(` |
+
+### 82.3 没做到的（说清楚）
+
+* **使用**：`combat_damage` / `combat_block` / `combat_energy` 都还没接通。查过了：**内核没有
+  "给某个战斗员加格挡/能量"的公开入口** —— `give_block` 是 `exec.rs` 里的**测试助手**，
+  伤害要走 `resolve_damage(ctx, …)`，需要一个 `ExecContext`。所以药水的战斗效果不是"接线一下"，
+  而是**要给 rd-core 加一小块公开 API**（或者让药水以内容节目表达）。这是下一轮的正题。
+* **腰带在浏览器里的外观没验到**：我驱动页面时先被**商店**卡住（`NodeNotSettled` —— 页面是对的，
+  我的脚本没点"离开"），修好脚本后跑了 60 步也没赶上 40% 的掉落。所以腰带 chip 目前只有
+  **接线断言**，没有"真浏览器里看见一瓶药水、点 × 丢掉"的证据。**不写成已验证。**
+* **奖励屏的"拿起"按钮同样只有接线断言**：它的 `potionLen 字节` 显示是占位（长度不是有用的信息），
+  应该显示药水名 —— 需要一条 `rd_run_reward_potion_name_*` 或让页面自己去查。
+
+### 82.4 数字
+
+| 项 | 前 | 后 |
+|---|---|---|
+| 聚合验收 | 16/16 | **16/16** |
+| 单测 | 659 | **660**（rd-run 57） |

@@ -1180,6 +1180,19 @@ pub unsafe extern "C" fn rd_run_potion_id_into(index: i32, ptr: *mut u8) -> i32 
     }
 }
 
+/// Throw away belt slot `index`.
+#[no_mangle]
+pub extern "C" fn rd_run_drop_potion(index: i32) -> i32 {
+    if index < 0 {
+        return -1;
+    }
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let outcome = session.state.drop_potion(index as usize).map(|_| 0i32);
+    finish(session, outcome)
+}
+
 /// The potion the reward screen is offering (empty when none), for display.
 #[no_mangle]
 pub extern "C" fn rd_run_reward_potion_len() -> i32 {

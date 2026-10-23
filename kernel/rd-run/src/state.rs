@@ -650,6 +650,24 @@ impl RunState {
         Ok(())
     }
 
+    /// Throw away belt slot `index`. The survivors keep their order (the belt is a list, not a set).
+    ///
+    /// Dropping is how the player makes room when the belt is full and a fight offers another one --
+    /// which is also what makes [`RunState::take_potion`]'s `Capacity` error actionable instead of a
+    /// dead end.
+    pub fn drop_potion(&mut self, index: usize) -> Result<(), RunError> {
+        if index >= self.potions_len as usize {
+            return Err(RunError::NoSuchPotion);
+        }
+        let last = self.potions_len as usize - 1;
+        for slot in index..last {
+            self.potions[slot] = self.potions[slot + 1];
+        }
+        self.potions[last] = RunId::EMPTY;
+        self.potions_len -= 1;
+        Ok(())
+    }
+
     /// What the relics do when a fight ends.
     ///
     /// # The design, stated once
@@ -2153,6 +2171,35 @@ mod tests {
     /// fight, then step onto the next node, and the fight never happens.
     /// `inv:§9.3`: a won fight drops a potion from 40% of fights, taking it lands it on the belt, and
     /// a **full belt refuses loudly** rather than quietly dropping what the player was offered.
+    /// Dropping a potion keeps the order of the survivors, and dropping what is not there is an
+    /// error rather than a no-op -- the same discipline as `remove_card`.
+    #[test]
+    fn dropping_a_potion_keeps_the_order_of_the_survivors() {
+        let mut run = ironclad();
+        for id in ["fire_potion", "block_potion", "energy_potion"] {
+            run.push_potion(id).expect("space");
+        }
+        assert_eq!(run.potions().len(), 3);
+        run.drop_potion(1).expect("drop the middle one");
+        let left: Vec<&str> = run.potions().iter().map(|id| id.as_str()).collect();
+        assert_eq!(left, vec!["fire_potion", "energy_potion"]);
+        run.drop_potion(1).expect("drop the last one");
+        let left: Vec<&str> = run.potions().iter().map(|id| id.as_str()).collect();
+        assert_eq!(left, vec!["fire_potion"]);
+        assert_eq!(
+            run.drop_potion(1),
+            Err(RunError::NoSuchPotion),
+            "there is no slot 1 any more"
+        );
+        assert_eq!(
+            run.drop_potion(0).is_ok(),
+            true,
+            "the last one can go too"
+        );
+        assert_eq!(run.potions().len(), 0);
+        assert_eq!(run.drop_potion(0), Err(RunError::NoSuchPotion));
+    }
+
     #[test]
     fn a_won_fight_drops_a_potion_and_the_belt_takes_it() {
         let pool = ["fire_potion", "block_potion", "energy_potion"];
