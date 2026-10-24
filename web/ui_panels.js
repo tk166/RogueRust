@@ -130,6 +130,8 @@ const RD_PANELS = (() => {
         sub: card.chip,
         value: card.price < 0 ? "已售" : `${card.price} 金`,
         disabled: card.price < 0,
+        // Shift+click shows the card (`port-plan.md` §95).
+        card: `shop:${slot}`,
         button: { label: "买", action: { kind: "buy_card", slot } },
       });
     }
@@ -173,6 +175,7 @@ const RD_PANELS = (() => {
         sub: card.chip,
         value: card.id,
         disabled: false,
+        card: `reward:${slot}`,
         button: { label: "拿这张", action: { kind: "take_card", slot } },
       });
     }

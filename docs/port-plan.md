@@ -6567,3 +6567,52 @@ battle log        16 steps, claimed == actual for hero and every enemy
 | 单测 | **663** |
 | 日志判据 | **16 步**逐项核对（英雄 + 每个敌人） |
 | 已知覆盖不到 | 陈旧基线（由 Rust 那条独立真值的测试负责） |
+---
+
+## 95. 第 85 轮：**Shift+点牌看说明**（商店不再是盲猜）
+
+用户："按住 shift 点击卡片，无论是商店界面还是使用界面都显示卡片的详细介绍，现在的交易全靠盲猜。"
+
+### 95.1 一个导出，三个来源
+
+```rust
+rd_run_card_fact_len(source, slot, field) -> i32        // field: 0 标题, 1 说明
+rd_run_card_fact_into(source, slot, field, ptr)
+// source: 0 = 商店卡槽, 1 = 奖励卡槽, 2 = 牌组第 N 张
+```
+
+六个导出（每个来源 × 每个字段）会变成一堆近似重复；一个带两个小整数的倒是一次说清。手牌不必走它 ——
+战斗侧本来就有 `rd_env_card_title_*` / `rd_env_card_text_*`。
+
+页面侧只有一个 `cardFacts(where, slot)`（`hand` / `shop` / `reward` / `deck`）和两个入口：
+`showCardDetail()` 与一段**委托**的 shift+点击处理 —— 新面板只要在行上写 `data-card="<where>:<slot>"`
+就自动拥有这个手势。
+
+### 95.2 覆盖的地方
+
+| 位置 | 手式 |
+|---|---|
+| 手牌（战斗） | Shift+点击卡面 → 弹窗（**普通点击仍然是出牌**，测试里验了这两件事都成立） |
+| 战斗奖励 | Shift+点击整行 → 弹窗 |
+| 商店 | Shift+点击整行（卡与遗物行都行）→ 弹窗 |
+| 牌组"所有牌" | Shift+点击 → 弹窗 |
+
+### 95.3 判据
+
+* `smoke.mjs`：新导出必须真的存在（它当场抓到我把 `rd_run_card_fact_*` 写进页面却没重编 wasm）。
+* `ui_test.mjs`：**每一行"可交易的卡"必须带 `card` 来源**（`shop:N` / `reward:N`）——
+  没有它，shift+点击就没有对象可开。遗物行不算卡，断言里排除了。
+* 真浏览器实测：
+  ```
+  手牌 Shift+点击 → title="Strike", body="Deal 6 damage."
+  随后普通点击  → log 出现「手牌离开：strike / 消耗 1 点能量 / 敌人 0 受到 6 点伤害」  ← 仍然出牌
+  奖励行 Shift+点击 → title="Anger", body="Deal 6 damage. Add a copy of this card into your discard pile."
+  ```
+
+### 95.4 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **16/16** |
+| 单测 | **663** |
+| 新导出 | 2（`rd_run_card_fact_len/into`） |

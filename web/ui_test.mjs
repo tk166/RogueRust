@@ -124,6 +124,19 @@ const PANEL_STATES = [
     }
   }
   if (shop.rows[1].disabled !== true) fail("a sold-out shop row must be disabled");
+  // Every tradable row must say **which card it is**, or shift+click has nothing to open -- this is
+  // the wiring behind "buying was blind guessing" (`port-plan.md` §95).
+  for (const row of shop.rows) {
+    // Only the **card** rows are cards; a relic row has no card to describe.
+    if (row.button.action.kind === "buy_card" && !row.card?.startsWith("shop:")) {
+      fail("a shop card row has no card origin: " + row.card);
+    }
+  }
+  for (const row of P.describe(PANEL_STATES.find((s) => s[0] === "reward")[1]).rows) {
+    if (!row.card?.startsWith("reward:")) {
+      fail("a reward row has no card origin: " + row.card);
+    }
+  }
   console.log(`  panels: ${PANEL_STATES.length} states, actions and headings agree`);
 }
 

@@ -1557,6 +1557,65 @@ fn deck_card(session: Option<&RunSession>, index: i32) -> Option<rd_run::state::
 
 /// A card's title out of the content. `None` when the content has no `NameKey` for it, which the
 /// callers turn into "use the id".
+/// The card's **description** by id -- the same read `deck_title` does, one cell over.
+fn deck_text(content: &'static Content<'static>, id: &str) -> Option<&'static str> {
+    content
+        .lookup_in(id, rd_core::content::EK_CARD)
+        .and_then(|entry| content.row(rd_core::content::Table::Card, entry.index as u32))
+        .and_then(rd_core::content::CardRow::new)
+        .and_then(|row| content.string(row.description_key()))
+        .filter(|text| !text.is_empty())
+}
+
+
+/// Text of a card `field` for the panel named by `source`: `0` = shop slot, `1` = reward slot,
+/// `2` = deck index. `field` is `0` title, `1` description.
+///
+/// One export per (source, field) would be six functions; this is one with two small integers, and
+/// the page reads it through one helper. **Shift+click shows the card** -- buying blind was the
+/// complaint behind it (`port-plan.md` §95).
+fn card_fact(source: i32, slot: i32, field: i32) -> Option<&'static str> {
+    // The id is copied out first: the shop/reward accessors hand back borrows of the run, and the
+    // content lookup needs only `&str`.
+    let id = {
+        let session = run_slot().as_ref()?;
+        match source {
+            0 => shop_offer(Some(session), slot, true).map(|offer| offer.id.as_str().to_string())?,
+            1 => reward_card(slot).map(|id| id.as_str().to_string())?,
+            2 => {
+                if slot < 0 {
+                    return None;
+                }
+                session.state.deck().get(slot as usize)?.as_str().to_string()
+            }
+            _ => return None,
+        }
+    };
+    let image = content();
+    match field {
+        0 => deck_title(image, &id),
+        1 => deck_text(image, &id),
+        _ => None,
+    }
+}
+
+/// Length of the card fact, or `-1`.
+#[no_mangle]
+pub extern "C" fn rd_run_card_fact_len(source: i32, slot: i32, field: i32) -> i32 {
+    card_fact(source, slot, field).map_or(-1, |text| text.len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_card_fact_len(source, slot, field)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_card_fact_into(source: i32, slot: i32, field: i32, ptr: *mut u8) -> i32 {
+    match card_fact(source, slot, field) {
+        Some(text) => write_out(text, ptr),
+        None => 0,
+    }
+}
+
 fn deck_title(content: &'static Content<'static>, id: &str) -> Option<&'static str> {
     content
         .lookup_in(id, rd_core::content::EK_CARD)
