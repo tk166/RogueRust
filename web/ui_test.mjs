@@ -189,6 +189,101 @@ const ex = instance.exports;
 const OBS_LEN = ex.rd_env_observe_len();
 const obs = () => new Int32Array(ex.memory.buffer, ex.rd_env_observe_buf(), OBS_LEN).slice();
 
+// ---------------------------------------------------------------------------------------------
+// **The battle log must not lie.** `diffObservations` is what the log is made of, and it is pure --
+// but it is fed by two observation vectors, so a stale `before` produced a log line for damage that
+// happened *outside* the step (reported by hand: "bash 打出后英雄受到 7 点伤害", where the 7 was the
+// tower blessing's cost).
+//
+// The invariant needs **no hand-written expectation**, which is the point: for every step of a real
+// fight, the health changes the log *claims* must equal the health changes the two vectors actually
+// show. An event without a change (phantom) and a change without an event (silent) both fail.
+//
+// ⚠️ **What it cannot catch, measured.** Freezing the baseline (\efore\ never advancing -- the exact
+// bug that was reported) does **not** turn this red, because both sides of the comparison use the same
+// frozen pair. A stale baseline is caught by the *Rust* test
+// \_fight_starts_at_the_runs_health_and_the_observation_agrees\, which compares the published vector
+// against the run's own health -- an **independent** truth. This check earns its keep on a different
+// failure: the diff reading the wrong cells (an offset bug) or inventing an event.
+// ---------------------------------------------------------------------------------------------
+{
+  const HERO_HP = 4;
+  const HERO_ENERGY = 8;
+  const ENEMIES = 11;
+  const ENEMY_BASE = 17; // `ui_render.js`'s OFF_ENEMY (4 slots x 8)
+  const reflect = UI.diffObservations;
+
+  const claimed = (events, side, slot) =>
+    events
+      .filter((e) => e.side === side && (slot === undefined || e.slot === slot))
+      .filter((e) => e.kind === "damage" || e.kind === "heal")
+      .reduce((sum, e) => sum + (e.kind === "heal" ? e.amount : -e.amount), 0);
+
+  ex.rd_env_reset();
+  let before = obs();
+  let checked = 0;
+  let played = 0;
+  for (let step = 0; step < 24 && ex.rd_env_done() === 0; step++) {
+    // A card if one is playable (kind 0); otherwise the end-turn entry of the action table.
+    let action = -1;
+    let endTurn = -1;
+    for (let i = 0; i < ex.rd_env_action_count(); i++) {
+      const kind = ex.rd_env_action_kind(i);
+      if (kind === 0 && action < 0) action = i;
+      if (kind === 1) endTurn = i;
+    }
+    const wasEndTurn = action < 0;
+    if (wasEndTurn) action = endTurn;
+    if (action < 0) break;
+    if (!wasEndTurn) played++;
+
+    const verdict = ex.rd_env_step(action);
+    const after = obs();
+    if (verdict >= 0) {
+      const { events } = reflect(before, after, wasEndTurn);
+      const trail = events
+        .map((e) => e.kind + ':' + (e.side || '-') + ':' + (e.slot ?? '-') + ':' + (e.amount ?? e.spent ?? ''))
+        .join(' ');
+
+      const heroClaimed = claimed(events, 'hero');
+      const heroActual = after[HERO_HP] - before[HERO_HP];
+      if (heroClaimed !== heroActual) {
+        fail(
+          'step ' + step + ' (' + (wasEndTurn ? 'end turn' : 'card') + '): log claims hero ' +
+            heroClaimed + ' HP, vectors moved ' + heroActual + ' [' + before[HERO_HP] + ' -> ' +
+            after[HERO_HP] + '] events: ' + trail
+        );
+      }
+
+      const slots = Math.max(before[ENEMIES], after[ENEMIES]);
+      for (let slot = 0; slot < slots; slot++) {
+        const hp = ENEMY_BASE + slot * 8 + 1;
+        const said = claimed(events, 'enemy', slot);
+        const moved = after[hp] - before[hp];
+        if (said !== moved) {
+          fail(
+            'step ' + step + ': log claims enemy ' + slot + ' ' + said + ' HP, vectors moved ' +
+              moved + ' [' + before[hp] + ' -> ' + after[hp] + '] events: ' + trail
+          );
+        }
+      }
+
+      const spent = events
+        .filter((e) => e.kind === 'energy')
+        .reduce((n, e) => n + e.spent, 0);
+      if (spent > 0 && before[HERO_ENERGY] - after[HERO_ENERGY] < spent) {
+        fail('step ' + step + ': log claims ' + spent + ' energy spent, the pool fell less');
+      }
+      checked++;
+    }
+    before = after;
+  }
+  if (checked < 5) fail('only ' + checked + ' steps checked; the invariant needs a real fight');
+  if (played === 0) fail('no card was ever played; the invariant would never see a card\'s log');
+  console.log('  battle log        ' + checked + ' steps, claimed == actual for hero and every enemy');
+}
+
+
 function text(lenOf, intoOf, index) {
   const n = lenOf(index);
   if (n <= 0) return "";
