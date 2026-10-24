@@ -326,6 +326,14 @@
   };
 
   /// The same diff, as lines a player can read. Chinese to match the rest of the page.
+  /// One **grouped** line per step: `打出 Bash → 敌人 0 −8，敌人 0 易伤 +2，耗 2 能量`.
+  ///
+  /// It used to be one line per event, so a single card produced three or four lines
+  /// (`手牌离开：bash` / `消耗 2 点能量` / `敌人 0 受到 8 点伤害` / `敌人 0 vuln +2`) and the cause was
+  /// separated from its effects. Turn and result lines stay on their own line -- they are separators.
+  ///
+  /// ⚠️ This is **presentation only**: the events are what `diffObservations` produced, and the
+  /// "claimed == actual" invariant in `ui_test.mjs` is asserted on the events, not on these strings.
   function logLines(diff, io) {
     const lines = [];
     const ordered = diff.events
@@ -336,37 +344,63 @@
         return pa - pb || a.index - b.index; // stable within a kind
       })
       .map((pair) => pair.event);
+
+    const who = (event) => (event.side === "hero" ? "英雄" : `敌人 ${event.slot}`);
+    const effects = [];
+    let played = "";
+
     for (const event of ordered) {
       switch (event.kind) {
         case "damage": {
-          const who = event.side === "hero" ? "英雄" : `敌人 ${event.slot}`;
-          const absorbed = event.blocked ? `（格挡挡下 ${event.blocked}）` : "";
-          if (event.amount) lines.push(`${who} 受到 ${event.amount} 点伤害${absorbed}`);
-          else lines.push(`${who} 的格挡挡下 ${event.blocked} 点伤害`);
+          const absorbed = event.blocked ? `（挡下 ${event.blocked}）` : "";
+          if (event.amount) effects.push(`${who(event)} −${event.amount}${absorbed}`);
+          else effects.push(`${who(event)} 挡下 ${event.blocked}`);
           break;
         }
-        case "heal": lines.push(`${event.side === "hero" ? "英雄" : `敌人 ${event.slot}`} 回复 ${event.amount} 点生命`); break;
-        case "block": lines.push(`${event.side === "hero" ? "英雄" : `敌人 ${event.slot}`} 获得 ${event.amount} 点格挡`); break;
-        case "blockCleared": lines.push("回合结束，格挡清空"); break;
-        case "down": lines.push(`敌人 ${event.slot} 被击倒`); break;
-        case "energy": lines.push(`消耗 ${event.spent} 点能量`); break;
-        case "draw": lines.push(`抽 ${event.count} 张牌`); break;
+        case "heal":
+          effects.push(`${who(event)} +${event.amount} 生命`);
+          break;
+        case "block":
+          effects.push(`${who(event)} +${event.amount} 格挡`);
+          break;
+        case "blockCleared":
+          effects.push("格挡清空");
+          break;
+        case "down":
+          effects.push(`敌人 ${event.slot} 倒下`);
+          break;
+        case "energy":
+          effects.push(`耗 ${event.spent} 能量`);
+          break;
+        case "draw":
+          effects.push(`抽 ${event.count} 张`);
+          break;
         case "leftHand": {
           const names = event.defSlots.map((slot) => io.cardNameOfDefinition(slot)).filter(Boolean);
-          const what = names.length ? names.join("、") : `${event.count} 张牌`;
-          lines.push(`手牌离开：${what}`);
+          played = names.length ? `打出 ${names.join("、")}` : `${event.count} 张牌离手`;
           break;
         }
         case "status": {
-          const who = event.side === "hero" ? "英雄" : `敌人 ${event.slot}`;
           const sign = event.delta > 0 ? "+" : "";
-          lines.push(`${who} ${event.label} ${sign}${event.delta}`);
+          effects.push(`${who(event)} ${event.label} ${sign}${event.delta}`);
           break;
         }
-        case "turn": lines.push(`—— 第 ${event.round} 回合 · ${event.turn} ——`); break;
-        case "result": lines.push(`战斗结束：${event.name}`); break;
-        default: break;
+        // Separators: they frame the step, so they get their own line.
+        case "turn":
+          lines.push(`—— 第 ${event.round} 回合 · ${event.turn} ——`);
+          break;
+        case "result":
+          lines.push(`战斗结束：${event.name}`);
+          break;
+        default:
+          break;
       }
+    }
+
+    if (effects.length) {
+      lines.push(played ? `${played} → ${effects.join("，")}` : effects.join("，"));
+    } else if (played) {
+      lines.push(played);
     }
     return lines;
   }

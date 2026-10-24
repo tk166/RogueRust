@@ -170,6 +170,8 @@ for (const [needle, why] of [
   ["rd_run_potion_count", "the page would show no potion belt"],
   ["rd_run_drop_potion(", "a potion could never be dropped"],
   ["rd_env_use_potion(", "a potion could never be used"],
+  // `#msg` must have exactly **one** writer (`say`); the rule that was broken twice for `#nodePanel`.
+  ["function say(", "the message strip has no single writer"],
   ["rd_run_start_offer_len", "the run would open with no blessing to choose"],
   ["rd_run_choose_start(", "the blessing could never be taken"],
   ["rd_run_event_text_len", "an unknown room would show no event"],
@@ -692,12 +694,12 @@ if (ex.rd_env_reset() !== 0) fail("reset before the diff blocks failed");
     fail("the damage does not add up");
   }
   const lines = UI.logLines(diff, logIo());
-  if (!lines.some((l) => l.includes(`受到 ${preview} 点伤害`))) {
+  if (!lines.some((l) => l.includes("英雄 −" + preview))) {
     fail(`no damage line in ${JSON.stringify(lines)}`);
   }
   // The line names the count the diff saw, not a literal: with a full hand before the end-turn the
   // diff can only report the slots that changed (see the note on `drawn` above).
-  if (!lines.some((l) => l.includes(`抽 ${diff.drawn} 张牌`))) {
+  if (!lines.some((l) => l.includes("抽 " + diff.drawn + " 张"))) {
     fail(`no draw line in ${JSON.stringify(lines)}`);
   }
   const plan = UI.animationPlan(diff, view());
@@ -738,12 +740,18 @@ if (ex.rd_env_reset() !== 0) fail("reset before the diff blocks failed");
   // The reading order: the card leaves, then the cost, then the damage -- not the order the vector
   // happens to be walked in.
   const lines = UI.logLines(diff, logIo());
-  const at = (needle) => lines.findIndex((line) => line.includes(needle));
-  if (at("手牌离开") < 0 || at("消耗") < 0 || at("受到") < 0) {
+
+  if (!/打出 .*→ .*耗 \d+ 能量.*敌人 \d+ −\d+/.test(lines.join(" "))) {
     fail(`expected a leave/cost/damage trio, got ${JSON.stringify(lines)}`);
   }
-  if (!(at("手牌离开") < at("消耗") && at("消耗") < at("受到"))) {
-    fail(`the log reads out of order: ${JSON.stringify(lines)}`);
+  {
+    const one = lines.join(" ");
+    const leave = one.indexOf("打出 ");
+    const cost = one.indexOf("耗 ");
+    const hit = one.indexOf("敌人 0 −");
+    if (!(leave >= 0 && cost > leave && hit > cost)) {
+      fail(`expected leave < cost < damage inside one line, got ${JSON.stringify(lines)}`);
+    }
   }
   const plan = UI.animationPlan(diff, view());
   if (!plan.some((p) => p.effect === "float" && p.at === `enemy:${targetSlot}`)) {

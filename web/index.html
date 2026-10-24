@@ -607,6 +607,13 @@ function renderTopBar() {
 // ---------------------------------------------------------------------------------------------
 // The map, the node panels, and the modal
 // ---------------------------------------------------------------------------------------------
+/// **The only writer of `#msg`.** Two places used to assign it (`renderMap`'s status line and
+/// `act`'s refusal), which is the same "two writers, one element" shape that produced two P0s in
+/// `#nodePanel` (`port-plan.md` §89, §90). One helper, one writer.
+function say(text) {
+  document.getElementById("msg").innerHTML = text;
+}
+
 function renderMap(verdict) {
   const view = RD_MAP.describeMap(runRead);
   document.getElementById("mapbox").innerHTML = view ? RD_MAP.svgMarkup(view) : "";
@@ -621,7 +628,7 @@ function renderMap(verdict) {
     parts.push(`<span class="err">走不过去 · ${esc(runError())}</span>`);
   }
   parts.push(`<span class="dim">可达 ${view.actions.length} 个节点</span>`);
-  document.getElementById("msg").innerHTML = parts.join(" · ");
+  say(parts.join(" · "));
 }
 
 /// The run, as **plain data**. Every field comes from one kernel export; the panel's decisions all
@@ -812,8 +819,7 @@ function nodeLine() {
 function act(call, label) {
   const verdict = call();
   if (verdict < 0) {
-    document.getElementById("msg").innerHTML =
-      `<span class="err">${esc(label)} 被拒 · ${esc(runError())}</span>`;
+    say(`<span class="err">${esc(label)} 被拒 · ${esc(runError())}</span>`);
     // Re-render anyway: a refusal must never eat a pending choice. The player clicked something the
     // kernel would not take, and the panel it replaced (a blessing, a shop, an event) has to come
     // back -- otherwise the only way out is a reload.
@@ -1490,8 +1496,7 @@ function measure() {
     const began = ex.rd_run_begin_node();
     renderMap(verdict);
     if (began < 0) {
-      document.getElementById("msg").innerHTML =
-        `<span class="err">这个节点本版不结算 · ${esc(runError())}</span>`;
+      say(`<span class="err">这个节点本版不结算 · ${esc(runError())}</span>`);
       renderNode();
       return;
     }
