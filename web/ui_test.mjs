@@ -172,6 +172,11 @@ for (const [needle, why] of [
   ["rd_env_use_potion(", "a potion could never be used"],
   // `#msg` must have exactly **one** writer (`say`); the rule that was broken twice for `#nodePanel`.
   ["function say(", "the message strip has no single writer"],
+  // §97: a card you cannot afford and an enemy that will hit are both *visible*, and a click that
+  // cannot happen says why instead of doing nothing.
+  ["unaffordable", "an unaffordable card would look the same as a playable one"],
+  ["threat", "a threatening enemy would look the same as a harmless one"],
+  ["只能走点亮的节点", "clicking an unreachable node would say nothing at all"],
   ["rd_run_start_offer_len", "the run would open with no blessing to choose"],
   ["rd_run_choose_start(", "the blessing could never be taken"],
   ["rd_run_event_text_len", "an unknown room would show no event"],

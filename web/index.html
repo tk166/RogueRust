@@ -163,6 +163,30 @@
   .topbar .stats b { color: var(--ink); }
   .topbar .act { padding: 5px 10px; font-size: 12px; }
   .chips .chip.relic { border-color: var(--energy); color: var(--energy); }
+/* An unaffordable card keeps its shape but loses its pull: dimmed, and the cost badge turns red. */
+#hand .card.unaffordable {
+  opacity: 0.45;
+  filter: saturate(0.4);
+}
+#hand .card.unaffordable .cost-badge {
+  color: #ff8f8f;
+}
+/* A card that can be played right now gets a lift on hover, so the hand is readable at a glance. */
+#hand .card:not(.unaffordable):hover {
+  transform: translateY(-6px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+/* An enemy that is going to hit something is worth looking at twice. */
+.enemy-panel.threat {
+  border-color: #7a3b3b;
+}
+.enemy-panel.enemy-target {
+  cursor: crosshair;
+}
+.enemy-panel.enemy-target:hover {
+  outline: 2px solid #e0b060;
+  outline-offset: 2px;
+}
 .chip.potion {
   border-color: #3f6b52;
   color: #b9f0cf;
@@ -1249,7 +1273,8 @@ function render(verdict, reward) {
       : "—";
     const chips = e.statuses.map((s) => `<span class="chip">${esc(s.label)} ${s.stacks}</span>`).join("");
     return `
-      <div class="enemy-panel${down}${aimable ? " enemy-target" : ""}"
+      <div class="enemy-panel${down}${aimable ? " enemy-target" : ""}${
+        e.alive && e.intentDamage !== null && e.intentDamage > 0 ? " threat" : ""}"
            data-enemy-panel="${e.slot}" ${aimable ? `data-target-slot="${e.slot}"` : ""}>
       <div class="row"><span class="name">${esc(e.name)}${e.alive ? "" : " (down)"}</span>
         <span class="name">${e.hp} / ${e.hpMax}</span></div>
@@ -1273,7 +1298,8 @@ function render(verdict, reward) {
   // above (the ABI emits one action per live enemy slot); clicking an enemy spends the action that
   // names that slot. `def_slot` moves to `title=` — it is a content-row index, not a rule.
   const hand = view.hand.map((card, order) => `
-      <button class="card${card.armed ? " picking" : ""}" data-hand="${card.slot}"
+      <button class="card${card.armed ? " picking" : ""}${card.playable ? "" : " unaffordable"}"
+              data-hand="${card.slot}"
               data-action="${card.directActionIndex}"
               style="animation-delay:${order * 40}ms"
               title="card definition slot ${card.definitionSlot}" ${card.playable ? "" : "disabled"}>
@@ -1480,7 +1506,19 @@ function measure() {
       return;
     }
     const group = ev.target.closest("g.node.reachable");
-    if (!group || mode !== "run" || runOver) return;
+    if (!group || mode !== "run" || runOver) {
+      // **Say why nothing happened.** An unlit node used to swallow the click silently, which reads
+      // as a broken page; the two reasons are "not a neighbour of where you stand" and "settle this
+      // one first".
+      const node = ev.target.closest("g.node");
+      if (node && mode === "run" && !runOver) {
+        const reasoning = ex.rd_run_action_count() === 0
+          ? "先把手上的选择做完（面板里那个），才能往前走"
+          : "只能走点亮的节点 —— 它和当前节点连着";
+        say(`<span class="dim">走不过去 · ${esc(reasoning)}</span>`);
+      }
+      return;
+    }
     const target = Number(group.dataset.node);
     const view = RD_MAP.describeMap(runRead);
     const action = view.actions.indexOf(target);
