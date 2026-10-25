@@ -528,7 +528,8 @@ const startOffer = (slot) =>
 // **function declaration** on purpose -- a `const` here is still in the temporal
 // dead zone while the panel renders, which silently produced an empty label.
 function offerName(id) {
-  const names = { max_hp: "更坚的体魄", gold: "财宝", heal: "治疗", blood_money: "血钱" };
+  const names = { max_hp: "更坚的体魄", gold: "财宝", heal: "治疗", blood_money: "血钱",
+    remove_card: "净化", upgrade_card: "磨砺" };
   return names[id] || id;
 }
 const offerText = (code, amount) =>
