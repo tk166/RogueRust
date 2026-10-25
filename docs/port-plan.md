@@ -6766,3 +6766,52 @@ rd_run_card_fact_into(source, slot, field, ptr)
 | 聚合验收 | **16/16** |
 | 单测 | 663 → **664** |
 | 连锁红的测试 | 4 → **0**（基建修好后祝福池可自由演进） |
+---
+
+## 99. 第 91 轮：塔底从 4 项扩到 **6 项**（加了"删一张牌""升级一张牌"）
+
+上一轮倒在这里：池子一变，4 个测试因为"起始牌组正好 10 张"连锁红。这一轮先把**牌组侧的基建**做完。
+
+### 99.1 基建（第二半）：不再假设牌组是 10 张
+
+| 位置 | 之前 | 之后 |
+|---|---|---|
+| `reset(seed)` | 取 slot 0 | 按"不碰东西"打分挑一个（不删牌/不升级/不掉血），并且**把欠的选牌做完** |
+| `the_deck_can_be_listed_...` | 断言 10 张、5 张 Strike | 断言"每行都有标题""三种牌都在"；**组成**在祝福之前钉 |
+| `the_piles_can_be_listed_...` | `draw == 5`、`piles + hand == 10` | `draw > 0` 且 `draw + hand <= 牌组数` |
+| `a_fight_is_the_runs_fight_...` | `piles + hand == 10` | 与 `rd_run_deck_count()` 比 |
+| `the_blessing_is_offered_and_applied` | 选完就断言 `pending == 0` | 先做完欠的选牌 |
+
+⇒ 加上上一轮的 HP 解耦，**祝福池现在真的可以自由演进**（这正是 §98 当时说要做到、但只做到一半的事）。
+
+### 99.2 两项新祝福
+
+```rust
+pub enum BlessingFollowUp { None, RemoveCard, UpgradeCard }
+```
+
+`StartOffer` 多一个 `follow_up`；`choose_start` 取完之后如果是这两个，run 停在 **`Pending::BlessingCard`**，
+等一个牌组下标；`pick_blessing_card(index)` 做实际的删/升级。ABI：`rd_run_start_needs(slot)`（这一项要不要
+选牌）、`rd_run_blessing_needs()`、`rd_run_pick_blessing_card(index)`。
+
+⚠️ 两处细节：**不能复用 `remove_card`/`smith`**（它们各自带"只在商店/篝火"的相位门），所以这里是等价的
+列表搬移与写回；`rd-run` 是 `no_std`，**没有 `format!`**，`strike` → `strike+` 是在栈上的 `[u8; 64]` 里拼的。
+
+### 99.3 判据
+
+`a_blessing_can_remove_or_upgrade_a_card`（rd-run）：取 `remove_card` ⇒ `pending == BlessingCard`；
+`pick_blessing_card(3)` ⇒ 牌组少一张；取 `upgrade_card` ⇒ `pick_blessing_card(2)` ⇒ 第 3 张变 `strike+`
+且**张数不变**；越界 ⇒ `BadNode`（不是静默无事）。
+
+### 99.4 页面
+
+`pending === 7` 时出「塔底 · 移除/升级哪一张牌？」+「选一张牌」，点了走 `showDeckPicker` →
+`rd_run_pick_blessing_card`。`map_test.mjs` 的 `takeBlessing()` 也跟着做完选牌（否则走不动）。
+
+### 99.5 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **16/16** |
+| 单测 | 664 → **665** |
+| 塔底选项 | 4 → **6** |

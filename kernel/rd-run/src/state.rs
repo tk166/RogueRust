@@ -96,6 +96,8 @@ pub enum Pending {
     Event = 5,
     /// [`RunState::choose_start`] -- the pre-run blessing, before floor 1.
     Start = 6,
+    /// [`RunState::pick_blessing_card`] -- a blessing that needs a deck index.
+    BlessingCard = 7,
 }
 
 /// The pre-run choice (StS's Neow, `inv:§7.1`): the player picks one blessing from a rolled pair.
@@ -106,6 +108,8 @@ pub enum Pending {
 pub struct StartOffer {
     /// The id (`max_hp`, `gold`, ...), for the UI and for the run hash.
     pub id: &'static str,
+    /// Whether the blessing needs a card pick after it is taken.
+    pub follow_up: BlessingFollowUp,
     /// What the player gets.
     pub gain: EventEffect,
     /// What it costs. [`EventEffect::Nothing`] for the free blessings.
@@ -116,26 +120,55 @@ pub struct StartOffer {
 ///
 /// ⚠️ **This is not the wiki's pool**: StS draws from eight or so blessings with rarity weights.
 /// Four, unweighted, is what this content can honour -- recorded in `inv:§7.1` rather than implied.
-pub const START_OFFERS: [StartOffer; 4] = [
+/// What a blessing still needs after it is picked. `None` finishes immediately; the other two need
+/// a **deck index**, which is why they leave the run in `Pending::BlessingCard`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum BlessingFollowUp {
+    /// Nothing: the gain and the cost were the whole blessing.
+    None,
+    /// Remove deck card `N` (Neow's "remove a card").
+    RemoveCard,
+    /// Upgrade deck card `N`.
+    UpgradeCard,
+}
+
+pub const START_OFFERS: [StartOffer; 6] = [
     StartOffer {
         id: "max_hp",
         gain: EventEffect::GainMaxHealth(8),
         cost: EventEffect::Nothing,
+        follow_up: BlessingFollowUp::None,
     },
     StartOffer {
         id: "gold",
         gain: EventEffect::Gold(100),
         cost: EventEffect::LoseHealth(7),
+        follow_up: BlessingFollowUp::None,
     },
     StartOffer {
         id: "heal",
         gain: EventEffect::Heal(25),
         cost: EventEffect::Nothing,
+        follow_up: BlessingFollowUp::None,
     },
     StartOffer {
         id: "blood_money",
         gain: EventEffect::Gold(150),
         cost: EventEffect::LoseHealth(14),
+        follow_up: BlessingFollowUp::None,
+    },
+    // The two blessings that are about the deck rather than a number (wiki `Neow`).
+    StartOffer {
+        id: "remove_card",
+        gain: EventEffect::Nothing,
+        cost: EventEffect::Nothing,
+        follow_up: BlessingFollowUp::RemoveCard,
+    },
+    StartOffer {
+        id: "upgrade_card",
+        gain: EventEffect::Nothing,
+        cost: EventEffect::Nothing,
+        follow_up: BlessingFollowUp::UpgradeCard,
     },
 ];
 
@@ -481,6 +514,8 @@ pub struct RunState {
     event: RunId,
     /// Which two blessings were rolled, as indices into [`START_OFFERS`].
     start_offers: [u8; 2],
+    /// The picked blessing's follow-up, while [`Pending::BlessingCard`] waits for a deck index.
+    blessing_follow: Option<BlessingFollowUp>,
     /// The rare-card pity offset (`inv:§3.5`): starts at −5%, +1% per non-rare reward roll, reset to
     /// −5% on a rare, capped at +40%. Only **combat reward** rolls move it.
     rarity_offset: i32,
@@ -524,6 +559,7 @@ impl RunState {
             event: RunId::EMPTY,
             // Rolled by `offer_start_choice`; until then the pair is not a choice anyone can take.
             start_offers: [0, 1],
+            blessing_follow: None,
             resolved: [0; 2],
             rarity_offset: RARITY_OFFSET_START,
         };
@@ -1196,6 +1232,68 @@ impl RunState {
         };
         self.apply_event_effect(offer.gain)?;
         self.apply_event_effect(offer.cost)?;
+        // A blessing that names a card is not finished until the card is named.
+        self.blessing_follow = match offer.follow_up {
+            BlessingFollowUp::None => None,
+            other => Some(other),
+        };
+        self.pending = if self.blessing_follow.is_some() {
+            Pending::BlessingCard
+        } else {
+            Pending::None
+        };
+        Ok(())
+    }
+
+    /// What the pending blessing still needs, for a picker.
+    #[must_use]
+    pub const fn blessing_follow_up(&self) -> Option<BlessingFollowUp> {
+        self.blessing_follow
+    }
+
+    /// Finish a blessing that named a card: remove or upgrade deck entry `index`.
+    pub fn pick_blessing_card(&mut self, index: usize) -> Result<(), RunError> {
+        if self.pending != Pending::BlessingCard {
+            return Err(RunError::WrongPhase);
+        }
+        let Some(follow_up) = self.blessing_follow else {
+            return Err(RunError::WrongPhase);
+        };
+        if index >= self.deck_len as usize {
+            return Err(RunError::BadNode);
+        }
+        match follow_up {
+            BlessingFollowUp::RemoveCard => {
+                // Not `remove_card`: that action belongs to the shop and refuses outside it. This is
+                // the same list splice it performs.
+                let last = self.deck_len as usize - 1;
+                for slot in index..last {
+                    self.deck[slot] = self.deck[slot + 1];
+                }
+                self.deck[last] = RunId::EMPTY;
+                self.deck_len -= 1;
+            }
+            BlessingFollowUp::UpgradeCard => {
+                // Already upgraded is not an error: the blessing simply has nothing to do.
+                if !self.deck[index].as_str().ends_with('+') {
+                    let mut buffer = [0u8; 64];
+                    let mut len = 0usize;
+                    for byte in self.deck[index].as_str().as_bytes() {
+                        if len < buffer.len() - 1 {
+                            buffer[len] = *byte;
+                            len += 1;
+                        }
+                    }
+                    buffer[len] = b'+';
+                    len += 1;
+                    let upgraded =
+                        core::str::from_utf8(&buffer[..len]).map_err(|_| RunError::BadId)?;
+                    self.deck[index] = RunId::new(upgraded).map_err(|_| RunError::BadId)?;
+                }
+            }
+            BlessingFollowUp::None => return Err(RunError::WrongPhase),
+        }
+        self.blessing_follow = None;
         self.pending = Pending::None;
         Ok(())
     }
@@ -2216,6 +2314,48 @@ mod tests {
 
     /// A node pays **once**. Without this, a combat node could be fought again from where you stand
     /// and a campfire would heal on every click -- the page showed exactly that before the guard.
+    /// The two deck blessings really touch the deck. Taking one leaves the run in
+    /// `Pending::BlessingCard`; the deck index is what finishes it.
+    #[test]
+    fn a_blessing_can_remove_or_upgrade_a_card() {
+        let index_of = |id: &str| -> u8 {
+            START_OFFERS
+                .iter()
+                .position(|offer| offer.id == id)
+                .expect("in the pool") as u8
+        };
+
+        // Remove: the deck shrinks by one.
+        let mut run = RunState::new(7, 80, 0, &["strike"; 10]).expect("a run");
+        run.start_offers = [index_of("remove_card"), index_of("max_hp")];
+        run.pending = Pending::Start;
+        run.choose_start(0).expect("taking remove_card");
+        assert_eq!(run.pending, Pending::BlessingCard, "the card pick is still owed");
+        assert_eq!(run.blessing_follow_up(), Some(BlessingFollowUp::RemoveCard));
+        let before = run.deck_len as usize;
+        run.pick_blessing_card(3).expect("removing the fourth card");
+        assert_eq!(run.pending, Pending::None);
+        assert_eq!(run.deck_len as usize, before - 1, "one card left the deck");
+        assert_eq!(run.blessing_follow_up(), None);
+
+        // Upgrade: the row becomes the `+` variant and the size does not change.
+        let mut run = RunState::new(7, 80, 0, &["strike"; 10]).expect("a run");
+        run.start_offers = [index_of("upgrade_card"), index_of("max_hp")];
+        run.pending = Pending::Start;
+        run.choose_start(0).expect("taking upgrade_card");
+        assert_eq!(run.blessing_follow_up(), Some(BlessingFollowUp::UpgradeCard));
+        assert_eq!(run.deck[2].as_str(), "strike");
+        run.pick_blessing_card(2).expect("upgrading the third card");
+        assert_eq!(run.deck[2].as_str(), "strike+");
+        assert_eq!(run.deck_len, 10, "upgrading does not change the deck size");
+
+        // A deck index that is not there is an error, not a silent no-op.
+        let mut run = RunState::new(7, 80, 0, &["strike"; 10]).expect("a run");
+        run.pending = Pending::BlessingCard;
+        run.blessing_follow = Some(BlessingFollowUp::RemoveCard);
+        assert_eq!(run.pick_blessing_card(99), Err(RunError::BadNode));
+    }
+
     /// A blessing offer must be a **choice**: no heal at full health, and always something free.
     #[test]
     fn blessing_offers_are_never_nonsense() {

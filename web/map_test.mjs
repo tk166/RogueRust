@@ -62,7 +62,12 @@ const io = {
 // The run opens on a blessing choice; take the first, the way the page does. Declared with
 // `function` so the calls above it work (a `const` arrow would be in the temporal dead zone).
 function takeBlessing() {
-  if (ex.rd_run_pending() === 6) return ex.rd_run_choose_start(0);
+  if (ex.rd_run_pending() === 6) {
+    const verdict = ex.rd_run_choose_start(0);
+    if (verdict !== 0) return verdict;
+  }
+  // A blessing about a card owes a deck index before anything can move.
+  if (ex.rd_run_pending() === 7) return ex.rd_run_pick_blessing_card(0);
   return 0;
 }
 

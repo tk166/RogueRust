@@ -681,6 +681,7 @@ function runSnapshot() {
     rewardCards: [],
     choices: [],
     rewardPotion: null,
+    blessingNeeds: 0,
     restHeal: 0,
     removePrice: 0,
     rewardGold: 0,
@@ -697,6 +698,9 @@ function runSnapshot() {
           costAmount: ex.rd_run_start_cost_amount(slot),
         });
       }
+      break;
+    case 7:
+      snapshot.blessingNeeds = ex.rd_run_blessing_needs();
       break;
     case 1:
       snapshot.restHeal = Math.floor((snapshot.hpMax * 30) / 100);
@@ -761,6 +765,9 @@ const PANEL_ACTIONS = {
     startRun();
   },
   choose_start: (a) => act(() => ex.rd_run_choose_start(a.slot), "祝福"),
+  blessing_card: () =>
+    showDeckPicker("祝福：选一张牌", (index) =>
+      act(() => ex.rd_run_pick_blessing_card(index), "祝福选牌")),
   begin_fight: () => beginFight(),
   rest: () => act(() => ex.rd_run_rest(), "休息"),
   smith: () =>

@@ -215,6 +215,16 @@ const RD_PANELS = (() => {
     };
   }
 
+  function describeBlessingCard(s) {
+    const what = s.blessingNeeds === 2 ? "升级哪一张牌？" : "移除哪一张牌？";
+    return {
+      title: "塔底 · " + what,
+      lines: [],
+      rows: [],
+      buttons: [{ id: "pick", label: "选一张牌", action: { kind: "blessing_card" } }],
+    };
+  }
+
   function describeIdle(s) {
     if (s.kind < 0) {
       return { title: "", lines: ["还没出发 · 点亮的节点可以走"], rows: [], buttons: [] };
@@ -230,6 +240,8 @@ const RD_PANELS = (() => {
     switch (s.pending) {
       case 6:
         return describeBlessing(s);
+      case 7:
+        return describeBlessingCard(s);
       case 4:
         return describeReward(s);
       case 5:
