@@ -1117,16 +1117,58 @@ impl RunState {
     /// Called by the driver right after the run is created: **no move is legal until the blessing is
     /// chosen**, which is the same rule as `NodeNotSettled` one level up.
     pub fn offer_start_choice(&mut self) -> Result<(), RunError> {
-        let span = START_OFFERS.len() as u32;
-        let first = self.rng.roll(RunStream::Event, span)? as u8;
-        let mut second = self.rng.roll(RunStream::Event, span - 1)? as u8;
-        // Pick a *distinct* second by mapping into the pool with the first one removed.
-        if second >= first {
-            second += 1;
+        // **Only blessings that are choices.** Two rules, both from reading the panel:
+        //   1. no `heal` while the hero is at full health (it would change nothing);
+        //   2. at least one of the two offers must be free -- otherwise the opening move of the game
+        //      is "lose HP", which is not a choice either.
+        let mut pool = [0u8; START_OFFERS.len()];
+        let mut pool_len = 0usize;
+        for (index, offer) in START_OFFERS.iter().enumerate() {
+            if self.blessing_is_meaningful(offer) {
+                pool[pool_len] = index as u8;
+                pool_len += 1;
+            }
         }
-        self.start_offers = [first, second];
+        if pool_len < 2 {
+            // The rule, not the content, would be wrong here; fail loudly rather than offer one.
+            return Err(RunError::Invariant("fewer than two meaningful blessings"));
+        }
+
+        let first_slot = self.rng.roll(RunStream::Event, pool_len as u32)? as usize;
+        let mut second_slot = self.rng.roll(RunStream::Event, pool_len as u32 - 1)? as usize;
+        if second_slot >= first_slot {
+            second_slot += 1;
+        }
+        let mut pair = [pool[first_slot], pool[second_slot]];
+
+        // Rule 2: force one free offer in when the roll produced none.
+        let is_free = |slot: u8| matches!(START_OFFERS[slot as usize].cost, EventEffect::Nothing);
+        if !is_free(pair[0]) && !is_free(pair[1]) {
+            for candidate in 0..pool_len {
+                if is_free(pool[candidate]) {
+                    pair[1] = pool[candidate];
+                    break;
+                }
+            }
+            if !is_free(pair[1]) {
+                return Err(RunError::Invariant("no free blessing exists"));
+            }
+        }
+
+        self.start_offers = pair;
         self.pending = Pending::Start;
         Ok(())
+    }
+
+    /// Would this blessing change anything **right now**? Today: healing a hero who is already at
+    /// full health changes nothing. The list is deliberately short -- it grows only when a blessing
+    /// is shown to be a non-choice.
+    #[must_use]
+    fn blessing_is_meaningful(&self, offer: &StartOffer) -> bool {
+        match offer.gain {
+            EventEffect::Heal(_) => self.health < self.health_max,
+            _ => true,
+        }
     }
 
     /// The two rolled blessings, or `None` when no choice is pending.
@@ -2174,6 +2216,47 @@ mod tests {
 
     /// A node pays **once**. Without this, a combat node could be fought again from where you stand
     /// and a campfire would heal on every click -- the page showed exactly that before the guard.
+    /// A blessing offer must be a **choice**: no heal at full health, and always something free.
+    #[test]
+    fn blessing_offers_are_never_nonsense() {
+        for seed in 1..=80 {
+            let mut run = RunState::new(seed, 80, 0, &["strike"; 10]).expect("a run");
+            run.offer_start_choice().expect("offers");
+            let offers = run.start_offers().expect("a pending choice");
+            for offer in offers {
+                assert!(
+                    !matches!(offer.gain, EventEffect::Heal(_)),
+                    "seed {seed}: heal offered at full health"
+                );
+            }
+            assert!(
+                offers
+                    .iter()
+                    .any(|offer| matches!(offer.cost, EventEffect::Nothing)),
+                "seed {seed}: neither blessing is free -- the run would have to start with a loss"
+            );
+        }
+
+        // And a wounded hero *is* offered a heal again (the filter is about the state, not the pool).
+        let mut run = RunState::new(7, 80, 0, &["strike"; 10]).expect("a run");
+        run.adjust_health(-40);
+        let mut seen = false;
+        for _ in 0..16 {
+            run.pending = Pending::None;
+            run.offer_start_choice().expect("offers");
+            if run
+                .start_offers()
+                .expect("a pending choice")
+                .iter()
+                .any(|offer| matches!(offer.gain, EventEffect::Heal(_)))
+            {
+                seen = true;
+                break;
+            }
+        }
+        assert!(seen, "a wounded hero must still be able to be offered a heal");
+    }
+
     /// **You cannot walk on before settling the node you are on.** Found by clicking: step onto a
     /// fight, then step onto the next node, and the fight never happens.
     /// `inv:§9.3`: a won fight drops a potion from 40% of fights, taking it lands it on the belt, and

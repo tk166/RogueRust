@@ -1965,6 +1965,9 @@ mod tests {
     use rd_run::state::{MAX_RUN_POTIONS, MAX_RUN_RELICS};
     use rd_run::streams::RunRng;
 
+    /// Start a run and take blessing 0. **Nothing here promises full health**: a blessing may cost
+    /// HP (`blood_money` is -14), so a test that wants a particular health reads
+    /// `rd_run_observe(2)` instead of assuming one.
     fn reset(seed: i32) {
         assert_eq!(rd_run_start(seed), 0, "rd_run_start({seed}) failed");
         assert_eq!(rd_run_choose_start(0), 0, "taking blessing 0");
@@ -1976,13 +1979,16 @@ mod tests {
 
     #[test]
     fn a_run_starts_from_the_content_not_from_constants() {
-        reset(7);
+        // **Before the blessing**: this test is about what the *content* says (80/80), not about
+        // what a blessing later did to it.
+        assert_eq!(rd_run_start(7), 0, "rd_run_start(7)");
+        let start = obs();
+        assert_eq!(start[2], 80, "health");
+        assert_eq!(start[3], 80, "max health");
+        assert_eq!(start[4], 0, "gold comes out of the content, which says 0");
+        assert_eq!(rd_run_choose_start(0), 0, "taking blessing 0");
         let o = obs();
         assert_eq!(rd_run_seed(), 7);
-        // `Characters[0].Start` in the sts package says MaxHealth/StartingHealth 80 and gold 0.
-        assert_eq!(o[2], 80, "health");
-        assert_eq!(o[3], 80, "max health");
-        assert_eq!(o[4], 0, "gold comes out of the content, which says 0");
         assert_eq!(o[5], 10, "`inv:§2.1`: a ten-card starting deck");
         assert_eq!(o[0], 0, "floor is 0 before the first step");
         assert_eq!(o[1], -1, "the cursor starts off the map");
@@ -2203,9 +2209,11 @@ mod tests {
     fn burning_blood_heals_at_the_end_of_the_fight() {
         reset(7);
         let session = run_slot().as_mut().expect("session");
+        // Relative to the run's own health: a blessing may already have cost HP (`inv:§7.1`).
+        let base = session.state.health();
         session.state.adjust_health(-20);
         assert_eq!(session.state.end_of_combat(), Ok(6));
-        assert_eq!(session.state.health(), 66);
+        assert_eq!(session.state.health(), base - 20 + 6);
         session.state.adjust_health(1000);
         assert_eq!(session.state.end_of_combat(), Ok(0), "nothing to heal at full health");
     }
@@ -2221,16 +2229,19 @@ mod tests {
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_pending(), 0, "a fight has nothing for the run layer to settle");
 
-        // The hero enters wounded, and the fight has to know that.
+        // The hero enters wounded, and the fight has to know that. Relative to the run's own health:
+        // a blessing may already have cost HP (`inv:§7.1`).
+        let base: i32;
         {
             let session = run_slot().as_mut().unwrap();
+            base = session.state.health();
             session.state.adjust_health(-20);
-            assert_eq!(session.state.health(), 60);
+            assert_eq!(session.state.health(), base - 20);
         }
         assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
         assert_eq!(
             crate::combat_hero_health(),
-            Some(60),
+            Some(base - 20),
             "the fight starts at the run's health, not at full"
         );
         // The fight's deck is the run's deck: every card is in a pile **or in hand** -- the fight
@@ -2248,7 +2259,11 @@ mod tests {
         assert_eq!(rd_run_fight_end(), 0, "a fight still in progress ends as Ongoing");
         assert_eq!(rd_run_fight_end(), -1, "there is no second fight to end");
         let session = run_slot().as_ref().unwrap();
-        assert_eq!(session.state.health(), 60, "the fight did not change the run's health");
+        assert_eq!(
+            session.state.health(),
+            base - 20,
+            "the fight did not change the run's health"
+        );
     }
 
     /// Winning folds the health back **and** runs the relics: `Burning Blood` heals 6.
@@ -2263,7 +2278,7 @@ mod tests {
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_fight_begin(), 0);
         let start = run_slot().as_ref().unwrap().state.health();
-        assert_eq!(start, 80);
+        assert!(start > 0, "the run must have health to lose");
 
         // Play the fight out the way a policy would: any play action, else end the turn.
         let mut guard = 0;
