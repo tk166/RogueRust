@@ -7389,3 +7389,57 @@ Metallicize 是同一种形状 —— 而 §106 我写"给 `turn_ended` 加一�
 我现在的上下文不足以做完三轮。**再硬上一次就是第四次回退**，那正是这两天在治的病。
 
 ⇒ 下一轮从 §112.2 的第 1 行开始，一次一个编译，任何一步失败最多回退一步。
+
+---
+
+## 113. Metallicize 的**实现**进了内核；**内容挂载**被一条实测拦住了
+
+这一轮按 §112 做完了第 1–2 步，然后在第 3 步前被一条实测挡住 —— 挡住了就是挡住了，记下来。
+
+### 113.1 已经进内核的部分（可用）
+
+`host.rs`：
+
+```rust
+fn grant_end_of_turn_block(&mut self, state, actor)          // 遍历 active 状态，累加 standard.metallicize 的层数
+                                                             // ⇒ set_defensive_pool("standard.block", current + n)
+// 调用点：try_run_turn_ended_triggers，**在 TurnEnded 事件入队之前**（这样事件的处理者读得到格挡）
+```
+
+`status_catalog`：`standard.metallicize` 从 `is_declared_inert` **挪进 `has_behaviour`** ——
+符合 §104 那条规则（有行为就不许再挂"惰性"牌子）。
+
+### 113.2 卡在哪：**`core_image()` 没有 STAT 行**
+
+判据测试（`metallicize_grants_block_at_the_end_of_the_turn`）写好了，跑起来红在：
+
+```
+turn end: Bind(Missing("STAT row"))
+```
+
+原因不是我的实现，是**测试用的镜像**：`core_image()`（14,380 B）**不含 `STAT` 表**，所以任何在 `solo()` 里
+`give(...)` 上去的状态都绑不到定义。旁边那条 poison 测试能跑，是因为 **poison 按 tag 绑定**，不走 STAT 行。
+
+⇒ 这条测试要改成像运行期那样用**全量镜像**（`content.sts.rdcf`）。测试已标 `#[ignore]`，理由就写在属性里，
+**不是"以后再说"，是"要换镜像"**。
+
+### 113.3 所以内容**暂时没有挂**这只状态 —— 故意的
+
+`spike_slime_m` 上的 Metallicize 3 已经撤回。理由：
+
+**如果 turn-end 对"没有触发节目"的状态会 `Err`**（`Bind(Missing(...))` 就是这个形状），那么把一只带
+`metallicize` 的怪放进战斗，可能让**整个回合结束报错**。在拿到"全量镜像下 turn-end 不报错"的证据之前，
+不把这条路径接进玩家实际会遇到的战斗。
+
+⇒ 待验证的一句话：**"回合结束遇到一个没有节目的状态，是跳过还是报错？"**
+答"跳过" ⇒ 挂上去；答"报错" ⇒ 先让收集器容忍，再挂。
+
+### 113.4 状态
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | **669 / 1 ignored**（那 1 条就是本条，理由写在属性里） |
+| 内核实现 | ✅ 在两处（步骤 + 调用点） |
+| 规则 | ✅ `standard.metallicize` 已进 `has_behaviour` |
+| 内容挂载 | ⛔ 撤回，等 113.3 那句话的答案 |

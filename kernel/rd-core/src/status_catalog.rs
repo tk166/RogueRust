@@ -659,6 +659,9 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.artifact"
             | "standard.thorns"
             | "standard.rage"
+            // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
+            // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
+            | "standard.metallicize"
     )
 }
 
@@ -672,7 +675,7 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // No rule anywhere yet. `ritual` is the wiki's "gain Strength at the end of each turn"
         // (Cultist) and `standard.metallicize` is "gain Block at the end of each turn" (Lagavulin);
         // both want a **content trigger** on `TurnEnded` (`port-plan.md` §107), not a kernel arm.
-        "ritual" | "standard.metallicize"
+        "ritual"
     )
 }
 

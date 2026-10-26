@@ -1108,6 +1108,49 @@ impl<'a> Host<'a> {
     /// 别的效果（例如一条"解毒"触发器把层数减掉，`:476-479` 的注释是在说这个）。今天没有
     /// 任何 DamageTaken/StatusChanged 触发器接上（21 个未接事件之一），所以两者观察等价；
     /// 而**层数**读的是生效时点的值（见 B 段的实现），这一半与参考一致。
+    /// **Metallicize**: Block at the end of the turn (`standard.metallicize`, wiki: Lagavulin 8).
+    ///
+    /// A status implemented as a **host step**, the same shape [`Self::try_damage_over_time`] uses for
+    /// poison -- this kernel has no trigger interpreter (`port-plan.md` §111/§112), so a status with a
+    /// rule has a function, and `status_catalog::has_behaviour` names it.
+    fn grant_end_of_turn_block(
+        &mut self,
+        state: &mut CombatState,
+        actor: &CombatantId,
+    ) -> Result<(), HostError> {
+        let mut total = 0i32;
+        {
+            let Some(combatant) = state.combatant(actor) else {
+                return Ok(());
+            };
+            for instance in combatant.statuses() {
+                if !is_active(instance) || instance.stacks <= 0 {
+                    continue;
+                }
+                if instance.definition_id.as_str() == "standard.metallicize" {
+                    total += instance.stacks as i32;
+                }
+            }
+        }
+        if total <= 0 {
+            return Ok(());
+        }
+        let Ok(pool) = crate::state::DefensivePoolId::new("standard.block") else {
+            return Ok(());
+        };
+        if let Some(combatant) = state.combatant_mut(actor) {
+            let current = combatant
+                .defensive_pools()
+                .iter()
+                .find(|entry| entry.key.as_str() == "standard.block")
+                .map_or(0, |entry| entry.pool.current);
+            combatant
+                .set_defensive_pool(pool, current + total, None)
+                .map_err(|e| self.record(HostError::Capacity(e)))?;
+        }
+        Ok(())
+    }
+
     pub fn try_damage_over_time(
         &mut self,
         state: &mut CombatState,
@@ -1370,6 +1413,9 @@ impl<'a> Host<'a> {
         actor: &CombatantId,
     ) -> Result<(), HostError> {
         self.flush_deferred()?;
+        // Metallicize pays out **before** the turn-ended event, so the Block is there for whatever
+        // the event's handlers read.
+        self.grant_end_of_turn_block(state, actor)?;
         state
             .enqueue_event_at_root(CombatEvent::TurnEnded {
                 combatant: *actor,
@@ -4110,6 +4156,36 @@ mod tests {
     }
 
     // ---------------------------------------------------------------- 钩子 5：DoT
+
+    #[test]
+    #[ignore = "needs the FULL image: `core_image()` has no STAT rows, so any status bound in `solo()` \
+                fails with Bind(Missing(\"STAT row\")) -- the poison test gets away with it because poison \
+                is bound by tag. See port-plan.md §113."]
+    fn metallicize_grants_block_at_the_end_of_the_turn() {
+        // Wiki: Metallicize N = "gain N Block at the end of each turn". A **host step**, not a
+        // modifier and not a trigger (`port-plan.md` §112).
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = solo();
+        give(&mut state, "hero", status("st_met", "standard.metallicize", 3));
+
+        let block = |state: &crate::state::CombatState| -> i32 {
+            state
+                .combatant(&cid("hero"))
+                .map_or(0, |c| c.defensive_pools().iter().map(|e| e.pool.current).sum())
+        };
+        assert_eq!(block(&state), 0, "no block before the turn ends");
+
+        host.try_run_turn_ended_triggers(&mut state, &cid("hero"))
+            .expect("turn end");
+        assert_eq!(block(&state), 3, "Metallicize 3 pays 3 Block");
+
+        // It stacks per instance value, and pays again next turn end.
+        host.try_run_turn_ended_triggers(&mut state, &cid("hero"))
+            .expect("turn end again");
+        assert_eq!(block(&state), 6, "and again on the next turn end");
+    }
 
     #[test]
     fn poison_ticks_for_its_stacks_and_never_changes_them() {

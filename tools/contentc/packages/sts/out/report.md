@@ -180,7 +180,7 @@ contains no raw JSON text at all.
 | `json.loads` of 0.1 MiB source | 0.006 |
 | derive | 0.006 |
 | encode | 0.006 |
-| serialize | 0.006 |
+| serialize | 0.007 |
 | total, one build | 0.024 |
 
 Peak Python heap during the whole run (both builds, tracemalloc): **0.9 MiB**.
