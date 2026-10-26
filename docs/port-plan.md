@@ -7075,7 +7075,7 @@ assert!(rd_run_deck_count() > 0, ...);
 
 | # | 悬挂项 | 数字 | 位置 | 下一步 |
 |---|---|---|---|---|
-| 1 | 夹具迁移（`reset` → `test_run`） | **3 / 27 已迁，24 个仍用 `reset`** | `rd-wasm/src/run.rs` 的 `reset` 文档注释 | 摸到哪个迁哪个；**不做一次性 sweep** |
+| 1 | 夹具迁移（`reset` → `test_run`） | **7 / 27 已迁，20 个仍用 `reset`** | `rd-wasm/src/run.rs` 的 `reset` 文档注释 | 摸到哪个迁哪个；**不做一次性 sweep** |
 | 2 | 惰性状态 | **1 个**：`ritual`（在 `is_declared_inert` 里） | `rd-core/src/status_catalog.rs` | 做 Ritual 的行为时，必须同时把它挪进 `has_behaviour`，否则 `the_status_catalogue_is_honest` 红 |
 | 3 | 目录里有名字、`host.rs` 里没行为的 | `artifact`、`thorns`、`metallicize` 等（侦察于 §104） | 同上 | 加行为，或加进 inert 名单并写理由 —— **没有第三种** |
 | 4 | 药水"多敌人 + 伤害药水 ⇒ 瞄准态"分支无判据 | 1 条分支 | `web/index.html` | 需要"fire_potion + 多敌人"的组合，暂只能手测 |

@@ -2072,7 +2072,7 @@ mod tests {
     /// that -- an explicit seed, health and deck, straight into the slot.
     ///
     /// A test that is **about** the start path keeps using `reset`; everything else should use this.
-    /// **3 migrated / 24 to go** -- the count lives in `reset`'s doc comment, and this line points at
+    /// **7 migrated / 20 to go** -- the count lives in `reset`'s doc comment, and this line points at
     /// it rather than repeating it (`docs/port-plan.md` §106).
     #[cfg(test)]
     fn test_run(seed: i32, health: i32, max_health: i32, deck: &[&str]) {
@@ -2095,7 +2095,7 @@ mod tests {
     /// ⚠️ **HANGING ITEM (counted, not forgotten).** `reset` *replays the real start path*, so any
     /// test written against it depends on the blessing rules -- which is what turned four unrelated
     /// tests red twice (`port-plan.md` §88, §90). [`test_run`] exists to break that dependency, and
-    /// **3 of the 27 tests in this module have moved to it**; the other **24 still call `reset`**.
+    /// **7 of the 27 tests in this module have moved to it**; the other **20 still call `reset`**.
     ///
     /// The rule: a test **about the start path** keeps `reset`; every other test should use
     /// `test_run`. Migrate a test when you next touch it -- *not* in one sweep, because a sweep is
@@ -2177,7 +2177,8 @@ mod tests {
     /// The exported map must be the one `rd-run` generates for that seed — not a second opinion.
     #[test]
     fn the_exported_map_is_the_one_the_run_layer_generated() {
-        reset(11);
+        // An explicit run: this test is about the map, not about the start path.
+        test_run(11, 80, 80, &["strike"; 10]);
         let mut rng = RunRng::new(11);
         let expected = RunMap::generate(&mut rng).expect("seed 11 generates");
         assert_eq!(rd_run_map_len() as usize, expected.node_count());
@@ -2236,7 +2237,8 @@ mod tests {
 
     #[test]
     fn the_first_step_offers_floor_one_and_marks_exactly_those_reachable() {
-        reset(5);
+        // An explicit run: this test is about the map, not about the start path.
+        test_run(5, 80, 80, &["strike"; 10]);
         let o = obs();
         let offer = o[16];
         assert!(offer >= 2, "floor 1 must offer a choice, got {offer}");
@@ -2264,7 +2266,8 @@ mod tests {
 
     #[test]
     fn walking_moves_the_cursor_and_a_refusal_changes_nothing() {
-        reset(9);
+        // An explicit run: this test is about the map, not about the start path.
+        test_run(9, 80, 80, &["strike"; 10]);
         let (before, action) = (obs(), 0);
         // Read the target **before** stepping: the action table is a function of the current
         // state, so after the step `action 0` names one of the *new* node's exits.
@@ -2312,7 +2315,8 @@ mod tests {
 
     #[test]
     fn a_different_seed_is_a_different_run() {
-        reset(1);
+        // An explicit run: this test is about the map, not about the start path.
+        test_run(1, 80, 80, &["strike"; 10]);
         let first = (0..rd_run_map_len())
             .map(|i| (rd_run_map_node(i, NODE_FIELD_KIND), rd_run_map_node(i, NODE_FIELD_OUT_DEGREE)))
             .collect::<Vec<_>>();
