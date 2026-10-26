@@ -2844,7 +2844,8 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": "首回合必定 Chomp；三步循环满足三条『不能连用』约束（inv:§4.1、plan §3.2#8）"
+      "AiNote": "首回合必定 Chomp；三步循环满足三条『不能连用』约束（inv:§4.1、plan §3.2#8）",
+      "TriggeredEffects": []
     },
     {
       "Id": "cultist",

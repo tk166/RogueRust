@@ -7191,3 +7191,62 @@ pub fn try_run_turn_ended_triggers(&mut self, state, actor) -> Result<(), HostEr
 
 §106 的悬挂项表里第 3 行（"目录有名、`host.rs` 无行为"）现在有了**更准的描述**：不是"内核缺一根臂"，
 而是"**内容缺一条触发器**，而触发器的形状已经找到、只差一个选择器的答案"。
+
+---
+
+## 109. 实验结论：**我们的编译器根本不写触发器表** —— `TriggeredEffects` 被静默丢弃
+
+用户："完成实验，如果符合预期就实现功能，如果不符合就试其他方向再拿一个结论。"
+
+### 109.1 三次探针，全负
+
+给 `jaw_worm` 挂了一条 `TurnEnded → gainBlock(5)` 的 `TriggeredEffects`，重建内容、重编 wasm，然后用
+`rd_env_reset()` 建那场默认战斗、结束一回合、读敌人的格挡：
+
+| # | 变的量 | 结果 |
+|---|---|---|
+| 1 | 选择器 `sel.source` | 敌人格挡 `0 → 0`，**没触发** |
+| 2 | 选择器 `sel.allEnemies`（排除选择器问题） | `0 → 0`，**没触发** |
+| 3 | 事件名 `turnEnded`（参考里 camelCase 与 PascalCase 并存） | `0 → 0`，**没触发** |
+
+### 109.2 决定性的一查：manifest 里**没有触发器表**
+
+```
+all tables: strings, opcodes, terms, cards, statuses, enemy_actions,
+            encounters, relics, events, potions, roots, id_index
+```
+
+**没有 `TRM` / `TRW`。** 我们的编译器 `ENTITY_SECTIONS` 里没有这两张表，所以：
+
+> **写进内容的 `TriggeredEffects` 会被编译器接受、但根本不会写进镜像** —— 内核当然也就永远不可能触发它。
+
+这不是选择器的问题，也不是事件名的问题，更不是内核缺一根臂：**是编译端到端根本没通**。
+
+### 109.3 这一轮真正的收获：**我查错了三层的顺序**
+
+连着三次（§106 → §107 → 本节）我给"下一步"写过三种判断，全被下一轮推翻：
+
+1. §106："给 `host.rs` 加一根臂" —— 错，内核是数据驱动的；
+2. §107："那就写内容触发器" —— 对，但**没先确认编译器认不认这个字段**；
+3. 本节：**编译器不写这张表** —— 所以前两步都无从谈起。
+
+⇒ **教训（比这次实验更值钱）：判断"能不能做"要从下往上查 —— 格式/编译器 → 内核 → 内容 → 页面。
+我三次都是从上往下猜的。**
+
+### 109.4 于是 Metallicize 的正确下一步
+
+**不是**加触发器，而是给编译器加两张表：
+
+1. `rdcfmt.py`：`TRM`（trigger match：事件 + 谓词）与 `TRW`（trigger word/程序句柄）的 `ROW_SCHEMA`，
+   **并加进 `SEC_ORDER`**（第 76 轮那条：段号必须等于下标）；
+2. `compile.py`：把 `TriggeredEffects` 从 monster/encounter 记录里**降到**这两张表；
+3. 内核：`Table::TriggerMatch` / `TriggerWord` 的读取器（`status_catalog` 之外的新表）；
+4. 然后才是 §108 的那个选择器问题。
+
+这是一次**格式迁移**（`FORMAT_VERSION` → 5），和 `EV`（§76）、`POT`（§80）同一套路数。
+
+### 109.5 状态
+
+实验已**完全撤回**（`jaw_worm.TriggeredEffects` 回空、内容重建、镜像重钉、wasm 重编）。
+聚合验收 **17/17**；单测 **669**；`standard.metallicize` 仍在 `is_declared_inert` 里，理由现在更准确：
+**"编译器还不写触发器表"**。
