@@ -7085,3 +7085,58 @@ assert!(rd_run_deck_count() > 0, ...);
 
 **本轮的下一步**（按用户要求，写完这份清单就继续）：给 `host.rs` 的 `turn_ended` 加 **Metallicize** 的
 一根臂 —— 先写一条会红的测试，再实现，再内容，再怪，再全量闸门。
+
+---
+
+## 107. **更正 §106 的下一步**：Metallicize 大概是**内容活**，不是内核活
+
+写 §106 时我写的是"给 `host.rs` 的 `turn_ended` 加一根臂"。动工前读了那个钩子，结论**相反**：
+
+```rust
+pub fn try_run_turn_ended_triggers(&mut self, state, actor) -> Result<(), HostError> {
+    self.flush_deferred()?;
+    state.enqueue_event_at_root(CombatEvent::TurnEnded { combatant: *actor })?;
+    self.try_resolve_pending_queues(state)
+}
+```
+
+`turn_ended` **不发号施令**：它只是把 `TurnEnded` 事件入队，然后**跑内容里挂在这个事件上的触发器**
+（`TRM`/`TRW` 两张表）。同理 `turn_started`、`damage_received`。
+
+⇒ **这个内核是数据驱动的**：`status_catalog` 里那些条目只是**元数据**（极性、tag、排序），真正的
+"回合结束加格挡"应当是一条**内容触发器**：
+
+```
+状态 metallicize(N)
+触发器：on TurnEnded, self has metallicize  →  节目 gainBlock(N)
+```
+
+### 107.1 这意味着什么
+
+| 之前的判断（§106） | 更正后 |
+|---|---|
+| 加一只怪的 Metallicize 要动 `host.rs` | **大概不用动内核**，是内容 + 触发器 |
+| 三个状态 = 三处内核改动 | 三个状态 = 三条触发器 + 三行 `STAT` |
+| `has_behaviour` 要跟着加 id | **仍然要**：状态"有行为"的判据从"内核有分支"变成"内容有触发器"，而 `has_behaviour` 的语义要跟着改口径（见下） |
+
+### 107.2 于是 §104 那条规则的口径要修一次
+
+`has_behaviour(id)` 现在的注释写的是"内核真的有规则（`host.rs`/`exec.rs` 里有分支）"。数据驱动下这句
+**不准确**了：行为可以完全在内容里。正确的口径是：
+
+> **一个状态"有行为" ⟺ 内容里有触发器/节目引用它，或者内核里有分支。**
+> `is_declared_inert` 只留给"两边都没有"的状态。
+
+这条修正是下一轮的第一件事（比做 Metallicize 更靠前），因为它决定 `the_status_catalogue_is_honest`
+到底在查什么 —— 一个查错的规则比没有规则更糟。
+
+### 107.3 下一轮的具体第一步
+
+1. 在 `docs/spec/content-schema.md` / `effect-program-ir.md` 里读 `TRM`/`TRW` 与
+   `TriggeredEffects` 的**行 schema**（encounter 记录里已经有 `TriggeredEffects: []` 这个字段，
+   说明形状是现成的）；
+2. 手写**一条**内容触发器（`TurnEnded` → `gainBlock`），挂在一只新怪身上，看 `sts_content_check`
+   的 inert 检查是不是**立刻发现它没被引用**；
+3. 只有第 2 步证明"内容触发器跑不通"时，才回到内核加臂。
+
+⚠️ 这一轮没写代码：**把一条会误导下一轮的计划改对，比硬着头皮按错的计划动手更值**。
