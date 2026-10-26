@@ -247,6 +247,13 @@ Write-Output "[+7] 地图页：画出来的东西**就是** rd-run 生成的那�
 $results += Invoke-Gate -Name 'web-map' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'web\map_test.mjs') -Workdir $ROOT -MustMatch 'MAP_RENDER PASS' -TimeoutSec 600
 
+# 门 17：**真浏览器**。前面那些 web 门都只跑纯模块，DOM 上的点击处理器只有真浏览器能验 —— 而三次 P0
+# （祝福面板被吃掉、拒绝消息擦掉按钮、日志把祝福的伤害算在卡上）都是"点一下才知道"的。
+# 零依赖：node:http 起静态服务 + 系统 Chrome 的 CDP（Node 22 自带 WebSocket），断言的是**渲染出来的文字**，
+# 不做截图像素比对（那个在不同字体/缩放下太脆）。
+$results += Invoke-Gate -Name 'web-browser' -Exe 'C:\Program Files\nodejs\node.exe' `
+  -ArgLine (Join-Path $ROOT 'web\browser_test.mjs') -Workdir $ROOT -MustMatch 'BROWSER_TEST PASS' -TimeoutSec 600
+
 Write-Output "`n" + ("-" * 78)
 Write-Output ("{0,-18}{1,6}  {2,-22}{3}" -f '闸门', '退出', '证据', '备注')
 Write-Output ("-" * 78)

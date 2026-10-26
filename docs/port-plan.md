@@ -6896,3 +6896,48 @@ ABI：`rd_run_act()`。页面顶栏最前面多了 `幕 N`；结算面板的标�
 
 ⚠️ **`the_boss_is_offered_at_floor_16_and_clears_the_act` 这条 ABI 用例走到的是"输给 Boss"的分支**
 （机器人打不赢），所以"赢了之后进第二幕"只有 rd-run 的直接测试覆盖，**没有 ABI 层证据**。这条记在这。
+---
+
+## 102. 第 94 轮：**第 17 道闸门 —— 真浏览器回归（零依赖）**
+
+用户："OK，按这个计划进行吧。"（Playwright + 关键文字断言 + 接进闸门）
+
+### 102.1 计划改了一处：**不装 Playwright**
+
+`web/` 一直是**零构建**，Playwright 会再拉一份 Chromium（~150 MB）。而本机**已经有 Chrome**，Node 22
+又自带 `WebSocket` —— 于是驱动只需要三样现成的东西：
+
+1. `node:http` 起一个静态服务（20 行）；
+2. 系统 Chrome `--headless=new --remote-debugging-port=0`，从 `DevToolsActivePort` 读端口；
+3. CDP 的 `Runtime.evaluate`（`awaitPromise: true`）在页面里跑脚本、**把渲染出来的文字带回来**。
+
+`web/browser_test.mjs` 约 300 行，**零依赖**，`node web/browser_test.mjs` 直接跑。
+
+### 102.2 它断言的是"渲染出来的文字"，不是像素
+
+| # | 断言 |
+|---|---|
+| 1 | 塔底给出**两个**祝福，而且显示的是**名字**不是 id（`净化 / 财宝 金币 100，代价 受伤 7`） |
+| 2 | 选完之后 `pending == 0`（祝福真的结算了，含"欠一张牌"那条分支） |
+| 3 | 点一个走不到的节点 ⇒ 消息条出现 `走不过去 · 只能走点亮的节点 —— 它和当前节点连着` |
+| 4 | 走进节点能开战（`#handPanel` 可见） |
+| 5 | **Shift+点击**手牌 ⇒ 弹窗打开、标题与说明都有（`Bash · Deal 8 damage. Apply 2 Vulnerable.`） |
+| 6 | 出牌后日志**写着牌名**（`打出 defend → 耗 1 能量，英雄 +5 格挡`） |
+| 7 | 顶栏以 `幕 N` 开头（`幕 1 · floor 1 · hp 80/80 · …`） |
+| 8 | 能量归零后，手上的牌被标成 `unaffordable`（实测 3 张） |
+
+这三条正好覆盖**三次 P0** 的形状——它们当初都是"点一下才知道"的。
+
+### 102.3 接进闸门
+
+`tools/acceptance.ps1` 加**第 17 道**：`web-browser`，证据串 `BROWSER_TEST PASS`，600 秒超时。
+聚合验收从 16/16 变成 **17/17**。
+
+### 102.4 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17**（新门全绿） |
+| 单测 | **667** |
+| 新文件 | `web/browser_test.mjs`（零依赖） |
+| 新增依赖 | **0** |
