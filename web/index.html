@@ -592,8 +592,10 @@ function renderTopBar() {
   const gold = ex.rd_run_observe(4);
   const deck = ex.rd_run_deck_count();
   const relics = ex.rd_run_observe(6);
+  const act = ex.rd_run_act();
   document.getElementById("runStats").innerHTML =
-    `floor <b>${floor}</b> · hp <b>${hp}/${hpMax}</b> · gold <b>${gold}</b> · deck <b>${deck}</b>`;
+    `幕 <b>${act}</b> · floor <b>${floor}</b> · hp <b>${hp}/${hpMax}</b> · ` +
+    `gold <b>${gold}</b> · deck <b>${deck}</b>`;
   const chips = [];
   for (let index = 0; index < relics; index++) {
     chips.push(`<span class="chip relic">${esc(runRead.relicName(index) || "relic")}</span>`);
@@ -666,6 +668,7 @@ function runSnapshot() {
     runOver,
     runOverWhy,
     cleared: !runOver && ex.rd_run_boss_beaten() === 1,
+    act: ex.rd_run_act(),
     pending,
     kind: ex.rd_run_node_kind(),
     resolved: ex.rd_run_node_resolved() === 1,

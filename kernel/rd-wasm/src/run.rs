@@ -1446,6 +1446,12 @@ pub extern "C" fn rd_run_take_potion() -> i32 {
     finish(session, outcome)
 }
 
+/// Which act the run is on (1-based), or `-1` with no run.
+#[no_mangle]
+pub extern "C" fn rd_run_act() -> i32 {
+    run_slot().as_ref().map_or(-1, |s| i32::from(s.state.act()))
+}
+
 /// Has the act been cleared? `1` yes, `0` no, `-1` no run.
 #[no_mangle]
 pub extern "C" fn rd_run_boss_beaten() -> i32 {

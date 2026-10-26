@@ -41,7 +41,7 @@ const P = context.RD_PANELS;
 if (!P) fail("ui_panels.js did not define RD_PANELS");
 
 const BASE = {
-  mode: "run", runOver: false, runOverWhy: "", cleared: false, pending: 0, kind: -1,
+  mode: "run", runOver: false, runOverWhy: "", cleared: false, act: 1, pending: 0, kind: -1,
   resolved: false, actionCount: 0, floor: 0, hp: 80, hpMax: 80, gold: 0, deckCount: 10,
   relicCount: 1, bossName: "Slime Boss", offers: [], shopCards: [], shopRelics: [],
   rewardCards: [], choices: [], rewardPotion: null,
@@ -77,8 +77,8 @@ const PANEL_STATES = [
   ["event", { ...BASE, kind: 5, pending: 5, eventText: "old_shrine — A shrine",
       choices: [{ label: "Pray", effect: 1, amount: 15 }, { label: "Leave", effect: 5, amount: 0 }] },
     ["event_choice", "event_choice"], ["Pray", "Leave"], "未知房间"],
-  ["cleared", { ...BASE, cleared: true, kind: 7, floor: 16 },
-    ["restart", "next_seed"], ["再打一局", "换一个 seed"], "第一幕通关"],
+  ["cleared", { ...BASE, cleared: true, act: 3, kind: 7, floor: 16 },
+    ["restart", "next_seed"], ["再打一局", "换一个 seed"], "第 3 幕通关"],
   ["run over", { ...BASE, runOver: true, runOverWhy: "倒了", floor: 7 },
     ["restart", "next_seed"], ["再来一局", "换一个 seed"], "结束了"],
   ["idle before start", { ...BASE }, [], [], "还没出发"],

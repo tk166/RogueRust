@@ -6857,3 +6857,42 @@ pick_blessing_card(index, pool)                  // transform 删一张、随机
 | 聚合验收 | **16/16** |
 | 单测 | 665 → **666** |
 | 塔底选项 | 6 → **8**（= wiki 的 8 项） |
+---
+
+## 101. 第 93 轮：**第二幕（结构性）** + 全量回归
+
+用户："把第二幕做完一并回归吧。"
+
+### 101.1 做了什么
+
+`RunState` 有了 **`act: u8`（1 起）** 与 `MAX_ACT = 3`。`mark_boss_beaten()` 现在不再直接"通关"：
+
+* `act < MAX_ACT` ⇒ **推进一幕**：`act += 1`、`floor = 0`、`node = -1`、`pending = None`、`resolved` 清零；
+  **血量 / 牌组 / 遗物 / 金币全部带过去**（血量由战斗结束那一步已经折算过）；
+* `act == MAX_ACT` ⇒ 才是真正的通关（`boss_beaten = true`）。
+
+ABI：`rd_run_act()`。页面顶栏最前面多了 `幕 N`；结算面板的标题从写死的"第一幕通关"改成 `第 N 幕通关`。
+
+### 101.2 ⚠️ 一处**写明**的降级
+
+**这份内容只有一幕的素材**（一张地图、一套遭遇/事件/药水），所以第 2、3 幕**复用第 1 幕的**。
+也就是说：**"推进"这个机制是真的**（幕数、进度重置、继承、通关条件），**幕与幕之间的内容差异是假的**。
+这一条同时写进 `port-plan.md` 与代码注释 —— 不能让它看起来像"第二幕做完了"。
+
+### 101.3 判据
+
+`the_boss_of_an_act_advances_instead_of_ending_the_run`（rd-run）：
+杀 act 1 Boss ⇒ `act == 2`、`boss_beaten == false`、`floor == 0`、游标 -1，**牌组与血量不变**；
+杀 act 2 Boss ⇒ `act == 3`；杀 act 3 Boss ⇒ `act` 仍 3 且 `boss_beaten == true`。
+
+### 101.4 回归（用户要求"一并回归"）
+
+| 闸门 | 结果 |
+|---|---|
+| 聚合验收 | **16/16** |
+| 单测 | 666 → **667**（rd-core 579 / rd-run 61 / rd-wasm 27） |
+| `WEB_SMOKE` / `UI_RENDER` / `MAP_RENDER` | 全 PASS |
+| 真浏览器 | 顶栏读作 `幕 1 · floor 0 · hp 80/80 · gold 0 · deck 10`，祝福面板正常 |
+
+⚠️ **`the_boss_is_offered_at_floor_16_and_clears_the_act` 这条 ABI 用例走到的是"输给 Boss"的分支**
+（机器人打不赢），所以"赢了之后进第二幕"只有 rd-run 的直接测试覆盖，**没有 ABI 层证据**。这条记在这。

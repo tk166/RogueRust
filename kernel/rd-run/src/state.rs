@@ -29,6 +29,10 @@ pub const MAX_RUN_DECK: usize = 60;
 /// of a dozen; twenty-four is "what a run needs", not "what a budget allows".
 pub const MAX_RUN_RELICS: usize = 24;
 /// The potion belt (`inv:§9.3`: hold at most 3).
+/// How many acts a run has. Killing the boss of an act before the last one **advances**; killing the
+/// last one wins the run.
+pub const MAX_ACT: u8 = 3;
+
 pub const MAX_RUN_POTIONS: usize = 3;
 /// `inv:§9.3`: a potion drops from 40% of fights (the act-1 reset value; the ±10% per act is not
 /// modelled because there is one act).
@@ -526,6 +530,8 @@ pub struct RunState {
     /// Which nodes have paid out. A node settles **once** -- a second visit is an error, which is
     /// what stops a fight from being farmed and a campfire from healing on every click.
     resolved: [u64; 2],
+    /// Which act this run is on (1-based). Killing an act's boss advances it.
+    act: u8,
     /// The `?`-room event under the cursor, while `Pending::Event`.
     event: RunId,
     /// Which two blessings were rolled, as indices into [`START_OFFERS`].
@@ -572,6 +578,7 @@ impl RunState {
             shop: ShopStock::empty(),
             reward: Reward::empty(),
             boss_beaten: false,
+            act: 1,
             event: RunId::EMPTY,
             // Rolled by `offer_start_choice`; until then the pair is not a choice anyone can take.
             start_offers: [0, 1],
@@ -860,7 +867,13 @@ impl RunState {
 
     // ---- settling a node -------------------------------------------------------------------
 
-    /// Has the act been cleared (the boss is dead)?
+    /// Which act this run is on (1-based).
+    #[must_use]
+    pub const fn act(&self) -> u8 {
+        self.act
+    }
+
+    /// Has the **last** act been cleared (the run is won)?
     #[must_use]
     pub const fn boss_beaten(&self) -> bool {
         self.boss_beaten
@@ -869,8 +882,24 @@ impl RunState {
     /// Record the act clear. Called by the fight epilogue when the boss falls -- the fight is
     /// settled outside this crate, so the caller has to say so (same shape as `mark_resolved`).
     pub fn mark_boss_beaten(&mut self) {
-        self.boss_beaten = true;
         self.mark_resolved();
+        if self.act >= MAX_ACT {
+            // The last act's boss: the run is won.
+            self.boss_beaten = true;
+            return;
+        }
+        // **Advance to the next act**: the walk starts over from the first row, with the hero's
+        // health, deck and relics carried across (the fight already folded the health back).
+        //
+        // ⚠️ **Documented downgrade**: this content has one act's worth of map, encounters, events
+        // and potions, so act 2 and 3 **re-use act 1's** -- the *progression* is real, the *content*
+        // is not. `port-plan.md` §101 says so.
+        self.act += 1;
+        self.node = -1;
+        self.floor = 0;
+        self.pending = Pending::None;
+        self.resolved = [0; 2];
+        self.boss_beaten = false;
     }
 
     /// Has the node under the cursor already paid out?
@@ -2500,6 +2529,36 @@ mod tests {
             }
         }
         assert!(seen, "a wounded hero must still be able to be offered a heal");
+    }
+
+    /// **Killing an act's boss advances the act** instead of ending the run; only the last act's
+    /// boss wins. Health, deck and relics carry across; the walk starts over.
+    #[test]
+    fn the_boss_of_an_act_advances_instead_of_ending_the_run() {
+        let mut run = ironclad();
+        assert_eq!(run.act(), 1, "a run starts in act 1");
+        let deck = run.deck_len;
+        let hp = run.health();
+
+        // Act 1's boss falls: act 2 begins at the first row.
+        run.enter_node(run.reachable().get(0).unwrap()).expect("floor 1");
+        run.mark_boss_beaten();
+        assert_eq!(run.act(), 2, "the act advanced");
+        assert!(!run.boss_beaten(), "the run is not won yet");
+        assert_eq!(run.floor(), 0, "the walk starts over");
+        assert_eq!(run.node(), -1, "and the cursor is off the map");
+        assert_eq!(run.deck_len, deck, "the deck carries across");
+        assert_eq!(run.health(), hp, "and so does the health");
+
+        // Act 2's boss: act 3.
+        run.mark_boss_beaten();
+        assert_eq!(run.act(), 3);
+        assert!(!run.boss_beaten());
+
+        // The last act's boss wins the run.
+        run.mark_boss_beaten();
+        assert_eq!(run.act(), 3, "no act beyond the last");
+        assert!(run.boss_beaten(), "the run is won");
     }
 
     /// **You cannot walk on before settling the node you are on.** Found by clicking: step onto a

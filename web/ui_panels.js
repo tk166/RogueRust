@@ -47,7 +47,7 @@ const RD_PANELS = (() => {
   // ---------------------------------------------------------------------------------------------
   function describeCleared(s) {
     return {
-      title: "第一幕通关 · Slime Boss 已击败",
+      title: `第 ${s.act} 幕通关 · ${s.bossName} 已击败`,
       tone: "good",
       lines: [statsLine(s)],
       rows: [],
