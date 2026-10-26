@@ -7066,3 +7066,22 @@ assert!(rd_run_deck_count() > 0, ...);
 | 聚合验收 | **17/17** |
 | 单测 | **669** |
 | 迁移的测试 | 3（其余 24 个按同一规则陆续迁） |
+---
+
+## 106. 悬挂项清单（**写在明处，带数字**）
+
+> 规矩：**一个已知的"没做完"必须有数字，否则它会在两周后变成"我以为做完了"。** 这里只列真正悬挂的，
+> 做完就删掉。
+
+| # | 悬挂项 | 数字 | 位置 | 下一步 |
+|---|---|---|---|---|
+| 1 | 夹具迁移（`reset` → `test_run`） | **3 / 27 已迁，24 个仍用 `reset`** | `rd-wasm/src/run.rs` 的 `reset` 文档注释 | 摸到哪个迁哪个；**不做一次性 sweep** |
+| 2 | 惰性状态 | **1 个**：`ritual`（在 `is_declared_inert` 里） | `rd-core/src/status_catalog.rs` | 做 Ritual 的行为时，必须同时把它挪进 `has_behaviour`，否则 `the_status_catalogue_is_honest` 红 |
+| 3 | 目录里有名字、`host.rs` 里没行为的 | `artifact`、`thorns`、`metallicize` 等（侦察于 §104） | 同上 | 加行为，或加进 inert 名单并写理由 —— **没有第三种** |
+| 4 | 药水"多敌人 + 伤害药水 ⇒ 瞄准态"分支无判据 | 1 条分支 | `web/index.html` | 需要"fire_potion + 多敌人"的组合，暂只能手测 |
+| 5 | 幕与幕之间的内容差异 | 第 2、3 幕**复用**第 1 幕素材 | `rd-run` 的 `mark_boss_beaten` | 先做内容，再谈"真第二幕" |
+| 6 | `rdcf-verify` 的 `5/5 tables` | 少报 2 张（`EV`、`POT`） | `tools/` 的校验器 | 让它读 `ROW_SCHEMAS` |
+| 7 | 像素级判据 | 0 条（第 17 道闸门只断文字） | `web/browser_test.mjs` | 颜色/间距仍只能靠眼睛 |
+
+**本轮的下一步**（按用户要求，写完这份清单就继续）：给 `host.rs` 的 `turn_ended` 加 **Metallicize** 的
+一根臂 —— 先写一条会红的测试，再实现，再内容，再怪，再全量闸门。

@@ -2072,6 +2072,8 @@ mod tests {
     /// that -- an explicit seed, health and deck, straight into the slot.
     ///
     /// A test that is **about** the start path keeps using `reset`; everything else should use this.
+    /// **3 migrated / 24 to go** -- the count lives in `reset`'s doc comment, and this line points at
+    /// it rather than repeating it (`docs/port-plan.md` §106).
     #[cfg(test)]
     fn test_run(seed: i32, health: i32, max_health: i32, deck: &[&str]) {
         let state = rd_run::state::RunState::new(seed, max_health, 0, deck).expect("a run");
@@ -2089,6 +2091,15 @@ mod tests {
     /// settled run. It prefers a blessing that touches nothing (no card removed, no card upgraded,
     /// no HP paid), but **nothing here is relied upon**: a test that cares about the deck reads
     /// `rd_run_deck_count()` instead of assuming ten.
+    ///
+    /// ⚠️ **HANGING ITEM (counted, not forgotten).** `reset` *replays the real start path*, so any
+    /// test written against it depends on the blessing rules -- which is what turned four unrelated
+    /// tests red twice (`port-plan.md` §88, §90). [`test_run`] exists to break that dependency, and
+    /// **3 of the 27 tests in this module have moved to it**; the other **24 still call `reset`**.
+    ///
+    /// The rule: a test **about the start path** keeps `reset`; every other test should use
+    /// `test_run`. Migrate a test when you next touch it -- *not* in one sweep, because a sweep is
+    /// exactly what produced the reverts. See `docs/port-plan.md` §106.
     fn reset(seed: i32) {
         assert_eq!(rd_run_start(seed), 0, "rd_run_start({seed}) failed");
         let mut slot = 0;
