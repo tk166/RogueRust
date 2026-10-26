@@ -1397,6 +1397,38 @@ pub unsafe extern "C" fn rd_run_potion_id_into(index: i32, ptr: *mut u8) -> i32 
     }
 }
 
+/// What belt slot `slot` does, as a small integer the page can branch on:
+/// `1` damage an enemy (needs a target), `2` block, `3` energy, `4` heal, `0` unknown, `-1` no slot.
+///
+/// It exists because **a damage potion has to ask which enemy** -- before this the page always sent
+/// "the first living one", which in a three-enemy fight is a decision the player never got to make.
+#[no_mangle]
+pub extern "C" fn rd_run_potion_effect(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    if slot < 0 {
+        return -1;
+    }
+    let Some(id) = session.state.potions().get(slot as usize) else {
+        return -1;
+    };
+    let image = content();
+    let Some(potion) = (0..image.potion_count())
+        .filter_map(|index| image.potion(index))
+        .find(|potion| potion.id == id.as_str())
+    else {
+        return 0;
+    };
+    match potion.effect {
+        "combat_damage" => 1,
+        "combat_block" => 2,
+        "combat_energy" => 3,
+        "heal" => 4,
+        _ => 0,
+    }
+}
+
 /// Throw away belt slot `index`.
 #[no_mangle]
 pub extern "C" fn rd_run_drop_potion(index: i32) -> i32 {

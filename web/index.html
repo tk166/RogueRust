@@ -183,6 +183,12 @@
 .enemy-panel.enemy-target {
   cursor: crosshair;
 }
+/* A potion waiting for a target: every living enemy is one. */
+#enemies.potion-armed .enemy-panel:not(.down) {
+  outline: 2px dashed #7fd0a8;
+  outline-offset: 2px;
+  cursor: crosshair;
+}
 .enemy-panel.enemy-target:hover {
   outline: 2px solid #e0b060;
   outline-offset: 2px;
@@ -619,8 +625,18 @@ function renderTopBar() {
       act(() => ex.rd_run_drop_potion(Number(button.dataset.dropPotion)), "丢弃药水");
   });
   document.querySelectorAll("[data-use-potion]").forEach((button) => {
-    button.onclick = () =>
-      act(() => ex.rd_env_use_potion(Number(button.dataset.usePotion), -1), "用药水");
+    button.onclick = () => {
+      const slot = Number(button.dataset.usePotion);
+      // A damage potion with more than one enemy alive **asks which one**: arm the enemy panels and
+      // let the next click decide. Block / energy / heal act on the hero and need no target.
+      if (ex.rd_run_potion_effect(slot) === 1 && obs[11] > 1) {
+        potionPending = slot;
+        document.getElementById("enemies").classList.add("potion-armed");
+        say(`<span class="dim">用药水 · 点一个敌人</span>`);
+        return;
+      }
+      act(() => ex.rd_env_use_potion(slot, -1), "用药水");
+    };
   });
   document.getElementById("deckCount").textContent = String(Math.max(0, deck));
   // The piles belong to a fight; in the run there is no draw / discard / exhaust.
@@ -876,6 +892,8 @@ function act(call, label) {
 }
 
 function beginFight() {
+  potionPending = -1;
+  document.getElementById("enemies").classList.remove("potion-armed");
   const verdict = ex.rd_run_fight_begin();
   if (verdict < 0) {
     document.getElementById("nodePanel").innerHTML =
@@ -1244,6 +1262,9 @@ function appendLog(diff) {
 function esc(s) { return String(s).replace(/[<>&]/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c])); }
 
 let currentView = null;
+
+/// A potion waiting for a target: its belt slot, or `-1`. (Block/energy/heal never wait.)
+let potionPending = -1;
 
 function render(verdict, reward) {
   const actions = readActions();
@@ -1635,6 +1656,16 @@ function measure() {
   });
   // The enemy panel is the picker's other half. Only enemies this card can reach are marked.
   document.getElementById("enemies").addEventListener("click", (ev) => {
+    // A potion waiting for a target takes the click, whether or not a card is armed.
+    if (potionPending >= 0) {
+      const hit = ev.target.closest("[data-enemy-panel]");
+      if (!hit) return;
+      const use = potionPending;
+      potionPending = -1;
+      document.getElementById("enemies").classList.remove("potion-armed");
+      act(() => ex.rd_env_use_potion(use, Number(hit.dataset.enemyPanel)), "用药水");
+      return;
+    }
     if (!pending) return;
     const target = ev.target.closest("[data-target-slot]");
     if (!target) return;
