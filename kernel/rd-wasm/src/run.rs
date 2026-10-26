@@ -2064,6 +2064,27 @@ mod tests {
     /// Start a run and take blessing 0. **Nothing here promises full health**: a blessing may cost
     /// HP (`blood_money` is -14), so a test that wants a particular health reads
     /// `rd_run_observe(2)` instead of assuming one.
+    /// **A run built for a test, with no start path at all.**
+    ///
+    /// `reset(seed)` below replays the real thing (`rd_run_start` -> roll a blessing -> pick it),
+    /// which means every test written against it depends on the blessing rules: changing the pool
+    /// twice turned four unrelated tests red (port-plan.md §88, §90). This constructor skips all of
+    /// that -- an explicit seed, health and deck, straight into the slot.
+    ///
+    /// A test that is **about** the start path keeps using `reset`; everything else should use this.
+    #[cfg(test)]
+    fn test_run(seed: i32, health: i32, max_health: i32, deck: &[&str]) {
+        let state = rd_run::state::RunState::new(seed, max_health, 0, deck).expect("a run");
+        let mut state = state;
+        state.adjust_health(health - max_health);
+        *run_slot() = Some(RunSession {
+            state: Box::new(state),
+            error: String::new(),
+            elite_fight: false,
+            boss_fight: false,
+        });
+    }
+
     /// Start a run and **finish the blessing**, so every test below stands on floor 1 with a
     /// settled run. It prefers a blessing that touches nothing (no card removed, no card upgraded,
     /// no HP paid), but **nothing here is relied upon**: a test that cares about the deck reads
@@ -2084,6 +2105,12 @@ mod tests {
         if rd_run_blessing_needs() != 0 {
             assert_eq!(rd_run_pick_blessing_card(0), 0, "finishing the card blessing");
         }
+        // **The fixture's post-condition, asserted here** so that a future change which leaves the
+        // run half-started fails with *this* message instead of cascading into 27 confusing ones.
+        assert_eq!(rd_run_pending(), 0, "reset left a choice pending");
+        assert_eq!(rd_run_act(), 1, "reset must start in act 1");
+        assert_eq!(rd_run_observe(0), 0, "reset must start before floor 1");
+        assert!(rd_run_deck_count() > 0, "reset left an empty deck");
     }
 
     fn obs() -> Vec<i32> {
@@ -2336,7 +2363,9 @@ mod tests {
     /// `inv:§7.2` fixes floor 1 to be all combat, so the first step lands on one -- no search.
     #[test]
     fn a_fight_is_the_runs_fight_and_the_result_goes_back() {
-        reset(7);
+        // An explicit run: this test is about the deck, not about the start path,
+        // so it must not depend on the blessing rules (§105).
+        test_run(7, 80, 80, &["strike"; 10]);
         assert_eq!(rd_run_step(0), 0, "floor 1");
         assert_eq!(rd_run_node_kind(), 1, "floor 1 is all combat (inv:§7.2)");
         assert_eq!(rd_run_begin_node(), 0);
@@ -3350,7 +3379,9 @@ mod tests {
     /// The three pile exports read the fight's piles, and the observation only carries counts.
     #[test]
     fn the_piles_can_be_listed_not_just_counted() {
-        reset(7);
+        // An explicit run: this test is about the deck, not about the start path,
+        // so it must not depend on the blessing rules (§105).
+        test_run(7, 80, 80, &["strike"; 10]);
         assert_eq!(rd_run_step(0), 0);
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_fight_begin(), 0);
@@ -3385,7 +3416,9 @@ mod tests {
     /// The deck exports: ids and titles, straight out of the content.
     #[test]
     fn the_deck_can_be_listed_with_the_contents_titles() {
-        reset(7);
+        // An explicit run: this test is about the deck, not about the start path,
+        // so it must not depend on the blessing rules (§105).
+        test_run(7, 80, 80, &["strike","strike","strike","strike","strike","defend","defend","defend","defend","bash"]);
         // The deck is the content's ten minus whatever the blessing did -- the *content's* ten is
   // asserted before the blessing, in `a_run_starts_from_the_content_not_from_constants`.
   assert!(rd_run_deck_count() >= 9, "the deck must still be a deck");
