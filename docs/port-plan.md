@@ -7349,3 +7349,43 @@ enemy block   0 -> 0      TRIGGER DID NOT FIRE
 
 **根因一直没变：我用名字当证据。** 而正确的查法（格式 → 内核读 → 内核执行 → 内容 → 页面）只用两次实验就
 把问题钉死在**一个函数**上了。
+
+---
+
+## 112. Metallicize 的**确切落点**找到了：它是 `TurnHost` 上的一个新步骤
+
+§111 说缺口在"执行"这一侧。这一轮把执行侧的结构读清楚了，结论是**三个文件、一个 trait 方法**。
+
+### 112.1 结构（实测，非推断）
+
+```
+turn.rs:150        pub trait TurnHost { … }          ← 战斗循环调用的**步骤**接口
+host.rs:2025       impl TurnHost for Host {           ← 每个步骤转调一个 try_* 方法
+  fn damage_over_time(&mut self, state, actor) { self.try_damage_over_time(state, actor) }
+}
+host.rs:1111       pub fn try_damage_over_time(…)     ← 真正的实现（遍历该战斗员的状态）
+```
+
+⇒ **状态"有效果"的既有做法不是触发器，而是"一个 trait 步骤 + 一个实现"**：poison 就是这么做的。
+Metallicize 是同一种形状 —— 而 §106 我写"给 `turn_ended` 加一根臂"其实**方向是对的**，只是我把落点
+说成了"入队事件那个函数"，真正该加的是**trait 上的一个步骤**。
+
+### 112.2 三个编辑点（下一轮照这个做，不需要再探索）
+
+| # | 文件 | 做什么 |
+|---|---|---|
+| 1 | `turn.rs` | `trait TurnHost` 加 `fn end_of_turn_block(&mut self, state, actor) -> Result<(), TurnError>`，**给一个默认空实现**（`Ok(())`）⇒ 测试里的其它 implementor 不会因为加方法而编译不过 |
+| 2 | `host.rs` | `impl TurnHost for Host` 里转调 `self.try_metallicize(state, actor)`；并写 `try_metallicize`：遍历该战斗员的**active** 状态，找 `standard.metallicize`，`gain_block(stacks)`（照 `try_damage_over_time` 的骨架：`flush_deferred` → 快照 → 施加） |
+| 3 | `battle.rs` | 在**回合结束**的那一步（`hand_turn_end_lifecycle` 之后、`turn_ended` 之前）调用 `host.end_of_turn_block(state, actor)` |
+
+### 112.3 判据（一次就够）
+
+一条 rd-core 测试：造一个带 `standard.metallicize` 2 层的战斗员，跑到回合结束，断言格挡 = 2。
+**然后把 `standard.metallicize` 从 `is_declared_inert` 挪进 `has_behaviour`** —— §104 那条规则会强制。
+
+### 112.4 为什么这一轮停在这里
+
+读结构用掉了这一轮的预算；而 §112.2 是**三次编译-测试循环**的活（trait → impl → call site），
+我现在的上下文不足以做完三轮。**再硬上一次就是第四次回退**，那正是这两天在治的病。
+
+⇒ 下一轮从 §112.2 的第 1 行开始，一次一个编译，任何一步失败最多回退一步。
