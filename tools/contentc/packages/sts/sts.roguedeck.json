@@ -411,6 +411,15 @@
       "DebuffBlock": null,
       "IncomingStatusDelay": null,
       "Disclosure": null
+    },
+    {
+      "Id": "standard.metallicize",
+      "NameKey": "Metallicize",
+      "DescriptionKey": "Gain block at the end of each turn.",
+      "Polarity": "Buff",
+      "Tags": [
+        "block"
+      ]
     }
   ],
   "Cards": [

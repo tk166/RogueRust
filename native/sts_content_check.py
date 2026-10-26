@@ -81,7 +81,7 @@ INV_COUNTS = {
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     "encounters": 5,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
-    "statuses": 5,       # inv:§10 the ones this subset actually needs
+    "statuses": 6,       # inv:§10 the ones this subset actually needs
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -221,6 +221,9 @@ INV_BOSS_POOL = {
 # because a content image **disables** that catalog (exec.rs:2421-2426): with
 # content present the candidate rows come only from STAT.PassiveModifiers.
 INV_STATUSES = {
+    # Declared inert by the kernel (`is_declared_inert`): it wants a TurnEnded content trigger,
+    # not a modifier. `port-plan.md` §107.
+    "standard.metallicize": [],
     "standard.strength": [("DamageDealt", "AddPerStack", 1, 100, "Direct")],
     "standard.vulnerable": [("DamageReceived", "ScalePercent", 150, 300, "Direct")],
     "standard.weak": [("DamageDealt", "ScalePercent", 75, 200, "Direct")],

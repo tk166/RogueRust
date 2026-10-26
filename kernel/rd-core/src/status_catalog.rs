@@ -667,7 +667,13 @@ pub fn has_behaviour(status_id: &str) -> bool {
 /// lives next to the plan (`port-plan.md` §104).
 #[must_use]
 pub fn is_declared_inert(status_id: &str) -> bool {
-    matches!(status_id, "ritual")
+    matches!(
+        status_id,
+        // No rule anywhere yet. `ritual` is the wiki's "gain Strength at the end of each turn"
+        // (Cultist) and `standard.metallicize` is "gain Block at the end of each turn" (Lagavulin);
+        // both want a **content trigger** on `TurnEnded` (`port-plan.md` §107), not a kernel arm.
+        "ritual" | "standard.metallicize"
+    )
 }
 
 fn lookup(table: &'static [StatusMeta], status_id: &str) -> Option<&'static StatusMeta> {
