@@ -7250,3 +7250,102 @@ all tables: strings, opcodes, terms, cards, statuses, enemy_actions,
 实验已**完全撤回**（`jaw_worm.TriggeredEffects` 回空、内容重建、镜像重钉、wasm 重编）。
 聚合验收 **17/17**；单测 **669**；`standard.metallicize` 仍在 `is_declared_inert` 里，理由现在更准确：
 **"编译器还不写触发器表"**。
+
+---
+
+## 110. **更正 §109**：`TRM` / `TRW` 不是触发器表，它们是**通用的 term 表**
+
+按 §109.3 那条教训（**从下往上查：格式 → 内核 → 内容 → 页面**），这一轮先读格式定义，而不是直接动手加表。
+结果 §109 的结论**机制部分是错的**。
+
+### 110.1 `rdcfmt.py` 的原文
+
+```
+  4 TRM    term records (variable length, 4-byte aligned)
+  5 TRW    u16[n_terms] word offset (byte_offset / 4) of each term record
+```
+
+参考镜像里：`TRM` **2,143 条 / 20,760 B**、`TRW` 2,143 条 —— 那是**每一条 IR 对象/程序节点**都住的地方，
+和"触发器"没有关系。我上一轮把 `TRM` 当成 "TRigger Match"、`TRW` 当成 "TRigger Word"，**纯属望文生义**。
+
+⇒ §109 的"编译器根本不写触发器表"这个**结论的措辞是错的**（那两张表一直都在，所有程序都在里面）。
+**但实测结果依然成立**：那条 `TurnEnded` 触发器的确没有生效。
+
+### 110.2 于是真正的问题变成：参考把触发器**存在哪**
+
+三条线索，按可信度排：
+
+1. **`ENCT` 行有 `TriggeredEffects` 这一格** —— 我们的 `ENCT_ROW` schema 里就有（`F_TERM`）。
+   参考文档的 `CardPlayed` 例子也确实是挂在 **encounter** 上的 ⇒ 遭遇级触发器**有地方存**。
+2. **怪物级**：我们的 `Monster` 记录在 schema 里**没有** `TriggeredEffects` 格 ⇒ 那个字段会掉进 `extra`
+   （`extra` 是 `_obj` term，**存下来了**，但内核没人读）。
+   ⇒ 上一轮挂在 **monster** 上的实验，很可能就是**存了但没人执行**，和"编译器没写"是两回事。
+3. **遗物**：`REL_ROW` 有 `RunPrograms` 与 `CombatRules` 两格，另外遗物的触发器是
+   `{event, condition, templates[]}` 这种**第三种形状**。
+
+### 110.3 下一轮的第一个实验（更便宜、更准）
+
+**把触发器挂在 `enc_jaw_worm` 这个 encounter 上**（它已经有那一格），而不是 monster：
+
+```
+"TriggeredEffects": [ { "Event": "TurnEnded",
+                        "Program": { ... node.gainBlock, TargetSelector: sel.source ... } } ]
+```
+
+判据沿用上一轮那个探针（`rd_env_reset()` → 结束一回合 → 读敌人格挡）：
+* 加上了 ⇒ **encounter 级触发器是通的**，那么 monster 级的缺口只是"schema 少一格 + 内核少一条读法"；
+* 还是 0 ⇒ 问题在**内核执行这一侧**（事件名、队列、或者这一格根本没被解释），再往下查 `TODO`。
+
+### 110.4 四次更正的账（这条比结论更值得记）
+
+| 轮次 | 我的判断 | 被什么推翻 |
+|---|---|---|
+| §106 | 给 `host.rs` 加一根臂 | 内核是数据驱动的（`turn_ended` 只入队事件） |
+| §107 | 那就写内容触发器 | 没先确认**编译器/格式**认不认 |
+| §109 | 编译器不写触发器表 | **把 `TRM`/`TRW` 望文生义成触发器表** |
+| §110 | 触发器大概在 `ENCT` 那一格里 | 待实验 |
+
+⇒ **望文生义是"从上往下猜"最便宜的一种形式**：名字看起来对，就省掉了读定义那一步。
+四次的根因其实是同一件事——**我用名字当证据**。
+
+---
+
+## 111. 结论（第二个实验）：**那一格存下来了，但内核没人执行**
+
+§110.3 的实验照做了：把 `TurnEnded → gainBlock(allEnemies, 5)` 挂到 **`enc_jaw_worm`**（`ENCT` 行里有
+`TriggeredEffects` 这一格），重建内容、重编 wasm，同一个探针：
+
+```
+enemy block   0 -> 0      TRIGGER DID NOT FIRE
+```
+
+⇒ **encounter 级也不触发**。加上 §109 的 monster 级，两个层级都试过了。
+
+### 111.1 现在可以说准的一句话
+
+| 环节 | 状态 | 证据 |
+|---|---|---|
+| 格式 | **有**这一格 | `content.rs:1408`：`("TriggeredEffects", F_TERM, 0) => triggered_effects => 4` |
+| 编译器 | **写进去了** | 同一个 schema，`content.rs:3480` 的 round-trip 断言会读它 |
+| 内核**读取器** | **有** | `EnctRow::triggered_effects()`（`content.rs:3351` 的测试就在用它） |
+| 内核**执行** | **没有** | 两次探针，monster 与 encounter 两级都不触发 |
+
+⇒ **缺口在"执行"这一侧，而且位置是已知的**：`host.rs` 在 834 行附近的注释里已经点名了参考实现
+（`TurnEndedTriggeredEffects.cs:55-62`、`TurnStartedTriggeredEffects.cs:29`），并说明"事件 → 触发器"
+的派发是**按 `TurnCombatant.Statuses` 与战斗员列表遍历**的。**移植点就在那儿，只是没接。**
+
+### 111.2 下一轮的第一个动作（具体到文件与函数）
+
+1. 打开 `host.rs` 的 `try_run_turn_ended_triggers`（现在只入队事件 + 跑队列）；
+2. 对照 `TurnEndedTriggeredEffects.cs:55-62`，补上"**取 `ENCT[enc].TriggeredEffects` 里 `Event == TurnEnded`
+   的节目，逐个执行**"这一步；
+3. 判据就用这一轮的探针（`rd_env_reset()` → 结束一回合 → 敌人格挡 +5）；
+4. 通了之后，把 `standard.metallicize` 从 `is_declared_inert` 里挪进 `has_behaviour`（规则会强制）。
+
+### 111.3 五次的账（都在同一根绳上）
+
+§106 猜内核臂 → §107 猜内容触发器 → §109 把 `TRM`/`TRW` 望文生义成触发器表 → §110 更正为"在
+`ENCT` 那一格" → **§111 实测：格子在、读取器在、执行不在**。
+
+**根因一直没变：我用名字当证据。** 而正确的查法（格式 → 内核读 → 内核执行 → 内容 → 页面）只用两次实验就
+把问题钉死在**一个函数**上了。
