@@ -1220,9 +1220,10 @@ pub extern "C" fn rd_run_start_needs(slot: i32) -> i32 {
         return -1;
     };
     match offer.follow_up {
-        BlessingFollowUp::None => 0,
+        BlessingFollowUp::None | BlessingFollowUp::GainThreeCards => 0,
         BlessingFollowUp::RemoveCard => 1,
         BlessingFollowUp::UpgradeCard => 2,
+        BlessingFollowUp::TransformCard => 3,
     }
 }
 
@@ -1237,7 +1238,8 @@ pub extern "C" fn rd_run_blessing_needs() -> i32 {
     match session.state.blessing_follow_up() {
         Some(BlessingFollowUp::RemoveCard) => 1,
         Some(BlessingFollowUp::UpgradeCard) => 2,
-        Some(BlessingFollowUp::None) | None => 0,
+        Some(BlessingFollowUp::TransformCard) => 3,
+        Some(BlessingFollowUp::None) | Some(BlessingFollowUp::GainThreeCards) | None => 0,
     }
 }
 
@@ -1250,7 +1252,14 @@ pub extern "C" fn rd_run_pick_blessing_card(index: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
-    let outcome = session.state.pick_blessing_card(index as usize).map(|_| 0i32);
+    let pool = match reward_pool(content()) {
+        Ok(pool) => pool,
+        Err(message) => return fail(session, &message),
+    };
+    let outcome = session
+        .state
+        .pick_blessing_card(index as usize, &pool)
+        .map(|_| 0i32);
     finish(session, outcome)
 }
 
@@ -1309,7 +1318,13 @@ pub extern "C" fn rd_run_choose_start(slot: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
-    let outcome = session.state.choose_start(slot as usize).map(|_| 0i32);
+    // A blessing may need the card pool ("three random cards", "transform one"), so the pool is
+    // built here, where the content is reachable.
+    let pool = match reward_pool(content()) {
+        Ok(pool) => pool,
+        Err(message) => return fail(session, &message),
+    };
+    let outcome = session.state.choose_start(slot as usize, &pool).map(|_| 0i32);
     finish(session, outcome)
 }
 

@@ -6815,3 +6815,45 @@ pub enum BlessingFollowUp { None, RemoveCard, UpgradeCard }
 | 聚合验收 | **16/16** |
 | 单测 | 664 → **665** |
 | 塔底选项 | 4 → **6** |
+---
+
+## 100. 第 92 轮：塔底补到 **wiki 的 8 项**（变形 / 三张牌）
+
+用户："三个挨个一起做吧。"（① 塔底到 8 项 ② 第二幕 ③ 像素级回归）——这一轮先做 ①。
+
+### 100.1 牌池第一次进了"选择"这条路
+
+`three_cards` 和 `transform_card` 需要**随机取牌**，而 `rd-run` 从来没有牌池（`roll_reward` 是调用方
+传进来的）。这一轮把池子顺着祝福这条路传下去：
+
+```rust
+choose_start(slot, pool: &[PoolCard<'_>])       // three_cards 当场加三张，不留待办
+pick_blessing_card(index, pool)                  // transform 删一张、随机补一张
+```
+
+`BlessingFollowUp` 加了 `TransformCard` / `GainThreeCards`；随机用的是 run 自己的 `Event` 子流，
+只从**非 Status/Curse** 里挑（和奖励池同一条规矩）。
+
+### 100.2 顺手加的一条"有意义"规则
+
+`blessing_is_meaningful` 现在有两条：满血不出回血、**空牌组不出任何改牌组的祝福**。
+第二条今天用不上（牌组不会空），但它是"规则跟着状态走"的同一个形状，写下来比将来补丁好。
+
+### 100.3 判据
+
+`a_blessing_can_transform_or_add_cards`（rd-run）：
+* `transform_card` ⇒ 取完 `pending == BlessingCard`；`pick_blessing_card(4)` ⇒ **张数不变**；
+* `three_cards` ⇒ 取完**当场** `pending == None`、牌组 **10 → 13**。
+
+### 100.4 跟着改的测试（都是"别假设牌组是 10 张"的余波）
+
+* `map_test.mjs`：`count !== 10` → `count < 9`；组成断言从"5/4/1 精确" → "三种牌都在"。
+* `rd-wasm` 的两个导出不再自己造池子，而是 `reward_pool(content())`。
+
+### 100.5 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **16/16** |
+| 单测 | 665 → **666** |
+| 塔底选项 | 6 → **8**（= wiki 的 8 项） |

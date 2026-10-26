@@ -130,9 +130,13 @@ pub enum BlessingFollowUp {
     RemoveCard,
     /// Upgrade deck card `N`.
     UpgradeCard,
+    /// Replace deck card `N` with a random one from the pool ("transform").
+    TransformCard,
+    /// Add three random cards, no pick needed -- it is finished the moment it is taken.
+    GainThreeCards,
 }
 
-pub const START_OFFERS: [StartOffer; 6] = [
+pub const START_OFFERS: [StartOffer; 8] = [
     StartOffer {
         id: "max_hp",
         gain: EventEffect::GainMaxHealth(8),
@@ -169,6 +173,18 @@ pub const START_OFFERS: [StartOffer; 6] = [
         gain: EventEffect::Nothing,
         cost: EventEffect::Nothing,
         follow_up: BlessingFollowUp::UpgradeCard,
+    },
+    StartOffer {
+        id: "transform_card",
+        gain: EventEffect::Nothing,
+        cost: EventEffect::Nothing,
+        follow_up: BlessingFollowUp::TransformCard,
+    },
+    StartOffer {
+        id: "three_cards",
+        gain: EventEffect::Nothing,
+        cost: EventEffect::Nothing,
+        follow_up: BlessingFollowUp::GainThreeCards,
     },
 ];
 
@@ -1201,10 +1217,19 @@ impl RunState {
     /// is shown to be a non-choice.
     #[must_use]
     fn blessing_is_meaningful(&self, offer: &StartOffer) -> bool {
-        match offer.gain {
+        let gain_does_something = match offer.gain {
+            // Healing a hero already at full health changes nothing.
             EventEffect::Heal(_) => self.health < self.health_max,
             _ => true,
-        }
+        };
+        // A deck blessing on an empty deck has nothing to act on.
+        let deck_does_something = match offer.follow_up {
+            BlessingFollowUp::RemoveCard
+            | BlessingFollowUp::UpgradeCard
+            | BlessingFollowUp::TransformCard => self.deck_len > 0,
+            BlessingFollowUp::None | BlessingFollowUp::GainThreeCards => true,
+        };
+        gain_does_something && deck_does_something
     }
 
     /// The two rolled blessings, or `None` when no choice is pending.
@@ -1220,7 +1245,11 @@ impl RunState {
     }
 
     /// Take blessing `slot` (`0` or `1`): its gain, then its cost.
-    pub fn choose_start(&mut self, slot: usize) -> Result<(), RunError> {
+    pub fn choose_start(
+        &mut self,
+        slot: usize,
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
         if self.pending != Pending::Start {
             return Err(RunError::WrongPhase);
         }
@@ -1230,6 +1259,13 @@ impl RunState {
         let Some(offer) = offers.get(slot) else {
             return Err(RunError::NoSuchOffer);
         };
+        // `three_cards` is finished right here: it needs the pool, not a pick.
+        if matches!(offer.follow_up, BlessingFollowUp::GainThreeCards) {
+            self.grant_random_cards(3, pool)?;
+            self.blessing_follow = None;
+            self.pending = Pending::None;
+            return Ok(());
+        }
         self.apply_event_effect(offer.gain)?;
         self.apply_event_effect(offer.cost)?;
         // A blessing that names a card is not finished until the card is named.
@@ -1251,8 +1287,44 @@ impl RunState {
         self.blessing_follow
     }
 
+    /// Splice deck entry `index` out. **Not** `remove_card`: that action belongs to the shop and
+    /// refuses outside it; this is the same list move it performs.
+    fn remove_at(&mut self, index: usize) {
+        let last = self.deck_len as usize - 1;
+        for slot in index..last {
+            self.deck[slot] = self.deck[slot + 1];
+        }
+        self.deck[last] = RunId::EMPTY;
+        self.deck_len -= 1;
+    }
+
+    /// Add `count` random non-Status/Curse cards from the pool, on the run's own stream.
+    fn grant_random_cards(&mut self, count: usize, pool: &[PoolCard<'_>]) -> Result<(), RunError> {
+        let mut eligible = [0usize; MAX_POOL];
+        let mut eligible_len = 0usize;
+        for index in 0..pool.len().min(MAX_POOL) {
+            if !matches!(pool[index].rarity, Rarity::Status | Rarity::Curse) {
+                eligible[eligible_len] = index;
+                eligible_len += 1;
+            }
+        }
+        if eligible_len == 0 {
+            return Err(RunError::PoolTooSmall { pool: 0, need: 1 });
+        }
+        for _ in 0..count {
+            let picked = self.rng.roll(RunStream::Event, eligible_len as u32)? as usize;
+            let id = pool[eligible[picked]].id;
+            self.push_card(id)?;
+        }
+        Ok(())
+    }
+
     /// Finish a blessing that named a card: remove or upgrade deck entry `index`.
-    pub fn pick_blessing_card(&mut self, index: usize) -> Result<(), RunError> {
+    pub fn pick_blessing_card(
+        &mut self,
+        index: usize,
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
         if self.pending != Pending::BlessingCard {
             return Err(RunError::WrongPhase);
         }
@@ -1264,14 +1336,7 @@ impl RunState {
         }
         match follow_up {
             BlessingFollowUp::RemoveCard => {
-                // Not `remove_card`: that action belongs to the shop and refuses outside it. This is
-                // the same list splice it performs.
-                let last = self.deck_len as usize - 1;
-                for slot in index..last {
-                    self.deck[slot] = self.deck[slot + 1];
-                }
-                self.deck[last] = RunId::EMPTY;
-                self.deck_len -= 1;
+                self.remove_at(index);
             }
             BlessingFollowUp::UpgradeCard => {
                 // Already upgraded is not an error: the blessing simply has nothing to do.
@@ -1291,7 +1356,13 @@ impl RunState {
                     self.deck[index] = RunId::new(upgraded).map_err(|_| RunError::BadId)?;
                 }
             }
-            BlessingFollowUp::None => return Err(RunError::WrongPhase),
+            BlessingFollowUp::TransformCard => {
+                self.remove_at(index);
+                self.grant_random_cards(1, pool)?;
+            }
+            BlessingFollowUp::None | BlessingFollowUp::GainThreeCards => {
+                return Err(RunError::WrongPhase);
+            }
         }
         self.blessing_follow = None;
         self.pending = Pending::None;
@@ -2329,11 +2400,11 @@ mod tests {
         let mut run = RunState::new(7, 80, 0, &["strike"; 10]).expect("a run");
         run.start_offers = [index_of("remove_card"), index_of("max_hp")];
         run.pending = Pending::Start;
-        run.choose_start(0).expect("taking remove_card");
+        run.choose_start(0, &basic_pool()).expect("taking remove_card");
         assert_eq!(run.pending, Pending::BlessingCard, "the card pick is still owed");
         assert_eq!(run.blessing_follow_up(), Some(BlessingFollowUp::RemoveCard));
         let before = run.deck_len as usize;
-        run.pick_blessing_card(3).expect("removing the fourth card");
+        run.pick_blessing_card(3, &basic_pool()).expect("removing the fourth card");
         assert_eq!(run.pending, Pending::None);
         assert_eq!(run.deck_len as usize, before - 1, "one card left the deck");
         assert_eq!(run.blessing_follow_up(), None);
@@ -2342,10 +2413,10 @@ mod tests {
         let mut run = RunState::new(7, 80, 0, &["strike"; 10]).expect("a run");
         run.start_offers = [index_of("upgrade_card"), index_of("max_hp")];
         run.pending = Pending::Start;
-        run.choose_start(0).expect("taking upgrade_card");
+        run.choose_start(0, &basic_pool()).expect("taking upgrade_card");
         assert_eq!(run.blessing_follow_up(), Some(BlessingFollowUp::UpgradeCard));
         assert_eq!(run.deck[2].as_str(), "strike");
-        run.pick_blessing_card(2).expect("upgrading the third card");
+        run.pick_blessing_card(2, &basic_pool()).expect("upgrading the third card");
         assert_eq!(run.deck[2].as_str(), "strike+");
         assert_eq!(run.deck_len, 10, "upgrading does not change the deck size");
 
@@ -2353,7 +2424,41 @@ mod tests {
         let mut run = RunState::new(7, 80, 0, &["strike"; 10]).expect("a run");
         run.pending = Pending::BlessingCard;
         run.blessing_follow = Some(BlessingFollowUp::RemoveCard);
-        assert_eq!(run.pick_blessing_card(99), Err(RunError::BadNode));
+        assert_eq!(
+            run.pick_blessing_card(99, &basic_pool()),
+            Err(RunError::BadNode)
+        );
+    }
+
+    /// **`transform_card` and `three_cards` are real**: one swaps a deck entry for a random one from
+    /// the pool, the other adds three.
+    #[test]
+    fn a_blessing_can_transform_or_add_cards() {
+        let index_of = |id: &str| -> u8 {
+            START_OFFERS
+                .iter()
+                .position(|offer| offer.id == id)
+                .expect("in the pool") as u8
+        };
+
+        // Transform: same size, different card.
+        let mut run = RunState::new(7, 80, 0, &["strike"; 10]).expect("a run");
+        run.start_offers = [index_of("transform_card"), index_of("max_hp")];
+        run.pending = Pending::Start;
+        run.choose_start(0, &basic_pool()).expect("taking transform_card");
+        assert_eq!(run.blessing_follow_up(), Some(BlessingFollowUp::TransformCard));
+        let before = run.deck_len as usize;
+        run.pick_blessing_card(4, &basic_pool()).expect("transforming the fifth card");
+        assert_eq!(run.deck_len as usize, before, "transform keeps the size");
+        assert_eq!(run.pending, Pending::None);
+
+        // Three cards: +3, straight away (no pick).
+        let mut run = RunState::new(7, 80, 0, &["strike"; 10]).expect("a run");
+        run.start_offers = [index_of("three_cards"), index_of("max_hp")];
+        run.pending = Pending::Start;
+        run.choose_start(0, &basic_pool()).expect("taking three_cards");
+        assert_eq!(run.pending, Pending::None, "no pick is owed");
+        assert_eq!(run.deck_len, 13, "three cards joined the deck");
     }
 
     /// A blessing offer must be a **choice**: no heal at full health, and always something free.
