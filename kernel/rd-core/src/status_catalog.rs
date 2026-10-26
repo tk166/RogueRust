@@ -637,6 +637,39 @@ pub fn status_meta(status_id: &str) -> Option<&'static StatusMeta> {
     lookup(&STANDARD_STATUSES, status_id).or_else(|| lookup(&STS_PROTOTYPE_STATUSES, status_id))
 }
 
+/// The statuses the **kernel actually executes**: each one has an arm somewhere in `host.rs` or
+/// `exec.rs` that reads it. Everything else in [`StatusMeta`]-land is a *name*.
+///
+/// **Why this list exists.** A status can exist in three places at once -- the catalogue (name and
+/// polarity), the content's `STAT` table, and the code that acts on it -- and the first two are
+/// happy to describe a status nothing implements. That is the worst shape a gap can take: it looks
+/// finished. `status_catalogue_is_honest` (in `content.rs`) refuses an image whose statuses are
+/// neither implemented nor **declared inert**, so "silently does nothing" cannot happen again.
+#[must_use]
+pub fn has_behaviour(status_id: &str) -> bool {
+    matches!(
+        status_id,
+        "standard.strength"
+            | "standard.dexterity"
+            | "standard.vulnerable"
+            | "standard.weak"
+            | "standard.frail"
+            | "standard.poison"
+            | "standard.stun"
+            | "standard.artifact"
+            | "standard.thorns"
+            | "standard.rage"
+    )
+}
+
+/// Statuses that are **knowingly inert**: present in the content, read by the kernel for its
+/// display and its hash, but with no rule attached yet. Each one needs a reason, and the reason
+/// lives next to the plan (`port-plan.md` §104).
+#[must_use]
+pub fn is_declared_inert(status_id: &str) -> bool {
+    matches!(status_id, "ritual")
+}
+
 fn lookup(table: &'static [StatusMeta], status_id: &str) -> Option<&'static StatusMeta> {
     table
         .binary_search_by(|entry| entry.id.cmp(status_id))

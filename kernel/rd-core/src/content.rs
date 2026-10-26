@@ -3911,6 +3911,38 @@ mod tests {
         assert_eq!(core.potion_count(), 0, "roguedeck has no potions");
     }
 
+    /// **Every status the content declares is either implemented or declared inert.**
+    ///
+    /// This is the "one concept, one account" rule made executable: a status used to be able to
+    /// exist in the catalogue and in the content's `STAT` table while nothing acted on it, and that
+    /// looks exactly like a finished feature. Reconnaissance for Metallicize/Ritual/Thorns found
+    /// `standard.artifact` and `standard.thorns` **described** in the catalogue and **absent** from
+    /// `host.rs` -- so the check is not hypothetical.
+    #[test]
+    fn the_status_catalogue_is_honest() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&bytes).expect("the image parses");
+        let rows = content
+            .section(crate::content::S_STAT)
+            .map_or(0, |section| section.count);
+        assert!(rows >= 5, "the sts image declares statuses ({rows})");
+        for index in 0..rows {
+            let Some(status) = content.status(index) else { continue };
+            let Some(id) = content.string(status.id()) else { continue };
+            assert!(
+                crate::status_catalog::has_behaviour(id)
+                    || crate::status_catalog::is_declared_inert(id),
+                "status `{id}` is declared by the content but the kernel has no rule for it, \
+                 and it is not in the declared-inert list -- it would silently do nothing"
+            );
+        }
+    }
+
+    #[test]
     fn the_real_images_validate() {
         with_core(|content, _| {
             assert_eq!(content.validate(), Ok(()));
