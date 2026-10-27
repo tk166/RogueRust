@@ -81,7 +81,7 @@ INV_COUNTS = {
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     "encounters": 5,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
-    "statuses": 7,       # inv:§10 the ones this subset actually needs
+    "statuses": 10,       # inv:§10 the ones this subset actually needs
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -226,6 +226,10 @@ INV_STATUSES = {
     "standard.metallicize": [],
     # Thorns: a DamageTaken trigger (port-plan.md §116).
     "standard.thorns": [],
+    # Downed / artifact / CardPlayed hooks (port-plan.md §117).
+    "standard.spore_cloud": [],
+    "standard.artifact": [],
+    "standard.enrage": [],
     "standard.strength": [("DamageDealt", "AddPerStack", 1, 100, "Direct")],
     "standard.vulnerable": [("DamageReceived", "ScalePercent", 150, 300, "Direct")],
     "standard.weak": [("DamageDealt", "ScalePercent", 75, 200, "Direct")],
@@ -540,12 +544,12 @@ def check_statuses(doc):
             if row.get("UsesStacks") is not True:
                 fail("status." + sid, "UsesStacks must be true (plan §G10), got %r"
                      % row.get("UsesStacks"))
-        elif sid == "standard.thorns":
-            # Thorns is the second status allowed a trigger: it reacts to `DamageTaken`
-            # (port-plan.md §116). Anything else here must stay trigger-free.
-            if triggers != ["DamageTaken"]:
-                fail("status." + sid, "expected exactly one DamageTaken trigger, got %s"
-                     % triggers)
+        elif sid in ("standard.thorns", "standard.spore_cloud", "standard.enrage"):
+            expected = {"standard.thorns": ["DamageTaken"],
+                        "standard.spore_cloud": ["Downed"],
+                        "standard.enrage": ["CardPlayed"]}[sid]
+            if triggers != expected:
+                fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
             # `ritual` is checked separately below (it *needs* a TurnEnded
             # trigger); every other status in this subset must be trigger-free.

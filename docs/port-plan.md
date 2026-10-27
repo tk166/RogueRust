@@ -7658,3 +7658,66 @@ ctx.state.next_status_instance_number = number.saturating_add(1);   // 再自增
 | 内容状态 | 6 → **7** |
 | 状态触发器 | `ritual`(TurnEnded) + `thorns`(DamageTaken) |
 | 镜像 | full 17,324 B / core 14,940 B（重钉） |
+
+---
+
+## 117. 三件事一起做完：**死亡钩子 + Spore Cloud**、**Artifact**、**出牌钩子 + Enrage**
+
+§115 那张表里 B/C/D 类的三个"销售点"，一轮做完。做法和 §116 一样：**先看内核有没有钩子，
+没有就补一条事件 + 一个 runner，内容侧只写触发器**。
+
+### 117.1 三条新事件 / 钩子
+
+| 事件 | 入队点 | Bearer | 谁用它 |
+|---|---|---|---|
+| `Downed` | `exec::resolve_damage`（目标真的从 Alive 转 Downed 时） | **倒下的那个** | Spore Cloud |
+| `CardPlayed` | `play.rs`（`counted_as_card_played` 时） | **每个战斗员** | Enrage |
+| （`DamageTaken`） | 上一轮 §116 已补 | 承受者 | Thorns |
+
+`Downed` 的 runner **故意不看 `state.result`**：倒下往往就是战斗结束那一刻，而"临死一击"必须照报。
+
+### 117.2 Artifact 不是触发器，是**施加路径上的一道闸**
+
+`exec::apply_one_status` 开头：要加的层数 > 0、极性是 **Debuff**、目标身上有 `standard.artifact` 层数 > 0
+⇒ **吃掉一层 Artifact 并直接返回**（目标一点状态都不沾，层数耗尽就删实例）。
+
+放在这里而不是某个触发器上，是因为**它必须挡住所有来源**（卡、敌人行动、DoT、事件）。
+
+### 117.3 内容与降级（都写在记录里）
+
+| 状态 | 挂给谁 | 降级说明 |
+|---|---|---|
+| `standard.spore_cloud` | （未挂怪，见下） | wiki: Fungi Beast 死亡时给 2 层虚弱 |
+| `standard.artifact` | **`sentry_1/2/3`** | **与 wiki 一致**（Sentry 就是 Artifact 1） |
+| `standard.enrage` | `fat_gremlin` | wiki 属 Gremlin Nob；且**卡片 tag 未建模**，所以触发条件是「出牌就 +2 力量」不是「技能牌」 |
+
+⚠️ `spore_cloud` 这一轮**只做到了机制**（内容里有这条状态 + 测试证明它工作），**还没挂到怪身上** ——
+下一步把它挂给 `acid_slime_m`（wiki 的 Fungi Beast 不在我们的名单里）。
+
+### 117.4 判据（三条，都是真跑出来绿的）
+
+| 测试 | 证明 |
+|---|---|
+| `spore_cloud_weakens_the_killer_on_death` | 敌人 10 HP、挨 12 点致死 ⇒ **凶手拿到 2 层虚弱** |
+| `artifact_eats_one_debuff_and_nothing_else` | Artifact 1：第一个 debuff 被吃掉且层数清零；**第二个照常落下** |
+| `enrage_answers_a_card_played_by_the_other_side` | 敌人戴 Enrage，**玩家出牌** ⇒ 敌人 +2 力量，玩家 0 |
+
+为了测 Artifact 加了一个 `#[cfg(test)]` 的门（`exec::apply_status_for_test`）—— 否则要么造一整个节目，
+要么测不到"闸"本身。
+
+### 117.5 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | 671 → **674**（rd-core 586 / rd-run 61 / rd-wasm 27） |
+| 内容状态 | 7 → **10**（spore_cloud / artifact / enrage） |
+| 事件 | `DamageDealt` `DamageTaken` `Downed` `CardPlayed` + 回合/轮次四类 |
+| 镜像 | full 18,164 B / core 15,592 B（重钉） |
+
+### 117.6 现在还剩什么（§115 那张表的余项）
+
+* **`CardPlayed` 的 tag 过滤器**（"只认技能牌"）—— 需要把卡片的 tag 送进事件（Enrage 才能真的像 Enrage）；
+* **`Spore Cloud` 挂怪**（一步）；
+* `Combust` / `Regen` / `Rage` / `Flame Barrier`（都是已有钩子上的新触发器，便宜）；
+* 出牌侧的 `CardCostPaid`、`StatusApplied` / `StatusMerged` / `StatusRemoved` 三条状态事件（`not_handled` 只剩 4 类）。

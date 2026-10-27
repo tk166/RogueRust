@@ -779,6 +779,14 @@ fn apply_plan_in_chain(
     pay_costs(state, &plan.source, &plan.paid)?;
 
     let counted_as_card_played = !plan.is_action;
+    // `CardPlayed`（`CardPlay.cs:144`）：只有**真的算一次出牌**才发（行动面不算）。
+    // ⚠️ 今天的载荷只有"谁出的"：卡上的 tag 过滤器（`Enrage` 只认技能牌）还没建模，
+    // 所以内容里那条触发条件是"出牌就触发"，这是写明了的降级（`port-plan.md` §117）。
+    if counted_as_card_played {
+        state.enqueue_event(crate::state::CombatEvent::CardPlayed {
+            owner: plan.source,
+        })?;
+    }
 
     // ── 无节目分支（`Cards/CardPlay.cs:283-293`，5.12）。
     //

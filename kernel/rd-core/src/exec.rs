@@ -1099,6 +1099,13 @@ pub fn resolve_damage_of_kind(
         && combatant.lifecycle_state == CombatantLifecycleState::Alive;
     if went_down {
         combatant.lifecycle_state = CombatantLifecycleState::Downed;
+        // `Downed` 事件：`Spore Cloud` 这一批触发器等它（`port-plan.md` §117）。
+        ctx.state
+            .enqueue_event(crate::state::CombatEvent::Downed {
+                combatant: *target,
+                source: ctx.source,
+            })
+            .map_err(ExecError::Capacity)?;
     }
 
     // ── 倒下就判胜负（`CombatStateEffects.cs:36-58`）。
@@ -3005,6 +3012,19 @@ fn card_instance_id(number: i32) -> Result<CardInstanceId, ExecError> {
 // 状态施加：合并规则（`StatusEffects.cs:126-199`）
 // =============================================================================================
 
+/// Apply one status by **id string** -- a test-only door into [`apply_one_status`], so tests can
+/// exercise the Artifact gate without building a whole program (`port-plan.md` §117).
+#[cfg(test)]
+pub(crate) fn apply_status_for_test(
+    ctx: &mut ExecContext<'_>,
+    target: &CombatantId,
+    definition: &str,
+    stacks: i32,
+) -> Result<(), ExecError> {
+    let definition_id = StatusDefinitionId::new(definition)?;
+    apply_one_status(ctx, target, definition_id, stacks, 0, 0)
+}
+
 /// 对**一个**目标施加一次状态。
 fn apply_one_status(
     ctx: &mut ExecContext<'_>,
@@ -3018,6 +3038,38 @@ fn apply_one_status(
     // 放在**写入路径**里而不是节点里，是为了让"绕过节点直接调这个函数"也守住同一条线。
     if stacks < 0 || duration_turns < 0 || charges < 0 {
         return Err(ExecError::Modifier);
+    }
+
+    // **Artifact 先过一道**（wiki: "negate the next debuff"）。只挡 Debuff，也只挡真正要加的
+    // 层数（`stacks == 0` 不算一次施加）。吃掉一层 Artifact 就返回 —— 目标一点状态都不沾。
+    if stacks > 0 {
+        let content = ctx.content;
+        let polarity = status_polarity(definition_id.as_str(), content)?;
+        if polarity == crate::state::StatusPolarity::Debuff {
+            let artifact = ctx
+                .state
+                .combatant(target)
+                .ok_or(ExecError::MissingCombatant)?
+                .statuses()
+                .iter()
+                .position(|status| {
+                    status.definition_id.as_str() == "standard.artifact" && status.stacks > 0
+                });
+            if let Some(index) = artifact {
+                let combatant = ctx
+                    .state
+                    .combatant_mut(target)
+                    .ok_or(ExecError::MissingCombatant)?;
+                let Some(status) = combatant.statuses_mut().get_mut(index) else {
+                    return Err(ExecError::Modifier);
+                };
+                status.stacks -= 1;
+                if status.stacks <= 0 {
+                    combatant.remove_status(index);
+                }
+                return Ok(());
+            }
+        }
     }
 
     // 同定义 id 的**第一个**实例（`FirstOrDefault(status => status.DefinitionId == …)`，`:128-130`）。

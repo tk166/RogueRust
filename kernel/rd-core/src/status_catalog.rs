@@ -667,6 +667,9 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // Thorns: a `DamageTaken` trigger in the CONTENT; the hook is
             // `Host::run_damage_taken_triggers` (§116).
             | "standard.thorns"
+            // The three that arrived with the Downed / artifact / CardPlayed hooks (§117).
+            | "standard.spore_cloud"
+            | "standard.enrage"
     )
 }
 

@@ -2033,6 +2033,25 @@ pub enum CombatEvent {
         /// 出手方（`None` = 无来源的伤害，触发器不跑 —— 参考的第一句就是 `SourceCombatant is not null`）。
         source: Option<CombatantId>,
     },
+    /// `CardPlayed`（`CardPlay.cs:144`）：**有人打出了一张牌**。
+    ///
+    /// 派发给**所有战斗员**：`Enrage` 长在**敌人**身上而由**你出牌**触发，所以"只给出手的人"
+    /// 这种过滤器在这里是错的（`port-plan.md` §117）。
+    CardPlayed {
+        /// 出牌的人。
+        owner: CombatantId,
+    },
+    /// `Downed`（`CombatantLifecycleEffects.cs`）：**某个战斗员倒下了**。
+    ///
+    /// Bearer 是**倒下的那个**，`EventTarget` 是送他上路的人 —— `Spore Cloud` 就长在这上面
+    /// （"我死了，给你 2 层虚弱"）。它**不受胜负判定约束**：整场打完也要报，所以分发时不看
+    /// `state.result`。
+    Downed {
+        /// 倒下的战斗员。
+        combatant: CombatantId,
+        /// 出手方。
+        source: Option<CombatantId>,
+    },
 }
 
 impl Empty for CombatEvent {

@@ -353,7 +353,13 @@ pub enum TriggerEvent {
     /// Bearer 是**挨打的那个**：`Thorns` 就长在这上面（"谁打我，我打回去"）。节目里
     /// `sel.source` 是承受者、`sel.eventTarget` 是出手方。
     DamageTaken,
-    /// 参考有、但今天的 `TurnHost` 没有对应钩子的 19 个成员之一。
+    /// `Downed` —— 有战斗员倒下（`CombatantLifecycleEffects.cs`）。Bearer 是**倒下的那个**。
+    ///
+    /// 只认字面名 `Downed`；参考里还有 `CombatantLifecycleChanged` 之类的旁支，本内核没建模。
+    Downed,
+    /// `CardPlayed` —— 有人打出一张牌。**派发给所有战斗员**：`Enrage` 是"敌人反应你的出牌"。
+    CardPlayed,
+    /// 参考有、但今天的 `TurnHost` 没有对应钩子的 17 个成员之一。
     NotHandled,
 }
 
@@ -368,8 +374,10 @@ impl TriggerEvent {
             "RoundEnded" => Some(TriggerEvent::RoundEnded),
             "DamageDealt" => Some(TriggerEvent::DamageDealt),
             "DamageTaken" => Some(TriggerEvent::DamageTaken),
+            "Downed" => Some(TriggerEvent::Downed),
+            "CardPlayed" => Some(TriggerEvent::CardPlayed),
             // ── 参考有、本内核今天没有钩子接的 20 个（按 `EffectVocabulary.cs` 的声明序）──
-            "Healed" | "CardPlayed" | "Downed" | "StatusExpired"
+            "Healed" | "StatusExpired"
             | "ResourceGained" | "CardCostPaid" | "StatusApplied" | "StatusRemoved"
             | "StatusMerged" | "StatusStacksChanged" | "BlockGained" | "CardsDrawn"
             | "CardMovedToZone" | "CardInstanceCreated" | "StatusApplicationPrevented"
@@ -389,6 +397,8 @@ impl TriggerEvent {
             TriggerEvent::RoundEnded => "RoundEnded",
             TriggerEvent::DamageDealt => "DamageDealt",
             TriggerEvent::DamageTaken => "DamageTaken",
+            TriggerEvent::Downed => "Downed",
+            TriggerEvent::CardPlayed => "CardPlayed",
             TriggerEvent::NotHandled => "",
         }
     }
@@ -1948,7 +1958,80 @@ impl Host<'_> {
             CombatEvent::DamageTaken { target, source } => {
                 self.run_damage_taken_triggers(state, &target, source)
             }
+            // `Downed`：Bearer = **倒下的那个**（Spore Cloud 之类"临死一击"）。
+            CombatEvent::Downed { combatant, source } => {
+                self.run_downed_triggers(state, &combatant, source)
+            }
+            // `CardPlayed`：派发给**所有战斗员**（Enrage 在敌人身上，由你出牌触发）。
+            CombatEvent::CardPlayed { owner } => self.run_card_played_triggers(state, &owner),
         }
+    }
+
+    /// `CardPlayed` 的触发器：**每个战斗员都是 Bearer**。
+    ///
+    /// 为什么不是"只给出牌的人"：`Enrage`（Gremlin Nob）挂在**敌人**身上，由**你**出牌触发。
+    /// 参考的 `CardPlayedTriggeredEffects` 也是按"场上每个 status 持有者"遍历的。
+    fn run_card_played_triggers(
+        &mut self,
+        state: &mut CombatState,
+        owner: &CombatantId,
+    ) -> Result<(), HostError> {
+        let mut bearers = [CombatantId::EMPTY; crate::state::MAX_COMBATANTS];
+        let mut count = 0usize;
+        for combatant in state.combatants() {
+            if count < bearers.len() {
+                bearers[count] = combatant.id;
+                count += 1;
+            }
+        }
+        for index in 0..count {
+            if state.result != CombatResult::Ongoing {
+                break;
+            }
+            let bearer = bearers[index];
+            let mut batch = TriggerBatch::new();
+            self.collect_triggers(state, &bearer, TriggerEvent::CardPlayed, &mut batch)?;
+            batch.sort();
+            for i in 0..batch.len {
+                let Some(handle) = batch.root.get(i).copied() else {
+                    break;
+                };
+                let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
+                let root = NodeRef::new(self.content, handle);
+                let outcome =
+                    execute_program(state, self.content, root, Some(bearer), Some(*owner), steps);
+                outcome.map_err(|e| self.record(HostError::Exec(e)))?;
+            }
+        }
+        Ok(())
+    }
+
+    /// `Downed` 的触发器：**Bearer 是倒下的那个**。
+    ///
+    /// ⚠️ **故意不看 `state.result`**：倒下往往就是战斗结束的那一刻，而"临死一击"必须照报
+    /// （`Spore Cloud` 就是这种）。其它 runner 的 `result != Ongoing` 早退在这里不适用。
+    fn run_downed_triggers(
+        &mut self,
+        state: &mut CombatState,
+        combatant: &CombatantId,
+        source: Option<CombatantId>,
+    ) -> Result<(), HostError> {
+        let bearer = *combatant;
+        let mut batch = TriggerBatch::new();
+        self.collect_triggers(state, &bearer, TriggerEvent::Downed, &mut batch)?;
+        batch.sort();
+
+        for i in 0..batch.len {
+            let Some(handle) = batch.root.get(i).copied() else {
+                break;
+            };
+            let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
+            let root = NodeRef::new(self.content, handle);
+            // Bearer = 倒下的那个，`EventTarget` = 出手方（没来源时解出空集，节目自己决定怎么办）。
+            let outcome = execute_program(state, self.content, root, Some(bearer), source, steps);
+            outcome.map_err(|e| self.record(HostError::Exec(e)))?;
+        }
+        Ok(())
     }
 
     /// `DamageTaken` 的触发器（`DamageEffects.cs:196-204`）：**Bearer 是承受者**。
@@ -3383,6 +3466,8 @@ mod tests {
         let mut round_started = 0usize;
         let mut damage_dealt = 0usize;
             let mut damage_taken = 0usize;
+            let mut downed = 0usize;
+            let mut card_played = 0usize;
         let mut not_handled = 0usize;
         let mut with_triggers = 0usize;
         let mut statuses = 0usize;
@@ -3407,6 +3492,8 @@ mod tests {
                     TriggerEvent::RoundStarted => round_started += 1,
                     TriggerEvent::DamageDealt => damage_dealt += 1,
                     TriggerEvent::DamageTaken => damage_taken += 1,
+                    TriggerEvent::Downed => downed += 1,
+                    TriggerEvent::CardPlayed => card_played += 1,
                     TriggerEvent::NotHandled => not_handled += 1,
                 }
                 // 信封上的步数预算：实测 25/25 都是 1024。
@@ -3425,6 +3512,9 @@ mod tests {
         assert_eq!(damage_dealt, 1, "doubt 的 DamageDealt 触发器");
         // `DamageTaken` 那 1 条**也不再是缺口**：§116 给它接了钩子，`thorns` 是它的第一批触发器。
         assert_eq!(damage_taken, 1, "承受者侧的那一条（参考内容里也有 1 条）");
+        // 参考内容里 `Downed` 与 `CardPlayed` 各有几条，实测后钉在这里（§117）。
+        assert_eq!(downed, 0, "参考镜像里没有 Downed 触发器");
+        assert_eq!(card_played, 0, "参考镜像里没有 CardPlayed 触发器");
         // 剩下 10 条是 4 种"参考有、本内核没有钩子接"的事件：`StatusApplied` 3 /
         // `StatusMerged` 3 / `StatusStacksChanged` 2 / `StatusRemoved` 2。
         assert_eq!(not_handled, 10);
@@ -4258,6 +4348,110 @@ mod tests {
         host.try_run_turn_ended_triggers(&mut state, &cid("hero"))
             .expect("turn end again");
         assert_eq!(strength(&state), 6, "and again on the next turn end");
+    }
+
+    #[test]
+    fn enrage_answers_a_card_played_by_the_other_side() {
+        // Wiki (Gremlin Nob): "Enrage -- whenever you play a Skill, gains 2 Strength". The status
+        // sits on the **enemy** and reacts to the **player's** card, so `CardPlayed` is dispatched to
+        // every combatant (`port-plan.md` §117).
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("st_enr", "standard.enrage", 1));
+
+        assert_eq!(stacks_of(&state, "enemy_a", "standard.strength"), 0);
+
+        // The hero plays a card: the event is queued by `play.rs`; here we queue it directly so the
+        // test is about the dispatch, not about the card pipeline.
+        state
+            .enqueue_event(CombatEvent::CardPlayed { owner: cid("hero") })
+            .expect("queue");
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+
+        assert_eq!(
+            stacks_of(&state, "enemy_a", "standard.strength"),
+            2,
+            "the enraged enemy gains 2 Strength when the player plays a card"
+        );
+
+        // The hero does not have the status, so nothing lands on them.
+        assert_eq!(stacks_of(&state, "hero", "standard.strength"), 0);
+    }
+
+    #[test]
+    fn artifact_eats_one_debuff_and_nothing_else() {
+        // Wiki: Artifact N = "negate the next N debuffs". The gate lives in `apply_one_status`
+        // (`port-plan.md` §117), so it covers every producer of statuses.
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut state = arena();
+        give(&mut state, "enemy_b", status("st_art", "standard.artifact", 1));
+
+
+        // A debuff: eaten. The Artifact stack is spent, the target stays clean.
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            crate::exec::apply_status_for_test(&mut ctx, &cid("enemy_b"), "standard.weak", 2)
+                .expect("apply");
+        }
+        assert_eq!(stacks_of(&state, "enemy_b", "standard.weak"), 0, "the debuff is negated");
+        assert_eq!(
+            stacks_of(&state, "enemy_b", "standard.artifact"),
+            0,
+            "and the Artifact stack is spent"
+        );
+
+        // A second debuff now lands: Artifact is gone.
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            crate::exec::apply_status_for_test(&mut ctx, &cid("enemy_b"), "standard.vulnerable", 2)
+                .expect("apply");
+        }
+        assert_eq!(
+            stacks_of(&state, "enemy_b", "standard.vulnerable"),
+            2,
+            "with no Artifact left, the next debuff lands"
+        );
+    }
+
+    #[test]
+    fn spore_cloud_weakens_the_killer_on_death() {
+        // Wiki (Fungi Beast): "Spore Cloud -- on death, apply 2 Weak". Content-side, on the
+        // **Downed** trigger; the killer is `sel.eventTarget` (`port-plan.md` §117).
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "enemy_b", status("st_sc", "standard.spore_cloud", 1));
+        // `enemy_b` is on 10 HP: one hit of 12 kills it.
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("enemy_b"), 12, false).expect("the kill");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+
+        assert_eq!(
+            stacks_of(&state, "hero", "standard.weak"),
+            2,
+            "the killer must be left with 2 Weak"
+        );
     }
 
     #[test]

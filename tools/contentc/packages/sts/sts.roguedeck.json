@@ -478,6 +478,127 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.spore_cloud",
+      "PackageId": "sts",
+      "NameKey": "Spore Cloud",
+      "DescriptionKey": "When this combatant dies, apply 2 Weak to whoever killed it.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "death"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "Downed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.applyStatus",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.weak"
+                },
+                "Stacks": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 2
+                  }
+                },
+                "DurationTurns": 0,
+                "Charges": 0,
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.artifact",
+      "PackageId": "sts",
+      "NameKey": "Artifact",
+      "DescriptionKey": "Negates the next debuff.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "artifact"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.enrage",
+      "PackageId": "sts",
+      "NameKey": "Enrage",
+      "DescriptionKey": "Whenever a card is played, gains 2 Strength.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "enrage"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardPlayed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.applyStatus",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.strength"
+                },
+                "Stacks": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 2
+                  }
+                },
+                "DurationTurns": 0,
+                "Charges": 0,
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -2661,7 +2782,14 @@
               "value": "sentry.beam"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.artifact"
+              },
+              "Stacks": 1
+            }
+          ],
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Sentry"
@@ -2677,7 +2805,14 @@
               "value": "sentry.beam"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.artifact"
+              },
+              "Stacks": 1
+            }
+          ],
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Sentry"
@@ -2693,7 +2828,14 @@
               "value": "sentry.beam"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.artifact"
+              },
+              "Stacks": 1
+            }
+          ],
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Sentry"
@@ -2789,11 +2931,18 @@
           "value": "fat_gremlin.smash"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.enrage"
+          },
+          "Stacks": 1
+        }
+      ],
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": "单一动作 ⇒ 完全忠实（plan §3.2#2）"
+      "AiNote": " ⚠️ 降级写明：wiki 的 Enrage 属于 Gremlin Nob；本内容没有它，为让机制被用到，挂在这里。另外卡片 tag 还没建模，所以触发条件是「出牌就 +2 力量」，不是「技能牌」。 port-plan.md §117。"
     },
     {
       "Id": "sneaky_gremlin",
@@ -3011,7 +3160,14 @@
           "value": "sentry.beam"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.artifact"
+          },
+          "Stacks": 1
+        }
+      ],
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.2",
@@ -3031,7 +3187,14 @@
           "value": "sentry.beam"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.artifact"
+          },
+          "Stacks": 1
+        }
+      ],
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.2",
@@ -3051,7 +3214,14 @@
           "value": "sentry.beam"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.artifact"
+          },
+          "Stacks": 1
+        }
+      ],
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.2",
