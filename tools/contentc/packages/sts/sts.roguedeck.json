@@ -2817,11 +2817,18 @@
           "value": "spike_slime_m.lick"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.metallicize"
+          },
+          "Stacks": 3
+        }
+      ],
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": "原作 30/70、同招不能连三次（inv:§4.1）⇒ 两招交替（plan §3.2#7）"
+      "AiNote": " ⚠️ 降级写明：wiki 的 Metallicize 8 属于 Lagavulin（第一幕精英），本内容没有它；为了让这条机制在真实战斗里被用到，挂在这里（3 层）。port-plan.md §114。"
     },
     {
       "Id": "jaw_worm",

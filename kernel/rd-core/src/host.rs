@@ -4158,13 +4158,17 @@ mod tests {
     // ---------------------------------------------------------------- 钩子 5：DoT
 
     #[test]
-    #[ignore = "needs the FULL image: `core_image()` has no STAT rows, so any status bound in `solo()` \
-                fails with Bind(Missing(\"STAT row\")) -- the poison test gets away with it because poison \
-                is bound by tag. See port-plan.md §113."]
     fn metallicize_grants_block_at_the_end_of_the_turn() {
         // Wiki: Metallicize N = "gain N Block at the end of each turn". A **host step**, not a
         // modifier and not a trigger (`port-plan.md` §112).
-        let blob = core_image();
+        //
+        // The **full** sts image, not `core_image()`: the core image carries no `STAT` rows, so a
+        // status handed to `solo()` cannot bind there (`port-plan.md` §113).
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
         let content = parse(&blob);
         let mut host = Host::new(&content);
         let mut state = solo();

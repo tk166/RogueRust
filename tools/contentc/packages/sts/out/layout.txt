@@ -13,7 +13,7 @@
  27  2  2   8 IR sel.source                                                   : Cardinality:STR RequiredContextCapabilities:STR
  28  0  0   4 OBJ _obj()                                                       : 
  29  3  3   8 OBJ _obj(Action,Condition,Priority)                              : Action:STR(wrap) Condition:TERM Priority:INT
- 30 11 14  32 OBJ _obj(Actions,AiNote,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,StartingStatuses,Tier) : Actions:STRLIST(wrap) AiNote:STR HpMax:INT HpMin:INT Id:STR IntentRules:TERMLIST InvRef:STR MaxHealth:INT NameKey:STR StartingStatuses:STRLIST Tier:STR
+ 30 11 14  32 OBJ _obj(Actions,AiNote,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,StartingStatuses,Tier) : Actions:STRLIST(wrap) AiNote:STR HpMax:INT HpMin:INT Id:STR IntentRules:TERMLIST InvRef:STR MaxHealth:INT NameKey:STR StartingStatuses:TERMLIST Tier:STR
  31 12 16  36 OBJ _obj(Actions,AiNote,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,StartingStatuses,Tier,TriggeredEffects) : Actions:STRLIST(wrap) AiNote:STR HpMax:INT HpMin:INT Id:STR IntentRules:STRLIST InvRef:STR MaxHealth:INT NameKey:STR StartingStatuses:STRLIST Tier:STR TriggeredEffects:STRLIST
  32  7 10  24 OBJ _obj(Actions,DisplayName,Id,IntentRules,MaxHealth,Position,StartingStatuses) : Actions:STRLIST(wrap) DisplayName:STR Id:STR IntentRules:TERMLIST MaxHealth:INT Position:TERM StartingStatuses:STRLIST
  33  6  6  16 OBJ _obj(Amount,DescriptionKey,Effect,Id,NameKey,Rarity)         : Amount:INT DescriptionKey:STR Effect:STR Id:STR NameKey:STR Rarity:STR
@@ -40,7 +40,8 @@
  54  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
  55  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
  56  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
- 57  1  1   4 OBJ _obj(gold)                                                   : gold:INT
+ 57  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
+ 58  1  1   4 OBJ _obj(gold)                                                   : gold:INT
 
 # reserved opcodes:
   0 reserved : (no fields)
