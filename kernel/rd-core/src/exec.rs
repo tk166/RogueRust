@@ -3099,6 +3099,8 @@ fn apply_one_status(
         .position(|status| status.definition_id == definition_id);
 
     if let Some(index) = existing {
+        // `StatusMerged` 要在借用结束之后入队（`ctx.state` 只能借一次）。
+        let merged_target = *target;
         let combatant = ctx
             .state
             .combatant_mut(target)
@@ -3116,6 +3118,9 @@ fn apply_one_status(
         status.stacks = add_clamped(status.stacks, stacks);
         status.duration_turns = status.duration_turns.max(duration_turns);
         status.charges = add_clamped(status.charges, charges);
+        ctx.state
+            .enqueue_event(crate::state::CombatEvent::StatusMerged { target: merged_target })
+            .map_err(ExecError::Capacity)?;
         return Ok(());
     }
 
@@ -3123,6 +3128,9 @@ fn apply_one_status(
     let content = ctx.content;
     let polarity = status_polarity(definition_id.as_str(), content)?;
     // 新实例走**唯一入口**：`push_new_status` 负责取号、造实例、自增。
+    ctx.state
+        .enqueue_event(crate::state::CombatEvent::StatusApplied { target: *target })
+        .map_err(ExecError::Capacity)?;
     push_new_status(
         ctx.state,
         target,

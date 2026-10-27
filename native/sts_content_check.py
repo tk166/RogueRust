@@ -81,7 +81,7 @@ INV_COUNTS = {
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     "encounters": 5,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
-    "statuses": 10,       # inv:§10 the ones this subset actually needs
+    "statuses": 14,       # inv:§10 the ones this subset actually needs
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -230,6 +230,11 @@ INV_STATUSES = {
     "standard.spore_cloud": [],
     "standard.artifact": [],
     "standard.enrage": [],
+    # The four built on existing hooks (port-plan.md §119).
+    "standard.regen": [],
+    "standard.rage": [],
+    "standard.flame_barrier": [],
+    "standard.combust": [],
     "standard.strength": [("DamageDealt", "AddPerStack", 1, 100, "Direct")],
     "standard.vulnerable": [("DamageReceived", "ScalePercent", 150, 300, "Direct")],
     "standard.weak": [("DamageDealt", "ScalePercent", 75, 200, "Direct")],
@@ -328,7 +333,7 @@ def diff(expected, actual, path="", out=None):
 def tgt(selector):
     """`TargetSelector` -> a short label.  Unknown selectors raise (never guess)."""
     kind = selector.get("kind")
-    mapping = {"sel.eventTarget": "event", "sel.source": "source"}
+    mapping = {"sel.eventTarget": "event", "sel.source": "source", "sel.allEnemies": "allEnemies"}
     if kind not in mapping:
         raise AssertionError("unexpected selector kind %r" % kind)
     return mapping[kind]
@@ -358,6 +363,8 @@ def program_facts(root):
                 walk(child)
         elif kind == "node.dealDamage":
             facts.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
+        elif kind == "node.heal":
+            facts.append(("heal", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.gainBlock":
             facts.append(("block", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.applyStatus":
@@ -555,10 +562,16 @@ def check_statuses(doc):
             if row.get("UsesStacks") is not True:
                 fail("status." + sid, "UsesStacks must be true (plan §G10), got %r"
                      % row.get("UsesStacks"))
-        elif sid in ("standard.thorns", "standard.spore_cloud", "standard.enrage"):
+        elif sid in ("standard.thorns", "standard.spore_cloud", "standard.enrage",
+                     "standard.regen", "standard.rage", "standard.flame_barrier",
+                     "standard.combust"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
-                        "standard.enrage": ["CardPlayed"]}[sid]
+                        "standard.enrage": ["CardPlayed"],
+                        "standard.regen": ["TurnEnded"],
+                        "standard.rage": ["CardPlayed"],
+                        "standard.flame_barrier": ["DamageTaken"],
+                        "standard.combust": ["TurnEnded"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

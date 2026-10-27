@@ -777,6 +777,12 @@ fn apply_plan_in_chain(
     // `:125` EnsureCostsCanBePaid 已经在计划里做过；`:126` PayCosts。
     ensure_affordable(state, &plan.source, &plan.paid)?;
     pay_costs(state, &plan.source, &plan.paid)?;
+    // `CardCostPaid`（`CardPlay.cs:138`）：只对**真的付了费用**的出牌发。
+    if !plan.paid.is_empty() {
+        state.enqueue_event(crate::state::CombatEvent::CardCostPaid {
+            owner: plan.source,
+        })?;
+    }
 
     let counted_as_card_played = !plan.is_action;
     // `CardPlayed`（`CardPlay.cs:144`）：只有**真的算一次出牌**才发（行动面不算）。

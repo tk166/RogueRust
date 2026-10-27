@@ -359,7 +359,15 @@ pub enum TriggerEvent {
     Downed,
     /// `CardPlayed` —— 有人打出一张牌。**派发给所有战斗员**：`Enrage` 是"敌人反应你的出牌"。
     CardPlayed,
-    /// 参考有、但今天的 `TurnHost` 没有对应钩子的 17 个成员之一。
+    /// `CardCostPaid` —— 出牌付了费用。
+    CardCostPaid,
+    /// `StatusApplied` —— 一条新状态实例落到某人身上。
+    StatusApplied,
+    /// `StatusMerged` —— 并进了已有实例。
+    StatusMerged,
+    /// `StatusRemoved` —— 一条实例没了。
+    StatusRemoved,
+    /// 参考有、但今天的 `TurnHost` 没有对应钩子的 13 个成员之一。
     NotHandled,
 }
 
@@ -376,10 +384,14 @@ impl TriggerEvent {
             "DamageTaken" => Some(TriggerEvent::DamageTaken),
             "Downed" => Some(TriggerEvent::Downed),
             "CardPlayed" => Some(TriggerEvent::CardPlayed),
+            "CardCostPaid" => Some(TriggerEvent::CardCostPaid),
+            "StatusApplied" => Some(TriggerEvent::StatusApplied),
+            "StatusMerged" => Some(TriggerEvent::StatusMerged),
+            "StatusRemoved" => Some(TriggerEvent::StatusRemoved),
             // ── 参考有、本内核今天没有钩子接的 20 个（按 `EffectVocabulary.cs` 的声明序）──
             "Healed" | "StatusExpired"
-            | "ResourceGained" | "CardCostPaid" | "StatusApplied" | "StatusRemoved"
-            | "StatusMerged" | "StatusStacksChanged" | "BlockGained" | "CardsDrawn"
+            | "ResourceGained" | "StatusRemoved"
+            | "StatusStacksChanged" | "BlockGained" | "CardsDrawn"
             | "CardMovedToZone" | "CardInstanceCreated" | "StatusApplicationPrevented"
             | "StatusApplicationAmplified" | "ActionResolved" | "RuleAnnounced"
             | "ActionStarting" => Some(TriggerEvent::NotHandled),
@@ -399,6 +411,10 @@ impl TriggerEvent {
             TriggerEvent::DamageTaken => "DamageTaken",
             TriggerEvent::Downed => "Downed",
             TriggerEvent::CardPlayed => "CardPlayed",
+            TriggerEvent::CardCostPaid => "CardCostPaid",
+            TriggerEvent::StatusApplied => "StatusApplied",
+            TriggerEvent::StatusMerged => "StatusMerged",
+            TriggerEvent::StatusRemoved => "StatusRemoved",
             TriggerEvent::NotHandled => "",
         }
     }
@@ -1966,7 +1982,62 @@ impl Host<'_> {
             CombatEvent::CardPlayed { owner, card } => {
                 self.run_card_played_triggers(state, &owner, card)
             }
+            // The four "status / cost" events have no content that uses them yet; they are
+            // dispatched to **every combatant** like `CardPlayed`, with `EventTarget` = whoever the
+            // event is about (`port-plan.md` §119).
+            CombatEvent::CardCostPaid { owner } => {
+                self.run_broadcast_triggers(state, TriggerEvent::CardCostPaid, &owner)
+            }
+            CombatEvent::StatusApplied { target } => {
+                self.run_broadcast_triggers(state, TriggerEvent::StatusApplied, &target)
+            }
+            CombatEvent::StatusMerged { target } => {
+                self.run_broadcast_triggers(state, TriggerEvent::StatusMerged, &target)
+            }
+            CombatEvent::StatusRemoved { target } => {
+                self.run_broadcast_triggers(state, TriggerEvent::StatusRemoved, &target)
+            }
         }
+    }
+
+    /// 派发给**每个战斗员**的触发器（`CardCostPaid` 与三条状态事件）。
+    ///
+    /// 这几条事件今天是**没有人用**的钩子（内容里 0 条触发器），但"名字认得出来、事件真的会发"
+    /// 是 `not_handled` 归零的前提 —— 宁可有一条空跑的派发，也不要一个"名字都没有"的事件。
+    fn run_broadcast_triggers(
+        &mut self,
+        state: &mut CombatState,
+        event: TriggerEvent,
+        about: &CombatantId,
+    ) -> Result<(), HostError> {
+        let mut bearers = [CombatantId::EMPTY; crate::state::MAX_COMBATANTS];
+        let mut count = 0usize;
+        for combatant in state.combatants() {
+            if count < bearers.len() {
+                bearers[count] = combatant.id;
+                count += 1;
+            }
+        }
+        for index in 0..count {
+            if state.result != CombatResult::Ongoing {
+                break;
+            }
+            let bearer = bearers[index];
+            let mut batch = TriggerBatch::new();
+            self.collect_triggers(state, &bearer, event, &mut batch)?;
+            batch.sort();
+            for i in 0..batch.len {
+                let Some(handle) = batch.root.get(i).copied() else {
+                    break;
+                };
+                let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
+                let root = NodeRef::new(self.content, handle);
+                let outcome =
+                    execute_program(state, self.content, root, Some(bearer), Some(*about), steps);
+                outcome.map_err(|e| self.record(HostError::Exec(e)))?;
+            }
+        }
+        Ok(())
     }
 
     /// `CardPlayed` 的触发器：**每个战斗员都是 Bearer**。
@@ -3565,6 +3636,10 @@ mod tests {
                     TriggerEvent::DamageTaken => damage_taken += 1,
                     TriggerEvent::Downed => downed += 1,
                     TriggerEvent::CardPlayed => card_played += 1,
+                    TriggerEvent::CardCostPaid => {} 
+                    TriggerEvent::StatusApplied => {}
+                    TriggerEvent::StatusMerged => {}
+                    TriggerEvent::StatusRemoved => {}
                     TriggerEvent::NotHandled => not_handled += 1,
                 }
                 // 信封上的步数预算：实测 25/25 都是 1024。
@@ -3586,9 +3661,9 @@ mod tests {
         // 参考内容里 `Downed` 与 `CardPlayed` 各有几条，实测后钉在这里（§117）。
         assert_eq!(downed, 0, "参考镜像里没有 Downed 触发器");
         assert_eq!(card_played, 0, "参考镜像里没有 CardPlayed 触发器");
-        // 剩下 10 条是 4 种"参考有、本内核没有钩子接"的事件：`StatusApplied` 3 /
-        // `StatusMerged` 3 / `StatusStacksChanged` 2 / `StatusRemoved` 2。
-        assert_eq!(not_handled, 10);
+        // 10 -> 2：StatusApplied / StatusMerged / StatusRemoved 都接了钩子，只剩
+        // **StatusStacksChanged 2 条**还是"参考有、本内核没有钩子接"。
+        assert_eq!(not_handled, 2);
     }
 
     #[test]
@@ -4442,6 +4517,102 @@ mod tests {
         host.try_run_turn_ended_triggers(&mut state, &cid("hero"))
             .expect("turn end again");
         assert_eq!(strength(&state), 6, "and again on the next turn end");
+    }
+
+    #[test]
+    fn regen_heals_at_the_end_of_the_turn() {
+        // Wiki: Regen N = "at the end of your turn, heal N". Content trigger on `TurnEnded`.
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "hero", status("st_reg", "standard.regen", 4));
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("hero"), 10, false).expect("hurt");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("settle");
+        let hurt = health(&state, "hero");
+        host.try_run_turn_ended_triggers(&mut state, &cid("hero"))
+            .expect("turn end");
+        assert_eq!(health(&state, "hero"), hurt + 4, "Regen 4 heals 4");
+    }
+
+    #[test]
+    fn rage_gives_block_only_for_an_attack() {
+        // Wiki: Rage N = "whenever you play an Attack, gain N Block".
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "hero", status("st_rg", "standard.rage", 3));
+        let attack = card_in_hand(&mut state, &content, "hero", "strike");
+        let skill = card_in_hand(&mut state, &content, "hero", "defend");
+
+        let block = |state: &crate::state::CombatState| -> i32 {
+            state
+                .combatant(&cid("hero"))
+                .map_or(0, |c| c.defensive_pools().iter().map(|e| e.pool.current).sum())
+        };
+
+        state
+            .enqueue_event(CombatEvent::CardPlayed { owner: cid("hero"), card: skill })
+            .expect("queue");
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+        assert_eq!(block(&state), 0, "a Skill gives no Block");
+
+        state
+            .enqueue_event(CombatEvent::CardPlayed { owner: cid("hero"), card: attack })
+            .expect("queue");
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+        assert_eq!(block(&state), 3, "an Attack gives 3 Block");
+    }
+
+    #[test]
+    fn flame_barrier_hits_back_and_combust_burns_everyone() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // Flame Barrier: same hook as Thorns, different status.
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "enemy_b", status("st_fb", "standard.flame_barrier", 4));
+        let hero_before = health(&state, "hero");
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("enemy_b"), 5, false).expect("hit");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+        assert_eq!(health(&state, "hero"), hero_before - 4, "Flame Barrier 4 hits back for 4");
+
+        // Combust: turn end, every enemy takes its stacks.
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "hero", status("st_cb", "standard.combust", 3));
+        let before = health(&state, "enemy_a");
+        host.try_run_turn_ended_triggers(&mut state, &cid("hero"))
+            .expect("turn end");
+        host.try_resolve_pending_queues(&mut state).expect("settle");
+        assert!(
+            health(&state, "enemy_a") < before,
+            "Combust must hurt the enemies ({} -> {})",
+            before,
+            health(&state, "enemy_a")
+        );
     }
 
     #[test]

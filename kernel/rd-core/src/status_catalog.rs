@@ -658,7 +658,6 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.stun"
             | "standard.artifact"
             | "standard.thorns"
-            | "standard.rage"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"
@@ -670,6 +669,11 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // The three that arrived with the Downed / artifact / CardPlayed hooks (§117).
             | "standard.spore_cloud"
             | "standard.enrage"
+            // Content triggers on hooks that already existed (port-plan.md §119).
+            | "standard.regen"
+            | "standard.rage"
+            | "standard.flame_barrier"
+            | "standard.combust"
     )
 }
 

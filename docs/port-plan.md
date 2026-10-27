@@ -7785,3 +7785,59 @@ node.conditional { Condition: event.bool("card.hasTag.skill"),
 | 单测 | 674（rd-core 586 / rd-run 61 / rd-wasm 27） |
 | 内容事件事实 | 4 个 bit（attack / skill / power / status） |
 | 镜像 | full 18,288 B / core 15,716 B（重钉） |
+
+---
+
+## 119. 三件事收尾：Spore Cloud 挂怪、四个"便宜状态"、**事件表补全**
+
+### 119.1 Spore Cloud 挂上了怪
+
+`acid_slime_m` 带 **Spore Cloud 1**（wiki 属 Fungi Beast，我们没有它 —— 降级写进 `AiNote`）。
+encounter 的内联副本同步改了。
+
+### 119.2 四个新状态，全部是"已有钩子上的新触发器"
+
+| 状态 | 钩子 | 节目 | 判据 |
+|---|---|---|---|
+| **Regen** | `TurnEnded` | `heal(stacks)` | 受伤 10 后回 4 ⇒ `hurt + 4` |
+| **Rage** | `CardPlayed` + `card.hasTag.attack` | `gainBlock(stacks)` | 出技能=0 格挡，出攻击=**3** 格挡 |
+| **Flame Barrier** | `DamageTaken` | `dealDamage(eventTarget, stacks)` | 敌人挡 4 ⇒ 打它的人掉 4 |
+| **Combust** | `TurnEnded` | `dealDamage(allEnemies, stacks)` | 回合结束敌人真的掉血 |
+
+**没有加一条内核分支** —— 这正是 §115 那张表的用处：钩子补齐之后，剩下的都是内容填空。
+`sts_content_check` 的 `program_facts` 也跟着认识 `node.heal` 与 `sel.allEnemies`（不认识的节点/选择器
+一律抛错，不许"跳过"）。
+
+### 119.3 事件表补全：`not_handled` 10 → **2**
+
+四个事件接了钩子：
+
+| 事件 | 入队点 | 派发给 |
+|---|---|---|
+| `CardCostPaid` | `play.rs`（付了费用时） | 每个战斗员 |
+| `StatusApplied` | `exec::apply_one_status`（新实例） | 每个战斗员 |
+| `StatusMerged` | 同上（并入已有实例） | 每个战斗员 |
+| `StatusRemoved` | 同上（层数归零/删除） | 每个战斗员 |
+
+⚠️ `StatusMerged` 的入队必须**等借用结束**再发（`ctx.state` 只能借一次）—— 这是个真实的编译错误，
+不是洁癖。
+
+**剩下 2 条 `StatusStacksChanged`** 仍是"参考有、本内核没有钩子接"。参考镜像里 25 条触发器，
+现在只有 2 条落在未接的钩子上。
+
+### 119.4 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | 674 → **677**（rd-core 589 / rd-run 61 / rd-wasm 27） |
+| 内容状态 | 10 → **14** |
+| `not_handled` 触发器 | 10 → **2**（只剩 `StatusStacksChanged`） |
+| 镜像 | full 19,300 B / core 16,488 B（重钉） |
+
+### 119.5 还剩什么
+
+* `StatusStacksChanged`（最后 1 类未接事件）；
+* `CardPlayed` 的**每回合出牌统计**（`cardsPlayedThisTurnWithTag` 那一族表达式需要它）；
+* `Artifact` 的 `StatusApplicationPrevented` 事件（挡掉时参考会发一条，我们还没发）；
+* Boss 分裂/相位、`?` 房通用解释器、幕间内容差异（老账）。

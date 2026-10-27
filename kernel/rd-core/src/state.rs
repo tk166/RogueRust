@@ -2044,6 +2044,26 @@ pub enum CombatEvent {
         /// （`Enrage` 只认技能牌）。
         card: crate::state::CardInstanceId,
     },
+    /// `CardCostPaid`（`CardPlay.cs:138`）：出牌付了费用。
+    CardCostPaid {
+        /// 付钱的人。
+        owner: CombatantId,
+    },
+    /// `StatusApplied`（新实例）/ `StatusMerged`（并入已有实例）：**状态落到了某个战斗员身上**。
+    StatusApplied {
+        /// 承受者。
+        target: CombatantId,
+    },
+    /// 同上，但合进了已有实例（`StatusEffects.cs:135-139`）。
+    StatusMerged {
+        /// 承受者。
+        target: CombatantId,
+    },
+    /// `StatusRemoved`：**一条状态实例没了**（层数归零被删、或到期）。
+    StatusRemoved {
+        /// 原承受者。
+        target: CombatantId,
+    },
     /// `Downed`（`CombatantLifecycleEffects.cs`）：**某个战斗员倒下了**。
     ///
     /// Bearer 是**倒下的那个**，`EventTarget` 是送他上路的人 —— `Spore Cloud` 就长在这上面

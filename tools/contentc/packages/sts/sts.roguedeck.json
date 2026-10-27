@@ -610,6 +610,249 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.regen",
+      "PackageId": "sts",
+      "NameKey": "Regen",
+      "DescriptionKey": "At the end of the turn, heal HP equal to its stacks.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "regen"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.heal",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "Amount": {
+                  "kind": "combatantStatusStacks",
+                  "value": {
+                    "Selector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusId": {
+                      "value": "standard.regen"
+                    }
+                  }
+                },
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.rage",
+      "PackageId": "sts",
+      "NameKey": "Rage",
+      "DescriptionKey": "Whenever you play an Attack, gain Block equal to its stacks.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "rage"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardPlayed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "event.bool",
+                  "value": {
+                    "FieldKey": "card.hasTag.attack"
+                  }
+                },
+                "Then": {
+                  "kind": "node.gainBlock",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Amount": {
+                      "kind": "combatantStatusStacks",
+                      "value": {
+                        "Selector": {
+                          "kind": "sel.source",
+                          "value": {
+                            "Cardinality": "ZeroOrOne",
+                            "RequiredContextCapabilities": "Source"
+                          }
+                        },
+                        "StatusId": {
+                          "value": "standard.rage"
+                        }
+                      }
+                    },
+                    "ResultKey": null
+                  }
+                }
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.flame_barrier",
+      "PackageId": "sts",
+      "NameKey": "Flame Barrier",
+      "DescriptionKey": "Whenever you are attacked, deal damage back equal to its stacks.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "thorns"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "combatantStatusStacks",
+                  "value": {
+                    "Selector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusId": {
+                      "value": "standard.flame_barrier"
+                    }
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": true,
+                "Element": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.combust",
+      "PackageId": "sts",
+      "NameKey": "Combust",
+      "DescriptionKey": "At the end of the turn, lose 1 HP and deal its stacks to all enemies.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "combust"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.allEnemies",
+                        "value": {}
+                      },
+                      "Amount": {
+                        "kind": "combatantStatusStacks",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "StatusId": {
+                            "value": "standard.combust"
+                          }
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -2737,7 +2980,14 @@
               "value": "acid_slime_m.lick"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.spore_cloud"
+              },
+              "Stacks": 1
+            }
+          ],
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Acid Slime (M)"
@@ -3029,11 +3279,18 @@
           "value": "acid_slime_m.lick"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.spore_cloud"
+          },
+          "Stacks": 1
+        }
+      ],
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": "原作 30/40/30 且 Tackle/Lick 不能连续（inv:§4.1）⇒ 三步循环满足全部约束（plan §3.2#6）"
+      "AiNote": " ⚠️ 降级写明：wiki 的 Spore Cloud 属于 Fungi Beast；本内容没有它，为让机制被用到，挂在这里。 port-plan.md §119。"
     },
     {
       "Id": "spike_slime_m",
