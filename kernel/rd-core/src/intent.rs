@@ -264,8 +264,9 @@ impl CompareOp {
 ///
 /// 名字**逐字**来自 `Run\Serialization\RunJson.cs:141-151` 的注册表（规格书 §3.5 把 10 条都
 /// 读到了），不是猜的。但**只有两种在 core 镜像里真的有 opcode**（实测 op 46/47）——
-/// 其余 8 种的字段名无从测量，所以 [`ConditionKind::is_supported`] 只对 `selfHasCounter` 为真，
-/// 另外 9 种一律 [`IntentError::UnsupportedCondition`]。
+/// 其余 8 种的字段名无从测量，所以 [`ConditionKind::is_supported`] 只对**实现过的**为真
+/// （今天两个：`selfHasCounter` 与 `healthPercent`），另外 8 种一律
+/// [`IntentError::UnsupportedCondition`]。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConditionKind {
     /// `intent.healthPercent`（C# 参数 `Op, Percent`）
@@ -336,8 +337,13 @@ impl ConditionKind {
     /// `opponentCardsPlayed` 要一张内核故意没有的表，另外 8 种在镜像里连 opcode 都不存在
     /// ⇒ 字段名不可测量 ⇒ 实现它等于发明一个求值器。
     #[must_use]
-    pub const fn is_supported(self) -> bool {
-        matches!(self, ConditionKind::SelfHasCounter)
+    fn is_supported(self) -> bool {
+        // `healthPercent` is the second one implemented -- "the boss changes its move at half HP"
+        // needs it (`port-plan.md` §123).
+        matches!(
+            self,
+            ConditionKind::SelfHasCounter | ConditionKind::HealthPercent
+        )
     }
 }
 
@@ -418,17 +424,29 @@ pub fn locate_enemy(
 ) -> Result<Option<EnemySlot>, IntentError> {
     let mut ids = [0u16; MAX_ENEMIES];
     let count = encounter_enemy_ids(content, encounter, &mut ids)?;
+    // A spawned combatant is named `<definition>#<n>` (`node.createCombatant`, port-plan.md §121), so
+    // an exact id match would miss it and it would show "unknown intent" forever. Fall back to the
+    // **definition part** -- the slime that split off is still that slime.
+    let raw = combatant.as_str();
+    let definition = raw.split('#').next().unwrap_or(raw);
+    let mut by_definition: Option<u16> = None;
     for (index, id) in ids.iter().enumerate().take(count) {
         // 借用视图的"根"取 `&'a Content<'a>`；这里只需要读一个 `F_STR`，用短生命周期即可。
         let record = NodeRef::new(content, *id);
-        if record.str_field("Id")? == Some(combatant.as_str()) {
+        let Some(record_id) = record.str_field("Id")? else {
+            continue;
+        };
+        if record_id == raw {
             return Ok(Some(EnemySlot {
                 encounter,
                 index: index as u16,
             }));
         }
+        if by_definition.is_none() && record_id == definition {
+            by_definition = Some(index as u16);
+        }
     }
-    Ok(None)
+    Ok(by_definition.map(|index| EnemySlot { encounter, index }))
 }
 
 // ===========================================================================
@@ -517,7 +535,11 @@ pub fn select_action<'a>(
 
     // ── B0：`byId.TryGetValue(enemyId, out var enemy)` 不命中（`:156-157`）。
     let record_id = record.str_field("Id")?.ok_or(IntentError::Missing("Id"))?;
-    if record_id != actor.as_str() {
+    // Same rule as locate_enemy: a spawned combatant is <definition>#<n>, and it is still that
+    // definition for the purpose of choosing a move (§123).
+    let raw = actor.as_str();
+    let definition = raw.split('#').next().unwrap_or(raw);
+    if record_id != raw && record_id != definition {
         return Ok(None);
     }
 
@@ -624,7 +646,24 @@ pub fn condition_matches(
                 .map_or(0, |entry| entry.value);
             Ok(op.apply(current, value))
         }
-        // 其余 9 种一律响亮拒绝（偏离 D3），**不**当作"不匹配"。
+        // `intent.healthPercent`（`Run\Serialization\RunJson.cs` 注册表里的一条；C# 签名的参数是
+        // `Op, Percent`）。判据是**出手者当前生命的百分比**：
+        //   `Percent = current * 100 / max`（整数除法，`max <= 0` 时按 0 处理）。
+        // 这是"Boss 半血换招"唯一需要的那种条件（`port-plan.md` §123）。
+        ConditionKind::HealthPercent => {
+            let op = compare_op(condition)?;
+            let percent = condition
+                .int_field("Percent")?
+                .ok_or(IntentError::Missing("Percent"))?;
+            let Some(combatant) = state.combatant(actor) else {
+                return Ok(false);
+            };
+            let max = combatant.health_max;
+            let current = combatant.health_current;
+            let ratio = if max > 0 { current * 100 / max } else { 0 };
+            Ok(op.apply(ratio, percent))
+        }
+        // 其余 8 种一律响亮拒绝（偏离 D3），**不**当作"不匹配"。
         unsupported => Err(IntentError::UnsupportedCondition(unsupported)),
     }
 }
@@ -1125,6 +1164,80 @@ mod tests {
         }
     }
 
+    /// A **spawned** combatant (`acid_slime_m#000003`) still finds its enemy record, so it gets a
+    /// real intent instead of "unknown" -- `locate_enemy` falls back to the definition part
+    /// (`port-plan.md` §123).
+    #[test]
+    fn a_spawned_combatant_still_resolves_to_its_enemy_record() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let encounter = encounter_row(&content, "enc_small_slimes");
+
+        let plain = cid("acid_slime_m");
+        let spawned = cid("acid_slime_m#000003");
+        let plain_slot = locate_enemy(&content, encounter, &plain).expect("lookup");
+        let spawned_slot = locate_enemy(&content, encounter, &spawned).expect("lookup");
+        assert!(plain_slot.is_some(), "the roster entry must be found by exact id");
+        assert_eq!(
+            spawned_slot, plain_slot,
+            "the spawned one must resolve to the same slot"
+        );
+
+        // ...and that slot really yields an action for the spawned combatant.
+        let slot = spawned_slot.expect("a slot");
+        let state = arena(spawned.as_str());
+        assert!(
+            select_action(&state, &content, slot, &spawned, 1)
+                .expect("select")
+                .is_some(),
+            "a spawned enemy must have an intent"
+        );
+    }
+
+    /// **The boss changes its move at half health** -- the one thing `intent.healthPercent` was
+    /// implemented for (`port-plan.md` §123).
+    #[test]
+    fn a_health_percent_rule_switches_the_boss_move_at_half_health() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let at = slot(&content, "enc_slime_boss", 0);
+        let owner = cid(record_id(&content, at));
+
+        let mut state = arena(owner.as_str());
+        {
+            let combatant = state.combatant_mut(&owner).expect("the boss");
+            combatant.health_max = 140;
+            combatant.health_current = 140;
+        }
+        let full = select_action(&state, &content, at, &owner, 1)
+            .expect("select")
+            .expect("an action");
+        assert_ne!(
+            full.action_id.to_string(),
+            "slime_boss.slam".to_string(),
+            "at full health the phase rule must not fire"
+        );
+
+        // 70/140 = exactly 50% -> `LessOrEqual 50` matches.
+        state.combatant_mut(&owner).expect("the boss").health_current = 70;
+        let half = select_action(&state, &content, at, &owner, 1)
+            .expect("select")
+            .expect("an action");
+        assert_eq!(
+            half.action_id.to_string(),
+            "slime_boss.slam".to_string(),
+            "at half health the boss switches to its phase move"
+        );
+    }
+
     // ---------------------------------------------------------------- B0
 
     #[test]
@@ -1545,7 +1658,10 @@ mod tests {
             .into_iter()
             .filter(|kind| kind.is_supported())
             .collect();
-        assert_eq!(supported, vec![ConditionKind::SelfHasCounter]);
+        assert_eq!(
+            supported,
+            vec![ConditionKind::HealthPercent, ConditionKind::SelfHasCounter]
+        );
     }
 
     #[test]

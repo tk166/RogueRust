@@ -3324,7 +3324,21 @@
             }
           ],
           "Position": null,
-          "IntentRules": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.healthPercent",
+                "value": {
+                  "Op": "LessOrEqual",
+                  "Percent": 50
+                }
+              },
+              "Action": {
+                "value": "slime_boss.slam"
+              },
+              "Priority": 20
+            }
+          ],
           "DisplayName": "Slime Boss"
         }
       ],
@@ -3713,10 +3727,24 @@
           "Stacks": 1
         }
       ],
-      "IntentRules": [],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.healthPercent",
+            "value": {
+              "Op": "LessOrEqual",
+              "Percent": 50
+            }
+          },
+          "Action": {
+            "value": "slime_boss.slam"
+          },
+          "Priority": 20
+        }
+      ],
       "Tier": "Boss",
       "InvRef": "inv:§4.3",
-      "AiNote": " ⚠️ wiki 的 Slime Boss 分裂成两只；本内容用 `standard.split`的 Downed 触发器 + `node.createCombatant` 实现。port-plan.md §121。"
+      "AiNote": " ⚠️ 相位写明：wiki 的 Slime Boss 半血后会换招；本内容用 `intent.healthPercent <= 50` → `slam` 表达（port-plan.md §123）。"
     }
   ],
   "EncounterTables": {

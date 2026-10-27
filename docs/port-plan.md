@@ -8056,3 +8056,70 @@ const overflowNote = overflow === 1 ? ' · <span class="warn">⚠️ 敌人超�
 * 相位**换招**（半血改用另一套意图）—— 需要 `EnemyIntentRules` 能按状态切换（内容侧有条件，但没试过）；
 * 分裂出来的敌人**立刻有意图**（今天的 `refresh_intents` 每帧重算，理论上会，但没有测试钉住）；
 * 多段 Boss（第一幕的 Boss 只有史莱姆王一只，第二幕的还没做）。
+
+---
+
+## 123. 相位**换招**（`intent.healthPercent`）+ 分裂出来的敌人**有自己的意图**
+
+### 123.1 前置：`intent.healthPercent` 原本**没实现**
+
+`intent.rs` 的条件语言有 10 种原语，但 `is_supported` 只对 `selfHasCounter` 为真，其余 9 种一律
+`UnsupportedCondition`。所以"半血换招"在内容里根本写不出来。
+
+这一轮实现了第二条：
+
+```rust
+ConditionKind::HealthPercent => {
+    let ratio = if max > 0 { current * 100 / max } else { 0 };
+    op.apply(ratio, percent)
+}
+```
+
+判据 `a_health_percent_rule_switches_the_boss_move_at_half_health`：
+`slime_boss` 140/140 ⇒ 不 slam；70/140（正好 50%）⇒ **`slime_boss.slam`**。
+
+⚠️ 一个格式细节：`Percent` 必须是**整数**（`"Percent": 50`），写成 `{"value": 50}`（term 形式）会得到
+`Ir(WrongKind("F_INT"))` —— 和 `selfHasCounter` 的 `Value` 同形。
+
+### 123.2 内容
+
+```json
+slime_boss.IntentRules = [
+  { "Condition": { "kind": "intent.healthPercent",
+                   "value": { "Op": "LessOrEqual", "Percent": 50 } },
+    "Action": { "value": "slime_boss.slam" }, "Priority": 20 }
+]
+```
+
+⇒ 半血之后从 `goop_spray` 换成 `slam`。
+
+### 123.3 分裂出来的敌人**本来拿不到意图**
+
+这是这一轮最有价值的发现。`node.createCombatant` 造出来的 id 是 `acid_slime_m#000000`，而**两处
+id 匹配都是全等比较**：
+
+| 位置 | 后果 |
+|---|---|
+| `intent::locate_enemy` | 找不到槽位 ⇒ 意图被标成 "unknown" |
+| `intent::select_action` 的 B0 闸 | `record_id != actor` ⇒ 直接返回 `None` |
+
+⇒ 两只分裂出来的史莱姆在界面上会是"准备中"直到战斗结束。**修法**：两处都加一条回退 ——
+把 `#` 之后的部分砍掉再比一次（"分裂出来的那个仍然是那个怪"）。
+
+判据 `a_spawned_combatant_still_resolves_to_its_enemy_record`：
+`acid_slime_m#000003` 与 `acid_slime_m` 解到**同一个槽位**，而且那个槽位**真的能选出一个动作**。
+
+### 123.4 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | 680 → **682**（rd-core 594 / rd-run 61 / rd-wasm 27） |
+| 意图条件 | 支持 1 → **2** 种（`selfHasCounter`、`healthPercent`） |
+| 镜像 | full 19,856 B / core 16,888 B（重钉） |
+
+### 123.5 剩余
+
+* 意图条件还有 **8 种**没实现（`round` / `selfHasStatus` / `opponentHasStatus` / …）；
+* 分裂出来的敌人**意图栏**在页面上是否显示正确，只有内核判据，没有浏览器判据；
+* 第二幕 Boss 与幕间内容差异（老账）。
