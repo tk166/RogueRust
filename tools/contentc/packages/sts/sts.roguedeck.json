@@ -552,7 +552,7 @@
       "Id": "standard.enrage",
       "PackageId": "sts",
       "NameKey": "Enrage",
-      "DescriptionKey": "Whenever a card is played, gains 2 Strength.",
+      "DescriptionKey": "Whenever a Skill is played, gains 2 Strength.",
       "Polarity": "Buff",
       "UsesStacks": true,
       "UsesDuration": false,
@@ -571,27 +571,38 @@
               "Value": "(unnamed)"
             },
             "Root": {
-              "kind": "node.applyStatus",
+              "kind": "node.conditional",
               "value": {
-                "TargetSelector": {
-                  "kind": "sel.source",
+                "Condition": {
+                  "kind": "event.bool",
                   "value": {
-                    "Cardinality": "ZeroOrOne",
-                    "RequiredContextCapabilities": "Source"
+                    "FieldKey": "card.hasTag.skill"
                   }
                 },
-                "StatusDefinitionId": {
-                  "value": "standard.strength"
-                },
-                "Stacks": {
-                  "kind": "const",
+                "Then": {
+                  "kind": "node.applyStatus",
                   "value": {
-                    "Value": 2
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusDefinitionId": {
+                      "value": "standard.strength"
+                    },
+                    "Stacks": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 2
+                      }
+                    },
+                    "DurationTurns": 0,
+                    "Charges": 0,
+                    "ResultKey": null
                   }
-                },
-                "DurationTurns": 0,
-                "Charges": 0,
-                "ResultKey": null
+                }
               }
             },
             "MaxNodeDepth": 64,

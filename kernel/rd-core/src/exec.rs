@@ -310,6 +310,12 @@ pub struct ExecContext<'a> {
     pub iteration_card: Option<CardInstanceId>,
     /// 节目信封里的 `MaxProgramSteps`（core 镜像实测 1024）。
     pub max_steps: u32,
+    /// 触发事件的**布尔事实**，按位。今天只有"这张牌有没有某个 tag"这四种
+    /// （`exec::CARD_HAS_TAG_*`），由宿主在派发 `CardPlayed` 时算好。
+    ///
+    /// 为什么不把卡实例塞进表达式上下文：那要把 `Content` 的寿命也拖进 `ExprContext`，
+    /// 而这四个比特是**唯一**被用到的信息（`port-plan.md` §118）。
+    pub event_flags: u8,
     /// 内容镜像。`Some` ⇒ 状态元数据走 [`crate::status_bind`]（参考实现的路）；
     /// `None` ⇒ 走标准包目录（oracle/env 的路）。**只有它决定命名空间桥开不开**。
     pub content: Option<&'a Content<'a>>,
@@ -350,6 +356,7 @@ impl<'a> ExecContext<'a> {
             iteration_target,
             iteration_card: None,
             max_steps,
+            event_flags: 0,
             content: None,
         }
     }
@@ -373,6 +380,7 @@ impl<'a> ExecContext<'a> {
             event_target: self.event_target,
             iteration_target: self.iteration_target,
             iteration_card: self.iteration_card,
+            event_flags: self.event_flags,
         }
     }
 
@@ -3012,6 +3020,15 @@ fn card_instance_id(number: i32) -> Result<CardInstanceId, ExecError> {
 // 状态施加：合并规则（`StatusEffects.cs:126-199`）
 // =============================================================================================
 
+/// The card tags the kernel reports as **event facts** (`event.bool`). One bit each.
+///
+/// These are the only tags any photographed content asks about; a new one is a one-line change
+/// here plus a line in `expr::eval_bool`.
+pub const CARD_HAS_TAG_ATTACK: u8 = 1 << 0;
+pub const CARD_HAS_TAG_SKILL: u8 = 1 << 1;
+pub const CARD_HAS_TAG_POWER: u8 = 1 << 2;
+pub const CARD_HAS_TAG_STATUS: u8 = 1 << 3;
+
 /// Apply one status by **id string** -- a test-only door into [`apply_one_status`], so tests can
 /// exercise the Artifact gate without building a whole program (`port-plan.md` §117).
 #[cfg(test)]
@@ -5509,6 +5526,7 @@ mod tests {
                     event_target: None,
                     iteration_target: None,
                     iteration_card: None,
+                    event_flags: 0,
                 };
                 crate::expr::eval_int(amount_expression, &expr_ctx).expect("常量")
             };
@@ -5609,6 +5627,7 @@ mod tests {
                             event_target: event_target.map(cid),
                             iteration_target: iteration_target.map(cid),
                             iteration_card: None,
+                            event_flags: 0,
                         };
                         match crate::expr::eval_bool(condition, &expr_ctx) {
                             Ok(value) => value,

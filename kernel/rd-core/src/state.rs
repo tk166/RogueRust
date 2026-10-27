@@ -2040,6 +2040,9 @@ pub enum CombatEvent {
     CardPlayed {
         /// 出牌的人。
         owner: CombatantId,
+        /// 打出的那张牌（实例）。带上它，触发器才能问"这张牌有技能 tag 吗"
+        /// （`Enrage` 只认技能牌）。
+        card: crate::state::CardInstanceId,
     },
     /// `Downed`（`CombatantLifecycleEffects.cs`）：**某个战斗员倒下了**。
     ///

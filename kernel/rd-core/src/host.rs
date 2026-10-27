@@ -1963,7 +1963,9 @@ impl Host<'_> {
                 self.run_downed_triggers(state, &combatant, source)
             }
             // `CardPlayed`：派发给**所有战斗员**（Enrage 在敌人身上，由你出牌触发）。
-            CombatEvent::CardPlayed { owner } => self.run_card_played_triggers(state, &owner),
+            CombatEvent::CardPlayed { owner, card } => {
+                self.run_card_played_triggers(state, &owner, card)
+            }
         }
     }
 
@@ -1975,7 +1977,11 @@ impl Host<'_> {
         &mut self,
         state: &mut CombatState,
         owner: &CombatantId,
+        card: crate::state::CardInstanceId,
     ) -> Result<(), HostError> {
+        // Which tags the played card has -- the only thing `event.bool` can ask about today.
+        let flags = card_definition_of(state, card)
+            .map_or(0, |definition| card_tag_flags(self.content, definition));
         let mut bearers = [CombatantId::EMPTY; crate::state::MAX_COMBATANTS];
         let mut count = 0usize;
         for combatant in state.combatants() {
@@ -1998,8 +2004,15 @@ impl Host<'_> {
                 };
                 let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
                 let root = NodeRef::new(self.content, handle);
-                let outcome =
-                    execute_program(state, self.content, root, Some(bearer), Some(*owner), steps);
+                let outcome = execute_program_with_flags(
+                    state,
+                    self.content,
+                    root,
+                    Some(bearer),
+                    Some(*owner),
+                    steps,
+                    flags,
+                );
                 outcome.map_err(|e| self.record(HostError::Exec(e)))?;
             }
         }
@@ -2424,9 +2437,67 @@ fn execute_program(
     event_target: Option<CombatantId>,
     max_steps: u32,
 ) -> Result<(), exec::ExecError> {
+    execute_program_with_flags(state, content, root, source, event_target, max_steps, 0)
+}
+
+/// [`execute_program`] plus the **event facts** (`event.bool` reads them).
+#[allow(clippy::too_many_arguments)]
+fn execute_program_with_flags(
+    state: &mut CombatState,
+    content: &Content<'_>,
+    root: NodeRef<'_>,
+    source: Option<CombatantId>,
+    event_target: Option<CombatantId>,
+    max_steps: u32,
+    event_flags: u8,
+) -> Result<(), exec::ExecError> {
     let mut ctx = ExecContext::new(state, source, event_target, None, max_steps)
         .with_content(content);
+    ctx.event_flags = event_flags;
     exec::begin(root, &mut ctx, crate::state::ProgramTerminalHook::None).map(|_| ())
+}
+
+/// The definition id of a card **instance**.
+///
+/// `CombatState` exposes `card(slot)` by pool slot, so this walks the zones of every combatant until
+/// it finds the instance -- a fight has a handful of cards and this runs once per card played.
+fn card_definition_of<'a>(
+    state: &'a CombatState,
+    card: crate::state::CardInstanceId,
+) -> Option<&'a str> {
+    for combatant in state.combatants() {
+        for zone in [
+            CardZone::DrawPile,
+            CardZone::Hand,
+            CardZone::DiscardPile,
+            CardZone::ExhaustPile,
+        ] {
+            for instance in state.zone_cards(&combatant.id, zone) {
+                if instance.id == card {
+                    return Some(instance.definition_id.as_str());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Which card tags the played card has, as `event.bool` bits.
+fn card_tag_flags(content: &Content<'_>, definition_id: &str) -> u8 {
+    let mut flags = 0u8;
+    if content.card_has_tag(definition_id, "attack") == Some(true) {
+        flags |= exec::CARD_HAS_TAG_ATTACK;
+    }
+    if content.card_has_tag(definition_id, "skill") == Some(true) {
+        flags |= exec::CARD_HAS_TAG_SKILL;
+    }
+    if content.card_has_tag(definition_id, "power") == Some(true) {
+        flags |= exec::CARD_HAS_TAG_POWER;
+    }
+    if content.card_has_tag(definition_id, "status") == Some(true) {
+        flags |= exec::CARD_HAS_TAG_STATUS;
+    }
+    flags
 }
 
 /// `CARD` 行按定义 id 查（内核的"卡定义表"就是镜像的 `CARD` 表，`play.rs:572-575`）。
@@ -4095,6 +4166,29 @@ mod tests {
     // `DamageDealt` + 触发器：批次 1 真正换来的东西（`CARD_MULTI` 那 10 格的根因）
     // ---------------------------------------------------------------------------------------
 
+    /// Put one card of `definition` into `who`'s hand and return its instance id.
+    ///
+    /// The tag tests need a **real** card instance: the host resolves its definition id and asks the
+    /// content for tags (`card_tag_flags`).
+    fn card_in_hand(
+        state: &mut CombatState,
+        content: &Content<'_>,
+        who: &str,
+        definition: &str,
+    ) -> crate::state::CardInstanceId {
+        let id = crate::state::CardInstanceId::new(definition).expect("instance id");
+        let definition_id = crate::state::CardDefinitionId::new(definition).expect("definition");
+        let _ = content;
+        state
+            .push_card(
+                &cid(who),
+                CardZone::Hand,
+                crate::state::CardInstance::new(id, definition_id),
+            )
+            .expect("push card");
+        id
+    }
+
     /// 用 `exec` 的伤害管线打一下（这是 `battle.rs` 之外唯一能造出 `DamageDealt` 的入口）。
     fn strike(state: &mut CombatState, content: &Content<'_>, source: &str, target: &str, amount: i32) {
         let mut ctx = crate::exec::ExecContext::new(
@@ -4351,10 +4445,10 @@ mod tests {
     }
 
     #[test]
-    fn enrage_answers_a_card_played_by_the_other_side() {
-        // Wiki (Gremlin Nob): "Enrage -- whenever you play a Skill, gains 2 Strength". The status
-        // sits on the **enemy** and reacts to the **player's** card, so `CardPlayed` is dispatched to
-        // every combatant (`port-plan.md` §117).
+    fn enrage_answers_only_a_skill() {
+        // Wiki (Gremlin Nob): "Enrage -- whenever you play a **Skill**, gains 2 Strength". The status
+        // sits on the enemy; the gate is `event.bool { card.hasTag.skill }`, which reads the flags the
+        // host computed from the played card's tags (`port-plan.md` §118).
         let blob = std::fs::read(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
@@ -4362,26 +4456,32 @@ mod tests {
         .expect("the sts image");
         let content = parse(&blob);
         let mut host = Host::new(&content);
+
+        // Build a run with one card of each kind in hand, then fire `CardPlayed` for each.
         let mut state = arena();
         give(&mut state, "enemy_a", status("st_enr", "standard.enrage", 1));
+        let skill = card_in_hand(&mut state, &content, "hero", "defend");
+        let attack = card_in_hand(&mut state, &content, "hero", "strike");
 
-        assert_eq!(stacks_of(&state, "enemy_a", "standard.strength"), 0);
-
-        // The hero plays a card: the event is queued by `play.rs`; here we queue it directly so the
-        // test is about the dispatch, not about the card pipeline.
         state
-            .enqueue_event(CombatEvent::CardPlayed { owner: cid("hero") })
+            .enqueue_event(CombatEvent::CardPlayed { owner: cid("hero"), card: skill })
             .expect("queue");
         host.try_resolve_pending_queues(&mut state).expect("triggers");
-
         assert_eq!(
             stacks_of(&state, "enemy_a", "standard.strength"),
             2,
-            "the enraged enemy gains 2 Strength when the player plays a card"
+            "a Skill wakes the Enrage"
         );
 
-        // The hero does not have the status, so nothing lands on them.
-        assert_eq!(stacks_of(&state, "hero", "standard.strength"), 0);
+        state
+            .enqueue_event(CombatEvent::CardPlayed { owner: cid("hero"), card: attack })
+            .expect("queue");
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+        assert_eq!(
+            stacks_of(&state, "enemy_a", "standard.strength"),
+            2,
+            "an Attack must not"
+        );
     }
 
     #[test]

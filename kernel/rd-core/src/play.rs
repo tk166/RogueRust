@@ -785,6 +785,7 @@ fn apply_plan_in_chain(
     if counted_as_card_played {
         state.enqueue_event(crate::state::CombatEvent::CardPlayed {
             owner: plan.source,
+            card: plan.instance,
         })?;
     }
 
@@ -1246,6 +1247,7 @@ fn play_condition_validator(state: &CombatState, card: &CardOnTable<'_>) -> Resu
         event_target: card.target,
         iteration_target: None,
         iteration_card: None,
+            event_flags: 0,
     };
     match expr::eval_bool(condition, &context) {
         Ok(true) => Ok(()),

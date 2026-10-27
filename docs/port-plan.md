@@ -7721,3 +7721,67 @@ ctx.state.next_status_instance_number = number.saturating_add(1);   // 再自增
 * **`Spore Cloud` 挂怪**（一步）；
 * `Combust` / `Regen` / `Rage` / `Flame Barrier`（都是已有钩子上的新触发器，便宜）；
 * 出牌侧的 `CardCostPaid`、`StatusApplied` / `StatusMerged` / `StatusRemoved` 三条状态事件（`not_handled` 只剩 4 类）。
+
+---
+
+## 118. **`CardPlayed` 带上卡片 tag**：`event.bool` 成了事件的布尔通道
+
+§117 留的那个口子补上了：Enrage 现在**只认技能牌**。
+
+### 118.1 为什么不是"把卡实例塞进表达式上下文"
+
+那要把 `Content` 的寿命也拖进 `ExprContext`（`expr` 目前只借 `CombatState`），改动面铺开到整个求值层。
+而真正被用到的信息只有一句：**这张牌有没有某个 tag**。
+
+⇒ 改成**事件事实**：宿主在派发 `CardPlayed` 时先算好 4 个比特，`event.bool` 读它们。
+
+```rust
+pub const CARD_HAS_TAG_ATTACK: u8 = 1 << 0;
+pub const CARD_HAS_TAG_SKILL:  u8 = 1 << 1;
+pub const CARD_HAS_TAG_POWER:  u8 = 1 << 2;
+pub const CARD_HAS_TAG_STATUS: u8 = 1 << 3;
+```
+
+* `CombatEvent::CardPlayed { owner, card }` —— 事件带上**卡实例**（`play.rs` 出牌时入队）；
+* 宿主 `card_definition_of(state, card)` 扫各战斗员的四个区找到定义 id，再用
+  `content.card_has_tag` 算比特；
+* `ExecContext.event_flags` / `ExprContext.event_flags` 把比特送进求值；`execute_program_with_flags`
+  是带比特的那条入口（原 `execute_program` 退化成"比特全 0"）。
+* `event.bool { FieldKey: "card.hasTag.skill" }` —— **只认四个键**，别的键 `UnsupportedKind`
+  （响亮失败，不静默 `false`）。
+
+### 118.2 内容
+
+`standard.enrage` 的节目现在是：
+
+```
+node.conditional { Condition: event.bool("card.hasTag.skill"),
+                   Then: applyStatus(sel.source, standard.strength, 2) }
+```
+
+⇒ **wiki 的 Enrage 终于名副其实**：只对技能牌反应。
+
+### 118.3 判据
+
+`enrage_answers_only_a_skill`（rd-core，全量镜像）：
+
+* 打一张 **defend（skill）** ⇒ 敌人 +2 力量；
+* 再打一张 **strike（attack）** ⇒ 力量**不变**（还是 2）。
+
+用的是真的卡实例（`card_in_hand` 帮手把牌塞进手牌），不是编的 tag。
+
+### 118.4 顺带两件事
+
+* `sts_content_check` 的 `program_facts` 现在认识 `node.conditional`，并把**两个分支**的事实
+  带上前缀 `("when", key)` 一起报 —— 否则一条 `if` 就能把分支藏过清点；
+* `expr` 的覆盖扫描仍是 **40 条 UnsupportedKind**：参考镜像里那两条 `event.bool` 用的是别的键
+  （`node.isCombat` 之类），照旧算"没实现"。
+
+### 118.5 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | 674（rd-core 586 / rd-run 61 / rd-wasm 27） |
+| 内容事件事实 | 4 个 bit（attack / skill / power / status） |
+| 镜像 | full 18,288 B / core 15,716 B（重钉） |

@@ -205,6 +205,8 @@ pub struct ExprContext<'a> {
     /// `ForEachCardInZone` 绑卡实例，两者可以嵌套，所以不能共用一个槽。
     /// 唯一读它的是 `cardInstance.iterated`（见 [`eval_card`]）。
     pub iteration_card: Option<CardInstanceId>,
+    /// 触发事件的布尔事实（按位，见 `exec::CARD_HAS_TAG_*`）。`event.bool` 读它。
+    pub event_flags: u8,
 }
 
 impl ExprContext<'_> {
@@ -585,6 +587,20 @@ pub fn eval_bool<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<bool, E
             }
         }
 
+        "event.bool" => {
+            let name = node
+                .str_field("FieldKey")?
+                .ok_or(IrError::Missing("FieldKey"))?;
+            let bit = match name {
+                "card.hasTag.attack" => crate::exec::CARD_HAS_TAG_ATTACK,
+                "card.hasTag.skill" => crate::exec::CARD_HAS_TAG_SKILL,
+                "card.hasTag.power" => crate::exec::CARD_HAS_TAG_POWER,
+                "card.hasTag.status" => crate::exec::CARD_HAS_TAG_STATUS,
+                _ => return Err(ExprError::UnsupportedKind),
+            };
+            Ok(ctx.event_flags & bit != 0)
+        }
+
         _ => Err(ExprError::UnsupportedKind),
     }
 }
@@ -605,6 +621,7 @@ fn compare_ints(left: i32, right: i32, op: &str) -> Result<bool, ExprError> {
         "LessOrEqual" => Ok(left <= right),
         "Greater" | "GreaterThan" => Ok(left > right),
         "GreaterOrEqual" => Ok(left >= right),
+
         _ => Err(ExprError::UnsupportedKind),
     }
 }
@@ -1005,6 +1022,7 @@ mod tests {
             event_target: Some(cid("enemy_a")),
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
+            event_flags: 0,
         }
     }
 
@@ -1025,6 +1043,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
+            event_flags: 0,
         }
     }
 
@@ -1055,6 +1074,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
+            event_flags: 0,
         };
         assert_eq!(eval_int(amount, &empty_ctx), Ok(6));
     }
@@ -1117,6 +1137,7 @@ mod tests {
             event_target: Some(cid("hero")),
             iteration_target: None,
             iteration_card: None,
+            event_flags: 0,
         };
         assert_eq!(eval_int(amount, &hero_ctx), Ok(28));
     }
@@ -1176,6 +1197,7 @@ mod tests {
             event_target: Some(cid("enemy_b")),
             iteration_target: Some(cid("enemy_a")),
             iteration_card: None,
+            event_flags: 0,
         };
         assert_eq!(eval_int(node(&content, 1000), &swapped), Ok(0));
         assert_eq!(eval_int(node(&content, 337), &swapped), Ok(5));
@@ -1201,6 +1223,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
+            event_flags: 0,
         };
         assert_eq!(eval_int(node(&content, 1131), &enemy_src), Ok(0));
     }
@@ -1221,6 +1244,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
+            event_flags: 0,
         };
         assert_eq!(eval_int(node(&content, 92), &no_target), Ok(0));
         assert_eq!(eval_int(node(&content, 337), &no_target), Ok(0));
@@ -1375,6 +1399,7 @@ mod tests {
             event_target: None,
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
+            event_flags: 0,
         };
         assert_eq!(eval_int(node(&content, 1527), &no_target), Ok(0));
         assert_eq!(eval_int(node(&content, 1728), &no_target), Ok(0));
@@ -1907,6 +1932,7 @@ mod tests {
             event_target: Some(cid("enemy_a")),
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
+            event_flags: 0,
         };
 
         // kind → (成功, UnsupportedKind, 其它错误)
@@ -1994,6 +2020,8 @@ mod tests {
         // 53 → 40：`currentHealth`(t1527) 与 `maxHealth`(t1728) 不再是 `UnsupportedKind`
         // （它们实现了，只是**这份内容**里没有 `Selector` 字段），它们的 11 个祖先也跟着变了
         // —— 见下面那条 id 清单。
+        // 仍是 40：event.bool 现在实现了，但**只认四个 card.hasTag.* 键**；参考镜像里那两条
+        // 用的是别的键（node.isCombat 之类），照旧算 UnsupportedKind —— 响亮失败，不静默 false。
         assert_eq!(unsupported, 40, "UnsupportedKind（见上面的按 kind 分布）");
         // 0 → 13：**两片叶子 + 它们的 11 个祖先**。这条断言的价值是把"其它错误"从 0 变成
         // **一个可以逐条念出来的清单**：
@@ -2039,6 +2067,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: Some(card),
+            event_flags: 0,
         };
         assert_eq!(eval_card(iterated, &bound), Ok(card));
 

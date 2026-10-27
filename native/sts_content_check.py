@@ -373,6 +373,17 @@ def program_facts(root):
         elif kind == "node.modifyStatusStacks":
             facts.append(("modify", body["StatusDefinitionId"]["value"],
                           amount(body["Delta"]), tgt(body["TargetSelector"])))
+        elif kind == "node.conditional":
+            # A conditional states the facts of **both** branches, tagged with the condition, so the
+            # inventory cannot hide a branch behind an `if` (port-plan.md §118).
+            cond = body["Condition"]
+            key = cond.get("value", {}).get("FieldKey")
+            for branch in ("Then", "Else"):
+                sub = body.get(branch)
+                if sub:
+                    before = len(facts)
+                    walk(sub)
+                    facts[before:] = [("when", key) + f for f in facts[before:]]
         else:
             raise AssertionError("unexpected node kind %r" % kind)
 
