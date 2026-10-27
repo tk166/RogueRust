@@ -7496,3 +7496,103 @@ metallicize 3 → 回合结束      格挡 = 3
   `has_behaviour` 才能通过 —— 规则不是装饰。
 * **"镜像"本身是一个坑**：`core_image()` 没有 `STAT` 表这件事，只有踩到才会知道。下次写"需要状态定义"的
   内核测试，**直接用全量镜像**。
+
+---
+
+## 115. 对照 wiki 的**后续完善计划**：所有"类似功能"归到五条钩子上
+
+Metallicize 走通之后（§114），把 StS 第一幕里所有"状态/怪物机制"按**它们需要哪条内核钩子**归了类。
+这比"一个一个功能点"有用：**同类的东西共用一条钩子，做完一条就解锁一批。**
+
+### 115.1 五条钩子（我们已有的三条标 ✅）
+
+| 钩子 | 内核位置 | 我们 |
+|---|---|---|
+| 回合结束 | `Host::try_run_turn_ended_triggers` | ✅（Metallicize 就挂在这） |
+| 回合开始 | `Host::try_run_turn_started_triggers` | ✅（poison 走这条） |
+| 伤害结算 | `exec::resolve_damage` | ✅（但**没有"受击后"回调**） |
+| **打出牌** | 无 | ❌ |
+| **死亡时** | 无 | ❌ |
+
+### 115.2 归类的结果（wiki 第一幕 + 常见）
+
+**A. 回合结束型**（挂 ✅ 钩子，**最便宜**）
+
+| 机制 | wiki | 实现 = 加一段 `try_*` | 状态 |
+|---|---|---|---|
+| **Metallicize** | Lagavulin 8 | 格挡 + 层数 | ✅ 完成（§114） |
+| **Ritual** | Cultist 3 | 力量 + 层数 | **下一步**：只差"没有实例就建一个" |
+| **Combust**（自伤换伤害） | Ironclad 卡 | 需要"伤害所有人" | 中 |
+| **Regen** | 若干遗物 | 治疗 + 层数 | 便宜 |
+
+**B. 受击型**（挂 ✅ 伤害结算，但要在 `resolve_damage` **之后**开一个口）
+
+| 机制 | wiki | 缺口 |
+|---|---|---|
+| **Thorns** | 反伤 X | 需要在伤害落地后回调"防守方" |
+| **Enrage** | Gremlin Nob：你打技能他加力量 | 需要"打出牌"钩子（见 D） |
+| **Rage / Flame Barrier** | 加格挡 | 同 Thorns 的形状 |
+
+**C. 回合开始型**（挂 ✅ 钩子）
+
+| 机制 | wiki | 说明 |
+|---|---|---|
+| **Poison** | 中毒掉血 | ✅ 已有 |
+| **Draw +1 / Energy +1** | 若干 | 便宜，但要动回合流程的"发牌"步骤 |
+| **Artifact 的减免** | Sentry 1 | 挂在"施加状态前"，**另开一个口**（不是回合开始） |
+
+**D. 打出牌型**（❌ 无钩子）
+
+| 机制 | wiki | 说明 |
+|---|---|---|
+| **Enrage** | Gremlin Nob | 你每打一张技能牌，+2 力量 |
+| **Thorns 的变体**（"每打一张攻击牌"） | 若干 | 同形 |
+| **Runic Pyramid / 遗物类** | — | 大多挂在这条 |
+
+**E. 死亡型**（❌ 无钩子）
+
+| 机制 | wiki | 说明 |
+|---|---|---|
+| **Spore Cloud** | Fungi Beast：死亡时给你 2 层虚弱 | 需要"战斗员死亡"事件 |
+| **Explosive** | 爆炸怪 | 同上 |
+| **分裂**（Slime Boss） | — | 需要"生成新敌人"（容量 + ID 分配） |
+
+### 115.3 建议的顺序（每步一条钩子/一个状态，都以绿收尾）
+
+1. **Ritual**（B 类里最便宜的，仍用 ✅ 钩子）—— 一轮
+2. **受击后回调**（在 `resolve_damage` 之后开一个 `Host::after_damage_received`）→ 顺手把 **Thorns** 做完 —— 一轮
+3. **死亡钩子**（`CombatantDied` 事件 + 一个步骤）→ **Spore Cloud** —— 一轮
+4. **Artifact**（施加状态前的最后一道闸）—— 一轮。**它会让 `artifact` 从"目录有名"变成"有行为"**（§104 的账要跟着改）
+5. **打出牌钩子** → **Enrage**（Gremlin Nob 才真的像 Gremlin Nob）—— 一轮
+
+### 115.4 为什么 Ritual 这一轮没做完
+
+它比 Metallicize 多一件小事：**"身上没有 `standard.strength` 实例时要先建一个"**。
+`state.statuses_mut()` + `push_status(StatusInstance)` 都在，但 `StatusInstance` 的字段（来源、时长、可见性…）
+需要照着 `exec` 里已有的"施加状态"路径抄 —— 那是下一轮的第一件事，**不是猜**.
+
+（这一轮把"归类 + 顺序"做完，价值在于：之后每一轮都是"挑一个格子填"，不再需要重新判断哪种做法对。）
+
+### 115.5 Ritual 的落点也找到了（照抄 `exec` 的施加路径）
+
+`exec.rs:3046-3071` 就是"给某人上一个状态"的**唯一正路**：
+
+```rust
+let number = ctx.state.next_status_instance_number;       // 先取号
+let instance_id = status_instance_id(number)?;            // 私有函数
+let mut instance = StatusInstance::new(instance_id, definition_id, polarity)
+    .with_stacks(stacks).with_duration_turns(d).with_charges(c);
+combatant.push_status(instance)?;
+ctx.state.next_status_instance_number = number.saturating_add(1);   // 再自增
+```
+
+⇒ Ritual 的步骤只差一件小事：**"身上没有 `standard.strength` 时要建一个新实例"**，而建实例需要
+`status_instance_id(number)` —— 它是 `exec.rs` 的**私有函数**，且 `rd-core` 是 `no_std`（没有 `format!`）。
+
+**所以 Ritual 的第一步是一个小重构**：把"取号 + 造实例"抽成 `CombatState` 上的一个方法
+（例如 `push_new_status(definition, stacks)`），`exec.rs` 与 `host.rs` 都调它。
+**这一步比 Metallicize 多，但它是"施加状态"的唯一入口，做完之后 C 类里一大半都便宜了。**
+
+⚠️ 写在这里而不是直接动手的原因：这个重构会动到 `exec.rs` 的**唯一施加路径**，而它被 poison、虚弱、
+易伤等所有现有机制共用 —— 一旦漏掉"号没有自增"或"极性取错"，破坏面是**全部战斗**。
+下一轮做它时：**先跑一遍现有 581 条 rd-core 测试确立基线**，再改，再跑同一批。
