@@ -30,11 +30,11 @@
   // Gate 14 re-derives the tiling from these numbers and the axis list below.
   // ---------------------------------------------------------------------------------------------
   const OFF_HERO_STATUS = 12;
-  const OFF_ENEMY = 17; // 4 slots × 8
-  const OFF_ENEMY_STATUS = 49; // 4 slots × 5
-  const OFF_HAND = 69; // 10 slots × 4
-  const OFF_PILES = 109; // 5
-  const MAX_ENEMY_SLOTS = 4;
+  const OFF_ENEMY = 17; // 6 slots × 8
+  const OFF_ENEMY_STATUS = 65; // 6 slots × 5
+  const OFF_HAND = 95; // 10 slots × 4
+  const OFF_PILES = 135; // 5
+  const MAX_ENEMY_SLOTS = 6;
   const MAX_HAND_SLOTS = 10;
   const STATUS_AXES = ["str", "vuln", "weak", "dex", "frail"];
 

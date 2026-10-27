@@ -674,6 +674,8 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.rage"
             | "standard.flame_barrier"
             | "standard.combust"
+            // Boss split: a Downed trigger that spawns two (§121).
+            | "standard.split"
     )
 }
 

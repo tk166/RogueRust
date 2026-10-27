@@ -1264,6 +1264,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::GainBlock
         | NodeKind::ApplyStatus
         | NodeKind::Heal
+        // 本内核自己的第 16 种（分裂 / 召唤，`port-plan.md` §121）。
+        | NodeKind::CreateCombatant
         // W4e 的 7 种（见模块头那张表）。
         | NodeKind::SetCombatantCounter
         | NodeKind::ModifyStatusStacks
@@ -1417,6 +1419,7 @@ fn dispatch_node(
         NodeKind::GainBlock => gain_block_node(node, ctx, frame, slot, stats),
         NodeKind::ApplyStatus => apply_status_node(node, ctx, frame, slot, stats),
         NodeKind::Heal => heal_node(node, ctx, frame, slot, stats),
+    NodeKind::CreateCombatant => create_combatant_node(node, ctx, frame, slot, stats),
         NodeKind::SetCombatantCounter => set_combatant_counter_node(node, ctx, frame, slot, stats),
         NodeKind::ModifyStatusStacks => modify_status_stacks_node(node, ctx, frame, slot, stats),
         NodeKind::DrawCards => draw_cards_node(node, ctx, frame, slot, stats),
@@ -1922,6 +1925,74 @@ fn apply_status_node(
 }
 
 /// `Heal`：`Amount` → `TargetSelector` → **每个目标一条请求**（`:658-680`）。
+/// 分裂出来的战斗员在内容没给 `Health` 时用这个生命值。
+pub const DEFAULT_SPLIT_HEALTH: i32 = 1;
+
+/// `node.createCombatant`：**造一个战斗员**（分裂 / 召唤）。
+///
+/// 字段：`DefinitionId`（内容里 `Monsters` 的 id）、`Health`（可选表达式，缺省取定义的最大生命）、
+/// `TeamId`（可选字符串，缺省 `enemy`）。
+///
+/// 新实例的 id 由 `CombatState.next_combatant_number` 发号：
+/// `<definition>#<n>` —— **确定性**（同一个 seed 同一条序列），并且一眼能看出它从哪来。
+/// 容量满了走 `add_combatant` 的**响亮失败**，不截断。
+fn create_combatant_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let definition = node
+        .str_field("DefinitionId")?
+        .ok_or(IrError::Missing("DefinitionId"))?;
+    let team = node.str_field("TeamId")?.unwrap_or("enemy");
+
+    // 生命：给了就求值，没给就用定义里的最大生命（`0` = 让 state 用默认）。
+    let health = match node.node_field("Health")? {
+        Some(expr) => {
+            let context = ctx.expr_context();
+            crate::expr::eval_int(expr, &context)?
+        }
+        None => 0,
+    };
+
+    let definition_id = crate::state::CombatantDefinitionId::new(definition)?;
+    let team_id = crate::state::TeamId::new(team)?;
+
+    let number = ctx.state.next_combatant_number;
+    let mut buffer = [0u8; 96];
+    let mut len = 0usize;
+    for byte in definition.as_bytes() {
+        if len < buffer.len() - 8 {
+            buffer[len] = *byte;
+            len += 1;
+        }
+    }
+    buffer[len] = b'#';
+    len += 1;
+    {
+        // The helper wants a [u8; INSTANCE_TEXT_CAP], so hand it its own buffer and copy.
+        let mut scratch = [0u8; INSTANCE_TEXT_CAP];
+        let text = numbered_instance_text(b"", number, &mut scratch)?;
+        for byte in text.as_bytes() {
+            if len < buffer.len() {
+                buffer[len] = *byte;
+                len += 1;
+            }
+        }
+    }
+    let id_text = core::str::from_utf8(&buffer[..len]).map_err(|_| ExecError::Modifier)?;
+    let id = CombatantId::new(id_text)?;
+
+    let max_health = if health > 0 { health } else { DEFAULT_SPLIT_HEALTH };
+    let combatant = crate::state::Combatant::new(id, definition_id, team_id, max_health, max_health);
+    ctx.state.add_combatant(combatant)?;
+    ctx.state.next_combatant_number = number.saturating_add(1);
+    stats.effects = stats.effects.saturating_add(1);
+    resume_later(ctx.state, frame, slot)
+}
+
 fn heal_node(
     node: NodeRef<'_>,
     ctx: &mut ExecContext<'_>,

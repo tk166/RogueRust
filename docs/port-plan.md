@@ -7904,3 +7904,88 @@ not_handled          = 0      ← 25 个事件名**全部**有钩子
 | 聚合验收 | **17/17** |
 | 单测 | **677**（rd-core 589 / rd-run 61 / rd-wasm 27） |
 | 触发事件 | **25 / 25 有钩子**，`not_handled = 0` |
+
+---
+
+## 121. **Boss 分裂**：按 §120 的四步做完
+
+用户："请按这个顺序实现一下吧"（数据源 → 动作 → 上限 → 内容节点）。
+
+### 121.1 第一步：敌人名单**改成派生的**
+
+```rust
+fn enemy_roster(&self) -> Vec<CombatantId>   // 每次问都从 state.combatants() 读
+```
+
+`refresh_intents` / `compute_observation` / `compute_actions` / `alive_enemy_slots` 全部改成读它。
+原先三处都读 `plan.enemies` —— 那是 `Box::leak` 的**开局快照**，一旦有人中途加入战斗，它就是错的。
+
+**这一步不动 ABI**，27 个 wasm 测试全绿即为证据。
+
+### 121.2 第二步：动作跟着派生
+
+`compute_actions` 的目标原先从 `plan.enemies.get(slot)` 取（一个带 `.id` 的结构），现在从 roster 取
+（已经是 `CombatantId`）。**新敌人从此可被选为目标。**
+
+### 121.3 第三步：上限 4 → **6**，并把偏移量两侧同步
+
+`MAX_ENEMY_SLOTS` 是"放大就变语义"的常量：它决定 `OFF_ENEMY_STATUS`(65) / `OFF_HAND`(95) /
+`OFF_PILES`(135) / `OBS_LEN`(**148**)。三处必须一起动：
+
+| 位置 | 改了什么 |
+|---|---|
+| `kernel/rd-wasm/src/lib.rs` | 常量 4 → 6（偏移量本来就是**表达式**，自动跟着走） |
+| `web/ui_render.js` | `OFF_ENEMY_STATUS` 49→65、`OFF_HAND` 69→95、`OFF_PILES` 109→135、`MAX_ENEMY_SLOTS` 4→6 |
+| `web/smoke.mjs` | 原先写死 `OFF_HAND = 69` ⇒ 改成**从布局常量推**（`OFF_ENEMY + 6*8 + 6*5`） |
+| `web/browser_test.mjs` | 原先写死 `122` ⇒ 改成 `ex.rd_env_observe_len()` |
+
+**第 14 道闸门（`smoke`）自己抓到了漂移**：它把每个块的结尾重新推一遍（`offsets tile to 140/148`），
+页面与 Rust 一旦不同步就红。这就是当初把它写成"重新推导"而不是"抄数字"的回报。
+
+另外补了一个导出 **`rd_env_enemy_overflow()`**：多出来的敌人**报出来**，不静默丢弃 —— 向量装不下是
+ABI 的天花板，但"装不下"这件事不能被藏起来。
+
+### 121.4 第四步：`node.createCombatant`
+
+参考实现没有这个词，是本内核的**第 16 种节点**：
+
+```json
+{ "kind": "node.createCombatant",
+  "value": { "DefinitionId": "acid_slime_m", "TeamId": "enemy",
+             "Health": {"kind":"const","value":{"Value":10}} } }
+```
+
+* 新实例 id = `<definition>#<n>`，`n` 来自 `CombatState.next_combatant_number` —— **确定性**，而且一眼
+  看得出它从哪来；
+* 容量满了走 `add_combatant` 的**响亮失败**；
+* 内容的用法是**一条 `Downed` 触发器**（复用 §116 补的死亡钩子）：
+
+```
+standard.split = { Downed → sequence(createCombatant(acid_slime_m,10) × 2) }
+```
+
+挂在 `slime_boss` 上 ⇒ Boss 一死就分成两只小史莱姆。
+
+### 121.5 判据
+
+`a_split_spawns_two_combatants_when_the_boss_dies`（rd-core，全量镜像）：
+给敌人挂 `standard.split`，一记 12 点打死它，`try_resolve_pending_queues` 之后
+**战斗员数量 +2**，两只都是 `acid_slime_m`，且 id 里带 `#`。
+
+### 121.6 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | 677 → **678**（rd-core 590 / rd-run 61 / rd-wasm 27） |
+| 观察向量 | 122 → **148** slot（敌人槽 4 → 6） |
+| 内容状态 | 14 → **15**（`standard.split`） |
+| IR 节点 | 15 → **16**（第一个**自定义**节点） |
+| 镜像 | full 19,340 B / core 16,452 B（重钉） |
+
+### 121.7 仍然没有的
+
+* 分裂出来的敌人**什么时候行动**（现在是加进回合序末尾，同一轮不会立刻动 —— 与 wiki 的"下一回合"一致，
+  但没写测试钉住）；
+* Boss 的**相位**（半血换招式）仍然没有；
+* `rd_env_enemy_overflow()` 还没有页面提示（导出有了，UI 没接）。

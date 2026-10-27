@@ -149,7 +149,13 @@ const ENERGY: i32 = 3;
 // The observation vector (`docs/spec/env-abi.md` §4) — 12 + 5 + 4×8 + 4×5 + 10×4 + 5 + 8 = 122
 // =============================================================================================
 
-const MAX_ENEMY_SLOTS: usize = 4;
+// Six, not four: the Slime Boss splits (1 -> 2), and a split plus an add would overflow four.
+// This is a **semantic** constant -- it moves `OFF_ENEMY_STATUS`, `OFF_HAND`, `OFF_PILES` and
+// `OBS_LEN` with it, so `web/ui_render.js` has to move in step (`smoke.mjs` checks the tiling).
+const MAX_ENEMY_SLOTS: usize = 6;
+
+/// The team the hero is on; everything else is an enemy (`env-abi.md` §10).
+const PLAYER_TEAM: &str = "player";
 const MAX_HAND_SLOTS: usize = 10;
 /// The five status axes the ABI fixes, in ABI order.
 const STATUS_AXES: [&str; 5] = [
@@ -590,9 +596,10 @@ impl Session {
     fn refresh_intents(&mut self) {
         let content = self.content;
         let round = self.state.current_round;
-        let mut intents = Vec::with_capacity(self.plan.enemies.len());
-        for slot in 0..self.plan.enemies.len().min(MAX_ENEMY_SLOTS) {
-            let raw_id = self.plan.enemies[slot].id;
+        let roster = self.enemy_roster();
+        let mut intents = Vec::with_capacity(roster.len());
+        for slot in 0..roster.len().min(MAX_ENEMY_SLOTS) {
+            let raw_id = roster[slot].as_str();
             let Ok(id) = CombatantId::new(raw_id) else {
                 intents.push(Intent::unknown("combatant id 不合法"));
                 continue;
@@ -771,16 +778,46 @@ impl Session {
         total
     }
 
-    /// Wall-slot count of enemies that are still alive (their slots never move — `env-abi.md` §10).
+    /// **The enemy roster, derived from the state on every ask.**
+    ///
+    /// Before this it was `plan.enemies` -- the encounter's opening list, `Box::leak`ed at setup.
+    /// That is a *snapshot*, and it is wrong the moment something adds a combatant mid-fight (a
+    /// split). The rule this project keeps relearning (`port-plan.md` §8): **a cached derivation
+    /// always looks like "somewhere forgot to sync"**. So: read the fight, not the plan.
+    ///
+    /// Order = the order the state keeps them in (turn order), filtered to the enemy team and
+    /// capped at what the ABI can express. The cap is **reported**, not hidden: see
+    /// [`Self::enemy_roster_truncated`].
+    fn enemy_roster(&self) -> Vec<CombatantId> {
+        let mut out = Vec::new();
+        for combatant in self.state.combatants() {
+            if Some(combatant.id) == self.hero_id() {
+                continue;
+            }
+            if combatant.team_id.as_str() == PLAYER_TEAM {
+                continue;
+            }
+            out.push(combatant.id);
+        }
+        out
+    }
+
+    /// Did the fight have more enemies than the observation can show?
+    ///
+    /// `env-abi.md` §10 fixes four wall slots. Silently dropping the fifth would be exactly the
+    /// "tool reports success" shape this project is trying to stamp out, so the overflow is
+    /// observable (`rd_env_enemy_overflow`) even though the vector cannot carry it.
+    fn enemy_roster_truncated(&self) -> bool {
+        self.enemy_roster().len() > MAX_ENEMY_SLOTS
+    }
+
+    /// Wall-slot indices of enemies that are still alive (their slots never move — `env-abi.md` §10).
     fn alive_enemy_slots(&self) -> Vec<usize> {
         let mut out = Vec::new();
-        for (slot_index, plan_enemy) in self.plan.enemies.iter().enumerate() {
-            if slot_index >= MAX_ENEMY_SLOTS {
-                break;
-            }
-            let alive = CombatantId::new(plan_enemy.id)
-                .ok()
-                .and_then(|id| self.state.combatant(&id))
+        for (slot_index, id) in self.enemy_roster().iter().take(MAX_ENEMY_SLOTS).enumerate() {
+            let alive = self
+                .state
+                .combatant(id)
                 .map(|c| c.lifecycle_state == CombatantLifecycleState::Alive)
                 .unwrap_or(false);
             if alive {
@@ -794,6 +831,7 @@ impl Session {
     /// value — "0 block", "0 stacks" — so it cannot mean "absent").
     fn compute_observation(&self) -> Vec<i32> {
         let mut obs = vec![-1i32; OBS_LEN];
+        let roster = self.enemy_roster();
 
         let hero = self.hero_id().and_then(|id| self.state.combatant(&id).copied());
         obs[H_ROUND] = self.state.current_round;
@@ -832,7 +870,7 @@ impl Session {
             })
             .unwrap_or(-1);
         obs[H_HAND_COUNT] = self.hand_len() as i32;
-        obs[H_ENEMY_COUNT] = self.plan.enemies.len() as i32;
+        obs[H_ENEMY_COUNT] = roster.len().min(MAX_ENEMY_SLOTS) as i32;
 
         // Hero status axes.
         if let Some(hero) = hero.as_ref() {
@@ -848,12 +886,10 @@ impl Session {
         // Enemies ×4, eight slots each.
         for slot_index in 0..MAX_ENEMY_SLOTS {
             let base = OFF_ENEMY + slot_index * 8;
-            let Some(plan_enemy) = self.plan.enemies.get(slot_index) else {
+            let Some(enemy_id) = roster.get(slot_index) else {
                 continue; // already `-1`
             };
-            let combatant = CombatantId::new(plan_enemy.id)
-                .ok()
-                .and_then(|id| self.state.combatant(&id));
+            let combatant = self.state.combatant(enemy_id);
             let Some(combatant) = combatant else {
                 continue;
             };
@@ -949,6 +985,7 @@ impl Session {
         };
 
         let alive = self.alive_enemy_slots();
+        let roster = self.enemy_roster();
         let hero_is_active = self.state.active_combatant_id.as_ref() == Some(&hero);
         for (hand_index, _def_id) in self.hand_defs.iter().enumerate() {
             let Some(instance_id) = self
@@ -963,8 +1000,8 @@ impl Session {
             // pass a real one so a target-requiring validator sees what the player would do.
             let target = alive
                 .first()
-                .and_then(|slot_index| self.plan.enemies.get(*slot_index))
-                .and_then(|enemy| CombatantId::new(enemy.id).ok());
+                .and_then(|slot_index| roster.get(*slot_index))
+                .copied();
             let request = rd_core::play::PlayRequest {
                 source: hero,
                 card: instance_id,
@@ -1242,6 +1279,19 @@ pub extern "C" fn rd_env_reset() -> i32 {
             }
             -3
         }
+    }
+}
+
+/// Did the fight hold more enemies than the observation can show?
+///
+/// `0` = no, `1` = yes, `-1` = no session. The vector cannot grow past `MAX_ENEMY_SLOTS` without
+/// moving every offset after it, so the overflow is **reported** rather than silently dropped --
+/// the same rule this project applies to every other capacity.
+#[no_mangle]
+pub extern "C" fn rd_env_enemy_overflow() -> i32 {
+    match ensure_session() {
+        Ok(session) => i32::from(session.enemy_roster_truncated()),
+        Err(_) => -1,
     }
 }
 

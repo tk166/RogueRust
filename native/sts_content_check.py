@@ -81,7 +81,7 @@ INV_COUNTS = {
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     "encounters": 5,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
-    "statuses": 14,       # inv:§10 the ones this subset actually needs
+    "statuses": 15,       # inv:§10 the ones this subset actually needs
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -235,6 +235,8 @@ INV_STATUSES = {
     "standard.rage": [],
     "standard.flame_barrier": [],
     "standard.combust": [],
+    # Boss split: a Downed trigger that spawns two (port-plan.md §121).
+    "standard.split": [],
     "standard.strength": [("DamageDealt", "AddPerStack", 1, 100, "Direct")],
     "standard.vulnerable": [("DamageReceived", "ScalePercent", 150, 300, "Direct")],
     "standard.weak": [("DamageDealt", "ScalePercent", 75, 200, "Direct")],
@@ -380,6 +382,8 @@ def program_facts(root):
         elif kind == "node.modifyStatusStacks":
             facts.append(("modify", body["StatusDefinitionId"]["value"],
                           amount(body["Delta"]), tgt(body["TargetSelector"])))
+        elif kind == "node.createCombatant":
+            facts.append(("spawn", body["DefinitionId"], amount(body["Health"]) if body.get("Health") else 0))
         elif kind == "node.conditional":
             # A conditional states the facts of **both** branches, tagged with the condition, so the
             # inventory cannot hide a branch behind an `if` (port-plan.md §118).
@@ -564,14 +568,15 @@ def check_statuses(doc):
                      % row.get("UsesStacks"))
         elif sid in ("standard.thorns", "standard.spore_cloud", "standard.enrage",
                      "standard.regen", "standard.rage", "standard.flame_barrier",
-                     "standard.combust"):
+                     "standard.combust", "standard.split"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
                         "standard.regen": ["TurnEnded"],
                         "standard.rage": ["CardPlayed"],
                         "standard.flame_barrier": ["DamageTaken"],
-                        "standard.combust": ["TurnEnded"]}[sid]
+                        "standard.combust": ["TurnEnded"],
+                        "standard.split": ["Downed"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

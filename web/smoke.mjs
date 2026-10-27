@@ -98,7 +98,10 @@ const OBS_LEN = ex.rd_env_observe_len();
 const obs = () => new Int32Array(ex.memory.buffer, ex.rd_env_observe_buf(), OBS_LEN);
 const EMPTY = -1;
 const H = { HP: 4, HP_MAX: 5, HAND: 10, ENEMIES: 11 };
-const OFF_ENEMY = 17, OFF_HAND = 69;
+// Derived, not remembered: MAX_ENEMY_SLOTS moved 4 -> 6 (a split needs the room), and every
+// offset after it moved with it. Reading it off the page's own declaration is what keeps this
+// test from being a second copy of the layout.
+const OFF_ENEMY = 17, OFF_HAND = OFF_ENEMY + 6 * 8 + 6 * 5;
 
 function text(lenOf, intoOf, index) {
   const n = lenOf(index);

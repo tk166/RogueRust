@@ -4542,6 +4542,50 @@ mod tests {
     }
 
     #[test]
+    fn a_split_spawns_two_combatants_when_the_boss_dies() {
+        // Wiki: the Slime Boss splits into two smaller slimes when it dies. The spawn node is the
+        // kernel's own (`node.createCombatant`, `port-plan.md` §121); the trigger is a `Downed`
+        // status, so this also proves the death hook reaches a *spawning* program.
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "enemy_b", status("st_split", "standard.split", 1));
+        let before = state.combatants().len();
+
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("enemy_b"), 12, false).expect("the kill");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+
+        assert_eq!(
+            state.combatants().len(),
+            before + 2,
+            "the split must add exactly two combatants"
+        );
+        // ...and they are alive enemies with the definition the content named.
+        let spawned: Vec<&str> = state
+            .combatants()
+            .iter()
+            .filter(|c| c.definition_id.as_str() == "acid_slime_m")
+            .map(|c| c.id.as_str())
+            .collect();
+        assert_eq!(spawned.len(), 2, "two acid_slime_m: {spawned:?}");
+        for id in spawned {
+            assert!(
+                id.contains('#'),
+                "the spawned id names its definition and its number ({id})"
+            );
+        }
+    }
+
+    #[test]
     fn regen_heals_at_the_end_of_the_turn() {
         // Wiki: Regen N = "at the end of your turn, heal N". Content trigger on `TurnEnded`.
         let blob = std::fs::read(concat!(

@@ -2846,6 +2846,11 @@ pub struct CombatState {
     pub turn_phase: CombatTurnPhase,
     pub active_combatant_id: Option<CombatantId>,
     pub next_status_instance_number: i32,
+    /// 下一个 `node.createCombatant` 造出来的战斗员的编号（分裂/召唤）。
+    ///
+    /// 单独一个计数器而不是复用别的：实例号进哈希、进快照，混用会让"同一局面"因为
+    /// 之前造过几张牌而分叉。
+    pub next_combatant_number: i32,
     pub next_card_instance_number: i32,
     pub next_effect_chain_number: i64,
     pub next_program_execution_id: i64,
@@ -2973,6 +2978,7 @@ impl Empty for CombatState {
         turn_phase: CombatTurnPhase::WaitingToStartTurn,
         active_combatant_id: None,
         next_status_instance_number: 0,
+            next_combatant_number: 0,
         next_card_instance_number: 0,
         next_effect_chain_number: 0,
         next_program_execution_id: 0,
@@ -3076,6 +3082,7 @@ impl CombatState {
             turn_phase: CombatTurnPhase::WaitingToStartTurn,
             active_combatant_id: None,
             next_status_instance_number: 0,
+            next_combatant_number: 0,
             next_card_instance_number: 0,
             next_effect_chain_number: 0,
             next_program_execution_id: 0,

@@ -853,6 +853,67 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.split",
+      "PackageId": "sts",
+      "NameKey": "Split",
+      "DescriptionKey": "When this combatant dies, it splits into two smaller ones.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "split"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "Downed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.createCombatant",
+                    "value": {
+                      "DefinitionId": "acid_slime_m",
+                      "TeamId": "enemy",
+                      "Health": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 10
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "kind": "node.createCombatant",
+                    "value": {
+                      "DefinitionId": "acid_slime_m",
+                      "TeamId": "enemy",
+                      "Health": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 10
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -3135,7 +3196,14 @@
               "value": "slime_boss.slam"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.split"
+              },
+              "Stacks": 1
+            }
+          ],
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Slime Boss"
@@ -3512,11 +3580,18 @@
           "value": "slime_boss.slam"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.split"
+          },
+          "Stacks": 1
+        }
+      ],
       "IntentRules": [],
       "Tier": "Boss",
       "InvRef": "inv:§4.3",
-      "AiNote": "固定循环 Goop Spray → Preparing → Slam。⚠️ **一处降级，且是本 Boss 的身份所在**：原作在 HP ≤ 50% 时**分裂**成 Acid Slime (L) + Spike Slime (L)，各带分裂瞬间的当前 HP。内核没有「战斗中途生成敌人」的能力（`CombatState` 的战斗员集合在建战斗时定下），所以这一版**不会分裂**。⇒ 它是一场「会塞 Slimed、会砸 35 的大怪」，不是等价的 Slime Boss。"
+      "AiNote": " ⚠️ wiki 的 Slime Boss 分裂成两只；本内容用 `standard.split`的 Downed 触发器 + `node.createCombatant` 实现。port-plan.md §121。"
     }
   ],
   "EncounterTables": {

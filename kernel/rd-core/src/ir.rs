@@ -110,6 +110,12 @@ pub enum NodeKind {
     GainResource,
     /// `node.loseResource`。
     LoseResource,
+    /// `node.createCombatant` —— **造一个战斗员**（Boss 分裂、召唤）。
+    ///
+    /// 不是参考实现的节点（它没有这个词），是本内核为了"分裂"加的第一个**自定义**节点。
+    /// `port-plan.md` §121 说明了为什么它必须存在：内核早就能加战斗员（`add_combatant`），
+    /// 但内容没有任何办法说"加一个"。
+    CreateCombatant,
 }
 
 impl NodeKind {
@@ -132,13 +138,14 @@ impl NodeKind {
             NodeKind::MoveCardToZone => "node.moveCardToZone",
             NodeKind::GainResource => "node.gainResource",
             NodeKind::LoseResource => "node.loseResource",
+            NodeKind::CreateCombatant => "node.createCombatant",
         }
     }
 
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 15] = [
+        const ALL: [NodeKind; 16] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -154,6 +161,8 @@ impl NodeKind {
             NodeKind::MoveCardToZone,
             NodeKind::GainResource,
             NodeKind::LoseResource,
+            // 本内核自己的第 16 种（分裂 / 召唤）。
+            NodeKind::CreateCombatant,
         ];
         let mut i = 0;
         while i < ALL.len() {

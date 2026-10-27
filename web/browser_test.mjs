@@ -176,7 +176,7 @@ const report = await evaluate(`(async () => {
   const buf = ex.rd_env_scratch_buf();
   const cell = (index) => {
     ex.rd_env_observe_into(buf);
-    return new Int32Array(ex.memory.buffer, buf, 122)[index];
+    return new Int32Array(ex.memory.buffer, buf, ex.rd_env_observe_len())[index];
   };
 
   // (a) the blessing is a choice, with a name rather than an id
