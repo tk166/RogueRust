@@ -197,6 +197,20 @@ impl IntentKind {
     }
 }
 
+/// 一条 `intent.*Of` / `intent.not` 最多几个子条件。实测镜像里 0 条组合条件 ⇒ 取 8 余量。
+pub const MAX_CONDITION_CHILDREN: usize = 8;
+
+/// 这个战斗员是否戴着条件里点名的状态（层数 >= `MinStacks`，缺省 1）。
+fn carries_status(combatant: &crate::state::Combatant, condition: NodeRef<'_>) -> bool {
+    let Ok(Some(status_id)) = condition.str_field("Status") else {
+        return false;
+    };
+    let min_stacks = condition.int_field("MinStacks").ok().flatten().unwrap_or(1);
+    combatant.statuses().iter().any(|status| {
+        status.definition_id.as_str() == status_id && status.stacks >= min_stacks
+    })
+}
+
 /// 比较算子（参考的 `ComparisonOperator`，`EnemyIntentRules.cs:26-35`）。
 ///
 /// 字符串拼法来自 `System.Text.Json` 的枚举序列化，**六个名字逐字相同**。
@@ -338,12 +352,9 @@ impl ConditionKind {
     /// ⇒ 字段名不可测量 ⇒ 实现它等于发明一个求值器。
     #[must_use]
     fn is_supported(self) -> bool {
-        // `healthPercent` is the second one implemented -- "the boss changes its move at half HP"
-        // needs it (`port-plan.md` §123).
-        matches!(
-            self,
-            ConditionKind::SelfHasCounter | ConditionKind::HealthPercent
-        )
+        // Everything except `opponentCardsPlayed`, which needs per-turn card statistics the kernel
+        // does not track (`port-plan.md` §124).
+        !matches!(self, ConditionKind::OpponentCardsPlayed)
     }
 }
 
@@ -561,7 +572,7 @@ pub fn select_action<'a>(
                 .node_field("Condition")?
                 .ok_or(IntentError::Missing("Condition"))?;
             // 求不出来就**立刻**响亮失败（不是"当作不匹配"，见函数文档最后一段）。
-            if condition_matches(state, actor, condition)? {
+            if condition_matches(state, content, actor, condition)? {
                 let action_id = rule.str_field("Action")?.ok_or(IntentError::Missing("Action"))?;
                 let reason = ChoiceReason::Rule {
                     index: rank as u16,
@@ -620,6 +631,7 @@ pub fn select_action<'a>(
 /// * `Op` 不认识 ⇒ 抛（`:34`）。
 pub fn condition_matches(
     state: &CombatState,
+    content: &Content<'_>,
     actor: &CombatantId,
     condition: NodeRef<'_>,
 ) -> Result<bool, IntentError> {
@@ -663,7 +675,93 @@ pub fn condition_matches(
             let ratio = if max > 0 { current * 100 / max } else { 0 };
             Ok(op.apply(ratio, percent))
         }
-        // 其余 8 种一律响亮拒绝（偏离 D3），**不**当作"不匹配"。
+        // `intent.round`：当前轮次（`Op, Round`）。
+        ConditionKind::Round => {
+            let op = compare_op(condition)?;
+            let round = condition
+                .int_field("Round")?
+                .ok_or(IntentError::Missing("Round"))?;
+            Ok(op.apply(state.current_round, round))
+        }
+        // `intent.selfHasStatus`：出手者戴着 `Status`，层数 >= `MinStacks`（缺省 1）。
+        ConditionKind::SelfHasStatus => {
+            let Some(combatant) = state.combatant(actor) else {
+                return Ok(false);
+            };
+            Ok(carries_status(combatant, condition))
+        }
+        // `intent.opponentHasStatus`：**对手阵营**里有人戴着它（出手者是敌人时，对手就是英雄）。
+        ConditionKind::OpponentHasStatus => {
+            let Some(me) = state.combatant(actor) else {
+                return Ok(false);
+            };
+            let team = me.team_id;
+            let mut found = false;
+            for other in state.combatants() {
+                if other.team_id == team || !is_alive(state, &other.id) {
+                    continue;
+                }
+                if carries_status(other, condition) {
+                    found = true;
+                    break;
+                }
+            }
+            Ok(found)
+        }
+        // `intent.selfResource`：出手者的某个资源池（`Resource, Op, Value`）。
+        ConditionKind::SelfResource => {
+            let resource = condition
+                .str_field("Resource")?
+                .ok_or(IntentError::Missing("Resource"))?;
+            let op = compare_op(condition)?;
+            let value = condition
+                .int_field("Value")?
+                .ok_or(IntentError::Missing("Value"))?;
+            let Some(combatant) = state.combatant(actor) else {
+                return Ok(false);
+            };
+            let current = combatant
+                .resources()
+                .iter()
+                .find(|entry| entry.key.as_str() == resource)
+                .map_or(0, |entry| entry.pool.current);
+            Ok(op.apply(current, value))
+        }
+        // `intent.allOf`：子条件全真；**空列表 ⇒ true**（空合取）。
+        ConditionKind::AllOf => {
+            let mut ids = [0u16; MAX_CONDITION_CHILDREN];
+            let count = condition.term_list_field("Conditions", &mut ids)?;
+            let mut all = true;
+            for id in ids.iter().take(count) {
+                if !condition_matches(state, content, actor, NodeRef::new(content, *id))? {
+                    all = false;
+                    break;
+                }
+            }
+            Ok(all)
+        }
+        // `intent.anyOf`：子条件任一真；**空列表 ⇒ false**。
+        ConditionKind::AnyOf => {
+            let mut ids = [0u16; MAX_CONDITION_CHILDREN];
+            let count = condition.term_list_field("Conditions", &mut ids)?;
+            let mut any = false;
+            for id in ids.iter().take(count) {
+                if condition_matches(state, content, actor, NodeRef::new(content, *id))? {
+                    any = true;
+                    break;
+                }
+            }
+            Ok(any)
+        }
+        // `intent.not`：内层条件取反。
+        ConditionKind::Not => {
+            let inner = condition
+                .node_field("Condition")?
+                .ok_or(IntentError::Missing("Condition"))?;
+            Ok(!condition_matches(state, content, actor, inner)?)
+        }
+        // 剩下的 `opponentCardsPlayed` 要**每回合出牌统计**（`CardPlayTurnStats` 整块未移植）⇒
+        // 响亮拒绝，**不**当作"不匹配"。
         unsupported => Err(IntentError::UnsupportedCondition(unsupported)),
     }
 }
@@ -1198,10 +1296,10 @@ mod tests {
         );
     }
 
-    /// **The boss changes its move at half health** -- the one thing `intent.healthPercent` was
-    /// implemented for (`port-plan.md` §123).
+    /// **The boss changes its move at half health, from round 2 on.** The rule is a combinator
+    /// (`intent.allOf` over `healthPercent` and `round`), so the child term list is exercised too.
     #[test]
-    fn a_health_percent_rule_switches_the_boss_move_at_half_health() {
+    fn a_combinator_rule_switches_the_boss_move() {
         let blob = std::fs::read(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
@@ -1215,26 +1313,37 @@ mod tests {
         {
             let combatant = state.combatant_mut(&owner).expect("the boss");
             combatant.health_max = 140;
-            combatant.health_current = 140;
+            combatant.health_current = 70; // exactly 50%
         }
-        let full = select_action(&state, &content, at, &owner, 1)
+        state.current_round = 1;
+        let round_one = select_action(&state, &content, at, &owner, 1)
             .expect("select")
             .expect("an action");
         assert_ne!(
-            full.action_id.to_string(),
+            round_one.action_id.to_string(),
             "slime_boss.slam".to_string(),
-            "at full health the phase rule must not fire"
+            "round 1 must not fire the phase rule yet"
         );
 
-        // 70/140 = exactly 50% -> `LessOrEqual 50` matches.
-        state.combatant_mut(&owner).expect("the boss").health_current = 70;
-        let half = select_action(&state, &content, at, &owner, 1)
+        state.current_round = 2;
+        let round_two = select_action(&state, &content, at, &owner, 2)
             .expect("select")
             .expect("an action");
         assert_eq!(
-            half.action_id.to_string(),
+            round_two.action_id.to_string(),
             "slime_boss.slam".to_string(),
-            "at half health the boss switches to its phase move"
+            "half health from round 2 on => the phase move"
+        );
+
+        state.combatant_mut(&owner).expect("the boss").health_current = 140;
+        state.current_round = 5;
+        let healthy = select_action(&state, &content, at, &owner, 5)
+            .expect("select")
+            .expect("an action");
+        assert_ne!(
+            healthy.action_id.to_string(),
+            "slime_boss.slam".to_string(),
+            "a healthy boss must not slam"
         );
     }
 
@@ -1658,10 +1767,43 @@ mod tests {
             .into_iter()
             .filter(|kind| kind.is_supported())
             .collect();
+        // 10 种里 **9 种**实现；只剩 `opponentCardsPlayed`（要每回合出牌统计）。
         assert_eq!(
             supported,
-            vec![ConditionKind::HealthPercent, ConditionKind::SelfHasCounter]
+            vec![
+                ConditionKind::HealthPercent,
+                ConditionKind::Round,
+                ConditionKind::SelfHasStatus,
+                ConditionKind::OpponentHasStatus,
+                ConditionKind::SelfHasCounter,
+                ConditionKind::SelfResource,
+                ConditionKind::AllOf,
+                ConditionKind::AnyOf,
+                ConditionKind::Not,
+            ]
         );
+    }
+
+    /// `CompareOp::apply` is the shared arithmetic behind **nine** of the ten condition kinds, so it
+    /// gets its own table (`port-plan.md` §124).
+    #[test]
+    fn every_comparison_operator_orders_its_operands_correctly() {
+        for (op, left, right, want) in [
+            (CompareOp::Equal, 3, 3, true),
+            (CompareOp::Equal, 3, 4, false),
+            (CompareOp::NotEqual, 3, 4, true),
+            (CompareOp::NotEqual, 3, 3, false),
+            (CompareOp::Less, 3, 4, true),
+            (CompareOp::Less, 4, 4, false),
+            (CompareOp::LessOrEqual, 4, 4, true),
+            (CompareOp::LessOrEqual, 5, 4, false),
+            (CompareOp::Greater, 5, 4, true),
+            (CompareOp::Greater, 4, 4, false),
+            (CompareOp::GreaterOrEqual, 4, 4, true),
+            (CompareOp::GreaterOrEqual, 3, 4, false),
+        ] {
+            assert_eq!(op.apply(left, right), want, "{op:?} {left} vs {right}");
+        }
     }
 
     #[test]

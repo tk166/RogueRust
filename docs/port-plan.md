@@ -8123,3 +8123,59 @@ id 匹配都是全等比较**：
 * 意图条件还有 **8 种**没实现（`round` / `selfHasStatus` / `opponentHasStatus` / …）；
 * 分裂出来的敌人**意图栏**在页面上是否显示正确，只有内核判据，没有浏览器判据；
 * 第二幕 Boss 与幕间内容差异（老账）。
+
+---
+
+## 124. 意图条件：**10 种里 9 种实现**
+
+### 124.1 这一轮补的 7 种
+
+| kind | 字段 | 判据 |
+|---|---|---|
+| `intent.round` | `Op, Round` | 与 `state.current_round` 比 |
+| `intent.selfHasStatus` | `Status, MinStacks`(缺省 1) | 出手者身上有它且层数够 |
+| `intent.opponentHasStatus` | 同上 | **对手阵营**里有人戴着（出手者是敌人时，对手就是英雄） |
+| `intent.selfResource` | `Resource, Op, Value` | 出手者该资源池的当前值 |
+| `intent.allOf` | `Conditions[]` | 全真；**空列表 ⇒ true** |
+| `intent.anyOf` | `Conditions[]` | 任一真；**空列表 ⇒ false** |
+| `intent.not` | `Condition` | 内层取反 |
+
+`is_supported` 现在写成 `!matches!(self, OpponentCardsPlayed)` —— 剩下的那一种要**每回合出牌统计**
+（`CardPlayTurnStats` 整块没移植），照旧**响亮拒绝**。
+
+**一处签名改动**：`condition_matches` 多了 `content` 参数 —— 组合条件要顺着 `Conditions` 的**子 term**
+递归，而 term 是从镜像里读的。两个调用点（`select_action` 与它自己）都改了一行。
+
+### 124.2 判据
+
+* `every_comparison_operator_orders_its_operands_correctly` —— 六种 `CompareOp` × 12 组，**九种条件共用**
+  这个算术，所以它单独钉一张表；
+* `a_combinator_rule_switches_the_boss_move` —— **真的**用组合条件：内容里 `slime_boss` 的相位规则改成
+  `allOf(healthPercent <= 50, round >= 2)`：
+  * 半血 + 第 1 轮 ⇒ **不 slam**
+  * 半血 + 第 2 轮 ⇒ **slam**
+  * 满血 + 第 5 轮 ⇒ **不 slam**（`allOf` 因为血那半为假）
+
+  这一条同时覆盖了 `allOf` 的**子 term 列表**、`round`、`healthPercent` 三种新代码。
+
+### 124.3 诚实的一条
+
+`selfHasStatus` / `opponentHasStatus` / `selfResource` / `anyOf` / `not` 这五种**只有编译级与
+`is_supported` 级覆盖**，没有行为判据 —— 因为内容里还没有一条规则用到它们，而给它们造规则就要往怪物身上
+加"永不触发的测试规则"（内容污染）。**等有内容真的用到时再补判据**，这一条记在这里而不是假装已覆盖。
+
+### 124.4 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | 682 → **683**（rd-core 595 / rd-run 61 / rd-wasm 27） |
+| 意图条件 | 支持 2 → **9** 种（10 种里只剩 `opponentCardsPlayed`） |
+| 镜像 | full / core 重钉 |
+
+### 124.5 一个操作教训
+
+这一轮我把 `git checkout -- intent.rs` 当"撤销这次编辑"用了，**结果连未提交的七个臂一起丢了**，
+只好重跑一遍补丁。**`git checkout` 撤销的是整份文件，不是最后一次编辑** —— 要撤销局部就用反向补丁。
+（同一类事这是第三次：`Copy-Item` 恢复源文件会连 mtime 一起恢复、`git show > file` 写 UTF-16，现在是
+`checkout` 吃掉未提交改动。）

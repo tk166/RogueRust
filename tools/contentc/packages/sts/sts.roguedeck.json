@@ -3327,10 +3327,24 @@
           "IntentRules": [
             {
               "Condition": {
-                "kind": "intent.healthPercent",
+                "kind": "intent.allOf",
                 "value": {
-                  "Op": "LessOrEqual",
-                  "Percent": 50
+                  "Conditions": [
+                    {
+                      "kind": "intent.healthPercent",
+                      "value": {
+                        "Op": "LessOrEqual",
+                        "Percent": 50
+                      }
+                    },
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "GreaterOrEqual",
+                        "Round": 2
+                      }
+                    }
+                  ]
                 }
               },
               "Action": {
@@ -3730,10 +3744,24 @@
       "IntentRules": [
         {
           "Condition": {
-            "kind": "intent.healthPercent",
+            "kind": "intent.allOf",
             "value": {
-              "Op": "LessOrEqual",
-              "Percent": 50
+              "Conditions": [
+                {
+                  "kind": "intent.healthPercent",
+                  "value": {
+                    "Op": "LessOrEqual",
+                    "Percent": 50
+                  }
+                },
+                {
+                  "kind": "intent.round",
+                  "value": {
+                    "Op": "GreaterOrEqual",
+                    "Round": 2
+                  }
+                }
+              ]
             }
           },
           "Action": {
@@ -3744,7 +3772,7 @@
       ],
       "Tier": "Boss",
       "InvRef": "inv:§4.3",
-      "AiNote": " ⚠️ 相位写明：wiki 的 Slime Boss 半血后会换招；本内容用 `intent.healthPercent <= 50` → `slam` 表达（port-plan.md §123）。"
+      "AiNote": " ⚠️ 相位写明：半血**且**从第 2 轮起才换招（`intent.allOf` + `healthPercent` + `round`，port-plan.md §124）。"
     }
   ],
   "EncounterTables": {
