@@ -367,7 +367,11 @@ pub enum TriggerEvent {
     StatusMerged,
     /// `StatusRemoved` —— 一条实例没了。
     StatusRemoved,
-    /// 参考有、但今天的 `TurnHost` 没有对应钩子的 13 个成员之一。
+    /// `StatusStacksChanged` —— 某人的某条状态层数变了。
+    StatusStacksChanged,
+    /// `StatusApplicationPrevented` —— Artifact 挡掉一次 debuff。
+    StatusApplicationPrevented,
+    /// 参考有、但今天的 `TurnHost` 没有对应钩子的 11 个成员之一。
     NotHandled,
 }
 
@@ -388,10 +392,12 @@ impl TriggerEvent {
             "StatusApplied" => Some(TriggerEvent::StatusApplied),
             "StatusMerged" => Some(TriggerEvent::StatusMerged),
             "StatusRemoved" => Some(TriggerEvent::StatusRemoved),
+            "StatusStacksChanged" => Some(TriggerEvent::StatusStacksChanged),
+            "StatusApplicationPrevented" => Some(TriggerEvent::StatusApplicationPrevented),
             // ── 参考有、本内核今天没有钩子接的 20 个（按 `EffectVocabulary.cs` 的声明序）──
             "Healed" | "StatusExpired"
             | "ResourceGained" | "StatusRemoved"
-            | "StatusStacksChanged" | "BlockGained" | "CardsDrawn"
+            | "BlockGained" | "CardsDrawn"
             | "CardMovedToZone" | "CardInstanceCreated" | "StatusApplicationPrevented"
             | "StatusApplicationAmplified" | "ActionResolved" | "RuleAnnounced"
             | "ActionStarting" => Some(TriggerEvent::NotHandled),
@@ -415,6 +421,8 @@ impl TriggerEvent {
             TriggerEvent::StatusApplied => "StatusApplied",
             TriggerEvent::StatusMerged => "StatusMerged",
             TriggerEvent::StatusRemoved => "StatusRemoved",
+            TriggerEvent::StatusStacksChanged => "StatusStacksChanged",
+            TriggerEvent::StatusApplicationPrevented => "StatusApplicationPrevented",
             TriggerEvent::NotHandled => "",
         }
     }
@@ -1996,6 +2004,16 @@ impl Host<'_> {
             }
             CombatEvent::StatusRemoved { target } => {
                 self.run_broadcast_triggers(state, TriggerEvent::StatusRemoved, &target)
+            }
+            CombatEvent::StatusStacksChanged { target } => {
+                self.run_broadcast_triggers(state, TriggerEvent::StatusStacksChanged, &target)
+            }
+            CombatEvent::StatusApplicationPrevented { target } => {
+                self.run_broadcast_triggers(
+                    state,
+                    TriggerEvent::StatusApplicationPrevented,
+                    &target,
+                )
             }
         }
     }
@@ -3610,6 +3628,7 @@ mod tests {
             let mut damage_taken = 0usize;
             let mut downed = 0usize;
             let mut card_played = 0usize;
+            let mut status_stacks_changed = 0usize;
         let mut not_handled = 0usize;
         let mut with_triggers = 0usize;
         let mut statuses = 0usize;
@@ -3640,6 +3659,8 @@ mod tests {
                     TriggerEvent::StatusApplied => {}
                     TriggerEvent::StatusMerged => {}
                     TriggerEvent::StatusRemoved => {}
+                    TriggerEvent::StatusStacksChanged => status_stacks_changed += 1,
+                    TriggerEvent::StatusApplicationPrevented => {}
                     TriggerEvent::NotHandled => not_handled += 1,
                 }
                 // 信封上的步数预算：实测 25/25 都是 1024。
@@ -3663,7 +3684,8 @@ mod tests {
         assert_eq!(card_played, 0, "参考镜像里没有 CardPlayed 触发器");
         // 10 -> 2：StatusApplied / StatusMerged / StatusRemoved 都接了钩子，只剩
         // **StatusStacksChanged 2 条**还是"参考有、本内核没有钩子接"。
-        assert_eq!(not_handled, 2);
+        assert_eq!(status_stacks_changed, 2, "参考镜像里 2 条（原先算未接的那两条）");
+        assert_eq!(not_handled, 0, "25 个事件名现在全部有钩子");
     }
 
     #[test]

@@ -7841,3 +7841,66 @@ encounter 的内联副本同步改了。
 * `CardPlayed` 的**每回合出牌统计**（`cardsPlayedThisTurnWithTag` 那一族表达式需要它）；
 * `Artifact` 的 `StatusApplicationPrevented` 事件（挡掉时参考会发一条，我们还没发）；
 * Boss 分裂/相位、`?` 房通用解释器、幕间内容差异（老账）。
+
+---
+
+## 120. 最后两个事件接上，**25/25**；以及用户问的"Boss 分裂有没有埋坑"
+
+### 120.1 `StatusStacksChanged` 与 `StatusApplicationPrevented`
+
+| 事件 | 入队点 |
+|---|---|
+| `StatusStacksChanged` | `exec::modify_one_status_stacks`，**净变化非 0 时**（`StatusEffects.cs:826`） |
+| `StatusApplicationPrevented` | `exec::apply_one_status` 的 Artifact 闸里，挡掉的那一支 |
+
+`the_image_has_exactly_the_three_plus_six_triggers_the_spec_claims` 现在钉的是：
+
+```
+status_stacks_changed = 2     参考镜像里那两条
+not_handled          = 0      ← 25 个事件名**全部**有钩子
+```
+
+**这是本轮最硬的一个里程碑**：参考实现 25 种触发事件，本内核一种不少地认得、并且都有派发点。
+
+### 120.2 Boss 分裂：**有坑，而且坑不在内核**
+
+用户问得很准。逐层查了一遍，结论是"**内核能长，界面看不见**"。
+
+| 层 | 结论 | 证据 |
+|---|---|---|
+| 内核容量 | ✅ 够用 | `MAX_COMBATANTS = 12`（`state.rs:120`） |
+| 内核加人 | ✅ 有且**响亮失败** | `add_combatant`（`state.rs:3629`）先查三处容量（战斗员/回合序/卡区），任一项满 ⇒ `CapacityError::Full(Combatants)`，**不会留下两个列表不同步** |
+| 卡区 | ✅ 自动建 | `add_combatant` 里 `card_zones.push(CardZones::new(id))` |
+| **观察向量** | ❌ **硬上限 4** | `lib.rs:152` `MAX_ENEMY_SLOTS = 4`；`compute_observation` 只循环 `0..MAX_ENEMY_SLOTS`，多出来的敌人**静默不出现** |
+| **观察向量的数据源** | ❌ **来自快照** | `self.plan.enemies` 是 `Box::leak` 的**开局快照**（`lib.rs:457-478`），不是 `state.combatants()` ⇒ 分裂出来的新敌人**根本不在名单里** |
+| **动作枚举** | ❌ 同源 | `compute_actions` 用 `alive_enemy_slots()` + `plan.enemies.get(..)` ⇒ 新敌人**不可被选为目标** |
+| 意图 | ❌ 同源 | `refresh_intents` 循环 `plan.enemies.len().min(4)` |
+| 页面 | ❌ 硬编码 | `ui_render.js:33-38`：`OFF_ENEMY = 17`、`MAX_ENEMY_SLOTS = 4`（偏移量是**算出来的**，改数值会连带移动 `OFF_ENEMY_STATUS` / `OFF_HAND`） |
+| 内容 | ❌ 没有节点 | 19 个 IR 节点里**没有**"造一个战斗员"的节点 |
+
+### 120.3 所以分裂要动的是**四处**，而不是一处
+
+1. **观察向量的上限**：`MAX_ENEMY_SLOTS` 是"放大就变语义"的那种常量 —— 它决定 `OFF_ENEMY_STATUS` 与
+   `OFF_HAND` 的偏移，改它必须**同时**改 `lib.rs` 与 `ui_render.js`，并且按项目规矩**溢出要响亮失败**，
+   而不是静默截断（今天 `compute_observation` 就是静默截断）。
+2. **数据源**：把"敌人是谁"从 `plan.enemies`（快照）改成 `state.combatants()`（活的那个），
+   —— 这正是 §8 那条"**这个值是谁派生的**"：缓存的派生值永远长得像"某处忘了同步"。
+3. **动作枚举**：跟着 2 改；否则新敌人永不可选。
+4. **内容**：新增一个 `node.createCombatant`（或等价的分裂节目），并想清楚"新敌人的 id 从哪来"、
+   "它什么时候进回合序"、"分裂出来的那个是不是同一回合就行动"。
+
+### 120.4 一句话
+
+**坑不在内核，在"内核与界面之间那层快照"**：内核乐意长到 12 个战斗员，而观察/动作/意图三处都还是
+"开局那 4 个"的副本。分裂真正的工作量是**把这层快照改成派生**，不是加一个怪。
+
+⇒ 顺序建议：先做 2（数据源）+ 3（动作），这两步不改变 ABI 布局，可以被现有测试证明；
+再决定要不要动 1（上限，会动 ABI 偏移，需要页面同步）。
+
+### 120.5 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | **677**（rd-core 589 / rd-run 61 / rd-wasm 27） |
+| 触发事件 | **25 / 25 有钩子**，`not_handled = 0` |

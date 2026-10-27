@@ -2059,6 +2059,16 @@ pub enum CombatEvent {
         /// 承受者。
         target: CombatantId,
     },
+    /// `StatusStacksChanged`：**层数变了**（`StatusEffects.cs:826-827` 的净变化非 0 才发）。
+    StatusStacksChanged {
+        /// 承受者。
+        target: CombatantId,
+    },
+    /// `StatusApplicationPrevented`：**Artifact 挡掉了一次 debuff**。
+    StatusApplicationPrevented {
+        /// 挡住的那一方（Artifact 的主人）。
+        target: CombatantId,
+    },
     /// `StatusRemoved`：**一条状态实例没了**（层数归零被删、或到期）。
     StatusRemoved {
         /// 原承受者。

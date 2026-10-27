@@ -2134,6 +2134,10 @@ fn modify_one_status_stacks(
     if new_stacks == old_stacks {
         return Ok(());
     }
+    // 层数真的变了 ⇒ `StatusStacksChanged`（`StatusEffects.cs:826` 的入队点）。
+    ctx.state
+        .enqueue_event(crate::state::CombatEvent::StatusStacksChanged { target: *target })
+        .map_err(ExecError::Capacity)?;
     if new_stacks == 0 && old_stacks > 0 {
         remove_status_at(ctx, target, index)?;
     }
@@ -3084,6 +3088,12 @@ fn apply_one_status(
                 if status.stacks <= 0 {
                     combatant.remove_status(index);
                 }
+                // Artifact 挡下了这一发 ⇒ 参考会报 `StatusApplicationPrevented`。
+                ctx.state
+                    .enqueue_event(crate::state::CombatEvent::StatusApplicationPrevented {
+                        target: *target,
+                    })
+                    .map_err(ExecError::Capacity)?;
                 return Ok(());
             }
         }
