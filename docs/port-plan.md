@@ -8179,3 +8179,74 @@ id 匹配都是全等比较**：
 只好重跑一遍补丁。**`git checkout` 撤销的是整份文件，不是最后一次编辑** —— 要撤销局部就用反向补丁。
 （同一类事这是第三次：`Copy-Item` 恢复源文件会连 mtime 一起恢复、`git show > file` 写 UTF-16，现在是
 `checkout` 吃掉未提交改动。）
+
+---
+
+## 125. **时间吞噬者的"12 张牌强制结束回合"**：机制已备好
+
+用户："时间吞噬者的手牌数量到阈值以后回合强行结束功能是不是也可以现在准备好"
+
+### 125.1 内核原来**没有**这个能力
+
+两处都缺：
+
+* `EffectRequest` 里没有任何"结束回合"的请求；
+* 也没有"回合被提前结束"的旗子 —— 回合推进只发生在 `turn.rs` / `battle.rs`。
+
+（`combatantCounter` **早就有**，`node.setCombatantCounter` 也有 —— 所以缺的只是"结束回合"。）
+
+### 125.2 补的形状：**立旗 + 循环兑现**
+
+```rust
+EffectRequest::EndTurn            // 第 7 个请求（参考实现没有）
+CombatState.end_turn_requested    // 效果层立旗
+battle.rs::hero_plays             // 出牌排空后：flag 立着 ⇒ end_turn_and_start_next + 清旗
+node.endTurn                      // 第 17 个 IR 节点，无字段
+```
+
+为什么是"请求"而不是直接跳：效果节目跑在效果队列深处，回合推进住在 `turn.rs`。**立旗 + 让循环兑现**
+保持了控制方向单向 —— 和 `state.result` 一模一样，而且"谁兑现了这个请求"是可读的。
+
+### 125.3 内容：`standard.time_warp`
+
+```
+CardPlayed →
+  if counter(time_warp) >= 11:
+      applyStatus(self, standard.strength, 2)
+      setCombatantCounter(time_warp, 0)   // 绝对置零：第 12 张算新一轮的第 1 张
+      endTurn
+  else:
+      setCombatantCounter(time_warp, +1)
+```
+
+⚠️ **一个必须知道的批处理语义**：`node.sequence` 是**批处理** —— 孩子先全部派发、效果排队，所以
+"先 +1 再读"读到的还是**旧值**。第一版就是这么写的，测试给出"第 12 张没触发"。**正确写法是把条件放在
+最外层，增减放在分支里。**
+
+挂在 **`blue_slaver`** 上（它**不在任何遭遇里**），所以玩家不会在正常流程里撞见它 —— 这是"把机制准备好"
+而不是"把第三幕 Boss 做进来"。`AiNote` 写明了降级。
+
+### 125.4 判据
+
+`the_twelfth_card_asks_for_the_turn_to_end`（rd-core，全量镜像）：
+
+* 前 11 张：`end_turn_requested` **一直是 false**；
+* 第 12 张：旗子立、**+2 力量**、计数器归 **0**；
+* 第 13 张：又是普通一张（说明归零真的生效）。
+
+### 125.5 还差什么才算"时间吞噬者能上"
+
+* 一只真正的第三幕 Boss（内容 + 遭遇 + 意图）；
+* "额外回合"（真正的 Time Eater：时间扭曲之后 Boss 还会多动一次）—— 需要"插入一个额外回合"的推进原语；
+* 页面上的提示（"你的回合被强行结束了"）—— 现在只是状态旗，UI 不显示。
+
+### 125.6 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | 683 → **684**（rd-core 596 / rd-run 61 / rd-wasm 27） |
+| `EffectRequest` | 6 → **7**（`EndTurn`） |
+| IR 节点 | 16 → **17**（`node.endTurn`） |
+| 内容状态 | 16 → **17**（`standard.time_warp`） |
+| 镜像 | full 20,404 B / core 17,324 B（重钉） |

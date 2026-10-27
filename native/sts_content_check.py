@@ -81,7 +81,7 @@ INV_COUNTS = {
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     "encounters": 5,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
-    "statuses": 16,       # inv:§10 the ones this subset actually needs
+    "statuses": 17,       # inv:§10 the ones this subset actually needs
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -239,6 +239,8 @@ INV_STATUSES = {
     "standard.split": [],
     # Boss phase: at <=10 HP it splits once (port-plan.md §122).
     "standard.phase_split": [],
+    # Time Eater's mechanic, prepared on an unused monster (port-plan.md §125).
+    "standard.time_warp": [],
     "standard.strength": [("DamageDealt", "AddPerStack", 1, 100, "Direct")],
     "standard.vulnerable": [("DamageReceived", "ScalePercent", 150, 300, "Direct")],
     "standard.weak": [("DamageDealt", "ScalePercent", 75, 200, "Direct")],
@@ -384,6 +386,8 @@ def program_facts(root):
         elif kind == "node.modifyStatusStacks":
             facts.append(("modify", body["StatusDefinitionId"]["value"],
                           amount(body["Delta"]), tgt(body["TargetSelector"])))
+        elif kind == "node.endTurn":
+            facts.append(("endTurn",))
         elif kind == "node.createCombatant":
             facts.append(("spawn", body["DefinitionId"], amount(body["Health"]) if body.get("Health") else 0))
         elif kind == "node.conditional":
@@ -570,7 +574,8 @@ def check_statuses(doc):
                      % row.get("UsesStacks"))
         elif sid in ("standard.thorns", "standard.spore_cloud", "standard.enrage",
                      "standard.regen", "standard.rage", "standard.flame_barrier",
-                     "standard.combust", "standard.split", "standard.phase_split"):
+                     "standard.combust", "standard.split", "standard.phase_split",
+                     "standard.time_warp"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -579,7 +584,8 @@ def check_statuses(doc):
                         "standard.flame_barrier": ["DamageTaken"],
                         "standard.combust": ["TurnEnded"],
                         "standard.split": ["Downed"],
-                        "standard.phase_split": ["DamageTaken"]}[sid]
+                        "standard.phase_split": ["DamageTaken"],
+                        "standard.time_warp": ["CardPlayed"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

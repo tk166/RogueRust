@@ -116,6 +116,8 @@ pub enum NodeKind {
     /// `port-plan.md` §121 说明了为什么它必须存在：内核早就能加战斗员（`add_combatant`），
     /// 但内容没有任何办法说"加一个"。
     CreateCombatant,
+    /// `node.endTurn` —— 请求结束当前回合（本内核自己的节点，`port-plan.md` §125）。
+    EndTurn,
 }
 
 impl NodeKind {
@@ -139,13 +141,14 @@ impl NodeKind {
             NodeKind::GainResource => "node.gainResource",
             NodeKind::LoseResource => "node.loseResource",
             NodeKind::CreateCombatant => "node.createCombatant",
+            NodeKind::EndTurn => "node.endTurn",
         }
     }
 
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 16] = [
+        const ALL: [NodeKind; 17] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -163,6 +166,7 @@ impl NodeKind {
             NodeKind::LoseResource,
             // 本内核自己的第 16 种（分裂 / 召唤）。
             NodeKind::CreateCombatant,
+            NodeKind::EndTurn,
         ];
         let mut i = 0;
         while i < ALL.len() {

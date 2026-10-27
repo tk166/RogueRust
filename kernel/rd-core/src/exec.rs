@@ -820,7 +820,8 @@ pub fn resolve_effect(
             | EffectRequest::LoseResource { target, .. } => target,
             EffectRequest::DrawCards { .. }
             | EffectRequest::CreateCardInstance { .. }
-            | EffectRequest::MoveCardToZone { .. } => None,
+            | EffectRequest::MoveCardToZone { .. }
+            | EffectRequest::EndTurn => None,
         },
         None,
         // 解析器**一个节点都不派发** ⇒ 步数预算无关。写 0 让"用错"当场报错。
@@ -896,6 +897,11 @@ fn resolve_request(ctx: &mut ExecContext<'_>, request: &EffectRequest) -> Result
         } => {
             let Some(target) = target else { return Ok(()) };
             set_counter_for(ctx, &target, key, amount, relative)
+        }
+        // The kernel's own request: raise the flag, the battle loop does the advancing.
+        EffectRequest::EndTurn => {
+            ctx.state.end_turn_requested = true;
+            Ok(())
         }
         EffectRequest::DrawCards { owner, count } => draw_for(ctx, &owner, count),
         EffectRequest::GainResource {
@@ -1266,6 +1272,7 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::Heal
         // 本内核自己的第 16 种（分裂 / 召唤，`port-plan.md` §121）。
         | NodeKind::CreateCombatant
+        | NodeKind::EndTurn
         // W4e 的 7 种（见模块头那张表）。
         | NodeKind::SetCombatantCounter
         | NodeKind::ModifyStatusStacks
@@ -1419,6 +1426,7 @@ fn dispatch_node(
         NodeKind::GainBlock => gain_block_node(node, ctx, frame, slot, stats),
         NodeKind::ApplyStatus => apply_status_node(node, ctx, frame, slot, stats),
         NodeKind::Heal => heal_node(node, ctx, frame, slot, stats),
+    NodeKind::EndTurn => end_turn_node(node, ctx, frame, slot, stats),
     NodeKind::CreateCombatant => create_combatant_node(node, ctx, frame, slot, stats),
         NodeKind::SetCombatantCounter => set_combatant_counter_node(node, ctx, frame, slot, stats),
         NodeKind::ModifyStatusStacks => modify_status_stacks_node(node, ctx, frame, slot, stats),
@@ -1989,6 +1997,22 @@ fn create_combatant_node(
     let combatant = crate::state::Combatant::new(id, definition_id, team_id, max_health, max_health);
     ctx.state.add_combatant(combatant)?;
     ctx.state.next_combatant_number = number.saturating_add(1);
+    stats.effects = stats.effects.saturating_add(1);
+    resume_later(ctx.state, frame, slot)
+}
+
+/// `node.endTurn`：请求**结束当前回合**（本内核自己的节点，`port-plan.md` §125）。
+///
+/// 没有字段：谁去结束回合由战斗循环决定，节目只说"该结束了"。
+fn end_turn_node(
+    _node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    ctx.state
+        .enqueue_effect_with_owner(EffectRequest::EndTurn, Some(frame))?;
     stats.effects = stats.effects.saturating_add(1);
     resume_later(ctx.state, frame, slot)
 }

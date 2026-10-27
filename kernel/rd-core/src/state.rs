@@ -1838,6 +1838,13 @@ impl Default for ChainArena {
 /// "效果永远不会生效"配一个好听的类型名。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EffectRequest {
+    /// **End the current turn** (not in the reference's request list: it is the kernel's own,
+    /// `port-plan.md` §125).
+    ///
+    /// Why a *request* and not a jump: an effect program runs deep inside the effect queue, and
+    /// turn advancement lives in `turn.rs`. Setting a flag and letting the battle loop end the turn
+    /// keeps the direction of control one-way -- exactly how `state.result` already works.
+    EndTurn,
     /// `DealDamageEffectRequest`（`DamageEffects.cs:15-53`）。
     ///
     /// ⚠️ **必须带 `source`**：参考的请求里带着 `SourceCombatantId`，因为**修饰器在解析时
@@ -2845,6 +2852,9 @@ pub struct CombatState {
     pub current_turn: i32,
     pub turn_phase: CombatTurnPhase,
     pub active_combatant_id: Option<CombatantId>,
+    /// Set by [`EffectRequest::EndTurn`]; the battle loop ends the turn and clears it. It is **not**
+    /// cleared by the effect itself, because "who honours the request" must stay visible.
+    pub end_turn_requested: bool,
     pub next_status_instance_number: i32,
     /// 下一个 `node.createCombatant` 造出来的战斗员的编号（分裂/召唤）。
     ///
@@ -2977,6 +2987,7 @@ impl Empty for CombatState {
         current_turn: 0,
         turn_phase: CombatTurnPhase::WaitingToStartTurn,
         active_combatant_id: None,
+        end_turn_requested: false,
         next_status_instance_number: 0,
             next_combatant_number: 0,
         next_card_instance_number: 0,
@@ -3081,6 +3092,7 @@ impl CombatState {
             current_turn: 0,
             turn_phase: CombatTurnPhase::WaitingToStartTurn,
             active_combatant_id: None,
+            end_turn_requested: false,
             next_status_instance_number: 0,
             next_combatant_number: 0,
             next_card_instance_number: 0,
@@ -3120,6 +3132,7 @@ impl CombatState {
         self.current_turn = 1;
         self.turn_phase = CombatTurnPhase::WaitingToStartTurn;
         self.active_combatant_id = None;
+        self.end_turn_requested = false;
         self.next_status_instance_number = 1;
         self.next_card_instance_number = 1;
         self.next_effect_chain_number = 1;

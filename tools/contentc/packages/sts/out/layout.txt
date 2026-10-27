@@ -1,58 +1,60 @@
 # opcode nfields nslots sizeB class name : fields
- 16  2  2   8 IR combatantStatusStacks                                        : Selector:TERM StatusId:STR(wrap)
- 17  3  3   8 IR compare                                                      : Left:TERM Op:STR Right:TERM
- 18  1  1   4 IR const                                                        : Value:INT
- 19  1  1   4 IR currentHealth                                                : Selector:TERM
- 20  1  1   4 IR event.bool                                                   : FieldKey:STR
- 21  1  2   8 IR intent.allOf                                                 : Conditions:TERMLIST
- 22  2  2   8 IR intent.healthPercent                                         : Op:STR Percent:INT
- 23  2  2   8 IR intent.round                                                 : Op:STR Round:INT
- 24  3  3   8 IR intent.selfHasCounter                                        : Counter:STR(wrap) Op:STR Value:INT
- 25  6  6  16 IR node.applyStatus                                             : Charges:INT DurationTurns:INT ResultKey:TERM Stacks:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
- 26  2  2   8 IR node.conditional                                             : Condition:TERM Then:TERM
- 27  5  5  12 IR node.createCardInstance                                      : CardDefinitionId:STR(wrap) Count:TERM ResultKey:TERM TargetSelector:TERM ToZone:STR
- 28  3  3   8 IR node.createCombatant                                         : DefinitionId:STR Health:TERM TeamId:STR
- 29  5  5  12 IR node.dealDamage                                              : Amount:TERM Element:TERM IgnoresBlock:BOOL ResultKey:TERM TargetSelector:TERM
- 30  3  3   8 IR node.gainBlock                                               : Amount:TERM ResultKey:TERM TargetSelector:TERM
- 31  3  3   8 IR node.heal                                                    : Amount:TERM ResultKey:TERM TargetSelector:TERM
- 32  5  6  16 IR node.modifyStatusStacks                                      : Children:STRLIST Delta:TERM ResultKey:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
- 33  1  2   8 IR node.sequence                                                : Children:TERMLIST
- 34  4  4  12 IR node.setCombatantCounter                                     : Amount:TERM CounterId:STR(wrap) Relative:BOOL TargetSelector:TERM
- 35  0  0   4 IR sel.allEnemies                                               : 
- 36  2  2   8 IR sel.eventTarget                                              : Cardinality:STR RequiredContextCapabilities:STR
- 37  2  2   8 IR sel.source                                                   : Cardinality:STR RequiredContextCapabilities:STR
- 38  0  0   4 OBJ _obj()                                                       : 
- 39  3  3   8 OBJ _obj(Action,Condition,Priority)                              : Action:STR(wrap) Condition:TERM Priority:INT
- 40 11 14  32 OBJ _obj(Actions,AiNote,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,StartingStatuses,Tier) : Actions:STRLIST(wrap) AiNote:STR HpMax:INT HpMin:INT Id:STR IntentRules:TERMLIST InvRef:STR MaxHealth:INT NameKey:STR StartingStatuses:TERMLIST Tier:STR
- 41 12 16  36 OBJ _obj(Actions,AiNote,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,StartingStatuses,Tier,TriggeredEffects) : Actions:STRLIST(wrap) AiNote:STR HpMax:INT HpMin:INT Id:STR IntentRules:STRLIST InvRef:STR MaxHealth:INT NameKey:STR StartingStatuses:STRLIST Tier:STR TriggeredEffects:STRLIST
- 42  7 10  24 OBJ _obj(Actions,DisplayName,Id,IntentRules,MaxHealth,Position,StartingStatuses) : Actions:STRLIST(wrap) DisplayName:STR Id:STR IntentRules:TERMLIST MaxHealth:INT Position:TERM StartingStatuses:TERMLIST
- 43  6  6  16 OBJ _obj(Amount,DescriptionKey,Effect,Id,NameKey,Rarity)         : Amount:INT DescriptionKey:STR Effect:STR Id:STR NameKey:STR Rarity:STR
- 44  2  2   8 OBJ _obj(Amount,ResourceId)                                      : Amount:INT ResourceId:STR(wrap)
- 45  9  9  20 OBJ _obj(Amount0,Amount1,DescriptionKey,Effect0,Effect1,Id,Label0,Label1,NameKey) : Amount0:INT Amount1:INT DescriptionKey:STR Effect0:STR Effect1:STR Id:STR Label0:STR Label1:STR NameKey:STR
- 46  7  7  16 OBJ _obj(AppliesToStatusId,Magnitude,Operation,Pipeline,Priority,RestrictDamageKind,RestrictSourceCardTag) : AppliesToStatusId:TERM Magnitude:INT Operation:STR Pipeline:STR Priority:INT RestrictDamageKind:STR RestrictSourceCardTag:TERM
- 47  9 14  32 OBJ _obj(AuthoringConventions,Deviations,InvariantSource,KernelGapsFound,NotYetAuthored,PackageId,Scope,SingleSourceAndInferred,StatusNamespace) : AuthoringConventions:STRLIST Deviations:TERMLIST InvariantSource:STR KernelGapsFound:TERMLIST NotYetAuthored:STRLIST PackageId:STR Scope:STR SingleSourceAndInferred:TERMLIST StatusNamespace:STR
- 48  5  8  20 OBJ _obj(Boss,Elite,Note,PackageId,Weak)                         : Boss:TERMLIST Elite:TERMLIST Note:STR PackageId:STR Weak:TERMLIST
- 49 15 26  56 OBJ _obj(Cards,Characters,Deck,EncounterTables,Encounters,EnemyActions,InertKeys,Monsters,Notes,Potions,Relics,SchemaVersion,Start,Statuses,UnknownRooms) : Cards:TERMLIST Characters:TERMLIST Deck:STRLIST(wrap) EncounterTables:TERM Encounters:TERMLIST EnemyActions:TERMLIST InertKeys:TERMLIST Monsters:TERMLIST Notes:TERM Potions:TERMLIST Relics:TERMLIST SchemaVersion:INT Start:TERM Statuses:TERMLIST UnknownRooms:TERMLIST
- 50  7 11  24 OBJ _obj(CardsDrawnPerTurn,Enemies,HeroDisplayName,HeroResources,HeroStartingStatuses,Id,TriggeredEffects) : CardsDrawnPerTurn:TERM Enemies:TERMLIST HeroDisplayName:TERM HeroResources:TERMLIST HeroStartingStatuses:STRLIST Id:STR(Wrap) TriggeredEffects:STRLIST
- 51  4  4  12 OBJ _obj(CombatRules,DisplayName,Id,RunPrograms)                 : CombatRules:TERM DisplayName:STR Id:STR RunPrograms:TERM
- 52 12 14  32 OBJ _obj(Costs,DescriptionKey,Id,LifecyclePrograms,NameKey,PackageId,PlayedCardDestinationZone,Program,Rarity,RetainInHandOnTurnEnd,Tags,TurnEndHandDestinationZone) : Costs:TERMLIST DescriptionKey:STR Id:STR LifecyclePrograms:TERM NameKey:STR PackageId:STR PlayedCardDestinationZone:STR Program:TERM Rarity:STR RetainInHandOnTurnEnd:BOOL Tags:STRLIST(wrap) TurnEndHandDestinationZone:STR
- 53  3  3   8 OBJ _obj(Current,Max,Resource)                                   : Current:INT Max:INT Resource:STR(wrap)
- 54 16 19  40 OBJ _obj(DeathPrevention,DebuffBlock,DescriptionKey,Disclosure,Id,IncomingStatusDelay,NameKey,PackageId,PassiveModifiers,Polarity,StackingBehavior,Tags,Triggers,UsesCharges,UsesDuration,UsesStacks) : DeathPrevention:TERM DebuffBlock:TERM DescriptionKey:STR Disclosure:TERM Id:STR IncomingStatusDelay:TERM NameKey:STR PackageId:STR PassiveModifiers:TERMLIST Polarity:STR StackingBehavior:STR Tags:STRLIST Triggers:TERMLIST UsesCharges:BOOL UsesDuration:BOOL UsesStacks:BOOL
- 55  9 14  32 OBJ _obj(Deck,HeroName,MaxHealth,Resources,StartingConsumables,StartingHealth,StartingParty,StartingRelics,StartingUnits) : Deck:STRLIST(wrap) HeroName:STR MaxHealth:INT Resources:TERM StartingConsumables:STRLIST StartingHealth:INT StartingParty:STRLIST StartingRelics:STRLIST(wrap) StartingUnits:STRLIST
- 56  6  6  16 OBJ _obj(DescriptionKey,Id,Intent,NameKey,PackageId,Program)     : DescriptionKey:STR Id:STR Intent:TERM NameKey:STR PackageId:STR Program:TERM
- 57 12 15  32 OBJ _obj(DescriptionKey,Id,NameKey,PackageId,PassiveModifiers,Polarity,StackingBehavior,Tags,Triggers,UsesCharges,UsesDuration,UsesStacks) : DescriptionKey:STR Id:STR NameKey:STR PackageId:STR PassiveModifiers:STRLIST Polarity:STR StackingBehavior:STR Tags:STRLIST Triggers:TERMLIST UsesCharges:BOOL UsesDuration:BOOL UsesStacks:BOOL
- 58  5  6  16 OBJ _obj(DescriptionKey,Id,NameKey,Polarity,Tags)                : DescriptionKey:STR Id:STR NameKey:STR Polarity:STR Tags:STRLIST
- 59  3  3   8 OBJ _obj(Detail,Id,Where)                                        : Detail:STR Id:STR Where:STR
- 60  3  3   8 OBJ _obj(Detail,Item,Mark)                                       : Detail:STR Item:STR Mark:STR
- 61  6  6  16 OBJ _obj(Detectable,Id,InvRef,Ours,Reference,Why)                : Detectable:STR Id:STR InvRef:STR Ours:STR Reference:STR Why:STR
- 62  2  2   8 OBJ _obj(Event,Program)                                          : Event:STR Program:TERM
- 63  4  4  12 OBJ _obj(Id,MaxNodeDepth,MaxProgramSteps,Root)                   : Id:STR(Wrap) MaxNodeDepth:INT MaxProgramSteps:INT Root:TERM
- 64  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
- 65  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
- 66  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
- 67  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
- 68  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
- 69  1  1   4 OBJ _obj(gold)                                                   : gold:INT
+ 16  2  2   8 IR combatantCounter                                             : CounterId:STR Selector:TERM
+ 17  2  2   8 IR combatantStatusStacks                                        : Selector:TERM StatusId:STR(wrap)
+ 18  3  3   8 IR compare                                                      : Left:TERM Op:STR Right:TERM
+ 19  1  1   4 IR const                                                        : Value:INT
+ 20  1  1   4 IR currentHealth                                                : Selector:TERM
+ 21  1  1   4 IR event.bool                                                   : FieldKey:STR
+ 22  1  2   8 IR intent.allOf                                                 : Conditions:TERMLIST
+ 23  2  2   8 IR intent.healthPercent                                         : Op:STR Percent:INT
+ 24  2  2   8 IR intent.round                                                 : Op:STR Round:INT
+ 25  3  3   8 IR intent.selfHasCounter                                        : Counter:STR(wrap) Op:STR Value:INT
+ 26  6  6  16 IR node.applyStatus                                             : Charges:INT DurationTurns:INT ResultKey:TERM Stacks:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
+ 27  3  3   8 IR node.conditional                                             : Condition:TERM Else:TERM Then:TERM
+ 28  5  5  12 IR node.createCardInstance                                      : CardDefinitionId:STR(wrap) Count:TERM ResultKey:TERM TargetSelector:TERM ToZone:STR
+ 29  3  3   8 IR node.createCombatant                                         : DefinitionId:STR Health:TERM TeamId:STR
+ 30  5  5  12 IR node.dealDamage                                              : Amount:TERM Element:TERM IgnoresBlock:BOOL ResultKey:TERM TargetSelector:TERM
+ 31  0  0   4 IR node.endTurn                                                 : 
+ 32  3  3   8 IR node.gainBlock                                               : Amount:TERM ResultKey:TERM TargetSelector:TERM
+ 33  3  3   8 IR node.heal                                                    : Amount:TERM ResultKey:TERM TargetSelector:TERM
+ 34  5  6  16 IR node.modifyStatusStacks                                      : Children:STRLIST Delta:TERM ResultKey:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
+ 35  1  2   8 IR node.sequence                                                : Children:TERMLIST
+ 36  4  4  12 IR node.setCombatantCounter                                     : Amount:TERM CounterId:STR(wrap) Relative:BOOL TargetSelector:TERM
+ 37  0  0   4 IR sel.allEnemies                                               : 
+ 38  2  2   8 IR sel.eventTarget                                              : Cardinality:STR RequiredContextCapabilities:STR
+ 39  2  2   8 IR sel.source                                                   : Cardinality:STR RequiredContextCapabilities:STR
+ 40  0  0   4 OBJ _obj()                                                       : 
+ 41  3  3   8 OBJ _obj(Action,Condition,Priority)                              : Action:STR(wrap) Condition:TERM Priority:INT
+ 42 11 14  32 OBJ _obj(Actions,AiNote,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,StartingStatuses,Tier) : Actions:STRLIST(wrap) AiNote:STR HpMax:INT HpMin:INT Id:STR IntentRules:TERMLIST InvRef:STR MaxHealth:INT NameKey:STR StartingStatuses:TERMLIST Tier:STR
+ 43 12 16  36 OBJ _obj(Actions,AiNote,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,StartingStatuses,Tier,TriggeredEffects) : Actions:STRLIST(wrap) AiNote:STR HpMax:INT HpMin:INT Id:STR IntentRules:STRLIST InvRef:STR MaxHealth:INT NameKey:STR StartingStatuses:STRLIST Tier:STR TriggeredEffects:STRLIST
+ 44  7 10  24 OBJ _obj(Actions,DisplayName,Id,IntentRules,MaxHealth,Position,StartingStatuses) : Actions:STRLIST(wrap) DisplayName:STR Id:STR IntentRules:TERMLIST MaxHealth:INT Position:TERM StartingStatuses:TERMLIST
+ 45  6  6  16 OBJ _obj(Amount,DescriptionKey,Effect,Id,NameKey,Rarity)         : Amount:INT DescriptionKey:STR Effect:STR Id:STR NameKey:STR Rarity:STR
+ 46  2  2   8 OBJ _obj(Amount,ResourceId)                                      : Amount:INT ResourceId:STR(wrap)
+ 47  9  9  20 OBJ _obj(Amount0,Amount1,DescriptionKey,Effect0,Effect1,Id,Label0,Label1,NameKey) : Amount0:INT Amount1:INT DescriptionKey:STR Effect0:STR Effect1:STR Id:STR Label0:STR Label1:STR NameKey:STR
+ 48  7  7  16 OBJ _obj(AppliesToStatusId,Magnitude,Operation,Pipeline,Priority,RestrictDamageKind,RestrictSourceCardTag) : AppliesToStatusId:TERM Magnitude:INT Operation:STR Pipeline:STR Priority:INT RestrictDamageKind:STR RestrictSourceCardTag:TERM
+ 49  9 14  32 OBJ _obj(AuthoringConventions,Deviations,InvariantSource,KernelGapsFound,NotYetAuthored,PackageId,Scope,SingleSourceAndInferred,StatusNamespace) : AuthoringConventions:STRLIST Deviations:TERMLIST InvariantSource:STR KernelGapsFound:TERMLIST NotYetAuthored:STRLIST PackageId:STR Scope:STR SingleSourceAndInferred:TERMLIST StatusNamespace:STR
+ 50  5  8  20 OBJ _obj(Boss,Elite,Note,PackageId,Weak)                         : Boss:TERMLIST Elite:TERMLIST Note:STR PackageId:STR Weak:TERMLIST
+ 51 15 26  56 OBJ _obj(Cards,Characters,Deck,EncounterTables,Encounters,EnemyActions,InertKeys,Monsters,Notes,Potions,Relics,SchemaVersion,Start,Statuses,UnknownRooms) : Cards:TERMLIST Characters:TERMLIST Deck:STRLIST(wrap) EncounterTables:TERM Encounters:TERMLIST EnemyActions:TERMLIST InertKeys:TERMLIST Monsters:TERMLIST Notes:TERM Potions:TERMLIST Relics:TERMLIST SchemaVersion:INT Start:TERM Statuses:TERMLIST UnknownRooms:TERMLIST
+ 52  7 11  24 OBJ _obj(CardsDrawnPerTurn,Enemies,HeroDisplayName,HeroResources,HeroStartingStatuses,Id,TriggeredEffects) : CardsDrawnPerTurn:TERM Enemies:TERMLIST HeroDisplayName:TERM HeroResources:TERMLIST HeroStartingStatuses:STRLIST Id:STR(Wrap) TriggeredEffects:STRLIST
+ 53  4  4  12 OBJ _obj(CombatRules,DisplayName,Id,RunPrograms)                 : CombatRules:TERM DisplayName:STR Id:STR RunPrograms:TERM
+ 54 12 14  32 OBJ _obj(Costs,DescriptionKey,Id,LifecyclePrograms,NameKey,PackageId,PlayedCardDestinationZone,Program,Rarity,RetainInHandOnTurnEnd,Tags,TurnEndHandDestinationZone) : Costs:TERMLIST DescriptionKey:STR Id:STR LifecyclePrograms:TERM NameKey:STR PackageId:STR PlayedCardDestinationZone:STR Program:TERM Rarity:STR RetainInHandOnTurnEnd:BOOL Tags:STRLIST(wrap) TurnEndHandDestinationZone:STR
+ 55  3  3   8 OBJ _obj(Current,Max,Resource)                                   : Current:INT Max:INT Resource:STR(wrap)
+ 56 16 19  40 OBJ _obj(DeathPrevention,DebuffBlock,DescriptionKey,Disclosure,Id,IncomingStatusDelay,NameKey,PackageId,PassiveModifiers,Polarity,StackingBehavior,Tags,Triggers,UsesCharges,UsesDuration,UsesStacks) : DeathPrevention:TERM DebuffBlock:TERM DescriptionKey:STR Disclosure:TERM Id:STR IncomingStatusDelay:TERM NameKey:STR PackageId:STR PassiveModifiers:TERMLIST Polarity:STR StackingBehavior:STR Tags:STRLIST Triggers:TERMLIST UsesCharges:BOOL UsesDuration:BOOL UsesStacks:BOOL
+ 57  9 14  32 OBJ _obj(Deck,HeroName,MaxHealth,Resources,StartingConsumables,StartingHealth,StartingParty,StartingRelics,StartingUnits) : Deck:STRLIST(wrap) HeroName:STR MaxHealth:INT Resources:TERM StartingConsumables:STRLIST StartingHealth:INT StartingParty:STRLIST StartingRelics:STRLIST(wrap) StartingUnits:STRLIST
+ 58  6  6  16 OBJ _obj(DescriptionKey,Id,Intent,NameKey,PackageId,Program)     : DescriptionKey:STR Id:STR Intent:TERM NameKey:STR PackageId:STR Program:TERM
+ 59 12 15  32 OBJ _obj(DescriptionKey,Id,NameKey,PackageId,PassiveModifiers,Polarity,StackingBehavior,Tags,Triggers,UsesCharges,UsesDuration,UsesStacks) : DescriptionKey:STR Id:STR NameKey:STR PackageId:STR PassiveModifiers:STRLIST Polarity:STR StackingBehavior:STR Tags:STRLIST Triggers:TERMLIST UsesCharges:BOOL UsesDuration:BOOL UsesStacks:BOOL
+ 60  5  6  16 OBJ _obj(DescriptionKey,Id,NameKey,Polarity,Tags)                : DescriptionKey:STR Id:STR NameKey:STR Polarity:STR Tags:STRLIST
+ 61  3  3   8 OBJ _obj(Detail,Id,Where)                                        : Detail:STR Id:STR Where:STR
+ 62  3  3   8 OBJ _obj(Detail,Item,Mark)                                       : Detail:STR Item:STR Mark:STR
+ 63  6  6  16 OBJ _obj(Detectable,Id,InvRef,Ours,Reference,Why)                : Detectable:STR Id:STR InvRef:STR Ours:STR Reference:STR Why:STR
+ 64  2  2   8 OBJ _obj(Event,Program)                                          : Event:STR Program:TERM
+ 65  4  4  12 OBJ _obj(Id,MaxNodeDepth,MaxProgramSteps,Root)                   : Id:STR(Wrap) MaxNodeDepth:INT MaxProgramSteps:INT Root:TERM
+ 66  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
+ 67  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
+ 68  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
+ 69  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
+ 70  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
+ 71  1  1   4 OBJ _obj(gold)                                                   : gold:INT
 
 # reserved opcodes:
   0 reserved : (no fields)

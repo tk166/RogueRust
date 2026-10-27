@@ -4541,6 +4541,58 @@ mod tests {
         assert_eq!(strength(&state), 6, "and again on the next turn end");
     }
 
+    /// **Time Warp, prepared**: after twelve cards are played the enemy gains 2 Strength and the
+    /// turn is asked to end (`node.endTurn` -> `state.end_turn_requested`, `port-plan.md` §125).
+    #[test]
+    fn the_twelfth_card_asks_for_the_turn_to_end() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("st_tw", "standard.time_warp", 1));
+
+        let mut card = card_in_hand(&mut state, &content, "hero", "strike");
+
+        for played in 1..=12 {
+            state
+                .enqueue_event(CombatEvent::CardPlayed { owner: cid("hero"), card })
+                .expect("queue");
+            host.try_resolve_pending_queues(&mut state).expect("triggers");
+            if played < 12 {
+                assert!(
+                    !state.end_turn_requested,
+                    "the turn must not end after card {played}"
+                );
+            }
+        }
+
+        assert!(
+            state.end_turn_requested,
+            "the twelfth card must ask for the turn to end"
+        );
+        assert_eq!(
+            stacks_of(&state, "enemy_a", "standard.strength"),
+            2,
+            "and it pays 2 Strength"
+        );
+
+        // The clock reset, so a thirteenth card does not immediately re-fire.
+        state.end_turn_requested = false;
+        card = card_in_hand(&mut state, &content, "hero", "defend");
+        state
+            .enqueue_event(CombatEvent::CardPlayed { owner: cid("hero"), card })
+            .expect("queue");
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+        assert!(
+            !state.end_turn_requested,
+            "the counter went back to zero, so the next card is just a card"
+        );
+    }
+
     #[test]
     fn the_boss_phase_splits_once_at_low_health() {
         // Wiki: the Slime Boss's phase *is* its split. Content trigger: on `DamageTaken`, if my HP is

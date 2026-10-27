@@ -1266,6 +1266,13 @@ fn hero_plays<H: TurnHost>(
     host.resolve_pending_queues(state)?;
     // 一次出牌就是一次排空（参考在队列排空时判胜负，`CombatStateEffects.cs:28-60`）。
     settle_result(state);
+    // **`node.endTurn` 的兑现点**（本内核自己的机制，`port-plan.md` §125）：节目只是把
+    // `end_turn_requested` 立起来，回合的推进留在这里 —— 方向和 `state.result` 一致（效果层立旗，
+    // 循环层推进），而且"谁兑现了请求"这件事是可读的。
+    if state.end_turn_requested && state.result == CombatResult::Ongoing {
+        state.end_turn_requested = false;
+        end_turn_and_start_next(state, config, host)?;
+    }
     // `:124` 的原话是 `if (outcome.Value is { WasPlayed: false })` —— 它匹配的是 **false**，
     // 不匹配 **null**。而"战斗在这一步里已经结束"时参考的队列循环
     // （`CombatEventHandling.cs:99-111`）根本不会解析那个请求 ⇒ outcome 是 null ⇒

@@ -678,6 +678,8 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.split"
             // Boss phase (half HP / low HP split, §122).
             | "standard.phase_split"
+            // Time Warp: a CardPlayed trigger that ends the turn (§125).
+            | "standard.time_warp"
     )
 }
 
