@@ -676,6 +676,8 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.combust"
             // Boss split: a Downed trigger that spawns two (§121).
             | "standard.split"
+            // Boss phase (half HP / low HP split, §122).
+            | "standard.phase_split"
     )
 }
 

@@ -7989,3 +7989,70 @@ standard.split = { Downed → sequence(createCombatant(acid_slime_m,10) × 2) }
   但没写测试钉住）；
 * Boss 的**相位**（半血换招式）仍然没有；
 * `rd_env_enemy_overflow()` 还没有页面提示（导出有了，UI 没接）。
+
+---
+
+## 122. 收尾三件：分裂的行动时机、**Boss 相位**、页面的 overflow 提示
+
+### 122.1 分裂出来的敌人什么时候行动 —— 用一条测试钉住
+
+回合推进是一个**纯轮转**（`turn.rs:845-877`）：从当前活跃者往后找第一个活着的。新加的战斗员被**追加到
+`turn_order` 末尾**，所以：
+
+* 如果轮转还没经过它的下标 ⇒ 它**本回合就会行动**；
+* 死掉的战斗员**不会从 `turn_order` 里删掉**，只是被"活着吗"跳过（`turn.rs:850`）。
+
+`a_spawned_enemy_joins_the_turn_order_after_the_current_actor` 把这四条一起钉住：
+`turn_order` 变成 5 条（hero + enemy_a + **死掉的** enemy_b + 两只 spawn）、`order[0]` 仍是 hero、
+spawn 在末尾（id 带 `#`）、**`active_combatant_id` 没被抢走**。
+
+### 122.2 Boss 相位：**低血分裂**，而且只触发一次
+
+wiki 里 Slime Boss 的"相位"就是它的分裂。这一轮把它做成**一条 `DamageTaken` 触发器**：
+
+```json
+standard.phase_split = {
+  DamageTaken →
+    if currentHealth(self) <= 10:
+       createCombatant(acid_slime_m, 10)
+       createCombatant(spike_slime_s, 10)
+       modifyStatusStacks(self, standard.phase_split, -1)   // 消耗自己 ⇒ 只触发一次
+}
+```
+
+挂在 `slime_boss` 上。`currentHealth` 这个表达式**本来就有**（`Selector` 字段是我们定的，
+参考镜像那条 `nfields = 0` 所以从来没被用过 —— 这是它第一次真的被内容用上）。
+
+判据 `the_boss_phase_splits_once_at_low_health`：
+10 HP 的敌人挨 3 点落到 7（≤ 10）⇒ **战斗员 +2**、`standard.phase_split` 层数归 **0**；
+再挨 1 点 ⇒ **不再分裂**。
+
+### 122.3 页面的 overflow 提示
+
+`rd_env_enemy_overflow()` 接进顶栏：
+
+```js
+const overflow = ex.rd_env_enemy_overflow();
+const overflowNote = overflow === 1 ? ' · <span class="warn">⚠️ 敌人超出可见槽（只显示 6 个）</span>' : "";
+```
+
+⇒ 战场真超过 6 个敌人时，页面**说出来**，而不是安静地只画六个。`smoke.mjs` 的导出清单也跟着要求它存在。
+
+⚠️ **这条提示今天没法在真浏览器里看到**：默认战斗只有 2 个敌人，而造 7 个敌人需要内容 + ABI 层的编排。
+所以它只有"接线"级别的判据（smoke 要求导出存在 + 真浏览器闸门仍绿），**视觉没有判据** —— 和像素级
+判据缺失是同一条账。
+
+### 122.4 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | 678 → **680**（rd-core 592 / rd-run 61 / rd-wasm 27） |
+| 内容状态 | 15 → **16**（`standard.phase_split`） |
+| 镜像 | full 19,752 B / core 16,788 B（重钉） |
+
+### 122.5 现在"Boss"这一块还剩什么
+
+* 相位**换招**（半血改用另一套意图）—— 需要 `EnemyIntentRules` 能按状态切换（内容侧有条件，但没试过）；
+* 分裂出来的敌人**立刻有意图**（今天的 `refresh_intents` 每帧重算，理论上会，但没有测试钉住）；
+* 多段 Boss（第一幕的 Boss 只有史莱姆王一只，第二幕的还没做）。

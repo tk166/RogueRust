@@ -81,7 +81,7 @@ INV_COUNTS = {
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     "encounters": 5,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
-    "statuses": 15,       # inv:§10 the ones this subset actually needs
+    "statuses": 16,       # inv:§10 the ones this subset actually needs
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -237,6 +237,8 @@ INV_STATUSES = {
     "standard.combust": [],
     # Boss split: a Downed trigger that spawns two (port-plan.md §121).
     "standard.split": [],
+    # Boss phase: at <=10 HP it splits once (port-plan.md §122).
+    "standard.phase_split": [],
     "standard.strength": [("DamageDealt", "AddPerStack", 1, 100, "Direct")],
     "standard.vulnerable": [("DamageReceived", "ScalePercent", 150, 300, "Direct")],
     "standard.weak": [("DamageDealt", "ScalePercent", 75, 200, "Direct")],
@@ -568,7 +570,7 @@ def check_statuses(doc):
                      % row.get("UsesStacks"))
         elif sid in ("standard.thorns", "standard.spore_cloud", "standard.enrage",
                      "standard.regen", "standard.rage", "standard.flame_barrier",
-                     "standard.combust", "standard.split"):
+                     "standard.combust", "standard.split", "standard.phase_split"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -576,7 +578,8 @@ def check_statuses(doc):
                         "standard.rage": ["CardPlayed"],
                         "standard.flame_barrier": ["DamageTaken"],
                         "standard.combust": ["TurnEnded"],
-                        "standard.split": ["Downed"]}[sid]
+                        "standard.split": ["Downed"],
+                        "standard.phase_split": ["DamageTaken"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

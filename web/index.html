@@ -183,6 +183,11 @@
 .enemy-panel.enemy-target {
   cursor: crosshair;
 }
+.warn {
+  color: #f0b862;
+  font-weight: 600;
+}
+
 /* A potion waiting for a target: every living enemy is one. */
 #enemies.potion-armed .enemy-panel:not(.down) {
   outline: 2px dashed #7fd0a8;
@@ -599,9 +604,14 @@ function renderTopBar() {
   const deck = ex.rd_run_deck_count();
   const relics = ex.rd_run_observe(6);
   const act = ex.rd_run_act();
+  // `rd_env_enemy_overflow()`: the observation carries six enemy slots. A fight that holds more
+  // **cannot be drawn correctly**, and the honest thing is to say so rather than quietly show six.
+  const overflow = ex.rd_env_enemy_overflow();
+  const overflowNote =
+    overflow === 1 ? ' · <span class="warn">⚠️ 敌人超出可见槽（只显示 6 个）</span>' : "";
   document.getElementById("runStats").innerHTML =
     `幕 <b>${act}</b> · floor <b>${floor}</b> · hp <b>${hp}/${hpMax}</b> · ` +
-    `gold <b>${gold}</b> · deck <b>${deck}</b>`;
+    `gold <b>${gold}</b> · deck <b>${deck}</b>` + overflowNote;
   const chips = [];
   for (let index = 0; index < relics; index++) {
     chips.push(`<span class="chip relic">${esc(runRead.relicName(index) || "relic")}</span>`);

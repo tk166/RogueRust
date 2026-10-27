@@ -4542,6 +4542,94 @@ mod tests {
     }
 
     #[test]
+    fn the_boss_phase_splits_once_at_low_health() {
+        // Wiki: the Slime Boss's phase *is* its split. Content trigger: on `DamageTaken`, if my HP is
+        // <= 10, spawn two slimes and **consume the phase status** so it cannot fire twice
+        // (`port-plan.md` §122).
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "enemy_b", status("st_phase", "standard.phase_split", 1));
+        let before = state.combatants().len();
+
+        // `enemy_b` is on 10 HP: a 3-point hit lands it at 7, which is <= 10.
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("enemy_b"), 3, false).expect("hit");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+        assert_eq!(
+            state.combatants().len(),
+            before + 2,
+            "the phase must spawn exactly two"
+        );
+        assert_eq!(
+            stacks_of(&state, "enemy_b", "standard.phase_split"),
+            0,
+            "the phase status is consumed, so it cannot fire again"
+        );
+
+        // A second hit must NOT spawn anybody else.
+        let after_first = state.combatants().len();
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("enemy_b"), 1, false).expect("hit again");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+        assert_eq!(
+            state.combatants().len(),
+            after_first,
+            "the phase is a one-shot"
+        );
+    }
+
+    #[test]
+    fn a_spawned_enemy_joins_the_turn_order_after_the_current_actor() {
+        // The turn order is a plain rotation (`turn.rs:845-877`), so a combatant appended mid-fight
+        // acts **later in the same round** if the rotation has not passed its index yet. That is
+        // the behaviour, so it gets pinned here rather than rediscovered.
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        state.active_combatant_id = Some(cid("hero"));
+        give(&mut state, "enemy_b", status("st_split", "standard.split", 1));
+
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("enemy_b"), 12, false).expect("the kill");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+
+        let order: Vec<&str> = state.turn_order().iter().map(|id| id.as_str()).collect();
+        // The dead one **stays** in the order; advancement skips it by liveness (`turn.rs:850`).
+        assert_eq!(order.len(), 5, "hero + enemy_a + dead enemy_b + two spawned: {order:?}");
+        assert_eq!(order[0], "hero", "the actor keeps its place");
+        assert_eq!(order[2], "enemy_b", "the dead one is still in the order");
+        assert!(
+            order[3].contains('#') && order[4].contains('#'),
+            "the spawned ones sit at the end: {order:?}"
+        );
+        assert_eq!(
+            state.active_combatant_id.map(|id| id.as_str().to_string()),
+            Some("hero".to_string()),
+            "spawning must not steal the active slot"
+        );
+    }
+
+    #[test]
     fn a_split_spawns_two_combatants_when_the_boss_dies() {
         // Wiki: the Slime Boss splits into two smaller slimes when it dies. The spawn node is the
         // kernel's own (`node.createCombatant`, `port-plan.md` §121); the trigger is a `Downed`

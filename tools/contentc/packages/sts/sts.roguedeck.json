@@ -914,6 +914,119 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.phase_split",
+      "PackageId": "sts",
+      "NameKey": "Split (phase)",
+      "DescriptionKey": "At 10 HP or less, splits into two slimes. Fires once.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "phase"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Op": "LessOrEqual",
+                    "Left": {
+                      "kind": "currentHealth",
+                      "value": {
+                        "Selector": {
+                          "kind": "sel.source",
+                          "value": {
+                            "Cardinality": "ZeroOrOne",
+                            "RequiredContextCapabilities": "Source"
+                          }
+                        }
+                      }
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 10
+                      }
+                    }
+                  }
+                },
+                "Then": {
+                  "kind": "node.sequence",
+                  "value": {
+                    "Children": [
+                      {
+                        "kind": "node.createCombatant",
+                        "value": {
+                          "DefinitionId": "acid_slime_m",
+                          "TeamId": "enemy",
+                          "Health": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 10
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "kind": "node.createCombatant",
+                        "value": {
+                          "DefinitionId": "spike_slime_s",
+                          "TeamId": "enemy",
+                          "Health": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 10
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "kind": "node.modifyStatusStacks",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "StatusDefinitionId": {
+                            "value": "standard.phase_split"
+                          },
+                          "Delta": {
+                            "kind": "const",
+                            "value": {
+                              "Value": -1
+                            }
+                          },
+                          "ResultKey": null,
+                          "Children": []
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -3202,6 +3315,12 @@
                 "value": "standard.split"
               },
               "Stacks": 1
+            },
+            {
+              "StatusDefinitionId": {
+                "value": "standard.phase_split"
+              },
+              "Stacks": 1
             }
           ],
           "Position": null,
@@ -3584,6 +3703,12 @@
         {
           "StatusDefinitionId": {
             "value": "standard.split"
+          },
+          "Stacks": 1
+        },
+        {
+          "StatusDefinitionId": {
+            "value": "standard.phase_split"
           },
           "Stacks": 1
         }
