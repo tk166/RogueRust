@@ -7596,3 +7596,65 @@ ctx.state.next_status_instance_number = number.saturating_add(1);   // 再自增
 ⚠️ 写在这里而不是直接动手的原因：这个重构会动到 `exec.rs` 的**唯一施加路径**，而它被 poison、虚弱、
 易伤等所有现有机制共用 —— 一旦漏掉"号没有自增"或"极性取错"，破坏面是**全部战斗**。
 下一轮做它时：**先跑一遍现有 581 条 rd-core 测试确立基线**，再改，再跑同一批。
+
+---
+
+## 116. **Ritual 与 Thorns 都完成了** —— 一个证明了"内容路径"，一个补上了"受击钩子"
+
+### 116.1 Ritual：内容路径**本来就通**，是我误判成"惰性"
+
+先按 §112 的形状给 Ritual 写了内核步骤（`grant_ritual_strength`），测试却给我 **6 而不是 3**。
+把内核步骤**关掉**再跑，仍然是 3 ⇒ **内容里那条 `TurnEnded` 触发器本来就在工作**。
+
+回头看 `sts.roguedeck.json` 的 `ritual` 记录，`Triggers: [{Event: "TurnEnded", Program: applyStatus(strength)}]`
+**一直都在**。也就是说 §104 那条"惰性"名单里挂着 `ritual` 是**我的误判**（当时靠 grep 判断"没有行为"）。
+
+⇒ 于是把内核步骤、调用点、守卫字段**全部删掉**（一个功能两份实现会付两遍钱），测试改成
+`ritual_grants_strength_at_the_end_of_the_turn`（走内容路径，3 → 6）。
+
+### 116.2 Thorns：`DamageTaken` 钩子，一次补齐
+
+先试"把 thorns 挂成 `DamageDealt` 触发器"—— **不触发**。读 `run_damage_dealt_triggers` 才明白：
+**Bearer 是出手方**（`doubt` 长在打人的人身上）。Thorns 要的是**承受者侧**，而那条事件在参考里叫
+`DamageReceivedCombatEvent`，本内核的注释里写着"它跟着它的第一批触发器一起进来" —— 这一批就是现在。
+
+补三处：
+
+| # | 位置 | 内容 |
+|---|---|---|
+| 1 | `state.rs` | `CombatEvent::DamageTaken { target, source }` |
+| 2 | `exec.rs` | 伤害落地时**入队两条**：`DamageDealt`（出手方）+ `DamageTaken`（承受者） |
+| 3 | `host.rs` | `TriggerEvent::DamageTaken` **从 `NotHandled` 毕业**；`run_damage_taken_triggers`（Bearer = 承受者，`EventTarget` = 出手方） |
+
+内容侧：`standard.thorns` = `DamageTaken` → `dealDamage(sel.eventTarget, stacks(sel.source, standard.thorns))`。
+
+⚠️ 两个坑，都是"名字/键写错就静默打空"：`combatantStatusStacks` 的键是 **`StatusId`** 不是
+`StatusDefinitionId`（照 ritual 抄才对）；伤害的 `IgnoresBlock` 必须为 `true`。
+
+### 116.3 判据
+
+| 测试 | 证明 |
+|---|---|
+| `ritual_grants_strength_at_the_end_of_the_turn` | 内容路径：3 → 6 |
+| `thorns_hurts_whoever_hits_its_owner` | 敌人戴 Thorns 3，英雄打它 5 ⇒ **英雄掉 3** |
+| `the_image_has_exactly_the_three_plus_six_triggers_the_spec_claims` | 参考镜像里 **`DamageTaken` 那条 = 1**，`not_handled` 11 → **10** |
+| `..._trigger_event_names_are_known...` | `DamageTaken` 不再是 `NotHandled` |
+| 事件计数 | 一次伤害现在入队 **2** 条事件（原来 1 条）|
+
+### 116.4 内容（两处都带降级说明）
+
+* `spike_slime_m`：**Metallicize 3**（wiki 属 Lagavulin）
+* `spike_slime_s`：**Thorns 3**（wiki 属第二幕的 Spiker）
+
+两条都写在 `AiNote` 里，并且 encounter 的**内联敌人**也同步改了 —— 内容门会比对 roster 与内联副本
+（漏了它会报 `StartingStatuses differs from the roster`）。
+
+### 116.5 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | 670 → **671**（rd-core 583 / rd-run 61 / rd-wasm 27） |
+| 内容状态 | 6 → **7** |
+| 状态触发器 | `ritual`(TurnEnded) + `thorns`(DamageTaken) |
+| 镜像 | full 17,324 B / core 14,940 B（重钉） |

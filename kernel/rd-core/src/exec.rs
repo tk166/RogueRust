@@ -1121,10 +1121,9 @@ pub fn resolve_damage_of_kind(
     // `enemy_acts`，以及 `turn.rs` 的五个 `resolve_pending_queues` 点）。这正是两相位的意义
     // —— 触发器节目入队的效果要等到**整批**效果解析完才落地（`CombatEventHandling.cs:104-105`）。
     //
-    // ⚠️ 参考还入队一条 `DamageReceivedCombatEvent`（`:196-204`，承受者侧）。本内核的
-    // 镜像里**没有**一条 `DamageTaken` 触发器（`host.rs` 的 `not_handled` 里那一行是
-    // 未建模的，不是"有触发器没钩子"），所以那条事件今天没有观察者 —— 它跟着它的
-    // 第一批触发器一起进来（批次 2 的接线表）。
+    // ⚠️ 参考入队**两条**事件：出手方侧与承受者侧（`:196-204`）。承受者侧那条今天有观察者了
+    // —— `Thorns` 就是它的第一批触发器（`port-plan.md` §116）。
+    let taken_source = ctx.source;
     ctx.state
         .enqueue_event(crate::state::CombatEvent::DamageDealt {
             target: *target,
@@ -1132,6 +1131,14 @@ pub fn resolve_damage_of_kind(
             blocked_damage: blocked,
             requested: amount,
             source: ctx.source,
+        })
+        .map_err(ExecError::Capacity)?;
+
+    // 承受者侧（`DamageReceivedCombatEvent`）：同一个结算点，Bearer 在宿主那边换成**承受者**。
+    ctx.state
+        .enqueue_event(crate::state::CombatEvent::DamageTaken {
+            target: *target,
+            source: taken_source,
         })
         .map_err(ExecError::Capacity)?;
 
@@ -3043,32 +3050,20 @@ fn apply_one_status(
         return Ok(());
     }
 
-    // 新实例：id 由生成器发（`CombatState.cs:680-687`：先取号再自增）。
-    let number = ctx.state.next_status_instance_number;
-    let instance_id = status_instance_id(number)?;
     // 极性：有内容镜像时走 `STAT.Polarity`（参考实现的路），否则走标准包目录。
-    // `ctx.content` 是 `Option<&'a Content<'a>>`（`Copy`），所以先拷出来，避免与后面
-    // `ctx.state.combatant_mut(..)` 的可变借用打架。
     let content = ctx.content;
     let polarity = status_polarity(definition_id.as_str(), content)?;
-    let mut instance = StatusInstance::new(instance_id, definition_id, polarity)
-        .with_stacks(stacks)
-        .with_duration_turns(duration_turns)
-        .with_charges(charges);
-    // `:187`：`SourceCombatantId: applyStatus.SourceCombatantId` —— 新实例**原样收下**这一次
-    // 施加的出手方。没有来源（`ctx.source == None`，例如一条没有 `sel.source` 的节目）⇒ `None`，
-    // 不是"猜一个行动者"。
-    if let Some(source) = ctx.source {
-        instance = instance.with_source_combatant(source);
-    }
-    {
-        let combatant = ctx
-            .state
-            .combatant_mut(target)
-            .ok_or(ExecError::MissingCombatant)?;
-        combatant.push_status(instance)?;
-    }
-    ctx.state.next_status_instance_number = number.saturating_add(1);
+    // 新实例走**唯一入口**：`push_new_status` 负责取号、造实例、自增。
+    push_new_status(
+        ctx.state,
+        target,
+        definition_id,
+        stacks,
+        duration_turns,
+        charges,
+        polarity,
+        ctx.source,
+    )?;
     Ok(())
 }
 
@@ -3121,6 +3116,43 @@ fn status_polarity(
             Some(status_catalog::StatusPolarity::Buff) | None => StatusPolarity::Buff,
         },
     )
+}
+
+/// **The one way a new status instance is born.** Takes the next instance number, builds the
+/// instance, pushes it, and advances the counter -- `CombatState.cs:680-687`.
+///
+/// Both the `applyStatus` opcode ([`apply_one_status`]) and the host's own steps (`Host`'s
+/// `grant_ritual_strength`, for Ritual) go through here, so there is exactly one place that knows
+/// about numbering. Getting that wrong corrupts instance ids for the whole fight.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn push_new_status(
+    state: &mut CombatState,
+    target: &CombatantId,
+    definition_id: StatusDefinitionId,
+    stacks: i32,
+    duration_turns: i32,
+    charges: i32,
+    polarity: StatusPolarity,
+    source: Option<CombatantId>,
+) -> Result<StatusInstanceId, ExecError> {
+    let number = state.next_status_instance_number;
+    let instance_id = status_instance_id(number)?;
+    let mut instance = StatusInstance::new(instance_id, definition_id, polarity)
+        .with_stacks(stacks)
+        .with_duration_turns(duration_turns)
+        .with_charges(charges);
+    // `:187`：`SourceCombatantId: applyStatus.SourceCombatantId` —— 新实例**原样收下**这一次
+    // 施加的出手方。没有来源（`ctx.source == None`，例如一条没有 `sel.source` 的节目）⇒ `None`，
+    // 不是"猜一个行动者"。
+    if let Some(source) = source {
+        instance = instance.with_source_combatant(source);
+    }
+    {
+        let combatant = state.combatant_mut(target).ok_or(ExecError::MissingCombatant)?;
+        combatant.push_status(instance)?;
+    }
+    state.next_status_instance_number = number.saturating_add(1);
+    Ok(instance_id)
 }
 
 /// `status_%06d`（`CombatState.cs:680-687`：`$"status_{NextStatusInstanceNumber:000000}"`）。

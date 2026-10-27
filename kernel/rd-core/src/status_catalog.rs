@@ -662,6 +662,11 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"
+            // Ritual: a `TurnEnded` trigger in the CONTENT (wiki: Cultist 3).
+            | "ritual"
+            // Thorns: a `DamageTaken` trigger in the CONTENT; the hook is
+            // `Host::run_damage_taken_triggers` (§116).
+            | "standard.thorns"
     )
 }
 
@@ -672,10 +677,9 @@ pub fn has_behaviour(status_id: &str) -> bool {
 pub fn is_declared_inert(status_id: &str) -> bool {
     matches!(
         status_id,
-        // No rule anywhere yet. `ritual` is the wiki's "gain Strength at the end of each turn"
-        // (Cultist) and `standard.metallicize` is "gain Block at the end of each turn" (Lagavulin);
-        // both want a **content trigger** on `TurnEnded` (`port-plan.md` §107), not a kernel arm.
-        "ritual"
+        // Nothing yet: every status in the content has a rule now. The list stays because the rule
+        // needs somewhere to put the next one -- and because "empty" must be *sayable*.
+        ""
     )
 }
 

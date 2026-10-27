@@ -3760,7 +3760,6 @@ mod tests {
         assert_eq!(content.card_has_tag("no_such_card", "attack"), None);
     }
 
-    #[test]
     /// `Rarity` is cell 14 of `CARD`, it cost no layout (`align4(2*15) == align4(2*16) == 32`), and
     /// it moved `FORMAT_VERSION` to 2 -- a schema change has to be visible to a reader whose cell
     /// table is fixed, or an old image decodes as garbage instead of failing.

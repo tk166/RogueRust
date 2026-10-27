@@ -420,6 +420,64 @@
       "Tags": [
         "block"
       ]
+    },
+    {
+      "Id": "standard.thorns",
+      "PackageId": "sts",
+      "NameKey": "Thorns",
+      "DescriptionKey": "Whenever you are attacked, deal damage back equal to its stacks.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "thorns"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "combatantStatusStacks",
+                  "value": {
+                    "Selector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusId": {
+                      "value": "standard.thorns"
+                    }
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": true,
+                "Element": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -2560,7 +2618,14 @@
               "value": "spike_slime_s.tackle"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.thorns"
+              },
+              "Stacks": 3
+            }
+          ],
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Spike Slime (S)"
@@ -2700,11 +2765,18 @@
           "value": "spike_slime_s.tackle"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.thorns"
+          },
+          "Stacks": 3
+        }
+      ],
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": "单一动作 ⇒ 无需 AI 桥，完全忠实（plan §3.2#1）"
+      "AiNote": " ⚠️ 降级写明：wiki 的 Thorns 属于第二幕的 Spiker；本内容没有它，为让机制在真实战斗里被用到，挂在这里（3 层）。port-plan.md §116。"
     },
     {
       "Id": "fat_gremlin",

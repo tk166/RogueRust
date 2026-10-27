@@ -2021,6 +2021,18 @@ pub enum CombatEvent {
         /// 出手方（`SourceCombatantId`）。`None` = 没有来源（选择器解出空集 / DoT 没有归属）。
         source: Option<CombatantId>,
     },
+    /// `DamageReceivedCombatEvent`（`DamageEffects.cs:196-204`）：**承受者侧**的那一条。
+    ///
+    /// `DamageDealt` 的 Bearer 是**出手方**（所以 `doubt` 挂在打人的人身上）；这一条的 Bearer 是
+    /// **承受者**，`Thorns` 就长在它上面（"谁打我，我打回去"）。
+    ///
+    /// 携带的字段只有两侧的 id：触发器节目要的是"谁打谁"，伤害数字在那条状态上已经读得到。
+    DamageTaken {
+        /// 承受者。
+        target: CombatantId,
+        /// 出手方（`None` = 无来源的伤害，触发器不跑 —— 参考的第一句就是 `SourceCombatant is not null`）。
+        source: Option<CombatantId>,
+    },
 }
 
 impl Empty for CombatEvent {

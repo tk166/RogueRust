@@ -348,7 +348,12 @@ pub enum TriggerEvent {
     /// 而镜像 25 条触发器**一个 `Scope` 都没出现**）。`doubt` 的触发器就长在这上面：
     /// 敌人戴着 doubt 打人 ⇒ 触发 ⇒ `modifyStatusStacks(doubt, -1)` 落到 `sel.source`。
     DamageDealt,
-    /// 参考有、但今天的 `TurnHost` 没有对应钩子的 20 个成员之一。
+    /// `DamageTaken` —— **承受者侧**（`DamageEffects.cs:196-204`）。
+    ///
+    /// Bearer 是**挨打的那个**：`Thorns` 就长在这上面（"谁打我，我打回去"）。节目里
+    /// `sel.source` 是承受者、`sel.eventTarget` 是出手方。
+    DamageTaken,
+    /// 参考有、但今天的 `TurnHost` 没有对应钩子的 19 个成员之一。
     NotHandled,
 }
 
@@ -362,8 +367,9 @@ impl TriggerEvent {
             "RoundStarted" => Some(TriggerEvent::RoundStarted),
             "RoundEnded" => Some(TriggerEvent::RoundEnded),
             "DamageDealt" => Some(TriggerEvent::DamageDealt),
+            "DamageTaken" => Some(TriggerEvent::DamageTaken),
             // ── 参考有、本内核今天没有钩子接的 20 个（按 `EffectVocabulary.cs` 的声明序）──
-            "DamageTaken" | "Healed" | "CardPlayed" | "Downed" | "StatusExpired"
+            "Healed" | "CardPlayed" | "Downed" | "StatusExpired"
             | "ResourceGained" | "CardCostPaid" | "StatusApplied" | "StatusRemoved"
             | "StatusMerged" | "StatusStacksChanged" | "BlockGained" | "CardsDrawn"
             | "CardMovedToZone" | "CardInstanceCreated" | "StatusApplicationPrevented"
@@ -382,6 +388,7 @@ impl TriggerEvent {
             TriggerEvent::RoundStarted => "RoundStarted",
             TriggerEvent::RoundEnded => "RoundEnded",
             TriggerEvent::DamageDealt => "DamageDealt",
+            TriggerEvent::DamageTaken => "DamageTaken",
             TriggerEvent::NotHandled => "",
         }
     }
@@ -1416,6 +1423,11 @@ impl<'a> Host<'a> {
         // Metallicize pays out **before** the turn-ended event, so the Block is there for whatever
         // the event's handlers read.
         self.grant_end_of_turn_block(state, actor)?;
+        // **Ritual is not implemented here on purpose**: the sts content carries a `TurnEnded`
+        // program for the `ritual` status, and the kernel's status-trigger drain already runs it
+        // (measured: disabling this step still pays 3 Strength per turn end). A second
+        // implementation would pay twice.
+
         state
             .enqueue_event_at_root(CombatEvent::TurnEnded {
                 combatant: *actor,
@@ -1932,7 +1944,56 @@ impl Host<'_> {
             CombatEvent::DamageDealt { target, source, .. } => {
                 self.run_damage_dealt_triggers(state, &target, source)
             }
+            // `DamageReceivedTriggeredEffects`（`:196-204`）：Bearer = **承受者**。
+            CombatEvent::DamageTaken { target, source } => {
+                self.run_damage_taken_triggers(state, &target, source)
+            }
         }
+    }
+
+    /// `DamageTaken` 的触发器（`DamageEffects.cs:196-204`）：**Bearer 是承受者**。
+    ///
+    /// 和 [`Self::run_damage_dealt_triggers`] 的区别只有一处，但那一处就是全部语义：
+    /// 过滤器戴在**挨打的人**身上。`Thorns` 靠它工作（`port-plan.md` §116）。
+    fn run_damage_taken_triggers(
+        &mut self,
+        state: &mut CombatState,
+        target: &CombatantId,
+        source: Option<CombatantId>,
+    ) -> Result<(), HostError> {
+        // 无来源的伤害不跑：参考的第一句就是 `SourceCombatant is not null`。
+        let Some(attacker) = source else {
+            return Ok(());
+        };
+        if state.combatant(target).is_none() {
+            return Ok(());
+        }
+        let bearer = *target;
+        let mut batch = TriggerBatch::new();
+        self.collect_triggers(state, &bearer, TriggerEvent::DamageTaken, &mut batch)?;
+        batch.sort();
+
+        for i in 0..batch.len {
+            if state.result != CombatResult::Ongoing {
+                break;
+            }
+            let Some(handle) = batch.root.get(i).copied() else {
+                break;
+            };
+            let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
+            let root = NodeRef::new(self.content, handle);
+            // Bearer = 承受者，`EventTarget` = 出手方 ⇒ 节目里 `sel.eventTarget` 就是打人的那个。
+            let outcome = execute_program(
+                state,
+                self.content,
+                root,
+                Some(bearer),
+                Some(attacker),
+                steps,
+            );
+            outcome.map_err(|e| self.record(HostError::Exec(e)))?;
+        }
+        Ok(())
     }
 
     /// `DamageDealt` 的触发器（`SB:StatusDataRebuild.cs:53-55`）。
@@ -3321,6 +3382,7 @@ mod tests {
         let mut round_ended = 0usize;
         let mut round_started = 0usize;
         let mut damage_dealt = 0usize;
+            let mut damage_taken = 0usize;
         let mut not_handled = 0usize;
         let mut with_triggers = 0usize;
         let mut statuses = 0usize;
@@ -3344,6 +3406,7 @@ mod tests {
                     TriggerEvent::RoundEnded => round_ended += 1,
                     TriggerEvent::RoundStarted => round_started += 1,
                     TriggerEvent::DamageDealt => damage_dealt += 1,
+                    TriggerEvent::DamageTaken => damage_taken += 1,
                     TriggerEvent::NotHandled => not_handled += 1,
                 }
                 // 信封上的步数预算：实测 25/25 都是 1024。
@@ -3360,9 +3423,11 @@ mod tests {
         // `DamageDealt` 那 1 条**不再是缺口**（批次 1 接了钩子，见 `TriggerEvent::DamageDealt`）：
         // `doubt` 的触发器就在这一条上，它正是 `CARD_MULTI` 那 10 格 NOT-COMPARABLE 的根因。
         assert_eq!(damage_dealt, 1, "doubt 的 DamageDealt 触发器");
-        // 剩下 11 条是 5 种"参考有、本内核没有钩子接"的事件：`DamageTaken` 1 /
-        // `StatusApplied` 3 / `StatusMerged` 3 / `StatusStacksChanged` 2 / `StatusRemoved` 2。
-        assert_eq!(not_handled, 11);
+        // `DamageTaken` 那 1 条**也不再是缺口**：§116 给它接了钩子，`thorns` 是它的第一批触发器。
+        assert_eq!(damage_taken, 1, "承受者侧的那一条（参考内容里也有 1 条）");
+        // 剩下 10 条是 4 种"参考有、本内核没有钩子接"的事件：`StatusApplied` 3 /
+        // `StatusMerged` 3 / `StatusStacksChanged` 2 / `StatusRemoved` 2。
+        assert_eq!(not_handled, 10);
     }
 
     #[test]
@@ -3403,14 +3468,15 @@ mod tests {
                 "{name} 是参考的成员"
             );
         }
-        // 4 个能落到钩子上的必须是"自己的"变体，其余 21 个才是 NotHandled。
+        // 5 个能落到钩子上的必须是"自己的"变体，其余 20 个才是 NotHandled。
         assert_eq!(
             TriggerEvent::from_wire_name("TurnStarted"),
             Some(TriggerEvent::TurnStarted)
         );
+        // `DamageTaken` 从 NotHandled 毕业了：`Thorns` 是它的第一批触发器（§116）。
         assert_eq!(
             TriggerEvent::from_wire_name("DamageTaken"),
-            Some(TriggerEvent::NotHandled)
+            Some(TriggerEvent::DamageTaken)
         );
         // 拼错/大小写错必须返回 None（**不许**默认成某个变体）。
         for typo in ["Turnstarted", "turnstarted", "TurnStarted ", "Damage", ""] {
@@ -3969,8 +4035,8 @@ mod tests {
         strike(&mut state, &content, "enemy_a", "hero", 5);
         assert_eq!(
             state.pending_event_count(),
-            1,
-            "伤害落地就该入队一条 `DamageDealt`（参考在 `:186` 入队）"
+            2,
+            "伤害落地入队**两条**：出手方侧的 `DamageDealt`（`:186`）与承受者侧的 `DamageTaken`（`:196`）"
         );
 
         let exec_before = state.next_program_execution_id;
@@ -4156,6 +4222,73 @@ mod tests {
     }
 
     // ---------------------------------------------------------------- 钩子 5：DoT
+
+    #[test]
+    fn ritual_grants_strength_at_the_end_of_the_turn() {
+        // Wiki: Cultist's Ritual 3 = "gain 3 Strength at the end of each turn".
+        //
+        // **This one is implemented in the CONTENT, not the kernel**: the sts package carries a
+        // `TurnEnded` program for the `ritual` status, and the status-trigger drain runs it. The test
+        // therefore proves the content path, which is the interesting half (`port-plan.md` §116).
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = solo();
+        give(&mut state, "hero", status("st_rit", "ritual", 3));
+
+        let strength = |state: &crate::state::CombatState| -> i32 {
+            state.combatant(&cid("hero")).map_or(0, |c| {
+                c.statuses()
+                    .iter()
+                    .filter(|s| is_active(s) && s.definition_id.as_str() == "standard.strength")
+                    .map(|s| s.stacks)
+                    .sum()
+            })
+        };
+        assert_eq!(strength(&state), 0, "no Strength before the turn ends");
+
+        host.try_run_turn_ended_triggers(&mut state, &cid("hero"))
+            .expect("turn end");
+        assert_eq!(strength(&state), 3, "Ritual 3 pays 3 Strength, from the content program");
+
+        host.try_run_turn_ended_triggers(&mut state, &cid("hero"))
+            .expect("turn end again");
+        assert_eq!(strength(&state), 6, "and again on the next turn end");
+    }
+
+    #[test]
+    fn thorns_hurts_whoever_hits_its_owner() {
+        // Wiki: Thorns N = "whenever you are attacked, deal N damage back". Like Ritual this lives in
+        // the **content** (a `DamageDealt` trigger on the status), so this test proves the content
+        // path: the enemy wears Thorns, the hero hits it, the hero bleeds.
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "enemy_b", status("st_th", "standard.thorns", 3));
+
+        let hero_before = health(&state, "hero");
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("enemy_b"), 5, false).expect("the hit lands");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+
+        assert_eq!(
+            health(&state, "hero"),
+            hero_before - 3,
+            "Thorns 3 must take 3 from the attacker"
+        );
+    }
 
     #[test]
     fn metallicize_grants_block_at_the_end_of_the_turn() {
