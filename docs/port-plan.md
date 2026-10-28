@@ -8819,3 +8819,41 @@ rd_env_enemy_is_minion(slot)   // 1 是 / 0 不是 / -1 没有这个槽
 ### 140.4 数字
 
 聚合验收 **17/17**；单测 690 → **691**（rd-core 601 / rd-run 62 / rd-wasm 28）。
+
+---
+
+## 141. 对照 wiki 的缺口清单：单独一份 `docs/sts-wiki-gap.md`
+
+用户："界面后面会直接上轻量 Live2D 真正模拟 StS，所以先仔细对照 wiki，有哪些功能细节需要进一步实现。"
+
+把现状与 wiki 逐项对了一遍，写成 **`docs/sts-wiki-gap.md`**（不再往本文件的 100+ 节里塞）。
+
+### 141.1 已确认缺的（按对体验的影响排）
+
+| 类 | 缺什么 | 活 |
+|---|---|---|
+| **Live2D 硬前提** | **一步之内的事件序列**（现在页面靠 `diffObservations` 反推，多段伤害分不出来）| 内核：`rd_env_events_*` |
+| 内容表达力 | 事件只能选 `heal/gold/damage/max_hp/nothing`：**删卡 / 升级 / 拿诅咒 / 给遗物** 都没有 | 内核 |
+| 卡牌关键词 | `Ethereal`（内核 0 次）、`Retain`、`Innate`；**X 费**引擎里明确不存在 | 内核 |
+| 状态 | `Intangible` / `Buffer` / `Plated Armor` / `Barricade` / `Blur` / `Entangled` / `Slow` | 内核 |
+| 状态（便宜） | `Constricted`（`TurnEnded` 触发器就能写）、塞牌（`createCardInstance` 已有）| **内容** |
+| 运行层 | **遗物只有 1 个**（burning_blood）、**无钥匙/第四幕**、**无 Ascension**、篝火只有休息/打铁 | 内容 / 运行层 |
+| 敌人形态 | 无复活 / 多段（Awakened One 那种）| 内核 |
+
+### 141.2 顺手纠正了我自己两条记忆
+
+* **`Unplayable` 是有的** —— 它是 `play.rs` 受理校验五条之一（stun / decree / play_condition /
+  one_attack / unplayable），我一开始写成"没有"；
+* **X 费确实不存在** —— `play.rs` 模块头原文："X 费在引擎里**不存在**"。
+
+⇒ 又一次印证：**"我以为没有"要靠 grep 证明，不能靠印象。**
+
+### 141.3 建议顺序
+
+1. `rd_env_events_*`（Live2D 的硬前提）
+2. 事件解释器（删卡/升级/拿诅咒）
+3. 卡牌关键词：Ethereal → Retain → Innate → X 费
+4. **遗物池**（1 → 一窝，纯内容，立刻让每局不同）
+5. 状态：Constricted（内容）→ Intangible/Buffer（伤害管线）
+
+聚合验收 **17/17**；单测 **691**（本轮只加文档）。
