@@ -604,6 +604,18 @@ function renderTopBar() {
   const deck = ex.rd_run_deck_count();
   const relics = ex.rd_run_observe(6);
   const act = ex.rd_run_act();
+  // **The act transition** (§132): the run advanced, so say it out loud and let the map repaint.
+  // `say` is still the only writer of `#msg`.
+  if (act > actSeen) {
+    actSeen = act;
+    say(
+      `<b>—— 第 ${act} 幕 ——</b>` +
+        `<span class="dim"> 地图重画了，血量、牌组、遗物都带过来了</span>`
+    );
+  } else if (act > 0 && act < actSeen) {
+    // A new run started: reset without announcing anything.
+    actSeen = act;
+  }
   // `rd_env_enemy_overflow()`: the observation carries six enemy slots. A fight that holds more
   // **cannot be drawn correctly**, and the honest thing is to say so rather than quietly show six.
   // A turn that ended **without the player asking** is worth a line: it is the only visible sign of
@@ -1287,6 +1299,10 @@ let currentView = null;
 /// (`node.endTurn`, i.e. Time Warp) -- the observation vector does not carry that, so it is polled
 /// here and reported through `say()`, the single writer of `#msg`.
 let forcedTurnSeen = 0;
+
+/// The last act we showed. A bigger value means "a new act started" (`port-plan.md` §132) -- the run
+/// advances it when the boss falls, and nothing else in the UI says so.
+let actSeen = 1;
 
 /// A potion waiting for a target: its belt slot, or `-1`. (Block/energy/heal never wait.)
 let potionPending = -1;

@@ -289,6 +289,14 @@ for (const [name, got, want] of [
 }
 if (PAGE_PILES + 5 > OBS_LEN) fail(`the piles block ends at ${PAGE_PILES + 5}, past observe_len ${OBS_LEN}`);
 
+// §132: the act transition is announced by the page. A comment cannot be asserted, but the
+// **call** can: if someone deletes the announcement the string disappears and this goes red.
+// The literal from the page: `<b>—— 第 ${act} 幕 ——</b>`. Asserting on the template
+// literal keeps the check honest (it fails if the announcement is deleted or the act is dropped).
+if (!inline[0].body.includes("第 ${act} 幕")) {
+  fail("index.html no longer announces the act transition");
+}
+
 console.log("WEB_SMOKE PASS");
 console.log(`  wasm bytes        ${bytes.length}`);
 console.log(`  observe_len       ${OBS_LEN} i32`);
