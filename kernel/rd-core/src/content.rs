@@ -3843,6 +3843,33 @@ mod tests {
     /// `EncounterTables` is the document's own statement of the two pools (`inv:§5.2/§5.3`), and it
     /// had no reader until the elite needed one: the run layer could only pick "any encounter".
     #[test]
+    /// **No encounter places more enemies than a fight allows** (`port-plan.md` §140).
+    ///
+    /// The kernel enforces the cap on *summons* (`node.createCombatant`); this pins the other half --
+    /// the content may not author a fight the player cannot see or target.
+    #[test]
+    fn no_encounter_places_more_enemies_than_a_fight_allows() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&bytes).expect("the image parses");
+        let mut worst = 0usize;
+        for row in content.rows(Table::Encounter) {
+            let Ok(enemies) = content.encounter_enemies(row.index()) else {
+                continue;
+            };
+            worst = worst.max(enemies.len());
+        }
+        assert!(
+            worst <= crate::state::MAX_ENEMIES_IN_FIGHT,
+            "an encounter places {worst} enemies; the cap is {}",
+            crate::state::MAX_ENEMIES_IN_FIGHT
+        );
+        assert!(worst >= 1, "the image has encounters at all");
+    }
+
     fn the_encounter_pools_are_readable() {
         let bytes = std::fs::read(concat!(
             env!("CARGO_MANIFEST_DIR"),

@@ -130,6 +130,10 @@ INV_CARDS = {
 }
 
 # inv:§4.1 -- the 10 zero-new-ability enemies: (hp_min, hp_max, action ids).
+# §140: mirrors `rd_core::state::MAX_ENEMIES_IN_FIGHT`. The kernel enforces it on **summons**;
+# this file enforces it on what the content **places**.
+MAX_ENEMIES_IN_FIGHT = 4
+
 INV_MONSTERS = [
     ("spike_slime_s", 10, 14, ["spike_slime_s.tackle"]),
     # §129: the wiki's act-3 boss, parked in the Boss pool (acts still share content).
@@ -749,6 +753,12 @@ def check_relations(doc):
             fail("encounter." + eid,
                  "CardsDrawnPerTurn must stay null (= inv:§2's %d-card default), got %r"
                  % (INV_HERO["CardsDrawnPerTurn"], enc.get("CardsDrawnPerTurn")))
+        # §140: the **same** cap the kernel enforces for summons applies to what the content may
+        # place directly. A five-enemy encounter would build fine at runtime and then be unable to
+        # show or target the fifth -- better to refuse it here.
+        if len(enc.get("Enemies") or []) > MAX_ENEMIES_IN_FIGHT:
+            fail("encounter." + eid, "%d enemies, the cap is %d"
+                 % (len(enc.get("Enemies") or []), MAX_ENEMIES_IN_FIGHT))
         for inline in enc.get("Enemies") or []:
             mid = inline["Id"]
             entry = roster.get(mid)

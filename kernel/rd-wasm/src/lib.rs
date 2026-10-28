@@ -1294,6 +1294,28 @@ pub extern "C" fn rd_env_forced_turns() -> i32 {
     }
 }
 
+/// Was enemy slot `slot` **summoned** (rather than placed by the encounter)?
+///
+/// `1` yes, `0` no, `-1` no such slot. The observation has no bit for this, and the page needs it to
+/// mark a minion as one (`port-plan.md` §140).
+#[no_mangle]
+pub extern "C" fn rd_env_enemy_is_minion(slot: i32) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    if slot < 0 {
+        return -1;
+    }
+    let roster = session.enemy_roster();
+    let Some(id) = roster.get(slot as usize) else {
+        return -1;
+    };
+    match session.state.combatant(id) {
+        Some(combatant) => i32::from(combatant.owner.is_some()),
+        None => -1,
+    }
+}
+
 /// Did the fight hold more enemies than the observation can show?
 ///
 /// `0` = no, `1` = yes, `-1` = no session. The vector cannot grow past `MAX_ENEMY_SLOTS` without

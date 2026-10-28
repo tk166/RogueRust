@@ -48,6 +48,16 @@
     border: 1px solid var(--line); border-radius: 8px; background: #171b22;
   }
   .enemy-panel.collapsed { opacity: .45; }
+
+/* §140: a summoned minion wears a chip so it does not read as a placed monster. */
+.chip.minion {
+  background: #2a3a4a;
+  color: #7fd0a8;
+  border: 1px solid #3d5a6a;
+  margin-left: .35rem;
+  font-size: .7rem;
+  padding: 0 .3rem;
+}
   .name { font-family: var(--mono); font-size: 13px; }
   .bar { height: 8px; border-radius: 4px; background: #0b0d11; overflow: hidden; margin: 6px 0 4px; }
   .bar > i { display: block; height: 100%; background: var(--hp); transition: width .18s ease; }
@@ -1414,8 +1424,11 @@ function render(verdict, reward) {
   // gives the id, `intent::select_action` + the `EACT` program give the numbers (obs +5/+6).
   const aimSlots = new Set(pending ? (RD_UI.playOptions(actions).get(pending.hand) || []).map((p) => p.slot) : []);
   const aimCard = pending ? (cardName(pending.hand) || ("hand #" + pending.hand)) : "";
+  // §140: a **summoned** enemy says so (`rd_env_enemy_is_minion`), because the observation has no
+  // bit for it and a minion otherwise looks exactly like a placed monster.
   const enemies = view.enemies.map((e) => {
     const aimable = aimSlots.has(e.slot);
+    const minion = ex.rd_env_enemy_is_minion(e.slot) === 1;
     const down = e.alive ? "" : " collapsed";
     // A downed enemy's seat keeps its last intent in the observation (the reference asks the
     // selector about dead enemies too), so the page is what decides not to advertise it.
@@ -1427,7 +1440,7 @@ function render(verdict, reward) {
       <div class="enemy-panel${down}${aimable ? " enemy-target" : ""}${
         e.alive && e.intentDamage !== null && e.intentDamage > 0 ? " threat" : ""}"
            data-enemy-panel="${e.slot}" ${aimable ? `data-target-slot="${e.slot}"` : ""}>
-      <div class="row"><span class="name">${esc(e.name)}${e.alive ? "" : " (down)"}</span>
+      <div class="row"><span class="name">${esc(e.name)}${e.minion ? ' <span class="chip minion" title="召唤出来的随从">召唤</span>' : ""}${e.alive ? "" : " (down)"}</span>
         <span class="name">${e.hp} / ${e.hpMax}</span></div>
       <div class="bar"><i style="width:${Math.max(0, 100 * e.hp / Math.max(1, e.hpMax))}%"></i></div>
       <div class="stats">

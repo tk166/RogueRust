@@ -8781,3 +8781,41 @@ for other in ctx.state.combatants_mut() {
 ### 139.6 数字
 
 聚合验收 **17/17**；单测 688 → **690**（rd-core 600 / rd-run 62 / rd-wasm 28）。
+
+---
+
+## 140. 随从的细节：**页面上的标记** + **内容侧的同一个上限**
+
+### 140.1 页面：召唤出来的敌人自己说
+
+观察向量里没有"这是随从"这一位（加了就要动 148 个 slot 的布局），所以做成了一个**独立导出**：
+
+```rust
+rd_env_enemy_is_minion(slot)   // 1 是 / 0 不是 / -1 没有这个槽
+```
+
+实现就是 `combatant.owner.is_some()` —— §139 存下来的那条边，这里第二次派上用场。
+页面在敌人面板的名字后面挂一个 `召唤` 小标签（`.chip.minion`），否则随从和"内容摆进来的怪"长得一模一样。
+
+### 140.2 内容侧：同一个上限也管"直接摆"
+
+`MAX_ENEMIES_IN_FIGHT = 4` 之前只在**召唤**路径上检查。现在两边都管：
+
+| 谁 | 怎么管 |
+|---|---|
+| 内核（召唤） | `node.createCombatant` 数活着的同队，到上限 **报错**（§139）|
+| 内容门 | 任何遭遇的 `Enemies` **多于 4** ⇒ `fail("encounter.X", "N enemies, the cap is 4")` |
+| 内核测试 | `no_encounter_places_more_enemies_than_a_fight_allows` 扫全部遭遇，断言最大的那个 ≤ 4 |
+
+第三个是"内容门的那条规则有没有真的被遵守"的内核侧证据 —— 门和内核各说一遍，是最便宜的互校。
+
+### 140.3 判据
+
+* `no_encounter_places_more_enemies_than_a_fight_allows`（rd-core，扫真镜像）；
+* `sts_content_check` 逐遭遇查上限；
+* `smoke.mjs` 要求 `rd_env_enemy_is_minion` 这个导出真的存在（页面调它，模块就得有）；
+* 真浏览器闸门仍然绿（随从标签在**没有随从**的战斗里不会出现，所以这条只有接线级判据）。
+
+### 140.4 数字
+
+聚合验收 **17/17**；单测 690 → **691**（rd-core 601 / rd-run 62 / rd-wasm 28）。
