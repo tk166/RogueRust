@@ -6220,5 +6220,34 @@
         "Id": "ancient_forge"
       }
     ]
+  },
+  "PotionTables": {
+    "Potions": [
+      {
+        "Id": "fire_potion"
+      },
+      {
+        "Id": "block_potion"
+      },
+      {
+        "Id": "energy_potion"
+      }
+    ],
+    "Potions2": [
+      {
+        "Id": "blood_potion"
+      },
+      {
+        "Id": "block_potion"
+      }
+    ],
+    "Potions3": [
+      {
+        "Id": "swift_potion"
+      },
+      {
+        "Id": "fire_potion"
+      }
+    ]
   }
 }

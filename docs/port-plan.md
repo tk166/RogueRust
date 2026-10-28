@@ -8594,3 +8594,22 @@ Elite2/Elite3 换成新遭遇、计数 monsters 23 / encounters 14 / enemy_actio
 
 数字：聚合验收 **17/17**；单测 **687**；内容 怪物 21 → **23**、遭遇 12 → **14**、动作 40 → **44**；
 镜像 full 25,708 B / core 21,564 B（重钉）。
+
+---
+
+## 135. 药水也按幕分池（§133 那条"说了没做"的补上）
+
+§133 写过：药水的**身份**不是在 run 层摇的，而是在 `rd-wasm` 的奖励路径里从整张 `POT` 挑。这一轮把池子穿过去：
+
+```rust
+let potion_pool_name = match act { 1 => "Potions", 2 => "Potions2", _ => "Potions3" };
+let Some(pool) = image.potion_pool(potion_pool_name) else { /* 响亮失败，指名缺哪个池 */ };
+```
+
+内容侧 `PotionTables { Potions, Potions2, Potions3 }` 回来了 —— 这次**真的被读**，所以不再是惰性内容
+（内容门会拿 `PotionTables.Potions` 这些字面量去核）。
+
+判据 `the_potions_are_readable` 里新增：第 1 幕池 == 三瓶原版；**第 2 幕池含 `blood_potion` 且不含
+`energy_potion`**（"不重放第 1 幕"）；同一个池两次读出来相等；未知池名返回 `None` 而不是空池。
+
+数字：聚合验收 17/17；单测 687；镜像重钉。

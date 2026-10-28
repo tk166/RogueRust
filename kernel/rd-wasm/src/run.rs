@@ -1922,12 +1922,24 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
             Ok(pool) => pool,
             Err(message) => return fail(session, &message),
         };
-        // The potion the fight may drop (`inv:§9.3`) is one of the image's own potions. A package
-        // without a `POT` table simply never offers one.
+        // The potion the fight may drop (`inv:§9.3`) comes from **the current act's pool**
+        // (`port-plan.md` §135): `Potions` / `Potions2` / `Potions3`. A missing pool is a content
+        // gap and says so instead of quietly falling back to act 1's list.
+        let act = session.state.act();
+        let potion_pool_name: &str = match act {
+            1 => "Potions",
+            2 => "Potions2",
+            _ => "Potions3",
+        };
+        let Some(potion_pool) = image.potion_pool(potion_pool_name) else {
+            let message =
+                std::format!("内容里没有 `PotionTables.{potion_pool_name}` 池（第 {act} 幕）");
+            return fail(session, &message);
+        };
         let mut potion_ids = std::vec::Vec::new();
-        for index in 0..image.potion_count() {
-            if let Some(potion) = image.potion(index) {
-                potion_ids.push(potion.id);
+        for id in potion_pool.iter() {
+            if !id.is_empty() {
+                potion_ids.push(*id);
             }
         }
         if let Err(e) = session

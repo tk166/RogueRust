@@ -3980,6 +3980,28 @@ mod tests {
             ids,
             vec!["block_potion", "blood_potion", "energy_potion", "fire_potion", "swift_potion"]
         );
+        // §135: the potion pool is **per act**. Act 1's list is the three originals, act 2 brings
+        // the heal potion, act 3 the block one -- and each is a real PotionTables entry.
+        let act_one: Vec<&str> = content
+            .potion_pool("Potions")
+            .expect("act 1 potions")
+            .iter()
+            .filter(|id| !id.is_empty())
+            .copied()
+            .collect();
+        assert_eq!(act_one, vec!["fire_potion", "block_potion", "energy_potion"]);
+        let act_two: Vec<&str> = content
+            .potion_pool("Potions2")
+            .expect("act 2 potions")
+            .iter()
+            .filter(|id| !id.is_empty())
+            .copied()
+            .collect();
+        assert!(act_two.contains(&"blood_potion"), "act 2: {act_two:?}");
+        assert!(!act_two.contains(&"energy_potion"), "act 2 must not replay act 1: {act_two:?}");
+        assert_eq!(content.potion_pool("Potions"), content.potion_pool("Potions"), "deterministic");
+        assert!(content.potion_pool("Nope").is_none(), "an unknown pool is None, not empty");
+
         let index = (0..content.potion_count())
             .find(|index| content.potion(*index).map(|p| p.id) == Some("fire_potion"))
             .expect("fire_potion");
