@@ -828,6 +828,50 @@ pub fn end_current_turn_and_start_next<H: TurnHost>(
 /// 参考实现在这里只**入队**两个事件（处理器要到调用方那次 `ResolvePendingQueues` 才跑），
 /// 所以本函数**不检查** `result`：边界上的宿主回调哪怕立刻把战斗判成终态，回合机也照参考的
 /// 形状走完这一格，由 `end_current_turn` 的 ④ 之后统一判停。
+    /// **An extra turn beats the rotation** (`port-plan.md` §127): the actor that asked for one stays
+    /// active, the candidate enemy does not get its turn yet, and the marker is consumed.
+    #[test]
+    fn an_extra_turn_keeps_the_same_actor_active() {
+        use crate::state::{Combatant, CombatantDefinitionId, TeamId};
+        let id = |name: &str| CombatantId::new(name).unwrap();
+        let unit = |name: &str, team: &str| {
+            Combatant::new(
+                id(name),
+                CombatantDefinitionId::new(name).unwrap(),
+                TeamId::new(team).unwrap(),
+                10,
+                10,
+            )
+        };
+        let mut state = CombatState::new(crate::state::CombatId::new("t").unwrap(), 1);
+        state.add_combatant(unit("hero", "player")).unwrap();
+        state.add_combatant(unit("enemy_a", "enemy")).unwrap();
+        let mut host = NullHost;
+        let hero = id("hero");
+        let enemy = id("enemy_a");
+        state.active_combatant_id = Some(hero);
+
+        // Ordinary rotation: the enemy takes over.
+        advance_to_next_combatant(&mut state, &mut host).unwrap();
+        assert_eq!(state.active_combatant_id, Some(enemy));
+
+        // Now the enemy asks for one more turn: ending it keeps the enemy active.
+        state.extra_turn_for = Some(enemy);
+        let turn_before = state.current_turn;
+        advance_to_next_combatant(&mut state, &mut host).unwrap();
+        assert_eq!(
+            state.active_combatant_id,
+            Some(enemy),
+            "the enemy acts again instead of handing over"
+        );
+        assert_eq!(state.current_turn, turn_before + 1, "the turn clock still moves");
+        assert_eq!(state.extra_turn_for, None, "the marker is spent");
+
+        // ...and the one after that rotates normally.
+        advance_to_next_combatant(&mut state, &mut host).unwrap();
+        assert_eq!(state.active_combatant_id, Some(hero));
+    }
+
 pub fn advance_to_next_combatant<H: TurnHost>(
     state: &mut CombatState,
     host: &mut H,
@@ -840,6 +884,15 @@ pub fn advance_to_next_combatant<H: TurnHost>(
     let Some(cur) = state.turn_order().iter().position(|id| *id == active) else {
         return Err(TurnError::ActiveNotInTurnOrder);
     };
+
+    // **An extra turn beats the rotation** (`node.extraTurn`, `port-plan.md` §127): the actor that
+    // asked for one simply stays active, and only the turn clock moves.
+    if state.extra_turn_for == Some(active) {
+        state.extra_turn_for = None;
+        state.current_turn += 1;
+        state.expire_temporary_rules_at_turn_boundary();
+        return Ok(());
+    }
     let len = state.turn_order().len(); // 非 0：上面那次 ensure 已经保证
 
     for offset in 1..=len {

@@ -822,6 +822,7 @@ pub fn resolve_effect(
             | EffectRequest::CreateCardInstance { .. }
             | EffectRequest::MoveCardToZone { .. }
             | EffectRequest::EndTurn => None,
+            EffectRequest::ExtraTurn { target } => target,
         },
         None,
         // 解析器**一个节点都不派发** ⇒ 步数预算无关。写 0 让"用错"当场报错。
@@ -897,6 +898,12 @@ fn resolve_request(ctx: &mut ExecContext<'_>, request: &EffectRequest) -> Result
         } => {
             let Some(target) = target else { return Ok(()) };
             set_counter_for(ctx, &target, key, amount, relative)
+        }
+        EffectRequest::ExtraTurn { target } => {
+            if let Some(target) = target {
+                ctx.state.extra_turn_for = Some(target);
+            }
+            Ok(())
         }
         // The kernel's own request: raise the flag, the battle loop does the advancing.
         EffectRequest::EndTurn => {
@@ -1273,6 +1280,7 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         // 本内核自己的第 16 种（分裂 / 召唤，`port-plan.md` §121）。
         | NodeKind::CreateCombatant
         | NodeKind::EndTurn
+        | NodeKind::ExtraTurn
         // W4e 的 7 种（见模块头那张表）。
         | NodeKind::SetCombatantCounter
         | NodeKind::ModifyStatusStacks
@@ -1427,6 +1435,7 @@ fn dispatch_node(
         NodeKind::ApplyStatus => apply_status_node(node, ctx, frame, slot, stats),
         NodeKind::Heal => heal_node(node, ctx, frame, slot, stats),
     NodeKind::EndTurn => end_turn_node(node, ctx, frame, slot, stats),
+    NodeKind::ExtraTurn => extra_turn_node(node, ctx, frame, slot, stats),
     NodeKind::CreateCombatant => create_combatant_node(node, ctx, frame, slot, stats),
         NodeKind::SetCombatantCounter => set_combatant_counter_node(node, ctx, frame, slot, stats),
         NodeKind::ModifyStatusStacks => modify_status_stacks_node(node, ctx, frame, slot, stats),
@@ -2004,6 +2013,33 @@ fn create_combatant_node(
 /// `node.endTurn`：请求**结束当前回合**（本内核自己的节点，`port-plan.md` §125）。
 ///
 /// 没有字段：谁去结束回合由战斗循环决定，节目只说"该结束了"。
+/// `node.extraTurn`：让目标**再来一个回合**（本内核自己的节点，`port-plan.md` §127）。
+///
+/// 字段与 `applyStatus` 同形：一个 `TargetSelector`。
+fn extra_turn_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut targets)?;
+    for target in targets.iter().take(count) {
+        ctx.state.enqueue_effect_with_owner(
+            EffectRequest::ExtraTurn {
+                target: Some(*target),
+            },
+            Some(frame),
+        )?;
+        stats.effects = stats.effects.saturating_add(1);
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
 fn end_turn_node(
     _node: NodeRef<'_>,
     ctx: &mut ExecContext<'_>,

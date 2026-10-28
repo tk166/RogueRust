@@ -118,6 +118,8 @@ pub enum NodeKind {
     CreateCombatant,
     /// `node.endTurn` —— 请求结束当前回合（本内核自己的节点，`port-plan.md` §125）。
     EndTurn,
+    /// `node.extraTurn` —— 目标再来一个回合（`port-plan.md` §127）。
+    ExtraTurn,
 }
 
 impl NodeKind {
@@ -142,13 +144,14 @@ impl NodeKind {
             NodeKind::LoseResource => "node.loseResource",
             NodeKind::CreateCombatant => "node.createCombatant",
             NodeKind::EndTurn => "node.endTurn",
+            NodeKind::ExtraTurn => "node.extraTurn",
         }
     }
 
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 17] = [
+        const ALL: [NodeKind; 18] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -167,6 +170,7 @@ impl NodeKind {
             // 本内核自己的第 16 种（分裂 / 召唤）。
             NodeKind::CreateCombatant,
             NodeKind::EndTurn,
+            NodeKind::ExtraTurn,
         ];
         let mut i = 0;
         while i < ALL.len() {

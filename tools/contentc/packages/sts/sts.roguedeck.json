@@ -1131,6 +1131,18 @@
                       {
                         "kind": "node.endTurn",
                         "value": {}
+                      },
+                      {
+                        "kind": "node.extraTurn",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          }
+                        }
                       }
                     ]
                   }

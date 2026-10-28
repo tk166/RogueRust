@@ -1845,6 +1845,11 @@ pub enum EffectRequest {
     /// turn advancement lives in `turn.rs`. Setting a flag and letting the battle loop end the turn
     /// keeps the direction of control one-way -- exactly how `state.result` already works.
     EndTurn,
+    /// **The target acts again when its turn ends** (the kernel's own, `port-plan.md` §127).
+    ExtraTurn {
+        /// Who gets it (`None` = the selector resolved to nobody ⇒ nothing happens).
+        target: Option<CombatantId>,
+    },
     /// `DealDamageEffectRequest`（`DamageEffects.cs:15-53`）。
     ///
     /// ⚠️ **必须带 `source`**：参考的请求里带着 `SourceCombatantId`，因为**修饰器在解析时
@@ -2860,6 +2865,9 @@ pub struct CombatState {
     /// A counter, not a flag: the UI polls it and shows "your turn was ended" when it changes, which
     /// survives the fact that the flag itself is consumed inside the battle loop.
     pub forced_turn_ends: i32,
+    /// Who gets **another turn in a row** when their current one ends (`node.extraTurn`,
+    /// `port-plan.md` §127). Cleared when honoured.
+    pub extra_turn_for: Option<CombatantId>,
     pub next_status_instance_number: i32,
     /// 下一个 `node.createCombatant` 造出来的战斗员的编号（分裂/召唤）。
     ///
@@ -2994,6 +3002,7 @@ impl Empty for CombatState {
         active_combatant_id: None,
         end_turn_requested: false,
         forced_turn_ends: 0,
+        extra_turn_for: None,
         next_status_instance_number: 0,
             next_combatant_number: 0,
         next_card_instance_number: 0,
@@ -3100,6 +3109,7 @@ impl CombatState {
             active_combatant_id: None,
             end_turn_requested: false,
             forced_turn_ends: 0,
+            extra_turn_for: None,
             next_status_instance_number: 0,
             next_combatant_number: 0,
             next_card_instance_number: 0,
@@ -3141,6 +3151,7 @@ impl CombatState {
         self.active_combatant_id = None;
         self.end_turn_requested = false;
         self.forced_turn_ends = 0;
+        self.extra_turn_for = None;
         self.next_status_instance_number = 1;
         self.next_card_instance_number = 1;
         self.next_effect_chain_number = 1;

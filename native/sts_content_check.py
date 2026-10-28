@@ -386,6 +386,8 @@ def program_facts(root):
         elif kind == "node.modifyStatusStacks":
             facts.append(("modify", body["StatusDefinitionId"]["value"],
                           amount(body["Delta"]), tgt(body["TargetSelector"])))
+        elif kind == "node.extraTurn":
+            facts.append(("extraTurn", tgt(body["TargetSelector"])))
         elif kind == "node.endTurn":
             facts.append(("endTurn",))
         elif kind == "node.createCombatant":
