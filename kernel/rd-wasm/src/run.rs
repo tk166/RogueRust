@@ -2782,9 +2782,12 @@ mod tests {
             index += 1;
         }
         assert_eq!(names.len(), 1, "one boss; got {names:?}");
+        // Two bosses are authorable now (§129), so the assertion is "one of the boss pool",
+        // not "the slime boss".
+        let boss = names[0].to_lowercase();
         assert!(
-            names[0].to_lowercase().contains("slime_boss"),
-            "the boss is the slime boss; got {names:?}"
+            boss.contains("slime_boss") || boss.contains("time_eater"),
+            "the boss must come from the Boss pool; got {names:?}"
         );
 
         // Fight it out. The assertion is that the *mechanism* is consistent in both directions --

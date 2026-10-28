@@ -3805,7 +3805,7 @@ mod tests {
         assert!(weak.contains(&"enc_small_slimes"));
         assert_eq!(elite, vec!["enc_three_sentries"], "elite: {elite:?}");
         // A pool the document does not have is `None`, not an empty set.
-        // The boss pool (inv:§4.3): one entry, because this content authors one of the three.
+        // The boss pool (inv:§4.3).
         let boss: Vec<&str> = content
             .encounter_pool("Boss")
             .expect("a boss pool")
@@ -3813,7 +3813,8 @@ mod tests {
             .filter(|id| !id.is_empty())
             .copied()
             .collect();
-        assert_eq!(boss, vec!["enc_slime_boss"]);
+        // Two bosses now (§129): the floor-16 pick is a real choice, not a constant.
+        assert_eq!(boss, vec!["enc_slime_boss", "enc_time_eater"]);
         // A pool the document does not have is None, not an empty set.
         assert_eq!(content.encounter_pool("Sideboard"), None);
     }

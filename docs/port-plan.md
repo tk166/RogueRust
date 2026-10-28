@@ -8328,3 +8328,69 @@ CombatState.cards_played_last_turn   // turn.rs 在每个回合边界滚动
 | 单测 | 684 → **685**（rd-core 597 / rd-run 61 / rd-wasm 27） |
 | 意图条件 | **10 / 10** |
 | 表达式 | `cardsPlayedThisTurn` / `cardsPlayedLastTurn` 从不支持变成支持 |
+
+---
+
+## 129. 第 1 件：**第三幕 Boss（时间吞噬者）进了内容**
+
+### 129.1 一只真的 Boss
+
+| 项 | 值 |
+|---|---|
+| 怪 | `time_eater`，456 HP（wiki 值） |
+| 动作 | `reverberate`（7×3）/ `ripple`（20 格挡 + 1 虚弱 + 1 易伤）/ `head_slam`（26） |
+| 状态 | `standard.time_warp` 1 层（§125 做的机制） |
+| 意图规则 | 半血以下改用 `head_slam`（`intent.healthPercent <= 50`，§124 做的条件） |
+| 遭遇 | `enc_time_eater` |
+| 池 | **`EncounterTables.Boss` 现在有两项** |
+
+⇒ floor 16 的 Boss **不再是常量**：两个 Boss 等概率二选一。
+
+### 129.2 一处降级（写在 `AiNote` 里）
+
+wiki 的 Time Eater 是**第三幕** Boss；本内容把它放进 **Boss 池**（与 Slime Boss 同池），因为
+**幕与幕之间的内容差异还没做**（§101）。机制（时间扭曲、额外回合、相位）是真的，**"它只出现在第三幕"
+是假的**。
+
+### 129.3 实现过程中修掉的三处"内容门太紧"
+
+内容门 `sts_content_check` 是逐条对账的，所以每加一窝怪都要跟着改它 —— 这一轮改了四处：
+
+1. 动作事实表（`INV_ACTIONS`）加三条；
+2. 怪物名册（`INV_MONSTERS`）加一行；
+3. Boss 池（`INV_BOSS_POOL`）加一项；
+4. 计数 `monsters 14→15` / `encounters 5→6`。
+
+**还有两处踩到的形状坑**（都是"编译器认识哪些字段"这种硬约束）：
+
+* 怪物记录**不能**带 `PackageId`（`compile.py` 的 `obj()` 只有它见过的字段组合）；
+* 遭遇记录**要**带 `HeroResources` / `HeroStartingStatuses` / `HeroDisplayName` / `CardsDrawnPerTurn`，
+  内联敌人**要**带 `Position` / `DisplayName` / `MaxHealth` —— 少一个就是 `KeyError: (...)` 或者
+  内容门报 `MaxHealth None != roster 456`。
+
+### 129.4 判据
+
+* 内容门：`monsters 15 / encounters 6 / enemy_actions 27`；
+* `the_encounter_pools_are_readable`：Boss 池 == `["enc_slime_boss", "enc_time_eater"]`；
+* `the_boss_is_offered_at_floor_16_and_clears_the_act`：断言从"必须是史莱姆王"**放宽成"必须来自 Boss 池"**
+  （两个 Boss 之后那句硬断言就是错的）。
+
+### 129.5 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | **685**（rd-core 597 / rd-run 61 / rd-wasm 27） |
+| 内容 | 怪物 14 → **15**、遭遇 5 → **6**、动作 24 → **27** |
+| Boss 池 | 1 → **2** |
+| 镜像 | full 21,272 B / core 18,028 B（重钉） |
+
+### 129.6 这一整轮（§125–§129）做完的
+
+1. `node.endTurn` + 请求 + 循环兑现（"12 张牌结束回合"）；
+2. 页面上的"回合被强行结束"提示（计数器 + 轮询）；
+3. `node.extraTurn`（额外回合）；
+4. 每回合出牌统计 + `opponentCardsPlayed`（**意图条件 10/10**）；
+5. 时间吞噬者本体（怪 + 动作 + 遭遇 + Boss 池 + 相位 + 时间扭曲）。
+
+剩下的仍然是那几笔老账：幕间内容差异、`?` 房通用解释器、像素级判据、Boss 之外的第三幕怪。

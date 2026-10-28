@@ -77,9 +77,9 @@ CORE_PATH = os.path.join(PKG_DIR, "out", "content.sts.core.rdcf")
 INV_COUNTS = {
     # 10 tier-A monsters + three sentry **rows** (one per instance: a combatant id must be unique
     # and the encounter record has no instance number, inv:§4.2) + the boss.
-    "monsters": 14,
+    "monsters": 15,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
-    "encounters": 5,
+    "encounters": 6,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     "statuses": 17,       # inv:§10 the ones this subset actually needs
 }
@@ -132,6 +132,9 @@ INV_CARDS = {
 # inv:§4.1 -- the 10 zero-new-ability enemies: (hp_min, hp_max, action ids).
 INV_MONSTERS = [
     ("spike_slime_s", 10, 14, ["spike_slime_s.tackle"]),
+    # §129: the wiki's act-3 boss, parked in the Boss pool (acts still share content).
+    ("time_eater", 456, 456,
+     ["time_eater.reverberate", "time_eater.ripple", "time_eater.head_slam"]),
     ("fat_gremlin", 13, 17, ["fat_gremlin.smash"]),
     ("sneaky_gremlin", 10, 14, ["sneaky_gremlin.puncture"]),
     ("blue_slaver", 46, 50, ["blue_slaver.stab", "blue_slaver.rake"]),
@@ -157,6 +160,12 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    "time_eater.reverberate": ("Attack", [("damage", 7, "event"), ("damage", 7, "event"),
+                                          ("damage", 7, "event")]),
+    "time_eater.head_slam": ("Attack", [("damage", 26, "event")]),
+    "time_eater.ripple": ("Defend", [("block", 20, "source"),
+                                     ("status", "standard.weak", 1, "event"),
+                                     ("status", "standard.vulnerable", 1, "event")]),
     "spike_slime_s.tackle": ("Attack", [("damage", 5, "event")]),
     "fat_gremlin.smash": ("Attack", [("damage", 4, "event"),
                                      ("status", "standard.weak", 1, "event")]),
@@ -213,6 +222,8 @@ INV_ELITE_POOL = {
 # content authors one of them (Slime Boss) and says why in the document.
 INV_BOSS_POOL = {
     "enc_slime_boss": ["slime_boss"],
+    # §129: two bosses now, so the floor-16 pick is a real choice.
+    "enc_time_eater": ["time_eater"],
 }
 
 # inv:§10 -- the 5 statuses, with the modifier the damage/block pipeline needs.

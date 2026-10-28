@@ -28,7 +28,7 @@
  42  3  3   8 OBJ _obj(Action,Condition,Priority)                              : Action:STR(wrap) Condition:TERM Priority:INT
  43 11 14  32 OBJ _obj(Actions,AiNote,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,StartingStatuses,Tier) : Actions:STRLIST(wrap) AiNote:STR HpMax:INT HpMin:INT Id:STR IntentRules:TERMLIST InvRef:STR MaxHealth:INT NameKey:STR StartingStatuses:TERMLIST Tier:STR
  44 12 16  36 OBJ _obj(Actions,AiNote,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,StartingStatuses,Tier,TriggeredEffects) : Actions:STRLIST(wrap) AiNote:STR HpMax:INT HpMin:INT Id:STR IntentRules:STRLIST InvRef:STR MaxHealth:INT NameKey:STR StartingStatuses:STRLIST Tier:STR TriggeredEffects:STRLIST
- 45  7 10  24 OBJ _obj(Actions,DisplayName,Id,IntentRules,MaxHealth,Position,StartingStatuses) : Actions:STRLIST(wrap) DisplayName:STR Id:STR IntentRules:TERMLIST MaxHealth:INT Position:TERM StartingStatuses:TERMLIST
+ 45  7 10  24 OBJ _obj(Actions,DisplayName,Id,IntentRules,MaxHealth,Position,StartingStatuses) : Actions:STRLIST(wrap) DisplayName:STR Id:STR IntentRules:TERMLIST MaxHealth:INT Position:INT StartingStatuses:TERMLIST
  46  6  6  16 OBJ _obj(Amount,DescriptionKey,Effect,Id,NameKey,Rarity)         : Amount:INT DescriptionKey:STR Effect:STR Id:STR NameKey:STR Rarity:STR
  47  2  2   8 OBJ _obj(Amount,ResourceId)                                      : Amount:INT ResourceId:STR(wrap)
  48  9  9  20 OBJ _obj(Amount0,Amount1,DescriptionKey,Effect0,Effect1,Id,Label0,Label1,NameKey) : Amount0:INT Amount1:INT DescriptionKey:STR Effect0:STR Effect1:STR Id:STR Label0:STR Label1:STR NameKey:STR
