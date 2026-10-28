@@ -4189,6 +4189,218 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "gremlin_leader.slash",
+      "PackageId": "sts",
+      "NameKey": "Slash",
+      "DescriptionKey": "Slash - 16 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Slash - 16 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 16
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "gremlin_leader.rally",
+      "PackageId": "sts",
+      "NameKey": "Rally",
+      "DescriptionKey": "Rally - 12 Block and 5 Strength",
+      "Intent": {
+        "Kind": "Defend",
+        "Label": "Rally - 12 Block and 5 Strength"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 12
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.strength"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 5
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "giant_head.glare",
+      "PackageId": "sts",
+      "NameKey": "Glare",
+      "DescriptionKey": "Glare - 12 damage and 1 Weak",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Glare - 12 damage and 1 Weak"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 12
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.weak"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "giant_head.count",
+      "PackageId": "sts",
+      "NameKey": "Count",
+      "DescriptionKey": "Count - 26 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Count - 26 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 26
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -4804,6 +5016,92 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_gremlin_leader"
+      },
+      "Enemies": [
+        {
+          "Id": "gremlin_leader",
+          "MaxHealth": 140,
+          "Actions": [
+            {
+              "value": "gremlin_leader.slash"
+            },
+            {
+              "value": "gremlin_leader.rally"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.enrage"
+              },
+              "Stacks": 1
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Gremlin Leader"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_giant_head"
+      },
+      "Enemies": [
+        {
+          "Id": "giant_head",
+          "MaxHealth": 320,
+          "Actions": [
+            {
+              "value": "giant_head.glare"
+            },
+            {
+              "value": "giant_head.count"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.metallicize"
+              },
+              "Stacks": 4
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Giant Head"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -5389,6 +5687,60 @@
       "Tier": "Boss",
       "InvRef": "inv:§4.3",
       "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
+    },
+    {
+      "Id": "gremlin_leader",
+      "NameKey": "Gremlin Leader",
+      "HpMin": 140,
+      "HpMax": 140,
+      "MaxHealth": 140,
+      "Actions": [
+        {
+          "value": "gremlin_leader.slash"
+        },
+        {
+          "value": "gremlin_leader.rally"
+        }
+      ],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.enrage"
+          },
+          "Stacks": 1
+        }
+      ],
+      "IntentRules": [],
+      "Tier": "Elite",
+      "InvRef": "inv:§5.3",
+      "AiNote": "⚠️ 第 2/3 幕的精英（port-plan.md §134）；机制用的是已有的 Enrage 与 Metallicize。"
+    },
+    {
+      "Id": "giant_head",
+      "NameKey": "Giant Head",
+      "HpMin": 320,
+      "HpMax": 320,
+      "MaxHealth": 320,
+      "Actions": [
+        {
+          "value": "giant_head.glare"
+        },
+        {
+          "value": "giant_head.count"
+        }
+      ],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.metallicize"
+          },
+          "Stacks": 4
+        }
+      ],
+      "IntentRules": [],
+      "Tier": "Elite",
+      "InvRef": "inv:§5.3",
+      "AiNote": "⚠️ 第 2/3 幕的精英（port-plan.md §134）；机制用的是已有的 Enrage 与 Metallicize。"
     }
   ],
   "EncounterTables": {
@@ -5446,13 +5798,13 @@
     ],
     "Elite2": [
       {
-        "Id": "enc_three_sentries",
+        "Id": "enc_gremlin_leader",
         "Weight": 100
       }
     ],
     "Elite3": [
       {
-        "Id": "enc_three_sentries",
+        "Id": "enc_giant_head",
         "Weight": 100
       }
     ],

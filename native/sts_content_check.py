@@ -77,9 +77,9 @@ CORE_PATH = os.path.join(PKG_DIR, "out", "content.sts.core.rdcf")
 INV_COUNTS = {
     # 10 tier-A monsters + three sentry **rows** (one per instance: a combatant id must be unique
     # and the encounter record has no instance number, inv:§4.2) + the boss.
-    "monsters": 21,
+    "monsters": 23,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
-    "encounters": 12,
+    "encounters": 14,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     "statuses": 17,       # inv:§10 the ones this subset actually needs
 }
@@ -133,6 +133,9 @@ INV_CARDS = {
 INV_MONSTERS = [
     ("spike_slime_s", 10, 14, ["spike_slime_s.tackle"]),
     # §129: the wiki's act-3 boss, parked in the Boss pool (acts still share content).
+    # §134: acts 2 and 3 have their own elites.
+    ("gremlin_leader", 140, 140, ["gremlin_leader.slash", "gremlin_leader.rally"]),
+    ("giant_head", 320, 320, ["giant_head.glare", "giant_head.count"]),
     ("time_eater", 456, 456,
      ["time_eater.reverberate", "time_eater.ripple", "time_eater.head_slam"]),
     # §130: act 2 and act 3 have monsters of their own -- the point of the section.
@@ -168,6 +171,12 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    "gremlin_leader.slash": ("Attack", [("damage", 16, "event")]),
+    "gremlin_leader.rally": ("Defend", [("block", 12, "source"),
+                                        ("status", "standard.strength", 5, "source")]),
+    "giant_head.glare": ("Attack", [("damage", 12, "event"),
+                                    ("status", "standard.weak", 1, "event")]),
+    "giant_head.count": ("Attack", [("damage", 26, "event")]),
     "shelled_parasite.suck": ("Attack", [("damage", 10, "event"), ("block", 2, "source")]),
     "shelled_parasite.double_strike": ("Attack", [("damage", 6, "event"), ("damage", 6, "event")]),
     "chosen.poke": ("Attack", [("damage", 6, "event"), ("damage", 6, "event")]),
@@ -245,6 +254,9 @@ INV_WEAK_WEIGHT = 25   # inv:§5.2 每项 25%
 # inv:§5.3 -- the elite pool. One entry, so there is no weight question yet; `EncounterTables.Elite`
 # in the document carries it, and this is what the check compares that against.
 INV_ELITE_POOL = {
+    # §134: one elite per later act.
+    "enc_gremlin_leader": ["gremlin_leader"],
+    "enc_giant_head": ["giant_head"],
     "enc_three_sentries": ["sentry_1", "sentry_2", "sentry_3"],
 }
 
@@ -257,8 +269,8 @@ INV_ACT_TABLES = {
     "Weak2": ["enc_shelled_parasite", "enc_chosen"],
     "Weak3": ["enc_byrds", "enc_spiker", "enc_orb_walker"],
     "Elite": ["enc_three_sentries"],
-    "Elite2": ["enc_three_sentries"],
-    "Elite3": ["enc_three_sentries"],
+    "Elite2": ["enc_gremlin_leader"],
+    "Elite3": ["enc_giant_head"],
     "Boss": ["enc_slime_boss"],
     "Boss2": ["enc_the_champ"],
     "Boss3": ["enc_time_eater"],

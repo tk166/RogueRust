@@ -8573,3 +8573,24 @@ let Some(pool) = image.event_pool(pool_name) else { /* 响亮失败，指名缺�
 | 单测 | **687**（rd-core 597 / rd-run 62 / rd-wasm 28） |
 | 内容 | 事件 4 → **6**、药水 3 → **5** |
 | 镜像 | full 24,744 B / core 20,792 B（重钉） |
+
+---
+
+## 134. 每幕自己的精英
+
+Elite / Elite2 / Elite3 原来都是同一窝哨兵（§130 写明过）。这一轮后两幕各有自己的精英：
+
+| 幕 | 精英 | 血量 | 用的机制 |
+|---|---|---|---|
+| 1 | sentry_1/2/3 | 3 × 40 | （无状态）|
+| **2** | **gremlin_leader** | 140 | **Enrage 1**（§117）：你每出一张牌它 +2 力量 |
+| **3** | **giant_head** | 320 | **Metallicize 4**（§114）：每回合结束 +4 格挡 |
+
+gremlin_leader.rally 还会给自己 +5 力量、+12 格挡；giant_head.glare 给 1 层虚弱。**没有一条新内核代码** ——
+两种状态都是前几轮做出来的，这两只精英只是在用它们。
+
+内容门跟着加：两只怪进名册、三条动作进事实表、两个遭遇进 INV_ELITE_POOL、INV_ACT_TABLES 的
+Elite2/Elite3 换成新遭遇、计数 monsters 23 / encounters 14 / enemy_actions 44。
+
+数字：聚合验收 **17/17**；单测 **687**；内容 怪物 21 → **23**、遭遇 12 → **14**、动作 40 → **44**；
+镜像 full 25,708 B / core 21,564 B（重钉）。
