@@ -8473,3 +8473,34 @@ let hop = match pool { "Weak" => "EncounterTables.Weak", … _ => return None };
 * **事件**（`?` 房）和 **药水**只有一套；
 * 幕间**没有过渡画面**（打完 Boss 直接进下一幕）；
 * 精英池三幕共用。
+
+---
+
+## 131. 每幕自己的地图
+
+§130 之后还剩一条最显眼的假：三幕共用同一张地图（RunMap::generate 只在开局跑一次）。
+
+### 131.1 形状
+
+RunState::mark_boss_beaten 推进act 时**重新生成地图**，种子由 run seed 与幕号折出来：
+
+`
+ust
+pub const fn act_seed(&self) -> i32 {
+    self.seed.wrapping_add(((self.act - 1) as i32).wrapping_mul(0x9E37_79B9u32 as i32))
+}
+`
+
+ct - 1 是刻意的：**第 1 幕的种子就是 run seed**，所以老种子跑出来的第一张图和以前一模一样；
+第 2 幕才是第一次折叠。生成失败时**保留旧图并立 map_generation_failed 旗**（今天不可能发生，
+但静默换一张图正是这个项目一直在禁的那种悄悄错）。
+
+### 131.2 判据
+
+dvancing_the_act_draws_a_new_map（rd-run）：act 1 的 ct_seed() == run seed、地图 == 开局那张；
+杀 Boss 之后 ct == 2、map_generation_failed == false、种子变了、**地图不等于第 1 幕那张**，
+而且**同种子的另一局画出一模一样的第 2 幕地图**（确定性）。
+
+### 131.3 数字
+
+聚合验收 17/17；单测 686 → **687**。

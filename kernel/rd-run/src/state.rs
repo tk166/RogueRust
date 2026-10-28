@@ -515,6 +515,8 @@ pub struct RunState {
     potions: [RunId; MAX_RUN_POTIONS],
     potions_len: u8,
     map: RunMap,
+    /// See [`RunState::map_generation_failed`].
+    map_generation_failed: bool,
     rng: RunRng,
     /// `?` room cumulative odds (`inv:§7.5`), three counters, reset at the start of an act.
     unknown: [i32; 3],
@@ -572,6 +574,7 @@ impl RunState {
             potions: [RunId::EMPTY; MAX_RUN_POTIONS],
             potions_len: 0,
             map,
+            map_generation_failed: false,
             rng,
             unknown: [0; 3],
             pending: Pending::None,
@@ -890,16 +893,52 @@ impl RunState {
         }
         // **Advance to the next act**: the walk starts over from the first row, with the hero's
         // health, deck and relics carried across (the fight already folded the health back).
-        //
-        // ⚠️ **Documented downgrade**: this content has one act's worth of map, encounters, events
-        // and potions, so act 2 and 3 **re-use act 1's** -- the *progression* is real, the *content*
-        // is not. `port-plan.md` §101 says so.
         self.act += 1;
         self.node = -1;
         self.floor = 0;
         self.pending = Pending::None;
         self.resolved = [0; 2];
         self.boss_beaten = false;
+
+        // **A new act gets a new map** (`port-plan.md` §131). The seed is derived from the run seed
+        // and the act number, so the map is deterministic for a given run -- the same discipline the
+        // opening map follows (`RunMap::generate` on the run's own RNG).
+        //
+        // ⚠️ A map that failed to generate here would be catastrophic (the run would have no walk),
+        // so the old map is kept on failure and `map_generation_failed` is raised -- the caller sees
+        // it instead of walking a stale map by accident.
+        let previous = self.map;
+        let seed = self.act_seed();
+        let mut rng = RunRng::new(seed);
+        match RunMap::generate(&mut rng) {
+            Ok(map) => {
+                self.map = map;
+                self.map_generation_failed = false;
+            }
+            Err(_) => {
+                self.map = previous;
+                self.map_generation_failed = true;
+            }
+        }
+    }
+
+    /// The map seed for the **current** act: the run seed folded with the act number.
+    ///
+    /// Act 1 keeps the original seed (so a run's first map is exactly what it always was); later acts
+    /// get their own, and the fold is a fixed constant so the whole thing stays reproducible.
+    #[must_use]
+    pub const fn act_seed(&self) -> i32 {
+        // ct - 1, so act 1 is **exactly** the opening seed and act 2 is the first fold.
+        self.seed
+            .wrapping_add(((self.act - 1) as i32).wrapping_mul(0x9E37_79B9u32 as i32))
+    }
+
+    /// Did the act-change map generation fail? (It cannot today -- `RunMap::generate` retries and the
+    /// generator is total -- but a silent fallback would be exactly the kind of "quietly wrong" this
+    /// project keeps banning, so the flag exists and the UI can say so.)
+    #[must_use]
+    pub const fn map_generation_failed(&self) -> bool {
+        self.map_generation_failed
     }
 
     /// Has the node under the cursor already paid out?
@@ -2529,6 +2568,37 @@ mod tests {
             }
         }
         assert!(seen, "a wounded hero must still be able to be offered a heal");
+    }
+
+    /// **Each act draws its own map** (`port-plan.md` §131): advancing the act regenerates the map
+    /// from a seed folded with the act number, and act 1 keeps the opening seed.
+    #[test]
+    fn advancing_the_act_draws_a_new_map() {
+        let mut run = ironclad();
+        let act_one_seed = run.act_seed();
+        assert_eq!(act_one_seed, run.seed(), "act 1 keeps the run seed");
+        let act_one_map = *run.map();
+
+        // The walk to the boss, then the act changes.
+        let first = run.reachable().get(0).expect("floor 1");
+        run.enter_node(first).expect("floor 1");
+        run.mark_boss_beaten();
+
+        assert_eq!(run.act(), 2);
+        assert!(!run.map_generation_failed(), "the new map must generate");
+        assert_ne!(run.act_seed(), act_one_seed, "act 2 folds the seed");
+        let act_two_map = *run.map();
+        assert_ne!(
+            act_one_map, act_two_map,
+            "act 2 must not replay act 1's map"
+        );
+
+        // ...and it is deterministic: a second run with the same seed draws the same act-2 map.
+        let mut twin = ironclad();
+        let first = twin.reachable().get(0).expect("floor 1");
+        twin.enter_node(first).expect("floor 1");
+        twin.mark_boss_beaten();
+        assert_eq!(*twin.map(), act_two_map, "same seed, same act-2 map");
     }
 
     /// **Killing an act's boss advances the act** instead of ending the run; only the last act's
