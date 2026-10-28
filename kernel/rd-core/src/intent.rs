@@ -456,7 +456,40 @@ pub fn locate_enemy(
             by_definition = Some(index as u16);
         }
     }
-    Ok(by_definition.map(|index| EnemySlot { encounter, index }))
+    if let Some(index) = by_definition {
+        return Ok(Some(EnemySlot { encounter, index }));
+    }
+
+    // The reference's B0 lookup is "by the *current* encounter's id map" -- an actor that is simply
+    // a stranger must stay None. Only a **spawned** id (it carries the #<n> suffix) is allowed to
+    // resolve outside this encounter, because that is the summoning case.
+    if !raw.contains('#') {
+        return Ok(None);
+    }
+
+    // **A summoned minion is not in this encounter's roster** (`port-plan.md` §138): an elite that
+    // calls for help brings a monster the encounter never listed. The definition still names a real
+    // monster in the *image*, so fall back to "the first encounter that does list it" -- the intent
+    // rules are keyed on the definition, not on which fight it showed up in.
+    for row in content.rows(Table::Encounter) {
+        let mut ids = [0u16; MAX_ENEMIES];
+        let Ok(count) = encounter_enemy_ids(content, row.index(), &mut ids) else {
+            continue;
+        };
+        for (index, id) in ids.iter().enumerate().take(count) {
+            let record = NodeRef::new(content, *id);
+            let Some(record_id) = record.str_field("Id")? else {
+                continue;
+            };
+            if record_id == definition {
+                return Ok(Some(EnemySlot {
+                    encounter: row.index(),
+                    index: index as u16,
+                }));
+            }
+        }
+    }
+    Ok(None)
 }
 
 // ===========================================================================
@@ -1286,6 +1319,48 @@ mod tests {
                 field_slot(content, condition_id, "Op"),
             ),
         }
+    }
+
+    /// **A summoned minion gets an intent** even though the encounter never listed it
+    /// (`port-plan.md` §138): the id carries `#<n>`, so `locate_enemy` falls back to the first
+    /// encounter in the image that does list the definition.
+    #[test]
+    fn a_summoned_minion_resolves_through_the_image_not_the_encounter() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // `enc_giant_head` lists one enemy (giant_head); a summoned gremlin is not in it.
+        let encounter = encounter_row(&content, "enc_giant_head");
+        let summoned = cid("gremlin_wizard#000007");
+        let slot = locate_enemy(&content, encounter, &summoned)
+            .expect("lookup")
+            .expect("a summoned minion must resolve");
+        assert_ne!(
+            slot.encounter, encounter,
+            "it has to resolve to the encounter that actually lists it"
+        );
+
+        // ...and that slot really yields a move for the minion.
+        let state = arena(summoned.as_str());
+        assert!(
+            select_action(&state, &content, slot, &summoned, 1)
+                .expect("select")
+                .is_some(),
+            "a summoned minion must have an intent"
+        );
+
+        // The reference's B0 still holds for a **stranger** (no `#` suffix): an id from another
+        // encounter is not a summon, it is a bug.
+        let stranger = cid("minute_moth");
+        assert_eq!(
+            locate_enemy(&content, encounter, &stranger).expect("lookup"),
+            None,
+            "a stranger must stay unresolved"
+        );
     }
 
     /// A **spawned** combatant (`acid_slime_m#000003`) still finds its enemy record, so it gets a

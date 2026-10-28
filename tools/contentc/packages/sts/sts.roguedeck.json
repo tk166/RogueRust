@@ -4651,6 +4651,56 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "gremlin_leader.summon",
+      "PackageId": "sts",
+      "NameKey": "Summon",
+      "DescriptionKey": "Summon - calls two gremlins",
+      "Intent": {
+        "Kind": "Buff",
+        "Label": "Summon - calls two gremlins"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.createCombatant",
+                "value": {
+                  "DefinitionId": "sneaky_gremlin",
+                  "TeamId": "enemy",
+                  "Health": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "node.createCombatant",
+                "value": {
+                  "DefinitionId": "gremlin_wizard",
+                  "TeamId": "enemy",
+                  "Health": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 20
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -5281,6 +5331,9 @@
             },
             {
               "value": "gremlin_leader.rally"
+            },
+            {
+              "value": "gremlin_leader.summon"
             }
           ],
           "StartingStatuses": [
@@ -5442,6 +5495,89 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Maw"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_gremlin_gang"
+      },
+      "Enemies": [
+        {
+          "Id": "fat_gremlin",
+          "MaxHealth": 13,
+          "Actions": [
+            {
+              "value": "fat_gremlin.smash"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.enrage"
+              },
+              "Stacks": 1
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Fat Gremlin"
+        },
+        {
+          "Id": "sneaky_gremlin",
+          "MaxHealth": 10,
+          "Actions": [
+            {
+              "value": "sneaky_gremlin.puncture"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 1,
+          "IntentRules": [],
+          "DisplayName": "Sneaky Gremlin"
+        },
+        {
+          "Id": "gremlin_wizard",
+          "MaxHealth": 21,
+          "Actions": [
+            {
+              "value": "gremlin_wizard.charging"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 2,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "gremlin_wizard_charges"
+                  },
+                  "Op": "GreaterOrEqual",
+                  "Value": 3
+                }
+              },
+              "Action": {
+                "value": "gremlin_wizard.ultimate_blast"
+              },
+              "Priority": 10
+            }
+          ],
+          "DisplayName": "Gremlin Wizard"
         }
       ],
       "HeroResources": [
@@ -6055,6 +6191,9 @@
         },
         {
           "value": "gremlin_leader.rally"
+        },
+        {
+          "value": "gremlin_leader.summon"
         }
       ],
       "StartingStatuses": [
@@ -6185,6 +6324,10 @@
       {
         "Id": "enc_chosen",
         "Weight": 50
+      },
+      {
+        "Id": "enc_gremlin_gang",
+        "Weight": 34
       }
     ],
     "Weak3": [

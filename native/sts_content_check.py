@@ -79,7 +79,7 @@ INV_COUNTS = {
     # and the encounter record has no instance number, inv:§4.2) + the boss.
     "monsters": 25,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
-    "encounters": 16,
+    "encounters": 17,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     "statuses": 17,       # inv:§10 the ones this subset actually needs
 }
@@ -137,7 +137,8 @@ INV_MONSTERS = [
     ("darkling", 48, 48, ["darkling.nip", "darkling.chomp"]),
     ("maw", 80, 80, ["maw.roar", "maw.bite", "maw.slam"]),
     # §134: acts 2 and 3 have their own elites.
-    ("gremlin_leader", 140, 140, ["gremlin_leader.slash", "gremlin_leader.rally"]),
+    ("gremlin_leader", 140, 140,
+     ["gremlin_leader.slash", "gremlin_leader.rally", "gremlin_leader.summon"]),
     ("giant_head", 320, 320, ["giant_head.glare", "giant_head.count"]),
     ("time_eater", 456, 456,
      ["time_eater.reverberate", "time_eater.ripple", "time_eater.head_slam"]),
@@ -186,6 +187,9 @@ INV_ACTIONS = {
     "giant_head.glare": ("Attack", [("damage", 12, "event"),
                                     ("status", "standard.weak", 1, "event")]),
     "giant_head.count": ("Attack", [("damage", 26, "event")]),
+    # \u00a7138: summoning -- two minions the encounter never lists.
+    "gremlin_leader.summon": ("Buff", [("spawn", "sneaky_gremlin", 10),
+                                              ("spawn", "gremlin_wizard", 20)]),
     "shelled_parasite.suck": ("Attack", [("damage", 10, "event"), ("block", 2, "source")]),
     "shelled_parasite.double_strike": ("Attack", [("damage", 6, "event"), ("damage", 6, "event")]),
     "chosen.poke": ("Attack", [("damage", 6, "event"), ("damage", 6, "event")]),
@@ -254,6 +258,8 @@ INV_WEAK_POOL = {
     # §130: act 2 and act 3 have encounters -- and therefore monsters -- of their own.
     "enc_shelled_parasite": ["shelled_parasite"],
     "enc_chosen": ["chosen"],
+    # §138: the gang exists so that a **summoned** gremlin has a record to point at.
+    "enc_gremlin_gang": ["fat_gremlin", "sneaky_gremlin", "gremlin_wizard"],
     "enc_byrds": ["byrd"],
     "enc_spiker": ["spiker"],
     "enc_orb_walker": ["orb_walker"],
@@ -277,7 +283,7 @@ INV_ELITE_POOL = {
 # say which act each pool member belongs to, so the table checks can compare per act.
 INV_ACT_TABLES = {
     "Weak": ["enc_cultist", "enc_jaw_worm", "enc_small_slimes"],
-    "Weak2": ["enc_shelled_parasite", "enc_chosen"],
+    "Weak2": ["enc_chosen", "enc_gremlin_gang", "enc_shelled_parasite"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker"],
     "Elite": ["enc_three_sentries"],
     "Elite2": ["enc_gremlin_leader"],

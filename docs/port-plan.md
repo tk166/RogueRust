@@ -8673,3 +8673,51 @@ let Some(pool) = image.potion_pool(potion_pool_name) else { /* 响亮失败，�
 | 幕间 | 无 | **一整屏幕间画面** |
 
 聚合验收 **17/17**，单测 **687**，镜像 full 26,808 B / core 22,456 B。
+
+---
+
+## 138. **召唤随从**：机制本来就在，缺的是"随从的意图"
+
+用户："现在有精英怪/boss召唤随从的机制吗。"
+
+答：**一半有。** `node.createCombatant`（§121）早就能中途造战斗员，史莱姆王的分裂就用它。缺的是另一半：
+
+### 138.1 缺的那一半是"随从拿不到意图"
+
+`intent::locate_enemy` 只在**当前遭遇**的敌人名单里找 id（这是参考的 B0 语义）。§123 给它加了
+`#<n>` 的回退（分裂出来的史莱姆还是史莱姆），但那只在**同一个遭遇**里有效。
+
+⇒ 精英召唤一只"本遭遇没列过"的随从时，那只随从的意图永远是 "unknown"。
+
+### 138.2 补法：`#<n>` 的 id 允许**跨遭遇**解析
+
+```rust
+if !raw.contains('#') {
+    return Ok(None);          // 纯陌生人（参考的 B0）—— 不许它解析
+}
+// 召唤出来的：在整张镜像里找第一个列了它的遭遇
+for row in content.rows(Table::Encounter) { … }
+```
+
+**只对带 `#` 的 id 放开**：陌生人（另一个遭遇里的怪，但不是召唤出来的）仍然是 `None` —— B0 那条语义没被
+破坏，`b0_actor_not_in_this_encounter_has_no_action` 仍然绿。
+
+### 138.3 内容：哥布林头目会召唤了
+
+* 新动作 `gremlin_leader.summon`：`sequence(createCombatant(sneaky_gremlin, 10), createCombatant(gremlin_wizard, 20))`；
+* 新遭遇 `enc_gremlin_gang`（fat_gremlin + sneaky_gremlin + gremlin_wizard），进 `Weak2`。
+
+那个遭遇**不是为了好玩**：`gremlin_wizard` / `sneaky_gremlin` 之前被 author 了却没有任何遭遇列过它们，
+所以"召唤出来的它们"**无处解析**（实测：`locate_enemy` 返回 `None`）。把三只哥布林组成一个真遭遇之后，
+召唤出来的那两只才有记录可指。
+
+### 138.4 判据
+
+`a_summoned_minion_resolves_through_the_image_not_the_encounter`：
+`gremlin_wizard#000007` 在 `enc_giant_head`（只列了 giant_head）里**能解出槽位**、且**能选出动作**；
+同一个遭遇里的陌生人 `minute_moth`（不带 `#`）仍然 `None`。
+
+### 138.5 数字
+
+聚合验收 **17/17**；单测 687 → **688**；敌人动作 49 → **50**；遭遇 16 → **17**；
+镜像 full 27,124 B / core 22,700 B。

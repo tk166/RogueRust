@@ -3885,7 +3885,7 @@ mod tests {
             .filter(|id| !id.is_empty())
             .copied()
             .collect();
-        assert_eq!(weak2.len(), 2, "act 2 weak: {weak2:?}");
+        assert_eq!(weak2.len(), 3, "act 2 weak: {weak2:?}");
         assert!(!weak2.contains(&"enc_cultist"), "act 2 must not replay act 1");
         // A pool the document does not have is None, not an empty set.
         assert_eq!(content.encounter_pool("Sideboard"), None);
