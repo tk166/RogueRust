@@ -77,9 +77,9 @@ CORE_PATH = os.path.join(PKG_DIR, "out", "content.sts.core.rdcf")
 INV_COUNTS = {
     # 10 tier-A monsters + three sentry **rows** (one per instance: a combatant id must be unique
     # and the encounter record has no instance number, inv:§4.2) + the boss.
-    "monsters": 15,
+    "monsters": 21,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
-    "encounters": 6,
+    "encounters": 12,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     "statuses": 17,       # inv:§10 the ones this subset actually needs
 }
@@ -135,6 +135,14 @@ INV_MONSTERS = [
     # §129: the wiki's act-3 boss, parked in the Boss pool (acts still share content).
     ("time_eater", 456, 456,
      ["time_eater.reverberate", "time_eater.ripple", "time_eater.head_slam"]),
+    # §130: act 2 and act 3 have monsters of their own -- the point of the section.
+    ("shelled_parasite", 68, 68, ["shelled_parasite.suck", "shelled_parasite.double_strike"]),
+    ("chosen", 48, 48, ["chosen.poke", "chosen.debilitate"]),
+    ("byrd", 25, 25, ["byrd.peck", "byrd.swoop"]),
+    ("spiker", 42, 42, ["spiker.cut", "spiker.spike"]),
+    ("orb_walker", 90, 90, ["orb_walker.laser", "orb_walker.claw"]),
+    ("the_champ", 330, 330,
+     ["the_champ.heavy_slash", "the_champ.defensive_stance", "the_champ.execute"]),
     ("fat_gremlin", 13, 17, ["fat_gremlin.smash"]),
     ("sneaky_gremlin", 10, 14, ["sneaky_gremlin.puncture"]),
     ("blue_slaver", 46, 50, ["blue_slaver.stab", "blue_slaver.rake"]),
@@ -160,6 +168,22 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    "shelled_parasite.suck": ("Attack", [("damage", 10, "event"), ("block", 2, "source")]),
+    "shelled_parasite.double_strike": ("Attack", [("damage", 6, "event"), ("damage", 6, "event")]),
+    "chosen.poke": ("Attack", [("damage", 6, "event"), ("damage", 6, "event")]),
+    "chosen.debilitate": ("Attack", [("damage", 10, "event"),
+                                     ("status", "standard.vulnerable", 2, "event")]),
+    "byrd.peck": ("Attack", [("damage", 1, "event")] * 5),
+    "byrd.swoop": ("Attack", [("damage", 12, "event")]),
+    "spiker.cut": ("Attack", [("damage", 8, "event")]),
+    "spiker.spike": ("Attack", [("damage", 4, "event"), ("block", 2, "source")]),
+    "orb_walker.laser": ("Attack", [("damage", 10, "event"),
+                                    ("status", "standard.weak", 2, "event")]),
+    "orb_walker.claw": ("Attack", [("damage", 15, "event")]),
+    "the_champ.heavy_slash": ("Attack", [("damage", 18, "event")]),
+    "the_champ.defensive_stance": ("Defend", [("block", 15, "source"),
+                                              ("status", "standard.metallicize", 2, "source")]),
+    "the_champ.execute": ("Attack", [("damage", 30, "event")]),
     "time_eater.reverberate": ("Attack", [("damage", 7, "event"), ("damage", 7, "event"),
                                           ("damage", 7, "event")]),
     "time_eater.head_slam": ("Attack", [("damage", 26, "event")]),
@@ -209,6 +233,12 @@ INV_WEAK_POOL = {
     # The source rolls 50/50 acid|spike for the M and for the S independently;
     # a static enemy list pins one of the four combinations.
     "enc_small_slimes": ["acid_slime_m", "spike_slime_s"],
+    # §130: act 2 and act 3 have encounters -- and therefore monsters -- of their own.
+    "enc_shelled_parasite": ["shelled_parasite"],
+    "enc_chosen": ["chosen"],
+    "enc_byrds": ["byrd"],
+    "enc_spiker": ["spiker"],
+    "enc_orb_walker": ["orb_walker"],
 }
 INV_WEAK_WEIGHT = 25   # inv:§5.2 每项 25%
 
@@ -220,10 +250,26 @@ INV_ELITE_POOL = {
 
 # inv:§4.3 -- the boss pool. `inv:§4.3` says the three act-1 bosses are picked equiprobably; this
 # content authors one of them (Slime Boss) and says why in the document.
+# §130: the pool dicts above are the **union** (every encounter must be declared somewhere). These
+# say which act each pool member belongs to, so the table checks can compare per act.
+INV_ACT_TABLES = {
+    "Weak": ["enc_cultist", "enc_jaw_worm", "enc_small_slimes"],
+    "Weak2": ["enc_shelled_parasite", "enc_chosen"],
+    "Weak3": ["enc_byrds", "enc_spiker", "enc_orb_walker"],
+    "Elite": ["enc_three_sentries"],
+    "Elite2": ["enc_three_sentries"],
+    "Elite3": ["enc_three_sentries"],
+    "Boss": ["enc_slime_boss"],
+    "Boss2": ["enc_the_champ"],
+    "Boss3": ["enc_time_eater"],
+}
+
 INV_BOSS_POOL = {
     "enc_slime_boss": ["slime_boss"],
     # §129: two bosses now, so the floor-16 pick is a real choice.
     "enc_time_eater": ["time_eater"],
+    # §130: act 2's boss.
+    "enc_the_champ": ["the_champ"],
 }
 
 # inv:§10 -- the 5 statuses, with the modifier the damage/block pipeline needs.
@@ -719,24 +765,37 @@ def check_weak_pool_table(doc):
     print("[6] encounter weights (inv:§5.2)")
     table = (doc.get("EncounterTables") or {}).get("Weak") or []
     got = {row["Id"]: row["Weight"] for row in table}
-    if got != {eid: INV_WEAK_WEIGHT for eid in INV_WEAK_POOL}:
-        fail("EncounterTables.Weak", "%s != %s (each 25%%, inv:§5.2)"
-             % (got, {eid: INV_WEAK_WEIGHT for eid in INV_WEAK_POOL}))
+    if sorted(got) != sorted(INV_ACT_TABLES["Weak"]):
+        fail("EncounterTables.Weak", "%s != act 1 %s (inv:§5.2)"
+             % (sorted(got), sorted(INV_ACT_TABLES["Weak"])))
     ok("weak pool", "%d entries x %d%%" % (len(table), INV_WEAK_WEIGHT))
     elite = (doc.get("EncounterTables") or {}).get("Elite")
     if elite is None:
         fail("encounter-tables", "EncounterTables.Elite is missing (inv:§5.3)")
-    if sorted(e["Id"] for e in elite) != sorted(INV_ELITE_POOL):
+    if sorted(e["Id"] for e in elite) != sorted(INV_ACT_TABLES["Elite"]):
         fail("encounter-tables", "Elite %s != inv %s"
              % (sorted(e["Id"] for e in elite), sorted(INV_ELITE_POOL)))
     ok("elite pool", "%d entry" % len(elite))
     boss = (doc.get("EncounterTables") or {}).get("Boss")
     if boss is None:
         fail("encounter-tables", "EncounterTables.Boss is missing (inv:§4.3)")
-    if sorted(e["Id"] for e in boss) != sorted(INV_BOSS_POOL):
-        fail("encounter-tables", "Boss %s != inv %s"
-             % (sorted(e["Id"] for e in boss), sorted(INV_BOSS_POOL)))
-    ok("boss pool", "%d entry" % len(boss))
+    # §130: acts 2 and 3 have their own Weak/Elite/Boss pools. Each is checked against the same
+    # inventory: a pool that names an encounter the kernel cannot build is the same bug regardless
+    # of which act it belongs to.
+    for act in (2, 3):
+        for kind in ("Weak", "Elite", "Boss"):
+            name = "%s%d" % (kind, act)
+            rows = (doc.get("EncounterTables") or {}).get(name)
+            if rows is None:
+                fail("encounter-tables", "EncounterTables.%s is missing" % name)
+                continue
+            ids = sorted(row["Id"] for row in rows)
+            if ids != sorted(INV_ACT_TABLES[name]):
+                fail("encounter-tables", "%s %s != act %d %s"
+                     % (name, ids, act, sorted(INV_ACT_TABLES[name])))
+    if sorted(e["Id"] for e in boss) != sorted(INV_ACT_TABLES["Boss"]):
+        fail("encounter-tables", "Boss %s != act 1 %s"
+             % (sorted(e["Id"] for e in boss), sorted(INV_ACT_TABLES["Boss"])))
 
 
 # =============================================================================

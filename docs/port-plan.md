@@ -8394,3 +8394,82 @@ wiki 的 Time Eater 是**第三幕** Boss；本内容把它放进 **Boss 池**�
 5. 时间吞噬者本体（怪 + 动作 + 遭遇 + Boss 池 + 相位 + 时间扭曲）。
 
 剩下的仍然是那几笔老账：幕间内容差异、`?` 房通用解释器、像素级判据、Boss 之外的第三幕怪。
+
+---
+
+## 130. **幕与幕的内容差异**：第 2、3 幕有自己的怪物、遭遇和 Boss
+
+§101 写过一句"推进机制是真的，幕与幕之间的内容差异是假的"。这一轮把它变成真的。
+
+### 130.1 池子按幕分家
+
+```
+EncounterTables = { Weak, Elite, Boss, Weak2, Elite2, Boss2, Weak3, Elite3, Boss3 }
+```
+
+`rd_run_fight_begin` 里的池名从**幕号**推出来（第 1 幕不加后缀，所以原来的名字仍然有效）：
+
+```rust
+let base = match kind { 2 => "Elite", 7 => "Boss", _ => "Weak" };
+let pool_name = if act <= 1 { base } else { format!("{base}{act}") };
+```
+
+**缺池子就响亮失败**（"内容里没有 `EncounterTables.Weak2` 池（第 2 幕）"）—— 退回第 1 幕等于把这一节要治的
+毛病藏起来。
+
+### 130.2 新内容（21 怪 / 12 遭遇 / 40 动作）
+
+| 幕 | 弱池 | Boss |
+|---|---|---|
+| 1 | cultist / jaw_worm / small_slimes | slime_boss |
+| **2** | **shelled_parasite / chosen** | **the_champ**（330 HP，重斩/防御姿态/处决）|
+| **3** | **byrds / spiker / orb_walker** | time_eater |
+
+`spiker` 带 **Thorns 3**（§116 的机制），`the_champ` 的防御姿态给 **Metallicize 2**（§114 的机制）—— 新怪不是
+换皮，是在用已经做出来的机制。精英池三幕共用 `enc_three_sentries`（写明）。
+
+### 130.3 内核侧要改的一处"名字表"
+
+`Content::encounter_pool` 原本只认三个名字（`Weak`/`Elite`/`Boss`），其余返回 `None` ——
+
+```rust
+let hop = match pool { "Weak" => "EncounterTables.Weak", … _ => return None };
+```
+
+名字是**逐字写出**的（`sts_content_check` 靠在这些字面量里找 `EncounterTables.Weak` 来判断"内核真的读这张表"）。
+⇒ 九个名字都列进去，注释说明为什么不能拼字符串。
+
+### 130.4 内容门要跟着长大
+
+`sts_content_check` 里三张池子表原本是**单幕**的。现在：
+
+* `INV_WEAK_POOL` / `INV_ELITE_POOL` / `INV_BOSS_POOL` 是**并集**（"每个遭遇都要被声明"靠它）；
+* 新增 `INV_ACT_TABLES`，逐幕列出成员；九个表的检查都对比它；
+* 怪物/遭遇/动作三张事实表各加 6/6/13 行；计数 `monsters 21` / `encounters 12` / `enemy_actions 40`。
+
+### 130.5 判据
+
+`act_two_fights_act_two_enemies`（rd-wasm）：两次**独立**开局 —— 一次直接打第 1 幕，一次先 `mark_boss_beaten`
+再打；前半场的敌人名必须属于第 1 幕池（`acid_slime/spike_slime/jaw_worm/cultist`），后半场必须属于第 2 幕池
+（`shelled_parasite/chosen`）。
+
+⚠️ 两条**踩到的真事**：
+1. 战斗是 `rd_run_fight_begin` **建**的，不是 `begin_node` 建的 —— 不调它就还在看上一场；
+2. 一场已经开始的战斗不能再 begin，所以测试要用**两次独立开局**而不是"打完一场接着下一幕"。
+
+### 130.6 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | 685 → **686**（rd-core 597 / rd-run 61 / rd-wasm 28） |
+| 内容 | 怪物 15 → **21**、遭遇 6 → **12**、动作 27 → **40** |
+| 遭遇池 | 3 → **9**（每幕一套 Weak/Elite/Boss） |
+| 镜像 | full 24,172 B / core 20,220 B（重钉） |
+
+### 130.7 这一节之后，"幕"还剩什么假的
+
+* **地图**三幕共用同一张（`Map::generate` 只在开局跑一次）；
+* **事件**（`?` 房）和 **药水**只有一套；
+* 幕间**没有过渡画面**（打完 Boss 直接进下一幕）；
+* 精英池三幕共用。

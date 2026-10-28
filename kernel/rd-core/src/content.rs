@@ -2249,6 +2249,13 @@ impl<'a> Content<'a> {
             "Weak" => "EncounterTables.Weak",
             "Elite" => "EncounterTables.Elite",
             "Boss" => "EncounterTables.Boss",
+            // §130: acts 2 and 3 have their own pools, suffixed by the act number.
+            "Weak2" => "EncounterTables.Weak2",
+            "Weak3" => "EncounterTables.Weak3",
+            "Elite2" => "EncounterTables.Elite2",
+            "Elite3" => "EncounterTables.Elite3",
+            "Boss2" => "EncounterTables.Boss2",
+            "Boss3" => "EncounterTables.Boss3",
             _ => return None,
         };
         let root = self.root_by_name("EncounterTables")?;
@@ -3813,8 +3820,25 @@ mod tests {
             .filter(|id| !id.is_empty())
             .copied()
             .collect();
-        // Two bosses now (§129): the floor-16 pick is a real choice, not a constant.
-        assert_eq!(boss, vec!["enc_slime_boss", "enc_time_eater"]);
+        // §130 splits the pools **by act**: act 1 has one boss, act 2 and 3 have their own.
+        assert_eq!(boss, vec!["enc_slime_boss"]);
+        let boss2: Vec<&str> = content
+            .encounter_pool("Boss2")
+            .expect("act 2 needs its own boss pool")
+            .iter()
+            .filter(|id| !id.is_empty())
+            .copied()
+            .collect();
+        assert_eq!(boss2, vec!["enc_the_champ"]);
+        let weak2: Vec<&str> = content
+            .encounter_pool("Weak2")
+            .expect("act 2 needs its own weak pool")
+            .iter()
+            .filter(|id| !id.is_empty())
+            .copied()
+            .collect();
+        assert_eq!(weak2.len(), 2, "act 2 weak: {weak2:?}");
+        assert!(!weak2.contains(&"enc_cultist"), "act 2 must not replay act 1");
         // A pool the document does not have is None, not an empty set.
         assert_eq!(content.encounter_pool("Sideboard"), None);
     }

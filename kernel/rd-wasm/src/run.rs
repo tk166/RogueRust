@@ -1788,15 +1788,26 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // was "any encounter in the image", which would send an elite into a slime fight.
     session.elite_fight = kind == 2;
     session.boss_fight = kind == 7;
-    let pool_name = match kind {
+    // **The act decides the pool** (`port-plan.md` §130): `Weak` / `Weak2` / `Weak3`, and the same
+    // for elites and bosses. Before this, act 2 and act 3 replayed act 1's encounters -- the
+    // downgrade §101 documented. The suffix is empty for act 1 so the original names still work.
+    let base = match kind {
         2 => "Elite",
         7 => "Boss",
         _ => "Weak",
     };
-    let encounters: Vec<&'static str> = match content.encounter_pool(pool_name) {
+    let act = session.state.act();
+    let pool_name: String = if act <= 1 {
+        base.to_string()
+    } else {
+        std::format!("{base}{act}")
+    };
+    let encounters: Vec<&'static str> = match content.encounter_pool(&pool_name) {
         Some(ids) => ids.iter().filter(|id| !id.is_empty()).copied().collect(),
         None => {
-            let message = std::format!("内容里没有 `EncounterTables.{pool_name}` 池");
+            // Loud on purpose: an act with no encounters of its own is a **content gap**, and
+            // falling back to act 1 would hide exactly the thing this section is about.
+            let message = std::format!("内容里没有 `EncounterTables.{pool_name}` 池（第 {act} 幕）");
             return fail(session, &message);
         }
     };
@@ -2728,6 +2739,71 @@ mod tests {
     /// fighting anything -- that makes it deterministic and fast. (The previous version fought its
     /// way up, died on some seeds, and `return`ed early: a green that meant nothing. Silent skips are
     /// the exact shape this project keeps banning.)
+    /// **Each act fights its own monsters** (`port-plan.md` §130): act 1 sees the act-1 pool, act 2
+    /// the act-2 pool. The run walks to act 2 the way the game does (the boss falls).
+    #[test]
+    fn act_two_fights_act_two_enemies() {
+        // Enemy names of the fight the run is standing on (after `rd_run_begin_node`).
+        fn enemy_names() -> Vec<String> {
+            let mut out = Vec::new();
+            let mut index = 0;
+            while rd_env_enemy_name_len(index) >= 0 {
+                let n = rd_env_enemy_name_len(index);
+                let mut buffer = vec![0u8; n as usize];
+                unsafe { rd_env_enemy_name_into(index, buffer.as_mut_ptr()) };
+                out.push(String::from_utf8(buffer).unwrap_or_default());
+                index += 1;
+            }
+            out
+        }
+
+        // **Two separate runs**, because a fight that was begun cannot be re-begun: the point is
+        // which pool `begin_node` picks given the act, not how to bail out of a fight.
+        let first_fight = |advance: bool| -> String {
+            reset(7);
+            if advance {
+                run_slot()
+                    .as_mut()
+                    .expect("session")
+                    .state
+                    .mark_boss_beaten();
+            }
+            assert_eq!(rd_run_step(0), 0, "floor 1 (advance={advance})");
+            assert_eq!(
+                rd_run_begin_node(),
+                0,
+                "begin (advance={advance}): {}",
+                run_error_text()
+            );
+            // The fight is **built** by ight_begin (that is where the pool is picked), so this
+            // has to happen before the names mean anything.
+            assert_eq!(
+                rd_run_fight_begin(),
+                0,
+                "fight_begin (advance={advance}): {}",
+                run_error_text()
+            );
+            enemy_names().join(",").to_lowercase()
+        };
+
+        let act_one = first_fight(false);
+        assert!(
+            ["acid_slime", "spike_slime", "jaw_worm", "cultist"]
+                .iter()
+                .any(|name| act_one.contains(name)),
+            "act 1 must field act-1 monsters, got {act_one}"
+        );
+
+        let act_two = first_fight(true);
+        assert_eq!(rd_run_act(), 2, "the advance really happened");
+        assert!(
+            ["shelled_parasite", "chosen"]
+                .iter()
+                .any(|name| act_two.contains(name)),
+            "act 2 must field act-2 monsters, got {act_two}"
+        );
+    }
+
     #[test]
     fn the_boss_is_offered_at_floor_16_and_clears_the_act() {
         reset(7);

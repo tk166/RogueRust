@@ -3405,6 +3405,790 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "shelled_parasite.suck",
+      "PackageId": "sts",
+      "NameKey": "Suck",
+      "DescriptionKey": "Suck — 10 damage, +2 Block",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Suck — 10 damage, +2 Block"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "shelled_parasite.double_strike",
+      "PackageId": "sts",
+      "NameKey": "Double Strike",
+      "DescriptionKey": "Double Strike — 6 damage ×2",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Double Strike — 6 damage ×2"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 6
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 6
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "chosen.poke",
+      "PackageId": "sts",
+      "NameKey": "Poke",
+      "DescriptionKey": "Poke — 6 damage ×2",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Poke — 6 damage ×2"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 6
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 6
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "chosen.debilitate",
+      "PackageId": "sts",
+      "NameKey": "Debilitate",
+      "DescriptionKey": "Debilitate — 10 damage, 2 Vulnerable",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Debilitate — 10 damage, 2 Vulnerable"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.vulnerable"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "byrd.peck",
+      "PackageId": "sts",
+      "NameKey": "Peck",
+      "DescriptionKey": "Peck — 1 damage ×5",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Peck — 1 damage ×5"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "byrd.swoop",
+      "PackageId": "sts",
+      "NameKey": "Swoop",
+      "DescriptionKey": "Swoop — 12 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Swoop — 12 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 12
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "spiker.cut",
+      "PackageId": "sts",
+      "NameKey": "Cut",
+      "DescriptionKey": "Cut — 8 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Cut — 8 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 8
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "spiker.spike",
+      "PackageId": "sts",
+      "NameKey": "Spike",
+      "DescriptionKey": "Spike — 4 damage, +2 Block",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Spike — 4 damage, +2 Block"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 4
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "orb_walker.laser",
+      "PackageId": "sts",
+      "NameKey": "Laser",
+      "DescriptionKey": "Laser — 10 damage, 2 Weak",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Laser — 10 damage, 2 Weak"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.weak"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "orb_walker.claw",
+      "PackageId": "sts",
+      "NameKey": "Claw",
+      "DescriptionKey": "Claw — 15 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Claw — 15 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 15
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "the_champ.heavy_slash",
+      "PackageId": "sts",
+      "NameKey": "Heavy Slash",
+      "DescriptionKey": "Heavy Slash — 18 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Heavy Slash — 18 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 18
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "the_champ.defensive_stance",
+      "PackageId": "sts",
+      "NameKey": "Defensive Stance",
+      "DescriptionKey": "Defensive Stance — 15 Block, 2 Metallicize",
+      "Intent": {
+        "Kind": "Defend",
+        "Label": "Defensive Stance — 15 Block, 2 Metallicize"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 15
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.metallicize"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "the_champ.execute",
+      "PackageId": "sts",
+      "NameKey": "Execute",
+      "DescriptionKey": "Execute — 30 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Execute — 30 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 30
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -3794,6 +4578,232 @@
       ],
       "HeroStartingStatuses": [],
       "HeroDisplayName": null
+    },
+    {
+      "Id": {
+        "Value": "enc_shelled_parasite"
+      },
+      "Enemies": [
+        {
+          "Id": "shelled_parasite",
+          "MaxHealth": 68,
+          "Actions": [
+            {
+              "value": "shelled_parasite.suck"
+            },
+            {
+              "value": "shelled_parasite.double_strike"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Shelled Parasite"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_chosen"
+      },
+      "Enemies": [
+        {
+          "Id": "chosen",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "chosen.poke"
+            },
+            {
+              "value": "chosen.debilitate"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Chosen"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_byrds"
+      },
+      "Enemies": [
+        {
+          "Id": "byrd",
+          "MaxHealth": 25,
+          "Actions": [
+            {
+              "value": "byrd.peck"
+            },
+            {
+              "value": "byrd.swoop"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Byrd"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_spiker"
+      },
+      "Enemies": [
+        {
+          "Id": "spiker",
+          "MaxHealth": 42,
+          "Actions": [
+            {
+              "value": "spiker.cut"
+            },
+            {
+              "value": "spiker.spike"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.thorns"
+              },
+              "Stacks": 3
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Spiker"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_orb_walker"
+      },
+      "Enemies": [
+        {
+          "Id": "orb_walker",
+          "MaxHealth": 90,
+          "Actions": [
+            {
+              "value": "orb_walker.laser"
+            },
+            {
+              "value": "orb_walker.claw"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Orb Walker"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_the_champ"
+      },
+      "Enemies": [
+        {
+          "Id": "the_champ",
+          "MaxHealth": 330,
+          "Actions": [
+            {
+              "value": "the_champ.heavy_slash"
+            },
+            {
+              "value": "the_champ.defensive_stance"
+            },
+            {
+              "value": "the_champ.execute"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "The Champ"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -4249,6 +5259,136 @@
       "Tier": "Boss",
       "InvRef": "inv:§4.3",
       "AiNote": "⚠️ 降级写明：wiki 的 Time Eater 是第三幕 Boss；本内容把它放进 **Boss 池**（与 Slime Boss 同池），因为幕与幕之间的内容差异还没做（§101）。port-plan.md §129。"
+    },
+    {
+      "Id": "shelled_parasite",
+      "NameKey": "Shelled Parasite",
+      "HpMin": 68,
+      "HpMax": 68,
+      "MaxHealth": 68,
+      "Actions": [
+        {
+          "value": "shelled_parasite.suck"
+        },
+        {
+          "value": "shelled_parasite.double_strike"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "inv:§5.2",
+      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
+    },
+    {
+      "Id": "chosen",
+      "NameKey": "Chosen",
+      "HpMin": 48,
+      "HpMax": 48,
+      "MaxHealth": 48,
+      "Actions": [
+        {
+          "value": "chosen.poke"
+        },
+        {
+          "value": "chosen.debilitate"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "inv:§5.2",
+      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
+    },
+    {
+      "Id": "byrd",
+      "NameKey": "Byrd",
+      "HpMin": 25,
+      "HpMax": 25,
+      "MaxHealth": 25,
+      "Actions": [
+        {
+          "value": "byrd.peck"
+        },
+        {
+          "value": "byrd.swoop"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "inv:§5.2",
+      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
+    },
+    {
+      "Id": "spiker",
+      "NameKey": "Spiker",
+      "HpMin": 42,
+      "HpMax": 42,
+      "MaxHealth": 42,
+      "Actions": [
+        {
+          "value": "spiker.cut"
+        },
+        {
+          "value": "spiker.spike"
+        }
+      ],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.thorns"
+          },
+          "Stacks": 3
+        }
+      ],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "inv:§5.2",
+      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
+    },
+    {
+      "Id": "orb_walker",
+      "NameKey": "Orb Walker",
+      "HpMin": 90,
+      "HpMax": 90,
+      "MaxHealth": 90,
+      "Actions": [
+        {
+          "value": "orb_walker.laser"
+        },
+        {
+          "value": "orb_walker.claw"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "inv:§5.2",
+      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
+    },
+    {
+      "Id": "the_champ",
+      "NameKey": "The Champ",
+      "HpMin": 330,
+      "HpMax": 330,
+      "MaxHealth": 330,
+      "Actions": [
+        {
+          "value": "the_champ.heavy_slash"
+        },
+        {
+          "value": "the_champ.defensive_stance"
+        },
+        {
+          "value": "the_champ.execute"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Boss",
+      "InvRef": "inv:§4.3",
+      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
     }
   ],
   "EncounterTables": {
@@ -4277,11 +5417,55 @@
     "Boss": [
       {
         "Id": "enc_slime_boss",
-        "Weight": 1
+        "Weight": 100
+      }
+    ],
+    "Weak2": [
+      {
+        "Id": "enc_shelled_parasite",
+        "Weight": 50
       },
       {
-        "Id": "enc_time_eater",
+        "Id": "enc_chosen",
         "Weight": 50
+      }
+    ],
+    "Weak3": [
+      {
+        "Id": "enc_byrds",
+        "Weight": 50
+      },
+      {
+        "Id": "enc_orb_walker",
+        "Weight": 50
+      },
+      {
+        "Id": "enc_spiker",
+        "Weight": 50
+      }
+    ],
+    "Elite2": [
+      {
+        "Id": "enc_three_sentries",
+        "Weight": 100
+      }
+    ],
+    "Elite3": [
+      {
+        "Id": "enc_three_sentries",
+        "Weight": 100
+      }
+    ],
+    "Boss2": [
+      {
+        "Id": "enc_the_champ",
+        "Weight": 100
+      }
+    ],
+    "Boss3": [
+      {
+        "Id": "enc_time_eater",
+        "Weight": 100
       }
     ]
   },
