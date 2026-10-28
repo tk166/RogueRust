@@ -707,13 +707,26 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
     // for exactly this.
     if kind == rd_run::map::NodeKind::Unknown {
         let image = content;
-        let count = image.event_count();
-        if count == 0 {
+        // **The act decides which `?` rooms can appear** (`port-plan.md` §133): `Events` /
+        // `Events2` / `Events3`. A missing pool is a content gap and says so.
+        let act = session.state.act();
+        let pool_name: &str = match act {
+            1 => "Events",
+            2 => "Events2",
+            _ => "Events3",
+        };
+        let Some(pool) = image.event_pool(pool_name) else {
+            let message = std::format!("内容里没有 `EventTables.{pool_name}` 池（第 {act} 幕）");
+            return fail(session, &message);
+        };
+        let events: Vec<&'static str> = pool.iter().filter(|id| !id.is_empty()).copied().collect();
+        if events.is_empty() {
             return fail(
                 session,
                 "内容里没有事件（`EV` 0 行）—— `?` 房无处可去",
             );
         }
+        let count = events.len() as u32;
         let pick = match session.state.rng_mut().roll(RunStream::Event, count) {
             Ok(value) => value,
             Err(e) => {
@@ -721,7 +734,7 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
                 return fail(session, &message);
             }
         };
-        let Some((id, _, _)) = image.event(pick) else {
+        let Some(id) = events.get(pick as usize).copied() else {
             return fail(session, "事件读不出来");
         };
         if let Err(e) = session.state.begin_event(id) {
@@ -3084,6 +3097,15 @@ mod tests {
                     fire_target_before - 20,
                     "20 damage through the damage pipeline"
                 );
+                assert_eq!(rd_run_potion_count(), belt - 1, "the potion is consumed");
+            }
+            "blood_potion" => {
+                // §133 added it: a heal potion, so the belt drops and HP goes up (capped).
+                assert_eq!(outcome, 0, "blood potion: {:?}", run_error_text());
+                assert_eq!(rd_run_potion_count(), belt - 1, "the potion is consumed");
+            }
+            "swift_potion" => {
+                assert_eq!(outcome, 0, "swift potion: {:?}", run_error_text());
                 assert_eq!(rd_run_potion_count(), belt - 1, "the potion is consumed");
             }
             other => panic!("the content offers no potion called {other}"),

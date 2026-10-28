@@ -2258,7 +2258,55 @@ impl<'a> Content<'a> {
             "Boss3" => "EncounterTables.Boss3",
             _ => return None,
         };
-        let root = self.root_by_name("EncounterTables")?;
+        self.id_pool("EncounterTables", pool, hop)
+    }
+
+    /// The `?`-room event ids of one act (`port-plan.md` §133).
+    ///
+    /// `pool` is `"Events"` (act 1), `"Events2"` or `"Events3"`.
+    #[must_use]
+    pub fn event_pool(&self, pool: &str) -> Option<[&'a str; MAX_POOL_IDS]> {
+        let hop = match pool {
+            "Events" => "EventTables.Events",
+            "Events2" => "EventTables.Events2",
+            "Events3" => "EventTables.Events3",
+            _ => return None,
+        };
+        self.id_pool("EventTables", pool, hop)
+    }
+
+    /// The potion ids of one act (`port-plan.md` §133).
+    ///
+    /// `pool` is `"Potions"` (act 1), `"Potions2"` or `"Potions3"`.
+    #[must_use]
+    pub fn potion_pool(&self, pool: &str) -> Option<[&'a str; MAX_POOL_IDS]> {
+        let hop = match pool {
+            "Potions" => "PotionTables.Potions",
+            "Potions2" => "PotionTables.Potions2",
+            "Potions3" => "PotionTables.Potions3",
+            _ => return None,
+        };
+        self.id_pool("PotionTables", pool, hop)
+    }
+
+    /// The shared walker behind the three public pool readers.
+    ///
+    /// `hop` is passed in (not rebuilt) so the literal stays in the public reader, where the content
+    /// gate can see it.
+    fn id_pool(
+        &self,
+        table_name: &str,
+        pool: &str,
+        hop: &'static str,
+    ) -> Option<[&'a str; MAX_POOL_IDS]> {
+        // Literals on purpose: `sts_content_check` decides "the kernel reads this root table" by
+        // finding `root_by_name("X")` in kernel code. A variable there is invisible to it.
+        let root = match table_name {
+            "EncounterTables" => self.root_by_name("EncounterTables")?,
+            "EventTables" => self.root_by_name("EventTables")?,
+            "PotionTables" => self.root_by_name("PotionTables")?,
+            _ => return None,
+        };
         let table = self.term(root)?;
         if table.op < OP_FIRST_DYNAMIC {
             return None;
@@ -3852,7 +3900,7 @@ mod tests {
         ))
         .expect("the sts image");
         let content = Content::parse(&bytes).expect("the image parses");
-        assert_eq!(content.event_count(), 4, "four events");
+        assert_eq!(content.event_count(), 6, "six events: four for act 1, two for acts 2-3 (§133)");
         let mut ids = Vec::new();
         for index in 0..content.event_count() {
             let (id, text, choices) = content.event(index).expect("event {index}");
@@ -3873,7 +3921,14 @@ mod tests {
         ids.sort_unstable();
         assert_eq!(
             ids,
-            vec!["golden_idol", "old_shrine", "scrap_pile", "shining_light"]
+            vec![
+                "ancient_forge",
+                "golden_idol",
+                "old_shrine",
+                "scrap_pile",
+                "shining_light",
+                "wandering_merchant"
+            ]
         );
         // Spot-check one: the golden idol pays 30 gold, and leaving it does nothing.
         let index = (0..content.event_count())
@@ -3900,7 +3955,7 @@ mod tests {
         ))
         .expect("the sts image");
         let content = Content::parse(&bytes).expect("the image parses");
-        assert_eq!(content.potion_count(), 3, "three potions");
+        assert_eq!(content.potion_count(), 5, "five potions: three for act 1, two for acts 2-3 (§133)");
         let mut ids = Vec::new();
         for index in 0..content.potion_count() {
             let potion = content.potion(index).expect("potion {index}");
@@ -3921,7 +3976,10 @@ mod tests {
             );
         }
         ids.sort_unstable();
-        assert_eq!(ids, vec!["block_potion", "energy_potion", "fire_potion"]);
+        assert_eq!(
+            ids,
+            vec!["block_potion", "blood_potion", "energy_potion", "fire_potion", "swift_potion"]
+        );
         let index = (0..content.potion_count())
             .find(|index| content.potion(*index).map(|p| p.id) == Some("fire_potion"))
             .expect("fire_potion");

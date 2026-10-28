@@ -8521,3 +8521,55 @@ pub const fn act_seed(&self) -> i32 {
 
 **判据**：`smoke.mjs` 检查页面里还有 `第 ${act} 幕` 这个模板串（删掉公告就红）。真浏览器闸门覆盖不到
 "真的进第二幕"（那要打赢 Boss），所以这一条是**接线级**判据，不是视觉判据 —— 记在这里。
+
+---
+
+## 133. 每幕自己的 `?` 房事件（药水那半**没做，写清原因**）
+
+### 133.1 事件：`EventTables`
+
+```json
+"EventTables": { "Events": [...4 个第 1 幕], "Events2": [...], "Events3": [...] }
+```
+
+`?` 房原来从**整张 `EV` 表**里掷一个（`content.event_count()`）；现在从**当前幕的池**里掷：
+
+```rust
+let pool_name = match act { 1 => "Events", 2 => "Events2", _ => "Events3" };
+let Some(pool) = image.event_pool(pool_name) else { /* 响亮失败，指名缺哪个池 */ };
+```
+
+缺池子照旧**响亮失败**（和 §130 的遭遇池同一条规矩）。
+
+新事件两条：`ancient_forge`（第 2 幕：+6 最大生命 / 45 金币）、`wandering_merchant`（第 3 幕：回 18 / 25 金币）。
+新药水两条：`blood_potion`（回 15）、`swift_potion`（+12 格挡）。
+
+### 133.2 药水：**只加了两种药水，没做"每幕一套池"**
+
+原因是查出来的：药水的**身份**不是在 run 层摇的（那里只有"掉不掉"的 40%），而是在 `rd-wasm` 的奖励路径里
+从整张 `POT` 表挑。要按幕分池，得先把池子参数穿到那条路上 —— 那是另一处改动。
+
+我**没有**留下一个"读不到任何东西的 `PotionTables`"：那正是 §104 那条规则要治的"惰性内容"。
+表被删掉了，两种新药水留着（它们真的会掉、真的有效果），降级写在 `port-plan.md` 这里而不是假装已覆盖。
+
+### 133.3 内核侧的一个小重构
+
+三个池读器（`encounter_pool` / `event_pool` / `potion_pool`）现在共用一个 `id_pool(table, pool, hop)`。
+⚠️ `hop` 是**传进去的**，因为内容门靠在公开读器里找 `EventTables.Events` 这类**字面量**；而
+`root_by_name` 也必须写成**字面量**（`match table_name { "EventTables" => self.root_by_name("EventTables")? }`），
+否则门会报"这个 root 没人读"。这两条都是"门能看见才算接线"的直接后果。
+
+### 133.4 判据
+
+* `sts_content_check`：事件 4 → **6**、药水 3 → **5**，且 `EventTables` 的每一幕都被点过名；
+* `the_unknown_room_events_are_readable` / `the_potions_are_readable`：id 清单跟着改成 6 / 5；
+* `a_potion_can_be_used_in_a_fight`：多两条分支（`blood_potion` / `swift_potion`），否则掉到新药水就 panic。
+
+### 133.5 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | **687**（rd-core 597 / rd-run 62 / rd-wasm 28） |
+| 内容 | 事件 4 → **6**、药水 3 → **5** |
+| 镜像 | full 24,744 B / core 20,792 B（重钉） |

@@ -5771,6 +5771,28 @@
       "Label1": "Leave",
       "Effect1": "nothing",
       "Amount1": 0
+    },
+    {
+      "Id": "ancient_forge",
+      "NameKey": "Ancient Forge",
+      "DescriptionKey": "A cold forge still holds one glowing coal.",
+      "Label0": "Temper your body",
+      "Effect0": "max_hp",
+      "Amount0": 6,
+      "Label1": "Pocket the coal",
+      "Effect1": "gold",
+      "Amount1": 45
+    },
+    {
+      "Id": "wandering_merchant",
+      "NameKey": "Wandering Merchant",
+      "DescriptionKey": "A merchant offers a tonic for what ails you.",
+      "Label0": "Drink it",
+      "Effect0": "heal",
+      "Amount0": 18,
+      "Label1": "Ask for coin instead",
+      "Effect1": "gold",
+      "Amount1": 25
     }
   ],
   "Potions": [
@@ -5797,6 +5819,54 @@
       "Effect": "combat_energy",
       "Amount": 2,
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "blood_potion",
+      "NameKey": "Blood Potion",
+      "DescriptionKey": "Heal 15 HP.",
+      "Effect": "heal",
+      "Amount": 15,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "swift_potion",
+      "NameKey": "Swift Potion",
+      "DescriptionKey": "Gain 12 Block.",
+      "Effect": "combat_block",
+      "Amount": 12,
+      "Rarity": "Common"
     }
-  ]
+  ],
+  "EventTables": {
+    "Events": [
+      {
+        "Id": "golden_idol"
+      },
+      {
+        "Id": "shining_light"
+      },
+      {
+        "Id": "old_shrine"
+      },
+      {
+        "Id": "scrap_pile"
+      }
+    ],
+    "Events2": [
+      {
+        "Id": "ancient_forge"
+      },
+      {
+        "Id": "golden_idol"
+      }
+    ],
+    "Events3": [
+      {
+        "Id": "wandering_merchant"
+      },
+      {
+        "Id": "ancient_forge"
+      }
+    ]
+  }
 }
