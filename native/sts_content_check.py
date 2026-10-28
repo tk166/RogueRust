@@ -77,9 +77,9 @@ CORE_PATH = os.path.join(PKG_DIR, "out", "content.sts.core.rdcf")
 INV_COUNTS = {
     # 10 tier-A monsters + three sentry **rows** (one per instance: a combatant id must be unique
     # and the encounter record has no instance number, inv:§4.2) + the boss.
-    "monsters": 23,
+    "monsters": 25,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
-    "encounters": 14,
+    "encounters": 16,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     "statuses": 17,       # inv:§10 the ones this subset actually needs
 }
@@ -133,6 +133,9 @@ INV_CARDS = {
 INV_MONSTERS = [
     ("spike_slime_s", 10, 14, ["spike_slime_s.tackle"]),
     # §129: the wiki's act-3 boss, parked in the Boss pool (acts still share content).
+    # §137: the act-3 normal pool gets thicker.
+    ("darkling", 48, 48, ["darkling.nip", "darkling.chomp"]),
+    ("maw", 80, 80, ["maw.roar", "maw.bite", "maw.slam"]),
     # §134: acts 2 and 3 have their own elites.
     ("gremlin_leader", 140, 140, ["gremlin_leader.slash", "gremlin_leader.rally"]),
     ("giant_head", 320, 320, ["giant_head.glare", "giant_head.count"]),
@@ -171,6 +174,12 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    "darkling.nip": ("Attack", [("damage", 7, "event")]),
+    "darkling.chomp": ("Attack", [("damage", 11, "event")]),
+    "maw.roar": ("Debuff", [("status", "standard.strength", 3, "source"),
+                            ("status", "standard.weak", 2, "event")]),
+    "maw.bite": ("Attack", [("damage", 14, "event")]),
+    "maw.slam": ("Attack", [("damage", 20, "event"), ("block", 3, "source")]),
     "gremlin_leader.slash": ("Attack", [("damage", 16, "event")]),
     "gremlin_leader.rally": ("Defend", [("block", 12, "source"),
                                         ("status", "standard.strength", 5, "source")]),
@@ -248,6 +257,8 @@ INV_WEAK_POOL = {
     "enc_byrds": ["byrd"],
     "enc_spiker": ["spiker"],
     "enc_orb_walker": ["orb_walker"],
+    "enc_darklings": ["darkling", "darkling"],
+    "enc_maw": ["maw"],
 }
 INV_WEAK_WEIGHT = 25   # inv:§5.2 每项 25%
 
@@ -267,7 +278,7 @@ INV_ELITE_POOL = {
 INV_ACT_TABLES = {
     "Weak": ["enc_cultist", "enc_jaw_worm", "enc_small_slimes"],
     "Weak2": ["enc_shelled_parasite", "enc_chosen"],
-    "Weak3": ["enc_byrds", "enc_spiker", "enc_orb_walker"],
+    "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker"],
     "Elite": ["enc_three_sentries"],
     "Elite2": ["enc_gremlin_leader"],
     "Elite3": ["enc_giant_head"],

@@ -4401,6 +4401,256 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "darkling.nip",
+      "PackageId": "sts",
+      "NameKey": "Nip",
+      "DescriptionKey": "Nip - 7 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Nip - 7 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 7
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "darkling.chomp",
+      "PackageId": "sts",
+      "NameKey": "Chomp",
+      "DescriptionKey": "Chomp - 11 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Chomp - 11 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 11
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "maw.roar",
+      "PackageId": "sts",
+      "NameKey": "Roar",
+      "DescriptionKey": "Roar - 3 Strength, 2 Weak",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Roar - 3 Strength, 2 Weak"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.strength"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.weak"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "maw.bite",
+      "PackageId": "sts",
+      "NameKey": "Bite",
+      "DescriptionKey": "Bite - 14 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Bite - 14 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 14
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "maw.slam",
+      "PackageId": "sts",
+      "NameKey": "Slam",
+      "DescriptionKey": "Slam - 20 damage and 3 Block",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Slam - 20 damage and 3 Block"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 20
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -5102,6 +5352,111 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_darklings"
+      },
+      "Enemies": [
+        {
+          "Id": "darkling",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "darkling.nip"
+            },
+            {
+              "value": "darkling.chomp"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.regen"
+              },
+              "Stacks": 5
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Darkling"
+        },
+        {
+          "Id": "darkling",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "darkling.nip"
+            },
+            {
+              "value": "darkling.chomp"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.regen"
+              },
+              "Stacks": 5
+            }
+          ],
+          "Position": 1,
+          "IntentRules": [],
+          "DisplayName": "Darkling"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_maw"
+      },
+      "Enemies": [
+        {
+          "Id": "maw",
+          "MaxHealth": 80,
+          "Actions": [
+            {
+              "value": "maw.roar"
+            },
+            {
+              "value": "maw.bite"
+            },
+            {
+              "value": "maw.slam"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Maw"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -5741,6 +6096,56 @@
       "Tier": "Elite",
       "InvRef": "inv:§5.3",
       "AiNote": "⚠️ 第 2/3 幕的精英（port-plan.md §134）；机制用的是已有的 Enrage 与 Metallicize。"
+    },
+    {
+      "Id": "darkling",
+      "NameKey": "Darkling",
+      "HpMin": 48,
+      "HpMax": 48,
+      "MaxHealth": 48,
+      "Actions": [
+        {
+          "value": "darkling.nip"
+        },
+        {
+          "value": "darkling.chomp"
+        }
+      ],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.regen"
+          },
+          "Stacks": 5
+        }
+      ],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "inv:§5.2",
+      "AiNote": "⚠️ 第三幕普通怪（port-plan.md §137）；用的是已有的 Regen。"
+    },
+    {
+      "Id": "maw",
+      "NameKey": "Maw",
+      "HpMin": 80,
+      "HpMax": 80,
+      "MaxHealth": 80,
+      "Actions": [
+        {
+          "value": "maw.roar"
+        },
+        {
+          "value": "maw.bite"
+        },
+        {
+          "value": "maw.slam"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "inv:§5.2",
+      "AiNote": "⚠️ 第三幕普通怪（port-plan.md §137）；用的是已有的 Regen。"
     }
   ],
   "EncounterTables": {
@@ -5794,6 +6199,14 @@
       {
         "Id": "enc_spiker",
         "Weight": 50
+      },
+      {
+        "Id": "enc_darklings",
+        "Weight": 33
+      },
+      {
+        "Id": "enc_maw",
+        "Weight": 33
       }
     ],
     "Elite2": [
