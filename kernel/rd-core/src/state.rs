@@ -118,6 +118,12 @@ use core::cmp::Ordering;
 
 /// See the module table. 4v3 = 7 in the reference's heavy fight, plus summons.
 pub const MAX_COMBATANTS: usize = 12;
+
+/// How many **living enemies** a fight may hold (port-plan.md §139).
+///
+/// The reference caps summons the same way; the number is 4 because the player has to be able to see
+/// and target every one of them, and the observation publishes six slots in total.
+pub const MAX_ENEMIES_IN_FIGHT: usize = 4;
 /// Total card *instances* in one fight - not per combatant. See the module table.
 pub const MAX_CARD_INSTANCES: usize = 224;
 /// Entries in a single pile of a single combatant.
@@ -1107,6 +1113,11 @@ pub struct Combatant {
     pub id: CombatantId,
     pub definition_id: CombatantDefinitionId,
     pub team_id: TeamId,
+    /// Who summoned this combatant (`None` for anything the encounter placed).
+    ///
+    /// A minion **flees when its master falls** (`port-plan.md` §139) -- that is the whole reason
+    /// the link is stored rather than inferred from a naming convention.
+    pub owner: Option<CombatantId>,
     pub lifecycle_state: CombatantLifecycleState,
     pub health_current: i32,
     pub health_max: i32,
@@ -1139,6 +1150,7 @@ impl Empty for Combatant {
         id: CombatantId::EMPTY,
         definition_id: CombatantDefinitionId::EMPTY,
         team_id: TeamId::EMPTY,
+        owner: None,
         // The reference's default lifecycle value is `Alive`; only a `default(CombatantId)` id
         // marks the slot as vacant, and vacant slots are never read.
         lifecycle_state: CombatantLifecycleState::Alive,
@@ -1166,6 +1178,7 @@ impl Combatant {
             id,
             definition_id,
             team_id,
+            owner: None,
             lifecycle_state: CombatantLifecycleState::Alive,
             health_current,
             health_max,
@@ -3619,6 +3632,13 @@ impl CombatState {
     #[must_use]
     pub fn combatants(&self) -> &[Combatant] {
         self.combatants.as_slice()
+    }
+
+    /// Mutable view of every combatant -- for the few rules that must touch more than one at a time
+    /// (a master's fall taking its minions with it, port-plan.md §139).
+    #[must_use]
+    pub fn combatants_mut(&mut self) -> &mut [Combatant] {
+        self.combatants.as_mut_slice()
     }
 
     /// Finds a combatant by id.

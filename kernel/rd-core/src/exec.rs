@@ -1120,6 +1120,16 @@ pub fn resolve_damage_of_kind(
         && combatant.lifecycle_state == CombatantLifecycleState::Alive;
     if went_down {
         combatant.lifecycle_state = CombatantLifecycleState::Downed;
+        // **Its minions flee** (`port-plan.md` §139). `Escaped` is a lifecycle state the reference
+        // already has, and the victory check only counts `Alive` -- so an escaped minion neither
+        // blocks the win nor contributes anything to it (its remaining HP stops mattering).
+        for other in ctx.state.combatants_mut() {
+            if other.owner == Some(*target)
+                && other.lifecycle_state == CombatantLifecycleState::Alive
+            {
+                other.lifecycle_state = CombatantLifecycleState::Escaped;
+            }
+        }
         // `Downed` 事件：`Spore Cloud` 这一批触发器等它（`port-plan.md` §117）。
         ctx.state
             .enqueue_event(crate::state::CombatEvent::Downed {
@@ -2002,8 +2012,29 @@ fn create_combatant_node(
     let id_text = core::str::from_utf8(&buffer[..len]).map_err(|_| ExecError::Modifier)?;
     let id = CombatantId::new(id_text)?;
 
+    // **The summon cap** (`port-plan.md` §139): a fight never holds more than this many living
+    // enemies, and asking for one more is a **loud** failure -- a summoner whose action cannot be
+    // honoured is a content bug, not something to paper over by dropping the minion.
+    let mut living = 0usize;
+    for combatant in ctx.state.combatants() {
+        if combatant.team_id == team_id
+            && combatant.lifecycle_state == crate::state::CombatantLifecycleState::Alive
+        {
+            living += 1;
+        }
+    }
+    if living >= crate::state::MAX_ENEMIES_IN_FIGHT {
+        return Err(ExecError::Capacity(crate::state::CapacityError::Full(
+            crate::state::Container::Combatants,
+        )));
+    }
+
     let max_health = if health > 0 { health } else { DEFAULT_SPLIT_HEALTH };
-    let combatant = crate::state::Combatant::new(id, definition_id, team_id, max_health, max_health);
+    let mut combatant =
+        crate::state::Combatant::new(id, definition_id, team_id, max_health, max_health);
+    // **Who called it.** `ctx.source` is the combatant whose program is running, so a summon from an
+    // enemy action names the summoner; the minion flees when that one falls.
+    combatant.owner = ctx.source;
     ctx.state.add_combatant(combatant)?;
     ctx.state.next_combatant_number = number.saturating_add(1);
     stats.effects = stats.effects.saturating_add(1);

@@ -4685,6 +4685,100 @@ mod tests {
     }
 
     #[test]
+    /// **A minion flees when its master falls** (`port-plan.md` §139): it becomes `Escaped`, which
+    /// is neither alive (so it cannot block the victory) nor a corpse the reward screen counts.
+    #[test]
+    fn a_minion_flees_when_its_master_falls() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        {
+            let id = cid("minion1");
+            let definition = crate::state::CombatantDefinitionId::new("spike_slime_s").expect("def");
+            let team = crate::state::TeamId::new("enemy").expect("team");
+            let mut minion = crate::state::Combatant::new(id, definition, team, 10, 10);
+            minion.owner = Some(cid("enemy_b"));
+            state.add_combatant(minion).expect("minion");
+        }
+        assert!(crate::turn::is_alive(&state, &cid("minion1")), "it starts alive");
+
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("enemy_b"), 12, false).expect("the kill");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("triggers");
+
+        assert!(!crate::turn::is_alive(&state, &cid("minion1")), "the minion stops being alive");
+        assert_eq!(
+            state.combatant(&cid("minion1")).map(|c| c.lifecycle_state),
+            Some(crate::state::CombatantLifecycleState::Escaped),
+            "and it left by fleeing, not by dying"
+        );
+        // An escaped minion does not keep the fight going: `enemy_a` is the only one left.
+        assert_eq!(state.result, crate::state::CombatResult::Ongoing);
+    }
+
+    /// The summon cap is **loud** (`port-plan.md` §139): asking for one enemy too many fails
+    /// instead of quietly dropping the minion.
+    #[test]
+    fn the_summon_cap_is_a_loud_failure() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut state = arena();
+        // The summoner has to **exist** (a missing actor is a silent no-op in execute_action).
+        {
+            let definition = crate::state::CombatantDefinitionId::new("gremlin_leader").expect("def");
+            let team = crate::state::TeamId::new("enemy").expect("team");
+            state
+                .add_combatant(crate::state::Combatant::new(
+                    cid("gremlin_leader"),
+                    definition,
+                    team,
+                    140,
+                    140,
+                ))
+                .expect("summoner");
+        }
+        // ...then fill the fight up to the cap so the summoner is the last one standing room-wise.
+        for index in 0..(crate::state::MAX_ENEMIES_IN_FIGHT - 2) {
+            let id = CombatantId::new(&std::format!("filler{index}")).expect("id");
+            let definition = crate::state::CombatantDefinitionId::new("spike_slime_s").expect("def");
+            let team = crate::state::TeamId::new("enemy").expect("team");
+            state
+                .add_combatant(crate::state::Combatant::new(id, definition, team, 10, 10))
+                .expect("filler");
+        }
+
+        let summon_row = (0..content.section(crate::content::S_EACT).map_or(0, |s| s.count))
+            .find(|index| {
+                content.entity_id(crate::content::Table::EnemyAction, *index)
+                    == Some("gremlin_leader.summon")
+            })
+            .expect("the summon action is in the image");
+        let outcome = crate::intent::execute_action(
+            &mut state,
+            &content,
+            &cid("gremlin_leader"),
+            summon_row,
+            Some(cid("hero")),
+        );
+        assert!(
+            outcome.is_err(),
+            "a summon at the cap must fail loudly, got {outcome:?}"
+        );
+    }
+
+
     fn a_split_spawns_two_combatants_when_the_boss_dies() {
         // Wiki: the Slime Boss splits into two smaller slimes when it dies. The spawn node is the
         // kernel's own (`node.createCombatant`, `port-plan.md` §121); the trigger is a `Downed`

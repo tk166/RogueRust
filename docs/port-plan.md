@@ -8721,3 +8721,63 @@ for row in content.rows(Table::Encounter) { … }
 
 聚合验收 **17/17**；单测 687 → **688**；敌人动作 49 → **50**；遭遇 16 → **17**；
 镜像 full 27,124 B / core 22,700 B。
+
+---
+
+## 139. 随从的三件：**上限 / 槽位 / 主人死了就逃跑**
+
+用户："召唤上限、槽位、主人死了就逃跑这些可能可以一起做？逃跑以后胜利结算不考虑它们的剩余血量"
+
+### 139.1 上限：`MAX_ENEMIES_IN_FIGHT = 4`
+
+`node.createCombatant` 在造人之前数**活着的同队战斗员**，到上限就**响亮失败**
+（`ExecError::Capacity(Full(Combatants))`）。不静默丢一只 —— 召唤者的招式放不出来是**内容 bug**，
+不是"少一只也无所谓"。
+
+数字取 4 的理由：玩家得能看见并选中每一个，而观察向量一共 6 个敌人槽。
+
+### 139.2 槽位：随从落在哪
+
+观察向量的敌人槽来自 `enemy_roster()`（§121 就是派生的），所以召唤出来的随从**自动占一个槽**；
+名字/意图走 `locate_enemy`（§138 的跨遭遇回退），因此槽位上既有名字也有意图。
+
+### 139.3 主人死了就逃跑
+
+```rust
+// 造人时记住是谁召唤的
+combatant.owner = ctx.source;
+
+// 倒下那一刻，它的随从一起走
+for other in ctx.state.combatants_mut() {
+    if other.owner == Some(*target) && other.lifecycle_state == Alive {
+        other.lifecycle_state = Escaped;
+    }
+}
+```
+
+用参考实现本来就有的 `CombatantLifecycleState::Escaped`（值 4）—— **不是**自己发明一个"逃跑"标志。
+
+### 139.4 "逃跑以后胜利结算不考虑剩余血量"
+
+这一条**自动成立**，因为胜负只看 `Alive`（`update_standard_combat_result`）：
+
+* 逃跑的随从**不再是 `Alive`** ⇒ 它不会让战斗继续；
+* 它也不是 `Downed` ⇒ 不会触发死亡触发器、不会进"尸体"那类结算；
+* 它的剩余血量因此**不参与任何判定**。
+
+判据里额外断言了这一条：主人倒下之后 `state.result` 仍是 `Ongoing`（因为 `enemy_a` 还活着），
+而逃跑的随从已经不是 `Alive`。
+
+### 139.5 判据
+
+| 测试 | 证明 |
+|---|---|
+| `a_minion_flees_when_its_master_falls` | 随从从 `Alive` 变成 **`Escaped`**（不是 `Downed`），且不影响胜负 |
+| `the_summon_cap_is_a_loud_failure` | 场上 4 个活敌人时，`gremlin_leader.summon` **报错** |
+
+（第二条测试需要召唤者本人在场 —— `execute_action` 对不存在的 actor 是**静默 no-op**，
+这是我第一版测试失败的原因。）
+
+### 139.6 数字
+
+聚合验收 **17/17**；单测 688 → **690**（rd-core 600 / rd-run 62 / rd-wasm 28）。
