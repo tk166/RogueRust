@@ -1282,6 +1282,18 @@ pub extern "C" fn rd_env_reset() -> i32 {
     }
 }
 
+/// How many times a turn has been cut short so far (`node.endTurn`), or `-1` with no session.
+///
+/// The page polls this: a value bigger than the last one it saw means "your turn was ended by
+/// something", which is information the observation vector deliberately does not carry.
+#[no_mangle]
+pub extern "C" fn rd_env_forced_turns() -> i32 {
+    match ensure_session() {
+        Ok(session) => session.state.forced_turn_ends,
+        Err(_) => -1,
+    }
+}
+
 /// Did the fight hold more enemies than the observation can show?
 ///
 /// `0` = no, `1` = yes, `-1` = no session. The vector cannot grow past `MAX_ENEMY_SLOTS` without

@@ -78,7 +78,7 @@ const REQUIRED = [
   "rd_run_deck_title_into", "rd_run_fight_begin", "rd_run_fight_end",
   "rd_env_pile_len", "rd_env_pile_card_id_len", "rd_env_pile_card_id_into",
   "rd_env_pile_card_title_len", "rd_env_pile_card_title_into",
-  "rd_env_enemy_overflow", "rd_env_use_potion", "rd_run_potion_effect", "rd_run_potion_count", "rd_run_potion_id_len", "rd_run_potion_id_into", "rd_run_drop_potion",
+  "rd_env_enemy_overflow", "rd_env_forced_turns", "rd_env_use_potion", "rd_run_potion_effect", "rd_run_potion_count", "rd_run_potion_id_len", "rd_run_potion_id_into", "rd_run_drop_potion",
   "rd_run_reward_potion_len", "rd_run_take_potion",
   "rd_run_start_offer_len", "rd_run_start_offer_into", "rd_run_start_gain",
   "rd_run_start_gain_amount", "rd_run_start_cost", "rd_run_start_cost_amount",

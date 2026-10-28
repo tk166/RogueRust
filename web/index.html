@@ -606,6 +606,16 @@ function renderTopBar() {
   const act = ex.rd_run_act();
   // `rd_env_enemy_overflow()`: the observation carries six enemy slots. A fight that holds more
   // **cannot be drawn correctly**, and the honest thing is to say so rather than quietly show six.
+  // A turn that ended **without the player asking** is worth a line: it is the only visible sign of
+  // Time Warp (port-plan.md §126).
+  const forcedTurns = ex.rd_env_forced_turns();
+  if (forcedTurns > forcedTurnSeen) {
+    forcedTurnSeen = forcedTurns;
+    say('<span class="warn">⏳ 你的回合被强行结束了（时间扭曲）</span>');
+  } else if (forcedTurns >= 0) {
+    forcedTurnSeen = forcedTurns;
+  }
+
   const overflow = ex.rd_env_enemy_overflow();
   const overflowNote =
     overflow === 1 ? ' · <span class="warn">⚠️ 敌人超出可见槽（只显示 6 个）</span>' : "";
@@ -1272,6 +1282,11 @@ function appendLog(diff) {
 function esc(s) { return String(s).replace(/[<>&]/g, (c) => ({ "<":"&lt;", ">":"&gt;", "&":"&amp;" }[c])); }
 
 let currentView = null;
+
+/// The last `rd_env_forced_turns()` we showed. A bigger value means "something ended your turn"
+/// (`node.endTurn`, i.e. Time Warp) -- the observation vector does not carry that, so it is polled
+/// here and reported through `say()`, the single writer of `#msg`.
+let forcedTurnSeen = 0;
 
 /// A potion waiting for a target: its belt slot, or `-1`. (Block/energy/heal never wait.)
 let potionPending = -1;

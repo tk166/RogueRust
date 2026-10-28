@@ -2855,6 +2855,11 @@ pub struct CombatState {
     /// Set by [`EffectRequest::EndTurn`]; the battle loop ends the turn and clears it. It is **not**
     /// cleared by the effect itself, because "who honours the request" must stay visible.
     pub end_turn_requested: bool,
+    /// How many times a turn has been **cut short** by `node.endTurn` (`port-plan.md` §126).
+    ///
+    /// A counter, not a flag: the UI polls it and shows "your turn was ended" when it changes, which
+    /// survives the fact that the flag itself is consumed inside the battle loop.
+    pub forced_turn_ends: i32,
     pub next_status_instance_number: i32,
     /// 下一个 `node.createCombatant` 造出来的战斗员的编号（分裂/召唤）。
     ///
@@ -2988,6 +2993,7 @@ impl Empty for CombatState {
         turn_phase: CombatTurnPhase::WaitingToStartTurn,
         active_combatant_id: None,
         end_turn_requested: false,
+        forced_turn_ends: 0,
         next_status_instance_number: 0,
             next_combatant_number: 0,
         next_card_instance_number: 0,
@@ -3093,6 +3099,7 @@ impl CombatState {
             turn_phase: CombatTurnPhase::WaitingToStartTurn,
             active_combatant_id: None,
             end_turn_requested: false,
+            forced_turn_ends: 0,
             next_status_instance_number: 0,
             next_combatant_number: 0,
             next_card_instance_number: 0,
@@ -3133,6 +3140,7 @@ impl CombatState {
         self.turn_phase = CombatTurnPhase::WaitingToStartTurn;
         self.active_combatant_id = None;
         self.end_turn_requested = false;
+        self.forced_turn_ends = 0;
         self.next_status_instance_number = 1;
         self.next_card_instance_number = 1;
         self.next_effect_chain_number = 1;

@@ -1271,6 +1271,7 @@ fn hero_plays<H: TurnHost>(
     // 循环层推进），而且"谁兑现了请求"这件事是可读的。
     if state.end_turn_requested && state.result == CombatResult::Ongoing {
         state.end_turn_requested = false;
+        state.forced_turn_ends = state.forced_turn_ends.saturating_add(1);
         end_turn_and_start_next(state, config, host)?;
     }
     // `:124` 的原话是 `if (outcome.Value is { WasPlayed: false })` —— 它匹配的是 **false**，
