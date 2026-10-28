@@ -789,6 +789,7 @@ fn apply_plan_in_chain(
     // ⚠️ 今天的载荷只有"谁出的"：卡上的 tag 过滤器（`Enrage` 只认技能牌）还没建模，
     // 所以内容里那条触发条件是"出牌就触发"，这是写明了的降级（`port-plan.md` §117）。
     if counted_as_card_played {
+        state.cards_played_this_turn = state.cards_played_this_turn.saturating_add(1);
         state.enqueue_event(crate::state::CombatEvent::CardPlayed {
             owner: plan.source,
             card: plan.instance,

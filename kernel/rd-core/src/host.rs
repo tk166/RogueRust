@@ -3572,43 +3572,30 @@ mod tests {
 
     #[test]
     fn the_two_error_channels_agree_on_class_and_detail() {
-        // 走**冻结的** trait 入口（不是 `try_*`）：这才是"只读 `TurnError` 的调用方"的经历。
-        // 它必须同时得到 **类别**（`TurnError::Host(Unsupported)`）与**细节**
-        // （`last_failure()` 里的 `Exec(Expr(UnsupportedKind))`）。
+        // Walk the **frozen** trait entry (not the `try_*` one): that is what a caller who only reads
+        // `TurnError` experiences, and it must get both the **class** and the **detail**.
+        //
+        // The failure used here is "a status with no STAT row in the image" (`Bind(Missing)`); the
+        // old example -- `cardsPlayedLastTurn` being unimplemented -- went away in §128.
         let blob = core_image();
         let content = parse(&blob);
-        let mut state = arena();
+        let mut state = solo();
         let mut host = Host::new(&content);
-        // `queue_advances` 的 TurnStarted 触发器用的是 `cardsPlayedLastTurn`，表达式层没实现。
-        give(&mut state, "hero", status("st_qa", "queue_advances", 0));
+        give(&mut state, "hero", status("st_x", "standard.strength", 2));
+
         let err = TurnHost::run_turn_started_triggers(&mut host, &mut state, &cid("hero"))
-            .expect_err("必须报错");
+            .expect_err("a status without a STAT row must fail loudly");
         assert_eq!(
             err,
-            TurnError::Host(HostFailure::Unsupported),
-            "类别：这是'内核还没做到'，不是'内容配错了'"
+            TurnError::Host(HostFailure::Content),
+            "class: the content is wrong, not the kernel"
         );
         assert_eq!(
             host.last_failure(),
-            Some(HostError::Exec(ExecError::Expr(ExprError::UnsupportedKind))),
-            "细节：原因记在宿主上，不丢"
-        );
-        // 反向的一档：内容里没有这个状态定义 ⇒ **类别必须不同**。
-        let mut host = Host::new(&content);
-        let mut state = arena();
-        give(&mut state, "hero", status("st_x", "standard.strength", 2));
-        assert_eq!(
-            TurnHost::run_turn_started_triggers(&mut host, &mut state, &cid("hero")),
-            Err(TurnError::Host(HostFailure::Content)),
-            "同一个钩子、不同原因 ⇒ 不同类别"
-        );
-        assert_eq!(
-            host.last_failure(),
-            Some(HostError::Bind(BindError::Missing("STAT row")))
+            Some(HostError::Bind(BindError::Missing("STAT row"))),
+            "detail: which binding failed"
         );
     }
-
-    // ---------------------------------------------------------------- 解码入口
 
     #[test]
     fn the_image_has_exactly_the_three_plus_six_triggers_the_spec_claims() {
@@ -3892,27 +3879,43 @@ mod tests {
     }
 
     #[test]
-    fn queue_advances_is_a_kernel_gap_not_a_content_error() {
-        // `queue_advances` 的 TurnStarted 触发器是 `conditional`，它的条件是
-        // `compare(cardsPlayedLastTurn(...) >= 3)` —— 而 `cardsPlayedLastTurn` 是
-        // `expr.rs` **今天不实现**的 int 表达式（模块头第 35-44 行点过名）。
+    fn queue_advances_runs_now_that_the_turn_counters_exist() {
+        // This used to be the project's example of "kernel gap, not content error": the status
+        // `queue_advances` has a `TurnStarted` trigger conditioned on `cardsPlayedLastTurn >= 3`,
+        // and that expression was unimplemented (`expr.rs` module head, §128 fixed it).
         //
-        // ⚠️ **规格书 §2.2 在这里说错了一句**：它写"用到的节点种类全在 `exec.rs` 已交付的
-        // 15 种里 ⇒ 执行层够用"。节点种类确实够（`conditional` + `setCombatantCounter`），
-        // 但**表达式**种类不够。这条测试把那个反例钉住。
+        // Now it **runs**, and the counter it sets is the proof.
         let blob = core_image();
         let content = parse(&blob);
         let mut host = Host::new(&content);
+
+        let counter_of = |state: &crate::state::CombatState| -> i32 {
+            state
+                .combatant(&cid("hero"))
+                .map_or(0, |c| {
+                    c.counters()
+                        .iter()
+                        .map(|entry| entry.value)
+                        .sum()
+                })
+        };
+
+        // Fewer than three cards last turn: the condition is false, nothing happens.
         let mut state = solo();
         give(&mut state, "hero", status("st_qa", "queue_advances", 0));
-        let err = host
-            .try_run_turn_started_triggers(&mut state, &cid("hero"))
-            .expect_err("必须响亮失败");
-        assert_eq!(
-            err,
-            HostError::Exec(ExecError::Expr(ExprError::UnsupportedKind)),
-            "这是'内核还没做到'（UnsupportedKind），不是'内容配错了'（Ir/Missing）"
-        );
+        state.cards_played_last_turn = 2;
+        host.try_run_turn_started_triggers(&mut state, &cid("hero"))
+            .expect("the trigger runs");
+        assert_eq!(counter_of(&state), 0, "two cards is not three");
+
+        // Three or more: the `Then` branch bumps the counter.
+        let mut host = Host::new(&content);
+        let mut state = solo();
+        give(&mut state, "hero", status("st_qa", "queue_advances", 0));
+        state.cards_played_last_turn = 3;
+        host.try_run_turn_started_triggers(&mut state, &cid("hero"))
+            .expect("the trigger runs");
+        assert!(counter_of(&state) > 0, "three cards must move the queue");
     }
 
     #[test]

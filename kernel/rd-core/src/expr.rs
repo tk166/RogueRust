@@ -508,7 +508,12 @@ pub fn eval_int<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, Exp
         // `CombatantMaxHealthExpression.Evaluate`（`:687-693`）：`Health.Max`。
         "maxHealth" => Ok(health_target(node, ctx)?.map_or(0, |c| c.health_max)),
 
-        // 其余（`eventAmount` / `cardsPlayedThisTurn` / `card.upgradeLevel` / `missingHealth` …）
+        // `CardsPlayedThisTurnExpression` / `...LastTurnExpression`（`:930-944`）：回合级的计数，
+        // 不取选择器（`port-plan.md` §128）。
+        "cardsPlayedThisTurn" => Ok(ctx.state.cards_played_this_turn),
+        "cardsPlayedLastTurn" => Ok(ctx.state.cards_played_last_turn),
+
+        // 其余（`eventAmount` / `card.upgradeLevel` / `missingHealth` …）
         // —— 值类别是 int，但 v1 没有它需要的上下文。**绝不返回 0**。
         _ => Err(ExprError::UnsupportedKind),
     }
@@ -1862,14 +1867,14 @@ mod tests {
         let content = parse(&blob);
         let state = arena();
         let ctx = full_ctx(&state);
-        // 四处真实实例，各自缺一种上下文：
-        //   term 986  = cardsPlayedThisTurn{sel.source}      （每回合出牌统计）
+        // 三处真实实例，各自缺一种上下文：
         //   term 354  = eventAmount{}                        （触发事件上下文）
         //   term 1736 = card.upgradeLevel{}                  （卡实例上下文）
         //   term 1542 = fx.heal{Amount:10}                   （run 层节点）
+        // ⚠️ **`cardsPlayedThisTurn` 不再是这一档**（§128 给它补了回合级计数）：term 986 现在**答得出**
+        // —— 见下面那条断言。
         for (tid, why) in [
-            (986u16, "cardsPlayedThisTurn"),
-            (354, "eventAmount"),
+            (354u16, "eventAmount"),
             (1736, "card.upgradeLevel"),
             (1542, "fx.heal"),
         ] {
@@ -1877,8 +1882,8 @@ mod tests {
             assert_eq!(got, Err(ExprError::UnsupportedKind), "term {tid}（{why}）不许给 0");
             assert_ne!(got, Ok(0), "term {tid}（{why}）不许给 0");
         }
-        // 它们嵌在别的表达式里也一样（term 987 = compare{cardsPlayedThisTurn, Equal, 1}）。
-        assert_eq!(eval_bool(node(&content, 987), &ctx), Err(ExprError::UnsupportedKind));
+        // term 987 = compare{cardsPlayedThisTurn, Equal, 1} —— 它现在**求得出值**，不再响亮失败。
+        assert_eq!(eval_bool(node(&content, 987), &ctx), Ok(false), "0 cards played yet");
         // ⚠️ **`currentHealth` / `maxHealth` 不再是这一档**（2026-10-19 改了本文件：
         // 它们实现了，字段名 `Selector` 由我们定，见模块头第 4 条）。这条断言原来写的是
         // `UnsupportedKind`，现在改成**更具体的那种错** —— 真实镜像的 op 28 / op 48
@@ -2016,13 +2021,15 @@ mod tests {
         // 因为它的值域是卡实例而不是 int（见 `CARD_KINDS`）。它不是"不再被扫"，
         // 而是被 `skipped_card` 单独计数 —— 下面这条断言就是在钉这件事。
         assert_eq!(total, 170, "候选表达式条数（去重后的 term 条数）");
-        assert_eq!(ok, 117, "v1 求得出值的");
+        // 117 → 121：`cardsPlayedThisTurn` / `cardsPlayedLastTurn` 与它们的两个祖先现在求得出值（§128）。
+        assert_eq!(ok, 121, "v1 求得出值的");
         // 53 → 40：`currentHealth`(t1527) 与 `maxHealth`(t1728) 不再是 `UnsupportedKind`
         // （它们实现了，只是**这份内容**里没有 `Selector` 字段），它们的 11 个祖先也跟着变了
         // —— 见下面那条 id 清单。
         // 仍是 40：event.bool 现在实现了，但**只认四个 card.hasTag.* 键**；参考镜像里那两条
         // 用的是别的键（node.isCombat 之类），照旧算 UnsupportedKind —— 响亮失败，不静默 false。
-        assert_eq!(unsupported, 40, "UnsupportedKind（见上面的按 kind 分布）");
+        // 40 → 36：同上，四条不再落进 UnsupportedKind。
+        assert_eq!(unsupported, 36, "UnsupportedKind（见上面的按 kind 分布）");
         // 0 → 13：**两片叶子 + 它们的 11 个祖先**。这条断言的价值是把"其它错误"从 0 变成
         // **一个可以逐条念出来的清单**：
         //   * 叶子：1527 `currentHealth`、1728 `maxHealth`（`nfields = 0` ⇒ 缺 `Selector`）；

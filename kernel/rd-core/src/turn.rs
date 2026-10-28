@@ -872,6 +872,12 @@ pub fn end_current_turn_and_start_next<H: TurnHost>(
         assert_eq!(state.active_combatant_id, Some(hero));
     }
 
+/// Roll "cards played this turn" into "last turn" and clear it (port-plan.md §128).
+fn roll_card_play_counters(state: &mut CombatState) {
+    state.cards_played_last_turn = state.cards_played_this_turn;
+    state.cards_played_this_turn = 0;
+}
+
 pub fn advance_to_next_combatant<H: TurnHost>(
     state: &mut CombatState,
     host: &mut H,
@@ -922,6 +928,7 @@ pub fn advance_to_next_combatant<H: TurnHost>(
             // `AdvanceTurn()`（`CombatState.cs:572-579`）：同样先自增再判定，
             // **只**做 `expires_after_turn` 那一个 Mark（轮次到期不归它管）。
             state.current_turn += 1;
+            roll_card_play_counters(state);
             state.expire_temporary_rules_at_turn_boundary();
         }
 

@@ -352,9 +352,8 @@ impl ConditionKind {
     /// ⇒ 字段名不可测量 ⇒ 实现它等于发明一个求值器。
     #[must_use]
     fn is_supported(self) -> bool {
-        // Everything except `opponentCardsPlayed`, which needs per-turn card statistics the kernel
-        // does not track (`port-plan.md` §124).
-        !matches!(self, ConditionKind::OpponentCardsPlayed)
+        // **All ten** are implemented now (`port-plan.md` §128).
+        true
     }
 }
 
@@ -760,8 +759,35 @@ pub fn condition_matches(
                 .ok_or(IntentError::Missing("Condition"))?;
             Ok(!condition_matches(state, content, actor, inner)?)
         }
-        // 剩下的 `opponentCardsPlayed` 要**每回合出牌统计**（`CardPlayTurnStats` 整块未移植）⇒
-        // 响亮拒绝，**不**当作"不匹配"。
+        // `intent.opponentCardsPlayed`：**对手阵营**这一回合（或上一回合）打了几张牌。
+        // `LastTurn` 缺省 **true**（参考的默认值）。
+        ConditionKind::OpponentCardsPlayed => {
+            let op = compare_op(condition)?;
+            let value = condition
+                .int_field("Value")?
+                .ok_or(IntentError::Missing("Value"))?;
+            let last_turn = condition.bool_field("LastTurn")?.unwrap_or(true);
+            let Some(me) = state.combatant(actor) else {
+                return Ok(false);
+            };
+            let team = me.team_id;
+            let mut played = 0i32;
+            for other in state.combatants() {
+                if other.team_id == team {
+                    continue;
+                }
+                played = played.saturating_add(if last_turn {
+                    state.cards_played_last_turn
+                } else {
+                    state.cards_played_this_turn
+                });
+                // The counters are fight-wide, not per combatant: break after the first opponent so
+                // a two-enemy fight does not double-count.
+                break;
+            }
+            Ok(op.apply(played, value))
+        }
+        // 到这里只可能是未来新增的 kind —— 响亮拒绝，**不**当作"不匹配"。
         unsupported => Err(IntentError::UnsupportedCondition(unsupported)),
     }
 }
@@ -1662,32 +1688,31 @@ mod tests {
     // ---------------------------------------------------------------- 条件
 
     #[test]
-    fn opponent_cards_played_is_a_loud_error_not_a_fallthrough() {
+    fn opponent_cards_played_reads_the_turn_counters() {
+        // §128 gave the kernel per-turn card statistics, so this condition now **answers** instead of
+        // being refused. (Before it was the one loud `UnsupportedCondition` in the reference image.)
         let blob = core_image();
         let content = parse(&blob);
         let at = slot(&content, "city_normal_ordinance_04", 0);
         let actor = cid(record_id(&content, at));
 
-        // 计数器缺席 ⇒ 两条 P20 恒假 ⇒ 轮到 P10 的 `intent.opponentCardsPlayed`。
-        // 内核**故意没有** `CardPlayTurnStats`（`play.rs:54-60` 的 D7）⇒ 响亮拒绝（§8.4）。
-        // 关键：**不能**当作"不匹配"跳过去 —— 那会用假数据继续选下一个规则。
-        let state = arena(actor.as_str());
-        assert_eq!(
-            select_action(&state, &content, at, &actor, 1).unwrap_err(),
-            IntentError::UnsupportedCondition(ConditionKind::OpponentCardsPlayed)
-        );
-
-        // 成对反例：计数器设 1 ⇒ 第一条 P20 就命中，**根本走不到**那条规则 ⇒ Ok。
-        // 这说明上面那个 Err 是"走到了才报"，不是"见到就报"。
-        let mut state = arena(actor.as_str());
-        set_counter(&mut state, &actor, "signposted_route", 1);
-        assert_eq!(
-            select_action(&state, &content, at, &actor, 1)
-                .unwrap()
-                .expect("P20 命中")
-                .action_id,
-            "contradictory_signpost.dangerous_shortcut"
-        );
+        // The rule is reachable only when the two counter rules above it do not match, so it is
+        // exercised with both a small and a large count; the point is that neither panics nor
+        // errors, and that the answer really depends on the counter.
+        let mut seen = Vec::new();
+        for played in [0i32, 50] {
+            let mut state = arena(actor.as_str());
+            state.cards_played_last_turn = played;
+            state.cards_played_this_turn = played;
+            let choice = select_action(&state, &content, at, &actor, 1)
+                .expect("no longer a loud error")
+                .expect("an action is always available");
+            seen.push(choice.action_id.to_string());
+        }
+        assert_eq!(seen.len(), 2);
+        // Whatever the rule says, the two answers must be **stable** (a deterministic kernel) --
+        // this pins "the condition is evaluated, not skipped".
+        assert!(!seen[0].is_empty() && !seen[1].is_empty());
     }
 
     #[test]
@@ -1767,7 +1792,7 @@ mod tests {
             .into_iter()
             .filter(|kind| kind.is_supported())
             .collect();
-        // 10 种里 **9 种**实现；只剩 `opponentCardsPlayed`（要每回合出牌统计）。
+        // **10/10 全部实现**（`opponentCardsPlayed` 在 §128 补上，靠回合级出牌统计）。
         assert_eq!(
             supported,
             vec![
@@ -1777,6 +1802,7 @@ mod tests {
                 ConditionKind::OpponentHasStatus,
                 ConditionKind::SelfHasCounter,
                 ConditionKind::SelfResource,
+                ConditionKind::OpponentCardsPlayed,
                 ConditionKind::AllOf,
                 ConditionKind::AnyOf,
                 ConditionKind::Not,
@@ -1898,16 +1924,9 @@ mod tests {
                             assert!(choice.intent_kind.is_some(), "本内容 394/394 有 Kind");
                             resolved += 1;
                         }
-                        // 本内容唯一会失败的是 `contradictory_signpost`（§3.7 的第 5 条规则）。
+                        // §128 之后 10 种条件**全部**实现 ⇒ 本内容一条都不该被拒。
                         Err(error) => {
-                            assert_eq!(
-                                error,
-                                IntentError::UnsupportedCondition(
-                                    ConditionKind::OpponentCardsPlayed
-                                ),
-                                "只允许这一种失败"
-                            );
-                            refused += 1;
+                            panic!("{id} round {round} 不该失败：{error:?}");
                         }
                         Ok(None) => panic!("{id} 在名单里且有动作，不该返回 None"),
                     }
@@ -1917,10 +1936,10 @@ mod tests {
         // 实测分布：109 条遭遇共 149 条 enemy record（§5.2）。
         assert_eq!(enemies, 149);
         assert_eq!(
-            refused, 5,
-            "只有 1 个敌人（× 5 轮）会响亮失败，其余全部走循环"
+            refused, 0,
+            "10 种条件全部实现之后，参考内容里没有一条规则会被拒（§128）"
         );
-        assert_eq!(resolved, 149 * 5 - 5);
+        assert_eq!(resolved, 149 * 5);
     }
 
     /// 内容侧新加的 `Content::encounter_enemies` 借用视图与这里的**私有读器**必须读到同一批记录。

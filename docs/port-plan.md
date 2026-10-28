@@ -8250,3 +8250,81 @@ CardPlayed →
 | IR 节点 | 16 → **17**（`node.endTurn`） |
 | 内容状态 | 16 → **17**（`standard.time_warp`） |
 | 镜像 | full 20,404 B / core 17,324 B（重钉） |
+
+---
+
+## 126. 第 3 件：**"回合被强行结束"在页面上看得见**
+
+`node.endTurn` 立的旗子在战斗循环里**当场被消费**，页面根本读不到它。
+
+⇒ 暴露**单调计数器**而不是旗子：
+
+```rust
+CombatState.forced_turns: i32          // 每次兑现 +1（EMPTY/reset 清零）
+rd_env_forced_turns()                  // 导出
+```
+
+页面轮询它：值比上次大 ⇒ `say('⏳ 你的回合被强行结束了（时间扭曲）')`。`say()` 仍是 `#msg` 的唯一写者。
+
+**为什么用计数器**：旗子是"这一帧的事件"，页面每帧都可能错过那个瞬间；计数器是"发生过几次"，不会漏。
+
+---
+
+## 127. 第 2 件：**额外回合**（`node.extraTurn`）
+
+Time Eater 时间扭曲之后还会再动一次 —— 那是"插入一个额外回合"，内核原来没有。
+
+| 件 | 内容 |
+|---|---|
+| 状态 | `CombatState.extra_turn_for: Option<CombatantId>` |
+| 请求 | `EffectRequest::ExtraTurn { target }`（第 8 个） |
+| 节点 | `node.extraTurn`（第 18 个，带 `TargetSelector`） |
+| 兑现 | `turn.rs::advance_to_next_combatant` 开头：**额外回合优先于轮转** —— 标记指向当前行动者时，它保持活跃、只推回合时钟、清标记 |
+
+结果：十二张牌之后 = +2 力量 + 计数器归零 + **你的回合结束** + **敌人再来一个回合**。
+
+判据 `an_extra_turn_keeps_the_same_actor_active`：普通轮转 ⇒ 敌人接管；打上标记后再推 ⇒ **仍是敌人**、
+时钟 +1、标记被消费；之后那一次照常轮转回英雄。
+
+---
+
+## 128. 第 3 件（`opponentCardsPlayed`）：**10 种意图条件全部实现**
+
+### 128.1 缺的是"每回合出牌统计"
+
+```rust
+CombatState.cards_played_this_turn   // play.rs 每出一张 +1
+CombatState.cards_played_last_turn   // turn.rs 在每个回合边界滚动
+```
+
+由此：
+
+* `intent.opponentCardsPlayed`（`Op, Value, LastTurn` 缺省 **true**）：比较**对手阵营**的计数；
+* 顺带把两个表达式 `cardsPlayedThisTurn` / `cardsPlayedLastTurn` 也实现了（它们本来在
+  `expr.rs` 的"不支持"名单里）。
+
+`is_supported` 现在返回 `true` —— **10/10**。
+
+### 128.2 实现一个功能会打破"钉住它不存在"的测试（这一轮有五条）
+
+| 测试 | 原来钉的 | 现在 |
+|---|---|---|
+| `expr` 覆盖扫描 | `ok = 117` / `unsupported = 40` | **121 / 36** |
+| `unsupported_expressions_are_loud_and_never_zero` | `cardsPlayedThisTurn` 必须报错 | 它**答得出**；那条断言改成 `Ok(false)`（0 张牌） |
+| `condition_kinds_are_the_ten...` | 支持 9 种 | **10 种** |
+| `every_cycle_action_in_the_image_resolves_to_its_own_row` | 参考内容里有 5 次响亮失败 | **0 次**（`refused = 0`，`resolved = 149*5`） |
+| `opponent_cards_played_is_a_loud_error_not_a_fallthrough` | 报 `UnsupportedCondition` | 改成"读得到计数"的真值测试 |
+| `queue_advances_is_a_kernel_gap_not_a_content_error` | 该状态触发必失败 | 改成**正面**测试：`cardsPlayedLastTurn >= 3` 才动计数器 |
+| `the_two_error_channels_agree_on_class_and_detail` | 用上面那个失败当例子 | 改用 `Bind(Missing("STAT row"))`（`HostFailure::Content`），**两条通道仍然一致** |
+
+⚠️ 最后一条值得单独说：那条测试的价值是"类别与细节两条通道说同一件事"，**不是**"用哪个错误当例子"。
+换例子保住了价值，删掉就会丢。
+
+### 128.3 数字
+
+| 项 | 值 |
+|---|---|
+| 聚合验收 | **17/17** |
+| 单测 | 684 → **685**（rd-core 597 / rd-run 61 / rd-wasm 27） |
+| 意图条件 | **10 / 10** |
+| 表达式 | `cardsPlayedThisTurn` / `cardsPlayedLastTurn` 从不支持变成支持 |

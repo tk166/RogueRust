@@ -2868,6 +2868,14 @@ pub struct CombatState {
     /// Who gets **another turn in a row** when their current one ends (`node.extraTurn`,
     /// `port-plan.md` §127). Cleared when honoured.
     pub extra_turn_for: Option<CombatantId>,
+    /// Cards played **this turn** and **last turn** (`port-plan.md` §128).
+    ///
+    /// Turn-scoped totals, not per-combatant: only the hero plays cards today, and the intent
+    /// condition that needs them (`opponentCardsPlayed`) asks about "the other side" as a whole.
+    /// Rolled at every turn boundary in `turn.rs`.
+    pub cards_played_this_turn: i32,
+    /// See [`Self::cards_played_this_turn`].
+    pub cards_played_last_turn: i32,
     pub next_status_instance_number: i32,
     /// 下一个 `node.createCombatant` 造出来的战斗员的编号（分裂/召唤）。
     ///
@@ -3003,6 +3011,8 @@ impl Empty for CombatState {
         end_turn_requested: false,
         forced_turn_ends: 0,
         extra_turn_for: None,
+        cards_played_this_turn: 0,
+        cards_played_last_turn: 0,
         next_status_instance_number: 0,
             next_combatant_number: 0,
         next_card_instance_number: 0,
@@ -3110,6 +3120,8 @@ impl CombatState {
             end_turn_requested: false,
             forced_turn_ends: 0,
             extra_turn_for: None,
+            cards_played_this_turn: 0,
+            cards_played_last_turn: 0,
             next_status_instance_number: 0,
             next_combatant_number: 0,
             next_card_instance_number: 0,
@@ -3152,6 +3164,8 @@ impl CombatState {
         self.end_turn_requested = false;
         self.forced_turn_ends = 0;
         self.extra_turn_for = None;
+        self.cards_played_this_turn = 0;
+        self.cards_played_last_turn = 0;
         self.next_status_instance_number = 1;
         self.next_card_instance_number = 1;
         self.next_effect_chain_number = 1;
