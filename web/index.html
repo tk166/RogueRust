@@ -183,6 +183,53 @@
 .enemy-panel.enemy-target {
   cursor: crosshair;
 }
+/* The act transition (`port-plan.md` §136): a real screen, not a line in the message bar. */
+#actCurtain {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 40%, rgba(20, 28, 40, 0.92), rgba(6, 9, 14, 0.97));
+  cursor: pointer;
+  animation: curtainIn 240ms ease-out;
+}
+
+#actCurtain[hidden] {
+  display: none;
+}
+
+.curtain-inner {
+  text-align: center;
+  padding: 2rem 3rem;
+}
+
+.curtain-act {
+  font-size: 2.6rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  color: #f0d68a;
+  text-shadow: 0 0 18px rgba(240, 214, 138, 0.35);
+}
+
+.curtain-line {
+  margin-top: 0.9rem;
+  color: #b9c4d2;
+  font-size: 1rem;
+}
+
+.curtain-hint {
+  margin-top: 1.6rem;
+  color: #6d7a8a;
+  font-size: 0.85rem;
+}
+
+@keyframes curtainIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .warn {
   color: #f0b862;
   font-weight: 600;
@@ -253,6 +300,14 @@
   <br>
   一次「结束回合」= 英雄回合结束 → **每个**敌人各自走一个回合（<code>Step::EndOneTurn</code>）→ 回到英雄。
 </details>
+
+<div id="actCurtain" hidden>
+  <div class="curtain-inner">
+    <div class="curtain-act" id="curtainAct">第 2 幕</div>
+    <div class="curtain-line" id="curtainLine">地图重画了 · 血量、牌组、遗物都带过来了</div>
+    <div class="curtain-hint">点一下继续</div>
+  </div>
+</div>
 
 <div class="topbar">
   <span class="stats" id="runStats">——</span>
@@ -608,10 +663,7 @@ function renderTopBar() {
   // `say` is still the only writer of `#msg`.
   if (act > actSeen) {
     actSeen = act;
-    say(
-      `<b>—— 第 ${act} 幕 ——</b>` +
-        `<span class="dim"> 地图重画了，血量、牌组、遗物都带过来了</span>`
-    );
+    showActCurtain(act);
   } else if (act > 0 && act < actSeen) {
     // A new run started: reset without announcing anything.
     actSeen = act;
@@ -686,6 +738,28 @@ function renderTopBar() {
 /// **The only writer of `#msg`.** Two places used to assign it (`renderMap`'s status line and
 /// `act`'s refusal), which is the same "two writers, one element" shape that produced two P0s in
 /// `#nodePanel` (`port-plan.md` §89, §90). One helper, one writer.
+/// The act transition (`port-plan.md` §136). A **screen**, not a message: the map has just been
+/// redrawn and the player deserves to notice. It fades out on its own, or on a click.
+function showActCurtain(act) {
+  const curtain = document.getElementById("actCurtain");
+  document.getElementById("curtainAct").textContent = `第 ${act} 幕`;
+  curtain.hidden = false;
+  if (actCurtainTimer !== null) clearTimeout(actCurtainTimer);
+  actCurtainTimer = setTimeout(() => {
+    curtain.hidden = true;
+    actCurtainTimer = null;
+  }, 1600);
+}
+
+function hideActCurtain() {
+  const curtain = document.getElementById("actCurtain");
+  curtain.hidden = true;
+  if (actCurtainTimer !== null) {
+    clearTimeout(actCurtainTimer);
+    actCurtainTimer = null;
+  }
+}
+
 function say(text) {
   document.getElementById("msg").innerHTML = text;
 }
@@ -1304,6 +1378,9 @@ let forcedTurnSeen = 0;
 /// advances it when the boss falls, and nothing else in the UI says so.
 let actSeen = 1;
 
+/// The auto-hide timer of the act curtain, so a second transition does not race the first.
+let actCurtainTimer = null;
+
 /// A potion waiting for a target: its belt slot, or `-1`. (Block/energy/heal never wait.)
 let potionPending = -1;
 
@@ -1626,6 +1703,12 @@ function measure() {
     ev.preventDefault();
     showCardDetail(where, Number(slot));
   });
+  // Wired once at boot: the act curtain is dismissed by a click anywhere on it.
+  var actCurtainEl = document.getElementById("actCurtain");
+  if (actCurtainEl && !actCurtainEl.dataset.wired) {
+    actCurtainEl.dataset.wired = "1";
+    actCurtainEl.addEventListener("click", hideActCurtain);
+  }
   document.getElementById("deckBtn").onclick = () => showPile("所有牌", deckEntries());
   document.getElementById("drawBtn").onclick = () => showPile("抽牌堆", pileEntries(0));
   document.getElementById("discardBtn").onclick = () => showPile("弃牌堆", pileEntries(1));

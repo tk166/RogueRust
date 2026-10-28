@@ -8613,3 +8613,32 @@ let Some(pool) = image.potion_pool(potion_pool_name) else { /* 响亮失败，�
 `energy_potion`**（"不重放第 1 幕"）；同一个池两次读出来相等；未知池名返回 `None` 而不是空池。
 
 数字：聚合验收 17/17；单测 687；镜像重钉。
+
+---
+
+## 136. 真正的幕间画面（不是消息条里那一行）
+
+§132 的幕间提示只是 `say()` 的一行字。这一轮把它换成**一整屏**：
+
+```html
+<div id="actCurtain" hidden>
+  <div class="curtain-inner">
+    <div class="curtain-act">第 2 幕</div>
+    <div class="curtain-line">地图重画了 · 血量、牌组、遗物都带过来了</div>
+    <div class="curtain-hint">点一下继续</div>
+  </div>
+</div>
+```
+
+* `position: fixed; inset: 0; z-index: 50`，径向渐变底 + 淡入（`curtainIn 240ms`）；
+* `rd_run_act()` 变大 ⇒ `showActCurtain(act)`；**1.6 秒自动淡出**，或者**点一下就收**；
+* 计时器存进 `actCurtainTimer`，两次换幕不会互相打架。
+
+### 判据
+
+* `ui_test.mjs`：页面里必须有 `id="actCurtain"` / `id="curtainAct"`，且有人调 `showActCurtain(`；
+* **真浏览器实测**（`mcp` 驱动，直接调 `showActCurtain(2)`）：
+  `hidden=false`、文本 `第 2 幕`、`display=flex`、`z-index=50`，点一下之后 `hidden=true`。
+
+⚠️ 还是那句：**"赢下 Boss 之后自动出现"这一步没有自动化判据**（那要打赢一整个 Boss 战），
+手工调用 + 上面的三条 CSS/DOM 断言是目前能拿到的最好证据。

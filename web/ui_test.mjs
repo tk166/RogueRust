@@ -141,8 +141,15 @@ const PANEL_STATES = [
 }
 
 
+
 // The page must actually use it, or this whole file is testing dead code.
 const page = await readFile(new URL("./index.html", HERE), "utf8");
+
+// §136: the act transition is a **screen**. The page must own one, and a new act must show it.
+for (const id of ["actCurtain", "curtainAct"]) {
+  if (!page.includes('id="' + id + '"')) fail(`the act curtain is missing #${id}`);
+}
+if (!page.includes("showActCurtain(")) fail("nothing ever calls showActCurtain");
 if (!page.includes('src="./ui_render.js"')) {
   fail("index.html does not load ui_render.js -- the describers below would be dead code");
 }
