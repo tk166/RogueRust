@@ -40,6 +40,22 @@
   const MAX_ENEMY_SLOTS = 6;
   const MAX_HAND_SLOTS = 10;
   const STATUS_AXES = ["str", "vuln", "weak", "dex", "frail"];
+  /// §147: the five axes above are a **frozen layout**, not the whole world -- `Constricted` and
+  /// anything else the content adds lives outside them. `io.statusList(whom)` asks the module for
+  /// every status **by name** (id + stacks) so a debuff the player must play around is visible.
+  /// `whom`: -1 = hero, 0..5 = enemy wall slot.
+  function extraStatuses(io, whom, skip) {
+    if (typeof io.statusList !== "function") return [];
+    const out = [];
+    for (const entry of io.statusList(whom) || []) {
+      if (skip.has(entry.id)) continue;
+      // The five axes are drawn with their short labels above; this list is for everything else,
+      // so strip the content's namespace and show the tail (`standard.constricted` -> `constricted`).
+      const label = entry.id.split(".").pop().replace(/_/g, " ");
+      out.push({ id: entry.id, label, stacks: entry.stacks });
+    }
+    return out;
+  }
 
   const H = {
     ROUND: 0, TURN: 1, PHASE: 2, RESULT: 3, HP: 4, HP_MAX: 5, BLOCK: 6, WARD: 7,
@@ -82,6 +98,9 @@
       const stacks = o[OFF_HERO_STATUS + axis];
       if (stacks) statuses.push({ label: STATUS_AXES[axis], stacks });
     }
+    // §147: axis-less statuses (Constricted, ...) -- see `extraStatuses`.
+    const shown = new Set(statuses.map((entry) => entry.id).filter(Boolean));
+    for (const entry of extraStatuses(io, -1, shown)) statuses.push(entry);
     return {
       name: io.heroName ? io.heroName() : "hero",
       hp: o[H.HP], hpMax: o[H.HP_MAX],
@@ -102,8 +121,11 @@
       const statuses = [];
       for (let axis = 0; axis < STATUS_AXES.length; axis++) {
         const stacks = o[OFF_ENEMY_STATUS + slot * 5 + axis];
-        if (stacks) statuses.push({ label: STATUS_AXES[axis], stacks });
+        if (stacks) statuses.push({ label: STATUS_AXES[axis], axis, stacks });
       }
+      // §147: axis-less statuses, same rule as the hero panel.
+      const shown = new Set(statuses.map((entry) => entry.id).filter(Boolean));
+      for (const entry of extraStatuses(io, slot, shown)) statuses.push(entry);
       const kind = o[base + 5];
       const damage = o[base + 6];
       out.push({

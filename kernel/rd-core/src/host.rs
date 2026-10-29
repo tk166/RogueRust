@@ -6214,6 +6214,50 @@ mod tests {
 
     // ---------------------------------------------------------------- 策略钩子
 
+    /// §147：`Constricted` 是**内容**触发器 —— 回合结束掉血，掉的血量等于层数，而且**穿过格挡**。
+    ///
+    /// "lose HP" 在 StS 里不是伤害，所以它必须无视 Block；内容侧那一格 `IgnoresBlock: true` 就是
+    /// 这条规则的载体。这条测试同时钉住三件事：触发器真的跑了、掉的血等于层数、格挡**一点没动**。
+    ///
+    /// 用 **sts 镜像**：`host.rs` 其它测试用的手搓镜像里没有这条状态，而"内容说了、内核跑不跑"
+    /// 正是这一节要证明的东西。
+    #[test]
+    fn constricted_loses_its_stacks_of_hp_through_block_at_turn_end() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(70);
+        give(&mut state, "hero", status("st_con", "standard.constricted", 3));
+
+        turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+        // ⚠️ 格挡必须**回合开始之后**再给：玩家自己的格挡在**自己回合开始**时清空，所以"开局
+        // 先摆 10 点再进回合"测不出任何东西（它会被正常清掉，看起来像 Constricted 吃掉了它）。
+        state
+            .combatant_mut(&cid("hero"))
+            .unwrap()
+            .set_defensive_pool(DefensivePoolId::new("standard.block").unwrap(), 10, None)
+            .unwrap();
+        turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+
+        assert_eq!(health(&state, "hero"), 67, "3 层 ⇒ 回合结束掉 3 点");
+        assert_eq!(
+            block_of(&state, "hero"),
+            10,
+            "`IgnoresBlock: true` ⇒ 格挡一点没动（这不算伤害）"
+        );
+
+        // 成对：没有这条状态就一点都不掉（否则上面那句也可能是"每回合掉 3"）。
+        let mut host = Host::new(&content);
+        let mut plain = duel(70);
+        turn::start_current_turn(&mut plain, &config(), &mut host).unwrap();
+        turn::end_current_turn(&mut plain, &config(), &mut host).unwrap();
+        assert_eq!(health(&plain, "hero"), 70);
+    }
+
     #[test]
     fn panic_takes_cards_away_from_the_turn_start_draw() {
         // V5：`panic 2` ⇒ 抽 5 → 3。默认实现（返回 base）在这里是错的，

@@ -680,6 +680,10 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.phase_split"
             // Time Warp: a CardPlayed trigger that ends the turn (§125).
             | "standard.time_warp"
+            // Constricted: a `TurnEnded` trigger that deals its own stacks, **ignoring Block**
+            // (§147). Content-side like the rest of this list -- the kernel only has to *run*
+            // turn-ended triggers, which it already does.
+            | "standard.constricted"
     )
 }
 

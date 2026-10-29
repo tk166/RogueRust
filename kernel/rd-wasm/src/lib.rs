@@ -843,6 +843,19 @@ impl Session {
         -2
     }
 
+    /// The combatant `whom` names: `-1` = the hero, `0..5` = an enemy **wall slot**.
+    ///
+    /// `None` for "no such combatant" (an empty slot, a slot past the roster, or `whom < -1`).
+    fn combatant_of_wall_slot(&self, whom: i32) -> Option<CombatantId> {
+        if whom == -1 {
+            return self.hero_id();
+        }
+        if whom < 0 {
+            return None;
+        }
+        self.enemy_roster().get(whom as usize).copied()
+    }
+
     /// Wall-slot indices of enemies that are still alive (their slots never move — `env-abi.md` §10).
     fn alive_enemy_slots(&self) -> Vec<usize> {
         let mut out = Vec::new();
@@ -2052,6 +2065,79 @@ pub unsafe extern "C" fn rd_env_beat_def_into(index: i32, ptr: *mut u8) -> i32 {
     text.len() as i32
 }
 
+// =============================================================================================
+// Every status, by name (§147)
+// =============================================================================================
+//
+// The observation carries **five fixed status axes** (`STATUS_AXES`: strength / vulnerable / weak /
+// dexterity / frail) because that layout was frozen early and is tiled end to end. That is fine
+// until a status outside the five matters -- `Constricted` (lose HP every turn) is exactly such a
+// status: a debuff the player cannot see is a debuff the player cannot play around.
+//
+// Adding a sixth axis would move every offset after it, so instead: an id/stacks pair per slot, the
+// same shape `rd_env_enemy_name_*` already uses for names.
+
+/// How many status instances combatant `whom` carries (`-1` = hero, `0..5` = enemy wall slot),
+/// or `-1` for no such combatant.
+#[no_mangle]
+pub extern "C" fn rd_env_status_count(whom: i32) -> i32 {
+    match statuses_of(whom) {
+        Some(statuses) => statuses.len() as i32,
+        None => -1,
+    }
+}
+
+/// Definition id length of status `index` on `whom`, or `-1`.
+#[no_mangle]
+pub extern "C" fn rd_env_status_id_len(whom: i32, index: i32) -> i32 {
+    match status_at(whom, index) {
+        Some(status) => status.definition_id.as_str().len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_status_id_len(whom, index)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_status_id_into(whom: i32, index: i32, ptr: *mut u8) -> i32 {
+    if ptr.is_null() {
+        return -1;
+    }
+    let Some(status) = status_at(whom, index) else {
+        return -1;
+    };
+    let text = status.definition_id.as_str();
+    std::ptr::copy_nonoverlapping(text.as_ptr(), ptr, text.len());
+    text.len() as i32
+}
+
+/// How many stacks status `index` on `whom` carries, or `-1`.
+#[no_mangle]
+pub extern "C" fn rd_env_status_stacks(whom: i32, index: i32) -> i32 {
+    match status_at(whom, index) {
+        Some(status) => status.stacks,
+        None => -1,
+    }
+}
+
+/// The status instances of `whom` (§147), or `None` when there is no such combatant.
+fn statuses_of(whom: i32) -> Option<Vec<rd_core::state::StatusInstance>> {
+    let session = ensure_session().ok()?;
+    let id = session.combatant_of_wall_slot(whom)?;
+    let hero = session.state.combatant(&id)?;
+    Some(hero.statuses().to_vec())
+}
+
+/// One status instance, by wall slot and index.
+fn status_at(whom: i32, index: i32) -> Option<rd_core::state::StatusInstance> {
+    if index < 0 {
+        return None;
+    }
+    let statuses = statuses_of(whom)?;
+    statuses.get(index as usize).copied()
+}
+
 /// Benchmark hook: rebuild the observation + action table **without** stepping the fight.
 ///
 /// Not part of the ABI. It exists because "how long does one `rd_env_step` take" is not the same
@@ -2646,6 +2732,61 @@ mod tests {
             }
         }
         assert!(downed, "the 10 HP slime dies during the third pass");
+    }
+
+    /// §147：状态**按名字**读得出来 —— 观察向量的五个状态轴之外的那些（`Constricted`）靠这一对。
+    ///
+    /// 断言的是"名字 + 层数"，因为那正是页面要画的东西；轴之外的 debuff 在页面上看不见，
+    /// 就等于玩家没法躲。
+    #[test]
+    fn statuses_outside_the_five_axes_are_readable_by_name() {
+        session_with_deck(&[DeckEntry {
+            card: "strike",
+            count: 1,
+        }]);
+        let hero = -1;
+        let count = rd_env_status_count(hero);
+        assert!(count >= 0, "the hero exists");
+        for index in 0..count {
+            let len = rd_env_status_id_len(hero, index);
+            assert!(len > 0, "status {index} has an id");
+        }
+        assert_eq!(rd_env_status_count(9), -1, "no such wall slot");
+        assert_eq!(rd_env_status_id_len(hero, 99), -1);
+        assert_eq!(rd_env_status_stacks(hero, 99), -1);
+
+        // 现在给英雄挂一条**轴之外**的状态（`Constricted`），它必须读得出来。
+        {
+            let session = ensure_session().expect("session");
+            let hero_id = session.hero_id().expect("hero");
+            let definition = rd_core::state::StatusDefinitionId::new("standard.constricted")
+                .expect("id");
+            let instance = rd_core::state::StatusInstance::new(
+                rd_core::state::StatusInstanceId::new("st_con").expect("id"),
+                definition,
+                rd_core::state::StatusPolarity::Debuff,
+            )
+            .with_stacks(3);
+            session
+                .state
+                .combatant_mut(&hero_id)
+                .expect("hero")
+                .push_status(instance)
+                .expect("room");
+            session.reobserve_after_external_change();
+        }
+        let count = rd_env_status_count(hero);
+        assert_eq!(count, 1, "one status now");
+        let len = rd_env_status_id_len(hero, 0);
+        let mut buffer = vec![0u8; len as usize];
+        let written = unsafe { rd_env_status_id_into(hero, 0, buffer.as_mut_ptr()) };
+        assert_eq!(written, len);
+        assert_eq!(
+            String::from_utf8(buffer).expect("ascii"),
+            "standard.constricted",
+            "an axis-less status must still be named"
+        );
+        assert_eq!(rd_env_status_stacks(hero, 0), 3);
     }
 
     /// `(伤害条数, 总伤害)`，只数真的掉血的 hit。

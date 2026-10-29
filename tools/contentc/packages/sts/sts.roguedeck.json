@@ -1176,6 +1176,64 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.constricted",
+      "PackageId": "sts",
+      "NameKey": "Constricted",
+      "DescriptionKey": "At the end of your turn, lose HP equal to its stacks.",
+      "Polarity": "Debuff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "debuff",
+        "constricted"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "Amount": {
+                  "kind": "combatantStatusStacks",
+                  "value": {
+                    "Selector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusId": {
+                      "value": "standard.constricted"
+                    }
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": true,
+                "Element": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -2310,6 +2368,70 @@
                   "kind": "const",
                   "value": {
                     "Value": 5
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
+              }
+            },
+            "MaxCount": 32
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "whirlwind+",
+      "PackageId": "sts",
+      "NameKey": "Whirlwind+",
+      "DescriptionKey": "Deal 8 damage to ALL enemies X times.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "x_cost"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.repeat",
+          "value": {
+            "Count": {
+              "kind": "x.cost",
+              "value": {}
+            },
+            "Body": {
+              "kind": "node.dealDamage",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.allEnemies",
+                  "value": {
+                    "Cardinality": "Any"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 8
                   }
                 },
                 "ResultKey": null,
@@ -4972,6 +5094,123 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "spire_growth.strategic",
+      "PackageId": "sts",
+      "NameKey": "Strategic",
+      "DescriptionKey": "Strategic - 2 Constricted",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Strategic - 2 Constricted"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.constricted"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 2
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "spire_growth.aggressive",
+      "PackageId": "sts",
+      "NameKey": "Aggressive",
+      "DescriptionKey": "Aggressive - 16 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Aggressive - 16 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 16
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "spire_growth.aggressive_heavy",
+      "PackageId": "sts",
+      "NameKey": "Aggressive",
+      "DescriptionKey": "Aggressive - 22 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Aggressive - 22 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 22
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -5864,6 +6103,45 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_spire_growth"
+      },
+      "Enemies": [
+        {
+          "Id": "spire_growth",
+          "MaxHealth": 170,
+          "Actions": [
+            {
+              "value": "spire_growth.strategic"
+            },
+            {
+              "value": "spire_growth.aggressive"
+            },
+            {
+              "value": "spire_growth.aggressive_heavy"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Spire Growth"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -6556,6 +6834,29 @@
       "Tier": "Normal",
       "InvRef": "inv:§5.2",
       "AiNote": "⚠️ 第三幕普通怪（port-plan.md §137）；用的是已有的 Regen。"
+    },
+    {
+      "Id": "spire_growth",
+      "NameKey": "Spire Growth",
+      "HpMin": 170,
+      "HpMax": 170,
+      "MaxHealth": 170,
+      "Actions": [
+        {
+          "value": "spire_growth.strategic"
+        },
+        {
+          "value": "spire_growth.aggressive"
+        },
+        {
+          "value": "spire_growth.aggressive_heavy"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "https://slayspiredb.com/sts1/bestiary/spire-growth",
+      "AiNote": "§147 第三幕普通怪；Constricted 的载体（wiki: Strategic / Aggressive 16 / 22）。"
     }
   ],
   "EncounterTables": {
@@ -6621,6 +6922,9 @@
       {
         "Id": "enc_maw",
         "Weight": 33
+      },
+      {
+        "Id": "enc_spire_growth"
       }
     ],
     "Elite2": [

@@ -37,10 +37,10 @@ regen / rage / flame_barrier / combust / spore_cloud / enrage / time_warp / phas
 | **Barricade / Blur** | 格挡不被清 | 内核（回合开始的清格挡要能跳过）|
 | **Entangled** | 本回合不能打攻击牌 | 内核（`can_play_card` 的判据 + 回合末清）|
 | **Slow** | 每打一张牌它受的伤害 +10% | 内核（伤害管线的修饰器）|
-| **Constricted** | 回合结束掉 N 血 | **内容**（`TurnEnded` 触发器，已有钩子）|
+| **Constricted** | 回合结束掉 N 血 | **有**（§147：`TurnEnded` 触发器 + `IgnoresBlock`；载体 Spire Growth 已进第三幕池）|
 | **Draw / Energized**（下一回合多抽/多能量）| — | 内核（回合开始的发牌/能量结算）|
 
-> 后 4 条里，**Constricted 是纯内容**（我们现在就能写）；其余都要动"伤害管线"或"回合边界"。
+> 后 4 条里，**Constricted 已做**（§147，纯内容）；其余都要动"伤害管线"或"回合边界"。
 
 ## C. 战斗流程
 
@@ -94,4 +94,4 @@ regen / rage / flame_barrier / combust / spore_cloud / enrage / time_warp / phas
 2. ~~**事件解释器**~~（**第一层已完成**，§143：删卡/升级/转化/诅咒/遗物）
 3. ~~**卡牌关键词**~~（**已完成**，§144：Retain/Ethereal/Innate；X 费仍是"要新造机制"）
 4. ~~**遗物池**~~（**已完成**，§145：1 → 5 件，三个派发点；`relic:` 事件现在有东西可给）
-5. **状态**：Constricted（内容，最便宜）→ Intangible/Buffer（伤害管线）
+5. **状态**：~~Constricted~~（**已完成**，§147）→ `Intangible` / `Buffer` / `Plated Armor`（伤害管线，内核活）

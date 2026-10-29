@@ -3648,6 +3648,38 @@ mod tests {
         assert_eq!(pile.len(), 5);
     }
 
+    /// §147：`whirlwind+` **必须真的在镜像里** —— 运行层的"升级"只是往卡 id 后面加一个 `+`，
+    /// 所以一张没有 `+` 行的牌升完级之后，下一场战斗会在建战斗那一步**响亮失败**
+    /// （`BattleError::UnknownCard`）。这条测试就是那个失败模式的守门人。
+    #[test]
+    fn an_upgraded_card_row_is_buildable() {
+        let blob = sts_image();
+        let entries = [
+            DeckEntry {
+                card: "whirlwind",
+                count: 1,
+            },
+            DeckEntry {
+                card: "whirlwind+",
+                count: 1,
+            },
+        ];
+        let state = build_sts_fight(&blob, &entries, true).expect("both rows must be buildable");
+        let mut defs = draw_pile_definitions(&state, "hero");
+        defs.sort();
+        assert_eq!(defs, vec!["whirlwind", "whirlwind+"]);
+
+        // 成对：一个**不存在**的 `+` 行照样要响亮失败 —— 否则这条测试也可能是"建战斗从不查定义"。
+        let broken = [DeckEntry {
+            card: "no_such_card+",
+            count: 1,
+        }];
+        assert!(
+            build_sts_fight(&blob, &broken, true).is_err(),
+            "an upgraded row that does not exist must fail loudly"
+        );
+    }
+
     /// 卡实例 id 的形状是 `card_%06d`（`CombatState.cs:689-696`），而且**每张一个新号**。
     #[test]
     fn card_instance_ids_are_card_underscore_six_digits_and_never_shared() {

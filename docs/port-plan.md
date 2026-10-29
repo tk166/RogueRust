@@ -9346,3 +9346,94 @@ StS 允许 0 能量打 X 费牌（X = 0，用来推进 Nunchaku / Ink Bottle 这
 聚合验收 **17/17**；单测 722 → **728**（rd-core 620 → **621** / rd-run 70 / rd-wasm 32 → **35**）。
 内容：**17 张卡**（+whirlwind）/ 9 个事件 / 5 件遗物 / 17 个遭遇 / 25 个敌人；
 镜像 full **28,588 B** / core **23,912 B**。
+
+---
+
+## 147. 旋风斩补齐各处 + `Constricted`（连它的载体 Spire Growth）
+
+用户："把用上它的卡片'旋风斩'也在各个层面实现出来吧，再做 Constricted。"
+
+### 147.1 旋风斩：`whirlwind+` 是**必须**有的，不是锦上添花
+
+§146 只加了 `whirlwind`。而运行层的"升级"就是**往卡 id 后面加一个 `+`**
+（`RunState::upgrade_at`），所以一张没有 `+` 行的牌一旦被升级，**下一场战斗会在建战斗那一步
+炸**（`BattleError::UnknownCard`）—— 玩家在营火"打铁"升级了旋风斩，然后走到下一个战斗节点
+才发现这局废了。
+
+⇒ 补 `whirlwind+`（每段 8 点，X 不变），并加一条守门测试
+`an_upgraded_card_row_is_buildable`：`whirlwind` 与 `whirlwind+` 都能建战斗，而一个**不存在**的
+`no_such_card+` 照样响亮失败（成对，否则这条测试也可能是"建战斗从不查定义"）。
+
+### 147.2 `Constricted`：内容触发器，不是内核步骤
+
+wiki：**Constricted X —— "At the end of your turn, lose X HP."** 三个性质决定了它怎么落地：
+
+| 性质 | 落地 |
+|---|---|
+| 回合**结束**时结算 | `Triggers: [{ Event: "TurnEnded", … }]`（钩子早就有，§117 起）|
+| 血量 = **层数** | `Amount: combatantStatusStacks{ Selector: sel.source, StatusId: standard.constricted }` |
+| 是"**lose HP**"，不是伤害 | `IgnoresBlock: true` —— 格挡挡不住 |
+| 不衰减 | `UsesDuration: false`（层数只在被再次施加时合并）|
+
+⇒ 内核侧只加了一行：`status_catalog::has_behaviour` 里登记 `standard.constricted`
+（那条"内容声明了状态就必须有规则或声明惰性"的诚实性测试会拦住漏登记）。
+
+⚠️ 测试踩到一个**真实的时点**问题：第一版把 10 点格挡摆在 `start_current_turn` **之前**，
+结果格挡被正常清空（玩家格挡在**自己回合开始**时清空），看起来像"Constricted 吃掉了格挡"。
+正确写法是**回合开始之后**再给格挡。这条注释留在测试里，因为下次还会有人这么写。
+
+### 147.3 载体：Spire Growth（第三幕）
+
+`Constricted` 得有人施加，否则它就是一张没人发的牌。选真怪：
+
+| 项 | 值 | 出处 |
+|---|---|---|
+| HP | 170 | slayspiredb（Asc 7+ 是 190；本内容无 Ascension）|
+| `Strategic` | 施加 Constricted 2 | 同上（意图 Debuff）|
+| `Aggressive` | 16 伤害 | 同上 |
+| `Aggressive`（重）| 22 伤害 | 同上 |
+
+新增：1 条 `STAT`（constricted）、3 条 `EACT`、1 条 `ENCT`（`enc_spire_growth`）、
+1 条名册、第三幕普通池 +1。
+
+### 147.4 轴之外的状态：观察向量是布局，不是世界
+
+观察向量只有**五条状态轴**（str / vuln / weak / dex / frail），而且那个布局是端到端拼死的
+（`smoke.mjs` 有一条"offsets tile to 140/148"）。加第六条轴会让后面每个偏移都动。
+
+而"玩家看不见的 debuff"= 玩家躲不掉的 debuff —— Constricted 正好落在五条轴之外。
+所以走另一条路：**按名字读**。
+
+```
+rd_env_status_count(whom)                  // -1 英雄 / 0..5 敌人墙位
+rd_env_status_id_len(whom, i) / _into(…)
+rd_env_status_stacks(whom, i)
+```
+
+页面把它们并进英雄/敌人面板的状态列表（五条轴照旧用短标签，其余用 id 的尾巴），
+`ui_test` 有一条 `x-cost` 式的接线断言，rd-wasm 有一条"轴之外也读得出名字"的测试。
+
+### 147.5 判据
+
+* `constricted_loses_its_stacks_of_hp_through_block_at_turn_end`（rd-core，**sts 镜像**）：
+  3 层 ⇒ 掉 3 血、**格挡一点没动**；成对：没有这条状态就一点都不掉。
+* `an_upgraded_card_row_is_buildable`（rd-core）：`whirlwind+` 可建、假 `+` 行响亮失败。
+* `statuses_outside_the_five_axes_are_readable_by_name`（rd-wasm）：名字 + 层数读得出来，
+  越界墙位/下标回 `-1`。
+* 内容门：`standard.constricted` 的触发器恰好是 `["TurnEnded"]`；`spire_growth` 的三条动作、
+  HP 170、第三幕池成员都对得上；`whirlwind+` 在卡片清单里且 `Facts` 是
+  `("repeat", ("x.cost"), "damage", 8, "allEnemies")`。
+
+### 147.6 还没做的
+
+* `Constricted` **不衰减**这条今天对，但 SStS 里它是"X 层 = 每回合 X 伤、永久"，没有"层数
+  每回合变"的机制 —— 与本实现一致，无需额外工作。
+* Spire Growth 的**行动顺序**（StS 是"Strategic 先手，之后交替 16/22"）没有强制：本内容的
+  意图选择仍是通用的顺序规则（§4.x），没有"首回合必出某招"的 AI。这条与其它敌人同构。
+* `Constricted` 没有对应的**卡**（StS 也没有）—— 它只来自敌人。
+
+### 147.7 数字
+
+聚合验收 **17/17**；单测 728 → **731**（rd-core 621 → **623** / rd-run 70 / rd-wasm 35 → **38**）。
+内容：**18 张卡 / 18 条状态 / 53 条敌人动作 / 26 个敌人 / 18 个遭遇**；
+镜像 full **29,664 B** / core **24,724 B**。

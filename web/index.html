@@ -502,6 +502,22 @@ const cardText = (h) =>
 // comes from `ENCT`, the intent text from `EACT` + the program's own damage.
 const enemyName = (e) =>
   readText((i) => ex.rd_env_enemy_name_len(i), (p, i) => ex.rd_env_enemy_name_into(i, p), e);
+/// §147: every status on a combatant, **by name** — the five observation axes are a frozen layout,
+/// not the whole world. `whom`: -1 = hero, 0..5 = enemy wall slot.
+const statusList = (whom) => {
+  const out = [];
+  const count = ex.rd_env_status_count(whom);
+  for (let index = 0; index < count; index++) {
+    const id = readText(
+      () => ex.rd_env_status_id_len(whom, index),
+      (ptr) => ex.rd_env_status_id_into(whom, index, ptr)
+    );
+    if (!id) continue;
+    out.push({ id, stacks: ex.rd_env_status_stacks(whom, index) });
+  }
+  return out;
+};
+
 const intentText = (e) =>
   readText((i) => ex.rd_env_intent_len(i), (p, i) => ex.rd_env_intent_into(i, p), e);
 
@@ -1408,7 +1424,7 @@ function render(verdict, reward) {
   // A pending choice can be invalidated by anything that changes the hand (a step, a reset).
   if (pending && !RD_UI.playOptions(actions).has(pending.hand)) pending = null;
   const view = RD_UI.describe(obs, actions,
-    { heroName: () => "hero", cardName, enemyName, intentText }, pending);
+    { heroName: () => "hero", cardName, enemyName, intentText, statusList }, pending);
   currentView = view;
 
   const hero = view.hero;

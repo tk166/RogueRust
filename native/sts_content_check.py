@@ -77,11 +77,11 @@ CORE_PATH = os.path.join(PKG_DIR, "out", "content.sts.core.rdcf")
 INV_COUNTS = {
     # 10 tier-A monsters + three sentry **rows** (one per instance: a combatant id must be unique
     # and the encounter record has no instance number, inv:§4.2) + the boss.
-    "monsters": 25,
+    "monsters": 26,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
-    "encounters": 17,
+    "encounters": 18,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
-    "statuses": 17,       # inv:§10 the ones this subset actually needs
+    "statuses": 18,       # inv:§10 the ones this subset actually needs
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -146,6 +146,9 @@ INV_CARDS = {
     # 它的费用是"当前全部能量"，`Cost` 在这里记 0 —— 印刷价格**不参与**结算，内容门下面会查
     # 这一格必须是 0 或缺失。Facts 里的 `("repeat", ("expr", "x.cost"), ...)` 说明"这一条伤害
     # **每 X 一次**"，而不是被展开成 32 条。
+    # §147: the upgraded row -- same X mechanics, 8 damage per hit instead of 5.
+    "whirlwind+": {"Cost": 0, "Tags": ["attack", "x_cost"],
+                   "Facts": [("repeat", ("expr", "x.cost"), "damage", 8, "allEnemies")]},
     "whirlwind": {"Cost": 0, "Tags": ["attack", "x_cost"],
                   "Facts": [("repeat", ("expr", "x.cost"), "damage", 5, "allEnemies")]},
 }
@@ -173,6 +176,9 @@ INV_MONSTERS = [
     ("byrd", 25, 25, ["byrd.peck", "byrd.swoop"]),
     ("spiker", 42, 42, ["spiker.cut", "spiker.spike"]),
     ("orb_walker", 90, 90, ["orb_walker.laser", "orb_walker.claw"]),
+    # §147: the `Constricted` carrier (wiki HP 170; Strategic / Aggressive 16 / 22).
+    ("spire_growth", 170, 170,
+     ["spire_growth.strategic", "spire_growth.aggressive", "spire_growth.aggressive_heavy"]),
     ("the_champ", 330, 330,
      ["the_champ.heavy_slash", "the_champ.defensive_stance", "the_champ.execute"]),
     ("fat_gremlin", 13, 17, ["fat_gremlin.smash"]),
@@ -237,6 +243,11 @@ INV_ACTIONS = {
     "time_eater.ripple": ("Defend", [("block", 20, "source"),
                                      ("status", "standard.weak", 1, "event"),
                                      ("status", "standard.vulnerable", 1, "event")]),
+    # §147: Constricted itself is a content trigger (see `standard.constricted`), so the action
+    # only has to apply it.
+    "spire_growth.strategic": ("Debuff", [("status", "standard.constricted", 2, "event")]),
+    "spire_growth.aggressive": ("Attack", [("damage", 16, "event")]),
+    "spire_growth.aggressive_heavy": ("Attack", [("damage", 22, "event")]),
     "spike_slime_s.tackle": ("Attack", [("damage", 5, "event")]),
     "fat_gremlin.smash": ("Attack", [("damage", 4, "event"),
                                      ("status", "standard.weak", 1, "event")]),
@@ -289,6 +300,8 @@ INV_WEAK_POOL = {
     "enc_spiker": ["spiker"],
     "enc_orb_walker": ["orb_walker"],
     "enc_darklings": ["darkling", "darkling"],
+    # §147: the carrier for `Constricted` (act 3, wiki HP 170).
+    "enc_spire_growth": ["spire_growth"],
     "enc_maw": ["maw"],
 }
 INV_WEAK_WEIGHT = 25   # inv:§5.2 每项 25%
@@ -309,7 +322,8 @@ INV_ELITE_POOL = {
 INV_ACT_TABLES = {
     "Weak": ["enc_cultist", "enc_jaw_worm", "enc_small_slimes"],
     "Weak2": ["enc_chosen", "enc_gremlin_gang", "enc_shelled_parasite"],
-    "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker"],
+    "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
+              "enc_spire_growth"],
     "Elite": ["enc_three_sentries"],
     "Elite2": ["enc_gremlin_leader"],
     "Elite3": ["enc_giant_head"],
@@ -352,6 +366,8 @@ INV_STATUSES = {
     "standard.phase_split": [],
     # Time Eater's mechanic, prepared on an unused monster (port-plan.md §125).
     "standard.time_warp": [],
+    # §147: `TurnEnded` trigger, damage = stacks, **ignores Block** ("lose HP" is not damage).
+    "standard.constricted": [],
     "standard.strength": [("DamageDealt", "AddPerStack", 1, 100, "Direct")],
     "standard.vulnerable": [("DamageReceived", "ScalePercent", 150, 300, "Direct")],
     "standard.weak": [("DamageDealt", "ScalePercent", 75, 200, "Direct")],
@@ -696,7 +712,7 @@ def check_statuses(doc):
         elif sid in ("standard.thorns", "standard.spore_cloud", "standard.enrage",
                      "standard.regen", "standard.rage", "standard.flame_barrier",
                      "standard.combust", "standard.split", "standard.phase_split",
-                     "standard.time_warp"):
+                     "standard.time_warp", "standard.constricted"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -706,7 +722,9 @@ def check_statuses(doc):
                         "standard.combust": ["TurnEnded"],
                         "standard.split": ["Downed"],
                         "standard.phase_split": ["DamageTaken"],
-                        "standard.time_warp": ["CardPlayed"]}[sid]
+                        "standard.time_warp": ["CardPlayed"],
+                        # §147: "lose HP at the end of your turn" is a TurnEnded trigger.
+                        "standard.constricted": ["TurnEnded"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
