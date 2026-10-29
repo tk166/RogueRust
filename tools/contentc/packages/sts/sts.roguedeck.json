@@ -2264,6 +2264,70 @@
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Common"
+    },
+    {
+      "Id": "whirlwind",
+      "PackageId": "sts",
+      "NameKey": "Whirlwind",
+      "DescriptionKey": "Deal 5 damage to ALL enemies X times.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "x_cost"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.repeat",
+          "value": {
+            "Count": {
+              "kind": "x.cost",
+              "value": {}
+            },
+            "Body": {
+              "kind": "node.dealDamage",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.allEnemies",
+                  "value": {
+                    "Cardinality": "Any"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 5
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
+              }
+            },
+            "MaxCount": 32
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Uncommon"
     }
   ],
   "EnemyActions": [

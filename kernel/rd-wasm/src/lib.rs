@@ -185,6 +185,10 @@ const H_RESULT: usize = 3;
 const H_HERO_HP: usize = 4;
 const H_HERO_HP_MAX: usize = 5;
 pub(crate) const H_HERO_BLOCK: usize = 6;
+/// 手牌费用格里的"这不是数字费"（§146）：页面把它画成 `X`。
+pub const X_COST_DISPLAY: i32 = -2;
+/// X 费牌的 tag（与 `rd_core::battle::X_COST_TAG` 同一个字面量）。
+const X_COST_TAG: &str = rd_core::battle::X_COST_TAG;
 const H_HERO_WARD: usize = 7;
 pub(crate) const H_ENERGY: usize = 8;
 const H_ENERGY_MAX: usize = 9;
@@ -739,6 +743,11 @@ impl Session {
         let Some(row) = self.content.card(u32::from(entry.index)) else {
             return -1;
         };
+        // §146：X 费牌印的不是数字。报一个**显式**的哨兵而不是它 `Costs` 里那个 0 ——
+        // 后者会让页面显示"0 费"，而那是一句假话（玩家会以为可以随便打）。
+        if matches!(self.content.card_has_tag(def.as_str(), X_COST_TAG), Some(true)) {
+            return X_COST_DISPLAY;
+        }
         let handle = row.costs();
         if handle == ABSENT16 || handle == NULL16 {
             return 0;
@@ -2533,6 +2542,197 @@ mod tests {
         assert_eq!(distinct.first().copied(), Some(0), "slot 0 acts first");
         assert!(!turns.is_empty(), "the hero's turn ended somewhere in there");
         assert_eq!(turns[0], -1, "the hero's turn is what ended");
+    }
+
+    // =========================================================================================
+    // X 费（`port-plan.md` §146）
+    // =========================================================================================
+
+    /// Build a session whose deck is exactly `deck`, so a test can play one specific card.
+    fn session_with_deck(deck: &'static [DeckEntry<'static>]) {
+        let session = build_session_with(SEED, ENCOUNTER, HERO_HP, Some(deck)).expect("a fight");
+        install_session(session);
+    }
+
+    fn hero_energy() -> i32 {
+        let session = ensure_session().expect("session");
+        session
+            .state
+            .combatant(&session.hero_id().expect("hero"))
+            .and_then(|hero| {
+                hero.resources()
+                    .iter()
+                    .find(|pool| pool.key.as_str() == "standard.energy")
+                    .map(|pool| pool.pool.current)
+            })
+            .unwrap_or(-1)
+    }
+
+    fn set_hero_energy(current: i32, max: i32) {
+        let session = ensure_session().expect("session");
+        let hero = session.hero_id().expect("hero");
+        let key = rd_core::state::ResourceId::new("standard.energy").expect("id");
+        session
+            .state
+            .combatant_mut(&hero)
+            .expect("hero")
+            .set_resource(key, current, Some(max))
+            .expect("energy");
+        session.reobserve_after_external_change();
+    }
+
+    fn play_action_of(definition: &str) -> Option<i32> {
+        let session = ensure_session().expect("session");
+        for index in 0..session.actions.len() {
+            if session.actions[index].kind != ACTION_PLAY {
+                continue;
+            }
+            let hand = session.actions[index].arg0.max(0) as usize;
+            if session.hand_defs.get(hand).map(String::as_str) == Some(definition) {
+                return Some(index as i32);
+            }
+        }
+        None
+    }
+
+    /// §146：X 费牌花掉**全部**能量，并且真的跑 X 遍。
+    ///
+    /// 判据走 §142 的 beats（而不是"敌人掉了多少血"）：后者在敌人血少时会因为**打死了**而
+    /// 少掉几点，看起来像"X 算错了"。beats 数的是"打了几下"，那正是 X 的定义。
+    #[test]
+    fn an_x_cost_card_spends_all_energy_and_hits_x_times() {
+        // 1 点能量 ⇒ 恰好一遍 ⇒ 两只敌人各挨 5 点。用 1 而不是 3 是有意的：3 遍会**打死**
+        // 那只 10 血的史莱姆，而"死了的敌人不再是目标"会让伤害条数少于 X×敌人数 ——
+        // 那是正确的语义，但它会把这条测试变成一条关于血量的测试。
+        session_with_deck(&[DeckEntry {
+            card: "whirlwind",
+            count: 1,
+        }]);
+        assert_eq!(hero_energy(), 3, "the fight starts with 3 energy");
+        assert_eq!(
+            ensure_session().expect("session").enemy_roster().len(),
+            2,
+            "`enc_small_slimes` has two enemies"
+        );
+        set_hero_energy(1, 3);
+        let play = play_action_of("whirlwind").expect("whirlwind is in hand");
+        assert_eq!(rd_env_step(play), 0, "playing an X-cost card must be accepted");
+        assert_eq!(hero_energy(), 0, "an X-cost card spends ALL the energy");
+        let (hits, total) = damage_beats();
+        assert_eq!(hits, 2, "X = 1 ⇒ one pass over both enemies");
+        assert_eq!(total, 10, "5 per enemy");
+
+        // 3 点能量 ⇒ 3 遍。第二只史莱姆只有 10 血，所以它在第二下之后倒下，**不再是目标** ——
+        // 于是伤害条数少于 6，而活下来那只吃满 15。两条一起才说清"X 真的算对了"。
+        session_with_deck(&[DeckEntry {
+            card: "whirlwind",
+            count: 1,
+        }]);
+        let play = play_action_of("whirlwind").expect("whirlwind is in hand");
+        assert_eq!(rd_env_step(play), 0, "3 energy is a legal X = 3");
+        let (hits, total) = damage_beats();
+        assert!(
+            hits > 2,
+            "X = 3 must be more than one pass; got {hits} hits"
+        );
+        assert!(
+            total > 10,
+            "three passes deal more than one pass (total {total})"
+        );
+        let mut downed = false;
+        for index in 0..rd_env_beat_count() {
+            if rd_env_beat_field(index, 0) == BEAT_DOWNED {
+                downed = true;
+            }
+        }
+        assert!(downed, "the 10 HP slime dies during the third pass");
+    }
+
+    /// `(伤害条数, 总伤害)`，只数真的掉血的 hit。
+    fn damage_beats() -> (i32, i32) {
+        let mut hits = 0;
+        let mut total = 0;
+        for index in 0..rd_env_beat_count() {
+            if rd_env_beat_field(index, 0) != BEAT_DAMAGE {
+                continue;
+            }
+            hits += 1;
+            total += rd_env_beat_field(index, 4);
+            assert_eq!(rd_env_beat_field(index, 4), 5, "each hit is 5");
+        }
+        (hits, total)
+    }
+
+    /// 0 能量也能打（X = 0），而且**什么都打不到** —— 这是 StS 的真行为（用来推进计数器）。
+    ///
+    /// 用上 `beats` 才能区分"打了 0 下"与"根本没受理"：前者是合法的 0 下，后者会是 `-1`。
+    #[test]
+    fn an_x_cost_card_played_with_no_energy_is_legal_and_does_nothing() {
+        session_with_deck(&[DeckEntry {
+            card: "whirlwind",
+            count: 1,
+        }]);
+        set_hero_energy(0, 3);
+        let play = play_action_of("whirlwind").expect("still playable at 0 energy");
+        assert_eq!(rd_env_step(play), 0, "X = 0 is a legal play, not a refusal");
+        let (hits, _) = damage_beats();
+        assert_eq!(hits, 0, "X = 0 ⇒ nothing was hit");
+        assert_eq!(hero_energy(), 0);
+    }
+
+    /// §146：手牌费用格里，X 费牌报的是**哨兵** `X_COST_DISPLAY`，不是它 `Costs` 里那个 0。
+    ///
+    /// 这条是给页面用的："0 费"是一句会被玩家当真的假话（看起来可以白打）。数字在 Rust 侧只有
+    /// `X_COST_DISPLAY` 一处；`ui_test.mjs` 那边有一条断言把页面的副本和它对齐。
+    #[test]
+    fn the_hand_cost_cell_reports_x_cost_cards_as_the_display_sentinel() {
+        session_with_deck(&[DeckEntry {
+            card: "whirlwind",
+            count: 1,
+        }]);
+        let obs = exported_observation();
+        let hand = obs[OFF_HAND + 1];
+        assert_eq!(
+            hand, X_COST_DISPLAY,
+            "an X-cost card must not report a printed 0"
+        );
+    }
+
+    /// 反过来：一张普通牌照样报它的印刷费用（否则上面那条也可能是"所有牌都报 -2"）。
+    #[test]
+    fn a_fixed_cost_card_still_reports_its_printed_cost() {
+        session_with_deck(&[DeckEntry {
+            card: "strike",
+            count: 1,
+        }]);
+        let obs = exported_observation();
+        assert!(obs[OFF_HAND + 1] >= 0, "strike reports a real cost");
+        assert_ne!(obs[OFF_HAND + 1], X_COST_DISPLAY);
+    }
+
+    /// `node.repeat` 的 `MaxCount` 守卫**是能踩到的**：给英雄 40 点能量就超过了 32 的上限。
+    ///
+    /// 这条测试的价值不在于"40 点能量会发生"，而在于证明那道守卫**真的在**、而且报的是错而不是
+    /// 静默截断（"打 32 下"看起来完全正常）。
+    #[test]
+    fn a_repeat_past_its_maximum_is_a_loud_error_not_a_truncation() {
+        session_with_deck(&[DeckEntry {
+            card: "whirlwind",
+            count: 1,
+        }]);
+        set_hero_energy(40, 40);
+        let play = play_action_of("whirlwind").expect("whirlwind is in hand");
+        // 一次 **faulted** 节目不是"被拒的出牌"：参考里 Faulted ⇒ 卡照样落区、报告 played
+        // （`Cards/CardPlay.cs` 的终态回调）。所以判据不是步的返回值，而是**伤害一下都没有**、
+        // 而且驱动记下了一个 problem —— 静默截断到 32 下会给出 32 条伤害。
+        assert_eq!(rd_env_step(play), 0, "a faulted program still plays the card");
+        let (hits, _) = damage_beats();
+        assert_eq!(hits, 0, "the repeat faulted before the first hit");
+        let session = ensure_session().expect("session");
+        assert!(
+            !session.problems.is_empty(),
+            "40 > MaxCount(32) must be reported, not swallowed"
+        );
     }
 }
 

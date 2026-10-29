@@ -9234,3 +9234,115 @@ API**：格挡走 `set_defensive_pool`，力量走一条 `ApplyStatus` 效果（
 聚合验收 **17/17**；单测 716 → **722**（rd-core 620 / rd-run 70 / rd-wasm 32）。
 内容：**16 张卡 / 9 个事件 / 5 件遗物 / 17 个遭遇 / 25 个敌人**；
 镜像 full **28,296 B** / core **23,692 B**。
+
+---
+
+## 146. X 费：一次"参考里没有"的机制重建
+
+用户："X 费如果是 StS 有的功能就先实现一下这个吧，参考 wiki。越是底层的东西要越早实现。"
+
+### 146.1 wiki 说了什么（这条是 wiki 有、参考实现没有的功能）
+
+`slaythespire.org/wiki/keywords/x-cost`（Verified 2026-02-27）：
+**"Costs All Remaining Energy; Effect Scales With Amount Spent."**
+Whirlwind 页逐字："When playing an X-cost card, all **Energy** that you currently have will be
+consumed. The **Energy** consumed this way will be used as the value for X."
+
+⇒ 三件事：① 费用 = **当前全部**能量；② X = 那个量；③ 效果按 X 缩放。
+Whirlwind 本体：Ironclad Uncommon Attack，"Deal 5 damage to ALL enemies X times"（升级 8）。
+
+⚠️ **参考实现里没有这个概念**（`ref/RogueDeck-Core` 全仓 grep `XCost` / `EnergySpent` 零命中），
+所以这一节是**新造**，不是移植 —— 与 §144 时把它当成"响亮拒绝"的判断一致，只是这次把它补上了。
+
+### 146.2 三个零件（缺一不可）
+
+| 零件 | 在哪 | 说明 |
+|---|---|---|
+| **费用形态** | `play.rs::x_cost_payment` | 带 `x_cost` tag 的牌 ⇒ 付"该资源当前全部"；`Costs` 里印的 `Amount` **不参与结算** |
+| **X 的读法** | `expr.rs` 的 `"x.cost"` | 新的整数表达式 kind（本内核自己的）—— 0 字段，值只来自这次出牌 |
+| **按 X 跑 N 遍** | `exec.rs::dispatch_repeat` | `node.repeat { Count, Body, MaxCount }` —— **参考有、内核此前没移植** |
+
+`node.repeat` 是这次最值得说的一件：它一直在参考的 35 个节点里（`EffectProgramNodes.cs:116-155`），
+而内核的 15 种里没有 —— 因为 **core 镜像里一条都没有**（固定多段攻击在内容里是展开写的，
+`byrd.peck` 就是 5 个 `dealDamage`）。X 是运行期的值，展开写不出来 ⇒ 这个节点终于有了第一个
+内容侧使用者。
+
+### 146.3 参考的逐条语义（`EffectProgramNodeExecutors.cs:282-330`）
+
+* `count < 0` ⇒ **抛**（"Card definitions must not produce negative repeat counts"）；
+* `count > MaxCount` ⇒ **抛**（默认 `RepeatEffectNode.DefaultMaxCount = 32`）—— **不截断**；
+* `index >= count` ⇒ 完成；否则派发 `Body`，body 完成后**在节目链里**接着下一趟；
+* 每一趟 `ctx.OpenScope()` / `CloseScope()` —— 本内核没有作用域栈，这一层也没绑任何变量，
+  **所以那一对调用没有对应物**。如实记在这里：内容若在 `repeat` 体里读 `iterationIndex`，
+  本内核读到的是**外层**的值。今天没有这样的内容。
+
+### 146.4 X 必须存在**帧**上，不能只放上下文
+
+节目的后续节点是在**续延**里派的，那时上下文由 `exec::frame_context` 从帧重建
+（`ProgramExecutionFrame`）。只放上下文里的结果就是"第一趟读到 X，第二趟读到 0"——
+而 X 费牌的核心恰恰是"每一趟都按同一个 X 跑"。所以：
+
+* `ProgramExecutionFrame` 多一格 `x_cost: i32`（+4 B/帧，**不进哈希**：它是派生的）；
+* `ExprContext.x_cost` / `ExecContext.x_cost` 各一格，`frame_context` 负责搬回来。
+
+### 146.5 X = 0 是**合法**的，这与固定费用相反
+
+StS 允许 0 能量打 X 费牌（X = 0，用来推进 Nunchaku / Ink Bottle 这类"打出攻击牌"的计数器）。
+所以 `x_cost_payment` 付"现有多少"，`ensure_affordable` **永远通过** —— 这条路**不会**报
+`Unaffordable`，而固定费用那条会。这条差别写进了测试。
+
+⚠️ 费用修饰器（"下一张免费"）对 X 费牌**不生效**：`calculate_costs` 在 modifier 管线**之前**
+就把 X 费分流出去了，因为 StS 的 X 费牌照样"能量全花掉"，印出来的 `Amount` 根本不参与。
+
+### 146.6 页面：`0` 是一句会被当真的假话
+
+手牌费用格原来直接报 `Costs` 的 `Amount`；X 费牌的 `Amount` 是 0（内容门强制），于是页面会
+显示"0 费"——玩家会以为可以白打。现在 `rd_wasm::X_COST_DISPLAY = -2` 走那一格，
+`ui_render.js` 把它画成 `X`，并且 `affordable` 按"有没有能量"算。
+`ui_test.mjs` 有一条断言把**页面的副本**与模块的那个数对齐（`-2` 两边都写了，测试比对它们）。
+
+### 146.7 内容：Whirlwind
+
+```json
+"Costs": [{ "ResourceId": { "value": "standard.energy" }, "Amount": 0 }],
+"Tags":  [{ "value": "attack" }, { "value": "x_cost" }],
+"Root":  { "kind": "node.repeat",
+           "value": { "Count": { "kind": "x.cost", "value": {} },
+                      "Body": { "kind": "node.dealDamage", "value": { "Amount": 5,
+                                "TargetSelector": { "kind": "sel.allEnemies", … } } },
+                      "MaxCount": 32 } }
+```
+
+⚠️ 踩到一次：`"Count": {"kind": "x.cost"}` **没有 `value` 键**时，contentc 不认为它是 IR 节点
+（`is_ir(v)` 要求 `"value" in v`），于是编成一个普通对象 ⇒ 运行期报 `Expr(Ir(Missing("kind")))`。
+错误信息指向"kind 读不到"，离"少了一个空 `value`"隔着两层 —— 记在这里，因为这是本内容格式的
+一条**通用**陷阱：零字段节点也要写 `"value": {}`。
+
+### 146.8 判据（每条都能红）
+
+| 测试 | 钉住什么 |
+|---|---|
+| `the_whirlwind_program_hits_each_enemy_once_per_x`（rd-core，真镜像）| `x_cost=3` ⇒ 3 遍；`nodes=4`；`effects=5`（第三遍时 10 血的敌人已倒下）；活下来那只吃满 15 |
+| 同上的 `x_cost=0` 分支 | 一遍都不跑，且**不是错误** |
+| `an_x_cost_card_spends_all_energy_and_hits_x_times`（rd-wasm，ABI）| X = 1 ⇒ 恰好 2 条伤害；3 点能量 ⇒ 能量归零 + 那只 10 血的史莱姆**真的倒下**（`BEAT_DOWNED`）|
+| `an_x_cost_card_played_with_no_energy_is_legal_and_does_nothing` | X = 0 受理、0 伤害 |
+| `a_repeat_past_its_maximum_is_a_loud_error_not_a_truncation` | 40 能量 ⇒ 一次伤害都没有 **且** 驱动记了 problem（"静默截到 32 下"会给出 32 条伤害）|
+| `the_hand_cost_cell_reports_x_cost_cards_as_the_display_sentinel` + `a_fixed_cost_card_still_reports_its_printed_cost` | 页面那格是哨兵，普通牌仍是真价（成对）|
+| `ui_test.mjs` 的 `x-cost` 块 | 页面画 `X`、`affordable` 跟能量走 |
+| 内容门 `[6d]` | `x_cost` 卡的印刷费用必须是 0，且节目**必须真的读 `x.cost`**（否则 tag 只是装饰）|
+
+**反向控制**：把 `"x.cost" => Ok(ctx.x_cost)` 改成 `Ok(0)`，
+`an_x_cost_card_spends_all_energy_and_hits_x_times` 当场红（`left: 0, right: 2`），然后才恢复。
+
+### 146.9 还没做的
+
+* `repeat` 体里读 `iterationIndex` 的语义（参考有作用域，本内核没有）—— 没有内容用它。
+* `repeatUntil`（参考也注册了）没做：没有内容用它，做了就是没人踩的代码。
+* **Chemical X** 那种"X +2 但不多花能量"的遗物：`combat_bonus` 还没有 X 这一轴。
+* 0 能量打 X 费牌时的那批"打出攻击牌"计数器（Nunchaku / Ink Bottle）—— 遗物系统还没有这类。
+
+### 146.10 数字
+
+聚合验收 **17/17**；单测 722 → **728**（rd-core 620 → **621** / rd-run 70 / rd-wasm 32 → **35**）。
+内容：**17 张卡**（+whirlwind）/ 9 个事件 / 5 件遗物 / 17 个遭遇 / 25 个敌人；
+镜像 full **28,588 B** / core **23,912 B**。

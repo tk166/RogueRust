@@ -207,6 +207,11 @@ pub struct ExprContext<'a> {
     pub iteration_card: Option<CardInstanceId>,
     /// 触发事件的布尔事实（按位，见 `exec::CARD_HAS_TAG_*`）。`event.bool` 读它。
     pub event_flags: u8,
+    /// **X 费牌的 X**（§146）：这一次出牌真的花掉了多少能量。
+    ///
+    /// 不是全局状态的一部分：它随一次出牌生、随那次出牌死，所以走上下文、
+    /// 并且**存在节目帧上**（续延里重建上下文时要拿得回来）。
+    pub x_cost: i32,
 }
 
 impl ExprContext<'_> {
@@ -351,6 +356,8 @@ const INT_KINDS: &[&str] = &[
     "cardsPlayedLastTurn",
     "cardsPlayedThisTurnWithTag",
     "card.upgradeLevel",
+    // §146：X 费牌的 X（本内核自己的 kind —— 参考里没有 X 费，见 `port-plan.md` §146）。
+    "x.cost",
 ];
 
 /// 求值为**卡实例**的 kind（参考里 `ICombatExpression<_, CardInstance>` 的那些）。
@@ -420,6 +427,8 @@ pub fn eval_int<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, Exp
     match kind {
         // `ConstantExpression.Evaluate => Value`（`EffectProgramExpressions.cs:61`）。
         "const" => Ok(node.int_field("Value")?.ok_or(IrError::Missing("Value"))?),
+        // §146：X 费牌的 X。零字段 —— 值只来自这次出牌付掉的能量。
+        "x.cost" => Ok(ctx.x_cost),
 
         // `Saturate((long)l + r / - r / * r)`（`:256 / :280 / :304`）。
         "add" => {
@@ -1028,6 +1037,7 @@ mod tests {
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
             event_flags: 0,
+            x_cost: 0,
         }
     }
 
@@ -1049,6 +1059,7 @@ mod tests {
             iteration_target: None,
             iteration_card: None,
             event_flags: 0,
+            x_cost: 0,
         }
     }
 
@@ -1080,6 +1091,7 @@ mod tests {
             iteration_target: None,
             iteration_card: None,
             event_flags: 0,
+            x_cost: 0,
         };
         assert_eq!(eval_int(amount, &empty_ctx), Ok(6));
     }
@@ -1143,6 +1155,7 @@ mod tests {
             iteration_target: None,
             iteration_card: None,
             event_flags: 0,
+            x_cost: 0,
         };
         assert_eq!(eval_int(amount, &hero_ctx), Ok(28));
     }
@@ -1203,6 +1216,7 @@ mod tests {
             iteration_target: Some(cid("enemy_a")),
             iteration_card: None,
             event_flags: 0,
+            x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 1000), &swapped), Ok(0));
         assert_eq!(eval_int(node(&content, 337), &swapped), Ok(5));
@@ -1229,6 +1243,7 @@ mod tests {
             iteration_target: None,
             iteration_card: None,
             event_flags: 0,
+            x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 1131), &enemy_src), Ok(0));
     }
@@ -1250,6 +1265,7 @@ mod tests {
             iteration_target: None,
             iteration_card: None,
             event_flags: 0,
+            x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 92), &no_target), Ok(0));
         assert_eq!(eval_int(node(&content, 337), &no_target), Ok(0));
@@ -1405,6 +1421,7 @@ mod tests {
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
             event_flags: 0,
+            x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 1527), &no_target), Ok(0));
         assert_eq!(eval_int(node(&content, 1728), &no_target), Ok(0));
@@ -1938,6 +1955,7 @@ mod tests {
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
             event_flags: 0,
+            x_cost: 0,
         };
 
         // kind → (成功, UnsupportedKind, 其它错误)
@@ -2075,6 +2093,7 @@ mod tests {
             iteration_target: None,
             iteration_card: Some(card),
             event_flags: 0,
+            x_cost: 0,
         };
         assert_eq!(eval_card(iterated, &bound), Ok(card));
 

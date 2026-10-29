@@ -254,6 +254,35 @@ const ex = instance.exports;
 const OBS_LEN = ex.rd_env_observe_len();
 const obs = () => new Int32Array(ex.memory.buffer, ex.rd_env_observe_buf(), OBS_LEN).slice();
 
+// §146: an X-cost card must **print X**, not "0". The kernel reports `X_COST_DISPLAY` in the cost
+// cell (a fixed cost of 0 would be a lie the player acts on: it looks free), and this pins that the
+// page turns that cell into the letter -- and that the page's copy of the number equals the
+// module's. The number is spelled in two places (`rd_wasm::X_COST_DISPLAY` and `ui_render.js`);
+// this is the assertion that keeps them from drifting.
+{
+  const synthetic = obs();
+  synthetic[UI.H.HAND] = 1;
+  synthetic[UI.H.ENERGY] = 3;
+  for (let i = 0; i < 4; i++) synthetic[UI.OFF_HAND + i] = -1;
+  synthetic[UI.OFF_HAND] = 1;
+  synthetic[UI.OFF_HAND + 1] = UI.X_COST_DISPLAY;
+  synthetic[UI.OFF_HAND + 2] = 0;
+  const cell = UI.describe(synthetic, [], { cardName: () => "Whirlwind" }, null).hand[0];
+  if (cell.cost !== UI.X_COST_DISPLAY) fail(`an X-cost cell kept its raw cost ${cell.cost}`);
+  if (cell.costText !== "X") fail(`an X-cost card must print "X", got "${cell.costText}"`);
+  if (!cell.affordable) fail("an X-cost card is affordable whenever there is any energy");
+  // The module's constant is the authority; if the page ever spelled a different number the check
+  // above would still pass (both sides are the page), so compare against the Rust export's docs.
+  if (UI.X_COST_DISPLAY !== -2) {
+    fail(`ui_render.js spells X_COST_DISPLAY as ${UI.X_COST_DISPLAY}, rd_wasm uses -2`);
+  }
+  // ... and with no energy it is *still* playable at X = 0, which `affordable` must reflect:
+  synthetic[UI.H.ENERGY] = 0;
+  const broke = UI.describe(synthetic, [], { cardName: () => "Whirlwind" }, null).hand[0];
+  if (broke.affordable) fail("0 energy makes X = 0, and X = 0 is not affordable");
+  console.log('  x-cost           prints "X", affordable only with energy');
+}
+
 // ---------------------------------------------------------------------------------------------
 // **The battle log must not lie.** `diffObservations` is what the log is made of, and it is pure --
 // but it is fed by two observation vectors, so a stale `before` produced a log line for damage that

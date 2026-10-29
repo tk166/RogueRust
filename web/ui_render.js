@@ -33,6 +33,9 @@
   const OFF_ENEMY = 17; // 6 slots × 8
   const OFF_ENEMY_STATUS = 65; // 6 slots × 5
   const OFF_HAND = 95; // 10 slots × 4
+  /// §146: the cost cell says "this is an X-cost card", not a number. Mirrors
+  /// `rd_wasm::X_COST_DISPLAY`; `ui_test.mjs` fails if the two ever disagree.
+  const X_COST_DISPLAY = -2;
   const OFF_PILES = 135; // 5
   const MAX_ENEMY_SLOTS = 6;
   const MAX_HAND_SLOTS = 10;
@@ -135,12 +138,17 @@
       const definitionSlot = o[base + 2];
       const options = byHand.get(slot) || [];
       const name = io.cardName(slot);
-      const affordable = cost >= 0 && cost <= o[H.ENERGY];
+      // §146: `-2` means "this card is X-cost" -- it prints `X`, not a number. Everything else
+      // keeps the old meaning (`-1` unreadable, `0..n` a real price). A separate constant here
+      // would be a second copy of the ABI's `X_COST_DISPLAY`, so the literal is spelled once and
+      // `ui_test.mjs` pins that the page and the module agree.
+      const affordable = cost === X_COST_DISPLAY ? o[H.ENERGY] > 0
+        : (cost >= 0 && cost <= o[H.ENERGY]);
       const armed = !!aiming && aiming.hand === slot;
       const playable = options.length > 0;
       const note = !playable ? "出不了" : (armed ? "选一个敌人" : (options.length > 1 ? "多目标" : ""));
       out.push({
-        slot, cost, definitionSlot,
+        slot, cost, costText: cost === X_COST_DISPLAY ? "X" : String(cost), definitionSlot,
         name: name || ("def#" + definitionSlot),
         affordable, playable, armed,
         targetSlots: options.map((option) => option.slot),
@@ -504,7 +512,7 @@
 
   root.RD_UI = {
     // layout (gate 14 checks these tile)
-    OFF_HERO_STATUS, OFF_ENEMY, OFF_ENEMY_STATUS, OFF_HAND, OFF_PILES,
+    OFF_HERO_STATUS, OFF_ENEMY, OFF_ENEMY_STATUS, OFF_HAND, OFF_PILES, X_COST_DISPLAY,
     MAX_ENEMY_SLOTS, MAX_HAND_SLOTS, STATUS_AXES, H,
     RESULT_NAMES, INTENT_KINDS, ACTION_PLAY, ACTION_END_TURN,
     // pure describers

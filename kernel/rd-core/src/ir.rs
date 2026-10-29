@@ -120,6 +120,13 @@ pub enum NodeKind {
     EndTurn,
     /// `node.extraTurn` —— 目标再来一个回合（`port-plan.md` §127）。
     ExtraTurn,
+    /// `node.repeat` —— 把 `Body` 跑 `Count` 遍（**参考有、内核此前没移植**，§146）。
+    ///
+    /// 它一直是 `CombatJson` 注册的 35 个节点之一（`EffectProgramNodes.cs:116-155`），
+    /// 但内核的 15 种里没有它 —— 因为 **core 镜像里一条都没有**（固定次数的多段攻击在内容里
+    /// 是展开写的，例如 `byrd.peck` 是 5 个 `dealDamage`）。X 费需要"跑 X 遍"，X 是运行期的值，
+    /// 展开写不出来 ⇒ 这个节点终于有了第一个内容侧的使用者。
+    Repeat,
 }
 
 impl NodeKind {
@@ -145,13 +152,14 @@ impl NodeKind {
             NodeKind::CreateCombatant => "node.createCombatant",
             NodeKind::EndTurn => "node.endTurn",
             NodeKind::ExtraTurn => "node.extraTurn",
+            NodeKind::Repeat => "node.repeat",
         }
     }
 
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 18] = [
+        const ALL: [NodeKind; 19] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -171,6 +179,7 @@ impl NodeKind {
             NodeKind::CreateCombatant,
             NodeKind::EndTurn,
             NodeKind::ExtraTurn,
+            NodeKind::Repeat,
         ];
         let mut i = 0;
         while i < ALL.len() {

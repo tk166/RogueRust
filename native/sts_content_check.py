@@ -142,6 +142,12 @@ INV_CARDS = {
                       "RetainInHandOnTurnEnd": True},
     "swift_strike": {"Cost": 1, "Tags": ["attack", "strike", "innate"],
                      "Facts": [("damage", 6, "event")]},
+    # §146：第一张 **X 费**牌（Whirlwind，真卡：X 费，"Deal 5 damage to ALL enemies X times"）。
+    # 它的费用是"当前全部能量"，`Cost` 在这里记 0 —— 印刷价格**不参与**结算，内容门下面会查
+    # 这一格必须是 0 或缺失。Facts 里的 `("repeat", ("expr", "x.cost"), ...)` 说明"这一条伤害
+    # **每 X 一次**"，而不是被展开成 32 条。
+    "whirlwind": {"Cost": 0, "Tags": ["attack", "x_cost"],
+                  "Facts": [("repeat", ("expr", "x.cost"), "damage", 5, "allEnemies")]},
 }
 
 # inv:§4.1 -- the 10 zero-new-ability enemies: (hp_min, hp_max, action ids).
@@ -508,6 +514,14 @@ def program_facts(root):
                     before = len(facts)
                     walk(sub)
                     facts[before:] = [("when", key) + f for f in facts[before:]]
+        elif kind == "node.repeat":
+            # §146: the body runs an unknown-at-authoring number of times, so its facts are tagged
+            # by **the count expression** rather than unrolled. That keeps the inventory honest
+            # ("this card deals 5 damage to all enemies *per X*") and keeps the walker total: a
+            # repeat that hid its body would be the same failure as an unknown node kind.
+            before = len(facts)
+            walk(body["Body"])
+            facts[before:] = [("repeat", amount(body["Count"])) + f for f in facts[before:]]
         else:
             raise AssertionError("unexpected node kind %r" % kind)
 
@@ -919,9 +933,17 @@ def check_card_keywords(doc):
                  % ("present" if "retain" in tags else "absent",
                     card.get("RetainInHandOnTurnEnd")))
         if "x_cost" in tags:
-            # `battle.rs` refuses such a deck at build time, so shipping one would make the card
-            # unplayable *and* its deck unbuildable. Say so here instead of at the first fight.
-            fail(label, "x_cost 是内核**还没造**的机制（§144），内容里不许出现")
+            # §146：X 费现在是真能力，但两条配套约束必须成立，否则那张牌**看起来正常、算起来不对**：
+            #   ① 印刷价格必须是 0 或缺席（真正的费用是"当前全部能量"，`Amount` 不参与结算）；
+            #   ② 节目必须真的读 `x.cost`（否则那个 tag 只是个装饰，牌会按 0 遍结算）。
+            costs = card.get("Costs") or []
+            for entry in costs:
+                if entry.get("Amount") != 0:
+                    fail(label, "x_cost 卡的印刷费用必须是 0（现在是 %r）"
+                         % (entry.get("Amount"),))
+            program = json.dumps(card.get("Program") or {}, ensure_ascii=False)
+            if '"x.cost"' not in program:
+                fail(label, "x_cost 卡的节目没读 x.cost ⇒ X 永远用不上（tag 只是装饰）")
         for keyword in counts:
             if keyword in tags:
                 counts[keyword] += 1

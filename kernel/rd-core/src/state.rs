@@ -2309,6 +2309,11 @@ pub struct ProgramExecutionFrame {
     pub steps: u32,
     /// 步数上限（信封上的 `MaxProgramSteps`）。
     pub max_steps: u32,
+    /// **X 费牌的 X**（§146）：这一次出牌花掉了多少能量。
+    ///
+    /// 存在帧上而不是只放上下文里：节目的后续节点是在**续延**里派的，那时上下文是从这一帧
+    /// 重建出来的（`exec::frame_context`）；只放上下文里的结果就是"第一趟读到 X，第二趟读到 0"。
+    pub x_cost: i32,
     /// 生命周期状态。
     pub state: ProgramFrameState,
     /// **终态那一刻**的环境链 —— 它是 `chain_num` 的唯一判据，见 `exec::finish_frame`。
@@ -2332,6 +2337,7 @@ impl Empty for ProgramExecutionFrame {
         entry_iteration_card: None,
         steps: 0,
         max_steps: 0,
+        x_cost: 0,
         state: ProgramFrameState::Running,
         terminal_chain: ChainSlot::NONE,
         hook: ProgramTerminalHook::None,
@@ -2570,6 +2576,11 @@ pub enum ProgramLoopList {
     Targets(Bounded<CombatantId, MAX_COMBATANTS>),
     /// 卡快照（`forEachCardInZone`，`CardInstanceId[]` 的槽位表示，见 `exec.rs` 的说明）。
     Cards(Bounded<CardSlot, MAX_CARDS_PER_ZONE>),
+    /// **次数**（`node.repeat`，§146）：没有可绑的变量，只有"跑几遍"。
+    ///
+    /// 单独一个变体而不是复用 `Targets` 造一堆假目标：`repeat` 的语义里**没有**迭代对象
+    /// （`sel.iterationTarget` 在 X 费牌里必须还是外层那个），造点假人会让选择器读到错的东西。
+    Count(u16),
 }
 
 impl ProgramLoopList {
@@ -2580,6 +2591,7 @@ impl ProgramLoopList {
             Self::None => 0,
             Self::Targets(list) => list.len(),
             Self::Cards(list) => list.len(),
+            Self::Count(count) => usize::from(*count),
         }
     }
 

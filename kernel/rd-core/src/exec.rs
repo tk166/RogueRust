@@ -319,6 +319,8 @@ pub struct ExecContext<'a> {
     /// 内容镜像。`Some` ⇒ 状态元数据走 [`crate::status_bind`]（参考实现的路）；
     /// `None` ⇒ 走标准包目录（oracle/env 的路）。**只有它决定命名空间桥开不开**。
     pub content: Option<&'a Content<'a>>,
+    /// **X 费牌的 X**（§146）。0 = 这一次出牌没有 X（绝大多数节目）。
+    pub x_cost: i32,
 }
 
 /// 执行统计。做成返回值是为了让测试能断言"确实做了事"，而不是只看状态。
@@ -358,6 +360,7 @@ impl<'a> ExecContext<'a> {
             max_steps,
             event_flags: 0,
             content: None,
+            x_cost: 0,
         }
     }
 
@@ -365,6 +368,13 @@ impl<'a> ExecContext<'a> {
     #[must_use]
     pub fn with_content(mut self, content: &'a Content<'a>) -> Self {
         self.content = Some(content);
+        self
+    }
+
+    /// 带上这次出牌的 **X**（§146）。只有 X 费牌的节目需要它，其余一律 0。
+    #[must_use]
+    pub fn with_x_cost(mut self, x_cost: i32) -> Self {
+        self.x_cost = x_cost;
         self
     }
 
@@ -381,6 +391,7 @@ impl<'a> ExecContext<'a> {
             iteration_target: self.iteration_target,
             iteration_card: self.iteration_card,
             event_flags: self.event_flags,
+            x_cost: self.x_cost,
         }
     }
 
@@ -411,10 +422,14 @@ const BLOCK_POOL_ID: &str = "standard.block";
 const DEFAULT_MAX_ITERATIONS: i32 = 32;
 
 /// `ForEachCardInZoneNode.DefaultMaxIterations = 64`（`EffectProgramNodes.cs:290`）。
-///
 /// 镜像实测 2 条 `node.forEachCardInZone` 的 `MaxIterations` 都是 64（即序列化后的默认值），
 /// 所以"缺席就用 64"这条今天走不到 —— 留它是因为参考的构造函数默认值就是它。
 const DEFAULT_CARD_IN_ZONE_MAX_ITERATIONS: i32 = 64;
+
+/// `RepeatEffectNode.DefaultMaxCount = 32`（`EffectProgramNodes.cs:119`，§146）。
+///
+/// 超过就**抛**（参考逐字：`count > MaxCount ⇒ InvalidOperationException`），不截断。
+const REPEAT_DEFAULT_MAX_COUNT: i32 = 32;
 
 /// `CreateCardInstanceNode` 的 `count ?? new ConstantExpression(1)`
 /// （`EffectProgramNativeNodes.cs:911`）—— `Count` 缺席 ⇒ **1 张**。
@@ -610,6 +625,8 @@ fn open_frame(
         entry_iteration_card: ctx.iteration_card,
         steps: 0,
         max_steps: ctx.max_steps,
+        // §146：X 从**建立帧的那一刻**的上下文取，之后每一趟续延都从帧恢复。
+        x_cost: ctx.x_cost,
         state: ProgramFrameState::Running,
         terminal_chain: ChainSlot::NONE,
         hook,
@@ -1376,7 +1393,10 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::CreateCardInstance
         // W4f 的 2 种（卡实例这一层寻址）。
         | NodeKind::ForEachCardInZone
-        | NodeKind::MoveCardToZone => {}
+        | NodeKind::MoveCardToZone
+        // §146：`repeat`（X 费牌的"跑 X 遍"）。它有孩子，但预检只走一遍 Body ——
+        // 次数是运行期的值，预检看不到它。
+        | NodeKind::Repeat => {}
     }
     reject_result_key(node)?;
     // `DefinitionFilter` 非空同样是**结构上不可执行**（见模块头），所以也在预检这一道闸上拒：
@@ -1514,6 +1534,7 @@ fn dispatch_node(
         NodeKind::ForEachCardInZone => {
             dispatch_for_each_card_in_zone(node, ctx, frame, slot, depth, stats)
         }
+        NodeKind::Repeat => dispatch_repeat(node, ctx, frame, slot, stats),
         // 11 个产出型节点：**只造请求**，不写状态（`exec.rs` 的"请求 + 解析"拆分）。
         NodeKind::DealDamage => deal_damage_node(node, ctx, frame, slot, stats),
         NodeKind::GainBlock => gain_block_node(node, ctx, frame, slot, stats),
@@ -1687,6 +1708,7 @@ fn frame_context<'a>(
         record.max_steps,
     );
     ctx.iteration_card = record.iteration_card;
+    ctx.x_cost = record.x_cost;
     ctx.content = content;
     Ok(ctx)
 }
@@ -2557,8 +2579,58 @@ fn dispatch_for_each_target(
     start_iteration(ctx, Some(node), frame, slot, stats)
 }
 
-/// 起一趟循环迭代（`ExecuteIteration`，`:405-428` / `:475-505`）。
+/// `Repeat`：把 `Body` 跑 `Count` 遍（§146，参考 `EffectProgramNodeExecutors.cs:282-330`）。
 ///
+/// 参考逐条（我读过那 50 行）：
+/// * `count = Count.Evaluate(...)`；
+/// * `count < 0` ⇒ **抛**（"Card definitions must not produce negative repeat counts"）；
+/// * `count > MaxCount` ⇒ **抛**（默认 `RepeatEffectNode.DefaultMaxCount = 32`）；
+/// * `ExecuteIteration(body, count, 0, ...)`：`index >= count` ⇒ `onComplete`；
+///   否则 `dispatch(body)`，body 完成后**在节目链里**接着下一趟；
+/// * 每一趟 `ctx.OpenScope()` / `CloseScope()` —— 本内核没有作用域栈，这一层的作用域里
+///   也没有绑任何东西（没有 `iterationIndex` 之外的变量），所以那对调用在这里**没有对应物**。
+///   ⚠️ 这是一处如实记录的偏差：内容若在 `repeat` 体里读 `iterationIndex`，本内核读到的是
+///   **外层**的值。今天没有这样的内容，且这条偏差在 `dispatch_repeat` 的测试里钉住。
+fn dispatch_repeat(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let body = node.node_field("Body")?.ok_or(IrError::Missing("Body"))?;
+    let count = eval_amount(node, "Count", ctx)?;
+    let max_count = node.int_field("MaxCount")?.unwrap_or(REPEAT_DEFAULT_MAX_COUNT);
+    // 两条都是**响亮失败**，一条都不截断：静默 `min(count, max)` 会让"打 40 下"变成
+    // "打 32 下"，而屏幕上只会少几下 —— X 费牌里这种错最容易当成"算错了"。
+    if count < 0 {
+        return Err(ExecError::Modifier);
+    }
+    if count > max_count {
+        return Err(ExecError::Modifier);
+    }
+    let count = u16::try_from(count).map_err(|_| ExecError::Modifier)?;
+    let loop_at = ctx.state.program_loops_mut().alloc(ProgramLoop {
+        list: ProgramLoopList::Count(count),
+        // `repeat` 不改变迭代绑定 —— 存下来的就是外层那对，`complete` 恢复它等于什么都不做
+        // （写法与另外两种循环一致，免得"这一类不需要恢复"成为一条要记住的例外）。
+        saved_target: ctx.iteration_target,
+        saved_card: ctx.iteration_card,
+        body: body.id(),
+        live: true,
+    })?;
+    if let Some(cell) = ctx.state.program_nodes_mut().get_mut(slot) {
+        cell.kind = ProgramNodeKind::Loop;
+        cell.remaining = 0;
+        cell.loop_at = loop_at;
+    }
+    if count == 0 {
+        return resume_later(ctx.state, frame, slot);
+    }
+    start_iteration(ctx, Some(node), frame, slot, stats)
+}
+
+/// 起一趟循环迭代（`ExecuteIteration`，`:405-428` / `:475-505`）。
 /// 绑值 → 派发 `Body`。**绑值同时写进帧**：下一趟是在续延里派的，那时只能从帧恢复。
 /// `remaining` 记"下一趟的下标"（参考的 `nextIndex = index + 1`，`:421`/`:496`）。
 fn start_iteration(
@@ -2602,6 +2674,9 @@ fn start_iteration(
             };
             ctx.iteration_card = Some(card.id);
         }
+        // §146：`repeat` 没有可绑的东西 —— 迭代目标/卡保持外层原样（这正是"不要在 X 费牌里
+        // 造假目标"的理由：`sel.iterationTarget` 必须还是外层那个）。
+        ProgramLoopList::Count(_) => {}
         ProgramLoopList::None => return Err(ExecError::Modifier),
     }
     if let Some(cell) = ctx.state.program_frames_mut().get_mut(frame) {
@@ -5931,6 +6006,7 @@ mod tests {
                     iteration_target: None,
                     iteration_card: None,
                     event_flags: 0,
+                    x_cost: 0,
                 };
                 crate::expr::eval_int(amount_expression, &expr_ctx).expect("常量")
             };
@@ -6032,6 +6108,7 @@ mod tests {
                             iteration_target: iteration_target.map(cid),
                             iteration_card: None,
                             event_flags: 0,
+                            x_cost: 0,
                         };
                         match crate::expr::eval_bool(condition, &expr_ctx) {
                             Ok(value) => value,
@@ -8551,6 +8628,47 @@ mod tests {
         // 逃跑的是第 3 个战斗员（存储序 [hero, enemy_a, enemy_b, minion#1]）。
         assert_eq!(state.beats()[2].target, 3);
         assert_eq!(state.beats()[1].target, 2, "倒下的是 enemy_b");
+    }
+
+    #[test]
+    fn the_whirlwind_program_hits_each_enemy_once_per_x() {
+        // §146：`node.repeat { Count: x.cost, Body: dealDamage{5, sel.allEnemies} }`，跑在**真镜像**
+        // 的那张卡上。断言 `effects` 而不是血量：`execute` 只**入队**请求，解析是宿主的事
+        // （与 `a_three_hit_attack_is_three_beats_not_one_number` 用 `deal` 直接打的分工不同）。
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let ir = Ir::new(&content);
+        let index = content
+            .lookup_in("whirlwind", crate::content::EK_CARD)
+            .expect("whirlwind is in the image")
+            .index as u32;
+        // `card_program_root` 直接给 `Result<NodeRef>`（信封缺失才是 `Missing("Program")`）。
+        let root = ir.card_program_root(index).expect("a program");
+
+        let mut state = arena();
+        // `execute` 会**把效果也解析掉**（`a_three_hit...` 用 `deal` 是为了只测管线），所以
+        // 10 血的 `enemy_b` 在两下之后倒下 ⇒ 第三遍只打 `enemy_a`。这正是这条测试要的语义：
+        // "X 遍"不假，但**死了的敌人不再是目标**。
+        let mut ctx = ExecContext::new(&mut state, Some(cid("hero")), None, None, 1024)
+            .with_content(&content)
+            .with_x_cost(3);
+        let stats = execute(root, &mut ctx).expect("X = 3 是合法次数");
+        assert_eq!(stats.nodes, 4, "repeat + 三遍 dealDamage");
+        assert_eq!(stats.effects, 5, "2 + 2 + 1（第三遍只剩一个活着的敌人）");
+        assert_eq!(health(&state, "enemy_a"), 20 - 15, "活下来那只吃满 3 × 5");
+        assert_eq!(lifecycle(&state, "enemy_b"), CombatantLifecycleState::Downed);
+
+        // X = 0 ⇒ 一遍都不跑，而且**不是错误**（0 能量打 X 费牌是合法的）。
+        let mut state = arena();
+        let mut ctx = ExecContext::new(&mut state, Some(cid("hero")), None, None, 1024)
+            .with_content(&content)
+            .with_x_cost(0);
+        let stats = execute(root, &mut ctx).expect("X = 0 合法");
+        assert_eq!(stats.effects, 0, "0 遍 ⇒ 0 次请求");
     }
 
     #[test]

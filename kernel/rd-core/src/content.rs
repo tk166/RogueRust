@@ -4014,6 +4014,15 @@ mod tests {
             "swift_strike 是 Innate"
         );
         assert_eq!(content.card_has_tag("strike", "innate"), Some(false));
+
+        // §146：X 费牌的 tag 也必须真的在镜像里 —— 它是 `play.rs` 认 X 费的**唯一**判据。
+        assert_eq!(
+            content.card_has_tag("whirlwind", "x_cost"),
+            Some(true),
+            "whirlwind 是 X 费牌"
+        );
+        assert_eq!(content.card_rarity("whirlwind"), Some("Uncommon"));
+        assert_eq!(content.card_has_tag("strike", "x_cost"), Some(false));
     }
 
     /// The `?` room's events, read out of the image: ids, body text, and both choices.

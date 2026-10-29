@@ -16,9 +16,9 @@
 | **Innate** | 开局必在手牌 | **有**（§144：`MoveInnateCardsToTop`，照参考的"倒着挪"实现）| — |
 | **Retain** | 回合结束不弃 | **有**（§144：`CARD.RetainInHandOnTurnEnd`）| — |
 | **Unplayable** | 不能从手里打出 | **有**（`play.rs` 受理校验的五条之一：stun / decree / play_condition / one_attack / **unplayable**）| — |
-| **X 费** | 消耗全部能量，效果按消耗量 | **仍然没有**，而且这与上面三条不同：参考仓里**没有 X 费这个概念**（grep `XCost`/`EnergySpent` 零命中）⇒ 要新造机制，不是补一句读取 | **内核**：费用形态 + 新的数量来源（X）+ 编译器支持 |
+| **X 费** | 消耗全部能量，效果按消耗量 | **有**（§146：`x_cost` tag + `x.cost` 表达式 + `node.repeat`；Whirlwind 是第一个载体）。⚠️ 参考仓里**没有**这个概念（grep 零命中）⇒ 这一条是**新造**的，不是移植 | Chemical X 那种"X +2 不多花钱"的遗物；`repeat` 体里的 `iterationIndex` |
 
-> §144 之后，内容里已经有三种关键字的载体：`sentinel`（Ethereal，真卡）、`patient_guard`（Retain，
+> §146 之后 X 费也有了（`whirlwind`）。§144 之后，内容里已经有三种关键字的载体：`sentinel`（Ethereal，真卡）、`patient_guard`（Retain，
 > fixture —— Ironclad 没有 Retain 卡）、`swift_strike`（Innate，fixture）。`x_cost` 是**唯一**
 > 内核还不许出现的 tag：内容门 `[6d]` 会拒，建战斗与出牌两处也会拒。
 

@@ -447,12 +447,12 @@ const CARDS_DRAWN_PER_TURN: i32 = 5;
 /// §144 起**有消费者**：`move_innate_cards_to_top` 真的按它挑牌了（之前只用来拒绝）。
 const INNATE_TAG: &str = "innate";
 
-/// `x_cost`：本内核**自己的**约定，参考里没有它（§144）。
+/// `x_cost`：本内核**自己的**约定，参考里没有它（§144 引入，§146 变成真能力）。
 ///
-/// 参考全仓没有 X 费概念，所以这是一个"要新造机制"的能力，而不是"还没移植的字段"。
-/// 带这个 tag 的牌在**建战斗时**就被拒绝（`reject_x_cost_deck`），并被 `play.rs` 再拒绝一次
-/// （防手写牌组绕过）—— 两张嘴说同一句话，代价是一行 match。
-pub(crate) const X_COST_TAG: &str = "x_cost";
+/// 参考全仓没有 X 费概念（`XCost` / `EnergySpent` 零命中），所以这是**新造**的一条费用形态，
+/// 而不是"还没移植的字段"。§144 时它只是一个响亮拒绝的判据；§146 起 `play.rs` 真的把它
+/// 算成"花掉全部能量"，`expr` 的 `x.cost` 把它交给节目。这个字面量现在是两处共用的那一份。
+pub const X_COST_TAG: &str = "x_cost";
 /// `CreateNextCardInstanceId` 的前缀（`CombatState.cs:689-696`：`$"card_{n:000000}"`）。
 const CARD_ID_PREFIX: &[u8] = b"card_";
 /// 装 `<prefix>%06d` 的栈上缓冲（与 `exec.rs:2125` 同值，理由见那边的注释）。
@@ -621,10 +621,9 @@ fn build_fight_with(
         // 只验不改：`add_combatant` 里再建一次（幂等、无副作用）。
         CombatantId::new(enemy.id)?;
     }
-    // 步 6 的判定（`MoveInnateCardsToTop`）：参考的**挪牌**必须在洗牌之后（`:45-47`），
-    // 但 `x_cost` 的判定没有顺序依赖 ⇒ 提前到这里，失败时 state 还是干净的。
-    // （`innate` §144 起是**真的挪**，不再在步 0 拒绝。）
-    reject_x_cost_deck(content, &deck)?;
+    // 步 6 的判定（`MoveInnateCardsToTop`）：参考的**挪牌**必须在洗牌之后（`:45-47`）。
+    // `innate` §144 起是**真的挪**，不再在步 0 拒绝；`x_cost` §146 起默认被支持，
+    // 也不再在这里被拒 —— 见下面步 6b。
     // 蓝图里"喂回合机"的两项能不能被表达（抽牌数、补能表）—— 在这里先算一遍配置，
     // 免得建完一局才发现那条路通向 `Turn(Host(Unsupported))`。
     let _ = turn_config_for(plan)?;
@@ -701,13 +700,10 @@ fn build_fight_with(
     // 挪在**洗牌之后**（`:49`），这正是"起手必有它"的实现方式。
     move_innate_cards_to_top(state, content, &hero_id)?;
 
-    // ── 步 6b：`x_cost` 的响亮拒绝（§144）====================================
-    // 参考**没有 X 费这个概念**（全仓 grep 无 `XCost` / `EnergySpent`），所以它不是"还没移植"，
-    // 是"要新造一个机制"：一个"用光全部能量、并以用掉的量作为 X"的费用形态，加一个新的
-    // 数量来源让节目读到 X，再加内容编译器对它的支持。在此之前，一张带 `x_cost` 的牌若被静默
-    // 当成固定费用，它的效果会按"X = 印刷费用"结算 —— 数字全都合理，所以最难发现。
-    // 因此：**构造期就拒绝**，与 `innate` 在 §144 之前受到的待遇同形。
-    reject_x_cost_deck(content, &deck)?;
+    // ── 步 6b：`x_cost`（§146 起是**真能力**，不再拒绝）========================
+    // §144 时这里有一道 `reject_x_cost_deck`；§146 把 X 费做出来了（`play.rs` 算钱、
+    // `expr` 的 `x.cost` 读值、`node.repeat` 跑 X 遍），所以那道闸**被删掉**。
+    // 建战斗这一层现在不需要认识 X 费：一张 X 费牌和别的牌一样进抽牌堆。
 
     // ── 步 7/8：起始状态 / 开局临时规则（`:51-61`）============================
     // 两者都是"入队 + 排空"（要事件队列），而 `FightPlan` 里没有对应字段 ⇒ 恒为空。
@@ -851,23 +847,7 @@ fn move_innate_cards_to_top(
     Ok(())
 }
 
-/// 拒绝带 `x_cost` tag 的牌组（§144：X 费是**新造**的机制，不是移植）。
-///
-/// 为什么响亮：一张 X 费牌被当成固定费用时，它的效果会按"X = 印刷费用"结算 ——
-/// 数字全都合理、走位完全正常，与 `innate` 在 §144 之前的情形同型。
-/// 判定读**镜像**（tag 只有镜像说了算），两条入口都过。
-fn reject_x_cost_deck(content: &Content<'_>, deck: &DeckPath<'_>) -> Result<(), BattleError> {
-    let mut cursor = *deck;
-    while let Some(item) = cursor.next_entry() {
-        let (card, _count) = item?;
-        match card_has_tag(content, card, X_COST_TAG) {
-            Ok(false) => {}
-            Ok(true) => return Err(unsupported()),
-            Err(()) => return Err(content_error()),
-        }
-    }
-    Ok(())
-}
+// §146 删掉了 `reject_x_cost_deck`：X 费不再是"内核造不出来的机制"。
 
 /// 建战斗时牌组的**实际来源** —— [`build_fight`] 与 [`build_fight_from_content`]
 /// 唯一的差别就是这一格。

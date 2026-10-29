@@ -418,6 +418,11 @@ const ATTACK_TAG: &str = "attack";
 const SKILL_TAG: &str = "skill";
 /// `StandardCombatIds.UnplayableTag`（`:88`）。
 const UNPLAYABLE_TAG: &str = "unplayable";
+/// §146：X 费牌的 tag。定义在 `battle.rs`（建战斗时它曾用来**拒绝**这类牌），现在两边读同
+/// 一个字面量 —— 一处定义，两处读。
+const X_COST_TAG: &str = crate::battle::X_COST_TAG;
+/// X 费牌没有 `Costs` 时花哪条资源（与标准包的 `standard.energy` 同值，`inv:§2`）。
+const X_COST_RESOURCE_DEFAULT: &str = "standard.energy";
 /// `StandardCombatIds.CardCostDeltaCounter`（`:131`）。
 const CARD_COST_DELTA_COUNTER: &str = "standard.card_cost_delta";
 
@@ -604,6 +609,8 @@ struct PlayPlan<'a> {
     max_steps: u32,
     target: Option<CombatantId>,
     content: &'a Content<'a>,
+    /// **X 费牌的 X**（§146）：这一次出牌真的花掉了多少。非 X 费牌恒 0。
+    x_cost: i32,
 }
 
 /// 出牌校验/算费时的"这张卡在这张桌上"的视图。
@@ -620,6 +627,11 @@ struct CardOnTable<'a> {
     is_action: bool,
     is_attack: bool,
     is_skill: bool,
+    /// **X 费牌**（§146）：内容用 `x_cost` tag 声明，费用 = 当前全部能量。
+    ///
+    /// 不是一条独立的费用条目：`Costs` 里那个 `Amount` 对 X 费牌**没有意义**（内容门要求它
+    /// 是 0 或缺席），真正的费用在出牌那一刻才读得出来。
+    is_x_cost: bool,
 }
 
 /// 六阶段里的前五阶段：**纯读**，任何拒绝都不改状态。
@@ -679,6 +691,7 @@ fn plan_play<'c>(
         is_action: row.is_action() == BOOL_TRUE,
         is_attack: card_has_tag(content, row, ATTACK_TAG)?,
         is_skill: card_has_tag(content, row, SKILL_TAG)?,
+        is_x_cost: card_has_tag(content, row, X_COST_TAG)?,
     };
 
     // ── 法令闸门（规格书 §8.2/§8.3）：v1 没有法令实现，所以"内容里真的有法令"
@@ -692,6 +705,21 @@ fn plan_play<'c>(
     // ── 阶段 5（`:106` → `:114-294`）：算费用 + 付得起校验（`EnsureCostsCanBePaid`）。
     let paid = calculate_costs(state, &card)?;
     ensure_affordable(state, &card.source, &paid)?;
+    // §146：**X 就是这一次真的付掉的量**（付不起那条路走不到 X 费牌：`x_cost_payment` 只付
+    // 现有的，所以 `ensure_affordable` 永远通过）。读回来而不是另算一遍，
+    // 是因为"X 等于花了多少"是这条规则的**全部内容**。
+    // X 费牌不套 `ensure_affordable`：它付的永远是"现有多少付多少"，所以那条校验不可能失败；
+    // 而 X 的值就是**这一次真的花掉的量**（读回来而不是另算一遍 —— "X 等于花了多少"正是
+    // 这条规则的全部内容）。
+    let x_cost = {
+        let mut total = 0i32;
+        for index in 0..paid.len() {
+            if let Some(entry) = paid.get(index) {
+                total = total.saturating_add(entry.amount);
+            }
+        }
+        total
+    };
 
     // ── 落点（`:298-302`）：法令 `PlayedCardsExhaust` 已被上面那道闸门否决，
     // 所以这里只剩卡定义自己的 `PlayedCardDestinationZone`。
@@ -710,6 +738,7 @@ fn plan_play<'c>(
         max_steps,
         target: card.target,
         content,
+        x_cost,
     })
 }
 
@@ -864,7 +893,8 @@ fn apply_plan_in_chain(
             None,
             plan.max_steps,
         )
-        .with_content(plan.content);
+        .with_content(plan.content)
+        .with_x_cost(plan.x_cost);
         exec::begin(root, &mut ctx, hook)
     };
     let frame = match begun {
@@ -1112,8 +1142,6 @@ enum Validator {
     PlayCondition,
     OneAttackPerTurn,
     Unplayable,
-    /// **本内核自己的**（§144）：X 费还造不出来，所以带 `x_cost` 的牌一律拒。
-    XCost,
 }
 
 impl Validator {
@@ -1127,8 +1155,6 @@ impl Validator {
             Validator::Stun => 100,
             Validator::Decree | Validator::PlayCondition => 150,
             Validator::OneAttackPerTurn | Validator::Unplayable => 200,
-            // 参考没有这一条；给它一个"最后"的优先级，让真正的规则先说话。
-            Validator::XCost => 1000,
         }
     }
 
@@ -1141,22 +1167,17 @@ impl Validator {
             Validator::PlayCondition => "standard.play_condition_validator",
             Validator::OneAttackPerTurn => "standard.one_attack_per_turn_validator",
             Validator::Unplayable => "standard.unplayable_validator",
-            // §144：本内核自己的，不注册在标准包里 —— 名字只用于测试里的顺序断言。
-            Validator::XCost => "kernel.x_cost_validator",
         }
     }
 }
 
 /// 执行序 = 升序后的固定表。**顺序就是语义**：第一个说不的为止。
-const VALIDATOR_ORDER: [Validator; 6] = [
+const VALIDATOR_ORDER: [Validator; 5] = [
     Validator::Stun,
     Validator::Decree,
     Validator::PlayCondition,
     Validator::OneAttackPerTurn,
     Validator::Unplayable,
-    // **§144：参考里没有这一条。** 它排在最后，因为它是"本内核造不出的机制"而不是一条规则 ——
-    // 一条真的被 stun 的 X 费牌，应当报 stun（那是玩家看得懂的拒绝）。
-    Validator::XCost,
 ];
 
 /// 逐条问，第一条说不的立刻返回（`Cards/CardPlay.cs:400-401` 的 `foreach` + 抛）。
@@ -1168,7 +1189,6 @@ fn validate_card_play(state: &CombatState, card: &CardOnTable<'_>) -> Result<(),
             Validator::PlayCondition => play_condition_validator(state, card),
             Validator::OneAttackPerTurn => one_attack_per_turn_validator(state, card),
             Validator::Unplayable => unplayable_validator(card),
-            Validator::XCost => x_cost_validator(card),
         };
         verdict?;
     }
@@ -1293,6 +1313,7 @@ fn play_condition_validator(state: &CombatState, card: &CardOnTable<'_>) -> Resu
         iteration_target: None,
         iteration_card: None,
             event_flags: 0,
+            x_cost: 0,
     };
     match expr::eval_bool(condition, &context) {
         Ok(true) => Ok(()),
@@ -1338,20 +1359,11 @@ fn unplayable_validator(card: &CardOnTable<'_>) -> Result<(), PlayError> {
     Ok(())
 }
 
-/// **#6 `x_cost`（§144 的响亮拒绝，参考里没有这一条）。**
+/// **§146：`x_cost` 不再是拒绝，而是一条真正的费用形态。**
 ///
-/// X 费不是"还没移植的字段"：参考全仓没有 `XCost` / `EnergySpent` 这类概念（grep 过），所以它
-/// 要**新造**一个"用光全部能量、并以用掉的量作为 X"的机制，外加一个新的数量来源。在它存在之前，
-/// 一张带 `x_cost` 的牌必须被拒 —— 而不是按印刷费用结算：后者的数字全都合理，所以最难发现。
-///
-/// 放在 `play.rs` 是**第二道**（第一道在 `battle.rs` 的建战斗期）。两张嘴说同一句话，代价一行，
-/// 而手写牌组绕过 `build_fight` 的那条路也堵上了。
-fn x_cost_validator(card: &CardOnTable<'_>) -> Result<(), PlayError> {
-    if card_has_tag(card.content, card.row, crate::battle::X_COST_TAG)? {
-        return Err(unsupported_content("XCost"));
-    }
-    Ok(())
-}
+/// §144 时这里有一个 `x_cost_validator`（带这个 tag 的牌一律拒），因为那时 X 费还不存在；
+/// 现在它在 `calculate_costs` 里算钱、在 `x.cost` 表达式里被读，所以那条校验器**被删掉了** ——
+/// 留着它会让一张已经能正常工作的牌继续被拒。`Validator` 也回到五条。
 
 // ===========================================================================
 // 阶段 5：费用（`Cards/CardPlay.cs:436-544`）
@@ -1432,6 +1444,15 @@ const COST_STAGE_ORDER: [CostStage; 6] = [
 /// 本实现按**印刷条目的出现序**（同资源合并时保持首次出现的位次）—— 这是**有意偏离**：
 /// 参考的顺序是 .NET 实现细节，而本内容每张卡最多 1 条费用，造不出区别。
 fn calculate_costs(state: &CombatState, card: &CardOnTable<'_>) -> Result<PaidCosts, PlayError> {
+    // ── X 费（§146）：**全部当前能量**，而且 `Costs` 里印的数字对这张牌没有意义。
+    //
+    // 放在最前面是有意的：费用修饰器（"下一张免费"之类）不该把 X 费牌改成 0 费 ——
+    // StS 里 X 费牌照样吃"能量全花掉"这条规则，`Costs` 的 `Amount` 根本不参与结算。
+    // 资源取 `Costs` 第一条里的那个 id（缺省 `standard.energy`）：内容若把 X 费挂在别的资源上，
+    // 这里读的就是那条资源，而不是硬编码。
+    if card.is_x_cost {
+        return Ok(x_cost_payment(state, card, X_COST_RESOURCE_DEFAULT)?);
+    }
     let content = card.content;
     let handle = card.row.costs();
     // `Costs` 是列表格（`F_TERM` → `_arr`）。哨兵 ⇒ 没有费用条目。
@@ -1923,6 +1944,59 @@ fn pool_of(combatant: &Combatant, key: &ResourceId) -> Option<Pool> {
         .iter()
         .find(|pool| pool.key == *key)
         .map(|pool| pool.pool)
+}
+
+/// X 费牌要付的钱：**当前全部**那条资源（§146）。
+///
+/// * 资源 id 取 `Costs` 第一条（内容没写就 `standard.energy`）；
+/// * 池子不在身、或已经见底 ⇒ **0**，而这是**合法**的：StS 允许 0 能量打 X 费牌（X = 0，
+///   用来推进 Nunchaku / Ink Bottle 这类"打出攻击牌"的计数器）。所以这条路**不**报
+///   `Unaffordable` —— 与固定费用那条刚好相反。
+fn x_cost_payment(
+    state: &CombatState,
+    card: &CardOnTable<'_>,
+    fallback: &str,
+) -> Result<PaidCosts, PlayError> {
+    // `no_std` 里没有 `String`：资源 id 就那么短，用 `Ident` 装（它本来就是这个用途）。
+    let resource = match x_cost_resource(card)? {
+        Some(id) => id,
+        None => ResourceId::new(fallback)?,
+    };
+    let combatant = source_of(state, &card.source)?;
+    let current = pool_of(combatant, &resource)
+        .map_or(0, |pool| pool.current)
+        .max(0);
+    let mut paid = PaidCosts::EMPTY;
+    if current > 0 && !paid.push(resource, current) {
+        return Err(cost_table_full());
+    }
+    Ok(paid)
+}
+
+/// X 费牌 `Costs` 第一条里的资源 id（缺席 ⇒ `None` ⇒ 用默认资源）。
+fn x_cost_resource(card: &CardOnTable<'_>) -> Result<Option<ResourceId>, PlayError> {
+    let content = card.content;
+    let list_id = match card.row.costs() {
+        ABSENT16 | NULL16 => return Ok(None),
+        id => id,
+    };
+    let list = content.term(list_id).ok_or(IrError::Term(list_id))?;
+    if list.op != OP_ARR {
+        return Err(IrError::WrongKind("_arr").into());
+    }
+    let start = list.slot(0).ok_or(IrError::Slot)?;
+    let count = list.slot(1).ok_or(IrError::Slot)?;
+    if count == LIST_ABSENT || count == LIST_NULL || count == 0 {
+        return Ok(None);
+    }
+    let element_id = content.aux(start).ok_or(IrError::List)?;
+    let element = NodeRef::new(content, element_id);
+    match element.field("ResourceId")? {
+        Some(Value::Str(text)) => Ok(Some(ResourceId::new(text)?)),
+        // `Costs` 里没有 `ResourceId` ⇒ 用默认资源（内容是"没写"，不是"配错了"）。
+        Some(Value::Absent | Value::Null) | None => Ok(None),
+        Some(_) => Err(IrError::WrongKind("F_STR").into()),
+    }
 }
 
 /// 卡实例上的命名标记计数器读数（缺席 ⇒ 0，`Cards/CardZones.cs` 的 `GetMarkCounter`）。
@@ -2749,11 +2823,8 @@ mod tests {
                 "standard.play_condition_validator",
                 "standard.one_attack_per_turn_validator",
                 "standard.unplayable_validator",
-                // §144：本内核自己的第六条，排在最后（`1000`）—— 它是"造不出来的机制"，
-                // 不该抢在一条真规则前面说话。
-                "kernel.x_cost_validator",
             ],
-            "§2.2 的五条执行序（150 档 'd' < 'p'，200 档 'o' < 'u'）+ §144 的第六条"
+            "§2.2 的五条执行序（150 档 'd' < 'p'，200 档 'o' < 'u'）"
         );
 
         // §3.3：六个费用修饰器的执行序同理。
@@ -2845,6 +2916,7 @@ mod tests {
             is_action: false,
             is_attack: card_has_tag(content, row, ATTACK_TAG).expect("Tags 可解"),
             is_skill: card_has_tag(content, row, SKILL_TAG).expect("Tags 可解"),
+            is_x_cost: card_has_tag(content, row, X_COST_TAG).expect("Tags 可解"),
         }
     }
 
