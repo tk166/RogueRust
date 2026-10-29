@@ -31,9 +31,9 @@ regen / rage / flame_barrier / combust / spore_cloud / enrage / time_warp / phas
 
 | 状态 | 语义 | 需要 |
 |---|---|---|
-| **Intangible** | 本回合受到的伤害变 1 | 内核（伤害管线的最后一道）|
-| **Buffer** | 免疫下一次伤害 | 内核（同一条管线）|
-| **Plated Armor** | 回合结束 +N 格挡，受击时 -1 | 内核（钩子已有，缺"受击减层"）|
+| **Intangible** | 受到的伤害与掉血降到 1 | **有**（§149：格挡吸收**之前**压请求；载体 `apparition` 卡）|
+| **Buffer** | 免疫下一次掉血 | **有**（§149：格挡吸收**之后**判 `health_lost > 0`；全挡住不消耗）|
+| **Plated Armor** | 回合结束 +N 格挡，受未格挡伤害时 -1 | **有**（§149：格挡半边与 Metallicize 同一段代码，掉层在管线；载体遗物 Thread and Needle）|
 | **Barricade / Blur** | 格挡不被清 | 内核（回合开始的清格挡要能跳过）|
 | **Entangled** | 本回合不能打攻击牌 | 内核（`can_play_card` 的判据 + 回合末清）|
 | **Slow** | 每打一张牌它受的伤害 +10% | 内核（伤害管线的修饰器）|
@@ -94,4 +94,4 @@ regen / rage / flame_barrier / combust / spore_cloud / enrage / time_warp / phas
 2. ~~**事件解释器**~~（**第一层已完成**，§143：删卡/升级/转化/诅咒/遗物）
 3. ~~**卡牌关键词**~~（**已完成**，§144：Retain/Ethereal/Innate；X 费仍是"要新造机制"）
 4. ~~**遗物池**~~（**已完成**，§145：1 → 5 件，三个派发点；`relic:` 事件现在有东西可给）
-5. **状态**：~~Constricted~~（**已完成**，§147）→ `Intangible` / `Buffer` / `Plated Armor`（伤害管线，内核活）
+5. ~~**状态（伤害管线那一批）**~~（**已完成**，§149：Intangible / Buffer / Plated Armor）→ 剩下 `Barricade` / `Blur` / `Entangled` / `Slow`

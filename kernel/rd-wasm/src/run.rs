@@ -2010,14 +2010,14 @@ fn apply_combat_bonus(bonus: rd_run::state::CombatBonus) -> Result<(), String> {
             ));
         }
     }
-    if bonus.strength != 0 {
-        let definition = rd_core::state::StatusDefinitionId::new("standard.strength")
-            .map_err(|_| "`standard.strength` 不是合法的状态 id".to_string())?;
+    for entry in bonus.statuses.iter().take(bonus.status_count).flatten() {
+        let definition = rd_core::state::StatusDefinitionId::new(entry.id)
+            .map_err(|_| std::format!("`{}` 不是合法的状态 id", entry.id))?;
         let item = rd_core::state::EffectItem {
             request: rd_core::state::EffectRequest::ApplyStatus {
                 target: Some(hero),
                 definition,
-                stacks: bonus.strength,
+                stacks: entry.stacks,
                 duration: 0,
                 charges: 0,
                 source: None,
@@ -2028,7 +2028,7 @@ fn apply_combat_bonus(bonus: rd_run::state::CombatBonus) -> Result<(), String> {
         };
         let image = content();
         rd_core::exec::resolve_effect(&mut session.state, &item, Some(image))
-            .map_err(|e| std::format!("遗物加力量失败：{e:?}"))?;
+            .map_err(|e| std::format!("遗物加状态 `{}` 失败：{e:?}", entry.id))?;
     }
     session.reobserve_after_external_change();
     Ok(())
@@ -2586,7 +2586,7 @@ mod tests {
             session.state.push_relic("vajra").expect("vajra");
             // 开局那件 Burning Blood 也还在 —— 顺便钉住"三件遗物各管各的钩子"。
             assert_eq!(session.state.combat_bonus().block, 10);
-            assert_eq!(session.state.combat_bonus().strength, 1);
+            assert_eq!(session.state.combat_bonus().status_count, 1, "Vajra grants one status");
         }
         assert_eq!(rd_run_step(0), 0, "floor 1");
         assert_eq!(rd_run_begin_node(), 0);
@@ -3296,12 +3296,17 @@ mod tests {
                 }
                 assert!(fire_slot >= 0, "the belt must hold the fire potion we hunted for");
                 let enemy_before = first_enemy_hp();
+
                 let fire_outcome = rd_env_use_potion(fire_slot, -1);
                 assert_eq!(fire_outcome, 0, "fire potion: {:?}", run_error_text());
-                assert_eq!(
-                    first_enemy_hp(),
-                    enemy_before - 20,
-                    "20 damage through the pipeline"
+                // ⚠️ 不能钉"恰好 20"：这趟行走会顺路捡到遗物/状态（Vajra 的 1 点力量、易伤），
+                // 而它们**本来就该**改这个数（§145/§149）。钉的是"药水真的走了伤害管线、打了
+                // 至少 20 点"，而 `== enemy_before - 20` 会让每次内容变动都可能翻红 ——
+                // 它已经因为卡池多两张（§149）而红过一次。
+                let dropped = enemy_before - first_enemy_hp();
+                assert!(
+                    dropped >= 20,
+                    "20 damage through the pipeline, got {dropped}"
                 );
                 assert_eq!(rd_run_potion_count(), after_energy - 1);
             }

@@ -1164,7 +1164,11 @@ impl<'a> Host<'a> {
     /// 别的效果（例如一条"解毒"触发器把层数减掉，`:476-479` 的注释是在说这个）。今天没有
     /// 任何 DamageTaken/StatusChanged 触发器接上（21 个未接事件之一），所以两者观察等价；
     /// 而**层数**读的是生效时点的值（见 B 段的实现），这一半与参考一致。
-    /// **Metallicize**: Block at the end of the turn (`standard.metallicize`, wiki: Lagavulin 8).
+    /// **Metallicize / Plated Armor**: Block at the end of the turn (§149)。
+    ///
+    /// 两条状态的规则**逐字相同**（"回合结束加等同于层数的格挡"），所以是同一段代码 + 两个 id，
+    /// 而不是两份拷贝。Plated Armor 的另一半（挨了没挡住的伤害掉 1 层）住在伤害管线里
+    /// （`exec::resolve_damage_of_kind`）—— 那里才有"有没有打穿"这个事实。
     ///
     /// A status implemented as a **host step**, the same shape [`Self::try_damage_over_time`] uses for
     /// poison -- this kernel has no trigger interpreter (`port-plan.md` §111/§112), so a status with a
@@ -1183,7 +1187,10 @@ impl<'a> Host<'a> {
                 if !is_active(instance) || instance.stacks <= 0 {
                     continue;
                 }
-                if instance.definition_id.as_str() == "standard.metallicize" {
+                if matches!(
+                    instance.definition_id.as_str(),
+                    "standard.metallicize" | "standard.plated_armor"
+                ) {
                     total += instance.stacks as i32;
                 }
             }
@@ -6250,13 +6257,41 @@ mod tests {
             "`IgnoresBlock: true` ⇒ 格挡一点没动（这不算伤害）"
         );
 
-        // 成对：没有这条状态就一点都不掉（否则上面那句也可能是"每回合掉 3"）。
+    /// 成对：没有这条状态就一点都不掉（否则上面那句也可能是"每回合掉 3"）。
         let mut host = Host::new(&content);
         let mut plain = duel(70);
         turn::start_current_turn(&mut plain, &config(), &mut host).unwrap();
         turn::end_current_turn(&mut plain, &config(), &mut host).unwrap();
         assert_eq!(health(&plain, "hero"), 70);
     }
+    /// §149：`Plated Armor` 的**另一半** —— 回合结束给等同于层数的格挡，并与 Metallicize 相加。
+    ///
+    /// 两条状态的规则是同一句话，所以它们是同一段代码（`host::grant_end_of_turn_block`）；
+    /// 这条测试钉住"两件一起是相加"，因为把第二个 id 漏掉时差别只有几格挡，肉眼看不出来。
+    #[test]
+    fn plated_armor_and_metallicize_both_pay_block_at_turn_end() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(70);
+        give(&mut state, "hero", status("st_pa", "standard.plated_armor", 4));
+        give(&mut state, "hero", status("st_met", "standard.metallicize", 3));
+
+        turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+        turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+        // 回合开始时格挡被清空过，所以这 7 点都是这一回合挣的。
+        assert_eq!(
+            block_of(&state, "hero"),
+            7,
+            "4 层 Plated Armor + 3 层 Metallicize = 7 格挡"
+        );
+    }
+
+
 
     #[test]
     fn panic_takes_cards_away_from_the_turn_start_draw() {

@@ -9437,3 +9437,142 @@ rd_env_status_stacks(whom, i)
 聚合验收 **17/17**；单测 728 → **731**（rd-core 621 → **623** / rd-run 70 / rd-wasm 35 → **38**）。
 内容：**18 张卡 / 18 条状态 / 53 条敌人动作 / 26 个敌人 / 18 个遭遇**；
 镜像 full **29,664 B** / core **24,724 B**。
+
+---
+
+## 148. 行动顺序：机制早就在，缺的是有人用它 + 有人守它
+
+用户："接下来做行动顺序和伤害管线吧。"
+
+### 148.1 先说清楚：**这不是新机制**
+
+`intent::select_action` 从 §4 起就是三段式：
+
+1. **规则表**（`ENCT` 里那条敌人自带的 `IntentRules`）：每条 `(Condition, Action, Priority)`，
+   按 `Priority` 降序问，第一条命中的条件说话；
+2. 全不命中 ⇒ 落到 `Actions` 列表的**循环**（`(round - 1) % n`）；
+3. 规则指向的动作**不必**在 `Actions` 里 —— 这条正是"首回合专用招式"的表达方式。
+
+条件原语 **10 个**（`intent.round` / `healthPercent` / `selfHasStatus` / `opponentHasStatus` /
+`selfHasCounter` / `selfResource` / `opponentCardsPlayed` / `allOf` / `anyOf` / `not`），
+本内容**已经在用**：Cultist 用 `selfHasCounter(ritual_owner_turns >= 1) → dark_strike`，
+Slime Boss 用 `allOf(healthPercent <= 50, round >= 2) → slam`。
+
+### 148.2 所以这一节做的是三件"没人做"的事
+
+**① 把 Spire Growth 的顺序写对。** §147 把它写成三格循环 `[strategic, aggressive, aggressive_heavy]`
+⇒ Strategic 会**每三回合**来一次。StS 里它只出现一次。现在是：
+
+```
+Actions:     [spire_growth.aggressive, spire_growth.aggressive_heavy]
+IntentRules: [{ Condition: intent.round{Op: Equal, Round: 1},
+                Action: spire_growth.strategic, Priority: 10 }]
+```
+
+⇒ 第 1 回合 Strategic，之后 `(round-1) % 2` 轮换两个 Aggressive。
+（wiki 里两个 Aggressive 是**随机**二选一；参考实现没有 `intent.random`，所以这里是确定的轮换，
+如实记下。）
+
+**② 给规则本身加一道内容门（`[2b] enemy intent rules`）。** 三条检查：
+
+* `Condition.kind` 必须在那 10 个里；带 `Op` 的必须在那 6 个运算符里；
+* `Action` 必须是真实存在的 `EACT` 行（可以不在 `Actions` 里，见 148.1）；
+* `Priority` 必须是整数，且**名册与遭遇内联记录里的规则必须一致**。
+
+为什么值得单开一道：规则**静默不命中**时会落回循环 —— 看起来是一个"节奏略有不同"的敌人，
+而不是一个坏掉的敌人。那种错最难发现，也最容易在内容里写出来（把 `Round: 1` 写成 `Round: 0`、
+把 `Action` 里少打一个字母）。
+
+**③ 一条会红的测试。** `a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it`
+断言**四个回合**（1 规则、2/3 循环、4 回到循环的 slot 1）：只看第 1 回合的话，"规则没命中"与
+"根本没有规则"是同一种观察。
+
+⚠️ 测试里踩到一个**语义细节**，值得写下来：`intent.round` 条件读的是**状态里的
+`current_round`**，而 `select_action` 的 `round` 实参只用来算循环下标。真实战斗里两者一起前进，
+测试里如果只传实参、不推进状态，状态会停在开局那一轮 ⇒ 规则**每一回合**都命中
+（第一版就这么错的，报出来的是"第 2 回合还在 Strategic"）。
+
+---
+
+## 149. 伤害管线：Intangible / Buffer / Plated Armor
+
+三条状态都得**住进伤害管线**，因为它们的语义各是一个不同的**位置**：
+
+| 状态 | wiki | 位置 | 为什么是这个位置 |
+|---|---|---|---|
+| **Intangible** | "Reduce ALL damage and HP loss you receive to 1" | **格挡吸收之前**（压 `amount`）| 压的是"进来的伤害"本身，所以格挡最多只挡那 1 点 |
+| **Buffer** | "Prevent the next time you would lose HP" | **格挡吸收之后**，判据是 `health_lost > 0` | 被格挡吃干净的一下**不消耗** Buffer（StS 的行为）|
+| **Plated Armor** | "回合结束获得等同于层数的格挡；受到**未被格挡**的伤害时失去 1 层" | 两半：格挡在 `host::grant_end_of_turn_block`（与 Metallicize **同一段代码**），掉层在伤害管线 | 只有管线知道"这一下打穿了没有" |
+
+三处都在 `exec::resolve_damage_of_kind` 里，也就是**伤害的唯一出口** —— 卡、敌人动作、DoT、
+药水、Constricted 全部经过它，所以没有第二处需要改。
+
+### 149.1 `Intangible` 顺带把 Constricted 也管住了
+
+Constricted 是 `IgnoresBlock` 的 `dealDamage`，而 Intangible 压的是 `amount` —— 两条规则不打架：
+**3 层 Constricted 踩在 Intangible 上只掉 1**。这正是 wiki 那句 "ALL damage **and HP loss**"。
+
+### 149.2 遗物：`StartCombatStatus` 取代了 `StartCombatStrength`
+
+Plated Armor 在 StS 里从**遗物 Thread and Needle** 来。所以 `RelicEffect` 长了一个通用口：
+
+```rust
+StartCombatStatus(&'static str, i32)   // vajra ⇒ (strength, 1); thread_and_needle ⇒ (plated_armor, 4)
+```
+
+并把原来的 `StartCombatStrength(i32)` **删掉**、`CombatBonus.strength` 换成
+`statuses: [Option<CombatStatus>; 4]` + `status_count`：
+
+* 每条遗物一个字段（`strength`）是"运行层认识每一条状态"的开始，而状态是**内容**，会一直长；
+* 两条遗物给**同一条**状态必须**合并**（Vajra + 再一件 1 力量 = 2 层），不是覆盖；
+* 列表满（> 4 条）时 `push_status` 返回 `false` —— 这是响亮失败，不许静默丢一件遗物的效果。
+
+### 149.3 载体（内容）
+
+| 载体 | 是什么 |
+|---|---|
+| `apparition` 卡 | 真卡（无色）："Gain 1 Intangible. Exhaust."，1 费，落消耗堆 |
+| `buffer` 卡 | StS 的 Buffer 是 Defect 的能力牌；本内容做成同效果的技能牌 |
+| `thread_and_needle` 遗物 | 真遗物："Start each combat with 4 Plated Armor" |
+
+三条状态本身**没有 trigger**：规则在内核里（与 `standard.metallicize` 同型），
+所以 `change behaviour` 名单里加了它们三个 —— 不然那条"内容声明了状态就必须有规则或声明惰性"
+的诚实性测试会红。
+
+### 149.4 判据
+
+* `the_damage_pipeline_honours_intangible_buffer_and_plated_armor`（rd-core）：
+  Intangible 把 30 压成 1（格挡只掉 1 点，成对：没有它 30 点直接打穿并打死）；
+  Buffer 挡下第一下、用完即删、第二下照打、**被格挡吃干净的一下不消耗**；
+  Plated Armor 挨到没挡住的伤掉 1 层、全挡住不掉层。
+* `plated_armor_and_metallicize_both_pay_block_at_turn_end`（rd-core，sts 镜像）：
+  4 + 3 = 7 格挡 —— 两个 id 共用一段代码，漏掉一个时差别只有几格挡，肉眼看不出来。
+* `a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it`（rd-core）。
+* 内容门 `[2b]`（规则可执行）+ `[6d]`（关键字）+ `[6e]`（遗物都必须实现）。
+* rd-run：`the_relic_pool_fires_at_the_three_hooks_it_has` 现在断言**状态列表**（含合并）。
+
+**反向控制**：把 Intangible 那一行 `if` 关掉，管线测试当场红（`left: 0, right: 20` ——
+30 点伤害把 20 血的敌人直接打死），然后才恢复。
+
+### 149.5 顺手修了一条**脆弱**的旧断言
+
+`a_potion_can_be_used_in_a_fight` 原来钉"火焰药水恰好 20 点"。这一节给内容加了两张卡
+⇒ 卡池变大 ⇒ 整条 walk 的 RNG 全部平移 ⇒ 那条 walk 恰好捡到了加伤害的东西，测试翻红。
+**它不是被功能弄坏的，是被"内容一变它就换一条路"弄坏的**（"恰好 N 点"在一条随机行走上
+本来就脆）。改成 `>= 20` 并写明理由。
+
+### 149.6 还没做的
+
+* **`Barricade`**（格挡不清空）/ **`Blur`**（下一回合保留格挡）：走的是"格挡清空"那条边，
+  与伤害管线相邻但不是它；`host::block_is_retained` 的钩子已在那儿（今天恒 false）。
+* **`Entangled`**（不能出攻击牌）与 **`Slow`**（本回合每出一张牌 +10% 受伤）：前者是受理
+  校验、后者是伤害修饰器，各自的钩子都不在管线里。
+* `Plated Armor` 的**掉层事件**没有独立的 `StatusStacksChanged` 之外的信号 —— 页面靠观察向量
+  相减看到它，够用但不如 §142 的 beats 精确（beats 里已经有 `StatusChanged`，但没有专门为
+  "被甲片挡了一下"记账）。
+
+### 149.7 数字
+
+聚合验收 **17/17**；单测 731 → **734**（rd-core 623 → **626** / rd-run 70 / rd-wasm 38）。
+内容：**20 张卡 / 21 条状态 / 53 条敌人动作 / 26 个敌人 / 18 个遭遇 / 6 件遗物**；
+镜像 full **30,588 B** / core **25,312 B**。

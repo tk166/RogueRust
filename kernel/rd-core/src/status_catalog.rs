@@ -684,6 +684,12 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // (§147). Content-side like the rest of this list -- the kernel only has to *run*
             // turn-ended triggers, which it already does.
             | "standard.constricted"
+            // §149: the three that live **inside the damage pipeline** (`exec::resolve_damage_of_kind`).
+            // Intangible caps incoming damage at 1, Buffer eats the next HP loss, Plated Armor loses a
+            // stack on unblocked damage (its block half shares the Metallicize step).
+            | "standard.intangible"
+            | "standard.buffer"
+            | "standard.plated_armor"
     )
 }
 

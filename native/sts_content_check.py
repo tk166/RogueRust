@@ -81,7 +81,7 @@ INV_COUNTS = {
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     "encounters": 18,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
-    "statuses": 18,       # inv:§10 the ones this subset actually needs
+    "statuses": 21,       # inv:§10 the ones this subset actually needs
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -146,6 +146,12 @@ INV_CARDS = {
     # 它的费用是"当前全部能量"，`Cost` 在这里记 0 —— 印刷价格**不参与**结算，内容门下面会查
     # 这一格必须是 0 或缺失。Facts 里的 `("repeat", ("expr", "x.cost"), ...)` 说明"这一条伤害
     # **每 X 一次**"，而不是被展开成 32 条。
+    # §149: cards that hand out the damage-pipeline statuses (they exist so the statuses are
+    # reachable in a run; `buffer` is a Defect power in StS, modelled here as a skill).
+    "apparition": {"Cost": 1, "Tags": ["skill", "intangible"],
+                   "Facts": [("status", "standard.intangible", 1, "source")]},
+    "buffer": {"Cost": 1, "Tags": ["skill", "buffer"],
+               "Facts": [("status", "standard.buffer", 1, "source")]},
     # §147: the upgraded row -- same X mechanics, 8 damage per hit instead of 5.
     "whirlwind+": {"Cost": 0, "Tags": ["attack", "x_cost"],
                    "Facts": [("repeat", ("expr", "x.cost"), "damage", 8, "allEnemies")]},
@@ -177,8 +183,11 @@ INV_MONSTERS = [
     ("spiker", 42, 42, ["spiker.cut", "spiker.spike"]),
     ("orb_walker", 90, 90, ["orb_walker.laser", "orb_walker.claw"]),
     # §147: the `Constricted` carrier (wiki HP 170; Strategic / Aggressive 16 / 22).
+    # §148: the **cycle** is the two Aggressive moves; `Strategic` is a round-1 **rule**, not a
+    # cycle slot (StS opens with it once). That is why it is absent from this list --
+    # `spire_growth.strategic` is still a real `EACT` row, and the gate checks that separately.
     ("spire_growth", 170, 170,
-     ["spire_growth.strategic", "spire_growth.aggressive", "spire_growth.aggressive_heavy"]),
+     ["spire_growth.aggressive", "spire_growth.aggressive_heavy"]),
     ("the_champ", 330, 330,
      ["the_champ.heavy_slash", "the_champ.defensive_stance", "the_champ.execute"]),
     ("fat_gremlin", 13, 17, ["fat_gremlin.smash"]),
@@ -366,6 +375,10 @@ INV_STATUSES = {
     "standard.phase_split": [],
     # Time Eater's mechanic, prepared on an unused monster (port-plan.md §125).
     "standard.time_warp": [],
+    # §149: the three damage-pipeline statuses -- no triggers at all, the kernel owns the rule.
+    "standard.intangible": [],
+    "standard.buffer": [],
+    "standard.plated_armor": [],
     # §147: `TurnEnded` trigger, damage = stacks, **ignores Block** ("lose HP" is not damage).
     "standard.constricted": [],
     "standard.strength": [("DamageDealt", "AddPerStack", 1, 100, "Direct")],
@@ -640,6 +653,67 @@ def check_monsters(doc):
     # equal the number of distinct actions the inventory lists.
     total = sum(len(m[3]) for m in INV_MONSTERS)
     ok("roster numbers", "%d monsters, %d action references" % (len(INV_MONSTERS), total))
+    check_intent_rules(doc)
+
+
+# §148: the intent-rule vocabulary (`intent.rs::ConditionKind`) and its operators.
+INTENT_CONDITIONS = ("intent.healthPercent", "intent.round", "intent.selfHasStatus",
+                     "intent.opponentHasStatus", "intent.selfHasCounter", "intent.selfResource",
+                     "intent.opponentCardsPlayed", "intent.allOf", "intent.anyOf", "intent.not")
+INTENT_OPS = ("Equal", "NotEqual", "Less", "LessOrEqual", "Greater", "GreaterOrEqual")
+
+
+def check_intent_rules(doc):
+    """§148: every `IntentRules` entry must be **executable**.
+
+    The kernel reads a rule as `(Condition, Action, Priority)`; a condition kind it does not know is a
+    loud error at intent time, and an `Action` that is not an `EACT` row is `UnknownAction` — both
+    *after* the player is already in the fight. Worse: a rule that silently never matches falls back
+    to the `Actions` **cycle**, which looks like a working enemy with a slightly different rhythm.
+    So the shape is checked here, where the message can name the enemy.
+
+    An action named by a rule need **not** be in the enemy's `Actions` list: that is exactly how a
+    "turn 1 only" opener is expressed (Spire Growth's `Strategic`).
+    """
+    print("[2b] enemy intent rules (port-plan.md §148)")
+    actions = {a["Id"] for a in doc.get("EnemyActions") or []}
+    checked = 0
+
+    def walk(where, rules):
+        nonlocal checked
+        for index, rule in enumerate(rules or []):
+            label = "%s.IntentRules[%d]" % (where, index)
+            condition = rule.get("Condition") or {}
+            kind = condition.get("kind")
+            if kind not in INTENT_CONDITIONS:
+                fail(label, "condition kind %r is outside the kernel's 10" % (kind,))
+            # Every operator-bearing condition must name a known `Op` — the kernel throws on an
+            # unknown one, so a typo is a mid-fight error rather than a different rhythm.
+            if kind not in ("intent.allOf", "intent.anyOf", "intent.not"):
+                op = (condition.get("value") or {}).get("Op")
+                if op is not None and op not in INTENT_OPS:
+                    fail(label, "Op %r is outside the kernel's 6" % (op,))
+            action = (rule.get("Action") or {}).get("value")
+            if action not in actions:
+                fail(label, "Action %r is not an EACT row" % (action,))
+            if not isinstance(rule.get("Priority"), int):
+                fail(label, "Priority must be an integer, got %r" % (rule.get("Priority"),))
+            checked += 1
+
+    for monster in doc.get("Monsters") or []:
+        walk("Monster." + monster.get("Id", "?"), monster.get("IntentRules"))
+    for encounter in doc.get("Encounters") or []:
+        for enemy in encounter.get("Enemies") or []:
+            # The encounter's inline record is what the kernel reads; the roster copy is
+            # documentation. They must agree, and the gate compares them below.
+            walk("Encounter.%s./%s" % (encounter.get("Id", {}).get("Value"), enemy.get("Id")),
+                 enemy.get("IntentRules"))
+            roster = next((m for m in doc.get("Monsters") or []
+                           if m.get("Id") == enemy.get("Id")), None)
+            if roster is not None and (roster.get("IntentRules") or []) != (enemy.get("IntentRules") or []):
+                fail("Encounter.%s./%s" % (encounter.get("Id", {}).get("Value"), enemy.get("Id")),
+                     "the inline IntentRules differ from the roster's copy")
+    ok("intent rules", "%d rule(s), all conditions/actions/priorities resolvable" % checked)
 
 
 def check_cards_and_actions(doc):
@@ -893,7 +967,7 @@ EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing",
                       "remove_card", "upgrade_card", "transform_card")
 # Mirrors `rd_run::state::RunState::relic_effect`. Kept as a literal list on purpose: this file is
 # the **second opinion** -- if the two disagree, one of them is wrong and the gate says so.
-IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial")
+IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", "thread_and_needle")
 
 
 def check_relics(doc):

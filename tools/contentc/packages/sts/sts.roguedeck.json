@@ -1234,6 +1234,57 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.intangible",
+      "PackageId": "sts",
+      "NameKey": "Intangible",
+      "DescriptionKey": "Reduce ALL damage and HP loss you receive to 1.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "intangible"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.buffer",
+      "PackageId": "sts",
+      "NameKey": "Buffer",
+      "DescriptionKey": "Prevent the next time you would lose HP.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "buffer"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.plated_armor",
+      "PackageId": "sts",
+      "NameKey": "Plated Armor",
+      "DescriptionKey": "At the end of your turn, gain Block equal to its stacks. Loses 1 stack when you take unblocked damage.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "plated_armor"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
     }
   ],
   "Cards": [
@@ -2440,6 +2491,122 @@
               }
             },
             "MaxCount": 32
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "apparition",
+      "PackageId": "sts",
+      "NameKey": "Apparition",
+      "DescriptionKey": "Gain 1 Intangible. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "intangible"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.intangible"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile",
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "buffer",
+      "PackageId": "sts",
+      "NameKey": "Buffer",
+      "DescriptionKey": "Gain 1 Buffer.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "buffer"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.buffer"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
           }
         },
         "MaxNodeDepth": 64,
@@ -6114,9 +6281,6 @@
           "MaxHealth": 170,
           "Actions": [
             {
-              "value": "spire_growth.strategic"
-            },
-            {
               "value": "spire_growth.aggressive"
             },
             {
@@ -6125,7 +6289,21 @@
           ],
           "StartingStatuses": [],
           "Position": 0,
-          "IntentRules": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.round",
+                "value": {
+                  "Op": "Equal",
+                  "Round": 1
+                }
+              },
+              "Action": {
+                "value": "spire_growth.strategic"
+              },
+              "Priority": 10
+            }
+          ],
           "DisplayName": "Spire Growth"
         }
       ],
@@ -6843,9 +7021,6 @@
       "MaxHealth": 170,
       "Actions": [
         {
-          "value": "spire_growth.strategic"
-        },
-        {
           "value": "spire_growth.aggressive"
         },
         {
@@ -6853,7 +7028,21 @@
         }
       ],
       "StartingStatuses": [],
-      "IntentRules": [],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.round",
+            "value": {
+              "Op": "Equal",
+              "Round": 1
+            }
+          },
+          "Action": {
+            "value": "spire_growth.strategic"
+          },
+          "Priority": 10
+        }
+      ],
       "Tier": "Normal",
       "InvRef": "https://slayspiredb.com/sts1/bestiary/spire-growth",
       "AiNote": "§147 第三幕普通怪；Constricted 的载体（wiki: Strategic / Aggressive 16 / 22）。"
@@ -6980,6 +7169,12 @@
     {
       "Id": "blood_vial",
       "DisplayName": "Blood Vial",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "thread_and_needle",
+      "DisplayName": "Thread and Needle",
       "RunPrograms": null,
       "CombatRules": null
     }

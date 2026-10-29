@@ -1228,6 +1228,49 @@ mod tests {
             .unwrap()
     }
 
+    /// §148：`Spire Growth` 的**行动顺序**是"第一回合 Strategic，之后在两个 Aggressive 之间循环"。
+    ///
+    /// 这**不是**新机制：规则表（`IntentRules`）+ 10 条条件原语早就在，`intent.round` 就是
+    /// "首回合"的表达方式。缺的只是有人用它 —— 上一版把 `strategic` 放进 `Actions` 三格循环里，
+    /// 于是它每三回合重复一次，而 StS 里它只出现一次。
+    ///
+    /// 断言的是**三个回合**：1 走规则、2/3 走循环（`(round-1) % 2`），因为"规则没匹配"与
+    /// "规则根本不存在"在只看第 1 回合时是同一种观察。
+    #[test]
+    fn a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let at = slot(&content, "enc_spire_growth", 0);
+        let mut state = arena("spire_growth");
+        let actor = cid("spire_growth");
+
+        // ⚠️ `intent.round` 读的是**状态里的 `current_round`**，不是 `select_action` 的
+        // `round` 实参（那是循环用的 1-based 回合）。真实战斗里两者一起前进，测试里就得手动
+        // 让状态也前进 —— 否则状态停在开局那一轮，规则会**每一回合**都命中（第一版就踩了这个，
+        // 报出来的是"第 2 回合还在 Strategic"）。
+        let pick = |state: &mut CombatState, round: i32| {
+            state.current_round = round;
+            select_action(state, &content, at, &actor, round)
+                .expect("intent")
+                .expect("an action")
+                .action_id
+        };
+
+        assert_eq!(pick(&mut state, 1), "spire_growth.strategic", "round 1 opens with Strategic");
+        assert_eq!(
+            pick(&mut state, 2),
+            "spire_growth.aggressive_heavy",
+            "the cycle is `(round-1) % 2` ⇒ round 2 is slot 1"
+        );
+        assert_eq!(pick(&mut state, 3), "spire_growth.aggressive", "round 3 is slot 0");
+        // 成对：Strategic 只该出现一次 —— 第 4 回合又回到循环的 slot 1。
+        assert_eq!(pick(&mut state, 4), "spire_growth.aggressive_heavy");
+    }
+
     // ---------------------------------------------------------------- 补丁工具
 
     /// term 第 `slot` 个槽在**整个镜像缓冲区**里的绝对字节偏移。

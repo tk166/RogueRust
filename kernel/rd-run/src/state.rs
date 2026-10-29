@@ -58,20 +58,53 @@ pub enum RelicEffect {
     HealUp(i32),
     /// Start every fight with this much Block. (`anchor`)
     StartCombatBlock(i32),
-    /// Start every fight with this many stacks of Strength. (`vajra`)
-    StartCombatStrength(i32),
+    /// Start every fight with `stacks` of status `id`. (`vajra` = 1 Strength, `thread_and_needle`
+    /// = 4 Plated Armor.)
+    ///
+    /// One generic arm instead of one per status: the run layer does not need to know what
+    /// `standard.plated_armor` *means* -- the kernel does. A per-status arm here would be a second
+    /// list to keep in step with the content.
+    StartCombatStatus(&'static str, i32),
+}
+
+/// `CombatBonus` 最多能带几种"开战时给的状态"（遗物数量远小于它）。
+pub const MAX_COMBAT_STATUSES: usize = 4;
+
+/// 开战时挂到英雄身上的一条状态。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct CombatStatus {
+    /// 状态定义 id（内容的 `STAT` 行）。
+    pub id: &'static str,
+    /// 层数。
+    pub stacks: i32,
 }
 
 /// What the relics do **at the start of a fight**.
 ///
 /// A struct and not a list of effects, because the caller (the fight builder) has to apply them in
 /// one place: "which relics fire" is the run's answer, "how a status is applied" is the kernel's.
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct CombatBonus {
     /// Block the hero starts the fight with.
     pub block: i32,
-    /// Strength stacks the hero starts the fight with.
-    pub strength: i32,
+    /// Statuses the hero starts the fight with (Strength from Vajra, Plated Armor from Thread and
+    /// Needle, ...).
+    ///
+    /// A list rather than named fields: the run layer must not grow a field per status it happens
+    /// to know about — `standard.vajra`-style relics are content, and content grows.
+    pub statuses: [Option<CombatStatus>; MAX_COMBAT_STATUSES],
+    /// How many of [`Self::statuses`] are set.
+    pub status_count: usize,
+}
+
+impl Default for CombatBonus {
+    fn default() -> Self {
+        Self {
+            block: 0,
+            statuses: [None; MAX_COMBAT_STATUSES],
+            status_count: 0,
+        }
+    }
 }
 
 impl CombatBonus {
@@ -79,7 +112,18 @@ impl CombatBonus {
     /// one the caller can skip every write for.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.block == 0 && self.strength == 0
+        self.block == 0 && self.status_count == 0
+    }
+
+    /// Add `stacks` of status `id`. `false` = the list is full (a **loud** failure: the caller must
+    /// not silently drop a relic's effect).
+    pub fn push_status(&mut self, id: &'static str, stacks: i32) -> bool {
+        if self.status_count >= MAX_COMBAT_STATUSES {
+            return false;
+        }
+        self.statuses[self.status_count] = Some(CombatStatus { id, stacks });
+        self.status_count += 1;
+        true
     }
 }
 
@@ -871,7 +915,7 @@ impl RunState {
             RelicEffect::HealUp(amount) => self.heal_after_combat(amount),
             RelicEffect::EndOfCombatHeal(_)
             | RelicEffect::StartCombatBlock(_)
-            | RelicEffect::StartCombatStrength(_) => {}
+            | RelicEffect::StartCombatStatus(_, _) => {}
         }
         self.relics[slot] = id;
         self.relics_len += 1;
@@ -937,7 +981,7 @@ impl RunState {
                     RelicEffect::MaxHealthUp(_)
                     | RelicEffect::HealUp(_)
                     | RelicEffect::StartCombatBlock(_)
-                    | RelicEffect::StartCombatStrength(_),
+                    | RelicEffect::StartCombatStatus(_, _),
                 ) => {}
                 None => {
                     return Err(RunError::UnsupportedRelic {
@@ -966,7 +1010,10 @@ impl RunState {
             "pear" => Some(RelicEffect::MaxHealthUp(10)),
             "blood_vial" => Some(RelicEffect::HealUp(2)),
             "anchor" => Some(RelicEffect::StartCombatBlock(10)),
-            "vajra" => Some(RelicEffect::StartCombatStrength(1)),
+            "vajra" => Some(RelicEffect::StartCombatStatus("standard.strength", 1)),
+            // `inv` has no line for this one; the wiki's Thread and Needle is "start each combat
+            // with 4 Plated Armor", and Plated Armor itself landed in §149.
+            "thread_and_needle" => Some(RelicEffect::StartCombatStatus("standard.plated_armor", 4)),
             _ => None,
         }
     }
@@ -987,7 +1034,23 @@ impl RunState {
         for slot in 0..self.relics_len as usize {
             match Self::relic_effect(self.relics[slot].as_str()) {
                 Some(RelicEffect::StartCombatBlock(amount)) => bonus.block += amount,
-                Some(RelicEffect::StartCombatStrength(amount)) => bonus.strength += amount,
+                Some(RelicEffect::StartCombatStatus(id, stacks)) => {
+                    // Two relics granting the same status must **merge**, not overwrite: the same
+                    // rule the kernel uses when a status is applied twice.
+                    let mut merged = false;
+                    for entry in bonus.statuses.iter_mut().take(bonus.status_count) {
+                        if let Some(existing) = entry {
+                            if existing.id == id {
+                                existing.stacks += stacks;
+                                merged = true;
+                                break;
+                            }
+                        }
+                    }
+                    if !merged {
+                        let _ = bonus.push_status(id, stacks);
+                    }
+                }
                 Some(
                     RelicEffect::EndOfCombatHeal(_)
                     | RelicEffect::MaxHealthUp(_)
@@ -2407,16 +2470,41 @@ mod tests {
         let mut run = ironclad();
         assert!(run.combat_bonus().is_empty(), "没有遗物就没有加成");
         run.push_relic("anchor").expect("anchor");
-        assert_eq!(run.combat_bonus(), CombatBonus { block: 10, strength: 0 });
+        let block_only = run.combat_bonus();
+        assert_eq!(block_only.block, 10);
+        assert_eq!(block_only.status_count, 0);
         run.push_relic("vajra").expect("vajra");
+        let both = run.combat_bonus();
+        assert_eq!(both.block, 10, "两件遗物的加成必须相加");
+        assert_eq!(both.status_count, 1);
         assert_eq!(
-            run.combat_bonus(),
-            CombatBonus {
-                block: 10,
-                strength: 1
-            },
-            "两件遗物的加成必须相加"
+            both.statuses[0],
+            Some(CombatStatus {
+                id: "standard.strength",
+                stacks: 1
+            })
         );
+
+        // §149：`Thread and Needle` 是同一个通用口 —— 4 层 Plated Armor。
+        let mut run = ironclad();
+        run.push_relic("thread_and_needle").expect("thread and needle");
+        let bonus = run.combat_bonus();
+        assert_eq!(
+            bonus.statuses[0],
+            Some(CombatStatus {
+                id: "standard.plated_armor",
+                stacks: 4
+            }),
+            "开局挂 4 层 Plated Armor"
+        );
+
+        // 两件给**同一条**状态的遗物必须合并（不是覆盖）：Vajra + 再一件 1 力量。
+        let mut run = ironclad();
+        run.push_relic("vajra").expect("vajra");
+        run.push_relic("vajra").expect("vajra again");
+        let merged = run.combat_bonus();
+        assert_eq!(merged.status_count, 1, "同名状态只有一条");
+        assert_eq!(merged.statuses[0].map(|s| s.stacks), Some(2));
 
         // 结束战斗时：只有 Burning Blood 在这条钩子上，其余四件**什么都不做**（不是"也回血"）。
         let mut run = ironclad();

@@ -414,6 +414,64 @@ impl<'a> ExecContext<'a> {
 /// 也是 `GainBlockEffectHandler` 唯一写入的池（`DefensivePoolEffects.cs:44-72`）。
 const BLOCK_POOL_ID: &str = "standard.block";
 
+/// 三条**伤害管线里的状态**（§149）。id 是内核侧的约定（与 `standard.metallicize` 同型）：
+/// 内容声明这一行，内核在这一行上动手。
+///
+/// * `standard.intangible` —— 进来的伤害与掉血压到 **1**；
+/// * `standard.buffer` —— 挡住**下一次**掉血（消耗 1 层）；
+/// * `standard.plated_armor` —— 挨到"没被挡住的伤害"时掉 1 层（另一半在 `host`，回合结束给格挡）。
+const INTANGIBLE_STATUS: &str = "standard.intangible";
+const BUFFER_STATUS: &str = "standard.buffer";
+const PLATED_ARMOR_STATUS: &str = "standard.plated_armor";
+
+/// 给 `definition` 减 **1 层**；减到 0 就把实例删掉。返回是否真的减了（没有这条实例 ⇒ `false`）。
+///
+/// "删掉"和"留一条 0 层实例"仍然不是等价物（理由同 `remove_status_at`：0 层实例会出现在
+/// `statuses()`、快照与哈希的 `s=` 行里，还占容量）。
+fn consume_one_status_stack(
+    state: &mut CombatState,
+    target: &CombatantId,
+    definition: &str,
+) -> Result<bool, ExecError> {
+    let Some(combatant) = state.combatant(target) else {
+        return Ok(false);
+    };
+    if !carries_status(state, target, definition) {
+        return Ok(false);
+    }
+    let position = combatant
+        .statuses()
+        .iter()
+        .position(|status| status.definition_id.as_str() == definition && status.stacks > 0);
+    let Some(index) = position else {
+        return Ok(false);
+    };
+    let combatant = state
+        .combatant_mut(target)
+        .ok_or(ExecError::MissingCombatant)?;
+    let Some(instance) = combatant.statuses_mut().get_mut(index) else {
+        return Err(ExecError::Modifier);
+    };
+    instance.stacks -= 1;
+    if instance.stacks <= 0 {
+        combatant.remove_status(index);
+    }
+    Ok(true)
+}
+
+/// 这个战斗员身上是否戴着 `definition`（层数 > 0 的**第一条**实例就够）。
+fn carries_status(state: &CombatState, id: &CombatantId, definition: &str) -> bool {
+    state
+        .combatant(id)
+        .map(|combatant| {
+            combatant
+                .statuses()
+                .iter()
+                .any(|status| status.definition_id.as_str() == definition && status.stacks > 0)
+        })
+        .unwrap_or(false)
+}
+
 /// `ForEachTargetEffectNode.DefaultMaxIterations = 32`（`EffectProgramNodes.cs:249`）。
 ///
 /// 镜像实测 6 条 `node.forEachTarget` 的 `MaxIterations` **全是 32**（即序列化后的默认值），
@@ -1076,6 +1134,18 @@ pub fn resolve_damage_of_kind(
         }
     }
 
+    // ── S3b：**`Intangible`**（§149）—— "把所有伤害与掉血降到 1"。
+    //
+    // 位置是**防御池吸收之前**：StS 里 Intangible 压的是"进来的伤害"本身，所以格挡最多只挡到那
+    // 1 点。放在吸收之后会让"30 点伤害 + 10 格挡"变成 0 掉血，那不是 Intangible。
+    //
+    // ⚠️ 它也压"掉血"类效果（Constricted 就是 `IgnoresBlock` 的 dealDamage）—— 这里压的是
+    // `amount`，而 `ignores_block` 只是跳过 S4，两条规则不打架：Constricted 3 层踩在
+    // Intangible 上照样只掉 1。
+    if carries_status(ctx.state, target, INTANGIBLE_STATUS) {
+        amount = amount.min(1);
+    }
+
     // ── S4：防御池吸收（`DamageEffects.cs:80-101`）。
     //
     // 参考：`foreach (var poolDef in registry.GetDefensivePoolsInAbsorbOrder())`，而那张表的顺序是
@@ -1118,12 +1188,33 @@ pub fn resolve_damage_of_kind(
 
     // ── S5/S7：生命损失（`:103-104,138-141`）。
     let remaining = amount.saturating_sub(blocked);
-    let health_after = if remaining >= health_before {
+    let mut health_after = if remaining >= health_before {
         0
     } else {
         health_before - remaining
     };
-    let health_lost = (health_before - health_after).max(0);
+    let mut health_lost = (health_before - health_after).max(0);
+
+    // ── S6b：**`Buffer`**（§149）—— "挡下下一次掉血"。
+    //
+    // 判据是"**本来要掉血**"（`health_lost > 0`），所以**被格挡吃干净的那些不消耗 Buffer** ——
+    // 这正是 StS 的行为，也是这条规则唯一值得写两行注释的地方：把判定放在 `amount` 上会变成
+    // "每挨一下就消耗一层"，玩家会发现盾还在但 Buffer 没了。
+    if health_lost > 0 && carries_status(ctx.state, target, BUFFER_STATUS) {
+        if consume_one_status_stack(ctx.state, target, BUFFER_STATUS)? {
+            health_after = health_before;
+            health_lost = 0;
+        }
+    }
+
+    // ── S6c：**`Plated Armor`**（§149）—— 挨到"没被挡住的伤害"就掉 1 层。
+    //
+    // 它的另一半（回合结束给格挡）住在 `host::grant_end_of_turn_block`：那是回合边界的事，
+    // 这里只有"这一下打穿了没有"这个事实。⚠️ 用**掉血之后**的 `health_lost` 判，所以被格挡
+    // 吃干净的一下不会掉层（wiki：unblocked damage）。
+    if health_lost > 0 {
+        let _ = consume_one_status_stack(ctx.state, target, PLATED_ARMOR_STATUS)?;
+    }
 
     let combatant = ctx
         .state
@@ -8628,6 +8719,77 @@ mod tests {
         // 逃跑的是第 3 个战斗员（存储序 [hero, enemy_a, enemy_b, minion#1]）。
         assert_eq!(state.beats()[2].target, 3);
         assert_eq!(state.beats()[1].target, 2, "倒下的是 enemy_b");
+    }
+
+    /// §149：三条**伤害管线**的状态。断言的是管线里的三个位置，各一条：
+    /// Intangible 在**格挡之前**（压请求），Buffer 在**格挡之后**（只挡真的掉血），
+    /// Plated Armor 在**掉血之后**（只认没挡住的伤）。
+    #[test]
+    fn the_damage_pipeline_honours_intangible_buffer_and_plated_armor() {
+        // ---- Intangible: 30 点进来只剩 1 点，而且格挡最多挡那 1 点 ----
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("st_int", "standard.intangible", 1));
+        give_block(&mut state, "enemy_a", 10);
+        deal(&mut state, "enemy_a", 30, false);
+        assert_eq!(
+            health(&state, "enemy_a"),
+            20,
+            "Intangible 把 30 压成 1，而 1 点被格挡吃干净 ⇒ 一点血都不掉"
+        );
+        assert_eq!(
+            block_of(&state, "enemy_a"),
+            9,
+            "格挡只吸收那 1 点（10 → 9），不是被 30 点吃掉"
+        );
+        // 成对：没有 Intangible 时同样的 30 点会打穿 10 点格挡、掉 20 血（= 直接倒下）。
+        let mut plain = arena();
+        give_block(&mut plain, "enemy_a", 10);
+        deal(&mut plain, "enemy_a", 30, false);
+        assert_eq!(health(&plain, "enemy_a"), 0, "没有 Intangible 就吃满 20 点");
+
+        // ---- Buffer: 挡下**下一次**掉血，并消耗 1 层；第二下照打 ----
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("st_buf", "standard.buffer", 1));
+        deal(&mut state, "enemy_a", 5, false);
+        assert_eq!(health(&state, "enemy_a"), 20, "第一下被 Buffer 挡住");
+        assert_eq!(
+            stacks_of(&state, "enemy_a", "standard.buffer"),
+            0,
+            "Buffer 用完了（0 层实例被删）"
+        );
+        deal(&mut state, "enemy_a", 5, false);
+        assert_eq!(health(&state, "enemy_a"), 15, "第二下照打");
+
+        // 被格挡吃干净的一下**不**消耗 Buffer（判定在格挡之后）。
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("st_buf2", "standard.buffer", 1));
+        give_block(&mut state, "enemy_a", 10);
+        deal(&mut state, "enemy_a", 5, false);
+        assert_eq!(health(&state, "enemy_a"), 20);
+        assert_eq!(
+            stacks_of(&state, "enemy_a", "standard.buffer"),
+            1,
+            "全被挡住 ⇒ Buffer 不该消耗"
+        );
+
+        // ---- Plated Armor: 挨到没挡住的伤 ⇒ 掉 1 层；全挡住 ⇒ 不掉 ----
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("st_pa", "standard.plated_armor", 4));
+        deal(&mut state, "enemy_a", 3, false);
+        assert_eq!(
+            stacks_of(&state, "enemy_a", "standard.plated_armor"),
+            3,
+            "没挡住的伤掉 1 层"
+        );
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("st_pa2", "standard.plated_armor", 4));
+        give_block(&mut state, "enemy_a", 10);
+        deal(&mut state, "enemy_a", 3, false);
+        assert_eq!(
+            stacks_of(&state, "enemy_a", "standard.plated_armor"),
+            4,
+            "全挡住 ⇒ 不掉层（wiki: unblocked damage）"
+        );
     }
 
     #[test]
