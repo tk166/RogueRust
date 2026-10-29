@@ -8857,3 +8857,139 @@ rd_env_enemy_is_minion(slot)   // 1 是 / 0 不是 / -1 没有这个槽
 5. 状态：Constricted（内容）→ Intangible/Buffer（伤害管线）
 
 聚合验收 **17/17**；单测 **691**（本轮只加文档）。
+
+---
+
+## 142. 有序动画事件（`rd_env_beat_*`）：Live2D 的硬前提
+
+用户："先来做 1 和 2 吧"（§141.3 的顺序）。
+
+### 142.1 为什么 `diffObservations` 不够
+
+页面到今天为止是从 `diffObservations(before, after)` **反推**"刚才发生了什么"。它对"还剩几点血"
+够用，对动画不够，而且是**原理上**不够：
+
+| 事实 | 相减给出 | 动画需要 |
+|---|---|---|
+| 敌人 7×3 的三段攻击 | "掉了 21" | **三段**，每段 7，中间可以插受击反馈 |
+| 先加格挡再挨打 | 与"先挨打再加格挡"**同一个向量** | **顺序** |
+| 加格挡 / 回血 / 抽牌 | 完全没有对应的事件变体（参考自己也不为它们发事件） | 拿出来播 |
+
+相减丢掉的是**顺序与分段**，而这两样恰好是动画的全部输入。
+
+### 142.2 不是从 `pending_events` 里捞
+
+内核里已经有一本账：`CombatState::pending_events`（参考的 `ICombatEvent`，25 种触发器事件）。
+它**不能**当动画日志用，两个理由：
+
+1. 它是**待分发**的队列，在宿主的一次排空里就被消化干净了 —— 一步之后它是空的；
+2. 它的语义是"驱动内容里的状态钩子"，不是"屏幕上发生了什么事"：`GainBlock` / `Heal` /
+   `DrawCards` **根本没有事件变体**，而 `StatusMerged` 只带一个 `target`，**说不出是哪个状态**。
+
+⇒ 单开一本账：`rd_core::beat`（`Beat` / `BeatKind` / `BeatLog`）。
+
+### 142.3 一个事实一个写点
+
+| 事实 | 写点 |
+|---|---|
+| 掉血 | `exec::resolve_damage_of_kind`（伤害管线**唯一出口**：卡 / 敌动作 / DoT / 伤害药水）|
+| 格挡 | `exec::gain_block_for`（`modified != 0` 才会写）|
+| 治疗 | `exec::heal_for`（满血不写，不飘 `+0`）|
+| 状态增减 / 新建 / 被 Artifact 挡下 | `exec::apply_one_status`、`modify_one_status_stacks` |
+| 状态到期被删 | `host::try_decrease_timed_statuses` 的删除行 |
+| 倒下 / 随从逃跑 | 伤害管线里翻转 `lifecycle_state` 的那一行 |
+| 出牌 | `play::play_card`（**包括** `is_action` 的敌方行动面，见下）|
+| 回合边界 | `host` 的 `TurnStarted` / `TurnEnded` 入队点 |
+| 召唤 | `exec::create_combatant_node` |
+
+两条设计决定：
+
+* **`CardPlayed` 事件与 `CardPlayed` 动画不同口径。** 触发器事件只在"真的算一次出牌"时发
+  （`Enrage` 不该被敌方行动面触发），动画日志**每次都记** —— 敌人挥出一张行动牌也该有动画。
+  所以那一处**故意不套** `counted_as_card_played` 那道门，`flags` 的 bit2 标出来。
+* **它是派生视图，不是游戏状态。** 满了不报错（那会把一次出牌变成失败），而是把
+  `beats_dropped` 加一 —— 页面能读到并说出来。"少报了要能看见"。
+
+### 142.4 容量与"谁负责清空"
+
+* `MAX_BEATS = 64`、`MAX_BEAT_DEFS = 24`。64 是**量出来的**：
+  `exec::tests::a_heavy_turn_fits_in_the_log` 一步打 5×3 段伤害 + 一块 + 两状态（18 条），
+  断言 `beats_dropped() == 0`。
+* 名字走**旁表**（`def` 是下标）：`Ident<40>` 是 41 B，塞进每条就是 2.6 KB，而一步里被点到的
+  名字通常不到五个。整本账 `size_of::<BeatLog>()` = **2,268 B**。
+* 清空在 **ABI**（`rd_env_step` / `rd_env_use_potion`），不在内核：这样"一个动作一本账"是
+  ABI 的性质，而不是"哪次引擎调用记得清"。而且清在**动作查表之前** —— 否则一次被拒的 step
+  会把上一步的 beats 留在地上，而**陈旧的 beats 会完美地重播一遍，只是播错了东西**。
+
+### 142.5 墙位是 ABI 的事，不是内核的事
+
+内核只认 `combatants()` 的**下标**（`ordinal`）；墙位（`-1` 英雄、`0..5` 敌人、`-2` 墙外）
+由 `rd-wasm` 的 `Session::wall_slot_of_ordinal` 算 —— 因为"墙有多宽"是 `env-abi.md` §10 的事，
+内核不知道，也不该知道。同一套槽位号页面已经在用（`OFF_ENEMY`），所以动画能直接按槽位找元素。
+
+### 142.6 ABI
+
+```
+rd_env_beat_count()                 // 这一步几条
+rd_env_beat_field(i, field)         // 0 kind | 1 actor 墙位 | 2 target 墙位 | 3 flags
+                                    // 4 a | 5 b | 6 c | 7 有名字吗
+rd_env_beat_def_len(i) / _into(i)   // 名字（状态定义 / 卡定义）
+rd_env_beats_dropped()              // 丢了几条（正常恒 0）
+rd_env_beats_clear()                // 驱动方主动清（回放/暂停）
+```
+
+`kind` 的号是**已发布**的（1..12），新种类往后加，删掉一个就让它的号空着。
+⚠️ 负下标**不夹到 0**：`beat_field(-1, 0)` 回 `-1`。夹到 0 会让"传错了下标"看起来像真数据
+—— 写 ABI 测试时这一条被自己抓到过一次（`rd_env_beat_def_len(-1)` 回了 beat 0 的名字长度 6）。
+
+### 142.7 判据
+
+内核侧（数**条数**与**每一位**，不是"有没有某条"）：
+
+* `a_three_hit_attack_is_three_beats_not_one_number` —— 三下必须是三条，且 `(a,b,c)` 分别是
+  `(2,3,5) / (5,0,5) / (5,0,5)`（第一下被 3 点格挡吃掉大半）；
+* `block_heal_and_status_change_each_land_one_beat_in_order` —— 四件事四条，顺序与
+  `FLAG_NEW_INSTANCE` 都对；
+* `a_status_reduced_to_zero_is_a_change_then_a_removal` —— 先掉层再收图标（反了页面会先看见图标消失）；
+* `artifact_turns_a_debuff_into_a_prevented_beat_naming_the_blocked_status` —— 名字必须是**没上成**的那个；
+* `a_kill_is_damage_then_downed_and_the_minions_flee_after_it` —— 伤害 → 倒下 → 逃跑，三条；
+* `a_dot_tick_is_flagged_so_it_does_not_animate_like_a_sword`；
+* `a_heal_at_full_health_is_no_beat`；
+* `both_turn_boundaries_leave_exactly_one_beat_each`；
+* `an_animated_card_play_names_the_card_definition`（名字是卡定义 `paper_cut`，不是实例 `card_h1`）；
+* `a_heavy_turn_fits_in_the_log`。
+
+ABI 侧（真 `rd-wasm`、真内容镜像）：
+
+* `the_animation_log_names_the_card_the_wall_slots_and_the_damage` —— 英雄恒 `-1`、敌人 `>= 0`、
+  出牌在伤害**之前**、`dealt + blocked <= requested`；
+* `an_end_turn_shows_every_enemy_acting_in_order` —— 两只史莱姆**都**出手（`distinct >= 2`），
+  且槽位 0 先动；
+* `rd_env_step(越界)` 之后 `rd_env_beat_count() == 0` —— **被拒的一步不留旧 beats**。
+
+**反向控制**（本项目的老纪律）：把伤害那一处 `record` 用 `if false` 关掉，
+`a_three_hit_attack_is_three_beats_not_one_number` 当场红（`left: 0, right: 3`），然后才恢复。
+
+### 142.8 内存账本：又是两行旧错
+
+`CombatState` **213,224 → 216,080 B（+2,856，SRAM 35.2% → 35.6%）**。加字段顺手核账，抓出
+`state.rs` 模块头那张表里**两行早就烂了**：
+
+* `combatants` 写的 `12 x 4,832` —— 实测 `Combatant` 是 **4,876**（差 528 B）；
+* `event queues` 写的 23,040 —— 按今天四个实测尺寸算是 **23,296**（差 256 B）。
+
+而这一轮的 diff **一行都没碰 `Combatant`、也没碰那六个队列**。⇒ 印证那张表自己的警告：
+"这次没变化的那几行"才是最容易烂的地方。现在 `state_fits_the_sram_plan` 会把 `beats` 那一行的
+**分量和**与 `size_of::<BeatLog>()` **一起**打出来，对不上时看得见是哪一边。
+
+### 142.9 还没做的（写明白，别当成做完了）
+
+* **页面还没读它** —— 这一轮只把 ABI 与判据做实；页面正在等 Live2D 重写，届时
+  `diffObservations` 会退成"兜底"，beats 变成主路径。今天页面上的日志仍由相减生成。
+* **抽牌 / 能量没有 beats**：抽牌能从观察向量（手牌）反推，能量本来就在观察里，
+  为省两条容量先不加。
+* **敌人复活 / 多段形态**仍缺（§141），那是内核能力，不是这本账的事。
+
+### 142.10 数字
+
+聚合验收 **17/17**；单测 691 → **709**（rd-core 601 → **617** / rd-run 62 / rd-wasm 28 → **30**）。

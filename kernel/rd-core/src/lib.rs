@@ -19,6 +19,7 @@
 #![forbid(unsafe_code)]
 
 pub mod battle;
+pub mod beat;
 pub mod content;
 pub mod exec;
 pub mod expr;

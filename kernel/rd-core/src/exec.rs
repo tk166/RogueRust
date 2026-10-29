@@ -1180,6 +1180,81 @@ pub fn resolve_damage_of_kind(
         })
         .map_err(ExecError::Capacity)?;
 
+    // ── 动画日志（§142）：**掉血**。写在这里的理由与上面两条事件同一行 ——
+    // 这是伤害管线的唯一出口（卡 / 敌动作 / DoT tick / 伤害药水都走到这）。
+    // 三个数字各有其职：`a` 是动画要飘的那个数、`b` 是"格挡吸收"（盾牌闪光）、
+    // `c` 是请求额（多段攻击里"这一下本来多疼"，被完全挡住时页面靠它才知道有攻击）。
+    crate::beat::record(
+        ctx.state,
+        crate::beat::Beat {
+            kind: crate::beat::BeatKind::Damage,
+            actor: match ctx.source {
+                Some(source) => crate::beat::ordinal_of(ctx.state, &source),
+                None => crate::beat::NOBODY,
+            },
+            target: crate::beat::ordinal_of(ctx.state, target),
+            def: crate::beat::NO_DEF,
+            flags: match kind {
+                BindDamageKind::Dot => crate::beat::FLAG_DOT,
+                _ => 0,
+            },
+            a: health_lost,
+            b: blocked,
+            c: amount,
+        },
+    );
+    // 倒下：**同一行**翻转 `lifecycle_state` 的地方已经在上面记过账，这里只补动画。
+    // 倒下：**同一行**翻转 `lifecycle_state` 的地方已经在上面记过账，这里只补动画。
+    if went_down {
+        let actor = match ctx.source {
+            Some(source) => crate::beat::ordinal_of(ctx.state, &source),
+            None => crate::beat::NOBODY,
+        };
+        crate::beat::record(
+            ctx.state,
+            crate::beat::Beat {
+                kind: crate::beat::BeatKind::Downed,
+                actor,
+                target: crate::beat::ordinal_of(ctx.state, target),
+                def: crate::beat::NO_DEF,
+                flags: 0,
+                a: 0,
+                b: 0,
+                c: 0,
+            },
+        );
+        // 随从逃跑（§139）也各记一条：屏幕上"人没了"但不该算被这一下打死的。
+        // 先攒 ordinal 再记 —— `record` 要 `&mut state`，而遍历 `combatants()` 正借着它。
+        let mut fled = [crate::beat::NOBODY; MAX_COMBATANTS];
+        let mut fled_count = 0usize;
+        for (index, other) in ctx.state.combatants().iter().enumerate() {
+            if other.owner == Some(*target)
+                && other.lifecycle_state == CombatantLifecycleState::Escaped
+            {
+                if let Some(cell) = fled.get_mut(fled_count) {
+                    *cell = index.min(usize::from(crate::beat::NOBODY) - 1) as u8;
+                    fled_count += 1;
+                }
+            }
+        }
+        let falling = crate::beat::ordinal_of(ctx.state, target);
+        for ordinal in fled.iter().take(fled_count) {
+            crate::beat::record(
+                ctx.state,
+                crate::beat::Beat {
+                    kind: crate::beat::BeatKind::Escaped,
+                    actor: falling,
+                    target: *ordinal,
+                    def: crate::beat::NO_DEF,
+                    flags: 0,
+                    a: 0,
+                    b: 0,
+                    c: 0,
+                },
+            );
+        }
+    }
+
     Ok((blocked, health_lost))
 }
 
@@ -1905,6 +1980,21 @@ fn gain_block_for(
             .combatant_mut(target)
             .ok_or(ExecError::MissingCombatant)?;
         combatant.set_defensive_pool(key, new_current, max)?;
+        // 动画日志（§142）：`a` 记**真的加了**多少（修饰后），不是请求额 ——
+        // 页面上的数字必须与状态里的数字一致，否则"盾 12"旁边飘一个 +5。
+        crate::beat::record(
+            ctx.state,
+            crate::beat::Beat {
+                kind: crate::beat::BeatKind::Block,
+                actor: crate::beat::ordinal_of(ctx.state, target),
+                target: crate::beat::ordinal_of(ctx.state, target),
+                def: crate::beat::NO_DEF,
+                flags: 0,
+                a: modified,
+                b: 0,
+                c: 0,
+            },
+        );
     }
     Ok(())
 }
@@ -2037,6 +2127,30 @@ fn create_combatant_node(
     combatant.owner = ctx.source;
     ctx.state.add_combatant(combatant)?;
     ctx.state.next_combatant_number = number.saturating_add(1);
+    // 动画日志（§142）：`target` = 新人在 `combatants()` 里的 ordinal（`add_combatant` 刚
+    // 追加过，所以就是最后一格）；`def` = 它的定义名，页面据此挑立绘。
+    {
+        let ordinal = (ctx.state.combatants().len().saturating_sub(1)).min(usize::from(
+            crate::beat::NOBODY - 1,
+        )) as u8;
+        let def = crate::beat::intern_def(ctx.state, definition_id.as_str());
+        crate::beat::record(
+            ctx.state,
+            crate::beat::Beat {
+                kind: crate::beat::BeatKind::Summoned,
+                actor: match ctx.source {
+                    Some(source) => crate::beat::ordinal_of(ctx.state, &source),
+                    None => crate::beat::NOBODY,
+                },
+                target: ordinal,
+                def,
+                flags: 0,
+                a: i32::from(ordinal),
+                b: max_health,
+                c: 0,
+            },
+        );
+    }
     stats.effects = stats.effects.saturating_add(1);
     resume_later(ctx.state, frame, slot)
 }
@@ -2126,6 +2240,24 @@ fn heal_for(ctx: &mut ExecContext<'_>, target: &CombatantId, amount: i32) -> Res
         .combatant_mut(target)
         .ok_or(ExecError::MissingCombatant)?;
     combatant.health_current = capped;
+    // 动画日志（§142）：`a` 是**真的回了**多少（上限之后），不是请求额。
+    let healed = (capped - snapshot.health_current).max(0);
+    if healed > 0 {
+        let ordinal = crate::beat::ordinal_of(ctx.state, target);
+        crate::beat::record(
+            ctx.state,
+            crate::beat::Beat {
+                kind: crate::beat::BeatKind::Heal,
+                actor: ordinal,
+                target: ordinal,
+                def: crate::beat::NO_DEF,
+                flags: 0,
+                a: healed,
+                b: 0,
+                c: 0,
+            },
+        );
+    }
     Ok(())
 }
 
@@ -2300,8 +2432,41 @@ fn modify_one_status_stacks(
     ctx.state
         .enqueue_event(crate::state::CombatEvent::StatusStacksChanged { target: *target })
         .map_err(ExecError::Capacity)?;
+    // 动画日志（§142）：`a` = **净变化**（可负）。写在这里、删实例之前，因为
+    // "层数被减到 0"是"卸掉一层"之后的事 —— 顺序反过来页面会先看到图标消失再看到数字掉。
+    let def = crate::beat::intern_def(ctx.state, definition_id.as_str());
+    let ordinal = crate::beat::ordinal_of(ctx.state, target);
+    crate::beat::record(
+        ctx.state,
+        crate::beat::Beat {
+            kind: crate::beat::BeatKind::StatusChanged,
+            actor: ordinal,
+            target: ordinal,
+            def,
+            flags: 0,
+            a: new_stacks - old_stacks,
+            b: new_stacks,
+            c: 0,
+        },
+    );
     if new_stacks == 0 && old_stacks > 0 {
         remove_status_at(ctx, target, index)?;
+        // 实例被删 ⇒ 单独一条：页面据此把图标**收走**（而不是把它画成 0）。
+        let def = crate::beat::intern_def(ctx.state, definition_id.as_str());
+        let ordinal = crate::beat::ordinal_of(ctx.state, target);
+        crate::beat::record(
+            ctx.state,
+            crate::beat::Beat {
+                kind: crate::beat::BeatKind::StatusRemoved,
+                actor: ordinal,
+                target: ordinal,
+                def,
+                flags: 0,
+                a: 0,
+                b: 0,
+                c: 0,
+            },
+        );
     }
     Ok(())
 }
@@ -3256,6 +3421,26 @@ fn apply_one_status(
                         target: *target,
                     })
                     .map_err(ExecError::Capacity)?;
+                // 动画日志（§142）：`def` 记**被挡下的那个状态**（页面要飘"免疫"），
+                // 而不是 Artifact 本身 —— 玩家关心的是"我想上的 debuff 没上成"。
+                let def = crate::beat::intern_def(ctx.state, definition_id.as_str());
+                let target_ordinal = crate::beat::ordinal_of(ctx.state, target);
+                crate::beat::record(
+                    ctx.state,
+                    crate::beat::Beat {
+                        kind: crate::beat::BeatKind::StatusPrevented,
+                        actor: match ctx.source {
+                            Some(source) => crate::beat::ordinal_of(ctx.state, &source),
+                            None => crate::beat::NOBODY,
+                        },
+                        target: target_ordinal,
+                        def,
+                        flags: 0,
+                        a: stacks,
+                        b: 0,
+                        c: 0,
+                    },
+                );
                 return Ok(());
             }
         }
@@ -3293,6 +3478,26 @@ fn apply_one_status(
         ctx.state
             .enqueue_event(crate::state::CombatEvent::StatusMerged { target: merged_target })
             .map_err(ExecError::Capacity)?;
+        // 动画日志（§142）：`a` = **这一次加了多少**（不是合并后的总数），
+        // `flags` 不带 `FLAG_NEW_INSTANCE` ⇒ 页面知道图标已经在场，只是数字变大。
+        let def = crate::beat::intern_def(ctx.state, definition_id.as_str());
+        let ordinal = crate::beat::ordinal_of(ctx.state, &merged_target);
+        crate::beat::record(
+            ctx.state,
+            crate::beat::Beat {
+                kind: crate::beat::BeatKind::StatusChanged,
+                actor: match ctx.source {
+                    Some(source) => crate::beat::ordinal_of(ctx.state, &source),
+                    None => crate::beat::NOBODY,
+                },
+                target: ordinal,
+                def,
+                flags: 0,
+                a: stacks,
+                b: 0,
+                c: 0,
+            },
+        );
         return Ok(());
     }
 
@@ -3313,6 +3518,25 @@ fn apply_one_status(
         polarity,
         ctx.source,
     )?;
+    // 动画日志（§142）：新建实例 ⇒ 带 `FLAG_NEW_INSTANCE`，页面据此**先画图标再飘数字**。
+    let def = crate::beat::intern_def(ctx.state, definition_id.as_str());
+    let ordinal = crate::beat::ordinal_of(ctx.state, target);
+    crate::beat::record(
+        ctx.state,
+        crate::beat::Beat {
+            kind: crate::beat::BeatKind::StatusChanged,
+            actor: match ctx.source {
+                Some(source) => crate::beat::ordinal_of(ctx.state, &source),
+                None => crate::beat::NOBODY,
+            },
+            target: ordinal,
+            def,
+            flags: crate::beat::FLAG_NEW_INSTANCE,
+            a: stacks,
+            b: duration_turns,
+            c: charges,
+        },
+    );
     Ok(())
 }
 
@@ -8109,6 +8333,294 @@ mod tests {
             vec!["card_unknown"],
             "未注册的定义留在手里（不是错误、也不是'匹配上了'）"
         );
+    }
+
+    // =========================================================================================
+    // 动画日志（§142）
+    // =========================================================================================
+    //
+    // 这一组的形状**故意是数条数、对每一位**，而不是"有没有某条"：一次掉血记两遍、或者
+    // 多段攻击塌成一条，都不会让"有没有"型断言变红。§142 的全部理由是"顺序与分段"，
+    // 所以断言也必须是顺序与分段。
+
+    /// 走**效果解析**这条路（不是节点），这样块/治疗/状态三条分支都能单独打。
+    fn apply(state: &mut CombatState, request: EffectRequest) {
+        let item = EffectItem {
+            request,
+            chain: ChainSlot::NONE,
+            owner: None,
+        };
+        resolve_effect(state, &item, None).expect("效果必须解析成功");
+    }
+
+    #[test]
+    fn a_three_hit_attack_is_three_beats_not_one_number() {
+        // **这就是 §142 的全部理由。** `diffObservations` 对下面这三下只会说"掉了 12 血"；
+        // 页面于是画不出"敌人挥了三下"。
+        let mut state = arena();
+        give_block(&mut state, "enemy_a", 3);
+        for _ in 0..3 {
+            deal(&mut state, "enemy_a", 5, false);
+        }
+        let beats = state.beats();
+        assert_eq!(beats.len(), 3, "三下必须是三条：{beats:?}");
+        // 第一下被 3 点格挡吃掉了大半 —— 请求 5、挡住 3、真掉 2。
+        assert_eq!((beats[0].a, beats[0].b, beats[0].c), (2, 3, 5));
+        // 后两下格挡已经见底，各掉 5。
+        assert_eq!((beats[1].a, beats[1].b, beats[1].c), (5, 0, 5));
+        assert_eq!((beats[2].a, beats[2].b, beats[2].c), (5, 0, 5));
+        for beat in beats {
+            assert_eq!(beat.kind, crate::beat::BeatKind::Damage);
+            assert_eq!(beat.actor, 0, "出手方是存储序第 0 个（hero）");
+            assert_eq!(beat.target, 1, "承受方是存储序第 1 个（enemy_a）");
+        }
+        assert_eq!(health(&state, "enemy_a"), 20 - 2 - 5 - 5);
+        assert_eq!(state.beats_dropped(), 0);
+    }
+
+    #[test]
+    fn block_heal_and_status_change_each_land_one_beat_in_order() {
+        let mut state = arena();
+        state.combatant_mut(&cid("hero")).unwrap().health_current = 50;
+
+        apply(
+            &mut state,
+            EffectRequest::GainBlock {
+                target: Some(cid("hero")),
+                amount: 5,
+            },
+        );
+        apply(
+            &mut state,
+            EffectRequest::Heal {
+                target: Some(cid("hero")),
+                amount: 8,
+            },
+        );
+        apply(
+            &mut state,
+            EffectRequest::ApplyStatus {
+                target: Some(cid("enemy_a")),
+                definition: StatusDefinitionId::new("standard.vulnerable").unwrap(),
+                stacks: 2,
+                duration: 0,
+                charges: 0,
+                source: Some(cid("hero")),
+                source_card: None,
+            },
+        );
+        // 同名再来一次 ⇒ **并入**已有实例（不带 `FLAG_NEW_INSTANCE`）。
+        apply(
+            &mut state,
+            EffectRequest::ApplyStatus {
+                target: Some(cid("enemy_a")),
+                definition: StatusDefinitionId::new("standard.vulnerable").unwrap(),
+                stacks: 1,
+                duration: 0,
+                charges: 0,
+                source: Some(cid("hero")),
+                source_card: None,
+            },
+        );
+
+        let kinds: Vec<crate::beat::BeatKind> =
+            state.beats().iter().map(|beat| beat.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                crate::beat::BeatKind::Block,
+                crate::beat::BeatKind::Heal,
+                crate::beat::BeatKind::StatusChanged,
+                crate::beat::BeatKind::StatusChanged,
+            ],
+            "四件事、四条、按发生顺序"
+        );
+        assert_eq!(state.beats()[0].a, 5, "格挡记的是真加了多少");
+        assert_eq!(state.beats()[1].a, 8, "治疗记的是真回了多少");
+        assert_eq!(stacks_of(&state, "enemy_a", "standard.vulnerable"), 3);
+        assert_eq!(
+            state.beats()[2].flags & crate::beat::FLAG_NEW_INSTANCE,
+            crate::beat::FLAG_NEW_INSTANCE,
+            "第一次是新建实例"
+        );
+        assert_eq!(
+            state.beats()[3].flags & crate::beat::FLAG_NEW_INSTANCE,
+            0,
+            "第二次是并入，页面不该再画一个图标"
+        );
+        assert_eq!(state.beat_def_text(2), Some("standard.vulnerable"));
+    }
+
+    #[test]
+    fn a_heal_at_full_health_is_no_beat() {
+        // 满血治疗**不是**一条"回了 0 点"。页面据此不飘一个 +0，与 `gain_block_for`
+        // 里 `modified != 0` 那道门是同一条纪律。
+        let mut state = arena();
+        apply(
+            &mut state,
+            EffectRequest::Heal {
+                target: Some(cid("hero")),
+                amount: 8,
+            },
+        );
+        assert!(state.beats().is_empty(), "{:?}", state.beats());
+    }
+
+    #[test]
+    fn a_status_reduced_to_zero_is_a_change_then_a_removal() {
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("status_1", "standard.strength", 2));
+        apply(
+            &mut state,
+            EffectRequest::ModifyStatusStacks {
+                target: Some(cid("enemy_a")),
+                definition: StatusDefinitionId::new("standard.strength").unwrap(),
+                delta: -2,
+            },
+        );
+        let kinds: Vec<crate::beat::BeatKind> =
+            state.beats().iter().map(|beat| beat.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                crate::beat::BeatKind::StatusChanged,
+                crate::beat::BeatKind::StatusRemoved,
+            ],
+            "先掉层、再收图标：顺序反了页面会先看见图标消失"
+        );
+        assert_eq!(state.beats()[0].a, -2, "净变化是负的");
+        assert_eq!(state.beat_def_text(1), Some("standard.strength"));
+        assert_eq!(instances_of(&state, "enemy_a", "standard.strength"), 0);
+    }
+
+    #[test]
+    fn artifact_turns_a_debuff_into_a_prevented_beat_naming_the_blocked_status() {
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("status_1", "standard.artifact", 1));
+        apply(
+            &mut state,
+            EffectRequest::ApplyStatus {
+                target: Some(cid("enemy_a")),
+                definition: StatusDefinitionId::new("standard.vulnerable").unwrap(),
+                stacks: 2,
+                duration: 0,
+                charges: 0,
+                source: Some(cid("hero")),
+                source_card: None,
+            },
+        );
+        assert_eq!(state.beats().len(), 1);
+        assert_eq!(state.beats()[0].kind, crate::beat::BeatKind::StatusPrevented);
+        assert_eq!(
+            state.beat_def_text(0),
+            Some("standard.vulnerable"),
+            "名字必须是**没上成**的那个 debuff，不是 Artifact"
+        );
+        assert_eq!(stacks_of(&state, "enemy_a", "standard.vulnerable"), 0);
+    }
+
+    #[test]
+    fn a_kill_is_damage_then_downed_and_the_minions_flee_after_it() {
+        let mut state = arena();
+        state
+            .add_combatant({
+                let mut minion = unit("minion#1", "enemy", 5, 5);
+                minion.owner = Some(cid("enemy_b"));
+                minion
+            })
+            .unwrap();
+        // enemy_b 只有 10 血：这一下打死它，随从该跟着跑。
+        deal(&mut state, "enemy_b", 10, true);
+        assert_eq!(lifecycle(&state, "enemy_b"), CombatantLifecycleState::Downed);
+        assert_eq!(
+            lifecycle(&state, "minion#1"),
+            CombatantLifecycleState::Escaped,
+            "主人倒下 ⇒ 随从逃跑（§139）"
+        );
+        let kinds: Vec<crate::beat::BeatKind> =
+            state.beats().iter().map(|beat| beat.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![
+                crate::beat::BeatKind::Damage,
+                crate::beat::BeatKind::Downed,
+                crate::beat::BeatKind::Escaped,
+            ],
+            "伤害 → 倒下 → 逃跑：三条、这个顺序"
+        );
+        // 逃跑的是第 3 个战斗员（存储序 [hero, enemy_a, enemy_b, minion#1]）。
+        assert_eq!(state.beats()[2].target, 3);
+        assert_eq!(state.beats()[1].target, 2, "倒下的是 enemy_b");
+    }
+
+    #[test]
+    fn a_dot_tick_is_flagged_so_it_does_not_animate_like_a_sword() {
+        let mut state = arena();
+        let mut ctx = ExecContext::new(&mut state, Some(cid("hero")), None, None, 1024);
+        let (_, lost) = resolve_damage_of_kind(
+            &mut ctx,
+            &cid("enemy_a"),
+            4,
+            true,
+            BindDamageKind::Dot,
+        )
+        .unwrap();
+        assert_eq!(lost, 4);
+        assert_eq!(state.beats().len(), 1);
+        assert_eq!(
+            state.beats()[0].flags & crate::beat::FLAG_DOT,
+            crate::beat::FLAG_DOT
+        );
+    }
+
+    #[test]
+    fn a_heavy_turn_fits_in_the_log() {
+        // 模块头说 64 条"是量出来的"：这里量。五个敌人各打三段（15 条伤害）+ 英雄一块 +
+        // 两个状态 ⇒ 一步 18 条，丢条计数必须还是 0。每一步都清空（与 ABI 同一条规则），
+        // 所以量的是**一步**而不是三步的累计 —— 后者会让"够用"变成一句空话。
+        let mut state = arena();
+        for index in 0..3 {
+            let enemy = unit(&std::format!("enemy_x{index}"), "enemy", 40, 40);
+            state.add_combatant(enemy).unwrap();
+        }
+        let enemies = ["enemy_a", "enemy_b", "enemy_x0", "enemy_x1", "enemy_x2"];
+        for _ in 0..3 {
+            state.clear_beats();
+            // 这里没有宿主，触发器本来也不会跑 —— 事件只会在队列里堆积，堆到 64 就
+            // `Full(PendingEvents)`。本测试量的是**日志**容量，所以顺手把队列排空。
+            while state.has_pending_events() {
+                let _ = state.dequeue_event();
+            }
+            for _name in enemies {
+                for _ in 0..3 {
+                    // 每一下都落在**英雄**身上：被打的是 hero，出手方无所谓。
+                    deal(&mut state, "hero", 1, false);
+                }
+            }
+            apply(
+                &mut state,
+                EffectRequest::GainBlock {
+                    target: Some(cid("hero")),
+                    amount: 3,
+                },
+            );
+            for _ in 0..2 {
+                apply(
+                    &mut state,
+                    EffectRequest::ApplyStatus {
+                        target: Some(cid("enemy_a")),
+                        definition: StatusDefinitionId::new("standard.weak").unwrap(),
+                        stacks: 1,
+                        duration: 0,
+                        charges: 0,
+                        source: Some(cid("hero")),
+                        source_card: None,
+                    },
+                );
+            }
+            assert_eq!(state.beats().len(), 18, "一步 5x3 段 + 一块 + 两状态");
+            assert_eq!(state.beats_dropped(), 0, "这一步不该有丢条");
+        }
     }
 }
 

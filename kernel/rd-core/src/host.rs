@@ -961,6 +961,21 @@ impl<'a> Host<'a> {
         actor: &CombatantId,
     ) -> Result<(), HostError> {
         self.flush_deferred()?;
+        // 动画日志（§142）：回合边界也记一条 —— 页面要的是"你的回合"横幅的**准确时刻**，
+        // 而观察向量只给得出"回合号变了"。
+        crate::beat::record(
+            state,
+            crate::beat::Beat {
+                kind: crate::beat::BeatKind::TurnStarted,
+                actor: crate::beat::ordinal_of(state, actor),
+                target: crate::beat::NOBODY,
+                def: crate::beat::NO_DEF,
+                flags: 0,
+                a: state.current_round,
+                b: state.current_turn,
+                c: 0,
+            },
+        );
         state
             .enqueue_event_at_root(CombatEvent::TurnStarted {
                 combatant: *actor,
@@ -1462,6 +1477,21 @@ impl<'a> Host<'a> {
         // (measured: disabling this step still pays 3 Strength per turn end). A second
         // implementation would pay twice.
 
+        // 动画日志（§142）：回合结束记一条。位置在 `grant_end_of_turn_block` **之后** ——
+        // 那一刻"金属化给的格挡"已经是一条独立的 `Block` 事件，顺序对得上屏幕。
+        crate::beat::record(
+            state,
+            crate::beat::Beat {
+                kind: crate::beat::BeatKind::TurnEnded,
+                actor: crate::beat::ordinal_of(state, actor),
+                target: crate::beat::NOBODY,
+                def: crate::beat::NO_DEF,
+                flags: 0,
+                a: state.current_round,
+                b: state.current_turn,
+                c: state.forced_turn_ends,
+            },
+        );
         state
             .enqueue_event_at_root(CombatEvent::TurnEnded {
                 combatant: *actor,
@@ -1523,6 +1553,11 @@ impl<'a> Host<'a> {
             }
         }
 
+        // 到期被删的实例（§142）：先攒定义 id，出了借用再记动画 —— `beat::intern_def`
+        // 要 `&mut state`，而在循环里 `state` 正被 `combatant` 可变借着。
+        let mut expired = [crate::state::StatusDefinitionId::EMPTY; MAX_STATUSES_PER_COMBATANT];
+        let mut expired_count = 0usize;
+
         for index in 0..count {
             let Some(Some(id)) = targets.get(index).copied() else {
                 continue;
@@ -1542,13 +1577,39 @@ impl<'a> Host<'a> {
                 continue; // `:350-351`
             }
             let next = current.saturating_sub(1); // `Math.Max(0, old - 1)`（`:353-354`）
+            let definition = combatant
+                .statuses()
+                .get(position)
+                .map(|s| s.definition_id)
+                .unwrap_or(crate::state::StatusDefinitionId::EMPTY);
             if let Some(instance) = combatant.statuses_mut().get_mut(position) {
                 instance.duration_turns = next;
             }
             if next == 0 {
                 // `:362-375`：归零删实例。
                 combatant.remove_status(position);
+                if let Some(cell) = expired.get_mut(expired_count) {
+                    *cell = definition;
+                    expired_count += 1;
+                }
             }
+        }
+        for definition in expired.iter().take(expired_count) {
+            let def = crate::beat::intern_def(state, definition.as_str());
+            let ordinal = crate::beat::ordinal_of(state, actor);
+            crate::beat::record(
+                state,
+                crate::beat::Beat {
+                    kind: crate::beat::BeatKind::StatusRemoved,
+                    actor: ordinal,
+                    target: ordinal,
+                    def,
+                    flags: 0,
+                    a: 0,
+                    b: 0,
+                    c: 0,
+                },
+            );
         }
         Ok(())
     }
@@ -3916,6 +3977,40 @@ mod tests {
         host.try_run_turn_started_triggers(&mut state, &cid("hero"))
             .expect("the trigger runs");
         assert!(counter_of(&state) > 0, "three cards must move the queue");
+    }
+
+    #[test]
+    fn both_turn_boundaries_leave_exactly_one_beat_each() {
+        // §142：回合边界是页面画"你的回合"横幅的**准确时刻**。观察向量只说得出"回合号变了"，
+        // 说不出"是谁的回合在这个瞬间开始"。恰好一条 —— 两处都写会让动画播两遍。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = solo();
+        state.clear_beats();
+
+        host.try_run_turn_started_triggers(&mut state, &cid("hero"))
+            .expect("turn start runs");
+        let started: Vec<crate::beat::Beat> = state
+            .beats()
+            .iter()
+            .filter(|beat| beat.kind == crate::beat::BeatKind::TurnStarted)
+            .copied()
+            .collect();
+        assert_eq!(started.len(), 1, "一个回合开始只有一条：{:?}", state.beats());
+        assert_eq!(started[0].actor, 0, "是存储序第 0 个（hero）的回合");
+
+        state.clear_beats();
+        host.try_run_turn_ended_triggers(&mut state, &cid("hero"))
+            .expect("turn end runs");
+        let ended: Vec<crate::beat::Beat> = state
+            .beats()
+            .iter()
+            .filter(|beat| beat.kind == crate::beat::BeatKind::TurnEnded)
+            .copied()
+            .collect();
+        assert_eq!(ended.len(), 1, "一个回合结束只有一条");
+        assert_eq!(ended[0].actor, 0);
     }
 
     #[test]

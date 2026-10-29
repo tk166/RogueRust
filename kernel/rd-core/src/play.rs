@@ -796,6 +796,34 @@ fn apply_plan_in_chain(
         })?;
     }
 
+    // ── 动画日志（§142）：**每一次出牌都记**，包括 `is_action` 的敌方行动面。
+    //
+    // 与上面那条 `CardPlayed` 事件的差别是**故意的**：事件是给内容的触发器用的（`Enrage`
+    // 只该在玩家真的出牌时触发），日志是给屏幕用的（敌人挥出一张行动牌也该有动画）。
+    // 所以这里不套 `counted_as_card_played` 那道门。
+    {
+        let definition = find_card_slot(state, &plan.source, &plan.instance)
+            .and_then(|(_, slot)| state.card(slot))
+            .map(|card| card.definition_id);
+        let def = match definition {
+            Some(id) => crate::beat::intern_def(state, id.as_str()),
+            None => crate::beat::NO_DEF,
+        };
+        crate::beat::record(
+            state,
+            crate::beat::Beat {
+                kind: crate::beat::BeatKind::CardPlayed,
+                actor: crate::beat::ordinal_of(state, &plan.source),
+                target: crate::beat::NOBODY,
+                def,
+                flags: if counted_as_card_played { 0 } else { 1 << 2 },
+                a: 0,
+                b: 0,
+                c: 0,
+            },
+        );
+    }
+
     // ── 无节目分支（`Cards/CardPlay.cs:283-293`，5.12）。
     //
     // 参考在这里入队一条 `MoveCardToZone` 再 `EnqueueContinuation(CloseAction)`：
@@ -2554,6 +2582,39 @@ mod tests {
     }
 
     // ------------------------------------------------------------- 12. 请求面
+
+    #[test]
+    fn an_animated_card_play_names_the_card_definition() {
+        // §142：页面要画"谁打出了哪张牌"。定义名走日志的旁表，**不是**每一条带一份 41 B。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut state = arena();
+        give_card(&mut state, "hero", CardZone::Hand, "card_h1", "paper_cut");
+        state.clear_beats();
+
+        play_card(&mut state, Some(&content), &request("card_h1", Some("enemy_a")))
+            .expect("受理");
+
+        let played: std::vec::Vec<crate::beat::Beat> = state
+            .beats()
+            .iter()
+            .filter(|beat| beat.kind == crate::beat::BeatKind::CardPlayed)
+            .copied()
+            .collect();
+        assert_eq!(played.len(), 1, "出一次牌一条：{:?}", state.beats());
+        assert_eq!(played[0].actor, 0, "是 hero 出的");
+        assert_eq!(
+            state.beat_def_text(
+                state
+                    .beats()
+                    .iter()
+                    .position(|beat| beat.kind == crate::beat::BeatKind::CardPlayed)
+                    .expect("刚断言过")
+            ),
+            Some("paper_cut"),
+            "名字是**卡定义**，不是实例 id（实例 id 是 card_h1）"
+        );
+    }
 
     #[test]
     fn the_request_face_no_ops_on_a_refusal_but_errors_on_broken_state() {

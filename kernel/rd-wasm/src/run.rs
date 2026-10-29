@@ -1097,6 +1097,8 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
     let Some(session) = crate::slot().as_mut() else {
         return refuse("不在战斗里 —— 药水的效果只能作用于一场战斗");
     };
+    // §142: a potion is an action too, so the animation log describes it alone.
+    session.state.clear_beats();
     let Some(hero) = session.hero_id() else {
         return refuse("战斗里找不到英雄");
     };

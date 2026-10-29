@@ -811,6 +811,29 @@ impl Session {
         self.enemy_roster().len() > MAX_ENEMY_SLOTS
     }
 
+    /// Kernel ordinal (`state.combatants()` index) → wall slot for the animation log.
+    ///
+    /// `-1` = the hero, `0..5` = the enemy wall slots the observation uses, `-2` = "not on the
+    /// wall" (a combatant past `MAX_ENEMY_SLOTS`, a third team, or `NOBODY`). The wall is the ABI's
+    /// business, which is why this lives here and not in the kernel (`port-plan.md` §142).
+    fn wall_slot_of_ordinal(&self, ordinal: u8) -> i32 {
+        if ordinal == rd_core::beat::NOBODY {
+            return -2;
+        }
+        let Some(combatant) = self.state.combatants().get(usize::from(ordinal)) else {
+            return -2;
+        };
+        if Some(combatant.id) == self.hero_id() {
+            return -1;
+        }
+        for (slot, id) in self.enemy_roster().iter().take(MAX_ENEMY_SLOTS).enumerate() {
+            if *id == combatant.id {
+                return slot as i32;
+            }
+        }
+        -2
+    }
+
     /// Wall-slot indices of enemies that are still alive (their slots never move — `env-abi.md` §10).
     fn alive_enemy_slots(&self) -> Vec<usize> {
         let mut out = Vec::new();
@@ -1378,6 +1401,12 @@ pub extern "C" fn rd_env_step(index: i32) -> i32 {
         Ok(session) => session,
         Err(_) => return -3,
     };
+    // §142: the animation log describes **this action only**, so it is cleared *before* the
+    // action is even looked up. Clearing it further down would leave the previous action's beats
+    // in place after a refused step -- and stale beats replay perfectly, they just replay the
+    // wrong thing. "Refused ⇒ nothing happened" has to hold for the log too.
+    session.error.clear();
+    session.state.clear_beats();
     if session.is_done() {
         return -2;
     }
@@ -1385,7 +1414,6 @@ pub extern "C" fn rd_env_step(index: i32) -> i32 {
         return -1;
     };
 
-    session.error.clear();
     session.reobserve();
     session.before.copy_from_slice(&session.after);
     let energy_before = session.energy_now();
@@ -1861,6 +1889,160 @@ pub unsafe extern "C" fn rd_env_enemy_name_into(index: i32, ptr: *mut u8) -> i32
     enemy.id.len() as i32
 }
 
+// =============================================================================================
+// The animation log (`port-plan.md` §142)
+// =============================================================================================
+//
+// The page used to reconstruct "what just happened" by subtracting two observation vectors. That
+// answers "how much HP is left" and nothing else: a 7x3 multi-hit attack subtracts to "21 damage",
+// and "block then take a hit" subtracts identically to "take a hit then block". Order and segmen-
+// tation are exactly what an animation needs, and they are exactly what a difference throws away.
+//
+// So the kernel keeps an ordered log of **facts that landed** (`rd_core::beat`), cleared at every
+// action entry point. `field 0` is the kind; the rest are the numbers, all of them already decoded
+// by the kernel (no string parsing on the JS side).
+//
+// Wall slots: `-1` = the hero, `0..5` = the enemy wall slots **the observation uses**
+// (`env-abi.md` §10 -- slots never move), `-2` = `beyond the wall` (a 7th enemy, or a combatant that
+// is not on the field). The kernel only knows `combatants()` ordinals; the mapping to wall slots
+// lives here because the kernel does not know how wide the wall is.
+
+/// Kinds, as the numbers `rd_env_beat_field(index, 0)` hands out. Mirrors `rd_core::beat::BeatKind`.
+pub const BEAT_DAMAGE: i32 = 1;
+/// Gained block.
+pub const BEAT_BLOCK: i32 = 2;
+/// Healed.
+pub const BEAT_HEAL: i32 = 3;
+/// Status stacks changed (`a` = net change, `flags` bit1 = a new instance was created).
+pub const BEAT_STATUS_CHANGED: i32 = 4;
+/// A status instance was removed (stacks hit 0, or its duration ran out).
+pub const BEAT_STATUS_REMOVED: i32 = 5;
+/// A debuff was negated by Artifact. `def` is the status that did **not** land.
+pub const BEAT_STATUS_PREVENTED: i32 = 6;
+/// Someone went down.
+pub const BEAT_DOWNED: i32 = 7;
+/// A minion fled because its owner went down.
+pub const BEAT_ESCAPED: i32 = 8;
+/// A card was played. `def` is the card definition.
+pub const BEAT_CARD_PLAYED: i32 = 9;
+/// A turn started.
+pub const BEAT_TURN_STARTED: i32 = 10;
+/// A turn ended.
+pub const BEAT_TURN_ENDED: i32 = 11;
+/// A combatant was created (split / summon). `a` = its ordinal, `b` = its maximum health.
+pub const BEAT_SUMMONED: i32 = 12;
+
+/// `flags` bit: this Damage was damage-over-time, not a hit.
+pub const BEAT_FLAG_DOT: i32 = 1;
+/// `flags` bit: this status change created a **new** instance.
+pub const BEAT_FLAG_NEW_INSTANCE: i32 = 2;
+/// `flags` bit: this card play was an **action-side** play (no `CardPlayed` trigger, still animated).
+pub const BEAT_FLAG_ACTION: i32 = 4;
+
+/// How many animation beats the last action produced. `-1` = no session.
+#[no_mangle]
+pub extern "C" fn rd_env_beat_count() -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    session.state.beats().len() as i32
+}
+
+/// How many beats the log had to drop (capacity). `0` is the only good answer, and the page can
+/// print the other one instead of quietly animating less than happened.
+#[no_mangle]
+pub extern "C" fn rd_env_beats_dropped() -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    i32::from(session.state.beats_dropped())
+}
+
+/// Clears the animation log. Called at every action entry point; exported so a driver that stops
+/// mid-step (a browser pause, a replay scrubber) can start from an empty log on purpose.
+#[no_mangle]
+pub extern "C" fn rd_env_beats_clear() -> i32 {
+    match slot().as_mut() {
+        Some(session) => {
+            session.state.clear_beats();
+            0
+        }
+        None => -1,
+    }
+}
+
+/// One field of beat `index`. `-1` = no session / no such beat.
+///
+/// | field | meaning |
+/// |---|---|
+/// | 0 | kind (see the `BEAT_*` constants) |
+/// | 1 | actor **wall slot** (`-1` hero, `0..5` enemy, `-2` nobody/beyond the wall) |
+/// | 2 | target wall slot, same encoding |
+/// | 3 | extra flags (see the `BEAT_FLAG_*` constants) |
+/// | 4 | `a` -- the main number (damage dealt / block gained / stacks changed / ...) |
+/// | 5 | `b` -- the second number (damage blocked / duration turns / max HP / ...) |
+/// | 6 | `c` -- the third number (damage requested / charges / ...) |
+/// | 7 | has a definition name (`1` yes, `0` no) |
+#[no_mangle]
+pub extern "C" fn rd_env_beat_field(index: i32, field: i32) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    // A negative index is a **caller bug**, not "beat 0": clamping it would answer for a real beat
+    // and the mistake would look like data. (`-1` is already the "no such beat" answer, so this
+    // also keeps the sentinel unambiguous.)
+    if index < 0 {
+        return -1;
+    }
+    let Some(beat) = session.state.beats().get(index as usize).copied() else {
+        return -1;
+    };
+    match field {
+        0 => i32::from(beat.kind as u8),
+        1 => session.wall_slot_of_ordinal(beat.actor),
+        2 => session.wall_slot_of_ordinal(beat.target),
+        3 => i32::from(beat.flags),
+        4 => beat.a,
+        5 => beat.b,
+        6 => beat.c,
+        7 => i32::from(session.state.beat_def_text(index as usize).is_some()),
+        _ => -1,
+    }
+}
+
+/// Length of beat `index`'s definition name (status definition / card definition), or `-1`.
+#[no_mangle]
+pub extern "C" fn rd_env_beat_def_len(index: i32) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    if index < 0 {
+        return -1;
+    }
+    session
+        .state
+        .beat_def_text(index as usize)
+        .map_or(-1, |text| text.len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_beat_def_len(index)` writable bytes in linear memory.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_beat_def_into(index: i32, ptr: *mut u8) -> i32 {
+    if ptr.is_null() || index < 0 {
+        return -1;
+    }
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    let Some(text) = session.state.beat_def_text(index as usize) else {
+        return -1;
+    };
+    std::ptr::copy_nonoverlapping(text.as_ptr(), ptr, text.len());
+    text.len() as i32
+}
+
 /// Benchmark hook: rebuild the observation + action table **without** stepping the fight.
 ///
 /// Not part of the ABI. It exists because "how long does one `rd_env_step` take" is not the same
@@ -2176,6 +2358,11 @@ mod tests {
         let out_of_range = rd_env_action_count() + 5;
         assert_eq!(rd_env_step(out_of_range), -1, "out-of-range step");
         assert_eq!(observation(), before, "a rejected step moved the observation");
+        assert_eq!(
+            rd_env_beat_count(),
+            0,
+            "a refused step must not leave the previous step's beats lying around"
+        );
 
         // ── play the fight out ──────────────────────────────────────────────────────────────
         let mut steps = 0;
@@ -2211,6 +2398,141 @@ mod tests {
             different == 0 || different == 1,
             "selfcheck on another seed must be a real verdict"
         );
+    }
+
+    // =========================================================================================
+    // The animation log ABI (`port-plan.md` §142)
+    // =========================================================================================
+
+    fn beat_field(index: i32, field: i32) -> i32 {
+        rd_env_beat_field(index, field)
+    }
+
+    fn beat_def(index: i32) -> String {
+        let len = rd_env_beat_def_len(index);
+        if len <= 0 {
+            return String::new();
+        }
+        let mut bytes = vec![0u8; len as usize];
+        let written = unsafe { rd_env_beat_def_into(index, bytes.as_mut_ptr()) };
+        assert_eq!(written, len, "beat_def_len / beat_def_into disagree");
+        String::from_utf8(bytes).expect("definition ids are ASCII")
+    }
+
+    #[test]
+    fn the_animation_log_names_the_card_the_wall_slots_and_the_damage() {
+        // What the page needs and what `diffObservations` cannot give it: **who hit whom, with
+        // what, and for how much**, as one ordered list. Wall slots are the ABI's own numbering
+        // (`-1` hero, `0..5` enemies), so the page can look up the same element it renders.
+        assert_eq!(rd_env_reset(), 0);
+        // `rd_env_reset` builds the fight **and starts the hero's first turn** (the browser driver
+        // needs the hand on load), so the log may already hold that one boundary event. Anything
+        // else here would mean the reset itself animated something nobody asked for.
+        let after_reset = rd_env_beat_count();
+        assert!(
+            (0..=1).contains(&after_reset),
+            "reset produced {after_reset} beats"
+        );
+        if after_reset == 1 {
+            assert_eq!(beat_field(0, 0), BEAT_TURN_STARTED, "the only thing reset may log");
+            assert_eq!(beat_field(0, 1), -1, "…and it is the hero's");
+        }
+
+        let strike = (0..rd_env_action_count())
+            .find(|index| {
+                rd_env_action_kind(*index) == ACTION_PLAY
+                    && ensure_session()
+                        .expect("session")
+                        .hand_defs
+                        .get(rd_env_action_arg(*index, 0).max(0) as usize)
+                        .map(String::as_str)
+                        == Some("strike")
+            })
+            .expect("the starting hand holds a strike");
+        assert_eq!(rd_env_step(strike), 0, "playing a strike must be accepted");
+
+        let count = rd_env_beat_count();
+        assert!(count >= 2, "a card play and its damage: {count} beats");
+
+        // 0 = kind, 1 = actor wall slot, 2 = target wall slot, 4 = damage dealt, 7 = has a name.
+        let mut saw_play = false;
+        let mut saw_damage = false;
+        for index in 0..count {
+            let kind = beat_field(index, 0);
+            if kind == BEAT_CARD_PLAYED {
+                saw_play = true;
+                assert_eq!(beat_field(index, 1), -1, "the hero is wall slot -1");
+                assert_eq!(beat_field(index, 7), 1, "the played card must be named");
+                assert_eq!(beat_def(index), "strike", "the card **definition**, not the instance");
+            }
+            if kind == BEAT_DAMAGE {
+                saw_damage = true;
+                assert_eq!(beat_field(index, 1), -1, "hero dealt it");
+                assert!(beat_field(index, 2) >= 0, "an enemy wall slot took it");
+                assert!(beat_field(index, 4) > 0, "damage dealt must be positive");
+                assert!(
+                    beat_field(index, 4) + beat_field(index, 5) <= beat_field(index, 6).max(0) + 1,
+                    "dealt + blocked cannot exceed the requested amount"
+                );
+            }
+        }
+        assert!(saw_play, "no CardPlayed beat in {count} beats");
+        assert!(saw_damage, "no Damage beat in {count} beats");
+
+        // The card play comes **before** its damage: order is the whole point.
+        let first_play = (0..count)
+            .find(|index| beat_field(*index, 0) == BEAT_CARD_PLAYED)
+            .expect("checked above");
+        let first_damage = (0..count)
+            .find(|index| beat_field(*index, 0) == BEAT_DAMAGE)
+            .expect("checked above");
+        assert!(first_play < first_damage, "the card is played before it lands");
+
+        assert_eq!(rd_env_beats_dropped(), 0, "nothing may be dropped");
+        assert_eq!(beat_field(count, 0), -1, "past the end is -1, not a stale beat");
+        assert_eq!(rd_env_beat_def_len(-1), -1);
+    }
+
+    #[test]
+    fn an_end_turn_shows_every_enemy_acting_in_order() {
+        // The multi-enemy half: with two slimes, ending the turn must produce **two** attacking
+        // actors, in wall-slot order, and the hero must be the one taking both hits.
+        assert_eq!(rd_env_reset(), 0);
+        let end_turn = (0..rd_env_action_count())
+            .find(|index| rd_env_action_kind(*index) == ACTION_END_TURN)
+            .expect("end turn must be offered");
+        assert_eq!(rd_env_step(end_turn), 0);
+
+        let count = rd_env_beat_count();
+        let mut attackers: Vec<i32> = Vec::new();
+        let mut hits_on_hero = 0;
+        let mut turns: Vec<i32> = Vec::new();
+        for index in 0..count {
+            match beat_field(index, 0) {
+                BEAT_DAMAGE if beat_field(index, 2) == -1 => {
+                    hits_on_hero += 1;
+                    attackers.push(beat_field(index, 1));
+                }
+                BEAT_TURN_ENDED => turns.push(beat_field(index, 1)),
+                _ => {}
+            }
+        }
+        assert!(hits_on_hero > 0, "the enemies must have hit the hero: {count} beats");
+        assert!(
+            attackers.iter().all(|slot| *slot >= 0),
+            "every attacker is an enemy wall slot: {attackers:?}"
+        );
+        // Two slimes ⇒ at least two distinct attackers, and the first one listed is slot 0.
+        let mut distinct = attackers.clone();
+        distinct.sort_unstable();
+        distinct.dedup();
+        assert!(
+            distinct.len() >= 2,
+            "both slimes must act, not just the first: {attackers:?}"
+        );
+        assert_eq!(distinct.first().copied(), Some(0), "slot 0 acts first");
+        assert!(!turns.is_empty(), "the hero's turn ended somewhere in there");
+        assert_eq!(turns[0], -1, "the hero's turn is what ended");
     }
 }
 

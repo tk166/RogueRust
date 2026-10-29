@@ -47,13 +47,14 @@
 //! | part | bytes |
 //! |---|---|
 //! | card pool (`MAX_CARD_INSTANCES` x `size_of::<CardInstance>()` = 224 x 440) | 98,560 |
-//! | combatants (`MAX_COMBATANTS` x `size_of::<Combatant>()` = 12 x 4,832) | 57,984 |
+//! | combatants (`MAX_COMBATANTS` x `size_of::<Combatant>()` = 12 x 4,876) | 58,512 |
 //! | piles (`MAX_COMBATANTS` x `size_of::<CardZones>()` = 12 x 1,392) | 16,704 |
-//! | **those three parts** | **173,248** |
-//! | event queues (批次 1)：effects 64x176 + effect chains 64x2 + effect owners 64x4 + events 64x96 + event chains 64x2 + continuations 64x44 + chain arena 128x16 | 23,040 |
-//! | residual: scalar fields, ids, `StatusInstance` arrays, resources, temporary rules, the six queues' `head`/`len`, `current_chain` | 11,424 |
+//! | **those three parts** | **173,776** |
+//! | event queues (批次 1)：64x(180+4+4) + 64x(96+4) + 64x44 + 128x16（`EffectRequest` / `ChainSlot` / `Option<ProgramExecutionSlot>` / `CombatEvent` / `Continuation` / `ChainRecord`）| 23,296 |
+//! | residual: scalar fields, ids, `StatusInstance` arrays, resources, temporary rules, the six queues' `head`/`len`, `current_chain` | 11,228 |
 //! | program frame arenas (批次 2): frames 8x216 + node slots 64x12 + loop snapshots 4x546 | 5,512 |
-//! | **`size_of::<CombatState>()`** | **213,224 (208 KiB)** |
+//! | animation log (§142): beats 64x20 + def side table 24x41 + `len`/`defs_len`/`dropped` = `size_of::<BeatLog>()` | 2,268 |
+//! | **`size_of::<CombatState>()`** | **216,080 (211 KiB)** |
 //!
 //! ⚠️ 这张表是**实测量出来的**，不是估的；每次改 `CombatState` 的字段都要重新核，核的是**每一行**
 //! 而不只是总量 —— 这张表就烂过一次：总量那行是对的，而 `combatants` 那行写着
@@ -63,7 +64,19 @@
 //! （`state_fits_the_sram_plan` 只盯着上界，盯不住"表格里的数字过期"）。
 //! 残差那一行是**总量减三个分量**推出来的，它不会单独过期，但它的含义（哪些字段住在残差里）
 //! 会随字段增删改变，所以它也要跟着看。
-//! 最近两次变化：
+//!
+//! ⚠️ **它又烂了两行，都在 §142 这一轮被发现**：
+//!
+//! * `combatants` 写的 `12 x 4,832 = 57,984` 早已过期（实例化后实测 **4,876** ⇒ 58,512）；
+//! * `event queues` 写的 23,040 也对不上（按今天实测的四个尺寸算是 **23,296**，差 256 B）。
+//!
+//! 而 **§142 的 diff 一行都没碰 `Combatant`、也一行都没碰那六个队列** —— 也就是说这两行在
+//! 本轮之前就已经错了，只是没人加字段时去核它们。这正是上面那条警告的意思：表格里
+//! "这次没变化的那几行"才是最容易烂的地方。数字已按今天重测的填，且现在
+//! `state_fits_the_sram_plan` 会把 `beats` 那一行的两个数（分量和 / `size_of::<BeatLog>()`）
+//! 一起打出来 —— 对不上的时候看得见是哪一边。
+//!
+//! 最近三次变化：
 //!
 //! 1. `StatusInstance` 加了 `source_combatant_id: Option<CombatantId>`
 //!    （DoT 要能归属出手方，见 `port-plan` §41.4），**171,848 → 184,648 B（+12.8 KB）**。
@@ -82,8 +95,15 @@
 //!    ⚠️ 207,712 **小于** `event-queue-interface.md` §10.2 探针的**忠实档 231,256 B**：
 //!    探针按"事件枚举 = 参考全集 41 个变体"量形状，而批次 1 只声明了接了线的那 5 个变体
 //!    （`CombatEvent` 因此是 96 B 而不是 492 B）。差的是**还没有生产者的变体**，不是能力。
+//! 4. **动画日志**（§142）：**213,224 → 216,080 B（+2,856 B，+1.3%）**，SRAM 35.2% → **35.6%**。
+//!    日志本体 `size_of::<BeatLog>()` = **2,268 B**（64 条 × 20 B + 24 个名字 × 41 B + 4），
+//!    连同它带进来的对齐是 2,856 B；同时上面两条**旧错行**被改正（`Combatant` +528、
+//!    队列 +256），所以这一版的总量不能只用"加了一个日志"来解释 —— 差额逐项列在表里。
+//!    ⚠️ 它**不进哈希也不要进快照**：日志记的是"已经发生过什么"，两个只在日志上不同的局面
+//!    后续行为逐字相同 ⇒ 加它**不移动任何基线**（`hash_golden` 的字节一个都没变，这是
+//!    §142 提交里 `golden` 闸门仍然绿的原因，而不是"跑了没红"）。
 //!
-//! That is 34.3% of the P4's 592 KiB of SRAM in the worst case, and about 7x the reference's *packed*
+//! That is 35.6% of the P4's 592 KiB of SRAM in the worst case, and about 7x the reference's *packed*
 //! estimate of ~9 KB for the same 4v3/200-card fight (spec §5.2) - because §5.2 assumes interned
 //! `u16` ids and 24 B per card, while this stage stores **ASCII strings** (the task's stage-1
 //! instruction, §3-D9) and pays both per-card mark arrays in full: of a card's 440 B, 280 B are the
@@ -2937,6 +2957,12 @@ pub struct CombatState {
     program_frames: ProgramFrameArena,
     program_nodes: ProgramNodeArena,
     program_loops: ProgramLoopArena,
+    // ---- 动画日志（§142）----
+    //
+    // **不进哈希、不进快照**，理由与节目帧那一节同型：它记的是"已经发生过什么"，
+    // 不是"以后会怎样"。两个只在日志上不同的局面，后续行为逐字相同 —— 所以它不该
+    // 移动任何基线（加它之前与之后 `hash_golden` 的字节完全一样）。
+    beat_log: crate::beat::BeatLog,
 }
 
 impl CombatState {
@@ -2979,6 +3005,18 @@ impl CombatState {
     #[must_use]
     pub fn live_program_frames(&self) -> usize {
         self.program_frames.live()
+    }
+
+    /// 动画日志（读）。对外接口在 [`crate::beat`]：`beats()` / `beat_def_text()` /
+    /// `beats_dropped()` / `clear_beats()`。
+    #[must_use]
+    pub(crate) fn beat_log(&self) -> &crate::beat::BeatLog {
+        &self.beat_log
+    }
+
+    /// 动画日志（写）。**只有 [`crate::beat`] 的埋点函数该调它。**
+    pub(crate) fn beat_log_mut(&mut self) -> &mut crate::beat::BeatLog {
+        &mut self.beat_log
     }
 }
 
@@ -3048,6 +3086,7 @@ impl Empty for CombatState {
         program_frames: ProgramFrameArena::new(),
         program_nodes: ProgramNodeArena::new(),
         program_loops: ProgramLoopArena::new(),
+        beat_log: crate::beat::BeatLog::new(),
     };
 }
 
@@ -3114,6 +3153,8 @@ impl CombatState {
         self.program_frames.clear();
         self.program_nodes.clear();
         self.program_loops.clear();
+        // 动画日志（§142）：上一局的"发生过什么"绝不能出现在新局的第一步里。
+        self.beat_log.clear();
     }
 
     /// 一份全空的状态 —— [`Empty::EMPTY`] 的**逐字段**版本。
@@ -3157,6 +3198,7 @@ impl CombatState {
             program_frames: ProgramFrameArena::new(),
             program_nodes: ProgramNodeArena::new(),
             program_loops: ProgramLoopArena::new(),
+            beat_log: crate::beat::BeatLog::new(),
         }
     }
 
@@ -4756,6 +4798,22 @@ mod tests {
             MAX_COMBATANTS,
             core::mem::size_of::<CardZones>(),
             MAX_COMBATANTS * core::mem::size_of::<CardZones>()
+        );
+        // 动画日志（§142）：一行一个分量，再打**整个结构体** —— 两者的差就是对齐，
+        // 而"对齐"必须看得见，否则"总量加不出来"又会变成一句看不懂的话。
+        std::println!(
+            "  beats      : {} x {} (beat) + {} x {} (def) + {} (len/defs_len/dropped) = {} B, \
+             size_of::<BeatLog>() = {} B",
+            crate::beat::MAX_BEATS,
+            core::mem::size_of::<crate::beat::Beat>(),
+            crate::beat::MAX_BEAT_DEFS,
+            core::mem::size_of::<Ident<ID_CAP>>(),
+            core::mem::size_of::<u16>() + 2 * core::mem::size_of::<u8>(),
+            crate::beat::MAX_BEATS * core::mem::size_of::<crate::beat::Beat>()
+                + crate::beat::MAX_BEAT_DEFS * core::mem::size_of::<Ident<ID_CAP>>()
+                + core::mem::size_of::<u16>()
+                + 2 * core::mem::size_of::<u8>(),
+            core::mem::size_of::<crate::beat::BeatLog>()
         );
         // 事件队列这一块（批次 1）。**逐列打**，因为"总量对、分量烂"是这张账本栽过的坑：
         // 六个队列 + 链 arena 加起来必须能和"总量 − 上面三个分量"对上。
