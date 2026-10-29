@@ -2100,6 +2100,170 @@
       "TurnEndHandDestinationZone": "Hand",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Curse"
+    },
+    {
+      "Id": "sentinel",
+      "PackageId": "sts",
+      "NameKey": "Sentinel",
+      "DescriptionKey": "Gain 5 Block. Ethereal.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "ethereal"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.gainBlock",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 5
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "ExhaustPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Common"
+    },
+    {
+      "Id": "patient_guard",
+      "PackageId": "sts",
+      "NameKey": "Patient Guard",
+      "DescriptionKey": "Gain 5 Block. Retain.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "retain"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.gainBlock",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 5
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": true,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Common"
+    },
+    {
+      "Id": "swift_strike",
+      "PackageId": "sts",
+      "NameKey": "Swift Strike",
+      "DescriptionKey": "Innate. Deal 6 damage.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "strike"
+        },
+        {
+          "value": "innate"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 6
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Common"
     }
   ],
   "EnemyActions": [
@@ -6424,6 +6588,30 @@
     {
       "Id": "burning_blood",
       "DisplayName": "Burning Blood",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "anchor",
+      "DisplayName": "Anchor",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "vajra",
+      "DisplayName": "Vajra",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "pear",
+      "DisplayName": "Pear",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "blood_vial",
+      "DisplayName": "Blood Vial",
       "RunPrograms": null,
       "CombatRules": null
     }

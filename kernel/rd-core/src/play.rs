@@ -1112,6 +1112,8 @@ enum Validator {
     PlayCondition,
     OneAttackPerTurn,
     Unplayable,
+    /// **本内核自己的**（§144）：X 费还造不出来，所以带 `x_cost` 的牌一律拒。
+    XCost,
 }
 
 impl Validator {
@@ -1125,6 +1127,8 @@ impl Validator {
             Validator::Stun => 100,
             Validator::Decree | Validator::PlayCondition => 150,
             Validator::OneAttackPerTurn | Validator::Unplayable => 200,
+            // 参考没有这一条；给它一个"最后"的优先级，让真正的规则先说话。
+            Validator::XCost => 1000,
         }
     }
 
@@ -1137,17 +1141,22 @@ impl Validator {
             Validator::PlayCondition => "standard.play_condition_validator",
             Validator::OneAttackPerTurn => "standard.one_attack_per_turn_validator",
             Validator::Unplayable => "standard.unplayable_validator",
+            // §144：本内核自己的，不注册在标准包里 —— 名字只用于测试里的顺序断言。
+            Validator::XCost => "kernel.x_cost_validator",
         }
     }
 }
 
 /// 执行序 = 升序后的固定表。**顺序就是语义**：第一个说不的为止。
-const VALIDATOR_ORDER: [Validator; 5] = [
+const VALIDATOR_ORDER: [Validator; 6] = [
     Validator::Stun,
     Validator::Decree,
     Validator::PlayCondition,
     Validator::OneAttackPerTurn,
     Validator::Unplayable,
+    // **§144：参考里没有这一条。** 它排在最后，因为它是"本内核造不出的机制"而不是一条规则 ——
+    // 一条真的被 stun 的 X 费牌，应当报 stun（那是玩家看得懂的拒绝）。
+    Validator::XCost,
 ];
 
 /// 逐条问，第一条说不的立刻返回（`Cards/CardPlay.cs:400-401` 的 `foreach` + 抛）。
@@ -1159,6 +1168,7 @@ fn validate_card_play(state: &CombatState, card: &CardOnTable<'_>) -> Result<(),
             Validator::PlayCondition => play_condition_validator(state, card),
             Validator::OneAttackPerTurn => one_attack_per_turn_validator(state, card),
             Validator::Unplayable => unplayable_validator(card),
+            Validator::XCost => x_cost_validator(card),
         };
         verdict?;
     }
@@ -1324,6 +1334,21 @@ fn one_attack_per_turn_validator(
 fn unplayable_validator(card: &CardOnTable<'_>) -> Result<(), PlayError> {
     if card_has_tag(card.content, card.row, UNPLAYABLE_TAG)? {
         return Err(PlayError::Refused(Refusal::Unplayable));
+    }
+    Ok(())
+}
+
+/// **#6 `x_cost`（§144 的响亮拒绝，参考里没有这一条）。**
+///
+/// X 费不是"还没移植的字段"：参考全仓没有 `XCost` / `EnergySpent` 这类概念（grep 过），所以它
+/// 要**新造**一个"用光全部能量、并以用掉的量作为 X"的机制，外加一个新的数量来源。在它存在之前，
+/// 一张带 `x_cost` 的牌必须被拒 —— 而不是按印刷费用结算：后者的数字全都合理，所以最难发现。
+///
+/// 放在 `play.rs` 是**第二道**（第一道在 `battle.rs` 的建战斗期）。两张嘴说同一句话，代价一行，
+/// 而手写牌组绕过 `build_fight` 的那条路也堵上了。
+fn x_cost_validator(card: &CardOnTable<'_>) -> Result<(), PlayError> {
+    if card_has_tag(card.content, card.row, crate::battle::X_COST_TAG)? {
+        return Err(unsupported_content("XCost"));
     }
     Ok(())
 }
@@ -2724,8 +2749,11 @@ mod tests {
                 "standard.play_condition_validator",
                 "standard.one_attack_per_turn_validator",
                 "standard.unplayable_validator",
+                // §144：本内核自己的第六条，排在最后（`1000`）—— 它是"造不出来的机制"，
+                // 不该抢在一条真规则前面说话。
+                "kernel.x_cost_validator",
             ],
-            "§2.2 的五条执行序（150 档 'd' < 'p'，200 档 'o' < 'u'）"
+            "§2.2 的五条执行序（150 档 'd' < 'p'，200 档 'o' < 'u'）+ §144 的第六条"
         );
 
         // §3.3：六个费用修饰器的执行序同理。

@@ -1,21 +1,21 @@
 {
   "package": "sts",
-  "description": "Slay the Spire Act 1 (Ironclad) -- the zero-new-ability (tier A) subset: 10 enemies, 3 weak encounters, the 10-card starting deck, 5 statuses.  No elite, no boss, no relic, no map, no event.  Every number is from docs/spec/sts-act1-inventory.md and is re-checked by native/sts_content_check.py (inv numbers + per-key round trip of both images + cross references).  Deliberately NOT pinned in expected_sha.txt: this package is meant to grow every milestone, so the gate is the inv contract, not a byte freeze.  Nothing here is kernel-verified yet (no fight has been driven from it).",
+  "description": "Slay the Spire Act 1 (Ironclad) -- the zero-new-ability (tier A) subset: 10 enemies, 3 weak encounters, the 10-card starting deck, 5 statuses.  No elite, no boss, no relic, map, events and potions (\u00a7133 / \u00a7143).  Every number is from docs/spec/sts-act1-inventory.md and is re-checked by native/sts_content_check.py (inv numbers, per-key round trip of both images, cross references, and the event vocabulary with its payloads).  Deliberately NOT pinned in expected_sha.txt: this package is meant to grow every milestone, so the gate is the inv contract, not a byte freeze.  Nothing here is kernel-verified yet (no fight has been driven from it).",
   "src": {
     "path": "tools/contentc/packages/sts/sts.roguedeck.json",
-    "bytes": 190237,
-    "sha256": "8c30dfab8686a31c342de3880e9081ebe26c377c2c33308e086ab32c635529ac"
+    "bytes": 194579,
+    "sha256": "1ccf844e56f356260ecfeb9e241fa9b56dc5da8b0a54aa3dfbadfc68a97d8f20"
   },
   "images": {
     "full": {
       "file": "content.sts.rdcf",
-      "bytes": 27720,
-      "sha256": "59c2c6f0fe95779f0a695121332ea5602f4b36f831bc62f5957828053bbfd6be"
+      "bytes": 28296,
+      "sha256": "b731c2cca2cee1f8c98b8b76bb1702715c2087042f4c0f3bec335e82efcdf359"
     },
     "core": {
       "file": "content.sts.core.rdcf",
-      "bytes": 23288,
-      "sha256": "cbb1d5e6756dd4daf9b6df384d556520acb3925150da645808fbbebf08d42867"
+      "bytes": 23692,
+      "sha256": "7a41bb272f540a1f12818c81d027fb10126a21820f68f8382c72a46fa3d98d65"
     }
   },
   "compiler": {

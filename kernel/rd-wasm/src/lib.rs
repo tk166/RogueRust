@@ -167,7 +167,7 @@ const STATUS_AXES: [&str; 5] = [
 ];
 
 const OFF_HEADER: usize = 0;
-const OFF_HERO_STATUS: usize = OFF_HEADER + 12; // 12
+pub(crate) const OFF_HERO_STATUS: usize = OFF_HEADER + 12; // 12
 const OFF_ENEMY: usize = OFF_HERO_STATUS + 5; // 17
 const OFF_ENEMY_STATUS: usize = OFF_ENEMY + MAX_ENEMY_SLOTS * 8; // 49
 const OFF_HAND: usize = OFF_ENEMY_STATUS + MAX_ENEMY_SLOTS * 5; // 69

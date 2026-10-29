@@ -130,6 +130,18 @@ INV_CARDS = {
     # §143: the first **Curse**. It is not in the deck and never a reward; an event hands it to
     # you (`curse:injury`), and the only thing it does is sit in the way -- `unplayable`.
     "injury": {"Cost": 1, "Tags": ["curse", "unplayable", "junk"], "Facts": []},
+    # §144: the keyword cards. `sentinel` is a **real** Ironclad card (5 Block, Ethereal); the other
+    # two are **fixtures** on purpose -- the Ironclad has no Retain and no Innate card in StS, so
+    # the keyword has to be exercised by a card this package owns. Their numbers are this package's,
+    # not the wiki's, and that is why they are named here rather than silently mixed in.
+    "sentinel": {"Cost": 1, "Tags": ["skill", "ethereal"],
+                 "Facts": [("block", 5, "source")],
+                 "TurnEndHandDestinationZone": "ExhaustPile"},
+    "patient_guard": {"Cost": 1, "Tags": ["skill", "retain"],
+                      "Facts": [("block", 5, "source")],
+                      "RetainInHandOnTurnEnd": True},
+    "swift_strike": {"Cost": 1, "Tags": ["attack", "strike", "innate"],
+                     "Facts": [("damage", 6, "event")]},
 }
 
 # inv:§4.1 -- the 10 zero-new-ability enemies: (hp_min, hp_max, action ids).
@@ -847,10 +859,76 @@ def check_weak_pool_table(doc):
 # whose effect the kernel implements.
 EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing",
                       "remove_card", "upgrade_card", "transform_card")
-
 # Mirrors `rd_run::state::RunState::relic_effect`. Kept as a literal list on purpose: this file is
 # the **second opinion** -- if the two disagree, one of them is wrong and the gate says so.
-IMPLEMENTED_RELICS = ("burning_blood",)
+IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial")
+
+
+def check_relics(doc):
+    """§145：遗物池里的**每一件**都必须被内核实现。
+
+    这不是洁癖：宝箱和商店都是从这张表里随机挑一件，所以一件内核跑不了的遗物不是"躺在那里
+    没人用"，而是**随机地把玩家的宝箱变成一次拒绝**（`push_relic` 在授予那一刻就报错）。
+    `RunState::relic_effect` 是内核那边的表；这里是它的第二张嘴。
+    """
+    print("[6e] relic pool (port-plan.md §145)")
+    relics = doc.get("Relics") or []
+    if len(relics) < 2:
+        fail("Relics", "只有 %d 件遗物 —— 池子至少要能让一次掉落有得选" % len(relics))
+    for relic in relics:
+        relic_id = relic.get("Id")
+        if relic_id not in IMPLEMENTED_RELICS:
+            fail("Relics.%s" % relic_id,
+                 "内核没实现这件遗物的效果（%s）⇒ 宝箱抽到它会当场拒绝"
+                 % " / ".join(IMPLEMENTED_RELICS))
+        if not relic.get("DisplayName"):
+            fail("Relics.%s" % relic_id, "没有 DisplayName（页面上会是一串 id）")
+    # A relic that exists in the kernel's table but not in the content can never be handed out
+    # either -- say so once, in the other direction.
+    declared = {relic.get("Id") for relic in relics}
+    for relic_id in IMPLEMENTED_RELICS:
+        if relic_id not in declared:
+            fail("Relics", "内核实现了 `%s`，但内容里没有它 ⇒ 永远发不出来" % relic_id)
+    ok("relic pool", "%d relics, all implemented" % len(relics))
+
+
+def check_card_keywords(doc):
+    """§144：关键字必须**落在机制字段上**，tag 只是文档。
+
+    内核读的是 `CARD.TurnEndHandDestinationZone`（Ethereal）、`CARD.RetainInHandOnTurnEnd`
+    （Retain）和 `Tags` 里的 `innate`（Innate）。一条 tag 写着 `ethereal`、而那一格还写着
+    `DiscardPile` 的卡，在游戏里就是"一张什么关键字都没有的牌" —— 而且**看不出来**。
+    这条检查把两边的说法钉在一起。
+    """
+    print("[6d] card keywords (port-plan.md §144)")
+    cards = doc.get("Cards") or []
+    counts = {"ethereal": 0, "retain": 0, "innate": 0, "x_cost": 0}
+    for card in cards:
+        card_id = card.get("Id")
+        tags = {tag.get("value") for tag in card.get("Tags") or [] if isinstance(tag, dict)}
+        zone = card.get("TurnEndHandDestinationZone") or "DiscardPile"
+        retain = card.get("RetainInHandOnTurnEnd") is True
+        label = "Cards.%s" % card_id
+        # tag ⇔ mechanism, both directions: a mechanism without the tag is a card whose
+        # description lies, and a tag without the mechanism is a card that does nothing.
+        if ("ethereal" in tags) != (zone == "ExhaustPile"):
+            fail(label, "ethereal tag %s but TurnEndHandDestinationZone is %r"
+                 % ("present" if "ethereal" in tags else "absent", zone))
+        if ("retain" in tags) != retain:
+            fail(label, "retain tag %s but RetainInHandOnTurnEnd is %r"
+                 % ("present" if "retain" in tags else "absent",
+                    card.get("RetainInHandOnTurnEnd")))
+        if "x_cost" in tags:
+            # `battle.rs` refuses such a deck at build time, so shipping one would make the card
+            # unplayable *and* its deck unbuildable. Say so here instead of at the first fight.
+            fail(label, "x_cost 是内核**还没造**的机制（§144），内容里不许出现")
+        for keyword in counts:
+            if keyword in tags:
+                counts[keyword] += 1
+    ok("keyword cards", "ethereal %d / retain %d / innate %d / x_cost %d"
+       % (counts["ethereal"], counts["retain"], counts["innate"], counts["x_cost"]))
+    if counts["ethereal"] + counts["retain"] + counts["innate"] == 0:
+        fail("Cards", "no card exercises any keyword -- §144 would be untested in the real image")
 
 
 def check_event_vocabulary(doc):
@@ -1416,6 +1494,8 @@ def main():
     check_relations(doc)
     check_weak_pool_table(doc)
     check_event_vocabulary(doc)
+    check_card_keywords(doc)
+    check_relics(doc)
     check_inert_keys(doc)
     check_roundtrip(doc, full, "full", doc)
     # The core image's expectation comes from the compiler's own strip rule --

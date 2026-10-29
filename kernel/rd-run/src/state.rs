@@ -41,13 +41,46 @@ pub const POTION_DROP_PERCENT: u32 = 40;
 /// `Burning Blood`: "At the end of combat, heal 6 HP" (`inv:§2`).
 pub const BURNING_BLOOD_HEAL: i32 = 6;
 
-/// What a relic does. One variant today, and that is the point: this enum is the **only** place a
-/// relic's behaviour is described (`RunState::relic_effect`), so "is this relic implemented?" and
-/// "what does this relic do?" are the same table.
+/// What a relic does. **One table** (`RunState::relic_effect`) is the only place a relic's
+/// behaviour is described, so "is this relic implemented?" and "what does this relic do?" cannot
+/// disagree (`port-plan.md` §145).
+///
+/// The three hook points are modelled because they are the three the run layer can honour without
+/// a program interpreter: **on grant** (a number changes once), **combat start** (the fight is
+/// built by the caller, so the run hands out a bonus) and **combat end** (`end_of_combat`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum RelicEffect {
-    /// Heal this much when a fight ends, capped at the maximum.
+    /// Heal this much when a fight ends, capped at the maximum. (`burning_blood`)
     EndOfCombatHeal(i32),
+    /// Raise the maximum HP (and the current HP with it) **when the relic is granted**. (`pear`)
+    MaxHealthUp(i32),
+    /// Heal this much (capped at the maximum) **when the relic is granted**. (`blood_vial`)
+    HealUp(i32),
+    /// Start every fight with this much Block. (`anchor`)
+    StartCombatBlock(i32),
+    /// Start every fight with this many stacks of Strength. (`vajra`)
+    StartCombatStrength(i32),
+}
+
+/// What the relics do **at the start of a fight**.
+///
+/// A struct and not a list of effects, because the caller (the fight builder) has to apply them in
+/// one place: "which relics fire" is the run's answer, "how a status is applied" is the kernel's.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct CombatBonus {
+    /// Block the hero starts the fight with.
+    pub block: i32,
+    /// Strength stacks the hero starts the fight with.
+    pub strength: i32,
+}
+
+impl CombatBonus {
+    /// True when nothing about this fight is different from a bare one — the common case, and the
+    /// one the caller can skip every write for.
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.block == 0 && self.strength == 0
+    }
 }
 
 /// Card slots a merchant shows (`inv:§8.2`: five coloured cards; the two colourless ones are not
@@ -806,11 +839,39 @@ impl RunState {
     }
 
     /// Add a relic. Past [`MAX_RUN_RELICS`] this is an error.
+    ///
+    /// **The single grant point** (§145): every way a relic can arrive — chest, shop, elite reward,
+    /// an event's `relic:<id>` — goes through here, so three things happen exactly once:
+    ///
+    /// 1. an **unimplemented** relic is refused ([`RunError::UnsupportedRelic`]) while the player is
+    ///    still looking at whatever handed it over, instead of at the end of the next fight;
+    /// 2. the relic's **grant-time** effect fires (`MaxHealthUp` / `HealUp`);
+    /// 3. it enters the belt.
+    ///
+    /// Doing (2) at the call sites instead would mean four copies of "and then Pear's max HP goes
+    /// up", which is how a relic comes to work in a chest but not in a shop.
     pub fn push_relic(&mut self, relic_id: &str) -> Result<(), RunError> {
+        let Some(effect) = Self::relic_effect(relic_id) else {
+            return Err(RunError::UnsupportedRelic {
+                index: self.relics_len,
+            });
+        };
         let id = RunId::new(relic_id).map_err(|_| RunError::BadId)?;
         let slot = self.relics_len as usize;
         if slot >= MAX_RUN_RELICS {
             return Err(RunError::Capacity);
+        }
+        match effect {
+            RelicEffect::MaxHealthUp(amount) => {
+                self.health_max += amount;
+                // The current HP follows the maximum up — StS's "raise your max HP" always heals
+                // you by the same amount.
+                self.adjust_health(amount);
+            }
+            RelicEffect::HealUp(amount) => self.heal_after_combat(amount),
+            RelicEffect::EndOfCombatHeal(_)
+            | RelicEffect::StartCombatBlock(_)
+            | RelicEffect::StartCombatStrength(_) => {}
         }
         self.relics[slot] = id;
         self.relics_len += 1;
@@ -868,6 +929,16 @@ impl RunState {
                     self.heal_after_combat(amount);
                     healed += self.health - before;
                 }
+                // The other four are **not** end-of-combat effects: they fire when the relic is
+                // granted (`push_relic`) or when a fight starts (`combat_bonus`). Listing them
+                // explicitly instead of a `_` arm is what makes "a new effect variant" a compile
+                // error here rather than a relic that quietly does nothing at this hook.
+                Some(
+                    RelicEffect::MaxHealthUp(_)
+                    | RelicEffect::HealUp(_)
+                    | RelicEffect::StartCombatBlock(_)
+                    | RelicEffect::StartCombatStrength(_),
+                ) => {}
                 None => {
                     return Err(RunError::UnsupportedRelic {
                         index: slot as u8,
@@ -878,16 +949,24 @@ impl RunState {
         Ok(healed)
     }
 
-    /// The **one** table of relic effects (`port-plan.md` §143 moved it out of `end_of_combat`).
+    /// The **one** table of relic effects (`port-plan.md` §143 moved it out of `end_of_combat`,
+    /// §145 grew it into a pool).
     ///
-    /// Two callers read it now: `end_of_combat` (what happens) and the `relic:<id>` event effect
-    /// (whether a relic this kernel cannot run may enter the belt at all). Keeping one table is
-    /// what makes those two answers unable to disagree.
+    /// Three callers read it: `end_of_combat` (what happens), `push_relic` (whether a relic this
+    /// kernel cannot run may enter the belt **and** what it does the moment it arrives), and
+    /// `combat_bonus` (what it does when a fight starts). Keeping one table is what makes those
+    /// three answers unable to disagree.
     #[must_use]
     pub fn relic_effect(id: &str) -> Option<RelicEffect> {
         match id {
             // `inv:§2`: "At the end of combat, heal 6 HP."
             "burning_blood" => Some(RelicEffect::EndOfCombatHeal(BURNING_BLOOD_HEAL)),
+            // The wiki's numbers, not invented ones: Pear +10 max HP, Blood Vial +2 HP on pickup,
+            // Anchor 10 Block at combat start, Vajra 1 Strength at combat start.
+            "pear" => Some(RelicEffect::MaxHealthUp(10)),
+            "blood_vial" => Some(RelicEffect::HealUp(2)),
+            "anchor" => Some(RelicEffect::StartCombatBlock(10)),
+            "vajra" => Some(RelicEffect::StartCombatStrength(1)),
             _ => None,
         }
     }
@@ -896,6 +975,28 @@ impl RunState {
     #[must_use]
     pub fn relic_is_implemented(id: &str) -> bool {
         Self::relic_effect(id).is_some()
+    }
+
+    /// What the relics do **at the start of a fight** (§145).
+    ///
+    /// Summed, not "the first one wins": two relics that both give Block add up, which is what the
+    /// player expects and what the belt's order must not silently decide.
+    #[must_use]
+    pub fn combat_bonus(&self) -> CombatBonus {
+        let mut bonus = CombatBonus::default();
+        for slot in 0..self.relics_len as usize {
+            match Self::relic_effect(self.relics[slot].as_str()) {
+                Some(RelicEffect::StartCombatBlock(amount)) => bonus.block += amount,
+                Some(RelicEffect::StartCombatStrength(amount)) => bonus.strength += amount,
+                Some(
+                    RelicEffect::EndOfCombatHeal(_)
+                    | RelicEffect::MaxHealthUp(_)
+                    | RelicEffect::HealUp(_),
+                )
+                | None => {}
+            }
+        }
+        bonus
     }
 
     /// Take the `Burning Blood` heal (`inv:§2`: +6 HP at the end of combat). **Capped at the
@@ -1239,13 +1340,24 @@ impl RunState {
         self.adjust_gold(gold);
         // A chest always holds a relic in `inv:§8.3`; an empty pool is a content problem, not "an
         // empty chest".
-        let relic = if relic_pool.is_empty() {
-            None
-        } else {
-            let index = self.rng.roll(RunStream::Chest, relic_pool.len() as u32)? as usize;
-            let id = RunId::new(relic_pool[index]).map_err(|_| RunError::BadId)?;
-            self.push_relic(relic_pool[index])?;
-            Some(id)
+        //
+        // §145: **already-held relics are filtered out** — a chest that hands you a second
+        // Burning Blood is a bug the player sees immediately, and before the pool had more than one
+        // entry it was the *only* thing this could do.
+        let relic = {
+            let mut available = [0usize; MAX_POOL];
+            let count = self.relic_candidates(relic_pool, &mut available);
+            if count == 0 {
+                None
+            } else {
+                let index = self.rng.roll(RunStream::Chest, count as u32)? as usize;
+                let Some(&slot) = available.get(index) else {
+                    return Err(RunError::EmptyPool("relics"));
+                };
+                let id = RunId::new(relic_pool[slot]).map_err(|_| RunError::BadId)?;
+                self.push_relic(relic_pool[slot])?;
+                Some(id)
+            }
         };
         self.pending = Pending::None;
         self.mark_resolved();
@@ -1279,17 +1391,47 @@ impl RunState {
         }
         self.shop.cards_len = cards as u8;
 
-        let relics = MAX_SHOP_RELICS.min(relic_pool.len());
-        for (slot, source) in relic_pool.iter().take(relics).enumerate() {
+        // §145: the merchant also refuses to sell you something you already wear (same filter as
+        // the chest — one rule, one helper).
+        let mut available = [0usize; MAX_POOL];
+        let candidates = self.relic_candidates(relic_pool, &mut available);
+        let relics = MAX_SHOP_RELICS.min(candidates);
+        for (slot, source) in available.iter().take(relics).enumerate() {
+            let index = *source;
+            let Some(id) = relic_pool.get(index) else {
+                return Err(RunError::EmptyPool("relics"));
+            };
             // Common 143–157.
             let price = 143 + self.rng.roll(RunStream::Shop, 15)? as i32;
             self.shop.relics[slot] = Offer {
-                id: RunId::new(source).map_err(|_| RunError::BadId)?,
+                id: RunId::new(id).map_err(|_| RunError::BadId)?,
                 price,
             };
         }
         self.shop.relics_len = relics as u8;
         Ok(())
+    }
+
+    /// The indices in `pool` that name a relic the run **does not already hold** (§145).
+    ///
+    /// One helper for the chest and the merchant: before the pool grew past one entry, "a second
+    /// copy of the relic you start with" was the only thing either of them could produce.
+    fn relic_candidates(&self, pool: &[&str], out: &mut [usize; MAX_POOL]) -> usize {
+        let mut count = 0usize;
+        for (index, id) in pool.iter().enumerate() {
+            if count == MAX_POOL {
+                break;
+            }
+            if self.relics().iter().any(|held| held.as_str() == *id) {
+                continue;
+            }
+            let Some(cell) = out.get_mut(count) else {
+                break;
+            };
+            *cell = index;
+            count += 1;
+        }
+        count
     }
 
     /// Buy the card in `slot`. The id stays readable through [`RunState::shop`].
@@ -2183,19 +2325,119 @@ mod tests {
     /// A relic whose effect this kernel cannot run is an **error**, not a no-op. This is the loud
     /// boundary of the whole relic system: `REL.RunPrograms`/`CombatRules` are not executed, so an
     /// unknown id must fail rather than quietly do nothing.
+    ///
+    /// ⚠️ §145 改了这条测试的**位置**，理由和测试本身一样：`vajra` 现在是**实现了**的（战力 +1），
+    /// 所以它不再是反例。反例换成一件内核确实还没有的遗物（`golden_idol`），而且拒绝发生在
+    /// **`push_relic` 那一刻** —— 玩家还看得见是谁要塞给他。
     #[test]
     fn a_relic_with_no_implemented_effect_is_an_error() {
         let mut run = ironclad();
-        run.push_relic("vajra").unwrap(); // a real StS relic, whose effect is not implemented
         assert_eq!(
-            run.end_of_combat(),
+            run.push_relic("golden_idol"),
             Err(RunError::UnsupportedRelic { index: 0 }),
-            "a relic with no rule must not be silently inert"
+            "一件内核跑不了的遗物必须在**授予那一刻**被拒"
         );
+        assert_eq!(run.relics().len(), 0, "拒绝之后腰带上什么都没有");
         // And a run with no relics has nothing to do, which is not an error.
         let mut bare = ironclad();
         assert_eq!(bare.end_of_combat(), Ok(0));
         assert_eq!(bare.health(), 80);
+    }
+
+    /// §145：池子里**已经戴在身上的**那件不会再发一次 —— 宝箱和商店是同一条规则。
+    #[test]
+    fn a_relic_you_already_hold_is_not_offered_again() {
+        let pool = ["burning_blood", "anchor", "vajra"];
+        let mut run = ironclad();
+        run.push_relic("burning_blood").expect("the starter relic");
+
+        // The chest: with only one un-held relic in the pool, every chest must give that one.
+        // Repeated because the draw is random -- one iteration would pass by luck.
+        for round in 0..12 {
+            let unheld = pool
+                .iter()
+                .filter(|id| !run.relics().iter().any(|held| held.as_str() == **id))
+                .count();
+            run.pending = Pending::Chest;
+            let outcome = run.open_chest(&pool).expect("a chest");
+            let got = outcome.relic.map(|id| id.as_str().to_string());
+            if unheld == 0 {
+                assert_eq!(got, None, "round {round}: nothing left to give ⇒ no relic, not a copy");
+                break;
+            }
+            assert!(
+                got.as_deref() != Some("burning_blood"),
+                "round {round}: the chest handed back the relic the hero already wears"
+            );
+            assert!(got.is_some(), "round {round}: a chest with an un-held relic gave none");
+        }
+
+        // The merchant: same filter, and the shelves only hold un-held relics.
+        let mut run = ironclad();
+        run.push_relic("anchor").expect("anchor");
+        run.stock_shop(&basic_pool(), &pool).expect("a shop");
+        for offer in run.shop().relics() {
+            assert_ne!(
+                offer.id.as_str(),
+                "anchor",
+                "the merchant offered a relic the hero already wears"
+            );
+        }
+    }
+
+    /// §145：遗物的三种派发点各自只算一次 —— 授予时（数值）、开战时（奖励）、结束战斗时。
+    #[test]
+    fn the_relic_pool_fires_at_the_three_hooks_it_has() {
+        // 授予时：Pear +10 最大生命，并且**当前生命跟着涨**（StS 的"提升最大生命"一向如此）。
+        let mut run = ironclad();
+        let before_max = run.health_max();
+        let before = run.health();
+        run.push_relic("pear").expect("pear is implemented");
+        assert_eq!(run.health_max(), before_max + 10);
+        assert_eq!(run.health(), before + 10);
+
+        // 授予时：Blood Vial 回 2 血，受上限约束。
+        let mut run = ironclad();
+        run.adjust_health(-20);
+        let low = run.health();
+        run.push_relic("blood_vial").expect("blood vial is implemented");
+        assert_eq!(run.health(), low + 2);
+
+        // 开战时：Anchor 10 Block、Vajra 1 力量，而且**两件一起**是相加不是覆盖。
+        let mut run = ironclad();
+        assert!(run.combat_bonus().is_empty(), "没有遗物就没有加成");
+        run.push_relic("anchor").expect("anchor");
+        assert_eq!(run.combat_bonus(), CombatBonus { block: 10, strength: 0 });
+        run.push_relic("vajra").expect("vajra");
+        assert_eq!(
+            run.combat_bonus(),
+            CombatBonus {
+                block: 10,
+                strength: 1
+            },
+            "两件遗物的加成必须相加"
+        );
+
+        // 结束战斗时：只有 Burning Blood 在这条钩子上，其余四件**什么都不做**（不是"也回血"）。
+        let mut run = ironclad();
+        for id in ["anchor", "vajra", "pear", "blood_vial"] {
+            run.push_relic(id).expect("implemented");
+        }
+        run.adjust_health(-30);
+        let wounded = run.health();
+        assert_eq!(
+            run.end_of_combat(),
+            Ok(0),
+            "这四件在战斗结束时不回血"
+        );
+        assert_eq!(run.health(), wounded);
+        run.push_relic("burning_blood").expect("burning blood");
+        assert_eq!(
+            run.end_of_combat(),
+            Ok(BURNING_BLOOD_HEAL),
+            "Burning Blood 是唯一一条战斗结束回血"
+        );
+        assert_eq!(run.health(), wounded + BURNING_BLOOD_HEAL);
     }
 
     // ---- settling a node ---------------------------------------------------------------------

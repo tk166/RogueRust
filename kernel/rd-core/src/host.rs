@@ -2446,21 +2446,34 @@ impl TurnHost for Host<'_> {
         actor: &CombatantId,
         slot: CardSlot,
     ) -> bool {
-        // 参考的两条：① 实例标记 `standard.retained_card` ② 定义 `RetainInHandOnTurnEnd`
-        // （`CardZoneEffects.cs:419-425`）。
+        // 参考的两条（`CardZoneEffects.cs:419-425`）：① 实例标记 `standard.retained_card`
+        // ② 定义 `RetainInHandOnTurnEnd`。
         //
-        // ⚠️ 这里**故意**返回默认 `false`，而理由是**两条可复现的实测**（都钉在测试
-        // `the_three_strategy_hooks_that_do_not_read_content_are_measured_not_assumed` 里）：
+        // **§144 起 ② 真的读了。** 之前这里恒 `false`，理由写在下面那段历史里（当时 62/62 卡
+        // 都是 false，两者观察等价）。内容里出现第一张 Retain 卡之后，"观察等价"就不再成立，
+        // 那条测试（`the_three_strategy_hooks_that_do_not_read_content_are_measured_not_assumed`）
+        // 正是为了在这一刻把人叫回来 —— 它红了，所以这一段被写出来了。
         //
-        // * `CARD.RetainInHandOnTurnEnd` 是 `F_BOOL` 原始值 **1 = `BOOL_FALSE`，62/62**；
-        // * ① 的标记来源是 `node.markCardInstance`，全镜像 **0 条 term**。
+        // ① 仍然**没有消费者**：`node.markCardInstance` 在 `exec` 里不存在，全镜像 0 条 term。
+        // 只做一半更糟（见下），所以这一半继续返回"没有标记"。
         //
-        // ⇒ 今天两条判据都恒假，返回 `false` 与"逐张读出来"**观察等价**。
-        // 为什么不去读：② 读一格就会多一条"读失败怎么办"的分支，而这条钩子没有 `Result`
-        // （见 `flush_deferred` 的两条边界）；① 的节点 `exec` 根本不支持，只做一半更糟。
-        // 内容一改成 `true`/一出现 `markCardInstance`，上面那条测试立刻红 —— 那时再来做。
-        let _ = (state, actor, slot);
-        false
+        // ⚠️ 读失败（卡不在镜像里 / `F_BOOL` 是 0/3 之外的值）**当作"留在手里"**：这条钩子没有
+        // `Result`，而两个方向的代价不对称 —— 误留一张牌只是让玩家多打一次，误弃一张牌是把
+        // 玩家以为保住了的牌扔掉。错误照旧由 `record` 报给下一个 `try_*`（同
+        // `hand_is_retained_detail` 的先例）。
+        let _ = actor;
+        let Some(card) = state.card(slot) else {
+            return false;
+        };
+        match self.content.card_retains_in_hand(card.definition_id.as_str()) {
+            Some(retains) => retains,
+            None => {
+                self.record(HostError::Capacity(crate::state::CapacityError::Full(
+                    crate::state::Container::CardInstances,
+                )));
+                true
+            }
+        }
     }
 
     fn turn_end_hand_destination(
@@ -2471,13 +2484,25 @@ impl TurnHost for Host<'_> {
     ) -> CardZone {
         // 参考：`definition.TurnEndHandDestinationZone`（`CardZoneEffects.cs:427`）。
         //
-        // ⚠️ 返回默认 `DiscardPile` 的依据同样是实测，不是"应该没问题"：
-        // `CARD.TurnEndHandDestinationZone` 这一格（`F_STR`）在**62/62 行**上都是
-        // `"DiscardPile"`（同一格枚举名，不是哈希短名 `disc`）。所以返回默认值今天
-        // 与"逐张读出来"观察等价。
-        // 真要去读得先解决"枚举名不认识 / 串取不到"往哪儿报 —— 这条钩子没有 `Result`。
-        let _ = (state, actor, slot);
-        CardZone::DiscardPile
+        // **§144 起真的读了** —— `Ethereal` 就是这一格等于 `"ExhaustPile"`：参考里的 Ethereal
+        // **不是**一条独立判据，它就是这张牌"从手牌离场时去哪"。
+        // 空缺 = 参考的构造默认值 `DiscardPile`；枚举名认不出来（内容打错）⇒ 记一笔 + 弃牌堆，
+        // 因为这条钩子同样没有 `Result`，而"留在手里"会让那张牌永远出不去。
+        let _ = actor;
+        let Some(card) = state.card(slot) else {
+            return CardZone::DiscardPile;
+        };
+        match self.content.card_turn_end_zone(card.definition_id.as_str()) {
+            Some("") | Some("DiscardPile") => CardZone::DiscardPile,
+            Some("ExhaustPile") => CardZone::ExhaustPile,
+            Some("Hand") => CardZone::Hand,
+            Some(_) | None => {
+                self.record(HostError::Capacity(crate::state::CapacityError::Full(
+                    crate::state::Container::CardInstances,
+                )));
+                CardZone::DiscardPile
+            }
+        }
     }
 
     fn unspent_energy_carries(&self, state: &CombatState, actor: &CombatantId) -> bool {
@@ -3227,6 +3252,8 @@ mod tests {
             "curse.burn_block",
             "curse.burn_dual",
             "curse.burn_retained",
+            "curse.burn_ethereal",
+            "ExhaustPile",
             "curse.weird",
             "plain.card",
         ];
@@ -3374,26 +3401,32 @@ mod tests {
         }
 
         // ---- CARD 行（15 格，stride 32；`rdcfmt.py:229-237` / `content.rs:1321-1358`）----
+        // §144：`TurnEndHandDestinationZone` 也要能摆（`Ethereal` 就是这一格 = `ExhaustPile`）。
+        // NULL16 照旧表示"这一格缺席" ⇒ 参考的构造默认值 `DiscardPile`。
+        let card_with_zone =
+            |id: u16, program: u16, lifecycle: u16, retain: u16, zone: u16| -> [u16; 15] {
+                [
+                    id,          // Id
+                    program,     // Program（出牌节目）
+                    ABSENT16,    // Tags
+                    ABSENT16,    // Costs
+                    lifecycle,   // LifecyclePrograms
+                    ABSENT16,    // PlayCondition
+                    ABSENT16,    // QueueOnPlay
+                    retain,      // RetainInHandOnTurnEnd（F_BOOL）
+                    BOOL_FALSE,  // IsAction
+                    0,           // NameKey
+                    0,           // DescriptionKey
+                    0,           // PackageId
+                    zone,        // TurnEndHandDestinationZone
+                    NULL16,      // PlayedCardDestinationZone
+                    NULL16,      // extra
+                ]
+            };
         let card = |id: u16, program: u16, lifecycle: u16, retain: u16| -> [u16; 15] {
-            [
-                id,        // Id
-                program,   // Program（出牌节目）
-                ABSENT16,  // Tags
-                ABSENT16,  // Costs
-                lifecycle, // LifecyclePrograms
-                ABSENT16,  // PlayCondition
-                ABSENT16,  // QueueOnPlay
-                retain,    // RetainInHandOnTurnEnd（F_BOOL）
-                BOOL_FALSE, // IsAction
-                0,         // NameKey
-                0,         // DescriptionKey
-                0,         // PackageId
-                NULL16,    // TurnEndHandDestinationZone（Host 走默认 = DiscardPile）
-                NULL16,    // PlayedCardDestinationZone
-                NULL16,    // extra
-            ]
+            card_with_zone(id, program, lifecycle, retain, NULL16)
         };
-        let cards: [(&str, [u16; 15]); 6] = [
+        let cards: [(&str, [u16; 15]); 7] = [
             (
                 "curse.burn",
                 card(sid("curse.burn"), ABSENT16, t_lifecycle_two, BOOL_FALSE),
@@ -3405,6 +3438,20 @@ mod tests {
             (
                 "curse.burn_dual",
                 card(sid("curse.burn_dual"), t_envelope_seven, t_lifecycle_two, BOOL_FALSE),
+            ),
+            // §144：`Ethereal` 的载体 —— 回合结束从**手牌**直接进消耗堆（参考 `:427`）。
+            // ⚠️ 顺序是**按 id 字节序**排的（`IDX` 是二分查找）：`burn_ethereal` 必须排在
+            // `burn_retained` **前面**，否则查不到这张卡 —— 症状是 `card_row` 返回 None，
+            // 报出来的却是 `Content("CARD row")`，离"索引没排序"隔着三层。
+            (
+                "curse.burn_ethereal",
+                card_with_zone(
+                    sid("curse.burn_ethereal"),
+                    ABSENT16,
+                    t_lifecycle_two,
+                    BOOL_FALSE,
+                    sid("ExhaustPile"),
+                ),
             ),
             (
                 "curse.burn_retained",
@@ -3488,7 +3535,7 @@ mod tests {
         assert_eq!(content.section_count(), 15);
         assert_eq!(content.opcode_count(), 24);
         assert_eq!(content.term_count(), 15);
-        assert_eq!(content.rows(crate::content::Table::Card).count(), 6);
+        assert_eq!(content.rows(crate::content::Table::Card).count(), 7);
         // 六张卡的解码结果**逐张**（这张表就是上面 `burn_image` 文档里那张表的机器版）：
         // 四张有 `TurnEndInHand` 节目、`plain.card` 是空 `{}`、`curse.weird` 只有一个
         // 内核没有的触发器 ⇒ 响亮。
@@ -6077,12 +6124,12 @@ mod tests {
     /// `RetainInHandOnTurnEnd` 是**下一个**处理器（弃手牌，`CardZoneEffects.cs:419-425`）才读的
     /// ⇒ 一条 `retain` 分支都**不该有**。把保留的卡排除掉的实现会在这里给 70。
     ///
-    /// ⚠️ **顺带发现的缺口（不是本钩子的）**：`Host::card_stays_in_hand_at_turn_end` 恒返回
-    /// `false`（理由是"62/62 卡 `RetainInHandOnTurnEnd = false`"），所以这份手搓镜像里
-    /// **真的** `true` 的 `curse.burn_retained` 回合末照样被弃。最后那句断言把缺口摆出来：
-    /// 它一旦变红，说明那个钩子开始读内容了 —— 那时这条断言该按新语义改，别当成回归。
+    /// ⚠️ 这条测试的**最后一句**在 §144 换过语义，而它是被设计成要换的：上一版断言"保留标志
+    /// 不生效，卡还是被弃了"，用来把那个缺口摆出来；这一版 `card_stays_in_hand_at_turn_end`
+    /// 真的读 `RetainInHandOnTurnEnd` 了，于是断言反过来 —— **卡留在手里**。
+    /// 这正是"缺口写成断言"的用法：它红的那一刻就是补上缺口的那一刻。
     #[test]
-    fn a_retained_burn_card_still_fires_exactly_once() {
+    fn a_retained_burn_card_still_fires_exactly_once_and_stays_in_hand() {
         let blob = burn_image();
         let content = parse(&blob);
         let mut host = Host::new(&content);
@@ -6099,10 +6146,70 @@ mod tests {
         turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
         assert_eq!(health(&state, "hero"), 68, "保留标志不改变发作次数");
         assert_eq!(
-            zone_count(&state, "hero", CardZone::DiscardPile),
+            zone_count(&state, "hero", CardZone::Hand),
             1,
-            "缺口：`card_stays_in_hand_at_turn_end` 不读 `RetainInHandOnTurnEnd`（见文档）"
+            "`RetainInHandOnTurnEnd = true` ⇒ 回合结束仍留在手里"
         );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::DiscardPile),
+            0,
+            "留住的卡不许同时进弃牌堆"
+        );
+
+        // 成对的另一半：同一份镜像里**没有**这个标志的牌照样被弃 —— 否则上面那句可能是
+        // "整个弃手牌步骤没跑"而不是"这一张被留住了"。
+        let mut other = duel(70);
+        give_card(&mut other, "hero", CardZone::Hand, "burn1", "curse.burn", None);
+        turn::start_current_turn(&mut other, &config(), &mut host).unwrap();
+        turn::end_current_turn(&mut other, &config(), &mut host).unwrap();
+        assert_eq!(
+            zone_count(&other, "hero", CardZone::DiscardPile),
+            1,
+            "没有 Retain 的牌必须被弃（成对断言）"
+        );
+    }
+
+    /// §144：`Ethereal` = 这张牌从手牌离场时**进消耗堆**（`CARD.TurnEndHandDestinationZone`）。
+    ///
+    /// 参考里 Ethereal 不是一条独立判据，它就是这一格（`CardZoneEffects.cs:427`）。所以这条测试
+    /// 断言的是"落区被读出来了"，而不是"tag `ethereal` 被特判了" —— 后者会是一条假通路。
+    #[test]
+    fn an_ethereal_card_is_exhausted_instead_of_discarded() {
+        let blob = burn_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = duel(70);
+        give_card(
+            &mut state,
+            "hero",
+            CardZone::Hand,
+            "eth1",
+            "curse.burn_ethereal",
+            None,
+        );
+        turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+        if let Err(e) = turn::end_current_turn(&mut state, &config(), &mut host) {
+            panic!("end turn failed: {e:?}");
+        }
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::ExhaustPile),
+            1,
+            "`TurnEndHandDestinationZone = ExhaustPile` ⇒ 进消耗堆"
+        );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::DiscardPile),
+            0,
+            "消耗掉的牌不许同时进弃牌堆"
+        );
+
+        // 成对：同一份镜像里没有这一格的牌进弃牌堆。两句一起才是"这一格被读了"，
+        // 单独一句也可能是"所有牌都进消耗堆"。
+        let mut other = duel(70);
+        give_card(&mut other, "hero", CardZone::Hand, "burn2", "curse.burn", None);
+        turn::start_current_turn(&mut other, &config(), &mut host).unwrap();
+        turn::end_current_turn(&mut other, &config(), &mut host).unwrap();
+        assert_eq!(zone_count(&other, "hero", CardZone::ExhaustPile), 0);
+        assert_eq!(zone_count(&other, "hero", CardZone::DiscardPile), 1);
     }
 
     // ---------------------------------------------------------------- 策略钩子

@@ -444,9 +444,15 @@ const ENERGY_REFILL: i32 = 3;
 const CARDS_DRAWN_PER_TURN: i32 = 5;
 /// `StandardCombatIds.InnateTag`（`StandardCombatIds.cs`：`new("innate")`）。
 ///
-/// ⚠️ 实测：**core 镜像的串池里根本没有这个串**（1375 个串里没有 `innate`），
-/// 62 张卡的 `Tags` 里也没有它 ⇒ [`reject_innate_deck`] 今天不可达。
+/// §144 起**有消费者**：`move_innate_cards_to_top` 真的按它挑牌了（之前只用来拒绝）。
 const INNATE_TAG: &str = "innate";
+
+/// `x_cost`：本内核**自己的**约定，参考里没有它（§144）。
+///
+/// 参考全仓没有 X 费概念，所以这是一个"要新造机制"的能力，而不是"还没移植的字段"。
+/// 带这个 tag 的牌在**建战斗时**就被拒绝（`reject_x_cost_deck`），并被 `play.rs` 再拒绝一次
+/// （防手写牌组绕过）—— 两张嘴说同一句话，代价是一行 match。
+pub(crate) const X_COST_TAG: &str = "x_cost";
 /// `CreateNextCardInstanceId` 的前缀（`CombatState.cs:689-696`：`$"card_{n:000000}"`）。
 const CARD_ID_PREFIX: &[u8] = b"card_";
 /// 装 `<prefix>%06d` 的栈上缓冲（与 `exec.rs:2125` 同值，理由见那边的注释）。
@@ -616,8 +622,9 @@ fn build_fight_with(
         CombatantId::new(enemy.id)?;
     }
     // 步 6 的判定（`MoveInnateCardsToTop`）：参考的**挪牌**必须在洗牌之后（`:45-47`），
-    // 但**判定**没有顺序依赖 ⇒ 提前到这里，失败时 state 还是干净的。
-    reject_innate_deck(content, &deck)?;
+    // 但 `x_cost` 的判定没有顺序依赖 ⇒ 提前到这里，失败时 state 还是干净的。
+    // （`innate` §144 起是**真的挪**，不再在步 0 拒绝。）
+    reject_x_cost_deck(content, &deck)?;
     // 蓝图里"喂回合机"的两项能不能被表达（抽牌数、补能表）—— 在这里先算一遍配置，
     // 免得建完一局才发现那条路通向 `Turn(Host(Unsupported))`。
     let _ = turn_config_for(plan)?;
@@ -686,10 +693,21 @@ fn build_fight_with(
         shuffle_draw_pile(state, &hero_id)?;
     }
 
-    // ── 步 6：MoveInnateCardsToTop（`:45-49`、`:93-104`）—— **不支持** =========
-    // 判定已经在步 0 做掉了（`reject_innate_deck`）。为什么"不支持"是响亮的：
-    // 真有 innate 卡时，参考会在洗牌**之后**把它挪到堆顶 ⇒ 起手牌序不同，
-    // 而那种偏差看起来完全正常（数字全都合理）。
+    // ── 步 6：MoveInnateCardsToTop（`:45-49`、`:93-104`）======================
+    // 参考（`ScenarioCombatFactory.cs:91-104`）：
+    //   ① 按**抽牌堆顺序**收集带 `innate` tag 的实例 id；
+    //   ② **从后往前**逐个 `MoveCardToZone(DrawPile, Top)` —— 注释原话："Moving from last to
+    //      first lands the first innate card at index 0"，即这样才保住它们之间的相对顺序。
+    // 挪在**洗牌之后**（`:49`），这正是"起手必有它"的实现方式。
+    move_innate_cards_to_top(state, content, &hero_id)?;
+
+    // ── 步 6b：`x_cost` 的响亮拒绝（§144）====================================
+    // 参考**没有 X 费这个概念**（全仓 grep 无 `XCost` / `EnergySpent`），所以它不是"还没移植"，
+    // 是"要新造一个机制"：一个"用光全部能量、并以用掉的量作为 X"的费用形态，加一个新的
+    // 数量来源让节目读到 X，再加内容编译器对它的支持。在此之前，一张带 `x_cost` 的牌若被静默
+    // 当成固定费用，它的效果会按"X = 印刷费用"结算 —— 数字全都合理，所以最难发现。
+    // 因此：**构造期就拒绝**，与 `innate` 在 §144 之前受到的待遇同形。
+    reject_x_cost_deck(content, &deck)?;
 
     // ── 步 7/8：起始状态 / 开局临时规则（`:51-61`）============================
     // 两者都是"入队 + 排空"（要事件队列），而 `FightPlan` 里没有对应字段 ⇒ 恒为空。
@@ -778,23 +796,71 @@ fn shuffle_draw_pile(state: &mut CombatState, owner: &CombatantId) -> Result<(),
     Ok(())
 }
 
-/// 拒绝"牌组里有 innate 卡"的蓝图（`MoveInnateCardsToTop`，`:45-49`、`:93-104`）。
+/// 把带 `innate` tag 的牌挪到抽牌堆顶（`MoveInnateCardsToTop`，`:45-49`、`:91-104`）。
 ///
-/// 参考在开局把带 `innate` tag 的牌挪到抽牌堆顶上，好让**起手必有它**。本内核 v1 没有
-/// "按 tag 挑牌"的能力，而"静默不挪"的后果是**开局手牌本身就不对**（少一张、顺序不同）
-/// —— 那是最难发现的一种错（数字全都合理）。所以只要蓝图里有一张 innate 卡就拒绝。
+/// 逐行照参考：
+/// * 按**抽牌堆顺序**收集（`:96-100` 的 `zones.DrawPile.Where(...)`）；
+/// * **从后往前**逐个挪到顶部（`:102-103`，注释解释了为什么是倒序：倒着挪，第一张 innate
+///   才会落在 index 0，它们之间的相对顺序才保得住）；
+/// * 挪在**洗牌之后** —— 这正是"起手必有它"的实现方式。
 ///
-/// 判据是**镜像**（牌的 tag 只有镜像说了算），不是蓝图。
-/// 实测今天不可达：`innate` 这个串**不在** core 镜像的串池里，62/62 卡的 `Tags` 都没有它
-/// （测试 `no_card_in_the_image_is_innate_today` 钉住，且成对断言 tag 读取器**不是**恒假）。
+/// `MAX_CARDS_PER_ZONE` 是抽牌堆的容量（`state.rs` 的同一常量），所以这个快照不会截断。
+fn move_innate_cards_to_top(
+    state: &mut CombatState,
+    content: &Content<'_>,
+    owner: &CombatantId,
+) -> Result<(), BattleError> {
+    let mut innate = [CardSlot::from_index(0); MAX_CARDS_PER_ZONE];
+    let mut count = 0usize;
+    {
+        let Some(zones) = state.card_zones(owner) else {
+            return Err(BattleError::Capacity(CapacityError::MissingCombatant));
+        };
+        for index in 0..zones.count(CardZone::DrawPile) {
+            let Some(slot) = zones.slot_at(CardZone::DrawPile, index) else {
+                continue;
+            };
+            let Some(card) = state.card(slot) else {
+                continue;
+            };
+            match card_has_tag(content, card.definition_id.as_str(), INNATE_TAG) {
+                Ok(true) => {
+                    let Some(cell) = innate.get_mut(count) else {
+                        return Err(BattleError::Capacity(CapacityError::Full(
+                            crate::state::Container::CardsInZone(CardZone::DrawPile),
+                        )));
+                    };
+                    *cell = slot;
+                    count += 1;
+                }
+                Ok(false) => {}
+                Err(()) => return Err(content_error()),
+            }
+        }
+    }
+    // 倒着挪：第一张 innate 最后挪 ⇒ 落在 index 0。
+    for slot in innate[..count].iter().rev() {
+        state.move_card(
+            owner,
+            CardZone::DrawPile,
+            CardZone::DrawPile,
+            *slot,
+            ZonePlacement::Top,
+        )?;
+    }
+    Ok(())
+}
+
+/// 拒绝带 `x_cost` tag 的牌组（§144：X 费是**新造**的机制，不是移植）。
 ///
-/// ⚠️ 它吃的是 [`DeckPath`] 而不是 `FightPlan`：**两条入口**（手写牌组 / 内容牌组）都必须过
-/// 这条闸门 —— 内容里带一张 innate 卡与手写里带一张是同一件事。
-fn reject_innate_deck(content: &Content<'_>, deck: &DeckPath<'_>) -> Result<(), BattleError> {
+/// 为什么响亮：一张 X 费牌被当成固定费用时，它的效果会按"X = 印刷费用"结算 ——
+/// 数字全都合理、走位完全正常，与 `innate` 在 §144 之前的情形同型。
+/// 判定读**镜像**（tag 只有镜像说了算），两条入口都过。
+fn reject_x_cost_deck(content: &Content<'_>, deck: &DeckPath<'_>) -> Result<(), BattleError> {
     let mut cursor = *deck;
     while let Some(item) = cursor.next_entry() {
         let (card, _count) = item?;
-        match card_has_tag(content, card, INNATE_TAG) {
+        match card_has_tag(content, card, X_COST_TAG) {
             Ok(false) => {}
             Ok(true) => return Err(unsupported()),
             Err(()) => return Err(content_error()),
@@ -3548,6 +3614,58 @@ mod tests {
         assert_eq!(card_has_tag(&content, "paper_cut", "attack"), Ok(true));
         assert_eq!(card_has_tag(&content, "paper_cut", INNATE_TAG), Ok(false));
         assert_eq!(card_has_tag(&content, "no_such_card_", "attack"), Ok(false));
+    }
+
+    /// §144：`Innate` 是**真的挪**了 —— 一张 innate 卡从抽牌堆的**最后**被拉到顶。
+    ///
+    /// 成对设计：`shuffle: false` 时牌的初始顺序就是牌组顺序（`swift_strike` 在最后），
+    /// 所以"建完之后它在第 0 张"只可能是被挪过 —— 不挪的实现会让它留在第 4 张。
+    /// 参考的顺序细节也一并钉住：挪是**倒着**做的（`ScenarioCombatFactory.cs:102-103`）。
+    #[test]
+    fn an_innate_card_is_pulled_to_the_top_of_the_draw_pile() {
+        let blob = sts_image();
+        let entries = [
+            DeckEntry {
+                card: "strike",
+                count: 4,
+            },
+            DeckEntry {
+                card: "swift_strike",
+                count: 1,
+            },
+        ];
+        let state = build_sts_fight(&blob, &entries, false).expect("a fight");
+        let pile = draw_pile_definitions(&state, "hero");
+        assert_eq!(pile.len(), 5, "5 张牌都进了抽牌堆");
+        assert_eq!(
+            pile[0], "swift_strike",
+            "innate 卡必须在抽牌堆**顶**上（挪之前在最后一张）"
+        );
+        assert_eq!(
+            pile[1..].iter().filter(|id| *id == "strike").count(),
+            4,
+            "其余顺序不动"
+        );
+
+        // 两张 innate：相对顺序必须保住（参考的"倒着挪"正是为了这个）。
+        let two = [
+            DeckEntry {
+                card: "strike",
+                count: 3,
+            },
+            DeckEntry {
+                card: "swift_strike",
+                count: 2,
+            },
+        ];
+        let state = build_sts_fight(&blob, &two, false).expect("a fight");
+        let pile = draw_pile_definitions(&state, "hero");
+        assert_eq!(
+            &pile[..2],
+            &["swift_strike", "swift_strike"],
+            "两张 innate 都在顶上"
+        );
+        assert_eq!(pile.len(), 5);
     }
 
     /// 卡实例 id 的形状是 `card_%06d`（`CombatState.cs:689-696`），而且**每张一个新号**。

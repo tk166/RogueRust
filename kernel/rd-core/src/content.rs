@@ -2231,6 +2231,49 @@ impl<'a> Content<'a> {
         }
         self.string(cell)
     }
+
+    /// `Retain` 关键字：这张牌回合结束时**留在手里**吗？（`CARD.RetainInHandOnTurnEnd`）
+    ///
+    /// `None` = 这张卡不在镜像里 / 那一格读不出来 —— 调用方必须把"读不出来"和"false"分开，
+    /// 因为两者的处置方向相反（见 `host::card_stays_in_hand_at_turn_end`）。
+    ///
+    /// `F_BOOL` 的四个原始值是 **0 = 缺席、1 = false、2 = true、3 = null**（不是 `bool` 的两位）。
+    #[must_use]
+    pub fn card_retains_in_hand(&self, card: &str) -> Option<bool> {
+        let entry = self.lookup_in(card, EK_CARD)?;
+        let row = CardRow::new(self.row(Table::Card, entry.index as u32)?)?;
+        let cell = row.retain_in_hand_on_turn_end();
+        if cell == ABSENT16 || cell == NULL16 {
+            // 缺席 / null **就是** false（参考的默认值），不是"读不出来"。
+            return Some(false);
+        }
+        // 其余任何值都必须能判成真假，判不出来就是镜像坏了。
+        match cell {
+            // `F_BOOL` 的四个原始值：0 = 缺席（上面已处理）、1 = false、2 = true、3 = null
+            // （上面已处理）。**不是** `bool` 的 0/1 —— 这一格把 `1` 当 true 会正好反过来。
+            1 => Some(false),
+            2 => Some(true),
+            _ => None,
+        }
+    }
+
+    /// 这张牌从**手牌**在回合结束时去哪儿（`CARD.TurnEndHandDestinationZone`）。
+    ///
+    /// `Ethereal` 就是这一格等于 `"ExhaustPile"`：参考实现的 Ethereal **不是**一个独立的判据，
+    /// 它落在 `CardZoneEffects.cs:427` 的落区里（`host::turn_end_hand_destination`）。
+    /// `None` = 这张卡不在镜像里；字符串本身原样返回，让调用方自己认枚举名（认不出要响）。
+    #[must_use]
+    pub fn card_turn_end_zone(&self, card: &str) -> Option<&'a str> {
+        let entry = self.lookup_in(card, EK_CARD)?;
+        let row = CardRow::new(self.row(Table::Card, entry.index as u32)?)?;
+        let cell = row.turn_end_hand_destination_zone();
+        if cell == ABSENT16 || cell == NULL16 {
+            // 缺席 = 参考的构造默认值 `DiscardPile`。用一个**明确的空串**表示它，
+            // 而不是让调用方把 `None`（"卡不在镜像里"）当成"默认落区"。
+            return Some("");
+        }
+        self.string(cell)
+    }
 }
 
 impl<'a> Content<'a> {
@@ -3916,6 +3959,61 @@ mod tests {
         assert!(!weak2.contains(&"enc_cultist"), "act 2 must not replay act 1");
         // A pool the document does not have is None, not an empty set.
         assert_eq!(content.encounter_pool("Sideboard"), None);
+    }
+
+    /// §144：三个关键字的**机制格**真的在镜像里，而且 tag 与机制一致。
+    ///
+    /// 这一条盯的是"内容说了，但内核读的那一格没写"——那种卡在游戏里就是一张普通牌，
+    /// 而且**看不出来**（tag 只影响描述文本）。`native/sts_content_check.py` 的 `[6d]`
+    /// 是同一句话的第二张嘴：那边查文档，这边查二进制。
+    #[test]
+    fn the_keyword_cells_are_in_the_image() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&bytes).expect("the image parses");
+
+        // Ethereal = TurnEndHandDestinationZone = ExhaustPile（参考 `CardZoneEffects.cs:427`）。
+        assert_eq!(
+            content.card_turn_end_zone("sentinel"),
+            Some("ExhaustPile"),
+            "sentinel 是 Ethereal"
+        );
+        assert_eq!(
+            content.card_retains_in_hand("sentinel"),
+            Some(false),
+            "Ethereal 不是 Retain —— 两格必须各自成立"
+        );
+
+        // Retain = RetainInHandOnTurnEnd = true。
+        assert_eq!(
+            content.card_retains_in_hand("patient_guard"),
+            Some(true),
+            "patient_guard 是 Retain"
+        );
+        assert_eq!(
+            content.card_turn_end_zone("patient_guard"),
+            Some("DiscardPile"),
+            "Retain 卡不消耗自己"
+        );
+
+        // 普通卡：两格都是默认值（成对，避免"读什么都返回同一个值"）。
+        assert_eq!(content.card_retains_in_hand("strike"), Some(false));
+        assert_eq!(content.card_turn_end_zone("strike"), Some("DiscardPile"));
+
+        // 不在镜像里的卡：三态里"读不出来"这一态必须与 false 分得开。
+        assert_eq!(content.card_retains_in_hand("no_such_card_"), None);
+        assert_eq!(content.card_turn_end_zone("no_such_card_"), None);
+
+        // Innate 在 **tag** 上（`battle.rs::move_innate_cards_to_top` 读的就是它）。
+        assert_eq!(
+            content.card_has_tag("swift_strike", "innate"),
+            Some(true),
+            "swift_strike 是 Innate"
+        );
+        assert_eq!(content.card_has_tag("strike", "innate"), Some(false));
     }
 
     /// The `?` room's events, read out of the image: ids, body text, and both choices.

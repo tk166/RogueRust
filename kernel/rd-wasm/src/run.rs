@@ -1943,11 +1943,21 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         );
 
     let max_health = session.state.health_max();
+    // §145: what the relics do **when a fight starts**. Read off the run *before* the session is
+    // installed, because `combat_bonus` borrows the run and the applier borrows the fight.
+    let bonus = session.state.combat_bonus();
     match crate::build_session_with(fight_seed, encounters[pick], max_health, Some(entries)) {
         Ok(combat) => {
             crate::install_session(combat);
             // The fight is built at the hero's maximum; a run usually enters wounded.
             crate::set_combat_hero_health(session.state.health());
+            // ... and then the relics get their turn. A failure here is a **content** problem
+            // (a relic promising Block the kernel cannot write), so it is reported, not ignored.
+            if let Err(message) = apply_combat_bonus(bonus) {
+                session.error.clear();
+                session.error.push_str(&message);
+                return -2;
+            }
             0
         }
         Err(message) => {
@@ -1956,6 +1966,72 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
             -2
         }
     }
+}
+
+/// Put a [`rd_run::state::CombatBonus`] into the fight that was just installed (§145).
+///
+/// Both writes go through the **same public APIs the game itself uses**: Block through
+/// `set_defensive_pool`, Strength through an `ApplyStatus` effect. A relic that took a shortcut here
+/// would be a second status pipeline, and the two would drift on the first modifier change.
+fn apply_combat_bonus(bonus: rd_run::state::CombatBonus) -> Result<(), String> {
+    if bonus.is_empty() {
+        return Ok(());
+    }
+    let Some(session) = crate::slot().as_mut() else {
+        return Err("战斗会话不见了".to_string());
+    };
+    let Some(hero) = session.hero_id() else {
+        return Err("战斗里找不到英雄".to_string());
+    };
+    if bonus.block != 0 {
+        let key = rd_core::state::DefensivePoolId::new("standard.block")
+            .map_err(|_| "`standard.block` 不是合法的防守池 id".to_string())?;
+        let combatant = session
+            .state
+            .combatant_mut(&hero)
+            .ok_or_else(|| "拿不到英雄的战斗员".to_string())?;
+        let current = combatant
+            .defensive_pools()
+            .iter()
+            .find(|pool| pool.key.as_str() == "standard.block")
+            .map_or(0, |pool| pool.pool.current);
+        combatant
+            .set_defensive_pool(key, current + bonus.block, None)
+            .map_err(|e| std::format!("遗物加格挡失败：{e:?}"))?;
+        let after = combatant
+            .defensive_pools()
+            .iter()
+            .find(|pool| pool.key.as_str() == "standard.block")
+            .map_or(-1, |pool| pool.pool.current);
+        if after != current + bonus.block {
+            return Err(std::format!(
+                "遗物格挡写进去读到 {after}，期望 {}",
+                current + bonus.block
+            ));
+        }
+    }
+    if bonus.strength != 0 {
+        let definition = rd_core::state::StatusDefinitionId::new("standard.strength")
+            .map_err(|_| "`standard.strength` 不是合法的状态 id".to_string())?;
+        let item = rd_core::state::EffectItem {
+            request: rd_core::state::EffectRequest::ApplyStatus {
+                target: Some(hero),
+                definition,
+                stacks: bonus.strength,
+                duration: 0,
+                charges: 0,
+                source: None,
+                source_card: None,
+            },
+            chain: rd_core::state::ChainSlot::NONE,
+            owner: None,
+        };
+        let image = content();
+        rd_core::exec::resolve_effect(&mut session.state, &item, Some(image))
+            .map_err(|e| std::format!("遗物加力量失败：{e:?}"))?;
+    }
+    session.reobserve_after_external_change();
+    Ok(())
 }
 
 /// Finish the fight and fold its result back into the run.
@@ -2189,11 +2265,18 @@ mod tests {
     /// that -- an explicit seed, health and deck, straight into the slot.
     ///
     /// A test that is **about** the start path keeps using `reset`; everything else should use this.
+    /// The exported observation buffer, the way the page reads it (§145's relic test needs it).
+    fn exported_observation() -> Vec<i32> {
+        let len = crate::rd_env_observe_len();
+        assert!(len > 0, "no observation buffer");
+        let ptr = crate::rd_env_observe_buf();
+        unsafe { std::slice::from_raw_parts(ptr, len as usize).to_vec() }
+    }
+
     /// **7 migrated / 20 to go** -- the count lives in `reset`'s doc comment, and this line points at
     /// it rather than repeating it (`docs/port-plan.md` §106).
     #[cfg(test)]
-    fn test_run(seed: i32, health: i32, max_health: i32, deck: &[&str]) {
-        let state = rd_run::state::RunState::new(seed, max_health, 0, deck).expect("a run");
+    fn test_run(seed: i32, health: i32, max_health: i32, deck: &[&str]) {        let state = rd_run::state::RunState::new(seed, max_health, 0, deck).expect("a run");
         let mut state = state;
         state.adjust_health(health - max_health);
         *run_slot() = Some(RunSession {
@@ -2488,6 +2571,46 @@ mod tests {
         assert_eq!(session.state.health(), base - 20 + 6);
         session.state.adjust_health(1000);
         assert_eq!(session.state.end_of_combat(), Ok(0), "nothing to heal at full health");
+    }
+
+    /// §145：**开战时的遗物加成真的进了战斗**（Anchor 10 Block / Vajra 1 力量）。
+    ///
+    /// 断言的读法与页面一致：走 `rd_env_*` 的观察向量，而不是直接看战斗员 —— 加进去了但没
+    /// `reobserve`，页面看到的就是 0（这个坑 §84 踩过一次）。
+    #[test]
+    fn the_relic_pool_pays_out_when_a_fight_starts() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        {
+            let session = run_slot().as_mut().expect("session");
+            session.state.push_relic("anchor").expect("anchor");
+            session.state.push_relic("vajra").expect("vajra");
+            // 开局那件 Burning Blood 也还在 —— 顺便钉住"三件遗物各管各的钩子"。
+            assert_eq!(session.state.combat_bonus().block, 10);
+            assert_eq!(session.state.combat_bonus().strength, 1);
+        }
+        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+
+        let obs = exported_observation();
+        assert_eq!(
+            obs[crate::H_HERO_BLOCK], 10,
+            "Anchor 的 10 点格挡必须在开战时就摆在场上"
+        );
+        // `standard.strength` 是状态轴的第 0 条（`lib.rs::STATUS_AXES`）。
+        assert_eq!(
+            obs[crate::OFF_HERO_STATUS], 1,
+            "Vajra 的 1 点力量必须在开战时就挂在英雄身上"
+        );
+
+        // 成对：一场**没有**这两件遗物的战斗，两个数都是 0（否则上面两句也可能是"恒等于"）。
+        reset(7);
+        assert_eq!(rd_run_step(0), 0);
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0);
+        let plain = exported_observation();
+        assert_eq!(plain[crate::H_HERO_BLOCK], 0);
+        assert_eq!(plain[crate::OFF_HERO_STATUS], 0);
     }
 
     /// The link the run layer did not have: a fight is **the run's** fight, and its result goes back.

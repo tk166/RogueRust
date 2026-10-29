@@ -9090,3 +9090,147 @@ ABI 侧（真 `rd-wasm`、真内容镜像）：
 聚合验收 **17/17**；单测 709 → **716**（rd-core 617 / rd-run 62 → **68** / rd-wasm 30 → **31**）。
 内容：**13 张卡 / 9 个事件 / 17 个遭遇 / 25 个敌人 / 50 个敌人动作**；
 镜像 full **27,720 B** / core **23,288 B**（`sts` 包**故意**钉在"清点契约"而不是字节冻结）。
+
+---
+
+## 144. 卡牌关键词：Retain / Ethereal / Innate（以及 X 费的"响亮不存在"）
+
+§141 的第三件。三个关键词都**不是新机制**：内核里各有钩子，只是钩子**不读内容**，理由
+写在那儿（"62/62 卡都是 false，读不读观察等价"）。内容一出现真的关键字，等价就没了 ——
+而每条钩子上都留了一条**会红的测试**等着这一刻。这一轮它们全红了，于是全补上。
+
+### 144.1 Retain：`CARD.RetainInHandOnTurnEnd`
+
+`host::card_stays_in_hand_at_turn_end` 之前 `let _ = (state, actor, slot); false`。
+现在读那一格。⚠️ `F_BOOL` 的四个原始值是 **0 缺席 / 1 false / 2 true / 3 null**，
+**不是** `bool` 的 0/1 —— 把 1 当 true 会正好反过来。
+
+读失败（卡不在镜像里）当作**留在手里**：这条钩子没有 `Result`，而两个方向代价不对称 ——
+误留一张牌只是让玩家多打一次，误弃一张牌是把玩家以为保住了的牌扔掉；错误照旧 `record` 给下
+一个 `try_*`（同 `hand_is_retained_detail` 的先例）。
+
+### 144.2 Ethereal：`CARD.TurnEndHandDestinationZone`
+
+参考里 Ethereal **不是**一条独立判据，它就是这张牌"从手牌离场时去哪"（`CardZoneEffects.cs:427`）。
+所以 `host::turn_end_hand_destination` 现在真的读那一格，认 `DiscardPile` / `ExhaustPile` / `Hand`。
+认不出的枚举名 ⇒ `record` 一笔 + 弃牌堆（"留在手里"会让那张牌永远出不去）。
+
+⇒ **没有**一条 `if tag == "ethereal"` 的分支。tag 是文档，机制是那一格；两者的一致性由内容门
+的 `[6d]` 钉住（见 144.4）。
+
+### 144.3 Innate：`MoveInnateCardsToTop`（参考原样实现）
+
+之前是**响亮拒绝**（`reject_innate_deck`：牌组里有一张 innate 卡就不建战斗），理由是"挪牌会让
+起手牌序不同，而那种偏差看起来完全正常"。现在照着参考
+（`ScenarioCombatFactory.cs:91-104`）实现：
+
+1. 按**抽牌堆顺序**收集带 `innate` tag 的实例；
+2. **从后往前**逐个 `move_card(DrawPile → DrawPile, Top)` —— 参考注释原话："Moving from last to
+   first lands the first innate card at index 0"，即这样才保住它们之间的相对顺序；
+3. 挪在**洗牌之后**。
+
+判据：`an_innate_card_is_pulled_to_the_top_of_the_draw_pile`（`shuffle: false` ⇒ 牌组顺序
+= 堆序，`swift_strike` 原本在**最后**，建完之后必须在**第 0 张**）。**反向控制做过**：
+把那一行注释掉，测试当场红（`left: "strike"` / `right: "swift_strike"`）。
+
+### 144.4 X 费：参考里**根本没有**这个概念
+
+grep 过 `ref/RogueDeck-Core`：`XCost` / `EnergySpent` / `x-cost` **零命中**。所以它不是
+"还没移植的字段"，而是**要新造**一个机制：一种"用光全部能量、并以用掉的量作为 X"的费用形态，
+一个新的数量来源（节目的 `Amount` 要读得到 X），外加内容编译器对它的支持。
+
+在此之前，一张 X 费牌被当成固定费用结算会让**数字全都合理**，所以两处都**响亮拒绝**：
+
+| 哪一处 | 什么时候 |
+|---|---|
+| `battle.rs::reject_x_cost_deck` | 建战斗时（带 `x_cost` tag 的牌组直接拒绝）|
+| `play.rs` 的校验器第 6 条 `Validator::XCost` | 出牌时（防手写牌组绕过 `build_fight`）|
+
+⚠️ 这两处**今天不可达**（内容里没有也不许有 `x_cost` 卡），与 §144 之前的 `reject_innate_deck`
+同一个状态 —— 如实写在这里，而不是假装它们被跑过。内容门 `[6d]` 负责让它们保持不可达。
+
+### 144.5 内容：三张卡，两真一fixture
+
+| id | 是什么 | 为什么 |
+|---|---|---|
+| `sentinel` | **真卡**（Ironclad，5 Block + Ethereal）| Ethereal 的载体 |
+| `patient_guard` | **fixture**（5 Block + Retain）| Ironclad 在 StS 里**没有** Retain 卡（社区里"为什么 Ironclad 没有 Retain 卡"是个真问题），借不到 |
+| `swift_strike` | **fixture**（Innate + 6 damage）| 同理，Ironclad 没有 Innate 卡 |
+
+fixture 的**数字是本内容自己的**，不是 wiki 的 —— 所以它们的 id 与 `sts_content_check.py`
+的清单里都写明。要的是关键字的**语义**，不是一次冒充。
+
+### 144.6 判据
+
+* `the_keyword_cells_are_in_the_image`（真镜像：`sentinel` 的落区、`patient_guard` 的保留标志、
+  `swift_strike` 的 innate tag，**成对**含普通卡与不存在的卡）；
+* `a_retained_burn_card_still_fires_exactly_once_and_stays_in_hand`（手搓镜像，成对：
+  没有保留标志的卡照样被弃）；
+* `an_ethereal_card_is_exhausted_instead_of_discarded`（同上，成对）；
+* `an_innate_card_is_pulled_to_the_top_of_the_draw_pile`（真镜像，两张 innate 的相对顺序也钉）；
+* 内容门 `[6d]`：tag ⇔ 机制字段**双向**一致（`ethereal` ⇔ 落区 = ExhaustPile，
+  `retain` ⇔ 标志 = true），且内容里**不许**出现 `x_cost`。
+
+---
+
+## 145. 遗物池：1 → 5，三个派发点
+
+§141 的第四件，也是让 §143 的 `relic:<id>` 有内容可给的那一步。
+
+### 145.1 一张表，三种钩子
+
+`RunState::relic_effect(id) -> Option<RelicEffect>` 是**唯一**一张遗物表，三个调用方读它：
+
+| 钩子 | 什么时候 | 哪些遗物 |
+|---|---|---|
+| 授予时 | `push_relic`（**唯一的发放点**）| Pear（+10 最大生命，且当前生命跟着涨）、Blood Vial（+2 血）|
+| 开战时 | `RunState::combat_bonus()` → `rd_run_fight_begin` | Anchor（10 Block）、Vajra（1 力量）|
+| 结束战斗 | `end_of_combat` | Burning Blood（+6 血）|
+
+`combat_bonus` 是**相加**不是覆盖：两件加格挡的遗物要一起算，腰带里的顺序不该决定结果。
+
+### 145.2 授予只有一个入口
+
+`push_relic` 现在做三件事，顺序固定：① 内核跑不了这件 ⇒ `UnsupportedRelic`（**在玩家还看得见
+是谁要塞给他的时候**，而不是下一场战斗结束）；② 跑**授予时**的效果；③ 进腰带。
+
+在调用点各写一遍"然后 Pear 的最大生命 +10"，就会有四份副本 —— 那正是"宝箱里能用、商店里
+不能用"的成因。
+
+### 145.3 开战时的那一半在 `rd-wasm`
+
+`rd_run_fight_begin` 在建完战斗之后调 `apply_combat_bonus`，两次写入都走**游戏自己用的公开
+API**：格挡走 `set_defensive_pool`，力量走一条 `ApplyStatus` 效果（`exec::resolve_effect`）。
+抄近路 = 第二条状态管线，第一次修饰器改动就会分叉。写完必须 `reobserve_after_external_change`，
+否则页面看到 0（§84 那个坑）。
+
+### 145.4 池子还得**不重复**
+
+宝箱和商店原来从整张 `Relics` 表里随机挑，而那时表里只有一件 —— 于是它们唯一能做的事就是
+**再发一次你已经戴着的那件**。现在 `relic_candidates` 把已在身上的过滤掉，两边共用；
+全都戴上了 ⇒ 宝箱不给遗物（而不是发一个复制品）。
+
+### 145.5 判据
+
+* `the_relic_pool_fires_at_the_three_hooks_it_has`（授予时 / 开战时相加 / 结束时只有 Burning Blood）；
+* `a_relic_with_no_implemented_effect_is_an_error`（**位置搬到 `push_relic`**：反例从 `vajra`
+  换成 `golden_idol`，因为 `vajra` 现在实现了）；
+* `a_relic_you_already_hold_is_not_offered_again`（宝箱跑 12 轮 + 商店货架，成对含"全都戴上了
+  ⇒ `None`"）；
+* `the_relic_pool_pays_out_when_a_fight_starts`（**ABI 级**：读 `rd_env_observe_*` 的
+  `H_HERO_BLOCK` 与 `standard.strength` 那一轴，成对含没有遗物的一场）；
+* 内容门 `[6e]`：内容里的**每一件**遗物都必须被内核实现（否则宝箱会随机地把一次开箱变成
+  一次拒绝），反向也查（内核实现了但内容没有 ⇒ 永远发不出来）。
+
+### 145.6 还没做的
+
+* 遗物**稀有度**与掉落权重（`inv:§8.3` 的 tier）：现在是从一张平表里等概率挑。
+* 精英战不给遗物（StS 给）。`inv:§5` 的奖励档只覆盖金币与卡，遗物那一路要新的奖励格。
+* 遗物没有 `CombatRules` / `RunPrograms` 解释器（这是**设计决定**，不是缺口：
+  效果按 id 一条条写，跑不了的在授予时响亮拒绝）。
+
+### 145.7 数字
+
+聚合验收 **17/17**；单测 716 → **722**（rd-core 620 / rd-run 70 / rd-wasm 32）。
+内容：**16 张卡 / 9 个事件 / 5 件遗物 / 17 个遭遇 / 25 个敌人**；
+镜像 full **28,296 B** / core **23,692 B**。

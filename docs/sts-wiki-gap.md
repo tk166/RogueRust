@@ -12,14 +12,15 @@
 | 关键词 | wiki 语义 | 我们的状态 | 需要 |
 |---|---|---|---|
 | **Exhaust** | 用完移出战斗，进 Exhaust pile | **有**（`CardZone::ExhaustPile` + 卡的 `PlayedCardDestinationZone` 内容格）| 内容 |
-| **Ethereal** | 回合结束还在手里 ⇒ 消耗 | **没有**（`Ethereal` 这个词在内核 0 次）| **内核**：回合结束扫手牌 |
-| **Innate** | 开局必在手牌 | **没有**（33 次命中都是别的词）| **内核**：起手抽牌前先塞 |
-| **Retain** | 回合结束不弃 | **没有**（145 次命中都是"retain"在别处的用法）| **内核**：回合末弃牌时跳过 |
+| **Ethereal** | 回合结束还在手里 ⇒ 消耗 | **有**（§144：`CARD.TurnEndHandDestinationZone = ExhaustPile`）| — |
+| **Innate** | 开局必在手牌 | **有**（§144：`MoveInnateCardsToTop`，照参考的"倒着挪"实现）| — |
+| **Retain** | 回合结束不弃 | **有**（§144：`CARD.RetainInHandOnTurnEnd`）| — |
 | **Unplayable** | 不能从手里打出 | **有**（`play.rs` 受理校验的五条之一：stun / decree / play_condition / one_attack / **unplayable**）| — |
-| **X 费** | 消耗全部能量，效果按消耗量 | **没有**，而且 `play.rs` 的模块头明写"X 费在引擎里**不存在**"（47 张卡的 `Costs` 都是固定值）| **内核**：费用结算 + 表达式读"付了多少" |
+| **X 费** | 消耗全部能量，效果按消耗量 | **仍然没有**，而且这与上面三条不同：参考仓里**没有 X 费这个概念**（grep `XCost`/`EnergySpent` 零命中）⇒ 要新造机制，不是补一句读取 | **内核**：费用形态 + 新的数量来源（X）+ 编译器支持 |
 
-> 现在 12 张牌里没有一条用到它们（`slimed` 是状态牌但没标 Unplayable），所以**内容先不急着加**；
-> 但一旦要复刻 Ironclad 的 `True Grit`/`Second Wind`/`Feel No Pain`，`Exhaust` 之外的四条都得先有。
+> §144 之后，内容里已经有三种关键字的载体：`sentinel`（Ethereal，真卡）、`patient_guard`（Retain，
+> fixture —— Ironclad 没有 Retain 卡）、`swift_strike`（Innate，fixture）。`x_cost` 是**唯一**
+> 内核还不许出现的 tag：内容门 `[6d]` 会拒，建战斗与出牌两处也会拒。
 
 ## B. 状态 / buff（战斗内的"第二套语言"）
 
@@ -67,7 +68,7 @@ regen / rage / flame_barrier / combust / spore_cloud / enrage / time_warp / phas
 | **钥匙**（红/蓝/绿）与**第四幕** | 没有 | 内容 + 运行层 |
 | **爬塔等级（Ascension）** | 没有 | 运行层（一个难度参数 + 若干规则）|
 | **塔底 Neow** | **8 项**（§98/§100）| 缺"用初始遗物换 Boss 遗物"这类交易 |
-| **遗物** | **1 个**（burning_blood）| 内容（遗物池 + 稀有度 + 掉落规则）|
+| **遗物** | **5 件**（§145：burning_blood / anchor / vajra / pear / blood_vial），三个派发点（授予时、开战时、结束战斗）| 稀有度与掉落权重、精英战给遗物 |
 
 ## E. 给 Live2D 用：ABI 现在够不够
 
@@ -91,6 +92,6 @@ regen / rage / flame_barrier / combust / spore_cloud / enrage / time_warp / phas
 
 1. ~~**`rd_env_beat_*`**~~（**已完成**，§142）
 2. ~~**事件解释器**~~（**第一层已完成**，§143：删卡/升级/转化/诅咒/遗物）
-3. **卡牌关键词**：Ethereal → Retain → Innate → X 费（手感，内核活，可分批；`Unplayable` 早就有）
-4. **遗物池**（1 → 一窝，内容活，能立刻让每局不同；也是让 `relic:` 事件有东西可给的前提）
+3. ~~**卡牌关键词**~~（**已完成**，§144：Retain/Ethereal/Innate；X 费仍是"要新造机制"）
+4. ~~**遗物池**~~（**已完成**，§145：1 → 5 件，三个派发点；`relic:` 事件现在有东西可给）
 5. **状态**：Constricted（内容，最便宜）→ Intangible/Buffer（伤害管线）
