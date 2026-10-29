@@ -78,7 +78,14 @@ const settleHere = () => {
   if (kind === 1 || kind === 2 || kind === 7) { ex.rd_run_fight_begin(); ex.rd_run_fight_end(); }
   else if (kind === 3) ex.rd_run_rest();
   else if (kind === 4) ex.rd_run_leave();
-  else if (kind === 5) ex.rd_run_choose(0);
+  else if (kind === 5) {
+    // §143: an event choice may **owe a deck index**. A helper that stops at `rd_run_choose` leaves
+    // the run in `Pending::EventCard`, where `reachable()` is empty -- so the *next* step is refused
+    // and the failure points at the map instead of at this line. (`rd-wasm`'s Rust test helper had
+    // the same hole; both were found by the same walk.)
+    ex.rd_run_choose(0);
+    if (ex.rd_run_event_needs() > 0) ex.rd_run_pick_event_card(0);
+  }
   else if (kind === 6) ex.rd_run_open_chest();
 };
 

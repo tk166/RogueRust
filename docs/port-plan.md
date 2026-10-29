@@ -8993,3 +8993,100 @@ ABI 侧（真 `rd-wasm`、真内容镜像）：
 ### 142.10 数字
 
 聚合验收 **17/17**；单测 691 → **709**（rd-core 601 → **617** / rd-run 62 / rd-wasm 28 → **30**）。
+
+---
+
+## 143. 事件解释器（第一层）：删卡 / 升级 / 转化 / 诅咒 / 遗物
+
+§141 的第二件：`?` 房的选择原来只有五条数字效果，**删卡、升级、拿诅咒、给遗物全都不可表达**。
+这一轮把它们变成词表的一部分，并补上"选择要点名一张牌"的那个阶段。
+
+### 143.1 词表：`kind` 与 `kind:payload` 共用一个字符串格
+
+| 内容写 | 意思 |
+|---|---|
+| `heal` / `gold` / `damage` / `max_hp` / `nothing`（+ `AmountN`）| 五条数字效果（沿用）|
+| `remove_card` / `upgrade_card` / `transform_card` | 牌组改动：进 `Pending::EventCard`，等一个下标 |
+| `curse:<card id>` | 往牌组里加那张牌（必须是池子里的 **Curse**）|
+| `relic:<relic id>` | 给那件遗物（内核必须**实现了**它的效果）|
+
+⚠️ **为什么不做成新的 `EV` 列**：加列会把 `EV` 的 stride 从 20 改掉，而那个 stride 被**手抄在四个
+读者**里（`content.rs` 的 `EV_SCHEMA`、写出端、`rdcf_verify`、内容门）。stride 漂了是**静默读错**，
+而 payload 解析坏了是**响亮拒绝**。所以宁可在同一个 `F_STR` 格里放一个小语法。
+
+解析器只有一处：`rd_run::state::EventEffect::parse`（ABI、页面、测试都走它）。它把
+`curse` / `relic` **不带 payload** 的写法判成"词表之外" —— 那两个效果的**全部信息**就是那个 id，
+接受一个没有 id 的"拿诅咒"等于一个安静的"什么也不做"。只按**第一个** `:` 切分。
+
+### 143.2 两个 picker 共用一个 `DeckChange`
+
+`BlessingFollowUp` 原来自己带着 `RemoveCard/UpgradeCard/TransformCard`，而"升级一张牌"的实现
+**内联在 `pick_blessing_card` 里**。事件路径要是照样写一遍，`strike+` 就会在两处意味不同。
+
+现在：`DeckChange { Remove, Upgrade, Transform }` + `apply_deck_change(change, index, pool)`，
+`pick_blessing_card` 与 `pick_event_card` 都走它。`BlessingFollowUp` 变成
+`{ None, Deck(DeckChange), GainThreeCards }` —— "哪种牌组改动"只有一份定义。
+
+顺手改对了一个错误类型：牌组下标越界原来报 `BadNode`（**地图节点**的下标错误），现在是
+`BadCard`。两者长得都像"下标不对"，所以一直没人注意，直到两条路径共用同一个函数。
+
+### 143.3 新的运行层状态：`Pending::EventCard = 8`
+
+一个事件选择要是牌组改动，`resolve_event` **不落地**：它记下 `event_follow`、把 run 推进
+`Pending::EventCard`，等 `pick_event_card(index, pool)` 收尾（并在那时才 `mark_resolved`）。
+
+* 单独一个变体而不是给 `BlessingCard` 加标志：两者由**两个不同的调用**结束，共用一个变体只会
+  把"这是哪个 picker"变成两边都要判断的条件；
+* 互相不能收尾：`pick_event_card` 在 `Pending::BlessingCard` 下回 `WrongPhase`，反之亦然
+  （`the_two_pickers_cannot_finish_each_other`）；
+* 空牌组上的"删一张"⇒ `DeckEmpty`（一个没有出口的选牌屏不如当场拒绝）。
+
+### 143.4 遗物：把响亮边界**挪到玩家还看得见的时候**
+
+`relic:<id>` 之前没法表达，因为遗物的效果不是数据：`REL.RunPrograms` / `CombatRules` 从不执行，
+每个效果都是 `end_of_combat` 里按 id 写的一条规则 —— 一个不认识的 id 会在**下一场战斗结束**时
+才炸。现在：
+
+* `RunState::relic_effect(id) -> Option<RelicEffect>` 是**唯一**一张表；
+* `relic_is_implemented` 读同一张表；
+* `GainRelic` 在**授予那一刻**就用它检查，不实现 ⇒ `UnsupportedRelic`，玩家还站在事件里。
+
+⚠️ 内容里**还没有**用 `relic:`：全内容只有一件遗物（`burning_blood`），而英雄开局就有它。
+这条词表是"能表达"而不是"已用上"；§141 的第 4 项（遗物池）才是让它有内容可给的那一步。
+
+### 143.5 内容：一张诅咒 + 三个新事件
+
+* 卡 `injury`（`Rarity: Curse`，tags `curse/unplayable/junk`）—— 内容里的**第一张诅咒**。
+  它什么也不做，这正是诅咒的样子（`Unplayable` 是 `play.rs` 五条受理校验之一）。
+* 事件 `ancient_writing`（`upgrade_card`）、`forgotten_altar`（`curse:injury`）、
+  `purification_shrine`（`remove_card`）。
+* `EventTables`：幕 1 = 6 个（新增两个），幕 2/3 各 3 个（都拿到 `purification_shrine`）。
+
+### 143.6 判据
+
+| 层 | 判据 |
+|---|---|
+| 词表纯函数 | `the_event_vocabulary_parses_and_refuses_what_it_does_not_know`（含 `curse` / `relic` 裸写、空 payload、`card:` 假类型、`a:b:c` 只切一次）|
+| 运行层 | `an_event_that_edits_the_deck_owes_a_pick_first`、`an_event_can_give_a_curse_but_only_a_real_one`、`an_event_can_give_a_relic_only_if_the_kernel_can_run_it`、`a_deck_edit_event_on_an_empty_deck_is_refused`、`the_two_pickers_cannot_finish_each_other` |
+| 二进制 | `the_unknown_room_events_are_readable`（9 个事件；**`curse:injury` 必须带着 payload 从镜像里读回来**）|
+| ABI | `an_event_choice_that_edits_the_deck_owes_a_pick`（选完 `needs==2`、`pending==8`、`action_count==0`、选牌后归零、第二次选牌被拒；`forgotten_altar` 的诅咒真的进了牌组）|
+| 内容门 | 新增 `[6c] event vocabulary`：效果必须在词表里、`curse:` 必须是池里的 Curse、`relic:` 必须已实现、三个幕的池子必须只点名 `UnknownRooms` 里有的房间 |
+| 页面 | `ui_test` 新增两个面板状态（选定后 / 等选牌），并新增一条**真检查**：`RD_PANELS` 报出的每个 `action.kind` 都必须在 `index.html` 的 `PANEL_ACTIONS` 里（注释早就说"checked below"，其实没查过）|
+
+**两条同型的坑，这一轮各踩了一次：** "settle 当前节点"的辅助函数有两份（`rd-wasm` 的 Rust 测试
+与 `web/map_test.mjs`），新阶段一来**两份都要改**；漏改的症状不是"事件没生效"，而是**下一步
+被拒**（`reachable()` 在 `pending != None` 时是空的），报错指向地图，而不是那一行。
+
+### 143.7 还没做的
+
+* **一个选择只能有一条效果**：`Effect0` 是单个字符串。StS 的 Golden Idol 是"给遗物 **再** 给
+  诅咒"，今天表达不了。要做就得允许 `a+b` 这种组合，或者把 `EV` 行改成效果列表 —— 那是
+  下一轮的事（和 §143.1 的 stride 讨论绑在一起）。
+* 遗物池仍只有 1 件（§141 第 4 项），所以 `relic:` 无内容可用。
+* 事件没有 `?` 房之外的触发条件（层数、金币门槛）。
+
+### 143.8 数字
+
+聚合验收 **17/17**；单测 709 → **716**（rd-core 617 / rd-run 62 → **68** / rd-wasm 30 → **31**）。
+内容：**13 张卡 / 9 个事件 / 17 个遭遇 / 25 个敌人 / 50 个敌人动作**；
+镜像 full **27,720 B** / core **23,288 B**（`sts` 包**故意**钉在"清点契约"而不是字节冻结）。

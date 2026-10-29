@@ -127,6 +127,9 @@ INV_CARDS = {
     "uppercut": {"Cost": 2, "Tags": ["attack"],
                  "Facts": [("damage", 13, "event"), ("status", "standard.weak", 1, "event"),
                            ("status", "standard.vulnerable", 1, "event")]},
+    # §143: the first **Curse**. It is not in the deck and never a reward; an event hands it to
+    # you (`curse:injury`), and the only thing it does is sit in the way -- `unplayable`.
+    "injury": {"Cost": 1, "Tags": ["curse", "unplayable", "junk"], "Facts": []},
 }
 
 # inv:§4.1 -- the 10 zero-new-ability enemies: (hp_min, hp_max, action ids).
@@ -837,6 +840,73 @@ def check_weak_pool_table(doc):
              % (sorted(e["Id"] for e in boss), sorted(INV_ACT_TABLES["Boss"])))
 
 
+# §143: the event choices' closed vocabulary, checked **here** rather than only when a player
+# clicks the button. `EventEffect::parse` in `rd-run` is the authority on the shape; this gate is
+# the authority on the **payloads**, which the run layer cannot check on its own (it does not know
+# the content): a `curse:` id must be a Curse card in the pool, and a `relic:` id must be a relic
+# whose effect the kernel implements.
+EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing",
+                      "remove_card", "upgrade_card", "transform_card")
+
+# Mirrors `rd_run::state::RunState::relic_effect`. Kept as a literal list on purpose: this file is
+# the **second opinion** -- if the two disagree, one of them is wrong and the gate says so.
+IMPLEMENTED_RELICS = ("burning_blood",)
+
+
+def check_event_vocabulary(doc):
+    print("[6c] event vocabulary (port-plan.md §143)")
+    rooms = doc.get("UnknownRooms") or []
+    cards = {c["Id"]: c.get("Rarity") for c in doc.get("Cards") or []}
+    relics = {r["Id"] for r in doc.get("Relics") or []}
+    counts = {"bare": 0, "curse": 0, "relic": 0}
+    for room in rooms:
+        for slot in ("0", "1"):
+            effect = room.get("Effect" + slot)
+            label = "UnknownRooms.%s.Effect%s" % (room.get("Id"), slot)
+            if not isinstance(effect, str):
+                fail(label, "not a string: %r" % (effect,))
+                continue
+            if effect in EVENT_BARE_EFFECTS:
+                counts["bare"] += 1
+                continue
+            kind, _, payload = effect.partition(":")
+            if kind == "curse" and payload:
+                counts["curse"] += 1
+                if payload not in cards:
+                    fail(label, "curse:%s 不是内容里的卡" % payload)
+                elif cards[payload] != "Curse":
+                    fail(label, "curse:%s 的 Rarity 是 %s，不是 Curse"
+                         % (payload, cards[payload]))
+                continue
+            if kind == "relic" and payload:
+                counts["relic"] += 1
+                if payload not in relics:
+                    fail(label, "relic:%s 不在 Relics 表里" % payload)
+                elif payload not in IMPLEMENTED_RELICS:
+                    fail(label, "relic:%s 的效果内核没实现（%s）"
+                         % (payload, " / ".join(IMPLEMENTED_RELICS)))
+                continue
+            fail(label, "词表外的效果 %r" % (effect,))
+    # A choice with an unknown effect is refused at click time (`rd_run_choose` returns -1), and the
+    # player is left with a dead button. That is exactly the failure this section exists to prevent.
+    ok("event effects", "%d rooms, %d bare / %d curse: / %d relic:"
+       % (len(rooms), counts["bare"], counts["curse"], counts["relic"]))
+    # The three per-act pools must name rooms that exist, or the `?` room picks nothing.
+    known = {room.get("Id") for room in rooms}
+    tables = doc.get("EventTables") or {}
+    for name in ("Events", "Events2", "Events3"):
+        rows = tables.get(name)
+        if not rows:
+            fail("EventTables." + name, "missing or empty")
+            continue
+        for row in rows:
+            if row.get("Id") not in known:
+                fail("EventTables." + name, "%r is not in UnknownRooms" % (row.get("Id"),))
+    ok("event pools", "act1=%d act2=%d act3=%d"
+       % (len(tables.get("Events") or []), len(tables.get("Events2") or []),
+          len(tables.get("Events3") or [])))
+
+
 # =============================================================================
 # 2b.  the fourth layer -- a key that looks like data but is only documentation
 # =============================================================================
@@ -1345,6 +1415,7 @@ def main():
     check_statuses(doc)
     check_relations(doc)
     check_weak_pool_table(doc)
+    check_event_vocabulary(doc)
     check_inert_keys(doc)
     check_roundtrip(doc, full, "full", doc)
     # The core image's expectation comes from the compiler's own strip rule --

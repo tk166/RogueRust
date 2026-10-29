@@ -3918,7 +3918,7 @@ mod tests {
         assert_eq!(content.encounter_pool("Sideboard"), None);
     }
 
-    /// The `?` room's four events, read out of the image: ids, body text, and both choices.
+    /// The `?` room's events, read out of the image: ids, body text, and both choices.
     #[test]
     fn the_unknown_room_events_are_readable() {
         let bytes = std::fs::read(concat!(
@@ -3927,7 +3927,12 @@ mod tests {
         ))
         .expect("the sts image");
         let content = Content::parse(&bytes).expect("the image parses");
-        assert_eq!(content.event_count(), 6, "six events: four for act 1, two for acts 2-3 (§133)");
+        assert_eq!(
+            content.event_count(),
+            9,
+            "nine events: six for act 1, three for act 2, three for act 3 -- with `EventTables` \
+             sharing `purification_shrine` (§133 / §143)"
+        );
         let mut ids = Vec::new();
         for index in 0..content.event_count() {
             let (id, text, choices) = content.event(index).expect("event {index}");
@@ -3935,14 +3940,25 @@ mod tests {
             assert!(!text.is_empty(), "{id} has no body text");
             assert!(!choices[0].label.is_empty(), "{id} choice 0 has no label");
             assert!(!choices[1].label.is_empty(), "{id} choice 1 has no label");
-            // The vocabulary is closed: anything else is a content error the run layer would have to
-            // refuse, so it must not appear here.
+            // The **shape** of the vocabulary is the run layer's business (`EventEffect::parse`);
+            // what is pinned here is that the image carries none of the outside: a parsing rule
+            // this test cannot see is a rule the content gate alone would have to defend.
+            let bare = [
+                "heal",
+                "gold",
+                "damage",
+                "max_hp",
+                "nothing",
+                "remove_card",
+                "upgrade_card",
+                "transform_card",
+            ];
             for choice in &choices {
-                assert!(
-                    ["heal", "gold", "damage", "max_hp", "nothing"].contains(&choice.effect),
-                    "{id}: unknown effect {:?}",
-                    choice.effect
-                );
+                let effect = choice.effect;
+                let inside = bare.contains(&effect)
+                    || (effect.starts_with("curse:") && effect.len() > "curse:".len())
+                    || (effect.starts_with("relic:") && effect.len() > "relic:".len());
+                assert!(inside, "{id}: unknown effect {effect:?}");
             }
         }
         ids.sort_unstable();
@@ -3950,8 +3966,11 @@ mod tests {
             ids,
             vec![
                 "ancient_forge",
+                "ancient_writing",
+                "forgotten_altar",
                 "golden_idol",
                 "old_shrine",
+                "purification_shrine",
                 "scrap_pile",
                 "shining_light",
                 "wandering_merchant"
@@ -3965,6 +3984,30 @@ mod tests {
         assert_eq!(choices[0].effect, "gold");
         assert_eq!(choices[0].amount, 30);
         assert_eq!(choices[1].effect, "nothing");
+
+        // §143: the three new choices really carry the new vocabulary **out of the binary**, so a
+        // writer that quietly dropped a colon would be caught here and not by a dead button.
+        let effect_of = |id: &str| -> std::vec::Vec<std::string::String> {
+            let index = (0..content.event_count())
+                .find(|index| content.event(*index).map(|e| e.0) == Some(id))
+                .unwrap_or_else(|| panic!("{id} must be in the image"));
+            let (_, _, choices) = content.event(index).expect("event");
+            std::vec![
+                std::string::String::from(choices[0].effect),
+                std::string::String::from(choices[1].effect),
+            ]
+        };
+        assert_eq!(
+            effect_of("ancient_writing")[0],
+            "upgrade_card",
+            "the upgrade event must survive the round trip"
+        );
+        assert_eq!(
+            effect_of("forgotten_altar")[0],
+            "curse:injury",
+            "a `kind:payload` effect must survive the round trip **with its payload**"
+        );
+        assert_eq!(effect_of("purification_shrine")[0], "remove_card");
 
         // The roguedeck image has **no** `UnknownRooms` key, so it has no events -- not an error.
         let core = std::fs::read(CORE_IMAGE).expect("the roguedeck image");

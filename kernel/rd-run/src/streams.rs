@@ -180,9 +180,19 @@ pub enum RunError {
     /// combat node and pressing "fight" again would farm it, and a rest site would heal for ever.
     NodeResolved,
     /// An event effect outside the closed vocabulary (`heal` / `gold` / `damage` / `max_hp` /
-    /// `nothing`). The run layer applies effects it knows and refuses the rest: an event that does
+    /// `nothing` / `remove_card` / `upgrade_card` / `transform_card` / `curse:<id>` / `relic:<id>`).
+    /// The run layer applies effects it knows and refuses the rest: an event that does
     /// nothing because nobody implemented its effect is exactly the silent failure this project bans.
     UnsupportedEventEffect,
+    /// A `curse:<id>` payload that does not name a **Curse** card the content's pool holds.
+    ///
+    /// Two bugs wear this one error: a typo in the id (the deck would hold a phantom card nobody
+    /// can draw) and a `curse:` prefix on a card that is not a curse. Both are content bugs, and
+    /// both are invisible once the card is in the deck -- which is why they are refused here.
+    NoSuchCard,
+    /// An effect that needs a deck index while the deck is empty. There is nothing to point at, so
+    /// "pick a card" would be a screen with no way forward.
+    DeckEmpty,
     /// The event under the cursor is not one the content declared.
     NoSuchEvent,
     /// No such blessing slot (there are two).

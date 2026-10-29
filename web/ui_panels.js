@@ -15,8 +15,20 @@
 // Loaded before `index.html`'s script; no build step (the whole web/ layer is zero-build).
 
 const RD_PANELS = (() => {
-  /// Effect code -> Chinese label. The kernel's closed vocabulary (`docs/port-plan.md` §80).
-  const EFFECT_LABELS = ["", "回复", "金币", "受伤", "最大 HP", "什么也不做"];
+  /// Effect code -> Chinese label. The kernel's closed vocabulary (`docs/port-plan.md` §80, §143).
+  const EFFECT_LABELS = [
+    "",
+    "回复",
+    "金币",
+    "受伤",
+    "最大 HP",
+    "什么也不做",
+    "删一张牌",
+    "升级一张牌",
+    "转化一张牌",
+    "获得一张诅咒",
+    "获得遗物",
+  ];
 
   /// Kind number -> what to call it. Order is `run-layer.md` §7.2.
   const KIND_NAMES = ["", "战斗", "精英", "篝火", "商人", "未知", "宝箱", "Boss"];
@@ -24,6 +36,9 @@ const RD_PANELS = (() => {
   /// The effect phrase for an offer/choice half, or `""` when it does nothing.
   function effectText(code, amount) {
     if (code === 5 || code < 0) return "";
+    // §143: codes 6..=10 are not "amount" effects -- the number belongs to the number effects
+    // only, so appending it would print "升级一张牌 0".
+    if (code >= 6) return EFFECT_LABELS[code] || "?";
     return `${EFFECT_LABELS[code] || "?"} ${amount}`;
   }
 
@@ -225,6 +240,21 @@ const RD_PANELS = (() => {
     };
   }
 
+  /// §143: an event choice that edits the deck leaves a pick owed (`Pending::EventCard` = 8).
+  ///
+  /// Its own state rather than reusing the blessing panel: the two are finished by two different
+  /// kernel calls, and this panel's title has to say **which** edit the event asked for.
+  function describeEventCard(s) {
+    const names = { 1: "移除哪一张牌？", 2: "升级哪一张牌？", 3: "转化哪一张牌？" };
+    const what = names[s.eventNeeds] || "选一张牌";
+    return {
+      title: "未知房间 · " + what,
+      lines: [],
+      rows: [],
+      buttons: [{ id: "pick", label: "选一张牌", action: { kind: "event_card" } }],
+    };
+  }
+
   function describeIdle(s) {
     if (s.kind < 0) {
       return { title: "", lines: ["还没出发 · 点亮的节点可以走"], rows: [], buttons: [] };
@@ -242,6 +272,8 @@ const RD_PANELS = (() => {
         return describeBlessing(s);
       case 7:
         return describeBlessingCard(s);
+      case 8:
+        return describeEventCard(s);
       case 4:
         return describeReward(s);
       case 5:

@@ -997,18 +997,65 @@ pub extern "C" fn rd_run_event_amount(slot: i32) -> i32 {
 }
 
 /// Take choice `slot` of the open event.
+///
+/// A choice that edits the deck does **not** finish here: it leaves the run in
+/// `Pending::EventCard`, and `rd_run_event_needs()` says which edit is owed. That is why this
+/// returns `0` in both cases -- "taken" and "taken, now pick a card" are both accepted.
 #[no_mangle]
 pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
     let Some(choice) = event_choice(slot) else {
         return -1;
     };
-    let Some(effect) = effect_from(choice.effect, i32::from(choice.amount)) else {
+    let Some((effect, payload)) = effect_from(choice.effect, i32::from(choice.amount)) else {
         return -1;
     };
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
-    let outcome = session.state.resolve_event(effect).map(|_| 0i32);
+    let pool = match reward_pool(content()) {
+        Ok(pool) => pool,
+        Err(message) => return fail(session, &message),
+    };
+    let outcome = session
+        .state
+        .resolve_event(effect, payload, &pool)
+        .map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// What the open event still needs: `0` nothing, `1` remove a card, `2` upgrade one, `3` transform
+/// one, `-1` no run. The deck-index picker is `rd_run_pick_event_card`.
+#[no_mangle]
+pub extern "C" fn rd_run_event_needs() -> i32 {
+    use rd_run::state::DeckChange;
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    match session.state.event_follow_up() {
+        Some(DeckChange::Remove) => 1,
+        Some(DeckChange::Upgrade) => 2,
+        Some(DeckChange::Transform) => 3,
+        None => 0,
+    }
+}
+
+/// Finish an event choice that named a card, with deck index `index`.
+#[no_mangle]
+pub extern "C" fn rd_run_pick_event_card(index: i32) -> i32 {
+    if index < 0 {
+        return -1;
+    }
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let pool = match reward_pool(content()) {
+        Ok(pool) => pool,
+        Err(message) => return fail(session, &message),
+    };
+    let outcome = session
+        .state
+        .pick_event_card(index as usize, &pool)
+        .map(|_| 0i32);
     finish(session, outcome)
 }
 
@@ -1042,6 +1089,9 @@ fn lookup_event(
 }
 
 /// The content's closed vocabulary, as integers.
+///
+/// `1..=5` are the number effects (unchanged since §9); `6..=10` are the §143 additions. A caller
+/// that sees `-1` must not guess -- that is the whole point of a closed vocabulary.
 fn effect_code(effect: &str) -> i32 {
     match effect {
         "heal" => 1,
@@ -1049,20 +1099,35 @@ fn effect_code(effect: &str) -> i32 {
         "damage" => 3,
         "max_hp" => 4,
         "nothing" => 5,
-        _ => -1,
+        "remove_card" => 6,
+        "upgrade_card" => 7,
+        "transform_card" => 8,
+        _ => {
+            // `curse:<id>` / `relic:<id>`: one code per kind, whatever the payload is.
+            if let Some((kind, payload)) = effect.split_once(':') {
+                if payload.is_empty() {
+                    return -1;
+                }
+                return match kind {
+                    "curse" => 9,
+                    "relic" => 10,
+                    _ => -1,
+                };
+            }
+            -1
+        }
     }
 }
 
-fn effect_from(effect: &str, amount: i32) -> Option<rd_run::state::EventEffect> {
-    use rd_run::state::EventEffect;
-    Some(match effect {
-        "heal" => EventEffect::Heal(amount),
-        "gold" => EventEffect::Gold(amount),
-        "damage" => EventEffect::LoseHealth(amount),
-        "max_hp" => EventEffect::GainMaxHealth(amount),
-        "nothing" => EventEffect::Nothing,
-        _ => return None,
-    })
+/// Decode one content choice into the run layer's vocabulary.
+///
+/// The parser lives in `rd-run` (`EventEffect::parse`) so the page, the ABI and the tests cannot
+/// drift about what "in the vocabulary" means; this function only carries the payload across.
+fn effect_from(
+    effect: &str,
+    amount: i32,
+) -> Option<(rd_run::state::EventEffect, Option<&str>)> {
+    rd_run::state::EventEffect::parse(effect, amount)
 }
 
 /// **Use** potion `slot` in the fight that is running.
@@ -1230,30 +1295,30 @@ fn refuse(message: &str) -> i32 {
 /// `-1` no such slot.
 #[no_mangle]
 pub extern "C" fn rd_run_start_needs(slot: i32) -> i32 {
-    use rd_run::state::BlessingFollowUp;
+    use rd_run::state::{BlessingFollowUp, DeckChange};
     let Some(offer) = start_offer(slot) else {
         return -1;
     };
     match offer.follow_up {
         BlessingFollowUp::None | BlessingFollowUp::GainThreeCards => 0,
-        BlessingFollowUp::RemoveCard => 1,
-        BlessingFollowUp::UpgradeCard => 2,
-        BlessingFollowUp::TransformCard => 3,
+        BlessingFollowUp::Deck(DeckChange::Remove) => 1,
+        BlessingFollowUp::Deck(DeckChange::Upgrade) => 2,
+        BlessingFollowUp::Deck(DeckChange::Transform) => 3,
     }
 }
 
 /// What the pending blessing still needs: `0` nothing, `1` remove a card, `2` upgrade one,
-/// `-1` no run.
+/// `3` transform one, `-1` no run.
 #[no_mangle]
 pub extern "C" fn rd_run_blessing_needs() -> i32 {
-    use rd_run::state::BlessingFollowUp;
+    use rd_run::state::{BlessingFollowUp, DeckChange};
     let Some(session) = run_slot().as_ref() else {
         return -1;
     };
     match session.state.blessing_follow_up() {
-        Some(BlessingFollowUp::RemoveCard) => 1,
-        Some(BlessingFollowUp::UpgradeCard) => 2,
-        Some(BlessingFollowUp::TransformCard) => 3,
+        Some(BlessingFollowUp::Deck(DeckChange::Remove)) => 1,
+        Some(BlessingFollowUp::Deck(DeckChange::Upgrade)) => 2,
+        Some(BlessingFollowUp::Deck(DeckChange::Transform)) => 3,
         Some(BlessingFollowUp::None) | Some(BlessingFollowUp::GainThreeCards) | None => 0,
     }
 }
@@ -1352,6 +1417,11 @@ fn start_offer(slot: i32) -> Option<rd_run::state::StartOffer> {
 }
 
 /// `EventEffect` as the same small integers the event ABI uses.
+///
+/// ⚠️ The five number effects are `1..=5` and stay there; `6..=8` are the deck edits. `GainCurse`
+/// / `GainRelic` never reach this function (a blessing's gain/cost is never one of them -- see
+/// `EventEffect`'s table), so they answer `-1` rather than reusing `9` / `10`: those two codes mean
+/// "*this* choice names a card / a relic", which is information only the content string has.
 fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
     use rd_run::state::EventEffect;
     match effect {
@@ -1360,6 +1430,10 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         EventEffect::LoseHealth(_) => 3,
         EventEffect::GainMaxHealth(_) => 4,
         EventEffect::Nothing => 5,
+        EventEffect::RemoveCard => 6,
+        EventEffect::UpgradeCard => 7,
+        EventEffect::TransformCard => 8,
+        EventEffect::GainCurse | EventEffect::GainRelic => -1,
     }
 }
 
@@ -1370,7 +1444,12 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::Gold(n)
         | EventEffect::LoseHealth(n)
         | EventEffect::GainMaxHealth(n) => n,
-        EventEffect::Nothing => 0,
+        EventEffect::Nothing
+        | EventEffect::RemoveCard
+        | EventEffect::UpgradeCard
+        | EventEffect::TransformCard
+        | EventEffect::GainCurse
+        | EventEffect::GainRelic => 0,
     }
 }
 
@@ -2627,7 +2706,14 @@ mod tests {
                 let _ = rd_run_leave();
             }
             5 => {
+                // §143: a `?`-room choice can now **owe a deck index** (`remove_card` /
+                // `upgrade_card` / `transform_card`). Without this the run would sit in
+                // `Pending::EventCard` with no reachable node, and every caller of `settle_here`
+                // would see "-1: no such action" and blame the map.
                 let _ = rd_run_choose(0);
+                if rd_run_event_needs() > 0 {
+                    let _ = rd_run_pick_event_card(0);
+                }
             }
             6 => {
                 let _ = rd_run_open_chest();
@@ -3346,36 +3432,128 @@ mod tests {
         for slot in 0..2 {
             assert!(rd_run_event_label_len(slot) > 0, "choice {slot} has no label");
             let effect = rd_run_event_effect(slot);
-            assert!((1..=5).contains(&effect), "choice {slot} effect {effect}");
+            // `1..=5` number effects, `6..=8` deck edits, `9` curse, `10` relic (§143).
+            assert!(
+                (1..=10).contains(&effect),
+                "choice {slot} effect {effect} is outside the vocabulary"
+            );
         }
         assert_eq!(rd_run_event_label_len(2), -1, "only two choices");
 
         let gold_before = rd_run_observe(4);
         let hp_before = rd_run_observe(2);
         let hp_max_before = rd_run_observe(3);
+        let deck_before = rd_run_deck_count();
         let effect = rd_run_event_effect(0);
         let amount = rd_run_event_amount(0);
         assert_eq!(rd_run_choose(0), 0, "choosing must be accepted");
-        assert_eq!(rd_run_pending(), 0, "the room is settled");
         match effect {
-            1 => assert_eq!(
-                rd_run_observe(2),
-                (hp_before + amount).min(hp_max_before),
-                "heal"
-            ),
-            2 => assert_eq!(rd_run_observe(4), gold_before + amount, "gold"),
-            3 => assert_eq!(rd_run_observe(2), hp_before - amount, "damage"),
-            4 => assert_eq!(rd_run_observe(3), hp_max_before + amount, "max hp"),
-            5 => {
-                assert_eq!(rd_run_observe(2), hp_before, "nothing heals");
-                assert_eq!(rd_run_observe(4), gold_before, "nothing pays");
+            // §143: a deck edit does **not** finish the room -- it leaves a pick owed. That is the
+            // whole new state machine, and the point of asserting the phase rather than the deck.
+            6..=8 => {
+                assert_eq!(rd_run_pending(), 8, "Pending::EventCard");
+                assert_eq!(rd_run_event_needs(), effect - 5, "1/2/3 = remove/upgrade/transform");
+                assert_eq!(
+                    rd_run_node_resolved(),
+                    0,
+                    "the room is not paid until the card is named"
+                );
+                assert_eq!(rd_run_pick_event_card(0), 0, "finishing the pick");
+                assert_eq!(rd_run_pending(), 0, "the room is settled now");
+                if effect == 6 {
+                    assert_eq!(rd_run_deck_count(), deck_before - 1, "remove shrinks the deck");
+                } else {
+                    assert_eq!(rd_run_deck_count(), deck_before, "upgrade/transform keep the size");
+                }
+                assert_eq!(rd_run_event_needs(), 0, "nothing is owed after the pick");
             }
-            other => panic!("unexpected effect code {other}"),
+            9 => assert_eq!(
+                rd_run_deck_count(),
+                deck_before + 1,
+                "a curse goes into the deck"
+            ),
+            10 => assert_eq!(rd_run_pending(), 0, "a relic needs no pick"),
+            _ => {
+                assert_eq!(rd_run_pending(), 0, "the room is settled");
+                match effect {
+                    1 => assert_eq!(
+                        rd_run_observe(2),
+                        (hp_before + amount).min(hp_max_before),
+                        "heal"
+                    ),
+                    2 => assert_eq!(rd_run_observe(4), gold_before + amount, "gold"),
+                    3 => assert_eq!(rd_run_observe(2), hp_before - amount, "damage"),
+                    4 => assert_eq!(rd_run_observe(3), hp_max_before + amount, "max hp"),
+                    5 => {
+                        assert_eq!(rd_run_observe(2), hp_before, "nothing heals");
+                        assert_eq!(rd_run_observe(4), gold_before, "nothing pays");
+                    }
+                    other => panic!("unexpected effect code {other}"),
+                }
+            }
         }
         assert_eq!(rd_run_node_resolved(), 1, "the room paid once");
         // A second choice is a **wrong-phase** refusal (-2 with text), not "no such
         // choice" (-1): the event is still on record, it is the phase that is gone.
         assert_eq!(rd_run_choose(0), -2, "a second choice is refused");
+    }
+
+    /// §143, at the ABI: an event that edits the deck leaves a **pick owed**, and the pick is what
+    /// settles the room.
+    ///
+    /// Driven by opening the event directly instead of hunting a seed whose `?` room happens to
+    /// pick it: the thing under test is the phase machine, not the room roller -- and a seed hunt
+    /// would turn this test into a test of the map generator the day a pool changes.
+    #[test]
+    fn an_event_choice_that_edits_the_deck_owes_a_pick() {
+        reset(7);
+        let deck_before = rd_run_deck_count();
+        // A fresh run stands on no node, which is enough for `begin_event` (it only refuses a
+        // node that already paid).
+        let opened = run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .begin_event("ancient_writing")
+            .is_ok();
+        assert!(opened, "the content must carry `ancient_writing`");
+
+        assert_eq!(rd_run_event_effect(0), 7, "choice 0 is `upgrade_card`");
+        assert_eq!(rd_run_event_needs(), 0, "nothing is owed before the choice is taken");
+        assert_eq!(rd_run_choose(0), 0, "taking the choice is accepted");
+        assert_eq!(rd_run_event_needs(), 2, "2 = upgrade a card");
+        assert_eq!(rd_run_pending(), 8, "Pending::EventCard");
+
+        // The map offers nothing while a pick is owed: that is `reachable()`'s rule, and it is why
+        // a caller that forgets this phase sees "no such action" and blames the map.
+        assert_eq!(rd_run_action_count(), 0, "no walking while a card is owed");
+
+        assert_eq!(rd_run_pick_event_card(1), 0, "upgrading deck entry 1");
+        assert_eq!(rd_run_event_needs(), 0, "nothing is owed now");
+        assert_eq!(rd_run_pending(), 0, "the room is settled");
+        assert_eq!(rd_run_deck_count(), deck_before, "an upgrade does not change the size");
+
+        // ... and the ABI refuses a second pick (the phase is gone).
+        assert_eq!(rd_run_pick_event_card(1), -2, "a second pick is refused");
+
+        // The `curse:` payload is checked against the pool the **ABI** builds (`reward_pool`), not
+        // against the document. If that pool ever stopped carrying curses, the event would become a
+        // dead button and this is the assertion that says so.
+        reset(7);
+        let deck_before = rd_run_deck_count();
+        assert!(
+            run_slot()
+                .as_mut()
+                .expect("a run")
+                .state
+                .begin_event("forgotten_altar")
+                .is_ok(),
+            "the content must carry `forgotten_altar`"
+        );
+        assert_eq!(rd_run_event_effect(0), 9, "choice 0 is `curse:<id>`");
+        assert_eq!(rd_run_choose(0), 0, "an event may hand you a curse");
+        assert_eq!(rd_run_pending(), 0, "a curse needs no pick");
+        assert_eq!(rd_run_deck_count(), deck_before + 1, "the curse went into the deck");
     }
 
     /// **Balance probe, not a gate.** Plays a whole act with the dumbest reasonable policy and

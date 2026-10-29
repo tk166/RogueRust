@@ -2057,6 +2057,49 @@
       "TurnEndHandDestinationZone": "Hand",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "injury",
+      "PackageId": "sts",
+      "NameKey": "Injury",
+      "DescriptionKey": "Unplayable.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        },
+        {
+          "value": "junk"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": []
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "Hand",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Curse"
     }
   ],
   "EnemyActions": [
@@ -6701,6 +6744,39 @@
       "Label1": "Ask for coin instead",
       "Effect1": "gold",
       "Amount1": 25
+    },
+    {
+      "Id": "ancient_writing",
+      "NameKey": "Ancient Writing",
+      "DescriptionKey": "Glyphs older than the Spire cover the wall.",
+      "Label0": "Study the glyphs",
+      "Effect0": "upgrade_card",
+      "Amount0": 0,
+      "Label1": "Leave them be",
+      "Effect1": "nothing",
+      "Amount1": 0
+    },
+    {
+      "Id": "forgotten_altar",
+      "NameKey": "Forgotten Altar",
+      "DescriptionKey": "A stone bowl waits for an offering.",
+      "Label0": "Take the offering",
+      "Effect0": "curse:injury",
+      "Amount0": 0,
+      "Label1": "Walk away",
+      "Effect1": "nothing",
+      "Amount1": 0
+    },
+    {
+      "Id": "purification_shrine",
+      "NameKey": "Purification Shrine",
+      "DescriptionKey": "Cold water runs over a stone basin.",
+      "Label0": "Wash a card away",
+      "Effect0": "remove_card",
+      "Amount0": 0,
+      "Label1": "Leave",
+      "Effect1": "nothing",
+      "Amount1": 0
     }
   ],
   "Potions": [
@@ -6758,6 +6834,12 @@
       },
       {
         "Id": "scrap_pile"
+      },
+      {
+        "Id": "ancient_writing"
+      },
+      {
+        "Id": "forgotten_altar"
       }
     ],
     "Events2": [
@@ -6766,6 +6848,9 @@
       },
       {
         "Id": "golden_idol"
+      },
+      {
+        "Id": "purification_shrine"
       }
     ],
     "Events3": [
@@ -6774,6 +6859,9 @@
       },
       {
         "Id": "ancient_forge"
+      },
+      {
+        "Id": "purification_shrine"
       }
     ]
   },

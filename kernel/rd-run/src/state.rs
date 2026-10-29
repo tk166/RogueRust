@@ -41,6 +41,15 @@ pub const POTION_DROP_PERCENT: u32 = 40;
 /// `Burning Blood`: "At the end of combat, heal 6 HP" (`inv:§2`).
 pub const BURNING_BLOOD_HEAL: i32 = 6;
 
+/// What a relic does. One variant today, and that is the point: this enum is the **only** place a
+/// relic's behaviour is described (`RunState::relic_effect`), so "is this relic implemented?" and
+/// "what does this relic do?" are the same table.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RelicEffect {
+    /// Heal this much when a fight ends, capped at the maximum.
+    EndOfCombatHeal(i32),
+}
+
 /// Card slots a merchant shows (`inv:§8.2`: five coloured cards; the two colourless ones are not
 /// modelled -- this content has no colourless pool).
 pub const MAX_SHOP_CARDS: usize = 5;
@@ -102,6 +111,11 @@ pub enum Pending {
     Start = 6,
     /// [`RunState::pick_blessing_card`] -- a blessing that needs a deck index.
     BlessingCard = 7,
+    /// [`RunState::pick_event_card`] -- an **event** choice that needs a deck index (§143).
+    ///
+    /// Its own variant rather than a flag on `BlessingCard`: the two are finished by two different
+    /// calls, and a shared variant would make "which picker is this?" a condition inside both.
+    EventCard = 8,
 }
 
 /// The pre-run choice (StS's Neow, `inv:§7.1`): the player picks one blessing from a rolled pair.
@@ -130,14 +144,32 @@ pub struct StartOffer {
 pub enum BlessingFollowUp {
     /// Nothing: the gain and the cost were the whole blessing.
     None,
-    /// Remove deck card `N` (Neow's "remove a card").
-    RemoveCard,
-    /// Upgrade deck card `N`.
-    UpgradeCard,
-    /// Replace deck card `N` with a random one from the pool ("transform").
-    TransformCard,
+    /// A deck card has to be named (remove / upgrade / transform).
+    Deck(DeckChange),
     /// Add three random cards, no pick needed -- it is finished the moment it is taken.
     GainThreeCards,
+}
+
+/// A deck edit that needs the player to **name a card**.
+///
+/// One enum for both callers (the pre-run blessing and the `?`-room events, `port-plan.md` §143):
+/// before this there was one enum (`BlessingFollowUp`) and the "upgrade a card" logic lived inline
+/// in `pick_blessing_card`, which meant the event path would have grown a **second copy** of it.
+/// Two copies of "append a `+`" is exactly how `strike+` and `strike` end up meaning different
+/// things in two places.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum DeckChange {
+    /// Take the card out of the deck.
+    Remove,
+    /// Add `+` (idempotent: an already-upgraded card is left alone).
+    Upgrade,
+    /// Remove it and grant a random card from the pool.
+    Transform,
+}
+
+impl DeckChange {
+    /// The three values, for `PartialEq`-driven UI code and for tests that want to enumerate.
+    pub const ALL: [Self; 3] = [Self::Remove, Self::Upgrade, Self::Transform];
 }
 
 pub const START_OFFERS: [StartOffer; 8] = [
@@ -170,19 +202,19 @@ pub const START_OFFERS: [StartOffer; 8] = [
         id: "remove_card",
         gain: EventEffect::Nothing,
         cost: EventEffect::Nothing,
-        follow_up: BlessingFollowUp::RemoveCard,
+        follow_up: BlessingFollowUp::Deck(DeckChange::Remove),
     },
     StartOffer {
         id: "upgrade_card",
         gain: EventEffect::Nothing,
         cost: EventEffect::Nothing,
-        follow_up: BlessingFollowUp::UpgradeCard,
+        follow_up: BlessingFollowUp::Deck(DeckChange::Upgrade),
     },
     StartOffer {
         id: "transform_card",
         gain: EventEffect::Nothing,
         cost: EventEffect::Nothing,
-        follow_up: BlessingFollowUp::TransformCard,
+        follow_up: BlessingFollowUp::Deck(DeckChange::Transform),
     },
     StartOffer {
         id: "three_cards",
@@ -194,6 +226,25 @@ pub const START_OFFERS: [StartOffer; 8] = [
 
 /// What an event's choice does. The vocabulary is **closed** and comes from the content
 /// (`EV.Effect0` / `EV.Effect1`); anything else is [`RunError::UnsupportedEventEffect`].
+///
+/// # The vocabulary（`port-plan.md` §143）
+///
+/// | content says | means |
+/// |---|---|
+/// | `heal` / `gold` / `damage` / `max_hp` / `nothing` + `AmountN` | the five number effects |
+/// | `remove_card` / `upgrade_card` / `transform_card` | a deck edit: the run enters [`Pending::EventCard`] and waits for an index |
+/// | `curse:<card id>` | add that card to the deck (the id must be in the pool) |
+/// | `relic:<relic id>` | grant that relic (the id must have an implemented effect) |
+///
+/// The two `kind:payload` forms ride in the **same string column** as the bare keywords on
+/// purpose: widening the `EV` row would move a stride that is hand-copied into four readers
+/// (`content.rs`'s `EV_SCHEMA`, the writer, `rdcf_verify` and the content gate), and a stride that
+/// drifts is a *silent misread*. A payload that fails to parse is loud instead: the effect falls
+/// outside the vocabulary and the run refuses it.
+///
+/// `GainCurse` / `GainRelic` carry no payload of their own — the id travels beside the effect
+/// (`resolve_event`'s `named` argument), which keeps this enum `Copy` and usable in the
+/// `START_OFFERS` constant table.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum EventEffect {
     /// Restore HP, capped at the maximum.
@@ -206,6 +257,68 @@ pub enum EventEffect {
     GainMaxHealth(i32),
     /// Nothing at all -- a real, declared choice, not a missing one.
     Nothing,
+    /// Take a named card out of the deck.
+    RemoveCard,
+    /// Upgrade a named deck card.
+    UpgradeCard,
+    /// Replace a named deck card with a random one.
+    TransformCard,
+    /// Add the card named beside this effect (a curse, in practice).
+    GainCurse,
+    /// Grant the relic named beside this effect.
+    GainRelic,
+}
+
+impl EventEffect {
+    /// Parse the content's closed vocabulary. `None` = **outside** it, and the caller must refuse
+    /// rather than guess (see the table on [`Self`]).
+    ///
+    /// The returned `&str` is the payload (`curse:regret` → `"regret"`), borrowed from `text`.
+    #[must_use]
+    pub fn parse(text: &str, amount: i32) -> Option<(Self, Option<&str>)> {
+        Some(match text {
+            "heal" => (Self::Heal(amount), None),
+            "gold" => (Self::Gold(amount), None),
+            "damage" => (Self::LoseHealth(amount), None),
+            "max_hp" => (Self::GainMaxHealth(amount), None),
+            "nothing" => (Self::Nothing, None),
+            "remove_card" => (Self::RemoveCard, None),
+            "upgrade_card" => (Self::UpgradeCard, None),
+            "transform_card" => (Self::TransformCard, None),
+            other => {
+                // `kind:payload` -- split once, and refuse an empty or missing half. A bare
+                // `curse` / `relic` with no id is **outside** the vocabulary: the id is the whole
+                // point of those two, so accepting them without one would be a choice that
+                // silently does nothing.
+                let (kind, payload) = other.split_once(':')?;
+                if payload.is_empty() {
+                    return None;
+                }
+                match kind {
+                    "curse" => (Self::GainCurse, Some(payload)),
+                    "relic" => (Self::GainRelic, Some(payload)),
+                    _ => return None,
+                }
+            }
+        })
+    }
+
+    /// The deck edit this effect asks for, if any. `None` = it needs no card index.
+    #[must_use]
+    pub fn deck_change(self) -> Option<DeckChange> {
+        match self {
+            Self::RemoveCard => Some(DeckChange::Remove),
+            Self::UpgradeCard => Some(DeckChange::Upgrade),
+            Self::TransformCard => Some(DeckChange::Transform),
+            _ => None,
+        }
+    }
+
+    /// Does this effect need a payload supplied beside it?
+    #[must_use]
+    pub fn needs_payload(self) -> bool {
+        matches!(self, Self::GainCurse | Self::GainRelic)
+    }
 }
 
 /// A card's rarity (`inv:§3.5`; the six buckets StS uses).
@@ -540,6 +653,9 @@ pub struct RunState {
     start_offers: [u8; 2],
     /// The picked blessing's follow-up, while [`Pending::BlessingCard`] waits for a deck index.
     blessing_follow: Option<BlessingFollowUp>,
+    /// The picked **event** choice's deck edit, while [`Pending::EventCard`] waits for an index
+    /// (§143). Separate from `blessing_follow` so neither picker can be finished by the other.
+    event_follow: Option<DeckChange>,
     /// The rare-card pity offset (`inv:§3.5`): starts at −5%, +1% per non-rare reward roll, reset to
     /// −5% on a rare, capped at +40%. Only **combat reward** rolls move it.
     rarity_offset: i32,
@@ -586,6 +702,7 @@ impl RunState {
             // Rolled by `offer_start_choice`; until then the pair is not a choice anyone can take.
             start_offers: [0, 1],
             blessing_follow: None,
+            event_follow: None,
             resolved: [0; 2],
             rarity_offset: RARITY_OFFSET_START,
         };
@@ -730,14 +847,14 @@ impl RunState {
         Ok(())
     }
 
-    /// What the relics do when a fight ends.
+    /// What a relic does when a fight ends.
     ///
     /// # The design, stated once
     ///
     /// A relic's effect is **not** data in this kernel: `REL.RunPrograms` and `REL.CombatRules` are
     /// never executed (there is no run-level program interpreter and no `CombatRules` registry), so
-    /// every effect is an explicit rule here, keyed on the id. That is a real limitation and it is
-    /// made loud instead of quiet: an id this function does not know is
+    /// every effect is an explicit rule in [`Self::relic_effect`], keyed on the id. That is a real
+    /// limitation and it is made loud instead of quiet: an id that table does not know is
     /// [`RunError::UnsupportedRelic`], never "a relic that does nothing".
     ///
     /// Returns the health actually restored, so a caller can show "+6".
@@ -745,15 +862,13 @@ impl RunState {
         let mut healed = 0i32;
         for slot in 0..self.relics_len as usize {
             let id = self.relics[slot].as_str();
-            match id {
-                // `inv:§2`: "At the end of combat, heal 6 HP." The heal is capped at the maximum,
-                // so `heal_after_combat` is the right primitive (it clamps).
-                "burning_blood" => {
+            match Self::relic_effect(id) {
+                Some(RelicEffect::EndOfCombatHeal(amount)) => {
                     let before = self.health;
-                    self.heal_after_combat(BURNING_BLOOD_HEAL);
+                    self.heal_after_combat(amount);
                     healed += self.health - before;
                 }
-                _ => {
+                None => {
                     return Err(RunError::UnsupportedRelic {
                         index: slot as u8,
                     })
@@ -761,6 +876,26 @@ impl RunState {
             }
         }
         Ok(healed)
+    }
+
+    /// The **one** table of relic effects (`port-plan.md` §143 moved it out of `end_of_combat`).
+    ///
+    /// Two callers read it now: `end_of_combat` (what happens) and the `relic:<id>` event effect
+    /// (whether a relic this kernel cannot run may enter the belt at all). Keeping one table is
+    /// what makes those two answers unable to disagree.
+    #[must_use]
+    pub fn relic_effect(id: &str) -> Option<RelicEffect> {
+        match id {
+            // `inv:§2`: "At the end of combat, heal 6 HP."
+            "burning_blood" => Some(RelicEffect::EndOfCombatHeal(BURNING_BLOOD_HEAL)),
+            _ => None,
+        }
+    }
+
+    /// Does this kernel implement relic `id`'s effect? See [`Self::relic_effect`].
+    #[must_use]
+    pub fn relic_is_implemented(id: &str) -> bool {
+        Self::relic_effect(id).is_some()
     }
 
     /// Take the `Burning Blood` heal (`inv:§2`: +6 HP at the end of combat). **Capped at the
@@ -1292,9 +1427,7 @@ impl RunState {
         };
         // A deck blessing on an empty deck has nothing to act on.
         let deck_does_something = match offer.follow_up {
-            BlessingFollowUp::RemoveCard
-            | BlessingFollowUp::UpgradeCard
-            | BlessingFollowUp::TransformCard => self.deck_len > 0,
+            BlessingFollowUp::Deck(_) => self.deck_len > 0,
             BlessingFollowUp::None | BlessingFollowUp::GainThreeCards => true,
         };
         gain_does_something && deck_does_something
@@ -1334,8 +1467,8 @@ impl RunState {
             self.pending = Pending::None;
             return Ok(());
         }
-        self.apply_event_effect(offer.gain)?;
-        self.apply_event_effect(offer.cost)?;
+        self.apply_event_effect(offer.gain, None, pool)?;
+        self.apply_event_effect(offer.cost, None, pool)?;
         // A blessing that names a card is not finished until the card is named.
         self.blessing_follow = match offer.follow_up {
             BlessingFollowUp::None => None,
@@ -1353,6 +1486,12 @@ impl RunState {
     #[must_use]
     pub const fn blessing_follow_up(&self) -> Option<BlessingFollowUp> {
         self.blessing_follow
+    }
+
+    /// What the pending **event** still needs, for a picker (§143).
+    #[must_use]
+    pub const fn event_follow_up(&self) -> Option<DeckChange> {
+        self.event_follow
     }
 
     /// Splice deck entry `index` out. **Not** `remove_card`: that action belongs to the shop and
@@ -1399,41 +1538,82 @@ impl RunState {
         let Some(follow_up) = self.blessing_follow else {
             return Err(RunError::WrongPhase);
         };
-        if index >= self.deck_len as usize {
-            return Err(RunError::BadNode);
+        let BlessingFollowUp::Deck(change) = follow_up else {
+            return Err(RunError::WrongPhase);
+        };
+        self.apply_deck_change(change, index, pool)?;
+        self.blessing_follow = None;
+        self.pending = Pending::None;
+        Ok(())
+    }
+
+    /// Finish an **event** that named a card (§143).
+    ///
+    /// Shares [`Self::apply_deck_change`] with the blessing path on purpose: "upgrade a card" is
+    /// one behaviour, and a second copy of it is how `strike+` would come to mean one thing in a
+    /// blessing and another in an event.
+    pub fn pick_event_card(
+        &mut self,
+        index: usize,
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
+        if self.pending != Pending::EventCard {
+            return Err(RunError::WrongPhase);
         }
-        match follow_up {
-            BlessingFollowUp::RemoveCard => {
-                self.remove_at(index);
-            }
-            BlessingFollowUp::UpgradeCard => {
-                // Already upgraded is not an error: the blessing simply has nothing to do.
-                if !self.deck[index].as_str().ends_with('+') {
-                    let mut buffer = [0u8; 64];
-                    let mut len = 0usize;
-                    for byte in self.deck[index].as_str().as_bytes() {
-                        if len < buffer.len() - 1 {
-                            buffer[len] = *byte;
-                            len += 1;
-                        }
-                    }
-                    buffer[len] = b'+';
-                    len += 1;
-                    let upgraded =
-                        core::str::from_utf8(&buffer[..len]).map_err(|_| RunError::BadId)?;
-                    self.deck[index] = RunId::new(upgraded).map_err(|_| RunError::BadId)?;
-                }
-            }
-            BlessingFollowUp::TransformCard => {
+        let Some(change) = self.event_follow else {
+            return Err(RunError::WrongPhase);
+        };
+        self.apply_deck_change(change, index, pool)?;
+        self.event_follow = None;
+        self.pending = Pending::None;
+        // The room is settled **now**: picking a card is the last thing the choice asked for.
+        self.mark_resolved();
+        Ok(())
+    }
+
+    /// The one implementation of "edit the deck at `index`".
+    fn apply_deck_change(
+        &mut self,
+        change: DeckChange,
+        index: usize,
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
+        if index >= self.deck_len as usize {
+            return Err(RunError::BadCard(index as u8));
+        }
+        match change {
+            DeckChange::Remove => self.remove_at(index),
+            DeckChange::Upgrade => self.upgrade_at(index)?,
+            DeckChange::Transform => {
                 self.remove_at(index);
                 self.grant_random_cards(1, pool)?;
             }
-            BlessingFollowUp::None | BlessingFollowUp::GainThreeCards => {
-                return Err(RunError::WrongPhase);
+        }
+        Ok(())
+    }
+
+    /// Append the upgrade marker (`strike` → `strike+`).
+    ///
+    /// Already upgraded is **not** an error: the blessing (or the event) simply has nothing to do.
+    /// That is the reference's behaviour too -- StS lets you upgrade a card you already upgraded and
+    /// nothing happens.
+    fn upgrade_at(&mut self, index: usize) -> Result<(), RunError> {
+        let id = self.deck[index].as_str();
+        if id.ends_with('+') {
+            return Ok(());
+        }
+        let mut buffer = [0u8; 64];
+        let mut len = 0usize;
+        for byte in id.as_bytes() {
+            if len < buffer.len() - 1 {
+                buffer[len] = *byte;
+                len += 1;
             }
         }
-        self.blessing_follow = None;
-        self.pending = Pending::None;
+        buffer[len] = b'+';
+        len += 1;
+        let upgraded = core::str::from_utf8(&buffer[..len]).map_err(|_| RunError::BadId)?;
+        self.deck[index] = RunId::new(upgraded).map_err(|_| RunError::BadId)?;
         Ok(())
     }
 
@@ -1456,13 +1636,33 @@ impl RunState {
 
     /// Take one choice of the open event.
     ///
-    /// `effect` is what the **content** declared for that choice; the run layer applies it and
-    /// refuses anything it does not know. Every choice is answerable, including "nothing".
-    pub fn resolve_event(&mut self, effect: EventEffect) -> Result<(), RunError> {
+    /// `effect` is what the **content** declared for that choice (see [`EventEffect`]'s table);
+    /// `named` is the payload a `curse:<id>` / `relic:<id>` choice carries. `pool` is the content's
+    /// card list: the curse id is checked against it, and a `transform_card` later draws from it.
+    ///
+    /// A choice that needs a **deck index** does not finish here: the run enters
+    /// [`Pending::EventCard`] and [`RunState::pick_event_card`] completes it. Before §143 the run
+    /// layer had no such state, which is why "remove a card" was not expressible at all.
+    pub fn resolve_event(
+        &mut self,
+        effect: EventEffect,
+        named: Option<&str>,
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
         if self.pending != Pending::Event {
             return Err(RunError::WrongPhase);
         }
-        self.apply_event_effect(effect)?;
+        // A deck edit is *not applied here*: it becomes a pending pick. What is applied below is
+        // only the part that needs no name.
+        if let Some(change) = effect.deck_change() {
+            if self.deck_len == 0 {
+                return Err(RunError::DeckEmpty);
+            }
+            self.event_follow = Some(change);
+            self.pending = Pending::EventCard;
+            return Ok(());
+        }
+        self.apply_event_effect(effect, named, pool)?;
         self.pending = Pending::None;
         self.mark_resolved();
         Ok(())
@@ -1470,7 +1670,12 @@ impl RunState {
 
     /// One closed-vocabulary effect. Shared by `?` rooms and by the pre-run blessing, so the two
     /// cannot drift.
-    fn apply_event_effect(&mut self, effect: EventEffect) -> Result<(), RunError> {
+    fn apply_event_effect(
+        &mut self,
+        effect: EventEffect,
+        named: Option<&str>,
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
         match effect {
             EventEffect::Heal(n) => self.heal_after_combat(n),
             EventEffect::Gold(n) => self.adjust_gold(n),
@@ -1480,6 +1685,46 @@ impl RunState {
                 self.adjust_health(n);
             }
             EventEffect::Nothing => {}
+            EventEffect::GainCurse => {
+                // The id must name a card this run can actually hold. Without this check a typo in
+                // the content puts a phantom id in the deck, and it stays invisible until that card
+                // is drawn in a fight.
+                let Some(id) = named else {
+                    return Err(RunError::UnsupportedEventEffect);
+                };
+                if !pool.iter().any(|card| card.id == id) {
+                    return Err(RunError::NoSuchCard);
+                }
+                let curse = Rarity::Curse;
+                if !pool.iter().any(|card| card.id == id && card.rarity == curse) {
+                    // A `curse:` payload that names a non-curse is a content bug with a very
+                    // plausible-looking symptom (the deck just gets a card), so refuse it.
+                    return Err(RunError::NoSuchCard);
+                }
+                self.push_card(id)?;
+            }
+            EventEffect::GainRelic => {
+                let Some(id) = named else {
+                    return Err(RunError::UnsupportedEventEffect);
+                };
+                // **The loud boundary of the relic system**, moved forward: an event that hands out
+                // a relic whose effect this kernel does not implement is refused *here*, while the
+                // player is still looking at the event, instead of at the end of the next fight
+                // (`RunError::UnsupportedRelic`).
+                if !Self::relic_is_implemented(id) {
+                    return Err(RunError::UnsupportedRelic {
+                        index: self.relics_len,
+                    });
+                }
+                self.push_relic(id)?;
+            }
+            // Deck edits never reach here: `resolve_event` turns them into a pending pick.
+            EventEffect::RemoveCard | EventEffect::UpgradeCard | EventEffect::TransformCard => {
+                if named.is_some() {
+                    return Err(RunError::UnsupportedEventEffect);
+                }
+                return Err(RunError::WrongPhase);
+            }
         }
         Ok(())
     }
@@ -2470,7 +2715,7 @@ mod tests {
         run.pending = Pending::Start;
         run.choose_start(0, &basic_pool()).expect("taking remove_card");
         assert_eq!(run.pending, Pending::BlessingCard, "the card pick is still owed");
-        assert_eq!(run.blessing_follow_up(), Some(BlessingFollowUp::RemoveCard));
+        assert_eq!(run.blessing_follow_up(), Some(BlessingFollowUp::Deck(DeckChange::Remove)));
         let before = run.deck_len as usize;
         run.pick_blessing_card(3, &basic_pool()).expect("removing the fourth card");
         assert_eq!(run.pending, Pending::None);
@@ -2482,19 +2727,22 @@ mod tests {
         run.start_offers = [index_of("upgrade_card"), index_of("max_hp")];
         run.pending = Pending::Start;
         run.choose_start(0, &basic_pool()).expect("taking upgrade_card");
-        assert_eq!(run.blessing_follow_up(), Some(BlessingFollowUp::UpgradeCard));
+        assert_eq!(run.blessing_follow_up(), Some(BlessingFollowUp::Deck(DeckChange::Upgrade)));
         assert_eq!(run.deck[2].as_str(), "strike");
         run.pick_blessing_card(2, &basic_pool()).expect("upgrading the third card");
         assert_eq!(run.deck[2].as_str(), "strike+");
         assert_eq!(run.deck_len, 10, "upgrading does not change the deck size");
 
         // A deck index that is not there is an error, not a silent no-op.
+        // ⚠️ §143 顺手改对了错误类型：这里原来报 `BadNode`（那是**地图节点**的下标错误），
+        // 而 `BadCard` 就是为"牌组里没有这张"存在的变体。两者长得都像"下标不对"，所以一直
+        // 没被注意到 —— 直到 blessing 与 event 共用了 `apply_deck_change`。
         let mut run = RunState::new(7, 80, 0, &["strike"; 10]).expect("a run");
         run.pending = Pending::BlessingCard;
-        run.blessing_follow = Some(BlessingFollowUp::RemoveCard);
+        run.blessing_follow = Some(BlessingFollowUp::Deck(DeckChange::Remove));
         assert_eq!(
             run.pick_blessing_card(99, &basic_pool()),
-            Err(RunError::BadNode)
+            Err(RunError::BadCard(99))
         );
     }
 
@@ -2514,7 +2762,7 @@ mod tests {
         run.start_offers = [index_of("transform_card"), index_of("max_hp")];
         run.pending = Pending::Start;
         run.choose_start(0, &basic_pool()).expect("taking transform_card");
-        assert_eq!(run.blessing_follow_up(), Some(BlessingFollowUp::TransformCard));
+        assert_eq!(run.blessing_follow_up(), Some(BlessingFollowUp::Deck(DeckChange::Transform)));
         let before = run.deck_len as usize;
         run.pick_blessing_card(4, &basic_pool()).expect("transforming the fifth card");
         assert_eq!(run.deck_len as usize, before, "transform keeps the size");
@@ -2807,5 +3055,212 @@ mod tests {
             let kind = run.map().row(row).unwrap().node(local).unwrap().kind;
             assert_ne!(kind, NodeKind::Unassigned);
         }
+    }
+
+    // =============================================================================================
+    // §143：事件的关闭词表
+    // =============================================================================================
+
+    /// A pool with one **Curse** and one **Status**: the two rarities a `curse:` payload could
+    /// plausibly name, and the difference the check has to see.
+    fn curse_pool() -> [PoolCard<'static>; 6] {
+        [
+            PoolCard { id: "strike", rarity: Rarity::Basic },
+            PoolCard { id: "defend", rarity: Rarity::Basic },
+            PoolCard { id: "bash", rarity: Rarity::Basic },
+            PoolCard { id: "injury", rarity: Rarity::Curse },
+            PoolCard { id: "slimed", rarity: Rarity::Status },
+            PoolCard { id: "c1", rarity: Rarity::Common },
+        ]
+    }
+
+    #[test]
+    fn the_event_vocabulary_parses_and_refuses_what_it_does_not_know() {
+        use EventEffect as E;
+        // The five number effects keep their amounts.
+        assert_eq!(E::parse("heal", 15), Some((E::Heal(15), None)));
+        assert_eq!(E::parse("gold", 45), Some((E::Gold(45), None)));
+        assert_eq!(E::parse("damage", 7), Some((E::LoseHealth(7), None)));
+        assert_eq!(E::parse("max_hp", 6), Some((E::GainMaxHealth(6), None)));
+        assert_eq!(E::parse("nothing", 0), Some((E::Nothing, None)));
+        // The three deck edits need no payload of their own.
+        assert_eq!(E::parse("remove_card", 0), Some((E::RemoveCard, None)));
+        assert_eq!(E::parse("upgrade_card", 0), Some((E::UpgradeCard, None)));
+        assert_eq!(E::parse("transform_card", 0), Some((E::TransformCard, None)));
+        // The two that name something.
+        assert_eq!(
+            E::parse("curse:injury", 0),
+            Some((E::GainCurse, Some("injury")))
+        );
+        assert_eq!(
+            E::parse("relic:burning_blood", 0),
+            Some((E::GainRelic, Some("burning_blood")))
+        );
+        // Outside the vocabulary -- **all of these must be `None`**, not "a guess":
+        for bad in [
+            "curse",            // no id: the id is the whole point
+            "relic",
+            "curse:",           // empty payload
+            "relic:",
+            "card:injury",      // no such kind
+            "curse:injury:x",   // the id itself contains ':' -- only the first ':' splits
+            "blessing",         // a plausible-looking word that is not in the table
+            "",
+        ] {
+            if bad == "curse:injury:x" {
+                // Splitting once is deliberate: the payload is `injury:x`, which is a card id
+                // nobody has. The *parse* accepts it; the pool check is what refuses it.
+                assert_eq!(
+                    E::parse(bad, 0),
+                    Some((E::GainCurse, Some("injury:x"))),
+                    "only the first ':' splits"
+                );
+                continue;
+            }
+            assert_eq!(E::parse(bad, 1), None, "{bad:?} must be outside the vocabulary");
+        }
+        // `deck_change` is the bridge to the shared editor.
+        assert_eq!(E::RemoveCard.deck_change(), Some(DeckChange::Remove));
+        assert_eq!(E::UpgradeCard.deck_change(), Some(DeckChange::Upgrade));
+        assert_eq!(E::TransformCard.deck_change(), Some(DeckChange::Transform));
+        assert_eq!(E::Heal(3).deck_change(), None);
+    }
+
+    #[test]
+    fn an_event_that_edits_the_deck_owes_a_pick_first() {
+        let pool = curse_pool();
+        // Remove
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("ancient_forge").expect("opening the event");
+        assert_eq!(run.pending(), Pending::Event);
+        run.resolve_event(EventEffect::RemoveCard, None, &pool)
+            .expect("taking 'remove a card'");
+        assert_eq!(run.pending(), Pending::EventCard, "the pick is still owed");
+        assert_eq!(run.event_follow_up(), Some(DeckChange::Remove));
+        assert_eq!(run.deck_len, 5, "nothing leaves the deck until a card is named");
+        run.pick_event_card(2, &pool).expect("removing the third card");
+        assert_eq!(run.pending(), Pending::None);
+        assert_eq!(run.deck_len, 4);
+        assert_eq!(run.event_follow_up(), None);
+
+        // Upgrade
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("ancient_forge").expect("opening the event");
+        run.resolve_event(EventEffect::UpgradeCard, None, &pool)
+            .expect("taking 'upgrade a card'");
+        run.pick_event_card(1, &pool).expect("upgrading the second card");
+        assert_eq!(run.deck[1].as_str(), "strike+");
+        assert_eq!(run.deck_len, 5, "upgrading does not change the size");
+
+        // Transform: same size, and every entry is a real pool card.
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("ancient_forge").expect("opening the event");
+        run.resolve_event(EventEffect::TransformCard, None, &pool)
+            .expect("taking 'transform a card'");
+        run.pick_event_card(0, &pool).expect("transforming the first card");
+        assert_eq!(run.deck_len, 5, "transform keeps the size");
+        // ⚠️ **同一张牌回来是合法的**（池子抽到同一个 id）。所以这里断言的不是"变了"，
+        // 而是"整副牌仍然都是池子里的真卡" —— 后者才是这条路径可能坏掉的地方
+        // （抽到空 id / 抽到池子外的 id 都不会让尺寸变化）。
+        for card in run.deck() {
+            let id = card.as_str();
+            assert!(
+                pool.iter().any(|entry| entry.id == id),
+                "transform put {id:?} in the deck, which is not in the pool"
+            );
+        }
+    }
+
+    #[test]
+    fn an_event_can_give_a_curse_but_only_a_real_one() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("golden_idol").expect("opening the event");
+        run.resolve_event(EventEffect::GainCurse, Some("injury"), &pool)
+            .expect("an event may hand you a curse");
+        assert_eq!(run.deck_len, 6);
+        assert_eq!(run.deck[5].as_str(), "injury");
+        assert_eq!(run.pending(), Pending::None, "a curse needs no pick");
+
+        // A payload that is not in the pool: **refused**, because a phantom id in the deck stays
+        // invisible until the card is drawn.
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("golden_idol").expect("opening the event");
+        assert_eq!(
+            run.resolve_event(EventEffect::GainCurse, Some("regret"), &pool),
+            Err(RunError::NoSuchCard)
+        );
+        assert_eq!(run.deck_len, 5, "a refused effect changes nothing");
+
+        // A `curse:` payload naming a card that is **not** a curse: same refusal.
+        assert_eq!(
+            run.resolve_event(EventEffect::GainCurse, Some("strike"), &pool),
+            Err(RunError::NoSuchCard)
+        );
+        // No payload at all: outside the vocabulary.
+        assert_eq!(
+            run.resolve_event(EventEffect::GainCurse, None, &pool),
+            Err(RunError::UnsupportedEventEffect)
+        );
+    }
+
+    #[test]
+    fn an_event_can_give_a_relic_only_if_the_kernel_can_run_it() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("old_shrine").expect("opening the event");
+        run.resolve_event(EventEffect::GainRelic, Some("burning_blood"), &pool)
+            .expect("Burning Blood is implemented");
+        assert_eq!(run.relics().len(), 1);
+        assert_eq!(run.relics()[0].as_str(), "burning_blood");
+
+        // An unimplemented relic is refused **while the event is open**, not at the end of the
+        // next fight (`RunError::UnsupportedRelic` used to be reachable only there).
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("old_shrine").expect("opening the event");
+        assert_eq!(
+            run.resolve_event(EventEffect::GainRelic, Some("golden_idol"), &pool),
+            Err(RunError::UnsupportedRelic { index: 0 })
+        );
+        assert_eq!(run.relics().len(), 0);
+    }
+
+    #[test]
+    fn a_deck_edit_event_on_an_empty_deck_is_refused() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &[]).expect("a run with no cards");
+        run.begin_event("ancient_forge").expect("opening the event");
+        assert_eq!(
+            run.resolve_event(EventEffect::RemoveCard, None, &pool),
+            Err(RunError::DeckEmpty)
+        );
+        assert_eq!(run.pending(), Pending::Event, "the event is still open");
+    }
+
+    #[test]
+    fn the_two_pickers_cannot_finish_each_other() {
+        let pool = curse_pool();
+        // In the event's pick phase, the blessing picker refuses.
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("ancient_forge").expect("opening the event");
+        run.resolve_event(EventEffect::RemoveCard, None, &pool)
+            .expect("taking 'remove a card'");
+        assert_eq!(
+            run.pick_blessing_card(0, &pool),
+            Err(RunError::WrongPhase),
+            "the blessing picker must not complete an event"
+        );
+        assert_eq!(run.pending(), Pending::EventCard);
+
+        // ... and in the blessing's, the event picker refuses.
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.pending = Pending::BlessingCard;
+        run.blessing_follow = Some(BlessingFollowUp::Deck(DeckChange::Remove));
+        assert_eq!(
+            run.pick_event_card(0, &pool),
+            Err(RunError::WrongPhase),
+            "the event picker must not complete a blessing"
+        );
+        assert_eq!(run.pending(), Pending::BlessingCard);
     }
 }

@@ -77,6 +77,13 @@ const PANEL_STATES = [
   ["event", { ...BASE, kind: 5, pending: 5, eventText: "old_shrine — A shrine",
       choices: [{ label: "Pray", effect: 1, amount: 15 }, { label: "Leave", effect: 5, amount: 0 }] },
     ["event_choice", "event_choice"], ["Pray", "Leave"], "未知房间"],
+  // §143: the two new event states. A deck-editing choice shows as a named effect (no amount), and
+  // the pick phase names **which** edit is owed.
+  ["event deck edit", { ...BASE, kind: 5, pending: 5, eventText: "ancient_writing — Glyphs",
+      choices: [{ label: "Study", effect: 7, amount: 0 }, { label: "Leave", effect: 5, amount: 0 }] },
+    ["event_choice", "event_choice"], ["Study", "Leave"], "未知房间"],
+  ["event owes a pick", { ...BASE, kind: 5, pending: 8, eventNeeds: 2 },
+    ["event_card"], ["选一张牌"], "升级哪一张牌"],
   ["cleared", { ...BASE, cleared: true, act: 3, kind: 7, floor: 16 },
     ["restart", "next_seed"], ["再打一局", "换一个 seed"], "第 3 幕通关"],
   ["run over", { ...BASE, runOver: true, runOverWhy: "倒了", floor: 7 },
@@ -144,6 +151,37 @@ const PANEL_STATES = [
 
 // The page must actually use it, or this whole file is testing dead code.
 const page = await readFile(new URL("./index.html", HERE), "utf8");
+
+// **A button the page cannot wire is a dead button.** The comment in the panel loop above claimed
+// this was checked "below"; until §143 it was not -- `event_card` could have been added to
+// `RD_PANELS` alone and the only symptom would be a throw on click, in the browser, for a player.
+{
+  const start = page.indexOf("const PANEL_ACTIONS");
+  if (start < 0) fail("index.html has no PANEL_ACTIONS table");
+  const end = page.indexOf("\n};", start);
+  const body = page.slice(start, end < 0 ? page.length : end);
+  const wired = new Set(
+    [...body.matchAll(/^ {2}([a-z_]+) *:/gm)].map((m) => m[1])
+  );
+  if (wired.size < 10) fail(`PANEL_ACTIONS parsed as only ${wired.size} entries: ${[...wired]}`);
+  const wanted = new Set();
+  for (const [, snapshot] of PANEL_STATES) {
+    const d = P.describe(snapshot);
+    for (const b of [...(d.buttons || []), ...(d.rows || []).map((r) => r.button).filter(Boolean)]) {
+      wanted.add(b.action.kind);
+    }
+  }
+  // The states above are a sample; the row actions of a shop are the ones most likely to be missed.
+  for (const kind of ["event_card", "blessing_card", "buy_card", "buy_relic", "take_card"]) {
+    wanted.add(kind);
+  }
+  for (const kind of wanted) {
+    if (!wired.has(kind)) {
+      fail(`panel action "${kind}" is described by ui_panels.js but index.html cannot wire it`);
+    }
+  }
+  console.log(`  panels: ${wanted.size} action kinds all wired in index.html`);
+}
 
 // §136: the act transition is a **screen**. The page must own one, and a new act must show it.
 for (const id of ["actCurtain", "curtainAct"]) {
