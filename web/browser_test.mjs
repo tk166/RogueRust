@@ -153,7 +153,8 @@ await send("Runtime.enable");
 await send("Page.enable");
 
 // ---- 3. the flow ------------------------------------------------------------------------------
-const url = `http://127.0.0.1:${port}/web/index.html?browser-test`;
+// The query carries **debug** because the potion scenario (§150) pins a seed through RD_DEBUG.
+const url = `http://127.0.0.1:${port}/web/index.html?browser-test&debug`;
 const loaded = await send("Page.navigate", { url });
 if (loaded.errorText) fail(`navigation failed: ${loaded.errorText}`);
 
@@ -238,6 +239,91 @@ const report = await evaluate(`(async () => {
   out.topBar = text(document.getElementById("runStats"));
   out.energyAfter = cell(8);
   out.unaffordable = document.querySelectorAll("#hand button.card.unaffordable").length;
+
+  // (f) **A potion must be usable from the belt** (§150). This is the scenario that was missing:
+  // a handler that throws is a dead button, and nothing above clicked one. It found a real
+  // regression -- renderTopBar had a local named act (ex.rd_run_act()), which shadowed the page's
+  // act(call, label) helper, so the button threw TypeError: act is not a function.
+  //
+  // The seed is pinned because a potion drop is 40%: this checks the **wiring**, not the drop.
+  // If a content change ever moves the drop, pick another seed with a comment.
+  const POTION_SEED = 12;
+  const finishFight = async () => {
+    for (let step = 0; step < 80; step++) {
+      const inFight = !document.getElementById("handPanel").hidden;
+      if (!inFight) break;
+      const next = document.querySelector("#hand button.card:not([disabled])");
+      if (next) {
+        next.click();
+        await sleep(0);
+        const target = document.querySelector("#enemies [data-target-slot]");
+        if (target) { target.click(); await sleep(0); }
+      } else {
+        document.getElementById("endTurn").click();
+        await sleep(0);
+      }
+    }
+  };
+  const walkIntoFight = async () => {
+    for (let step = 0; step < 20; step++) {
+      if (!document.getElementById("handPanel").hidden) return true;
+      const lit = [...document.querySelectorAll("#mapbox g.node.reachable")];
+      if (!lit.length) return false;
+      lit[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await sleep(0);
+      const first = panel().querySelector("[data-panel-action]");
+      if (first) first.click();
+      await sleep(0);
+      if (document.getElementById("handPanel").hidden) {
+        const leave = [...panel().querySelectorAll("[data-panel-action]")]
+          .find((b) => b.innerText.includes("离开"));
+        if (leave) { leave.click(); await sleep(0); }
+      }
+    }
+    return !document.getElementById("handPanel").hidden;
+  };
+
+  window.RD_DEBUG.startWithSeed(POTION_SEED);
+  await sleep(0);
+  panel().querySelector("[data-panel-action]").click();
+  await sleep(0);
+  if (ex.rd_run_pending() === 7) {
+    panel().querySelector("[data-panel-action]").click();
+    await sleep(0);
+    const pick = document.querySelector("#modalBody [data-pick]");
+    if (pick) { pick.click(); await sleep(0); }
+  }
+  await walkIntoFight();
+  await finishFight();
+  out.potionBeltBefore = ex.rd_run_potion_count();
+  if (ex.rd_run_pending() === 4) {
+    const row = [...panel().querySelectorAll(".shop-item")].find((r) => r.innerText.includes("药水"));
+    if (row) {
+      const takeButton = row.querySelector("[data-panel-action]");
+      if (takeButton) { takeButton.click(); await sleep(0); }
+    }
+    const skip = [...panel().querySelectorAll("[data-panel-action]")].pop();
+    if (skip) { skip.click(); await sleep(0); }
+  }
+  out.potionInBelt = ex.rd_run_potion_count();
+  out.potionBeltHtml = document.getElementById("relicChips").innerHTML;
+  await walkIntoFight();
+  out.potionFight = !document.getElementById("handPanel").hidden;
+  out.potionHasUse = Boolean(document.querySelector("[data-use-potion]"));
+  const useButton = document.querySelector("[data-use-potion]");
+  if (useButton) {
+    // Call the handler **directly** so a throw is visible here instead of vanishing into the
+    // event dispatcher (that is exactly how the regression above stayed invisible).
+    try {
+      useButton.onclick();
+      out.potionThrew = null;
+    } catch (error) {
+      out.potionThrew = String(error);
+    }
+    await sleep(0);
+  }
+  out.potionAfter = ex.rd_run_potion_count();
+  out.potionBeltAfter = document.getElementById("relicChips").innerHTML;
   return out;
 })()`);
 
@@ -272,6 +358,22 @@ want(
   report.energyAfter === 0 ? report.unaffordable > 0 : true,
   "with no energy left, no card is marked unaffordable"
 );
+// §150: the potion button must *do* something -- and a handler that throws counts as "did nothing".
+want(report.potionInBelt === 1, `the reward did not hand over a potion (belt ${report.potionInBelt})`);
+want(report.potionFight === true, "could not reach a second fight to use the potion in");
+want(
+  report.potionHasUse === true,
+  "a potion in the belt offers no 用 button while in a fight"
+);
+want(report.potionThrew === null, `the potion button threw: ${report.potionThrew}`);
+want(
+  report.potionAfter === 0,
+  `the potion was not consumed (still ${report.potionAfter} in the belt)`
+);
+want(
+  !report.potionBeltAfter.includes("chip potion"),
+  `the belt still shows the potion after using it: ${report.potionBeltAfter}`
+);
 
 socket.close();
 chrome.kill();
@@ -288,4 +390,6 @@ console.log("  card detail       " + report.card.title + " · " + report.card.bo
 console.log("  log               " + report.log[report.log.length - 1]);
 console.log("  top bar           " + report.topBar);
 console.log("  energy/unafford.  " + report.energyAfter + " / " + report.unaffordable);
+console.log("  potion            belt " + report.potionInBelt + " -> " + report.potionAfter +
+  (report.potionThrew ? " · THREW " + report.potionThrew : ""));
 console.log("BROWSER_TEST PASS");

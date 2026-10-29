@@ -684,15 +684,19 @@ function renderTopBar() {
   const gold = ex.rd_run_observe(4);
   const deck = ex.rd_run_deck_count();
   const relics = ex.rd_run_observe(6);
-  const act = ex.rd_run_act();
+  // ⚠️ **不要把这个局部变量叫 `act`**：那是本页的"执行一个动作"助手（`function act(call, label)`），
+  // 而这个函数体里的按钮处理器要用它。改名成 `actNow` 之前，喝药水的按钮一按就
+  // `TypeError: act is not a function`（在 handler 里被静默吞掉，只留一个什么都没发生的按钮）。
+  // 这是 §136 加"幕间幕布"时引入的回归，`browser_test.mjs` 当时没人点过药水，所以没人发现。
+  const actNow = ex.rd_run_act();
   // **The act transition** (§132): the run advanced, so say it out loud and let the map repaint.
   // `say` is still the only writer of `#msg`.
-  if (act > actSeen) {
-    actSeen = act;
-    showActCurtain(act);
-  } else if (act > 0 && act < actSeen) {
+  if (actNow > actSeen) {
+    actSeen = actNow;
+    showActCurtain(actNow);
+  } else if (actNow > 0 && actNow < actSeen) {
     // A new run started: reset without announcing anything.
-    actSeen = act;
+    actSeen = actNow;
   }
   // `rd_env_enemy_overflow()`: the observation carries six enemy slots. A fight that holds more
   // **cannot be drawn correctly**, and the honest thing is to say so rather than quietly show six.
@@ -710,7 +714,7 @@ function renderTopBar() {
   const overflowNote =
     overflow === 1 ? ' · <span class="warn">⚠️ 敌人超出可见槽（只显示 6 个）</span>' : "";
   document.getElementById("runStats").innerHTML =
-    `幕 <b>${act}</b> · floor <b>${floor}</b> · hp <b>${hp}/${hpMax}</b> · ` +
+    `幕 <b>${actNow}</b> · floor <b>${floor}</b> · hp <b>${hp}/${hpMax}</b> · ` +
     `gold <b>${gold}</b> · deck <b>${deck}</b>` + overflowNote;
   const chips = [];
   for (let index = 0; index < relics; index++) {
