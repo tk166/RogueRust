@@ -153,6 +153,30 @@ INV_CARDS = {
     "buffer": {"Cost": 1, "Tags": ["skill", "buffer"],
                "Facts": [("status", "standard.buffer", 1, "source")]},
     # §147: the upgraded row -- same X mechanics, 8 damage per hit instead of 5.
+    # §154: the ten `+` rows that were missing. The run upgrades by appending `+` to the card id, so
+    # a card without one becomes an id the image does not contain -- and the next fight refuses to
+    # build (`UnknownCard(CardDefinitionId("iron_wave+"))`, reported from the browser).
+    "anger+": {"Cost": 0, "Tags": ["attack"],
+               "Facts": [("damage", 8, "event"), ("card", "anger+", 1, "DiscardPile", "event")]},
+    "twin_strike+": {"Cost": 1, "Tags": ["attack", "strike"],
+                     "Facts": [("damage", 7, "event"), ("damage", 7, "event")]},
+    "iron_wave+": {"Cost": 1, "Tags": ["attack", "block"],
+                   "Facts": [("block", 7, "source"), ("damage", 7, "event")]},
+    "clothesline+": {"Cost": 2, "Tags": ["attack"],
+                     "Facts": [("damage", 14, "event"), ("status", "standard.weak", 3, "event")]},
+    "uppercut+": {"Cost": 2, "Tags": ["attack"],
+                  "Facts": [("damage", 13, "event"), ("status", "standard.weak", 2, "event"),
+                            ("status", "standard.vulnerable", 2, "event")]},
+    "sentinel+": {"Cost": 1, "Tags": ["skill", "ethereal"],
+                  "Facts": [("block", 8, "source")]},
+    "patient_guard+": {"Cost": 1, "Tags": ["skill", "retain"],
+                       "Facts": [("block", 8, "source")]},
+    "swift_strike+": {"Cost": 1, "Tags": ["attack", "strike", "innate"],
+                      "Facts": [("damage", 9, "event")]},
+    "apparition+": {"Cost": 1, "Tags": ["skill", "intangible"],
+                    "Facts": [("status", "standard.intangible", 2, "source")]},
+    "buffer+": {"Cost": 1, "Tags": ["skill", "buffer"],
+                "Facts": [("status", "standard.buffer", 2, "source")]},
     "whirlwind+": {"Cost": 0, "Tags": ["attack", "x_cost"],
                    "Facts": [("repeat", ("expr", "x.cost"), "damage", 8, "allEnemies")]},
     "whirlwind": {"Cost": 0, "Tags": ["attack", "x_cost"],
@@ -1038,6 +1062,52 @@ POTION_KINDS = ("combat_block", "combat_energy", "combat_heal_percent", "combat_
 POTION_NEEDS_TARGET = ("combat_damage", "combat_status_target")
 
 
+# The tags a card can carry and still be upgraded at a campfire. Curses and statuses cannot.
+NOT_UPGRADABLE_TAGS = ("curse", "status")
+
+
+def check_upgrades(doc):
+    """§154: **every upgradable card must have a `+` row.**
+
+    The run's upgrade path is "append `+` to the id" (`RunState::upgrade_at`), so a card without an
+    upgraded row becomes an id the image does not contain: the run looks fine until the next fight,
+    which then refuses to build (`UnknownCard(CardDefinitionId("iron_wave+"))`). §147 fixed exactly
+    one card and wrote the lesson down; nine others still had no row.
+    """
+    print("[3c] card upgrades (port-plan.md §154)")
+    cards = {card["Id"]: card for card in doc.get("Cards") or []}
+    missing = []
+    for card_id, card in cards.items():
+        if card_id.endswith("+"):
+            continue
+        tags = [tag["value"] for tag in card.get("Tags") or []]
+        if any(tag in NOT_UPGRADABLE_TAGS for tag in tags):
+            continue
+        if card_id + "+" not in cards:
+            missing.append(card_id)
+    if missing:
+        fail("cards.upgrades", "no `+` row for %s" % (missing,))
+    # An upgraded row must keep the base's cost and tags: a `+` that changes the shape (cheaper cost,
+    # different keyword) is not an upgrade, it is a different card wearing the same name.
+    for card_id, card in cards.items():
+        if not card_id.endswith("+"):
+            continue
+        base = cards.get(card_id[:-1])
+        if base is None:
+            fail("cards.upgrades", "%s has no base row" % (card_id,))
+            continue
+        if [cost.get("Amount") for cost in card.get("Costs") or []] != [
+            cost.get("Amount") for cost in base.get("Costs") or []
+        ]:
+            fail("cards.upgrades", "%s costs differently from %s" % (card_id, card_id[:-1]))
+        if [tag["value"] for tag in card.get("Tags") or []] != [
+            tag["value"] for tag in base.get("Tags") or []
+        ]:
+            fail("cards.upgrades", "%s has different tags from %s" % (card_id, card_id[:-1]))
+    upgraded = sum(1 for card_id in cards if card_id.endswith("+"))
+    ok("card upgrades", "%d upgraded rows, every upgradable card has one" % upgraded)
+
+
 def check_potions(doc):
     """§152: every potion must be **drinkable**.
 
@@ -1704,6 +1774,7 @@ def main():
     check_relations(doc)
     check_weak_pool_table(doc)
     check_event_vocabulary(doc)
+    check_upgrades(doc)
     check_potions(doc)
     check_card_keywords(doc)
     check_relics(doc)

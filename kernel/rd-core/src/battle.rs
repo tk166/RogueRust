@@ -3776,6 +3776,57 @@ mod tests {
         );
     }
 
+    /// §154：**每一张能升级的牌都必须建得起来**，成对：假 `+` 行照样响亮失败。
+    ///
+    /// 这条比 `an_upgraded_card_row_is_buildable` 宽：那条只钉了 `whirlwind`（§147 的教训就写在
+    /// 它上面），而用户实际撞到的是 `iron_wave+` —— 运行层的升级就是往 id 后面加 `+`，所以
+    /// **任何**一张没有 `+` 行的牌，都会在升完级之后的下一场战斗里 `UnknownCard`。
+    ///
+    /// 遍历的是**镜像里的所有 `+` 行**，所以内容新增一张牌时它会自动覆盖到。
+    #[test]
+    fn every_upgraded_card_row_builds_a_fight() {
+        let blob = sts_image();
+        let content = parse(&blob);
+        // 遍历 `CARD` 段的行：行里那一格是**串槽**，`content.string(...)` 才是 id。
+        let rows = content.section(crate::content::S_CARD).map_or(0, |s| s.count);
+        let mut upgraded: Vec<&str> = Vec::new();
+        for index in 0..rows {
+            let Some(card) = content.card(index) else {
+                continue;
+            };
+            let Some(id) = content.string(card.id()) else {
+                continue;
+            };
+            if id.ends_with('+') {
+                upgraded.push(id);
+            }
+        }
+        assert!(
+            upgraded.len() >= 14,
+            "expected the upgraded rows to be there, got {upgraded:?}"
+        );
+        for id in upgraded {
+            let entries = [DeckEntry { card: id, count: 1 }];
+            let state = build_sts_fight(&blob, &entries, true)
+                .unwrap_or_else(|e| panic!("{id} must be buildable: {e:?}"));
+            let defs = draw_pile_definitions(&state, "hero");
+            assert_eq!(defs, vec![id], "{id} did not land in the draw pile");
+        }
+        // 成对：不存在的 `+` 行仍然响亮失败（否则上面那些断言也可能是"建战斗从不查定义"）。
+        assert!(
+            build_sts_fight(
+                &blob,
+                &[DeckEntry {
+                    card: "no_such_card+",
+                    count: 1
+                }],
+                true
+            )
+            .is_err(),
+            "an upgraded row that does not exist must fail loudly"
+        );
+    }
+
     /// 卡实例 id 的形状是 `card_%06d`（`CombatState.cs:689-696`），而且**每张一个新号**。
     #[test]
     fn card_instance_ids_are_card_underscore_six_digits_and_never_shared() {
