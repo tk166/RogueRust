@@ -213,6 +213,17 @@ const RD_PANELS = (() => {
         button: { label: "拿起", action: { kind: "take_potion" } },
       });
     }
+    // §155: elites and bosses pay a relic (StS's elite reward is gold + cards + a relic). Its own
+    // row, on the same "one offer, one button" rule the potion already follows.
+    if (s.rewardRelic) {
+      rows.push({
+        label: `遗物 ${s.rewardRelic}`,
+        sub: "",
+        value: "",
+        disabled: false,
+        button: { label: "拿起", action: { kind: "take_relic" } },
+      });
+    }
     return {
       title: `战斗奖励 · 已得 ${s.rewardGold} 金 · 选一张牌`,
       lines: [],

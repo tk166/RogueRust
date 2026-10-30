@@ -1764,6 +1764,43 @@ pub extern "C" fn rd_run_take_potion() -> i32 {
     finish(session, outcome)
 }
 
+/// The relic the reward screen is offering (empty when none; §155: elites and bosses), for display.
+#[no_mangle]
+pub extern "C" fn rd_run_reward_relic_len() -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    match session.state.reward_relic() {
+        Some(id) => id.len() as i32,
+        None => 0,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_reward_relic_len()` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_reward_relic_into(ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return 0;
+    };
+    match session.state.reward_relic() {
+        Some(id) => write_out(id, ptr),
+        None => 0,
+    }
+}
+
+/// Take the offered relic. Refuses when the table has none (`NoSuchRelic`) instead of silently
+/// doing nothing -- a button that lies is the §150 shape.
+#[no_mangle]
+pub extern "C" fn rd_run_take_relic() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let outcome = session.state.take_relic().map(|_| 0i32);
+    finish(session, outcome)
+}
+
 /// Which act the run is on (1-based), or `-1` with no run.
 #[no_mangle]
 pub extern "C" fn rd_run_act() -> i32 {
@@ -2288,9 +2325,13 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
                 potion_ids.push(*id);
             }
         }
+        // §155: an elite (or boss) also pays a relic. `relic_pool` is the content's whole relic table;
+        // `roll_reward` filters out the ones the player already holds (the same rule the chest and the
+        // shop use), so a fight can never hand out a duplicate.
+        let relic_ids = relic_pool(image);
         if let Err(e) = session
             .state
-            .roll_reward(&pool, &potion_ids, fight_kind)
+            .roll_reward(&pool, &potion_ids, &relic_ids, fight_kind)
         {
             let message = describe(&e);
             return fail(session, &message);
@@ -2795,6 +2836,46 @@ mod tests {
             );
         }
     }
+    /// §155：**精英奖励里的遗物能通过 ABI 拿到**（走 `push_relic` 这个唯一授予点）。
+    ///
+    /// 这里直接逼出一张奖励表（`roll_reward(FightKind::Elite)`），而不是打赢一场精英：
+    /// 打赢需要一套出牌策略，而策略不是"奖励能不能拿"这件事的判据。
+    #[test]
+    fn the_elite_relic_reward_round_trips_through_the_abi() {
+        reset(7);
+        let relics = relic_pool(content());
+        let pool = match full_pool(content()) {
+            Ok(pool) => pool,
+            Err(message) => panic!("{message}"),
+        };
+        let held_before = rd_run_observe(6);
+        let offered = {
+            let session = run_slot().as_mut().expect("session");
+            session
+                .state
+                .roll_reward(&pool, &[], &relics, rd_run::state::FightKind::Elite)
+                .expect("an elite reward")
+        };
+        let _ = offered;
+        let len = rd_run_reward_relic_len();
+        assert!(len > 0, "the reward table offers a relic");
+        let mut buffer = std::vec![0u8; len as usize];
+        unsafe { rd_run_reward_relic_into(buffer.as_mut_ptr()) };
+        let id = String::from_utf8(buffer).expect("ascii");
+        assert!(relics.contains(&id.as_str()), "{id} is not in the pool");
+
+        assert_eq!(rd_run_take_relic(), 0, "take it: {}", run_error_text());
+        assert_eq!(
+            rd_run_observe(6),
+            held_before + 1,
+            "the relic count moved"
+        );
+        assert_eq!(rd_run_reward_relic_len(), 0, "the row is empty after taking it");
+        // `-2` = refused with a readable reason (`-1` means "no run / no such slot"), which is what
+        // a second take is: the table has no relic left.
+        assert_eq!(rd_run_take_relic(), -2, "taking it twice is refused, not ignored");
+    }
+
     /// §152：五种新的药水形状**真的有效**（各自读回来一个数，而不是"没报错"）。
     ///
     /// 药水的词表从 3 种效果扩到 8 种，而"扩了词表"与"喝下去有用"是两件事 —— 这一条盯后者。

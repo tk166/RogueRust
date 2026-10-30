@@ -849,6 +849,7 @@ function runSnapshot() {
     rewardCards: [],
     choices: [],
     rewardPotion: null,
+      /// The relic an elite/boss fight pays (§155). `null` for a normal fight.
     blessingNeeds: 0,
     eventNeeds: 0,
     restHeal: 0,
@@ -913,6 +914,14 @@ function runSnapshot() {
           (ptr) => ex.rd_run_reward_potion_into(ptr)
         );
       }
+      // §155: an elite (and a boss) also offers a **relic**; a normal fight offers none, so this
+      // stays null and the row is not drawn.
+      if (ex.rd_run_reward_relic_len() > 0) {
+        snapshot.rewardRelic = readText(
+          () => ex.rd_run_reward_relic_len(),
+          (ptr) => ex.rd_run_reward_relic_into(ptr)
+        );
+      }
       break;
     case 5:
       snapshot.eventText = eventText();
@@ -954,6 +963,7 @@ const PANEL_ACTIONS = {
     showDeckPicker("删卡：选一张移除", (index) => act(() => ex.rd_run_remove_card(index), "删卡")),
   take_card: (a) => act(() => ex.rd_run_take_card(a.slot), "拿牌"),
   take_potion: () => act(() => ex.rd_run_take_potion(), "拿药水"),
+  take_relic: () => act(() => ex.rd_run_take_relic(), "拿遗物"),
   skip_reward: () => act(() => ex.rd_run_skip_reward(), "跳过"),
   event_choice: (a) => act(() => ex.rd_run_choose(a.slot), "选择"),
   event_card: () =>

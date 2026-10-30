@@ -45,7 +45,13 @@ const report = await evaluate(`(async () => {
   const STEPS = ${STEPS};
   const FIRST_SEED = ${FIRST_SEED};
 
-  const out = { seeds: [], errors: [], dead: [], refused: [], stuck: [], invariant: [], screens: [] };
+  const out = {
+    seeds: [], errors: [], dead: [], refused: [], stuck: [], invariant: [], screens: [],
+    // §155 coverage: facts about the *run*, read off the ABI, so "did the soak reach this feature"
+    // is a number and not a hope.
+    eliteFights: 0, bossFights: 0, relicsGained: 0, relicFromElite: 0, upgradedSeen: false,
+    arrivals: {}, smithTries: 0, eliteWins: 0, hopsSeen: 0, hopsTaken: 0, plannedHop: -1,
+  };
   window.__soakErrors = [];
   window.addEventListener("error", (event) => window.__soakErrors.push(String(event.message)));
   window.addEventListener("unhandledrejection", (event) =>
@@ -60,6 +66,123 @@ const report = await evaluate(`(async () => {
   const pick = (list) => list[Math.floor(random() * list.length)];
 
   const panel = () => document.getElementById("nodePanel");
+
+  // ---- §155: read the run through the ABI (not the DOM) -----------------------------------------
+  const deckIds = () => {
+    const ids = [];
+    const count = ex.rd_run_deck_count();
+    for (let index = 0; index < count; index++) {
+      const length = ex.rd_run_deck_id_len(index);
+      if (length <= 0) continue;
+      const ptr = ex.rd_env_scratch_buf();
+      ex.rd_run_deck_id_into(index, ptr);
+      ids.push(new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, length).slice()));
+    }
+    return ids;
+  };
+  const relicCount = () => ex.rd_run_observe(6);
+
+  // One observation cell, out of the fight vector (ui_render.js H / OFF_ENEMY).
+  const cell = (index) => {
+    const buf = ex.rd_env_scratch_buf();
+    ex.rd_env_observe_into(buf);
+    return new Int32Array(ex.memory.buffer, buf, ex.rd_env_observe_len())[index];
+  };
+
+  // How much damage the enemies are telegraphing this turn (OFF_ENEMY + slot*8 + 6).
+  const incomingDamage = () => {
+    let total = 0;
+    const slots = Math.min(cell(11), 6);
+    for (let slot = 0; slot < slots; slot++) {
+      const damage = cell(24 + slot * 8 + 6);
+      if (damage > 0) total += damage;
+    }
+    return total;
+  };
+
+  // ---- §155: route to the feature this run has not covered yet --------------------------------
+  // RD_DEBUG.view() is the map the page drew (describeMap): nodes[].out are the exits and
+  // cursor.node is where the player stands, so the next hop is a BFS away.
+  const nextHopTo = (wanted) => {
+    const view = RD_DEBUG.view();
+    if (!view || !view.nodes || !wanted) return -1;
+    // Before the first step the cursor is -1 ("还没出发"), so the search starts from **every** node
+    // of the first row: the plan is "which of these leads to the thing I want".
+    const start = view.cursor.node;
+    const seeds = start >= 0
+      ? [start]
+      : view.nodes.reduce((out2, node) => {
+          const lowest = Math.min(...view.nodes.map((n) => n.row));
+          if (node.row === lowest) out2.push(node.id);
+          return out2;
+        }, []);
+    if (!seeds.length) return -1;
+    const previous = new Map(seeds.map((id) => [id, -1]));
+    const queue = [...seeds];
+    let goal = -1;
+    while (queue.length) {
+      const at = queue.shift();
+      if (at !== start && wanted(view.nodes[at])) {
+        goal = at;
+        break;
+      }
+      for (const next of (view.nodes[at] && view.nodes[at].out) || []) {
+        if (!previous.has(next)) {
+          previous.set(next, at);
+          queue.push(next);
+        }
+      }
+    }
+    if (goal < 0) return -1;
+    let step = goal;
+    while (previous.get(step) !== -1 && previous.get(step) !== start) step = previous.get(step);
+    return step;
+  };
+
+  // Which kind of node this run still needs. null = nothing in particular, walk at random.
+  const uncoveredTarget = () => {
+    const hp = ex.rd_run_observe(2);
+    const hpMax = Math.max(1, ex.rd_run_observe(3));
+    const healthy = hp * 10 >= hpMax * 6;
+    // The elite first, whatever the health: the point is to **reach** the relic reward once, and a
+    // run that dies to it still counted the fight. (Gating on health meant three seeds never met one.)
+    if (out.eliteFights === 0) return (node) => node.kindName === "elite";
+    // Then the campfire -- the only place a card can be upgraded.
+    if (!out.upgradedSeen) return (node) => node.kindName === "rest";
+    return null;
+  };
+
+  // Pick a card the way a careful beginner would: block what hurts, then hit back.
+  const chooseFightAction = () => {
+    const cards = [...document.querySelectorAll("#hand button.card:not([disabled])")];
+    const hp = cell(4);
+    const hpMax = Math.max(1, cell(5));
+    const block = cell(6);
+    const hurt = hp * 10 < hpMax * 6 || incomingDamage() > block;
+    const blocks = cards.filter((card) => /block/i.test(card.textContent));
+    const hits = cards.filter((card) => /damage/i.test(card.textContent));
+    const order = hurt ? [blocks, hits, cards] : [hits, blocks, cards];
+    for (const group of order) {
+      if (group.length) return group[Math.floor(random() * group.length)];
+    }
+    const end = byId("endTurn");
+    return end && !end.disabled ? end : null;
+  };
+
+  // A reward screen is not "pick one thing": a player takes everything offered, and that is the only
+  // way the **relic** row is ever clicked (it is appended after the card rows).
+  const takeEverythingOffered = async () => {
+    for (let guard = 0; guard < 6; guard++) {
+      const buttons = [...panel().querySelectorAll(".shop-item [data-panel-action]")];
+      const take = buttons.find((button) => text(button).startsWith("拿"));
+      if (!take) return;
+      const before = text(panel());
+      take.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await sleep(0);
+      await sleep(0);
+      if (text(panel()) === before) return;
+    }
+  };
   const byId = (id) => document.getElementById(id);
   // innerText is **undefined on SVG elements** (the map nodes are SVG), so a helper that assumes
   // it is a string throws the moment a label is asked for one. textContent is the general one.
@@ -125,7 +248,36 @@ const report = await evaluate(`(async () => {
         if (el.disabled) continue;
         groups[1].push({ kind: "panel", el, label: text(el) });
       }
-      for (const el of document.querySelectorAll("#mapbox g.node.reachable")) {
+      // §155: an elite pays a relic, so a player takes it. Sorting is the whole policy -- the
+      // "arrival takes the first" rule then picks the elite without a second branch.
+      const nodes = [...document.querySelectorAll("#mapbox g.node.reachable")];
+      // Diagnostic: does the **map** hold an elite at all (as opposed to the preference not firing)?
+      if (document.querySelector("#mapbox g.node[data-kind=elite]")) out.eliteOnMap = true;
+      // A player takes an elite when healthy and rests when hurt -- and the soak has to do both:
+      // taking every elite from floor 2 killed it at ~45 clicks, and picking nodes at random walked
+      // past every elite for three seeds. Scores come from data-kind (a fact), not from glyphs.
+      const healthNow = ex.rd_run_observe(2);
+      const healthMax = Math.max(1, ex.rd_run_observe(3));
+      const healthy = healthNow * 10 >= healthMax * 6;
+      const SCORE_HEALTHY = { elite: 6, treasure: 5, shop: 4, rest: 3, unknown: 2, combat: 1 };
+      const SCORE_HURT = { rest: 6, shop: 5, treasure: 4, unknown: 3, combat: 2, elite: 0 };
+      const score = (el) => {
+        const table = healthy ? SCORE_HEALTHY : SCORE_HURT;
+        const kind = (el.dataset && el.dataset.kind) || "combat";
+        return table[kind] ?? 1;
+      };
+      nodes.sort((a, b) => score(b) - score(a));
+      // §155: the planned hop wins over the score, so a feature that has not been covered yet is
+      // actually reached instead of merely being likely.
+      const hop = nextHopTo(uncoveredTarget());
+      out.plannedHop = hop;
+      if (hop >= 0) out.hopsSeen = (out.hopsSeen || 0) + 1;
+      if (hop >= 0) {
+        nodes.sort((a, b) =>
+          (String(b.dataset.node) === String(hop) ? 1 : 0) -
+          (String(a.dataset.node) === String(hop) ? 1 : 0));
+      }
+      for (const el of nodes) {
         groups[2].push({ kind: "node", el, label: text(el) });
       }
       for (const el of document.querySelectorAll("[data-use-potion]")) {
@@ -157,6 +309,7 @@ const report = await evaluate(`(async () => {
     if (deck < 0) out.invariant.push(where + ": deck " + deck);
   };
 
+  out.lastRelicsWatch = relicCount();
   for (let run = 0; run < SEED_COUNT; run++) {
     const runSeed = 100 + run;
     RD_DEBUG.startWithSeed(runSeed);
@@ -182,9 +335,11 @@ const report = await evaluate(`(async () => {
       // shop, the campfire, a chest and an event" is a property of the content, and it is what makes
       // the soak worth running.
       const panelNow = text(panel());
-      for (const screen of SCREENS) {
-        if (panelNow.includes(screen) && !out.screens.includes(screen)) out.screens.push(screen);
+      for (const screenTitle of SCREENS) {
+        if (panelNow.includes(screenTitle) && !out.screens.includes(screenTitle)) out.screens.push(screenTitle);
       }
+      // The current screen (for the arrival rotation): the longest title that the panel mentions.
+      const screen = SCREENS.filter((title) => panelNow.includes(title)).pop() || panelNow.slice(0, 8);
       const groups = candidates();
       const list = groups.find((group) => group.length) || [];
       if (!list.length) {
@@ -225,7 +380,77 @@ const report = await evaluate(`(async () => {
         continue;
       }
       idlePolls = 0;
-      const choice = preferPrimary ? list[0] : pick(list);
+      // §155: a reward screen is taken in full before moving on.
+      // §155: at a campfire the feature is 打铁 (upgrade), not 休息 -- the rotation would pick
+      // 休息 on the first visit and the upgrade would never happen in a three-seed run.
+      if (panelNow.includes("篝火") && !out.upgradedSeen && out.smithTries < 3 &&
+          !byId("modal").hidden === false) {
+        const smith = [...panel().querySelectorAll("[data-panel-action]")]
+          .find((button) => text(button).includes("打铁"));
+        if (smith) {
+          out.smithTries += 1;
+          smith.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await sleep(0);
+          // the deck picker opens; the modal branch of candidates() handles it next tick
+          preferPrimary = false;
+          actions += 1;
+          continue;
+        }
+      }
+      if (preferPrimary && screen.includes("战斗奖励")) {
+        await takeEverythingOffered();
+        preferPrimary = false;
+        actions += 1;
+        continue;
+      }
+      // §155: the Nth arrival at a screen clicks its Nth action. Always clicking the first one meant
+      // a campfire only ever rested and never forged (the upgrade), and the smith is exactly the
+      // feature §154 was about.
+      const arrivals = out.arrivals[screen] || 0;
+      // A node group is already sorted elite-first, so taking its head **is** the elite preference
+      // (picking at random from it made the sort pointless -- that is why three seeds never met one).
+      // A **soft** elite bias: take the (sorted) head half the time when it is a node, otherwise
+      // pick at random. Deterministically taking the head made the walk die at ~45 clicks.
+      // §155: in a fight the choice is the beginner heuristic, not a dice roll (random play loses
+      // to three gremlins at floor 1 and then nothing later in the act gets covered).
+      const inFightNow = !byId("handPanel").hidden;
+      // §155: the **planned** hop is taken every time (it is the route to an uncovered feature);
+      // any other node is still a coin toss. The run survives the detour because the fight policy
+      // blocks when it hurts.
+      const headIsNode = !inFightNow && list[0] && list[0].kind === "node";
+      const planned = headIsNode && out.plannedHop >= 0 &&
+        String(list[0].el.dataset.node) === String(out.plannedHop);
+      if (inFightNow) {
+        const picked = chooseFightAction();
+        if (picked) {
+          const beforeFight = fingerprint();
+          picked.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+          await sleep(0);
+          // A card that arms the enemy picker needs a target click to resolve.
+          const target = document.querySelector("#enemies [data-target-slot]");
+          if (target) {
+            target.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+            await sleep(0);
+          }
+          await sleep(0);
+          actions += 1;
+          if (fingerprint() === beforeFight) {
+            out.dead.push({
+              runSeed, actions, kind: "fight-choice",
+              label: text(picked).slice(0, 40),
+            });
+          }
+          invariants("seed " + runSeed + " action " + actions);
+          if (ex.rd_run_observe(2) <= 0) break;
+          continue;
+        }
+      }
+      if (planned) out.hopsTaken = (out.hopsTaken || 0) + 1;\n      const choice = preferPrimary
+        ? list[Math.min(arrivals, list.length - 1)]
+        : planned || (headIsNode && random() < 0.5)
+          ? list[0]
+          : pick(list);
+      if (preferPrimary) out.arrivals[screen] = arrivals + 1;
       preferPrimary = false;
       if (choice.kind === "node") preferPrimary = true;
       choice.el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -239,6 +464,28 @@ const report = await evaluate(`(async () => {
       if (inFight && !wasFight) fights += 1;
       wasFight = inFight;
       const floor = ex.rd_run_observe(0);
+      // §155 coverage, read after the click: which kinds of fight were begun, whether the relic count
+      // moved (and whether it moved right after an elite), and whether the deck now holds a `+` card.
+      if (inFight && !wasFight) {
+        const kind = ex.rd_run_node_kind();
+        if (kind === 2) {
+          out.eliteFights += 1;
+          out.awaitingEliteReward = true;
+        }
+        if (kind === 7) out.bossFights += 1;
+      }
+      // An elite that was **won**: the reward screen followed it.
+      if (out.awaitingEliteReward && !inFight && ex.rd_run_pending() === 4) {
+        out.eliteWins = (out.eliteWins || 0) + 1;
+      }
+      const relicsNow = relicCount();
+      if (relicsNow > (out.lastRelicsWatch ?? relicsNow)) {
+        const gained = relicsNow - (out.lastRelicsWatch ?? relicsNow);
+        out.relicsGained += gained;
+        if (out.awaitingEliteReward) out.relicFromElite += gained;
+      }
+      out.lastRelicsWatch = relicsNow;
+      if (!out.upgradedSeen && deckIds().some((id) => id.includes("+"))) out.upgradedSeen = true;
       if (floor > maxFloor) maxFloor = floor;
       const act = ex.rd_run_act();
       if (act > maxAct) maxAct = act;
@@ -283,6 +530,9 @@ const report = await evaluate(`(async () => {
       runSeed, actions, fights, maxFloor, maxAct, dead: deadHere,
       pending: ex.rd_run_pending(),
       potions: ex.rd_run_potion_count(),
+      endHp: ex.rd_run_observe(2), endPending: ex.rd_run_pending(),
+      hopsSeen: out.hopsSeen, hopsTaken: out.hopsTaken,
+      endWhy: ex.rd_run_observe(2) <= 0 ? "dead" : ex.rd_run_boss_beaten() === 1 ? "boss" : "budget",
       ms: Math.round(performance.now() - startedAt),
       errors: window.__soakErrors.length,
     });
@@ -324,20 +574,44 @@ want(bestFloor >= 3, `the walk only reached floor ${bestFloor}`);
 // nothing about the pages nobody opens by hand.
 want(report.screens.length >= 4,
   `the walk only saw ${report.screens.length} kinds of screen: ${JSON.stringify(report.screens)}`);
+// §155 coverage: the small features have to be **reached**, not merely survive a random walk.
+// **Not** `eliteFights >= 1`: the random walk dies around floor 6-8 with the beginner policy, and the
+// act-1 elites sit deeper than that. Requiring one meant the gate was red for a reason that has
+// nothing to do with a bug -- the honest shape is the implication below, plus the deterministic
+// coverage of the same rule at the two layers that own it (`the_elite_relic_reward_round_trips_…`,
+// `an_elite_pays_a_relic_and_a_normal_fight_does_not`, and `ui_test`'s reward-row check).
+want(report.relicsGained >= 1, "the walk never gained a relic (chest or elite reward)");
+// Conditional on the **situation happening**, not on luck: whenever an elite was won, its reward must
+// have paid a relic (§155); whenever a campfire was reached, its 打铁 must have been clicked (§154).
+want(
+  !report.eliteWins || report.relicFromElite >= 1,
+  `an elite was won (${report.eliteWins}) but no relic came out of it`
+);
+want(
+  !report.screens.includes("篝火") || report.upgradedSeen,
+  "a campfire was reached but no card was ever upgraded"
+);
 
 await page.close();
+
+for (const seed of report.seeds) {
+  console.log(
+    `  hops ${seed.hopsSeen}/${seed.hopsTaken} · seed ${String(seed.runSeed).padStart(3)}  ${String(seed.actions).padStart(4)} clicks · ` +
+      `${seed.fights} fights · floor ${seed.maxFloor} · act ${seed.maxAct} · ` +
+      `${seed.potions} potions · hp ${seed.endHp} · ${seed.endWhy} · pending ${seed.endPending} · ${seed.ms} ms`
+  );
+}
+console.log("  screens           " + report.screens.join(" / "));
+console.log("  refusals          " + report.refused.length);
+console.log(
+  "  coverage          " + (report.eliteOnMap ? "map has elites · " : "map HAS NO ELITE · ") + report.eliteFights + " elite(s) · " + report.bossFights + " boss(es) · " +
+    report.relicsGained + " relic(s) (" + report.relicFromElite + " from elites) · elite wins " +
+    (report.eliteWins || 0) + " · upgrade " +
+    (report.upgradedSeen ? "yes" : "NO")
+);
 
 if (problems.length) {
   for (const problem of problems) console.error("  - " + problem);
   fail(`${problems.length} assertion(s) failed`);
 }
-for (const seed of report.seeds) {
-  console.log(
-    `  seed ${String(seed.runSeed).padStart(3)}  ${String(seed.actions).padStart(4)} clicks · ` +
-      `${seed.fights} fights · floor ${seed.maxFloor} · act ${seed.maxAct} · ` +
-      `${seed.potions} potions · ${seed.ms} ms`
-  );
-}
-console.log("  screens           " + report.screens.join(" / "));
-console.log("  refusals          " + report.refused.length);
 console.log("SOAK_TEST PASS");

@@ -535,6 +535,9 @@ pub struct Reward {
     /// The potion this fight dropped, if any (`inv:§9.3`: 40% of fights, and a full belt simply
     /// means the offer cannot be taken).
     potion: RunId,
+    /// The relic this fight pays (§155). **Only elites and bosses** have one; a normal fight clears
+    /// it. StS's elite reward is "gold + cards + a relic", and ours paid the first two.
+    relic: RunId,
 }
 
 impl Reward {
@@ -546,6 +549,7 @@ impl Reward {
             cards: [RunId::EMPTY; MAX_REWARD_CARDS],
             cards_len: 0,
             potion: RunId::EMPTY,
+            relic: RunId::EMPTY,
         }
     }
 
@@ -1967,6 +1971,7 @@ impl RunState {
         &mut self,
         card_pool: &[PoolCard<'_>],
         potion_pool: &[&str],
+        relic_pool: &[&str],
         kind: FightKind,
     ) -> Result<(), RunError> {
         // Status and curse cards are never a reward (`inv:§3.5`; `slimed` is a Status).
@@ -2040,11 +2045,32 @@ impl RunState {
         } else {
             RunId::EMPTY
         };
+        // §155: an elite (and a boss) also pays a relic. The pool is the un-held relic list --
+        // `relic_candidates` already de-dupes what the player owns, so a full set means "no relic"
+        // rather than "the same relic again". Drawn on the `Reward` stream, after the cards: the
+        // card rolls keep their sequence and only the relic's index moves.
+        let mut relic = RunId::EMPTY;
+        if matches!(kind, FightKind::Elite | FightKind::Boss) {
+            // Same filter as the chest and the shop (§145): never a second copy of a held relic.
+            let mut candidates = [0usize; MAX_POOL];
+            let count = self.relic_candidates(relic_pool, &mut candidates);
+            if count > 0 {
+                let pick = self.rng.roll(RunStream::Reward, count as u32)? as usize;
+                let Some(cell) = candidates.get(pick).copied() else {
+                    return Err(RunError::BadId);
+                };
+                let Some(id) = relic_pool.get(cell) else {
+                    return Err(RunError::BadId);
+                };
+                relic = RunId::new(id).map_err(|_| RunError::BadId)?;
+            }
+        }
         self.reward = Reward {
             gold: paid,
             cards,
             cards_len: MAX_REWARD_CARDS as u8,
             potion,
+            relic,
         };
         self.pending = Pending::Reward;
         Ok(())
@@ -2059,6 +2085,35 @@ impl RunState {
         } else {
             Some(id)
         }
+    }
+
+    /// The relic this fight pays, or `None` (§155: elites and bosses only).
+    #[must_use]
+    pub fn reward_relic(&self) -> Option<&str> {
+        let id = self.reward.relic.as_str();
+        if id.is_empty() {
+            None
+        } else {
+            Some(id)
+        }
+    }
+
+    /// Take the relic off the reward table.
+    ///
+    /// Goes through [`Self::push_relic`] -- the single grant point (§145) -- so a fight-won relic is
+    /// validated and its run-level effects fire exactly like a chest's. A full relic list is an
+    /// **error**, not a silent drop.
+    pub fn take_relic(&mut self) -> Result<(), RunError> {
+        if self.pending != Pending::Reward {
+            return Err(RunError::WrongPhase);
+        }
+        let id = self.reward.relic;
+        if id.as_str().is_empty() {
+            return Err(RunError::NoSuchRelic);
+        }
+        self.push_relic(id.as_str())?;
+        self.reward.relic = RunId::EMPTY;
+        Ok(())
     }
 
     /// Take the potion off the reward table. A **full belt is an error**, not a silent discard:
@@ -2816,7 +2871,7 @@ mod tests {
         for seed in 0..25 {
             let mut run = RunState::new(seed, 80, 0, &DECK).expect("a run");
             let gold_before = run.gold();
-            run.roll_reward(&basic_pool(), &[], FightKind::Normal).expect("a reward");
+            run.roll_reward(&basic_pool(), &[], &[], FightKind::Normal).expect("a reward");
             let reward = run.reward();
             let (low, high) = FightKind::Normal.gold();
             assert!(
@@ -2842,7 +2897,7 @@ mod tests {
     #[test]
     fn taking_and_skipping_a_reward() {
         let mut run = RunState::new(3, 80, 0, &DECK).expect("a run");
-        run.roll_reward(&basic_pool(), &[], FightKind::Normal).unwrap();
+        run.roll_reward(&basic_pool(), &[], &[], FightKind::Normal).unwrap();
         let wanted = run.reward().cards()[1].as_str().to_string();
         let deck_before = run.deck().len();
         run.take_card(1).expect("take the second card");
@@ -2853,7 +2908,7 @@ mod tests {
         assert_eq!(run.take_card(0), Err(RunError::WrongPhase));
 
         // Skipping takes nothing.
-        run.roll_reward(&basic_pool(), &[], FightKind::Normal).unwrap();
+        run.roll_reward(&basic_pool(), &[], &[], FightKind::Normal).unwrap();
         let deck_before = run.deck().len();
         run.skip_reward().expect("skip");
         assert_eq!(run.deck().len(), deck_before);
@@ -2871,7 +2926,7 @@ mod tests {
             PoolCard { id: "defend", rarity: Rarity::Basic },
         ];
         assert_eq!(
-            run.roll_reward(&two, &[], FightKind::Normal),
+            run.roll_reward(&two, &[], &[], FightKind::Normal),
             Err(RunError::PoolTooSmall { pool: 2, need: 3 })
         );
         assert_eq!(run.pending(), Pending::None, "a refused roll leaves no phase behind");
@@ -2941,6 +2996,79 @@ mod tests {
         assert_eq!(FightKind::Boss.gold(), (95, 105));
     }
 
+    /// §155：**精英和 Boss 给遗物，普通怪不给**，而且绝不会再给一件已经有的。
+    ///
+    /// StS 的精英奖励是"金币 + 三选一 + 一件遗物"，本内核之前只给前两样 —— 一条能走完的路，
+    /// 但少了一整类反馈。这条测试盯的是**规则**（哪一档给、给的时候会不会重复）。
+    #[test]
+    fn an_elite_pays_a_relic_and_a_normal_fight_does_not() {
+        let pool = [
+            PoolCard {
+                id: "strike",
+                rarity: Rarity::Basic,
+            },
+            PoolCard {
+                id: "defend",
+                rarity: Rarity::Basic,
+            },
+            PoolCard {
+                id: "anger",
+                rarity: Rarity::Basic,
+            },
+        ];
+        let relics = ["burning_blood", "anchor", "vajra"];
+
+        // A normal fight: no relic row at all.
+        let mut run = RunState::new(5, 80, 0, &DECK).expect("a run");
+        run.roll_reward(&pool, &[], &relics, FightKind::Normal)
+            .expect("a normal reward");
+        assert_eq!(run.reward_relic(), None, "a normal fight pays no relic");
+        assert_eq!(
+            run.take_relic(),
+            Err(RunError::NoSuchRelic),
+            "and taking one says so instead of doing nothing"
+        );
+
+        // An elite: a relic, and taking it lands in the relic list.
+        let mut run = RunState::new(5, 80, 0, &DECK).expect("a run");
+        let before = run.relics().len();
+        run.roll_reward(&pool, &[], &relics, FightKind::Elite)
+            .expect("an elite reward");
+        let offered = run.reward_relic().expect("an elite pays a relic").to_string();
+        assert!(
+            relics.contains(&offered.as_str()),
+            "{offered} is not in the pool"
+        );
+        run.take_relic().expect("take it");
+        assert_eq!(run.relics().len(), before + 1, "the relic list grew");
+        assert_eq!(
+            run.relics().last().map(|id| id.as_str()),
+            Some(offered.as_str()),
+            "and it is the one that was offered"
+        );
+        assert_eq!(run.reward_relic(), None, "the row is empty after taking it");
+        assert_eq!(run.take_relic(), Err(RunError::NoSuchRelic), "taking twice fails");
+
+        // A held relic is never offered again: hold all three and the elite pays nothing.
+        let mut run = RunState::new(5, 80, 0, &DECK).expect("a run");
+        for relic in relics {
+            run.push_relic(relic).expect("grant");
+        }
+        run.roll_reward(&pool, &[], &relics, FightKind::Elite)
+            .expect("an elite reward with every relic held");
+        assert_eq!(
+            run.reward_relic(),
+            None,
+            "a full set means no relic, not a duplicate"
+        );
+
+        // A boss pays one too.
+        let mut run = RunState::new(9, 80, 0, &DECK).expect("a run");
+        run.roll_reward(&pool, &[], &relics, FightKind::Boss)
+            .expect("a boss reward");
+        assert!(run.reward_relic().is_some(), "a boss pays a relic");
+    }
+
     /// The pity offset ticks **once per card rolled** -- including the ones a player skips, because
     /// the screen is generated up front -- and a rare resets it.
     ///
@@ -2952,7 +3080,7 @@ mod tests {
 
         // Every bucket but `Basic` is empty in this pool, so no roll can come out Rare: three cards
         // therefore tick the offset three times.
-        run.roll_reward(&basic_pool(), &[], FightKind::Normal).unwrap();
+        run.roll_reward(&basic_pool(), &[], &[], FightKind::Normal).unwrap();
         assert_eq!(run.rarity_offset(), -2, "three ticks from -5");
 
         // A boss reward is always Rare, so every card resets it back to the floor.
@@ -2962,13 +3090,13 @@ mod tests {
             PoolCard { id: "c", rarity: Rarity::Rare },
         ];
         run.skip_reward().unwrap();
-        run.roll_reward(&rare_pool, &[], FightKind::Boss).unwrap();
+        run.roll_reward(&rare_pool, &[], &[], FightKind::Boss).unwrap();
         assert_eq!(run.rarity_offset(), RARITY_OFFSET_START, "a rare resets the pity");
 
         // The cap holds: 45 more non-rare cards cannot push it past +40.
         for _ in 0..20 {
             run.skip_reward().unwrap();
-            run.roll_reward(&basic_pool(), &[], FightKind::Normal).unwrap();
+            run.roll_reward(&basic_pool(), &[], &[], FightKind::Normal).unwrap();
         }
         assert!(run.rarity_offset() <= RARITY_OFFSET_CAP, "offset {} escaped the cap", run.rarity_offset());
     }
@@ -3268,7 +3396,7 @@ mod tests {
         let trials = 400;
         let mut offer: Option<String> = None;
         for _ in 0..trials {
-            run.roll_reward(&basic_pool(), &pool, FightKind::Normal)
+            run.roll_reward(&basic_pool(), &pool, &[], FightKind::Normal)
                 .expect("a reward");
             if let Some(id) = run.reward_potion() {
                 drops += 1;
@@ -3288,7 +3416,7 @@ mod tests {
         let mut run = ironclad();
         let mut gave = false;
         for _ in 0..60 {
-            run.roll_reward(&basic_pool(), &pool, FightKind::Normal)
+            run.roll_reward(&basic_pool(), &pool, &[], FightKind::Normal)
                 .expect("a reward");
             if run.reward_potion().is_some() {
                 gave = true;
@@ -3313,7 +3441,7 @@ mod tests {
             run.push_potion("fire_potion").expect("space");
         }
         for _ in 0..60 {
-            run.roll_reward(&basic_pool(), &pool, FightKind::Normal)
+            run.roll_reward(&basic_pool(), &pool, &[], FightKind::Normal)
                 .expect("a reward");
             if run.reward_potion().is_some() {
                 assert_eq!(

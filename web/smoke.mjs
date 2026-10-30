@@ -62,6 +62,8 @@ const REQUIRED = [
   "rd_env_card_text_len", "rd_env_card_text_into", "rd_env_enemy_name_len",
   "rd_env_enemy_name_into", "rd_env_intent_len", "rd_env_intent_into",
   "rd_env_status_count", "rd_env_status_id_len", "rd_env_status_id_into", "rd_env_status_stacks",
+  // §155: the elite/boss relic reward.
+  "rd_run_reward_relic_len", "rd_run_reward_relic_into", "rd_run_take_relic",
   "rd_env_last_error_len", "rd_env_last_error_into", "rd_env_bench_bookkeeping",
   "rd_env_bench_envelope", "rd_env_bench_step_raw", "rd_env_bench_sizes",
   // The run layer (`env-abi.md` §11) -- the map page is the consumer.
