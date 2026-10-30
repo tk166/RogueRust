@@ -332,6 +332,10 @@
 <div id="modal" class="modal" hidden>
   <div class="modal-box">
     <h3 id="modalTitle">牌</h3>
+    <!-- §151: a modal needs a way **out**. Until the soak test opened one, the card detail and the
+         pile view could only be dismissed by reloading the page -- `browser_test.mjs` closed it by
+         assigning `hidden = true` from the driver, which is exactly why nobody noticed. -->
+    <button id="modalClose" data-close="1" class="drop" title="关闭">×</button>
     <div class="deck" id="modalBody"></div>
   </div>
 </div>
@@ -743,6 +747,8 @@ function renderTopBar() {
       const slot = Number(button.dataset.usePotion);
       // A damage potion with more than one enemy alive **asks which one**: arm the enemy panels and
       // let the next click decide. Block / energy / heal act on the hero and need no target.
+      // §152: 1 = "needs an enemy target" (damage-one and status-on-a-target alike), 3 = all
+      // enemies, 2 = the hero. Only 1 arms the picker, and only when there is a choice to make.
       if (ex.rd_run_potion_effect(slot) === 1 && obs[11] > 1) {
         potionPending = slot;
         document.getElementById("enemies").classList.add("potion-armed");
@@ -1118,6 +1124,12 @@ function cardFacts(where, slot) {
 
 /// **Shift+click a card to see what it does.** Before this, buying in the shop was guesswork: the
 /// row only had an id. (`port-plan.md` §95.)
+/// **The only closer of `#modal`** (§151; one writer per element, `port-plan.md` §89/§90).
+/// Three affordances call it: the × button, a click on the backdrop, and Escape.
+function closeModal() {
+  document.getElementById("modal").hidden = true;
+}
+
 function showCardDetail(where, slot) {
   const card = cardFacts(where, slot);
   document.getElementById("modalTitle").textContent = card.title || card.id || "（无标题）";
@@ -1146,7 +1158,7 @@ function showDeckPicker(title, onPick) {
     button.innerHTML = `${esc(deckTitle(index) || deckId(index))} ` +
       `<span>${esc(deckId(index))}${kindChip(runKind(0, index))}</span>`;
     button.onclick = () => {
-      document.getElementById("modal").hidden = true;
+      closeModal();
       onPick(index);
     };
     body.appendChild(button);
@@ -1791,6 +1803,16 @@ function measure() {
       settle: () => new Promise((resolve) => setTimeout(resolve, 0)),
     };
   }
+
+  // §151: the modal's three ways out. `#modal` itself is the backdrop, so a click that lands on the
+  // box (or anything inside it) must not close it.
+  document.getElementById("modalClose").addEventListener("click", closeModal);
+  document.getElementById("modal").addEventListener("click", (event) => {
+    if (event.target === document.getElementById("modal")) closeModal();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !document.getElementById("modal").hidden) closeModal();
+  });
 
   // Drag to play: pointer events, so a mouse and a finger take the same path.
   document.getElementById("hand").addEventListener("pointerdown", onPointerDown);

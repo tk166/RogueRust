@@ -15,158 +15,16 @@
 //
 // Run: node web/browser_test.mjs   (exit 0 and `BROWSER_TEST PASS` = green)
 
-import { spawn } from "node:child_process";
-import { createServer } from "node:http";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
-import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
+import { openPage } from "./cdp.mjs";
 
-const HERE = fileURLToPath(new URL("./", import.meta.url));
-const ROOT = normalize(join(HERE, ".."));
-const CHROME_CANDIDATES = [
-  "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
-  "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
-];
-const MIME = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".mjs": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".wasm": "application/wasm",
-  ".json": "application/json",
-};
-
-const fail = (message) => {
-  console.error("BROWSER_TEST FAIL: " + message);
-  process.exit(1);
-};
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// ---- 1. a static server for the tree ---------------------------------------------------------
-const server = createServer(async (req, res) => {
-  const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
-  const file = normalize(join(ROOT, path));
-  if (!file.startsWith(ROOT)) {
-    res.writeHead(403).end();
-    return;
-  }
-  try {
-    const body = await readFile(file);
-    res.writeHead(200, { "content-type": MIME[extname(file)] || "application/octet-stream" });
-    res.end(body);
-  } catch {
-    res.writeHead(404).end();
-  }
-});
-await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-const port = server.address().port;
-
-// ---- 2. headless Chrome, over CDP ------------------------------------------------------------
-const chromePath = await (async () => {
-  for (const candidate of CHROME_CANDIDATES) {
-    try {
-      await readFile(candidate);
-      return candidate;
-    } catch {
-      /* keep looking */
-    }
-  }
-  return null;
-})();
-if (!chromePath) fail("no Chrome or Edge found");
-
-const profile = await mkdtemp(join(tmpdir(), "rd-browser-"));
-const chrome = spawn(
-  chromePath,
-  [
-    "--headless=new",
-    "--disable-gpu",
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--disable-extensions",
-    "--mute-audio",
-    `--user-data-dir=${profile}`,
-    "--remote-debugging-port=0",
-    "about:blank",
-  ],
-  { stdio: "ignore" }
-);
-
-let devtoolsPort = 0;
-for (let i = 0; i < 150; i++) {
-  try {
-    const text = await readFile(join(profile, "DevToolsActivePort"), "utf8");
-    devtoolsPort = Number(text.split("\n")[0]);
-    if (devtoolsPort > 0) break;
-  } catch {
-    /* not written yet */
-  }
-  await sleep(100);
-}
-if (!devtoolsPort) fail("Chrome never opened its devtools port");
-
-const targets = await (await fetch(`http://127.0.0.1:${devtoolsPort}/json/list`)).json();
-const target = targets.find((t) => t.type === "page");
-if (!target) fail("Chrome has no page target");
-
-const socket = new WebSocket(target.webSocketDebuggerUrl);
-await new Promise((resolve, reject) => {
-  socket.addEventListener("open", resolve, { once: true });
-  socket.addEventListener("error", () => reject(new Error("CDP socket failed")), { once: true });
-});
-
-let nextId = 1;
-const pending = new Map();
-socket.addEventListener("message", (event) => {
-  const message = JSON.parse(event.data);
-  const waiter = pending.get(message.id);
-  if (!waiter) return;
-  pending.delete(message.id);
-  if (message.error) waiter.reject(new Error(JSON.stringify(message.error)));
-  else waiter.resolve(message.result);
-});
-const send = (method, params = {}) =>
-  new Promise((resolve, reject) => {
-    const id = nextId++;
-    pending.set(id, { resolve, reject });
-    socket.send(JSON.stringify({ id, method, params }));
-  });
-
-/** Evaluate `expression` in the page and return the value (promises awaited). */
-async function evaluate(expression) {
-  const result = await send("Runtime.evaluate", {
-    expression,
-    awaitPromise: true,
-    returnByValue: true,
-  });
-  if (result.exceptionDetails) {
-    fail(
-      "the page script threw: " +
-        (result.exceptionDetails.exception?.description || result.exceptionDetails.text)
-    );
-  }
-  return result.result.value;
-}
-
-await send("Runtime.enable");
-await send("Page.enable");
-
-// ---- 3. the flow ------------------------------------------------------------------------------
+// ---- the browser (see cdp.mjs: static server + headless Chrome + CDP) -------------------------
 // The query carries **debug** because the potion scenario (§150) pins a seed through RD_DEBUG.
-const url = `http://127.0.0.1:${port}/web/index.html?browser-test&debug`;
-const loaded = await send("Page.navigate", { url });
-if (loaded.errorText) fail(`navigation failed: ${loaded.errorText}`);
-
-// Wait for `ex` and the blessing panel -- the page fetches and instantiates the wasm first.
-let ready = false;
-for (let i = 0; i < 100; i++) {
-  ready = await evaluate('Boolean(window.ex && document.querySelector("#nodePanel [data-panel-action]"))');
-  if (ready) break;
-  await sleep(100);
-}
-if (!ready) fail("the page never offered a tower blessing");
-
+const page = await openPage({
+  query: "browser-test&debug",
+  gate: "BROWSER_TEST",
+  waitFor: 'Boolean(window.ex && document.querySelector("#nodePanel [data-panel-action]"))',
+});
+const { evaluate, fail } = page;
 const report = await evaluate(`(async () => {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const panel = () => document.getElementById("nodePanel");
@@ -223,7 +81,12 @@ const report = await evaluate(`(async () => {
       title: document.getElementById("modalTitle").innerText.trim(),
       body: text(document.getElementById("modalBody")).slice(0, 60),
     };
-    document.getElementById("modal").hidden = true;
+    // Close it the way a **player** does (§151). The old line assigned hidden = true from the
+    // driver, which is why nobody noticed that the modal had no way out at all.
+    const closer = document.getElementById("modalClose");
+    if (closer) closer.click();
+    await sleep(0);
+    out.card.closed = document.getElementById("modal").hidden;
   }
 
   // (e) play every affordable card, then look at the log and the top bar
@@ -346,6 +209,7 @@ want(
 want(report.fight.inFight, "the fight did not start");
 want(report.card?.open === true, "Shift+click did not open the card detail");
 want((report.card?.body || "").length > 3, "the card detail has no text");
+want(report.card?.closed === true, "the card detail cannot be closed by a click (§151)");
 want(
   report.log.some((line) => line.includes("打出")),
   `the log does not name the card played: ${JSON.stringify(report.log)}`
@@ -375,10 +239,8 @@ want(
   `the belt still shows the potion after using it: ${report.potionBeltAfter}`
 );
 
-socket.close();
-chrome.kill();
-server.close();
-await rm(profile, { recursive: true, force: true }).catch(() => {});
+await page.close();
+
 
 if (problems.length) {
   for (const problem of problems) console.error("  - " + problem);

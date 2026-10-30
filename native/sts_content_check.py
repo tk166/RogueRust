@@ -77,9 +77,9 @@ CORE_PATH = os.path.join(PKG_DIR, "out", "content.sts.core.rdcf")
 INV_COUNTS = {
     # 10 tier-A monsters + three sentry **rows** (one per instance: a combatant id must be unique
     # and the encounter record has no instance number, inv:§4.2) + the boss.
-    "monsters": 26,
+    "monsters": 31,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
-    "encounters": 18,
+    "encounters": 22,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     "statuses": 21,       # inv:§10 the ones this subset actually needs
 }
@@ -182,6 +182,13 @@ INV_MONSTERS = [
     ("byrd", 25, 25, ["byrd.peck", "byrd.swoop"]),
     ("spiker", 42, 42, ["spiker.cut", "spiker.spike"]),
     ("orb_walker", 90, 90, ["orb_walker.laser", "orb_walker.claw"]),
+    # §152: the rest of act 1's roster, wiki numbers.
+    ("louse_red", 10, 15, ["louse_red.bite", "louse_red.grow", "louse_red.spit_web"]),
+    ("louse_green", 11, 16, ["louse_green.bite", "louse_green.grow"]),
+    ("fungi_beast", 22, 28, ["fungi_beast.bite", "fungi_beast.grow"]),
+    ("slaver_red", 46, 50, ["slaver_red.stab", "slaver_red.scrape"]),
+    ("gremlin_nob", 82, 86,
+     ["gremlin_nob.bellow", "gremlin_nob.rush", "gremlin_nob.skull_bash"]),
     # §147: the `Constricted` carrier (wiki HP 170; Strategic / Aggressive 16 / 22).
     # §148: the **cycle** is the two Aggressive moves; `Strategic` is a round-1 **rule**, not a
     # cycle slot (StS opens with it once). That is why it is absent from this list --
@@ -252,6 +259,21 @@ INV_ACTIONS = {
     "time_eater.ripple": ("Defend", [("block", 20, "source"),
                                      ("status", "standard.weak", 1, "event"),
                                      ("status", "standard.vulnerable", 1, "event")]),
+    # §152: act 1's new enemies (wiki numbers).
+    "louse_red.bite": ("Attack", [("damage", 6, "event")]),
+    "louse_red.grow": ("Buff", [("status", "standard.strength", 3, "source")]),
+    "louse_red.spit_web": ("Debuff", [("status", "standard.weak", 2, "event")]),
+    "louse_green.bite": ("Attack", [("damage", 6, "event")]),
+    "louse_green.grow": ("Buff", [("status", "standard.strength", 3, "source")]),
+    "fungi_beast.bite": ("Attack", [("damage", 6, "event")]),
+    "fungi_beast.grow": ("Buff", [("status", "standard.strength", 3, "source")]),
+    "slaver_red.stab": ("Attack", [("damage", 13, "event")]),
+    "slaver_red.scrape": ("Attack", [("damage", 7, "event"),
+                                     ("status", "standard.weak", 1, "event")]),
+    "gremlin_nob.bellow": ("Buff", [("status", "standard.strength", 2, "source")]),
+    "gremlin_nob.rush": ("Attack", [("damage", 14, "event")]),
+    "gremlin_nob.skull_bash": ("Attack", [("damage", 6, "event"),
+                                          ("status", "standard.vulnerable", 2, "event")]),
     # §147: Constricted itself is a content trigger (see `standard.constricted`), so the action
     # only has to apply it.
     "spire_growth.strategic": ("Debuff", [("status", "standard.constricted", 2, "event")]),
@@ -309,11 +331,15 @@ INV_WEAK_POOL = {
     "enc_spiker": ["spiker"],
     "enc_orb_walker": ["orb_walker"],
     "enc_darklings": ["darkling", "darkling"],
+    # §152: the rest of act 1's weak pool, wiki numbers (see patch_152_enemies.py).
+    "enc_louse": ["louse_red"],
+    "enc_fungi_beast": ["fungi_beast"],
+    "enc_slaver_red": ["slaver_red"],
     # §147: the carrier for `Constricted` (act 3, wiki HP 170).
     "enc_spire_growth": ["spire_growth"],
     "enc_maw": ["maw"],
 }
-INV_WEAK_WEIGHT = 25   # inv:§5.2 每项 25%
+INV_WEAK_WEIGHT = 100  # inv:§5.2 权重之和 100（6 个遭遇按 20/16/16/16/16/16 分）
 
 # inv:§5.3 -- the elite pool. One entry, so there is no weight question yet; `EncounterTables.Elite`
 # in the document carries it, and this is what the check compares that against.
@@ -322,6 +348,8 @@ INV_ELITE_POOL = {
     "enc_gremlin_leader": ["gremlin_leader"],
     "enc_giant_head": ["giant_head"],
     "enc_three_sentries": ["sentry_1", "sentry_2", "sentry_3"],
+    # §152: a second act-1 elite, so the elite node is not always the same fight.
+    "enc_gremlin_nob": ["gremlin_nob"],
 }
 
 # inv:§4.3 -- the boss pool. `inv:§4.3` says the three act-1 bosses are picked equiprobably; this
@@ -329,11 +357,12 @@ INV_ELITE_POOL = {
 # §130: the pool dicts above are the **union** (every encounter must be declared somewhere). These
 # say which act each pool member belongs to, so the table checks can compare per act.
 INV_ACT_TABLES = {
-    "Weak": ["enc_cultist", "enc_jaw_worm", "enc_small_slimes"],
+    "Weak": ["enc_cultist", "enc_jaw_worm", "enc_small_slimes",
+             "enc_louse", "enc_fungi_beast", "enc_slaver_red"],
     "Weak2": ["enc_chosen", "enc_gremlin_gang", "enc_shelled_parasite"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
-    "Elite": ["enc_three_sentries"],
+    "Elite": ["enc_gremlin_nob", "enc_three_sentries"],
     "Elite2": ["enc_gremlin_leader"],
     "Elite3": ["enc_giant_head"],
     "Boss": ["enc_slime_boss"],
@@ -998,6 +1027,71 @@ def check_relics(doc):
     ok("relic pool", "%d relics, all implemented" % len(relics))
 
 
+# §152: the potion vocabulary, as the ABI's `rd_env_use_potion` reads it. `kind:payload` carries a
+# status id; the payload form is the same convention the event vocabulary uses (§143).
+POTION_KINDS = ("combat_block", "combat_energy", "combat_heal_percent", "combat_draw",
+                "combat_damage", "combat_damage_all")
+# Which effects need the player to pick an enemy (the ABI's code `1`). Kept here as the **second
+# opinion**: if the page's rule and this list disagree, one of them is wrong.
+POTION_NEEDS_TARGET = ("combat_damage", "combat_status_target")
+
+
+def check_potions(doc):
+    """§152: every potion must be **drinkable**.
+
+    Before this section the content had five potions built from three effects and two of them were
+    broken: `swift_potion` was a second Block Potion under a different name, and `blood_potion` used
+    an effect the ABI did not handle at all (refused with "未知的药水效果"). A potion that cannot be
+    drunk is a dead button in the belt -- the §150 shape, one layer down.
+    """
+    print("[3b] potions (port-plan.md §152)")
+    potions = doc.get("Potions") or []
+    statuses = {status["Id"] for status in doc.get("Statuses") or []}
+    seen_effects = set()
+    for potion in potions:
+        potion_id = potion.get("Id")
+        effect = potion.get("Effect") or ""
+        label = "Potions.%s" % potion_id
+        amount = potion.get("Amount")
+        if not isinstance(amount, int) or amount <= 0:
+            fail(label, "Amount must be a positive integer, got %r" % (amount,))
+        if not potion.get("NameKey") or not potion.get("DescriptionKey"):
+            fail(label, "needs NameKey and DescriptionKey (the belt shows the id otherwise)")
+        kind, _, payload = effect.partition(":")
+        if kind in POTION_KINDS:
+            if payload:
+                fail(label, "`%s` takes no payload" % kind)
+        elif kind in ("combat_status", "combat_status_target"):
+            if payload not in statuses:
+                fail(label, "`%s` names status %r, which is not a STAT row" % (kind, payload))
+        else:
+            fail(label, "effect %r is outside the ABI's vocabulary" % (effect,))
+        seen_effects.add(effect)
+    if len(potions) < 6:
+        fail("Potions", "only %d potions -- too few to make a drop interesting" % len(potions))
+    # Two potions with the same effect **and** amount are one potion with two names (the exact bug
+    # `swift_potion` shipped: a copy of Block Potion).
+    fingerprints = [(potion.get("Effect"), potion.get("Amount")) for potion in potions]
+    for fingerprint in set(fingerprints):
+        if fingerprints.count(fingerprint) > 1:
+            names = [p.get("Id") for p in potions if (p.get("Effect"), p.get("Amount")) == fingerprint]
+            fail("Potions", "%s are the same potion twice (%r)" % (names, fingerprint))
+    # The three per-act pools must only name potions that exist.
+    known = {potion.get("Id") for potion in potions}
+    tables = doc.get("PotionTables") or {}
+    for name in ("Potions", "Potions2", "Potions3"):
+        rows = tables.get(name)
+        if not rows:
+            fail("PotionTables." + name, "missing or empty")
+            continue
+        for row in rows:
+            if row.get("Id") not in known:
+                fail("PotionTables." + name, "%r is not in Potions" % (row.get("Id"),))
+    ok("potions", "%d potions, %d distinct effects, pools %d/%d/%d"
+       % (len(potions), len(seen_effects), len(tables.get("Potions") or []),
+          len(tables.get("Potions2") or []), len(tables.get("Potions3") or [])))
+
+
 def check_card_keywords(doc):
     """§144：关键字必须**落在机制字段上**，tag 只是文档。
 
@@ -1608,6 +1702,7 @@ def main():
     check_relations(doc)
     check_weak_pool_table(doc)
     check_event_vocabulary(doc)
+    check_potions(doc)
     check_card_keywords(doc)
     check_relics(doc)
     check_inert_keys(doc)

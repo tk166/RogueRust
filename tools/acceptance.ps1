@@ -1,4 +1,4 @@
-﻿# 聚合验收器：一条命令跑完所有闸门，用**真实退出码**下判定。
+﻿��合验收器：一条命令跑完所有闸门，用**真实退出码**下判定。
 #
 # 为什么需要它：这个项目的验收分散在 cargo / python / dotnet 三套工具链里，共十来个闸门。
 # 逐个手跑的问题是**会漏**，而且漏掉的那个一定是最后加的那条。更早的教训是：
@@ -14,7 +14,7 @@
 
 param(
   [switch]$SkipSlow,
-  [int]$UnitsFloor = 734
+  [int]$UnitsFloor = 738
 )
 
 $ErrorActionPreference = 'Stop'
@@ -80,7 +80,7 @@ function Invoke-Gate {
   # 从输出里抓一个数字当"证据"（比如测试条数 / 语料份数），让人一眼看到它真的做了事。
   $evidence = ''
   foreach ($pat in @('(\d+) case\(s\)', '(\d+)/19', '(\d+) passed', '(\d+/\d+ images)',
-                     '(\d+/\d+ tables)', '(\d+ monsters)')) {
+                     '(\d+/\d+ tables)', '(\d+ monsters)', '(\d+) clicks')) {
     $m = [regex]::Match($out, $pat)
     if ($m.Success) { $evidence = $m.Value; break }
   }
@@ -253,6 +253,13 @@ $results += Invoke-Gate -Name 'web-map' -Exe 'C:\Program Files\nodejs\node.exe' 
 # 不做截图像素比对（那个在不同字体/缩放下太脆）。
 $results += Invoke-Gate -Name 'web-browser' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'web\browser_test.mjs') -Workdir $ROOT -MustMatch 'BROWSER_TEST PASS' -TimeoutSec 600
+
+# 门 18：**整局随机 soak**（§151）。门 17 是一条**写死**的路径，而 §150 的药水 bug 在它后面活了三个
+# 小节 —— 因为那条路径不点药水。这一道用带种子的 PRNG 随机点**每一个启用中的控件**，每点一次问一句
+# "有东西变了吗"：死按钮违反的正是这一条，而它不关心是哪个按钮。另外断言"页面没抛异常"与"走过若干种
+# 界面"（商店/篝火/宝箱/事件…），否则"随机点 300 次什么都没坏"可能只是没点到东西。
+$results += Invoke-Gate -Name 'web-soak' -Exe 'C:\Program Files\nodejs\node.exe' `
+  -ArgLine (Join-Path $ROOT 'web\soak_test.mjs') -Workdir $ROOT -MustMatch 'SOAK_TEST PASS' -TimeoutSec 900
 
 Write-Output "`n" + ("-" * 78)
 Write-Output ("{0,-18}{1,6}  {2,-22}{3}" -f '闸门', '退出', '证据', '备注')

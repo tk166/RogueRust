@@ -144,7 +144,10 @@ const RD_PANELS = (() => {
         label: card.title || card.id,
         sub: card.chip,
         value: card.price < 0 ? "已售" : `${card.price} 金`,
-        disabled: card.price < 0,
+        // §151: **unaffordable is disabled too**. Until the soak test clicked one, every shop showed
+        // a live 买 button whose only possible outcome was `被拒 · NotEnoughGold`. The price stays on
+        // screen, so the reason is visible without the button pretending it could work.
+        disabled: card.price < 0 || (card.price >= 0 && card.price > s.gold),
         // Shift+click shows the card (`port-plan.md` §95).
         card: `shop:${slot}`,
         button: { label: "买", action: { kind: "buy_card", slot } },
@@ -155,7 +158,7 @@ const RD_PANELS = (() => {
         label: relic.title || relic.id,
         sub: "",
         value: relic.price < 0 ? "已售" : `${relic.price} 金`,
-        disabled: relic.price < 0,
+        disabled: relic.price < 0 || (relic.price >= 0 && relic.price > s.gold),
         button: { label: "买", action: { kind: "buy_relic", slot } },
       });
     }
@@ -164,7 +167,13 @@ const RD_PANELS = (() => {
       lines: [],
       rows,
       buttons: [
-        { id: "remove", label: "删一张牌", action: { kind: "remove_card" } },
+        {
+          id: "remove",
+          label: "删一张牌",
+          // Same rule: a 75-gold removal with 23 gold is not a button, it is a price list.
+          disabled: s.removePrice > s.gold,
+          action: { kind: "remove_card" },
+        },
         { id: "leave", label: "离开", action: { kind: "leave" } },
       ],
     };

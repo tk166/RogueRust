@@ -1263,6 +1263,118 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 return refuse(&std::format!("伤害药水失败：{e:?}"));
             }
         }
+        // ── §152: the new shapes. `kind:payload` carries a status id (the §143 convention). ────────
+        "combat_heal_percent" => {
+            // Wiki's Blood Potion: "Heal 20% of your max HP". A percentage, so it has to be read off
+            // the hero rather than stored as a flat amount.
+            let Some(combatant) = session.state.combatant(&hero) else {
+                return refuse("拿不到英雄的战斗员");
+            };
+            let max = combatant.health_max;
+            let healed = max.saturating_mul(amount) / 100;
+            let current = combatant.health_current;
+            let capped = (current.saturating_add(healed)).min(max);
+            let Some(combatant) = session.state.combatant_mut(&hero) else {
+                return refuse("拿不到英雄的战斗员");
+            };
+            combatant.health_current = capped;
+        }
+        "combat_damage_all" => {
+            // Every living enemy, each through the same pipeline a single-target potion uses.
+            let mut ids: Vec<rd_core::state::CombatantId> = Vec::new();
+            for enemy in session.plan.enemies.iter() {
+                let Ok(id) = rd_core::state::CombatantId::new(enemy.id) else {
+                    continue;
+                };
+                if session
+                    .state
+                    .combatant(&id)
+                    .is_some_and(|c| c.health_current > 0)
+                {
+                    ids.push(id);
+                }
+            }
+            if ids.is_empty() {
+                return refuse("药水没有目标：场上没有活着的敌人");
+            }
+            for id in ids {
+                let mut ctx = rd_core::exec::ExecContext::new(
+                    &mut session.state,
+                    Some(hero.clone()),
+                    Some(id.clone()),
+                    None,
+                    64,
+                )
+                .with_content(image);
+                if let Err(e) = rd_core::exec::resolve_damage(&mut ctx, &id, amount, false) {
+                    return refuse(&std::format!("群体伤害药水失败：{e:?}"));
+                }
+            }
+        }
+        "combat_draw" => {
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::DrawCards {
+                    owner: hero,
+                    count: amount,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            if let Err(e) = rd_core::exec::resolve_effect(&mut session.state, &item, Some(image)) {
+                return refuse(&std::format!("抽牌药水失败：{e:?}"));
+            }
+        }
+        other if other.starts_with("combat_status") => {
+            // `combat_status:<id>` = the hero; `combat_status_target:<id>` = the chosen enemy.
+            let (needs_target, status_id) = match other.split_once(':') {
+                Some(("combat_status", id)) => (false, id),
+                Some(("combat_status_target", id)) => (true, id),
+                _ => return refuse(&std::format!("药水效果 `{other}` 缺少 `:<状态 id>`")),
+            };
+            let Ok(definition) = rd_core::state::StatusDefinitionId::new(status_id) else {
+                return refuse(&std::format!("`{status_id}` 不是合法的状态 id"));
+            };
+            let target_id = if needs_target {
+                let slot_index = if target >= 0 {
+                    target as usize
+                } else {
+                    (0..session.plan.enemies.len())
+                        .find(|index| {
+                            let id = session.plan.enemies[*index].id;
+                            rd_core::state::CombatantId::new(id)
+                                .ok()
+                                .and_then(|cid| session.state.combatant(&cid))
+                                .is_some_and(|c| c.health_current > 0)
+                        })
+                        .unwrap_or(usize::MAX)
+                };
+                let Some(plan_enemy) = session.plan.enemies.get(slot_index) else {
+                    return refuse("药水没有目标：这一侧没有活着的敌人");
+                };
+                match rd_core::state::CombatantId::new(plan_enemy.id) {
+                    Ok(id) => id,
+                    Err(_) => return refuse("敌人的战斗员 id 不合法"),
+                }
+            } else {
+                hero.clone()
+            };
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(target_id),
+                    definition,
+                    stacks: amount,
+                    duration: 0,
+                    charges: 0,
+                    source: None,
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            if let Err(e) = rd_core::exec::resolve_effect(&mut session.state, &item, Some(image)) {
+                return refuse(&std::format!("上状态的药水失败：{e:?}"));
+            }
+        }
         other => return refuse(&std::format!("未知的药水效果 `{other}`")),
     }
 
@@ -1514,10 +1626,15 @@ pub extern "C" fn rd_run_potion_effect(slot: i32) -> i32 {
     else {
         return 0;
     };
+    // §152: `1` = needs an enemy target, `2` = acts on the hero (no target), `3` = every enemy.
+    // The page arms its enemy picker on `1`; before this only "damage one" existed, so a
+    // status-on-a-target potion could not be aimed at all.
     match potion.effect {
         "combat_damage" => 1,
-        "combat_block" => 2,
-        "combat_energy" => 3,
+        "combat_block" | "combat_energy" | "combat_heal_percent" | "combat_draw" => 2,
+        "combat_damage_all" => 3,
+        effect if effect.starts_with("combat_status_target") => 1,
+        effect if effect.starts_with("combat_status") => 2,
         "heal" => 4,
         _ => 0,
     }
@@ -2557,6 +2674,110 @@ mod tests {
         // Out of range is `-1`, not an empty name.
         assert_eq!(rd_run_relic_name_len(1), -1);
         assert_eq!(rd_run_relic_id_len(-1), -1);
+    }
+
+    /// §152：五种新的药水形状**真的有效**（各自读回来一个数，而不是"没报错"）。
+    ///
+    /// 药水的词表从 3 种效果扩到 8 种，而"扩了词表"与"喝下去有用"是两件事 —— 这一条盯后者。
+    /// 前两种是 `kind:payload`（状态 id 在冒号后），中间两种走的是新加的管线入口，最后一种走抽牌。
+    #[test]
+    fn the_new_potion_shapes_all_do_something() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+
+        // Wounded hero, so a percentage heal has something to heal.
+        crate::set_combat_hero_health(40);
+
+        let enemies = crate::slot().as_ref().expect("env session").enemy_roster().len();
+        assert!(enemies >= 1, "a fight has at least one enemy");
+        let hp_before = enemy_hp(0);
+
+        // 1. `combat_status:standard.strength` -- onto the hero.
+        assert_eq!(drink("strength_potion", -1), 0, "strength potion");
+        assert_eq!(hero_status("standard.strength"), 2, "2 Strength on the hero");
+
+        // 2. `combat_status_target:standard.weak` -- onto the chosen enemy.
+        assert_eq!(drink("weak_potion", 0), 0, "weak potion");
+        assert_eq!(enemy_status(0, "standard.weak"), 3, "3 Weak on enemy 0");
+
+        // 3. `combat_damage_all` -- 10 to every living enemy (two beats, one per enemy).
+        {
+            let session = crate::slot().as_mut().expect("env session");
+            session.state.clear_beats();
+        }
+        assert_eq!(drink("explosive_potion", -1), 0, "explosive potion");
+        let mut hits = 0;
+        for index in 0..crate::rd_env_beat_count() {
+            if crate::rd_env_beat_field(index, 0) == crate::BEAT_DAMAGE {
+                hits += 1;
+            }
+        }
+        assert_eq!(hits as usize, enemies, "every living enemy takes the explosion");
+        assert!(enemy_hp(0) < hp_before || enemy_hp(0) == 0, "enemy 0 lost health");
+
+        // 4. `combat_heal_percent` -- 20% of maximum (80) = 16.
+        let before = crate::combat_hero_health().unwrap_or(-1);
+        assert_eq!(drink("blood_potion", -1), 0, "blood potion");
+        assert_eq!(
+            crate::combat_hero_health().unwrap_or(-1),
+            (before + 16).min(80),
+            "20% of 80 max HP"
+        );
+
+        // 5. `combat_draw` -- three more cards in hand.
+        let hand_before = exported_observation()[crate::H_HAND_COUNT];
+        assert_eq!(drink("swift_potion", -1), 0, "swift potion");
+        assert_eq!(
+            exported_observation()[crate::H_HAND_COUNT],
+            hand_before + 3,
+            "Swift Potion draws 3"
+        );
+        assert_eq!(rd_run_potion_count(), 0, "every potion was consumed");
+    }
+
+    /// Put `potion` in the belt and drink it at `target`. The belt has **three** slots, so a test
+    /// that wants five potions cannot push them all: push one, drink it, repeat.
+    fn drink(potion: &str, target: i32) -> i32 {
+        {
+            let session = run_slot().as_mut().expect("session");
+            session.state.push_potion(potion).expect("belt room");
+        }
+        let slot = rd_run_potion_count() - 1;
+        rd_env_use_potion(slot, target)
+    }
+
+    /// The hero's stacks of `definition`, read through the §147 ABI (works for any status).
+    fn hero_status(definition: &str) -> i32 {
+        for index in 0..crate::rd_env_status_count(-1) {
+            let len = crate::rd_env_status_id_len(-1, index);
+            let mut bytes = vec![0u8; len as usize];
+            unsafe { crate::rd_env_status_id_into(-1, index, bytes.as_mut_ptr()) };
+            if String::from_utf8_lossy(&bytes) == definition {
+                return crate::rd_env_status_stacks(-1, index);
+            }
+        }
+        0
+    }
+
+    /// The same for enemy wall slot `slot`.
+    fn enemy_status(slot: i32, definition: &str) -> i32 {
+        for index in 0..crate::rd_env_status_count(slot) {
+            let len = crate::rd_env_status_id_len(slot, index);
+            let mut bytes = vec![0u8; len as usize];
+            unsafe { crate::rd_env_status_id_into(slot, index, bytes.as_mut_ptr()) };
+            if String::from_utf8_lossy(&bytes) == definition {
+                return crate::rd_env_status_stacks(slot, index);
+            }
+        }
+        0
+    }
+
+    /// Enemy wall slot `slot`'s current HP, out of the observation.
+    fn enemy_hp(slot: usize) -> i32 {
+        let obs = exported_observation();
+        obs[crate::OFF_ENEMY + slot * 8 + 1]
     }
 
     /// The effect fires, and it is capped: `Burning Blood` heals 6 but never past the maximum.

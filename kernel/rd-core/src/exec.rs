@@ -8721,6 +8721,34 @@ mod tests {
         assert_eq!(state.beats()[1].target, 2, "倒下的是 enemy_b");
     }
 
+    /// §149：`Plated Armor` 被削到 0 时**必须安静地消失**（不是报错，也不是留一条 0 层实例）。
+    ///
+    /// 这个函数在伤害管线里，`?` 会把它返回的错误一路抛成 `StepThrew` —— 而 soak 在 §152 的
+    /// 长战斗里正是撞到那个（`Problem::StepThrew` 把具体错误吞掉了，只剩"这一步抛了"）。
+    /// 所以这里逐层走一遍：4 → 3 → 2 → 1 → 消失，每一步都要 `Ok`。
+    #[test]
+    fn plated_armor_wears_down_to_nothing_without_an_error() {
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("st_pa", "standard.plated_armor", 4));
+        for expected in [3, 2, 1] {
+            deal(&mut state, "enemy_a", 1, false);
+            assert_eq!(
+                stacks_of(&state, "enemy_a", "standard.plated_armor"),
+                expected,
+                "a hit wears one plate off"
+            );
+        }
+        deal(&mut state, "enemy_a", 1, false);
+        assert_eq!(
+            stacks_of(&state, "enemy_a", "standard.plated_armor"),
+            0,
+            "the last plate is removed, not left at zero"
+        );
+        // 再挨一下：没有这条状态了，管线必须照常走完（不是"找不到就报错"）。
+        deal(&mut state, "enemy_a", 1, false);
+        assert_eq!(health(&state, "enemy_a"), 20 - 5, "every hit still lands");
+    }
+
     /// §149：三条**伤害管线**的状态。断言的是管线里的三个位置，各一条：
     /// Intangible 在**格挡之前**（压请求），Buffer 在**格挡之后**（只挡真的掉血），
     /// Plated Armor 在**掉血之后**（只认没挡住的伤）。

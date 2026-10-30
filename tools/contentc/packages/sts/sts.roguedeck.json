@@ -5378,6 +5378,539 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "louse_red.bite",
+      "PackageId": "sts",
+      "NameKey": "Bite",
+      "DescriptionKey": "Bite - 6 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Bite - 6 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 6
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "louse_red.grow",
+      "PackageId": "sts",
+      "NameKey": "Grow",
+      "DescriptionKey": "Grow - 3 Strength",
+      "Intent": {
+        "Kind": "Buff",
+        "Label": "Grow - 3 Strength"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.strength"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "louse_red.spit_web",
+      "PackageId": "sts",
+      "NameKey": "Spit Web",
+      "DescriptionKey": "Spit Web - 2 Weak",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Spit Web - 2 Weak"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.weak"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 2
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "louse_green.bite",
+      "PackageId": "sts",
+      "NameKey": "Bite",
+      "DescriptionKey": "Bite - 6 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Bite - 6 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 6
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "louse_green.grow",
+      "PackageId": "sts",
+      "NameKey": "Grow",
+      "DescriptionKey": "Grow - 3 Strength",
+      "Intent": {
+        "Kind": "Buff",
+        "Label": "Grow - 3 Strength"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.strength"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "fungi_beast.bite",
+      "PackageId": "sts",
+      "NameKey": "Bite",
+      "DescriptionKey": "Bite - 6 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Bite - 6 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 6
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "fungi_beast.grow",
+      "PackageId": "sts",
+      "NameKey": "Grow",
+      "DescriptionKey": "Grow - 3 Strength",
+      "Intent": {
+        "Kind": "Buff",
+        "Label": "Grow - 3 Strength"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.strength"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "slaver_red.stab",
+      "PackageId": "sts",
+      "NameKey": "Stab",
+      "DescriptionKey": "Stab - 13 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Stab - 13 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 13
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "slaver_red.scrape",
+      "PackageId": "sts",
+      "NameKey": "Scrape",
+      "DescriptionKey": "Scrape - 7 damage, 1 Weak",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Scrape - 7 damage, 1 Weak"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 7
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.weak"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "gremlin_nob.bellow",
+      "PackageId": "sts",
+      "NameKey": "Bellow",
+      "DescriptionKey": "Bellow - 2 Strength",
+      "Intent": {
+        "Kind": "Buff",
+        "Label": "Bellow - 2 Strength"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.strength"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 2
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "gremlin_nob.rush",
+      "PackageId": "sts",
+      "NameKey": "Rush",
+      "DescriptionKey": "Rush - 14 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Rush - 14 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 14
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "gremlin_nob.skull_bash",
+      "PackageId": "sts",
+      "NameKey": "Skull Bash",
+      "DescriptionKey": "Skull Bash - 6 damage, 2 Vulnerable",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Skull Bash - 6 damage, 2 Vulnerable"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 6
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.vulnerable"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -6320,6 +6853,156 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_louse"
+      },
+      "Enemies": [
+        {
+          "Id": "louse_red",
+          "MaxHealth": 10,
+          "Actions": [
+            {
+              "value": "louse_red.bite"
+            },
+            {
+              "value": "louse_red.grow"
+            },
+            {
+              "value": "louse_red.spit_web"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Red Louse"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_fungi_beast"
+      },
+      "Enemies": [
+        {
+          "Id": "fungi_beast",
+          "MaxHealth": 22,
+          "Actions": [
+            {
+              "value": "fungi_beast.bite"
+            },
+            {
+              "value": "fungi_beast.grow"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Fungi Beast"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_slaver_red"
+      },
+      "Enemies": [
+        {
+          "Id": "slaver_red",
+          "MaxHealth": 46,
+          "Actions": [
+            {
+              "value": "slaver_red.stab"
+            },
+            {
+              "value": "slaver_red.scrape"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Slaver"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_gremlin_nob"
+      },
+      "Enemies": [
+        {
+          "Id": "gremlin_nob",
+          "MaxHealth": 82,
+          "Actions": [
+            {
+              "value": "gremlin_nob.bellow"
+            },
+            {
+              "value": "gremlin_nob.rush"
+            },
+            {
+              "value": "gremlin_nob.skull_bash"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Gremlin Nob"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -7046,6 +7729,112 @@
       "Tier": "Normal",
       "InvRef": "https://slayspiredb.com/sts1/bestiary/spire-growth",
       "AiNote": "§147 第三幕普通怪；Constricted 的载体（wiki: Strategic / Aggressive 16 / 22）。"
+    },
+    {
+      "Id": "louse_red",
+      "NameKey": "Red Louse",
+      "HpMin": 10,
+      "HpMax": 15,
+      "MaxHealth": 10,
+      "Actions": [
+        {
+          "value": "louse_red.bite"
+        },
+        {
+          "value": "louse_red.grow"
+        },
+        {
+          "value": "louse_red.spit_web"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "https://slaythespire.wiki.gg/wiki/Red_Louse",
+      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。"
+    },
+    {
+      "Id": "louse_green",
+      "NameKey": "Green Louse",
+      "HpMin": 11,
+      "HpMax": 16,
+      "MaxHealth": 11,
+      "Actions": [
+        {
+          "value": "louse_green.bite"
+        },
+        {
+          "value": "louse_green.grow"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "https://slaythespire.wiki.gg/wiki/Green_Louse",
+      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。"
+    },
+    {
+      "Id": "fungi_beast",
+      "NameKey": "Fungi Beast",
+      "HpMin": 22,
+      "HpMax": 28,
+      "MaxHealth": 22,
+      "Actions": [
+        {
+          "value": "fungi_beast.bite"
+        },
+        {
+          "value": "fungi_beast.grow"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "https://slaythespire.wiki.gg/wiki/Fungi_Beast",
+      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。"
+    },
+    {
+      "Id": "slaver_red",
+      "NameKey": "Red Slaver",
+      "HpMin": 46,
+      "HpMax": 50,
+      "MaxHealth": 46,
+      "Actions": [
+        {
+          "value": "slaver_red.stab"
+        },
+        {
+          "value": "slaver_red.scrape"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "https://slaythespire.wiki.gg/wiki/Red_Slaver",
+      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。"
+    },
+    {
+      "Id": "gremlin_nob",
+      "NameKey": "Gremlin Nob",
+      "HpMin": 82,
+      "HpMax": 86,
+      "MaxHealth": 82,
+      "Actions": [
+        {
+          "value": "gremlin_nob.bellow"
+        },
+        {
+          "value": "gremlin_nob.rush"
+        },
+        {
+          "value": "gremlin_nob.skull_bash"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "https://slaythespire.wiki.gg/wiki/Gremlin_Nob",
+      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。"
     }
   ],
   "EncounterTables": {
@@ -7053,21 +7842,37 @@
     "Weak": [
       {
         "Id": "enc_cultist",
-        "Weight": 25
+        "Weight": 20
       },
       {
         "Id": "enc_jaw_worm",
-        "Weight": 25
+        "Weight": 16
       },
       {
         "Id": "enc_small_slimes",
-        "Weight": 25
+        "Weight": 16
+      },
+      {
+        "Id": "enc_louse",
+        "Weight": 16
+      },
+      {
+        "Id": "enc_fungi_beast",
+        "Weight": 16
+      },
+      {
+        "Id": "enc_slaver_red",
+        "Weight": 16
       }
     ],
     "Note": "inv:§5.2：weak 池 4 项各 25%。ENCT 行没有权重格（rdcfmt.py:254-259）⇒ 权重只能住在这里，不参与任何镜像行为。第 4 项 enc_two_louses 未 author（要 louse_red/green，C 档）。 Elite 池由本内容补上（3 × sentry）；raw weights are documentation only -- `ENCT` has no weight cell (`rdcfmt.py`), so a single entry means 'the only elite'. Boss 池由本内容补上（slime_boss）。`inv:§4.3` 说三只 Boss 等概率三选一 —— 本内容只 author 了 Slime Boss，另两只（The Guardian 的 Mode Shift、Hexaghost 的 Burn 升级）都还需要内核新机制。",
     "Elite": [
       {
         "Id": "enc_three_sentries",
+        "Weight": 1
+      },
+      {
+        "Id": "enc_gremlin_nob",
         "Weight": 1
       }
     ],
@@ -7558,17 +8363,57 @@
     {
       "Id": "blood_potion",
       "NameKey": "Blood Potion",
-      "DescriptionKey": "Heal 15 HP.",
-      "Effect": "heal",
-      "Amount": 15,
+      "DescriptionKey": "Heal 20% of your maximum HP.",
+      "Effect": "combat_heal_percent",
+      "Amount": 20,
       "Rarity": "Common"
     },
     {
       "Id": "swift_potion",
       "NameKey": "Swift Potion",
-      "DescriptionKey": "Gain 12 Block.",
-      "Effect": "combat_block",
-      "Amount": 12,
+      "DescriptionKey": "Draw 3 cards.",
+      "Effect": "combat_draw",
+      "Amount": 3,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "explosive_potion",
+      "NameKey": "Explosive Potion",
+      "DescriptionKey": "Deal 10 damage to ALL enemies.",
+      "Effect": "combat_damage_all",
+      "Amount": 10,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "strength_potion",
+      "NameKey": "Strength Potion",
+      "DescriptionKey": "Gain 2 Strength.",
+      "Effect": "combat_status:standard.strength",
+      "Amount": 2,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "regen_potion",
+      "NameKey": "Regen Potion",
+      "DescriptionKey": "Gain 5 Regen.",
+      "Effect": "combat_status:standard.regen",
+      "Amount": 5,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "weak_potion",
+      "NameKey": "Weak Potion",
+      "DescriptionKey": "Apply 3 Weak to the chosen enemy.",
+      "Effect": "combat_status_target:standard.weak",
+      "Amount": 3,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "fear_potion",
+      "NameKey": "Fear Potion",
+      "DescriptionKey": "Apply 3 Vulnerable to the chosen enemy.",
+      "Effect": "combat_status_target:standard.vulnerable",
+      "Amount": 3,
       "Rarity": "Common"
     }
   ],
@@ -7626,6 +8471,9 @@
       },
       {
         "Id": "energy_potion"
+      },
+      {
+        "Id": "explosive_potion"
       }
     ],
     "Potions2": [
@@ -7634,6 +8482,12 @@
       },
       {
         "Id": "block_potion"
+      },
+      {
+        "Id": "strength_potion"
+      },
+      {
+        "Id": "fear_potion"
       }
     ],
     "Potions3": [
@@ -7642,6 +8496,12 @@
       },
       {
         "Id": "fire_potion"
+      },
+      {
+        "Id": "regen_potion"
+      },
+      {
+        "Id": "weak_potion"
       }
     ]
   }

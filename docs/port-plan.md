@@ -9641,3 +9641,176 @@ TypeError: act is not a function   at button.onclick (index.html:748)
 
 聚合验收 **17/17**（`web-browser` 那道现在含药水场景）；单测仍是 **734**（这一节没有 Rust 改动；
 判据在浏览器闸门里）。
+
+---
+
+## 151. 整局随机 soak：第 18 道闸门
+
+用户："感觉可以加上这种自动化的完整轮次游戏流程随机测试来作为补充门禁，靠纯手点比较昂贵和低效。"
+
+### 151.1 为什么门 17 不够
+
+`browser_test.mjs` 是**一条写死的路径**。§150 的药水按钮在那条路径后面活了三个小节 —— 因为
+它从不点药水。手点一次发现一个按钮，成本是一轮对话；而"每个界面上的每个按钮"根本点不完。
+
+### 151.2 设计：每点一次，问一句"有东西变了吗"
+
+`web/soak_test.mjs`（→ `web-soak`，门 18）用带种子的 PRNG 在**真浏览器**里随机点**每一个启用中的
+控件**，每点一次比较一个**指纹**：
+
+```
+runStats | relicChips | deckCount | mapbox 长度 | .here 数 | nodePanel | handPanel
+| enemies | log 长度 | msg | modal.hidden | actCurtain.hidden
+```
+
+指纹没变 ⇒ 这个按钮什么也没做。**死按钮违反的正是这一条**，而它不关心是哪个按钮 —— 所以
+它覆盖那些没有任何脚本测试提到的控件。
+
+配套断言：
+* 页面**没抛异常**（装 `error` / `unhandledrejection` 监听，不靠"没人看见"）；
+* 状态不变量：`hp ∈ 0..hpMax`、`gold ≥ 0`、`deck ≥ 0`；
+* **有进展**：点够次数、开够战斗、走到若干楼层；
+* **覆盖面**：至少见过 4 种界面（塔底/战斗/奖励/商店/篝火/宝箱/未知房间）——
+  否则"随机点 300 次什么都没坏"可能只是没点到东西。
+
+### 151.3 三条被它自己抓出来的**测试自身的谎**
+
+写这道闸门的过程本身就是它价值的证据 —— 前三个版本**通过了**，但都在骗人：
+
+1. **候选里没有卡牌选择器**：祝福的"删一张牌"打开模态框，而 soak 只认 `[data-close]`
+   ⇒ 卡在第一个祝福上。那是"闸门红了但红的原因与产品无关"。
+2. **`innerText` 在 SVG 上是 `undefined`**：地图节点是 `<g>`，`text(el)` 直接 `TypeError`。
+3. **负面控制没落地**：第一次"把开箱按钮弄坏"的替换**没匹配上**（缩进不同），于是 soak 绿着，
+   而我以为它抓不到 —— 这正是本项目那条"先确认补丁真的落地"的规矩。
+
+修完这三条之后，负面控制才真的红：把 `open_chest` 换成空函数 ⇒
+`1 dead control(s), 第一个就是 {kind: panel, label: 开箱}`。随后恢复。
+
+### 151.4 顺手让"选择器"变得**确定**
+
+随机点会在"开箱 / 离开"之间掷硬币，于是"主按钮坏了"只有一半概率被撞到（第一版连撞两次都没中）。
+所以走进一个节点后**第一次**一定点面板的第一个动作。这让覆盖面从"看运气"变成"每个界面至少点一次主按钮"。
+
+### 151.5 它抓到的第一件真事：`enqueue_event_at_root` 漏一条链引用
+
+第一次跑长 soak 就在 3 × Sentry 的第 12 回合撞到：
+
+```
+StepThrew(Capacity:Chains)   envActions 0 · envDone 0 · phase 0 · heroHp 82
+```
+
+一局**卡死**：战斗没结束、没有任何可做的动作、页面还挂着"开始战斗"的按钮。
+
+链的引用计数是本模块唯一的 GC，`MAX_LIVE_CHAINS = 128`。`state::enqueue_event_at_root` 里：
+
+```rust
+let chain = self.new_root_chain_in_arena()?;   // refs = 1（建链那一次）
+self.enqueue_event_with_chain(event, chain)    // 队列条目自己又 acquire ⇒ refs = 2
+```
+
+出队时只 `release` 一次 ⇒ **每条根事件漏一格链**。12 回合 × 每回合 2–4 个回合边界事件 ⇒ 128 满了。
+修法是把"建链"那一次还给 arena（入队失败时也要还）。
+
+判据：`a_turn_boundary_leaves_no_chain_referenced`（rd-core）——回合开始/结束各跑三次，
+每次之后 `live_chain_count()` 必须是 0。修之前它报的是 `[(0,"start",1),(0,"end",2),(1,"start",3)…]`，
+修之后全 0。
+
+### 151.6 为了让这种错**可查**：`StepThrew` 带上了原因
+
+`Problem::StepThrew` 是参考的语义（"抛了"），但它把具体错误丢掉了 —— 于是"这一步抛了"在页面上
+和"内核某处返回了 Err"长得一模一样，我在这上面花了好几轮。现在两件事分开记账：
+
+* `Problem` 的线上形状**不变**（golden 基线没动）；
+* `FightOutcome.step_causes: [StepCause; 64]` 记**家族**（Script/Exec/Turn/Capacity/Other）；
+* `FightOutcome.step_capacity: [u8; 64]` 记**是哪个容器**（`Container::code()`，名字表在
+  `state::Container::name_of`，**只有一份**）。
+
+⇒ 宿主把 `StepThrew` 说成 `StepThrew(Capacity:Chains)`。
+
+⚠️ 第一版把容器名（`&'static str`）直接塞进 `step_causes`，`FightOutcome` 当场涨过 4 KB，
+被 `the_spike_scenario_is_playable_through_the_env_abi` 里那条"信封必须是几 KB"的断言拦下 ——
+**定容结构的大小本身是判据**，这次它省了半天。
+
+---
+
+## 152. 敌人与药水：从"三种效果五个药水"到能覆盖更多形状
+
+用户："根据 wiki 完善敌人和药水种类，现在的品类太单一了而且数值也不合理。"
+
+### 152.1 先说三件本来就错的事
+
+| 症状 | 真相 |
+|---|---|
+| `swift_potion` 写的是 "Gain 12 Block" | 它是**第二个 Block Potion**穿了件马甲（同 effect 同 amount）|
+| `blood_potion` 的 effect 是 `heal` | `rd_env_use_potion` **没有这个分支** ⇒ 喝它一律 `未知的药水效果` |
+| 精英池只有 1 个遭遇 | 一层只有一种精英战 |
+
+⇒ 新增一道内容门 `[3b] potions`：**每个药水都必须能喝**。三条检查：
+效果在 ABI 的封闭词表里（`kind` 或 `kind:<状态 id>`）、`Amount > 0`、**两个药水不许是同一个**
+（`(Effect, Amount)` 撞车即"一个药水两个名字"）；再加"每幕池只许引用存在的药水"。
+
+### 152.2 药水词表：从 3 种到 8 种形状
+
+沿用 §143 的 `kind:payload` 约定（payload 是状态 id）：
+
+| effect | 语义 | 需要选目标 |
+|---|---|---|
+| `combat_block` / `combat_energy` | 英雄的格挡 / 能量 | 否 |
+| `combat_heal_percent` | 按**最大生命百分比**回血 | 否 |
+| `combat_draw` | 抽 N 张 | 否 |
+| `combat_damage` | 单体伤害（走伤害管线）| **是** |
+| `combat_damage_all` | 全体伤害（每个活着的敌人各走一遍管线）| 否 |
+| `combat_status:<id>` | 给英雄上状态 | 否 |
+| `combat_status_target:<id>` | 给选中的敌人上状态 | **是** |
+
+`rd_run_potion_effect` 现在返回 **1 = 要选敌人 / 2 = 只作用于英雄 / 3 = 全体**，
+页面按 1 来武装目标选择器 —— 以前只有"单体伤害"这一种要选目标，所以"给敌人上虚弱"根本没法瞄。
+
+十个药水（wiki 数值）：Fire 20 / Block 12 / Energy 2 / Blood 20% / Swift 3 / Explosive 10 全体 /
+Strength 2 / Regen 5 / Weak 3 / Fear 3。
+
+⚠️ 第一次想加的是 **Dexterity Potion**，被 `[3b]` 当场拦下：`standard.dexterity` 在本内容里
+**没有 `STAT` 行** ⇒ 喝下去会在状态绑定那一步被拒。换成 Regen Potion（`standard.regen` 存在）。
+**门替我省了一次"加了个喝不了的药水"。**
+
+### 152.3 敌人：五个一层怪，全是已有机制
+
+| 敌人 | HP | 招式 |
+|---|---|---|
+| Red Louse | 10–15 | Bite 6 / Grow +3 力量 / Spit Web 2 虚弱 |
+| Green Louse | 11–16 | Bite 6 / Grow +3 力量 |
+| Fungi Beast | 22–28 | Bite 6 / Grow +3 力量 |
+| Red Slaver | 46–50 | Stab 13 / Scrape 7 + 1 虚弱 |
+| **Gremlin Nob**（精英）| 82–86 | Bellow +2 力量 / Rush 14 / Skull Bash 6 + 2 易伤 |
+
+一层弱池 **3 → 6** 个遭遇（权重 20/16×5 = 100），精英池 **1 → 2**。
+
+⚠️ 写内容时踩到一个**自己的 bug**：`Grow` 的 `sel.source` 目标我写成了 `sel.eventTarget`
+（只改了 `RequiredContextCapabilities`，没改 `kind`）⇒ 力量会加到**玩家**身上。内容门
+`[3] program_facts` 当场报 `facts [('status','standard.strength',3,'event')] != inv […'source']`。
+**"两个字段要一起改"这种错，只有把两个字段都钉在清单里才拦得住。**
+
+### 152.4 判据
+
+* `[3b] potions`（内容门）：10 个药水 / 8 种效果形状 / 每幕池 4 个。
+* `the_new_potion_shapes_all_do_something`（rd-wasm）：五种新形状各读回来一个数 ——
+  2 力量读到 2、3 虚弱读到 3、爆炸药水对**每个**活着的敌人各记一条伤害 beat、血药回 20%(80)=16、
+  迅捷药水手牌 +3。⚠️ 腰带只有 **3** 格，所以测试是"塞一个、喝一个"。
+* `the_potions_are_readable`（rd-core）跟着更新：10 个、`kind[:payload]` 形状、每幕池。
+* `a_long_fight_never_reports_a_step_problem`（rd-core）：3 × Sentry 打 24 回合，**每一步**的
+  `problems` 必须是 0 —— `StepThrew` 是外壳吞掉的错误，只要有一层错就红。
+
+### 152.5 还没做的
+
+* 药水的 **Rarity 权重**没进掉落（`roll_reward` 还是均匀抽池子）。
+* `Fruit Juice`（+5 最大生命，**战斗外**用）需要"药水能不能在战斗外喝"的规则，今天 ABI 只允许战斗中。
+* 精英战**给遗物**还没做（§145 的池子仍然只从宝箱/商店进）。
+* 敌人还剩一层的一批（Looter / Lagavulin / Guardian / Hexaghost）：前两个要"偷钱"/"睡眠觉醒"
+  这类**新机制**，不是数值活。
+
+### 152.6 数字
+
+聚合验收 **18/18**（新增门 18 `web-soak`）；单测 734 → **738**（rd-core 626 → **629** /
+rd-run 70 / rd-wasm 38 → **39**）。
+内容：**20 张卡 / 21 条状态 / 65 条敌人动作 / 31 个敌人 / 22 个遭遇 / 10 种药水 / 6 件遗物**；
+镜像 full **33,344 B** 附近 / core **27,700 B** 附近（以 `build.json` 为准）。

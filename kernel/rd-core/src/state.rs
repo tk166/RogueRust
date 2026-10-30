@@ -278,6 +278,79 @@ pub enum Container {
     /// 同时在飞的循环迭代快照（参考是闭包捕获的 `CardInstanceId[]` / `CombatantId[]`）。
     ProgramLoops,
 }
+impl Container {
+    /// 容器的数字代号（§152）。
+    ///
+    /// 装进 FightOutcome.step_capacity: [u8; MAX_STEPS] 的就是它：定容容器装满时
+    /// 哪一个 是唯一 actionable 的信息，而内核 no_std、不能格式化，所以数字+名字表分开放。
+    /// **名字只在这一个地方写**（name_of），宿主不许抄第二份。
+    #[must_use]
+    pub const fn code(self) -> u8 {
+        match self {
+            Container::TurnOrder => 1,
+            Container::Combatants => 2,
+            Container::CardZones => 3,
+            Container::CardInstances => 4,
+            Container::CardsInZone(_) => 5,
+            Container::GlobalStatuses => 6,
+            Container::Statuses => 7,
+            Container::Resources => 8,
+            Container::DefensivePools => 9,
+            Container::Counters => 10,
+            Container::Tags => 11,
+            Container::Marks => 12,
+            Container::MarkCounters => 13,
+            Container::TemporaryRules => 14,
+            Container::PendingEffects => 15,
+            Container::PendingEffectChains => 16,
+            Container::PendingEffectOwners => 17,
+            Container::PendingEvents => 18,
+            Container::PendingEventChains => 19,
+            Container::PendingContinuations => 20,
+            Container::Chains => 21,
+            Container::EventIdList => 22,
+            Container::ProgramFrames => 23,
+            Container::ProgramNodeSlots => 24,
+            Container::ProgramLoops => 25,
+        }
+    }
+
+    /// 代号 → 短名；不认识的代号给 ?。
+    #[must_use]
+    pub const fn name_of(code: u8) -> &'static str {
+        match code {
+            1 => "TurnOrder",
+            2 => "Combatants",
+            3 => "CardZones",
+            4 => "CardInstances",
+            5 => "CardsInZone",
+            6 => "GlobalStatuses",
+            7 => "Statuses",
+            8 => "Resources",
+            9 => "DefensivePools",
+            10 => "Counters",
+            11 => "Tags",
+            12 => "Marks",
+            13 => "MarkCounters",
+            14 => "TemporaryRules",
+            15 => "PendingEffects",
+            16 => "PendingEffectChains",
+            17 => "PendingEffectOwners",
+            18 => "PendingEvents",
+            19 => "PendingEventChains",
+            20 => "PendingContinuations",
+            21 => "Chains",
+            22 => "EventIdList",
+            23 => "ProgramFrames",
+            24 => "ProgramNodeSlots",
+            25 => "ProgramLoops",
+            _ => "?",
+        }
+    }
+}
+
+
+
 
 impl core::fmt::Display for CapacityError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -3366,8 +3439,19 @@ impl CombatState {
     /// 这是"顶层入队"那一支：回合机把 `TurnStartedCombatEvent` 交给处理器
     /// （`CombatTurnProcessor.cs:28-32`）时没有环境链 ⇒ `+1`。
     pub fn enqueue_event_at_root(&mut self, event: CombatEvent) -> StateResult<()> {
+        // 建链那一次引用**归调用方**（`new_root_chain_in_arena` 里 `refs: 1`）。队列条目自己
+        // 在 `enqueue_event_with_chain` 里又 `acquire` 了一次，所以这里必须把"建链"那一次还掉 ——
+        // 否则**每条根事件漏一格链**，而表现是"打到十几回合突然 `Full(Chains)`"
+        // （§152 的 soak 在 3 × Sentry 的第 12 回合上撞到；`a_turn_boundary_leaves_no_chain_referenced`
+        // 把它钉成 +1/回合）。参考那边靠 GC，条目出队后对象自然没人指了；我们的引用计数必须手工对齐。
         let chain = self.new_root_chain_in_arena()?;
-        self.enqueue_event_with_chain(event, chain)
+        if let Err(e) = self.enqueue_event_with_chain(event, chain) {
+            // 入队失败时队列没拿到引用 ⇒ 建链那一次也要还，不然失败会漏。
+            self.chains.release(chain);
+            return Err(e);
+        }
+        self.chains.release(chain);
+        Ok(())
     }
 
     /// 入队一条事件，链由调用方给。
@@ -5892,3 +5976,6 @@ mod tests {
         assert_eq!(canonical_text(&state), canonical_text(&fresh));
     }
 }
+
+
+

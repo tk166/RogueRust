@@ -170,7 +170,7 @@ const OFF_HEADER: usize = 0;
 pub(crate) const OFF_HERO_STATUS: usize = OFF_HEADER + 12; // 12
 const OFF_ENEMY: usize = OFF_HERO_STATUS + 5; // 17
 const OFF_ENEMY_STATUS: usize = OFF_ENEMY + MAX_ENEMY_SLOTS * 8; // 49
-const OFF_HAND: usize = OFF_ENEMY_STATUS + MAX_ENEMY_SLOTS * 5; // 69
+pub(crate) const OFF_HAND: usize = OFF_ENEMY_STATUS + MAX_ENEMY_SLOTS * 5; // 69
 const OFF_PILES: usize = OFF_HAND + MAX_HAND_SLOTS * 4; // 109
 const OFF_RESERVED: usize = OFF_PILES + 5; // 114
 /// `rd_env_observe_len()` — the caller must not hard-code this (`env-abi.md` §2.3), so it is
@@ -192,7 +192,7 @@ const X_COST_TAG: &str = rd_core::battle::X_COST_TAG;
 const H_HERO_WARD: usize = 7;
 pub(crate) const H_ENERGY: usize = 8;
 const H_ENERGY_MAX: usize = 9;
-const H_HAND_COUNT: usize = 10;
+pub(crate) const H_HAND_COUNT: usize = 10;
 const H_ENEMY_COUNT: usize = 11;
 
 // =============================================================================================
@@ -559,6 +559,53 @@ fn build_session_with(
     // `run_fight` needs a `&mut Host`; keep it warm so the first step does not allocate.
     let _ = session.host.take_failure();
     Ok(session)
+}
+
+/// A step whose error the shell swallowed, named by family (§152).
+fn step_cause_text(cause: &str) -> &'static str {
+    match cause {
+        "Script" => "StepThrew(Script)",
+        "Exec" => "StepThrew(Exec)",
+        "Turn" => "StepThrew(Turn)",
+        "Other" => "StepThrew(Other)",
+        _ => "StepThrew",
+    }
+}
+
+/// `StepThrew(Capacity)` plus **which** container filled up.
+///
+/// The names come from `state::Container::name_of` (one table, in the kernel); this function only
+/// turns one into a `&'static str`, because `Session::problems` is a `Vec<&'static str>` and cannot
+/// hold a formatted string.
+fn capacity_problem_text(container: &str) -> &'static str {
+    match container {
+        "TurnOrder" => "StepThrew(Capacity:TurnOrder)",
+        "Combatants" => "StepThrew(Capacity:Combatants)",
+        "CardZones" => "StepThrew(Capacity:CardZones)",
+        "CardInstances" => "StepThrew(Capacity:CardInstances)",
+        "CardsInZone" => "StepThrew(Capacity:CardsInZone)",
+        "GlobalStatuses" => "StepThrew(Capacity:GlobalStatuses)",
+        "Statuses" => "StepThrew(Capacity:Statuses)",
+        "Resources" => "StepThrew(Capacity:Resources)",
+        "DefensivePools" => "StepThrew(Capacity:DefensivePools)",
+        "Counters" => "StepThrew(Capacity:Counters)",
+        "Tags" => "StepThrew(Capacity:Tags)",
+        "Marks" => "StepThrew(Capacity:Marks)",
+        "MarkCounters" => "StepThrew(Capacity:MarkCounters)",
+        "TemporaryRules" => "StepThrew(Capacity:TemporaryRules)",
+        "PendingEffects" => "StepThrew(Capacity:PendingEffects)",
+        "PendingEffectChains" => "StepThrew(Capacity:PendingEffectChains)",
+        "PendingEffectOwners" => "StepThrew(Capacity:PendingEffectOwners)",
+        "PendingEvents" => "StepThrew(Capacity:PendingEvents)",
+        "PendingEventChains" => "StepThrew(Capacity:PendingEventChains)",
+        "PendingContinuations" => "StepThrew(Capacity:PendingContinuations)",
+        "Chains" => "StepThrew(Capacity:Chains)",
+        "EventIdList" => "StepThrew(Capacity:EventIdList)",
+        "ProgramFrames" => "StepThrew(Capacity:ProgramFrames)",
+        "ProgramNodeSlots" => "StepThrew(Capacity:ProgramNodeSlots)",
+        "ProgramLoops" => "StepThrew(Capacity:ProgramLoops)",
+        _ => "StepThrew(Capacity)",
+    }
 }
 
 impl Session {
@@ -1083,7 +1130,7 @@ impl Session {
         actions
     }
 
-    /// Run one driver step and fold its problems into `self.problems`.
+/// Run one driver step and fold its problems into `self.problems`.
     fn exec(&mut self, steps: &[Step<'static>]) -> Result<(), String> {
         self.problems.clear();
         *self.out = FightOutcome::new();
@@ -1092,8 +1139,28 @@ impl Session {
         run_fight(state, self.content, &self.plan, steps, &mut self.host, out)
             .map_err(|e| format!("run_fight: {}", detail(&e)))?;
         for index in 0..out.step_count {
+            // §152: a swallowed error is only diagnosable if the cause travels with it. The wire
+            // text stays `StepThrew` (the reference's word), with the family in parentheses.
+            let cause = out.step_causes.get(index).copied().unwrap_or_default();
             for problem in out.problems_of(index) {
-                self.problems.push(problem.wire_name());
+                // §152: the family, plus (for `Capacity`) **which** container. The name table
+                // lives in `state::Container::name_of` -- one place, not a copy here.
+                let cause_name = cause.wire_name();
+                let name = if *problem == rd_core::battle::Problem::StepThrew && cause_name == "Capacity" {
+                    let container = rd_core::state::Container::name_of(
+                        out.step_capacity.get(index).copied().unwrap_or(0),
+                    );
+                    if container == "?" {
+                        "StepThrew(Capacity)"
+                    } else {
+                        // The page reads this string; the container name is the actionable half.
+                        capacity_problem_text(container)
+                    }
+                } else if *problem == rd_core::battle::Problem::StepThrew && !cause_name.is_empty() {
+                    step_cause_text(cause_name)
+                } else {
+                    problem.wire_name()
+                };                self.problems.push(name);
             }
         }
         Ok(())

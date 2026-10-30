@@ -327,6 +327,81 @@ impl StepOutcome {
     };
 }
 
+/// [`Problem::StepThrew`] 背后的粗分类（`port-plan.md` §152）。
+///
+/// 粒度是有意**粗**的：它是"去哪一层查"的指针，不是错误本身 —— 精确的错误在 `Debug` 里，
+/// 而那东西进不了 wasm 的一格 `i32`。
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum StepCause {
+    /// 没有错误。
+    #[default]
+    None,
+    /// 枚举/脚本层（`BattleError::Card` / `Step` / `Ir` …）。
+    Script,
+    /// 执行程序（`ExecError`）。
+    Exec,
+    /// 回合机（`Turn`/`Host`）。
+    Turn,
+    /// 容量（某个定容表满了）。
+    ///
+    /// ⚠️ **不带"哪一个容器"的载荷**：`FightOutcome` 是 wasm 里的一个信封，`rd_env_bench_sizes`
+    /// 有一条"它必须是几 KB"的断言（`step_causes` 带 `&'static str` 时当场把它撑过 4 KB）。
+    /// 所以容器走**数字代号**：`step_capacity: [u8; MAX_STEPS]`，名字表只有一份
+    /// （`state::Container::name_of`），宿主拿它来把 `Capacity` 说成 `Capacity:Statuses`。
+    Capacity,
+    /// 其它。
+    Other,
+}
+
+impl StepCause {
+    /// 从被吞掉的那个错误里分类。
+    #[must_use]
+    pub fn of(error: &BattleError) -> Self {
+        match error {
+            BattleError::TooManySteps
+            | BattleError::TooManyProblems
+            | BattleError::Capacity(_) => StepCause::Capacity,
+            BattleError::Turn(turn) => match turn {
+                crate::turn::TurnError::Capacity(_) => StepCause::Capacity,
+                crate::turn::TurnError::Host(failure) => match failure {
+                    crate::turn::HostFailure::Effect => StepCause::Exec,
+                    _ => StepCause::Turn,
+                },
+                _ => StepCause::Turn,
+            },
+            BattleError::Deck(_) | BattleError::Play(_) => StepCause::Script,
+            _ => StepCause::Other,
+        }
+    }
+
+    /// 这个错误装满的那个容器的代号（0 = 不是容量错误 / 不知道）。
+    #[must_use]
+    pub fn capacity_code(error: &BattleError) -> u8 {
+        let capacity = match error {
+            BattleError::Capacity(failure) => Some(failure),
+            BattleError::Turn(crate::turn::TurnError::Capacity(failure)) => Some(failure),
+            _ => None,
+        };
+        match capacity {
+            Some(crate::state::CapacityError::Full(container)) => container.code(),
+            _ => 0,
+        }
+    }
+
+    /// 一个稳定的短名（宿主/日志用）。
+    #[must_use]
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            StepCause::None => "",
+            StepCause::Script => "Script",
+            StepCause::Exec => "Exec",
+            StepCause::Turn => "Turn",
+            StepCause::Capacity => "Capacity",
+            StepCause::Other => "Other",
+        }
+    }
+}
+
 /// 整局的观测结果。**装不下时响亮失败**，绝不静默截断。
 #[derive(Clone, Copy, Debug)]
 pub struct FightOutcome {
@@ -336,6 +411,17 @@ pub struct FightOutcome {
     pub step_count: usize,
     /// 每步的问题，`problems[i]` 最多 `MAX_PROBLEMS_PER_STEP` 条。
     pub problems: [[Problem; MAX_PROBLEMS_PER_STEP]; MAX_STEPS],
+    /// 每步被**吞掉的那个错误**的类别（0 = 没有）。
+    ///
+    /// [`Problem::StepThrew`] 是参考的语义（"抛了"），但它把**具体哪个错**丢掉了 —— 于是
+    /// "这一步抛了"在页面上和"内核里某处返回了 Err"长得一样，谁也查不下去（§152 的 soak 撞了
+    /// 很久）。这一格不改变 `Problem` 的线上形状，只是让宿主能多说一句 `StepThrew(Exec)`。
+    pub step_causes: [StepCause; MAX_STEPS],
+    /// 装不下时**是哪个容器**（`state::Container::code()`；0 = 不是容量错误）。
+    ///
+    /// 与 `step_causes` 分开，是为了让信封保持小：这个名字只用来让宿主把
+    /// `StepThrew(Capacity)` 说成 `StepThrew(Capacity:Statuses)`。
+    pub step_capacity: [u8; MAX_STEPS],
     /// 终局结果。
     pub result: CombatResult,
 }
@@ -351,6 +437,8 @@ impl FightOutcome {
             steps: [StepOutcome::EMPTY; MAX_STEPS],
             step_count: 0,
             problems: [[Problem::CombatAlreadyEnded; MAX_PROBLEMS_PER_STEP]; MAX_STEPS],
+            step_causes: [StepCause::None; MAX_STEPS],
+            step_capacity: [0; MAX_STEPS],
             result: CombatResult::Ongoing,
         }
     }
@@ -1180,8 +1268,16 @@ pub fn run_fight<H: TurnHost>(
                 // 信封错误不许被吞成 StepThrew：那会把"问题记不下了"伪装成"这一步抛了"。
                 Err(BattleError::TooManyProblems) => return Err(BattleError::TooManyProblems),
                 // `:57-62`：异常 → 一条问题 + **当下的**上下文（`:61`），循环继续。
-                Err(_) => {
+                Err(error) => {
+                    // 记下类别**再**吞掉：两个流（给玩家的 `Problem`、给宿主的类别）在这一处分开。
+                    let cause = StepCause::of(&error);
                     problems.push(Problem::StepThrew)?;
+                    if let Some(slot) = out.step_causes.get_mut(index) {
+                        *slot = cause;
+                    }
+                    if let Some(slot) = out.step_capacity.get_mut(index) {
+                        *slot = StepCause::capacity_code(&error);
+                    }
                     context_of(state)
                 }
             }
@@ -3937,6 +4033,131 @@ mod tests {
             start: content.root_by_name("Start"),
             deck: content.root_by_name("Deck"),
         }
+    }
+
+    /// §152：链的引用计数在**回合边界**上必须回到 0。
+    ///
+    /// soak 在 3 × Sentry 的第 12 回合撞到 `StepThrew(Capacity:Chains)` —— 那时 arena 已经满了
+    /// （`MAX_LIVE_CHAINS = 128`），而每一步都在**漏**。这里把它拆到最小：回合开始/结束各跑
+    /// 一次，看是谁的引用没还。
+    #[test]
+    fn a_turn_boundary_leaves_no_chain_referenced() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let enemies = [PlanCombatant { id: "sentry_1", max_health: 39 }];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "sts_one_sentry",
+            seed: 11,
+            hero: PlanCombatant { id: "hero", max_health: 200 },
+            enemies: &enemies,
+            deck: &[],
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: true,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短 id"), 0);
+        build_fight_from_content(&mut state, &content, &plan).expect("builds");
+        let config = turn_config_for(&plan).expect("config");
+        let mut host = Host::new(&content);
+        let hero = cid("hero");
+        let mut report = Vec::new();
+        for round in 0..3 {
+            turn::start_current_turn(&mut state, &config, &mut host).expect("start");
+            report.push((round, "start", state.live_chain_count()));
+            turn::end_current_turn(&mut state, &config, &mut host).expect("end");
+            report.push((round, "end", state.live_chain_count()));
+        }
+        let leaked: Vec<_> = report.iter().filter(|entry| entry.2 > 0).copied().collect();
+        assert!(leaked.is_empty(), "leaked after: {leaked:?} (round, phase, live)");
+    }
+
+    /// §152：一场**长**战斗里每一步都必须**没有问题**。
+    ///
+    /// 这条测试是 soak 逼出来的：那道闸门在第 12 回合的 3 × Sentry 上撞到 `StepThrew`，
+    /// 而 `Problem::StepThrew` 是外壳把 `execute_step` 的 `Err(_)` **吞掉**之后的残渣 ——
+    /// 页面看到的只有"这一步抛了"，没有哪一步、为什么。所以这里直接把每一步的 `problems`
+    /// 数出来：只要有一层错误，测试就红，而不是留下一局"回合结束了但新回合没开始"的死局。
+    ///
+    /// 覆盖的是回合边界那一段（`EndOneTurn` × N）：§149 在伤害管线里加了三条状态的钩子，
+    /// 它们都在敌人回合里跑。
+    #[test]
+    fn a_long_fight_never_reports_a_step_problem() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let enemies = [
+            PlanCombatant { id: "sentry_1", max_health: 39 },
+            PlanCombatant { id: "sentry_2", max_health: 39 },
+            PlanCombatant { id: "sentry_3", max_health: 39 },
+        ];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "sts_sentries",
+            seed: 11,
+            hero: PlanCombatant { id: "hero", max_health: 200 },
+            enemies: &enemies,
+            deck: &[],
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: true,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短 id"), 0);
+        build_fight_from_content(&mut state, &content, &plan).expect("the sentry fight builds");
+        // §149 的 Plated Armor 也在管线里：让英雄戴着它，敌人回合就一定会走到那条钩子。
+        if let Some(hero) = state.combatant_mut(&cid("hero")) {
+            hero.push_status(crate::state::StatusInstance::new(
+                crate::state::StatusInstanceId::new("st_pa").expect("id"),
+                crate::state::StatusDefinitionId::new("standard.plated_armor").expect("id"),
+                crate::state::StatusPolarity::Buff,
+            )
+            .with_stacks(4))
+            .expect("room");
+        }
+
+        let mut host = Host::new(&content);
+        // 一步一步跑，每步之后看**链的引用计数**是否回到 0：这是本模块唯一的"GC"，
+        // 不平衡的表现不是"多一条链"，而是 128 个节目之后 `Full(Chains)` 到处炸
+        // （`exec.rs::a_program_hands_back_the_chain_references_it_took` 钉住的是节目内部那一层）。
+        let mut leaked = Vec::new();
+        for round in 0..24 {
+            let steps = [Step::EndOneTurn];
+            let mut out = FightOutcome::new();
+            run_fight(&mut state, &content, &plan, &steps, &mut host, &mut out).expect("one turn");
+            let live = state.live_chain_count();
+            if live > 0 {
+                leaked.push((round, live));
+            }
+        }
+        assert!(
+            leaked.is_empty(),
+            "chains still referenced after a turn (round, live): {leaked:?}"
+        );
+        let steps = [Step::EndOneTurn; 24];
+        let mut out = FightOutcome::new();
+        run_fight(&mut state, &content, &plan, &steps, &mut host, &mut out).expect("24 turns");
+        let mut offenders = Vec::new();
+        for index in 0..steps.len() {
+            let count = out.steps[index].problems;
+            if count > 0 {
+                offenders.push(index);
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "steps with problems (StepThrew = an error the shell swallowed): {offenders:?}"
+        );
     }
 
     /// 抽牌堆里的卡定义 id（按堆序）。

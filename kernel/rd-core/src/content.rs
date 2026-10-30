@@ -4132,18 +4132,46 @@ mod tests {
         ))
         .expect("the sts image");
         let content = Content::parse(&bytes).expect("the image parses");
-        assert_eq!(content.potion_count(), 5, "five potions: three for act 1, two for acts 2-3 (§133)");
+        assert_eq!(
+            content.potion_count(),
+            10,
+            "ten potions (§152: act 1's four, plus six more across the acts)"
+        );
         let mut ids = Vec::new();
         for index in 0..content.potion_count() {
             let potion = content.potion(index).expect("potion {index}");
             ids.push(potion.id);
             assert!(!potion.name.is_empty(), "{} has no name", potion.id);
             assert!(potion.amount > 0, "{} has no amount", potion.id);
+            // §152: `kind` or `kind:<status id>` -- the same convention the event vocabulary uses.
+            let (kind, payload) = match potion.effect.split_once(':') {
+                Some((kind, payload)) => (kind, Some(payload)),
+                None => (potion.effect, None),
+            };
             assert!(
-                ["combat_damage", "combat_block", "combat_energy", "heal"].contains(&potion.effect),
+                [
+                    "combat_damage",
+                    "combat_block",
+                    "combat_energy",
+                    "combat_heal_percent",
+                    "combat_draw",
+                    "combat_damage_all",
+                    "combat_status",
+                    "combat_status_target",
+                ]
+                .contains(&kind),
                 "{}: unknown effect {:?}",
                 potion.id,
                 potion.effect
+            );
+            // The payload form is only for the two status kinds, and only those need it.
+            let wants_payload = kind.starts_with("combat_status");
+            assert_eq!(
+                payload.is_some(),
+                wants_payload,
+                "{}: payload presence does not match {:?}",
+                potion.id,
+                kind
             );
             assert!(
                 ["Common", "Uncommon", "Rare"].contains(&potion.rarity),
@@ -4155,7 +4183,18 @@ mod tests {
         ids.sort_unstable();
         assert_eq!(
             ids,
-            vec!["block_potion", "blood_potion", "energy_potion", "fire_potion", "swift_potion"]
+            vec![
+                "block_potion",
+                "blood_potion",
+                "energy_potion",
+                "explosive_potion",
+                "fear_potion",
+                "fire_potion",
+                "regen_potion",
+                "strength_potion",
+                "swift_potion",
+                "weak_potion",
+            ]
         );
         // §135: the potion pool is **per act**. Act 1's list is the three originals, act 2 brings
         // the heal potion, act 3 the block one -- and each is a real PotionTables entry.
@@ -4166,7 +4205,10 @@ mod tests {
             .filter(|id| !id.is_empty())
             .copied()
             .collect();
-        assert_eq!(act_one, vec!["fire_potion", "block_potion", "energy_potion"]);
+        assert_eq!(
+            act_one,
+            vec!["fire_potion", "block_potion", "energy_potion", "explosive_potion"]
+        );
         let act_two: Vec<&str> = content
             .potion_pool("Potions2")
             .expect("act 2 potions")
