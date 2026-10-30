@@ -7842,27 +7842,31 @@
     "Weak": [
       {
         "Id": "enc_cultist",
-        "Weight": 20
+        "Weight": 15
       },
       {
         "Id": "enc_jaw_worm",
-        "Weight": 16
+        "Weight": 14
       },
       {
         "Id": "enc_small_slimes",
-        "Weight": 16
+        "Weight": 14
       },
       {
         "Id": "enc_louse",
-        "Weight": 16
+        "Weight": 14
       },
       {
         "Id": "enc_fungi_beast",
-        "Weight": 16
+        "Weight": 14
       },
       {
         "Id": "enc_slaver_red",
-        "Weight": 16
+        "Weight": 14
+      },
+      {
+        "Id": "enc_gremlin_gang",
+        "Weight": 15
       }
     ],
     "Note": "inv:§5.2：weak 池 4 项各 25%。ENCT 行没有权重格（rdcfmt.py:254-259）⇒ 权重只能住在这里，不参与任何镜像行为。第 4 项 enc_two_louses 未 author（要 louse_red/green，C 档）。 Elite 池由本内容补上（3 × sentry）；raw weights are documentation only -- `ENCT` has no weight cell (`rdcfmt.py`), so a single entry means 'the only elite'. Boss 池由本内容补上（slime_boss）。`inv:§4.3` 说三只 Boss 等概率三选一 —— 本内容只 author 了 Slime Boss，另两只（The Guardian 的 Mode Shift、Hexaghost 的 Burn 升级）都还需要内核新机制。",
@@ -7890,10 +7894,6 @@
       {
         "Id": "enc_chosen",
         "Weight": 50
-      },
-      {
-        "Id": "enc_gremlin_gang",
-        "Weight": 34
       }
     ],
     "Weak3": [
@@ -7918,7 +7918,8 @@
         "Weight": 33
       },
       {
-        "Id": "enc_spire_growth"
+        "Id": "enc_spire_growth",
+        "Weight": 33
       }
     ],
     "Elite2": [

@@ -358,8 +358,10 @@ INV_ELITE_POOL = {
 # say which act each pool member belongs to, so the table checks can compare per act.
 INV_ACT_TABLES = {
     "Weak": ["enc_cultist", "enc_jaw_worm", "enc_small_slimes",
-             "enc_louse", "enc_fungi_beast", "enc_slaver_red"],
-    "Weak2": ["enc_chosen", "enc_gremlin_gang", "enc_shelled_parasite"],
+             "enc_louse", "enc_fungi_beast", "enc_slaver_red",
+             # §153: the Gremlin Gang is an **act-1** encounter (wiki); it sat in act 2.
+             "enc_gremlin_gang"],
+    "Weak2": ["enc_chosen", "enc_shelled_parasite"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
     "Elite": ["enc_gremlin_nob", "enc_three_sentries"],

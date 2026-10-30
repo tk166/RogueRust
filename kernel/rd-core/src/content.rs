@@ -2393,9 +2393,72 @@ impl<'a> Content<'a> {
         }
         None
     }
-}
 
-/// One potion, as the content declares it.
+    /// The **weights** of one encounter pool (`port-plan.md` §153).
+    ///
+    /// Same hop mapping as [`Self::encounter_pool`]; the difference is which field is read (`Weight`
+    /// instead of `Id`). Both live on the same element, so a reader that takes only the ids throws
+    /// the weights away -- which is what this kernel did until §153.
+    ///
+    /// `None` = the pool is absent. A row without a `Weight` reads as `0`; the caller falls back to
+    /// uniform when every weight is zero rather than dropping such a row.
+    #[must_use]
+    pub fn encounter_weights(&self, pool: &str) -> Option<[u16; MAX_POOL_IDS]> {
+        // The hops are spelled out for the same reason as in `encounter_pool`: the content gate
+        // decides "the kernel reads `EncounterTables.Weak`" by finding that literal in kernel code.
+        let hop = match pool {
+            "Weak" => "EncounterTables.Weak",
+            "Elite" => "EncounterTables.Elite",
+            "Boss" => "EncounterTables.Boss",
+            "Weak2" => "EncounterTables.Weak2",
+            "Weak3" => "EncounterTables.Weak3",
+            "Elite2" => "EncounterTables.Elite2",
+            "Elite3" => "EncounterTables.Elite3",
+            "Boss2" => "EncounterTables.Boss2",
+            "Boss3" => "EncounterTables.Boss3",
+            _ => return None,
+        };
+        let root = self.root_by_name("EncounterTables")?;
+        let table = self.term(root)?;
+        if table.op < OP_FIRST_DYNAMIC {
+            return None;
+        }
+        let opcode = self.opcode(table.op)?;
+        let mut at = 0usize;
+        for position in 0..opcode.nfields() {
+            let field = opcode.field(position)?;
+            let width = usize::from(field.slots()?);
+            let name = self.string(field.name_str())?;
+            if name == pool {
+                let list = slot_list(self, &table, at, field.kind(), hop).ok()?;
+                let mut out = [0u16; MAX_POOL_IDS];
+                for index in 0..list.len().min(MAX_POOL_IDS) {
+                    let element = list.cell(index)?;
+                    let element_term = self.term(element)?;
+                    if element_term.op < OP_FIRST_DYNAMIC {
+                        return None;
+                    }
+                    let element_opcode = self.opcode(element_term.op)?;
+                    let mut offset = 0usize;
+                    for slot in 0..element_opcode.nfields() {
+                        let sub = element_opcode.field(slot)?;
+                        let sub_width = usize::from(sub.slots()?);
+                        let sub_name = self.string(sub.name_str())?;
+                        if sub_name == WEIGHT_FIELD && sub.kind() == F_INT {
+                            let raw = element_term.slot(offset)?;
+                            out[index] = u16::try_from(i64::from(raw).max(0)).unwrap_or(u16::MAX);
+                            break;
+                        }
+                        offset = offset.checked_add(sub_width)?;
+                    }
+                }
+                return Some(out);
+            }
+            at = at.checked_add(width)?;
+        }
+        None
+    }
+}
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Potion<'a> {
     /// The id (`fire_potion` ...).
@@ -2593,6 +2656,13 @@ pub const MAX_POOL_IDS: usize = 8;
 
 /// The field name of each entry in an `EncounterTables` pool.
 const ENCOUNTER_ID_FIELD: &str = "Id";
+
+/// The `Weight` of each entry in an `EncounterTables` pool (`port-plan.md` §153).
+///
+/// It sat in the content **unread** for twenty sections: the rows declared `Weight: 20/16/16/…`, the
+/// content gate checked they sum to 100, and `rd_wasm::run::fight_begin` picked `roll(len)`
+/// (uniform). Declared, validated, unused.
+const WEIGHT_FIELD: &str = "Weight";
 
 /// 一个**根键**本身的列表读数（`F_TERMLIST` / `F_STRLIST`）。
 ///

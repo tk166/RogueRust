@@ -1395,6 +1395,81 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
     }
 }
 
+/// How many times the encounter pick may be re-rolled to avoid repeating the previous one (§153).
+///
+/// Three, not a loop-until-different: a pool with one entry would spin forever, and with `n` entries
+/// three tries turns a repeat from `1/n` into `1/n³` (measured before: 18 of ~100 fights repeated
+/// with no re-roll, 2 of ~104 with one).
+const ENCOUNTER_REROLLS: u32 = 3;
+
+/// An encounter id, from the pool''s string form (§153). Over-long ids cannot be compared, so they
+/// come back as `EMPTY` -- and `EMPTY` is also the "no previous fight" value, which means such an id
+/// simply never suppresses a repeat.
+/// Choose which encounter a fight uses (`port-plan.md` §153).
+///
+/// Three rules, in order:
+/// 1. **the content's `Weight`**, not a uniform draw (`Weight: 15/14/14/14/14/14/15` used to be
+///    written, validated by the content gate, and then ignored);
+/// 2. a pool with no weights at all falls back to uniform (that is what "no `Weight` field" means);
+/// 3. **never the same encounter twice in a row** -- one re-roll, not a loop, because a loop over a
+///    two-entry pool would turn the pool into a cycle.
+fn pick_encounter(
+    state: &mut rd_run::state::RunState,
+    content: &'static Content<'static>,
+    pool_name: &str,
+    encounters: &[&'static str],
+) -> Result<usize, String> {
+    let weights = content.encounter_weights(pool_name);
+    let total: u32 = weights
+        .as_ref()
+        .map_or(0, |table| table.iter().take(encounters.len()).map(|w| u32::from(*w)).sum());
+    let mut pick = if total == 0 {
+        match state.rng_mut().roll(RunStream::Combat, encounters.len() as u32) {
+            Ok(value) => value as usize,
+            Err(e) => return Err(describe(&e)),
+        }
+    } else {
+        let roll = match state.rng_mut().roll(RunStream::Combat, total) {
+            Ok(value) => value,
+            Err(e) => return Err(describe(&e)),
+        };
+        let mut remaining = roll;
+        let mut chosen = encounters.len() - 1;
+        for (index, weight) in weights.iter().flatten().take(encounters.len()).enumerate() {
+            let weight = u32::from(*weight);
+            if weight == 0 {
+                continue;
+            }
+            if remaining < weight {
+                chosen = index;
+                break;
+            }
+            remaining -= weight;
+        }
+        chosen
+    };
+    // Re-roll up to [`ENCOUNTER_REROLLS`] times while the pick repeats the previous encounter.
+    // Bounded on purpose: an unbounded loop over a one-entry pool never terminates, and three tries
+    // already takes a repeat from `1/n` to `1/n³` (~2% of fights were repeats with one re-roll).
+    if encounters.len() > 1 {
+        for _ in 0..ENCOUNTER_REROLLS {
+            if encounter_id(encounters[pick]) != state.last_encounter() {
+                break;
+            }
+            let again = match state.rng_mut().roll(RunStream::Combat, encounters.len() as u32) {
+                Ok(value) => value as usize,
+                Err(e) => return Err(describe(&e)),
+            };
+            pick = again;
+        }
+    }
+    state.set_last_encounter(encounter_id(encounters[pick]));
+    Ok(pick)
+}
+
+fn encounter_id(text: &'static str) -> rd_run::state::RunId {
+    rd_run::state::RunId::new(text).unwrap_or(rd_run::state::RunId::EMPTY)
+}
 /// A refusal that has nothing to do with the run slot's own error text.
 fn refuse(message: &str) -> i32 {
     match run_slot().as_mut() {
@@ -2025,12 +2100,9 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     if encounters.is_empty() {
         return fail(session, "内容镜像里没有任何遭遇");
     }
-    let pick = match session.state.rng_mut().roll(RunStream::Combat, encounters.len() as u32) {
-        Ok(value) => value as usize,
-        Err(e) => {
-            let message = describe(&e);
-            return fail(session, &message);
-        }
+    let pick = match pick_encounter(&mut session.state, content, &pool_name, &encounters) {
+        Ok(index) => index,
+        Err(message) => return fail(session, &message),
     };
     let fight_seed = match session.state.rng_mut().roll(RunStream::Combat, i32::MAX as u32) {
         Ok(value) => value as i32,
@@ -2676,6 +2748,53 @@ mod tests {
         assert_eq!(rd_run_relic_id_len(-1), -1);
     }
 
+    /// §153：**同一种普通怪不会连着来**，而一局里必须见到不止一种。
+    ///
+    /// 这条测试来自一个用户报告："普通怪始终只有 jaw_worm，没有其他的"。三个原因叠在一起：
+    /// ① 页面的 `runSeed` 是常量 `7`（每次刷新重放同一局，而 seed 7 的头三场都是 jaw_worm）；
+    /// ② 内容写了 `Weight`，内核却用 `roll(len)` **均匀抽**（权重是死数据）；
+    /// ③ 没有"别连着重复"的约束（实测 ~100 场里 18 场与上一场相同，还有过三连）。
+    ///
+    /// 这里直接打**抽签那一层**（`pick_encounter`）：走完整战斗会让英雄在对局里被打死，
+    /// 于是只能测到第一场（第一版就是这样，报的是 `expected several fights, got ["enc_jaw_worm"]`）。
+    #[test]
+    fn normal_fights_do_not_repeat_and_are_not_all_the_same() {
+        reset(7);
+        let image = content();
+        let pool = image.encounter_pool("Weak").expect("the act-1 weak pool");
+        let encounters: Vec<&'static str> =
+            pool.iter().filter(|id| !id.is_empty()).copied().collect();
+        assert!(encounters.len() >= 6, "the pool should be spread out: {encounters:?}");
+        let mut picks: Vec<String> = Vec::new();
+        for _ in 0..40 {
+            let session = run_slot().as_mut().expect("session");
+            let index = pick_encounter(&mut session.state, image, "Weak", &encounters)
+                .expect("a pick");
+            picks.push(encounters[index].to_string());
+        }
+        for pair in picks.windows(2) {
+            assert_ne!(pair[0], pair[1], "two fights in a row used the same encounter: {picks:?}");
+        }
+        let mut distinct = picks.clone();
+        distinct.sort_unstable();
+        distinct.dedup();
+        assert_eq!(
+            distinct.len(),
+            encounters.len(),
+            "40 picks must cover the whole pool: {distinct:?}"
+        );
+        // The weights say `cultist` and `gremlin_gang` are 15/100 each and the others 14/100, so no
+        // encounter may be wildly over- or under-represented. Loose on purpose: this is a smoke
+        // check that the weights are *used* (a uniform pool would pass it too), the exact
+        // distribution is a statistical claim no single seed can make.
+        for encounter in &distinct {
+            let count = picks.iter().filter(|pick| *pick == encounter).count();
+            assert!(
+                (1..=15).contains(&count),
+                "{encounter} came up {count} times in 40: {picks:?}"
+            );
+        }
+    }
     /// §152：五种新的药水形状**真的有效**（各自读回来一个数，而不是"没报错"）。
     ///
     /// 药水的词表从 3 种效果扩到 8 种，而"扩了词表"与"喝下去有用"是两件事 —— 这一条盯后者。

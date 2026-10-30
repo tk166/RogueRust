@@ -579,7 +579,12 @@ function wasEndTurnAction(actionIndex) {
 // routes -- the same split as `ui_render.js`.
 // ---------------------------------------------------------------------------------------------
 let mode = "run";
-let runSeed = 7;
+/// The run seed. **Not a constant** (§153): it used to be `7`, which meant every page load replayed
+/// the identical run -- same map, same encounters, and (because seed 7's first three fights are all
+/// `jaw_worm`) the same enemy over and over, which is exactly how the "why do I only ever meet
+/// jaw_worm" report happened. `?debug` still lets a checker pin a seed through
+/// `RD_DEBUG.startWithSeed`.
+let runSeed = Math.floor(Math.random() * 2_000_000_000);
 /// The run is finished. Two ways to get here, and only one of them exists yet: **defeat** (the
 /// hero's health reached 0). There is no boss encounter in this content, so a run cannot be won --
 /// the end of the act says so instead of pretending.

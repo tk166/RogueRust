@@ -726,6 +726,13 @@ pub struct RunState {
     act: u8,
     /// The `?`-room event under the cursor, while `Pending::Event`.
     event: RunId,
+    /// The encounter the **previous** fight used (`port-plan.md` §153), so the next normal fight can
+    /// avoid repeating it.
+    ///
+    /// StS does not hand out the same encounter group twice in a row, and without this the run above
+    /// produced runs like `fungi, louse, louse, louse` -- see `docs/port-plan.md` §153 for the
+    /// measurement (18 of ~100 fights were a repeat of the one before).
+    last_encounter: RunId,
     /// Which two blessings were rolled, as indices into [`START_OFFERS`].
     start_offers: [u8; 2],
     /// The picked blessing's follow-up, while [`Pending::BlessingCard`] waits for a deck index.
@@ -739,6 +746,16 @@ pub struct RunState {
 }
 
 impl RunState {
+    /// The encounter the previous fight used; `RunId::EMPTY` before the first fight (§153).
+    #[must_use]
+    pub fn last_encounter(&self) -> RunId {
+        self.last_encounter
+    }
+
+    /// Remember the encounter the fight that just started used (§153).
+    pub fn set_last_encounter(&mut self, id: RunId) {
+        self.last_encounter = id;
+    }
     /// Start a run: generate the map from the `Map` stream, and take the content-derived starting
     /// facts as arguments (see the module docs).
     ///
@@ -776,6 +793,7 @@ impl RunState {
             boss_beaten: false,
             act: 1,
             event: RunId::EMPTY,
+            last_encounter: RunId::EMPTY,
             // Rolled by `offer_start_choice`; until then the pair is not a choice anyone can take.
             start_offers: [0, 1],
             blessing_follow: None,
