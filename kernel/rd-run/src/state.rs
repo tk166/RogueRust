@@ -33,10 +33,22 @@ pub const MAX_RUN_RELICS: usize = 24;
 /// last one wins the run.
 pub const MAX_ACT: u8 = 3;
 
-pub const MAX_RUN_POTIONS: usize = 3;
+/// Belt **storage**: five slots, because `potion_belt` adds two (§157).
+///
+/// The *rule* is still "three slots" -- that is [`RunState::potion_slots`], and the difference between
+/// storage and rule is what lets a relic raise the count without a second array.
+pub const MAX_RUN_POTIONS: usize = 5;
+
+/// The wiki's three starting potion slots (§157; Ascension 11's reduction does not exist here).
+pub const BASE_POTION_SLOTS: u8 = 3;
 /// `inv:§9.3`: a potion drops from 40% of fights (the act-1 reset value; the ±10% per act is not
 /// modelled because there is one act).
-pub const POTION_DROP_PERCENT: u32 = 40;
+/// The wiki's **starting** potion drop chance (§157). It moves: -10 after a drop, +10 after a
+/// miss, reset at the start of each act. A flat 40% was wrong in the way that matters over a run.
+pub const POTION_DROP_START: i32 = 40;
+
+/// How much the chance moves per fight (`+10` on a miss, `-10` on a drop).
+pub const POTION_DROP_STEP: i32 = 10;
 
 /// `Burning Blood`: "At the end of combat, heal 6 HP" (`inv:§2`).
 pub const BURNING_BLOOD_HEAL: i32 = 6;
@@ -70,6 +82,13 @@ pub enum RelicEffect {
     /// Heal `amount` at the end of a fight **only when HP is at or below `percent` of maximum**
     /// (`meat_on_the_bone`, wiki: 12 HP at or below 50%).
     EndOfCombatHealIfBelow { percent: i32, amount: i32 },
+    /// Resting also heals `amount` per **five cards** in the deck (`eternal_feather`, wiki: 3 HP).
+    RestHealPerFiveCards(i32),
+    /// Fight gold is multiplied by `100 + percent` (`golden_idol`, wiki: +25%).
+    FightGoldPercent(i32),
+    /// Extra potion slots (`potion_belt`, wiki: +2). The wiki calls it the **only** way to raise the
+    /// three slots, which is why the slot count is a method and not the array length (§157).
+    ExtraPotionSlots(i32),
 }
 
 /// `CombatBonus` 最多能带几种"开战时给的状态"（遗物数量远小于它）。
@@ -748,6 +767,9 @@ pub struct RunState {
     relics_len: u8,
     potions: [RunId; MAX_RUN_POTIONS],
     potions_len: u8,
+    /// The potion drop chance **right now** (§157): starts at 40, `-10` after a drop, `+10` after a
+    /// miss, reset when an act starts.
+    potion_chance: i32,
     map: RunMap,
     /// See [`RunState::map_generation_failed`].
     map_generation_failed: bool,
@@ -827,6 +849,7 @@ impl RunState {
             relics_len: 0,
             potions: [RunId::EMPTY; MAX_RUN_POTIONS],
             potions_len: 0,
+            potion_chance: POTION_DROP_START,
             map,
             map_generation_failed: false,
             rng,
@@ -979,18 +1002,49 @@ impl RunState {
             | RelicEffect::StartCombatBlock(_)
             | RelicEffect::StartCombatStatus(_, _)
             | RelicEffect::RestHealBonus(_)
-            | RelicEffect::EndOfCombatHealIfBelow { .. } => {}
+            | RelicEffect::EndOfCombatHealIfBelow { .. }
+            // §157: none of these fires on pickup either -- the belt slot, the gold rate and the
+            // rest bonus are read where they are used.
+            | RelicEffect::RestHealPerFiveCards(_)
+            | RelicEffect::FightGoldPercent(_)
+            | RelicEffect::ExtraPotionSlots(_) => {}
         }
         self.relics[slot] = id;
         self.relics_len += 1;
         Ok(())
     }
 
-    /// Add a potion. Past [`MAX_RUN_POTIONS`] this is an error (the belt has three slots).
+    /// The potion drop chance right now (§157).
+    #[must_use]
+    pub const fn potion_drop_chance(&self) -> i32 {
+        self.potion_chance
+    }
+
+    /// How many potion slots the run has: three, plus `potion_belt`'s two (§157).
+    #[must_use]
+    pub fn potion_slots(&self) -> u8 {
+        let mut slots = BASE_POTION_SLOTS;
+        for slot in 0..self.relics_len as usize {
+            if let Some(RelicEffect::ExtraPotionSlots(extra)) =
+                Self::relic_effect(self.relics[slot].as_str())
+            {
+                slots = slots.saturating_add(u8::try_from(extra).unwrap_or(0));
+            }
+        }
+        slots
+    }
+
+    /// Is there room for one more potion?
+    #[must_use]
+    pub fn potion_room(&self) -> bool {
+        self.potions_len < self.potion_slots()
+    }
+
+    /// Add a potion. Past [`Self::potion_slots`] this is an error (the belt is full).
     pub fn push_potion(&mut self, potion_id: &str) -> Result<(), RunError> {
         let id = RunId::new(potion_id).map_err(|_| RunError::BadId)?;
         let slot = self.potions_len as usize;
-        if slot >= MAX_RUN_POTIONS {
+        if slot >= usize::from(self.potion_slots()) || slot >= MAX_RUN_POTIONS {
             return Err(RunError::Capacity);
         }
         self.potions[slot] = id;
@@ -1056,7 +1110,10 @@ impl RunState {
                     | RelicEffect::HealUp(_)
                     | RelicEffect::StartCombatBlock(_)
                     | RelicEffect::StartCombatStatus(_, _)
-                    | RelicEffect::RestHealBonus(_),
+                    | RelicEffect::RestHealBonus(_)
+                    | RelicEffect::RestHealPerFiveCards(_)
+                    | RelicEffect::FightGoldPercent(_)
+                    | RelicEffect::ExtraPotionSlots(_),
                 ) => {}
                 None => {
                     return Err(RunError::UnsupportedRelic {
@@ -1098,6 +1155,11 @@ impl RunState {
                 percent: 50,
                 amount: 12,
             }),
+            // §157 (wiki numbers): Eternal Feather 3 HP per 5 cards on rest, Golden Idol +25% fight
+            // gold, Potion Belt +2 slots.
+            "eternal_feather" => Some(RelicEffect::RestHealPerFiveCards(3)),
+            "golden_idol" => Some(RelicEffect::FightGoldPercent(25)),
+            "potion_belt" => Some(RelicEffect::ExtraPotionSlots(2)),
             _ => None,
         }
     }
@@ -1140,7 +1202,10 @@ impl RunState {
                     | RelicEffect::EndOfCombatHealIfBelow { .. }
                     | RelicEffect::MaxHealthUp(_)
                     | RelicEffect::HealUp(_)
-                    | RelicEffect::RestHealBonus(_),
+                    | RelicEffect::RestHealBonus(_)
+                    | RelicEffect::RestHealPerFiveCards(_)
+                    | RelicEffect::FightGoldPercent(_)
+                    | RelicEffect::ExtraPotionSlots(_),
                 )
                 | None => {}
             }
@@ -1159,6 +1224,15 @@ impl RunState {
     /// run at 0 HP is over, not negative.
     pub fn adjust_health(&mut self, delta: i32) {
         self.health = (self.health + delta).clamp(0, self.health_max);
+    }
+
+    /// Raise the maximum HP **and** heal by the same amount (§157: Fruit Juice, "Gain 5 Max HP").
+    ///
+    /// Same rule as a relic that raises the maximum (`push_relic`'s `MaxHealthUp`): StS's "+max HP"
+    /// always comes with the health, so the two cannot drift apart.
+    pub fn raise_max_health(&mut self, amount: i32) {
+        self.health_max += amount;
+        self.adjust_health(amount);
     }
 
     /// Add or spend gold, clamped at 0.
@@ -1279,6 +1353,8 @@ impl RunState {
         // **Advance to the next act**: the walk starts over from the first row, with the hero's
         // health, deck and relics carried across (the fight already folded the health back).
         self.act += 1;
+        // §157: the wiki resets the potion chance "at the start of each Act".
+        self.potion_chance = POTION_DROP_START;
         self.node = -1;
         self.floor = 0;
         self.pending = Pending::None;
@@ -1365,8 +1441,39 @@ impl RunState {
     /// What a rest would restore: 30% of maximum HP, rounded down (`inv:§8.1`).
     #[must_use]
     pub fn rest_heal(&self) -> i32 {
-        // §156: Regal Pillow adds a flat bonus on top of the percentage.
-        self.health_max * REST_HEAL_PERCENT / 100 + self.rest_heal_bonus()
+        // §156: Regal Pillow adds a flat bonus on top of the percentage. §157: Eternal Feather adds
+        // 3 HP per **five cards** in the deck -- the deck is a run quantity, so it is read here.
+        self.health_max * REST_HEAL_PERCENT / 100
+            + self.rest_heal_bonus()
+            + self.rest_heal_per_cards()
+    }
+
+    /// The card-count part of the rest heal (`eternal_feather`, §157): 3 HP per five cards.
+    #[must_use]
+    pub fn rest_heal_per_cards(&self) -> i32 {
+        let mut bonus = 0i32;
+        for slot in 0..self.relics_len as usize {
+            if let Some(RelicEffect::RestHealPerFiveCards(amount)) =
+                Self::relic_effect(self.relics[slot].as_str())
+            {
+                bonus += amount * i32::from(self.deck_len) / 5;
+            }
+        }
+        bonus
+    }
+
+    /// The fight-gold multiplier in percent (`golden_idol` = 125, §157).
+    #[must_use]
+    pub fn fight_gold_percent(&self) -> i32 {
+        let mut percent = 100i32;
+        for slot in 0..self.relics_len as usize {
+            if let Some(RelicEffect::FightGoldPercent(bonus)) =
+                Self::relic_effect(self.relics[slot].as_str())
+            {
+                percent += bonus;
+            }
+        }
+        percent
     }
 
     /// The flat rest bonus from relics (`regal_pillow` = 15, wiki).
@@ -2137,11 +2244,23 @@ impl RunState {
         let eligible = &eligible[..eligible_len];
         let (low, high) = kind.gold();
         let span = (high - low + 1).max(1) as u32;
-        let paid = low + self.rng.roll(RunStream::Reward, span)? as i32;
+        let base_gold = low + self.rng.roll(RunStream::Reward, span)? as i32;
+        // §157: Golden Idol pays 25% more. Applied to the rolled amount (integer, truncated), so the
+        // reward's own `gold` is what the player was actually given.
+        let paid = base_gold * self.fight_gold_percent() / 100;
         self.adjust_gold(paid);
 
-        // `inv:§9.3`: a potion drops from 40% of fights, on the `Potion` stream.
-        let drop = self.rng.roll(RunStream::Potion, 100)? < POTION_DROP_PERCENT;
+        // §157: the wiki's **moving** chance -- 40% to start, -10 after a drop, +10 after a miss.
+        // The roll happens even when the belt is full (the wiki's Colosseum note relies on that),
+        // so the chance keeps moving; only the **offer** is suppressed below.
+        let chance = self.potion_chance.clamp(0, 100) as u32;
+        let rolled = self.rng.roll(RunStream::Potion, 100)? < chance;
+        self.potion_chance = if rolled {
+            (self.potion_chance - POTION_DROP_STEP).max(0)
+        } else {
+            (self.potion_chance + POTION_DROP_STEP).min(100)
+        };
+        let drop = rolled && self.potion_room();
 
         let mut used = [false; MAX_POOL];
         let mut cards = [RunId::EMPTY; MAX_REWARD_CARDS];
@@ -2232,6 +2351,12 @@ impl RunState {
         };
         self.pending = Pending::Reward;
         Ok(())
+    }
+
+    /// The gold this fight paid (already added to the run; §157's idol multiplier is in it).
+    #[must_use]
+    pub fn reward_gold(&self) -> i32 {
+        self.reward.gold()
     }
 
     /// The potion this fight dropped, or `None`.
@@ -2564,11 +2689,23 @@ mod tests {
             run.push_relic("burning_blood").unwrap();
         }
         assert_eq!(run.push_relic("burning_blood"), Err(RunError::Capacity));
-        // Potions: the belt is three slots (`inv:§9.3`).
-        for _ in 0..MAX_RUN_POTIONS {
-            run.push_potion("fire_potion").unwrap();
+        // Potions, on a **fresh** run: this one's relic list is already full, so `potion_belt`
+        // could not be granted here. The rule is three slots (`inv:§9.3`, §157) even though the
+        // storage is five, so that the belt relic can hand out two more.
+        let mut potion_run = ironclad();
+        for _ in 0..BASE_POTION_SLOTS {
+            potion_run.push_potion("fire_potion").unwrap();
         }
-        assert_eq!(run.push_potion("fire_potion"), Err(RunError::Capacity));
+        assert_eq!(potion_run.push_potion("fire_potion"), Err(RunError::Capacity));
+        potion_run.push_relic("potion_belt").expect("the belt");
+        for _ in 0..2 {
+            potion_run.push_potion("fire_potion").expect("the belt's two slots");
+        }
+        assert_eq!(
+            potion_run.push_potion("fire_potion"),
+            Err(RunError::Capacity),
+            "and the storage bound still holds"
+        );
         // An id longer than the id capacity is refused, not silently shortened.
         assert_eq!(run.push_card(&"x".repeat(ID_CAP + 1)), Err(RunError::BadId));
         assert_eq!(run.deck().len(), MAX_RUN_DECK);
@@ -2627,7 +2764,7 @@ mod tests {
     fn a_relic_with_no_implemented_effect_is_an_error() {
         let mut run = ironclad();
         assert_eq!(
-            run.push_relic("golden_idol"),
+            run.push_relic("no_such_relic"),
             Err(RunError::UnsupportedRelic { index: 0 }),
             "一件内核跑不了的遗物必须在**授予那一刻**被拒"
         );
@@ -3170,6 +3307,227 @@ mod tests {
         assert_eq!(FightKind::Boss.gold(), (95, 105));
     }
 
+    /// §157：药水掉率是 wiki 那条**会走**的 40%，不是常量。
+    ///
+    /// -10（掉了）/ +10（没掉），换幕重置。断言走的是**数字**而不是"某个种子恰好掉了几瓶"。
+    #[test]
+    fn the_potion_chance_walks_the_wikis_ten_percent() {
+        let pool = [
+            PoolCard {
+                id: "strike",
+                rarity: Rarity::Basic,
+            },
+            PoolCard {
+                id: "defend",
+                rarity: Rarity::Basic,
+            },
+            PoolCard {
+                id: "anger",
+                rarity: Rarity::Basic,
+            },
+        ];
+        // A pool with one potion: with an **empty** pool a rolled drop cannot be offered, and then
+        // "offered" stops meaning "rolled" (found the hard way).
+        let potions = [PoolPotion {
+            id: "fire_potion",
+            rarity: Rarity::Common,
+        }];
+        let mut run = RunState::new(31, 80, 0, &DECK).expect("a run");
+        assert_eq!(run.potion_drop_chance(), POTION_DROP_START, "starts at 40");
+        let mut drops = 0;
+        let mut misses = 0;
+        for _ in 0..12 {
+            run.skip_reward().ok();
+            // Drain the belt first: a **full** belt suppresses the offer while the drop still counts
+            // (the wiki's Colosseum note), and then "offered" would stop meaning "dropped". Dropping
+            // needs `Pending::None`, which `skip_reward` just gave us.
+            while !run.potions().is_empty() {
+                let _ = run.drop_potion(0);
+            }
+            let before = run.potion_drop_chance();
+            run.roll_reward(&pool, &potions, &[], FightKind::Normal)
+                .expect("a reward");
+            let offered = run.reward_potion().is_some();
+            let after = run.potion_drop_chance();
+            if offered {
+                drops += 1;
+                assert_eq!(after, (before - POTION_DROP_STEP).max(0), "a drop moves it down");
+            } else {
+                misses += 1;
+                assert_eq!(after, (before + POTION_DROP_STEP).min(100), "a miss moves it up");
+            }
+            assert!((0..=100).contains(&after), "the chance stays a percentage");
+        }
+        assert!(drops > 0 && misses > 0, "12 rolls should contain both outcomes");
+    }
+
+    /// §157：**腰带满了照样摇**（wiki 的 Colosseum 注记就靠这一点），只是不摆出来。
+    #[test]
+    fn a_full_belt_still_rolls_the_chance() {
+        let pool = [PoolPotion {
+            id: "fire_potion",
+            rarity: Rarity::Common,
+        }];
+        let cards = [
+            PoolCard {
+                id: "strike",
+                rarity: Rarity::Basic,
+            },
+            PoolCard {
+                id: "defend",
+                rarity: Rarity::Basic,
+            },
+            PoolCard {
+                id: "anger",
+                rarity: Rarity::Basic,
+            },
+        ];
+        let mut run = RunState::new(41, 80, 0, &DECK).expect("a run");
+        for _ in 0..BASE_POTION_SLOTS {
+            run.push_potion("fire_potion").expect("room");
+        }
+        assert!(!run.potion_room(), "the belt is full");
+        let mut moved = false;
+        for _ in 0..8 {
+            let before = run.potion_drop_chance();
+            run.roll_reward(&cards, &pool, &[], FightKind::Normal)
+                .expect("a reward");
+            assert_eq!(run.reward_potion(), None, "a full belt gets no offer");
+            if run.potion_drop_chance() != before {
+                moved = true;
+            }
+            run.skip_reward().expect("skip");
+        }
+        assert!(moved, "the chance must keep moving even when nothing is offered");
+    }
+
+    /// §157：药水按稀有度权重抽（65/25/10）—— 和遗物那条同样是**宽松**的烟测。
+    #[test]
+    fn potions_are_drawn_by_rarity_weight() {
+        let pool = [
+            PoolPotion {
+                id: "fire_potion",
+                rarity: Rarity::Common,
+            },
+            PoolPotion {
+                id: "energy_potion",
+                rarity: Rarity::Uncommon,
+            },
+            PoolPotion {
+                id: "regen_potion",
+                rarity: Rarity::Rare,
+            },
+        ];
+        let mut run = RunState::new(51, 80, 0, &DECK).expect("a run");
+        let mut commons = 0;
+        let mut uncommons = 0;
+        let mut rares = 0;
+        for _ in 0..40 {
+            // A miss is possible; that is what the 40% is. Count only what came out.
+            match run.pick_rarity(RunStream::Potion, &POTION_RARITY_WEIGHTS, &[Rarity::Common, Rarity::Uncommon, Rarity::Rare]).expect("a band") {
+                Some(Rarity::Common) => commons += 1,
+                Some(Rarity::Uncommon) => uncommons += 1,
+                Some(Rarity::Rare) => rares += 1,
+                other => panic!("unexpected band {other:?}"),
+            }
+        }
+        assert_eq!(commons + uncommons + rares, 40);
+        assert!(commons > uncommons, "common {commons} vs uncommon {uncommons}");
+        assert!(
+            uncommons >= rares,
+            "uncommon {uncommons} vs rare {rares} (65/25/10)"
+        );
+        // A pool with only rares shifts the mass instead of returning nothing.
+        for _ in 0..10 {
+            assert_eq!(
+                run.pick_rarity(RunStream::Potion, &POTION_RARITY_WEIGHTS, &[Rarity::Rare])
+                    .expect("a band"),
+                Some(Rarity::Rare)
+            );
+        }
+        let _ = pool;
+    }
+
+    /// §157：Potion Belt 是唯一增加腰带格数的东西（wiki 原话），所以格数是**方法**而不是数组长度。
+    #[test]
+    fn potion_belt_raises_the_slot_count() {
+        let mut run = RunState::new(61, 80, 0, &DECK).expect("a run");
+        assert_eq!(run.potion_slots(), BASE_POTION_SLOTS, "three slots");
+        for _ in 0..BASE_POTION_SLOTS {
+            run.push_potion("fire_potion").expect("room");
+        }
+        assert_eq!(
+            run.push_potion("fire_potion"),
+            Err(RunError::Capacity),
+            "the fourth is refused without the belt"
+        );
+
+        run.push_relic("potion_belt").expect("the belt");
+        assert_eq!(run.potion_slots(), BASE_POTION_SLOTS + 2, "two more slots");
+        assert!(run.push_potion("fire_potion").is_ok(), "the fourth fits now");
+        assert!(run.push_potion("fire_potion").is_ok(), "and the fifth");
+        assert_eq!(
+            run.push_potion("fire_potion"),
+            Err(RunError::Capacity),
+            "the sixth is still refused"
+        );
+        assert_eq!(
+            run.potions().len(),
+            usize::from(BASE_POTION_SLOTS) + 2,
+            "the belt holds five"
+        );
+    }
+
+    /// §157：Eternal Feather 按"每五张牌 3 点"回血，Golden Idol 让战斗金币 +25%。
+    #[test]
+    fn the_new_relics_pay_out() {
+        // Ten cards = two groups of five.
+        let mut run = RunState::new(71, 80, 0, &DECK).expect("a run");
+        let base = run.rest_heal();
+        run.push_relic("eternal_feather").expect("the feather");
+        assert_eq!(run.deck_len, 10, "the fixture deck is ten cards");
+        assert_eq!(
+            run.rest_heal(),
+            base + 3 * 2,
+            "3 HP per five cards, two groups"
+        );
+        assert_eq!(run.rest_heal_per_cards(), 6);
+
+        // The idol multiplies the fight's gold; the reward's own number is what was paid.
+        let cards = [
+            PoolCard {
+                id: "strike",
+                rarity: Rarity::Basic,
+            },
+            PoolCard {
+                id: "defend",
+                rarity: Rarity::Basic,
+            },
+            PoolCard {
+                id: "anger",
+                rarity: Rarity::Basic,
+            },
+        ];
+        let mut plain = RunState::new(81, 80, 0, &DECK).expect("a run");
+        plain
+            .roll_reward(&cards, &[], &[], FightKind::Normal)
+            .expect("a reward");
+        let plain_gold = plain.reward_gold();
+        assert_eq!(plain.fight_gold_percent(), 100);
+
+        let mut idol = RunState::new(81, 80, 0, &DECK).expect("a run");
+        idol.push_relic("golden_idol").expect("the idol");
+        assert_eq!(idol.fight_gold_percent(), 125);
+        idol.roll_reward(&cards, &[], &[], FightKind::Normal)
+            .expect("a reward");
+        assert_eq!(
+            idol.reward_gold(),
+            plain_gold * 125 / 100,
+            "the same roll, 25% more"
+        );
+        assert_eq!(idol.gold(), plain.gold() + (plain_gold * 125 / 100) - plain_gold);
+    }
+
     /// §156：稀有度权重**按顺序**生效，且空档不会把抽取变空。
     ///
     /// 断言是**刻意宽松**的：单个种子证明不了 50/33/17，这只是一条"权重真的用上了"的烟测。
@@ -3656,67 +4014,38 @@ mod tests {
                 rarity: Rarity::Uncommon,
             },
         ];
+        // §157: the chance **moves** (-10/+10), so "about 40% over 400 rolls" is no longer the
+        // promise -- the promise is "at 100 it always drops, at 0 it never does". The rate walk has
+        // its own test (`the_potion_chance_walks_the_wikis_ten_percent`).
         let mut run = ironclad();
-        let mut drops = 0;
-        let trials = 400;
-        let mut offer: Option<String> = None;
-        for _ in 0..trials {
-            run.roll_reward(&basic_pool(), &pool, &[], FightKind::Normal)
-                .expect("a reward");
-            if let Some(id) = run.reward_potion() {
-                drops += 1;
-                if offer.is_none() {
-                    offer = Some(id.to_string());
-                }
-            }
-        }
-        // 40% of 400 with a wide band: this is a rate check, not a distribution test.
-        let percent = drops * 100 / trials;
+        run.potion_chance = 100;
+        run.roll_reward(&basic_pool(), &pool, &[], FightKind::Normal)
+            .expect("a reward");
+        let offered = run.reward_potion().expect("at 100% it must drop").to_string();
         assert!(
-            (25..=55).contains(&percent),
-            "a potion dropped {percent}% of the time, not about 40%"
+            ["fire_potion", "block_potion", "energy_potion"].contains(&offered.as_str()),
+            "{offered} is not in the pool"
         );
+        assert_eq!(run.potion_drop_chance(), 90, "a drop moves the chance down by 10");
 
-        // Take one: it lands on the belt and the offer is consumed.
-        let mut run = ironclad();
-        let mut gave = false;
-        for _ in 0..60 {
-            run.roll_reward(&basic_pool(), &pool, &[], FightKind::Normal)
-                .expect("a reward");
-            if run.reward_potion().is_some() {
-                gave = true;
-                break;
-            }
-        }
-        assert!(gave, "no potion in 60 fights: the 40% drop is not firing");
-        let wanted = run.reward_potion().unwrap().to_string();
-        assert_eq!(run.potions().len(), 0, "the belt starts empty");
+        // Taking it lands on the belt and consumes the offer.
+        let belt_before = run.potions().len();
         run.take_potion().expect("take it");
-        assert_eq!(run.potions().len(), 1);
-        assert_eq!(run.potions()[0].as_str(), wanted);
-        assert!(run.reward_potion().is_none(), "the offer is consumed");
+        assert_eq!(run.potions().len(), belt_before + 1, "the potion is on the belt");
+        assert_eq!(run.reward_potion(), None, "the offer is consumed");
         assert_eq!(
             run.take_potion(),
             Err(RunError::NoSuchPotion),
-            "taking twice must not conjure a second potion"
+            "taking it twice is refused"
         );
 
-        // A full belt is a refusal, not a silent discard.
-        while run.potions().len() < MAX_RUN_POTIONS {
-            run.push_potion("fire_potion").expect("space");
-        }
-        for _ in 0..60 {
-            run.roll_reward(&basic_pool(), &pool, &[], FightKind::Normal)
-                .expect("a reward");
-            if run.reward_potion().is_some() {
-                assert_eq!(
-                    run.take_potion(),
-                    Err(RunError::Capacity),
-                    "a full belt must refuse the offer"
-                );
-                return;
-            }
-        }
+        // At 0% nothing drops, and the chance walks back up.
+        let mut run = ironclad();
+        run.potion_chance = 0;
+        run.roll_reward(&basic_pool(), &pool, &[], FightKind::Normal)
+            .expect("a reward");
+        assert_eq!(run.reward_potion(), None, "at 0% nothing drops");
+        assert_eq!(run.potion_drop_chance(), 10, "a miss moves the chance up by 10");
     }
 
     #[test]
@@ -3960,7 +4289,7 @@ mod tests {
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
         run.begin_event("old_shrine").expect("opening the event");
         assert_eq!(
-            run.resolve_event(EventEffect::GainRelic, Some("golden_idol"), &pool),
+            run.resolve_event(EventEffect::GainRelic, Some("no_such_relic"), &pool),
             Err(RunError::UnsupportedRelic { index: 0 })
         );
         assert_eq!(run.relics().len(), 0);

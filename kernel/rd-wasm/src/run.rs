@@ -1301,6 +1301,15 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
             };
             combatant.health_current = capped;
         }
+        // §157: Fruit Juice -- the run's maximum, not the fight's. `adjust_health` heals by the
+        // same amount, which is what StS's "Gain 5 Max HP" does.
+        "max_hp" => {
+            let Some(run) = run_slot().as_mut() else {
+                return refuse("没有在进行中的一局");
+            };
+            run.state.raise_max_health(amount);
+            session.reobserve_after_external_change();
+        }
         "combat_damage_all" => {
             // Every living enemy, each through the same pipeline a single-target potion uses.
             let mut ids: Vec<rd_core::state::CombatantId> = Vec::new();
@@ -1728,7 +1737,7 @@ pub extern "C" fn rd_run_potion_effect(slot: i32) -> i32 {
     // status-on-a-target potion could not be aimed at all.
     match potion.effect {
         "combat_damage" => 1,
-        "combat_block" | "combat_energy" | "combat_heal_percent" | "combat_draw" => 2,
+        "combat_block" | "combat_energy" | "combat_heal_percent" | "combat_draw" | "max_hp" => 2,
         "combat_damage_all" => 3,
         effect if effect.starts_with("combat_status_target") => 1,
         effect if effect.starts_with("combat_status") => 2,
@@ -4305,7 +4314,18 @@ mod tests {
     fn the_container_bounds_are_the_run_layers_and_not_the_pages() {
         // Pins the three numbers the observation exposes as counts, so a page that assumes a
         // different belt size shows up here rather than in a screenshot.
-        assert_eq!(MAX_RUN_POTIONS, 3, "`inv:§9.3`: three potion slots");
+        //
+        // §157: `MAX_RUN_POTIONS` (5) is the belt's **storage**, not the rule -- three slots is
+        // `BASE_POTION_SLOTS`, and `potion_belt` is the only thing that moves it (the wiki says so).
+        assert_eq!(
+            rd_run::state::BASE_POTION_SLOTS,
+            3,
+            "`inv:§9.3`: three potion slots"
+        );
+        assert!(
+            MAX_RUN_POTIONS >= usize::from(rd_run::state::BASE_POTION_SLOTS) + 2,
+            "storage must hold the three slots plus the belt's two"
+        );
         assert_eq!(MAX_RUN_RELICS, 24);
         assert_eq!(MAX_RUN_DECK, 60);
         assert_eq!(NODES_PER_ROW, 6);

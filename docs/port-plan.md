@@ -10063,3 +10063,80 @@ StS 的抽法是"先按权重抽**稀有度档**，再在档内均匀抽一件"�
 
 聚合验收 **18/18**；单测 742 → **743**（rd-core 630 / rd-run 71 → **72** / rd-wasm 41）。
 内容：**10 件遗物**（Common 6 / Uncommon 3 / Rare 1）；镜像 full **34,868 B** / core **28,660 B**。
+
+---
+
+## 157. 药水掉率对齐 wiki + 稀有档补满 + 三件遗物
+
+用户："每次战斗后药水的掉落概率也需要和 wiki 对齐。"
+
+### 157.1 掉率不是常量，是一条**会走**的 40%
+
+wiki（`Potions` 页 "Sources"）原话：
+
+> The **default chance** of a potion dropping is **40%** and resets at the start of each Act.
+> If a potion drops, the chance **decreases** by **10%**. If a potion doesn't drop, the chance
+> **increases** by **10%**.
+
+原来的 `POTION_DROP_PERCENT = 40` 是常量 —— 这在短局里看不出来，在整局里恰好错在**最要紧的地方**：
+连续五场没掉，概率应该是 90%，而不是一直 40%。
+
+现在 `RunState.potion_chance` 从 40 起，每场战后按结果 ±10（夹在 `0..=100`），**换幕重置**。
+
+⚠️ 两条容易写错的细节，都按 wiki 处理：
+* **腰带满了照样摇**（wiki 的 Colosseum 注记明说"rolls for a potion, but does not display"）
+  ⇒ 概率继续走，只是**不摆出来**（`drop = rolled && potion_room()`）；
+* 一格腰带 = 3 格是**规则**，`MAX_RUN_POTIONS = 5` 是**存储** —— 因为 Potion Belt 要加两格。
+
+### 157.2 稀有档是空的（又一处"声明了但没用"）
+
+十个药水是 9 Common + 1 Uncommon，**Rare 档一个都没有**。权重 `65/25/10` 会在"当前可用档"上
+重新归一化，所以 Rare 那 10% 静默并进了别的档 —— 这正是本项目反复禁止的形状。
+
+两处按 wiki 补齐：
+* **Fruit Juice**（Rare）："Gain 5 Max HP."，新增效果 `max_hp` —— 它作用于**运行层**（fights 之外），
+  是唯一一个不关于这场战斗的药水效果；
+* **Regen Potion** 改成 Uncommon（wiki 的 patch 24 记录："Regen Potion and Ancient Potion are now
+  Uncommon"）。
+
+内容门 `[3b]` 现在也要求**三档都不能是空的**（和 `[6f]` 对遗物的要求同形）。
+
+### 157.3 三件遗物（2 Rare + 1 Common），Rare 档不再靠一件撑
+
+| 遗物 | 稀有度 | wiki 效果 | 落点 |
+|---|---|---|---|
+| Eternal Feather | Rare | 休息时每 5 张牌回 3 血 | `RestHealPerFiveCards(3)` |
+| Golden Idol | Rare | 敌人多掉 25% 金币 | `FightGoldPercent(25)` |
+| Potion Belt | Common | +2 药水格（wiki：**唯一**能加格的东西）| `ExtraPotionSlots(2)` |
+
+遗物池 **10 → 13**（Common 7 / Uncommon 3 / **Rare 3**）⇒ Rare 那 17% 不再只能给同一件。
+
+### 157.4 判据（五条，各自独立）
+
+* `the_potion_chance_walks_the_wikis_ten_percent`：每场按结果 ±10、夹在 0..100、12 次里两种结果都出现。
+* `a_full_belt_still_rolls_the_chance`：满腰带时**没有 offer**，但概率**继续走**。
+* `potions_are_drawn_by_rarity_weight`：65/25/10 的顺序（宽松，和遗物那条同形）；
+  只有 Rare 的池子照样每次都给出它。
+* `potion_belt_raises_the_slot_count`：3 格 → 装第 4 瓶被拒 → 戴上腰带 5 格 → 第 6 瓶仍被拒。
+* `the_new_relics_pay_out`：Eternal Feather 十张牌 = 两组五张 = +6；Golden Idol 同一卷轴金币 ×1.25。
+
+### 157.5 被这次改动照出来的旧测试
+
+四处，都是"测试量的是常量/运气"：
+1. `capacity_is_an_error_not_a_truncation` 拿 `MAX_RUN_POTIONS` 当规则（现在是存储）⇒ 改用
+   `BASE_POTION_SLOTS`，并顺手证明腰带能把它抬到 5；
+2. `a_won_fight_drops_a_potion_and_the_belt_takes_it` 断言"400 次里约 40%"——概率会走之后那个
+   数字不再成立（走的是平稳分布，不是 40%），改成"100% 一定掉 / 0% 一定不掉"这条**规则**；
+3. `golden_idol` 曾是"内核跑不了的遗物"的 fixture，§157 把它实现了 ⇒ 换成 `no_such_relic`
+   （更好的 fixture：以后再实现一件遗物也不会让它过期）；
+4. `the_container_bounds_are_the_run_layers_and_not_the_pages` 钉的是 `MAX_RUN_POTIONS == 3`
+   ⇒ 改成钉 `BASE_POTION_SLOTS == 3` 加"存储至少装得下腰带"。
+
+⚠️ 新写的掉率测试自身也踩了一次：它用**空药水池**去测 —— 空了就永远不会 offer，于是
+"offer 为假" ≠ "没掉"，断言立刻红。池子必须非空。
+
+### 157.6 数字
+
+聚合验收 **18/18**；单测 743 → **748**（rd-core 630 / rd-run 72 → **77** / rd-wasm 41）。
+内容：**13 件遗物**、**11 种药水**（Common 8 / Uncommon 2 / Rare 1）；
+镜像 full **35,064 B** / core **28,816 B**（`--repin` 已执行：`REL` 加格的字节变化）。

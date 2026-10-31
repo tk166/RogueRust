@@ -4208,8 +4208,8 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.potion_count(),
-            10,
-            "ten potions (§152: act 1's four, plus six more across the acts)"
+            11,
+            "eleven potions (§152's ten plus Fruit Juice, §157: the rare band had nothing in it)"
         );
         let mut ids = Vec::new();
         for index in 0..content.potion_count() {
@@ -4232,6 +4232,8 @@ mod tests {
                     "combat_damage_all",
                     "combat_status",
                     "combat_status_target",
+                    // §157: the one effect about the **run** rather than the fight.
+                    "max_hp",
                 ]
                 .contains(&kind),
                 "{}: unknown effect {:?}",
@@ -4264,6 +4266,7 @@ mod tests {
                 "explosive_potion",
                 "fear_potion",
                 "fire_potion",
+                "fruit_juice",
                 "regen_potion",
                 "strength_potion",
                 "swift_potion",

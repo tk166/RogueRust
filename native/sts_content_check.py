@@ -1025,7 +1025,9 @@ EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing",
 IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", "thread_and_needle",
                       # §156: wiki numbers (Strawberry +7 max HP, Bronze Scales 3 Thorns, Regal Pillow
                       # +15 on rest, Meat on the Bone 12 HP at or below 50%).
-                      "strawberry", "bronze_scales", "regal_pillow", "meat_on_the_bone")
+                      "strawberry", "bronze_scales", "regal_pillow", "meat_on_the_bone",
+                      # §157: two more Rare (Eternal Feather, Golden Idol) + Potion Belt.
+                      "eternal_feather", "golden_idol", "potion_belt")
 
 
 def check_relics(doc):
@@ -1059,7 +1061,9 @@ def check_relics(doc):
 # §152: the potion vocabulary, as the ABI's `rd_env_use_potion` reads it. `kind:payload` carries a
 # status id; the payload form is the same convention the event vocabulary uses (§143).
 POTION_KINDS = ("combat_block", "combat_energy", "combat_heal_percent", "combat_draw",
-                "combat_damage", "combat_damage_all")
+                "combat_damage", "combat_damage_all",
+                # §157: the one effect that is about the **run** (Fruit Juice).
+                "max_hp")
 # Which effects need the player to pick an enemy (the ABI's code `1`). Kept here as the **second
 # opinion**: if the page's rule and this list disagree, one of them is wrong.
 POTION_NEEDS_TARGET = ("combat_damage", "combat_status_target")
@@ -1142,7 +1146,7 @@ def check_potions(doc):
         else:
             fail(label, "effect %r is outside the ABI's vocabulary" % (effect,))
         seen_effects.add(effect)
-    if len(potions) < 6:
+    if len(potions) < 8:
         fail("Potions", "only %d potions -- too few to make a drop interesting" % len(potions))
     # Two potions with the same effect **and** amount are one potion with two names (the exact bug
     # `swift_potion` shipped: a copy of Block Potion).
@@ -1162,6 +1166,10 @@ def check_potions(doc):
         for row in rows:
             if row.get("Id") not in known:
                 fail("PotionTables." + name, "%r is not in Potions" % (row.get("Id"),))
+    # §157: the rarity weights (65/25/10) are only meaningful if every band has an entry.
+    for rarity in RELAPSE_RARITIES:
+        if not any(potion.get("Rarity") == rarity for potion in potions):
+            fail("Potions", "no %s potion: the %d%% band would be empty" % (rarity, 0))
     ok("potions", "%d potions, %d distinct effects, pools %d/%d/%d"
        % (len(potions), len(seen_effects), len(tables.get("Potions") or []),
           len(tables.get("Potions2") or []), len(tables.get("Potions3") or [])))

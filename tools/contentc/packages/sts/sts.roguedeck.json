@@ -8733,6 +8733,27 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "eternal_feather",
+      "DisplayName": "Eternal Feather",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "golden_idol",
+      "DisplayName": "Golden Idol",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "potion_belt",
+      "DisplayName": "Potion Belt",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Common"
     }
   ],
   "Start": {
@@ -9149,7 +9170,7 @@
       "DescriptionKey": "Gain 5 Regen.",
       "Effect": "combat_status:standard.regen",
       "Amount": 5,
-      "Rarity": "Common"
+      "Rarity": "Uncommon"
     },
     {
       "Id": "weak_potion",
@@ -9166,6 +9187,14 @@
       "Effect": "combat_status_target:standard.vulnerable",
       "Amount": 3,
       "Rarity": "Common"
+    },
+    {
+      "Id": "fruit_juice",
+      "NameKey": "Fruit Juice",
+      "DescriptionKey": "Gain 5 Max HP.",
+      "Effect": "max_hp",
+      "Amount": 5,
+      "Rarity": "Rare"
     }
   ],
   "EventTables": {
@@ -9238,7 +9267,7 @@
         "Id": "strength_potion"
       },
       {
-        "Id": "fear_potion"
+        "Id": "regen_potion"
       }
     ],
     "Potions3": [
@@ -9252,7 +9281,7 @@
         "Id": "regen_potion"
       },
       {
-        "Id": "weak_potion"
+        "Id": "fruit_juice"
       }
     ]
   }
