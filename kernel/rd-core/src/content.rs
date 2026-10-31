@@ -4221,8 +4221,9 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.potion_count(),
-            20,
-            "§158: eleven after §157, plus the nine that need no new mechanic"
+            22,
+            "§158: eleven after §157, plus nine that need no new mechanic, plus §161.3's two \
+             whose effect is a card choice"
         );
         let mut ids = Vec::new();
         let mut bands = [0usize; 3];
@@ -4255,6 +4256,10 @@ mod tests {
                         // §157: the effects about the **run** rather than the fight.
                         "max_hp",
                         "potion_fill",
+                        // §161.3: the effects that are a **question** (`PendingChoice`). They
+                        // read no amount and do not resolve inside `rd_env_use_potion`.
+                        "choice_hand_exhaust",
+                        "choice_hand_discard_draw",
                     ]
                     .contains(kind),
                     "{}: unknown effect {:?}",
@@ -4270,10 +4275,14 @@ mod tests {
                     kind
                 );
             }
-            // `potion_fill` is the only atom that reads no amount (it fills whatever is empty), so
-            // the rule is per-atom rather than per-row: a flat "amount > 0" would have forced a
-            // meaningless `1` into Entropic Brew's row and pinned nothing.
-            if atoms.iter().all(|(kind, _)| *kind == "potion_fill") {
+            // Two atoms read no amount: `potion_fill` fills whatever is empty, and the §161.3
+            // choice atoms take the player's answer instead of a number. The rule is per-atom
+            // rather than per-row: a flat "amount > 0" would have forced a meaningless `1` into
+            // Entropic Brew's row and pinned nothing.
+            if atoms
+                .iter()
+                .all(|(kind, _)| matches!(*kind, "potion_fill" | "choice_hand_exhaust" | "choice_hand_discard_draw"))
+            {
                 assert_eq!(potion.amount, 0, "{}: takes no amount", potion.id);
             } else {
                 assert!(potion.amount > 0, "{} has no amount", potion.id);
@@ -4294,6 +4303,7 @@ mod tests {
                 "blood_potion",
                 "cultist_potion",
                 "dexterity_potion",
+                "elixir",
                 "energy_potion",
                 "entropic_brew",
                 "essence_of_steel",
@@ -4302,6 +4312,7 @@ mod tests {
                 "fire_potion",
                 "flex_potion",
                 "fruit_juice",
+                "gamblers_brew",
                 "heart_of_iron",
                 "liquid_bronze",
                 "regen_potion",
@@ -4312,16 +4323,17 @@ mod tests {
             ]
         );
         // §158: the wiki's counts for the only character this content has (`Potions`, Ironclad only:
-        // **17 Common / 9 Uncommon / 7 Rare = 33**). Thirteen are still missing, and every one of
-        // them needs a mechanic the kernel does not have yet -- an in-fight card choice (Attack /
-        // Skill / Power / Colorless Potion), a card upgrade or multi-select in a fight (Blessing of
-        // the Forge, Elixir, Gambler's Brew, Liquid Memories), an auto-play or a duplicate play
-        // (Distilled Chaos, Duplication Potion), a cost rewrite (Snecko Oil), a death save (Fairy in
-        // a Bottle), a flee (Smoke Bomb). Pinning the band sizes is what makes "we are at 20" a fact
-        // instead of an impression.
+        // **17 Common / 9 Uncommon / 7 Rare = 33**). Eleven are still missing, and every one of
+        // them needs a mechanic the kernel does not have yet -- three card offers from the pool
+        // (Attack / Skill / Power), a colorless pool (Colorless Potion), a card upgrade in a fight
+        // (Blessing of the Forge), a **per-copy price** (Liquid Memories, Snecko Oil), an auto-play
+        // or a duplicate play (Distilled Chaos, Duplication Potion), a death save (Fairy in a
+        // Bottle), a flee (Smoke Bomb). Pinning the band sizes is what makes "we are at 22" a fact
+        // instead of an impression -- ⚠️ and it is the assertion that went red when §161.3 added
+        // Elixir and Gambler's Brew, which is the whole reason it is a number here.
         assert_eq!(
             bands,
-            [12, 4, 4],
+            [12, 6, 4],
             "Common / Uncommon / Rare -- the wiki's Ironclad pool is 17 / 9 / 7"
         );
 

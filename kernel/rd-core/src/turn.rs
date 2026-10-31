@@ -525,33 +525,10 @@ fn draw_for_turn_start(
     requested: i32,
 ) -> Result<usize, TurnError> {
     let wanted = capped_draw_count(state, actor, config, requested);
-    let mut drawn = 0usize;
-    let mut reshuffles = 0usize;
-    while drawn < wanted {
-        // `zones.DrawCards(wanted - drawn)`：把堆里剩的都抽上来（最多到还差多少张）。
-        while drawn < wanted {
-            if state.draw_card(actor)?.is_none() {
-                break;
-            }
-            drawn += 1;
-        }
-
-        if drawn >= wanted {
-            break;
-        }
-        if zone_count(state, actor, CardZone::DiscardPile) == 0 {
-            break; // `:59-60`
-        }
-        // 兜底：正常路径上这里恒为 false（见函数头）。
-        if reshuffles >= 1 {
-            break;
-        }
-        if state.reshuffle_discard_into_draw(actor)? == 0 {
-            break;
-        }
-        reshuffles += 1;
-    }
-    Ok(drawn)
+    // 循环体（抽满 / 重洗一次 / 两堆都空就停）搬到了
+    // [`CombatState::draw_cards_with_reshuffle`]：§161.3 的 `ChoiceThen::DiscardThenDraw`
+    // 是第二个消费者，而两份重洗策略迟早会分叉。这里只剩「想要几张」的**修饰器计算**。
+    Ok(state.draw_cards_with_reshuffle(actor, wanted)?)
 }
 
 /// turn-start 处理器 #7：`ClearBlockOnTurnStartedHandler`（注册在 `StandardCombatPackage.cs:133-135`；

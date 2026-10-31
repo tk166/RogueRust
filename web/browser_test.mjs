@@ -188,6 +188,73 @@ const report = await evaluate(`(async () => {
   out.potionAfter = ex.rd_run_potion_count();
   out.potionBeltAfter = document.getElementById("relicChips").innerHTML;
 
+  // (h) **§161.3: the card-choice picker.** Elixir and Gambler's Brew do not resolve when drunk --
+  // they ask a question, and the kernel's action table is empty until it is answered. Every part of
+  // that sentence is a separate way to be broken, and all of them are invisible without a browser.
+  out.choiceSeed = 31;
+  window.RD_DEBUG.startWithSeed(out.choiceSeed);
+  await sleep(0);
+  panel().querySelector("[data-panel-action]").click();
+  await sleep(0);
+  if (ex.rd_run_pending() === 7) {
+    panel().querySelector("[data-panel-action]").click();
+    await sleep(0);
+    const pick = document.querySelector("#modalBody [data-pick]");
+    if (pick) { pick.click(); await sleep(0); }
+  }
+  out.choiceFight = await walkIntoFight();
+  out.choiceGranted = window.RD_DEBUG.givePotion("elixir");
+  out.choiceBelt = ex.rd_run_potion_count();
+  // The 用 button of the **last** belt slot, which is the Elixir we just put there.
+  // No nested template literal here: the whole block is already inside one, and a second pair of
+  // backticks ends it. (That exact trap has now been hit three times in this file -- FACT.md §2b.)
+  const elixirButton =
+    document.querySelector('[data-use-potion="' + (out.choiceBelt - 1) + '"]');
+  out.choiceHasUse = Boolean(elixirButton);
+  out.choiceModalBefore = document.getElementById("modal").hidden;
+  if (elixirButton) {
+    // Call the handler **directly**: a throw inside an event handler never reaches the caller
+    // (dispatchEvent swallows it into window.onerror), which is exactly how §150 stayed invisible.
+    try {
+      elixirButton.onclick();
+      out.choiceThrew = null;
+    } catch (error) {
+      out.choiceThrew = String(error);
+    }
+    await sleep(0);
+  }
+  out.choicePending = ex.rd_env_choice_pending();
+  out.choiceKind = ex.rd_env_choice_kind();
+  out.choiceModalOpen = !document.getElementById("modal").hidden;
+  out.choiceTitle = text(document.getElementById("modalTitle"));
+  out.choiceOptions = document.querySelectorAll("#modalBody [data-choice]").length;
+  out.choiceEnvActions = ex.rd_env_action_count();
+  // The modal must not be dismissable: an unanswered question with an empty action table is a
+  // page with no way forward.
+  document.getElementById("modalClose").click();
+  await sleep(0);
+  out.choiceStillOpen = !document.getElementById("modal").hidden;
+  // Tick one option through the **DOM button**, then confirm through the DOM button.
+  const exhaustBefore = ex.rd_env_pile_len(2);
+  const first = document.querySelector("#modalBody [data-choice]");
+  if (first) { first.click(); await sleep(0); }
+  out.choiceTicked = first ? first.dataset.ticked : null;
+  const choiceConfirm = document.querySelector('#modalBody [data-panel-action="choice-confirm"]');
+  out.choiceHasConfirm = Boolean(choiceConfirm);
+  if (choiceConfirm) {
+    try {
+      choiceConfirm.onclick();
+      out.choiceConfirmThrew = null;
+    } catch (error) {
+      out.choiceConfirmThrew = String(error);
+    }
+    await sleep(0);
+    await sleep(0);
+  }
+  out.choicePendingAfter = ex.rd_env_choice_pending();
+  out.choiceExhausted = ex.rd_env_pile_len(2) - exhaustBefore;
+  out.choiceEnvActionsAfter = ex.rd_env_action_count();
+
   // §159: (seed, level) is the whole description of a run. Drive it through the **fields** the
   // player actually uses -- typing a level and pressing 开始 -- because a page whose level input is
   // not read is a dead affordance, and startWithSeed would have hidden that.
@@ -270,6 +337,28 @@ want(
   `the top bar does not show the level: ${JSON.stringify(report.ascTopBar)}`
 );
 
+// §161.3: the card-choice picker, on the real DOM.
+want(report.choiceFight === true, "could not reach a fight to open the card choice in");
+want(report.choiceGranted === 0, `the debug potion grant failed (${report.choiceGranted})`);
+want(report.choiceHasUse === true, "an Elixir on the belt offered no 用 button in a fight");
+want(report.choiceThrew === null, `the Elixir button threw: ${report.choiceThrew}`);
+want(report.choicePending === 1, `drinking Elixir opened no question (pending ${report.choicePending})`);
+want(report.choiceKind === 1, `the question is not an exhaust (kind ${report.choiceKind})`);
+want(report.choiceModalOpen === true, "the picker did not open");
+want(/消耗/.test(report.choiceTitle || ""),
+  `the picker does not say what it does: ${JSON.stringify(report.choiceTitle)}`);
+want(report.choiceOptions >= 2,
+  `the picker offered ${report.choiceOptions} cards, expected the whole hand`);
+want(report.choiceEnvActions === 0,
+  `the action table has ${report.choiceEnvActions} entries while a question is open`);
+want(report.choiceStillOpen === true, "the picker closed with the question still open");
+want(report.choiceTicked === "1", `clicking an option did not tick it (${report.choiceTicked})`);
+want(report.choiceHasConfirm === true, "the picker has no confirm button");
+want(report.choiceConfirmThrew === null, `confirm threw: ${report.choiceConfirmThrew}`);
+want(report.choicePendingAfter === 0, "confirming did not answer the question");
+want(report.choiceExhausted === 1, `confirming exhausted ${report.choiceExhausted} cards, expected 1`);
+want(report.choiceEnvActionsAfter > 0, "the action table did not come back after the answer");
+
 await page.close();
 
 
@@ -283,6 +372,9 @@ console.log("  card detail       " + report.card.title + " · " + report.card.bo
 console.log("  log               " + report.log[report.log.length - 1]);
 console.log("  top bar           " + report.topBar);
 console.log("  energy/unafford.  " + report.energyAfter + " / " + report.unaffordable);
+console.log("  card choice       " + report.choiceTitle + " · " + report.choiceOptions +
+  " option(s) · ticked " + report.choiceTicked + " · exhausted " + report.choiceExhausted +
+  " · table " + report.choiceEnvActions + " -> " + report.choiceEnvActionsAfter);
 console.log("  potion            belt " + report.potionInBelt + " -> " + report.potionAfter +
   (report.potionThrew ? " · THREW " + report.potionThrew : ""));
 console.log("BROWSER_TEST PASS");

@@ -9542,6 +9542,22 @@
       "Effect": "potion_fill",
       "Amount": 0,
       "Rarity": "Rare"
+    },
+    {
+      "Id": "elixir",
+      "NameKey": "Elixir",
+      "DescriptionKey": "Exhaust any number of cards in your hand.",
+      "Effect": "choice_hand_exhaust",
+      "Amount": 0,
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "gamblers_brew",
+      "NameKey": "Gambler's Brew",
+      "DescriptionKey": "Discard any number of cards, then draw that many.",
+      "Effect": "choice_hand_discard_draw",
+      "Amount": 0,
+      "Rarity": "Uncommon"
     }
   ],
   "EventTables": {

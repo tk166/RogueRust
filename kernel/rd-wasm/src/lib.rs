@@ -63,7 +63,7 @@ use rd_core::host::Host;
 use rd_core::intent::{enemy_action_program_root, locate_enemy, select_action, ActionChoice, IntentKind};
 use rd_core::ir::NodeRef;
 use rd_core::play::can_play_card;
-use rd_core::state::{
+use rd_core::state::{ChoiceThen, 
     CardZone, CombatId, CombatResult, CombatState, CombatTurnPhase, CombatantId,
     CombatantLifecycleState, ResourceId,
 };
@@ -356,6 +356,14 @@ struct Session {
     error: String,
     /// Reward for the last step, in 1/1000 (`env-abi.md` §7 + §10's "wasted energy" ruling).
     reward: i32,
+    /// §161.3: which legal options the player has ticked in the pending card choice.
+    ///
+    /// **UI scratch, not game state.** The *action* is [`rd_env_choice_confirm`], which hands the
+    /// whole selection to the kernel at once; the kernel's [`rd_core::state::resolve_choice`] either
+    /// takes it entirely or refuses with nothing changed. Keeping the tick list here rather than in
+    /// `CombatState` is what lets the kernel's answer stay atomic -- and it is why a half-finished
+    /// selection is not something a save file has to describe.
+    choice_picks: Vec<usize>,
     /// Observation snapshots either side of the last step: `-1` means "step rejected, state
     /// unchanged" is decided by comparing these, exactly as §10 requires.
     before: Vec<i32>,
@@ -560,6 +568,7 @@ fn build_session_at(
         problems: Vec::new(),
         error: String::new(),
         reward: 0,
+        choice_picks: Vec::new(),
         before: vec![0; OBS_LEN],
         after: vec![0; OBS_LEN],
     };
@@ -1090,6 +1099,14 @@ impl Session {
         if self.is_done() {
             return actions;
         }
+        // §161.3: a pending card choice is a **modal** state. Play/end-turn are not legal until it
+        // is answered, so listing them would be a table of actions that all get refused -- and a
+        // random driver would spin on `-1` forever while the fight looked alive. An empty table is
+        // the honest answer ("nothing you can do until you choose"), and `rd_env_choice_pending`
+        // is what tells a driver *why*.
+        if self.state.pending_choice().is_some() {
+            return actions;
+        }
         let Some(hero) = self.hero_id() else {
             return actions;
         };
@@ -1517,6 +1534,15 @@ pub extern "C" fn rd_env_step(index: i32) -> i32 {
     if session.is_done() {
         return -2;
     }
+    // §161.3: `compute_actions` is empty while a choice is pending, so this is unreachable through
+    // the table -- which is exactly why it is written: a driver holding a **stale** action index
+    // would otherwise play a card through the open question. It sits *before* the table lookup so
+    // the refusal has a reason (an out-of-range index would otherwise return the same `-1` with
+    // nothing said).
+    if session.state.pending_choice().is_some() {
+        session.error = "还有一次待决的选牌没回答".to_string();
+        return -1;
+    }
     let Some(action) = session.actions.get(index.max(0) as usize).copied() else {
         return -1;
     };
@@ -1743,11 +1769,19 @@ pub unsafe extern "C" fn rd_env_card_text_into(index: i32, ptr: *mut u8) -> i32 
 // policy and useless for a player who wants to know *what* is in the discard pile. These read the
 // piles directly. Zone ids match `ui_render.js`: 0 = draw, 1 = discard, 2 = exhaust.
 
-fn pile_zone(zone: i32) -> Option<CardZone> {
+/// Zone ids, as `ui_render.js` spells them: 0 = draw, 1 = discard, 2 = exhaust, **3 = the
+/// pending card choice's source pile** (§161.3).
+///
+/// Id 3 is dynamic on purpose: the picker renders the same card faces the pile viewer does, and a
+/// fourth static pile would have to be kept in sync with "which pile is the question about". The
+/// one thing a caller must know is that id 3 answers **nothing** when no choice is pending, which
+/// is why it returns `None` instead of an empty pile.
+fn pile_zone(session: &Session, zone: i32) -> Option<CardZone> {
     match zone {
         0 => Some(CardZone::DrawPile),
         1 => Some(CardZone::DiscardPile),
         2 => Some(CardZone::ExhaustPile),
+        3 => session.state.pending_choice().map(|choice| choice.source.zone()),
         _ => None,
     }
 }
@@ -1758,7 +1792,7 @@ pub extern "C" fn rd_env_pile_len(zone: i32) -> i32 {
     let Ok(session) = ensure_session() else {
         return -1;
     };
-    let Some(zone) = pile_zone(zone) else {
+    let Some(zone) = pile_zone(session, zone) else {
         return -1;
     };
     let Some(hero) = session.hero_id() else {
@@ -1823,12 +1857,216 @@ pub unsafe extern "C" fn rd_env_pile_card_title_into(zone: i32, index: i32, ptr:
     }
 }
 
+// =============================================================================================
+//
+// §161.3: the pending card choice.
+//
+// Elixir and Gambler's Brew do not resolve inside `rd_env_use_potion` -- they **ask a question**:
+// the potion returns `0` with `rd_env_choice_pending() == 1`, the action table goes empty, and the
+// only way on is `rd_env_choice_confirm`. The options are the source pile, so the picker renders
+// through the **existing** pile exports with zone id `3` instead of a parallel set of string
+// getters (a fourth copy of "read a card's title" would be a fourth thing to keep in sync).
+//
+// The tick list lives in `Session::choice_picks`, deliberately **not** in `CombatState`: the
+// kernel's action is the whole selection handed over at once, so a half-finished selection is not
+// something a save file has to describe, and `resolve_choice` can stay atomic.
+
+/// Report a refusal through the **fight** session's error buffer and return `-2`.
+///
+/// `run.rs` has an almost-identically-named `refuse`, which writes to the *run* slot instead: the
+/// two slots are separate error surfaces on purpose (a fight can refuse while the run is fine), and
+/// one helper for two sinks would put the message where the page does not look.
+fn refuse_with_text(message: &str) -> i32 {
+    if let Some(session) = slot().as_mut() {
+        session.error = message.to_string();
+    }
+    -2
+}
+
+/// Is the kernel waiting for a card choice? `1` yes, `0` no, `-1` no session.
+#[no_mangle]
+pub extern "C" fn rd_env_choice_pending() -> i32 {
+    match ensure_session() {
+        Ok(session) => i32::from(session.state.pending_choice().is_some()),
+        Err(_) => -1,
+    }
+}
+
+/// What answering does with the picked cards: `1` exhaust, `2` discard-then-draw, `0`/`-1` nothing.
+///
+/// The numbers are the kind the page needs to write the right sentence ("消耗" vs "丢弃并抽").
+/// They are **not** `ChoiceThen as i32`: that enum is rd-core's internal numbering, and an ABI
+/// number that silently follows a Rust enum is the same shape as an `as i32` cast over a
+/// `#[repr(u8)]` that someone reorders.
+#[no_mangle]
+pub extern "C" fn rd_env_choice_kind() -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    match session.state.pending_choice() {
+        Some(choice) => match choice.then {
+            ChoiceThen::Exhaust => 1,
+            ChoiceThen::DiscardThenDraw => 2,
+        },
+        None => 0,
+    }
+}
+
+/// Lower bound on how many cards may be picked; `-1` when nothing is pending.
+#[no_mangle]
+pub extern "C" fn rd_env_choice_min() -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    session
+        .state
+        .pending_choice()
+        .map_or(-1, |choice| i32::from(choice.min))
+}
+
+/// Upper bound on how many cards may be picked; `-1` when nothing is pending.
+#[no_mangle]
+pub extern "C" fn rd_env_choice_max() -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    session
+        .state
+        .pending_choice()
+        .map_or(-1, |choice| i32::from(choice.max))
+}
+
+/// How many legal options there are, i.e. how many cards are in the source pile.
+///
+/// Equal to `rd_env_pile_len(3)` -- it is written twice on purpose, because the page's picker and
+/// its bounds check must agree and this is the cheapest place to notice if they stop agreeing.
+#[no_mangle]
+pub extern "C" fn rd_env_choice_count() -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    let Some(choice) = session.state.pending_choice() else {
+        return 0;
+    };
+    session
+        .state
+        .card_zones(&choice.chooser)
+        .map_or(-1, |zones| zones.count(choice.source.zone()) as i32)
+}
+
+/// Tick (`on != 0`) or untick option `index`. `0` ok, `-1` no such option.
+///
+/// Ticking past the upper bound is allowed: the page lets the player change their mind, and the
+/// kernel refuses at `confirm` time with the count it wanted. Refusing the *click* instead would
+/// make the picker un-editable, which is the more common way to be wrong.
+#[no_mangle]
+pub extern "C" fn rd_env_choice_pick(index: i32, on: i32) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    if index < 0 || index >= rd_env_choice_count() {
+        return -1;
+    }
+    let slot = index as usize;
+    let position = session.choice_picks.iter().position(|picked| *picked == slot);
+    if on != 0 {
+        if position.is_none() {
+            session.choice_picks.push(slot);
+        }
+    } else if let Some(position) = position {
+        session.choice_picks.remove(position);
+    }
+    0
+}
+
+/// Is option `index` ticked? `1`/`0`, `-1` no such option.
+#[no_mangle]
+pub extern "C" fn rd_env_choice_selected(index: i32) -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    if index < 0 || index >= rd_env_choice_count() {
+        return -1;
+    }
+    i32::from(session.choice_picks.contains(&(index as usize)))
+}
+
+/// Forget the ticks. The question stays -- this is "clear the selection", not "cancel".
+///
+/// "Cancel" is `rd_env_choice_confirm` with nothing ticked, and that works because both consumers
+/// declare `min == 0`: the wiki says "any number", and zero is a number.
+#[no_mangle]
+pub extern "C" fn rd_env_choice_clear() -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    session.choice_picks.clear();
+    0
+}
+
+/// Answer the question. `0` accepted, `-1` nothing pending, `-2` refused with text.
+///
+/// The picks are handed over in **pile order**, not tick order: two players who ticked the same two
+/// cards in different sequences asked for the same thing, and the replay must not care.
+#[no_mangle]
+pub extern "C" fn rd_env_choice_confirm() -> i32 {
+    let session = match ensure_session() {
+        Ok(session) => session,
+        Err(_) => return -1,
+    };
+    let Some(choice) = session.state.pending_choice() else {
+        return -1;
+    };
+    let Some(zones) = session.state.card_zones(&choice.chooser) else {
+        return refuse_with_text("待决选牌的战斗员没有牌区");
+    };
+    let zone = choice.source.zone();
+    let count = zones.count(zone);
+    // Same enumeration the picker used (`rd_env_pile_len(3)`), and a loud cross-check that the slot
+    // table and the card pool still line up. A silent `zip` over two lists of different lengths
+    // would resolve a *different* question than the one that was asked.
+    let ids: Vec<rd_core::state::CardInstanceId> = session
+        .state
+        .zone_cards(&choice.chooser, zone)
+        .map(|card| card.id)
+        .collect();
+    if ids.len() != count {
+        return refuse_with_text("牌的槽位表与卡池不一致：选牌清单不完整");
+    }
+    let mut picks: Vec<rd_core::state::CardInstanceId> = Vec::with_capacity(session.choice_picks.len());
+    let mut wanted = session.choice_picks.clone();
+    wanted.sort_unstable();
+    wanted.dedup();
+    for index in wanted {
+        let Some(id) = ids.get(index) else {
+            return refuse_with_text(&std::format!("选项 {index} 不存在"));
+        };
+        picks.push(*id);
+    }
+    match session.state.resolve_choice(&picks) {
+        Ok(done) => {
+            session.choice_picks.clear();
+            // A choice does not go through `d_env_step`, exactly like a potion -- the observation is
+            // a cached snapshot, so it has to be refreshed here or the page shows the pre-choice
+            // hand for one frame (and the hand is what the player is looking at).
+            session.reobserve_after_external_change();
+            if done.drawn < done.picked {
+                // Drawing fewer than dropped is legal (both piles empty) but it is **information**:
+                // the page says so, and a gate that silently accepted it would hide a reshuffle bug.
+                session.error = std::format!("弃了 {} 张只抽到 {}", done.picked, done.drawn);
+            }
+            0
+        }
+        Err(e) => refuse_with_text(&std::format!("选牌被拒：{e}")),
+    }
+}
+
 fn pile_card_id(zone: i32, index: i32) -> Option<&'static str> {
     if index < 0 {
         return None;
     }
     let session = ensure_session().ok()?;
-    let zone = pile_zone(zone)?;
+    let zone = pile_zone(session, zone)?;
     let hero = session.hero_id()?;
     let (_, card) = session
         .state

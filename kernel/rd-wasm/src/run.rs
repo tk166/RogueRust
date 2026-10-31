@@ -1414,6 +1414,37 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 return refuse(&std::format!("抽牌药水失败：{e:?}"));
             }
         }
+        "choice_hand_exhaust" | "choice_hand_discard_draw" => {
+            // §161.3: these two do not resolve here -- they **ask a question**. The bottle is
+            // consumed by the tail below (the wiki's potion is drunk either way), and the fight
+            // stays modal until `rd_env_choice_confirm`.
+            let then = if atom == "choice_hand_exhaust" {
+                rd_core::state::ChoiceThen::Exhaust
+            } else {
+                rd_core::state::ChoiceThen::DiscardThenDraw
+            };
+            let Some(zones) = session.state.card_zones(&hero) else {
+                return refuse("英雄没有牌区");
+            };
+            let hand = zones.count(rd_core::state::CardZone::Hand);
+            if hand == 0 {
+                // An empty hand means the question has no answers. Asking it anyway would put an
+                // empty picker on screen whose only option is "confirm nothing" -- a modal that
+                // exists to say the potion did nothing.
+                continue;
+            }
+            let question = rd_core::state::PendingChoice {
+                chooser: hero.clone(),
+                source: rd_core::state::ChoiceSource::Hand,
+                min: 0,
+                max: hand.min(u8::MAX as usize) as u8,
+                then,
+            };
+            if let Err(e) = session.state.begin_choice(question) {
+                return refuse(&std::format!("这次选牌问不出口：{e}"));
+            }
+            session.choice_picks.clear();
+        }
         other if other.starts_with("combat_status") => {
             // `combat_status:<id>` = the hero; `combat_status_target:<id>` = the chosen enemy.
             let (needs_target, status_id) = match other.split_once(':') {
@@ -1902,10 +1933,22 @@ pub extern "C" fn rd_run_potion_effect(slot: i32) -> i32 {
         } else if kind == "combat_damage_all" {
             hits_every_enemy = true;
         }
+        // §161.3: the choice atoms act on the **hand**, so they need no enemy target (they fall
+        // into the `2` branch below). Adding them here is not bookkeeping: without this line
+        // `rd_run_potion_effect` answered `0` -- "unknown effect" -- for a potion the kernel drinks
+        // happily, and the only reason nothing broke is that the page's `=== 1` check took the
+        // other branch. `every_potion_in_the_table_classifies_as_known` is the tripwire for the
+        // next atom that gets added to `rd_env_use_potion` and forgotten here.
         let known = kind == "combat_damage"
             || kind == "combat_damage_all"
             || kind == "heal"
-            || matches!(kind, "max_hp" | "potion_fill")
+            || matches!(
+                kind,
+                "max_hp"
+                    | "potion_fill"
+                    | "choice_hand_exhaust"
+                    | "choice_hand_discard_draw"
+            )
             || ["combat_block", "combat_energy", "combat_heal_percent", "combat_draw"]
                 .contains(&kind)
             || kind.starts_with("combat_status");
@@ -1919,6 +1962,56 @@ pub extern "C" fn rd_run_potion_effect(slot: i32) -> i32 {
         3
     } else {
         2
+    }
+}
+
+/// Put potion `id` on the belt. **For tests and the page's `?debug` surface only.**
+///
+/// There is no in-game caller: every real potion arrives through a drop (`roll_reward` ->
+/// `take_potion`) or through `entropic_brew`. This exists for the same reason
+/// `RD_DEBUG.startWithSeed` does -- a checker that has to hope for a 40% drop of one specific
+/// potion out of **twenty-two** is not a checker, and the §161.3 card-choice picker is reachable
+/// through exactly **two** of those twenty-two. Before this, the picker could only be exercised by
+/// a unit test that stuffed the belt from inside the crate.
+///
+/// It is deliberately **not** behind a `cfg`: a debug gate would mean the shipped `.wasm` and the
+/// tested one are different binaries, which is a worse problem than a cheat entry point.
+///
+/// `0` granted, `-1` no run / bad pointer, `-2` refused (unknown id, or the belt is full).
+///
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_grant_potion(ptr: *const u8, len: i32) -> i32 {
+    if ptr.is_null() || len <= 0 {
+        return -1;
+    }
+    let bytes = std::slice::from_raw_parts(ptr, len as usize);
+    let Ok(id) = std::str::from_utf8(bytes) else {
+        return -2;
+    };
+    let image = content();
+    // The id must be a real `POT` row: a typo has to fail here rather than sit in the belt until
+    // somebody drinks it and the effect reader says "unknown".
+    if !(0..image.potion_count())
+        .filter_map(|index| image.potion(index))
+        .any(|potion| potion.id == id)
+    {
+        set_error(&std::format!("`{id}` 不是内容的 POT 行"));
+        return -2;
+    }
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    match session.state.push_potion(id) {
+        // No re-publish: the run's observation is computed per call (), unlike the
+        // fight's cached snapshot. The belt is drawn from , which reads the state.
+        Ok(()) => 0,
+        Err(e) => {
+            set_error(&std::format!("放不进腰带：{e:?}"));
+            -2
+        }
     }
 }
 
@@ -3343,6 +3436,193 @@ mod tests {
         assert_eq!(rd_run_pending(), 0, "reset_at left a choice pending");
     }
 
+    /// §161.3: **every** `POT` row must classify as a known effect.
+    ///
+    /// Two readers share one vocabulary: `rd_env_use_potion`'s `match` decides what a potion does,
+    /// and `rd_run_potion_effect` decides whether the page offers a target picker. Adding
+    /// `choice_hand_exhaust` to the first and forgetting the second produced a potion the kernel
+    /// drinks happily while the page classifies it as `0 = unknown` -- and **nothing went red**,
+    /// because the page's `=== 1` test simply took the other branch. Not a hypothetical: that is
+    /// exactly what this section shipped into until this test was written.
+    ///
+    /// Walking the **whole table** is the point. A test that only checks "elixir is known" would be
+    /// the same per-atom list that just failed.
+    #[test]
+    fn every_potion_in_the_table_classifies_as_known() {
+        test_run(11, 80, 80, &["strike"; 10]);
+        let image = content();
+        let mut checked = 0usize;
+        for index in 0..image.potion_count() {
+            let Some(potion) = image.potion(index) else {
+                continue;
+            };
+            // The belt holds three, so the table is walked one bottle at a time.
+            {
+                let session = run_slot().as_mut().expect("a session");
+                while !session.state.potions().is_empty() {
+                    session.state.drop_potion(0).expect("dropping an empty slot");
+                }
+                session.state.push_potion(potion.id).expect("an empty belt takes one");
+            }
+            let kind = rd_run_potion_effect(0);
+            assert!(
+                kind != 0,
+                "`{}` ({}) classifies as UNKNOWN -- the page would call a working potion broken",
+                potion.id,
+                potion.effect
+            );
+            assert!(kind == 1 || kind == 2 || kind == 3, "`{}` -> {kind}", potion.id);
+            checked += 1;
+        }
+        assert_eq!(
+            checked as u32,
+            image.potion_count(),
+            "every POT row must be walked, not a sample"
+        );
+
+        // "Known" is not enough for the two new atoms: they act on the **hand**, so arming the
+        // enemy picker for them is a wrong branch that `kind != 0` would happily accept.
+        for id in ["elixir", "gamblers_brew"] {
+            {
+                let session = run_slot().as_mut().expect("a session");
+                while !session.state.potions().is_empty() {
+                    session.state.drop_potion(0).expect("dropping an empty slot");
+                }
+                session.state.push_potion(id).expect("an empty belt takes one");
+            }
+            assert_eq!(
+                rd_run_potion_effect(0),
+                2,
+                "`{id}` acts on the hand, so it needs no enemy target"
+            );
+        }
+    }
+
+    /// §161.3: the two potions whose effect is a **question**, driven end to end.
+    ///
+    /// The mechanism itself is pinned in `rd-core` (`resolve_choice` and its five tests). What is
+    /// pinned *here* is the seam, and every step of it is a thing that could break on its own:
+    ///
+    /// * the bottle is drunk (consumed) **and** a question opens -- not one or the other;
+    /// * the action table goes empty, because play / end-turn are not legal answers;
+    /// * a stale action index is refused *with a reason*;
+    /// * the options are the source pile, so zone 3 is the same list;
+    /// * answering moves exactly the picked cards and restores the table;
+    /// * "pick nothing" is a legal answer (both potions say "any number").
+    #[test]
+    fn the_choice_potions_ask_a_question_and_the_answer_moves_the_cards() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+
+        // ---- nothing is pending before a potion opens one -----------------------------------
+        assert_eq!(crate::rd_env_choice_pending(), 0);
+        assert_eq!(crate::rd_env_choice_kind(), 0);
+        assert_eq!(crate::rd_env_choice_count(), 0);
+        assert_eq!(crate::rd_env_pile_len(3), -1, "zone 3 answers nothing without a question");
+
+        // ---- Elixir: exhaust any number of cards from your hand -----------------------------
+        let belt_before = rd_run_potion_count();
+        assert_eq!(drink("elixir", -1), 0, "elixir accepted");
+        assert_eq!(
+            rd_run_potion_count(),
+            belt_before,
+            "the bottle is consumed: a potion is drunk whether or not the answer is convenient"
+        );
+        assert_eq!(crate::rd_env_choice_pending(), 1, "and it opened a question");
+        assert_eq!(crate::rd_env_choice_kind(), 1, "1 = exhaust");
+        assert_eq!(crate::rd_env_choice_min(), 0, "\"any number\" includes zero");
+        let options = crate::rd_env_choice_count();
+        assert!(options >= 2, "a fresh hand has cards to pick from: {options}");
+        assert_eq!(
+            crate::rd_env_choice_max(),
+            options,
+            "the upper bound is the whole hand"
+        );
+        assert_eq!(
+            crate::rd_env_pile_len(3),
+            options,
+            "zone 3 is the question's source pile, so the picker renders through the pile exports"
+        );
+        assert_eq!(
+            crate::rd_env_action_count(),
+            0,
+            "play / end-turn are not legal while a question is open"
+        );
+        assert_eq!(rd_env_step(0), -1, "a stale action index is refused");
+        assert!(
+            crate::slot().as_ref().is_some_and(|s| !s.error.is_empty()),
+            "and the refusal says why"
+        );
+
+        // Ticking is not the action -- `confirm` is. Two ticks, then one answer.
+        assert_eq!(crate::rd_env_choice_pick(0, 1), 0);
+        assert_eq!(crate::rd_env_choice_pick(2, 1), 0);
+        assert_eq!(crate::rd_env_choice_selected(0), 1);
+        assert_eq!(crate::rd_env_choice_selected(1), 0);
+        assert_eq!(
+            crate::rd_env_choice_pick(options, 1),
+            -1,
+            "an index past the last option is refused, not ignored"
+        );
+        let exhausted_before = crate::rd_env_pile_len(2);
+        assert_eq!(crate::rd_env_choice_confirm(), 0, "answered");
+        assert_eq!(crate::rd_env_choice_pending(), 0, "the question is gone");
+        assert_eq!(
+            crate::rd_env_pile_len(2),
+            exhausted_before + 2,
+            "exactly the two ticked cards were exhausted"
+        );
+        assert!(
+            crate::rd_env_action_count() > 0,
+            "the action table is back once the question is answered"
+        );
+
+        // ---- Gambler's Brew: discard any number, then draw that many ------------------------
+        let hand_before = crate::rd_env_choice_count();
+        assert_eq!(hand_before, 0, "no question is open");
+        assert_eq!(drink("gamblers_brew", -1), 0, "gambler's brew accepted");
+        assert_eq!(crate::rd_env_choice_kind(), 2, "2 = discard then draw");
+        let options = crate::rd_env_choice_count();
+        assert!(options >= 2, "cards to discard: {options}");
+        let discarded_before = crate::rd_env_pile_len(1);
+        // Three picks, then **clear**: the selection is scratch, and clearing it must not answer
+        // the question (otherwise "select none" and "cancel the screen" would be the same code).
+        assert_eq!(crate::rd_env_choice_pick(0, 1), 0);
+        assert_eq!(crate::rd_env_choice_pick(1, 1), 0);
+        assert_eq!(crate::rd_env_choice_pick(2, 1), 0);
+        assert_eq!(crate::rd_env_choice_clear(), 0);
+        assert_eq!(crate::rd_env_choice_selected(0), 0, "cleared");
+        assert_eq!(crate::rd_env_choice_pending(), 1, "still unanswered");
+        // Now actually discard two.
+        assert_eq!(crate::rd_env_choice_pick(0, 1), 0);
+        assert_eq!(crate::rd_env_choice_pick(1, 1), 0);
+        assert_eq!(crate::rd_env_choice_confirm(), 0);
+        assert_eq!(crate::rd_env_choice_pending(), 0);
+        assert_eq!(
+            crate::rd_env_choice_count(),
+            0,
+            "the same count reads 0 once there is no question"
+        );
+        assert!(
+            crate::rd_env_pile_len(1) >= discarded_before,
+            "the two discarded cards land in the discard pile"
+        );
+
+        // ---- "pick nothing" is a legal answer ----------------------------------------------
+        assert_eq!(drink("elixir", -1), 0);
+        assert_eq!(crate::rd_env_choice_pending(), 1);
+        let exhausted_before = crate::rd_env_pile_len(2);
+        assert_eq!(crate::rd_env_choice_confirm(), 0, "zero picks is an answer");
+        assert_eq!(crate::rd_env_choice_pending(), 0);
+        assert_eq!(
+            crate::rd_env_pile_len(2),
+            exhausted_before,
+            "and it exhausts nothing"
+        );
+    }
+
     /// Put `potion` in the belt and drink it at `target`. The belt has **three** slots, so a test
     /// that wants five potions cannot push them all: push one, drink it, repeat.
     fn drink(potion: &str, target: i32) -> i32 {
@@ -3979,7 +4259,7 @@ mod tests {
     /// covered by the reward tests (`roll_reward`), and this test is about drinking one.
     fn a_potion_can_be_used_in_a_fight() {
         reset(4);
-        let started = arrive_at_a_fight();
+        assert!(arrive_at_a_fight(), "the fixture must actually reach a fight");
 
 
         // The three the assertions below know how to check.

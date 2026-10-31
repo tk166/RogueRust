@@ -93,6 +93,13 @@ const REQUIRED = [
   "rd_run_reward_card_id_into", "rd_run_reward_card_title_len", "rd_run_reward_card_title_into",
   "rd_run_take_card", "rd_run_skip_reward",
   "rd_env_card_kind", "rd_run_card_kind", "rd_run_node_resolved", "rd_run_boss_beaten",
+  // §161.3: the pending card choice (Elixir / Gambler's Brew). The options are zone `3` of the
+  // pile exports above, so there is no second set of string getters to keep in sync.
+  "rd_env_choice_pending", "rd_env_choice_kind", "rd_env_choice_min", "rd_env_choice_max",
+  "rd_env_choice_count", "rd_env_choice_pick", "rd_env_choice_selected", "rd_env_choice_clear",
+  "rd_env_choice_confirm",
+  // §161.3: the debug potion grant, used by `RD_DEBUG.givePotion` and by `browser_test`.
+  "rd_run_grant_potion",
 ];
 for (const name of REQUIRED) {
   if (!(name in ex)) fail(`missing export ${name}`);

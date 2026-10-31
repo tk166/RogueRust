@@ -277,6 +277,8 @@ pub enum Container {
     ProgramNodeSlots,
     /// 同时在飞的循环迭代快照（参考是闭包捕获的 `CardInstanceId[]` / `CombatantId[]`）。
     ProgramLoops,
+    /// 待决选牌的**合法选项表**（§161.3）。调用方给的缓冲区装不下整张清单就是它满。
+    ChoiceOptions,
 }
 impl Container {
     /// 容器的数字代号（§152）。
@@ -312,6 +314,7 @@ impl Container {
             Container::ProgramFrames => 23,
             Container::ProgramNodeSlots => 24,
             Container::ProgramLoops => 25,
+            Container::ChoiceOptions => 26,
         }
     }
 
@@ -344,6 +347,7 @@ impl Container {
             23 => "ProgramFrames",
             24 => "ProgramNodeSlots",
             25 => "ProgramLoops",
+            26 => "ChoiceOptions",
             _ => "?",
         }
     }
@@ -1555,6 +1559,148 @@ pub enum ZonePlacement {
     Bottom,
     /// Insert at index 0. "The front is the draw top."
     Top,
+}
+
+/// 一次待决的选牌：玩家（或任何战斗员）**必须**先回答它，才能继续（§161.3）。
+///
+/// # 为什么这是一个状态，而不是一个 UI 回调
+///
+/// 参考引擎的 `CardChooser` 是一个宿主委托（`CombatStateSnapshot.cs` 里连它一起排除），因为
+/// 那边是单人同步程序：问一句、当场答。但本项目要的是**可存档、可回放、可训练**：
+/// 「正在等玩家从手牌里选 3 张」必须是能从状态里读出来的东西，否则一局只能在线性时间里重放。
+/// ⇒ 这里的选牌是 `CombatState` 的一个字段，`resolve_choice` 是唯一把它消掉的人。
+///
+/// # 为什么它**不**进 `hash_golden`
+///
+/// `hash_golden` 是参考引擎规范文本的**逐字节**复刻（`snapshot.rs`），参考没有这个字段，
+/// 写进去就等于伪造参考的输出。它属于 `snapshot.rs` 那张「状态里有、指纹里没有」的清单
+/// —— 与 `mark_source_combatant_id` 同一类，**`hash_full` 落地时必须覆盖它**。
+/// 这也是加它**不动任何基线**（85 份语料一个字节都不变）的原因。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PendingChoice {
+    /// 谁在选。选谁的手牌/弃牌堆由它决定，内核**不**假定是英雄。
+    pub chooser: CombatantId,
+    /// 从哪儿选。
+    pub source: ChoiceSource,
+    /// 最少选几张。`0` 合法，含义是「可以什么都不选」，于是**取消永远可用**。
+    pub min: u8,
+    /// 最多选几张。
+    pub max: u8,
+    /// 选完之后做什么。
+    pub then: ChoiceThen,
+}
+
+/// 选牌的**来源**。
+///
+/// ⚠️ 只有**真的被用到**的两种。`Offered`（从卡池抽三张候选，Attack / Skill / Power /
+/// Colorless Potion 要的那一种）故意还不在：它需要「候选不是牌堆的一部分」这个第二形态的
+/// 载荷，而先冻一个没有消费者的形态，正是本模块反复躲开的那种「提前把语义推给未来」。
+/// 加它的时候，`choice_legal` 的 `match` 会逼着接的人把两条路都想清楚。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum ChoiceSource {
+    /// 手牌（Elixir「消耗任意张手牌」/ Gambler's Brew「弃任意张，抽同样多」）。
+    #[default]
+    Hand,
+    /// 弃牌堆（Liquid Memories「把弃牌堆里一张拿回手牌」）。
+    DiscardPile,
+}
+
+impl ChoiceSource {
+    /// 这个来源对应哪个牌区。
+    ///
+    /// `const` 且有穷尽 `match`：加一种来源时，这里编译不过，而不是掉进一个默认分支。
+    #[must_use]
+    pub const fn zone(self) -> CardZone {
+        match self {
+            Self::Hand => CardZone::Hand,
+            Self::DiscardPile => CardZone::DiscardPile,
+        }
+    }
+}
+
+/// 选完之后做什么 —— 这是「待决」的**可列举**的那一半。
+///
+/// 每加一种药水/一张卡就要多一个变体，这是**有意的**：动作的语义必须能被列出来，
+/// 否则「合法动作可枚举」就是一句空话。反过来说，内容只是挑一个变体，不是各写一套状态机。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum ChoiceThen {
+    /// 把选中的牌**消耗**掉（Elixir）。
+    #[default]
+    Exhaust,
+    /// 把选中的牌**丢弃**，然后**抽同样多张**（Gambler's Brew）。
+    DiscardThenDraw,
+}
+
+impl ChoiceThen {
+    /// 选中的牌最终去哪儿。
+    #[must_use]
+    pub const fn destination(self) -> CardZone {
+        match self {
+            Self::Exhaust => CardZone::ExhaustPile,
+            Self::DiscardThenDraw => CardZone::DiscardPile,
+        }
+    }
+}
+
+/// [`CombatState::resolve_choice`] 做完了什么。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ChoiceDone {
+    /// 选了几张（全部成功移动）。
+    pub picked: usize,
+    /// 抽了几张。只有 [`ChoiceThen::DiscardThenDraw`] 会非零，而且**可能少于 `picked`**
+    /// —— 两堆都空的时候抽不满，参考那边也是这个语义（`Cards/CardZones.cs:59-60`）。
+    pub drawn: usize,
+}
+
+/// 选牌被拒绝的**原因**。
+///
+/// 与 [`CapacityError`] 分开：那条错误说的是「容器满了」，而这里的绝大多数拒绝跟容量无关。
+/// 把一个「张数不在范围内」报成 `Full`，就让人去找哪个容器溢出 —— 本模块已经吃过一次
+/// 这个亏（`TurnError::Host` 的注释记着另一例）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChoiceError {
+    /// 已经有一个待决的选牌了。**不做嵌套**：两个待决问句叠在一起，界面无法表达顺序。
+    AlreadyPending,
+    /// 没有待决的选牌。
+    NotPending,
+    /// 张数不在 `min..=max` 里（`min > max` 这种内容错误也走这条）。
+    Count {
+        /// 实际选了几张。
+        picked: usize,
+        /// 下限。
+        min: u8,
+        /// 上限。
+        max: u8,
+    },
+    /// 一张牌不在来源牌区里。也覆盖「这张牌不是这个战斗员的」与「它已经在弃牌堆了」。
+    NotInSource,
+    /// 同一张牌被选了两次。
+    Duplicate,
+    /// 底层定容容器满了。
+    Capacity(CapacityError),
+}
+
+impl From<CapacityError> for ChoiceError {
+    fn from(e: CapacityError) -> Self {
+        ChoiceError::Capacity(e)
+    }
+}
+
+impl core::fmt::Display for ChoiceError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::AlreadyPending => f.write_str("another choice is already pending"),
+            Self::NotPending => f.write_str("no choice is pending"),
+            Self::Count { picked, min, max } => {
+                write!(f, "picked {picked} cards, expected {min}..={max}")
+            }
+            Self::NotInSource => f.write_str("a picked card is not in the source pile"),
+            Self::Duplicate => f.write_str("the same card was picked twice"),
+            Self::Capacity(e) => write!(f, "{e}"),
+        }
+    }
 }
 
 /// One combatant's seven piles.
@@ -3048,6 +3194,13 @@ pub struct CombatState {
     // 不是"以后会怎样"。两个只在日志上不同的局面，后续行为逐字相同 —— 所以它不该
     // 移动任何基线（加它之前与之后 `hash_golden` 的字节完全一样）。
     beat_log: crate::beat::BeatLog,
+    /// 待决的选牌（§161.3）。`None` = 没有。
+    ///
+    /// ⚠️ **不进 `hash_golden`**：参考引擎没有这个字段（它把选牌做成一个宿主委托
+    /// `CardChooser`），写进指纹就等于伪造参考的输出。它与 `mark_source_combatant_id`、
+    /// `CardPlayTurnStats` 同属 `snapshot.rs` 那张「状态里有、指纹里没有」的清单，
+    /// `hash_full` 落地时必须把它算进去。
+    choice: Option<PendingChoice>,
 }
 
 impl CombatState {
@@ -3172,6 +3325,7 @@ impl Empty for CombatState {
         program_nodes: ProgramNodeArena::new(),
         program_loops: ProgramLoopArena::new(),
         beat_log: crate::beat::BeatLog::new(),
+        choice: None,
     };
 }
 
@@ -3284,6 +3438,7 @@ impl CombatState {
             program_nodes: ProgramNodeArena::new(),
             program_loops: ProgramLoopArena::new(),
             beat_log: crate::beat::BeatLog::new(),
+            choice: None,
         }
     }
 
@@ -4241,6 +4396,216 @@ impl CombatState {
         self.cards.push(card, Container::CardInstances)?;
         Ok(CardSlot(slot))
     }
+
+    // ── 待决的选牌（§161.3）────────────────────────────────────────────────────────────────────
+    //
+    // REVIEW §四.2 的要求原话是「战斗侧补一个边界明确的待决操作即可，例如选牌来源、最少/最多
+    // 张数、选完后的操作。同一机制应能服务卡牌、药水和事件」。下面四个函数就是那句话的全部：
+    // `begin_choice` 提出问题、`choice_legal` 把合法选项**列出来**、`resolve_choice` 收答案并
+    // 执行、`pending_choice` 让宿主知道现在该问什么。
+    //
+    // 三条纪律：
+    //
+    // 1. **拒绝不改任何东西。** 这是 §161.2(a) 在战斗层的同一条话：`resolve_choice` 先做完
+    //    全部校验（张数、来源、重复、两个目的牌区的容量），再动第一张牌。半途而废比拒绝更糟
+    //    —— 拒绝是可见的，半途是「两张被消耗、一张还在」。
+    // 2. **选牌不嵌套。** 两个待决问句叠在一起，界面无法表达先后，回放也无法表达。
+    //    `begin_choice` 见到已经有一个就拒绝（不是排队）。
+    // 3. **`min == 0` 时取消永远可用。** 这不是方便，是语义：Elixir 与 Gambler's Brew 的
+    //    原文都是「任意张」，选 0 张就是玩家的合法答案。
+
+    /// 当前待决的选牌（`None` = 没有）。
+    #[must_use]
+    pub const fn pending_choice(&self) -> Option<PendingChoice> {
+        self.choice
+    }
+
+    /// 提出一个待决的选牌。
+    ///
+    /// 三道前置校验，全部**响亮**：
+    ///
+    /// * 已经有一个待决的 ⇒ [`ChoiceError::AlreadyPending`]（不排队）；
+    /// * `min > max` ⇒ [`ChoiceError::Count`]：这是内容错误，不是玩家输入错误；
+    /// * `min` 超过来源牌区的实际张数 ⇒ [`ChoiceError::Count`]：那样的问句**永远无法回答**，
+    ///   而一个答不出来的问句会把这一局钉死。宁可在这里红。
+    pub fn begin_choice(&mut self, choice: PendingChoice) -> Result<(), ChoiceError> {
+        if self.choice.is_some() {
+            return Err(ChoiceError::AlreadyPending);
+        }
+        let zone = choice.source.zone();
+        let available = self
+            .card_zones(&choice.chooser)
+            .ok_or(ChoiceError::NotInSource)?
+            .count(zone);
+        if choice.min > choice.max || choice.min as usize > available {
+            return Err(ChoiceError::Count {
+                picked: available,
+                min: choice.min,
+                max: choice.max,
+            });
+        }
+        self.choice = Some(choice);
+        Ok(())
+    }
+
+    /// 合法的卡，按**来源牌区的顺序**写进 `out`，返回个数。
+    ///
+    /// 「可枚举」在这里是字面意思：宿主/训练器不需要知道 Elixir 和 Gambler's Brew 的区别，
+    /// 它问一次就拿到完整的候选清单。`out` 装不下整份清单 ⇒ [`Container::ChoiceOptions`]，
+    /// **不截断**（截断掉的选项等于一个不存在的规则）。
+    pub fn choice_legal(&self, out: &mut [CardInstanceId]) -> Result<usize, ChoiceError> {
+        let choice = self.choice.ok_or(ChoiceError::NotPending)?;
+        let zones = self
+            .card_zones(&choice.chooser)
+            .ok_or(ChoiceError::NotInSource)?;
+        let zone = choice.source.zone();
+        let mut count = 0usize;
+        for index in 0..zones.count(zone) {
+            // 槽位表与卡池必须一致；不一致的槽位跳过（`card()` 的 `Option` 兜住，不 panic）。
+            let Some(slot) = zones.slot_at(zone, index) else {
+                continue;
+            };
+            let Some(card) = self.card(slot) else {
+                continue;
+            };
+            if count == out.len() {
+                return Err(ChoiceError::Capacity(CapacityError::Full(
+                    Container::ChoiceOptions,
+                )));
+            }
+            out[count] = card.id;
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    /// 结算待决的选牌：把选中的牌按 [`ChoiceThen`] 送走，然后清掉问句。
+    ///
+    /// **全部校验在动手之前**（见本节头第 1 条）。成功之后 [`Self::pending_choice`] 是 `None`。
+    pub fn resolve_choice(&mut self, picks: &[CardInstanceId]) -> Result<ChoiceDone, ChoiceError> {
+        let choice = self.choice.ok_or(ChoiceError::NotPending)?;
+        let picked = picks.len();
+        if picked < choice.min as usize || picked > choice.max as usize {
+            return Err(ChoiceError::Count {
+                picked,
+                min: choice.min,
+                max: choice.max,
+            });
+        }
+
+        let source = choice.source.zone();
+        let destination = choice.then.destination();
+        let Some(zones) = self.card_zones(&choice.chooser) else {
+            return Err(ChoiceError::NotInSource);
+        };
+        // (a) 每张都在来源牌区里，而且不重复。重复直接比 id —— 卡实例 id 在整场里唯一，
+        //     所以「同一个 id 出现两次」就是「同一张牌被选了两次」，不需要第二张表。
+        let mut slots = [CardSlot::from_index(0); MAX_CARDS_PER_ZONE];
+        for (index, id) in picks.iter().enumerate() {
+            let Some((zone, slot)) = self.find_card(&choice.chooser, id) else {
+                return Err(ChoiceError::NotInSource);
+            };
+            if zone != source {
+                return Err(ChoiceError::NotInSource);
+            }
+            if picks[..index].iter().any(|earlier| earlier == id) {
+                return Err(ChoiceError::Duplicate);
+            }
+            slots[index] = slot;
+        }
+        // (b) 目的牌区装得下。三条一起看，因为「搬第一张时才发现第三张装不下」正是要避免的。
+        let destination_room = MAX_CARDS_PER_ZONE.saturating_sub(zones.count(destination));
+        if picked > destination_room {
+            return Err(ChoiceError::Capacity(CapacityError::Full(
+                Container::CardsInZone(destination),
+            )));
+        }
+        // (c) `DiscardThenDraw` 会把 `picked` 张抽回**同一只手牌**。先丢掉 `picked` 张，手牌
+        //     因此空了 `picked` 格，所以抽满 `picked` 张在构造上装得下 —— 这里把它断言成前置
+        //     条件，而不是指望下游的 `move_card` 半路报错。
+        if choice.then == ChoiceThen::DiscardThenDraw
+            && zones.count(CardZone::Hand) + picked > MAX_CARDS_PER_ZONE
+        {
+            return Err(ChoiceError::Capacity(CapacityError::Full(
+                Container::CardsInZone(CardZone::Hand),
+            )));
+        }
+
+        // ---- 到这里为止一个字节都没改。----
+        for &slot in &slots[..picked] {
+            self.move_card(&choice.chooser, source, destination, slot, ZonePlacement::Bottom)?;
+        }
+        self.choice = None;
+
+        let mut drawn = 0usize;
+        if choice.then == ChoiceThen::DiscardThenDraw {
+            drawn = self.draw_cards_with_reshuffle(&choice.chooser, picked)?;
+        }
+        Ok(ChoiceDone { picked, drawn })
+    }
+
+    /// 在**一个战斗员**的七个牌区里按 id 找卡，返回 `(在哪个区, 池槽位)`。
+    ///
+    /// 参考的 `zones.GetCard(id)`（`Cards/CardZones.cs:192-200`）的等价物：只在这套牌区里找，
+    /// 所以「找不到」同时覆盖了「卡不存在」与「卡的主人不是这个战斗员」。
+    #[must_use]
+    pub fn find_card(
+        &self,
+        owner: &CombatantId,
+        card_id: &CardInstanceId,
+    ) -> Option<(CardZone, CardSlot)> {
+        let zones = self.card_zones(owner)?;
+        for zone in CardZone::ALL {
+            for index in 0..zones.count(zone) {
+                let Some(slot) = zones.slot_at(zone, index) else {
+                    continue;
+                };
+                if self.card(slot).map(|card| card.id == *card_id) == Some(true) {
+                    return Some((zone, slot));
+                }
+            }
+        }
+        None
+    }
+
+    /// 抽 `wanted` 张，抽牌堆空了就**重洗弃牌堆**（每次调用最多一次），返回真抽到的张数。
+    ///
+    /// 这是从 `turn.rs::draw_for_turn_start` 的循环体里搬出来的，因为消费者从**一个变成了两个**
+    /// （回合开始抽牌，以及 §161.3 的 `ChoiceThen::DiscardThenDraw`）。抄第二份的后果是可预测的：
+    /// 两边的重洗策略会分叉，而「少重洗一次」只表现为某一步的 `step=` 与牌序不同 —— 那是最难
+    /// 从失败信息里读回来的错。
+    ///
+    /// 循环一定会停：重洗会**搬空弃牌堆**，而循环体内没有任何东西会再往里放牌 ⇒ 最多重洗一次，
+    /// 重洗后抽牌堆非空 ⇒ 下一圈必然抽到牌。「抽不满」的唯一成因是**两堆都空**，与参考一致
+    /// （`Cards/CardZones.cs:59-60`）。
+    pub fn draw_cards_with_reshuffle(
+        &mut self,
+        owner: &CombatantId,
+        wanted: usize,
+    ) -> StateResult<usize> {
+        let mut drawn = 0usize;
+        while drawn < wanted {
+            while drawn < wanted {
+                if self.draw_card(owner)?.is_none() {
+                    break;
+                }
+                drawn += 1;
+            }
+            if drawn >= wanted {
+                break;
+            }
+            if self
+                .card_zones(owner)
+                .is_none_or(|zones| zones.count(CardZone::DiscardPile) == 0)
+            {
+                break;
+            }
+            if self.reshuffle_discard_into_draw(owner)? == 0 {
+                break;
+            }
+        }
+        Ok(drawn)
+    }
 }
 
 /// Iterator over the cards in one pile.
@@ -5062,6 +5427,308 @@ mod tests {
         assert_eq!(z.count(CardZone::DiscardPile), 10);
         assert_eq!(z.count(CardZone::DrawPile), 0);
         assert_eq!(z.count(CardZone::Hand), 0);
+    }
+
+    // ── 待决的选牌（§161.3）────────────────────────────────────────────────────────────────────
+    //
+    // 这一组测试盯的是 REVIEW §四.2 的那句话：机制要「可枚举、可存档、可回放」。
+    // 所以除了"选完真的动了牌"，还各有一条钉住**枚举**（`choice_legal` 的顺序与截断）
+    // 与**拒绝的原子性**（§161.2(a) 在战斗层的同一条话）。
+
+    fn hand_of(n: usize) -> CombatState {
+        let mut s = fight();
+        s.add_combatant(hero()).unwrap();
+        for i in 0..n {
+            let id = std::format!("card_{:06}", i + 1);
+            s.push_card(
+                &cid("hero"),
+                CardZone::Hand,
+                CardInstance::new(ciid(&id), cdid("standard.strike")),
+            )
+            .unwrap();
+        }
+        s
+    }
+
+    /// 一个牌区的卡实例 id，按牌堆顺序。**从状态派生**，不自己记。
+    fn pile_ids(s: &CombatState, zone: CardZone) -> std::vec::Vec<CardInstanceId> {
+        let zones = s.card_zones(&cid("hero")).unwrap();
+        (0..zones.count(zone))
+            .filter_map(|index| zones.slot_at(zone, index))
+            .filter_map(|slot| s.card(slot))
+            .map(|card| card.id)
+            .collect()
+    }
+
+    fn elixir(min: u8, max: u8) -> PendingChoice {
+        PendingChoice {
+            chooser: cid("hero"),
+            source: ChoiceSource::Hand,
+            min,
+            max,
+            then: ChoiceThen::Exhaust,
+        }
+    }
+
+    fn gamblers_brew(max: u8) -> PendingChoice {
+        PendingChoice {
+            then: ChoiceThen::DiscardThenDraw,
+            ..elixir(0, max)
+        }
+    }
+
+    #[test]
+    fn the_legal_options_are_the_source_pile_in_pile_order() {
+        let mut s = hand_of(3);
+        // 没有待决问句时，枚举是**一个错误**，不是"空清单" —— 空清单会被读成
+        // "可以选的东西是零个"，而那是一个不存在的状态。
+        let mut buf = [CardInstanceId::EMPTY; 8];
+        assert_eq!(s.choice_legal(&mut buf), Err(ChoiceError::NotPending));
+
+        s.begin_choice(elixir(0, 3)).unwrap();
+        assert_eq!(s.choice_legal(&mut buf), Ok(3));
+        assert_eq!(
+            &buf[..3],
+            pile_ids(&s, CardZone::Hand).as_slice(),
+            "候选清单必须就是来源牌区，且顺序与牌堆一致"
+        );
+
+        // 缓冲区装不下 ⇒ 响亮失败，**不截断**。截断掉的选项等于一条不存在的规则，而
+        // 「只能选前两张」这种错只会在玩家真的想选第三张时才被发现。
+        let mut tiny = [CardInstanceId::EMPTY; 2];
+        assert_eq!(
+            s.choice_legal(&mut tiny),
+            Err(ChoiceError::Capacity(CapacityError::Full(
+                Container::ChoiceOptions
+            )))
+        );
+        assert_eq!(s.pending_choice(), Some(elixir(0, 3)), "枚举失败不改问句");
+    }
+
+    #[test]
+    fn exhausting_the_chosen_cards_moves_exactly_them_and_clears_the_question() {
+        // Elixir：「消耗任意张手牌」。选 2 张。
+        let mut s = hand_of(3);
+        let hand = pile_ids(&s, CardZone::Hand);
+        s.begin_choice(elixir(0, 3)).unwrap();
+        let done = s.resolve_choice(&[hand[0], hand[2]]).unwrap();
+        assert_eq!(done, ChoiceDone { picked: 2, drawn: 0 });
+        assert_eq!(s.pending_choice(), None, "结算之后问句必须消失");
+
+        assert_eq!(
+            pile_ids(&s, CardZone::ExhaustPile),
+            std::vec![hand[0], hand[2]],
+            "被选中的两张按选择顺序进消耗堆"
+        );
+        assert_eq!(pile_ids(&s, CardZone::Hand), std::vec![hand[1]], "没被选的必须留手");
+    }
+
+    #[test]
+    fn discarding_then_drawing_returns_as_many_cards_as_were_dropped() {
+        // Gambler's Brew：「弃任意张，然后抽同样多」。
+        let mut s = hand_of(3);
+        for i in 0..4 {
+            let id = std::format!("draw_{:06}", i + 1);
+            s.push_card(
+                &cid("hero"),
+                CardZone::DrawPile,
+                CardInstance::new(ciid(&id), cdid("standard.defend")),
+            )
+            .unwrap();
+        }
+        let hand = pile_ids(&s, CardZone::Hand);
+        s.begin_choice(gamblers_brew(3)).unwrap();
+        let done = s.resolve_choice(&[hand[0], hand[1]]).unwrap();
+        assert_eq!(done, ChoiceDone { picked: 2, drawn: 2 });
+        assert_eq!(pile_ids(&s, CardZone::DiscardPile), std::vec![hand[0], hand[1]]);
+        assert_eq!(s.card_zones(&cid("hero")).unwrap().count(CardZone::Hand), 3);
+        // 抽到的是**抽牌堆的最上面两张**（`draw_card` 取 front），顺序照抄。
+        assert_eq!(
+            pile_ids(&s, CardZone::Hand),
+            std::vec![hand[2], ciid("draw_000001"), ciid("draw_000002")]
+        );
+        // 抽牌堆少了 2 张，弃牌堆多了 2 张 —— 池子不长（移动复用槽位）。
+        assert_eq!(s.card_count(), 7);
+    }
+
+    #[test]
+    fn drawing_past_an_empty_draw_pile_reshuffles_like_the_turn_start_does() {
+        // 抽牌堆空、弃牌堆有牌 ⇒ 必须走 `reshuffle_discard_into_draw`（一次，且推进 random_step）。
+        // 不做这一步的话"弃 2 抽 2"会安静地只抽到 0 张 —— 那看起来像是玩家选错了。
+        let mut s = hand_of(3);
+        let hand = pile_ids(&s, CardZone::Hand);
+        let step_before = s.random_step;
+        s.begin_choice(gamblers_brew(3)).unwrap();
+        let done = s.resolve_choice(&[hand[0], hand[1]]).unwrap();
+        assert_eq!(done.picked, 2);
+        // 弃牌堆里的 2 张被洗回抽牌堆，于是这 2 张**又**被抽了回来。
+        assert_eq!(done.drawn, 2, "重洗之后抽得满");
+        assert_eq!(s.random_step, step_before + 1, "重洗推进一次随机步");
+    }
+
+    #[test]
+    fn a_refused_choice_leaves_the_combat_byte_identical() {
+        // §161.2(a) 在战斗层的同一条话：拒绝 ⇒ 一个字节都没改。
+        //
+        // 判据用规范文本（`canonical_text`），因为 `CombatState` 没有派生 `PartialEq`
+        // （18 个字段里有 6 个定容容器，逐字段写一份"等价"没法确认自己没漏）。
+        // ⚠️ 规范文本**不含** `choice` 本身（参考引擎没有这个字段，见 §161.3 的文档），
+        // 所以下面每一种拒绝都额外断言 `pending_choice()` 没变 —— 两边都看才完整。
+        let mut s = hand_of(3);
+        let hand = pile_ids(&s, CardZone::Hand);
+        s.begin_choice(elixir(1, 2)).unwrap();
+        let before = canonical_text(&s);
+        let before_choice = s.pending_choice();
+
+        let refused = [
+            // (a) 张数：0 张低于下限 1、3 张高于上限 2。
+            (
+                s.clone().resolve_choice(&[]),
+                ChoiceError::Count {
+                    picked: 0,
+                    min: 1,
+                    max: 2,
+                },
+            ),
+            (
+                s.clone()
+                    .resolve_choice(&[hand[0], hand[1], hand[2]]),
+                ChoiceError::Count {
+                    picked: 3,
+                    min: 1,
+                    max: 2,
+                },
+            ),
+            // (b) 来源：库里没有这张牌。
+            (
+                s.clone().resolve_choice(&[ciid("not_a_card")]),
+                ChoiceError::NotInSource,
+            ),
+            // (c) 重复：同一张选两次。
+            (
+                s.clone().resolve_choice(&[hand[0], hand[0]]),
+                ChoiceError::Duplicate,
+            ),
+        ];
+        for (outcome, expected) in refused {
+            assert_eq!(outcome, Err(expected), "拒绝原因必须具体");
+        }
+
+        // 真·原子性：**不是**用 `s.clone()` 试错，而是在真身上走一遍再比。
+        assert_eq!(s.resolve_choice(&[hand[0], hand[0]]), Err(ChoiceError::Duplicate));
+        assert_eq!(canonical_text(&s), before, "被拒绝的选牌改了战斗");
+        assert_eq!(s.pending_choice(), before_choice, "被拒绝的选牌改了问句");
+
+        // 一张已经不在来源牌区里的牌：先把它丢掉，再从手牌里选它。
+        let mut moved = hand_of(3);
+        let hand = pile_ids(&moved, CardZone::Hand);
+        moved
+            .move_card(
+                &cid("hero"),
+                CardZone::Hand,
+                CardZone::DiscardPile,
+                CardSlot::from_index(0),
+                ZonePlacement::Bottom,
+            )
+            .unwrap();
+        moved.begin_choice(elixir(0, 2)).unwrap();
+        let before = canonical_text(&moved);
+        assert_eq!(
+            moved.resolve_choice(&[hand[0]]),
+            Err(ChoiceError::NotInSource),
+            "来源是手牌，选一张弃牌堆里的牌必须被拒"
+        );
+        assert_eq!(canonical_text(&moved), before);
+    }
+
+    #[test]
+    fn a_choice_reads_its_source_pile_instead_of_assuming_the_hand() {
+        // §161.3 ships `ChoiceSource::{Hand, DiscardPile}` and **only `Hand` has content today**
+        // (Elixir, Gambler's Brew). `DiscardPile` is Liquid Memories' half of the mechanism, and it
+        // waits for §161.4's per-copy price -- so it is here without a caller.
+        //
+        // That is only defensible if the variant is **tested**, otherwise "the source is read"
+        // is a claim nobody checked and the next potion would find out. Both directions:
+        let mut s = hand_of(2);
+        let hand = pile_ids(&s, CardZone::Hand);
+        s.move_card(
+            &cid("hero"),
+            CardZone::Hand,
+            CardZone::DiscardPile,
+            CardSlot::from_index(0),
+            ZonePlacement::Bottom,
+        )
+        .unwrap();
+        let discarded = pile_ids(&s, CardZone::DiscardPile);
+        assert_eq!(discarded.len(), 1);
+
+        s.begin_choice(PendingChoice {
+            chooser: cid("hero"),
+            source: ChoiceSource::DiscardPile,
+            min: 0,
+            max: 1,
+            then: ChoiceThen::Exhaust,
+        })
+        .unwrap();
+        let mut buf = [CardInstanceId::EMPTY; 8];
+        assert_eq!(s.choice_legal(&mut buf), Ok(1));
+        assert_eq!(&buf[..1], discarded.as_slice(), "the options are the discard pile");
+
+        // A hand card is **not** an option, even though it is the same combatant's card.
+        assert_eq!(s.resolve_choice(&[hand[1]]), Err(ChoiceError::NotInSource));
+        // The discarded one is, and it lands where `then` says.
+        assert_eq!(
+            s.resolve_choice(&discarded),
+            Ok(ChoiceDone {
+                picked: 1,
+                drawn: 0
+            })
+        );
+        assert_eq!(pile_ids(&s, CardZone::ExhaustPile), discarded);
+    }
+
+    #[test]
+    fn a_choice_that_could_never_be_answered_is_refused_up_front() {
+        // `min` 超过来源牌区的张数 ⇒ 这个问句永远无法回答。把它放行的话，这一局会被一个
+        // 玩家答不出来的弹窗钉死，而内核里没有任何东西会报错 —— 正是本项目最怕的那种形态。
+        let mut s = hand_of(2);
+        assert_eq!(
+            s.begin_choice(elixir(3, 3)),
+            Err(ChoiceError::Count {
+                picked: 2,
+                min: 3,
+                max: 3,
+            })
+        );
+        assert_eq!(s.pending_choice(), None, "被拒绝的问句不许留下");
+
+        // `min > max` 是内容错误（不是玩家输入错误），同样响亮。
+        assert_eq!(
+            s.begin_choice(elixir(2, 1)),
+            Err(ChoiceError::Count {
+                picked: 2,
+                min: 2,
+                max: 1,
+            })
+        );
+
+        // 选 0 张（下限 0）是合法答案，而且**真的**把问句消掉 —— 这就是"取消"。
+        s.begin_choice(elixir(0, 2)).unwrap();
+        assert_eq!(s.resolve_choice(&[]), Ok(ChoiceDone { picked: 0, drawn: 0 }));
+        assert_eq!(s.pending_choice(), None);
+    }
+
+    #[test]
+    fn a_second_choice_is_refused_instead_of_queued() {
+        // 不排队：两个待决问句叠在一起，界面无法表达先后，回放也无法表达。
+        let mut s = hand_of(2);
+        s.begin_choice(elixir(0, 2)).unwrap();
+        assert_eq!(
+            s.begin_choice(gamblers_brew(2)),
+            Err(ChoiceError::AlreadyPending),
+            "第二个问句必须被拒，而不是覆盖或排队"
+        );
+        assert_eq!(s.pending_choice(), Some(elixir(0, 2)), "第一个问句原样留下");
     }
 
     #[test]

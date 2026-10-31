@@ -1088,12 +1088,16 @@ def check_relics(doc):
 
 # §152: the potion vocabulary, as the ABI's `rd_env_use_potion` reads it. `kind:payload` carries a
 # status id; the payload form is the same convention the event vocabulary uses (§143).
+# §161.3: the two atoms whose effect is a **question** (`PendingChoice`). They read no amount and
+# they do not resolve inside `rd_env_use_potion` -- the ABI returns "pending" and the answer arrives
+# through `rd_env_choice_confirm`.
+POTION_CHOICE_KINDS = ("choice_hand_exhaust", "choice_hand_discard_draw")
 POTION_KINDS = ("combat_block", "combat_energy", "combat_heal_percent", "combat_draw",
                 "combat_damage", "combat_damage_all",
                 # §157/§158: the effects that are about the **run**, not the fight (Fruit Juice,
                 # Entropic Brew). §158 made them usable **outside** a fight, which is what the wiki
                 # says; before that the "no fight" check came first and refused them.
-                "max_hp", "potion_fill")
+                "max_hp", "potion_fill") + POTION_CHOICE_KINDS
 # Which effects need the player to pick an enemy (the ABI's code `1`). Kept here as the **second
 # opinion**: if the page's rule and this list disagree, one of them is wrong.
 POTION_NEEDS_TARGET = ("combat_damage", "combat_status_target")
@@ -1186,13 +1190,17 @@ def check_potions(doc):
             wants_target = kind in POTION_NEEDS_TARGET
             if wants_target and any(a.partition(":")[0] not in POTION_NEEDS_TARGET for a in atoms):
                 fail(label, "mixes a targeted atom with a non-targeted one")
-        # §158: `potion_fill` is the only atom that reads no amount, so the rule is per-atom.
-        takes_amount = any(atom.partition(":")[0] != "potion_fill" for atom in atoms)
+        # §158: the rule is per-atom, because not every atom reads an amount.
+        # §161.3 added the choice atoms, which read none either (the number of cards is the
+        # player's answer, not a constant in the content).
+        NO_AMOUNT = ("potion_fill",) + POTION_CHOICE_KINDS
+        takes_amount = any(atom.partition(":")[0] not in NO_AMOUNT for atom in atoms)
         if takes_amount:
             if not isinstance(amount, int) or amount <= 0:
                 fail(label, "Amount must be a positive integer, got %r" % (amount,))
         elif amount != 0:
-            fail(label, "`potion_fill` reads no amount, so it must be 0, got %r" % (amount,))
+            fail(label, "`%s` reads no amount, so it must be 0, got %r"
+                 % (atoms[0].partition(":")[0], amount,))
         seen_effects.add(effect)
     if len(potions) < 8:
         fail("Potions", "only %d potions -- too few to make a drop interesting" % len(potions))
