@@ -147,6 +147,12 @@ pub enum RunError {
     /// **Never** a truncation. StS decks grow past sixty cards in the late game, so the bound is a
     /// capacity and the honest failure is a red, not a dropped card.
     Capacity,
+    /// A content pool is longer than the fixed array a reader can hold (§161).
+    ///
+    /// `pool` is the pool's real length and `max` is the capacity. This used to be `.min(MAX_POOL)`
+    /// at seven call sites -- the entries past the cap simply never got drawn and nothing said so.
+    /// Same shape as the `MAX_POOL_IDS = 8` truncation §158 deleted for potions.
+    PoolTooLarge { pool: usize, max: usize },
     /// An id that is not ASCII, or longer than `rd_core::state::ID_CAP`.
     BadId,
     /// `RunState::enter_node` was handed a node that is not an edge out of the current one.

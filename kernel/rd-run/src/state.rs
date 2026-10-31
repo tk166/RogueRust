@@ -1826,13 +1826,35 @@ impl RunState {
     /// Fill the merchant's shelves. Prices are `[推断]`: the content carries no rarity, so every
     /// card is priced in the Common band and every relic likewise (`inv:§8.2`'s ranges are by
     /// rarity, and this content does not have one to look at).
+    /// Is this pool short enough for the fixed readers? (§161)
+    ///
+    /// Every reader below builds a `[_; MAX_POOL]` and used to iterate `len().min(MAX_POOL)`, which
+    /// **silently dropped** everything past the cap: the pool said it had N entries, the draw only
+    /// ever saw 64, and no gate, test or error could tell. This is the same shape as the
+    /// `MAX_POOL_IDS = 8` potion truncation §158 removed, one layer down (that one was in `rd-core`,
+    /// this one is the run layer's own buffers).
+    ///
+    /// The number stays a capacity -- replacing it with `Vec` would be the right answer for a
+    /// server and the wrong one for a `no_std` kernel that already pays for fixed tables. What
+    /// changes is that going over it is now **loud**.
+    fn pool_fits(len: usize) -> Result<(), RunError> {
+        if len > MAX_POOL {
+            return Err(RunError::PoolTooLarge {
+                pool: len,
+                max: MAX_POOL,
+            });
+        }
+        Ok(())
+    }
+
     fn stock_shop(&mut self, card_pool: &[PoolCard<'_>], relic_pool: &[PoolRelic<'_>]) -> Result<(), RunError> {
         if card_pool.is_empty() {
             return Err(RunError::EmptyPool("cards"));
         }
+        Self::pool_fits(card_pool.len())?;
         self.shop = ShopStock::empty();
         let mut order = [0u8; MAX_POOL];
-        let n = card_pool.len().min(MAX_POOL);
+        let n = card_pool.len();
         for (index, slot) in order.iter_mut().take(n).enumerate() {
             *slot = index as u8;
         }
@@ -1893,16 +1915,17 @@ impl RunState {
         if pool.is_empty() {
             return Ok(RunId::EMPTY);
         }
+        Self::pool_fits(pool.len())?;
         let mut rarities = [Rarity::Common; MAX_POOL];
-        for (slot, entry) in pool.iter().take(MAX_POOL).enumerate() {
+        for (slot, entry) in pool.iter().enumerate() {
             rarities[slot] = entry.rarity;
         }
-        let present = &rarities[..pool.len().min(MAX_POOL)];
+        let present = &rarities[..pool.len()];
         let band = self.pick_rarity(stream, &POTION_RARITY_WEIGHTS, present)?;
         let band = band.unwrap_or(pool[0].rarity);
         let mut eligible = [0usize; MAX_POOL];
         let mut count = 0usize;
-        for (slot, entry) in pool.iter().take(MAX_POOL).enumerate() {
+        for (slot, entry) in pool.iter().enumerate() {
             if entry.rarity == band {
                 eligible[count] = slot;
                 count += 1;
@@ -1988,7 +2011,8 @@ impl RunState {
         let mut candidates = [0usize; MAX_POOL];
         let mut rarities = [Rarity::Common; MAX_POOL];
         let mut count = 0usize;
-        for (slot, entry) in pool.iter().take(MAX_POOL).enumerate() {
+        Self::pool_fits(pool.len())?;
+        for (slot, entry) in pool.iter().enumerate() {
             if !Self::relic_rarity_is_droppable(entry.rarity) {
                 continue;
             }
@@ -2248,7 +2272,8 @@ impl RunState {
     fn grant_random_cards(&mut self, count: usize, pool: &[PoolCard<'_>]) -> Result<(), RunError> {
         let mut eligible = [0usize; MAX_POOL];
         let mut eligible_len = 0usize;
-        for index in 0..pool.len().min(MAX_POOL) {
+        Self::pool_fits(pool.len())?;
+        for index in 0..pool.len() {
             if !matches!(pool[index].rarity, Rarity::Status | Rarity::Curse) {
                 eligible[eligible_len] = index;
                 eligible_len += 1;
@@ -2489,7 +2514,8 @@ impl RunState {
         // Status and curse cards are never a reward (`inv:§3.5`; `slimed` is a Status).
         let mut eligible = [0usize; MAX_POOL];
         let mut eligible_len = 0usize;
-        for index in 0..card_pool.len().min(MAX_POOL) {
+        Self::pool_fits(card_pool.len())?;
+        for index in 0..card_pool.len() {
             if !matches!(card_pool[index].rarity, Rarity::Status | Rarity::Curse) {
                 eligible[eligible_len] = index;
                 eligible_len += 1;
@@ -3953,6 +3979,198 @@ mod tests {
                 "the idol is never rolled, the anchor always is"
             );
         }
+    }
+
+    /// **一条超长的内容池必须响亮失败，不许被截成 64**（REVIEW P1，§161.1）。
+    ///
+    /// 五个读取器（`stock_shop` / `pick_potion` / `pick_relic_avoiding` / `grant_random_cards` /
+    /// `roll_reward`）各有 `[_; MAX_POOL]`，原来都走 `len().min(MAX_POOL)`。超出的条目**永远抽不到**，
+    /// 而内容、内容门和任何断言都看不出来 —— 与 §158 删掉的 `MAX_POOL_IDS = 8` 同形。
+    ///
+    /// 判据分两半：**恰好 64 仍然能用**（容量不该被误伤），**65 立刻红**（并报出长度与上限）。
+    #[test]
+    fn a_pool_longer_than_the_capacity_is_loud_instead_of_cut() {
+        let at_cap: Vec<PoolCard<'static>> = (0..MAX_POOL)
+            .map(|_| PoolCard {
+                id: "strike",
+                rarity: Rarity::Common,
+            })
+            .collect();
+        let over: Vec<PoolCard<'static>> = (0..MAX_POOL + 1)
+            .map(|_| PoolCard {
+                id: "strike",
+                rarity: Rarity::Common,
+            })
+            .collect();
+
+        // `roll_reward` is the reader every fight goes through, so it is the one worth pinning.
+        let mut run = RunState::new(41, 80, 0, &DECK).expect("a run");
+        assert_eq!(
+            run.roll_reward(&at_cap, &[], &[], FightKind::Normal),
+            Ok(()),
+            "a pool of exactly MAX_POOL is fine"
+        );
+
+        let mut run = RunState::new(41, 80, 0, &DECK).expect("a run");
+        assert_eq!(
+            run.roll_reward(&over, &[], &[], FightKind::Normal),
+            Err(RunError::PoolTooLarge {
+                pool: MAX_POOL + 1,
+                max: MAX_POOL,
+            }),
+            "one card over the cap must be a red, not a silently smaller pool"
+        );
+
+        // `pick_relic_avoiding` and `pick_potion` are the other two the review named.
+        let relics_over: Vec<PoolRelic<'static>> = (0..MAX_POOL + 1)
+            .map(|_| PoolRelic {
+                id: "anchor",
+                rarity: Rarity::Common,
+            })
+            .collect();
+        let mut run = RunState::new(41, 80, 0, &DECK).expect("a run");
+        assert_eq!(
+            run.pick_relic(RunStream::Reward, &relics_over),
+            Err(RunError::PoolTooLarge {
+                pool: MAX_POOL + 1,
+                max: MAX_POOL,
+            })
+        );
+
+        let potions_over: Vec<PoolPotion<'static>> = (0..MAX_POOL + 1)
+            .map(|_| PoolPotion {
+                id: "fire_potion",
+                rarity: Rarity::Common,
+            })
+            .collect();
+        let mut run = RunState::new(41, 80, 0, &DECK).expect("a run");
+        assert_eq!(
+            run.pick_potion(RunStream::Potion, &potions_over),
+            Err(RunError::PoolTooLarge {
+                pool: MAX_POOL + 1,
+                max: MAX_POOL,
+            })
+        );
+
+        // The shop stocks through `begin_node`, so the failure has to come back out of a node.
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Shop));
+        assert_eq!(
+            run.begin_node(&over, &RELICS),
+            Err(RunError::PoolTooLarge {
+                pool: MAX_POOL + 1,
+                max: MAX_POOL,
+            }),
+            "a too-long card pool must refuse the node, not stock a shorter shop"
+        );
+    }
+
+    /// **拒绝不改任何东西，包括 RNG**（REVIEW §四.1 的 L2 层，§161.2）。
+    ///
+    /// `RunState` 派生 `Copy + PartialEq + Eq`，而且**没有藏在别处的可观察状态**：整局就是这一个
+    /// 结构体，`rng` 是它的一个字段。所以判据能写成最硬的一句 —— 调用前后整个 `RunState` 相等。
+    ///
+    /// 这比"逐字段比较"强，因为漏比一个字段正是 §160 的 P0（金币变了、牌组没变、没人发现）。
+    /// 逐字段的清单会过期，`==` 不会。
+    ///
+    /// 覆盖的拒绝种类：相位不对、目标不对、容量满、重复领取、重复购买。
+    #[test]
+    fn every_refused_action_leaves_the_run_byte_identical() {
+        macro_rules! refused {
+            ($run:expr, $call:expr, $why:expr) => {{
+                let before = *$run;
+                let outcome = $call;
+                assert!(outcome.is_err(), "{}: the action was ACCEPTED ({:?})", $why, outcome);
+                // `assert!` rather than `assert_eq!`: the diff would print two whole `RunState`s
+                // (the map alone is ~40 lines), and the only thing worth reading is which action.
+                assert!(
+                    *$run == before,
+                    "{}: a refused action changed the run ({:?})",
+                    $why,
+                    outcome
+                );
+            }};
+        }
+
+        // (a) 相位：还没进节点的每一种"结算"动作。
+        let mut run = ironclad();
+        refused!(&mut run, run.buy_card(0), "buy without a shop");
+        refused!(&mut run, run.buy_relic(0), "buy a relic without a shop");
+        refused!(&mut run, run.rest(), "rest without a rest site");
+        refused!(&mut run, run.smith(0, "strike+"), "smith without a rest site");
+        refused!(&mut run, run.remove_card(0), "remove without a shop");
+        refused!(&mut run, run.take_card(0), "take a card without a reward");
+        refused!(&mut run, run.skip_reward(), "skip without a reward");
+
+        // (b) 目标：不在图上的节点、以及不相邻的节点。
+        refused!(&mut run, run.enter_node(200), "a node that is not on the map");
+        refused!(&mut run, run.enter_node(u8::MAX), "the largest node index");
+
+        // (c) 容量：§160 的 P0 在这一层被抓住 —— 牌组满了还去买。
+        let mut shop = ironclad();
+        assert!(walk_to(&mut shop, NodeKind::Shop), "the map has no shop");
+        shop.adjust_gold(400);
+        assert_eq!(shop.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Shop));
+        while (shop.deck_len as usize) < MAX_RUN_DECK {
+            shop.push_card("strike").expect("room until the cap");
+        }
+        let gold = shop.gold();
+        refused!(&mut shop, shop.buy_card(0), "a card the deck has no room for");
+        assert_eq!(shop.gold(), gold, "and the gold is part of `before`, so this is belt and braces");
+        // 重复购买同一个货位。
+        let mut again = ironclad();
+        assert!(walk_to(&mut again, NodeKind::Shop));
+        again.adjust_gold(400);
+        assert_eq!(again.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Shop));
+        assert_eq!(again.buy_card(0), Ok(()), "the first buy works");
+        refused!(&mut again, again.buy_card(0), "the same shelf slot twice");
+    }
+
+    /// **同一种子 + 同一动作序列 ⇒ 同一局**（REVIEW §四.1，§161.2）。
+    ///
+    /// 这是"可复现"在**运行层**的版本：`rd-core` 有逐字节的哈希序列对拍，地图有
+    /// `same_seed_same_map`，但"整局走同一条路"此前只有浏览器 soak 在间接覆盖。判据直接比
+    /// `RunState`（含 `rng` 计数），所以一次多的 RNG 抽取也会红。
+    #[test]
+    fn the_same_seed_and_the_same_actions_replay_to_the_same_run() {
+        fn trace(seed: i32) -> Vec<RunState> {
+            let mut run = RunState::new(seed, 80, 0, &DECK).expect("a run");
+            let mut out = Vec::new();
+            for _ in 0..6 {
+                // A fixed policy: the **first** legal edge, then whatever the node asks for.
+                // `enter_node` takes a **global node index** (not a per-row slot), so the scan has
+                // to cover a range; a rejected index changes nothing (the test above pins that).
+                let mut moved = false;
+                for index in 0..32u8 {
+                    if run.enter_node(index).is_ok() {
+                        moved = true;
+                        break;
+                    }
+                }
+                if !moved {
+                    break;
+                }
+                let kind = run.begin_node(&basic_pool(), &RELICS).expect("begin");
+                match kind {
+                    NodeKind::Rest => {
+                        let _ = run.rest();
+                    }
+                    NodeKind::Treasure => {
+                        let _ = run.open_chest(&RELICS);
+                    }
+                    NodeKind::Shop => {
+                        let _ = run.leave();
+                    }
+                    _ => run.mark_resolved(),
+                }
+                out.push(run);
+            }
+            out
+        }
+        let first = trace(101);
+        assert!(first.len() >= 3, "the fixture must actually walk somewhere");
+        assert_eq!(first, trace(101), "same seed, same actions, same run");
+        assert_ne!(first, trace(102), "a different seed must be a different run");
     }
 
     /// §157 的两件新遗物真的付账（§160 把 Eternal Feather 那半搬到了进入时）。
