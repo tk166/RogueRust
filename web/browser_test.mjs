@@ -255,6 +255,68 @@ const report = await evaluate(`(async () => {
   out.choiceExhausted = ex.rd_env_pile_len(2) - exhaustBefore;
   out.choiceEnvActionsAfter = ex.rd_env_action_count();
 
+  // (i) **§161.4: the card comes back free, and the screen says so.**
+  // Liquid Memories takes a card out of the discard pile into the hand and prices **that copy** at
+  // zero. Three separate things have to agree: the picker is a mandatory one-pick question, the
+  // observation's cost column reads 0 (that is what the player sees), and the kernel really charges
+  // nothing. Plus one thing that must NOT happen: gracefully resolving without a pick.
+  out.lmFight = !document.getElementById("handPanel").hidden;
+  out.lmGranted = window.RD_DEBUG.givePotion("liquid_memories");
+  // Make sure the discard pile is not empty: play whatever is affordable first, then drink.
+  for (let guard = 0; guard < 8; guard++) {
+    const next = document.querySelector("#hand button.card:not([disabled])");
+    if (!next) break;
+    next.click();
+    await sleep(0);
+    const target = document.querySelector("#enemies [data-target-slot]");
+    if (target) { target.click(); await sleep(0); }
+  }
+  out.lmDiscards = ex.rd_env_pile_len(1);
+  const lmButton = document.querySelector(
+    '[data-use-potion="' + (ex.rd_run_potion_count() - 1) + '"]');
+  out.lmHasUse = Boolean(lmButton);
+  if (lmButton) {
+    try { lmButton.onclick(); out.lmThrew = null; } catch (error) { out.lmThrew = String(error); }
+    await sleep(0);
+  }
+  out.lmPending = ex.rd_env_choice_pending();
+  out.lmKind = ex.rd_env_choice_kind();
+  out.lmTitle = text(document.getElementById("modalTitle"));
+  const lmConfirm = document.querySelector('#modalBody [data-panel-action="choice-confirm"]');
+  out.lmConfirmDisabledEmpty = lmConfirm ? lmConfirm.disabled : null;
+  // A mandatory choice: pressing confirm with nothing ticked must be refused **by the kernel**, so
+  // the question survives. (The button is disabled too -- this checks the layer underneath it.)
+  const lmRefusal = ex.rd_env_choice_confirm();
+  out.lmRefusedEmpty = lmRefusal;
+  out.lmStillPending = ex.rd_env_choice_pending();
+  const lmOption = document.querySelector("#modalBody [data-choice]");
+  if (lmOption) { lmOption.click(); await sleep(0); }
+  const lmConfirm2 = document.querySelector('#modalBody [data-panel-action="choice-confirm"]');
+  out.lmConfirmEnabled = lmConfirm2 ? !lmConfirm2.disabled : null;
+  if (lmConfirm2) { lmConfirm2.onclick(); await sleep(0); await sleep(0); }
+  out.lmPendingAfter = ex.rd_env_choice_pending();
+  // The hand block is MAX_HAND_SLOTS x 4 starting at OFF_HAND, and +1 inside a slot is the
+  // **printed** cost that the page shows. If that column still says 2 while the kernel charges 0,
+  // the player is being lied to -- which is what this reads.
+  out.lmHandCosts = [];
+  for (let slot = 0; slot < Math.min(cell(10), 10); slot++) {
+    out.lmHandCosts.push(cell(OFF_HAND + slot * 4 + 1));
+  }
+  out.lmFreeShown = out.lmHandCosts.filter((cost) => cost === 0).length;
+  // And the kernel charges what the screen showed: play the free one, energy must not move.
+  const lmEnergyBefore = cell(8);
+  const freeSlot = out.lmHandCosts.indexOf(0);
+  let playedFree = false;
+  if (freeSlot >= 0) {
+    for (let tries = 0; tries < ex.rd_env_action_count(); tries++) {
+      if (ex.rd_env_action_kind(tries) !== 0 || ex.rd_env_action_arg(tries, 0) !== freeSlot) continue;
+      playedFree = ex.rd_env_step(tries) === 0;
+      break;
+    }
+  }
+  out.lmPlayedFree = playedFree;
+  out.lmEnergyKept = cell(8) === lmEnergyBefore;
+
   // §159: (seed, level) is the whole description of a run. Drive it through the **fields** the
   // player actually uses -- typing a level and pressing 开始 -- because a page whose level input is
   // not read is a dead affordance, and startWithSeed would have hidden that.
@@ -359,6 +421,28 @@ want(report.choicePendingAfter === 0, "confirming did not answer the question");
 want(report.choiceExhausted === 1, `confirming exhausted ${report.choiceExhausted} cards, expected 1`);
 want(report.choiceEnvActionsAfter > 0, "the action table did not come back after the answer");
 
+// §161.4: Liquid Memories -- the card comes back, free, and the screen agrees.
+want(report.lmFight === true, "could not reach a fight for the Liquid Memories check");
+want(report.lmGranted === 0, `the debug grant failed for liquid_memories (${report.lmGranted})`);
+want(report.lmDiscards >= 1, "the discard pile is empty: Liquid Memories has nothing to offer");
+want(report.lmHasUse === true, "Liquid Memories offered no 用 button");
+want(report.lmThrew === null, `the Liquid Memories button threw: ${report.lmThrew}`);
+want(report.lmPending === 1, `drinking it opened no question (pending ${report.lmPending})`);
+want(report.lmKind === 3, `the question is not a take-into-hand (kind ${report.lmKind})`);
+want(/弃牌堆/.test(report.lmTitle || ""),
+  `the picker does not say where the card comes from: ${JSON.stringify(report.lmTitle)}`);
+want(report.lmConfirmDisabledEmpty === true,
+  "confirm is enabled with nothing ticked, but the question demands exactly one card");
+want(report.lmRefusedEmpty === -2, `the kernel did not refuse an empty answer (${report.lmRefusedEmpty})`);
+want(report.lmStillPending === 1, "an empty answer consumed the question");
+want(report.lmConfirmEnabled === true, "confirm stayed disabled after ticking a card");
+want(report.lmPendingAfter === 0, "confirming did not answer the question");
+want(report.lmFreeShown >= 1,
+  `no card in hand reads 0 after Liquid Memories (costs ${JSON.stringify(report.lmHandCosts)})`);
+want(report.lmPlayedFree === true, "the free card is not playable");
+want(report.lmEnergyKept === true,
+  "playing the free card spent energy: the screen said 0 and the kernel took more");
+
 await page.close();
 
 
@@ -372,6 +456,9 @@ console.log("  card detail       " + report.card.title + " · " + report.card.bo
 console.log("  log               " + report.log[report.log.length - 1]);
 console.log("  top bar           " + report.topBar);
 console.log("  energy/unafford.  " + report.energyAfter + " / " + report.unaffordable);
+console.log("  liquid memories   " + report.lmTitle + " · " + report.lmFreeShown +
+  " free card(s) · empty answer refused " + report.lmRefusedEmpty +
+  " · free play kept energy " + report.lmEnergyKept);
 console.log("  card choice       " + report.choiceTitle + " · " + report.choiceOptions +
   " option(s) · ticked " + report.choiceTicked + " · exhausted " + report.choiceExhausted +
   " · table " + report.choiceEnvActions + " -> " + report.choiceEnvActionsAfter);

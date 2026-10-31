@@ -737,7 +737,28 @@ impl Session {
                 continue;
             };
             let def_id = instance.definition_id.as_str().to_string();
-            let cost = self.printed_energy_cost(&def_id);
+            let mut cost = self.printed_energy_cost(&def_id);
+            // §161.4: 一张带**每副本价格**的牌，屏幕上必须显示它真的要付的数字，否则玩家看到 2 而
+            // 内核收 0 —— 那正是"视图不是状态的投影"那一类谎。钳到 0 与 `play.rs` 的每阶段钳位一致。
+            //
+            // ⚠️ 这是**显示侧**的第二份定价：`hand_costs` 本来就是"印刷价"的显示副本
+            // （`printed_energy_cost` 也自己读了一遍 `Costs`）。它**不**覆盖别的费用修饰器（"下一张
+            // 免费"之类），`the_discount_follows_the_copy...` 那条测试把这个差距钉在**可观察**的
+            // 层面：显示 0 与真的收 0 必须同时成立。
+            if cost > 0 {
+                if let Ok(key) = rd_core::state::CounterId::new(
+                    rd_core::state::CARD_COST_DELTA_COUNTER,
+                ) {
+                    let delta = instance
+                        .mark_counters()
+                        .iter()
+                        .find(|counter| counter.key == key)
+                        .map_or(0, |counter| counter.value);
+                    if delta != 0 {
+                        cost = (cost + delta).max(0);
+                    }
+                }
+            }
             self.hand_costs.push(cost);
             self.hand_defs.push(def_id);
         }
@@ -1210,13 +1231,20 @@ impl Session {
     /// both are the same definition. Worth writing down because it stops being true the moment
     /// the ABI grows a per-instance quantity (marks, `mark_source_combatant_id`).
     fn step_play(&mut self, hand_index: usize, target_slot: i32) -> Result<(), String> {
-        let Some(def_id) = self.hand_defs.get(hand_index).cloned() else {
+        // §161.4: the step names the **instance**, not the definition. `HeroPlays` means "the first
+        // card in hand with this definition" (the reference's scenario script is text and has no
+        // instance number), so two copies of one definition were indistinguishable -- and the
+        // player clicks a hand *position*. A discounted `strike` behind a plain `strike` was
+        // unplayable: the button existed, the click played the other copy.
+        let Some(instance) = self
+            .hand_zone()
+            .and_then(|zones| zones.slot_at(CardZone::Hand, hand_index))
+            .and_then(|slot| self.state.card(slot))
+            .map(|card| card.id)
+        else {
             self.error = format!("hand slot {hand_index} is empty");
             return Ok(());
         };
-        // `Step` wants `&'static str`; the definition id came out of the content image, which is
-        // itself `'static`, so this is a genuine promotion rather than a hidden leak.
-        let card: &'static str = Box::leak(def_id.into_boxed_str());
         let target: Option<&'static str> = if target_slot < 0 {
             None
         } else {
@@ -1225,7 +1253,10 @@ impl Session {
                 .get(target_slot as usize)
                 .map(|enemy| &*Box::leak(enemy.id.to_string().into_boxed_str()))
         };
-        self.exec(&[Step::HeroPlays { card, target }])
+        self.exec(&[Step::HeroPlaysInstance {
+            card: instance,
+            target,
+        }])
     }
 
     /// kind 1: end the hero's turn and let **every** enemy take its own turn, then give the round
@@ -1907,6 +1938,9 @@ pub extern "C" fn rd_env_choice_kind() -> i32 {
         Some(choice) => match choice.then {
             ChoiceThen::Exhaust => 1,
             ChoiceThen::DiscardThenDraw => 2,
+            // §161.4: "take it into your hand and make it free" (Liquid Memories). A **new number**
+            // rather than reusing one, because the page writes the sentence from it.
+            ChoiceThen::ToHand => 3,
         },
         None => 0,
     }
@@ -2043,7 +2077,33 @@ pub extern "C" fn rd_env_choice_confirm() -> i32 {
         };
         picks.push(*id);
     }
-    match session.state.resolve_choice(&picks) {
+    // §161.4: "free this turn" is a **per-copy price** of `-printed`, and only the content can
+    // say what "printed" is. Computed here, at answer time, because the delta depends on **which**
+    // card was picked -- a question cannot carry it.
+    let mut cost_delta = 0i32;
+    if choice.then == ChoiceThen::ToHand {
+        let mut total = 0i32;
+        for id in &picks {
+            let Some(card) = session.state.find_card(&choice.chooser, id).and_then(|(_, slot)| {
+                session.state.card(slot)
+            }) else {
+                return refuse_with_text("选中的牌不在牌区里");
+            };
+            let printed = session.printed_energy_cost(card.definition_id.as_str());
+            // `X_COST_DISPLAY` is a **sentinel**, not a price: an X-cost card pays "all your energy"
+            // and never touches the `Costs` table, so a delta on it is invisible -- the card would be
+            // handed over advertised as free and then charge everything. Refusing keeps the question
+            // open (nothing changes), so the page can say "pick another one".
+            if printed <= 0 || printed == X_COST_DISPLAY {
+                return refuse_with_text(&std::format!(
+                    "这张牌没有可取消的印刷费用（X 费牌按全部能量结算），换一张"
+                ));
+            }
+            total = total.saturating_add(-printed);
+        }
+        cost_delta = total;
+    }
+    match session.state.resolve_choice(&picks, cost_delta) {
         Ok(done) => {
             session.choice_picks.clear();
             // A choice does not go through `d_env_step`, exactly like a potion -- the observation is

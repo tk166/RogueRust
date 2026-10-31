@@ -1445,6 +1445,31 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
             }
             session.choice_picks.clear();
         }
+        "choice_discard_to_hand" => {
+            // §161.4: Liquid Memories -- "Choose a card in your discard pile and return it to your
+            // hand. It costs 0 this turn." One card, exactly (`min = max = 1`), so `confirm` with
+            // nothing ticked is refused and the picker cannot be dismissed into the void.
+            let Some(zones) = session.state.card_zones(&hero) else {
+                return refuse("英雄没有牌区");
+            };
+            if zones.count(rd_core::state::CardZone::DiscardPile) == 0 {
+                // Nothing to choose: the question has no answers, so asking it would only put an
+                // empty picker on screen whose confirm button is disabled forever. Same rule as the
+                // empty hand for Elixir.
+                continue;
+            }
+            let question = rd_core::state::PendingChoice {
+                chooser: hero.clone(),
+                source: rd_core::state::ChoiceSource::DiscardPile,
+                min: 1,
+                max: 1,
+                then: rd_core::state::ChoiceThen::ToHand,
+            };
+            if let Err(e) = session.state.begin_choice(question) {
+                return refuse(&std::format!("这次选牌问不出口：{e}"));
+            }
+            session.choice_picks.clear();
+        }
         other if other.starts_with("combat_status") => {
             // `combat_status:<id>` = the hero; `combat_status_target:<id>` = the chosen enemy.
             let (needs_target, status_id) = match other.split_once(':') {
@@ -1948,6 +1973,7 @@ pub extern "C" fn rd_run_potion_effect(slot: i32) -> i32 {
                     | "potion_fill"
                     | "choice_hand_exhaust"
                     | "choice_hand_discard_draw"
+                    | "choice_discard_to_hand"
             )
             || ["combat_block", "combat_energy", "combat_heal_percent", "combat_draw"]
                 .contains(&kind)
@@ -3436,6 +3462,105 @@ mod tests {
         assert_eq!(rd_run_pending(), 0, "reset_at left a choice pending");
     }
 
+    /// §161.4: Liquid Memories -- the card comes back **and** it is actually free.
+    ///
+    /// `paper_cut` is the core image's `CARD[0]`: 1 energy printed, deals 6, lands in the discard
+    /// pile. The point of the test is the **third** assertion block: the observation's `cost` column
+    /// (what the player sees) and the energy the kernel really takes must agree, and the price must
+    /// be spent once.
+    #[test]
+    fn liquid_memories_returns_a_card_and_makes_that_copy_free_once() {
+        // `strike` is the one-cost card this **content** has (the `paper_cut` fixture belongs to
+        // rd-core's own image, which this crate does not load).
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+
+        // Play one card so the discard pile is not empty (Liquid Memories has nothing to choose
+        // from otherwise, and the atom then declines to ask -- see the empty-hand rule for Elixir).
+        let played = (0..rd_env_action_count())
+            .find(|index| rd_env_action_kind(*index) == crate::ACTION_PLAY)
+            .expect("a play action exists");
+        assert_eq!(rd_env_step(played), 0, "play the first card");
+        assert!(rd_env_pile_len(1) >= 1, "the played card is in the discard pile");
+        let discarded = rd_env_pile_len(1);
+        let hand_before = crate::slot().as_ref().expect("session").hand_len();
+
+        // Drink Liquid Memories.
+        assert_eq!(drink("liquid_memories", -1), 0, "accepted");
+        assert_eq!(crate::rd_env_choice_pending(), 1, "it asks a question");
+        assert_eq!(crate::rd_env_choice_kind(), 3, "3 = take into hand");
+        assert_eq!(crate::rd_env_choice_min(), 1, "the wiki says \"choose A card\"");
+        assert_eq!(crate::rd_env_choice_max(), 1);
+        assert_eq!(crate::rd_env_choice_count() as i32, discarded, "options = the discard pile");
+        // A mandatory choice: confirming with nothing ticked is **refused**, and the question
+        // survives so the page can re-prompt instead of dead-ending.
+        let before = crate::slot().as_ref().expect("session").hand_len();
+        assert_eq!(
+            crate::rd_env_choice_confirm(),
+            -2,
+            "zero picks must be refused for a `min = 1` question"
+        );
+        assert_eq!(crate::rd_env_choice_pending(), 1, "and the question is still open");
+        assert_eq!(crate::slot().as_ref().expect("session").hand_len(), before);
+
+        // Tick one and answer.
+        assert_eq!(crate::rd_env_choice_pick(0, 1), 0);
+        assert_eq!(crate::rd_env_choice_confirm(), 0, "answered");
+        assert_eq!(crate::rd_env_choice_pending(), 0);
+        assert_eq!(
+            rd_env_pile_len(1),
+            discarded - 1,
+            "the card left the discard pile"
+        );
+        assert_eq!(
+            crate::slot().as_ref().expect("session").hand_len(),
+            hand_before + 1,
+            "and arrived in the hand"
+        );
+
+        // ★ the **display** must agree with what the kernel will charge.
+        let slot = crate::slot().as_ref().expect("session");
+        let free = slot
+            .hand_costs
+            .iter()
+            .position(|cost| *cost == 0)
+            .expect("the returned card shows 0 in the observation, not its printed cost");
+        let def = slot.hand_defs[free].clone();
+        assert_eq!(def, "strike", "the free one is the card we took back");
+        assert_eq!(
+            slot.printed_energy_cost(&def),
+            1,
+            "and it really is a 1-cost card -- the 0 comes from the per-copy price"
+        );
+        drop(slot);
+
+        // ★ and the kernel charges what it showed.
+        let energy_before = crate::slot().as_ref().expect("session").energy_now();
+        let play_free = (0..crate::rd_env_action_count())
+            .find(|index| {
+                rd_env_action_kind(*index) == crate::ACTION_PLAY
+                    && crate::rd_env_action_arg(*index, 0) == free as i32
+            })
+            .expect("the free card is playable");
+        assert_eq!(rd_env_step(play_free), 0, "play it for free");
+        assert_eq!(
+            crate::slot().as_ref().expect("session").energy_now(),
+            energy_before,
+            "the kernel charged nothing -- the price the screen showed"
+        );
+
+        // ★ the price is **spent**: the same copy back in hand costs its printed 1 again.
+        let used = crate::slot().as_ref().expect("session");
+        let spent = used
+            .hand_costs
+            .get(free)
+            .copied()
+            .unwrap_or(-1);
+        assert_ne!(spent, 0, "no card left in hand is still free");
+    }
+
     /// §161.3: **every** `POT` row must classify as a known effect.
     ///
     /// Two readers share one vocabulary: `rd_env_use_potion`'s `match` decides what a potion does,
@@ -3482,7 +3607,7 @@ mod tests {
 
         // "Known" is not enough for the two new atoms: they act on the **hand**, so arming the
         // enemy picker for them is a wrong branch that `kind != 0` would happily accept.
-        for id in ["elixir", "gamblers_brew"] {
+        for id in ["elixir", "gamblers_brew", "liquid_memories"] {
             {
                 let session = run_slot().as_mut().expect("a session");
                 while !session.state.potions().is_empty() {
@@ -3493,7 +3618,7 @@ mod tests {
             assert_eq!(
                 rd_run_potion_effect(0),
                 2,
-                "`{id}` acts on the hand, so it needs no enemy target"
+                "`{id}` acts on a hand or a discard pile, so it needs no enemy target"
             );
         }
     }

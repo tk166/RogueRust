@@ -9558,6 +9558,14 @@
       "Effect": "choice_hand_discard_draw",
       "Amount": 0,
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "liquid_memories",
+      "NameKey": "Liquid Memories",
+      "DescriptionKey": "Choose a card in your discard pile and return it to your hand. It costs 0 this turn.",
+      "Effect": "choice_discard_to_hand",
+      "Amount": 0,
+      "Rarity": "Uncommon"
     }
   ],
   "EventTables": {

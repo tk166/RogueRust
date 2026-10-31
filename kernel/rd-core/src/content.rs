@@ -4221,9 +4221,9 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.potion_count(),
-            22,
-            "§158: eleven after §157, plus nine that need no new mechanic, plus §161.3's two \
-             whose effect is a card choice"
+            23,
+            "§158: eleven after §157, plus nine that need no new mechanic, plus the three whose \
+             effect is a card choice (§161.3 and §161.4)"
         );
         let mut ids = Vec::new();
         let mut bands = [0usize; 3];
@@ -4260,6 +4260,7 @@ mod tests {
                         // read no amount and do not resolve inside `rd_env_use_potion`.
                         "choice_hand_exhaust",
                         "choice_hand_discard_draw",
+                        "choice_discard_to_hand",
                     ]
                     .contains(kind),
                     "{}: unknown effect {:?}",
@@ -4281,7 +4282,13 @@ mod tests {
             // Entropic Brew's row and pinned nothing.
             if atoms
                 .iter()
-                .all(|(kind, _)| matches!(*kind, "potion_fill" | "choice_hand_exhaust" | "choice_hand_discard_draw"))
+                .all(|(kind, _)| matches!(
+                    *kind,
+                    "potion_fill"
+                        | "choice_hand_exhaust"
+                        | "choice_hand_discard_draw"
+                        | "choice_discard_to_hand"
+                ))
             {
                 assert_eq!(potion.amount, 0, "{}: takes no amount", potion.id);
             } else {
@@ -4315,6 +4322,7 @@ mod tests {
                 "gamblers_brew",
                 "heart_of_iron",
                 "liquid_bronze",
+                "liquid_memories",
                 "regen_potion",
                 "speed_potion",
                 "strength_potion",
@@ -4323,17 +4331,17 @@ mod tests {
             ]
         );
         // §158: the wiki's counts for the only character this content has (`Potions`, Ironclad only:
-        // **17 Common / 9 Uncommon / 7 Rare = 33**). Eleven are still missing, and every one of
-        // them needs a mechanic the kernel does not have yet -- three card offers from the pool
+        // **17 Common / 9 Uncommon / 7 Rare = 33**). Ten are still missing, and every one of them
+        // needs a mechanic the kernel does not have yet -- three card offers from the pool
         // (Attack / Skill / Power), a colorless pool (Colorless Potion), a card upgrade in a fight
-        // (Blessing of the Forge), a **per-copy price** (Liquid Memories, Snecko Oil), an auto-play
-        // or a duplicate play (Distilled Chaos, Duplication Potion), a death save (Fairy in a
-        // Bottle), a flee (Smoke Bomb). Pinning the band sizes is what makes "we are at 22" a fact
+        // (Blessing of the Forge), a **cost rewrite** (Snecko Oil), an auto-play or a duplicate
+        // play (Distilled Chaos, Duplication Potion), a death save (Fairy in a Bottle), a flee
+        // (Smoke Bomb). Pinning the band sizes is what makes "we are at 23" a fact
         // instead of an impression -- ⚠️ and it is the assertion that went red when §161.3 added
         // Elixir and Gambler's Brew, which is the whole reason it is a number here.
         assert_eq!(
             bands,
-            [12, 6, 4],
+            [12, 7, 4],
             "Common / Uncommon / Rare -- the wiki's Ironclad pool is 17 / 9 / 7"
         );
 

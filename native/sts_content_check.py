@@ -1091,7 +1091,8 @@ def check_relics(doc):
 # §161.3: the two atoms whose effect is a **question** (`PendingChoice`). They read no amount and
 # they do not resolve inside `rd_env_use_potion` -- the ABI returns "pending" and the answer arrives
 # through `rd_env_choice_confirm`.
-POTION_CHOICE_KINDS = ("choice_hand_exhaust", "choice_hand_discard_draw")
+POTION_CHOICE_KINDS = ("choice_hand_exhaust", "choice_hand_discard_draw",
+                       "choice_discard_to_hand")
 POTION_KINDS = ("combat_block", "combat_energy", "combat_heal_percent", "combat_draw",
                 "combat_damage", "combat_damage_all",
                 # §157/§158: the effects that are about the **run**, not the fight (Fruit Juice,

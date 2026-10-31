@@ -1561,6 +1561,21 @@ pub enum ZonePlacement {
     Top,
 }
 
+/// 一张牌**自己的**价格：`standard.card_cost_delta`（`StandardCombatIds.cs:93`）。
+///
+/// 参考的模型（`Cards/CardInstanceCostModifier.cs:13-34`）：这是一个**每张牌副本**的 mark
+/// counter，加到这张牌的**每一条**资源代价上、**钳到 0**、并且**在出牌付款之后清零**
+/// （`Cards/CardPlay.cs:176-183`：*"A per-copy price is a promise to ONE card and is kept once"*）。
+///
+/// 它为什么不能用一个状态表达：状态是**按持有者**给每张牌定价的（"你的技能牌便宜 1"），而
+/// "你刚拿回来的那张牌这次免费"是一个**只属于那一张牌**的承诺，得跟着它穿过弃牌堆与手牌。
+///
+/// ⚠️ **与 StS 的差别（写明了的不对称）**：StS 的 "costs 0 **this turn**" 在回合结束时过期；
+/// 参考引擎的模型是"被出牌消费"，所以一张没被打出的折扣牌会一直带着它。我们照参考实现 ——
+/// 给回合结束加一次清除等于发明一条参考没有的规则（§159.3 的教训是"不要实现一个关于不存在的
+/// 事件的分数"），而这条差别由 `the_per_copy_price_is_consumed_by_the_play` 钉住。
+pub const CARD_COST_DELTA_COUNTER: &str = "standard.card_cost_delta";
+
 /// 一次待决的选牌：玩家（或任何战斗员）**必须**先回答它，才能继续（§161.3）。
 ///
 /// # 为什么这是一个状态，而不是一个 UI 回调
@@ -1631,6 +1646,11 @@ pub enum ChoiceThen {
     Exhaust,
     /// 把选中的牌**丢弃**，然后**抽同样多张**（Gambler's Brew）。
     DiscardThenDraw,
+    /// 把选中的牌**拿进手牌**，并给它一个每副本价格（§161.4，Liquid Memories）。
+    ///
+    /// 价格由 `resolve_choice` 的 `cost_delta` 参数给出，因为"免费"是**负数张牌代价**，
+    /// 而那个数字只有知道内容的人算得出来（`CombatState` 里没有内容）。
+    ToHand,
 }
 
 impl ChoiceThen {
@@ -1640,6 +1660,7 @@ impl ChoiceThen {
         match self {
             Self::Exhaust => CardZone::ExhaustPile,
             Self::DiscardThenDraw => CardZone::DiscardPile,
+            Self::ToHand => CardZone::Hand,
         }
     }
 }
@@ -1678,6 +1699,10 @@ pub enum ChoiceError {
     NotInSource,
     /// 同一张牌被选了两次。
     Duplicate,
+    /// 给了一个 `cost_delta`，但这个问句的 `then` 根本没有价格（只有 [`ChoiceThen::ToHand`] 有）。
+    ///
+    /// **调用方的错，不是玩家的错**：静默忽略一个折扣等于"这张牌本来就要钱，而且玩家以为它免费"。
+    DeltaNotApplicable,
     /// 底层定容容器满了。
     Capacity(CapacityError),
 }
@@ -1698,6 +1723,9 @@ impl core::fmt::Display for ChoiceError {
             }
             Self::NotInSource => f.write_str("a picked card is not in the source pile"),
             Self::Duplicate => f.write_str("the same card was picked twice"),
+            Self::DeltaNotApplicable => {
+                f.write_str("a cost delta was given to a choice whose then has no price")
+            }
             Self::Capacity(e) => write!(f, "{e}"),
         }
     }
@@ -4481,9 +4509,20 @@ impl CombatState {
 
     /// 结算待决的选牌：把选中的牌按 [`ChoiceThen`] 送走，然后清掉问句。
     ///
+    /// `cost_delta` 是**每副本价格**（[`CARD_COST_DELTA_COUNTER`]），只有
+    /// [`ChoiceThen::ToHand`] 用得上；其余 `then` 必须传 `0`，否则
+    /// [`ChoiceError::DeltaNotApplicable`] —— 静默忽略一个折扣会让"它免费"变成一句谎。
+    ///
     /// **全部校验在动手之前**（见本节头第 1 条）。成功之后 [`Self::pending_choice`] 是 `None`。
-    pub fn resolve_choice(&mut self, picks: &[CardInstanceId]) -> Result<ChoiceDone, ChoiceError> {
+    pub fn resolve_choice(
+        &mut self,
+        picks: &[CardInstanceId],
+        cost_delta: i32,
+    ) -> Result<ChoiceDone, ChoiceError> {
         let choice = self.choice.ok_or(ChoiceError::NotPending)?;
+        if cost_delta != 0 && choice.then != ChoiceThen::ToHand {
+            return Err(ChoiceError::DeltaNotApplicable);
+        }
         let picked = picks.len();
         if picked < choice.min as usize || picked > choice.max as usize {
             return Err(ChoiceError::Count {
@@ -4534,6 +4573,16 @@ impl CombatState {
         // ---- 到这里为止一个字节都没改。----
         for &slot in &slots[..picked] {
             self.move_card(&choice.chooser, source, destination, slot, ZonePlacement::Bottom)?;
+            // §161.4: the per-copy price rides **on the card**, so it travels with it through the
+            // hand and the discard pile -- and `play.rs` zeroes it once the play is paid for.
+            if choice.then == ChoiceThen::ToHand && cost_delta != 0 {
+                let Ok(key) = CounterId::new(CARD_COST_DELTA_COUNTER) else {
+                    return Err(ChoiceError::NotInSource);
+                };
+                if let Some(card) = self.cards.as_mut_slice().get_mut(slot.index()) {
+                    card.set_mark_counter(key, cost_delta)?;
+                }
+            }
         }
         self.choice = None;
 
@@ -5511,7 +5560,7 @@ mod tests {
         let mut s = hand_of(3);
         let hand = pile_ids(&s, CardZone::Hand);
         s.begin_choice(elixir(0, 3)).unwrap();
-        let done = s.resolve_choice(&[hand[0], hand[2]]).unwrap();
+        let done = s.resolve_choice(&[hand[0], hand[2]], 0).unwrap();
         assert_eq!(done, ChoiceDone { picked: 2, drawn: 0 });
         assert_eq!(s.pending_choice(), None, "结算之后问句必须消失");
 
@@ -5538,7 +5587,7 @@ mod tests {
         }
         let hand = pile_ids(&s, CardZone::Hand);
         s.begin_choice(gamblers_brew(3)).unwrap();
-        let done = s.resolve_choice(&[hand[0], hand[1]]).unwrap();
+        let done = s.resolve_choice(&[hand[0], hand[1]], 0).unwrap();
         assert_eq!(done, ChoiceDone { picked: 2, drawn: 2 });
         assert_eq!(pile_ids(&s, CardZone::DiscardPile), std::vec![hand[0], hand[1]]);
         assert_eq!(s.card_zones(&cid("hero")).unwrap().count(CardZone::Hand), 3);
@@ -5559,7 +5608,7 @@ mod tests {
         let hand = pile_ids(&s, CardZone::Hand);
         let step_before = s.random_step;
         s.begin_choice(gamblers_brew(3)).unwrap();
-        let done = s.resolve_choice(&[hand[0], hand[1]]).unwrap();
+        let done = s.resolve_choice(&[hand[0], hand[1]], 0).unwrap();
         assert_eq!(done.picked, 2);
         // 弃牌堆里的 2 张被洗回抽牌堆，于是这 2 张**又**被抽了回来。
         assert_eq!(done.drawn, 2, "重洗之后抽得满");
@@ -5583,7 +5632,7 @@ mod tests {
         let refused = [
             // (a) 张数：0 张低于下限 1、3 张高于上限 2。
             (
-                s.clone().resolve_choice(&[]),
+                s.clone().resolve_choice(&[], 0),
                 ChoiceError::Count {
                     picked: 0,
                     min: 1,
@@ -5592,7 +5641,7 @@ mod tests {
             ),
             (
                 s.clone()
-                    .resolve_choice(&[hand[0], hand[1], hand[2]]),
+                    .resolve_choice(&[hand[0], hand[1], hand[2]], 0),
                 ChoiceError::Count {
                     picked: 3,
                     min: 1,
@@ -5601,12 +5650,12 @@ mod tests {
             ),
             // (b) 来源：库里没有这张牌。
             (
-                s.clone().resolve_choice(&[ciid("not_a_card")]),
+                s.clone().resolve_choice(&[ciid("not_a_card")], 0),
                 ChoiceError::NotInSource,
             ),
             // (c) 重复：同一张选两次。
             (
-                s.clone().resolve_choice(&[hand[0], hand[0]]),
+                s.clone().resolve_choice(&[hand[0], hand[0]], 0),
                 ChoiceError::Duplicate,
             ),
         ];
@@ -5615,7 +5664,7 @@ mod tests {
         }
 
         // 真·原子性：**不是**用 `s.clone()` 试错，而是在真身上走一遍再比。
-        assert_eq!(s.resolve_choice(&[hand[0], hand[0]]), Err(ChoiceError::Duplicate));
+        assert_eq!(s.resolve_choice(&[hand[0], hand[0]], 0), Err(ChoiceError::Duplicate));
         assert_eq!(canonical_text(&s), before, "被拒绝的选牌改了战斗");
         assert_eq!(s.pending_choice(), before_choice, "被拒绝的选牌改了问句");
 
@@ -5634,7 +5683,7 @@ mod tests {
         moved.begin_choice(elixir(0, 2)).unwrap();
         let before = canonical_text(&moved);
         assert_eq!(
-            moved.resolve_choice(&[hand[0]]),
+            moved.resolve_choice(&[hand[0]], 0),
             Err(ChoiceError::NotInSource),
             "来源是手牌，选一张弃牌堆里的牌必须被拒"
         );
@@ -5675,16 +5724,90 @@ mod tests {
         assert_eq!(&buf[..1], discarded.as_slice(), "the options are the discard pile");
 
         // A hand card is **not** an option, even though it is the same combatant's card.
-        assert_eq!(s.resolve_choice(&[hand[1]]), Err(ChoiceError::NotInSource));
+        assert_eq!(s.resolve_choice(&[hand[1]], 0), Err(ChoiceError::NotInSource));
         // The discarded one is, and it lands where `then` says.
         assert_eq!(
-            s.resolve_choice(&discarded),
+            s.resolve_choice(&discarded, 0),
             Ok(ChoiceDone {
                 picked: 1,
                 drawn: 0
             })
         );
         assert_eq!(pile_ids(&s, CardZone::ExhaustPile), discarded);
+    }
+
+    #[test]
+    fn a_card_taken_into_hand_carries_its_own_price() {
+        // Liquid Memories: take one card out of the discard pile into your hand, free this turn.
+        // The price is a **mark counter on that copy** (`standard.card_cost_delta`), which is the
+        // reference's model -- a status cannot say "the card you chose is free", because a status
+        // prices every card its wearer holds.
+        let mut s = hand_of(2);
+        let hand = pile_ids(&s, CardZone::Hand);
+        s.move_card(
+            &cid("hero"),
+            CardZone::Hand,
+            CardZone::DiscardPile,
+            CardSlot::from_index(0),
+            ZonePlacement::Bottom,
+        )
+        .unwrap();
+        let discarded = pile_ids(&s, CardZone::DiscardPile);
+        s.begin_choice(PendingChoice {
+            chooser: cid("hero"),
+            source: ChoiceSource::DiscardPile,
+            min: 1,
+            max: 1,
+            then: ChoiceThen::ToHand,
+        })
+        .unwrap();
+        // The delta is "minus the printed cost", which only the caller can compute. -2 here.
+        assert_eq!(
+            s.resolve_choice(&discarded, -2),
+            Ok(ChoiceDone {
+                picked: 1,
+                drawn: 0
+            })
+        );
+        assert_eq!(
+            pile_ids(&s, CardZone::Hand),
+            std::vec![hand[1], discarded[0]],
+            "the card is back in hand"
+        );
+        assert!(
+            pile_ids(&s, CardZone::DiscardPile).is_empty(),
+            "and no longer in the discard pile"
+        );
+
+        // The price rides on the **copy**, so a zone change does not lose it.
+        let (_, slot) = s.find_card(&cid("hero"), &discarded[0]).expect("in hand");
+        let counter = s.card(slot).expect("a card").mark_counters().iter()
+            .find(|counter| counter.key.as_str() == CARD_COST_DELTA_COUNTER)
+            .copied()
+            .expect("the price is on the card");
+        assert_eq!(counter.value, -2);
+    }
+
+    #[test]
+    fn a_price_given_to_a_choice_that_has_none_is_a_caller_bug() {
+        // Three `then`s, one price. Handing a discount to `Exhaust` would either be ignored (a lie:
+        // "it is free" -- no) or applied to cards that then get exhausted (pointless). Loud instead.
+        let mut s = hand_of(2);
+        let hand = pile_ids(&s, CardZone::Hand);
+        s.begin_choice(elixir(0, 2)).unwrap();
+        assert_eq!(
+            s.resolve_choice(&[hand[0]], -2),
+            Err(ChoiceError::DeltaNotApplicable)
+        );
+        assert_eq!(s.pending_choice(), Some(elixir(0, 2)), "and nothing moved");
+        // The same answer with the right argument works, so the refusal is about the delta only.
+        assert_eq!(
+            s.resolve_choice(&[hand[0]], 0),
+            Ok(ChoiceDone {
+                picked: 1,
+                drawn: 0
+            })
+        );
     }
 
     #[test]
@@ -5714,7 +5837,7 @@ mod tests {
 
         // 选 0 张（下限 0）是合法答案，而且**真的**把问句消掉 —— 这就是"取消"。
         s.begin_choice(elixir(0, 2)).unwrap();
-        assert_eq!(s.resolve_choice(&[]), Ok(ChoiceDone { picked: 0, drawn: 0 }));
+        assert_eq!(s.resolve_choice(&[], 0), Ok(ChoiceDone { picked: 0, drawn: 0 }));
         assert_eq!(s.pending_choice(), None);
     }
 

@@ -1237,9 +1237,13 @@ function maybeShowChoice() {
   const titles = {
     1: "消耗任意张手牌",
     2: "弃掉任意张手牌，然后抽同样多张",
+    3: "从弃牌堆拿一张回手牌（它这次免费）",
   };
-  document.getElementById("modalTitle").textContent =
-    `${titles[kind] || "选牌"}（0–${max} 张）`;
+  // The bound is the kernel's, not a guess: `min = max = 1` for Liquid Memories reads "1 张", a
+  // "any number" question reads "0–N 张". Printing a literal range for a mandatory choice would be
+  // the page inventing a rule.
+  const span = min === max ? `${min} 张` : `${min}–${max} 张`;
+  document.getElementById("modalTitle").textContent = `${titles[kind] || "选牌"} · ${span}`;
   const body = document.getElementById("modalBody");
   body.innerHTML = "";
 

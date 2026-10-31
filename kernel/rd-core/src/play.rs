@@ -136,7 +136,7 @@ use crate::ir::{Ir, IrError, NodeRef, Value};
 use crate::modifiers::{self, Candidate, ClaimLedger, Pipeline as ModifierPipeline};
 use crate::state::{
     CardInstanceId, CardSlot, CardZone, CapacityError, CombatResult, Combatant, CombatantId,
-    CombatantLifecycleState, CombatState, Container, Continuation, EffectRequest, Pool,
+    CombatantLifecycleState, CombatState, Container, Continuation, CounterId, EffectRequest, Pool,
     ProgramExecutionSlot, ProgramFrameState, ProgramTerminalHook, ResourceId, TagId, ZonePlacement,
 };
 use crate::status_bind;
@@ -424,7 +424,10 @@ const X_COST_TAG: &str = crate::battle::X_COST_TAG;
 /// X 费牌没有 `Costs` 时花哪条资源（与标准包的 `standard.energy` 同值，`inv:§2`）。
 const X_COST_RESOURCE_DEFAULT: &str = "standard.energy";
 /// `StandardCombatIds.CardCostDeltaCounter`（`:131`）。
-const CARD_COST_DELTA_COUNTER: &str = "standard.card_cost_delta";
+///
+/// §161.4: 定义搬到了 [`crate::state::CARD_COST_DELTA_COUNTER`] —— 写它的人（`resolve_choice`）
+/// 现在在 `state.rs`，两处字面量迟早漂。这里只是**读同一处**，与 `X_COST_TAG` 同形。
+const CARD_COST_DELTA_COUNTER: &str = crate::state::CARD_COST_DELTA_COUNTER;
 
 /// `EffectProgram<TContext>.DefaultMaxProgramSteps = 1024`（`EffectProgramContracts.cs:540`）。
 /// 本内容 62 个信封都显式写了 1024，这条只兜"缺席"。
@@ -806,6 +809,26 @@ fn apply_plan_in_chain(
     // `:125` EnsureCostsCanBePaid 已经在计划里做过；`:126` PayCosts。
     ensure_affordable(state, &plan.source, &plan.paid)?;
     pay_costs(state, &plan.source, &plan.paid)?;
+
+    // `Cards/CardPlay.cs:176-183`：*"A per-copy price is a promise to ONE card and is kept once:
+    // the play has been paid for by now, so the mark is spent here rather than lingering into the
+    // next time this card is drawn."*
+    //
+    // §161.4。位置是**付款之后**，和参考逐行对齐：放在付款之前就会在 `ensure_affordable` 失败时
+    // 把折扣吞掉（一张付不起的牌本来就没打出去，它的承诺还在）。
+    //
+    // ⚠️ 这一步**不**等于 StS 的 "this turn"：回合结束时我们不清这里（参考也没有这条规则）。
+    // 一张没被打出的折扣牌会一直带着它 —— 写明了的偏差，由
+    // `the_per_copy_price_is_consumed_by_the_play` 钉住。
+    if let Some((_, slot)) = find_card_slot(state, &plan.source, &plan.instance) {
+        if let Some(card) = state.card_mut(slot) {
+            if mark_counter(card, CARD_COST_DELTA_COUNTER) != 0 {
+                if let Ok(key) = CounterId::new(CARD_COST_DELTA_COUNTER) {
+                    card.set_mark_counter(key, 0)?;
+                }
+            }
+        }
+    }
     // `CardCostPaid`（`CardPlay.cs:138`）：只对**真的付了费用**的出牌发。
     if !plan.paid.is_empty() {
         state.enqueue_event(crate::state::CombatEvent::CardCostPaid {
@@ -2294,6 +2317,96 @@ mod tests {
     }
 
     // ------------------------------------------------------------- 1. 真打一张牌
+
+    /// 这张副本自己身上的 `standard.card_cost_delta` 读出来（没有 = 0）。
+    fn cost_delta_of(state: &CombatState, who: &str, instance: &str) -> i32 {
+        let id = CardInstanceId::new(instance).unwrap();
+        let Some((_, slot)) = find_card_slot(state, &cid(who), &id) else {
+            return 0;
+        };
+        state
+            .card(slot)
+            .map(|card| mark_counter(card, CARD_COST_DELTA_COUNTER))
+            .unwrap_or(0)
+    }
+
+    #[test]
+    fn the_per_copy_price_is_consumed_by_the_play() {
+        // §161.4：一张牌**自己**的价格。参考 `Cards/CardPlay.cs:176-183`：*"A per-copy price is a
+        // promise to ONE card and is kept once: the play has been paid for by now, so the mark is
+        // spent here rather than lingering into the next time this card is drawn."*
+        //
+        // `paper_cut` 印刷 1 能量（`CARD[0]`），所以"这次免费"就是 `-1`。
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut state = arena();
+        give_card(&mut state, "hero", CardZone::Hand, "card_h1", "paper_cut");
+        assert_eq!(energy_of(&state, "hero"), 3);
+
+        // 把价格写在那一张牌上（内容侧写它的是 Liquid Memories 那一路，§161.4 的 `resolve_choice`）。
+        let (_, slot) = find_card_slot(&state, &cid("hero"), &CardInstanceId::new("card_h1").unwrap())
+            .expect("card_h1 在手");
+        state
+            .card_mut(slot)
+            .unwrap()
+            .set_mark_counter(CounterId::new(CARD_COST_DELTA_COUNTER).unwrap(), -1)
+            .unwrap();
+        assert_eq!(cost_delta_of(&state, "hero", "card_h1"), -1);
+
+        let report = play_card(
+            &mut state,
+            Some(&content),
+            &request("card_h1", Some("enemy_a")),
+        )
+        .expect("折扣牌必须打得出去");
+        assert!(report.played);
+        // 印刷 1 + delta(-1) = 0 ⇒ 归零的条目**不进**费用表（`:488-489`），所以这一条**没付**。
+        assert_eq!(
+            report.paid.amount_for(&energy()),
+            None,
+            "免费就是真免费：一条 0 的费用不进表"
+        );
+        assert_eq!(energy_of(&state, "hero"), 3, "一滴能量都没扣");
+        assert_eq!(health_of(&state, "enemy_a"), 14, "牌照常生效（6 点）");
+
+        // ★ 承诺只兑现一次：打完就清零，哪怕这张牌已经进了弃牌堆。
+        assert_eq!(
+            cost_delta_of(&state, "hero", "card_h1"),
+            0,
+            "价格必须在**付款之后**消费掉 —— 否则它会跟着这张牌回到手牌，永久免费"
+        );
+
+        // 反面控制：把牌拿回手牌再打一次，这次要付满 1 点。
+        let (zone, slot) = find_card_slot(&state, &cid("hero"), &CardInstanceId::new("card_h1").unwrap())
+            .expect("还在牌区里");
+        let from = zone;
+        state
+            .move_card(
+                &cid("hero"),
+                from,
+                CardZone::Hand,
+                slot,
+                ZonePlacement::Bottom,
+            )
+            .unwrap();
+        state
+            .combatant_mut(&cid("hero"))
+            .unwrap()
+            .set_resource(energy(), 3, Some(3))
+            .unwrap();
+        let report = play_card(
+            &mut state,
+            Some(&content),
+            &request("card_h1", Some("enemy_a")),
+        )
+        .expect("第二次也要打得出去");
+        assert_eq!(
+            report.paid.amount_for(&energy()),
+            Some(1),
+            "第二次是**原价**：折扣是一次性的，不是这张牌的新印刷价"
+        );
+        assert_eq!(energy_of(&state, "hero"), 2);
+    }
 
     #[test]
     fn a_real_deal_damage_card_is_paid_resolved_and_discarded() {
