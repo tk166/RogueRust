@@ -9014,14 +9014,14 @@
       "DisplayName": "Eternal Feather",
       "RunPrograms": null,
       "CombatRules": null,
-      "Rarity": "Rare"
+      "Rarity": "Uncommon"
     },
     {
       "Id": "golden_idol",
       "DisplayName": "Golden Idol",
       "RunPrograms": null,
       "CombatRules": null,
-      "Rarity": "Rare"
+      "Rarity": "Event"
     },
     {
       "Id": "potion_belt",

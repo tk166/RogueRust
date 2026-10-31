@@ -8,10 +8,10 @@ come from re-serialising the parsed document with each item removed.
 
 | quantity | bytes | vs raw | vs compact |
 |---|---|---|---|
-| source on disk (pretty-printed JSON) | 261562 | 1.00x | — |
-| source, compact JSON | 136275 | 1.9x | 1.00x |
-| source, compact + redundant `Children` removed | 136261 | 1.9x | 1.00x |
-| source, compact + `Children` + presentation removed | 123719 | 2.1x | 1.10x |
+| source on disk (pretty-printed JSON) | 261567 | 1.00x | — |
+| source, compact JSON | 136280 | 1.9x | 1.00x |
+| source, compact + redundant `Children` removed | 136266 | 1.9x | 1.00x |
+| source, compact + `Children` + presentation removed | 123724 | 2.1x | 1.10x |
 | **RDCF binary, full** | **36880** | **7.1x** | **3.7x** |
 | **RDCF binary, presentation stripped** | **30360** | **8.6x** | **4.5x** |
 
@@ -65,7 +65,7 @@ under *shared*.  So the columns do not add up to the file size, by design.
 | `Statuses` *(table)* | 24 | 20719 | 1340 | 2086 |
 | `EnemyActions` *(table)* | 65 | 42634 | 1644 | 1975 |
 | `Encounters` *(table)* | 22 | 11971 | 864 | 7 |
-| `Relics` *(table)* | 13 | 1366 | 0 | 274 |
+| `Relics` *(table)* | 13 | 1371 | 0 | 280 |
 | `UnknownRooms` *(table)* | 9 | 1951 | 0 | 715 |
 | `Potions` *(table)* | 20 | 3275 | 0 | 1663 |
 | `Characters` | 1 | 432 | 16 | 20 |
@@ -79,7 +79,7 @@ under *shared*.  So the columns do not add up to the file size, by design.
 | `Start` | 9 | 386 | 0 | 6 |
 | **shared (reached from >1 group)** | | | **536** | **2789** |
 
-Column sum 136070 B = compact 136275 B minus the 205 B spent on the 16 top-level key
+Column sum 136075 B = compact 136280 B minus the 205 B spent on the 16 top-level key
 names, their quotes and the surrounding braces.
 
 `InertKeys` / `Notes` / `UnknownRooms` / `Potions` above are **document keys**: build metadata that is serialised into neither
@@ -148,7 +148,7 @@ Sources of truth for each of those claims:
   * `Events[].situations[].TextKey`, `...Choices[].TextKey`, `Shops[].Offers[].TextKey`
   * the whole `Presentation` object (4 B compact)
 
-  Measured effect: compact 136275 -> 123733 B; binary 36880 -> 30360 B (saves 6520 B, 17.7%).
+  Measured effect: compact 136280 -> 123738 B; binary 36880 -> 30360 B (saves 6520 B, 17.7%).
 
 ## 4. Derived tables
 
@@ -181,7 +181,7 @@ contains no raw JSON text at all.
 | `json.loads` of 0.2 MiB source | 0.005 |
 | derive | 0.013 |
 | encode | 0.017 |
-| serialize | 0.016 |
+| serialize | 0.015 |
 | total, one build | 0.050 |
 
 Peak Python heap during the whole run (both builds, tracemalloc): **2.1 MiB**.

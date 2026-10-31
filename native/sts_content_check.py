@@ -1235,9 +1235,13 @@ def check_relic_rarities(doc):
     `None`), so it would simply **never drop** -- a relic that exists and cannot be found is worse
     than one that is absent.
     """
-    print("[6f] relic rarities (port-plan.md §156)")
+    print("[6f] relic rarities (port-plan.md §156, §160)")
     relics = doc.get("Relics") or []
-    missing = [relic.get("Id") for relic in relics if relic.get("Rarity") not in RELAPSE_RARITIES]
+    # §160: `Event` is a **legal** relic rarity that is *not* droppable -- the wiki's navbox puts
+    # `golden_idol` there. The kernel's `pick_relic_avoiding` filters any band that is not in
+    # `RELIC_RARITY_WEIGHTS`, so an `Event` relic is holdable (and pays out) but never rolled.
+    allowed = tuple(RELAPSE_RARITIES) + ("Event",)
+    missing = [relic.get("Id") for relic in relics if relic.get("Rarity") not in allowed]
     if missing:
         fail("Relics.rarity", "no usable Rarity on %s" % (missing,))
     counts = {}

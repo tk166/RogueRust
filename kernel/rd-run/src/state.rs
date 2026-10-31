@@ -211,7 +211,10 @@ pub const MAX_SHOP_RELICS: usize = 3;
 #[must_use]
 pub const fn card_price_band(rarity: Rarity) -> (i32, i32) {
     match rarity {
-        Rarity::Common | Rarity::Basic | Rarity::Status | Rarity::Curse => (45, 55),
+        // §160: `Event` joins this band for the same reason -- it is a **relic** rarity that no
+        // card can carry, so reaching here at all means something upstream is confused. The Common
+        // band is the "somebody has to get a number" answer, and a card is never Event.
+        Rarity::Common | Rarity::Basic | Rarity::Status | Rarity::Curse | Rarity::Event => (45, 55),
         Rarity::Uncommon => (68, 82),
         Rarity::Rare => (135, 165),
     }
@@ -487,6 +490,13 @@ pub enum Rarity {
     Status = 4,
     /// Not in this content.
     Curse = 5,
+    /// **Not droppable** (§160): the wiki puts these relics in its `Event` bucket (`golden_idol`),
+    /// or in `Shop`/`Boss`. They exist, they have an effect, and no reward/chest/shop pool may roll
+    /// them -- `pick_relic_avoiding` filters them out before the weight draw.
+    ///
+    /// Without this bucket the only way to say "event-only" was to lie about the rarity, and the
+    /// content said `Rare`, so 17% of every elite reward could be an event relic.
+    Event = 6,
 }
 
 impl Rarity {
@@ -500,6 +510,9 @@ impl Rarity {
             "Rare" => Some(Self::Rare),
             "Status" => Some(Self::Status),
             "Curse" => Some(Self::Curse),
+            // §160: the wiki's `Event` bucket (and the shape `Shop`/`Boss` would take). Droppable
+            // relics are the three weighted bands; this one exists so "event-only" is sayable.
+            "Event" => Some(Self::Event),
             _ => None,
         }
     }
@@ -1578,16 +1591,30 @@ impl RunState {
     }
 
     /// What a rest would restore: 30% of maximum HP, rounded down (`inv:§8.1`).
+    ///
+    /// §160: the Eternal Feather term is **not** here any more. The wiki says it heals on **entering**
+    /// the rest site, so it fires in `begin_node` (see [`Self::rest_site_entry_heal`]) and a player
+    /// who chooses Smith keeps it. `rest_heal` is what the `Rest` **button** does, and that is only
+    /// the 30% plus Regal Pillow.
     #[must_use]
     pub fn rest_heal(&self) -> i32 {
-        // §156: Regal Pillow adds a flat bonus on top of the percentage. §157: Eternal Feather adds
-        // 3 HP per **five cards** in the deck -- the deck is a run quantity, so it is read here.
-        self.health_max * REST_HEAL_PERCENT / 100
-            + self.rest_heal_bonus()
-            + self.rest_heal_per_cards()
+        self.health_max * REST_HEAL_PERCENT / 100 + self.rest_heal_bonus()
     }
 
-    /// The card-count part of the rest heal (`eternal_feather`, §157): 3 HP per five cards.
+    /// The card-count part of the rest heal (`eternal_feather`, §157): 3 HP per **five** cards.
+    ///
+    /// §160: the multiplication used to come first (`amount * deck_len / 5`), which is a different
+    /// function -- it pays pro rata instead of per whole group of five. With `amount = 3`:
+    ///
+    /// | 牌组 | 应回 | 旧实现 `(3 * n) / 5` |
+    /// |---:|---:|---:|
+    /// | 8 | 3 | **4** |
+    /// | 9 | 3 | **5** |
+    /// | 14 | 6 | **8** |
+    /// | 10 | 6 | 6 |
+    ///
+    /// §157 的 `the_new_relics_pay_out` 用 10 张牌，两种写法都是 6 —— 一个分段函数只测了整档，
+    /// 所以全绿。这不是"测试不够多"，是**边界没测**。
     #[must_use]
     pub fn rest_heal_per_cards(&self) -> i32 {
         let mut bonus = 0i32;
@@ -1595,10 +1622,24 @@ impl RunState {
             if let Some(RelicEffect::RestHealPerFiveCards(amount)) =
                 Self::relic_effect(self.relics[slot].as_str())
             {
-                bonus += amount * i32::from(self.deck_len) / 5;
+                bonus += amount * (i32::from(self.deck_len) / 5);
             }
         }
         bonus
+    }
+
+    /// The heal for **entering** a rest site (§160).
+    ///
+    /// The wiki's Eternal Feather page says it in one line: "Heal applies **on entering**, so you can
+    /// Rest less often." So the trigger is the room, not the `Rest` choice -- a player who enters and
+    /// chooses **Smith** keeps the heal. §157 had bound it to `rest_heal()`, which only `rest()`
+    /// calls, so a smith at 8/10 cards silently lost 3 HP of value.
+    ///
+    /// `mark_rest_entered` is the one-shot guard: the room pays once, whichever button is pressed
+    /// first, and `Rest`'s own 30% is a **second**, separate effect.
+    #[must_use]
+    pub fn rest_site_entry_heal(&self) -> i32 {
+        self.rest_heal_per_cards()
     }
 
     /// The fight-gold multiplier in percent (`golden_idol` = 125, §157).
@@ -1675,7 +1716,17 @@ impl RunState {
             // A fight is the caller's business: it runs the combat session and calls
             // `end_of_combat` when it is done. Nothing to settle here.
             NodeKind::Combat => Pending::None,
-            NodeKind::Rest => Pending::Rest,
+            // §160: **entering** a rest site is its own effect. The wiki's Eternal Feather page:
+            // "Heal applies on entering, so you can Rest less often." So the room pays it here,
+            // before the player chooses Rest or Smith -- a relic bound to the `rest()` call would
+            // have paid nothing to a player who smithed.
+            NodeKind::Rest => {
+                let heal = self.rest_site_entry_heal();
+                if heal > 0 {
+                    self.heal_after_combat(heal);
+                }
+                Pending::Rest
+            }
             NodeKind::Treasure => Pending::Chest,
             NodeKind::Shop => {
                 self.stock_shop(card_pool, relic_pool)?;
@@ -1896,6 +1947,18 @@ impl RunState {
         Ok(None)
     }
 
+    /// Is this rarity in a **drop** band? (§160)
+    ///
+    /// The weight table is the single answer: a rarity that is not in it (the wiki's `Event`,
+    /// `Shop`, `Boss` buckets) can be held and can pay out, but no reward, chest or shelf will roll
+    /// it. That is what makes "event-only" sayable without lying about the rarity.
+    #[must_use]
+    pub fn relic_rarity_is_droppable(rarity: Rarity) -> bool {
+        RELIC_RARITY_WEIGHTS
+            .iter()
+            .any(|(band, _)| *band == rarity)
+    }
+
     /// Draw a relic from `pool` by **rarity weight** (§156), skipping relics already held.
     ///
     /// One helper for the chest, the shop and the elite reward: before this each of them picked
@@ -1917,10 +1980,18 @@ impl RunState {
         reserved: &[RunId],
     ) -> Result<RunId, RunError> {
         // Never a second copy of a held relic (§145) -- the filter every source shares.
+        // §160: **not-droppable rarities are not candidates at all.** `Event` (and `Shop`/`Boss`,
+        // if this content ever has them) are not in `RELIC_RARITY_WEIGHTS`, so `pick_rarity` can
+        // never return them -- but a pool made *only* of them would fall through to
+        // `unwrap_or(pool[first].rarity)` and hand one out anyway. Filtering here means "the pool
+        // has no droppable relic" arrives as `RunId::EMPTY`, which every caller already handles.
         let mut candidates = [0usize; MAX_POOL];
         let mut rarities = [Rarity::Common; MAX_POOL];
         let mut count = 0usize;
         for (slot, entry) in pool.iter().take(MAX_POOL).enumerate() {
+            if !Self::relic_rarity_is_droppable(entry.rarity) {
+                continue;
+            }
             if self.relics().iter().any(|held| held.as_str() == entry.id)
                 || reserved.iter().any(|taken| taken.as_str() == entry.id)
             {
@@ -1973,8 +2044,13 @@ impl RunState {
                 gold: self.gold,
             });
         }
-        self.adjust_gold(-offer.price);
+        // §160: **提交点只有一个，而且失败的那一半在前面。**
+        // 原来的顺序是"先扣钱、再 `push_card?`"：牌组满（`MAX_RUN_DECK`）时 `push_card` 返回
+        // `Capacity`，而金币已经扣掉、货架也还在 —— 一次**被拒绝的**操作改变了可观察状态。
+        // `push_card` 自己先校验再写，失败时什么都不动，所以调换顺序就是完整修复（`adjust_gold`
+        // 不会失败）。REVIEW 的 P0，判据是 `a_refused_purchase_leaves_the_run_untouched`。
         self.push_card(offer.id.as_str())?;
+        self.adjust_gold(-offer.price);
         self.shop.cards[slot].price = -1;
         Ok(())
     }
@@ -1998,8 +2074,9 @@ impl RunState {
                 gold: self.gold,
             });
         }
-        self.adjust_gold(-offer.price);
+        // §160: the same commit-point rule as `buy_card` -- the failing half must come first.
         self.push_relic(offer.id.as_str())?;
+        self.adjust_gold(-offer.price);
         self.shop.relics[slot].price = -1;
         Ok(())
     }
@@ -3742,7 +3819,143 @@ mod tests {
         );
     }
 
-    /// §157：Eternal Feather 按"每五张牌 3 点"回血，Golden Idol 让战斗金币 +25%。
+    /// **检测**：被拒绝的购买不许改变可观察状态（REVIEW P0，§160）。
+    ///
+    /// `buy_card` / `buy_relic` 原本是"先扣钱、再 `push_*?`"。牌组或遗物栏满时 `push_*` 返回
+    /// `Capacity`，而金币已经扣掉、货架也还在 —— 一次**被拒绝**的操作改了状态。契约是
+    /// "拒绝 ⇒ 什么都没发生（包括 RNG）"，所以失败的半步必须在前。
+    ///
+    /// 故意把顺序改回去，这条必须红 —— 而且红在**金币**上，不是红在错误码上。
+    #[test]
+    fn a_refused_purchase_leaves_the_run_untouched() {
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Shop), "the map has no shop");
+        run.adjust_gold(400);
+        assert_eq!(run.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Shop));
+
+        // Fill the deck to capacity, then try to buy a card.
+        while (run.deck_len as usize) < MAX_RUN_DECK {
+            run.push_card("strike").expect("room until the cap");
+        }
+        let gold = run.gold();
+        let price = run.shop().cards()[0].price;
+        assert!(price > 0, "the shelf has a price");
+        assert_eq!(
+            run.buy_card(0),
+            Err(RunError::Capacity),
+            "a full deck must refuse the card"
+        );
+        assert_eq!(run.gold(), gold, "and the gold must not move");
+        assert_eq!(
+            run.shop().cards()[0].price,
+            price,
+            "the offer is still on the shelf, at the same price"
+        );
+
+        // Same shape for relics: the array is smaller, so this one is easier to reach.
+        while (run.relics_len as usize) < MAX_RUN_RELICS {
+            run.push_relic("anchor").expect("room until the cap");
+        }
+        let gold = run.gold();
+        let price = run.shop().relics()[0].price;
+        assert_eq!(
+            run.buy_relic(0),
+            Err(RunError::Capacity),
+            "a full relic belt must refuse the relic"
+        );
+        assert_eq!(run.gold(), gold, "and the gold must not move");
+        assert_eq!(run.shop().relics()[0].price, price, "the relic is still shelved");
+    }
+
+    /// **Eternal Feather 的三件事**（REVIEW P1，§160）：整除、触发点、边界。
+    ///
+    /// 旧实现 `amount * deck_len / 5` 是**按期摊**，不是"每满五张"：8 张给 4、9 张给 5（应为 3）。
+    /// §157 只测了 10 张（两种写法都是 6），所以全绿 —— 分段函数只测了整档。
+    /// 触发点也错：它被塞进 `rest_heal()`，而那只在 `rest()` 里被调用，wiki 说的是**进入**时回血
+    /// （原文："Heal applies on entering, so you can Rest less often."），所以打铁也应吃到。
+    #[test]
+    fn the_eternal_feather_pays_per_whole_group_of_five_on_entering() {
+        for (cards, want) in [(5usize, 3), (8, 3), (9, 3), (10, 6), (14, 6)] {
+            let deck: Vec<&str> = vec!["strike"; cards];
+            let mut run = RunState::new(71, 80, 0, &deck).expect("a run");
+            run.push_relic("eternal_feather").expect("the feather");
+            assert_eq!(
+                run.rest_site_entry_heal(),
+                want,
+                "a deck of {cards} cards pays {want}"
+            );
+        }
+
+        // 触发点是**进入**：Rest 与 Smith 都吃到，而且只吃一次。
+        let mut resting = RunState::new(71, 80, 0, &DECK).expect("a run");
+        resting.push_relic("eternal_feather").expect("the feather");
+        assert!(walk_to(&mut resting, NodeKind::Rest));
+        resting.adjust_health(-40);
+        assert_eq!(resting.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Rest));
+        let after_entry = resting.health();
+        assert_eq!(after_entry, 46, "ten cards = two groups of five, on entering");
+        // The Rest **button** then adds its own 30% on top, and the entry heal is not repeated.
+        assert_eq!(resting.rest(), Ok(24), "30% of 80");
+        assert_eq!(resting.health(), after_entry + 24);
+
+        let mut smithing = RunState::new(71, 80, 0, &DECK).expect("a run");
+        smithing.push_relic("eternal_feather").expect("the feather");
+        assert!(walk_to(&mut smithing, NodeKind::Rest));
+        smithing.adjust_health(-40);
+        assert_eq!(smithing.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Rest));
+        assert_eq!(
+            smithing.health(),
+            46,
+            "entering pays even if the player is about to smith"
+        );
+        smithing.smith(0, "strike+").expect("upgrade");
+        assert_eq!(
+            smithing.health(),
+            46,
+            "and smithing does not take the entry heal back"
+        );
+    }
+
+    /// **`Event` 稀有度的遗物永远不进掉落池**（REVIEW P1，§160）。
+    ///
+    /// wiki 的遗物导航盒把 `golden_idol` 列在 **Event** 下：它能被持有、能生效，但宝箱/精英/商店
+    /// 都不该抽到它。内容里原来写的是 `Rare`，于是每次精英奖励有 17% 概率给出一件事件遗物。
+    ///
+    /// 判据分两半：只有事件遗物的池子给 `EMPTY`（而不是"退回第一个"），混合池子 40 次里一次都不给。
+    #[test]
+    fn an_event_relic_is_never_drawn() {
+        let mut run = RunState::new(31, 80, 0, &DECK).expect("a run");
+        let only_event = [PoolRelic {
+            id: "golden_idol",
+            rarity: Rarity::Event,
+        }];
+        for _ in 0..20 {
+            assert_eq!(
+                run.pick_relic(RunStream::Reward, &only_event),
+                Ok(RunId::EMPTY),
+                "a pool of event-only relics offers nothing"
+            );
+        }
+        let mixed = [
+            PoolRelic {
+                id: "golden_idol",
+                rarity: Rarity::Event,
+            },
+            PoolRelic {
+                id: "anchor",
+                rarity: Rarity::Common,
+            },
+        ];
+        for _ in 0..40 {
+            assert_eq!(
+                run.pick_relic(RunStream::Reward, &mixed),
+                Ok(RunId::new("anchor").expect("id")),
+                "the idol is never rolled, the anchor always is"
+            );
+        }
+    }
+
+    /// §157 的两件新遗物真的付账（§160 把 Eternal Feather 那半搬到了进入时）。
     #[test]
     fn the_new_relics_pay_out() {
         // Ten cards = two groups of five.
@@ -3750,10 +3963,17 @@ mod tests {
         let base = run.rest_heal();
         run.push_relic("eternal_feather").expect("the feather");
         assert_eq!(run.deck_len, 10, "the fixture deck is ten cards");
+        // §160: the feather is **not** part of `rest_heal` any more -- it pays on entering the rest
+        // site, so `rest_heal` (the Rest button) is unchanged and the entry heal is its own number.
         assert_eq!(
             run.rest_heal(),
-            base + 3 * 2,
-            "3 HP per five cards, two groups"
+            base,
+            "the Rest button does not carry the feather any more"
+        );
+        assert_eq!(
+            run.rest_site_entry_heal(),
+            3 * 2,
+            "3 HP per five cards, two groups, paid on entering"
         );
         assert_eq!(run.rest_heal_per_cards(), 6);
 
