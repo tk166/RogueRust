@@ -1,7 +1,17 @@
-"""§161.4 negative control. `python native/negctl_164.py price [--restore]`.
+"""§161.4 / §161.5 negative controls.
 
-Breaks the one thing §161.4 adds to `play.rs`: the price is zeroed after the play is paid for.
-`the_per_copy_price_is_consumed_by_the_play` must then go red on the *second* play (it stays free).
+`python native/negctl_164.py <which> [--restore]`
+
+  price    删掉"付款后置 0"  ⇒ 折扣变成永久的
+  display  删掉显示侧的每副本增量 ⇒ 屏幕说 1、内核收 0
+  pregrow  把 Offered 的候选**先造成三张实例**（§161.5 里最容易犯的那个错）
+
+`price` is the one thing §161.4 adds to `play.rs`: the price is zeroed after the play is paid for,
+so `the_per_copy_price_is_consumed_by_the_play` must go red on the *second* play (it stays free).
+
+`pregrow` is §161.5's central mistake: create **all three** offered candidates instead of only the
+chosen one. It looks harmless ("just throw the other two away") and it puts cards that the
+reference never had into `card_num=` and the card lines.
 """
 import io
 import sys
@@ -43,6 +53,16 @@ SHOWN_OK = """            if cost > 0 {
 SHOWN_BROKEN = """            // BROKEN CONTROL: the screen shows the printed price while the kernel charges less."""
 
 
+# ---- pregrow -----------------------------------------------------------------------------------
+STATE = "kernel/rd-core/src/state.rs"
+
+PREGROW_OK = """        let mut created = 0usize;
+        for definition in &definitions[..picked] {"""
+PREGROW_BROKEN = """        let mut created = 0usize;
+        // BROKEN CONTROL: create every candidate, chosen or not.
+        for definition in offered {"""
+
+
 def patch(path, ok, broken, restore):
     text = io.open(path, encoding="utf-8").read()
     a, b = (broken, ok) if restore else (ok, broken)
@@ -57,6 +77,8 @@ def main():
         patch(PLAY, OK, BROKEN, restore)
     elif which == "display":
         patch(LIB, SHOWN_OK, SHOWN_BROKEN, restore)
+    elif which == "pregrow":
+        patch(STATE, PREGROW_OK, PREGROW_BROKEN, restore)
     else:
         raise SystemExit(f"unknown control {which!r}")
     print(f"{which}: {'restored' if restore else 'broken'}")

@@ -1,4 +1,4 @@
-﻿��合验收器：一条命令跑完所有闸门，用**真实退出码**下判定。
+﻿# 合验收器：一条命令跑完所有闸门，用**真实退出码**下判定。
 #
 # 为什么需要它：这个项目的验收分散在 cargo / python / dotnet 三套工具链里，共十来个闸门。
 # 逐个手跑的问题是**会漏**，而且漏掉的那个一定是最后加的那条。更早的教训是：
@@ -14,7 +14,7 @@
 
 param(
   [switch]$SkipSlow,
-  [int]$UnitsFloor = 779
+  [int]$UnitsFloor = 783
 )
 
 $ErrorActionPreference = 'Stop'

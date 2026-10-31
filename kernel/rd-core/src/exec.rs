@@ -199,7 +199,7 @@ use crate::ir::{IrError, NodeKind, NodeRef, Value};
 use crate::modifiers::{self, Candidate, ClaimLedger, Operation, StatusKey};
 use crate::sel::{CompiledSelector, SelError};
 use crate::state::{
-    Bounded, CapacityError, CardDefinitionId, CardInstance, CardInstanceId, CardSlot, CardZone,
+    Bounded, CapacityError, CardDefinitionId, CardInstanceId, CardSlot, CardZone,
     ChainSlot, CombatResult, Combatant, CombatantId, CombatantLifecycleState, CombatState,
     Container, Continuation, CounterId, DefensivePool, DefensivePoolId, EffectItem, EffectRequest,
     Empty, ProgramExecutionFrame, ProgramExecutionSlot, ProgramFrameState, ProgramLoop,
@@ -3249,11 +3249,9 @@ fn create_card_for(
         return Err(ExecError::Modifier);
     }
     for _ in 0..count {
-        let number = ctx.state.next_card_instance_number;
-        let id = card_instance_id(number)?;
-        let instance = CardInstance::new(id, definition);
-        ctx.state.push_card(owner, zone, instance)?;
-        ctx.state.next_card_instance_number = number.saturating_add(1);
+        // §161.5: 铸号搬到了 `state::CombatState::create_card_instance`（`Offered` 也要用它）。
+        // 这里是**第二个调用方**，不是第二份实现 —— 两条铸号路径会给出两个"下一个是几"。
+        ctx.state.create_card_instance(owner, definition, zone)?;
     }
     Ok(())
 }
@@ -3504,13 +3502,6 @@ fn resource_pool(combatant: &Combatant, key: &ResourceId) -> Option<crate::state
 /// 某个战斗员某个牌区的张数（牌区表缺席 ⇒ 0，与 `state::CombatState::card_zones` 的契约一致）。
 fn zone_count(state: &CombatState, owner: &CombatantId, zone: CardZone) -> usize {
     state.card_zones(owner).map_or(0, |zones| zones.count(zone))
-}
-
-/// `card_%06d`（`CombatState.cs:689-696`：`$"card_{NextCardInstanceNumber:000000}"`）。
-fn card_instance_id(number: i32) -> Result<CardInstanceId, ExecError> {
-    let mut buffer = [0u8; INSTANCE_TEXT_CAP];
-    let text = numbered_instance_text(b"card_", number, &mut buffer)?;
-    Ok(CardInstanceId::new(text)?)
 }
 
 // =============================================================================================
@@ -3801,61 +3792,17 @@ fn status_instance_id(number: i32) -> Result<StatusInstanceId, ExecError> {
     Ok(StatusInstanceId::new(text)?)
 }
 
-/// 装一个 `<prefix>%06d` 的栈上缓冲要多大。
-///
-/// 最长情形：`status_`(7) + `i32` 的 10 位十进制 = 17 B。取 32 是"怎么都不会撞上"的余量，
-/// 真正越界时 [`numbered_instance_text`] 报错而不是截断。
-const INSTANCE_TEXT_CAP: usize = 32;
+/// 装一个 `<prefix>%06d` 的栈上缓冲要多大（§161.5：定义搬到了 `state.rs`）。
+const INSTANCE_TEXT_CAP: usize = crate::state::INSTANCE_TEXT_CAP;
 
-/// `<prefix>%06d` 的**零分配**版（`format!` 在 `no_std` 里没有）。
-///
-/// 逐字对应 C# 的 `$"{prefix}{number:000000}"`：负数在参考里不可能出现（生成器从 1 开始），
-/// 真出现时按 **0** 写（与旧实现 `status_instance_id` 的行为一致，那不是"猜"，是"不可能发生"）。
-/// 返回的 `&str` 借用 `buffer`，所以调用方持有它、并立刻用完。
+/// `<prefix>%06d` 的零分配版。**实现在 [`crate::state::numbered_text`]**（§161.5 搬过去，
+/// 因为 `create_card_instance` 在 `state.rs` 里也要它）。这里只把 `Option` 换成 `ExecError`。
 fn numbered_instance_text<'b>(
     prefix: &[u8],
     number: i32,
     buffer: &'b mut [u8; INSTANCE_TEXT_CAP],
 ) -> Result<&'b str, ExecError> {
-    // 10 位十进制够装下 `u32::MAX`（10 位），再补前导 0 到 6 位。
-    let mut digits = [b'0'; 12];
-    let mut len = 0usize;
-    let mut value = if number < 0 { 0u32 } else { number as u32 };
-    loop {
-        let Some(slot) = digits.get_mut(len) else {
-            return Err(ExecError::Modifier);
-        };
-        *slot = b'0' + (value % 10) as u8;
-        len += 1;
-        value /= 10;
-        if value == 0 {
-            break;
-        }
-    }
-    while len < 6 {
-        let Some(slot) = digits.get_mut(len) else {
-            return Err(ExecError::Modifier);
-        };
-        *slot = b'0';
-        len += 1;
-    }
-
-    let Some(head) = buffer.get_mut(..prefix.len()) else {
-        return Err(ExecError::Modifier);
-    };
-    head.copy_from_slice(prefix);
-    for index in 0..len {
-        let Some(slot) = buffer.get_mut(prefix.len() + index) else {
-            return Err(ExecError::Modifier);
-        };
-        let Some(digit) = digits.get(len - 1 - index) else {
-            return Err(ExecError::Modifier);
-        };
-        *slot = *digit;
-    }
-    let total = prefix.len().checked_add(len).ok_or(ExecError::Modifier)?;
-    let bytes = buffer.get(..total).ok_or(ExecError::Modifier)?;
-    core::str::from_utf8(bytes).map_err(|_| ExecError::Modifier)
+    crate::state::numbered_text(prefix, number, buffer).ok_or(ExecError::Modifier)
 }
 
 // =============================================================================================
@@ -4509,6 +4456,8 @@ fn block_pool(combatant: &Combatant) -> (i32, Option<i32>, bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // §161.5：`CardInstance` 不再是本模块的生产依赖（铸号搬进了 `state`），但测试要手搓卡。
+    use crate::state::CardInstance;
     use crate::content::{Content, S_STR, S_STRO, S_TRM, S_TRW};
     use crate::ir::Ir;
     use crate::state::{CombatId, CombatantDefinitionId, TeamId};

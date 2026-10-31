@@ -98,6 +98,8 @@ const REQUIRED = [
   "rd_env_choice_pending", "rd_env_choice_kind", "rd_env_choice_min", "rd_env_choice_max",
   "rd_env_choice_count", "rd_env_choice_pick", "rd_env_choice_selected", "rd_env_choice_clear",
   "rd_env_choice_confirm",
+  // §161.5: where the options come from (a pile vs three offered definitions).
+  "rd_env_choice_source",
   // §161.3: the debug potion grant, used by `RD_DEBUG.givePotion` and by `browser_test`.
   "rd_run_grant_potion",
 ];

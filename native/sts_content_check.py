@@ -1092,7 +1092,7 @@ def check_relics(doc):
 # they do not resolve inside `rd_env_use_potion` -- the ABI returns "pending" and the answer arrives
 # through `rd_env_choice_confirm`.
 POTION_CHOICE_KINDS = ("choice_hand_exhaust", "choice_hand_discard_draw",
-                       "choice_discard_to_hand")
+                       "choice_discard_to_hand", "choice_offered")
 POTION_KINDS = ("combat_block", "combat_energy", "combat_heal_percent", "combat_draw",
                 "combat_damage", "combat_damage_all",
                 # §157/§158: the effects that are about the **run**, not the fight (Fruit Juice,
@@ -1161,6 +1161,9 @@ def check_potions(doc):
     print("[3b] potions (port-plan.md §152, §158)")
     potions = doc.get("Potions") or []
     statuses = {status["Id"] for status in doc.get("Statuses") or []}
+    # §161.5: every tag any card carries -- `choice_offered:<tag>` payloads must be one of these.
+    tags = {tag.get("value") for card in doc.get("Cards") or []
+            for tag in card.get("Tags") or []}
     seen_effects = set()
     for potion in potions:
         potion_id = potion.get("Id")
@@ -1178,8 +1181,21 @@ def check_potions(doc):
         for atom in atoms:
             kind, _, payload = atom.partition(":")
             if kind in POTION_KINDS:
-                if payload:
+                if payload and kind != "choice_offered":
                     fail(label, "`%s` takes no payload" % kind)
+                if kind == "choice_offered":
+                    # §161.5: the payload is a **tag**, and the promise is "three of them exist".
+                    # 少于三张时这瓶药给不出它写的东西 —— 那正是一个安静的死按钮。
+                    if payload not in tags:
+                        fail(label, "`choice_offered` names tag %r, which no card carries"
+                             % (payload,))
+                    else:
+                        carriers = sum(1 for card in doc.get("Cards") or []
+                                       if any(t.get("value") == payload
+                                              for t in card.get("Tags") or []))
+                        if carriers < 3:
+                            fail(label, "`choice_offered:%s` needs 3 cards carrying it, %d exist"
+                                 % (payload, carriers))
             elif kind in ("combat_status", "combat_status_target"):
                 if payload not in statuses:
                     fail(label, "`%s` names status %r, which is not a STAT row" % (kind, payload))

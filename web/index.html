@@ -1234,16 +1234,21 @@ function maybeShowChoice() {
   const count = ex.rd_env_choice_count();
   const min = ex.rd_env_choice_min();
   const max = ex.rd_env_choice_max();
+  // §161.5: the sentence is a function of **both** halves. `kind` alone cannot tell "from your
+  // discard pile" from "from three random attack cards" -- they are the same `then`.
+  const source = ex.rd_env_choice_source();
   const titles = {
-    1: "消耗任意张手牌",
-    2: "弃掉任意张手牌，然后抽同样多张",
-    3: "从弃牌堆拿一张回手牌（它这次免费）",
+    "1:1": "消耗任意张手牌",
+    "1:2": "弃掉任意张手牌，然后抽同样多张",
+    "1:3": "从弃牌堆拿一张回手牌（它这次免费）",
+    "2:3": "从三张候选里选一张加进手牌（它这次免费）",
   };
   // The bound is the kernel's, not a guess: `min = max = 1` for Liquid Memories reads "1 张", a
   // "any number" question reads "0–N 张". Printing a literal range for a mandatory choice would be
   // the page inventing a rule.
   const span = min === max ? `${min} 张` : `${min}–${max} 张`;
-  document.getElementById("modalTitle").textContent = `${titles[kind] || "选牌"} · ${span}`;
+  document.getElementById("modalTitle").textContent =
+    `${titles[source + ":" + kind] || "选牌"} · ${span}`;
   const body = document.getElementById("modalBody");
   body.innerHTML = "";
 

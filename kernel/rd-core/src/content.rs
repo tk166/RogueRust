@@ -4221,9 +4221,9 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.potion_count(),
-            23,
-            "§158: eleven after §157, plus nine that need no new mechanic, plus the three whose \
-             effect is a card choice (§161.3 and §161.4)"
+            25,
+            "§158: eleven after §157, plus nine that need no new mechanic, plus the five whose \
+             effect is a card choice (§161.3 / §161.4 / §161.5)"
         );
         let mut ids = Vec::new();
         let mut bands = [0usize; 3];
@@ -4261,16 +4261,20 @@ mod tests {
                         "choice_hand_exhaust",
                         "choice_hand_discard_draw",
                         "choice_discard_to_hand",
+                        // §161.5: `choice_offered:<tag>` -- 三张候选，payload 是**标签**。
+                        "choice_offered",
                     ]
                     .contains(kind),
                     "{}: unknown effect {:?}",
                     potion.id,
                     potion.effect
                 );
-                // The payload form is only for the two status kinds, and only those need it.
+                // The payload form is only for the two status kinds and §161.5's tag kind, and only
+                // those need it. (A `kind` that carries a payload it ignores is the same silent shape
+                // as a payload-less kind that reads one.)
                 assert_eq!(
                     payload.is_some(),
-                    kind.starts_with("combat_status"),
+                    kind.starts_with("combat_status") || *kind == "choice_offered",
                     "{}: payload presence does not match {:?}",
                     potion.id,
                     kind
@@ -4288,6 +4292,7 @@ mod tests {
                         | "choice_hand_exhaust"
                         | "choice_hand_discard_draw"
                         | "choice_discard_to_hand"
+                        | "choice_offered"
                 ))
             {
                 assert_eq!(potion.amount, 0, "{}: takes no amount", potion.id);
@@ -4306,6 +4311,7 @@ mod tests {
             ids,
             vec![
                 "ancient_potion",
+                "attack_potion",
                 "block_potion",
                 "blood_potion",
                 "cultist_potion",
@@ -4324,6 +4330,7 @@ mod tests {
                 "liquid_bronze",
                 "liquid_memories",
                 "regen_potion",
+                "skill_potion",
                 "speed_potion",
                 "strength_potion",
                 "swift_potion",
@@ -4331,17 +4338,17 @@ mod tests {
             ]
         );
         // §158: the wiki's counts for the only character this content has (`Potions`, Ironclad only:
-        // **17 Common / 9 Uncommon / 7 Rare = 33**). Ten are still missing, and every one of them
-        // needs a mechanic the kernel does not have yet -- three card offers from the pool
-        // (Attack / Skill / Power), a colorless pool (Colorless Potion), a card upgrade in a fight
-        // (Blessing of the Forge), a **cost rewrite** (Snecko Oil), an auto-play or a duplicate
-        // play (Distilled Chaos, Duplication Potion), a death save (Fairy in a Bottle), a flee
-        // (Smoke Bomb). Pinning the band sizes is what makes "we are at 23" a fact
+        // **17 Common / 9 Uncommon / 7 Rare = 33**). Eight are still missing: Power Potion needs
+        // three `power`-tagged cards (this content has zero), Colorless Potion needs a colorless
+        // pool, Blessing of the Forge a card upgrade in a fight, Snecko Oil an **hand-wide** cost
+        // rewrite, Distilled Chaos / Duplication Potion an auto-play and a duplicate play, Fairy
+        // in a Bottle a death save, Smoke Bomb a flee. Pinning the band sizes is what makes
+        // "we are at 25" a fact
         // instead of an impression -- ⚠️ and it is the assertion that went red when §161.3 added
         // Elixir and Gambler's Brew, which is the whole reason it is a number here.
         assert_eq!(
             bands,
-            [12, 7, 4],
+            [14, 7, 4],
             "Common / Uncommon / Rare -- the wiki's Ironclad pool is 17 / 9 / 7"
         );
 

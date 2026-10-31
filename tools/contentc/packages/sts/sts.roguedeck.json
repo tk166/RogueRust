@@ -9566,6 +9566,22 @@
       "Effect": "choice_discard_to_hand",
       "Amount": 0,
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "attack_potion",
+      "NameKey": "Attack Potion",
+      "DescriptionKey": "Choose 1 of 3 random Attack cards to add to your hand. It costs 0 this turn.",
+      "Effect": "choice_offered:attack",
+      "Amount": 0,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "skill_potion",
+      "NameKey": "Skill Potion",
+      "DescriptionKey": "Choose 1 of 3 random Skill cards to add to your hand. It costs 0 this turn.",
+      "Effect": "choice_offered:skill",
+      "Amount": 0,
+      "Rarity": "Common"
     }
   ],
   "EventTables": {

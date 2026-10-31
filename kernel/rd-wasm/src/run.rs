@@ -1439,6 +1439,82 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 min: 0,
                 max: hand.min(u8::MAX as usize) as u8,
                 then,
+                offered: rd_core::state::Bounded::new(),
+            };
+            if let Err(e) = session.state.begin_choice(question) {
+                return refuse(&std::format!("这次选牌问不出口：{e}"));
+            }
+            session.choice_picks.clear();
+        }
+        other if other.starts_with("choice_offered:") => {
+            // §161.5: Attack / Skill Potion -- "choose 1 of 3 random <type> cards to add to your
+            // hand; it costs 0 this turn".
+            let Some((_, tag)) = other.split_once(':') else {
+                return refuse("`choice_offered` 缺少 `:<tag>`");
+            };
+            let image = content();
+            // The pool is**内容**的事：哪些牌算 Attack 写在 `CARD.Tags` 里。
+            let mut pool: Vec<rd_run::state::PoolCard<'static>> = Vec::new();
+            // 走到 `None` 为止：`Content` 没有"卡表有几行"的公开读数，而"第一行读不出来"
+            // 就是表的结尾（`card(i)` 对越界下标返回 `None`）。
+            let mut index = 0u32;
+            while let Some(row) = image.card(index) {
+                index += 1;
+                // `CardRow` 的格子是**串池句柄**，不是 `&str`：要过一次 `Content::string`。
+                let Some(id) = image.string(row.id()) else {
+                    continue;
+                };
+                if image.card_has_tag(id, tag) != Some(true) {
+                    continue;
+                }
+                let Some(rarity) = rd_run::state::Rarity::from_name(
+                    image.string(row.rarity()).unwrap_or(""),
+                ) else {
+                    // 一个认不出的稀有度会让"这张牌该不该在池子里"变成一个猜 —— 拒绝。
+                    return refuse(&std::format!("`{id}` 的稀有度认不出来"));
+                };
+                pool.push(rd_run::state::PoolCard { id, rarity });
+            }
+            // 三张是**规则**，不是上限：少于三张时这瓶药给不出它承诺的东西。
+            if pool.len() < MAX_OFFERED {
+                return refuse(&std::format!(
+                    "`{tag}` 牌只有 {} 张，凑不出 {MAX_OFFERED} 张候选",
+                    pool.len()
+                ));
+            }
+            let Some(run) = run_slot().as_mut() else {
+                return -1;
+            };
+            let mut picked = [rd_run::state::RunId::EMPTY; MAX_OFFERED];
+            let drawn = match run.state.draw_distinct(&pool, MAX_OFFERED, &mut picked) {
+                Ok(drawn) => drawn,
+                Err(e) => {
+                    let _ = e;
+                    return refuse("从卡池抽候选失败");
+                }
+            };
+            if drawn < MAX_OFFERED {
+                return refuse("抽不出足够的候选牌");
+            }
+            let mut offered = rd_core::state::Bounded::new();
+            for id in &picked[..drawn] {
+                let Ok(definition) = rd_core::state::CardDefinitionId::new(id.as_str()) else {
+                    return refuse("候选牌的 id 不合法");
+                };
+                if offered
+                    .push(definition, rd_core::state::Container::ChoiceOptions)
+                    .is_err()
+                {
+                    return refuse("候选表装不下");
+                }
+            }
+            let question = rd_core::state::PendingChoice {
+                chooser: hero.clone(),
+                source: rd_core::state::ChoiceSource::Offered,
+                min: 1,
+                max: 1,
+                then: rd_core::state::ChoiceThen::ToHand,
+                offered,
             };
             if let Err(e) = session.state.begin_choice(question) {
                 return refuse(&std::format!("这次选牌问不出口：{e}"));
@@ -1464,6 +1540,7 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 min: 1,
                 max: 1,
                 then: rd_core::state::ChoiceThen::ToHand,
+                offered: rd_core::state::Bounded::new(),
             };
             if let Err(e) = session.state.begin_choice(question) {
                 return refuse(&std::format!("这次选牌问不出口：{e}"));
@@ -1532,6 +1609,12 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
     // Consumed only after it worked: a refusal must not eat the potion.
     consume_used_potion(slot)
 }
+
+/// §161.5：候选**三张**是规则（wiki 的三瓶药都写 "1 of 3"），所以它是常量而不是参数。
+///
+/// 写成 `rd_core::state::MAX_CHOICE_OFFERED` 的名字会让"三"看起来像个容量上限 ——
+/// 它其实是这条规则的**全部内容**，改它就得改药水的说明文字。
+const MAX_OFFERED: usize = 3;
 
 /// Is this potion atom about a **fight**? (§158)
 ///
@@ -1974,6 +2057,8 @@ pub extern "C" fn rd_run_potion_effect(slot: i32) -> i32 {
                     | "choice_hand_exhaust"
                     | "choice_hand_discard_draw"
                     | "choice_discard_to_hand"
+                    // §161.5：`choice_offered:<tag>`（payload 是标签，不是状态 id）。
+                    | "choice_offered"
             )
             || ["combat_block", "combat_energy", "combat_heal_percent", "combat_draw"]
                 .contains(&kind)
@@ -3468,6 +3553,120 @@ mod tests {
     /// pile. The point of the test is the **third** assertion block: the observation's `cost` column
     /// (what the player sees) and the energy the kernel really takes must agree, and the price must
     /// be spent once.
+    /// §161.5: Attack Potion -- three **definitions**, one card created, and it is free.
+    ///
+    /// The three things that can be wrong here are independent:
+    /// * the candidates are instances created up front (then the fingerprint grows three cards that
+    ///   the reference never had);
+    /// * the picked card is created but not priced (the screen says 0, the kernel charges 1);
+    /// * the pool filter is wrong (a Skill Potion offering attacks, or a tag with no carriers
+    ///   silently offering fewer than three).
+    #[test]
+    fn an_attack_potion_offers_three_definitions_and_creates_only_the_chosen_card() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+
+        let cards_before = crate::slot().as_ref().expect("session").state.card_count();
+        assert_eq!(drink("attack_potion", -1), 0, "accepted");
+        assert_eq!(crate::rd_env_choice_pending(), 1, "it asks a question");
+        assert_eq!(crate::rd_env_choice_source(), 2, "2 = three offered definitions");
+        assert_eq!(crate::rd_env_choice_kind(), 3, "3 = take into hand");
+        assert_eq!(crate::rd_env_choice_min(), 1);
+        assert_eq!(crate::rd_env_choice_max(), 1);
+        assert_eq!(crate::rd_env_choice_count(), 3, "three candidates");
+        assert_eq!(
+            crate::rd_env_pile_len(3),
+            3,
+            "the picker reads its options through the pile exports (zone 3)"
+        );
+        // ★ the question itself must not create cards.
+        assert_eq!(
+            crate::slot().as_ref().expect("session").state.card_count(),
+            cards_before,
+            "asking must not mint the three candidates"
+        );
+
+        // Every option is an **attack**, and they are three **different** cards.
+        let content = content();
+        let mut offered: Vec<String> = Vec::new();
+        for index in 0..3 {
+            let len = crate::rd_env_pile_card_id_len(3, index);
+            assert!(len > 0, "option {index} has an id");
+            let mut bytes = vec![0u8; len as usize];
+            unsafe { crate::rd_env_pile_card_id_into(3, index, bytes.as_mut_ptr()) };
+            let id = String::from_utf8_lossy(&bytes).to_string();
+            assert_eq!(
+                content.card_has_tag(&id, "attack"),
+                Some(true),
+                "`{id}` is not an attack"
+            );
+            assert!(
+                crate::rd_env_pile_card_title_len(3, index) > 0,
+                "option {index} has a title"
+            );
+            offered.push(id);
+        }
+        offered.sort();
+        offered.dedup();
+        assert_eq!(offered.len(), 3, "three **distinct** cards");
+
+        // Pick the first option and answer.
+        let picked = {
+            let len = crate::rd_env_pile_card_id_len(3, 0);
+            let mut bytes = vec![0u8; len as usize];
+            unsafe { crate::rd_env_pile_card_id_into(3, 0, bytes.as_mut_ptr()) };
+            String::from_utf8_lossy(&bytes).to_string()
+        };
+        assert_eq!(crate::rd_env_choice_pick(0, 1), 0);
+        assert_eq!(
+            crate::rd_env_choice_confirm(),
+            0,
+            "answered: {}",
+            crate::slot().as_ref().map_or(String::new(), |s| s.error.clone())
+        );
+        assert_eq!(crate::rd_env_choice_pending(), 0);
+        assert_eq!(
+            crate::slot().as_ref().expect("session").state.card_count(),
+            cards_before + 1,
+            "exactly one card was created: the two not chosen never existed"
+        );
+
+        // ★ The created card is the picked definition, it is in hand, and it shows **0**.
+        let slot_ref = crate::slot().as_ref().expect("session");
+        let free = slot_ref
+            .hand_defs
+            .iter()
+            .position(|definition| *definition == picked)
+            .expect("the picked card is in the hand");
+        assert_eq!(
+            slot_ref.hand_costs[free],
+            0,
+            "the observation must show what the kernel will charge"
+        );
+        assert!(
+            slot_ref.hand_costs[free] != slot_ref.printed_energy_cost(&picked),
+            "and that is not its printed cost -- the per-copy price is doing the work"
+        );
+        drop(slot_ref);
+
+        // ★ …and the kernel charges it: play it, energy must not move.
+        let energy_before = crate::slot().as_ref().expect("session").energy_now();
+        let play = (0..crate::rd_env_action_count())
+            .find(|index| {
+                crate::rd_env_action_kind(*index) == crate::ACTION_PLAY
+                    && crate::rd_env_action_arg(*index, 0) == free as i32
+            })
+            .expect("the new card is playable");
+        assert_eq!(rd_env_step(play), 0);
+        assert_eq!(
+            crate::slot().as_ref().expect("session").energy_now(),
+            energy_before,
+            "a potion that says \"it costs 0 this turn\" must charge 0"
+        );
+    }
+
     #[test]
     fn liquid_memories_returns_a_card_and_makes_that_copy_free_once() {
         // `strike` is the one-cost card this **content** has (the `paper_cut` fixture belongs to
@@ -3607,7 +3806,14 @@ mod tests {
 
         // "Known" is not enough for the two new atoms: they act on the **hand**, so arming the
         // enemy picker for them is a wrong branch that `kind != 0` would happily accept.
-        for id in ["elixir", "gamblers_brew", "liquid_memories"] {
+        for id in [
+            "elixir",
+            "gamblers_brew",
+            "liquid_memories",
+            // §161.5: the offered pair acts on the hand too.
+            "attack_potion",
+            "skill_potion",
+        ] {
             {
                 let session = run_slot().as_mut().expect("a session");
                 while !session.state.potions().is_empty() {

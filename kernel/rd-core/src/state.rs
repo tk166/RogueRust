@@ -389,6 +389,54 @@ impl core::fmt::Display for Container {
 /// `Result` shorthand for the model's mutating API.
 pub type StateResult<T> = Result<T, CapacityError>;
 
+/// 装一个 `<prefix>%06d` 的栈上缓冲要多大。
+///
+/// 最长情形：`status_`(7) + `i32` 的 10 位十进制 = 17 B。取 32 是"怎么都不会撞上"的余量，
+/// 真正越界时 [`numbered_text`] 返回 `None` 而不是截断。
+pub const INSTANCE_TEXT_CAP: usize = 32;
+
+/// `<prefix>%06d` 的**零分配**版（`format!` 在 `no_std` 里没有）。
+///
+/// 逐字对应 C# 的 `$"{prefix}{number:000000}"`：负数在参考里不可能出现（生成器从 1 开始），
+/// 真出现时按 **0** 写（与旧实现一致，那不是"猜"，是"不可能发生"）。
+/// 返回的 `&str` 借用 `buffer`，所以调用方持有它、并立刻用完。
+///
+/// §161.5：从 `exec.rs` 搬到这里（`create_card_instance` 在这里用它）。`exec.rs` 的
+/// `status_%06d` 与 `summoned_%06d` 也读这一份 —— 一处实现，三处读。
+#[must_use]
+pub fn numbered_text<'b>(
+    prefix: &[u8],
+    number: i32,
+    buffer: &'b mut [u8; INSTANCE_TEXT_CAP],
+) -> Option<&'b str> {
+    // 10 位十进制够装下 `u32::MAX`（10 位），再补前导 0 到 6 位。
+    let mut digits = [b'0'; 12];
+    let mut len = 0usize;
+    let mut value = if number < 0 { 0u32 } else { number as u32 };
+    loop {
+        let slot = digits.get_mut(len)?;
+        *slot = b'0' + (value % 10) as u8;
+        len += 1;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    while len < 6 {
+        let slot = digits.get_mut(len)?;
+        *slot = b'0';
+        len += 1;
+    }
+    let head = buffer.get_mut(..prefix.len())?;
+    head.copy_from_slice(prefix);
+    for index in 0..len {
+        let slot = buffer.get_mut(prefix.len() + index)?;
+        // 反着写：`digits` 是低位在前。
+        *slot = digits[len - 1 - index];
+    }
+    core::str::from_utf8(&buffer[..prefix.len() + len]).ok()
+}
+
 /// Element of a fixed-capacity container: supplies the value of a vacant slot, so containers can
 /// be built without an allocator (and, later, in `static` storage).
 pub trait Empty: Copy {
@@ -1576,6 +1624,10 @@ pub enum ZonePlacement {
 /// 事件的分数"），而这条差别由 `the_per_copy_price_is_consumed_by_the_play` 钉住。
 pub const CARD_COST_DELTA_COUNTER: &str = "standard.card_cost_delta";
 
+/// 一次候选最多几张（StS 的三张；留到 8 是因为 Attack/Skill/Power 三瓶都要同一个数，
+/// 而"三"写在三处的常量迟早只有一个被改）。
+pub const MAX_CHOICE_OFFERED: usize = 8;
+
 /// 一次待决的选牌：玩家（或任何战斗员）**必须**先回答它，才能继续（§161.3）。
 ///
 /// # 为什么这是一个状态，而不是一个 UI 回调
@@ -1603,14 +1655,18 @@ pub struct PendingChoice {
     pub max: u8,
     /// 选完之后做什么。
     pub then: ChoiceThen,
+    /// [`ChoiceSource::Offered`] 的候选：**卡定义**，不是实例（§161.5）。
+    ///
+    /// 其余来源必须留空；`begin_choice` 两边都校验，因为「候选」和「来源」不一致，等于问一个
+    /// 玩家答不出来的问题。
+    pub offered: Bounded<CardDefinitionId, MAX_CHOICE_OFFERED>,
 }
 
 /// 选牌的**来源**。
 ///
-/// ⚠️ 只有**真的被用到**的两种。`Offered`（从卡池抽三张候选，Attack / Skill / Power /
-/// Colorless Potion 要的那一种）故意还不在：它需要「候选不是牌堆的一部分」这个第二形态的
-/// 载荷，而先冻一个没有消费者的形态，正是本模块反复躲开的那种「提前把语义推给未来」。
-/// 加它的时候，`choice_legal` 的 `match` 会逼着接的人把两条路都想清楚。
+/// ⚠️ `Offered` 是**第二个形态**：它的候选不是牌堆的一部分，而是三条**卡定义**（§161.5）。
+/// 它不能落到任何一个 [`CardZone`] 上 —— 这也是 [`Self::zone`] 返回 `Option` 的原因：
+/// `match` 会逼着每个读者回答「候选从哪来」，而不是把它当成一个空牌区。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(u8)]
 pub enum ChoiceSource {
@@ -1619,17 +1675,20 @@ pub enum ChoiceSource {
     Hand,
     /// 弃牌堆（Liquid Memories「把弃牌堆里一张拿回手牌」）。
     DiscardPile,
+    /// **三条候选**（Attack / Skill Potion「从三张随机 X 牌里选一张加进手牌」）。
+    Offered,
 }
 
 impl ChoiceSource {
-    /// 这个来源对应哪个牌区。
+    /// 这个来源对应的牌区；`None` = 它的候选**不在任何一个牌区里**（[`Self::Offered`]）。
     ///
     /// `const` 且有穷尽 `match`：加一种来源时，这里编译不过，而不是掉进一个默认分支。
     #[must_use]
-    pub const fn zone(self) -> CardZone {
+    pub const fn zone(self) -> Option<CardZone> {
         match self {
-            Self::Hand => CardZone::Hand,
-            Self::DiscardPile => CardZone::DiscardPile,
+            Self::Hand => Some(CardZone::Hand),
+            Self::DiscardPile => Some(CardZone::DiscardPile),
+            Self::Offered => None,
         }
     }
 }
@@ -1663,6 +1722,18 @@ impl ChoiceThen {
             Self::ToHand => CardZone::Hand,
         }
     }
+}
+
+/// 一个选牌问句的**答案**。
+///
+/// 两种形态是因为两种来源问的是不同的问题：牌区来源问"这些实例里选哪些"，候选来源问
+/// "这三张里要哪个下标"。合成一个类型就会逼出一个"另一种随便填什么"的字段。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ChoiceAnswer<'a> {
+    /// 从牌区里选中的**实例**（[`ChoiceSource::Hand`] / [`ChoiceSource::DiscardPile`]）。
+    Instances(&'a [CardInstanceId]),
+    /// 从候选里选中的**下标**（[`ChoiceSource::Offered`]），升序、不重复。
+    Offered(&'a [usize]),
 }
 
 /// [`CombatState::resolve_choice`] 做完了什么。
@@ -1699,6 +1770,8 @@ pub enum ChoiceError {
     NotInSource,
     /// 同一张牌被选了两次。
     Duplicate,
+    /// 答案的形状和问句的来源不匹配（`Instances` 回答 `Offered`，或反过来）。
+    WrongAnswer,
     /// 给了一个 `cost_delta`，但这个问句的 `then` 根本没有价格（只有 [`ChoiceThen::ToHand`] 有）。
     ///
     /// **调用方的错，不是玩家的错**：静默忽略一个折扣等于"这张牌本来就要钱，而且玩家以为它免费"。
@@ -1723,6 +1796,7 @@ impl core::fmt::Display for ChoiceError {
             }
             Self::NotInSource => f.write_str("a picked card is not in the source pile"),
             Self::Duplicate => f.write_str("the same card was picked twice"),
+            Self::WrongAnswer => f.write_str("the answer does not match the question's source"),
             Self::DeltaNotApplicable => {
                 f.write_str("a cost delta was given to a choice whose then has no price")
             }
@@ -4460,11 +4534,19 @@ impl CombatState {
         if self.choice.is_some() {
             return Err(ChoiceError::AlreadyPending);
         }
-        let zone = choice.source.zone();
-        let available = self
-            .card_zones(&choice.chooser)
-            .ok_or(ChoiceError::NotInSource)?
-            .count(zone);
+        // 候选来源和牌区来源的"有多少可选"完全不是一件事：前者数**定义**，后者数牌区里的牌。
+        // 两边都校验，因为一个"候选和来源对不上"的问句，玩家永远回答不了。
+        let available = match choice.source.zone() {
+            Some(zone) => {
+                if !choice.offered.is_empty() {
+                    return Err(ChoiceError::WrongAnswer);
+                }
+                self.card_zones(&choice.chooser)
+                    .ok_or(ChoiceError::NotInSource)?
+                    .count(zone)
+            }
+            None => choice.offered.len(),
+        };
         if choice.min > choice.max || choice.min as usize > available {
             return Err(ChoiceError::Count {
                 picked: available,
@@ -4483,10 +4565,14 @@ impl CombatState {
     /// **不截断**（截断掉的选项等于一个不存在的规则）。
     pub fn choice_legal(&self, out: &mut [CardInstanceId]) -> Result<usize, ChoiceError> {
         let choice = self.choice.ok_or(ChoiceError::NotPending)?;
+        // 候选来源没有实例可列：它的选项是**下标 + 定义**，用 [`Self::choice_offered`] 读，
+        // 这里**响亮拒绝**而不是返回 0 个（"零个选项"会被读成一个合法的空清单）。
+        let Some(zone) = choice.source.zone() else {
+            return Err(ChoiceError::WrongAnswer);
+        };
         let zones = self
             .card_zones(&choice.chooser)
             .ok_or(ChoiceError::NotInSource)?;
-        let zone = choice.source.zone();
         let mut count = 0usize;
         for index in 0..zones.count(zone) {
             // 槽位表与卡池必须一致；不一致的槽位跳过（`card()` 的 `Option` 兜住，不 panic）。
@@ -4507,7 +4593,23 @@ impl CombatState {
         Ok(count)
     }
 
+    /// 候选来源的选项（[`ChoiceSource::Offered`]）：三条**卡定义**，按抽出的顺序。
+    ///
+    /// 牌区来源调用它 ⇒ [`ChoiceError::WrongAnswer`]（与 [`Self::choice_legal`] 互补：两个函数
+    /// 各自只回答一种形态，而不是一个函数返回一个"看情况"的联合体）。
+    pub fn choice_offered(&self) -> Result<&[CardDefinitionId], ChoiceError> {
+        // `as_ref`（不是 `?` 拷一份）：返回的切片借的是**状态里的**那份候选，不是本地副本。
+        let choice = self.choice.as_ref().ok_or(ChoiceError::NotPending)?;
+        if choice.source.zone().is_some() {
+            return Err(ChoiceError::WrongAnswer);
+        }
+        Ok(choice.offered.as_slice())
+    }
+
     /// 结算待决的选牌：把选中的牌按 [`ChoiceThen`] 送走，然后清掉问句。
+    ///
+    /// `answer` 的形状必须和问句的**来源**一致（[`ChoiceError::WrongAnswer`]）：牌区来源回答
+    /// 实例，候选来源回答下标。
     ///
     /// `cost_delta` 是**每副本价格**（[`CARD_COST_DELTA_COUNTER`]），只有
     /// [`ChoiceThen::ToHand`] 用得上；其余 `then` 必须传 `0`，否则
@@ -4516,13 +4618,34 @@ impl CombatState {
     /// **全部校验在动手之前**（见本节头第 1 条）。成功之后 [`Self::pending_choice`] 是 `None`。
     pub fn resolve_choice(
         &mut self,
-        picks: &[CardInstanceId],
+        answer: ChoiceAnswer<'_>,
         cost_delta: i32,
     ) -> Result<ChoiceDone, ChoiceError> {
         let choice = self.choice.ok_or(ChoiceError::NotPending)?;
         if cost_delta != 0 && choice.then != ChoiceThen::ToHand {
             return Err(ChoiceError::DeltaNotApplicable);
         }
+        match (choice.source, answer) {
+            (ChoiceSource::Offered, ChoiceAnswer::Offered(indices)) => {
+                self.resolve_offered(choice, indices, cost_delta)
+            }
+            (ChoiceSource::Offered, ChoiceAnswer::Instances(_))
+            | (_, ChoiceAnswer::Offered(_)) => Err(ChoiceError::WrongAnswer),
+            (_, ChoiceAnswer::Instances(picks)) => {
+                self.resolve_from_pile(choice, picks, cost_delta)
+            }
+        }
+    }
+
+    /// 牌区来源的答案（[`ChoiceSource::Hand`] / [`ChoiceSource::DiscardPile`]）。
+    fn resolve_from_pile(
+        &mut self,
+        choice: PendingChoice,
+        picks: &[CardInstanceId],
+        cost_delta: i32,
+    ) -> Result<ChoiceDone, ChoiceError> {
+        let source = choice.source.zone().ok_or(ChoiceError::WrongAnswer)?;
+        let destination = choice.then.destination();
         let picked = picks.len();
         if picked < choice.min as usize || picked > choice.max as usize {
             return Err(ChoiceError::Count {
@@ -4532,8 +4655,6 @@ impl CombatState {
             });
         }
 
-        let source = choice.source.zone();
-        let destination = choice.then.destination();
         let Some(zones) = self.card_zones(&choice.chooser) else {
             return Err(ChoiceError::NotInSource);
         };
@@ -4576,12 +4697,7 @@ impl CombatState {
             // §161.4: the per-copy price rides **on the card**, so it travels with it through the
             // hand and the discard pile -- and `play.rs` zeroes it once the play is paid for.
             if choice.then == ChoiceThen::ToHand && cost_delta != 0 {
-                let Ok(key) = CounterId::new(CARD_COST_DELTA_COUNTER) else {
-                    return Err(ChoiceError::NotInSource);
-                };
-                if let Some(card) = self.cards.as_mut_slice().get_mut(slot.index()) {
-                    card.set_mark_counter(key, cost_delta)?;
-                }
+                self.write_price(slot, cost_delta)?;
             }
         }
         self.choice = None;
@@ -4591,6 +4707,107 @@ impl CombatState {
             drawn = self.draw_cards_with_reshuffle(&choice.chooser, picked)?;
         }
         Ok(ChoiceDone { picked, drawn })
+    }
+
+    /// 候选来源的答案（[`ChoiceSource::Offered`]，§161.5）。
+    ///
+    /// 选中的那一张在这一刻**才**被造出来。三张候选里没被选的两张**从来没有存在过** ——
+    /// 如果先把三张造成实例再扔掉两张，`card_num=` 与两条 `aside=` 卡行会凭空出现，
+    /// 而参考引擎里那个局面根本没有这些牌。指纹要像参考，就不能为了内部方便多造牌。
+    fn resolve_offered(
+        &mut self,
+        choice: PendingChoice,
+        indices: &[usize],
+        cost_delta: i32,
+    ) -> Result<ChoiceDone, ChoiceError> {
+        let offered = choice.offered.as_slice();
+        let picked = indices.len();
+        if picked < choice.min as usize || picked > choice.max as usize {
+            return Err(ChoiceError::Count {
+                picked,
+                min: choice.min,
+                max: choice.max,
+            });
+        }
+        let mut definitions = [CardDefinitionId::EMPTY; MAX_CHOICE_OFFERED];
+        for (at, index) in indices.iter().enumerate() {
+            let Some(definition) = offered.get(*index) else {
+                return Err(ChoiceError::NotInSource);
+            };
+            if indices[..at].contains(index) {
+                return Err(ChoiceError::Duplicate);
+            }
+            definitions[at] = *definition;
+        }
+        let destination = choice.then.destination();
+        // 两张容量一起看：牌区装不下、或者卡池没有多余槽位，都在动手之前拒绝。
+        {
+            let Some(zones) = self.card_zones(&choice.chooser) else {
+                return Err(ChoiceError::NotInSource);
+            };
+            if picked > MAX_CARDS_PER_ZONE.saturating_sub(zones.count(destination)) {
+                return Err(ChoiceError::Capacity(CapacityError::Full(
+                    Container::CardsInZone(destination),
+                )));
+            }
+        }
+        if self.cards.len() + picked > MAX_CARD_INSTANCES {
+            return Err(ChoiceError::Capacity(CapacityError::Full(
+                Container::CardInstances,
+            )));
+        }
+
+        // ---- 到这里为止一个字节都没改。----
+        let mut created = 0usize;
+        for definition in &definitions[..picked] {
+            let slot = self.create_card_instance(&choice.chooser, *definition, destination)?;
+            if choice.then == ChoiceThen::ToHand && cost_delta != 0 {
+                self.write_price(slot, cost_delta)?;
+            }
+            created += 1;
+        }
+        self.choice = None;
+        Ok(ChoiceDone {
+            picked: created,
+            drawn: 0,
+        })
+    }
+
+    /// 铸一张**新卡**：取号 → 建实例 → 按底插入牌区。返回它的池槽位。
+    ///
+    /// 参考 `CombatState.CreateNextCardInstanceId`（`CombatState.cs:689-696`）：
+    /// `$"card_{NextCardInstanceNumber:000000}"`，**先取号再自增**（`exec.rs` 那条
+    /// `next_card_instance_number == 1` 的测试就是钉这个的）。
+    ///
+    /// §161.5 把铸号从 `exec.rs` 搬到这里：发号器是 `CombatState` 的字段，铸号也该在同一个模块。
+    /// 两条铸号路径会给出两个"下一个是几"，而那是一种最难看的错 —— 每条路径单独看都对。
+    pub fn create_card_instance(
+        &mut self,
+        owner: &CombatantId,
+        definition: CardDefinitionId,
+        zone: CardZone,
+    ) -> StateResult<CardSlot> {
+        let number = self.next_card_instance_number;
+        let mut buffer = [0u8; INSTANCE_TEXT_CAP];
+        // 装不下是**不可能**的（`INSTANCE_TEXT_CAP` 是 32，最长情形 17）；真发生时返回 `None`
+        // 而不是截断 —— 一个被截断的 id 会和另一张牌撞名。
+        let text = numbered_text(b"card_", number, &mut buffer)
+            .ok_or(CapacityError::IdNotAscii)?;
+        let id = CardInstanceId::new(text)?;
+        let slot = self.push_card(owner, zone, CardInstance::new(id, definition))?;
+        self.next_card_instance_number = number.saturating_add(1);
+        Ok(slot)
+    }
+
+    /// 把每副本价格写到**那一份副本**上（[`CARD_COST_DELTA_COUNTER`]）。
+    fn write_price(&mut self, slot: CardSlot, delta: i32) -> Result<(), ChoiceError> {
+        let key = CounterId::new(CARD_COST_DELTA_COUNTER)
+            .map_err(|_| ChoiceError::NotInSource)?;
+        let Some(card) = self.cards.as_mut_slice().get_mut(slot.index()) else {
+            return Err(ChoiceError::NotInSource);
+        };
+        card.set_mark_counter(key, delta)?;
+        Ok(())
     }
 
     /// 在**一个战斗员**的七个牌区里按 id 找卡，返回 `(在哪个区, 池槽位)`。
@@ -5509,6 +5726,7 @@ mod tests {
             .collect()
     }
 
+    /// 一个牌区来源的问句（`offered` 必须留空 —— `begin_choice` 会校验这一点）。
     fn elixir(min: u8, max: u8) -> PendingChoice {
         PendingChoice {
             chooser: cid("hero"),
@@ -5516,6 +5734,25 @@ mod tests {
             min,
             max,
             then: ChoiceThen::Exhaust,
+            offered: Bounded::new(),
+        }
+    }
+
+    /// 一个**候选**来源的问句（§161.5）：三条定义，选一张进手牌。
+    fn offered_choice(definitions: &[&str]) -> PendingChoice {
+        let mut offered = Bounded::new();
+        for definition in definitions {
+            offered
+                .push(CardDefinitionId::new(definition).expect("短 id"), Container::ChoiceOptions)
+                .expect("候选装得下");
+        }
+        PendingChoice {
+            chooser: cid("hero"),
+            source: ChoiceSource::Offered,
+            min: 1,
+            max: 1,
+            then: ChoiceThen::ToHand,
+            offered,
         }
     }
 
@@ -5560,7 +5797,7 @@ mod tests {
         let mut s = hand_of(3);
         let hand = pile_ids(&s, CardZone::Hand);
         s.begin_choice(elixir(0, 3)).unwrap();
-        let done = s.resolve_choice(&[hand[0], hand[2]], 0).unwrap();
+        let done = s.resolve_choice(ChoiceAnswer::Instances(&[hand[0], hand[2]]), 0).unwrap();
         assert_eq!(done, ChoiceDone { picked: 2, drawn: 0 });
         assert_eq!(s.pending_choice(), None, "结算之后问句必须消失");
 
@@ -5587,7 +5824,7 @@ mod tests {
         }
         let hand = pile_ids(&s, CardZone::Hand);
         s.begin_choice(gamblers_brew(3)).unwrap();
-        let done = s.resolve_choice(&[hand[0], hand[1]], 0).unwrap();
+        let done = s.resolve_choice(ChoiceAnswer::Instances(&[hand[0], hand[1]]), 0).unwrap();
         assert_eq!(done, ChoiceDone { picked: 2, drawn: 2 });
         assert_eq!(pile_ids(&s, CardZone::DiscardPile), std::vec![hand[0], hand[1]]);
         assert_eq!(s.card_zones(&cid("hero")).unwrap().count(CardZone::Hand), 3);
@@ -5608,7 +5845,7 @@ mod tests {
         let hand = pile_ids(&s, CardZone::Hand);
         let step_before = s.random_step;
         s.begin_choice(gamblers_brew(3)).unwrap();
-        let done = s.resolve_choice(&[hand[0], hand[1]], 0).unwrap();
+        let done = s.resolve_choice(ChoiceAnswer::Instances(&[hand[0], hand[1]]), 0).unwrap();
         assert_eq!(done.picked, 2);
         // 弃牌堆里的 2 张被洗回抽牌堆，于是这 2 张**又**被抽了回来。
         assert_eq!(done.drawn, 2, "重洗之后抽得满");
@@ -5632,7 +5869,7 @@ mod tests {
         let refused = [
             // (a) 张数：0 张低于下限 1、3 张高于上限 2。
             (
-                s.clone().resolve_choice(&[], 0),
+                s.clone().resolve_choice(ChoiceAnswer::Instances(&[]), 0),
                 ChoiceError::Count {
                     picked: 0,
                     min: 1,
@@ -5641,7 +5878,7 @@ mod tests {
             ),
             (
                 s.clone()
-                    .resolve_choice(&[hand[0], hand[1], hand[2]], 0),
+                    .resolve_choice(ChoiceAnswer::Instances(&[hand[0], hand[1], hand[2]]), 0),
                 ChoiceError::Count {
                     picked: 3,
                     min: 1,
@@ -5650,12 +5887,12 @@ mod tests {
             ),
             // (b) 来源：库里没有这张牌。
             (
-                s.clone().resolve_choice(&[ciid("not_a_card")], 0),
+                s.clone().resolve_choice(ChoiceAnswer::Instances(&[ciid("not_a_card")]), 0),
                 ChoiceError::NotInSource,
             ),
             // (c) 重复：同一张选两次。
             (
-                s.clone().resolve_choice(&[hand[0], hand[0]], 0),
+                s.clone().resolve_choice(ChoiceAnswer::Instances(&[hand[0], hand[0]]), 0),
                 ChoiceError::Duplicate,
             ),
         ];
@@ -5664,7 +5901,7 @@ mod tests {
         }
 
         // 真·原子性：**不是**用 `s.clone()` 试错，而是在真身上走一遍再比。
-        assert_eq!(s.resolve_choice(&[hand[0], hand[0]], 0), Err(ChoiceError::Duplicate));
+        assert_eq!(s.resolve_choice(ChoiceAnswer::Instances(&[hand[0], hand[0]]), 0), Err(ChoiceError::Duplicate));
         assert_eq!(canonical_text(&s), before, "被拒绝的选牌改了战斗");
         assert_eq!(s.pending_choice(), before_choice, "被拒绝的选牌改了问句");
 
@@ -5683,7 +5920,7 @@ mod tests {
         moved.begin_choice(elixir(0, 2)).unwrap();
         let before = canonical_text(&moved);
         assert_eq!(
-            moved.resolve_choice(&[hand[0]], 0),
+            moved.resolve_choice(ChoiceAnswer::Instances(&[hand[0]]), 0),
             Err(ChoiceError::NotInSource),
             "来源是手牌，选一张弃牌堆里的牌必须被拒"
         );
@@ -5717,6 +5954,7 @@ mod tests {
             min: 0,
             max: 1,
             then: ChoiceThen::Exhaust,
+            offered: Bounded::new(),
         })
         .unwrap();
         let mut buf = [CardInstanceId::EMPTY; 8];
@@ -5724,10 +5962,10 @@ mod tests {
         assert_eq!(&buf[..1], discarded.as_slice(), "the options are the discard pile");
 
         // A hand card is **not** an option, even though it is the same combatant's card.
-        assert_eq!(s.resolve_choice(&[hand[1]], 0), Err(ChoiceError::NotInSource));
+        assert_eq!(s.resolve_choice(ChoiceAnswer::Instances(&[hand[1]]), 0), Err(ChoiceError::NotInSource));
         // The discarded one is, and it lands where `then` says.
         assert_eq!(
-            s.resolve_choice(&discarded, 0),
+            s.resolve_choice(ChoiceAnswer::Instances(&discarded), 0),
             Ok(ChoiceDone {
                 picked: 1,
                 drawn: 0
@@ -5759,11 +5997,12 @@ mod tests {
             min: 1,
             max: 1,
             then: ChoiceThen::ToHand,
+            offered: Bounded::new(),
         })
         .unwrap();
         // The delta is "minus the printed cost", which only the caller can compute. -2 here.
         assert_eq!(
-            s.resolve_choice(&discarded, -2),
+            s.resolve_choice(ChoiceAnswer::Instances(&discarded), -2),
             Ok(ChoiceDone {
                 picked: 1,
                 drawn: 0
@@ -5796,18 +6035,138 @@ mod tests {
         let hand = pile_ids(&s, CardZone::Hand);
         s.begin_choice(elixir(0, 2)).unwrap();
         assert_eq!(
-            s.resolve_choice(&[hand[0]], -2),
+            s.resolve_choice(ChoiceAnswer::Instances(&[hand[0]]), -2),
             Err(ChoiceError::DeltaNotApplicable)
         );
         assert_eq!(s.pending_choice(), Some(elixir(0, 2)), "and nothing moved");
         // The same answer with the right argument works, so the refusal is about the delta only.
         assert_eq!(
-            s.resolve_choice(&[hand[0]], 0),
+            s.resolve_choice(ChoiceAnswer::Instances(&[hand[0]]), 0),
             Ok(ChoiceDone {
                 picked: 1,
                 drawn: 0
             })
         );
+    }
+
+    #[test]
+    fn an_offered_choice_creates_only_the_card_that_was_picked() {
+        // §161.5：三张候选里只有被选的那一张**曾经存在**。
+        //
+        // 反过来的做法（先把三张造成实例放进一个牌区，再扔掉两张）会凭空多出三张牌：
+        // `card_num=` 与两张 `aside=` 卡行都会出现在指纹里，而参考引擎那个局面根本没有它们。
+        // 这条测试盯的就是"牌池里只多了一张"。
+        // 空手牌起步是**必须的**：`hand_of` 用 `push_card` 手搓 id（`card_000001`…），而
+        // `push_card` **不发号** —— 发号器仍然停在 1，于是铸出来的新卡会和手搓的那张**撞 id**，
+        // `find_card` 找到的是先扫到的那一张。（这不是实现的问题，是夹具的问题；第一版就是这么红的。）
+        let mut s = fight();
+        s.add_combatant(hero()).unwrap();
+        let cards_before = s.card_count();
+        let next_number = s.next_card_instance_number;
+        s.begin_choice(offered_choice(&["card.anger", "card.bash", "card.cleave"]))
+            .unwrap();
+        assert_eq!(
+            s.choice_offered(),
+            Ok(&[
+                CardDefinitionId::new("card.anger").unwrap(),
+                CardDefinitionId::new("card.bash").unwrap(),
+                CardDefinitionId::new("card.cleave").unwrap(),
+            ][..]),
+            "候选按抽出的顺序，原样可读"
+        );
+        // 牌区来源的读取器对它必须**响亮拒绝**，而不是返回一个空清单。
+        let mut buf = [CardInstanceId::EMPTY; 8];
+        assert_eq!(s.choice_legal(&mut buf), Err(ChoiceError::WrongAnswer));
+        assert_eq!(s.card_count(), cards_before, "提问本身不造牌");
+
+        let done = s.resolve_choice(ChoiceAnswer::Offered(&[1]), -1).unwrap();
+        assert_eq!(done, ChoiceDone { picked: 1, drawn: 0 });
+        assert_eq!(s.pending_choice(), None);
+        assert_eq!(
+            s.card_count(),
+            cards_before + 1,
+            "只多了一张：没被选的两张从来没存在过"
+        );
+        assert_eq!(s.next_card_instance_number, next_number + 1, "发号器只动了 1");
+        // 造出来的那张用的是**参考的 id 形状**，进的是手牌，带着每副本价格。
+        let hand = pile_ids(&s, CardZone::Hand);
+        let picked = *hand.last().expect("手牌非空");
+        assert_eq!(
+            picked.as_str(),
+            std::format!("card_{:06}", next_number),
+            "`card_%06d` 且先取号再自增"
+        );
+        let (_, slot) = s.find_card(&cid("hero"), &picked).expect("在手牌里");
+        let card = s.card(slot).expect("卡在");
+        assert_eq!(card.definition_id.as_str(), "card.bash", "选的是第 2 张候选");
+        let price = card
+            .mark_counters()
+            .iter()
+            .find(|counter| counter.key.as_str() == CARD_COST_DELTA_COUNTER)
+            .map(|counter| counter.value);
+        assert_eq!(price, Some(-1), "每副本价格也写上了");
+
+        // 候选来源的问句读完了就没了：`choice_offered` 回到"没有待决问句"。
+        assert_eq!(s.choice_offered(), Err(ChoiceError::NotPending));
+    }
+
+    #[test]
+    fn an_offered_choice_and_a_pile_choice_cannot_answer_each_other() {
+        // 两种答案形状不能互换 —— 否则"从手牌选"会拿着三个候选下标去查手牌，
+        // 而结果**看起来像成功**（0 张或别的一张）。形状不匹配必须响。
+        let mut s = hand_of(2);
+        let hand = pile_ids(&s, CardZone::Hand);
+        s.begin_choice(elixir(0, 2)).unwrap();
+        assert_eq!(
+            s.resolve_choice(ChoiceAnswer::Offered(&[0]), 0),
+            Err(ChoiceError::WrongAnswer)
+        );
+        assert_eq!(s.pending_choice(), Some(elixir(0, 2)), "拒绝不改问句");
+
+        let mut offered = hand_of(1);
+        offered
+            .begin_choice(offered_choice(&["card.anger", "card.bash", "card.cleave"]))
+            .unwrap();
+        assert_eq!(
+            offered.resolve_choice(ChoiceAnswer::Instances(&[hand[0]]), 0),
+            Err(ChoiceError::WrongAnswer)
+        );
+        // 越界的下标也要响，不能悄悄换成别的候选。
+        assert_eq!(
+            offered.resolve_choice(ChoiceAnswer::Offered(&[3]), 0),
+            Err(ChoiceError::NotInSource)
+        );
+        // 同一个候选选两次：`min = max = 1` 先撞**张数**，所以换一个能收两张的问句来测重复。
+        assert_eq!(
+            offered.resolve_choice(ChoiceAnswer::Offered(&[0, 0]), 0),
+            Err(ChoiceError::Count {
+                picked: 2,
+                min: 1,
+                max: 1
+            })
+        );
+        let mut two = fight();
+        two.add_combatant(hero()).unwrap();
+        let mut question = offered_choice(&["card.anger", "card.bash", "card.cleave"]);
+        question.max = 2;
+        two.begin_choice(question).unwrap();
+        assert_eq!(
+            two.resolve_choice(ChoiceAnswer::Offered(&[1, 1]), 0),
+            Err(ChoiceError::Duplicate)
+        );
+    }
+
+    #[test]
+    fn a_choice_that_has_candidates_must_not_also_name_a_pile() {
+        // 「候选」与「来源」不一致 = 一个玩家答不出来的问题。两边都校验。
+        let mut s = hand_of(2);
+        let mut wrong = offered_choice(&["card.anger"]);
+        wrong.source = ChoiceSource::Hand;
+        assert_eq!(s.begin_choice(wrong), Err(ChoiceError::WrongAnswer));
+        let mut wrong = elixir(0, 2);
+        wrong.offered = offered_choice(&["card.anger"]).offered;
+        assert_eq!(s.begin_choice(wrong), Err(ChoiceError::WrongAnswer));
+        assert_eq!(s.pending_choice(), None, "被拒绝的问句一个都不留");
     }
 
     #[test]
@@ -5837,7 +6196,7 @@ mod tests {
 
         // 选 0 张（下限 0）是合法答案，而且**真的**把问句消掉 —— 这就是"取消"。
         s.begin_choice(elixir(0, 2)).unwrap();
-        assert_eq!(s.resolve_choice(&[], 0), Ok(ChoiceDone { picked: 0, drawn: 0 }));
+        assert_eq!(s.resolve_choice(ChoiceAnswer::Instances(&[]), 0), Ok(ChoiceDone { picked: 0, drawn: 0 }));
         assert_eq!(s.pending_choice(), None);
     }
 
