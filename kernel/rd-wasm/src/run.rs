@@ -292,8 +292,12 @@ fn finish(session: &mut RunSession, result: Result<i32, RunError>) -> i32 {
 
 /// `env-abi.md` §11.1: start a run. Returns 0, or a negative value with the reason in the error
 /// buffer.
+///
+/// `ascension` is `0..=20` (§159): the wiki's rules are cumulative, so a level is one number and
+/// every rule asks `at_least` for its own. A level above 20 is clamped, not refused -- "A20" is the
+/// end of the ladder and a caller's off-by-one should not be a dead button.
 #[no_mangle]
-pub extern "C" fn rd_run_start(seed: i32) -> i32 {
+pub extern "C" fn rd_run_start(seed: i32, ascension: i32) -> i32 {
     let content = content();
     let roots = roots(content);
 
@@ -337,7 +341,13 @@ pub extern "C" fn rd_run_start(seed: i32) -> i32 {
         return -5;
     }
 
-    let mut state = match RunState::new(seed, facts.max_health, facts.gold, &deck) {
+    let mut state = match RunState::new_with_ascension(
+        seed,
+        facts.max_health,
+        facts.gold,
+        &deck,
+        u8::try_from(ascension.clamp(0, i32::from(rd_run::state::MAX_ASCENSION))).unwrap_or(0),
+    ) {
         Ok(state) => Box::new(state),
         Err(e) => {
             set_error(&std::format!("RunState::new: {}", describe(&e)));
@@ -345,7 +355,15 @@ pub extern "C" fn rd_run_start(seed: i32) -> i32 {
         }
     };
     // `StartingHealth` may be below the maximum; `adjust_health` is the clamped way to say so.
-    state.adjust_health(facts.starting_health - facts.max_health);
+    state.adjust_health(facts.starting_health - state.health());
+    // §159 `A6`: "lose 10% health at the start of each run". Applied **here**, after the content's
+    // own starting value, because it is the one place that knows both -- see
+    // `RunState::new_with_ascension`'s note about which of the two numbers wins.
+    if state.at_least(rd_run::state::A_START_DAMAGED) {
+        let damage =
+            state.health_max() * rd_run::state::ASCENDED_START_DAMAGE_PERCENT / 100;
+        state.adjust_health(-damage);
+    }
 
     // Starting relics, out of the content (`Start.StartingRelics`). A relic whose declared effect
     // this kernel cannot run is refused here rather than loaded and ignored.
@@ -1832,6 +1850,18 @@ pub unsafe extern "C" fn rd_run_potion_id_into(index: i32, ptr: *mut u8) -> i32 
     }
 }
 
+/// The Ascension level this run is played at (`0`..=`20`, §159); `-1` when there is no run.
+///
+/// It exists so the page can *show* the level the run was started with: a seed plus a level is the
+/// whole description of a run, and a page that only echoed the seed would look reproducible while
+/// silently being a different ladder.
+#[no_mangle]
+pub extern "C" fn rd_run_ascension() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |session| i32::from(session.state.ascension()))
+}
+
 /// What belt slot `slot` does, as a small integer the page can branch on:
 /// `1` needs an enemy target, `2` acts on the hero (or on the run), `3` hits every enemy,
 /// `0` unknown, `-1` no slot.
@@ -2380,7 +2410,21 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // §145: what the relics do **when a fight starts**. Read off the run *before* the session is
     // installed, because `combat_bonus` borrows the run and the applier borrows the fight.
     let bonus = session.state.combat_bonus();
-    match crate::build_session_with(fight_seed, encounters[pick], max_health, Some(entries)) {
+    // §159 `A7` / `A8` / `A9`: the node's kind decides which of the three rules (if any) raises the
+    // enemies' maximum health. Read here, before the run is borrowed by the fight.
+    let fight_kind = match kind {
+        2 => rd_run::state::FightKind::Elite,
+        7 => rd_run::state::FightKind::Boss,
+        _ => rd_run::state::FightKind::Normal,
+    };
+    let enemy_health_percent = session.state.enemy_health_bonus_percent(fight_kind);
+    match crate::build_session_at(
+        fight_seed,
+        encounters[pick],
+        max_health,
+        Some(entries),
+        enemy_health_percent,
+    ) {
         Ok(combat) => {
             crate::install_session(combat);
             // The fight is built at the hero's maximum; a run usually enters wounded.
@@ -2723,24 +2767,9 @@ mod tests {
     /// `test_run`. Migrate a test when you next touch it -- *not* in one sweep, because a sweep is
     /// exactly what produced the reverts. See `docs/port-plan.md` §106.
     fn reset(seed: i32) {
-        assert_eq!(rd_run_start(seed), 0, "rd_run_start({seed}) failed");
-        let mut slot = 0;
-        let mut best = i32::MAX;
-        for candidate in 0..2 {
-            let score = rd_run_start_needs(candidate) * 2
-                + i32::from(rd_run_start_cost(candidate) == 3);
-            if score < best {
-                best = score;
-                slot = candidate;
-            }
-        }
-        assert_eq!(rd_run_choose_start(slot), 0, "taking a blessing");
-        if rd_run_blessing_needs() != 0 {
-            assert_eq!(rd_run_pick_blessing_card(0), 0, "finishing the card blessing");
-        }
+        reset_at(seed, 0);
         // **The fixture's post-condition, asserted here** so that a future change which leaves the
         // run half-started fails with *this* message instead of cascading into 27 confusing ones.
-        assert_eq!(rd_run_pending(), 0, "reset left a choice pending");
         assert_eq!(rd_run_act(), 1, "reset must start in act 1");
         assert_eq!(rd_run_observe(0), 0, "reset must start before floor 1");
         assert!(rd_run_deck_count() > 0, "reset left an empty deck");
@@ -2754,7 +2783,7 @@ mod tests {
     fn a_run_starts_from_the_content_not_from_constants() {
         // **Before the blessing**: this test is about what the *content* says (80/80), not about
         // what a blessing later did to it.
-        assert_eq!(rd_run_start(7), 0, "rd_run_start(7)");
+        assert_eq!(rd_run_start(7, 0), 0, "rd_run_start(7)");
         let start = obs();
         assert_eq!(start[2], 80, "health");
         assert_eq!(start[3], 80, "max health");
@@ -3222,6 +3251,96 @@ mod tests {
             "and the same amount of health, capped at the new maximum"
         );
         assert_eq!(rd_run_potion_count(), 0, "the bottle was consumed");
+    }
+
+    /// §159: **(seed, level)** is the whole description of a run, and both are real inputs.
+    ///
+    /// The rules are **cumulative**, so `A14` also carries `A6` -- which is why A14 reads 75/68 and
+    /// not 75/75. Both numbers are asserted at four levels so that "which rule is in effect" cannot
+    /// be answered by a single `>=` that was written once and never checked on both sides.
+    #[test]
+    fn the_ascension_level_reaches_the_run() {
+        assert_eq!(rd_run_start(7, 0), 0);
+        assert_eq!(rd_run_ascension(), 0, "A0 is a real level, not 'no run'");
+        assert_eq!(rd_run_observe(3), 80, "the content's maximum");
+        assert_eq!(rd_run_observe(2), 80, "and it starts full at A0");
+
+        // A6 alone: still 80 maximum, 10% off the health.
+        assert_eq!(rd_run_start(7, 6), 0);
+        assert_eq!(rd_run_observe(3), 80, "A6 does not touch the maximum");
+        assert_eq!(rd_run_observe(2), 72, "A6: 10% of 80");
+
+        // A14 adds `-5` maximum on top of A6 (cumulative, so A6 is still in effect).
+        assert_eq!(rd_run_start(7, 14), 0);
+        assert_eq!(rd_run_ascension(), 14);
+        assert_eq!(rd_run_observe(3), 75, "A14: -5 for the Ironclad");
+        assert_eq!(rd_run_observe(2), 68, "A6 on the new maximum: 75 - 7");
+
+        // A20 changes nothing further: A6 and A14 are the only two starting-state rules.
+        assert_eq!(rd_run_start(7, 20), 0);
+        assert_eq!(rd_run_ascension(), 20);
+        assert_eq!(rd_run_observe(3), 75);
+        assert_eq!(rd_run_observe(2), 68);
+
+        // A level off the end of the ladder is clamped rather than refused.
+        assert_eq!(rd_run_start(7, 99), 0);
+        assert_eq!(rd_run_ascension(), 20);
+
+        // The seed still means what it meant: the same seed at the same level is the same run.
+        assert_eq!(rd_run_start(7, 0), 0);
+        let first = rd_run_observe(3);
+        assert_eq!(rd_run_start(7, 0), 0);
+        assert_eq!(rd_run_observe(3), first);
+    }
+
+    /// §159 `A7`: the same seed, the same fight, and only the rule differs -- so the enemy's maximum
+    /// health is the **only** thing that can move.
+    ///
+    /// Each walk starts from `reset_at`, not from a bare `rd_run_start`: the second walk needs the
+    /// blessing taken and the run settled, and a helper that did half of it would fail as "no fight"
+    /// rather than as "the wrong number".
+    #[test]
+    fn ascension_seven_makes_a_normal_fight_tougher() {
+        reset_at(7, 0);
+        assert!(arrive_at_a_fight(), "seed 7 must reach a fight at A0");
+        let plain = crate::slot().as_ref().expect("the fight").plan.enemies[0].max_health;
+
+        reset_at(7, 7);
+        assert!(arrive_at_a_fight(), "seed 7 must reach the same fight at A7");
+        let ascended = crate::slot().as_ref().expect("the fight").plan.enemies[0].max_health;
+
+        assert!(plain > 0, "the encounter has a health to scale");
+        assert_eq!(
+            ascended,
+            plain + plain * rd_run::state::ASCENDED_ENEMY_HEALTH_PERCENT / 100,
+            "A7 is +{}% on the ENCT row",
+            rd_run::state::ASCENDED_ENEMY_HEALTH_PERCENT
+        );
+        assert!(ascended > plain, "A7 must actually make the fight tougher");
+    }
+
+    /// [`reset`], at an Ascension level (§159).
+    fn reset_at(seed: i32, ascension: i32) {
+        assert_eq!(
+            rd_run_start(seed, ascension),
+            0,
+            "rd_run_start({seed}, {ascension}) failed"
+        );
+        let mut slot = 0;
+        let mut best = i32::MAX;
+        for candidate in 0..2 {
+            let score = rd_run_start_needs(candidate) * 2
+                + i32::from(rd_run_start_cost(candidate) == 3);
+            if score < best {
+                best = score;
+                slot = candidate;
+            }
+        }
+        assert_eq!(rd_run_choose_start(slot), 0, "taking a blessing");
+        if rd_run_blessing_needs() != 0 {
+            assert_eq!(rd_run_pick_blessing_card(0), 0, "finishing the card blessing");
+        }
+        assert_eq!(rd_run_pending(), 0, "reset_at left a choice pending");
     }
 
     /// Put `potion` in the belt and drink it at `target`. The belt has **three** slots, so a test
@@ -4020,7 +4139,7 @@ mod tests {
     /// one is taken, and the taken one applies its gain *and* its cost.
     #[test]
     fn the_blessing_is_offered_and_applied() {
-        assert_eq!(rd_run_start(7), 0);
+        assert_eq!(rd_run_start(7, 0), 0);
         assert_eq!(rd_run_pending(), 6, "Pending::Start before floor 1");
 
         // Two offers, both real, and distinct.
@@ -4101,7 +4220,7 @@ mod tests {
         // Find a seed whose blessing costs health, so the run is wounded before the fight.
         let mut wounded = false;
         for seed in 1..=40 {
-            assert_eq!(rd_run_start(seed), 0, "starting seed {seed}");
+            assert_eq!(rd_run_start(seed, 0), 0, "starting seed {seed}");
             let mut slot = -1;
             for candidate in 0..2 {
                 if rd_run_start_cost(candidate) == 3 && rd_run_start_cost_amount(candidate) > 0 {

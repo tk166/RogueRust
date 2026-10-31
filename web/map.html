@@ -182,7 +182,7 @@ function renderDeck() {
 }
 
 function startRun() {
-  const verdict = ex.rd_run_start(seed);
+  const verdict = ex.rd_run_start(seed, 0);
   render(verdict);
   renderDeck();
 }

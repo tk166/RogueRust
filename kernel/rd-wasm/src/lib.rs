@@ -453,6 +453,21 @@ fn build_session_with(
     hero_hp: i32,
     deck: Option<&'static [DeckEntry<'static>]>,
 ) -> Result<Session, String> {
+    build_session_at(seed, encounter_name, hero_hp, deck, 0)
+}
+
+/// [`build_session_with`], plus the Ascension health bonus for the enemies (§159).
+///
+/// `enemy_health_percent` is `A7`/`A8`/`A9` read off the run (`0` below those levels). It is applied
+/// to the `ENCT` row's `MaxHealth`, which is the only place an enemy's health is stated -- so the
+/// rule lands on the number the content wrote, not on a second copy.
+fn build_session_at(
+    seed: i32,
+    encounter_name: &str,
+    hero_hp: i32,
+    deck: Option<&'static [DeckEntry<'static>]>,
+    enemy_health_percent: i32,
+) -> Result<Session, String> {
     let content: &'static Content<'static> =
         Box::leak(Box::new(Content::parse(IMAGE).map_err(|e| format!("RDCF 镜像解析失败: {}", detail(&e)))?));
 
@@ -477,7 +492,10 @@ fn build_session_with(
             .max_health()
             .map_err(|e| format!("ENCT enemy MaxHealth: {}", detail(&e)))?
             .ok_or_else(|| format!("`{id}` has no MaxHealth in the encounter"))?;
-        enemies.push(PlanCombatant { id, max_health });
+        enemies.push(PlanCombatant {
+            id,
+            max_health: max_health + max_health * enemy_health_percent / 100,
+        });
     }
     if enemies.is_empty() {
         return Err(format!("遭遇 `{encounter_name}` 里没有敌人"));

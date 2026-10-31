@@ -172,6 +172,14 @@
   .topbar .stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-family: var(--mono); font-size: 12px; color: var(--dim); }
   .topbar .stats b { color: var(--ink); }
   .topbar .act { padding: 5px 10px; font-size: 12px; }
+  /* §159: the two facts a run is made of, entered before it starts. */
+  .seedbar { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; margin: 4px 0 10px;
+             font-size: 12px; color: var(--dim); font-family: var(--mono); }
+  .seedbar label { display: flex; align-items: center; gap: 6px; }
+  .seedbar input { font-family: var(--mono); font-size: 12px; padding: 3px 6px; border-radius: 6px;
+                   background: var(--panel); color: var(--ink); border: 1px solid var(--line); }
+  #ascInput { width: 4.5em; }
+  .seedbar .note { color: var(--dim); opacity: 0.75; }
   .chips .chip.relic { border-color: var(--energy); color: var(--energy); }
 /* An unaffordable card keeps its shape but loses its pull: dimmed, and the cost badge turns red. */
 #hand .card.unaffordable {
@@ -345,8 +353,16 @@
 
   <div class="panel" id="runPanel" style="grid-column: 1 / -1;">
     <h2>Act 1 · 地图</h2>
-    <div class="mapbox" id="mapbox"></div>
-    <div class="node-panel" id="nodePanel"></div>
+    <!-- §159: a run is described by **(seed, ascension level)** and nothing else, so both are
+         entered **before** it starts. The fields are written only by `setSeed` (and by the player);
+         `startRun` reads them, which is why typing a seed and pressing 开始 cannot disagree. -->
+    <div class="seedbar">
+      <label>种子 <input id="seedInput" type="text" inputmode="numeric" size="12"></label>
+      <label>爬塔等级 <input id="ascInput" type="number" min="0" max="20" step="1" value="0"></label>
+      <button class="act" id="newRunBtn">开始 / 重开</button>
+      <span class="note">同一个种子 + 同一个等级 = 同一局</span>
+    </div>
+    <div class="mapbox" id="mapbox"></div>    <div class="node-panel" id="nodePanel"></div>
   </div>
 
   <div class="panel" id="heroPanel">
@@ -585,6 +601,18 @@ let mode = "run";
 /// jaw_worm" report happened. `?debug` still lets a checker pin a seed through
 /// `RD_DEBUG.startWithSeed`.
 let runSeed = Math.floor(Math.random() * 2_000_000_000);
+/// The Ascension level the **next** run starts at (§159). `0` = no rules. The wiki's ladder is
+/// cumulative and this build has a rule for 11 of the 20 levels; the rest are named in
+/// `docs/port-plan.md` §159.6 rather than silently doing nothing.
+let runAscension = 0;
+/// The one writer of `#seedInput` (§159): the field and `runSeed` are **one fact**, so a second
+/// writer is a second chance for them to disagree -- and a seed field that disagrees with the seed
+/// the run used is worse than no field at all.
+function setSeed(value) {
+  runSeed = value | 0;
+  const field = document.getElementById("seedInput");
+  if (field) field.value = String(runSeed);
+}
 /// The run is finished. Two ways to get here, and only one of them exists yet: **defeat** (the
 /// hero's health reached 0). There is no boss encounter in this content, so a run cannot be won --
 /// the end of the act says so instead of pretending.
@@ -722,9 +750,14 @@ function renderTopBar() {
   const overflow = ex.rd_env_enemy_overflow();
   const overflowNote =
     overflow === 1 ? ' · <span class="warn">⚠️ 敌人超出可见槽（只显示 6 个）</span>' : "";
+  // §159: the Ascension level is part of what a run **is**, so it belongs next to the seed in the
+  // summary. Read from the kernel rather than from the input: the input is what the *next* run will
+  // use, and after a click they are two different facts.
+  const ascLevel = ex.rd_run_ascension();
+  const ascNote = ascLevel > 0 ? ` · A<b>${ascLevel}</b>` : "";
   document.getElementById("runStats").innerHTML =
     `幕 <b>${actNow}</b> · floor <b>${floor}</b> · hp <b>${hp}/${hpMax}</b> · ` +
-    `gold <b>${gold}</b> · deck <b>${deck}</b>` + overflowNote;
+    `gold <b>${gold}</b> · deck <b>${deck}</b>` + ascNote + overflowNote;
   const chips = [];
   for (let index = 0; index < relics; index++) {
     chips.push(`<span class="chip relic">${esc(runRead.relicName(index) || "relic")}</span>`);
@@ -945,7 +978,7 @@ function runSnapshot() {
 const PANEL_ACTIONS = {
   restart: () => startRun(),
   next_seed: () => {
-    runSeed += 1;
+    setSeed(runSeed + 1);
     startRun();
   },
   choose_start: (a) => act(() => ex.rd_run_choose_start(a.slot), "祝福"),
@@ -1082,7 +1115,17 @@ function beginFight() {
 function startRun() {
   runOver = false;
   runOverWhy = "";
-  if (ex.rd_run_start(runSeed) !== 0) {
+  // §159: read the two fields the run is made of, clamp the level to the wiki's ladder, and write
+  // both back so the page shows what the kernel actually got. An empty seed field means "keep the
+  // one you have" (which is the random one on the first load).
+  const seedField = document.getElementById("seedInput");
+  const typedSeed = Number.parseInt(seedField ? seedField.value : "", 10);
+  if (Number.isFinite(typedSeed)) setSeed(typedSeed);
+  const ascField = document.getElementById("ascInput");
+  const typedAsc = Number.parseInt(ascField ? ascField.value : "", 10);
+  runAscension = Number.isFinite(typedAsc) ? Math.max(0, Math.min(20, typedAsc)) : runAscension;
+  if (ascField) ascField.value = String(runAscension);
+  if (ex.rd_run_start(runSeed, runAscension) !== 0) {
     document.getElementById("msg").innerHTML =
       `<span class="err">开局失败 · ${esc(runError())}</span>`;
     return;
@@ -1780,6 +1823,10 @@ function measure() {
     actCurtainEl.addEventListener("click", hideActCurtain);
   }
   document.getElementById("deckBtn").onclick = () => showPile("所有牌", deckEntries());
+  // §159: the seed / level fields only mean something with a button that starts the run from them.
+  // Wiring it here (not inside `renderNode`) keeps it out of the re-render path -- a handler rebuilt
+  // every frame is a handler that silently loses its identity.
+  document.getElementById("newRunBtn").onclick = () => startRun();
   document.getElementById("drawBtn").onclick = () => showPile("抽牌堆", pileEntries(0));
   document.getElementById("discardBtn").onclick = () => showPile("弃牌堆", pileEntries(1));
   document.getElementById("exhaustBtn").onclick = () => showPile("消耗堆", pileEntries(2));
@@ -1810,8 +1857,12 @@ function measure() {
       esc,
       view: () => RD_MAP.describeMap(runRead),
       // A chosen seed, so a browser check does not have to hope a 40% potion drop shows up.
-      startWithSeed: (seed) => {
-        runSeed = seed;
+      // §159: the level rides along, because a seed alone is only half of "the same run".
+      startWithSeed: (seed, ascension = 0) => {
+        setSeed(seed);
+        runAscension = ascension;
+        const field = document.getElementById("ascInput");
+        if (field) field.value = String(ascension);
         startRun();
       },
       // The page re-renders inside ct, which may be asynchronous: a checker that clicks and reads

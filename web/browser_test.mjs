@@ -187,6 +187,26 @@ const report = await evaluate(`(async () => {
   }
   out.potionAfter = ex.rd_run_potion_count();
   out.potionBeltAfter = document.getElementById("relicChips").innerHTML;
+
+  // §159: (seed, level) is the whole description of a run. Drive it through the **fields** the
+  // player actually uses -- typing a level and pressing 开始 -- because a page whose level input is
+  // not read is a dead affordance, and startWithSeed would have hidden that.
+  // (No backticks in this comment: the whole block is already inside a template literal, and a
+  // backtick here ends it -- which is how this section first failed to parse.)
+  const asc = document.getElementById("ascInput");
+  const seedField = document.getElementById("seedInput");
+  if (asc && seedField) {
+    seedField.value = "2222";
+    asc.value = "14";
+    document.getElementById("newRunBtn").onclick();
+    await sleep(0);
+  }
+  out.ascLevel = ex.rd_run_ascension();
+  out.ascSeed = ex.rd_run_seed();
+  out.ascMaxHp = ex.rd_run_observe(3);
+  // textContent + collapsed whitespace, not innerText: innerText of two adjacent <b> elements puts a
+  // newline between them, so the readable assertion below would fail on a top bar that is correct.
+  out.ascTopBar = document.getElementById("runStats").textContent.replace(/\s+/g, " ").trim();
   return out;
 })()`);
 
@@ -237,6 +257,17 @@ want(
 want(
   !report.potionBeltAfter.includes("chip potion"),
   `the belt still shows the potion after using it: ${report.potionBeltAfter}`
+);
+// §159: typing a level and pressing 开始 must actually start **that** run.
+want(report.ascLevel === 14, `the level input did not reach the kernel (got ${report.ascLevel})`);
+want(report.ascSeed === 2222, `the seed input did not reach the kernel (got ${report.ascSeed})`);
+want(
+  report.ascMaxHp === 75,
+  `A14 must set the maximum to 75, the run says ${report.ascMaxHp}`
+);
+want(
+  /A14/.test(report.ascTopBar),
+  `the top bar does not show the level: ${JSON.stringify(report.ascTopBar)}`
 );
 
 await page.close();

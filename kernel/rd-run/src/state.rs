@@ -39,7 +39,8 @@ pub const MAX_ACT: u8 = 3;
 /// storage and rule is what lets a relic raise the count without a second array.
 pub const MAX_RUN_POTIONS: usize = 5;
 
-/// The wiki's three starting potion slots (§157; Ascension 11's reduction does not exist here).
+/// The wiki's three starting potion slots (§157; Ascension 11 takes one away -- see
+/// [`A_POTION_SLOT`]).
 pub const BASE_POTION_SLOTS: u8 = 3;
 /// `inv:§9.3`: a potion drops from 40% of fights (the act-1 reset value; the ±10% per act is not
 /// modelled because there is one act).
@@ -52,6 +53,53 @@ pub const POTION_DROP_STEP: i32 = 10;
 
 /// `Burning Blood`: "At the end of combat, heal 6 HP" (`inv:§2`).
 pub const BURNING_BLOOD_HEAL: i32 = 6;
+
+// =============================================================================================
+// Ascension (`port-plan.md` §159)
+// =============================================================================================
+
+/// The highest Ascension level the wiki defines (and the highest this build accepts).
+pub const MAX_ASCENSION: u8 = 20;
+
+/// The rule numbers, **named** so a call site reads as a rule instead of as a magic `>= 5`.
+///
+/// The wiki's list is cumulative: level N carries rules 1..=N. Eleven of the twenty have a rule
+/// here; the nine that do not are listed in `port-plan.md` §159.6 with what each one needs, because
+/// "Ascension up to 20" with eight silent no-ops would be exactly the kind of lie this project
+/// keeps catching.
+pub const A_BOSS_HEAL: u8 = 5;
+/// Start each run damaged (lose 10% health).
+pub const A_START_DAMAGED: u8 = 6;
+/// Normal enemies are tougher (more max HP).
+pub const A_NORMAL_HP: u8 = 7;
+/// Elites are tougher.
+pub const A_ELITE_HP: u8 = 8;
+/// Bosses are tougher.
+pub const A_BOSS_HP: u8 = 9;
+/// One less potion slot.
+pub const A_POTION_SLOT: u8 = 11;
+/// Bosses drop 25% less gold.
+pub const A_BOSS_GOLD: u8 = 13;
+/// Lower max HP (`-5` for the Ironclad, which is the only character this content has).
+pub const A_MAX_HP: u8 = 14;
+/// The merchant charges 10% more.
+pub const A_SHOP_PRICE: u8 = 16;
+
+/// `A14`: the Ironclad loses 5 maximum health (`-4` for the other three characters).
+pub const ASCENDED_MAX_HEALTH_LOSS: i32 = 5;
+/// `A6`: "lose 10% health at the start of each run" -- of the maximum, rounded down.
+pub const ASCENDED_START_DAMAGE_PERCENT: i32 = 10;
+/// `A7`/`A8`/`A9`: how much more max HP an enemy has.
+///
+/// ⚠️ **The wiki gives no number here**: it says "have more HP" and the real game hand-tunes each
+/// monster's HP per ascension. A flat percentage is therefore our *model*, not StS's data. It lives
+/// in one constant so that the day `ENCT` grows an ascension column, this constant is the only thing
+/// to delete.
+pub const ASCENDED_ENEMY_HEALTH_PERCENT: i32 = 10;
+/// `A13`: bosses drop 25% less gold.
+pub const ASCENDED_BOSS_GOLD_PERCENT: i32 = 75;
+/// `A16`: "everything costs 10% more".
+pub const ASCENDED_SHOP_PERCENT: i32 = 110;
 
 /// What a relic does. **One table** (`RunState::relic_effect`) is the only place a relic's
 /// behaviour is described, so "is this relic implemented?" and "what does this relic do?" cannot
@@ -809,6 +857,9 @@ pub struct RunState {
     /// The rare-card pity offset (`inv:§3.5`): starts at −5%, +1% per non-rare reward roll, reset to
     /// −5% on a rare, capped at +40%. Only **combat reward** rolls move it.
     rarity_offset: i32,
+    /// The Ascension level, `0`..=[`MAX_ASCENSION`] (§159). Cumulative: level `N` carries rules
+    /// `1..=N`, and every rule asks [`RunState::at_least`] for its own number.
+    ascension: u8,
 }
 
 impl RunState {
@@ -827,18 +878,45 @@ impl RunState {
     ///
     /// `starting_deck` is the deck **in order** — deck order is observable (`run-layer.md` §5.2),
     /// so it is not sorted here or anywhere else.
+    ///
+    /// Ascension 0 means "no rules"; [`Self::new_with_ascension`] is the real constructor and this
+    /// one is the shortcut every test and every non-ascended call site uses.
     pub fn new(
         seed: i32,
         health_max: i32,
         gold: i32,
         starting_deck: &[&str],
     ) -> Result<Self, RunError> {
+        Self::new_with_ascension(seed, health_max, gold, starting_deck, 0)
+    }
+
+    /// [`Self::new`], with an Ascension level (§159).
+    ///
+    /// `A14` changes the **maximum**, so it has to happen at construction. `A6` ("start each run
+    /// damaged") is *not* applied here: the content declares its own `StartingHealth`, and the only
+    /// place that knows it is the caller -- `rd-wasm`'s `rd_run_start`, which applies the damage
+    /// after setting the health. Splitting them this way is what keeps "which of the two numbers
+    /// wins" from depending on the order of two lines.
+    pub fn new_with_ascension(
+        seed: i32,
+        health_max: i32,
+        gold: i32,
+        starting_deck: &[&str],
+        ascension: u8,
+    ) -> Result<Self, RunError> {
+        let ascension = ascension.min(MAX_ASCENSION);
+        let health_max = if ascension >= A_MAX_HP {
+            (health_max - ASCENDED_MAX_HEALTH_LOSS).max(1)
+        } else {
+            health_max
+        };
+        let health = health_max;
         let mut rng = RunRng::new(seed);
         let map = RunMap::generate(&mut rng)?;
         let mut state = Self {
             seed,
             floor: 0,
-            health: health_max,
+            health,
             health_max,
             gold,
             node: -1,
@@ -867,6 +945,7 @@ impl RunState {
             event_follow: None,
             resolved: [0; 2],
             rarity_offset: RARITY_OFFSET_START,
+            ascension,
         };
         for id in starting_deck {
             state.push_card(id)?;
@@ -877,10 +956,53 @@ impl RunState {
 
     // ---- reads -----------------------------------------------------------------------------
 
+    /// The Ascension level this run is played at (`0` = none, §159).
+    #[must_use]
+    pub const fn ascension(&self) -> u8 {
+        self.ascension
+    }
+
+    /// Is rule `level` in effect? The wiki's rules are **cumulative**, so this is the only
+    /// comparison any rule needs -- and it keeps the numbers in [`A_BOSS_HEAL`] & co. instead of
+    /// scattering `>= 5` through the file.
+    #[must_use]
+    pub const fn at_least(&self, level: u8) -> bool {
+        self.ascension >= level
+    }
+
     /// The run seed.
     #[must_use]
     pub const fn seed(&self) -> i32 {
         self.seed
+    }
+
+    /// `A16` (§159): a shop price after the Ascension markup.
+    ///
+    /// Applied **once, at stock time** -- the price the page shows and the price a purchase charges
+    /// have to be the same number, and a markup applied at purchase time would need a second rule to
+    /// keep them in step.
+    const fn marked_up(&self, price: i32) -> i32 {
+        if self.at_least(A_SHOP_PRICE) {
+            price * ASCENDED_SHOP_PERCENT / 100
+        } else {
+            price
+        }
+    }
+
+    /// `A7` / `A8` / `A9` (§159): how much extra maximum health this kind of fight's enemies get,
+    /// in percent. `0` below the level that owns the kind, so the three rules stay three rules.
+    #[must_use]
+    pub const fn enemy_health_bonus_percent(&self, kind: FightKind) -> i32 {
+        let level = match kind {
+            FightKind::Normal => A_NORMAL_HP,
+            FightKind::Elite => A_ELITE_HP,
+            FightKind::Boss => A_BOSS_HP,
+        };
+        if self.at_least(level) {
+            ASCENDED_ENEMY_HEALTH_PERCENT
+        } else {
+            0
+        }
     }
     /// 0 before the first step, then 1..=ROWS.
     #[must_use]
@@ -1023,7 +1145,14 @@ impl RunState {
     /// How many potion slots the run has: three, plus `potion_belt`'s two (§157).
     #[must_use]
     pub fn potion_slots(&self) -> u8 {
-        let mut slots = BASE_POTION_SLOTS;
+        // §159: Ascension 11 takes one slot away -- and the wiki says the *belt relic still adds
+        // two*, so the reduction lands on the base, not on the total (5 → 4 with the belt, exactly
+        // what the Potions page spells out).
+        let mut slots = if self.at_least(A_POTION_SLOT) {
+            BASE_POTION_SLOTS.saturating_sub(1)
+        } else {
+            BASE_POTION_SLOTS
+        };
         for slot in 0..self.relics_len as usize {
             if let Some(RelicEffect::ExtraPotionSlots(extra)) =
                 Self::relic_effect(self.relics[slot].as_str())
@@ -1345,6 +1474,16 @@ impl RunState {
     /// settled outside this crate, so the caller has to say so (same shape as `mark_resolved`).
     pub fn mark_boss_beaten(&mut self) {
         self.mark_resolved();
+        // §159: StS heals you **to full** when an act's boss falls (that is what the missing-health
+        // rule in `A5` is a fraction *of* -- before this the heal did not exist at all, so Ascension
+        // 5 would have been a rule about nothing). Ascension 5 makes it 75% of the missing health.
+        let missing = (self.health_max - self.health).max(0);
+        let healed = if self.at_least(A_BOSS_HEAL) {
+            missing * 3 / 4
+        } else {
+            missing
+        };
+        self.health = (self.health + healed).min(self.health_max);
         if self.act >= MAX_ACT {
             // The last act's boss: the run is won.
             self.boss_beaten = true;
@@ -1496,7 +1635,8 @@ impl RunState {
     /// (`inv:§8.2` -- "此后每次使用时 +25，跨店累计").
     #[must_use]
     pub const fn remove_card_price(&self) -> i32 {
-        SHOP_REMOVE_BASE + SHOP_REMOVE_STEP * self.removed_cards
+        // §159 `A16`: the removal service is a shop price too, so it carries the same markup.
+        self.marked_up(SHOP_REMOVE_BASE + SHOP_REMOVE_STEP * self.removed_cards)
     }
 
     /// Declare what the node under the cursor needs. `card_pool` / `relic_pool` are the content's
@@ -1654,7 +1794,10 @@ impl RunState {
             let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
             self.shop.cards[slot] = Offer {
                 id: RunId::new(card.id).map_err(|_| RunError::BadId)?,
-                price,
+                // §159 `A16`: "everything costs 10% more". Applied **at stock time**, so the price
+                // the page shows and the price the purchase charges are the same number -- a markup
+                // applied at purchase time would need a second rule and the two would drift.
+                price: self.marked_up(price),
             };
         }
         self.shop.cards_len = cards as u8;
@@ -1675,7 +1818,7 @@ impl RunState {
             let price = 143 + self.rng.roll(RunStream::Shop, 15)? as i32;
             self.shop.relics[slot] = Offer {
                 id: picked,
-                price,
+                price: self.marked_up(price),
             };
             shelved[slot] = picked;
             self.shop.relics_len = (slot + 1) as u8;
@@ -2287,7 +2430,13 @@ impl RunState {
         let base_gold = low + self.rng.roll(RunStream::Reward, span)? as i32;
         // §157: Golden Idol pays 25% more. Applied to the rolled amount (integer, truncated), so the
         // reward's own `gold` is what the player was actually given.
-        let paid = base_gold * self.fight_gold_percent() / 100;
+        // §159: Ascension 13 makes a **boss** pay 25% less. Both multipliers are applied to the roll
+        // and the order is fixed (idol first, then the ascension tax) so the number is reproducible.
+        let paid = if matches!(kind, FightKind::Boss) && self.at_least(A_BOSS_GOLD) {
+            base_gold * self.fight_gold_percent() / 100 * ASCENDED_BOSS_GOLD_PERCENT / 100
+        } else {
+            base_gold * self.fight_gold_percent() / 100
+        };
         self.adjust_gold(paid);
 
         // §157: the wiki's **moving** chance -- 40% to start, -10 after a drop, +10 after a miss.
@@ -3324,6 +3473,107 @@ mod tests {
     /// §157：药水掉率是 wiki 那条**会走**的 40%，不是常量。
     ///
     /// -10（掉了）/ +10（没掉），换幕重置。断言走的是**数字**而不是"某个种子恰好掉了几瓶"。
+    /// §159: the Ascension rules that live in this crate, **each one its own level**.
+    ///
+    /// The wiki's list is cumulative, and the point of `at_least` is that a rule at level 14 does
+    /// not fire at 13. That is the assertion here: every row is checked on both sides of its own
+    /// threshold, because "A13 already has the A14 rule" is the bug a single `>=` written once in a
+    /// hurry produces.
+    #[test]
+    fn the_ascension_rules_are_each_their_own_level() {
+        let plain = RunState::new(11, 80, 0, &DECK).expect("a run");
+        assert_eq!(plain.ascension(), 0);
+        assert_eq!(plain.health_max(), 80, "A0 changes nothing");
+        assert!(!plain.at_least(A_MAX_HP));
+        assert_eq!(plain.potion_slots(), 3);
+        assert_eq!(plain.remove_card_price(), SHOP_REMOVE_BASE);
+
+        // A14: -5 maximum health for the Ironclad (the only character this content has).
+        let a13 = RunState::new_with_ascension(11, 80, 0, &DECK, 13).expect("A13");
+        let a14 = RunState::new_with_ascension(11, 80, 0, &DECK, 14).expect("A14");
+        assert_eq!(a13.health_max(), 80, "A14 is level 14, not 13");
+        assert_eq!(a14.health_max(), 75, "A14: -5");
+        assert!(a14.at_least(A_MAX_HP));
+
+        // A11: one less slot -- and the belt still adds its two, **on top of the base** (the wiki's
+        // "5 with the belt, or 4 on ascension 11 and higher").
+        let mut a11 = RunState::new_with_ascension(11, 80, 0, &DECK, 11).expect("A11");
+        assert_eq!(a11.potion_slots(), 2);
+        a11.push_relic("potion_belt").expect("the belt");
+        assert_eq!(a11.potion_slots(), 4);
+
+        // A16: everything costs 10% more, including the removal service.
+        let a16 = RunState::new_with_ascension(11, 80, 0, &DECK, 16).expect("A16");
+        assert_eq!(a15_price(15), SHOP_REMOVE_BASE, "A15 is level 15, not 16");
+        assert_eq!(
+            a16.remove_card_price(),
+            SHOP_REMOVE_BASE * ASCENDED_SHOP_PERCENT / 100
+        );
+    }
+
+    /// The price at level `level`, for the "not yet" side of the A16 threshold.
+    fn a15_price(level: u8) -> i32 {
+        RunState::new_with_ascension(11, 80, 0, &DECK, level)
+            .expect("a run")
+            .remove_card_price()
+    }
+
+    /// §159 `A5`: an act's boss heals you to **full**, and Ascension 5 takes a quarter of it back.
+    ///
+    /// The base rule did not exist before this section -- which is worth saying out loud, because
+    /// `A5`'s wiki text is "heal 75% of missing health **instead of 100%**", and a fraction of a heal
+    /// that never happened would have been a rule about nothing.
+    #[test]
+    fn a_boss_heals_to_full_and_ascension_five_heals_three_quarters() {
+        let mut plain = RunState::new(11, 80, 0, &DECK).expect("a run");
+        plain.adjust_health(-40);
+        assert_eq!(plain.health(), 40);
+        plain.mark_boss_beaten();
+        assert_eq!(plain.health(), 80, "a cleared act heals you to full");
+
+        let mut a4 = RunState::new_with_ascension(11, 80, 0, &DECK, 4).expect("A4");
+        a4.adjust_health(-40);
+        a4.mark_boss_beaten();
+        assert_eq!(a4.health(), 80, "A5 is level 5, not 4");
+
+        let mut a5 = RunState::new_with_ascension(11, 80, 0, &DECK, 5).expect("A5");
+        a5.adjust_health(-40);
+        a5.mark_boss_beaten();
+        assert_eq!(a5.health(), 40 + 30, "A5: 75% of the 40 that was missing");
+    }
+
+    /// §159 `A7`/`A8`/`A9`: the health bonus belongs to **its own** fight kind.
+    #[test]
+    fn the_enemy_health_bonus_belongs_to_its_own_fight_kind() {
+        fn levels(run: &RunState) -> [i32; 3] {
+            [
+                run.enemy_health_bonus_percent(FightKind::Normal),
+                run.enemy_health_bonus_percent(FightKind::Elite),
+                run.enemy_health_bonus_percent(FightKind::Boss),
+            ]
+        }
+        let plain = RunState::new(11, 80, 0, &DECK).expect("a run");
+        assert_eq!(levels(&plain), [0, 0, 0]);
+        let a7 = RunState::new_with_ascension(11, 80, 0, &DECK, 7).expect("A7");
+        assert_eq!(
+            levels(&a7),
+            [ASCENDED_ENEMY_HEALTH_PERCENT, 0, 0],
+            "A7 is normal fights only"
+        );
+        let a8 = RunState::new_with_ascension(11, 80, 0, &DECK, 8).expect("A8");
+        assert_eq!(
+            levels(&a8),
+            [ASCENDED_ENEMY_HEALTH_PERCENT, ASCENDED_ENEMY_HEALTH_PERCENT, 0],
+            "A8 adds elites, bosses still untouched"
+        );
+        let a9 = RunState::new_with_ascension(11, 80, 0, &DECK, 9).expect("A9");
+        assert_eq!(levels(&a9), [ASCENDED_ENEMY_HEALTH_PERCENT; 3]);
+        // A level above the ladder is clamped, not refused: an off-by-one from the page should not
+        // be a dead button.
+        let over = RunState::new_with_ascension(11, 80, 0, &DECK, 99).expect("A99");
+        assert_eq!(over.ascension(), MAX_ASCENSION);
+    }
+
     #[test]
     fn the_potion_chance_walks_the_wikis_ten_percent() {
         let pool = [

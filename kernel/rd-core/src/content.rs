@@ -2355,8 +2355,16 @@ impl<'a> Content<'a> {
             let name = self.string(field.name_str())?;
             if name == pool {
                 let list = slot_list(self, &table, at, field.kind(), hop).ok()?;
+                // §159b: a pool **longer than the reader can hold is refused, not truncated.**
+                // The truncated version looked fine from outside (the returned array is 8 wide, so
+                // counting its non-empty cells can never exceed 8) -- which is why the first version
+                // of `every_pool_in_the_image_fits_the_pool_capacity` passed with nine entries in
+                // the list. The guard has to sit **before** the cut, so it sits here.
+                if list.len() > MAX_POOL_IDS {
+                    return None;
+                }
                 let mut out = [""; MAX_POOL_IDS];
-                for index in 0..list.len().min(MAX_POOL_IDS) {
+                for index in 0..list.len() {
                     // Each element is an `_obj{Id, Weight}`; the id is an `F_STR` field.
                     let element = list.cell(index)?;
                     let element_term = self.term(element)?;
@@ -4328,6 +4336,46 @@ mod tests {
         let core = std::fs::read(CORE_IMAGE).expect("the roguedeck image");
         let core = Content::parse(&core).expect("parses");
         assert_eq!(core.potion_count(), 0, "roguedeck has no potions");
+    }
+
+    /// **No pool in the image is longer than `MAX_POOL_IDS`.**
+    ///
+    /// §158 deleted the potion pools partly because `id_pool` **silently truncated** at
+    /// [`MAX_POOL_IDS`] -- a 33-entry list would have shipped as "the first eight potions can drop,
+    /// and the content gate still says all 33 are there". The encounter and event pools still go
+    /// through that walker, so the same trap is one `Weak` entry away: the weak pool is already 7 of
+    /// 8.
+    ///
+    /// ⚠️ **The first version of this test could not fail.** It counted the non-empty cells of the
+    /// returned `[&str; MAX_POOL_IDS]`, which is by construction at most 8 -- so it passed with nine
+    /// entries in the list (found by running the negative control, which is exactly why negative
+    /// controls are not optional). `id_pool` now **refuses** a too-long list instead of cutting it,
+    /// so "the pool is gone" is the observable failure and this test is about the reason.
+    #[test]
+    fn every_pool_in_the_image_fits_the_pool_capacity() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&bytes).expect("the image parses");
+        const ENCOUNTER_POOLS: [&str; 9] = [
+            "Weak", "Elite", "Boss", "Weak2", "Elite2", "Boss2", "Weak3", "Elite3", "Boss3",
+        ];
+        const EVENT_POOLS: [&str; 3] = ["Events", "Events2", "Events3"];
+        for name in ENCOUNTER_POOLS {
+            assert!(
+                content.encounter_pool(name).is_some(),
+                "`EncounterTables.{name}` is missing or holds more than {MAX_POOL_IDS} ids \
+                 (the reader refuses a too-long list rather than cutting it)"
+            );
+        }
+        for name in EVENT_POOLS {
+            assert!(
+                content.event_pool(name).is_some(),
+                "`EventTables.{name}` is missing or holds more than {MAX_POOL_IDS} ids"
+            );
+        }
     }
 
     /// **Every status the content declares is either implemented or declared inert.**

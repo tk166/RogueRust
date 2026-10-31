@@ -91,11 +91,11 @@ const settleHere = () => {
 
 const view = () => M.describeMap(io);
 
-if (ex.rd_run_start(7) !== 0) {
+if (ex.rd_run_start(7, 0) !== 0) {
   const n = ex.rd_run_last_error_len();
   const ptr = ex.rd_env_scratch_buf();
   ex.rd_run_last_error_into(ptr);
-  fail("rd_run_start(7) failed: " +
+  fail("rd_run_start(7, 0) failed: " +
        new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, n).slice()));
 }
 takeBlessing();
@@ -263,10 +263,10 @@ takeBlessing();
 // 5. Two seeds are two maps. A generator that ignored the seed would pass everything above.
 // ---------------------------------------------------------------------------------------------
 {
-  if (ex.rd_run_start(7) !== 0) fail("restarting seed 7 failed");
+  if (ex.rd_run_start(7, 0) !== 0) fail("restarting seed 7 failed");
   takeBlessing();
   const seven = view().nodes.map((n) => `${n.row}:${n.col}:${n.kind}`).join("|");
-  if (ex.rd_run_start(1234) !== 0) fail("starting seed 1234 failed");
+  if (ex.rd_run_start(1234, 0) !== 0) fail("starting seed 1234 failed");
   takeBlessing();
   const other = view().nodes.map((n) => `${n.row}:${n.col}:${n.kind}`).join("|");
   if (seven === other) fail("two different seeds produced the same map");
@@ -339,7 +339,7 @@ function assertViewAgreesWithModule(where) {
     fail(`walking stopped at floor ${io.obs(M.RUN_FLOOR)} after ${steps} steps`);
   }
   // A different seed, checked the same way: the helper must not be passing by coincidence.
-  if (ex.rd_run_start(4242) !== 0) fail("starting seed 4242 failed");
+  if (ex.rd_run_start(4242, 0) !== 0) fail("starting seed 4242 failed");
   takeBlessing();
   assertViewAgreesWithModule("seed 4242, fresh");
   if (ex.rd_run_step(0) !== 0) fail("the first step of seed 4242 was refused");
