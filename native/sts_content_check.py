@@ -1022,7 +1022,10 @@ EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing",
                       "remove_card", "upgrade_card", "transform_card")
 # Mirrors `rd_run::state::RunState::relic_effect`. Kept as a literal list on purpose: this file is
 # the **second opinion** -- if the two disagree, one of them is wrong and the gate says so.
-IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", "thread_and_needle")
+IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", "thread_and_needle",
+                      # §156: wiki numbers (Strawberry +7 max HP, Bronze Scales 3 Thorns, Regal Pillow
+                      # +15 on rest, Meat on the Bone 12 HP at or below 50%).
+                      "strawberry", "bronze_scales", "regal_pillow", "meat_on_the_bone")
 
 
 def check_relics(doc):
@@ -1162,6 +1165,31 @@ def check_potions(doc):
     ok("potions", "%d potions, %d distinct effects, pools %d/%d/%d"
        % (len(potions), len(seen_effects), len(tables.get("Potions") or []),
           len(tables.get("Potions2") or []), len(tables.get("Potions3") or [])))
+
+
+RELAPSE_RARITIES = ("Common", "Uncommon", "Rare")
+
+
+def check_relic_rarities(doc):
+    """§156: every relic declares a rarity the drop weights know about.
+
+    The weights are `Common 50 / Uncommon 33 / Rare 17`; a relic whose `Rarity` is missing or spelled
+    differently is silently skipped by the pool reader in `rd-wasm` (`Rarity::from_name` returns
+    `None`), so it would simply **never drop** -- a relic that exists and cannot be found is worse
+    than one that is absent.
+    """
+    print("[6f] relic rarities (port-plan.md §156)")
+    relics = doc.get("Relics") or []
+    missing = [relic.get("Id") for relic in relics if relic.get("Rarity") not in RELAPSE_RARITIES]
+    if missing:
+        fail("Relics.rarity", "no usable Rarity on %s" % (missing,))
+    counts = {}
+    for relic in relics:
+        counts[relic["Rarity"]] = counts.get(relic["Rarity"], 0) + 1
+    for rarity in RELAPSE_RARITIES:
+        if counts.get(rarity, 0) == 0:
+            fail("Relics.rarity", "no %s relic: the weight band would be empty" % rarity)
+    ok("relic rarities", "%d relics over %s" % (len(relics), sorted(counts.items())))
 
 
 def check_card_keywords(doc):
@@ -1775,6 +1803,7 @@ def main():
     check_weak_pool_table(doc)
     check_event_vocabulary(doc)
     check_upgrades(doc)
+    check_relic_rarities(doc)
     check_potions(doc)
     check_card_keywords(doc)
     check_relics(doc)

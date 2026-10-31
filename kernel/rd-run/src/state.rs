@@ -65,6 +65,11 @@ pub enum RelicEffect {
     /// `standard.plated_armor` *means* -- the kernel does. A per-status arm here would be a second
     /// list to keep in step with the content.
     StartCombatStatus(&'static str, i32),
+    /// Resting heals this much more (`regal_pillow`, wiki: +15).
+    RestHealBonus(i32),
+    /// Heal `amount` at the end of a fight **only when HP is at or below `percent` of maximum**
+    /// (`meat_on_the_bone`, wiki: 12 HP at or below 50%).
+    EndOfCombatHealIfBelow { percent: i32, amount: i32 },
 }
 
 /// `CombatBonus` 最多能带几种"开战时给的状态"（遗物数量远小于它）。
@@ -445,6 +450,41 @@ pub struct PoolCard<'a> {
     /// Its rarity, from the content.
     pub rarity: Rarity,
 }
+
+/// A relic the content offers: what it is, and how rare (§156).
+///
+/// Same shape as [`PoolCard`] and for the same reason: the drop tables weight on rarity, so the run
+/// layer has to see it. A parallel `&[Rarity]` beside a `&[&str]` is how the two get out of step.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct PoolRelic<'a> {
+    /// The definition id.
+    pub id: &'a str,
+    /// Its rarity, from the content's `REL.Rarity`.
+    pub rarity: Rarity,
+}
+
+/// A potion the content offers: what it is, and how rare (§156). See [`PoolRelic`].
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct PoolPotion<'a> {
+    /// The definition id.
+    pub id: &'a str,
+    /// Its rarity, from the content's `POT.Rarity`.
+    pub rarity: Rarity,
+}
+
+/// The wiki's relic drop weights: Common 50%, Uncommon 33%, Rare 17%.
+pub const RELIC_RARITY_WEIGHTS: [(Rarity, u32); 3] = [
+    (Rarity::Common, 50),
+    (Rarity::Uncommon, 33),
+    (Rarity::Rare, 17),
+];
+
+/// The wiki's potion drop weights: Common 65%, Uncommon 25%, Rare 10%.
+pub const POTION_RARITY_WEIGHTS: [(Rarity, u32); 3] = [
+    (Rarity::Common, 65),
+    (Rarity::Uncommon, 25),
+    (Rarity::Rare, 10),
+];
 
 /// Which fight paid. `inv:§5` / `inv:§3.5` differ per kind in **both** gold and rarity.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -937,7 +977,9 @@ impl RunState {
             RelicEffect::HealUp(amount) => self.heal_after_combat(amount),
             RelicEffect::EndOfCombatHeal(_)
             | RelicEffect::StartCombatBlock(_)
-            | RelicEffect::StartCombatStatus(_, _) => {}
+            | RelicEffect::StartCombatStatus(_, _)
+            | RelicEffect::RestHealBonus(_)
+            | RelicEffect::EndOfCombatHealIfBelow { .. } => {}
         }
         self.relics[slot] = id;
         self.relics_len += 1;
@@ -995,6 +1037,16 @@ impl RunState {
                     self.heal_after_combat(amount);
                     healed += self.health - before;
                 }
+                // §156: Meat on the Bone -- "if your HP is at or below 50%". The percentage is read
+                // off the **current** maximum (Pear/Strawberry move it), same as the intent rules do.
+                Some(RelicEffect::EndOfCombatHealIfBelow { percent, amount }) => {
+                    let max = self.health_max.max(1);
+                    if self.health * 100 <= max * percent {
+                        let before = self.health;
+                        self.heal_after_combat(amount);
+                        healed += self.health - before;
+                    }
+                }
                 // The other four are **not** end-of-combat effects: they fire when the relic is
                 // granted (`push_relic`) or when a fight starts (`combat_bonus`). Listing them
                 // explicitly instead of a `_` arm is what makes "a new effect variant" a compile
@@ -1003,7 +1055,8 @@ impl RunState {
                     RelicEffect::MaxHealthUp(_)
                     | RelicEffect::HealUp(_)
                     | RelicEffect::StartCombatBlock(_)
-                    | RelicEffect::StartCombatStatus(_, _),
+                    | RelicEffect::StartCombatStatus(_, _)
+                    | RelicEffect::RestHealBonus(_),
                 ) => {}
                 None => {
                     return Err(RunError::UnsupportedRelic {
@@ -1036,6 +1089,15 @@ impl RunState {
             // `inv` has no line for this one; the wiki's Thread and Needle is "start each combat
             // with 4 Plated Armor", and Plated Armor itself landed in §149.
             "thread_and_needle" => Some(RelicEffect::StartCombatStatus("standard.plated_armor", 4)),
+            // §156 (wiki numbers): Strawberry +7 max HP, Bronze Scales 3 Thorns at combat start,
+            // Regal Pillow +15 on rest, Meat on the Bone 12 HP at or below 50%.
+            "strawberry" => Some(RelicEffect::MaxHealthUp(7)),
+            "bronze_scales" => Some(RelicEffect::StartCombatStatus("standard.thorns", 3)),
+            "regal_pillow" => Some(RelicEffect::RestHealBonus(15)),
+            "meat_on_the_bone" => Some(RelicEffect::EndOfCombatHealIfBelow {
+                percent: 50,
+                amount: 12,
+            }),
             _ => None,
         }
     }
@@ -1075,8 +1137,10 @@ impl RunState {
                 }
                 Some(
                     RelicEffect::EndOfCombatHeal(_)
+                    | RelicEffect::EndOfCombatHealIfBelow { .. }
                     | RelicEffect::MaxHealthUp(_)
-                    | RelicEffect::HealUp(_),
+                    | RelicEffect::HealUp(_)
+                    | RelicEffect::RestHealBonus(_),
                 )
                 | None => {}
             }
@@ -1300,8 +1364,25 @@ impl RunState {
 
     /// What a rest would restore: 30% of maximum HP, rounded down (`inv:§8.1`).
     #[must_use]
-    pub const fn rest_heal(&self) -> i32 {
-        self.health_max * REST_HEAL_PERCENT / 100
+    pub fn rest_heal(&self) -> i32 {
+        // §156: Regal Pillow adds a flat bonus on top of the percentage.
+        self.health_max * REST_HEAL_PERCENT / 100 + self.rest_heal_bonus()
+    }
+
+    /// The flat rest bonus from relics (`regal_pillow` = 15, wiki).
+    #[must_use]
+    pub fn rest_heal_bonus(&self) -> i32 {
+        let mut bonus = 0i32;
+        let mut slot = 0usize;
+        while slot < self.relics_len as usize {
+            if let Some(RelicEffect::RestHealBonus(amount)) =
+                Self::relic_effect(self.relics[slot].as_str())
+            {
+                bonus += amount;
+            }
+            slot += 1;
+        }
+        bonus
     }
 
     /// What removing a card costs right now: 75, then +25 per removal already made this run
@@ -1318,7 +1399,7 @@ impl RunState {
     pub fn begin_node(
         &mut self,
         card_pool: &[PoolCard<'_>],
-        relic_pool: &[&str],
+        relic_pool: &[PoolRelic<'_>],
     ) -> Result<crate::map::NodeKind, RunError> {
         if self.node < 0 {
             return Err(RunError::WrongPhase);
@@ -1407,7 +1488,7 @@ impl RunState {
     ///
     /// Chest type and gold follow `inv:§8.3` exactly (50/33/17 by type; a per-type chance of gold;
     /// the ranges 23–27 / 45–55 / 68–82). The relic is drawn from the caller's pool.
-    pub fn open_chest(&mut self, relic_pool: &[&str]) -> Result<ChestOutcome, RunError> {
+    pub fn open_chest(&mut self, relic_pool: &[PoolRelic<'_>]) -> Result<ChestOutcome, RunError> {
         if self.pending != Pending::Chest {
             return Err(RunError::WrongPhase);
         }
@@ -1430,18 +1511,13 @@ impl RunState {
         // Burning Blood is a bug the player sees immediately, and before the pool had more than one
         // entry it was the *only* thing this could do.
         let relic = {
-            let mut available = [0usize; MAX_POOL];
-            let count = self.relic_candidates(relic_pool, &mut available);
-            if count == 0 {
+            // §156: the same weighted draw as an elite reward, and the same "not one you hold".
+            let picked = self.pick_relic(RunStream::Chest, relic_pool)?;
+            if picked.as_str().is_empty() {
                 None
             } else {
-                let index = self.rng.roll(RunStream::Chest, count as u32)? as usize;
-                let Some(&slot) = available.get(index) else {
-                    return Err(RunError::EmptyPool("relics"));
-                };
-                let id = RunId::new(relic_pool[slot]).map_err(|_| RunError::BadId)?;
-                self.push_relic(relic_pool[slot])?;
-                Some(id)
+                self.push_relic(picked.as_str())?;
+                Some(picked)
             }
         };
         self.pending = Pending::None;
@@ -1452,7 +1528,7 @@ impl RunState {
     /// Fill the merchant's shelves. Prices are `[推断]`: the content carries no rarity, so every
     /// card is priced in the Common band and every relic likewise (`inv:§8.2`'s ranges are by
     /// rarity, and this content does not have one to look at).
-    fn stock_shop(&mut self, card_pool: &[PoolCard<'_>], relic_pool: &[&str]) -> Result<(), RunError> {
+    fn stock_shop(&mut self, card_pool: &[PoolCard<'_>], relic_pool: &[PoolRelic<'_>]) -> Result<(), RunError> {
         if card_pool.is_empty() {
             return Err(RunError::EmptyPool("cards"));
         }
@@ -1476,47 +1552,116 @@ impl RunState {
         }
         self.shop.cards_len = cards as u8;
 
-        // §145: the merchant also refuses to sell you something you already wear (same filter as
-        // the chest — one rule, one helper).
-        let mut available = [0usize; MAX_POOL];
-        let candidates = self.relic_candidates(relic_pool, &mut available);
-        let relics = MAX_SHOP_RELICS.min(candidates);
-        for (slot, source) in available.iter().take(relics).enumerate() {
-            let index = *source;
-            let Some(id) = relic_pool.get(index) else {
-                return Err(RunError::EmptyPool("relics"));
-            };
+        // §145/§156: the merchant refuses to sell what you already wear, and draws by rarity weight
+        // (both via `pick_relic`, the one function the chest and the elite reward share).
+        let mut shelved: [RunId; MAX_SHOP_RELICS] = [RunId::EMPTY; MAX_SHOP_RELICS];
+        for slot in 0..MAX_SHOP_RELICS {
+            let picked = self.pick_relic_avoiding(
+                RunStream::Shop,
+                relic_pool,
+                &shelved[..slot],
+            )?;
+            if picked.as_str().is_empty() {
+                break;
+            }
             // Common 143–157.
             let price = 143 + self.rng.roll(RunStream::Shop, 15)? as i32;
             self.shop.relics[slot] = Offer {
-                id: RunId::new(id).map_err(|_| RunError::BadId)?,
+                id: picked,
                 price,
             };
+            shelved[slot] = picked;
+            self.shop.relics_len = (slot + 1) as u8;
         }
-        self.shop.relics_len = relics as u8;
         Ok(())
     }
 
-    /// The indices in `pool` that name a relic the run **does not already hold** (§145).
-    ///
-    /// One helper for the chest and the merchant: before the pool grew past one entry, "a second
-    /// copy of the relic you start with" was the only thing either of them could produce.
-    fn relic_candidates(&self, pool: &[&str], out: &mut [usize; MAX_POOL]) -> usize {
-        let mut count = 0usize;
-        for (index, id) in pool.iter().enumerate() {
-            if count == MAX_POOL {
-                break;
+    /// Draw a rarity band by weight, re-normalised over the bands that still have entries
+    /// (§156). `None` = no band has an entry.
+    fn pick_rarity(
+        &mut self,
+        stream: RunStream,
+        weights: &[(Rarity, u32)],
+        present: &[Rarity],
+    ) -> Result<Option<Rarity>, RunError> {
+        let mut total = 0u32;
+        for (rarity, weight) in weights {
+            if present.contains(rarity) {
+                total += *weight;
             }
-            if self.relics().iter().any(|held| held.as_str() == *id) {
+        }
+        if total == 0 {
+            return Ok(None);
+        }
+        let mut roll = self.rng.roll(stream, total)?;
+        for (rarity, weight) in weights {
+            if !present.contains(rarity) {
                 continue;
             }
-            let Some(cell) = out.get_mut(count) else {
-                break;
-            };
-            *cell = index;
+            if roll < *weight {
+                return Ok(Some(*rarity));
+            }
+            roll -= *weight;
+        }
+        Ok(None)
+    }
+
+    /// Draw a relic from `pool` by **rarity weight** (§156), skipping relics already held.
+    ///
+    /// One helper for the chest, the shop and the elite reward: before this each of them picked
+    /// uniformly, so "an elite pays a rare more often than a chest" was not true even in principle.
+    pub fn pick_relic(
+        &mut self,
+        stream: RunStream,
+        pool: &[PoolRelic<'_>],
+    ) -> Result<RunId, RunError> {
+        self.pick_relic_avoiding(stream, pool, &[])
+    }
+
+    /// [`Self::pick_relic`], also skipping `reserved` -- the relics a caller has already put on a
+    /// shelf but not yet sold (the shop stocks three, and a picked relic is not in the belt yet).
+    pub fn pick_relic_avoiding(
+        &mut self,
+        stream: RunStream,
+        pool: &[PoolRelic<'_>],
+        reserved: &[RunId],
+    ) -> Result<RunId, RunError> {
+        // Never a second copy of a held relic (§145) -- the filter every source shares.
+        let mut candidates = [0usize; MAX_POOL];
+        let mut rarities = [Rarity::Common; MAX_POOL];
+        let mut count = 0usize;
+        for (slot, entry) in pool.iter().take(MAX_POOL).enumerate() {
+            if self.relics().iter().any(|held| held.as_str() == entry.id)
+                || reserved.iter().any(|taken| taken.as_str() == entry.id)
+            {
+                continue;
+            }
+            candidates[count] = slot;
+            rarities[count] = entry.rarity;
             count += 1;
         }
-        count
+        if count == 0 {
+            return Ok(RunId::EMPTY);
+        }
+        let present = &rarities[..count];
+        let band = self
+            .pick_rarity(stream, &RELIC_RARITY_WEIGHTS, present)?
+            .unwrap_or(pool[candidates[0]].rarity);
+        let mut band_slots = [0usize; MAX_POOL];
+        let mut band_count = 0usize;
+        for slot in &candidates[..count] {
+            if pool[*slot].rarity == band {
+                band_slots[band_count] = *slot;
+                band_count += 1;
+            }
+        }
+        let chosen = if band_count == 0 {
+            candidates[0]
+        } else {
+            let pick = self.rng.roll(stream, band_count as u32)? as usize;
+            band_slots[pick]
+        };
+        RunId::new(pool[chosen].id).map_err(|_| RunError::BadId)
     }
 
     /// Buy the card in `slot`. The id stays readable through [`RunState::shop`].
@@ -1970,8 +2115,8 @@ impl RunState {
     pub fn roll_reward(
         &mut self,
         card_pool: &[PoolCard<'_>],
-        potion_pool: &[&str],
-        relic_pool: &[&str],
+        potion_pool: &[PoolPotion<'_>],
+        relic_pool: &[PoolRelic<'_>],
         kind: FightKind,
     ) -> Result<(), RunError> {
         // Status and curse cards are never a reward (`inv:§3.5`; `slimed` is a Status).
@@ -2037,11 +2182,36 @@ impl RunState {
                 self.rarity_offset = (self.rarity_offset + 1).min(RARITY_OFFSET_CAP);
             }
         }
-        // Which potion: the content's own list, picked on the same stream. `potion_pool` is empty
-        // when the image declares none (roguedeck), and then no potion is offered at all.
+        // Which potion: the content's own list, **weighted by rarity** (§156). `potion_pool` is
+        // empty when the image declares none (roguedeck), and then no potion is offered at all.
         let potion = if drop && !potion_pool.is_empty() {
-            let index = self.rng.roll(RunStream::Potion, potion_pool.len() as u32)? as usize;
-            RunId::new(potion_pool[index]).map_err(|_| RunError::BadId)?
+            let mut rarities: [Rarity; MAX_POOL] = [Rarity::Common; MAX_POOL];
+            for (slot, entry) in potion_pool.iter().take(MAX_POOL).enumerate() {
+                rarities[slot] = entry.rarity;
+            }
+            let present = &rarities[..potion_pool.len().min(MAX_POOL)];
+            let band = self.pick_rarity(RunStream::Potion, &POTION_RARITY_WEIGHTS, present)?;
+            let band = band.unwrap_or(potion_pool[0].rarity);
+            let mut eligible = [0usize; MAX_POOL];
+            let mut count = 0usize;
+            for (slot, entry) in potion_pool.iter().take(MAX_POOL).enumerate() {
+                if entry.rarity == band {
+                    eligible[count] = slot;
+                    count += 1;
+                }
+            }
+            let pool: &[usize] = if count == 0 {
+                &[]
+            } else {
+                &eligible[..count]
+            };
+            let chosen = if pool.is_empty() {
+                0
+            } else {
+                let pick = self.rng.roll(RunStream::Potion, pool.len() as u32)? as usize;
+                pool[pick]
+            };
+            RunId::new(potion_pool[chosen].id).map_err(|_| RunError::BadId)?
         } else {
             RunId::EMPTY
         };
@@ -2051,19 +2221,7 @@ impl RunState {
         // card rolls keep their sequence and only the relic's index moves.
         let mut relic = RunId::EMPTY;
         if matches!(kind, FightKind::Elite | FightKind::Boss) {
-            // Same filter as the chest and the shop (§145): never a second copy of a held relic.
-            let mut candidates = [0usize; MAX_POOL];
-            let count = self.relic_candidates(relic_pool, &mut candidates);
-            if count > 0 {
-                let pick = self.rng.roll(RunStream::Reward, count as u32)? as usize;
-                let Some(cell) = candidates.get(pick).copied() else {
-                    return Err(RunError::BadId);
-                };
-                let Some(id) = relic_pool.get(cell) else {
-                    return Err(RunError::BadId);
-                };
-                relic = RunId::new(id).map_err(|_| RunError::BadId)?;
-            }
+            relic = self.pick_relic(RunStream::Reward, relic_pool)?;
         }
         self.reward = Reward {
             gold: paid,
@@ -2483,7 +2641,20 @@ mod tests {
     /// §145：池子里**已经戴在身上的**那件不会再发一次 —— 宝箱和商店是同一条规则。
     #[test]
     fn a_relic_you_already_hold_is_not_offered_again() {
-        let pool = ["burning_blood", "anchor", "vajra"];
+        let pool = [
+        PoolRelic {
+            id: "burning_blood",
+            rarity: Rarity::Common,
+        },
+        PoolRelic {
+            id: "anchor",
+            rarity: Rarity::Common,
+        },
+        PoolRelic {
+            id: "vajra",
+            rarity: Rarity::Common,
+        },
+    ];
         let mut run = ironclad();
         run.push_relic("burning_blood").expect("the starter relic");
 
@@ -2492,7 +2663,7 @@ mod tests {
         for round in 0..12 {
             let unheld = pool
                 .iter()
-                .filter(|id| !run.relics().iter().any(|held| held.as_str() == **id))
+                .filter(|entry| !run.relics().iter().any(|held| held.as_str() == entry.id))
                 .count();
             run.pending = Pending::Chest;
             let outcome = run.open_chest(&pool).expect("a chest");
@@ -2687,7 +2858,10 @@ mod tests {
     const CARDS: [&str; 7] = [
         "strike", "defend", "bash", "slimed", "strike+", "defend+", "bash+",
     ];
-    const RELICS: [&str; 1] = ["burning_blood"];
+    const RELICS: [PoolRelic<'static>; 1] = [PoolRelic {
+        id: "burning_blood",
+        rarity: Rarity::Common,
+    }];
     /// The starting deck (inv:§2.1), in order.
     const DECK: [&str; 10] = [
         "strike", "strike", "strike", "strike", "strike",
@@ -2996,6 +3170,71 @@ mod tests {
         assert_eq!(FightKind::Boss.gold(), (95, 105));
     }
 
+    /// §156：稀有度权重**按顺序**生效，且空档不会把抽取变空。
+    ///
+    /// 断言是**刻意宽松**的：单个种子证明不了 50/33/17，这只是一条"权重真的用上了"的烟测。
+    /// 精确分布属于统计断言，得由多次运行去说，不该由一条测试假装。
+    #[test]
+    fn relic_rarity_weights_favour_commons_and_shift_when_a_band_is_empty() {
+        let pool = [
+            PoolRelic {
+                id: "common_one",
+                rarity: Rarity::Common,
+            },
+            PoolRelic {
+                id: "uncommon_one",
+                rarity: Rarity::Uncommon,
+            },
+            PoolRelic {
+                id: "rare_one",
+                rarity: Rarity::Rare,
+            },
+        ];
+        let mut run = RunState::new(21, 80, 0, &DECK).expect("a run");
+        let mut commons = 0;
+        let mut uncommons = 0;
+        let mut rares = 0;
+        for _ in 0..300 {
+            let picked = run
+                .pick_relic(RunStream::Chest, &pool)
+                .expect("a relic each time");
+            match picked.as_str() {
+                "common_one" => commons += 1,
+                "uncommon_one" => uncommons += 1,
+                "rare_one" => rares += 1,
+                other => panic!("picked {other}, which is not in the pool"),
+            }
+        }
+        assert_eq!(commons + uncommons + rares, 300);
+        assert!(commons > uncommons, "common {commons} vs uncommon {uncommons}: the 50/33 order");
+        assert!(
+            uncommons > rares,
+            "uncommon {uncommons} vs rare {rares}: the 33/17 order"
+        );
+        assert!(rares > 0, "the rare band must still be reachable");
+
+        // A pool with only rares: the weights re-normalise, they do not return nothing.
+        let only_rare = [PoolRelic {
+            id: "rare_one",
+            rarity: Rarity::Rare,
+        }];
+        for _ in 0..20 {
+            assert_eq!(
+                run.pick_relic(RunStream::Chest, &only_rare)
+                    .expect("a relic")
+                    .as_str(),
+                "rare_one"
+            );
+        }
+
+        // An empty pool is "no relic", which is what the chest treats as an empty chest.
+        assert_eq!(
+            run.pick_relic(RunStream::Chest, &[]).expect("no relic").as_str(),
+            "",
+            "an empty pool yields the empty id, not an error"
+        );
+    }
+
     /// §155：**精英和 Boss 给遗物，普通怪不给**，而且绝不会再给一件已经有的。
     ///
     /// StS 的精英奖励是"金币 + 三选一 + 一件遗物"，本内核之前只给前两样 —— 一条能走完的路，
@@ -3016,7 +3255,20 @@ mod tests {
                 rarity: Rarity::Basic,
             },
         ];
-        let relics = ["burning_blood", "anchor", "vajra"];
+        let relics = [
+            PoolRelic {
+                id: "burning_blood",
+                rarity: Rarity::Common,
+            },
+            PoolRelic {
+                id: "vajra",
+                rarity: Rarity::Common,
+            },
+            PoolRelic {
+                id: "thread_and_needle",
+                rarity: Rarity::Rare,
+            },
+        ];
 
         // A normal fight: no relic row at all.
         let mut run = RunState::new(5, 80, 0, &DECK).expect("a run");
@@ -3036,7 +3288,7 @@ mod tests {
             .expect("an elite reward");
         let offered = run.reward_relic().expect("an elite pays a relic").to_string();
         assert!(
-            relics.contains(&offered.as_str()),
+            relics.iter().any(|entry| entry.id == offered),
             "{offered} is not in the pool"
         );
         run.take_relic().expect("take it");
@@ -3051,7 +3303,7 @@ mod tests {
 
         // A held relic is never offered again: hold all three and the elite pays nothing.
         let mut run = RunState::new(5, 80, 0, &DECK).expect("a run");
-        for relic in relics {
+        for relic in relics.iter().map(|entry| entry.id) {
             run.push_relic(relic).expect("grant");
         }
         run.roll_reward(&pool, &[], &relics, FightKind::Elite)
@@ -3390,7 +3642,20 @@ mod tests {
 
     #[test]
     fn a_won_fight_drops_a_potion_and_the_belt_takes_it() {
-        let pool = ["fire_potion", "block_potion", "energy_potion"];
+        let pool = [
+            PoolPotion {
+                id: "fire_potion",
+                rarity: Rarity::Common,
+            },
+            PoolPotion {
+                id: "block_potion",
+                rarity: Rarity::Common,
+            },
+            PoolPotion {
+                id: "energy_potion",
+                rarity: Rarity::Uncommon,
+            },
+        ];
         let mut run = ironclad();
         let mut drops = 0;
         let trials = 400;

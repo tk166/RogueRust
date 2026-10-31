@@ -276,7 +276,10 @@ ENCT_ROW = [
 ]
 REL_ROW = [
     ("Id", F_STR, 0), ("DisplayName", F_STR, 0), ("RunPrograms", F_TERM, 0),
-    ("CombatRules", F_TERM, 0), ("extra", F_TERM, 0),
+    ("CombatRules", F_TERM, 0),
+    # §156: `Common` / `Uncommon` / `Rare` -- what the drop tables weight on (50/33/17, the wiki's
+    # numbers). The row is 12 bytes = six `u16` cells, so this is a sixth cell, not a longer row.
+    ("Rarity", F_STR, 0), ("extra", F_TERM, 0),
 ]
 EV_ROW = [
     ("Id", F_STR, 0), ("NameKey", F_STR, 0), ("DescriptionKey", F_STR, 0),

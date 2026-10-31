@@ -215,17 +215,39 @@ fn reward_pool(
     Ok(pool)
 }
 
-/// The content's relic ids, in table order.
-fn relic_pool(content: &'static Content<'static>) -> Vec<&'static str> {
+/// The content's relics, in table order, **with their rarity** (§156).
+///
+/// A relic whose `REL.Rarity` is missing or unknown is skipped and reported by the caller: letting it
+/// default to `Common` would flatten the drop weights and look exactly like a balance decision.
+fn relic_pool(content: &'static Content<'static>) -> Vec<rd_run::state::PoolRelic<'static>> {
     let mut out = Vec::new();
     let mut index = 0u32;
     while let Some(row) = content.row(rd_core::content::Table::Relic, index) {
         if let Some(relic) = rd_core::content::RelRow::new(row) {
-            if let Some(id) = content.string(relic.id()) {
-                out.push(id);
+            let id = content.string(relic.id());
+            let rarity = content
+                .string(relic.rarity())
+                .and_then(rd_run::state::Rarity::from_name);
+            if let (Some(id), Some(rarity)) = (id, rarity) {
+                out.push(rd_run::state::PoolRelic { id, rarity });
             }
         }
         index += 1;
+    }
+    out
+}
+
+/// The act's potion ids, with the rarity the `POT` row declares (§156).
+fn potion_pool_of(image: &'static Content<'static>, ids: &[&'static str]) -> Vec<rd_run::state::PoolPotion<'static>> {
+    let mut out = Vec::new();
+    for id in ids {
+        let rarity = (0..image.potion_count())
+            .filter_map(|index| image.potion(index))
+            .find(|potion| potion.id == *id)
+            .and_then(|potion| rd_run::state::Rarity::from_name(potion.rarity));
+        if let Some(rarity) = rarity {
+            out.push(rd_run::state::PoolPotion { id, rarity });
+        }
     }
     out
 }
@@ -2325,6 +2347,7 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
                 potion_ids.push(*id);
             }
         }
+        let potion_ids = potion_pool_of(image, &potion_ids);
         // §155: an elite (or boss) also pays a relic. `relic_pool` is the content's whole relic table;
         // `roll_reward` filters out the ones the player already holds (the same rule the chest and the
         // shop use), so a fight can never hand out a duplicate.
@@ -2862,7 +2885,10 @@ mod tests {
         let mut buffer = std::vec![0u8; len as usize];
         unsafe { rd_run_reward_relic_into(buffer.as_mut_ptr()) };
         let id = String::from_utf8(buffer).expect("ascii");
-        assert!(relics.contains(&id.as_str()), "{id} is not in the pool");
+        assert!(
+            relics.iter().any(|entry| entry.id == id),
+            "{id} is not in the pool"
+        );
 
         assert_eq!(rd_run_take_relic(), 0, "take it: {}", run_error_text());
         assert_eq!(
@@ -3565,88 +3591,27 @@ mod tests {
     /// kernel APIs and must move the number; `combat_damage` has no entry point yet
     /// (`port-plan.md` §83) and must **refuse without eating the potion**.
     #[test]
+    /// §156: a potion, drunk **in a real fight**, does what it says.
+    ///
+    /// The belt contents are pushed directly instead of hunted from drops: with the rarity-weighted
+    /// drop (§156) the old version -- "walk twenty fights until block + energy + fire all show up" --
+    /// was measuring the potion RNG, and it broke the moment the weights changed. The **drop** is
+    /// covered by the reward tests (`roll_reward`), and this test is about drinking one.
     fn a_potion_can_be_used_in_a_fight() {
         reset(4);
-        let mut belt = 0;
-        // Walk the map, settling whatever is on the way, and fights are played out -- the potion has
-        // to come from a real won fight, which is the whole point.
-        for _ in 0..20 {
-            assert!(
-                rd_run_action_count() > 0,
-                "the walk ran out of moves before a potion dropped"
-            );
-            let mut combat = -1;
-            for action in 0..rd_run_action_count() {
-                let node = rd_run_action_arg(action, 0);
-                if node >= 0 && node_kind(node) == 1 {
-                    combat = action;
-                    break;
-                }
-            }
-            let chosen = if combat >= 0 { combat } else { 0 };
-            assert_eq!(rd_run_step(chosen), 0, "walk");
-            let kind = rd_run_node_kind();
-            if kind == 1 {
-                assert_eq!(rd_run_begin_node(), 0, "begin_node");
-                assert_eq!(rd_run_fight_begin(), 0, "fight_begin: {:?}", run_error_text());
-                play_to_the_end();
-                assert_eq!(rd_run_fight_end(), 1, "the bot must survive these fights");
-                if rd_run_reward_potion_len() > 0 {
-                    assert_eq!(rd_run_take_potion(), 0, "take the dropped potion");
-                    belt = rd_run_potion_count();
-                    let _ = rd_run_take_card(0);
-                    // Keep hunting until the belt holds a **block** potion, so the arithmetic in
-                    // this test actually runs instead of depending on the drop.
-                    let mut has_block = false;
-                    let mut has_energy = false;
-                    let mut has_fire = false;
-                    for slot in 0..belt {
-                        let n = rd_run_potion_id_len(slot as i32);
-                        let mut buffer = vec![0u8; n as usize];
-                        unsafe { rd_run_potion_id_into(slot as i32, buffer.as_mut_ptr()) };
-                        match String::from_utf8_lossy(&buffer).as_ref() {
-                            "block_potion" => has_block = true,
-                            "energy_potion" => has_energy = true,
-                            "fire_potion" => has_fire = true,
-                            _ => {}
-                        }
-                    }
-                    // Both, so neither arm of the assertion below is skipped. The belt holds three,
-                    // so this stops as soon as it cannot make progress.
-                    if (has_block && has_energy && has_fire) || belt >= 3 {
-                        break;
-                    }
-                }
-                let _ = rd_run_take_card(0);
-            } else {
-                settle_here();
-            }
-        }
-        assert!(belt > 0, "twenty fights and not one potion: the 40% drop is not firing");
+        let started = arrive_at_a_fight();
 
-        // Find a fight to use it in: walk, settling what is not a fight, stop at the first one.
-        let mut started = false;
-        for _ in 0..20 {
-            assert!(rd_run_action_count() > 0, "no fight left to use the potion in");
-            let mut combat = -1;
-            for action in 0..rd_run_action_count() {
-                let node = rd_run_action_arg(action, 0);
-                if node >= 0 && node_kind(node) == 1 {
-                    combat = action;
-                    break;
-                }
+
+        // The three the assertions below know how to check.
+        {
+            let session = run_slot().as_mut().expect("session");
+            for potion in ["block_potion", "energy_potion", "fire_potion"] {
+                session.state.push_potion(potion).expect("the belt holds three");
             }
-            let chosen = if combat >= 0 { combat } else { 0 };
-            assert_eq!(rd_run_step(chosen), 0, "walk");
-            if rd_run_node_kind() == 1 {
-                assert_eq!(rd_run_begin_node(), 0, "begin_node");
-                assert_eq!(rd_run_fight_begin(), 0, "fight_begin: {:?}", run_error_text());
-                started = true;
-                break;
-            }
-            settle_here();
         }
-        assert!(started, "never reached a fight to use the potion in");
+        let belt = rd_run_potion_count();
+        assert_eq!(belt, 3, "three potions in the belt");
+
 
         // Which slot holds the block potion (there may be other potions in front of it).
         let mut slot = -1;
@@ -3908,7 +3873,14 @@ mod tests {
                 }
             }
             let chosen = if combat >= 0 { combat } else { 0 };
-            assert_eq!(rd_run_step(chosen), 0, "walk");
+            assert_eq!(
+                rd_run_step(chosen),
+                0,
+                "walk from floor {} (kind {}): {}",
+                rd_run_observe(0),
+                rd_run_node_kind(),
+                run_error_text()
+            );
             if rd_run_node_kind() == 1 {
                 assert_eq!(rd_run_begin_node(), 0);
                 assert_eq!(rd_run_fight_begin(), 0, "fight_begin: {:?}", run_error_text());
@@ -4210,6 +4182,39 @@ mod tests {
     }
 
     /// Play the current fight out: first playable card, first living enemy, else end turn.
+    /// Walk until a **fight is on** and return `true` (or `false` if the map runs out).
+    ///
+    /// The three rules it encodes: settle whatever you are standing on, walk only from a settled node,
+    /// and prefer a combat neighbour. `port-plan.md` §156 -- the first version of the potion test
+    /// re-derived this and got it wrong (`NodeNotSettled` at floor 1).
+    fn arrive_at_a_fight() -> bool {
+        for _ in 0..24 {
+            settle_here();
+            if rd_run_action_count() == 0 {
+                return false;
+            }
+            let mut combat = -1;
+            for action in 0..rd_run_action_count() {
+                let node = rd_run_action_arg(action, 0);
+                if node >= 0 && node_kind(node) == 1 {
+                    combat = action;
+                    break;
+                }
+            }
+            let chosen = if combat >= 0 { combat } else { 0 };
+            if rd_run_step(chosen) != 0 {
+                return false;
+            }
+            if rd_run_node_kind() == 1
+                && rd_run_begin_node() == 0
+                && rd_run_fight_begin() == 0
+            {
+                return true;
+            }
+        }
+        false
+    }
+
     fn play_to_the_end() {
         let mut guard = 0;
         while rd_env_done() == 0 && guard < 2000 {

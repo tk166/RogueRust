@@ -9986,3 +9986,80 @@ coverage  map has elites · N elite(s) · M boss(es) · K relic(s) (X from elite
 
 聚合验收 **18/18**；单测 740 → **742**（rd-core 630 / rd-run 70 → **71** / rd-wasm 40 → **41**）。
 soak：3 个种子共 80–200 次点击，楼层 6–16，界面覆盖 7 种，升级 ✅。
+
+---
+
+## 156. 遗物稀有度与掉落权重（+4 件遗物）
+
+用户："按照这个顺序继续完善细节吧" —— 上一节列的顺序是：遗物稀有度/掉落权重 → 再补几件遗物 →
+药水稀有度权重。
+
+### 156.1 稀有度是**内容**，所以它进了 `REL` 行
+
+`REL_ROW` 原本是 `{Id, DisplayName, RunPrograms, CombatRules, extra}` —— 5 格装在一个 12 字节的行里
+（`u16` × 6 = 12），所以第 6 格是**免费的**，stride 不变（`rdcf_verify` 那条 count×stride 依旧成立）。
+
+另一条路是在 `rd-run` 里放一张"id → 稀有度"表（和 `relic_effect()` 并排）。**没有**那么做：
+效果是**行为**，稀有度是**内容**，而药水早就把 `Rarity` 放在 `POT` 行里了。同一个概念放两个地方，
+就是两份会走样的清单。
+
+⚠️ 改了编译器 → `contentc-bytes` 门红。按那条门自己的规矩：**同一个提交里显式 `--repin`**，
+并在提交消息里写明理由（本次：`REL` 多一格 `Rarity`，两件镜像的 sha 都变了）。
+
+### 156.2 掉落权重：一个函数，三个来源
+
+StS 的抽法是"先按权重抽**稀有度档**，再在档内均匀抽一件"：
+
+| 池 | Common | Uncommon | Rare |
+|---|---|---|---|
+| 遗物 | 50% | 33% | 17% |
+| 药水 | 65% | 25% | 10% |
+
+`pick_rarity` 把权重**在当前可用的档上重新归一化** —— "稀有档已经空了"会把质量挪到别的档，
+而不是返回 `None`（那会变成"宝箱偶尔什么都不给"，而且没有任何信号）。
+
+`pick_relic(stream, pool)` 现在被**三个来源共用**：宝箱、商店货架、精英/Boss 奖励。
+它们本来就共用"不会给你已经有的那件"这条过滤（§145），现在连"按档抽"也共用 ——
+三个来源要一直，只有**一个**函数能做到。
+
+⚠️ 商店一次上三件，而抽中的遗物在买之前**不在腰带上** ⇒ "跳过已有的"不够，同一件会上三次。
+所以补了 `pick_relic_avoiding(stream, pool, reserved)`，商店把自己已经摆上去的传进去。
+
+### 156.3 四件新遗物（wiki 数值）
+
+| 遗物 | 稀有度 | 效果 | 落点 |
+|---|---|---|---|
+| Strawberry | Common | +7 最大生命 | `MaxHealthUp(7)` |
+| Bronze Scales | Common | 受击反 3 伤 | `StartCombatStatus("standard.thorns", 3)` |
+| Regal Pillow | Uncommon | 休息多回 15 | `RestHealBonus(15)`（新）|
+| Meat on the Bone | Uncommon | 战后若 ≤50% 生命，回 12 | `EndOfCombatHealIfBelow { 50, 12 }`（新）|
+
+两个新 `RelicEffect` 变体各自只落在一个钩子上：`rest_heal()` 加平值；`end_of_combat()` 里读
+**当前最大值**的百分比（Pear/Strawberry 会移动它）。三个钩子的 `match` 都是**穷尽**的，
+所以"新加一个效果变体"是编译错误，而不是一件静默无效果的遗物。
+
+### 156.4 判据
+
+* `relic_rarity_weights_favour_commons_and_shift_when_a_band_is_empty`（rd-run）：300 次抽样里
+  常见档 > 罕见档、且罕见档仍抽得到；**只有罕见档的池子**照样每次都给出它（重新归一化）；
+  空池返回空 id（= 空宝箱），不报错。
+⚠️ 断言刻意宽松：单个种子证明不了 50/33/17，精确分布是统计断言，不该由一条测试假装。
+* 内容门 `[6f] relic rarities`：每件遗物的 `Rarity` 必须在那三档里，且**三档都不能是空的**
+  （空档 = 那部分的权重永远抽不到）。
+* 内容门 `[6e]` 跟着到 10 件；`[3c]`（卡升级）不变。
+
+### 156.5 顺带修的两处"测试测的是运气"
+
+1. `a_potion_can_be_used_in_a_fight` 原来是"走二十场直到 block+energy+fire 三种药水都掉出来"。
+   药水权重一改，`Potion` 流的序列平移，它就"走完也没掉到" —— 它测的是 RNG，不是功能。
+   现在**直接塞进腰带**（`push_potion`），只在真战斗里喝；掉落由奖励那一层单独覆盖。
+   顺带把"走进一场战斗"抽成 `arrive_at_a_fight()`（先结算脚下、只能从已结算的节点走、优先战斗邻居）——
+   我第一版自己重写这段时在 1 层撞了 `NodeNotSettled`。
+2. `content::entity_tables_decode_row_by_row` 读的是 **core 镜像**；`build.py --package sts` 只重建
+   sts 包 ⇒ core 还是 5 格的旧产物，`extra()` 读到 padding 的 0。**必须 `--all` 重建两个包**
+   （这类"改格式只重建一个包"的坑，闸门会在奇怪的断言上红）。
+
+### 156.6 数字
+
+聚合验收 **18/18**；单测 742 → **743**（rd-core 630 / rd-run 71 → **72** / rd-wasm 41）。
+内容：**10 件遗物**（Common 6 / Uncommon 3 / Rare 1）；镜像 full **34,868 B** / core **28,660 B**。

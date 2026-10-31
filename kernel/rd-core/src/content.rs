@@ -1449,7 +1449,7 @@ entity_row!(
 
 entity_row!(
     /// 遗物行（`REL`，stride 12，5 格）。
-    RelRow, Relic, REL_SCHEMA, 12, 5, {
+    RelRow, Relic, REL_SCHEMA, 12, 6, {
         /// `Id`（串号）。
         ("Id", F_STR, 0) => id => 0,
         /// `DisplayName`（串号）。
@@ -1458,8 +1458,10 @@ entity_row!(
         ("RunPrograms", F_TERM, 0) => run_programs => 2,
         /// `CombatRules`（term 句柄）。
         ("CombatRules", F_TERM, 0) => combat_rules => 3,
+        /// `Rarity`（§156：`Common` / `Uncommon` / `Rare`）。
+        ("Rarity", F_STR, 0) => rarity => 4,
         /// schema 不认识的键（term 句柄）。
-        ("extra", F_TERM, 0) => extra => 4,
+        ("extra", F_TERM, 0) => extra => 5,
     }
 );
 
@@ -3428,7 +3430,9 @@ mod tests {
             assert_eq!((StatusRow::STRIDE, StatusRow::CELLS), (40, 20));
             assert_eq!((EactRow::STRIDE, EactRow::CELLS), (16, 7));
             assert_eq!((EnctRow::STRIDE, EnctRow::CELLS), (16, 8));
-            assert_eq!((RelRow::STRIDE, RelRow::CELLS), (12, 5));
+            // §156: REL gained a `Rarity` cell (5 -> 6). The 12-byte stride already had the room;
+            // `align4(2 * 6) = 12` still matches, which the loop below re-checks for every table.
+            assert_eq!((RelRow::STRIDE, RelRow::CELLS), (12, 6));
             for table in Table::ALL {
                 assert_eq!(table.stride(), align4(2 * table.cells() as u32));
                 assert_eq!(

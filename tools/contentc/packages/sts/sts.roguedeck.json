@@ -8668,37 +8668,71 @@
       "Id": "burning_blood",
       "DisplayName": "Burning Blood",
       "RunPrograms": null,
-      "CombatRules": null
+      "CombatRules": null,
+      "Rarity": "Common"
     },
     {
       "Id": "anchor",
       "DisplayName": "Anchor",
       "RunPrograms": null,
-      "CombatRules": null
+      "CombatRules": null,
+      "Rarity": "Common"
     },
     {
       "Id": "vajra",
       "DisplayName": "Vajra",
       "RunPrograms": null,
-      "CombatRules": null
+      "CombatRules": null,
+      "Rarity": "Common"
     },
     {
       "Id": "pear",
       "DisplayName": "Pear",
       "RunPrograms": null,
-      "CombatRules": null
+      "CombatRules": null,
+      "Rarity": "Uncommon"
     },
     {
       "Id": "blood_vial",
       "DisplayName": "Blood Vial",
       "RunPrograms": null,
-      "CombatRules": null
+      "CombatRules": null,
+      "Rarity": "Common"
     },
     {
       "Id": "thread_and_needle",
       "DisplayName": "Thread and Needle",
       "RunPrograms": null,
-      "CombatRules": null
+      "CombatRules": null,
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "strawberry",
+      "DisplayName": "Strawberry",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "bronze_scales",
+      "DisplayName": "Bronze Scales",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "regal_pillow",
+      "DisplayName": "Regal Pillow",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "meat_on_the_bone",
+      "DisplayName": "Meat on the Bone",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Uncommon"
     }
   ],
   "Start": {
