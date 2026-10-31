@@ -4221,9 +4221,9 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.potion_count(),
-            25,
+            26,
             "§158: eleven after §157, plus nine that need no new mechanic, plus the five whose \
-             effect is a card choice (§161.3 / §161.4 / §161.5)"
+             effect is a card choice, plus §161.7's Power Potion"
         );
         let mut ids = Vec::new();
         let mut bands = [0usize; 3];
@@ -4329,6 +4329,7 @@ mod tests {
                 "heart_of_iron",
                 "liquid_bronze",
                 "liquid_memories",
+                "power_potion",
                 "regen_potion",
                 "skill_potion",
                 "speed_potion",
@@ -4348,7 +4349,7 @@ mod tests {
         // Elixir and Gambler's Brew, which is the whole reason it is a number here.
         assert_eq!(
             bands,
-            [14, 7, 4],
+            [15, 7, 4],
             "Common / Uncommon / Rare -- the wiki's Ironclad pool is 17 / 9 / 7"
         );
 

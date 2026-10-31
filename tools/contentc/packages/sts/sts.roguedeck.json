@@ -419,7 +419,8 @@
       "Polarity": "Buff",
       "Tags": [
         "block"
-      ]
+      ],
+      "Triggers": null
     },
     {
       "Id": "standard.thorns",
@@ -818,6 +819,27 @@
               "kind": "node.sequence",
               "value": {
                 "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "IgnoresBlock": true,
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "ResultKey": null,
+                      "Element": null
+                    }
+                  },
                   {
                     "kind": "node.dealDamage",
                     "value": {
@@ -3593,6 +3615,336 @@
               "kind": "const",
               "value": {
                 "Value": 2
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "inflame",
+      "PackageId": "sts",
+      "NameKey": "Inflame",
+      "DescriptionKey": "Gain 2 Strength.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.strength"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 2
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "inflame+",
+      "PackageId": "sts",
+      "NameKey": "Inflame",
+      "DescriptionKey": "Gain 2 Strength.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.strength"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "metallicize",
+      "PackageId": "sts",
+      "NameKey": "Metallicize",
+      "DescriptionKey": "At the end of your turn, gain 3 Block.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.metallicize"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "metallicize+",
+      "PackageId": "sts",
+      "NameKey": "Metallicize",
+      "DescriptionKey": "At the end of your turn, gain 3 Block.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.metallicize"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 4
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "combust",
+      "PackageId": "sts",
+      "NameKey": "Combust",
+      "DescriptionKey": "At the end of your turn, lose 1 HP and deal 5 damage to ALL enemies.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.combust"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 5
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "combust+",
+      "PackageId": "sts",
+      "NameKey": "Combust",
+      "DescriptionKey": "At the end of your turn, lose 1 HP and deal 5 damage to ALL enemies.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.combust"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 7
               }
             },
             "DurationTurns": 0,
@@ -9580,6 +9932,14 @@
       "NameKey": "Skill Potion",
       "DescriptionKey": "Choose 1 of 3 random Skill cards to add to your hand. It costs 0 this turn.",
       "Effect": "choice_offered:skill",
+      "Amount": 0,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "power_potion",
+      "NameKey": "Power Potion",
+      "DescriptionKey": "Choose 1 of 3 random Power cards to add to your hand. It costs 0 this turn.",
+      "Effect": "choice_offered:power",
       "Amount": 0,
       "Rarity": "Common"
     }
