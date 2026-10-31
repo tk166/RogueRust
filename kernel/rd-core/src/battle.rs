@@ -1818,6 +1818,7 @@ mod tests {
     use crate::host::Host;
     use crate::snapshot;
     use crate::state::CombatantLifecycleState;
+    use crate::state::{StatusDefinitionId, StatusInstance, StatusInstanceId, StatusPolarity};
     use crate::writer::TextWriter;
 
     const CORE_IMAGE_REL: &str = "../../tools/contentc/out/content.core.rdcf";
@@ -4127,6 +4128,89 @@ mod tests {
         }
         let leaked: Vec<_> = report.iter().filter(|entry| entry.2 > 0).copied().collect();
         assert!(leaked.is_empty(), "leaked after: {leaked:?} (round, phase, live)");
+    }
+
+    /// §158: **Dexterity really adds Block for this content.**
+    ///
+    /// `standard.dexterity` is a new `STAT` row, and its whole behaviour is one spec in
+    /// `PassiveModifiers`: `BlockGain / AddPerStack / 1 / Priority 100`. Get the pipeline string
+    /// wrong and the spec never matches -- the status applies, the number does not move, and
+    /// **nothing says so** (`status_bind.rs` calls that "the worst kind of silent"). So this plays
+    /// the content's own `defend` with 2 Dexterity on the hero and asks for **7**, not 5.
+    #[test]
+    fn dexterity_from_the_content_scales_a_real_defend() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let enemies = [PlanCombatant {
+            id: "sentry_1",
+            max_health: 99,
+        }];
+        let res = resources();
+        let refill = refills();
+        // Eight Defends, so the opening hand of five is all Defend and the play is deterministic.
+        let deck = [DeckEntry {
+            card: "defend",
+            count: 8,
+        }];
+        let plan = FightPlan {
+            combat_id: "sts_dex",
+            seed: 11,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 200,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: true,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let mut state = CombatState::new(CombatId::new("dex").expect("短 id"), 0);
+        build_fight_from_content(&mut state, &content, &plan).expect("builds");
+        let config = turn_config_for(&plan).expect("config");
+        let mut host = Host::new(&content);
+        turn::start_current_turn(&mut state, &config, &mut host).expect("start");
+        let hero = cid("hero");
+        // Exactly what Dexterity Potion applies (`combat_status:standard.dexterity`, amount 2).
+        state
+            .combatant_mut(&hero)
+            .expect("hero")
+            .push_status(
+                StatusInstance::new(
+                    StatusInstanceId::new("status_dex").expect("id"),
+                    StatusDefinitionId::new("standard.dexterity").expect("definition"),
+                    StatusPolarity::Buff,
+                )
+                .with_stacks(2),
+            )
+            .expect("push");
+        let mut problems = Problems::new();
+        hero_plays(
+            &mut state,
+            &content,
+            &config,
+            Play {
+                card: "defend",
+                target: None,
+            },
+            &mut host,
+            &hero,
+            &mut problems,
+        )
+        .expect("defend is playable");
+        let block = state
+            .combatant(&hero)
+            .expect("hero")
+            .defensive_pools()
+            .iter()
+            .find(|pool| pool.key.as_str() == "standard.block")
+            .map_or(-1, |pool| pool.pool.current);
+        assert_eq!(block, 7, "defend's 5 Block plus 2 from Dexterity");
     }
 
     /// §152：一场**长**战斗里每一步都必须**没有问题**。

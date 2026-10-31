@@ -729,14 +729,15 @@ function renderTopBar() {
   for (let index = 0; index < relics; index++) {
     chips.push(`<span class="chip relic">${esc(runRead.relicName(index) || "relic")}</span>`);
   }
-  // The potion belt (`inv:§9.3`, three slots). Each held potion is a chip with a drop button;
-  // using one in a fight comes later, and the button says so instead of doing nothing.
+  // The potion belt (`inv:§9.3`, three slots). Each held potion is a chip with a drop button.
   const potions = ex.rd_run_potion_count();
   for (let index = 0; index < Math.max(0, potions); index++) {
     const id = runRead.potionName(index) || "potion";
-    // Using a potion only means something inside a fight (the kernel refuses otherwise with a
-    // readable reason), so the button only appears there.
-    const use = mode === "fight" ? `<button class="drop" data-use-potion="${index}" title="使用">用</button>` : "";
+    // §158: `max_hp` (Fruit Juice) and `potion_fill` (Entropic Brew) are about the **run** and the
+    // wiki lets you drink them in most rooms -- so the button can no longer key off "am I in a
+    // fight". The ABI answers for a single bottle so this list does not become a second one.
+    const usable = mode === "fight" || ex.rd_run_potion_needs_fight(index) === 0;
+    const use = usable ? `<button class="drop" data-use-potion="${index}" title="使用">用</button>` : "";
     chips.push(
       `<span class="chip potion">${esc(id)}${use}` +
         `<button class="drop" data-drop-potion="${index}" title="丢弃">×</button></span>`

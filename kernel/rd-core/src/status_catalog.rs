@@ -657,7 +657,6 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.poison"
             | "standard.stun"
             | "standard.artifact"
-            | "standard.thorns"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"
@@ -690,6 +689,12 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.intangible"
             | "standard.buffer"
             | "standard.plated_armor"
+            // §158: the "give it back at the end of the turn" half of Flex Potion and Speed
+            // Potion. Content-side like `standard.constricted`: a `TurnEnded` trigger that
+            // subtracts its own stacks from Strength / Dexterity and then removes itself. The
+            // kernel needs no new rule -- it already runs turn-ended triggers.
+            | "standard.lose_strength"
+            | "standard.lose_dexterity"
     )
 }
 

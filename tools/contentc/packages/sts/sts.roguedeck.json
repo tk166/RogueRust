@@ -1285,6 +1285,281 @@
       ],
       "PassiveModifiers": [],
       "Triggers": []
+    },
+    {
+      "Id": "standard.dexterity",
+      "PackageId": "sts",
+      "NameKey": "Dexterity",
+      "DescriptionKey": "Cards that give Block give 1 more per stack.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "dexterity"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "BlockGain",
+          "Operation": "AddPerStack",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": [],
+      "DeathPrevention": null,
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null,
+      "Disclosure": null
+    },
+    {
+      "Id": "standard.lose_strength",
+      "PackageId": "sts",
+      "NameKey": "Lose Strength",
+      "DescriptionKey": "At the end of the turn, lose Strength equal to this status's stacks, then remove it.",
+      "Polarity": "Debuff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "debuff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.modifyStatusStacks",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.strength"
+                      },
+                      "Delta": {
+                        "kind": "subtract",
+                        "value": {
+                          "Left": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Right": {
+                            "kind": "combatantStatusStacks",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "StatusId": {
+                                "value": "standard.lose_strength"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.modifyStatusStacks",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.lose_strength"
+                      },
+                      "Delta": {
+                        "kind": "subtract",
+                        "value": {
+                          "Left": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Right": {
+                            "kind": "combatantStatusStacks",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "StatusId": {
+                                "value": "standard.lose_strength"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ],
+      "DeathPrevention": null,
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null,
+      "Disclosure": null
+    },
+    {
+      "Id": "standard.lose_dexterity",
+      "PackageId": "sts",
+      "NameKey": "Lose Dexterity",
+      "DescriptionKey": "At the end of the turn, lose Dexterity equal to this status's stacks, then remove it.",
+      "Polarity": "Debuff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "debuff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.modifyStatusStacks",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.dexterity"
+                      },
+                      "Delta": {
+                        "kind": "subtract",
+                        "value": {
+                          "Left": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Right": {
+                            "kind": "combatantStatusStacks",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "StatusId": {
+                                "value": "standard.lose_dexterity"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.modifyStatusStacks",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.lose_dexterity"
+                      },
+                      "Delta": {
+                        "kind": "subtract",
+                        "value": {
+                          "Left": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Right": {
+                            "kind": "combatantStatusStacks",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "StatusId": {
+                                "value": "standard.lose_dexterity"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ],
+      "DeathPrevention": null,
+      "DebuffBlock": null,
+      "IncomingStatusDelay": null,
+      "Disclosure": null
     }
   ],
   "Cards": [
@@ -9130,7 +9405,7 @@
       "DescriptionKey": "Gain 2 Energy.",
       "Effect": "combat_energy",
       "Amount": 2,
-      "Rarity": "Uncommon"
+      "Rarity": "Common"
     },
     {
       "Id": "blood_potion",
@@ -9195,6 +9470,78 @@
       "Effect": "max_hp",
       "Amount": 5,
       "Rarity": "Rare"
+    },
+    {
+      "Id": "ancient_potion",
+      "NameKey": "Ancient Potion",
+      "DescriptionKey": "Gain 1 Artifact.",
+      "Effect": "combat_status:standard.artifact",
+      "Amount": 1,
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "dexterity_potion",
+      "NameKey": "Dexterity Potion",
+      "DescriptionKey": "Gain 2 Dexterity.",
+      "Effect": "combat_status:standard.dexterity",
+      "Amount": 2,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "essence_of_steel",
+      "NameKey": "Essence of Steel",
+      "DescriptionKey": "Gain 4 Plated Armor.",
+      "Effect": "combat_status:standard.plated_armor",
+      "Amount": 4,
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "liquid_bronze",
+      "NameKey": "Liquid Bronze",
+      "DescriptionKey": "Gain 3 Thorns.",
+      "Effect": "combat_status:standard.thorns",
+      "Amount": 3,
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "heart_of_iron",
+      "NameKey": "Heart of Iron",
+      "DescriptionKey": "Gain 6 Metallicize.",
+      "Effect": "combat_status:standard.metallicize",
+      "Amount": 6,
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "cultist_potion",
+      "NameKey": "Cultist Potion",
+      "DescriptionKey": "Gain 1 Ritual.",
+      "Effect": "combat_status:ritual",
+      "Amount": 1,
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "flex_potion",
+      "NameKey": "Flex Potion",
+      "DescriptionKey": "Gain 5 Strength. At the end of your turn, lose 5 Strength.",
+      "Effect": "combat_status:standard.strength,combat_status:standard.lose_strength",
+      "Amount": 5,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "speed_potion",
+      "NameKey": "Speed Potion",
+      "DescriptionKey": "Gain 5 Dexterity. At the end of your turn, lose 5 Dexterity.",
+      "Effect": "combat_status:standard.dexterity,combat_status:standard.lose_dexterity",
+      "Amount": 5,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "entropic_brew",
+      "NameKey": "Entropic Brew",
+      "DescriptionKey": "Fill all your empty potion slots with random potions.",
+      "Effect": "potion_fill",
+      "Amount": 0,
+      "Rarity": "Rare"
     }
   ],
   "EventTables": {
@@ -9238,50 +9585,6 @@
       },
       {
         "Id": "purification_shrine"
-      }
-    ]
-  },
-  "PotionTables": {
-    "Potions": [
-      {
-        "Id": "fire_potion"
-      },
-      {
-        "Id": "block_potion"
-      },
-      {
-        "Id": "energy_potion"
-      },
-      {
-        "Id": "explosive_potion"
-      }
-    ],
-    "Potions2": [
-      {
-        "Id": "blood_potion"
-      },
-      {
-        "Id": "block_potion"
-      },
-      {
-        "Id": "strength_potion"
-      },
-      {
-        "Id": "regen_potion"
-      }
-    ],
-    "Potions3": [
-      {
-        "Id": "swift_potion"
-      },
-      {
-        "Id": "fire_potion"
-      },
-      {
-        "Id": "regen_potion"
-      },
-      {
-        "Id": "fruit_juice"
       }
     ]
   }

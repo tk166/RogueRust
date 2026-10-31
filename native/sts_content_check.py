@@ -81,7 +81,7 @@ INV_COUNTS = {
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     "encounters": 22,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
-    "statuses": 21,       # inv:§10 the ones this subset actually needs
+    "statuses": 24,       # inv:§10 the ones this subset actually needs (+ the three §158 added)
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -449,6 +449,18 @@ INV_STATUSES = {
     # None in the last slot.  Single stage, no priority-per-stage axis.
     "standard.frail": [("BlockGain", "ScalePercent", 75, 200, None)],
     "ritual": [],
+    # §158: Dexterity. Same pipeline as `frail` and the same wire-string trap, but `AddPerStack`
+    # (the reference declaration is `StandardCombatPackage.cs:360-363`:
+    # BlockGain / AddPerStack / 1 / Priority 100). The kernel's own `BLOCK_MODIFIERS` table says the
+    # same thing, but a content image **disables** that table (`exec.rs` §A), so this row is the only
+    # thing that makes a Dexterity Potion move the number -- and
+    # `dexterity_from_the_content_scales_a_real_defend` is what proves it does.
+    "standard.dexterity": [("BlockGain", "AddPerStack", 1, 100, None)],
+    # §158: the "give it back at the end of the turn" half of Flex / Speed Potion. No modifier: the
+    # behaviour is a TurnEnded trigger that subtracts its own stacks from Strength / Dexterity and
+    # then removes itself.
+    "standard.lose_strength": [],
+    "standard.lose_dexterity": [],
 }
 # Statuses whose stacks decay at the owner's turn end (inv:§10).
 INV_DECAYING = {"standard.vulnerable", "standard.weak", "standard.frail"}
@@ -838,6 +850,22 @@ def check_statuses(doc):
             if row.get("UsesStacks") is not True:
                 fail("status." + sid, "UsesStacks must be true (plan §G10), got %r"
                      % row.get("UsesStacks"))
+        elif sid in ("standard.lose_strength", "standard.lose_dexterity"):
+            # §158: the "give back what Flex / Speed Potion lent" half. Two modifications, both by
+            # an **expression** (`subtract(0, stacks)` -- the kernel has no `negate`, expr.rs:50),
+            # and the order is part of the fact: the matched status first, then itself. Removing
+            # the instance first would make its own stacks read 0 and the debt would be free.
+            lends = {"standard.lose_strength": "standard.strength",
+                     "standard.lose_dexterity": "standard.dexterity"}[sid]
+            if triggers != ["TurnEnded"]:
+                fail("status." + sid, "expected exactly one TurnEnded trigger, got %s" % triggers)
+            else:
+                facts = program_facts(row["Triggers"][0]["Program"]["Root"])
+                expected = [("modify", lends, ("expr", "subtract"), "source"),
+                            ("modify", sid, ("expr", "subtract"), "source")]
+                if facts != expected:
+                    fail("status." + sid, "the give-back program is %s, expected %s"
+                         % (facts, expected))
         elif sid in ("standard.thorns", "standard.spore_cloud", "standard.enrage",
                      "standard.regen", "standard.rage", "standard.flame_barrier",
                      "standard.combust", "standard.split", "standard.phase_split",
@@ -1062,8 +1090,10 @@ def check_relics(doc):
 # status id; the payload form is the same convention the event vocabulary uses (§143).
 POTION_KINDS = ("combat_block", "combat_energy", "combat_heal_percent", "combat_draw",
                 "combat_damage", "combat_damage_all",
-                # §157: the one effect that is about the **run** (Fruit Juice).
-                "max_hp")
+                # §157/§158: the effects that are about the **run**, not the fight (Fruit Juice,
+                # Entropic Brew). §158 made them usable **outside** a fight, which is what the wiki
+                # says; before that the "no fight" check came first and refused them.
+                "max_hp", "potion_fill")
 # Which effects need the player to pick an enemy (the ABI's code `1`). Kept here as the **second
 # opinion**: if the page's rule and this list disagree, one of them is wrong.
 POTION_NEEDS_TARGET = ("combat_damage", "combat_status_target")
@@ -1123,7 +1153,7 @@ def check_potions(doc):
     an effect the ABI did not handle at all (refused with "未知的药水效果"). A potion that cannot be
     drunk is a dead button in the belt -- the §150 shape, one layer down.
     """
-    print("[3b] potions (port-plan.md §152)")
+    print("[3b] potions (port-plan.md §152, §158)")
     potions = doc.get("Potions") or []
     statuses = {status["Id"] for status in doc.get("Statuses") or []}
     seen_effects = set()
@@ -1132,19 +1162,37 @@ def check_potions(doc):
         effect = potion.get("Effect") or ""
         label = "Potions.%s" % potion_id
         amount = potion.get("Amount")
-        if not isinstance(amount, int) or amount <= 0:
-            fail(label, "Amount must be a positive integer, got %r" % (amount,))
         if not potion.get("NameKey") or not potion.get("DescriptionKey"):
             fail(label, "needs NameKey and DescriptionKey (the belt shows the id otherwise)")
-        kind, _, payload = effect.partition(":")
-        if kind in POTION_KINDS:
-            if payload:
-                fail(label, "`%s` takes no payload" % kind)
-        elif kind in ("combat_status", "combat_status_target"):
-            if payload not in statuses:
-                fail(label, "`%s` names status %r, which is not a STAT row" % (kind, payload))
-        else:
-            fail(label, "effect %r is outside the ABI's vocabulary" % (effect,))
+        # §158: an effect is a **comma-separated list of atoms**. Every atom is checked on its own,
+        # for the same reason the run layer executes them one at a time: `combat_status:a` and
+        # `combat_status:zzz` in the same cell must not pass because the first one was fine.
+        atoms = [atom for atom in effect.split(",") if atom]
+        if not atoms:
+            fail(label, "no Effect at all")
+        for atom in atoms:
+            kind, _, payload = atom.partition(":")
+            if kind in POTION_KINDS:
+                if payload:
+                    fail(label, "`%s` takes no payload" % kind)
+            elif kind in ("combat_status", "combat_status_target"):
+                if payload not in statuses:
+                    fail(label, "`%s` names status %r, which is not a STAT row" % (kind, payload))
+            else:
+                fail(label, "effect %r is outside the ABI's vocabulary" % (atom,))
+            # The **target** decision lives in two places on purpose (`rd-wasm`'s
+            # `rd_run_potion_effect` and `POTION_NEEDS_TARGET` here): if they disagree, the page aims
+            # at nothing and the potion silently lands on the hero.
+            wants_target = kind in POTION_NEEDS_TARGET
+            if wants_target and any(a.partition(":")[0] not in POTION_NEEDS_TARGET for a in atoms):
+                fail(label, "mixes a targeted atom with a non-targeted one")
+        # §158: `potion_fill` is the only atom that reads no amount, so the rule is per-atom.
+        takes_amount = any(atom.partition(":")[0] != "potion_fill" for atom in atoms)
+        if takes_amount:
+            if not isinstance(amount, int) or amount <= 0:
+                fail(label, "Amount must be a positive integer, got %r" % (amount,))
+        elif amount != 0:
+            fail(label, "`potion_fill` reads no amount, so it must be 0, got %r" % (amount,))
         seen_effects.add(effect)
     if len(potions) < 8:
         fail("Potions", "only %d potions -- too few to make a drop interesting" % len(potions))
@@ -1155,24 +1203,25 @@ def check_potions(doc):
         if fingerprints.count(fingerprint) > 1:
             names = [p.get("Id") for p in potions if (p.get("Effect"), p.get("Amount")) == fingerprint]
             fail("Potions", "%s are the same potion twice (%r)" % (names, fingerprint))
-    # The three per-act pools must only name potions that exist.
-    known = {potion.get("Id") for potion in potions}
-    tables = doc.get("PotionTables") or {}
-    for name in ("Potions", "Potions2", "Potions3"):
-        rows = tables.get(name)
-        if not rows:
-            fail("PotionTables." + name, "missing or empty")
+    # §158: there is **no per-act potion pool**. `PotionTables` used to hold three lists; the wiki
+    # has no such split, and `MAX_POOL_IDS` (8) would have truncated a 33-entry list. So the check is
+    # now the opposite one: the table must be **gone**, because a leftover list would be data the
+    # kernel never reads.
+    if doc.get("PotionTables"):
+        fail("PotionTables", "the potion pools were removed in §158 -- this is dead data")
+    # §157/§158: the rarity weights (65/25/10) are only meaningful if every band has an entry.
+    bands = {rarity: 0 for rarity in RELAPSE_RARITIES}
+    for potion in potions:
+        rarity = potion.get("Rarity")
+        if rarity not in bands:
+            fail("Potions.%s" % potion.get("Id"), "unknown Rarity %r" % (rarity,))
             continue
-        for row in rows:
-            if row.get("Id") not in known:
-                fail("PotionTables." + name, "%r is not in Potions" % (row.get("Id"),))
-    # §157: the rarity weights (65/25/10) are only meaningful if every band has an entry.
+        bands[rarity] += 1
     for rarity in RELAPSE_RARITIES:
-        if not any(potion.get("Rarity") == rarity for potion in potions):
-            fail("Potions", "no %s potion: the %d%% band would be empty" % (rarity, 0))
-    ok("potions", "%d potions, %d distinct effects, pools %d/%d/%d"
-       % (len(potions), len(seen_effects), len(tables.get("Potions") or []),
-          len(tables.get("Potions2") or []), len(tables.get("Potions3") or [])))
+        if bands[rarity] == 0:
+            fail("Potions", "no %s potion: that band of the 65/25/10 roll would be empty" % rarity)
+    ok("potions", "%d potions (C%d/U%d/R%d), %d distinct effects"
+       % (len(potions), bands["Common"], bands["Uncommon"], bands["Rare"], len(seen_effects)))
 
 
 RELAPSE_RARITIES = ("Common", "Uncommon", "Rare")

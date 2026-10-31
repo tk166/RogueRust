@@ -4833,7 +4833,6 @@ mod tests {
         );
     }
 
-    #[test]
     /// **A minion flees when its master falls** (`port-plan.md` §139): it becomes `Escaped`, which
     /// is neither alive (so it cannot block the victory) nor a corpse the reward screen counts.
     #[test]
@@ -4928,6 +4927,13 @@ mod tests {
     }
 
 
+    /// The Slime Boss splits in two when it dies (`node.createCombatant` reached from a `Downed`
+    /// status, `port-plan.md` §121).
+    ///
+    /// §158: this function had **no `#[test]`** -- an earlier edit anchored on a doc line and ate
+    /// the attribute, which then duplicated onto the function above. It compiled, never ran, and
+    /// the only trace was a `never used` warning nobody read.
+    #[test]
     fn a_split_spawns_two_combatants_when_the_boss_dies() {
         // Wiki: the Slime Boss splits into two smaller slimes when it dies. The spawn node is the
         // kernel's own (`node.createCombatant`, `port-plan.md` §121); the trigger is a `Downed`

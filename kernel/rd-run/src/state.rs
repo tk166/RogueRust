@@ -1683,6 +1683,46 @@ impl RunState {
         Ok(())
     }
 
+    /// Draw a potion from `pool` by **rarity weight** (65/25/10, §156).
+    ///
+    /// `RunId::EMPTY` when the pool is empty: that is what a run whose content declares no potions
+    /// has to see, and it is why the caller treats "no id" and "no potion" as the same thing.
+    ///
+    /// §158 made this a function instead of a block inside [`Self::roll_reward`] so **Entropic
+    /// Brew** asks the same question ("which potion is this bottle?") and gets the same answer --
+    /// a second picker would be a second set of weights to forget.
+    pub fn pick_potion(
+        &mut self,
+        stream: RunStream,
+        pool: &[PoolPotion<'_>],
+    ) -> Result<RunId, RunError> {
+        if pool.is_empty() {
+            return Ok(RunId::EMPTY);
+        }
+        let mut rarities = [Rarity::Common; MAX_POOL];
+        for (slot, entry) in pool.iter().take(MAX_POOL).enumerate() {
+            rarities[slot] = entry.rarity;
+        }
+        let present = &rarities[..pool.len().min(MAX_POOL)];
+        let band = self.pick_rarity(stream, &POTION_RARITY_WEIGHTS, present)?;
+        let band = band.unwrap_or(pool[0].rarity);
+        let mut eligible = [0usize; MAX_POOL];
+        let mut count = 0usize;
+        for (slot, entry) in pool.iter().take(MAX_POOL).enumerate() {
+            if entry.rarity == band {
+                eligible[count] = slot;
+                count += 1;
+            }
+        }
+        let chosen = if count == 0 {
+            0
+        } else {
+            let pick = self.rng.roll(stream, count as u32)? as usize;
+            eligible[pick]
+        };
+        RunId::new(pool[chosen].id).map_err(|_| RunError::BadId)
+    }
+
     /// Draw a rarity band by weight, re-normalised over the bands that still have entries
     /// (§156). `None` = no band has an entry.
     fn pick_rarity(
@@ -2301,36 +2341,10 @@ impl RunState {
                 self.rarity_offset = (self.rarity_offset + 1).min(RARITY_OFFSET_CAP);
             }
         }
-        // Which potion: the content's own list, **weighted by rarity** (§156). `potion_pool` is
-        // empty when the image declares none (roguedeck), and then no potion is offered at all.
+        // Which potion: the content's own list, **weighted by rarity** (§156) through the one
+        // picker (§158). An empty pool offers nothing at all (roguedeck).
         let potion = if drop && !potion_pool.is_empty() {
-            let mut rarities: [Rarity; MAX_POOL] = [Rarity::Common; MAX_POOL];
-            for (slot, entry) in potion_pool.iter().take(MAX_POOL).enumerate() {
-                rarities[slot] = entry.rarity;
-            }
-            let present = &rarities[..potion_pool.len().min(MAX_POOL)];
-            let band = self.pick_rarity(RunStream::Potion, &POTION_RARITY_WEIGHTS, present)?;
-            let band = band.unwrap_or(potion_pool[0].rarity);
-            let mut eligible = [0usize; MAX_POOL];
-            let mut count = 0usize;
-            for (slot, entry) in potion_pool.iter().take(MAX_POOL).enumerate() {
-                if entry.rarity == band {
-                    eligible[count] = slot;
-                    count += 1;
-                }
-            }
-            let pool: &[usize] = if count == 0 {
-                &[]
-            } else {
-                &eligible[..count]
-            };
-            let chosen = if pool.is_empty() {
-                0
-            } else {
-                let pick = self.rng.roll(RunStream::Potion, pool.len() as u32)? as usize;
-                pool[pick]
-            };
-            RunId::new(potion_pool[chosen].id).map_err(|_| RunError::BadId)?
+            self.pick_potion(RunStream::Potion, potion_pool)?
         } else {
             RunId::EMPTY
         };

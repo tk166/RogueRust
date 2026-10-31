@@ -2320,24 +2320,16 @@ impl<'a> Content<'a> {
         self.id_pool("EventTables", pool, hop)
     }
 
-    /// The potion ids of one act (`port-plan.md` §133).
-    ///
-    /// `pool` is `"Potions"` (act 1), `"Potions2"` or `"Potions3"`.
-    #[must_use]
-    pub fn potion_pool(&self, pool: &str) -> Option<[&'a str; MAX_POOL_IDS]> {
-        let hop = match pool {
-            "Potions" => "PotionTables.Potions",
-            "Potions2" => "PotionTables.Potions2",
-            "Potions3" => "PotionTables.Potions3",
-            _ => return None,
-        };
-        self.id_pool("PotionTables", pool, hop)
-    }
-
-    /// The shared walker behind the three public pool readers.
+    /// The shared walker behind the two public pool readers.
     ///
     /// `hop` is passed in (not rebuilt) so the literal stays in the public reader, where the content
     /// gate can see it.
+    ///
+    /// ⚠️ **There is no potion pool** (§158). `PotionTables` used to hold one list per act, and the
+    /// wiki has no such split: every potion of a rarity is equally likely in every act. Keeping the
+    /// three lists would also have needed `MAX_POOL_IDS >= 33` or it would have **silently truncated**
+    /// the drop pool to eight entries. The potion pool is now "every `POT` row", which cannot fall out
+    /// of sync with the potions that exist.
     fn id_pool(
         &self,
         table_name: &str,
@@ -2349,7 +2341,6 @@ impl<'a> Content<'a> {
         let root = match table_name {
             "EncounterTables" => self.root_by_name("EncounterTables")?,
             "EventTables" => self.root_by_name("EventTables")?,
-            "PotionTables" => self.root_by_name("PotionTables")?,
             _ => return None,
         };
         let table = self.term(root)?;
@@ -3957,9 +3948,6 @@ mod tests {
         assert_eq!(core.card_rarity("paper_cut"), None);
     }
 
-    /// `EncounterTables` is the document's own statement of the two pools (`inv:§5.2/§5.3`), and it
-    /// had no reader until the elite needed one: the run layer could only pick "any encounter".
-    #[test]
     /// **No encounter places more enemies than a fight allows** (`port-plan.md` §140).
     ///
     /// The kernel enforces the cap on *summons* (`node.createCombatant`); this pins the other half --
@@ -3987,6 +3975,25 @@ mod tests {
         assert!(worst >= 1, "the image has encounters at all");
     }
 
+    /// `EncounterTables` is the document's own statement of the two pools (`inv:§5.2/§5.3`), and it
+    /// had no reader until the elite needed one: the run layer could only pick "any encounter".
+    ///
+    /// §158: this test had **lost its `#[test]`** -- an earlier edit anchored on this doc comment
+    /// and swallowed the attribute of its own function, so `no_encounter_places_more_enemies_than_a
+    /// _fight_allows` above carried two `#[test]`s and this function carried none. It compiled, ran
+    /// zero times, and reported nothing. `cargo test` warned `duplicated attribute` / `never used`
+    /// for a whole release; the fix is the missing attribute, not a silencer.
+    ///
+    /// The body had also gone **stale**: it pinned "the weak pool has three entries", which was true
+    /// when it was written and had been seven for two releases. So the shape was replaced too -- it
+    /// now checks the *structure* rather than today's numbers:
+    ///
+    /// 1. every id in a pool is a real `ENCT` row;
+    /// 2. the ten pools **partition** the encounter table -- no encounter is unreachable, and none
+    ///    is in two pools (a normal encounter cannot also be an elite);
+    /// 3. every act has a weak / elite / boss pool, because the run layer asks for them by name and
+    ///    a missing one would fall back to something.
+    #[test]
     fn the_encounter_pools_are_readable() {
         let bytes = std::fs::read(concat!(
             env!("CARGO_MANIFEST_DIR"),
@@ -3994,44 +4001,42 @@ mod tests {
         ))
         .expect("the sts image");
         let content = Content::parse(&bytes).expect("the image parses");
-        let weak = content.encounter_pool("Weak").expect("a weak pool");
-        let elite = content.encounter_pool("Elite").expect("an elite pool");
-        let weak: Vec<&str> = weak.iter().filter(|id| !id.is_empty()).copied().collect();
-        let elite: Vec<&str> = elite.iter().filter(|id| !id.is_empty()).copied().collect();
-        assert_eq!(weak.len(), 3, "weak: {weak:?}");
-        assert!(weak.contains(&"enc_cultist"));
-        assert!(weak.contains(&"enc_jaw_worm"));
-        assert!(weak.contains(&"enc_small_slimes"));
-        assert_eq!(elite, vec!["enc_three_sentries"], "elite: {elite:?}");
+        // The ten names the run layer can ask for (`rd-wasm`'s act -> pool mapping). Hard-coded on
+        // purpose: the pool names live in the caller, so a test that discovered them dynamically
+        // would not notice a pool the caller asks for and the content lost.
+        const POOLS: [&str; 9] = [
+            "Weak", "Elite", "Boss", "Weak2", "Elite2", "Boss2", "Weak3", "Elite3", "Boss3",
+        ];
+        let mut seen: Vec<&str> = Vec::new();
+        for name in POOLS {
+            let pool = content
+                .encounter_pool(name)
+                .unwrap_or_else(|| panic!("the content has no `{name}` pool"));
+            let ids: Vec<&str> = pool.iter().filter(|id| !id.is_empty()).copied().collect();
+            assert!(!ids.is_empty(), "{name} is empty");
+            for id in ids {
+                assert!(
+                    (0..content.rows(Table::Encounter).count()).any(|index| {
+                        content.entity_id(Table::Encounter, index as u32) == Some(id)
+                    }),
+                    "{name} names `{id}`, which is not an ENCT row"
+                );
+                assert!(
+                    !seen.contains(&id),
+                    "`{id}` is in two pools -- an encounter belongs to exactly one"
+                );
+                seen.push(id);
+            }
+        }
+        let total = content.rows(Table::Encounter).count();
+        assert_eq!(
+            seen.len(),
+            total,
+            "{} of {total} encounters are reachable: {:?}",
+            seen.len(),
+            seen
+        );
         // A pool the document does not have is `None`, not an empty set.
-        // The boss pool (inv:§4.3).
-        let boss: Vec<&str> = content
-            .encounter_pool("Boss")
-            .expect("a boss pool")
-            .iter()
-            .filter(|id| !id.is_empty())
-            .copied()
-            .collect();
-        // §130 splits the pools **by act**: act 1 has one boss, act 2 and 3 have their own.
-        assert_eq!(boss, vec!["enc_slime_boss"]);
-        let boss2: Vec<&str> = content
-            .encounter_pool("Boss2")
-            .expect("act 2 needs its own boss pool")
-            .iter()
-            .filter(|id| !id.is_empty())
-            .copied()
-            .collect();
-        assert_eq!(boss2, vec!["enc_the_champ"]);
-        let weak2: Vec<&str> = content
-            .encounter_pool("Weak2")
-            .expect("act 2 needs its own weak pool")
-            .iter()
-            .filter(|id| !id.is_empty())
-            .copied()
-            .collect();
-        assert_eq!(weak2.len(), 3, "act 2 weak: {weak2:?}");
-        assert!(!weak2.contains(&"enc_cultist"), "act 2 must not replay act 1");
-        // A pool the document does not have is None, not an empty set.
         assert_eq!(content.encounter_pool("Sideboard"), None);
     }
 
@@ -4196,7 +4201,7 @@ mod tests {
         assert_eq!(core.event_count(), 0, "roguedeck has no events");
     }
 
-    /// The three potions, read out of the image, with the **closed effect vocabulary** enforced:
+    /// The twenty potions, read out of the image, with the **closed effect vocabulary** enforced:
     /// a potion whose effect the run layer cannot apply must fail here rather than do nothing.
     #[test]
     fn the_potions_are_readable() {
@@ -4208,95 +4213,109 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.potion_count(),
-            11,
-            "eleven potions (§152's ten plus Fruit Juice, §157: the rare band had nothing in it)"
+            20,
+            "§158: eleven after §157, plus the nine that need no new mechanic"
         );
         let mut ids = Vec::new();
+        let mut bands = [0usize; 3];
         for index in 0..content.potion_count() {
             let potion = content.potion(index).expect("potion {index}");
             ids.push(potion.id);
             assert!(!potion.name.is_empty(), "{} has no name", potion.id);
-            assert!(potion.amount > 0, "{} has no amount", potion.id);
-            // §152: `kind` or `kind:<status id>` -- the same convention the event vocabulary uses.
-            let (kind, payload) = match potion.effect.split_once(':') {
-                Some((kind, payload)) => (kind, Some(payload)),
-                None => (potion.effect, None),
-            };
-            assert!(
-                [
-                    "combat_damage",
-                    "combat_block",
-                    "combat_energy",
-                    "combat_heal_percent",
-                    "combat_draw",
-                    "combat_damage_all",
-                    "combat_status",
-                    "combat_status_target",
-                    // §157: the one effect about the **run** rather than the fight.
-                    "max_hp",
-                ]
-                .contains(&kind),
-                "{}: unknown effect {:?}",
-                potion.id,
-                potion.effect
-            );
-            // The payload form is only for the two status kinds, and only those need it.
-            let wants_payload = kind.starts_with("combat_status");
-            assert_eq!(
-                payload.is_some(),
-                wants_payload,
-                "{}: payload presence does not match {:?}",
-                potion.id,
-                kind
-            );
-            assert!(
-                ["Common", "Uncommon", "Rare"].contains(&potion.rarity),
-                "{}: unknown rarity {:?}",
-                potion.id,
-                potion.rarity
-            );
+            // §158: an effect is a **comma-separated list of atoms**, `kind` or `kind:<payload>`.
+            // Flex Potion needs it: "+5 Strength" *and* "at the end of the turn, lose 5 Strength" are
+            // two different statuses and the row has one `Effect` cell.
+            let atoms: Vec<(&str, Option<&str>)> = potion
+                .effect
+                .split(',')
+                .map(|atom| match atom.split_once(':') {
+                    Some((kind, payload)) => (kind, Some(payload)),
+                    None => (atom, None),
+                })
+                .collect();
+            for (kind, payload) in &atoms {
+                assert!(
+                    [
+                        "combat_damage",
+                        "combat_block",
+                        "combat_energy",
+                        "combat_heal_percent",
+                        "combat_draw",
+                        "combat_damage_all",
+                        "combat_status",
+                        "combat_status_target",
+                        // §157: the effects about the **run** rather than the fight.
+                        "max_hp",
+                        "potion_fill",
+                    ]
+                    .contains(kind),
+                    "{}: unknown effect {:?}",
+                    potion.id,
+                    potion.effect
+                );
+                // The payload form is only for the two status kinds, and only those need it.
+                assert_eq!(
+                    payload.is_some(),
+                    kind.starts_with("combat_status"),
+                    "{}: payload presence does not match {:?}",
+                    potion.id,
+                    kind
+                );
+            }
+            // `potion_fill` is the only atom that reads no amount (it fills whatever is empty), so
+            // the rule is per-atom rather than per-row: a flat "amount > 0" would have forced a
+            // meaningless `1` into Entropic Brew's row and pinned nothing.
+            if atoms.iter().all(|(kind, _)| *kind == "potion_fill") {
+                assert_eq!(potion.amount, 0, "{}: takes no amount", potion.id);
+            } else {
+                assert!(potion.amount > 0, "{} has no amount", potion.id);
+            }
+            bands[match potion.rarity {
+                "Common" => 0,
+                "Uncommon" => 1,
+                "Rare" => 2,
+                other => panic!("{}: unknown rarity {:?}", potion.id, other),
+            }] += 1;
         }
         ids.sort_unstable();
         assert_eq!(
             ids,
             vec![
+                "ancient_potion",
                 "block_potion",
                 "blood_potion",
+                "cultist_potion",
+                "dexterity_potion",
                 "energy_potion",
+                "entropic_brew",
+                "essence_of_steel",
                 "explosive_potion",
                 "fear_potion",
                 "fire_potion",
+                "flex_potion",
                 "fruit_juice",
+                "heart_of_iron",
+                "liquid_bronze",
                 "regen_potion",
+                "speed_potion",
                 "strength_potion",
                 "swift_potion",
                 "weak_potion",
             ]
         );
-        // §135: the potion pool is **per act**. Act 1's list is the three originals, act 2 brings
-        // the heal potion, act 3 the block one -- and each is a real PotionTables entry.
-        let act_one: Vec<&str> = content
-            .potion_pool("Potions")
-            .expect("act 1 potions")
-            .iter()
-            .filter(|id| !id.is_empty())
-            .copied()
-            .collect();
+        // §158: the wiki's counts for the only character this content has (`Potions`, Ironclad only:
+        // **17 Common / 9 Uncommon / 7 Rare = 33**). Thirteen are still missing, and every one of
+        // them needs a mechanic the kernel does not have yet -- an in-fight card choice (Attack /
+        // Skill / Power / Colorless Potion), a card upgrade or multi-select in a fight (Blessing of
+        // the Forge, Elixir, Gambler's Brew, Liquid Memories), an auto-play or a duplicate play
+        // (Distilled Chaos, Duplication Potion), a cost rewrite (Snecko Oil), a death save (Fairy in
+        // a Bottle), a flee (Smoke Bomb). Pinning the band sizes is what makes "we are at 20" a fact
+        // instead of an impression.
         assert_eq!(
-            act_one,
-            vec!["fire_potion", "block_potion", "energy_potion", "explosive_potion"]
+            bands,
+            [12, 4, 4],
+            "Common / Uncommon / Rare -- the wiki's Ironclad pool is 17 / 9 / 7"
         );
-        let act_two: Vec<&str> = content
-            .potion_pool("Potions2")
-            .expect("act 2 potions")
-            .iter()
-            .filter(|id| !id.is_empty())
-            .copied()
-            .collect();
-        assert!(act_two.contains(&"blood_potion"), "act 2: {act_two:?}");
-        assert!(!act_two.contains(&"energy_potion"), "act 2 must not replay act 1: {act_two:?}");
-        assert_eq!(content.potion_pool("Potions"), content.potion_pool("Potions"), "deterministic");
-        assert!(content.potion_pool("Nope").is_none(), "an unknown pool is None, not empty");
 
         let index = (0..content.potion_count())
             .find(|index| content.potion(*index).map(|p| p.id) == Some("fire_potion"))

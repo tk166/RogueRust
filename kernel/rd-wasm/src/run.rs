@@ -237,17 +237,27 @@ fn relic_pool(content: &'static Content<'static>) -> Vec<rd_run::state::PoolReli
     out
 }
 
-/// The act's potion ids, with the rarity the `POT` row declares (§156).
-fn potion_pool_of(image: &'static Content<'static>, ids: &[&'static str]) -> Vec<rd_run::state::PoolPotion<'static>> {
+/// Every potion in the image, with the rarity its `POT` row declares (§156/§158).
+///
+/// §158 removed the per-act `PotionTables` lists. Two reasons, in the order they bit:
+/// * the wiki has **no** per-act potion split -- every potion of a rarity is equally likely in
+///   every act, so the act was never a real input;
+/// * `MAX_POOL_IDS` is 8, so a 33-entry list would have been **silently truncated to eight** and
+///   two-thirds of the pool would have been unreachable while the content gate still said it was
+///   there. Reading the `POT` table directly cannot fall out of sync with the potions that exist.
+fn potion_pool_of(image: &'static Content<'static>) -> Vec<rd_run::state::PoolPotion<'static>> {
     let mut out = Vec::new();
-    for id in ids {
-        let rarity = (0..image.potion_count())
-            .filter_map(|index| image.potion(index))
-            .find(|potion| potion.id == *id)
-            .and_then(|potion| rd_run::state::Rarity::from_name(potion.rarity));
-        if let Some(rarity) = rarity {
-            out.push(rd_run::state::PoolPotion { id, rarity });
-        }
+    for index in 0..image.potion_count() {
+        let Some(potion) = image.potion(index) else {
+            continue;
+        };
+        let Some(rarity) = rd_run::state::Rarity::from_name(potion.rarity) else {
+            continue;
+        };
+        out.push(rd_run::state::PoolPotion {
+            id: potion.id,
+            rarity,
+        });
     }
     out
 }
@@ -1152,14 +1162,18 @@ fn effect_from(
     rd_run::state::EventEffect::parse(effect, amount)
 }
 
-/// **Use** potion `slot` in the fight that is running.
+/// **Use** potion `slot`.
 ///
-/// Two of the three effects are applied through **public kernel APIs** (`set_defensive_pool` for
-/// Block, `set_resource` for energy). The third, `combat_damage`, needs the program pipeline
-/// (`exec::resolve_damage` wants an `ExecContext`), which is not reachable from here yet -- so it
-/// **refuses loudly** rather than doing nothing. `port-plan.md` §83 carries the two ways to close it.
+/// The effects are applied through **public kernel APIs** (`set_defensive_pool` for Block,
+/// `set_resource` for energy) or through the program pipeline (`exec::resolve_damage` wants an
+/// `ExecContext`, and `exec::resolve_effect` covers draw / status). An effect the run layer does not
+/// know **refuses loudly** rather than doing nothing.
 ///
-/// Returns `0`, `-1` when there is no such slot / no fight, or `-2` with text.
+/// §158: `Effect` is a comma-separated list of atoms, and the run-only atoms (`max_hp`,
+/// `potion_fill`) work **outside** a fight -- the wiki lets you drink Fruit Juice and Entropic Brew
+/// in most rooms.
+///
+/// Returns `0`, `-1` when there is no such slot, or `-2` with text.
 #[no_mangle]
 pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
     if slot < 0 {
@@ -1181,16 +1195,43 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
         return refuse(&std::format!("药水 `{id}` 不在内容的 `POT` 表里"));
     };
 
+    let amount = i32::from(potion.amount);
+    // §158: `Effect` is a **comma-separated list of atoms**. Two kinds of atom are about the run
+    // (`max_hp`, `potion_fill`) and need no fight; every other atom does. An effect that mixes the
+    // two is refused rather than ordered by accident -- no content does it, and inventing an order
+    // would be inventing a rule.
+    let mut fight_atoms = 0usize;
+    let mut run_atoms = 0usize;
+    for atom in potion.effect.split(',') {
+        if atom_needs_a_fight(atom) {
+            fight_atoms += 1;
+        } else {
+            run_atoms += 1;
+        }
+    }
+    if fight_atoms > 0 && run_atoms > 0 {
+        return refuse("药水效果同时包含运行层原子与战斗层原子：执行顺序没有出处，所以拒绝");
+    }
+    if run_atoms > 0 {
+        return match use_run_atoms(slot, potion.effect, amount) {
+            Err(message) => refuse(&message),
+            // `potion_fill` takes the bottle off the belt itself: it has to free its own slot
+            // before it can fill anything, so "consume only after it worked" cannot apply.
+            Ok(true) => 0,
+            Ok(false) => consume_used_potion(slot),
+        };
+    }
+
     let Some(session) = crate::slot().as_mut() else {
-        return refuse("不在战斗里 —— 药水的效果只能作用于一场战斗");
+        return refuse("不在战斗里 —— 这瓶药水的效果只能作用于一场战斗");
     };
     // §142: a potion is an action too, so the animation log describes it alone.
     session.state.clear_beats();
     let Some(hero) = session.hero_id() else {
         return refuse("战斗里找不到英雄");
     };
-    let amount = i32::from(potion.amount);
-    match potion.effect {
+    for atom in potion.effect.split(',') {
+        match atom {
         "combat_block" => {
             let Ok(key) = rd_core::state::DefensivePoolId::new("standard.block") else {
                 return refuse("`standard.block` 不是合法的防守池 id");
@@ -1407,6 +1448,7 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
             }
         }
         other => return refuse(&std::format!("未知的药水效果 `{other}`")),
+        }
     }
 
     // The observation is a **cached snapshot** (Session::publish), and a potion does not go through
@@ -1414,6 +1456,24 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
     session.reobserve_after_external_change();
 
     // Consumed only after it worked: a refusal must not eat the potion.
+    consume_used_potion(slot)
+}
+
+/// Is this potion atom about a **fight**? (§158)
+///
+/// `max_hp` (Fruit Juice) and `potion_fill` (Entropic Brew) are the two the wiki lets you use
+/// outside combat, and before §158 the "no fight" check at the top of [`rd_env_use_potion`] refused
+/// both -- the potion was in the vocabulary but only half-reachable.
+fn atom_needs_a_fight(atom: &str) -> bool {
+    let kind = match atom.split_once(':') {
+        Some((kind, _)) => kind,
+        None => atom,
+    };
+    !matches!(kind, "max_hp" | "potion_fill" | "heal")
+}
+
+/// Take the used potion off the belt: the one tail every potion shares.
+fn consume_used_potion(slot: i32) -> i32 {
     let Some(run) = run_slot().as_mut() else {
         return -1;
     };
@@ -1423,6 +1483,69 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
             let message = describe(&e);
             fail(run, &message)
         }
+    }
+}
+
+/// Apply a potion whose atoms are all about the **run** (§157/§158).
+///
+/// `Ok(false)` = the caller still has to take the bottle off the belt; `Ok(true)` = this function
+/// already did (only `potion_fill`, which must free its own slot before filling).
+fn use_run_atoms(slot: i32, effect: &str, amount: i32) -> Result<bool, std::string::String> {
+    let image = content();
+    for atom in effect.split(',') {
+        let kind = match atom.split_once(':') {
+            Some((kind, _)) => kind,
+            None => atom,
+        };
+        match kind {
+            "max_hp" => {
+                let Some(run) = run_slot().as_mut() else {
+                    return Err(std::format!("没有在进行中的一局"));
+                };
+                run.state.raise_max_health(amount);
+                refresh_fight_observation();
+            }
+            "potion_fill" => {
+                let pool = potion_pool_of(image);
+                let Some(run) = run_slot().as_mut() else {
+                    return Err(std::format!("没有在进行中的一局"));
+                };
+                // Free the slot **first**: a full belt has no room, so a brew drunk at 3/3 would
+                // otherwise "fill" nothing.
+                if let Err(e) = run.state.drop_potion(slot as usize) {
+                    return Err(std::format!("腾出药水格失败：{e:?}"));
+                }
+                // Bounded by the slot count -- every `push_potion` either fills a slot or stops the
+                // loop -- so this cannot spin even if the pool keeps returning the same id.
+                while run.state.potion_room() {
+                    let picked = match run.state.pick_potion(
+                        rd_run::streams::RunStream::Potion,
+                        &pool,
+                    ) {
+                        Ok(id) => id,
+                        Err(e) => return Err(std::format!("抽药水失败：{e:?}")),
+                    };
+                    if picked.as_str().is_empty() {
+                        break;
+                    }
+                    if run.state.push_potion(picked.as_str()).is_err() {
+                        break;
+                    }
+                }
+                refresh_fight_observation();
+                return Ok(true);
+            }
+            other => return Err(std::format!("运行层没有这个药水效果 `{other}`")),
+        }
+    }
+    Ok(false)
+}
+
+/// The page's observation is a cached snapshot; a run-layer write does not go through `rd_env_step`,
+/// so a potion drunk outside a fight still has to publish (§157/§158).
+fn refresh_fight_observation() {
+    if let Some(session) = crate::slot().as_mut() {
+        session.reobserve_after_external_change();
     }
 }
 
@@ -1710,7 +1833,8 @@ pub unsafe extern "C" fn rd_run_potion_id_into(index: i32, ptr: *mut u8) -> i32 
 }
 
 /// What belt slot `slot` does, as a small integer the page can branch on:
-/// `1` damage an enemy (needs a target), `2` block, `3` energy, `4` heal, `0` unknown, `-1` no slot.
+/// `1` needs an enemy target, `2` acts on the hero (or on the run), `3` hits every enemy,
+/// `0` unknown, `-1` no slot.
 ///
 /// It exists because **a damage potion has to ask which enemy** -- before this the page always sent
 /// "the first living one", which in a three-enemy fight is a decision the player never got to make.
@@ -1735,15 +1859,68 @@ pub extern "C" fn rd_run_potion_effect(slot: i32) -> i32 {
     // §152: `1` = needs an enemy target, `2` = acts on the hero (no target), `3` = every enemy.
     // The page arms its enemy picker on `1`; before this only "damage one" existed, so a
     // status-on-a-target potion could not be aimed at all.
-    match potion.effect {
-        "combat_damage" => 1,
-        "combat_block" | "combat_energy" | "combat_heal_percent" | "combat_draw" | "max_hp" => 2,
-        "combat_damage_all" => 3,
-        effect if effect.starts_with("combat_status_target") => 1,
-        effect if effect.starts_with("combat_status") => 2,
-        "heal" => 4,
-        _ => 0,
+    // §158: the effect is a list of atoms -- **if any atom wants a target, the whole potion does**.
+    let mut wants_target = false;
+    let mut hits_every_enemy = false;
+    for atom in potion.effect.split(',') {
+        let kind = match atom.split_once(':') {
+            Some((kind, _)) => kind,
+            None => atom,
+        };
+        if kind.starts_with("combat_status_target") || kind == "combat_damage" {
+            wants_target = true;
+        } else if kind == "combat_damage_all" {
+            hits_every_enemy = true;
+        }
+        let known = kind == "combat_damage"
+            || kind == "combat_damage_all"
+            || kind == "heal"
+            || matches!(kind, "max_hp" | "potion_fill")
+            || ["combat_block", "combat_energy", "combat_heal_percent", "combat_draw"]
+                .contains(&kind)
+            || kind.starts_with("combat_status");
+        if !known {
+            return 0;
+        }
     }
+    if wants_target {
+        1
+    } else if hits_every_enemy {
+        3
+    } else {
+        2
+    }
+}
+
+/// Can potion `slot` be used **outside** a fight? `-1` = no such slot, `0` = run-only (yes),
+/// `1` = it needs a fight.
+///
+/// §158: the page used to offer "用" only in fight mode, which made Fruit Juice and Entropic Brew
+/// reachable only mid-battle -- the two the wiki explicitly allows anywhere.
+#[no_mangle]
+pub extern "C" fn rd_run_potion_needs_fight(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    if slot < 0 {
+        return -1;
+    }
+    let Some(id) = session.state.potions().get(slot as usize) else {
+        return -1;
+    };
+    let image = content();
+    let Some(potion) = (0..image.potion_count())
+        .filter_map(|index| image.potion(index))
+        .find(|potion| potion.id == id.as_str())
+    else {
+        return -1;
+    };
+    for atom in potion.effect.split(',') {
+        if atom_needs_a_fight(atom) {
+            return 1;
+        }
+    }
+    0
 }
 
 /// Throw away belt slot `index`.
@@ -2336,27 +2513,10 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
             Ok(pool) => pool,
             Err(message) => return fail(session, &message),
         };
-        // The potion the fight may drop (`inv:§9.3`) comes from **the current act's pool**
-        // (`port-plan.md` §135): `Potions` / `Potions2` / `Potions3`. A missing pool is a content
-        // gap and says so instead of quietly falling back to act 1's list.
-        let act = session.state.act();
-        let potion_pool_name: &str = match act {
-            1 => "Potions",
-            2 => "Potions2",
-            _ => "Potions3",
-        };
-        let Some(potion_pool) = image.potion_pool(potion_pool_name) else {
-            let message =
-                std::format!("内容里没有 `PotionTables.{potion_pool_name}` 池（第 {act} 幕）");
-            return fail(session, &message);
-        };
-        let mut potion_ids = std::vec::Vec::new();
-        for id in potion_pool.iter() {
-            if !id.is_empty() {
-                potion_ids.push(*id);
-            }
-        }
-        let potion_ids = potion_pool_of(image, &potion_ids);
+        // The potion the fight may drop (`inv:§9.3`) comes from **the whole `POT` table**
+        // (§158): the per-act `PotionTables` split had no wiki source and `MAX_POOL_IDS` would
+        // have truncated it anyway.
+        let potion_ids = potion_pool_of(image);
         // §155: an elite (or boss) also pays a relic. `relic_pool` is the content's whole relic table;
         // `roll_reward` filters out the ones the player already holds (the same rule the chest and the
         // shop use), so a fight can never hand out a duplicate.
@@ -2970,6 +3130,98 @@ mod tests {
             "Swift Potion draws 3"
         );
         assert_eq!(rd_run_potion_count(), 0, "every potion was consumed");
+    }
+
+    /// §158: Flex Potion is **two atoms in one bottle** -- `+5 Strength` now, and `-5 Strength` at
+    /// the end of the turn. The potion row has one `Effect` cell, so this is what the comma list is
+    /// for; the second half has to be a status that *removes itself*, or the hero keeps the +5 and
+    /// the potion is simply better than the wiki's.
+    #[test]
+    fn flex_potion_gives_strength_and_takes_it_back() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+
+        assert_eq!(drink("flex_potion", -1), 0, "flex potion");
+        assert_eq!(hero_status("standard.strength"), 5, "+5 Strength right now");
+        assert_eq!(
+            hero_status("standard.lose_strength"),
+            5,
+            "and a 5-point debt that the turn end has to settle"
+        );
+
+        let end = rd_env_action_index_of_end_turn();
+        assert!(end >= 0, "the hero can end the turn");
+        assert_eq!(rd_env_step(end), 0, "end the turn");
+
+        // 0 here means **absent** (`modifyStatusStacks` to zero removes the instance), which is
+        // exactly what "gave it back" looks like on this ABI.
+        assert_eq!(hero_status("standard.strength"), 0, "the Strength went back");
+        assert_eq!(
+            hero_status("standard.lose_strength"),
+            0,
+            "the debt removed itself instead of charging the same 5 every turn"
+        );
+    }
+
+    /// §158: Entropic Brew fills the empty slots -- and it has to **free its own first**.
+    ///
+    /// The belt is three slots, so a brew drunk at 3/3 that filled before consuming would find no
+    /// room and leave the player with two potions where they started with three. The assertion is
+    /// therefore "3 before, 3 after", which cannot pass by accident.
+    #[test]
+    fn entropic_brew_fills_the_belt_after_freeing_its_own_slot() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        {
+            let session = run_slot().as_mut().expect("session");
+            for potion in ["entropic_brew", "fire_potion", "block_potion"] {
+                session.state.push_potion(potion).expect("belt room");
+            }
+        }
+        assert_eq!(rd_run_potion_count(), 3, "the belt is full");
+        assert_eq!(rd_run_potion_needs_fight(0), 0, "a brew does not need a fight");
+
+        assert_eq!(rd_env_use_potion(0, -1), 0, "drink the brew");
+        assert_eq!(
+            rd_run_potion_count(),
+            3,
+            "the brew freed its slot and the refill used it"
+        );
+        let session = run_slot().as_ref().expect("session");
+        for id in session.state.potions() {
+            assert!(!id.as_str().is_empty(), "a refill produced an empty id");
+        }
+    }
+
+    /// §158: Fruit Juice is the one potion that is about the **run**, and the wiki lets you drink it
+    /// in most rooms -- so it must work with no fight running. Before this the "not in a fight"
+    /// check came first and refused it, which made the potion reachable only mid-battle.
+    #[test]
+    fn fruit_juice_works_outside_a_fight() {
+        reset(7);
+        {
+            let session = run_slot().as_mut().expect("session");
+            session.state.push_potion("fruit_juice").expect("belt room");
+        }
+        let (max_before, hp_before) = {
+            let session = run_slot().as_ref().expect("session");
+            (session.state.health_max(), session.state.health())
+        };
+        assert_eq!(rd_run_potion_needs_fight(0), 0, "it is a run-layer potion");
+        assert_eq!(
+            rd_env_use_potion(0, -1),
+            0,
+            "Fruit Juice must work with no fight running"
+        );
+        let session = run_slot().as_ref().expect("session");
+        assert_eq!(session.state.health_max(), max_before + 5, "+5 Max HP");
+        assert_eq!(
+            session.state.health(),
+            (hp_before + 5).min(max_before + 5),
+            "and the same amount of health, capped at the new maximum"
+        );
+        assert_eq!(rd_run_potion_count(), 0, "the bottle was consumed");
     }
 
     /// Put `potion` in the belt and drink it at `target`. The belt has **three** slots, so a test
