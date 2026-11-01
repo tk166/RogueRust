@@ -26,11 +26,15 @@
 // what `index.html` assumes.
 
 import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
 const WASM = new URL("./rd_wasm.wasm", import.meta.url);
+/// The repo root, spelled once: the content image and its `build.json` live under it.
+const root = fileURLToPath(new URL("../", import.meta.url));
 const fail = (message) => { console.error("SMOKE FAIL: " + message); process.exit(1); };
 
 const COPY_HINT =
@@ -106,6 +110,7 @@ const REQUIRED = [
   "rd_run_archive_fill", "rd_run_archive_buf", "rd_run_archive_capacity", "rd_run_restore_from",
   // §163: the replay script (dump + replay + the two evidence readers). Used by the kernel's
   // replay test today; a page-level "replay" button is the next step.
+  "rd_content_fingerprint",
   "rd_run_script_len", "rd_run_script_into", "rd_run_script_fill",
   "rd_run_script_buf", "rd_run_script_capacity", "rd_run_replay_from",
   "rd_run_replay_checked", "rd_run_replay_diverged",
@@ -324,6 +329,25 @@ console.log(`  enemies           ${names.map((n, i) => `${n} (${intents[i]})`).j
 console.log(`  round 1 preview   ${previewed} damage, and the fact matched it`);
 console.log(`  steps to victory  ${steps}`);
 console.log(`  CombatState       ${ex.rd_env_bench_sizes(0)} B (this build)`);
+// §166: the content fingerprint the module reports must be the first 4 bytes of the image's sha256 --
+// the same number `build.json` publishes. This is what makes "the wasm was built against the image in
+// this tree" checkable instead of assumed: a stale `content.sts.rdcf` changes the pin and fails here.
+const build = JSON.parse(readFileSync(join(root, "tools/contentc/packages/sts/out/build.json"), "utf8"));
+const publishedSha = build.images.full.sha256;
+const pin = ex.rd_content_fingerprint() >>> 0;
+const pinHex = pin.toString(16).padStart(8, "0");
+if (pinHex !== publishedSha.slice(0, 8)) {
+  fail(
+    `the module's content pin ${pinHex} is not the image's sha256 prefix ${publishedSha.slice(0, 8)} ` +
+      `-- the wasm was built against a different content.sts.rdcf`
+  );
+}
+// …and the image on disk is that same file, not just the same declaration.
+if (sha(readFileSync(join(root, "tools/contentc/packages/sts/out/content.sts.rdcf"))).toString("hex") !== publishedSha) {
+  fail("content.sts.rdcf does not hash to build.json's images.full.sha256 (rebuild the package)");
+}
+
+console.log(`  content pin       ${pinHex} (sha256(image)[0..4], matches build.json)`);
 console.log(`  artifact          byte-identical to kernel/target/…/rd_wasm.wasm, sha256 ${sha(bytes).slice(0, 12)}…`);
 console.log(`  page              ${1 + sources.size} scripts parsed, ${called.size} exports cross-checked, ` +
             `layout from ${layoutFile[0]}, offsets tile to ${PAGE_PILES + 5}/${OBS_LEN}`);

@@ -470,6 +470,20 @@ const report = await evaluate(`(async () => {
   await sleep(0);
   out.scriptEmptyNote = text(document.getElementById("scriptNote"));
 
+  // 166: a script from **another content build** must be refused before step 1, and the page must show
+  // both fingerprints. The pin lives in the head's 5th field of RDR1,S,seed,asc,pin.
+  out.contentPin = text(document.getElementById("contentPin"));
+  const headParts = script.split(";")[0].split(",");
+  out.scriptPin = headParts[4];
+  const otherContent = script.split(";");
+  otherContent[0] = [headParts[0], headParts[1], headParts[2], headParts[3], "deadbeef"].join(",");
+  document.getElementById("scriptBox").value = otherContent.join(";");
+  document.getElementById("scriptReplay").onclick();
+  await sleep(0);
+  out.contentMismatchNote = text(document.getElementById("scriptNote"));
+  out.contentMismatchChecked = ex.rd_run_replay_checked();
+  out.contentMismatchSeed = ex.rd_run_seed();
+
   // Put the run **back** on the recorded path: the tampered replay stopped at step 2, so the archive
   // below would otherwise be taken from an earlier floor.
   document.getElementById("scriptBox").value = script;
@@ -734,6 +748,22 @@ want(/第 2 步/.test(report.scriptTamperNote || ""),
   `the page did not name the diverging step: ${JSON.stringify(report.scriptTamperNote)}`);
 want(/框是空的/.test(report.scriptEmptyNote || ""),
   `an empty script was not refused: ${JSON.stringify(report.scriptEmptyNote)}`);
+// 166: the content fingerprint is on the page, in the script head, and a foreign build is refused
+// **before** any step runs (a script that diverges at step 5 also returns non-zero -- and by then the
+// run has already been changed).
+want(/^内容 [0-9a-f]{8}$/.test(report.contentPin || ""),
+  `the page's content pin reads ${JSON.stringify(report.contentPin)}`);
+want(report.scriptPin === report.contentPin.replace("内容 ", ""),
+  `the script head's pin ${JSON.stringify(report.scriptPin)} is not the page's ` +
+  JSON.stringify(report.contentPin));
+want(/内容版本不同/.test(report.contentMismatchNote || ""),
+  `a foreign content was not refused: ${JSON.stringify(report.contentMismatchNote)}`);
+want((report.contentMismatchNote || "").indexOf("deadbeef") >= 0 &&
+  (report.contentMismatchNote || "").indexOf(report.scriptPin) >= 0,
+  "the refusal did not name both content builds: " + JSON.stringify(report.contentMismatchNote));
+want(report.contentMismatchChecked === 0,
+  `${report.contentMismatchChecked} step(s) were applied before the content was checked`);
+
 // …and a **restored** run's script starts at its archive. This is the half that keeps a restore from
 // silently poisoning the journal: the restored state is not on the "played from the start" timeline.
 want(report.scriptArchiveHead === true,
@@ -979,6 +1009,8 @@ console.log("  pointer           seed " + JSON.stringify(report.pointer.typed) +
 console.log("  script            " + report.scriptHead + "… head, " + report.scriptSteps +
   " step(s) · archive head " + report.scriptArchiveHead + " · verified " + report.scriptChecked +
   " · tampered step " + report.scriptTamperDiverged + " (checked " + report.scriptTamperChecked + ")");
+console.log("  content           " + report.contentPin + " (head " + report.scriptPin +
+  ") · foreign build refused with " + report.contentMismatchChecked + " step(s) applied");
 console.log("  attack potion     " + report.apTitle + " · " + report.apOptions +
   " option(s) · hand +1 " + report.apHandGrew + " · free shown " + report.apFreeShown);
 console.log("  liquid memories   " + report.lmTitle + " · " + report.lmFreeShown +

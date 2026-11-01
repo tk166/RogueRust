@@ -158,6 +158,33 @@ fn rec_kind_from_name(name: &str) -> Option<u8> {
 }
 
 /// `run_hash` 的前 8 字节 —— 逐步比对用。整条 64 字符的十六进制只留在错误信息里。
+/// §166：本机**内容**的指纹（`sha256(镜像)` 的前 4 字节）。
+///
+/// 只算一次：镜像 38 KB，每次进战斗重算一遍是白烧 CPU，而它在一个进程里是常量。
+/// `OnceLock` 而不是 `static mut`：这里真的可能被两个导出在"同一轮"里问到（页面先读指纹、
+/// 再回放），而缓存一个常量不需要任何守卫之外的东西。
+pub fn content_fingerprint() -> i32 {
+    static PIN: std::sync::OnceLock<i32> = std::sync::OnceLock::new();
+    *PIN.get_or_init(|| {
+        let digest = rd_core::hash::sha256(crate::IMAGE);
+        i32::from_be_bytes([digest[0], digest[1], digest[2], digest[3]])
+    })
+}
+
+/// The content fingerprint as 8 lowercase hex digits — the form the page prints and the script
+/// carries. One spelling of the format, used by the export, the error message and the page.
+pub fn content_pin_text() -> std::string::String {
+    std::format!("{:08x}", content_fingerprint() as u32)
+}
+
+/// `§166`: 本机内容的指纹（八位十六进制，读作 u32）。
+///
+/// 页面用它做两件事：在导出脚本时把"这份脚本属于哪份内容"说出来；在回档/回放被拒时对照两边的值。
+#[no_mangle]
+pub extern "C" fn rd_content_fingerprint() -> i32 {
+    content_fingerprint()
+}
+
 fn hash_prefix(state: &rd_run::state::RunState) -> Option<u64> {
     let digest = rd_run::hash::run_hash(state)?;
     Some(u64::from_be_bytes([
@@ -586,7 +613,7 @@ pub extern "C" fn rd_run_start(seed: i32, ascension: i32) -> i32 {
         boss_fight: false,
         in_fight: false,
         journal: Vec::new(),
-        head: std::format!("RDR1,S,{},{}", seed, ascension),
+        head: std::format!("RDR1,S,{},{},{}", seed, ascension, content_pin_text()),
         replaying: false,
         replay_checked: 0,
         replay_diverged: 0,
@@ -2439,7 +2466,7 @@ pub extern "C" fn rd_run_archive_fill() -> i32 {
     // it and a longer payload is `ArchiveError::TooLong`.
     #[allow(static_mut_refs)]
     let buffer = unsafe { &mut *std::ptr::addr_of_mut!(crate::ARCHIVE) };
-    match rd_run::state::archive::write(&session.state, buffer) {
+    match rd_run::state::archive::write(&session.state, content_fingerprint(), buffer) {
         Ok(len) => len as i32,
         Err(error) => {
             set_error(&std::format!("存档写不出来：{error}"));
@@ -2479,15 +2506,26 @@ pub unsafe extern "C" fn rd_run_restore_from(ptr: *const u8, len: i32) -> i32 {
         return -2;
     }
     let mut restored = *session.state;
-    match rd_run::state::archive::restore(text, &mut restored) {
+    match rd_run::state::archive::restore(text, content_fingerprint(), &mut restored) {
         Ok(()) => {
             *session.state = restored;
             session.error.clear();
             // ⚠️ 回档 = **这条时间线的起点**：日志里记的是"这一局之前做过的动作"，而恢复出来的状态
             // 不是那些动作的结果。留着它，导出的脚本第一行就和局面矛盾（回放第一步就分叉）。
             session.journal.clear();
+            // `A` 形态的内容指纹在**档案自己**里（一份当两份存就一定会漂）。所以头部只带档案。
             session.head = std::format!("RDR1,A,{text}");
             0
+        }
+        Err(rd_run::state::archive::ArchiveError::ContentMismatch { archive, build }) => {
+            // §166：这条错误要说人话 —— 玩家看到的是"这份档案是另一份内容里的一局"，
+            // 而不是把两个十六进制数丢给他猜。
+            set_error(&std::format!(
+                "回档被拒：这份档案是另一份内容里的一局（档案 {:08x}，本机 {}）· id 未必还对得上，重新导出",
+                archive as u32,
+                content_pin_text()
+            ));
+            return -2;
         }
         Err(error) => {
             set_error(&std::format!("回档被拒：{error}"));
@@ -3225,6 +3263,9 @@ fn replay_fight(session: &mut RunSession, hero_hp: i32, flags: i32) -> i32 {
 /// `ptr` must point at `len` readable bytes.
 #[no_mangle]
 pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
+    // ⚠️ 先把两个读数清零，否则**拒绝路径**（解析失败、内容不同）会留下上一次回放的
+    // "13 步全部对上"，页面于是一边报错一边显示绿灯 —— 度量报陈旧数字。
+    session_clear_replay(0, 0);
     if ptr.is_null() || len <= 0 {
         return -2;
     }
@@ -3246,7 +3287,18 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
     // 第二种存在的理由是：**回档之后接着打的步，只有档案能说明它的起点**。
     let parts: std::vec::Vec<&str> = fields.split(',').collect();
     match parts.first().copied() {
-        Some("S") if parts.len() == 3 => {
+        Some("S") if parts.len() == 4 => {
+            // §166：**先问内容，再问别的**。这一步在第一条记录之前，所以内容不同的脚本连一步都
+            // 不会被应用 —— 而不是走到一半以"第 N 步分叉"或 `UnknownCard` 的形式暴露。
+            let pin = u32::from_str_radix(parts[3], 16).unwrap_or(0);
+            if pin != content_fingerprint() as u32 {
+                set_error(&std::format!(
+                    "内容版本不同（脚本 {:08x}，本机 {}）· 这份脚本是用另一份内容编的，重新导出再回放",
+                    pin,
+                    content_pin_text()
+                ));
+                return -2;
+            }
             let (Ok(seed), Ok(ascension)) = (parts[1].parse::<i32>(), parts[2].parse::<i32>()) else {
                 set_error("回放脚本的 seed/asc 不是整数");
                 return -2;
@@ -3267,7 +3319,7 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
             }
         }
         _ => {
-            set_error("回放脚本的头部应当是 RDR1,S,seed,asc 或 RDR1,A,<档案>");
+            set_error("回放脚本的头部应当是 RDR1,S,seed,asc,内容 或 RDR1,A,<档案>");
             return -2;
         }
     }
@@ -3579,7 +3631,12 @@ mod tests {
             boss_fight: false,
         in_fight: false,
         journal: Vec::new(),
-        head: std::format!("RDR1,S,{},{}", state.seed(), state.ascension()),
+        head: std::format!(
+            "RDR1,S,{},{},{}",
+            state.seed(),
+            state.ascension(),
+            content_pin_text()
+        ),
         replaying: false,
         replay_checked: 0,
         replay_diverged: 0,
@@ -4253,7 +4310,12 @@ mod tests {
             unsafe { rd_run_script_into(buffer.as_mut_ptr()) };
             String::from_utf8(buffer).expect("ascii")
         };
-        assert!(script.starts_with("RDR1,S,7,0;"), "head: {}", &script[..20.min(script.len())]);
+        // §166: 头部带**内容指纹**（`sha256(镜像)` 的前 4 字节，与 `build.json` 的镜像 sha 同源）。
+        assert!(
+            script.starts_with("RDR1,S,7,0,"),
+            "head: {}",
+            &script[..24.min(script.len())]
+        );
 
         // (1) 重放：每一步都必须对上。
         assert_eq!(
@@ -4290,6 +4352,32 @@ mod tests {
             run_error_text()
         );
 
+        // (3b) §166: **内容不同** ⇒ 在第一步之前拒，并且说出两边的值。
+        //      判据是"一步都没应用"（`replay_checked == 0`），而不是"返回了非零" —— 一个走到
+        //      第 5 步才分叉的脚本也会返回非零，可那时候局面已经被改了一半。
+        let other_content = {
+            let mut parts: std::vec::Vec<&str> = head_fields(&script);
+            parts[3] = "deadbeef";
+            std::format!(
+                "RDR1,{};{}",
+                parts.join(","),
+                script.split_once(';').expect("head").1
+            )
+        };
+        assert_eq!(
+            unsafe {
+                rd_run_replay_from(other_content.as_ptr(), other_content.len() as i32)
+            },
+            -2,
+            "another content build must be refused before step 1"
+        );
+        assert_eq!(rd_run_replay_checked(), 0, "no step may be applied");
+        let message = run_error_text();
+        assert!(
+            message.contains("deadbeef") && message.contains(&super::content_pin_text()),
+            "the refusal must name both builds: {message}"
+        );
+
         // (4) 垃圾一律拒，且不留下半局。
         assert_eq!(
             unsafe { rd_run_replay_from(b"hello".as_ptr(), 5) },
@@ -4297,10 +4385,12 @@ mod tests {
             "a script without a head is refused"
         );
         assert_eq!(
-            // 头部合法、**第 1 步**的种类不认识 ⇒ 报第 1 步（不是"头部坏了"）。
-            unsafe {
-                let bad = b"RDR1,S,7,0;nonsense,1,2,3,;";
-                rd_run_replay_from(bad.as_ptr(), bad.len() as i32)
+            // 头部合法（含**对的**内容指纹）、**第 1 步**的种类不认识 ⇒ 报第 1 步，不是"头部坏了"。
+            // 头部错在这里拼成常量：`{:08x}` 只有一处拼写（`content_pin_text`），测试跟着它走。
+            {
+                let head = std::format!("RDR1,S,7,0,{};", super::content_pin_text());
+                let bad = std::format!("{head}nonsense,1,2,3,;");
+                unsafe { rd_run_replay_from(bad.as_ptr(), bad.len() as i32) }
             },
             1,
             "an unknown kind is reported as step 1"
@@ -4509,6 +4599,19 @@ mod tests {
             out.push(';');
         }
         out
+    }
+
+    /// 头部按 `,` 切成字段，**去掉 `RDR1,` 前缀** —— 于是下标与 `rd_run_replay_from` 里的一致
+    /// （`[S, seed, asc, pin]`），而不是差一个。
+    fn head_fields(script: &str) -> std::vec::Vec<&str> {
+        script
+            .split_once(';')
+            .expect("a head")
+            .0
+            .strip_prefix("RDR1,")
+            .expect("the RDR1 head")
+            .split(',')
+            .collect()
     }
 
     /// 把第 `n`（0 基）条记录的哈希换成垃圾，其余原样。

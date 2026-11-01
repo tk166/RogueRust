@@ -2150,6 +2150,12 @@ function measure() {
   const setScript = (text) => {
     document.getElementById("scriptBox").value = text;
   };
+  // §166：本机内容的指纹。`u32` 从 ABI 出来是**有符号**的 i32，所以 `>>> 0` 之后再补零 —— 少了这一步
+  // 一个以 `f…` 开头的指纹会显示成负数。
+  const pinHex = (value) => (value >>> 0).toString(16).padStart(8, "0");
+  const contentPin = pinHex(ex.rd_content_fingerprint());
+  // 一个元素一个写者：`#contentPin` 只在这里写一次。
+  document.getElementById("contentPin").textContent = "内容 " + contentPin;
   const scriptSay = (html) => {
     document.getElementById("scriptNote").innerHTML = html;
   };
@@ -2176,7 +2182,7 @@ function measure() {
     setScript(text);
     // 步数 = 分号个数 - 1（头部那一段不算），给玩家一个"这局记了多少动作"的直观数字。
     const steps = text.split(";").filter((part) => part.length > 0).length - 1;
-    scriptSay(`<span class="good">已导出 · ${steps} 步 · ${text.length} 个字符</span>` +
+    scriptSay(`<span class="good">已导出 · ${steps} 步 · ${text.length} 个字符 · 内容 ${contentPin}</span>` +
       ` <span class="dim">改掉其中一步的哈希再点"回放"，它会指出是哪一步</span>`);
   };
   document.getElementById("scriptReplay").onclick = () => {
@@ -2252,6 +2258,8 @@ function measure() {
     <button class="act" id="scriptExport">导出脚本</button>
     <button class="act" id="scriptReplay">回放</button>
     <span class="note" id="scriptNote">导出这一局的脚本，改掉任何一步再回放，它会指出是哪一步</span>
+    <!-- §166：内容指纹。脚本的头部也带着它，所以"这份脚本属于哪份内容"两处对得上。 -->
+    <span class="note" id="contentPin">内容 …</span>
   </div>
   <textarea id="scriptBox" rows="3" spellcheck="false"
             placeholder="RDR1,S,seed,asc;step,0,-1,0123456789abcdef,;…"></textarea>

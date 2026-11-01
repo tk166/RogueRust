@@ -25,8 +25,10 @@
 //!   战斗进行中调 [`write`] 是允许的（它只看运行层），但 `rd-wasm` 的 `rd_run_archive_*` 在战斗里
 //!   **拒绝**并说明原因：一个把战斗丢掉、只回到"进了这个节点"的存档，会让玩家以为自己在打同一场
 //!   仗，而敌人其实满血。**那比没有存档更糟。**
-//! * **内容版本**。存档里只有 id：id 变了就是"这张牌不存在"，在进战斗时响亮报错（`UnknownCard`），
-//!   而不是在回档时假装成功。
+//! * **内容版本**（§166，这一条**改过**）。原来写的是"存档里只有 id：id 变了就是这张牌不存在，
+//!   在进战斗时响亮报错"。那句话对了一半：`UnknownCard` 确实响亮，但它**迟到**，而且只覆盖
+//!   "id 消失了"这一种变化 —— id 还在、数值变了的情况会安静地变成另一局游戏。
+//!   所以现在 payload 里带一个**内容指纹**，回档时先比对：不同就**在这里**拒绝，并且说出两边的值。
 
 use crate::map::{MapNode, MapRow, NodeKind, RunMap, MAX_OUT_EDGES, NODES_PER_ROW, ROWS};
 use super::RunId;
@@ -38,8 +40,8 @@ use crate::streams::{RunRng, RunStream};
 
 /// 头部的定界串。改格式就改它（`RDA2`），旧存档于是**响亮**地不认识。
 pub const MAGIC: &str = "RDA1";
-/// payload 的版本号（在 CRC 覆盖范围内）。
-const VERSION: u8 = 1;
+/// payload 的版本号（在 CRC 覆盖范围内）。§166：2 = 带内容指纹。
+const VERSION: u8 = 2;
 /// payload 缓冲。实测一局约 300–900 B；4 KB 是"内容翻倍也不会撞上"的余量。
 pub const MAX_PAYLOAD: usize = 4096;
 /// 一行文本的缓冲：base64 是 4/3，RLE 最坏 2×（每个字节都是 0xFF 时）。
@@ -60,6 +62,11 @@ pub enum ArchiveError {
     BadCrc,
     /// 版本号不认识。
     BadVersion,
+    /// §166：这份存档是用**另一份内容**编的。
+    ///
+    /// 单独一类而不是 `BadField`：字节没坏、CRC 也对，坏的是"这份存档在讲另一个游戏"。
+    /// 两个值都留着，因为"内容不同"这句话不带数字就是让人去猜。
+    ContentMismatch { archive: i32, build: i32 },
     /// 字段形状不对（长度越界、枚举不认识、id 非法）。名字指出是哪一格。
     BadField(&'static str),
     /// payload 读完了还有剩余字节 —— 这不是这个版本的产物。
@@ -80,6 +87,11 @@ impl core::fmt::Display for ArchiveError {
             Self::TooLong => f.write_str("archive does not fit its buffer"),
             Self::BadCrc => f.write_str("archive checksum mismatch (edited or truncated?)"),
             Self::BadVersion => f.write_str("archive version is not supported"),
+            Self::ContentMismatch { archive, build } => write!(
+                f,
+                "archive is from another content build (archive {:08x}, this build {:08x})",
+                *archive as u32, *build as u32
+            ),
             Self::BadField(what) => write!(f, "archive field {what} is not valid"),
             Self::Trailing => f.write_str("archive has trailing bytes"),
             Self::Invariant(what) => write!(f, "archive state is inconsistent: {what}"),
@@ -478,10 +490,14 @@ fn read_offers(reader: &mut Reader<'_>, out: &mut [Offer]) -> Result<u8, Archive
 }
 
 /// 把一局写进 `payload`（不含信封）。返回 payload 长度。
-fn write_payload(state: &RunState, payload: &mut [u8]) -> Result<usize, ArchiveError> {
+///
+/// `content` 是**内容指纹**（调用方算，这一层不认识内容）：它进 payload、被 CRC 覆盖，
+/// 于是"这份存档属于哪份内容"与字节完整性一起被校验。
+fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<usize, ArchiveError> {
     let mut writer = Writer { buf: payload, len: 0 };
 
     writer.byte(VERSION)?;
+    writer.int(content)?;
     writer.int(state.seed)?;
     writer.byte(state.ascension)?;
     writer.int(state.floor)?;
@@ -574,10 +590,18 @@ fn write_payload(state: &RunState, payload: &mut [u8]) -> Result<usize, ArchiveE
 }
 
 /// 从 `payload` 还原一局。**全有或全无**。
-fn read_payload(payload: &[u8]) -> Result<RunState, ArchiveError> {
+fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, ArchiveError> {
     let mut reader = Reader { buf: payload, at: 0 };
     if reader.byte()? != VERSION {
         return Err(ArchiveError::BadVersion);
+    }
+    // §166：先问"这是不是同一份内容"，再问别的 —— 后面的每个 id 都只有在这一点成立时才有意义。
+    let content = reader.int()?;
+    if content != expected_content {
+        return Err(ArchiveError::ContentMismatch {
+            archive: content,
+            build: expected_content,
+        });
     }
     let seed = reader.int()?;
     let ascension = reader.byte()?;
@@ -748,9 +772,12 @@ fn read_payload(payload: &[u8]) -> Result<RunState, ArchiveError> {
 // =============================================================================================
 
 /// 写一局成**一行**文本，返回写进 `out` 的字节数。
-pub fn write(state: &RunState, out: &mut [u8]) -> Result<usize, ArchiveError> {
+///
+/// `content`：这一局是在哪份内容上打的（§166）。这一层**不认识内容** —— 它只把宿主给的指纹
+/// 写进去并被 CRC 覆盖，所以"存档属于哪份内容"和"字节没被改过"由同一个校验尾巴见证。
+pub fn write(state: &RunState, content: i32, out: &mut [u8]) -> Result<usize, ArchiveError> {
     let mut payload = [0u8; MAX_PAYLOAD];
-    let payload_len = write_payload(state, &mut payload)?;
+    let payload_len = write_payload(state, content, &mut payload)?;
 
     let mut packed = [0u8; MAX_PAYLOAD * 2];
     let packed_len = rle_encode(&payload[..payload_len], &mut packed)?;
@@ -776,7 +803,9 @@ pub fn write(state: &RunState, out: &mut [u8]) -> Result<usize, ArchiveError> {
 }
 
 /// 从一行文本还原一局。**全有或全无**：任何一步不合规都返回 `Err`，`state` 一个字节都不改。
-pub fn restore(text: &str, state: &mut RunState) -> Result<(), ArchiveError> {
+///
+/// `expected_content`：本机内容的指纹。与本存档不同 ⇒ `ContentMismatch`，**在还原之前**。
+pub fn restore(text: &str, expected_content: i32, state: &mut RunState) -> Result<(), ArchiveError> {
     let bytes = text.trim().as_bytes();
     let magic = MAGIC.as_bytes();
     if bytes.len() < magic.len() + 10 || &bytes[..magic.len()] != magic || bytes[magic.len()] != b'-' {
@@ -806,7 +835,7 @@ pub fn restore(text: &str, state: &mut RunState) -> Result<(), ArchiveError> {
     if crc32(&payload[..payload_len]) != sum {
         return Err(ArchiveError::BadCrc);
     }
-    let restored = read_payload(&payload[..payload_len])?;
+    let restored = read_payload(&payload[..payload_len], expected_content)?;
     // §162：**提交前**问一次整局的不变量。CRC 证明"没被改坏"，这一句证明"这样的一局可能存在"。
     restored.check_invariants().map_err(|error| match error {
         crate::streams::RunError::Invariant(what) => ArchiveError::Invariant(what),
@@ -819,6 +848,10 @@ pub fn restore(text: &str, state: &mut RunState) -> Result<(), ArchiveError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The fingerprint every test in this module uses unless it is *testing* the mismatch.
+    /// A literal at each site would make "which content" a matter of luck.
+    const CONTENT: i32 = 0x1234_abcd;
 
     fn sample() -> RunState {
         let deck = [
@@ -833,20 +866,51 @@ mod tests {
         run
     }
 
+    /// §166: 另一份内容编的存档，必须在**还原之前**被拒。
+    ///
+    /// 这条测试差的不是"能不能验出来"，而是**在哪一步验出来**：原来（不存内容指纹）它会在
+    /// 下一次进战斗时以 `UnknownCard` 报错 —— 迟到、而且只覆盖"id 消失了"那一种变化。
+    /// id 还在、数值变了的情况会安静地变成另一局游戏。
+    #[test]
+    fn an_archive_from_another_content_build_is_refused_before_it_touches_anything() {
+        let run = sample();
+        let mut out = [0u8; MAX_ARCHIVE];
+        let len = write(&run, CONTENT, &mut out).expect("write");
+        let text = core::str::from_utf8(&out[..len]).expect("ascii");
+
+        // A target that is **deliberately different** from `run`, so "unchanged" is observable:
+        // a refusal that already wrote half a state would leave its mark here.
+        let mut target = RunState::new_with_ascension(7, 80, 11, &["defend"], 9).expect("a skeleton");
+        let untouched = target;
+
+        assert_eq!(
+            restore(text, CONTENT ^ 0x1, &mut target),
+            Err(ArchiveError::ContentMismatch {
+                archive: CONTENT,
+                build: CONTENT ^ 0x1,
+            })
+        );
+        // 拒绝 ⇒ 一个字节都不改（判据是**整个结构体相等**，不是"没崩"）。
+        assert!(target == untouched, "a refused restore changed the run");
+
+        // 同样的字节、对的内容 ⇒ 照常通过（否则上面那条可以被"永远拒绝"满足）。
+        restore(text, CONTENT, &mut target).expect("the same content restores");
+    }
+
     #[test]
     fn a_saved_run_round_trips_byte_identically() {
         let run = sample();
         let mut first = [0u8; MAX_ARCHIVE];
-        let first_len = write(&run, &mut first).expect("write");
+        let first_len = write(&run, CONTENT, &mut first).expect("write");
         let text = core::str::from_utf8(&first[..first_len]).expect("ascii");
 
         // 同一局写两次**逐字节相同**：否则"存档"就不是一局的函数，而回放/对拍都建在这一点上。
         let mut second = [0u8; MAX_ARCHIVE];
-        let second_len = write(&run, &mut second).expect("write");
+        let second_len = write(&run, CONTENT, &mut second).expect("write");
         assert_eq!(first[..first_len], second[..second_len], "two writes differ");
 
         let mut restored = RunState::new_with_ascension(1, 80, 0, &[], 0).expect("a skeleton");
-        restore(text, &mut restored).expect("restore");
+        restore(text, CONTENT, &mut restored).expect("restore");
         // `RunState` 派生 `PartialEq`，所以判据是**整局相等** —— 漏还原一个字段就红。
         assert_eq!(restored, run, "the archive lost a field");
     }
@@ -854,7 +918,7 @@ mod tests {
     #[test]
     fn the_archive_is_one_line_with_a_head_and_a_tail() {
         let mut out = [0u8; MAX_ARCHIVE];
-        let len = write(&sample(), &mut out).expect("write");
+        let len = write(&sample(), CONTENT, &mut out).expect("write");
         let text = core::str::from_utf8(&out[..len]).expect("ascii");
         assert!(!text.contains('\n') && !text.contains('\r'), "an archive is ONE line");
         assert!(text.starts_with("RDA1-"), "head: {}", &text[..12]);
@@ -874,7 +938,7 @@ mod tests {
             run.push_card("twin_strike").expect("deck room");
         }
         let mut out = [0u8; MAX_ARCHIVE];
-        let len = write(&run, &mut out).expect("write");
+        let len = write(&run, CONTENT, &mut out).expect("write");
         std::println!("60-card archive: {len} bytes");
         assert!(
             len > 1024,
@@ -917,10 +981,10 @@ mod tests {
         assert_eq!(run.deck()[before - 2].as_str(), "bash", "the tail survivor is still last");
 
         let mut out = [0u8; MAX_ARCHIVE];
-        let len = write(&run, &mut out).expect("write");
+        let len = write(&run, CONTENT, &mut out).expect("write");
         let text = core::str::from_utf8(&out[..len]).expect("ascii");
         let mut restored = RunState::new_with_ascension(1, 80, 0, &[], 0).expect("a skeleton");
-        restore(text, &mut restored).expect("restore");
+        restore(text, CONTENT, &mut restored).expect("restore");
         assert_eq!(
             restored, run,
             "a removed card left the archive unable to round-trip (stale tail slot)"
@@ -936,11 +1000,11 @@ mod tests {
         run.health_max = 40;
         run.health = 41;
         let mut out = [0u8; MAX_ARCHIVE];
-        let len = write(&run, &mut out).expect("write");
+        let len = write(&run, CONTENT, &mut out).expect("write");
         let text = core::str::from_utf8(&out[..len]).expect("ascii");
         let mut target = sample();
         assert_eq!(
-            restore(text, &mut target),
+            restore(text, CONTENT, &mut target),
             Err(ArchiveError::Invariant("health outside 0..=max")),
             "a checksum-valid archive of an impossible state must still be refused"
         );
@@ -950,7 +1014,7 @@ mod tests {
     #[test]
     fn an_edited_or_truncated_archive_is_refused_not_guessed() {
         let mut out = [0u8; MAX_ARCHIVE];
-        let len = write(&sample(), &mut out).expect("write");
+        let len = write(&sample(), CONTENT, &mut out).expect("write");
         let text = core::str::from_utf8(&out[..len]).expect("ascii");
         let mut run = sample();
 
@@ -960,15 +1024,15 @@ mod tests {
         let byte = edited.as_bytes()[at];
         let replacement = if byte == b'A' { 'B' } else { 'A' };
         edited.replace_range(at..at + 1, &replacement.to_string());
-        assert_eq!(restore(&edited, &mut run), Err(ArchiveError::BadCrc));
+        assert_eq!(restore(&edited, CONTENT, &mut run), Err(ArchiveError::BadCrc));
 
         // 截掉尾巴 ⇒ 没有校验和。
         let cut = &text[..text.len() - 5];
-        assert_eq!(restore(cut, &mut run), Err(ArchiveError::BadTail));
+        assert_eq!(restore(cut, CONTENT, &mut run), Err(ArchiveError::BadTail));
 
         // 不是存档 ⇒ 头部就不认。
-        assert_eq!(restore("hello", &mut run), Err(ArchiveError::BadMagic));
-        assert_eq!(restore("RDA2-AAAA-badc0de0", &mut run), Err(ArchiveError::BadMagic));
+        assert_eq!(restore("hello", CONTENT, &mut run), Err(ArchiveError::BadMagic));
+        assert_eq!(restore("RDA2-AAAA-badc0de0", CONTENT, &mut run), Err(ArchiveError::BadMagic));
 
         // 被拒绝之后**一局都没变**（判据 `RunState` 相等，与 §161.2(a) 同一条）。
         assert_eq!(run, sample(), "a refused restore changed the run");
