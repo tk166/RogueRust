@@ -158,8 +158,8 @@ export async function openPage({ query = "", gate = "BROWSER_TEST", waitFor = "B
    * Returns the hit-test verdict so the caller can assert on it:
    * `{ missing, x, y, hits, coverTag }` — `hits: false` means something else is on top.
    */
-  async function clickSelector(selector, index = 0) {
-    const box = await evaluate(`(() => {
+  async function probe(selector, index = 0) {
+    return evaluate(`(() => {
       const node = document.querySelectorAll(${JSON.stringify(selector)})[${index}];
       if (!node) return null;
       node.scrollIntoView({ block: "center", inline: "center" });
@@ -172,22 +172,54 @@ export async function openPage({ query = "", gate = "BROWSER_TEST", waitFor = "B
         hits: !!top && (top === node || node.contains(top)),
         coverTag: top ? (top.id ? "#" + top.id : String(top.className || top.tagName)) : null,
       };
-    })()`);
-    if (!box) return { missing: true, selector: selector, index: index };
-    // A zero-size element has no clickable centre; say so rather than clicking (0,0).
-    if (!(box.width > 0 && box.height > 0)) {
-      return { missing: false, empty: true, selector: selector, index: index, width: box.width };
+    })()`).then((box) => (box === null ? { missing: true, selector: selector, index: index } : box));
+  }
+
+  /**
+   * Press a button with **real** pointer events, once it is actually hit-testable.
+   *
+   * `element.dispatchEvent(new MouseEvent(...))` (what every earlier scenario used) bypasses
+   * hit-testing completely: a button that a modal covers, or that is scrolled out of view, still
+   * "works". That is precisely the class of bug a page test must not be blind to.
+   *
+   * The wait matters as much as the hit test: a CSS transition leaves the box hit-testable a frame
+   * or two after `hidden` goes false, and clicking during that window looks exactly like "the button
+   * is covered" (it happened on `#modalClose`). So this polls until `hits` is true, and reports the
+   * **last** probe either way -- a genuinely covered button still comes back with `hits: false`.
+   */
+  async function clickSelector(selector, index = 0, budgetMs = 2000) {
+    let box = await probe(selector, index);
+    if (box.missing || box.empty) return box;
+    const until = Date.now() + budgetMs;
+    while (box.hits !== true && Date.now() < until) {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      box = await probe(selector, index);
+      if (box.missing || box.empty) return box;
     }
-    await send("Input.dispatchMouseEvent", {
-      type: "mouseMoved", x: box.x, y: box.y, buttons: 0,
-    });
-    await send("Input.dispatchMouseEvent", {
-      type: "mousePressed", x: box.x, y: box.y, button: "left", buttons: 1, clickCount: 1,
-    });
-    await send("Input.dispatchMouseEvent", {
-      type: "mouseReleased", x: box.x, y: box.y, button: "left", buttons: 0, clickCount: 1,
-    });
+    if (!(box.width > 0 && box.height > 0)) {
+      return { ...box, empty: true };
+    }
+    await clickAt(box.x, box.y);
     return box;
+  }
+
+  /**
+   * Press at **exactly these coordinates**, with no hit test and no waiting.
+   *
+   * The partner of `probe`: when the point of the test is that the click must land on whatever is on
+   * top (a modal swallowing a click meant for the map), waiting for the target to become hit-testable
+   * would silently turn the test into a different one.
+   */
+  async function clickAt(x, y) {
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved", x: x, y: y, buttons: 0,
+    });
+    await send("Input.dispatchMouseEvent", {
+      type: "mousePressed", x: x, y: y, button: "left", buttons: 1, clickCount: 1,
+    });
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseReleased", x: x, y: y, button: "left", buttons: 0, clickCount: 1,
+    });
   }
 
   /** §165: type into a field the way a person does — focus it with a real click, then insert text. */
@@ -227,6 +259,8 @@ export async function openPage({ query = "", gate = "BROWSER_TEST", waitFor = "B
 
   return {
     evaluate,
+    probe,
+    clickAt,
     clickSelector,
     typeInto,
     fail,

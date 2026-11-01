@@ -2154,8 +2154,13 @@ function measure() {
   // 一个以 `f…` 开头的指纹会显示成负数。
   const pinHex = (value) => (value >>> 0).toString(16).padStart(8, "0");
   const contentPin = pinHex(ex.rd_content_fingerprint());
+  // §167：先问"这份内容读得懂吗"。读不懂就说原因 —— `content()` 里那条 `panic!` 在浏览器里
+  // 是一个没有任何理由的死按钮，而这里能说出是**哪张表**、**哪个版本**。
+  const contentVerdict = ex.rd_content_check();
   // 一个元素一个写者：`#contentPin` 只在这里写一次。
-  document.getElementById("contentPin").textContent = "内容 " + contentPin;
+  document.getElementById("contentPin").innerHTML = contentVerdict === 0
+    ? "内容 " + contentPin
+    : `<span class="err">内容读不懂 · ${esc(runError())}</span>`;
   const scriptSay = (html) => {
     document.getElementById("scriptNote").innerHTML = html;
   };

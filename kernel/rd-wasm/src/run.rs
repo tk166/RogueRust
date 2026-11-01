@@ -177,6 +177,26 @@ pub fn content_pin_text() -> std::string::String {
     std::format!("{:08x}", content_fingerprint() as u32)
 }
 
+/// §167：**这份内容这个内核读得懂吗**（`0` 是懂，`-1` 是读不懂，理由在错误文本里）。
+///
+/// 与 `rd_content_fingerprint` 是两个问题，故意分成两个导出：
+///
+/// * 指纹答的是"**是不是同一份**内容"（+/- 一张牌都算不同）；
+/// * 这一个答的是"**形状**能不能读"（行 schema 版本、每张关键表的行长）。
+///
+/// 页面在启动时问一次，于是"内容读不懂"是页面上的一句话，而不是第一次点按钮时的
+/// wasm trap —— `content()` 里那条 `panic!` 在浏览器里看不出任何原因。
+#[no_mangle]
+pub extern "C" fn rd_content_check() -> i32 {
+    match Content::parse(IMAGE) {
+        Ok(_) => 0,
+        Err(error) => {
+            set_error(&std::format!("内容读不懂：{}", detail(&error)));
+            -1
+        }
+    }
+}
+
 /// `§166`: 本机内容的指纹（八位十六进制，读作 u32）。
 ///
 /// 页面用它做两件事：在导出脚本时把"这份脚本属于哪份内容"说出来；在回档/回放被拒时对照两边的值。

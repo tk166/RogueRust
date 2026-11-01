@@ -3499,7 +3499,8 @@ mod tests {
         blob[4..6].copy_from_slice(&FORMAT_VERSION.to_le_bytes());
         blob[12..16].copy_from_slice(&(HEADER as u32).to_le_bytes()); // dir_off
         blob[16..18].copy_from_slice(&(NSEC as u16).to_le_bytes());
-        blob[18..20].copy_from_slice(&7u16.to_le_bytes()); // SchemaVersion
+        // §167：`parse` 现在真的比对这一格；探针原来写 7（那时它只是"随便一个非零值"）。
+        blob[18..20].copy_from_slice(&crate::content::SUPPORTED_SCHEMA_VERSION.to_le_bytes());
 
         let sections: [(usize, Vec<u8>, u32); 10] = [
             (0, pool, strings.len() as u32),                      // STR

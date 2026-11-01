@@ -60,13 +60,37 @@ except Exception as exc:                                  # pragma: no cover
 
 # 段名 -> (manifest 顶层 tables 里的键, row_stride 用的 schema 名)
 # 用来交叉检查 "段字节数 == count × stride"。
+#
+# §167：这里原来是**五**张（漏了 EV / POT），而 `rdcfmt.ROW_SCHEMAS` 有七张、`manifest.tables`
+# 也一直写着 `events` / `potions`。于是 "5/5 tables" 是一句关于**残缺清单**的真话 ——
+# 全绿的闸门只覆盖了它自己列出来的那部分。下面的 `assert_strided_is_complete()` 让"再漏一张"
+# 变成响亮失败。
 STRIDED = {
     "CARD": ("cards", "CARD"),
     "STAT": ("statuses", "STATUS"),
     "EACT": ("enemy_actions", "EACT"),
     "ENCT": ("encounters", "ENCT"),
     "REL": ("relics", "REL"),
+    "EV": ("events", "EV"),
+    "POT": ("potions", "POT"),
 }
+
+
+def assert_strided_is_complete():
+    """清单必须与 `ROW_SCHEMAS` 一样宽 —— 数量不等就退，而不是少查几张。
+
+    只比**数量**是不够的，所以两边的名字一起打印：名字对不上时人一眼能看出来，而数量相等
+    这件事是脚本能判的。清单里多一个 `ROW_SCHEMAS` 没有的名字同样算错（`row_stride` 会 KeyError）。
+    """
+    schemas = set(ROW_SCHEMAS)
+    listed = {schema for _, schema in STRIDED.values()}
+    if len(STRIDED) != len(schemas) or listed != schemas:
+        print("!! 定长表清单与 rdcfmt.ROW_SCHEMAS 不一致：")
+        print(f"   清单 {len(STRIDED)} 张：{sorted(listed)}")
+        print(f"   格式 {len(schemas)} 张：{sorted(schemas)}")
+        print("   闸门不判通过（退出码 2）—— 少查一张表等于这条闸门从没覆盖过它。")
+        sys.exit(2)
+    print(f"   定长表 {len(STRIDED)} 张（{', '.join(sorted(listed))}）")
 
 
 def parse_directory(blob, header_bytes, n_entries):
@@ -234,6 +258,8 @@ def main(argv):
 
     failures = []
     tables = mf.get("tables")
+    if tables is not None:
+        assert_strided_is_complete()
     if not isinstance(tables, dict):
         failures.append("manifest 顶层没有 tables 段 —— 5 张定长表的 count×stride 检查无法执行"
                         "（不许静默跳过）")
@@ -261,7 +287,7 @@ def main(argv):
           f"{len(STRIDED)}/{len(STRIDED)} tables, {total_ran} count×stride checks, "
           f"{total_rows} table rows)")
     print("\n✓ 通过的结构不变量：magic 正确、段都落在文件内、段间无重叠、manifest 与磁盘字节一致、"
-          "段目录可被独立解出且与 manifest 逐字段相符、5 张定长表的段字节数恰为 行数 × stride。")
+          "段目录可被独立解出且与 manifest 逐字段相符、7 张定长表的段字节数恰为 行数 × stride。")
     print("  不在范围内的：段内编码是否正确、语义是否等价于源 JSON —— 需由编译器的 reader/validate 回答。")
     return 0
 

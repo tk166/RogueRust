@@ -97,6 +97,12 @@ const HDR_TOTAL_SIZE: usize = 8;
 const HDR_DIR_OFF: usize = 12;
 const HDR_NSEC: usize = 16;
 const HDR_SCHEMA_VERSION: usize = 18;
+/// §167：本内核认得的**行 schema** 版本（头部 offset 18）。
+///
+/// 什么时候要改它：任何一张关键表增删一格、或换掉某一格的类别。改的时候两边一起改 ——
+/// 编译器写进头部的那个数（源 JSON 的 `SchemaVersion`）与这里的这个数，否则文档在 `parse` 就被拒。
+/// 只改内容、不改形状（加一张牌、改一句描述）**不必**改它：那种变化由 §166 的内容指纹管。
+pub const SUPPORTED_SCHEMA_VERSION: u16 = 1;
 const HDR_CONTENT_HASH: usize = 20;
 
 // ===========================================================================
@@ -285,6 +291,22 @@ pub enum ContentError {
     TooSmall,
     BadMagic(u32),
     UnsupportedVersion(u16),
+    /// §167：文档声明的**行 schema 版本**（头部 offset 18）不是本内核认识的那一个。
+    ///
+    /// 与 `UnsupportedVersion` 分开：那一个是**容器**格式（怎么摆字节），这一个是**行形状**
+    /// （每张表一行几格、每格什么类别）。前者变了连段目录都读不出，后者变了段目录照样读得出，
+    /// 只有格子的含义变了 —— 而那才是静默错位的地方。
+    UnsupportedSchema { found: u16, supported: u16 },
+    /// §167：某张关键表的字节数不是"这张表已知行长"的整数倍。
+    ///
+    /// 响亮在这里，而不是在第一次 `row()` 上：`Content::rows` 用
+    /// `min(count, data.len() / stride)` 收尾，行宽变了只会**少读几行**，一句话都不说。
+    TableShape {
+        table: &'static str,
+        count: u32,
+        bytes: u32,
+        stride: u32,
+    },
     /// 目录项里的 offset/bytes 落在文件之外。
     SectionOutOfRange { index: usize },
     /// 头部声明的段数与目录区放不下。
@@ -347,9 +369,16 @@ impl core::fmt::Debug for Content<'_> {
 impl<'a> Content<'a> {
     /// 解析头部与段目录。**不校验段内语义** —— 那是 `validate` 与调用方的事。
     ///
-    /// 这里只保证"拿得到段视图"这件事成立：头在、magic/版本对、`total_size` 真的在缓冲区里
-    /// （`blob.len() >= total_size`，截断 → `TooSmall`）、目录区在声明的镜像内、
-    /// 每个目录项都落在声明的镜像内（否则 `SectionOutOfRange`）。
+    /// 这里保证的是"**这个内核读得懂这份文档**"：
+    ///
+    /// * 头在、magic 对、**容器**版本对、`total_size` 真的在缓冲区里（截断 → `TooSmall`）；
+    /// * 目录区在声明的镜像内、每个目录项都落在声明的镜像内（否则 `SectionOutOfRange`）；
+    /// * §167 **行 schema 版本**是本内核认识的那一个（否则 `UnsupportedSchema`）；
+    /// * §167 七张关键表里每一个非空段的字节数 = `count × stride`（否则 `TableShape`）。
+    ///
+    /// 后两条与"段内语义"的界线：它们只看**长度**，不看格里的值。判据是"这一行有多宽"，
+    /// 而不是"这一行写了什么"。放在 `parse` 而不是 `validate`，是因为生产路径上**没有人调**
+    /// `validate` —— 一个没人调用的检查等于一句注释。
     pub fn parse(blob: &'a [u8]) -> Result<Self, ContentError> {
         // 1. 头本身。
         if blob.len() < HEADER_BYTES {
@@ -362,6 +391,14 @@ impl<'a> Content<'a> {
         let version = u16_at(blob, HDR_VERSION).ok_or(ContentError::TooSmall)?;
         if version != FORMAT_VERSION {
             return Err(ContentError::UnsupportedVersion(version));
+        }
+        // §167：**行 schema** 版本。容器能读不代表里面的表能读 —— 见 `UnsupportedSchema`。
+        let schema = u16_at(blob, HDR_SCHEMA_VERSION).ok_or(ContentError::TooSmall)?;
+        if schema != SUPPORTED_SCHEMA_VERSION {
+            return Err(ContentError::UnsupportedSchema {
+                found: schema,
+                supported: SUPPORTED_SCHEMA_VERSION,
+            });
         }
 
         // 2. 头声明的总长必须真的在缓冲区里：短了就是被截断。
@@ -393,6 +430,33 @@ impl<'a> Content<'a> {
                 return Err(ContentError::SectionOutOfRange { index: i });
             }
             i += 1;
+        }
+
+        // 5. §167：每张关键表都必须是"已知行长"的整数倍（只看长度，不看值）。
+        for table in Table::ALL {
+            let index = table.section_id();
+            if index >= nsec {
+                continue;
+            }
+            let base = dir_off + index * DIRECTORY_ENTRY_BYTES;
+            let offset = u32_at(blob, base).ok_or(ContentError::DirectoryTruncated)? as usize;
+            let bytes = u32_at(blob, base + 4).ok_or(ContentError::DirectoryTruncated)?;
+            let count = u32_at(blob, base + 8).ok_or(ContentError::DirectoryTruncated)?;
+            let stride = table.stride();
+            // An empty section is `0, 0` and is always fine (an absent table is not a shape error).
+            if bytes == 0 && count == 0 {
+                continue;
+            }
+            // 精确相等，不是"至少装得下"：多出来的字节同样说明行宽不是我以为的那个。
+            if u64::from(bytes) != u64::from(count) * u64::from(stride) {
+                let _ = offset;
+                return Err(ContentError::TableShape {
+                    table: table.name(),
+                    count,
+                    bytes,
+                    stride,
+                });
+            }
         }
 
         Ok(Self {
@@ -725,6 +789,18 @@ impl<'a> Content<'a> {
         })
     }
 
+    /// 这份镜像里**存在**的关键表（`Table::ALL ∩ 非空段`）。
+    ///
+    /// §167：`Table::ALL` 回答的是"**这个内核**认识哪些表"，不是"**这份镜像**有哪几张" ——
+    /// `content.core.rdcf`（RogueDeck 那份）就早于 `EV`/`POT`，两张表都不存在。把两者混为一谈，
+    /// 一个 `for table in Table::ALL { content.section(...).unwrap() }` 就会在换镜像时崩，
+    /// 而崩的位置看起来像"镜像坏了"。
+    pub fn tables_present(&self) -> impl Iterator<Item = Table> + '_ {
+        Table::ALL
+            .into_iter()
+            .filter(|table| self.section(table.section_id()).is_some_and(|s| !s.is_empty()))
+    }
+
     /// 迭代表内所有行（行数取 `count` 与"字节装得下的行数"的较小者）。
     #[must_use]
     pub fn rows(&self, table: Table) -> Rows<'a> {
@@ -935,6 +1011,12 @@ impl<'a> Content<'a> {
 /// `u16 op` + 补齐），`TAGS` 在真实镜像里是空段所以按 1 字节算。
 #[must_use]
 pub const fn section_stride(index: usize) -> u32 {
+    // §167：七张关键表的行宽**只有一处定义**（`Table::stride()`，由 `entity_row!` 的格数算出）。
+    // 这份表原来手抄了一遍，而且**漏了 `EV`/`POT`**（落到 `_ => 1`）—— 于是 `validate()` 对这两张表
+    // 的 "count × stride" 恒真，`rdcf-verify` 的 "5/5 tables" 就是这么少报的。
+    if let Some(table) = Table::from_section(index) {
+        return table.stride();
+    }
     match index {
         S_STR => 1,
         S_STRO => 4,
@@ -973,13 +1055,19 @@ pub enum Table {
 }
 
 impl Table {
-    /// 全部五张表，顺序 = 段号顺序。
-    pub const ALL: [Table; 5] = [
+    /// 全部**七**张关键表，顺序 = 段号顺序。
+    ///
+    /// §167：原来是五张（漏了 `Event` 与 `Potion`）。少报不会报错 —— `for table in Table::ALL`
+    /// 只是少走两圈，于是"每张表都检查过"这句话在两张表上是假的。
+    /// 与枚举的一致性由 `every_table_is_in_all`（穷尽 `match`）钉住：加变体不加进 `ALL` 编译不过。
+    pub const ALL: [Table; 7] = [
         Table::Card,
         Table::Status,
         Table::EnemyAction,
         Table::Encounter,
         Table::Relic,
+        Table::Event,
+        Table::Potion,
     ];
 
     /// 段号（`rdcfmt.S_*`）。
@@ -1021,6 +1109,21 @@ impl Table {
             Table::Relic => "REL",
             Table::Event => "EV",
             Table::Potion => "POT",
+        }
+    }
+
+    /// 段号 → 表（`section_id` 的反函数）。非关键表返回 `None`。
+    #[must_use]
+    pub const fn from_section(index: usize) -> Option<Table> {
+        match index {
+            S_CARD => Some(Table::Card),
+            S_STAT => Some(Table::Status),
+            S_EACT => Some(Table::EnemyAction),
+            S_ENCT => Some(Table::Encounter),
+            S_REL => Some(Table::Relic),
+            S_EV => Some(Table::Event),
+            S_POT => Some(Table::Potion),
+            _ => None,
         }
     }
 
@@ -3432,7 +3535,7 @@ mod tests {
             // §156: REL gained a `Rarity` cell (5 -> 6). The 12-byte stride already had the room;
             // `align4(2 * 6) = 12` still matches, which the loop below re-checks for every table.
             assert_eq!((RelRow::STRIDE, RelRow::CELLS), (12, 6));
-            for table in Table::ALL {
+            for table in content.tables_present() {
                 assert_eq!(table.stride(), align4(2 * table.cells() as u32));
                 assert_eq!(
                     table.stride(),
@@ -3732,7 +3835,10 @@ mod tests {
     #[test]
     fn every_entity_id_resolves_to_its_own_row() {
         with_core(|content, _| {
-            let mut seen = [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+            // §167：按**实体类别**记，而不是按 `Table::ALL` 里的位置 —— 两边原来恰好同序，
+            // 于是"位置"与"类别"看起来像一回事。`ALL` 长到七张时这个假设当场崩了。
+            let mut seen = [Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(),
+                Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()];
             for i in 0..content.id_count() {
                 let entry = content.id_entry(i).unwrap();
                 let Some(table) = Table::from_entity_kind(entry.entity_kind) else {
@@ -3747,12 +3853,17 @@ mod tests {
                     .entity_id(table, entry.index as u32)
                     .unwrap_or_else(|| panic!("{}/{} 的 Id 格读不出来", entry.id, table.name()));
                 assert_eq!(row_id, entry.id, "IDX 与表里的 Id 必须一致");
-                seen[entry.entity_kind as usize - 1].push(entry.index);
+                seen[entry.entity_kind as usize].push(entry.index);
             }
 
             // 每类实体的 index 恰好把表铺满：0..count 一个不多一个不少。
-            for (i, table) in Table::ALL.into_iter().enumerate() {
-                let mut indices = seen[i].clone();
+            for table in content.tables_present() {
+                // `EV`/`POT` 没有 `IDX` 条目（`Table::from_entity_kind` 只覆盖 1..=5），所以它们
+                // 不参与"索引把表铺满"这条断言 —— 它们靠自己的列表找，不靠 `IDX`。
+                if Table::from_entity_kind(table.entity_kind()).is_none() {
+                    continue;
+                }
+                let mut indices = seen[table.entity_kind() as usize].clone();
                 indices.sort_unstable();
                 let expected: Vec<u16> = (0..content.section(table.section_id()).unwrap().count as u16)
                     .collect();
@@ -4466,22 +4577,35 @@ mod tests {
             Err(ValidationError::Misaligned { index: S_STRO })
         );
 
-        // count × stride > bytes（CARD 声明 63 行，只有 62 行的字节）。
+        // count × stride > bytes。**关键表由 `parse` 先拒**（§167），所以这里的病例走非关键表 IDX：
+        // 两条臂都要有活着的判据，否则其中一条迟早变成永远不执行的死代码。
         let mut blob = original.clone();
         patch32(&mut blob, dir_base(S_CARD) + 8, 63);
-        let content = Content::parse(&blob).unwrap();
+        assert_eq!(
+            Content::parse(&blob).err(),
+            Some(ContentError::TableShape {
+                table: "CARD",
+                count: 63,
+                bytes: 1_984,
+                stride: 32,
+            }),
+            "a key table with the wrong row count must be refused by `parse`, before `validate`"
+        );
+
+        // 非关键表（IDX，stride 8）：`parse` 不看它，`validate` 负责。
+        let mut blob = original.clone();
+        // 691 行 × 8 B = 5,528 B 正好；声明 692 行就要 5,536 B。
+        patch32(&mut blob, dir_base(S_IDX) + 8, 692);
+        let content = Content::parse(&blob).expect("IDX 不是关键表，parse 不管它的行数");
         assert_eq!(
             content.validate(),
             Err(ValidationError::CountExceedsBytes {
-                index: S_CARD,
-                count: 63,
-                stride: 32,
-                bytes: 1_984,
+                index: S_IDX,
+                count: 692,
+                stride: 8,
+                bytes: 5_528,
             })
         );
-        // 但按字节取行仍然是安全的：第 63 行拿不到。
-        assert!(content.card(62).is_none());
-        assert_eq!(content.rows(Table::Card).count(), 62);
 
         // 字符串池：STRO 不再严格递增。
         let mut blob = original.clone();
@@ -4521,6 +4645,97 @@ mod tests {
         assert_eq!(content.validate(), Ok(()));
     }
 
+    /// §167：文档声明的**行 schema 版本**不是本内核认识的那一个 ⇒ 在 `parse` 就拒。
+    #[test]
+    fn a_schema_version_this_kernel_does_not_know_is_refused() {
+        let original = read_image(CORE_IMAGE);
+
+        let mut blob = original.clone();
+        patch16(&mut blob, HDR_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION + 1);
+        assert_eq!(
+            Content::parse(&blob).err(),
+            Some(ContentError::UnsupportedSchema {
+                found: SUPPORTED_SCHEMA_VERSION + 1,
+                supported: SUPPORTED_SCHEMA_VERSION,
+            })
+        );
+
+        // 而**支持的那个**版本必须照常通过 —— 否则上面那条可以被"永远拒绝"满足。
+        assert!(Content::parse(&original).is_ok());
+    }
+
+    /// §167：关键表的字节数不是"已知行长"的整数倍 ⇒ 拒，**即使版本号一个字都没改**。
+    ///
+    /// 这一条是本节真正的判据：版本号要靠人记得改，行宽是**读得出来的**事实。
+    /// 不改它的话，`Content::rows` 的 `min(count, bytes / stride)` 会把这个文档读成 62 张牌
+    /// （而不是 63 张），一句提示都没有。
+    #[test]
+    fn a_key_table_with_the_wrong_row_count_is_refused_without_a_version_bump() {
+        let original = read_image(CORE_IMAGE);
+        // 数字**从镜像里读**，不抄：换个镜像（sts / core 的 CARD 分别是 36 / 62 行）这条测试
+        // 仍然成立，而"抄一份 count 到测试里"必然在某次内容变更后变成一句谎话。
+        let parsed = Content::parse(&original).expect("the real image");
+        let card = parsed.section(S_CARD).expect("CARD");
+        let mut blob = original.clone();
+        patch32(&mut blob, dir_base(S_CARD) + 8, card.count - 1);
+        assert_eq!(
+            Content::parse(&blob).err(),
+            Some(ContentError::TableShape {
+                table: "CARD",
+                count: card.count - 1,
+                bytes: card.bytes,
+                stride: 32,
+            })
+        );
+        // 版本号仍然是对的：这条拒绝**不是**版本号抓到的。
+        assert_eq!(
+            u16::from_le_bytes([blob[HDR_SCHEMA_VERSION], blob[HDR_SCHEMA_VERSION + 1]]),
+            SUPPORTED_SCHEMA_VERSION
+        );
+
+        // 每张关键表都要有这条保护，而不是只有 CARD：遍历 `ALL`，把每张表的 count 各加一。
+        for table in Table::ALL {
+            let Some(present) = parsed.section(table.section_id()) else {
+                continue;   // 这份镜像里没有这张表（core 镜像没有 EV/POT）
+            };
+            if present.count == 0 {
+                continue;
+            }
+            let mut blob = original.clone();
+            patch32(&mut blob, dir_base(table.section_id()) + 8, present.count + 1);
+            assert!(
+                matches!(
+                    Content::parse(&blob).err(),
+                    Some(ContentError::TableShape { table: name, .. }) if name == table.name()
+                ),
+                "{} 的行数改了一行也要被拒",
+                table.name()
+            );
+        }
+    }
+
+    /// §167：`Table::ALL` 与枚举必须同步。加一个变体不加进 `ALL`，这个 `match` 编译不过。
+    #[test]
+    fn every_table_is_in_all() {
+        for table in Table::ALL {
+            match table {
+                Table::Card
+                | Table::Status
+                | Table::EnemyAction
+                | Table::Encounter
+                | Table::Relic
+                | Table::Event
+                | Table::Potion => {}
+            }
+            assert!(Table::ALL.contains(&table));
+        }
+        assert_eq!(Table::ALL.len(), 7, "七张关键表，一张不少");
+        // 段号的往返：`from_section(section_id(t)) == t`。
+        for table in Table::ALL {
+            assert_eq!(Table::from_section(table.section_id()), Some(table));
+        }
+    }
+
     #[test]
     fn a_synthetic_minimal_image_parses() {
         // 手搓一个小镜像：目录 7 项（段号 0..6 = STR…AUX），其中 STR/STRO 是空段
@@ -4531,7 +4746,10 @@ mod tests {
         blob[HDR_VERSION..HDR_VERSION + 2].copy_from_slice(&FORMAT_VERSION.to_le_bytes());
         blob[HDR_NSEC..HDR_NSEC + 2].copy_from_slice(&(NSEC as u16).to_le_bytes());
         blob[HDR_DIR_OFF..HDR_DIR_OFF + 4].copy_from_slice(&(HEADER_BYTES as u32).to_le_bytes());
-        blob[HDR_SCHEMA_VERSION..HDR_SCHEMA_VERSION + 2].copy_from_slice(&7u16.to_le_bytes());
+        // §167：探针里原来写的是 7 —— 那时 `parse` 不查行 schema，于是它顺带证明了"内核什么版本都收"。
+        // 现在写本内核支持的那个，这条测试回到它自己的题目（目录与段视图）。
+        blob[HDR_SCHEMA_VERSION..HDR_SCHEMA_VERSION + 2]
+            .copy_from_slice(&SUPPORTED_SCHEMA_VERSION.to_le_bytes());
         let section_base = HEADER_BYTES + DIRECTORY_ENTRY_BYTES * NSEC;
         let total = (section_base + 4) as u32;
         blob[HDR_TOTAL_SIZE..HDR_TOTAL_SIZE + 4].copy_from_slice(&total.to_le_bytes());
@@ -4551,7 +4769,7 @@ mod tests {
         let content = Content::parse(&blob).expect("小镜像必须能解析");
         assert_eq!(content.section_count(), NSEC);
         assert_eq!(content.version(), FORMAT_VERSION);
-        assert_eq!(content.schema_version(), 7);
+        assert_eq!(content.schema_version(), SUPPORTED_SCHEMA_VERSION);
         assert_eq!(content.total_size(), total);
         assert_eq!(content.validate(), Ok(()));
         assert!(

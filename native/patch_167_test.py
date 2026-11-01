@@ -1,110 +1,114 @@
-"""rd-wasm §161.7: Power Potion, and the fact that its three candidates are real Powers.
+"""§167: the two new refusals, each falsifiable on its own.
 
-The test is deliberately close to §161.5's Attack Potion one, because what changed is the **pool**,
-not the mechanism: this is the check that "adding a whole potion is a content change" is true.
+The second one is the point of the whole section: the compiler only bumps `SchemaVersion` if somebody
+remembers, so the kernel must *also* check the shape it can see. That test patches only the directory
+(the row count) and leaves the declared schema version correct -- if the check were "trust the
+version number", this document would be accepted and read as 62 cards instead of 63.
 """
 import io
 
-PATH = "kernel/rd-wasm/src/run.rs"
+PATH = "kernel/rd-core/src/content.rs"
 
 ANCHOR = """    #[test]
-    fn an_attack_potion_offers_three_definitions_and_creates_only_the_chosen_card() {"""
+    fn a_synthetic_minimal_image_parses() {"""
 
-TEST = '''    /// §161.7: Power Potion -- the same mechanism, a different pool.
-    ///
-    /// The point of this test is not the mechanism (that is §161.5's) but the claim that adding a
-    /// potion of the same *shape* is a **content** change: the only new code since §161.5 is the
-    /// `+`-row filter, and the only new content is three cards plus one `POT` row.
-    ///
-    /// It also pins the two content bugs this section fixed, from the outside: a Power card is a
-    /// status that **keeps working**, so `metallicize`/`combust` must actually apply stacks that a
-    /// later turn-end reads.
+TEST = '''    /// §167：文档声明的**行 schema 版本**不是本内核认识的那一个 ⇒ 在 `parse` 就拒。
     #[test]
-    fn a_power_potion_offers_the_three_power_cards_and_they_are_real_powers() {
-        test_run(7, 80, 80, &["strike"; 10]);
-        assert_eq!(rd_run_step(0), 0, "floor 1");
-        assert_eq!(rd_run_begin_node(), 0);
-        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+    fn a_schema_version_this_kernel_does_not_know_is_refused() {
+        let original = read_image(IMAGE);
 
-        assert_eq!(drink("power_potion", -1), 0, "accepted");
-        assert_eq!(crate::rd_env_choice_pending(), 1, "it asks a question");
-        assert_eq!(crate::rd_env_choice_source(), 2, "2 = three offered definitions");
-        assert_eq!(crate::rd_env_choice_kind(), 3, "3 = take into hand");
-        assert_eq!(crate::rd_env_choice_count(), 3, "three candidates");
+        let mut blob = original.clone();
+        patch16(&mut blob, HDR_SCHEMA_VERSION, SUPPORTED_SCHEMA_VERSION + 1);
+        assert_eq!(
+            Content::parse(&blob).err(),
+            Some(ContentError::UnsupportedSchema {
+                found: SUPPORTED_SCHEMA_VERSION + 1,
+                supported: SUPPORTED_SCHEMA_VERSION,
+            })
+        );
 
-        let content = content();
-        let mut offered: Vec<String> = Vec::new();
-        for index in 0..3 {
-            let len = crate::rd_env_pile_card_id_len(3, index);
-            assert!(len > 0, "option {index} has an id");
-            let mut bytes = vec![0u8; len as usize];
-            unsafe { crate::rd_env_pile_card_id_into(3, index, bytes.as_mut_ptr()) };
-            let id = String::from_utf8_lossy(&bytes).to_string();
-            assert_eq!(
-                content.card_has_tag(&id, "power"),
-                Some(true),
-                "`{id}` is not tagged power"
+        // 而**支持的那个**版本必须照常通过 —— 否则上面那条可以被"永远拒绝"满足。
+        assert!(Content::parse(&original).is_ok());
+    }
+
+    /// §167：关键表的字节数不是"已知行长"的整数倍 ⇒ 拒，**即使版本号一个字都没改**。
+    ///
+    /// 这一条是本节真正的判据：版本号要靠人记得改，行宽是**读得出来的**事实。
+    /// 不改它的话，`Content::rows` 的 `min(count, bytes / stride)` 会把这个文档读成 62 张牌
+    /// （而不是 63 张），一句提示都没有。
+    #[test]
+    fn a_key_table_with_the_wrong_row_count_is_refused_without_a_version_bump() {
+        let original = read_image(IMAGE);
+        // 真实镜像：CARD = 36 行 × 32 B = 1,152 B。
+        let mut blob = original.clone();
+        patch32(&mut blob, dir_base(S_CARD) + 8, 35);
+        assert_eq!(
+            Content::parse(&blob).err(),
+            Some(ContentError::TableShape {
+                table: "CARD",
+                count: 35,
+                bytes: 1_152,
+                stride: 32,
+            })
+        );
+        // 版本号仍然是对的：这条拒绝**不是**版本号抓到的。
+        assert_eq!(
+            u16::from_le_bytes([blob[HDR_SCHEMA_VERSION], blob[HDR_SCHEMA_VERSION + 1]]),
+            SUPPORTED_SCHEMA_VERSION
+        );
+
+        // 每张关键表都要有这条保护，而不是只有 CARD：遍历 `ALL`，把每张表的 count 各加一。
+        for table in Table::ALL {
+            let mut blob = original.clone();
+            let section = Content::parse(&original).expect("the real image");
+            let present = section.section(table.section_id()).expect("a section");
+            if present.count == 0 {
+                continue;
+            }
+            patch32(&mut blob, dir_base(table.section_id()) + 8, present.count + 1);
+            assert!(
+                matches!(
+                    Content::parse(&blob).err(),
+                    Some(ContentError::TableShape { table: name, .. }) if name == table.name()
+                ),
+                "{} 的行数改了一行也要被拒",
+                table.name()
             );
-            // §161.7: the `+` rows are **not** offered -- a potion gives the printed card.
-            assert!(!id.ends_with('+'), "`{id}` is an upgraded row");
-            offered.push(id);
         }
-        offered.sort();
-        offered.dedup();
-        assert_eq!(
-            offered,
-            std::vec!["combust", "inflame", "metallicize"],
-            "the three power cards, and nothing else"
-        );
+    }
 
-        // Take `inflame` (2 Strength) -- the strongest, simplest assertion.
-        let index = (0..3)
-            .find(|slot| {
-                let len = crate::rd_env_pile_card_id_len(3, *slot);
-                let mut bytes = vec![0u8; len as usize];
-                unsafe { crate::rd_env_pile_card_id_into(3, *slot, bytes.as_mut_ptr()) };
-                String::from_utf8_lossy(&bytes) == "inflame"
-            })
-            .expect("inflame is on offer");
-        assert_eq!(crate::rd_env_choice_pick(index, 1), 0);
-        assert_eq!(crate::rd_env_choice_confirm(), 0, "answered");
-
-        // Play it: it must cost 0 (the potion's promise) and hand the hero 2 Strength, which is a
-        // status that outlives the card.
-        let slot_ref = crate::slot().as_ref().expect("session");
-        let hand = slot_ref
-            .hand_defs
-            .iter()
-            .position(|definition| definition == "inflame")
-            .expect("inflame is in hand");
-        assert_eq!(slot_ref.hand_costs[hand], 0, "the potion made it free");
-        drop(slot_ref);
-        let energy_before = crate::slot().as_ref().expect("session").energy_now();
-        let play = (0..crate::rd_env_action_count())
-            .find(|action| {
-                crate::rd_env_action_kind(*action) == crate::ACTION_PLAY
-                    && crate::rd_env_action_arg(*action, 0) == hand as i32
-            })
-            .expect("inflame is playable");
-        assert_eq!(rd_env_step(play), 0, "play inflame");
-        assert_eq!(
-            crate::slot().as_ref().expect("session").energy_now(),
-            energy_before,
-            "it was free"
-        );
-        assert_eq!(hero_status("standard.strength"), 2, "2 Strength, permanently");
+    /// §167：`Table::ALL` 与枚举必须同步。加一个变体不加进 `ALL`，这个 `match` 编译不过。
+    #[test]
+    fn every_table_is_in_all() {
+        for table in Table::ALL {
+            match table {
+                Table::Card
+                | Table::Status
+                | Table::EnemyAction
+                | Table::Encounter
+                | Table::Relic
+                | Table::Event
+                | Table::Potion => {}
+            }
+            assert!(Table::ALL.contains(&table));
+        }
+        assert_eq!(Table::ALL.len(), 7, "七张关键表，一张不少");
+        // 段号的往返：`from_section(section_id(t)) == t`。
+        for table in Table::ALL {
+            assert_eq!(Table::from_section(table.section_id()), Some(table));
+        }
     }
 
     #[test]
-    fn an_attack_potion_offers_three_definitions_and_creates_only_the_chosen_card() {'''
+    fn a_synthetic_minimal_image_parses() {'''
 
 
 def main():
     text = io.open(PATH, encoding="utf-8").read()
     assert text.count(ANCHOR) == 1, text.count(ANCHOR)
-    assert "fn a_power_potion_offers" not in text, "already inserted"
+    assert "fn every_table_is_in_all" not in text, "already inserted"
     io.open(PATH, "w", encoding="utf-8", newline="").write(text.replace(ANCHOR, TEST))
-    print("run.rs: power potion e2e")
+    print("schema/shape/all tests added")
 
 
 if __name__ == "__main__":

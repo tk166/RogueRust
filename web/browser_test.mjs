@@ -791,6 +791,23 @@ const readCell = async (index) =>
       " const o = new Int32Array(ex.memory.buffer, ptr, n); return o[" + index + "]; })()"
   );
 const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+/**
+ * Poll a page expression until it equals `want` (or the budget runs out).
+ *
+ * `settle()` is a **fixed** 50 ms sleep while the page re-renders on its own schedule: under a loaded
+ * machine that is occasionally too short, which made this section fail once inside the acceptance
+ * gate and pass when run on its own. Waiting for the **state** instead of the clock removes the whole
+ * class -- the assertion after it can no longer race the render.
+ */
+const waitFor = async (expression, want, budgetMs = 3000) => {
+  const until = Date.now() + budgetMs;
+  let seen;
+  for (;;) {
+    seen = await page.evaluate(expression);
+    if (seen === want || Date.now() > until) return seen;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+};
 /** Click the first of several selectors that exists; report which one took it. */
 const clickFirst = async (selectors) => {
   for (const selector of selectors) {
@@ -816,7 +833,7 @@ async function realStart(seed, trail) {
   const typed = await page.typeInto("#seedInput", seed);
   const start = await page.clickSelector("#newRunBtn");
   await settle();
-  const pending0 = await page.evaluate("ex.rd_run_pending()");
+  const pending0 = await waitFor("ex.rd_run_pending()", 6);
   let clicks = 0;
   let stuck = -1;
   while (clicks < 8) {
@@ -881,18 +898,55 @@ async function realStart(seed, trail) {
   // this test does not need to reproduce; the click under test is the map node, not the opener.
   await page.evaluate("RD_DEBUG.showDeckPicker ? (RD_DEBUG.showDeckPicker('real click', function () {}), 1) : 0");
   await settle();
-  pointer.modalOpen = await page.evaluate("!document.getElementById('modal').hidden");
-  const covered = await page.clickSelector("#mapbox g.node.reachable", 0);
+  pointer.modalOpen = await waitFor("!document.getElementById('modal').hidden", true);
+  // A **probe** here, not `clickSelector`: `clickSelector` waits until the target is hit-testable,
+  // which is the opposite of what this line is asking. We want the map node's coordinates and who is
+  // on top of them -- then a real click at exactly that point, which the modal must swallow.
+  const covered = await page.probe("#mapbox g.node.reachable", 0);
   pointer.mapCoveredHits = covered.hits;
   pointer.mapCover = covered.coverTag || (covered.missing ? "no reachable node" : null);
   pointer.mapCovered = covered.hits === false;
+  // 同一坐标、真输入：弹窗必须把它吃掉（不是"等它可点"，那会变成另一条测试）。
+  if (!covered.missing && !covered.empty) await page.clickAt(covered.x, covered.y);
   await settle();
   pointer.floorWhileModalUp = await page.evaluate("ex.rd_run_observe(0)");
   pointer.pendingWhileModalUp = await page.evaluate("ex.rd_run_pending()");
+  // ⚠️ 这一枪可能**落在背景上**，而背景点击正是 §151 的三种出口之一 ⇒ 弹窗自己关掉。
+  // 所以"关掉了吗"不能当作 × 的证据：两条判据必须从各自确定的前提出发。
+  pointer.modalStillOpen = !(await page.evaluate("document.getElementById('modal').hidden"));
+
+  // 第二条判据：重新打开一次，让弹窗处于**确定打开**的状态，再真点 ×。
+  await page.evaluate("RD_DEBUG.showDeckPicker ? (RD_DEBUG.showDeckPicker('close me', function () {}), 1) : 0");
+  pointer.reopened = await waitFor("!document.getElementById('modal').hidden", true);
   const closed = await page.clickSelector("#modalClose");
   pointer.closeHits = closed.hits;
+  // 记下"到底谁在上面"——一条只说"被盖住了"的失败信息让人只能猜。
+  pointer.closeCover = closed.coverTag;
+  pointer.closeBox = [Math.round(closed.x), Math.round(closed.y),
+    Math.round(closed.width), Math.round(closed.height)];
+  if (closed.hits !== true) {
+    // 失败时把现场留下：只说"被盖住了"让人只能猜，而这条已经猜错两次了。
+    pointer.closeLayout = await page.evaluate(`(() => {
+      const rect = function (el) {
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        const s = getComputedStyle(el);
+        return [Math.round(r.width), Math.round(r.height), s.display, s.visibility];
+      };
+      return {
+        modalHidden: document.getElementById("modal").hidden,
+        modal: rect(document.getElementById("modal")),
+        box: rect(document.querySelector(".modal-box")),
+        close: rect(document.getElementById("modalClose")),
+        bodyChildren: document.getElementById("modalBody").children.length,
+        scrollY: Math.round(window.scrollY),
+        docHeight: Math.round(document.documentElement.scrollHeight),
+        viewport: [window.innerWidth, window.innerHeight],
+      };
+    })()`);
+  }
   await settle();
-  pointer.modalClosed = await page.evaluate("document.getElementById('modal').hidden");
+  pointer.modalClosed = await waitFor("document.getElementById('modal').hidden", true);
 
   // (e) walk into the first reachable node, for real.
   // Prefer a combat: the card half below needs one, and a calm node would silently skip it.
@@ -905,7 +959,7 @@ async function realStart(seed, trail) {
   pointer.combatIndex = combatIndex;
   pointer.nodeHits = node.hits;
   await settle();
-  pointer.floorAfterNode = await page.evaluate("ex.rd_run_observe(0)");
+  pointer.floorAfterNode = await waitFor("ex.rd_run_observe(0)", 1);
   pointer.inFightAfterNode = await page.evaluate("!document.getElementById('handPanel').hidden");
   // Walking into a fight is **two** real clicks: the map node asks the kernel to move, and the
   // node panel's own button starts the combat. A test that stopped after the first click would
@@ -915,7 +969,8 @@ async function realStart(seed, trail) {
     pointer.beginHits = begin.missing ? null : begin.hits;
     pointer.beginSelector = begin.selector || null;
     await settle();
-    pointer.inFightAfterNode = await page.evaluate("!document.getElementById('handPanel').hidden");
+    pointer.inFightAfterNode = await waitFor(
+      "!document.getElementById('handPanel').hidden", true);
   }
 
   // If that was a fight, press a card -- the single most important button in the game -- then
@@ -965,7 +1020,13 @@ want(report.pointer.mapCovered === true,
   `a map node was clickable through the modal (top element ${JSON.stringify(report.pointer.mapCover)})`);
 want(report.pointer.floorWhileModalUp === 0,
   `a real click through the modal moved the run (floor ${report.pointer.floorWhileModalUp})`);
-want(report.pointer.closeHits === true, "the modal's close button was covered");
+want(report.pointer.reopened === true, "the second open did not take (nothing to close)");
+// The backdrop click may have closed the modal (§151's own way out); either way the *run* must not
+// have moved, and the deliberate second open is what tests the × button.
+want(report.pointer.closeHits === true,
+  `the modal's close button was covered by ${JSON.stringify(report.pointer.closeCover)} ` +
+  `at ${JSON.stringify(report.pointer.closeBox)} · layout ` +
+  `${JSON.stringify(report.pointer.closeLayout || null)}`);
 want(report.pointer.modalClosed === true, "a real click on × did not close the modal");
 want(report.pointer.nodeHits === true, "the map node was covered after the modal closed");
 want(report.pointer.floorAfterNode === 1,
