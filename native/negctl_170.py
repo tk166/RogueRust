@@ -50,6 +50,16 @@ ROUNDS = [
         "the_script_abi_refuses_mid_fight",
     ),
     (
+        "P1-4 hash_failed guard",
+        '''    if session.hash_failed {
+        // §170 `P1-4`: 有一格哈希算不出来，这份脚本就**不能**导出去当证据用。
+        set_error("导不出脚本：这一局的状态文本超出了哈希缓冲，逐步哈希对不上");
+        return -2;
+    }''',
+        '''    // [negctl] hash_failed guard removed''',
+        "an_unavailable_hash_is_refused",
+    ),
+    (
         "P1-1 rollback body",
         '''    *session.state = before;
     session.elite_fight = false;

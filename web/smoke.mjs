@@ -111,7 +111,7 @@ const REQUIRED = [
   // §163: the replay script (dump + replay + the two evidence readers). Used by the kernel's
   // replay test today; a page-level "replay" button is the next step.
   "rd_content_fingerprint", "rd_content_check",
-  "rd_run_script_len", "rd_run_script_into", "rd_run_script_fill",
+  "rd_run_script_fill",
   "rd_run_script_buf", "rd_run_script_capacity", "rd_run_replay_from",
   "rd_run_replay_checked", "rd_run_replay_diverged",
 ];

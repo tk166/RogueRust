@@ -58,6 +58,11 @@ struct RunSession {
     replay_checked: usize,
     /// Where the last replay diverged (`0` = it did not).
     replay_diverged: i32,
+    /// §170 `P1-4`: 有过一次**算不出指纹**（规范文本超出 `run_hash` 的 `MAX_TEXT`）。
+    ///
+    /// 这一格存在的理由：哈希不可用时曾经被写成 `0`，而 `0` 是一个**合法可比较的值** —— 两个都溢出的
+    /// 状态于是"相等"。现在不可用就记在这里，导出与回放都**响亮拒绝**，绝不拿 0 顶替。
+    hash_failed: bool,
     /// Is a fight **in progress** right now? (§161.10)
     ///
     /// ⚠️ This is **not** "does a combat session exist": the page creates one at boot
@@ -222,9 +227,10 @@ impl RunSession {
         // 这样不必要求每个导出都从 `finish` 回来（`rd_run_step` 就不是）。
         if let Some(last) = self.journal.last() {
             if last.hash == 0 {
-                let hash = hash_prefix(&self.state).unwrap_or(0);
+                // §170 `P1-4`: 算不出来就**记下来**，不写 0 假装算过。
+                let hash = self.state_hash();
                 if let Some(last) = self.journal.last_mut() {
-                    last.hash = hash;
+                    last.hash = hash.unwrap_or(0);
                 }
             }
         }
@@ -242,10 +248,24 @@ impl RunSession {
         if self.replaying {
             return;
         }
+        let hash = self.state_hash();
         let Some(last) = self.journal.last_mut() else {
             return;
         };
-        last.hash = hash_prefix(&self.state).unwrap_or(0);
+        // §170 `P1-4`: `None` 不再是"0"，是"这一局的文本算不出指纹"—— 记进会话，导出/回放拒绝。
+        last.hash = hash.unwrap_or(0);
+    }
+
+    /// 当前状态的哈希前缀，`None` = 规范文本超出 `run_hash` 的缓冲。
+    ///
+    /// 唯一的取哈希入口：失败时**置** `hash_failed`，于是"算不出"这件事跟着会话走到每个消费者，
+    /// 而不是被某个 `unwrap_or(0)` 咽掉。
+    fn state_hash(&mut self) -> Option<u64> {
+        let hash = hash_prefix(&self.state);
+        if hash.is_none() {
+            self.hash_failed = true;
+        }
+        hash
     }
 }
 
@@ -637,6 +657,7 @@ pub extern "C" fn rd_run_start(seed: i32, ascension: i32) -> i32 {
         replaying: false,
         replay_checked: 0,
         replay_diverged: 0,
+        hash_failed: false,
     });
     0
 }
@@ -3239,9 +3260,8 @@ pub extern "C" fn rd_run_script_buf() -> *mut u8 {
 
 /// Write the script into this module's buffer and return its length; `-1` no run, `-2` too long.
 ///
-/// The page uses this (`rd_run_script_buf()` then read `len` bytes); an embedder that owns its own
-/// buffer uses `rd_run_script_len` + `rd_run_script_into`. Both go through `script_text`, so the
-/// **format** still has one writer.
+/// The page uses this (`rd_run_script_buf()` then read `len` bytes), and since §170 `P1-5` it is the
+/// **only** way out: the `into(ptr)` variant that took a caller buffer without a capacity went away.
 #[no_mangle]
 pub extern "C" fn rd_run_script_fill() -> i32 {
     let Some(session) = run_slot().as_mut() else {
@@ -3255,6 +3275,11 @@ pub extern "C" fn rd_run_script_fill() -> i32 {
         return -2;
     }
     session.stamp();
+    if session.hash_failed {
+        // §170 `P1-4`: 有一格哈希算不出来，这份脚本就**不能**导出去当证据用。
+        set_error("导不出脚本：这一局的状态文本超出了哈希缓冲，逐步哈希对不上");
+        return -2;
+    }
     let text = script_text(session);
     let bytes = text.as_bytes();
     if bytes.len() > crate::MAX_SCRIPT {
@@ -3272,33 +3297,11 @@ pub extern "C" fn rd_run_script_fill() -> i32 {
     bytes.len() as i32
 }
 
-/// Length of the script as text (no buffer involved).
-#[no_mangle]
-pub extern "C" fn rd_run_script_len() -> i32 {
-    match run_slot().as_mut() {
-        Some(session) => {
-            session.stamp();
-            script_text(session).len() as i32
-        }
-        None => -1,
-    }
-}
-
-/// # Safety
-///
-/// `ptr` must point at `rd_run_script_len()` writable bytes.
-#[no_mangle]
-pub unsafe extern "C" fn rd_run_script_into(ptr: *mut u8) -> i32 {
-    let Some(session) = run_slot().as_mut() else {
-        return -1;
-    };
-    session.stamp();
-    let text = script_text(session);
-    for (offset, &byte) in text.as_bytes().iter().enumerate() {
-        *ptr.add(offset) = byte;
-    }
-    text.len() as i32
-}
+// §170 `P1-5`: 这里原来还有 `rd_run_script_len()` + `rd_run_script_into(ptr)` 一对 —— 和
+// `fill`/`buf`/`capacity` 做的是同一件事，而 `into` 的 `unsafe` 契约是"你自己留够地方"：对 Rust
+// 调用者成立，对 wasm/JS 那一侧就是一把对着脚的枪。它们唯一的用户是内核自己的测试，所以删掉它们、
+// 让测试走页面走的那条路（`fill` + `buf` + `capacity`），而不是给一个只在测试里出现的导出加参数。
+// 脚本接口现在只有一条路：**先问容量，再问长度，最后按长度读这个模块自己的缓冲区。**
 
 /// How many steps the last replay verified (`0` when it diverged at the first step).
 #[no_mangle]
@@ -3508,10 +3511,18 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
             _ => {}
         }
 
-        let Some(session) = run_slot().as_ref() else {
-            return -1;
+        // §170 `P1-4`: "算不出哈希" 与 "哈希不一致" 是两件事，不能都折成一次比较失败。
+        let now = match run_slot().as_mut().and_then(RunSession::state_hash) {
+            Some(hash) => hash,
+            None => {
+                session_clear_replay(checked, (index + 1) as i32);
+                set_error(&std::format!(
+                    "第 {} 步之后算不出指纹：这一局的状态文本超出了哈希缓冲，无法逐步对拍",
+                    index + 1
+                ));
+                return -2;
+            }
         };
-        let now = hash_prefix(&session.state).unwrap_or(0);
         if now != want {
             session_clear_replay(checked, (index + 1) as i32);
             set_error(&std::format!(
@@ -3713,6 +3724,7 @@ mod tests {
         replaying: false,
         replay_checked: 0,
         replay_diverged: 0,
+        hash_failed: false,
         });
     }
 
@@ -4376,13 +4388,7 @@ mod tests {
             let session = run_slot().as_ref().expect("session");
             rd_run::hash::run_hash_hex(&session.state).expect("hash")
         };
-        let script = {
-            let len = rd_run_script_len();
-            assert!(len > 0, "script_len said {len}");
-            let mut buffer = vec![0u8; len as usize];
-            unsafe { rd_run_script_into(buffer.as_mut_ptr()) };
-            String::from_utf8(buffer).expect("ascii")
-        };
+        let script = script_text_now();
         // §166: 头部带**内容指纹**（`sha256(镜像)` 的前 4 字节，与 `build.json` 的镜像 sha 同源）。
         assert!(
             script.starts_with("RDR1,S,7,0,"),
@@ -4588,6 +4594,42 @@ mod tests {
         assert!(*session.state == settled, "a refused begin changed the run");
     }
 
+    /// §170 `P1-4`：**算不出指纹**时不能拿 0 顶替 —— 导出与回放都必须响亮拒绝。
+    ///
+    /// 为什么是"直接置标记"而不是"造一个溢出的大局"：`the_largest_legal_run_fits_the_hash_buffer`
+    /// 已经量出最大合法局只有 4186 B / 8192 B，所以这条路径**对合法状态不可达**。它存在的意义不是
+    /// "今天会响"，而是"哪天有人把 `MAX_RUN_DECK` 或遗物容量翻倍、或者往规范文本里加一个大字段，
+    /// 它响" —— 而不是让两个都溢出的状态互相"匹配"。
+    ///
+    /// 所以这里测的是**接线**：标记置上之后，两个消费者都拒绝，且拒绝不改局面。
+    #[test]
+    fn an_unavailable_hash_is_refused_not_treated_as_zero() {
+        // 开局状态就够：这两条守卫都只看 `hash_failed`，与节点无关。
+        test_run(7, 80, 80, &["strike"; 10]);
+
+        // 一个可以让它"算不出来"的局面：直接置标记（合法状态到不了这里）。
+        run_slot().as_mut().expect("session").hash_failed = true;
+        let before = *run_slot().as_ref().expect("session").state;
+
+        assert_eq!(rd_run_script_fill(), -2, "a script whose hashes are unknown must not export");
+        assert!(
+            run_error_text().contains("哈希缓冲"),
+            "the refusal must say why: {}",
+            run_error_text()
+        );
+
+        assert!(
+            *run_slot().as_ref().expect("session").state == before,
+            "the refusal changed the run"
+        );
+
+        // ⚠️ **回放那一半的拒绝分支在这里测不到，而且我不假装测到了。**
+        // `rd_run_replay_from` 会用 `rd_run_start` 建一个**新**会话（`hash_failed = false`），
+        // 所以比对时看到的永远是"新局能不能算哈希"；而新局能不能算哈希由上面的边界测试回答
+        // （最大合法局 4186 B / 8192 B）。那条分支（`state_hash() == None` ⇒ `-2`）于是
+        // **对合法状态不可达**，它的意义与 `hash_failed` 一样：哪天容量翻倍或文本长大，它响。
+    }
+
     /// §170 `P1-3`：脚本导出与回放在**ABI 层**就拒绝战斗中调用。
     ///
     /// 这条测试**故意绕开页面**：页面的 `mode === "fight"` 不是契约，内核才是。存档在 §161.10
@@ -4673,11 +4715,7 @@ mod tests {
             run_error_text()
         );
         assert_eq!(rd_run_seed(), 5, "the restored run is the first one");
-        let steps_after_restore = {
-            let mut buffer = vec![0u8; rd_run_script_len() as usize];
-            unsafe { rd_run_script_into(buffer.as_mut_ptr()) };
-            String::from_utf8(buffer).expect("ascii")
-        };
+        let steps_after_restore = script_text_now();
         assert_eq!(
             steps_after_restore.matches(';').count(),
             1,
@@ -4687,11 +4725,7 @@ mod tests {
 
         // (3) 从恢复出来的局面接着打，然后导出：头部必须是那份档案。
         walk_calm_nodes(2);
-        let script = {
-            let mut buffer = vec![0u8; rd_run_script_len() as usize];
-            unsafe { rd_run_script_into(buffer.as_mut_ptr()) };
-            String::from_utf8(buffer).expect("ascii")
-        };
+        let script = script_text_now();
         assert!(
             script.starts_with("RDR1,A,RDA1-"),
             "head: {}",
@@ -4709,11 +4743,7 @@ mod tests {
         );
         assert_eq!(rd_run_replay_checked() as usize, steps);
         assert_eq!(rd_run_seed(), 5);
-        let after = {
-            let mut buffer = vec![0u8; rd_run_script_len() as usize];
-            unsafe { rd_run_script_into(buffer.as_mut_ptr()) };
-            String::from_utf8(buffer).expect("ascii")
-        };
+        let after = script_text_now();
         assert!(
             after.starts_with("RDR1,A,RDA1-"),
             "a replayed run still starts at its archive: {}",
@@ -4838,6 +4868,19 @@ mod tests {
             out.push(';');
         }
         out
+    }
+
+    /// The script, read the way the **page** reads it: ask the capacity, fill the module's buffer, read
+    /// `len` bytes. §170 `P1-5` deleted the `into(ptr)` variant that the tests used to call, so this
+    /// helper keeps the tests on the one path that ships.
+    fn script_text_now() -> String {
+        let len = rd_run_script_fill();
+        assert!(len > 0, "script_fill said {len}: {}", run_error_text());
+        let capacity = rd_run_script_capacity();
+        assert!(len <= capacity, "{len} > capacity {capacity}");
+        let ptr = rd_run_script_buf();
+        String::from_utf8(unsafe { std::slice::from_raw_parts(ptr, len as usize).to_vec() })
+            .expect("ascii")
     }
 
     /// 头部按 `,` 切成字段，**去掉 `RDR1,` 前缀** —— 于是下标与 `rd_run_replay_from` 里的一致

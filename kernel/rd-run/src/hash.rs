@@ -287,6 +287,72 @@ mod tests {
         assert_ne!(before, after, "a draw that does not move the hash is a draw nobody records");
     }
 
+    /// §170 `P1-4`: **量一遍最大合法局的规范文本**，而不是假设它装得下。
+    ///
+    /// 之前只有 `the_text_is_canonical_and_not_truncated`，用的是 `run()` 的 10 张牌 —— 那证明不了
+    /// "一局真实的后盘会不会撑爆 8 KiB"。这里量的是**类型的上限**：每个牌位都放 `ID_CAP` 长的 id，
+    /// 遗物/药水拉满、金币 `i32::MAX`、Ascension 20。内容以后怎么改都超不过这个数。
+    ///
+    /// **实测（2026-11-01）：4186 B / 8192 B = 51%**。所以"最大合法局装得下"是成立的，但**没有
+    /// 两倍余量**（真实余量 1.96 倍）—— 我不能写一个自己都不成立的判据。这里钉的是：
+    ///
+    /// 1. 装得下（这正是 `run_hash` 返回 `None` 的唯一原因，也是 P1-4 的问题）；
+    /// 2. 至少 **1.5 倍**余量；
+    /// 3. 那份文本确实"很大"（> 4 KiB），否则这条测试可能只是在量一副 10 张牌。
+    ///
+    /// 以及一个必须写下来的事实：文本的约 90% 是 id 文本（60 张牌 + 24 遗物 + 5 药水）。
+    /// **把 `MAX_RUN_DECK` 或遗物容量翻倍，就会溢出。** 那时 `run_hash` 返回 `None`，
+    /// 而 `rd-wasm` 会**响亮拒绝**导出与回放（§170 `P1-4` 的另一半），不会拿 0 顶替。
+    #[test]
+    fn the_largest_legal_run_fits_the_hash_buffer() {
+        let widest_card = "z".repeat(rd_core::state::ID_CAP);
+        let widest_relic = "z".repeat(rd_core::state::ID_CAP);
+        let widest_potion = "z".repeat(rd_core::state::ID_CAP);
+        let deck: Vec<&str> = std::vec![widest_card.as_str(); crate::state::MAX_RUN_DECK];
+        let state = big_run(&deck, &widest_relic, &widest_potion);
+
+        let mut buffer = [0u8; MAX_TEXT];
+        let mut writer = TextWriter::new(&mut buffer);
+        write_run_input(&mut writer, &state);
+        assert!(
+            !writer.overflowed(),
+            "the largest legal run did not fit {MAX_TEXT} B -- `run_hash` would return None"
+        );
+        let len = writer.as_str().len();
+        let percent = (len * 100) / MAX_TEXT;
+        println!("largest legal canonical text: {len} B of {MAX_TEXT} B ({percent}%)");
+        // 2. 至少 1.5 倍余量（实测 1.96 倍；写 2 倍就会红，那是我一开始想当然的判据）。
+        assert!(
+            len * 3 / 2 < MAX_TEXT,
+            "the largest legal run uses {len} of {MAX_TEXT} B ({percent}%): under 1.5x headroom"
+        );
+        // 3. 这条测试确实在量一个大局面，而不是 `run()` 那副 10 张牌。
+        assert!(len > MAX_TEXT / 2, "only {len} B: this is not the maximal state");
+    }
+
+    /// 一局"尽可能大"的合法局面：满牌组、满遗物、满药水、金币拉满、Ascension 20。
+    ///
+    /// 商店/奖励屏在这个状态里是空的（它们由进入节点时生成，单测够不到），所以这个数字是**下界**；
+    /// 两倍余量的判据就是替它们、以及替后续内容留的。
+    fn big_run(deck: &[&str], relic: &str, potion: &str) -> RunState {
+        let mut state = RunState::new_with_ascension(
+            i32::MAX - 1,
+            999,
+            i32::MAX,
+            deck,
+            crate::state::MAX_ASCENSION,
+        )
+        .expect("a maximal run");
+        state.adjust_gold(i32::MAX);
+        for _ in 0..crate::state::MAX_RUN_RELICS {
+            let _ = state.push_relic(relic);
+        }
+        for _ in 0..crate::state::MAX_RUN_POTIONS {
+            let _ = state.push_potion(potion);
+        }
+        state
+    }
+
     #[test]
     fn the_text_is_canonical_and_not_truncated() {
         let mut buffer = [0u8; MAX_TEXT];
