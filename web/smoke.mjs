@@ -104,6 +104,10 @@ const REQUIRED = [
   "rd_run_grant_potion",
   // §161.9: the one-line run archive (copy / restore).
   "rd_run_archive_fill", "rd_run_archive_buf", "rd_run_archive_capacity", "rd_run_restore_from",
+  // §163: the replay script (dump + replay + the two evidence readers). Used by the kernel's
+  // replay test today; a page-level "replay" button is the next step.
+  "rd_run_script_len", "rd_run_script_into", "rd_run_replay_from",
+  "rd_run_replay_checked", "rd_run_replay_diverged",
 ];
 for (const name of REQUIRED) {
   if (!(name in ex)) fail(`missing export ${name}`);

@@ -988,6 +988,67 @@ impl RunState {
 
     // ---- reads -----------------------------------------------------------------------------
 
+
+    /// 当前的药水掉率（§157：40 起、每次战后 ±10、换幕重置）。
+    #[must_use]
+    pub const fn potion_chance(&self) -> i32 {
+        self.potion_chance
+    }
+
+    /// `?` 房的三条累计计数（`inv:§7.5`），换幕重置。
+    #[must_use]
+    pub const fn unknown(&self) -> &[i32; 3] {
+        &self.unknown
+    }
+
+    /// 已经选定的祝福后续动作（只在 `Pending::BlessingCard` 期间非空）。
+    #[must_use]
+    pub const fn blessing_follow(&self) -> Option<BlessingFollowUp> {
+        self.blessing_follow
+    }
+
+    /// 已选定的事件后续动作（只在 `Pending::EventCard` 期间非空）。
+    #[must_use]
+    pub const fn event_follow(&self) -> Option<DeckChange> {
+        self.event_follow
+    }
+
+    /// 已结算位图的两个字（节点的下标 → 位）。
+    #[must_use]
+    pub const fn resolved_words(&self) -> &[u64; 2] {
+        &self.resolved
+    }
+
+    /// 商店的卡位（含已买走/未上架的行，`price < 0`）。
+    #[must_use]
+    pub fn shop_cards(&self) -> &[Offer] {
+        &self.shop.cards
+    }
+
+    /// 商店的遗物位。
+    #[must_use]
+    pub fn shop_relics(&self) -> &[Offer] {
+        &self.shop.relics
+    }
+
+    /// 商店卡位的有效行数（槽位下标必须稳定，所以它不随购买减少）。
+    #[must_use]
+    pub const fn shop_cards_len(&self) -> u8 {
+        self.shop.cards_len
+    }
+
+    /// 商店遗物位的有效行数。
+    #[must_use]
+    pub const fn shop_relics_len(&self) -> u8 {
+        self.shop.relics_len
+    }
+
+    /// 奖励屏的三张卡（空槽是 `EMPTY`）。
+    #[must_use]
+    pub fn reward_cards(&self) -> &[RunId] {
+        &self.reward.cards[..self.reward.cards_len as usize]
+    }
+
     /// The Ascension level this run is played at (`0` = none, §159).
     #[must_use]
     pub const fn ascension(&self) -> u8 {
@@ -1076,6 +1137,14 @@ impl RunState {
     pub const fn rng(&self) -> &RunRng {
         &self.rng
     }
+    /// 换掉整组随机流（§163： 的测试要只推进一步再比哈希）。
+    ///
+    /// 收一个**完整的**  而不是某个计数：让调用方一次交代清楚全部七条流，比允许
+    /// 逐条改更难写错 —— 而少写一条正是这类接口最容易犯的错。
+    pub const fn replace_rng(&mut self, rng: RunRng) {
+        self.rng = rng;
+    }
+
     /// Mutable access to the streams, for the settlement code that lands next.
     pub fn rng_mut(&mut self) -> &mut RunRng {
         &mut self.rng

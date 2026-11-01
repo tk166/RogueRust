@@ -45,6 +45,15 @@ struct RunSession {
     /// Was this fight started from an **elite** node? `fight_end` needs it for the reward tier
     /// (`inv:§5`: elite pays 25–35 gold, rare 10/40/50) and the cursor no longer says so.
     elite_fight: bool,
+    /// §163: the recorded run calls, oldest first. **Not** part of game state (it is the host's
+    /// action log), so `run_hash` does not include it and the archive does not carry it.
+    journal: Vec<Rec>,
+    /// Replaying right now? Then calls must not be recorded again (they would double the log).
+    replaying: bool,
+    /// How many steps the last replay verified (evidence for the gate).
+    replay_checked: usize,
+    /// Where the last replay diverged (`0` = it did not).
+    replay_diverged: i32,
     /// Is a fight **in progress** right now? (§161.10)
     ///
     /// ⚠️ This is **not** "does a combat session exist": the page creates one at boot
@@ -53,6 +62,140 @@ struct RunSession {
     /// It is set by [`rd_run_fight_begin`] and cleared by [`rd_run_fight_end`] / [`rd_run_start`],
     /// so "a fight is running" has exactly one meaning and only the calls that own it move it.
     in_fight: bool,
+}
+
+/// 一次**会改运行层状态**的调用（§163）。
+#[derive(Clone, Debug)]
+struct Rec {
+    kind: u8,
+    a: i32,
+    b: i32,
+    /// 只有 `smith` / `grant_potion` 用得上（升级后的牌 id / 药水 id）。
+    text: String,
+    /// 调用**之后**的 `run_hash` 前 8 字节。回放逐步比这一格。
+    hash: u64,
+}
+
+/// 记录的种类。数值是**脚本的文本**（写在 `kind` 那一列），所以改它就改了存档/脚本的兼容性。
+const K_STEP: u8 = 1;
+const K_BEGIN: u8 = 2;
+const K_REST: u8 = 3;
+const K_SMITH: u8 = 4;
+const K_CHEST: u8 = 5;
+const K_LEAVE: u8 = 6;
+const K_BUY_CARD: u8 = 7;
+const K_BUY_RELIC: u8 = 8;
+const K_REMOVE: u8 = 9;
+const K_TAKE_CARD: u8 = 10;
+const K_SKIP: u8 = 11;
+const K_TAKE_POTION: u8 = 12;
+const K_TAKE_RELIC: u8 = 13;
+const K_CHOOSE: u8 = 14;
+const K_EVENT_CARD: u8 = 15;
+const K_CHOOSE_START: u8 = 16;
+const K_BLESSING_CARD: u8 = 17;
+const K_DROP_POTION: u8 = 18;
+const K_FIGHT_END: u8 = 19;
+const K_FIGHT_BEGIN: u8 = 20;
+const K_GRANT_POTION: u8 = 21;
+
+const fn rec_kind_name(kind: u8) -> &'static str {
+    match kind {
+        K_STEP => "step",
+        K_BEGIN => "begin",
+        K_REST => "rest",
+        K_SMITH => "smith",
+        K_CHEST => "chest",
+        K_LEAVE => "leave",
+        K_BUY_CARD => "buy_card",
+        K_BUY_RELIC => "buy_relic",
+        K_REMOVE => "remove",
+        K_TAKE_CARD => "take_card",
+        K_SKIP => "skip",
+        K_TAKE_POTION => "take_potion",
+        K_TAKE_RELIC => "take_relic",
+        K_CHOOSE => "choose",
+        K_EVENT_CARD => "event_card",
+        K_CHOOSE_START => "choose_start",
+        K_BLESSING_CARD => "blessing_card",
+        K_DROP_POTION => "drop_potion",
+        K_FIGHT_END => "fight_end",
+        K_FIGHT_BEGIN => "fight_begin",
+        K_GRANT_POTION => "grant_potion",
+        _ => "?",
+    }
+}
+
+fn rec_kind_from_name(name: &str) -> Option<u8> {
+    Some(match name {
+        "step" => K_STEP,
+        "begin" => K_BEGIN,
+        "rest" => K_REST,
+        "smith" => K_SMITH,
+        "chest" => K_CHEST,
+        "leave" => K_LEAVE,
+        "buy_card" => K_BUY_CARD,
+        "buy_relic" => K_BUY_RELIC,
+        "remove" => K_REMOVE,
+        "take_card" => K_TAKE_CARD,
+        "skip" => K_SKIP,
+        "take_potion" => K_TAKE_POTION,
+        "take_relic" => K_TAKE_RELIC,
+        "choose" => K_CHOOSE,
+        "event_card" => K_EVENT_CARD,
+        "choose_start" => K_CHOOSE_START,
+        "blessing_card" => K_BLESSING_CARD,
+        "drop_potion" => K_DROP_POTION,
+        "fight_end" => K_FIGHT_END,
+        "fight_begin" => K_FIGHT_BEGIN,
+        "grant_potion" => K_GRANT_POTION,
+        _ => return None,
+    })
+}
+
+/// `run_hash` 的前 8 字节 —— 逐步比对用。整条 64 字符的十六进制只留在错误信息里。
+fn hash_prefix(state: &rd_run::state::RunState) -> Option<u64> {
+    let digest = rd_run::hash::run_hash(state)?;
+    Some(u64::from_be_bytes([
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6], digest[7],
+    ]))
+}
+
+impl RunSession {
+    /// 记下这次调用（回放时不记）。`finish` 会在调用之后把哈希填进最后一条。
+    fn log(&mut self, kind: u8, a: i32, b: i32, text: &str) {
+        if self.replaying {
+            return;
+        }
+        // **懒上戳**：每条导出都在**动手之前**调 `log`，所以此刻的哈希就是"上一次调用之后"的哈希。
+        // 这样不必要求每个导出都从 `finish` 回来（`rd_run_step` 就不是）。
+        if let Some(last) = self.journal.last() {
+            if last.hash == 0 {
+                let hash = hash_prefix(&self.state).unwrap_or(0);
+                if let Some(last) = self.journal.last_mut() {
+                    last.hash = hash;
+                }
+            }
+        }
+        self.journal.push(Rec {
+            kind,
+            a,
+            b,
+            text: text.to_string(),
+            hash: 0,
+        });
+    }
+
+    /// 把**当前**状态的哈希写进最后一条记录（`finish` 调它）。
+    fn stamp(&mut self) {
+        if self.replaying {
+            return;
+        }
+        let Some(last) = self.journal.last_mut() else {
+            return;
+        };
+        last.hash = hash_prefix(&self.state).unwrap_or(0);
+    }
 }
 
 static mut RUN: Option<RunSession> = None;
@@ -284,6 +427,8 @@ fn write_out(text: &str, ptr: *mut u8) -> i32 {
 /// A helper that turns a `Result<_, RunError>` into the ABI's convention: `0` ok, `-2` refused, and
 /// the message in the error buffer. Kept in one place so every new action reports the same way.
 fn finish(session: &mut RunSession, result: Result<i32, RunError>) -> i32 {
+    // §163: one line here is what keeps every export from having to remember to stamp the hash.
+    session.stamp();
     match result {
         Ok(value) => {
             session.error.clear();
@@ -436,6 +581,10 @@ pub extern "C" fn rd_run_start(seed: i32, ascension: i32) -> i32 {
         elite_fight: false,
         boss_fight: false,
         in_fight: false,
+        journal: Vec::new(),
+        replaying: false,
+        replay_checked: 0,
+        replay_diverged: 0,
     });
     0
 }
@@ -686,6 +835,7 @@ pub extern "C" fn rd_run_step(action_index: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_STEP, action_index, -1, "");
     let reachable = session.state.reachable();
     if action_index < 0 || action_index as usize >= reachable.len() {
         set_error("action index out of range");
@@ -756,6 +906,7 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_BEGIN, -1, -1, "");
     let content = content();
     let cards = match full_pool(content) {
         Ok(cards) => cards,
@@ -820,6 +971,7 @@ pub extern "C" fn rd_run_rest() -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_REST, -1, -1, "");
     let outcome = session.state.rest();
     finish(session, outcome)
 }
@@ -830,6 +982,7 @@ pub extern "C" fn rd_run_smith(index: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_SMITH, index, -1, "");
     if index < 0 {
         return -1;
     }
@@ -859,6 +1012,7 @@ pub extern "C" fn rd_run_open_chest() -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_CHEST, -1, -1, "");
     let relics = relic_pool(content());
     let outcome = session.state.open_chest(&relics).map(|_| 0i32);
     finish(session, outcome)
@@ -870,6 +1024,7 @@ pub extern "C" fn rd_run_leave() -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_LEAVE, -1, -1, "");
     let outcome = session.state.leave().map(|_| 0i32);
     finish(session, outcome)
 }
@@ -966,6 +1121,7 @@ pub extern "C" fn rd_run_buy_card(slot: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_BUY_CARD, slot, -1, "");
     if slot < 0 {
         return -1;
     }
@@ -979,6 +1135,7 @@ pub extern "C" fn rd_run_buy_relic(slot: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_BUY_RELIC, slot, -1, "");
     if slot < 0 {
         return -1;
     }
@@ -992,6 +1149,7 @@ pub extern "C" fn rd_run_remove_card(index: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_REMOVE, index, -1, "");
     if index < 0 {
         return -1;
     }
@@ -1081,6 +1239,7 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_CHOOSE, slot, -1, "");
     let pool = match reward_pool(content()) {
         Ok(pool) => pool,
         Err(message) => return fail(session, &message),
@@ -1117,6 +1276,7 @@ pub extern "C" fn rd_run_pick_event_card(index: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_EVENT_CARD, index, -1, "");
     let pool = match reward_pool(content()) {
         Ok(pool) => pool,
         Err(message) => return fail(session, &message),
@@ -1855,6 +2015,7 @@ pub extern "C" fn rd_run_pick_blessing_card(index: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_BLESSING_CARD, index, -1, "");
     let pool = match reward_pool(content()) {
         Ok(pool) => pool,
         Err(message) => return fail(session, &message),
@@ -1921,6 +2082,7 @@ pub extern "C" fn rd_run_choose_start(slot: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_CHOOSE_START, slot, -1, "");
     // A blessing may need the card pool ("three random cards", "transform one"), so the pool is
     // built here, where the content is reachable.
     let pool = match reward_pool(content()) {
@@ -2127,6 +2289,11 @@ pub unsafe extern "C" fn rd_run_grant_potion(ptr: *const u8, len: i32) -> i32 {
     let Ok(id) = std::str::from_utf8(bytes) else {
         return -2;
     };
+    // 与 `fight_begin` 同一个理由：它改运行层（腰带），所以必须进脚本 —— 否则上一条记录的
+    // "调用之后的哈希"会把它的效果算进去，而回放里没人做这件事。
+    if let Some(session) = run_slot().as_mut() {
+        session.log(K_GRANT_POTION, -1, -1, id);
+    }
     let image = content();
     // The id must be a real `POT` row: a typo has to fail here rather than sit in the belt until
     // somebody drinks it and the effect reader says "unknown".
@@ -2191,6 +2358,7 @@ pub extern "C" fn rd_run_drop_potion(index: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_DROP_POTION, index, -1, "");
     let outcome = session.state.drop_potion(index as usize).map(|_| 0i32);
     finish(session, outcome)
 }
@@ -2227,6 +2395,7 @@ pub extern "C" fn rd_run_take_potion() -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_TAKE_POTION, -1, -1, "");
     let outcome = session.state.take_potion().map(|_| 0i32);
     finish(session, outcome)
 }
@@ -2351,6 +2520,7 @@ pub extern "C" fn rd_run_take_relic() -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_TAKE_RELIC, -1, -1, "");
     let outcome = session.state.take_relic().map(|_| 0i32);
     finish(session, outcome)
 }
@@ -2454,6 +2624,7 @@ pub extern "C" fn rd_run_take_card(slot: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_TAKE_CARD, slot, -1, "");
     if slot < 0 {
         return -1;
     }
@@ -2467,6 +2638,7 @@ pub extern "C" fn rd_run_skip_reward() -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    session.log(K_SKIP, -1, -1, "");
     let outcome = session.state.skip_reward().map(|_| 0i32);
     finish(session, outcome)
 }
@@ -2618,6 +2790,9 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    // `fight_begin` 会写 `last_encounter`（进指纹），所以它也必须被记录 —— 否则上一条记录的
+    // "调用之后的哈希"会把它的效果算进去，而回放里没有人做这件事（§163 踩过：第 4 步就对不上）。
+    session.log(K_FIGHT_BEGIN, -1, -1, "");
     // Only a combat node starts a fight. The kind is read off the session we are already holding:
     // calling `rd_run_node_kind()` here would take the slot a second time (see `fail`).
     let node = session.state.node();
@@ -2852,6 +3027,29 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    // §163: the tail is `apply_fight_outcome` so the replay can apply a **recorded** fight
+    // without a combat session (a fight is not replayed; its outcome is).
+    // `b` 低两位是**档位**（精英/Boss），高位是**结果**（1 胜 / 2 负 / 0 未决）。第一版只记了档位，
+    // 回放时假定"记下来的战斗都是赢的" ⇒ 第 4 步就对不上（录制那次 `result = 0`，没有奖励）。
+    session.log(
+        K_FIGHT_END,
+        hero_hp,
+        (i32::from(boss_fight) << 1 | i32::from(elite_fight)) | (result << 4),
+        "",
+    );
+    let verdict = apply_fight_outcome(session, hero_hp, result, elite_fight, boss_fight);
+    session.stamp();
+    return verdict;
+}
+
+/// The run-layer effect of a finished fight (extracted from `rd_run_fight_end`, §163).
+fn apply_fight_outcome(
+    session: &mut RunSession,
+    hero_hp: i32,
+    result: i32,
+    elite_fight: bool,
+    boss_fight: bool,
+) -> i32 {
     // The fight is over: the run's health becomes the hero's.
     let delta = hero_hp - session.state.health();
     session.state.adjust_health(delta);
@@ -2900,6 +3098,247 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
         session.state.mark_boss_beaten();
     }
     0.max(result)
+}
+
+// =============================================================================================
+// §163 回放：脚本导出与逐步对拍
+// =============================================================================================
+
+fn script_text(session: &RunSession) -> std::string::String {
+    let mut out = std::string::String::new();
+    std::string::String::push_str(&mut out, "RDR1,");
+    std::string::String::push_str(&mut out, &std::format!("{},{};", session.state.seed(), session.state.ascension()));
+    for rec in &session.journal {
+        std::string::String::push_str(&mut out, rec_kind_name(rec.kind));
+        std::string::String::push_str(&mut out, &std::format!(",{},{},{:016x},", rec.a, rec.b, rec.hash));
+        std::string::String::push_str(&mut out, &rec.text);
+        std::string::String::push_str(&mut out, ";");
+    }
+    out
+}
+
+/// How long the script is (bytes); `-1` no run.
+#[no_mangle]
+pub extern "C" fn rd_run_script_len() -> i32 {
+    match run_slot().as_mut() {
+        Some(session) => {
+            session.stamp();
+            script_text(session).len() as i32
+        }
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_script_len()` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_script_into(ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.stamp();
+    let text = script_text(session);
+    for (offset, &byte) in text.as_bytes().iter().enumerate() {
+        *ptr.add(offset) = byte;
+    }
+    text.len() as i32
+}
+
+/// How many steps the last replay verified (`0` when it diverged at the first step).
+#[no_mangle]
+pub extern "C" fn rd_run_replay_checked() -> i32 {
+    run_slot().as_ref().map_or(-1, |s| s.replay_checked as i32)
+}
+
+/// Where the last replay diverged: `0` = nowhere.
+#[no_mangle]
+pub extern "C" fn rd_run_replay_diverged() -> i32 {
+    run_slot().as_ref().map_or(-1, |s| s.replay_diverged)
+}
+
+/// Apply a **recorded** fight outcome (the replay's path; a fight is never re-simulated).
+fn replay_fight(session: &mut RunSession, hero_hp: i32, flags: i32) -> i32 {
+    let elite = flags & 1 != 0;
+    let boss = flags & 2 != 0;
+    let result = flags >> 4;
+    apply_fight_outcome(session, hero_hp, result, elite, boss)
+}
+
+/// Replay the script in `(ptr, len)`. `0` = every step reproduced; `n > 0` = step `n` diverged;
+/// `-1` no run slot; `-2` refused (parse error or a step the replay cannot apply) with text.
+///
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
+    if ptr.is_null() || len <= 0 {
+        return -2;
+    }
+    let bytes = std::slice::from_raw_parts(ptr, len as usize);
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        set_error("回放脚本不是 UTF-8");
+        return -2;
+    };
+    // `RDR1,seed,asc;` first, then one record per step.
+    let Some((head, rest)) = text.split_once(';') else {
+        set_error("回放脚本缺少头部");
+        return -2;
+    };
+    let Some(fields) = head.strip_prefix("RDR1,") else {
+        set_error("回放脚本的头部不是 RDR1");
+        return -2;
+    };
+    let parts: std::vec::Vec<&str> = fields.split(',').collect();
+    if parts.len() != 2 {
+        set_error("回放脚本的头部应当是 RDR1,seed,asc");
+        return -2;
+    }
+    let (Ok(seed), Ok(ascension)) = (parts[0].parse::<i32>(), parts[1].parse::<i32>()) else {
+        set_error("回放脚本的 seed/asc 不是整数");
+        return -2;
+    };
+    // 从头开一局（`rd_run_start` 会清会话、清日志），然后关掉记录。
+    if rd_run_start(seed, ascension) != 0 {
+        return -2;
+    }
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.replaying = true;
+
+    let mut checked = 0usize;
+    for (index, record) in rest.split(';').enumerate() {
+        if record.is_empty() {
+            continue;
+        }
+        let cells: std::vec::Vec<&str> = record.split(',').collect();
+        if cells.len() < 4 {
+            session.replaying = false;
+            session.replay_checked = checked;
+            session.replay_diverged = (index + 1) as i32;
+            set_error(&std::format!("第 {} 步的格式不对", index + 1));
+            return (index + 1) as i32;
+        }
+        let Some(kind) = rec_kind_from_name(cells[0]) else {
+            session.replaying = false;
+            session.replay_checked = checked;
+            session.replay_diverged = (index + 1) as i32;
+            set_error(&std::format!("第 {} 步的种类 `{}` 不认识", index + 1, cells[0]));
+            return (index + 1) as i32;
+        };
+        let (Ok(a), Ok(b), Ok(want)) = (
+            cells[1].parse::<i32>(),
+            cells[2].parse::<i32>(),
+            u64::from_str_radix(cells[3], 16),
+        ) else {
+            session.replaying = false;
+            session.replay_checked = checked;
+            session.replay_diverged = (index + 1) as i32;
+            set_error(&std::format!("第 {} 步的参数不是整数", index + 1));
+            return (index + 1) as i32;
+        };
+        // 第 5 列保留给带字符串的步（今天没有： 自己算升级后的 id）。
+        let payload = cells.get(4).copied().unwrap_or("");
+
+        // 走**同一个**入口：拒绝与接受都由导出的函数自己决定，回放不重写规则。
+        match kind {
+            K_STEP => {
+                let _ = rd_run_step(a);
+            }
+            K_BEGIN => {
+                let _ = rd_run_begin_node();
+            }
+            K_REST => {
+                let _ = rd_run_rest();
+            }
+            K_CHEST => {
+                let _ = rd_run_open_chest();
+            }
+            K_LEAVE => {
+                let _ = rd_run_leave();
+            }
+            K_BUY_CARD => {
+                let _ = rd_run_buy_card(a);
+            }
+            K_BUY_RELIC => {
+                let _ = rd_run_buy_relic(a);
+            }
+            K_REMOVE => {
+                let _ = rd_run_remove_card(a);
+            }
+            K_TAKE_CARD => {
+                let _ = rd_run_take_card(a);
+            }
+            K_SKIP => {
+                let _ = rd_run_skip_reward();
+            }
+            K_TAKE_POTION => {
+                let _ = rd_run_take_potion();
+            }
+            K_TAKE_RELIC => {
+                let _ = rd_run_take_relic();
+            }
+            K_CHOOSE => {
+                let _ = rd_run_choose(a);
+            }
+            K_EVENT_CARD => {
+                let _ = rd_run_pick_event_card(a);
+            }
+            K_CHOOSE_START => {
+                let _ = rd_run_choose_start(a);
+            }
+            K_BLESSING_CARD => {
+                let _ = rd_run_pick_blessing_card(a);
+            }
+            K_DROP_POTION => {
+                let _ = rd_run_drop_potion(a);
+            }
+            K_SMITH => {
+                let _ = rd_run_smith(a);
+            }
+            K_FIGHT_END => {
+                // 回放里先把这个"记录下来的战斗"自己的会话收掉（`fight_begin` 会开一个）。
+                crate::take_session();
+                let Some(session) = run_slot().as_mut() else {
+                    return -1;
+                };
+                let _ = replay_fight(session, a, b);
+            }
+            K_FIGHT_BEGIN => {
+                let _ = rd_run_fight_begin();
+            }
+            K_GRANT_POTION => {
+                let _ = rd_run_grant_potion(payload.as_ptr(), payload.len() as i32);
+            }
+            _ => {}
+        }
+
+        let Some(session) = run_slot().as_ref() else {
+            return -1;
+        };
+        let now = hash_prefix(&session.state).unwrap_or(0);
+        if now != want {
+            session_clear_replay(checked, (index + 1) as i32);
+            set_error(&std::format!(
+                "第 {} 步之后局面不同（期望 {want:016x}，回放得到 {now:016x}）",
+                index + 1
+            ));
+            return (index + 1) as i32;
+        }
+        checked += 1;
+    }
+    session_clear_replay(checked, 0);
+    0
+}
+
+fn session_clear_replay(checked: usize, diverged: i32) {
+    if let Some(session) = run_slot().as_mut() {
+        session.replaying = false;
+        session.replay_checked = checked;
+        session.replay_diverged = diverged;
+    }
 }
 
 /// The **kind** of a card the run is showing, so the deck / reward / merchant lists can say
@@ -3071,6 +3510,10 @@ mod tests {
             elite_fight: false,
             boss_fight: false,
         in_fight: false,
+        journal: Vec::new(),
+        replaying: false,
+        replay_checked: 0,
+        replay_diverged: 0,
         });
     }
 
@@ -3430,7 +3873,7 @@ mod tests {
     #[test]
     fn the_new_potion_shapes_all_do_something() {
         test_run(7, 80, 80, &["strike"; 10]);
-        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
 
@@ -3491,7 +3934,7 @@ mod tests {
     #[test]
     fn flex_potion_gives_strength_and_takes_it_back() {
         test_run(7, 80, 80, &["strike"; 10]);
-        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
 
@@ -3672,6 +4115,156 @@ mod tests {
     /// pile. The point of the test is the **third** assertion block: the observation's `cost` column
     /// (what the player sees) and the energy the kernel really takes must agree, and the price must
     /// be spent once.
+    /// §163: 回放 —— 一串真实动作重放一遍必须逐步对上；篡改过的脚本必须**指出是哪一步**。
+    #[test]
+    fn a_recorded_run_replays_step_by_step_and_a_tampered_one_names_its_step() {
+        // **必须是 `rd_run_start`**：脚本的头部只有 `(seed, asc)`，所以"起点"必须是一局的**开头**。
+        // 用 `test_run`（手搓一个局）会让录制与回放的起点不同 —— 第一版就是这么红的：
+        // 第 1 步期望 `0324f5…` 而回放得到 `fb615f…`，因为录制那条路的祝福/RNG 计数是手搓的。
+        assert_eq!(rd_run_start(7, 0), 0, "a fresh run");
+        assert_eq!(rd_run_choose_start(0), 0, "take blessing 0");
+        while rd_run_pending() == 7 {
+            assert_eq!(rd_run_pick_blessing_card(0), 0, "the blessing owes a pick");
+        }
+
+        // 走几个节点，按类型结算。战斗只 `begin` + `end`（不真打牌），因为回放不重演战斗。
+        for hop in 0..8 {
+            // 走到头（未结算的节点、最后一层、Boss 哨兵）就停：这条测试要的是**一段真实脚本**，
+            // 不是"必须走满五步"。
+            if rd_run_action_count() == 0 {
+                break;
+            }
+            assert_eq!(rd_run_step(0), 0, "hop {hop}: enter ({})", run_error_text());
+            let kind = rd_run_node_kind();
+            assert_eq!(rd_run_begin_node(), 0, "hop {hop}: begin a kind-{kind} node");
+            match kind {
+                1 | 2 | 7 => {
+                    assert_eq!(rd_run_fight_begin(), 0, "hop {hop}: begin the fight");
+                    assert!(rd_run_fight_end() >= 0, "hop {hop}: end the fight");
+                }
+                3 => {
+                    let _ = rd_run_rest();
+                }
+                5 => {
+                    let _ = rd_run_leave();
+                }
+                6 => {
+                    let _ = rd_run_open_chest();
+                    let _ = rd_run_leave();
+                }
+                _ => {}
+            }
+            // `?` 房在 M1 是"有内容的空"（§6.3）：`begin_node` 给它 `Pending::None` 而节点**没结算**，
+            // 所以它要么靠事件选项走、要么靠"离开"。不处理它，下一步就是"无处可走"。
+            if kind == 4 {
+                let _ = rd_run_choose(0);
+            }
+            // 奖励屏（战斗之后）与其它待决问句都要走完，否则下一步进不去。
+            while rd_run_pending() == 4 {
+                let _ = rd_run_skip_reward();
+            }
+            while rd_run_pending() == 8 {
+                let _ = rd_run_pick_event_card(0);
+            }
+            if rd_run_action_count() == 0 && rd_run_pending() != 0 {
+                let _ = rd_run_leave();
+            }
+        }
+
+        let steps = run_slot().as_ref().expect("session").journal.len();
+        assert!(steps >= 8, "the fixture must record a real script, it recorded {steps}");
+        let before = {
+            let session = run_slot().as_ref().expect("session");
+            rd_run::hash::run_hash_hex(&session.state).expect("hash")
+        };
+        let script = {
+            let len = rd_run_script_len();
+            assert!(len > 0, "script_len said {len}");
+            let mut buffer = vec![0u8; len as usize];
+            unsafe { rd_run_script_into(buffer.as_mut_ptr()) };
+            String::from_utf8(buffer).expect("ascii")
+        };
+        assert!(script.starts_with("RDR1,7,0;"), "head: {}", &script[..16.min(script.len())]);
+
+        // (1) 重放：每一步都必须对上。
+        assert_eq!(
+            unsafe { rd_run_replay_from(script.as_ptr(), script.len() as i32) },
+            0,
+            "the recorded script must replay: {} · script={}",
+            run_error_text(),
+            &script[..script.len().min(220)]
+        );
+        assert_eq!(rd_run_replay_checked() as usize, steps, "every step verified");
+        assert_eq!(rd_run_replay_diverged(), 0);
+        let after = {
+            let session = run_slot().as_ref().expect("session");
+            rd_run::hash::run_hash_hex(&session.state).expect("hash")
+        };
+        assert_eq!(after, before, "the replay must land on the same run");
+
+        // (2) 把一个哈希改掉：必须报**那一步**。
+        let broken_hash = replace_nth_hash(&script, 2);
+        assert_eq!(
+            unsafe { rd_run_replay_from(broken_hash.as_ptr(), broken_hash.len() as i32) },
+            3,
+            "a bad hash at step 3 must be reported as step 3: {}",
+            run_error_text()
+        );
+        assert_eq!(rd_run_replay_diverged(), 3);
+        assert_eq!(rd_run_replay_checked(), 2, "the two steps before it did verify");
+
+        // (3) 改一个**参数**（第 2 步的 arg0）：局面不同，必须红，而且不会悄悄通过。
+        let broken_arg = replace_nth_arg(&script, 1, 999);
+        assert!(
+            unsafe { rd_run_replay_from(broken_arg.as_ptr(), broken_arg.len() as i32) } > 0,
+            "a changed argument must diverge: {}",
+            run_error_text()
+        );
+
+        // (4) 垃圾一律拒，且不留下半局。
+        assert_eq!(
+            unsafe { rd_run_replay_from(b"hello".as_ptr(), 5) },
+            -2,
+            "a script without a head is refused"
+        );
+        assert_eq!(
+            unsafe { rd_run_replay_from(b"RDR1,7,0;nonsense,1,2,3,;".as_ptr(), 25) },
+            1,
+            "an unknown kind is reported as step 1"
+        );
+    }
+
+    /// 把第 `n`（0 基）条记录的哈希换成垃圾，其余原样。
+    fn replace_nth_hash(script: &str, n: usize) -> String {
+        let (head, body) = script.split_once(';').expect("a head");
+        let mut out = std::format!("{head};");
+        for (index, record) in body.split(';').filter(|r| !r.is_empty()).enumerate() {
+            let mut cells: Vec<&str> = record.split(',').collect();
+            if index == n {
+                cells[3] = "dead0000dead0000";
+            }
+            out.push_str(&cells.join(","));
+            out.push(';');
+        }
+        out
+    }
+
+    /// 把第 `n` 条记录的 `arg{which}` 换掉。
+    fn replace_nth_arg(script: &str, n: usize, value: i32) -> String {
+        let (head, body) = script.split_once(';').expect("a head");
+        let mut out = std::format!("{head};");
+        for (index, record) in body.split(';').filter(|r| !r.is_empty()).enumerate() {
+            let mut cells: Vec<&str> = record.split(',').collect();
+            if index == n {
+                let text = value.to_string();
+                cells[1] = Box::leak(text.into_boxed_str());
+            }
+            out.push_str(&cells.join(","));
+            out.push(';');
+        }
+        out
+    }
+
     /// §161.10 P0: 存档走**自己的**缓冲区，容量由 ABI 公布。
     ///
     /// 旧的 `rd_run_archive_into(ptr)` 接收任意指针，而页面给的是 1024 B 的通用 scratch —— 一个
@@ -3722,7 +4315,7 @@ mod tests {
 
         // §161.10: **bypass the UI and call the ABI** -- a fight must refuse both directions.
         // Walk into a combat node first (`rd_run_fight_begin` only accepts one).
-        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
         assert_eq!(rd_run_begin_node(), 0, "the node under the cursor");
         assert_eq!(rd_run_fight_begin(), 0, "begin a fight");
         assert_eq!(
@@ -3768,7 +4361,7 @@ mod tests {
     #[test]
     fn a_power_potion_offers_the_three_power_cards_and_they_are_real_powers() {
         test_run(7, 80, 80, &["strike"; 10]);
-        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
 
@@ -3844,7 +4437,7 @@ mod tests {
     #[test]
     fn an_attack_potion_offers_three_definitions_and_creates_only_the_chosen_card() {
         test_run(7, 80, 80, &["strike"; 10]);
-        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
 
@@ -3952,7 +4545,7 @@ mod tests {
         // `strike` is the one-cost card this **content** has (the `paper_cut` fixture belongs to
         // rd-core's own image, which this crate does not load).
         test_run(7, 80, 80, &["strike"; 10]);
-        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
 
@@ -4124,7 +4717,7 @@ mod tests {
     #[test]
     fn the_choice_potions_ask_a_question_and_the_answer_moves_the_cards() {
         test_run(7, 80, 80, &["strike"; 10]);
-        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
 
@@ -4307,7 +4900,7 @@ mod tests {
             assert_eq!(session.state.combat_bonus().block, 10);
             assert_eq!(session.state.combat_bonus().status_count, 1, "Vajra grants one status");
         }
-        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
 
@@ -4340,7 +4933,7 @@ mod tests {
         // An explicit run: this test is about the deck, not about the start path,
         // so it must not depend on the blessing rules (§105).
         test_run(7, 80, 80, &["strike"; 10]);
-        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
         assert_eq!(rd_run_node_kind(), 1, "floor 1 is all combat (inv:§7.2)");
         assert_eq!(rd_run_begin_node(), 0);
         assert_eq!(rd_run_pending(), 0, "a fight has nothing for the run layer to settle");
