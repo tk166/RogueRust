@@ -166,16 +166,21 @@ const STATUS_AXES: [&str; 5] = [
     "standard.frail",
 ];
 
+// §169: **不加"这一格是几号"的尾注**。这些数字原来是手写的（`// 49`、`// 69`、`// 122`），
+// 而 `MAX_ENEMY_SLOTS` 从 4 涨到 6 之后它们全成了假的 —— 表达式仍然是对的，只有注释在说谎，
+// 而"哪一格是几号"恰恰是页面唯一关心的事。真正的守卫是 `smoke.mjs`：它把 `web/ui_render.js`
+// 声明的偏移与本模块导出的 `rd_env_observe_len()` 对起来，铺不满就红。
 const OFF_HEADER: usize = 0;
-pub(crate) const OFF_HERO_STATUS: usize = OFF_HEADER + 12; // 12
-const OFF_ENEMY: usize = OFF_HERO_STATUS + 5; // 17
-const OFF_ENEMY_STATUS: usize = OFF_ENEMY + MAX_ENEMY_SLOTS * 8; // 49
-pub(crate) const OFF_HAND: usize = OFF_ENEMY_STATUS + MAX_ENEMY_SLOTS * 5; // 69
-const OFF_PILES: usize = OFF_HAND + MAX_HAND_SLOTS * 4; // 109
-const OFF_RESERVED: usize = OFF_PILES + 5; // 114
+pub(crate) const OFF_HERO_STATUS: usize = OFF_HEADER + 12;
+const OFF_ENEMY: usize = OFF_HERO_STATUS + 5;
+const OFF_ENEMY_STATUS: usize = OFF_ENEMY + MAX_ENEMY_SLOTS * 8;
+pub(crate) const OFF_HAND: usize = OFF_ENEMY_STATUS + MAX_ENEMY_SLOTS * 5;
+const OFF_PILES: usize = OFF_HAND + MAX_HAND_SLOTS * 4;
+const OFF_RESERVED: usize = OFF_PILES + 5;
 /// `rd_env_observe_len()` — the caller must not hard-code this (`env-abi.md` §2.3), so it is
-/// published as an export too. 122 is what this implementation happens to produce.
-const OBS_LEN: usize = OFF_RESERVED + 8; // 122
+/// published as an export too. The value is whatever the expression above produces (148 today);
+/// the page reads it rather than repeating it.
+const OBS_LEN: usize = OFF_RESERVED + 8;
 
 /// Header slot indices.
 const H_ROUND: usize = 0;

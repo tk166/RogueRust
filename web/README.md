@@ -2,7 +2,9 @@
 
 A **single static file**, `index.html`, with inline CSS and JS and **no CDN, no worker, no
 `SharedArrayBuffer`**. It loads `rd_wasm.wasm` with a plain `WebAssembly.instantiate` and reads the
-whole game state out of the 122 `i32`s that `rd_env_observe_buf()` points at.
+whole game state out of the `i32`s that `rd_env_observe_buf()` points at -- **148** of them in this
+build, but the page reads `rd_env_observe_len()` rather than repeating the number (§169 removed the
+hand-written offsets from `rd-wasm` for exactly that reason).
 
 ## Files
 
@@ -182,7 +184,8 @@ It reads the **artifact sitting next to it** (a local, git-ignored build), check
 imports**, asserts every export `index.html` touches exists, and plays the fight out (round-1
 preview must equal the HP actually lost — that is what proves *both* enemies acted). Then it checks
 the artifact is **byte-identical to a fresh build**, and checks the **page**: the inline script
-parses, every `ex.*` it calls is a real export, and its hard-coded 122-slot offsets still tile. It
+parses, every `ex.*` it calls is a real export, and its offsets still tile over the length the
+module exports. It
 prints `WEB_SMOKE PASS` plus the byte count, the two enemies with their intents, the step count,
 the artifact sha, and the page's export/offset tally.
 
@@ -214,7 +217,7 @@ Served by `python -m http.server 8765 --bind 127.0.0.1`, opened in
 | loader path | **`instantiateStreaming`** — the fast path, not the `arrayBuffer` fallback |
 | fetch + instantiate + first observe | 10–40 ms (varies 4× between a cold and a warm cache) |
 | linear memory | 1,408 KiB |
-| DOM | renders, all 122 slots land in the right cells, cards are clickable |
+| DOM | renders, every slot lands in the right cell, cards are clickable |
 
 Then the fight was **played by clicking**, not by script: 21 clicks to `Victory` in round 7, and the
 HP lost on the first end-turn matched the two previewed intents (7 + 5 = 12) exactly.
@@ -240,7 +243,7 @@ Both are fixed. The deeper lesson is the one that became gates 13, 14 and (later
 `tools\acceptance.ps1`:
 **`web/index.html` was not looked at by anything.** A syntax error in it passed all twelve gates,
 because every gate stopped at the `.wasm`. `smoke.mjs` now also parses the page's inline script,
-cross-checks every `ex.*` the page calls against the module's real exports, re-derives the 122-slot
+cross-checks every `ex.*` the page calls against the module's real exports, re-derives the
 offset arithmetic, and asserts `web/rd_wasm.wasm` is **byte-identical** to a fresh
 `cargo build -p rd-wasm --release --target wasm32-unknown-unknown` (byte equality, not mtime:
 `Copy-Item` restores mtime, and a one-line comment edit makes an artifact look older than it is).
