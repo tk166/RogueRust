@@ -19,7 +19,7 @@
 
 use rd_core::state::{Ident, ID_CAP};
 
-use crate::map::{RunMap, NODES_PER_ROW, ROWS};
+use crate::map::{NodeKind, RunMap, NODES_PER_ROW, ROWS};
 pub mod archive;
 
 use crate::streams::{RunError, RunRng, RunStream};
@@ -62,6 +62,9 @@ pub const BURNING_BLOOD_HEAL: i32 = 6;
 
 /// The highest Ascension level the wiki defines (and the highest this build accepts).
 pub const MAX_ASCENSION: u8 = 20;
+/// 一局最多几幕（三幕 Boss 之后结束）。
+pub const MAX_ACTS: u8 = 3;
+
 
 /// The rule numbers, **named** so a call site reads as a rule instead of as a magic `>= 5`.
 ///
@@ -877,6 +880,20 @@ pub struct RunState {
     ascension: u8,
 }
 
+impl Pending {
+    /// 这个问句只可能出现在哪种房间里？`None` = 不限定（战斗奖励可能在三种战斗节点之后）。
+    #[must_use]
+    pub const fn room(self) -> Option<NodeKind> {
+        Some(match self {
+            Self::Rest => NodeKind::Rest,
+            Self::Shop => NodeKind::Shop,
+            Self::Chest => NodeKind::Treasure,
+            Self::Event | Self::EventCard => NodeKind::Unknown,
+            Self::None | Self::Reward | Self::Start | Self::BlessingCard => return None,
+        })
+    }
+}
+
 impl RunState {
     /// The encounter the previous fight used; `RunId::EMPTY` before the first fight (§153).
     #[must_use]
@@ -1457,17 +1474,24 @@ impl RunState {
         if self.pending == Pending::Start {
             return Err(RunError::WrongPhase);
         }
+        // ⚠️ **先验证再动**（§161.2(a)）：`check_invariants` 曾经在游标已经移动之后才跑，
+        // 于是一条不变量失败会留下"页面说被拒、内核却已经站在那个节点上"的局面 —— 页面随后
+        // 卡在一个它settle不了、也走不掉的节点里（soak 的 320 个死控件就是这么来的）。
+        let mut probe = *self;
         if target == crate::map::BOSS_NODE {
             // `inv:§7.2`: the boss is floor 16, one row past the map's last.
-            self.node = i32::from(target);
-            self.floor = ROWS as i32 + 1;
-            return self.check_invariants();
+            probe.node = i32::from(target);
+            probe.floor = ROWS as i32 + 1;
+        } else {
+            let Some((row, _)) = self.map.locate(target) else {
+                return Err(RunError::BadNode);
+            };
+            probe.node = i32::from(target);
+            probe.floor = row as i32 + 1;
         }
-        let Some((row, _)) = self.map.locate(target) else {
-            return Err(RunError::BadNode);
-        };
-        self.node = i32::from(target);
-        self.floor = row as i32 + 1;
+        probe.check_invariants()?;
+        self.node = probe.node;
+        self.floor = probe.floor;
         self.check_invariants()
     }
 
@@ -2870,8 +2894,149 @@ impl RunState {
                 return Err(RunError::Invariant("floor does not match the node's row"));
             }
         }
+        // ---- 标量 -------------------------------------------------------------------------
+        if self.gold < 0 {
+            return Err(RunError::Invariant("gold must not be negative"));
+        }
+        if self.removed_cards < 0 {
+            return Err(RunError::Invariant("removed_cards must not be negative"));
+        }
+        if self.act == 0 || self.act > MAX_ACTS {
+            return Err(RunError::Invariant("act must be in 1..=MAX_ACTS"));
+        }
+        if self.ascension > MAX_ASCENSION {
+            return Err(RunError::Invariant("ascension must be in 0..=MAX_ASCENSION"));
+        }
+        if self.potion_chance < 0 || self.potion_chance > 100 {
+            return Err(RunError::Invariant("potion_chance must be a percentage"));
+        }
+        if self.rarity_offset < RARITY_OFFSET_START || self.rarity_offset > RARITY_OFFSET_CAP {
+            return Err(RunError::Invariant("rarity_offset is outside its pity band"));
+        }
+
+        // 已结算位图只许指向地图上的节点（哨兵与越界位都不算）。
+        for word in 0..self.resolved.len() {
+            let mut bits = self.resolved[word];
+            while bits != 0 {
+                let bit = bits.trailing_zeros() as usize;
+                bits &= bits - 1;
+                let index = word * 64 + bit;
+                if index >= self.map.node_count() {
+                    return Err(RunError::Invariant("a resolved bit points off the map"));
+                }
+            }
+        }
+
+        // ---- `len` 之前有内容、之后是空的（§161.10 的 `remove_card` 尾槽就是这个漏的）----
+        if self.deck_len as usize > MAX_RUN_DECK {
+            return Err(RunError::Invariant("deck_len exceeds the deck capacity"));
+        }
+        for (index, card) in self.deck.iter().enumerate() {
+            let used = index < self.deck_len as usize;
+            if used && card.as_str().is_empty() {
+                return Err(RunError::Invariant("a deck slot inside len is empty"));
+            }
+            if !used && !card.as_str().is_empty() {
+                // §161.10：`remove_card` 曾经把被删的牌留在这里，而存档只写前 `len` 项。
+                return Err(RunError::Invariant("a deck slot past len is not empty"));
+            }
+        }
+        if self.relics_len as usize > MAX_RUN_RELICS {
+            return Err(RunError::Invariant("relics_len exceeds the relic capacity"));
+        }
+        for (index, relic) in self.relics.iter().enumerate() {
+            let used = index < self.relics_len as usize;
+            if used && relic.as_str().is_empty() {
+                return Err(RunError::Invariant("a relic slot inside len is empty"));
+            }
+            if !used && !relic.as_str().is_empty() {
+                return Err(RunError::Invariant("a relic slot past len is not empty"));
+            }
+        }
+        // 遗物不重复：重复的一件会付两次钱。
+        for (index, relic) in self.relics.iter().take(self.relics_len as usize).enumerate() {
+            if self.relics[..index].contains(relic) {
+                return Err(RunError::Invariant("the same relic is held twice"));
+            }
+        }
+        if self.potions_len > self.potion_slots() {
+            // Potion Belt 才是格数的来源（§157）：没有它就装不下第 4、5 瓶。
+            return Err(RunError::Invariant("more potions than the belt has slots"));
+        }
+        for (index, potion) in self.potions.iter().enumerate() {
+            let used = index < self.potions_len as usize;
+            if used && potion.as_str().is_empty() {
+                return Err(RunError::Invariant("a potion slot inside len is empty"));
+            }
+            if !used && !potion.as_str().is_empty() {
+                return Err(RunError::Invariant("a potion slot past len is not empty"));
+            }
+        }
+
+        // ---- 问句必须与它站着的房间一致 ------------------------------------------------------
+        if self.blessing_follow.is_some() && self.pending != Pending::BlessingCard {
+            return Err(RunError::Invariant("a blessing follow-up without its question"));
+        }
+        if self.event_follow.is_some() && self.pending != Pending::EventCard {
+            return Err(RunError::Invariant("an event follow-up without its question"));
+        }
+        if self.start_offers[0] as usize >= START_OFFERS.len()
+            || self.start_offers[1] as usize >= START_OFFERS.len()
+        {
+            return Err(RunError::Invariant("a rolled blessing is not in the table"));
+        }
+        if self.pending == Pending::Start && self.floor != 0 {
+            return Err(RunError::Invariant("the blessing screen exists only before floor 1"));
+        }
+        if self.pending == Pending::Event && self.event.as_str().is_empty() {
+            return Err(RunError::Invariant("an event screen without an event"));
+        }
+        if let Some(room) = self.pending.room() {
+            // Boss 是哨兵，它的"房间类型"由楼层决定（§161.8 的路由就是这么走的）。
+            let here = self.node_at_cursor();
+            if here != Some(room) {
+                return Err(RunError::Invariant("the pending screen is not this room"));
+            }
+        }
+
+        // ---- 商店与奖励屏 -------------------------------------------------------------------
+        // ⚠️ 这条判据我写错过**两次**，两次都被闸门当场打红 —— 记在这里：
+        //   1. "每一行都必须是活报价"：买过的行 price = -1 但 `count` 不减（槽位下标要稳定，
+        //      页面靠它下 `buy_card(slot)`）⇒ 合法局面被拒；
+        //   2. "有 id ⇔ 有价格"：`buy_card` **保留 id**、只把 price 设成 -1（`stock_shop` 才是
+        //      "有 id + 有价"）⇒ 合法的"已买"被当成半死不活。
+        // 真正的不变量只有两条：**活报价必须有 id**，以及**价格不会低于 -1**（-1 = 已经买走或
+        // 从没上架，两种死法在数据上是一样的，不该分开猜）。
+        for offer in self.shop.cards.iter().take(self.shop.cards_len as usize) {
+            if offer.price < -1 || (offer.price >= 0 && offer.id.as_str().is_empty()) {
+                return Err(RunError::Invariant("a live shop card row has no id"));
+            }
+        }
+        for offer in self.shop.relics.iter().take(self.shop.relics_len as usize) {
+            if offer.price < -1 || (offer.price >= 0 && offer.id.as_str().is_empty()) {
+                return Err(RunError::Invariant("a live shop relic row has no id"));
+            }
+        }
+        if self.reward.cards_len as usize > MAX_REWARD_CARDS || self.reward.gold < 0 {
+            return Err(RunError::Invariant("the reward screen is malformed"));
+        }
         Ok(())
     }
+
+    /// 游标下这个节点的**类型**；哨兵按 Boss 算，还没出发就是 `None`。
+    ///
+    /// `NodeKind::Boss` 在生成器里从不赋值（Boss 是地图外的哨兵），所以"类型"必须由这里回答，
+    /// 而不是去地图里找 —— 那是 §161.8 的路由器踩过的同一件事。
+    #[must_use]
+    pub fn node_at_cursor(&self) -> Option<NodeKind> {
+        let node = u8::try_from(self.node).ok()?;
+        if node == crate::map::BOSS_NODE {
+            return Some(NodeKind::Boss);
+        }
+        let (row, local) = self.map.locate(node)?;
+        self.map.row(row)?.node(local).map(|node| node.kind)
+    }
+
 }
 
 /// The tripwire. Prints the measured size and its headroom so the number in a memory table never
@@ -2901,6 +3066,175 @@ mod tests {
             "bash",
         ];
         RunState::new(7, 80, 99, &deck).expect("a run must start")
+    }
+
+    /// **真人的局面必须通过校验器**（§162）。太严的校验器比没有更糟。
+    ///
+    /// 走一整幕：每个节点都结算，每一步都问一次。这条测试存在的理由是"我加的那些不变量是从代码
+    /// 里读出来的，而代码里有我不知道的例外" —— 只有真跑一遍才知道有没有。
+    #[test]
+    fn a_real_run_validates_at_every_step() {
+        let mut run = ironclad();
+        run.check_invariants().expect("a fresh run");
+        // 出发前：挑一个第一层的节点。
+        let mut steps = 0;
+        for _ in 0..40 {
+            let mut moved = false;
+            for target in 0..crate::map::BOSS_NODE {
+                if run.enter_node(target).is_ok() {
+                    moved = true;
+                    break;
+                }
+            }
+            if !moved {
+                break;
+            }
+            run.check_invariants().unwrap_or_else(|e| panic!("step {steps}: {e:?}"));
+            // 结算这个节点：`enter_node` 只挪游标，**开节点**是另一件事（`begin_node` 会给
+            // 篝火/商店/宝箱摆好问句）。少了这一步，下面每个 `rest`/`leave` 都是 WrongPhase。
+            let pool = [PoolCard {
+                id: "strike",
+                rarity: Rarity::Common,
+            }];
+            match run.node_at_cursor() {
+                Some(NodeKind::Rest) => {
+                    run.begin_node(&pool, &RELICS).expect("begin the campfire");
+                    run.check_invariants().expect("a rest site is pending");
+                    run.rest().expect("rest");
+                }
+                Some(NodeKind::Treasure) => {
+                    run.begin_node(&pool, &RELICS).expect("begin the chest");
+                    run.check_invariants().expect("a chest is pending");
+                    // `open_chest` 自己结算这个节点（之后 `leave` 会是 WrongPhase）。
+                    run.open_chest(&RELICS).expect("open");
+                    run.check_invariants().expect("after the chest");
+                }
+                Some(NodeKind::Shop) => {
+                    run.begin_node(&pool, &RELICS).expect("stock the shop");
+                    run.check_invariants().expect("a shop is pending");
+                    run.leave().expect("leave");
+                }
+                _ => {}
+            }
+            run.mark_resolved();
+            run.check_invariants().unwrap_or_else(|e| panic!("resolved {steps}: {e:?}"));
+            steps += 1;
+            if run.node() == i32::from(crate::map::BOSS_NODE) {
+                break;
+            }
+        }
+        assert!(steps >= 8, "the fixture must actually walk, it took {steps} steps");
+    }
+
+    /// 每条不变量各一条反例，而且都指名它自己。**一条断言一个原因** —— 否则"拒绝了"什么都证明不了。
+    #[test]
+    fn every_invariant_names_itself_when_violated() {
+        let base = || ironclad();
+
+        let mut run = base();
+        run.health = run.health_max + 1;
+        assert_eq!(
+            run.check_invariants(),
+            Err(RunError::Invariant("health outside 0..=max"))
+        );
+
+        let mut run = base();
+        run.gold = -1;
+        assert_eq!(
+            run.check_invariants(),
+            Err(RunError::Invariant("gold must not be negative"))
+        );
+
+        let mut run = base();
+        run.act = 0;
+        assert_eq!(run.check_invariants(), Err(RunError::Invariant("act must be in 1..=MAX_ACTS")));
+
+        let mut run = base();
+        run.floor = 3;
+        assert_eq!(run.check_invariants(), Err(RunError::Invariant("floor set before the first step")));
+
+        let mut run = base();
+        run.node = 99;
+        assert_eq!(run.check_invariants(), Err(RunError::BadNode));
+
+        // 楼层与游标不一致：走到某一层，然后把楼层改掉。
+        let mut run = base();
+        assert!(run.enter_node(0).is_ok() || run.enter_node(1).is_ok() || run.enter_node(2).is_ok());
+        run.floor += 1;
+        assert_eq!(
+            run.check_invariants(),
+            Err(RunError::Invariant("floor does not match the node's row"))
+        );
+
+        // §161.10 的那个坑：`len` 之后不是空的。
+        let mut run = base();
+        let stale = run.deck[run.deck_len as usize - 1];
+        run.deck[run.deck_len as usize] = stale;
+        assert_eq!(
+            run.check_invariants(),
+            Err(RunError::Invariant("a deck slot past len is not empty"))
+        );
+
+        // 同一件遗物两份：先让手上真的有两件，再把第二件写成第一件。
+        let mut run = base();
+        // 先让手上真的有两件**不同的**遗物，再把第二件写成第一件 —— 否则会先撞上
+        // "len 之后的槽位不是空的"，那一条不是这条测试要问的。
+        run.push_relic("anchor").expect("relic room");
+        run.push_relic("vajra").expect("relic room");
+        run.relics[1] = run.relics[0];
+        assert_eq!(
+            run.check_invariants(),
+            Err(RunError::Invariant("the same relic is held twice"))
+        );
+
+        // 药水比腰带格数多（没有 Potion Belt 就是 3 格）。
+        let mut run = base();
+        run.potions_len = run.potion_slots() + 1;
+        assert_eq!(
+            run.check_invariants(),
+            Err(RunError::Invariant("more potions than the belt has slots"))
+        );
+
+        // 问句与房间不一致：把 pending 设成 Rest 而脚下是战斗。
+        let mut run = base();
+        assert!(run.enter_node(0).is_ok() || run.enter_node(1).is_ok() || run.enter_node(2).is_ok());
+        run.pending = Pending::Rest;
+        assert_eq!(
+            run.check_invariants(),
+            Err(RunError::Invariant("the pending screen is not this room"))
+        );
+
+        // 后续动作与问句脱钩。
+        let mut run = base();
+        run.event_follow = Some(DeckChange::Remove);
+        assert_eq!(
+            run.check_invariants(),
+            Err(RunError::Invariant("an event follow-up without its question"))
+        );
+
+        // 祝福不在表里。
+        let mut run = base();
+        run.start_offers = [0, 200];
+        assert_eq!(
+            run.check_invariants(),
+            Err(RunError::Invariant("a rolled blessing is not in the table"))
+        );
+
+        // 活报价却没有 id：价格在、货不在 —— 那才是坏局面。
+        // （不设 `pending`：这条判据与问句无关，把 `pending` 硬设成 Shop 会让"问句与房间一致"
+        // 先响，那是另一条测试的事。）
+        let mut run = base();
+        run.shop.cards_len = 1;
+        run.shop.cards[0].id = RunId::EMPTY;
+        run.shop.cards[0].price = 50;
+        assert_eq!(
+            run.check_invariants(),
+            Err(RunError::Invariant("a live shop card row has no id"))
+        );
+        // price = -1 是**合法**的（买走或没上架），不算错。
+        run.shop.cards[0].id = RunId::new("strike").expect("id");
+        run.shop.cards[0].price = -1;
+        assert_eq!(run.check_invariants(), Ok(()));
     }
 
     #[test]

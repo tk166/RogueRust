@@ -64,6 +64,11 @@ pub enum ArchiveError {
     BadField(&'static str),
     /// payload 读完了还有剩余字节 —— 这不是这个版本的产物。
     Trailing,
+    /// 解析成功，但这一局**自相矛盾**（`RunState::validate`）。名字指出是哪一条。
+    ///
+    /// 与 `BadField` 分开：那一类是"字节不对劲"，这一类是"字节都对，但这样的局面不可能存在"。
+    /// CRC 只证明前者；后者只有整局的不变量能证明。
+    Invariant(&'static str),
 }
 
 impl core::fmt::Display for ArchiveError {
@@ -77,6 +82,7 @@ impl core::fmt::Display for ArchiveError {
             Self::BadVersion => f.write_str("archive version is not supported"),
             Self::BadField(what) => write!(f, "archive field {what} is not valid"),
             Self::Trailing => f.write_str("archive has trailing bytes"),
+            Self::Invariant(what) => write!(f, "archive state is inconsistent: {what}"),
         }
     }
 }
@@ -801,6 +807,11 @@ pub fn restore(text: &str, state: &mut RunState) -> Result<(), ArchiveError> {
         return Err(ArchiveError::BadCrc);
     }
     let restored = read_payload(&payload[..payload_len])?;
+    // §162：**提交前**问一次整局的不变量。CRC 证明"没被改坏"，这一句证明"这样的一局可能存在"。
+    restored.check_invariants().map_err(|error| match error {
+        crate::streams::RunError::Invariant(what) => ArchiveError::Invariant(what),
+        _ => ArchiveError::Invariant("validate"),
+    })?;
     *state = restored;
     Ok(())
 }
@@ -881,6 +892,20 @@ mod tests {
     #[test]
     fn a_run_that_lost_a_card_still_round_trips() {
         let mut run = sample();
+        // 删除服务要 `Pending::Shop`，而校验器要求"这个问句就是脚下的房间" —— 所以先把游标
+        // 摆到一个真的商店节点上（摆到 0 层、把 pending 硬设成 Shop 是伪造局面，校验器会拒，
+        // 而它拒得对：那样的局运行层自己造不出来）。
+        let shop = (0..run.map().node_count()).find(|index| {
+            run.map()
+                .locate(*index as u8)
+                .and_then(|(row, local)| run.map().row(row).and_then(|line| line.node(local)))
+                .is_some_and(|node| node.kind == crate::map::NodeKind::Shop)
+        });
+        let Some(shop) = shop else {
+            panic!("seed 2024's map has a shop");
+        };
+        run.node = shop as i32;
+        run.floor = run.map().locate(shop as u8).expect("on the map").0 as i32 + 1;
         run.pending = Pending::Shop;
         run.adjust_gold(400);
         let before = run.deck().len();
@@ -900,6 +925,26 @@ mod tests {
             restored, run,
             "a removed card left the archive unable to round-trip (stale tail slot)"
         );
+    }
+
+    /// **CRC 合法、状态非法**：`write` 一个自相矛盾的局，它的校验和当然是"对的"，
+    /// 所以拒绝只能来自不变量（§162）。
+    #[test]
+    fn an_archive_whose_state_is_impossible_is_refused_even_with_a_valid_checksum() {
+        let mut run = sample();
+        // 血量超过上限：一个任何动作都造不出来的局面。
+        run.health_max = 40;
+        run.health = 41;
+        let mut out = [0u8; MAX_ARCHIVE];
+        let len = write(&run, &mut out).expect("write");
+        let text = core::str::from_utf8(&out[..len]).expect("ascii");
+        let mut target = sample();
+        assert_eq!(
+            restore(text, &mut target),
+            Err(ArchiveError::Invariant("health outside 0..=max")),
+            "a checksum-valid archive of an impossible state must still be refused"
+        );
+        assert_eq!(target, sample(), "and the run is untouched");
     }
 
     #[test]
