@@ -92,23 +92,41 @@ const report = await page.evaluate(`(async () => {
   }
 
   // ---- a fight policy that is better than "first card" ---------------------------------------
-  // Attacks first, blocks when the incoming damage would land, potions when the hero is low.
-  // Deliberately not clever: the point is to *finish* fights so the act can advance, and a policy
-  // that silently loses would turn five scenarios into five "died on floor 6" reports.
+  // It has to be able to **win an act**, because the boss scenario walks 15 floors: "attacks first,
+  // block never" lost the boss at 50/95 HP and the whole slice then reported a driver gap. So:
+  // block when the incoming damage would get through, otherwise hit, and drink when hurt.
+  const incoming = () => {
+    let total = 0;
+    for (let slot = 0; slot < 6; slot++) {
+      const base = OFF_ENEMY + slot * 8;
+      if (cell(base) === 1) total += Math.max(0, cell(base + 6));
+    }
+    return total;
+  };
   async function fight(budget) {
     let guard = 0;
     while (inFight() && guard++ < budget) {
-      // **Armed = every card click is ignored.** The page is waiting for an enemy to be picked; if
-      // the arm happened on a tick the driver did not watch (a potion click's re-render is async),
-      // this is the only state that can freeze a fight with energy, cards and end-turn all "fine".
+      // The page has **two** "pick an enemy" flows and they are not interchangeable:
+      //   * a potion waiting for a target  -> potion-armed on #enemies, click [data-enemy-panel];
+      //   * a card waiting for a target    -> the aimable panels carry [data-target-slot].
+      // data-enemy-panel exists on **every** panel, data-target-slot only where the armed card
+      // can reach. The click handler looks for [data-target-slot] whenever a card is armed and
+      // returns early if the panel lacks it -- so clicking [data-enemy-panel] first leaves the card
+      // armed and every later card click ignored. That was the 25-minute stall at floor 12.
       if (byId("enemies").classList.contains("potion-armed")) {
-        const target = document.querySelector("#enemies [data-enemy-panel]") ||
-        document.querySelector("#enemies [data-target-slot]");
+        const target = document.querySelector("#enemies [data-enemy-panel]");
         if (target) {
           await click(target);
           await answerChoice();
           continue;
         }
+      }
+      // A card is armed iff some panel is marked aimable: finish that play before choosing another.
+      const armed = document.querySelector("#enemies [data-target-slot]");
+      if (armed) {
+        await click(armed);
+        await answerChoice();
+        continue;
       }
       if (await answerChoice()) continue;
       if (!byId("modal").hidden) {
@@ -117,7 +135,9 @@ const report = await page.evaluate(`(async () => {
         else byId("modal").hidden = true;
         continue;
       }
-      if (cell(4) * 3 < cell(5)) {
+      // Potions at half health (and always on the first turn of a boss fight: a free card is worth
+      // more early than the HP it saves later).
+      if (cell(4) * 2 < cell(5)) {
         const potion = document.querySelector("[data-use-potion]");
         if (potion) {
           await drinkPotion(potion.dataset.usePotion);
@@ -131,11 +151,33 @@ const report = await page.evaluate(`(async () => {
       }
       const attack = cards.find((c) => /damage/i.test(text(c)));
       const block = cards.find((c) => /block/i.test(text(c)));
-      const pick = attack || block || cards[0];
+      // Blocking whenever damage "gets through" made fights *longer* than they were short: a 5-block
+      // card against 27 incoming still lets 22 through, and every extra turn is another 27. What a
+      // player does is kill faster and block only when the hit would be lethal.
+      const lethal = incoming() >= cell(4);
+      const pick = lethal && block ? block : (attack || block || cards[0]);
       await click(pick);
-      const target = document.querySelector("#enemies [data-enemy-panel]") ||
-        document.querySelector("#enemies [data-target-slot]");
-      if (target) await click(target);
+      // …and aim at the enemy that dies soonest, so the incoming total drops early.
+      const weakest = (() => {
+        let best = -1;
+        let bestHp = Infinity;
+        for (let slot = 0; slot < 6; slot++) {
+          const base = OFF_ENEMY + slot * 8;
+          if (cell(base) !== 1) continue;
+          const hp = cell(base + 1);
+          if (hp < bestHp) {
+            bestHp = hp;
+            best = slot;
+          }
+        }
+        return best;
+      })();
+      const aimAt = weakest >= 0
+        ? document.querySelector('#enemies [data-target-slot="' + weakest + '"]')
+        : null;
+      if (aimAt) await click(aimAt);
+      // The card may have armed a target picker; the next loop iteration finishes it (see above).
+      // Clicking anything else here is what used to strand the card.
     }
     return !inFight();
   }
@@ -179,6 +221,11 @@ const report = await page.evaluate(`(async () => {
         if (ex.rd_env_choice_pending() !== 1) byId("modal").hidden = true;
         continue;
       }
+      // **Stop at the boss.** Settling it here would fight and, if it lost, restart the run -- which
+      // is exactly what the first version did: the walk reached floor 15, the boss was fought inside
+      // the settler, the hero died at 21 HP, the run-over panel appeared, and the fallback below
+      // clicked 再打一局 and started a *new* run. Three identical walks appeared in the trail.
+      if (ex.rd_run_node_kind() === 7) return true;
       // A combat node presents 开始战斗; the fight does not start by itself. Without this the
       // settle loop stalled on every combat/elite and the walk "could not reach the last row".
       const begin = findButton(/^开始战斗/);
@@ -228,8 +275,13 @@ const report = await page.evaluate(`(async () => {
         continue;
       }
       if (!buttons().length) return true;
-      // Something this driver does not know: click it **once** and let the next round decide.
-      const any = buttons()[0];
+      // Something this driver does not know: click it **once** and let the next round decide --
+      // except a button that starts a **new run**. A driver that restarts hides its own failure
+      // behind a fresh act, and the trail then shows three walks and no reason.
+      // ⚠️ ui_panels.js spells this twice ("再**打**一局" and "再**来**一局"); a guard that names
+      // only one of them let a driver restart the run and hide its own failure.
+      const any = buttons().find((b) => !/再[打来]一局|换一个 ?seed|重开/.test(text(b)));
+      if (!any) return false;
       const before = text(panel());
       await click(any);
       if (text(panel()) === before && !inFight()) return false;
@@ -275,33 +327,54 @@ const report = await page.evaluate(`(async () => {
 
   // The boss is a **sentinel cursor** at floor 16, off the map (inv:§7.2), so it is not a node a
   // route can name. The last row is the pre-boss campfire; settling it moves the cursor there.
+  /// Cheapest route from the current position to the **last row**, where an elite costs a lot more
+  /// than anything else.
+  ///
+  /// Not BFS: "shortest" and "safest" are different questions, and the first version asked the first
+  /// one -- so the walk went straight through a three-Sentry elite with 5 HP left and died on floor
+  /// 11. A player with a starter deck walks around elites; that is what the branching map is for.
   function planToLastRow() {
     const view = window.RD_DEBUG.view();
     if (!view) return null;
     const last = Math.max(...view.nodes.map((n) => n.row));
     const byIdMap = new Map(view.nodes.map((n) => [n.id, n]));
+    const cost = new Map();
     const parent = new Map();
-    const queue = [];
+    const done = new Set();
+    const frontier = [];
     for (const node of view.nodes.filter((n) => n.reachable)) {
-      if (node.row === last) return [node.id];
+      cost.set(node.id, 0);
       parent.set(node.id, -1);
-      queue.push(node.id);
+      frontier.push(node.id);
     }
-    while (queue.length) {
-      const id = queue.shift();
-      for (const next of byIdMap.get(id).out) {
-        if (parent.has(next)) continue;
-        parent.set(next, id);
-        if (byIdMap.get(next).row === last) {
-          const path = [next];
-          let walk = id;
-          while (walk !== -1) {
-            path.unshift(walk);
-            walk = parent.get(walk);
-          }
-          return path;
+    while (frontier.length) {
+      // smallest tentative cost first (73 nodes: a linear scan is clearer than a heap)
+      let bestAt = 0;
+      for (let i = 1; i < frontier.length; i++) {
+        if (cost.get(frontier[i]) < cost.get(frontier[bestAt])) bestAt = i;
+      }
+      const id = frontier.splice(bestAt, 1)[0];
+      if (done.has(id)) continue;
+      done.add(id);
+      const node = byIdMap.get(id);
+      if (node.row === last) {
+        const path = [id];
+        let walk = parent.get(id);
+        while (walk !== -1 && walk !== undefined) {
+          path.unshift(walk);
+          walk = parent.get(walk);
         }
-        queue.push(next);
+        return path;
+      }
+      for (const next of node.out) {
+        if (done.has(next)) continue;
+        const step = byIdMap.get(next).kindName === "elite" ? 50 : 1;
+        const total = cost.get(id) + step;
+        if (!cost.has(next) || total < cost.get(next)) {
+          cost.set(next, total);
+          parent.set(next, id);
+          frontier.push(next);
+        }
       }
     }
     return null;
@@ -541,7 +614,10 @@ const report = await page.evaluate(`(async () => {
         // line skipped the click when the plan was longer than one hop and only settled -- the walk
         // then reported "no progress on floor 0" for 20 hops, which looked like a broken route.)
         await click(document.querySelector('[data-node="' + plan[0] + '"]'));
-        const settled = plan.length === 1 ? true : await settle(200);
+        // **Every** hop is settled, including the last one: settling the last row's campfire is what
+        // moves the cursor onto the boss sentinel (floor 16). The first version stopped after the
+        // click and then reported "stuck on floor 15".
+        const settled = await settle(200);
         row.trail.push(
           "f" + ex.rd_run_observe(0) + "k" + ex.rd_run_node_kind() +
           "/len" + plan.length + (settled ? "" : "/STALL") + "/hp" + hp() +
@@ -553,7 +629,7 @@ const report = await page.evaluate(`(async () => {
             "/arm" + (byId("enemies").classList.contains("potion-armed") ? "Y" : "N") +
             "/energy" + cell(8) + "/h0" + document.querySelectorAll("#hand button.card[disabled]").length)
         );
-        if (plan.length === 1) break;
+        if (ex.rd_run_node_kind() === 7) break; // the cursor is on the boss sentinel
         if (hp() <= 0) break;
         if (ex.rd_run_observe(0) === lastFloor) {
           stallsOnFloor += 1;
@@ -571,22 +647,45 @@ const report = await page.evaluate(`(async () => {
       row.floor = ex.rd_run_observe(0);
       // §161.7 anchor: a potion that asks a question, inside the boss fight.
       row.potionGranted = window.RD_DEBUG.givePotion("attack_potion");
+      const beltSlot = ex.rd_run_potion_count() - 1;
       const begin = findButton(/^开始战斗/);
       if (begin) await click(begin);
       row.started = inFight();
       if (row.started) {
-        const potion = document.querySelector("[data-use-potion]");
+        // givePotion appends, so the Attack Potion is the **last** belt slot. Taking the first
+        // 用 button drank whatever the act had already dropped there (a block potion), which opens
+        // no question -- and the gate then blamed the mechanism.
+        const potion = document.querySelector('[data-use-potion="' + beltSlot + '"]');
         row.potionUsed = Boolean(potion);
         if (potion) {
-          // The Attack Potion needs a target **and** asks a card question: both are part of using it.
-          await drinkPotion(potion.dataset.usePotion);
+          // §161.7's anchor, step by step: click 用, complete the **target pick** it arms, then read
+          // the question it opened *before* answering it. (Reading it after the answer reports 0 --
+          // an order-of-observation bug, not a mechanism bug.)
+          const button = document.querySelector('[data-use-potion="' + potion.dataset.usePotion + '"]');
+          button.onclick ? button.onclick() : await click(button);
+          await sleep(0);
+          if (byId("enemies").classList.contains("potion-armed")) {
+            const target = document.querySelector("#enemies [data-enemy-panel]");
+            if (target) await click(target);
+            await sleep(0);
+          }
+          row.potionOpened = ex.rd_env_choice_pending();
+          row.potionSource = ex.rd_env_choice_source();
+          row.potionOptions = ex.rd_env_choice_count();
+          const option = document.querySelector("#modalBody [data-choice]");
+          if (option) await click(option);
+          const confirmPick = document.querySelector('#modalBody [data-panel-action="choice-confirm"]');
+          if (confirmPick && !confirmPick.disabled) {
+            confirmPick.onclick ? confirmPick.onclick() : await click(confirmPick);
+            await sleep(0);
+          }
+          row.potionAnswered = ex.rd_env_choice_pending() === 0;
+        } else {
+          row.potionOpened = 0;
+          row.potionSource = 0;
+          row.potionOptions = 0;
+          row.potionAnswered = true;
         }
-        row.potionOpened = ex.rd_env_choice_pending();
-        row.potionSource = ex.rd_env_choice_source();
-        row.potionOptions = ex.rd_env_choice_count();
-        // …answered by the same helper the fights use.
-        await answerChoice();
-        row.potionAnswered = ex.rd_env_choice_pending() === 0;
         row.won = await fight(900);
         row.pending = ex.rd_run_pending();
       }
@@ -684,17 +783,27 @@ if (!elite.skipped) {
 }
 
 const boss = byName("boss");
-// **Not asserted, and reported instead.** The walk reaches floor 12 of 15 and stops on an elite whose
-// fight the driver cannot finish: the page arms a "pick a target" state and the driver's click races
-// the re-render (the same trap that froze it on an armed potion, which *is* fixed). Making this a
-// `want` would mean either a gate that is red for a driver bug or a gate that quietly skips -- and
-// both are lies. So the four node kinds above are asserted, and the boss prints its trail until the
-// fight driver can finish a three-enemy fight.
-const bossReached = boss.kind === 7;
-console.log(
-  "  boss   REACHED=" + bossReached + " floor=" + boss.floor + " kind=" + boss.kind +
-  (bossReached ? "" : "  (driver gap, see port-plan §161.8)")
-);
+if (!boss.skipped) {
+  // The boss is the **sentinel cursor** at floor 16 (`inv:§7.2`), reached by settling the last row's
+  // campfire -- which is as literal as "从开局走到幕末" gets.
+  want(boss.kind === 7, `boss: the cursor is on kind ${boss.kind}, expected 7 (the boss sentinel)`);
+  want(boss.floor === 16, `boss: floor ${boss.floor}, expected 16`);
+  want(boss.started === true, "boss: the fight did not start");
+  // §161.7's anchor: a potion that opens a card question, inside the boss fight.
+  want(boss.potionGranted === 0, `boss: the debug grant failed (${boss.potionGranted})`);
+  want(boss.potionUsed === true, "boss: no 用 button for the granted potion");
+  want(boss.potionOpened === 1, "boss: the Attack Potion opened no question");
+  want(boss.potionSource === 2, `boss: the question's source is ${boss.potionSource}, expected 2`);
+  want(boss.potionOptions === 3, `boss: ${boss.potionOptions} candidates, expected 3`);
+  want(boss.potionAnswered === true, "boss: the question was not answered");
+  want(boss.won === true, "boss: the boss was not beaten");
+  want(
+    boss.actAfter === (boss.actBefore || 1) + 1,
+    `boss: the act did not advance (${boss.actBefore} -> ${boss.actAfter})`
+  );
+  want(boss.hpAfter === boss.maxHp, `boss: the act-end heal did not fill up (${boss.hpAfter}/${boss.maxHp})`);
+  want(boss.mapNodes > 0, "boss: the next act has no map");
+}
 if (boss.trail) console.log("  boss trail  " + boss.trail.join(" "));
 
 await page.close();
