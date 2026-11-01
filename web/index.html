@@ -2144,6 +2144,85 @@ function measure() {
       `hp ${ex.rd_run_observe(2)}/${ex.rd_run_observe(3)} · gold ${ex.rd_run_observe(4)}</span>`);
   };
 
+  // ---- §164 回放 -----------------------------------------------------------------------
+  // 与存档同一条纪律：一个元素一个写者（`#scriptBox` ← `setScript`，`#scriptNote` ← `scriptSay`），
+  // 并且页面拥有"战斗中不许"这条判断（它知道自己处在什么模式，内核不知道）。
+  const setScript = (text) => {
+    document.getElementById("scriptBox").value = text;
+  };
+  const scriptSay = (html) => {
+    document.getElementById("scriptNote").innerHTML = html;
+  };
+  document.getElementById("scriptExport").onclick = () => {
+    if (mode === "fight") {
+      scriptSay(`<span class="err">战斗中没有脚本 · 一场战斗不是运行层的动作，只有它的**结果**进脚本。` +
+        `先打完这一场再导出。</span>`);
+      return;
+    }
+    const len = ex.rd_run_script_fill();
+    if (len < 0) {
+      scriptSay(`<span class="err">导不了 · ${esc(runError())}</span>`);
+      return;
+    }
+    const capacity = ex.rd_run_script_capacity();
+    if (len > capacity) {
+      // 不可达：`fill` 自己就写在这个缓冲区里、长度由它决定，超了它自己会拒。写出来是因为
+      // "不可能"也要可观察。
+      scriptSay(`<span class="err">脚本 ${len} 字节超过缓冲容量 ${capacity}</span>`);
+      return;
+    }
+    const ptr = ex.rd_run_script_buf();
+    const text = new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, len).slice());
+    setScript(text);
+    // 步数 = 分号个数 - 1（头部那一段不算），给玩家一个"这局记了多少动作"的直观数字。
+    const steps = text.split(";").filter((part) => part.length > 0).length - 1;
+    scriptSay(`<span class="good">已导出 · ${steps} 步 · ${text.length} 个字符</span>` +
+      ` <span class="dim">改掉其中一步的哈希再点"回放"，它会指出是哪一步</span>`);
+  };
+  document.getElementById("scriptReplay").onclick = () => {
+    if (mode === "fight") {
+      scriptSay(`<span class="err">战斗中不能回放 · 回放从开局重跑这一局，会把这场战斗扔掉。</span>`);
+      return;
+    }
+    const text = document.getElementById("scriptBox").value.trim();
+    if (!text) {
+      scriptSay(`<span class="err">框是空的 · 先"导出脚本"，或者粘一份</span>`);
+      return;
+    }
+    const bytes = new TextEncoder().encode(text);
+    const capacity = ex.rd_run_script_capacity();
+    if (bytes.length > capacity) {
+      scriptSay(`<span class="err">脚本 ${bytes.length} 字节，超过缓冲容量 ${capacity}</span>`);
+      return;
+    }
+    const ptr = ex.rd_run_script_buf();
+    new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
+    const verdict = ex.rd_run_replay_from(ptr, bytes.length);
+    // 无论结果如何，槽里现在都是**回放过的那一局** —— 先把视图切回来，再说结果，
+    // 否则玩家看到的还是上一局的画面（"状态改了没重渲染 = 玩家看不见"）。
+    setMode("run");
+    runOver = false;
+    renderMap();
+    renderNode();
+    renderTopBar();
+    const checked = ex.rd_run_replay_checked();
+    if (verdict === 0) {
+      // 0 步不是"通过"，是"这一局就是那份档案"（回档之后日志从空白开始）。说清楚，否则
+      // 「回放通过 · 0 步」读起来像某个闸门偷偷绿灯了。
+      const what = checked === 0
+        ? "回放通过 · 这一局正是头部的档案本身（0 步）"
+        : `回放通过 · ${checked} 步全部对上`;
+      scriptSay(`<span class="good">${what}</span>` +
+        ` <span class="dim">floor ${ex.rd_run_observe(0)} · hp ${ex.rd_run_observe(2)}/${ex.rd_run_observe(3)}` +
+        ` · gold ${ex.rd_run_observe(4)}</span>`);
+      return;
+    }
+    // 分叉：**局面停在分叉处**（这是真实状态，不是"什么都没发生"），所以照样重画了，
+    // 并且把已经验过的步数一起说出来 —— "第 3 步" 与 "第 3 步（前 2 步没问题）" 是不同的信息。
+    scriptSay(`<span class="err">回放分叉 · 第 ${verdict} 步（前 ${checked} 步对上）· ` +
+      `${esc(runError())}</span>`);
+  };
+
   document.getElementById("reset").addEventListener("click", () => {
     // "重开" is a new **run**, not a new fight: the fight is a consequence of walking into one.
     pending = null; lastVerdict = null; lastReward = 0;
@@ -2163,6 +2242,19 @@ function measure() {
   </div>
   <textarea id="archiveBox" rows="3" spellcheck="false"
             placeholder="RDA1-…"></textarea>
+</div>
+
+<!-- §164：回放。一行一步：`kind,a,b,hash16,text`，`;` 分隔，`RDR1,seed,asc;` 开头。
+     回放**从开局重跑**，每一步比哈希 —— 所以它证明的是"这串动作能复现这一局"，而不是"文件没坏"。 -->
+<div class="panel archive-bar" id="scriptBar">
+  <h2>回放 · 动作序列 + 每步哈希</h2>
+  <div class="row">
+    <button class="act" id="scriptExport">导出脚本</button>
+    <button class="act" id="scriptReplay">回放</button>
+    <span class="note" id="scriptNote">导出这一局的脚本，改掉任何一步再回放，它会指出是哪一步</span>
+  </div>
+  <textarea id="scriptBox" rows="3" spellcheck="false"
+            placeholder="RDR1,S,seed,asc;step,0,-1,0123456789abcdef,;…"></textarea>
 </div>
 </body>
 </html>

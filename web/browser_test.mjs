@@ -435,6 +435,48 @@ const report = await evaluate(`(async () => {
     done: ex.rd_env_done(), result: ex.rd_env_result(), inFight: out.archiveInFight,
     pending: ex.rd_run_pending(),
   };
+  // 164: the replay, through the page's own buttons -- on a run that has **steps** (the two hops
+  // above), because a zero-step script would make every assertion below vacuous.
+  document.getElementById("scriptExport").onclick();
+  await sleep(0);
+  const script = document.getElementById("scriptBox").value;
+  out.scriptHead = script.slice(0, 9);
+  out.scriptSteps = script.split(";").filter((part) => part.length > 0).length - 1;
+  out.scriptExportNote = text(document.getElementById("scriptNote"));
+  out.scriptFloorBefore = ex.rd_run_observe(0);
+  document.getElementById("scriptReplay").onclick();
+  await sleep(0);
+  out.scriptReplayNote = text(document.getElementById("scriptNote"));
+  out.scriptFloorAfter = ex.rd_run_observe(0);
+  out.scriptSeedAfter = ex.rd_run_seed();
+  out.scriptChecked = ex.rd_run_replay_checked();
+
+  // Tamper the **second** record's hash: the page must name that step, not just "failed".
+  const parts = script.split(";");
+  // parts[0] is the head, so parts[2] is the **second** record (step 2).
+  const cells = parts[2].split(",");
+  cells[3] = cells[3].slice(0, 15) + (cells[3].slice(15) === "0" ? "1" : "0");
+  parts[2] = cells.join(",");
+  document.getElementById("scriptBox").value = parts.join(";");
+  document.getElementById("scriptReplay").onclick();
+  await sleep(0);
+  out.scriptTamperNote = text(document.getElementById("scriptNote"));
+  out.scriptTamperDiverged = ex.rd_run_replay_diverged();
+  out.scriptTamperChecked = ex.rd_run_replay_checked();
+
+  // An empty box must not start a run and must not say "passed".
+  document.getElementById("scriptBox").value = "";
+  document.getElementById("scriptReplay").onclick();
+  await sleep(0);
+  out.scriptEmptyNote = text(document.getElementById("scriptNote"));
+
+  // Put the run **back** on the recorded path: the tampered replay stopped at step 2, so the archive
+  // below would otherwise be taken from an earlier floor.
+  document.getElementById("scriptBox").value = script;
+  document.getElementById("scriptReplay").onclick();
+  await sleep(0);
+  out.scriptBackFloor = ex.rd_run_observe(0);
+
   document.getElementById("archiveCopy").onclick();
   await sleep(0);
   const saved = document.getElementById("archiveBox").value;
@@ -481,6 +523,20 @@ const report = await evaluate(`(async () => {
   document.getElementById("archiveCopy").onclick();
   await sleep(0);
   out.archiveStable = document.getElementById("archiveBox").value === saved;
+  // 164: a restored run's script starts at its **archive**, not at (seed, level) -- the restored
+  // state is not on the "played from the start" timeline. Zero steps is the right answer here: the
+  // run *is* the archive, and replaying it proves that the head round-trips.
+  document.getElementById("scriptExport").onclick();
+  await sleep(0);
+  const restoredScript = document.getElementById("scriptBox").value;
+  out.scriptArchiveHead = restoredScript.startsWith("RDR1,A,RDA1-");
+  out.scriptArchiveSteps = restoredScript.split(";").filter((part) => part.length > 0).length - 1;
+  document.getElementById("scriptReplay").onclick();
+  await sleep(0);
+  out.scriptArchiveNote = text(document.getElementById("scriptNote"));
+  out.scriptArchiveSeed = ex.rd_run_seed();
+  out.scriptArchiveFloor = ex.rd_run_observe(0);
+
 
   // §159: (seed, level) is the whole description of a run. Drive it through the **fields** the
   // player actually uses -- typing a level and pressing 开始 -- because a page whose level input is
@@ -656,8 +712,248 @@ want(report.afterEditFloor === report.restoredFloor,
 want(report.afterEditSeed === 4321, "a refused restore changed the seed");
 want(report.archiveStable === true, "the same run produced two different archives");
 
+// 164: the replay, through the page's own buttons.
+want(report.scriptHead === "RDR1,S,43", `the script head is ${JSON.stringify(report.scriptHead)}`);
+want(report.scriptSteps > 0, `the exported script has ${report.scriptSteps} step(s)`);
+want(report.scriptBackFloor === report.scriptFloorBefore,
+  `replaying the good script did not return to floor ${report.scriptFloorBefore} ` +
+  `(it went to ${report.scriptBackFloor})`);
+want(/已导出/.test(report.scriptExportNote || ""),
+  `export said nothing useful: ${JSON.stringify(report.scriptExportNote)}`);
+want(/回放通过/.test(report.scriptReplayNote || ""),
+  `replay did not pass: ${JSON.stringify(report.scriptReplayNote)}`);
+want(report.scriptChecked === report.scriptSteps,
+  `verified ${report.scriptChecked} of ${report.scriptSteps} step(s)`);
+want(report.scriptFloorAfter === report.scriptFloorBefore && report.scriptSeedAfter === 4321,
+  `the replay did not land on the same run (floor ${report.scriptFloorAfter}, seed ${report.scriptSeedAfter})`);
+want(report.scriptTamperDiverged === 2,
+  `a tampered step 2 was reported as step ${report.scriptTamperDiverged}`);
+want(report.scriptTamperChecked === 1,
+  `${report.scriptTamperChecked} step(s) verified before the tampered one, expected 1`);
+want(/第 2 步/.test(report.scriptTamperNote || ""),
+  `the page did not name the diverging step: ${JSON.stringify(report.scriptTamperNote)}`);
+want(/框是空的/.test(report.scriptEmptyNote || ""),
+  `an empty script was not refused: ${JSON.stringify(report.scriptEmptyNote)}`);
+// …and a **restored** run's script starts at its archive. This is the half that keeps a restore from
+// silently poisoning the journal: the restored state is not on the "played from the start" timeline.
+want(report.scriptArchiveHead === true,
+  "a restored run's script did not start at its archive");
+want(report.scriptArchiveSteps === 0,
+  `a restored run's script claims ${report.scriptArchiveSteps} step(s), expected 0 before playing on`);
+want(/回放通过/.test(report.scriptArchiveNote || ""),
+  `replaying an archive-headed script failed: ${JSON.stringify(report.scriptArchiveNote)}`);
+want(report.scriptArchiveSeed === 4321 && report.scriptArchiveFloor === report.restoredFloor,
+  `the archive-headed replay landed on seed ${report.scriptArchiveSeed} floor ${report.scriptArchiveFloor}`);
+
+// §165: the **same** page, pressed with real pointer events (CDP `Input.dispatchMouseEvent`).
+//
+// Everything above dispatches synthetic `MouseEvent`s from inside the page, which skips hit-testing:
+// a control that a modal covers, or that is scrolled out of view, still "clicks" for the test and is
+// dead for the player. So this section (a) types a seed, (b) presses 开始, (c) settles the blessing
+// through the panels the player actually uses, (d) proves that a real click **on the map** while a
+// modal is up is swallowed by the backdrop, and (e) walks into a node and presses a card.
+const pointer = {};
+// One observation reader for this section: `rd_env_observe_buf()` is the page's own source, so this
+// cannot drift from what the UI shows (index 8 = energy, 0 = round, 1 = turn).
+const readCell = async (index) =>
+  page.evaluate(
+    "(() => { const ptr = ex.rd_env_observe_buf(); const n = ex.rd_env_observe_len();" +
+      " const o = new Int32Array(ex.memory.buffer, ptr, n); return o[" + index + "]; })()"
+  );
+const settle = () => new Promise((resolve) => setTimeout(resolve, 50));
+/** Click the first of several selectors that exists; report which one took it. */
+const clickFirst = async (selectors) => {
+  for (const selector of selectors) {
+    const box = await page.clickSelector(selector, 0);
+    if (!box.missing && !box.empty) return { ...box, selector: selector };
+  }
+  return { missing: true, tried: selectors };
+};
+const reachableKinds = () =>
+  page.evaluate(
+    "[...document.querySelectorAll('#mapbox g.node.reachable')].map(function (n) {" +
+      " return n.dataset.kind; })"
+  );
+
+/**
+ * Type a seed, press 开始, and settle the blessing -- all with real pointer events.
+ *
+ * The blessing is `pending` 6 (choose one of two offers) then 7 (the offer owes a **deck pick**),
+ * which the panel turns into a button that opens the picker in the modal. So the loop alternates:
+ * a picker row if one is on screen, otherwise the panel's own button.
+ */
+async function realStart(seed, trail) {
+  const typed = await page.typeInto("#seedInput", seed);
+  const start = await page.clickSelector("#newRunBtn");
+  await settle();
+  const pending0 = await page.evaluate("ex.rd_run_pending()");
+  let clicks = 0;
+  let stuck = -1;
+  while (clicks < 8) {
+    const pending = await page.evaluate("ex.rd_run_pending()");
+    if (pending === 0 || pending === 4 || pending === 8) break;
+    let hit = await clickFirst(["#modalBody [data-pick]", "#nodePanel [data-pick]"]);
+    if (hit.missing) {
+      hit = await clickFirst(["#nodePanel [data-panel-action]", "#modalBody [data-panel-action]"]);
+    }
+    clicks += 1;
+    if (hit.missing) {
+      stuck = pending;
+      break;
+    }
+    if (trail) trail.push(pending + ":" + (hit.selector.indexOf("data-pick") >= 0 ? "pick" : "panel"));
+    await settle();
+  }
+  return {
+    typedValue: typed.value,
+    typedHits: typed.hits,
+    startHits: start.hits,
+    startCover: start.coverTag,
+    seedAfterStart: await page.evaluate("ex.rd_run_seed()"),
+    pending0: pending0,
+    clicks: clicks,
+    stuck: stuck,
+    pending: await page.evaluate("ex.rd_run_pending()"),
+    kinds: await reachableKinds(),
+  };
+}
+
+{
+  // A combat node at floor 1 is what makes the card half of this section runnable; whether one is
+  // reachable is a property of the seed, so try a few (bounded) rather than trusting one.
+  const seeds = ["777", "778", "779", "780", "781", "782", "783", "784"];
+  let attempt = null;
+  pointer.tried = [];
+  for (const seed of seeds) {
+    const trail = [];
+    attempt = await realStart(seed, trail);
+    pointer.tried.push(seed + ":" + (attempt.kinds.join(",") || "-"));
+    if (attempt.pending === 0 && attempt.kinds.some((kind) => kind === "combat")) break;
+    if (attempt.stuck >= 0) break;
+  }
+  pointer.typed = attempt.typedValue;
+  pointer.seed = attempt.seedAfterStart;
+  pointer.seedAfterStart = attempt.seedAfterStart;
+  pointer.typedHits = attempt.typedHits;
+  pointer.startHits = attempt.startHits;
+  pointer.startCover = attempt.startCover;
+  pointer.pendingAfterStart = attempt.pending0;
+  pointer.blessingClicks = attempt.clicks;
+  pointer.blessingStuck = attempt.stuck;
+  pointer.pendingAfterBlessing = attempt.pending;
+  pointer.kinds = attempt.kinds;
+  pointer.mapNodesAll = await page.evaluate("document.querySelectorAll('#mapbox g.node').length");
+  pointer.modalOpen = false;
+
+  // (d) the falsifiable half: open a modal, then press a map node with a **real** click. The modal's
+  // backdrop is on top, so the click must be swallowed -- `dispatchEvent` would have walked the run.
+  // Opened through the debug hook because a deck view is otherwise reached from inside a run state
+  // this test does not need to reproduce; the click under test is the map node, not the opener.
+  await page.evaluate("RD_DEBUG.showDeckPicker ? (RD_DEBUG.showDeckPicker('real click', function () {}), 1) : 0");
+  await settle();
+  pointer.modalOpen = await page.evaluate("!document.getElementById('modal').hidden");
+  const covered = await page.clickSelector("#mapbox g.node.reachable", 0);
+  pointer.mapCoveredHits = covered.hits;
+  pointer.mapCover = covered.coverTag || (covered.missing ? "no reachable node" : null);
+  pointer.mapCovered = covered.hits === false;
+  await settle();
+  pointer.floorWhileModalUp = await page.evaluate("ex.rd_run_observe(0)");
+  pointer.pendingWhileModalUp = await page.evaluate("ex.rd_run_pending()");
+  const closed = await page.clickSelector("#modalClose");
+  pointer.closeHits = closed.hits;
+  await settle();
+  pointer.modalClosed = await page.evaluate("document.getElementById('modal').hidden");
+
+  // (e) walk into the first reachable node, for real.
+  // Prefer a combat: the card half below needs one, and a calm node would silently skip it.
+  const combatIndex = await page.evaluate(
+    "[...document.querySelectorAll('#mapbox g.node.reachable')]" +
+      ".findIndex(function (n) { return n.dataset.kind === 'combat'; })"
+  );
+  const node = await page.clickSelector(
+    "#mapbox g.node.reachable", combatIndex >= 0 ? combatIndex : 0);
+  pointer.combatIndex = combatIndex;
+  pointer.nodeHits = node.hits;
+  await settle();
+  pointer.floorAfterNode = await page.evaluate("ex.rd_run_observe(0)");
+  pointer.inFightAfterNode = await page.evaluate("!document.getElementById('handPanel').hidden");
+  // Walking into a fight is **two** real clicks: the map node asks the kernel to move, and the
+  // node panel's own button starts the combat. A test that stopped after the first click would
+  // think the fight never happened and skip the card half silently.
+  if (!pointer.inFightAfterNode) {
+    const begin = await clickFirst(["#nodePanel [data-panel-action]"]);
+    pointer.beginHits = begin.missing ? null : begin.hits;
+    pointer.beginSelector = begin.selector || null;
+    await settle();
+    pointer.inFightAfterNode = await page.evaluate("!document.getElementById('handPanel').hidden");
+  }
+
+  // If that was a fight, press a card -- the single most important button in the game -- then
+  // 结束回合. The card may want a target, so an armed card is followed by a real click on an enemy.
+  pointer.energyBefore = await readCell(8);
+  const card = await page.clickSelector("#hand button.card:not([disabled])", 0);
+  pointer.cardHits = card.hits;
+  pointer.cardMissing = !!card.missing;
+  await settle();
+  pointer.energyAfter = await readCell(8);
+  if (pointer.cardHits && pointer.energyAfter === pointer.energyBefore) {
+    const enemy = await page.clickSelector("#enemies .enemy", 0);
+    pointer.enemyHits = enemy.hits;
+    await settle();
+    pointer.energyAfterTarget = await readCell(8);
+  }
+  const end = await page.clickSelector("#endTurn");
+  pointer.endTurnHits = end.hits;
+  await settle();
+  pointer.roundAfterEnd = await readCell(0);
+  pointer.cardsAfterEnd = await page.evaluate("document.querySelectorAll('#hand button.card').length");
+}
+report.pointer = pointer;
+
 await page.close();
 
+
+want(report.pointer.typed === "777",
+  `typing a seed into #seedInput gave ${JSON.stringify(report.pointer.typed)}`);
+want(report.pointer.typedHits === true, "the seed field was covered by something");
+want(report.pointer.startHits === true,
+  `the 开始 button was covered by ${JSON.stringify(report.pointer.startCover)}`);
+want(report.pointer.seedAfterStart === 777,
+  `a real click on 开始 started seed ${report.pointer.seedAfterStart}`);
+want(report.pointer.pendingAfterStart === 6,
+  `a fresh run asks something other than the blessing (pending ${report.pointer.pendingAfterStart})`);
+want(report.pointer.mapNodesAll > 0, "the map was never rendered");
+want(report.pointer.pendingAfterBlessing === 0,
+  `the blessing never settled after ${report.pointer.blessingClicks} real click(s) ` +
+  `(pending ${report.pointer.pendingAfterBlessing}, first click on ${JSON.stringify(report.pointer.blessingSelector)})`);
+want(report.pointer.kinds.length > 0,
+  "no node became reachable after the blessing (tried " + JSON.stringify(report.pointer.tried) + ")");
+// ⚠️ The falsifiable half: with a modal up, a **real** click on a map node must land on the backdrop.
+// A synthetic `dispatchEvent` would have "worked" and hidden exactly the bug this section exists for.
+want(report.pointer.modalOpen === true, "the deck modal did not open");
+want(report.pointer.mapCovered === true,
+  `a map node was clickable through the modal (top element ${JSON.stringify(report.pointer.mapCover)})`);
+want(report.pointer.floorWhileModalUp === 0,
+  `a real click through the modal moved the run (floor ${report.pointer.floorWhileModalUp})`);
+want(report.pointer.closeHits === true, "the modal's close button was covered");
+want(report.pointer.modalClosed === true, "a real click on × did not close the modal");
+want(report.pointer.nodeHits === true, "the map node was covered after the modal closed");
+want(report.pointer.floorAfterNode === 1,
+  `a real click on a map node went to floor ${report.pointer.floorAfterNode}`);
+if (report.pointer.inFightAfterNode) {
+  want(report.pointer.cardMissing === false, "the hand had no enabled card in a fight");
+  want(report.pointer.cardHits === true, "the first playable card was covered");
+  const spent = report.pointer.energyAfter !== report.pointer.energyBefore ||
+    report.pointer.energyAfterTarget !== report.pointer.energyBefore;
+  want(spent, `pressing a card did not spend energy (${report.pointer.energyBefore} -> ` +
+    `${report.pointer.energyAfter}/${report.pointer.energyAfterTarget})`);
+  want(report.pointer.endTurnHits === true, "结束回合 was covered");
+  want(report.pointer.roundAfterEnd > 0,
+    `结束回合 did not leave the round (round ${report.pointer.roundAfterEnd})`);
+} else {
+  // Not a fight: the card half is inapplicable, and saying so beats a silently skipped assertion.
+  console.log("  pointer           " + JSON.stringify(report.pointer));
+}
 
 if (problems.length) {
   for (const problem of problems) console.error("  - " + problem);
@@ -674,6 +970,15 @@ console.log("  archive           " + report.archiveText + "… · " +
   report.archiveLength + " chars · " + report.archiveLines + " line(s) · restored floor " +
   report.restoredFloor + " hp " + report.restoredHp + " gold " + report.restoredGold +
   " · edited refused " + report.editedRefused);
+console.log("  pointer           seed " + JSON.stringify(report.pointer.typed) + " · 开始 " +
+  report.pointer.startHits + " · modal swallowed the map click " + report.pointer.mapCovered +
+  " (" + report.pointer.mapCover + ") · floor " + report.pointer.floorAfterNode +
+  " · card " + report.pointer.cardHits + " · energy " + report.pointer.energyBefore + " -> " +
+  report.pointer.energyAfter + "/" + report.pointer.energyAfterTarget +
+  " · round " + report.pointer.roundAfterEnd);
+console.log("  script            " + report.scriptHead + "… head, " + report.scriptSteps +
+  " step(s) · archive head " + report.scriptArchiveHead + " · verified " + report.scriptChecked +
+  " · tampered step " + report.scriptTamperDiverged + " (checked " + report.scriptTamperChecked + ")");
 console.log("  attack potion     " + report.apTitle + " · " + report.apOptions +
   " option(s) · hand +1 " + report.apHandGrew + " · free shown " + report.apFreeShown);
 console.log("  liquid memories   " + report.lmTitle + " · " + report.lmFreeShown +

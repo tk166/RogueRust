@@ -377,6 +377,16 @@ static mut OBS: [i32; OBS_LEN] = [0; OBS_LEN];
 /// Scratch for error / card-name bytes handed across the boundary.
 static mut SCRATCH: [u8; 1024] = [0; 1024];
 
+/// Capacity of the replay-script buffer. A three-act run's script is a few KB; 24 KiB is ~10x
+/// headroom, and `rd_run_script_fill` refuses rather than truncating if it is ever not enough.
+pub const MAX_SCRIPT: usize = 24 * 1024;
+
+/// The **replay script** buffer (§164). Its own buffer for the same reason as `ARCHIVE`: a script
+/// grows with the run (a 40-step walk measures ~1.6 KB, a three-act run several KB) and `SCRATCH`
+/// is 1024 B by contract. Length is published (`rd_run_script_capacity`) and overflow is refused
+/// **before** anything is written, not truncated.
+static mut SCRIPT: [u8; MAX_SCRIPT] = [0; MAX_SCRIPT];
+
 /// The **archive** buffer (§161.10). Not the scratch one: an archive is up to 16 KiB (a 60-card
 /// run measures 1628 B) and `SCRATCH` is 1024 B by contract, so handing the scratch pointer to the
 /// archive export wrote past the end of it. One buffer per contract, and this one's length is

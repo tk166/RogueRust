@@ -48,6 +48,10 @@ struct RunSession {
     /// §163: the recorded run calls, oldest first. **Not** part of game state (it is the host's
     /// action log), so `run_hash` does not include it and the archive does not carry it.
     journal: Vec<Rec>,
+    /// §164: **这一段动作从哪里开始**。`RDR1,S,seed,asc` = 开局；`RDR1,A,<archive>` = 从一份档案
+    /// 恢复之后。没有这一格，回档之后接着打的那些步就永远回放不了 —— 脚本的头部只有 seed/asc，
+    /// 而回档的状态不在那条时间线上。
+    head: std::string::String,
     /// Replaying right now? Then calls must not be recorded again (they would double the log).
     replaying: bool,
     /// How many steps the last replay verified (evidence for the gate).
@@ -582,6 +586,7 @@ pub extern "C" fn rd_run_start(seed: i32, ascension: i32) -> i32 {
         boss_fight: false,
         in_fight: false,
         journal: Vec::new(),
+        head: std::format!("RDR1,S,{},{}", seed, ascension),
         replaying: false,
         replay_checked: 0,
         replay_diverged: 0,
@@ -2478,6 +2483,10 @@ pub unsafe extern "C" fn rd_run_restore_from(ptr: *const u8, len: i32) -> i32 {
         Ok(()) => {
             *session.state = restored;
             session.error.clear();
+            // ⚠️ 回档 = **这条时间线的起点**：日志里记的是"这一局之前做过的动作"，而恢复出来的状态
+            // 不是那些动作的结果。留着它，导出的脚本第一行就和局面矛盾（回放第一步就分叉）。
+            session.journal.clear();
+            session.head = std::format!("RDR1,A,{text}");
             0
         }
         Err(error) => {
@@ -3020,9 +3029,6 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     // Captured before the run is borrowed mutably below.
     let elite_fight = run_slot().as_ref().is_some_and(|s| s.elite_fight);
     let boss_fight = run_slot().as_ref().is_some_and(|s| s.boss_fight);
-    if let Some(session) = run_slot().as_mut() {
-        session.in_fight = false;
-    }
     crate::take_session();
     let Some(session) = run_slot().as_mut() else {
         return -1;
@@ -3050,6 +3056,10 @@ fn apply_fight_outcome(
     elite_fight: bool,
     boss_fight: bool,
 ) -> i32 {
+    // ⚠️ `in_fight` 清在这里，不是清在导出里。它原来在 `rd_run_fight_end` 里，而回放走的是
+    // `replay_fight` ⇒ 回放一场战斗之后运行层仍然"在战斗中"，于是页面的"回档"被内核拒掉
+    // （浏览器闸门抓到的就是这个：restore 返回 -2，玩家看到的是"战斗中没有回档"，而他不在战斗里）。
+    session.in_fight = false;
     // The fight is over: the run's health becomes the hero's.
     let delta = hero_hp - session.state.health();
     session.state.adjust_health(delta);
@@ -3106,8 +3116,8 @@ fn apply_fight_outcome(
 
 fn script_text(session: &RunSession) -> std::string::String {
     let mut out = std::string::String::new();
-    std::string::String::push_str(&mut out, "RDR1,");
-    std::string::String::push_str(&mut out, &std::format!("{},{};", session.state.seed(), session.state.ascension()));
+    std::string::String::push_str(&mut out, &session.head);
+    std::string::String::push_str(&mut out, ";");
     for rec in &session.journal {
         std::string::String::push_str(&mut out, rec_kind_name(rec.kind));
         std::string::String::push_str(&mut out, &std::format!(",{},{},{:016x},", rec.a, rec.b, rec.hash));
@@ -3118,6 +3128,48 @@ fn script_text(session: &RunSession) -> std::string::String {
 }
 
 /// How long the script is (bytes); `-1` no run.
+/// The capacity of the script buffer, in bytes. Published so a caller can refuse **before** it
+/// writes rather than discover truncation after (an overflowing script is a lie about the run).
+#[no_mangle]
+pub extern "C" fn rd_run_script_capacity() -> i32 {
+    crate::MAX_SCRIPT as i32
+}
+
+/// The address of the script buffer (`rd_run_script_capacity()` bytes, owned by this module).
+#[no_mangle]
+pub extern "C" fn rd_run_script_buf() -> *mut u8 {
+    std::ptr::addr_of_mut!(crate::SCRIPT) as *mut u8
+}
+
+/// Write the script into this module's buffer and return its length; `-1` no run, `-2` too long.
+///
+/// The page uses this (`rd_run_script_buf()` then read `len` bytes); an embedder that owns its own
+/// buffer uses `rd_run_script_len` + `rd_run_script_into`. Both go through `script_text`, so the
+/// **format** still has one writer.
+#[no_mangle]
+pub extern "C" fn rd_run_script_fill() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.stamp();
+    let text = script_text(session);
+    let bytes = text.as_bytes();
+    if bytes.len() > crate::MAX_SCRIPT {
+        set_error(&std::format!(
+            "回放脚本 {} 字节，超过缓冲容量 {}",
+            bytes.len(),
+            crate::MAX_SCRIPT
+        ));
+        return -2;
+    }
+    #[allow(static_mut_refs)]
+    unsafe {
+        crate::SCRIPT[..bytes.len()].copy_from_slice(bytes);
+    }
+    bytes.len() as i32
+}
+
+/// Length of the script as text (no buffer involved).
 #[no_mangle]
 pub extern "C" fn rd_run_script_len() -> i32 {
     match run_slot().as_mut() {
@@ -3190,18 +3242,34 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
         set_error("回放脚本的头部不是 RDR1");
         return -2;
     };
+    // 头部有两种：`S,seed,asc`（开局）与 `A,<档案>`（从一份档案恢复之后接着打）。
+    // 第二种存在的理由是：**回档之后接着打的步，只有档案能说明它的起点**。
     let parts: std::vec::Vec<&str> = fields.split(',').collect();
-    if parts.len() != 2 {
-        set_error("回放脚本的头部应当是 RDR1,seed,asc");
-        return -2;
-    }
-    let (Ok(seed), Ok(ascension)) = (parts[0].parse::<i32>(), parts[1].parse::<i32>()) else {
-        set_error("回放脚本的 seed/asc 不是整数");
-        return -2;
-    };
-    // 从头开一局（`rd_run_start` 会清会话、清日志），然后关掉记录。
-    if rd_run_start(seed, ascension) != 0 {
-        return -2;
+    match parts.first().copied() {
+        Some("S") if parts.len() == 3 => {
+            let (Ok(seed), Ok(ascension)) = (parts[1].parse::<i32>(), parts[2].parse::<i32>()) else {
+                set_error("回放脚本的 seed/asc 不是整数");
+                return -2;
+            };
+            // 从头开一局（`rd_run_start` 会清会话、清日志），然后关掉记录。
+            if rd_run_start(seed, ascension) != 0 {
+                return -2;
+            }
+        }
+        Some("A") if parts.len() == 2 => {
+            // 先要一个槽，`restore` 才有东西可写；`rd_run_start` 会把日志/头部清成开局形态，
+            // 随后 restore 再把头部改成档案形态。
+            if rd_run_start(0, 0) != 0 {
+                return -2;
+            }
+            if rd_run_restore_from(parts[1].as_ptr(), parts[1].len() as i32) != 0 {
+                return -2;
+            }
+        }
+        _ => {
+            set_error("回放脚本的头部应当是 RDR1,S,seed,asc 或 RDR1,A,<档案>");
+            return -2;
+        }
     }
     let Some(session) = run_slot().as_mut() else {
         return -1;
@@ -3511,6 +3579,7 @@ mod tests {
             boss_fight: false,
         in_fight: false,
         journal: Vec::new(),
+        head: std::format!("RDR1,S,{},{}", state.seed(), state.ascension()),
         replaying: false,
         replay_checked: 0,
         replay_diverged: 0,
@@ -4184,7 +4253,7 @@ mod tests {
             unsafe { rd_run_script_into(buffer.as_mut_ptr()) };
             String::from_utf8(buffer).expect("ascii")
         };
-        assert!(script.starts_with("RDR1,7,0;"), "head: {}", &script[..16.min(script.len())]);
+        assert!(script.starts_with("RDR1,S,7,0;"), "head: {}", &script[..20.min(script.len())]);
 
         // (1) 重放：每一步都必须对上。
         assert_eq!(
@@ -4228,10 +4297,218 @@ mod tests {
             "a script without a head is refused"
         );
         assert_eq!(
-            unsafe { rd_run_replay_from(b"RDR1,7,0;nonsense,1,2,3,;".as_ptr(), 25) },
+            // 头部合法、**第 1 步**的种类不认识 ⇒ 报第 1 步（不是"头部坏了"）。
+            unsafe {
+                let bad = b"RDR1,S,7,0;nonsense,1,2,3,;";
+                rd_run_replay_from(bad.as_ptr(), bad.len() as i32)
+            },
             1,
             "an unknown kind is reported as step 1"
         );
+    }
+
+    /// §164: 回档之后接着打的那些步，靠**头部携带档案**回放。
+    #[test]
+    fn a_run_restored_from_an_archive_replays_from_its_archive() {
+        // (1) 一局，走到有几步历史。
+        assert_eq!(rd_run_start(5, 0), 0);
+        assert_eq!(rd_run_choose_start(0), 0);
+        while rd_run_pending() == 7 {
+            assert_eq!(rd_run_pick_blessing_card(0), 0);
+        }
+        walk_calm_nodes(2);
+        let archive = {
+            let len = rd_run_archive_fill();
+            assert!(len > 0, "archive: {}", run_error_text());
+            let capacity = rd_run_archive_capacity();
+            assert!(len <= capacity);
+            let ptr = rd_run_archive_buf();
+            String::from_utf8(unsafe {
+                std::slice::from_raw_parts(ptr, len as usize).to_vec()
+            })
+            .expect("ascii")
+        };
+        assert!(archive.starts_with("RDA1-"), "head: {}", &archive[..12]);
+
+        // (2) 换一局**完全不同**的（别的种子、别的几步），再回档到 (1)。日志里现在是一段与
+        // 恢复出来的局面无关的历史 —— 不清掉它，下面第一步就会分叉。
+        assert_eq!(rd_run_start(9, 0), 0);
+        assert_eq!(rd_run_choose_start(0), 0);
+        while rd_run_pending() == 7 {
+            assert_eq!(rd_run_pick_blessing_card(0), 0);
+        }
+        walk_calm_nodes(1);
+        assert!(
+            unsafe { rd_run_restore_from(archive.as_ptr(), archive.len() as i32) } == 0,
+            "restore: {}",
+            run_error_text()
+        );
+        assert_eq!(rd_run_seed(), 5, "the restored run is the first one");
+        let steps_after_restore = {
+            let mut buffer = vec![0u8; rd_run_script_len() as usize];
+            unsafe { rd_run_script_into(buffer.as_mut_ptr()) };
+            String::from_utf8(buffer).expect("ascii")
+        };
+        assert_eq!(
+            steps_after_restore.matches(';').count(),
+            1,
+            "a restore starts a new history: {}",
+            &steps_after_restore[..steps_after_restore.len().min(40)]
+        );
+
+        // (3) 从恢复出来的局面接着打，然后导出：头部必须是那份档案。
+        walk_calm_nodes(2);
+        let script = {
+            let mut buffer = vec![0u8; rd_run_script_len() as usize];
+            unsafe { rd_run_script_into(buffer.as_mut_ptr()) };
+            String::from_utf8(buffer).expect("ascii")
+        };
+        assert!(
+            script.starts_with("RDR1,A,RDA1-"),
+            "head: {}",
+            &script[..script.len().min(24)]
+        );
+        let steps = script.matches(';').count() - 1;
+        assert!(steps >= 3, "the continuation must be recorded, got {steps}");
+
+        // (4) 回放：从档案恢复，再走这些步，每一步都要对上。
+        assert_eq!(
+            unsafe { rd_run_replay_from(script.as_ptr(), script.len() as i32) },
+            0,
+            "the continuation must replay: {}",
+            run_error_text()
+        );
+        assert_eq!(rd_run_replay_checked() as usize, steps);
+        assert_eq!(rd_run_seed(), 5);
+        let after = {
+            let mut buffer = vec![0u8; rd_run_script_len() as usize];
+            unsafe { rd_run_script_into(buffer.as_mut_ptr()) };
+            String::from_utf8(buffer).expect("ascii")
+        };
+        assert!(
+            after.starts_with("RDR1,A,RDA1-"),
+            "a replayed run still starts at its archive: {}",
+            &after[..after.len().min(24)]
+        );
+
+        // (5) 判据的反面：篡改原始脚本 → 必须报出那一步。
+        let broken = tamper_hash(&script, 1);
+        assert_eq!(
+            unsafe { rd_run_replay_from(broken.as_ptr(), broken.len() as i32) },
+            2,
+            "step 2 was tampered: {}",
+            run_error_text()
+        );
+        assert_eq!(rd_run_replay_checked(), 1);
+    }
+
+    /// §164: 回放一场战斗之后，运行层**必须**已经不在战斗里。
+    ///
+    /// 这条是浏览器闸门逼出来的：`in_fight` 原来在 `rd_run_fight_end` 里清零，而回放走
+    /// `replay_fight`、绕过那个导出 ⇒ 回放完一局之后"回档"被内核以"战斗中没有回档"拒掉。
+    /// 断言落在**页面会问的那个问题**上（`restore_from` 接受），而不是"某个字段等于 false"。
+    #[test]
+    fn a_replayed_fight_does_not_leave_the_run_in_a_fight() {
+        assert_eq!(rd_run_start(3, 0), 0);
+        assert_eq!(rd_run_choose_start(0), 0);
+        while rd_run_pending() == 7 {
+            assert_eq!(rd_run_pick_blessing_card(0), 0);
+        }
+        let health = run_slot().as_ref().expect("session").state.health();
+        {
+            let session = run_slot().as_mut().expect("session");
+            // `fight_begin` 做的就这一件事（外加选遭遇），而回放不该依赖 `fight_begin` 的副作用。
+            session.in_fight = true;
+            session.elite_fight = false;
+            session.boss_fight = false;
+            // 一场**赢了的**普通战斗，英雄掉了 5 点血。
+            let verdict = replay_fight(session, health - 5, 1 << 4);
+            // `apply_fight_outcome` 返回 `0.max(result)`：1 = 赢了（不是错误码）。
+            assert_eq!(verdict, 1, "the outcome was applied");
+        }
+        let session = run_slot().as_ref().expect("session");
+        assert!(!session.in_fight, "a replayed fight must leave the run out of the fight");
+        // 血量**不是**精确的 `health - 5`：赢了就触发战后遗物（Burning Blood 一类，`inv:§2`）。
+        // 所以只断言方向，真正的判据是节点结算了 —— 那才是`apply_fight_outcome` 的产物。
+        assert!(
+            session.state.health() >= health - 5,
+            "the recorded health was applied ({} -> {})",
+            health,
+            session.state.health()
+        );
+        // 不断言 `node_resolved()`：这条测试故意停在楼层 0（还没进节点），而 `mark_resolved`
+        // 标记的是**当前节点** —— 那不是这里要测的东西（节点结算由 `a_recorded_run_replays…` 覆盖）。
+
+
+        // 玩家会立刻做的那件事：存一份档 / 回一份档。内核必须接受。
+        let len = rd_run_archive_fill();
+        assert!(len > 0, "archive: {}", run_error_text());
+        let ptr = rd_run_archive_buf();
+        let archive = String::from_utf8(unsafe {
+            std::slice::from_raw_parts(ptr, len as usize).to_vec()
+        })
+        .expect("ascii");
+        assert_eq!(
+            unsafe { rd_run_restore_from(archive.as_ptr(), archive.len() as i32) },
+            0,
+            "restoring after a replayed fight must be accepted: {}",
+            run_error_text()
+        );
+    }
+
+    /// 走 `hop` 个节点，按**种类**结算（与 `a_recorded_run_replays...` 同一套动作）。
+    ///
+    /// 战斗也照走：`begin` + `end` 不真打牌，一场"没打"的战斗结果是 0（未决）⇒ 没有奖励、
+    /// 节点照常结算。这条测试问的是**历史与头部**，不是战斗。
+    fn walk_calm_nodes(hop: usize) {
+        for index in 0..hop {
+            if rd_run_action_count() == 0 {
+                return;
+            }
+            assert_eq!(rd_run_step(0), 0, "hop {index}: {}", run_error_text());
+            let kind = rd_run_node_kind();
+            assert_eq!(rd_run_begin_node(), 0, "hop {index}: kind {kind}");
+            match kind {
+                1 | 2 | 7 => {
+                    assert_eq!(rd_run_fight_begin(), 0, "hop {index}: {}", run_error_text());
+                    assert!(rd_run_fight_end() >= 0, "hop {index}: {}", run_error_text());
+                }
+                3 => {
+                    let _ = rd_run_rest();
+                }
+                4 => {
+                    let _ = rd_run_choose(0);
+                }
+                5 | 6 => {
+                    if kind == 6 {
+                        let _ = rd_run_open_chest();
+                    }
+                    let _ = rd_run_leave();
+                }
+                _ => {}
+            }
+            while rd_run_pending() == 4 {
+                let _ = rd_run_skip_reward();
+            }
+            if rd_run_action_count() == 0 && rd_run_pending() != 0 {
+                let _ = rd_run_leave();
+            }
+        }
+    }
+
+    /// 把第 `n`（0 基）条记录的哈希换成垃圾。
+    fn tamper_hash(script: &str, n: usize) -> String {
+        let (head, body) = script.split_once(';').expect("a head");
+        let mut out = std::format!("{head};");
+        for (index, record) in body.split(';').filter(|r| !r.is_empty()).enumerate() {
+            let mut cells: Vec<&str> = record.split(',').collect();
+            if index == n {
+                cells[3] = "dead0000dead0000";
+            }
+            out.push_str(&cells.join(","));
+            out.push(';');
+        }
+        out
     }
 
     /// 把第 `n`（0 基）条记录的哈希换成垃圾，其余原样。

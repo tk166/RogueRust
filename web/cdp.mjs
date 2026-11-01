@@ -146,6 +146,68 @@ export async function openPage({ query = "", gate = "BROWSER_TEST", waitFor = "B
     return result.result.value;
   }
 
+  /**
+   * §165: press a button with **real** pointer events, and report what the click would hit.
+   *
+   * `element.dispatchEvent(new MouseEvent(...))` (what every earlier scenario used) bypasses
+   * hit-testing completely: a button that a modal covers, or that is scrolled out of view, still
+   * "works". That is precisely the class of bug a page test must not be blind to. So this scrolls
+   * the element into view, asks `elementFromPoint` what is actually on top of the centre, and then
+   * sends `mousePressed`/`mouseReleased` at that point.
+   *
+   * Returns the hit-test verdict so the caller can assert on it:
+   * `{ missing, x, y, hits, coverTag }` — `hits: false` means something else is on top.
+   */
+  async function clickSelector(selector, index = 0) {
+    const box = await evaluate(`(() => {
+      const node = document.querySelectorAll(${JSON.stringify(selector)})[${index}];
+      if (!node) return null;
+      node.scrollIntoView({ block: "center", inline: "center" });
+      const r = node.getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      const top = document.elementFromPoint(x, y);
+      return {
+        x: x, y: y, width: r.width, height: r.height,
+        hits: !!top && (top === node || node.contains(top)),
+        coverTag: top ? (top.id ? "#" + top.id : String(top.className || top.tagName)) : null,
+      };
+    })()`);
+    if (!box) return { missing: true, selector: selector, index: index };
+    // A zero-size element has no clickable centre; say so rather than clicking (0,0).
+    if (!(box.width > 0 && box.height > 0)) {
+      return { missing: false, empty: true, selector: selector, index: index, width: box.width };
+    }
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseMoved", x: box.x, y: box.y, buttons: 0,
+    });
+    await send("Input.dispatchMouseEvent", {
+      type: "mousePressed", x: box.x, y: box.y, button: "left", buttons: 1, clickCount: 1,
+    });
+    await send("Input.dispatchMouseEvent", {
+      type: "mouseReleased", x: box.x, y: box.y, button: "left", buttons: 0, clickCount: 1,
+    });
+    return box;
+  }
+
+  /** §165: type into a field the way a person does — focus it with a real click, then insert text. */
+  async function typeInto(selector, text) {
+    const box = await clickSelector(selector);
+    if (box.missing) return box;
+    // Clear first: `Input.insertText` inserts at the caret, and the seed field starts empty only
+    // until somebody has typed in it.
+    await evaluate(
+      "(() => { const field = document.querySelector(" + JSON.stringify(selector) +
+        "); if (field) { field.value = ''; field.focus(); } })()"
+    );
+    await send("Input.insertText", { text: text });
+    const value = await evaluate(
+      "(() => { const field = document.querySelector(" + JSON.stringify(selector) +
+        "); return field ? field.value : null; })()"
+    );
+    return { ...box, value: value };
+  }
+
   await send("Runtime.enable");
   await send("Page.enable");
 
@@ -165,6 +227,8 @@ export async function openPage({ query = "", gate = "BROWSER_TEST", waitFor = "B
 
   return {
     evaluate,
+    clickSelector,
+    typeInto,
     fail,
     port,
     async close() {
