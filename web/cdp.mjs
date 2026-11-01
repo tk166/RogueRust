@@ -15,6 +15,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { decodePng } from "./pixels.mjs";
 
 const HERE = fileURLToPath(new URL("./", import.meta.url));
 const ROOT = normalize(join(HERE, ".."));
@@ -39,7 +40,17 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * `handle.evaluate(expression)` runs the expression in the page (promises awaited, value returned).
  * `handle.close()` tears everything down. `handle.fail` prints the gate's own failure prefix.
  */
-export async function openPage({ query = "", gate = "BROWSER_TEST", waitFor = "Boolean(window.ex)" } = {}) {
+export async function openPage({
+  query = "",
+  gate = "BROWSER_TEST",
+  waitFor = "Boolean(window.ex)",
+  /**
+   * §168: the bitmap is only comparable across runs if the viewport is. The Chrome window defaults
+   * to whatever the OS gives it (764x485 here), and DPI changes `deviceScaleFactor` -- so a pixel
+   * gate that does not pin these is measuring the machine, not the page.
+   */
+  viewport = null,
+} = {}) {
   const fail = (message) => {
     console.error(`${gate} FAIL: ${message}`);
     process.exit(1);
@@ -242,6 +253,14 @@ export async function openPage({ query = "", gate = "BROWSER_TEST", waitFor = "B
 
   await send("Runtime.enable");
   await send("Page.enable");
+  if (viewport) {
+    await send("Emulation.setDeviceMetricsOverride", {
+      width: viewport.width,
+      height: viewport.height,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+  }
 
   const suffix = query ? `?${query}` : "";
   const loaded = await send("Page.navigate", {
@@ -258,6 +277,20 @@ export async function openPage({ query = "", gate = "BROWSER_TEST", waitFor = "B
   if (!ready) fail(`the page never became ready (waited for ${waitFor})`);
 
   return {
+    send,
+    /**
+     * §168: the page as the rasterizer saw it, decoded to RGBA. `Page.captureScreenshot` hands back
+     * base64 PNG; `decodePng` turns it into pixels so assertions can be about **the picture** --
+     * which is the one thing a DOM assertion cannot check.
+     */
+    async screenshot(rect = null) {
+      const params = { format: "png", fromSurface: true, captureBeyondViewport: false };
+      if (rect) {
+        params.clip = { ...rect, scale: 1 };
+      }
+      const shot = await send("Page.captureScreenshot", params);
+      return decodePng(Buffer.from(shot.data, "base64"));
+    },
     evaluate,
     probe,
     clickAt,
