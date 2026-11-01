@@ -257,8 +257,8 @@ const RUN_SCRATCH_LEN: usize = 1024;
 /// Scratch for the error text handed across the boundary.
 static mut RUN_SCRATCH: [u8; RUN_SCRATCH_LEN] = [0; RUN_SCRATCH_LEN];
 
-/// The run slot. Same argument as `lib.rs::slot()`: single-threaded wasm, no export re-enters
-/// another export, the value lives in BSS for the module's lifetime.
+/// The run slot. Same argument as `lib.rs::slot()` — and the same rule: **no borrow may span a call
+/// to another export**, because `rd_run_replay_from` re-enters this one on purpose.
 #[allow(static_mut_refs)]
 fn run_slot() -> &'static mut Option<RunSession> {
     unsafe { &mut RUN }
@@ -2860,6 +2860,13 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // `fight_begin` 会写 `last_encounter`（进指纹），所以它也必须被记录 —— 否则上一条记录的
     // "调用之后的哈希"会把它的效果算进去，而回放里没有人做这件事（§163 踩过：第 4 步就对不上）。
     session.log(K_FIGHT_BEGIN, -1, -1, "");
+    // §170 `P1-2`: 一场没打完就不许再开一场。战斗中 `node_resolved()` 仍是 false（要到 `fight_end`
+    // 才结算），所以下面那句"这个节点已经结算过了"**放行**重复调用 —— 而重复调用会重新选遭遇
+    // （烧掉一个 `Combat` 随机数）、再 `Box::leak` 一份牌组、并且 `install_session` **覆盖**掉
+    // 正在打的那一场。站在战斗节点上反复按"开打"就能重摇遭遇。
+    if session.in_fight {
+        return fail(session, "这一场已经开始了：先打完它，或者重开一局");
+    }
     // Only a combat node starts a fight. The kind is read off the session we are already holding:
     // calling `rd_run_node_kind()` here would take the slot a second time (see `fail`).
     let node = session.state.node();
@@ -2905,9 +2912,13 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // node into a slime fight.
     // The pool follows the node (`inv:§5.2` weak / `inv:§5.3` elite) -- before this the only rule
     // was "any encounter in the image", which would send an elite into a slime fight.
-    session.elite_fight = kind == 2;
-    session.boss_fight = kind == 7;
-    session.in_fight = true;
+    // §170 `P1-1`: 三个标记**不在这里**写。下面每一步都可能失败（池子缺、池子空、选遭遇、摇种子、
+    // 建战斗、遗物加成），而 `in_fight` 卡在 true 的后果不是审美问题：`rd_run_archive_fill` 会一直
+    // 拒绝存档，而玩家**根本没有一场仗可以打完**。它们在**提交点**统一写，见函数尾部。
+    //
+    // 原子性的判据用 `RunState: Copy` 的整结构体快照：任何失败都回到进函数那一刻，
+    // 连"选遭遇已经消耗的随机数"也一起还回去（`RunState` 的 `rng` 是字段）。
+    let before = *session.state;
     // **The act decides the pool** (`port-plan.md` §130): `Weak` / `Weak2` / `Weak3`, and the same
     // for elites and bosses. Before this, act 2 and act 3 replayed act 1's encounters -- the
     // downgrade §101 documented. The suffix is empty for act 1 so the original names still work.
@@ -2946,25 +2957,6 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         }
     };
 
-    // The run's deck, compressed into (id, count) entries. Leaked because `FightPlan` borrows them
-    // for the session's lifetime -- one small slice per fight, same trade as `build_session`.
-    let mut counts: Vec<(&'static str, u16)> = Vec::new();
-    for id in session.state.deck() {
-        let id = id.as_str();
-        match counts.iter_mut().find(|(name, _)| *name == id) {
-            Some((_, count)) => *count += 1,
-            None => counts.push((id, 1)),
-        }
-    }
-    let entries: &'static [rd_core::battle::DeckEntry<'static>] =
-        Box::leak(
-            counts
-                .into_iter()
-                .map(|(card, count)| rd_core::battle::DeckEntry { card, count })
-                .collect::<Vec<_>>()
-                .into_boxed_slice(),
-        );
-
     let max_health = session.state.health_max();
     // §145: what the relics do **when a fight starts**. Read off the run *before* the session is
     // installed, because `combat_bonus` borrows the run and the applier borrows the fight.
@@ -2977,32 +2969,78 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         _ => rd_run::state::FightKind::Normal,
     };
     let enemy_health_percent = session.state.enemy_health_bonus_percent(fight_kind);
-    match crate::build_session_at(
-        fight_seed,
-        encounters[pick],
-        max_health,
-        Some(entries),
-        enemy_health_percent,
-    ) {
-        Ok(combat) => {
-            crate::install_session(combat);
-            // The fight is built at the hero's maximum; a run usually enters wounded.
-            crate::set_combat_hero_health(session.state.health());
-            // ... and then the relics get their turn. A failure here is a **content** problem
-            // (a relic promising Block the kernel cannot write), so it is reported, not ignored.
-            if let Err(message) = apply_combat_bonus(bonus) {
-                session.error.clear();
-                session.error.push_str(&message);
-                return -2;
+    // 可失败段收在一个块里：`entries` 借着 `state`（`DeckEntry<'static>` 的要求），块一结束借用就死，
+    // 后面才允许拿整个 `session` 去回滚。这不是绕过借用检查，而是让借用检查器**替我**保证
+    // "先建、后提交"。
+    let failure: Option<std::string::String> = {
+        // The run's deck, compressed into (id, count) entries, **owning its strings**.
+        //
+        // §170 `P1-1`: 原来写成 `Vec<(&'static str, u16)>` 直接借 `RunId::as_str()` —— 那是指进
+        // `RunState` 自己的存储。于是"失败就恢复 `*session.state = before`"与"牌组项还指着那块内存"
+        // 只能二选一：借用检查器拒绝它，而如果绕过检查，回滚会覆写战斗正在读的字节。
+        // 拷贝出独立字符串之后，`FightPlan` 与 `RunState` 再无别名，回滚才是安全的。
+        let mut counts: Vec<(std::string::String, u16)> = Vec::new();
+        for id in session.state.deck() {
+            let id = id.as_str();
+            match counts.iter_mut().find(|(name, _)| name.as_str() == id) {
+                Some((_, count)) => *count += 1,
+                None => counts.push((std::string::String::from(id), 1)),
             }
-            0
         }
-        Err(message) => {
-            session.error.clear();
-            session.error.push_str(&message);
-            -2
+        let entries: &'static [rd_core::battle::DeckEntry<'static>] =
+            Box::leak(
+                counts
+                    .into_iter()
+                    .map(|(card, count)| rd_core::battle::DeckEntry {
+                        card: Box::leak(card.into_boxed_str()),
+                        count,
+                    })
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+            );
+        match crate::build_session_at(
+            fight_seed,
+            encounters[pick],
+            max_health,
+            Some(entries),
+            enemy_health_percent,
+        ) {
+            Ok(combat) => {
+                crate::install_session(combat);
+                // The fight is built at the hero's maximum; a run usually enters wounded.
+                crate::set_combat_hero_health(session.state.health());
+                // ... and then the relics get their turn. A failure here is a **content** problem
+                // (a relic promising Block the kernel cannot write), so it is reported, not ignored.
+                apply_combat_bonus(bonus).err()
+            }
+            Err(message) => Some(message),
         }
+    };
+    if let Some(message) = failure {
+        // §170 `P1-1`: 失败的这一次必须**什么都没改** —— 连"装好了战斗之后才在遗物加成一环失败"
+        // 的那半场也一起撤掉（`take_session` 在没有会话时是 no-op）。
+        crate::take_session();
+        return fail_begin(session, before, &message);
     }
+    // **提交点**：走到这里才是"这一场开始了"。
+    session.elite_fight = kind == 2;
+    session.boss_fight = kind == 7;
+    session.in_fight = true;
+    0
+}
+
+/// §170 `P1-1`: 一次失败的 `fight_begin` 必须**什么都没改**。
+///
+/// 恢复整局（`RunState` 是 `Copy`，所以连随机流计数一起回去）、清掉三个战斗标记、丢弃可能已经装上的
+/// 战斗会话，然后写错误。判据是"拒绝 ⇒ 一个字节都不改"，与 `archive::restore` 同一条纪律。
+fn fail_begin(session: &mut RunSession, before: rd_run::state::RunState, message: &str) -> i32 {
+    *session.state = before;
+    session.elite_fight = false;
+    session.boss_fight = false;
+    session.in_fight = false;
+    session.error.clear();
+    session.error.push_str(message);
+    -2
 }
 
 /// Put a [`rd_run::state::CombatBonus`] into the fight that was just installed (§145).
@@ -3209,6 +3247,13 @@ pub extern "C" fn rd_run_script_fill() -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    // §170 `P1-3`: 与 `rd_run_archive_fill` 同一条规则，**在 ABI 里**，不是只在页面的 `mode` 里。
+    // 一份战斗中导出的脚本一定缺一段（战斗只有结果进脚本），回放它必然分叉 —— 与其给出一份会
+    // 分叉的脚本，不如在这里拒绝。
+    if session.in_fight {
+        set_error("战斗中没有脚本：一场战斗只有**结果**进脚本，先打完这一场。");
+        return -2;
+    }
     session.stamp();
     let text = script_text(session);
     let bytes = text.as_bytes();
@@ -3286,6 +3331,12 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
     // ⚠️ 先把两个读数清零，否则**拒绝路径**（解析失败、内容不同）会留下上一次回放的
     // "13 步全部对上"，页面于是一边报错一边显示绿灯 —— 度量报陈旧数字。
     session_clear_replay(0, 0);
+    // §170 `P1-3`: 回放会**重新开一局**（`rd_run_start`），所以它会毁掉正在进行的战斗。
+    // 这条守卫必须在 ABI 里 —— 调用者不只有那个记得住 `mode` 的页面。
+    if run_slot().as_ref().is_some_and(|session| session.in_fight) {
+        set_error("战斗中不能回放：回放会从开局重跑这一局，把这场战斗扔掉。");
+        return -2;
+    }
     if ptr.is_null() || len <= 0 {
         return -2;
     }
@@ -3343,10 +3394,14 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
             return -2;
         }
     }
-    let Some(session) = run_slot().as_mut() else {
+    // ⚠️ **No `let session = run_slot()` may live across the loop body.** It calls other exports,
+    // and each of those takes the slot again (`lib.rs::slot()` states the rule). The flag is set in
+    // a scope that ends here; every refusal borrows only for the length of one helper call.
+    if let Some(session) = run_slot().as_mut() {
+        session.replaying = true;
+    } else {
         return -1;
-    };
-    session.replaying = true;
+    }
 
     let mut checked = 0usize;
     for (index, record) in rest.split(';').enumerate() {
@@ -3355,17 +3410,17 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
         }
         let cells: std::vec::Vec<&str> = record.split(',').collect();
         if cells.len() < 4 {
-            session.replaying = false;
-            session.replay_checked = checked;
-            session.replay_diverged = (index + 1) as i32;
+            session_clear_replay(checked, (index + 1) as i32);
             set_error(&std::format!("第 {} 步的格式不对", index + 1));
             return (index + 1) as i32;
         }
         let Some(kind) = rec_kind_from_name(cells[0]) else {
-            session.replaying = false;
-            session.replay_checked = checked;
-            session.replay_diverged = (index + 1) as i32;
-            set_error(&std::format!("第 {} 步的种类 `{}` 不认识", index + 1, cells[0]));
+            session_clear_replay(checked, (index + 1) as i32);
+            set_error(&std::format!(
+                "第 {} 步的种类 `{}` 不认识",
+                index + 1,
+                cells[0]
+            ));
             return (index + 1) as i32;
         };
         let (Ok(a), Ok(b), Ok(want)) = (
@@ -3373,9 +3428,7 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
             cells[2].parse::<i32>(),
             u64::from_str_radix(cells[3], 16),
         ) else {
-            session.replaying = false;
-            session.replay_checked = checked;
-            session.replay_diverged = (index + 1) as i32;
+            session_clear_replay(checked, (index + 1) as i32);
             set_error(&std::format!("第 {} 步的参数不是整数", index + 1));
             return (index + 1) as i32;
         };
@@ -4415,6 +4468,172 @@ mod tests {
             1,
             "an unknown kind is reported as step 1"
         );
+    }
+
+    /// §170 `P1-2`: 一场没打完就不许再开一场 —— 否则它会重新摇遭遇、覆盖掉正在打的战斗。
+    ///
+    /// 判据是"**什么都没改** + 战斗还在"：整局相等（含随机流计数）、`in_fight` 仍为真、
+    /// 战斗会话还在、英雄血量没被重设。
+    #[test]
+    fn a_second_fight_begin_is_refused_and_the_fight_in_progress_survives() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the first begin must work: {}", run_error_text());
+        assert!(
+            run_slot().as_ref().expect("session").in_fight,
+            "a successful begin commits `in_fight`"
+        );
+
+        let before = *run_slot().as_ref().expect("session").state;
+        let hero_before = crate::combat_hero_health().expect("a fight");
+        let journal_before = run_slot().as_ref().expect("session").journal.len();
+
+        assert_eq!(
+            rd_run_fight_begin(),
+            -2,
+            "a second begin while the fight runs must be refused"
+        );
+        assert!(
+            run_error_text().contains("已经开始了"),
+            "the refusal must say why: {}",
+            run_error_text()
+        );
+
+        // The whole point: the encounter was not re-rolled and the fight was not replaced.
+        assert!(
+            *run_slot().as_ref().expect("session").state == before,
+            "a refused begin changed the run"
+        );
+        // 日志记的是**尝试**（`log` 在动手之前调，这是 §163 懒上戳的前提），所以被拒的这一次
+        // 确实会多一条记录 —— 但那一条的哈希必须等于前一条，因为"这次尝试什么都没改"。
+        // 这恰好也是回放能复现一次拒绝的原因：它回放到这一步再被拒一次，哈希照样相等。
+        let journal = &run_slot().as_ref().expect("session").journal;
+        assert_eq!(
+            journal.len(),
+            journal_before + 1,
+            "the attempt is recorded (that is what makes a refused step replayable)"
+        );
+        assert_eq!(
+            journal[journal.len() - 1].hash, 0,
+            "the refused record is unstamped until the next call"
+        );
+        assert_eq!(
+            crate::combat_hero_health().expect("the fight survives"),
+            hero_before,
+            "the fight in progress was replaced"
+        );
+    }
+
+    /// §170 `P1-1`：回滚**机制**本身。
+    ///
+    /// 这条单独测 `fail_begin`，因为 `fight_begin` 里那些"建好战斗之后才失败"的路由内容决定
+    /// （缺一幕的池、遗物加成失败），本仓库现有的内容走不到。**声明清楚**：那几条是"由构造保证"，
+    /// 不是"由测试证明"；这里证明的是它们共用的那个回滚函数真的会回到快照。
+    #[test]
+    fn fail_begin_restores_the_snapshot_and_clears_the_tier_flags() {
+        test_run(7, 80, 60, &["strike"; 10]);
+        let session = run_slot().as_mut().expect("session");
+        let before = *session.state;
+
+        // 模拟"半个开始"：随机流走了一步、标记已置、还装了一场战斗。
+        let _ = session.state.rng_mut().roll(RunStream::Combat, i32::MAX as u32);
+        session.elite_fight = true;
+        session.boss_fight = true;
+        session.in_fight = true;
+        let moved = *session.state;
+        assert!(moved != before, "the fixture must actually move the state");
+
+        // 回滚的目标快照是**进函数时**的那一份。
+        assert_eq!(fail_begin(session, before, "boom"), -2);
+        assert!(*session.state == before, "the rollback did not restore the snapshot");
+        assert!(!session.in_fight, "`in_fight` survived the rollback");
+        assert!(!session.elite_fight && !session.boss_fight, "the tier flags survived");
+        assert_eq!(session.error, "boom");
+    }
+
+    /// §170 `P1-1`：可失败的 `fight_begin` 拒绝之后，`in_fight` **不许**留在 true。
+    ///
+    /// 卡住的 `in_fight` 不是审美问题：`rd_run_archive_fill` 会一直拒绝存档，而玩家根本没有一场仗
+    /// 可以打完 —— 这与 §164.3 是同一类 bug。
+    #[test]
+    fn a_refused_fight_begin_never_leaves_the_run_in_a_fight() {
+        // (a) 还没走到任何节点。
+        test_run(7, 80, 80, &["strike"; 10]);
+        let before = *run_slot().as_ref().expect("session").state;
+        assert_eq!(rd_run_fight_begin(), -2, "no node, no fight");
+        let session = run_slot().as_ref().expect("session");
+        assert!(!session.in_fight, "a refused begin left `in_fight` set");
+        assert!(!session.elite_fight && !session.boss_fight, "the tier flags leaked");
+        assert!(*session.state == before, "a refused begin changed the run");
+
+        // (b) 一个**已经结算**的战斗节点：打完再按一次。
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "{}", run_error_text());
+        assert!(rd_run_fight_end() >= 0, "{}", run_error_text());
+        assert!(
+            !run_slot().as_ref().expect("session").in_fight,
+            "ending the fight clears the flag"
+        );
+        let settled = *run_slot().as_ref().expect("session").state;
+        assert_eq!(rd_run_fight_begin(), -2, "a settled node pays once");
+        assert!(
+            run_error_text().contains("已经结算"),
+            "the refusal must name the reason: {}",
+            run_error_text()
+        );
+        let session = run_slot().as_ref().expect("session");
+        assert!(!session.in_fight, "a refused begin left `in_fight` set");
+        assert!(*session.state == settled, "a refused begin changed the run");
+    }
+
+    /// §170 `P1-3`：脚本导出与回放在**ABI 层**就拒绝战斗中调用。
+    ///
+    /// 这条测试**故意绕开页面**：页面的 `mode === "fight"` 不是契约，内核才是。存档在 §161.10
+    /// 学过一次，脚本接口没跟着学。
+    #[test]
+    fn the_script_abi_refuses_mid_fight_without_the_page() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "{}", run_error_text());
+        let before = *run_slot().as_ref().expect("session").state;
+        let hero_before = crate::combat_hero_health().expect("a fight");
+
+        // 导出：拒绝，且缓冲区不被写脏（判据是返回值 + 状态不变）。
+        assert_eq!(rd_run_script_fill(), -2, "no script mid-fight");
+        assert!(
+            run_error_text().contains("战斗中没有脚本"),
+            "the refusal must say why: {}",
+            run_error_text()
+        );
+
+        // 回放：拒绝，而且必须在**解析之前** —— 这里给的是一段合法头部，守卫仍先响。
+        let head = std::format!("RDR1,S,7,0,{};", super::content_pin_text());
+        assert_eq!(
+            unsafe { rd_run_replay_from(head.as_ptr(), head.len() as i32) },
+            -2,
+            "no replay mid-fight"
+        );
+        assert!(
+            run_error_text().contains("战斗中不能回放"),
+            "the refusal must say why: {}",
+            run_error_text()
+        );
+
+        // 两次拒绝都不许动局面，也不许动那场战斗 —— 回放本来会 `rd_run_start` 毁掉它。
+        let session = run_slot().as_ref().expect("session");
+        assert!(*session.state == before, "a refused replay changed the run");
+        assert!(session.in_fight, "a refused replay took the fight away");
+        assert_eq!(
+            crate::combat_hero_health().expect("the fight survives"),
+            hero_before,
+            "a refused replay replaced the fight"
+        );
+        // 而且没有留下"回放过几步"的陈旧读数。
+        assert_eq!(rd_run_replay_checked(), 0);
+        assert_eq!(rd_run_replay_diverged(), 0);
     }
 
     /// §164: 回档之后接着打的那些步，靠**头部携带档案**回放。

@@ -400,9 +400,19 @@ static mut ARCHIVE: [u8; rd_run::state::archive::MAX_ARCHIVE] = [0; rd_run::stat
 
 /// The session slot.
 ///
-/// `wasm32-unknown-unknown` here is single-threaded, no export re-enters another export, and the
-/// value lives in the module's BSS for the module's whole lifetime — so a `static mut` with one
-/// accessor is sound. (This is the only `unsafe` in the crate besides the raw-pointer writes.)
+/// `wasm32-unknown-unknown` here is single-threaded and the value lives in the module's BSS for the
+/// module's whole lifetime, so a `static mut` with one accessor is sound — **provided no borrow is
+/// held across a call**.
+///
+/// ⚠️ One export **does** re-enter others: `rd_run_replay_from` replays a script by calling the
+/// ordinary exports. So the old phrasing of this note ("no export re-enters another export") was
+/// false — and false in the worst place, as the stated reason the aliasing was fine. The rule that
+/// replaces it:
+///
+/// > **Never hold a `&`/`&mut` from the slot across a call to another export.** Borrow, use, drop,
+/// > call. `rd_run_replay_from` is where this matters, and it is written that way.
+///
+/// (Found by an external review of `5c467b6`: the code worked, but it was UB by the aliasing model.)
 #[allow(static_mut_refs)]
 pub(crate) fn slot() -> &'static mut Option<Session> {
     unsafe { &mut SESSION }
