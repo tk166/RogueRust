@@ -854,6 +854,54 @@ mod tests {
         std::println!("archive of the sample run: {len} bytes");
     }
 
+    /// 一个**后期**牌组（60 张满容量）写出来多长？这道题以前没人问，而答案是"比 1 KiB 的通用
+    /// scratch 长"—— 也就是说页面把 `rd_env_scratch_buf()` 交给存档导出函数时会写出缓冲区。
+    #[test]
+    fn a_full_deck_archive_is_bigger_than_the_generic_scratch() {
+        let mut run = RunState::new_with_ascension(7, 80, 99, &[], 0).expect("a run");
+        for _ in 0..MAX_RUN_DECK {
+            run.push_card("twin_strike").expect("deck room");
+        }
+        let mut out = [0u8; MAX_ARCHIVE];
+        let len = write(&run, &mut out).expect("write");
+        std::println!("60-card archive: {len} bytes");
+        assert!(
+            len > 1024,
+            "a full deck archive is {len} bytes; if this ever drops under 1 KiB the scratch              contract would be safe by accident, which is not a contract"
+        );
+    }
+
+    /// **删过牌的局也要能整局相等地回档**（REVIEW P1，§161.10）。
+    ///
+    /// 旧 `remove_card` 把尾槽留着（`deck()` 看不见，但结构里还在），而存档只写前 `deck_len` 项
+    /// ⇒ 回档后 `restored != run`。这条测试删一张牌再存档，于是它能在旧实现上失败。
+    ///
+    /// 不绕地图：删除服务要的是 `Pending::Shop`，这里直接把相位摆好 —— 这条测试问的是"尾槽",
+    /// 不是"能不能走到商店"。
+    #[test]
+    fn a_run_that_lost_a_card_still_round_trips() {
+        let mut run = sample();
+        run.pending = Pending::Shop;
+        run.adjust_gold(400);
+        let before = run.deck().len();
+        run.remove_card(1).expect("removal service");
+        assert_eq!(run.deck().len(), before - 1);
+        // 删除是"把后面的往前挪一格"：`[strike, strike, ...]` 去掉 index 1 之后，
+        // 第 1 格变成原来的第 2 张（还是 strike），而**最后一张仍是 bash** —— 顺序不变是被观察的。
+        assert_eq!(run.deck()[0].as_str(), "strike");
+        assert_eq!(run.deck()[before - 2].as_str(), "bash", "the tail survivor is still last");
+
+        let mut out = [0u8; MAX_ARCHIVE];
+        let len = write(&run, &mut out).expect("write");
+        let text = core::str::from_utf8(&out[..len]).expect("ascii");
+        let mut restored = RunState::new_with_ascension(1, 80, 0, &[], 0).expect("a skeleton");
+        restore(text, &mut restored).expect("restore");
+        assert_eq!(
+            restored, run,
+            "a removed card left the archive unable to round-trip (stale tail slot)"
+        );
+    }
+
     #[test]
     fn an_edited_or_truncated_archive_is_refused_not_guessed() {
         let mut out = [0u8; MAX_ARCHIVE];

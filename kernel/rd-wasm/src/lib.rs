@@ -377,6 +377,12 @@ static mut OBS: [i32; OBS_LEN] = [0; OBS_LEN];
 /// Scratch for error / card-name bytes handed across the boundary.
 static mut SCRATCH: [u8; 1024] = [0; 1024];
 
+/// The **archive** buffer (§161.10). Not the scratch one: an archive is up to 16 KiB (a 60-card
+/// run measures 1628 B) and `SCRATCH` is 1024 B by contract, so handing the scratch pointer to the
+/// archive export wrote past the end of it. One buffer per contract, and this one's length is
+/// published (`rd_run_archive_capacity`).
+static mut ARCHIVE: [u8; rd_run::state::archive::MAX_ARCHIVE] = [0; rd_run::state::archive::MAX_ARCHIVE];
+
 /// The session slot.
 ///
 /// `wasm32-unknown-unknown` here is single-threaded, no export re-enters another export, and the

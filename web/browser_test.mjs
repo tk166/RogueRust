@@ -431,6 +431,10 @@ const report = await evaluate(`(async () => {
   out.archiveGold = ex.rd_run_observe(4);
   out.archiveDeck = ex.rd_run_deck_count();
   out.archiveInFight = !document.getElementById("handPanel").hidden;
+  out.archiveEnv = {
+    done: ex.rd_env_done(), result: ex.rd_env_result(), inFight: out.archiveInFight,
+    pending: ex.rd_run_pending(),
+  };
   document.getElementById("archiveCopy").onclick();
   await sleep(0);
   const saved = document.getElementById("archiveBox").value;
@@ -624,7 +628,10 @@ want(report.apFreeShown >= 1,
   `no card reads 0 after the Attack Potion (costs ${JSON.stringify(report.apCosts)})`);
 
 // §161.9: the one-line archive, through the page's own buttons.
-want(report.archiveInFight === false, "an archive was taken mid-fight (this scenario must not)");
+want(
+  report.archiveInFight === false,
+  `an archive was taken mid-fight (env ${JSON.stringify(report.archiveEnv)})`
+);
 want(
   (report.archiveText || "").startsWith("RDA1-"),
   `the archive does not start with RDA1- (${JSON.stringify(report.archiveText)})`
@@ -662,6 +669,7 @@ console.log("  card detail       " + report.card.title + " · " + report.card.bo
 console.log("  log               " + report.log[report.log.length - 1]);
 console.log("  top bar           " + report.topBar);
 console.log("  energy/unafford.  " + report.energyAfter + " / " + report.unaffordable);
+console.log("  archive env       " + JSON.stringify(report.archiveEnv || null));
 console.log("  archive           " + report.archiveText + "… · " +
   report.archiveLength + " chars · " + report.archiveLines + " line(s) · restored floor " +
   report.restoredFloor + " hp " + report.restoredHp + " gold " + report.restoredGold +

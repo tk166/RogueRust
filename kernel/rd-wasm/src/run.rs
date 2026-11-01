@@ -45,6 +45,14 @@ struct RunSession {
     /// Was this fight started from an **elite** node? `fight_end` needs it for the reward tier
     /// (`inv:§5`: elite pays 25–35 gold, rare 10/40/50) and the cursor no longer says so.
     elite_fight: bool,
+    /// Is a fight **in progress** right now? (§161.10)
+    ///
+    /// ⚠️ This is **not** "does a combat session exist": the page creates one at boot
+    /// (`rd_env_reset`) so the fight view has something to draw, which made session-presence true
+    /// from page load — a guard built on it refused every archive with a reason that was false.
+    /// It is set by [`rd_run_fight_begin`] and cleared by [`rd_run_fight_end`] / [`rd_run_start`],
+    /// so "a fight is running" has exactly one meaning and only the calls that own it move it.
+    in_fight: bool,
 }
 
 static mut RUN: Option<RunSession> = None;
@@ -298,6 +306,16 @@ fn finish(session: &mut RunSession, result: Result<i32, RunError>) -> i32 {
 /// end of the ladder and a caller's off-by-one should not be a dead button.
 #[no_mangle]
 pub extern "C" fn rd_run_start(seed: i32, ascension: i32) -> i32 {
+    // §161.10: a new run **ends** any fight the previous one left behind. This is what makes
+    // "a combat session exists" mean "a fight is in progress" -- without it, a page that starts a
+    // new run mid-fight leaves the session alive and every later "no archiving in a fight" check
+    // refuses forever, for a reason that is no longer true.
+    crate::take_session();
+    // A new run is never mid-fight (§161.10): clear the bit here as well as the session, because a
+    // page can start a run from the game-over screen while the old fight's flag is still set.
+    if let Some(session) = run_slot().as_mut() {
+        session.in_fight = false;
+    }
     let content = content();
     let roots = roots(content);
 
@@ -417,6 +435,7 @@ pub extern "C" fn rd_run_start(seed: i32, ascension: i32) -> i32 {
         error: String::new(),
         elite_fight: false,
         boss_fight: false,
+        in_fight: false,
     });
     0
 }
@@ -2212,50 +2231,45 @@ pub extern "C" fn rd_run_take_potion() -> i32 {
     finish(session, outcome)
 }
 
-/// How many bytes `rd_run_archive_into` will write; `-1` when there is no run, `-2` in a fight.
+/// The archive buffer's capacity, in bytes (§161.10).
+///
+/// Published so the host can check **before** it writes: `rd_run_archive_buf()` is exactly this
+/// long, and `rd_run_restore_from` refuses a longer input. Without this the page had to guess, and
+/// it guessed a 1 KiB scratch buffer shared with every other `*_into` export.
 #[no_mangle]
-pub extern "C" fn rd_run_archive_len() -> i32 {
-    match archive_text() {
-        Ok(text) => text.len() as i32,
-        Err(code) => code,
-    }
+pub extern "C" fn rd_run_archive_capacity() -> i32 {
+    rd_run::state::archive::MAX_ARCHIVE as i32
 }
 
-/// # Safety
-///
-/// `ptr` must point at `rd_run_archive_len()` writable bytes.
+/// The address of the archive buffer (`rd_run_archive_capacity()` bytes, owned by this module).
 #[no_mangle]
-pub unsafe extern "C" fn rd_run_archive_into(ptr: *mut u8) -> i32 {
-    match archive_text() {
-        Ok(text) => {
-            for (offset, &byte) in text.as_bytes().iter().enumerate() {
-                *ptr.add(offset) = byte;
-            }
-            text.len() as i32
-        }
-        Err(code) => code,
-    }
+pub extern "C" fn rd_run_archive_buf() -> *mut u8 {
+    std::ptr::addr_of_mut!(crate::ARCHIVE) as *mut u8
 }
 
-/// The archive as one line, or the refusal code.
+/// Fill the archive buffer and return its length; `-1` no run, `-2` refused with text.
 ///
-/// ⚠️ 存档**不含战斗**（那是 `CombatState`，213 KB、每场重建），所以"战斗中不要存"这条判断
-/// **归页面**：内核分不清"这一场正在打"和"上一场结束后没人清理会话"（`browser_test` 里前一条
-/// 场景留下的会话就是后者 —— 第一版把判断放在这里，于是整页从此再也存不了档，而且理由是错的）。
-/// 页面知道自己的 `mode`，它守这一关；内核只负责把整局写成一行。
-fn archive_text() -> Result<std::string::String, i32> {
+/// ⚠️ 存档**不含战斗**（`CombatState`，213 KB、每场重建）。所以"战斗中不许存"这条判断在这里 ——
+/// 权威状态所在的层 —— 而不是在页面里。它可靠的前提是"有战斗会话"确实等于"正在打"：
+/// `rd_run_start` 现在会清掉上一场的会话（见那里），于是这个判据没有第二种含义。
+#[no_mangle]
+pub extern "C" fn rd_run_archive_fill() -> i32 {
     let Some(session) = run_slot().as_ref() else {
-        return Err(-1);
+        return -1;
     };
-    let mut buffer = [0u8; rd_run::state::archive::MAX_ARCHIVE];
-    match rd_run::state::archive::write(&session.state, &mut buffer) {
-        Ok(len) => match std::str::from_utf8(&buffer[..len]) {
-            Ok(text) => Ok(text.to_string()),
-            Err(_) => Err(-3),
-        },
-        Err(_) => {
-            set_error("存档写不出来（缓冲区不够）");
-            Err(-3)
+    if session.in_fight {
+        set_error("战斗中没有存档：这份档案只描述整局，回档会让敌人满血。先打完这一场。");
+        return -2;
+    }
+    // The buffer is ours and `MAX_ARCHIVE` long, so `write` cannot overflow it: it encodes INTO
+    // it and a longer payload is `ArchiveError::TooLong`.
+    #[allow(static_mut_refs)]
+    let buffer = unsafe { &mut *std::ptr::addr_of_mut!(crate::ARCHIVE) };
+    match rd_run::state::archive::write(&session.state, buffer) {
+        Ok(len) => len as i32,
+        Err(error) => {
+            set_error(&std::format!("存档写不出来：{error}"));
+            -2
         }
     }
 }
@@ -2273,6 +2287,11 @@ pub unsafe extern "C" fn rd_run_restore_from(ptr: *const u8, len: i32) -> i32 {
     if ptr.is_null() || len <= 0 {
         return -3;
     }
+    // The capacity contract, enforced rather than assumed (§161.10).
+    if len as usize > rd_run::state::archive::MAX_ARCHIVE {
+        set_error("档案太长：超过 THIS 实现的缓冲容量");
+        return -3;
+    }
     let bytes = std::slice::from_raw_parts(ptr, len as usize);
     let Ok(text) = std::str::from_utf8(bytes) else {
         set_error("档案不是 UTF-8 文本");
@@ -2281,6 +2300,10 @@ pub unsafe extern "C" fn rd_run_restore_from(ptr: *const u8, len: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
+    if session.in_fight {
+        set_error("战斗中没有回档：先打完这一场，或者重开一局。");
+        return -2;
+    }
     let mut restored = *session.state;
     match rd_run::state::archive::restore(text, &mut restored) {
         Ok(()) => {
@@ -2642,6 +2665,7 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // was "any encounter in the image", which would send an elite into a slime fight.
     session.elite_fight = kind == 2;
     session.boss_fight = kind == 7;
+    session.in_fight = true;
     // **The act decides the pool** (`port-plan.md` §130): `Weak` / `Weak2` / `Weak3`, and the same
     // for elites and bosses. Before this, act 2 and act 3 replayed act 1's encounters -- the
     // downgrade §101 documented. The suffix is empty for act 1 so the original names still work.
@@ -2821,6 +2845,9 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     // Captured before the run is borrowed mutably below.
     let elite_fight = run_slot().as_ref().is_some_and(|s| s.elite_fight);
     let boss_fight = run_slot().as_ref().is_some_and(|s| s.boss_fight);
+    if let Some(session) = run_slot().as_mut() {
+        session.in_fight = false;
+    }
     crate::take_session();
     let Some(session) = run_slot().as_mut() else {
         return -1;
@@ -3043,6 +3070,7 @@ mod tests {
             error: String::new(),
             elite_fight: false,
             boss_fight: false,
+        in_fight: false,
         });
     }
 
@@ -3644,6 +3672,82 @@ mod tests {
     /// pile. The point of the test is the **third** assertion block: the observation's `cost` column
     /// (what the player sees) and the energy the kernel really takes must agree, and the price must
     /// be spent once.
+    /// §161.10 P0: 存档走**自己的**缓冲区，容量由 ABI 公布。
+    ///
+    /// 旧的 `rd_run_archive_into(ptr)` 接收任意指针，而页面给的是 1024 B 的通用 scratch —— 一个
+    /// 60 张牌的存档是 **1628 B**（`a_full_deck_archive_is_bigger_than_the_generic_scratch`），
+    /// 于是它往 `SCRATCH` 后面写了约 600 B。这条测试把"能装下"变成可观察的：容量、长度、
+    /// 以及超长输入被拒。
+    #[test]
+    fn the_archive_buffer_is_sized_for_a_full_deck_and_refuses_more() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        let capacity = rd_run_archive_capacity();
+        assert!(
+            capacity as usize >= rd_run::state::archive::MAX_ARCHIVE,
+            "the published capacity must be the real one"
+        );
+
+        // A normal run.
+        let len = rd_run_archive_fill();
+        assert!(len > 0, "archive_fill said {len}");
+        assert!(len <= capacity, "archive {len} does not fit {capacity}");
+
+        // A **full deck**: the case that overflowed the old scratch (1024 B).
+        {
+            let session = run_slot().as_mut().expect("a run");
+            for _ in 0..rd_run::state::MAX_RUN_DECK.saturating_sub(session.state.deck().len()) {
+                let _ = session.state.push_card("strike");
+            }
+        }
+        let big = rd_run_archive_fill();
+        assert!(big > 0, "a full-deck archive said {big}");
+        assert!(
+            big > 1024,
+            "a full-deck archive measured {big} bytes; if it fits in 1 KiB the old bug would have              been masked by luck, which is not a contract"
+        );
+        assert!(
+            big <= capacity,
+            "a full-deck archive is {big} bytes but the buffer is {capacity}"
+        );
+
+        // Reading it back works at that size.
+        let ptr = rd_run_archive_buf();
+        assert!(!ptr.is_null());
+        let bytes = unsafe { std::slice::from_raw_parts(ptr, big as usize) }.to_vec();
+        assert_eq!(
+            unsafe { rd_run_restore_from(ptr, big) },
+            0,
+            "restore of a big archive"
+        );
+
+        // §161.10: **bypass the UI and call the ABI** -- a fight must refuse both directions.
+        // Walk into a combat node first (`rd_run_fight_begin` only accepts one).
+        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_begin_node(), 0, "the node under the cursor");
+        assert_eq!(rd_run_fight_begin(), 0, "begin a fight");
+        assert_eq!(
+            rd_run_archive_fill(),
+            -2,
+            "archiving mid-fight must be refused by the ABI, not only by the page"
+        );
+        let buf = rd_run_archive_buf();
+        assert_eq!(
+            unsafe { rd_run_restore_from(buf, big) },
+            -2,
+            "restoring mid-fight must be refused by the ABI too"
+        );
+
+        // …and **one byte past the capacity** is refused, not clamped.
+        let over = capacity + 1;
+        let mut padded = bytes.clone();
+        padded.resize(over as usize, b'A');
+        assert_eq!(
+            unsafe { rd_run_restore_from(padded.as_ptr(), over) },
+            -3,
+            "an input longer than the buffer must be refused before anything is read"
+        );
+    }
+
     /// §161.5: Attack Potion -- three **definitions**, one card created, and it is free.
     ///
     /// The three things that can be wrong here are independent:

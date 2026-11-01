@@ -2162,6 +2162,11 @@ impl RunState {
         for index in card..(self.deck_len as usize - 1) {
             self.deck[index] = self.deck[index + 1];
         }
+        // **`len` 之后必须是 EMPTY**，与 `Bounded` 的不变式同一条（REVIEW P1，§161.10）。
+        // 少了这一行，被删的那张牌仍留在尾槽里：`deck()` 看不见它，但**结构相等看不见的是另一回事**
+        // —— 存档只写前 `len` 项，于是"删过牌的局"回档后与原局不相等，而 round-trip 测试查不出来
+        // （它从来不在删牌之后存档）。`drop_potion` 早就是这么写的，是这一个兄弟漏了。
+        self.deck[self.deck_len as usize - 1] = RunId::EMPTY;
         self.deck_len -= 1;
         self.removed_cards += 1;
         Ok(price)

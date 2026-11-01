@@ -103,7 +103,7 @@ const REQUIRED = [
   // §161.3: the debug potion grant, used by `RD_DEBUG.givePotion` and by `browser_test`.
   "rd_run_grant_potion",
   // §161.9: the one-line run archive (copy / restore).
-  "rd_run_archive_len", "rd_run_archive_into", "rd_run_restore_from",
+  "rd_run_archive_fill", "rd_run_archive_buf", "rd_run_archive_capacity", "rd_run_restore_from",
 ];
 for (const name of REQUIRED) {
   if (!(name in ex)) fail(`missing export ${name}`);

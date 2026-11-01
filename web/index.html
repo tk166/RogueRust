@@ -2086,18 +2086,21 @@ function measure() {
       archiveSay(`<span class="err">战斗中没有存档 · 这份档案只描述整局，回档会让敌人满血。先打完这一场。</span>`);
       return;
     }
-    const len = ex.rd_run_archive_len();
+    // §161.10：存档有**自己的**缓冲区，容量由 ABI 公布（`rd_env_scratch_buf()` 是 1 KiB 的通用
+    // scratch，而一份后期存档是 1.6 KB —— 第一版就是往那 1 KiB 里写的）。
+    const len = ex.rd_run_archive_fill();
     if (len < 0) {
       archiveSay(`<span class="err">存不了 · ${esc(runError())}</span>`);
       return;
     }
-    const ptr = ex.rd_env_scratch_buf();
-    const wrote = ex.rd_run_archive_into(ptr);
-    if (wrote < 0) {
-      archiveSay(`<span class="err">存不了 · ${esc(runError())}</span>`);
+    const capacity = ex.rd_run_archive_capacity();
+    if (len > capacity) {
+      // 不可达：`fill` 自己就写在这个缓冲区里、长度由它决定。写出来是因为"不可能"也要可观察。
+      archiveSay(`<span class="err">存档 ${len} 字节超过缓冲容量 ${capacity}</span>`);
       return;
     }
-    const text = new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, wrote).slice());
+    const ptr = ex.rd_run_archive_buf();
+    const text = new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, len).slice());
     setArchive(text);
     try {
       await navigator.clipboard.writeText(text);
@@ -2118,7 +2121,13 @@ function measure() {
       return;
     }
     const bytes = new TextEncoder().encode(text);
-    const ptr = ex.rd_env_scratch_buf();
+    const capacity = ex.rd_run_archive_capacity();
+    // **UTF-8 字节数**，不是 `text.length`：一个中文字符是 3 个字节。
+    if (bytes.length > capacity) {
+      archiveSay(`<span class="err">档案 ${bytes.length} 字节，超过缓冲容量 ${capacity}</span>`);
+      return;
+    }
+    const ptr = ex.rd_run_archive_buf();
     new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
     const verdict = ex.rd_run_restore_from(ptr, bytes.length);
     if (verdict < 0) {
