@@ -20,6 +20,8 @@
 use rd_core::state::{Ident, ID_CAP};
 
 use crate::map::{RunMap, NODES_PER_ROW, ROWS};
+pub mod archive;
+
 use crate::streams::{RunError, RunRng, RunStream};
 
 /// The most cards a run's deck may hold. See the module docs: exceeding it is an error, never a

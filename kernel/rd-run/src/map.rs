@@ -148,6 +148,22 @@ impl MapNode {
     pub const fn out_degree(&self) -> u8 {
         self.out_degree
     }
+
+    /// Rebuild a node from an **archive** (§161.9). `None` = the data cannot describe a node.
+    ///
+    /// The only thing that can go wrong is an edge list past [`MAX_OUT_EDGES`], and that is refused
+    /// rather than cut: a map restored with a missing edge is a map the player can get stuck on.
+    #[must_use]
+    pub fn from_parts(col: u8, kind: NodeKind, out: &[u8]) -> Option<Self> {
+        if out.len() > MAX_OUT_EDGES {
+            return None;
+        }
+        let mut node = Self::empty(col);
+        node.kind = kind;
+        node.out_degree = out.len() as u8;
+        node.out[..out.len()].copy_from_slice(out);
+        Some(node)
+    }
 }
 
 /// One row of the map. `count` may be less than [`NODES_PER_ROW`] after orphan pruning — and an
@@ -196,6 +212,37 @@ impl MapRow {
     #[must_use]
     pub fn node(&self, index: usize) -> Option<&MapNode> {
         self.nodes.get(index).filter(|_| index < self.count as usize)
+    }
+
+    /// **All** slots, including the ones past `count`.
+    ///
+    /// An archive writes the whole row (§161.9): a pruned node keeps the edges and column it was
+    /// built with, and "restore gives back an equal value" is the property that catches a forgotten
+    /// field. `nodes()` (the readable prefix) is what every reader wants; this is what a save wants.
+    #[must_use]
+    pub fn slots(&self) -> &[MapNode; NODES_PER_ROW] {
+        &self.nodes
+    }
+
+    /// Rebuild a row — **count and all slots** — from an archive (§161.9).
+    #[must_use]
+    pub fn from_slots(count: u8, nodes: [MapNode; NODES_PER_ROW]) -> Option<Self> {
+        if count as usize > NODES_PER_ROW {
+            return None;
+        }
+        Some(Self { count, nodes })
+    }
+
+    /// Rebuild a row from its readable prefix (the rest is blank).
+    #[must_use]
+    pub fn from_nodes(nodes: &[MapNode]) -> Option<Self> {
+        if nodes.len() > NODES_PER_ROW {
+            return None;
+        }
+        let mut row = Self::blank();
+        row.count = nodes.len() as u8;
+        row.nodes[..nodes.len()].copy_from_slice(nodes);
+        Some(row)
     }
 }
 
@@ -247,6 +294,16 @@ impl RunMap {
     /// Every attempt either satisfies all four overrides or is abandoned; failure is
     /// [`RunError::MapGeneration`], never a relaxed constraint. `MAX_ATTEMPTS` exists because the
     /// override rules genuinely can conflict, and a silent loosening would be worse than a red.
+    /// Rebuild a map from an **archive** (§161.9).
+    ///
+    /// Deliberately **not** re-generated from the seed: a save must come back exactly as it was, and
+    /// a content change can legitimately produce a different map for the same seed. Regenerating and
+    /// hoping would make "restore" mean "a different act that starts the same".
+    #[must_use]
+    pub fn from_rows(rows: [MapRow; ROWS]) -> Self {
+        Self { rows }
+    }
+
     pub fn generate(rng: &mut RunRng) -> Result<Self, RunError> {
         for _ in 0..MAX_ATTEMPTS {
             if let Some(map) = Self::attempt(rng) {

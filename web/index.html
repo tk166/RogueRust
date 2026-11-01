@@ -287,6 +287,12 @@
   .shop-item button { padding: 3px 8px; font-size: 11px; }
   .modal { position: fixed; inset: 0; background: #0009; display: flex; align-items: center;
            justify-content: center; z-index: 60; }
+  /* §161.9：存档条。文本框单独一行、等宽字体，因为我们要求它就是**一行**文本。 */
+  .archive-bar { grid-column: 1 / -1; }
+  .archive-bar .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .archive-bar textarea { width: 100%; margin-top: 8px; font: 11px/1.4 var(--mono);
+                          background: #161b26; color: var(--ink); border: 1px solid var(--line);
+                          border-radius: 6px; padding: 6px 8px; resize: vertical; }
   .modal[hidden] { display: none; }
   .modal-box { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
                padding: 14px; max-width: 720px; max-height: 70vh; overflow-y: auto; }
@@ -2064,6 +2070,71 @@ function measure() {
     const idx = Number(ev.currentTarget.dataset.action);
     if (idx >= 0) step(idx);
   });
+  // ---- §161.9 存档 -------------------------------------------------------------------------
+  // `#archiveBox` 只有一个写者（`setArchive`），`#archiveNote` 也只有一个（`archiveSay`）：
+  // 一个元素两个写者就会互相擦掉消息，而"复制失败"和"回档被拒"必须是看得见的。
+  const setArchive = (text) => {
+    document.getElementById("archiveBox").value = text;
+  };
+  const archiveSay = (html) => {
+    document.getElementById("archiveNote").innerHTML = html;
+  };
+  document.getElementById("archiveCopy").onclick = async () => {
+    // §161.9: **the page** owns "don't archive mid-fight". It knows its mode; the kernel does not,
+    // and asking it there meant a stale session from an earlier fight blocked archiving forever.
+    if (mode === "fight") {
+      archiveSay(`<span class="err">战斗中没有存档 · 这份档案只描述整局，回档会让敌人满血。先打完这一场。</span>`);
+      return;
+    }
+    const len = ex.rd_run_archive_len();
+    if (len < 0) {
+      archiveSay(`<span class="err">存不了 · ${esc(runError())}</span>`);
+      return;
+    }
+    const ptr = ex.rd_env_scratch_buf();
+    const wrote = ex.rd_run_archive_into(ptr);
+    if (wrote < 0) {
+      archiveSay(`<span class="err">存不了 · ${esc(runError())}</span>`);
+      return;
+    }
+    const text = new TextDecoder().decode(new Uint8Array(ex.memory.buffer, ptr, wrote).slice());
+    setArchive(text);
+    try {
+      await navigator.clipboard.writeText(text);
+      archiveSay(`<span class="good">已复制 · ${text.length} 个字符</span>`);
+    } catch (error) {
+      // 无头浏览器/没有权限时剪贴板会被拒。这不是失败 —— 文本已经在框里，选中就能复制。
+      archiveSay(`<span class="dim">剪贴板不可用（${esc(String(error))}）· 文本已在框里，手动复制</span>`);
+    }
+  };
+  document.getElementById("archiveRestore").onclick = () => {
+    if (mode === "fight") {
+      archiveSay(`<span class="err">战斗中没有回档 · 先打完这一场，或者重开一局。</span>`);
+      return;
+    }
+    const text = document.getElementById("archiveBox").value.trim();
+    if (!text) {
+      archiveSay(`<span class="err">框是空的 · 先粘一份档案</span>`);
+      return;
+    }
+    const bytes = new TextEncoder().encode(text);
+    const ptr = ex.rd_env_scratch_buf();
+    new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
+    const verdict = ex.rd_run_restore_from(ptr, bytes.length);
+    if (verdict < 0) {
+      archiveSay(`<span class="err">回档被拒 · ${esc(runError())}</span>`);
+      return;
+    }
+    // 回档换了整局：先把战斗视图收起来，再让页面按新状态重画。
+    setMode("run");
+    runOver = false;
+    renderMap();
+    renderNode();
+    renderTopBar();
+    archiveSay(`<span class="good">已回档 · floor ${ex.rd_run_observe(0)} · ` +
+      `hp ${ex.rd_run_observe(2)}/${ex.rd_run_observe(3)} · gold ${ex.rd_run_observe(4)}</span>`);
+  };
+
   document.getElementById("reset").addEventListener("click", () => {
     // "重开" is a new **run**, not a new fight: the fight is a consequence of walking into one.
     pending = null; lastVerdict = null; lastReward = 0;
@@ -2071,5 +2142,18 @@ function measure() {
   });
 })();
 </script>
+
+<!-- §161.9：存档是一行文本。复制它 = 存，粘回去 + 回档 = 读。没有内部存储、没有文件、没有格式协商：
+     一个单行串 + CRC，改一个字符就会被拒（`rd/run/src/state/archive.rs`）。 -->
+<div class="panel archive-bar" id="archiveBar">
+  <h2>存档 · 一行文本</h2>
+  <div class="row">
+    <button class="act" id="archiveCopy">复制档案</button>
+    <button class="act" id="archiveRestore">回档</button>
+    <span class="note" id="archiveNote">复制下面这一行就能存；把它粘回来点"回档"就能读</span>
+  </div>
+  <textarea id="archiveBox" rows="3" spellcheck="false"
+            placeholder="RDA1-…"></textarea>
+</div>
 </body>
 </html>

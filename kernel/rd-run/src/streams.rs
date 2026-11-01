@@ -244,6 +244,15 @@ pub const fn stream_seed(run_seed: i32, stream: RunStream) -> i32 {
 }
 
 impl RunRng {
+    /// Rebuild the stream counters from an **archive** (§161.9).
+    ///
+    /// The counters *are* the run's randomness: restoring probabilities without them would rewind
+    /// every stream, so a restored run would replay draws it has already made.
+    #[must_use]
+    pub const fn from_counters(seed: i32, counters: [i32; RunStream::COUNT]) -> Self {
+        Self { seed, counters }
+    }
+
     /// A fresh run: every counter at zero.
     #[must_use]
     pub const fn new(seed: i32) -> Self {

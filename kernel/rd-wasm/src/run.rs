@@ -2212,6 +2212,89 @@ pub extern "C" fn rd_run_take_potion() -> i32 {
     finish(session, outcome)
 }
 
+/// How many bytes `rd_run_archive_into` will write; `-1` when there is no run, `-2` in a fight.
+#[no_mangle]
+pub extern "C" fn rd_run_archive_len() -> i32 {
+    match archive_text() {
+        Ok(text) => text.len() as i32,
+        Err(code) => code,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_archive_len()` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_archive_into(ptr: *mut u8) -> i32 {
+    match archive_text() {
+        Ok(text) => {
+            for (offset, &byte) in text.as_bytes().iter().enumerate() {
+                *ptr.add(offset) = byte;
+            }
+            text.len() as i32
+        }
+        Err(code) => code,
+    }
+}
+
+/// The archive as one line, or the refusal code.
+///
+/// ⚠️ 存档**不含战斗**（那是 `CombatState`，213 KB、每场重建），所以"战斗中不要存"这条判断
+/// **归页面**：内核分不清"这一场正在打"和"上一场结束后没人清理会话"（`browser_test` 里前一条
+/// 场景留下的会话就是后者 —— 第一版把判断放在这里，于是整页从此再也存不了档，而且理由是错的）。
+/// 页面知道自己的 `mode`，它守这一关；内核只负责把整局写成一行。
+fn archive_text() -> Result<std::string::String, i32> {
+    let Some(session) = run_slot().as_ref() else {
+        return Err(-1);
+    };
+    let mut buffer = [0u8; rd_run::state::archive::MAX_ARCHIVE];
+    match rd_run::state::archive::write(&session.state, &mut buffer) {
+        Ok(len) => match std::str::from_utf8(&buffer[..len]) {
+            Ok(text) => Ok(text.to_string()),
+            Err(_) => Err(-3),
+        },
+        Err(_) => {
+            set_error("存档写不出来（缓冲区不够）");
+            Err(-3)
+        }
+    }
+}
+
+/// Restore a run from the archive in `(ptr, len)`. `0` ok, `-1` no run slot, `-2` refused, `-3` bad text.
+///
+/// **全有或全无**：`archive::restore` 先装到一个本地 `RunState` 上，最后一步才赋值，所以一份
+/// 坏档案不会把当前这局改成半新半旧。
+///
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_restore_from(ptr: *const u8, len: i32) -> i32 {
+    if ptr.is_null() || len <= 0 {
+        return -3;
+    }
+    let bytes = std::slice::from_raw_parts(ptr, len as usize);
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        set_error("档案不是 UTF-8 文本");
+        return -3;
+    };
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let mut restored = *session.state;
+    match rd_run::state::archive::restore(text, &mut restored) {
+        Ok(()) => {
+            *session.state = restored;
+            session.error.clear();
+            0
+        }
+        Err(error) => {
+            set_error(&std::format!("回档被拒：{error}"));
+            -2
+        }
+    }
+}
+
 /// The relic the reward screen is offering (empty when none; §155: elites and bosses), for display.
 #[no_mangle]
 pub extern "C" fn rd_run_reward_relic_len() -> i32 {

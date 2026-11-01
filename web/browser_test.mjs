@@ -366,6 +366,118 @@ const report = await evaluate(`(async () => {
   out.apHandGrew = out.apHandAfter === cardsBefore + 1;
   out.apFreeShown = out.apCosts.filter((cost) => cost === 0).length;
 
+  // (k) **§161.9: the one-line archive.**
+  window.RD_DEBUG.startWithSeed(4321, 0);
+  await sleep(0);
+  panel().querySelector("[data-panel-action]").click();
+  await sleep(0);
+  if (ex.rd_run_pending() === 7) {
+    panel().querySelector("[data-panel-action]").click();
+    await sleep(0);
+    const pick = document.querySelector("#modalBody [data-pick]");
+    if (pick) { pick.click(); await sleep(0); }
+  }
+  // Walk two nodes so the saved run is not the state a fresh start would give -- and **settle**
+  // them: the archive refuses while a fight is live (a save that drops the fight would restore the
+  // node with the enemies at full health). The first version archived mid-fight and the gate said
+  // "存不了 · 战斗中没有存档", which is the refusal working, not the archive failing.
+  const settleAll = async () => {
+    for (let guard = 0; guard < 400; guard++) {
+      if (!document.getElementById("handPanel").hidden) {
+        // A card that needs a target **arms** the panels; every later card click is ignored until
+        // that target is picked (the same trap the act-1 slice documents). Finish the aim first.
+        const aim = document.querySelector("#enemies [data-target-slot]");
+        if (aim) {
+          aim.click();
+          await sleep(0);
+          continue;
+        }
+        const card = document.querySelector("#hand button.card:not([disabled])");
+        if (card) {
+          card.click();
+          await sleep(0);
+          continue;
+        }
+        document.getElementById("endTurn").click();
+        await sleep(0);
+        continue;
+      }
+      const button = panel().querySelector("[data-panel-action]:not([disabled])");
+      if (!button) return true;
+      const label = text(button);
+      button.click();
+      await sleep(0);
+      if (/离开|跳过/.test(label)) return true;
+    }
+    return false;
+  };
+  for (let hop = 0; hop < 2; hop++) {
+    const lit = [...document.querySelectorAll("#mapbox g.node.reachable")];
+    if (!lit.length) break;
+    // Only walk a node that is **not** a fight: this scenario is about the archive, and a fight
+    // costs a hundred clicks and cannot be archived anyway.
+    const view = window.RD_DEBUG.view();
+    const calm = lit.find((node) => {
+      const kind = Number(node.dataset.kind ? 0 : 0);
+      return node.dataset.kind !== "combat" && node.dataset.kind !== "elite" && node.dataset.kind !== "boss";
+    });
+    (calm || lit[0]).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await sleep(0);
+    await settleAll();
+  }
+  await settleAll();
+  out.archiveFloor = ex.rd_run_observe(0);
+  out.archiveHp = ex.rd_run_observe(2);
+  out.archiveGold = ex.rd_run_observe(4);
+  out.archiveDeck = ex.rd_run_deck_count();
+  out.archiveInFight = !document.getElementById("handPanel").hidden;
+  document.getElementById("archiveCopy").onclick();
+  await sleep(0);
+  const saved = document.getElementById("archiveBox").value;
+  out.archiveText = saved.slice(0, 9);
+  out.archiveLength = saved.length;
+  out.archiveLines = saved.split(String.fromCharCode(10)).length;
+  out.archiveNote = text(document.getElementById("archiveNote"));
+  out.archiveRefusedInFight = out.archiveInFight ? saved.length : -1;
+
+  // A fresh, different run: (4322) rather than (4321), so nothing can pass by accident.
+  window.RD_DEBUG.startWithSeed(4322, 0);
+  await sleep(0);
+  panel().querySelector("[data-panel-action]").click();
+  await sleep(0);
+  if (ex.rd_run_pending() === 7) {
+    panel().querySelector("[data-panel-action]").click();
+    await sleep(0);
+    const pick = document.querySelector("#modalBody [data-pick]");
+    if (pick) { pick.click(); await sleep(0); }
+  }
+  out.archiveSeedAfterRestart = ex.rd_run_seed();
+
+  // Paste and restore through the page's own button.
+  document.getElementById("archiveBox").value = saved;
+  document.getElementById("archiveRestore").onclick();
+  await sleep(0);
+  out.restoredSeed = ex.rd_run_seed();
+  out.restoredFloor = ex.rd_run_observe(0);
+  out.restoredHp = ex.rd_run_observe(2);
+  out.restoredGold = ex.rd_run_observe(4);
+  out.restoredDeck = ex.rd_run_deck_count();
+  out.restoredNote = text(document.getElementById("archiveNote"));
+
+  // One edited character must be **refused**, and the run must not move.
+  const edited = saved.slice(0, 12) + (saved[12] === "A" ? "B" : "A") + saved.slice(13);
+  document.getElementById("archiveBox").value = edited;
+  document.getElementById("archiveRestore").onclick();
+  await sleep(0);
+  out.editedRefused = /被拒/.test(text(document.getElementById("archiveNote")));
+  out.afterEditFloor = ex.rd_run_observe(0);
+  out.afterEditSeed = ex.rd_run_seed();
+
+  // …and the same run saved twice is the same string.
+  document.getElementById("archiveCopy").onclick();
+  await sleep(0);
+  out.archiveStable = document.getElementById("archiveBox").value === saved;
+
   // §159: (seed, level) is the whole description of a run. Drive it through the **fields** the
   // player actually uses -- typing a level and pressing 开始 -- because a page whose level input is
   // not read is a dead affordance, and startWithSeed would have hidden that.
@@ -511,6 +623,32 @@ want(report.apHandGrew === true, "the hand did not grow by exactly one card");
 want(report.apFreeShown >= 1,
   `no card reads 0 after the Attack Potion (costs ${JSON.stringify(report.apCosts)})`);
 
+// §161.9: the one-line archive, through the page's own buttons.
+want(report.archiveInFight === false, "an archive was taken mid-fight (this scenario must not)");
+want(
+  (report.archiveText || "").startsWith("RDA1-"),
+  `the archive does not start with RDA1- (${JSON.stringify(report.archiveText)})`
+);
+want(report.archiveLength > 100, `the archive is suspiciously short (${report.archiveLength})`);
+want(report.archiveLines === 1, `the archive is ${report.archiveLines} lines, expected one`);
+want(/已复制|剪贴板/.test(report.archiveNote || ""),
+  `copy said nothing useful: ${JSON.stringify(report.archiveNote)}`);
+want(report.archiveSeedAfterRestart === 4322,
+  `the restart did not change the seed (${report.archiveSeedAfterRestart})`);
+want(report.restoredSeed === 4321, `restore gave seed ${report.restoredSeed}, expected 4321`);
+want(report.restoredFloor === report.archiveFloor,
+  `floor ${report.restoredFloor} != ${report.archiveFloor}`);
+want(report.restoredHp === report.archiveHp, `hp ${report.restoredHp} != ${report.archiveHp}`);
+want(report.restoredGold === report.archiveGold,
+  `gold ${report.restoredGold} != ${report.archiveGold}`);
+want(report.restoredDeck === report.archiveDeck,
+  `deck ${report.restoredDeck} != ${report.archiveDeck}`);
+want(report.editedRefused === true, "an edited archive was accepted");
+want(report.afterEditFloor === report.restoredFloor,
+  "a refused restore moved the run anyway (that is the worse bug)");
+want(report.afterEditSeed === 4321, "a refused restore changed the seed");
+want(report.archiveStable === true, "the same run produced two different archives");
+
 await page.close();
 
 
@@ -524,6 +662,10 @@ console.log("  card detail       " + report.card.title + " · " + report.card.bo
 console.log("  log               " + report.log[report.log.length - 1]);
 console.log("  top bar           " + report.topBar);
 console.log("  energy/unafford.  " + report.energyAfter + " / " + report.unaffordable);
+console.log("  archive           " + report.archiveText + "… · " +
+  report.archiveLength + " chars · " + report.archiveLines + " line(s) · restored floor " +
+  report.restoredFloor + " hp " + report.restoredHp + " gold " + report.restoredGold +
+  " · edited refused " + report.editedRefused);
 console.log("  attack potion     " + report.apTitle + " · " + report.apOptions +
   " option(s) · hand +1 " + report.apHandGrew + " · free shown " + report.apFreeShown);
 console.log("  liquid memories   " + report.lmTitle + " · " + report.lmFreeShown +
