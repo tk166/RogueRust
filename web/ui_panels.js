@@ -193,14 +193,16 @@ const RD_PANELS = (() => {
 
   function describeReward(s) {
     const rows = [];
-    for (const [slot, card] of (s.rewardCards || []).entries()) {
+    for (const card of s.rewardCards || []) {
+      // §161.8: `card.slot` is the kernel's slot; the array position is a page artifact and stops
+      // matching the moment a row is blanked by `take_card`.
       rows.push({
         label: card.title || card.id,
         sub: card.chip,
         value: card.id,
         disabled: false,
-        card: `reward:${slot}`,
-        button: { label: "拿这张", action: { kind: "take_card", slot } },
+        card: `reward:${card.slot}`,
+        button: { label: "拿这张", action: { kind: "take_card", slot: card.slot } },
       });
     }
     // `inv:§9.3`: the potion is its own offer -- taking the card and taking the potion are separate.

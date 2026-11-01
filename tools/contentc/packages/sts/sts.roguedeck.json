@@ -9388,7 +9388,7 @@
     "MaxHealth": 80,
     "StartingHealth": 80,
     "Resources": {
-      "gold": 0
+      "gold": 99
     },
     "Deck": [
       {
@@ -9439,7 +9439,7 @@
         "MaxHealth": 80,
         "StartingHealth": 80,
         "Resources": {
-          "gold": 0
+          "gold": 99
         },
         "Deck": [
           {

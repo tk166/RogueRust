@@ -946,8 +946,19 @@ function runSnapshot() {
     case 4:
       snapshot.rewardGold = ex.rd_run_reward_gold();
       for (let slot = 0; slot < ex.rd_run_reward_card_count(); slot++) {
+        const id = rewardId(slot);
+        // §161.8: a taken row is **blanked**, not removed -- the slot index has to stay stable for
+        // `take_card(slot)`. So the page must skip empties itself; before `take_card` closed the
+        // whole screen, a blank row could never be drawn, and now it can (and a row with an empty
+        // label but a live button is a dead button wearing a costume).
+        if (!id) continue;
+        // §161.8: the row must carry the **kernel's** slot. The panel used to use the array
+        // position, which happened to equal the slot only while a taken row removed the whole
+        // screen. With blanked rows, position != slot, and `take_card(position)` refused forever
+        // (the row it named was already empty).
         snapshot.rewardCards.push({
-          id: rewardId(slot),
+          slot,
+          id,
           title: rewardTitle(slot),
           chip: kindChip(runKind(1, slot)),
         });

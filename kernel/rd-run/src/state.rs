@@ -2769,7 +2769,19 @@ impl RunState {
         Ok(None)
     }
 
-    /// Take card `slot` from the reward screen and leave it.
+    /// Take card `slot` from the reward screen. **The screen stays open** (§161.8).
+    ///
+    /// The card, the potion and the relic are three independent rows of one screen: taking the card
+    /// must not take the other two with it. This used to set `pending = None; mark_resolved()`,
+    /// which meant a player who took the card first **lost the elite's relic** -- and nothing said
+    /// so, because the relic row simply vanished with the screen.
+    ///
+    /// §161.8's vertical slice found it the honest way: its elite scenario took the card (the first
+    /// thing a player does) and then asked where the relic went. `take_relic` / `take_potion` were
+    /// already correct, so the bug was the asymmetry inside this one function.
+    ///
+    /// The node is settled by `skip_reward` (or by `leave`), which is also the way out when every
+    /// row has been taken.
     pub fn take_card(&mut self, slot: usize) -> Result<(), RunError> {
         if self.pending != Pending::Reward {
             return Err(RunError::WrongPhase);
@@ -2781,8 +2793,16 @@ impl RunState {
             return Err(RunError::EmptyOffer(slot as u8));
         }
         self.push_card(id.as_str())?;
-        self.pending = Pending::None;
-        self.mark_resolved();
+        // The **card choice** is one pick (`inv:§3.5`: "one of three"), so taking it spends the
+        // whole row set -- but only that set: the potion and the relic are separate offers on the
+        // same screen and stay (`inv:§9.3` already says the potion is its own offer).
+        //
+        // §161.8: this is the shape StS has. The first fix here blanked just the taken row, which
+        // let a driver take **all three** cards from one reward -- the slice's own deck grew by 3.
+        for row in self.reward.cards.iter_mut() {
+            *row = RunId::EMPTY;
+        }
+        self.reward.cards_len = 0;
         Ok(())
     }
 
@@ -3505,7 +3525,12 @@ mod tests {
         }
     }
 
-    /// Taking a card adds exactly one and leaves the phase; skipping adds none. Both are one-shot.
+    /// Taking a card adds exactly one; **the screen stays open**; skipping adds none.
+    ///
+    /// §161.8 changed the first half of this test. `take_card` used to leave the phase, which meant
+    /// the potion and the relic rows vanished with it -- an elite's relic was lost by any player who
+    /// took the card first (i.e. by everyone). The three rows are independent in StS, and
+    /// `take_relic`/`take_potion` already behaved that way; `take_card` was the odd one out.
     #[test]
     fn taking_and_skipping_a_reward() {
         let mut run = RunState::new(3, 80, 0, &DECK).expect("a run");
@@ -3515,17 +3540,30 @@ mod tests {
         run.take_card(1).expect("take the second card");
         assert_eq!(run.deck().len(), deck_before + 1);
         assert_eq!(run.deck()[deck_before].as_str(), wanted);
-        assert_eq!(run.pending(), Pending::None);
-        // A second take from the same screen is an out-of-order action.
-        assert_eq!(run.take_card(0), Err(RunError::WrongPhase));
+        assert_eq!(
+            run.pending(),
+            Pending::Reward,
+            "taking the card must leave the other rows on the table"
+        );
 
-        // Skipping takes nothing.
+        // The card choice is **one** pick: every card row is spent, so a second take is refused.
+        assert_eq!(run.reward().cards().len(), 0, "the card choice was spent");
+        assert_eq!(run.take_card(0), Err(RunError::EmptyOffer(0)));
+
+        // …but the screen itself is still up, because the potion/relic rows are separate offers.
+        assert_eq!(run.pending(), Pending::Reward);
+
+        // Leaving is `skip_reward`, and it settles the node.
+        run.skip_reward().expect("leave the screen");
+        assert_eq!(run.pending(), Pending::None);
+        assert_eq!(run.skip_reward(), Err(RunError::WrongPhase));
+
+        // Skipping a fresh screen takes nothing.
         run.roll_reward(&basic_pool(), &[], &[], FightKind::Normal).unwrap();
         let deck_before = run.deck().len();
         run.skip_reward().expect("skip");
         assert_eq!(run.deck().len(), deck_before);
         assert_eq!(run.pending(), Pending::None);
-        assert_eq!(run.skip_reward(), Err(RunError::WrongPhase));
     }
 
     /// A pool too small to fill three distinct slots is an **error**, not a short or repeating

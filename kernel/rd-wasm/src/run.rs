@@ -2997,7 +2997,9 @@ mod tests {
         let start = obs();
         assert_eq!(start[2], 80, "health");
         assert_eq!(start[3], 80, "max health");
-        assert_eq!(start[4], 0, "gold comes out of the content, which says 0");
+        // §161.8: the content says 99 (the wiki's starting gold); it used to say 0, so the first
+        // shop could not buy anything -- found by the vertical slice, not by this test.
+        assert_eq!(start[4], 99, "gold comes out of the content, which says 99");
         assert_eq!(rd_run_choose_start(0), 0, "taking blessing 0");
         let o = obs();
         assert_eq!(rd_run_seed(), 7);
@@ -4316,11 +4318,17 @@ mod tests {
         sorted.dedup();
         assert_eq!(sorted.len(), 3, "the reward offered a duplicate: {ids:?}");
 
-        // Taking one adds exactly that card and closes the screen.
+        // Taking one adds exactly that card. §161.8: the **screen stays open** -- the potion and the
+        // relic are separate rows (and on an elite's reward this is what used to lose the relic).
         let wanted = ids[2].clone();
         assert_eq!(rd_run_take_card(2), 0);
         assert_eq!(rd_run_deck_count(), deck_before + 1);
-        assert_eq!(rd_run_pending(), 0);
+        assert_eq!(
+            rd_run_reward_card_count(),
+            0,
+            "the card choice is one pick: every card row is spent"
+        );
+        assert_ne!(rd_run_pending(), -1, "the screen is still there for the other rows");
         let last = {
             let n = rd_run_deck_id_len(rd_run_deck_count() - 1);
             let mut buffer = vec![0u8; n as usize];
@@ -4329,8 +4337,10 @@ mod tests {
         };
         assert_eq!(last, wanted);
 
-        // And skipping is a way out of the screen, not a stuck state.
-        assert_eq!(rd_run_skip_reward(), -2, "there is no screen to skip");
+        // §161.8: the screen is still up after taking the card, so `跳过` is the way out -- and a
+        // second skip has nothing left to close.
+        assert_eq!(rd_run_skip_reward(), 0, "跳过 leaves the reward screen");
+        assert_eq!(rd_run_skip_reward(), -2, "there is no screen to skip a second time");
     }
 
     /// Settle whatever is under the cursor, through the ABI, the way a player would.

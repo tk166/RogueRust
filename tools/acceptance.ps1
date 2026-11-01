@@ -261,6 +261,14 @@ $results += Invoke-Gate -Name 'web-browser' -Exe 'C:\Program Files\nodejs\node.e
 $results += Invoke-Gate -Name 'web-soak' -Exe 'C:\Program Files\nodejs\node.exe' `
   -ArgLine (Join-Path $ROOT 'web\soak_test.mjs') -Workdir $ROOT -MustMatch 'SOAK_TEST PASS' -TimeoutSec 900
 
+# 门 19：**一幕垂直切片**（§161.8，REVIEW §六 第 3 步）。
+# 门 17 是一条写死的路，门 18 是随机点 —— 两者都不能证明
+# "商店能买东西""精英会给遗物""篟火能打铁"。
+# 这一道在固定种子上**自己算路线**走到每一种节点。
+$results += Invoke-Gate -Name 'web-slice' -Exe 'C:\Program Files\nodejs\node.exe' `
+  -ArgLine (Join-Path $ROOT 'web\act1_slice.mjs') -Workdir $ROOT `
+  -MustMatch 'ACT1_SLICE PASS' -TimeoutSec 900
+
 Write-Output "`n" + ("-" * 78)
 Write-Output ("{0,-18}{1,6}  {2,-22}{3}" -f '闸门', '退出', '证据', '备注')
 Write-Output ("-" * 78)
