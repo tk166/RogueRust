@@ -54,6 +54,22 @@ NEW_MONSTERS = '''    ("taskmaster", 54, 60, ["taskmaster.scouring_whip"]),
      ["reptomancer.spawn_dagger", "reptomancer.big_bite", "reptomancer.snake_strike"]),
     ("dagger", 20, 25, ["dagger.wound", "dagger.explode"]),'''
 
+# The status **list** (not just the count) also has to learn the new row, and the trigger table has to
+# know it is the one status here that carries a `TurnStarted` trigger.
+OLD_STATUS_LIST = '''    "standard.plated_armor": [],'''
+NEW_STATUS_LIST = '''    "standard.plated_armor": [],
+    # §175: Nemesis's carrier -- the first content row using a `TurnStarted` trigger.
+    "standard.phantom_veil": [],'''
+
+OLD_TRIGGER_SET = '''                     "standard.time_warp", "standard.constricted"):'''
+NEW_TRIGGER_SET = '''                     "standard.time_warp", "standard.constricted",
+                     "standard.phantom_veil"):'''
+
+OLD_TRIGGER_MAP = '''                        "standard.constricted": ["TurnEnded"]}[sid]'''
+NEW_TRIGGER_MAP = '''                        "standard.constricted": ["TurnEnded"],
+                        # §175: the first `TurnStarted` trigger in this package.
+                        "standard.phantom_veil": ["TurnStarted"]}[sid]'''
+
 OLD_POOL = '''    "enc_slavers": ["taskmaster", "slaver_red", "blue_slaver"],
 }'''
 NEW_POOL = '''    "enc_slavers": ["taskmaster", "slaver_red", "blue_slaver"],
@@ -75,6 +91,9 @@ def main():
         (OLD_ACTIONS, NEW_ACTIONS),
         (OLD_CARD, NEW_CARD),
         (OLD_MONSTERS, NEW_MONSTERS),
+        (OLD_STATUS_LIST, NEW_STATUS_LIST),
+        (OLD_TRIGGER_SET, NEW_TRIGGER_SET),
+        (OLD_TRIGGER_MAP, NEW_TRIGGER_MAP),
         (OLD_POOL, NEW_POOL),
         (OLD_TABLE, NEW_TABLE),
     ]:

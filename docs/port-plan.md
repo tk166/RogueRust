@@ -12295,3 +12295,69 @@ soak 在第 108 次点击时把局面卡死。这正是 soak 存在的理由 —
 
   这一节净效果为零（内容与代码全部回退），但留下了：三个幂等的补丁脚本、`web-slice` 的战斗现场诊断、
   以及"敌人起始状态从未应用"这条结论。20/20 门、单测 813 与 §174 结束时一致。
+
+---
+
+## 176. 起始状态打开之后的连锁反应：召唤物不能行动（已定位并按纪律回退）
+
+用户的判断对了一半也错了一半：**"耦合在回合结束"确实不是设计意图**，但它是**真实存在的耦合** ——
+回合结束那条路径会跑两类内容程序：卡牌的 `LifecyclePrograms[TurnEndInHand]` 与状态的 `TurnEnded`
+触发器，而 §175 恰好同时新增了这两类东西。真正的 bug 却不在那里。
+
+176.1 ★★ 真正的根因：驱动器假定敌人名单在开局就固定
+
+  内核级复现（不需要浏览器）：把 Slime Boss 打到 2 HP，它会分裂 —— 然后：
+
+      第 11 回合: verdict -3 · err [活跃战斗员 `acid_slime_m#000000` 不在 plan.enemies 里]
+      enemies: ["slime_boss=2", "acid_slime_m#000000=10", "spike_slime_s#000001=10"]
+
+  `step_end_turn` 在 `plan.enemies`（开局时从 `ENCT` 记录里泄漏出来的固定切片）里找"轮到谁、它有
+  哪些招"。而 `node.createCombatant` 造出来的战斗员（Boss 分裂、Reptomancer 的匕首、Gremlin Leader
+  的 gremlin）**不在那个切片里** ⇒ 整个结束回合的步骤失败。页面上看起来就是"打不动"。
+
+  这个假设一直没被撞破，是因为 §175 之前 `standard.split` / `phase_split`（起始状态）根本不生效
+  —— **Boss 从来没分裂过**。两个 bug 互相掩盖了。
+
+176.2 修法（两个脚本，已验证）
+
+  * `native/patch_176_summons.py`：`Session::exec` 收 `Step<'_>` 而不是 `Step<'static>`（内核的
+    `run_fight` 一直是 `'_`），于是可以传**局部副本**的 id，不必再泄漏；召唤物的招式表按**定义 id**
+    到 `ENCT[*].Enemies[j].Id` 里找，轮转用内核自己的 `Actions[(round-1) % len]`。
+  * `native/patch_176_bosstest.py`：三个 Boss 的回归测试（判据是"每一步都还受理 + 分裂后敌人真的
+    行动"，不是"打赢"）。实测：**Slime Boss 11 回合（含 1 次分裂）→ 第 12 回合胜利**、
+    **The Champ 25 回合**、**Time Eater 4 回合**，每一步都返回 0、`problems` 空。
+
+176.3 还差最后一步：浏览器那条路径仍有一次 `StepThrew(Script)`
+
+  内核的 Boss 战是绿的，但 `web-slice` 里 act-1 的 Boss 仍失败，现场（新加的诊断）：
+
+      {"actions":1,"done":0,"result":0,"phase":1,"round":5,"turn":1,
+       "heroHp":38,"hand":7,"active":"hero","problem":"StepThrew(Script)","enemies":["slime_boss"]}
+
+  `Script` = `BattleError::Deck(_) | BattleError::Play(_)` —— **不是程序错误**，所以它不是敌动作，
+  而是一次**出牌**在 `play::try_play_card` 里被拒。已排除的：回合没开始（§176 的
+  `reobserve_after_external_change` 单点自愈已加上，`phase` 从 0 变成 1）；召唤物（已修）。
+  剩下的线索是"手牌 7 张、只剩结束回合、round/turn 完全没动"，也就是**某一手牌被拒之后页面再没有
+  合法动作**。
+
+  ⚠️ 下一步需要的东西很具体：`BattleError::Play` 的**具体变体**（哪张牌、哪条拒因）今天到不了
+  `problems`（那里只有家族名 `StepThrew(Script)`）。取它的最小改动是让 `battle.rs` 把一个
+  `u8` 码写进 `FightOutcome`（`step_capacity` 就是这么做的），再由 `rd-wasm` 翻成人话。
+
+176.4 为什么又回退
+
+  `web-slice` 红 ⇒ 不提交。回退后 20/20（soak 207 次点击）。留下的产物：五个补丁/诊断脚本
+  （`patch_176_summons.py`、`patch_176_bosstest.py`、`patch_176_diag.py`、`patch_175*`、
+  `check_braces.py`）与 `web/act1_slice.mjs` 的战斗现场 dump。
+
+176.5 一个值得记下的工具教训
+
+  这次插入测试时用了 `text[:start] + new + text[end:]`，而 `end` 的位置**在 `start` 之前** ⇒
+  整段尾巴被复制了一遍（+1325 行、多一个 `}`）。`native/check_braces.py` 就是为此写的：它按
+  "剥掉字符串与注释后数花括号"报告深度，插完立刻能看出不平衡。**拼接前先断言两个锚点的先后顺序。**
+
+176.6 药水池：这一轮没有开始
+
+  用户要求"修起始状态 → 验三个 Boss → 继续药水"。前两件做完了（内核侧），第三件**未开始**：
+  7 瓶药水的机制清单在 `docs/sts-wiki-gap.md` §D.1，各自要动伤害管线或回合边界。
+  在 §176.3 的那个 `Play` 拒因查清之前开药水，会让两个 bug 混在一起。

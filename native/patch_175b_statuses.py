@@ -62,10 +62,20 @@ fn apply_starting_statuses(
         for index in 0..statuses.len() {
             let term = statuses
                 .term(index)
-                .map_err(|e| format!("StartingStatuses[{index}]: {}", detail(&e)))?;
+                .ok_or_else(|| format!("StartingStatuses[{index}] has no term"))?;
             let node = rd_core::ir::NodeRef::new(content, term);
-            let Some(status_id) = node.str_field("Status").ok().flatten() else {
-                return Err(format!("StartingStatuses[{index}] has no `Status`"));
+            // `StatusDefinitionId` is the key the **content** uses (`enc_three_sentries` and friends);
+            // `content.rs`'s doc comment said `Status`, which was wrong -- that comment is fixed in the
+            // same change. Both spellings are accepted so neither can bite again.
+            let status_id = node
+                .str_field("StatusDefinitionId")
+                .ok()
+                .flatten()
+                .or_else(|| node.str_field("Status").ok().flatten());
+            let Some(status_id) = status_id else {
+                return Err(format!(
+                    "StartingStatuses[{index}] has neither `StatusDefinitionId` nor `Status`"
+                ));
             };
             let Ok(definition) = rd_core::state::StatusDefinitionId::new(status_id) else {
                 return Err(format!("`{status_id}` is not a usable status id"));
