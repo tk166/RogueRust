@@ -204,6 +204,11 @@ pub enum CapacityError {
     DuplicateKey,
     /// `AddCombatant` with an id that is already in the fight (`CombatState.cs:228-229`).
     DuplicateCombatant,
+    /// `node.destroyCombatant` asked to remove the combatant whose turn it is (§178).
+    ///
+    /// The turn processor addresses the active combatant **by id**, so removing it mid-turn would
+    /// leave the loop holding a dangling id. Loud, and nothing is mutated.
+    ActiveCombatant,
     /// A card or zone was addressed to a combatant the state does not know.
     MissingCombatant,
     /// The queue's parallel columns have different lengths.
@@ -364,6 +369,7 @@ impl core::fmt::Display for CapacityError {
             Self::Full(c) => write!(f, "{c:?} is full"),
             Self::DuplicateKey => f.write_str("key already present"),
             Self::DuplicateCombatant => f.write_str("combatant id already present"),
+            Self::ActiveCombatant => f.write_str("cannot remove the active combatant"),
             Self::MissingCombatant => f.write_str("no such combatant"),
             Self::QueueMetadataMisaligned {
                 column,
@@ -4133,6 +4139,70 @@ impl CombatState {
             self.active_combatant_id = Some(id);
         }
         Ok(())
+    }
+
+    /// **Removes** a combatant from the fight (`node.destroyCombatant`, `port-plan.md` §178).
+    ///
+    /// Three lists hold a combatant and they must move together or `card_zones` stops lining up with
+    /// `combatants`: the roster, the turn order, and that combatant's piles.
+    ///
+    /// ⚠️ Distinct from *dying*: a dead combatant **stays** in the roster and in the turn order (the
+    /// turn advance skips it, `CombatState.cs:139-168`), and its statuses stay collectable -- that is
+    /// how `Downed` triggers work. **Removal** is the stronger act: the bearer is gone, so no trigger
+    /// can be collected from it ever again. That distinction is the whole point of this method.
+    ///
+    /// Refuses (`StateError::Active`) to remove the combatant whose turn it is: the turn processor
+    /// addresses the active combatant **by id**, so deleting it mid-turn would leave a dangling id.
+    pub fn remove_combatant(&mut self, id: &CombatantId) -> StateResult<Combatant> {
+        if self.active_combatant_id == Some(*id) {
+            return Err(CapacityError::ActiveCombatant);
+        }
+        let mut index = None;
+        for i in 0..self.combatants.len() {
+            if self.combatants.get(i).map(|c| c.id) == Some(*id) {
+                index = Some(i);
+                break;
+            }
+        }
+        let Some(index) = index else {
+            return Err(CapacityError::MissingCombatant);
+        };
+        let combatant = *self.combatants.get(index).ok_or(CapacityError::MissingCombatant)?;
+        // Turn order: shift down so the *relative* order of everyone else is untouched (the order is
+        // semantics -- `turn_order` decides who acts next).
+        let len = self.turn_order.len();
+        let mut turn_index = None;
+        for i in 0..len {
+            if self.turn_order.get(i) == Some(id) {
+                turn_index = Some(i);
+                break;
+            }
+        }
+        if let Some(from) = turn_index {
+            for j in from..len - 1 {
+                if let Some(moved) = self.turn_order.get(j + 1).copied() {
+                    if let Some(slot) = self.turn_order.get_mut(j) {
+                        *slot = moved;
+                    }
+                }
+            }
+            self.turn_order.pop();
+        }
+        // Roster: same shift-down.
+        let len = self.combatants.len();
+        for j in index..len - 1 {
+            if let Some(moved) = self.combatants.get(j + 1).copied() {
+                if let Some(slot) = self.combatants.get_mut(j) {
+                    *slot = moved;
+                }
+            }
+        }
+        self.combatants.pop();
+        // Piles: `detach_card_zones` already knows how to shift that list.
+        self.detach_card_zones(id);
+        // Obstacles/statuses keyed by combatant are dropped with the combatant itself: they live
+        // inside `Combatant`, so nothing else to clean.
+        Ok(combatant)
     }
 
     /// Drops a combatant's pile entry, mirroring the reference's dictionary lookup: a combatant

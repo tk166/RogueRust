@@ -695,6 +695,9 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // kernel needs no new rule -- it already runs turn-ended triggers.
             | "standard.lose_strength"
             | "standard.lose_dexterity"
+            // §178: Nemesis's "intangible every other turn" carrier -- the first content status
+            // whose trigger is `TurnStarted`. It was in the §175 patch and was reverted with it.
+            | "standard.phantom_veil"
     )
 }
 

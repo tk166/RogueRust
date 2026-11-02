@@ -903,6 +903,18 @@
               "value": {
                 "Children": [
                   {
+                    "kind": "node.destroyCombatant",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.sourceIncludingDowned",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      }
+                    }
+                  },
+                  {
                     "kind": "node.createCombatant",
                     "value": {
                       "DefinitionId": "acid_slime_m",
@@ -991,6 +1003,18 @@
                   "value": {
                     "Children": [
                       {
+                        "kind": "node.destroyCombatant",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.sourceIncludingDowned",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          }
+                        }
+                      },
+                      {
                         "kind": "node.createCombatant",
                         "value": {
                           "DefinitionId": "acid_slime_m",
@@ -1014,29 +1038,6 @@
                               "Value": 10
                             }
                           }
-                        }
-                      },
-                      {
-                        "kind": "node.modifyStatusStacks",
-                        "value": {
-                          "TargetSelector": {
-                            "kind": "sel.source",
-                            "value": {
-                              "Cardinality": "ZeroOrOne",
-                              "RequiredContextCapabilities": "Source"
-                            }
-                          },
-                          "StatusDefinitionId": {
-                            "value": "standard.phase_split"
-                          },
-                          "Delta": {
-                            "kind": "const",
-                            "value": {
-                              "Value": -1
-                            }
-                          },
-                          "ResultKey": null,
-                          "Children": []
                         }
                       }
                     ]
@@ -1582,6 +1583,110 @@
       "DebuffBlock": null,
       "IncomingStatusDelay": null,
       "Disclosure": null
+    },
+    {
+      "Id": "standard.phantom_veil",
+      "PackageId": "sts",
+      "NameKey": "Phantom Veil",
+      "DescriptionKey": "Gains Intangible every other turn.",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Op": "Equal",
+                    "Left": {
+                      "kind": "combatantStatusStacks",
+                      "value": {
+                        "Selector": {
+                          "kind": "sel.source",
+                          "value": {
+                            "Cardinality": "ZeroOrOne",
+                            "RequiredContextCapabilities": "Source"
+                          }
+                        },
+                        "StatusId": {
+                          "value": "standard.intangible"
+                        }
+                      }
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 0
+                      }
+                    }
+                  }
+                },
+                "Then": {
+                  "kind": "node.applyStatus",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusDefinitionId": {
+                      "value": "standard.intangible"
+                    },
+                    "Stacks": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 1
+                      }
+                    },
+                    "DurationTurns": 0,
+                    "Charges": 0,
+                    "ResultKey": null
+                  }
+                },
+                "Else": {
+                  "kind": "node.modifyStatusStacks",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusDefinitionId": {
+                      "value": "standard.intangible"
+                    },
+                    "Delta": {
+                      "kind": "const",
+                      "value": {
+                        "Value": -99
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -3999,6 +4104,78 @@
         "MaxProgramSteps": 1024
       },
       "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "Hand",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Status"
+    },
+    {
+      "Id": "burn",
+      "PackageId": "sts",
+      "NameKey": "Burn",
+      "DescriptionKey": "Unplayable. At the end of your turn, take 2 damage.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "status"
+        },
+        {
+          "value": "unplayable"
+        },
+        {
+          "value": "junk"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": []
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {
+        "TurnEndInHand": {
+          "Id": {
+            "Value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.dealDamage",
+            "value": {
+              "TargetSelector": {
+                "kind": "sel.source",
+                "value": {
+                  "Cardinality": "ZeroOrOne",
+                  "RequiredContextCapabilities": "Source"
+                }
+              },
+              "Amount": {
+                "kind": "const",
+                "value": {
+                  "Value": 2
+                }
+              },
+              "ResultKey": null,
+              "IgnoresBlock": false,
+              "Element": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      },
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "Hand",
       "PlayedCardDestinationZone": "DiscardPile",
@@ -7627,6 +7804,435 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "nemesis.tri_attack",
+      "PackageId": "sts",
+      "NameKey": "Tri Attack",
+      "DescriptionKey": "Tri Attack - 6 damage x3",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Tri Attack - 6 damage x3"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 6
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 6
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 6
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "nemesis.tri_burn",
+      "PackageId": "sts",
+      "NameKey": "Tri Burn",
+      "DescriptionKey": "Tri Burn - 3 Burn into your discard pile",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Tri Burn - 3 Burn into your discard pile"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createCardInstance",
+          "value": {
+            "CardDefinitionId": {
+              "value": "burn"
+            },
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "ToZone": "DiscardPile",
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "nemesis.scythe",
+      "PackageId": "sts",
+      "NameKey": "Scythe",
+      "DescriptionKey": "Scythe - 45 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Scythe - 45 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 45
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "reptomancer.spawn_dagger",
+      "PackageId": "sts",
+      "NameKey": "Spawn Dagger",
+      "DescriptionKey": "Spawn Dagger - summons a Dagger",
+      "Intent": {
+        "Kind": "Buff",
+        "Label": "Spawn Dagger - summons a Dagger"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createCombatant",
+          "value": {
+            "DefinitionId": "dagger",
+            "TeamId": "enemy",
+            "Health": {
+              "kind": "const",
+              "value": {
+                "Value": 22
+              }
+            }
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "reptomancer.big_bite",
+      "PackageId": "sts",
+      "NameKey": "Big Bite",
+      "DescriptionKey": "Big Bite - 30 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Big Bite - 30 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 30
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "reptomancer.snake_strike",
+      "PackageId": "sts",
+      "NameKey": "Snake Strike",
+      "DescriptionKey": "Snake Strike - 13 damage x2, 1 Weak",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Snake Strike - 13 damage x2, 1 Weak"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 13
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 13
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.weak"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "dagger.wound",
+      "PackageId": "sts",
+      "NameKey": "Wound",
+      "DescriptionKey": "Wound - 9 damage, 1 Wound into your discard pile",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Wound - 9 damage, 1 Wound into your discard pile"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 9
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.createCardInstance",
+                "value": {
+                  "CardDefinitionId": {
+                    "value": "wound"
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "ToZone": "DiscardPile",
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "dagger.explode",
+      "PackageId": "sts",
+      "NameKey": "Explode",
+      "DescriptionKey": "Explode - 25 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Explode - 25 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 25
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -8884,6 +9490,123 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_nemesis"
+      },
+      "Enemies": [
+        {
+          "Id": "nemesis",
+          "MaxHealth": 185,
+          "Actions": [
+            {
+              "value": "nemesis.tri_attack"
+            },
+            {
+              "value": "nemesis.tri_burn"
+            },
+            {
+              "value": "nemesis.scythe"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.phantom_veil"
+              },
+              "Stacks": 1
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Nemesis"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_reptomancer"
+      },
+      "Enemies": [
+        {
+          "Id": "reptomancer",
+          "MaxHealth": 180,
+          "Actions": [
+            {
+              "value": "reptomancer.spawn_dagger"
+            },
+            {
+              "value": "reptomancer.big_bite"
+            },
+            {
+              "value": "reptomancer.snake_strike"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Reptomancer"
+        },
+        {
+          "Id": "dagger",
+          "MaxHealth": 20,
+          "Actions": [
+            {
+              "value": "dagger.wound"
+            },
+            {
+              "value": "dagger.explode"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Dagger"
+        },
+        {
+          "Id": "dagger",
+          "MaxHealth": 20,
+          "Actions": [
+            {
+              "value": "dagger.wound"
+            },
+            {
+              "value": "dagger.explode"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Dagger"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -9794,6 +10517,79 @@
       "Tier": "Elite",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Taskmaster",
       "AiNote": "§173：wiki 数值（HP 54-60、Scouring Whip 7 伤害 + 1 张 Wound 进弃牌堆）。只有一个招式，所以轮转就是它。"
+    },
+    {
+      "Id": "nemesis",
+      "NameKey": "Nemesis",
+      "HpMin": 185,
+      "HpMax": 185,
+      "MaxHealth": 185,
+      "Actions": [
+        {
+          "value": "nemesis.tri_attack"
+        },
+        {
+          "value": "nemesis.tri_burn"
+        },
+        {
+          "value": "nemesis.scythe"
+        }
+      ],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.phantom_veil"
+          },
+          "Stacks": 1
+        }
+      ],
+      "IntentRules": [],
+      "Tier": "Elite",
+      "InvRef": "https://slaythespire.wiki.gg/wiki/Nemesis",
+      "AiNote": "§175：wiki 数值（HP 185；Tri Attack 6×3；Tri Burn 3 张 Burn；Scythe 45；隔回合无形）。隔回合由 `standard.phantom_veil` 的 TurnStarted 触发器实现（读自己的 tick 奇偶）。"
+    },
+    {
+      "Id": "reptomancer",
+      "NameKey": "Reptomancer",
+      "HpMin": 180,
+      "HpMax": 190,
+      "MaxHealth": 180,
+      "Actions": [
+        {
+          "value": "reptomancer.spawn_dagger"
+        },
+        {
+          "value": "reptomancer.big_bite"
+        },
+        {
+          "value": "reptomancer.snake_strike"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Elite",
+      "InvRef": "https://slaythespire.wiki.gg/wiki/Reptomancer",
+      "AiNote": "§175：wiki 数值（HP 180-190；Big Bite 30；Snake Strike 13×2 + 1 Weak；Spawn Dagger）。⚠️ 偏差：召唤没有『上限 4』（`node.createCombatant` 没有上限参数，唯一的界是 6 个敌人槽）。"
+    },
+    {
+      "Id": "dagger",
+      "NameKey": "Dagger",
+      "HpMin": 20,
+      "HpMax": 25,
+      "MaxHealth": 20,
+      "Actions": [
+        {
+          "value": "dagger.wound"
+        },
+        {
+          "value": "dagger.explode"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Normal",
+      "InvRef": "https://slaythespire.wiki.gg/wiki/Dagger",
+      "AiNote": "§175：wiki 数值（HP 20-25；Wound 9 + 1 Wound；Explode 25 且**自身死亡**）。⚠️ 偏差：`Explode` 之后不自毁 —— 内核没有 `destroyCombatant` 这个节点。"
     }
   ],
   "EncounterTables": {
@@ -9902,6 +10698,14 @@
     "Elite3": [
       {
         "Id": "enc_giant_head",
+        "Weight": 100
+      },
+      {
+        "Id": "enc_nemesis",
+        "Weight": 100
+      },
+      {
+        "Id": "enc_reptomancer",
         "Weight": 100
       }
     ],

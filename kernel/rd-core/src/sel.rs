@@ -320,6 +320,11 @@ impl Builder {
 pub fn leaf_for(kind: &str) -> Option<LeafSelector> {
     match kind {
         "sel.source" => Some(LeafSelector::Source),
+        // §178：`SourceIncludingDownedCombatantTargetSelector`（`CombatJson.cs:319`）。变体
+        // 早就在 `targets.rs`，**判别串却没人注册** —— 于是内容只要用参考的写法就会拿到
+        // `SelError::UnsupportedKind`，而"分裂"（`Downed` 触发器上的自我移除）恰恰必须用它：
+        // 倒下的战斗员用 `sel.source` 解析出来是**空集**（参考 `:130` 的 `IsAlive` 检查）。
+        "sel.sourceIncludingDowned" => Some(LeafSelector::SourceIncludingDowned),
         "sel.eventTarget" => Some(LeafSelector::EventTarget),
         "sel.iterationTarget" => Some(LeafSelector::IterationTarget),
         "sel.allAllies" => Some(LeafSelector::AllAlliesOfSource),
@@ -340,8 +345,9 @@ pub fn leaf_for(kind: &str) -> Option<LeafSelector> {
 mod tests {
     use super::*;
 
-    const ALL_LEAF_KINDS: [&str; 10] = [
+    const ALL_LEAF_KINDS: [&str; 11] = [
         "sel.source",
+        "sel.sourceIncludingDowned",
         "sel.eventTarget",
         "sel.iterationTarget",
         "sel.allAllies",

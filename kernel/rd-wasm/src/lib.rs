@@ -495,6 +495,78 @@ fn build_session_with(
     build_session_at(seed, encounter_name, hero_hp, deck, 0)
 }
 
+/// Put every enemy's `StartingStatuses` onto it (§175b).
+///
+/// `ENCT[*].Enemies[j].StartingStatuses` is a list of `{Status, Stacks, DurationTurns, Charges}`
+/// specs. Nothing applied them before this: Sentries had no Artifact, Gremlin Leader no Enrage,
+/// Giant Head no Metallicize, Lagavulin no Metallicize 8. The content layer had been *counting* them
+/// since §1 -- a number that was checked while the behaviour was missing.
+///
+/// Applied through `EffectRequest::ApplyStatus` + `exec::drain`, i.e. the same path a card or an
+/// enemy action takes, so there is no second implementation of "add a status".
+fn apply_starting_statuses(
+    session: &mut Session,
+    content: &'static Content<'static>,
+    encounter: u32,
+) -> Result<(), String> {
+    let enemies = content
+        .encounter_enemies(encounter)
+        .map_err(|e| format!("encounter_enemies: {}", detail(&e)))?;
+    for spec in enemies.iter() {
+        let spec = spec.map_err(|e| format!("ENCT enemy record: {}", detail(&e)))?;
+        let id = spec.id().map_err(|e| format!("ENCT enemy id: {}", detail(&e)))?;
+        let Ok(target) = rd_core::state::CombatantId::new(id) else {
+            return Err(format!("`{id}` is not a usable combatant id"));
+        };
+        let statuses = spec
+            .starting_statuses()
+            .map_err(|e| format!("StartingStatuses: {}", detail(&e)))?;
+        for index in 0..statuses.len() {
+            let term = statuses
+                .term(index)
+                .ok_or_else(|| format!("StartingStatuses[{index}] has no term"))?;
+            let node = rd_core::ir::NodeRef::new(content, term);
+            // `StatusDefinitionId` is the key the **content** uses (`enc_three_sentries` and friends);
+            // `content.rs`'s doc comment said `Status`, which was wrong -- that comment is fixed in the
+            // same change. Both spellings are accepted so neither can bite again.
+            let status_id = node
+                .str_field("StatusDefinitionId")
+                .ok()
+                .flatten()
+                .or_else(|| node.str_field("Status").ok().flatten());
+            let Some(status_id) = status_id else {
+                return Err(format!(
+                    "StartingStatuses[{index}] has neither `StatusDefinitionId` nor `Status`"
+                ));
+            };
+            let Ok(definition) = rd_core::state::StatusDefinitionId::new(status_id) else {
+                return Err(format!("`{status_id}` is not a usable status id"));
+            };
+            let stacks = node.int_field("Stacks").ok().flatten().unwrap_or(1);
+            let duration = node.int_field("DurationTurns").ok().flatten().unwrap_or(0);
+            let charges = node.int_field("Charges").ok().flatten().unwrap_or(0);
+            session
+                .state
+                .enqueue_effect_with_owner(
+                    rd_core::state::EffectRequest::ApplyStatus {
+                        target: Some(target),
+                        definition,
+                        stacks,
+                        duration,
+                        charges,
+                        source: Some(target),
+                        source_card: None,
+                    },
+                    None,
+                )
+                .map_err(|e| format!("enqueue starting status: {}", detail(&e)))?;
+            rd_core::exec::drain(&mut session.state, Some(content), None)
+                .map_err(|e| format!("drain starting status: {}", detail(&e)))?;
+        }
+    }
+    Ok(())
+}
+
 /// [`build_session_with`], plus the Ascension health bonus for the enemies (§159).
 ///
 /// `enemy_health_percent` is `A7`/`A8`/`A9` read off the run (`0` below those levels). It is applied
@@ -611,6 +683,8 @@ fn build_session_at(
     //
     // Without this, round 1 rendered as an empty hand -- faithful to the reference DSL, wrong for the
     // game, and it looked exactly like a bug.
+    // §175b: apply the encounter's `StartingStatuses` **before** the first turn starts.
+    apply_starting_statuses(&mut session, content, encounter)?;
     start_first_turn(&mut session.state, &standard, &mut session.host)
         .map_err(|e| format!("start_first_turn: {}", detail(&e)))?;
     session.reobserve();
@@ -1218,7 +1292,10 @@ impl Session {
     }
 
 /// Run one driver step and fold its problems into `self.problems`.
-    fn exec(&mut self, steps: &[Step<'static>]) -> Result<(), String> {
+    // §176: `Step<'_>`, not `Step<'static>` -- the acting enemy may be a **summoned** combatant whose
+    // id lives in the state, so the caller has to be able to pass a borrowed id. `run_fight` in the
+    // kernel has taken `Step<'_>` all along; only this wrapper was stricter.
+    fn exec(&mut self, steps: &[Step<'_>]) -> Result<(), String> {
         self.problems.clear();
         *self.out = FightOutcome::new();
         let out = &mut *self.out;
@@ -1341,13 +1418,9 @@ impl Session {
             if hops > limit {
                 return Err(format!("结束回合在 {limit} 跳内没有回到英雄身上"));
             }
-            let raw_id: &'static str = self
-                .plan
-                .enemies
-                .iter()
-                .map(|enemy| enemy.id)
-                .find(|id| *id == active.as_str())
-                .ok_or_else(|| format!("活跃战斗员 `{}` 不在 plan.enemies 里", active.as_str()))?;
+            // `active` is a **copy** (`CombatantId` is `Copy`), so borrowing its text here does not
+            // borrow the state that `exec` mutates below.
+            let raw_id: &str = active.as_str();
             let action = self.action_for(&active)?;
             // `None` = this enemy has no authored action (`Actions` empty and no rule matched).
             // The reference has nothing to execute either; the turn still ends — it does not get
@@ -1382,13 +1455,64 @@ impl Session {
     }
 
     /// The `EACT` id this combatant will use **now** (nil = no authored action).
+    ///
+    /// §176: a combatant created by `node.createCombatant` (split / summon) is not in this encounter's
+    /// enemy list, so the encounter-indexed selector cannot answer for it. Its actions come from the
+    /// content's enemy records by **definition id** (`ENCT[*].Enemies[j].Id`), and the rotation is the
+    /// same `Actions[(round - 1) % len]` the kernel falls back to when no `IntentRule` matches.
     fn action_for(&self, actor: &CombatantId) -> Result<Option<&'static str>, String> {
-        let at = locate_enemy(self.content, self.encounter, actor)
+        if let Some(at) = locate_enemy(self.content, self.encounter, actor)
             .map_err(|error| format!("locate_enemy: {}", detail(&error)))?
-            .ok_or_else(|| format!("`{}` 不在这条遭遇的敌人名单里", actor.as_str()))?;
-        let choice = select_action(&self.state, self.content, at, actor, self.state.current_round)
-            .map_err(|error| format!("select_action: {}", detail(&error)))?;
-        Ok(choice.map(|choice| choice.action_id))
+        {
+            let choice =
+                select_action(&self.state, self.content, at, actor, self.state.current_round)
+                    .map_err(|error| format!("select_action: {}", detail(&error)))?;
+            return Ok(choice.map(|choice| choice.action_id));
+        }
+        let actions = self.summoned_actions(actor)?;
+        if actions.is_empty() {
+            return Ok(None);
+        }
+        let round = self.state.current_round.max(1) as usize;
+        Ok(actions.get((round - 1) % actions.len()).copied())
+    }
+
+    /// The action list an encounter record gives for this combatant's **definition id** (§176).
+    ///
+    /// Scanning every encounter is cheap (27 rows, each a handful of records) and it is the only place
+    /// the content keeps "which actions does this monster have": the image has no monster table.
+    fn summoned_actions(&self, actor: &CombatantId) -> Result<Vec<&'static str>, String> {
+        let Some(combatant) = self.state.combatant(actor) else {
+            return Ok(Vec::new());
+        };
+        let definition = combatant.definition_id.as_str();
+        // `ENCT` is a fixed table: walk it with `Encounter` rows until one is absent.
+        let encounters = self
+            .content
+            .section(rd_core::content::S_ENCT)
+            .map_or(0, |section| section.count);
+        for index in 0..encounters {
+            let Ok(enemies) = self.content.encounter_enemies(index as u32) else {
+                continue;
+            };
+            for spec in enemies.iter() {
+                let Ok(spec) = spec else { continue };
+                if spec.id().ok() != Some(definition) {
+                    continue;
+                }
+                let Ok(list) = spec.actions() else { continue };
+                let mut out = Vec::with_capacity(list.len());
+                for slot in 0..list.len() {
+                    if let Some(action) = list.string(slot) {
+                        out.push(action);
+                    }
+                }
+                if !out.is_empty() {
+                    return Ok(out);
+                }
+            }
+        }
+        Ok(Vec::new())
     }
 
     /// `env-abi.md` §7 + §10: `1000*(enemy hp lost) - 1000*(hero hp lost) - 10*(wasted energy)`.
@@ -3194,15 +3318,30 @@ mod tests {
         // `rd_env_reset` builds the fight **and starts the hero's first turn** (the browser driver
         // needs the hand on load), so the log may already hold that one boundary event. Anything
         // else here would mean the reset itself animated something nobody asked for.
+        // §178: the reset now also applies the encounter's `StartingStatuses` (`§175b`), and a
+        // status that lands is a `StatusChanged` beat -- `spike_slime_s` starts with Thorns 3 and
+        // `acid_slime_m` with Spore Cloud 1, so three beats is the honest count here. The judgment
+        // tightens from "at most one beat" to "only these two kinds, exactly one turn start": a
+        // reset that animated damage or a card would still fail.
         let after_reset = rd_env_beat_count();
-        assert!(
-            (0..=1).contains(&after_reset),
-            "reset produced {after_reset} beats"
-        );
-        if after_reset == 1 {
-            assert_eq!(beat_field(0, 0), BEAT_TURN_STARTED, "the only thing reset may log");
-            assert_eq!(beat_field(0, 1), -1, "…and it is the hero's");
+        let mut turn_starts = 0;
+        for index in 0..after_reset {
+            let kind = beat_field(index, 0);
+            match kind {
+                BEAT_TURN_STARTED => {
+                    turn_starts += 1;
+                    assert_eq!(beat_field(index, 1), -1, "the turn that starts is the hero's");
+                }
+                BEAT_STATUS_CHANGED => {
+                    assert!(beat_field(index, 2) >= 0, "a starting status lands on an enemy");
+                }
+                other => panic!("reset logged beat kind {other} at {index}, which nobody asked for"),
+            }
         }
+        assert!(
+            turn_starts <= 1,
+            "reset starts at most one turn, got {turn_starts} in {after_reset} beats"
+        );
 
         let strike = (0..rd_env_action_count())
             .find(|index| {
@@ -3460,13 +3599,21 @@ mod tests {
         assert_eq!(rd_env_status_stacks(hero, 0), 3);
     }
 
-    /// `(伤害条数, 总伤害)`，只数真的掉血的 hit。
+    /// `(伤害条数, 总伤害)`，只数**打在敌人身上的** hit。
+    ///
+    /// §178: the filter on `target >= 0` is not decoration. `enc_small_slimes` now really applies
+    /// its `StartingStatuses` (`§175b`), and `spike_slime_s` starts with **Thorns 3** -- so every
+    /// hero attack also logs a 3-point damage beat **on the hero**. Counting those would make this
+    /// helper assert "each hit is 5" against the recoil and call a correct fight wrong.
     fn damage_beats() -> (i32, i32) {
         let mut hits = 0;
         let mut total = 0;
         for index in 0..rd_env_beat_count() {
             if rd_env_beat_field(index, 0) != BEAT_DAMAGE {
                 continue;
+            }
+            if rd_env_beat_field(index, 2) < 0 {
+                continue; // the hero took this one (thorns, spore cloud, …)
             }
             hits += 1;
             total += rd_env_beat_field(index, 4);

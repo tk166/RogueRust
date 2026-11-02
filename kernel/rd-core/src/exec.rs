@@ -881,6 +881,23 @@ pub fn resolve_effect(
     content: Option<&Content<'_>>,
 ) -> Result<(), ExecError> {
     let request = item.request;
+    // §178: **a request whose target left the fight is dropped.**
+    //
+    // The target existed when the request was *enqueued* (`deal_damage_node` resolves the selector
+    // then), and the drain can run much later. `node.destroyCombatant` is the first thing in the
+    // engine that can make a target disappear in between -- and the very case it exists for is a
+    // multi-hit turn: the first hit splits the Slime Boss (the boss is removed), and hits two and
+    // three are already queued against it. Throwing `MissingCombatant` there would kill a fight
+    // that StS just continues ("damage to a corpse is nothing").
+    //
+    // ⚠️ This is **not** the same as a caller addressing a phantom: `resolve_damage` (the direct
+    // entry used by card play and DoT) still fails loudly on a missing target, because there the id
+    // was just handed to it by someone who should have known better.
+    if let Some(target) = request_target(&request) {
+        if state.combatant(&target).is_none() {
+            return Ok(());
+        }
+    }
     let mut ctx = ExecContext::new(
         state,
         request_source(&request),
@@ -907,6 +924,28 @@ pub fn resolve_effect(
         ctx.content = Some(content);
     }
     resolve_request(&mut ctx, &request)
+}
+
+/// 请求指向的战斗员（`None` = 这条请求不针对某个战斗员）。
+///
+/// 与 [`resolve_effect`] 里那张表同源：新增变体时两处都要动，否则新变体会被当成
+/// "没有目标"而跳过错位检查 —— 所以这里写成**穷尽** `match`（没有 `_` 臂）。
+const fn request_target(request: &EffectRequest) -> Option<CombatantId> {
+    match request {
+        EffectRequest::DealDamage { target, .. }
+        | EffectRequest::GainBlock { target, .. }
+        | EffectRequest::ApplyStatus { target, .. }
+        | EffectRequest::ModifyStatusStacks { target, .. }
+        | EffectRequest::Heal { target, .. }
+        | EffectRequest::SetCombatantCounter { target, .. }
+        | EffectRequest::GainResource { target, .. }
+        | EffectRequest::LoseResource { target, .. }
+        | EffectRequest::ExtraTurn { target } => *target,
+        EffectRequest::DrawCards { .. }
+        | EffectRequest::CreateCardInstance { .. }
+        | EffectRequest::MoveCardToZone { .. }
+        | EffectRequest::EndTurn => None,
+    }
 }
 
 /// 请求自带的出手方（只有伤害真的用它，其余变体为 `None`）。
@@ -1472,6 +1511,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::Heal
         // 本内核自己的第 16 种（分裂 / 召唤，`port-plan.md` §121）。
         | NodeKind::CreateCombatant
+        // §178：`destroyCombatant` 与 `createCombatant` 对称 —— 立即生效，不走效果队列。
+        | NodeKind::DestroyCombatant
         | NodeKind::EndTurn
         | NodeKind::ExtraTurn
         // W4e 的 7 种（见模块头那张表）。
@@ -1634,6 +1675,7 @@ fn dispatch_node(
     NodeKind::EndTurn => end_turn_node(node, ctx, frame, slot, stats),
     NodeKind::ExtraTurn => extra_turn_node(node, ctx, frame, slot, stats),
     NodeKind::CreateCombatant => create_combatant_node(node, ctx, frame, slot, stats),
+    NodeKind::DestroyCombatant => destroy_combatant_node(node, ctx, frame, slot, stats),
         NodeKind::SetCombatantCounter => set_combatant_counter_node(node, ctx, frame, slot, stats),
         NodeKind::ModifyStatusStacks => modify_status_stacks_node(node, ctx, frame, slot, stats),
         NodeKind::DrawCards => draw_cards_node(node, ctx, frame, slot, stats),
@@ -2157,6 +2199,64 @@ fn apply_status_node(
 /// `Heal`：`Amount` → `TargetSelector` → **每个目标一条请求**（`:658-680`）。
 /// 分裂出来的战斗员在内容没给 `Health` 时用这个生命值。
 pub const DEFAULT_SPLIT_HEALTH: i32 = 1;
+
+/// `node.destroyCombatant`：**把一个战斗员移出战斗**（§178）。
+///
+/// 字段：`TargetSelector`（与其它节点同名同义）。解析出来的每个目标都会被移出；
+/// 一个都解析不出来就是**响亮失败**（`ExecError::NoSource`），因为"分裂"少了一半会让
+/// 内容以为自己成功了，而局面里什么都没变。
+///
+/// 立即生效，**不**入队 —— 与 [`create_combatant_node`] 对称。原因不是风格：
+/// "移除"是`once only` 唯一能表达出来的形式（见 `ir.rs` 的注释）。
+fn destroy_combatant_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let _ = &mut *stats;
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut targets)?;
+    if count == 0 {
+        return Err(ExecError::NoSource);
+    }
+    for target in targets.iter().take(count) {
+        // A target that is already gone is **not** an error: a multi-hit card can name the same
+        // combatant twice, and StS treats "damage/heal a corpse" as a no-op. Only the *selector*
+        // producing nothing is a content bug.
+        if ctx.state.combatant(target).is_none() {
+            continue;
+        }
+        // Read everything the log needs **before** mutating: `ordinal_of` looks the id up in the
+        // roster, and after removal there is nothing to find.
+        let ordinal = crate::beat::ordinal_of(ctx.state, target);
+        let actor = match ctx.source {
+            Some(source) => crate::beat::ordinal_of(ctx.state, &source),
+            None => crate::beat::NOBODY,
+        };
+        let removed = ctx.state.remove_combatant(target)?;
+        // Animation log (§142/§178): the page fades this ordinal out.
+        let def = crate::beat::intern_def(ctx.state, removed.definition_id.as_str());
+        crate::beat::record(
+            ctx.state,
+            crate::beat::Beat {
+                kind: crate::beat::BeatKind::Destroyed,
+                actor,
+                target: ordinal,
+                def,
+                flags: 0,
+                a: 0,
+                b: 0,
+                c: 0,
+            },
+        );
+    }
+    resume_later(ctx.state, frame, slot)
+}
 
 /// `node.createCombatant`：**造一个战斗员**（分裂 / 召唤）。
 ///

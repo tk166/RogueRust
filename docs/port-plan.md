@@ -12428,3 +12428,77 @@ dump（含 `hostFailure` 与 `code`）。内容与 §175/§176 的补丁仍然�
    连挨三下只分裂一次，且 `Combatants` 从不满"。
 2. 然后重放 §173/§175 的内容补丁（幂等脚本都在）。
 3. 再做药水池差的 7 瓶。
+
+---
+
+## 178. 补上"消失"这一半：`node.destroyCombatant`
+
+§177 只提交了诊断，但它已经指出真凶（`Exec(Capacity(Full(Combatants)))`）。这一节把它修到底。
+
+### 178.1 为什么"排空顺序"不是正确的修法
+
+第一版想法是让触发器程序的写**先落地**（改排空顺序）。查参考实现证伪了这条路：
+
+* `ModifyStatusStacksNodeExecutor` 在参考里也是 `combat.EnqueueEffect(...)`（`EffectProgramNodeExecutors.cs:1287`）
+  —— **FIFO 队列是参考的形状**，不是我们的偏差；
+* 参考之所以没有这个问题，是因为它**根本没有 `createCombatant` 这个节点**（`grep CreateCombatant`
+  在 `ref/RogueDeck-Core` 里一条都没有）。分裂是**我们的扩展**，那"只分裂一次"就得由我们的语义来保证。
+
+所以真正缺的是另一半：**内容无法表达"这个战斗员不在了"**。StS 的 Slime Boss 分裂是
+"Boss 消失、两只史莱姆顶替"，而我们只能说"再造两只" —— 于是任何"只一次"的守卫都只能是状态层数，
+而状态写入是入队请求（§177 的实测：三次伤害各分裂一次）。
+
+### 178.2 落地
+
+| 层 | 改动 |
+|---|---|
+| `state.rs` | `remove_combatant`：名册 / 回合序 / 牌堆表**三处一起移位**（顺序是语义，不能 swap）；拒绝移除**当前行动者**（回合循环按 id 找它）。新错误 `ActiveCombatant`。 |
+| `ir.rs` | `NodeKind::DestroyCombatant` = `"node.destroyCombatant"`（**追加**在表尾，判别串是字符串，二进制不动）。 |
+| `exec.rs` | 节点本体：`TargetSelector` 解析不出目标 ⇒ 枪响（`NoSource`）；目标已不在场 ⇒ 跳过（多段牌可以两次点名同一个）。与 `createCombatant` 一样**立即生效**，因为"立即"正是 once-only 能表达的唯一形式。 |
+| `beat.rs` | `BeatKind::Destroyed = 13`（`Downed` ≠ 消失：倒下的还在名册里、触发器还能响）。 |
+| `sel.rs` | ★ **补上 `sel.sourceIncludingDowned` 的判别串**。变体早在 `targets.rs`，但 `leaf_for` 没有名字 ⇒ 参考的写法在我们这里会拿到 `UnsupportedKind`。而 `standard.split` 挂在 `Downed` 上，`sel.source` 对**倒下的**战斗员解析为**空集**（参考 `:130` 的 `IsAlive`）—— 这条缺口正好卡住分裂。 |
+| 内容 | `split` / `phase_split` = `[destroy(self), create, create]`，删掉没用的 `modify(-1)`。 |
+
+### 178.3 ★★ 第二个 bug：打"已经不在的目标"
+
+修好分裂后，`the_boss_phase_splits_once_at_low_health` 的第二下抛 `MissingCombatant`。这不是测试的
+毛病，而是浏览器里**必然**发生的事：多段攻击的三条 `DealDamage` 请求在**入队时**就指名了 Boss，
+第一段把它打没了，第二段落地时目标已不存在。
+
+判据要分两个入口，因为两种"目标不存在"是不同的事：
+
+* **队里**的请求（`resolve_effect`）：目标在**解析那一刻**已经不在 ⇒ **丢掉**。请求是"入队时"解析
+  选择器产生的，中间被 `destroyCombatant` 拿走是引擎自己的动作，不是内容写错；
+* **直接**调用 `resolve_damage`（出牌、DoT）：目标不存在仍然**枪响** —— 那里 id 是调用方刚递过来的，
+  写错了就该当场知道。
+
+新增 `request_target`（穷尽 `match`，没有 `_` 臂：新变体必须显式回答"你指向谁"）。
+
+### 178.4 §175/§176 的内容补丁重新叠上来了
+
+§175（Act3：Nemesis / Reptomancer / Dagger / Burn / `phantom_veil`）与 §176（召唤物能行动）
+的脚本重新应用，全部通过。重新应用时暴露了三处**旧断言**（它们都假设"分裂只是多两只"）：
+
+1. `a_split_spawns_two_combatants_when_the_boss_dies`：`before + 2` → `before + 1`（替换不是复制）；
+2. `a_spawned_enemy_joins_the_turn_order_after_the_current_actor`：5 格 → 4 格，"倒下还在序里"
+   改成"消失不在序里"；
+3. `the_boss_phase_splits_once_at_low_health`：`stacks_of(...) == 0` 改成"承受者不在了"
+   —— 前者会留一具**还能被打**的尸体。
+
+另外两处是 §175b（起始状态真的生效）带来的**正确**变化，测试该变锋利：
+
+* `damage_beats()` 现在只数**打在敌人身上的**伤害条。`enc_small_slimes` 的 `spike_slime_s` 起始
+  带 Thorns 3 ⇒ 每次攻击都记一条**打英雄**的 3 点，原来"每条都是 5"的断言会拿反伤去比；
+* reset 之后的日志从"至多 1 条"改成"只许 `TurnStarted` 与 `StatusChanged`，且至多一次回合开始"
+  —— 起始状态落地本来就是 `StatusChanged`。
+
+### 178.5 数字
+
+* **20/20 闸门绿**，单测 **816**（rd-core 656 / rd-run 100 / rd-wasm 62，`--test-threads=1`）。
+* soak **350 次点击**（§177 前 207）：Act3 的牌与精英进了随机路径。
+* 内容：37 怪 / 27 遭遇 / 38 卡 / 25 状态 / 79 敌动作，镜像 43,684 B（core 36,060 B）。
+* `ACT1_SLICE PASS`：三幕 Boss 都能被打过、幕能推进（§177 时 Boss 卡在 `Full(Combatants)`）。
+
+⚠️ 留下的一条**已知偏差**：`remove_combatant` 拒绝移除**当前行动者**。Reptomancer 的匕首在
+**自己行动时**自毁（StS 里 Explode 会死）需要回合循环改写，今天做不到 —— 那需要"行动者消失后
+回合怎么收尾"的判据，不是加一个参数能解决的。

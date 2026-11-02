@@ -92,6 +92,10 @@ pub enum BeatKind {
     TurnEnded = 11,
     /// 造了一个战斗员（分裂 / 召唤）。`target` = 新人的 **ordinal**、`def` = 定义。
     Summoned = 12,
+    /// 一个战斗员被**移出战斗**（`node.destroyCombatant`，§178）。与 `Downed` 不同：
+    /// 倒下的人还在名册里（触发器还能响），被移出的人**不在了**。
+    /// `target` = 它原来的 ordinal、`def` = 定义。
+    Destroyed = 13,
 }
 
 impl BeatKind {
@@ -111,6 +115,7 @@ impl BeatKind {
             10 => Self::TurnStarted,
             11 => Self::TurnEnded,
             12 => Self::Summoned,
+            13 => Self::Destroyed,
             _ => return None,
         })
     }
@@ -462,11 +467,12 @@ mod tests {
             BeatKind::TurnStarted,
             BeatKind::TurnEnded,
             BeatKind::Summoned,
+            BeatKind::Destroyed,
         ] {
             assert_eq!(BeatKind::from_code(kind as i32), Some(kind));
         }
         assert_eq!(BeatKind::from_code(0), None);
-        assert_eq!(BeatKind::from_code(13), None, "13 号还没发布");
+        assert_eq!(BeatKind::from_code(14), None, "14 号还没发布");
     }
 
     #[test]

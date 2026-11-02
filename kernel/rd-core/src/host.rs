@@ -4769,30 +4769,47 @@ mod tests {
             crate::exec::resolve_damage(&mut ctx, &cid("enemy_b"), 3, false).expect("hit");
         }
         host.try_resolve_pending_queues(&mut state).expect("triggers");
+        // §178: the split is *"the boss is replaced"*, not *"two more appear"* -- so the net change
+        // is +1 (remove the bearer, add two), and the guard is structural: the bearer is gone, so
+        // there is no status left to fire a second time.
         assert_eq!(
             state.combatants().len(),
-            before + 2,
-            "the phase must spawn exactly two"
+            before + 1,
+            "the phase replaces the bearer with two (net +1)"
         );
-        assert_eq!(
-            stacks_of(&state, "enemy_b", "standard.phase_split"),
-            0,
-            "the phase status is consumed, so it cannot fire again"
+        assert!(
+            state.combatant(&cid("enemy_b")).is_none(),
+            "the bearer itself is gone; 'stacks == 0' would still leave a corpse that can be hit"
         );
 
-        // A second hit must NOT spawn anybody else.
+        // A second hit must NOT spawn anybody else. §178 made this structural (the bearer is
+        // out of the fight), so the judgment is two-sided:
+        //   * a **queued** request against it is dropped silently -- that is the multi-hit turn;
+        //   * a **direct** `resolve_damage` on it still fails loudly, because there the caller
+        //     just handed us an id that should not exist.
         let after_first = state.combatants().len();
-        {
-            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
-                .with_content(&content);
-            crate::exec::resolve_damage(&mut ctx, &cid("enemy_b"), 1, false).expect("hit again");
-        }
-        host.try_resolve_pending_queues(&mut state).expect("triggers");
+        state
+            .enqueue_effect(crate::state::EffectRequest::DealDamage {
+                target: Some(cid("enemy_b")),
+                amount: 5,
+                ignores_block: false,
+                source: Some(cid("hero")),
+            })
+            .expect("queue a hit at something that is gone");
+        host.try_resolve_pending_queues(&mut state).expect("a vanished target is a no-op");
         assert_eq!(
             state.combatants().len(),
             after_first,
             "the phase is a one-shot"
         );
+        {
+            let mut ctx = crate::exec::ExecContext::new(&mut state, Some(cid("hero")), None, None, 64)
+                .with_content(&content);
+            assert!(
+                crate::exec::resolve_damage(&mut ctx, &cid("enemy_b"), 1, false).is_err(),
+                "a direct hit on an id that is not in the fight must stay loud"
+            );
+        }
     }
 
     #[test]
@@ -4819,12 +4836,17 @@ mod tests {
         host.try_resolve_pending_queues(&mut state).expect("triggers");
 
         let order: Vec<&str> = state.turn_order().iter().map(|id| id.as_str()).collect();
-        // The dead one **stays** in the order; advancement skips it by liveness (`turn.rs:850`).
-        assert_eq!(order.len(), 5, "hero + enemy_a + dead enemy_b + two spawned: {order:?}");
+        // §178: a combatant that *dies* stays in the order (advancement skips it by liveness,
+        // `turn.rs:850`), but one that is **destroyed** leaves it. This split destroys its bearer.
+        assert_eq!(order.len(), 4, "hero + enemy_a + two spawned: {order:?}");
         assert_eq!(order[0], "hero", "the actor keeps its place");
-        assert_eq!(order[2], "enemy_b", "the dead one is still in the order");
+        assert_eq!(order[1], "enemy_a", "the survivors keep their relative order");
         assert!(
-            order[3].contains('#') && order[4].contains('#'),
+            !order.contains(&"enemy_b"),
+            "the split bearer is out of the order, not a corpse in it: {order:?}"
+        );
+        assert!(
+            order[2].contains('#') && order[3].contains('#'),
             "the spawned ones sit at the end: {order:?}"
         );
         assert_eq!(
@@ -4934,6 +4956,135 @@ mod tests {
     /// §158: this function had **no `#[test]`** -- an earlier edit anchored on a doc line and ate
     /// the attribute, which then duplicated onto the function above. It compiled, never ran, and
     /// the only trace was a `never used` warning nobody read.
+    /// §178: the exact shape of the `§177` freeze -- **three damage instances in one turn** while
+    /// the boss is at `<= 10` HP. Before `node.destroyCombatant` each instance split again (the
+    /// status removal is a queued request and never wins the race), so this test failed with
+    /// `Capacity(Full(Combatants))` after ten summons.
+    ///
+    /// The judgment is the **roster**, not "it did not throw": a fix that silently swallows the
+    /// overflow would also not throw.
+    ///
+    /// ⚠️ `assert!` rather than `assert_eq!` where the payload is a whole list of combatants -- a
+    /// failing `assert_eq!` prints both rosters and nobody reads the second one.
+    #[test]
+    fn a_phase_split_happens_once_even_under_three_hits() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = CombatState::new(CombatId::new("c1").unwrap(), 42);
+        state
+            .add_combatant(unit("hero", "player", 70, 70))
+            .unwrap();
+        // The boss at 8 HP: one point above the phase threshold, so the first hit takes it under.
+        state
+            .add_combatant(unit("slime_boss", "enemy", 8, 140))
+            .unwrap();
+        give(&mut state, "slime_boss", status("st_split", "standard.split", 1));
+        give(
+            &mut state,
+            "slime_boss",
+            status("st_phase", "standard.phase_split", 1),
+        );
+        assert_eq!(state.combatants().len(), 2, "hero + boss to start");
+
+        // The real shape, and the reason this is not three separate `resolve_damage` calls: a
+        // multi-hit card **enqueues** every hit, and the drain processes them back to back. The
+        // trigger's own `modifyStatusStacks(-1)` lands at the *tail* of that same queue, so hits 2
+        // and 3 still see the status unless the split removes the bearer itself.
+        for _ in 0..3 {
+            state
+                .enqueue_effect(crate::state::EffectRequest::DealDamage {
+                    target: Some(cid("slime_boss")),
+                    amount: 2,
+                    ignores_block: false,
+                    source: Some(cid("hero")),
+                })
+                .expect("queue a hit");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("settle");
+
+        let ids: Vec<&str> = state.combatants().iter().map(|c| c.id.as_str()).collect();
+        assert!(
+            !ids.contains(&"slime_boss"),
+            "the boss is GONE after the phase split, not merely dead: {ids:?}"
+        );
+        assert!(
+            ids.len() <= 3,
+            "one split means hero + two slimes, got {} combatants: {ids:?}",
+            ids.len()
+        );
+        assert_eq!(
+            state
+                .combatants()
+                .iter()
+                .filter(|c| c.team_id.as_str() == "enemy")
+                .count(),
+            2,
+            "exactly two enemies remain: {ids:?}"
+        );
+        assert!(
+            state.combatants().len() < crate::state::MAX_COMBATANTS,
+            "the container must never be the thing that stops the split"
+        );
+    }
+
+    #[test]
+    fn destroying_a_combatant_takes_it_out_of_the_roster_and_the_turn_order() {
+        let mut state = arena(); // hero, enemy_a (20), enemy_b (10)
+        let before = state.combatants().len();
+        let order_before: Vec<String> = state
+            .turn_order()
+            .iter()
+            .map(|id| id.as_str().to_string())
+            .collect();
+
+        let removed = state
+            .remove_combatant(&cid("enemy_a"))
+            .expect("remove enemy_a");
+        assert_eq!(removed.id.as_str(), "enemy_a");
+        assert_eq!(state.combatants().len(), before - 1, "one fewer in the roster");
+        let order_after: Vec<String> = state
+            .turn_order()
+            .iter()
+            .map(|id| id.as_str().to_string())
+            .collect();
+        let expected: Vec<String> = order_before
+            .iter()
+            .filter(|id| id.as_str() != "enemy_a")
+            .cloned()
+            .collect();
+        assert_eq!(
+            order_after, expected,
+            "the turn order keeps everyone else in the same relative order"
+        );
+        assert!(state.combatant(&cid("enemy_a")).is_none(), "no dangling id");
+        assert!(
+            state.card_zones(&cid("enemy_a")).is_none(),
+            "its piles go with it, or every `cz=` line after it shifts"
+        );
+
+        // Refusals change nothing. `CombatState` has no `PartialEq`, so the judgment is the
+        // canonical text (the same one the golden hash consumes -- it covers `rng=`, the id
+        // counters and every status line, which "compare a few fields" would miss).
+        let snapshot = state_text(&state);
+        assert!(
+            state.remove_combatant(&cid("enemy_a")).is_err(),
+            "removing a combatant that is not in the fight must fail loudly"
+        );
+        assert!(
+            state.remove_combatant(&cid("hero")).is_err(),
+            "the active combatant cannot be removed mid-turn (the turn loop holds its id)"
+        );
+        assert!(
+            state_text(&state) == snapshot,
+            "a refusal must not move a single byte"
+        );
+    }
+
     #[test]
     fn a_split_spawns_two_combatants_when_the_boss_dies() {
         // Wiki: the Slime Boss splits into two smaller slimes when it dies. The spawn node is the
@@ -4957,10 +5108,15 @@ mod tests {
         }
         host.try_resolve_pending_queues(&mut state).expect("triggers");
 
+        // §178: `before + 1`, not `+2`: the boss is destroyed and two slimes take its place.
         assert_eq!(
             state.combatants().len(),
-            before + 2,
-            "the split must add exactly two combatants"
+            before + 1,
+            "the split adds two and removes the boss (net +1)"
+        );
+        assert!(
+            state.combatant(&cid("enemy_b")).is_none(),
+            "the boss is gone, so its `Downed` trigger can never fire a second time"
         );
         // ...and they are alive enemies with the definition the content named.
         let spawned: Vec<&str> = state

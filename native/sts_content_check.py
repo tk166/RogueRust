@@ -77,13 +77,15 @@ CORE_PATH = os.path.join(PKG_DIR, "out", "content.sts.core.rdcf")
 INV_COUNTS = {
     # 10 tier-A monsters + three sentry **rows** (one per instance: a combatant id must be unique
     # and the encounter record has no instance number, inv:§4.2) + the boss.
-    # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster).
-    "monsters": 34,
+    # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster); §175: +3 (Nemesis / Reptomancer / Dagger).
+    "monsters": 37,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
-    # §173: +3 (enc_lagavulin / enc_book_of_stabbing / enc_slavers).
-    "encounters": 25,
+    # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
+    "encounters": 27,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
-    "statuses": 24,       # inv:§10 the ones this subset actually needs (+ the three §158 added)
+    # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
+    # It is the first content row that uses a `TurnStarted` trigger.
+    "statuses": 25,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -135,6 +137,11 @@ INV_CARDS = {
     # §173: the junk the act-2 elites hand out (Taskmaster's whip, and the Daggers that come later).
     # Same shape as `slimed`: a status card, unplayable, no program.
     "wound": {"Cost": 1, "Tags": ["status", "unplayable", "junk"], "Facts": []},
+    # §175: Burn is the first card in this package with a `LifecyclePrograms[TurnEndInHand]` program
+    # ("at the end of your turn, take 2 damage"). `Facts` is the **card's own** program (empty); the
+    # lifecycle program is checked by the card-lifecycle test, not by this table.
+    "burn": {"Cost": 1, "Tags": ["status", "unplayable", "junk"], "Facts": [],
+             "Lifecycle": {"TurnEndInHand": [("damage", 2, "source")]}},
     # §144: the keyword cards. `sentinel` is a **real** Ironclad card (5 Block, Ethereal); the other
     # two are **fixtures** on purpose -- the Ironclad has no Retain and no Innate card in StS, so
     # the keyword has to be exercised by a card this package owns. Their numbers are this package's,
@@ -245,6 +252,12 @@ INV_MONSTERS = [
     ("book_of_stabbing", 160, 164,
      ["book_of_stabbing.multi_stab", "book_of_stabbing.big_stab"]),
     ("taskmaster", 54, 60, ["taskmaster.scouring_whip"]),
+    # §175: act 3's elites. Nemesis carries `standard.phantom_veil` (the alternating Intangible);
+    # Reptomancer summons Daggers; the Dagger's `Explode` does **not** kill it (no `destroyCombatant`).
+    ("nemesis", 185, 185, ["nemesis.tri_attack", "nemesis.tri_burn", "nemesis.scythe"]),
+    ("reptomancer", 180, 190,
+     ["reptomancer.spawn_dagger", "reptomancer.big_bite", "reptomancer.snake_strike"]),
+    ("dagger", 20, 25, ["dagger.wound", "dagger.explode"]),
     # §147: the `Constricted` carrier (wiki HP 170; Strategic / Aggressive 16 / 22).
     # §148: the **cycle** is the two Aggressive moves; `Strategic` is a round-1 **rule**, not a
     # cycle slot (StS opens with it once). That is why it is absent from this list --
@@ -385,6 +398,18 @@ INV_ACTIONS = {
                                     [("repeat", ("expr", "add"), "damage", 6, "event"),
                                      ("counter", "book_stab_uses", 1, True, "source")]),
     "book_of_stabbing.big_stab": ("Attack", [("damage", 21, "event")]),
+    # §175: act 3's two elites and the Dagger they summon.
+    "nemesis.tri_attack": ("Attack", [("damage", 6, "event"), ("damage", 6, "event"),
+                                      ("damage", 6, "event")]),
+    "nemesis.tri_burn": ("Debuff", [("card", "burn", 3, "DiscardPile", "event")]),
+    "nemesis.scythe": ("Attack", [("damage", 45, "event")]),
+    "reptomancer.spawn_dagger": ("Buff", [("spawn", "dagger", 22)]),
+    "reptomancer.big_bite": ("Attack", [("damage", 30, "event")]),
+    "reptomancer.snake_strike": ("Attack", [("damage", 13, "event"), ("damage", 13, "event"),
+                                            ("status", "standard.weak", 1, "event")]),
+    "dagger.wound": ("Attack", [("damage", 9, "event"),
+                                ("card", "wound", 1, "DiscardPile", "event")]),
+    "dagger.explode": ("Attack", [("damage", 25, "event")]),
     "taskmaster.scouring_whip": ("Attack", [("damage", 7, "event"),
                                             ("card", "wound", 1, "DiscardPile", "event")]),
 }
@@ -431,6 +456,9 @@ INV_ELITE_POOL = {
     "enc_lagavulin": ["lagavulin"],
     "enc_book_of_stabbing": ["book_of_stabbing"],
     "enc_slavers": ["taskmaster", "slaver_red", "blue_slaver"],
+    # §175: act 3's two, so every act's elite pool has the wiki's three.
+    "enc_nemesis": ["nemesis"],
+    "enc_reptomancer": ["reptomancer", "dagger", "dagger"],
 }
 
 # inv:§4.3 -- the boss pool. `inv:§4.3` says the three act-1 bosses are picked equiprobably; this
@@ -447,7 +475,7 @@ INV_ACT_TABLES = {
               "enc_spire_growth"],
     "Elite": ["enc_gremlin_nob", "enc_lagavulin", "enc_three_sentries"],
     "Elite2": ["enc_book_of_stabbing", "enc_gremlin_leader", "enc_slavers"],
-    "Elite3": ["enc_giant_head"],
+    "Elite3": ["enc_giant_head", "enc_nemesis", "enc_reptomancer"],
     "Boss": ["enc_slime_boss"],
     "Boss2": ["enc_the_champ"],
     "Boss3": ["enc_time_eater"],
@@ -491,6 +519,8 @@ INV_STATUSES = {
     "standard.intangible": [],
     "standard.buffer": [],
     "standard.plated_armor": [],
+    # §175: Nemesis's carrier -- the first content row using a `TurnStarted` trigger.
+    "standard.phantom_veil": [],
     # §147: `TurnEnded` trigger, damage = stacks, **ignores Block** ("lose HP" is not damage).
     "standard.constricted": [],
     "standard.strength": [("DamageDealt", "AddPerStack", 1, 100, "Direct")],
@@ -603,7 +633,15 @@ def diff(expected, actual, path="", out=None):
 def tgt(selector):
     """`TargetSelector` -> a short label.  Unknown selectors raise (never guess)."""
     kind = selector.get("kind")
-    mapping = {"sel.eventTarget": "event", "sel.source": "source", "sel.allEnemies": "allEnemies"}
+    mapping = {
+        "sel.eventTarget": "event",
+        "sel.source": "source",
+        # §178: distinct from `source` on purpose -- `sel.source` resolves to the EMPTY set for a
+        # downed combatant, so a split on `Downed` must use this one. Two different facts, two
+        # different labels; folding them would hide exactly the bug this section fixed.
+        "sel.sourceIncludingDowned": "sourceDowned",
+        "sel.allEnemies": "allEnemies",
+    }
     if kind not in mapping:
         raise AssertionError("unexpected selector kind %r" % kind)
     return mapping[kind]
@@ -654,6 +692,10 @@ def program_facts(root):
             facts.append(("extraTurn", tgt(body["TargetSelector"])))
         elif kind == "node.endTurn":
             facts.append(("endTurn",))
+        elif kind == "node.destroyCombatant":
+            # §178: the other half of a split. Recorded as a fact, not ignored -- "the boss is
+            # replaced" is exactly the thing the old content got wrong.
+            facts.append(("destroy", tgt(body["TargetSelector"])))
         elif kind == "node.createCombatant":
             facts.append(("spawn", body["DefinitionId"], amount(body["Health"]) if body.get("Health") else 0))
         elif kind == "node.conditional":
@@ -926,7 +968,8 @@ def check_statuses(doc):
         elif sid in ("standard.thorns", "standard.spore_cloud", "standard.enrage",
                      "standard.regen", "standard.rage", "standard.flame_barrier",
                      "standard.combust", "standard.split", "standard.phase_split",
-                     "standard.time_warp", "standard.constricted"):
+                     "standard.time_warp", "standard.constricted",
+                     "standard.phantom_veil"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -938,7 +981,9 @@ def check_statuses(doc):
                         "standard.phase_split": ["DamageTaken"],
                         "standard.time_warp": ["CardPlayed"],
                         # §147: "lose HP at the end of your turn" is a TurnEnded trigger.
-                        "standard.constricted": ["TurnEnded"]}[sid]
+                        "standard.constricted": ["TurnEnded"],
+                        # §175: the first `TurnStarted` trigger in this package.
+                        "standard.phantom_veil": ["TurnStarted"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

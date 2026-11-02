@@ -120,6 +120,15 @@ pub enum NodeKind {
     EndTurn,
     /// `node.extraTurn` —— 目标再来一个回合（`port-plan.md` §127）。
     ExtraTurn,
+    /// `node.destroyCombatant` —— **把一个战斗员移出战斗**（§178）。
+    ///
+    /// `createCombatant` 的另一半。StS 的 Slime Boss 是"Boss 消失、两只史莱姆顶替"，
+    /// 而在此之前内容只能说"再造两只" —— 于是"只分裂一次"只能靠自摘状态，而状态写入是
+    /// **入队请求**（§177 实测：同一回合三次伤害各分裂一次，直到容器满 12）。
+    ///
+    /// 移出是**结构性**的守卫：不再在名册里，`collect_triggers` 就收不到这个承受者，
+    /// 触发器不可能再响第二次。
+    DestroyCombatant,
     /// `node.repeat` —— 把 `Body` 跑 `Count` 遍（**参考有、内核此前没移植**，§146）。
     ///
     /// 它一直是 `CombatJson` 注册的 35 个节点之一（`EffectProgramNodes.cs:116-155`），
@@ -150,6 +159,7 @@ impl NodeKind {
             NodeKind::GainResource => "node.gainResource",
             NodeKind::LoseResource => "node.loseResource",
             NodeKind::CreateCombatant => "node.createCombatant",
+            NodeKind::DestroyCombatant => "node.destroyCombatant",
             NodeKind::EndTurn => "node.endTurn",
             NodeKind::ExtraTurn => "node.extraTurn",
             NodeKind::Repeat => "node.repeat",
@@ -159,7 +169,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 19] = [
+        const ALL: [NodeKind; 20] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -177,6 +187,8 @@ impl NodeKind {
             NodeKind::LoseResource,
             // 本内核自己的第 16 种（分裂 / 召唤）。
             NodeKind::CreateCombatant,
+            // §178：第 20 种（分裂的另一半 —— 把本体移出战斗）。
+            NodeKind::DestroyCombatant,
             NodeKind::EndTurn,
             NodeKind::ExtraTurn,
             NodeKind::Repeat,
