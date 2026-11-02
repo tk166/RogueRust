@@ -12361,3 +12361,70 @@ soak 在第 108 次点击时把局面卡死。这正是 soak 存在的理由 —
   用户要求"修起始状态 → 验三个 Boss → 继续药水"。前两件做完了（内核侧），第三件**未开始**：
   7 瓶药水的机制清单在 `docs/sts-wiki-gap.md` §D.1，各自要动伤害管线或回合边界。
   在 §176.3 的那个 `Play` 拒因查清之前开药水，会让两个 bug 混在一起。
+
+---
+
+## 177. 让"这一步抛了"说出原因：`u8` 码 + 宿主失败文本
+
+### 177.1 两个诊断出口（这一节落地的代码）
+
+`StepThrew(Exec)` 是一句**无法动手**的话。原因是两层折叠：
+
+1. `StepCause::Script` 把 `BattleError::Deck(_) | Play(_)` 折成一个名字；`Exec` 也一样；
+2. `TurnError::Host(HostFailure)` **只带五个家族**（文档明说"载荷只有类别"），而细节
+   "在 `host::Host::last_failure()`（宿主自己保管，不会丢）" —— **而在此之前没有任何导出读过它**。
+
+所以这一节加了两样东西（都是纯加性，不改任何玩法）：
+
+* `FightOutcome.step_codes: [u8; MAX_STEPS]` + `battle::play_code` / `play_code_name`：
+  把 `Play` 的 11 个变体与 6 条 `Refusal` 编成 `1..=17`（`step_capacity` 已经是这个形状的先例）；
+* `rd_env_step_code(index)` / `rd_env_code_name_len|into(code)`：页面拿到码与名字；
+* `rd_env_host_failure_len|into`：把 `Host::last_failure()` 的完整 `Debug` 文本吐出来 ——
+  这一条比码值钱，因为它保留的是**原始错误**。
+
+### 177.2 ★ 它当场就抓到了真凶
+
+`web-act1_slice` 的 Boss 现场（加了这两个出口之后）：
+
+```json
+{"actions":1,"result":0,"phase":0,"round":5,"turn":1,"heroHp":38,"hand":7,"active":"hero",
+ "problem":"StepThrew(Exec)","hostFailure":"Exec(Capacity(Full(Combatants)))","enemies":["slime_boss"]}
+```
+
+**`Full(Combatants)`** —— 战斗员容器（`MAX_COMBATANTS` = 12）满了。`enemies` 只剩 1 个，
+说明占着槽位的是**死掉的召唤物**：分裂发生了 5 次以上。
+
+### 177.3 ★★ 为什么内容侧的"只分裂一次"守卫不管用（设计级结论）
+
+两个分裂状态其实**都有**自我移除：
+
+* `standard.split`（`Downed`）：`[create, create, modify(-1)]`；
+* `standard.phase_split`（`DamageTaken`，血量 ≤10）：`[create, create, modify(-1)]`。
+
+我把 `modify(-1)` 挪到**最前面**试验过，仍然 `Full(Combatants)`。原因是 §173 那条教训的延伸：
+
+> **触发器程序里的每个效果都是入队的请求。** 同一个伤害批次（一次多段攻击）在
+> **移除落地之前**就把后续每一次伤害的触发器都收进了 batch，于是每一次都看到"状态还在"。
+
+所以"once only"**不能由内容表达**。要么内核在跑完一个触发器程序后立刻排空（让移除先落地），
+要么 `createCombatant` 按"每个事件一次"去重。这是**内核**的决定，不是内容的。
+
+⚠️ 内容门也帮不上：它只钉 `phase_split` 的**触发事件**（`DamageTaken`），不钉程序形状 ——
+20 条状态里只有 `lose_strength`/`lose_dexterity` 钉了 facts。这是另一个"检查看着存在但不覆盖"。
+
+### 177.4 为什么又只提交诊断
+
+`web-slice` 在内容应用后仍然是红的（Boss 卡在 `Full(Combatants)`），而**根因现在已经精确**：
+不是"某个东西莫名被拒"，而是"一个内容无法表达的 once-only 语义"。修它要动内核的触发器排空
+顺序，那是一个独立的、需要自己判据的改动 —— 和诊断混在一起会让两者都说不清。
+
+⇒ 这一节只提交：`step_codes` + `play_code`/`play_code_name` + 三个导出 + `act1_slice` 的现场
+dump（含 `hostFailure` 与 `code`）。内容与 §175/§176 的补丁仍然留在脚本里，20/20 门全绿，
+单测 814（诊断没有加测试，它自己由浏览器闸门与 soak 间接验证）。
+
+### 177.5 下一节（顺序已定）
+
+1. **内核：让触发器程序的移除先落地**（或 `createCombatant` 去重），判据是"Boss 在 ≤10 HP
+   连挨三下只分裂一次，且 `Combatants` 从不满"。
+2. 然后重放 §173/§175 的内容补丁（幂等脚本都在）。
+3. 再做药水池差的 7 瓶。

@@ -712,6 +712,23 @@ const report = await page.evaluate(`(async () => {
               ex.rd_env_problem_into(b);
               return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, b, n).slice());
             })(),
+            // §177: the host keeps the FULL failure (TurnError::Host carries only a family).
+            hostFailure: (() => {
+              const n = ex.rd_env_host_failure_len();
+              if (n <= 0) return null;
+              const b = ex.rd_env_scratch_buf();
+              ex.rd_env_host_failure_into(b);
+              return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, b, n).slice());
+            })(),
+            // §177: StepThrew(Script) only names the family; the code names WHICH refusal.
+            code: (() => {
+              const code = ex.rd_env_step_code(0);
+              if (code <= 0) return null;
+              const n = ex.rd_env_code_name_len(code);
+              const b = ex.rd_env_scratch_buf();
+              ex.rd_env_code_name_into(code, b);
+              return code + ":" + new TextDecoder().decode(new Uint8Array(ex.memory.buffer, b, n).slice());
+            })(),
             enemies: (() => {
               const out = [];
               for (let i = 0; ; i++) {

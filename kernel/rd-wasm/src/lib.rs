@@ -1535,6 +1535,73 @@ pub unsafe extern "C" fn rd_env_problem_into(ptr: *mut u8) -> i32 {
     len
 }
 
+/// §177：第 `index` 步的 `Deck`/`Play` 拒绝码（`0` = 没有），`-1` = 越界或没有会话。
+///
+/// `StepThrew(Script)` 只说了家族，而"哪一张牌、哪一条拒因"才是能动手的信息。
+#[no_mangle]
+pub extern "C" fn rd_env_step_code(index: i32) -> i32 {
+    let Some(session) = slot().as_ref() else {
+        return -1;
+    };
+    if index < 0 {
+        return -1;
+    }
+    session
+        .out
+        .step_codes
+        .get(index as usize)
+        .map_or(-1, |code| i32::from(*code))
+}
+
+/// §177：拒绝码的名字，写进 scratch，返回长度（`play_code_name` 的那张表，内核里只有一份）。
+#[no_mangle]
+pub extern "C" fn rd_env_code_name_len(code: i32) -> i32 {
+    let name = rd_core::battle::play_code_name(u8::try_from(code).unwrap_or(0));
+    write_scratch(name.as_bytes()) as i32
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_code_name_len(code)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_code_name_into(code: i32, ptr: *mut u8) -> i32 {
+    let len = rd_env_code_name_len(code);
+    if len < 0 {
+        return len;
+    }
+    std::ptr::copy_nonoverlapping(crate::SCRATCH.as_ptr(), ptr, len as usize);
+    len
+}
+
+/// §177：宿主**上一次失败**的完整原因，写进 scratch，返回长度（`0` = 没有失败）。
+///
+/// `TurnError::Host` 只带五个**家族**之一，细节（哪个 `IrError`、哪个容器满了）留在
+/// `Host::last_failure()`——`turn.rs` 的文档明说"细节在宿主自己保管，不会丢"，而在此之前
+/// **没有任何导出读它**。实测它就写着 `Exec(Capacity(Full(Combatants)))`。
+#[no_mangle]
+pub extern "C" fn rd_env_host_failure_len() -> i32 {
+    let Some(session) = slot().as_ref() else {
+        return -1;
+    };
+    match session.host.last_failure() {
+        Some(failure) => write_scratch(detail(&failure).as_bytes()) as i32,
+        None => 0,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_host_failure_len()` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_host_failure_into(ptr: *mut u8) -> i32 {
+    let len = rd_env_host_failure_len();
+    if len <= 0 {
+        return len;
+    }
+    std::ptr::copy_nonoverlapping(crate::SCRATCH.as_ptr(), ptr, len as usize);
+    len
+}
+
 /// §174：**谁在行动**（`active_combatant_id`），写进 scratch，返回长度。`-1` = 没有会话。
 ///
 /// 这一格存在的理由是一个真实的两小时：soak 抓到"敌方回合跑不完"的死锁，而观察向量里没有
