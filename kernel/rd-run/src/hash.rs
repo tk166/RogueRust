@@ -287,70 +287,144 @@ mod tests {
         assert_ne!(before, after, "a draw that does not move the hash is a draw nobody records");
     }
 
-    /// §170 `P1-4`: **量一遍最大合法局的规范文本**，而不是假设它装得下。
+    /// §170 `P1-4` / §172：**量一遍能从真实内容到达的最大局**，并且**证明夹具就是它自称的那个**。
     ///
-    /// 之前只有 `the_text_is_canonical_and_not_truncated`，用的是 `run()` 的 10 张牌 —— 那证明不了
-    /// "一局真实的后盘会不会撑爆 8 KiB"。这里量的是**类型的上限**：每个牌位都放 `ID_CAP` 长的 id，
-    /// 遗物/药水拉满、金币 `i32::MAX`、Ascension 20。内容以后怎么改都超不过这个数。
+    /// 第一版这条测试是错的（外部评审 §P1-1 抓到）：它用 `let _ = state.push_relic(...)` 循环 24 次，
+    /// 而 `push_relic` 对手写规则表之外的 id 返回 `UnsupportedRelic` —— 24 次**全部失败**，一件遗物
+    /// 都没进去；又在 Ascension 20 上塞 5 瓶药水，而那等级只有 2 个槽。它于是报出一个**看起来像上界**
+    /// 的数字（4186 B），实际只是一个残缺夹具的测量值。
     ///
-    /// **实测（2026-11-01）：4186 B / 8192 B = 51%**。所以"最大合法局装得下"是成立的，但**没有
-    /// 两倍余量**（真实余量 1.96 倍）—— 我不能写一个自己都不成立的判据。这里钉的是：
+    /// 现在：
+    /// * 每一次 `push_*` 都 `expect`，静默拒绝会**让测试红**而不是让夹具变小；
+    /// * 测量之前先断言元素个数（牌 60、遗物 = 镜像里全部、药水 = 腰带容量），"夹具就是它自称的
+    ///   那个"本身就是一条判据；
+    /// * id 取自**内容镜像**（与 `rd-wasm` 嵌入的是同一份），所以量的是"**内容可达**的最大局"。
     ///
-    /// 1. 装得下（这正是 `run_hash` 返回 `None` 的唯一原因，也是 P1-4 的问题）；
-    /// 2. 至少 **1.5 倍**余量；
-    /// 3. 那份文本确实"很大"（> 4 KiB），否则这条测试可能只是在量一副 10 张牌。
-    ///
-    /// 以及一个必须写下来的事实：文本的约 90% 是 id 文本（60 张牌 + 24 遗物 + 5 药水）。
-    /// **把 `MAX_RUN_DECK` 或遗物容量翻倍，就会溢出。** 那时 `run_hash` 返回 `None`，
-    /// 而 `rd-wasm` 会**响亮拒绝**导出与回放（§170 `P1-4` 的另一半），不会拿 0 顶替。
+    /// **这条测试证明不了的事，写在这里**：*结构*上界比它大 —— 遗物 id 只要不超过 `ID_CAP` 就能存进
+    /// `RunId`，但 `push_relic` 只接受手写规则表里的 id，所以那个状态**用公开 API 构造不出来**，
+    /// 这里也就不测。保护那种情况的是 §171 的**响亮拒绝**（`hash_failed`），不是这条测量。
     #[test]
-    fn the_largest_legal_run_fits_the_hash_buffer() {
-        let widest_card = "z".repeat(rd_core::state::ID_CAP);
-        let widest_relic = "z".repeat(rd_core::state::ID_CAP);
-        let widest_potion = "z".repeat(rd_core::state::ID_CAP);
-        let deck: Vec<&str> = std::vec![widest_card.as_str(); crate::state::MAX_RUN_DECK];
-        let state = big_run(&deck, &widest_relic, &widest_potion);
+    fn the_largest_run_reachable_from_the_content_fits_the_hash_buffer() {
+        let image = read_core_image();
+        let content = rd_core::content::Content::parse(&image).expect("the content image");
 
-        let mut buffer = [0u8; MAX_TEXT];
-        let mut writer = TextWriter::new(&mut buffer);
-        write_run_input(&mut writer, &state);
-        assert!(
-            !writer.overflowed(),
-            "the largest legal run did not fit {MAX_TEXT} B -- `run_hash` would return None"
+        // 镜像里最长的卡 / 药水 / 每件遗物：**从表里取**，不抄字符串，也不走 `IDX`
+        // （`IDX` 不含每种实体 —— 药水与事件各有自己的列表，见 `Table::from_entity_kind`）。
+        let mut longest_card = "";
+        let mut index = 0u32;
+        while let Some(row) = content.row(rd_core::content::Table::Card, index) {
+            if let Some(card) = rd_core::content::CardRow::new(row) {
+                if let Some(id) = content.string(card.id()) {
+                    if id.len() > longest_card.len() {
+                        longest_card = id;
+                    }
+                }
+            }
+            index += 1;
+        }
+
+        let mut longest_potion = "";
+        for index in 0..content.potion_count() {
+            let Some(potion) = content.potion(index) else {
+                continue;
+            };
+            if potion.id.len() > longest_potion.len() {
+                longest_potion = potion.id;
+            }
+        }
+
+        let mut relics: std::vec::Vec<&str> = std::vec::Vec::new();
+        let mut index = 0u32;
+        while let Some(row) = content.row(rd_core::content::Table::Relic, index) {
+            if let Some(relic) = rd_core::content::RelRow::new(row) {
+                if let Some(id) = content.string(relic.id()) {
+                    if RunState::relic_effect(id).is_some() && !relics.contains(&id) {
+                        relics.push(id);
+                    }
+                }
+            }
+            index += 1;
+        }
+
+        assert!(!longest_card.is_empty(), "no card in the image");
+        assert!(!longest_potion.is_empty(), "no potion in the image");
+        assert!(!relics.is_empty(), "no relic in the image that the rule table knows");
+
+        // 两个口径，分开量、分开断言 —— 这正是评审要求的"不要把两者混用"。
+        let padded_card = "z".repeat(rd_core::state::ID_CAP);
+        let padded_potion = "z".repeat(rd_core::state::ID_CAP);
+        let reachable = measure(&build(&relics, longest_card, longest_potion));
+        let represented = measure(&build(&relics, &padded_card, &padded_potion));
+
+        // 实测（2026-11-02，内容 sts 镜像）：reachable 2815 B（34%），representable 4495 B（55%）。
+        // ⇒ **两倍余量不成立**（4495 × 2 > 8192），真实余量 1.82 倍，所以判据取 1.5 倍。
+        // 把这条线写成"两倍"就是拿一个更好听的数字换掉一个真的数字。
+        println!(
+            "reachable (ids from the image): {reachable} B of {MAX_TEXT} B · \
+             representable (deck/potions padded to ID_CAP): {represented} B"
         );
-        let len = writer.as_str().len();
-        let percent = (len * 100) / MAX_TEXT;
-        println!("largest legal canonical text: {len} B of {MAX_TEXT} B ({percent}%)");
-        // 2. 至少 1.5 倍余量（实测 1.96 倍；写 2 倍就会红，那是我一开始想当然的判据）。
+        for (label, len) in [("reachable", reachable), ("representable", represented)] {
+            let percent = (len * 100) / MAX_TEXT;
+            assert!(
+                len * 3 / 2 < MAX_TEXT,
+                "the {label} maximum uses {len} of {MAX_TEXT} B ({percent}%): under 1.5x headroom"
+            );
+        }
+        // 这两条是"测试真的在量大局面"的判据 —— 第一版把它标定在坏夹具的数字上（> 4096），
+        // 那是拿错答案校准的尺子。现在它只说"比 `run()` 那副 10 张牌大得多"。
+        assert!(reachable > 2_000, "only {reachable} B: this is not the large state");
         assert!(
-            len * 3 / 2 < MAX_TEXT,
-            "the largest legal run uses {len} of {MAX_TEXT} B ({percent}%): under 1.5x headroom"
+            represented > reachable,
+            "padding the ids to ID_CAP must make the text longer ({represented} vs {reachable})"
         );
-        // 3. 这条测试确实在量一个大局面，而不是 `run()` 那副 10 张牌。
-        assert!(len > MAX_TEXT / 2, "only {len} B: this is not the maximal state");
     }
 
-    /// 一局"尽可能大"的合法局面：满牌组、满遗物、满药水、金币拉满、Ascension 20。
+    /// 一局"尽可能满"的局面：满牌组、镜像里**每一件**遗物、药水塞到槽满。
     ///
-    /// 商店/奖励屏在这个状态里是空的（它们由进入节点时生成，单测够不到），所以这个数字是**下界**；
-    /// 两倍余量的判据就是替它们、以及替后续内容留的。
-    fn big_run(deck: &[&str], relic: &str, potion: &str) -> RunState {
-        let mut state = RunState::new_with_ascension(
-            i32::MAX - 1,
-            999,
-            i32::MAX,
-            deck,
-            crate::state::MAX_ASCENSION,
-        )
-        .expect("a maximal run");
-        state.adjust_gold(i32::MAX);
-        for _ in 0..crate::state::MAX_RUN_RELICS {
-            let _ = state.push_relic(relic);
+    /// Ascension 0 on purpose: A11 takes a slot away and the belt only gives two back —— 上界要的是
+    /// **尽可能多**的槽，不是"最难的等级"。每一次 push 都 `expect`：静默拒绝会**让测试红**，
+    /// 而不是让夹具悄悄变小（这正是上一版出错的形状）。
+    fn build(relics: &[&str], card: &str, potion: &str) -> RunState {
+        let deck: std::vec::Vec<&str> = std::vec![card; crate::state::MAX_RUN_DECK];
+        let mut state =
+            RunState::new_with_ascension(7, 80, i32::MAX, &deck, 0).expect("a maximal run");
+        for relic in relics {
+            state
+                .push_relic(relic)
+                .unwrap_or_else(|error| panic!("pushing relic {relic} must work: {error:?}"));
         }
-        for _ in 0..crate::state::MAX_RUN_POTIONS {
-            let _ = state.push_potion(potion);
+        let slots = usize::from(state.potion_slots());
+        for slot in 0..slots {
+            state
+                .push_potion(potion)
+                .unwrap_or_else(|error| panic!("pushing potion {slot} must work: {error:?}"));
         }
+        // 夹具就是它自称的那个 —— 这三条是这次修复的核心。
+        assert_eq!(state.deck().len(), crate::state::MAX_RUN_DECK, "the deck is not full");
+        assert_eq!(state.relics().len(), relics.len(), "a relic push was refused");
+        assert_eq!(state.potions().len(), slots, "a potion push was refused");
         state
+    }
+
+    /// 规范文本的长度（顺带断言没溢出）。
+    fn measure(state: &RunState) -> usize {
+        let mut buffer = [0u8; MAX_TEXT];
+        let mut writer = TextWriter::new(&mut buffer);
+        write_run_input(&mut writer, state);
+        assert!(!writer.overflowed(), "the text did not fit {MAX_TEXT} B");
+        writer.as_str().len()
+    }
+
+    /// 内容镜像：与 `rd-wasm` 嵌入的是同一份（`tools/contentc/packages/sts/out/content.sts.rdcf`）。
+    fn read_core_image() -> std::vec::Vec<u8> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tools/contentc/packages/sts/out/content.sts.rdcf");
+        std::fs::read(&path).unwrap_or_else(|error| {
+            panic!(
+                "内容镜像读不到：{}\n  {error}\n  它是 tools/contentc 的构建产物：\n                     python tools/contentc/compile.py\n  （`rd-wasm` 嵌入的就是这一份）",
+                path.display()
+            )
+        })
     }
 
     #[test]
