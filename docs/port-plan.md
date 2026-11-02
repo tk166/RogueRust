@@ -12218,3 +12218,80 @@ Act1 `Elite` 3 个、Act2 `Elite2` 3 个 —— 与 wiki 的"每幕三个精英"
 
 **"内容加完、门绿了"不等于"能玩"。** 这一轮 19/20 的门、814 个单测、两条机制测试全绿，而一个随机
 soak 在第 108 次点击时把局面卡死。这正是 soak 存在的理由 —— 它也是唯一一道**用时间换状态覆盖**的门。
+
+---
+
+## §175 Act 3 精英与药水池：又撞出一个更大的缺口（敌人起始状态从未应用）
+
+这一节和第 §173 一样**没有落地**，但它挖到的东西比"再加两个精英"重要得多。
+
+175.1 写完了什么（补丁脚本可重放）
+
+  `native/patch_175_act3.py` + `native/patch_175_inventory.py`：
+
+  · **Nemesis**（HP 185）：Tri Attack 6×3、Tri Burn（3 张 Burn 进弃牌堆）、Scythe 45、**隔回合无形**；
+  · **Reptomancer**（HP 180-190）：Spawn Dagger、Big Bite 30、Snake Strike 13×2 + 1 Weak；
+  · **Dagger**（HP 20-25）：Wound 9 + 1 张 Wound、Explode 25；
+  · **Burn 牌**：`LifecyclePrograms[TurnEndInHand]` = 2 点伤害 —— 本包**第一张**真有生命期节目的卡
+    （机制从 §1 就在，62/62 张卡的该字段一直是空 map）；
+  · **standard.phantom_veil**：本包**第一条**用 `TurnStarted` 触发器的状态，用来做"隔回合无形"的载体。
+
+  三幕的精英池因此都到 wiki 的三个。内容门全绿（37 怪 / 27 遭遇 / 25 状态 / 38 卡 / 79 动作，
+  镜像 43,752 B）。Nemesis 的载体还单独在 `rd-core` 里验过：给一个战斗员挂上它，连续三次回合开始
+  得到"开、关、开"——**内容本身是对的**。
+
+175.2 ★★★ 真正的发现：`ENCT[*].Enemies[j].StartingStatuses` **从来没有被应用**
+
+  这条测试是在 `rd-wasm` 里失败的，现场只有一句话：`nemesis statuses at start: []`。追下去才发现：
+
+  * `content.rs` 早就把这份列表解码出来了，甚至**统计**过它（"20 条记录带 StartingStatuses"）；
+  * 而 `build_session_at` 只读 `id` 与 `MaxHealth`，**没有任何代码把它们装上**。
+
+  ⇒ 哨兵的 Artifact、Gremlin Leader 的 Enrage、Giant Head 的 Metallicize、§173 加的 Lagavulin 的
+  Metallicize 8、**Slime Boss 的 `split` / `phase_split`** —— 全是"写着但不生效"。
+  一个被**统计**过的字段，和一个被**实现**的字段，看起来一样。
+
+  修法（同样留在补丁里）：`build_session_at` 在 `start_first_turn` **之前**，逐条读每个敌人记录的
+  `StartingStatuses`，走 `EffectRequest::ApplyStatus` + `exec::drain` —— 与卡牌/敌动作**同一条**路径，
+  不另写一份"加状态"。⚠️ spec 的键是 `StatusDefinitionId`，而 `content.rs` 的文档注释写的是 `Status`
+  （又从没被执行过 ⇒ 也就没人发现注释是错的）。
+
+175.3 ★ 打开它之后暴露的三件事
+
+  ① **Boss 真的会分裂了**（`split` 终于生效）—— act 1 的难度回到 wiki 的水平，而 `web-slice` 的
+     驱动器打不完了；
+  ② 现场（新加的诊断，见 175.4）：`phase=WaitingToStartTurn` + `active=hero` + 手牌 7 张 + 只有
+     "结束回合"一个动作 ⇒ **§174 修的那类死锁的另一种形状**（那边是 active=敌人）。补上"每一步之前
+     先 `start_first_turn`"（参考驱动器的 `EnsureTurnStarted`）之后，phase 变成 `TurnInProgress`；
+  ③ 但接着又冒出 `StepThrew(Script)`：**回合结束那一步抛 Script 错误**，于是回合推不动。
+     这是下一个要查的点，也是最可能是"卡牌 `TurnEndInHand` 生命期节目 + 状态触发器"交界的 bug。
+
+175.4 顺手加的诊断（这一节唯一留下来的代码）
+
+  `web/act1_slice.mjs` 在打不完时把战斗现场记进报告（`actions/done/result/phase/round/turn/heroHp/
+  hand/active/problem/enemies`）—— 与 soak 的卡死 dump 同一套字段。两份现场都是靠 `rd_env_active_len`
+  与 `rd_env_problem_len`（§174 加的两个导出）才看得见的：**观察向量里没有"现在是谁的回合"**。
+
+175.5 为什么回退
+
+  `web-slice` 红 ⇒ 按纪律不提交。回退后 20/20 全绿（`web-soak` 207 次点击）。
+  内容与修法都在补丁脚本里，幂等，可在死锁修好后一条命令重放：
+
+      python native/patch_173_elites.py
+      python native/patch_175_act3.py
+      python native/patch_175_inventory.py
+      python native/patch_175b_statuses.py     （改 rd-wasm + rd-core 的两处，见脚本头注释）
+
+175.6 下一节的顺序（我建议）
+
+  1. **先查 `StepThrew(Script)`**：回合结束那一步。它是 ②③ 的共同下游，也是"敌人起始状态生效"之后
+     唯一挡住整局的东西。查法已经现成：`action=dump`（`web-slice` 会在失败时打印）。
+  2. 然后重放 §175 的补丁（内容 + 起始状态 + `EnsureTurnStarted` 护栏）。
+  3. **药水池差的 7 瓶**（`docs/sts-wiki-gap.md` §D.1 逐瓶点名各自要的机制）：无色牌池、战斗中整手牌
+     升级、自动打出、打两次、整手牌改费、死亡拦截、逃跑。每一瓶都要动伤害管线或回合边界，所以它应该
+     是**独立的一节**，而不是塞在精英池后面。
+
+175.7 数字
+
+  这一节净效果为零（内容与代码全部回退），但留下了：三个幂等的补丁脚本、`web-slice` 的战斗现场诊断、
+  以及"敌人起始状态从未应用"这条结论。20/20 门、单测 813 与 §174 结束时一致。

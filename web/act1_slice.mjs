@@ -687,6 +687,44 @@ const report = await page.evaluate(`(async () => {
           row.potionAnswered = true;
         }
         row.won = await fight(900);
+        if (!row.won) {
+          // §175b: a fight that will not end has to say *why*. Same fields as the soak's stuck dump.
+          row.fightState = {
+            actions: ex.rd_env_action_count(),
+            done: ex.rd_env_done(),
+            result: ex.rd_env_result(),
+            phase: cell(2),
+            round: cell(0),
+            turn: cell(1),
+            heroHp: cell(4),
+            hand: cell(10),
+            active: (() => {
+              const n = ex.rd_env_active_len();
+              if (n < 0) return null;
+              const b = ex.rd_env_scratch_buf();
+              ex.rd_env_active_into(b);
+              return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, b, n).slice());
+            })(),
+            problem: (() => {
+              const n = ex.rd_env_problem_len();
+              if (n <= 0) return null;
+              const b = ex.rd_env_scratch_buf();
+              ex.rd_env_problem_into(b);
+              return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, b, n).slice());
+            })(),
+            enemies: (() => {
+              const out = [];
+              for (let i = 0; ; i++) {
+                if (ex.rd_env_enemy_name_len(i) < 0) break;
+                const n = ex.rd_env_enemy_name_len(i);
+                const b = ex.rd_env_scratch_buf();
+                ex.rd_env_enemy_name_into(i, b);
+                out.push(new TextDecoder().decode(new Uint8Array(ex.memory.buffer, b, n).slice()));
+              }
+              return out;
+            })(),
+          };
+        }
         row.pending = ex.rd_run_pending();
       }
       await settle(80);
@@ -796,7 +834,8 @@ if (!boss.skipped) {
   want(boss.potionSource === 2, `boss: the question's source is ${boss.potionSource}, expected 2`);
   want(boss.potionOptions === 3, `boss: ${boss.potionOptions} candidates, expected 3`);
   want(boss.potionAnswered === true, "boss: the question was not answered");
-  want(boss.won === true, "boss: the boss was not beaten");
+  want(boss.won === true,
+  "boss: the boss was not beaten · fight " + JSON.stringify(boss.fightState || null));
   want(
     boss.actAfter === (boss.actBefore || 1) + 1,
     `boss: the act did not advance (${boss.actBefore} -> ${boss.actAfter})`
