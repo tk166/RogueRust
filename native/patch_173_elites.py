@@ -114,6 +114,18 @@ def status(status_id, stacks, target="event"):
     }
 
 
+def modify(status_id, delta):
+    """`node.modifyStatusStacks`: add `delta` stacks (negative to take them away)."""
+    return {
+        "kind": "node.modifyStatusStacks",
+        "value": {
+            "TargetSelector": selector("sel.eventTarget", "EventTarget"),
+            "StatusDefinitionId": {"value": status_id},
+            "Delta": const(delta),
+        },
+    }
+
+
 def counter_bump(name):
     """`counter = counter + 1`, written as an absolute `setCombatantCounter`.
 
@@ -179,8 +191,11 @@ NEW_ACTIONS = [
     action("lagavulin.sleep", "Sleep", "Sleep - does nothing", "Unknown",
            [{"kind": "node.sequence", "value": {"Children": []}}]),
     action("lagavulin.attack", "Attack", "Attack - 18 damage", "Attack", [damage(18)]),
+    # ⚠️ **不能**用 `applyStatus` 传负层数：那会让程序抛 `Exec`，而驱动把抛出记成 `StepThrew`
+    # 之后局面停在"轮到敌人但它的回合没开始" —— §174 的死锁就是这么来的。
+    # 减层数用 `modifyStatusStacks`（Delta 为负）。
     action("lagavulin.siphon_soul", "Siphon Soul", "Siphon Soul - -1 Strength, -1 Dexterity",
-           "Debuff", [status("standard.strength", -1), status("standard.dexterity", -1)]),
+           "Debuff", [modify("standard.strength", -1), modify("standard.dexterity", -1)]),
     # ---- Book of Stabbing (act 2 elite) -----------------------------------------------------
     # "Deals 6×N damage. N = number of times Multi Stab was used this combat, plus 2."
     # After the bump `uses` is 1 on the first use, so N = uses + 2 = 3 → 18 damage, exactly the wiki.

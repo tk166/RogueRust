@@ -412,6 +412,33 @@ const report = await evaluate(`(async () => {
               .map((el) => text(el).slice(0, 90)),
             mode: byId("handPanel").hidden ? "run" : "fight",
             lastClicks: (window.__soakClicks || []).slice(-6),
+            // §174: who the kernel thinks is acting -- the one thing the observation vector does not
+            // carry, and the reason this deadlock had to be diagnosed by guessing.
+            problem: (() => {
+              const n = ex.rd_env_problem_len();
+              if (n <= 0) return null;
+              const b = ex.rd_env_scratch_buf();
+              ex.rd_env_problem_into(b);
+              return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, b, n).slice());
+            })(),
+            active: (() => {
+              const n = ex.rd_env_active_len();
+              if (n < 0) return null;
+              const b = ex.rd_env_scratch_buf();
+              ex.rd_env_active_into(b);
+              return new TextDecoder().decode(new Uint8Array(ex.memory.buffer, b, n).slice());
+            })(),
+            enemiesLeft: (() => {
+              const out = [];
+              for (let i = 0; ; i++) {
+                if (ex.rd_env_enemy_name_len(i) < 0) break;
+                const n = ex.rd_env_enemy_name_len(i);
+                const b = ex.rd_env_scratch_buf();
+                ex.rd_env_enemy_name_into(i, b);
+                out.push(new TextDecoder().decode(new Uint8Array(ex.memory.buffer, b, n).slice()));
+              }
+              return out;
+            })(),
           });
           break;
         }

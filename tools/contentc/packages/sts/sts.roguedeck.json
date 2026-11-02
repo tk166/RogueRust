@@ -3960,6 +3960,49 @@
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "wound",
+      "PackageId": "sts",
+      "NameKey": "Wound",
+      "DescriptionKey": "Unplayable.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "status"
+        },
+        {
+          "value": "unplayable"
+        },
+        {
+          "value": "junk"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": []
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "Hand",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Status"
     }
   ],
   "EnemyActions": [
@@ -7254,6 +7297,336 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "lagavulin.sleep",
+      "PackageId": "sts",
+      "NameKey": "Sleep",
+      "DescriptionKey": "Sleep - does nothing",
+      "Intent": {
+        "Kind": "Unknown",
+        "Label": "Sleep - does nothing"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": []
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "lagavulin.attack",
+      "PackageId": "sts",
+      "NameKey": "Attack",
+      "DescriptionKey": "Attack - 18 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Attack - 18 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 18
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "lagavulin.siphon_soul",
+      "PackageId": "sts",
+      "NameKey": "Siphon Soul",
+      "DescriptionKey": "Siphon Soul - -1 Strength, -1 Dexterity",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Siphon Soul - -1 Strength, -1 Dexterity"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.modifyStatusStacks",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.strength"
+                  },
+                  "Delta": {
+                    "kind": "const",
+                    "value": {
+                      "Value": -1
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "node.modifyStatusStacks",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.dexterity"
+                  },
+                  "Delta": {
+                    "kind": "const",
+                    "value": {
+                      "Value": -1
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "book_of_stabbing.multi_stab",
+      "PackageId": "sts",
+      "NameKey": "Multi Stab",
+      "DescriptionKey": "Multi Stab - 6 x (uses + 2) damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Multi Stab - 6 x (uses + 2) damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.repeat",
+                "value": {
+                  "Count": {
+                    "kind": "add",
+                    "value": {
+                      "Left": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "book_stab_uses"
+                        }
+                      },
+                      "Right": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      }
+                    }
+                  },
+                  "Body": {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 6
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  "MaxCount": 32
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "book_stab_uses"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": true
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "book_of_stabbing.big_stab",
+      "PackageId": "sts",
+      "NameKey": "Big Stab",
+      "DescriptionKey": "Big Stab - 21 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Big Stab - 21 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 21
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "taskmaster.scouring_whip",
+      "PackageId": "sts",
+      "NameKey": "Scouring Whip",
+      "DescriptionKey": "Scouring Whip - 7 damage, 1 Wound to discard",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Scouring Whip - 7 damage, 1 Wound to discard"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 7
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.createCardInstance",
+                "value": {
+                  "CardDefinitionId": {
+                    "value": "wound"
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "ToZone": "DiscardPile",
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -8346,6 +8719,171 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_lagavulin"
+      },
+      "Enemies": [
+        {
+          "Id": "lagavulin",
+          "MaxHealth": 109,
+          "Actions": [
+            {
+              "value": "lagavulin.siphon_soul"
+            },
+            {
+              "value": "lagavulin.attack"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.metallicize"
+              },
+              "Stacks": 8
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.round",
+                "value": {
+                  "Op": "LessOrEqual",
+                  "Round": 3
+                }
+              },
+              "Action": {
+                "value": "lagavulin.sleep"
+              },
+              "Priority": 10
+            }
+          ],
+          "DisplayName": "Lagavulin"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_book_of_stabbing"
+      },
+      "Enemies": [
+        {
+          "Id": "book_of_stabbing",
+          "MaxHealth": 160,
+          "Actions": [
+            {
+              "value": "book_of_stabbing.multi_stab"
+            },
+            {
+              "value": "book_of_stabbing.big_stab"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Book of Stabbing"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_slavers"
+      },
+      "Enemies": [
+        {
+          "Id": "taskmaster",
+          "MaxHealth": 54,
+          "Actions": [
+            {
+              "value": "taskmaster.scouring_whip"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Taskmaster"
+        },
+        {
+          "Id": "slaver_red",
+          "MaxHealth": 46,
+          "Actions": [
+            {
+              "value": "slaver_red.stab"
+            },
+            {
+              "value": "slaver_red.scrape"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Red Slaver"
+        },
+        {
+          "Id": "blue_slaver",
+          "MaxHealth": 46,
+          "Actions": [
+            {
+              "value": "blue_slaver.stab"
+            },
+            {
+              "value": "blue_slaver.rake"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.time_warp"
+              },
+              "Stacks": 1
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Blue Slaver"
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -9178,6 +9716,84 @@
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Gremlin_Nob",
       "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。"
+    },
+    {
+      "Id": "lagavulin",
+      "NameKey": "Lagavulin",
+      "HpMin": 109,
+      "HpMax": 111,
+      "MaxHealth": 109,
+      "Actions": [
+        {
+          "value": "lagavulin.siphon_soul"
+        },
+        {
+          "value": "lagavulin.attack"
+        }
+      ],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.metallicize"
+          },
+          "Stacks": 8
+        }
+      ],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.round",
+            "value": {
+              "Op": "LessOrEqual",
+              "Round": 3
+            }
+          },
+          "Action": {
+            "value": "lagavulin.sleep"
+          },
+          "Priority": 10
+        }
+      ],
+      "Tier": "Elite",
+      "InvRef": "https://slaythespire.wiki.gg/wiki/Lagavulin",
+      "AiNote": "§173：wiki 数值（HP 109-111、Metallicize 8、Attack 18、Siphon Soul -1 力量/-1 敏捷）。⚠️ 偏差：睡眠只按回合数（1-3）判定；wiki 的『受到伤害即惊醒并眩晕一回合』需要on-damaged 触发器 + stun，内核没有；起始 Block 8 也没表达（只有 Metallicize）。Actions 刻意排成 [siphon_soul, attack]，使第 4 回合（(4-1)%2=1）正好是 Attack —— wiki 说它醒来立刻攻击。"
+    },
+    {
+      "Id": "book_of_stabbing",
+      "NameKey": "Book of Stabbing",
+      "HpMin": 160,
+      "HpMax": 164,
+      "MaxHealth": 160,
+      "Actions": [
+        {
+          "value": "book_of_stabbing.multi_stab"
+        },
+        {
+          "value": "book_of_stabbing.big_stab"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Elite",
+      "InvRef": "https://slaythespire.wiki.gg/wiki/Book_of_Stabbing",
+      "AiNote": "§173：wiki 数值（HP 160-164、Multi Stab 6×N、N=使用次数+2、Big Stab 21）。⚠️ 偏差：wiki 是 85%/15% 加权 + 『不能连续三次/两次』；本内核的挑招是确定性轮转，所以它是交替的。递增的 N 是精确的（计数器 + node.repeat）。"
+    },
+    {
+      "Id": "taskmaster",
+      "NameKey": "Taskmaster",
+      "HpMin": 54,
+      "HpMax": 60,
+      "MaxHealth": 54,
+      "Actions": [
+        {
+          "value": "taskmaster.scouring_whip"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [],
+      "Tier": "Elite",
+      "InvRef": "https://slaythespire.wiki.gg/wiki/Taskmaster",
+      "AiNote": "§173：wiki 数值（HP 54-60、Scouring Whip 7 伤害 + 1 张 Wound 进弃牌堆）。只有一个招式，所以轮转就是它。"
     }
   ],
   "EncounterTables": {
@@ -9220,6 +9836,10 @@
       },
       {
         "Id": "enc_gremlin_nob",
+        "Weight": 1
+      },
+      {
+        "Id": "enc_lagavulin",
         "Weight": 1
       }
     ],
@@ -9269,6 +9889,14 @@
       {
         "Id": "enc_gremlin_leader",
         "Weight": 100
+      },
+      {
+        "Id": "enc_book_of_stabbing",
+        "Weight": 1
+      },
+      {
+        "Id": "enc_slavers",
+        "Weight": 1
       }
     ],
     "Elite3": [

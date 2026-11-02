@@ -1353,6 +1353,11 @@ impl Session {
             // The reference has nothing to execute either; the turn still ends — it does not get
             // to act twice, and skipping the whole turn would be a different rule.
             if let Some(choice) = action {
+                // §174: a **thrown** enemy action is recorded as `StepThrew` by the driver (it does
+                // not `Err`), so this cannot use `?` -- the loop has to keep going, or the fight is
+                // left with that enemy as the active combatant and nobody able to advance it. That
+                // was a real two-hour deadlock: Lagavulin's Siphon Soul applied *negative stacks*,
+                // the program threw, and the run froze at "round 5 · turn 2" with no button to press.
                 self.exec(&[Step::EnemyActs {
                     enemy: raw_id,
                     action: choice,
@@ -1361,6 +1366,15 @@ impl Session {
                 if self.state.result != CombatResult::Ongoing {
                     return Ok(());
                 }
+            }
+            // A throw can leave the phase at `WaitingToStartTurn` (the enemy's turn never legally
+            // began). Ending a turn that has not started is refused by the turn machine, which would
+            // spin this loop to its hop limit; starting it first makes the end legal. Idempotent.
+            if self.state.turn_phase == rd_core::state::CombatTurnPhase::WaitingToStartTurn {
+                let config = standard_turn_config()
+                    .map_err(|e| format!("standard_turn_config: {}", detail(&e)))?;
+                start_first_turn(&mut self.state, &config, &mut self.host)
+                    .map_err(|e| format!("start_first_turn: {}", detail(&e)))?;
             }
             self.exec(&[Step::EndOneTurn])?;
         }
@@ -1495,6 +1509,72 @@ pub extern "C" fn rd_env_reset() -> i32 {
 ///
 /// The page polls this: a value bigger than the last one it saw means "your turn was ended by
 /// something", which is information the observation vector deliberately does not carry.
+/// §174：**上一步为什么没做完**（`run_fight` 的 `problems`，第一条），写进 scratch。
+///
+/// 驱动会把"这一步抛了"吞成 `StepThrew` 并继续 —— 于是`回合启动失败`这类错误在页面上只剩一个
+/// 数字。这条出口让那次失败有话说。
+#[no_mangle]
+pub extern "C" fn rd_env_problem_len() -> i32 {
+    let Some(session) = slot().as_ref() else {
+        return -1;
+    };
+    let text = session.problems.first().copied().unwrap_or("");
+    write_scratch(text.as_bytes()) as i32
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_problem_len()` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_problem_into(ptr: *mut u8) -> i32 {
+    let len = rd_env_problem_len();
+    if len < 0 {
+        return len;
+    }
+    std::ptr::copy_nonoverlapping(crate::SCRATCH.as_ptr(), ptr, len as usize);
+    len
+}
+
+/// §174：**谁在行动**（`active_combatant_id`），写进 scratch，返回长度。`-1` = 没有会话。
+///
+/// 这一格存在的理由是一个真实的两小时：soak 抓到"敌方回合跑不完"的死锁，而观察向量里没有
+/// "现在是谁的回合"——只有 `round`/`turn`/`phase`，于是只能猜。诊断出口比再猜一轮便宜。
+#[no_mangle]
+pub extern "C" fn rd_env_active_len() -> i32 {
+    let Some(session) = slot().as_ref() else {
+        return -1;
+    };
+    let text = session
+        .state
+        .active_combatant_id
+        .map(|id| id.as_str().to_string())
+        .unwrap_or_default();
+    write_scratch(text.as_bytes()) as i32
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_env_active_len()` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_active_into(ptr: *mut u8) -> i32 {
+    let len = rd_env_active_len();
+    if len < 0 {
+        return len;
+    }
+    std::ptr::copy_nonoverlapping(crate::SCRATCH.as_ptr(), ptr, len as usize);
+    len
+}
+
+/// 把字节写进 scratch，返回长度（`rd_env_active_len` 的实体）。
+fn write_scratch(bytes: &[u8]) -> usize {
+    #[allow(static_mut_refs)]
+    unsafe {
+        let len = bytes.len().min(crate::SCRATCH.len());
+        crate::SCRATCH[..len].copy_from_slice(&bytes[..len]);
+        len
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rd_env_forced_turns() -> i32 {
     match ensure_session() {

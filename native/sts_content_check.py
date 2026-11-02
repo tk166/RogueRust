@@ -77,9 +77,11 @@ CORE_PATH = os.path.join(PKG_DIR, "out", "content.sts.core.rdcf")
 INV_COUNTS = {
     # 10 tier-A monsters + three sentry **rows** (one per instance: a combatant id must be unique
     # and the encounter record has no instance number, inv:§4.2) + the boss.
-    "monsters": 31,
+    # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster).
+    "monsters": 34,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
-    "encounters": 22,
+    # §173: +3 (enc_lagavulin / enc_book_of_stabbing / enc_slavers).
+    "encounters": 25,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     "statuses": 24,       # inv:§10 the ones this subset actually needs (+ the three §158 added)
 }
@@ -130,6 +132,9 @@ INV_CARDS = {
     # §143: the first **Curse**. It is not in the deck and never a reward; an event hands it to
     # you (`curse:injury`), and the only thing it does is sit in the way -- `unplayable`.
     "injury": {"Cost": 1, "Tags": ["curse", "unplayable", "junk"], "Facts": []},
+    # §173: the junk the act-2 elites hand out (Taskmaster's whip, and the Daggers that come later).
+    # Same shape as `slimed`: a status card, unplayable, no program.
+    "wound": {"Cost": 1, "Tags": ["status", "unplayable", "junk"], "Facts": []},
     # §144: the keyword cards. `sentinel` is a **real** Ironclad card (5 Block, Ethereal); the other
     # two are **fixtures** on purpose -- the Ironclad has no Retain and no Innate card in StS, so
     # the keyword has to be exercised by a card this package owns. Their numbers are this package's,
@@ -233,6 +238,13 @@ INV_MONSTERS = [
     ("slaver_red", 46, 50, ["slaver_red.stab", "slaver_red.scrape"]),
     ("gremlin_nob", 82, 86,
      ["gremlin_nob.bellow", "gremlin_nob.rush", "gremlin_nob.skull_bash"]),
+    # §173: the wiki's act-1 elite #2 and act-2 elites #2/#3.
+    # Lagavulin: HP 109-111, Metallicize 8, Sleep for rounds 1-3 (`intent.round` rule), then
+    # `siphon_soul`/`attack` alternating -- the order is chosen so round 4 is the Attack.
+    ("lagavulin", 109, 111, ["lagavulin.siphon_soul", "lagavulin.attack"]),
+    ("book_of_stabbing", 160, 164,
+     ["book_of_stabbing.multi_stab", "book_of_stabbing.big_stab"]),
+    ("taskmaster", 54, 60, ["taskmaster.scouring_whip"]),
     # §147: the `Constricted` carrier (wiki HP 170; Strategic / Aggressive 16 / 22).
     # §148: the **cycle** is the two Aggressive moves; `Strategic` is a round-1 **rule**, not a
     # cycle slot (StS opens with it once). That is why it is absent from this list --
@@ -356,6 +368,25 @@ INV_ACTIONS = {
         # the AI turn counter is reset by the blast itself; it is the content-side
         # substitute for `intent.round` (there is none, see Notes.Deviations).
         ("counter", "gremlin_wizard_charges", 0, False, "source")]),
+    # §173: the three elites that bring the act-1 and act-2 pools up to the wiki's three each.
+    # `Sleep` is an **empty** program on purpose: the turn is taken and nothing happens.
+    "lagavulin.sleep": ("Unknown", []),
+    "lagavulin.attack": ("Attack", [("damage", 18, "event")]),
+    # The wiki's Siphon Soul is "-1 Strength, -1 Dexterity" -- and it must be **`modifyStatusStacks`**,
+    # not `applyStatus` with negative stacks: the latter throws `Exec` (§174), which the driver records
+    # as `StepThrew` and then the fight is stuck with that enemy as the active combatant.
+    "lagavulin.siphon_soul": ("Debuff", [("modify", "standard.strength", -1, "event"),
+                                        ("modify", "standard.dexterity", -1, "event")]),
+    # "6×N damage, N = times Multi Stab was used this combat + 2". The order is damage-then-bump
+    # because `setCombatantCounter` is a **queued effect**: a program cannot read a counter it just
+    # wrote (measured: bump-then-repeat still counted the old value). "completed uses + 3" is
+    # identically the wiki's "uses + 2". `repeat` **flattens** its body facts behind the count.
+    "book_of_stabbing.multi_stab": ("Attack",
+                                    [("repeat", ("expr", "add"), "damage", 6, "event"),
+                                     ("counter", "book_stab_uses", 1, True, "source")]),
+    "book_of_stabbing.big_stab": ("Attack", [("damage", 21, "event")]),
+    "taskmaster.scouring_whip": ("Attack", [("damage", 7, "event"),
+                                            ("card", "wound", 1, "DiscardPile", "event")]),
 }
 
 # inv:§5.2 -- the weak pool.  The 4th entry (`enc_two_louses`) needs
@@ -394,6 +425,12 @@ INV_ELITE_POOL = {
     "enc_three_sentries": ["sentry_1", "sentry_2", "sentry_3"],
     # §152: a second act-1 elite, so the elite node is not always the same fight.
     "enc_gremlin_nob": ["gremlin_nob"],
+    # §173: the wiki's three-per-act elite pools. Act 1 gains Lagavulin, act 2 gains Book of
+    # Stabbing and the Slavers trio (Taskmaster + Red Slaver + Blue Slaver, in that order -- the
+    # order is the turn order).
+    "enc_lagavulin": ["lagavulin"],
+    "enc_book_of_stabbing": ["book_of_stabbing"],
+    "enc_slavers": ["taskmaster", "slaver_red", "blue_slaver"],
 }
 
 # inv:§4.3 -- the boss pool. `inv:§4.3` says the three act-1 bosses are picked equiprobably; this
@@ -408,8 +445,8 @@ INV_ACT_TABLES = {
     "Weak2": ["enc_chosen", "enc_shelled_parasite"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
-    "Elite": ["enc_gremlin_nob", "enc_three_sentries"],
-    "Elite2": ["enc_gremlin_leader"],
+    "Elite": ["enc_gremlin_nob", "enc_lagavulin", "enc_three_sentries"],
+    "Elite2": ["enc_book_of_stabbing", "enc_gremlin_leader", "enc_slavers"],
     "Elite3": ["enc_giant_head"],
     "Boss": ["enc_slime_boss"],
     "Boss2": ["enc_the_champ"],
