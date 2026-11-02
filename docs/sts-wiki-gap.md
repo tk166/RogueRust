@@ -87,7 +87,7 @@
 |---|---|---|
 | 地图 6 种节点 + Boss 行 / 每幕独立地图 | **有** | — |
 | 遭遇池按幕分 | **有**：第一幕 7 个 weak，第二幕 2 个，第三幕 6 个（共 22 个遭遇） | 内容（第二幕只有 2 个，第三幕只有 6 个） |
-| **精英池** | **只有 4 个遭遇**：第一幕 `three_sentries` / `gremlin_nob`，第二幕 `gremlin_leader`，第三幕 `giant_head` | 内容（缺 Lagavulin / Book of Stabbing / Slavers / Nemesis / Reptomancer；后三个各要新机制） |
+| **精英池** | **7 个遭遇**：第一幕 `three_sentries` / `gremlin_nob` / **`lagavulin`**，第二幕 `gremlin_leader` / **`book_of_stabbing`** / **`slavers`**，第三幕 `giant_head`。第一、二幕都到 wiki 的三个（§173/§174） | 内容：第三幕还缺 **Nemesis**（"隔回合无形"要一个回合开始触发器的载体状态）与 **Reptomancer**（召唤有 `node.createCombatant`，但"Explode 后自身死亡"需要 `destroyCombatant`，内核没有） |
 | **Boss 池** | 每幕各 **1** 个：Slime Boss / The Champ / Time Eater | 内容 + 内核（The Guardian 的 Mode Shift、Hexaghost 的 Burn 升级、Bronze Automaton 的召唤） |
 | 药水 | **26 / 33**（铁甲战士口径）。缺 7 瓶，见 §D.1 | 见 §D.1 |
 | 遗物 | **13 件**（7 Common / 4 Uncommon / 1 Rare / 1 Event）。效果是 `rd-run` 里的**手写规则**，不是数据 | 内容 + 内核（每件一条规则）；总数**未核对**（wiki 的 `Relics List` 是模板生成的，取不到可直接引用的清单） |

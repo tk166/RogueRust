@@ -9892,11 +9892,11 @@
       },
       {
         "Id": "enc_book_of_stabbing",
-        "Weight": 1
+        "Weight": 100
       },
       {
         "Id": "enc_slavers",
-        "Weight": 1
+        "Weight": 100
       }
     ],
     "Elite3": [

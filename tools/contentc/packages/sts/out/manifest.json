@@ -4,11 +4,11 @@
   "magic": "0x46434452",
   "source": {
     "path": "D:\\Vibe\\sts-tui\\tools\\contentc\\packages\\sts\\sts.roguedeck.json",
-    "raw_bytes": 289010,
-    "content_hash_fnv1a32": "0x9B29E524",
+    "raw_bytes": 289014,
+    "content_hash_fnv1a32": "0xA60B8A6C",
     "schema_version": 1,
-    "compact_json_bytes": 150878,
-    "compact_json_without_redundant_children": 150864
+    "compact_json_bytes": 150882,
+    "compact_json_without_redundant_children": 150868
   },
   "totals": {
     "content.sts.rdcf": 40988,
@@ -321,10 +321,10 @@
     }
   },
   "timing_seconds": {
-    "json_load": 0.0106,
-    "derive": 0.0092,
-    "encode": 0.0115,
-    "serialize": 0.0066
+    "json_load": 0.0122,
+    "derive": 0.0093,
+    "encode": 0.011,
+    "serialize": 0.0063
   },
   "peak_heap_mib": 2.6
 }

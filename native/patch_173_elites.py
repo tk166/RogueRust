@@ -340,7 +340,11 @@ for pool, encounter_id in (("Elite", "enc_lagavulin"),
                            ("Elite2", "enc_slavers")):
     rows = tables.setdefault(pool, [])
     if not any(row["Id"] == encounter_id for row in rows):
-        rows.append({"Id": encounter_id, "Weight": 1})
+        # ⚠️ 权重必须与**同一池子里已有的那一行**一致：`Elite2` 原来只有 Gremlin Leader，权重 100，
+        # 我第一版给新加的两个写了 1 ⇒ Gremlin Leader 占 99% 的权重，池子形同虚设。
+        # 这件事是 `native/gap_check.py` 打印每幕池子时才看出来的。
+        weight = rows[0]["Weight"] if rows else 100
+        rows.append({"Id": encounter_id, "Weight": weight})
 
 with io.open(SRC, "w", encoding="utf-8", newline="\n") as handle:
     json.dump(document, handle, ensure_ascii=False, indent=2)
