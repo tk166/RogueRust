@@ -273,7 +273,9 @@ const report = await evaluate(`(async () => {
       const end = byId("endTurn");
       if (end && !end.disabled) groups[1].push({ kind: "end-turn", el: end });
       for (const el of document.querySelectorAll("[data-use-potion]")) {
-        groups[2].push({ kind: "use-potion", el });
+        // §173: the potion's own label, so a stuck state names the bottle that caused it.
+        groups[2].push({ kind: "use-potion", el,
+          label: String(el.dataset.usePotion) + " " + text(el).slice(0, 24) });
       }
     } else {
       for (const el of document.querySelectorAll("#nodePanel [data-panel-action]")) {
@@ -405,6 +407,11 @@ const report = await evaluate(`(async () => {
             envKinds: Array.from({ length: Math.max(0, ex.rd_env_action_count()) },
               (_, i) => ex.rd_env_action_kind(i)),
             handHtml: byId("hand").innerHTML.slice(0, 160),
+            // The last few log lines are the only record of *how* it got here.
+            log: Array.from(document.querySelectorAll("#log div")).slice(-8)
+              .map((el) => text(el).slice(0, 90)),
+            mode: byId("handPanel").hidden ? "run" : "fight",
+            lastClicks: (window.__soakClicks || []).slice(-6),
           });
           break;
         }
@@ -492,6 +499,10 @@ const report = await evaluate(`(async () => {
       await sleep(0);
       const after = fingerprint();
       actions += 1;
+      // §173: the last few clicks are the only witness to *how* a stuck state was reached.
+      (window.__soakClicks = window.__soakClicks || []).push(
+        (choice.kind || "?") + ":" + String(choice.label || (choice.el && text(choice.el)) || "").slice(0, 30));
+      if (window.__soakClicks.length > 12) window.__soakClicks.shift();
       const inFight = !byId("handPanel").hidden;
       if (inFight && !wasFight) fights += 1;
       wasFight = inFight;

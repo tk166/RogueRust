@@ -1,0 +1,79 @@
+{{Enemy Infobox
+| Name  = Reptomancer
+| Image = Reptomancer.png
+| HP    = 180-190
+| AscHP = 190-200
+| Debut = Act 3
+| Type  = Elite
+}}
+Reptomancer is an [[Elite]] enemy found exclusively in [[Act 3]].
+
+== Pattern ==
+{{Intents Table/start|Reptomancer}}
+{{Intents Table/row
+| Name   = Spawn Dagger
+| Intent = Unknown
+| Effect = Summons (1 {{M|Dagger}};{{Asc|18|2}} {{M|Dagger|Daggers}}) (up to a maximum of 4).
+}}
+{{Intents Table/row
+| Name   = Big Bite
+| Intent = Attack7
+| Effect = Deals (30;{{Asc|3|34}}) damage.
+}}
+{{Intents Table/row
+| Name          = Snake Strike
+| Intent        = DebuffAttack6
+| Effect        = Deals (13×2;{{Asc|3|16×2}}) damage. Applies 1 {{BD|Weak}}.
+| GivesToPlayer = Weak
+}}
+{{Intents Table/end}}
+
+Always starts with {{Int|Reptomancer|Spawn Dagger}}.
+
+Afterward it has an approximately equal chance of using {{Int|Reptomancer|Snake Strike}}, {{Int|Reptomancer|Big Bite}}, and {{Int|Reptomancer|Spawn Dagger}}.
+
+Cannot use {{Int|Reptomancer|Snake Strike}} or {{Int|Reptomancer|Big Bite}} twice in a row. Cannot use {{Int|Reptomancer|Spawn Dagger}} three times in a row.
+
+Only 4 {{M|Dagger|Daggers}} can be in play at any time. If {{Int|Reptomancer|Spawn Dagger}} was chosen with 4 {{M|Dagger|Daggers}} in play, it will use {{Int|Reptomancer|Snake Strike}} instead.
+
+== Found With ==
+=== Act 3 ===
+* Two other {{M|Dagger|Daggers}}
+
+= Dagger =
+{{Enemy Infobox
+| Name   = Dagger
+| Link   = Reptomancer#Dagger
+| Image  = Dagger.png
+| HP     = 20-25
+| AscHP  = 20-25
+| Powers = {{BD|Minion}}
+| Debut  = Act 3
+| Type   = Minion
+}}
+Dagger is a {{BD|Minion}} enemy summoned only by Reptomancer.
+
+== Pattern ==
+{{Intents Table/start|Dagger}}
+{{Intents Table/row
+| Name   = Wound
+| Intent = DebuffAttack2
+| Effect = Deals 9 damage. Adds a {{C|Wound}} into your discard pile.
+}}
+{{Intents Table/row
+| Name   = Explode
+| Intent = Attack6
+| Effect = Deals 25 damage. Dies
+}}
+{{Intents Table/end}}
+
+Uses {{Int|Dagger|Wound}} and then {{Int|Dagger|Explode}}.
+
+== Found With ==
+Summoned during the Reptomancer fight and also found at the start of combat with:
+* One other Dagger
+* Reptomancer
+
+{{EnemyNav}}
+[[Category:Minions]]
+[[Category:Elites]]

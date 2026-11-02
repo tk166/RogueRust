@@ -1,0 +1,34 @@
+{{Enemy Infobox
+| Name  = Taskmaster
+| Image = Taskmaster.png
+| HP    = 54-60
+| AscHP = 57-64
+| Debut = Act 2
+| Type  = Elite
+}}{{Small Card Infobox|Wound}}
+Taskmaster is an [[Elite]] enemy found exclusively in [[Act 2]].
+
+== Pattern ==
+{{Intents Table/start|Taskmaster}}
+{{Intents Table/row
+| Name         = Scouring Whip
+| Intent       = DebuffAttack2
+| Effect       = Deals 7 damage. Adds (1 {{C|Wound}}; {{Asc|2|2}} ; {{Asc|18|3}} {{C|Wound|Wounds}}) into your discard pile. (;Gains {{Asc|18|1}} {{BD|Strength}}.)
+| GivesToEnemy = Strength
+}}
+{{Intents Table/end}}
+
+== Found With ==
+
+=== Act 2 ===
+Found in the '''[[Slavers]]''' Elite encounter with:
+* {{M|Red Slaver}}
+* {{M|Blue Slaver}}
+
+Found in {{E|The Colosseum}} event alongside:
+
+* {{M|Enemy Name=|Gremlin Nob}}
+
+{{EnemyNav}}
+[[Category:ToUpdate]]
+[[Category:Elites]]
