@@ -1,0 +1,84 @@
+{{Enemy Infobox
+| Name  = The Champ
+| Image = Champ.png
+| Icon  = Map-Champ.png
+| HP    = 420
+| AscHP = 440
+| Debut = Act 2
+| Type  = Boss
+}}
+The Champ is a [[Boss]] found at the end of [[Act 2]].
+
+== Pattern ==
+{{Intents Table/start|The Champ}}
+{{Intents Table/row
+| Name   = Heavy Slash
+| Intent = Attack4
+| Effect = Deals (16;{{Asc|4|18}}) damage.
+}}
+{{Intents Table/row
+| Name          = Face Slap
+| Intent        = DebuffAttack3
+| Effect        = Deals (12;{{Asc|4|14}}) damage. Applies 2 {{BD|Frail}} and 2 {{BD|Vulnerable}}
+| GivesToPlayer = Frail, Vulnerable
+}}
+{{Intents Table/row
+| Name         = Defensive Stance
+| Intent       = DefendBuff
+| Effect       = Gains (15;{{Asc|9|18}} ; {{Asc|19|20}}) {{KW|Block}} and (5;{{Asc|9|6}} ; {{Asc|19|7}}) {{BD|Metallicize}}.
+| GivesToEnemy = Metallicize, Block
+}}
+{{Intents Table/row
+| Name         = Gloat
+| Intent       = Buff
+| Effect       = Gains (2;{{Asc|4|3}} ; {{Asc|19|4}}) {{BD|Strength}}.
+| GivesToEnemy = Strength
+}}
+{{Intents Table/row
+| Name          = Taunt
+| Intent        = Unknown
+| Effect        = Applies 2 {{BD|Weak}} and 2 {{BD|Vulnerable}}.
+| GivesToPlayer = Weak, Vulnerable
+}}
+{{Intents Table/row
+| Name         = Anger
+| Intent       = Buff
+| Effect       = Removes all [[Debuffs]]. Gains (6;{{Asc|4|9}} ; {{Asc|19|12}}) {{BD|Strength}}.
+| GivesToEnemy = Strength
+}}
+{{Intents Table/row
+| Name   = Execute
+| Intent = Attack7
+| Effect = Deals 10×2 damage.
+}}
+{{Intents Table/end}}
+
+=== Phase One ===
+Always uses {{Int|The Champ|Taunt}} every 4 turns.
+
+'''On all other turns:'''
+* {{Int|The Champ|Defensive Stance}} 15% chance
+* {{Int|The Champ|Gloat}} ({{Int|The Champ|Defensive Stance}} {{Asc|19}}) 15% chance
+* {{Int|The Champ|Face Slap}} 25% chance
+* {{Int|The Champ|Heavy Slash}} 45% chance
+
+No move can be used twice in a row. When he attempts to use the same move again, he will instead use the next move in the list above. For example, if he used {{Int|The Champ|Gloat}}, there's a 0% chance of him using {{Int|The Champ|Gloat}} again but a 40% chance of him using {{Int|The Champ|Face Slap}}. If he used {{Int|The Champ|Heavy Slash}}, the chance of {{Int|The Champ|Heavy Slash}} will be transferred to {{Int|The Champ|Face Slap}} instead (0% chance of {{Int|The Champ|Heavy Slash}}, 70% chance of {{Int|The Champ|Face Slap}})
+
+On {{Asc|19|Ascension}}, when {{Int|The Champ|Gloat}} is replaced with {{Int|The Champ|Defensive Stance}}, if the last move was also {{Int|The Champ|Defensive Stance}}, he will instead use {{Int|The Champ|Gloat}}.
+
+=== Phase Two ===
+When his HP drops below 50%, he will use {{Int|The Champ|Anger}} on the next turn and enter Phase Two.
+
+After using {{Int|The Champ|Anger}} he will use {{Int|The Champ|Execute}} the turn after.
+
+He will then repeat this pattern for the rest of combat:
+* Random Move (Same chances as Phase One)
+* Random Move (Same chances as Phase One)
+* {{Int|The Champ|Execute}}
+
+== Trivia ==
+* The Champ appears in the artwork of {{C|Pressure Points}} and {{C|Wheel Kick}}.
+* The {{R|Champion Belt}} Relic belongs to the Champ. If you fight him with it obtained, he will scream "{{TS||shake|THAT'S MY BELT!!}}" on his first turn.
+
+{{EnemyNav}}
+[[Category:Bosses]]

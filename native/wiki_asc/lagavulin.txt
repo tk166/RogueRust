@@ -1,0 +1,62 @@
+{{Enemy Infobox
+| Name   = Lagavulin
+| Image  = LagavulinAwake.png
+| HP     = 109-111
+| AscHP  = 112-115
+| Powers = {{BD|Metallicize}} 8 <br> {{KW|Block}} 8
+| Debut  = Act 1
+| Type   = Elite
+}}
+{{Power Infobox|Metallicize}}
+Lagavulin is an [[Elite]] enemy found exclusively in [[Act 1]] or in the {{E|Dead Adventurer}} Event.
+== Pattern ==
+{{Intents Table/start|Lagavulin}}
+{{Intents Table/row
+| Name   = Sleep
+| Intent = Sleep
+| Effect = Does nothing.
+}}
+{{Intents Table/row
+| Name   = Stunned
+| Intent = Stunned
+| Effect = Does nothing.
+}}
+{{Intents Table/row
+| Name   = Attack
+| Intent = Attack4
+| Effect = Deals (18;{{Asc|3|20}}) damage.
+}}
+{{Intents Table/row
+| Name          = Siphon Soul
+| Intent        = DebuffStrong
+| Effect        = Applies (-1;{{Asc|18|-2}}) {{BD|Dexterity}} and (-1;{{Asc|18|-2}}) {{BD|Strength}}.
+| GivesToPlayer = Dexterity (Negative), Strength (Negative)
+}}
+{{Intents Table/end}}
+
+=== When found in an Elite encounter: ===
+[[File:Lagavulin.png|140px|left|thumb|Lagavulin asleep.]]
+Starts off {{Int|Lagavulin|Sleep|Sleeping}}. If it takes any damage, it will be stunned for one turn and then proceed to attack. If three turns pass without any damage taken, it will awake and immediately begin attacking. Once awoken, its {{BD|Metallicize}} will be removed.
+
+When attacking it will repeat this pattern:
+* {{Int|Lagavulin|Attack}}
+* {{Int|Lagavulin|Attack}}
+* {{Int|Lagavulin|Siphon Soul}}
+<br> <br> 
+
+=== When found in the {{E|Dead Adventurer}} fight: ===
+
+Spawns already awake and will repeat this pattern:
+
+* {{Int|Lagavulin|Siphon Soul}}
+* {{Int|Lagavulin|Attack}}
+* {{Int|Lagavulin|Attack}}
+
+== Found With ==
+
+=== Act 1 ===
+* Solo
+* Can be found in the {{E|Dead Adventurer}} when choosing {{Frame|Search}}.
+
+{{EnemyNav}}
+[[Category:Elites]]

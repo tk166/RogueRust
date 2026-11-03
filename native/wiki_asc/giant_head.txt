@@ -1,0 +1,77 @@
+{{Enemy Infobox
+| Name   = Giant Head
+| Image  = GiantHead.png
+| HP     = 500
+| AscHP  = 520
+| Powers = {{BD|Slow}}
+| Debut  = Act 3
+| Type   = Elite
+}} 
+{{Power Infobox
+| Name         = Slow
+| Image        = Icon Slow.png
+| Description  = Whenever you play a card, target receives 10% more damage from {{QueryLink|Cards|type:Attack|Attacks}} this turn. (Receives (X+10)% more damage)
+| Type         = Debuff
+| Stacks       = Intensity
+| BetweenTurns =
+| Cap          =
+}}
+Giant Head is an [[Elite]] enemy found exclusively in [[Act 3]].
+
+== Pattern ==
+{{Intents Table/start|Giant Head}}
+{{Intents Table/row
+| Name   = Count
+| Intent = Attack3
+| Effect = Deals 13 damage.
+}}
+{{Intents Table/row
+| Name          = Glare
+| Intent        = Debuff
+| Effect        = Applies 1 {{BD|Weak}}.
+| GivesToPlayer = Weak
+}}
+{{Intents Table/row
+| Name   = It Is Time
+| Intent = Attack7
+| Effect = Deals (30;{{Asc|3|40}}) damage, increased by 5 for each time {{Int|Giant Head|It Is Time}} has been used this combat up to a maximum of (60;{{Asc|3|70}}) damage.
+}}
+{{Intents Table/end}}
+
+For the first 4 ({{Asc|18|3}}) turns, it has a 50/50 chance to use either {{Int|Giant Head|Count}} or {{Int|Giant Head|Glare}}. Cannot use either move three times in a row.
+
+Afterwards, it repeats {{Int|Giant Head|It Is Time}} for the rest of combat.
+
+== Found With ==
+
+=== Act 3 ===
+* Solo
+
+== Dialogue ==
+
+As it counts down to using {{Int|Giant Head|It Is Time}}:
+<blockquote>
+<i>{{TS|ironclad|up|4..}}</i>
+<br>
+<i>{{TS|ironclad|up|3..}}</i>  (Starts here on {{Asc|18|Ascension}})
+<br>
+<i>{{TS|ironclad|up|2..}}</i>
+<br>
+<i>{{TS|ironclad|up|1..}}</i>
+<br>
+</blockquote>
+
+After counting down it will say one of these lines each turn:
+<blockquote>
+<i>{{TS||up|Tick Tock Tick Tock}}</i>
+<br>
+<i>{{TS||up|Good Bye}}</i>
+<br>
+<i>{{TS||up|Why are you still here?}}</i>
+<br>
+<i>{{TS||up|It is time}}</i>
+<br>
+</blockquote>
+
+{{EnemyNav}}
+[[Category:Elites]]

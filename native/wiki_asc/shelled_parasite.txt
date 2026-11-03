@@ -1,0 +1,85 @@
+{{Enemy Infobox
+| Name   = Shelled Parasite
+| Image  = ShelledParasite.png
+| HP     = 68-72
+| AscHP  = 70-75
+| Powers = {{BD|Plated Armor}} 14
+| Debut  = Act 2
+| Type   = Normal
+}} {{Power Infobox|Plated Armor}}
+'''Shelled Parasite''' is a normal [[Monsters|Enemy]] encountered exclusively in [[Act 2]].
+
+== Pattern ==
+{{Intents Table/start|Shelled Parasite}}
+{{Intents Table/row
+| Name   = Double Strike
+| Intent = Attack3
+| Effect = Deals (6×2;{{Asc|2|7×2}}) damage.
+}}
+{{Intents Table/row
+| Name   = Life Suck
+| Intent = BuffAttack3
+| Effect = Deals (10;{{Asc|2|12}}) damage. Heals HP equal to unblocked damage dealt.
+}}
+{{Intents Table/row
+| Name          = Fell
+| Intent        = DebuffAttack4
+| Effect        = Deals (18;{{Asc|2|21}}) damage. Applies 2 {{BD|Frail}}.
+| GivesToPlayer = Frail
+}}
+{{Intents Table/row
+| Name   = Stunned
+| Intent = Stunned
+| Effect = Does nothing.
+}}
+{{Intents Table/end}}
+'''Shelled Parasite''' cannot use {{Int|Shelled Parasite|Fell}} on its first turn, except on {{Asc|17|Ascension}} when '''it''' will always start with {{Int|Shelled Parasite|Fell}}.
+
+After that, it will use one of the following attacks each turn:
+* {{Int|Shelled Parasite|Double Strike}} (40% chance)
+* {{Int|Shelled Parasite|Life Suck}} (40% chance)
+* {{Int|Shelled Parasite|Fell}} (20% chance)
+'''Shelled Parasite''' cannot use {{Int|Shelled Parasite|Double Strike}} or {{Int|Shelled Parasite|Life Suck}} three times in a row, or {{Int|Shelled Parasite|Fell}} twice in a row. 
+
+If all of its {{BD|Plated Armor}} is broken, '''Shelled Parasite''' will change its current [[Intent]] to {{Int|Shelled Parasite|Stunned}}. This can only happen once per combat.
+
+== In Party With ==
+=== Act 2 ===
+As an easy pool encounter:
+* Solo
+
+As a hard pool encounter alongside:
+* 1 {{M|Fungi Beast}}
+
+== Trivia ==
+* '''Shelled Parasite''' appears in the [[Card]] art for {{C|Barrage}} and {{C|Talk to the Hand}}.
+
+== Update History ==
+
+* Patch V1.1: The Dealer
+** Improved lifesteal logic for Reaper and Shelled Parasite.
+
+* Weekly Patch 38: Bane
+** Parasite + Fungi Beast combat can actually be encountered now.
+
+* Weekly Patch 37: Darkness
+** New City Encounter - Shelled Parasite and Fungi Beast.
+** Shelled Parasite and Slaver combined combat has been removed from The City.
+
+* Weekly Patch 35: Aggregate
+** Shelled Parasite now accounts for Buffer and Intangible with its life leech action.
+
+* Weekly Patch 10: Quality of Life
+** We updated the animations for several monsters! Affected monsters include: Shelled Parasite
+
+* Weekly Patch 7: Setting Up All the Things
+** Slaver and Shelled Parasite combat in the city have their order swapped so the slaver will not apply Vulnerable before attacked by Parasite.
+
+* Weekly Patch 5: Happy Holidays!
+** Raising the Slaver's position a bit for Slaver + Parasite combat (power hidden by card).
+
+* Weekly Patch 3: Balance Balance Balance
+** Shelled Parasite enemy buff.
+
+{{EnemyNav}}
+[[Category:Monsters]]

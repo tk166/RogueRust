@@ -13105,3 +13105,73 @@ severe consequences"）。所以 `patch_188_content.py` 的表头把两类分开
 * Ascension：**20 / 20 条都有机制**。剩下的都是**内容覆盖面**：A2/3/4 与 A17/18/19 只有 13 个动作
   有升档数值（还有 66 个等 wiki 出处），`Boss3` 池只有 1 只（A20 的两场打同一只）。
 * 负控：四条规则各拆一次阈值（A1 恒假、A10 改成 9 级、A12 不减半、A20 恒假），**四条全红**。
+
+---
+
+## 190. 补齐 A 数值：13 → 42 个动作（并列出**基础值就不对**的 11 条）
+
+§187 把 `EACT` 的 ascension 维度做出来了，但只有 13 个动作有数值。这一节把它补到 **42 / 79**。
+
+### 190.1 抓 wiki 的方式（这一步花了最久，结论值得记）
+
+* **渲染页会骗人**：wiki 的 Pattern 表把"多段攻击"的 `×N` 与升档上标挤在一起，
+  `Deals 1×5` 升档后渲染成 `Deals 1×62 damage` —— 读起来像"一个数 162"。用机器抽取会得到
+  一堆 `A2=4` 这种看不出基础的片段。
+* **wikitext 才是真话**：`index.php?title=<Page>&action=raw` 给的是
+  `Deals (1×5;{{Asc|2|1×6}})`，基础与升档**成对出现**，没有歧义。
+  ⇒ `native/fetch_wiki_asc.py` 抓 30 个页面存到 `native/wiki_asc/*.txt`，
+  `native/asc_report.py` 把它们展开成 `{A2:12}` 形式的表。**这两个脚本入库**，
+  下一次补内容不用再从浏览器里抄。
+* **重定向**：`Acid_Slime` / `Spiker` / 三个 gremlin 都是 `#REDIRECT`（`Slimes` / `Shapes` /
+  `Gremlins`），抓取脚本跟一跳；`Maw` 是 **404**（wiki 上没有这一页），所以 `maw.*` 三招没有出处、
+  没有变体 —— 这条写在缺口文档里，而不是编一个数字。
+
+### 190.2 写内容的方法（§187 的纪律照旧）
+
+仍然**深拷贝基础节目、只动常量**，改不到就响亮失败。四种改写器：
+`damage(before, after)` / `status(id, before, after)` / `cards(id, before, after)` /
+`one_more_hit()`。
+
+`one_more_hit` 是这一节新增的一种：`byrd.peck` 的升档是"多一段"（5 段 → 6 段），而内容里的
+固定段数是**展开写**的（五个 `dealDamage`），所以变体是序列里多一个节点，不是改数字。
+
+三条**模型的边界**（不是错，是表达不出来，写在内容的注释与缺口文档 §G 里）：
+
+1. **可变伤害**：`louse_*.bite`、`darkling.nip` 的 A 值是**区间**（`5-7` → `6-8`），而
+   `dealDamage` 只吃常量；
+2. **同一招两个档位**：`jaw_worm.bellow` 的 Strength 在 A2 升、Block 在 A17 升，而 `ProgramAsc`
+   每行只有一个 ⇒ 变体带较早那个；
+3. **基础就错的招式不加变体**（下一条）。
+
+### 190.3 ★★ 回核的副产品：11 条招式**基础值**与 wiki 不一致
+
+补 A 数值之前必须先对基础。对照之后有 11 条基础就与 wiki 不符（`spiker.cut` 8 vs **7**、
+`the_champ.heavy_slash` 18 vs **16**（18 是它的 A4 值）、`chosen.poke` 6+6 vs **5×2**、
+`gremlin_leader.slash` 16 vs **6×3**、`darkling.chomp` 11 vs **8×2**、`sentry.bolt` 10 伤害 vs
+**塞 2 张 Dazed**、`spire_growth.strategic` Constricted 2 vs **10**、`giant_head.*` 的简化版……）。
+
+**这些故意没有升档变体**：在错的地基上加层只会更错。完整清单（含 wiki 数值与差异性质）在
+`docs/sts-wiki-gap.md` §G —— 那是下一步"修基础"的工单，而不是这一节的残留。
+
+这也是这一节最值钱的部分：它不是"又多填了几个数"，而是**给下一轮留下了一张可执行的清单**。
+
+### 190.4 判据
+
+| 判据 | 位置 | 抓什么 |
+|---|---|---|
+| `check_ascension_variants` | 内容门 | 42 条逐条钉（facts + 阈值），**独立于内容**（数字从 wikitext 抄）；变体 facts 等于基础 ⇒ 红；内容里有而表里没有 ⇒ 红 |
+| `an_ascension_variant_replaces_the_program_at_its_threshold` | `rd-core` | Lagavulin 18@A0/A2、20@A3/A20（两侧） |
+| `the_ascension_condition_compares_the_fight_level` | `rd-intent` | 条件两侧 |
+| `the_ascension_level_reaches_the_fight_state` | `rd-wasm` | A0/2/3/4/17/19/20 开局 → 战斗状态一致 |
+| `gap_check.py` | 工具 | 打印"多少个动作有变体 / 多少个还没有"（当前 42 / 37） |
+
+⚠️ **没有新写内核判据**：机制在 §187 已经钉住，这一节只加数据。数据的新判据是**内容门那张表**
+（每一行都是对 wiki 的独立陈述），以及"变体必须与基础不同"这条自动检查 —— 它对 42 条一视同仁。
+
+### 190.5 数字
+
+* **20/20 闸门绿**，单测 **836** 不变（这一节没有内核改动）。
+* 内容：镜像 47,536 B（core 39,560 B）；**42 个动作有升档变体**（A2 ×24、A3 ×7、A4 ×4、
+  A17 ×2、A18 ×1、A19 ×3，以 `gap_check.py` 输出为准）。
+* 剩下的 37 个：多数本来无升档（`Does nothing` / 纯召唤 / 纯状态），11 条等 §G 的基础修正，
+  可变伤害 3 条等一个"区间表达式"。

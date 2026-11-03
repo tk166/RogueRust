@@ -1,0 +1,72 @@
+{{Enemy Infobox
+| Name   = Darkling
+| Image  = Darkling.png
+| HP     = 48-56
+| AscHP  = 50-59
+| Powers = {{BD|Life Link}}
+| Debut  = Act 3
+| Type   = Normal
+}} 
+{{Power Infobox
+| Name         = Life Link
+| Image        = Icon LifeLink.png
+| Description  = If other {{M|Darkling|Darklings}} are still alive, revives in 2 turns.
+| Type         = Buff
+| Stacks       = Does not stack
+| BetweenTurns =
+| Cap          =
+}}
+Darkling is a normal [[Monsters|Enemy]] found exclusively in [[Act 3]].
+
+== Pattern ==
+{{Intents Table/start|Darkling}}
+{{Intents Table/row
+| Name         = Harden
+| Intent       = Defend
+| Effect       = Gains 12 {{KW|Block}}(; and {{Asc|17|2}} {{BD|Strength}}).
+| GivesToEnemy = Block, Strength
+}}
+{{Intents Table/row
+| Name   = Nip
+| Intent = Attack2
+| Effect = Deals N damage. N = Number between (7-11;{{Asc|2|9-13}}), chosen at the start of combat.
+}}
+{{Intents Table/row
+| Name   = Chomp
+| Intent = Attack4
+| Effect = Deals (8×2;{{Asc|2|9×2}}) damage.
+}}
+{{Intents Table/row
+| Name   = Regrowing...
+| Intent = Unknown
+| Effect = Does nothing.
+}}
+{{Intents Table/row
+| Name   = Reincarnate
+| Intent = Buff
+| Effect = Revives with 50% HP.
+}}
+{{Intents Table/end}}
+On turn one all Darklings have a 50/50 chance of using either {{Int|Darkling|Nip}} or {{Int|Darkling|Harden}}. The middle Darkling continues this pattern but cannot use {{Int|Darkling|Chomp}}.
+
+'''The outer two Darklings on all other turns:'''
+* {{Int|Darkling|Nip}} 30% chance
+* {{Int|Darkling|Chomp}} 40% chance
+* {{Int|Darkling|Harden}} 30% chance
+
+Neither {{Int|Darkling|Harden}} nor {{Int|Darkling|Chomp}} can be used twice in a row. {{Int|Darkling|Nip}} cannot be used three times in a row.
+
+After its HP reaches 0, its current intent changes to {{Int|Darkling|Regrowing...}} and cannot be targeted. On the next turn it will use {{Int|Darkling|Reincarnate}}.
+
+== Interactions ==
+* Cards with the {{KW|Fatal}} modifier only activate their effects whenever the last Darkling is killed.
+
+== Found With ==
+=== Act 3 ===
+* Two other Darklings
+
+== Trivia ==
+* Darklings appear in the artwork of {{C|Wallop}} and {{C|Lesson Learned}}.
+
+{{EnemyNav}}
+[[Category:Monsters]]

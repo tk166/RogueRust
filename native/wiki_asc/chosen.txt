@@ -1,0 +1,97 @@
+{{Enemy Infobox
+| Name  = Chosen
+| Image = Chosen.png
+| HP    = 95-99
+| AscHP = 98-103
+| Debut = Act 2
+| Type  = Normal
+}}
+{{Power Infobox
+| Name         = Hex
+| Image        = Icon Hex.png
+| Description  = Whenever you play a non-{{QueryLink|Cards|type:Attack|Attack}} card, shuffle X {{C|Dazed}} into your draw pile.
+| Type         = Debuff
+| Stacks       = Intensity
+| BetweenTurns =
+| Cap          =
+}}
+'''The Chosen''' is a normal [[Monsters|Enemy]] encountered exclusively in [[Act 2]].
+
+== Pattern ==
+{{Intents Table/start|Chosen}}
+{{Intents Table/row
+| Name   = Poke
+| Intent = Attack3
+| Effect = Deals (5×2;{{Asc|2|6×2}}) damage.
+}}
+{{Intents Table/row
+| Name          = Hex
+| Intent        = DebuffStrong
+| Effect        = Applies {{BD|Hex}}.
+| GivesToPlayer = Hex
+}}
+{{Intents Table/row
+| Name          = Debilitate
+| Intent        = DebuffAttack3
+| Effect        = Deals (10;{{Asc|2|12}}) damage. Applies 2 {{BD|Vulnerable}}.
+| GivesToPlayer = Vulnerable
+}}
+{{Intents Table/row
+| Name          = Drain
+| Intent        = DebuffDefend
+| Effect        = Applies 3 {{BD|Weak}}. Gain 3 {{BD|Strength}}.
+| GivesToEnemy  = Strength
+| GivesToPlayer = Weak
+}}
+{{Intents Table/row
+| Name   = Zap
+| Intent = Attack4
+| Effect = Deals (18;{{Asc|2|21}}) damage.
+}}
+{{Intents Table/end}}
+Always starts with {{Int|Chosen|Poke}} followed by {{Int|Chosen|Hex}}. After that, repeats the following pattern for the rest of the combat:
+#{{Int|Chosen|Debilitate}} (50% chance) or {{Int|Chosen|Drain}} (50% chance)
+#{{Int|Chosen|Poke}} (60% chance) or {{Int|Chosen|Zap}} (40% chance)
+
+On {{Asc|17|Ascension}}, '''Chosen''' always starts with {{Int|Chosen|Hex}} instead of {{Int|Chosen|Poke}}.
+
+== In Party With ==
+=== Act 2 ===
+As an easy pool encounter:
+* Solo
+
+As a hard pool encounter alongside either:
+* 1 {{M|Byrd}}
+* 1 {{M|Cultist}}
+<!--
+== Tips ==
+* You can block Hex with Artifact.
+-->
+== Lore ==
+'''Chosen''' are implied to be connected to the {{M|Cultist|Cultists}} and {{M|Awakened One}} in some way, as they all share a blue crow motif.
+
+== Trivia ==
+* The '''Chosen''' is the only thing in the game that can apply {{BD|Hex}}.
+* '''Chosen''' appears in the artwork of {{C|Immolate}}.
+
+== Update History ==
+* Weekly Patch 32: Face Trader
+** The Chosen enemy's AI is now less random.
+
+* Weekly Patch 19: Seed
+** Fixed the turn order for Chosen + Byrd encounter. Chosen no longer applies Vulnerable before Byrd attacks.
+
+* Weekly Patch 10: Quality of Life
+** Adding Cultist + Chosen encounter into City.
+
+* Weekly Patch 7: Setting Up All the Things
+** Hex Power wording improvements.
+
+* Weekly Patch 6: We're Back!
+** The Chosen gets new animations.
+
+* Weekly Patch 3: Balance Balance Balance
+** Chosen enemy buffed.
+
+{{EnemyNav}}
+[[Category:Monsters]]

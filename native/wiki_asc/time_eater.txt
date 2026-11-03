@@ -1,0 +1,97 @@
+{{Enemy Infobox
+| Name   = Time Eater
+| Image  = TimeEater.png
+| Icon   = Map-TimeEater.png
+| HP     = 456
+| AscHP  = 480
+| Powers = {{BD|Time Warp}}
+| Debut  = Act 3
+| Type   = Boss
+}}
+{{Power Infobox
+| Name         = Time Warp
+| Image        = Icon TimeWarp.png
+| Description  = Whenever you play a certain number of cards, ends your turn and gains X {{BD|Strength}}.
+| Type         = Buff
+| Stacks       = Intensity
+| BetweenTurns =
+| Cap          =
+| GivesToEnemy = Strength
+}}
+{{Power Infobox
+| Name          = Draw Reduction
+| Image         = Icon DrawReduction.png
+| Description   = Draw X less cards next turn.
+| Type          = Debuff
+| Stacks        = Intensity
+| BetweenTurns  = Removed
+| Cap           =
+| GivesToPlayer = Draw
+}}
+'''Time Eater''' is a [[Boss]] found at the end of [[Act 3]].
+
+== Pattern ==
+{{Intents Table/start|Time Eater}}
+{{Intents Table/row
+| Name   = Reverberate
+| Intent = Attack5
+| Effect = Deals (7×3;{{Asc|4|8×3}}) damage.
+}}
+{{Intents Table/row
+| Name          = Head Slam
+| Intent        = DebuffAttack6
+| Effect        = Deals (26;{{Asc|4|32}}) damage. Applies 1 {{BD|Draw Reduction}}. (;Adds {{Asc|19|2}} {{C|Slimed}} into your discard pile.)
+| GivesToPlayer = Draw Reduction
+}}
+{{Intents Table/row
+| Name          = Ripple
+| Intent        = DebuffDefend
+| Effect        = Gains 20 {{KW|Block}}. Applies 1 {{BD|Vulnerable}}, 1 {{BD|Weak}}(.; and {{Asc|19|1}} {{BD|Frail}}.)
+| GivesToPlayer = Vulnerable, Weak, Frail
+| GivesToEnemy  = Block
+}}
+{{Intents Table/row
+| Name         = Haste
+| Intent       = Buff
+| Effect       = Removes all [[Debuffs]]. Heals to 50% HP. (;Gains {{Asc|19|32}} {{KW|Block}}.)
+| GivesToEnemy = Heal, Block
+}}
+{{Intents Table/end}}
+'''Time Eater''' will always use {{Int|Time Eater|Haste}} when it is reduced to below half HP. {{Int|Time Eater|Haste}} can only be used once per combat. '''Time Eater''' will use one of the following three attacks each turn:
+* {{Int|Time Eater|Reverberate}} (45% chance)
+* {{Int|Time Eater|Head Slam}} (35% chance)
+* {{Int|Time Eater|Ripple}} (20% chance)
+'''Time Eater''' will not use {{Int|Time Eater|Reverberate}} three times in a row, or {{Int|Time Eater|Head Slam}}/{{Int|Time Eater|Ripple}} twice in a row.
+
+== Trivia ==
+* When playing as the [[Ironclad]], [[Silent]], or [[Defect]], Time Eater will say ''"Ah... company."'' on its first turn.
+** When playing as the [[Watcher]], Time Eater will instead say ''"Never... Liked... You..."''.
+
+== Update History ==
+* Weekly Patch 51: Recursion
+** Burn cards no longer trigger Time Eater's ability at end of turn.
+
+* Weekly Patch 42: Reboot
+** Adding a VFX for when your turn ends due to Time Warp power.
+** Updating SFX for Time Warp Power.
+
+* Weekly Patch 40: Forethought
+** Adding SFX for Time Warp, Flight, Constricted, and Entangle Powers.
+
+* Weekly Patch 18: Paranormal
+** Time Eater's Time Warp no longer increments when Curses play themselves.
+
+* Weekly Patch 11: A Library of Features
+** Curses/Statuses that play themselves no longer trigger Powers (Time Warp, After Image, etc)
+
+* Weekly Patch 10: Quality of Life
+** We updated the animations for several monsters! Affected monsters include: Time Eater
+
+* Weekly Patch 2: Slimes!
+** Time Eater now gains less Strength from Time Warp but base damage for attacks increased.
+
+* Weekly Patch 1: The First of Many!
+** Time Eater and Champ now show which Powers get removed when they remove them.
+
+{{EnemyNav}}
+[[Category:Bosses]] [[Category:ToUpdate]]

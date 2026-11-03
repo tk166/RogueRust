@@ -1,0 +1,66 @@
+{{Enemy Infobox
+| Name  = Jaw Worm
+| Image = JawWorm.png
+| HP    = 40-44
+| AscHP = 42-46
+| Debut = Act 1
+| Type  = Normal
+}}
+{{Enemy Infobox
+| Name   = Jaw Worm (Hard)
+| Image  = JawWorm.png
+| HP     = 40-44
+| AscHP  = 42-46
+| Powers = {{BD|Strength}} 3 ({{Asc|2|4}}/{{Asc|17|5}})<br> {{KW|Block}}  6 ({{Asc|17|9}})
+| Debut  = Act 3
+| Type   = Normal
+}}
+'''Jaw Worm''' is a normal [[Monsters|Enemy]] that can show up in Act 1, and has a hard variant that can show up in Act 3.
+
+== Pattern ==
+{{Intents Table/start|Jaw Worm}}
+{{Intents Table/row
+| Name   = Chomp
+| Intent = Attack3
+| Effect = Deals (11;{{Asc|2|12}}) damage.
+}}
+{{Intents Table/row
+| Name         = Bellow
+| Intent       = DefendBuff
+| Effect       = Gains (3;{{Asc|2|4}} ; {{Asc|17|5}}) {{BD|Strength}}. Gains (6;{{Asc|17|9}}) {{KW|Block}}.
+| GivesToEnemy = Strength, Block
+}}
+{{Intents Table/row
+| Name         = Thrash
+| Intent       = DefendAttack2
+| Effect       = Deals 7 damage. Gains 5 {{KW|Block}}.
+| GivesToEnemy = Block
+}}
+{{Intents Table/end}}
+Always starts with {{Int|Jaw Worm|Chomp}}. If it is found in Act 3, it starts with the effects of {{Int|Jaw Worm|Bellow}}, and for its first action it has a 45% chance of starting with {{Int|Jaw Worm|Bellow}}, a 30% chance of {{Int|Jaw Worm|Thrash}} and a 25% chance of using {{Int|Jaw Worm|Chomp}}
+* After using {{Int|Jaw Worm|Chomp}}, it has a 59% chance of using {{Int|Jaw Worm|Bellow}} and a 41% of {{Int|Jaw Worm|Thrash}}
+* After using {{Int|Jaw Worm|Bellow}}, it has a 56% chance of using {{Int|Jaw Worm|Thrash}} and a 44% of using {{Int|Jaw Worm|Chomp}}
+* After using {{Int|Jaw Worm|Thrash}}, it has a 45% chance of using {{Int|Jaw Worm|Bellow}}, a 30% chance of using {{Int|Jaw Worm|Thrash}} and a 25% chance of using {{Int|Jaw Worm|Chomp}}. Unless {{Int|Jaw Worm|Thrash}} has been used 2 turns in a row, then it has a 64% chance of using {{Int|Jaw Worm|Bellow}}, and a 36% of using {{Int|Jaw Worm|Chomp}}
+
+== In Party With ==
+
+=== Act 1 ===
+As an easy pool encounter:
+
+* Solo
+
+As half of an Exodium Wildlife encounter in the hard pool:
+
+* 1 {{M|Red Louse}}
+* 1 {{M|Green Louse}}
+* 1 {{M|Spike Slime (M)}}
+* 1 {{M|Acid Slime (M)}}
+
+=== Act 3 ===
+In the Jaw Worm Horde encounter, it appears along with 2 other Jaw Worm's, all 3 are the Hard variant.
+
+== Trivia ==
+* Jaw Worm appears in the artwork of {{C|Reaper}}.
+
+{{EnemyNav}}
+[[Category:Monsters]]
