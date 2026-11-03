@@ -45,7 +45,7 @@
 //! * `cardsPlayedThisTurn` / `cardsPlayedLastTurn` / `cardsPlayedThisTurnWithTag` /
 //!   `firstCardPlayedHasTag` —— 需要**每回合出牌统计**，内核没有（`CardPlayTurnStats` 整块未移植）；
 //! * `cardInstance.iterated` / `card.upgradeLevel` —— 需要卡实例表达式上下文；
-//! * `eventAmount` / `event.bool` / `intent.*` —— 需要**触发事件上下文**，v1 的效果执行还没有事件队列；
+//! * `eventAmount`（§195.1 起**已实现**：伤害事件带的是实际掉血）/ `intent.*` —— 需要**触发事件上下文**；
 //! * `fx.*` / `reward.*` / `meta.*` / `tpl.*` —— run 层；
 //! * `abs` / `negate` / `remainder` / `clamp` —— 参考实现里有（`EffectProgramExpressions.cs:219/532/587/622`），
 //!   但**镜像里一条都没有**，字段名（`Operand` / `Inner` / `Value,Min,Max`）无法用真实数据核实，
@@ -207,6 +207,11 @@ pub struct ExprContext<'a> {
     pub iteration_card: Option<CardInstanceId>,
     /// 触发事件的布尔事实（按位，见 `exec::CARD_HAS_TAG_*`）。`event.bool` 读它。
     pub event_flags: u8,
+    /// §195.1：当前事件带的**数量**（`eventAmount` 专用）。`None` = 没有事件上下文。
+    ///
+    /// 今天只有两个伤害事件会填它（= **实际掉的血**）；`0` 是合法数量，所以"没有上下文"必须是
+    /// `None`，不能与"这一次伤害是 0"混成一个数。
+    pub event_amount: Option<i32>,
     /// **X 费牌的 X**（§146）：这一次出牌真的花掉了多少能量。
     ///
     /// 不是全局状态的一部分：它随一次出牌生、随那次出牌死，所以走上下文、
@@ -522,7 +527,10 @@ pub fn eval_int<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, Exp
         "cardsPlayedThisTurn" => Ok(ctx.state.cards_played_this_turn),
         "cardsPlayedLastTurn" => Ok(ctx.state.cards_played_last_turn),
 
-        // 其余（`eventAmount` / `card.upgradeLevel` / `missingHealth` …）
+        // §195.1：**事件带的数量**（伤害事件 = 实际掉的血）。
+        "eventAmount" => ctx.event_amount.ok_or(ExprError::NoTarget),
+
+        // 其余（`card.upgradeLevel` / `missingHealth` …）
         // —— 值类别是 int，但 v1 没有它需要的上下文。**绝不返回 0**。
         _ => Err(ExprError::UnsupportedKind),
     }
@@ -1036,7 +1044,7 @@ mod tests {
             event_target: Some(cid("enemy_a")),
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
-            event_flags: 0,
+            event_flags: 0, event_amount: None,
             x_cost: 0,
         }
     }
@@ -1058,7 +1066,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
-            event_flags: 0,
+            event_flags: 0, event_amount: None,
             x_cost: 0,
         }
     }
@@ -1090,7 +1098,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
-            event_flags: 0,
+            event_flags: 0, event_amount: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(amount, &empty_ctx), Ok(6));
@@ -1154,7 +1162,7 @@ mod tests {
             event_target: Some(cid("hero")),
             iteration_target: None,
             iteration_card: None,
-            event_flags: 0,
+            event_flags: 0, event_amount: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(amount, &hero_ctx), Ok(28));
@@ -1215,7 +1223,7 @@ mod tests {
             event_target: Some(cid("enemy_b")),
             iteration_target: Some(cid("enemy_a")),
             iteration_card: None,
-            event_flags: 0,
+            event_flags: 0, event_amount: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 1000), &swapped), Ok(0));
@@ -1242,7 +1250,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
-            event_flags: 0,
+            event_flags: 0, event_amount: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 1131), &enemy_src), Ok(0));
@@ -1264,7 +1272,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
-            event_flags: 0,
+            event_flags: 0, event_amount: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 92), &no_target), Ok(0));
@@ -1420,7 +1428,7 @@ mod tests {
             event_target: None,
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
-            event_flags: 0,
+            event_flags: 0, event_amount: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 1527), &no_target), Ok(0));
@@ -1890,13 +1898,16 @@ mod tests {
         //   term 1542 = fx.heal{Amount:10}                   （run 层节点）
         // ⚠️ **`cardsPlayedThisTurn` 不再是这一档**（§128 给它补了回合级计数）：term 986 现在**答得出**
         // —— 见下面那条断言。
-        for (tid, why) in [
-            (354u16, "eventAmount"),
-            (1736, "card.upgradeLevel"),
-            (1542, "fx.heal"),
+        // ⚠️ §195.1：`eventAmount` 从 `UnsupportedKind` 变成 **`NoTarget`** —— 它实现了，只是
+        // **这段上下文里没有事件**。两者都是"响亮的错"，判据（不许给 0）没变，所以这条测试的
+        // 价值仍在：把"实现了但缺上下文"与"根本没实现"分开，两者都不许返回一个数。
+        for (tid, why, want) in [
+            (354u16, "eventAmount", ExprError::NoTarget),
+            (1736, "card.upgradeLevel", ExprError::UnsupportedKind),
+            (1542, "fx.heal", ExprError::UnsupportedKind),
         ] {
             let got = eval_int(node(&content, tid), &ctx);
-            assert_eq!(got, Err(ExprError::UnsupportedKind), "term {tid}（{why}）不许给 0");
+            assert_eq!(got, Err(want), "term {tid}（{why}）不许给 0");
             assert_ne!(got, Ok(0), "term {tid}（{why}）不许给 0");
         }
         // term 987 = compare{cardsPlayedThisTurn, Equal, 1} —— 它现在**求得出值**，不再响亮失败。
@@ -1954,7 +1965,7 @@ mod tests {
             event_target: Some(cid("enemy_a")),
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
-            event_flags: 0,
+            event_flags: 0, event_amount: None,
             x_cost: 0,
         };
 
@@ -2047,7 +2058,10 @@ mod tests {
         // 仍是 40：event.bool 现在实现了，但**只认四个 card.hasTag.* 键**；参考镜像里那两条
         // 用的是别的键（node.isCombat 之类），照旧算 UnsupportedKind —— 响亮失败，不静默 false。
         // 40 → 36：同上，四条不再落进 UnsupportedKind。
-        assert_eq!(unsupported, 36, "UnsupportedKind（见上面的按 kind 分布）");
+        // 36 → 32：§195.1 实现了 `eventAmount`（四条 term）。它们**没有**变成"求得出值"：没有
+        // 事件上下文时给 `NoTarget`，所以在这次扫描里从 `UnsupportedKind` 挪进了"其它错误"
+        // —— `ok` 因此**不动**（121），这正是"实现了 ≠ 在这段上下文里能算"。
+        assert_eq!(unsupported, 32, "UnsupportedKind（见上面的按 kind 分布）");
         // 0 → 13：**两片叶子 + 它们的 11 个祖先**。这条断言的价值是把"其它错误"从 0 变成
         // **一个可以逐条念出来的清单**：
         //   * 叶子：1527 `currentHealth`、1728 `maxHealth`（`nfields = 0` ⇒ 缺 `Selector`）；
@@ -2056,15 +2070,33 @@ mod tests {
         //     1858/1859/1860（1731 那个形状的第二份拷贝）。
         // 换句话说：**错误一路冒到树顶**，没有任何一层把它盖成 0 或默认值 —— 这正是要的。
         // 将来多出第十四条 ⇒ 红，逼人先决定它是哪一种（而不是让它混进计数里）。
-        assert_eq!(other, 13, "其它错误只允许是那 13 条缺 Selector 的树");
-        for (tid, kind, err) in &others {
+        //
+        // §195.1：13 → **17**。多出来的 4 条是 `eventAmount` 那一族（term 354 自己 + 3 个祖先
+        // 361/362/1158）—— 它现在**实现**了，只是这段上下文里没有事件 ⇒ `NoTarget`。它们是
+        // "另一类"错，所以下面按**两种**错分别逐条点名，而不是把 17 条混在一起数。
+        assert_eq!(other, 17, "其它错误 = 13 条缺 Selector + 4 条缺事件上下文");
+        let no_target: Vec<u16> = others
+            .iter()
+            .filter(|(_, _, err)| *err == ExprError::NoTarget)
+            .map(|(tid, _, _)| *tid)
+            .collect();
+        assert_eq!(
+            no_target,
+            vec![354u16, 361, 362, 1158],
+            "缺事件上下文的只可能是 `eventAmount`（354）与它的 3 个祖先"
+        );
+        for (tid, kind, err) in others.iter().filter(|(_, _, err)| *err != ExprError::NoTarget) {
             assert_eq!(
                 *err,
                 ExprError::Ir(IrError::Missing("Selector")),
                 "term {tid}（{kind}）的错必须是缺 `Selector` —— 不是别的结构错"
             );
         }
-        let error_ids: Vec<u16> = others.iter().map(|(tid, _, _)| *tid).collect();
+        let error_ids: Vec<u16> = others
+            .iter()
+            .filter(|(_, _, err)| *err == ExprError::Ir(IrError::Missing("Selector")))
+            .map(|(tid, _, _)| *tid)
+            .collect();
         assert_eq!(
             error_ids,
             vec![1527u16, 1528, 1529, 1707, 1721, 1728, 1729, 1731, 1733, 1858, 1859, 1860, 1867],
@@ -2092,7 +2124,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: Some(card),
-            event_flags: 0,
+            event_flags: 0, event_amount: None,
             x_cost: 0,
         };
         assert_eq!(eval_card(iterated, &bound), Ok(card));

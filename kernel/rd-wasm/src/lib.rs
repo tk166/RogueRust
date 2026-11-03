@@ -690,8 +690,10 @@ fn build_session_at(
     // Darkling Nip 7-11), so the roll happens here -- after the combatants exist and before the
     // first turn -- and the action program reads it with the reference's own `combatantCounter`.
     // One draw per roll, `random_step += 1`, so the RNG ledger still says exactly what happened.
-    rd_core::battle::apply_spawn_rolls(&mut session.state, content, encounter)
-        .map_err(|e| format!("apply_spawn_rolls: {:?}", e))?;
+    // §195.1: the same call also writes the **fixed** spawn counters (`Counters`), which is how a
+    // content status can find an initialised budget (The Guardian's Mode Shift 30/35/40).
+    rd_core::battle::apply_spawn_setup(&mut session.state, content, encounter)
+        .map_err(|e| format!("apply_spawn_setup: {:?}", e))?;
     // §175b: apply the encounter's `StartingStatuses` **before** the first turn starts.
     apply_starting_statuses(&mut session, content, encounter)?;
     start_first_turn(&mut session.state, &standard, &mut session.host)
@@ -3148,6 +3150,31 @@ mod tests {
                 .is_empty(),
             "the cultist declares `Rolls: []` -- no counter may appear"
         );
+    }
+
+    /// §195.1: the browser's fight builder seeds the Guardian's Mode Shift **budget** at spawn.
+    ///
+    /// The kernel test proves the budget drains and refills; this one proves the *page's* path runs
+    /// the seeding at all (a `Counters` entry that nobody reads is the "data in the image, nothing
+    /// in the fight" shape). A0 seeds 30, A9 35, A19 40 -- all three are checked, because the tiering
+    /// is the part that can silently pick the wrong row.
+    #[test]
+    fn building_a_guardian_fight_seeds_its_mode_shift_budget_by_ascension() {
+        for (ascension, want) in [(0u8, 30), (9, 35), (19, 40)] {
+            let session = build_session_at(3, "enc_the_guardian", 70, None, 0, ascension)
+                .expect("the guardian fight builds");
+            let id = rd_core::state::CombatantId::new("the_guardian").expect("a usable id");
+            let key = rd_core::state::CounterId::new("mode_shift_budget").expect("a usable id");
+            let got = session
+                .state
+                .combatant(&id)
+                .expect("the guardian is in the fight")
+                .counters()
+                .iter()
+                .find(|counter| counter.key == key)
+                .map(|counter| counter.value);
+            assert_eq!(got, Some(want), "A{ascension}: wiki says Mode Shift {want}");
+        }
     }
 
     /// The intent text of an enemy slot, the way the page reads it.

@@ -2425,6 +2425,11 @@ pub enum CombatEvent {
         target: CombatantId,
         /// 出手方（`None` = 无来源的伤害，触发器不跑 —— 参考的第一句就是 `SourceCombatant is not null`）。
         source: Option<CombatantId>,
+        /// **实际掉的血**（`§195.1`：`eventAmount` 读的就是这个数）。
+        ///
+        /// 不是请求额、也不是被格挡吸收的那部分：wiki 把 Mode Shift 写成 "after losing X HP"，
+        /// 而一次被完全挡住的攻击**一点血都没掉**。`DamageDealt` 三个数都有，这条只要一个。
+        health_damage: i32,
     },
     /// `CardPlayed`（`CardPlay.cs:144`）：**有人打出了一张牌**。
     ///

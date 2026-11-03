@@ -2043,12 +2043,13 @@ impl Host<'_> {
                 self.run_round_triggers(state, &actor, TriggerEvent::RoundEnded)
             }
             // `DamageDealtTriggeredEffects`（`:53-55`）：Bearer = **出手方**。
-            CombatEvent::DamageDealt { target, source, .. } => {
-                self.run_damage_dealt_triggers(state, &target, source)
+            // §195.1：两个伤害事件都把**实际掉血**交给触发器，`eventAmount` 读的就是它。
+            CombatEvent::DamageDealt { target, source, health_damage, .. } => {
+                self.run_damage_dealt_triggers(state, &target, source, health_damage)
             }
             // `DamageReceivedTriggeredEffects`（`:196-204`）：Bearer = **承受者**。
-            CombatEvent::DamageTaken { target, source } => {
-                self.run_damage_taken_triggers(state, &target, source)
+            CombatEvent::DamageTaken { target, source, health_damage } => {
+                self.run_damage_taken_triggers(state, &target, source, health_damage)
             }
             // `Downed`：Bearer = **倒下的那个**（Spore Cloud 之类"临死一击"）。
             CombatEvent::Downed { combatant, source } => {
@@ -2213,6 +2214,7 @@ impl Host<'_> {
         state: &mut CombatState,
         target: &CombatantId,
         source: Option<CombatantId>,
+        health_damage: i32,
     ) -> Result<(), HostError> {
         // 无来源的伤害不跑：参考的第一句就是 `SourceCombatant is not null`。
         let Some(attacker) = source else {
@@ -2236,13 +2238,14 @@ impl Host<'_> {
             let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
             let root = NodeRef::new(self.content, handle);
             // Bearer = 承受者，`EventTarget` = 出手方 ⇒ 节目里 `sel.eventTarget` 就是打人的那个。
-            let outcome = execute_program(
+            let outcome = execute_program_amount(
                 state,
                 self.content,
                 root,
                 Some(bearer),
                 Some(attacker),
                 steps,
+                Some(health_damage),
             );
             outcome.map_err(|e| self.record(HostError::Exec(e)))?;
         }
@@ -2270,6 +2273,7 @@ impl Host<'_> {
         state: &mut CombatState,
         target: &CombatantId,
         source: Option<CombatantId>,
+        health_damage: i32,
     ) -> Result<(), HostError> {
         // 第 1 道：承受者不在场 ⇒ 上下文工厂返回 null（`:89-92`）。
         if state.combatant(target).is_none() {
@@ -2293,13 +2297,14 @@ impl Host<'_> {
             let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
             let root = NodeRef::new(self.content, handle);
             // 执行号由 `exec::begin` 发（`EffectProgramExecution.cs:27`，**包括触发器节目**）。
-            let outcome = execute_program(
+            let outcome = execute_program_amount(
                 state,
                 self.content,
                 root,
                 Some(bearer),
                 Some(*target),
                 steps,
+                Some(health_damage),
             );
             outcome.map_err(|e| self.record(HostError::Exec(e)))?;
         }
@@ -2611,6 +2616,25 @@ fn decode_trigger<'a>(
 /// （`CombatEventHandling.cs:97-113` 的相位 1）。宿主**不在钩子里排空** —— 那是回合驱动
 /// （`turn.rs`）与场景驱动的活，参考也是这么分的（`CombatTurnProcessor` 自己调
 /// `ResolvePendingQueues`，`ScenarioRunner` 自己调）。
+/// §195.1：与 [`execute_program`] 相同，外加**事件带的数量**（`eventAmount` 读它）。
+///
+/// 单独一个入口而不是给 `execute_program` 加参数：那个函数有十几个调用点（回合钩子、状态
+/// 触发器、出牌……），它们**没有**"当前事件的数量"可言，给它们传 `None` 只是噪音。
+fn execute_program_amount(
+    state: &mut CombatState,
+    content: &Content<'_>,
+    root: NodeRef<'_>,
+    source: Option<CombatantId>,
+    event_target: Option<CombatantId>,
+    max_steps: u32,
+    event_amount: Option<i32>,
+) -> Result<(), exec::ExecError> {
+    let mut ctx = ExecContext::new(state, source, event_target, None, max_steps)
+        .with_content(content);
+    ctx.event_amount = event_amount;
+    exec::begin(root, &mut ctx, crate::state::ProgramTerminalHook::None).map(|_| ())
+}
+
 fn execute_program(
     state: &mut CombatState,
     content: &Content<'_>,
@@ -5315,8 +5339,9 @@ mod tests {
                     .add_combatant(unit("louse_red", "enemy", 10, 10))
                     .expect("the louse");
                 state.set_ascension(ascension);
-                let draws = crate::battle::apply_spawn_rolls(&mut state, &content, encounter)
-                    .expect("the encounter rolls");
+                let draws = crate::battle::apply_spawn_setup(&mut state, &content, encounter)
+                    .expect("the encounter rolls")
+                    .draws;
                 assert_eq!(draws, 1, "one roll per enemy (the hero has none)");
                 assert_eq!(state.random_step, 1, "A{ascension}/seed {seed}: one draw, one step");
 
@@ -5388,8 +5413,9 @@ mod tests {
         // Deliberately *not* the encounter's own enemy set: the rolls are looked up by the record
         // ids the encounter names, and `louse_red` is one of them, so a fight with the right
         // combatant must still draw.
-        let draws = crate::battle::apply_spawn_rolls(&mut state, &content, encounter)
-            .expect("rolls");
+        let draws = crate::battle::apply_spawn_setup(&mut state, &content, encounter)
+            .expect("rolls")
+            .draws;
         assert!(draws >= 1, "enc_louse names louse_red, which rolls");
         // And the negative half: a record that declares `Rolls: []` (cultist) draws nothing.
         let mut state = CombatState::new(CombatId::new("c1").unwrap(), 7);
@@ -5401,8 +5427,9 @@ mod tests {
                 .expect("enc_cultist")
                 .index,
         );
-        let draws = crate::battle::apply_spawn_rolls(&mut state, &content, encounter)
-            .expect("no rolls is not an error");
+        let draws = crate::battle::apply_spawn_setup(&mut state, &content, encounter)
+            .expect("no rolls is not an error")
+            .draws;
         assert_eq!(draws, 0, "cultist declares `Rolls: []`");
         assert_eq!(state.random_step, 0, "no draw ⇒ no step");
     }
@@ -5530,6 +5557,119 @@ mod tests {
             0,
             "`sel.allEnemies` would have buffed the hero -- this is the assertion that pins which              team the selector means"
         );
+    }
+
+    /// §195.1: The Guardian's Mode Shift is a **budget** seeded at spawn (`Counters`), drained by
+    /// the HP actually lost (`eventAmount`), refilled by +10 on each shift.
+    ///
+    /// Four judgements, none of which a "the boss has a rule" test would make:
+    /// 1. 29 HP is **not** enough (the threshold is 30, not 29);
+    /// 2. a fully **blocked** hit drains nothing (the amount is HP lost, not the request);
+    /// 3. the shift resets the budget to `surplus + 10` -- so the next shift needs 40 cumulative;
+    /// 4. the budget comes from the **content's `Counters`**, not from a literal in the kernel
+    ///    (a later `Counters` edit must move this test).
+    #[test]
+    fn mode_shift_is_a_budget_drained_by_the_health_actually_lost() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let encounter = u32::from(
+            content
+                .lookup_in("enc_the_guardian", crate::content::EK_ENCOUNTER)
+                .expect("the guardian's encounter")
+                .index,
+        );
+
+        // The combatant must carry the **record id** (`the_guardian`): `Counters` are keyed on the
+        // encounter's enemy ids, so `arena()`'s `enemy_a` would get nothing (and the setup says so
+        // with `MissingCombatant` instead of silently writing nothing).
+        let mut state = CombatState::new(CombatId::new("c1").unwrap(), 42);
+        state.add_combatant(unit("hero", "player", 70, 70)).expect("hero");
+        state
+            .add_combatant(unit("the_guardian", "enemy", 240, 240))
+            .expect("the guardian");
+        give(&mut state, "the_guardian", status("st_ms", "standard.mode_shift", 1));
+        // `arena()`'s enemy is called `enemy_a`, but the `Counters` are keyed on the **record id**,
+        // so the setup has to be run for the real encounter -- and then the number read from the
+        // state is what the content declared.
+        let mut host = Host::new(&content);
+        let drawn = crate::battle::apply_spawn_setup(&mut state, &content, encounter)
+            .expect("spawn setup");
+        assert_eq!(drawn.counters, 1, "one fixed counter (the Mode Shift budget)");
+        assert_eq!(drawn.draws, 0, "a stated value must not cost a random step");
+        assert_eq!(
+            counter_of(&state, "the_guardian", "mode_shift_budget"),
+            30,
+            "wiki: Mode Shift 30 at A0"
+        );
+
+        let hit_for = |state: &mut CombatState, host: &mut Host<'_>, amount: i32, block: i32| {
+            state
+                .combatant_mut(&cid("the_guardian"))
+                .expect("the guardian")
+                .set_defensive_pool(
+                    crate::state::DefensivePoolId::new("standard.block").unwrap(),
+                    block,
+                    None,
+                )
+                .expect("block");
+            {
+                let mut ctx = crate::exec::ExecContext::new(
+                    state,
+                    Some(cid("hero")),
+                    Some(cid("the_guardian")),
+                    None,
+                    64,
+                )
+                .with_content(&content);
+                crate::exec::resolve_damage(&mut ctx, &cid("the_guardian"), amount, false)
+                    .expect("the blow lands");
+            }
+            host.try_resolve_pending_queues(state).expect("the trigger settles");
+        };
+
+        hit_for(&mut state, &mut host, 29, 0);
+        assert_eq!(counter_of(&state, "the_guardian", "mode_shift_budget"), 1, "29 of 30 spent");
+
+        // Fully blocked: the request is 50 but **no HP is lost**, so the budget does not move.
+        hit_for(&mut state, &mut host, 50, 999);
+        assert_eq!(
+            counter_of(&state, "the_guardian", "mode_shift_budget"),
+            1,
+            "a fully blocked hit loses no HP -- `eventAmount` must not be the requested amount"
+        );
+
+        // One more HP crosses zero.
+        hit_for(&mut state, &mut host, 1, 0);
+        assert_eq!(counter_of(&state, "the_guardian", "mode_shift_budget"), 0);
+        let row = u32::from(
+            content
+                .lookup_in("the_guardian.defensive_mode", crate::content::EK_EACTION)
+                .expect("defensive mode is in the image")
+                .index,
+        );
+        crate::intent::execute_action(&mut state, &content, &cid("the_guardian"), row, Some(cid("hero")))
+            .expect("Defensive Mode");
+        assert_eq!(
+            counter_of(&state, "the_guardian", "mode_shift_budget"),
+            10,
+            "the wiki's `increased by 10 each time`: 0 + 10"
+        );
+        assert_eq!(block_of(&state, "the_guardian"), 20, "wiki: gains 20 Block");
+        assert_eq!(
+            stacks_of(&state, "the_guardian", "standard.sharp_hide"),
+            3,
+            "and 3 Sharp Hide"
+        );
+
+        // The second shift therefore needs 40 cumulative (30 spent + 10). 9 is not enough, 10 is.
+        hit_for(&mut state, &mut host, 9, 0);
+        assert_eq!(counter_of(&state, "the_guardian", "mode_shift_budget"), 1);
+        hit_for(&mut state, &mut host, 1, 0);
+        assert_eq!(counter_of(&state, "the_guardian", "mode_shift_budget"), 0);
     }
 
     #[test]

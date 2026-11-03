@@ -911,7 +911,10 @@ fn add_combatant(
     Ok(())
 }
 
-/// §193：把内容里写的**开局掷骰**落到战斗员身上（"chosen at the start of combat"）。
+/// §193/§195.1：把内容里写的**开局计数**落到战斗员身上 —— 掷骰（`Rolls`）与明写的值（`Counters`）。
+///
+/// 两件事一起做，是因为它们的位置、失败桶、选档规则都一样，而分开写就会出现**两份**"找到这个
+/// 敌人并把数写上去"的代码（§161.3 的老路）。唯一必须分开的是 RNG 账：掷骰花步、固定值不花。
 ///
 /// 内容的一行（`ENCT[i].Enemies[j].Rolls[k]`）是 `{Key, Min, Max, AscensionMin}`；这里按
 /// `state.ascension()` 选好档位（[`Content::spawn_rolls`]），抽一次，把值写进**那个敌人**的
@@ -936,16 +939,28 @@ fn add_combatant(
 ///
 /// 内容读不出来 / 值域不合法 / 计数器容器满 ⇒ 对应的桶。**不吞**任何一条：一条读不懂的掷骰
 /// 会让某一个招式的伤害静默变成 0，而那种错只会表现为"这一局有点奇怪"。
-pub fn apply_spawn_rolls(
+/// §195.1：建战斗时的**计数**账本，一次跑完两条列表。
+///
+/// `draws = 0` 的局是常态（本内容只有两只怪掷骰）：`Counters` 是**明写的数**，一个随机步都不该花。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SpawnSetup {
+    /// `Rolls` 抽了几次（= `random_step` 涨了几个）。
+    pub draws: u32,
+    /// `Counters` 写了几条（不消耗随机步）。
+    pub counters: u32,
+}
+
+pub fn apply_spawn_setup(
     state: &mut CombatState,
     content: &Content<'_>,
     encounter: u32,
-) -> Result<u32, SpawnRollError> {
+) -> Result<SpawnSetup, SpawnRollError> {
     let enemies = content
         .encounter_enemies(encounter)
         .map_err(SpawnRollError::Encounter)?;
     let ascension = i32::from(state.ascension());
     let mut draws = 0u32;
+    let mut counters_written = 0u32;
     for slot in 0..enemies.len() {
         let spec = enemies.get(slot).map_err(SpawnRollError::Encounter)?;
         let id = spec.id().map_err(SpawnRollError::Encounter)?;
@@ -954,6 +969,28 @@ pub fn apply_spawn_rolls(
             min: 0,
             max: 0,
         }; crate::content::MAX_SPAWN_ROLLS];
+        // §195.1: the fixed counters first -- they cost no random step, so their order relative to
+        // the rolls is unobservable; doing them first keeps the `draws` bookkeeping in one tail
+        // (the RNG ledger is the thing a reader has to be able to check).
+        let mut fixed = [crate::content::SpawnCounter { key: "", value: 0 };
+            crate::content::MAX_SPAWN_COUNTERS];
+        let fixed_count = content
+            .spawn_counters(spec, ascension, &mut fixed)
+            .map_err(SpawnRollError::Encounter)?;
+        if fixed_count > 0 {
+            let combatant = CombatantId::new(id).map_err(|_| SpawnRollError::BadCombatantId)?;
+            if state.combatant(&combatant).is_none() {
+                return Err(SpawnRollError::MissingCombatant);
+            }
+            for entry in fixed.iter().take(fixed_count) {
+                let key = crate::state::CounterId::new(entry.key)?;
+                state
+                    .combatant_mut(&combatant)
+                    .ok_or(SpawnRollError::MissingCombatant)?
+                    .set_counter(key, entry.value)?;
+                counters_written = counters_written.saturating_add(1);
+            }
+        }
         let count = content
             .spawn_rolls(spec, ascension, &mut rolls)
             .map_err(SpawnRollError::Encounter)?;
@@ -996,10 +1033,13 @@ pub fn apply_spawn_rolls(
                 .set_counter(key, value)?;
         }
     }
-    Ok(draws)
+    Ok(SpawnSetup {
+        draws,
+        counters: counters_written,
+    })
 }
 
-/// [`apply_spawn_rolls`] 的失败桶。
+/// [`apply_spawn_setup`] 的失败桶。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpawnRollError {
     /// 内容侧读不出来（`Rolls` 的形态/字段坏了）。

@@ -1416,8 +1416,11 @@ fn play_condition_validator(state: &CombatState, card: &CardOnTable<'_>) -> Resu
         event_target: card.target,
         iteration_target: None,
         iteration_card: None,
-            event_flags: 0,
-            x_cost: 0,
+        // §195.1: a `PlayCondition` is evaluated outside any event, so there is no amount to read
+        // (`eventAmount` reports `NoTarget` rather than 0).
+        event_flags: 0,
+        event_amount: None,
+        x_cost: 0,
     };
     match expr::eval_bool(condition, &context) {
         Ok(true) => Ok(()),

@@ -87,7 +87,7 @@ INV_COUNTS = {
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
-    "statuses": 29,
+    "statuses": 30,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -488,8 +488,11 @@ INV_ACTIONS = {
                                           ("damage", 5, "event"), ("damage", 5, "event"),
                                           ("counter", "guard_mode", 0, False, "source"),
                                           ("counter", "guard_step", 0, False, "source")]),
+    # §195.1: Mode Shift is a **budget** now (seeded at spawn from the record's `Counters`, drained
+    # by the HP actually lost), so Defensive Mode *refills* it by the wiki's +10 per trigger.
     "the_guardian.defensive_mode": ("Buff", [("block", 20, "source"),
                                              ("status", "standard.sharp_hide", 3, "source"),
+                                             ("counter", "mode_shift_budget", 10, True, "source"),
                                              ("counter", "guard_mode", 1, False, "source"),
                                              ("counter", "guard_step", 0, False, "source")]),
     "the_guardian.roll_attack": ("Attack", [("damage", 9, "event"),
@@ -725,6 +728,9 @@ INV_STATUSES = {
     # here (no passive modifier; the whole effect is a trigger).
     "standard.sharp_hide": [],
     "standard.curiosity": [],
+    # §195.1: the Guardian's Mode Shift -- a `DamageTaken` trigger that adds `eventAmount` (the HP
+    # actually lost) to a counter. The threshold is an intent rule, so there is no passive modifier.
+    "standard.mode_shift": [],
 }
 # Statuses whose stacks decay at the owner's turn end (inv:§10).
 INV_DECAYING = {"standard.vulnerable", "standard.weak", "standard.frail"}
@@ -1170,6 +1176,7 @@ INV_ASC_VARIANTS = {
                                       ('counter', 'guard_step', 1, False, 'source')])],
     'the_guardian.defensive_mode': [(19, [('block', 20, 'source'),
                                           ('status', 'standard.sharp_hide', 4, 'source'),
+                                          ('counter', 'mode_shift_budget', 10, True, 'source'),
                                           ('counter', 'guard_mode', 1, False, 'source'),
                                           ('counter', 'guard_step', 0, False, 'source')])],
     # Hexaghost (Sear 1 Burn->A19 2, Tackle 5x2->A4 6x2, Inflame 2 Str->A19 3, Inferno 2x6->A4 3x6).
@@ -1256,6 +1263,16 @@ INV_ASC_VARIANTS = {
 INV_ROLLS = {
     "louse_red": [("roll.bite", 5, 7, 0), ("roll.bite", 6, 8, 2)],
     "darkling": [("roll.nip", 7, 11, 0), ("roll.nip", 9, 13, 2)],
+}
+
+# §195.1: `ENCT.Enemies[].Counters` -- the **stated** numbers a status/rule needs to find already in
+# place (a random roll cannot say "30", and no program can initialise a counter).
+#
+# The Guardian's Mode Shift budget: wiki `Powers = Mode Shift 30 (Asc|9|35 | Asc|19|40)`.
+INV_SPAWN_COUNTERS = {
+    "the_guardian": [("mode_shift_budget", 30, 0),
+                     ("mode_shift_budget", 35, 9),
+                     ("mode_shift_budget", 40, 19)],
 }
 
 # §193: actions that exist in `EACT` but that **no enemy record lists**. They must not be converted
@@ -1362,6 +1379,28 @@ def check_spawn_rolls(doc):
     if unknown:
         fail("roll.unknown", "inventory names enemies that are not in the content: %s" % unknown)
 
+    # ①b §195.1：固定计数器的形态 + 数字（`Counters: [{Key, Value, AscensionMin?}]`）。
+    for record_id, group in records.items():
+        for record in group:
+            entries = record.get("Counters")
+            if entries is None:
+                fail("counters." + record_id, "the record has no `Counters` key (shape drift)")
+                continue
+            got = [(e["Key"], e["Value"], e.get("AscensionMin", 0)) for e in entries]
+            want = INV_SPAWN_COUNTERS.get(record_id, [])
+            if got != want:
+                fail("counters." + record_id, "%r, inv says %r" % (got, want))
+            by_key = {}
+            for key, _value, threshold in got:
+                by_key.setdefault(key, []).append(threshold)
+            for key, thresholds in by_key.items():
+                if thresholds != sorted(set(thresholds)):
+                    fail("counters." + record_id,
+                         "`%s`: thresholds %r are not strictly ascending/unique" % (key, thresholds))
+    missing = sorted(record_id for record_id in INV_SPAWN_COUNTERS if record_id not in records)
+    if missing:
+        fail("counters.unknown", "inventory names enemies that are not in the content: %s" % missing)
+
     # ② 程序侧：每个计数器读取都必须是**列这条动作的记录**掷过的键。
     actions = {a["Id"]: a for a in doc.get("EnemyActions") or []}
     readers = 0
@@ -1407,8 +1446,9 @@ def check_spawn_rolls(doc):
         if action_id in listed:
             fail("roll.wired." + action_id,
                  "this action now has an enemy record -- give it a roll and drop it from INV_UNWIRED")
-    ok("spawn rolls", "%d ranges over %d enemies, %d counter reads wired"
-       % (sum(len(v) for v in INV_ROLLS.values()), len(INV_ROLLS), readers))
+    ok("spawn rolls", "%d ranges over %d enemies, %d counter reads wired, %d fixed counters"
+       % (sum(len(v) for v in INV_ROLLS.values()), len(INV_ROLLS), readers,
+          sum(len(v) for v in INV_SPAWN_COUNTERS.values())))
 
 
 def check_statuses(doc):
@@ -1462,7 +1502,7 @@ def check_statuses(doc):
                      "standard.combust", "standard.split", "standard.phase_split",
                      "standard.time_warp", "standard.constricted",
                      "standard.phantom_veil",
-                     "standard.sharp_hide", "standard.curiosity"):
+                     "standard.sharp_hide", "standard.curiosity", "standard.mode_shift"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -1480,7 +1520,10 @@ def check_statuses(doc):
                         # §194: the Guardian's Sharp Hide and the Awakened One's Curiosity -- both
                         # `CardPlayed` filtered by the played card's tag, the Enrage shape.
                         "standard.sharp_hide": ["CardPlayed"],
-                        "standard.curiosity": ["CardPlayed"]}[sid]
+                        "standard.curiosity": ["CardPlayed"],
+                        # §195.1: "after losing X HP" is a `DamageTaken` trigger (the event now carries
+                        # the amount).
+                        "standard.mode_shift": ["DamageTaken"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

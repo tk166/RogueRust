@@ -723,7 +723,11 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // write and must not pretend it does. Declared here so `the_status_catalogue_is_honest`
         // keeps meaning what it says: every status is either implemented or on this list.
         "standard.sharp_hide" |
-        "standard.curiosity"
+        "standard.curiosity" |
+        // §195.1: The Guardian's Mode Shift -- also entirely a content trigger (`DamageTaken` ->
+        // add `eventAmount` to a counter). The *threshold* lives in an intent rule
+        // (`compare{counter >= 30 + 10 * shifts}`), not in the kernel.
+        "standard.mode_shift"
     )
 }
 

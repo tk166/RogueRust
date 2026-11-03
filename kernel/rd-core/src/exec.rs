@@ -316,6 +316,9 @@ pub struct ExecContext<'a> {
     /// 为什么不把卡实例塞进表达式上下文：那要把 `Content` 的寿命也拖进 `ExprContext`，
     /// 而这四个比特是**唯一**被用到的信息（`port-plan.md` §118）。
     pub event_flags: u8,
+    /// §195.1：当前事件带的**数量**（`eventAmount` 读它）。今天只有伤害事件会填；`None` 与 `0`
+    /// 严格区分（见 `expr::eval_int` 的 `eventAmount` 分支）。
+    pub event_amount: Option<i32>,
     /// 内容镜像。`Some` ⇒ 状态元数据走 [`crate::status_bind`]（参考实现的路）；
     /// `None` ⇒ 走标准包目录（oracle/env 的路）。**只有它决定命名空间桥开不开**。
     pub content: Option<&'a Content<'a>>,
@@ -358,7 +361,7 @@ impl<'a> ExecContext<'a> {
             iteration_target,
             iteration_card: None,
             max_steps,
-            event_flags: 0,
+            event_flags: 0, event_amount: None,
             content: None,
             x_cost: 0,
         }
@@ -391,6 +394,7 @@ impl<'a> ExecContext<'a> {
             iteration_target: self.iteration_target,
             iteration_card: self.iteration_card,
             event_flags: self.event_flags,
+            event_amount: self.event_amount,
             x_cost: self.x_cost,
         }
     }
@@ -1405,6 +1409,7 @@ pub fn resolve_damage_of_kind(
         .enqueue_event(crate::state::CombatEvent::DamageTaken {
             target: *target,
             source: taken_source,
+            health_damage: health_lost,
         })
         .map_err(ExecError::Capacity)?;
 
@@ -6226,7 +6231,7 @@ mod tests {
                     event_target: None,
                     iteration_target: None,
                     iteration_card: None,
-                    event_flags: 0,
+                    event_flags: 0, event_amount: None,
                     x_cost: 0,
                 };
                 crate::expr::eval_int(amount_expression, &expr_ctx).expect("常量")
@@ -6328,7 +6333,7 @@ mod tests {
                             event_target: event_target.map(cid),
                             iteration_target: iteration_target.map(cid),
                             iteration_card: None,
-                            event_flags: 0,
+                            event_flags: 0, event_amount: None,
                             x_cost: 0,
                         };
                         match crate::expr::eval_bool(condition, &expr_ctx) {

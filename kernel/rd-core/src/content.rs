@@ -1018,6 +1018,79 @@ impl<'a> Content<'a> {
         Ok(written)
     }
 
+    /// 一条敌人记录的**开局固定计数器**，按 `ascension` 选好档位（§195.1）。
+    ///
+    /// 与 [`Self::spawn_rolls`] 同一条选档规则（`AscensionMin <= ascension` 里阈值最大的一行；
+    /// **缺席 / 0 都是"这就是基础值"**；同键同阈值两行 ⇒ 报错）。
+    ///
+    /// # Errors
+    ///
+    /// 条目超 [`MAX_SPAWN_COUNTER_ENTRIES`] / 生效的键超 [`MAX_SPAWN_COUNTERS`] /
+    /// 同键同阈值两行 ⇒ [`EncounterError::MalformedList`]；`Key` 或 `Value` 缺席 ⇒
+    /// [`EncounterError::MissingField`]。
+    pub fn spawn_counters(
+        &'a self,
+        spec: EnemySpec<'a>,
+        ascension: i32,
+        out: &mut [SpawnCounter<'a>; MAX_SPAWN_COUNTERS],
+    ) -> Result<usize, EncounterError> {
+        let entries = spec.counters()?;
+        if entries.len() > MAX_SPAWN_COUNTER_ENTRIES {
+            return Err(EncounterError::MalformedList("Counters"));
+        }
+        let mut raw: [(&'a str, i32, i32); MAX_SPAWN_COUNTER_ENTRIES] = [("", 0, 0); MAX_SPAWN_COUNTER_ENTRIES];
+        let mut count = 0usize;
+        for index in 0..entries.len() {
+            let term = entries.term(index).ok_or(EncounterError::MalformedList("Counters"))?;
+            let node = crate::ir::NodeRef::new(self, term);
+            let key = node
+                .str_field("Key")
+                .map_err(|_| EncounterError::WrongFieldKind("Counters.Key"))?
+                .ok_or(EncounterError::MissingField("Counters.Key"))?;
+            let value = node
+                .int_field("Value")
+                .map_err(|_| EncounterError::WrongFieldKind("Counters.Value"))?
+                .ok_or(EncounterError::MissingField("Counters.Value"))?;
+            let threshold = node
+                .int_field("AscensionMin")
+                .map_err(|_| EncounterError::WrongFieldKind("Counters.AscensionMin"))?
+                .unwrap_or(0);
+            raw[index] = (key, value, threshold);
+            count += 1;
+        }
+        let mut written = 0usize;
+        for index in 0..count {
+            let (key, value, threshold) = raw[index];
+            if threshold > ascension {
+                continue;
+            }
+            let mut shadowed = false;
+            for other in 0..count {
+                if other == index {
+                    continue;
+                }
+                let (other_key, _, other_threshold) = raw[other];
+                if other_key != key || other_threshold > ascension {
+                    continue;
+                }
+                if other_threshold > threshold {
+                    shadowed = true;
+                } else if other_threshold == threshold {
+                    return Err(EncounterError::MalformedList("Counters"));
+                }
+            }
+            if shadowed {
+                continue;
+            }
+            if written == MAX_SPAWN_COUNTERS {
+                return Err(EncounterError::MalformedList("Counters"));
+            }
+            out[written] = SpawnCounter { key, value };
+            written += 1;
+        }
+        Ok(written)
+    }
+
     /// 一条遭遇的**敌人名单**（`ENCT[index].Enemies`，每条是 id / 生命 / 动作 / 起始状态 / 规则）。
     ///
     /// 这是 `intent::select_action` 那个 `(遭遇, 槽位)` 入参的**内容侧来路**：
@@ -1825,6 +1898,25 @@ pub const MAX_SPAWN_ROLL_ENTRIES: usize = 2 * MAX_SPAWN_ROLLS;
 /// 就是抽签能覆盖的全部。超了**响亮失败**：把 `5..=300` 悄悄截成 `5..=260` 会让难度静默变低一档。
 pub const MAX_SPAWN_ROLL_SPAN: i32 = 255;
 
+/// 一条敌人记录最多带几条"开局固定计数器"（§195.1）。四条是**容量**，不是规则：超了报错。
+pub const MAX_SPAWN_COUNTERS: usize = 4;
+
+/// 与 [`MAX_SPAWN_ROLL_ENTRIES`] 同一条理由：一个键可以有多个升档档位，所以"生效的键数"与
+/// "内容里写了几行"是两个数。
+pub const MAX_SPAWN_COUNTER_ENTRIES: usize = 2 * MAX_SPAWN_COUNTERS;
+
+/// 一条敌人记录里的**开局固定计数器**（`ENCT[i].Enemies[j].Counters[k]`，§195.1）。
+///
+/// 与 §193 的 [`SpawnRoll`] 是兄弟：一个写"抽出来的数"，一个写"内容里明写的数"。两者都用
+/// `{AscensionMin}` 分档、都在建战斗时落到战斗员身上，区别只在**要不要消耗一次随机步**。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpawnCounter<'a> {
+    /// 计数器键。
+    pub key: &'a str,
+    /// 初始值。
+    pub value: i32,
+}
+
 /// 一条敌人记录里的一条"开局掷骰"（`ENCT[i].Enemies[j].Rolls[k]`，§193）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SpawnRoll<'a> {
@@ -1961,6 +2053,16 @@ impl<'a> EnemySpec<'a> {
     /// （键 `Stacks` / `DurationTurns` / `Charges` / `Status`）。
     pub fn starting_statuses(&self) -> Result<SlotList<'a>, EncounterError> {
         self.list("StartingStatuses", F_TERMLIST)
+    }
+
+    /// `Counters`（`F_TERMLIST`，§195.1）：开局**固定**计数器的条目（键 `Key` / `Value` / `AscensionMin`）。
+    ///
+    /// 与 [`Self::rolls`] 同样的"键缺席 = 空列表"约定（opcode 按出现过的键集派生）。
+    pub fn counters(&self) -> Result<SlotList<'a>, EncounterError> {
+        match self.list("Counters", F_TERMLIST) {
+            Err(EncounterError::MissingField("Counters")) => Ok(SlotList::empty(self.content)),
+            other => other,
+        }
     }
 
     /// `Rolls`（`F_TERMLIST`，§193）：开局掷骰的条目（键 `Key` / `Min` / `Max` / `AscensionMin`）。

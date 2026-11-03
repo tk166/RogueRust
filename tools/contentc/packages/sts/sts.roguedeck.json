@@ -1863,6 +1863,66 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.mode_shift",
+      "PackageId": "sts",
+      "NameKey": "Mode Shift",
+      "DescriptionKey": "After losing 30 HP, gains 20 Block and switches to Defensive Mode (+10 HP each time).",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "mode_shift"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.setCombatantCounter",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "CounterId": {
+                  "value": "mode_shift_budget"
+                },
+                "Amount": {
+                  "kind": "subtract",
+                  "value": {
+                    "Left": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 0
+                      }
+                    },
+                    "Right": {
+                      "kind": "eventAmount",
+                      "value": {}
+                    }
+                  }
+                },
+                "Relative": true,
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -12119,6 +12179,29 @@
                     }
                   },
                   "CounterId": {
+                    "value": "mode_shift_budget"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "Relative": true,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
                     "value": "guard_mode"
                   },
                   "Amount": {
@@ -12211,6 +12294,29 @@
                       },
                       "DurationTurns": 0,
                       "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "mode_shift_budget"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 10
+                        }
+                      },
+                      "Relative": true,
                       "ResultKey": null
                     }
                   },
@@ -16509,7 +16615,8 @@
             }
           ],
           "DisplayName": "Cultist",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -16549,7 +16656,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Jaw Worm",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -16596,7 +16704,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Acid Slime (M)",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "spike_slime_s",
@@ -16617,7 +16726,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Spike Slime (S)",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -16661,7 +16771,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Sentry",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "sentry_2",
@@ -16685,7 +16796,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Sentry",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "sentry_3",
@@ -16709,7 +16821,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Sentry",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -16790,7 +16903,8 @@
             }
           ],
           "DisplayName": "Slime Boss",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -16868,7 +16982,8 @@
             }
           ],
           "DisplayName": "Time Eater",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "CardsDrawnPerTurn": null,
@@ -16905,7 +17020,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Shelled Parasite",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -16942,7 +17058,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Chosen",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -16979,7 +17096,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Byrd",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17023,7 +17141,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Spiker",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17060,7 +17179,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Orb Walker",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17222,7 +17342,8 @@
             }
           ],
           "DisplayName": "The Champ",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17269,7 +17390,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Gremlin Leader",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17313,7 +17435,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Giant Head",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17369,7 +17492,8 @@
               "Max": 13,
               "AscensionMin": 2
             }
-          ]
+          ],
+          "Counters": []
         },
         {
           "Id": "darkling",
@@ -17405,7 +17529,8 @@
               "Max": 13,
               "AscensionMin": 2
             }
-          ]
+          ],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17445,7 +17570,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Maw",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17486,7 +17612,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Fat Gremlin",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "sneaky_gremlin",
@@ -17500,7 +17627,8 @@
           "Position": 1,
           "IntentRules": [],
           "DisplayName": "Sneaky Gremlin",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "gremlin_wizard",
@@ -17531,7 +17659,8 @@
             }
           ],
           "DisplayName": "Gremlin Wizard",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17582,7 +17711,8 @@
             }
           ],
           "DisplayName": "Spire Growth",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17634,7 +17764,8 @@
               "Max": 8,
               "AscensionMin": 2
             }
-          ]
+          ],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17671,7 +17802,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Fungi Beast",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17708,7 +17840,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Slaver",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17748,7 +17881,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Gremlin Nob",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17806,7 +17940,8 @@
             }
           ],
           "DisplayName": "Lagavulin",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17843,7 +17978,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Book of Stabbing",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17877,7 +18013,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Taskmaster",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "slaver_red",
@@ -17894,7 +18031,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Red Slaver",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "blue_slaver",
@@ -17918,7 +18056,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Blue Slaver",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -17965,7 +18104,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Nemesis",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -18005,7 +18145,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Reptomancer",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "dagger",
@@ -18022,7 +18163,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Dagger",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "dagger",
@@ -18039,7 +18181,8 @@
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Dagger",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -18078,32 +18221,25 @@
               "value": "the_guardian.whirlwind"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.mode_shift"
+              },
+              "Stacks": 1
+            }
+          ],
           "Position": null,
           "IntentRules": [
             {
               "Condition": {
-                "kind": "intent.allOf",
+                "kind": "intent.selfHasCounter",
                 "value": {
-                  "Conditions": [
-                    {
-                      "kind": "intent.healthPercent",
-                      "value": {
-                        "Op": "LessOrEqual",
-                        "Percent": 50
-                      }
-                    },
-                    {
-                      "kind": "intent.selfHasCounter",
-                      "value": {
-                        "Counter": {
-                          "value": "guard_mode"
-                        },
-                        "Op": "LessOrEqual",
-                        "Value": 0
-                      }
-                    }
-                  ]
+                  "Counter": {
+                    "value": "mode_shift_budget"
+                  },
+                  "Op": "LessOrEqual",
+                  "Value": 0
                 }
               },
               "Action": {
@@ -18212,7 +18348,23 @@
             }
           ],
           "DisplayName": "The Guardian",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": [
+            {
+              "Key": "mode_shift_budget",
+              "Value": 30
+            },
+            {
+              "Key": "mode_shift_budget",
+              "Value": 35,
+              "AscensionMin": 9
+            },
+            {
+              "Key": "mode_shift_budget",
+              "Value": 40,
+              "AscensionMin": 19
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -18291,7 +18443,8 @@
             }
           ],
           "DisplayName": "Hexaghost",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -18402,7 +18555,8 @@
             }
           ],
           "DisplayName": "Bronze Automaton",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "bronze_orb",
@@ -18419,7 +18573,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Bronze Orb",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "bronze_orb",
@@ -18436,7 +18591,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Bronze Orb",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -18494,7 +18650,8 @@
             }
           ],
           "DisplayName": "The Collector",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "torch_head",
@@ -18508,7 +18665,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Torch Head",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "torch_head",
@@ -18522,7 +18680,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Torch Head",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -18708,7 +18867,8 @@
             }
           ],
           "DisplayName": "Awakened One",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -18752,7 +18912,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Donu",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         },
         {
           "Id": "deca",
@@ -18776,7 +18937,8 @@
           "Position": null,
           "IntentRules": [],
           "DisplayName": "Deca",
-          "Rolls": []
+          "Rolls": [],
+          "Counters": []
         }
       ],
       "HeroResources": [
@@ -18817,7 +18979,8 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": " ⚠️ 降级写明：wiki 的 Thorns 属于第二幕的 Spiker；本内容没有它，为让机制在真实战斗里被用到，挂在这里（3 层）。port-plan.md §116。"
+      "AiNote": " ⚠️ 降级写明：wiki 的 Thorns 属于第二幕的 Spiker；本内容没有它，为让机制在真实战斗里被用到，挂在这里（3 层）。port-plan.md §116。",
+      "Counters": []
     },
     {
       "Id": "fat_gremlin",
@@ -18841,7 +19004,8 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": " ⚠️ 降级写明：wiki 的 Enrage 属于 Gremlin Nob；本内容没有它，为让机制被用到，挂在这里。另外卡片 tag 还没建模，所以触发条件是「出牌就 +2 力量」，不是「技能牌」。 port-plan.md §117。"
+      "AiNote": " ⚠️ 降级写明：wiki 的 Enrage 属于 Gremlin Nob；本内容没有它，为让机制被用到，挂在这里。另外卡片 tag 还没建模，所以触发条件是「出牌就 +2 力量」，不是「技能牌」。 port-plan.md §117。",
+      "Counters": []
     },
     {
       "Id": "sneaky_gremlin",
@@ -18858,7 +19022,8 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": "单一动作 ⇒ 完全忠实（plan §3.2#3）"
+      "AiNote": "单一动作 ⇒ 完全忠实（plan §3.2#3）",
+      "Counters": []
     },
     {
       "Id": "blue_slaver",
@@ -18885,7 +19050,8 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": " ⚠️ 降级写明：wiki 的 Time Warp 属于**时间吞噬者**（第三幕 Boss），本内容没有它；且 blue_slaver 不在任何遭遇里。 port-plan.md §125。"
+      "AiNote": " ⚠️ 降级写明：wiki 的 Time Warp 属于**时间吞噬者**（第三幕 Boss），本内容没有它；且 blue_slaver 不在任何遭遇里。 port-plan.md §125。",
+      "Counters": []
     },
     {
       "Id": "acid_slime_s",
@@ -18905,7 +19071,8 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": "原作首回合 50/50、之后两招交替（inv:§4.1）⇒ 固定首招 Tackle + 交替（plan §3.2#5）"
+      "AiNote": "原作首回合 50/50、之后两招交替（inv:§4.1）⇒ 固定首招 Tackle + 交替（plan §3.2#5）",
+      "Counters": []
     },
     {
       "Id": "acid_slime_m",
@@ -18935,7 +19102,8 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": " ⚠️ 降级写明：wiki 的 Spore Cloud 属于 Fungi Beast；本内容没有它，为让机制被用到，挂在这里。 port-plan.md §119。"
+      "AiNote": " ⚠️ 降级写明：wiki 的 Spore Cloud 属于 Fungi Beast；本内容没有它，为让机制被用到，挂在这里。 port-plan.md §119。",
+      "Counters": []
     },
     {
       "Id": "spike_slime_m",
@@ -18962,7 +19130,8 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": " ⚠️ 降级写明：wiki 的 Metallicize 8 属于 Lagavulin（第一幕精英），本内容没有它；为了让这条机制在真实战斗里被用到，挂在这里（3 层）。port-plan.md §114。"
+      "AiNote": " ⚠️ 降级写明：wiki 的 Metallicize 8 属于 Lagavulin（第一幕精英），本内容没有它；为了让这条机制在真实战斗里被用到，挂在这里（3 层）。port-plan.md §114。",
+      "Counters": []
     },
     {
       "Id": "jaw_worm",
@@ -18986,7 +19155,8 @@
       "Tier": "A",
       "InvRef": "inv:§4.1",
       "AiNote": "首回合必定 Chomp；三步循环满足三条『不能连用』约束（inv:§4.1、plan §3.2#8）",
-      "TriggeredEffects": []
+      "TriggeredEffects": [],
+      "Counters": []
     },
     {
       "Id": "cultist",
@@ -19023,7 +19193,8 @@
       ],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": "第 1 回合必定 Incantation、之后永远 Dark Strike（inv:§4.1）⇒ 回合计数器 + 一条 selfHasCounter 规则（plan §G7：桥是内容，不是内核）"
+      "AiNote": "第 1 回合必定 Incantation、之后永远 Dark Strike（inv:§4.1）⇒ 回合计数器 + 一条 selfHasCounter 规则（plan §G7：桥是内容，不是内核）",
+      "Counters": []
     },
     {
       "Id": "gremlin_wizard",
@@ -19057,7 +19228,8 @@
       ],
       "Tier": "A",
       "InvRef": "inv:§4.1",
-      "AiNote": "先充能 2 回合→Blast→之后每充能 3 回合一次 Blast（inv:§4.1）。HP 采信游戏文件的 21-25（inv:§0 瑕疵 4）。⚠️ 单条件/常量阈值 ⇒ 首次 Blast 落在第 4 回合（降级见 Notes.Deviations/gremlin-wizard-phase）"
+      "AiNote": "先充能 2 回合→Blast→之后每充能 3 回合一次 Blast（inv:§4.1）。HP 采信游戏文件的 21-25（inv:§0 瑕疵 4）。⚠️ 单条件/常量阈值 ⇒ 首次 Blast 落在第 4 回合（降级见 Notes.Deviations/gremlin-wizard-phase）",
+      "Counters": []
     },
     {
       "Id": "sentry_1",
@@ -19084,7 +19256,8 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.2",
-      "AiNote": "3 只同名 Sentry 的第 1 只。内核要求战斗员 id 唯一（`Capacity(DuplicateCombatant)`），而本内容的遭遇记录只有 `Id`、没有实例号 ⇒ 三个实例只能写成三行（`NameKey` 都是 Sentry，玩家看到的三只没有区别）。⚠️ 两处降级见 §4.2：Beam 少 Dazed、缺 Artifact。"
+      "AiNote": "3 只同名 Sentry 的第 1 只。内核要求战斗员 id 唯一（`Capacity(DuplicateCombatant)`），而本内容的遭遇记录只有 `Id`、没有实例号 ⇒ 三个实例只能写成三行（`NameKey` 都是 Sentry，玩家看到的三只没有区别）。⚠️ 两处降级见 §4.2：Beam 少 Dazed、缺 Artifact。",
+      "Counters": []
     },
     {
       "Id": "sentry_2",
@@ -19111,7 +19284,8 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.2",
-      "AiNote": "3 只同名 Sentry 的第 2 只。内核要求战斗员 id 唯一（`Capacity(DuplicateCombatant)`），而本内容的遭遇记录只有 `Id`、没有实例号 ⇒ 三个实例只能写成三行（`NameKey` 都是 Sentry，玩家看到的三只没有区别）。⚠️ 两处降级见 §4.2：Beam 少 Dazed、缺 Artifact。"
+      "AiNote": "3 只同名 Sentry 的第 2 只。内核要求战斗员 id 唯一（`Capacity(DuplicateCombatant)`），而本内容的遭遇记录只有 `Id`、没有实例号 ⇒ 三个实例只能写成三行（`NameKey` 都是 Sentry，玩家看到的三只没有区别）。⚠️ 两处降级见 §4.2：Beam 少 Dazed、缺 Artifact。",
+      "Counters": []
     },
     {
       "Id": "sentry_3",
@@ -19138,7 +19312,8 @@
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.2",
-      "AiNote": "3 只同名 Sentry 的第 3 只。内核要求战斗员 id 唯一（`Capacity(DuplicateCombatant)`），而本内容的遭遇记录只有 `Id`、没有实例号 ⇒ 三个实例只能写成三行（`NameKey` 都是 Sentry，玩家看到的三只没有区别）。⚠️ 两处降级见 §4.2：Beam 少 Dazed、缺 Artifact。"
+      "AiNote": "3 只同名 Sentry 的第 3 只。内核要求战斗员 id 唯一（`Capacity(DuplicateCombatant)`），而本内容的遭遇记录只有 `Id`、没有实例号 ⇒ 三个实例只能写成三行（`NameKey` 都是 Sentry，玩家看到的三只没有区别）。⚠️ 两处降级见 §4.2：Beam 少 Dazed、缺 Artifact。",
+      "Counters": []
     },
     {
       "Id": "slime_boss",
@@ -19202,7 +19377,8 @@
       ],
       "Tier": "Boss",
       "InvRef": "inv:§4.3",
-      "AiNote": " ⚠️ 相位写明：半血**且**从第 2 轮起才换招（`intent.allOf` + `healthPercent` + `round`，port-plan.md §124）。"
+      "AiNote": " ⚠️ 相位写明：半血**且**从第 2 轮起才换招（`intent.allOf` + `healthPercent` + `round`，port-plan.md §124）。",
+      "Counters": []
     },
     {
       "Id": "time_eater",
@@ -19263,7 +19439,8 @@
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Time_Eater",
-      "AiNote": "§194：wiki 数值（HP 456/480；Reverberate 7×3→A4 8×3；Head Slam 26→A4 32，A19 另加 2 Slimed；Ripple 20 Block + Weak + Vuln，A19 加 Frail；Haste 半血以下回满一半，A19 另给 32 Block）。⚠️ 偏差：① Haste 只回血（不清 debuff，没有『清空状态』节点）；② `Draw Reduction` 未实现（没有减少抽牌数的 debuff）；③ 45/35/20 权重变成确定性 3 循环。"
+      "AiNote": "§194：wiki 数值（HP 456/480；Reverberate 7×3→A4 8×3；Head Slam 26→A4 32，A19 另加 2 Slimed；Ripple 20 Block + Weak + Vuln，A19 加 Frail；Haste 半血以下回满一半，A19 另给 32 Block）。⚠️ 偏差：① Haste 只回血（不清 debuff，没有『清空状态』节点）；② `Draw Reduction` 未实现（没有减少抽牌数的 debuff）；③ 45/35/20 权重变成确定性 3 循环。",
+      "Counters": []
     },
     {
       "Id": "shelled_parasite",
@@ -19283,7 +19460,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "inv:§5.2",
-      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
+      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。",
+      "Counters": []
     },
     {
       "Id": "chosen",
@@ -19303,7 +19481,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "inv:§5.2",
-      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
+      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。",
+      "Counters": []
     },
     {
       "Id": "byrd",
@@ -19323,7 +19502,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "inv:§5.2",
-      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
+      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。",
+      "Counters": []
     },
     {
       "Id": "spiker",
@@ -19350,7 +19530,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "inv:§5.2",
-      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
+      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。",
+      "Counters": []
     },
     {
       "Id": "orb_walker",
@@ -19370,7 +19551,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "inv:§5.2",
-      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。"
+      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。",
+      "Counters": []
     },
     {
       "Id": "the_champ",
@@ -19515,7 +19697,8 @@
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/The_Champ",
-      "AiNote": "§194：wiki 数值（HP 420/440；Heavy Slash 16→A4 18；Face Slap 12→A4 14 + 2 Frail + 2 Vuln；Defensive Stance 15 Block + 5 Metallicize，A9 18/6、A19 20/7；Gloat 2 Str，A4 3、A19 4；Taunt 每 4 回合 2 Weak + 2 Vuln；Anger 清 debuff + 6 Str，A4 9、A19 12；Execute 10×2）。⚠️ 偏差：① 45/25/15/15 权重变成确定性 4 循环；② Anger 按名清掉 Weak/Vulnerable/Frail（没有『清空状态』节点）；③ A19 的『Gloat 换成 Defensive Stance』未实现。"
+      "AiNote": "§194：wiki 数值（HP 420/440；Heavy Slash 16→A4 18；Face Slap 12→A4 14 + 2 Frail + 2 Vuln；Defensive Stance 15 Block + 5 Metallicize，A9 18/6、A19 20/7；Gloat 2 Str，A4 3、A19 4；Taunt 每 4 回合 2 Weak + 2 Vuln；Anger 清 debuff + 6 Str，A4 9、A19 12；Execute 10×2）。⚠️ 偏差：① 45/25/15/15 权重变成确定性 4 循环；② Anger 按名清掉 Weak/Vulnerable/Frail（没有『清空状态』节点）；③ A19 的『Gloat 换成 Defensive Stance』未实现。",
+      "Counters": []
     },
     {
       "Id": "gremlin_leader",
@@ -19545,7 +19728,8 @@
       "IntentRules": [],
       "Tier": "Elite",
       "InvRef": "inv:§5.3",
-      "AiNote": "⚠️ 第 2/3 幕的精英（port-plan.md §134）；机制用的是已有的 Enrage 与 Metallicize。"
+      "AiNote": "⚠️ 第 2/3 幕的精英（port-plan.md §134）；机制用的是已有的 Enrage 与 Metallicize。",
+      "Counters": []
     },
     {
       "Id": "giant_head",
@@ -19572,7 +19756,8 @@
       "IntentRules": [],
       "Tier": "Elite",
       "InvRef": "inv:§5.3",
-      "AiNote": "⚠️ 第 2/3 幕的精英（port-plan.md §134）；机制用的是已有的 Enrage 与 Metallicize。"
+      "AiNote": "⚠️ 第 2/3 幕的精英（port-plan.md §134）；机制用的是已有的 Enrage 与 Metallicize。",
+      "Counters": []
     },
     {
       "Id": "darkling",
@@ -19599,7 +19784,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "inv:§5.2",
-      "AiNote": "⚠️ 第三幕普通怪（port-plan.md §137）；用的是已有的 Regen。"
+      "AiNote": "⚠️ 第三幕普通怪（port-plan.md §137）；用的是已有的 Regen。",
+      "Counters": []
     },
     {
       "Id": "maw",
@@ -19622,7 +19808,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "inv:§5.2",
-      "AiNote": "⚠️ 第三幕普通怪（port-plan.md §137）；用的是已有的 Regen。"
+      "AiNote": "⚠️ 第三幕普通怪（port-plan.md §137）；用的是已有的 Regen。",
+      "Counters": []
     },
     {
       "Id": "spire_growth",
@@ -19656,7 +19843,8 @@
       ],
       "Tier": "Normal",
       "InvRef": "https://slayspiredb.com/sts1/bestiary/spire-growth",
-      "AiNote": "§147 第三幕普通怪；Constricted 的载体（wiki: Strategic / Aggressive 16 / 22）。"
+      "AiNote": "§147 第三幕普通怪；Constricted 的载体（wiki: Strategic / Aggressive 16 / 22）。",
+      "Counters": []
     },
     {
       "Id": "louse_red",
@@ -19679,7 +19867,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Red_Louse",
-      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。"
+      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。",
+      "Counters": []
     },
     {
       "Id": "louse_green",
@@ -19699,7 +19888,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Green_Louse",
-      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。"
+      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。",
+      "Counters": []
     },
     {
       "Id": "fungi_beast",
@@ -19719,7 +19909,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Fungi_Beast",
-      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。"
+      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。",
+      "Counters": []
     },
     {
       "Id": "slaver_red",
@@ -19739,7 +19930,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Red_Slaver",
-      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。"
+      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。",
+      "Counters": []
     },
     {
       "Id": "gremlin_nob",
@@ -19762,7 +19954,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Gremlin_Nob",
-      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。"
+      "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。",
+      "Counters": []
     },
     {
       "Id": "lagavulin",
@@ -19803,7 +19996,8 @@
       ],
       "Tier": "Elite",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Lagavulin",
-      "AiNote": "§173：wiki 数值（HP 109-111、Metallicize 8、Attack 18、Siphon Soul -1 力量/-1 敏捷）。⚠️ 偏差：睡眠只按回合数（1-3）判定；wiki 的『受到伤害即惊醒并眩晕一回合』需要on-damaged 触发器 + stun，内核没有；起始 Block 8 也没表达（只有 Metallicize）。Actions 刻意排成 [siphon_soul, attack]，使第 4 回合（(4-1)%2=1）正好是 Attack —— wiki 说它醒来立刻攻击。"
+      "AiNote": "§173：wiki 数值（HP 109-111、Metallicize 8、Attack 18、Siphon Soul -1 力量/-1 敏捷）。⚠️ 偏差：睡眠只按回合数（1-3）判定；wiki 的『受到伤害即惊醒并眩晕一回合』需要on-damaged 触发器 + stun，内核没有；起始 Block 8 也没表达（只有 Metallicize）。Actions 刻意排成 [siphon_soul, attack]，使第 4 回合（(4-1)%2=1）正好是 Attack —— wiki 说它醒来立刻攻击。",
+      "Counters": []
     },
     {
       "Id": "book_of_stabbing",
@@ -19823,7 +20017,8 @@
       "IntentRules": [],
       "Tier": "Elite",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Book_of_Stabbing",
-      "AiNote": "§173：wiki 数值（HP 160-164、Multi Stab 6×N、N=使用次数+2、Big Stab 21）。⚠️ 偏差：wiki 是 85%/15% 加权 + 『不能连续三次/两次』；本内核的挑招是确定性轮转，所以它是交替的。递增的 N 是精确的（计数器 + node.repeat）。"
+      "AiNote": "§173：wiki 数值（HP 160-164、Multi Stab 6×N、N=使用次数+2、Big Stab 21）。⚠️ 偏差：wiki 是 85%/15% 加权 + 『不能连续三次/两次』；本内核的挑招是确定性轮转，所以它是交替的。递增的 N 是精确的（计数器 + node.repeat）。",
+      "Counters": []
     },
     {
       "Id": "taskmaster",
@@ -19840,7 +20035,8 @@
       "IntentRules": [],
       "Tier": "Elite",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Taskmaster",
-      "AiNote": "§173：wiki 数值（HP 54-60、Scouring Whip 7 伤害 + 1 张 Wound 进弃牌堆）。只有一个招式，所以轮转就是它。"
+      "AiNote": "§173：wiki 数值（HP 54-60、Scouring Whip 7 伤害 + 1 张 Wound 进弃牌堆）。只有一个招式，所以轮转就是它。",
+      "Counters": []
     },
     {
       "Id": "nemesis",
@@ -19870,7 +20066,8 @@
       "IntentRules": [],
       "Tier": "Elite",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Nemesis",
-      "AiNote": "§175：wiki 数值（HP 185；Tri Attack 6×3；Tri Burn 3 张 Burn；Scythe 45；隔回合无形）。隔回合由 `standard.phantom_veil` 的 TurnStarted 触发器实现（读自己的 tick 奇偶）。"
+      "AiNote": "§175：wiki 数值（HP 185；Tri Attack 6×3；Tri Burn 3 张 Burn；Scythe 45；隔回合无形）。隔回合由 `standard.phantom_veil` 的 TurnStarted 触发器实现（读自己的 tick 奇偶）。",
+      "Counters": []
     },
     {
       "Id": "reptomancer",
@@ -19893,7 +20090,8 @@
       "IntentRules": [],
       "Tier": "Elite",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Reptomancer",
-      "AiNote": "§175：wiki 数值（HP 180-190；Big Bite 30；Snake Strike 13×2 + 1 Weak；Spawn Dagger）。⚠️ 偏差：召唤没有『上限 4』（`node.createCombatant` 没有上限参数，唯一的界是 6 个敌人槽）。"
+      "AiNote": "§175：wiki 数值（HP 180-190；Big Bite 30；Snake Strike 13×2 + 1 Weak；Spawn Dagger）。⚠️ 偏差：召唤没有『上限 4』（`node.createCombatant` 没有上限参数，唯一的界是 6 个敌人槽）。",
+      "Counters": []
     },
     {
       "Id": "dagger",
@@ -19913,7 +20111,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Dagger",
-      "AiNote": "§175：wiki 数值（HP 20-25；Wound 9 + 1 Wound；Explode 25 且**自身死亡**）。⚠️ 偏差：`Explode` 之后不自毁 —— 内核没有 `destroyCombatant` 这个节点。"
+      "AiNote": "§175：wiki 数值（HP 20-25；Wound 9 + 1 Wound；Explode 25 且**自身死亡**）。⚠️ 偏差：`Explode` 之后不自毁 —— 内核没有 `destroyCombatant` 这个节点。",
+      "Counters": []
     },
     {
       "Id": "the_guardian",
@@ -19935,31 +20134,24 @@
           "value": "the_guardian.whirlwind"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.mode_shift"
+          },
+          "Stacks": 1
+        }
+      ],
       "IntentRules": [
         {
           "Condition": {
-            "kind": "intent.allOf",
+            "kind": "intent.selfHasCounter",
             "value": {
-              "Conditions": [
-                {
-                  "kind": "intent.healthPercent",
-                  "value": {
-                    "Op": "LessOrEqual",
-                    "Percent": 50
-                  }
-                },
-                {
-                  "kind": "intent.selfHasCounter",
-                  "value": {
-                    "Counter": {
-                      "value": "guard_mode"
-                    },
-                    "Op": "LessOrEqual",
-                    "Value": 0
-                  }
-                }
-              ]
+              "Counter": {
+                "value": "mode_shift_budget"
+              },
+              "Op": "LessOrEqual",
+              "Value": 0
             }
           },
           "Action": {
@@ -20069,7 +20261,23 @@
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/The_Guardian",
-      "AiNote": "§194：wiki 数值（HP 240/250；Fierce Bash 32→A4 36；Whirlwind 5×4；Roll Attack 9→A4 10；Twin Slam 8×2；Defensive Mode 20 Block + 3 Sharp Hide，A19 4）。⚠️ 偏差：Mode Shift 是『显示 HP ≤ 50% 时切一次』，且切换落在**下一轮**而不是当场改意图（本内核的意图是每轮选一次）；Sharp Hide 是精确的（`CardPlayed` + `card.hasTag.attack`）。"
+      "AiNote": "§195.1：wiki 数值（HP 240/250；Fierce Bash 32→A4 36；Whirlwind 5×4；Roll Attack 9→A4 10；Twin Slam 8×2；Defensive Mode 20 Block + 3 Sharp Hide，A19 4）。Mode Shift 是**真·累计受伤**：开局 `Counters` 把 `mode_shift_budget` 种成 30（A9 35、A19 40），`standard.mode_shift` 的 DamageTaken 触发器把它减去**实际掉血**（`eventAmount`），意图规则在预算 ≤ 0 时切防御态，防御态把预算 +10（wiki 的『每次触发 +10』）。Sharp Hide 是精确的（`CardPlayed` + `card.hasTag.attack`）。⚠️ 偏差：被完全挡住的攻击不算伤害（StS 同理）。",
+      "Counters": [
+        {
+          "Key": "mode_shift_budget",
+          "Value": 30
+        },
+        {
+          "Key": "mode_shift_budget",
+          "Value": 35,
+          "AscensionMin": 9
+        },
+        {
+          "Key": "mode_shift_budget",
+          "Value": 40,
+          "AscensionMin": 19
+        }
+      ]
     },
     {
       "Id": "hexaghost",
@@ -20131,7 +20339,8 @@
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Hexaghost",
-      "AiNote": "§194：wiki 数值（HP 250/264；Activate；Divider (HP/12+1)×6；Sear 6 + 1 Burn（A19 2）；Tackle 5×2→A4 6×2；Inflame 12 Block + 2 Str（A19 3）；Inferno 2×6→A4 3×6 + 3 Burn+）。⚠️ 偏差：Divider 读的是**结算时**的英雄 HP（wiki 是回合开始时）；Inferno 不升级已有 Burn。"
+      "AiNote": "§194：wiki 数值（HP 250/264；Activate；Divider (HP/12+1)×6；Sear 6 + 1 Burn（A19 2）；Tackle 5×2→A4 6×2；Inflame 12 Block + 2 Str（A19 3）；Inferno 2×6→A4 3×6 + 3 Burn+）。⚠️ 偏差：Divider 读的是**结算时**的英雄 HP（wiki 是回合开始时）；Inferno 不升级已有 Burn。",
+      "Counters": []
     },
     {
       "Id": "bronze_automaton",
@@ -20225,7 +20434,8 @@
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Bronze_Automaton",
-      "AiNote": "§194：wiki 数值（HP 300/320；Artifact 3；Flail 7×2→A4 8×2；Boost 3 Str + 9 Block，A4 Str 4、A9 Block 12；HYPER BEAM 45→A4 50；Stunned；A19 用 Boost 顶替 Stunned）。⚠️ 偏差：两只 Bronze Orb **开局就在场上**（`intent::locate_enemy` 要靠遭遇名单给召唤物找招式表 ⇒ 列了就会生成，§138），所以 wiki 的 Spawn Orbs 被去掉；`Stasis`（偷牌、死亡时归还）没有原语，未实现。"
+      "AiNote": "§194：wiki 数值（HP 300/320；Artifact 3；Flail 7×2→A4 8×2；Boost 3 Str + 9 Block，A4 Str 4、A9 Block 12；HYPER BEAM 45→A4 50；Stunned；A19 用 Boost 顶替 Stunned）。⚠️ 偏差：两只 Bronze Orb **开局就在场上**（`intent::locate_enemy` 要靠遭遇名单给召唤物找招式表 ⇒ 列了就会生成，§138），所以 wiki 的 Spawn Orbs 被去掉；`Stasis`（偷牌、死亡时归还）没有原语，未实现。",
+      "Counters": []
     },
     {
       "Id": "bronze_orb",
@@ -20245,7 +20455,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Bronze_Orb",
-      "AiNote": "§194：wiki 数值（HP 52-58；Beam 8；Support Beam 给友军 12 Block）。⚠️ 偏差：Support Beam 用 `sel.allAllies`，即**全体友军**（含自己）；`Stasis` 未实现；wiki 的 75%/70% 权重与『同一招不连续三次』变成了确定性 2 循环。"
+      "AiNote": "§194：wiki 数值（HP 52-58；Beam 8；Support Beam 给友军 12 Block）。⚠️ 偏差：Support Beam 用 `sel.allAllies`，即**全体友军**（含自己）；`Stasis` 未实现；wiki 的 75%/70% 权重与『同一招不连续三次』变成了确定性 2 循环。",
+      "Counters": []
     },
     {
       "Id": "the_collector",
@@ -20286,7 +20497,8 @@
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/The_Collector",
-      "AiNote": "§194：wiki 数值（HP 282/300；Fireball 18→A4 21；Buff 全体 +3 Str + 15 Block，A4 Str 4、A9 Block 18、A19 5/23；Mega Debuff 3/3/3，A19 5/5/5，第 4 回合必出）。⚠️ 偏差：两只 Torch Head 开局在场上，Spawn 被去掉（同 Automaton 的理由）；25/45/30 权重变成确定性 2 循环。"
+      "AiNote": "§194：wiki 数值（HP 282/300；Fireball 18→A4 21；Buff 全体 +3 Str + 15 Block，A4 Str 4、A9 Block 18、A19 5/23；Mega Debuff 3/3/3，A19 5/5/5，第 4 回合必出）。⚠️ 偏差：两只 Torch Head 开局在场上，Spawn 被去掉（同 Automaton 的理由）；25/45/30 权重变成确定性 2 循环。",
+      "Counters": []
     },
     {
       "Id": "torch_head",
@@ -20303,7 +20515,8 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Torch_Head",
-      "AiNote": "§194：wiki 数值（HP 38-40；Tackle 7）。⚠️ 偏差：开局即在场上（wiki 由 Collector 召唤），且不会被再次召唤。"
+      "AiNote": "§194：wiki 数值（HP 38-40；Tackle 7）。⚠️ 偏差：开局即在场上（wiki 由 Collector 召唤），且不会被再次召唤。",
+      "Counters": []
     },
     {
       "Id": "awakened_one",
@@ -20472,7 +20685,8 @@
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Awakened_One",
-      "AiNote": "§194：wiki 数值（HP 300/320；Regenerate 10 / A19 15；Curiosity 1 / A19 2；Slash 20；Soul Strike 6×4；Dark Echo 40；Tackle 10×3；Sludge 18 + 1 Void）。两阶段用计数器做：`ao_phase` 由 Rebirth 置 1，之后 Dark Echo（一次）→ Tackle/Sludge 交替。⚠️ 偏差：① Rebirth 在 **HP ≤ 25%** 时改为意图（内核没有死亡拦截，死亡后无法复活）；② 『移除所有 debuff』只按名摘掉 Curiosity（没有『清空状态』节点）；③ 两个 Cultist 不在（wiki 的第二阶段会在场）；④ Regenerate/Curiosity 的层数不随 A19 变（`StartingStatuses` 没有升档轴）。"
+      "AiNote": "§194：wiki 数值（HP 300/320；Regenerate 10 / A19 15；Curiosity 1 / A19 2；Slash 20；Soul Strike 6×4；Dark Echo 40；Tackle 10×3；Sludge 18 + 1 Void）。两阶段用计数器做：`ao_phase` 由 Rebirth 置 1，之后 Dark Echo（一次）→ Tackle/Sludge 交替。⚠️ 偏差：① Rebirth 在 **HP ≤ 25%** 时改为意图（内核没有死亡拦截，死亡后无法复活）；② 『移除所有 debuff』只按名摘掉 Curiosity（没有『清空状态』节点）；③ 两个 Cultist 不在（wiki 的第二阶段会在场）；④ Regenerate/Curiosity 的层数不随 A19 变（`StartingStatuses` 没有升档轴）。",
+      "Counters": []
     },
     {
       "Id": "donu",
@@ -20499,7 +20713,8 @@
       "IntentRules": [],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Donu",
-      "AiNote": "§194：wiki 数值（HP 250/265；Artifact 2 / A19 3；Circle of Power 全体 +3 Str；Beam 10×2→A4 12×2）。⚠️ 偏差：Artifact 层数不随 A19 变；『全体』用 `sel.allAllies`。"
+      "AiNote": "§194：wiki 数值（HP 250/265；Artifact 2 / A19 3；Circle of Power 全体 +3 Str；Beam 10×2→A4 12×2）。⚠️ 偏差：Artifact 层数不随 A19 变；『全体』用 `sel.allAllies`。",
+      "Counters": []
     },
     {
       "Id": "deca",
@@ -20526,7 +20741,8 @@
       "IntentRules": [],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Deca",
-      "AiNote": "§194：wiki 数值（HP 250/265；Artifact 2 / A19 3；Beam 10×2→A4 12×2 + 2 Dazed；Square of Protection 全体 16 Block，A19 另给 3 Plated Armor）。⚠️ 偏差：Artifact 层数不随 A19 变。"
+      "AiNote": "§194：wiki 数值（HP 250/265；Artifact 2 / A19 3；Beam 10×2→A4 12×2 + 2 Dazed；Square of Protection 全体 16 Block，A19 另给 3 Plated Armor）。⚠️ 偏差：Artifact 层数不随 A19 变。",
+      "Counters": []
     }
   ],
   "EncounterTables": {
