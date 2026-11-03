@@ -5236,6 +5236,177 @@ mod tests {
         }
     }
 
+    /// §192: **one** action, **two** ascension tiers -- Jaw Worm's Bellow.
+    ///
+    /// The wiki states all three numbers on one line (`native/wiki_asc/jaw_worm.txt:30`):
+    /// `Gains (3;Asc|2|4;Asc|17|5) Strength. Gains (6;Asc|17|9) Block.` With §187's single variant
+    /// slot only the A2 number could be carried (§190.4 wrote that limitation down), and A17's
+    /// Strength (5) was unreachable: a variant is a *whole program*, so the A17 entry has to repeat
+    /// the A2 change and add its own.
+    ///
+    /// The judgment is the two numbers a player sees (Strength stacks, Block), checked on **both
+    /// sides of both thresholds** -- a tier that leaked one level early, or an A17 entry that forgot
+    /// the A2 number, fails one of these five rows.
+    #[test]
+    fn one_action_can_carry_two_ascension_tiers() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let row = u32::from(
+            content
+                .lookup_in("jaw_worm.bellow", crate::content::EK_EACTION)
+                .expect("jaw_worm.bellow is in the image")
+                .index,
+        );
+        for (ascension, strength, block) in [(0u8, 3, 6), (1, 3, 6), (2, 4, 6), (16, 4, 6), (17, 5, 9), (20, 5, 9)] {
+            let mut state = arena();
+            state.set_ascension(ascension);
+            crate::intent::execute_action(&mut state, &content, &cid("enemy_a"), row, Some(cid("hero")))
+                .expect("the action runs");
+            assert_eq!(
+                (stacks_of(&state, "enemy_a", "standard.strength"), block_of(&state, "enemy_a")),
+                (strength, block),
+                "A{ascension}: Bellow must give Strength {strength} and {block} Block"
+            );
+        }
+    }
+
+    /// §193: variable damage -- "chosen at the start of combat" made literal.
+    ///
+    /// The wiki (`native/wiki_asc/louse.txt:28`) says `N = Number between (5-7;{{Asc|2|6-8}}),
+    /// chosen at the start of combat`. So the number must be **one** value per fight, drawn before
+    /// any turn, read by `louse_red.bite` through the reference's own `combatantCounter` expression.
+    ///
+    /// The judgment is the hero's health after two bites in the same fight: equal (one draw) and
+    /// inside the range, with `random_step` having moved exactly once. A per-attack draw would make
+    /// the two numbers differ roughly half the time -- which is why two bites, not one.
+    #[test]
+    fn a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let encounter = u32::from(
+            content
+                .lookup_in("enc_louse", crate::content::EK_ENCOUNTER)
+                .expect("enc_louse is in the image")
+                .index,
+        );
+        let row = u32::from(
+            content
+                .lookup_in("louse_red.bite", crate::content::EK_EACTION)
+                .expect("louse_red.bite is in the image")
+                .index,
+        );
+
+        let mut seen: Vec<i32> = Vec::new();
+        for seed in 0..24 {
+            for (ascension, low, high) in [(0u8, 5, 7), (2, 6, 8)] {
+                let mut state = CombatState::new(CombatId::new("c1").unwrap(), seed);
+                state
+                    .add_combatant(unit("hero", "player", 70, 70))
+                    .expect("hero");
+                state
+                    .add_combatant(unit("louse_red", "enemy", 10, 10))
+                    .expect("the louse");
+                state.set_ascension(ascension);
+                let draws = crate::battle::apply_spawn_rolls(&mut state, &content, encounter)
+                    .expect("the encounter rolls");
+                assert_eq!(draws, 1, "one roll per enemy (the hero has none)");
+                assert_eq!(state.random_step, 1, "A{ascension}/seed {seed}: one draw, one step");
+
+                let value = counter_of(&state, "louse_red", "roll.bite");
+                assert!(
+                    (low..=high).contains(&value),
+                    "A{ascension}/seed {seed}: roll.bite = {value}, wiki says {low}-{high}"
+                );
+
+                // Two bites in the same fight carry the **same** number, and it is the rolled one.
+                for bite in 0..2 {
+                    let before = health(&state, "hero");
+                    crate::intent::execute_action(
+                        &mut state,
+                        &content,
+                        &cid("louse_red"),
+                        row,
+                        Some(cid("hero")),
+                    )
+                    .expect("the bite lands");
+                    assert_eq!(
+                        before - health(&state, "hero"),
+                        value,
+                        "A{ascension}/seed {seed}: bite {} must deal the rolled {value}",
+                        bite + 1
+                    );
+                }
+                assert_eq!(
+                    state.random_step, 1,
+                    "the bite itself draws nothing -- the roll already happened"
+                );
+                seen.push(value);
+            }
+        }
+        let distinct: std::collections::BTreeSet<i32> = seen.iter().copied().collect();
+        assert!(
+            distinct.len() >= 4,
+            "48 rolls produced only {distinct:?} -- the draw is not a draw"
+        );
+        assert!(
+            seen.iter().all(|value| (5..=8).contains(value)),
+            "every roll must be in 5..=8 (A0 5-7, A2 6-8): {distinct:?}"
+        );
+    }
+
+    /// §193: a fight whose enemies declare **no** rolls draws nothing and leaves no counter behind.
+    ///
+    /// The second half matters more than the first: `combatantCounter` reads an absent counter as
+    /// **0**, so "the roll silently did not happen" would look exactly like "the content says the
+    /// damage is 0". Here it is pinned that the *absence* is the state (counter `-1` from the test's
+    /// `counter_of` helper) and that `random_step` did not move.
+    #[test]
+    fn an_encounter_without_rolls_draws_nothing() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let encounter = u32::from(
+            content
+                .lookup_in("enc_louse", crate::content::EK_ENCOUNTER)
+                .expect("an encounter")
+                .index,
+        );
+        let mut state = CombatState::new(CombatId::new("c1").unwrap(), 7);
+        state.add_combatant(unit("hero", "player", 70, 70)).expect("hero");
+        state.add_combatant(unit("louse_red", "enemy", 10, 10)).expect("the louse");
+        // Deliberately *not* the encounter's own enemy set: the rolls are looked up by the record
+        // ids the encounter names, and `louse_red` is one of them, so a fight with the right
+        // combatant must still draw.
+        let draws = crate::battle::apply_spawn_rolls(&mut state, &content, encounter)
+            .expect("rolls");
+        assert!(draws >= 1, "enc_louse names louse_red, which rolls");
+        // And the negative half: a record that declares `Rolls: []` (cultist) draws nothing.
+        let mut state = CombatState::new(CombatId::new("c1").unwrap(), 7);
+        state.add_combatant(unit("hero", "player", 70, 70)).expect("hero");
+        state.add_combatant(unit("cultist", "enemy", 50, 50)).expect("the cultist");
+        let encounter = u32::from(
+            content
+                .lookup_in("enc_cultist", crate::content::EK_ENCOUNTER)
+                .expect("enc_cultist")
+                .index,
+        );
+        let draws = crate::battle::apply_spawn_rolls(&mut state, &content, encounter)
+            .expect("no rolls is not an error");
+        assert_eq!(draws, 0, "cultist declares `Rolls: []`");
+        assert_eq!(state.random_step, 0, "no draw ⇒ no step");
+    }
+
     #[test]
     fn regen_heals_at_the_end_of_the_turn() {
         // Wiki: Regen N = "at the end of your turn, heal N". Content trigger on `TurnEnded`.

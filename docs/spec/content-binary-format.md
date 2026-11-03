@@ -255,12 +255,19 @@ card / status / enemy_action / encounter / relic / map_node / event / shop / cha
 负控在 `native/negctl_184.py`：**基线绿 → bug①红（且点名 opcode 与字段）→ bug②红 → 清理回绿**。
 证据串因此多了一段：`... 1274 table rows, 6 term-shape checks over 5,038 terms`。
 
-## 7. 实现补充（2026-11-03）：`FORMAT_VERSION` 5
+## 7. 实现补充（2026-11-03）：`FORMAT_VERSION` 5 → 7
 
-`EACT` 从 7 格涨到 9 格（§187：`ProgramAsc` + `AscensionMin`），行宽 16 → 20 B：
+三条 schema 变更，每次一行：
 
-* `FORMAT_VERSION` 4 → 5，**旧镜像会被 `UnsupportedVersion` 直接拒绝**（不是尽力解析）；
-* `tools/contentc/expected_sha.txt` 因此必须重新钉（`verify_bytes.py --repin`）：编译器变了，
-  旧内容的产物字节必然移动。重钉之后 85 份语料与 4 条对拍仍是逐字节一致 —— 那是"格式变了、
-  语义没变"的证据；
-* 核心镜像（`roguedeck`）也涨了：85,616 → 87,192 B，全量 158,296 → 159,872 B。
+| 版本 | 变更 | `EACT` 格数 / 行宽 | 镜像（core / full） |
+|---|---|---|---|
+| 4 → 5 | `ProgramAsc` + `AscensionMin` 两格（§187） | 7 → 9 / 16 → 20 B | 85,616 → 87,192 / 158,296 → 159,872 |
+| 5 → 6 | `EV` 的四格换成四个效果**列表**（§188），行宽不变、含义变了 | 9 / 20 | 不变 |
+| 6 → 7 | `ProgramAsc` 变成**变体列表**，`AscensionMin` 格删掉（§192） | 9 → 8 / 20 → 16 B | 87,192 → 85,616 / 159,872 → 158,296 |
+
+* 旧镜像一律被 `UnsupportedVersion` **直接拒绝**（不是尽力解析）；
+* `tools/contentc/expected_sha.txt` 每次都得重新钉（`verify_bytes.py --repin`）：编译器变了，
+  旧内容的产物字节必然移动。§192 那次重钉之后 `native/card_specs.json`（对拍闸门真正读的东西）
+  **逐字节不变** —— 那是"格式变了、语义没变"的证据，而不是"重新钉一下让红变绿"；
+* ⚠️ §192 那次是**行宽回退**：同一张表先涨后跌。所以"`EACT` 是 16 B"这句话只有在版本 7 下成立，
+  读 `content-binary-format` 旧章节时别把两次数混起来。

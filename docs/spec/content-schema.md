@@ -669,22 +669,59 @@ $so = $p.StandardOutput.ReadToEnd(); $se = $p.StandardError.ReadToEnd(); $p.Wait
 ⇒ 形状判据现在由第 11 道闸门（`tools/rdcf_terms.py`）在**镜像层面**检查（§184）：
 除保留 opcode 5 自己，任何 opcode 的任何字段都不许声明成 `F_JSON`。
 
-## 9. 实现补充（2026-11-03）：`EACT` 的 ascension 维度
+## 9. 实现补充（2026-11-03）：`EACT` 的 ascension 维度（§192 起是**列表**）
 
-§2 的 `EACT` 有 7 格（`Id/NameKey/DescriptionKey/PackageId/Intent/Program/extra`）。§187 加了**两格**：
+§2 的 `EACT` 有 7 格（`Id/NameKey/DescriptionKey/PackageId/Intent/Program/extra`）。§187 加了
+`ProgramAsc` + `AscensionMin` 两格；§192 把那一对换成**一格列表**：
 
 | 格 | 类型 | 含义 |
 |---|---|---|
-| `ProgramAsc` | `F_TERM`（可空） | 升档后的节目，**与 `Program` 同形的信封**（`{Root, MaxProgramSteps, …}`），不是裸 `Root` |
-| `AscensionMin` | `F_INT`（`0` = 无） | 从哪一级起改用 `ProgramAsc`。`0` **不**表示"从 0 级起" |
+| `ProgramAsc` | `F_TERM`（可空） | **变体列表** `[{AscensionMin, Program}, …]`。每个 `Program` 是与 `Program` 格**同形的信封**（`{Root, MaxProgramSteps, …}`），不是裸 `Root` |
 
-行宽 7 → 9 格，stride 16 → 20，`FORMAT_VERSION` 4 → 5。
+行宽 7 → 9（§187）→ **8 格 / stride 16（§192）**，`FORMAT_VERSION` 4 → 5 → 7。
+
+**为什么不是"再加一对格"**：`jaw_worm.bellow` 的 Strength 在 A2 升、Block 在 A17 升
+（`native/wiki_asc/jaw_worm.txt:30`：`Gains (3;Asc|2|4;Asc|17|5) Strength. Gains (6;Asc|17|9) Block.`）。
+一对格只能装一个档位；两对格只能装两个；而列表的长度由内容决定。选择规则只有一条：
+**`AscensionMin <= ascension` 里阈值最大的那个**（顺序不参与判定），
+`AscensionMin` 为 `0` 的元素**永不生效**（`0` 是"没填"，不是"从 0 级起"）。
+"阈值升序且不重复"由 `native/sts_content_check.py` 的独立第二份钉住。
+
+⚠️ 语义上的一个变化：一个 A17 变体是**整段节目**，所以它必须**重复** A2 的改动再加自己的
+（上面 Bellow 的 A17 变体写的是 Strength 5 + Block 9，不是只写 Block 9）。
 
 **阈值写在内容里，不由内核推**：内核不知道一条遭遇来自哪个池（精英也可能出现在事件里），
 所以"普通 2 / 精英 3 / Boss 4"这条规则由内容作者按怪的种类填，招式表则是 17/18/19。
 
 另有一个新条件 `intent.ascensionAtLeast`（`{Value: n}`）：StS 的 A17/18/19 在源码里是每只怪
 `getMove` 里的一段 `if`，数据化引擎不能照抄；把那个 `if` 交给内容的 `IntentRule` 就行。
+
+## 9b. 实现补充（2026-11-03）：敌人记录里的 `Rolls`（§193）
+
+`ENCT[i].Enemies[j]` 多了一个键（**不是格** —— 敌人记录是 term 对象，加键不动任何 stride）：
+
+| 键 | 类型 | 含义 |
+|---|---|---|
+| `Rolls` | 列表 `[{Key, Min, Max, AscensionMin?}, …]` | 开局掷骰：`Key` 计数器在 `Min..=Max` 里抽一个值，写进**这个敌人** |
+
+这与 `ProgramAsc` 的阈值规则**故意方向相反**：那里的 `AscensionMin = 0` 是"没填"（永不生效），
+这里的缺席是"**这就是基础值**"。所以"忘了给 A2 那行填阈值"（两行都是 0）会被
+`Content::spawn_rolls` 当成**同键同阈值**而报错，而不是悄悄两行都生效。
+
+动作侧读它用的是参考**自己**的表达式 `combatantCounter(Selector, CounterId)` —— 没有新节点种类：
+
+```jsonc
+"Rolls": [{"Key": "roll.bite", "Min": 5, "Max": 7},
+          {"Key": "roll.bite", "Min": 6, "Max": 8, "AscensionMin": 2}]
+"Program": {"Root": {"kind": "node.dealDamage",
+                     "value": {"Amount": {"kind": "combatantCounter",
+                                          "value": {"Selector": {"kind": "sel.source", …},
+                                                    "CounterId": "roll.bite"}}}}}
+```
+
+一条**没有** `Rolls` 的记录与一条写着 `Rolls: []` 的记录是两个 opcode（opcode 按出现过的键集派生），
+所以 `EnemySpec::rolls()` 把"键缺席"读成**空列表**而不是错误 —— 否则 roguedeck 那份内容
+（一条都没有）整份读不出来。
 
 ## 10. 实现补充（2026-11-03）：事件的选项是**效果列表**
 

@@ -543,5 +543,6 @@
 
 §2 的 `G`-能力矩阵里，"A2/3/4 伤害"与 "A17/18/19 招式表"当时是"需要 `EACT` 加维度"。
 §187 把它加了：`EACT.ProgramAsc` + `AscensionMin`（两格）+ `intent.ascensionAtLeast`。
+§192 又把那两格换成**一格变体列表**（一个动作两个档位），`intent.ascensionAtLeast` 保持不变。
 当前内容接了 **13 个动作**（普通 4 / 精英 4 / Boss 3 / 招式表 2），剩下的由
 `native/gap_check.py` 报数：**没有 wiki 出处就不写数字**。

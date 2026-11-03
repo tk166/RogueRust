@@ -1515,6 +1515,40 @@ def spec_program_text(program: dict) -> str:
             + ";root=" + gen_card_specs.node_text(program["root"]) + ")")
 
 
+def counter_draw_reason(action: dict) -> str:
+    """Why this action's damage cannot be compared against the C# harness, or `""`.
+
+    §193: `louse_red.bite` / `darkling.nip` deal `amount = combatantCounter(source, roll.*)` -- the
+    number is drawn at **spawn** by `battle::apply_spawn_rolls`, which the C# harness does not call
+    (it builds its own fight and has no such concept). Both sides would therefore read an absent
+    counter as 0 and agree on "0 damage": a comparison that passes while testing nothing.
+
+    Rendered uncomparable on purpose, and counted in the denominator -- "not compared" is visible in
+    the summary line, whereas a silent 0-vs-0 would just look green. The detection is mechanical
+    (walk the program), so a *new* counter-based action shows up here without anyone remembering to
+    add it, and the content checker is what pins the ranges (`INV_ROLLS`).
+    """
+    found = []
+
+    def walk(node):
+        if isinstance(node, dict):
+            if node.get("kind") in ("node.dealDamage", "node.gainBlock", "node.heal"):
+                size = (node.get("value") or {}).get("Amount") or {}
+                if size.get("kind") == "combatantCounter":
+                    found.append(size["value"]["CounterId"])
+            for value in node.values():
+                walk(value)
+        elif isinstance(node, list):
+            for value in node:
+                walk(value)
+
+    walk(action["program"]["root"])
+    if not found:
+        return ""
+    return ("amount is `combatantCounter(%s)` -- drawn at spawn by the kernel, "
+            "which this harness does not do (it would compare 0 vs 0)" % ", ".join(sorted(found)))
+
+
 def enemy_layer_expected(action: dict, spec: dict, mirror: Mirror) -> dict:
     """一条敌人动作 → C# 侧该报出来的每一条事实。状态与形状都从 spec（= 镜像）派生。"""
     statuses = {status["id"]: status for status in spec["statuses"]}
@@ -1583,6 +1617,11 @@ def enemy_layer(oracle: Oracle, mirror: Mirror, spec: dict) -> tuple:
         if header.get("index") != str(action["index"]):
             raise GateFailure(f"`{action['id']}` 的头行 index={header.get('index')}，该是 {action['index']}")
         seed = int(header["seed"])
+        draw_reason = counter_draw_reason(action)
+        if draw_reason:
+            unavailable.append((action["id"], draw_reason))
+            print(f"enemy={action['id']:<56} index={action['index']:<3} NOT-COMPARED  {draw_reason}")
+            continue
         code = oracle.enemy_run(action["index"], seed)
         if code <= 0:
             reason = oracle.error()

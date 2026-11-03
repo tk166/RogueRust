@@ -135,16 +135,34 @@ def main():
     # ── §187: the ascension **data** (A2/A3/A4 numbers and the A17/18/19 move sets) ──────────────
     # 这几条不是运行层常量，而是内容侧的数字 + 内核的一个条件，所以上面的 `A_*` 扫描看不到它们。
     # 一份"实现了 A2/3/4"的声明如果没人核对，它会在下一次内容变更后变成谎话。
-    print("== ascension data (EACT.ProgramAsc, §187) ==")
+    print("== ascension data (EACT.ProgramAsc, §187/§192) ==")
+    # §192: `ProgramAsc` is a **list** `[{AscensionMin, Program}]`, so one action can appear at two
+    # thresholds. Counting actions and counting variants are now two different numbers on purpose.
     variants = [a for a in doc.get("EnemyActions") or [] if a.get("ProgramAsc")]
     by_tier = {}
+    total = 0
     for action in variants:
-        by_tier.setdefault(action.get("AscensionMin"), []).append(action["Id"])
-    print("  %d action(s) with an ascension variant" % len(variants))
+        for variant in action["ProgramAsc"]:
+            by_tier.setdefault(variant["AscensionMin"], []).append(action["Id"])
+            total += 1
+    print("  %d action(s) with an ascension variant, %d variant(s) in total"
+          % (len(variants), total))
     for tier in sorted(by_tier):
-        print("    A%-2s %s" % (tier, ", ".join(by_tier[tier])))
+        ids = by_tier[tier]
+        more = " (+%d repeated)" % (len(ids) - len(set(ids))) if len(ids) != len(set(ids)) else ""
+        print("    A%-2s %s%s" % (tier, ", ".join(sorted(set(ids))), more))
     missing = [a["Id"] for a in doc.get("EnemyActions") or [] if not a.get("ProgramAsc")]
     print("  without a variant: %d action(s) (the content has not sourced them yet)" % len(missing))
+
+    # §193: the spawn rolls (the wiki's "chosen at the start of combat" numbers).
+    print("== spawn rolls (ENCT.Enemies[].Rolls, §193) ==")
+    for encounter in doc.get("Encounters") or []:
+        for record in encounter["Enemies"]:
+            rolls = record.get("Rolls") or []
+            if rolls:
+                print("  %-14s %s" % (record["Id"], ", ".join(
+                    "%s %d-%d @A%d" % (r["Key"], r["Min"], r["Max"], r.get("AscensionMin", 0))
+                    for r in rolls)))
 
     print("== gates ==")
     accept = read(ACCEPT)

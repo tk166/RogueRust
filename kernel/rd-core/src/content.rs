@@ -47,9 +47,14 @@ pub const DIRECTORY_ENTRY_BYTES: usize = 12;
 /// 配 16 格的新内核会**解析成功并读出垃圾**（把旧的 `extra` 当 `Rarity`，`content.string`
 /// 碰巧拿到合法串号就返回一段像样的文本）。schema 变更必须响亮，所以版本号跟着 schema 走。
 /// 5: `EACT` gained `ProgramAsc` + `AscensionMin` (§187), so that row's stride moved 16 -> 20.
+
 /// 6: `EV` replaced its four `Effect*/Amount*` cells with four effect **lists** (§188): same
 ///    stride, different meaning -- a reader that kept version 5 would decode a term id as a string id.
-pub const FORMAT_VERSION: u16 = 6;
+/// 7: `EACT.ProgramAsc` became a **variant list** `[{AscensionMin, Program}]` and the single
+///    `AscensionMin` cell went away (§192), so that row's stride moved 20 -> 16. One action can now
+///    carry two thresholds (Jaw Worm's Bellow raises Strength at A2 *and* Block at A17); a reader
+///    that kept version 6 would read the list term id as if it were the one envelope.
+pub const FORMAT_VERSION: u16 = 7;
 /// 目录项数（头里 `nsec`）。0..=14 有名字，15..19 保留。
 pub const SECTION_COUNT: usize = 20;
 /// 头部 `flags` 的 bit0：表现层已剥（`content.core.rdcf`）。
@@ -142,6 +147,13 @@ pub const F_JSON: u8 = 7;
 /// 四条是**容量**，不是规则：超了就是内容错误（`ContentError::TooManyEventEffects`），
 /// **不截断** —— 截断会把"遗物 + 诅咒 + 金币"悄悄变成两条，而屏幕上仍然显示三条的文案。
 pub const MAX_EVENT_EFFECTS: usize = 4;
+
+/// §192：一条敌人动作最多带几个升档变体（`EACT.ProgramAsc` 列表的长度上限）。
+///
+/// 四条是**容量**，不是规则，而今天最多的一条只用了 2 条（`jaw_worm.bellow`：A2 与 A17）。超了
+/// 就是内容错误（[`crate::ir::IrError::List`]），**不截断** —— 截断意味着内容里写着一条内核永远不读的
+/// 档位，而屏幕上 / 战斗里都看不出来（§191 那张「内容里有而表里没有 ⇒ 红」的同一形状）。
+pub const MAX_ASC_VARIANTS: usize = 4;
 
 /// 字段类别 → 占几个 u16 槽（下标即类别；`[0]` 是无效类别）。
 pub const FIELD_SLOTS: [u8; 8] = [0, 1, 1, 1, 1, 2, 2, 1];
@@ -854,6 +866,158 @@ impl<'a> Content<'a> {
         EnctRow::new(self.row(Table::Encounter, index)?)
     }
 
+    /// 一条敌人动作在 `ascension` 级该用的**节目信封**（`EACT.ProgramAsc` 的变体列表，§192）。
+    ///
+    /// 列表元素是 `{AscensionMin, Program}`（term 对象）。选择规则只有一条：
+    /// **在 `AscensionMin <= ascension` 的元素里取阈值最大的那个**。
+    ///
+    /// 为什么要"最大的"而不是"第一个命中的"：列表是内容写的，而内容里元素的顺序是**作者
+    /// 顺手**的产物。按顺序取意味着"把 A17 那条往上挪一行"就悄悄换了难度 —— 而这种错在
+    /// 任何数值测试里都不会红（A17 的内容在 A2 下看起来"正常偏强"）。所以顺序不参与判定，
+    /// 由 `native/sts_content_check.py` 单独钉"阈值升序且不重复"。
+    ///
+    /// 没有变体、或所有阈值都高于 `ascension` ⇒ `Ok(None)`（调用方退回 `Program`）。
+    ///
+    /// # Errors
+    ///
+    /// * `ProgramAsc` 格不是 `_arr` ⇒ [`crate::ir::IrError::WrongKind`]（形状坏了，不是"没有变体"）；
+    /// * 元素不是对象 / `AscensionMin` 不是 int / `Program` 不是 term ⇒ [`crate::ir::IrError::WrongKind`]；
+    /// * 列表比 [`MAX_ASC_VARIANTS`] 长 ⇒ [`crate::ir::IrError::List`]（不截断：多出来的变体就是"内容写了
+    ///   一条内核永远不读的档位"）。
+    pub fn ascension_program(
+        &'a self,
+        action: EactRow<'a>,
+        ascension: i32,
+    ) -> Result<Option<crate::ir::NodeRef<'a>>, crate::ir::IrError> {
+        let cell = action.program_asc();
+        if cell == ABSENT16 || cell == NULL16 {
+            return Ok(None);
+        }
+        let term = self.term(cell).ok_or(crate::ir::IrError::Term(cell))?;
+        if term.op != OP_ARR {
+            return Err(crate::ir::IrError::WrongKind("ProgramAsc"));
+        }
+        let start = term.slot(0).ok_or(crate::ir::IrError::Slot)?;
+        let count = term.slot(1).ok_or(crate::ir::IrError::Slot)?;
+        if count == LIST_ABSENT || count == LIST_NULL {
+            return Ok(None);
+        }
+        if usize::from(count) > MAX_ASC_VARIANTS {
+            return Err(crate::ir::IrError::List);
+        }
+        let mut best: Option<(i32, crate::ir::NodeRef<'a>)> = None;
+        for index in 0..usize::from(count) {
+            let offset = start.checked_add(index as u16).ok_or(crate::ir::IrError::List)?;
+            let element = self.aux(offset).ok_or(crate::ir::IrError::List)?;
+            let element = crate::ir::NodeRef::new(self, element);
+            // 阈值为 0 的元素**永远不生效**（与 §187 同一条约定：0 是"没填"，不是"从 0 级起"）。
+            // 不静默跳过是不行的 —— 跳过会让"忘了填"变成"这条变体不存在"，看起来一切正常。
+            let threshold = element
+                .int_field("AscensionMin")?
+                .ok_or(crate::ir::IrError::Missing("AscensionMin"))?;
+            if threshold <= 0 || threshold > ascension {
+                continue;
+            }
+            let program = element
+                .node_field("Program")?
+                .ok_or(crate::ir::IrError::Missing("Program"))?;
+            match best {
+                Some((seen, _)) if seen >= threshold => {}
+                _ => best = Some((threshold, program)),
+            }
+        }
+        Ok(best.map(|(_, program)| program))
+    }
+
+    /// 一条敌人记录的**开局掷骰**，按 `ascension` 选好档位（§193）。
+    ///
+    /// 写进 `out`，返回条数。每个 `Key` 只留一条：`AscensionMin <= ascension` 里阈值最大的
+    /// 那一行（与 [`Self::ascension_program`] 同一条规则 —— 顺序不参与判定）。
+    ///
+    /// # Errors
+    ///
+    /// * 条目超过 [`MAX_SPAWN_ROLL_ENTRIES`] / 生效的键超过 [`MAX_SPAWN_ROLLS`] ⇒
+    ///   [`EncounterError::MalformedList`]（不截断）；
+    /// * `Key` 缺席、`Min` / `Max` 不是 int ⇒ [`EncounterError::WrongFieldKind`]；
+    /// * 两个**生效**条目用同一个 `Key` 且阈值相同 ⇒ [`EncounterError::MalformedList`]
+    ///   （"同一个键两个不同的范围"，选哪个都是猜）。
+    pub fn spawn_rolls(
+        &'a self,
+        spec: EnemySpec<'a>,
+        ascension: i32,
+        out: &mut [SpawnRoll<'a>; MAX_SPAWN_ROLLS],
+    ) -> Result<usize, EncounterError> {
+        let entries = spec.rolls()?;
+        if entries.len() > MAX_SPAWN_ROLL_ENTRIES {
+            return Err(EncounterError::MalformedList("Rolls"));
+        }
+        // 先把行读成 (key, min, max, threshold)，读不全就是内容坏了。
+        let mut raw: [(&'a str, i32, i32, i32); MAX_SPAWN_ROLL_ENTRIES] =
+            [("", 0, 0, 0); MAX_SPAWN_ROLL_ENTRIES];
+        let mut count = 0usize;
+        for index in 0..entries.len() {
+            let term = entries.term(index).ok_or(EncounterError::MalformedList("Rolls"))?;
+            let node = crate::ir::NodeRef::new(self, term);
+            let key = node
+                .str_field("Key")
+                .map_err(|_| EncounterError::WrongFieldKind("Rolls.Key"))?
+                .ok_or(EncounterError::MissingField("Rolls.Key"))?;
+            let min = node
+                .int_field("Min")
+                .map_err(|_| EncounterError::WrongFieldKind("Rolls.Min"))?
+                .ok_or(EncounterError::MissingField("Rolls.Min"))?;
+            let max = node
+                .int_field("Max")
+                .map_err(|_| EncounterError::WrongFieldKind("Rolls.Max"))?
+                .ok_or(EncounterError::MissingField("Rolls.Max"))?;
+            let threshold = node
+                .int_field("AscensionMin")
+                .map_err(|_| EncounterError::WrongFieldKind("Rolls.AscensionMin"))?
+                .unwrap_or(0);
+            raw[index] = (key, min, max, threshold);
+            count += 1;
+        }
+        // 每个键取阈值最大的生效行。
+        //
+        // ⚠️ 这里的 `0` 与 `ProgramAsc` 里的 `0` **含义相反**，是刻意的：一条动作变体的
+        // `AscensionMin = 0` 是"没填"（填错就是基础难度悄悄变难），而一条掷骰的
+        // `AscensionMin` 缺席是"**这条就是基础值**"（`{Key, Min, Max}` 才是最常见的写法）。
+        // 方向不同的两种错各有各的闸门：这里靠"同键同阈值两行 ⇒ 报错"，所以"忘了给 A2 那行
+        // 填阈值"（于是两行都是 0）当场红，不会被读成"两行都生效、随便挑一行"。
+        let mut written = 0usize;
+        for index in 0..count {
+            let (key, min, max, threshold) = raw[index];
+            if threshold > ascension {
+                continue;
+            }
+            let mut shadowed = false;
+            for other in 0..count {
+                if other == index {
+                    continue;
+                }
+                let (other_key, _, _, other_threshold) = raw[other];
+                if other_key != key || other_threshold > ascension {
+                    continue;
+                }
+                if other_threshold > threshold {
+                    shadowed = true;
+                } else if other_threshold == threshold {
+                    // 同一个键、同一个阈值、两行 —— 选哪一行都是猜。
+                    return Err(EncounterError::MalformedList("Rolls"));
+                }
+            }
+            if shadowed {
+                continue;
+            }
+            if written == MAX_SPAWN_ROLLS {
+                return Err(EncounterError::MalformedList("Rolls"));
+            }
+            out[written] = SpawnRoll { key, min, max };
+            written += 1;
+        }
+        Ok(written)
+    }
+
     /// 一条遭遇的**敌人名单**（`ENCT[index].Enemies`，每条是 id / 生命 / 动作 / 起始状态 / 规则）。
     ///
     /// 这是 `intent::select_action` 那个 `(遭遇, 槽位)` 入参的**内容侧来路**：
@@ -1486,8 +1650,8 @@ entity_row!(
 );
 
 entity_row!(
-    /// 敌人动作行（`EACT`，stride 16，7 格）。
-    EactRow, EnemyAction, EACT_SCHEMA, 20, 9, {
+    /// 敌人动作行（`EACT`，stride 16，8 格）。
+    EactRow, EnemyAction, EACT_SCHEMA, 16, 8, {
         /// `Id`（串号）。
         ("Id", F_STR, 0) => id => 0,
         /// `NameKey`（串号）。
@@ -1500,15 +1664,19 @@ entity_row!(
         ("Intent", F_TERM, 0) => intent => 4,
         /// `Program`（term 句柄）。
         ("Program", F_TERM, 0) => program => 5,
-        /// `ProgramAsc`（term 句柄，§187）：**升档后的节目**。与 `AscensionMin` 一起用。
-        ("ProgramAsc", F_TERM, 0) => program_asc => 6,
-        /// `AscensionMin`（`F_INT`，§187）：从哪一级起改用 `ProgramAsc`。`0` = 没有变体。
+        /// `ProgramAsc`（term 句柄，§192）：**升档变体列表** `[{AscensionMin, Program}, …]`。
         ///
-        /// 数值由**内容**写（普通 2 / 精英 3 / Boss 4；招式表则是 17/18/19），因为内核不知道
-        /// 这条遭遇来自哪个池 —— 而"猜一次"在第一次"精英出现在事件里"时就会错。
-        ("AscensionMin", F_INT, 0) => ascension_min => 7,
+        /// 每个元素的 `Program` 是与 `Program` 格**同形**的信封（`{Root, MaxProgramSteps, …}`），
+        /// 不是裸 `Root`（§187 踩过：塞 `Root` 进去 ⇒ 下一跳去 `node.dealDamage` 里找 `Root`）。
+        ///
+        /// 阈值（普通 2 / 精英 3 / Boss 4；招式表 17/18/19）由**内容**写，因为内核不知道这条
+        /// 遭遇来自哪个池 —— 而"猜一次"在第一次"精英出现在事件里"时就会错。
+        ///
+        /// ⚠️ §192 之前这里是"一个信封 + 一个 `AscensionMin` 格"。两格表达不了
+        /// "Strength @A2 且 Block @A17"，而**留着一个不再被读的格**等于留一份会漂的第二份真相。
+        ("ProgramAsc", F_TERM, 0) => program_asc => 6,
         /// schema 不认识的键（term 句柄）。
-        ("extra", F_TERM, 0) => extra => 8,
+        ("extra", F_TERM, 0) => extra => 7,
     }
 );
 
@@ -1641,6 +1809,33 @@ pub enum EncounterError {
     BadString(u16),
 }
 
+/// 一条敌人记录最多带几条"开局掷骰"（§193）。四条是**容量**，不是规则：超了报错，不截断。
+pub const MAX_SPAWN_ROLLS: usize = 4;
+
+/// 一条敌人记录在**内容里**能写几条掷骰条目（每个 `Key` 可以有多个升档档位）。
+///
+/// 比 [`MAX_SPAWN_ROLLS`] 大是刻意的：`MAX_SPAWN_ROLLS` 是"生效的键有几个"，
+/// 这个数是"内容里写了几行"（一个键 + 一个 A2 档位 = 2 行）。超了报错，不截断 ——
+/// 截断会让"我多写了一个档位"变成"这个档位不存在"，而屏幕上什么都看不出来。
+pub const MAX_SPAWN_ROLL_ENTRIES: usize = 2 * MAX_SPAWN_ROLLS;
+
+/// 一次掷骰的值域宽度上限（§193）。
+///
+/// [`crate::rng::shuffled_pick_index`] 的下标是 `u8`（"一堆牌，不是牌库"），所以 256 个可能值
+/// 就是抽签能覆盖的全部。超了**响亮失败**：把 `5..=300` 悄悄截成 `5..=260` 会让难度静默变低一档。
+pub const MAX_SPAWN_ROLL_SPAN: i32 = 255;
+
+/// 一条敌人记录里的一条"开局掷骰"（`ENCT[i].Enemies[j].Rolls[k]`，§193）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpawnRoll<'a> {
+    /// 计数器键。动作里的 `combatantCounter` 就是按这个键读。
+    pub key: &'a str,
+    /// 下界（**含**，`random(5, 7)` 是 5/6/7 三个值）。
+    pub min: i32,
+    /// 上界（**含**）。
+    pub max: i32,
+}
+
 /// 一段槽列表（`F_TERMLIST` 或 `F_STRLIST`）的借用视图：`(AUX 起址, 个数)`。
 ///
 /// ⚠️ **两种 kind 的格含义不同**：`F_STRLIST` 的格是**串号**（用 [`Self::string`]），
@@ -1671,6 +1866,19 @@ impl<'a> SlotList<'a> {
     #[must_use]
     pub const fn kind(&self) -> u8 {
         self.kind
+    }
+
+    /// 一个空列表（0 项）。
+    ///
+    /// `start` 是 0 而不是某个真实偏移：**空列表的起址槽在镜像里是垃圾值**（实测 146 条
+    /// `IntentRules` 就是这样存的），所以"空"必须是一种显式的构造，不能让调用方去读那个槽。
+    const fn empty(content: &'a Content<'a>) -> Self {
+        Self {
+            content,
+            start: 0,
+            count: 0,
+            kind: F_TERMLIST,
+        }
     }
 
     /// 第 `index` 格的原始值（**不解释含义**）。越界 `None`。
@@ -1753,6 +1961,19 @@ impl<'a> EnemySpec<'a> {
     /// （键 `Stacks` / `DurationTurns` / `Charges` / `Status`）。
     pub fn starting_statuses(&self) -> Result<SlotList<'a>, EncounterError> {
         self.list("StartingStatuses", F_TERMLIST)
+    }
+
+    /// `Rolls`（`F_TERMLIST`，§193）：开局掷骰的条目（键 `Key` / `Min` / `Max` / `AscensionMin`）。
+    ///
+    /// ⚠️ **键缺席是合法的**（= 这条记录不掷骰），不是"形态坏了"。opcode 是按**出现过的键集**
+    /// 派生的（`compile.py` 的 `Deriver`），所以一条没有 `Rolls` 的记录与一条有 `Rolls: []`
+    /// 的记录是**两个 opcode**；对前者 [Self::list] 只能报 `MissingField`。把"这个键在这条记录里
+    /// 不存在"当成错误，会让 roguedeck 那份内容（一条 `Rolls` 都没有）整份读不出来。
+    pub fn rolls(&self) -> Result<SlotList<'a>, EncounterError> {
+        match self.list("Rolls", F_TERMLIST) {
+            Err(EncounterError::MissingField("Rolls")) => Ok(SlotList::empty(self.content)),
+            other => other,
+        }
     }
 
     /// 这个记录的 term（opcode 的字段表决定了"键 → 槽"的映射）。
@@ -3140,11 +3361,11 @@ mod tests {
         (6, "AUX", 64328, 4156, 2078),
         (7, "CARD", 68484, 1984, 62),
         (8, "STAT", 70468, 920, 23),
-        (9, "EACT", 71388, 7880, 394),
-        (10, "ENCT", 79268, 1744, 109),
-        (11, "REL", 81012, 588, 49),
-        (12, "ROOT", 81600, 64, 16),
-        (13, "IDX", 81664, 5528, 691),
+        (9, "EACT", 71388, 6304, 394),
+        (10, "ENCT", 77692, 1744, 109),
+        (11, "REL", 79436, 588, 49),
+        (12, "ROOT", 80024, 64, 16),
+        (13, "IDX", 80088, 5528, 691),
         (14, "TAGS", 0, 0, 0),
     ];
 
@@ -3159,11 +3380,11 @@ mod tests {
         (6, "AUX", 133540, 7620, 3810),
         (7, "CARD", 141160, 1984, 62),
         (8, "STAT", 143144, 920, 23),
-        (9, "EACT", 144064, 7880, 394),
-        (10, "ENCT", 151944, 1744, 109),
-        (11, "REL", 153688, 588, 49),
-        (12, "ROOT", 154276, 68, 17),
-        (13, "IDX", 154344, 5528, 691),
+        (9, "EACT", 144064, 6304, 394),
+        (10, "ENCT", 150368, 1744, 109),
+        (11, "REL", 152112, 588, 49),
+        (12, "ROOT", 152700, 68, 17),
+        (13, "IDX", 152768, 5528, 691),
         (14, "TAGS", 0, 0, 0),
     ];
 
@@ -3467,7 +3688,7 @@ mod tests {
     #[test]
     fn the_core_image_matches_the_manifest() {
         with_core(|content, blob| {
-            assert_eq!(blob.len(), 87_192);
+            assert_eq!(blob.len(), 85_616);
             assert_eq!(content.total_size() as usize, blob.len());
             assert_eq!(content.version(), FORMAT_VERSION);
             assert_eq!(content.flags(), 1);
@@ -3525,7 +3746,7 @@ mod tests {
     #[test]
     fn the_full_image_also_reads() {
         let blob = read_image(FULL_IMAGE);
-        assert_eq!(blob.len(), 159_872);
+        assert_eq!(blob.len(), 158_296);
         let content = Content::parse(&blob).expect("full 镜像必须能解析");
         assert_eq!(content.flags(), 0);
         assert!(!content.presentation_stripped());
@@ -3619,7 +3840,7 @@ mod tests {
             // 行宽/格数：与 manifest 的 stride 和 rdcfmt 的 schema 一致。
             assert_eq!(Table::Card.stride(), 32);
             assert_eq!(Table::Status.stride(), 40);
-            assert_eq!(Table::EnemyAction.stride(), 20);
+            assert_eq!(Table::EnemyAction.stride(), 16);
             assert_eq!(Table::Encounter.stride(), 16);
             assert_eq!(Table::Relic.stride(), 12);
             assert_eq!(
@@ -3628,9 +3849,10 @@ mod tests {
                 "CARD 16 格 = 32 B（15 格时 30 B 也取整到 32：那一格是免费的）"
             );
             assert_eq!((StatusRow::STRIDE, StatusRow::CELLS), (40, 20));
-            // §187: EACT gained `ProgramAsc` + `AscensionMin` (7 -> 9 cells), so its stride is the
-            // first one in this list that is **not** 4-byte aligned on its own: align4(2 * 9) = 20.
-            assert_eq!((EactRow::STRIDE, EactRow::CELLS), (20, 9));
+            // §192: EACT's `ProgramAsc` became a list and the single `AscensionMin` cell went
+            // away (9 -> 8 cells), so the row is exactly 16 B again -- the one table in this list
+            // whose stride moved **twice** (7 cells/16 B -> 9/20 B in §187 -> 8/16 B here).
+            assert_eq!((EactRow::STRIDE, EactRow::CELLS), (16, 8));
             assert_eq!((EnctRow::STRIDE, EnctRow::CELLS), (16, 8));
             // §156: REL gained a `Rarity` cell (5 -> 6). The 12-byte stride already had the room;
             // `align4(2 * 6) = 12` still matches, which the loop below re-checks for every table.
@@ -3777,6 +3999,9 @@ mod tests {
             assert_eq!(ENCT_SCHEMA[0], cell("Id", F_STR, FLAG_WRAP_UPPER));
             assert_eq!(ENCT_SCHEMA[6], cell("CardsDrawnPerTurn", F_INT, 0));
             assert_eq!(EACT_SCHEMA[5], cell("Program", F_TERM, 0));
+            assert_eq!(EACT_SCHEMA[6], cell("ProgramAsc", F_TERM, 0));
+            assert_eq!(EACT_SCHEMA[7], cell("extra", F_TERM, 0));
+            assert_eq!(EACT_SCHEMA.len(), 8, "§192: no leftover `AscensionMin` cell");
             assert_eq!(REL_SCHEMA[2], cell("RunPrograms", F_TERM, 0));
             assert_eq!(Table::Card.schema().len(), 16);
             assert_eq!(Table::Status.schema().len(), 20);
@@ -3841,7 +4066,6 @@ mod tests {
                 ("Intent", action.intent()),
                 ("Program", action.program()),
                 ("ProgramAsc", action.program_asc()),
-                ("AscensionMin", action.ascension_min()),
                 ("extra", action.extra()),
             ] {
                 assert_eq!(action.row().cell_by_name(name), Some(got), "EACT.{name}");
@@ -4160,7 +4384,7 @@ mod tests {
         assert_eq!(content.card_rarity("slimed"), Some("Status"));
         assert_eq!(content.card_rarity("no_such_card"), None);
         assert_eq!((CardRow::STRIDE, CardRow::CELLS), (32, 16));
-        assert_eq!(FORMAT_VERSION, 6);
+        assert_eq!(FORMAT_VERSION, 7);
         assert_eq!(content.version(), FORMAT_VERSION);
         // The roguedeck image has no `Rarity` key at all: the cell is there and reads as absent,
         // which is `None` rather than an error.

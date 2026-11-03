@@ -331,8 +331,14 @@ v1 的范围（§2.1 IN）没有包含下面这些；它们是**内容逼出来�
 
 * `CombatState.ascension`（`u8`，建战斗时写一次）。它**不在规范文本里** —— 参考没有这个字段，
   写进去会移动全部 85 份语料；`hash_full` 落地时必须覆盖它。
-* `EACT.ProgramAsc` + `AscensionMin`：同一个动作的两份节目。
+* `EACT.ProgramAsc`：同一个动作的**变体列表** `[{AscensionMin, Program}]`（§192 起；之前是
+  "一个信封 + 一个阈值"，装不下两个档位）。取 `AscensionMin <= ascension` 里阈值最大的一个。
 * `intent.ascensionAtLeast`：让内容能"在 A18 以上用另一条规则"。
 
 所以 Ascension 对核心的影响**只在入口**：一个动作要么走基础节目、要么走变体，
 两者都是**已有的**执行器（`intent::execute_action` → `exec::execute`）。
+
+§193 另加一条：**开局掷骰**（`ENCT[i].Enemies[j].Rolls`）在建战斗时写进战斗员的计数器
+（`battle::apply_spawn_rolls`，每抽一次 `random_step += 1`），动作里的 `combatantCounter`
+读到它。规则本身不动 §2.1 —— 它只是给"伤害是多少"提供了一个**在第一次出招之前就固定**的值，
+这正是 wiki 的 *chosen at the start of combat*。

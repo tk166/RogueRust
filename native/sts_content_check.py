@@ -307,7 +307,9 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
-    "darkling.nip": ("Attack", [("damage", 7, "event")]),
+    # §193: `N = Number between (7-11;{{Asc|2|9-13}}), chosen at the start of combat` -- the amount
+    # is a counter the fight rolls at spawn, not a constant (the range lives in `INV_ROLLS`).
+    "darkling.nip": ("Attack", [("damage", ("counter", "roll.nip", "source"), "event")]),
     "darkling.chomp": ("Attack", [("damage", 8, "event"), ("damage", 8, "event")]),
     "maw.roar": ("Debuff", [("status", "standard.strength", 3, "source"),
                             ("status", "standard.weak", 2, "event")]),
@@ -346,7 +348,8 @@ INV_ACTIONS = {
                                      ("status", "standard.weak", 1, "event"),
                                      ("status", "standard.vulnerable", 1, "event")]),
     # §152: act 1's new enemies (wiki numbers).
-    "louse_red.bite": ("Attack", [("damage", 6, "event")]),
+    # §193: `N = Number between (5-7;{{Asc|2|6-8}}), chosen at the start of combat`.
+    "louse_red.bite": ("Attack", [("damage", ("counter", "roll.bite", "source"), "event")]),
     "louse_red.grow": ("Buff", [("status", "standard.strength", 3, "source")]),
     "louse_red.spit_web": ("Debuff", [("status", "standard.weak", 2, "event")]),
     "louse_green.bite": ("Attack", [("damage", 6, "event")]),
@@ -678,6 +681,10 @@ def tgt(selector):
 def amount(expr):
     if expr.get("kind") == "const":
         return expr["value"]["Value"]
+    if expr.get("kind") == "combatantCounter":
+        # §193: a damage/gain whose size is a **counter**. Spelled with its key *and* the selector,
+        # so "the wrong unit's counter" is a visible fact and not an interchangeable number.
+        return ("counter", expr["value"]["CounterId"], tgt(expr["value"]["Selector"]))
     return ("expr", expr.get("kind"))
 
 
@@ -946,98 +953,235 @@ def check_cards_and_actions(doc):
     ok("cards", "%d cards x (cost, tags, facts)" % len(INV_CARDS))
     ok("enemy actions", "%d actions x (intent, facts)" % len(INV_ACTIONS))
     check_ascension_variants(doc)
+    check_spawn_rolls(doc)
 
 
 # §187：`EACT.ProgramAsc` 的**独立第二份**。每一行都是 wiki 的数字（出处列在
 # `native/patch_187_content.py` 的表头），而不是从内容拄过来的 --
 # "从内容生成期望值"等于没有期望值。
 INV_ASC_VARIANTS = {
-    # action id: (AscensionMin, facts)
-    "blue_slaver.stab": (2, [("damage", 13, "event")]),
-    "blue_slaver.rake": (2, [("damage", 8, "event"), ("status", "standard.weak", 1, "event")]),
-    "slaver_red.stab": (2, [("damage", 14, "event")]),
-    "slaver_red.scrape": (2, [("damage", 9, "event"),
-                             ("status", "standard.vulnerable", 1, "event")]),
-    "lagavulin.attack": (3, [("damage", 20, "event")]),
-    "book_of_stabbing.multi_stab": (3, [("repeat", ("expr", "add"), "damage", 7, "event"),
-                                        ("counter", "book_stab_uses", 1, True, "source")]),
-    "book_of_stabbing.big_stab": (3, [("damage", 24, "event")]),
-    "taskmaster.scouring_whip": (3, [("damage", 7, "event"),
-                                     ("card", "wound", 2, "DiscardPile", "event")]),
-    "nemesis.tri_attack": (4, [("damage", 7, "event"), ("damage", 7, "event"),
-                               ("damage", 7, "event")]),
-    "nemesis.tri_burn": (19, [("card", "burn", 5, "DiscardPile", "event")]),
-    "reptomancer.spawn_dagger": (19, [("spawn", "dagger", 22), ("spawn", "dagger", 22)]),
-    "reptomancer.big_bite": (4, [("damage", 34, "event")]),
-    "reptomancer.snake_strike": (4, [("damage", 16, "event"), ("damage", 16, "event"),
-                                     ("status", "standard.weak", 1, "event")]),
-    "acid_slime_m.corrosive_spit": (2, [('damage', 8, 'event'), ('card', 'slimed', 1, 'DiscardPile', 'event')]),
-    "acid_slime_m.tackle": (2, [('damage', 12, 'event')]),
-    "acid_slime_s.tackle": (2, [('damage', 4, 'event')]),
-    "byrd.peck": (2, [('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event')]),
-    "byrd.swoop": (2, [('damage', 14, 'event')]),
-    "chosen.debilitate": (2, [('damage', 12, 'event'), ('status', 'standard.vulnerable', 2, 'event')]),
-    "cultist.incantation": (2, [('status', 'ritual', 4, 'source')]),
-    "fat_gremlin.smash": (2, [('damage', 5, 'event'), ('status', 'standard.weak', 1, 'event')]),
-    "fungi_beast.grow": (2, [('status', 'standard.strength', 4, 'source')]),
-    "gremlin_nob.bellow": (18, [('status', 'standard.strength', 3, 'source')]),
-    "gremlin_nob.rush": (3, [('damage', 16, 'event')]),
-    "gremlin_nob.skull_bash": (3, [('damage', 8, 'event'), ('status', 'standard.vulnerable', 2, 'event')]),
-    "gremlin_wizard.ultimate_blast": (2, [('damage', 30, 'event'), ('counter', 'gremlin_wizard_charges', 0, False, 'source')]),
-    "jaw_worm.bellow": (2, [('status', 'standard.strength', 4, 'source'), ('block', 6, 'source')]),
-    "jaw_worm.chomp": (2, [('damage', 12, 'event')]),
-    "louse_green.grow": (17, [('status', 'standard.strength', 4, 'source')]),
-    "louse_red.grow": (17, [('status', 'standard.strength', 4, 'source')]),
-    "orb_walker.claw": (2, [('damage', 16, 'event')]),
-    "orb_walker.laser": (2, [('damage', 11, 'event'), ('status', 'standard.weak', 2, 'event')]),
-    "sentry.beam": (3, [('damage', 10, 'event')]),
-    "shelled_parasite.double_strike": (2, [('damage', 7, 'event'), ('damage', 7, 'event')]),
-    "shelled_parasite.suck": (2, [('damage', 12, 'event'), ('block', 2, 'source')]),
-    "slime_boss.goop_spray": (19, [('card', 'slimed', 5, 'DiscardPile', 'event')]),
-    # §191：基础值修对之后，这六条终于可以有升档（数字仍是 wiki 那一格）。
-    "spiker.cut": (2, [("damage", 9, "event")]),
-    "the_champ.heavy_slash": (4, [("damage", 18, "event")]),
-    "chosen.poke": (2, [("damage", 6, "event"), ("damage", 6, "event")]),
-    "darkling.chomp": (2, [("damage", 9, "event"), ("damage", 9, "event")]),
-    "spire_growth.strategic": (2, [("status", "standard.constricted", 12, "event")]),
-    "sentry.bolt": (18, [("card", "dazed", 3, "DiscardPile", "event")]),
-    "slime_boss.slam": (4, [('damage', 38, 'event')]),
-    "sneaky_gremlin.puncture": (2, [('damage', 10, 'event')]),
-    "spike_slime_m.flame_tackle": (2, [('damage', 10, 'event'), ('card', 'slimed', 1, 'DiscardPile', 'event')]),
-    "spike_slime_s.tackle": (2, [('damage', 6, 'event')]),
-    "spire_growth.aggressive": (2, [('damage', 18, 'event')]),
-    "spire_growth.aggressive_heavy": (2, [('damage', 25, 'event')]),
+    # action id: [(AscensionMin, facts), ...] —— §192 起是**列表**：一个动作可以有两个档位
+    # （`jaw_worm.bellow` 的 Strength 在 A2 升、Block 在 A17 升）。单档位的动作仍然只写一项。
+    # 每一行都是 wiki 的数字；出处见 `native/wiki_asc/<monster>.txt`。
+    'acid_slime_m.corrosive_spit': [(2, [('damage', 8, 'event'), ('card', 'slimed', 1, 'DiscardPile', 'event')])],
+    'acid_slime_m.tackle': [(2, [('damage', 12, 'event')])],
+    'acid_slime_s.tackle': [(2, [('damage', 4, 'event')])],
+    'blue_slaver.rake': [(2, [('damage', 8, 'event'), ('status', 'standard.weak', 1, 'event')])],
+    'blue_slaver.stab': [(2, [('damage', 13, 'event')])],
+    'book_of_stabbing.big_stab': [(3, [('damage', 24, 'event')])],
+    'book_of_stabbing.multi_stab': [(3, [('repeat', ('expr', 'add'), 'damage', 7, 'event'), ('counter', 'book_stab_uses', 1, True, 'source')])],
+    'byrd.peck': [(2, [('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event')])],
+    'byrd.swoop': [(2, [('damage', 14, 'event')])],
+    'chosen.debilitate': [(2, [('damage', 12, 'event'), ('status', 'standard.vulnerable', 2, 'event')])],
+    'chosen.poke': [(2, [('damage', 6, 'event'), ('damage', 6, 'event')])],
+    'cultist.incantation': [(2, [('status', 'ritual', 4, 'source')])],
+    'darkling.chomp': [(2, [('damage', 9, 'event'), ('damage', 9, 'event')])],
+    'fat_gremlin.smash': [(2, [('damage', 5, 'event'), ('status', 'standard.weak', 1, 'event')])],
+    'fungi_beast.grow': [(2, [('status', 'standard.strength', 4, 'source')])],
+    'gremlin_nob.bellow': [(18, [('status', 'standard.strength', 3, 'source')])],
+    'gremlin_nob.rush': [(3, [('damage', 16, 'event')])],
+    'gremlin_nob.skull_bash': [(3, [('damage', 8, 'event'), ('status', 'standard.vulnerable', 2, 'event')])],
+    'gremlin_wizard.ultimate_blast': [(2, [('damage', 30, 'event'), ('counter', 'gremlin_wizard_charges', 0, False, 'source')])],
+    'jaw_worm.bellow': [
+        (2, [('status', 'standard.strength', 4, 'source'), ('block', 6, 'source')]),
+        (17, [('status', 'standard.strength', 5, 'source'), ('block', 9, 'source')]),
+    ],
+    'jaw_worm.chomp': [(2, [('damage', 12, 'event')])],
+    'lagavulin.attack': [(3, [('damage', 20, 'event')])],
+    'louse_green.grow': [(17, [('status', 'standard.strength', 4, 'source')])],
+    'louse_red.grow': [(17, [('status', 'standard.strength', 4, 'source')])],
+    'nemesis.tri_attack': [(4, [('damage', 7, 'event'), ('damage', 7, 'event'), ('damage', 7, 'event')])],
+    'nemesis.tri_burn': [(19, [('card', 'burn', 5, 'DiscardPile', 'event')])],
+    'orb_walker.claw': [(2, [('damage', 16, 'event')])],
+    'orb_walker.laser': [(2, [('damage', 11, 'event'), ('status', 'standard.weak', 2, 'event')])],
+    'reptomancer.big_bite': [(4, [('damage', 34, 'event')])],
+    'reptomancer.snake_strike': [(4, [('damage', 16, 'event'), ('damage', 16, 'event'), ('status', 'standard.weak', 1, 'event')])],
+    'reptomancer.spawn_dagger': [(19, [('spawn', 'dagger', 22), ('spawn', 'dagger', 22)])],
+    'sentry.beam': [(3, [('damage', 10, 'event')])],
+    'sentry.bolt': [(18, [('card', 'dazed', 3, 'DiscardPile', 'event')])],
+    'shelled_parasite.double_strike': [(2, [('damage', 7, 'event'), ('damage', 7, 'event')])],
+    'shelled_parasite.suck': [(2, [('damage', 12, 'event'), ('block', 2, 'source')])],
+    'slaver_red.scrape': [(2, [('damage', 9, 'event'), ('status', 'standard.vulnerable', 1, 'event')])],
+    'slaver_red.stab': [(2, [('damage', 14, 'event')])],
+    'slime_boss.goop_spray': [(19, [('card', 'slimed', 5, 'DiscardPile', 'event')])],
+    'slime_boss.slam': [(4, [('damage', 38, 'event')])],
+    'sneaky_gremlin.puncture': [(2, [('damage', 10, 'event')])],
+    'spike_slime_m.flame_tackle': [(2, [('damage', 10, 'event'), ('card', 'slimed', 1, 'DiscardPile', 'event')])],
+    'spike_slime_s.tackle': [(2, [('damage', 6, 'event')])],
+    'spiker.cut': [(2, [('damage', 9, 'event')])],
+    'spire_growth.aggressive': [(2, [('damage', 18, 'event')])],
+    'spire_growth.aggressive_heavy': [(2, [('damage', 25, 'event')])],
+    'spire_growth.strategic': [(2, [('status', 'standard.constricted', 12, 'event')])],
+    'taskmaster.scouring_whip': [(3, [('damage', 7, 'event'), ('card', 'wound', 2, 'DiscardPile', 'event')])],
+    'the_champ.heavy_slash': [(4, [('damage', 18, 'event')])],
 }
 
 
+# §193: the wiki's damage ranges, as an **independent second copy**.
+#
+#   native/wiki_asc/louse.txt:28      Deals N damage. N between (5-7;{{Asc|2|6-8}}), chosen at the
+#                                     start of combat.
+#   native/wiki_asc/darkling.txt:32   Deals N damage. N between (7-11;{{Asc|2|9-13}}), chosen at
+#                                     the start of combat.
+#
+# enemy record id: [(Key, Min, Max, AscensionMin), ...]  -- `AscensionMin` absent = the base range.
+INV_ROLLS = {
+    "louse_red": [("roll.bite", 5, 7, 0), ("roll.bite", 6, 8, 2)],
+    "darkling": [("roll.nip", 7, 11, 0), ("roll.nip", 9, 13, 2)],
+}
+
+# §193: actions that exist in `EACT` but that **no enemy record lists**. They must not be converted
+# to a counter read -- a counter nobody rolls reads 0, and 0 damage is a landmine that the
+# ENEMY_DIFF harness cannot see (it runs every `EACT` row against a synthesised `<prefix>` enemy).
+# The day one of these gets a record, this table goes red and forces the roll to be written too.
+INV_UNWIRED = {"louse_green.bite", "louse_green.grow"}
+
+
 def check_ascension_variants(doc):
-    """§187：**每一条**升档节目都必须被上面那张表钉住，且与基础节目**不同**。"""
-    print("[7] ascension variants (port-plan.md §187)")
+    """§187/§192：**每一条**升档节目都必须被上面那张表钉住，且与基础节目、别的变体**都不同**。"""
+    print("[7] ascension variants (port-plan.md §187/§192)")
     actions = {a["Id"]: a for a in doc.get("EnemyActions") or []}
-    for aid, (threshold, facts) in INV_ASC_VARIANTS.items():
+    total = 0
+    for aid, entries in INV_ASC_VARIANTS.items():
         action = actions.get(aid)
         if action is None:
             fail("asc." + aid, "action missing")
             continue
-        if "ProgramAsc" not in action:
+        variants = action.get("ProgramAsc")
+        if variants is None:
             fail("asc." + aid, "no ProgramAsc")
             continue
-        if action.get("AscensionMin") != threshold:
-            fail("asc." + aid, "AscensionMin %r, inv says %r"
-                 % (action.get("AscensionMin"), threshold))
-        got = program_facts(action["ProgramAsc"]["Root"])
-        if got != facts:
-            fail("asc." + aid, "facts %s, inv says %s" % (got, facts))
-        # 一个"变体"如果与基础一模一样，它就是一个**没有症状的错字**：
-        # 战斗照跑、数字看起来合理，而难度从来没动过。
-        if got == program_facts(action["Program"]["Root"]):
-            fail("asc." + aid, "variant facts equal the base -- this ascension does nothing")
+        if not isinstance(variants, list) or not variants:
+            fail("asc." + aid, "ProgramAsc must be a non-empty **list** (%r)" % (variants,))
+            continue
+        # 阈值：内容写的这几个必须**正好**是表里那几个（多一个 = 没人钉过的档位）。
+        thresholds = []
+        for index, variant in enumerate(variants):
+            keys = set(variant) if isinstance(variant, dict) else set()
+            if keys != {"AscensionMin", "Program"}:
+                fail("asc." + aid, "variant[%d] keys %r" % (index, sorted(keys)))
+                break
+            thresholds.append(variant["AscensionMin"])
+        if len(thresholds) != len(variants):
+            continue
+        if sorted(thresholds) != [t for t, _ in entries]:
+            fail("asc." + aid, "thresholds %r, inv says %r"
+                 % (thresholds, [t for t, _ in entries]))
+            continue
+        if thresholds != sorted(set(thresholds)):
+            fail("asc." + aid, "thresholds %r are not strictly ascending/unique -- the kernel "
+                               "picks the largest eligible, so order must not be load-bearing"
+                 % (thresholds,))
+        # 事实：每个档位各自与表比；而且**没有两个档位讲同一个故事**。
+        seen = [program_facts(action["Program"]["Root"])]
+        for variant, (threshold, facts) in zip(variants, entries):
+            got = program_facts(variant["Program"]["Root"])
+            if got != facts:
+                fail("asc." + aid + ".A%d" % threshold,
+                     "facts %s, inv says %s" % (got, facts))
+            if got in seen:
+                fail("asc." + aid + ".A%d" % threshold,
+                     "identical to the base or to an earlier variant -- this tier does nothing")
+            seen.append(got)
+            total += 1
     # 反向：内容里有而表里没有的变体也不行（"没人钉过的数字"）。
     unknown = sorted(aid for aid, action in actions.items()
-                     if "ProgramAsc" in action and aid not in INV_ASC_VARIANTS)
+                     if action.get("ProgramAsc") and aid not in INV_ASC_VARIANTS)
     if unknown:
         fail("asc.unknown", "variants not pinned by the inventory: %s" % unknown)
-    ok("ascension variants", "%d variants pinned (A2/A3/A4 + A17-A19)" % len(INV_ASC_VARIANTS))
+    ok("ascension variants", "%d variants over %d actions pinned (A2/A3/A4 + A17-A19)"
+       % (total, len(INV_ASC_VARIANTS)))
+
+
+def check_spawn_rolls(doc):
+    """§193: 每条计数器读取都必须被**列出这条动作的那个敌人的**掷骰覆盖。"""
+    print("[7b] spawn rolls (port-stage/§193)")
+    records = {}
+    for encounter in doc.get("Encounters") or []:
+        for record in encounter["Enemies"]:
+            records.setdefault(record["Id"], []).append(record)
+
+    # ① 记录侧的形态：只有表里的敌人掷骰，而且范围/档位逐个对得上。
+    for record_id, group in records.items():
+        for record in group:
+            rolls = record.get("Rolls")
+            if rolls is None:
+                fail("roll." + record_id, "the record has no `Rolls` key (shape drift)")
+                continue
+            got = [(r["Key"], r["Min"], r["Max"], r.get("AscensionMin", 0)) for r in rolls]
+            want = INV_ROLLS.get(record_id, [])
+            if got != want:
+                fail("roll." + record_id, "%r, inv says %r" % (got, want))
+            # 值域必须能被一次 `shuffled_pick_index` 覆盖（下标是 u8），而且 Min 不许比 Max 大。
+            for key, low, high, threshold in got:
+                if high < low:
+                    fail("roll." + record_id, "`%s`: Max %d < Min %d" % (key, high, low))
+                if high - low + 1 > 255:
+                    fail("roll." + record_id,
+                         "`%s`: %d values do not fit the u8 pick index" % (key, high - low + 1))
+                if threshold < 0:
+                    fail("roll." + record_id, "`%s`: negative AscensionMin" % key)
+            # 同一个 Key 的阈值必须严格升序（与 `ProgramAsc` 同一条规矩：顺序不参与判定，
+            # 但"两行同阈值"选谁都是猜）。
+            by_key = {}
+            for key, _, _, threshold in got:
+                by_key.setdefault(key, []).append(threshold)
+            for key, thresholds in by_key.items():
+                if thresholds != sorted(set(thresholds)):
+                    fail("roll." + record_id,
+                         "`%s`: thresholds %r are not strictly ascending/unique" % (key, thresholds))
+    unknown = sorted(record_id for record_id in INV_ROLLS if record_id not in records)
+    if unknown:
+        fail("roll.unknown", "inventory names enemies that are not in the content: %s" % unknown)
+
+    # ② 程序侧：每个计数器读取都必须是**列这条动作的记录**掷过的键。
+    actions = {a["Id"]: a for a in doc.get("EnemyActions") or []}
+    readers = 0
+    for record_id, group in records.items():
+        for record in group:
+            rolled = {r["Key"] for r in record.get("Rolls") or []}
+            for action_id in record["Actions"]:
+                action_id = action_id["value"] if isinstance(action_id, dict) else action_id
+                program = actions.get(action_id)
+                if program is None:
+                    fail("roll." + action_id, "record lists an action that is not in EACT")
+                    continue
+                for fact in program_facts(program["Program"]["Root"]):
+                    # 事实的形状是 ("damage", amount, target)；amount 是 3 元组才是计数器读取。
+                    if fact[0] not in ("damage", "block", "heal"):
+                        continue
+                    size = fact[1]
+                    if not isinstance(size, tuple) or size[0] != "counter":
+                        continue
+                    readers += 1
+                    if size[2] != "source":
+                        fail("roll." + action_id,
+                             "reads a counter from `%s`, not from itself" % size[2])
+                    if size[1] not in rolled:
+                        fail("roll." + action_id,
+                             "reads `%s` but `%s` never rolls it (damage would be 0)" % (size[1], record_id))
+
+    # ③ 反向：没有敌人记录的动作**不许**读计数器（见 `INV_UNWIRED` 的理由）。
+    listed = set()
+    for record in records.values():
+        for action_ids in record:
+            for action_id in action_ids["Actions"]:
+                listed.add(action_id["value"] if isinstance(action_id, dict) else action_id)
+    for action_id, action in actions.items():
+        if action_id in listed:
+            continue
+        for fact in program_facts(action["Program"]["Root"]):
+            if fact[0] in ("damage", "block", "heal") and isinstance(fact[1], tuple) \
+                    and fact[1][0] == "counter":
+                fail("roll.unwired." + action_id,
+                     "unreachable action reads a counter nobody rolls")
+    for action_id in INV_UNWIRED:
+        if action_id in listed:
+            fail("roll.wired." + action_id,
+                 "this action now has an enemy record -- give it a roll and drop it from INV_UNWIRED")
+    ok("spawn rolls", "%d ranges over %d enemies, %d counter reads wired"
+       % (sum(len(v) for v in INV_ROLLS.values()), len(INV_ROLLS), readers))
+
 
 def check_statuses(doc):
     print("[4] status rows (inv:§10)")

@@ -41,15 +41,22 @@ source_sha256 = 96d064c2cced72d1d21d8eb7e09bf081709dc2f966bc9f93118dea5608124073
 source_bytes = 8291305
 
 full_name = content.rdcf
-full_sha256 = 5d15b5c0b4e9ec00b67936f195145be6f303f6bf65189fa91abbabafde58c908
-full_bytes = 159872
+full_sha256 = ee2a779a4919a311ec6deccaf1b077124704617fc18217d61db4de9f2e34aa3b
+full_bytes = 158296
 
 core_name = content.core.rdcf
-core_sha256 = 5a649267376419e03fe8b32a887f2b6fa4074347dc07723a9b50581d70539c86
-core_bytes = 87192
+core_sha256 = db398a45bfd26b76de757150212fc8f4b89f1fe53e13a41832520bcf086185c5
+core_bytes = 85616
 
 # The two images above were produced by compile.py at git HEAD (before the
 # multi-package change) and re-verified reproducible on 2026-10-20: a fresh
 # in-process compile from the untouched source reproduces both SHAs exactly
 # (manifest.json / report.md are NOT pinned -- they embed timings and the
 # absolute source path).
+#
+# RE-PIN 2 (port-plan §192): `EACT` went from 9 cells back to 8 -- the single `AscensionMin` cell was
+# replaced by a **variant list** inside `ProgramAsc` (one action can now carry two thresholds), so the
+# row stride moved 20 -> 16 and every section after `EACT` shifted by -1576 B (394 rows x 4). The
+# *source document* did not change (its hash still matches) and neither did what these images say:
+# `native/card_specs.json` -- the thing the cross-language gates actually read -- regenerates
+# byte-identically, which is why this re-pin is safe rather than a hole in the safety net.

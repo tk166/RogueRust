@@ -1,6 +1,6 @@
 {
   "format": "RDCF",
-  "format_version": 6,
+  "format_version": 7,
   "magic": "0x46434452",
   "source": {
     "path": "D:\\Vibe\\sts-tui\\ref\\RogueDeck-Core\\src\\RogueDeck.Sandbox.Run\\SampleContent\\bureaucrats.roguedeck.json",
@@ -11,8 +11,8 @@
     "compact_json_without_redundant_children": 921704
   },
   "totals": {
-    "content.rdcf": 159872,
-    "content.core.rdcf": 87192
+    "content.rdcf": 158296,
+    "content.core.rdcf": 85616
   },
   "header_bytes": 32,
   "directory_bytes": 240,
@@ -41,7 +41,7 @@
     },
     "enemy_actions": {
       "count": 394,
-      "stride": 20
+      "stride": 16
     },
     "encounters": {
       "count": 109,
@@ -69,7 +69,7 @@
   "variants": {
     "full": {
       "file": "content.rdcf",
-      "bytes": 159872,
+      "bytes": 158296,
       "flags": 0,
       "sections": [
         {
@@ -139,34 +139,34 @@
           "id": 9,
           "name": "EACT",
           "offset": 144064,
-          "bytes": 7880,
+          "bytes": 6304,
           "count": 394
         },
         {
           "id": 10,
           "name": "ENCT",
-          "offset": 151944,
+          "offset": 150368,
           "bytes": 1744,
           "count": 109
         },
         {
           "id": 11,
           "name": "REL",
-          "offset": 153688,
+          "offset": 152112,
           "bytes": 588,
           "count": 49
         },
         {
           "id": 12,
           "name": "ROOT",
-          "offset": 154276,
+          "offset": 152700,
           "bytes": 68,
           "count": 17
         },
         {
           "id": 13,
           "name": "IDX",
-          "offset": 154344,
+          "offset": 152768,
           "bytes": 5528,
           "count": 691
         },
@@ -195,7 +195,7 @@
     },
     "core": {
       "file": "content.core.rdcf",
-      "bytes": 87192,
+      "bytes": 85616,
       "flags": 1,
       "sections": [
         {
@@ -265,34 +265,34 @@
           "id": 9,
           "name": "EACT",
           "offset": 71388,
-          "bytes": 7880,
+          "bytes": 6304,
           "count": 394
         },
         {
           "id": 10,
           "name": "ENCT",
-          "offset": 79268,
+          "offset": 77692,
           "bytes": 1744,
           "count": 109
         },
         {
           "id": 11,
           "name": "REL",
-          "offset": 81012,
+          "offset": 79436,
           "bytes": 588,
           "count": 49
         },
         {
           "id": 12,
           "name": "ROOT",
-          "offset": 81600,
+          "offset": 80024,
           "bytes": 64,
           "count": 16
         },
         {
           "id": 13,
           "name": "IDX",
-          "offset": 81664,
+          "offset": 80088,
           "bytes": 5528,
           "count": 691
         },
@@ -321,10 +321,10 @@
     }
   },
   "timing_seconds": {
-    "json_load": 0.0633,
-    "derive": 0.1323,
-    "encode": 0.1802,
-    "serialize": 0.0272
+    "json_load": 0.065,
+    "derive": 0.1473,
+    "encode": 0.2075,
+    "serialize": 0.0297
   },
   "peak_heap_mib": 29.3
 }

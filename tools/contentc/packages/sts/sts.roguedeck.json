@@ -4533,35 +4533,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 6
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 6
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "fat_gremlin.smash",
@@ -4631,66 +4635,70 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 5
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.applyStatus",
                     "value": {
-                      "Value": 5
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.weak"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.applyStatus",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "StatusDefinitionId": {
-                    "value": "standard.weak"
-                  },
-                  "Stacks": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 1
-                    }
-                  },
-                  "DurationTurns": 0,
-                  "Charges": 0,
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "sneaky_gremlin.puncture",
@@ -4729,35 +4737,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 10
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 10
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "blue_slaver.stab",
@@ -4796,35 +4808,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 13
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 13
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "blue_slaver.rake",
@@ -4894,66 +4910,70 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 8
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.applyStatus",
                     "value": {
-                      "Value": 8
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.weak"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.applyStatus",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "StatusDefinitionId": {
-                    "value": "standard.weak"
-                  },
-                  "Stacks": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 1
-                    }
-                  },
-                  "DurationTurns": 0,
-                  "Charges": 0,
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "acid_slime_s.tackle",
@@ -4992,35 +5012,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 4
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 4
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "acid_slime_s.lick",
@@ -5130,65 +5154,69 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 8
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.createCardInstance",
                     "value": {
-                      "Value": 8
+                      "CardDefinitionId": {
+                        "value": "slimed"
+                      },
+                      "Count": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "ToZone": "DiscardPile",
+                      "ResultKey": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.createCardInstance",
-                "value": {
-                  "CardDefinitionId": {
-                    "value": "slimed"
-                  },
-                  "Count": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 1
-                    }
-                  },
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "ToZone": "DiscardPile",
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "acid_slime_m.tackle",
@@ -5227,35 +5255,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 12
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 12
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "acid_slime_m.lick",
@@ -5365,65 +5397,69 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 10
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.createCardInstance",
                     "value": {
-                      "Value": 10
+                      "CardDefinitionId": {
+                        "value": "slimed"
+                      },
+                      "Count": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "ToZone": "DiscardPile",
+                      "ResultKey": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.createCardInstance",
-                "value": {
-                  "CardDefinitionId": {
-                    "value": "slimed"
-                  },
-                  "Count": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 1
-                    }
-                  },
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "ToZone": "DiscardPile",
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "spike_slime_m.lick",
@@ -5503,35 +5539,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 12
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 12
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "jaw_worm.thrash",
@@ -5663,64 +5703,128 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.applyStatus",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.source",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.applyStatus",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "Source"
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.strength"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 4
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
                     }
                   },
-                  "StatusDefinitionId": {
-                    "value": "standard.strength"
-                  },
-                  "Stacks": {
-                    "kind": "const",
+                  {
+                    "kind": "node.gainBlock",
                     "value": {
-                      "Value": 4
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 6
+                        }
+                      },
+                      "ResultKey": null
                     }
-                  },
-                  "DurationTurns": 0,
-                  "Charges": 0,
-                  "ResultKey": null
-                }
-              },
-              {
-                "kind": "node.gainBlock",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.source",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "Source"
-                    }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 6
-                    }
-                  },
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
         },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        {
+          "AscensionMin": 17,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.strength"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 5
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.gainBlock",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 9
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     },
     {
       "Id": "cultist.incantation",
@@ -5762,38 +5866,42 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.applyStatus",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.source",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.applyStatus",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "Source"
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "ritual"
+                },
+                "Stacks": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 4
+                  }
+                },
+                "DurationTurns": 0,
+                "Charges": 0,
+                "ResultKey": null
               }
             },
-            "StatusDefinitionId": {
-              "value": "ritual"
-            },
-            "Stacks": {
-              "kind": "const",
-              "value": {
-                "Value": 4
-              }
-            },
-            "DurationTurns": 0,
-            "Charges": 0,
-            "ResultKey": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "cultist.dark_strike",
@@ -5922,64 +6030,68 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 30
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.setCombatantCounter",
                     "value": {
-                      "Value": 30
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "gremlin_wizard_charges"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 0
+                        }
+                      },
+                      "Relative": false
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.setCombatantCounter",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.source",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "Source"
-                    }
-                  },
-                  "CounterId": {
-                    "value": "gremlin_wizard_charges"
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 0
-                    }
-                  },
-                  "Relative": false
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "sentry.bolt",
@@ -6020,37 +6132,41 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.createCardInstance",
-          "value": {
-            "CardDefinitionId": {
-              "value": "dazed"
+      "ProgramAsc": [
+        {
+          "AscensionMin": 18,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
             },
-            "Count": {
-              "kind": "const",
+            "Root": {
+              "kind": "node.createCardInstance",
               "value": {
-                "Value": 3
+                "CardDefinitionId": {
+                  "value": "dazed"
+                },
+                "Count": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 3
+                  }
+                },
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "ToZone": "DiscardPile",
+                "ResultKey": null
               }
             },
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
-              }
-            },
-            "ToZone": "DiscardPile",
-            "ResultKey": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 18
+        }
+      ]
     },
     {
       "Id": "sentry.beam",
@@ -6096,42 +6212,46 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 3,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 10
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 10
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 3
+        }
+      ]
     },
     {
       "Id": "slime_boss.goop_spray",
@@ -6179,44 +6299,48 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.createCardInstance",
-                "value": {
-                  "CardDefinitionId": {
-                    "value": "slimed"
-                  },
-                  "Count": {
-                    "kind": "const",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 19,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.createCardInstance",
                     "value": {
-                      "Value": 5
+                      "CardDefinitionId": {
+                        "value": "slimed"
+                      },
+                      "Count": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 5
+                        }
+                      },
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "ToZone": "DiscardPile",
+                      "ResultKey": null
                     }
-                  },
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "ToZone": "DiscardPile",
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 19
+        }
+      ]
     },
     {
       "Id": "slime_boss.preparing",
@@ -6285,42 +6409,46 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 4,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 38
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 38
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 4
+        }
+      ]
     },
     {
       "Id": "time_eater.reverberate",
@@ -6601,61 +6729,65 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 12
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.gainBlock",
                     "value": {
-                      "Value": 12
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "ResultKey": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.gainBlock",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.source",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "Source"
-                    }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 2
-                    }
-                  },
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "shelled_parasite.double_strike",
@@ -6722,63 +6854,67 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 7
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Value": 7
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 7
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 7
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "chosen.poke",
@@ -6845,63 +6981,67 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 6
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Value": 6
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 6
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 6
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "chosen.debilitate",
@@ -6971,66 +7111,70 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 12
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.applyStatus",
                     "value": {
-                      "Value": 12
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.vulnerable"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.applyStatus",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "StatusDefinitionId": {
-                    "value": "standard.vulnerable"
-                  },
-                  "Stacks": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 2
-                    }
-                  },
-                  "DurationTurns": 0,
-                  "Charges": 0,
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "byrd.peck",
@@ -7160,147 +7304,151 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Value": 1
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Value": 1
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Value": 1
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 1
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 1
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 1
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "byrd.swoop",
@@ -7339,35 +7487,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 14
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 14
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "spiker.cut",
@@ -7406,35 +7558,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 9
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 9
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "spiker.spike",
@@ -7568,66 +7724,70 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 11
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.applyStatus",
                     "value": {
-                      "Value": 11
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.weak"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.applyStatus",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "StatusDefinitionId": {
-                    "value": "standard.weak"
-                  },
-                  "Stacks": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 2
-                    }
-                  },
-                  "DurationTurns": 0,
-                  "Charges": 0,
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "orb_walker.claw",
@@ -7666,35 +7826,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 16
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 16
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "the_champ.heavy_slash",
@@ -7733,35 +7897,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 4,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 18
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 18
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 4
+        }
+      ]
     },
     {
       "Id": "the_champ.defensive_stance",
@@ -8161,10 +8329,10 @@
       "Id": "darkling.nip",
       "PackageId": "sts",
       "NameKey": "Nip",
-      "DescriptionKey": "Nip - 7 damage",
+      "DescriptionKey": "Nip - 7-11 damage",
       "Intent": {
         "Kind": "Attack",
-        "Label": "Nip - 7 damage"
+        "Label": "Nip - 7-11 damage"
       },
       "Program": {
         "Id": {
@@ -8181,9 +8349,16 @@
               }
             },
             "Amount": {
-              "kind": "const",
+              "kind": "combatantCounter",
               "value": {
-                "Value": 7
+                "Selector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "CounterId": "roll.nip"
               }
             },
             "ResultKey": null,
@@ -8260,63 +8435,67 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 9
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Value": 9
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 9
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 9
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "maw.roar",
@@ -8582,38 +8761,42 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.applyStatus",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.applyStatus",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.constricted"
+                },
+                "Stacks": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 12
+                  }
+                },
+                "DurationTurns": 0,
+                "Charges": 0,
+                "ResultKey": null
               }
             },
-            "StatusDefinitionId": {
-              "value": "standard.constricted"
-            },
-            "Stacks": {
-              "kind": "const",
-              "value": {
-                "Value": 12
-              }
-            },
-            "DurationTurns": 0,
-            "Charges": 0,
-            "ResultKey": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "spire_growth.aggressive",
@@ -8652,35 +8835,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 18
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 18
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "spire_growth.aggressive_heavy",
@@ -8719,44 +8906,48 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 25
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 25
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "louse_red.bite",
       "PackageId": "sts",
       "NameKey": "Bite",
-      "DescriptionKey": "Bite - 6 damage",
+      "DescriptionKey": "Bite - 5-7 damage",
       "Intent": {
         "Kind": "Attack",
-        "Label": "Bite - 6 damage"
+        "Label": "Bite - 5-7 damage"
       },
       "Program": {
         "Id": {
@@ -8773,9 +8964,16 @@
               }
             },
             "Amount": {
-              "kind": "const",
+              "kind": "combatantCounter",
               "value": {
-                "Value": 6
+                "Selector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "CounterId": "roll.bite"
               }
             },
             "ResultKey": null,
@@ -8827,38 +9025,42 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.applyStatus",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.source",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 17,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.applyStatus",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "Source"
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.strength"
+                },
+                "Stacks": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 4
+                  }
+                },
+                "DurationTurns": 0,
+                "Charges": 0,
+                "ResultKey": null
               }
             },
-            "StatusDefinitionId": {
-              "value": "standard.strength"
-            },
-            "Stacks": {
-              "kind": "const",
-              "value": {
-                "Value": 4
-              }
-            },
-            "DurationTurns": 0,
-            "Charges": 0,
-            "ResultKey": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 17
+        }
+      ]
     },
     {
       "Id": "louse_red.spit_web",
@@ -8979,38 +9181,42 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.applyStatus",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.source",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 17,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.applyStatus",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "Source"
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.strength"
+                },
+                "Stacks": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 4
+                  }
+                },
+                "DurationTurns": 0,
+                "Charges": 0,
+                "ResultKey": null
               }
             },
-            "StatusDefinitionId": {
-              "value": "standard.strength"
-            },
-            "Stacks": {
-              "kind": "const",
-              "value": {
-                "Value": 4
-              }
-            },
-            "DurationTurns": 0,
-            "Charges": 0,
-            "ResultKey": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 17
+        }
+      ]
     },
     {
       "Id": "fungi_beast.bite",
@@ -9090,38 +9296,42 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.applyStatus",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.source",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.applyStatus",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "Source"
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.strength"
+                },
+                "Stacks": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 4
+                  }
+                },
+                "DurationTurns": 0,
+                "Charges": 0,
+                "ResultKey": null
               }
             },
-            "StatusDefinitionId": {
-              "value": "standard.strength"
-            },
-            "Stacks": {
-              "kind": "const",
-              "value": {
-                "Value": 4
-              }
-            },
-            "DurationTurns": 0,
-            "Charges": 0,
-            "ResultKey": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "slaver_red.stab",
@@ -9160,35 +9370,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 14
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 14
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "slaver_red.scrape",
@@ -9258,66 +9472,70 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 9
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.applyStatus",
                     "value": {
-                      "Value": 9
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.vulnerable"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.applyStatus",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "StatusDefinitionId": {
-                    "value": "standard.vulnerable"
-                  },
-                  "Stacks": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 1
-                    }
-                  },
-                  "DurationTurns": 0,
-                  "Charges": 0,
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 2
+        }
+      ]
     },
     {
       "Id": "gremlin_nob.bellow",
@@ -9359,38 +9577,42 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.applyStatus",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.source",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 18,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.applyStatus",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "Source"
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.strength"
+                },
+                "Stacks": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 3
+                  }
+                },
+                "DurationTurns": 0,
+                "Charges": 0,
+                "ResultKey": null
               }
             },
-            "StatusDefinitionId": {
-              "value": "standard.strength"
-            },
-            "Stacks": {
-              "kind": "const",
-              "value": {
-                "Value": 3
-              }
-            },
-            "DurationTurns": 0,
-            "Charges": 0,
-            "ResultKey": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 18
+        }
+      ]
     },
     {
       "Id": "gremlin_nob.rush",
@@ -9429,35 +9651,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 3,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 16
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 16
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 3
+        }
+      ]
     },
     {
       "Id": "gremlin_nob.skull_bash",
@@ -9527,66 +9753,70 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 3,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 8
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.applyStatus",
                     "value": {
-                      "Value": 8
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.vulnerable"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.applyStatus",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "StatusDefinitionId": {
-                    "value": "standard.vulnerable"
-                  },
-                  "Stacks": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 2
-                    }
-                  },
-                  "DurationTurns": 0,
-                  "Charges": 0,
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 3
+        }
+      ]
     },
     {
       "Id": "lagavulin.sleep",
@@ -9648,35 +9878,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 3,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 20
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 20
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 3
+        }
+      ]
     },
     {
       "Id": "lagavulin.siphon_soul",
@@ -9840,93 +10074,97 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.repeat",
-                "value": {
-                  "Count": {
-                    "kind": "add",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 3,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.repeat",
                     "value": {
-                      "Left": {
-                        "kind": "currentTurn",
+                      "Count": {
+                        "kind": "add",
                         "value": {
-                          "Selector": {
-                            "kind": "sel.source",
+                          "Left": {
+                            "kind": "currentTurn",
                             "value": {
-                              "Cardinality": "ZeroOrOne",
-                              "RequiredContextCapabilities": "Source"
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              }
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 1
                             }
                           }
                         }
                       },
-                      "Right": {
-                        "kind": "const",
+                      "Body": {
+                        "kind": "node.dealDamage",
                         "value": {
-                          "Value": 1
+                          "TargetSelector": {
+                            "kind": "sel.eventTarget",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "EventTarget"
+                            }
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 7
+                            }
+                          },
+                          "ResultKey": null,
+                          "IgnoresBlock": false,
+                          "Element": null
                         }
-                      }
+                      },
+                      "MaxCount": 32
                     }
                   },
-                  "Body": {
-                    "kind": "node.dealDamage",
+                  {
+                    "kind": "node.setCombatantCounter",
                     "value": {
                       "TargetSelector": {
-                        "kind": "sel.eventTarget",
+                        "kind": "sel.source",
                         "value": {
                           "Cardinality": "ZeroOrOne",
-                          "RequiredContextCapabilities": "EventTarget"
+                          "RequiredContextCapabilities": "Source"
                         }
+                      },
+                      "CounterId": {
+                        "value": "book_stab_uses"
                       },
                       "Amount": {
                         "kind": "const",
                         "value": {
-                          "Value": 7
+                          "Value": 1
                         }
                       },
-                      "ResultKey": null,
-                      "IgnoresBlock": false,
-                      "Element": null
+                      "Relative": true
                     }
-                  },
-                  "MaxCount": 32
-                }
-              },
-              {
-                "kind": "node.setCombatantCounter",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.source",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "Source"
-                    }
-                  },
-                  "CounterId": {
-                    "value": "book_stab_uses"
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 1
-                    }
-                  },
-                  "Relative": true
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 3
+        }
+      ]
     },
     {
       "Id": "book_of_stabbing.big_stab",
@@ -9965,35 +10203,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 3,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 24
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 24
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 3
+        }
+      ]
     },
     {
       "Id": "taskmaster.scouring_whip",
@@ -10062,65 +10304,69 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 3,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 7
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.createCardInstance",
                     "value": {
-                      "Value": 7
+                      "CardDefinitionId": {
+                        "value": "wound"
+                      },
+                      "Count": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "ToZone": "DiscardPile",
+                      "ResultKey": null
                     }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.createCardInstance",
-                "value": {
-                  "CardDefinitionId": {
-                    "value": "wound"
-                  },
-                  "Count": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 2
-                    }
-                  },
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "ToZone": "DiscardPile",
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 3
+        }
+      ]
     },
     {
       "Id": "nemesis.tri_attack",
@@ -10208,84 +10454,88 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 4,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 7
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Value": 7
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 7
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 7
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 7
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 7
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 4
+        }
+      ]
     },
     {
       "Id": "nemesis.tri_burn",
@@ -10326,37 +10576,41 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.createCardInstance",
-          "value": {
-            "CardDefinitionId": {
-              "value": "burn"
+      "ProgramAsc": [
+        {
+          "AscensionMin": 19,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
             },
-            "Count": {
-              "kind": "const",
+            "Root": {
+              "kind": "node.createCardInstance",
               "value": {
-                "Value": 5
+                "CardDefinitionId": {
+                  "value": "burn"
+                },
+                "Count": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 5
+                  }
+                },
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "ToZone": "DiscardPile",
+                "ResultKey": null
               }
             },
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
-              }
-            },
-            "ToZone": "DiscardPile",
-            "ResultKey": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 19
+        }
+      ]
     },
     {
       "Id": "nemesis.scythe",
@@ -10425,47 +10679,51 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.createCombatant",
-                "value": {
-                  "DefinitionId": "dagger",
-                  "TeamId": "enemy",
-                  "Health": {
-                    "kind": "const",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 19,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.createCombatant",
                     "value": {
-                      "Value": 22
+                      "DefinitionId": "dagger",
+                      "TeamId": "enemy",
+                      "Health": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 22
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "kind": "node.createCombatant",
+                    "value": {
+                      "DefinitionId": "dagger",
+                      "TeamId": "enemy",
+                      "Health": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 22
+                        }
+                      }
                     }
                   }
-                }
-              },
-              {
-                "kind": "node.createCombatant",
-                "value": {
-                  "DefinitionId": "dagger",
-                  "TeamId": "enemy",
-                  "Health": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 22
-                    }
-                  }
-                }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 19
+        }
+      ]
     },
     {
       "Id": "reptomancer.big_bite",
@@ -10504,35 +10762,39 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 4,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
               "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 34
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
               }
             },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 34
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 4
+        }
+      ]
     },
     {
       "Id": "reptomancer.snake_strike",
@@ -10623,87 +10885,91 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "ProgramAsc": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.sequence",
-          "value": {
-            "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+      "ProgramAsc": [
+        {
+          "AscensionMin": 4,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 16
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "Amount": {
-                    "kind": "const",
+                  {
+                    "kind": "node.dealDamage",
                     "value": {
-                      "Value": 16
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 16
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
                     }
                   },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
+                  {
+                    "kind": "node.applyStatus",
                     "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.weak"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
                     }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 16
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
-              {
-                "kind": "node.applyStatus",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "StatusDefinitionId": {
-                    "value": "standard.weak"
-                  },
-                  "Stacks": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 1
-                    }
-                  },
-                  "DurationTurns": 0,
-                  "Charges": 0,
-                  "ResultKey": null
-                }
+                  }
+                ]
               }
-            ]
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
           }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "AscensionMin": 4
+        }
+      ]
     },
     {
       "Id": "dagger.wound",
@@ -10849,7 +11115,8 @@
               "Priority": 10
             }
           ],
-          "DisplayName": "Cultist"
+          "DisplayName": "Cultist",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -10888,7 +11155,8 @@
           "StartingStatuses": [],
           "Position": null,
           "IntentRules": [],
-          "DisplayName": "Jaw Worm"
+          "DisplayName": "Jaw Worm",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -10934,7 +11202,8 @@
           ],
           "Position": null,
           "IntentRules": [],
-          "DisplayName": "Acid Slime (M)"
+          "DisplayName": "Acid Slime (M)",
+          "Rolls": []
         },
         {
           "Id": "spike_slime_s",
@@ -10954,7 +11223,8 @@
           ],
           "Position": null,
           "IntentRules": [],
-          "DisplayName": "Spike Slime (S)"
+          "DisplayName": "Spike Slime (S)",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -10997,7 +11267,8 @@
           ],
           "Position": null,
           "IntentRules": [],
-          "DisplayName": "Sentry"
+          "DisplayName": "Sentry",
+          "Rolls": []
         },
         {
           "Id": "sentry_2",
@@ -11020,7 +11291,8 @@
           ],
           "Position": null,
           "IntentRules": [],
-          "DisplayName": "Sentry"
+          "DisplayName": "Sentry",
+          "Rolls": []
         },
         {
           "Id": "sentry_3",
@@ -11043,7 +11315,8 @@
           ],
           "Position": null,
           "IntentRules": [],
-          "DisplayName": "Sentry"
+          "DisplayName": "Sentry",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11123,7 +11396,8 @@
               "Priority": 20
             }
           ],
-          "DisplayName": "Slime Boss"
+          "DisplayName": "Slime Boss",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11183,7 +11457,8 @@
           ],
           "Position": 0,
           "DisplayName": "Time Eater",
-          "MaxHealth": 456
+          "MaxHealth": 456,
+          "Rolls": []
         }
       ],
       "CardsDrawnPerTurn": null,
@@ -11219,7 +11494,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Shelled Parasite"
+          "DisplayName": "Shelled Parasite",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11255,7 +11531,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Chosen"
+          "DisplayName": "Chosen",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11291,7 +11568,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Byrd"
+          "DisplayName": "Byrd",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11334,7 +11612,8 @@
           ],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Spiker"
+          "DisplayName": "Spiker",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11370,7 +11649,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Orb Walker"
+          "DisplayName": "Orb Walker",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11409,7 +11689,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "The Champ"
+          "DisplayName": "The Champ",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11455,7 +11736,8 @@
           ],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Gremlin Leader"
+          "DisplayName": "Gremlin Leader",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11498,7 +11780,8 @@
           ],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Giant Head"
+          "DisplayName": "Giant Head",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11541,7 +11824,20 @@
           ],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Darkling"
+          "DisplayName": "Darkling",
+          "Rolls": [
+            {
+              "Key": "roll.nip",
+              "Min": 7,
+              "Max": 11
+            },
+            {
+              "Key": "roll.nip",
+              "Min": 9,
+              "Max": 13,
+              "AscensionMin": 2
+            }
+          ]
         },
         {
           "Id": "darkling",
@@ -11564,7 +11860,20 @@
           ],
           "Position": 1,
           "IntentRules": [],
-          "DisplayName": "Darkling"
+          "DisplayName": "Darkling",
+          "Rolls": [
+            {
+              "Key": "roll.nip",
+              "Min": 7,
+              "Max": 11
+            },
+            {
+              "Key": "roll.nip",
+              "Min": 9,
+              "Max": 13,
+              "AscensionMin": 2
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -11603,7 +11912,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Maw"
+          "DisplayName": "Maw",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11643,7 +11953,8 @@
           ],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Fat Gremlin"
+          "DisplayName": "Fat Gremlin",
+          "Rolls": []
         },
         {
           "Id": "sneaky_gremlin",
@@ -11656,7 +11967,8 @@
           "StartingStatuses": [],
           "Position": 1,
           "IntentRules": [],
-          "DisplayName": "Sneaky Gremlin"
+          "DisplayName": "Sneaky Gremlin",
+          "Rolls": []
         },
         {
           "Id": "gremlin_wizard",
@@ -11686,7 +11998,8 @@
               "Priority": 10
             }
           ],
-          "DisplayName": "Gremlin Wizard"
+          "DisplayName": "Gremlin Wizard",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11736,7 +12049,8 @@
               "Priority": 10
             }
           ],
-          "DisplayName": "Spire Growth"
+          "DisplayName": "Spire Growth",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11775,7 +12089,20 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Red Louse"
+          "DisplayName": "Red Louse",
+          "Rolls": [
+            {
+              "Key": "roll.bite",
+              "Min": 5,
+              "Max": 7
+            },
+            {
+              "Key": "roll.bite",
+              "Min": 6,
+              "Max": 8,
+              "AscensionMin": 2
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -11811,7 +12138,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Fungi Beast"
+          "DisplayName": "Fungi Beast",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11847,7 +12175,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Slaver"
+          "DisplayName": "Slaver",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11886,7 +12215,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Gremlin Nob"
+          "DisplayName": "Gremlin Nob",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11943,7 +12273,8 @@
               "Priority": 10
             }
           ],
-          "DisplayName": "Lagavulin"
+          "DisplayName": "Lagavulin",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -11979,7 +12310,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Book of Stabbing"
+          "DisplayName": "Book of Stabbing",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -12012,7 +12344,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Taskmaster"
+          "DisplayName": "Taskmaster",
+          "Rolls": []
         },
         {
           "Id": "slaver_red",
@@ -12028,7 +12361,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Red Slaver"
+          "DisplayName": "Red Slaver",
+          "Rolls": []
         },
         {
           "Id": "blue_slaver",
@@ -12051,7 +12385,8 @@
           ],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Blue Slaver"
+          "DisplayName": "Blue Slaver",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -12097,7 +12432,8 @@
           ],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Nemesis"
+          "DisplayName": "Nemesis",
+          "Rolls": []
         }
       ],
       "HeroResources": [
@@ -12136,7 +12472,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Reptomancer"
+          "DisplayName": "Reptomancer",
+          "Rolls": []
         },
         {
           "Id": "dagger",
@@ -12152,7 +12489,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Dagger"
+          "DisplayName": "Dagger",
+          "Rolls": []
         },
         {
           "Id": "dagger",
@@ -12168,7 +12506,8 @@
           "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
-          "DisplayName": "Dagger"
+          "DisplayName": "Dagger",
+          "Rolls": []
         }
       ],
       "HeroResources": [

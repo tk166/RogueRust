@@ -686,6 +686,12 @@ fn build_session_at(
     //
     // Without this, round 1 rendered as an empty hand -- faithful to the reference DSL, wrong for the
     // game, and it looked exactly like a bug.
+    // §193: the wiki's variable damage is "chosen at the start of combat" (Louse Bite 5-7,
+    // Darkling Nip 7-11), so the roll happens here -- after the combatants exist and before the
+    // first turn -- and the action program reads it with the reference's own `combatantCounter`.
+    // One draw per roll, `random_step += 1`, so the RNG ledger still says exactly what happened.
+    rd_core::battle::apply_spawn_rolls(&mut session.state, content, encounter)
+        .map_err(|e| format!("apply_spawn_rolls: {:?}", e))?;
     // §175b: apply the encounter's `StartingStatuses` **before** the first turn starts.
     apply_starting_statuses(&mut session, content, encounter)?;
     start_first_turn(&mut session.state, &standard, &mut session.host)
@@ -3095,6 +3101,53 @@ mod tests {
         let written = unsafe { rd_env_observe_into(out.as_mut_ptr()) };
         assert_eq!(written as usize, len, "observe_into must write the whole vector");
         out
+    }
+
+    /// §193: the page's fight builder really draws the louse's `roll.bite`.
+    ///
+    /// The kernel test (`host::tests::a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action`)
+    /// proves the roll is constant per fight and in the wiki's range, but it calls
+    /// `apply_spawn_rolls` itself -- so "the browser goes through that path" was untested. Here two
+    /// fights are built through the **real** entry point with the same seed and the same deck: the
+    /// only difference between them is that one encounter names an enemy with a `Rolls` entry.
+    ///
+    /// What is compared: the RNG step (`+1`, and only one), and the counter itself -- read off the
+    /// combatant, so a "rolled but not stored" build fails here rather than showing up as 0 damage
+    /// in a fight nobody is staring at.
+    #[test]
+    fn building_a_louse_fight_draws_its_bite_and_a_cultist_fight_does_not() {
+        let louse = build_session_at(11, "enc_louse", 70, None, 0, 0).expect("the louse fight builds");
+        let cultist =
+            build_session_at(11, "enc_cultist", 70, None, 0, 0).expect("the cultist fight builds");
+        assert_eq!(
+            louse.state.random_step,
+            cultist.state.random_step + 1,
+            "exactly one draw (the louse's bite); shuffle and the first draw are identical in both"
+        );
+        let id = rd_core::state::CombatantId::new("louse_red").expect("a usable id");
+        let name = rd_core::state::CounterId::new("roll.bite").expect("a usable counter id");
+        let value = louse
+            .state
+            .combatant(&id)
+            .expect("the louse is in the fight")
+            .counters()
+            .iter()
+            .find(|counter| counter.key == name)
+            .map(|counter| counter.value);
+        let value = value.expect("`roll.bite` must be on the combatant");
+        assert!(
+            (5..=7).contains(&value),
+            "A0 louse bite is 5-7 (wiki), got {value}"
+        );
+        assert!(
+            cultist
+                .state
+                .combatant(&rd_core::state::CombatantId::new("cultist").expect("a usable id"))
+                .expect("the cultist is in the fight")
+                .counters()
+                .is_empty(),
+            "the cultist declares `Rolls: []` -- no counter may appear"
+        );
     }
 
     /// The intent text of an enemy slot, the way the page reads it.

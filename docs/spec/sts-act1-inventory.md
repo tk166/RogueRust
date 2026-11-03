@@ -375,6 +375,11 @@
 渲染页会把 `1×5` 与升档上标糊成 `1×52`）。逐条的数字与本表一致，由内容门
 （`native/sts_content_check.py` 的 `INV_ASC_VARIANTS`）**独立**钉住。
 
+可变伤害（`louse_*.bite` 的 5-7 / 6-8、`darkling.nip` 的 7-11 / 9-13）在 §193 落地：
+数字是 `ENCT` 敌人记录里的 `Rolls`（"chosen at the start of combat"），动作读
+`combatantCounter`。`louse_green.bite` 仍是常量 6 —— 这份内容没有 `louse_green` 敌人记录，
+把它改成计数器读取等于埋一个"0 伤害"的地雷（内容门用 `INV_UNWIRED` 钉住这件事）。
+
 §191 修掉了 8 条**基础值**与 wiki 不一致的招式并给它们补了升档（`spiker.cut`、`chosen.poke`、
 `darkling.chomp`、`the_champ.heavy_slash` / `execute`、`gremlin_leader.slash`、`sentry.bolt`、
 `spire_growth.strategic`）；剩下 `giant_head.*`（320 HP 简化版）与 `maw.*`（wiki 无页）
@@ -425,8 +430,9 @@
 | `reptomancer.big_bite` | A4 |
 | `reptomancer.snake_strike` | A4 |
 
-> `jaw_worm.bellow` 有两个档位（Strength @A2、Block @A17），而 `ProgramAsc` 每行只有一个 ⇒
-> 变体带的是较早那个，Block 那一半写在内容的注释里。
+> §192 起 `ProgramAsc` 是**变体列表**，所以 `jaw_worm.bellow` 的两个档位都在：A2 是
+> Strength 4 + Block 6，A17 是 Strength 5 + Block 9（A17 那一条**重复**了 A2 的改动 ——
+> 变体是整段节目，只有阈值最大的一条生效）。
 > `byrd.peck` 的升档是"多一段"（5 段 → 6 段），内容里多段攻击是**展开写**的，所以变体是序列里多一个
 > `dealDamage`，不是改数字。
 

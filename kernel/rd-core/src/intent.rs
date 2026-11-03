@@ -116,8 +116,7 @@
 //! 钉着（149 个敌人 × round 1..=5 ⇒ 740 个 `Ok(Some)` + 5 个 `Err`）。
 
 use crate::content::{
-    Content, Row, Table, ABSENT16, ABSENT_INT, EK_EACTION, F_TERM, LIST_ABSENT, LIST_NULL, NULL16,
-    NULL_INT, OP_ARR,
+    Content, Row, Table, ABSENT16, EK_EACTION, F_TERM, LIST_ABSENT, LIST_NULL, NULL16, OP_ARR,
 };
 use crate::exec::{self, ExecContext, ExecError, ExecStats};
 use crate::ir::{IrError, NodeRef};
@@ -963,45 +962,25 @@ pub fn execute_action(
     //    放在读信封之前：请求已经入队了才轮到处理器读内容，与参考同序。
     let _request_chain = state.create_root_effect_chain();
 
-    // §187：升档后的节目。`ProgramAsc` 有值且 `ascension >= AscensionMin` 时用它，
-    // 否则用 `Program`。两个格都在 `EACT` 行上，所以"同一个招式换数值"不需要再写一条动作。
+    // §192：升档节目是一张**变体列表**（`[{AscensionMin, Program}, …]`），不是"一个信封 +
+    // 一个阈值"。理由：一个招式可能有两个档位（`jaw_worm.bellow` 的 Strength 在 A2 升、
+    // Block 在 A17 升），两格表达不了 —— §190 当时只能让较早的那个赢。
     //
-    // ⚠️ `AscensionMin` 为 0 时**不能**当成"从 0 级开始用 ProgramAsc" —— 那会让
-    // "忘了填 AscensionMin" 的内容在基础难度下就变难。所以判据是两个条件同时成立。
+    // 判定全在 `Content::ascension_program` 里（"阈值 ≤ 等级的里面取最大的"），这里只做一件事：
+    // 没有变体就退回 `Program`。**顺序不参与判定**，所以内容里把 A17 那条写在前面也不会
+    // 悄悄换档；"阈值必须升序且不重复"由内容门的独立第二份钉住（`sts_content_check.py`）。
+    //
+    // ⚠️ 变体是**与 `Program` 同形的信封**（`{Root, MaxProgramSteps, …}`），不是裸 `Root`：
+    // §187 第一版塞了 `Root`，于是下一句 `envelope.node_field("Root")` 去 `node.dealDamage`
+    // 里找 `Root`，当场 `Missing("Root")`。选的是"用哪个信封"，不是"用哪个 Root"。
     let envelope = {
         let base = envelope(content, action_row)?;
-        // ⚠️ 两个新格在 **EACT 行**上，不在节目信封里：信封是 `Program` 指向的那个 term
-        // （`{Root, MaxProgramSteps, …}`），而"从哪一级开始换节目"是**动作**的属性。
-        // 第一版写成 `base.int_field(…)`，于是永远读不到（内容里的格要么被忽略、要么报错）。
         let row = content
             .enemy_action(action_row)
             .ok_or(IntentError::Missing("EACT row"))?;
-        // F_INT 的两个哨兵是 `0x8000`/`x8001`（"缺席"/"null"），与 0 不是一回事。
-        let raw = row.ascension_min();
-        let threshold = if raw == ABSENT_INT || raw == NULL_INT {
-            0
-        } else {
-            i32::from(raw as i16)
-        };
-        let handle = row.program_asc();
-        if threshold > 0
-            && i32::from(state.ascension()) >= threshold
-            && handle != ABSENT16
-            && handle != NULL16
-        {
-            // `ProgramAsc` 指向的是与 `Program` **同形**的信封（`{Root, MaxProgramSteps, …}`），
-            // 所以 "取 `Root`" 走同一条路；`Root` 缺席就当作没有变体（而不是发一个空节目）。
-            // `ProgramAsc` **就是**信封本身（与 `Program` 同形）：这里选的是"用哪个信封"，
-            // 不是"用哪个 Root"。⚠️ 第一版返回了 `variant.Root`，于是后面那句
-            // `envelope.node_field("Root")` 去 `node.dealDamage` 里找 `Root` —— 当场 `Missing("Root")`。
-            let variant = crate::ir::NodeRef::new(content, handle);
-            if variant.node_field("Root")?.is_some() {
-                variant
-            } else {
-                base
-            }
-        } else {
-            base
+        match content.ascension_program(row, i32::from(state.ascension()))? {
+            Some(variant) => variant,
+            None => base,
         }
     };
     let root = envelope

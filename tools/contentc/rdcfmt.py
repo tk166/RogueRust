@@ -161,7 +161,7 @@ MAGIC = 0x46434452          # b'RDCF'
 # 5: `EACT` gained `ProgramAsc` + `AscensionMin` (§187), so that row's stride moved 16 -> 20.
 # 6: `EV` replaced its four `Effect*/Amount*` cells with four effect **lists** (§188); same stride,
 #    different meaning.
-FORMAT_VERSION = 6
+FORMAT_VERSION = 7
 HEADER_SIZE = 32
 NSEC = 20
 
@@ -269,8 +269,10 @@ STATUS_ROW = [
 EACT_ROW = [
     ("Id", F_STR, 0), ("NameKey", F_STR, 0), ("DescriptionKey", F_STR, 0),
     ("PackageId", F_STR, 0), ("Intent", F_TERM, 0), ("Program", F_TERM, 0),
-    # §187: the ascension dimension (A2/3/4 numbers, A17/18/19 move sets). Nine cells => stride 20.
-    ("ProgramAsc", F_TERM, 0), ("AscensionMin", F_INT, 0),
+    # §192: the ascension dimension is a **variant list** (`[{AscensionMin, Program}]`), not
+    # "one envelope + one threshold": one action can carry two thresholds (Jaw Worm's Bellow raises
+    # Strength at A2 and Block at A17). Eight cells => stride 16, and the version moved with it.
+    ("ProgramAsc", F_TERM, 0),
     ("extra", F_TERM, 0),
 ]
 ENCT_ROW = [
