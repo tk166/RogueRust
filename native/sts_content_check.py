@@ -113,6 +113,8 @@ INV_CARDS = {
     "slimed": {"Cost": 1, "Tags": ["status", "unplayable", "junk"], "Facts": []},
     # §183: the colorless pool. The Colorless Potion offers three of them; **no deck can hold them**,
     # which is why they have no `+` row (see NOT_UPGRADABLE_TAGS). Wiki values, base.
+    # §189 `A10`：开局诅咒（wiki: Unplayable. Ethereal. Cannot be removed）。
+    "ascenders_bane": {"Cost": 0, "Tags": ["curse", "unplayable", "ethereal"], "Facts": []},
     "bandage_up": {"Cost": 0, "Tags": ["skill", "colorless"],
                    "Facts": [("heal", 4, "sourceDowned")]},
     "blind": {"Cost": 0, "Tags": ["skill", "colorless"],

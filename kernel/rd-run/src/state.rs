@@ -92,6 +92,18 @@ pub const A_SHOP_PRICE: u8 = 16;
 /// §188：事件变得更糟（wiki: *Unfavorable Events — many events have less positive outcomes
 /// and more severe consequences*）。内容用 `Effects*Asc` 给出变体；没有变体的选项照旧。
 pub const A_EVENTS_WORSE: u8 = 15;
+/// §189：精英更常见（wiki: *Elites are more common* — 8% → 16%）。
+pub const A_ELITE_MORE: u8 = 1;
+/// §189：开局带 Ascender's Bane（wiki: *Start with Ascender's Bane*）。
+pub const A_START_CURSE: u8 = 10;
+/// §189：升级牌更少（wiki: *Upgraded cards are less common*）—— 二三幕的升级概率减半。
+pub const A_FEWER_UPGRADES: u8 = 12;
+/// §189：第三幕两个 Boss（wiki: *Double Boss*）。
+pub const A_DOUBLE_BOSS: u8 = 20;
+
+/// A10 的诅咒。**不能被删** —— wiki 的卡面写着 "Cannot be removed"，而 StS 自己也是把这一条
+/// 写在这张卡**自己**的代码里（它不是一个通用标签）。
+pub const ASCENDERS_BANE: &str = "ascenders_bane";
 
 /// `A14`: the Ironclad loses 5 maximum health (`-4` for the other three characters).
 pub const ASCENDED_MAX_HEALTH_LOSS: i32 = 5;
@@ -636,6 +648,39 @@ impl FightKind {
 /// common 65% -- the wiki states exactly that ("Actual at reset (offset -5%)"). An implementation
 /// that clamps the rare band to 0 *and keeps uncommon at 37%* would quietly hand the 2% to uncommon.
 #[must_use]
+/// §189 `A12`：这张奖励牌有多大比例是**升级版**（百分比，整数）。
+///
+/// 基线（wiki `Card Rewards`）：第一幕 **0%**，第二幕 **12%**，第三幕 **25%**。
+/// A12 是 "Upgraded cards are less common" ⇒ **减半**（6% / 12%）。
+///
+/// ⚠️ 基线这条规则以前**根本不存在** —— `inv:§3.5` 那句"第一幕不出现升级牌"被实现成了
+/// "哪一幕都不出现"。所以 A12 是把两条一起做掉。
+#[must_use]
+pub const fn upgrade_chance_percent(act: u8, ascension: u8) -> i32 {
+    let base = match act {
+        1 => 0,
+        2 => 12,
+        3 => 25,
+        _ => 0,
+    };
+    if ascension >= A_FEWER_UPGRADES {
+        base / 2
+    } else {
+        base
+    }
+}
+
+/// `id` 的 `+` 行，**如果池子里有**（§189）。
+///
+/// 不做字符串拼接再查表：id 是 `&'static str`，一次线性扫描比"拼一个 String 再比"更容易看出它
+/// 到底在找什么（这个池子最多几十条）。
+#[must_use]
+fn upgraded_id<'a>(pool: &[PoolCard<'a>], base: &str) -> Option<&'a str> {
+    pool.iter()
+        .map(|card| card.id)
+        .find(|id| id.len() == base.len() + 1 && id.starts_with(base) && id.ends_with('+'))
+}
+
 pub fn reward_bands(kind: FightKind, offset: i32) -> (i32, i32) {
     // A boss reward is rare at 100% and **does not read the offset** -- but it does *reset* it
     // (wiki `Card Rewards`, the "What doesn't update the pity counter" table: boss reads `no`,
@@ -854,6 +899,9 @@ pub struct RunState {
     /// Has the act been **cleared**? Set when the boss dies (`inv:§7.2`: the boss is the end of the
     /// act). Until this existed a run could not be won, only lost.
     boss_beaten: bool,
+    /// §189 `A20`: 这一幕已经倒下了几个 Boss（0 = 还没有，1 = 第一个已倒）。只有最后一幕 + A20
+    /// 才会变成 1；换幕时归零。与 `boss_beaten` 同类：run 层状态，不进战斗指纹。
+    bosses_fought: u8,
     /// Which nodes have paid out. A node settles **once** -- a second visit is an error, which is
     /// what stops a fight from being farmed and a campfire from healing on every click.
     resolved: [u64; 2],
@@ -947,7 +995,7 @@ impl RunState {
         };
         let health = health_max;
         let mut rng = RunRng::new(seed);
-        let map = RunMap::generate(&mut rng)?;
+        let map = RunMap::generate_at(&mut rng, ascension)?;
         let mut state = Self {
             seed,
             floor: 0,
@@ -971,6 +1019,7 @@ impl RunState {
             shop: ShopStock::empty(),
             reward: Reward::empty(),
             boss_beaten: false,
+            bosses_fought: 0,
             act: 1,
             event: RunId::EMPTY,
             last_encounter: RunId::EMPTY,
@@ -984,6 +1033,10 @@ impl RunState {
         };
         for id in starting_deck {
             state.push_card(id)?;
+        }
+        // §189 `A10`：开局牌组里塞一张 Ascender's Bane（在牌组末尾，与其他"开局牌"一致）。
+        if ascension >= A_START_CURSE {
+            state.push_card(ASCENDERS_BANE)?;
         }
         state.check_invariants()?;
         Ok(state)
@@ -1596,6 +1649,17 @@ impl RunState {
         };
         self.health = (self.health + healed).min(self.health_max);
         if self.act >= MAX_ACT {
+            // §189 `A20`：最后一幕要**两个** Boss。第一个倒下后节点重新可打（清 `resolved`），
+            // 直到第二个也倒下才算赢。奖励屏照旧给两次：每一个 Boss 都是一场真的战斗。
+            if self.at_least(A_DOUBLE_BOSS) && self.bosses_fought == 0 {
+                self.bosses_fought = 1;
+                // 调用方唯一的入口是"游标在 Boss 上、且节点没结算过" ⇒ 把节点重新打开。
+                self.resolved = [0; 2];
+                // ⚠️ **不要动 `pending`**：`rd_run_fight_end` 的顺序是"先掷奖励（Pending::Reward）、
+                // 再 mark_boss_beaten"，把 pending 清成 None 会把第一个 Boss 的奖励屏关掉 ——
+                // 玩家白打一场。这条是写测试时发现的，判据见 `a20_…` 里的奖励屏断言。
+                return;
+            }
             // The last act's boss: the run is won.
             self.boss_beaten = true;
             return;
@@ -1610,6 +1674,8 @@ impl RunState {
         self.pending = Pending::None;
         self.resolved = [0; 2];
         self.boss_beaten = false;
+        // §189：换幕重置"这一幕打了几个 Boss"。
+        self.bosses_fought = 0;
 
         // **A new act gets a new map** (`port-plan.md` §131). The seed is derived from the run seed
         // and the act number, so the map is deterministic for a given run -- the same discipline the
@@ -1621,7 +1687,7 @@ impl RunState {
         let previous = self.map;
         let seed = self.act_seed();
         let mut rng = RunRng::new(seed);
-        match RunMap::generate(&mut rng) {
+        match RunMap::generate_at(&mut rng, self.ascension()) {
             Ok(map) => {
                 self.map = map;
                 self.map_generation_failed = false;
@@ -2246,6 +2312,11 @@ impl RunState {
         if card >= self.deck_len as usize {
             return Err(RunError::BadCard(card as u8));
         }
+        // §189 `A10`：Ascender's Bane 的卡面写着 "Cannot be removed"，StS 也把这一条写在这张卡
+        // 自己的代码里。拒绝发生在**扣钱之前**，所以"拒绝 ⇒ 一个字节都不改"。
+        if self.deck[card].as_str() == ASCENDERS_BANE {
+            return Err(RunError::CannotRemove);
+        }
         let price = self.remove_card_price();
         if self.gold < price {
             return Err(RunError::NotEnoughGold {
@@ -2770,7 +2841,17 @@ impl RunState {
                 });
             };
             used[index] = true;
-            cards[slot] = RunId::new(card_pool[index].id).map_err(|_| RunError::BadId)?;
+            // §189 `A12`：先拿基础牌，再按概率换成它的 `+` 行。概率由**幕 + 难度**决定
+            // （`upgrade_chance_percent`）；没有 `+` 行的牌保持原样、**不报错**（那是内容的事，
+            // 内容门另有一条"每张可升级牌都必须有 `+` 行"的判据）。
+            let mut chosen = card_pool[index].id;
+            let chance = upgrade_chance_percent(self.act, self.ascension());
+            if chance > 0 && self.rng.roll(RunStream::Reward, 100)? < chance as u32 {
+                if let Some(upgraded) = upgraded_id(card_pool, chosen) {
+                    chosen = upgraded;
+                }
+            }
+            cards[slot] = RunId::new(chosen).map_err(|_| RunError::BadId)?;
             // `inv:§3.5`: the pity offset moves after **every** roll -- reset on a rare, +1%
             // otherwise (the wiki says "otherwise", not "on a common": an uncommon also ticks it).
             if band == Rarity::Rare {
@@ -2887,6 +2968,12 @@ impl RunState {
             if used[*index] {
                 continue;
             }
+            // §189 `A12`：`+` 行只能通过"升级抽取"进来。计数与定位是两次遍历，**两边都要跳过**，
+            // 只跳一边会让第 i 张彩票落到不同的牌上（第一版就是这样，于是第一幕的奖励屏蹦出
+            // 95 张升级牌 —— 比例比 100% 还高，因为位置全错）。
+            if pool[*index].id.ends_with('+') {
+                continue;
+            }
             let rarity = pool[*index].rarity;
             let ok = match wanted {
                 Some(rarity_wanted) => rarity == rarity_wanted,
@@ -2902,6 +2989,9 @@ impl RunState {
         let mut target = self.rng.roll(RunStream::Reward, count)? as u32;
         for index in eligible {
             if used[*index] {
+                continue;
+            }
+            if pool[*index].id.ends_with('+') {
                 continue;
             }
             let rarity = pool[*index].rarity;
@@ -5596,6 +5686,142 @@ mod tests {
             Err(RunError::UnsupportedRelic { index: 0 })
         );
         assert_eq!(run.relics().len(), 0);
+    }
+
+    /// §189 `A10`：Ascender's Bane 在 10 级进牌组、9 级不进，而且进了就**删不掉**
+    /// （wiki 卡面写着 "Cannot be removed"，StS 也把这条写在这张卡自己的代码里）。
+    #[test]
+    fn a10_starts_with_a_curse_that_cannot_be_removed() {
+        for (level, want) in [(0u8, false), (9, false), (10, true), (20, true)] {
+            let run =
+                RunState::new_with_ascension(7, 80, 0, &["strike"; 5], level).expect("a run");
+            let has = run.deck().iter().any(|card| card.as_str() == ASCENDERS_BANE);
+            assert_eq!(has, want, "A{level}: Ascender's Bane in the deck must be {want}");
+            assert_eq!(
+                run.deck_len,
+                5 + u8::from(want),
+                "A{level}: exactly one extra card"
+            );
+        }
+
+        // Removing it is refused, and the refusal changes nothing -- the price is not charged.
+        let mut run =
+            RunState::new_with_ascension(7, 80, 500, &["strike"; 5], 10).expect("a run");
+        // The test lives in this module, so it can put the run straight into the shop phase, which is
+        // the only thing `remove_card` checks before refusing.
+        run.pending = Pending::Shop;
+        let index = run
+            .deck()
+            .iter()
+            .position(|card| card.as_str() == ASCENDERS_BANE)
+            .expect("the curse is in the deck");
+        let before = run;
+        assert_eq!(run.remove_card(index), Err(RunError::CannotRemove));
+        assert!(run == before, "a refused removal must not spend gold");
+    }
+
+    /// §189 `A12`：基线规则（二三幕 12% / 25%）与 A12 的减半。
+    ///
+    /// 基线以前**不存在**（第一幕的 0% 被实现成了"哪一幕都 0%"），所以这条测试也是"基线在那儿"
+    /// 的证明：64 个种子里第三幕必须出现升级牌，第一幕一张都不许有。
+    #[test]
+    fn a12_halves_the_upgrade_chance_in_acts_two_and_three() {
+        for (act, ascension, want) in [
+            (1u8, 0u8, 0),
+            (1, 20, 0),
+            (2, 0, 12),
+            (2, 11, 12),
+            (2, 12, 6),
+            (3, 0, 25),
+            (3, 12, 12),
+            (3, 20, 12),
+        ] {
+            assert_eq!(
+                upgrade_chance_percent(act, ascension),
+                want,
+                "act {act} at A{ascension}"
+            );
+        }
+
+        // Six base cards plus their `+` rows: a reward screen needs three **distinct** base cards, so
+        // a two-card pool would fail with `PoolTooSmall` before the rule could be observed.
+        let mut pool = std::vec::Vec::new();
+        for id in ["strike", "defend", "anger", "bash", "clash", "flex"] {
+            pool.push(PoolCard {
+                id,
+                rarity: Rarity::Common,
+            });
+            pool.push(PoolCard {
+                id: std::boxed::Box::leak(std::format!("{id}+").into_boxed_str()),
+                rarity: Rarity::Common,
+            });
+        }
+
+        let mut upgraded_in_act3 = 0;
+        let mut upgraded_in_act1 = 0;
+        for seed in 0..64 {
+            let mut run = RunState::new(seed, 80, 0, &["strike"; 5]).expect("a run");
+            run.act = 3;
+            run.roll_reward(&pool, &[], &[], FightKind::Normal)
+                .expect("reward");
+            upgraded_in_act3 += run
+                .reward_cards()
+                .iter()
+                .filter(|id| id.as_str().ends_with('+'))
+                .count();
+
+            let mut run = RunState::new(seed, 80, 0, &["strike"; 5]).expect("a run");
+            run.roll_reward(&pool, &[], &[], FightKind::Normal)
+                .expect("reward");
+            upgraded_in_act1 += run
+                .reward_cards()
+                .iter()
+                .filter(|id| id.as_str().ends_with('+'))
+                .count();
+        }
+        assert_eq!(upgraded_in_act1, 0, "act 1 never offers an upgraded card");
+        assert!(
+            upgraded_in_act3 > 0,
+            "act 3 must offer upgraded cards (25%), got none in 64 seeds"
+        );
+    }
+
+    /// §189 `A20`：最后一幕的第一个 Boss 倒下后节点**重新可打**，只有第二个才算赢。
+    #[test]
+    fn a20_makes_the_last_act_have_two_bosses() {
+        let finish = |level: u8| -> (bool, bool, u8) {
+            let mut run =
+                RunState::new_with_ascension(7, 80, 0, &["strike"; 5], level).expect("a run");
+            run.act = MAX_ACT;
+            run.node = i32::from(crate::map::BOSS_NODE);
+            // The caller's order is "roll the reward, then mark the boss" -- so the reward screen is
+            // already open when this runs, and it must stay open (see the branch's comment).
+            run.pending = Pending::Reward;
+            run.mark_boss_beaten();
+            assert_eq!(
+                run.pending(),
+                Pending::Reward,
+                "A{level}: the fight's reward screen must survive"
+            );
+            if level >= A_DOUBLE_BOSS {
+                assert!(!run.boss_beaten(), "A20: the first boss must not win the run");
+                assert!(!run.node_resolved(), "A20: the boss node must be open again");
+                run.pending = Pending::None;
+                run.mark_boss_beaten();
+            }
+            (run.boss_beaten(), run.node_resolved(), run.act)
+        };
+
+        for level in [0u8, 19] {
+            let (won, resolved, act) = finish(level);
+            assert!(won, "A{level}: the last boss wins the run");
+            assert!(resolved, "A{level}: the node stays settled");
+            assert_eq!(act, MAX_ACT, "A{level}: no act past the last");
+        }
+        let (won, resolved, act) = finish(20);
+        assert!(won, "A20: the second boss wins the run");
+        assert!(resolved, "A20: and then the node settles");
+        assert_eq!(act, MAX_ACT, "A20: still the last act");
     }
 
     #[test]

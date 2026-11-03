@@ -4404,6 +4404,49 @@
       "TurnEndHandDestinationZone": "Hand",
       "PlayedCardDestinationZone": "Exhaust",
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "ascenders_bane",
+      "PackageId": "sts",
+      "NameKey": "Ascender's Bane",
+      "DescriptionKey": "Unplayable. Ethereal. Cannot be removed from your deck.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        },
+        {
+          "value": "ethereal"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": []
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "ExhaustPile",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Curse"
     }
   ],
   "EnemyActions": [

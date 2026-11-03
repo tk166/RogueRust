@@ -437,11 +437,10 @@ fn reward_pool(
     content: &'static Content<'static>,
 ) -> Result<Vec<rd_run::state::PoolCard<'static>>, String> {
     let mut pool = Vec::new();
+    // §189 `A12`：`+` 行**必须在池子里**（升级要找得到目标），但**不能被当成
+    // 基础奖励直接选中** —— 后一条由 `pick_of` 负责（它跳过 `+`）。两条在不同层，
+    // 因为它们回答的是不同的问题："池子里有什么" 与 "这一次能拿哪一张"。
     for card in full_pool(content)? {
-        let id = card.id;
-        if id.ends_with('+') {
-            continue;
-        }
         // `rd-run` drops `Status`/`Curse` from the roll itself -- one rule, one owner.
         pool.push(card);
     }

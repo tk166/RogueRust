@@ -704,3 +704,12 @@ term id 当字符串 id）。
 * 一个选项里**最多一条**改牌效果（`remove_card` / `upgrade_card` / `transform_card`）—— 待答的
   选牌只有一个位置，两个就是内容错误（运行层报 `RunError::TwoDeckChanges`）；
 * `Effects*Asc` 若存在，**必须与基础不同**（"变糟了"却什么都没变是 typo，没有症状）。
+
+## 11. 实现补充（2026-11-03）：A10 的诅咒
+
+`ascenders_bane` 是内容里第一张**"删不掉"**的牌。它靠两处配合：
+
+* 内容：`Rarity: "Curse"`、`Tags: [curse, unplayable, ethereal]`、`TurnEndHandDestinationZone:
+  "ExhaustPile"`（`ethereal` 那个标签的判据要求这一格，内容门会查）；
+* 内核：`remove_card` 按 **id** 拒绝它（`RunError::CannotRemove`）—— StS 自己也是把这条写在这张卡
+  的代码里，而不是一个通用标签，所以这里照抄这个形状，并把常量与理由写在 `state.rs`。

@@ -305,8 +305,15 @@ impl RunMap {
     }
 
     pub fn generate(rng: &mut RunRng) -> Result<Self, RunError> {
+        Self::generate_at(rng, 0)
+    }
+
+    /// `generate` **at an ascension level** (§189): A1 moves the elite share, so the map for an
+    /// A1+ run is a different (still deterministic) map. A0 keeps the exact stream it had, which is
+    /// why `generate` still delegates with `0` -- the map golden and every existing test stay put.
+    pub fn generate_at(rng: &mut RunRng, ascension: u8) -> Result<Self, RunError> {
         for _ in 0..MAX_ATTEMPTS {
-            if let Some(map) = Self::attempt(rng) {
+            if let Some(map) = Self::attempt_at(rng, false, ascension) {
                 // The post-condition is a real check, not a debug one: what runs on the device is
                 // the release build, and this is the one place that proves generation and
                 // validation agree.
@@ -333,11 +340,19 @@ impl RunMap {
         Self::attempt_with(rng, false)
     }
 
+    fn attempt_at(rng: &mut RunRng, relaxed: bool, ascension: u8) -> Option<Self> {
+        Self::attempt_with_level(rng, relaxed, ascension)
+    }
+
     /// `relaxed` skips the two rules that are ours rather than `inv`'s (`TooNarrow` and
     /// `Disconnected`), so a test can see **what the draws look like** before they are rejected.
     /// Without it the only observable is "generation failed", which says nothing about which rule
     /// binds -- and the two pull in opposite directions.
     fn attempt_with(rng: &mut RunRng, relaxed: bool) -> Option<Self> {
+        Self::attempt_with_level(rng, relaxed, 0)
+    }
+
+    fn attempt_with_level(rng: &mut RunRng, relaxed: bool, ascension: u8) -> Option<Self> {
         let mut rows = [MapRow::blank(); ROWS];
 
         // Step 1: each row's width and columns. `[推断]`: the inventory fixes only the upper bound,
@@ -411,7 +426,7 @@ impl RunMap {
             for index in 0..rows[row].len() {
                 let kind = match fixed {
                     Some(kind) => kind,
-                    None => roll_kind(rng, &rows, row, index)?,
+                    None => roll_kind(rng, &rows, row, index, ascension)?,
                 };
                 rows[row].nodes[index].kind = kind;
             }
@@ -825,10 +840,16 @@ fn prune(rows: &mut [MapRow; ROWS]) -> Option<()> {
 }
 
 /// Roll one node's kind, applying overrides 1–3 by rerolling (`inv:§7.4` #5).
-fn roll_kind(rng: &mut RunRng, rows: &[MapRow; ROWS], row: usize, index: usize) -> Option<NodeKind> {
+fn roll_kind(
+    rng: &mut RunRng,
+    rows: &[MapRow; ROWS],
+    row: usize,
+    index: usize,
+    ascension: u8,
+) -> Option<NodeKind> {
     for _ in 0..MAX_REROLLS {
         let roll = rng.roll(RunStream::Map, 100).ok()?;
-        let kind = kind_for_roll(roll)?;
+        let kind = kind_for_roll_at(roll, ascension)?;
         if is_legal_at(rows, row, index, kind) {
             return Some(kind);
         }
@@ -839,12 +860,31 @@ fn roll_kind(rng: &mut RunRng, rows: &[MapRow; ROWS], row: usize, index: usize) 
 /// The 53/8/12/5/22 table (`inv:§7.3`). Cumulative upper bounds, so the mapping is auditable.
 #[must_use]
 pub const fn kind_for_roll(roll: u32) -> Option<NodeKind> {
+    kind_for_roll_at(roll, 0)
+}
+
+/// `kind_for_roll` **at an ascension level** (§189).
+///
+/// A1 is "elites are more common": 8% → 16%, and the inventory records that the *combat* share pays
+/// for it (53% → 45%). Rest / shop / unknown keep their 12 / 5 / 22, so the table still sums to 100
+/// and a reader can audit it by comparing two constants.
+#[must_use]
+pub const fn kind_for_roll_at(roll: u32, ascension: u8) -> Option<NodeKind> {
+    // The only movable boundary is the combat/elite one: everything above it is fixed.
+    let combat_top = if ascension >= crate::state::A_ELITE_MORE {
+        44
+    } else {
+        52
+    };
+    const ELITE_TOP: u32 = 60;
+    const REST_TOP: u32 = 72;
+    const SHOP_TOP: u32 = 77;
     match roll {
-        0..=52 => Some(NodeKind::Combat),   // 53%
-        53..=60 => Some(NodeKind::Elite),   //  8%
-        61..=72 => Some(NodeKind::Rest),    // 12%
-        73..=77 => Some(NodeKind::Shop),    //  5%
-        78..=99 => Some(NodeKind::Unknown), // 22%
+        r if r <= combat_top => Some(NodeKind::Combat),
+        r if r <= ELITE_TOP => Some(NodeKind::Elite),
+        r if r <= REST_TOP => Some(NodeKind::Rest),
+        r if r <= SHOP_TOP => Some(NodeKind::Shop),
+        r if r <= 99 => Some(NodeKind::Unknown),
         _ => None,
     }
 }
@@ -1268,6 +1308,50 @@ mod tests {
     // A generator-only suite cannot express "this map must be refused", and a validator that
     // never looks passes it. These eight mutations each break exactly one rule.
     // =========================================================================================
+
+    /// §189 `A1`: elites go 8% -> 16%, and the combat share pays for it. Both tables must still sum
+    /// to 100 -- a table that does not is a bug the share check catches, not a rounding detail.
+    #[test]
+    fn a1_gives_elites_eight_more_percent_at_the_combat_share_s_expense() {
+        fn shares(ascension: u8) -> [u32; 5] {
+            let mut out = [0u32; 5];
+            for roll in 0..100u32 {
+                match kind_for_roll_at(roll, ascension).expect("every roll is a kind") {
+                    NodeKind::Combat => out[0] += 1,
+                    NodeKind::Elite => out[1] += 1,
+                    NodeKind::Rest => out[2] += 1,
+                    NodeKind::Shop => out[3] += 1,
+                    NodeKind::Unknown => out[4] += 1,
+                    _ => panic!("unexpected kind for roll {roll}"),
+                }
+            }
+            out
+        }
+        assert_eq!(shares(0), [53, 8, 12, 5, 22], "A0 is the inventory's table");
+        assert_eq!(shares(1), [45, 16, 12, 5, 22], "A1 moves 8 points to elites");
+        assert_eq!(shares(20), [45, 16, 12, 5, 22], "and nothing else moves, ever");
+        for ascension in [0u8, 1, 2, 20] {
+            assert_eq!(
+                shares(ascension).iter().sum::<u32>(),
+                100,
+                "A{ascension}: the table must sum to 100"
+            );
+        }
+        // The stream is untouched at A0: same seed, same map as before this rule existed.
+        let mut plain = RunRng::new(7);
+        let mut levelled = RunRng::new(7);
+        assert_eq!(
+            RunMap::generate(&mut plain).expect("A0 map"),
+            RunMap::generate_at(&mut levelled, 0).expect("A0 map"),
+        );
+        // ...and A1 draws a **different** map from the same seed (that is the rule's whole effect).
+        let mut plain = RunRng::new(7);
+        let mut levelled = RunRng::new(7);
+        assert_ne!(
+            RunMap::generate(&mut plain).expect("A0 map"),
+            RunMap::generate_at(&mut levelled, 1).expect("A1 map"),
+        );
+    }
 
     #[test]
     fn check_rejects_a_wrong_fixed_floor() {

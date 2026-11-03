@@ -622,3 +622,23 @@ Smoke Bomb（§179）落地时把"逃出非 Boss 战斗"表达成 `FightOutcome`
 
 A15 的选择**不在这里**：运行层只拿到一串已经选好的效果。选哪一串由 `Content::EventChoice::effects_at`
 按 `RunState::ascension()` 决定（阈值常量 `A_EVENTS_WORSE = 15`，与其它 `A_*` 摆在一起）。
+
+## 12. 实现补充（2026-11-03）：Ascension 的最后四条（A1 / A10 / A12 / A20）
+
+| 规则 | 落点 | 判据（都在 `rd-run`） |
+|---|---|---|
+| **A1** 精英更多 | `map::kind_for_roll_at`：只有 combat/elite 的边界动（45/16 而不是 53/8），rest/shop/unknown 不动 ⇒ 表仍然合计 100 | `a1_gives_elites_eight_more_percent_…`（四档份额 + A0 与 `generate` 逐字节相同 + A1 与 A0 不是同一张图） |
+| **A10** 开局诅咒 | `new_with_ascension` 往牌组塞 `ascenders_bane`；`remove_card` 拒绝它（`CannotRemove`） | `a10_starts_with_a_curse_that_cannot_be_removed`（0/9/10/20 四档 + 拒绝不扣钱） |
+| **A12** 升级牌更少 | `upgrade_chance_percent(act, ascension)`：基线 0/12/25%，A12 减半成 0/6/12%；`roll_reward` 先取基础牌再按概率换成 `+` 行 | `a12_halves_the_upgrade_chance_…`（八组 (act, asc) + 64 个种子里第三幕必须有、第一幕必须没有） |
+| **A20** 双 Boss | `mark_boss_beaten`：最后一幕的第一个 Boss **不清** `boss_beaten`，只把 `resolved` 清掉（节点重开）；第二个才赢 | `a20_makes_the_last_act_have_two_bosses`（A0/A19 一次赢；A20 两次；奖励屏必须活着） |
+
+⚠️ 三条踩过的坑，写在这里因为它们都会**静默**：
+
+1. **`+` 行必须在奖励池里**（否则升级找不到目标），但**不能被当成基础牌抽到**。`pick_of` 里
+   "计数"和"定位"是两次遍历，**两边都要跳过** —— 只跳一边会让第 i 张彩票落到不同的牌上（第一幕
+   的奖励屏蹦出 95 张升级牌）。
+2. **A20 不许清 `pending`**：`rd_run_fight_end` 的顺序是"先掷奖励、再 `mark_boss_beaten`"，清掉
+   `pending` 就是把第一个 Boss 的奖励屏关掉。判据里那句话（"the reward screen must survive"）
+   就是为它写的。
+3. **A12 的基线规则以前不存在**：`inv:§3.5` 的"第一幕不出现升级牌"被实现成了"哪一幕都不出现"。
+   所以 A12 必须把基线一起做掉，否则它是一条关于零的规则。
