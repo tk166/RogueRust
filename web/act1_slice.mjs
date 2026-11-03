@@ -105,6 +105,8 @@ const report = await page.evaluate(`(async () => {
   };
   async function fight(budget) {
     let guard = 0;
+    // §179: slots this fight has already tried to drink (see the half-health branch below).
+    const triedPotions = new Set();
     while (inFight() && guard++ < budget) {
       // The page has **two** "pick an enemy" flows and they are not interchangeable:
       //   * a potion waiting for a target  -> potion-armed on #enemies, click [data-enemy-panel];
@@ -137,9 +139,18 @@ const report = await page.evaluate(`(async () => {
       }
       // Potions at half health (and always on the first turn of a boss fight: a free card is worth
       // more early than the HP it saves later).
+      //
+      // §179: **a potion may be refused, and a refusal is not progress.** Smoke Bomb is legal only
+      // outside boss fights, so the old drink-the-first-bottle-then-continue spun forever on
+      // the boss: the page said "被拒", nothing changed, and the driver clicked the same bottle
+      // again for the rest of its budget. Each slot is now tried **once per fight**, and a refused
+      // one is remembered instead of retried.
       if (cell(4) * 2 < cell(5)) {
-        const potion = document.querySelector("[data-use-potion]");
+        const potion = [...document.querySelectorAll("[data-use-potion]")].find(
+          (button) => !triedPotions.has(button.dataset.usePotion),
+        );
         if (potion) {
+          triedPotions.add(potion.dataset.usePotion);
           await drinkPotion(potion.dataset.usePotion);
           continue;
         }
@@ -698,6 +709,22 @@ const report = await page.evaluate(`(async () => {
             turn: cell(1),
             heroHp: cell(4),
             hand: cell(10),
+            // §179: a stalled fight has to say why in the *page's* terms too. actions counts what
+            // the ABI offers; these two say what the player could actually click (a hand whose
+            // buttons are all disabled looks identical to an empty one from the ABI's side).
+            energy: cell(8),
+            // The page says what went wrong in #msg; a stuck fight that reads as "nothing happened"
+            // is usually a refusal the driver never looked at.
+            msg: byId("msg") ? byId("msg").textContent : null,
+            modalOpen: byId("modal") ? !byId("modal").hidden : null,
+            disabledCards: document.querySelectorAll("#hand button.card[disabled]").length,
+            handCosts: (() => {
+              const out = [];
+              for (const card of document.querySelectorAll("#hand button.card")) {
+                out.push(card.dataset.cost ?? "?");
+              }
+              return out;
+            })(),
             active: (() => {
               const n = ex.rd_env_active_len();
               if (n < 0) return null;

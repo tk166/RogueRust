@@ -610,6 +610,46 @@ pub fn decode<'a>(
 ///
 /// 只有"查不到就等于没说过"的读口：今天只剩 [`polarity`]（`applyStatus` 只需要极性，
 /// 拿野 id 时按 `Buff` 兜底，那条偏差记在 `exec.rs` 的模块头）。
+/// A status' **death-prevention** data (`STAT.DeathPrevention`, §180).
+///
+/// Mirrors the reference's `StatusDeathPreventionData(SurvivingHealth, Effects, Repeating)`, plus
+/// `Percent`: the reference cannot express StS's "heal to 30% of your Max HP", and a flat number
+/// would either be wrong for every other max HP or need one row per hero.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DeathPreventionData {
+    /// Survive at (at least) this many HP.
+    pub surviving_health: i32,
+    /// ...and at least this percentage of the bearer's max HP. `0` = not used.
+    pub percent: i32,
+    /// Whether the status **stays** after saving its bearer. `false` = the one-shot charm.
+    pub repeating: bool,
+}
+
+/// Read `DeathPrevention` off a status row.
+///
+/// `Ok(None)` = the row exists and the field is null (most statuses -- 25 of 25 before §180).
+/// `Err` = the row or the data is malformed, which a caller must **not** treat as "no prevention":
+/// that is the silent-shape failure `§161.3` is about.
+pub fn death_prevention(
+    content: &Content<'_>,
+    status_id: &str,
+) -> Result<Option<DeathPreventionData>, BindError> {
+    let row = status_row(content, status_id).ok_or(BindError::Missing("STAT row"))?;
+    let cell = row.death_prevention();
+    if cell == ABSENT16 || cell == NULL16 {
+        return Ok(None);
+    }
+    let node = NodeRef::new(content, cell);
+    let surviving_health = node.int_field("SurvivingHealth")?.unwrap_or(0);
+    let percent = node.int_field("Percent")?.unwrap_or(0);
+    let repeating = node.bool_field("Repeating")?.unwrap_or(false);
+    Ok(Some(DeathPreventionData {
+        surviving_health,
+        percent,
+        repeating,
+    }))
+}
+
 pub fn decode_required<'a>(
     content: &'a Content<'a>,
     status_id: &str,

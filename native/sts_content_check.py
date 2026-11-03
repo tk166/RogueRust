@@ -85,7 +85,8 @@ INV_COUNTS = {
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
-    "statuses": 25,
+    # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
+    "statuses": 26,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -518,6 +519,11 @@ INV_STATUSES = {
     # §149: the three damage-pipeline statuses -- no triggers at all, the kernel owns the rule.
     "standard.intangible": [],
     "standard.buffer": [],
+    # §180: no triggers and no modifiers: its whole behaviour is `DeathPrevention`, which the
+    # damage pipeline reads at the death point (`exec::resolve_damage_of_kind`). Listed with `[]`
+    # because an empty expectation is the **assertion** ("this row must not grow modifiers"), not
+    # an omission.
+    "standard.fairy_in_a_bottle": [],
     "standard.plated_armor": [],
     # §175: Nemesis's carrier -- the first content row using a `TurnStarted` trigger.
     "standard.phantom_veil": [],

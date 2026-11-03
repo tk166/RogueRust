@@ -50,10 +50,6 @@
       "Why": "参考的起始单位：与 `StartingParty` 同理，内核的战场成员只来自 FightPlan，零消费者，内容里恒空表。"
     },
     {
-      "Path": "Statuses[]:DeathPrevention",
-      "Why": "参考的状态规则钩子（STATUS 第 10 列）：内核没有这个能力，规则代码里零 `.death_prevention(` 调用点；内容里恒 null，填任何值都不生效也不报错。"
-    },
-    {
       "Path": "Statuses[]:DebuffBlock",
       "Why": "参考的状态规则钩子（STATUS 第 11 列）：内核零 `.debuff_block(` 调用点，内容里恒 null。"
     },
@@ -1687,6 +1683,27 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.fairy_in_a_bottle",
+      "PackageId": "sts",
+      "NameKey": "Fairy in a Bottle",
+      "DescriptionKey": "When you would die, heal to 30% of your Max HP instead.",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "RefreshDuration",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "DeathPrevention": {
+        "SurvivingHealth": 0,
+        "Percent": 30,
+        "Repeating": false
+      },
+      "Triggers": null
     }
   ],
   "Cards": [
@@ -11397,6 +11414,14 @@
       "DescriptionKey": "Escape from a non-boss combat. Receive no rewards.",
       "Effect": "combat_flee",
       "Amount": 0,
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "fairy_in_a_bottle",
+      "NameKey": "Fairy in a Bottle",
+      "DescriptionKey": "When you would die, heal to 30% of your Max HP instead.",
+      "Effect": "combat_status:standard.fairy_in_a_bottle",
+      "Amount": 1,
       "Rarity": "Rare"
     }
   ],

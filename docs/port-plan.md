@@ -12569,3 +12569,59 @@ Boss 战拒绝（wiki：non-boss combat）。
   差的正是这个内容没有的两瓶）。
 * 还剩 4 瓶：Fairy in a Bottle（死亡拦截）、Duplication Potion（打两次）、
   Distilled Chaos（自动打出）、Colorless Potion（无色牌池）。
+
+---
+
+## 180. 药水池（二）：Fairy in a Bottle —— 那个"能解出来但没人读"的字段
+
+`STAT.DeathPrevention` 从状态行存在那天就能解（`content.rs:1457`），**十年没人读**：缺口文档一直
+挂着它，而"能解出来"与"有行为"是两件事。这一节把参考的 `IPreDownInterceptor` 这一半接上。
+
+### 180.1 参考的形状
+
+`SandboxInterceptors.cs:16-58`：
+`StatusDeathPreventionData(SurvivingHealth, Effects, Repeating)` —— 承受者戴着这个状态时，
+这一下被**接住**：生存血量 = `max(1, SurvivingHealth)`，状态**被消耗**（`Repeating` 才留下）。
+
+位置是语义：**穿过格挡 / Buffer / Plated Armor 之后、转 `Downed` 之前**。所以它住在
+`exec::resolve_damage_of_kind` 里，就在 `MarkCombatantDownedOnZeroHealthHandler` 那一步之前 ——
+而那里已经有一个活着的 `combatant` 可变借用，所以这段代码被放在它**之前**（第一版放在之后，
+借用检查器直接拒绝，不是风格问题）。
+
+### 180.2 `Percent` 是本移植的扩展
+
+wiki 的 Fairy in a Bottle 是 "heal to **30% of your Max HP**"，而参考的数据只有平值
+`SurvivingHealth` —— 用平值表达，要么对每一种最大生命都错，要么内容里每个英雄一行。
+所以线格式多一个可选 `Percent`，公式 `max(SurvivingHealth, 最大生命 * Percent / 100, 1)`。
+
+### 180.3 判据是**三面**的
+
+"没死"单独一条会被"连别人的死亡也一起拒绝了"的 bug 满足。所以
+`the_charm_catches_one_killing_blow_and_is_spent` 断言：① 致命伤后**活着且正好 30%**；
+② 状态**被消耗**（wiki: "works once"）；③ **第二下真的死**（`Downed`）。
+
+负控：把整段拦截关掉 ⇒ `left: 0, right: 21`，红在"活着且正好 30%"那句上。
+
+### 180.4 ★★ 闸门抓到的不是内核，是**驱动器**
+
+内容一落地，`web-slice` 红：Boss 战 900 次点击零进展，`problem`/`hostFailure` 都是 null。
+把 `#msg` 加进现场 dump 之后答案立刻有了：
+
+```
+"msg": "用药水 被拒 · Boss 战不能脱战（Smoke Bomb：non-boss combat）"
+```
+
+**产品行为是对的**（Boss 战不能脱战），错的是切片驱动器：它在半血分支点"第一瓶药"然后
+`continue`，而这次拒绝**什么都没改变** ⇒ 同一瓶被点了整个预算。修法：每场战斗**每个药水槽
+只试一次**（拒绝也记住），不是"药水喝了就一定有效"。
+
+这条值得单独记：**合法的拒绝也会锁死一个假设"动作总会改变状态"的驱动**。上一节的
+`StepThrew` 诊断、这一节的 `#msg`，两者都是"让卡住的地方说话"，而两次都是**先说清，再修对**。
+
+### 180.5 数字
+
+* **20/20 闸门绿**，单测 **821**（rd-core 656 / rd-run 100 / rd-wasm 65）。
+* 内容：30 瓶药水（Common 16 / Uncommon 7 / Rare 7）、26 个状态。
+* 惰性声明少了一条：`Statuses[]:DeathPrevention` 从 `InertKeys` 里删掉 —— 是内容门自己喊的
+  （"declared inert but the kernel reads it at status_bind.rs:638"），这正是那个声明的用途。
+* 还剩 3 瓶：Duplication（打两次）、Distilled Chaos（自动打出）、Colorless（无色牌池）。

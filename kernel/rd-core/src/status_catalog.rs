@@ -698,6 +698,10 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // §178: Nemesis's "intangible every other turn" carrier -- the first content status
             // whose trigger is `TurnStarted`. It was in the §175 patch and was reverted with it.
             | "standard.phantom_veil"
+            // §180: its whole rule is `DeathPrevention`, read in `exec::resolve_damage_of_kind`.
+            // This is the **point** of `the_status_catalogue_is_honest`: a status with no trigger
+            // and no modifier would otherwise look inert, and "inert" is exactly what it is not.
+            | "standard.fairy_in_a_bottle"
     )
 }
 
