@@ -745,3 +745,30 @@ pub trait PlayHost {
 | 哈希与快照 | `C:CombatStateHasher.cs:26-164`、`C:CombatStateSnapshot.cs:115-162` |
 | 内核现状（只读参考） | `K:modifiers.rs:36-45`、`K:status_bind.rs:122-140`、`K:state.rs:480-490`、`:513-523`、`:1441-1453`、`K:exec.rs:170-289`、`:412`、`K:turn.rs:60-159`、`K:content.rs:1013-1029`、`:1268-1300` |
 | 参考测试（行为钉子） | `T:CombatCardPlayProcessorTests.cs:8-109`、`T:CardPlayValidatorTests.cs:44-116`、`T:UnplayableCardTests.cs:41-70`、`T:CardPlayCompletionBoundaryTests.cs:21-180`、`T:CardProgramTerminalCleanupTests.cs:18-78`、`T:CardCostModifierTests.cs:46-193`、`T:CardCostPaidEventTests.cs:10-195`、`T:XCostCardTests.cs:33-61` |
+## 11. 实现补充（2026-11-03）：两处出牌路径的新事实
+
+### 11.1 §3 费用阶段多了一张"绝对价"
+
+`CostStage::CardInstance` 现在先读 `standard.card_cost_override`（**绝对价**，不被出牌消费），
+再读 `standard.card_cost_delta`（增量，**付款后清零**）。排序是语义：覆盖是对"这一份副本这一场
+战斗的价格"的最终回答，delta 只是相对修饰。判据
+`the_randomized_price_survives_the_play_but_the_delta_does_not` 钉住这个不对称（§179）。
+
+⚠️ 显示侧（`rd-wasm` 的手牌代价列）是**第二份定价**：它也读同一个覆盖（`hand_costs`），
+所以"显示 0 且真的收 0"这条浏览器判据才成立。
+
+### 11.2 出牌节目的"跑两遍"
+
+`apply_plan_in_chain` 在 `plan` 已经扣过费、`cards_played_this_turn` 已经加过之后，
+按 `standard.duplication` 的层数决定 `exec::begin` 跑 1 遍还是 2 遍（跑之前**先花掉一层**，
+否则第二遍的终态回调会再复制一次，就变成"打到死"）。
+
+位置不是随手选的：那里是**唯一**同时满足"只付一次费、只算一次出牌"与"手里有 `Content` 借用"
+的地方 —— 终态回调（`finish_frame` → `run_terminal_hook`）是纯数据驱动的，没有 content，
+而 `NodeRef` 需要它（§181）。
+
+**已知表示差异**：两遍的节目是**连续入队**的，所以第二遍读到的状态是第一遍的**效果落地之前**的
+状态。对"固定伤害/格挡"的牌完全等价；对"读当前血量/状态层数"的牌会有可观察差异 ——
+这一条写在这里，而不是假装等价。
+
+

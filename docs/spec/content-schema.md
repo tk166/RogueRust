@@ -647,3 +647,26 @@ $so = $p.StandardOutput.ReadToEnd(); $se = $p.StandardError.ReadToEnd(); $p.Wait
 后者把键名一起算入），相差 <1.6%（Encounters 5,861,586 vs 5,955,367 B），本文以
 `content_probe.py` 为准。§3 里「节点自身字节」累计会超过文档大小，因为嵌套子树的字节
 被逐个父节点重复计入——需要不重复口径时看 §3.3 的计数与 `rom_estimate.py` 的输出。
+## 8. 实现补充（2026-11-03）：三个新节点/字段与两个方言陷阱
+
+### 8.1 新增的节点与字段
+
+| 名字 | 形状 | 说明 |
+|---|---|---|
+| `node.destroyCombatant` | `{TargetSelector}` | 把一个战斗员移出战斗（§178）。与 `node.createCombatant` 一样**立即生效**，不走效果队列 —— "立即"正是"只发生一次"唯一能表达的形式 |
+| `STAT.DeathPrevention` | `{SurvivingHealth:int, Percent:int?, Repeating:bool?}` | PreDown 拦截（§180）。`Percent` 是**本移植的扩展**：参考的记录只有平值，表达不了 wiki 的 "30% of Max HP" |
+| `sel.sourceIncludingDowned` | `{}` 或 `{Cardinality}` | 参考的 `SourceIncludingDownedCombatantTargetSelector`。`sel.source` 对**倒下的**战斗员解析为空集 ⇒ 挂在 `Downed` 上的分裂必须用这一个 |
+
+### 8.2 ★★ 两个只在**内核**炸、内容门看不见的方言坑
+
+1. **`node.applyStatus` 的 `DurationTurns` / `Charges` 是裸整数，不是 term。**
+   写成 `{"kind":"const","value":{"Value":0}}` 时，只要**别的卡写的是裸整数**，编译器就会把该
+   opcode 的这个字段**声明成 `F_JSON`**（"原始 JSON 逃生口"），而内核的 `NodeRef::field()`
+   对 `F_JSON` **无条件**报错。症状极具误导性：**加一张卡，另一个不相关的测试红了**
+   （`Ir(WrongKind("F_JSON"))`）。
+2. **`sel.allEnemies` 的 `value` 是 `{}` 或 `{"Cardinality":"Any"}`。** 写 `"Many"` 是同一个症状。
+
+⇒ 形状判据现在由第 11 道闸门（`tools/rdcf_terms.py`）在**镜像层面**检查（§184）：
+除保留 opcode 5 自己，任何 opcode 的任何字段都不许声明成 `F_JSON`。
+
+

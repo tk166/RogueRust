@@ -239,3 +239,20 @@ card / status / enemy_action / encounter / relic / map_node / event / shop / cha
   VM 只需要 kind 和 flags。可以让 `opclass==0` 的 opcode 不带 `key_name`，省约 1.2 KB。
   留着是因为它是「字段名 → 槽位」的唯一记录，调试和对拍全靠它。
 * opcode 8..15 是预留块里的空洞（`OPD` 里是全零描述），只值 8×8 = 64 B。
+## 6. 实现补充（2026-11-03）：term 表的**形状**也会被闸门读
+
+§4 的校验原本只到"段字节数 == count × stride"。§183 的两个内容事故（`DurationTurns` 写成 term、
+`sel.allEnemies` 的 `Cardinality` 写成对象）证明那层不够：**源 JSON 合法、编译成功、字节门全绿**，
+而镜像里同一个字段在不同出现处形状不一致 ⇒ 编译器把整个字段降级成 `F_JSON` ⇒ 内核读到就报错。
+
+现在第 11 道闸门（`tools/rdcf_verify.py` + `tools/rdcf_terms.py`）**独立解析** OPD/OPF/TRM/TRW/STR/STRO，
+检查三条：
+
+1. 除保留 opcode 5（`_json`）自己之外，任何 opcode 的任何字段都不许声明成 `F_JSON`；
+2. 不允许存在 `_json` term（失败消息带那段 JSON 原文）；
+3. `F_TERM` 槽指向的 term id 必须真实存在（段 id 位移那种"对的字节、错的 id"）。
+
+负控在 `native/negctl_184.py`：**基线绿 → bug①红（且点名 opcode 与字段）→ bug②红 → 清理回绿**。
+证据串因此多了一段：`... 1274 table rows, 6 term-shape checks over 5,038 terms`。
+
+

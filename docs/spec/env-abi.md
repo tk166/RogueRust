@@ -248,3 +248,19 @@ M1 的路径选择只有一个动作族（"沿哪条出边走"）；`run-layer.m
 ⚠️ 页面**不画**"这一步只走了、没结算"的标记。§11.5 要求它可观察，而当前地图页只在
 `msg` 行里写角色状态，没有逐节点的"已走 / 已结算"区分。**这是一个已知的欠账**，
 写在这里以免"看得见地图"被当成"节点结算做了"。
+## 12. 诊断导出（2026-11-03 追加，v1 契约的**纯增量**）
+
+§3 那套是"可玩"所需的；这一组是"卡住时能说清为什么"所需的。它们都不改观察向量的布局，
+也不参与指纹。
+
+| 导出 | 返回 | 用途 |
+|---|---|---|
+| `rd_env_step_code(index)` | 第 `index` 步的 `Deck`/`Play` 拒绝码（`0` = 没有，`-1` = 越界/无会话） | `StepThrew(Script)` 只说了家族；这个说**哪一条**拒因（`Refused(Unplayable)` / `Unaffordable` / `CardNotInHand` / …） |
+| `rd_env_code_name_len(code)` / `rd_env_code_name_into(code, ptr)` | 码的**名字**（内核里只有一份表） | 页面把数字印成人话 |
+| `rd_env_host_failure_len()` / `rd_env_host_failure_into(ptr)` | 宿主**上一次失败的原始文本**（`0` = 没有） | `TurnError::Host` 只带五个家族；细节一直在 `Host::last_failure()`，**在此之前没有任何导出读它**。实测它就写着 `Exec(Capacity(Full(Combatants)))` |
+
+它们抓到过的第一个真凶：Boss 分裂在同一回合多次触发、战斗员容器溢出（§177 → §178）。
+`?debug` 侧另有 `dropPotions()`（空腰带）与 `givePotion(id)`，理由与 `startWithSeed` 相同：
+一个必须"祈祷掉落抽到某一瓶"的检查器不是检查器（§185）。
+
+

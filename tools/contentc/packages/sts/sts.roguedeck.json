@@ -4315,8 +4315,8 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "Hand",
-      "PlayedCardDestinationZone": "Exhaust",
-      "Rarity": "Common"
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Uncommon"
     },
     {
       "Id": "dark_shackles",

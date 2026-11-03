@@ -1,25 +1,31 @@
 # 对照 StS wiki 的功能缺口清单
 
-> **这份文件回答一个问题**：站在玩家视角，本仓库距离"像《杀戮尖塔》第一幕"还差什么。
+> **这份文件回答一个问题**：站在玩家视角，本仓库距离"像《杀戮尖塔》"还差什么。
 >
-> **数字不写死在正文里**：所有"我们有 N 个 / 差 M 条"的 N 都由 `python -X utf8 native/gap_check.py`
-> 从内容 JSON 与代码里**重算**并打印。正文只写结论与出处的 §号；数字对不上时，是正文过期了，不是脚本。
+> **数字不写死在正文里**：所有"我们有 N 个 / 差 M 条"的 N 都由
+> `python -X utf8 native/gap_check.py`（内容与规则）与
+> `python -X utf8 native/sts_content_check.py`（内容自洽 + 交叉引用）**重算**并打印。
+> 正文只写结论与出处；数字对不上时，是正文过期了，不是脚本。
 >
-> **两份来源**：`slaythespire.wiki.gg`（下面每条都带页面名）+ 本仓库实现（§ 号指向 `docs/port-plan.md`）。
+> **两份来源**：`slaythespire.wiki.gg`（每条带页面名）+ 本仓库实现（§ 号指向 `docs/port-plan.md`）。
 > 只有两边都看过的结论才写成"有"或"没有"；只在一处看到的写成"未核对"。
+>
+> **最近一次重核：2026-11-03**（本轮把 7 瓶药水、3 张无色牌、Act 2/3 精英逐个回到 wiki 页面核对；
+> 抓到一处**内容写错**：`blind` 的稀有度写成 Common、且被写成 Exhaust —— wiki 是
+> **Uncommon**、**不 Exhaust**，已修）。
 
 ---
 
 ## 0. 方法与口径
 
-* **口径是铁甲战士（Ironclad）第一幕**，加上"三幕的骨架能走通"。其他角色的专属内容一律**不做**，
-  不列进缺口。
-* `需要` 一列区分三种活：
+* **口径是铁甲战士（Ironclad）**，加上"三幕骨架能走通"与"一整幕可以从头打到幕末"。
+  其他角色的专属内容一律**不做**，不列进缺口。
+* `需要` 一列区分四种活：
   * **内容** —— 只写 JSON（`tools/contentc/packages/sts/sts.roguedeck.json`），内核不动；
-  * **内核** —— 要新机制（`rd-core` 或 `rd-run` 的规则）；
-  * **页面** —— ABI 已经够了，只差前端。
-* 每条状态/关键词都注明它是**内容侧**（靠 `TurnEnded` 之类的触发器 + 已有的 opcode 表达）还是
-  **管线侧**（写在内核的伤害/回合代码里）。这条区分很有用：内容侧的条目成本近乎零。
+  * **内核** —— 要新机制（`rd-core` / `rd-run` 的规则）；
+  * **页面** —— ABI 已经够了，只差前端；
+  * **驱动** —— 闸门/场景要改（例如"重试到赢"，§185）。
+* 每条状态/关键词都注明是**内容侧**（触发器 + 已有 opcode）还是**管线侧**（写在内核的伤害/回合代码里）。
 
 ---
 
@@ -27,15 +33,17 @@
 
 | 层 | 现状 | 出处 |
 |---|---|---|
-| 战斗内核 | 出牌 / 结算 / 状态 / 意图 / 修饰器管线 / 效果程序 IR（70 条 opcode）/ 选择与目标 / 金色指纹 | `SEMANTICS-v1.md`，§1–§128 |
-| 卡牌关键词 | **Exhaust / Ethereal / Innate / Retain / Unplayable / X 费** 全部有载体（内容里各有多行） | §144 / §146 |
-| 状态 | 内容里 **24 个状态全部有规则**，`is_declared_inert()` 的名单是**空的** | §147 / §149 / §158 |
+| 战斗内核 | 出牌 / 结算 / 状态 / 意图 / 修饰器管线 / 效果程序 IR / 选择与目标 / 金色指纹 | `SEMANTICS-v1.md`，§1–§128 |
+| 卡牌关键词 | Exhaust / Ethereal / Innate / Retain / Unplayable / X 费 全部有载体 | §144 / §146 |
+| 状态 | 内容里**每一条状态都有规则**，`is_declared_inert()` 的名单是**空的**（`gap_check.py` 打印） | §147 / §149 / §158 / §180 / §181 |
 | 三幕骨架 | 地图 15 行 × 7 列 + Boss 行、每幕独立的遭遇/事件池、幕间切换 | §130 / §131 / §133 / §137 |
-| 战斗流程 | 召唤随从（上限 6 槽）、Boss 分裂（Slime Boss）、半血换招（`intent.healthPercent`） | §121 / §124 / §138–§140 |
-| 运行层 | 商店（卡/遗物/药水/删卡 + 价格）、篝火（休息/打铁）、宝箱、`?` 房 9 个事件、奖励屏 | §143 / §161.8 |
-| Ascension | 框架 0–20 + **9 条规则已实现**（A5 A6 A7 A8 A9 A11 A13 A14 A16），每条在阈值两侧各测一次 | §159、`gap_check.py` |
+| 战斗流程 | 召唤随从（敌人槽上限 6）、Boss 分裂、半血换招、**销毁战斗员**（§178） | §121 / §124 / §138–§140 / §178 |
+| 运行层 | 商店（卡/遗物/药水/删卡 + 价格）、篝火（休息/打铁）、宝箱、事件、奖励屏、**脱战**（§179） | §143 / §161.8 / §179 |
+| 药水 | **全部 33 瓶**（Ironclad 口径）都能喝，效果词表见 `gap_check.py` | §152 / §158 / §179–§185 |
+| Ascension | 框架 0–20 + **9 条规则**，每条在阈值两侧各测一次 | §159、`gap_check.py` |
 | 存档 / 回放 | 单行文本 + CRC（`RDA1`）；动作序列 + 每步哈希（`RDR1`）；内容指纹 | §161.9 / §163 / §164 / §166 |
-| 前端 | 战斗 + 运行层 + 存档 + 回放，真浏览器闸门（含**真指针**点击与**像素**判据） | §165 / §168 |
+| 前端 | 战斗 + 运行层 + 存档 + 回放；真浏览器闸门（真指针点击 + 像素判据 + 切片五场景） | §165 / §168 / §185 |
+| 诊断 | 一步之内的有序事件（beats）、**拒绝码**与**宿主失败原文**导出（§177） | `env-abi.md` §12 |
 
 ---
 
@@ -45,115 +53,136 @@
 
 | 关键词 | wiki 语义 | 我们的状态 | 需要 |
 |---|---|---|---|
-| Exhaust / Ethereal / Innate / Retain / Unplayable / X 费 | 见 `Keywords` 页 | **有**（内容侧；X 费走 `x_cost` tag + `x.cost` + `node.repeat`） | — |
-| **Double Damage**（双倍伤害，Blasphemy/Divinity 一类） | 下一张攻击打两次 | **没有** | 内核（`play.rs` 的出牌次数） |
-| **Exhaust 触发链**（"每当一张牌被消耗…"） | 触发器 | **部分**：`CardExhausted` 触发器在（`LifecyclePrograms` 为空的原因是本内容还没用），但**没有一张牌用它** | 内容 |
+| Exhaust / Ethereal / Innate / Retain / Unplayable / X 费 | `Keywords` 页 | **有**（内容侧；X 费走 `x_cost` tag + `x.cost` + `node.repeat`） | — |
+| **Double Damage**（Blasphemy / Divinity：下一张攻击打两次） | `Keywords` 页 | **部分**：`standard.duplication` + `play.rs` 已经把"下一张牌打两遍"做出来了（§181，Duplication Potion 在用），但它挂在**状态**上，不是卡牌关键词，也不消费"攻击牌"这个条件 | 内容（一张带该关键词的牌） |
+| **Exhaust 触发链**（"每当一张牌被消耗…"） | 触发器 | **载体有**（`LifecyclePrograms` 的 `CardExhausted`），**没有一张牌用它** | 内容 |
+| **升级牌在战斗中回退**（"until end of combat" 的临时性） | — | **不适用**：我们照 wiki 的"for the rest of combat"，升级是**本场战斗内持久**的（§179） | — |
 
 > ⚠️ 上一版写"X 费是唯一内核不许出现的 tag，内容门 [6d] 会拒"。**已过期**：§146 删掉了
-> `reject_x_cost_deck`，X 费现在有载体（`whirlwind` 与 `whirlwind+`）；内容检查反过来要求它的
-> **印刷费用是 0**（`native/sts_content_check.py`），因为它的代价走 `x_cost_payment`（全部能量），
-> `Costs` 表对它没有意义。
+> `reject_x_cost_deck`；内容检查反过来要求它的**印刷费用是 0**，因为代价走 `x_cost_payment`。
 
-### B. 状态 —— 内容里没有的那些
+### B. 状态 —— wiki 常见而我们没有的
 
-已实现 24 个（`gap_check.py` 会打印全名）。wiki 常见而我们**没有**的：
+内容里目前的状态分三类（`gap_check.py` 打印全名）：
+
+* **wiki 有、我们有规则**：`strength / vulnerable / weak / frail / dexterity / metallicize / thorns /
+  spore_cloud / artifact / enrage / regen / rage / flame_barrier / combust / constricted /
+  intangible / buffer / plated_armor / lose_strength / lose_dexterity / ritual / time_warp`；
+* **本移植自己的载体**（wiki 没有同名状态，是我们拿来表达机制的最小零件）：
+  `standard.fairy_in_a_bottle`（死亡拦截，§180）、`standard.duplication`（打两次，§181）、
+  `standard.phantom_veil`（Nemesis 的"隔回合无形"，§175）、`standard.split` 与
+  `standard.phase_split`（Boss 分裂的两半：`Downed` 与"血量 ≤10"）。**它们不是缺口**，
+  写在这里是为了下一次有人看到"内容里有 wiki 没有的状态"时不用再查一遍。
+
+wiki 常见而我们**没有**的：
 
 | 状态 | wiki 语义 | 需要 |
 |---|---|---|
-| **Barricade / Blur** | 格挡不被清 / 本回合不清 | 内核（回合开始的清格挡要能跳过；`Block` 页明确点名这两个） |
+| **Barricade / Blur** | 格挡不被清 / 本回合不清 | 内核（回合开始的清格挡要能跳过；`Block` 页点名这两个） |
 | **Entangled** | 本回合不能打攻击牌 | 内核（`can_play_card` 的判据 + 回合末清） |
 | **Slow** | 每打一张牌它受的伤害 +10% | 内核（伤害管线的修饰器） |
-| **Draw / Energized（下一回合多抽/多能量）** | 回合开始结算 | 内核（回合开始的发牌/能量）—— 现在只有**本回合**的 `combat_draw` / `combat_energy` |
-| **Poison / Focus / Orbs / Stance / Scry** | 其他角色的语言（`Keywords` 页把它们分在各自角色下） | **不做**（口径之外） |
+| **Draw / Energized（下一回合多抽 / 多能量）** | 回合开始结算 | 内核（回合开始的发牌/能量）—— 现在只有**本回合**的 `combat_draw` / `combat_energy` |
+| **Poison / Focus / Orbs / Stance / Scry** | 其他角色的语言 | **不做**（口径之外） |
 
-**已实现但值得记下的偏差**：`standard.poison` 若将来引入，参考实现的毒**不随回合衰减**
-（只有层数轴，回合开始按层数跳一次），与《杀戮尖塔》不同 —— 别照 StS 直觉写。
+**已实现但值得记下的偏差**：`standard.poison` 若将来引入，参考实现的毒**不随回合衰减**（只有层数轴），
+与《杀戮尖塔》不同 —— 别照 StS 直觉写。
 
 ### C. 战斗流程
 
 | 机制 | 状态 | 需要 |
 |---|---|---|
-| 敌人召唤随从 | **有**（上限 6 槽、主人死则随从逃） | — |
-| Boss 分裂 | **有**，但**只有 Slime Boss** | 内容（另两只 Boss 的机制各要新东西） |
+| 敌人召唤随从 | **有**（槽上限 6、主人死则随从逃） | — |
+| Boss 分裂 | **有**，但目前**只有 Slime Boss**（`destroyCombatant` 到位后，"消失 + 两只顶替"才第一次能正确表达，§178） | 内容（另两只 Boss 各有新东西） |
 | Boss 半血换招 | **有**（`intent.healthPercent`） | — |
+| **销毁战斗员** | **有**（`node.destroyCombatant`，§178）：名册 / 回合序 / 牌堆表一起移位 | — |
+| **死亡拦截** | **有**（`STAT.DeathPrevention` + PreDown 拦截，§180）：`Percent` 是本移植的扩展 | — |
+| **自动打出** | **有**（`combat_autoplay_top`，§182，走普通 `play_card` + 每副本 0 费） | — |
+| **整手牌升级 / 整手牌改费** | **有**（§179：`combat_upgrade_hand`、`combat_randomize_costs`） | — |
 | **偷钱后逃跑**（Looter） | 没有 | 内容 + 一个"偷金币并 Escaped"的节目 |
 | **往牌库塞牌**（Hexaghost 的 Burn） | 机制**有**（`createCardInstance` + 区） | 内容 |
-| **形态切换 / 复活**（Awakened One） | 没有 | 内核（复活 + 换招式表） |
-| **逃跑（flee）** | 没有这个概念 —— 一局只有"打完"或"死" | 内核 |
+| **形态切换 / 复活**（Awakened One / The Guardian Mode Shift） | 没有 | 内核（复活 + 换招式表） |
+| **Giant Head 的 "It Is Time" 递增**（30 点、每次 +5） | **没有**：本项目是**简化版**（320 HP + Metallicize 4 + Glare/Count 两招，§130 记录） | 内容（wiki 的 500 HP 对一局切片太长） |
+| **逃跑（flee）** | **有**，但只在**运行层**（`result = 3`：不给奖励、节点算用掉、Boss 战拒绝，§179）。内核的 `CombatResult` 仍是参考的三种 | 内核（若要让敌人也能"逃走"并带走金币） |
+| **自己行动时自毁**（Reptomancer 的匕首 Explode） | **做不到**：`remove_combatant` 拒绝移除**当前行动者**（回合循环按 id 找它） | 内核（"行动者消失后回合怎么收尾"的判据） |
 
 ### D. 运行层
 
 | 项 | 状态 | 需要 |
 |---|---|---|
 | 地图 6 种节点 + Boss 行 / 每幕独立地图 | **有** | — |
-| 遭遇池按幕分 | **有**：第一幕 7 个 weak，第二幕 2 个，第三幕 6 个（共 22 个遭遇） | 内容（第二幕只有 2 个，第三幕只有 6 个） |
-| **精英池** | **7 个遭遇**：第一幕 `three_sentries` / `gremlin_nob` / **`lagavulin`**，第二幕 `gremlin_leader` / **`book_of_stabbing`** / **`slavers`**，第三幕 `giant_head`。第一、二幕都到 wiki 的三个（§173/§174） | 内容：第三幕还缺 **Nemesis**（"隔回合无形"要一个回合开始触发器的载体状态）与 **Reptomancer**（召唤有 `node.createCombatant`，但"Explode 后自身死亡"需要 `destroyCombatant`，内核没有） |
-| **Boss 池** | 每幕各 **1** 个：Slime Boss / The Champ / Time Eater | 内容 + 内核（The Guardian 的 Mode Shift、Hexaghost 的 Burn 升级、Bronze Automaton 的召唤） |
-| 药水 | **26 / 33**（铁甲战士口径）。缺 7 瓶，见 §D.1 | 见 §D.1 |
+| 遭遇池按幕分 | **有**（`gap_check.py` 打印每幕的数量） | 内容（第二幕的普通池只有 2 个） |
+| **精英池** | 每幕 **3 个**：Act1 `three_sentries / gremlin_nob / lagavulin`、Act2 `gremlin_leader / book_of_stabbing / slavers`、Act3 `giant_head / nemesis / reptomancer` | — （wiki 的每幕 3 个齐了） |
+| **Boss 池** | 每幕各 **1** 个：Slime Boss / The Champ / Time Eater（wiki 是每幕三选一） | 内容 + 内核（The Guardian 的 Mode Shift、Hexaghost 的 Burn 升级、Bronze Automaton 的召唤） |
+| 药水 | **33 / 33**（Ironclad 口径） | — （见 §D.1，全部落地） |
 | 遗物 | **13 件**（7 Common / 4 Uncommon / 1 Rare / 1 Event）。效果是 `rd-run` 里的**手写规则**，不是数据 | 内容 + 内核（每件一条规则）；总数**未核对**（wiki 的 `Relics List` 是模板生成的，取不到可直接引用的清单） |
-| 篝火选项 | **只有 Rest / Smith**；wiki 的 `Rest Sites` 页另有 **Recall**（拿红钥匙，依赖第四幕）与三件遗物开启的 **Lift / Toke / Dig** | 内核（新选项类型）+ 内容 |
-| 商店 | **有**（卡/遗物/药水/删卡，价格按稀有度；A16 加价） | — |
-| 事件 | **9 个**。内核的闭合词表是 `heal / gold / damage / max_hp / nothing / remove_card / upgrade_card / transform_card / curse:<id> / relic:<id>`；本内容的 9 个事件用到的是 `gold / heal / max_hp / nothing / remove_card / upgrade_card / curse`（`gap_check.py` 打印实际用到的） | 内容；**一个选项只能有一条效果**（Golden Idol 那种"遗物 + 诅咒"还不行）→ 内核（效果的**列表**） |
-| 塔底 Neow | **9 项**祝福（`Start` 表） | 内容（缺"用初始遗物换 Boss 遗物"这类交易） |
+| 篝火选项 | **只有 Rest / Smith**；wiki 的 `Rest Sites` 页另有 **Recall**（红钥匙，依赖第四幕）与三件遗物开启的 **Lift / Toke / Dig** | 内核（新选项类型）+ 内容 |
+| 商店 | **有**（卡/遗物/药水/删卡，价格按稀有度；A16 加价）。⚠️ **无色牌不出售**：我们没有 StS 的无色货架，无色牌的唯一来源是 Colorless Potion（§185） | 内核（无色货架）+ 内容 |
+| 事件 | **9 个**。内核的闭合词表：`heal / gold / damage / max_hp / nothing / remove_card / upgrade_card / transform_card / curse:<id> / relic:<id>` | 内容；**一个选项只能有一条效果**（Golden Idol 那种"遗物 + 诅咒"还不行）→ 内核（效果的**列表**） |
+| 塔底 Neow | **9 项**祝福 | 内容（缺"用初始遗物换 Boss 遗物"这类交易） |
 | **钥匙（红/蓝/绿）与第四幕** | 没有 | 内核 + 内容 |
 | **Ascension 1–20** | **9 条 / 20 条**，见 §E | 内核（其余 11 条） |
 
-#### D.1 差的那 7 瓶药水
+#### D.1 药水池：**7 瓶全部落地**（留档，不再算缺口）
 
-对照 `Module:Potions/data`（铁甲战士口径 33 瓶：17 Common / 9 Uncommon / 7 Rare），我们有 26 瓶。
-缺的 7 瓶与它们各自要什么：
+这一节原来逐瓶列"缺什么机制"，现在改成"每瓶最后是怎么做的"，方便下一次有人问
+"Fairy in a Bottle 为什么是个状态"时有答案。
 
-| 药水 | 稀有度 | wiki 效果 | 需要 |
-|---|---|---|---|
-| **Blessing of the Forge** | Common | 本场战斗升级**手牌里所有**牌 | 内核（整手牌升级 + 战斗内升级的临时性） |
-| **Colorless Potion** | Common | 三选一**无色**牌加入手牌 | 内容（无色牌池；`choice_offered:` 已有三种 kind） |
-| **Distilled Chaos** | Uncommon | 打出抽牌堆顶 3 张 | 内核（**自动打出**，且费用为 0） |
-| **Duplication Potion** | Uncommon | 本回合下一张牌打两次 | 内核（出牌次数） |
-| **Fairy in a Bottle** | Rare | 致死时改为回复 30% 最大生命 | 内核（**死亡拦截**；`status.DeathPrevention` 目前已解出但没人读） |
-| **Smoke Bomb** | Rare | 逃离非 Boss 战斗，无奖励 | 内核（逃跑） |
-| **Snecko Oil** | Rare | 抽 5 张，手牌费用**随机化** | 内核（整手牌改费） |
+| 药水 | wiki 稀有度 | wiki 效果 | 落地方案 | § |
+|---|---|---|---|---|
+| Blessing of the Forge | Common | 本场战斗升级手牌里所有牌 | 换 `definition_id` 到 `id+` 那一行（`play` 按定义 id 查节目 ⇒ 升级是真的） | §179 |
+| Snecko Oil | Rare | 抽 5；手牌费用随机化（本场战斗） | `standard.card_cost_override`：**绝对价**、不被出牌消费（delta 是"一次承诺"，表达不了 "for the rest of combat"） | §179 |
+| Smoke Bomb | Rare | 逃离非 Boss 战斗，无奖励 | 运行层 `result = 3`（不是第四种 `CombatResult`，那会动黄金指纹） | §179 |
+| Fairy in a Bottle | Rare | 致死改为回复 30% 最大生命 | `STAT.DeathPrevention`（参考的 PreDown 拦截器）+ `Percent` 扩展 | §180 |
+| Duplication Potion | Uncommon | 本回合下一张牌打两次 | `standard.duplication` + 在 `apply_plan_in_chain` **跑两遍**（只付一次费、只算一次出牌） | §181 |
+| Distilled Chaos | Uncommon | 打出抽牌堆顶 3 张 | 抽到手 → 每副本 0 费 → 走**普通** `play_card` | §182 |
+| Colorless Potion | Common | 三选一无色牌进手牌（本回合 0 费） | `choice_offered:colorless` + 三张无色牌（不进任何牌组） | §183 / §185 |
 
-> 上一版写"差的 13 瓶"。**已过期**：§158/§160 之后只剩 7 瓶，而且其中 5 瓶的机制已经落地
-> （三选一加手牌、从弃牌堆取回、消耗任意张手牌、随机填满腰带、每副本改费）。`gap_check.py` 打印
-> 实际的效果词表 —— 词表里没有名字的，就是还差的那个机制。
+> ⚠️ 上一版写"差的 13 瓶"。**已过期两轮**：§158/§160 之后剩 7 瓶，§179–§185 全部做完。
+> 核对时还抓到我们自己的一个内容错误（`blind` 的稀有度与 Exhaust），说明**词表对了不等于每条
+> 数据都对** —— 所以这一节的每一行都应该能点回 wiki 页面。
 
 ### E. Ascension 逐条
 
 `Module:Ascension`（wiki）列了 20 条，全部**累计**。我们的 9 条在阈值两侧各有一条测试。
 
-| # | wiki 效果 | 状态 |
-|---|---|---|
-| 1 | 精英出现更多（~60%） | **没有**（地图生成没有 elite 权重） |
-| 2 | 普通敌人更致命（伤害提高） | **没有**（`EACT` 没有 ascension 列） |
-| 3 | 精英更致命 | 没有（同上） |
-| 4 | Boss 更致命 | 没有（同上） |
-| 5 | Boss 战后只回复 75% | **有**（`A_BOSS_HEAL`） |
-| 6 | 开局掉 10% 生命 | **有**（`A_START_DAMAGED`，在 `rd-wasm` 里应用） |
-| 7 | 普通敌人更硬（生命 + 格挡） | **有**（`A_NORMAL_HP`，经 `enemy_health_percent(kind)`） |
-| 8 | 精英更硬 | **有**（`A_ELITE_HP`） |
-| 9 | Boss 更硬 | **有**（`A_BOSS_HP`） |
-| 10 | 开局带 Ascender's Bane（诅咒） | **没有**（缺诅咒牌与"开局往牌库里塞牌"） |
-| 11 | 少一个药水栏 | **有**（`A_POTION_SLOT`；腰带遗物仍在其上加 2） |
-| 12 | 升级牌出现率减半（第二、三幕） | **没有**（奖励屏的升级概率没有幕参数） |
-| 13 | Boss 少给 25% 金币 | **有**（`A_BOSS_GOLD`） |
-| 14 | 最大生命 −5（铁甲战士） | **有**（`A_MAX_HP`） |
-| 15 | 事件更糟 | **没有**（事件是闭集，没有"更糟的版本"） |
-| 16 | 商店贵 10% | **有**（`A_SHOP_PRICE`，含删卡服务） |
-| 17 | 普通敌人换招式表 | **没有**（`EACT` 每只怪只有一张招式表） |
-| 18 | 精英换招式表 | 没有（同上） |
-| 19 | Boss 换招式表 | 没有（同上） |
-| 20 | 双 Boss（第三幕两只） | **没有**（`Boss3` 池只有 1 个） |
+| # | wiki 效果 | 状态 | 若要做，卡在哪 |
+|---|---|---|---|
+| 1 | 精英出现更多（~60%） | **没有** | 地图生成要能按 ascension 改 elite 权重（运行层一个数） |
+| 2 | 普通敌人伤害提高 | **没有** | `EACT` 没有 ascension 列 |
+| 3 | 精英伤害提高 | 没有 | 同上 |
+| 4 | Boss 伤害提高 | 没有 | 同上 |
+| 5 | Boss 战后只回复 75% | **有** | — |
+| 6 | 开局掉 10% 生命 | **有** | — |
+| 7 | 普通敌人更硬（生命 + 格挡） | **有** | — |
+| 8 | 精英更硬 | **有** | — |
+| 9 | Boss 更硬 | **有** | — |
+| 10 | 开局带 Ascender's Bane（诅咒） | **没有** | 缺诅咒牌 + "开局往牌库塞牌"（A10 的诅咒内容也还没写） |
+| 11 | 少一个药水栏 | **有** | — |
+| 12 | 升级牌出现率减半（第二、三幕） | **没有** | 奖励屏的升级概率没有幕参数（运行层） |
+| 13 | Boss 少给 25% 金币 | **有** | — |
+| 14 | 最大生命 −5 | **有** | — |
+| 15 | 事件更糟 | **没有** | 事件是闭集，且**一个选项只有一条效果** ⇒ 先做"效果列表" |
+| 16 | 商店贵 10% | **有** | — |
+| 17 | 普通敌人换招式表 | **没有** | `EACT` 每只怪只有一张招式表 |
+| 18 | 精英换招式表 | 没有 | 同上 |
+| 19 | Boss 换招式表 | 没有 | 同上 |
+| 20 | 双 Boss（第三幕两只） | **没有** | `Boss3` 池只有 1 个 |
 
-规律：**能落在"运行层的一个数"上的规则都做了**（金币/生命/药水栏/价格/回复）；
-需要**第二套招式表**或**第二套伤害表**的（A2/3/4、A17/18/19）都要先给 `EACT` 加维度。
+规律没变：**能落在"运行层的一个数"上的规则都做了**；需要**第二套招式表 / 伤害表**的
+（A2/3/4、A17/18/19）都要先给 `EACT` 加维度 —— **一根维度解锁六条规则**，这是 Ascension 里
+性价比最高的一刀。
 
 ### F. 前端 / Live2D 需要的 ABI
 
-**够用的**：战斗观察向量（`rd_env_observe_*`）、动作表、牌堆/手牌读名、敌人读名与意图、
-运行层观察（19 个 slot）、`rd_env_beat_*`（一步之内的有序事件 + 墙位 + DoT 标记 + 丢条计数）、
-`rd_env_forced_turns`、`rd_env_enemy_is_minion`。
+**够用的**：战斗观察向量、动作表、牌堆/手牌读名、敌人读名与意图、运行层观察（19 个 slot）、
+`rd_env_beat_*`（一步之内的有序事件 + 墙位 + DoT 标记 + 丢条计数）、`rd_env_forced_turns`、
+`rd_env_enemy_is_minion`。
 
-**不够的两项**（都不是硬前提，但 Live2D 一定会要）：
+**§177 补上的诊断**（原来"这一步抛了"只有一句家族名）：`rd_env_step_code` /
+`rd_env_code_name_len|into` / `rd_env_host_failure_len|into`。前两个说"哪一类拒绝"，
+最后一个直接给宿主**原始错误**（`Host::last_failure()` 一直存着，只是没有导出读它）。
+
+**还不够的两项**（都不是硬前提，但 Live2D 一定会要）：
 
 | 缺什么 | 为什么 |
 |---|---|
@@ -164,20 +193,28 @@
 
 ## 3. 建议顺序（按"玩家感受 / 成本"比）
 
-1. **事件效果的列表**（内核小改动）—— 解锁 Golden Idol 那种"遗物 + 诅咒"，也让 A15 有落脚点。
-2. **逃跑**（内核）—— 一次改动同时解锁 Smoke Bomb 与 Looter 的偷钱逃走。
-3. **出牌次数 / 费用修饰**（内核）—— 解锁 Duplication、Snecko Oil、Blessing of the Forge 的后半。
-4. **死亡拦截**（内核，`status.DeathPrevention` 已经在解但没人读）—— 解锁 Fairy in a Bottle。
-5. **加密与招式表**（内容 + 内核各一条）—— 精英池 4 → 9，A17/18/19 才有地方落。
-6. **A1 / A10 / A12**（运行层）—— 三条都不需要新招式表，成本比 A2/3/4 低得多。
+1. **`EACT` 的 ascension 维度**（内核 + 内容各一条）—— 一根维度同时解锁 A2/A3/A4 与
+   A17/A18/A19 六条规则，是 Ascension 剩下的最大一块。
+2. **事件效果的列表**（内核小改动）—— 解锁 Golden Idol 那种"遗物 + 诅咒"，也让 A15 有落脚点。
+3. **A1 / A10 / A12**（运行层）—— 三条都不需要新招式表，成本比 A2/3/4 低得多。
+4. **每幕的第二、三只 Boss**（内容 + 内核各一条：Guardian 换形态、Hexaghost 的 Burn 升级、
+   Bronze Automaton 的召唤）—— 顺带验"分裂/召唤/销毁"这三种已落地的机制在别处也能用。
+5. **"行动者可以自毁"**（内核）—— 解锁 Reptomancer 匕首的 Explode 与 Looter 的偷钱逃走；
+   需要"行动者消失后回合怎么收尾"的判据，不是加个参数。
+6. **A20 双 Boss**（运行层 + 内容）—— 需要一个 Boss 池 ≥ 2 的第三幕。
 
 ---
 
 ## 4. 这份文档怎么保持不烂
 
-* 数字：`python -X utf8 native/gap_check.py`。
-* wiki 侧引用（`slaythespire.wiki.gg`，取于 2026-11-01 的核对）：`Module:Potions/data`、
-  `Module:Ascension`、`Keywords`、`Rest Sites`、`Relics`、`Acts`。**页面会变**，所以只引页面名，
-  不引页面里的数字；数字以脚本重算的那一侧为准。
+* 数字：`python -X utf8 native/gap_check.py`（内容/规则）与
+  `python -X utf8 native/sts_content_check.py`（内容自洽）。
+* wiki 侧引用（`slaythespire.wiki.gg`，最近核对 **2026-11-03**）：`Potions_List`、`Module:Potions/data`、
+  `Colorless_Cards`、`Blind` / `Bandage_Up` / `Dark_Shackles` 单卡页、`Module:Ascension`、
+  `Keywords`、`Rest Sites`、`Relics`、`Acts`、`Lagavulin` / `Book_of_Stabbing` / `Nemesis` /
+  `Reptomancer` / `Slavers` / `Taskmaster`。**页面会变**，所以只引页面名 + 核对日期。
 * 改了内容或内核规则之后，**跑一遍脚本**，把正文里对不上的句子改掉 —— 或者干脆改成"见脚本"。
   一句"我们有 26/33 瓶药水"如果没人重算，它会在下一次内容变更后变成谎话，而**没有任何闸门会红**。
+* ⚠️ **闸门看不见 wiki**：本轮重核抓到 `blind` 的稀有度与 Exhaust 都写错了，而 20 道闸门全绿
+  （内容门对照的是 `docs/spec/` 的清单，清单本身也是人抄的）。⇒ 新内容落地时，**至少把稀有度
+  与"是否 Exhaust"这两列回到单卡页看一眼**，它们是最容易"顺手抄邻居"的两格。

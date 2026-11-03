@@ -240,6 +240,28 @@
 
 ---
 
+### 3.6 无色牌（本项目用到的 3 张）
+
+`Colorless_Cards`（wiki，核对于 2026-11-03）：全局 67 张，**不属于任何职业色**。本项目只做
+三张 —— 它们唯一的入口是 Colorless Potion（§183/§185），**不进任何牌组**。
+
+| `id` | name | 稀有度 | 类型 | 费用 | 效果（基准） |
+|---|---|---|---|---|---|
+| `bandage_up` | Bandage Up | **Uncommon** | Skill | 0 | Heal 4 HP. **Exhaust.** |
+| `blind` | Blind | **Uncommon** | Skill | 0 | Apply 2 **Weak to ALL enemies**. **不 Exhaust** |
+| `dark_shackles` | Dark Shackles | **Uncommon** | Skill | 0 | Enemy loses 9 **Strength this turn**. **Exhaust.** |
+
+> 「升级」一列**故意不写**：本项目没有这三张的 `+` 行（它们只由药水在战斗内给出，没有任何牌组
+> 装得下），写一个没人能到达的升级值只会变成下一个过期数字。
+
+> ⚠️ **两处容易抄错的格子**（本项目第一次就抄错了，风景一样）：
+> * **Blind 是 Uncommon**，不是 Common —— 无色牌里 Common 只有少数几张；
+> * **Blind 不 Exhaust**（Bandage Up 与 Dark Shackles 才 Exhaust）。
+>
+> ⚠️ Dark Shackles 的 "**this turn**" 在我们的实现里是**两个状态**：`standard.lose_strength 9`
+> （回合末把力量还回去）+ `standard.strength -9`（当场的减益）。净效果与 wiki 等价（这一回合少 9 点），
+> 但状态面板上能看到两条 —— 这是**写明了的表示差异**，不是两条规则。
+
 ## 4. 敌人
 
 约定：HP 给 **A0（无进阶）** 区间；行动给 **A0** 数值，进阶改动不在 v1 范围（§11）。
@@ -319,12 +341,32 @@
 选 Slime Boss：它的**循环**（Goop Spray → Preparing → Slam）三个动作都能照原样表达，
 而 Split 是一次性的形态转换 —— 降级后它仍是"会塞 Slimed、会砸 35 的大怪"。
 
-> ⚠️ **降级写在明处**：这一版 **Slime Boss 不分裂**。它不是等价的 Slime Boss，是一场
-> 同名前度的简化仗。`enc_slime_boss` 是 `EncounterTables.Boss` 的唯一一项，因为另两只的机制都缺。
+> ✅ **2026-11-03 更新**：Slime Boss **现在会分裂**（§178 的 `node.destroyCombatant` 到位后，
+> "本体消失 + 两只顶替"才第一次能正确表达；§180 之前它靠"再生成两只"近似，会被同一回合的
+> 多次伤害反复触发直到战斗员容器溢出）。
+>
+> 仍然缺的是另外两只 Boss 的机制：Guardian 的 **Mode Shift**（受伤计数 + 形态状态机）、
+> Hexaghost 的 **Burn 升级**。"三选一"这一层仍然无从体现 —— `Boss` 池只有 1 个。
 
 > `inv:§4.3` 说三只等概率三选一【推断】；本内容只有一只，所以"三选一"这一层现在无从体现。
 
 ---
+
+### 4.4 第 2 / 3 幕的精英（本项目已实现，2026-11-03 回 wiki 复核）
+
+第一幕的 3 个精英在 §4.2；第二、三幕的这 6 个是 §173 / §175 加的，数字来自各自的单怪页面。
+
+| `id` | name | HP（A0） | AscHP | 行动（A0） | 特殊机制 |
+|---|---|---|---|---|---|
+| `book_of_stabbing` | Book of Stabbing | 160-164 | 168-172 | Multi-Stab: **6 × N**（N = 本场战斗已用次数 + 2）/ Single Stab: 21 | 每次 Multi-Stab 的段数**在场内递增** |
+| `lagavulin` | Lagavulin | 109-111 | 112-115 | Asleep（不行动，Metallicize 8 每回合给 8 Block）/ Attack 18 / Siphon Soul（先 −1 Dexterity 再 −1 Strength） | 睡 3 回合自醒；被**穿透格挡的 HP 伤害**打醒则先眩晕 1 回合；醒后失去 Metallicize |
+| `taskmaster` | Taskmaster（Slavers 遭遇） | 54-60 | 57-64 | Scouring Whip: 7 dmg + 往弃牌堆塞 1 张 **Wound**（A2 起 2 张，A18 起 3 张 + 1 力量） | 与 Slaver × 2 同场 |
+| `nemesis` | Nemesis | 185 | 200 | Debuff / Attack 45 / Scythe 45（塞 3 Burn） | **每两回合 Intangible**（`standard.phantom_veil` 的载体） |
+| `reptomancer` | Reptomancer | 180-190 | 190-200 | Spawn Dagger（召唤 Dagger，**最多 4 只**）/ Snake Strike 13×2 + 1 Weak / Big Bite 30（A3 起 34） | 匕首 Explode 会自毁 —— 我们**做不到**（见 `sts-wiki-gap.md` §C） |
+| `giant_head` | Giant Head | **500** | **520** | Glare（1 Weak）/ It Is Time（30 dmg，**每次 +5**）/ Count | **本项目是简化版**：HP **320** + Metallicize 4 + 只有 Glare/Count 两招，**没有** It Is Time 的递增（§130 记录了这个偏差）。wiki 的 500 HP 对一局切片太长 |
+
+> ⚠️ **召唤上限**：wiki 对 Reptomancer 写的是"最多 4 只 Dagger"，本项目的 `node.createCombatant`
+> **没有上限参数**，唯一的界是 6 个敌人槽 —— 这是写明了的偏差。
 
 ## 5. 遭遇编成（Encounter）
 

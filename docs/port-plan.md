@@ -12799,3 +12799,97 @@ manifest 走。
 * **20/20 闸门绿**，单测 **824**（rd-core 657 / rd-run 100 / rd-wasm 67）。
 * 内容：**41 卡 / 33 瓶药水（Common 17 / Uncommon 9 / Rare 7）/ 27 状态**。
 * **药水池 25 → 33，差的 7 瓶全部落地**（Fairy 在 §180，其余在 §179/§181/§182/§183/§185）。
+
+---
+
+## 186. 文档体检：回 wiki 重核、规格书补课、README 重写
+
+这一节不动代码，只把"仓库说的"和"仓库做的"对齐。触发点有三条：药水池刚做完（7 瓶新内容 +
+3 张无色牌）、§178–§185 加了四个新机制（销毁 / 死亡拦截 / 打两次 / 自动打出），
+以及 README 从来没写过"下载源码之后怎么跑起来"。
+
+### 186.1 ★★ 回 wiki 重核：抓到我们自己的一处内容错误
+
+逐条回到 `slaythespire.wiki.gg` 的**单卡页**核对本轮新增的内容（不只对清单页）：
+
+```
+blind:  Rarity = Common      (我们)  ->  Uncommon        (wiki 单卡页 / Colorless_Cards)
+        PlayedCardDestinationZone = Exhaust (我们)  ->  DiscardPile（Blind **不** Exhaust）
+```
+
+同批核对的其余条目都对：`bandage_up`（Uncommon / Heal 4 / **Exhaust**）、`dark_shackles`
+（Uncommon / −9 Strength **this turn** / **Exhaust**）、33 瓶药水的稀有度分布（17 / 9 / 7）、
+Act 2/3 六个精英的 HP 与招式（Book of Stabbing 160-164、Lagavulin 109-111 + Metallicize 8、
+Taskmaster 54-60 + Wound、Nemesis 185 + 隔回合 Intangible、Reptomancer 180-190 + 最多 4 匕首、
+Giant Head 500）。
+
+**而当时 20 道闸门全绿。** 原因值得写下来：
+
+> 内容门（`native/sts_content_check.py`）对照的是 `docs/spec/sts-act1-inventory.md` 里的清单，
+> 而**那份清单也是人抄的**。于是"我们抄错 + 清单也抄错"这个组合没有任何判据能看见 ——
+> 与 §161.3 的"同一个词表被多处认识就一定漂"是同一个形状，只不过这次漂的是**数据**不是词表。
+
+⇒ 结论写进缺口文档 §4：新内容落地时，**稀有度**与**是否 Exhaust** 这两格必须回到单卡页看一眼，
+它们最容易被"顺手抄邻居"。本轮的错误正是这两格一起抄错了。
+
+### 186.2 `docs/sts-wiki-gap.md`：整篇重写
+
+旧版写于"药水 26/33、精英 4 个遭遇"的年代，一半的"没有"已经做完。重写后：
+
+* §1 已对上的部分：补上销毁战斗员、死亡拦截、自动打出、脱战、**药水池已满**、§177 的诊断导出；
+* §2.A 关键词：`Double Damage` 从"没有"改成"**部分**"（`standard.duplication` + 出牌路径已在用，
+  但它挂在状态上、不是卡牌关键词，也不认"攻击牌"这个条件）；
+* §2.B 状态：明确列出**三类** —— wiki 有且我们有规则的、**本移植自己的载体**
+  （`fairy_in_a_bottle` / `duplication` / `phantom_veil`，wiki 没有同名状态）、以及还缺的
+  （Barricade / Blur / Entangled / Slow / Draw / Energized）；
+* §2.C 战斗流程：逃跑、销毁、死亡拦截、整手牌升级/改费、自动打出都移进"有"；
+  仍然缺的是"偷钱后逃跑"、"形态切换/复活"、以及**行动者自毁**（`remove_combatant` 拒绝移除当前行动者）；
+* §2.D：精英池改成**每幕 3 个**（Act1/2/3 各三个都齐了）；药水 33/33；无色牌**不出售**；
+* §D.1：从"差 7 瓶"改成"7 瓶各自最后怎么做的"（留档：为什么 Fairy 是个状态、为什么脱战在运行层）；
+* §2.E Ascension：表格加"若要做，卡在哪"一列，并点出 **`EACT` 一根维度解锁六条规则**；
+* §3 建议顺序：改成"先 `EACT` 维度 → 事件效果列表 → A1/A10/A12 → 第二三只 Boss → 行动者自毁 → A20"。
+
+### 186.3 `docs/spec/*`：给 8 份规格书补"实现补充"章节
+
+规格书是**冻结的设计契约**，所以不改正文，只在末尾（或 §2 之后）追加带日期的落地记录：
+
+| 文件 | 补了什么 |
+|---|---|
+| `SEMANTICS-v1.md` | 新增 **§2.3 实现期扩展**：`node.destroyCombatant`、`STAT.DeathPrevention`（PreDown 拦截）、`card_cost_override`、`duplication`、运行层动词，以及那条"触发器效果是入队请求 ⇒ once-only 不能由内容表达"的队列语义 |
+| `play-card-flow.md` | §11：费用阶段的**绝对价**（读在 delta 之前、不被消费）与"节目跑两遍"为什么只能放在 `apply_plan_in_chain`（那里同时有"只付一次费"与 `Content` 借用） |
+| `modifier-pipeline.md` | §8：两张"每副本"计数器（delta 付款即清零 / override 永不清零）+ 为什么必须用 `mark_counter_opt` |
+| `run-layer.md` | §10：脱战是**运行层** `result = 3`（动内核会动 85 份语料）；无色牌滤网放在 `full_pool`（商人**和**奖励都从它取样） |
+| `content-schema.md` | §8：三个新节点/字段 + **两个只在镜像里炸的方言坑**（`DurationTurns` 是裸整数、`sel.allEnemies` 的 value 形状） |
+| `content-binary-format.md` | §6：term 表的**形状**现在被第 11 道闸门读（三条判据 + 负控） |
+| `env-abi.md` | §12：§177 的三个诊断导出（拒绝码 + 宿主失败原文）+ `?debug` 的 `dropPotions()` |
+| `sts-act1-plan.md` | §10：现状（能力/内容/仍缺）与"以 gap 文档与 port-plan 为准"的指向 |
+
+顺带在 `sts-act1-inventory.md` 补了两块**之前没有出处记录**的 wiki 事实：**§3.6 无色牌**
+（含 Blind 的两个易抄错格子）、**§4.4 Act 2/3 的 6 个精英**；并把 §4.3.1 那句"本版 Slime Boss
+**不分裂**"改成"现在会分裂"（§178 之后它才第一次能正确表达）。
+
+### 186.4 README：新增「五分钟跑起来」
+
+原 README 只讲架构与闸门，一个**普通用户**看完不知道从哪开始。新版第一节是完整的上手路径：
+
+1. 装什么（Rust + wasm 目标 + Python；Node/Chrome 只在跑闸门时需要）；
+2. `cargo build -p rd-wasm --release --target wasm32-unknown-unknown` + 覆盖 `web/rd_wasm.wasm`
+   （并说明**内容镜像已经 `include_bytes!` 进 wasm**，不需要另备数据）；
+3. `python -m http.server 8000` → `http://127.0.0.1:8000/web/index.html`
+   （并解释为什么必须走 HTTP、为什么从**仓库根目录**起服务）；
+4. **怎么玩**：种子 → 祝福 → 地图六种节点 → 战斗（点牌/点敌人/结束回合、意图、药水）→ 奖励/商店/篝火；
+5. `?debug` 面板的五个调试入口；
+6. **常见坑表**：白屏（`file://`）、缓存（Ctrl+F5）、改了内核没重编 wasm、没装 wasm 目标、内容没重编。
+
+两处"可验证的断言"当场验了，不靠感觉：
+
+* `python -m http.server` 对 `.wasm` 发的 Content-Type 实测是 **`application/wasm`**（否则浏览器会拒绝流式实例化）；
+* **全新 target 目录**（`--target-dir` 指向一个空目录）能从零编出 wasm，9.78 s —— 说明上手路径
+  不依赖任何陈旧产物。
+
+### 186.5 数字
+
+* 文档：`README.md` 重写（新增 §1 上手 + §1.4 玩法 + §1.5 调试 + §1.6 坑表），
+  `sts-wiki-gap.md` 整篇重写，`sts-act1-inventory.md` +2 节 −1 处过期注解，8 份规格书补章节。
+* 代码：只有一处内容修正（`blind` 的稀有度与去向），20/20 闸门绿、单测 824 不变。
+* 内容重新核对覆盖：33 瓶药水、3 张无色牌、6 个 Act2/3 精英、Ascension 20 条、关键词页。

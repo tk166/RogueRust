@@ -8,10 +8,10 @@ come from re-serialising the parsed document with each item removed.
 
 | quantity | bytes | vs raw | vs compact |
 |---|---|---|---|
-| source on disk (pretty-printed JSON) | 318274 | 1.00x | — |
-| source, compact JSON | 165952 | 1.9x | 1.00x |
-| source, compact + redundant `Children` removed | 165952 | 1.9x | 1.00x |
-| source, compact + `Children` + presentation removed | 150378 | 2.1x | 1.10x |
+| source on disk (pretty-printed JSON) | 318280 | 1.00x | — |
+| source, compact JSON | 165958 | 1.9x | 1.00x |
+| source, compact + redundant `Children` removed | 165958 | 1.9x | 1.00x |
+| source, compact + `Children` + presentation removed | 150384 | 2.1x | 1.10x |
 | **RDCF binary, full** | **45584** | **7.0x** | **3.6x** |
 | **RDCF binary, presentation stripped** | **37736** | **8.4x** | **4.4x** |
 
@@ -61,7 +61,7 @@ under *shared*.  So the columns do not add up to the file size, by design.
 
 | top-level key | items | compact B | exclusive term B | exclusive string B |
 |---|---|---|---|---|
-| `Cards` *(table)* | 41 | 33881 | 980 | 1901 |
+| `Cards` *(table)* | 41 | 33887 | 980 | 1901 |
 | `Statuses` *(table)* | 27 | 23061 | 1388 | 2167 |
 | `EnemyActions` *(table)* | 79 | 52584 | 2016 | 2544 |
 | `Encounters` *(table)* | 27 | 15122 | 1096 | 7 |
@@ -79,7 +79,7 @@ under *shared*.  So the columns do not add up to the file size, by design.
 | `Start` | 9 | 387 | 0 | 6 |
 | **shared (reached from >1 group)** | | | **644** | **3530** |
 
-Column sum 165747 B = compact 165952 B minus the 205 B spent on the 16 top-level key
+Column sum 165753 B = compact 165958 B minus the 205 B spent on the 16 top-level key
 names, their quotes and the surrounding braces.
 
 `InertKeys` / `Notes` / `UnknownRooms` / `Potions` above are **document keys**: build metadata that is serialised into neither
@@ -148,7 +148,7 @@ Sources of truth for each of those claims:
   * `Events[].situations[].TextKey`, `...Choices[].TextKey`, `Shops[].Offers[].TextKey`
   * the whole `Presentation` object (4 B compact)
 
-  Measured effect: compact 165952 -> 150378 B; binary 45584 -> 37736 B (saves 7848 B, 17.2%).
+  Measured effect: compact 165958 -> 150384 B; binary 45584 -> 37736 B (saves 7848 B, 17.2%).
 
 ## 4. Derived tables
 
