@@ -111,6 +111,15 @@ INV_CARDS = {
              "Facts": [("damage", 8, "event"), ("status", "standard.vulnerable", 2, "event")]},
     # inv:§10 -- a status card created by two enemies (not part of the deck).
     "slimed": {"Cost": 1, "Tags": ["status", "unplayable", "junk"], "Facts": []},
+    # §183: the colorless pool. The Colorless Potion offers three of them; **no deck can hold them**,
+    # which is why they have no `+` row (see NOT_UPGRADABLE_TAGS). Wiki values, base.
+    "bandage_up": {"Cost": 0, "Tags": ["skill", "colorless"],
+                   "Facts": [("heal", 4, "sourceDowned")]},
+    "blind": {"Cost": 0, "Tags": ["skill", "colorless"],
+              "Facts": [("status", "standard.weak", 2, "allEnemies")]},
+    "dark_shackles": {"Cost": 0, "Tags": ["skill", "colorless"],
+                      "Facts": [("status", "standard.lose_strength", 9, "event"),
+                                ("status", "standard.strength", -9, "event")]},
     # inv:§2.1 "升级后" -- the upgraded rows. They are **separate CARD rows**, not a flag on the base
     # card (`sts-act1-plan.md` §6.5-2), and their numbers are the inventory's second column:
     # strike+ 9 damage, defend+ 8 Block, bash+ 10 damage + 3 Vulnerable.
@@ -1222,7 +1231,11 @@ POTION_NEEDS_TARGET = ("combat_damage", "combat_status_target")
 
 
 # The tags a card can carry and still be upgraded at a campfire. Curses and statuses cannot.
-NOT_UPGRADABLE_TAGS = ("curse", "status")
+# §183: `colorless` joins the list, and the reason is **not** "they cannot be upgraded" (in StS they
+# can) -- it is that **no deck can ever hold them**: the only way a colorless card enters play is a
+# potion's offer, inside one fight. A `+` row would be content nothing can reach, and inventing three
+# upgrades whose wiki numbers nobody read is worse than saying so.
+NOT_UPGRADABLE_TAGS = ("curse", "status", "colorless")
 
 
 def check_upgrades(doc):

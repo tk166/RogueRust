@@ -2003,6 +2003,17 @@ function measure() {
         if (verdict === 0) renderTopBar();
         return verdict;
       },
+      // §185: empty the belt. `?debug` only -- same reason as `givePotion`: a scenario that has to
+      // hope the drop lottery handed it a specific bottle is not a scenario.
+      dropPotions: () => {
+        let dropped = 0;
+        while (ex.rd_run_potion_count() > 0) {
+          if (ex.rd_run_drop_potion(0) !== 0) break;
+          dropped += 1;
+        }
+        renderTopBar();
+        return dropped;
+      },
       settle: () => new Promise((resolve) => setTimeout(resolve, 0)),
     };
   }

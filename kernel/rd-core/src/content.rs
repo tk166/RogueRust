@@ -4332,7 +4332,7 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.potion_count(),
-            32,
+            33,
             "§158: eleven after §157, plus nine that need no new mechanic, plus the five whose \
              effect is a card choice, plus §161.7's Power Potion, plus §179's three (Blessing \
              of the Forge, Snecko Oil, Smoke Bomb), plus §180's Fairy in a Bottle"
@@ -4440,6 +4440,7 @@ mod tests {
                 "blessing_of_the_forge",
                 "block_potion",
                 "blood_potion",
+                "colorless_potion",
                 "cultist_potion",
                 "dexterity_potion",
                 "distilled_chaos",
@@ -4480,7 +4481,7 @@ mod tests {
         // Elixir and Gambler's Brew, which is the whole reason it is a number here.
         assert_eq!(
             bands,
-            [16, 9, 7],
+            [17, 9, 7],
             "Common / Uncommon / Rare -- the wiki's Ironclad pool is 17 / 9 / 7. §179 added              Blessing of the Forge (Common) and **two** Rares (Snecko Oil, Smoke Bomb), so every              band is still short by exactly what this content does not carry"
         );
 

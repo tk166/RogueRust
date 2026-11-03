@@ -59,14 +59,15 @@
  73  3  6  16 OBJ _obj(Events,Events2,Events3)                                 : Events:TERMLIST Events2:TERMLIST Events3:TERMLIST
  74  1  1   4 OBJ _obj(Id)                                                     : Id:STR
  75  4  4  12 OBJ _obj(Id,MaxNodeDepth,MaxProgramSteps,Root)                   : Id:STR(Wrap) MaxNodeDepth:INT MaxProgramSteps:INT Root:TERM
- 76  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
- 77  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
- 78  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
- 79  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
- 80  3  3   8 OBJ _obj(Percent,Repeating,SurvivingHealth)                      : Percent:INT Repeating:BOOL SurvivingHealth:INT
- 81  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
- 82  1  1   4 OBJ _obj(TurnEndInHand)                                          : TurnEndInHand:TERM
- 83  1  1   4 OBJ _obj(gold)                                                   : gold:INT
+ 76  2  2   8 OBJ _obj(Id,Root)                                                : Id:STR(Wrap) Root:TERM
+ 77  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
+ 78  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
+ 79  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
+ 80  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
+ 81  3  3   8 OBJ _obj(Percent,Repeating,SurvivingHealth)                      : Percent:INT Repeating:BOOL SurvivingHealth:INT
+ 82  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
+ 83  1  1   4 OBJ _obj(TurnEndInHand)                                          : TurnEndInHand:TERM
+ 84  1  1   4 OBJ _obj(gold)                                                   : gold:INT
 
 # reserved opcodes:
   0 reserved : (no fields)

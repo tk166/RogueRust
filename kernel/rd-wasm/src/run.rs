@@ -411,6 +411,17 @@ fn full_pool(
 ) -> Result<Vec<rd_run::state::PoolCard<'static>>, String> {
     let mut pool = Vec::new();
     for id in card_pool(content) {
+        // §183/§185: **colorless cards never enter a deck.** In StS they live in their own pool and
+        // arrive through the dedicated merchant slot, events and potions; this content has no such
+        // slot, so the honest rule is "the Colorless Potion is the only way to see one".
+        //
+        // ⚠️ This belongs in `full_pool`, not in `reward_pool`: the **merchant** draws from
+        // `full_pool`, so filtering only rewards left the three new cards for sale -- the driver
+        // bought them, its deck got weaker, and eleven of twelve seeds died early. One rule, one
+        // owner (the ping-pong between two lists is exactly how such a leak survives).
+        if content.card_has_tag(id, "colorless") == Some(true) {
+            continue;
+        }
         let rarity = match content.card_rarity(id) {
             Some(name) => rd_run::state::Rarity::from_name(name)
                 .ok_or_else(|| std::format!("卡 `{id}` 的 Rarity `{name}` 不认识"))?,
@@ -429,13 +440,6 @@ fn reward_pool(
     for card in full_pool(content)? {
         let id = card.id;
         if id.ends_with('+') {
-            continue;
-        }
-        // §183: **colorless cards are not combat rewards.** StS keeps them in their own pool
-        // (shops and some events); before this filter the three colorless rows added for the
-        // Colorless Potion would have made every fight able to pay one -- a content bug that no
-        // gate would have caught, because "a card was offered" is true either way.
-        if content.card_has_tag(id, "colorless") == Some(true) {
             continue;
         }
         // `rd-run` drops `Status`/`Curse` from the roll itself -- one rule, one owner.
@@ -5914,6 +5918,61 @@ mod tests {
             energy_before,
             "the potion pays, the player does not -- energy must not move"
         );
+    }
+
+    /// §183: Colorless Potion -- "Choose 1 of 3 random Colorless cards to add to your hand."
+    ///
+    /// Three judgments: the question is an **offered** one (`source = 2`, §161.5), it has exactly
+    /// three answers, and every answer is a colorless card from this content. Then the pick lands
+    /// in the hand -- because "a picker appeared" is not the potion.
+    #[test]
+    fn colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+
+        let hand_before = hand_ids();
+        assert_eq!(drink("colorless_potion", -1), 0, "drinking it opens the question");
+
+        // §161.5: `ChoiceSource::Offered` is `2` in the ABI, and the potion is consumed either way.
+        assert_eq!(crate::rd_env_choice_pending(), 1, "the picker is waiting");
+        assert_eq!(crate::rd_env_choice_source(), 2, "an Offered question");
+        let options = crate::rd_env_choice_count();
+        assert_eq!(options, 3, "`1 of 3`, exactly");
+
+        let mut names = Vec::new();
+        for slot in 0..options {
+            let length = crate::rd_env_pile_card_id_len(3, slot);
+            assert!(length > 0, "option {slot} has a name");
+            let mut buffer = vec![0u8; length as usize];
+            unsafe { crate::rd_env_pile_card_id_into(3, slot, buffer.as_mut_ptr()) };
+            names.push(String::from_utf8(buffer).expect("ascii ids"));
+        }
+        let colorless = ["bandage_up", "blind", "dark_shackles"];
+        for name in &names {
+            assert!(
+                colorless.contains(&name.as_str()),
+                "{name} is not a colorless card -- the pool leaked: {names:?}"
+            );
+        }
+
+        // Pick the first answer and confirm.
+        assert_eq!(crate::rd_env_choice_pick(0, 1), 0, "tick the first option");
+        assert_eq!(crate::rd_env_choice_confirm(), 0, "confirm it");
+        assert_eq!(crate::rd_env_choice_pending(), 0, "the question is answered");
+
+        let hand_after = hand_ids();
+        assert_eq!(
+            hand_after.len(),
+            hand_before.len() + 1,
+            "the chosen card is in the hand: {hand_after:?}"
+        );
+        let added: Vec<&String> = hand_after
+            .iter()
+            .filter(|id| colorless.contains(&id.as_str()))
+            .collect();
+        assert_eq!(added.len(), 1, "exactly one colorless card joined: {hand_after:?}");
     }
 
     /// The hand's definition ids, in pile order (`hand_costs` has the prices).
