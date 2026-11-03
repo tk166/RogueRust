@@ -2607,6 +2607,17 @@ pub enum ProgramTerminalHook {
         card: CardInstanceId,
         /// 落哪个区（`PlayedCardDestination`，`:298-302`）。
         destination: CardZone,
+        /// §181: 这个节目在镜像里的根（`term` 号）。**只有"再打一遍"的路径读它** ——
+        /// Duplication Potion 要在第一遍**跑完之后**把同一个节目再跑一遍，而那时
+        /// `plan` 已经不在了，帧上只剩这些数据。
+        program: u16,
+        /// 出牌时瞄的目标（`PlayRequest.target`）。第二遍必须瞄同一个，
+        /// 否则"打两次"会变成"打两个不同的目标"。
+        target: Option<CombatantId>,
+        /// X 费的 `X`（第一遍付了多少遍，第二遍就一样多）。
+        x_cost: i32,
+        /// 步数预算（第二遍用同一个，否则同一个节目会有两种预算）。
+        max_steps: u32,
     },
 }
 

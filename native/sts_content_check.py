@@ -86,7 +86,8 @@ INV_COUNTS = {
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
-    "statuses": 26,
+    # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
+    "statuses": 27,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -524,6 +525,8 @@ INV_STATUSES = {
     # because an empty expectation is the **assertion** ("this row must not grow modifiers"), not
     # an omission.
     "standard.fairy_in_a_bottle": [],
+    # §181: no triggers, no modifiers -- `play.rs` reads its charges when a card program starts.
+    "standard.duplication": [],
     "standard.plated_armor": [],
     # §175: Nemesis's carrier -- the first content row using a `TurnStarted` trigger.
     "standard.phantom_veil": [],
@@ -1207,6 +1210,8 @@ POTION_KINDS = ("combat_block", "combat_energy", "combat_heal_percent", "combat_
                 # Oil, Smoke Bomb). Listed here as the **second opinion** -- §161.3 taught that a
                 # vocabulary known in two places drifts unless both are checked.
                 "combat_upgrade_hand", "combat_randomize_costs", "combat_flee",
+                # §182: auto-play reads the count, so it is **not** in `NO_AMOUNT`.
+                "combat_autoplay_top",
                 # §157/§158: the effects that are about the **run**, not the fight (Fruit Juice,
                 # Entropic Brew). §158 made them usable **outside** a fight, which is what the wiki
                 # says; before that the "no fight" check came first and refused them.

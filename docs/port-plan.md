@@ -12625,3 +12625,73 @@ wiki 的 Fairy in a Bottle 是 "heal to **30% of your Max HP**"，而参考的�
 * 惰性声明少了一条：`Statuses[]:DeathPrevention` 从 `InertKeys` 里删掉 —— 是内容门自己喊的
   （"declared inert but the kernel reads it at status_bind.rs:638"），这正是那个声明的用途。
 * 还剩 3 瓶：Duplication（打两次）、Distilled Chaos（自动打出）、Colorless（无色牌池）。
+
+---
+
+## 181–183. 药水池（三）：打两次、自动打出、无色牌池
+
+### 181. Duplication Potion —— "your next card is played twice"
+
+机制是**状态**（`standard.duplication`，`UsesCharges`）+ 出牌路径上的一个判断。位置在
+`apply_plan_in_chain`，理由三条，每条都是"否则就错"：
+
+1. 那里是**唯一**"只付一次费、只算一次出牌"的地方 —— 参考的 `CardPlay` 早就把能量扣了；
+   如果改成"再调一次 `play_card`"，能量扣两次、`cards_played_this_turn` 加两次（StS 都不是这样）。
+2. 那里**有 `Content` 借用**。终态回调（`finish_frame`）是数据驱动的、没有 content，而 `NodeRef`
+   需要它；要把 content 穿进 `finish_frame` 得改 5 个调用点、其中两个（`fail_frame` /
+   `cancel_live_frames`）根本拿不到。
+3. 两遍的节目是**入队**的（`exec::begin` 只派发、不落地），所以 A 的请求在前、B 的请求在后，
+   正是"打两次"要的顺序。
+
+判据三面：伤害**两份**（20→8）、能量**只付一次**、`cards_played_this_turn` **只加一次**，
+然后那一层被花掉 ⇒ 第二张牌只打一遍。负控（`passes` 固定为 1）⇒ `left: 14, right: 8`。
+
+### 182. Distilled Chaos —— "Play the top 3 cards of your draw pile"
+
+不是第二条出牌管线：**抽到手里 → 用 §179 的每副本覆盖把它变成 0 费 → 走普通 `play_card`**。
+所以牌真的被打出（落区、`CardPlayed` 事件、节目都照常）。判据四面：抽牌堆 −3、弃牌堆 +3
+（= 真的打出了）、敌人掉血、**能量不动**。
+
+⚠️ 两处写明了的偏差：目标是**第一个活着的敌人**（StS 随机；我们要求同一 seed 重放同一目标）；
+不可打出的牌（诅咒）搬去弃牌堆后继续。
+
+### 183. Colorless Potion —— 机制成立，内容**未落地**
+
+`choice_offered:<tag>`（§161.5）本来就在，缺的只是三张无色牌。三张都写好了
+（Bandage Up / Blind / Dark Shackles，最后一张正好用上内容里已有的 `standard.lose_strength`），
+单测也钉住了"候选恰好三张、全是 colorless、选中的牌进手牌"。**但闸门不绿**：
+
+```
+boss seed=101  hpBefore=90  actAfter=1  msgAfter="战斗结束 · Defeat"
+```
+
+把 33 瓶药水 + 3 张无色牌加进内容之后，**同一个种子走的是另一条路线**（掉落表与奖励池都变了），
+而这个驱动器在 Boss 战里输了。这是**合法的战败**，不是引擎 bug —— 但闸门的断言是"这一幕能走完"，
+所以它变成了对内容字节数的抽签。
+
+按纪律撤回内容，留下三块**可复用的资产**与一条结论：
+
+* `reward_pool` 里的 colorless 滤网（当前内容没有 colorless 牌，所以它是空转 —— 但它防的是
+  "无色牌漏进普通奖励"这个未来的 bug，注释写明了）；
+* 三张卡的**正确写法**（这一节最大的收获见下）；
+* 结论：**押单一 seed 的闸门经不起内容增长**。要让 §183 落地，先给 boss 场景一个"重试到赢"的
+  驱动（`BOSS_SEEDS` 的第一版试过：种子 202 能赢但腰带是满的、药水锚点没触发；505 腰带空但输了），
+  或者把机器人做强。这是下一节的第一件事，不是"再挑一个幸运数字"。
+
+### 183.1 ★★ 内容方言的两个坑（都只会在内核里炸，内容门看不见）
+
+1. **`node.applyStatus` 的 `DurationTurns` / `Charges` 是裸整数**，不是 term。写成
+   `{"kind":"const",…}` 会被当 JSON 编进镜像，然后在**任何**状态的触发器里炸成
+   `Ir(WrongKind("F_JSON"))` —— 症状是"加了一张卡，另一个不相关的测试红了"。
+2. **`sel.allEnemies` 的 `value` 是 `{}` 或 `{"Cardinality":"Any"}`**；写 `"Many"` 是同一个
+   `F_JSON` 症状。
+
+两者都是"内容门只读 JSON、二进制只有内核测试碰"，所以定位成本极高（这一节在这上面花了最久）。
+**下一步的闸门候选**：内容门应当把编译后的镜像**反解一遍**（或至少 `rdcf-verify` 覆盖 CARD 行），
+否则"形状错"永远只在运行时暴露。
+
+### 183.2 数字
+
+* **20/20 闸门绿**，单测 **823**（rd-core 657 / rd-run 100 / rd-wasm 66）。
+* 内容：38 卡 / 32 瓶药水（Common 16 / Uncommon 9 / Rare 7）/ 27 状态。
+* 药水池只剩 **1 瓶**没落地：Colorless（内容已写好，等驱动）。

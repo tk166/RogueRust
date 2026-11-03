@@ -909,19 +909,55 @@ fn apply_plan_in_chain(
         player: plan.source,
         card,
         destination: plan.destination,
+        program: root.id(),
+        target: plan.target,
+        x_cost: plan.x_cost,
+        max_steps: plan.max_steps,
     };
-    let begun = {
-        let mut ctx = ExecContext::new(
-            state,
-            Some(plan.source),
-            plan.target,
-            None,
-            plan.max_steps,
-        )
-        .with_content(plan.content)
-        .with_x_cost(plan.x_cost);
-        exec::begin(root, &mut ctx, hook)
-    };
+    // ── §181：Duplication Potion —— "This turn, your next card is played twice." ────────────────
+    //
+    // 位置在这里，不是因为方便，而是因为这是**唯一**能在"只付一次费、只算一次出牌"的前提下
+    // 把节目跑两遍的地方：`apply_plan` 已经把能量扣了、`cards_played_this_turn` 已经加了，
+    // 而这里的 `begin` 只负责**派发节目**（它只入队请求，落地在排空时）。
+    //
+    // ⚠️ 为什么不"再调一次 `play_card`"：那会扣两次能量、算两次出牌 —— StS 都不是这样。
+    // ⚠️ 为什么不放在终态回调里重跑：hooks 是**数据**、没有 `Content` 借用，而
+    // `NodeRef` 需要它（`finish_frame` 有 5 个调用点、其中两个拿不到 content）。
+    //
+    // 两遍的帧同时存在，效果队列因此是 A 的请求在前、B 的请求在后 —— 对"打两次"来说，
+    // 这就是要的顺序（节目本身只**入队**，状态在排空时才变）。
+    let duplicate = state
+        .combatant(&plan.source)
+        .is_some_and(|combatant| total_status_stacks(combatant, DUPLICATION_STATUS) > 0);
+    if duplicate {
+        // 先把那一次花掉：否则第二遍的终态回调/下一次出牌又会看到它。
+        spend_one_charge(state, &plan.source, DUPLICATION_STATUS)?;
+    }
+    let passes: usize = if duplicate { 2 } else { 1 };
+    let mut begun = None;
+    for _ in 0..passes {
+        let attempt = {
+            let mut ctx = ExecContext::new(
+                state,
+                Some(plan.source),
+                plan.target,
+                None,
+                plan.max_steps,
+            )
+            .with_content(plan.content)
+            .with_x_cost(plan.x_cost);
+            exec::begin(root, &mut ctx, hook)
+        };
+        begun = Some(attempt);
+        if !duplicate {
+            break;
+        }
+        // 第二遍只在第一遍**真的开始**了之后才有意义（`Ok(None)` = 战斗已结束）。
+        if !matches!(begun, Some(Ok(Some(_)))) {
+            break;
+        }
+    }
+    let begun = begun.unwrap_or(Ok(None));
     let frame = match begun {
         Ok(Some(run)) => run.frame,
         Ok(None) => {
@@ -991,7 +1027,23 @@ pub(crate) fn run_terminal_hook(
             player,
             card,
             destination,
-        } => card_program_terminal(state, player, card, destination, outcome),
+            program,
+            target,
+            x_cost,
+            max_steps,
+        } => card_program_terminal(
+            state,
+            CardPlayTerminalContext {
+                player,
+                card,
+                destination,
+                program,
+                target,
+                x_cost,
+                max_steps,
+            },
+            outcome,
+        ),
     }
 }
 
@@ -1007,13 +1059,38 @@ pub(crate) fn run_terminal_hook(
 /// ⇒ 手牌守卫只挡**落区**，`CloseAction` **照样跑**。批次 2 第一版把两句写在同一个函数里
 /// 一起早退，结果是"卡被自己的节目搬走时连收尾都不发号" —— 比参考少一个链号，
 /// 而 `archive_the_evidence` 那一格立刻变红（`a_play_advances_both_counters_…`）。
-fn card_program_terminal(
-    state: &mut CombatState,
+/// 一次出牌节目终态时需要的全部数据（§181 从 `ProgramTerminalHook` 里原样传下来）。
+struct CardPlayTerminalContext {
     player: CombatantId,
     card: CardInstanceId,
     destination: CardZone,
+    /// 节目在镜像里的根（`term` 号）。
+    program: u16,
+    target: Option<CombatantId>,
+    x_cost: i32,
+    max_steps: u32,
+}
+
+/// `standard.duplication` —— Duplication Potion 留下的那一层（§181）。
+///
+/// `UsesCharges: true` 的内容侧写法让"下一张牌"是**消耗一层**而不是"这一回合都算"：
+/// 层数就是"还能打几次两遍"。
+const DUPLICATION_STATUS: &str = "standard.duplication";
+
+fn card_program_terminal(
+    state: &mut CombatState,
+    ctx: CardPlayTerminalContext,
     outcome: ProgramFrameState,
 ) -> Result<(), ExecError> {
+    let CardPlayTerminalContext {
+        player,
+        card,
+        destination,
+        program,
+        target,
+        x_cost,
+        max_steps,
+    } = ctx;
     // `:245-247` 的手牌守卫：卡**不在手牌**（被自己的节目搬走了）⇒ 不落区。
     let position = find_card_slot(state, &player, &card);
     let in_hand = position.is_some_and(|(zone, _)| zone == CardZone::Hand);
@@ -1031,6 +1108,8 @@ fn card_program_terminal(
                 })?;
             }
             ProgramFrameState::Faulted => {
+                // A faulted program is **not** re-run: it did not complete, so "played twice" has
+                // nothing to double (and re-running a fault would double the error, not the effect).
                 // `:254-261`：**直接搬**（队列不会再排空了，所以不能入队）。
                 if let Some(slot) = slot {
                     state.move_card(
@@ -1958,6 +2037,39 @@ fn has_status_with_charges(combatant: &Combatant, definition: &str) -> bool {
 }
 
 /// 该状态的层数和（`SkillCostReductionCostModifier` 用 `.Sum(stacks)`）。
+/// 花掉一层 `definition`（§181：`UsesCharges` 的状态就是"还能用几次"）。
+///
+/// 层数归零时**把实例摘掉**（与 `state.rs` 的层数语义一致："减到 0 就是没有"）。
+fn spend_one_charge(
+    state: &mut CombatState,
+    who: &CombatantId,
+    definition: &str,
+) -> Result<(), ExecError> {
+    let Some(combatant) = state.combatant_mut(who) else {
+        return Ok(());
+    };
+    let mut found = None;
+    let mut last = 1;
+    for (index, instance) in combatant.statuses().iter().enumerate() {
+        if instance.definition_id.as_str() == definition {
+            found = Some(index);
+            last = instance.stacks;
+        }
+    }
+    let Some(index) = found else {
+        return Ok(());
+    };
+    if last > 1 {
+        if let Some(instance) = combatant.statuses_mut().get_mut(index) {
+            instance.stacks = instance.stacks.saturating_sub(1);
+        }
+    } else {
+        // 层数归零 ⇒ **删掉实例**（与 `state.rs::remove_status` 的语义一致）。
+        let _ = combatant.remove_status(index);
+    }
+    Ok(())
+}
+
 fn total_status_stacks(combatant: &Combatant, definition: &str) -> i32 {
     let mut total = 0i32;
     for status in combatant.statuses() {
@@ -2426,6 +2538,91 @@ mod tests {
             "Snecko 的价是**这一场战斗**的价，不是一次性的折扣"
         );
         assert_eq!(energy_of(&state, "hero"), 3);
+    }
+
+    /// §181: Duplication Potion -- "This turn, your next card is played twice."
+    ///
+    /// Three assertions, because "the enemy lost 2× damage" alone is also what a bug that charges
+    /// twice (or counts the card twice) would produce:
+    /// 1. the damage landed **twice**;
+    /// 2. energy was paid **once**;
+    /// 3. the card counted as **one** play;
+    /// and the charge is spent, so the **next** card is played once.
+    #[test]
+    fn duplication_plays_the_program_twice_but_pays_and_counts_once() {
+        // The **sts** image, not the core one: `standard.duplication` is a content status (§181),
+        // and `paper_cut` exists in both -- but the status lookup would fail against core with
+        // `Bind(Missing("STAT row"))`, which is the kernel correctly saying "no such status here".
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut state = arena();
+        give_card(&mut state, "hero", CardZone::Hand, "card_h1", "strike");
+        give_card(&mut state, "hero", CardZone::Hand, "card_h2", "strike");
+        // `strike` deals 6; `enemy_a` has 20 HP.
+        state
+            .combatant_mut(&cid("hero"))
+            .unwrap()
+            .push_status(
+                crate::state::StatusInstance::new(
+                    crate::state::StatusInstanceId::new("st_dup").unwrap(),
+                    crate::state::StatusDefinitionId::new("standard.duplication").unwrap(),
+                    crate::state::StatusPolarity::Buff,
+                )
+                .with_stacks(1),
+            )
+            .unwrap();
+        let energy_before = energy_of(&state, "hero");
+        let played_before = state.cards_played_this_turn;
+
+        let report = play_card(
+            &mut state,
+            Some(&content),
+            &request("card_h1", Some("enemy_a")),
+        )
+        .expect("a duplicated Strike is still playable");
+        // Drain so the queued damage actually lands.
+        crate::exec::drain(&mut state, Some(&content), None).expect("the effects settle");
+
+        assert!(report.played);
+        assert_eq!(
+            health_of(&state, "enemy_a"),
+            8,
+            "20 - 6 - 6: the program ran twice. 14 would mean once, which is the shape a              status-that-exists-but-nobody-reads regression takes."
+        );
+        assert_eq!(
+            energy_of(&state, "hero"),
+            energy_before - 1,
+            "the card is paid for **once**"
+        );
+        assert_eq!(
+            state.cards_played_this_turn,
+            played_before + 1,
+            "and it counts as **one** card played"
+        );
+
+        // The charge is spent: the second Strike is an ordinary one.
+        let report = play_card(
+            &mut state,
+            Some(&content),
+            &request("card_h2", Some("enemy_a")),
+        )
+        .expect("the second Strike plays");
+        crate::exec::drain(&mut state, Some(&content), None).expect("the effects settle");
+        assert!(report.played);
+        assert_eq!(
+            health_of(&state, "enemy_a"),
+            2,
+            "one more Strike is 6, not 12 -- the charge was consumed by the first"
+        );
+        assert_eq!(
+            total_status_stacks(&state.combatant(&cid("hero")).unwrap(), "standard.duplication"),
+            0,
+            "no charges left"
+        );
     }
 
     #[test]

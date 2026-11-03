@@ -1704,6 +1704,22 @@
         "Repeating": false
       },
       "Triggers": null
+    },
+    {
+      "Id": "standard.duplication",
+      "PackageId": "sts",
+      "NameKey": "Duplication",
+      "DescriptionKey": "Your next card is played twice.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": true,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": null
     }
   ],
   "Cards": [
@@ -11423,6 +11439,22 @@
       "Effect": "combat_status:standard.fairy_in_a_bottle",
       "Amount": 1,
       "Rarity": "Rare"
+    },
+    {
+      "Id": "duplication_potion",
+      "NameKey": "Duplication Potion",
+      "DescriptionKey": "This turn, your next card is played twice.",
+      "Effect": "combat_status:standard.duplication",
+      "Amount": 1,
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "distilled_chaos",
+      "NameKey": "Distilled Chaos",
+      "DescriptionKey": "Play the top 3 cards of your draw pile.",
+      "Effect": "combat_autoplay_top",
+      "Amount": 3,
+      "Rarity": "Uncommon"
     }
   ],
   "EventTables": {

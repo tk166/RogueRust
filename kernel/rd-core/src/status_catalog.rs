@@ -702,6 +702,8 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // This is the **point** of `the_status_catalogue_is_honest`: a status with no trigger
             // and no modifier would otherwise look inert, and "inert" is exactly what it is not.
             | "standard.fairy_in_a_bottle"
+            // §181: read in play.rs when a card program is about to start (played twice).
+            | "standard.duplication"
     )
 }
 

@@ -431,6 +431,13 @@ fn reward_pool(
         if id.ends_with('+') {
             continue;
         }
+        // §183: **colorless cards are not combat rewards.** StS keeps them in their own pool
+        // (shops and some events); before this filter the three colorless rows added for the
+        // Colorless Potion would have made every fight able to pay one -- a content bug that no
+        // gate would have caught, because "a card was offered" is true either way.
+        if content.card_has_tag(id, "colorless") == Some(true) {
+            continue;
+        }
         // `rd-run` drops `Status`/`Curse` from the roll itself -- one rule, one owner.
         pool.push(card);
     }
@@ -1856,6 +1863,71 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 return refuse(&std::format!("上状态的药水失败：{e:?}"));
             }
         }
+        // ── §182: Distilled Chaos -- "Play the top 3 cards of your draw pile." ────────────────────
+        "combat_autoplay_top" => {
+            // `amount` is the number of cards ("3", and 6 upgraded -- this content carries the
+            // base value).
+            let plays = amount.max(1);
+            for _ in 0..plays {
+                // The top of the draw pile is index 0 (`state::draw_card` moves `first()`), so the
+                // potion and the draw rule cannot disagree about which end is the top.
+                let top = {
+                    let Some(zones) = session.state.card_zones(&hero) else {
+                        return refuse("英雄没有牌区");
+                    };
+                    match zones.slots(rd_core::state::CardZone::DrawPile).first().copied() {
+                        Some(slot) => slot,
+                        None => break, // the pile ran out: fewer than 3 is not an error
+                    }
+                };
+                let slot = rd_core::state::CardSlot::from_index(top);
+                let Some(card) = session.state.card(slot) else {
+                    break;
+                };
+                let instance = card.id;
+                // Draw it into the hand first: `play_card` requires the card to be *in hand*, and
+                // that is also where the effect puts it while it resolves.
+                if let Err(e) = session.state.move_card(
+                    &hero,
+                    rd_core::state::CardZone::DrawPile,
+                    rd_core::state::CardZone::Hand,
+                    slot,
+                    rd_core::state::ZonePlacement::Bottom,
+                ) {
+                    return refuse(&std::format!("自动打出的牌搬不到手牌：{e:?}"));
+                }
+                // Free: the potion pays, the player does not (§179's per-copy override is exactly
+                // "this one copy costs N").
+                if let Ok(key) =
+                    rd_core::state::CounterId::new(rd_core::state::CARD_COST_OVERRIDE_COUNTER)
+                {
+                    if let Some(card) = session.state.card_mut(slot) {
+                        let _ = card.set_mark_counter(key, 0);
+                    }
+                }
+                // StS picks a random living enemy; ours is the first one, so a replay of the same
+                // seed plays at the same target (see the module note in `port-plan.md` §182).
+                let target = (0..session.plan.enemies.len())
+                    .find(|index| {
+                        let id = session.plan.enemies[*index].id;
+                        rd_core::state::CombatantId::new(id)
+                            .ok()
+                            .and_then(|cid| session.state.combatant(&cid))
+                            .is_some_and(|c| c.health_current > 0)
+                    })
+                    .and_then(|index| {
+                        rd_core::state::CombatantId::new(session.plan.enemies[index].id).ok()
+                    });
+                let request = rd_core::play::PlayRequest::new(hero.clone(), instance, target);
+                match rd_core::play::play_card(&mut session.state, Some(image), &request) {
+                    Ok(_) => {}
+                    Err(rd_core::play::PlayError::CardNotInHand) => break,
+                    Err(e) => {
+                        return refuse(&std::format!("自动打出的牌失败：{e:?}"));
+                    }
+                }
+            }
+        }
         // ── §179: the three potions whose effect the engine had no verb for. ──────────────────────
         "combat_upgrade_hand" => {
             // Blessing of the Forge: "Upgrade all cards in your hand for the rest of combat."
@@ -2444,7 +2516,11 @@ pub extern "C" fn rd_run_potion_effect(slot: i32) -> i32 {
             // `every_potion_in_the_table_classifies_as_known` walked the whole table and caught
             // this one within a second of the content landing -- which is the only reason it is
             // being written down here instead of being found by a player.
-            || ["combat_upgrade_hand", "combat_randomize_costs", "combat_flee"].contains(&kind)
+            || ["combat_upgrade_hand", "combat_randomize_costs", "combat_flee"]
+                .contains(&kind)
+            // §182: auto-play is about the player's own piles, so no enemy target is picked by the
+            // page (the potion picks for itself).
+            || kind == "combat_autoplay_top"
             || kind.starts_with("combat_status");
         if !known {
             return 0;
@@ -5787,6 +5863,56 @@ mod tests {
         assert!(
             crate::slot().is_some(),
             "a refusal must not end the fight"
+        );
+    }
+
+    /// §182: Distilled Chaos -- "Play the top 3 cards of your draw pile."
+    ///
+    /// Four judgments, because "the enemy lost HP" is satisfied by almost any implementation:
+    /// the draw pile shrank by three, the discard pile grew by three (they really were *played*,
+    /// which is what puts them there), the enemy took damage, and **energy did not move**.
+    #[test]
+    fn distilled_chaos_plays_the_top_three_for_free() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+
+        let piles = |zone: rd_core::state::CardZone| {
+            let session = crate::slot().as_ref().expect("env session");
+            let hero = session.hero_id().expect("hero");
+            session
+                .state
+                .card_zones(&hero)
+                .map_or(0, |zones| zones.count(zone))
+        };
+        let draw_before = piles(rd_core::state::CardZone::DrawPile);
+        assert!(draw_before >= 3, "the draw pile needs three cards, has {draw_before}");
+        let discard_before = piles(rd_core::state::CardZone::DiscardPile);
+        let energy_before = hero_energy();
+        let hp_before = enemy_hp(0);
+
+        assert_eq!(drink("distilled_chaos", -1), 0, "drinking it must work");
+
+        assert_eq!(
+            piles(rd_core::state::CardZone::DrawPile),
+            draw_before - 3,
+            "three cards left the draw pile"
+        );
+        assert_eq!(
+            piles(rd_core::state::CardZone::DiscardPile),
+            discard_before + 3,
+            "and they were **played**, so they are in the discard pile -- not still in hand"
+        );
+        assert!(
+            enemy_hp(0) < hp_before,
+            "three Strikes went somewhere: enemy {hp_before} -> {}",
+            enemy_hp(0)
+        );
+        assert_eq!(
+            hero_energy(),
+            energy_before,
+            "the potion pays, the player does not -- energy must not move"
         );
     }
 
