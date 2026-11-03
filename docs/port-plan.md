@@ -12695,3 +12695,57 @@ boss seed=101  hpBefore=90  actAfter=1  msgAfter="战斗结束 · Defeat"
 * **20/20 闸门绿**，单测 **823**（rd-core 657 / rd-run 100 / rd-wasm 66）。
 * 内容：38 卡 / 32 瓶药水（Common 16 / Uncommon 9 / Rare 7）/ 27 状态。
 * 药水池只剩 **1 瓶**没落地：Colorless（内容已写好，等驱动）。
+
+---
+
+## 184. 闸门：内容门学会读**镜像里的 term 表**
+
+§183 的两个坑（`DurationTurns` 写成 term、`sel.allEnemies` 的 `Cardinality` 写成对象）都是
+"源文档 JSON 合法、编译成功、字节门全绿"，然后在一个**不相关的**内核测试里炸成
+`Ir(WrongKind("F_JSON"))`。这一节把那个盲区补上。
+
+### 184.1 根因：`F_JSON` 是**字段声明**层面的，不是值层面的
+
+第一版判据是"镜像里不许有 `_json` term"，负控立刻证伪：**只改一处时编译器会乖乖把那个 opcode
+的字段声明成 `F_TERM`**，读者全能读，内核也不炸。真正的机制是：
+
+> 同一个 opcode 的同一个字段在不同出现处**形状不一致**（十六张卡写裸整数、一张写 term）
+> ⇒ 编译器只能把整个字段降级成 `F_JSON` ⇒ 内核的 `NodeRef::field()` 对 `F_JSON`
+> **无条件** `Err(WrongKind("F_JSON"))`。
+
+所以判据是：**除保留 opcode 5（`_json`）自己之外，任何 opcode 的任何字段都不许声明成 `F_JSON`。**
+这条判据的失败消息会指名 `opcode 27（'node.applyStatus'）的字段 'DurationTurns'`——
+而那条消息正是"哪十六张卡里的哪一张不一致"的入口。
+
+### 184.2 落地：独立解析，不借编译器的代码
+
+新文件 `tools/rdcf_terms.py`，只 import `rdcfmt` 的**格式常量**（§167 的"常量只有一个出处"），
+自己解 OPD/OPF/TRM/TRW/STR/STRO：
+
+* **判据 1**：不允许 `F_JSON` 字段声明（见上）；
+* **判据 2**：不允许 `_json` term，且失败消息带上那段 JSON 原文；
+* **判据 3**：`F_TERM` 槽指向的 term id 必须真实存在（段 id 位移那种"对的字节、错的 id"）。
+
+它挂在**第 11 道闸门**（`rdcf-verify`）里，而不是新增第 21 道 —— 那道闸门的职责本来就是
+"只读字节、独立复核"，之前它自己写着"段内编码我验不了"，现在这句话少了一句。
+
+顺带修了 `rdcf_verify.py` 的一个真 bug：镜像目录原来写死 `tools/contentc/out`，
+于是**负控构建出来的草稿镜像它根本看不到**（报"文件不存在"而不是验证它）。现在目录跟着传进去的
+manifest 走。
+
+### 184.3 负控（`native/negctl_184.py`）
+
+四下判断，缺一不可：**基线绿 → bug①红（且点名）→ bug②红 → 清理后回绿**。
+`NEGCTL_184 PASS`。第一次跑它时 bug① 是**绿的** —— 正因为负控用了"只改一处"的真实形状，
+才把第一版判据（"不许有 `_json` term"）证伪。这是 §177 那条教训的第二次兑现：
+**一个从没红过的判据，你不知道它长什么样。**
+
+⚠️ 两次坑值得记：`rdcf_verify.py` 子进程输出是 **GBK**，用 `text=True` 直接解码会抛
+`UnicodeDecodeError` 并把 `stdout` 变成 `None`（于是判据变成 `None in ...` 崩掉）——
+一律 `capture_output=True` + 显式 `decode(..., "replace")`。
+
+### 184.4 数字
+
+* **20/20 闸门绿**（未新增闸门，扩了第 11 道），单测 **823**。
+* 第 11 道闸门的证据串现在写：`... 1274 table rows, 6 term-shape checks over 5,038 terms`。
+  **证据串必须能反映新增覆盖**，否则"加了检查"与"没加"在输出上无法区分。

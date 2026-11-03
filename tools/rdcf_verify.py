@@ -53,6 +53,9 @@ CONTENTC = os.path.join(HERE, "contentc")
 sys.path.insert(0, CONTENTC)
 try:
     from rdcfmt import row_stride, ROW_SCHEMAS
+    # §184: the term-table walker lives in its own file -- it parses TRM/TRW/OPD/OPF independently of
+    # `contentc/reader.py`, and it shares nothing with the compiler but the format constants above.
+    from rdcf_terms import check_terms
 except Exception as exc:                                  # pragma: no cover
     print(f"!! 无法从 {os.path.join(CONTENTC, 'rdcfmt.py')} 导入 row_stride: {exc}")
     print("   前缺失 ⇒ 定长表检查无法执行，本脚本不作判定（退出码 2，不等于通过）。")
@@ -157,14 +160,17 @@ def check_strided_tables(name, declared, tables, failures):
     return ran, rows
 
 
-def check_variant(name, info, tables, failures):
-    """校验一个变体。返回 (定长表检查项数, 定长表覆盖行数)。"""
-    path = os.path.join(OUT, os.path.basename(info["file"]))
+def check_variant(name, info, tables, failures, image_dir=None):
+    """校验一个变体。返回 (定长表检查项数, 定长表覆盖行数, term 检查项数, term 条数)。"""
+    # §184: the image directory follows the manifest that was passed in. Hard-coding `OUT` meant a
+    # negative-control build (a scratch copy, see `native/negctl_184.py`) could not be verified at
+    # all -- the script would report "file does not exist" for images it was never told to look at.
+    path = os.path.join(image_dir or OUT, os.path.basename(info["file"]))
     print(f"\n── 变体 {name}: {os.path.basename(info['file'])} ──")
     if not os.path.exists(path):
         failures.append(f"{name}: 文件不存在 {path}")
         print("   !! 文件不存在")
-        return 0, 0
+        return 0, 0, 0, 0
 
     with open(path, "rb") as fh:
         blob = fh.read()
@@ -188,7 +194,7 @@ def check_variant(name, info, tables, failures):
     entries, ok = parse_directory(blob, 32, len(declared))
     if not ok:
         failures.append(f"{name}: 段目录解不出来")
-        return 0, 0
+        return 0, 0, 0, 0
 
     # 目录解出来了吗？与 manifest 的段一一对齐比较（manifest 的段顺序 = 目录顺序）。
     mismatches = 0
@@ -236,7 +242,14 @@ def check_variant(name, info, tables, failures):
                         "（manifest 顶层的 tables 结构变了？）—— 这部分覆盖是空的")
     else:
         print(f"   定长表     {ran}/{len(STRIDED)} 张表跑成 count×stride 检查，覆盖 {rows} 行")
-    return ran, rows
+
+    # §184: 段内**形状**（不是语义）。`_json` 是编译器的"源文档装不下"逃生口，存在即错。
+    term_ran, terms = check_terms(blob, 32, len(declared), failures)
+    print(f"   term 表    {terms:,} 条记录，{term_ran} 项形状检查"
+          f"（`_json` 计数 + term 槽边界）")
+    if term_ran == 0:
+        failures.append(f"{name}: term 表检查**一次都没跑成** —— 这部分覆盖是空的")
+    return ran, rows, term_ran, terms
 
 
 def main(argv):
@@ -271,10 +284,15 @@ def main(argv):
               f"  (schema {schema}: {len(ROW_SCHEMAS[schema])} 个 u16 槽)")
 
     total_ran, total_rows, nvar = 0, 0, 0
+    total_term_ran = 0
+    total_terms = 0
     for name, info in mf.get("variants", {}).items():
-        ran, rows = check_variant(name, info, tables, failures)
+        ran, rows, term_ran, terms = check_variant(
+            name, info, tables, failures, os.path.dirname(mpath))
         total_ran += ran
         total_rows += rows
+        total_term_ran += term_ran
+        total_terms += terms
         nvar += 1
 
     print("\n" + "=" * 78)
@@ -285,7 +303,8 @@ def main(argv):
         return 1
     print(f"RDCF_VERIFY PASS ({nvar}/{len(mf.get('variants', {}))} variants, "
           f"{len(STRIDED)}/{len(STRIDED)} tables, {total_ran} count×stride checks, "
-          f"{total_rows} table rows)")
+          f"{total_rows} table rows, {total_term_ran} term-shape checks over "
+          f"{total_terms:,} terms)")
     print("\n✓ 通过的结构不变量：magic 正确、段都落在文件内、段间无重叠、manifest 与磁盘字节一致、"
           "段目录可被独立解出且与 manifest 逐字段相符、7 张定长表的段字节数恰为 行数 × stride。")
     print("  不在范围内的：段内编码是否正确、语义是否等价于源 JSON —— 需由编译器的 reader/validate 回答。")

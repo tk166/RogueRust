@@ -183,7 +183,7 @@ Write-Output "[11/20] 内容镜像结构不变量（独立解读字节：段目�
 #     会以非零退出并指名是哪张表。
 $results += Invoke-Gate -Name 'rdcf-verify' -Exe $PY `
   -ArgLine (Join-Path $ROOT 'tools\rdcf_verify.py') -Workdir $ROOT `
-  -MustMatch 'RDCF_VERIFY PASS \(2/2 variants, 7/7 tables, 14 count×stride checks' -TimeoutSec 300
+  -MustMatch 'RDCF_VERIFY PASS \(2/2 variants, 7/7 tables, 14 count×stride checks, [0-9]+ table rows, 6 term-shape checks' -TimeoutSec 300
 
 Write-Output "`n[12/20] StS 内容包自洽（不变量表 + 两份镜像逐键回读 + 交叉引用）"
 # 为什么这条闸门必须存在：第 10 道 verify_bytes.py **只钉 `packages/roguedeck/**`**。
