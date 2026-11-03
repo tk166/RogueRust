@@ -536,9 +536,13 @@ INV_ACTIONS = {
     "bronze_orb.beam": ("Attack", [("damage", 8, "event")]),
     "bronze_orb.support_beam": ("Defend", [("block", 12, "allAllies")]),
     # --- The Collector (wiki: Fireball 18, Buff +3 Str + 15 Block, Mega Debuff 3/3/3) -------------
-    "the_collector.fireball": ("Attack", [("damage", 18, "event")]),
+    # §195.3: the two moves the weighted rule draws from, each recording itself in `last_move`
+    # (that counter is how "cannot Buff twice in a row" is expressed without kernel state).
+    "the_collector.fireball": ("Attack", [("damage", 18, "event"),
+                                          ("counter", "last_move", 1, False, "source")]),
     "the_collector.buff": ("Defend", [("status", "standard.strength", 3, "allAllies"),
-                                      ("block", 15, "source")]),
+                                      ("block", 15, "source"),
+                                      ("counter", "last_move", 2, False, "source")]),
     "the_collector.mega_debuff": ("Debuff", [("status", "standard.weak", 3, "event"),
                                              ("status", "standard.vulnerable", 3, "event"),
                                              ("status", "standard.frail", 3, "event")]),
@@ -1052,9 +1056,37 @@ def check_intent_rules(doc):
                 op = (condition.get("value") or {}).get("Op")
                 if op is not None and op not in INTENT_OPS:
                     fail(label, "Op %r is outside the kernel's 6" % (op,))
-            action = (rule.get("Action") or {}).get("value")
-            if action not in actions:
-                fail(label, "Action %r is not an EACT row" % (action,))
+            # §195.3: a rule names either one `Action` or a weighted `Choice` list. Both halves are
+            # checked, and "both at once" is an error -- the kernel refuses that combination rather
+            # than picking one (two answers for one condition has no correct reading).
+            single = (rule.get("Action") or {}).get("value")
+            choice = rule.get("Choice")
+            if single is not None and choice is not None:
+                fail(label, "has both `Action` and `Choice`")
+            elif single is not None:
+                if single not in actions:
+                    fail(label, "Action %r is not an EACT row" % (single,))
+            elif choice is not None:
+                if not isinstance(choice, list) or not (1 <= len(choice) <= 8):
+                    fail(label, "Choice must be a list of 1..=8 options (%r)" % (choice,))
+                else:
+                    total = 0
+                    for option in choice:
+                        if set(option) != {"Action", "Weight"}:
+                            fail(label, "Choice option keys %r" % (sorted(option),))
+                            continue
+                        weight = option["Weight"]
+                        if not isinstance(weight, int) or weight <= 0:
+                            fail(label, "Choice weight %r is not a positive int" % (weight,))
+                        else:
+                            total += weight
+                        target = (option.get("Action") or {}).get("value")
+                        if target not in actions:
+                            fail(label, "Choice option %r is not an EACT row" % (target,))
+                    if total > 255:
+                        fail(label, "Choice weights total %d > 255 (the pick index is a u8)" % total)
+            else:
+                fail(label, "names neither `Action` nor `Choice`")
             if not isinstance(rule.get("Priority"), int):
                 fail(label, "Priority must be an integer, got %r" % (rule.get("Priority"),))
             checked += 1
@@ -1224,13 +1256,17 @@ INV_ASC_VARIANTS = {
     'bronze_automaton.hyper_beam': [(4, [('damage', 50, 'event')])],
     # The Collector (Fireball 18->A4 21, Buff Str 3->A4 4->A19 5 and Block 15->A9 18->A19 23,
     # Mega Debuff 3/3/3 ->A19 5/5/5).
-    'the_collector.fireball': [(4, [('damage', 21, 'event')])],
+    'the_collector.fireball': [(4, [('damage', 21, 'event'),
+                                    ('counter', 'last_move', 1, False, 'source')])],
     'the_collector.buff': [(4, [('status', 'standard.strength', 4, 'allAllies'),
-                                ('block', 15, 'source')]),
+                                ('block', 15, 'source'),
+                                ('counter', 'last_move', 2, False, 'source')]),
                            (9, [('status', 'standard.strength', 4, 'allAllies'),
-                                ('block', 18, 'source')]),
+                                ('block', 18, 'source'),
+                                ('counter', 'last_move', 2, False, 'source')]),
                            (19, [('status', 'standard.strength', 5, 'allAllies'),
-                                 ('block', 23, 'source')])],
+                                 ('block', 23, 'source'),
+                                 ('counter', 'last_move', 2, False, 'source')])],
     'the_collector.mega_debuff': [(19, [('status', 'standard.weak', 5, 'event'),
                                         ('status', 'standard.vulnerable', 5, 'event'),
                                         ('status', 'standard.frail', 5, 'event')])],

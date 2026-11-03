@@ -138,6 +138,18 @@ pub const MAX_ACTIONS: usize = 8;
 /// 一个敌人最多几条 `IntentRules`。**实测 `{0:146, 1:2, 3:1}`**，最大 3 ⇒ 8。
 pub const MAX_INTENT_RULES: usize = 8;
 
+/// §195.3：一条规则的 `Choice` 最多几项。
+///
+/// 8 是**容量**，不是规则：超了报 [`IntentError::BadChoice`]，不截断 —— 截断会让"我写了 9 个
+/// 权重"变成"最后那个永远不出现"，而屏幕上/战斗里都看不出来。
+pub const MAX_CHOICE_OPTIONS: usize = 8;
+
+/// §195.3：`Choice` 的权重总和上限。
+///
+/// [`crate::rng::shuffled_pick_index`] 的下标是 `u8`，所以 255 是抽签能覆盖的全部。超了**响亮
+/// 失败**：把 `300` 悄悄截成 `255` 会让权重比例变形，而"哪个招更常见"正是这一节唯一的语义。
+pub const MAX_CHOICE_WEIGHT: i32 = 255;
+
 /// 节目信封的步数上限兜底值 —— 参考的构造函数默认 1024
 /// （`EffectProgramContracts.cs:560-563`，`play.rs:1496` 同一条），镜像实测 394/394 都是 1024。
 const DEFAULT_MAX_PROGRAM_STEPS: u32 = 1024;
@@ -397,6 +409,8 @@ pub enum IntentError {
     UnknownOperator,
     /// 动作 id 在 `IDX` 里解析不出 `EACT` 行，或解析出的行 `Id` 不符。
     UnknownAction,
+    /// §195.3：规则的 `Choice` 不合法（空列表 / 权重 ≤ 0 / 总和 > 255 / 项数 > 8）。
+    BadChoice,
     /// 执行期错误（只有 [`execute_action`] 会产出）。
     Exec(ExecError),
 }
@@ -613,10 +627,27 @@ pub fn select_action<'a>(
                 .ok_or(IntentError::Missing("Condition"))?;
             // 求不出来就**立刻**响亮失败（不是"当作不匹配"，见函数文档最后一段）。
             if condition_matches(state, content, actor, condition)? {
-                let action_id = rule.str_field("Action")?.ok_or(IntentError::Missing("Action"))?;
                 let reason = ChoiceReason::Rule {
                     index: rank as u16,
                     priority: priorities[index],
+                };
+                // §195.3：`Action`（单一）或 `Choice`（带权列表）。
+                //
+                // ⚠️ 探测 `Choice` **不能**用 `node_field`：那个入口只认 `F_TERM`，而 `Choice` 是
+                // `F_TERMLIST` ⇒ 当场 `WrongKind("F_TERMLIST")`（第一版就是这样红的）。
+                // 用列表入口探测：非 0 条就是"这个字段在"，0 条则由 `weighted_action_id` 判 BadChoice
+                // （"写了 Choice 却没有选项"是坏规则，不是"没有 Choice"）。
+                let single = rule.str_field("Action")?;
+                let action_id = match single {
+                    Some(id) => {
+                        let mut probe = [0u16; MAX_CHOICE_OPTIONS];
+                        if rule.term_list_field("Choice", &mut probe)? != 0 {
+                            // "同一个条件给出两个答案"没有正确的读法。
+                            return Err(IntentError::BadChoice);
+                        }
+                        id
+                    }
+                    None => weighted_action_id(rule, state, round, at, content)?,
                 };
                 return Ok(Some(choice(content, action_id, reason)?));
             }
@@ -1139,6 +1170,73 @@ fn compare_op(condition: NodeRef<'_>) -> Result<CompareOp, IntentError> {
 ///
 /// 多做一步**一致性核对**：`IDX` 说这个 id 在第 `row` 行，那就要求该行的 `Id` 逐字节相符。
 /// 不做这一步的话，一张被改坏的符号表会让"动作 id"和"动作程序"静默错位（跑的是别人的程序）。
+/// §195.3：`Choice` 抽一个 action id。
+///
+/// **派生**而不是消耗随机流：`step = round * 16 + 敌人槽位`，于是 `(seed, round, slot)` 唯一决定
+/// 这一次抽签。`select_action` 每次观察都会被调（页面显示意图），所以它必须是纯函数 —— 消耗
+/// `random_step` 的抽签会让"玩家看到的意图"每次重绘都可能变，或者逼出一个要进快照的
+/// `planned_action` 字段（参考没有它，进快照就要动 85 份语料与 129 条 golden 的哈希）。
+///
+/// StS 自己在**另一条流**（`aiRng`）上掷骰，这里是同一件事的另一种实现，代价写明在
+/// `port-plan.md` §195.3：两次抽签之间没有顺序关系（每条规则只是 round+slot 的函数）。
+fn weighted_action_id<'a>(
+    rule: crate::ir::NodeRef<'a>,
+    state: &CombatState,
+    round: i32,
+    at: EnemySlot,
+    content: &'a Content<'a>,
+) -> Result<&'a str, IntentError> {
+    // `Choice` is an `F_TERMLIST` of `{Action: F_STR, Weight: F_INT}` objects.
+    let mut options = [0u16; MAX_CHOICE_OPTIONS];
+    let count = rule.term_list_field("Choice", &mut options)?;
+    if count == 0 || count > MAX_CHOICE_OPTIONS {
+        return Err(IntentError::BadChoice);
+    }
+    let mut total: i32 = 0;
+    let mut weights = [0i32; MAX_CHOICE_OPTIONS];
+    let mut ids: [&'a str; MAX_CHOICE_OPTIONS] = [""; MAX_CHOICE_OPTIONS];
+    for index in 0..count {
+        let option = rule.child(options[index]);
+        let weight = option.int_field("Weight")?.ok_or(IntentError::BadChoice)?;
+        if weight <= 0 {
+            return Err(IntentError::BadChoice);
+        }
+        total = total.saturating_add(weight);
+        if total > MAX_CHOICE_WEIGHT {
+            return Err(IntentError::BadChoice);
+        }
+        ids[index] = option.str_field("Action")?.ok_or(IntentError::BadChoice)?;
+        weights[index] = weight;
+    }
+    let step = derived_step(round, at.index);
+    let roll = crate::rng::shuffled_pick_index(total as usize, state.random_seed, step) as i32;
+    let mut cursor = 0i32;
+    for index in 0..count {
+        cursor += weights[index];
+        if roll < cursor {
+            let action_id = ids[index];
+            if content.lookup_in(action_id, EK_EACTION).is_none() {
+                return Err(IntentError::UnknownAction);
+            }
+            return Ok(action_id);
+        }
+    }
+    // `roll < total` always holds (`shuffled_pick_index` returns `[0, total)`), so reaching here means
+    // the weight table itself is broken -- do **not** fall back to the last option (that would
+    // silently reshape the weights).
+    Err(IntentError::BadChoice)
+}
+
+/// §195.3：抽签用的 (seed, step) 里的 step。
+///
+/// `round * 16 + slot`：一场战斗不会超过 64 轮、一条遭遇最多 8 个敌人，所以这个映射是**单射**的
+/// （同一轮里两个敌人拿到的 step 不同 ⇒ 它们不会抽到同一个数，否则"场上两只一样的怪"会永远
+/// 同时出同一招，那种相关性在数值测试里看不出来）。
+#[must_use]
+pub fn derived_step(round: i32, slot: u16) -> i32 {
+    round.saturating_mul(16).saturating_add(i32::from(slot))
+}
+
 fn choice<'a>(
     content: &'a Content<'a>,
     action_id: &'a str,
@@ -1343,6 +1441,95 @@ mod tests {
         assert_eq!(pick(&mut state, 3), "spire_growth.aggressive", "round 3 is slot 0");
         // 成对：Strategic 只该出现一次 —— 第 4 回合又回到循环的 slot 1。
         assert_eq!(pick(&mut state, 4), "spire_growth.aggressive_heavy");
+    }
+
+    // ================================================================ §195.3：带权抽签
+
+    /// §195.3: The Collector's weighted 70/30 choice -- four properties, one per failure mode.
+    ///
+    /// 1. **pure**: the same `(state, round)` gives the same action every call, because the page
+    ///    re-derives the intent on every observation (a stream draw would flicker);
+    /// 2. **free**: `random_step` does not move (the draw is `(seed, round, slot)`, not the combat
+    ///    stream -- otherwise the preview and the shuffle would fight over one ledger);
+    /// 3. **weighted**: over many seeds the split is near 70/30 (a broken picker that always takes the
+    ///    first option would be "correct" for rule 1 and 2);
+    /// 4. **stateful through content**: with `last_move == 2` (a Buff) the only option left is
+    ///    Fireball, which is the wiki's "she cannot use Buff twice in a row".
+    #[test]
+    fn the_collector_draws_by_weight_and_never_buffs_twice_in_a_row() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let at = slot(&content, "enc_the_collector", 0);
+        let actor = cid("the_collector");
+
+        let mut fireballs = 0usize;
+        let mut buffs = 0usize;
+        for seed in 0..400 {
+            let mut state = {
+                let mut state = arena("the_collector");
+                state.random_seed = seed;
+                state.current_round = 5; // not round 4: that round is Mega Debuff by rule
+                state
+            };
+            let before = state.random_step;
+            let first = select_action(&state, &content, at, &actor, 5)
+                .expect("intent")
+                .expect("an action");
+            // 1. pure: a second call (what the page does on every re-render) is the same move.
+            let again = select_action(&state, &content, at, &actor, 5)
+                .expect("intent")
+                .expect("an action");
+            assert_eq!(first.action_id, again.action_id, "seed {seed}: the preview must be stable");
+            // 2. free: no random step was consumed.
+            assert_eq!(state.random_step, before, "seed {seed}: a derived draw costs no step");
+            match first.action_id {
+                "the_collector.fireball" => fireballs += 1,
+                "the_collector.buff" => buffs += 1,
+                other => panic!("seed {seed}: unexpected move {other}"),
+            }
+
+            // 4. after a Buff the only option is Fireball -- for **every** seed.
+            set_counter(&mut state, &actor, "last_move", 2);
+            let after_buff = select_action(&state, &content, at, &actor, 5)
+                .expect("intent")
+                .expect("an action");
+            assert_eq!(
+                after_buff.action_id, "the_collector.fireball",
+                "seed {seed}: `last_move == 2` must exclude Buff"
+            );
+        }
+
+        // 3. weighted: 400 draws of a 70/30 split. The bounds are wide on purpose (±8 points) --
+        // this is a *distribution* check, not a bit-exact golden; the point is to catch "always the
+        // first option" (buffs would be 0) and "ignores the weights" (50/50).
+        let total = fireballs + buffs;
+        let ratio = fireballs as f64 / total as f64;
+        assert!(
+            (0.62..=0.78).contains(&ratio),
+            "Fireball took {fireballs}/{total} = {ratio:.2}, wiki says 70%"
+        );
+        assert!(buffs > 0, "Buff must be reachable");
+    }
+
+    /// §195.3: the draw is a function of `(seed, round, slot)` -- **different slots must not agree**.
+    ///
+    /// Two identical-looking enemies in one round would otherwise always act in lockstep, and no
+    /// numeric test would notice (each enemy's damage is still "right").
+    #[test]
+    fn two_enemies_of_the_same_kind_draw_independently() {
+        assert_ne!(derived_step(3, 0), derived_step(3, 1));
+        assert_ne!(derived_step(3, 0), derived_step(4, 0));
+        // ... and the mapping is injective over the ranges a fight can reach.
+        let mut seen = std::collections::BTreeSet::new();
+        for round in 1..=64 {
+            for slot in 0..8u16 {
+                assert!(seen.insert(derived_step(round, slot)), "round {round} slot {slot} collides");
+            }
+        }
     }
 
     // ================================================================ §194：Boss 池
