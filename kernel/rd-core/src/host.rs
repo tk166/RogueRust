@@ -5194,6 +5194,48 @@ mod tests {
         );
     }
 
+    /// §187: `EACT.ProgramAsc` + `AscensionMin` -- the same action, two numbers.
+    ///
+    /// Lagavulin's Attack is the cleanest example in this content: 18 base, **20** from A3
+    /// (`wiki_lagavulin.txt`, `Asc|3|20`; it is an Act-1 elite, so the tier is 3). The judgment is
+    /// the hero's health, i.e. what the player sees, and it is checked at **A2** (below the
+    /// threshold) as well as A3 -- a variant that leaked one level early would pass a one-sided test.
+    #[test]
+    fn an_ascension_variant_replaces_the_program_at_its_threshold() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        for (ascension, expected_damage) in [(0u8, 18), (2, 18), (3, 20), (20, 20)] {
+            let mut state = arena();
+            state.set_ascension(ascension);
+            // The image's own id index: no scanning, no hand-copied row number.
+            let row = u32::from(
+                content
+                    .lookup_in("lagavulin.attack", crate::content::EK_EACTION)
+                    .expect("lagavulin.attack is in the image")
+                    .index,
+            );
+            let hero_before = health(&state, "hero");
+            crate::intent::execute_action(
+                &mut state,
+                &content,
+                &cid("enemy_a"),
+                row,
+                Some(cid("hero")),
+            )
+            .expect("the action runs");
+            assert_eq!(
+                hero_before - health(&state, "hero"),
+                expected_damage,
+                "A{ascension}: Lagavulin's Attack must deal {expected_damage}"
+            );
+        }
+    }
+
     #[test]
     fn regen_heals_at_the_end_of_the_turn() {
         // Wiki: Regen N = "at the end of your turn, heal N". Content trigger on `TurnEnded`.

@@ -348,8 +348,12 @@ INV_ACTIONS = {
     "fungi_beast.bite": ("Attack", [("damage", 6, "event")]),
     "fungi_beast.grow": ("Buff", [("status", "standard.strength", 3, "source")]),
     "slaver_red.stab": ("Attack", [("damage", 13, "event")]),
-    "slaver_red.scrape": ("Attack", [("damage", 7, "event"),
-                                     ("status", "standard.weak", 1, "event")]),
+    # §187 回 wiki 重核：Red Slaver 的 Scrape 是 **8 伤害 + 1 Vulnerable**
+    # (`wiki_slavers.txt`：`Deals (8;{{Asc|2|9}}) damage. Applies (1;{{Asc|17|2}}) Vulnerable.`)。
+    # 内容与这张清单**当初一起写错**（写成了蓝色 Slaver 的 Rake），
+    # 所以 20 道闸门全绿 —— 与 §186 的 `blind` 是同一个形状。
+    "slaver_red.scrape": ("Attack", [("damage", 8, "event"),
+                                     ("status", "standard.vulnerable", 1, "event")]),
     "gremlin_nob.bellow": ("Buff", [("status", "standard.strength", 2, "source")]),
     "gremlin_nob.rush": ("Attack", [("damage", 14, "event")]),
     "gremlin_nob.skull_bash": ("Attack", [("damage", 6, "event"),
@@ -935,7 +939,63 @@ def check_cards_and_actions(doc):
             fail("action." + aid, "facts %s, inv says %s" % (got, facts))
     ok("cards", "%d cards x (cost, tags, facts)" % len(INV_CARDS))
     ok("enemy actions", "%d actions x (intent, facts)" % len(INV_ACTIONS))
+    check_ascension_variants(doc)
 
+
+# §187：`EACT.ProgramAsc` 的**独立第二份**。每一行都是 wiki 的数字（出处列在
+# `native/patch_187_content.py` 的表头），而不是从内容拄过来的 --
+# "从内容生成期望值"等于没有期望值。
+INV_ASC_VARIANTS = {
+    # action id: (AscensionMin, facts)
+    "blue_slaver.stab": (2, [("damage", 13, "event")]),
+    "blue_slaver.rake": (2, [("damage", 8, "event"), ("status", "standard.weak", 1, "event")]),
+    "slaver_red.stab": (2, [("damage", 14, "event")]),
+    "slaver_red.scrape": (2, [("damage", 9, "event"),
+                             ("status", "standard.vulnerable", 1, "event")]),
+    "lagavulin.attack": (3, [("damage", 20, "event")]),
+    "book_of_stabbing.multi_stab": (3, [("repeat", ("expr", "add"), "damage", 7, "event"),
+                                        ("counter", "book_stab_uses", 1, True, "source")]),
+    "book_of_stabbing.big_stab": (3, [("damage", 24, "event")]),
+    "taskmaster.scouring_whip": (3, [("damage", 7, "event"),
+                                     ("card", "wound", 2, "DiscardPile", "event")]),
+    "nemesis.tri_attack": (4, [("damage", 7, "event"), ("damage", 7, "event"),
+                               ("damage", 7, "event")]),
+    "nemesis.tri_burn": (19, [("card", "burn", 5, "DiscardPile", "event")]),
+    "reptomancer.spawn_dagger": (19, [("spawn", "dagger", 22), ("spawn", "dagger", 22)]),
+    "reptomancer.big_bite": (4, [("damage", 34, "event")]),
+    "reptomancer.snake_strike": (4, [("damage", 16, "event"), ("damage", 16, "event"),
+                                     ("status", "standard.weak", 1, "event")]),
+}
+
+
+def check_ascension_variants(doc):
+    """§187：**每一条**升档节目都必须被上面那张表钉住，且与基础节目**不同**。"""
+    print("[7] ascension variants (port-plan.md §187)")
+    actions = {a["Id"]: a for a in doc.get("EnemyActions") or []}
+    for aid, (threshold, facts) in INV_ASC_VARIANTS.items():
+        action = actions.get(aid)
+        if action is None:
+            fail("asc." + aid, "action missing")
+            continue
+        if "ProgramAsc" not in action:
+            fail("asc." + aid, "no ProgramAsc")
+            continue
+        if action.get("AscensionMin") != threshold:
+            fail("asc." + aid, "AscensionMin %r, inv says %r"
+                 % (action.get("AscensionMin"), threshold))
+        got = program_facts(action["ProgramAsc"]["Root"])
+        if got != facts:
+            fail("asc." + aid, "facts %s, inv says %s" % (got, facts))
+        # 一个"变体"如果与基础一模一样，它就是一个**没有症状的错字**：
+        # 战斗照跑、数字看起来合理，而难度从来没动过。
+        if got == program_facts(action["Program"]["Root"]):
+            fail("asc." + aid, "variant facts equal the base -- this ascension does nothing")
+    # 反向：内容里有而表里没有的变体也不行（"没人钉过的数字"）。
+    unknown = sorted(aid for aid, action in actions.items()
+                     if "ProgramAsc" in action and aid not in INV_ASC_VARIANTS)
+    if unknown:
+        fail("asc.unknown", "variants not pinned by the inventory: %s" % unknown)
+    ok("ascension variants", "%d variants pinned (A2/A3/A4 + A17-A19)" % len(INV_ASC_VARIANTS))
 
 def check_statuses(doc):
     print("[4] status rows (inv:§10)")

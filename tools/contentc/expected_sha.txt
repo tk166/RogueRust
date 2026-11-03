@@ -41,12 +41,12 @@ source_sha256 = 96d064c2cced72d1d21d8eb7e09bf081709dc2f966bc9f93118dea5608124073
 source_bytes = 8291305
 
 full_name = content.rdcf
-full_sha256 = 0c773c35dc304fb8bc35e5b7a6f84b7a9f2cc7dce05c7220bafb4948f8443313
-full_bytes = 158296
+full_sha256 = 2db5122b0489279a38d3cb13bb588e63cb2a24a81e1f890e10f8e6c7306d9cd0
+full_bytes = 159872
 
 core_name = content.core.rdcf
-core_sha256 = 090b0f89060890139daffba2ac0d75228e61d713d33841bdf069048ba6e1a8ef
-core_bytes = 85616
+core_sha256 = d9ec7bc3279f34e1f232f0b63a799d4ef545d4b7ecc528aca2f4994131bf51a9
+core_bytes = 87192
 
 # The two images above were produced by compile.py at git HEAD (before the
 # multi-package change) and re-verified reproducible on 2026-10-20: a fresh

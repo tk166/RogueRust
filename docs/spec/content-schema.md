@@ -669,4 +669,19 @@ $so = $p.StandardOutput.ReadToEnd(); $se = $p.StandardError.ReadToEnd(); $p.Wait
 ⇒ 形状判据现在由第 11 道闸门（`tools/rdcf_terms.py`）在**镜像层面**检查（§184）：
 除保留 opcode 5 自己，任何 opcode 的任何字段都不许声明成 `F_JSON`。
 
+## 9. 实现补充（2026-11-03）：`EACT` 的 ascension 维度
 
+§2 的 `EACT` 有 7 格（`Id/NameKey/DescriptionKey/PackageId/Intent/Program/extra`）。§187 加了**两格**：
+
+| 格 | 类型 | 含义 |
+|---|---|---|
+| `ProgramAsc` | `F_TERM`（可空） | 升档后的节目，**与 `Program` 同形的信封**（`{Root, MaxProgramSteps, …}`），不是裸 `Root` |
+| `AscensionMin` | `F_INT`（`0` = 无） | 从哪一级起改用 `ProgramAsc`。`0` **不**表示"从 0 级起" |
+
+行宽 7 → 9 格，stride 16 → 20，`FORMAT_VERSION` 4 → 5。
+
+**阈值写在内容里，不由内核推**：内核不知道一条遭遇来自哪个池（精英也可能出现在事件里），
+所以"普通 2 / 精英 3 / Boss 4"这条规则由内容作者按怪的种类填，招式表则是 17/18/19。
+
+另有一个新条件 `intent.ascensionAtLeast`（`{Value: n}`）：StS 的 A17/18/19 在源码里是每只怪
+`getMove` 里的一段 `if`，数据化引擎不能照抄；把那个 `if` 交给内容的 `IntentRule` 就行。

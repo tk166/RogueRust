@@ -116,7 +116,8 @@
 //! 钉着（149 个敌人 × round 1..=5 ⇒ 740 个 `Ok(Some)` + 5 个 `Err`）。
 
 use crate::content::{
-    Content, Row, Table, ABSENT16, EK_EACTION, F_TERM, LIST_ABSENT, LIST_NULL, NULL16, OP_ARR,
+    Content, Row, Table, ABSENT16, ABSENT_INT, EK_EACTION, F_TERM, LIST_ABSENT, LIST_NULL, NULL16,
+    NULL_INT, OP_ARR,
 };
 use crate::exec::{self, ExecContext, ExecError, ExecStats};
 use crate::ir::{IrError, NodeRef};
@@ -303,11 +304,17 @@ pub enum ConditionKind {
     AnyOf,
     /// `intent.not`（一个内层条件）
     Not,
+    /// `intent.ascensionAtLeast`（`Value`）：本场战斗的 Ascension 等级 ≥ `Value`。
+    ///
+    /// 本移植自己的条件（§187）：StS 的 A17/A18/A19 是**换招式表**，而它的数据不是一个
+    /// 可声明的表，是每只怪 `getMove` 里的一段 `if`。内核不给每只怪写代码，所以把那个
+    /// `if` 交给内容：`AscensionMin` 管"同一个招式换数值"，这个条件管"哪条规则先生效"。
+    AscensionAtLeast,
 }
 
 impl ConditionKind {
     /// 全部成员（顺序 = 规格书 §3.5 那张表的顺序）。
-    pub const ALL: [ConditionKind; 10] = [
+    pub const ALL: [ConditionKind; 11] = [
         ConditionKind::HealthPercent,
         ConditionKind::Round,
         ConditionKind::SelfHasStatus,
@@ -318,6 +325,7 @@ impl ConditionKind {
         ConditionKind::AllOf,
         ConditionKind::AnyOf,
         ConditionKind::Not,
+        ConditionKind::AscensionAtLeast,
     ];
 
     /// 判别串（= `OPD[op].name`，也 = `RunJson.cs:141-151` 注册的那个键）。
@@ -334,6 +342,7 @@ impl ConditionKind {
             ConditionKind::AllOf => "intent.allOf",
             ConditionKind::AnyOf => "intent.anyOf",
             ConditionKind::Not => "intent.not",
+            ConditionKind::AscensionAtLeast => "intent.ascensionAtLeast",
         }
     }
 
@@ -640,6 +649,17 @@ pub fn select_action<'a>(
     )?))
 }
 
+/// `intent.ascensionAtLeast` 的那一次比较（§187）。
+///
+/// 单独成函数不是为了好看：`condition_matches` 需要一个**内容里的 term** 才能跑，而本内容
+/// 目前没有任何规则用这条条件（所有有出处的 A17/18/19 改动都是数值，走 `EACT.ProgramAsc`）。
+/// 把比较抽出来，判据就能在两侧各测一次，而"这条条件真的被分派到了"由
+/// `every_condition_kind_is_reachable`（下面）钉住。
+#[must_use]
+pub const fn ascension_at_least(level: u8, value: i32) -> bool {
+    (level as i32) >= value
+}
+
 /// 求值一条 `IntentRule.Condition`。
 ///
 /// 单独公开是因为 10 个原语的语义是引擎硬编码（规格书 §8.2），测试要逐个打。
@@ -670,6 +690,16 @@ pub fn condition_matches(
     let kind = ConditionKind::from_wire_name(condition.kind_str()?)
         .ok_or(IntentError::UnknownConditionKind)?;
     match kind {
+        // `intent.ascensionAtLeast`（§187）：本场战斗的 Ascension 等级 ≥ `Value`。
+        //
+        // 它是"内容能换招式表"的唯一入口：A17/18/19 在 StS 里是每只怪 `getMove` 里的一段 `if`，
+        // 我们不给每只怪写代码，而是让内容写一条**更高优先级**的 `IntentRule`。
+        ConditionKind::AscensionAtLeast => {
+            let value = condition
+                .int_field("Value")?
+                .ok_or(IntentError::Missing("Value"))?;
+            Ok(ascension_at_least(state.ascension(), value))
+        }
         ConditionKind::SelfHasCounter => {
             let counter = condition
                 .str_field("Counter")?
@@ -933,7 +963,47 @@ pub fn execute_action(
     //    放在读信封之前：请求已经入队了才轮到处理器读内容，与参考同序。
     let _request_chain = state.create_root_effect_chain();
 
-    let envelope = envelope(content, action_row)?;
+    // §187：升档后的节目。`ProgramAsc` 有值且 `ascension >= AscensionMin` 时用它，
+    // 否则用 `Program`。两个格都在 `EACT` 行上，所以"同一个招式换数值"不需要再写一条动作。
+    //
+    // ⚠️ `AscensionMin` 为 0 时**不能**当成"从 0 级开始用 ProgramAsc" —— 那会让
+    // "忘了填 AscensionMin" 的内容在基础难度下就变难。所以判据是两个条件同时成立。
+    let envelope = {
+        let base = envelope(content, action_row)?;
+        // ⚠️ 两个新格在 **EACT 行**上，不在节目信封里：信封是 `Program` 指向的那个 term
+        // （`{Root, MaxProgramSteps, …}`），而"从哪一级开始换节目"是**动作**的属性。
+        // 第一版写成 `base.int_field(…)`，于是永远读不到（内容里的格要么被忽略、要么报错）。
+        let row = content
+            .enemy_action(action_row)
+            .ok_or(IntentError::Missing("EACT row"))?;
+        // F_INT 的两个哨兵是 `0x8000`/`x8001`（"缺席"/"null"），与 0 不是一回事。
+        let raw = row.ascension_min();
+        let threshold = if raw == ABSENT_INT || raw == NULL_INT {
+            0
+        } else {
+            i32::from(raw as i16)
+        };
+        let handle = row.program_asc();
+        if threshold > 0
+            && i32::from(state.ascension()) >= threshold
+            && handle != ABSENT16
+            && handle != NULL16
+        {
+            // `ProgramAsc` 指向的是与 `Program` **同形**的信封（`{Root, MaxProgramSteps, …}`），
+            // 所以 "取 `Root`" 走同一条路；`Root` 缺席就当作没有变体（而不是发一个空节目）。
+            // `ProgramAsc` **就是**信封本身（与 `Program` 同形）：这里选的是"用哪个信封"，
+            // 不是"用哪个 Root"。⚠️ 第一版返回了 `variant.Root`，于是后面那句
+            // `envelope.node_field("Root")` 去 `node.dealDamage` 里找 `Root` —— 当场 `Missing("Root")`。
+            let variant = crate::ir::NodeRef::new(content, handle);
+            if variant.node_field("Root")?.is_some() {
+                variant
+            } else {
+                base
+            }
+        } else {
+            base
+        }
+    };
     let root = envelope
         .node_field("Root")?
         .ok_or(IntentError::Missing("Root"))?;
@@ -1881,7 +1951,7 @@ mod tests {
     // ---------------------------------------------------------------- 词表
 
     #[test]
-    fn condition_kinds_are_the_ten_registered_wire_names() {
+    fn condition_kinds_are_the_eleven_registered_wire_names() {
         // 名字来自 `Run\Serialization\RunJson.cs:141-151` 的注册表（规格书 §3.5 逐条读过）。
         let names = [
             "intent.healthPercent",
@@ -1894,6 +1964,8 @@ mod tests {
             "intent.allOf",
             "intent.anyOf",
             "intent.not",
+            // §187：本移植自己的条件（StS 的 A17/18/19 是每只怪 `getMove` 里的一段 `if`）。
+            "intent.ascensionAtLeast",
         ];
         assert_eq!(ConditionKind::ALL.len(), names.len());
         for (kind, name) in ConditionKind::ALL.into_iter().zip(names) {
@@ -1910,7 +1982,8 @@ mod tests {
             .into_iter()
             .filter(|kind| kind.is_supported())
             .collect();
-        // **10/10 全部实现**（`opponentCardsPlayed` 在 §128 补上，靠回合级出牌统计）。
+        // **11/11 全部实现**（`opponentCardsPlayed` 在 §128 补上，靠回合级出牌统计；
+        // `ascensionAtLeast` 在 §187 补上，读 `CombatState::ascension()`）。
         assert_eq!(
             supported,
             vec![
@@ -1924,8 +1997,46 @@ mod tests {
                 ConditionKind::AllOf,
                 ConditionKind::AnyOf,
                 ConditionKind::Not,
+                ConditionKind::AscensionAtLeast,
             ]
         );
+    }
+
+    /// §187: `intent.ascensionAtLeast` -- **both** sides of the threshold.
+    ///
+    /// The comparison is extracted into [`ascension_at_least`] because `condition_matches` needs a
+    /// *content term* to run, and this content has no rule using the condition yet (every sourced
+    /// A17/18/19 change is a **number**, i.e. `EACT.ProgramAsc`). The dispatch itself -- "the kind is
+    /// registered and reachable" -- is pinned by
+    /// `condition_kinds_are_the_eleven_registered_wire_names`.
+    #[test]
+    fn the_ascension_condition_compares_the_fight_level() {
+        for (level, value, want) in [
+            (0u8, 0, true),
+            (0, 1, false),
+            (2, 2, true),
+            (2, 3, false),
+            (3, 17, false),
+            (18, 17, true),
+            (19, 19, true),
+            (20, 19, true),
+        ] {
+            assert_eq!(
+                ascension_at_least(level, value),
+                want,
+                "ascension {level} >= {value} must be {want}"
+            );
+        }
+    }
+
+    /// The helper the condition uses must agree with the state it reads: `set_ascension` writes the
+    /// field `ascension()` returns, and `0` is what a fresh state carries (the corpus depends on it).
+    #[test]
+    fn a_fresh_state_is_ascension_zero() {
+        let state = CombatState::new(crate::state::CombatId::new("c1").unwrap(), 7);
+        assert_eq!(state.ascension(), 0);
+        assert!(ascension_at_least(state.ascension(), 0));
+        assert!(!ascension_at_least(state.ascension(), 1));
     }
 
     /// `CompareOp::apply` is the shared arithmetic behind **nine** of the ten condition kinds, so it

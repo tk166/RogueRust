@@ -537,4 +537,11 @@
 * **仍然缺的**：`EACT` 的 ascension 维度（一根维度解锁 A2/3/4 + A17/18/19 六条）、事件效果的
   **列表**、每幕的第二三只 Boss、A1/A10/A12/A15/A20。逐条见 `sts-wiki-gap.md` §2–§3。
 
+---
 
+## 11. 现状补充（2026-11-03）：Ascension 的数据维度
+
+§2 的 `G`-能力矩阵里，"A2/3/4 伤害"与 "A17/18/19 招式表"当时是"需要 `EACT` 加维度"。
+§187 把它加了：`EACT.ProgramAsc` + `AscensionMin`（两格）+ `intent.ascensionAtLeast`。
+当前内容接了 **13 个动作**（普通 4 / 精英 4 / Boss 3 / 招式表 2），剩下的由
+`native/gap_check.py` 报数：**没有 wiki 出处就不写数字**。

@@ -3289,6 +3289,15 @@ pub struct CombatState {
     pub next_card_instance_number: i32,
     pub next_effect_chain_number: i64,
     pub next_program_execution_id: i64,
+    /// The run's Ascension level, 0–20 (§187). **Not** in the snapshot text: the reference has no
+    /// such field, so writing it into `hash_golden` would move all 85 corpus cases. It is a
+    /// fight-level constant (set once at build, never mutated mid-fight), and `hash_full` must
+    /// cover it when that lands.
+    ///
+    /// 它在这里而不是在 `FightPlan` 里：读它的是 `intent::select_action` 与
+    /// `intent::execute_action`，两者都已经拿到 `&CombatState`；放进 plan 会让 49 处
+    /// `FightPlan { .. }` 字面量全部要改一个字段。
+    pub ascension: u8,
     turn_order: Bounded<CombatantId, MAX_COMBATANTS>,
     combatants: Bounded<Combatant, MAX_COMBATANTS>,
     global_statuses: Bounded<StatusInstance, MAX_GLOBAL_STATUSES>,
@@ -3439,6 +3448,7 @@ impl Empty for CombatState {
         active_combatant_id: None,
         end_turn_requested: false,
         forced_turn_ends: 0,
+        ascension: 0,
         extra_turn_for: None,
         cards_played_this_turn: 0,
         cards_played_last_turn: 0,
@@ -3560,6 +3570,7 @@ impl CombatState {
             next_card_instance_number: 0,
             next_effect_chain_number: 0,
             next_program_execution_id: 0,
+            ascension: 0,
             turn_order: Bounded::new(),
             combatants: Bounded::new(),
             global_statuses: Bounded::new(),
@@ -4139,6 +4150,20 @@ impl CombatState {
     }
 
     // ---- writes ------------------------------------------------------------------------------
+
+    /// The Ascension level this fight runs at (§187). `0` = the base game.
+    #[must_use]
+    pub const fn ascension(&self) -> u8 {
+        self.ascension
+    }
+
+    /// Sets the Ascension level (called once, right after the fight is built).
+    ///
+    /// ⚠️ 它不是"战斗中途可以改的数"：没有任何规则会在 fight 里改它，而 `A17/18/19` 依赖
+    /// "整场一致"。做成 `pub` 字段是为了让 `build` 之后能写；不提供"中途修改"的入口。
+    pub fn set_ascension(&mut self, level: u8) {
+        self.ascension = level;
+    }
 
     /// Adds a combatant: appends to the turn order, creates its (empty) piles, and makes it the
     /// active combatant if it is the first (`CombatState.cs:224-238`).

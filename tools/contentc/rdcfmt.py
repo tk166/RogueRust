@@ -158,7 +158,8 @@ MAGIC = 0x46434452          # b'RDCF'
 # 2: `CARD` gained a `Rarity` cell (stride unchanged -- the cell fits the existing padding).
 # A schema change must be visible to a reader that has a *fixed* cell table, otherwise an old
 # image decodes as garbage instead of failing.
-FORMAT_VERSION = 4
+# 5: `EACT` gained `ProgramAsc` + `AscensionMin` (§187), so that row's stride moved 16 -> 20.
+FORMAT_VERSION = 5
 HEADER_SIZE = 32
 NSEC = 20
 
@@ -266,6 +267,8 @@ STATUS_ROW = [
 EACT_ROW = [
     ("Id", F_STR, 0), ("NameKey", F_STR, 0), ("DescriptionKey", F_STR, 0),
     ("PackageId", F_STR, 0), ("Intent", F_TERM, 0), ("Program", F_TERM, 0),
+    # §187: the ascension dimension (A2/3/4 numbers, A17/18/19 move sets). Nine cells => stride 20.
+    ("ProgramAsc", F_TERM, 0), ("AscensionMin", F_INT, 0),
     ("extra", F_TERM, 0),
 ]
 ENCT_ROW = [

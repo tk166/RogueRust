@@ -3193,6 +3193,8 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         _ => rd_run::state::FightKind::Normal,
     };
     let enemy_health_percent = session.state.enemy_health_bonus_percent(fight_kind);
+    // §187：A2/A3/A4 与 A17/18/19 都需要这一个数（内核不会猜它）。
+    let ascension = session.state.ascension();
     // 可失败段收在一个块里：`entries` 借着 `state`（`DeckEntry<'static>` 的要求），块一结束借用就死，
     // 后面才允许拿整个 `session` 去回滚。这不是绕过借用检查，而是让借用检查器**替我**保证
     // "先建、后提交"。
@@ -3228,6 +3230,7 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
             max_health,
             Some(entries),
             enemy_health_percent,
+            ascension,
         ) {
             Ok(combat) => {
                 crate::install_session(combat);
@@ -5997,6 +6000,38 @@ mod tests {
             .unwrap_or_default()
     }
 
+    /// §187：运行层的 Ascension 等级必须**真的进到战斗里**。
+    ///
+    /// `A2/A3/A4` 与 `A17/18/19` 全都读 `CombatState::ascension()`，而那个数来自这里的
+    /// `session.state.ascension()`。它不进快照、不进哈希，所以**加错地方也不会有任何闸门变红** ——
+    /// 除非有这一条。（第一版用 `test_run` 做夹具，它已经开了一局，再
+    /// `rd_run_start` 就被拒了 —— 开局路径只能走一次。）
+    #[test]
+    fn the_ascension_level_reaches_the_fight_state() {
+        for level in [0i32, 2, 3, 4, 17, 19, 20] {
+            assert_eq!(rd_run_start(11, level), 0, "start at A{level} ({})", run_error_text());
+            assert_eq!(rd_run_ascension(), level, "the run knows its level");
+            // 祝福先结掉（与界面一样），否则地图游标还没动，`rd_run_step(0)` 会报
+            // "动作下标越界" —— 那是正确的拒绝，只是这条测试走错了顺序。
+            assert_eq!(rd_run_choose_start(0), 0, "take blessing 0");
+            while rd_run_pending() == 7 {
+                assert_eq!(rd_run_pick_blessing_card(0), 0, "the blessing owes a pick");
+            }
+            assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+            assert_eq!(rd_run_begin_node(), 0, "begin the node");
+            if rd_run_fight_begin() != 0 {
+                // not every seed opens on a fight; the run-side fact is still asserted above
+                continue;
+            }
+            let session = crate::slot().as_ref().expect("env session");
+            assert_eq!(
+                session.state.ascension(),
+                u8::try_from(level).unwrap(),
+                "the fight must run at A{level}, not at the default"
+            );
+        }
+    }
+
     /// The hero's stacks of `definition`, read through the §147 ABI (works for any status).
     fn hero_status(definition: &str) -> i32 {
         for index in 0..crate::rd_env_status_count(-1) {
@@ -6195,7 +6230,7 @@ mod tests {
     #[test]
     fn every_boss_fight_stays_playable_including_summons() {
         for encounter in ["enc_slime_boss", "enc_the_champ", "enc_time_eater"] {
-            let session = crate::build_session_at(7, encounter, 400, None, 0)
+            let session = crate::build_session_at(7, encounter, 400, None, 0, 0)
                 .unwrap_or_else(|error| panic!("{encounter}: {error}"));
             crate::install_session(session);
             let mut multi = 0usize;
@@ -6269,7 +6304,7 @@ mod tests {
     /// Siphon Soul 真的把力量/敏捷减下去"。
     #[test]
     fn lagavulin_can_be_fought_for_eight_rounds_including_siphon_soul() {
-        let session = crate::build_session_at(7, "enc_lagavulin", 200, None, 0)
+        let session = crate::build_session_at(7, "enc_lagavulin", 200, None, 0, 0)
             .expect("the lagavulin encounter");
         crate::install_session(session);
         let hero = rd_core::state::CombatantId::new("hero").expect("hero id");

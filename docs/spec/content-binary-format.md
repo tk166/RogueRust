@@ -255,4 +255,12 @@ card / status / enemy_action / encounter / relic / map_node / event / shop / cha
 负控在 `native/negctl_184.py`：**基线绿 → bug①红（且点名 opcode 与字段）→ bug②红 → 清理回绿**。
 证据串因此多了一段：`... 1274 table rows, 6 term-shape checks over 5,038 terms`。
 
+## 7. 实现补充（2026-11-03）：`FORMAT_VERSION` 5
 
+`EACT` 从 7 格涨到 9 格（§187：`ProgramAsc` + `AscensionMin`），行宽 16 → 20 B：
+
+* `FORMAT_VERSION` 4 → 5，**旧镜像会被 `UnsupportedVersion` 直接拒绝**（不是尽力解析）；
+* `tools/contentc/expected_sha.txt` 因此必须重新钉（`verify_bytes.py --repin`）：编译器变了，
+  旧内容的产物字节必然移动。重钉之后 85 份语料与 4 条对拍仍是逐字节一致 —— 那是"格式变了、
+  语义没变"的证据；
+* 核心镜像（`roguedeck`）也涨了：85,616 → 87,192 B，全量 158,296 → 159,872 B。

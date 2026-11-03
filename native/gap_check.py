@@ -118,6 +118,21 @@ def main():
     if unread:
         print("  DECLARED BUT NEVER READ: " + ", ".join(f"A{lv}({n})" for n, lv in unread))
 
+
+    # ── §187: the ascension **data** (A2/A3/A4 numbers and the A17/18/19 move sets) ──────────────
+    # 这几条不是运行层常量，而是内容侧的数字 + 内核的一个条件，所以上面的 `A_*` 扫描看不到它们。
+    # 一份"实现了 A2/3/4"的声明如果没人核对，它会在下一次内容变更后变成谎话。
+    print("== ascension data (EACT.ProgramAsc, §187) ==")
+    variants = [a for a in doc.get("EnemyActions") or [] if a.get("ProgramAsc")]
+    by_tier = {}
+    for action in variants:
+        by_tier.setdefault(action.get("AscensionMin"), []).append(action["Id"])
+    print("  %d action(s) with an ascension variant" % len(variants))
+    for tier in sorted(by_tier):
+        print("    A%-2s %s" % (tier, ", ".join(by_tier[tier])))
+    missing = [a["Id"] for a in doc.get("EnemyActions") or [] if not a.get("ProgramAsc")]
+    print("  without a variant: %d action(s) (the content has not sourced them yet)" % len(missing))
+
     print("== gates ==")
     accept = read(ACCEPT)
     names = re.findall(r"Invoke-Gate -Name '([a-z0-9-]+)'", accept)

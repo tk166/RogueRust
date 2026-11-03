@@ -492,7 +492,7 @@ fn build_session_with(
     hero_hp: i32,
     deck: Option<&'static [DeckEntry<'static>]>,
 ) -> Result<Session, String> {
-    build_session_at(seed, encounter_name, hero_hp, deck, 0)
+    build_session_at(seed, encounter_name, hero_hp, deck, 0, 0)
 }
 
 /// Put every enemy's `StartingStatuses` onto it (§175b).
@@ -578,6 +578,7 @@ fn build_session_at(
     hero_hp: i32,
     deck: Option<&'static [DeckEntry<'static>]>,
     enemy_health_percent: i32,
+    ascension: u8,
 ) -> Result<Session, String> {
     let content: &'static Content<'static> =
         Box::leak(Box::new(Content::parse(IMAGE).map_err(|e| format!("RDCF 镜像解析失败: {}", detail(&e)))?));
@@ -653,6 +654,8 @@ fn build_session_at(
         CombatId::new(COMBAT_ID).map_err(|e| format!("CombatId: {}", detail(&e)))?,
         seed,
     ));
+    // §187：难度等级进战斗状态（意图条件 `intent.ascensionAtLeast` 与 `EACT.ProgramAsc` 都读它）。
+    state.set_ascension(ascension);
     let host = Host::new(content);
     build_fight_from_content(&mut state, content, &plan)
         .map_err(|e| format!("build_fight_from_content: {}", detail(&e)))?;

@@ -12893,3 +12893,85 @@ Giant Head 500）。
   `sts-wiki-gap.md` 整篇重写，`sts-act1-inventory.md` +2 节 −1 处过期注解，8 份规格书补章节。
 * 代码：只有一处内容修正（`blind` 的稀有度与去向），20/20 闸门绿、单测 824 不变。
 * 内容重新核对覆盖：33 瓶药水、3 张无色牌、6 个 Act2/3 精英、Ascension 20 条、关键词页。
+
+---
+
+## 187. Ascension 的数据维度：`EACT` 两格 + 一个条件（A2/3/4 与 A17/18/19）
+
+§159 把 9 条能落在"运行层一个数"上的规则做了；剩下的 A2/3/4（伤害）与 A17/18/19（招式表）
+一直写着"要先给 `EACT` 加维度"。这一节把那个维度加上。
+
+### 187.1 参考里的形状，和我们为什么不能照抄
+
+StS 的每只怪在自己的 `getMove()` 里写 `if (ascensionLevel >= 3) damage = 20;` —— **代码**，不是数据。
+数据化引擎照抄不了，于是拆成两半：
+
+| 需求 | 落点 | 为什么在这儿 |
+|---|---|---|
+| 同一个招式**换数值** | `EACT.ProgramAsc`（term）+ `EACT.AscensionMin`（int） | 一个动作一份节目，"升档"就是换成另一份 |
+| 换**招式表**（用哪一招、用几次） | `intent.ascensionAtLeast`（新条件） | 内容写一条更高优先级的 `IntentRule` 就能换招 |
+
+阈值**写在内容里**（普通 2/精英 3/Boss 4；招式表 17/18/19）。内核不知道一条遭遇来自哪个池 ——
+精英也会出现在事件里（`Dead Adventurer`），所以"内核替内容猜种类"在第一次遇到那种情况时就错。
+
+### 187.2 落地
+
+| 层 | 改动 |
+|---|---|
+| `state.rs` | `CombatState.ascension: u8` + `ascension()` / `set_ascension()`。**不进规范文本**（参考没有这个字段，写进去会移动全部 85 份语料）；`hash_full` 将来必须覆盖它 |
+| `content.rs` | `EACT` 7 → 9 格（`ProgramAsc`、`AscensionMin`），stride 16 → 20；`FORMAT_VERSION` 4 → 5 |
+| `rdcfmt.py` | 同一份 schema + 版本号（两边各一份是既有设计；`contentc-bytes` 与 `rdcf-verify` 会抓漂移） |
+| `intent.rs` | `execute_action` 按 `state.ascension()` 选信封；`ConditionKind::AscensionAtLeast`（第 11 个条件）+ `ascension_at_least()` |
+| `rd-wasm` | `build_session_at(..., ascension)`；跑一局时传 `session.state.ascension()` |
+| 内容 | **13 个动作**的升档（普通 4 / 精英 4 / Boss 3 / 招式表 2），数字全部回 wiki 单页抄 |
+
+⚠️ **三个当场踩到的坑（都不是"风格问题"）**：
+
+1. `AscensionMin` / `ProgramAsc` 在 **EACT 行**上，不在 `Program` 那个信封里。第一版读 `base.int_field(...)`
+   —— 于是格永远读不到，内容里写了等于没写。
+2. `ProgramAsc` **就是信封**（`{Root, MaxProgramSteps, …}`），不是裸 `Root`。第一版返回 `variant.Root`，
+   于是后面那句 `envelope.node_field("Root")` 跑去 `node.dealDamage` 里找 `Root` ⇒ `Missing("Root")`。
+3. `entity_row!` 的 `=> n` 是**真的格号**（getter 用它），不是注释。加两格之后我写成了 7/8/6，
+   于是 `ProgramAsc` 的 getter 读到了 `AscensionMin` 那一格（`65535` vs `0x8000`）。
+
+### 187.3 ★★ 写内容的方法：**改基础节目，不要手写节点**
+
+第一版把 13 个升档节目**手写**出来，两处方言立刻写错（`createCardInstance` 要 `ToZone` 不是
+`Destination`；目标选择器是 `eventTarget`）。这是 §183 的同一个坑：手写节点 = 猜形状。
+
+第二版改成**深拷贝基础节目、只改常量**（`set_damage` / `set_card_count` / `multi_stab_at_18` /
+`two_daggers`），改不到目标就**响亮失败**。这样"形状"永远来自内容自己，而"数字"是唯一变动的东西。
+
+同一个脚本里还踩了两次"返回值"的坑，值得记：`root = mutate(root) or root` 在 `set_damage` 返回
+**命中次数**时把 `Root` 变成了一个整数（内容门在第一个字段上就跨了）；而 `two_daggers` 返回新根时
+被忽略，于是那条"变体"与基础**一模一样** —— 一个没有症状的错字。现在判据是 `isinstance(dict)`。
+
+### 187.4 ★★ 又抓到一个内容错（回 wiki 复核的直接产出）
+
+核对 slavers 的数字时发现：**`slaver_red.scrape` 写成了 7 伤害 + 1 Weak**，而 wiki 是
+**8 伤害 + 1 Vulnerable**（`wiki_slavers.txt`：`Deals (8;{{Asc|2|9}}) damage. Applies (1;{{Asc|17|2}}) Vulnerable.`）。
+它从 §173 起就在内容里，而 20 道闸门全绿 —— 因为 **`INV_ACTIONS` 那张清单也写着 7 + Weak**。
+与 §186 的 `blind` 完全同一个形状：**内容错 + 清单错 ⇒ 没有判据看得见**。
+
+⇒ 修复后 `web-soak` 的点击数从 **350 掉到 188**：Vulnerable 比 Weak 更致命，随机点击的那一局死得更早。
+这不是回归，是"修对了一处内容"的副作用 —— 记在这里，免得下次有人看到数字变小就以为坏了。
+
+### 187.5 判据
+
+| 判据 | 位置 | 抓什么 |
+|---|---|---|
+| `an_ascension_variant_replaces_the_program_at_its_threshold` | `host.rs` | Lagavulin 的 Attack **A0/A2 = 18、A3/A20 = 20**（两侧都测；变体早一级生效会红） |
+| `the_ascension_condition_compares_the_fight_level` | `intent.rs` | 8 组 (level, value) 的比较，含 0 级与 20 级 |
+| `a_fresh_state_is_ascension_zero` | `intent.rs` | 新战斗默认 A0（语料依赖这一条） |
+| `the_ascension_level_reaches_the_fight_state` | `run.rs` | A0/2/3/4/17/19/20 开局 → 战斗状态里的等级一致 |
+| `check_ascension_variants` | 内容门 | 13 条变体逐条钉（facts + 阈值）；**变体 facts 与基础相同 ⇒ 红**；内容里有而表里没有 ⇒ 红 |
+| 负控 | 手工 | ① 阈值判据改成恒真 ⇒ Lagavulin 在 **A0** 就变难（红在 A0）；② 把某个变体换成基础节目 ⇒ 内容门两条同时红 |
+
+### 187.6 数字
+
+* **20/20 闸门绿**，单测 **828**（rd-core 660 / rd-run 100 / rd-wasm 68）。
+* `FORMAT_VERSION` **4 → 5**；`expected_sha.txt` 重新钉（编译器变了 ⇒ 旧内容字节必然移动），
+  85 份语料与四条对拍仍逐字节一致 = "格式变了、语义没变"的证据。
+* 内容：镜像 46,384 B（core 38,484 B）；**13 个动作**有升档变体，`gap_check.py` 会打印
+  "多少个还没有"（79 − 13 = 66）。
+* Ascension 现在 **15 / 20 条有机制**；剩下 A1 / A10 / A12 / A15 / A20。

@@ -368,6 +368,31 @@
 > ⚠️ **召唤上限**：wiki 对 Reptomancer 写的是"最多 4 只 Dagger"，本项目的 `node.createCombatant`
 > **没有上限参数**，唯一的界是 6 个敌人槽 —— 这是写明了的偏差。
 
+### 4.5 Ascension 数值（本项目已接线的 13 个动作，2026-11-03 回 wiki 复核）
+
+分档按**怪的种类**：普通 2 / 精英 3 / Boss 4（伤害），17 / 18 / 19（招式表）。
+数字取 wiki 单页里那一格 —— wiki 把 Boss 的伤害升级也标成 `Asc|3`，我们保留数字、按 Boss 用 A4。
+
+| 动作 | 基础 | 升档 | wiki 格子 |
+|---|---|---|---|
+| `blue_slaver.stab` | 12 | **13** @A2 | `Asc|2|13` |
+| `blue_slaver.rake` | 7 + Weak 1 | **8** + Weak 1 @A2 | `Asc|2|8` |
+| `slaver_red.stab` | 13 | **14** @A2 | `Asc|2|14` |
+| `slaver_red.scrape` | 8 + Vulnerable 1 | **9** + Vulnerable 1 @A2 | `Asc|2|9` |
+| `lagavulin.attack` | 18 | **20** @A3 | `Asc|3|20` |
+| `book_of_stabbing.multi_stab` | 6×N（N = 次数+2） | **7×N**，且 **N = 当前回合数+1** @A3 | `Asc|3|7×N`、`Asc|18|` |
+| `book_of_stabbing.big_stab` | 21 | **24** @A3 | `Asc|3|24` |
+| `taskmaster.scouring_whip` | 7 + 1 Wound | 7 + **2 Wounds** @A3 | `Asc|2|2` |
+| `nemesis.tri_attack` | 6×3 | **7×3** @A4 | `Asc|3|7×3` |
+| `nemesis.tri_burn` | 3 Burn | **5 Burn** @A19 | `Asc|18|5` |
+| `reptomancer.big_bite` | 30 | **34** @A4 | `Asc|3|34` |
+| `reptomancer.snake_strike` | 13×2 | **16×2** @A4 | `Asc|3|16×2` |
+| `reptomancer.spawn_dagger` | 1 Dagger | **2 Daggers** @A19 | `Asc|18|2` |
+
+> ⚠️ 这 13 行**也是内容门里那张 `INV_ASC_VARIANTS` 的来源**（`native/sts_content_check.py`），
+> 两边数字必须一致；`sts-content` 闸门会因为"变体的 facts 与基础相同"而红 —— 那正是"升档了但
+> 什么都没变"这个没有症状的错字。
+
 ## 5. 遭遇编成（Encounter）
 
 ### 5.1 规则

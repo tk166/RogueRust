@@ -46,7 +46,8 @@ pub const DIRECTORY_ENTRY_BYTES: usize = 12;
 /// 内核的格表是**固定**的，而镜像原本既不记格数、也不随 schema 动版本号 ⇒ 15 格的旧镜像
 /// 配 16 格的新内核会**解析成功并读出垃圾**（把旧的 `extra` 当 `Rarity`，`content.string`
 /// 碰巧拿到合法串号就返回一段像样的文本）。schema 变更必须响亮，所以版本号跟着 schema 走。
-pub const FORMAT_VERSION: u16 = 4;
+/// 5: `EACT` gained `ProgramAsc` + `AscensionMin` (§187), so that row's stride moved 16 -> 20.
+pub const FORMAT_VERSION: u16 = 5;
 /// 目录项数（头里 `nsec`）。0..=14 有名字，15..19 保留。
 pub const SECTION_COUNT: usize = 20;
 /// 头部 `flags` 的 bit0：表现层已剥（`content.core.rdcf`）。
@@ -1478,7 +1479,7 @@ entity_row!(
 
 entity_row!(
     /// 敌人动作行（`EACT`，stride 16，7 格）。
-    EactRow, EnemyAction, EACT_SCHEMA, 16, 7, {
+    EactRow, EnemyAction, EACT_SCHEMA, 20, 9, {
         /// `Id`（串号）。
         ("Id", F_STR, 0) => id => 0,
         /// `NameKey`（串号）。
@@ -1491,8 +1492,15 @@ entity_row!(
         ("Intent", F_TERM, 0) => intent => 4,
         /// `Program`（term 句柄）。
         ("Program", F_TERM, 0) => program => 5,
+        /// `ProgramAsc`（term 句柄，§187）：**升档后的节目**。与 `AscensionMin` 一起用。
+        ("ProgramAsc", F_TERM, 0) => program_asc => 6,
+        /// `AscensionMin`（`F_INT`，§187）：从哪一级起改用 `ProgramAsc`。`0` = 没有变体。
+        ///
+        /// 数值由**内容**写（普通 2 / 精英 3 / Boss 4；招式表则是 17/18/19），因为内核不知道
+        /// 这条遭遇来自哪个池 —— 而"猜一次"在第一次"精英出现在事件里"时就会错。
+        ("AscensionMin", F_INT, 0) => ascension_min => 7,
         /// schema 不认识的键（term 句柄）。
-        ("extra", F_TERM, 0) => extra => 6,
+        ("extra", F_TERM, 0) => extra => 8,
     }
 );
 
@@ -3033,39 +3041,39 @@ mod tests {
 
     /// `manifest.json` → `variants.core.sections`（逐字抄写，不改）。
     const CORE_SECTIONS: [(usize, &str, u32, u32, u32); 15] = [
-        (0, "STR", 272, 31_051, 1_375),
-        (1, "STRO", 31_324, 5_504, 1_376),
-        (2, "OPD", 36_828, 1_040, 130),
-        (3, "OPF", 37_868, 1_412, 353),
-        (4, "TRM", 39_280, 20_760, 2_143),
-        (5, "TRW", 60_040, 4_286, 2_143),
-        (6, "AUX", 64_328, 4_156, 2_078),
-        (7, "CARD", 68_484, 1_984, 62),
-        (8, "STAT", 70_468, 920, 23),
-        (9, "EACT", 71_388, 6_304, 394),
-        (10, "ENCT", 77_692, 1_744, 109),
-        (11, "REL", 79_436, 588, 49),
-        (12, "ROOT", 80_024, 64, 16),
-        (13, "IDX", 80_088, 5_528, 691),
+        (0, "STR", 272, 31051, 1375),
+        (1, "STRO", 31324, 5504, 1376),
+        (2, "OPD", 36828, 1040, 130),
+        (3, "OPF", 37868, 1412, 353),
+        (4, "TRM", 39280, 20760, 2143),
+        (5, "TRW", 60040, 4286, 2143),
+        (6, "AUX", 64328, 4156, 2078),
+        (7, "CARD", 68484, 1984, 62),
+        (8, "STAT", 70468, 920, 23),
+        (9, "EACT", 71388, 7880, 394),
+        (10, "ENCT", 79268, 1744, 109),
+        (11, "REL", 81012, 588, 49),
+        (12, "ROOT", 81600, 64, 16),
+        (13, "IDX", 81664, 5528, 691),
         (14, "TAGS", 0, 0, 0),
     ];
 
     /// `manifest.json` → `variants.full.sections`。
     const FULL_SECTIONS: [(usize, &str, u32, u32, u32); 15] = [
-        (0, "STR", 272, 76_799, 3_140),
-        (1, "STRO", 77_072, 12_564, 3_141),
-        (2, "OPD", 89_636, 1_112, 139),
-        (3, "OPF", 90_748, 2_996, 749),
-        (4, "TRM", 93_744, 34_004, 2_895),
-        (5, "TRW", 127_748, 5_790, 2_895),
-        (6, "AUX", 133_540, 7_620, 3_810),
-        (7, "CARD", 141_160, 1_984, 62),
-        (8, "STAT", 143_144, 920, 23),
-        (9, "EACT", 144_064, 6_304, 394),
-        (10, "ENCT", 150_368, 1_744, 109),
-        (11, "REL", 152_112, 588, 49),
-        (12, "ROOT", 152_700, 68, 17),
-        (13, "IDX", 152_768, 5_528, 691),
+        (0, "STR", 272, 76799, 3140),
+        (1, "STRO", 77072, 12564, 3141),
+        (2, "OPD", 89636, 1112, 139),
+        (3, "OPF", 90748, 2996, 749),
+        (4, "TRM", 93744, 34004, 2895),
+        (5, "TRW", 127748, 5790, 2895),
+        (6, "AUX", 133540, 7620, 3810),
+        (7, "CARD", 141160, 1984, 62),
+        (8, "STAT", 143144, 920, 23),
+        (9, "EACT", 144064, 7880, 394),
+        (10, "ENCT", 151944, 1744, 109),
+        (11, "REL", 153688, 588, 49),
+        (12, "ROOT", 154276, 68, 17),
+        (13, "IDX", 154344, 5528, 691),
         (14, "TAGS", 0, 0, 0),
     ];
 
@@ -3179,7 +3187,7 @@ mod tests {
 
         // offset + bytes 恰好越过 1 字节也算越界（不取巧、也不溢出）。
         let mut blob = read_image(CORE_IMAGE);
-        patch32(&mut blob, dir_base(S_TAGS), 85_616);
+        patch32(&mut blob, dir_base(S_TAGS), 87_192);
         patch32(&mut blob, dir_base(S_TAGS) + 4, 1);
         patch32(&mut blob, dir_base(S_TAGS) + 8, 1);
         assert_eq!(
@@ -3369,7 +3377,7 @@ mod tests {
     #[test]
     fn the_core_image_matches_the_manifest() {
         with_core(|content, blob| {
-            assert_eq!(blob.len(), 85_616);
+            assert_eq!(blob.len(), 87_192);
             assert_eq!(content.total_size() as usize, blob.len());
             assert_eq!(content.version(), FORMAT_VERSION);
             assert_eq!(content.flags(), 1);
@@ -3427,7 +3435,7 @@ mod tests {
     #[test]
     fn the_full_image_also_reads() {
         let blob = read_image(FULL_IMAGE);
-        assert_eq!(blob.len(), 158_296);
+        assert_eq!(blob.len(), 159_872);
         let content = Content::parse(&blob).expect("full 镜像必须能解析");
         assert_eq!(content.flags(), 0);
         assert!(!content.presentation_stripped());
@@ -3521,7 +3529,7 @@ mod tests {
             // 行宽/格数：与 manifest 的 stride 和 rdcfmt 的 schema 一致。
             assert_eq!(Table::Card.stride(), 32);
             assert_eq!(Table::Status.stride(), 40);
-            assert_eq!(Table::EnemyAction.stride(), 16);
+            assert_eq!(Table::EnemyAction.stride(), 20);
             assert_eq!(Table::Encounter.stride(), 16);
             assert_eq!(Table::Relic.stride(), 12);
             assert_eq!(
@@ -3530,7 +3538,9 @@ mod tests {
                 "CARD 16 格 = 32 B（15 格时 30 B 也取整到 32：那一格是免费的）"
             );
             assert_eq!((StatusRow::STRIDE, StatusRow::CELLS), (40, 20));
-            assert_eq!((EactRow::STRIDE, EactRow::CELLS), (16, 7));
+            // §187: EACT gained `ProgramAsc` + `AscensionMin` (7 -> 9 cells), so its stride is the
+            // first one in this list that is **not** 4-byte aligned on its own: align4(2 * 9) = 20.
+            assert_eq!((EactRow::STRIDE, EactRow::CELLS), (20, 9));
             assert_eq!((EnctRow::STRIDE, EnctRow::CELLS), (16, 8));
             // §156: REL gained a `Rarity` cell (5 -> 6). The 12-byte stride already had the room;
             // `align4(2 * 6) = 12` still matches, which the loop below re-checks for every table.
@@ -3740,6 +3750,8 @@ mod tests {
                 ("PackageId", action.package_id()),
                 ("Intent", action.intent()),
                 ("Program", action.program()),
+                ("ProgramAsc", action.program_asc()),
+                ("AscensionMin", action.ascension_min()),
                 ("extra", action.extra()),
             ] {
                 assert_eq!(action.row().cell_by_name(name), Some(got), "EACT.{name}");
@@ -4058,7 +4070,7 @@ mod tests {
         assert_eq!(content.card_rarity("slimed"), Some("Status"));
         assert_eq!(content.card_rarity("no_such_card"), None);
         assert_eq!((CardRow::STRIDE, CardRow::CELLS), (32, 16));
-        assert_eq!(FORMAT_VERSION, 4);
+        assert_eq!(FORMAT_VERSION, 5);
         assert_eq!(content.version(), FORMAT_VERSION);
         // The roguedeck image has no `Rarity` key at all: the cell is there and reads as absent,
         // which is `None` rather than an error.
