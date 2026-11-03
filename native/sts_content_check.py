@@ -115,6 +115,9 @@ INV_CARDS = {
     # which is why they have no `+` row (see NOT_UPGRADABLE_TAGS). Wiki values, base.
     # §189 `A10`：开局诅咒（wiki: Unplayable. Ethereal. Cannot be removed）。
     "ascenders_bane": {"Cost": 0, "Tags": ["curse", "unplayable", "ethereal"], "Facts": []},
+    # §191：Sentry 的 Bolt 塞的就是这张（wiki: Unplayable. Ethereal.）。第三张 junk 卡，
+    # 与 `slimed` / `wound` 同形 —— 唯一区别是它离手即烧掉。
+    "dazed": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"], "Facts": []},
     "bandage_up": {"Cost": 0, "Tags": ["skill", "colorless"],
                    "Facts": [("heal", 4, "sourceDowned")]},
     "blind": {"Cost": 0, "Tags": ["skill", "colorless"],
@@ -305,12 +308,13 @@ INV_MONSTERS = [
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
     "darkling.nip": ("Attack", [("damage", 7, "event")]),
-    "darkling.chomp": ("Attack", [("damage", 11, "event")]),
+    "darkling.chomp": ("Attack", [("damage", 8, "event"), ("damage", 8, "event")]),
     "maw.roar": ("Debuff", [("status", "standard.strength", 3, "source"),
                             ("status", "standard.weak", 2, "event")]),
     "maw.bite": ("Attack", [("damage", 14, "event")]),
     "maw.slam": ("Attack", [("damage", 20, "event"), ("block", 3, "source")]),
-    "gremlin_leader.slash": ("Attack", [("damage", 16, "event")]),
+    "gremlin_leader.slash": ("Attack", [("damage", 6, "event"), ("damage", 6, "event"),
+                                ("damage", 6, "event")]),
     "gremlin_leader.rally": ("Defend", [("block", 12, "source"),
                                         ("status", "standard.strength", 5, "source")]),
     "giant_head.glare": ("Attack", [("damage", 12, "event"),
@@ -321,20 +325,20 @@ INV_ACTIONS = {
                                               ("spawn", "gremlin_wizard", 20)]),
     "shelled_parasite.suck": ("Attack", [("damage", 10, "event"), ("block", 2, "source")]),
     "shelled_parasite.double_strike": ("Attack", [("damage", 6, "event"), ("damage", 6, "event")]),
-    "chosen.poke": ("Attack", [("damage", 6, "event"), ("damage", 6, "event")]),
+    "chosen.poke": ("Attack", [("damage", 5, "event"), ("damage", 5, "event")]),
     "chosen.debilitate": ("Attack", [("damage", 10, "event"),
                                      ("status", "standard.vulnerable", 2, "event")]),
     "byrd.peck": ("Attack", [("damage", 1, "event")] * 5),
     "byrd.swoop": ("Attack", [("damage", 12, "event")]),
-    "spiker.cut": ("Attack", [("damage", 8, "event")]),
+    "spiker.cut": ("Attack", [("damage", 7, "event")]),
     "spiker.spike": ("Attack", [("damage", 4, "event"), ("block", 2, "source")]),
     "orb_walker.laser": ("Attack", [("damage", 10, "event"),
                                     ("status", "standard.weak", 2, "event")]),
     "orb_walker.claw": ("Attack", [("damage", 15, "event")]),
-    "the_champ.heavy_slash": ("Attack", [("damage", 18, "event")]),
+    "the_champ.heavy_slash": ("Attack", [("damage", 16, "event")]),
     "the_champ.defensive_stance": ("Defend", [("block", 15, "source"),
                                               ("status", "standard.metallicize", 2, "source")]),
-    "the_champ.execute": ("Attack", [("damage", 30, "event")]),
+    "the_champ.execute": ("Attack", [("damage", 10, "event"), ("damage", 10, "event")]),
     "time_eater.reverberate": ("Attack", [("damage", 7, "event"), ("damage", 7, "event"),
                                           ("damage", 7, "event")]),
     "time_eater.head_slam": ("Attack", [("damage", 26, "event")]),
@@ -362,7 +366,7 @@ INV_ACTIONS = {
                                           ("status", "standard.vulnerable", 2, "event")]),
     # §147: Constricted itself is a content trigger (see `standard.constricted`), so the action
     # only has to apply it.
-    "spire_growth.strategic": ("Debuff", [("status", "standard.constricted", 2, "event")]),
+    "spire_growth.strategic": ("Debuff", [("status", "standard.constricted", 10, "event")]),
     "spire_growth.aggressive": ("Attack", [("damage", 16, "event")]),
     "spire_growth.aggressive_heavy": ("Attack", [("damage", 22, "event")]),
     "spike_slime_s.tackle": ("Attack", [("damage", 5, "event")]),
@@ -391,7 +395,7 @@ INV_ACTIONS = {
     "slime_boss.goop_spray": ("Special", [("card", "slimed", 3, "DiscardPile", "event")]),
     "slime_boss.preparing": ("Special", []),
     "slime_boss.slam": ("Attack", [("damage", 35, "event")]),
-    "sentry.bolt": ("Attack", [("damage", 10, "event")]),
+    "sentry.bolt": ("Attack", [("card", "dazed", 2, "DiscardPile", "event")]),
     "sentry.beam": ("Attack", [("damage", 9, "event")]),
     "gremlin_wizard.ultimate_blast": ("Attack", [
         ("damage", 25, "event"),
@@ -990,6 +994,13 @@ INV_ASC_VARIANTS = {
     "shelled_parasite.double_strike": (2, [('damage', 7, 'event'), ('damage', 7, 'event')]),
     "shelled_parasite.suck": (2, [('damage', 12, 'event'), ('block', 2, 'source')]),
     "slime_boss.goop_spray": (19, [('card', 'slimed', 5, 'DiscardPile', 'event')]),
+    # §191：基础值修对之后，这六条终于可以有升档（数字仍是 wiki 那一格）。
+    "spiker.cut": (2, [("damage", 9, "event")]),
+    "the_champ.heavy_slash": (4, [("damage", 18, "event")]),
+    "chosen.poke": (2, [("damage", 6, "event"), ("damage", 6, "event")]),
+    "darkling.chomp": (2, [("damage", 9, "event"), ("damage", 9, "event")]),
+    "spire_growth.strategic": (2, [("status", "standard.constricted", 12, "event")]),
+    "sentry.bolt": (18, [("card", "dazed", 3, "DiscardPile", "event")]),
     "slime_boss.slam": (4, [('damage', 38, 'event')]),
     "sneaky_gremlin.puncture": (2, [('damage', 10, 'event')]),
     "spike_slime_m.flame_tackle": (2, [('damage', 10, 'event'), ('card', 'slimed', 1, 'DiscardPile', 'event')]),

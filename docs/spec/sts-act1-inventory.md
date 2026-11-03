@@ -368,14 +368,17 @@
 > ⚠️ **召唤上限**：wiki 对 Reptomancer 写的是"最多 4 只 Dagger"，本项目的 `node.createCombatant`
 > **没有上限参数**，唯一的界是 6 个敌人槽 —— 这是写明了的偏差。
 
-### 4.5 Ascension 数值（已接线的 42 个动作，2026-11-03 回 wiki 复核）
+### 4.5 Ascension 数值（已接线的 48 个动作，2026-11-03 回 wiki 复核）
 
 分档按**怪的种类**：普通 2 / 精英 3 / Boss 4（伤害数值），17 / 18 / 19（招式表改动）。
 数字全部来自 `native/wiki_asc/<monster>.txt`（每只怪的 **wikitext**，不是渲染页 ——
 渲染页会把 `1×5` 与升档上标糊成 `1×52`）。逐条的数字与本表一致，由内容门
 （`native/sts_content_check.py` 的 `INV_ASC_VARIANTS`）**独立**钉住。
 
-**基础值与 wiki 不一致的 11 条招式故意没有升档**，见 `docs/sts-wiki-gap.md` §G。
+§191 修掉了 8 条**基础值**与 wiki 不一致的招式并给它们补了升档（`spiker.cut`、`chosen.poke`、
+`darkling.chomp`、`the_champ.heavy_slash` / `execute`、`gremlin_leader.slash`、`sentry.bolt`、
+`spire_growth.strategic`）；剩下 `giant_head.*`（320 HP 简化版）与 `maw.*`（wiki 无页）
+仍无升档，见 `docs/sts-wiki-gap.md` §G。
 
 | 动作 | 升档起点 |
 |---|---|

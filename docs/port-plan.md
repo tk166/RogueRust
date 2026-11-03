@@ -13175,3 +13175,58 @@ severe consequences"）。所以 `patch_188_content.py` 的表头把两类分开
   A17 ×2、A18 ×1、A19 ×3，以 `gap_check.py` 输出为准）。
 * 剩下的 37 个：多数本来无升档（`Does nothing` / 纯召唤 / 纯状态），11 条等 §G 的基础修正，
   可变伤害 3 条等一个"区间表达式"。
+
+---
+
+## 191. 把 §G 那张工单做掉：修 8 条基础值 + 补它们的升档
+
+§190 说得很清楚：**在错的地基上加层只会更错**，所以那 11 条基础值与 wiki 不符的招式当时没有变体。
+这一节先修基础，再补升档。
+
+### 191.1 八条修正（数字全部来自 `native/wiki_asc/*.txt`）
+
+| 招式 | 原值 | 现在 | 升档 |
+|---|---|---|---|
+| `spiker.cut` | 8 | **7** | A2: 9 |
+| `the_champ.heavy_slash` | 18（**写的是 A4 值**） | **16** | A4: 18 |
+| `chosen.poke` | 6+6（**写的是 A2 值**） | **5+5** | A2: 6+6 |
+| `darkling.chomp` | 单段 11 | **8×2** | A2: 9×2 |
+| `gremlin_leader.slash` | 单段 16 | **6×3** | 无（wiki 无升档值） |
+| `the_champ.execute` | 单段 30 | **10×2** | 无 |
+| `sentry.bolt` | 10 伤害 | **塞 2 张 Dazed**（A18: 3 张） | A18: 3 |
+| `spire_growth.strategic` | Constricted 2 | **10** | A2: 12 |
+
+两条**结构性**修正（不是改数字，是把一段拆成多段）：`the_champ.execute` 与 `darkling.chomp` 改成
+两段、`gremlin_leader.slash` 改成三段。内容里的固定段数是**展开写**的（§190 的 `one_more_hit`
+踩过同一个形状），所以这里是"换成一串 `dealDamage`"，不是引入 `repeat`。
+
+`sentry.bolt` 需要一个新卡：**`dazed`**（Unplayable / Ethereal / 无效果）—— 与 `slimed`、`wound`
+同一族的第三张 junk 卡，也是 wiki 里 Bolt 真正塞的那张。`Ascender's Bane` 之后内容里的第二张
+"ethereal 诅咒/状态"，`TurnEndHandDestinationZone = ExhaustPile` 由内容门的 ethereal 判据钉住。
+
+### 191.2 故意不修的 3 条（写在明处的简化，不是漏）
+
+* `giant_head.glare` / `count`：本项目是**320 HP 的简化版**（§130 记录的），招式表跟着简化
+  （12 伤害 + Weak / 26 伤害，而 wiki 是 Weak 1 / 13 伤害 / 还有 It Is Time 的递增）；
+* `maw.*` 三招：wiki 上**没有这个页面**（404）。没有出处就不编数字。
+
+### 191.3 判据怎么跟上的
+
+内容门那张 `INV_ASC_VARIANTS` 是**独立第二份**（数字从 wikitext 抄），所以这一节红了三次，每次都是
+它该红：
+
+1. **8 条基础 facts 不符**（`action.darkling.chomp: facts [...] inv says [...]`）；
+2. **6 条新变体没被钉住**（`asc.unknown: variants not pinned by the inventory`）——
+   这条是 §187 写的"内容里有而表里没有 ⇒ 红"，它第一次真的派上用场；
+3. `dazed` 既不在 `INV_CARDS`、也不在 id 清单里（"内容多了一张卡"与"清单少了一行"是同一件事）。
+
+修完之后 48 条变体、43 张卡、20/20 闸门绿，**单测 836 不变**（这一节仍然没有内核改动 ——
+Ascension 的机制在 §187/§189 就已经齐了，后来两节全是数据与内容）。
+
+### 191.4 数字
+
+* **20/20 闸门绿**，单测 **836**（660 / 107 / 69）。
+* 内容：**43 张卡**（+`dazed`）、镜像 47,800 B（core 39,788 B）、**48 个动作有升档变体**
+  （79 个里的 61%）。
+* 剩下的 31 个：多数本来无升档；`giant_head.*` 与 `maw.*` 是写明了的简化；
+  `louse_*.bite` / `darkling.nip` 的可变伤害等一个"区间表达式"（§G 最后一段）。

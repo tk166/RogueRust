@@ -141,31 +141,36 @@ wiki 常见而我们**没有**的：
 > 核对时还抓到我们自己的一个内容错误（`blind` 的稀有度与 Exhaust），说明**词表对了不等于每条
 > 数据都对** —— 所以这一节的每一行都应该能点回 wiki 页面。
 
-### G. ★ 基础值与 wiki 不一致的招式（§190 回核的副产品）
+### G. ★ 基础值偏差：§191 修掉了 8 条，剩 3 条是写明了的简化
 
-补 A 数值时必须先看"基础值对不对"。回 `native/wiki_asc/*.txt` 对照之后，有 11 条**基础**就与 wiki
-不一致 —— 这些**故意没有升档变体**（在一个错的地基上加层只会更错），列在这里等下一轮修基础：
+§190 补 A 数值时发现"有招式的基础值就和 wiki 不一致"。**这些不能加升档变体**（在错的地基上加层
+只会更错），所以 §191 先修基础，再给它们补升档。
 
-| 我们的动作 | 我们的 facts | wiki（A0） | 差异性质 |
+已修（数字全部来自 `native/wiki_asc/*.txt`）：
+
+| 招式 | 原值 | 现在 | 升档 |
 |---|---|---|---|
-| `spiker.cut` | 8 伤害 | **7**（A2: 9） | 数值偏 1 |
-| `the_champ.heavy_slash` | 18 伤害 | **16**（A4: 18） | 我们写的是**升档值** |
-| `the_champ.execute` | 30 单段 | **10×2**（两段） | 结构与数值都不同 |
-| `chosen.poke` | 6+6 | **5×2**（A2: 6×2） | 我们写的是**升档值** |
-| `gremlin_leader.slash` | 16 单段 | **Stab 6×3**（三段） | 结构不同 |
-| `darkling.chomp` | 11 单段 | **8×2**（A2: 9×2） | 结构不同 |
-| `sentry.bolt` | 10 伤害 | **塞 2 张 Dazed**（无伤害） | 招式内容不同（本内容没有 Dazed 卡） |
-| `spire_growth.strategic` | Constricted 2 | **Constricted 10**（A2: 12） | 层数偏小 |
-| `giant_head.glare` | 12 伤害 + Weak 1 | **Weak 1**（无伤害） | 本项目是 320 HP 的简化版（§130） |
-| `giant_head.count` | 26 伤害 | **13**（It Is Time 才是 30 → A3: 40） | 简化版 |
-| `maw.*`（3 招） | 自家设计 | **wiki 无此页**（404） | 名字对不上，未有出处 |
+| `spiker.cut` | 8 | **7** | 有（A2: 9） |
+| `the_champ.heavy_slash` | 18（写成了 A4 值） | **16** | 有（A4: 18） |
+| `chosen.poke` | 6+6 | **5+5** | 有（A2: 6+6） |
+| `darkling.chomp` | 单段 11 | **8×2** | 有（A2: 9×2） |
+| `gremlin_leader.slash` | 单段 16 | **6×3** | 无（wiki 无升档值） |
+| `the_champ.execute` | 单段 30 | **10×2** | 无 |
+| `sentry.bolt` | 10 伤害 | **塞 2 张 Dazed** | 有（A18: 3 张） |
+| `spire_growth.strategic` | Constricted 2 | **10** | 有（A2: 12） |
 
-⚠️ 还有两条**结构上无法表达**的 wiki 事实（不是错，是模型的边界）：
+`dazed` 是新加的状态牌（Unplayable / Ethereal / 无效果），与 `slimed`、`wound` 同一族 ——
+Sentry 的 Bolt 塞的就是它。
 
-* **可变伤害**：`louse_*.bite` 与 `darkling.nip` 的 A 值是**区间**（`N = 5-7` → A2: `6-8`），
-  而我们的 `dealDamage` 只吃常量 ⇒ 这两招没有变体，基础值取区间中点（6 / 7）。
-* **同一招两个档位**：`jaw_worm.bellow` 的 Strength 在 A2 升、Block 在 A17 升，而 `ProgramAsc`
-  每行只有一个 ⇒ 变体带的是**较早**那个（Strength 4），Block 那一半写在注释里。
+仍然**故意不修**（写在明处的简化，不是漏）：
+
+| 招式 | 我们 | wiki | 为什么留着 |
+|---|---|---|---|
+| `giant_head.glare` / `count` | 12 伤害 + Weak / 26 伤害 | Weak 1（无伤害）/ 13 | 本项目是 **320 HP 的简化版**（§130），招式表跟着简化 |
+| `maw.*`（3 招） | 自家设计 | **wiki 无此页**（404） | 没有出处就不编数字 |
+
+还有两条**模型表达不了**的（不是错）：可变伤害（`louse_*.bite` 的 `5-7 → 6-8`，而 `dealDamage`
+只吃常量）、同一招两个档位（`jaw_worm.bellow`：Strength @A2、Block @A17，而 `ProgramAsc` 每行一个）。
 
 ### E. Ascension 逐条
 
