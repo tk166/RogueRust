@@ -1923,6 +1923,28 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.unawakened",
+      "PackageId": "sts",
+      "NameKey": "Unawakened",
+      "DescriptionKey": "The first lethal blow leaves it at 1 HP; it awakens instead of dying.",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "RefreshDuration",
+      "Tags": [
+        "buff",
+        "unawakened"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": null,
+      "DeathPrevention": {
+        "SurvivingHealth": 1,
+        "Percent": 0,
+        "Repeating": false
+      }
     }
   ],
   "Cards": [
@@ -18732,6 +18754,12 @@
                 "value": "standard.curiosity"
               },
               "Stacks": 1
+            },
+            {
+              "StatusDefinitionId": {
+                "value": "standard.unawakened"
+              },
+              "Stacks": 1
             }
           ],
           "Position": null,
@@ -18742,10 +18770,17 @@
                 "value": {
                   "Conditions": [
                     {
-                      "kind": "intent.healthPercent",
+                      "kind": "intent.not",
                       "value": {
-                        "Op": "LessOrEqual",
-                        "Percent": 25
+                        "Condition": {
+                          "kind": "intent.selfHasStatus",
+                          "value": {
+                            "Status": {
+                              "value": "standard.unawakened"
+                            },
+                            "MinStacks": 1
+                          }
+                        }
                       }
                     },
                     {
@@ -18764,7 +18799,7 @@
               "Action": {
                 "value": "awakened_one.rebirth"
               },
-              "Priority": 90
+              "Priority": 95
             },
             {
               "Condition": {
@@ -20550,6 +20585,12 @@
             "value": "standard.curiosity"
           },
           "Stacks": 1
+        },
+        {
+          "StatusDefinitionId": {
+            "value": "standard.unawakened"
+          },
+          "Stacks": 1
         }
       ],
       "IntentRules": [
@@ -20559,10 +20600,17 @@
             "value": {
               "Conditions": [
                 {
-                  "kind": "intent.healthPercent",
+                  "kind": "intent.not",
                   "value": {
-                    "Op": "LessOrEqual",
-                    "Percent": 25
+                    "Condition": {
+                      "kind": "intent.selfHasStatus",
+                      "value": {
+                        "Status": {
+                          "value": "standard.unawakened"
+                        },
+                        "MinStacks": 1
+                      }
+                    }
                   }
                 },
                 {
@@ -20581,7 +20629,7 @@
           "Action": {
             "value": "awakened_one.rebirth"
           },
-          "Priority": 90
+          "Priority": 95
         },
         {
           "Condition": {
@@ -20685,7 +20733,7 @@
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Awakened_One",
-      "AiNote": "§194：wiki 数值（HP 300/320；Regenerate 10 / A19 15；Curiosity 1 / A19 2；Slash 20；Soul Strike 6×4；Dark Echo 40；Tackle 10×3；Sludge 18 + 1 Void）。两阶段用计数器做：`ao_phase` 由 Rebirth 置 1，之后 Dark Echo（一次）→ Tackle/Sludge 交替。⚠️ 偏差：① Rebirth 在 **HP ≤ 25%** 时改为意图（内核没有死亡拦截，死亡后无法复活）；② 『移除所有 debuff』只按名摘掉 Curiosity（没有『清空状态』节点）；③ 两个 Cultist 不在（wiki 的第二阶段会在场）；④ Regenerate/Curiosity 的层数不随 A19 变（`StartingStatuses` 没有升档轴）。",
+      "AiNote": "§194/§195.2：wiki 数值（HP 300/320；Regenerate 10 / A19 15；Curiosity 1 / A19 2；Slash 20；Soul Strike 6×4；Dark Echo 40；Tackle 10×3；Sludge 18 + 1 Void）。两阶段用计数器做：`ao_phase` 由 Rebirth 置 1，之后 Dark Echo（一次）→ Tackle/Sludge 交替。**复活是真的**：`standard.unawakened` 带 `DeathPrevention{1 HP, 一次性}`，第一次致命伤把它留在1 血并消耗掉，意图规则 `not(hasStatus unawakened)` ⇒ 下一回合 Rebirth（回满血 + 摘 Curiosity）。⚠️ 偏差：① StS 的两阶段第一阶段是 **0 血**（halfDead），我们停在 1 血 —— 所以玩家可以在它复活前补一刀直接杀死（同『要杀两次』的规则，第二次早一回合）；② 『移除所有 debuff』只按名摘掉Curiosity；③ 两个 Cultist 不在；④ Regenerate/Curiosity 的层数不随 A19 变（`StartingStatuses` 没有升档轴 —— `Counters` 有，这两条还没有）。",
       "Counters": []
     },
     {

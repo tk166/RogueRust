@@ -87,7 +87,7 @@ INV_COUNTS = {
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
-    "statuses": 30,
+    "statuses": 31,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -731,6 +731,9 @@ INV_STATUSES = {
     # §195.1: the Guardian's Mode Shift -- a `DamageTaken` trigger that adds `eventAmount` (the HP
     # actually lost) to a counter. The threshold is an intent rule, so there is no passive modifier.
     "standard.mode_shift": [],
+    # §195.2: Awakened One's phase-one guard. No trigger at all: the whole effect is the
+    # `DeathPrevention` row, which `resolve_damage` already reads for any combatant (§180).
+    "standard.unawakened": [],
 }
 # Statuses whose stacks decay at the owner's turn end (inv:§10).
 INV_DECAYING = {"standard.vulnerable", "standard.weak", "standard.frail"}

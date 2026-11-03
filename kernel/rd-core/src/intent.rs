@@ -1243,6 +1243,31 @@ mod tests {
         state
     }
 
+    /// Push a status instance directly -- same shape as `host.rs`'s `give`.
+    fn set_status(state: &mut CombatState, who: &CombatantId, definition: &str, stacks: i32) {
+        // `StatusInstanceId` is 16 bytes, shorter than ids like `standard.unawakened` -- the instance
+        // id is arbitrary (only the **definition** id is matched), so name it after the stacks.
+        let instance = crate::state::StatusInstance::new(
+            crate::state::StatusInstanceId::new(&std::format!("st{stacks}")).unwrap(),
+            crate::state::StatusDefinitionId::new(definition).unwrap(),
+            crate::state::StatusPolarity::Buff,
+        )
+        .with_stacks(stacks);
+        state
+            .combatant_mut(who)
+            .unwrap()
+            .push_status(instance)
+            .unwrap();
+    }
+
+    /// Drop every status instance -- "the guard was spent" in one line.
+    fn clear_statuses(state: &mut CombatState, who: &CombatantId) {
+        let combatant = state.combatant_mut(who).unwrap();
+        for index in (0..combatant.statuses().len()).rev() {
+            combatant.remove_status(index);
+        }
+    }
+
     fn set_counter(state: &mut CombatState, who: &CombatantId, key: &str, value: i32) {
         state
             .combatant_mut(who)
@@ -1488,24 +1513,34 @@ mod tests {
                 .action_id
         };
 
+        // §195.2: the phase flip is keyed on the `standard.unawakened` guard being **spent**, not on a
+        // health percentage (the guard is what survives the first lethal blow).
+        set_status(&mut state, &actor, "standard.unawakened", 1);
         state.current_round = 1;
         assert_eq!(pick(&mut state, 1), "awakened_one.slash", "phase one opens with Slash");
         {
             let boss = state.combatant_mut(&actor).expect("the boss");
             boss.health_current = boss.health_max / 4;
         }
-        assert_eq!(pick(&mut state, 2), "awakened_one.rebirth", "<= 25% => Rebirth");
+        assert_eq!(
+            pick(&mut state, 2),
+            "awakened_one.slash",
+            "still phase one while the guard is up -- even at 25% HP"
+        );
+        // The killing blow spends the guard (that is what `DeathPrevention` does in `resolve_damage`).
+        clear_statuses(&mut state, &actor);
+        assert_eq!(pick(&mut state, 3), "awakened_one.rebirth", "guard spent => Rebirth");
         // Rebirth sets three counters; do what its program does.
         set_counter(&mut state, &actor, "ao_phase", 1);
         set_counter(&mut state, &actor, "ao_started", 0);
         set_counter(&mut state, &actor, "ao_toggle", 0);
-        assert_eq!(pick(&mut state, 3), "awakened_one.dark_echo", "phase two opens with Dark Echo");
+        assert_eq!(pick(&mut state, 4), "awakened_one.dark_echo", "phase two opens with Dark Echo");
         set_counter(&mut state, &actor, "ao_started", 1);
-        assert_eq!(pick(&mut state, 4), "awakened_one.tackle");
+        assert_eq!(pick(&mut state, 5), "awakened_one.tackle");
         set_counter(&mut state, &actor, "ao_toggle", 1);
-        assert_eq!(pick(&mut state, 5), "awakened_one.sludge");
+        assert_eq!(pick(&mut state, 6), "awakened_one.sludge");
         set_counter(&mut state, &actor, "ao_toggle", 0);
-        assert_eq!(pick(&mut state, 6), "awakened_one.tackle", "Tackle/Sludge alternate");
+        assert_eq!(pick(&mut state, 7), "awakened_one.tackle", "Tackle/Sludge alternate");
     }
 
     // ---------------------------------------------------------------- 补丁工具

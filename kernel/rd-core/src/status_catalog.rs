@@ -727,7 +727,12 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // §195.1: The Guardian's Mode Shift -- also entirely a content trigger (`DamageTaken` ->
         // add `eventAmount` to a counter). The *threshold* lives in an intent rule
         // (`compare{counter >= 30 + 10 * shifts}`), not in the kernel.
-        "standard.mode_shift"
+        "standard.mode_shift" |
+        // §195.2: Awakened One's phase-one guard. It has **no trigger**: the whole effect is its
+        // `DeathPrevention` row, which `resolve_damage` reads for any combatant (§180). Declared here
+        // because "the kernel has a rule for it" is exactly what this list is for -- and the rule is
+        // a *row of data*, not code.
+        "standard.unawakened"
     )
 }
 

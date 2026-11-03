@@ -5672,6 +5672,88 @@ mod tests {
         assert_eq!(counter_of(&state, "the_guardian", "mode_shift_budget"), 0);
     }
 
+    /// §195.2: Awakened One's revive is **real** -- the first killing blow leaves it at 1 HP (its
+    /// `DeathPrevention` guard), the guard is spent, and the second killing blow kills it.
+    ///
+    /// Why this belongs in `host.rs` and not in the intent tests: the guard is consumed inside
+    /// `exec::resolve_damage` (the `S6d` block, §180), i.e. *below* the intent layer. The four
+    /// judgements: still standing at 1 HP; the guard is spent; Rebirth heals to full and flips the
+    /// phase; and a second lethal blow **does** down it (a `Repeating: true` guard would pass the
+    /// first three and make the boss immortal).
+    #[test]
+    fn the_awakened_one_survives_its_first_death_and_then_really_dies() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = CombatState::new(CombatId::new("c1").unwrap(), 5);
+        state.add_combatant(unit("hero", "player", 70, 70)).expect("hero");
+        state
+            .add_combatant(unit("awakened_one", "enemy", 300, 300))
+            .expect("the boss");
+        // What the boss's record declares: two powers and the phase-one guard.
+        for entry in [
+            status("st_regen", "standard.regen", 10),
+            status("st_cur", "standard.curiosity", 1),
+            status("st_un", "standard.unawakened", 1),
+        ] {
+            give(&mut state, "awakened_one", entry);
+        }
+
+        let blow = |state: &mut CombatState, host: &mut Host<'_>, amount: i32| {
+            {
+                let mut ctx = crate::exec::ExecContext::new(
+                    state,
+                    Some(cid("hero")),
+                    Some(cid("awakened_one")),
+                    None,
+                    64,
+                )
+                .with_content(&content);
+                crate::exec::resolve_damage(&mut ctx, &cid("awakened_one"), amount, false)
+                    .expect("the blow lands");
+            }
+            host.try_resolve_pending_queues(state).expect("triggers settle");
+        };
+
+        blow(&mut state, &mut host, 999);
+        assert_eq!(health(&state, "awakened_one"), 1, "the guard leaves it at 1 HP");
+        assert_eq!(
+            state.combatant(&cid("awakened_one")).map(|c| c.lifecycle_state),
+            Some(crate::state::CombatantLifecycleState::Alive),
+            "standing, not a corpse with 1 HP"
+        );
+        assert_eq!(
+            stacks_of(&state, "awakened_one", "standard.unawakened"),
+            0,
+            "a one-shot guard is spent (the kernel consumes non-repeating ones)"
+        );
+
+        // Rebirth: full heal, Curiosity gone, phase counter set.
+        let row = u32::from(
+            content
+                .lookup_in("awakened_one.rebirth", crate::content::EK_EACTION)
+                .expect("rebirth is in the image")
+                .index,
+        );
+        crate::intent::execute_action(&mut state, &content, &cid("awakened_one"), row, Some(cid("hero")))
+            .expect("Rebirth");
+        assert_eq!(health(&state, "awakened_one"), 300, "wiki: heals to full");
+        assert_eq!(stacks_of(&state, "awakened_one", "standard.curiosity"), 0, "loses Curiosity");
+        assert_eq!(counter_of(&state, "awakened_one", "ao_phase"), 1, "phase two");
+
+        blow(&mut state, &mut host, 999);
+        assert_eq!(health(&state, "awakened_one"), 0);
+        assert_eq!(
+            state.combatant(&cid("awakened_one")).map(|c| c.lifecycle_state),
+            Some(crate::state::CombatantLifecycleState::Downed),
+            "the second killing blow is a killing blow"
+        );
+    }
+
     #[test]
     fn regen_heals_at_the_end_of_the_turn() {
         // Wiki: Regen N = "at the end of your turn, heal N". Content trigger on `TurnEnded`.
