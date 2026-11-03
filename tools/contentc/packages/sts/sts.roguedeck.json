@@ -11374,6 +11374,30 @@
       "Effect": "choice_offered:power",
       "Amount": 0,
       "Rarity": "Common"
+    },
+    {
+      "Id": "blessing_of_the_forge",
+      "NameKey": "Blessing of the Forge",
+      "DescriptionKey": "Upgrade all cards in your hand for the rest of combat.",
+      "Effect": "combat_upgrade_hand",
+      "Amount": 0,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "snecko_oil",
+      "NameKey": "Snecko Oil",
+      "DescriptionKey": "Draw 5 cards. Randomize the costs of all cards in your hand for the rest of combat.",
+      "Effect": "combat_draw,combat_randomize_costs",
+      "Amount": 5,
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "smoke_bomb",
+      "NameKey": "Smoke Bomb",
+      "DescriptionKey": "Escape from a non-boss combat. Receive no rewards.",
+      "Effect": "combat_flee",
+      "Amount": 0,
+      "Rarity": "Rare"
     }
   ],
   "EventTables": {

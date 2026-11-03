@@ -12502,3 +12502,70 @@ dump（含 `hostFailure` 与 `code`）。内容与 §175/§176 的补丁仍然�
 ⚠️ 留下的一条**已知偏差**：`remove_combatant` 拒绝移除**当前行动者**。Reptomancer 的匕首在
 **自己行动时**自毁（StS 里 Explode 会死）需要回合循环改写，今天做不到 —— 那需要"行动者消失后
 回合怎么收尾"的判据，不是加一个参数能解决的。
+
+---
+
+## 179. 药水池（一）：三瓶想"一次打完"的药水
+
+计划里差的 7 瓶里，有三瓶只需要小机制。这一节落地它们，连同四个必须一起动的词表。
+
+### 179.1 三瓶各自缺什么
+
+| 药水 | wiki 原文（未升级基线） | 缺的机制 |
+|---|---|---|
+| Blessing of the Forge | "Upgrade all cards in your hand for the rest of combat." | **战斗中升级** |
+| Snecko Oil | "Draw 5 cards. Randomize the costs of all cards in your hand for the rest of combat." | **不被消费的每副本价格** |
+| Smoke Bomb | "Escape from a non-boss combat. Receive no rewards." | **脱战**（运行层结局） |
+
+### 179.2 升级 = 换定义 id（不是显示层小把戏）
+
+我们的 `+` 行是**独立的 `CARD` 行**，而 `play` 是按**定义 id** 查节目的 ⇒ 把实例的
+`definition_id` 换成 `id + "+"` **就是**升级。判据因此是定义 id 而不是名字：`strike+` 打 9、
+`strike` 打 6 —— 只换名字的假升级能骗过标签检查，骗不过这一条。
+
+没有 `+` 行的牌（已升级 / 不可升级）原地不动，与 StS 一致。内容里问"有没有这一行"用的是
+`Content::lookup_in(id, EK_CARD)` —— 内容的 id 索引，不是我猜。
+
+### 179.3 ★ 为什么必须**第二个**计数器
+
+已有的 `standard.card_cost_delta` 是"一次承诺"：**出牌付款之后清零**（`CardPlay.cs:176-183`）。
+而 Snecko Oil 的原文是 "**for the rest of combat**" —— 用 delta 表达，这瓶药只有效一次，
+而且**没有任何闸门会红**（它会以"这瓶药好像只管一张牌"的形式坏掉）。
+
+所以加 `standard.card_cost_override`：**绝对价**、读在 delta **之前**、**永不清零**。
+两个计数器在同一个 `CostStage::CardInstance` 里，因为参考对这个阶段只有一个位置。
+
+判据 `the_randomized_price_survives_the_play_but_the_delta_does_not`：0 费打出、牌回手、再打一次，
+两次都**一滴能量不扣**。负控（去掉覆盖分支）实测：`Some(1) != None` —— 红得准确。
+
+### 179.4 脱战是**运行层**的结局，不是第四种 `CombatResult`
+
+内核的三种结果与参考**逐字节**一致，而且 `result=` 在黄金指纹里 ⇒ 加第四种会动整个语料。
+所以 `result = 3` 只在 `FightOutcome` 的高位与 `apply_fight_outcome` 里存在：
+不跑 `end_of_combat`、不掷奖励、不给 Boss 记账，但节点**算用掉了**（`mark_resolved`）。
+Boss 战拒绝（wiki：non-boss combat）。
+
+⚠️ `rd_env_use_potion` 的契约是 `0` = "喝了"，所以 `flee_fight` 成功返回 **0**，"是否脱战成功"
+是页面从观察（`in_fight`）读的事实 —— 第一版返回了 `3`（运行层的结局码），测试立刻红。
+
+### 179.5 ★★ 四份词表，一次都没漏（但都是闸门抓的）
+
+内容里加了三瓶，`sts-content` 与单测连续红了四次，每次都是**同一个东西的第四份副本**：
+
+1. `content.rs` 的**闭词表**（解析期拒绝未知效果）；
+2. `content.rs` 的"哪一种读 amount"清单；
+3. 内置的 29 个药水 id 清单（排序过，所以插入位置也要对）；
+4. **`rd_run_potion_effect` 的 `known` 分类**（页面据此决定要不要选敌人）；
+   它由 §161.3 的 `every_potion_in_the_table_classifies_as_known` 兜住 —— 这条测试**遍历整张
+   表**，所以新原子漏在第四份里会**立刻**红，而不是等玩家发现"这瓶药是未知效果"。
+
+这正是 §161.3 的教训第二次兑现：**同一个词表被多处认识就一定漂**。三处注释里都写明了"还有
+另外几份，一起改"。
+
+### 179.6 数字
+
+* **20/20 闸门绿**，单测 **820**（rd-core 655 / rd-run 100 / rd-wasm 65）。
+* 内容：29 瓶药水（Common 16 / Uncommon 7 / Rare 6；wiki 的 Ironclad 池是 17 / 9 / 7，
+  差的正是这个内容没有的两瓶）。
+* 还剩 4 瓶：Fairy in a Bottle（死亡拦截）、Duplication Potion（打两次）、
+  Distilled Chaos（自动打出）、Colorless Potion（无色牌池）。

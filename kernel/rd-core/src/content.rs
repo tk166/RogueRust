@@ -4332,9 +4332,10 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.potion_count(),
-            26,
+            29,
             "§158: eleven after §157, plus nine that need no new mechanic, plus the five whose \
-             effect is a card choice, plus §161.7's Power Potion"
+             effect is a card choice, plus §161.7's Power Potion, plus §179's three (Blessing \
+             of the Forge, Snecko Oil, Smoke Bomb)"
         );
         let mut ids = Vec::new();
         let mut bands = [0usize; 3];
@@ -4374,6 +4375,13 @@ mod tests {
                         "choice_discard_to_hand",
                         // §161.5: `choice_offered:<tag>` -- 三张候选，payload 是**标签**。
                         "choice_offered",
+                        // §179: 三个新动词。⚠️ 这是词表的**第三份**：内容门
+                        // （`sts_content_check.py` 的 `POTION_KINDS`）与 ABI 的分派
+                        // （`rd-wasm` 的 `rd_env_use_potion`）各有一份，而 §161.3 的教训是
+                        // "同一个词表被多处认识就一定漂"。三处一起改，或一处都不改。
+                        "combat_upgrade_hand",
+                        "combat_randomize_costs",
+                        "combat_flee",
                     ]
                     .contains(kind),
                     "{}: unknown effect {:?}",
@@ -4404,6 +4412,10 @@ mod tests {
                         | "choice_hand_discard_draw"
                         | "choice_discard_to_hand"
                         | "choice_offered"
+                        // §179: they read no amount either -- the upgrade applies to whatever is
+                        // in hand, and fleeing has nothing to parametrise.
+                        | "combat_upgrade_hand"
+                        | "combat_flee"
                 ))
             {
                 assert_eq!(potion.amount, 0, "{}: takes no amount", potion.id);
@@ -4423,6 +4435,7 @@ mod tests {
             vec![
                 "ancient_potion",
                 "attack_potion",
+                "blessing_of_the_forge",
                 "block_potion",
                 "blood_potion",
                 "cultist_potion",
@@ -4443,6 +4456,8 @@ mod tests {
                 "power_potion",
                 "regen_potion",
                 "skill_potion",
+                "smoke_bomb",
+                "snecko_oil",
                 "speed_potion",
                 "strength_potion",
                 "swift_potion",
@@ -4460,8 +4475,8 @@ mod tests {
         // Elixir and Gambler's Brew, which is the whole reason it is a number here.
         assert_eq!(
             bands,
-            [15, 7, 4],
-            "Common / Uncommon / Rare -- the wiki's Ironclad pool is 17 / 9 / 7"
+            [16, 7, 6],
+            "Common / Uncommon / Rare -- the wiki's Ironclad pool is 17 / 9 / 7. §179 added              Blessing of the Forge (Common) and **two** Rares (Snecko Oil, Smoke Bomb), so every              band is still short by exactly what this content does not carry"
         );
 
         let index = (0..content.potion_count())
@@ -4470,6 +4485,21 @@ mod tests {
         let fire = content.potion(index).unwrap();
         assert_eq!(fire.effect, "combat_damage");
         assert_eq!(fire.amount, 20);
+
+        // §179: the three new verbs are in the image with the atoms the run layer dispatches on.
+        // Pinning the **string**, not just the count: an atom nobody dispatches passes a count.
+        for (id, effect, amount) in [
+            ("blessing_of_the_forge", "combat_upgrade_hand", 0),
+            ("snecko_oil", "combat_draw,combat_randomize_costs", 5),
+            ("smoke_bomb", "combat_flee", 0),
+        ] {
+            let index = (0..content.potion_count())
+                .find(|index| content.potion(*index).map(|p| p.id) == Some(id))
+                .unwrap_or_else(|| panic!("{id} is not in the image"));
+            let potion = content.potion(index).unwrap();
+            assert_eq!(potion.effect, effect, "{id} effect");
+            assert_eq!(potion.amount, amount, "{id} amount");
+        }
 
         // roguedeck has no `Potions` key: zero rows, and that is not an error.
         let core = std::fs::read(CORE_IMAGE).expect("the roguedeck image");

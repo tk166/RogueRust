@@ -1856,6 +1856,122 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 return refuse(&std::format!("上状态的药水失败：{e:?}"));
             }
         }
+        // ── §179: the three potions whose effect the engine had no verb for. ──────────────────────
+        "combat_upgrade_hand" => {
+            // Blessing of the Forge: "Upgrade all cards in your hand for the rest of combat."
+            //
+            // `+` rows are separate `CARD` rows, and `play` looks the program up by **definition
+            // id**, so swapping the instance's id *is* the upgrade -- no display-side special case.
+            // A card without a `+` row (already upgraded, or not upgradable) is left alone: the
+            // wiki's card is silent about it, and silently doing nothing is what StS does too.
+            let Some(zones) = session.state.card_zones(&hero) else {
+                return refuse("英雄没有牌区");
+            };
+            // Snapshot the hand first: `card_mut` borrows the state, and the loop needs `image`.
+            let mut slots = [0u16; 32];
+            let mut count = 0usize;
+            for slot in zones.slots(rd_core::state::CardZone::Hand) {
+                if count == slots.len() {
+                    break;
+                }
+                slots[count] = *slot;
+                count += 1;
+            }
+            let _ = &mut count;
+            let mut upgraded = 0;
+            for slot in &slots[..count] {
+                let Some(card) = session.state.card(rd_core::state::CardSlot::from_index(*slot))
+                else {
+                    continue;
+                };
+                let base = card.definition_id.as_str();
+                let mut buffer = [0u8; 64];
+                if base.len() + 1 > buffer.len() {
+                    continue;
+                }
+                buffer[..base.len()].copy_from_slice(base.as_bytes());
+                buffer[base.len()] = b'+';
+                let Ok(text) = core::str::from_utf8(&buffer[..base.len() + 1]) else {
+                    continue;
+                };
+                // `lookup_in(..., EK_CARD)` is the content's own id index: asking it is the only
+                // honest way to know whether an upgraded row exists (`None` = no such row).
+                if image.lookup_in(text, rd_core::content::EK_CARD).is_none() {
+                    continue;
+                }
+                let Ok(upgraded_id) = rd_core::state::CardDefinitionId::new(text) else {
+                    continue;
+                };
+                if let Some(card) =
+                    session.state.card_mut(rd_core::state::CardSlot::from_index(*slot))
+                {
+                    card.definition_id = upgraded_id;
+                    upgraded += 1;
+                }
+            }
+            if upgraded == 0 {
+                // Nothing to upgrade is **not** an error (an empty hand is a legal hand), but the
+                // potion still gets drunk -- the same rule Elixir follows for an empty hand.
+                continue;
+            }
+        }
+        "combat_randomize_costs" => {
+            // Snecko Oil, part 2. Part 1 is the `combat_draw` atom next to it in the content
+            // (`Effect: "combat_draw,combat_randomize_costs"`).
+            //
+            // The draw is `amount` (5); the randomized price is **0..=3** -- that is the whole
+            // content of this rule, so it is a constant here rather than a field nobody could
+            // source from the wiki ("Randomize the costs" gives no range; StS uses 0-3).
+            let Some(zones) = session.state.card_zones(&hero) else {
+                return refuse("英雄没有牌区");
+            };
+            let mut slots = [0u16; 32];
+            let mut count = 0usize;
+            for slot in zones.slots(rd_core::state::CardZone::Hand) {
+                if count == slots.len() {
+                    break;
+                }
+                slots[count] = *slot;
+                count += 1;
+            }
+            let Ok(key) = rd_core::state::CounterId::new(rd_core::state::CARD_COST_OVERRIDE_COUNTER)
+            else {
+                return refuse("价格覆盖的计数器名不合法");
+            };
+            for slot in &slots[..count] {
+                // One draw per card, each advancing `random_step` by one -- the same convention the
+                // shuffle uses (`state.rs`: "洗完之后 `random_step += 1`"), so a replay of the same
+                // seed randomizes the same ways.
+                let mut seed = session.state.random_seed as u32;
+                let roll = rd_core::rng::next_u32(&mut seed) % 4;
+                session.state.random_seed = seed as i32;
+                session.state.random_step = session.state.random_step.saturating_add(1);
+                if let Some(card) =
+                    session.state.card_mut(rd_core::state::CardSlot::from_index(*slot))
+                {
+                    if card.set_mark_counter(key, roll as i32).is_err() {
+                        return refuse("这张牌装不下价格覆盖");
+                    }
+                }
+            }
+        }
+        "combat_flee" => {
+            // Smoke Bomb: "Escape from a non-boss combat. Receive no rewards."
+            //
+            // A **run-layer** outcome, not a `CombatResult`: the kernel's three results match the
+            // reference byte for byte (and `result=` is hashed), so a fourth would move the golden
+            // corpus. `FightOutcome`'s high bits already carry the result, and `3` is free there.
+            let boss_fight = run_slot().as_ref().is_some_and(|s| s.boss_fight);
+            if boss_fight {
+                return refuse("Boss 战不能脱战（Smoke Bomb：non-boss combat）");
+            }
+            // The fight is over, so the tail below must not run against a session that is gone.
+            // The ABI's contract is `0` = "the potion was used"; **whether the fight was fled is a
+            // fact about the run**, which the page reads from the observation (`in_fight`), not
+            // from this return value. Returning `3` here (the run layer's outcome code) would make
+            // the page treat "the potion worked" as an error code.
+            return flee_fight(slot);
+        }
         other => return refuse(&std::format!("未知的药水效果 `{other}`")),
         }
     }
@@ -2322,6 +2438,13 @@ pub extern "C" fn rd_run_potion_effect(slot: i32) -> i32 {
             )
             || ["combat_block", "combat_energy", "combat_heal_percent", "combat_draw"]
                 .contains(&kind)
+            // §179: three atoms that act on the hand / on the fight itself, so no enemy target.
+            // This list is the **fourth** place the potion vocabulary lives (§161.3: content
+            // check, kernel closed list, `rd_env_use_potion`'s match, and this classifier).
+            // `every_potion_in_the_table_classifies_as_known` walked the whole table and caught
+            // this one within a second of the content landing -- which is the only reason it is
+            // being written down here instead of being found by a player.
+            || ["combat_upgrade_hand", "combat_randomize_costs", "combat_flee"].contains(&kind)
             || kind.starts_with("combat_status");
         if !known {
             return 0;
@@ -3165,6 +3288,43 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     return verdict;
 }
 
+/// Smoke Bomb's tail (§179): drop the fight and settle the run as **fled** (`result = 3`).
+///
+/// It mirrors `rd_run_fight_end` on purpose -- same borrow dance, same `session.log` so a replay
+/// reproduces the escape -- because "the fight ended some other way" must not be a second, private
+/// path into the run state. The potion is consumed here: `apply_fight_outcome` does not know about
+/// the belt, and the early return in `rd_env_use_potion` skips its usual tail.
+fn flee_fight(slot: i32) -> i32 {
+    if slot < 0 {
+        return -1;
+    }
+    let slot_index = slot as usize;
+    let Some(hero_hp) = crate::combat_hero_health() else {
+        return -1;
+    };
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    let elite_fight = session.elite_fight;
+    let boss_fight = session.boss_fight;
+    let _ = (elite_fight, boss_fight);
+    crate::take_session();
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    if let Err(e) = session.state.drop_potion(slot_index) {
+        let message = describe(&e);
+        return fail(session, &message);
+    }
+    session.log(K_FIGHT_END, hero_hp, 3 << 4, "");
+    let verdict = apply_fight_outcome(session, hero_hp, 3, false, false);
+    session.stamp();
+    if verdict < 0 {
+        return verdict;
+    }
+    0
+}
+
 /// The run-layer effect of a finished fight (extracted from `rd_run_fight_end`, §163).
 fn apply_fight_outcome(
     session: &mut RunSession,
@@ -3189,6 +3349,16 @@ fn apply_fight_outcome(
     } else {
         rd_run::state::FightKind::Normal
     };
+    if result == 3 {
+        // §179: Smoke Bomb -- "Escape from a non-boss combat. **Receive no rewards.**" So: no
+        // `end_of_combat` (no relics fire), no reward roll, no boss credit. The node still paid
+        // (the escape happened there), which is the `mark_resolved()` below.
+        //
+        // It is deliberately **not** a fourth `CombatResult`: the kernel's three match the
+        // reference byte for byte and `result=` is part of the golden hash.
+        session.state.mark_resolved();
+        return 3;
+    }
     if result == 1 {
         // `Burning Blood` and friends (`inv:§2`), now with a call site.
         if let Err(e) = session.state.end_of_combat() {
@@ -5499,6 +5669,147 @@ mod tests {
         }
         let slot = rd_run_potion_count() - 1;
         rd_env_use_potion(slot, target)
+    }
+
+    /// §179: Blessing of the Forge -- "Upgrade all cards in your hand for the rest of combat."
+    ///
+    /// The judgment is the **definition id** because that is what `play` looks the program up by:
+    /// `strike+` deals 9 where `strike` deals 6. A display-only swap (the upgraded name over the old
+    /// program) would pass a label check and fail this one.
+    ///
+    /// ⚠️ The starting deck is **read from the run**, not assumed: §154's blessing may already have
+    /// upgraded or removed cards, so the test asks the belt-side state which Strikes are in hand.
+    #[test]
+    fn blessing_of_the_forge_upgrades_every_strike_in_hand() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+
+        let hand_before = hand_ids();
+        assert!(
+            hand_before.iter().any(|id| id == "strike"),
+            "the fixture expects plain Strikes in hand: {hand_before:?}"
+        );
+        assert_eq!(drink("blessing_of_the_forge", -1), 0, "drinking it must work");
+
+        let hand_after = hand_ids();
+        assert_eq!(
+            hand_after.len(),
+            hand_before.len(),
+            "upgrading a card does not move it out of the hand"
+        );
+        let strikes: Vec<&String> = hand_after.iter().filter(|id| id.starts_with("strike")).collect();
+        assert!(!strikes.is_empty(), "the Strikes are still there: {hand_after:?}");
+        assert!(
+            strikes.iter().all(|id| id.as_str() == "strike+"),
+            "every Strike in hand is the `+` row now: {hand_after:?}"
+        );
+        assert!(
+            !hand_after.iter().any(|id| id == "strike"),
+            "no plain `strike` survives in hand: {hand_after:?}"
+        );
+    }
+
+    /// §179: Snecko Oil -- "Draw 5 cards. Randomize the costs of all cards in your hand."
+    ///
+    /// Two visible facts: five more cards, and every price inside `0..=3`. The prices are read from
+    /// the **display** column (`hand_costs`), so this also pins that the override reaches the screen
+    /// and not only `play` (the two-pricing-places problem from §161.4).
+    #[test]
+    fn snecko_oil_draws_five_and_randomizes_every_price_in_hand() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+
+        let hand_before = hand_ids().len();
+        assert_eq!(drink("snecko_oil", -1), 0, "drinking it must work");
+        let session = crate::slot().as_ref().expect("env session");
+        assert_eq!(
+            session.hand_len(),
+            hand_before + 5,
+            "`Draw 5` -- hand went {hand_before} -> {}",
+            session.hand_len()
+        );
+        let costs = session.hand_costs.clone();
+        assert_eq!(costs.len(), session.hand_len(), "one price per hand card");
+        for (index, cost) in costs.iter().enumerate() {
+            assert!(
+                (0..=3).contains(cost),
+                "hand[{index}] costs {cost}, outside the randomized band 0..=3"
+            );
+        }
+    }
+
+    /// §179: Smoke Bomb -- "Escape from a non-boss combat. Receive no rewards."
+    ///
+    /// The refusal in a boss fight matters as much as the escape: a guard that only worked outside
+    /// bosses would still let a player skip a boss.
+    #[test]
+    fn smoke_bomb_ends_a_normal_fight_and_refuses_a_boss() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+        let gold_before = run_slot().as_ref().expect("run").state.gold();
+        let pending_before = rd_run_pending();
+
+        assert_eq!(drink("smoke_bomb", -1), 0, "escaping a normal fight is legal");
+        assert!(
+            crate::slot().is_none(),
+            "the combat session is gone: escaping ends the fight, it does not pause it"
+        );
+        let run = run_slot().as_ref().expect("the run outlives the fight");
+        assert!(!run.in_fight, "the run knows the fight ended");
+        assert_eq!(
+            run.state.gold(),
+            gold_before,
+            "Smoke Bomb pays nothing -- gold moved, so the escape looted the node"
+        );
+        assert_eq!(
+            rd_run_pending(),
+            pending_before,
+            "no reward screen may open after an escape"
+        );
+
+        // The refusal: a boss fight. `boss_fight` is the run's own flag, so set it the way the
+        // node walker does and try again.
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+        run_slot().as_mut().expect("run").boss_fight = true;
+        assert!(
+            drink("smoke_bomb", -1) < 0,
+            "a boss fight must refuse the escape (wiki: non-boss combat)"
+        );
+        assert!(
+            crate::slot().is_some(),
+            "a refusal must not end the fight"
+        );
+    }
+
+    /// The hand's definition ids, in pile order (`hand_costs` has the prices).
+    fn hand_ids() -> Vec<String> {
+        let session = crate::slot().as_ref().expect("env session");
+        let hero = session.hero_id().expect("hero");
+        session
+            .state
+            .card_zones(&hero)
+            .map(|zones| {
+                zones
+                    .slots(rd_core::state::CardZone::Hand)
+                    .iter()
+                    .filter_map(|slot| {
+                        session
+                            .state
+                            .card(rd_core::state::CardSlot::from_index(*slot))
+                            .map(|card| card.definition_id.as_str().to_string())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// The hero's stacks of `definition`, read through the §147 ABI (works for any status).

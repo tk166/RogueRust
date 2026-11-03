@@ -1630,6 +1630,17 @@ pub enum ZonePlacement {
 /// 事件的分数"），而这条差别由 `the_per_copy_price_is_consumed_by_the_play` 钉住。
 pub const CARD_COST_DELTA_COUNTER: &str = "standard.card_cost_delta";
 
+/// 一张牌**自己的、不被出牌消费的**价格（§179：Snecko Oil）。
+///
+/// 和 [`CARD_COST_DELTA_COUNTER`] 的区别只有一条，但那一条就是全部：**它不随出牌清零**。
+/// 参考的 delta 是"一次性承诺"（`CardPlay.cs:176-183`），而 wiki 的 Snecko Oil 说
+/// "Randomize the costs of all cards in your hand **for the rest of combat**" —— 一张 0 费的牌
+/// 第二次抽到手里也还是 0 费。用 delta 表达会让这条药水的效果在第一次出牌后消失。
+///
+/// 它是**绝对价**而不是增量：随机出来的就是那张牌这一场战斗的价格，`Amount` 与全局修饰器
+/// （Snecko Eye 之类）都在这之上照常折叠 —— 顺序见 `play.rs` 的 `CostStage::CardInstance`。
+pub const CARD_COST_OVERRIDE_COUNTER: &str = "standard.card_cost_override";
+
 /// 一次候选最多几张（StS 的三张；留到 8 是因为 Attack/Skill/Power 三瓶都要同一个数，
 /// 而"三"写在三处的常量迟早只有一个被改）。
 pub const MAX_CHOICE_OFFERED: usize = 8;

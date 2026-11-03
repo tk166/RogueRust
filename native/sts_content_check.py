@@ -1197,6 +1197,10 @@ POTION_CHOICE_KINDS = ("choice_hand_exhaust", "choice_hand_discard_draw",
                        "choice_discard_to_hand", "choice_offered")
 POTION_KINDS = ("combat_block", "combat_energy", "combat_heal_percent", "combat_draw",
                 "combat_damage", "combat_damage_all",
+                # §179: the three potions that needed a new verb (Blessing of the Forge, Snecko
+                # Oil, Smoke Bomb). Listed here as the **second opinion** -- §161.3 taught that a
+                # vocabulary known in two places drifts unless both are checked.
+                "combat_upgrade_hand", "combat_randomize_costs", "combat_flee",
                 # §157/§158: the effects that are about the **run**, not the fight (Fruit Juice,
                 # Entropic Brew). §158 made them usable **outside** a fight, which is what the wiki
                 # says; before that the "no fight" check came first and refused them.
@@ -1312,7 +1316,11 @@ def check_potions(doc):
         # §158: the rule is per-atom, because not every atom reads an amount.
         # §161.3 added the choice atoms, which read none either (the number of cards is the
         # player's answer, not a constant in the content).
-        NO_AMOUNT = ("potion_fill",) + POTION_CHOICE_KINDS
+        # §179: `combat_flee` takes no amount either (there is nothing to parametrise), and
+        # `combat_randomize_costs` only matters when paired with a draw that does.
+        NO_AMOUNT = (
+            "potion_fill", "combat_flee", "combat_randomize_costs", "combat_upgrade_hand"
+        ) + POTION_CHOICE_KINDS
         takes_amount = any(atom.partition(":")[0] not in NO_AMOUNT for atom in atoms)
         if takes_amount:
             if not isinstance(amount, int) or amount <= 0:

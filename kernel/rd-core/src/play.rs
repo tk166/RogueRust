@@ -428,6 +428,8 @@ const X_COST_RESOURCE_DEFAULT: &str = "standard.energy";
 /// §161.4: 定义搬到了 [`crate::state::CARD_COST_DELTA_COUNTER`] —— 写它的人（`resolve_choice`）
 /// 现在在 `state.rs`，两处字面量迟早漂。这里只是**读同一处**，与 `X_COST_TAG` 同形。
 const CARD_COST_DELTA_COUNTER: &str = crate::state::CARD_COST_DELTA_COUNTER;
+/// §179: Snecko Oil's absolute per-copy price (read before the delta, never consumed).
+const CARD_COST_OVERRIDE_COUNTER: &str = crate::state::CARD_COST_OVERRIDE_COUNTER;
 
 /// `EffectProgram<TContext>.DefaultMaxProgramSteps = 1024`（`EffectProgramContracts.cs:540`）。
 /// 本内容 62 个信封都显式写了 1024，这条只兜"缺席"。
@@ -1636,6 +1638,12 @@ fn run_cost_stage(
             let Some(instance) = state.card(slot) else {
                 return Ok(current);
             };
+            // §179: an **absolute** per-copy price wins over the delta. Both live in the same
+            // stage because they answer the same question ("what does THIS copy cost"), and the
+            // reference has exactly one stage for it.
+            if let Some(absolute) = mark_counter_opt(instance, CARD_COST_OVERRIDE_COUNTER) {
+                return Ok(absolute.max(0));
+            }
             let delta = mark_counter(instance, CARD_COST_DELTA_COUNTER);
             if delta == 0 {
                 return Ok(current);
@@ -2023,6 +2031,18 @@ fn x_cost_resource(card: &CardOnTable<'_>) -> Result<Option<ResourceId>, PlayErr
 }
 
 /// 卡实例上的命名标记计数器读数（缺席 ⇒ 0，`Cards/CardZones.cs` 的 `GetMarkCounter`）。
+/// 同 [`mark_counter`]，但能区分「没有这个计数器」与「计数器是 0」（§179）。
+///
+/// 价格覆盖**必须**用这个版本：一张被随机成 **0 费**的牌，和一张没有覆盖的牌，是两件事。
+fn mark_counter_opt(instance: &crate::state::CardInstance, key: &str) -> Option<i32> {
+    for counter in instance.mark_counters() {
+        if counter.key.as_str() == key {
+            return Some(counter.value);
+        }
+    }
+    None
+}
+
 fn mark_counter(instance: &crate::state::CardInstance, key: &str) -> i32 {
     for counter in instance.mark_counters() {
         if counter.key.as_str() == key {
@@ -2328,6 +2348,84 @@ mod tests {
             .card(slot)
             .map(|card| mark_counter(card, CARD_COST_DELTA_COUNTER))
             .unwrap_or(0)
+    }
+
+    /// §179: `standard.card_cost_override` 与它旁边那个 delta 的**唯一**区别 ——
+    /// delta 被出牌消费（"一次承诺"），override **不被消费**（Snecko Oil："for the rest of
+    /// combat"）。两张牌打两次，第二次的价格是判据。
+    ///
+    /// 这条测试存在的理由：如果有人把两个计数器"简化"成一个，它会红 —— 而功能上那会以
+    /// "这瓶药只有效一次"的形式坏掉，没有任何别的闸门看得见。
+    #[test]
+    fn the_randomized_price_survives_the_play_but_the_delta_does_not() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut state = arena();
+        give_card(&mut state, "hero", CardZone::Hand, "card_h1", "paper_cut");
+        let (_, slot) = find_card_slot(
+            &state,
+            &cid("hero"),
+            &CardInstanceId::new("card_h1").unwrap(),
+        )
+        .expect("card_h1 在手");
+        // 绝对价 0：随机成 0 费的那张牌，和"没有覆盖"是两件事（`mark_counter_opt` 的存在理由）。
+        state
+            .card_mut(slot)
+            .unwrap()
+            .set_mark_counter(
+                CounterId::new(crate::state::CARD_COST_OVERRIDE_COUNTER).unwrap(),
+                0,
+            )
+            .unwrap();
+
+        let report = play_card(
+            &mut state,
+            Some(&content),
+            &request("card_h1", Some("enemy_a")),
+        )
+        .expect("0 费的牌当然打得出去");
+        assert!(report.played);
+        assert_eq!(
+            report.paid.amount_for(&energy()),
+            None,
+            "绝对价 0 ⇒ 一条 0 的费用都不进表"
+        );
+        assert_eq!(energy_of(&state, "hero"), 3, "一滴能量都没扣");
+        assert_eq!(health_of(&state, "enemy_a"), 14, "牌照常生效（6 点）");
+
+        // ★ 与 delta 相反：这个承诺**不是**一次性的。牌回到手里，价格还是 0。
+        let (zone, slot) = find_card_slot(
+            &state,
+            &cid("hero"),
+            &CardInstanceId::new("card_h1").unwrap(),
+        )
+        .expect("还在牌区里");
+        state
+            .move_card(
+                &cid("hero"),
+                zone,
+                CardZone::Hand,
+                slot,
+                ZonePlacement::Bottom,
+            )
+            .unwrap();
+        state
+            .combatant_mut(&cid("hero"))
+            .unwrap()
+            .set_resource(energy(), 3, Some(3))
+            .unwrap();
+        let report = play_card(
+            &mut state,
+            Some(&content),
+            &request("card_h1", Some("enemy_a")),
+        )
+        .expect("第二次也一样");
+        assert_eq!(
+            report.paid.amount_for(&energy()),
+            None,
+            "Snecko 的价是**这一场战斗**的价，不是一次性的折扣"
+        );
+        assert_eq!(energy_of(&state, "hero"), 3);
     }
 
     #[test]
