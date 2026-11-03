@@ -1,0 +1,74 @@
+Donu and Deca is a [[Bosses|Boss Encounter]] found at the end of [[Act 3]].
+
+== Donu ==
+{{Enemy Infobox
+| Name   = Donu
+| Link   = Donu and Deca#Donu
+| Image  = Donu.png
+| Icon   = Map-DonuDeca.png
+| HP     = 250
+| AscHP  = 265
+| Powers = {{BD|Artifact}} 2 ({{Asc|19|3}})
+| Debut  = Act 3
+| Type   = Boss
+}}
+{{Power Infobox|Artifact}}
+=== Pattern ===
+{{Intents Table/start|Donu}}
+{{Intents Table/row
+| Name         = Circle of Power
+| Intent       = Buff
+| Effect       = All enemies gain 3 {{BD|Strength}}.
+| GivesToEnemy = Strength
+}}
+{{Intents Table/row
+| Name   = Beam
+| Intent = Attack6
+| Effect = Deals (10×2;{{Asc|4|12×2}}) damage.
+}}
+{{Intents Table/end}}
+Alternates between {{Int|Donu|Circle of Power}} and {{Int|Donu|Beam}}.
+
+{{Clear}}
+
+== Deca ==
+{{Enemy Infobox
+| Name   = Deca
+| Link   = Donu and Deca#Deca
+| Image  = Deca.png
+| Icon   = Map-DonuDeca.png
+| HP     = 250
+| AscHP  = 265
+| Powers = {{BD|Artifact}} 2 ({{Asc|19|3}})
+| Debut  = Act 3
+| Type   = Boss
+}}
+{{Power Infobox|Artifact}}
+=== Pattern ===
+{{Intents Table/start|Deca}}
+{{Intents Table/row
+| Name   = Beam
+| Intent = DebuffAttack5
+| Effect = Deals (10×2;{{Asc|4|12×2}}) damage. Adds 2 {{C|Dazed}} into your discard pile.
+}}
+{{Intents Table/row
+| Name         = Square of Protection
+| Intent       = Defend
+| Effect       = All enemies gain 16 {{KW|Block}}(; and {{Asc|19|3}} {{BD|Plated Armor}}).
+| GivesToEnemy = Plated Armor, Block
+}}
+{{Intents Table/end}}
+Alternates between {{Int|Deca|Beam}} and {{Int|Deca|Square of Protection}}.
+
+{{Clear}}
+
+== Achievements ==
+* '''The Shapes''': Defeat Donu and Deca.
+* '''Ooh Donut!''': Finish Donu with a {{C|Feed}}.
+
+== Trivia ==
+* Donu appears in the artwork of {{C|Bullseye}}.
+* Despite Deca's name being the Greek root for 10, Deca is an octahedron.
+
+{{EnemyNav}}
+[[Category:Bosses]]

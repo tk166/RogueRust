@@ -1,0 +1,93 @@
+{{Enemy Infobox
+| Name   = The Guardian
+| Image  = TheGuardian.png
+| Icon   = Map-Guardian.png
+| HP     = 240
+| AscHP  = 250
+| Powers = {{BD|Mode Shift}} 30 ({{Asc|9|35}} {{!}} {{Asc|19|40}})
+| Debut  = Act 1
+| Type   = Boss
+}}
+{{Power Infobox
+| Name         = Mode Shift
+| Image        = Icon ModeShift.png
+| Description  = After losing X HP, gains 20 {{KW|Block}} and changes current Intent to {{Int|The Guardian|Defensive Mode}}.
+| Type         = Buff
+| Stacks       = Intensity
+| BetweenTurns =
+| Cap          =
+}}
+{{Power Infobox
+| Name         = Sharp Hide
+| Image        = Icon SharpHide.png
+| Description  = Whenever you play an {{QueryLink|Cards|type:Attack|Attack}}, take X damage.
+| Type         = Buff
+| Stacks       = Intensity
+| BetweenTurns =
+| Cap          =
+}}
+'''The Guardian''' is a [[Boss]] that can appear at the end of [[Act 1]] or the [[Act 3]] event {{E|Mind Bloom}}.
+
+== Pattern ==
+{{Intents Table/start|The Guardian}}
+{{Intents Table/row
+| Name         = Charging Up
+| Intent       = Defend
+| Effect       = Gains 9 {{KW|Block}}.
+| GivesToEnemy = Block
+}}
+{{Intents Table/row
+| Name   = Fierce Bash
+| Intent = Attack7
+| Effect = Deals (32;{{Asc|4|36}}) damage.
+}}
+{{Intents Table/row
+| Name          = Vent Steam
+| Intent        = DebuffStrong
+| Effect        = Applies 2 {{BD|Weak}} and 2 {{BD|Vulnerable}}.
+| GivesToPlayer = Weak, Vulnerable
+}}
+{{Intents Table/row
+| Name   = Whirlwind
+| Intent = Attack5
+| Effect = Deals 5×4 damage.
+}}
+{{Intents Table/row
+| Name         = Defensive Mode
+| Intent       = Buff
+| Effect       = Gains (3;{{Asc|19|4}}) {{BD|Sharp Hide}}.
+| GivesToEnemy = Sharp Hide
+}}
+{{Intents Table/row
+| Name   = Roll Attack
+| Intent = Attack2
+| Effect = Deals (9;{{Asc|4|10}}) damage.
+}}
+{{Intents Table/row
+| Name         = Twin Slam
+| Intent       = Attack4
+| Effect       = Deals 8×2 damage. Loses {{BD|Sharp Hide}}. Gains (30;{{Asc|9|35}} ; {{Asc|19|40}}) {{BD|Mode Shift}}, increased by 10 for each time {{BD|Mode Shift}} triggered this combat.
+| GivesToEnemy = Sharp Hide, Mode Shift
+}}
+{{Intents Table/end}}
+Repeats the following pattern:
+#{{Int|The Guardian|Charging Up}}
+#{{Int|The Guardian|Fierce Bash}}
+#{{Int|The Guardian|Vent Steam}}
+#{{Int|The Guardian|Whirlwind}}
+
+When Guardian triggers {{BD|Mode Shift}} the current [[Intent]] is replaced with {{Int|The Guardian|Defensive Mode}}.
+
+After {{Int|The Guardian|Defensive Mode}}, Guardian uses {{Int|The Guardian|Roll Attack}}, followed by {{Int|The Guardian|Twin Slam}} and {{Int|The Guardian|Whirlwind}}. Then the initial pattern restarts.
+
+<!-- == Hints == 
+* Interrupt Fierce Bash by triggering mode shift
+* Play block cards while in Defensive Mode
+* Permanently sources of minus strength good
+-->
+== Trivia ==
+
+* Guardian appears in the artwork of {{C|Spot Weakness}}.
+
+{{EnemyNav}}
+[[Category:Bosses]]

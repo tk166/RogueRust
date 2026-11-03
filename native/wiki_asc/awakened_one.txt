@@ -1,0 +1,99 @@
+{{Enemy Infobox
+| Name   = Awakened One
+| Image  = AwakenedOne.png
+| Icon   = Map-Awakened.png
+| HP     = 300
+| AscHP  = 320
+| Powers = {{BD|Regenerate}} 10 ({{Asc|19|15}}) <br> {{BD|Curiosity}} 1 ({{Asc|19|2}}) <br> ({{BD|Strength}} 2 {{Asc|4}})
+| Debut  = Act 3
+| Type   = Boss
+}} 
+{{Power Infobox
+| Name         = Curiosity
+| Image        = Icon Curiosity.png
+| Description  = Whenever you play a {{QueryLink|Cards|type:Power|Power}} card, gains X {{BD|Strength}}.
+| Type         = Buff
+| Stacks       = Intensity
+| BetweenTurns = Permanent
+| Cap          = Integer limit
+}}
+{{Power Infobox
+| Name         = Regenerate
+| Image        = Icon Regen.png
+| Description  = At the end of its turn, heals X HP.
+| Type         = Buff
+| Stacks       = Intensity
+| BetweenTurns = Counter
+| Cap          =
+}}
+{{Power Infobox
+| Name         = Unawakened
+| Image        = Icon Unawakened.png
+| Description  = This enemy hasn't awakened yet...
+| Type         = Buff
+| Stacks       = Does not stack
+| BetweenTurns = Removed
+}}
+The Awakened One is a [[Boss]] found at the end of [[Act 3]].
+
+== Pattern ==
+{{Intents Table/start|Awakened One
+}}
+{{Intents Table/row
+| Name   = Slash
+| Intent = Attack5
+| Effect = Deals 20 damage.
+}}
+{{Intents Table/row
+| Name   = Soul Strike
+| Intent = Attack5
+| Effect = Deals 6×4 damage.
+}}
+{{Intents Table/row
+| Name         = Rebirth
+| Intent       = Unknown
+| Effect       = Heals to full HP. Removes all [[Debuffs]]. Loses {{BD|Curiosity}}.
+| GivesToEnemy = Curiosity
+}}
+{{Intents Table/row
+| Name   = Dark Echo
+| Intent = Attack7
+| Effect = Deals 40 damage.
+}}
+{{Intents Table/row
+| Name   = Sludge
+| Intent = DebuffAttack4
+| Effect = Deals 18 damage. Adds a {{C|Void}} into your draw pile.
+}}
+{{Intents Table/row
+| Name   = Tackle
+| Intent = Attack7
+| Effect = Deals 10×3 damage.
+}}
+{{Intents Table/end}}
+
+=== Phase One ===
+Always starts with {{Int|Awakened One|Slash}}.
+
+'''Every turn after:'''
+* {{Int|Awakened One|Soul Strike}} 25% chance
+* {{Int|Awakened One|Slash}} 75% chance
+
+{{Int|Awakened One|Slash}} cannot be used three times in a row. {{Int|Awakened One|Soul Strike}} cannot be used twice in a row.
+
+=== Phase Two ===
+Once its HP reaches 0, it loses {{BD|Curiosity}} and its intent changes to {{Int|Awakened One|Rebirth}}. Any {{BD|Strength}} gained from {{BD|Curiosity}} is kept.
+
+Always starts Phase Two with {{Int|Awakened One|Dark Echo}}. Afterward, it has a 50/50 chance to use {{Int|Awakened One|Tackle}} or {{Int|Awakened One|Sludge}}. It cannot use either of these moves three times in a row.
+
+The remaining {{M|Cultist|Cultists}} will flee when the Awakened One is defeated in Phase Two.
+
+== Trivia ==
+* The {{M|Cultist|Cultists}} in this fight are not {{BD|Minion|Minions}} despite fleeing when the Awakened One is defeated so {{KW|Fatal}} effects will still trigger when killing them.
+* {{R|Matryoshka}} and {{R|Eternal Feather}} both reference this boss in their flavor text.
+* According to {{R|Bird-Faced Urn|Bird-Faced Urn's}} flavor text, the Awakened One is the crow god Mazaleth.
+** Fittingly, the {{R|Bird-Faced Urn}} has an effect triggered by playing {{QueryLink|Cards|type:power|Power}} cards, just like the Awakened One's {{BD|Curiosity}}.
+* A {{C|Ritual Dagger}} is stuck in its chest.
+
+{{EnemyNav}}
+[[Category:Bosses]]

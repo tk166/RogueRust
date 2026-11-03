@@ -345,10 +345,17 @@
 > "本体消失 + 两只顶替"才第一次能正确表达；§180 之前它靠"再生成两只"近似，会被同一回合的
 > 多次伤害反复触发直到战斗员容器溢出）。
 >
-> 仍然缺的是另外两只 Boss 的机制：Guardian 的 **Mode Shift**（受伤计数 + 形态状态机）、
-> Hexaghost 的 **Burn 升级**。"三选一"这一层仍然无从体现 —— `Boss` 池只有 1 个。
-
-> `inv:§4.3` 说三只等概率三选一【推断】；本内容只有一只，所以"三选一"这一层现在无从体现。
+> ✅ **2026-11-03 第二次更新（§194）**：三只**都在**了，而且三幕的 Boss 池各自齐到 wiki 的
+> "三选一"。降级是**写明**的（每条也在内容的 `AiNote` 里）：
+>
+> | Boss | 这一版怎么做的 | 与 wiki 的差 |
+> |---|---|---|
+> | The Guardian | 进攻 4 循环 + `Mode Shift` 用 **HP ≤ 50%** 触发一次，防御态 Roll Attack → Twin Slam → Whirlwind 后用计数器回到循环；**Sharp Hide 是精确的**（`CardPlayed` + `card.hasTag.attack`） | 触发条件是血量阈值而不是"累计受伤 30"，且切形态落在**下一轮**（意图每轮选一次） |
+> | Hexaghost | 第 1/2 回合规则（Activate、Divider，Divider = `repeat(HP/12 + 1)`），之后 7 招循环**轮转对齐**；Sear 塞 Burn、Inferno 塞 Burn+ | Inferno 不升级已有的 Burn（没有"升级牌堆里的卡"节点）；Divider 读结算时的 HP |
+>
+> 第 2 / 3 幕的 Boss 同一次也对齐了 wiki（The Champ 420 HP 与四招、Time Eater 的 Haste、
+> 以及四只新的：Bronze Automaton + 2 Orb、The Collector + 2 Torch Head、Awakened One 两阶段、
+> Donu & Deca 一对）。细节见 `docs/port-plan.md` §194 与 `docs/sts-wiki-gap.md` §H。
 
 ---
 
@@ -483,13 +490,20 @@
 | `enc_lagavulin` | Lagavulin ×1 | 33.33% | 【推断】等概率 |
 | `enc_three_sentries` | Sentry ×3 | 33.33% | 【推断】等概率 |
 
-### 5.5 Boss（1 只，等概率）
+### 5.5 Boss（三只，等概率；§194 起三幕各三只）
 
 | `id` | 编成 | 权重 |
 |---|---|---|
 | `enc_the_guardian` | The Guardian ×1 | 33.33% |
 | `enc_hexaghost` | Hexaghost ×1 | 33.33% |
 | `enc_slime_boss` | Slime Boss ×1 | 33.33% |
+
+第 2 / 3 幕（`Boss2` / `Boss3`）同样是三项等权：The Champ / Bronze Automaton（+2 Orb）/
+The Collector（+2 Torch Head），Time Eater / Awakened One / Donu & Deca。
+
+> ⚠️ **小兵是开局在场的**，不是召唤出来的：`intent::locate_enemy` 要靠遭遇名单给召唤物找招式表
+> （§138），而列进名单就会生成 —— 所以 wiki 的 `Spawn Orbs` / `Spawn` 被去掉，两只 Orb 与两只
+> Torch Head 从第 1 回合就站在场上。
 
 ---
 

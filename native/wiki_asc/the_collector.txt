@@ -1,0 +1,82 @@
+{{Enemy Infobox
+| Name  = The Collector
+| Image = TheCollector.png
+| Icon  = Map-Collector.png
+| HP    = 282
+| AscHP = 300
+| Debut = Act 2
+| Type  = Boss
+}}
+The Collector is a [[Boss]] found at the end of [[Act 2]].
+
+== Pattern ==
+{{Intents Table/start|The Collector}}
+{{Intents Table/row
+| Name   = Spawn
+| Intent = Unknown
+| Effect = Summons up to 2 {{M|Torch Head|Torch Heads}}.
+}}
+{{Intents Table/row
+| Name   = Fireball
+| Intent = Attack4
+| Effect = Deals (18;{{Asc|4|21}}) damage.
+}}
+{{Intents Table/row
+| Name         = Buff
+| Intent       = DefendBuff
+| Effect       = All enemies gain (3;{{Asc|4|4}} ; {{Asc|19|5}}) {{BD|Strength}}. Gains (15;{{Asc|9|18}} ; {{Asc|19|23}}) {{KW|Block}}.
+| GivesToEnemy = Block, Strength
+}}
+{{Intents Table/row
+| Name          = Mega Debuff
+| Intent        = DebuffStrong
+| Effect        = Applies (3;{{Asc|19|5}}) {{BD|Weak}}, (3;{{Asc|19|5}}) {{BD|Vulnerable}} and (3;{{Asc|19|5}}) {{BD|Frail}}.
+| GivesToPlayer = Vulnerable, Weak, Frail
+}}
+{{Intents Table/end}}
+
+Always starts with {{Int|The Collector|Spawn}} and always uses {{Int|The Collector|Mega Debuff}} on turn 4.
+
+Can only have two {{M|Torch Head|Torch Heads}} summoned at a time.
+
+'''If there are 0-1 {{M|Torch Head|Torch Heads}} alive:'''
+* {{Int|The Collector|Spawn}} 25% chance
+* {{Int|The Collector|Fireball}} 45% chance
+* {{Int|The Collector|Buff}} 30% chance
+
+'''If both {{M|Torch Head|Torch Heads}} are alive:'''
+* {{Int|The Collector|Fireball}} 70% chance
+* {{Int|The Collector|Buff}} 30% chance
+
+She cannot use {{Int|The Collector|Buff}} twice in a row and cannot use {{Int|The Collector|Fireball}} 3 times in a row.
+
+= Torch Head =
+{{Enemy Infobox
+| Name   = Torch Head
+| Image  = TorchHead.png
+| HP     = 38-40
+| AscHP  = 40-45
+| Powers = {{BD|Minion}}
+| Debut  = Act 2
+| Type   = Minion
+}}
+Torch Head is a {{BD|Minion}} spawned by the Collector.
+
+== Pattern ==
+{{Intents Table/start|Torch Head}}
+{{Intents Table/row
+| Name   = Tackle
+| Intent = Attack2
+| Effect = Deals 7 damage.
+}}
+{{Intents Table/end}}
+
+{{Clear}}
+== Trivia ==
+* '''The Collector''' is confirmed to be female. <ref>https://imgur.com/a/cOqF1p8 </ref>
+** This is further implied with {{M2|Queen}} in the sequel sharing many direct connections to '''The Collector'''.
+* '''The Collector''' is featured in the banner for Weekly Patch 56.
+
+{{EnemyNav}}
+[[Category:Minions]]
+[[Category:Bosses]]

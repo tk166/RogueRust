@@ -13343,3 +13343,71 @@ EACT[action].Program    = dealDamage{Amount: combatantCounter(source, Key)}
 * 变体：**48 个动作 / 49 条**；掷骰：**2 个敌人 / 4 条范围 / 3 处计数器读取**。
 * 四条对拍不变：`FIGHT_DIFF 182/182`、`CARD_DIFF 62/62`、`CARD_MULTI 124/124`、
   `ENEMY_DIFF 394/394`（不可对照 0）。
+
+---
+
+## 194. 把三幕的 Boss 池对齐 wiki（每幕三只）
+
+原先的账：`Boss` = Slime Boss、`Boss2` = The Champ、`Boss3` = Time Eater，而 §130 自己写过
+"第 2/3 幕不是 wiki 的数值照搬，而是**机制上真的不同**" —— 也就是说这两只是**编的**（330 HP、
+三招）。wiki 说每幕**三选一**。
+
+### 194.1 这一节做了什么
+
+| 幕 | 之前 | 之后 |
+|---|---|---|
+| 1 (`Boss`) | Slime Boss | Slime Boss / **The Guardian** / **Hexaghost** |
+| 2 (`Boss2`) | The Champ（编的 330 HP、3 招） | The Champ（**wiki 的 420 HP、7 招**）/ **Bronze Automaton**（+2 Orb）/ **The Collector**（+2 Torch Head） |
+| 3 (`Boss3`) | Time Eater | Time Eater（**wiki 的 4 招，含 Haste**）/ **Awakened One**（两阶段）/ **Donu & Deca**（一对） |
+
+内容从 37 怪 / 27 遭遇 / 79 动作长到 **46 怪 / 33 遭遇 / 117 动作**；镜像 48,948 → 62,864 B。
+
+### 194.2 三个"第一次"（都是既有机制的新用法，不是新机制）
+
+1. **`sel.allAllies`** —— Donu 的 Circle of Power「全体敌人 +3 力量」、Deca 的 Square of Protection、
+   Collector 的 Buff、Orb 的 Support Beam。⚠️ **`sel.allEnemies` 是敌方即"对方队伍"**
+   （`targets::team_set(state, source, false, ..)`），Boss 用它会把 Buff 加在玩家身上 —— 战斗会变得
+   *更容易*，而不是坏掉。所以这条有一个专门的测试（Donu 给自己和 Deca 各 3 层，玩家 0 层）。
+2. **`repeat` 的计数是算出来的** —— Hexaghost 的 Divider `(玩家 HP / 12 + 1) × 6`：
+   `repeat(add(divide(currentHealth(eventTarget), 12), 1))`。§146 引入 `node.repeat` 是为了 X 费牌，
+   这是第一次让计数来自状态。测试在 70/12/11/0 四个血量点上各算一次（6/2/1/0 段）。
+3. **`CardPlayed` 上"打出的是哪种牌"** —— Guardian 的 Sharp Hide（`card.hasTag.attack` → 3 伤害）
+   与 Awakened One 的 Curiosity（`card.hasTag.power` → +力量）。§144 的 Enrage/Rage 用同一条形状，
+   但都长在**玩家**身上；这是第一次用它在**敌人**身上反击玩家，而且**可被格挡**。
+
+### 194.3 机制做不到的地方，逐条写进内容
+
+每只 Boss 的 `AiNote` 都带一句"⚠️ 偏差"，`docs/sts-wiki-gap.md` §H 有汇总表。四条最要紧：
+
+* **Guardian 的 Mode Shift**：wiki 是"累计受伤 30 → 20 Block + 当场改意图"；这里是"HP ≤ 50% 时
+  改**下一轮**的意图"（意图每轮选一次）。防御态的 Roll Attack → Twin Slam → Whirlwind 与
+  "Twin Slam 摘掉 Sharp Hide" 都精确。
+* **Hexaghost 的 Inferno** 不升级已有的 Burn（没有"升级牌堆里的卡"节点）；Divider 读**结算时**的
+  玩家 HP。7 招循环是**轮转对齐**的：`Actions[(round-1) % 7]` 从第 3 回合起正好是 wiki 的顺序 ——
+  这条有测试（顺序被"理顺"时 Boss 照样打，只是招式顺序漂了）。
+* **Awakened One 的复活**在 HP ≤ 25% 时改意图（内核没有死亡拦截），"移除所有 debuff"只按名摘掉
+  Curiosity，场上没有 Cultist。
+* **小兵开局在场**：`intent::locate_enemy` 给召唤物找招式表要靠遭遇名单（§138），而列进去就会生成 ——
+  所以 `Spawn Orbs` / `Spawn` 被去掉，2 Orb 与 2 Torch Head 从第 1 回合就在。`Stasis`（偷牌）与
+  Time Eater 的 `Draw Reduction` 没有原语。
+
+### 194.4 判据
+
+* **内容门**（独立第二份，数字全部来自 `native/wiki_asc/*.txt`）：`INV_MONSTERS` +9、
+  `INV_ACTIONS` +38、`INV_CARDS` +2（`burn+` / `void`）、`INV_STATUSES` +2、变体 49 → **78**；
+  三幕池的成员由 `INV_ACT_TABLES` + `INV_BOSS_POOL` 逐个钉住（多一个、少一个都红）。
+* **内核行为**（5 + 3 条新测试）：三幕各三个 Boss 且每个都建得出来 / Hexaghost 的 9 回合招式序 /
+  Automaton 的 A19 `Stunned→Boost`（**两侧都测**）/ Champ 的第 4 回合 Taunt 与半血后 Anger→Execute /
+  Awakened One 的计数器翻阶段；Sharp Hide 只对 Attack 生效、Twin Slam 摘掉它 / Divider 在 4 个血量点上的
+  段数 / Donu 的 Buff 落在两个 Boss 身上而玩家 0 层。
+* **负控**：把 Sharp Hide 的 tag 改成 `skill` ⇒ 红在 `Sharp Hide 3 punishes an Attack, left 70 right 67`；
+  把 Divider 的除数改成 10 ⇒ 红在 `hero at 70: 6 hits of 6 = 36, left 48 right 36`。
+* **20/20 闸门绿**，单测 **848**（671 / 107 / 70）；四条对拍不变（182/182、62/62、124/124、394/394）。
+
+### 194.5 踩到的坑（值得记）
+
+内容里写 `divide{Left: ..., "Right": 12}` 而别处写 `Right: {"kind":"const",...}`，会让该字段在
+派生时同时出现 `int` 与 `term` 两种存储类 ⇒ **整个字段退化 `F_JSON`**，内核求值报
+`WrongKind("F_JSON")`，而报错点离"少包一层 `const`"有三层远。唯一在编辑期能看见它的地方是
+`build.py` 报告里的 **"Fields that fell back to `F_JSON`"** 一行 —— 所以 `p194_helpers` 的算术构造器
+现在自动把裸整数包成 `const`。

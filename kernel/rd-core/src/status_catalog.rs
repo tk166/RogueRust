@@ -716,7 +716,14 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         status_id,
         // Nothing yet: every status in the content has a rule now. The list stays because the rule
         // needs somewhere to put the next one -- and because "empty" must be *sayable*.
-        ""
+        "" |
+        // §194: the Guardian's Sharp Hide and the Awakened One's Curiosity. Both are entirely a
+        // **content** `CardPlayed` trigger filtered by a card tag (`card.hasTag.attack` /
+        // `card.hasTag.power`), the same shape as `standard.enrage` -- so the kernel has no rule to
+        // write and must not pretend it does. Declared here so `the_status_catalogue_is_honest`
+        // keeps meaning what it says: every status is either implemented or on this list.
+        "standard.sharp_hide" |
+        "standard.curiosity"
     )
 }
 

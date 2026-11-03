@@ -206,7 +206,7 @@ Sentry 的 Bolt 塞的就是它。
 | 17 | 普通敌人换招式表 | **有**（同一批变体里含 Slaver 的 Weak/Vulnerable 层数） | 内容：还有 33 个动作没有 wiki 出处 |
 | 18 | 精英换招式表 | **有**（Book of Stabbing 的 `N = turn + 1`） | 同上 |
 | 19 | Boss 换招式表 | **有**（Nemesis 5 张 Burn、Reptomancer 2 只匕首） | 同上 |
-| 20 | 双 Boss（第三幕两只） | **有**（第一只倒下后节点重开，第二只才算赢，§189） | 内容：`Boss3` 池仍只有 1 个 —— 两场打的是同一只 |
+| 20 | 双 Boss（第三幕两只） | **有**（第一只倒下后节点重开，第二只才算赢，§189） | §194 起 `Boss3` 池有 3 只，所以两场可以是不同的一对 |
 
 **A2/3/4 与 A17/18/19 的机制已经落地**（§187）：`EACT` 有一个 `ProgramAsc` 变体列表
 （§192 起是列表，能装两个档位），外加一个 `intent.ascensionAtLeast` 条件。分档按**怪的种类**
@@ -219,7 +219,7 @@ Sentry 的 Bolt 塞的就是它。
 **20 / 20 条全部有机制**（§189 补齐 A1 / A10 / A12 / A20），而且 **A2/3/4 与 A17/18/19 的数值
 已经覆盖 42 / 79 个动作**（§190：13 → 42）。剩下的 37 个里，一部分本来就没有升档（`Does nothing`、
 纯召唤、纯状态），另一部分是 §G 列的基础值不一致 —— 那要先修基础，不是补升档。
-`Boss3` 池仍只有 1 个，所以 A20 的两场打的是同一只 Boss。
+§194 起 `Boss3` 池有 3 只，所以 A20 的两场可以抽到不同的一对 Boss。
 
 ### F. 前端 / Live2D 需要的 ABI
 
@@ -267,3 +267,22 @@ Sentry 的 Bolt 塞的就是它。
 * ⚠️ **闸门看不见 wiki**：本轮重核抓到 `blind` 的稀有度与 Exhaust 都写错了，而 20 道闸门全绿
   （内容门对照的是 `docs/spec/` 的清单，清单本身也是人抄的）。⇒ 新内容落地时，**至少把稀有度
   与"是否 Exhaust"这两列回到单卡页看一眼**，它们是最容易"顺手抄邻居"的两格。
+
+## H. 六只新 Boss 的机制降级（§194）
+
+数字全部来自 `native/wiki_asc/<boss>.txt`（`action=raw`），**降级只在机制层面**，而且每一条都同时
+写在内容的 `AiNote` 里（下一读者看的是那里，不是这份文档）。
+
+| Boss | 做到了 | 与 wiki 的差 |
+|---|---|---|
+| The Guardian | 进攻 4 循环；Sharp Hide（`CardPlayed` + `card.hasTag.attack`，3 伤害，可格挡）；防御态 Roll Attack → Twin Slam → Whirlwind；Twin Slam 摘掉 Sharp Hide | **Mode Shift** 是"HP ≤ 50% 时切一次"，不是"累计受伤 30"；切换落在**下一轮**（意图每轮选一次） |
+| Hexaghost | 第 1/2 回合 Activate / Divider；7 招循环轮转对齐；Divider = `(HP/12 + 1) × 6` | Divider 读结算时 HP；Inferno **不升级**已有的 Burn（没有"升级牌堆里的卡"节点） |
+| The Champ | 420 HP；Heavy Slash / Face Slap / Defensive Stance / Gloat 循环；第 4 回合 Taunt；≤50% 后 Anger → Execute | 45/25/15/15 权重变成确定性循环；Anger 只按名清 Weak/Vulnerable/Frail；A19 的 "Gloat 换成 Defensive Stance" 未实现 |
+| Bronze Automaton | 300 HP + Artifact 3；6 招循环；HYPER BEAM 45；A19 用 Boost 顶替 Stunned | 2 只 Orb **开局在场**（不是 Spawn Orbs）；Orb 的 `Stasis`（偷牌、死亡归还）未实现 |
+| The Collector | 282 HP；Fireball/Buff 交替；第 4 回合 Mega Debuff | 25/45/30 权重变成 1:1；`Spawn` 去掉（2 只 Torch Head 开局在场） |
+| Time Eater | 456 HP；Reverberate / Head Slam / Ripple；≤50% 的 Haste 回血一次 | Haste 不清 debuff；`Draw Reduction` 未实现 |
+| Awakened One | 300 HP；Regenerate 10 + Curiosity 1；Slash/Soul Strike 循环；Rebirth → Dark Echo → Tackle/Sludge 交替 | Rebirth 在 **HP ≤ 25%** 时改意图（没有死亡拦截）；"移除所有 debuff"只摘 Curiosity；没有 Cultist |
+| Donu & Deca | 一对（250 HP 各 + Artifact 2）；Donu 交替 Circle of Power / Beam；Deca 交替 Beam / Square of Protection | Artifact 层数不随 A19 变（`StartingStatuses` 没有升档轴） |
+
+另外一条**全局**的：A9 的 `AscHP`（如 The Champ 440）不会被精确命中 —— 跑层对 `MaxHealth` 施加的是
+**百分比**（§159 的 A7/A8/A9 规则，420 → 525）。这条在 §194 之前就存在，基础血量现在是 wiki 的。
