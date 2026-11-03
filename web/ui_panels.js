@@ -236,7 +236,14 @@ const RD_PANELS = (() => {
 
   function describeEvent(s) {
     const buttons = (s.choices || []).map((choice, slot) => {
-      const suffix = effectText(choice.effect, choice.amount);
+      // §188：`effects` 是整张列表（遗物 + 诅咒就是两条）；没有就退回单条的旧字段。
+      const list = Array.isArray(choice.effects) && choice.effects.length
+        ? choice.effects
+        : [{ effect: choice.effect, amount: choice.amount }];
+      const suffix = list
+        .map((entry) => effectText(entry.effect, entry.amount))
+        .filter((text) => text !== "")
+        .join("、");
       return {
         id: `choice-${slot}`,
         label: choice.label,

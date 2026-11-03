@@ -41,11 +41,11 @@ source_sha256 = 96d064c2cced72d1d21d8eb7e09bf081709dc2f966bc9f93118dea5608124073
 source_bytes = 8291305
 
 full_name = content.rdcf
-full_sha256 = 2db5122b0489279a38d3cb13bb588e63cb2a24a81e1f890e10f8e6c7306d9cd0
+full_sha256 = 5d15b5c0b4e9ec00b67936f195145be6f303f6bf65189fa91abbabafde58c908
 full_bytes = 159872
 
 core_name = content.core.rdcf
-core_sha256 = d9ec7bc3279f34e1f232f0b63a799d4ef545d4b7ecc528aca2f4994131bf51a9
+core_sha256 = 5a649267376419e03fe8b32a887f2b6fa4074347dc07723a9b50581d70539c86
 core_bytes = 87192
 
 # The two images above were produced by compile.py at git HEAD (before the

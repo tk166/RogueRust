@@ -11937,99 +11937,257 @@
       "NameKey": "Golden Idol",
       "DescriptionKey": "An idol of gold sits on a mossy altar.",
       "Label0": "Take it",
-      "Effect0": "gold",
-      "Amount0": 30,
       "Label1": "Leave it",
-      "Effect1": "nothing",
-      "Amount1": 0
+      "Effects0": [
+        {
+          "Effect": "relic:golden_idol",
+          "Amount": 1
+        },
+        {
+          "Effect": "curse:injury",
+          "Amount": 1
+        }
+      ],
+      "Effects1": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Effects0Asc": [
+        {
+          "Effect": "relic:golden_idol",
+          "Amount": 1
+        },
+        {
+          "Effect": "damage",
+          "Amount": 20
+        }
+      ]
     },
     {
       "Id": "shining_light",
       "NameKey": "Shining Light",
       "DescriptionKey": "A shaft of light falls through the ceiling.",
       "Label0": "Step into it",
-      "Effect0": "max_hp",
-      "Amount0": 2,
       "Label1": "Walk on",
-      "Effect1": "nothing",
-      "Amount1": 0
+      "Effects0": [
+        {
+          "Effect": "max_hp",
+          "Amount": 2
+        }
+      ],
+      "Effects1": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Effects0Asc": [
+        {
+          "Effect": "max_hp",
+          "Amount": 1
+        }
+      ]
     },
     {
       "Id": "old_shrine",
       "NameKey": "Old Shrine",
       "DescriptionKey": "A shrine that still answers.",
       "Label0": "Pray",
-      "Effect0": "heal",
-      "Amount0": 15,
       "Label1": "Leave",
-      "Effect1": "nothing",
-      "Amount1": 0
+      "Effects0": [
+        {
+          "Effect": "heal",
+          "Amount": 15
+        }
+      ],
+      "Effects1": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Effects0Asc": [
+        {
+          "Effect": "heal",
+          "Amount": 8
+        }
+      ]
     },
     {
       "Id": "scrap_pile",
       "NameKey": "Scrap Pile",
       "DescriptionKey": "A heap of bent metal.",
       "Label0": "Dig through",
-      "Effect0": "gold",
-      "Amount0": 45,
       "Label1": "Leave",
-      "Effect1": "nothing",
-      "Amount1": 0
+      "Effects0": [
+        {
+          "Effect": "gold",
+          "Amount": 45
+        }
+      ],
+      "Effects1": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Effects0Asc": [
+        {
+          "Effect": "gold",
+          "Amount": 20
+        }
+      ]
     },
     {
       "Id": "ancient_forge",
       "NameKey": "Ancient Forge",
       "DescriptionKey": "A cold forge still holds one glowing coal.",
       "Label0": "Temper your body",
-      "Effect0": "max_hp",
-      "Amount0": 6,
       "Label1": "Pocket the coal",
-      "Effect1": "gold",
-      "Amount1": 45
+      "Effects0": [
+        {
+          "Effect": "max_hp",
+          "Amount": 6
+        }
+      ],
+      "Effects1": [
+        {
+          "Effect": "gold",
+          "Amount": 45
+        }
+      ],
+      "Effects0Asc": [
+        {
+          "Effect": "max_hp",
+          "Amount": 3
+        }
+      ],
+      "Effects1Asc": [
+        {
+          "Effect": "gold",
+          "Amount": 22
+        }
+      ]
     },
     {
       "Id": "wandering_merchant",
       "NameKey": "Wandering Merchant",
       "DescriptionKey": "A merchant offers a tonic for what ails you.",
       "Label0": "Drink it",
-      "Effect0": "heal",
-      "Amount0": 18,
       "Label1": "Ask for coin instead",
-      "Effect1": "gold",
-      "Amount1": 25
+      "Effects0": [
+        {
+          "Effect": "heal",
+          "Amount": 18
+        }
+      ],
+      "Effects1": [
+        {
+          "Effect": "gold",
+          "Amount": 25
+        }
+      ],
+      "Effects0Asc": [
+        {
+          "Effect": "heal",
+          "Amount": 9
+        }
+      ],
+      "Effects1Asc": [
+        {
+          "Effect": "gold",
+          "Amount": 12
+        }
+      ]
     },
     {
       "Id": "ancient_writing",
       "NameKey": "Ancient Writing",
       "DescriptionKey": "Glyphs older than the Spire cover the wall.",
       "Label0": "Study the glyphs",
-      "Effect0": "upgrade_card",
-      "Amount0": 0,
       "Label1": "Leave them be",
-      "Effect1": "nothing",
-      "Amount1": 0
+      "Effects0": [
+        {
+          "Effect": "upgrade_card",
+          "Amount": 0
+        }
+      ],
+      "Effects1": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Effects0Asc": [
+        {
+          "Effect": "upgrade_card",
+          "Amount": 0
+        },
+        {
+          "Effect": "damage",
+          "Amount": 8
+        }
+      ]
     },
     {
       "Id": "forgotten_altar",
       "NameKey": "Forgotten Altar",
       "DescriptionKey": "A stone bowl waits for an offering.",
       "Label0": "Take the offering",
-      "Effect0": "curse:injury",
-      "Amount0": 0,
       "Label1": "Walk away",
-      "Effect1": "nothing",
-      "Amount1": 0
+      "Effects0": [
+        {
+          "Effect": "curse:injury",
+          "Amount": 0
+        }
+      ],
+      "Effects1": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Effects0Asc": [
+        {
+          "Effect": "curse:injury",
+          "Amount": 1
+        },
+        {
+          "Effect": "damage",
+          "Amount": 6
+        }
+      ]
     },
     {
       "Id": "purification_shrine",
       "NameKey": "Purification Shrine",
       "DescriptionKey": "Cold water runs over a stone basin.",
       "Label0": "Wash a card away",
-      "Effect0": "remove_card",
-      "Amount0": 0,
       "Label1": "Leave",
-      "Effect1": "nothing",
-      "Amount1": 0
+      "Effects0": [
+        {
+          "Effect": "remove_card",
+          "Amount": 0
+        }
+      ],
+      "Effects1": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Effects0Asc": [
+        {
+          "Effect": "remove_card",
+          "Amount": 0
+        },
+        {
+          "Effect": "damage",
+          "Amount": 10
+        }
+      ]
     }
   ],
   "Potions": [

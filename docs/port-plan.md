@@ -12975,3 +12975,83 @@ StS 的每只怪在自己的 `getMove()` 里写 `if (ascensionLevel >= 3) damage
 * 内容：镜像 46,384 B（core 38,484 B）；**13 个动作**有升档变体，`gap_check.py` 会打印
   "多少个还没有"（79 − 13 = 66）。
 * Ascension 现在 **15 / 20 条有机制**；剩下 A1 / A10 / A12 / A15 / A20。
+
+---
+
+## 188. 事件效果的**列表** + A15（Unfavorable Events）
+
+两件一直挂着的事，在同一节落地：缺口文档从 §143 起写的"一个选项只能有一条效果（Golden Idol 那种
+'遗物 + 诅咒'还不行）"，以及 Ascension 里剩下那几条之一 **A15**。
+
+### 188.1 形状
+
+`EV` 行的四格 `Effect0/Amount0/Effect1/Amount1` 换成四格 **term**：
+
+| 格 | 类型 | 含义 |
+|---|---|---|
+| `Effects0` / `Effects1` | `F_TERM` | `[{Effect: "<词>[:<载荷>]", Amount: n}]` |
+| `Effects0Asc` / `Effects1Asc` | `F_TERM` | **A15 的变体**（wiki: *"Many events have less positive outcomes and more severe consequences"*） |
+
+行宽仍是 10 格 / 20 B，但格的含义变了 ⇒ `FORMAT_VERSION` **5 → 6**（还按旧版读的读者会把 term id
+当字符串 id —— 这正是 §167 记过的"对的字节、错的 id"）。
+
+为什么值得动格式而不是"把两条效果塞进一个字符串"：载荷是**闭集**，塞字符串就是发明第二种语法；
+而 term 列表的形状镜像里早就有（`ENCT.Enemies`、`CARD.Tags`），解析器是既有的。
+
+### 188.2 运行层：一次选择，多条效果，仍然原子
+
+`resolve_event_effects(&[(EventEffect, Option<&str>)], pool)`：
+
+1. **原子** —— 中间任何一条失败就 `*self = before`。`RunState: Copy` 本来就是为了这件事存在的，
+   所以"拒绝 ⇒ 一个字节都不改"这条纪律**对列表也成立**（判据在 `rd-run`）；
+2. **最多一条改牌效果** —— `remove_card` / `upgrade_card` / `transform_card` 变成一个待答问题，
+   而待答只有一个位置 ⇒ 两条报 `TwoDeckChanges`（新变体），**不静默丢一条**；
+3. **收尾一次** —— 没有改牌效果就地收尾。
+
+A15 的"选哪一串"**不在运行层**：`EventChoice::effects_at(ascension, A_EVENTS_WORSE)` 在内容层，
+阈值常量与其它九个 `A_*` 摆在一起（`at_least` 是唯一比较，规矩没变）。
+
+### 188.3 内容：Golden Idol 终于像 Golden Idol
+
+`golden_idol` 原来是"+30 金币"—— 和 wiki 那个事件毫无关系。现在：
+
+| 分支 | 基础（A0） | A15 |
+|---|---|---|
+| 拿 | **遗物 `golden_idol` + 诅咒 `injury`** | 遗物 + **20 点伤害**（80 最大生命的 25%，wiki 的 Smash 分支） |
+| 走 | 什么都不发生 | 同（`nothing` 没有更糟的版本） |
+
+两个数字都来自我们自己的 inventory §7（`golden_idol_event` 的三个分支：Outrun → Injury、
+Smash → 25% 最大 HP、Hide → −8% 最大 HP）。
+
+⚠️ **其余 8 个事件是自造的**（"a shrine that still answers"、"a heap of bent metal"……），
+它们的 A15 数字是**我们的设计**，不是 wiki 的：wiki 只给了方向（"less positive outcomes and more
+severe consequences"）。所以 `patch_188_content.py` 的表头把两类分开写，A15 用"数值减半"或
+"加一条惩罚"的整齐规则，不假装有出处。这条写在这里，免得下次有人把 45→20 当成 wiki 数字引用。
+
+### 188.4 判据
+
+| 判据 | 位置 | 抓什么 |
+|---|---|---|
+| `an_event_option_can_apply_several_effects_at_once` | `rd-run` | 三条效果（遗物 + 诅咒 + 金币）全部落地，且不欠选牌 |
+| `a_failing_effect_rolls_the_whole_list_back` | `rd-run` | 列表中间失败 ⇒ `run == before`（整结构体相等，连金币一起还） |
+| `two_deck_edits_in_one_option_are_refused` | `rd-run` | `TwoDeckChanges`，且什么都没改 |
+| `a15_swaps_the_event_effect_list` | `rd-wasm` | A0/A14 = 诅咒码 9，A15/A20 = 伤害码 3；遗物永远第一；老的一个效果访问器 == 列表头 |
+| 内容门 `check_event_vocabulary` | 内容 | 每条效果都在闭词表；`curse:`/`relic:` 载荷真实存在；**A15 列表等于基础 ⇒ 红**；一个选项两个改牌效果 ⇒ 红 |
+| `the_events_…`（改写的旧判据） | `rd-core` | `effects_at` 的四个等级（0/14/15/20）、`count`/`asc_count`、以及"离开"没有 A15 变体 |
+
+负控：把 `A_EVENTS_WORSE` 改成 99 ⇒ `a15_swaps_…` 在 A15 上红（`left: 9, right: 3`）。
+
+### 188.4b 顺手修掉一个会让闸门假红的坑
+
+这一节跑闸门时 `web-soak` 红了一次：`TypeError: fetch failed [cause]: bad port`。
+`cdp.mjs` 用 `listen(0)` 让内核分配端口，而 **undici（Node 的 fetch）拒绝一批知名端口**
+（6000 / 6666 / 10080 …）。撞上了就红，和内容无关 —— 一个随机红的闸门会训练人忽略它。
+现在分配到的端口在黑名单里就重新要一个（判据：连跑两次都是 PASS，且第一次就是那次的现场）。
+
+### 188.5 数字
+
+* **20/20 闸门绿**，单测 **832**（rd-core 660 / rd-run 103 / rd-wasm 69）。
+* `FORMAT_VERSION` **6**；`expected_sha.txt` 再钉一次（格式又变了）；85 份语料与四条对拍不变。
+* 内容：镜像 46,984 B（core 39,096 B）；9 个事件、**19 条基础效果 + 15 条 A15 专属效果**，
+  唯一带多条效果的选项是 `golden_idol`（`gap_check.py` 会打印这三个数）。
+* Ascension 现在 **16 / 20 条有机制**；剩下 A1 / A10 / A12 / A20。

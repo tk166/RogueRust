@@ -56,6 +56,7 @@ export async function openPage({
     process.exit(1);
   };
 
+  let port = 0;
   const server = createServer(async (req, res) => {
     const path = decodeURIComponent(new URL(req.url, "http://x").pathname);
     const file = normalize(join(ROOT, path));
@@ -71,9 +72,24 @@ export async function openPage({
       res.writeHead(404).end();
     }
   });
-  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  // A fixed port would collide with a dev server the user is running; 0 asks the OS.
-  const port = server.address().port;
+  // §188: `listen(0)` asks the OS for any free port, and undici (Node's fetch) **refuses a list of
+  // well-known ports** ("bad port": 6000, 6666, 10080, ...). One run of the gate got one of those and
+  // failed with `TypeError: fetch failed [cause]: bad port` -- a red gate that had nothing to do with
+  // the content. So: ask for 0, and if the OS hands back a port undici blocks, ask again.
+  const BLOCKED_PORTS = new Set([1, 7, 9, 11, 13, 15, 17, 19, 20, 21, 22, 23, 25, 37, 42, 43, 53, 69,
+    77, 79, 87, 95, 101, 102, 103, 104, 109, 110, 111, 113, 115, 117, 119, 123, 135, 137, 139, 143,
+    161, 179, 389, 427, 465, 512, 513, 514, 515, 526, 530, 531, 532, 540, 548, 554, 556, 563, 587,
+    601, 636, 989, 990, 993, 995, 1719, 1720, 1723, 2049, 3659, 4045, 4190, 5060, 5061, 6000, 6566,
+    6665, 6666, 6667, 6668, 6669, 6679, 6697, 10080]);
+  for (;;) {
+    await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const candidate = server.address().port;
+    if (!BLOCKED_PORTS.has(candidate)) {
+      port = candidate;
+      break;
+    }
+    await new Promise((resolve) => server.close(resolve));
+  }
 
   const chromePath = await (async () => {
     for (const candidate of CHROME_CANDIDATES) {

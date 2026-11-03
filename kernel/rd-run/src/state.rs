@@ -89,6 +89,9 @@ pub const A_BOSS_GOLD: u8 = 13;
 pub const A_MAX_HP: u8 = 14;
 /// The merchant charges 10% more.
 pub const A_SHOP_PRICE: u8 = 16;
+/// §188：事件变得更糟（wiki: *Unfavorable Events — many events have less positive outcomes
+/// and more severe consequences*）。内容用 `Effects*Asc` 给出变体；没有变体的选项照旧。
+pub const A_EVENTS_WORSE: u8 = 15;
 
 /// `A14`: the Ironclad loses 5 maximum health (`-4` for the other three characters).
 pub const ASCENDED_MAX_HEALTH_LOSS: i32 = 5;
@@ -2564,6 +2567,54 @@ impl RunState {
         self.apply_event_effect(effect, named, pool)?;
         self.pending = Pending::None;
         self.mark_resolved();
+        Ok(())
+    }
+
+    /// §188：**一串**效果，按顺序应用；任何一条失败 ⇒ 整个 `RunState` 回到调用前（逐字节）。
+    ///
+    /// 为什么不"循环调 `resolve_event`"：那样第二次调用会看到 `Pending::None`（第一次已经收尾），
+    /// 于是"遗物 + 诅咒"变成"遗物，然后拒绝"；而如果第一次就成功收尾，第二半就丢了。
+    ///
+    /// 改牌类效果（`remove_card` / `upgrade_card` / `transform_card`）**最多一条**：它们变成一个
+    /// 待答问题（`Pending::EventCard`），而队列里只有一个位置 ⇒ 两个就是内容错误。
+    pub fn resolve_event_effects(
+        &mut self,
+        effects: &[(EventEffect, Option<&str>)],
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
+        if self.pending != Pending::Event {
+            return Err(RunError::WrongPhase);
+        }
+        let before = *self;
+        let mut follow: Option<DeckChange> = None;
+        for (effect, named) in effects {
+            if let Some(change) = effect.deck_change() {
+                if follow.is_some() {
+                    *self = before;
+                    return Err(RunError::TwoDeckChanges);
+                }
+                if before.deck_len == 0 {
+                    *self = before;
+                    return Err(RunError::DeckEmpty);
+                }
+                follow = Some(change);
+                continue;
+            }
+            if let Err(error) = self.apply_event_effect(*effect, *named, pool) {
+                *self = before;
+                return Err(error);
+            }
+        }
+        match follow {
+            Some(change) => {
+                self.event_follow = Some(change);
+                self.pending = Pending::EventCard;
+            }
+            None => {
+                self.pending = Pending::None;
+                self.mark_resolved();
+            }
+        }
         Ok(())
     }
 
@@ -5424,6 +5475,73 @@ mod tests {
                 "transform put {id:?} in the deck, which is not in the pool"
             );
         }
+    }
+
+    /// §188: one option, two effects -- the "relic **and** curse" pair the gap doc named in §143.
+    #[test]
+    fn an_event_option_can_apply_several_effects_at_once() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("golden_idol").expect("opening the event");
+        let gold_before = run.gold();
+        let deck_before = run.deck_len;
+
+        run.resolve_event_effects(
+            &[
+                (EventEffect::GainRelic, Some("golden_idol")),
+                (EventEffect::GainCurse, Some("injury")),
+                (EventEffect::Gold(7), None),
+            ],
+            &pool,
+        )
+        .expect("the list applies");
+
+        assert_eq!(run.gold(), gold_before + 7, "the gold half landed");
+        assert_eq!(run.deck_len, deck_before + 1, "the curse half landed");
+        assert!(
+            run.deck().iter().any(|card| card.as_str() == "injury"),
+            "the deck holds the curse"
+        );
+        assert_eq!(run.pending(), Pending::None, "no pick is owed");
+    }
+
+    /// §188: a list that fails **in the middle** must not half-apply.
+    ///
+    /// The second entry is a curse naming a card the pool does not know, which `apply_event_effect`
+    /// refuses; the gold from the first entry must be rolled back with it.
+    #[test]
+    fn a_failing_effect_rolls_the_whole_list_back() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("golden_idol").expect("the event");
+        let before = run;
+
+        let outcome = run.resolve_event_effects(
+            &[
+                (EventEffect::Gold(30), None),
+                (EventEffect::GainCurse, Some("no_such_curse")),
+            ],
+            &pool,
+        );
+        assert!(outcome.is_err(), "an unknown curse must be refused");
+        // `RunState` is `Copy` and `PartialEq` precisely so this is one assertion, not a field list.
+        assert!(run == before, "a refused list must not move a single byte");
+    }
+
+    /// §188: two deck edits cannot both be honoured (there is one pending pick), so they are refused
+    /// rather than silently losing one.
+    #[test]
+    fn two_deck_edits_in_one_option_are_refused() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("ancient_forge").expect("the event");
+        let before = run;
+        let outcome = run.resolve_event_effects(
+            &[(EventEffect::RemoveCard, None), (EventEffect::UpgradeCard, None)],
+            &pool,
+        );
+        assert_eq!(outcome, Err(RunError::TwoDeckChanges));
+        assert!(run == before, "nothing was applied");
     }
 
     #[test]

@@ -685,3 +685,22 @@ $so = $p.StandardOutput.ReadToEnd(); $se = $p.StandardError.ReadToEnd(); $p.Wait
 
 另有一个新条件 `intent.ascensionAtLeast`（`{Value: n}`）：StS 的 A17/18/19 在源码里是每只怪
 `getMove` 里的一段 `if`，数据化引擎不能照抄；把那个 `if` 交给内容的 `IntentRule` 就行。
+
+## 10. 实现补充（2026-11-03）：事件的选项是**效果列表**
+
+`EV` 原来每行有 `Effect0/Amount0` 与 `Effect1/Amount1` 四格：**一个选项一条效果**，而词表是闭集。
+§188 把四格换成四格 **term**：
+
+| 格 | 类型 | 含义 |
+|---|---|---|
+| `Effects0` / `Effects1` | `F_TERM` | `[{Effect: "<词>[:<载荷>]", Amount: n}]` |
+| `Effects0Asc` / `Effects1Asc` | `F_TERM`（可空） | **A15** 的变体（wiki: *Unfavorable Events*） |
+
+行宽仍是 10 格 / 20 B，但**格的含义变了** ⇒ `FORMAT_VERSION` 5 → 6（一个还按旧版读的读者会把
+term id 当字符串 id）。
+
+三条约束，都由内容门钉住：
+* 每条效果都在闭词表里（载荷形如 `curse:<id>` / `relic:<id>`）；
+* 一个选项里**最多一条**改牌效果（`remove_card` / `upgrade_card` / `transform_card`）—— 待答的
+  选牌只有一个位置，两个就是内容错误（运行层报 `RunError::TwoDeckChanges`）；
+* `Effects*Asc` 若存在，**必须与基础不同**（"变糟了"却什么都没变是 typo，没有症状）。

@@ -87,6 +87,19 @@ def main():
     print(f"  {len(events)}: {', '.join(e['Id'] for e in events)}")
     print(f"  effect vocabulary: {dict(sorted(vocab.items()))}")
 
+
+    print("== event effects (port-plan.md §188) ==")
+    rooms = doc.get("UnknownRooms") or []
+    base = sum(len(r.get("Effects0") or []) + len(r.get("Effects1") or []) for r in rooms)
+    asc = sum(len(r.get("Effects0Asc") or []) + len(r.get("Effects1Asc") or []) for r in rooms)
+    lists = sum(1 for r in rooms
+                if len(r.get("Effects0") or []) + len(r.get("Effects1") or []) > 2)  # >1 option with 2 effects
+    multi = [r["Id"] for r in rooms if len(r.get("Effects0") or []) > 1]
+    print("  %d rooms, %d base effect(s) + %d A15-only effect(s)" % (len(rooms), base, asc))
+    print("  options with more than one effect: %s" % (", ".join(multi) or "none"))
+    print("  rooms with an A15 variant: %d / %d" % (
+        sum(1 for r in rooms if r.get("Effects0Asc") or r.get("Effects1Asc")), len(rooms)))
+
     print("== encounters ==")
     tables = doc["EncounterTables"]
     for key in ("Weak", "Weak2", "Weak3", "Elite", "Elite2", "Elite3", "Boss", "Boss2", "Boss3"):

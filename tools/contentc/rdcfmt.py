@@ -159,7 +159,9 @@ MAGIC = 0x46434452          # b'RDCF'
 # A schema change must be visible to a reader that has a *fixed* cell table, otherwise an old
 # image decodes as garbage instead of failing.
 # 5: `EACT` gained `ProgramAsc` + `AscensionMin` (§187), so that row's stride moved 16 -> 20.
-FORMAT_VERSION = 5
+# 6: `EV` replaced its four `Effect*/Amount*` cells with four effect **lists** (§188); same stride,
+#    different meaning.
+FORMAT_VERSION = 6
 HEADER_SIZE = 32
 NSEC = 20
 
@@ -286,9 +288,11 @@ REL_ROW = [
 ]
 EV_ROW = [
     ("Id", F_STR, 0), ("NameKey", F_STR, 0), ("DescriptionKey", F_STR, 0),
-    # Two choices as **fixed cells** (no TERM walk): the effect is a closed vocabulary word.
-    ("Label0", F_STR, 0), ("Effect0", F_STR, 0), ("Amount0", F_INT, 0),
-    ("Label1", F_STR, 0), ("Effect1", F_STR, 0), ("Amount1", F_INT, 0),
+    # §188: 每个选项的效果是一个 **term 列表**（`{Effect, Amount}` 元素），而不是
+    # "一个词 + 一个数"。`...Asc` 是 A15（"Unfavorable Events"）的变体。
+    # 四格换四格 ⇒ 行宽仍是 10 格 / 20 B，但**格的含义变了** ⇒ FORMAT_VERSION 动。
+    ("Label0", F_STR, 0), ("Effects0", F_TERM, 0), ("Effects0Asc", F_TERM, 0),
+    ("Label1", F_STR, 0), ("Effects1", F_TERM, 0), ("Effects1Asc", F_TERM, 0),
     ("extra", F_TERM, 0),
 ]
 

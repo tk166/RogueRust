@@ -199,6 +199,9 @@ pub enum RunError {
     /// An effect that needs a deck index while the deck is empty. There is nothing to point at, so
     /// "pick a card" would be a screen with no way forward.
     DeckEmpty,
+    /// §188：一个事件选项里出现了**两个**改牌效果（`remove_card` / `upgrade_card` /
+    /// `transform_card`）。待答的选牌只有一个位置，第二个会被静默丢掉 —— 拒绝比丢一半好。
+    TwoDeckChanges,
     /// The event under the cursor is not one the content declared.
     NoSuchEvent,
     /// No such blessing slot (there are two).

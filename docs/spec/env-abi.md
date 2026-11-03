@@ -263,4 +263,14 @@ M1 的路径选择只有一个动作族（"沿哪条出边走"）；`run-layer.m
 `?debug` 侧另有 `dropPotions()`（空腰带）与 `givePotion(id)`，理由与 `startWithSeed` 相同：
 一个必须"祈祷掉落抽到某一瓶"的检查器不是检查器（§185）。
 
+## 13. 事件效果列表（2026-11-03 追加，v1 契约的**纯增量**）
 
+§188 把事件选项从"一条效果"改成"一串"。三个新导出，老的三个含义**冻结**：
+
+| 导出 | 返回 |
+|---|---|
+| `rd_run_event_effect(slot)` / `rd_run_event_amount(slot)` | 仍然是**第一条**（页面的 chip 不用改） |
+| `rd_run_event_effect_count(slot)` | 该选项在**本局等级**下有几条（A15 会换成另一张表，条数可能变） |
+| `rd_run_event_effect_at(slot, index)` / `rd_run_event_amount_at(slot, index)` | 第 `index` 条（码表与 `effect` 一致：1 heal / 2 gold / 3 damage / 4 max_hp / 5 nothing / 6 remove / 7 upgrade / 8 transform / 9 curse / 10 relic） |
+
+页面用 `count` + `at` 把整个列表画在按钮的副标题里（`（遗物 Golden Idol、诅咒 Injury）`）。

@@ -1519,44 +1519,75 @@ def check_card_keywords(doc):
         fail("Cards", "no card exercises any keyword -- §144 would be untested in the real image")
 
 
+EVENT_DECK_EDITS = ("remove_card", "upgrade_card", "transform_card")
+
+
 def check_event_vocabulary(doc):
-    print("[6c] event vocabulary (port-plan.md §143)")
+    """§143 + §188：每个选项是一个**效果列表**，每个效果都在闭词表里。
+
+    三条判据（每一条对应一种没有症状的错误）：
+    * 词表外的效果 ⇒ 下面的 `fail`（点下去一个死按钮）；
+    * `Effects*Asc` 与基础**一模一样** ⇒ "A15 变糟"什么都没变；
+    * 一个选项里**两个改牌效果** ⇒ 待答的选牌只有一个位置，一定丢一个。
+    """
+    print("[6c] event vocabulary (port-plan.md §143 / §188)")
     rooms = doc.get("UnknownRooms") or []
     cards = {c["Id"]: c.get("Rarity") for c in doc.get("Cards") or []}
     relics = {r["Id"] for r in doc.get("Relics") or []}
-    counts = {"bare": 0, "curse": 0, "relic": 0}
+    counts = {"bare": 0, "curse": 0, "relic": 0, "effects": 0, "asc": 0}
     for room in rooms:
         for slot in ("0", "1"):
-            effect = room.get("Effect" + slot)
-            label = "UnknownRooms.%s.Effect%s" % (room.get("Id"), slot)
-            if not isinstance(effect, str):
-                fail(label, "not a string: %r" % (effect,))
+            base = room.get("Effects" + slot) or []
+            asc = room.get("Effects" + slot + "Asc") or []
+            label = "UnknownRooms.%s.Effects%s" % (room.get("Id"), slot)
+            if not isinstance(base, list):
+                fail(label, "not a list: %r" % (base,))
                 continue
-            if effect in EVENT_BARE_EFFECTS:
-                counts["bare"] += 1
-                continue
-            kind, _, payload = effect.partition(":")
-            if kind == "curse" and payload:
-                counts["curse"] += 1
-                if payload not in cards:
-                    fail(label, "curse:%s 不是内容里的卡" % payload)
-                elif cards[payload] != "Curse":
-                    fail(label, "curse:%s 的 Rarity 是 %s，不是 Curse"
-                         % (payload, cards[payload]))
-                continue
-            if kind == "relic" and payload:
-                counts["relic"] += 1
-                if payload not in relics:
-                    fail(label, "relic:%s 不在 Relics 表里" % payload)
-                elif payload not in IMPLEMENTED_RELICS:
-                    fail(label, "relic:%s 的效果内核没实现（%s）"
-                         % (payload, " / ".join(IMPLEMENTED_RELICS)))
-                continue
-            fail(label, "词表外的效果 %r" % (effect,))
-    # A choice with an unknown effect is refused at click time (`rd_run_choose` returns -1), and the
-    # player is left with a dead button. That is exactly the failure this section exists to prevent.
-    ok("event effects", "%d rooms, %d bare / %d curse: / %d relic:"
-       % (len(rooms), counts["bare"], counts["curse"], counts["relic"]))
+            if len(base) > 4 or len(asc) > 4:
+                fail(label, "more than 4 effects (the kernel's MAX_EVENT_EFFECTS)")
+            for kind_label, effects in (("", base), ("Asc", asc)):
+                edits = 0
+                for entry in effects:
+                    effect = entry.get("Effect")
+                    where = "%s%s.%s" % (label, kind_label, effect)
+                    if not isinstance(effect, str):
+                        fail(where, "Effect is not a string: %r" % (effect,))
+                        continue
+                    counts["effects"] += 1
+                    if kind_label:
+                        counts["asc"] += 1
+                    if effect in EVENT_BARE_EFFECTS:
+                        counts["bare"] += 1
+                        continue
+                    kind, _, payload = effect.partition(":")
+                    if kind == "curse" and payload:
+                        counts["curse"] += 1
+                        if payload not in cards:
+                            fail(where, "curse:%s 不是内容里的卡" % payload)
+                        elif cards[payload] != "Curse":
+                            fail(where, "curse:%s 的 Rarity 是 %s，不是 Curse"
+                                 % (payload, cards[payload]))
+                        continue
+                    if kind == "relic" and payload:
+                        counts["relic"] += 1
+                        if payload not in relics:
+                            fail(where, "relic:%s 不在 Relics 表里" % payload)
+                        elif payload not in IMPLEMENTED_RELICS:
+                            fail(where, "relic:%s 的效果内核没实现（%s）"
+                                 % (payload, " / ".join(IMPLEMENTED_RELICS)))
+                        continue
+                    fail(where, "词表外的效果 %r" % (effect,))
+                edits = sum(1 for e in effects if e.get("Effect") in EVENT_DECK_EDITS)
+                if edits > 1:
+                    fail(label + kind_label,
+                         "%d 个改牌效果（待答选牌只有一个位置）" % edits)
+            # §188：A15 的变体必须**真的不一样**。
+            if asc and asc == base:
+                fail(label + "Asc", "the A15 list equals the base -- this ascension does nothing")
+    ok("event effects",
+       "%d rooms, %d effect(s) (%d in A15 lists), %d bare / %d curse: / %d relic:"
+       % (len(rooms), counts["effects"], counts["asc"], counts["bare"],
+          counts["curse"], counts["relic"]))
     # The three per-act pools must name rooms that exist, or the `?` room picks nothing.
     known = {room.get("Id") for room in rooms}
     tables = doc.get("EventTables") or {}

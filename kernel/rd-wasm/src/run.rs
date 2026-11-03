@@ -1291,20 +1291,54 @@ pub unsafe extern "C" fn rd_run_event_label_into(slot: i32, ptr: *mut u8) -> i32
     }
 }
 
-/// Choice `slot`'s effect, as the ABI's small integer: 1 heal, 2 gold, 3 lose health, 4 max health,
-/// 5 nothing, `-1` unknown. A caller that sees `-1` must not guess.
+/// Choice `slot`'s **first** effect, as the ABI's small integer: 1 heal, 2 gold, 3 lose health,
+/// 4 max health, 5 nothing, `-1` unknown. §188: an option is a **list** now, so this is the head of
+/// it -- kept for the pages that only draw one chip; `rd_run_event_effect_at` walks the rest.
 #[no_mangle]
 pub extern "C" fn rd_run_event_effect(slot: i32) -> i32 {
+    rd_run_event_effect_at(slot, 0)
+}
+
+/// Choice `slot`'s first effect's amount.
+#[no_mangle]
+pub extern "C" fn rd_run_event_amount(slot: i32) -> i32 {
+    rd_run_event_amount_at(slot, 0)
+}
+
+/// §188: how many effects choice `slot` has **at this run's ascension** (A15 swaps the list).
+#[no_mangle]
+pub extern "C" fn rd_run_event_effect_count(slot: i32) -> i32 {
     let Some(choice) = event_choice(slot) else {
         return -1;
     };
-    effect_code(choice.effect)
+    let level = run_slot().as_ref().map_or(0, |s| s.state.ascension());
+    i32::from(choice.effects_at(level, rd_run::state::A_EVENTS_WORSE).len() as u8)
 }
 
-/// Choice `slot`'s amount.
+/// §188: effect `index` of choice `slot`, as the same small integer as `rd_run_event_effect`.
 #[no_mangle]
-pub extern "C" fn rd_run_event_amount(slot: i32) -> i32 {
-    event_choice(slot).map_or(0, |choice| i32::from(choice.amount))
+pub extern "C" fn rd_run_event_effect_at(slot: i32, index: i32) -> i32 {
+    let Some(spec) = event_effect_spec(slot, index) else {
+        return -1;
+    };
+    effect_code(spec.effect)
+}
+
+/// §188: effect `index` of choice `slot`'s amount.
+#[no_mangle]
+pub extern "C" fn rd_run_event_amount_at(slot: i32, index: i32) -> i32 {
+    event_effect_spec(slot, index).map_or(0, |spec| i32::from(spec.amount))
+}
+
+/// Effect `index` of choice `slot` **for this run's ascension**.
+fn event_effect_spec(slot: i32, index: i32) -> Option<rd_core::content::EffectSpec<'static>> {
+    let choice = event_choice(slot)?;
+    if index < 0 {
+        return None;
+    }
+    let level = run_slot().as_ref().map_or(0, |s| s.state.ascension());
+    let specs = choice.effects_at(level, rd_run::state::A_EVENTS_WORSE);
+    specs.get(index as usize).copied()
 }
 
 /// Take choice `slot` of the open event.
@@ -1317,9 +1351,25 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
     let Some(choice) = event_choice(slot) else {
         return -1;
     };
-    let Some((effect, payload)) = effect_from(choice.effect, i32::from(choice.amount)) else {
+    // §188：选项是**一串**效果，而 A15（事件变糟）给的是**另一串**。
+    let level = run_slot().as_ref().map_or(0, |s| s.state.ascension());
+    let specs = choice.effects_at(level, rd_run::state::A_EVENTS_WORSE);
+    let mut parsed: [(rd_run::state::EventEffect, Option<&'static str>); 8] = [
+        (rd_run::state::EventEffect::Nothing, None);
+        8
+    ];
+    if specs.len() > parsed.len() {
         return -1;
-    };
+    }
+    for (index, spec) in specs.iter().enumerate() {
+        let named = spec.effect.split_once(':').map(|(_, payload)| payload);
+        let Some((effect, _payload)) = effect_from(spec.effect, i32::from(spec.amount)) else {
+            return -1;
+        };
+        // 载荷（`curse:<id>` 里的 id）必须指向 `'static`：它来自镜像的字符串池，而池本身是
+        // `Box::leak` 出来的静态内存（见 `content()`）。
+        parsed[index] = (effect, named);
+    }
     let Some(session) = run_slot().as_mut() else {
         return -1;
     };
@@ -1330,7 +1380,7 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
     };
     let outcome = session
         .state
-        .resolve_event(effect, payload, &pool)
+        .resolve_event_effects(&parsed[..specs.len()], &pool)
         .map(|_| 0i32);
     finish(session, outcome)
 }
@@ -5976,6 +6026,72 @@ mod tests {
             .filter(|id| colorless.contains(&id.as_str()))
             .collect();
         assert_eq!(added.len(), 1, "exactly one colorless card joined: {hand_after:?}");
+    }
+
+    /// §188: A15 ("Unfavorable Events") reaches the ABI -- a different **list**, not a different
+    /// count (so a test that only counted effects would pass with the wrong one).
+    ///
+    /// ⤅golden_idol` 是本内容里唯一一个真实的 StS 事件：基础是 **遗物 + Injury 诅咒**，
+    /// A15 是 **遗物 + 25% 最大生命伤害**（wiki 的两个分支，记在 inventory §7）。
+    ///
+    /// 为什么不走地图：row 0 **永远是战斗**（StS 的规则），而这条测试要验的是"等级 → 选哪一张列表
+    /// → ABI" 这一段。所以直接建一个**已打开事件**的会话（`begin_event` 是公开的）。
+    #[test]
+    fn a15_swaps_the_event_effect_list() {
+        const CURSE_CODE: i32 = 9;
+        const DAMAGE_CODE: i32 = 3;
+        const RELIC_CODE: i32 = 10;
+        for (level, want_second) in [
+            (0u8, CURSE_CODE),
+            (14, CURSE_CODE),
+            (15, DAMAGE_CODE),
+            (20, DAMAGE_CODE),
+        ] {
+            let mut state = rd_run::state::RunState::new_with_ascension(
+                7,
+                80,
+                0,
+                &["strike"; 5],
+                level,
+            )
+            .expect("a run");
+            assert_eq!(state.ascension(), level, "the run knows its level");
+            state.begin_event("golden_idol").expect("open the event");
+            *run_slot() = Some(RunSession {
+                state: Box::new(state),
+                error: String::new(),
+                elite_fight: false,
+                boss_fight: false,
+                in_fight: false,
+                journal: Vec::new(),
+                head: std::format!("RDR1,S,7,{level},{}", content_pin_text()),
+                replaying: false,
+                replay_checked: 0,
+                replay_diverged: 0,
+                hash_failed: false,
+            });
+
+            assert_eq!(
+                rd_run_event_effect_count(0),
+                2,
+                "A{level}: the first option has two effects"
+            );
+            assert_eq!(
+                rd_run_event_effect_at(0, 0),
+                RELIC_CODE,
+                "the relic comes first at every level"
+            );
+            assert_eq!(
+                rd_run_event_effect_at(0, 1),
+                want_second,
+                "A{level}: the second effect must be {want_second}"
+            );
+            assert_eq!(
+                rd_run_event_effect(0),
+                rd_run_event_effect_at(0, 0),
+                "the legacy accessor is the head of the list"
+            );
+        }
     }
 
     /// The hand's definition ids, in pile order (`hand_costs` has the prices).

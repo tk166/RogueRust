@@ -987,10 +987,19 @@ function runSnapshot() {
     case 5:
       snapshot.eventText = eventText();
       for (let slot = 0; slot < 2; slot++) {
+        // §188：一个选项是一张**效果列表**，所以读它的长度而不是假定 1 条。
+        const effects = [];
+        for (let i = 0; i < ex.rd_run_event_effect_count(slot); i++) {
+          effects.push({
+            effect: ex.rd_run_event_effect_at(slot, i),
+            amount: ex.rd_run_event_amount_at(slot, i),
+          });
+        }
         snapshot.choices.push({
           label: eventLabel(slot),
           effect: ex.rd_run_event_effect(slot),
           amount: ex.rd_run_event_amount(slot),
+          effects,
         });
       }
       break;

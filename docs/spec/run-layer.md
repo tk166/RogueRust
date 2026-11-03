@@ -610,4 +610,15 @@ Smoke Bomb（§179）落地时把"逃出非 Boss 战斗"表达成 `FightOutcome`
 三张无色牌**没有 `+` 行**：不是"不能升级"（StS 里能），而是**没有任何牌组装得下它们**
 （唯一入口是 Colorless Potion，在一次战斗内给），`+` 行会是没人能到达的内容。
 
+## 11. 实现补充（2026-11-03）：一次事件选择可以有多条效果
 
+`resolve_event_effects(&[(EventEffect, Option<&str>)], pool)` 取代了单条版本，三条性质：
+
+1. **原子**：任何一条失败 ⇒ `*self = before`（`RunState: Copy` 就是为这个存在的），
+   所以"拒绝 ⇒ 一个字节都不改"对**列表**也成立（判据 `a_failing_effect_rolls_the_whole_list_back`）；
+2. **最多一条改牌效果**：`remove_card` / `upgrade_card` / `transform_card` 变成一个待答问题，
+   而待答只有一个位置 ⇒ 两条报 `TwoDeckChanges`，不静默丢一条；
+3. **收尾只有一次**：没有改牌效果时就地收尾（`Pending::None` + `mark_resolved`）。
+
+A15 的选择**不在这里**：运行层只拿到一串已经选好的效果。选哪一串由 `Content::EventChoice::effects_at`
+按 `RunState::ascension()` 决定（阈值常量 `A_EVENTS_WORSE = 15`，与其它 `A_*` 摆在一起）。

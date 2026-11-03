@@ -47,7 +47,9 @@ pub const DIRECTORY_ENTRY_BYTES: usize = 12;
 /// 配 16 格的新内核会**解析成功并读出垃圾**（把旧的 `extra` 当 `Rarity`，`content.string`
 /// 碰巧拿到合法串号就返回一段像样的文本）。schema 变更必须响亮，所以版本号跟着 schema 走。
 /// 5: `EACT` gained `ProgramAsc` + `AscensionMin` (§187), so that row's stride moved 16 -> 20.
-pub const FORMAT_VERSION: u16 = 5;
+/// 6: `EV` replaced its four `Effect*/Amount*` cells with four effect **lists** (§188): same
+///    stride, different meaning -- a reader that kept version 5 would decode a term id as a string id.
+pub const FORMAT_VERSION: u16 = 6;
 /// 目录项数（头里 `nsec`）。0..=14 有名字，15..19 保留。
 pub const SECTION_COUNT: usize = 20;
 /// 头部 `flags` 的 bit0：表现层已剥（`content.core.rdcf`）。
@@ -134,6 +136,12 @@ pub const F_TERM: u8 = 4;
 pub const F_TERMLIST: u8 = 5;
 pub const F_STRLIST: u8 = 6;
 pub const F_JSON: u8 = 7;
+
+/// §188：一个事件选项最多有几条效果。
+///
+/// 四条是**容量**，不是规则：超了就是内容错误（`ContentError::TooManyEventEffects`），
+/// **不截断** —— 截断会把"遗物 + 诅咒 + 金币"悄悄变成两条，而屏幕上仍然显示三条的文案。
+pub const MAX_EVENT_EFFECTS: usize = 4;
 
 /// 字段类别 → 占几个 u16 槽（下标即类别；`[0]` 是无效类别）。
 pub const FIELD_SLOTS: [u8; 8] = [0, 1, 1, 1, 1, 2, 2, 1];
@@ -1549,11 +1557,13 @@ entity_row!(
         ("NameKey", F_STR, 0) => name_key => 1,
         ("DescriptionKey", F_STR, 0) => description_key => 2,
         ("Label0", F_STR, 0) => label0 => 3,
-        ("Effect0", F_STR, 0) => effect0 => 4,
-        ("Amount0", F_INT, 0) => amount0 => 5,
+        /// `Effects0`（term：`[{Effect, Amount}]\`，§188）。
+        ("Effects0", F_TERM, 0) => effects0 => 4,
+        /// `Effects0Asc`（term）：A15 的变体（wiki: *Unfavorable Events*）。
+        ("Effects0Asc", F_TERM, 0) => effects0_asc => 5,
         ("Label1", F_STR, 0) => label1 => 6,
-        ("Effect1", F_STR, 0) => effect1 => 7,
-        ("Amount1", F_INT, 0) => amount1 => 8,
+        ("Effects1", F_TERM, 0) => effects1 => 7,
+        ("Effects1Asc", F_TERM, 0) => effects1_asc => 8,
         ("extra", F_TERM, 0) => extra => 9,
     }
 );
@@ -2618,11 +2628,43 @@ impl<'a> Content<'a> {
 pub struct EventChoice<'a> {
     /// What the button says.
     pub label: &'a str,
-    /// `heal` / `gold` / `damage` / `max_hp` / `nothing` -- a **closed** vocabulary, because the run
-    /// layer has no program interpreter.
+    /// The effects, in order (§188). `heal` / `gold` / `damage` / `max_hp` / `nothing` /
+    /// `remove_card` / `upgrade_card` / `transform_card` / `curse:<id>` / `relic:<id>` -- a
+    /// **closed** vocabulary, because the run layer has no program interpreter.
+    pub effects: [EffectSpec<'a>; MAX_EVENT_EFFECTS],
+    /// How many of `effects` are real.
+    pub count: u8,
+    /// The A15 variant (wiki: *Unfavorable Events*). `asc_count == 0` = none: the base list applies
+    /// at every level.
+    pub asc: [EffectSpec<'a>; MAX_EVENT_EFFECTS],
+    /// How many of `asc` are real.
+    pub asc_count: u8,
+}
+
+impl<'a> EventChoice<'a> {
+    /// The list that applies at `ascension`: the A15 variant when the row has one, else the base.
+    #[must_use]
+    pub fn effects_at(&self, ascension: u8, a15: u8) -> &[EffectSpec<'a>] {
+        if self.asc_count > 0 && ascension >= a15 {
+            &self.asc[..usize::from(self.asc_count)]
+        } else {
+            &self.effects[..usize::from(self.count)]
+        }
+    }
+}
+
+/// One event effect: a closed-vocabulary word (with an optional `:` payload) and its amount.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EffectSpec<'a> {
     pub effect: &'a str,
-    /// How much of it.
     pub amount: i16,
+}
+
+impl crate::state::Empty for EffectSpec<'_> {
+    const EMPTY: Self = Self {
+        effect: "nothing",
+        amount: 0,
+    };
 }
 
 impl<'a> Content<'a> {
@@ -2638,7 +2680,7 @@ impl<'a> Content<'a> {
 
     /// Event `index`: its id, its body text, and its two choices. `None` when the row is unusable.
     #[must_use]
-    pub fn event(&self, index: u32) -> Option<(&'a str, &'a str, [EventChoice<'a>; 2])> {
+    pub fn event(&'a self, index: u32) -> Option<(&'a str, &'a str, [EventChoice<'a>; 2])> {
         let row = EvRow::new(self.row(Table::Event, index)?)?;
         let id = self.string(row.id())?;
         let text = self
@@ -2647,23 +2689,71 @@ impl<'a> Content<'a> {
             .unwrap_or("");
         let mut choices = [EventChoice {
             label: "",
-            effect: "nothing",
-            amount: 0,
+            effects: [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS],
+            count: 0,
+            asc: [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS],
+            asc_count: 0,
         }; 2];
-        for (slot, (label_cell, effect_cell, amount_cell)) in [
-            (row.label0(), row.effect0(), row.amount0()),
-            (row.label1(), row.effect1(), row.amount1()),
+        for (slot, (label_cell, base_cell, asc_cell)) in [
+            (row.label0(), row.effects0(), row.effects0_asc()),
+            (row.label1(), row.effects1(), row.effects1_asc()),
         ]
         .into_iter()
         .enumerate()
         {
+            let mut base = [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS];
+            let count = self.effect_list(base_cell, &mut base)?;
+            let mut asc = [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS];
+            let asc_count = self.effect_list(asc_cell, &mut asc)?;
             choices[slot] = EventChoice {
                 label: self.string(label_cell).unwrap_or(""),
-                effect: self.string(effect_cell).unwrap_or("nothing"),
-                amount: self.amount(amount_cell),
+                effects: base,
+                count,
+                asc,
+                asc_count,
             };
         }
         Some((id, text, choices))
+    }
+
+    /// 读一个效果列表（`_arr` of `_obj{Effect: F_STR, Amount: F_INT}`，§188）。
+    ///
+    /// 返回条数。缺席/null 是**合法的空列表**（"这个选项没有效果"），但**越界**不是：
+    /// 超过 [`MAX_EVENT_EFFECTS`] 直接报错，不截断。
+    fn effect_list(
+        &'a self,
+        cell: u16,
+        out: &mut [EffectSpec<'a>; MAX_EVENT_EFFECTS],
+    ) -> Option<u8> {
+        if cell == ABSENT16 || cell == NULL16 {
+            return Some(0);
+        }
+        let term = self.term(cell)?;
+        if term.op != OP_ARR {
+            return None;
+        }
+        let start = term.slot(0)?;
+        let count = term.slot(1)?;
+        if count == LIST_ABSENT || count == LIST_NULL {
+            return Some(0);
+        }
+        let count = usize::from(count);
+        if count > MAX_EVENT_EFFECTS {
+            return None;
+        }
+        for index in 0..count {
+            let element = self.aux(start.checked_add(index as u16)?)?;
+            let node = crate::ir::NodeRef::new(self, element);
+            // 这里返回 Option（与 `Content::event` 的其他读取一致），所以 `Result` 要展开成
+            // `None`：**类型不对**说明镜像坏了，不是"这个元素没有效果"。
+            let effect = node.str_field("Effect").ok().flatten().unwrap_or("nothing");
+            let amount = node.int_field("Amount").ok().flatten().unwrap_or(0);
+            out[index] = EffectSpec {
+                effect,
+                amount: i16::try_from(amount).unwrap_or(0),
+            };
+        }
+        Some(count as u8)
     }
 
     /// An `F_INT` cell as a number. `ABSENT16` / `NULL16` are zero; everything else is `i16`.
@@ -4070,7 +4160,7 @@ mod tests {
         assert_eq!(content.card_rarity("slimed"), Some("Status"));
         assert_eq!(content.card_rarity("no_such_card"), None);
         assert_eq!((CardRow::STRIDE, CardRow::CELLS), (32, 16));
-        assert_eq!(FORMAT_VERSION, 5);
+        assert_eq!(FORMAT_VERSION, 6);
         assert_eq!(content.version(), FORMAT_VERSION);
         // The roguedeck image has no `Rarity` key at all: the cell is there and reads as absent,
         // which is `None` rather than an error.
@@ -4271,11 +4361,21 @@ mod tests {
                 "transform_card",
             ];
             for choice in &choices {
-                let effect = choice.effect;
-                let inside = bare.contains(&effect)
-                    || (effect.starts_with("curse:") && effect.len() > "curse:".len())
-                    || (effect.starts_with("relic:") && effect.len() > "relic:".len());
-                assert!(inside, "{id}: unknown effect {effect:?}");
+                // §188：一个选项是一张列表，所以**每一条**都要在闭词表里。
+                for spec in &choice.effects[..usize::from(choice.count)] {
+                    let effect = spec.effect;
+                    let inside = bare.contains(&effect)
+                        || (effect.starts_with("curse:") && effect.len() > "curse:".len())
+                        || (effect.starts_with("relic:") && effect.len() > "relic:".len());
+                    assert!(inside, "{id}: unknown effect {effect:?}");
+                }
+                for spec in &choice.asc[..usize::from(choice.asc_count)] {
+                    let effect = spec.effect;
+                    let inside = bare.contains(&effect)
+                        || (effect.starts_with("curse:") && effect.len() > "curse:".len())
+                        || (effect.starts_with("relic:") && effect.len() > "relic:".len());
+                    assert!(inside, "{id}: unknown A15 effect {effect:?}");
+                }
             }
         }
         ids.sort_unstable();
@@ -4293,14 +4393,29 @@ mod tests {
                 "wandering_merchant"
             ]
         );
-        // Spot-check one: the golden idol pays 30 gold, and leaving it does nothing.
+        // Spot-check the pair this section exists for: **relic + curse**, and the A15 branch is a
+        // different list (`port-plan.md` §188).
         let index = (0..content.event_count())
             .find(|index| content.event(*index).map(|e| e.0) == Some("golden_idol"))
             .expect("golden_idol");
         let (_, _, choices) = content.event(index).unwrap();
-        assert_eq!(choices[0].effect, "gold");
-        assert_eq!(choices[0].amount, 30);
-        assert_eq!(choices[1].effect, "nothing");
+        assert_eq!(choices[0].count, 2, "two effects in one option");
+        assert_eq!(choices[0].effects[0].effect, "relic:golden_idol");
+        assert_eq!(choices[0].effects[1].effect, "curse:injury");
+        assert_eq!(choices[0].asc_count, 2, "and an A15 variant of the same length");
+        assert_eq!(choices[0].asc[1].effect, "damage", "A15: the idol costs HP instead");
+        assert_eq!(choices[0].asc[1].amount, 20, "25% of 80, the wiki's Smash branch");
+
+        // `effects_at` is the **only** place the level decides which list applies.
+        assert_eq!(choices[0].effects_at(0, 15)[1].effect, "curse:injury");
+        assert_eq!(choices[0].effects_at(14, 15)[1].effect, "curse:injury");
+        assert_eq!(choices[0].effects_at(15, 15)[1].effect, "damage");
+        assert_eq!(choices[0].effects_at(20, 15)[1].effect, "damage");
+
+        // Leaving costs nothing, and `nothing` has no worse version.
+        assert_eq!(choices[1].count, 1);
+        assert_eq!(choices[1].effects[0].effect, "nothing");
+        assert_eq!(choices[1].asc_count, 0, "no A15 variant where nothing happens");
 
         // §143: the three new choices really carry the new vocabulary **out of the binary**, so a
         // writer that quietly dropped a colon would be caught here and not by a dead button.
@@ -4310,8 +4425,8 @@ mod tests {
                 .unwrap_or_else(|| panic!("{id} must be in the image"));
             let (_, _, choices) = content.event(index).expect("event");
             std::vec![
-                std::string::String::from(choices[0].effect),
-                std::string::String::from(choices[1].effect),
+                std::string::String::from(choices[0].effects[0].effect),
+                std::string::String::from(choices[1].effects[0].effect),
             ]
         };
         assert_eq!(
