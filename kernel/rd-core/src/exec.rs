@@ -1612,6 +1612,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         // W4f 的 2 种（卡实例这一层寻址）。
         | NodeKind::ForEachCardInZone
         | NodeKind::MoveCardToZone
+        // §195.4：`selectCards`（挑卡 + 搬卡）。没有孩子，预检只登记它。
+        | NodeKind::SelectCards
         // §146：`repeat`（X 费牌的"跑 X 遍"）。它有孩子，但预检只走一遍 Body ——
         // 次数是运行期的值，预检看不到它。
         | NodeKind::Repeat => {}
@@ -1769,6 +1771,7 @@ fn dispatch_node(
         NodeKind::LoseResource => lose_resource_node(node, ctx, frame, slot, stats),
         NodeKind::CreateCardInstance => create_card_instance_node(node, ctx, frame, slot, stats),
         NodeKind::MoveCardToZone => move_card_to_zone_node(node, ctx, frame, slot, stats),
+        NodeKind::SelectCards => select_cards_node(node, ctx, frame, slot, stats),
     };
     outcome?;
     Ok(slot)
@@ -2129,6 +2132,11 @@ fn dispatch_conditional(
         None => resume_later(ctx.state, frame, slot),
     }
 }
+
+/// §195.4：`node.selectCards` 一次最多搬几张（与 `Count` 的上限是同一个数）。
+///
+/// 8 是**容量**，不是规则：超了报 `Missing("Count")`（越界的 Count 是内容错，不是"少搬几张"）。
+pub const MAX_SELECTED_CARDS: usize = 8;
 
 /// `DealDamage`：`Amount` → `TargetSelector` → **每个目标一条请求**（不写状态）。
 ///
@@ -3453,6 +3461,137 @@ fn create_card_for(
 /// * handler 里：卡不在这个战斗员的牌区 ⇒ 抛；同区 ⇒ 只有 `Top` 才重排。
 ///
 /// `ToZone` / `Placement` 都是**裸字符串枚举名**，不认识的串 ⇒ [`IrError::UnknownKind`]。
+/// §195.4：**挑** `FromZone`（空则 `FallbackZone`）里按 `Order` 排好的前 `Count` 张，搬去 `ToZone`。
+///
+/// 搬卡走 `EffectRequest::MoveCardToZone`（与 `node.moveCardToZone` 同一个请求），所以触发器照样
+/// 看得见、`ExecStats::effects` 的"一次请求一次效果"照样成立。
+fn select_cards_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let owner_selector = node
+        .node_field("OwnerSelector")?
+        .ok_or(IrError::Missing("OwnerSelector"))?;
+    let from_name = node.str_field("FromZone")?.ok_or(IrError::Missing("FromZone"))?;
+    let from_zone = zone_from_wire_name(from_name).ok_or(ExecError::Ir(IrError::UnknownKind))?;
+    let fallback = match node.str_field("FallbackZone")? {
+        Some(name) => Some(zone_from_wire_name(name).ok_or(ExecError::Ir(IrError::UnknownKind))?),
+        None => None,
+    };
+    let order_name = node.str_field("Order")?.ok_or(IrError::Missing("Order"))?;
+    let count = node.int_field("Count")?.ok_or(IrError::Missing("Count"))?;
+    if !(1..=MAX_SELECTED_CARDS as i32).contains(&count) {
+        return Err(ExecError::Ir(IrError::Missing("Count")));
+    }
+    let count = count as usize;
+    let to_name = node.str_field("ToZone")?.ok_or(IrError::Missing("ToZone"))?;
+    let to_zone = zone_from_wire_name(to_name).ok_or(ExecError::Ir(IrError::UnknownKind))?;
+    let placement = match node.str_field("Placement")? {
+        None => ZonePlacement::Bottom,
+        Some(name) => placement_from_wire_name(name).ok_or(ExecError::Ir(IrError::UnknownKind))?,
+    };
+
+    let mut owners = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let owner_count = resolve_targets(owner_selector, ctx, &mut owners)?;
+    // 与 `moveCardToZone` 同一条：解不出 owner ⇒ no-op（没有卡可搬，也不是错误）。
+    let Some(owner) = owners.first().copied().filter(|_| owner_count > 0) else {
+        return resume_later(ctx.state, frame, slot);
+    };
+
+    // Candidates: `(card instance id, rarity rank)` in **pile order**.
+    let mut candidates = [CardInstanceId::EMPTY; MAX_SELECTED_CARDS * 8];
+    let mut ranks = [0u8; MAX_SELECTED_CARDS * 8];
+    let mut found = 0usize;
+    for zone in core::iter::once(from_zone).chain(fallback.into_iter()) {
+        for card in ctx.state.zone_cards(&owner, zone) {
+            if found == candidates.len() {
+                break;
+            }
+            candidates[found] = card.id;
+            ranks[found] = card_rarity_rank(ctx.content, &card.definition_id);
+            found += 1;
+        }
+        if found > 0 {
+            // `FallbackZone` is a fallback, not a second batch: stop at the first pile that has a card.
+            break;
+        }
+    }
+    if found == 0 {
+        // 没有卡可挑 ⇒ 空操作（不是错误）：一张空牌堆不是内容缺陷，它是战斗里最正常的一件事。
+        return resume_later(ctx.state, frame, slot);
+    }
+
+    let mut order = [0usize; MAX_SELECTED_CARDS * 8];
+    for index in 0..found {
+        order[index] = index;
+    }
+    match order_name {
+        "HighestRarity" => {
+            // Stable selection of the `count` highest ranks; ties keep pile order.
+            for index in 0..found {
+                let mut best = index;
+                for other in (index + 1)..found {
+                    let (a, b) = (order[other], order[best]);
+                    if ranks[a] > ranks[b] {
+                        best = other;
+                    }
+                }
+                order.swap(index, best);
+            }
+        }
+        "First" => {}
+        "Random" => {
+            // One draw for the whole batch, then a Fisher-Yates pass: a single `random_step` per use
+            // keeps the RNG ledger as readable as every other draw in the kernel.
+            let mut indexes = [0u8; MAX_SELECTED_CARDS * 8];
+            for index in 0..found {
+                indexes[index] = index as u8;
+            }
+            crate::rng::shuffle_indexes(&mut indexes[..found], ctx.state.random_seed, ctx.state.random_step);
+            ctx.state.random_step = ctx.state.random_step.saturating_add(1);
+            for index in 0..found {
+                order[index] = usize::from(indexes[index]);
+            }
+        }
+        _ => return Err(ExecError::Ir(IrError::UnknownKind)),
+    }
+
+    for index in order.iter().take(count) {
+        ctx.state.enqueue_effect_with_owner(
+            EffectRequest::MoveCardToZone {
+                owner,
+                card: candidates[*index],
+                to_zone,
+                placement,
+            },
+            Some(frame),
+        )?;
+        stats.effects = stats.effects.saturating_add(1);
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
+/// §195.4：一张牌的**稀有度排名**（"最高稀有度"取哪一张）。
+///
+/// `Rare 4 > Uncommon 3 > Common 2 > Basic 1 > Status 0 = Curse 0`。
+/// 卡表里的六种串是 `Basic/Common/Uncommon/Rare/Status/Curse`；排序按**价值**而不是枚举序号
+/// —— Status/Curse 在 StS 的枚举里排在 Rare **之后**，照序号降序会变成"先偷诅咒"。
+fn card_rarity_rank(content: Option<&Content<'_>>, definition: &crate::state::CardDefinitionId) -> u8 {
+    let Some(content) = content else {
+        return 0;
+    };
+    match content.card_rarity(definition.as_str()) {
+        Some("Rare") => 4,
+        Some("Uncommon") => 3,
+        Some("Common") => 2,
+        Some("Basic") => 1,
+        _ => 0,
+    }
+}
+
 fn move_card_to_zone_node(
     node: NodeRef<'_>,
     ctx: &mut ExecContext<'_>,

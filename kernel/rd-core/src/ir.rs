@@ -129,6 +129,12 @@ pub enum NodeKind {
     /// 移出是**结构性**的守卫：不再在名册里，`collect_triggers` 就收不到这个承受者，
     /// 触发器不可能再响第二次。
     DestroyCombatant,
+    /// `node.selectCards` —— **挑卡并搬卡**（§195.4，本内核自己的节点）。
+    ///
+    /// 参考的词表里有四个 `sel.*` 卡选择器，`sel.rs` 明确拒绝了它们（"卡选择器 / 玩家选择"），
+    /// 于是内容无法说"抽牌堆里稀有度最高的那张"。Stasis 需要它，所以这里只加**一个**具体节点，
+    /// 而不是一套谓词语言：`{OwnerSelector, FromZone, FallbackZone?, Order, Count, ToZone, Placement?}`。
+    SelectCards,
     /// `node.repeat` —— 把 `Body` 跑 `Count` 遍（**参考有、内核此前没移植**，§146）。
     ///
     /// 它一直是 `CombatJson` 注册的 35 个节点之一（`EffectProgramNodes.cs:116-155`），
@@ -162,6 +168,7 @@ impl NodeKind {
             NodeKind::DestroyCombatant => "node.destroyCombatant",
             NodeKind::EndTurn => "node.endTurn",
             NodeKind::ExtraTurn => "node.extraTurn",
+            NodeKind::SelectCards => "node.selectCards",
             NodeKind::Repeat => "node.repeat",
         }
     }
@@ -169,7 +176,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 20] = [
+        const ALL: [NodeKind; 21] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -191,6 +198,7 @@ impl NodeKind {
             NodeKind::DestroyCombatant,
             NodeKind::EndTurn,
             NodeKind::ExtraTurn,
+            NodeKind::SelectCards,
             NodeKind::Repeat,
         ];
         let mut i = 0;

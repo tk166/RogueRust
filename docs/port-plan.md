@@ -13411,3 +13411,87 @@ EACT[action].Program    = dealDamage{Amount: combatantCounter(source, Key)}
 `WrongKind("F_JSON")`，而报错点离"少包一层 `const`"有三层远。唯一在编辑期能看见它的地方是
 `build.py` 报告里的 **"Fields that fell back to `F_JSON`"** 一行 —— 所以 `p194_helpers` 的算术构造器
 现在自动把裸整数包成 `const`。
+
+---
+
+## 195. 把 A/D 那四条"基建缺口"做掉
+
+§194 的降级清单里，我把原因归成四类。这一节按类补基建，逐条都把"我以为缺"和"真的缺"分开：
+
+| 条目 | 结论 |
+|---|---|
+| A3 `eventAmount` + 伤害量 | **真缺** → §195.1 |
+| A1 复活原语 | **不缺**（`DeathPrevention` 早就对任何战斗员生效）→ §195.2 |
+| A2 意图层随机 + 上一招记忆 | **真缺**（意图层没有 RNG、没有历史）→ §195.3 |
+| D1 卡选择器 | **真缺**（`sel.*` 卡选择器被明确拒绝）→ §195.4 |
+
+### 195.1 事件带数量、`eventAmount`、开局固定计数器
+
+* `CombatEvent::DamageTaken` 带 `health_damage`（**实际掉血**，不是请求额：被完全挡住的攻击一点血
+  都没掉，而 wiki 写的是 "after losing X HP"）。`eventAmount` 终于有求值分支；**没有事件上下文时给
+  `NoTarget`，绝不 0**（0 是合法数量）。
+* 新内容面 `ENCT.Enemies[].Counters = [{Key, Value, AscensionMin?}]`（§193 `Rolls` 的兄弟，同一个
+  `battle::apply_spawn_setup`）：**节目没法初始化一个计数器**，随机值也表达不了"开局就是 30"。
+* Guardian 的 Mode Shift 变成真语义：种 30（A9 35 / A19 40）→ `budget -= eventAmount` → 规则
+  `budget <= 0` → 防御态 `+10`。
+
+⚠️ 第一版被内核**拒了一次**：把阈值写成规则里的 `compare{damage >= 30 + 10*shifts}` —— 规则条件只能
+是 11 种 `intent.*`，`selfHasCounter` 只能比**常量**。这不是该修的限制（任意表达式进规则 = 意图层要
+吃整个表达式引擎 + 要能解释"为什么命中"）；正确做法是**算术留在节目里**（`setCombatantCounter` 的
+Amount 是表达式），规则只做常数比较 —— 于是有了"预算"。
+
+### 195.2 复活：查完发现钩子早就在
+
+§194 写的"内核没有死亡拦截"是错的：`exec::resolve_damage` 在写血量前会遍历目标的 `DeathPrevention`
+（§180 的 S6d 块），对**任何**战斗员生效。于是 `standard.unawakened`
+（`{SurvivingHealth: 1, Repeating: false}`，一次性）+ 规则 `not(hasStatus unawakened)` ⇒ Rebirth。
+
+⚠️ 规则必须**两半**：只写"守卫没了 ⇒ Rebirth"会在复活后永远成立（Boss 从此只会复活）。
+
+### 195.3 带权抽签：抽签是派生值，历史交给内容
+
+`select_action` 每次观察都被调（页面每帧重算意图），所以抽签**必须是纯函数**；要让它稳定就得把
+"这一轮的招"存进快照，而参考没有那个字段 —— 85 份语料与 129 条 golden 的哈希全都要动。于是：
+
+    step = round * 16 + slot                        （单射：战斗 < 64 轮、遭遇 <= 8 敌）
+    r    = rng::shuffled_pick_index(total, seed, step)
+
+这也更接近 StS（它用独立的 `aiRng`）。代价写明：两次抽签之间没有顺序关系。
+"不能连续用同一招"由**内容**记计数器（每个节目末尾 `last_move = k`）+ 一条规则排除。
+
+词汇：规则的 `Action` 可换成 `Choice`（`[{Action, Weight}]`）。内核拒绝而不猜：空列表 / 权重 ≤ 0 /
+总和 > 255 / 项数 > 8 / action 不在 EACT / **同时写了 Action 与 Choice**。
+
+### 195.4 `node.selectCards`：第一次能问"哪张卡"
+
+`sel.rs` 一直拒绝四个卡选择器（"卡选择器 / 玩家选择"，报 `UnsupportedKind` 而不是静默空集），所以
+"抽牌堆里稀有度最高的那张"（Stasis）说不出来。新增**一个**具体节点而不是一套谓词语言：
+
+    node.selectCards { OwnerSelector, FromZone, FallbackZone?, Order, Count, ToZone, Placement? }
+
+`Order` = `HighestRarity` / `First` / `Random`（只有 `Random` 花一次 `random_step`）；稀有度排名
+`Rare 4 > Uncommon 3 > Common 2 > Basic 1 > Status 0 = Curse 0`（按价值，不是枚举序号）。搬卡走
+`EffectRequest::MoveCardToZone`，所以触发器照样看得见。
+
+Bronze Orb 的 `Stasis` 因此是真的：抽牌堆（空则弃牌堆）里最高稀有度的一张进 `SetAsidePile`，死亡时
+由一个 `Downed` 触发器还回手牌。⚠️ 状态必须**拆两个**：`standard.stasis` 带死亡钩子（永不消耗）、
+`standard.stasis_ready` 是"还没用过"的旗子（被招式消耗）—— 第一版合成一个，用掉它就把钩子也删了，
+卡永远还不回来。
+
+### 195.5 数字与判据
+
+* **20/20 闸门绿**，单测 **854**（676 / 107 / 71）；四条对拍不变（182/182、62/62、124/124、394/394）。
+* 内容：状态 31 → **33**、敌人动作 117 → **118**、镜像 65,200 → **66,328 B**（core 55,608 B）。
+* 负控（每条都真红）：`eventAmount → const 0` ⇒ `29 of 30 spent, left 30 right 1`；
+  `Repeating: true`（不死 Boss）⇒ `a one-shot guard is spent, left 1 right 0`；
+  权重翻成 30/70 ⇒ `Fireball took 108/400 = 0.27, wiki says 70%`；
+  `Order: HighestRarity → First` ⇒ 偷了 `strike` 而不是 `uppercut`。
+* ⚠️ 两次负控**第一次都没红**，原因同一个：改了 `Monsters` 的 roster，没改遭遇里的**内联副本**
+  （内核读的是后者）。这条已经在 §194 记过一次，这是第二次 —— 内容脚本现在两处都改。
+
+### 195.6 还剩什么
+
+* **D1 的谓词面**：`selectCards` 只有三种排序、没有过滤（按 tag / 类型 / 费用挑卡）。
+* **A2 的第二种历史**：Collector 的"不能连续三次 Fireball"要记两次历史，会挤满 8 条规则上限。
+* **`hash_full`**：`Counters`/`last_move` 都是内容侧状态（在 `Combatant.counters` 里，已在指纹里），
+  所以这一节没有新的"不在指纹里的字段"。

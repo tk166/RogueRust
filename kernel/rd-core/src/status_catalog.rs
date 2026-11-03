@@ -732,7 +732,13 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // `DeathPrevention` row, which `resolve_damage` reads for any combatant (§180). Declared here
         // because "the kernel has a rule for it" is exactly what this list is for -- and the rule is
         // a *row of data*, not code.
-        "standard.unawakened"
+        "standard.unawakened" |
+        // §195.4: Bronze Orb's Stasis. `standard.stasis` is a `Downed` trigger (return the stolen
+        // card); `standard.stasis_ready` is a plain flag the move spends ("once per combat"). Neither
+        // has a kernel rule -- the whole behaviour is the content's trigger plus `node.selectCards`,
+        // which is a *node*, not a status rule.
+        "standard.stasis" |
+        "standard.stasis_ready"
     )
 }
 

@@ -3118,6 +3118,14 @@ mod tests {
             .map_or(-1, |c| c.value)
     }
 
+    /// A zone's card **definitions**, in pile order (the tests care about *which* card, not its id).
+    fn zone_definitions(state: &CombatState, who: &str, zone: CardZone) -> Vec<std::string::String> {
+        state
+            .zone_cards(&cid(who), zone)
+            .map(|card| std::string::String::from(card.definition_id.as_str()))
+            .collect()
+    }
+
     fn zone_count(state: &CombatState, who: &str, zone: CardZone) -> usize {
         state.card_zones(&cid(who)).map_or(0, |z| z.count(zone))
     }
@@ -5751,6 +5759,124 @@ mod tests {
             state.combatant(&cid("awakened_one")).map(|c| c.lifecycle_state),
             Some(crate::state::CombatantLifecycleState::Downed),
             "the second killing blow is a killing blow"
+        );
+    }
+
+    /// §195.4: Bronze Orb's `Stasis` -- `node.selectCards` picks the **highest-rarity** card, falls
+    /// back to the discard pile when the draw pile is empty, and gives it back when the orb dies.
+    ///
+    /// Five judgements, one per way the node can be wrong:
+    /// 1. it takes the **highest rarity** (not the first card in the pile -- the naive
+    ///    implementation). This content has no `Rare` cards at all (the deck is Basic/Common/
+    ///    Uncommon), so the probe is `Uncommon > Common > Basic`; the rank table itself is pinned by
+    ///    `card_rarity_rank`'s doc comment, and using a card this content really has keeps the test
+    ///    from silently passing on a rank table that only knows `Rare`;
+    /// 2. it moves exactly **one** card, into `SetAsidePile`;
+    /// 3. an empty draw pile falls back to the discard pile (otherwise Stasis silently does nothing);
+    /// 4. `Stasis` spends its own status, so "once per combat" is real;
+    /// 5. when the orb goes down, the card comes back to the hero's **hand** (a `Downed` trigger).
+    #[test]
+    fn stasis_steals_the_best_card_and_returns_it_when_the_orb_dies() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        // A second enemy **must** be alive when the orb dies: killing the last enemy sets `Victory`,
+        // and the drain loops stop on `Victory` (`while pending && result == Ongoing`), so the death
+        // trigger would never run. In the real fight that is the Automaton -- the orb never dies last.
+        state
+            .add_combatant(unit("bronze_automaton", "enemy", 300, 300))
+            .expect("the automaton");
+        state.add_combatant(unit("orb", "enemy", 52, 52)).expect("the orb");
+        give(&mut state, "orb", status("st_stasis", "standard.stasis", 1));
+        give(&mut state, "orb", status("st_ready", "standard.stasis_ready", 1));
+
+        // A draw pile whose *first* card is Common and whose Rare is last: "first" and "best" differ.
+        // Pile order matters: Basic, Common, then the **Uncommon** at the end -- so "highest rarity"
+        // and "the first card" give different answers.
+        give_card(&mut state, "hero", CardZone::DrawPile, "c1", "strike", None);
+        give_card(&mut state, "hero", CardZone::DrawPile, "c2", "iron_wave", None);
+        give_card(&mut state, "hero", CardZone::DrawPile, "c3", "uppercut", None);
+        // ... and a Common + an Uncommon in the discard pile, which only the fallback may reach.
+        let hero_hand_before = zone_count(&state, "hero", CardZone::Hand);
+
+        let row = u32::from(
+            content
+                .lookup_in("bronze_orb.stasis", crate::content::EK_EACTION)
+                .expect("stasis is in the image")
+                .index,
+        );
+        crate::intent::execute_action(&mut state, &content, &cid("orb"), row, Some(cid("hero")))
+            .expect("Stasis");
+        host.try_resolve_pending_queues(&mut state).expect("the move lands");
+
+        assert_eq!(
+            zone_definitions(&state, "hero", CardZone::SetAsidePile),
+            vec!["uppercut".to_string()],
+            "the Uncommon (`uppercut`) is stolen -- not the first card in the pile"
+        );
+        assert_eq!(zone_count(&state, "hero", CardZone::DrawPile), 2, "exactly one card left the pile");
+        assert_eq!(
+            stacks_of(&state, "orb", "standard.stasis_ready"),
+            0,
+            "using Stasis spends the *flag* (wiki: once per combat)"
+        );
+        assert_eq!(
+            stacks_of(&state, "orb", "standard.stasis"),
+            1,
+            "the death hook must survive -- otherwise the stolen card is never returned"
+        );
+
+        // Fallback: an empty draw pile reaches into the discard pile.
+        let mut state = arena();
+        state
+            .add_combatant(unit("bronze_automaton", "enemy", 300, 300))
+            .expect("the automaton");
+        state.add_combatant(unit("orb", "enemy", 52, 52)).expect("the orb");
+        give(&mut state, "orb", status("st_stasis2", "standard.stasis", 1));
+        give(&mut state, "orb", status("st_ready2", "standard.stasis_ready", 1));
+        give_card(&mut state, "hero", CardZone::DiscardPile, "d1", "iron_wave", None);
+        give_card(&mut state, "hero", CardZone::DiscardPile, "d2", "uppercut", None);
+        let mut host = Host::new(&content);
+        crate::intent::execute_action(&mut state, &content, &cid("orb"), row, Some(cid("hero")))
+            .expect("Stasis");
+        host.try_resolve_pending_queues(&mut state).expect("the move lands");
+        assert_eq!(
+            zone_definitions(&state, "hero", CardZone::SetAsidePile),
+            vec!["uppercut".to_string()],
+            "an empty draw pile falls back to the discard pile, and the Uncommon still wins"
+        );
+
+        // Death returns it: kill the orb and the stolen card comes back to the hand.
+        {
+            let mut ctx = crate::exec::ExecContext::new(
+                &mut state,
+                Some(cid("hero")),
+                Some(cid("orb")),
+                None,
+                64,
+            )
+            .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("orb"), 999, false).expect("the orb dies");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("death triggers settle");
+        assert!(
+            zone_definitions(&state, "hero", CardZone::Hand).contains(&"uppercut".to_string()),
+            "wiki: on death, the stolen card is returned to your hand"
+        );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::SetAsidePile),
+            0,
+            "and the holding zone is empty again"
+        );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::Hand),
+            hero_hand_before + 1,
+            "exactly one card came back"
         );
     }
 

@@ -696,6 +696,25 @@ $so = $p.StandardOutput.ReadToEnd(); $se = $p.StandardError.ReadToEnd(); $p.Wait
 另有一个新条件 `intent.ascensionAtLeast`（`{Value: n}`）：StS 的 A17/18/19 在源码里是每只怪
 `getMove` 里的一段 `if`，数据化引擎不能照抄；把那个 `if` 交给内容的 `IntentRule` 就行。
 
+## 9a. 实现补充（2026-11-03）：`node.selectCards`（§195.4）
+
+从 §195.4 起，**挑哪张卡**第一次能被内容说出来。它是本内核自己的节点（参考的四个 `sel.*` 卡选择器
+在 `sel.rs` 里被明确判为不支持）：
+
+| 字段 | 含义 |
+|---|---|
+| `OwnerSelector` | 谁的牌堆（敌人的"你"= `sel.allEnemies`；死亡归还时是 `sel.eventTarget` = 凶手） |
+| `FromZone` / `FallbackZone?` | 从哪个牌区拿；第一个空了才看 `FallbackZone`（Stasis：抽牌堆，空则弃牌堆） |
+| `Order` | `HighestRarity` / `First` / `Random`（只有 `Random` 消耗一次 `random_step`） |
+| `Count` | 1..=8（普通整数格，不是表达式） |
+| `ToZone` / `Placement?` | 搬去哪里（默认堆底） |
+
+稀有度排名只有一处定义：`Rare 4 > Uncommon 3 > Common 2 > Basic 1 > Status 0 = Curse 0`
+（按**价值**排，不是枚举序号 —— 照 StS 的枚举序号降序会变成"先偷诅咒"）。
+
+它搬卡走的是 `EffectRequest::MoveCardToZone`（与 `node.moveCardToZone` 同一个请求），所以触发器
+照样看得见、"一次请求一次效果"的账照样成立。
+
 ## 9b. 实现补充（2026-11-03）：敌人记录里的 `Rolls`（§193）
 
 `ENCT[i].Enemies[j]` 多了一个键（**不是格** —— 敌人记录是 term 对象，加键不动任何 stride）：
@@ -703,6 +722,7 @@ $so = $p.StandardOutput.ReadToEnd(); $se = $p.StandardError.ReadToEnd(); $p.Wait
 | 键 | 类型 | 含义 |
 |---|---|---|
 | `Rolls` | 列表 `[{Key, Min, Max, AscensionMin?}, …]` | 开局掷骰：`Key` 计数器在 `Min..=Max` 里抽一个值，写进**这个敌人** |
+| `Counters` | 列表 `[{Key, Value, AscensionMin?}, …]` | 开局**固定**计数器（§195.1）：随机值表达不了"开局就是 30"，而节目没法初始化计数器 |
 
 这与 `ProgramAsc` 的阈值规则**故意方向相反**：那里的 `AscensionMin = 0` 是"没填"（永不生效），
 这里的缺席是"**这就是基础值**"。所以"忘了给 A2 那行填阈值"（两行都是 0）会被

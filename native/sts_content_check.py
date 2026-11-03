@@ -87,7 +87,7 @@ INV_COUNTS = {
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
-    "statuses": 31,
+    "statuses": 33,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -330,7 +330,7 @@ INV_MONSTERS = [
     ("bronze_automaton", 300, 300, ["bronze_automaton.flail", "bronze_automaton.boost",
                                     "bronze_automaton.flail", "bronze_automaton.boost",
                                     "bronze_automaton.hyper_beam", "bronze_automaton.stunned"]),
-    ("bronze_orb", 52, 52, ["bronze_orb.beam", "bronze_orb.support_beam"]),
+    ("bronze_orb", 52, 52, ["bronze_orb.stasis", "bronze_orb.beam", "bronze_orb.support_beam"]),
     # Act 2 (HP 282 / 300).
     ("the_collector", 282, 282, ["the_collector.fireball", "the_collector.buff"]),
     ("torch_head", 38, 38, ["torch_head.tackle"]),
@@ -533,6 +533,11 @@ INV_ACTIONS = {
     "bronze_automaton.hyper_beam": ("Attack", [("damage", 45, "event")]),
     "bronze_automaton.stunned": ("Special", []),
     # --- Bronze Orb (wiki: Beam 8, Support Beam +12 Block to allies) ------------------------------
+    # §195.4: Stasis -- steal the highest-rarity card from the draw pile (discard if empty) into
+    # `SetAsidePile`, then spend its own status ("once per combat").
+    "bronze_orb.stasis": ("Debuff", [("select", "allEnemies", "DrawPile", "DiscardPile",
+                                      "HighestRarity", 1, "SetAsidePile"),
+                                     ("modify", "standard.stasis_ready", -99, "source")]),
     "bronze_orb.beam": ("Attack", [("damage", 8, "event")]),
     "bronze_orb.support_beam": ("Defend", [("block", 12, "allAllies")]),
     # --- The Collector (wiki: Fireball 18, Buff +3 Str + 15 Block, Mega Debuff 3/3/3) -------------
@@ -738,6 +743,11 @@ INV_STATUSES = {
     # §195.2: Awakened One's phase-one guard. No trigger at all: the whole effect is the
     # `DeathPrevention` row, which `resolve_damage` already reads for any combatant (§180).
     "standard.unawakened": [],
+    # §195.4: Bronze Orb's Stasis, split in two on purpose -- `standard.stasis` carries the `Downed`
+    # hook (returns the stolen card) and `standard.stasis_ready` is the once-per-combat flag that the
+    # move spends. One status cannot be both: consuming it would delete the hook.
+    "standard.stasis": [],
+    "standard.stasis_ready": [],
 }
 # Statuses whose stacks decay at the owner's turn end (inv:§10).
 INV_DECAYING = {"standard.vulnerable", "standard.weak", "standard.frail"}
@@ -906,6 +916,13 @@ def program_facts(root):
                     before = len(facts)
                     walk(sub)
                     facts[before:] = [("when", key) + f for f in facts[before:]]
+        elif kind == "node.selectCards":
+            # §195.4: "pick which card" as a fact. Every field that decides *which* card is part of
+            # the fact, because "steal the best card" and "steal the first card" differ only here.
+            facts.append(("select", tgt(body["OwnerSelector"]), body["FromZone"],
+                          body.get("FallbackZone"), body["Order"],
+                          # `Count` is a plain int field on this node (not an expression).
+                          body["Count"], body["ToZone"]))
         elif kind == "node.repeat":
             # §146: the body runs an unknown-at-authoring number of times, so its facts are tagged
             # by **the count expression** rather than unrolled. That keeps the inventory honest
@@ -1541,7 +1558,8 @@ def check_statuses(doc):
                      "standard.combust", "standard.split", "standard.phase_split",
                      "standard.time_warp", "standard.constricted",
                      "standard.phantom_veil",
-                     "standard.sharp_hide", "standard.curiosity", "standard.mode_shift"):
+                     "standard.sharp_hide", "standard.curiosity", "standard.mode_shift",
+                     "standard.stasis"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -1562,7 +1580,9 @@ def check_statuses(doc):
                         "standard.curiosity": ["CardPlayed"],
                         # §195.1: "after losing X HP" is a `DamageTaken` trigger (the event now carries
                         # the amount).
-                        "standard.mode_shift": ["DamageTaken"]}[sid]
+                        "standard.mode_shift": ["DamageTaken"],
+                        # §195.4: "on death, the stolen card is returned" -- a Downed trigger.
+                        "standard.stasis": ["Downed"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

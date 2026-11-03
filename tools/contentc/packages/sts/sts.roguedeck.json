@@ -1945,6 +1945,68 @@
         "Percent": 0,
         "Repeating": false
       }
+    },
+    {
+      "Id": "standard.stasis",
+      "PackageId": "sts",
+      "NameKey": "Stasis",
+      "DescriptionKey": "On death, a stolen card is returned to your hand.",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "stasis"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "Downed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.selectCards",
+              "value": {
+                "OwnerSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "FromZone": "SetAsidePile",
+                "Order": "First",
+                "Count": 4,
+                "ToZone": "Hand",
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.stasis_ready",
+      "PackageId": "sts",
+      "NameKey": "Stasis Ready",
+      "DescriptionKey": "Has not used Stasis yet this combat.",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "stasis_ready"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": null
     }
   ],
   "Cards": [
@@ -16749,6 +16811,66 @@
           }
         }
       ]
+    },
+    {
+      "Id": "bronze_orb.stasis",
+      "PackageId": "sts",
+      "NameKey": "Stasis",
+      "DescriptionKey": "Stasis - steals the best card in your draw pile",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Stasis - steals the best card in your draw pile"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.selectCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.allEnemies",
+                    "value": {}
+                  },
+                  "FromZone": "DrawPile",
+                  "Order": "HighestRarity",
+                  "Count": 1,
+                  "ToZone": "SetAsidePile",
+                  "ResultKey": null,
+                  "FallbackZone": "DiscardPile"
+                }
+              },
+              {
+                "kind": "node.modifyStatusStacks",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.stasis_ready"
+                  },
+                  "Delta": {
+                    "kind": "const",
+                    "value": {
+                      "Value": -99
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -18737,15 +18859,47 @@
           "MaxHealth": 52,
           "Actions": [
             {
+              "value": "bronze_orb.stasis"
+            },
+            {
               "value": "bronze_orb.beam"
             },
             {
               "value": "bronze_orb.support_beam"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.stasis"
+              },
+              "Stacks": 1
+            },
+            {
+              "StatusDefinitionId": {
+                "value": "standard.stasis_ready"
+              },
+              "Stacks": 1
+            }
+          ],
           "Position": null,
-          "IntentRules": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.selfHasStatus",
+                "value": {
+                  "Status": {
+                    "value": "standard.stasis_ready"
+                  },
+                  "MinStacks": 1
+                }
+              },
+              "Action": {
+                "value": "bronze_orb.stasis"
+              },
+              "Priority": 50
+            }
+          ],
           "DisplayName": "Bronze Orb",
           "Rolls": [],
           "Counters": []
@@ -18755,15 +18909,47 @@
           "MaxHealth": 52,
           "Actions": [
             {
+              "value": "bronze_orb.stasis"
+            },
+            {
               "value": "bronze_orb.beam"
             },
             {
               "value": "bronze_orb.support_beam"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.stasis"
+              },
+              "Stacks": 1
+            },
+            {
+              "StatusDefinitionId": {
+                "value": "standard.stasis_ready"
+              },
+              "Stacks": 1
+            }
+          ],
           "Position": null,
-          "IntentRules": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.selfHasStatus",
+                "value": {
+                  "Status": {
+                    "value": "standard.stasis_ready"
+                  },
+                  "MinStacks": 1
+                }
+              },
+              "Action": {
+                "value": "bronze_orb.stasis"
+              },
+              "Priority": 50
+            }
+          ],
           "DisplayName": "Bronze Orb",
           "Rolls": [],
           "Counters": []
@@ -20676,17 +20862,49 @@
       "MaxHealth": 52,
       "Actions": [
         {
+          "value": "bronze_orb.stasis"
+        },
+        {
           "value": "bronze_orb.beam"
         },
         {
           "value": "bronze_orb.support_beam"
         }
       ],
-      "StartingStatuses": [],
-      "IntentRules": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.stasis"
+          },
+          "Stacks": 1
+        },
+        {
+          "StatusDefinitionId": {
+            "value": "standard.stasis_ready"
+          },
+          "Stacks": 1
+        }
+      ],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.selfHasStatus",
+            "value": {
+              "Status": {
+                "value": "standard.stasis_ready"
+              },
+              "MinStacks": 1
+            }
+          },
+          "Action": {
+            "value": "bronze_orb.stasis"
+          },
+          "Priority": 50
+        }
+      ],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Bronze_Orb",
-      "AiNote": "§194：wiki 数值（HP 52-58；Beam 8；Support Beam 给友军 12 Block）。⚠️ 偏差：Support Beam 用 `sel.allAllies`，即**全体友军**（含自己）；`Stasis` 未实现；wiki 的 75%/70% 权重与『同一招不连续三次』变成了确定性 2 循环。",
+      "AiNote": "§194/§195.4：wiki 数值（HP 52-58；Beam 8；Support Beam 给友军 12 Block）。`Stasis` 现在是真实现：`node.selectCards` 从**玩家的抽牌堆**（空则弃牌堆）挑**稀有度最高**的一张放进 `SetAsidePile`，`standard.stasis` 的 Downed 触发器在它死亡时把牌还回玩家手牌；『一场只能用一次』= 用掉的是一条状态。⚠️ 偏差：① 75% 概率没建模（Orb 的另一招仍是确定性循环）；② Support Beam 用 `sel.allAllies`，即全体友军（含自己）；③ 两只 Orb 开局在场（§194：遭遇名单是召唤物找招式表的来路）。",
       "Counters": []
     },
     {
