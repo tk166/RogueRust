@@ -14453,3 +14453,58 @@ The Champ 现在是 12 条。**这是"容量是语义、溢出必须响亮失败
 
 * **20/20 闸门绿**，单测 **891**（699 core + 85 wasm + 107 run）；四条对拍不变。
 * 内容：状态 41 → **42**、镜像 75,616 → **76,220 B**（core 64,376）。
+
+---
+
+## §210 "A19 换表"盘点 + 把受击状态从内核搬进内容
+
+### 210.1 换表的清单：只剩两条真的没做，且都不是 A 级
+
+把"按等级换招式表"过了一遍，结论是**这一类基本已经完了**：
+
+| Boss | A 级的行为 | 状态 |
+|---|---|---|
+| The Champ | A19 把 15% 的 `Gloat` 槽位换成 `Defensive Stance` | §209 做完 |
+| Time Eater | A4/A19 的伤害与附加效果（Slam 26→32、Ripple +1 Frail、Haste +32 Block） | §190/§192 的 `ProgramAsc` 已经覆盖 |
+| The Collector | A4/A19 的伤害、Strength、Block、debuff 层数 | 同上（`ProgramAsc`） |
+| Bronze Automaton | A19 用 `Boost` 顶替 `Stunned` | §195.x 已做 |
+| The Guardian | A9/A19 的 `Mode Shift` 30→35→40 | §195.1（`Counters` + `ProgramAsc`） |
+| **Giant Head** | A18 把"开局 4 回合的 Count/Glare 窗口"缩到 **3 回合**；`It Is Time` 每次 +5 上限 60 | **没做，而且做不了**：本内容的 Giant Head 是 §130 的简化版（320 HP、只有 Glare/Count 两招、**没有任何 `IntentRules`**）。没有招式表可换 —— 要做得先把这只怪按 wiki 重写。 |
+
+⇒ "A 级换表"这一类里，唯一真正欠的是一条**规则型**的 A18（Giant Head），而它被"这只怪本身是简化版"
+挡住，不是一个机制缺口。写在这里，避免下次又把它当成"机制没做"。
+
+### 210.2 ★ 受击状态：两处内核硬编码搬进内容
+
+`exec::resolve_damage_of_kind` 里一直有两段**内核硬编码**的受击状态，内容里对应的行是**死数据**
+（声明了但没人读）：
+
+* **`Intangible`**（S3b）：`amount = amount.min(1)`。现在是一条内容行
+  `DamageReceived / ClampMax 1`。等价性：`ClampMax` 就是 `min(current, max(0, magnitude))`，
+  而且它跑在**同一个折叠**里、**防御池吸收之前** —— 所以"格挡最多只挡那 1 点"没变。
+  ⚠️ 顺带发现 **`status_bind` 的词表里根本没有 `ClampMax`**（内核的 `modifiers::Operation` 有、
+  `exec` 的伤害管线也实现了），内容一写就 `Bind(Operation)`。补上之后，
+  `the_wire_names_are_exactly_the_four_plus_three_plus_three` 那条"线上词表只有这几个"的判据
+  也按新事实更新（它钉的是**契约**，契约变了就要改它，而不是绕过去）。
+* **`Plated Armor`** 的减层（S6c）：`if health_lost > 0 { 减 1 层 }`。现在是一条 `DamageTaken`
+  触发器（`damage.isAttack && eventAmount > 0` ⇒ `modifyStatusStacks(-1)`）。
+
+**这不是搬家，是修 bug**：旧的硬编码用 `health_lost > 0` 判，**毒也会剥掉一层**；
+wiki 写的是 "unblocked **attack** damage"。§208 的 `damage.isAttack` 事件事实正好让正确规则可表达。
+判据 `plated_armor_only_wears_off_for_attacks_not_for_poison`：DoT 打 3 点 ⇒ 层数**不动**（4），
+攻击打 3 点 ⇒ 4→3。负控：把 `is_attack` 那道门去掉 ⇒ 红在 `left: 3 / right: 4`（毒剥了一层）。
+
+`Buffer` **留在内核**：它是 `IPreDownInterceptor`（"取消下一次掉血"），不是修饰器，内容没有位置
+表达它 —— 这条清单里现在只剩它一个，注释写清了为什么。
+
+### 210.3 判据的连带修正
+
+两条老测试断言的是**硬编码的即时行为**（`deal()` 没有内容、没有宿主），规则搬走之后它们必然红。
+它们被改成走**真实路径**（`deal_dispatched` = 折叠 + `drain` + 宿主 `resolve_pending_queues_with`），
+断言不变：Intangible 30→1 且格挡只吃 1 点、Buffer 只挡真掉血、Plated Armor 被挡光时不掉层。
+
+### 210.4 数字
+
+* **20/20 闸门绿**，单测 **892**（700 core + 85 wasm + 107 run）；四条对拍不变。
+* 内容：镜像 76,220 → **76,360 B**（core 64,516）；状态数不变（42）—— 这一节换的是**规则住在哪**，
+  不是加内容。

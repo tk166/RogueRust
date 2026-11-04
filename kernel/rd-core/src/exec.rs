@@ -424,9 +424,7 @@ const BLOCK_POOL_ID: &str = "standard.block";
 /// * `standard.intangible` —— 进来的伤害与掉血压到 **1**；
 /// * `standard.buffer` —— 挡住**下一次**掉血（消耗 1 层）；
 /// * `standard.plated_armor` —— 挨到"没被挡住的伤害"时掉 1 层（另一半在 `host`，回合结束给格挡）。
-const INTANGIBLE_STATUS: &str = "standard.intangible";
 const BUFFER_STATUS: &str = "standard.buffer";
-const PLATED_ARMOR_STATUS: &str = "standard.plated_armor";
 
 /// 给 `definition` 减 **1 层**；减到 0 就把实例删掉。返回是否真的减了（没有这条实例 ⇒ `false`）。
 ///
@@ -1233,17 +1231,12 @@ pub fn resolve_damage_of_kind(
         }
     }
 
-    // ── S3b：**`Intangible`**（§149）—— "把所有伤害与掉血降到 1"。
+    // ── S3b：**`Intangible`** —— §210 起是**内容**的一行 `DamageReceived / ClampMax 1`
+    // （已经在上面的修饰器折叠里跑过）。它落在折叠里、**防御池吸收之前**，所以"格挡最多只挡到
+    // 那 1 点"这条性质没变；"也压 Constricted 这类 `IgnoresBlock` 掉血"同样没变（同一条管线）。
     //
-    // 位置是**防御池吸收之前**：StS 里 Intangible 压的是"进来的伤害"本身，所以格挡最多只挡到那
-    // 1 点。放在吸收之后会让"30 点伤害 + 10 格挡"变成 0 掉血，那不是 Intangible。
-    //
-    // ⚠️ 它也压"掉血"类效果（Constricted 就是 `IgnoresBlock` 的 dealDamage）—— 这里压的是
-    // `amount`，而 `ignores_block` 只是跳过 S4，两条规则不打架：Constricted 3 层踩在
-    // Intangible 上照样只掉 1。
-    if carries_status(ctx.state, target, INTANGIBLE_STATUS) {
-        amount = amount.min(1);
-    }
+    // ⚠️ 这里原来是一段 `amount = amount.min(1)` 的硬编码。搬走的理由是它有两个**下不去的**偏差：
+    // 硬编码只有内核认识（内容里那条 `standard.intangible` 是死数据），而 `ClampMax` 早就存在。
 
     // ── S4：防御池吸收（`DamageEffects.cs:80-101`）。
     //
@@ -1306,14 +1299,13 @@ pub fn resolve_damage_of_kind(
         }
     }
 
-    // ── S6c：**`Plated Armor`**（§149）—— 挨到"没被挡住的伤害"就掉 1 层。
+    // ── S6c：**`Plated Armor`** —— §210 起是**内容**的一条 `DamageTaken` 触发器
+    // （`damage.isAttack && eventAmount > 0` ⇒ 自减一层）。它的另一半（回合结束给格挡）还在
+    // `host::grant_end_of_turn_block`。
     //
-    // 它的另一半（回合结束给格挡）住在 `host::grant_end_of_turn_block`：那是回合边界的事，
-    // 这里只有"这一下打穿了没有"这个事实。⚠️ 用**掉血之后**的 `health_lost` 判，所以被格挡
-    // 吃干净的一下不会掉层（wiki：unblocked damage）。
-    if health_lost > 0 {
-        let _ = consume_one_status_stack(ctx.state, target, PLATED_ARMOR_STATUS)?;
-    }
+    // ⚠️ 这里原来是一段 `if health_lost > 0 { consume(plated) }`。那**是错的**：它分不清攻击与
+    // 毒 —— 一次 poison tick 也会剥掉一层，而 wiki 写的是 "unblocked **attack** damage"。
+    // §208 的 `damage.isAttack` 事件事实让正确规则可以表达，所以这不是搬家，是**修 bug**。
 
     // ── S6d：**`DeathPrevention`**（§180）—— 参考的 `IPreDownInterceptor` 这一半。
     //
@@ -4454,6 +4446,8 @@ fn image_operation(op: status_bind::ModifierOp) -> Operation {
         status_bind::ModifierOp::ScalePercent => Operation::ScalePercent,
         // §198: our own operation -- the status pipeline carries it straight through.
         status_bind::ModifierOp::ScalePercentPerStack => Operation::ScalePercentPerStack,
+        // §210: `Intangible`'s "all damage becomes 1" -- `min(current, max(0, 1))`.
+        status_bind::ModifierOp::ClampMax => Operation::ClampMax,
     }
 }
 
@@ -5266,6 +5260,36 @@ mod tests {
             1024,
         );
         resolve_damage(&mut ctx, &cid(target), base, ignores_block).unwrap()
+    }
+
+    /// §210: damage **through the real path** -- fold, drain, and the host's event dispatch.
+    ///
+    /// The two hooks that used to be hardcoded inside `resolve_damage_of_kind` (Intangible's clamp and
+    /// Plated Armor's decrement) are content now: the clamp runs in the modifier fold (so no host is
+    /// needed), but the decrement is a `DamageTaken` trigger and only fires when the **event queue**
+    /// is drained. A test that calls `deal` alone would still see the old synchronous behaviour --
+    /// which is exactly the trap (`deal` has no content at all).
+    fn deal_dispatched(
+        state: &mut CombatState,
+        content: &Content<'_>,
+        target: &str,
+        base: i32,
+        ignores_block: bool,
+        kind: crate::status_bind::DamageKind,
+    ) {
+        let mut ctx = ExecContext::new(
+            state,
+            Some(cid("hero")),
+            Some(cid(target)),
+            None,
+            1024,
+        )
+        .with_content(content);
+        resolve_damage_of_kind(&mut ctx, &cid(target), base, ignores_block, kind).unwrap();
+        drain(state, Some(content), None).unwrap();
+        let mut host = crate::host::Host::new(content);
+        host.resolve_pending_queues_with(state, crate::host::QueueLimits::DEFAULT)
+            .expect("the host dispatches DamageTaken");
     }
 
     /// 只跑伤害管线，但**接上内容镜像**（状态元数据走 `status_bind`、桥关闭）。
@@ -9239,25 +9263,96 @@ mod tests {
     /// 所以这里逐层走一遍：4 → 3 → 2 → 1 → 消失，每一步都要 `Ok`。
     #[test]
     fn plated_armor_wears_down_to_nothing_without_an_error() {
+        // §210: the decrement is the content's `DamageTaken` trigger now, so this goes through the
+        // full path (content + host dispatch).
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
         let mut state = arena();
         give(&mut state, "enemy_a", status("st_pa", "standard.plated_armor", 4));
         for expected in [3, 2, 1] {
-            deal(&mut state, "enemy_a", 1, false);
+            deal_dispatched(
+                &mut state,
+                &content,
+                "enemy_a",
+                1,
+                false,
+                crate::status_bind::DamageKind::Direct,
+            );
             assert_eq!(
                 stacks_of(&state, "enemy_a", "standard.plated_armor"),
                 expected,
                 "a hit wears one plate off"
             );
         }
-        deal(&mut state, "enemy_a", 1, false);
+        deal_dispatched(
+            &mut state,
+            &content,
+            "enemy_a",
+            1,
+            false,
+            crate::status_bind::DamageKind::Direct,
+        );
         assert_eq!(
             stacks_of(&state, "enemy_a", "standard.plated_armor"),
             0,
             "the last plate is removed, not left at zero"
         );
         // 再挨一下：没有这条状态了，管线必须照常走完（不是"找不到就报错"）。
-        deal(&mut state, "enemy_a", 1, false);
+        deal_dispatched(
+            &mut state,
+            &content,
+            "enemy_a",
+            1,
+            false,
+            crate::status_bind::DamageKind::Direct,
+        );
         assert_eq!(health(&state, "enemy_a"), 20 - 5, "every hit still lands");
+    }
+
+    /// §210: **毒不剥甲**。这是搬迁顺手修掉的偏差：旧的硬编码用 `health_lost > 0` 判，
+    /// 一次 poison tick 也会剥一层，而 wiki 写的是 "unblocked **attack** damage"。
+    ///
+    /// 判据分两半，缺一半就退化成"任何伤害都剥"：攻击剥一层、DoT 一层都不剥。
+    #[test]
+    fn plated_armor_only_wears_off_for_attacks_not_for_poison() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut state = arena();
+        give(&mut state, "enemy_a", status("st_pa", "standard.plated_armor", 4));
+        deal_dispatched(
+            &mut state,
+            &content,
+            "enemy_a",
+            3,
+            false,
+            crate::status_bind::DamageKind::Dot,
+        );
+        assert_eq!(
+            stacks_of(&state, "enemy_a", "standard.plated_armor"),
+            4,
+            "a poison tick must not strip a plate (wiki: attack damage)"
+        );
+        deal_dispatched(
+            &mut state,
+            &content,
+            "enemy_a",
+            3,
+            false,
+            crate::status_bind::DamageKind::Direct,
+        );
+        assert_eq!(
+            stacks_of(&state, "enemy_a", "standard.plated_armor"),
+            3,
+            "an attack does strip one"
+        );
     }
 
     /// §149：三条**伤害管线**的状态。断言的是管线里的三个位置，各一条：
@@ -9265,11 +9360,23 @@ mod tests {
     /// Plated Armor 在**掉血之后**（只认没挡住的伤）。
     #[test]
     fn the_damage_pipeline_honours_intangible_buffer_and_plated_armor() {
+        // §210: two of the three hooks are content now (Intangible = `ClampMax 1`, Plated Armor =
+        // a `DamageTaken` trigger; Buffer stays in the kernel because "cancel an HP loss" is an
+        // interceptor, not a modifier). So the test runs the **real** path with the image loaded --
+        // with `deal` alone the clamp would not run at all.
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let direct = crate::status_bind::DamageKind::Direct;
+
         // ---- Intangible: 30 点进来只剩 1 点，而且格挡最多挡那 1 点 ----
         let mut state = arena();
         give(&mut state, "enemy_a", status("st_int", "standard.intangible", 1));
         give_block(&mut state, "enemy_a", 10);
-        deal(&mut state, "enemy_a", 30, false);
+        deal_dispatched(&mut state, &content, "enemy_a", 30, false, direct);
         assert_eq!(
             health(&state, "enemy_a"),
             20,
@@ -9283,27 +9390,27 @@ mod tests {
         // 成对：没有 Intangible 时同样的 30 点会打穿 10 点格挡、掉 20 血（= 直接倒下）。
         let mut plain = arena();
         give_block(&mut plain, "enemy_a", 10);
-        deal(&mut plain, "enemy_a", 30, false);
+        deal_dispatched(&mut plain, &content, "enemy_a", 30, false, direct);
         assert_eq!(health(&plain, "enemy_a"), 0, "没有 Intangible 就吃满 20 点");
 
         // ---- Buffer: 挡下**下一次**掉血，并消耗 1 层；第二下照打 ----
         let mut state = arena();
         give(&mut state, "enemy_a", status("st_buf", "standard.buffer", 1));
-        deal(&mut state, "enemy_a", 5, false);
+        deal_dispatched(&mut state, &content, "enemy_a", 5, false, direct);
         assert_eq!(health(&state, "enemy_a"), 20, "第一下被 Buffer 挡住");
         assert_eq!(
             stacks_of(&state, "enemy_a", "standard.buffer"),
             0,
             "Buffer 用完了（0 层实例被删）"
         );
-        deal(&mut state, "enemy_a", 5, false);
+        deal_dispatched(&mut state, &content, "enemy_a", 5, false, direct);
         assert_eq!(health(&state, "enemy_a"), 15, "第二下照打");
 
         // 被格挡吃干净的一下**不**消耗 Buffer（判定在格挡之后）。
         let mut state = arena();
         give(&mut state, "enemy_a", status("st_buf2", "standard.buffer", 1));
         give_block(&mut state, "enemy_a", 10);
-        deal(&mut state, "enemy_a", 5, false);
+        deal_dispatched(&mut state, &content, "enemy_a", 5, false, direct);
         assert_eq!(health(&state, "enemy_a"), 20);
         assert_eq!(
             stacks_of(&state, "enemy_a", "standard.buffer"),
@@ -9311,10 +9418,10 @@ mod tests {
             "全被挡住 ⇒ Buffer 不该消耗"
         );
 
-        // ---- Plated Armor: 挨到没挡住的伤 ⇒ 掉 1 层；全挡住 ⇒ 不掉 ----
+        // ---- Plated Armor: 挨到没挡住的**攻击** ⇒ 掉 1 层；全挡住 ⇒ 不掉 ----
         let mut state = arena();
         give(&mut state, "enemy_a", status("st_pa", "standard.plated_armor", 4));
-        deal(&mut state, "enemy_a", 3, false);
+        deal_dispatched(&mut state, &content, "enemy_a", 3, false, direct);
         assert_eq!(
             stacks_of(&state, "enemy_a", "standard.plated_armor"),
             3,
@@ -9323,7 +9430,7 @@ mod tests {
         let mut state = arena();
         give(&mut state, "enemy_a", status("st_pa2", "standard.plated_armor", 4));
         give_block(&mut state, "enemy_a", 10);
-        deal(&mut state, "enemy_a", 3, false);
+        deal_dispatched(&mut state, &content, "enemy_a", 3, false, direct);
         assert_eq!(
             stacks_of(&state, "enemy_a", "standard.plated_armor"),
             4,

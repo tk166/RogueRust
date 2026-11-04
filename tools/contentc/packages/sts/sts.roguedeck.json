@@ -1268,7 +1268,17 @@
         "buff",
         "intangible"
       ],
-      "PassiveModifiers": [],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "DamageReceived",
+          "Operation": "ClampMax",
+          "Magnitude": 1,
+          "Priority": 200,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
       "Triggers": []
     },
     {
@@ -1303,7 +1313,72 @@
         "plated_armor"
       ],
       "PassiveModifiers": [],
-      "Triggers": []
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "and",
+                  "value": {
+                    "Left": {
+                      "kind": "event.bool",
+                      "value": {
+                        "FieldKey": "damage.isAttack"
+                      }
+                    },
+                    "Right": {
+                      "kind": "compare",
+                      "value": {
+                        "Op": "Greater",
+                        "Left": {
+                          "kind": "eventAmount",
+                          "value": {}
+                        },
+                        "Right": {
+                          "kind": "const",
+                          "value": {
+                            "Value": 0
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "Then": {
+                  "kind": "node.modifyStatusStacks",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusDefinitionId": {
+                      "value": "standard.plated_armor"
+                    },
+                    "Delta": {
+                      "kind": "const",
+                      "value": {
+                        "Value": -1
+                      }
+                    }
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     },
     {
       "Id": "standard.dexterity",

@@ -683,11 +683,14 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // (§147). Content-side like the rest of this list -- the kernel only has to *run*
             // turn-ended triggers, which it already does.
             | "standard.constricted"
-            // §149: the three that live **inside the damage pipeline** (`exec::resolve_damage_of_kind`).
-            // Intangible caps incoming damage at 1, Buffer eats the next HP loss, Plated Armor loses a
-            // stack on unblocked damage (its block half shares the Metallicize step).
-            | "standard.intangible"
+            // §149: the three that live on the damage pipeline. **`Buffer`** is still hardcoded
+            // (`exec::resolve_damage_of_kind` S6b): "cancel the next HP loss" is an interceptor, not a
+            // modifier, so there is nothing for content to say.
             | "standard.buffer"
+            // §210: Intangible and Plated Armor are **content rules** now -- `DamageReceived /
+            // ClampMax 1` and a `DamageTaken` trigger -- so they belong on this list (which means
+            // "the rule is the content row, not a kernel branch"), exactly like Slow and Flying.
+            | "standard.intangible"
             | "standard.plated_armor"
             // §158: the "give it back at the end of the turn" half of Flex Potion and Speed
             // Potion. Content-side like `standard.constricted`: a `TurnEnded` trigger that

@@ -298,6 +298,12 @@ pub enum ModifierOp {
     ScalePercent,
     /// §198：`current * (100 + magnitude * stacks) / 100`（`Slow`）。
     ScalePercentPerStack,
+    /// §210：`min(current, max(0, magnitude))` —— "把所有伤害压到 1"（`Intangible`）。
+    ///
+    /// 内核的 `modifiers::Operation` 一直有它（`exec.rs` 的伤害管线也实现了），但这个**词表**
+    /// 少一行 ⇒ 内容里写 `ClampMax` 时绑定层报 `Bind(Operation)`。发现方式是 §210 把
+    /// `Intangible` 从硬编码搬进内容时，测试当场红在 `Bind(Operation)`。
+    ClampMax,
 }
 
 impl ModifierOp {
@@ -310,6 +316,8 @@ impl ModifierOp {
             "ScalePercent" => Some(ModifierOp::ScalePercent),
             // §198: our own operation (the reference has only the three above).
             "ScalePercentPerStack" => Some(ModifierOp::ScalePercentPerStack),
+            // §210: the reference declares it; the binding simply had no spelling for it.
+            "ClampMax" => Some(ModifierOp::ClampMax),
             _ => None,
         }
     }
@@ -322,6 +330,7 @@ impl ModifierOp {
             ModifierOp::AddFlat => "AddFlat",
             ModifierOp::ScalePercent => "ScalePercent",
             ModifierOp::ScalePercentPerStack => "ScalePercentPerStack",
+            ModifierOp::ClampMax => "ClampMax",
         }
     }
 }
@@ -1171,7 +1180,13 @@ mod tests {
         for name in ["AddPerStack", "AddFlat", "ScalePercent"] {
             assert!(ModifierOp::from_wire_name(name).is_some(), "{name}");
         }
-        assert_eq!(ModifierOp::from_wire_name("ClampMax"), None);
+        // ⚠️ 这条**原来是 `None`**：`ClampMax` 在参考的枚举里一直有（`exec.rs` 的伤害管线也早就
+        // 实现了它），只是这个绑定层没有拼写 —— 于是内容写 `ClampMax` 时 `Intangible` 只能靠
+        // 内核硬编码（§210 把它搬进内容时，测试当场红在 `Bind(Operation)`）。
+        assert_eq!(
+            ModifierOp::from_wire_name("ClampMax"),
+            Some(ModifierOp::ClampMax)
+        );
 
         assert_eq!(
             DamageKind::from_wire_name("Direct"),

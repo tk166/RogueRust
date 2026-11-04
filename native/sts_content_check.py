@@ -803,6 +803,9 @@ INV_STATUSES = {
     "standard.flying": [("DamageReceived", "ScalePercent", 50, 160, "Direct")],
     # §209: Curl Up -- no modifier at all; its whole rule is the `DamageTaken` trigger below.
     "standard.curl_up": [],
+    # §210: Intangible -- "all damage becomes 1" is `ClampMax 1` (`min(current, max(0, 1))`), which is
+    # the same `amount.min(1)` the kernel used to hardcode before block absorption.
+    "standard.intangible": [("DamageReceived", "ClampMax", 1, 200, None)],
     # §199: Berserk -- the first `TurnStartEnergy` row (our own pipeline; +1 energy per stack).
     "standard.berserk": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
     # §198: Slow -- a `DamageReceived` row with the stack-linear scale (our own operation), plus a
@@ -2009,7 +2012,7 @@ def check_statuses(doc):
                      "standard.phantom_veil",
                      "standard.sharp_hide", "standard.curiosity", "standard.mode_shift",
                      "standard.stasis", "standard.slow", "standard.flying",
-                     "standard.curl_up"):
+                     "standard.curl_up", "standard.plated_armor"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -2038,7 +2041,10 @@ def check_statuses(doc):
                         # §208: Byrd's Flying -- loses a stack when hit by an **attack**.
                         "standard.flying": ["DamageTaken"],
                         # §209: "the first time this enemy takes damage" -- a DamageTaken trigger.
-                        "standard.curl_up": ["DamageTaken"]}[sid]
+                        "standard.curl_up": ["DamageTaken"],
+                        # §210: "lose a stack on unblocked **attack** damage" -- the decrement moved
+                        # out of `exec.rs` S6c, which could not tell poison from an attack.
+                        "standard.plated_armor": ["DamageTaken"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
