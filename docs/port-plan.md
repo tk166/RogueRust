@@ -13489,9 +13489,39 @@ Bronze Orb 的 `Stasis` 因此是真的：抽牌堆（空则弃牌堆）里最�
 * ⚠️ 两次负控**第一次都没红**，原因同一个：改了 `Monsters` 的 roster，没改遭遇里的**内联副本**
   （内核读的是后者）。这条已经在 §194 记过一次，这是第二次 —— 内容脚本现在两处都改。
 
+### 195.5b 全 Boss 的机制对齐（同一节的后半）
+
+基建到位后，把 wiki 里**有随机/排除规则**的 Boss 全部接上（数字仍来自 `native/wiki_asc/`）：
+
+| Boss | wiki | 现在的规则条数 |
+|---|---|---|
+| Slime Boss / The Guardian / Hexaghost / Bronze Automaton / Donu & Deca | 确定性循环（Split / Mode Shift / 7 招轮转 / 6 招轮转 / 固定交替） | 0–4（原有） |
+| **The Champ** | 45/25/15/15 + **任何一招不能连续两次** + 每 4 回合 Taunt | 8（3 相位/嘲讽 + 4 排除 + 1 默认） |
+| **The Collector** | Fireball 70 / Buff 30 + 不能连 Buff + **不能三次 Fireball** | 4 |
+| **Time Eater** | 45/35/20 + 不能三次 Reverberate + Head Slam/Ripple 不能两次 | 5 |
+| **Awakened One** | 一阶段 75/25 + Slash 不能三次；二阶段 Dark Echo 一次后 50/50 | 5 |
+| **Bronze Orb** | Stasis 75% 直到用掉；之后 70/30；同一招不能三次 | 4 |
+
+历史是**内容状态**：每个节目末尾 `prev_move = last_move; last_move = k`（`k` 是该动作的编号），
+排除规则是 `intent.selfHasCounter{last_move == k}` 的 `Choice`（把被禁的那一项去掉、其余按 wiki 权重重排）。
+
+判据（新增）：
+* `a_weighted_boss_never_repeats_the_move_the_wiki_forbids`：六个 `(encounter, 槽位, 敌, last, prev, 被禁招)`
+  组合 × 60 个种子 —— 每条排除规则都真的排除。**`prev` 参与判定**：Champ 禁"任何重复"、Time Eater
+  只禁 Reverberate 三次 / Head Slam·Ripple 两次、Orb 禁"三次"，一个深度的测试会放过过严的规则。
+* `the_awakened_one_draws_phase_one_by_weight_and_flips_on_the_guard`：200 个种子下 Slash 占
+  68%~82%，两招都出现；守卫摘掉后 Rebirth；二阶段先 Dark Echo 一次再只出 Tackle/Sludge。
+* 内容门新增 `check_intent_history`：① 每个能被选中的动作都要写 `last_move`；② 同一敌人的编号两两不同；
+  ③ 规则里问到的每个编号都得有动作写它（一个 4 字节错字就能造出"永不命中的死规则"）。
+  ⚠️ 它一上线就抓到三条真错：`haste` / `mega_debuff` / `rebirth` 也会被选中，却没写历史。
+
+★ 负控又抓到一处真问题：把 Champ 的排除规则优先级降到默认之下时**测试仍然绿** —— 因为它的"默认"
+是确定性循环（`Actions`），四条排除规则是它**唯一**的规则。补上一条默认权重规则后（正好用满
+`MAX_INTENT_RULES = 8`）负控才红：`last=1 prev=99 must exclude the_champ.heavy_slash`。
+
 ### 195.6 还剩什么
 
-* **D1 的谓词面**：`selectCards` 只有三种排序、没有过滤（按 tag / 类型 / 费用挑卡）。
+* **D1 的谓词面**：`selectCards` 现在有 `RequireTag`（按 tag 过滤）+ 三种排序，仍没有按类型/费用的过滤。
 * **A2 的第二种历史**：Collector 的"不能连续三次 Fireball"要记两次历史，会挤满 8 条规则上限。
 * **`hash_full`**：`Counters`/`last_move` 都是内容侧状态（在 `Combatant.counters` 里，已在指纹里），
   所以这一节没有新的"不在指纹里的字段"。

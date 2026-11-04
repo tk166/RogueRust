@@ -3463,6 +3463,8 @@ fn create_card_for(
 /// `ToZone` / `Placement` 都是**裸字符串枚举名**，不认识的串 ⇒ [`IrError::UnknownKind`]。
 /// §195.4：**挑** `FromZone`（空则 `FallbackZone`）里按 `Order` 排好的前 `Count` 张，搬去 `ToZone`。
 ///
+/// §195.5 补了可选的 `RequireTag`（只看带这个 tag 的卡）。
+///
 /// 搬卡走 `EffectRequest::MoveCardToZone`（与 `node.moveCardToZone` 同一个请求），所以触发器照样
 /// 看得见、`ExecStats::effects` 的"一次请求一次效果"照样成立。
 fn select_cards_node(
@@ -3482,6 +3484,10 @@ fn select_cards_node(
         None => None,
     };
     let order_name = node.str_field("Order")?.ok_or(IrError::Missing("Order"))?;
+    // §195.5：可选的 `RequireTag` —— "只看带这个 tag 的卡"（例如只偷 attack、只偷 curse）。
+    // 缺席 = 不过滤；空串也当"不过滤"（`card_has_tag("", ..)` 恒 false，显式挡掉，免得空串
+    // 悄悄变成"一张都挑不到"）。过滤发生在**排序之前**，否则 `Count` 会数到被滤掉的卡。
+    let require_tag = node.str_field("RequireTag")?.filter(|tag| !tag.is_empty());
     let count = node.int_field("Count")?.ok_or(IrError::Missing("Count"))?;
     if !(1..=MAX_SELECTED_CARDS as i32).contains(&count) {
         return Err(ExecError::Ir(IrError::Missing("Count")));
@@ -3509,6 +3515,11 @@ fn select_cards_node(
         for card in ctx.state.zone_cards(&owner, zone) {
             if found == candidates.len() {
                 break;
+            }
+            if let (Some(tag), Some(content)) = (require_tag, ctx.content) {
+                if !content.card_has_tag(card.definition_id.as_str(), tag).unwrap_or(false) {
+                    continue;
+                }
             }
             candidates[found] = card.id;
             ranks[found] = card_rarity_rank(ctx.content, &card.definition_id);

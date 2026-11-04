@@ -543,11 +543,9 @@ INV_ACTIONS = {
     # --- The Collector (wiki: Fireball 18, Buff +3 Str + 15 Block, Mega Debuff 3/3/3) -------------
     # §195.3: the two moves the weighted rule draws from, each recording itself in `last_move`
     # (that counter is how "cannot Buff twice in a row" is expressed without kernel state).
-    "the_collector.fireball": ("Attack", [("damage", 18, "event"),
-                                          ("counter", "last_move", 1, False, "source")]),
+    "the_collector.fireball": ("Attack", [("damage", 18, "event")]),
     "the_collector.buff": ("Defend", [("status", "standard.strength", 3, "allAllies"),
-                                      ("block", 15, "source"),
-                                      ("counter", "last_move", 2, False, "source")]),
+                                      ("block", 15, "source")]),
     "the_collector.mega_debuff": ("Debuff", [("status", "standard.weak", 3, "event"),
                                              ("status", "standard.vulnerable", 3, "event"),
                                              ("status", "standard.frail", 3, "event")]),
@@ -559,17 +557,13 @@ INV_ACTIONS = {
     "awakened_one.rebirth": ("Special", [("heal", ("expr", "max"), "source"),
                                          ("modify", "standard.curiosity", -99, "source"),
                                          ("counter", "ao_phase", 1, False, "source"),
-                                         ("counter", "ao_started", 0, False, "source"),
-                                         ("counter", "ao_toggle", 0, False, "source")]),
+                                         ("counter", "ao_started", 0, False, "source")]),
     "awakened_one.dark_echo": ("Attack", [("damage", 40, "event"),
-                                          ("counter", "ao_started", 1, False, "source"),
-                                          ("counter", "ao_toggle", 0, False, "source")]),
+                                          ("counter", "ao_started", 1, False, "source")]),
     "awakened_one.tackle": ("Attack", [("damage", 10, "event"), ("damage", 10, "event"),
-                                       ("damage", 10, "event"),
-                                       ("counter", "ao_toggle", 1, False, "source")]),
+                                       ("damage", 10, "event")]),
     "awakened_one.sludge": ("Attack", [("damage", 18, "event"),
-                                       ("card", "void", 1, "DiscardPile", "event"),
-                                       ("counter", "ao_toggle", 0, False, "source")]),
+                                       ("card", "void", 1, "DiscardPile", "event")]),
     # --- Donu / Deca (wiki: Beam 10x2 both, Circle of Power +3 Str, Square 16 Block) --------------
     "donu.circle_of_power": ("Buff", [("status", "standard.strength", 3, "allAllies")]),
     "donu.beam": ("Attack", [("damage", 10, "event"), ("damage", 10, "event")]),
@@ -938,6 +932,27 @@ def program_facts(root):
     return facts
 
 
+def split_history(facts):
+    """Peel the `prev_move = last_move; last_move = k` pair off a fact list.
+
+    §195.5: "which move did I just use" is **content state** (a counter pair at the end of every
+    action program), and every boss that draws by weight needs it. Keeping those two facts out of
+    `INV_ACTIONS` is deliberate: that table is the independent copy of the **wiki's numbers**, and a
+    bookkeeping counter is not a wiki number. The bookkeeping is checked structurally instead, by
+    `check_intent_history`, which can say things a per-action table cannot ("the code a rule asks
+    about must be written by some action").
+    """
+    if len(facts) >= 2:
+        prev, last = facts[-2], facts[-1]
+        is_prev = (prev[0] == "counter" and prev[1] == "prev_move"
+                   and isinstance(prev[2], tuple) and prev[2] == ("counter", "last_move", "source"))
+        is_last = (last[0] == "counter" and last[1] == "last_move"
+                   and isinstance(last[2], int) and last[3] is False)
+        if is_prev and is_last:
+            return facts[:-2], last[2]
+    return facts, None
+
+
 def load_programs(doc):
     """id -> the program root, for cards and enemy actions."""
     out = {}
@@ -1154,11 +1169,12 @@ def check_cards_and_actions(doc):
         if (action.get("Intent") or {}).get("Kind") != intent:
             fail("action." + aid, "intent %r, inv says %r"
                  % ((action.get("Intent") or {}).get("Kind"), intent))
-        got = program_facts(action["Program"]["Root"])
+        got, _code = split_history(program_facts(action["Program"]["Root"]))
         if got != facts:
             fail("action." + aid, "facts %s, inv says %s" % (got, facts))
     ok("cards", "%d cards x (cost, tags, facts)" % len(INV_CARDS))
     ok("enemy actions", "%d actions x (intent, facts)" % len(INV_ACTIONS))
+    check_intent_history(doc)
     check_ascension_variants(doc)
     check_spawn_rolls(doc)
 
@@ -1273,17 +1289,13 @@ INV_ASC_VARIANTS = {
     'bronze_automaton.hyper_beam': [(4, [('damage', 50, 'event')])],
     # The Collector (Fireball 18->A4 21, Buff Str 3->A4 4->A19 5 and Block 15->A9 18->A19 23,
     # Mega Debuff 3/3/3 ->A19 5/5/5).
-    'the_collector.fireball': [(4, [('damage', 21, 'event'),
-                                    ('counter', 'last_move', 1, False, 'source')])],
+    'the_collector.fireball': [(4, [('damage', 21, 'event')])],
     'the_collector.buff': [(4, [('status', 'standard.strength', 4, 'allAllies'),
-                                ('block', 15, 'source'),
-                                ('counter', 'last_move', 2, False, 'source')]),
+                                ('block', 15, 'source')]),
                            (9, [('status', 'standard.strength', 4, 'allAllies'),
-                                ('block', 18, 'source'),
-                                ('counter', 'last_move', 2, False, 'source')]),
+                                ('block', 18, 'source')]),
                            (19, [('status', 'standard.strength', 5, 'allAllies'),
-                                 ('block', 23, 'source'),
-                                 ('counter', 'last_move', 2, False, 'source')])],
+                                 ('block', 23, 'source')])],
     'the_collector.mega_debuff': [(19, [('status', 'standard.weak', 5, 'event'),
                                         ('status', 'standard.vulnerable', 5, 'event'),
                                         ('status', 'standard.frail', 5, 'event')])],
@@ -1376,7 +1388,7 @@ def check_ascension_variants(doc):
         # 事实：每个档位各自与表比；而且**没有两个档位讲同一个故事**。
         seen = [program_facts(action["Program"]["Root"])]
         for variant, (threshold, facts) in zip(variants, entries):
-            got = program_facts(variant["Program"]["Root"])
+            got, _code = split_history(program_facts(variant["Program"]["Root"]))
             if got != facts:
                 fail("asc." + aid + ".A%d" % threshold,
                      "facts %s, inv says %s" % (got, facts))
@@ -1505,6 +1517,79 @@ def check_spawn_rolls(doc):
     ok("spawn rolls", "%d ranges over %d enemies, %d counter reads wired, %d fixed counters"
        % (sum(len(v) for v in INV_ROLLS.values()), len(INV_ROLLS), readers,
           sum(len(v) for v in INV_SPAWN_COUNTERS.values())))
+
+
+def check_intent_history(doc):
+    """§195.5：`last_move` / `prev_move` 这套历史是**内容状态**，所以它有自己的检查。
+
+    带权抽签本身不需要历史；需要它的是"不能连续用同一招"那类规则，而那些规则的条件是
+    `intent.selfHasCounter{last_move == k}`。于是有三件事必须同时成立，否则 Boss 会静默出招错乱：
+
+    1. **每个能被选中的动作都要写自己的 code**（否则 `last_move` 停在上一只怪的旧值上，排除规则
+       会一直命中或永远不命中）；
+    2. **同一个敌人的 code 两两不同**（两招写同一个数 ⇒ "不能连续用 A" 会连带禁掉 B）；
+    3. **规则里问到的每个 code 都真有动作写它**（这是一个 4 字节的错字就能造成的死规则：
+       规则永远不命中、Boss 永远按默认权重出招，而所有数字看起来都对）。
+    """
+    print("[2c] intent history (port-stage/§195.5)")
+    actions = {a["Id"]: a for a in doc.get("EnemyActions") or []}
+    watched = 0
+    for monster in doc.get("Monsters") or []:
+        rules = monster.get("IntentRules") or []
+        blob = json.dumps(rules)
+        if "last_move" not in blob:
+            continue
+        watched += 1
+        mid = monster["Id"]
+        # every action this enemy can pick (cycle + every Choice/Action a rule names)
+        reachable = [entry["value"] for entry in monster.get("Actions") or []]
+        asked = set()
+        for rule in rules:
+            if rule.get("Action"):
+                reachable.append(rule["Action"]["value"])
+            for option in rule.get("Choice") or []:
+                reachable.append(option["Action"]["value"])
+            for condition in _walk_conditions(rule.get("Condition")):
+                if condition.get("kind") == "intent.selfHasCounter":
+                    value = condition["value"]
+                    if value["Counter"]["value"] == "last_move":
+                        asked.add(value["Value"])
+        # 1 + 2: each reachable action writes a distinct code
+        codes = {}
+        for action_id in sorted(set(reachable)):
+            action = actions.get(action_id)
+            if action is None:
+                continue
+            for program in [action["Program"]] + [v["Program"] for v in action.get("ProgramAsc") or []]:
+                _facts, code = split_history(program_facts(program["Root"]))
+                if code is None:
+                    fail("history." + mid, "`%s` does not record `last_move`" % action_id)
+                else:
+                    codes.setdefault(code, set()).add(action_id)
+        for code, owners in sorted(codes.items()):
+            if len(owners) > 1:
+                fail("history." + mid,
+                     "code %d is written by %s -- codes must be distinct per enemy"
+                     % (code, sorted(owners)))
+        # 3: every asked code exists
+        for code in sorted(asked):
+            if code not in codes:
+                fail("history." + mid,
+                     "a rule asks for `last_move == %d`, but no action writes it" % code)
+    ok("intent history", "%d enemies use last_move; codes distinct and all referenced codes written"
+       % watched)
+
+
+def _walk_conditions(condition):
+    """Yield every condition node in a (possibly nested) condition tree."""
+    if not isinstance(condition, dict):
+        return
+    yield condition
+    value = condition.get("value") or {}
+    for inner in value.get("Conditions") or []:
+        yield from _walk_conditions(inner)
+    if value.get("Condition") is not None:
+        yield from _walk_conditions(value["Condition"])
 
 
 def check_statuses(doc):

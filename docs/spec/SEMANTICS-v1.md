@@ -264,6 +264,17 @@ v1 的范围（§2.1 IN）没有包含下面这些；它们是**内容逼出来�
 | `CurrentPhaseTeam` / `_endedThisPhase` | **快照与哈希都没有** ⇒ 同时队伍模式中途存档无法忠实还原 | C:§2.1.2、§5.2 |
 | 状态 `Tags`/`Counters`、战员 `Position`/`IntentKey` | 位姿/标记变化不可见 | C:§5.4 |
 
+**本移植自己新增、参考根本没有的字段**（同样只能进 `hash_full` —— 参考没有它们，写进
+`hash_golden` 会立刻断开 85 份语料与 129 条 golden）：
+
+| 字段 | 加它的那一节 | 为什么 `hash_golden` 不能收 |
+|---|---|---|
+| `CombatState.ascension`（`u8`） | §187 | 参考没有 Ascension 轴；它会改变意图规则与 `ProgramAsc` 的选择 |
+| `PendingChoice`（战斗中的待决选牌：来源/问句/候选/张数） | §175b–§183 | 参考的"选牌"是宿主回调，不是状态；它决定战斗能不能继续 |
+| `ENCT.Enemies[].Counters` 种下的那些计数器 | §195.1 | ⚠️ **不需要额外处理**：它们落在 `Combatant.counters`，本来就在规范文本里 |
+| §195.3 的派生抽签 | §195.3 | ⚠️ **无状态**：`(seed, round, slot)` 的纯函数，没有任何东西要进指纹 |
+| §195.5 的 `last_move` / `prev_move` | §195.5 | ⚠️ **已经在**：它们是普通计数器，走 `c=` 行 |
+
 `hash_full` 允许换非加密哈希（xxHash/CRC）并做**增量更新**（每次状态变更更新 rolling hash），不必每步重算（C:§5.4 建议）。
 
 ### 6.4 允许不同（**仅限 §3 豁免列打「需要」的行**）

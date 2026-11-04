@@ -1638,6 +1638,149 @@ mod tests {
         }
     }
 
+    /// §195.5: the weighted bosses honour the wiki's **exclusions**, not just its weights.
+    ///
+    /// One test for three bosses because the failure shape is the same and it is the *rule*, not the
+    /// numbers, that is easy to get wrong: set `last_move` to a move's own code and the draw must not
+    /// return that move. If the exclusion rule was dropped (or its priority fell below the default
+    /// rule) the boss still "works" -- it just keeps repeating itself, which no fact table shows.
+    #[test]
+    fn a_weighted_boss_never_repeats_the_move_the_wiki_forbids() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // (encounter, slot, enemy, last, prev, forbidden move, round to ask about)
+        //
+        // `prev` matters: the wiki's bans are not all the same depth. The Champ bans **any** repeat
+        // ("no move can be used twice in a row"), Time Eater bans Head Slam/Ripple twice but
+        // Reverberate only *three* times, and the Orb bans "the same attack thrice". A single-depth
+        // test would pass on a rule that is too strict.
+        let cases = [
+            ("enc_the_champ", 0, "the_champ", 1, 99, "the_champ.heavy_slash", 3),
+            ("enc_time_eater", 0, "time_eater", 2, 99, "time_eater.head_slam", 3),
+            ("enc_time_eater", 0, "time_eater", 3, 99, "time_eater.ripple", 3),
+            // both in a row -> the third is banned
+            ("enc_time_eater", 0, "time_eater", 1, 1, "time_eater.reverberate", 3),
+            ("enc_bronze_automaton", 1, "bronze_orb", 2, 2, "bronze_orb.beam", 2),
+            ("enc_bronze_automaton", 1, "bronze_orb", 3, 3, "bronze_orb.support_beam", 2),
+        ];
+        for (encounter, index, enemy, last, prev, forbidden, round) in cases {
+            let at = slot(&content, encounter, index);
+            let actor = cid(enemy);
+            for seed in 0..60 {
+                let mut state = arena(enemy);
+                state.random_seed = seed;
+                state.current_round = round;
+                set_counter(&mut state, &actor, "last_move", last);
+                set_counter(&mut state, &actor, "prev_move", prev);
+                let choice = select_action(&state, &content, at, &actor, round)
+                    .expect("intent")
+                    .expect("an action");
+                assert_ne!(
+                    choice.action_id, forbidden,
+                    "{enemy} seed {seed}: `last={last} prev={prev}` must exclude `{forbidden}`"
+                );
+            }
+        }
+    }
+
+    /// §195.5: Awakened One's two phases by **weight**, and the guard that ends phase one.
+    ///
+    /// Phase 1 draws `Slash 75 / Soul Strike 25`; phase 2 opens with Dark Echo once and then draws
+    /// `Tackle 50 / Sludge 50`. Four judgements:
+    /// 1. with the `standard.unawakened` guard up, phase 1 only produces Slash/Soul Strike -- even at
+    ///    25% HP (the phase flip is the guard being spent, not a health threshold);
+    /// 2. once the guard is gone, Rebirth is the next intent;
+    /// 3. after Rebirth, Dark Echo comes **once** (`ao_started`), then only Tackle/Sludge;
+    /// 4. phase 1 really is weighted: over many seeds both moves appear, and Slash dominates.
+    #[test]
+    fn the_awakened_one_draws_phase_one_by_weight_and_flips_on_the_guard() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let at = slot(&content, "enc_awakened_one", 0);
+        let actor = cid("awakened_one");
+
+        let mut slashes = 0usize;
+        let mut souls = 0usize;
+        for seed in 0..200 {
+            let mut state = arena("awakened_one");
+            state.random_seed = seed;
+            set_status(&mut state, &actor, "standard.unawakened", 1);
+            state.current_round = 3;
+            let pick = select_action(&state, &content, at, &actor, 3)
+                .expect("intent")
+                .expect("an action");
+            assert_eq!(
+                pick.action_id,
+                select_action(&state, &content, at, &actor, 3)
+                    .expect("intent")
+                    .expect("an action")
+                    .action_id,
+                "seed {seed}: the preview must be stable"
+            );
+            match pick.action_id {
+                "awakened_one.slash" => slashes += 1,
+                "awakened_one.soul_strike" => souls += 1,
+                other => panic!("seed {seed}: phase one produced {other}"),
+            }
+        }
+        let total = slashes + souls;
+        let ratio = slashes as f64 / total as f64;
+        assert!(
+            (0.68..=0.82).contains(&ratio),
+            "Slash took {slashes}/{total} = {ratio:.2}, wiki says 75%"
+        );
+        assert!(souls > 0, "Soul Strike must be reachable");
+
+        // The guard is spent -> Rebirth (at any HP).
+        let mut state = arena("awakened_one");
+        {
+            let boss = state.combatant_mut(&actor).expect("the boss");
+            boss.health_current = boss.health_max / 4;
+        }
+        clear_statuses(&mut state, &actor);
+        state.current_round = 1;
+        assert_eq!(
+            select_action(&state, &content, at, &actor, 1)
+                .expect("intent")
+                .expect("an action")
+                .action_id,
+            "awakened_one.rebirth"
+        );
+
+        // Phase 2: Dark Echo once, then only Tackle/Sludge -- both must appear.
+        set_counter(&mut state, &actor, "ao_phase", 1);
+        set_counter(&mut state, &actor, "ao_started", 0);
+        let mut tackles = 0usize;
+        let mut sludges = 0usize;
+        for round in 2..40 {
+            state.current_round = round;
+            let choice = select_action(&state, &content, at, &actor, round)
+                .expect("intent")
+                .expect("an action")
+                .action_id;
+            if round == 2 {
+                assert_eq!(choice, "awakened_one.dark_echo", "phase two opens with Dark Echo");
+                set_counter(&mut state, &actor, "ao_started", 1);
+                continue;
+            }
+            match choice {
+                "awakened_one.tackle" => tackles += 1,
+                "awakened_one.sludge" => sludges += 1,
+                other => panic!("round {round}: phase two produced {other}"),
+            }
+        }
+        assert!(tackles > 0 && sludges > 0, "both phase-two moves must appear ({tackles}/{sludges})");
+    }
+
     /// The Champ：回合 4 是 Taunt；HP ≤ 50% 时先 Anger、下一回合 Execute。
     ///
     /// 三个判据各锁一条规则，而三者在"规则不生效"时都表现为"Boss 正常出招"。
@@ -1678,56 +1821,6 @@ mod tests {
         // `(9-1) % 4 = 0` ⇒ Heavy Slash。这一条是负控的旁证 —— 少写一个数就会在 8 上撞 Taunt。
         assert_eq!(pick(&mut state, 8), "the_champ.taunt", "every 4th round, phase two or not");
         assert_eq!(pick(&mut state, 9), "the_champ.heavy_slash", "afterwards the cycle resumes");
-    }
-
-    /// The Awakened One：≤ 25% 血时意图变 Rebirth；Rebirth 之后先 Dark Echo，然后 Tackle/Sludge 交替。
-    #[test]
-    fn the_awakened_one_flips_to_phase_two_through_its_counters() {
-        let blob = std::fs::read(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
-        ))
-        .expect("the sts image");
-        let content = parse(&blob);
-        let at = slot(&content, "enc_awakened_one", 0);
-        let mut state = arena("awakened_one");
-        let actor = cid("awakened_one");
-        let pick = |state: &mut CombatState, round: i32| {
-            state.current_round = round;
-            select_action(state, &content, at, &actor, round)
-                .expect("intent")
-                .expect("an action")
-                .action_id
-        };
-
-        // §195.2: the phase flip is keyed on the `standard.unawakened` guard being **spent**, not on a
-        // health percentage (the guard is what survives the first lethal blow).
-        set_status(&mut state, &actor, "standard.unawakened", 1);
-        state.current_round = 1;
-        assert_eq!(pick(&mut state, 1), "awakened_one.slash", "phase one opens with Slash");
-        {
-            let boss = state.combatant_mut(&actor).expect("the boss");
-            boss.health_current = boss.health_max / 4;
-        }
-        assert_eq!(
-            pick(&mut state, 2),
-            "awakened_one.slash",
-            "still phase one while the guard is up -- even at 25% HP"
-        );
-        // The killing blow spends the guard (that is what `DeathPrevention` does in `resolve_damage`).
-        clear_statuses(&mut state, &actor);
-        assert_eq!(pick(&mut state, 3), "awakened_one.rebirth", "guard spent => Rebirth");
-        // Rebirth sets three counters; do what its program does.
-        set_counter(&mut state, &actor, "ao_phase", 1);
-        set_counter(&mut state, &actor, "ao_started", 0);
-        set_counter(&mut state, &actor, "ao_toggle", 0);
-        assert_eq!(pick(&mut state, 4), "awakened_one.dark_echo", "phase two opens with Dark Echo");
-        set_counter(&mut state, &actor, "ao_started", 1);
-        assert_eq!(pick(&mut state, 5), "awakened_one.tackle");
-        set_counter(&mut state, &actor, "ao_toggle", 1);
-        assert_eq!(pick(&mut state, 6), "awakened_one.sludge");
-        set_counter(&mut state, &actor, "ao_toggle", 0);
-        assert_eq!(pick(&mut state, 7), "awakened_one.tackle", "Tackle/Sludge alternate");
     }
 
     // ---------------------------------------------------------------- 补丁工具

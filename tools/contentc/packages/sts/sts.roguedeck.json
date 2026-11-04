@@ -6934,6 +6934,59 @@
                   "IgnoresBlock": false,
                   "Element": null
                 }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
               }
             ]
           }
@@ -7014,6 +7067,59 @@
                       "IgnoresBlock": false,
                       "Element": null
                     }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
                   }
                 ]
               }
@@ -7038,24 +7144,84 @@
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.dealDamage",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 26
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
               }
-            },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 26
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -7113,6 +7279,59 @@
                         }
                       },
                       "ToZone": "DiscardPile",
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "Relative": false,
                       "ResultKey": null
                     }
                   }
@@ -7206,6 +7425,59 @@
                   },
                   "DurationTurns": 0,
                   "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "Relative": false,
                   "ResultKey": null
                 }
               }
@@ -7314,6 +7586,59 @@
                       },
                       "DurationTurns": 0,
                       "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "Relative": false,
                       "ResultKey": null
                     }
                   }
@@ -8534,24 +8859,84 @@
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.dealDamage",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 16
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
               }
-            },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 16
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -8565,24 +8950,84 @@
               "Value": "(unnamed)"
             },
             "Root": {
-              "kind": "node.dealDamage",
+              "kind": "node.sequence",
               "value": {
-                "TargetSelector": {
-                  "kind": "sel.eventTarget",
-                  "value": {
-                    "Cardinality": "ZeroOrOne",
-                    "RequiredContextCapabilities": "EventTarget"
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 18
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
                   }
-                },
-                "Amount": {
-                  "kind": "const",
-                  "value": {
-                    "Value": 18
-                  }
-                },
-                "ResultKey": null,
-                "IgnoresBlock": false,
-                "Element": null
+                ]
               }
             },
             "MaxNodeDepth": 64,
@@ -8650,6 +9095,59 @@
                   "Charges": 0,
                   "ResultKey": null
                 }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
               }
             ]
           }
@@ -8710,6 +9208,59 @@
                       "Charges": 0,
                       "ResultKey": null
                     }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
                   }
                 ]
               }
@@ -8768,6 +9319,59 @@
                       },
                       "DurationTurns": 0,
                       "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "Relative": false,
                       "ResultKey": null
                     }
                   }
@@ -8837,6 +9441,59 @@
                   "ResultKey": null,
                   "IgnoresBlock": false,
                   "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 7
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
                 }
               }
             ]
@@ -13952,24 +14609,84 @@
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.dealDamage",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 8
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
               }
-            },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 8
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -13990,22 +14707,82 @@
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.gainBlock",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.allAllies",
-              "value": {
-                "Cardinality": "All",
-                "RequiredContextCapabilities": "Source"
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.allAllies",
+                    "value": {
+                      "Cardinality": "All",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 12
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
               }
-            },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 12
-              }
-            },
-            "ResultKey": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -14048,6 +14825,36 @@
                   "ResultKey": null,
                   "IgnoresBlock": false,
                   "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
                 }
               },
               {
@@ -14109,6 +14916,36 @@
                       "ResultKey": null,
                       "IgnoresBlock": false,
                       "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
                     }
                   },
                   {
@@ -14214,6 +15051,36 @@
                     }
                   },
                   "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
                     "value": "last_move"
                   },
                   "Amount": {
@@ -14283,6 +15150,36 @@
                           "Value": 15
                         }
                       },
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
                       "ResultKey": null
                     }
                   },
@@ -14380,6 +15277,36 @@
                         }
                       },
                       "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
                         "value": "last_move"
                       },
                       "Amount": {
@@ -14449,6 +15376,36 @@
                           "Value": 23
                         }
                       },
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
                       "ResultKey": null
                     }
                   },
@@ -14572,6 +15529,59 @@
                   "Charges": 0,
                   "ResultKey": null
                 }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
               }
             ]
           }
@@ -14661,6 +15671,59 @@
                       "Charges": 0,
                       "ResultKey": null
                     }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
                   }
                 ]
               }
@@ -14723,24 +15786,84 @@
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.dealDamage",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 20
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
               }
-            },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 20
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -14846,6 +15969,59 @@
                   "ResultKey": null,
                   "IgnoresBlock": false,
                   "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
                 }
               }
             ]
@@ -15003,12 +16179,42 @@
                     }
                   },
                   "CounterId": {
-                    "value": "ao_toggle"
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
                   },
                   "Amount": {
                     "kind": "const",
                     "value": {
-                      "Value": 0
+                      "Value": 6
                     }
                   },
                   "Relative": false,
@@ -15094,12 +16300,42 @@
                     }
                   },
                   "CounterId": {
-                    "value": "ao_toggle"
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
                   },
                   "Amount": {
                     "kind": "const",
                     "value": {
-                      "Value": 0
+                      "Value": 3
                     }
                   },
                   "Relative": false,
@@ -15204,12 +16440,42 @@
                     }
                   },
                   "CounterId": {
-                    "value": "ao_toggle"
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
                   },
                   "Amount": {
                     "kind": "const",
                     "value": {
-                      "Value": 1
+                      "Value": 4
                     }
                   },
                   "Relative": false,
@@ -15295,12 +16561,42 @@
                     }
                   },
                   "CounterId": {
-                    "value": "ao_toggle"
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
                   },
                   "Amount": {
                     "kind": "const",
                     "value": {
-                      "Value": 0
+                      "Value": 5
                     }
                   },
                   "Relative": false,
@@ -15838,6 +17134,59 @@
                   "Charges": 0,
                   "ResultKey": null
                 }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
               }
             ]
           }
@@ -15924,6 +17273,59 @@
                       "Charges": 0,
                       "ResultKey": null
                     }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
                   }
                 ]
               }
@@ -15948,27 +17350,87 @@
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.applyStatus",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.source",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "Source"
+            "Children": [
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.strength"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 4
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
               }
-            },
-            "StatusDefinitionId": {
-              "value": "standard.strength"
-            },
-            "Stacks": {
-              "kind": "const",
-              "value": {
-                "Value": 2
-              }
-            },
-            "DurationTurns": 0,
-            "Charges": 0,
-            "ResultKey": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -15982,27 +17444,87 @@
               "Value": "(unnamed)"
             },
             "Root": {
-              "kind": "node.applyStatus",
+              "kind": "node.sequence",
               "value": {
-                "TargetSelector": {
-                  "kind": "sel.source",
-                  "value": {
-                    "Cardinality": "ZeroOrOne",
-                    "RequiredContextCapabilities": "Source"
+                "Children": [
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.strength"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 4
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
                   }
-                },
-                "StatusDefinitionId": {
-                  "value": "standard.strength"
-                },
-                "Stacks": {
-                  "kind": "const",
-                  "value": {
-                    "Value": 3
-                  }
-                },
-                "DurationTurns": 0,
-                "Charges": 0,
-                "ResultKey": null
+                ]
               }
             },
             "MaxNodeDepth": 64,
@@ -16016,27 +17538,87 @@
               "Value": "(unnamed)"
             },
             "Root": {
-              "kind": "node.applyStatus",
+              "kind": "node.sequence",
               "value": {
-                "TargetSelector": {
-                  "kind": "sel.source",
-                  "value": {
-                    "Cardinality": "ZeroOrOne",
-                    "RequiredContextCapabilities": "Source"
+                "Children": [
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.strength"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 4
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 4
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
                   }
-                },
-                "StatusDefinitionId": {
-                  "value": "standard.strength"
-                },
-                "Stacks": {
-                  "kind": "const",
-                  "value": {
-                    "Value": 4
-                  }
-                },
-                "DurationTurns": 0,
-                "Charges": 0,
-                "ResultKey": null
+                ]
               }
             },
             "MaxNodeDepth": 64,
@@ -16107,6 +17689,59 @@
                   },
                   "DurationTurns": 0,
                   "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 5
+                    }
+                  },
+                  "Relative": false,
                   "ResultKey": null
                 }
               }
@@ -16266,6 +17901,59 @@
                   "Relative": false,
                   "ResultKey": null
                 }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 6
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
               }
             ]
           }
@@ -16411,6 +18099,59 @@
                         "kind": "const",
                         "value": {
                           "Value": 0
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 6
                         }
                       },
                       "Relative": false,
@@ -16566,6 +18307,59 @@
                       "Relative": false,
                       "ResultKey": null
                     }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 6
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
                   }
                 ]
               }
@@ -16674,6 +18468,59 @@
                     "kind": "const",
                     "value": {
                       "Value": 1
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 8
                     }
                   },
                   "Relative": false,
@@ -16802,6 +18649,59 @@
                       "Relative": false,
                       "ResultKey": null
                     }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 8
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
                   }
                 ]
               }
@@ -16863,6 +18763,59 @@
                       "Value": -99
                     }
                   }
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
                 }
               }
             ]
@@ -17275,6 +19228,133 @@
                 "value": "time_eater.haste"
               },
               "Priority": 90
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 2
+                }
+              },
+              "Priority": 60,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "time_eater.reverberate"
+                  },
+                  "Weight": 45
+                },
+                {
+                  "Action": {
+                    "value": "time_eater.ripple"
+                  },
+                  "Weight": 20
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 3
+                }
+              },
+              "Priority": 59,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "time_eater.reverberate"
+                  },
+                  "Weight": 45
+                },
+                {
+                  "Action": {
+                    "value": "time_eater.head_slam"
+                  },
+                  "Weight": 35
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 58,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "time_eater.head_slam"
+                  },
+                  "Weight": 35
+                },
+                {
+                  "Action": {
+                    "value": "time_eater.ripple"
+                  },
+                  "Weight": 20
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 40,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "time_eater.reverberate"
+                  },
+                  "Weight": 45
+                },
+                {
+                  "Action": {
+                    "value": "time_eater.head_slam"
+                  },
+                  "Weight": 35
+                },
+                {
+                  "Action": {
+                    "value": "time_eater.ripple"
+                  },
+                  "Weight": 20
+                }
+              ]
             }
           ],
           "DisplayName": "Time Eater",
@@ -17635,6 +19715,173 @@
                 "value": "the_champ.taunt"
               },
               "Priority": 60
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 1
+                }
+              },
+              "Priority": 50,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "the_champ.face_slap"
+                  },
+                  "Weight": 25
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.defensive_stance"
+                  },
+                  "Weight": 15
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.gloat"
+                  },
+                  "Weight": 15
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 2
+                }
+              },
+              "Priority": 50,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "the_champ.heavy_slash"
+                  },
+                  "Weight": 45
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.defensive_stance"
+                  },
+                  "Weight": 15
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.gloat"
+                  },
+                  "Weight": 15
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 3
+                }
+              },
+              "Priority": 50,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "the_champ.heavy_slash"
+                  },
+                  "Weight": 45
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.face_slap"
+                  },
+                  "Weight": 25
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.gloat"
+                  },
+                  "Weight": 15
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 4
+                }
+              },
+              "Priority": 50,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "the_champ.heavy_slash"
+                  },
+                  "Weight": 45
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.face_slap"
+                  },
+                  "Weight": 25
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.defensive_stance"
+                  },
+                  "Weight": 15
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 40,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "the_champ.heavy_slash"
+                  },
+                  "Weight": 45
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.face_slap"
+                  },
+                  "Weight": 25
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.defensive_stance"
+                  },
+                  "Weight": 15
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.gloat"
+                  },
+                  "Weight": 15
+                }
+              ]
             }
           ],
           "DisplayName": "The Champ",
@@ -18894,10 +21141,126 @@
                   "MinStacks": 1
                 }
               },
-              "Action": {
-                "value": "bronze_orb.stasis"
+              "Priority": 50,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "bronze_orb.stasis"
+                  },
+                  "Weight": 75
+                },
+                {
+                  "Action": {
+                    "value": "bronze_orb.support_beam"
+                  },
+                  "Weight": 18
+                },
+                {
+                  "Action": {
+                    "value": "bronze_orb.beam"
+                  },
+                  "Weight": 7
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    }
+                  ]
+                }
               },
-              "Priority": 50
+              "Priority": 48,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "bronze_orb.support_beam"
+                  },
+                  "Weight": 100
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 47,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "bronze_orb.beam"
+                  },
+                  "Weight": 100
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 40,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "bronze_orb.support_beam"
+                  },
+                  "Weight": 70
+                },
+                {
+                  "Action": {
+                    "value": "bronze_orb.beam"
+                  },
+                  "Weight": 30
+                }
+              ]
             }
           ],
           "DisplayName": "Bronze Orb",
@@ -18944,10 +21307,126 @@
                   "MinStacks": 1
                 }
               },
-              "Action": {
-                "value": "bronze_orb.stasis"
+              "Priority": 50,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "bronze_orb.stasis"
+                  },
+                  "Weight": 75
+                },
+                {
+                  "Action": {
+                    "value": "bronze_orb.support_beam"
+                  },
+                  "Weight": 18
+                },
+                {
+                  "Action": {
+                    "value": "bronze_orb.beam"
+                  },
+                  "Weight": 7
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    }
+                  ]
+                }
               },
-              "Priority": 50
+              "Priority": 48,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "bronze_orb.support_beam"
+                  },
+                  "Weight": 100
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 47,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "bronze_orb.beam"
+                  },
+                  "Weight": 100
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 40,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "bronze_orb.support_beam"
+                  },
+                  "Weight": 70
+                },
+                {
+                  "Action": {
+                    "value": "bronze_orb.beam"
+                  },
+                  "Weight": 30
+                }
+              ]
             }
           ],
           "DisplayName": "Bronze Orb",
@@ -19019,11 +21498,49 @@
                   "Value": 2
                 }
               },
-              "Priority": 50,
+              "Priority": 55,
               "Choice": [
                 {
                   "Action": {
                     "value": "the_collector.fireball"
+                  },
+                  "Weight": 100
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 54,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "the_collector.buff"
                   },
                   "Weight": 100
                 }
@@ -19214,7 +21731,34 @@
               "Action": {
                 "value": "awakened_one.dark_echo"
               },
-              "Priority": 85
+              "Priority": 90
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "ao_phase"
+                  },
+                  "Op": "GreaterOrEqual",
+                  "Value": 1
+                }
+              },
+              "Priority": 70,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "awakened_one.tackle"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "awakened_one.sludge"
+                  },
+                  "Weight": 50
+                }
+              ]
             },
             {
               "Condition": {
@@ -19226,41 +21770,18 @@
                       "value": {
                         "Counter": {
                           "value": "ao_phase"
-                        },
-                        "Op": "GreaterOrEqual",
-                        "Value": 1
-                      }
-                    },
-                    {
-                      "kind": "intent.selfHasCounter",
-                      "value": {
-                        "Counter": {
-                          "value": "ao_toggle"
                         },
                         "Op": "LessOrEqual",
                         "Value": 0
                       }
-                    }
-                  ]
-                }
-              },
-              "Action": {
-                "value": "awakened_one.tackle"
-              },
-              "Priority": 80
-            },
-            {
-              "Condition": {
-                "kind": "intent.allOf",
-                "value": {
-                  "Conditions": [
+                    },
                     {
                       "kind": "intent.selfHasCounter",
                       "value": {
                         "Counter": {
-                          "value": "ao_phase"
+                          "value": "last_move"
                         },
-                        "Op": "GreaterOrEqual",
+                        "Op": "Equal",
                         "Value": 1
                       }
                     },
@@ -19268,19 +21789,51 @@
                       "kind": "intent.selfHasCounter",
                       "value": {
                         "Counter": {
-                          "value": "ao_toggle"
+                          "value": "prev_move"
                         },
-                        "Op": "GreaterOrEqual",
+                        "Op": "Equal",
                         "Value": 1
                       }
                     }
                   ]
                 }
               },
-              "Action": {
-                "value": "awakened_one.sludge"
+              "Priority": 50,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "awakened_one.soul_strike"
+                  },
+                  "Weight": 100
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "ao_phase"
+                  },
+                  "Op": "LessOrEqual",
+                  "Value": 0
+                }
               },
-              "Priority": 80
+              "Priority": 40,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "awakened_one.slash"
+                  },
+                  "Weight": 75
+                },
+                {
+                  "Action": {
+                    "value": "awakened_one.soul_strike"
+                  },
+                  "Weight": 25
+                }
+              ]
             }
           ],
           "DisplayName": "Awakened One",
@@ -19852,11 +22405,138 @@
             "value": "time_eater.haste"
           },
           "Priority": 90
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 2
+            }
+          },
+          "Priority": 60,
+          "Choice": [
+            {
+              "Action": {
+                "value": "time_eater.reverberate"
+              },
+              "Weight": 45
+            },
+            {
+              "Action": {
+                "value": "time_eater.ripple"
+              },
+              "Weight": 20
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 3
+            }
+          },
+          "Priority": 59,
+          "Choice": [
+            {
+              "Action": {
+                "value": "time_eater.reverberate"
+              },
+              "Weight": 45
+            },
+            {
+              "Action": {
+                "value": "time_eater.head_slam"
+              },
+              "Weight": 35
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 58,
+          "Choice": [
+            {
+              "Action": {
+                "value": "time_eater.head_slam"
+              },
+              "Weight": 35
+            },
+            {
+              "Action": {
+                "value": "time_eater.ripple"
+              },
+              "Weight": 20
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 40,
+          "Choice": [
+            {
+              "Action": {
+                "value": "time_eater.reverberate"
+              },
+              "Weight": 45
+            },
+            {
+              "Action": {
+                "value": "time_eater.head_slam"
+              },
+              "Weight": 35
+            },
+            {
+              "Action": {
+                "value": "time_eater.ripple"
+              },
+              "Weight": 20
+            }
+          ]
         }
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Time_Eater",
-      "AiNote": "§194：wiki 数值（HP 456/480；Reverberate 7×3→A4 8×3；Head Slam 26→A4 32，A19 另加 2 Slimed；Ripple 20 Block + Weak + Vuln，A19 加 Frail；Haste 半血以下回满一半，A19 另给 32 Block）。⚠️ 偏差：① Haste 只回血（不清 debuff，没有『清空状态』节点）；② `Draw Reduction` 未实现（没有减少抽牌数的 debuff）；③ 45/35/20 权重变成确定性 3 循环。",
+      "AiNote": "§194：wiki 数值（HP 456/480；Reverberate 7×3→A4 8×3；Head Slam 26→A4 32，A19 另加 2 Slimed；Ripple 20 Block + Weak + Vuln，A19 加 Frail；Haste 半血以下回满一半，A19 另给 32 Block）。⚠️ 偏差：① Haste 只回血（不清 debuff，没有『清空状态』节点）；② `Draw Reduction` 未实现（没有减少抽牌数的 debuff）；③ 45/35/20 是**带权抽签**，且『不能连续三次 Reverberate / 不能连续两次 Head Slam·Ripple』用 `last_move`+`prev_move` 的排除规则实现。",
       "Counters": []
     },
     {
@@ -20110,11 +22790,178 @@
             "value": "the_champ.taunt"
           },
           "Priority": 60
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 1
+            }
+          },
+          "Priority": 50,
+          "Choice": [
+            {
+              "Action": {
+                "value": "the_champ.face_slap"
+              },
+              "Weight": 25
+            },
+            {
+              "Action": {
+                "value": "the_champ.defensive_stance"
+              },
+              "Weight": 15
+            },
+            {
+              "Action": {
+                "value": "the_champ.gloat"
+              },
+              "Weight": 15
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 2
+            }
+          },
+          "Priority": 50,
+          "Choice": [
+            {
+              "Action": {
+                "value": "the_champ.heavy_slash"
+              },
+              "Weight": 45
+            },
+            {
+              "Action": {
+                "value": "the_champ.defensive_stance"
+              },
+              "Weight": 15
+            },
+            {
+              "Action": {
+                "value": "the_champ.gloat"
+              },
+              "Weight": 15
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 3
+            }
+          },
+          "Priority": 50,
+          "Choice": [
+            {
+              "Action": {
+                "value": "the_champ.heavy_slash"
+              },
+              "Weight": 45
+            },
+            {
+              "Action": {
+                "value": "the_champ.face_slap"
+              },
+              "Weight": 25
+            },
+            {
+              "Action": {
+                "value": "the_champ.gloat"
+              },
+              "Weight": 15
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 4
+            }
+          },
+          "Priority": 50,
+          "Choice": [
+            {
+              "Action": {
+                "value": "the_champ.heavy_slash"
+              },
+              "Weight": 45
+            },
+            {
+              "Action": {
+                "value": "the_champ.face_slap"
+              },
+              "Weight": 25
+            },
+            {
+              "Action": {
+                "value": "the_champ.defensive_stance"
+              },
+              "Weight": 15
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 40,
+          "Choice": [
+            {
+              "Action": {
+                "value": "the_champ.heavy_slash"
+              },
+              "Weight": 45
+            },
+            {
+              "Action": {
+                "value": "the_champ.face_slap"
+              },
+              "Weight": 25
+            },
+            {
+              "Action": {
+                "value": "the_champ.defensive_stance"
+              },
+              "Weight": 15
+            },
+            {
+              "Action": {
+                "value": "the_champ.gloat"
+              },
+              "Weight": 15
+            }
+          ]
         }
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/The_Champ",
-      "AiNote": "§194：wiki 数值（HP 420/440；Heavy Slash 16→A4 18；Face Slap 12→A4 14 + 2 Frail + 2 Vuln；Defensive Stance 15 Block + 5 Metallicize，A9 18/6、A19 20/7；Gloat 2 Str，A4 3、A19 4；Taunt 每 4 回合 2 Weak + 2 Vuln；Anger 清 debuff + 6 Str，A4 9、A19 12；Execute 10×2）。⚠️ 偏差：① 45/25/15/15 权重变成确定性 4 循环；② Anger 按名清掉 Weak/Vulnerable/Frail（没有『清空状态』节点）；③ A19 的『Gloat 换成 Defensive Stance』未实现。",
+      "AiNote": "§194/§195.5：wiki 数值（HP 420/440；Heavy Slash 16→A4 18；Face Slap 12→A4 14 + 2 Frail + 2 Vuln；Defensive Stance 15 Block + 5 Metallicize，A9 18/6、A19 20/7；Gloat 2 Str，A4 3、A19 4；Taunt 每 4 回合 2 Weak + 2 Vuln；Anger 清 debuff + 6 Str，A4 9、A19 12；Execute 10×2）。出招是**带权抽签**（Heavy Slash 45 / Face Slap 25 / Defensive 15 / Gloat 15），并且『不能连续用同一招』由 `last_move` 计数器 + 每条一招的排除规则实现（wiki：重复时用列表里的下一招）。⚠️ 偏差：① 第二阶段『随机、随机、Execute』只做了第一次 Execute，之后回到第一阶段权重；② Anger 按名清掉 Weak/Vulnerable/Frail（没有『清空状态』节点）；③ A19 的 Gloat→Defensive 未实现；④ 抽签是 `(seed, round, slot)` 的派生值，不是随机流（§195.3）。",
       "Counters": []
     },
     {
@@ -20896,15 +23743,131 @@
               "MinStacks": 1
             }
           },
-          "Action": {
-            "value": "bronze_orb.stasis"
+          "Priority": 50,
+          "Choice": [
+            {
+              "Action": {
+                "value": "bronze_orb.stasis"
+              },
+              "Weight": 75
+            },
+            {
+              "Action": {
+                "value": "bronze_orb.support_beam"
+              },
+              "Weight": 18
+            },
+            {
+              "Action": {
+                "value": "bronze_orb.beam"
+              },
+              "Weight": 7
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 2
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 2
+                  }
+                }
+              ]
+            }
           },
-          "Priority": 50
+          "Priority": 48,
+          "Choice": [
+            {
+              "Action": {
+                "value": "bronze_orb.support_beam"
+              },
+              "Weight": 100
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 3
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 3
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 47,
+          "Choice": [
+            {
+              "Action": {
+                "value": "bronze_orb.beam"
+              },
+              "Weight": 100
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 40,
+          "Choice": [
+            {
+              "Action": {
+                "value": "bronze_orb.support_beam"
+              },
+              "Weight": 70
+            },
+            {
+              "Action": {
+                "value": "bronze_orb.beam"
+              },
+              "Weight": 30
+            }
+          ]
         }
       ],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Bronze_Orb",
-      "AiNote": "§194/§195.4：wiki 数值（HP 52-58；Beam 8；Support Beam 给友军 12 Block）。`Stasis` 现在是真实现：`node.selectCards` 从**玩家的抽牌堆**（空则弃牌堆）挑**稀有度最高**的一张放进 `SetAsidePile`，`standard.stasis` 的 Downed 触发器在它死亡时把牌还回玩家手牌；『一场只能用一次』= 用掉的是一条状态。⚠️ 偏差：① 75% 概率没建模（Orb 的另一招仍是确定性循环）；② Support Beam 用 `sel.allAllies`，即全体友军（含自己）；③ 两只 Orb 开局在场（§194：遭遇名单是召唤物找招式表的来路）。",
+      "AiNote": "§194/§195.4：wiki 数值（HP 52-58；Beam 8；Support Beam 给友军 12 Block）。`Stasis` 现在是真实现：`node.selectCards` 从**玩家的抽牌堆**（空则弃牌堆）挑**稀有度最高**的一张放进 `SetAsidePile`，`standard.stasis` 的 Downed 触发器在它死亡时把牌还回玩家手牌；『一场只能用一次』= 用掉的是一条状态。出招是带权抽签（没用 Stasis 之前 75% 用它，其余按 70/30 分给两招；用过之后 70/30）。『同一招不连续三次』用 `last_move`+`prev_move` 排除。⚠️ 偏差：② Support Beam 用 `sel.allAllies`，即全体友军（含自己）；③ 两只 Orb 开局在场（§194：遭遇名单是召唤物找招式表的来路）。",
       "Counters": []
     },
     {
@@ -20954,11 +23917,49 @@
               "Value": 2
             }
           },
-          "Priority": 50,
+          "Priority": 55,
           "Choice": [
             {
               "Action": {
                 "value": "the_collector.fireball"
+              },
+              "Weight": 100
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 54,
+          "Choice": [
+            {
+              "Action": {
+                "value": "the_collector.buff"
               },
               "Weight": 100
             }
@@ -20990,7 +23991,7 @@
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/The_Collector",
-      "AiNote": "§194/§195.3：wiki 数值（HP 282/300；Fireball 18→A4 21；Buff 全体 +3 Str + 15 Block，A4 Str 4、A9 Block 18、A19 5/23；Mega Debuff 3/3/3，A19 5/5/5，第 4 回合必出）。出招现在是**带权抽签**（两只 Torch Head 在场 ⇒ wiki 的 Fireball 70% / Buff 30%），『不能连续两次 Buff』由 `last_move` 计数器 + 一条 P50 规则实现（内容自己记历史，不需要内核状态）。⚠️ 偏差：① 抽签是 `(seed, round, slot)` 的**派生值**，不是随机流（§195.3：意图每次观察都要重算，所以必须是纯函数）；② 『不能连续三次 Fireball』没做（要记两次历史，规则会挤满 8 格上限）；③ 两只 Torch Head 开局在场上，Spawn 被去掉（§194）。",
+      "AiNote": "§194/§195.3：wiki 数值（HP 282/300；Fireball 18→A4 21；Buff 全体 +3 Str + 15 Block，A4 Str 4、A9 Block 18、A19 5/23；Mega Debuff 3/3/3，A19 5/5/5，第 4 回合必出）。出招现在是**带权抽签**（两只 Torch Head 在场 ⇒ wiki 的 Fireball 70% / Buff 30%），『不能连续两次 Buff』由 `last_move` 计数器 + 一条 P50 规则实现（内容自己记历史，不需要内核状态）。⚠️ 偏差：① 抽签是 `(seed, round, slot)` 的**派生值**，不是随机流（§195.3：意图每次观察都要重算，所以必须是纯函数）；② 『不能连续三次 Fireball』用 `last_move` + `prev_move` 两级历史做（两次 Fireball 后强制 Buff）；③ 两只 Torch Head 开局在场上，Spawn 被去掉（§194）。",
       "Counters": []
     },
     {
@@ -21120,7 +24121,34 @@
           "Action": {
             "value": "awakened_one.dark_echo"
           },
-          "Priority": 85
+          "Priority": 90
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "ao_phase"
+              },
+              "Op": "GreaterOrEqual",
+              "Value": 1
+            }
+          },
+          "Priority": 70,
+          "Choice": [
+            {
+              "Action": {
+                "value": "awakened_one.tackle"
+              },
+              "Weight": 50
+            },
+            {
+              "Action": {
+                "value": "awakened_one.sludge"
+              },
+              "Weight": 50
+            }
+          ]
         },
         {
           "Condition": {
@@ -21132,41 +24160,18 @@
                   "value": {
                     "Counter": {
                       "value": "ao_phase"
-                    },
-                    "Op": "GreaterOrEqual",
-                    "Value": 1
-                  }
-                },
-                {
-                  "kind": "intent.selfHasCounter",
-                  "value": {
-                    "Counter": {
-                      "value": "ao_toggle"
                     },
                     "Op": "LessOrEqual",
                     "Value": 0
                   }
-                }
-              ]
-            }
-          },
-          "Action": {
-            "value": "awakened_one.tackle"
-          },
-          "Priority": 80
-        },
-        {
-          "Condition": {
-            "kind": "intent.allOf",
-            "value": {
-              "Conditions": [
+                },
                 {
                   "kind": "intent.selfHasCounter",
                   "value": {
                     "Counter": {
-                      "value": "ao_phase"
+                      "value": "last_move"
                     },
-                    "Op": "GreaterOrEqual",
+                    "Op": "Equal",
                     "Value": 1
                   }
                 },
@@ -21174,24 +24179,56 @@
                   "kind": "intent.selfHasCounter",
                   "value": {
                     "Counter": {
-                      "value": "ao_toggle"
+                      "value": "prev_move"
                     },
-                    "Op": "GreaterOrEqual",
+                    "Op": "Equal",
                     "Value": 1
                   }
                 }
               ]
             }
           },
-          "Action": {
-            "value": "awakened_one.sludge"
+          "Priority": 50,
+          "Choice": [
+            {
+              "Action": {
+                "value": "awakened_one.soul_strike"
+              },
+              "Weight": 100
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "ao_phase"
+              },
+              "Op": "LessOrEqual",
+              "Value": 0
+            }
           },
-          "Priority": 80
+          "Priority": 40,
+          "Choice": [
+            {
+              "Action": {
+                "value": "awakened_one.slash"
+              },
+              "Weight": 75
+            },
+            {
+              "Action": {
+                "value": "awakened_one.soul_strike"
+              },
+              "Weight": 25
+            }
+          ]
         }
       ],
       "Tier": "Boss",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Awakened_One",
-      "AiNote": "§194/§195.2：wiki 数值（HP 300/320；Regenerate 10 / A19 15；Curiosity 1 / A19 2；Slash 20；Soul Strike 6×4；Dark Echo 40；Tackle 10×3；Sludge 18 + 1 Void）。两阶段用计数器做：`ao_phase` 由 Rebirth 置 1，之后 Dark Echo（一次）→ Tackle/Sludge 交替。**复活是真的**：`standard.unawakened` 带 `DeathPrevention{1 HP, 一次性}`，第一次致命伤把它留在1 血并消耗掉，意图规则 `not(hasStatus unawakened)` ⇒ 下一回合 Rebirth（回满血 + 摘 Curiosity）。⚠️ 偏差：① StS 的两阶段第一阶段是 **0 血**（halfDead），我们停在 1 血 —— 所以玩家可以在它复活前补一刀直接杀死（同『要杀两次』的规则，第二次早一回合）；② 『移除所有 debuff』只按名摘掉Curiosity；③ 两个 Cultist 不在；④ Regenerate/Curiosity 的层数不随 A19 变（`StartingStatuses` 没有升档轴 —— `Counters` 有，这两条还没有）。",
+      "AiNote": "§194/§195.2：wiki 数值（HP 300/320；Regenerate 10 / A19 15；Curiosity 1 / A19 2；Slash 20；Soul Strike 6×4；Dark Echo 40；Tackle 10×3；Sludge 18 + 1 Void）。出招是**带权抽签**（第一阶段 Slash 75 / Soul Strike 25，且 Slash 不会连续三次；第二阶段 Tackle/Sludge 50/50）。两阶段用计数器做：`ao_phase` 由 Rebirth 置 1，之后 Dark Echo（一次）→ Tackle/Sludge 交替。**复活是真的**：`standard.unawakened` 带 `DeathPrevention{1 HP, 一次性}`，第一次致命伤把它留在1 血并消耗掉，意图规则 `not(hasStatus unawakened)` ⇒ 下一回合 Rebirth（回满血 + 摘 Curiosity）。⚠️ 偏差：① StS 的两阶段第一阶段是 **0 血**（halfDead），我们停在 1 血 —— 所以玩家可以在它复活前补一刀直接杀死（同『要杀两次』的规则，第二次早一回合）；② 『移除所有 debuff』只按名摘掉Curiosity；③ 两个 Cultist 不在；④ 第二阶段的『不能连续三次 Tackle/Sludge』没做（规则预算 8 条已用在两阶段与排除上）；⑤ Regenerate/Curiosity 的层数不随 A19 变（`StartingStatuses` 没有升档轴 —— `Counters` 有，这两条还没有）。",
       "Counters": []
     },
     {

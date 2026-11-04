@@ -142,9 +142,11 @@ python -m http.server 8000
   **数值**覆盖 **48 个动作 / 49 条变体**（§190–§192；一个动作可以有两个档位）。剩下的 31 个动作
   里多数本来就没有升档（纯状态 / 召唤 / `Does nothing`）；`giant_head.*` 与 `maw.*` 是写明了的
   简化（前者 320 HP 版，后者 wiki 无页）。§194 起每幕的 Boss 池都是三只，A20 的两场可以不同。
-* **出招基本不是随机的**（除 The Collector）：§195.3 给了意图层带权抽签，但抽签是
-  `(seed, round, slot)` 的**派生值**（意图每次观察都要重算 ⇒ 必须是纯函数），"不能连续用同一招"
-  由内容记计数器。今天只有 Collector 用了它（70/30 + 不能连 Buff），其余 Boss 仍是确定性循环。
+* **出招的权重是真实的、抽签是派生的**：§195.3 起意图层能带权抽签（The Champ 45/25/15/15、
+  Collector 70/30、Time Eater 45/35/20、Awakened One 75/25 与 50/50、Bronze Orb 75% 与 70/30），
+  抽签值是 `(seed, round, slot)` 的**派生值**（意图每次观察都要重算 ⇒ 必须是纯函数）。
+  "不能连续用同一招 / 同一招不能三次"由内容记 `last_move`/`prev_move` 计数器 + 排除规则实现。
+  ⚠️ 依旧确定性的：Slime Boss / Guardian / Hexaghost / Automaton / Donu & Deca 的循环（wiki 本身就是固定顺序）。
 * **可变伤害**：`louse_red.bite`（5-7，A2 6-8）与 `darkling.nip`（7-11，A2 9-13）在**建战斗时**
   抽一次并写进该敌人的计数器（wiki: *chosen at the start of combat*），动作读 `combatantCounter`。
   `louse_green.*` 仍是常量 —— 这份内容没有绿虱的敌人记录，改动它等于埋一个"0 伤害"的地雷。
