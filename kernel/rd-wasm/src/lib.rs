@@ -2843,16 +2843,31 @@ pub unsafe extern "C" fn rd_env_intent_into(index: i32, ptr: *mut u8) -> i32 {
 ///
 /// Presentation only, like `rd_env_card_name_*`: the observation carries slots and numbers, and a
 /// page that can only print "enemy #1" cannot show that the names came out of `ENCT`.
+///
+/// §205: the slot is resolved through `enemy_roster()` — **the same list the observation uses** —
+/// and the name comes from the live combatant's `definition_id`. Reading `plan.enemies` instead was
+/// the bug: a summoned combatant (Bronze Orb, Dagger, Torch Head) is not in the plan, so the page
+/// called it `enemy #1` — and so did the *run* page, because this is the only name the ABI carries.
+/// For a non-summoned enemy the two agree (`plan.enemies[i].id` is the definition id), so nothing
+/// else moves.
+fn enemy_slot_name(session: &Session, index: i32) -> Option<&str> {
+    let slot = usize::try_from(index.max(0)).ok()?;
+    let id = *session.enemy_roster().get(slot)?;
+    session
+        .state
+        .combatant(&id)
+        .map(|combatant| combatant.definition_id.as_str())
+        // A wall slot whose combatant has already left the fight (a destroyed summon) keeps the plan
+        // name when there is one, so a late read cannot turn a real name into `-1`.
+        .or_else(|| session.plan.enemies.get(slot).map(|enemy| enemy.id))
+}
+
 #[no_mangle]
 pub extern "C" fn rd_env_enemy_name_len(index: i32) -> i32 {
     let Ok(session) = ensure_session() else {
         return -1;
     };
-    session
-        .plan
-        .enemies
-        .get(index.max(0) as usize)
-        .map_or(-1, |enemy| enemy.id.len() as i32)
+    enemy_slot_name(session, index).map_or(-1, |name| name.len() as i32)
 }
 
 /// # Safety
@@ -2866,11 +2881,11 @@ pub unsafe extern "C" fn rd_env_enemy_name_into(index: i32, ptr: *mut u8) -> i32
     let Ok(session) = ensure_session() else {
         return -1;
     };
-    let Some(enemy) = session.plan.enemies.get(index.max(0) as usize) else {
+    let Some(name) = enemy_slot_name(session, index) else {
         return -1;
     };
-    std::ptr::copy_nonoverlapping(enemy.id.as_ptr(), ptr, enemy.id.len());
-    enemy.id.len() as i32
+    std::ptr::copy_nonoverlapping(name.as_ptr(), ptr, name.len());
+    name.len() as i32
 }
 
 // =============================================================================================
@@ -4486,7 +4501,23 @@ mod card_text_tests {
             "the boss summoned two orbs (enemies now {})",
             enemy_count()
         );
-        // The summons must be distinct combatants, or the turn loop cannot address them.
+        // The summons must be distinct **combatants**, or the turn loop cannot address them. This
+        // reads the roster (turn order) rather than the display names: §205 made the name come from
+        // the *definition*, so two orbs legitimately share `bronze_orb` -- the id is what must be
+        // unique, and the name export is a presentation detail, not an identity.
+        let roster: Vec<String> = slot()
+            .as_ref()
+            .expect("session")
+            .enemy_roster()
+            .iter()
+            .map(|id| id.as_str().to_string())
+            .collect();
+        let mut unique = roster.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), roster.len(), "duplicate combatant ids: {roster:?}");
+        // …and the **names** must be the definitions (that is the §205 claim), two identical orbs
+        // included, so a page printing "enemy #1" fails here.
         let mut names = Vec::new();
         let mut index = 0;
         while crate::rd_env_enemy_name_len(index) >= 0 {
@@ -4496,10 +4527,11 @@ mod card_text_tests {
             names.push(String::from_utf8_lossy(&buffer).to_string());
             index += 1;
         }
-        let mut unique = names.clone();
-        unique.sort();
-        unique.dedup();
-        assert_eq!(unique.len(), names.len(), "duplicate combatant ids: {names:?}");
+        assert_eq!(
+            names,
+            vec!["bronze_automaton".to_string(), "bronze_orb".to_string(), "bronze_orb".to_string()],
+            "a summoned orb must be named from its definition (§205)"
+        );
         crate::take_session();
     }
 

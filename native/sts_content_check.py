@@ -1279,10 +1279,17 @@ INV_ASC_VARIANTS = {
     # §204: wiki `Thieves` -- Looter's Mug 10 (A2: 11) and Lunge 12 (A2: 14). Thievery itself has an
     # A17 row (15 -> 20) but `EACT` still has no ascension column, so the **steal** stays 15 (the
     # note is in the monster's `AiNote`); only the damage moves here.
+    # §205: Thievery 15 -> A17: 20. A variant is a **whole program**, so the A17 row has to carry the
+    # A2 damage bump as well -- otherwise A17 would *lose* it (the picker takes the largest
+    # threshold, not a stack of deltas).
     'looter.mug': [(2, [('damage', 11, 'event'),
-                        ('counter', 'stolen_gold', 15, True, 'source')])],
+                        ('counter', 'stolen_gold', 15, True, 'source')]),
+                   (17, [('damage', 11, 'event'),
+                         ('counter', 'stolen_gold', 20, True, 'source')])],
     'looter.lunge': [(2, [('damage', 14, 'event'),
-                          ('counter', 'stolen_gold', 15, True, 'source')])],
+                          ('counter', 'stolen_gold', 15, True, 'source')]),
+                     (17, [('damage', 14, 'event'),
+                           ('counter', 'stolen_gold', 20, True, 'source')])],
     # §204: wiki `Giant Head` -- Count deals (30; A3: 40). This content's base is 26 (§130's
     # simplification), so the A3 row keeps the wiki's **+10 step**: 36.
     'giant_head.count': [(3, [('damage', 36, 'event')])],

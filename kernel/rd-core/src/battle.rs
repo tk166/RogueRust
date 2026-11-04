@@ -3411,6 +3411,76 @@ mod tests {
         }
     }
 
+    /// §205：`Thievery` 的 A17 档 —— 偷 20，**而且 A2 的伤害提升不能丢**。
+    ///
+    /// 变体是**整个节目**，不是增量：选档规则是"阈值 ≤ 等级里最大的那个"，所以在 A17 选中 17 那
+    /// 一行时，那一行必须**同时**带着 A2 的伤害（11）与 A17 的偷（20）。只写"偷 20"、伤害还是 10
+    /// 的话，A17 会**比 A2 更弱**，而任何单点判据都不会红 —— 只会觉得"这个 Boss 好像有点软"。
+    ///
+    /// 四个点：A0 → 打 10 / 偷 15；A2 → 打 11 / 偷 15；A16 → 同 A2；A17 → 打 11 / 偷 20。
+    /// A16 那一格就是这条测试存在的理由：它证明 17 那一行不是"从 A2 起就生效"。
+    #[test]
+    fn thievery_goes_to_twenty_at_a17_without_losing_the_a2_damage() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut observed = Vec::new();
+        for ascension in [0u8, 2, 16, 17] {
+            let enemies = [PlanCombatant { id: "looter", max_health: 44 }];
+            let deck: [DeckEntry; 0] = [];
+            let res = resources();
+            let refill = refills();
+            let plan = FightPlan {
+                combat_id: "looter_thievery",
+                seed: 1,
+                hero: PlanCombatant { id: "hero", max_health: 70 },
+                enemies: &enemies,
+                deck: &deck,
+                cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+                shuffle_draw_pile_on_start: false,
+                resources: &res,
+                turn_start_refills: &refill,
+            };
+            let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
+            state.set_ascension(ascension);
+            let mut host = Host::new(&content);
+            build_fight(&mut state, &content, &plan).expect("the looter fight builds");
+            let config = turn_config_for(&plan).expect("config");
+            crate::turn::start_current_turn(&mut state, &config, &mut host).expect("turn 1");
+            let mut out = FightOutcome::new();
+            run_fight(
+                &mut state,
+                &content,
+                &plan,
+                &[Step::EndOneTurn, Step::EnemyActs {
+                    enemy: "looter",
+                    action: "looter.mug",
+                    target: Some("hero"),
+                }],
+                &mut host,
+                &mut out,
+            )
+            .expect("mug");
+            let hp = state.combatant(&cid("hero")).expect("hero").health_current;
+            let stolen = state
+                .combatant(&cid("looter"))
+                .expect("looter")
+                .counters()
+                .iter()
+                .find(|entry| entry.key.as_str() == "stolen_gold")
+                .map_or(0, |entry| entry.value);
+            observed.push((ascension, 70 - hp, stolen));
+        }
+        assert_eq!(
+            observed,
+            vec![(0, 10, 15), (2, 11, 15), (16, 11, 15), (17, 11, 20)],
+            "(ascension, damage, stolen): Thievery 15 -> 20 at A17, damage 10 -> 11 at A2"
+        );
+    }
+
     /// §201：`stolen_gold` 是**按战斗员**记的，逃走时**清零**。
     ///
     /// 这条与上一条分开写，因为它们是两个不同的失败面：上一条证明"钱到了账上"，这一条证明

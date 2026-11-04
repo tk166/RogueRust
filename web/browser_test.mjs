@@ -1148,6 +1148,14 @@ want((act2.opening || []).length === 1,
 want((act2.after || []).length === 3,
   `act 2: the boss must summon two orbs (panel ${JSON.stringify(act2.after)})`);
 want(!act2.threw, `act 2: a step threw: ${act2.threw}`);
+// §205: a summoned combatant has to be **named**. It is not in the fight plan (only the boss is), so
+// the name has to come from the live combatant -- before this, both orbs painted as "enemy #1/#2"
+// and nothing in the suite noticed, because "3 entries" was the whole assertion.
+const summonedNames = (act2.after || []).map((entry) => entry.split(/\s+/)[0].trim());
+want(summonedNames.filter((name) => name === "bronze_orb").length === 2,
+  `act 2: both summoned orbs must be named bronze_orb; got ${JSON.stringify(summonedNames)}`);
+want(!summonedNames.some((name) => /^enemy #/.test(name)),
+  `act 2: a summoned enemy still has no name: ${JSON.stringify(summonedNames)}`);
 want(act3.build === 0, `act 3: the reptomancer fight did not build (${act3.build}) ${act3.error || ""}`);
 want((act3.opening || []).length === 3,
   `act 3: boss + two preset daggers; got ${JSON.stringify(act3.opening)}`);
