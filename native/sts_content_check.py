@@ -87,7 +87,7 @@ INV_COUNTS = {
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
-    "statuses": 33,
+    "statuses": 34,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -384,7 +384,10 @@ INV_ACTIONS = {
                                   ("counter", "te_haste", 1, False, "source")]),
     "time_eater.reverberate": ("Attack", [("damage", 7, "event"), ("damage", 7, "event"),
                                           ("damage", 7, "event")]),
-    "time_eater.head_slam": ("Attack", [("damage", 26, "event")]),
+    # §195.7: "Applies 1 Draw Reduction" -- the status is a `TurnStartDraw` passive + a TurnEnded
+    # decay, i.e. "next turn draw 1 less".
+    "time_eater.head_slam": ("Attack", [("damage", 26, "event"),
+                                        ("status", "standard.draw_reduction", 1, "event")]),
     "time_eater.ripple": ("Defend", [("block", 20, "source"),
                                      ("status", "standard.weak", 1, "event"),
                                      ("status", "standard.vulnerable", 1, "event")]),
@@ -508,10 +511,12 @@ INV_ACTIONS = {
     "hexaghost.tackle": ("Attack", [("damage", 5, "event"), ("damage", 5, "event")]),
     "hexaghost.inflame": ("Defend", [("block", 12, "source"),
                                      ("status", "standard.strength", 2, "source")]),
+    # §195.7: Inferno also upgrades every Burn that already exists (wiki: "Upgrades all Burns").
     "hexaghost.inferno": ("Attack", [("damage", 2, "event"), ("damage", 2, "event"),
                                      ("damage", 2, "event"), ("damage", 2, "event"),
                                      ("damage", 2, "event"), ("damage", 2, "event"),
-                                     ("card", "burn+", 3, "DiscardPile", "event")]),
+                                     ("card", "burn+", 3, "DiscardPile", "event"),
+                                     ("upgrade", "event", "burn", None, None)]),
     # --- The Champ's four new moves (wiki: Face Slap 12 + 2 Frail + 2 Vuln, Gloat 2 Str,
     #     Taunt 2 Weak + 2 Vuln, Anger clears debuffs + 6 Str) -----------------------------------
     "the_champ.face_slap": ("Attack", [("damage", 12, "event"),
@@ -747,9 +752,13 @@ INV_STATUSES = {
     # move spends. One status cannot be both: consuming it would delete the hook.
     "standard.stasis": [],
     "standard.stasis_ready": [],
+    # §195.7: Draw Reduction -- the `TurnStartDraw` pipeline, minus one per stack.
+    "standard.draw_reduction": [("TurnStartDraw", "AddPerStack", -1, 100, None)],
 }
 # Statuses whose stacks decay at the owner's turn end (inv:§10).
-INV_DECAYING = {"standard.vulnerable", "standard.weak", "standard.frail"}
+INV_DECAYING = {
+    # §195.7: one turn -- applied during the enemy's turn, gone by the end of the player's next.
+    "standard.draw_reduction","standard.vulnerable", "standard.weak", "standard.frail"}
 
 # =============================================================================
 # 2.  helpers
@@ -915,6 +924,11 @@ def program_facts(root):
                     before = len(facts)
                     walk(sub)
                     facts[before:] = [("when", key) + f for f in facts[before:]]
+        elif kind == "node.upgradeCards":
+            # §195.7: "upgrade every <id>" -- which definition, and where.
+            facts.append(("upgrade", tgt(body["OwnerSelector"]),
+                          body["CardDefinitionId"]["value"],
+                          body.get("FromZone"), body.get("Count")))
         elif kind == "node.selectCards":
             # §195.4: "pick which card" as a fact. Every field that decides *which* card is part of
             # the fact, because "steal the best card" and "steal the first card" differ only here.
@@ -1261,7 +1275,8 @@ INV_ASC_VARIANTS = {
     'hexaghost.inferno': [(4, [('damage', 3, 'event'), ('damage', 3, 'event'),
                                ('damage', 3, 'event'), ('damage', 3, 'event'),
                                ('damage', 3, 'event'), ('damage', 3, 'event'),
-                               ('card', 'burn+', 3, 'DiscardPile', 'event')])],
+                               ('card', 'burn+', 3, 'DiscardPile', 'event'),
+                               ('upgrade', 'event', 'burn', None, None)])],
     # The Champ (Face Slap 12->A4 14, Gloat 2->A4 3->A19 4, Anger 6->A4 9->A19 12,
     # Defensive Stance 15/5 ->A9 18/6 ->A19 20/7).
     'the_champ.face_slap': [(4, [('damage', 14, 'event'),
@@ -1308,7 +1323,8 @@ INV_ASC_VARIANTS = {
     'time_eater.reverberate': [(4, [('damage', 8, 'event'), ('damage', 8, 'event'),
                                     ('damage', 8, 'event')])],
     'time_eater.head_slam': [(19, [('damage', 26, 'event'),
-                                   ('card', 'slimed', 2, 'DiscardPile', 'event')])],
+                                   ('card', 'slimed', 2, 'DiscardPile', 'event'),
+                                   ('status', 'standard.draw_reduction', 1, 'event')])],
     'time_eater.ripple': [(19, [('block', 20, 'source'),
                                 ('status', 'standard.weak', 1, 'event'),
                                 ('status', 'standard.vulnerable', 1, 'event'),

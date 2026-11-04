@@ -2007,6 +2007,65 @@
       ],
       "PassiveModifiers": [],
       "Triggers": null
+    },
+    {
+      "Id": "standard.draw_reduction",
+      "PackageId": "sts",
+      "NameKey": "Draw Reduction",
+      "DescriptionKey": "Draw 1 less card next turn.",
+      "Polarity": "Debuff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "debuff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartDraw",
+          "Operation": "AddPerStack",
+          "Magnitude": -1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.modifyStatusStacks",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.draw_reduction"
+                },
+                "Delta": {
+                  "kind": "const",
+                  "value": {
+                    "Value": -1
+                  }
+                },
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -7134,10 +7193,10 @@
       "Id": "time_eater.head_slam",
       "PackageId": "sts",
       "NameKey": "Head Slam",
-      "DescriptionKey": "Head Slam — 26 damage",
+      "DescriptionKey": "Head Slam - 26 damage, 1 Draw Reduction",
       "Intent": {
         "Kind": "Attack",
-        "Label": "Head Slam — 26 damage"
+        "Label": "Head Slam - 26 damage, 1 Draw Reduction"
       },
       "Program": {
         "Id": {
@@ -7166,6 +7225,30 @@
                   "ResultKey": null,
                   "IgnoresBlock": false,
                   "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.draw_reduction"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
                 }
               },
               {
@@ -7279,6 +7362,30 @@
                         }
                       },
                       "ToZone": "DiscardPile",
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.draw_reduction"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
                       "ResultKey": null
                     }
                   },
@@ -13848,10 +13955,10 @@
       "Id": "hexaghost.inferno",
       "PackageId": "sts",
       "NameKey": "Inferno",
-      "DescriptionKey": "Inferno - 2 damage x6, 3 Burn+ into your discard pile",
+      "DescriptionKey": "Inferno - 2 damage x6, 3 Burn+ into your discard pile, upgrades all Burns",
       "Intent": {
         "Kind": "Attack",
-        "Label": "Inferno - 2 damage x6, 3 Burn+ into your discard pile"
+        "Label": "Inferno - 2 damage x6, 3 Burn+ into your discard pile, upgrades all Burns"
       },
       "Program": {
         "Id": {
@@ -14007,6 +14114,75 @@
                     }
                   },
                   "ToZone": "DiscardPile",
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.upgradeCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "CardDefinitionId": {
+                    "value": "burn"
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 9
+                    }
+                  },
+                  "Relative": false,
                   "ResultKey": null
                 }
               }
@@ -14173,6 +14349,75 @@
                         }
                       },
                       "ToZone": "DiscardPile",
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.upgradeCards",
+                    "value": {
+                      "OwnerSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "CardDefinitionId": {
+                        "value": "burn"
+                      },
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 9
+                        }
+                      },
+                      "Relative": false,
                       "ResultKey": null
                     }
                   }

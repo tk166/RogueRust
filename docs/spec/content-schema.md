@@ -696,6 +696,20 @@ $so = $p.StandardOutput.ReadToEnd(); $se = $p.StandardError.ReadToEnd(); $p.Wait
 另有一个新条件 `intent.ascensionAtLeast`（`{Value: n}`）：StS 的 A17/18/19 在源码里是每只怪
 `getMove` 里的一段 `if`，数据化引擎不能照抄；把那个 `if` 交给内容的 `IntentRule` 就行。
 
+## 9a2. 实现补充（2026-11-03）：`node.upgradeCards`（§195.7）
+
+StS 的"升级"在这份内容里是**定义 id**（`burn` / `burn+`），所以节点只说这件事：
+
+| 字段 | 含义 |
+|---|---|
+| `OwnerSelector` | 谁的牌堆 |
+| `CardDefinitionId` | 要升级哪一种（`burn`） |
+| `FromZone?` | 只升级某一堆；缺席 = 四个主牌堆都走 |
+| `Count?` | 最多升几张；缺席 = 全部 |
+
+匹配到的实例定义改成 `<id>+`，**没有 `+` 行的卡平静跳过**（`dazed`）—— 那是 StS 的
+`canUpgrade() == false`，不是内容错。它**直接写**（一张牌的定义不是触发器看得见的东西）。
+
 ## 9a. 实现补充（2026-11-03）：`node.selectCards`（§195.4）
 
 从 §195.4 起，**挑哪张卡**第一次能被内容说出来。它是本内核自己的节点（参考的四个 `sel.*` 卡选择器

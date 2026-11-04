@@ -738,7 +738,12 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // has a kernel rule -- the whole behaviour is the content's trigger plus `node.selectCards`,
         // which is a *node*, not a status rule.
         "standard.stasis" |
-        "standard.stasis_ready"
+        "standard.stasis_ready" |
+        // §195.7: Draw Reduction -- a `TurnStartDraw` passive row plus its own `TurnEnded` decay.
+        // `has_behaviour` only knows the damage/block pipelines, so the reader-side rule lives in the
+        // content's `PassiveModifiers`; the kernel rule that matters (`fold_turn_start_draw`) already
+        // exists (§195.5's `Pipeline::TurnStartDraw`).
+        "standard.draw_reduction"
     )
 }
 

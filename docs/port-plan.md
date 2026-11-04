@@ -13574,3 +13574,51 @@ README 的"还不能"清单是**承诺**，过期就是假话。这一节逐条�
 * ⚠️ 本节的 plan 段落第一次没写进来：`assert "## 195.6" not in src` 被上一节的
   `### 195.6 还剩什么` 命中了（`###` 里含 `## `）。于是只剩 README 进了提交 —— 现已改名并把本段
   补上。「检查自己写的断言」这条又派上用场。
+
+---
+
+## 195.7 最后一个内容节点（升级牌堆里的卡）与"限时状态"的真相
+
+### 195.7.1 `node.upgradeCards`
+
+StS 的"升级"在这份内容里就是**定义 id**（`burn` / `burn+`），所以节点只说这件事：
+
+    node.upgradeCards { OwnerSelector, CardDefinitionId, FromZone?, Count? }
+
+匹配到的实例改成 `<id>+`；**没有 `+` 行的卡平静跳过**（`dazed`）——那是 StS 的 `canUpgrade() == false`。
+它**直接写**，不入队：一张牌的定义不是触发器看得见的东西（本内核的卡事件只有
+`CardMovedToZone` / `CardInstanceCreated`），参考的升级路径也是直接改。
+
+第一个使用者是 Hexaghost 的 **Inferno**（wiki："Adds 3 Burns+ into your discard pile.
+**Upgrades all Burns**."）—— 后半句此前一个词都表达不出来。
+
+### 195.7.2 `Draw Reduction`：我上一节的诊断一半是错的
+
+§195.6 的 README 写的是"`Draw Reduction` 没接线，因为宿主没跑 `decrease_timed_statuses`"。
+**时钟确实没跑**，但这份内容里**每个限时 debuff 都是用自己的 `TurnEnded` 触发器衰减的**
+（`standard.weak` 就是这样），所以"一回合"是**内容**，不是内核：
+
+    standard.draw_reduction {
+      PassiveModifiers: [{Pipeline: "TurnStartDraw", Operation: "AddPerStack", Magnitude: -1}],
+      Triggers:        [{Event: "TurnEnded", modifyStatusStacks(self, -1)}],
+    }
+
+敌人回合里挂上 ⇒ **下**回合少抽一张 ⇒ 那个回合结束时自己掉光。正好是 wiki 的
+"Draw 1 less card next turn"。
+
+⚠️ 反过来说：把参考的时长时钟**打开**会变成回归 —— 已经在触发器里衰减的状态会**掉两次**，
+所有现有 debuff 的持续时间减半。这条写在这里，免得下一个人"顺手修好"。
+
+### 195.7.3 判据与数字
+
+* **20/20 闸门绿**，单测 **858**（679 / 107 / 72）；四条对拍不变。
+* 内容：状态 33 → **34**、镜像 68,716 → **69,076 B**（core 58,340）。
+* `upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade`：三个牌堆都走到（只扫抽牌堆
+  的实现也能过"一堆"的测试）、`dazed` 保持原样、已升级的不重复升也不丢。
+* `draw_reduction_costs_exactly_one_turns_draw_and_then_expires`：挂着它抽 **4** 张、回合结束后
+  层数归 **0**、没有它的对照局抽 **5** 张（最后一条是"4 不是全局常量"的证明）。
+* 负控：`FromZone: DrawPile` ⇒ 红在 `Hand still holds an un-upgraded Burn: ["burn"]`；
+  删掉衰减触发器 ⇒ 红在 `a TurnStartDraw passive with no decay would be permanent`。
+* 踩坑：`str_field` 返回的是 `&str`，我又调了一次 `.as_str()`，撞上 nightly 的 `str_as_str`；
+  `CardSlot` 的元组构造器是模块私有的，要用 `CardSlot::from_index`；`CardZone::ALL` 是 **7** 个
+  （我把数组写成了 4）。

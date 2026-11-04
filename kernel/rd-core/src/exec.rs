@@ -1614,6 +1614,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::MoveCardToZone
         // §195.4：`selectCards`（挑卡 + 搬卡）。没有孩子，预检只登记它。
         | NodeKind::SelectCards
+        // §195.7：`upgradeCards`（改定义 id），同上。
+        | NodeKind::UpgradeCards
         // §146：`repeat`（X 费牌的"跑 X 遍"）。它有孩子，但预检只走一遍 Body ——
         // 次数是运行期的值，预检看不到它。
         | NodeKind::Repeat => {}
@@ -1772,6 +1774,7 @@ fn dispatch_node(
         NodeKind::CreateCardInstance => create_card_instance_node(node, ctx, frame, slot, stats),
         NodeKind::MoveCardToZone => move_card_to_zone_node(node, ctx, frame, slot, stats),
         NodeKind::SelectCards => select_cards_node(node, ctx, frame, slot, stats),
+        NodeKind::UpgradeCards => upgrade_cards_node(node, ctx, frame, slot, stats),
     };
     outcome?;
     Ok(slot)
@@ -3461,6 +3464,104 @@ fn create_card_for(
 /// * handler 里：卡不在这个战斗员的牌区 ⇒ 抛；同区 ⇒ 只有 `Top` 才重排。
 ///
 /// `ToZone` / `Placement` 都是**裸字符串枚举名**，不认识的串 ⇒ [`IrError::UnknownKind`]。
+/// §195.7：把 `OwnerSelector` 的牌堆里所有 `CardDefinitionId` 的实例升级成 `<id>+`。
+///
+/// **直接写**，不入队：一张牌的定义不是任何触发器看得见的东西（本内核的卡事件只有
+/// `CardMovedToZone` / `CardInstanceCreated`），参考的升级路径也是直接改。
+///
+/// 没有 `+` 行的定义（例如 `dazed`）**平静跳过**：那是 StS 的 `canUpgrade() == false`，不是内容错。
+fn upgrade_cards_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let owner_selector = node
+        .node_field("OwnerSelector")?
+        .ok_or(IrError::Missing("OwnerSelector"))?;
+    let definition = node
+        .str_field("CardDefinitionId")?
+        .ok_or(IrError::Missing("CardDefinitionId"))?;
+    let only_zone = match node.str_field("FromZone")? {
+        Some(name) => Some(zone_from_wire_name(name).ok_or(ExecError::Ir(IrError::UnknownKind))?),
+        None => None,
+    };
+    let limit = match node.int_field("Count")? {
+        Some(count) if count >= 0 => count as usize,
+        Some(_) => return Err(ExecError::Ir(IrError::Missing("Count"))),
+        None => usize::MAX,
+    };
+
+    let mut owners = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let owner_count = resolve_targets(owner_selector, ctx, &mut owners)?;
+    let Some(owner) = owners.first().copied().filter(|_| owner_count > 0) else {
+        return resume_later(ctx.state, frame, slot);
+    };
+
+    // The upgraded definition: `<id>+`, and only if the content has that row. A card without one
+    // (`dazed`) is left alone -- StS's `canUpgrade() == false`, not a content bug.
+    let Some(content) = ctx.content else {
+        return resume_later(ctx.state, frame, slot);
+    };
+    let mut buffer = [0u8; 64];
+    let text = definition;
+    if text.len() + 1 >= buffer.len() {
+        return Err(ExecError::Ir(IrError::Missing("CardDefinitionId")));
+    }
+    buffer[..text.len()].copy_from_slice(text.as_bytes());
+    buffer[text.len()] = b'+';
+    let upgraded_text = core::str::from_utf8(&buffer[..text.len() + 1])
+        .map_err(|_| ExecError::Ir(IrError::Missing("CardDefinitionId")))?;
+    if content.lookup_in(upgraded_text, crate::content::EK_CARD).is_none() {
+        return resume_later(ctx.state, frame, slot);
+    }
+    let upgraded = crate::state::CardDefinitionId::new(upgraded_text)?;
+    let wanted = crate::state::CardDefinitionId::new(text)?;
+
+    let mut changed = 0usize;
+    // `CardZone::ALL` has four entries; a single named zone only walks its first slot of this array.
+    // `CardZone::ALL` has one entry per pile (7), not four.
+    let zones: [crate::state::CardZone; crate::state::CARD_ZONE_COUNT] = match only_zone {
+        Some(zone) => [zone; crate::state::CARD_ZONE_COUNT],
+        None => crate::state::CardZone::ALL,
+    };
+    let zone_count = if only_zone.is_some() { 1 } else { zones.len() };
+    for zone in zones.iter().take(zone_count).copied() {
+        if changed >= limit {
+            break;
+        }
+        let mut slots = [0u16; crate::state::MAX_CARDS_PER_ZONE];
+        let count = match ctx.state.card_zones(&owner) {
+            Some(data) => {
+                let listed = data.slots(zone);
+                let count = listed.len().min(slots.len());
+                slots[..count].copy_from_slice(&listed[..count]);
+                count
+            }
+            None => break,
+        };
+        for raw in slots.iter().take(count).copied() {
+            if changed >= limit {
+                break;
+            }
+            let slot_ref = crate::state::CardSlot::from_index(raw);
+            let Some(card) = ctx.state.card(slot_ref) else {
+                continue;
+            };
+            if card.definition_id != wanted {
+                continue;
+            }
+            if let Some(card) = ctx.state.card_mut(slot_ref) {
+                card.definition_id = upgraded;
+                changed += 1;
+                stats.effects = stats.effects.saturating_add(1);
+            }
+        }
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
 /// §195.4：**挑** `FromZone`（空则 `FallbackZone`）里按 `Order` 排好的前 `Count` 张，搬去 `ToZone`。
 ///
 /// §195.5 补了可选的 `RequireTag`（只看带这个 tag 的卡）。

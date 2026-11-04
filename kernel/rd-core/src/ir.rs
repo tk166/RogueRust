@@ -129,6 +129,12 @@ pub enum NodeKind {
     /// 移出是**结构性**的守卫：不再在名册里，`collect_triggers` 就收不到这个承受者，
     /// 触发器不可能再响第二次。
     DestroyCombatant,
+    /// `node.upgradeCards` —— **把牌升级**（§195.7，本内核自己的节点）。
+    ///
+    /// StS 的"升级"在这份内容里是**定义 id**（`burn` / `burn+`），所以这个节点做的事就是把匹配到的
+    /// 实例的定义改成 `<id>+`。没有 `+` 行的卡（`dazed`）**保持原样** —— 那是 StS 的
+    /// `canUpgrade() == false`，不是错误。
+    UpgradeCards,
     /// `node.selectCards` —— **挑卡并搬卡**（§195.4，本内核自己的节点）。
     ///
     /// 参考的词表里有四个 `sel.*` 卡选择器，`sel.rs` 明确拒绝了它们（"卡选择器 / 玩家选择"），
@@ -168,6 +174,7 @@ impl NodeKind {
             NodeKind::DestroyCombatant => "node.destroyCombatant",
             NodeKind::EndTurn => "node.endTurn",
             NodeKind::ExtraTurn => "node.extraTurn",
+            NodeKind::UpgradeCards => "node.upgradeCards",
             NodeKind::SelectCards => "node.selectCards",
             NodeKind::Repeat => "node.repeat",
         }
@@ -176,7 +183,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 21] = [
+        const ALL: [NodeKind; 22] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -198,6 +205,7 @@ impl NodeKind {
             NodeKind::DestroyCombatant,
             NodeKind::EndTurn,
             NodeKind::ExtraTurn,
+            NodeKind::UpgradeCards,
             NodeKind::SelectCards,
             NodeKind::Repeat,
         ];

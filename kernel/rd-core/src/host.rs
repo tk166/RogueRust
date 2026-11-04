@@ -5880,6 +5880,133 @@ mod tests {
         );
     }
 
+    /// §195.7: `node.upgradeCards` rewrites a card's **definition** (`burn` -> `burn+`) everywhere it
+    /// lives, and leaves a card that has no `+` row alone.
+    ///
+    /// Three judgements: all three piles are walked (a node that only looked at the draw pile would
+    /// still pass a one-pile test), a card without an upgrade row is **unchanged** (that is StS's
+    /// `canUpgrade() == false`, not an error), and the count is right (no double-upgrade, no
+    /// upgrade of the already-upgraded).
+    #[test]
+    fn upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut state = arena();
+        give_card(&mut state, "hero", CardZone::DrawPile, "b1", "burn", None);
+        give_card(&mut state, "hero", CardZone::Hand, "b2", "burn", None);
+        give_card(&mut state, "hero", CardZone::DiscardPile, "b3", "burn", None);
+        // Already upgraded: must stay as it is, and must not be counted twice.
+        give_card(&mut state, "hero", CardZone::DiscardPile, "b4", "burn+", None);
+        // No `burn++` (and `dazed` has no upgrade at all): both are left alone.
+        give_card(&mut state, "hero", CardZone::Hand, "d1", "dazed", None);
+
+        let mut host = Host::new(&content);
+        let row = u32::from(
+            content
+                .lookup_in("hexaghost.inferno", crate::content::EK_EACTION)
+                .expect("inferno is in the image")
+                .index,
+        );
+        crate::intent::execute_action(&mut state, &content, &cid("enemy_a"), row, Some(cid("hero")))
+            .expect("Inferno");
+        host.try_resolve_pending_queues(&mut state).expect("the move lands");
+
+        for zone in [CardZone::DrawPile, CardZone::Hand, CardZone::DiscardPile] {
+            let burns = zone_definitions(&state, "hero", zone)
+                .into_iter()
+                .filter(|name| name.starts_with("burn"))
+                .collect::<Vec<_>>();
+            assert!(
+                burns.iter().all(|name| name == "burn+"),
+                "{zone:?} still holds an un-upgraded Burn: {burns:?}"
+            );
+        }
+        assert_eq!(
+            zone_definitions(&state, "hero", CardZone::Hand),
+            vec!["burn+".to_string(), "dazed".to_string()],
+            "`dazed` has no `+` row, so it stays `dazed`"
+        );
+        // The discard pile also received Inferno's own "3 Burn+" (wiki), so it holds the two original
+        // cards plus those three -- all upgraded, none lost, none doubled.
+        assert_eq!(
+            zone_definitions(&state, "hero", CardZone::DiscardPile),
+            vec!["burn+".to_string(); 5],
+            "2 originals + the 3 Inferno shuffles in, all `burn+`"
+        );
+    }
+
+    /// §195.7: `standard.draw_reduction` -- 1 less card **next** turn, and gone the turn after.
+    ///
+    /// This is the status the README used to list as blocked ("the host never runs the reference's
+    /// timed clock"). The clock is indeed not run -- and it does not need to be: every timed debuff
+    /// in this content decays through its own `TurnEnded` trigger, so "one turn" is content.
+    ///
+    /// Three judgements, each a different failure mode: the passive really reaches the turn machine
+    /// (draw 4 instead of 5), the decay trigger really fires (the stack is gone at turn end), and a
+    /// **fresh** fight without the status still draws 5 (so "4" cannot be a global constant).
+    #[test]
+    fn draw_reduction_costs_exactly_one_turns_draw_and_then_expires() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let config = TurnConfig {
+            energy: ResourceId::new("standard.energy").unwrap(),
+            energy_refill: 3,
+            draw_per_turn: 5,
+            max_hand_size: i32::MAX,
+            block_pool: DefensivePoolId::new("standard.block").unwrap(),
+        };
+        let stock = |state: &mut CombatState| {
+            for index in 0..10 {
+                give_card(state, "hero", CardZone::DrawPile, &std::format!("c{index}"), "strike", None);
+            }
+        };
+
+        // Turning on the pipeline is what the enemy's Head Slam does *before* the hero's turn starts,
+        // so the status is already on the hero when the turn machine asks for the count.
+        let mut state = arena();
+        stock(&mut state);
+        state
+            .combatant_mut(&cid("hero"))
+            .expect("hero")
+            .push_status(crate::state::StatusInstance::new(
+                crate::state::StatusInstanceId::new("dr1").unwrap(),
+                crate::state::StatusDefinitionId::new("standard.draw_reduction").unwrap(),
+                crate::state::StatusPolarity::Debuff,
+            ).with_stacks(1))
+            .expect("apply draw reduction");
+        let mut host = Host::new(&content);
+        turn::start_current_turn(&mut state, &config, &mut host).expect("turn 1");
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::Hand),
+            4,
+            "wiki: `Draw 1 less card next turn`"
+        );
+
+        // The decay is the status' own `TurnEnded` trigger: one turn, not forever.
+        host.try_run_turn_ended_triggers(&mut state, &cid("hero"))
+            .expect("hero turn ends");
+        assert_eq!(
+            stacks_of(&state, "hero", "standard.draw_reduction"),
+            0,
+            "a `TurnStartDraw` passive with no decay would be permanent"
+        );
+
+        // Control: without the status the same deck draws the full five.
+        let mut clean = arena();
+        stock(&mut clean);
+        let mut host = Host::new(&content);
+        turn::start_current_turn(&mut clean, &config, &mut host).expect("turn 1");
+        assert_eq!(zone_count(&clean, "hero", CardZone::Hand), 5, "the base draw");
+    }
+
     #[test]
     fn regen_heals_at_the_end_of_the_turn() {
         // Wiki: Regen N = "at the end of your turn, heal N". Content trigger on `TurnEnded`.
