@@ -2252,6 +2252,76 @@
         }
       ],
       "Triggers": null
+    },
+    {
+      "Id": "standard.flying",
+      "PackageId": "sts",
+      "NameKey": "Flying",
+      "DescriptionKey": "Takes half damage from attacks and loses 1 Flying each time it is hit by one.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "DamageReceived",
+          "Operation": "ScalePercent",
+          "Magnitude": 50,
+          "Priority": 160,
+          "RestrictDamageKind": "Direct",
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "event.bool",
+                  "value": {
+                    "FieldKey": "damage.isAttack"
+                  }
+                },
+                "Then": {
+                  "kind": "node.modifyStatusStacks",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusDefinitionId": {
+                      "value": "standard.flying"
+                    },
+                    "Delta": {
+                      "kind": "const",
+                      "value": {
+                        "Value": -1
+                      }
+                    }
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -21291,6 +21361,13 @@
               "AscensionMin": 7,
               "MaxHealth": 42
             }
+          ],
+          "StartingBlock": 6,
+          "StartingBlockAsc": [
+            {
+              "AscensionMin": 17,
+              "Amount": 9
+            }
           ]
         }
       ],
@@ -21916,7 +21993,20 @@
               "value": "byrd.swoop"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.flying"
+              },
+              "Stacks": 3,
+              "Asc": [
+                {
+                  "AscensionMin": 17,
+                  "Stacks": 4
+                }
+              ]
+            }
+          ],
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Byrd",
@@ -24689,6 +24779,13 @@
           "StartingStatuses": [
             {
               "StatusDefinitionId": {
+                "value": "standard.strength"
+              },
+              "Stacks": 2,
+              "AscensionMin": 4
+            },
+            {
+              "StatusDefinitionId": {
                 "value": "standard.regen"
               },
               "Stacks": 10,
@@ -25444,7 +25541,14 @@
       "AiNote": "首回合必定 Chomp；三步循环满足三条『不能连用』约束（inv:§4.1、plan §3.2#8）",
       "TriggeredEffects": [],
       "Counters": [],
-      "Spawn": true
+      "Spawn": true,
+      "StartingBlock": 6,
+      "StartingBlockAsc": [
+        {
+          "AscensionMin": 17,
+          "Amount": 9
+        }
+      ]
     },
     {
       "Id": "cultist",
@@ -25922,7 +26026,20 @@
           "value": "byrd.swoop"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.flying"
+          },
+          "Stacks": 3,
+          "Asc": [
+            {
+              "AscensionMin": 17,
+              "Stacks": 4
+            }
+          ]
+        }
+      ],
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "inv:§5.2",
@@ -27596,6 +27713,13 @@
         }
       ],
       "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.strength"
+          },
+          "Stacks": 2,
+          "AscensionMin": 4
+        },
         {
           "StatusDefinitionId": {
             "value": "standard.regen"

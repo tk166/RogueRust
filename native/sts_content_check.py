@@ -89,7 +89,8 @@ INV_COUNTS = {
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
-    "statuses": 40,
+    # §208: +1 (`standard.flying`).
+    "statuses": 41,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -797,6 +798,9 @@ INV_STATUSES = {
     "standard.stasis_ready": [],
     # §195.7: Draw Reduction -- the `TurnStartDraw` pipeline, minus one per stack.
     "standard.draw_reduction": [("TurnStartDraw", "AddPerStack", -1, 100, None)],
+    # §208: Byrd's Flying -- half damage from **attacks** (`ScalePercent`, which ignores stacks:
+    # `ScalePercentPerStack` would halve once per stack) and one stack lost per attack taken.
+    "standard.flying": [("DamageReceived", "ScalePercent", 50, 160, "Direct")],
     # §199: Berserk -- the first `TurnStartEnergy` row (our own pipeline; +1 energy per stack).
     "standard.berserk": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
     # §198: Slow -- a `DamageReceived` row with the stack-linear scale (our own operation), plus a
@@ -1480,10 +1484,11 @@ INV_ASC_HP_LEVEL = {'Elite': 8, 'Boss': 9}
 INV_STATUS_ASC = {
     # `Shapes` (Spiker): Thorns 3 (A2: 4 | A17: 7).
     'spiker': {'standard.thorns': [(2, 4), (17, 7)]},
-    # `Byrd`: Flying 3 (A17: 4) -- **not expressible**: this content has no `standard.flying` status
-    # (Byrd is the §130 simplification), so there is nothing to pin. Recorded, not silently dropped.
-    # `Jaw Worm`: Strength 3 (A2/A17) + Block 6 (A17) -- Block is a **defensive pool**, not a status,
-    # so the wiki's second half has no home in `StartingStatuses` either.
+    # `Byrd`: Flying 3 (A17: 4). §208 added `standard.flying` (half damage from attacks, one stack
+    # per hit) **and** the `damage.isAttack` event fact, so the §207 "not expressible" note is gone.
+    # `Jaw Worm`: Strength 3 (A2/A17) is a status; its Block 6 (A17: 9) is a **defensive pool** --
+    # §208 gave the enemy record `StartingBlock` / `StartingBlockAsc` for exactly that case.
+    'byrd': {'standard.flying': [(17, 4)]},
     # `Orb Walker`: Strength Up 3 (A17: 5).
     'orb_walker': {'standard.strength': [(17, 5)]},
     # `Awakened One`: Regenerate 10 (A19: 15), Curiosity 1 (A19: 2).
@@ -1995,7 +2000,7 @@ def check_statuses(doc):
                      "standard.time_warp", "standard.constricted",
                      "standard.phantom_veil",
                      "standard.sharp_hide", "standard.curiosity", "standard.mode_shift",
-                     "standard.stasis", "standard.slow"):
+                     "standard.stasis", "standard.slow", "standard.flying"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -2020,7 +2025,9 @@ def check_statuses(doc):
                         # §195.4: "on death, the stolen card is returned" -- a Downed trigger.
                         "standard.stasis": ["Downed"],
                         # §198: "whenever you play a card" -- Slow grows on CardPlayed.
-                        "standard.slow": ["CardPlayed"]}[sid]
+                        "standard.slow": ["CardPlayed"],
+                        # §208: Byrd's Flying -- loses a stack when hit by an **attack**.
+                        "standard.flying": ["DamageTaken"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

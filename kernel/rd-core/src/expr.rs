@@ -618,6 +618,8 @@ pub fn eval_bool<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<bool, E
                 "card.hasTag.skill" => crate::exec::CARD_HAS_TAG_SKILL,
                 "card.hasTag.power" => crate::exec::CARD_HAS_TAG_POWER,
                 "card.hasTag.status" => crate::exec::CARD_HAS_TAG_STATUS,
+                // §208: the receiving side's fact (see `DAMAGE_IS_ATTACK`'s doc).
+                "damage.isAttack" => crate::exec::DAMAGE_IS_ATTACK,
                 _ => return Err(ExprError::UnsupportedKind),
             };
             Ok(ctx.event_flags & bit != 0)

@@ -2430,6 +2430,13 @@ pub enum CombatEvent {
         /// 不是请求额、也不是被格挡吸收的那部分：wiki 把 Mode Shift 写成 "after losing X HP"，
         /// 而一次被完全挡住的攻击**一点血都没掉**。`DamageDealt` 三个数都有，这条只要一个。
         health_damage: i32,
+        /// §208: 这次伤害是不是**攻击伤害**（`damage_kind == Direct`）。
+        ///
+        /// 为什么要有这一格：wiki 里"受到攻击时"与"受到伤害时"是两件事 —— Flying（Byrd）
+        /// "loses 1 Flying when hit by an **attack**"、Thorns 也只在被打时装上。此前
+        /// `event.bool` 只认**卡牌标签**（`card.hasTag.attack`，那是 `CardPlayed` 的事实），
+        /// 受击侧一个事实都没有，于是这类状态只能"受任何伤害都触发"，数值就错了。
+        is_attack: bool,
     },
     /// `CardPlayed`（`CardPlay.cs:144`）：**有人打出了一张牌**。
     ///

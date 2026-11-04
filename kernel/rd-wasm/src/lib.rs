@@ -574,6 +574,33 @@ fn apply_starting_statuses(
         let Ok(target) = rd_core::state::CombatantId::new(id) else {
             return Err(format!("`{id}` is not a usable combatant id"));
         };
+        // §208: `StartingBlock` -- an enemy can **start with block on it**, and `StartingStatuses`
+        // cannot say that (block is a defensive pool, not a status). The wiki states it as a power
+        // (`Jaw Worm: Block 6 (A17 9)`), so the record grows one column plus the usual ascension
+        // list. Applied through `EffectRequest::GainBlock` + `drain`, i.e. the same path a card
+        // takes -- no second implementation of "add block".
+        let level = i32::from(session.state.ascension());
+        let starting_block = match spec
+            .starting_block_asc(level)
+            .map_err(|e| format!("ENCT enemy StartingBlock: {}", detail(&e)))?
+        {
+            Some(amount) => amount,
+            None => spec
+                .starting_block()
+                .map_err(|e| format!("ENCT enemy StartingBlock: {}", detail(&e)))?
+                .unwrap_or(0),
+        };
+        if starting_block > 0 {
+            session
+                .state
+                .enqueue_effect(rd_core::state::EffectRequest::GainBlock {
+                    target: Some(target),
+                    amount: starting_block,
+                })
+                .map_err(|e| format!("enqueue starting block: {}", detail(&e)))?;
+            rd_core::exec::drain(&mut session.state, Some(&content), None)
+                .map_err(|e| format!("drain starting block: {}", detail(&e)))?;
+        }
         let statuses = spec
             .starting_statuses()
             .map_err(|e| format!("StartingStatuses: {}", detail(&e)))?;
@@ -598,11 +625,22 @@ fn apply_starting_statuses(
             let Ok(definition) = rd_core::state::StatusDefinitionId::new(status_id) else {
                 return Err(format!("`{status_id}` is not a usable status id"));
             };
+            // §208: **presence** is its own knob. `AscensionMin` on the entry means "this starting
+            // status does not exist below that level" (wiki: Awakened One has `Strength 2` only from
+            // A4). It is orthogonal to `Asc` below -- presence is not "0 stacks", because a status
+            // with 0 stacks still occupies an instance slot and still answers `selfHasStatus`.
+            let level = i32::from(session.state.ascension());
+            let present_from = node
+                .int_field("AscensionMin")
+                .map_err(|e| format!("StartingStatuses[{index}].AscensionMin: {e:?}"))?
+                .unwrap_or(0);
+            if present_from > 0 && level < present_from {
+                continue;
+            }
             // §207: `Asc: [{AscensionMin, Stacks}, …]` overrides the stack count at (and above) a
             // level -- the third ascension list, next to `EACT.ProgramAsc` (§192) and
             // `ENCT.MaxHealthAsc` (§206), with the **same** rule: the largest threshold that is
             // still `<= ascension`, and the order in the list does not participate.
-            let level = i32::from(session.state.ascension());
             let stacks = match starting_status_asc(&node, level) {
                 Ok(Some(overridden)) => overridden,
                 Ok(None) => node.int_field("Stacks").ok().flatten().unwrap_or(1),
@@ -625,7 +663,7 @@ fn apply_starting_statuses(
                     None,
                 )
                 .map_err(|e| format!("enqueue starting status: {}", detail(&e)))?;
-            rd_core::exec::drain(&mut session.state, Some(content), None)
+            rd_core::exec::drain(&mut session.state, Some(&content), None)
                 .map_err(|e| format!("drain starting status: {}", detail(&e)))?;
         }
     }
@@ -4428,10 +4466,13 @@ mod card_text_tests {
             hero_before,
             "Uppercut must not damage the hero"
         );
+        // §208: this content's jaw worm now **starts with 6 block** (wiki `Jaw Worm`: Block 6), so a
+        // 13-damage Uppercut takes 6 of it off the block and 7 off the health. The assertion is the
+        // wiki's arithmetic, not "13 less health" -- which was true only while the block was missing.
         assert_eq!(
             first_enemy_health(),
-            enemy_before - 13,
-            "Uppercut deals 13 to the enemy"
+            enemy_before - 7,
+            "Uppercut eats the 6 starting block and deals 7 to the health"
         );
     }
 
@@ -4533,6 +4574,152 @@ mod card_text_tests {
     /// §207: a `CombatantId` from a literal, for the tests below.
     fn cid_in(name: &str) -> rd_core::state::CombatantId {
         rd_core::state::CombatantId::new(name).expect("a short id")
+    }
+
+    /// §208：Byrd 的 Flying —— **攻击**伤害减半，每被打一次掉一层；DoT 不算"被打"。
+    ///
+    /// 三段判据（缺一段就会静默错一档）：
+    /// 1. 3 层 Flying 吃一次 10 点攻击 ⇒ 掉 **5** 点血（`ScalePercent -50` 是"乘 50%、**不读层数**"；
+    ///    用 `ScalePercentPerStack` 会变成 10 × 0.5³ = 1，看起来也能跑）；
+    /// 2. 那一次之后 Flying 只剩 **2** 层（`damage.isAttack` 这个事件事实）；
+    /// 3. 毒（`resolve_damage_of_kind(Dot)`）**不减层**：`damage.isAttack` 为假，触发器不动。
+    #[test]
+    fn flying_halves_attack_damage_and_loses_a_stack_per_hit() {
+        use rd_core::status_bind::DamageKind;
+        let session = build_session_at(7, "enc_byrds", 200, None, 0, 0)
+            .expect("the byrd fight builds");
+        install_session(session);
+        let blob = crate::IMAGE;
+        let content = rd_core::content::Content::parse(blob).expect("image");
+        let stacks = |state: &rd_core::state::CombatState| {
+            state
+                .combatant(&cid_in("byrd"))
+                .and_then(|combatant| {
+                    combatant
+                        .statuses()
+                        .iter()
+                        .find(|instance| instance.definition_id.as_str() == "standard.flying")
+                        .map(|instance| instance.stacks)
+                })
+                .unwrap_or(0)
+        };
+        // 1 + 2: one 10-point attack. The **host** has to run too: `DamageTaken` is an event, and the
+        // Flying trigger lives on the receiving side -- a bare `resolve_damage` halves the damage but
+        // never dispatches the event, which is exactly how the first version of this test failed.
+        {
+            let mut host = rd_core::host::Host::new(&content);
+            let session = slot().as_mut().expect("session");
+            let mut ctx = rd_core::exec::ExecContext::new(
+                &mut session.state,
+                Some(cid_in("hero")),
+                Some(cid_in("byrd")),
+                None,
+                1024,
+            )
+            .with_content(&content);
+            rd_core::exec::resolve_damage(&mut ctx, &cid_in("byrd"), 10, false)
+                .expect("an attack lands");
+            rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+            host.resolve_pending_queues_with(&mut session.state, rd_core::host::QueueLimits::DEFAULT)
+                .expect("the host dispatches DamageTaken");
+        }
+        let (hp, left) = {
+            let session = slot().as_ref().expect("session");
+            let combatant = session.state.combatant(&cid_in("byrd")).expect("byrd");
+            (combatant.health_current, stacks(&session.state))
+        };
+        let max = {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in("byrd")).expect("byrd").health_max
+        };
+        assert_eq!(max - hp, 5, "Flying halves the 10-point attack");
+        assert_eq!(left, 2, "and the hit costs one Flying stack");
+        // 3: a DoT tick does **not** touch it.
+        {
+            let session = slot().as_mut().expect("session");
+            let before = session.state.combatant(&cid_in("byrd")).expect("byrd").health_current;
+            let mut ctx = rd_core::exec::ExecContext::new(
+                &mut session.state,
+                Some(cid_in("hero")),
+                Some(cid_in("byrd")),
+                None,
+                1024,
+            )
+            .with_content(&content);
+            rd_core::exec::resolve_damage_of_kind(&mut ctx, &cid_in("byrd"), 10, false, DamageKind::Dot)
+                .expect("a DoT tick lands");
+            rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+            let after = session.state.combatant(&cid_in("byrd")).expect("byrd").health_current;
+            assert_eq!(before - after, 10, "DoT is not halved (it is not an attack)");
+        }
+        assert_eq!(
+            {
+                let session = slot().as_ref().expect("session");
+                stacks(&session.state)
+            },
+            2,
+            "a DoT tick must not consume a Flying stack (damage.isAttack)"
+        );
+        take_session();
+    }
+
+    /// §208：`StartingBlock` —— Jaw Worm 开局就带 6 格挡（A17: 9）。
+    ///
+    /// 这一条是**基建**判据：`StartingStatuses` 只能挂状态，Block 是防御池，所以记录上多了
+    /// `StartingBlock` / `StartingBlockAsc` 两列。判据问的是"建战之后它身上真的有格挡"，
+    /// 并且 A16（6）与 A17（9）两侧各问一次。
+    #[test]
+    fn a_jaw_worm_starts_with_block_and_a17_makes_it_bigger() {
+        for (ascension, expected) in [(0u8, 6i32), (16, 6), (17, 9)] {
+            let session = build_session_at(7, "enc_jaw_worm", 200, None, 0, ascension)
+                .unwrap_or_else(|e| panic!("jaw worm at A{ascension}: {e}"));
+            install_session(session);
+            let block = {
+                let session = slot().as_ref().expect("session");
+                session
+                    .state
+                    .combatant(&cid_in("jaw_worm"))
+                    .and_then(|combatant| {
+                        combatant
+                            .defensive_pools()
+                            .iter()
+                            .find(|pool| pool.key.as_str() == "standard.block")
+                            .map(|pool| pool.pool.current)
+                    })
+                    .unwrap_or(0)
+            };
+            assert_eq!(block, expected, "jaw worm block at A{ascension}");
+        }
+        take_session();
+    }
+
+    /// §208：`StartingStatuses[].AscensionMin` —— Awakened One 的 `Strength 2` **只在 A4 起存在**。
+    ///
+    /// 与 `Asc`（换层数）是两件事：0 层仍会占一个状态实例，`selfHasStatus` 也仍然为真，所以
+    /// "A4 之前没有这个状态"必须由**presence** 表达，不能写成 `Stacks: 0`。
+    #[test]
+    fn a_starting_status_can_start_existing_later() {
+        for (ascension, expected) in [(0u8, 0i32), (3, 0), (4, 2), (19, 2)] {
+            let session = build_session_at(7, "enc_awakened_one", 200, None, 0, ascension)
+                .unwrap_or_else(|e| panic!("awakened one at A{ascension}: {e}"));
+            install_session(session);
+            let strength = {
+                let session = slot().as_ref().expect("session");
+                session
+                    .state
+                    .combatant(&cid_in("awakened_one"))
+                    .map(|combatant| {
+                        combatant
+                            .statuses()
+                            .iter()
+                            .find(|instance| instance.definition_id.as_str() == "standard.strength")
+                            .map_or(0, |instance| instance.stacks)
+                    })
+                    .unwrap_or(-1)
+            };
+            assert_eq!(strength, expected, "awakened one Strength at A{ascension}");
+        }
+        take_session();
     }
 
     /// §207：起始状态的 A 级升档 —— 同一场遭遇，只有 `ascension` 不同，层数就是 wiki 的数。

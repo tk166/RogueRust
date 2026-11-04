@@ -1410,6 +1410,10 @@ pub fn resolve_damage_of_kind(
             target: *target,
             source: taken_source,
             health_damage: health_lost,
+            // §208: the fact the receiving side never had. `Direct` is what the content calls an
+            // attack (`damageKind: Direct`); DoT ticks are `Dot` and must not count as "hit by an
+            // attack" (Flying only loses a stack to attacks).
+            is_attack: matches!(kind, BindDamageKind::Direct),
         })
         .map_err(ExecError::Capacity)?;
 
@@ -4028,6 +4032,13 @@ fn zone_count(state: &CombatState, owner: &CombatantId, zone: CardZone) -> usize
 ///
 /// These are the only tags any photographed content asks about; a new one is a one-line change
 /// here plus a line in `expr::eval_bool`.
+/// §208: `event.bool: damage.isAttack` —— 这次伤害是不是攻击（`Direct`）。
+///
+/// 与下面四个卡牌标签位**同一套仓位**：`event_flags` 是「这次事件的事实」的位图，谁来填由事件
+/// 种类决定（`CardPlayed` 填卡牌标签，`DamageTaken` 填这一个）。受击侧此前一个事实都没有，
+/// 于是 Flying 那种"只在被打时扣层"只能写成"受任何伤害都扣"。
+pub const DAMAGE_IS_ATTACK: u8 = 1 << 4;
+
 pub const CARD_HAS_TAG_ATTACK: u8 = 1 << 0;
 pub const CARD_HAS_TAG_SKILL: u8 = 1 << 1;
 pub const CARD_HAS_TAG_POWER: u8 = 1 << 2;

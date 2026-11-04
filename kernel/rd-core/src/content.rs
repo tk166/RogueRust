@@ -2116,6 +2116,58 @@ impl<'a> EnemySpec<'a> {
         self.list_any("StartingStatuses")
     }
 
+    /// §208: `StartingBlock`（`F_INT`）—— 开局就挂在敌人身上的格挡。
+    ///
+    /// 为什么不能塞进 `StartingStatuses`：Block 是**防御池**（`EffectRequest::GainBlock`），不是
+    /// 状态实例；wiki 把它写在 `Powers` 列里（`Jaw Worm: Block 6 (A17 9)`），而我们的
+    /// `StartingStatuses` 只认 `StatusDefinitionId`。上一节把这一条记成"不可表达"是对的 ——
+    /// 但那是**基建缺口**，所以这里补列而不是留白。
+    pub fn starting_block(&self) -> Result<Option<i32>, EncounterError> {
+        match self.field_at("StartingBlock") {
+            Err(EncounterError::MissingField("StartingBlock")) => Ok(None),
+            Err(other) => Err(other),
+            Ok((_kind, at)) => match self.slot(at)? {
+                ABSENT_INT | NULL_INT => Ok(None),
+                raw => Ok(Some(i32::from(raw as i16))),
+            },
+        }
+    }
+
+    /// §208: `StartingBlock` 的升档列表（`[{AscensionMin, Amount}, …]`），规则与另外三张表一致。
+    pub fn starting_block_asc(
+        &self,
+        ascension: i32,
+    ) -> Result<Option<i32>, EncounterError> {
+        let list = match self.list_any("StartingBlockAsc") {
+            Err(EncounterError::MissingField("StartingBlockAsc")) => return Ok(None),
+            Err(EncounterError::WrongFieldKind("StartingBlockAsc")) => return Ok(None),
+            other => other?,
+        };
+        let mut best: Option<(i32, i32)> = None;
+        for index in 0..list.len() {
+            let element = list
+                .term(index)
+                .ok_or(EncounterError::MalformedList("StartingBlockAsc"))?;
+            let element = crate::ir::NodeRef::new(self.content, element);
+            let threshold = element
+                .int_field("AscensionMin")
+                .map_err(|_| EncounterError::WrongFieldKind("AscensionMin"))?
+                .ok_or(EncounterError::MissingField("AscensionMin"))?;
+            if threshold <= 0 || threshold > ascension {
+                continue;
+            }
+            let amount = element
+                .int_field("Amount")
+                .map_err(|_| EncounterError::WrongFieldKind("Amount"))?
+                .ok_or(EncounterError::MissingField("Amount"))?;
+            match best {
+                Some((seen, _)) if seen >= threshold => {}
+                _ => best = Some((threshold, amount)),
+            }
+        }
+        Ok(best.map(|(_, amount)| amount))
+    }
+
     /// `Owner`（`F_STR`，§195.8）：这条记录的**主人**（谁倒下时它逃跑）。缺席 ⇒ `Ok(None)`。
     ///
     /// 内核早有这条规则（`resolve_damage` 把主人倒下的 minion 转成 `Escaped`），但此前只有

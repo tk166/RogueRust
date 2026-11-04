@@ -14350,3 +14350,58 @@ Spiker 的 Thorns 在 A0/A2/A16/A17 四个点必须是 3/4/4/7（**中间那一�
   （`ENCT.MaxHealthAsc`，50 条）、**起始状态**（`StartingStatuses[].Asc`，6 条）。
   仍然欠的是"**A 级才出现/消失**"这一类（Awakened One 的 `Strength 2 @A4`、Louses 的 Curl Up 掷骰
   A7/A17）—— 那需要"条件状态"而不是"换层数"，留作已知缺口。
+
+---
+
+## §208 条件状态 + 把两条"不可表达"改到基线上
+
+§207 结尾留了两类欠账：**"A 级才出现/消失"的状态**，以及两条被我记成"加不进去"的（Byrd 的
+Flying、Jaw Worm 的起始 Block）。后者按你的要求**查到底**：一条是**内容**（Flying 本来就能写），
+一条是**基建**（起始格挡根本没有位置）。三条一起交付。
+
+### 208.1 条件状态：`StartingStatuses[].AscensionMin`
+
+"存在性"是**独立的一个旋钮**，与 `Asc`（换层数）正交：
+
+* `AscensionMin` 在**条目**上 ⇒ 这一条起始状态**在这一级之下不存在**（wiki `Awakened One`：
+  `Strength 2` 只从 A4 起）；
+* `Asc`（§207）在**同一个条目**里 ⇒ 各档的层数。
+
+为什么不能写成 `Stacks: 0`：0 层的状态仍然**占着一个实例槽**，`selfHasStatus`/`intent.selfHasStatus`
+也仍然为真 —— 于是"没有这个状态"的规则会静默地按"有，只是 0 层"跑。判据
+`a_starting_status_can_start_existing_later`：Awakened One 的 Strength 在 A0/A3 是 **0**（状态不存在）、
+A4/A19 是 **2**。
+
+### 208.2 基建：`StartingBlock` / `StartingBlockAsc`
+
+Jaw Worm 的 wiki 是 `Block 6 (A17 9)` —— 而 Block 是**防御池**（`EffectRequest::GainBlock`），
+`StartingStatuses` 只认 `StatusDefinitionId`。§207 把它记成"不可表达"是对的，但那不是收工的理由：
+这是**基建缺口**，所以敌人记录多了两列，`apply_starting_statuses` 之前先用
+`EffectRequest::GainBlock` + `drain` 把它挂上去（与卡牌同一条路径，没有第二套"加格挡"）。
+
+判据 `a_jaw_worm_starts_with_block_and_a17_makes_it_bigger`：A0/A16 → 6、A17 → 9。
+副作用是 `uppercut_hurts_the_enemy_and_not_the_hero` 当场变红（13 点 Uppercut 只掉 7 点血）——
+那不是"测试坏了"，是**新行为正确**：判据改成 wiki 的算术（先吃 6 点格挡）。
+
+### 208.3 基建：`damage.isAttack` 事件事实 + `standard.flying`
+
+`event.bool` 之前只认**卡牌标签**（`card.hasTag.attack`，那是 `CardPlayed` 的事实）。受击侧
+**一个事实都没有**，所以 Flying 的"被攻击时掉一层"只能写成"受任何伤害都掉"—— 数值就错了。
+
+* 基建：`CombatEvent::DamageTaken` 带上 `is_attack`（`resolve_damage_of_kind` 里 `kind == Direct`），
+  宿主把它填进 `ctx.event_flags` 的 `DAMAGE_IS_ATTACK` 位，`expr.rs` 认识 `damage.isAttack`。
+* 内容：`standard.flying` = `DamageReceived / ScalePercent 50 / Direct`（减半）+ `DamageTaken`
+  触发（`condition: event.bool: damage.isAttack` ⇒ `modifyStatusStacks(-1)`）。
+  ⚠️ `ScalePercent` 的 `magnitude` **就是百分比本身**（`current * magnitude / 100`），写 `-50`
+  会把伤害夹成 **0** —— 第一版就是这样，判据当场红在"10 点攻击掉了 0 点血"。
+* Byrd 的 `Flying 3 (A17 4)` 于是真的进了内容（§207 的"不可表达"注记删掉）。
+
+判据 `flying_halves_attack_damage_and_loses_a_stack_per_hit`：10 点攻击 ⇒ 掉 **5** 点、Flying 3→**2**；
+随后的 **DoT** 10 点 ⇒ 掉 **10** 点、层数**不动**（`damage.isAttack` 为假）。
+第二条判据（DoT）是这条测试存在的理由：只测攻击的话，"任何伤害都减半"也会绿。
+
+### 208.4 数字
+
+* **20/20 闸门绿**，单测 **889**（699 core + 83 wasm + 107 run）；四条对拍不变。
+* 内容：状态 40 → **41**、镜像 75,124 → **75,616 B**（core 63,876）。
+* §207 的两条"不可表达"现在都消失了：一条变成了内容（Flying），一条变成了基建（StartingBlock）。

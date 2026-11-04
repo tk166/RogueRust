@@ -744,6 +744,10 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // §198: Slow -- a `DamageReceived` row using the stack-linear scale, plus a `CardPlayed`
         // trigger. Like Draw Reduction, the kernel rule is the **content row** (the fold already
         // exists); `has_behaviour` only knows the hardcoded catalogue, so it goes on this list.
+        // §208: Flying -- a `DamageReceived / ScalePercent 50 / Direct` row (the fold exists) plus a
+        // `DamageTaken` trigger guarded by `event.bool: damage.isAttack`. Same category as Slow: the
+        // rule is the content row, so it is listed here rather than hardcoded.
+        "standard.flying" |
         "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No

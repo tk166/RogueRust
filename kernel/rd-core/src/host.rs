@@ -2140,8 +2140,8 @@ impl Host<'_> {
                 self.run_damage_dealt_triggers(state, &target, source, health_damage)
             }
             // `DamageReceivedTriggeredEffects`（`:196-204`）：Bearer = **承受者**。
-            CombatEvent::DamageTaken { target, source, health_damage } => {
-                self.run_damage_taken_triggers(state, &target, source, health_damage)
+            CombatEvent::DamageTaken { target, source, health_damage, is_attack } => {
+                self.run_damage_taken_triggers(state, &target, source, health_damage, is_attack)
             }
             // `Downed`：Bearer = **倒下的那个**（Spore Cloud 之类"临死一击"）。
             CombatEvent::Downed { combatant, source } => {
@@ -2307,6 +2307,7 @@ impl Host<'_> {
         target: &CombatantId,
         source: Option<CombatantId>,
         health_damage: i32,
+        is_attack: bool,
     ) -> Result<(), HostError> {
         // 无来源的伤害不跑：参考的第一句就是 `SourceCombatant is not null`。
         let Some(attacker) = source else {
@@ -2330,15 +2331,15 @@ impl Host<'_> {
             let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
             let root = NodeRef::new(self.content, handle);
             // Bearer = 承受者，`EventTarget` = 出手方 ⇒ 节目里 `sel.eventTarget` 就是打人的那个。
-            let outcome = execute_program_amount(
-                state,
-                self.content,
-                root,
-                Some(bearer),
-                Some(attacker),
-                steps,
-                Some(health_damage),
-            );
+            // §208: the event **facts** ride along, so a status trigger can ask "was this an
+            // attack?" (`event.bool: damage.isAttack`). `eventAmount` stays the health that was
+            // actually lost -- two different questions, two different carriers.
+            let mut ctx = ExecContext::new(state, Some(bearer), Some(attacker), None, steps)
+                .with_content(self.content);
+            ctx.event_amount = Some(health_damage);
+            ctx.event_flags = if is_attack { crate::exec::DAMAGE_IS_ATTACK } else { 0 };
+            let outcome = crate::exec::begin(root, &mut ctx, crate::state::ProgramTerminalHook::None)
+                .map(|_| ());
             outcome.map_err(|e| self.record(HostError::Exec(e)))?;
         }
         Ok(())
