@@ -14284,3 +14284,69 @@ Bronze Orb 画成 `enemy #1`。**运行层的页面也一样**，因为这是 AB
 * 仍然欠：`maw` 的三招与 A 级血量（wiki 页 404）、`spiker.spike` 一行、以及 `StartingStatuses` 的
   A17–A19 值（例如 Spiker 的 Thorns 3→A2 4→A17 7、Awakened One 的 Regenerate 10→A19 15）——
   那一套是**第三个**机制（`StartingStatuses` 还没有升档列表），留给下一节。
+
+---
+
+## §207 `StartingStatuses` 的升档（第三个 ascension 列表）+ 把 `maw` 的三招钉死
+
+§204/§206 补了两张表（`EACT.ProgramAsc`、`ENCT.MaxHealthAsc`），但**起始状态的层数**还只能写死
+一个值 —— 于是 Spiker 的 `Thorns 3`（wiki: A2 4 / A17 7）、Awakened One 的 `Regenerate 10`
+（A19 15）与 `Curiosity 1`（A19 2）、Donu/Deca 的 `Artifact 2`（A19 3）全都没有出处可放。
+
+### 207.1 `StartingStatuses[].Asc`
+
+`ENCT.Enemies[j].StartingStatuses[k]` 多了一列 `Asc: [{AscensionMin, Stacks}, …]`，规则与另外两张表
+**同一条**（阈值 ≤ 等级里最大的那个，顺序不参与判定，0 = 没填）。读取在
+`rd-wasm::apply_starting_statuses`（起始状态是**在那里**真正挂上去的），缺席 = 用 `Stacks`。
+坏的列表**响亮失败** —— 静默忽略等于"wiki 的 A19 数字"变成"A0 数字"，而所有闸门都绿。
+
+内容：`Thorns 3 → (A2) 4 → (A17) 7`、`Regenerate 10 → (A19) 15`、`Curiosity 1 → (A19) 2`、
+`Artifact 2 → (A19) 3`（Donu 与 Deca 各一条）、`Orb Walker 的 Strength 3 → (A17) 5`。共 **6 行**。
+
+### 207.2 ★ 两条"加不进去"的：写清理由，而不是编
+
+* **Byrd 的 Flying 3 → (A17) 4**：本内容**没有** `standard.flying` 这个状态（Byrd 是 §130 的
+  简化版）。我第一版直接给它写了 `standard.flying`，全遭遇 sweep 当场红在
+  `enc_byrds: build failed: start_first_turn: Turn(Host(Content))` —— 那正是"响亮失败"该有的样子。
+* **Jaw Worm 的 Block 6 → (A17) 9**：Block 是**防御池**，不是状态，`StartingStatuses` 里没有它的
+  位置。只抄 Strength 那一半等于半个事实。
+* 两条都记进内容门的 `INV_STATUS_ASC` 注释里（"不可表达 + 为什么"），而不是从清单里消失。
+
+### 207.3 `maw`：三招与 A 级血量的正确处置
+
+上一轮 `maw` 的三个动作和血量都还"未定"。wiki 的页名是 **`The Maw`**（搜索结果里才找得到；直接
+请求 `Maw` 是 404），所以第一次是**真的没有数据**，不是没查。
+
+拿到数据之后的结论是"**不能填**"：
+
+* wiki 的 The Maw 是 **300 HP** 的第三幕怪，招式是 `Roar`（Weak/Frail 3 → A17 5）、`Slam`
+  （25 → A2 30）、`Nom Nom`（5×N，N = 回合数/2 向上取整）、`Drool`（Strength 3 → A17 5）；
+* 本内容的 `maw` 是 **§137 的 stub**：80 HP、`bite 14` / `slam 20 + Block` / `roar +Strength` ——
+  **不是同一只怪**。把 wiki 的数字贴上去会造出一个谁都没有的杂交体。
+* 血量的官方答案更有趣：wiki 明写 **"The Maw is the only enemy whose Max HP does not change based
+  on Ascension level"** ⇒ 它的正确处置是**没有** `MaxHealthAsc`，而理由必须写下来 ——
+  现在 `INV_NO_ASC_HP` 就是那张表（`ascension health` 的输出里 `maw` 带原因，不再是可疑的空白）。
+
+### 207.4 棘轮归零
+
+```
+ok   ascension coverage   76 with variants + 49 exempt = 125 reviewed, 0 undecided
+ok   ascension health     50 ENCT enemy records pinned; unpinned monsters: ['maw']  (with a reason)
+ok   starting-status ascension   6 rows pinned (A2/A17/A19)
+```
+
+`ASC_UNREVIEWED_CEILING` 从 4 降到 **0**：125 条动作每一条都有决定（升档或带出处的豁免）。
+判据 `starting_statuses_follow_their_ascension_rows` 在**战斗里真的挂上的状态**上验：
+Spiker 的 Thorns 在 A0/A2/A16/A17 四个点必须是 3/4/4/7（**中间那一档也要测**——只测两头会漏掉
+"A2 生效但 A17 没生效"），Awakened One 的 Regenerate 在 A0/A2/A18/A19 是 10/10/10/15。
+负控：把 Spiker 的 A17 行改成 4（等于 A2）⇒ 内容门 `asc.status.spiker/standard.thorns` 红，
+内核测试红在 `left: 4 / right: 7`。
+
+### 207.5 数字
+
+* **20/20 闸门绿**，单测 **886**（699 core + 80 wasm + 107 run）；四条对拍不变。
+* 内容：镜像 74,964 → **75,124 B**（core 63,484）。
+* 三张 ascension 表到这里齐了：**招式节目**（`EACT.ProgramAsc`，76 条）、**血量**
+  （`ENCT.MaxHealthAsc`，50 条）、**起始状态**（`StartingStatuses[].Asc`，6 条）。
+  仍然欠的是"**A 级才出现/消失**"这一类（Awakened One 的 `Strength 2 @A4`、Louses 的 Curl Up 掷骰
+  A7/A17）—— 那需要"条件状态"而不是"换层数"，留作已知缺口。

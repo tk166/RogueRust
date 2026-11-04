@@ -21966,7 +21966,17 @@
               "StatusDefinitionId": {
                 "value": "standard.thorns"
               },
-              "Stacks": 3
+              "Stacks": 3,
+              "Asc": [
+                {
+                  "AscensionMin": 2,
+                  "Stacks": 4
+                },
+                {
+                  "AscensionMin": 17,
+                  "Stacks": 7
+                }
+              ]
             }
           ],
           "Position": 0,
@@ -22013,7 +22023,20 @@
               "value": "orb_walker.claw"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.strength"
+              },
+              "Stacks": 3,
+              "Asc": [
+                {
+                  "AscensionMin": 17,
+                  "Stacks": 5
+                }
+              ]
+            }
+          ],
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Orb Walker",
@@ -24668,13 +24691,25 @@
               "StatusDefinitionId": {
                 "value": "standard.regen"
               },
-              "Stacks": 10
+              "Stacks": 10,
+              "Asc": [
+                {
+                  "AscensionMin": 19,
+                  "Stacks": 15
+                }
+              ]
             },
             {
               "StatusDefinitionId": {
                 "value": "standard.curiosity"
               },
-              "Stacks": 1
+              "Stacks": 1,
+              "Asc": [
+                {
+                  "AscensionMin": 19,
+                  "Stacks": 2
+                }
+              ]
             },
             {
               "StatusDefinitionId": {
@@ -24991,7 +25026,13 @@
               "StatusDefinitionId": {
                 "value": "standard.artifact"
               },
-              "Stacks": 2
+              "Stacks": 2,
+              "Asc": [
+                {
+                  "AscensionMin": 19,
+                  "Stacks": 3
+                }
+              ]
             }
           ],
           "Position": null,
@@ -25023,7 +25064,13 @@
               "StatusDefinitionId": {
                 "value": "standard.artifact"
               },
-              "Stacks": 2
+              "Stacks": 2,
+              "Asc": [
+                {
+                  "AscensionMin": 19,
+                  "Stacks": 3
+                }
+              ]
             }
           ],
           "Position": null,
@@ -25902,7 +25949,17 @@
           "StatusDefinitionId": {
             "value": "standard.thorns"
           },
-          "Stacks": 3
+          "Stacks": 3,
+          "Asc": [
+            {
+              "AscensionMin": 2,
+              "Stacks": 4
+            },
+            {
+              "AscensionMin": 17,
+              "Stacks": 7
+            }
+          ]
         }
       ],
       "IntentRules": [],
@@ -25926,7 +25983,20 @@
           "value": "orb_walker.claw"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.strength"
+          },
+          "Stacks": 3,
+          "Asc": [
+            {
+              "AscensionMin": 17,
+              "Stacks": 5
+            }
+          ]
+        }
+      ],
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "inv:§5.2",
@@ -27530,13 +27600,25 @@
           "StatusDefinitionId": {
             "value": "standard.regen"
           },
-          "Stacks": 10
+          "Stacks": 10,
+          "Asc": [
+            {
+              "AscensionMin": 19,
+              "Stacks": 15
+            }
+          ]
         },
         {
           "StatusDefinitionId": {
             "value": "standard.curiosity"
           },
-          "Stacks": 1
+          "Stacks": 1,
+          "Asc": [
+            {
+              "AscensionMin": 19,
+              "Stacks": 2
+            }
+          ]
         },
         {
           "StatusDefinitionId": {
@@ -27744,7 +27826,13 @@
           "StatusDefinitionId": {
             "value": "standard.artifact"
           },
-          "Stacks": 2
+          "Stacks": 2,
+          "Asc": [
+            {
+              "AscensionMin": 19,
+              "Stacks": 3
+            }
+          ]
         }
       ],
       "IntentRules": [],
@@ -27773,7 +27861,13 @@
           "StatusDefinitionId": {
             "value": "standard.artifact"
           },
-          "Stacks": 2
+          "Stacks": 2,
+          "Asc": [
+            {
+              "AscensionMin": 19,
+              "Stacks": 3
+            }
+          ]
         }
       ],
       "IntentRules": [],

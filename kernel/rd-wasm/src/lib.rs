@@ -518,6 +518,46 @@ fn build_session_with(
 /// Giant Head no Metallicize, Lagavulin no Metallicize 8. The content layer had been *counting* them
 /// since §1 -- a number that was checked while the behaviour was missing.
 ///
+/// §207: the `Asc` override for one `StartingStatuses` entry, or `Ok(None)` when it has none.
+///
+/// Absent column / empty list = "not pinned" (a record without the key is legal: 20 of 50 records
+/// have `StartingStatuses` at all, and most of those never change with ascension). A malformed list
+/// is a **loud** error: a silently ignored override is "the wiki's A19 number" turning into "the A0
+/// number" with every gate green.
+fn starting_status_asc(
+    node: &rd_core::ir::NodeRef<'_>,
+    ascension: i32,
+) -> Result<Option<i32>, String> {
+    let mut ids = [0u16; rd_core::content::MAX_ASC_VARIANTS];
+    let count = match node.term_list_field_or_empty("Asc", &mut ids) {
+        Ok(count) => count,
+        Err(error) => return Err(std::format!("{error:?}")),
+    };
+    let mut best: Option<(i32, i32)> = None;
+    for index in 0..count {
+        let Some(id) = ids.get(index).copied() else {
+            return Err("list longer than the buffer".to_string());
+        };
+        let entry = node.child(id);
+        let threshold = entry
+            .int_field("AscensionMin")
+            .map_err(|e| std::format!("AscensionMin: {e:?}"))?
+            .ok_or_else(|| "an entry without `AscensionMin`".to_string())?;
+        if threshold <= 0 || threshold > ascension {
+            continue;
+        }
+        let stacks = entry
+            .int_field("Stacks")
+            .map_err(|e| std::format!("Stacks: {e:?}"))?
+            .ok_or_else(|| "an entry without `Stacks`".to_string())?;
+        match best {
+            Some((seen, _)) if seen >= threshold => {}
+            _ => best = Some((threshold, stacks)),
+        }
+    }
+    Ok(best.map(|(_, stacks)| stacks))
+}
+
 /// Applied through `EffectRequest::ApplyStatus` + `exec::drain`, i.e. the same path a card or an
 /// enemy action takes, so there is no second implementation of "add a status".
 fn apply_starting_statuses(
@@ -558,7 +598,16 @@ fn apply_starting_statuses(
             let Ok(definition) = rd_core::state::StatusDefinitionId::new(status_id) else {
                 return Err(format!("`{status_id}` is not a usable status id"));
             };
-            let stacks = node.int_field("Stacks").ok().flatten().unwrap_or(1);
+            // §207: `Asc: [{AscensionMin, Stacks}, …]` overrides the stack count at (and above) a
+            // level -- the third ascension list, next to `EACT.ProgramAsc` (§192) and
+            // `ENCT.MaxHealthAsc` (§206), with the **same** rule: the largest threshold that is
+            // still `<= ascension`, and the order in the list does not participate.
+            let level = i32::from(session.state.ascension());
+            let stacks = match starting_status_asc(&node, level) {
+                Ok(Some(overridden)) => overridden,
+                Ok(None) => node.int_field("Stacks").ok().flatten().unwrap_or(1),
+                Err(message) => return Err(format!("StartingStatuses[{index}].Asc: {message}")),
+            };
             let duration = node.int_field("DurationTurns").ok().flatten().unwrap_or(0);
             let charges = node.int_field("Charges").ok().flatten().unwrap_or(0);
             session
@@ -4479,6 +4528,54 @@ mod card_text_tests {
             crate::take_session();
         }
         assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    /// §207: a `CombatantId` from a literal, for the tests below.
+    fn cid_in(name: &str) -> rd_core::state::CombatantId {
+        rd_core::state::CombatantId::new(name).expect("a short id")
+    }
+
+    /// §207：起始状态的 A 级升档 —— 同一场遭遇，只有 `ascension` 不同，层数就是 wiki 的数。
+    ///
+    /// 三行覆盖「A2 升一次、A17 再升一次」（Spiker 的 Thorns 3→4→7）与「只有 A19 升」
+    /// （Awakened One 的 Regenerate 10→15、Curiosity 1→2）。**每一档都在阈值两侧**测：
+    /// 3 是 A0/A1 的值、4 是 A2..A16 的值、7 是 A17+ 的值 —— 只测两头会漏掉"中间那一档没生效"。
+    ///
+    /// 判据读的是**战斗里真的挂上去的状态**（`combatant.statuses()`），不是内容里的 `Asc` 列表：
+    /// 内容门已经比过列表了，这里问的是"它有没有真的被应用"。
+    #[test]
+    fn starting_statuses_follow_their_ascension_rows() {
+        // (encounter, combatant, status, [(ascension, stacks), …])
+        let cases: [(&str, &str, &str, [(u8, i32); 4]); 2] = [
+            ("enc_spiker", "spiker", "standard.thorns", [(0, 3), (2, 4), (16, 4), (17, 7)]),
+            ("enc_awakened_one", "awakened_one", "standard.regen",
+             [(0, 10), (2, 10), (18, 10), (19, 15)]),
+        ];
+        for (encounter, who, status, points) in cases {
+            for (ascension, expected) in points {
+                let session = build_session_at(7, encounter, 200, None, 0, ascension)
+                    .unwrap_or_else(|e| panic!("{encounter} at A{ascension}: {e}"));
+                install_session(session);
+                let stacks = slot()
+                    .as_ref()
+                    .expect("session")
+                    .state
+                    .combatant(&cid_in(who))
+                    .map(|combatant| {
+                        combatant
+                            .statuses()
+                            .iter()
+                            .find(|instance| instance.definition_id.as_str() == status)
+                            .map_or(0, |instance| instance.stacks)
+                    })
+                    .unwrap_or(-1);
+                assert_eq!(
+                    stacks, expected,
+                    "{who} {status} at A{ascension}: wiki says {expected}"
+                );
+            }
+        }
+        take_session();
     }
 
     /// §202: **Act 2 的代表战** —— Bronze Automaton 第 1 回合真召唤两只 Orb。

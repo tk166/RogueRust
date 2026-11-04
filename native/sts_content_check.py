@@ -1258,6 +1258,7 @@ def check_cards_and_actions(doc):
     check_intent_history(doc)
     check_ascension_variants(doc)
     check_ascension_health(doc)
+    check_starting_status_ascension(doc)
     check_spawn_rolls(doc)
 
 
@@ -1474,6 +1475,63 @@ INV_ASC_HP = {
 INV_ASC_HP_LEVEL = {'Elite': 8, 'Boss': 9}
 
 
+# §207: the wiki's starting-power ascension rows (`Enemy Infobox` -> `Powers`), by monster id.
+# `{status: [(level, stacks), …]}` -- the **independent copy** the content is checked against.
+INV_STATUS_ASC = {
+    # `Shapes` (Spiker): Thorns 3 (A2: 4 | A17: 7).
+    'spiker': {'standard.thorns': [(2, 4), (17, 7)]},
+    # `Byrd`: Flying 3 (A17: 4) -- **not expressible**: this content has no `standard.flying` status
+    # (Byrd is the §130 simplification), so there is nothing to pin. Recorded, not silently dropped.
+    # `Jaw Worm`: Strength 3 (A2/A17) + Block 6 (A17) -- Block is a **defensive pool**, not a status,
+    # so the wiki's second half has no home in `StartingStatuses` either.
+    # `Orb Walker`: Strength Up 3 (A17: 5).
+    'orb_walker': {'standard.strength': [(17, 5)]},
+    # `Awakened One`: Regenerate 10 (A19: 15), Curiosity 1 (A19: 2).
+    'awakened_one': {'standard.regen': [(19, 15)], 'standard.curiosity': [(19, 2)]},
+    # `Donu and Deca`: Artifact 2 (A19: 3).
+    'donu': {'standard.artifact': [(19, 3)]},
+    'deca': {'standard.artifact': [(19, 3)]},
+}
+
+
+def check_starting_status_ascension(doc):
+    """§207: every `StartingStatuses[].Asc` row is the wiki's, at the wiki's level."""
+    print("[7e] starting-status ascension (port-plan.md §207)")
+    seen = set()
+    for encounter in doc.get("Encounters") or []:
+        eid = encounter["Id"]["Value"] if isinstance(encounter["Id"], dict) else encounter["Id"]
+        for enemy in encounter.get("Enemies") or []:
+            monster = enemy["Id"]
+            want = INV_STATUS_ASC.get(monster)
+            rows = enemy.get("StartingStatuses") or []
+            for row in rows:
+                status = (row.get("StatusDefinitionId") or {}).get("value")
+                if want is None or status not in want:
+                    if row.get("Asc"):
+                        fail("asc.status.%s/%s" % (monster, status),
+                             "an `Asc` row that no wiki page backs (%r)" % (row.get("Asc"),))
+                    continue
+                got = [(entry.get("AscensionMin"), entry.get("Stacks"))
+                       for entry in row.get("Asc") or []]
+                if got != want[status]:
+                    fail("asc.status.%s/%s" % (monster, status),
+                         "Asc %s, wiki says %s" % (got, want[status]))
+                seen.add((monster, status))
+    missing = [(monster, status) for monster, rows in INV_STATUS_ASC.items()
+               for status in rows if (monster, status) not in seen]
+    if missing:
+        fail("asc.status.missing", "no record pins %s" % (missing,))
+    ok("starting-status ascension", "%d rows pinned (A2/A17/A19)" % len(seen))
+
+
+# §207: monsters whose ENCT record has **no** `MaxHealthAsc`, with the wiki reason.
+INV_NO_ASC_HP = {
+    # wiki `The Maw`: "The Maw is the only enemy whose Max HP does not change based on Ascension
+    # level." (native/wiki_asc/the_maw.txt) -- pinning a number here would be inventing one.
+    'maw': 'wiki The Maw: max HP does not change with ascension',
+}
+
+
 def check_ascension_health(doc):
     """§206: every pinned `MaxHealthAsc` matches the wiki's `AscHP` lower bound, at the right level."""
     print("[7d] ascension health (port-plan.md §206)")
@@ -1495,6 +1553,8 @@ def check_ascension_health(doc):
             monster = enemy["Id"]
             want = INV_ASC_HP.get(monster)
             if want is None:
+                if monster not in INV_NO_ASC_HP:
+                    fail("asc.hp." + monster, "no pinned row and no wiki reason")
                 unpinned.add(monster)
                 continue
             rows = enemy.get("MaxHealthAsc")
@@ -1657,12 +1717,24 @@ INV_NO_ASC = {
     'bronze_orb.support_beam': 'wiki Bronze Orb: Support Beam is 12 Block, no A-row',
     'torch_head.tackle': 'wiki Torch Head: Tackle is 7, no A-row',
     'the_collector.spawn': 'wiki The Collector: Spawn has no numbers',
+    # ---- §207: `maw` -- the wiki page is **The Maw** (the search API found it; the plain `Maw`
+    # title 404s). Its moves do have A-rows (Slam 25 -> A2: 30, Roar 3 Weak/3 Frail -> A17: 5,
+    # Drool 3 Strength -> A17: 5), but this content's `maw` is the **§137 stub** (80 HP, `bite 14` /
+    # `slam 20 + Block` / `roar +Strength`), i.e. a different monster. Copying the wiki numbers onto
+    # it would be inventing a hybrid, so the deviation is recorded here instead.
+    'maw.bite': 'this content is the §137 stub; the wiki move is Nom Nom (5xN, no A-row)',
+    'maw.slam': 'this content is the §137 stub (20 dmg); wiki The Maw: 25 -> A2: 30',
+    'maw.roar': 'this content is the §137 stub (+Strength); wiki The Maw: Weak/Frail 3 -> A17: 5',
+    # wiki `Shapes` (Spiker): its two moves are `Attack` (7 -> A2: 9) and `Buff Thorns`. This
+    # content's `spiker.spike` is 4 damage + 2 Block -- a simplification of neither, so the wiki's
+    # A2 row cannot be copied onto it without inventing a number.
+    'spiker.spike': 'this content is a simplification (4 dmg + 2 Block); wiki Spiker: Attack 7 -> A2: 9',
 }
 
 # §204: how many actions still have **neither** a variant nor an exemption. This is a **ratchet**:
 # the number may only go down, and it is printed (not implied) so "we reviewed everything" cannot be
-# claimed without the count agreeing. 44 at §204, 26 at §205, **4** after §206.
-ASC_UNREVIEWED_CEILING = 4
+# claimed without the count agreeing. 44 at §204, 26 at §205, 4 at §206, **0** after §207.
+ASC_UNREVIEWED_CEILING = 0
 
 
 def check_ascension_coverage(actions):
