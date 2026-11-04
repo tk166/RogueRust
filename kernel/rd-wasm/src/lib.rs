@@ -4579,6 +4579,134 @@ mod card_text_tests {
         rd_core::state::CombatantId::new(name).expect("a short id")
     }
 
+    /// §212：`Nom Nom` = `5 × ceil(turn / 2)` —— wiki 的公式，逐回合验。
+    ///
+    /// 用**第 1..6 回合**各打一次：N 必须是 `1,1,2,2,3,3`，也就是 5,5,10,10,15,15 点。
+    /// 这条测试专门钉三个容易错的写法：
+    /// * 向下取整（`turn / 2`）⇒ 第 1 回合就是 0 点（`repeat` 跑 0 次，**静默无伤害**）；
+    /// * 读成"用了几次"而不是"第几回合" ⇒ 序列会变成 5,10,15…；
+    /// * 把 `repeat` 写成一次乘好的伤害 ⇒ 那就不是多段（格挡/荆棘的行为会不同）。
+    #[test]
+    fn nom_nom_hits_five_damage_ceil_turn_over_two_times() {
+        let blob = crate::IMAGE;
+        let content = rd_core::content::Content::parse(blob).expect("image");
+        let session = build_session_at(7, "enc_maw", 3000, None, 0, 0).expect("the maw fight");
+        install_session(session);
+        let hero = cid_in("hero");
+        let hp = |state: &rd_core::state::CombatState| {
+            state.combatant(&hero).map_or(0, |c| c.health_current)
+        };
+        let action_row = u32::from(
+            content
+                .lookup_in("maw.nom_nom", rd_core::content::EK_EACTION)
+                .expect("nom_nom is in the image")
+                .index,
+        );
+        let mut dealt = Vec::new();
+        for turn in 1..=6 {
+            let before = {
+                let session = slot().as_ref().expect("session");
+                hp(&session.state)
+            };
+            {
+                let session = slot().as_mut().expect("session");
+                session.state.current_turn = turn;
+                rd_core::intent::execute_action(
+                    &mut session.state,
+                    &content,
+                    &cid_in("maw"),
+                    action_row,
+                    Some(hero),
+                )
+                .unwrap_or_else(|e| panic!("turn {turn}: {e:?}"));
+                rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+            }
+            let after = {
+                let session = slot().as_ref().expect("session");
+                hp(&session.state)
+            };
+            dealt.push(before - after);
+        }
+        assert_eq!(dealt, vec![5, 5, 10, 10, 15, 15], "5 x ceil(turn/2)");
+        take_session();
+    }
+
+    /// §212：The Maw 的四条转移规则（wiki 的句子，一句一条）。
+    ///
+    /// * 开局必 `Roar`；
+    /// * `Slam` 之后 50/50 `Nom Nom` / `Drool`；
+    /// * `Nom Nom` 之后**必** `Drool`；
+    /// * 其余（`Roar` 之后、`Drool` 之后）50/50 `Slam` / `Nom Nom`。
+    ///
+    /// 每一条都在 80 个种子上问，因为"规则写错"往往表现为"偶尔对"。
+    #[test]
+    fn the_maw_follows_the_wikis_transition_table() {
+        let blob = crate::IMAGE;
+        let content = rd_core::content::Content::parse(blob).expect("image");
+        let row = u32::from(
+            content
+                .lookup_in("enc_maw", rd_core::content::EK_ENCOUNTER)
+                .expect("enc_maw")
+                .index,
+        );
+        let ask = |round: i32, last: i32, seed: i32| -> String {
+            let session = build_session_at(seed, "enc_maw", 200, None, 0, 0)
+                .unwrap_or_else(|e| panic!("seed {seed}: {e}"));
+            install_session(session);
+            let session = slot().as_mut().expect("session");
+            let id = cid_in("maw");
+            session.state.current_round = round;
+            let _ = session
+                .state
+                .combatant_mut(&id)
+                .expect("the maw")
+                .set_counter(rd_core::state::CounterId::new("last_move").expect("counter"), last);
+            let at = rd_core::intent::locate_enemy(&content, row, &id)
+                .expect("locate")
+                .expect("the maw is in this encounter");
+            rd_core::intent::select_action(&session.state, &content, at, &id, round)
+                .expect("intent")
+                .expect("an action")
+                .action_id
+                .to_string()
+        };
+        // 1: "Always starts with Roar."
+        for seed in 0..80 {
+            assert_eq!(ask(1, 0, seed), "maw.roar", "round 1 is always Roar");
+        }
+        // 3: "After using Nom Nom: always uses Drool."
+        for seed in 0..80 {
+            assert_eq!(ask(4, 3, seed), "maw.drool", "after Nom Nom it always drools");
+        }
+        // 2: "After using Slam: 50/50 Nom Nom / Drool" -- both must appear, and nothing else.
+        let mut after_slam = std::collections::BTreeSet::new();
+        for seed in 0..80 {
+            after_slam.insert(ask(5, 2, seed));
+        }
+        assert_eq!(
+            after_slam,
+            ["maw.drool".to_string(), "maw.nom_nom".to_string()]
+                .into_iter()
+                .collect::<std::collections::BTreeSet<_>>(),
+            "after Slam only Nom Nom / Drool"
+        );
+        // 4: after Roar and after Drool: 50/50 Slam / Nom Nom.
+        for last in [1, 4] {
+            let mut picks = std::collections::BTreeSet::new();
+            for seed in 0..80 {
+                picks.insert(ask(6, last, seed));
+            }
+            assert_eq!(
+                picks,
+                ["maw.nom_nom".to_string(), "maw.slam".to_string()]
+                    .into_iter()
+                    .collect::<std::collections::BTreeSet<_>>(),
+                "after last_move={last} only Slam / Nom Nom"
+            );
+        }
+        take_session();
+    }
+
     /// §211：Giant Head 的 AI（wiki `Giant Head`）—— 4 回合窗口（A18 3）、同一招不能连三次、
     /// 之后一直 `It Is Time`。
     ///

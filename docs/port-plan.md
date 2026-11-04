@@ -14576,3 +14576,50 @@ row. Afterwards, it repeats It Is Time for the rest of combat."
 * 内容：敌人动作 125 → **126**（`giant_head.it_is_time`）、镜像 76,360 → **77,080 B**（core 65,112）。
 * Giant Head 现在与 wiki 对得上：500/520 HP、Slow、Count 13、Glare 1 Weak、It Is Time 30→60
   （A3 40→70）、4→3 回合窗口。**A18 的换表欠账清掉了。**
+
+---
+
+## §212 The Maw 按 wiki 重写（`Nom Nom` 的公式终于能写了）
+
+§207 把 `maw` 的三招记成"内容与 wiki 不是同一只怪"，当时因为 wiki 页找不到（`Maw` 是 404，
+真名 **The Maw**）。这一节按原文重写，同时补上它需要的那一点**基建**。
+
+### 212.1 数字与招式（`native/wiki_asc/the_maw.txt`）
+
+| 项 | wiki | 之前 |
+|---|---|---|
+| HP | **300**，且 wiki 明写 "the only enemy whose Max HP does not change based on Ascension level" | 80，无升档行（**这条一直是对的**，理由现在写进了 `INV_NO_ASC_HP`） |
+| `Roar` | 3 Weak + 3 Frail（**A17: 5/5**） | +3 Strength（完全不同的招式） |
+| `Slam` | **25**（**A2: 30**） | 20 + 3 Block |
+| `Nom Nom` | **5 × N，N = ceil(turn / 2)** | 不存在（`maw.bite` 14 是替身） |
+| `Drool` | +3 Strength（**A17: 5**） | 不存在 |
+
+AI 也是照 wiki 的句子写的四条：开局必 `Roar`；`Slam` 之后 50/50 `Nom Nom`/`Drool`；
+`Nom Nom` 之后**必** `Drool`；其余（`Roar` 之后、`Drool` 之后）50/50 `Slam`/`Nom Nom`。
+
+### 212.2 ★ 基建：`turnNumber` / `roundNumber`（值表达式）
+
+`Nom Nom` 的 N 是**当前回合数**的一半（向上取整）。词表里 `turnNumber` / `roundNumber` 一直存在，
+但实现那边是 `UnsupportedKind` —— 也就是说"第几回合"这个数**内容拿不到**。补上两个分支
+（各一行：`state.current_turn` / `state.current_round`）。
+
+`ceil(t/2)` 写成 `(t + 1) / 2`（`divide` 是向下取整），而"5 × N"写成 **`repeat` N 次、每次 5 点**
+—— 这不是偷懒：StS 的 `Nom Nom` 本来就是**多段**攻击，段数决定格挡怎么吃、荆棘怎么还手。
+一并发现 `divide` 的 `ZeroPolicy` 只认 `ReturnZero` / `Fault`（写 `Error` 会 `UnsupportedKind`），
+这里用 `Fault`：除数是常量 2，出现 0 只能是内容写坏了，该响亮失败。
+
+### 212.3 判据
+
+* `nom_nom_hits_five_damage_ceil_turn_over_two_times`：第 1..6 回合各打一次，掉血必须是
+  **5, 5, 10, 10, 15, 15**。这条专门钉三个容易错的写法：向下取整（第 1 回合 0 点、`repeat` 跑
+  0 次**静默无伤害**）、读成"用了几次"（序列变成 5,10,15…）、写成一次乘好的伤害（那就不是多段）。
+  负控：把 `turnNumber` 退回 `UnsupportedKind` ⇒ 红在 `turn 1: Exec(Expr(UnsupportedKind))`。
+* `the_maw_follows_the_wikis_transition_table`：四条规则各 80 个种子。`Slam` 之后**只能**是
+  `Nom Nom`/`Drool`（集合相等，不是"包含"），`Roar`/`Drool` 之后**只能**是 `Slam`/`Nom Nom`，
+  `Nom Nom` 之后**必** `Drool`。
+
+### 212.4 数字
+
+* **20/20 闸门绿**，单测 **896**（700 core + 89 wasm + 107 run）；四条对拍不变。
+* 内容：敌人动作 126 → **127**、镜像 77,080 → **78,116 B**（core 66,000）；`maw.bite` 随重写删除。
+* 至此 §207 记的两只"简化版"怪（Giant Head / The Maw）都按 wiki 重写完了。

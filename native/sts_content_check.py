@@ -273,7 +273,9 @@ INV_MONSTERS = [
     # §129: the wiki's act-3 boss, parked in the Boss pool (acts still share content).
     # §137: the act-3 normal pool gets thicker.
     ("darkling", 48, 48, ["darkling.nip", "darkling.chomp"]),
-    ("maw", 80, 80, ["maw.roar", "maw.bite", "maw.slam"]),
+    # §212: wiki `The Maw` -- 300 HP (and "the only enemy whose Max HP does not change based on
+    # Ascension level"), `Roar` / `Slam` / `Nom Nom` / `Drool`.
+    ("maw", 300, 300, ["maw.roar", "maw.slam", "maw.nom_nom", "maw.drool"]),
     # §134: acts 2 and 3 have their own elites.
     ("gremlin_leader", 140, 140,
      ["gremlin_leader.slash", "gremlin_leader.rally", "gremlin_leader.summon"]),
@@ -377,10 +379,13 @@ INV_ACTIONS = {
     # is a counter the fight rolls at spawn, not a constant (the range lives in `INV_ROLLS`).
     "darkling.nip": ("Attack", [("damage", ("counter", "roll.nip", "source"), "event")]),
     "darkling.chomp": ("Attack", [("damage", 8, "event"), ("damage", 8, "event")]),
-    "maw.roar": ("Debuff", [("status", "standard.strength", 3, "source"),
-                            ("status", "standard.weak", 2, "event")]),
-    "maw.bite": ("Attack", [("damage", 14, "event")]),
-    "maw.slam": ("Attack", [("damage", 20, "event"), ("block", 3, "source")]),
+    # §212: wiki `The Maw` -- Roar 3 Weak + 3 Frail (A17 5/5), Slam 25 (A2 30),
+    # Nom Nom 5 x ceil(turn/2) (a multi-hit, hence `repeat`), Drool 3 Strength (A17 5).
+    "maw.roar": ("Debuff", [("status", "standard.weak", 3, "event"),
+                            ("status", "standard.frail", 3, "event")]),
+    "maw.slam": ("Attack", [("damage", 25, "event")]),
+    "maw.nom_nom": ("Attack", [("repeat", ("expr", "divide"), "damage", 5, "event")]),
+    "maw.drool": ("Buff", [("status", "standard.strength", 3, "source")]),
     "gremlin_leader.slash": ("Attack", [("damage", 6, "event"), ("damage", 6, "event"),
                                 ("damage", 6, "event")]),
     "gremlin_leader.rally": ("Defend", [("block", 12, "source"),
@@ -1317,6 +1322,11 @@ INV_ASC_VARIANTS = {
     'giant_head.it_is_time': [(3, [('damage', ('counter', 'it_is_time_damage', 'source'), 'event'),
                                    ('when', None, 'counter', 'it_is_time_damage', 70, False, 'source'),
                                    ('when', None, 'counter', 'it_is_time_damage', 5, True, 'source')])],
+    # §212: wiki `The Maw` -- Roar 3/3 -> A17 5/5, Slam 25 -> A2 30, Drool 3 -> A17 5.
+    'maw.roar': [(17, [('status', 'standard.weak', 5, 'event'),
+                       ('status', 'standard.frail', 5, 'event')])],
+    'maw.slam': [(2, [('damage', 30, 'event')])],
+    'maw.drool': [(17, [('status', 'standard.strength', 5, 'source')])],
     # §204: wiki `Lagavulin` -- Siphon Soul -1/-1 (A18: -2/-2).
     'lagavulin.siphon_soul': [(18, [('modify', 'standard.strength', -2, 'event'),
                                     ('modify', 'standard.dexterity', -2, 'event')])],
@@ -1756,9 +1766,8 @@ INV_NO_ASC = {
     # Drool 3 Strength -> A17: 5), but this content's `maw` is the **§137 stub** (80 HP, `bite 14` /
     # `slam 20 + Block` / `roar +Strength`), i.e. a different monster. Copying the wiki numbers onto
     # it would be inventing a hybrid, so the deviation is recorded here instead.
-    'maw.bite': 'this content is the §137 stub; the wiki move is Nom Nom (5xN, no A-row)',
-    'maw.slam': 'this content is the §137 stub (20 dmg); wiki The Maw: 25 -> A2: 30',
-    'maw.roar': 'this content is the §137 stub (+Strength); wiki The Maw: Weak/Frail 3 -> A17: 5',
+    # §212: `Nom Nom` is the only one of the four without an A-row (its number is a formula).
+    'maw.nom_nom': 'wiki The Maw: Nom Nom is 5 x ceil(turn/2), no A-row',
     # wiki `Shapes` (Spiker): its two moves are `Attack` (7 -> A2: 9) and `Buff Thorns`. This
     # content's `spiker.spike` is 4 damage + 2 Block -- a simplification of neither, so the wiki's
     # A2 row cannot be copied onto it without inventing a number.

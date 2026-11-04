@@ -530,6 +530,16 @@ pub fn eval_int<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, Exp
         // §195.1：**事件带的数量**（伤害事件 = 实际掉的血）。
         "eventAmount" => ctx.event_amount.ok_or(ExprError::NoTarget),
 
+        // §212：**这是第几回合 / 第几轮**。两张表现在都读得到（`turnNumber` 是"当前行动者这一回合
+        // 在整场战斗里的序号"，`roundNumber` 是"第几轮"）。
+        //
+        // 为什么现在才实现：wiki 的 `The Maw: Nom Nom` 是 "Deals 5×N damage. N = Current turn,
+        // divided by two (rounded up)" —— 没有"当前回合数"这个值就**表达不出来**（`repeat` 的次数
+        // 只能是常量或计数器，而计数器不是回合数）。这两个 kind 在词表里躺了很久，一直是
+        // `UnsupportedKind`，所以这里补的是**能力**，不是词表。
+        "turnNumber" => Ok(ctx.state.current_turn),
+        "roundNumber" => Ok(ctx.state.current_round),
+
         // 其余（`card.upgradeLevel` / `missingHealth` …）
         // —— 值类别是 int，但 v1 没有它需要的上下文。**绝不返回 0**。
         _ => Err(ExprError::UnsupportedKind),
