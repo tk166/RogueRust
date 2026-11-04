@@ -53,6 +53,12 @@ pub enum Operation {
     AddFlat,
     /// 按百分比缩放，整数除法向零截断。
     ScalePercent,
+    /// §198：`current * (100 + magnitude * stacks) / 100` —— **每层线性加百分比**。
+    ///
+    /// `ScalePercent` 是"乘一个固定百分比、**不读层数**"（虚弱/易伤那种只有时长轴的），而 `Slow`
+    /// 是"每打一张牌 +10%"，需要 `1 + 0.1 × stacks` 这种**与层数线性**的因子。用 `AddPerStack`
+    /// 会变成"每层 +10 点平伤害"，用 `ScalePercent` 会忽略层数 —— 两种都是看起来能跑、数值却错一档。
+    ScalePercentPerStack,
     /// 上限钳制到 `max(0, magnitude)`。
     ClampMax,
 }
@@ -275,6 +281,14 @@ pub fn apply(
             // ScalePercent **不读 stacks**（`:210`），所以只有时长轴的状态（虚弱/易伤，层数恒 0）
             // 也能正常参与乘法。
             Operation::ScalePercent => current.wrapping_mul(candidate.magnitude) / 100,
+            // `current * (100 + magnitude * stacks) / 100`，用 i64 中间量避免 `magnitude * stacks` 溢出。
+            Operation::ScalePercentPerStack => {
+                let factor = i64::from(candidate.magnitude)
+                    .saturating_mul(i64::from(candidate.stacks))
+                    .saturating_add(100);
+                let scaled = i64::from(current).saturating_mul(factor) / 100;
+                scaled.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+            }
             // `Math.Min(current, Math.Max(0, magnitude))`（`:211`）：幅值为负时上限就是 0。
             Operation::ClampMax => {
                 let cap = if candidate.magnitude > 0 {

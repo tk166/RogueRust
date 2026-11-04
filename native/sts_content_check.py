@@ -87,7 +87,7 @@ INV_COUNTS = {
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
-    "statuses": 38,
+    "statuses": 39,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -769,6 +769,10 @@ INV_STATUSES = {
     "standard.stasis_ready": [],
     # §195.7: Draw Reduction -- the `TurnStartDraw` pipeline, minus one per stack.
     "standard.draw_reduction": [("TurnStartDraw", "AddPerStack", -1, 100, None)],
+    # §198: Slow -- a `DamageReceived` row with the stack-linear scale (our own operation), plus a
+    # `CardPlayed` trigger that grows it. No separate "clear" status: the wiki's "this turn" needs a
+    # TurnEnded reset, which the trigger below does.
+    "standard.slow": [("DamageReceived", "ScalePercentPerStack", 10, 150, "Direct")],
     # §197: Barricade (permanent) / Blur (one turn) -- both are "block is not cleared", which the
     # host already asks via the `retain_block` **tag**; no kernel rule, just a tag.
     "standard.barricade": [],
@@ -1690,7 +1694,7 @@ def check_statuses(doc):
                      "standard.time_warp", "standard.constricted",
                      "standard.phantom_veil",
                      "standard.sharp_hide", "standard.curiosity", "standard.mode_shift",
-                     "standard.stasis"):
+                     "standard.stasis", "standard.slow"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -1713,7 +1717,9 @@ def check_statuses(doc):
                         # the amount).
                         "standard.mode_shift": ["DamageTaken"],
                         # §195.4: "on death, the stolen card is returned" -- a Downed trigger.
-                        "standard.stasis": ["Downed"]}[sid]
+                        "standard.stasis": ["Downed"],
+                        # §198: "whenever you play a card" -- Slow grows on CardPlayed.
+                        "standard.slow": ["CardPlayed"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

@@ -13733,3 +13733,47 @@ stats。所以这一半的守卫是代码的 `min` 本身，长期解法是给 `
 * 内容未变（镜像 69,188 B / core 58,436 B）：这一节只动内核边界与文档。
 * 审阅里**未执行**的两条（如实报告）：Act2/Act3 的定向浏览器切片、以及 `Box::leak` 的长期内存曲线 ——
   前者已由 §195.9.3 的建战门禁覆盖"能不能开局"，后者明确排在本阶段之外。
+
+---
+
+## 198 `Slow` 与“每层线性加百分比”这个运算
+
+### 198.1 一句话
+
+`Slow` 是 `× (100 + 10 × 层数) / 100` —— 一个既不“加平值”、也不“乘固定百分比”的修饰器，而内核的
+`modifiers::Operation` 只有三种（`AddPerStack` / `AddFlat` / `ScalePercent`），其中 `ScalePercent`
+**不读层数**（虚弱/易伤那种只有时长轴的状态要用它）。于是加第四种：
+
+```text
+Operation::ScalePercentPerStack   current * (100 + magnitude * stacks) / 100
+```
+
+这是本移植自己的运算（参考只有三种），`status_bind::ModifierOp` 与 `exec::image_operation` 都补了
+对应分支 —— 那条映射是**穷尽 `match`**，所以漏一处就编译不过（这一点比测试更可靠）。
+
+⚠️ 两种"看起来能跑"的错法，都在负控里：
+`ScalePercent` ⇒ 忽略层数（Slow 5 层时 11 点而不是 15 点）；`AddPerStack` ⇒ 每层 +10 **点**伤害
+（60 点而不是 15 点）。
+
+### 198.2 内容
+
+* `standard.slow`：`DamageReceived` / `ScalePercentPerStack 10` / `RestrictDamageKind: Direct`
+  （与虚弱同口径：只放大普通攻击）+ 一个 `CardPlayed` 触发器，每打一张牌 +1 层。
+* Giant Head 的 `StartingStatuses` 装上它（wiki: `Powers = Slow`）。它自己的招式表仍是 §130 的
+  320 HP 简化版，这一节只补 Slow。
+
+### 198.3 判据
+
+* `slow_scales_linearly_with_stacks_and_grows_on_every_card_played`：**三个层数点**（0/5/10 层 →
+  10/15/20 点，基数 10）—— 线性与复合在这里分开（复合会给 10/16/25）；再加"每张牌 +1 层"两连击。
+* 两条负控见上，都精确红在 `Slow 5: a 10-point hit lands for 15`。
+* 内容门新增 `INV_STATUSES` 的一行（带运算名），`the_status_catalogue_is_honest` 要求它同时在
+  `is_declared_inert` 里 —— 因为它的规则是**内容的那一行**，不是内核硬编码。
+
+### 198.4 数字与剩下的
+
+* **20/20 闸门绿**，单测 **867**（685 / 107 / 75）；四条对拍不变。
+* 内容：状态 38 → **39**、镜像 71,276 → **71,848 B**（core 60,544）。
+* **"下回合多能量"还没做**：`TurnStartDraw` 这条管线能表达"下回合多抽"（Draw Reduction 的反向，
+  内容是纯数据），但**能量**没有对应管线（`turn_start_refill` 只从 `TurnConfig` 读）。它需要
+  "回合开始的补能数也过一条修饰器管线"，与 `TurnStartDraw` 同形 —— 留作下一节（§199）。

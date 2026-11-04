@@ -7732,6 +7732,66 @@ mod tests {
         assert_eq!(zone_count(&state, "hero", CardZone::DiscardPile), 2);
     }
 
+    /// §198：`Slow` —— 受击伤害 `×(100 + 10×层数)/100`，并且**每打一张牌 +1 层**。
+    ///
+    /// 为什么要单独一条运算（`ScalePercentPerStack`）：`ScalePercent` 不读层数、`AddPerStack` 加的是
+    /// 平伤害，两种都能"跑起来"，但 Slow 10 层时它们的答案是 1.1 倍 / +100 点，而正确的是 2 倍。
+    /// 所以判据是**三个层数点**（0/5/10 层 → 10/15/20 点伤害，基数 10），线性与复合在这里分开：
+    /// 复合会给出 10 / 16 / 25。
+    #[test]
+    fn slow_scales_linearly_with_stacks_and_grows_on_every_card_played() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // (stacks, expected damage dealt to the hero from a 10-point hit)
+        for (stacks, expected) in [(0, 10), (5, 15), (10, 20)] {
+            let mut state = arena();
+            if stacks > 0 {
+                give(&mut state, "hero", status("st_slow", "standard.slow", stacks));
+            }
+            {
+                let mut ctx = crate::exec::ExecContext::new(
+                    &mut state,
+                    Some(cid("enemy_a")),
+                    Some(cid("hero")),
+                    None,
+                    64,
+                )
+                .with_content(&content);
+                crate::exec::resolve_damage(&mut ctx, &cid("hero"), 10, false).expect("the blow");
+            }
+            assert_eq!(
+                70 - health(&state, "hero"),
+                expected,
+                "Slow {stacks}: a 10-point hit lands for {expected}"
+            );
+        }
+
+        // "Whenever you play a card": the trigger grows it by one, for **every** card.
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "hero", status("st_slow2", "standard.slow", 1));
+        let cards = [
+            card_in_hand(&mut state, &content, "hero", "strike"),
+            card_in_hand(&mut state, &content, "hero", "defend"),
+        ];
+        for (index, card) in cards.into_iter().enumerate() {
+            state
+                .enqueue_event(CombatEvent::CardPlayed { owner: cid("hero"), card })
+                .expect("queue");
+            host.try_resolve_pending_queues(&mut state).expect("triggers");
+            assert_eq!(
+                stacks_of(&state, "hero", "standard.slow"),
+                2 + index as i32,
+                "each card played adds one stack"
+            );
+        }
+    }
+
     /// §197：`Barricade`（永久）与 `Blur`（只保一次）—— 同一个 `retain_block` 标签，两种寿命。
     ///
     /// 内核早就有这条钩子（`block_is_retained` 读 active 状态的 `retain_block` tag），所以这一节

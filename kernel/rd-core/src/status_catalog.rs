@@ -739,6 +739,10 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // which is a *node*, not a status rule.
         "standard.stasis" |
         "standard.stasis_ready" |
+        // §198: Slow -- a `DamageReceived` row using the stack-linear scale, plus a `CardPlayed`
+        // trigger. Like Draw Reduction, the kernel rule is the **content row** (the fold already
+        // exists); `has_behaviour` only knows the hardcoded catalogue, so it goes on this list.
+        "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No
         // trigger, no modifier: the rule is the tag, so `has_behaviour` cannot see it.

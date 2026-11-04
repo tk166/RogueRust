@@ -4384,6 +4384,8 @@ fn image_operation(op: status_bind::ModifierOp) -> Operation {
         status_bind::ModifierOp::AddPerStack => Operation::AddPerStack,
         status_bind::ModifierOp::AddFlat => Operation::AddFlat,
         status_bind::ModifierOp::ScalePercent => Operation::ScalePercent,
+        // §198: our own operation -- the status pipeline carries it straight through.
+        status_bind::ModifierOp::ScalePercentPerStack => Operation::ScalePercentPerStack,
     }
 }
 

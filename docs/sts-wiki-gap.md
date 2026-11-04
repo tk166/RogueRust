@@ -53,11 +53,11 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 46 / encounters 33 / cards 49 (base 29 + plus 20) / statuses 38 /
+monsters 46 / encounters 33 / cards 49 (base 29 + plus 20) / statuses 39 /
 enemy actions 121 / relics 13 / potions 33 / events 12 (6+3+3) / start deck 10
 ascension variants 79 over 72 actions
-image full   content.sts.rdcf             71276 B
-image core   content.sts.core.rdcf        60064 B
+image full   content.sts.rdcf             71848 B
+image core   content.sts.core.rdcf        60544 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`45` 是**卡行**（27 基础 + 18 升级），不是 45 张职业卡；
@@ -273,8 +273,9 @@ Sentry 的 Bolt 塞的就是它。
    Red Slaver 的 5 条规则）。
 2. ~~`Barricade` / `Blur`~~ ✅ **已完成**（§197：`retain_block` / `retain_block_once` 两个 tag +
    两张卡；后者是一次性的，由内核在"它阻止了清空"那一刻摘掉）。
-3. **`Slow`（Giant Head）与"下回合多抽/多能量"**（内核：回合边界的延迟结算）—— 后者是所有
-   "Energized / Draw" 类卡与药水的前提。
+3. ~~**`Slow`（Giant Head）**~~ ✅ **已完成**（§198：`ScalePercentPerStack` 运算 + `CardPlayed` 推动）。
+   **"下回合多能量"仍缺**：`TurnStartDraw` 这条管线能表达"下回合多抽"（`Draw Reduction` 的反向），
+   但**能量**没有对应管线（`turn_start_refill` 只读配置）—— 那是所有 Energized 类卡与药水的前提。
 4. **"行动者可以自毁"**（内核）—— 解锁 Reptomancer 匕首的 Explode；Looter 的偷钱逃走也走这条。
 5. **内容规模**（卡池 / 遗物 / 事件 / Act2 普通池）—— 纯量，不阻塞机制；**不要**当 P1（见审阅
    报告 §10.4 的反对意见）。

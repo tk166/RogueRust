@@ -286,6 +286,8 @@ pub enum ModifierOp {
     AddFlat,
     /// `current * magnitude / 100`（整数、向零截断）。
     ScalePercent,
+    /// §198：`current * (100 + magnitude * stacks) / 100`（`Slow`）。
+    ScalePercentPerStack,
 }
 
 impl ModifierOp {
@@ -296,6 +298,8 @@ impl ModifierOp {
             "AddPerStack" => Some(ModifierOp::AddPerStack),
             "AddFlat" => Some(ModifierOp::AddFlat),
             "ScalePercent" => Some(ModifierOp::ScalePercent),
+            // §198: our own operation (the reference has only the three above).
+            "ScalePercentPerStack" => Some(ModifierOp::ScalePercentPerStack),
             _ => None,
         }
     }
@@ -307,6 +311,7 @@ impl ModifierOp {
             ModifierOp::AddPerStack => "AddPerStack",
             ModifierOp::AddFlat => "AddFlat",
             ModifierOp::ScalePercent => "ScalePercent",
+            ModifierOp::ScalePercentPerStack => "ScalePercentPerStack",
         }
     }
 }
