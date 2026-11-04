@@ -739,6 +739,11 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // which is a *node*, not a status rule.
         "standard.stasis" |
         "standard.stasis_ready" |
+        // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
+        // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No
+        // trigger, no modifier: the rule is the tag, so `has_behaviour` cannot see it.
+        "standard.barricade" |
+        "standard.blur" |
         // §196: Entangled -- no trigger and no modifier: the whole rule is the kernel's play
         // validator (`play::Validator::Entangled`), which `has_behaviour` does not know about.
         // `standard.entangle_ready` is the once-per-combat flag Red Slaver spends.

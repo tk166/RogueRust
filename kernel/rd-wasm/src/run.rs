@@ -5352,50 +5352,57 @@ mod tests {
             assert!(!id.ends_with('+'), "`{id}` is an upgraded row");
             offered.push(id);
         }
-        offered.sort();
-        offered.dedup();
+        // ⚠️ §197: this used to pin the exact trio `combust / inflame / metallicize`. That was an
+        // artefact of the pool having **exactly** three power cards; `barricade` (§197) is a Power
+        // too, so the potion now *draws* three of four and the trio depends on the run's RNG. The
+        // invariant worth pinning is "three distinct power cards, printed rows only" -- which is what
+        // the assertions above already do one by one.
+        assert_eq!(offered.len(), 3, "three distinct candidates: {offered:?}");
+        let mut sorted = offered.clone();
+        sorted.sort();
+        sorted.dedup();
+        assert_eq!(sorted.len(), 3, "the three candidates are distinct: {offered:?}");
+
+        // Take the first option and check it lands in hand **free** -- no dependency on which card
+        // the draw gave us (§197: `barricade` joined the power pool, so the trio is RNG-dependent).
+        let first_len = crate::rd_env_pile_card_id_len(3, 0);
+        let mut bytes = vec![0u8; first_len as usize];
+        unsafe { crate::rd_env_pile_card_id_into(3, 0, bytes.as_mut_ptr()) };
+        let first = String::from_utf8_lossy(&bytes).to_string();
+        let cards_before = crate::slot().as_ref().expect("session").state.card_count();
+        assert_eq!(crate::rd_env_choice_pick(0, 1), 0);
+        assert_eq!(crate::rd_env_choice_confirm(), 0, "answered");
+        assert_eq!(crate::rd_env_choice_pending(), 0, "the question is answered");
         assert_eq!(
-            offered,
-            std::vec!["combust", "inflame", "metallicize"],
-            "the three power cards, and nothing else"
+            crate::slot().as_ref().expect("session").state.card_count(),
+            cards_before + 1,
+            "exactly one card was created"
         );
 
-        // Take `inflame` (2 Strength) -- the strongest, simplest assertion.
-        let index = (0..3)
-            .find(|slot| {
-                let len = crate::rd_env_pile_card_id_len(3, *slot);
-                let mut bytes = vec![0u8; len as usize];
-                unsafe { crate::rd_env_pile_card_id_into(3, *slot, bytes.as_mut_ptr()) };
-                String::from_utf8_lossy(&bytes) == "inflame"
-            })
-            .expect("inflame is on offer");
-        assert_eq!(crate::rd_env_choice_pick(index, 1), 0);
-        assert_eq!(crate::rd_env_choice_confirm(), 0, "answered");
-
-        // Play it: it must cost 0 (the potion's promise) and hand the hero 2 Strength, which is a
-        // status that outlives the card.
+        // It is in hand and it is **free** (the potion's promise).
         let slot_ref = crate::slot().as_ref().expect("session");
         let hand = slot_ref
             .hand_defs
             .iter()
-            .position(|definition| definition == "inflame")
-            .expect("inflame is in hand");
+            .position(|definition| *definition == first)
+            .unwrap_or_else(|| panic!("`{first}` is in hand"));
         assert_eq!(slot_ref.hand_costs[hand], 0, "the potion made it free");
         drop(slot_ref);
+
+        // And it is playable at that price: play it and check the energy did not move.
         let energy_before = crate::slot().as_ref().expect("session").energy_now();
         let play = (0..crate::rd_env_action_count())
             .find(|action| {
                 crate::rd_env_action_kind(*action) == crate::ACTION_PLAY
                     && crate::rd_env_action_arg(*action, 0) == hand as i32
             })
-            .expect("inflame is playable");
-        assert_eq!(rd_env_step(play), 0, "play inflame");
+            .unwrap_or_else(|| panic!("`{first}` is playable"));
+        assert_eq!(rd_env_step(play), 0, "play `{first}`");
         assert_eq!(
             crate::slot().as_ref().expect("session").energy_now(),
             energy_before,
             "it was free"
         );
-        assert_eq!(hero_status("standard.strength"), 2, "2 Strength, permanently");
     }
 
     #[test]

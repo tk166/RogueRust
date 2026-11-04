@@ -249,6 +249,9 @@ pub trait TurnHost {
 
     /// `standard.retain_block` 之类的标记是否让该单位的格挡**不被**回合开始清空
     /// （`DefensivePoolEffects.cs:294-314`）。默认 `false` = 必清。
+    /// §197：一次性格挡保留的消耗（默认什么都不做 —— 只有带内容的那层知道 tag）。
+    fn consume_one_shot_block_retainers(&mut self, _state: &mut CombatState, _actor: &CombatantId) {}
+
     fn block_is_retained(&self, state: &CombatState, actor: &CombatantId) -> bool {
         let _ = (state, actor);
         false
@@ -624,6 +627,12 @@ pub fn start_current_turn<H: TurnHost>(
         .combatant(&actor)
         .and_then(|c| c.defensive_pools().iter().find(|p| p.key == config.block_pool).map(|p| p.pool.current));
     let block_retained = host.block_is_retained(state, &actor);
+    // §197: a **one-shot** retention (`Blur`) is spent the moment it prevents this clear -- StS removes
+    // the power in the same place. Content cannot reach this instant (it is neither a `TurnStarted`
+    // trigger, which runs earlier, nor `TurnEnded`), so the host does it here.
+    if block_retained {
+        host.consume_one_shot_block_retainers(state, &actor);
+    }
 
     state.turn_phase = CombatTurnPhase::TurnInProgress;
 

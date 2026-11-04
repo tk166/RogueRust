@@ -2131,6 +2131,40 @@
       ],
       "PassiveModifiers": [],
       "Triggers": null
+    },
+    {
+      "Id": "standard.barricade",
+      "PackageId": "sts",
+      "NameKey": "Barricade",
+      "DescriptionKey": "Block is not removed at the start of your turn.",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "retain_block"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": null
+    },
+    {
+      "Id": "standard.blur",
+      "PackageId": "sts",
+      "NameKey": "Blur",
+      "DescriptionKey": "Block is not removed at the start of next turn.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "retain_block_once"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": null
     }
   ],
   "Cards": [
@@ -5022,6 +5056,226 @@
       "TurnEndHandDestinationZone": "ExhaustPile",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Status"
+    },
+    {
+      "Id": "barricade",
+      "PackageId": "sts",
+      "NameKey": "Barricade",
+      "DescriptionKey": "Barricade: Block is not removed at the start of your turn.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 3
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.barricade"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "Hand",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "blur",
+      "PackageId": "sts",
+      "NameKey": "Blur",
+      "DescriptionKey": "Blur: Block is not removed at the start of next turn.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.blur"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "Hand",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "barricade+",
+      "PackageId": "sts",
+      "NameKey": "Barricade+",
+      "DescriptionKey": "Barricade: Block is not removed at the start of your turn.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.barricade"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "Hand",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "blur+",
+      "PackageId": "sts",
+      "NameKey": "Blur+",
+      "DescriptionKey": "Blur: Block is not removed at the start of next turn.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.blur"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "Hand",
+      "PlayedCardDestinationZone": "DiscardPile",
+      "Rarity": "Rare"
     }
   ],
   "EnemyActions": [

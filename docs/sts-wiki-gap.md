@@ -53,11 +53,11 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 46 / encounters 33 / cards 45 (base 27 + plus 18) / statuses 36 /
+monsters 46 / encounters 33 / cards 49 (base 29 + plus 20) / statuses 38 /
 enemy actions 121 / relics 13 / potions 33 / events 12 (6+3+3) / start deck 10
 ascension variants 79 over 72 actions
-image full   content.sts.rdcf             70480 B
-image core   content.sts.core.rdcf        59540 B
+image full   content.sts.rdcf             71276 B
+image core   content.sts.core.rdcf        60064 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`45` 是**卡行**（27 基础 + 18 升级），不是 45 张职业卡；
@@ -271,7 +271,8 @@ Sentry 的 Bolt 塞的就是它。
 
 1. ~~`Entangled` + Red Slaver 的第三招~~ ✅ **已完成**（§196：`Validator::Entangled` + 拒绝码 18 +
    Red Slaver 的 5 条规则）。
-2. **`Barricade` / `Blur`**（内核：格挡跨回合保留的条件清除）—— 缺了它，战士的"全防御"流派不存在。
+2. ~~`Barricade` / `Blur`~~ ✅ **已完成**（§197：`retain_block` / `retain_block_once` 两个 tag +
+   两张卡；后者是一次性的，由内核在"它阻止了清空"那一刻摘掉）。
 3. **`Slow`（Giant Head）与"下回合多抽/多能量"**（内核：回合边界的延迟结算）—— 后者是所有
    "Energized / Draw" 类卡与药水的前提。
 4. **"行动者可以自毁"**（内核）—— 解锁 Reptomancer 匕首的 Explode；Looter 的偷钱逃走也走这条。

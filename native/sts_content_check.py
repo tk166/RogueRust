@@ -87,7 +87,7 @@ INV_COUNTS = {
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
-    "statuses": 36,
+    "statuses": 38,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -227,6 +227,16 @@ INV_CARDS = {
                      "Facts": [("status", "standard.metallicize", 4, "source")]},
     "combust": {"Cost": 1, "Tags": ["power"],
                 "Facts": [("status", "standard.combust", 5, "source")]},
+    # §197: the two block-retention cards. Facts are the status they apply; the retention itself is
+    # the status' tag (checked by the kernel test, not by this table).
+    "barricade": {"Cost": 3, "Tags": ["power"],
+                  "Facts": [("status", "standard.barricade", 1, "source")]},
+    "barricade+": {"Cost": 2, "Tags": ["power"],
+                   "Facts": [("status", "standard.barricade", 1, "source")]},
+    "blur": {"Cost": 1, "Tags": ["skill"],
+             "Facts": [("status", "standard.blur", 1, "source")]},
+    "blur+": {"Cost": 0, "Tags": ["skill"],
+              "Facts": [("status", "standard.blur", 1, "source")]},
     "combust+": {"Cost": 1, "Tags": ["power"],
                  "Facts": [("status", "standard.combust", 7, "source")]},
 
@@ -759,6 +769,10 @@ INV_STATUSES = {
     "standard.stasis_ready": [],
     # §195.7: Draw Reduction -- the `TurnStartDraw` pipeline, minus one per stack.
     "standard.draw_reduction": [("TurnStartDraw", "AddPerStack", -1, 100, None)],
+    # §197: Barricade (permanent) / Blur (one turn) -- both are "block is not cleared", which the
+    # host already asks via the `retain_block` **tag**; no kernel rule, just a tag.
+    "standard.barricade": [],
+    "standard.blur": [],
     # §196: Entangled -- no modifiers at all; the whole rule is the kernel's play validator
     # (`Validator::Entangled`), and the status decays through its own TurnEnded trigger.
     "standard.entangled": [],
@@ -1957,8 +1971,12 @@ def check_upgrades(doc):
             missing.append(card_id)
     if missing:
         fail("cards.upgrades", "no `+` row for %s" % (missing,))
-    # An upgraded row must keep the base's cost and tags: a `+` that changes the shape (cheaper cost,
-    # different keyword) is not an upgrade, it is a different card wearing the same name.
+    # An upgraded row may be **cheaper** but never more expensive, and must keep the same tags.
+    #
+    # ⚠️ §197 修正了一条**假不变量**：这里原来要求"`+` 行的费必须和基础行一样"。那不是 StS ——
+    # 降费升级是**最常见**的一类升级（Barricade 3→2、Blur 1→0、Body Slam 1→0 …），而内核每次出牌
+    # 读的就是那一行的 `Costs`，所以内容本来就表达得了。原来那条规则会让"想写对的人"被迫写错，
+    # 于是内容与检查器**一起**错还全绿 —— 正是审阅 §4.2 说的那种绿。
     for card_id, card in cards.items():
         if not card_id.endswith("+"):
             continue
@@ -1966,10 +1984,11 @@ def check_upgrades(doc):
         if base is None:
             fail("cards.upgrades", "%s has no base row" % (card_id,))
             continue
-        if [cost.get("Amount") for cost in card.get("Costs") or []] != [
-            cost.get("Amount") for cost in base.get("Costs") or []
-        ]:
-            fail("cards.upgrades", "%s costs differently from %s" % (card_id, card_id[:-1]))
+        base_cost = [cost.get("Amount") for cost in base.get("Costs") or []]
+        up_cost = [cost.get("Amount") for cost in card.get("Costs") or []]
+        if any(up > base for up, base in zip(up_cost, base_cost)) or len(up_cost) != len(base_cost):
+            fail("cards.upgrades", "%s costs MORE than %s (%r > %r)"
+                 % (card_id, card_id[:-1], up_cost, base_cost))
         if [tag["value"] for tag in card.get("Tags") or []] != [
             tag["value"] for tag in base.get("Tags") or []
         ]:

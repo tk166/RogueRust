@@ -155,6 +155,9 @@ pub const TAG_RETAIN_HAND: &str = "retain_hand";
 
 /// `RetainBlockTag = "retain_block"`（`StandardCombatIds.cs:56`）。
 ///
+/// §197：`Barricade` 用它（永久），`Blur` 用下面那个**一次性**的兄弟。
+pub const TAG_RETAIN_BLOCK_ONCE: &str = "retain_block_once";
+///
 /// 镜像 23/23 状态都不带它 ⇒ [`Host::block_is_retained`] 恒 `false`。
 pub const TAG_RETAIN_BLOCK: &str = "retain_block";
 
@@ -1646,11 +1649,77 @@ impl<'a> Host<'a> {
     /// ⇒ 恒 `false` = 必清（= 参考的默认路径）。
     #[must_use]
     pub fn block_is_retained_detail(&self, state: &CombatState, actor: &CombatantId) -> bool {
-        match self.any_active_status_with_tag(state, actor, TAG_RETAIN_BLOCK) {
+        // §197: **两个**标签都说"这次不清"—— `retain_block`（Barricade，永久）与
+        // `retain_block_once`（Blur，撑过一次就由 [`Self::consume_one_shot_block_retainers`] 摘掉）。
+        // 只认前者的话，Blur 会被判定成"照常清空"，而**它自己不会报错** —— 静默少一条机制。
+        match self
+            .any_active_status_with_tag(state, actor, TAG_RETAIN_BLOCK)
+            .and_then(|permanent| {
+                if permanent {
+                    Ok(true)
+                } else {
+                    self.any_active_status_with_tag(state, actor, TAG_RETAIN_BLOCK_ONCE)
+                }
+            }) {
             Ok(found) => found,
             Err(e) => {
                 self.record(e);
                 false // 读不出来 ⇒ 按默认（清）。理由同上：这一支不可达，选默认值最不吓人。
+            }
+        }
+    }
+
+    /// §197：**一次性**的格挡保留（`Blur`）：`retain_block` 让它撑过这次回合开始，然后在这里被摘掉。
+    ///
+    /// 为什么必须是内核、不能是内容：StS 的 `Blur` 是在**它阻止清空的那一刻**被消耗的
+    /// （`GameActionManager` 清 block 时看 `hasPower("Blur")` 并把 power 摘掉）。本内核的时点是
+    /// `turn::start_current_turn` 里"采样 `block_is_retained` → 清池子"那两步之间 —— 那既不是
+    /// `TurnStarted` 触发器（在第 3–4 步，早于清空）也不是 `TurnEnded`（在上一回合末，会更早）。
+    /// 所以由调用方在"决定了保留"之后调这一句。
+    ///
+    /// 一次只摘**一层**：`Blur 2` 就撑两次回合开始（StS 的 Blur 可以叠）。
+    pub fn consume_one_shot_block_retainers(&mut self, state: &mut CombatState, actor: &CombatantId) {
+        let mut definitions = [crate::state::StatusDefinitionId::EMPTY; 8];
+        let mut count = 0usize;
+        {
+            let Some(combatant) = state.combatant(actor) else {
+                return;
+            };
+            for instance in combatant.statuses() {
+                if count == definitions.len() || !is_active(instance) || instance.stacks <= 0 {
+                    continue;
+                }
+                let Ok(true) = status_bind::has_tag(
+                    self.content,
+                    instance.definition_id.as_str(),
+                    TAG_RETAIN_BLOCK_ONCE,
+                ) else {
+                    continue;
+                };
+                definitions[count] = instance.definition_id;
+                count += 1;
+            }
+        }
+        for definition in definitions.iter().take(count) {
+            let name = definition.as_str();
+            let index = state.combatant(actor).and_then(|combatant| {
+                combatant
+                    .statuses()
+                    .iter()
+                    .position(|status| status.definition_id == *definition && status.stacks > 0)
+            });
+            let Some(index) = index else { continue };
+            let combatant = match state.combatant_mut(actor) {
+                Some(combatant) => combatant,
+                None => return,
+            };
+            let Some(instance) = combatant.statuses_mut().get_mut(index) else {
+                return;
+            };
+            instance.stacks -= 1;
+            let _ = name;
+            if instance.stacks <= 0 {
+                combatant.remove_status(index);
             }
         }
     }
@@ -2446,6 +2515,14 @@ impl TurnHost for Host<'_> {
 
     fn block_is_retained(&self, state: &CombatState, actor: &CombatantId) -> bool {
         self.block_is_retained_detail(state, actor)
+    }
+
+    /// §197: the one-shot retentions are **spent here** -- the inherent method above does the work,
+    /// and this delegation is what makes the turn machine reach it (without it the trait's default
+    /// no-op runs and `Blur` keeps the block forever; my first version of this test caught exactly
+    /// that).
+    fn consume_one_shot_block_retainers(&mut self, state: &mut CombatState, actor: &CombatantId) {
+        Host::consume_one_shot_block_retainers(self, state, actor);
     }
 
     fn turn_start_draw_count(&self, state: &CombatState, actor: &CombatantId, base: i32) -> i32 {
@@ -7653,6 +7730,60 @@ mod tests {
         turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
         assert_eq!(zone_count(&state, "hero", CardZone::Hand), 0);
         assert_eq!(zone_count(&state, "hero", CardZone::DiscardPile), 2);
+    }
+
+    /// §197：`Barricade`（永久）与 `Blur`（只保一次）—— 同一个 `retain_block` 标签，两种寿命。
+    ///
+    /// 内核早就有这条钩子（`block_is_retained` 读 active 状态的 `retain_block` tag），所以这一节
+    /// **没有内核改动**：缺的只是"内容能声明它"。判据是**三个回合**，因为"保一次"与"永久"在
+    /// 只看一个回合时完全一样：
+    /// 1. Barricade：回合 1 攒 5 格挡 → 回合 2 还在 5 → 回合 3 仍是 5；
+    /// 2. Blur：回合 2 保留 → 它的 `TurnEnded` 把状态摘掉 → 回合 3 清空；
+    /// 3. 对照：两样都没有时回合 2 就清空（上面那条测试钉着，这里再钉一次以免归因错误）。
+    #[test]
+    fn barricade_keeps_block_forever_and_blur_only_for_one_turn() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // (status, block expected at turn 2, block expected at turn 3)
+        for (status_id, expected_turn2, expected_turn3) in [
+            ("standard.barricade", 5, 5),
+            ("standard.blur", 5, 0),
+        ] {
+            let mut host = Host::new(&content);
+            let mut state = solo();
+            // ⚠️ The status is applied **during** turn 1, the way a card would be played -- giving it
+            // before `start_current_turn` would let the first turn start consume it (which is exactly
+            // what the first version of this test did, and it looked like a kernel bug).
+            turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+            give(&mut state, "hero", status("st_keep", status_id, 1));
+            give_block(&mut state, "hero", 5);
+            turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+            turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+            assert_eq!(
+                block_of(&state, "hero"),
+                expected_turn2,
+                "{status_id}: turn 2 keeps the block"
+            );
+            turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+            turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+            assert_eq!(
+                block_of(&state, "hero"),
+                expected_turn3,
+                "{status_id}: turn 3 -- Barricade keeps it, Blur has expired"
+            );
+            // The mechanism, not just the number: Blur is gone, Barricade is not.
+            let left = stacks_of(&state, "hero", status_id);
+            if status_id == "standard.blur" {
+                assert_eq!(left, 0, "Blur expires through its own `TurnEnded` trigger");
+            } else {
+                assert_eq!(left, 1, "Barricade has no decay");
+            }
+        }
     }
 
     #[test]
