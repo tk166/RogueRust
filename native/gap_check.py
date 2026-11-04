@@ -164,6 +164,36 @@ def main():
                     "%s %d-%d @A%d" % (r["Key"], r["Min"], r["Max"], r.get("AscensionMin", 0))
                     for r in rolls)))
 
+    # ── §195.9: 一段**可直接粘进文档**的计数区块 ────────────────────────────────────────────────
+    # 为什么要有它：README / gap 里的"46 怪 / 120 动作 / 34 状态"这种数字，此前是**人抄**的，改一次内容
+    # 就变成谎话，而没有任何闸门会红（审阅 §4.2 的第 2 条）。这里把它们变成"跑一次、贴一次"的产物。
+    import json as _json
+    import os as _os
+    build = _json.loads(read(_os.path.join("tools", "contentc", "packages", "sts", "out",
+                                            "build.json")))
+    print("== pastable counts (`docs/sts-wiki-gap.md` §1) ==")
+    print("  monsters %d / encounters %d / cards %d (base %d + plus %d) / statuses %d /"
+          % (len(doc["Monsters"]), len(doc["Encounters"]), len(doc["Cards"]),
+             sum(1 for c in doc["Cards"] if not c["Id"].endswith("+")),
+             sum(1 for c in doc["Cards"] if c["Id"].endswith("+")),
+             len(doc["Statuses"])))
+    events = doc.get("EventTables") or {}
+    # The event pools are **three** per-act lists (Events / Events2 / Events3); the old README said
+    # "9 events" which was neither the sum nor any one pool.
+    event_counts = [len(events.get(key) or []) for key in ("Events", "Events2", "Events3")]
+    print("  enemy actions %d / relics %d / potions %d / events %d (%s) / start deck %d"
+          % (len(doc["EnemyActions"]), len(doc["Relics"]), len(doc["Potions"]),
+             sum(event_counts), "+".join(str(n) for n in event_counts),
+             len(doc["Start"]["Deck"])))
+    variants = sum(len(a["ProgramAsc"]) for a in doc["EnemyActions"] if a.get("ProgramAsc"))
+    print("  ascension variants %d over %d actions"
+          % (variants, sum(1 for a in doc["EnemyActions"] if a.get("ProgramAsc"))))
+    if isinstance(build, dict):
+        # `images` is `{variant: {file, bytes, sha256}}`, not a list.
+        for variant, image in (build.get("images") or {}).items():
+            print("  image %-6s %-26s %7d B" % (variant, image.get("file", "?"),
+                                                image.get("bytes", 0)))
+
     print("== gates ==")
     accept = read(ACCEPT)
     names = re.findall(r"Invoke-Gate -Name '([a-z0-9-]+)'", accept)

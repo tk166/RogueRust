@@ -691,16 +691,42 @@ fn build_session_at(
     build_fight_from_content(&mut state, content, &plan)
         .map_err(|e| format!("build_fight_from_content: {}", detail(&e)))?;
 
-    // §195.8: content-declared masters. A placed minion (the Awakened One's two Cultists) has no
-    // other way to say "when this one falls, I flee" -- `node.createCombatant` sets `owner` for
+    // §195.8/§195.9: content-declared masters. A placed minion (the Awakened One's two Cultists) has
+    // no other way to say "when this one falls, I flee" -- `node.createCombatant` sets `owner` for
     // summons, and `resolve_damage` already turns a downed master's minions into `Escaped`.
+    //
+    // ⚠️ §195.9 起这里是**外键**，不再是"尽力而为"：上一版对读不懂的 id `continue`、也不检查主人
+    // 是否在场，于是一个拼错的主人 = 悬空引用 = 小兵永远不逃，**没有任何东西会红**。
+    // 现在三种情况全部响亮失败：minion 名不合法 / master 名不合法 / master 不在本场（含歧义）。
+    let mut resolved: Vec<(rd_core::state::CombatantId, rd_core::state::CombatantId)> = Vec::new();
     for (minion, master) in owners {
-        let Ok(minion_id) = rd_core::state::CombatantId::new(minion) else {
-            continue;
-        };
-        let Ok(master_id) = rd_core::state::CombatantId::new(master) else {
-            continue;
-        };
+        let minion_id = rd_core::state::CombatantId::new(minion)
+            .map_err(|e| format!("`Owner` on `{minion}`: bad combatant id ({:?})", e))?;
+        let master_id = rd_core::state::CombatantId::new(master)
+            .map_err(|e| format!("`{minion}`.Owner = `{master}`: bad combatant id ({:?})", e))?;
+        if state.combatant(&minion_id).is_none() {
+            return Err(std::format!("`Owner` set on `{minion}`, which is not in this fight"));
+        }
+        // Present **exactly once**: a duplicate record would make the reference ambiguous
+        // (`darkling` vs `darkling#2`), and a master that spawns later would be a forward reference
+        // this content cannot express yet.
+        let present = state
+            .combatants()
+            .iter()
+            .filter(|combatant| {
+                let raw = combatant.id.as_str();
+                raw == master || raw.split('#').next() == Some(master)
+            })
+            .count();
+        if present != 1 {
+            return Err(std::format!(
+                "`{minion}`.Owner = `{master}`: {} combatants match (must be exactly one)",
+                present
+            ));
+        }
+        resolved.push((minion_id, master_id));
+    }
+    for (minion_id, master_id) in resolved {
         if let Some(combatant) = state.combatant_mut(&minion_id) {
             combatant.owner = Some(master_id);
         }
@@ -3196,6 +3222,79 @@ mod tests {
                 .is_empty(),
             "the cultist declares `Rolls: []` -- no counter may appear"
         );
+    }
+
+    /// §195.9（审阅工作包 C）：**每一条能进入池的遭遇都必须建得起来** —— × A0/A9/A19/A20。
+    ///
+    /// 存在理由是一条真实的 bug：`enc_darklings`（两只相同 Darkling）在**第三幕 weak 池**里，却
+    /// 从来建不起来（第二条记录撞 `DuplicateCombatant`）。所有既有闸门都是绿的 —— 内容门只查
+    /// "内容里的 id 自洽"，浏览器切片只跑第一幕，随机 soak 恰好没抽到它。
+    ///
+    /// 这里把"能进入池"当成判据从内容里**读出来**（九个 `EncounterTables.*`），所以池子加一项就
+    /// 自动进这道门；四个 Ascension 覆盖 `ProgramAsc`（A2/A3/A4、A17/18/19）与 A20 的双 Boss。
+    ///
+    /// 判据不止"能建"：还要**有敌人、首轮能选出意图**（`select_action` 对每个敌人都不报错），
+    /// 因为"建起来但意图层炸"与"建不起来"对玩家是同一件事。
+    #[test]
+    fn every_pool_encounter_builds_and_can_pick_its_first_intents() {
+        let pools = [
+            "Weak", "Weak2", "Weak3", "Elite", "Elite2", "Elite3", "Boss", "Boss2", "Boss3",
+        ];
+        let mut seen: Vec<&'static str> = Vec::new();
+        let mut builds = 0usize;
+        for pool in pools {
+            // Read the pool through the content: adding an encounter there must add it here too.
+            let content = Box::leak(Box::new(
+                rd_core::content::Content::parse(IMAGE).expect("the image parses"),
+            ));
+            let ids = content
+                .encounter_pool(pool)
+                .unwrap_or_else(|| panic!("`EncounterTables.{pool}` must be readable"));
+            for name in ids.iter().copied().filter(|id| !id.is_empty()) {
+                if seen.contains(&name) {
+                    continue;
+                }
+                seen.push(name);
+                for ascension in [0u8, 9, 19, 20] {
+                    let mut session = build_session_at(11, name, 70, None, 0, ascension)
+                        .unwrap_or_else(|e| {
+                            panic!("`{name}` (pool `{pool}`, A{ascension}) must build: {e}")
+                        });
+                    builds += 1;
+                    let enemies: Vec<rd_core::state::CombatantId> = session
+                        .state
+                        .combatants()
+                        .iter()
+                        .filter(|combatant| combatant.team_id.as_str() == "enemy")
+                        .map(|combatant| combatant.id)
+                        .collect();
+                    assert!(
+                        !enemies.is_empty(),
+                        "`{name}` (A{ascension}) placed no enemy -- `Spawn: false` on everything?"
+                    );
+                    // The intent layer must answer for each enemy (this is where `ProgramAsc` and the
+                    // weighted-choice rules are actually exercised).
+                    for enemy in &enemies {
+                        let at = rd_core::intent::locate_enemy(session.content, session.encounter, enemy)
+                            .unwrap_or_else(|e| panic!("`{name}` locate {enemy:?}: {e:?}"))
+                            .unwrap_or_else(|| panic!("`{name}`: `{enemy:?}` has no enemy record"));
+                        rd_core::intent::select_action(
+                            &session.state,
+                            session.content,
+                            at,
+                            enemy,
+                            session.state.current_round.max(1),
+                        )
+                        .unwrap_or_else(|e| {
+                            panic!("`{name}` (A{ascension}) select_action for {enemy:?}: {e:?}")
+                        });
+                    }
+                    session.host.take_failure();
+                }
+            }
+        }
+        assert!(seen.len() >= 20, "only {} encounters are reachable: {seen:?}", seen.len());
+        assert!(builds >= 80, "only {builds} fights were built");
     }
 
     /// §195.8: the Awakened One comes with two Cultists, and they **flee** when it finally dies.

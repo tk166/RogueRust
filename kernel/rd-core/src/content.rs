@@ -2107,8 +2107,12 @@ impl<'a> EnemySpec<'a> {
                 match self.slot(at)? {
                     BOOL_FALSE => Ok(false),
                     BOOL_TRUE => Ok(true),
-                    // 缺席/null 两种哨兵都当"没说"—— 与 `max_health` 的口径一致。
-                    _ => Ok(true),
+                    // 两种"没说"的合法拼法：`A`（键缺席）与 `N`（null）。与 `max_health` 的口径一致。
+                    BOOL_ABSENT | BOOL_NULL => Ok(true),
+                    // ⚠️ §195.9：其余槽值（0x8000 之后的哨兵、或任何垃圾数）**不许**当 true ——
+                    // 上一次的 `_ => Ok(true)` 把"这个字段读坏了"变成了"这条记录上场"，
+                    // 与 `spawn: false` 的语义正好相反，而且完全静默。
+                    _ => Err(EncounterError::WrongFieldKind("Spawn")),
                 }
             }
         }

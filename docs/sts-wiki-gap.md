@@ -35,16 +35,33 @@
 |---|---|---|
 | 战斗内核 | 出牌 / 结算 / 状态 / 意图 / 修饰器管线 / 效果程序 IR / 选择与目标 / 金色指纹 | `SEMANTICS-v1.md`，§1–§128 |
 | 卡牌关键词 | Exhaust / Ethereal / Innate / Retain / Unplayable / X 费 全部有载体 | §144 / §146 |
-| 状态 | 内容里**每一条状态都有规则**，`is_declared_inert()` 的名单是**空的**（`gap_check.py` 打印） | §147 / §149 / §158 / §180 / §181 |
+| 状态 | 内容里每一条状态要么有内核规则、要么**显式声明为 inert**（`is_declared_inert()`，7 条，`gap_check.py` 打印）。⚠️ "在 inert 名单上"只说明"内核没有硬编码规则" —— 它的行为在内容的触发器里，**这不等价于"StS 语义全对"**（审阅 §4.2） | §147 / §149 / §158 / §180 / §181 / §195.1–§195.7 |
 | 三幕骨架 | 地图 15 行 × 7 列 + Boss 行、每幕独立的遭遇/事件池、幕间切换 | §130 / §131 / §133 / §137 |
 | 战斗流程 | 召唤随从（敌人槽上限 6）、Boss 分裂、半血换招、**销毁战斗员**（§178） | §121 / §124 / §138–§140 / §178 |
 | 运行层 | 商店（卡/遗物/药水/删卡 + 价格）、篝火（休息/打铁）、宝箱、事件、奖励屏、**脱战**（§179） | §143 / §161.8 / §179 |
 | 药水 | **全部 33 瓶**（Ironclad 口径）都能喝，效果词表见 `gap_check.py` | §152 / §158 / §179–§185 |
-| Ascension | **20 / 20 条都有机制**：13 条运行层规则（A1 A5–A9 A10 A11 A12 A13 A14 A15 A16 A20，每条在阈值两侧各测一次）+ **A2/A3/A4 与 A17/18/19 的数据维度**（13 个动作有升档变体，§187）+ 事件列表的 A15 变体（§188） | §159 / §187 / §188 / §189、`gap_check.py` |
+| Ascension | **20 / 20 条都有机制**（13 条运行层规则，每条在阈值两侧各测一次）+ **A2/A3/A4 与 A17/18/19 的数值**：**79 条变体 / 72 个动作**（`gap_check.py` 的 pastable 区块）+ 事件列表的 A15 变体 | §159 / §187–§192、`gap_check.py` |
 | 存档 / 回放 | 单行文本 + CRC（`RDA1`）；动作序列 + 每步哈希（`RDR1`）；内容指纹 | §161.9 / §163 / §164 / §166 |
 | 前端 | 战斗 + 运行层 + 存档 + 回放；真浏览器闸门（真指针点击 + 像素判据 + 切片五场景） | §165 / §168 / §185 |
 | 诊断 | 一步之内的有序事件（beats）、**拒绝码**与**宿主失败原文**导出（§177） | `env-abi.md` §12 |
 
+
+### 1.1 数字只有一个来源（§195.9）
+
+下面这一段是 `python -X utf8 native/gap_check.py` 的 **pastable 区块**原样贴进来 —— 文档里**不要**
+再手写这些数字（README 里那份曾经写着"28 张基础 + 17 张升级 / 9 事件"，实际是 **27 + 18 / 12**，
+而且没有任何闸门会红）。
+
+```
+monsters 46 / encounters 33 / cards 45 (base 27 + plus 18) / statuses 34 /
+enemy actions 120 / relics 13 / potions 33 / events 12 (6+3+3) / start deck 10
+ascension variants 79 over 72 actions
+image full   content.sts.rdcf             69188 B
+image core   content.sts.core.rdcf        58436 B
+```
+
+> ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`45` 是**卡行**（27 基础 + 18 升级），不是 45 张职业卡；
+> `79 / 72` 是**变体 / 动作**；`12` 是三个幕的事件池之和（`6+3+3`），不是单池大小。
 ---
 
 ## 2. 缺口
@@ -54,12 +71,18 @@
 | 关键词 | wiki 语义 | 我们的状态 | 需要 |
 |---|---|---|---|
 | Exhaust / Ethereal / Innate / Retain / Unplayable / X 费 | `Keywords` 页 | **有**（内容侧；X 费走 `x_cost` tag + `x.cost` + `node.repeat`） | — |
-| **Double Damage**（Blasphemy / Divinity：下一张攻击打两次） | `Keywords` 页 | **部分**：`standard.duplication` + `play.rs` 已经把"下一张牌打两遍"做出来了（§181，Duplication Potion 在用），但它挂在**状态**上，不是卡牌关键词，也不消费"攻击牌"这个条件 | 内容（一张带该关键词的牌） |
+| **Duplication**（不是 Double Damage） | `Keywords` / `Duplication` 页 | **有**：`standard.duplication` + `play.rs` 把"下一张牌打两遍"做出来了（§181，Duplication Potion 在用） | — |
+| **Double Damage**（"本回合攻击伤害 ×2"的倍率） | 同上 | **没有**，而且**与本项目无关**：它是 Watcher 的 Divinity / Blasphemy 语境；`standard.duplication` 是**追加打出一次**，不是倍率 | 不做（Ironclad 范围外） |
+| **Double Tap / Entangled / Divinity** | 各自单卡页 | **Double Tap**（下一张 Attack 打两次）没有；**Entangled**（本回合不能打 Attack）没有；**Divinity** 是 Watcher 姿态，范围外 | 前两条见 §3 的顺序表 |
 | **Exhaust 触发链**（"每当一张牌被消耗…"） | 触发器 | **载体有**（`LifecyclePrograms` 的 `CardExhausted`），**没有一张牌用它** | 内容 |
 | **升级牌在战斗中回退**（"until end of combat" 的临时性） | — | **不适用**：我们照 wiki 的"for the rest of combat"，升级是**本场战斗内持久**的（§179） | — |
 
 > ⚠️ 上一版写"X 费是唯一内核不许出现的 tag，内容门 [6d] 会拒"。**已过期**：§146 删掉了
 > `reject_x_cost_deck`；内容检查反过来要求它的**印刷费用是 0**，因为代价走 `x_cost_payment`。
+
+> ⚠️ **术语分开写**（审阅 §5.3）：**倍率**（Double Damage ×2）、**追加打出**（Duplication 任意牌 /
+> Double Tap 限 Attack）、**姿态**（Divinity，Watcher）是三件不同的事。本项目只有第二件，
+> 写文档时不要用"Double Damage"指它。
 
 ### B. 状态 —— wiki 常见而我们没有的
 
@@ -100,7 +123,7 @@ wiki 常见而我们**没有**的：
 | **整手牌升级 / 整手牌改费** | **有**（§179：`combat_upgrade_hand`、`combat_randomize_costs`） | — |
 | **偷钱后逃跑**（Looter） | 没有 | 内容 + 一个"偷金币并 Escaped"的节目 |
 | **往牌库塞牌**（Hexaghost 的 Burn） | 机制**有**（`createCardInstance` + 区） | 内容 |
-| **形态切换 / 复活**（Awakened One / The Guardian Mode Shift） | 没有 | 内核（复活 + 换招式表） |
+| ~~形态切换 / 复活~~ | ✅ **已完成**（§195.1 Mode Shift 真累计受伤 / §195.2 `DeathPrevention` 真复活 / §195.8 Cultist 逃跑） | — |
 | **Giant Head 的 "It Is Time" 递增**（30 点、每次 +5） | **没有**：本项目是**简化版**（320 HP + Metallicize 4 + Glare/Count 两招，§130 记录） | 内容（wiki 的 500 HP 对一局切片太长） |
 | **逃跑（flee）** | **有**，但只在**运行层**（`result = 3`：不给奖励、节点算用掉、Boss 战拒绝，§179）。内核的 `CombatResult` 仍是参考的三种 | 内核（若要让敌人也能"逃走"并带走金币） |
 | **自己行动时自毁**（Reptomancer 的匕首 Explode） | **做不到**：`remove_combatant` 拒绝移除**当前行动者**（回合循环按 id 找它） | 内核（"行动者消失后回合怎么收尾"的判据） |
@@ -112,7 +135,7 @@ wiki 常见而我们**没有**的：
 | 地图 6 种节点 + Boss 行 / 每幕独立地图 | **有** | — |
 | 遭遇池按幕分 | **有**（`gap_check.py` 打印每幕的数量） | 内容（第二幕的普通池只有 2 个） |
 | **精英池** | 每幕 **3 个**：Act1 `three_sentries / gremlin_nob / lagavulin`、Act2 `gremlin_leader / book_of_stabbing / slavers`、Act3 `giant_head / nemesis / reptomancer` | — （wiki 的每幕 3 个齐了） |
-| **Boss 池** | 每幕各 **1** 个：Slime Boss / The Champ / Time Eater（wiki 是每幕三选一） | 内容 + 内核（The Guardian 的 Mode Shift、Hexaghost 的 Burn 升级、Bronze Automaton 的召唤） |
+| ~~Boss 池~~ | ✅ **每幕三只**（§194）：Slime Boss / Guardian / Hexaghost，Champ / Automaton / Collector，Time Eater / Awakened One / Donu & Deca | — |
 | 药水 | **33 / 33**（Ironclad 口径） | — （见 §D.1，全部落地） |
 | 遗物 | **13 件**（7 Common / 4 Uncommon / 1 Rare / 1 Event）。效果是 `rd-run` 里的**手写规则**，不是数据 | 内容 + 内核（每件一条规则）；总数**未核对**（wiki 的 `Relics List` 是模板生成的，取不到可直接引用的清单） |
 | 篝火选项 | **只有 Rest / Smith**；wiki 的 `Rest Sites` 页另有 **Recall**（红钥匙，依赖第四幕）与三件遗物开启的 **Lift / Toke / Dig** | 内核（新选项类型）+ 内容 |
@@ -242,15 +265,19 @@ Sentry 的 Bolt 塞的就是它。
 
 ## 3. 建议顺序（按"玩家感受 / 成本"比）
 
-1. **事件效果的列表**（内核小改动）—— 解锁 Golden Idol 那种"遗物 + 诅咒"，也让 A15 有落脚点。
-2. **A1 / A10 / A12**（运行层）—— 三条都不需要新招式表，各是运行层的一条小规则。
-3. **把剩下的 66 个动作的 ascension 数字补齐**（纯内容 + wiki 出处）—— 机制已经在那儿了，
-   缺的只是有人去把每个数字读回来。
-4. **每幕的第二、三只 Boss**（内容 + 内核各一条：Guardian 换形态、Hexaghost 的 Burn 升级、
-   Bronze Automaton 的召唤）—— 顺带验"分裂/召唤/销毁"这三种已落地的机制在别处也能用。
-5. **"行动者可以自毁"**（内核）—— 解锁 Reptomancer 匕首的 Explode 与 Looter 的偷钱逃走；
-   需要"行动者消失后回合怎么收尾"的判据，不是加个参数。
-6. **A20 双 Boss**（运行层 + 内容）—— 需要一个 Boss 池 ≥ 2 的第三幕。
+> ⚠️ 这一节只列**当前**的缺口。已完成项不在这里（旧版本列的"事件效果列表 / A1·A10·A12 /
+> 补 66 个 ascension 数字 / 第二三只 Boss / A20 双 Boss"都已在 §188、§189、§190–§191、§194 落地，
+> 历史见 `port-plan.md` 对应节）。
+
+1. **`Entangled` + Red Slaver 的第三招**（内核一条拒绝码 + 内容一行动作）—— 目前 Red Slaver 只有
+   Stab / Scrape，AI 的三招节奏是错的。
+2. **`Barricade` / `Blur`**（内核：格挡跨回合保留的条件清除）—— 缺了它，战士的"全防御"流派不存在。
+3. **`Slow`（Giant Head）与"下回合多抽/多能量"**（内核：回合边界的延迟结算）—— 后者是所有
+   "Energized / Draw" 类卡与药水的前提。
+4. **"行动者可以自毁"**（内核）—— 解锁 Reptomancer 匕首的 Explode；Looter 的偷钱逃走也走这条。
+5. **内容规模**（卡池 / 遗物 / 事件 / Act2 普通池）—— 纯量，不阻塞机制；**不要**当 P1（见审阅
+   报告 §10.4 的反对意见）。
+6. **第四幕与钥匙**（运行层）—— 明确的范围外，等前面清完再说。
 
 ---
 
@@ -268,21 +295,30 @@ Sentry 的 Bolt 塞的就是它。
   （内容门对照的是 `docs/spec/` 的清单，清单本身也是人抄的）。⇒ 新内容落地时，**至少把稀有度
   与"是否 Exhaust"这两列回到单卡页看一眼**，它们是最容易"顺手抄邻居"的两格。
 
-## H. 六只新 Boss 的机制降级（§194）
+## H. Boss 机制：**当前**与 wiki 的剩余差异（§194 → §195.9）
 
-数字全部来自 `native/wiki_asc/<boss>.txt`（`action=raw`），**降级只在机制层面**，而且每一条都同时
-写在内容的 `AiNote` 里（下一读者看的是那里，不是这份文档）。
+数字全部来自 `native/wiki_asc/<boss>.txt`（`action=raw`）。这一张表**只写现在的差异**，
+历史降级（"Guardian 只按 HP 切形态""Awakened One 没有死亡拦截 / 没有 Cultist""Bronze Orb 没有
+Stasis""小兵预置"）已在 §195.1–§195.8 逐条修掉，过程见 `port-plan.md` 那几节。
 
-| Boss | 做到了 | 与 wiki 的差 |
+| Boss | 现在的行为 | 与 wiki 的**剩余**差异 |
 |---|---|---|
-| The Guardian | 进攻 4 循环；Sharp Hide（`CardPlayed` + `card.hasTag.attack`，3 伤害，可格挡）；防御态 Roll Attack → Twin Slam → Whirlwind；Twin Slam 摘掉 Sharp Hide | **Mode Shift** 是"HP ≤ 50% 时切一次"，不是"累计受伤 30"；切换落在**下一轮**（意图每轮选一次） |
-| Hexaghost | 第 1/2 回合 Activate / Divider；7 招循环轮转对齐；Divider = `(HP/12 + 1) × 6` | Divider 读结算时 HP；Inferno **不升级**已有的 Burn（没有"升级牌堆里的卡"节点） |
-| The Champ | 420 HP；Heavy Slash / Face Slap / Defensive Stance / Gloat 循环；第 4 回合 Taunt；≤50% 后 Anger → Execute | 45/25/15/15 权重变成确定性循环；Anger 只按名清 Weak/Vulnerable/Frail；A19 的 "Gloat 换成 Defensive Stance" 未实现 |
-| Bronze Automaton | 300 HP + Artifact 3；6 招循环；HYPER BEAM 45；A19 用 Boost 顶替 Stunned | 2 只 Orb **开局在场**（不是 Spawn Orbs）；Orb 的 `Stasis`（偷牌、死亡归还）未实现 |
-| The Collector | 282 HP；Fireball/Buff 交替；第 4 回合 Mega Debuff | 25/45/30 权重变成 1:1；`Spawn` 去掉（2 只 Torch Head 开局在场） |
-| Time Eater | 456 HP；Reverberate / Head Slam / Ripple；≤50% 的 Haste 回血一次 | Haste 不清 debuff；`Draw Reduction` 未实现 |
-| Awakened One | 300 HP；Regenerate 10 + Curiosity 1；Slash/Soul Strike 循环；Rebirth → Dark Echo → Tackle/Sludge 交替 | Rebirth 在 **HP ≤ 25%** 时改意图（没有死亡拦截）；"移除所有 debuff"只摘 Curiosity；没有 Cultist |
-| Donu & Deca | 一对（250 HP 各 + Artifact 2）；Donu 交替 Circle of Power / Beam；Deca 交替 Beam / Square of Protection | Artifact 层数不随 A19 变（`StartingStatuses` 没有升档轴） |
+| The Guardian | 进攻 4 循环；Sharp Hide（`CardPlayed` + `hasTag.attack`）；**Mode Shift = 累计受伤**（`Counters` 种 30/35/40，`eventAmount` 扣减，切防御态 +10）；防御态 Roll → Twin Slam → Whirlwind | 无（switch 落在"下一次选意图"，敌人只在自己回合动作） |
+| Hexaghost | Activate / Divider 两个开场规则 + 7 招轮转；Divider = `(HP/12 + 1) × 6`；**Inferno 升级所有已有 Burn**（`node.upgradeCards`） | Sear 后续塞的 Burn **不**自动升级（wiki："for the rest of combat"）；Divider 读结算时 HP |
+| The Champ | 420 HP；**45/25/15/15 带权抽签** + 任何一招不能连续两次 + 每 4 回合 Taunt；≤50% 后 Anger → Execute | A19 的 "Gloat 换成 Defensive Stance" 未实现；Anger 按名清 debuff；第二阶段只做第一次 Execute |
+| Bronze Automaton | 300 HP + Artifact 3；第 1 回合 **真召唤 2 Orb**（`Spawn: false`）；6 招循环；A19 用 Boost 顶替 Stunned | Orb 的 `Stasis` 用"最高稀有度"（并列随机），与 wiki 一致；"同一招不能三次"已做 |
+| The Collector | 282 HP；第 1 回合 **真召唤 2 Torch Head**；70/30 带权 + 不能连 Buff + 不能三次 Fireball；第 4 回合 Mega Debuff | 25/45/30（0-1 只 Torch Head 时的权重）未分档 |
+| Time Eater | 456 HP；45/35/20 带权 + 三次/两次的排除规则；≤50% 的 Haste 回血一次 | Haste 不清 debuff（没有"清空状态"节点）；`Draw Reduction` 已实现但 wiki 的"A19 另加 2 Slimed"没做 |
+| Awakened One | 300 HP；`DeathPrevention` 真复活；一阶段 75/25 + Slash 不能三次；二阶段 Dark Echo 一次后 50/50；**带两只 Cultist，主人倒下时逃跑** | 二阶段"不能连续三次 Tackle/Sludge"未做（规则预算 8 条已满）；Regenerate/Curiosity 层数不随 A19 变 |
+| Donu & Deca | 一对（250 HP 各 + Artifact 2）；Donu 交替 Circle / Beam；Deca 交替 Beam / Square | Artifact 层数不随 A19 变（`StartingStatuses` 没有升档轴） |
 
-另外一条**全局**的：A9 的 `AscHP`（如 The Champ 440）不会被精确命中 —— 跑层对 `MaxHealth` 施加的是
-**百分比**（§159 的 A7/A8/A9 规则，420 → 525）。这条在 §194 之前就存在，基础血量现在是 wiki 的。
+**两条全局的**（都不在 Boss 里）：
+
+1. **A9 的 `AscHP` 不精确** —— 跑层对 `MaxHealth` 施加的是**百分比**（§159 的 A7/A8/A9 规则，
+   420 → 525），不是 wiki 的定值。
+2. **抽签是 `(seed, round, slot)` 的派生值** —— 不是随机流，两次抽签之间没有顺序关系（§195.3）。
+
+**已知测试缺口**（如实报告，不是遗漏）：`selectCards` 的 `Count > found` 边界在**状态上不可观测**
+（同区搬运是 no-op），能看见它的只有 `ExecStats::effects`，而计数器只对"`Count > 1` 且候选更少"的
+**程序**可见 —— 本内容唯一这样的调用在触发器里，宿主不回收它的 stats。修法：给 `Host` 也记一份
+effect 账（§195.9 记录，未做）。

@@ -13672,3 +13672,64 @@ Dark Strike），缺的只是两件事：
 * 负控：把 `Owner` 键删掉 ⇒ 红在 `` `cultist` must have fled when its master fell `
   （`left: Alive, right: Escaped`）。
 * **20/20 闸门绿**，单测 **860**（679 / 107 / 74）；四条对拍不变；镜像 69,188 B（core 58,436）。
+
+---
+
+## 195.9 按第五轮审阅修三处（`selectCards` 边界 / 外键 / 文档账）
+
+审阅报告见 `docs/vibe/Review_105659c_a9d2c53_Wiki_Gap.md`（末尾附了我的逐条复核）。这一节只做它的
+**工作包 A + C 的基础部分**，机制扩充（B）留到下一节。
+
+### 195.9.1 `selectCards` 的三个边界（审阅 P1-1/P1-2/P1-3）
+
+三条都是我这轮（§195.4）自己引入的，而且**两条有活路径**：
+
+| 边界 | 旧行为 | 现在 |
+|---|---|---|
+| 候选缓冲 | `MAX_SELECTED_CARDS * 8` = **64**，而牌区容量是 **96** ⇒ 第 65 张以后的卡静默进不了排序（`break`） | 缓冲 = `MAX_CARD_CANDIDATES`（= 牌区容量）；溢出**报错**而不是截断 |
+| 并列稀有度 | 稳定选择 ⇒ 三张同稀有度永远偷第一张 | 先整体置换一次（一次抽签、`random_step += 1`）再按 rank **稳定**排序 ⇒ 并列内部随机 |
+| `Count > found` | `take(count)` 走过 `order` 的零值区 ⇒ 同一张卡入队 N 次、`effects` 多记 | `take(min(count, found))` |
+
+判据（`host.rs`）：96 张牌区里 Bad case 是偷到 `strike`、修好后偷 `uppercut`；60 个种子下三张同稀有度
+必须出现 ≥ 2 个不同实例；`Count: 4` + 1 张候选时 `effects == 4`（1 移动 + 1 状态 + 2 历史）。
+
+⚠️ **`Count > found` 这条在状态上不可观测**（同区搬运是 no-op），能看见它的只有 `ExecStats::effects`，
+而计数器只对"`Count > 1` 且候选更少"的**程序**可见 —— 本内容唯一这样的调用在触发器里，宿主不回收它的
+stats。所以这一半的守卫是代码的 `min` 本身，长期解法是给 `Host` 记一份 effect 账（记为已知测试缺口）。
+
+### 195.9.2 `Owner` 外键 + `spawn()` 布尔严格（审阅 P1-5/P2-1）
+
+* `Owner` 从"尽力而为"变成**外键**：minion 名不合法 / master 名不合法 / master 在场数 ≠ 1（悬空**或**
+  歧义）三种都**响亮失败**。旧版对读不懂的 id `continue`，于是一个拼错的主人 = 悬空引用 = 小兵永不
+  逃跑，**没有任何东西会红**。
+* `EnemySpec::spawn()` 只接受 `BOOL_FALSE` / `BOOL_TRUE` / `BOOL_ABSENT` / `BOOL_NULL`；其余槽值报
+  `WrongFieldKind`（旧版 `_ => Ok(true)` 把"字段读坏了"变成"这条记录上场"，与 `spawn: false` 的语义
+  **正好相反**）。
+
+### 195.9.3 新门禁 `AllEncounterConstructible`（审阅工作包 C）
+
+`rd-wasm` 里加一条测试：从内容**读**九个 `EncounterTables.*` 池，对每条遭遇 × **A0/A9/A19/A20** 建战，
+再对每个敌人跑一次 `select_action`（覆盖 `ProgramAsc` 与带权规则）。
+
+它存在的理由是一个真 bug：`enc_darklings`（两只相同 Darkling）在**第三幕 weak 池**里却**从来建不起来**
+（`DuplicateCombatant`）—— 而当时 20 道闸门全绿，因为内容门只查"内容自洽"、浏览器切片只跑第一幕、
+随机 soak 恰好没抽到它。负控（去掉 `#<n>` 后缀）**精确复现**：
+`` `enc_darklings` (pool `Weak3`, A0) must build: build_fight_from_contents: Capacity(DuplicateCombatant) ``。
+
+### 195.9.4 文档：一份账、一个当前版本（审阅 P1-6/P2 + §5）
+
+* `docs/sts-wiki-gap.md` 里 §C/§D/§E/§3/§H 的过时条目全部改成**当前状态**（历史留在 `port-plan.md`），
+  §H 整表按 §195.1–§195.8 重写，并新增"已知测试缺口"一段。
+* **数字只有一个来源**：`gap_check.py` 多了一个 **pastable 区块**，gap §1.1 原样贴它的输出，README 的
+  那一行改成引用它。一贴就抓到两处人抄的错：卡行是 **27 基础 + 18 升级**（README 写的是 28+17）、
+  事件是 **12（三幕 6+3+3）**（README 写的是 9）。
+* 术语：`Double Damage`（倍率）/ `Duplication`（追加打出）/ `Divinity`（姿态）在 gap 里**分开写**，
+  并注明本项目只有第二件。
+* README 的参考实现链接原来指向 `https://github.com/`（占位符），改成 `ref/RogueDeck-Core` 的说明。
+
+### 195.9.5 数字
+
+* **20/20 闸门绿**，单测 **864**（682 / 107 / 75）；四条对拍不变（182/182、62/62、124/124、394/394）。
+* 内容未变（镜像 69,188 B / core 58,436 B）：这一节只动内核边界与文档。
+* 审阅里**未执行**的两条（如实报告）：Act2/Act3 的定向浏览器切片、以及 `Box::leak` 的长期内存曲线 ——
+  前者已由 §195.9.3 的建战门禁覆盖"能不能开局"，后者明确排在本阶段之外。

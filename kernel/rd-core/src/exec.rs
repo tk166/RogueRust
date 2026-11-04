@@ -2136,6 +2136,12 @@ fn dispatch_conditional(
     }
 }
 
+/// §195.9：`node.selectCards` 的候选缓冲 = **牌区容量**（96）。
+///
+/// 它曾经是 `MAX_SELECTED_CARDS * 8` = 64 且溢出时 `break` —— 一个 96 张的牌堆里排在 65 位之后
+/// 的卡根本进不了排序。候选上限（容器容量）与 `Count`（搬几张）是**两个**数。
+pub const MAX_CARD_CANDIDATES: usize = crate::state::MAX_CARDS_PER_ZONE;
+
 /// §195.4：`node.selectCards` 一次最多搬几张（与 `Count` 的上限是同一个数）。
 ///
 /// 8 是**容量**，不是规则：超了报 `Missing("Count")`（越界的 Count 是内容错，不是"少搬几张"）。
@@ -3609,13 +3615,21 @@ fn select_cards_node(
     };
 
     // Candidates: `(card instance id, rarity rank)` in **pile order**.
-    let mut candidates = [CardInstanceId::EMPTY; MAX_SELECTED_CARDS * 8];
-    let mut ranks = [0u8; MAX_SELECTED_CARDS * 8];
+    //
+    // §195.9: the buffer is the **zone capacity**, not an arbitrary 64. A pile can hold
+    // `MAX_CARDS_PER_ZONE` (96) cards, and the old `MAX_SELECTED_CARDS * 8` = 64 silently dropped the
+    // last 32 -- so "steal the best card" would miss a Rare sitting at the bottom of a big deck.
+    let mut candidates = [CardInstanceId::EMPTY; MAX_CARD_CANDIDATES];
+    let mut ranks = [0u8; MAX_CARD_CANDIDATES];
     let mut found = 0usize;
     for zone in core::iter::once(from_zone).chain(fallback.into_iter()) {
         for card in ctx.state.zone_cards(&owner, zone) {
+            // Loud, not silent: overflow here can only mean "the pile grew past its container",
+            // and truncating would silently change *which* card is picked.
             if found == candidates.len() {
-                break;
+                return Err(ExecError::Capacity(crate::state::CapacityError::Full(
+                    crate::state::Container::CardInstances,
+                )));
             }
             if let (Some(tag), Some(content)) = (require_tag, ctx.content) {
                 if !content.card_has_tag(card.definition_id.as_str(), tag).unwrap_or(false) {
@@ -3636,42 +3650,36 @@ fn select_cards_node(
         return resume_later(ctx.state, frame, slot);
     }
 
-    let mut order = [0usize; MAX_SELECTED_CARDS * 8];
+    // `order[..found]` holds the candidate indices; nothing past `found` is ever read.
+    // §195.9: the old code took `count` entries from here, so `Count: 4` with one candidate walked
+    // three zeros and enqueued the **same** card four times (`stats.effects` counted it too).
+    let mut order = [0usize; MAX_CARD_CANDIDATES];
     for index in 0..found {
         order[index] = index;
     }
     match order_name {
         "HighestRarity" => {
-            // Stable selection of the `count` highest ranks; ties keep pile order.
-            for index in 0..found {
-                let mut best = index;
-                for other in (index + 1)..found {
-                    let (a, b) = (order[other], order[best]);
-                    if ranks[a] > ranks[b] {
-                        best = other;
-                    }
+            // Ties are meant to be **random** (wiki: Stasis steals "a random card of the highest
+            // rarity"), so shuffle first -- one draw for the batch -- then sort by rank with a
+            // **stable** sort, which keeps the shuffled order inside a tie.
+            shuffle_candidates(&mut order[..found], ctx);
+            let ranks_slice = &ranks[..found];
+            for index in 1..found {
+                let mut cursor = index;
+                while cursor > 0 && ranks_slice[order[cursor - 1]] < ranks_slice[order[cursor]] {
+                    order.swap(cursor - 1, cursor);
+                    cursor -= 1;
                 }
-                order.swap(index, best);
             }
         }
         "First" => {}
-        "Random" => {
-            // One draw for the whole batch, then a Fisher-Yates pass: a single `random_step` per use
-            // keeps the RNG ledger as readable as every other draw in the kernel.
-            let mut indexes = [0u8; MAX_SELECTED_CARDS * 8];
-            for index in 0..found {
-                indexes[index] = index as u8;
-            }
-            crate::rng::shuffle_indexes(&mut indexes[..found], ctx.state.random_seed, ctx.state.random_step);
-            ctx.state.random_step = ctx.state.random_step.saturating_add(1);
-            for index in 0..found {
-                order[index] = usize::from(indexes[index]);
-            }
-        }
+        "Random" => shuffle_candidates(&mut order[..found], ctx),
         _ => return Err(ExecError::Ir(IrError::UnknownKind)),
     }
 
-    for index in order.iter().take(count) {
+    // Never ask for more cards than exist.
+    let take = count.min(found);
+    for index in order.iter().take(take) {
         ctx.state.enqueue_effect_with_owner(
             EffectRequest::MoveCardToZone {
                 owner,
@@ -3684,6 +3692,20 @@ fn select_cards_node(
         stats.effects = stats.effects.saturating_add(1);
     }
     resume_later(ctx.state, frame, slot)
+}
+
+/// 一次抽签 = 一次完整置换，然后推进 `random_step`（与洗牌/掷骰同一条账）。
+fn shuffle_candidates(order: &mut [usize], ctx: &mut ExecContext<'_>) {
+    let mut indexes = [0u8; MAX_CARD_CANDIDATES];
+    let count = order.len().min(indexes.len());
+    for (index, slot) in indexes.iter_mut().enumerate().take(count) {
+        *slot = index as u8;
+    }
+    crate::rng::shuffle_indexes(&mut indexes[..count], ctx.state.random_seed, ctx.state.random_step);
+    ctx.state.random_step = ctx.state.random_step.saturating_add(1);
+    for index in 0..count {
+        order[index] = usize::from(indexes[index]);
+    }
 }
 
 /// §195.4：一张牌的**稀有度排名**（"最高稀有度"取哪一张）。

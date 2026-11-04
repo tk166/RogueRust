@@ -5880,6 +5880,168 @@ mod tests {
         );
     }
 
+    /// §195.9（审阅 P1-1）：候选缓冲是**牌区容量**（96），不是 64 —— 排在第 65 位以后的卡也要参与。
+    ///
+    /// 这条是可观测的：96 张 `strike`（Basic）+ 最后一张 `uppercut`（Uncommon），`HighestRarity`
+    /// 必须偷到 `uppercut`。旧实现（缓冲 64 + 静默 `break`）会偷到一张 `strike`。
+    #[test]
+    fn a_96_card_pile_still_reaches_the_best_card_at_the_end() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut state = arena();
+        state
+            .add_combatant(unit("bronze_automaton", "enemy", 300, 300))
+            .expect("the automaton");
+        state.add_combatant(unit("orb", "enemy", 52, 52)).expect("the orb");
+        give(&mut state, "orb", status("st_stasis", "standard.stasis", 1));
+        give(&mut state, "orb", status("st_ready", "standard.stasis_ready", 1));
+        // 95 Basics, then the Uncommon at the very end (position 96).
+        for index in 0..95 {
+            give_card(&mut state, "hero", CardZone::DrawPile, &std::format!("c{index}"), "strike", None);
+        }
+        give_card(&mut state, "hero", CardZone::DrawPile, "last", "uppercut", None);
+        assert_eq!(zone_count(&state, "hero", CardZone::DrawPile), 96, "the pile is full");
+
+        let mut host = Host::new(&content);
+        let row = u32::from(
+            content
+                .lookup_in("bronze_orb.stasis", crate::content::EK_EACTION)
+                .expect("stasis is in the image")
+                .index,
+        );
+        crate::intent::execute_action(&mut state, &content, &cid("orb"), row, Some(cid("hero")))
+            .expect("Stasis");
+        host.try_resolve_pending_queues(&mut state).expect("the move lands");
+        assert_eq!(
+            zone_definitions(&state, "hero", CardZone::SetAsidePile),
+            vec!["uppercut".to_string()],
+            "the Uncommon at the bottom of a 96-card pile must win"
+        );
+    }
+
+    /// §195.9（审阅 P1-2）：并列最高稀有度要**随机**，否则三张同稀有度永远偷同一张。
+    ///
+    /// 观测量是**实例 id**：三张 `iron_wave`（Common）内容一样，但实例不同。60 个种子必须出现
+    /// 至少两种结果（旧实现是稳定排序 ⇒ 永远偷第一张 ⇒ 只有一种）。
+    #[test]
+    fn tied_rarities_are_broken_by_the_combat_rng() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let row = u32::from(
+            content
+                .lookup_in("bronze_orb.stasis", crate::content::EK_EACTION)
+                .expect("stasis is in the image")
+                .index,
+        );
+        let mut stolen: Vec<std::string::String> = Vec::new();
+        for seed in 0..60 {
+            let mut state = arena();
+            state.random_seed = seed;
+            state
+                .add_combatant(unit("bronze_automaton", "enemy", 300, 300))
+                .expect("the automaton");
+            state.add_combatant(unit("orb", "enemy", 52, 52)).expect("the orb");
+            give(&mut state, "orb", status("st_stasis", "standard.stasis", 1));
+            give(&mut state, "orb", status("st_ready", "standard.stasis_ready", 1));
+            for index in 0..3 {
+                give_card(&mut state, "hero", CardZone::DrawPile,
+                          &std::format!("t{index}"), "iron_wave", None);
+            }
+            let mut host = Host::new(&content);
+            crate::intent::execute_action(&mut state, &content, &cid("orb"), row, Some(cid("hero")))
+                .expect("Stasis");
+            host.try_resolve_pending_queues(&mut state).expect("the move lands");
+            let taken: Vec<std::string::String> = state
+                .zone_cards(&cid("hero"), CardZone::SetAsidePile)
+                .map(|card| std::string::String::from(card.id.as_str()))
+                .collect();
+            assert_eq!(taken.len(), 1, "seed {seed}: exactly one card");
+            stolen.push(taken[0].clone());
+        }
+        let distinct: std::collections::BTreeSet<&std::string::String> = stolen.iter().collect();
+        assert!(
+            distinct.len() >= 2,
+            "60 draws of three tied cards produced only {distinct:?} -- ties are not random"
+        );
+    }
+
+    /// §195.9（审阅 P1-3）：`Count` 大于候选数时**只搬实际存在的那些**。
+    ///
+    /// Stasis 的归还写的是 `Count: 4` 而通常只有一张：旧实现会从 `order` 的零值区读出同一个索引
+    /// 4 次 ⇒ 同一张卡入队 4 次、`stats.effects` 多记 3 次。
+    ///
+    /// 口径：`selectCards(1) + modifyStatusStacks(1) + 历史对(2) = 4`；旧实现是 **7**
+    /// （历史对是 §195.5 加的 `prev_move` / `last_move` 两次写入，也计入 `effects`）。
+    ///
+    /// ⚠️ **这条测试抓不到什么**（如实报告，不是遗漏）：`Count > found` 的后果是"同一张卡被
+    /// 入队 N 次"，而**同区搬运是 no-op**（`move_card` 对 `from == to` 只在 `Top` 时重排），所以
+    /// 往回搬的那条路径在**状态**上看不出重复。能看见它的只有 `effects` 计数，而计数器只对
+    /// "`Count > 1` 且候选更少"的**程序**可见 —— 本内容唯一这样的调用在**触发器**里，宿主不回收
+    /// 它的 `ExecStats`。⇒ 这一半的守卫是代码里的 `count.min(found)`，加上面那条 `effects`
+    /// 基线（谁把 `min` 去掉、又把 Count 改成 >1，它就会红）。真正的长期解法是给
+    /// `Host` 也记一份 effect 账，已记进 `port-plan.md` §195.9 的"已知测试缺口"。
+    #[test]
+    fn asking_for_more_cards_than_exist_moves_each_of_them_once() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut state = arena();
+        state
+            .add_combatant(unit("bronze_automaton", "enemy", 300, 300))
+            .expect("the automaton");
+        state.add_combatant(unit("orb", "enemy", 52, 52)).expect("the orb");
+        give(&mut state, "orb", status("st_stasis", "standard.stasis", 1));
+        give(&mut state, "orb", status("st_ready2", "standard.stasis_ready", 1));
+        give_card(&mut state, "hero", CardZone::DiscardPile, "only", "uppercut", None);
+
+        let row = u32::from(
+            content
+                .lookup_in("bronze_orb.stasis", crate::content::EK_EACTION)
+                .expect("stasis is in the image")
+                .index,
+        );
+        let stats = crate::intent::execute_action(
+            &mut state, &content, &cid("orb"), row, Some(cid("hero")))
+            .expect("Stasis");
+        assert_eq!(
+            stats.effects, 4,
+            "one moved card + one status write + the two history counters"
+        );
+
+        // And the same through the **return** path (Count: 4, one card in the holding zone).
+        let mut host = Host::new(&content);
+        host.try_resolve_pending_queues(&mut state).expect("the move lands");
+        let hand_before = zone_count(&state, "hero", CardZone::Hand);
+        {
+            let mut ctx = crate::exec::ExecContext::new(
+                &mut state,
+                Some(cid("hero")),
+                Some(cid("orb")),
+                None,
+                64,
+            )
+            .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("orb"), 999, false).expect("the orb dies");
+        }
+        host.try_resolve_pending_queues(&mut state).expect("death triggers settle");
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::Hand),
+            hand_before + 1,
+            "exactly one card comes back -- `Count: 4` must not move it four times"
+        );
+    }
+
     /// §195.7: `node.upgradeCards` rewrites a card's **definition** (`burn` -> `burn+`) everywhere it
     /// lives, and leaves a card that has no `+` row alone.
     ///
