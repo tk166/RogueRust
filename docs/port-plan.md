@@ -13622,3 +13622,53 @@ StS 的"升级"在这份内容里就是**定义 id**（`burn` / `burn+`），所
 * 踩坑：`str_field` 返回的是 `&str`，我又调了一次 `.as_str()`，撞上 nightly 的 `str_as_str`；
   `CardSlot` 的元组构造器是模块私有的，要用 `CardSlot::from_index`；`CardZone::ALL` 是 **7** 个
   （我把数组写成了 4）。
+
+---
+
+## 195.8 Cultist 一族进场（并修掉一个"永远建不起来的遭遇"）
+
+wiki 的 Awakened One 是**带着两只 Cultist** 上场的，而且"The remaining Cultists will flee when the
+Awakened One is defeated in Phase Two"。内容里早就有 `cultist`（48 HP、Incantation → Ritual、
+Dark Strike），缺的只是两件事：
+
+1. **`Owner`（`F_STR`，可缺席）** —— 内核早就有这条规则（`resolve_damage` 把"主人倒下的 minion"
+   转成 `Escaped`，而 `Escaped` 不算 `Alive`），但此前**只有 `createCombatant` 召唤出来的**战斗员
+   带 `owner`；开局就在场上的小怪没有任何办法声明它的主人。现在内容写 `"Owner": "awakened_one"`，
+   `build_session_at` 建完战斗后把它盖到战斗员上。
+2. **同名记录** —— 两只 Cultist 的 `Id` 都是 `cultist`，而 `add_combatant` 拒绝重名。
+
+### 195.8.1 顺着 (2) 抓到一个真 bug
+
+`enc_darklings`（两只一模一样的 Darkling）**从来就建不起来**：第二条记录撞 `DuplicateCombatant`。
+而它就在**第三幕的 weak 池**里 —— 也就是说，一局真的随机到这条遭遇，`fight_begin` 会以
+`Capacity(DuplicateCombatant)` 失败（run 层会响亮报错并回滚，玩家看到的是"这一场开不了"）。
+
+修法：重复的 `Id` 拿召唤物的**同一套**后缀 —— 第二条叫 `darkling#2`。这同时是
+`intent::locate_enemy` 已经在用的回退（按 definition 部分匹配），所以两只 Darkling 仍然各自查得到
+招式表。判据 `an_encounter_with_two_records_of_the_same_id_builds` 断言 id 是
+`["darkling", "darkling#2"]` 且两者都解析到记录。
+
+### 195.8.2 第二个坑：**空列表不是 `F_TERMLIST`**
+
+给 Cultist 记录写 `"Counters": []` / `"IntentRules": []` / `"StartingStatuses": []` 之后，战斗建不起来：
+`WrongFieldKind("Counters")`。原因是 `compile.py` 的 `pick_kind` 把**空数组**（`arr0`）判成
+`F_STRLIST`（"元素集合为空 ⇒ 当成串表/空"），所以"空列表字段"与"非空列表字段"是**两个 kind**。
+
+修法：`EnemySpec` 的列表读器分两档 —— 严格版（`list(key, F_TERMLIST)`）与**宽松版**
+（`list_any(key)`，两种 kind 都收）。`Rolls` / `Counters` / `IntentRules` / `StartingStatuses` 走宽松版：
+它们表达的都是"这条记录没有这一项"，把空列表判成形态错误纯属自伤。
+
+⚠️ 同一个道理的第二个形态：`"Owner": null` 会让该字段被派生为 `F_TERM`（`null` 自成一类存储），
+所以 `owner()` 在 kind 不是 `F_STR` 时**再看槽值**：哨兵 ⇒ `None`，其余才是形态错。
+`Position: null`（149/149 条记录）一直是这个形状，只是没人读它。
+
+### 195.8.3 内容与判据
+
+`enc_awakened_one` 现在是 `[awakened_one, cultist, cultist]`，两只 Cultist 带 `Owner`。
+
+* `the_awakened_ones_cultists_flee_when_it_dies`（rd-wasm）：开局三个敌人（第二个 id 是 `cultist#2`）
+  → 打两次致命伤（第一次被 `unawakened` 守卫吃掉）→ Boss `Downed`、两只 Cultist `Escaped`、
+  **`result == Victory`**。最后一条是关键：wiki 的"逃跑"意味着玩家**不必**追杀两只 48 血的 Cultist。
+* 负控：把 `Owner` 键删掉 ⇒ 红在 `` `cultist` must have fled when its master fell `
+  （`left: Alive, right: Escaped`）。
+* **20/20 闸门绿**，单测 **860**（679 / 107 / 74）；四条对拍不变；镜像 69,188 B（core 58,436）。

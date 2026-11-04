@@ -664,7 +664,9 @@ INV_BOSS_POOL = {
     "enc_the_collector": ["the_collector", "torch_head", "torch_head"],
     # Act 3.
     "enc_time_eater": ["time_eater"],
-    "enc_awakened_one": ["awakened_one"],
+    # §195.8: wiki -- the Awakened One comes with two Cultists, and they **flee** when it finally dies
+    # (the kernel already does that for minions whose `owner` falls; the records declare `Owner`).
+    "enc_awakened_one": ["awakened_one", "cultist", "cultist"],
     # The first **pair**: two bosses in one fight, which is what the wiki's Donu and Deca are.
     "enc_donu_and_deca": ["donu", "deca"],
 }

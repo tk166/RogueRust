@@ -22362,6 +22362,80 @@
           "Rolls": [],
           "Counters": [],
           "Spawn": true
+        },
+        {
+          "Id": "cultist",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "cultist.incantation"
+            },
+            {
+              "value": "cultist.dark_strike"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "ritual_owner_turns"
+                  },
+                  "Op": "GreaterOrEqual",
+                  "Value": 1
+                }
+              },
+              "Action": {
+                "value": "cultist.dark_strike"
+              },
+              "Priority": 10
+            }
+          ],
+          "DisplayName": "Cultist",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "Owner": "awakened_one"
+        },
+        {
+          "Id": "cultist",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "cultist.incantation"
+            },
+            {
+              "value": "cultist.dark_strike"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "ritual_owner_turns"
+                  },
+                  "Op": "GreaterOrEqual",
+                  "Value": 1
+                }
+              },
+              "Action": {
+                "value": "cultist.dark_strike"
+              },
+              "Priority": 10
+            }
+          ],
+          "DisplayName": "Cultist",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "Owner": "awakened_one"
         }
       ],
       "HeroResources": [

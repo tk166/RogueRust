@@ -2046,13 +2046,47 @@ impl<'a> EnemySpec<'a> {
 
     /// `IntentRules`（`F_TERMLIST`）：规则记录（op 90，键 `Action`/`Condition`/`Priority`）。
     pub fn intent_rules(&self) -> Result<SlotList<'a>, EncounterError> {
-        self.list("IntentRules", F_TERMLIST)
+        // ⚠️ lenient: `"IntentRules": []` is stored as `F_STRLIST` (see [`Self::list_any`]).
+        self.list_any("IntentRules")
     }
 
     /// `StartingStatuses`（`F_TERMLIST`）：起始状态的 spec 对象
     /// （键 `Stacks` / `DurationTurns` / `Charges` / `Status`）。
     pub fn starting_statuses(&self) -> Result<SlotList<'a>, EncounterError> {
-        self.list("StartingStatuses", F_TERMLIST)
+        // ⚠️ lenient: `"StartingStatuses": []` is stored as `F_STRLIST`.
+        self.list_any("StartingStatuses")
+    }
+
+    /// `Owner`（`F_STR`，§195.8）：这条记录的**主人**（谁倒下时它逃跑）。缺席 ⇒ `Ok(None)`。
+    ///
+    /// 内核早有这条规则（`resolve_damage` 把主人倒下的 minion 转成 `Escaped`），但此前只有
+    /// `node.createCombatant` 召唤出来的战斗员带 `owner`；**开局就在场上**的小怪（Cultist）没有
+    /// 任何办法声明它。Awakened One 的第二阶段就靠它："剩下的 Cultist 会在它被打倒时逃跑"。
+    pub fn owner(&self) -> Result<Option<&'a str>, EncounterError> {
+        match self.field_at("Owner") {
+            Err(EncounterError::MissingField("Owner")) => Ok(None),
+            Err(other) => Err(other),
+            Ok((kind, at)) => {
+                if kind != F_STR {
+                    // ⚠️ A record that writes `"Owner": null` makes the **derived** kind `F_TERM`:
+                    // the deriver types a field by the storage classes it sees, and `null` is its own
+                    // class. That is "no owner", not a shape error -- the same reason `Position:
+                    // null` (149/149 records) is readable.
+                    return match self.slot(at)? {
+                        ABSENT16 | NULL16 => Ok(None),
+                        _ => Err(EncounterError::WrongFieldKind("Owner")),
+                    };
+                }
+                match self.slot(at)? {
+                    ABSENT16 | NULL16 => Ok(None),
+                    index => self
+                        .content
+                        .string(index)
+                        .map(Some)
+                        .ok_or(EncounterError::BadString(index)),
+                }
+            }
+        }
     }
 
     /// `Spawn`（`F_BOOL`，§195.6）：这条记录**开局是否上场**。缺席 ⇒ `true`。
@@ -2084,7 +2118,7 @@ impl<'a> EnemySpec<'a> {
     ///
     /// 与 [`Self::rolls`] 同样的"键缺席 = 空列表"约定（opcode 按出现过的键集派生）。
     pub fn counters(&self) -> Result<SlotList<'a>, EncounterError> {
-        match self.list("Counters", F_TERMLIST) {
+        match self.list_any("Counters") {
             Err(EncounterError::MissingField("Counters")) => Ok(SlotList::empty(self.content)),
             other => other,
         }
@@ -2097,7 +2131,7 @@ impl<'a> EnemySpec<'a> {
     /// 的记录是**两个 opcode**；对前者 [Self::list] 只能报 `MissingField`。把"这个键在这条记录里
     /// 不存在"当成错误，会让 roguedeck 那份内容（一条 `Rolls` 都没有）整份读不出来。
     pub fn rolls(&self) -> Result<SlotList<'a>, EncounterError> {
-        match self.list("Rolls", F_TERMLIST) {
+        match self.list_any("Rolls") {
             Err(EncounterError::MissingField("Rolls")) => Ok(SlotList::empty(self.content)),
             other => other,
         }
@@ -2158,6 +2192,35 @@ impl<'a> EnemySpec<'a> {
     /// 只有 3 条真的带规则。所以哨兵 ⇒ **空列表**，两种拼法都收（`ir.rs:364-394` 的
     /// `list_field` 同一条读法）。把哨兵当"形态坏了"会当场拒掉 146 条合法记录 ——
     /// 这一点是被 `every_encounter_enemy_record_reads` 的 149 条逐条读抓出来的。
+    /// 与 [`Self::list`] 相同，但**两种列表 kind 都收**。
+    ///
+    /// ⚠️ 为什么需要它（§195.8 实测）：`pick_kind` 把**空数组**（`arr0`）判成 `F_STRLIST`
+    /// （`elems` 为空 ⇒ "要么是串表、要么是空"），所以一条写着 `"Counters": []` 的记录与一条写着
+    /// `"Counters": [{...}]` 的记录是**两个不同的字段 kind**。严格版会把前者当成形态错误 ——
+    /// 而"这条记录不掷骰/没有计数器"正是空列表要表达的东西。
+    fn list_any(&self, key: &'static str) -> Result<SlotList<'a>, EncounterError> {
+        let (kind, at) = self.field_at(key)?;
+        if kind != F_TERMLIST && kind != F_STRLIST {
+            return Err(EncounterError::WrongFieldKind(key));
+        }
+        let term = self.record()?;
+        let start = term.slot(at).ok_or(EncounterError::MalformedList(key))?;
+        let count = term
+            .slot(at.checked_add(1).ok_or(EncounterError::MalformedList(key))?)
+            .ok_or(EncounterError::MalformedList(key))?;
+        let count = if count == LIST_ABSENT || count == LIST_NULL {
+            0
+        } else {
+            count
+        };
+        Ok(SlotList {
+            content: self.content,
+            start,
+            count,
+            kind,
+        })
+    }
+
     fn list(&self, key: &'static str, want: u8) -> Result<SlotList<'a>, EncounterError> {
         let (kind, at) = self.field_at(key)?;
         if kind != want {

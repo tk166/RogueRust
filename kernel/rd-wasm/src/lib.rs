@@ -591,7 +591,17 @@ fn build_session_at(
         .lookup_in(encounter_name, EK_ENCOUNTER)
         .ok_or_else(|| format!("内容镜像里没有遭遇 `{encounter_name}`"))?;
     let encounter: u32 = u32::from(entry.index);
+    // §195.8: two records may share an `Id` (`enc_darklings` is two identical Darklings, and the
+    // C# reference keys its roster by id, which is why the *content* keeps them distinct only by
+    // position). `add_combatant` refuses a duplicate, so the second one gets the same `#<n>` suffix a
+    // summon uses -- which is also what `intent::locate_enemy` already falls back to (definition part).
+    //
+    // ⚠️ Before this, `enc_darklings` could not be built at all: it sits in the act-3 weak pool, so a
+    // real run that rolled it ended in `Capacity(DuplicateCombatant)`.
     let mut enemies: Vec<PlanCombatant<'static>> = Vec::new();
+    let mut seen_ids: Vec<&'static str> = Vec::new();
+    // (combatant id, its master's id) for the records that declare an `Owner`.
+    let mut owners: Vec<(&'static str, &'static str)> = Vec::new();
     for spec in content
         .encounter_enemies(encounter)
         .map_err(|e| format!("encounter_enemies: {}", detail(&e)))?
@@ -609,8 +619,24 @@ fn build_session_at(
         if !spec.spawn().map_err(|e| format!("ENCT enemy Spawn: {}", detail(&e)))? {
             continue;
         }
+        // The id this combatant will actually carry: `id` the first time, `id#2`, `id#3` after that.
+        let unique: &'static str = if seen_ids.contains(&id) {
+            let mut count = 2usize;
+            let mut text = std::format!("{id}#{count}");
+            while seen_ids.iter().any(|seen| *seen == text.as_str()) {
+                count += 1;
+                text = std::format!("{id}#{count}");
+            }
+            Box::leak(text.into_boxed_str())
+        } else {
+            id
+        };
+        seen_ids.push(unique);
+        if let Some(master) = spec.owner().map_err(|e| format!("ENCT enemy Owner: {}", detail(&e)))? {
+            owners.push((unique, Box::leak(std::string::String::from(master).into_boxed_str())));
+        }
         enemies.push(PlanCombatant {
-            id,
+            id: unique,
             max_health: max_health + max_health * enemy_health_percent / 100,
         });
     }
@@ -664,6 +690,21 @@ fn build_session_at(
     let host = Host::new(content);
     build_fight_from_content(&mut state, content, &plan)
         .map_err(|e| format!("build_fight_from_content: {}", detail(&e)))?;
+
+    // §195.8: content-declared masters. A placed minion (the Awakened One's two Cultists) has no
+    // other way to say "when this one falls, I flee" -- `node.createCombatant` sets `owner` for
+    // summons, and `resolve_damage` already turns a downed master's minions into `Escaped`.
+    for (minion, master) in owners {
+        let Ok(minion_id) = rd_core::state::CombatantId::new(minion) else {
+            continue;
+        };
+        let Ok(master_id) = rd_core::state::CombatantId::new(master) else {
+            continue;
+        };
+        if let Some(combatant) = state.combatant_mut(&minion_id) {
+            combatant.owner = Some(master_id);
+        }
+    }
 
     let mut session = Session {
         content,
@@ -3155,6 +3196,118 @@ mod tests {
                 .is_empty(),
             "the cultist declares `Rolls: []` -- no counter may appear"
         );
+    }
+
+    /// §195.8: the Awakened One comes with two Cultists, and they **flee** when it finally dies.
+    ///
+    /// Three judgements, and the second is the one that matters: the fight must be **won** by killing
+    /// the boss, not by killing two 48-HP cultists afterwards. The kernel already converts a downed
+    /// master's minions to `Escaped` (`resolve_damage`), and `Escaped` is not `Alive`, so the victory
+    /// check ignores them -- the content only had to declare `Owner`.
+    #[test]
+    fn the_awakened_ones_cultists_flee_when_it_dies() {
+        let mut session = build_session_at(5, "enc_awakened_one", 70, None, 0, 0)
+            .expect("the fight builds");
+        let enemies = |session: &Session| -> Vec<std::string::String> {
+            session
+                .state
+                .combatants()
+                .iter()
+                .filter(|combatant| combatant.team_id.as_str() == "enemy")
+                .map(|combatant| std::string::String::from(combatant.id.as_str()))
+                .collect()
+        };
+        assert_eq!(
+            enemies(&session),
+            vec!["awakened_one", "cultist", "cultist#2"],
+            "wiki: two Cultists -- and the duplicate id gets the `#2` suffix (§195.8)"
+        );
+
+        // Kill the boss outright. Its `standard.unawakened` guard means the *first* lethal blow only
+        // leaves it at 1 HP; the second one really downs it.
+        for _ in 0..2 {
+            {
+                let mut ctx = rd_core::exec::ExecContext::new(
+                    &mut session.state,
+                    Some(rd_core::state::CombatantId::new("hero").expect("hero")),
+                    Some(rd_core::state::CombatantId::new("awakened_one").expect("the boss")),
+                    None,
+                    64,
+                )
+                .with_content(session.content);
+                rd_core::exec::resolve_damage(
+                    &mut ctx,
+                    &rd_core::state::CombatantId::new("awakened_one").expect("the boss"),
+                    9999,
+                    false,
+                )
+                .expect("the blow lands");
+            }
+            session
+                .host
+                .try_resolve_pending_queues(&mut session.state)
+                .expect("triggers settle");
+        }
+
+        let states: Vec<(&str, rd_core::state::CombatantLifecycleState)> = session
+            .state
+            .combatants()
+            .iter()
+            .filter(|combatant| combatant.team_id.as_str() == "enemy")
+            .map(|combatant| (combatant.id.as_str(), combatant.lifecycle_state))
+            .collect();
+        assert!(
+            states.iter().any(|(id, state)| *id == "awakened_one"
+                && *state == rd_core::state::CombatantLifecycleState::Downed),
+            "the boss is down: {states:?}"
+        );
+        for (id, state) in &states {
+            if *id == "awakened_one" {
+                continue;
+            }
+            assert_eq!(
+                *state,
+                rd_core::state::CombatantLifecycleState::Escaped,
+                "`{id}` must have fled when its master fell"
+            );
+        }
+        assert_eq!(
+            session.state.result,
+            rd_core::state::CombatResult::Victory,
+            "killing the boss wins the fight -- the cultists do not have to be hunted down"
+        );
+    }
+
+    /// §195.8: an encounter whose records share an `Id` still builds (`enc_darklings` = two identical
+    /// Darklings, and it sits in the act-3 weak pool).
+    ///
+    /// This was a real bug: the second record hit `add_combatant`'s duplicate check, so a run that
+    /// rolled that encounter ended in `Capacity(DuplicateCombatant)` -- a *content* row that could
+    /// never be played. Duplicates now get the same `#<n>` suffix a summon uses, which is also what
+    /// `intent::locate_enemy` already falls back to (the definition part).
+    #[test]
+    fn an_encounter_with_two_records_of_the_same_id_builds() {
+        let session = build_session_at(5, "enc_darklings", 70, None, 0, 0)
+            .expect("two identical Darklings must be placeable");
+        let names: Vec<&str> = session
+            .state
+            .combatants()
+            .iter()
+            .filter(|combatant| combatant.team_id.as_str() == "enemy")
+            .map(|combatant| combatant.id.as_str())
+            .collect();
+        assert_eq!(names, vec!["darkling", "darkling#2"], "the second one is suffixed");
+        // And both still resolve to the record (through the definition part, §123).
+        for name in names {
+            let id = rd_core::state::CombatantId::new(name).expect("a usable id");
+            let located = rd_core::intent::locate_enemy(
+                session.content,
+                session.encounter,
+                &id,
+            )
+            .expect("lookup");
+            assert!(located.is_some(), "`{name}` must resolve to its enemy record");
+        }
     }
 
     /// §195.6: `Spawn: false` keeps a minion off the field until it is **summoned**.

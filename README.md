@@ -6,7 +6,7 @@
 移植的硬约束是三条：**能在 ESP32-P4 裸机上跑**（`no_std`、零分配、纯整数、`forbid(unsafe_code)`）、
 **能多开当强化学习训练环境**（确定性、可快照、可回放）、**与参考实现逐字节一致的状态指纹**（对拍可证）。
 
-> 主计划在 `docs/port-plan.md`（§1–§195.7，每一轮都留数字、记下被推翻的结论）。
+> 主计划在 `docs/port-plan.md`（§1–§195.8，每一轮都留数字、记下被推翻的结论）。
 > 这份 README 只交代**仓库现在是什么样、以及怎么把它跑起来玩**；为什么变成这样，在计划里。
 
 ---
@@ -126,7 +126,7 @@ python -m http.server 8000
 |---|---|
 | **战斗内核** | `rd-core` 21 个源文件、约 57k 行。出牌/结算/状态/意图/修饰器管线/效果程序 IR（栈式）/选择与目标/金色指纹；**零分配、纯整数、`forbid(unsafe_code)`** |
 | **运行层** | `rd-run` 约 7.9k 行。地图（15 行 × 7 列 + Boss）、幕、牌组、金币、遗物、药水、奖励屏、商店、事件、篝火、**Ascension 0–20（20/20 条都有机制）**、**存档（单行文本 + CRC）**、**回放（动作序列 + 每步哈希）** |
-| **内容** | **46 怪 / 33 遭遇 / 45 条卡行（28 张基础 + 17 张 `+`）/ 34 状态 / 120 敌人动作 / 13 遗物 / 33 药水（满池）/ 9 事件 / 10 张起始牌**。编译成 69,076 B 的 `rdcf` 镜像（core 镜像 58,340 B） |
+| **内容** | **46 怪 / 33 遭遇 / 45 条卡行（28 张基础 + 17 张 `+`）/ 34 状态 / 120 敌人动作 / 13 遗物 / 33 药水（满池）/ 9 事件 / 10 张起始牌**。编译成 69,188 B 的 `rdcf` 镜像（core 镜像 58,436 B） |
 | **前端** | `index.html`（战斗 + 运行层 + 存档 + 回放）、`map.html`（地图页）；`wasm32` + **148** 个 `i32` 的战斗观察向量（另有 19 个 slot 的运行层观察）、一组 `rd_env_*` / `rd_run_*` 导出（`web/smoke.mjs` 有一张手抄的 `REQUIRED` 表**逐条**对账，加导出必须同时改两处） |
 | **RL 环境** | `rd_env_*` ABI（`docs/spec/env-abi.md`）+ Python `ctypes` 封装（多进程、批量观察） |
 | **裸机** | `riscv32imac-unknown-none-elf` 真链接成 ELF，镜像占用有闸门 |
@@ -135,10 +135,11 @@ python -m http.server 8000
 ⚠️ 这一节每一轮都会与代码对一遍账 —— §195.1–§195.6 就把下面四条**已经修掉**的旧说法删了
 （Guardian 的 Mode Shift、Awakened One 的复活、Bronze Orb 的 Stasis、小兵预置）。
 
-* **Boss 里剩下的降级只有一条**：Awakened One 的场上没有那两个 Cultist（wiki 第二阶段陪着它；
-  内容里没有 Cultist 这一族的小怪记录）。§195.7 已把 Hexaghost 的 **Inferno 升级所有 Burn**
-  （`node.upgradeCards`）与 Time Eater 的 **`Draw Reduction`**（`TurnStartDraw` 被动 + 自己的
-  `TurnEnded` 衰减 = 精确"下回合少抽一张"）都补上了。
+* **Boss 的机制降级已经清空**：三幕各三只、数值全部来自 wiki、抽签与排除规则是真的、小兵是真召唤、
+  Guardian 的 Mode Shift 是累计受伤、Awakened One 会真的复活且**带着两只 Cultist**（主人倒下时它们
+  逃跑，所以杀 Boss 即胜利）、Hexaghost 会升级已有的 Burn、Time Eater 的 `Draw Reduction` 精确。
+  仍与 wiki 不同的只剩**数值轴**两条（起始状态层数不随 Ascension 变、A9 的 `AscHP` 用百分比近似）
+  与一条**表达**差异（同一个 Boss 的"下一招"是 `(seed, round, slot)` 的派生值，不是随机流）。
 * **抽签是派生的，不是随机流**：§195.3 起意图层能带权抽签（The Champ 45/25/15/15、Collector 70/30、
   Time Eater 45/35/20、Awakened One 75/25 与 50/50、Bronze Orb 75% 与 70/30），抽签值是
   `(seed, round, slot)` 的**纯函数**（意图每次观察都要重算 ⇒ 必须是纯函数，且不进快照）。
