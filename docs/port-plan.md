@@ -14508,3 +14508,71 @@ wiki 写的是 "unblocked **attack** damage"。§208 的 `damage.isAttack` 事�
 * **20/20 闸门绿**，单测 **892**（700 core + 85 wasm + 107 run）；四条对拍不变。
 * 内容：镜像 76,220 → **76,360 B**（core 64,516）；状态数不变（42）—— 这一节换的是**规则住在哪**，
   不是加内容。
+
+---
+
+## §211 Giant Head 按 wiki 重写（A18 那一档终于有地方落）
+
+§210 的盘点里它是唯一"机制欠账"型的 A 级：本内容是 §130 的简化版（320 HP、Metallicize 4、
+Glare/Count 两招、**零 `IntentRules`**），所以 A18 那条"倒计时少一回合"根本没有表可换。
+这一节把这只怪按 `native/wiki_asc/giant_head.txt` 重写。
+
+### 211.1 数字与招式（全部来自 wiki）
+
+| 项 | wiki | 之前的内容 |
+|---|---|---|
+| HP | **500**（A8: 520，**是 Elite**） | 320（A8: 520 的钉法本来对，基数错） |
+| Powers | **Slow** | Metallicize 4（wiki 页上没有它） |
+| `Count` | **13 伤害**，**没有 A 行** | 26（A3: 36） |
+| `Glare` | **1 层 Weak** | 12 伤害 + 1 Weak（多出来的伤害是简化的产物） |
+| `It Is Time` | **(30; A3: 40)，每次 +5，上限 (60; A3: 70)** | **不存在** |
+
+`It Is Time` 的伤害放在**一个计数器**里（`Counters: [{30}, {40, A3}]`），动作只做三件事：
+打出计数器的值 → 按 cap 更新计数器 → 记 `last_move`。这样"基数 30、A3 40"和"上限 60、A3 70"
+各自只有**一处**真相（基数在 `Counters`，上限在 `ProgramAsc` 的两份节目里）。
+
+⚠️ 一个必须写下来的坑：**cap 要在"写"的时候夹，不能在"读"之前夹**。
+`setCombatantCounter` 是**入队请求**，而 `dealDamage` 的 `Amount` 在**入队那一刻**求值 ——
+第一版写成"先夹到 60 再打"，第 8 次照样打出 65（因为那一次读的是夹之前的 65）。
+现在的写法是：打完之后 `if counter >= cap-5 { set cap } else { +5 }`。
+
+### 211.2 AI（四条规则，按 wiki 的句子写）
+
+wiki："For the first 4 (A18: 3) turns, 50/50 Count or Glare. Cannot use either move three times in a
+row. Afterwards, it repeats It Is Time for the rest of combat."
+
+* `A18 且 round >= 4` ⇒ `It Is Time`（**这一条是必须的**：只说"A18 窗口是 3 回合"并不等于
+  "A18 的第 4 回合在窗口外" —— 通用的 4 回合窗口规则照样会在第 4 回合命中。第一版漏了它，
+  判据当场红在 `A18 round 4 → count`）；
+* `A18 且 round <= 3` ⇒ 50/50；
+* `last_move == prev_move == Count` ⇒ `Glare`（反之亦然）；
+* `round <= 4` ⇒ 50/50；
+* 兜底 ⇒ `It Is Time`。
+
+### 211.3 判据
+
+* `giant_head_counts_down_then_only_its_time`：窗口内只有 Count/Glare（80 个种子）；窗口后只有
+  `It Is Time`（A0 第 5 回合、A18 第 4 回合）；**A17 的第 4 回合仍在窗口内**（分界线两侧各测一次）；
+  连三次禁令两个方向各测（Count/Count ⇒ Glare，Glare/Glare ⇒ Count）。
+  ⚠️ `intent.round` 读的是 `state.current_round`，**不是** `select_action` 的 `round` 形参 ——
+  测试一开始只传了形参，于是窗口规则永远看到第 1 回合。
+* `it_is_time_escalates_by_five_and_respects_its_cap`：用**真实动作**连打八次，
+  A0 = `30,35,40,45,50,55,60,**60**`、A3 = `40,…,70,**70**`。第 8 次是这条测试存在的理由：
+  只测到第 7 次的话，一个**没有上限**的实现每次都对。
+  （英雄血量给到 2000：8 次共 490 点，400 血的英雄会在第 7 次倒下，第 8 次读到的是残血 15。）
+
+### 211.4 ★ 两处**检查器**的缺口（都修了，不是绕过）
+
+1. `roll.<action>: reads X but never rolls it` —— 那条判据只认 `Rolls`（掷骰），不认
+   `Counters`（固定计数器）。§195.1 的 The Guardian 走的是同一条路（`mode_shift_budget` 由
+   `Counters` 写），只是它的读数出现在**条件**里、不在 `damage`/`block`/`heal` 里，所以一直没被
+   撞到。现在两套都算"已初始化"，理由写在注释里。
+2. 内容门的 `INV_*` 全部按新事实更新（HP 500/520、三个动作的 facts、`Count`/`Glare` 进"无 A 行"
+   清单、`it_is_time` 的 A3 行）。
+
+### 211.5 数字
+
+* **20/20 闸门绿**，单测 **894**（700 core + 87 wasm + 107 run）；四条对拍不变。
+* 内容：敌人动作 125 → **126**（`giant_head.it_is_time`）、镜像 76,360 → **77,080 B**（core 65,112）。
+* Giant Head 现在与 wiki 对得上：500/520 HP、Slow、Count 13、Glare 1 Weak、It Is Time 30→60
+  （A3 40→70）、4→3 回合窗口。**A18 的换表欠账清掉了。**

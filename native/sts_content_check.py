@@ -277,7 +277,10 @@ INV_MONSTERS = [
     # §134: acts 2 and 3 have their own elites.
     ("gremlin_leader", 140, 140,
      ["gremlin_leader.slash", "gremlin_leader.rally", "gremlin_leader.summon"]),
-    ("giant_head", 320, 320, ["giant_head.glare", "giant_head.count"]),
+    # §211: wiki `Giant Head` (Elite, Act 3) -- 500 HP (A8 520), `Slow`, `Count` 13,
+    # `Glare` 1 Weak, `It Is Time` (30, +5 per use, cap 60; A3 40/70).
+    ("giant_head", 500, 500,
+     ["giant_head.count", "giant_head.glare", "giant_head.it_is_time"]),
     ("time_eater", 456, 456,
      ["time_eater.reverberate", "time_eater.ripple", "time_eater.head_slam"]),
     # §130: act 2 and act 3 have monsters of their own -- the point of the section.
@@ -382,9 +385,18 @@ INV_ACTIONS = {
                                 ("damage", 6, "event")]),
     "gremlin_leader.rally": ("Defend", [("block", 12, "source"),
                                         ("status", "standard.strength", 5, "source")]),
-    "giant_head.glare": ("Attack", [("damage", 12, "event"),
-                                    ("status", "standard.weak", 1, "event")]),
-    "giant_head.count": ("Attack", [("damage", 26, "event")]),
+    # §211: wiki `Giant Head`: Glare applies **1 Weak** and nothing else (the 12 damage that used
+    # to sit here was the §130 simplification).
+    "giant_head.glare": ("Debuff", [("status", "standard.weak", 1, "event")]),
+    # §211: flat 13 (the wiki's Count has no A-row; 26 + A3 36 was the §130 simplification).
+    "giant_head.count": ("Attack", [("damage", 13, "event")]),
+    # `It Is Time`: the number lives in a **counter** (30 / A3 40, written by `Counters`); the
+    # program clamps it to the cap, deals it, then raises it by 5 -- so the escalation needs no
+    # repeated arithmetic in the content.
+    "giant_head.it_is_time": ("Attack",
+                              [("damage", ("counter", "it_is_time_damage", "source"), "event"),
+                               ("when", None, "counter", "it_is_time_damage", 60, False, "source"),
+                               ("when", None, "counter", "it_is_time_damage", 5, True, "source")]),
     # \u00a7138: summoning -- two minions the encounter never lists.
     "gremlin_leader.summon": ("Buff", [("spawn", "sneaky_gremlin", 10),
                                               ("spawn", "gremlin_wizard", 20)]),
@@ -1301,9 +1313,10 @@ INV_ASC_VARIANTS = {
                           ('counter', 'stolen_gold', 15, True, 'source')]),
                      (17, [('damage', 14, 'event'),
                            ('counter', 'stolen_gold', 20, True, 'source')])],
-    # §204: wiki `Giant Head` -- Count deals (30; A3: 40). This content's base is 26 (§130's
-    # simplification), so the A3 row keeps the wiki's **+10 step**: 36.
-    'giant_head.count': [(3, [('damage', 36, 'event')])],
+    # §211: `It Is Time` 的基数在计数器里（30 / A3 40），所以 A3 那一行只动**上限**：60 → 70。
+    'giant_head.it_is_time': [(3, [('damage', ('counter', 'it_is_time_damage', 'source'), 'event'),
+                                   ('when', None, 'counter', 'it_is_time_damage', 70, False, 'source'),
+                                   ('when', None, 'counter', 'it_is_time_damage', 5, True, 'source')])],
     # §204: wiki `Lagavulin` -- Siphon Soul -1/-1 (A18: -2/-2).
     'lagavulin.siphon_soul': [(18, [('modify', 'standard.strength', -2, 'event'),
                                     ('modify', 'standard.dexterity', -2, 'event')])],
@@ -1461,6 +1474,10 @@ INV_SPAWN_COUNTERS = {
     "the_guardian": [("mode_shift_budget", 30, 0),
                      ("mode_shift_budget", 35, 9),
                      ("mode_shift_budget", 40, 19)],
+    # §211: wiki `Giant Head` -- `It Is Time` deals (30; A3: 40), +5 per use, cap (60; A3: 70).
+    # The **base** lives here (one place); the cap lives in the program's two variants.
+    "giant_head": [("it_is_time_damage", 30, 0),
+                   ("it_is_time_damage", 40, 3)],
 }
 
 # §193: actions that exist in `EACT` but that **no enemy record lists**. They must not be converted
@@ -1712,7 +1729,8 @@ INV_NO_ASC = {
     'gremlin_leader.slash': 'wiki Gremlin Leader: Slash is 6x3, no A-row',
     'gremlin_leader.rally': 'wiki rows describe "all enemies" wording; this content is the §130 simplification',
     # `Giant Head`: Glare applies 1 Weak, flat (Count carries the A3 row).
-    'giant_head.glare': 'wiki Giant Head: Glare has no A-row',
+    'giant_head.glare': 'wiki Giant Head: Glare applies 1 Weak, no A-row',
+    'giant_head.count': 'wiki Giant Head: Count is flat 13, no A-row',
     # `Darkling` / `Louses`: the damage is **rolled at combat start** (`N = 7-11`, A2 `9-13`), which
     # is the `Rolls` mechanism (§193), not `ProgramAsc`.
     'darkling.nip': 'wiki Darkling: Nip is rolled at spawn (A2 changes the roll, §193)',
@@ -1841,7 +1859,11 @@ def check_spawn_rolls(doc):
     readers = 0
     for record_id, group in records.items():
         for record in group:
+            # §211: `Counters` (fixed spawn counters, §195.1) initialise values exactly like `Rolls`
+            # do, so reading either is legitimate. The check only knew the random half -- which is why
+            # `it_is_time_damage` (written by `Counters`) looked like "a counter nobody rolls".
             rolled = {r["Key"] for r in record.get("Rolls") or []}
+            rolled |= {c["Key"] for c in record.get("Counters") or []}
             for action_id in record["Actions"]:
                 action_id = action_id["value"] if isinstance(action_id, dict) else action_id
                 program = actions.get(action_id)

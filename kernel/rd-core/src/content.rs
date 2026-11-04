@@ -5625,7 +5625,9 @@ mod tests {
         let cases: [(&str, i32, i32, i64, i64); 4] = [
             ("looter.mug", 2, 1, 10, 11),
             ("looter.lunge", 2, 1, 12, 14),
-            ("giant_head.count", 3, 2, 26, 36),
+            // §211: `Count` is flat 13 now; the A3 row moved to `It Is Time`, where it raises the
+            // **cap** from 60 to 70 (the base damage lives in a counter, see `INV_SPAWN_COUNTERS`).
+            ("giant_head.it_is_time", 3, 2, 60, 70),
             ("lagavulin.siphon_soul", 18, 17, -1, -2),
         ];
         for (action, threshold, below, base_value, variant_value) in cases {

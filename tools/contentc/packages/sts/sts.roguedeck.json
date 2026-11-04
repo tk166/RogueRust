@@ -10596,8 +10596,8 @@
       "NameKey": "Glare",
       "DescriptionKey": "Glare - 12 damage and 1 Weak",
       "Intent": {
-        "Kind": "Attack",
-        "Label": "Glare - 12 damage and 1 Weak"
+        "Kind": "Debuff",
+        "Label": "Glare - 1 Weak"
       },
       "Program": {
         "Id": {
@@ -10607,27 +10607,6 @@
           "kind": "node.sequence",
           "value": {
             "Children": [
-              {
-                "kind": "node.dealDamage",
-                "value": {
-                  "TargetSelector": {
-                    "kind": "sel.eventTarget",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "EventTarget"
-                    }
-                  },
-                  "Amount": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 12
-                    }
-                  },
-                  "ResultKey": null,
-                  "IgnoresBlock": false,
-                  "Element": null
-                }
-              },
               {
                 "kind": "node.applyStatus",
                 "value": {
@@ -10651,6 +10630,57 @@
                   "Charges": 0,
                   "ResultKey": null
                 }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false
+                }
               }
             ]
           }
@@ -10663,72 +10693,97 @@
       "Id": "giant_head.count",
       "PackageId": "sts",
       "NameKey": "Count",
-      "DescriptionKey": "Count - 26 damage",
+      "DescriptionKey": "Count - 13 damage",
       "Intent": {
         "Kind": "Attack",
-        "Label": "Count - 26 damage"
+        "Label": "Count - 13 damage"
       },
       "Program": {
         "Id": {
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.dealDamage",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 13
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false
+                }
               }
-            },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 26
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
-      },
-      "ProgramAsc": [
-        {
-          "AscensionMin": 3,
-          "Program": {
-            "Id": {
-              "Value": "(unnamed)"
-            },
-            "Root": {
-              "kind": "node.dealDamage",
-              "value": {
-                "TargetSelector": {
-                  "kind": "sel.eventTarget",
-                  "value": {
-                    "Cardinality": "ZeroOrOne",
-                    "RequiredContextCapabilities": "EventTarget"
-                  }
-                },
-                "Amount": {
-                  "kind": "const",
-                  "value": {
-                    "Value": 36
-                  }
-                },
-                "ResultKey": null,
-                "IgnoresBlock": false,
-                "Element": null
-              }
-            },
-            "MaxNodeDepth": 64,
-            "MaxProgramSteps": 1024
-          }
-        }
-      ]
+      }
     },
     {
       "Id": "darkling.nip",
@@ -21443,6 +21498,355 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "giant_head.it_is_time",
+      "PackageId": "sts",
+      "NameKey": "It Is Time",
+      "DescriptionKey": "It Is Time - 30 damage, +5 per use (max 60)",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "It Is Time - 30 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "it_is_time_damage"
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.conditional",
+                "value": {
+                  "Condition": {
+                    "kind": "compare",
+                    "value": {
+                      "Op": "GreaterOrEqual",
+                      "Left": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "it_is_time_damage"
+                        }
+                      },
+                      "Right": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 55
+                        }
+                      }
+                    }
+                  },
+                  "Then": {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "it_is_time_damage"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 60
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  "Else": {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "it_is_time_damage"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 5
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 3,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "it_is_time_damage"
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Op": "GreaterOrEqual",
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "it_is_time_damage"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 65
+                            }
+                          }
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.setCombatantCounter",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": {
+                            "value": "it_is_time_damage"
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 70
+                            }
+                          },
+                          "Relative": false
+                        }
+                      },
+                      "Else": {
+                        "kind": "node.setCombatantCounter",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": {
+                            "value": "it_is_time_damage"
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 5
+                            }
+                          },
+                          "Relative": true
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Encounters": [
@@ -22912,41 +23316,223 @@
       "Enemies": [
         {
           "Id": "giant_head",
-          "MaxHealth": 320,
+          "MaxHealth": 500,
           "Actions": [
+            {
+              "value": "giant_head.count"
+            },
             {
               "value": "giant_head.glare"
             },
             {
-              "value": "giant_head.count"
+              "value": "giant_head.it_is_time"
             }
           ],
           "StartingStatuses": [
             {
               "StatusDefinitionId": {
-                "value": "standard.metallicize"
-              },
-              "Stacks": 4
-            },
-            {
-              "StatusDefinitionId": {
                 "value": "standard.slow"
               },
-              "Stacks": 0
+              "Stacks": 1
             }
           ],
           "Position": 0,
-          "IntentRules": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 18
+                      }
+                    },
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "GreaterOrEqual",
+                        "Round": 4
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 97,
+              "Action": {
+                "value": "giant_head.it_is_time"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 18
+                      }
+                    },
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "LessOrEqual",
+                        "Round": 3
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 96,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "giant_head.count"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "giant_head.glare"
+                  },
+                  "Weight": 50
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 95,
+              "Action": {
+                "value": "giant_head.glare"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 95,
+              "Action": {
+                "value": "giant_head.count"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "LessOrEqual",
+                        "Round": 4
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 90,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "giant_head.count"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "giant_head.glare"
+                  },
+                  "Weight": 50
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 70,
+              "Action": {
+                "value": "giant_head.it_is_time"
+              }
+            }
+          ],
           "DisplayName": "Giant Head",
           "Rolls": [],
-          "Counters": [],
+          "Counters": [
+            {
+              "Key": "it_is_time_damage",
+              "Value": 30
+            },
+            {
+              "Key": "it_is_time_damage",
+              "Value": 40,
+              "AscensionMin": 3
+            }
+          ],
           "Spawn": true,
           "MaxHealthAsc": [
             {
               "AscensionMin": 8,
               "MaxHealth": 520
             }
-          ]
+          ],
+          "HpMin": 500,
+          "HpMax": 500
         }
       ],
       "HeroResources": [
@@ -27032,37 +27618,223 @@
     {
       "Id": "giant_head",
       "NameKey": "Giant Head",
-      "HpMin": 320,
-      "HpMax": 320,
-      "MaxHealth": 320,
+      "HpMin": 500,
+      "HpMax": 500,
+      "MaxHealth": 500,
       "Actions": [
+        {
+          "value": "giant_head.count"
+        },
         {
           "value": "giant_head.glare"
         },
         {
-          "value": "giant_head.count"
+          "value": "giant_head.it_is_time"
         }
       ],
       "StartingStatuses": [
         {
           "StatusDefinitionId": {
-            "value": "standard.metallicize"
-          },
-          "Stacks": 4
-        },
-        {
-          "StatusDefinitionId": {
             "value": "standard.slow"
           },
-          "Stacks": 0
+          "Stacks": 1
         }
       ],
-      "IntentRules": [],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.ascensionAtLeast",
+                  "value": {
+                    "Value": 18
+                  }
+                },
+                {
+                  "kind": "intent.round",
+                  "value": {
+                    "Op": "GreaterOrEqual",
+                    "Round": 4
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 97,
+          "Action": {
+            "value": "giant_head.it_is_time"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.ascensionAtLeast",
+                  "value": {
+                    "Value": 18
+                  }
+                },
+                {
+                  "kind": "intent.round",
+                  "value": {
+                    "Op": "LessOrEqual",
+                    "Round": 3
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 96,
+          "Choice": [
+            {
+              "Action": {
+                "value": "giant_head.count"
+              },
+              "Weight": 50
+            },
+            {
+              "Action": {
+                "value": "giant_head.glare"
+              },
+              "Weight": 50
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 95,
+          "Action": {
+            "value": "giant_head.glare"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 2
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 2
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 95,
+          "Action": {
+            "value": "giant_head.count"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.round",
+                  "value": {
+                    "Op": "LessOrEqual",
+                    "Round": 4
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 90,
+          "Choice": [
+            {
+              "Action": {
+                "value": "giant_head.count"
+              },
+              "Weight": 50
+            },
+            {
+              "Action": {
+                "value": "giant_head.glare"
+              },
+              "Weight": 50
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 70,
+          "Action": {
+            "value": "giant_head.it_is_time"
+          }
+        }
+      ],
       "Tier": "Elite",
       "InvRef": "inv:§5.3",
-      "AiNote": "⚠️ 第 2/3 幕的精英（port-plan.md §134）；机制用的是已有的 Enrage 与 Metallicize。 §198：装备 `standard.slow`（受击伤害每层 +10%，每打一张牌 +1 层，回合结束清零）—— 这就是 wiki 的 Slow。⚠️ 仍是 320 HP 简化版（§130）。",
-      "Counters": [],
-      "Spawn": true
+      "AiNote": "§211：wiki `Giant Head`（Elite, Act 3）—— HP 500（A8 520）、`Slow`、Count 13、Glare 1 Weak、It Is Time 30（A3 40）每次 +5 上限 60（A3 70）。模式：前 4 回合（A18 3）50/50 Count/Glare，同一招不能连三次；之后一直 It Is Time。",
+      "Counters": [
+        {
+          "Key": "it_is_time_damage",
+          "Value": 30
+        },
+        {
+          "Key": "it_is_time_damage",
+          "Value": 40,
+          "AscensionMin": 3
+        }
+      ],
+      "Spawn": true,
+      "MaxHealthAsc": [
+        {
+          "AscensionMin": 8,
+          "MaxHealth": 520
+        }
+      ]
     },
     {
       "Id": "darkling",

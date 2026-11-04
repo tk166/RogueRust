@@ -4579,6 +4579,149 @@ mod card_text_tests {
         rd_core::state::CombatantId::new(name).expect("a short id")
     }
 
+    /// §211：Giant Head 的 AI（wiki `Giant Head`）—— 4 回合窗口（A18 3）、同一招不能连三次、
+    /// 之后一直 `It Is Time`。
+    ///
+    /// wiki 原话："For the first 4 (A18: 3) turns, it has a 50/50 chance to use either Count or
+    /// Glare. Cannot use either move three times in a row. Afterwards, it repeats It Is Time for the
+    /// rest of combat."
+    ///
+    /// 四条判据：
+    /// 1. 窗口内只有 Count / Glare（第 1 回合，80 个种子）；
+    /// 2. 窗口之后只有 It Is Time（第 5 回合 @A0、第 4 回合 @A18）；
+    /// 3. **连三次禁令**：上一次与上上次都是 Count ⇒ 只能 Glare（反之亦然）；
+    /// 4. @A18 第 4 回合已经在 It Is Time —— 这是"窗口缩短"这一档的分界，A17 的第 4 回合仍在窗口内。
+    #[test]
+    fn giant_head_counts_down_then_only_its_time() {
+        let blob = crate::IMAGE;
+        let content = rd_core::content::Content::parse(blob).expect("image");
+        let row = u32::from(
+            content
+                .lookup_in("enc_giant_head", rd_core::content::EK_ENCOUNTER)
+                .expect("enc_giant_head")
+                .index,
+        );
+        let ask = |ascension: u8, round: i32, last: i32, prev: i32, seed: i32| -> String {
+            let session = build_session_at(seed, "enc_giant_head", 200, None, 0, ascension)
+                .unwrap_or_else(|e| panic!("A{ascension} seed {seed}: {e}"));
+            install_session(session);
+            let session = slot().as_mut().expect("session");
+            let id = cid_in("giant_head");
+            // `intent.round` reads `state.current_round`, **not** the third argument of
+            // `select_action` -- so the round has to be set on the state or the window rule never
+            // sees anything but round 1.
+            session.state.current_round = round;
+            for (key, value) in [("last_move", last), ("prev_move", prev)] {
+                let _ = session
+                    .state
+                    .combatant_mut(&id)
+                    .expect("giant head")
+                    .set_counter(
+                        rd_core::state::CounterId::new(key).expect("counter"),
+                        value,
+                    );
+            }
+            let at = rd_core::intent::locate_enemy(&content, row, &id)
+                .expect("locate")
+                .expect("the giant head is in this encounter");
+            let choice = rd_core::intent::select_action(&session.state, &content, at, &id, round)
+                .expect("intent")
+                .expect("an action");
+            choice.action_id.to_string()
+        };
+        // 1: the window offers only Count / Glare.
+        for seed in 0..80 {
+            let pick = ask(0, 1, 0, 0, seed);
+            assert!(
+                pick == "giant_head.count" || pick == "giant_head.glare",
+                "round 1 must be Count/Glare, got {pick}"
+            );
+        }
+        // 2: after the window it is always It Is Time.
+        for seed in 0..40 {
+            assert_eq!(ask(0, 5, 1, 2, seed), "giant_head.it_is_time", "A0 round 5");
+            assert_eq!(ask(18, 4, 1, 2, seed), "giant_head.it_is_time", "A18 round 4");
+        }
+        // 4: A17 round 4 is still inside the window; A18 round 4 is not.
+        for seed in 0..40 {
+            let a17 = ask(17, 4, 1, 2, seed);
+            assert!(
+                a17 == "giant_head.count" || a17 == "giant_head.glare",
+                "A17 round 4 must still be in the window, got {a17}"
+            );
+        }
+        // 3: two Counts in a row force Glare, and two Glares force Count.
+        for seed in 0..40 {
+            assert_eq!(ask(0, 3, 1, 1, seed), "giant_head.glare", "three Counts in a row");
+            assert_eq!(ask(0, 3, 2, 2, seed), "giant_head.count", "three Glares in a row");
+        }
+        take_session();
+    }
+
+    /// §211：`It Is Time` 的伤害**逐次 +5、有上限**，而且 A3 的起点与上限各高 10。
+    ///
+    /// 数值全在 wiki：`(30; A3: 40)`，每次 +5，上限 `(60; A3: 70)`。判据用**真实动作**跑八次：
+    ///
+    /// * A0：30, 35, 40, 45, 50, 55, 60, **60**（第 7 次到顶，第 8 次不再涨）；
+    /// * A3：40, 45, 50, 55, 60, 65, 70, **70**。
+    ///
+    /// 第二条是"上限真的钳住了"的唯一证据 —— 只测到第 7 次的话，一个没有上限的实现会在第 8 次
+    /// 给 65/75，而前面每一次都对。
+    #[test]
+    fn it_is_time_escalates_by_five_and_respects_its_cap() {
+        let blob = crate::IMAGE;
+        let content = rd_core::content::Content::parse(blob).expect("image");
+        for (ascension, expected) in [
+            (0u8, vec![30, 35, 40, 45, 50, 55, 60, 60]),
+            (3u8, vec![40, 45, 50, 55, 60, 65, 70, 70]),
+        ] {
+            // 2000 HP: eight uses at A3 total 490 damage, so a 400-HP hero would die on the seventh
+            // and the eighth "hit" would read as the remainder (15) -- which is what the first
+            // version of this test measured.
+            let session = build_session_at(7, "enc_giant_head", 2000, None, 0, ascension)
+                .unwrap_or_else(|e| panic!("A{ascension}: {e}"));
+            install_session(session);
+            let mut dealt = Vec::new();
+            for _ in 0..expected.len() {
+                let hero = cid_in("hero");
+                let hp = |state: &rd_core::state::CombatState| {
+                    state.combatant(&hero).map_or(0, |c| c.health_current)
+                };
+                let before = {
+                    let session = slot().as_ref().expect("session");
+                    hp(&session.state)
+                };
+                {
+                    let session = slot().as_mut().expect("session");
+                    let id = cid_in("giant_head");
+                    // `execute_action` takes the **EACT row**, not the action id.
+                    let action_row = u32::from(
+                        content
+                            .lookup_in("giant_head.it_is_time", rd_core::content::EK_EACTION)
+                            .expect("it_is_time is in the image")
+                            .index,
+                    );
+                    rd_core::intent::execute_action(
+                        &mut session.state,
+                        &content,
+                        &id,
+                        action_row,
+                        Some(cid_in("hero")),
+                    )
+                    .expect("It Is Time");
+                    rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+                }
+                let after = {
+                    let session = slot().as_ref().expect("session");
+                    hp(&session.state)
+                };
+                dealt.push(before - after);
+            }
+            assert_eq!(dealt, expected, "A{ascension}: It Is Time damage per use");
+        }
+        take_session();
+    }
+
     /// §209：Curl Up —— **首次**掉血时按掷骰加格挡，之后自我摘除；被完全格挡的一击**不**消耗它。
     ///
     /// 三段判据：
