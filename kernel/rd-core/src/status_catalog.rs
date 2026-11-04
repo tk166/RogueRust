@@ -739,6 +739,11 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // which is a *node*, not a status rule.
         "standard.stasis" |
         "standard.stasis_ready" |
+        // §196: Entangled -- no trigger and no modifier: the whole rule is the kernel's play
+        // validator (`play::Validator::Entangled`), which `has_behaviour` does not know about.
+        // `standard.entangle_ready` is the once-per-combat flag Red Slaver spends.
+        "standard.entangled" |
+        "standard.entangle_ready" |
         // §195.7: Draw Reduction -- a `TurnStartDraw` passive row plus its own `TurnEnded` decay.
         // `has_behaviour` only knows the damage/block pipelines, so the reader-side rule lives in the
         // content's `PassiveModifiers`; the kernel rule that matters (`fold_turn_start_draw`) already

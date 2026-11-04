@@ -5880,6 +5880,65 @@ mod tests {
         );
     }
 
+    /// §196：`Entangled` —— 本回合**只**拦 Attack，技能照打；回合结束后自动解除。
+    ///
+    /// 三条判据各锁一个不同的失败模式：
+    /// 1. Attack 被拒，**且拒绝码是 18**（页面按码显示文案，漏一个 case 会显示 "none"）；
+    /// 2. Skill 仍然能打 —— 只查攻击牌才是 Entangled，把"什么都拦"写成 Stunned 是最像对的错法；
+    /// 3. `TurnEnded` 之后能打 —— 这条状态靠自己的触发器失效（内核没有时长时钟）。
+    #[test]
+    fn entangled_refuses_attacks_but_not_skills_and_expires_at_turn_end() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        // `arena()` gives nobody energy; a play needs it before any validator runs.
+        state
+            .combatant_mut(&cid("hero"))
+            .expect("hero")
+            .set_resource(ResourceId::new("standard.energy").unwrap(), 3, Some(3))
+            .expect("energy");
+        give(&mut state, "hero", status("st_ent", "standard.entangled", 1));
+        let attack = card_in_hand(&mut state, &content, "hero", "strike");
+        let skill = card_in_hand(&mut state, &content, "hero", "defend");
+
+        let request = |card| crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a")));
+        let played = crate::play::play_card(&mut state, Some(&content), &request(attack));
+        match played {
+            Err(crate::play::PlayError::Refused(refusal)) => {
+                assert_eq!(refusal, crate::play::Refusal::Entangled, "the refusal kind");
+                assert_eq!(
+                    crate::battle::play_code(&crate::battle::BattleError::Play(
+                        crate::play::PlayError::Refused(refusal)
+                    )),
+                    18,
+                    "the page shows this number"
+                );
+                assert_eq!(
+                    crate::battle::play_code_name(18),
+                    "Refused(Entangled)",
+                    "and this name"
+                );
+            }
+            other => panic!("an Attack under Entangled must be refused, got {other:?}"),
+        }
+
+        // A Skill is untouched.
+        crate::play::play_card(&mut state, Some(&content), &request(skill))
+            .expect("wiki: only *Attacks* are blocked");
+
+        // Turn end -> the status' own trigger decays it -> Attacks are playable again.
+        host.try_run_turn_ended_triggers(&mut state, &cid("hero"))
+            .expect("turn end");
+        assert_eq!(stacks_of(&state, "hero", "standard.entangled"), 0, "expires");
+        crate::play::play_card(&mut state, Some(&content), &request(attack))
+            .expect("the attack is legal again");
+    }
+
     /// §195.9（审阅 P1-1）：候选缓冲是**牌区容量**（96），不是 64 —— 排在第 65 位以后的卡也要参与。
     ///
     /// 这条是可观测的：96 张 `strike`（Basic）+ 最后一张 `uppercut`（Uncommon），`HighestRarity`

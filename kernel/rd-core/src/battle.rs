@@ -543,6 +543,8 @@ pub fn play_code(error: &BattleError) -> u8 {
             crate::play::Refusal::DecreeMaxCardsPerTurn { .. } => 8,
             crate::play::Refusal::DecreeNoLikeness { .. } => 9,
             crate::play::Refusal::OneAttackPerTurn => 10,
+            // §196: the page prints this name; 11..17 are taken, so the code is 18.
+            crate::play::Refusal::Entangled => 18,
         },
         PlayError::MissingResource { .. } => 11,
         PlayError::Unaffordable { .. } => 12,
@@ -567,6 +569,7 @@ pub fn play_code_name(code: u8) -> &'static str {
         8 => "Refused(DecreeMaxCardsPerTurn)",
         9 => "Refused(DecreeNoLikeness)",
         10 => "Refused(OneAttackPerTurn)",
+        18 => "Refused(Entangled)",
         11 => "MissingResource",
         12 => "Unaffordable",
         13 => "NegativePrintedCost",

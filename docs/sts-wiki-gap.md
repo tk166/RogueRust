@@ -53,11 +53,11 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 46 / encounters 33 / cards 45 (base 27 + plus 18) / statuses 34 /
-enemy actions 120 / relics 13 / potions 33 / events 12 (6+3+3) / start deck 10
+monsters 46 / encounters 33 / cards 45 (base 27 + plus 18) / statuses 36 /
+enemy actions 121 / relics 13 / potions 33 / events 12 (6+3+3) / start deck 10
 ascension variants 79 over 72 actions
-image full   content.sts.rdcf             69188 B
-image core   content.sts.core.rdcf        58436 B
+image full   content.sts.rdcf             70480 B
+image core   content.sts.core.rdcf        59540 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`45` 是**卡行**（27 基础 + 18 升级），不是 45 张职业卡；
@@ -269,8 +269,8 @@ Sentry 的 Bolt 塞的就是它。
 > 补 66 个 ascension 数字 / 第二三只 Boss / A20 双 Boss"都已在 §188、§189、§190–§191、§194 落地，
 > 历史见 `port-plan.md` 对应节）。
 
-1. **`Entangled` + Red Slaver 的第三招**（内核一条拒绝码 + 内容一行动作）—— 目前 Red Slaver 只有
-   Stab / Scrape，AI 的三招节奏是错的。
+1. ~~`Entangled` + Red Slaver 的第三招~~ ✅ **已完成**（§196：`Validator::Entangled` + 拒绝码 18 +
+   Red Slaver 的 5 条规则）。
 2. **`Barricade` / `Blur`**（内核：格挡跨回合保留的条件清除）—— 缺了它，战士的"全防御"流派不存在。
 3. **`Slow`（Giant Head）与"下回合多抽/多能量"**（内核：回合边界的延迟结算）—— 后者是所有
    "Energized / Draw" 类卡与药水的前提。

@@ -87,7 +87,7 @@ INV_COUNTS = {
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
-    "statuses": 34,
+    "statuses": 36,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -269,7 +269,7 @@ INV_MONSTERS = [
     ("louse_red", 10, 15, ["louse_red.bite", "louse_red.grow", "louse_red.spit_web"]),
     ("louse_green", 11, 16, ["louse_green.bite", "louse_green.grow"]),
     ("fungi_beast", 22, 28, ["fungi_beast.bite", "fungi_beast.grow"]),
-    ("slaver_red", 46, 50, ["slaver_red.stab", "slaver_red.scrape"]),
+    ("slaver_red", 46, 50, ["slaver_red.stab", "slaver_red.scrape", "slaver_red.entangle"]),
     ("gremlin_nob", 82, 86,
      ["gremlin_nob.bellow", "gremlin_nob.rush", "gremlin_nob.skull_bash"]),
     # §173: the wiki's act-1 elite #2 and act-2 elites #2/#3.
@@ -400,6 +400,9 @@ INV_ACTIONS = {
     "louse_green.grow": ("Buff", [("status", "standard.strength", 3, "source")]),
     "fungi_beast.bite": ("Attack", [("damage", 6, "event")]),
     "fungi_beast.grow": ("Buff", [("status", "standard.strength", 3, "source")]),
+    # §196: Red Slaver's third move -- wiki: "Applies 1 Entangled" (+ the once-per-combat flag).
+    "slaver_red.entangle": ("Debuff", [("status", "standard.entangled", 1, "event"),
+                                       ("modify", "standard.entangle_ready", -99, "source")]),
     "slaver_red.stab": ("Attack", [("damage", 13, "event")]),
     # §187 回 wiki 重核：Red Slaver 的 Scrape 是 **8 伤害 + 1 Vulnerable**
     # (`wiki_slavers.txt`：`Deals (8;{{Asc|2|9}}) damage. Applies (1;{{Asc|17|2}}) Vulnerable.`)。
@@ -756,11 +759,17 @@ INV_STATUSES = {
     "standard.stasis_ready": [],
     # §195.7: Draw Reduction -- the `TurnStartDraw` pipeline, minus one per stack.
     "standard.draw_reduction": [("TurnStartDraw", "AddPerStack", -1, 100, None)],
+    # §196: Entangled -- no modifiers at all; the whole rule is the kernel's play validator
+    # (`Validator::Entangled`), and the status decays through its own TurnEnded trigger.
+    "standard.entangled": [],
+    "standard.entangle_ready": [],
 }
 # Statuses whose stacks decay at the owner's turn end (inv:§10).
 INV_DECAYING = {
     # §195.7: one turn -- applied during the enemy's turn, gone by the end of the player's next.
-    "standard.draw_reduction","standard.vulnerable", "standard.weak", "standard.frail"}
+    "standard.draw_reduction",
+    # §196: "this turn" -- same decay idiom as Weak.
+    "standard.entangled","standard.vulnerable", "standard.weak", "standard.frail"}
 
 # =============================================================================
 # 2.  helpers

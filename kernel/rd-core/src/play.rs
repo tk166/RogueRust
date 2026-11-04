@@ -221,6 +221,9 @@ pub enum Refusal {
     },
     /// 每回合最多一次"攻击开场"类限制（Priority 200）。
     OneAttackPerTurn,
+    /// §196：身上有 `standard.entangled` 时**不能打 Attack**（wiki: *You may not play any Attacks
+    /// this turn*）。技能 / 能力 / 状态牌不受影响。
+    Entangled,
 }
 
 /// 出牌失败的理由。
@@ -412,6 +415,12 @@ const FIRST_ATTACK_FREE_STATUS: &str = "standard.first_attack_each_turn_free";
 const SKILL_COST_REDUCTION_STATUS: &str = "standard.skill_cost_reduction";
 /// `StandardCombatIds.OneAttackPerTurnStatus`（`:35`）。
 const ONE_ATTACK_PER_TURN_STATUS: &str = "standard.one_attack_per_turn";
+/// §196：Red Slaver 的 `Entangled` —— "本回合不能打出 Attack"。
+///
+/// 参考实现把它写在 `AbstractCard.canUse()` 里（`type == ATTACK && player.hasPower("Entangled")`），
+/// 也就是"逐卡问一次能不能用"，与这里的校验器模型同形。⚠️ 参考的校验器清单里**没有**这一条，
+/// 所以这是本移植的扩展 —— 用与 `one_attack_per_turn` 相同的形状表达，不发明第二套拒绝机制。
+const ENTANGLED_STATUS: &str = "standard.entangled";
 /// `StandardCombatIds.AttackCardTag`（`:77`）。
 const ATTACK_TAG: &str = "attack";
 /// `StandardCombatIds.SkillCardTag`（`:79`）。
@@ -1243,6 +1252,7 @@ fn card_has_tag(content: &Content<'_>, row: CardRow<'_>, tag: &str) -> Result<bo
 enum Validator {
     Stun,
     Decree,
+    Entangled,
     PlayCondition,
     OneAttackPerTurn,
     Unplayable,
@@ -1257,7 +1267,7 @@ impl Validator {
     const fn priority(self) -> i32 {
         match self {
             Validator::Stun => 100,
-            Validator::Decree | Validator::PlayCondition => 150,
+            Validator::Decree | Validator::Entangled | Validator::PlayCondition => 150,
             Validator::OneAttackPerTurn | Validator::Unplayable => 200,
         }
     }
@@ -1268,6 +1278,8 @@ impl Validator {
         match self {
             Validator::Stun => "standard.stun_validator",
             Validator::Decree => "standard.decree_validator",
+            // §196: (priority, id) sorting puts this between `decree` and `play_condition`.
+            Validator::Entangled => "standard.entangled_validator",
             Validator::PlayCondition => "standard.play_condition_validator",
             Validator::OneAttackPerTurn => "standard.one_attack_per_turn_validator",
             Validator::Unplayable => "standard.unplayable_validator",
@@ -1276,9 +1288,10 @@ impl Validator {
 }
 
 /// 执行序 = 升序后的固定表。**顺序就是语义**：第一个说不的为止。
-const VALIDATOR_ORDER: [Validator; 5] = [
+const VALIDATOR_ORDER: [Validator; 6] = [
     Validator::Stun,
     Validator::Decree,
+    Validator::Entangled,
     Validator::PlayCondition,
     Validator::OneAttackPerTurn,
     Validator::Unplayable,
@@ -1290,6 +1303,7 @@ fn validate_card_play(state: &CombatState, card: &CardOnTable<'_>) -> Result<(),
         let verdict = match validator {
             Validator::Stun => stun_validator(state, card),
             Validator::Decree => decree_validator(card),
+            Validator::Entangled => entangled_validator(state, card),
             Validator::PlayCondition => play_condition_validator(state, card),
             Validator::OneAttackPerTurn => one_attack_per_turn_validator(state, card),
             Validator::Unplayable => unplayable_validator(card),
@@ -1453,6 +1467,24 @@ fn one_attack_per_turn_validator(
         return Ok(());
     }
     Err(unsupported_content("CardPlayTurnStats"))
+}
+
+/// §196 `entangled`（Priority 150，`standard.entangled_validator`）。
+///
+/// "You may not play any Attacks this turn"（wiki, Red Slaver 的 `Entangle`）：**只看攻击牌** ——
+/// 技能 / 能力 / 状态牌一律放行，这正是它与 `Stunned`（什么都不许打）的区别。
+fn entangled_validator(
+    state: &CombatState,
+    card: &CardOnTable<'_>,
+) -> Result<(), PlayError> {
+    if !card.is_attack {
+        return Ok(());
+    }
+    let source = source_of(state, &card.source)?;
+    if !has_status(source, ENTANGLED_STATUS) {
+        return Ok(());
+    }
+    Err(PlayError::Refused(Refusal::Entangled))
 }
 
 /// #5 unplayable（Priority 200，`standard.unplayable_validator`）。
@@ -3231,11 +3263,13 @@ mod tests {
             [
                 "standard.stun_validator",
                 "standard.decree_validator",
+                // §196: (150, "standard.entangled_validator") -- 'e' sits between 'd' and 'p'.
+                "standard.entangled_validator",
                 "standard.play_condition_validator",
                 "standard.one_attack_per_turn_validator",
                 "standard.unplayable_validator",
             ],
-            "§2.2 的五条执行序（150 档 'd' < 'p'，200 档 'o' < 'u'）"
+            "§2.2 的六条执行序（150 档 'd' < 'e' < 'p'，200 档 'o' < 'u'）"
         );
 
         // §3.3：六个费用修饰器的执行序同理。
