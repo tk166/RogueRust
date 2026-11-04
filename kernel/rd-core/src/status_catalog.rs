@@ -748,6 +748,9 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // `DamageTaken` trigger guarded by `event.bool: damage.isAttack`. Same category as Slow: the
         // rule is the content row, so it is listed here rather than hardcoded.
         "standard.flying" |
+        // §209: Curl Up -- no modifier at all; the whole rule is a `DamageTaken` trigger that gains
+        // the rolled block and then removes itself.
+        "standard.curl_up" |
         "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No

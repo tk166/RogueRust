@@ -89,8 +89,8 @@ INV_COUNTS = {
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
-    # §208: +1 (`standard.flying`).
-    "statuses": 41,
+    # §208: +1 (`standard.flying`); §209: +1 (`standard.curl_up`).
+    "statuses": 42,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -801,6 +801,8 @@ INV_STATUSES = {
     # §208: Byrd's Flying -- half damage from **attacks** (`ScalePercent`, which ignores stacks:
     # `ScalePercentPerStack` would halve once per stack) and one stack lost per attack taken.
     "standard.flying": [("DamageReceived", "ScalePercent", 50, 160, "Direct")],
+    # §209: Curl Up -- no modifier at all; its whole rule is the `DamageTaken` trigger below.
+    "standard.curl_up": [],
     # §199: Berserk -- the first `TurnStartEnergy` row (our own pipeline; +1 energy per stack).
     "standard.berserk": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
     # §198: Slow -- a `DamageReceived` row with the stack-linear scale (our own operation), plus a
@@ -1438,7 +1440,13 @@ INV_ASC_VARIANTS = {
 #
 # enemy record id: [(Key, Min, Max, AscensionMin), ...]  -- `AscensionMin` absent = the base range.
 INV_ROLLS = {
-    "louse_red": [("roll.bite", 5, 7, 0), ("roll.bite", 6, 8, 2)],
+    # §209: Curl Up N (3-7, A7: 4-8, A17: 9-12) -- rolled at spawn, read by the trigger.
+    "louse_red": [("roll.bite", 5, 7, 0), ("roll.bite", 6, 8, 2),
+                  ("roll.curl_up", 3, 7, 0), ("roll.curl_up", 4, 8, 7),
+                  ("roll.curl_up", 9, 12, 17)],
+    # `louse_green` has a roster row but **no encounter** uses it (this content ships `enc_louse`
+    # with the red one only), so an inventory row for it would be "names an enemy that never
+    # appears" -- the gate rejects that, correctly.
     "darkling": [("roll.nip", 7, 11, 0), ("roll.nip", 9, 13, 2)],
 }
 
@@ -2000,7 +2008,8 @@ def check_statuses(doc):
                      "standard.time_warp", "standard.constricted",
                      "standard.phantom_veil",
                      "standard.sharp_hide", "standard.curiosity", "standard.mode_shift",
-                     "standard.stasis", "standard.slow", "standard.flying"):
+                     "standard.stasis", "standard.slow", "standard.flying",
+                     "standard.curl_up"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -2027,7 +2036,9 @@ def check_statuses(doc):
                         # §198: "whenever you play a card" -- Slow grows on CardPlayed.
                         "standard.slow": ["CardPlayed"],
                         # §208: Byrd's Flying -- loses a stack when hit by an **attack**.
-                        "standard.flying": ["DamageTaken"]}[sid]
+                        "standard.flying": ["DamageTaken"],
+                        # §209: "the first time this enemy takes damage" -- a DamageTaken trigger.
+                        "standard.curl_up": ["DamageTaken"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

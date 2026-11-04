@@ -5583,8 +5583,17 @@ mod tests {
                 let draws = crate::battle::apply_spawn_setup(&mut state, &content, encounter)
                     .expect("the encounter rolls")
                     .draws;
-                assert_eq!(draws, 1, "one roll per enemy (the hero has none)");
-                assert_eq!(state.random_step, 1, "A{ascension}/seed {seed}: one draw, one step");
+                // §209: the louse now declares **two** rolls (`roll.bite` and `roll.curl_up`), so
+                // the count is "one draw per declared roll", read from the content -- a hard-coded 1
+                // was only ever true while `roll.bite` was the only roll in the file.
+                assert_eq!(
+                    draws, 2,
+                    "one draw per declared roll (`roll.bite` + `roll.curl_up`)"
+                );
+                assert_eq!(
+                    state.random_step, 2,
+                    "A{ascension}/seed {seed}: one draw, one step per roll"
+                );
 
                 let value = counter_of(&state, "louse_red", "roll.bite");
                 assert!(
@@ -5611,8 +5620,8 @@ mod tests {
                     );
                 }
                 assert_eq!(
-                    state.random_step, 1,
-                    "the bite itself draws nothing -- the roll already happened"
+                    state.random_step, 2,
+                    "the bite itself draws nothing -- both rolls happened at spawn"
                 );
                 seen.push(value);
             }

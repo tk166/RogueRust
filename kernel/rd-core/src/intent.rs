@@ -135,8 +135,13 @@ pub const MAX_ENEMIES: usize = 8;
 /// 一个敌人最多几条 `Actions`。**实测 `{1:1, 2:9, 3:107, 4:20, 5:12}`**，最大 5 ⇒ 8。
 pub const MAX_ACTIONS: usize = 8;
 
-/// 一个敌人最多几条 `IntentRules`。**实测 `{0:146, 1:2, 3:1}`**，最大 3 ⇒ 8。
-pub const MAX_INTENT_RULES: usize = 8;
+/// 一个敌人最多几条 `IntentRules`。
+///
+/// 实测 `{0:146, 1:2, 3:1}`（最大 3）时这里取 8。§209 把 The Champ 的**按等级换招式表**写成
+/// 四条 `intent.ascensionAtLeast` 规则（A19 的四个 "last_move" 档各一条）之后是 12 条 ——
+/// 那一次溢出让 `select_action` 响亮失败在 `Ir(List)`，正是"容量是语义、溢出必须响"的那条
+/// 纪律在起作用。常量放大到 16（留出同样的余量），**不截断**：多的规则要么被跑，要么报错。
+pub const MAX_INTENT_RULES: usize = 16;
 
 /// §195.3：一条规则的 `Choice` 最多几项。
 ///

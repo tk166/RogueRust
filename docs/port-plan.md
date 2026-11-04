@@ -14405,3 +14405,51 @@ Jaw Worm 的 wiki 是 `Block 6 (A17 9)` —— 而 Block 是**防御池**（`Eff
 * **20/20 闸门绿**，单测 **889**（699 core + 83 wasm + 107 run）；四条对拍不变。
 * 内容：状态 40 → **41**、镜像 75,124 → **75,616 B**（core 63,876）。
 * §207 的两条"不可表达"现在都消失了：一条变成了内容（Flying），一条变成了基建（StartingBlock）。
+
+---
+
+## §209 Curl Up 与"A 级才出现的招式"
+
+两件都是**内容**能力，只是之前没接上：Curl Up 需要"掷骰 + 首次受击 + 自我摘除"的组合，
+Champ 的 A19 换表需要 `intent.ascensionAtLeast`（§187 就有，一直没人用）。
+
+### 209.1 Curl Up（Louses）
+
+wiki `Louses`：`Curl Up N`（3-7，A7: 4-8，A17: 9-12，**开局掷骰**），"the first time this enemy
+takes damage, it gains N Block"。
+
+* `roll.curl_up` 三条（0 / A7 / A17），走 §193 已有的 `Rolls`（同一个 `Key`、不同 `AscensionMin`）；
+* `standard.curl_up`：**没有修饰器**，整个规则就是一条 `DamageTaken` 触发器 ——
+  `conditional(eventAmount > 0)` ⇒ `gainBlock(combatantCounter roll.curl_up)` + 自减一层。
+* "只付一次"靠**自我摘除**：状态没了，下一次挨打自然不会再触发（不需要另一个"已用过"的旗子）。
+* `eventAmount > 0` 那道门是必需的：一次**被完全格挡**的攻击掉 0 血，不该把它耗掉。
+
+判据 `curl_up_pays_out_once_and_only_for_a_hit_that_draws_blood`：格挡掉的一击**不**消耗它；
+真正掉血的一击给出**掷骰值**（判据读那只计数器，不写死数字）并把状态摘掉；第二击不再给。
+
+### 209.2 A19 换招式表（The Champ）
+
+wiki：`Gloat (Defensive Stance at A19) 15% chance` —— **招式本身**在 A19 被替换。这正是
+`intent.ascensionAtLeast` 的用途（§187：不给每只怪写 `getMove`，让内容写一条**更高优先级**的规则）。
+内容是四条规则（A19 + 四个 `last_move` 档各一条，Priority 51/41 压过 50/40）。
+
+判据 `the_champ_swaps_gloat_for_defensive_stance_at_a19`：**两侧都测** —— A18 的 80 个种子里
+Gloat **必须出现过**，A19 的 80 个种子里一次都不许出现，且 Defensive Stance 出现过。
+只测 A19 的话，"内容里根本没写 Gloat"也会绿。负控：删掉那四条规则 ⇒ 红在 `A19 must never
+choose Gloat (left: 11)`。
+
+### 209.3 ★ 顺带：一个真的容量常量被撞响了
+
+加那四条规则之后 `select_action` 立刻失败在 `intent: Ir(List)` —— `MAX_INTENT_RULES = 8`，而
+The Champ 现在是 12 条。**这是"容量是语义、溢出必须响亮失败"在起作用**（不是静默截断成 8 条、
+让 A19 的规则随机消失）。常量放大到 16 并在注释里写了这次的来由。
+
+同时两条**写死数字的老测试**被内容变化撞红，都改成了内容驱动的判据：
+`a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action`（louse 现在有两条掷骰 ⇒ "每个声明的
+掷骰抽一次"）与 `building_a_louse_fight_draws_its_bite_and_a_cultist_fight_does_not`（改成比**差值**，
+因为"一只怪有几条掷骰"是内容，会一直变）。
+
+### 209.4 数字
+
+* **20/20 闸门绿**，单测 **891**（699 core + 85 wasm + 107 run）；四条对拍不变。
+* 内容：状态 41 → **42**、镜像 75,616 → **76,220 B**（core 64,376）。

@@ -3390,10 +3390,13 @@ mod tests {
         let louse = build_session_at(11, "enc_louse", 70, None, 0, 0).expect("the louse fight builds");
         let cultist =
             build_session_at(11, "enc_cultist", 70, None, 0, 0).expect("the cultist fight builds");
+        // §209: the louse declares two rolls now (`roll.bite` + `roll.curl_up`), so the difference is
+        // **one per declared roll** -- the assertion is the difference, not an absolute count, because
+        // "how many rolls a monster has" is content and will keep changing.
         assert_eq!(
             louse.state.random_step,
-            cultist.state.random_step + 1,
-            "exactly one draw (the louse's bite); shuffle and the first draw are identical in both"
+            cultist.state.random_step + 2,
+            "one draw per louse roll; shuffle and the first draw are identical in both"
         );
         let id = rd_core::state::CombatantId::new("louse_red").expect("a usable id");
         let name = rd_core::state::CounterId::new("roll.bite").expect("a usable counter id");
@@ -4574,6 +4577,171 @@ mod card_text_tests {
     /// §207: a `CombatantId` from a literal, for the tests below.
     fn cid_in(name: &str) -> rd_core::state::CombatantId {
         rd_core::state::CombatantId::new(name).expect("a short id")
+    }
+
+    /// §209：Curl Up —— **首次**掉血时按掷骰加格挡，之后自我摘除；被完全格挡的一击**不**消耗它。
+    ///
+    /// 三段判据：
+    /// 1. 掉血的一击 ⇒ 加 N 点格挡（N = 开局掷的 `roll.curl_up`，判据直接读那只计数器，不写死数字）；
+    /// 2. 状态**没了** —— 所以第二次挨打不会再给一次（"first time" 是这个机制的全部要点）；
+    /// 3. 一次**被格挡吸收**的攻击（掉 0 血）照样**不**触发：`eventAmount > 0` 那道门。
+    #[test]
+    fn curl_up_pays_out_once_and_only_for_a_hit_that_draws_blood() {
+        let session = build_session_at(7, "enc_louse", 200, None, 0, 0).expect("the louse fight");
+        install_session(session);
+        let blob = crate::IMAGE;
+        let content = rd_core::content::Content::parse(blob).expect("image");
+        let louse = cid_in("louse_red");
+        let counter = |state: &rd_core::state::CombatState, key: &str| {
+            state
+                .combatant(&louse)
+                .and_then(|c| c.counters().iter().find(|e| e.key.as_str() == key).map(|e| e.value))
+                .unwrap_or(0)
+        };
+        let block = |state: &rd_core::state::CombatState| {
+            state
+                .combatant(&louse)
+                .and_then(|c| {
+                    c.defensive_pools()
+                        .iter()
+                        .find(|p| p.key.as_str() == "standard.block")
+                        .map(|p| p.pool.current)
+                })
+                .unwrap_or(0)
+        };
+        let has_curl = |state: &rd_core::state::CombatState| {
+            state
+                .combatant(&louse)
+                .map(|c| c.statuses().iter().any(|s| s.definition_id.as_str() == "standard.curl_up"))
+                .unwrap_or(false)
+        };
+        let rolled = {
+            let session = slot().as_ref().expect("session");
+            counter(&session.state, "roll.curl_up")
+        };
+        assert!(rolled >= 3, "the louse rolls Curl Up at combat start (got {rolled})");
+
+        // 3 first: a fully blocked hit (no HP lost) must leave the power alone.
+        {
+            let mut host = rd_core::host::Host::new(&content);
+            let session = slot().as_mut().expect("session");
+            let mut ctx = rd_core::exec::ExecContext::new(
+                &mut session.state,
+                Some(cid_in("hero")),
+                Some(louse),
+                None,
+                1024,
+            )
+            .with_content(&content);
+            rd_core::exec::resolve_damage(&mut ctx, &louse, 0, false).expect("a blocked hit");
+            rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+            host.resolve_pending_queues_with(&mut session.state, rd_core::host::QueueLimits::DEFAULT)
+                .expect("dispatch");
+            assert!(
+                has_curl(&session.state),
+                "a hit that draws no blood must not spend Curl Up"
+            );
+            assert_eq!(block(&session.state), 0, "and it grants nothing");
+        }
+
+        // 1 + 2: one real hit.
+        {
+            let mut host = rd_core::host::Host::new(&content);
+            let session = slot().as_mut().expect("session");
+            let mut ctx = rd_core::exec::ExecContext::new(
+                &mut session.state,
+                Some(cid_in("hero")),
+                Some(louse),
+                None,
+                1024,
+            )
+            .with_content(&content);
+            rd_core::exec::resolve_damage(&mut ctx, &louse, 1, false).expect("an attack lands");
+            rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+            host.resolve_pending_queues_with(&mut session.state, rd_core::host::QueueLimits::DEFAULT)
+                .expect("dispatch");
+            assert_eq!(block(&session.state), rolled, "Curl Up grants the rolled block");
+            assert!(!has_curl(&session.state), "and it is spent");
+        }
+
+        // …and the second hit grants nothing more.
+        {
+            let mut host = rd_core::host::Host::new(&content);
+            let session = slot().as_mut().expect("session");
+            let before = block(&session.state);
+            let mut ctx = rd_core::exec::ExecContext::new(
+                &mut session.state,
+                Some(cid_in("hero")),
+                Some(louse),
+                None,
+                1024,
+            )
+            .with_content(&content);
+            rd_core::exec::resolve_damage(&mut ctx, &louse, 1, false).expect("a second attack");
+            rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+            host.resolve_pending_queues_with(&mut session.state, rd_core::host::QueueLimits::DEFAULT)
+                .expect("dispatch");
+            // The second hit is **absorbed** by the block Curl Up just granted (1 damage), so the
+            // number goes down by exactly that; what must not happen is another Curl Up payout
+            // (which would add `rolled` on top).
+            assert_eq!(
+                block(&session.state),
+                before - 1,
+                "the second hit must not add block again (it already curled up)"
+            );
+        }
+        take_session();
+    }
+
+    /// §209：**A19 把 15% 的 Gloat 槽位换成 Defensive Stance**（wiki `The Champ`）。
+    ///
+    /// 这一条钉的是"招式表按等级换"这条内容能力（`intent.ascensionAtLeast`，§187）：A18 时
+    /// Gloat **必须出现过**，A19 时**一次都不许出现**。只测 A19 的话，一个"根本没写 Gloat"的
+    /// 内容也会绿 —— 所以两侧都测。
+    #[test]
+    fn the_champ_swaps_gloat_for_defensive_stance_at_a19() {
+        let blob = crate::IMAGE;
+        let content = rd_core::content::Content::parse(blob).expect("image");
+        let row = content
+            .lookup_in("enc_the_champ", rd_core::content::EK_ENCOUNTER)
+            .expect("enc_the_champ")
+            .index;
+        let mut seen = Vec::new();
+        for ascension in [18u8, 19u8] {
+            let mut gloat = 0usize;
+            let mut stance = 0usize;
+            for seed in 0..80 {
+                let session = build_session_at(seed, "enc_the_champ", 200, None, 0, ascension)
+                    .unwrap_or_else(|e| panic!("A{ascension} seed {seed}: {e}"));
+                install_session(session);
+                let choice = {
+                    let session = slot().as_ref().expect("session");
+                    let at = rd_core::intent::locate_enemy(
+                        &content,
+                        u32::from(row),
+                        &cid_in("the_champ"),
+                    )
+                    .expect("locate")
+                    .expect("the champ is in this encounter");
+                    rd_core::intent::select_action(&session.state, &content, at, &cid_in("the_champ"), 1)
+                        .expect("intent")
+                        .expect("an action")
+                };
+                if choice.action_id == "the_champ.gloat" {
+                    gloat += 1;
+                }
+                if choice.action_id == "the_champ.defensive_stance" {
+                    stance += 1;
+                }
+            }
+            seen.push((ascension, gloat, stance));
+        }
+        let (_, gloat18, _) = seen[0];
+        let (_, gloat19, stance19) = seen[1];
+        assert!(gloat18 > 0, "A18 must still be able to choose Gloat (got {gloat18})");
+        assert_eq!(gloat19, 0, "A19 must never choose Gloat");
+        assert!(stance19 > 0, "A19 turns that slot into Defensive Stance (got {stance19})");
+        take_session();
     }
 
     /// §208：Byrd 的 Flying —— **攻击**伤害减半，每被打一次掉一层；DoT 不算"被打"。

@@ -2322,6 +2322,109 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.curl_up",
+      "PackageId": "sts",
+      "NameKey": "Curl Up",
+      "DescriptionKey": "The first time this enemy takes damage, it gains N Block (N rolled at the start of combat).",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": null,
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Op": "Greater",
+                    "Left": {
+                      "kind": "eventAmount",
+                      "value": {}
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 0
+                      }
+                    }
+                  }
+                },
+                "Then": {
+                  "kind": "node.sequence",
+                  "value": {
+                    "Children": [
+                      {
+                        "kind": "node.gainBlock",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "Amount": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "roll.curl_up"
+                            }
+                          },
+                          "ResultKey": null
+                        }
+                      },
+                      {
+                        "kind": "node.modifyStatusStacks",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "StatusDefinitionId": {
+                            "value": "standard.curl_up"
+                          },
+                          "Delta": {
+                            "kind": "const",
+                            "value": {
+                              "Value": -1
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -22186,6 +22289,186 @@
                 "value": {
                   "Conditions": [
                     {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 19
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 51,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "the_champ.face_slap"
+                  },
+                  "Weight": 25
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.defensive_stance"
+                  },
+                  "Weight": 15
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.defensive_stance"
+                  },
+                  "Weight": 15
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 19
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 51,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "the_champ.heavy_slash"
+                  },
+                  "Weight": 45
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.defensive_stance"
+                  },
+                  "Weight": 15
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.defensive_stance"
+                  },
+                  "Weight": 15
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 19
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 51,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "the_champ.heavy_slash"
+                  },
+                  "Weight": 45
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.face_slap"
+                  },
+                  "Weight": 25
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.defensive_stance"
+                  },
+                  "Weight": 15
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 19
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 41,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "the_champ.heavy_slash"
+                  },
+                  "Weight": 45
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.face_slap"
+                  },
+                  "Weight": 25
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.defensive_stance"
+                  },
+                  "Weight": 15
+                },
+                {
+                  "Action": {
+                    "value": "the_champ.defensive_stance"
+                  },
+                  "Weight": 15
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
                       "kind": "intent.healthPercent",
                       "value": {
                         "Op": "LessOrEqual",
@@ -22943,7 +23226,14 @@
               "value": "louse_red.spit_web"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.curl_up"
+              },
+              "Stacks": 1
+            }
+          ],
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Red Louse",
@@ -22958,6 +23248,23 @@
               "Min": 6,
               "Max": 8,
               "AscensionMin": 2
+            },
+            {
+              "Key": "roll.curl_up",
+              "Min": 3,
+              "Max": 7
+            },
+            {
+              "Key": "roll.curl_up",
+              "Min": 4,
+              "Max": 8,
+              "AscensionMin": 7
+            },
+            {
+              "Key": "roll.curl_up",
+              "Min": 9,
+              "Max": 12,
+              "AscensionMin": 17
             }
           ],
           "Counters": [],
@@ -26149,6 +26456,186 @@
             "value": {
               "Conditions": [
                 {
+                  "kind": "intent.ascensionAtLeast",
+                  "value": {
+                    "Value": 19
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 51,
+          "Choice": [
+            {
+              "Action": {
+                "value": "the_champ.face_slap"
+              },
+              "Weight": 25
+            },
+            {
+              "Action": {
+                "value": "the_champ.defensive_stance"
+              },
+              "Weight": 15
+            },
+            {
+              "Action": {
+                "value": "the_champ.defensive_stance"
+              },
+              "Weight": 15
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.ascensionAtLeast",
+                  "value": {
+                    "Value": 19
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 2
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 51,
+          "Choice": [
+            {
+              "Action": {
+                "value": "the_champ.heavy_slash"
+              },
+              "Weight": 45
+            },
+            {
+              "Action": {
+                "value": "the_champ.defensive_stance"
+              },
+              "Weight": 15
+            },
+            {
+              "Action": {
+                "value": "the_champ.defensive_stance"
+              },
+              "Weight": 15
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.ascensionAtLeast",
+                  "value": {
+                    "Value": 19
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 3
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 51,
+          "Choice": [
+            {
+              "Action": {
+                "value": "the_champ.heavy_slash"
+              },
+              "Weight": 45
+            },
+            {
+              "Action": {
+                "value": "the_champ.face_slap"
+              },
+              "Weight": 25
+            },
+            {
+              "Action": {
+                "value": "the_champ.defensive_stance"
+              },
+              "Weight": 15
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.ascensionAtLeast",
+                  "value": {
+                    "Value": 19
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 41,
+          "Choice": [
+            {
+              "Action": {
+                "value": "the_champ.heavy_slash"
+              },
+              "Weight": 45
+            },
+            {
+              "Action": {
+                "value": "the_champ.face_slap"
+              },
+              "Weight": 25
+            },
+            {
+              "Action": {
+                "value": "the_champ.defensive_stance"
+              },
+              "Weight": 15
+            },
+            {
+              "Action": {
+                "value": "the_champ.defensive_stance"
+              },
+              "Weight": 15
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
                   "kind": "intent.healthPercent",
                   "value": {
                     "Op": "LessOrEqual",
@@ -26609,13 +27096,39 @@
           "value": "louse_red.spit_web"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.curl_up"
+          },
+          "Stacks": 1
+        }
+      ],
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Red_Louse",
       "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。",
       "Counters": [],
-      "Spawn": true
+      "Spawn": true,
+      "Rolls": [
+        {
+          "Key": "roll.curl_up",
+          "Min": 3,
+          "Max": 7
+        },
+        {
+          "Key": "roll.curl_up",
+          "Min": 4,
+          "Max": 8,
+          "AscensionMin": 7
+        },
+        {
+          "Key": "roll.curl_up",
+          "Min": 9,
+          "Max": 12,
+          "AscensionMin": 17
+        }
+      ]
     },
     {
       "Id": "louse_green",
@@ -26631,13 +27144,39 @@
           "value": "louse_green.grow"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.curl_up"
+          },
+          "Stacks": 1
+        }
+      ],
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Green_Louse",
       "AiNote": "§152：wiki 的 1 幕怪；数值见 patch_152_enemies.py 的表格。",
       "Counters": [],
-      "Spawn": true
+      "Spawn": true,
+      "Rolls": [
+        {
+          "Key": "roll.curl_up",
+          "Min": 3,
+          "Max": 7
+        },
+        {
+          "Key": "roll.curl_up",
+          "Min": 4,
+          "Max": 8,
+          "AscensionMin": 7
+        },
+        {
+          "Key": "roll.curl_up",
+          "Min": 9,
+          "Max": 12,
+          "AscensionMin": 17
+        }
+      ]
     },
     {
       "Id": "fungi_beast",
