@@ -142,6 +142,8 @@ const HERO: &str = "hero";
 /// starts reading it). The content says 80; this constant says 80; that agreement is a
 /// coincidence, not a wire — which is exactly why the declaration exists.
 const HERO_HP: i32 = 80;
+/// §203: the stand-in hero for `rd_env_start_encounter` (see its doc).
+const DEBUG_HERO_HP: i32 = 400;
 /// Starting / per-turn energy (the standard package's `3`).
 const ENERGY: i32 = 3;
 
@@ -1729,6 +1731,55 @@ pub extern "C" fn rd_env_result() -> i32 {
 }
 
 /// `rd_env_reset()` — rebuild the fight at the same seed. 0 on success, negative on failure.
+#[no_mangle]
+/// §203: **build a fight from an arbitrary encounter by name** (debug surface).
+///
+/// Why this exists: the browser gates can only fight what the run happens to roll, and the act-2 /
+/// act-3 content (Bronze Automaton's summoned orbs, Reptomancer's daggers) is behind ~30 nodes of
+/// walking plus a won act. A checker that has to *win two acts* to see an act-3 screen is not a
+/// checker -- it is a coin toss that fails on unrelated content changes.
+///
+/// It is the same shape as `startWithSeed` / `givePotion`: a **measured affordance** behind
+/// `?debug`, not a game action. It builds through `build_session_at`, i.e. the same path
+/// `rd_env_reset` uses (dedupe ids, `Spawn: false`, `Owner`, starting statuses), so it cannot
+/// invent a fight the run layer could not build.
+///
+/// Returns `0` on success, `-1` with `last_error` on a bad name.
+///
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes (UTF-8, the encounter id).
+#[no_mangle]
+pub unsafe extern "C" fn rd_env_start_encounter(ptr: *const u8, len: i32) -> i32 {
+    if len < 0 || ptr.is_null() {
+        return -1;
+    }
+    let bytes = core::slice::from_raw_parts(ptr, len as usize);
+    let Ok(name) = core::str::from_utf8(bytes) else {
+        return -1;
+    };
+    // The name has to outlive the `FightPlan` (it borrows it for the session's life), which is the
+    // same `Box::leak` the run layer already pays for one fight.
+    let leaked: &'static str = Box::leak(name.to_string().into_boxed_str());
+    // A **heavy** hero on purpose: these fights exist so a gate can *watch* the content (a summon
+    // arriving, a dagger removing itself), not so it can win. With `HERO_HP` the driver died to the
+    // Reptomancer before either dagger reached its Explode turn, and the gate then measured the
+    // wrong thing -- `DEBUG_HERO_HP` is the smallest fix that keeps the observation about content.
+    match build_session_at(SEED, leaked, DEBUG_HERO_HP, None, 0, 0) {
+        Ok(session) => {
+            *slot() = Some(session);
+            0
+        }
+        Err(message) => {
+            if let Some(session) = slot().as_mut() {
+                session.error.clear();
+                session.error.push_str(&message);
+            }
+            -1
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rd_env_reset() -> i32 {
     match build_session(SEED) {

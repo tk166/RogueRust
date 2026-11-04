@@ -588,7 +588,15 @@ function step(actionIndex) {
   appendLog(diff);
   renderTopBar();
   // A finished fight goes back to the run: the health and the relics are the run's business.
-  if (ex.rd_env_done() === 1) endFight();
+  // §203: **unless** it was a debug fight (`RD_DEBUG.fightEncounter`), which has no node to settle.
+  if (ex.rd_env_done() === 1) {
+    if (debugFight) {
+      debugFight = false;
+      say(`<span class="dim">调试遭遇结束（不入运行层）· ${RESULT_NAMES[ex.rd_env_result()] || ex.rd_env_result()}</span>`);
+    } else {
+      endFight();
+    }
+  }
   return verdict;
 }
 
@@ -606,6 +614,11 @@ function wasEndTurnAction(actionIndex) {
 // routes -- the same split as `ui_render.js`.
 // ---------------------------------------------------------------------------------------------
 let mode = "run";
+/// §203: a fight started by `RD_DEBUG.fightEncounter` has **no run node** behind it, so folding it
+/// back (`endFight` -> `rd_run_fight_end`) is refused and the page then reads a *fresh* demo session
+/// -- which is how one run's health ended up next to another fight's enemy names. A debug fight
+/// therefore ends in place: the result stays on screen, the run is untouched.
+let debugFight = false;
 /// The run seed. **Not a constant** (§153): it used to be `7`, which meant every page load replayed
 /// the identical run -- same map, same encounters, and (because seed 7's first three fights are all
 /// `jaw_worm`) the same enemy over and over, which is exactly how the "why do I only ever meet
@@ -2022,6 +2035,37 @@ function measure() {
         }
         renderTopBar();
         return dropped;
+      },
+      // §203: fight **any** encounter by name, right now. Act-2/act-3 content (Bronze Automaton's
+      // orbs, Reptomancer's daggers) sits behind ~30 nodes and a won act, so a gate that waits for
+      // the run to roll it is a coin toss. Same reasoning as `startWithSeed` / `givePotion`: a
+      // measured affordance behind `?debug`, built through the real `build_session_at`.
+      // The fight is **not** folded back into the run (`endFight` needs a node); a checker that uses
+      // this reloads afterwards.
+      fightEncounter: (name) => {
+        const bytes = new TextEncoder().encode(name);
+        const ptr = ex.rd_env_scratch_buf();
+        new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
+        const verdict = ex.rd_env_start_encounter(ptr, bytes.length);
+        if (verdict !== 0) return verdict;
+        debugFight = true;
+        obs = readObservation();
+        document.getElementById("log").innerHTML = "";
+        document.getElementById("floats").innerHTML = "";
+        // §203: the enemy panel is **not** cleared by `setMode` -- the normal path relies on the very
+        // next `render()` overwriting it from the new observation. That is fine for a page that
+        // always renders after a state change, and it is exactly how a stale panel became visible
+        // here: the checker read the **previous fight's** enemies as this fight's opening. Clearing
+        // it first makes "the panel shows the current fight" true even between the two calls.
+        for (const id of ["enemies", "hand", "heroStatus"]) {
+          const element = document.getElementById(id);
+          if (element) element.innerHTML = "";
+        }
+        setMode("fight");
+        render(0, 0);
+        // The hand is dealt by playing the turn-start step: a fresh fight sits in
+        // `WaitingToStartTurn` (the reference's DSL does the same), so the first END_TURN draws.
+        return 0;
       },
       settle: () => new Promise((resolve) => setTimeout(resolve, 0)),
     };

@@ -571,6 +571,98 @@ const report = await evaluate(`(async () => {
   // textContent + collapsed whitespace, not innerText: innerText of two adjacent <b> elements puts a
   // newline between them, so the readable assertion below would fail on a top bar that is correct.
   out.ascTopBar = document.getElementById("runStats").textContent.replace(/\s+/g, " ").trim();
+
+  // ---- §203: act-2 / act-3 content, fought for real ---------------------------------------------
+  // The act-1 slice can only reach act 2 by **winning an act** (~30 nodes plus a boss), and act 3
+  // needs a second win. A gate that waits for that is a coin toss that fails on unrelated content
+  // changes, so the page exposes a debug "fight this encounter now" (RD_DEBUG.fightEncounter,
+  // built through the same build_session_at the run uses). What these two drive is exactly what
+  // the act-1 slice cannot: the **enemy panel** against summons and self-removal.
+  //
+  // (No backticks in this block: it is inside a template literal.)
+  const enemySlots = () => {
+    const panelEl = document.getElementById("enemies");
+    // One entry per painted enemy: the panel gives each a data-enemy-panel ordinal.
+    const shown = [...panelEl.querySelectorAll("[data-enemy-panel]")];
+    return shown.map((el) => (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 40));
+  };
+  // Only ever click the page's own button. Stepping the ABI directly was the first attempt and it
+  // **desynced** the page from the session: the end-turn button is disabled exactly while an enemy
+  // is acting, so stepping anyway ran a second END_TURN on top of a turn the page had not painted --
+  // and the panel then showed one fight's health with another fight's names.
+  const fightFor = async (rounds) => {
+    for (let step = 0; step < rounds; step++) {
+      if (ex.rd_env_done() !== 0) break;
+      if (document.getElementById("handPanel").hidden) break; // the fight left the screen
+      const end = document.getElementById("endTurn");
+      if (end && !end.disabled) end.click();
+      await sleep(0);
+      await sleep(0);
+    }
+  };
+
+  out.act2 = {};
+  if (typeof window.RD_DEBUG.fightEncounter === "function") {
+    const verdict = window.RD_DEBUG.fightEncounter("enc_bronze_automaton");
+    out.act2.build = verdict;
+    out.act2.error = verdict === 0 ? "" : lastError();
+    if (verdict === 0) {
+      out.act2.opening = enemySlots();
+      // The boss summons two orbs on its first turn: the panel has to **grow**, and the new
+      // entries have to be distinguishable (the page keys them by slot, the kernel by id).
+      await fightFor(6);
+      out.act2.after = enemySlots();
+      out.act2.threw = lastError();
+    }
+  }
+
+  out.act3 = {};
+  if (typeof window.RD_DEBUG.fightEncounter === "function") {
+    const verdict = window.RD_DEBUG.fightEncounter("enc_reptomancer");
+    out.act3.build = verdict;
+    out.act3.error = verdict === 0 ? "" : lastError();
+    if (verdict === 0) {
+      out.act3.opening = enemySlots();
+      // Daggers explode and leave the fight (§200/§201): the panel must lose an entry, which is
+      // the one thing a page can get wrong even when the kernel is right (a stale render keeps
+      // painting the dead one).
+      let left = out.act3.opening.length;
+      for (let step = 0; step < 60; step++) {
+        if (ex.rd_env_done() !== 0) break;
+        await fightFor(1);
+        const now = enemySlots();
+        if (now.length && now.length < left) {
+          left = now.length;
+          out.act3.after = now;
+          break;
+        }
+      }
+      out.act3.openingCount = out.act3.opening.length;
+      out.act3.leftCount = left;
+      out.act3.errorEnd = lastError();
+      // Why the loop stopped: "no dagger left" and "the fight ended" need different fixes, and a
+      // bare count cannot tell them apart.
+      out.act3.done = ex.rd_env_done();
+      out.act3.result = ex.rd_env_result();
+      out.act3.hp = (() => {
+        const buf = ex.rd_env_scratch_buf();
+        ex.rd_env_observe_into(buf);
+        return new Int32Array(ex.memory.buffer, buf, ex.rd_env_observe_len())[4];
+      })();
+      out.act3.inFight = !document.getElementById("handPanel").hidden;
+      out.act3.msg = (document.getElementById("msg").textContent || "").replace(/\s+/g, " ").slice(0, 120);
+    }
+  }
+
+  // §203: put the page back on the run screen. The pointer section below drives **real** mouse
+  // events at the run UI, and a page left in fight mode has no seed field to type into -- the
+  // first version of this block made nine unrelated pointer assertions fail exactly that way.
+  debugFight = false;
+  setMode("run");
+  renderMap();
+  renderNode();
+  renderTopBar();
+
   return out;
 })()`);
 
@@ -1046,6 +1138,26 @@ if (report.pointer.inFightAfterNode) {
   console.log("  pointer           " + JSON.stringify(report.pointer));
 }
 
+// §203: act-2 / act-3 content, asserted. The three claims are the ones the act-1 slice cannot make:
+// a summon **appears** on the panel, a self-removal **disappears** from it, and neither path throws.
+const act2 = report.act2 || {};
+const act3 = report.act3 || {};
+want(act2.build === 0, `act 2: the automaton fight did not build (${act2.build}) ${act2.error || ""}`);
+want((act2.opening || []).length === 1,
+  `act 2: the orbs are \`Spawn: false\`, so the fight opens with the boss alone; got ${JSON.stringify(act2.opening)}`);
+want((act2.after || []).length === 3,
+  `act 2: the boss must summon two orbs (panel ${JSON.stringify(act2.after)})`);
+want(!act2.threw, `act 2: a step threw: ${act2.threw}`);
+want(act3.build === 0, `act 3: the reptomancer fight did not build (${act3.build}) ${act3.error || ""}`);
+want((act3.opening || []).length === 3,
+  `act 3: boss + two preset daggers; got ${JSON.stringify(act3.opening)}`);
+want(typeof act3.leftCount === "number" && act3.leftCount < 3,
+  `act 3: a dagger must explode and leave the panel (before ${act3.openingCount}, ` +
+  `after ${act3.leftCount}; done ${act3.done} result ${act3.result} hp ${act3.hp} ` +
+  `inFight ${act3.inFight} msg ${JSON.stringify(act3.msg)})`);
+want(!act3.errorEnd, `act 3: a step threw: ${act3.errorEnd}`);
+
+
 if (problems.length) {
   for (const problem of problems) console.error("  - " + problem);
   fail(`${problems.length} assertion(s) failed`);
@@ -1082,4 +1194,12 @@ console.log("  card choice       " + report.choiceTitle + " · " + report.choice
   " · table " + report.choiceEnvActions + " -> " + report.choiceEnvActionsAfter);
 console.log("  potion            belt " + report.potionInBelt + " -> " + report.potionAfter +
   (report.potionThrew ? " · THREW " + report.potionThrew : ""));
+console.log("  act 2 (orbs)      " + JSON.stringify(report.act2 && report.act2.after) +
+  " · opening " + JSON.stringify(report.act2 && report.act2.opening));
+console.log("  act 3 (daggers)   " + JSON.stringify({
+  opening: report.act3 && report.act3.openingCount, left: report.act3 && report.act3.leftCount,
+  done: report.act3 && report.act3.done, result: report.act3 && report.act3.result,
+  hp: report.act3 && report.act3.hp, inFight: report.act3 && report.act3.inFight,
+  msg: report.act3 && report.act3.msg,
+}));
 console.log("BROWSER_TEST PASS");
