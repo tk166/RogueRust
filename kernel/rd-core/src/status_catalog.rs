@@ -754,6 +754,9 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // §209: Curl Up -- no modifier at all; the whole rule is a `DamageTaken` trigger that gains
         // the rolled block and then removes itself.
         "standard.curl_up" |
+        // §213: Hex -- likewise a pure content rule: a `CardPlayed` trigger that shuffles a Dazed
+        // into the draw pile whenever the played card is **not** an Attack (`not(card.hasTag.attack)`).
+        "standard.hex" |
         "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No

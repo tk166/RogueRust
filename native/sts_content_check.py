@@ -89,8 +89,8 @@ INV_COUNTS = {
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
-    # §208: +1 (`standard.flying`); §209: +1 (`standard.curl_up`).
-    "statuses": 42,
+    # §208: +1 (`standard.flying`); §209: +1 (`standard.curl_up`); §213: +1 (`standard.hex`).
+    "statuses": 43,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -287,7 +287,10 @@ INV_MONSTERS = [
      ["time_eater.reverberate", "time_eater.ripple", "time_eater.head_slam"]),
     # §130: act 2 and act 3 have monsters of their own -- the point of the section.
     ("shelled_parasite", 68, 68, ["shelled_parasite.suck", "shelled_parasite.double_strike"]),
-    ("chosen", 48, 48, ["chosen.poke", "chosen.debilitate"]),
+    # §213: wiki `Chosen` (Act 2 normal) -- HP 95-99 (A7 98-103), five moves:
+    # Poke 5x2 (A2 6x2), Hex, Debilitate 10 + 2 Vulnerable (A2 12), Drain, Zap 18 (A2 21).
+    ("chosen", 95, 99,
+     ["chosen.poke", "chosen.hex", "chosen.debilitate", "chosen.drain", "chosen.zap"]),
     ("byrd", 25, 25, ["byrd.peck", "byrd.swoop"]),
     ("spiker", 42, 42, ["spiker.cut", "spiker.spike"]),
     ("orb_walker", 90, 90, ["orb_walker.laser", "orb_walker.claw"]),
@@ -407,7 +410,13 @@ INV_ACTIONS = {
                                               ("spawn", "gremlin_wizard", 20)]),
     "shelled_parasite.suck": ("Attack", [("damage", 10, "event"), ("block", 2, "source")]),
     "shelled_parasite.double_strike": ("Attack", [("damage", 6, "event"), ("damage", 6, "event")]),
+    # §213: wiki `Chosen`. Four of the five moves carry an A2 damage row; `Hex` / `Drain` are
+    # status-only (no A-row on the page).
     "chosen.poke": ("Attack", [("damage", 5, "event"), ("damage", 5, "event")]),
+    "chosen.hex": ("Debuff", [("status", "standard.hex", 1, "event")]),
+    "chosen.drain": ("Debuff", [("status", "standard.weak", 3, "event"),
+                                ("status", "standard.strength", 3, "source")]),
+    "chosen.zap": ("Attack", [("damage", 18, "event")]),
     "chosen.debilitate": ("Attack", [("damage", 10, "event"),
                                      ("status", "standard.vulnerable", 2, "event")]),
     "byrd.peck": ("Attack", [("damage", 1, "event")] * 5),
@@ -820,6 +829,9 @@ INV_STATUSES = {
     "standard.flying": [("DamageReceived", "ScalePercent", 50, 160, "Direct")],
     # §209: Curl Up -- no modifier at all; its whole rule is the `DamageTaken` trigger below.
     "standard.curl_up": [],
+    # §213: Hex -- no modifier either; the whole rule is a `CardPlayed` trigger that shuffles a
+    # Dazed into the draw pile when the played card is **not** an Attack.
+    "standard.hex": [],
     # §210: Intangible -- "all damage becomes 1" is `ClampMax 1` (`min(current, max(0, 1))`), which is
     # the same `amount.min(1)` the kernel used to hardcode before block absorption.
     "standard.intangible": [("DamageReceived", "ClampMax", 1, 200, None)],
@@ -1327,6 +1339,11 @@ INV_ASC_VARIANTS = {
                        ('status', 'standard.frail', 5, 'event')])],
     'maw.slam': [(2, [('damage', 30, 'event')])],
     'maw.drool': [(17, [('status', 'standard.strength', 5, 'source')])],
+    # §213: wiki `Chosen` -- Poke 5x2 -> A2 6x2, Debilitate 10 -> A2 12, Zap 18 -> A2 21.
+    'chosen.poke': [(2, [('damage', 6, 'event'), ('damage', 6, 'event')])],
+    'chosen.debilitate': [(2, [('damage', 12, 'event'),
+                               ('status', 'standard.vulnerable', 2, 'event')])],
+    'chosen.zap': [(2, [('damage', 21, 'event')])],
     # §204: wiki `Lagavulin` -- Siphon Soul -1/-1 (A18: -2/-2).
     'lagavulin.siphon_soul': [(18, [('modify', 'standard.strength', -2, 'event'),
                                     ('modify', 'standard.dexterity', -2, 'event')])],
@@ -1768,6 +1785,9 @@ INV_NO_ASC = {
     # it would be inventing a hybrid, so the deviation is recorded here instead.
     # §212: `Nom Nom` is the only one of the four without an A-row (its number is a formula).
     'maw.nom_nom': 'wiki The Maw: Nom Nom is 5 x ceil(turn/2), no A-row',
+    # §213: `Hex` applies a status and `Drain` moves statuses; neither has an A-row on the page.
+    'chosen.hex': 'wiki Chosen: Hex applies the Hex debuff, no A-row',
+    'chosen.drain': 'wiki Chosen: Drain is 3 Weak + 3 Strength, no A-row',
     # wiki `Shapes` (Spiker): its two moves are `Attack` (7 -> A2: 9) and `Buff Thorns`. This
     # content's `spiker.spike` is 4 damage + 2 Block -- a simplification of neither, so the wiki's
     # A2 row cannot be copied onto it without inventing a number.
@@ -2043,7 +2063,7 @@ def check_statuses(doc):
                      "standard.phantom_veil",
                      "standard.sharp_hide", "standard.curiosity", "standard.mode_shift",
                      "standard.stasis", "standard.slow", "standard.flying",
-                     "standard.curl_up", "standard.plated_armor"):
+                     "standard.curl_up", "standard.plated_armor", "standard.hex"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -2075,7 +2095,9 @@ def check_statuses(doc):
                         "standard.curl_up": ["DamageTaken"],
                         # §210: "lose a stack on unblocked **attack** damage" -- the decrement moved
                         # out of `exec.rs` S6c, which could not tell poison from an attack.
-                        "standard.plated_armor": ["DamageTaken"]}[sid]
+                        "standard.plated_armor": ["DamageTaken"],
+                        # §213: "whenever you play a non-Attack card" -- a CardPlayed trigger.
+                        "standard.hex": ["CardPlayed"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

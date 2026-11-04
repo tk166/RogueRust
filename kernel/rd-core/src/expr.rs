@@ -610,6 +610,17 @@ pub fn eval_bool<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<bool, E
             }
         }
 
+        // `NotExpression.Evaluate => !Condition.Evaluate(...)`：内层用 `Condition` 这个键，
+        // 与 `intent.rs` 的 `ConditionKind::Not` 同一个拼法（两边各写一遍会漂，这里照它写）。
+        //
+        // ⚠️ 这个分支此前**只有词表、没有求值**（`BOOL_KINDS` 里躺着 `"not"`，`eval_bool` 里没有
+        // 对应臂）⇒ 内容一写就 `Ir(WrongKind("F_TERM"))`（从 `child(node, "Operand")` 那条路
+        // 落进 `node_field` 的类型门）。§213 的 Hex（"非攻击牌"）是第一个真实用户。
+        "not" => {
+            let inner = child(node, "Condition")?;
+            Ok(!eval_bool(inner, ctx)?)
+        }
+
         // `Left.Evaluate(...) || Right.Evaluate(...)`（`:455-456`）。
         "or" => {
             if eval_bool(child(node, "Left")?, ctx)? {

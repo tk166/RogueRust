@@ -14623,3 +14623,56 @@ AI 也是照 wiki 的句子写的四条：开局必 `Roar`；`Slam` 之后 50/50
 * **20/20 闸门绿**，单测 **896**（700 core + 89 wasm + 107 run）；四条对拍不变。
 * 内容：敌人动作 126 → **127**、镜像 77,080 → **78,116 B**（core 66,000）；`maw.bite` 随重写删除。
 * 至此 §207 记的两只"简化版"怪（Giant Head / The Maw）都按 wiki 重写完了。
+
+---
+
+## §213 Chosen 按 wiki 重写（+ 一个"内容形状"陷阱）
+
+先把**所有**怪物的 HP 与 wiki 对了一遍（`Enemy Infobox` 的 `HP` / `AscHP`）：只有 `chosen` 一个
+对不上（内容 48，wiki 95-99），`maw` 只是因为 wiki 页名是 `The Maw`（§212 已修）。所以这一节就是
+Chosen。
+
+### 213.1 数字与招式
+
+| 项 | wiki | 之前 |
+|---|---|---|
+| HP | **95-99**（A7: 98-103） | 48 |
+| `Poke` | **5×2**（**A2: 6×2**） | 6×1 |
+| `Hex` | 施加 **Hex**（打非攻击牌 → 抽牌堆塞 Dazed） | 不存在 |
+| `Debilitate` | **10 + 2 Vulnerable**（**A2: 12**） | 10 + 2 Vulnerable（无 A2 行） |
+| `Drain` | 3 Weak + 自己 **+3 Strength** | 不存在 |
+| `Zap` | **18**（**A2: 21**） | 不存在 |
+
+新增状态 `standard.hex`：**没有修饰器**，整体是一条 `CardPlayed` 触发器 ——
+`not(card.hasTag.attack)` ⇒ `createCardInstance(dazed, ToZone: DrawPile)`。
+
+AI 照 wiki 的句子：开局 `Poke`→`Hex`（**A17 改成 `Hex`→`Poke`**）；之后
+`Debilitate 50 / Drain 50`，然后 `Poke 60 / Zap 40`，循环。
+
+### 213.2 ★ 三个真问题（都不是"再调一下"能过的）
+
+1. **`not` 只有词表、没有求值**。`expr.rs` 的 `BOOL_KINDS` 里有 `"not"`，`eval_bool` 里没有对应
+   分支 ⇒ 内容一写就 `Ir(WrongKind("F_TERM"))`（落进 `node_field` 的类型门）。补上求值，内层字段名
+   用 `Condition`（与 `intent.rs` 的 `ConditionKind::Not` 同一个拼法）。
+2. **`createCardInstance.Count` 写成表达式会换掉整张节点表的形状**。我把 `Count` 写成
+   `combatantStatusStacks`（"每层塞一张"），结果 `regen`/`thorns`/`flame_barrier`/`constricted` 四条
+   **无关**测试一起红 —— 镜像是**按数据推导形状**的，`node.createCardInstance` 因此多了第二种形状，
+   共享的节点字段表整体位移。改成 `const 1` 立刻恢复。⇒ 记成纪律：**同一种节点的字段值类型要统一**
+   （要么都是 `const`，要么都是表达式），否则形状会分叉。
+3. **`strip_else` 误伤**。我一度把每个 `node.conditional` 的 `Else` 都删掉（想统一形状），
+   而 `giant_head.it_is_time` 的 `Else` **是逻辑的一半**（"到上限就设成上限，否则 +5"），
+   于是内容门按 facts 对比当场红在少了一条 `when`。恢复之后全绿 —— 这是"内容门比 facts"的用处。
+
+### 213.3 判据
+
+* `hex_shuffles_a_dazed_only_for_non_attack_cards`：给英雄挂 Hex，打一张**技能**牌 ⇒ 抽牌堆多 1 张
+  Dazed；打一张**攻击**牌 ⇒ 数量不变。只测前半的话，"所有牌都塞"也会绿。
+* `chosen_swaps_its_opener_at_a17`：A16 第 1 回合 `Poke`、第 2 回合 `Hex`；A17 反过来
+  （`Hex`→`Poke`）；HP 在 A0/A6 是 95、A7 是 98（阈值两侧各一次）。
+
+### 213.4 数字
+
+* **20/20 闸门绿**，单测 **898**（700 core + 91 wasm + 107 run）；四条对拍不变。
+* 内容：状态 42 → **43**、敌人动作 127 → **130**（`chosen.hex`/`drain`/`zap`）、
+  镜像 78,116 → **79,508 B**（core 67,144）。
+* 全 47 只怪的 HP 现在与 wiki 一致（`INV_ASC_HP` 那张表就是对照物）。
