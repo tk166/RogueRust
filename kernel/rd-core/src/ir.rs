@@ -456,6 +456,33 @@ impl<'a> NodeRef<'a> {
         self.list_field_of_kind(key, out, Some(F_TERMLIST))
     }
 
+    /// §206：**空列表宽容版**：`F_TERMLIST` 或 `F_STRLIST` 都收 —— 但只有当列表是**空**的时候。
+    ///
+    /// 为什么需要它：JSON 里的 `"IntentRules": []` 会被派生器写成 `F_STRLIST`（非空的一律
+    /// `F_TERMLIST`），于是严格读取器会把"这条敌人没有规则"报成形状错误。`maw` 就是这种记录，
+    /// 而它在**全遭遇遍历**里才第一次被跑到（§202 的 sweep）。
+    ///
+    /// ⚠️ 严格版**不动**：`ir::tests::the_two_list_kinds_are_told_apart_by_the_strict_readers`
+    /// 钉的正是"两种 list 必须分得清"，而那条契约是对的 —— 放宽只能是一个**显式**的入口，
+    /// 不能偷偷放宽 `term_list_field`。
+    pub fn term_list_field_or_empty(self, key: &str, out: &mut [u16]) -> Result<usize, IrError> {
+        let Some((field, _)) = self.field_spec(key)? else {
+            return Ok(0);
+        };
+        let kind = field.kind();
+        if kind == F_TERMLIST {
+            return self.term_list_field(key, out);
+        }
+        if kind == F_STRLIST {
+            // Empty is empty; a non-empty string list is still a shape error for this reader.
+            let count = self.str_list_field(key, &mut [])?;
+            if count == 0 {
+                return Ok(0);
+            }
+        }
+        Err(IrError::WrongKind("F_TERMLIST"))
+    }
+
     /// 严格版：只接受 `F_STRLIST`，返回**串号**（用 `Content::string` 解成 `&str`）。
     pub fn str_list_field(self, key: &str, out: &mut [u16]) -> Result<usize, IrError> {
         self.list_field_of_kind(key, out, Some(F_STRLIST))

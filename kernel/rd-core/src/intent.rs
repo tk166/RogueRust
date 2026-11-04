@@ -610,7 +610,9 @@ pub fn select_action<'a>(
 
     // ── B1/B2：规则（`if (enemy.IntentRules.Count > 0)`，`:159`）。
     let mut rule_ids = [0u16; MAX_INTENT_RULES];
-    let rule_count = record.term_list_field("IntentRules", &mut rule_ids)?;
+    // §206: an empty `"IntentRules": []` is derived as F_STRLIST, so this uses the lenient entry
+    // (`term_list_field_or_empty`); the strict reader stays strict on purpose.
+    let rule_count = record.term_list_field_or_empty("IntentRules", &mut rule_ids)?;
     if rule_count > 0 {
         // `OrderByDescending(r => r.Priority)`（`:160`）：降序，等值保持作者顺序（偏离 D5）。
         let mut priorities = [0i32; MAX_INTENT_RULES];

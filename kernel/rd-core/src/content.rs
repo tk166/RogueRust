@@ -2037,6 +2037,65 @@ impl<'a> EnemySpec<'a> {
         }
     }
 
+    /// §206：这条记录在 `ascension` 级的 **max health**（`MaxHealthAsc` 的变体列表）。
+    ///
+    /// 选择规则与 `EACT.ProgramAsc` **同一条**：在 `AscensionMin <= ascension` 的元素里取阈值最大
+    /// 的那个，顺序不参与判定。`Ok(None)` = 这条记录没有钉（调用方退回 `%` 模型）。
+    ///
+    /// 为什么要这一列：wiki 给的是**绝对区间**（Looter 44-48 → A7: 46-50），而内核此前只有一个
+    /// `ASCENDED_ENEMY_HEALTH_PERCENT = 10` 的**模型**（`rd-run/src/state.rs` 的注释自己写着
+    /// "the day `ENCT` grows an ascension column, this constant is the only thing to delete"）。
+    /// 现在那一列有了：钉了的行走绝对值，没钉的行走旧模型。
+    ///
+    /// # Errors
+    ///
+    /// `MaxHealthAsc` 不是 `_arr`、元素形状不对、或条目超过 [`MAX_ASC_VARIANTS`] ⇒ 响亮失败
+    /// （与 `ProgramAsc` 一样：不截断、不猜）。
+    pub fn max_health_asc(
+        &self,
+        ascension: i32,
+    ) -> Result<Option<i32>, EncounterError> {
+        // ⚠️ `MaxHealthAsc` is an `F_TERMLIST` (two slots: start + count, elements are term ids) --
+        // the same shape as `IntentRules`, not a single term. Reading it as `F_TERM` fails loudly
+        // with `WrongFieldKind`, which is how this was found.
+        // A record without the column is "not pinned", not a shape error -- the same leniency
+        // `owner()` uses for `"Owner": null`. (`maw` is the one monster whose wiki page 404s, so its
+        // record deliberately has no `MaxHealthAsc`.)
+        let list = match self.list_any("MaxHealthAsc") {
+            Err(EncounterError::MissingField("MaxHealthAsc")) => return Ok(None),
+            Err(EncounterError::WrongFieldKind("MaxHealthAsc")) => return Ok(None),
+            other => other?,
+        };
+        let count = list.len();
+        if count == 0 {
+            return Ok(None);
+        }
+        let mut best: Option<(i32, i32)> = None;
+        for index in 0..count {
+            let element = list
+                .term(index)
+                .ok_or(EncounterError::MalformedList("MaxHealthAsc"))?;
+            let element = crate::ir::NodeRef::new(self.content, element);
+            // 0 = "没填"，不是"从 0 级起"（与 `ProgramAsc` 同一条约定）。
+            let threshold = element
+                .int_field("AscensionMin")
+                .map_err(|_| EncounterError::WrongFieldKind("AscensionMin"))?
+                .ok_or(EncounterError::MissingField("AscensionMin"))?;
+            if threshold <= 0 || threshold > ascension {
+                continue;
+            }
+            let health = element
+                .int_field("MaxHealth")
+                .map_err(|_| EncounterError::WrongFieldKind("MaxHealth"))?
+                .ok_or(EncounterError::MissingField("MaxHealth"))?;
+            match best {
+                Some((seen, _)) if seen >= threshold => {}
+                _ => best = Some((threshold, health)),
+            }
+        }
+        Ok(best.map(|(_, health)| health))
+    }
+
     /// `Actions`（**`F_STRLIST`**）：动作 id 列表。元素是**串号**，用 [`SlotList::string`] 解。
     ///
     /// 列表顺序就是循环分支的取用顺序（`Actions[(round - 1) % count]`）。
@@ -5443,6 +5502,53 @@ mod tests {
     ///
     /// **"总数 + 分布 + 抽样"三样一起比才有区分力**：只比抽样 → "少读一半遭遇"照样绿；
     /// 只比总数 → "两条记录互相搬了位置"照样绿；只比分布 → 抽样的 id/动作串错位看不出来。
+    /// §206：`MaxHealthAsc` —— 三种敌人各在自己的**那一级**变厚，阈值之下不变。
+    ///
+    /// wiki 的 `AscHP` 是**绝对区间**（Looter 44-48 → A7: 46-50），内核此前只有一个 `+10%` 的
+    /// 模型。三行覆盖 §187 的三条规则（普通 A7 / 精英 A8 / Boss A9），每行都在**阈值之下**
+    /// 与**阈值上**各问一次 —— 只测一侧等于没测"阈值"这件事。
+    ///
+    /// 数值来自 `native/wiki_asc/*.txt` 的 `Enemy Infobox`，与内容门的 `INV_ASC_HP` 是两份独立
+    /// 抄写（这正是它们交叉核对的意义）。
+    #[test]
+    fn an_ascension_health_row_applies_at_its_own_level_and_not_below() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&blob).expect("the image parses");
+        // (encounter, enemy index, level below, level at, hp below, hp at)
+        let cases: [(&str, u16, i32, i32, i32, i32); 3] = [
+            // Normal monsters get tougher at A7.
+            ("enc_looter", 0, 6, 7, 44, 46),
+            // Elites at A8 (wiki `Gremlin Nob`: 82-86 -> 85-90).
+            ("enc_gremlin_nob", 0, 7, 8, 82, 85),
+            // Bosses at A9 (wiki `The Champ`: 420 -> 440).
+            ("enc_the_champ", 0, 8, 9, 420, 440),
+        ];
+        for (encounter, slot, below, at, hp_below, hp_at) in cases {
+            let row = content
+                .lookup_in(encounter, crate::content::EK_ENCOUNTER)
+                .unwrap_or_else(|| panic!("{encounter} must exist"))
+                .index;
+            let enemies = content.encounter_enemies(u32::from(row)).expect("Enemies readable");
+            let spec = enemies.get(usize::from(slot)).expect("a readable enemy record");
+            assert!(
+                spec.max_health_asc(below).expect("read").is_none(),
+                "{encounter}: A{below} must not pin health (the row is A{at})"
+            );
+            assert_eq!(
+                spec.max_health_asc(at).expect("read"),
+                Some(hp_at),
+                "{encounter}: A{at} must pin the wiki's AscHP lower bound"
+            );
+            // The base number is what the record itself says -- the pinned row must be *above* it,
+            // or "tougher at A7" would be a downgrade.
+            assert_eq!(spec.max_health().expect("read"), Some(hp_below), "{encounter} base HP");
+        }
+    }
+
     /// §204：`ProgramAsc` 的**选取**在阈值两侧各测一次，而且每个变体只改 wiki 说的那个数。
     ///
     /// 这条是 §187/§192 机制的**端到端**判据：此前只有内容门的"变体与基础节目不同"，没有一条

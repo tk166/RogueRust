@@ -14223,3 +14223,64 @@ Bronze Orb 画成 `enemy #1`。**运行层的页面也一样**，因为这是 AB
 * **20/20 闸门绿**，单测 **885**（698 core + 79 wasm + 107 run + 1）；四条对拍不变。
 * 内容：镜像 74,120 → **74,224 B**（core 62,540）；`ascension coverage` 仍是
   `76/23/99 reviewed, 26 undecided`（这两条本来就是"有变体"的动作，只是多了一个档位）。
+
+---
+
+## §206 A7–A9 的敌人血量（`ENCT` 长出 ascension 列）+ 26 条未复核动作
+
+两件"数据侧"的欠账：血量升级此前只有一个 `+10%` 的**模型**（`ASCENDED_ENEMY_HEALTH_PERCENT` 的
+注释自己写着 "the day `ENCT` grows an ascension column, this constant is the only thing to delete"），
+而有 26 条敌人动作既没有升档行、也没有"不做"的理由。
+
+### 206.1 `MaxHealthAsc`：绝对值取代百分比模型
+
+* 内容：`ENCT.Enemies[j]` 多了一列 `MaxHealthAsc: [{AscensionMin, MaxHealth}]`，**50 条记录**钉住，
+  数值是 wiki `AscHP` 的**下界**（`native/wiki_asc/*.txt` 的 `Enemy Infobox` 那一列）。
+* 内核：`EnemySpec::max_health_asc(ascension)` 与 `EACT.ProgramAsc` **同一条规则**（阈值 ≤ 等级里
+  最大的那个，顺序不参与判定；0 = "没填"）。缺席的列 = "没钉"，返回 `Ok(None)`。
+* `build_session_at`：钉了就走绝对值，没钉才退回 `+10%`。今天只有 `maw` 走兜底 —— 它的 wiki 页
+  404，而**编一个数比留一条有注释的兜底更糟**。
+* ⚠️ **等级从池子里推，不从 `Monster.Tier` 推**：`gremlin_nob` 的 `Tier` 写着 `Normal`，而它是
+  精英。第一版按 `Tier` 写，内容门和内核测试两边都没红（它们都读同一份错），是靠"手算 A8 那条
+  用例为什么没生效"才发现的。现在 `Elite*` 池 → A8、`Boss*` 池 → A9、其余 A7，**内容门从
+  `EncounterTables` 独立重算一遍**。
+* 判据 `an_ascension_health_row_applies_at_its_own_level_and_not_below`：普通（Looter 44→46 @A7）、
+  精英（Gremlin Nob 82→85 @A8）、Boss（The Champ 420→440 @A9）各一行，每行都在阈值**之下**与
+  阈值上各问一次，并断言基础 HP 就是记录里那个数（否则"变厚"可能其实是变薄）。
+  负控：删掉 `enc_looter` 的 `MaxHealthAsc` ⇒ 内容门红在 `asc.hp.looter: no MaxHealthAsc`，
+  内核测试红在 `MissingField("MaxHealthAsc")`。
+
+### 206.2 26 条未复核动作 → 4 条
+
+按各自 wiki 页读完，结论是 **22 条"没有 A 行"**（`INV_NO_ASC`，每条带出处）：
+三个 `lick`（只有 **L** 尺寸的 Slime 有 A17 行，本内容没有 L）、`slaver_red.entangle`、
+`the_champ.taunt`/`execute`、`gremlin_leader.slash`、`giant_head.glare`、`louse_red.spit_web`、
+`lagavulin.sleep`、`the_guardian.vent_steam`、`bronze_automaton.stunned`/`spawn_orbs`、
+`bronze_orb.beam`/`support_beam`/`stasis`、`torch_head.tackle`、`the_collector.spawn`、
+两个 `louse.bite` 与 `darkling.nip`（伤害是**开局掷骰**，属于 §193 的 `Rolls`，不是 `ProgramAsc`）、
+`gremlin_leader.rally`（wiki 的 A3/A18 行是"all enemies gain…"的措辞，而本内容是 §130 的简化版 ——
+**写清楚这层偏差**，而不是假装覆盖）。
+
+剩 **4 条**未定：`maw` 的三招（页 404）+ `spiker.spike`（`Shapes` 页没有独立行，未核）。
+棘轮 `ASC_UNREVIEWED_CEILING` 从 **40 → 4**：`ascension coverage   76 + 45 = 121 reviewed, 4 undecided`。
+这条判据的价值就在"只能往下降"——再有人加动作而忘了决定，数字上去，闸门当场说话。
+
+### 206.3 ★ 顺带修好的两个真 bug（都是被"跑起来"逼出来的）
+
+1. **`enc_maw` 从来打不起来**：`"IntentRules": []` 被派生器写成 `F_STRLIST`（非空的一律
+   `F_TERMLIST`），而 `intent::select_action` 用的严格读取器把它报成 `WrongKind`。修法是给
+   `ir.rs` 加一个**显式**的宽容入口 `term_list_field_or_empty`（只对**空**列表放宽），严格版
+   **一格没动** —— `the_two_list_kinds_are_told_apart_by_the_strict_readers` 钉的正是那条契约，
+   我第一版直接放宽严格读取器，就是被它抓回来的。
+2. **老测试钉着错误的模型**：`ascension_seven_makes_a_normal_fight_tougher` 原本断言
+   `ascended == plain + 10%`。现在它从**镜像**里读"这只怪被钉的 A 级血量"（按基础 HP 匹配），
+   而不是把 47 个数字抄第二份 —— 抄一份就会漂。
+
+### 206.4 数字
+
+* **20/20 闸门绿**，单测 **885**（699 core + 79 wasm + 107 run）；四条对拍不变。
+* 内容：镜像 74,224 → **74,964 B**（core 63,324）；`ascension coverage` 121/125；`ascension health`
+  50 条记录、未钉的只有 `maw`。
+* 仍然欠：`maw` 的三招与 A 级血量（wiki 页 404）、`spiker.spike` 一行、以及 `StartingStatuses` 的
+  A17–A19 值（例如 Spiker 的 Thorns 3→A2 4→A17 7、Awakened One 的 Regenerate 10→A19 15）——
+  那一套是**第三个**机制（`StartingStatuses` 还没有升档列表），留给下一节。

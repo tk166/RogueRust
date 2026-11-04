@@ -4641,6 +4641,29 @@ mod tests {
         assert_eq!(rd_run_observe(3), first);
     }
 
+    /// §206: every `MaxHealthAsc` value the image pins for a monster whose base HP is `base`.
+    fn pinned_health_for(base: i32) -> Vec<i32> {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("the image parses");
+        let mut out = Vec::new();
+        for row in content.rows(rd_core::content::Table::Encounter) {
+            let Ok(enemies) = content.encounter_enemies(row.index()) else {
+                continue;
+            };
+            for slot in 0..enemies.len() {
+                let Ok(spec) = enemies.get(slot) else { continue };
+                if spec.max_health().ok().flatten() != Some(base) {
+                    continue;
+                }
+                if let Ok(Some(pinned)) = spec.max_health_asc(19) {
+                    out.push(pinned);
+                }
+            }
+        }
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
     /// §159 `A7`: the same seed, the same fight, and only the rule differs -- so the enemy's maximum
     /// health is the **only** thing that can move.
     ///
@@ -4658,13 +4681,20 @@ mod tests {
         let ascended = crate::slot().as_ref().expect("the fight").plan.enemies[0].max_health;
 
         assert!(plain > 0, "the encounter has a health to scale");
-        assert_eq!(
-            ascended,
-            plain + plain * rd_run::state::ASCENDED_ENEMY_HEALTH_PERCENT / 100,
-            "A7 is +{}% on the ENCT row",
-            rd_run::state::ASCENDED_ENEMY_HEALTH_PERCENT
+        // §206: the number is no longer a `+10%` model -- the ENCT row pins the wiki's absolute A7
+        // health. So the assertion is "the content's pinned value for this monster", read from the
+        // image rather than copied into this test: a second copy of 47 numbers would rot.
+        let pinned = pinned_health_for(plain);
+        assert!(
+            !pinned.is_empty(),
+            "no ENCT row pins an A-level health for a monster with {plain} base HP"
+        );
+        assert!(
+            pinned.contains(&ascended),
+            "A7 gave {ascended}, but the content pins {pinned:?} for a {plain}-HP monster"
         );
         assert!(ascended > plain, "A7 must actually make the fight tougher");
+        let _ = rd_run::state::ASCENDED_ENEMY_HEALTH_PERCENT;
     }
 
     /// [`reset`], at an Ascension level (§159).

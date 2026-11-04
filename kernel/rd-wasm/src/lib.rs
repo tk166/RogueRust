@@ -651,9 +651,20 @@ fn build_session_at(
         if let Some(master) = spec.owner().map_err(|e| format!("ENCT enemy Owner: {}", detail(&e)))? {
             owners.push((unique, Box::leak(std::string::String::from(master).into_boxed_str())));
         }
+        // §206: an ENCT record that pins `MaxHealthAsc` names the **absolute** HP for this ascension
+        // level (wiki gives ranges, e.g. Looter 44-48 -> 46-50 at A7). Only records with no pinned
+        // row fall back to the `+10%` model (`ASCENDED_ENEMY_HEALTH_PERCENT`), which is what that
+        // constant's own comment always said it was waiting for.
+        let max_health = match spec
+            .max_health_asc(i32::from(ascension))
+            .map_err(|e| format!("ENCT enemy MaxHealthAsc: {}", detail(&e)))?
+        {
+            Some(pinned) => pinned,
+            None => max_health + max_health * enemy_health_percent / 100,
+        };
         enemies.push(PlanCombatant {
             id: unique,
-            max_health: max_health + max_health * enemy_health_percent / 100,
+            max_health,
         });
     }
     if enemies.is_empty() {

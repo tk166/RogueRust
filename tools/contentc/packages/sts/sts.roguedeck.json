@@ -21237,7 +21237,13 @@
           "DisplayName": "Cultist",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 50
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -21279,7 +21285,13 @@
           "DisplayName": "Jaw Worm",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 42
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -21328,7 +21340,13 @@
           "DisplayName": "Acid Slime (M)",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 29
+            }
+          ]
         },
         {
           "Id": "spike_slime_s",
@@ -21351,7 +21369,13 @@
           "DisplayName": "Spike Slime (S)",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 11
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -21397,7 +21421,13 @@
           "DisplayName": "Sentry",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 39
+            }
+          ]
         },
         {
           "Id": "sentry_2",
@@ -21423,7 +21453,13 @@
           "DisplayName": "Sentry",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 39
+            }
+          ]
         },
         {
           "Id": "sentry_3",
@@ -21449,7 +21485,13 @@
           "DisplayName": "Sentry",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 39
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -21532,7 +21574,13 @@
           "DisplayName": "Slime Boss",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 150
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -21739,7 +21787,13 @@
           "DisplayName": "Time Eater",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 480
+            }
+          ]
         }
       ],
       "CardsDrawnPerTurn": null,
@@ -21778,7 +21832,13 @@
           "DisplayName": "Shelled Parasite",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 70
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -21817,7 +21877,13 @@
           "DisplayName": "Chosen",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 98
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -21856,7 +21922,13 @@
           "DisplayName": "Byrd",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 26
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -21902,7 +21974,13 @@
           "DisplayName": "Spiker",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 44
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -21941,7 +22019,13 @@
           "DisplayName": "Orb Walker",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 92
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -22272,7 +22356,13 @@
           "DisplayName": "The Champ",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 440
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -22321,7 +22411,13 @@
           "DisplayName": "Gremlin Leader",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 145
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -22373,7 +22469,13 @@
           "DisplayName": "Giant Head",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 520
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -22431,7 +22533,13 @@
             }
           ],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 50
+            }
+          ]
         },
         {
           "Id": "darkling",
@@ -22469,7 +22577,13 @@
             }
           ],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 50
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -22554,7 +22668,13 @@
           "DisplayName": "Fat Gremlin",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 14
+            }
+          ]
         },
         {
           "Id": "sneaky_gremlin",
@@ -22570,7 +22690,13 @@
           "DisplayName": "Sneaky Gremlin",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 11
+            }
+          ]
         },
         {
           "Id": "gremlin_wizard",
@@ -22603,7 +22729,13 @@
           "DisplayName": "Gremlin Wizard",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 22
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -22656,7 +22788,13 @@
           "DisplayName": "Spire Growth",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 190
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -22710,7 +22848,13 @@
             }
           ],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 11
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -22749,7 +22893,13 @@
           "DisplayName": "Fungi Beast",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 24
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -22943,7 +23093,13 @@
           "DisplayName": "Slaver",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 48
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -22985,7 +23141,13 @@
           "DisplayName": "Gremlin Nob",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 85
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -23045,7 +23207,13 @@
           "DisplayName": "Lagavulin",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 112
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -23084,7 +23252,13 @@
           "DisplayName": "Book of Stabbing",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 168
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -23120,7 +23294,13 @@
           "DisplayName": "Taskmaster",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 57
+            }
+          ]
         },
         {
           "Id": "slaver_red",
@@ -23294,7 +23474,13 @@
           "DisplayName": "Red Slaver",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 48
+            }
+          ]
         },
         {
           "Id": "blue_slaver",
@@ -23320,7 +23506,13 @@
           "DisplayName": "Blue Slaver",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 48
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -23369,7 +23561,13 @@
           "DisplayName": "Nemesis",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 200
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -23411,7 +23609,13 @@
           "DisplayName": "Reptomancer",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 190
+            }
+          ]
         },
         {
           "Id": "dagger",
@@ -23430,7 +23634,13 @@
           "DisplayName": "Dagger",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 20
+            }
+          ]
         },
         {
           "Id": "dagger",
@@ -23449,7 +23659,13 @@
           "DisplayName": "Dagger",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 20
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -23632,7 +23848,13 @@
               "AscensionMin": 19
             }
           ],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 250
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -23713,7 +23935,13 @@
           "DisplayName": "Hexaghost",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 264
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -23839,7 +24067,13 @@
           "DisplayName": "Bronze Automaton",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 320
+            }
+          ]
         },
         {
           "Id": "bronze_orb",
@@ -24006,7 +24240,13 @@
           "DisplayName": "Bronze Orb",
           "Rolls": [],
           "Counters": [],
-          "Spawn": false
+          "Spawn": false,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 54
+            }
+          ]
         },
         {
           "Id": "bronze_orb",
@@ -24173,7 +24413,13 @@
           "DisplayName": "Bronze Orb",
           "Rolls": [],
           "Counters": [],
-          "Spawn": false
+          "Spawn": false,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 54
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -24328,7 +24574,13 @@
           "DisplayName": "The Collector",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 300
+            }
+          ]
         },
         {
           "Id": "torch_head",
@@ -24344,7 +24596,13 @@
           "DisplayName": "Torch Head",
           "Rolls": [],
           "Counters": [],
-          "Spawn": false
+          "Spawn": false,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 40
+            }
+          ]
         },
         {
           "Id": "torch_head",
@@ -24360,7 +24618,13 @@
           "DisplayName": "Torch Head",
           "Rolls": [],
           "Counters": [],
-          "Spawn": false
+          "Spawn": false,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 40
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -24597,7 +24861,13 @@
           "DisplayName": "Awakened One",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 320
+            }
+          ]
         },
         {
           "Id": "cultist",
@@ -24634,7 +24904,13 @@
           "Rolls": [],
           "Counters": [],
           "Spawn": true,
-          "Owner": "awakened_one"
+          "Owner": "awakened_one",
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 50
+            }
+          ]
         },
         {
           "Id": "cultist",
@@ -24671,7 +24947,13 @@
           "Rolls": [],
           "Counters": [],
           "Spawn": true,
-          "Owner": "awakened_one"
+          "Owner": "awakened_one",
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 50
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -24717,7 +24999,13 @@
           "DisplayName": "Donu",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 265
+            }
+          ]
         },
         {
           "Id": "deca",
@@ -24743,7 +25031,13 @@
           "DisplayName": "Deca",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 9,
+              "MaxHealth": 265
+            }
+          ]
         }
       ],
       "HeroResources": [
@@ -24871,7 +25165,13 @@
           "DisplayName": "Looter",
           "Rolls": [],
           "Counters": [],
-          "Spawn": true
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 46
+            }
+          ]
         }
       ],
       "HeroResources": [

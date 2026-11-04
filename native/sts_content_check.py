@@ -1257,6 +1257,7 @@ def check_cards_and_actions(doc):
     ok("enemy actions", "%d actions x (intent, facts)" % len(INV_ACTIONS))
     check_intent_history(doc)
     check_ascension_variants(doc)
+    check_ascension_health(doc)
     check_spawn_rolls(doc)
 
 
@@ -1453,6 +1454,69 @@ INV_SPAWN_COUNTERS = {
 INV_UNWIRED = {"louse_green.bite", "louse_green.grow"}
 
 
+# §206: the wiki's `AscHP` **lower bound** per monster, straight out of the `Enemy Infobox` dump in
+# `native/wiki_asc/*.txt`. This is the **independent copy** of the numbers the ENCT rows pin: the
+# content is what the kernel reads, this table is what the wiki said, and the check is that they
+# match. `maw` is absent on purpose -- its wiki page 404s, so that record keeps the old `+10%` model.
+INV_ASC_HP = {
+    'spike_slime_s': 11, 'fat_gremlin': 14, 'sneaky_gremlin': 11, 'blue_slaver': 48,
+    'acid_slime_s': 9, 'acid_slime_m': 29, 'spike_slime_m': 29, 'jaw_worm': 42,
+    'cultist': 50, 'gremlin_wizard': 22, 'sentry_1': 39, 'sentry_2': 39, 'sentry_3': 39,
+    'slime_boss': 150, 'time_eater': 480, 'shelled_parasite': 70, 'chosen': 98, 'byrd': 26,
+    'spiker': 44, 'orb_walker': 92, 'the_champ': 440, 'gremlin_leader': 145, 'giant_head': 520,
+    'darkling': 50, 'spire_growth': 190, 'louse_red': 11, 'louse_green': 12, 'fungi_beast': 24,
+    'slaver_red': 48, 'gremlin_nob': 85, 'lagavulin': 112, 'book_of_stabbing': 168,
+    'taskmaster': 57, 'nemesis': 200, 'reptomancer': 190, 'dagger': 20, 'the_guardian': 250,
+    'hexaghost': 264, 'bronze_automaton': 320, 'bronze_orb': 54, 'the_collector': 300,
+    'torch_head': 40, 'awakened_one': 320, 'donu': 265, 'deca': 265, 'looter': 46,
+}
+# Which ascension level owns "tougher enemies" (§187's three rules).
+INV_ASC_HP_LEVEL = {'Elite': 8, 'Boss': 9}
+
+
+def check_ascension_health(doc):
+    """§206: every pinned `MaxHealthAsc` matches the wiki's `AscHP` lower bound, at the right level."""
+    print("[7d] ascension health (port-plan.md §206)")
+    # ⚠️ `Monster.Tier` is **not** the fight tier (`gremlin_nob` says "Normal" and is an elite), so
+    # the level comes from the **pools**: a boss pool pays A9, an elite pool A8, the rest A7.
+    level_of = {}
+    for key, entries in (doc.get("EncounterTables") or {}).items():
+        if not isinstance(entries, list):
+            continue
+        level = 9 if key.startswith("Boss") else (8 if key.startswith("Elite") else 7)
+        for entry in entries:
+            level_of[entry["Id"]] = max(level_of.get(entry["Id"], 0), level)
+    checked = 0
+    unpinned = set()
+    for encounter in doc.get("Encounters") or []:
+        eid = encounter["Id"]["Value"] if isinstance(encounter["Id"], dict) else encounter["Id"]
+        level = level_of.get(eid, 7)
+        for enemy in encounter.get("Enemies") or []:
+            monster = enemy["Id"]
+            want = INV_ASC_HP.get(monster)
+            if want is None:
+                unpinned.add(monster)
+                continue
+            rows = enemy.get("MaxHealthAsc")
+            if not rows:
+                fail("asc.hp." + monster, "no MaxHealthAsc (the row still uses the +10% model)")
+                continue
+            if len(rows) != 1:
+                fail("asc.hp." + monster, "expected exactly one A%d row, got %r" % (level, rows))
+                continue
+            row = rows[0]
+            if row.get("AscensionMin") != level:
+                fail("asc.hp." + monster,
+                     "pinned at A%s, but this encounter pays A%d"
+                     % (row.get("AscensionMin"), level))
+            if row.get("MaxHealth") != want:
+                fail("asc.hp." + monster,
+                     "MaxHealthAsc %r, wiki says %d" % (row.get("MaxHealth"), want))
+            checked += 1
+    ok("ascension health", "%d ENCT enemy records pinned; unpinned monsters: %s"
+       % (checked, sorted(unpinned) or "none"))
+
+
 def check_ascension_variants(doc):
     """§187/§192：**每一条**升档节目都必须被上面那张表钉住，且与基础节目、别的变体**都不同**。"""
     print("[7] ascension variants (port-plan.md §187/§192)")
@@ -1554,12 +1618,51 @@ INV_NO_ASC = {
     'dagger.explode': 'wiki Reptomancer: Explode 25, no A-row',
     'slime_boss.preparing': 'wiki Slime Boss: Preparing has no numbers',
     'gremlin_wizard.charging': 'wiki Gremlin Wizard: Charging has no numbers',
+    # ---- §206: the rest of the 26, each read off its own page today ---------------------------
+    # `Acid Slime` / `Spike Slime`: only the **L** size has an A17 row (`Lick` 2 -> 3); this content
+    # ships no L slime, and the S/M rows are flat (1 Weak / 1 Frail).
+    'acid_slime_s.lick': 'wiki Acid Slime: S Lick is 1 Weak, no A-row',
+    'acid_slime_m.lick': 'wiki Acid Slime: M Lick is 1 Weak, no A-row',
+    'spike_slime_m.lick': 'wiki Spike Slime: M Lick is 1 Frail, no A-row (only L has A17)',
+    # `Slavers`: Entangle is a rule ("Applies 1 Entangled"), not a number.
+    'slaver_red.entangle': 'wiki Slavers: Entangle applies a status, no A-row',
+    # `The Champ`: Taunt 2 Weak + 2 Vulnerable and Execute 10x2, both flat.
+    'the_champ.taunt': 'wiki The Champ: Taunt has no A-row',
+    'the_champ.execute': 'wiki The Champ: Execute is 10x2, no A-row',
+    # `Gremlin Leader`: Slash is 6x3 flat. `Rally!` **does** have A3/A18 rows, but they are worded
+    # "all enemies gain N Strength / other enemies gain M Block" -- this content's rally is the §130
+    # simplification (self +5 Strength / +12 Block), so the wiki's rows describe a program we do not
+    # implement. Named here instead of silently claimed.
+    'gremlin_leader.slash': 'wiki Gremlin Leader: Slash is 6x3, no A-row',
+    'gremlin_leader.rally': 'wiki rows describe "all enemies" wording; this content is the §130 simplification',
+    # `Giant Head`: Glare applies 1 Weak, flat (Count carries the A3 row).
+    'giant_head.glare': 'wiki Giant Head: Glare has no A-row',
+    # `Darkling` / `Louses`: the damage is **rolled at combat start** (`N = 7-11`, A2 `9-13`), which
+    # is the `Rolls` mechanism (§193), not `ProgramAsc`.
+    'darkling.nip': 'wiki Darkling: Nip is rolled at spawn (A2 changes the roll, §193)',
+    'louse_red.bite': 'wiki Louses: Bite is rolled at spawn (A2 changes the roll, §193)',
+    'louse_green.bite': 'wiki Louses: Bite is rolled at spawn (A2 changes the roll, §193)',
+    'louse_red.spit_web': 'wiki Louses: Spit Web is 2 Weak, no A-row',
+    # `Lagavulin`: Sleep does nothing.
+    'lagavulin.sleep': 'wiki Lagavulin: Sleep does nothing',
+    # `The Guardian`: Vent Steam applies 2 Weak + 2 Vulnerable, flat (the Sharp Hide / Mode Shift
+    # numbers live on `defensive_mode` / `twin_slam`, which have their own rows).
+    'the_guardian.vent_steam': 'wiki The Guardian: Vent Steam has no A-row',
+    # `Bronze Automaton` / `Bronze Orb` / `Torch Head`: Stunned and the summons have no numbers; Beam
+    # is 8 and Support Beam 12 Block, both flat; Torch Head Tackle is 7, flat.
+    'bronze_automaton.stunned': 'wiki Bronze Automaton: Stunned does nothing',
+    'bronze_automaton.spawn_orbs': 'wiki Bronze Automaton: Spawn Orbs has no numbers',
+    'bronze_orb.stasis': 'wiki Bronze Orb: Stasis is a rule, no numbers',
+    'bronze_orb.beam': 'wiki Bronze Orb: Beam is 8, no A-row',
+    'bronze_orb.support_beam': 'wiki Bronze Orb: Support Beam is 12 Block, no A-row',
+    'torch_head.tackle': 'wiki Torch Head: Tackle is 7, no A-row',
+    'the_collector.spawn': 'wiki The Collector: Spawn has no numbers',
 }
 
 # §204: how many actions still have **neither** a variant nor an exemption. This is a **ratchet**:
 # the number may only go down, and it is printed (not implied) so "we reviewed everything" cannot be
-# claimed without the count agreeing. The first measurement was 44.
-ASC_UNREVIEWED_CEILING = 40
+# claimed without the count agreeing. 44 at §204, 26 at §205, **4** after §206.
+ASC_UNREVIEWED_CEILING = 4
 
 
 def check_ascension_coverage(actions):
