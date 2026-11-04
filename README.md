@@ -6,7 +6,7 @@
 移植的硬约束是三条：**能在 ESP32-P4 裸机上跑**（`no_std`、零分配、纯整数、`forbid(unsafe_code)`）、
 **能多开当强化学习训练环境**（确定性、可快照、可回放）、**与参考实现逐字节一致的状态指纹**（对拍可证）。
 
-> 主计划在 `docs/port-plan.md`（§1–§195，每一轮都留数字、记下被推翻的结论）。
+> 主计划在 `docs/port-plan.md`（§1–§195.6，每一轮都留数字、记下被推翻的结论）。
 > 这份 README 只交代**仓库现在是什么样、以及怎么把它跑起来玩**；为什么变成这样，在计划里。
 
 ---
@@ -126,27 +126,31 @@ python -m http.server 8000
 |---|---|
 | **战斗内核** | `rd-core` 21 个源文件、约 57k 行。出牌/结算/状态/意图/修饰器管线/效果程序 IR（栈式）/选择与目标/金色指纹；**零分配、纯整数、`forbid(unsafe_code)`** |
 | **运行层** | `rd-run` 约 7.9k 行。地图（15 行 × 7 列 + Boss）、幕、牌组、金币、遗物、药水、奖励屏、商店、事件、篝火、**Ascension 0–20（20/20 条都有机制）**、**存档（单行文本 + CRC）**、**回放（动作序列 + 每步哈希）** |
-| **内容** | **46 怪 / 33 遭遇 / 45 条卡行（28 张基础 + 17 张 `+`）/ 29 状态 / 117 敌人动作 / 13 遗物 / 33 药水（满池）/ 9 事件 / 10 张起始牌**。编译成 62,864 B 的 `rdcf` 镜像（core 镜像 52,528 B） |
+| **内容** | **46 怪 / 33 遭遇 / 45 条卡行（28 张基础 + 17 张 `+`）/ 33 状态 / 120 敌人动作 / 13 遗物 / 33 药水（满池）/ 9 事件 / 10 张起始牌**。编译成 68,716 B 的 `rdcf` 镜像（core 镜像 58,064 B） |
 | **前端** | `index.html`（战斗 + 运行层 + 存档 + 回放）、`map.html`（地图页）；`wasm32` + **148** 个 `i32` 的战斗观察向量（另有 19 个 slot 的运行层观察）、一组 `rd_env_*` / `rd_run_*` 导出（`web/smoke.mjs` 有一张手抄的 `REQUIRED` 表**逐条**对账，加导出必须同时改两处） |
 | **RL 环境** | `rd_env_*` ABI（`docs/spec/env-abi.md`）+ Python `ctypes` 封装（多进程、批量观察） |
 | **裸机** | `riscv32imac-unknown-none-elf` 真链接成 ELF，镜像占用有闸门 |
 
-**还不能**（诚实清单，逐条与 wiki 比对过，见 `docs/sts-wiki-gap.md`）：
+**还不能**（诚实清单，逐条与 wiki 比对过，见 `docs/sts-wiki-gap.md`）。
+⚠️ 这一节每一轮都会与代码对一遍账 —— §195.1–§195.6 就把下面四条**已经修掉**的旧说法删了
+（Guardian 的 Mode Shift、Awakened One 的复活、Bronze Orb 的 Stasis、小兵预置）。
 
-* **Boss 的机制降级**（§194 起三幕各三只、数值全部来自 wiki，但四处机制只做到这样）：
-  The Guardian 的 Mode Shift 是"HP ≤ 50% 时切一次"（wiki 是累计受伤 30，且当场改意图）；
-  Hexaghost 的 Inferno 不升级已有的 Burn；Awakened One 的复活在 HP ≤ 25% 时改意图（内核没有死亡
-  拦截），且场上没有两个 Cultist；Bronze Orb 的 Stasis（偷牌）与 Time Eater 的 Draw Reduction 没有原语。
-  多段小兵（2 Orb / 2 Torch Head）**开局就在场上**，不是召唤的（遭遇名单是召唤物找招式表的唯一来路）。
+* **Boss 里仍然降级的只有两条**：
+  **Hexaghost 的 Inferno** 不升级已有的 Burn（需要"把牌堆里的卡升级"这个节点）；
+  **Time Eater 的 `Draw Reduction`** 没接线（`TurnStartDraw` 管线在，但"限时状态到期"那一段宿主
+  没跑 ⇒ 减抽牌会永远生效，比不做更错）。Cultist 不在 Awakened One 的场上（wiki 第二阶段陪着它）。
+* **抽签是派生的，不是随机流**：§195.3 起意图层能带权抽签（The Champ 45/25/15/15、Collector 70/30、
+  Time Eater 45/35/20、Awakened One 75/25 与 50/50、Bronze Orb 75% 与 70/30），抽签值是
+  `(seed, round, slot)` 的**纯函数**（意图每次观察都要重算 ⇒ 必须是纯函数，且不进快照）。
+  "不能连续用同一招 / 同一招不能三次"由内容记 `last_move`/`prev_move` + 排除规则实现。
+  ⚠️ 依旧确定性的是 Slime Boss / Guardian / Hexaghost / Automaton / Donu & Deca 的循环
+  （wiki 本身就是固定顺序）。
 * **Ascension 的内容覆盖**：20 条规则全部有机制（§187–§189），A2/A3/A4 与 A17/A18/19 的
-  **数值**覆盖 **48 个动作 / 49 条变体**（§190–§192；一个动作可以有两个档位）。剩下的 31 个动作
-  里多数本来就没有升档（纯状态 / 召唤 / `Does nothing`）；`giant_head.*` 与 `maw.*` 是写明了的
-  简化（前者 320 HP 版，后者 wiki 无页）。§194 起每幕的 Boss 池都是三只，A20 的两场可以不同。
-* **出招的权重是真实的、抽签是派生的**：§195.3 起意图层能带权抽签（The Champ 45/25/15/15、
-  Collector 70/30、Time Eater 45/35/20、Awakened One 75/25 与 50/50、Bronze Orb 75% 与 70/30），
-  抽签值是 `(seed, round, slot)` 的**派生值**（意图每次观察都要重算 ⇒ 必须是纯函数）。
-  "不能连续用同一招 / 同一招不能三次"由内容记 `last_move`/`prev_move` 计数器 + 排除规则实现。
-  ⚠️ 依旧确定性的：Slime Boss / Guardian / Hexaghost / Automaton / Donu & Deca 的循环（wiki 本身就是固定顺序）。
+  **数值**覆盖 **48 个动作 / 49 条变体**（§190–§192；一个动作可以有两个档位）。剩下的动作里多数
+  本来就没有升档（纯状态 / 召唤 / `Does nothing`）；`giant_head.*` 与 `maw.*` 是写明了的简化
+  （前者 320 HP 版，后者 wiki 无页）。每幕的 Boss 池都是三只，A20 的两场可以不同。
+  仍缺的两条数值轴：**起始状态的层数不随 Ascension 变**（Artifact 2→3、Regenerate 10→15），
+  以及 **A9 的 `AscHP` 不精确**（跑层施加的是百分比）。
 * **可变伤害**：`louse_red.bite`（5-7，A2 6-8）与 `darkling.nip`（7-11，A2 9-13）在**建战斗时**
   抽一次并写进该敌人的计数器（wiki: *chosen at the start of combat*），动作读 `combatantCounter`。
   `louse_green.*` 仍是常量 —— 这份内容没有绿虱的敌人记录，改动它等于埋一个"0 伤害"的地雷。
@@ -175,7 +179,7 @@ python -m http.server 8000
 | `native/*.py` | 三类：**对拍/校验驱动**（`fight_diff.py`、`gap_check.py`、`sts_content_check.py`…）、**`doc_*.py`**（每一节往 `port-plan.md` 追加章节的脚本，与正文一一对应）、**`patch_*.py` / `negctl_*.py`**（那一节改动源码与**反证**的脚本，留作记录） |
 | `py/roguedeck_env/` | RL 环境的 Python 封装（`ctypes`，多进程 + 批量观察 + 吞吐基准） |
 | `corpus/` | 对拍语料：`golden_v1.jsonl`、`hash_cases/*.txt`、`coverage.json`（份数以闸门输出为准） |
-| `docs/` | `port-plan.md`（主计划 §1–§186）、`spec/`（19 份规格书）、`sts-wiki-gap.md`（缺口清单，数字由 `native/gap_check.py` 重算） |
+| `docs/` | `port-plan.md`（主计划 §1–§195）、`spec/`（21 份规格书）、`sts-wiki-gap.md`（缺口清单，数字由 `native/gap_check.py` 重算） |
 | `ref/` | 参考实现的浅克隆位置（**不在本仓库**，见 §9） |
 | `sts/` | **早期 Python 原型**，已被 Rust 内核取代，保留作参照（不参与任何闸门） |
 

@@ -44,9 +44,9 @@
  58  0  0   4 OBJ _obj()                                                       : 
  59  3  3   8 OBJ _obj(Action,Condition,Priority)                              : Action:STR(wrap) Condition:TERM Priority:INT
  60  2  2   8 OBJ _obj(Action,Weight)                                          : Action:STR(wrap) Weight:INT
- 61 12 16  36 OBJ _obj(Actions,AiNote,Counters,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,StartingStatuses,Tier) : Actions:STRLIST(wrap) AiNote:STR Counters:TERMLIST HpMax:INT HpMin:INT Id:STR IntentRules:TERMLIST InvRef:STR MaxHealth:INT NameKey:STR StartingStatuses:TERMLIST Tier:STR
- 62 13 18  40 OBJ _obj(Actions,AiNote,Counters,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,StartingStatuses,Tier,TriggeredEffects) : Actions:STRLIST(wrap) AiNote:STR Counters:STRLIST HpMax:INT HpMin:INT Id:STR IntentRules:STRLIST InvRef:STR MaxHealth:INT NameKey:STR StartingStatuses:STRLIST Tier:STR TriggeredEffects:STRLIST
- 63  9 14  32 OBJ _obj(Actions,Counters,DisplayName,Id,IntentRules,MaxHealth,Position,Rolls,StartingStatuses) : Actions:STRLIST(wrap) Counters:TERMLIST DisplayName:STR Id:STR IntentRules:TERMLIST MaxHealth:INT Position:INT Rolls:TERMLIST StartingStatuses:TERMLIST
+ 61 13 17  36 OBJ _obj(Actions,AiNote,Counters,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,Spawn,StartingStatuses,Tier) : Actions:STRLIST(wrap) AiNote:STR Counters:TERMLIST HpMax:INT HpMin:INT Id:STR IntentRules:TERMLIST InvRef:STR MaxHealth:INT NameKey:STR Spawn:BOOL StartingStatuses:TERMLIST Tier:STR
+ 62 14 19  40 OBJ _obj(Actions,AiNote,Counters,HpMax,HpMin,Id,IntentRules,InvRef,MaxHealth,NameKey,Spawn,StartingStatuses,Tier,TriggeredEffects) : Actions:STRLIST(wrap) AiNote:STR Counters:STRLIST HpMax:INT HpMin:INT Id:STR IntentRules:STRLIST InvRef:STR MaxHealth:INT NameKey:STR Spawn:BOOL StartingStatuses:STRLIST Tier:STR TriggeredEffects:STRLIST
+ 63 10 15  32 OBJ _obj(Actions,Counters,DisplayName,Id,IntentRules,MaxHealth,Position,Rolls,Spawn,StartingStatuses) : Actions:STRLIST(wrap) Counters:TERMLIST DisplayName:STR Id:STR IntentRules:TERMLIST MaxHealth:INT Position:INT Rolls:TERMLIST Spawn:BOOL StartingStatuses:TERMLIST
  64  6  6  16 OBJ _obj(Amount,DescriptionKey,Effect,Id,NameKey,Rarity)         : Amount:INT DescriptionKey:STR Effect:STR Id:STR NameKey:STR Rarity:STR
  65  2  2   8 OBJ _obj(Amount,Effect)                                          : Amount:INT Effect:STR
  66  2  2   8 OBJ _obj(Amount,ResourceId)                                      : Amount:INT ResourceId:STR(wrap)

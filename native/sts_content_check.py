@@ -527,6 +527,9 @@ INV_ACTIONS = {
                                  ("counter", "champ_phase", 1, False, "source"),
                                  ("counter", "champ_exec", 0, False, "source")]),
     # --- Bronze Automaton (wiki: Flail 7x2, Boost 3 Str + 9 Block, HYPER BEAM 45, Stunned) --------
+    # §195.6: "Spawn Orbs" is two summons (two nodes, because each minted combatant needs its own id).
+    "bronze_automaton.spawn_orbs": ("Special", [("spawn", "bronze_orb", 52),
+                                                ("spawn", "bronze_orb", 52)]),
     "bronze_automaton.flail": ("Attack", [("damage", 7, "event"), ("damage", 7, "event")]),
     "bronze_automaton.boost": ("Defend", [("status", "standard.strength", 3, "source"),
                                           ("block", 9, "source")]),
@@ -543,6 +546,8 @@ INV_ACTIONS = {
     # --- The Collector (wiki: Fireball 18, Buff +3 Str + 15 Block, Mega Debuff 3/3/3) -------------
     # §195.3: the two moves the weighted rule draws from, each recording itself in `last_move`
     # (that counter is how "cannot Buff twice in a row" is expressed without kernel state).
+    "the_collector.spawn": ("Special", [("spawn", "torch_head", 38),
+                                        ("spawn", "torch_head", 38)]),
     "the_collector.fireball": ("Attack", [("damage", 18, "event")]),
     "the_collector.buff": ("Defend", [("status", "standard.strength", 3, "allAllies"),
                                       ("block", 15, "source")]),

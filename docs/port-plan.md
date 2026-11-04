@@ -13519,9 +13519,58 @@ Bronze Orb 的 `Stasis` 因此是真的：抽牌堆（空则弃牌堆）里最�
 是确定性循环（`Actions`），四条排除规则是它**唯一**的规则。补上一条默认权重规则后（正好用满
 `MAX_INTENT_RULES = 8`）负控才红：`last=1 prev=99 must exclude the_champ.heavy_slash`。
 
-### 195.6 还剩什么
+### 195.5c 当时还剩什么（§195.6 之前）
 
 * **D1 的谓词面**：`selectCards` 现在有 `RequireTag`（按 tag 过滤）+ 三种排序，仍没有按类型/费用的过滤。
 * **A2 的第二种历史**：Collector 的"不能连续三次 Fireball"要记两次历史，会挤满 8 条规则上限。
 * **`hash_full`**：`Counters`/`last_move` 都是内容侧状态（在 `Combatant.counters` 里，已在指纹里），
   所以这一节没有新的"不在指纹里的字段"。
+
+---
+
+## 195.6 小兵改成**真召唤**（`Spawn: false`），并给 README 对一次账
+
+### 195.6.1 被修掉的最后一条"结构降级"
+
+§194/§195.4 都写着同一句降级："两只 Bronze Orb / 两只 Torch Head **开局就在场上**，不是召唤的
+（遭遇名单是召唤物找招式表的唯一来路）。"
+
+原因是两条语义被一张表承担：`ENCT.Enemies` 既是"招式的查找表"（`intent::locate_enemy` 的 §138
+回退要在这里找到 definition），又是"开局谁上场"。所以"让小兵会出招"就等于"让小兵开局在场"，
+wiki 的 `Spawn Orbs` / `Spawn` 只能删掉。
+
+`Spawn: false`（`F_BOOL`，缺席 ⇒ `true`）把两件事分开：名单照旧（招式查得到）、开局不生成、
+由**召唤动作**生成。内容因此恢复成 wiki 的样子：Automaton 第 1 回合 `Spawn Orbs`、Collector
+第 1 回合 `Spawn`。Reptomancer **保持**两只匕首预置 —— wiki 就是"开局带两只匕首"。
+
+⚠️ 两只 Orb / 两只 Torch Head 必须是**两个** `createCombatant` 节点：一只一条，否则两次铸造
+会撞在同一个 `<definition>#<n>` 上。
+
+### 195.6.2 三条已经修掉、README 里却还留着的旧说法
+
+README 的"还不能"清单是**承诺**，过期就是假话。这一节逐条对账后删掉/改写：
+
+| 旧说法 | 真相 |
+|---|---|
+| "Guardian 的 Mode Shift 是 HP ≤ 50% 时切一次" | §195.1 变成真·累计受伤（30/35/40 预算 + `eventAmount`） |
+| "Awakened One 的复活在 HP ≤ 25% 时改意图（内核没有死亡拦截）" | §195.2 用 `DeathPrevention` 真复活；"没有死亡拦截"这句本身是错的 |
+| "Bronze Orb 的 Stasis 没有原语" | §195.4 `node.selectCards` + `SetAsidePile` + `Downed` 归还 |
+| "多段小兵开局就在场上" | §195.6 `Spawn: false` |
+
+剩下仍降级的只有两条，都写明了原因：Hexaghost 的 Inferno 不升级已有 Burn（缺"升级牌堆里的卡"
+节点）；Time Eater 的 `Draw Reduction` 没接线（`TurnStartDraw` 管线在，但"限时状态到期"宿主那段
+没跑 —— 接上去会让减抽牌**永远**生效，比不做更错）。
+
+### 195.6.3 数字与判据
+
+* **20/20 闸门绿**，单测 **856**（677 / 107 / 72）；四条对拍不变（182/182、62/62、124/124、394/394）。
+* 内容：敌人动作 118 → **120**、镜像 68,296 → **68,716 B**（core 58,064 B）。
+* `a_minion_is_not_on_the_field_until_its_summon_lands`（两个 Boss × 三个判据：开局只有 Boss /
+  召唤后 3 个 / 被召唤的 definition 正确）。它第一次就跑红：我把"敌人数"数成了
+  `combatants().len()` —— 英雄也是战斗员。
+* ⚠️ **内联副本的老坑第三次出现**：改 `Monsters` 的 roster 后，遭遇里的副本没同步，而内核读的是
+  副本。内容脚本现在**整条记录**（Actions / IntentRules / StartingStatuses / Spawn）一起同步，
+  而不只是新加的那个字段。
+* ⚠️ 本节的 plan 段落第一次没写进来：`assert "## 195.6" not in src` 被上一节的
+  `### 195.6 还剩什么` 命中了（`###` 里含 `## `）。于是只剩 README 进了提交 —— 现已改名并把本段
+  补上。「检查自己写的断言」这条又派上用场。

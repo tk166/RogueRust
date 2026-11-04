@@ -604,6 +604,11 @@ fn build_session_at(
             .max_health()
             .map_err(|e| format!("ENCT enemy MaxHealth: {}", detail(&e)))?
             .ok_or_else(|| format!("`{id}` has no MaxHealth in the encounter"))?;
+        // §195.6: `Spawn: false` = "this record is here so its moves can be looked up, not so it
+        // starts on the field" (Bronze Orb / Torch Head / Dagger). The summon action creates it.
+        if !spec.spawn().map_err(|e| format!("ENCT enemy Spawn: {}", detail(&e)))? {
+            continue;
+        }
         enemies.push(PlanCombatant {
             id,
             max_health: max_health + max_health * enemy_health_percent / 100,
@@ -3150,6 +3155,72 @@ mod tests {
                 .is_empty(),
             "the cultist declares `Rolls: []` -- no counter may appear"
         );
+    }
+
+    /// §195.6: `Spawn: false` keeps a minion off the field until it is **summoned**.
+    ///
+    /// The wiki's Bronze Automaton opens with "Spawn Orbs" and *then* fights; The Collector opens with
+    /// "Spawn". Before this flag the minions had to be pre-placed (the encounter roster is the only
+    /// place their move sets can be looked up, §138), and both bosses' turn-1 move was deleted.
+    ///
+    /// Three judgements per boss: the fight **starts** with one enemy; the summon move brings the
+    /// count to three; and the summoned minions are the right definitions (a `createCombatant` that
+    /// named the wrong id would still make the count right).
+    #[test]
+    fn a_minion_is_not_on_the_field_until_its_summon_lands() {
+        let cases = [
+            ("enc_bronze_automaton", "bronze_automaton", "bronze_automaton.spawn_orbs",
+             ["bronze_orb", "bronze_orb"]),
+            ("enc_the_collector", "the_collector", "the_collector.spawn",
+             ["torch_head", "torch_head"]),
+        ];
+        for (encounter, boss, spawn_move, minions) in cases {
+            let mut session = build_session_at(9, encounter, 70, None, 0, 0)
+                .expect("the fight builds");
+            // Count the **enemies**: the hero is a combatant too.
+            // (`definition_id` borrows the combatant, which borrows the session -- so this helper takes
+            // the session and returns owned strings; a `&'static str` return would tie the two
+            // lifetimes together and not compile.)
+            let enemies = |session: &Session| -> Vec<std::string::String> {
+                session
+                    .state
+                    .combatants()
+                    .iter()
+                    .filter(|combatant| combatant.team_id.as_str() == "enemy")
+                    .map(|combatant| std::string::String::from(combatant.definition_id.as_str()))
+                    .collect()
+            };
+            assert_eq!(
+                enemies(&session),
+                vec![std::string::String::from(boss)],
+                "{encounter}: only the boss starts on the field"
+            );
+
+            let row = u32::from(
+                session
+                    .content
+                    .lookup_in(spawn_move, rd_core::content::EK_EACTION)
+                    .expect("the spawn move is in the image")
+                    .index,
+            );
+            rd_core::intent::execute_action(
+                &mut session.state,
+                session.content,
+                &rd_core::state::CombatantId::new(boss).expect("a usable id"),
+                row,
+                None,
+            )
+            .expect("the summon lands");
+
+            let mut names = enemies(&session);
+            assert_eq!(names.len(), 3, "{encounter}: the spawn move brings two minions");
+            names.retain(|name| name.as_str() != boss);
+            names.sort_unstable();
+            let mut expected: Vec<std::string::String> =
+                minions.iter().map(|name| std::string::String::from(*name)).collect();
+            expected.sort_unstable();
+            assert_eq!(names, expected, "{encounter}: the summoned definitions");
+        }
     }
 
     /// §195.1: the browser's fight builder seeds the Guardian's Mode Shift **budget** at spawn.

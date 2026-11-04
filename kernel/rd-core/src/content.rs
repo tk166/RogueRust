@@ -2055,6 +2055,31 @@ impl<'a> EnemySpec<'a> {
         self.list("StartingStatuses", F_TERMLIST)
     }
 
+    /// `Spawn`（`F_BOOL`，§195.6）：这条记录**开局是否上场**。缺席 ⇒ `true`。
+    ///
+    /// 为什么需要它：一条被**召唤**出来的小兵（Bronze Orb / Torch Head / Dagger）必须出现在某条遭遇的
+    /// 名单里，`intent::locate_enemy` 才找得到它的招式表（§138）；而"名单里有"此前等于"开局就在场上"。
+    /// 于是 wiki 的 `Spawn Orbs` / `Spawn` 只能被删掉，改成"小兵预置"——一条写明了的降级。
+    /// `Spawn: false` 把"能查招式表"与"开局上场"分开：名单照旧，开局不生成，由召唤动作生成。
+    pub fn spawn(&self) -> Result<bool, EncounterError> {
+        match self.field_at("Spawn") {
+            // 键缺席 = 老内容（或没有小兵的记录）：照旧上场。
+            Err(EncounterError::MissingField("Spawn")) => Ok(true),
+            Err(other) => Err(other),
+            Ok((kind, at)) => {
+                if kind != F_BOOL {
+                    return Err(EncounterError::WrongFieldKind("Spawn"));
+                }
+                match self.slot(at)? {
+                    BOOL_FALSE => Ok(false),
+                    BOOL_TRUE => Ok(true),
+                    // 缺席/null 两种哨兵都当"没说"—— 与 `max_health` 的口径一致。
+                    _ => Ok(true),
+                }
+            }
+        }
+    }
+
     /// `Counters`（`F_TERMLIST`，§195.1）：开局**固定**计数器的条目（键 `Key` / `Value` / `AscensionMin`）。
     ///
     /// 与 [`Self::rolls`] 同样的"键缺席 = 空列表"约定（opcode 按出现过的键集派生）。
