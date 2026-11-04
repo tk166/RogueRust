@@ -4328,4 +4328,168 @@ mod card_text_tests {
             .map_or(-1, |c| c.health_current)
     }
 
+
+    /// §202: hero + every live enemy (`turn_order` is exactly that list), so **enemies = this - 1**.
+    fn combatant_count() -> usize {
+        slot().as_ref().map_or(0, |session| session.state.turn_order().len())
+    }
+
+    /// §202: the enemy count alone (the sweep above counts the hero too).
+    fn enemy_count() -> usize {
+        combatant_count().saturating_sub(1)
+    }
+
+    /// §202: the last session-level error text, for a message that says *why*.
+    fn session_error() -> String {
+        slot().as_ref().map_or_else(String::new, |session| session.error.clone())
+    }
+
+    /// §202: **镜像里的每一个遭遇都必须能建、能打。**
+    ///
+    /// 这条是工作包 C 的"全遭遇构造"：它走的不是测试自己拼的蓝图，而是**生产路径**
+    /// (`build_session_at`) —— 去重 id（`bronze_orb#2`）、`Spawn: false`（不在开场，等召唤）、
+    /// `Owner`（主人必须在这一场里）、`StartingStatuses`、敌人的血量掷骰、ASC 修正，全在里面。
+    ///
+    /// 判据（每一条都对应一次真实踩坑）：
+    /// 1. `build_session_at` 对**每一个** `ENCT` 行都成功 —— 镜像里 34 个，一个都不能少；
+    /// 2. 之后连打 `TURNS` 个"结束回合"：返回值不许是 `-3`（那才是"内核抛了"）；
+    /// 3. 每一步的 `problems` 必须是空的 —— `-1`（观察没变 = 拒绝）本身合法（英雄死了/没牌可打），
+    ///    但如果那一步其实抛了，`problems` 里会带着 `StepThrew(...)`。
+    ///
+    /// 为什么不是"断言英雄活着"：这些遭遇里有一半是 Boss，70 点血的假英雄打不过 —— 那是内容
+    /// 事实，不是内核缺陷。这条测试问的是"能不能跑"，不是"能不能赢"。
+    #[test]
+    fn every_encounter_in_the_image_builds_and_runs_without_a_thrown_step() {
+        const TURNS: usize = 12;
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("the image parses");
+        // `IDX` is the image's id index and the only place an encounter's **name** lives (the `ENCT`
+        // row itself does not repeat it), so the sweep walks it by entity kind rather than by row.
+        let mut encounters = Vec::new();
+        for position in 0..content.id_count() {
+            let Some(entry) = content.id_entry(position) else {
+                continue;
+            };
+            if entry.entity_kind == EK_ENCOUNTER {
+                encounters.push(entry.id.to_string());
+            }
+        }
+        // Loud, not "0 tests ran": the sweep is only meaningful if it really walked the table.
+        assert!(
+            encounters.len() >= 34,
+            "the image should hold every encounter; found {}",
+            encounters.len()
+        );
+        let mut failures = Vec::new();
+        for name in &encounters {
+            let session = match build_session_at(7, name, 70, None, 0, 0) {
+                Ok(session) => session,
+                Err(message) => {
+                    failures.push(std::format!("{name}: build failed: {message}"));
+                    continue;
+                }
+            };
+            install_session(session);
+            for turn in 0..TURNS {
+                let verdict = rd_env_step(0); // the only legal action on a fresh turn: END_TURN
+                if verdict == -3 {
+                    failures.push(std::format!("{name} turn {turn}: threw: {}", session_error()));
+                    break;
+                }
+                if rd_env_done() != 0 {
+                    break; // the fight is over; that is a legal ending, not a failure
+                }
+            }
+            crate::take_session();
+        }
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
+
+    /// §202: **Act 2 的代表战** —— Bronze Automaton 第 1 回合真召唤两只 Orb。
+    ///
+    /// wiki `Bronze Automaton`：`Spawn` 召唤 2 个 Bronze Orb；Orb 在遭遇里是 `Spawn: false`
+    /// （它只是**招式表**的载体，不在开场）。这条同时钉住三件事：
+    /// 1. 开场只有 Boss（1 个战斗员），Orb **不在**场；
+    /// 2. 打一个回合之后场上是 3 个（`node.createCombatant` 真的加了两个）；
+    /// 3. 新来的那两只有各自唯一的 id（`bronze_orb` / `bronze_orb#2`），并且**能行动**
+    ///    （第 2 回合起 `problems` 仍为空 —— 一个没有 id 的小兵会让回合机在某处响亮失败）。
+    #[test]
+    fn act_two_bronze_automaton_summons_its_orbs_on_turn_one() {
+        let session = build_session_at(7, "enc_bronze_automaton", 200, None, 0, 0)
+            .expect("the automat on fight builds");
+        install_session(session);
+        assert_eq!(enemy_count(), 1, "the boss alone: the orbs are `Spawn: false`");
+        // Turn 1: the hero ends their turn, the boss takes its turn (Spawn) and the orbs join.
+        for turn in 0..6 {
+            let verdict = rd_env_step(0);
+            assert_ne!(verdict, -3, "turn {turn}: {}", session_error());
+            if rd_env_done() != 0 {
+                break;
+            }
+            if enemy_count() == 3 {
+                break;
+            }
+        }
+        assert_eq!(
+            enemy_count(),
+            3,
+            "the boss summoned two orbs (enemies now {})",
+            enemy_count()
+        );
+        // The summons must be distinct combatants, or the turn loop cannot address them.
+        let mut names = Vec::new();
+        let mut index = 0;
+        while crate::rd_env_enemy_name_len(index) >= 0 {
+            let len = crate::rd_env_enemy_name_len(index) as usize;
+            let mut buffer = vec![0u8; len];
+            unsafe { crate::rd_env_enemy_name_into(index, buffer.as_mut_ptr()) };
+            names.push(String::from_utf8_lossy(&buffer).to_string());
+            index += 1;
+        }
+        let mut unique = names.clone();
+        unique.sort();
+        unique.dedup();
+        assert_eq!(unique.len(), names.len(), "duplicate combatant ids: {names:?}");
+        crate::take_session();
+    }
+
+    /// §202: **Act 3 的代表战** —— Reptomancer 召唤匕首，匕首炸完自己走（§200 的实战）。
+    ///
+    /// 这条把三个特性串起来：`createCombatant`（召唤）、§200 的"行动者自毁"、以及"敌人变多/变少
+    /// 之后回合机仍然对"。判据：匕首出现在场上（战斗员数上升），并且**在若干回合之后消失**
+    /// （`dagger.explode` 的 `destroyCombatant`），全程没有一步 `-3`。
+    #[test]
+    fn act_three_reptomancer_daggers_arrive_and_then_take_themselves_out() {
+        let session = build_session_at(7, "enc_reptomancer", 200, None, 0, 0)
+            .expect("the reptomancer fight builds");
+        install_session(session);
+        // This content's `enc_reptomancer` presets the two daggers (`Spawn: true`), so the fight
+        // opens with boss + 2 daggers. What §200 changed is the **exit**: `dagger.explode` removes
+        // its own actor, which used to be refused by `remove_combatant`.
+        let start = enemy_count();
+        assert_eq!(start, 3, "boss + the two preset daggers");
+        let mut peak = start;
+        let mut settled_after_peak = false;
+        for turn in 0..40 {
+            let verdict = rd_env_step(0);
+            assert_ne!(verdict, -3, "turn {turn}: {}", session_error());
+            if rd_env_done() != 0 {
+                break;
+            }
+            let now = enemy_count();
+            if now > peak {
+                peak = now;
+            } else if now < peak {
+                // A dagger left the fight (`dagger.explode` removes its own actor, §200).
+                settled_after_peak = true;
+                break;
+            }
+        }
+        assert!(peak >= start, "the daggers are on the field (peak {peak})");
+        assert!(
+            settled_after_peak,
+            "a dagger must leave the fight by exploding (start {start}, peak {peak})"
+        );
+        crate::take_session();
+    }
+
 }

@@ -14002,3 +14002,57 @@ Operation::ScalePercentPerStack   current * (100 + magnitude * stacks) / 100
 * 内容：怪 46 → **47**、遭遇 33 → **34**、敌人动作 121 → **125**、镜像 72,556 → **73,904 B**
   （core 62,216）。
 * 工作包 B **全部完成**（B-1 §196 / B-2 §197 / B-3 §198+§199 / B-4 §200+§201）。
+
+---
+
+## §202 全遭遇构造 + Act2/Act3 切片（工作包 C）
+
+工作包 C 的两条：**"遍历每一场遭遇的可构建测试"** 与 **"Act2/Act3 的确定性战斗切片"**。
+两条都放在 `rd-wasm` 的测试里，因为它们要的入口是**生产路径**（`build_session_at`），而不是
+测试自己拼的蓝图 —— `rd-core` 拿不到那段代码，而复制一份就是第二个真相。
+
+### 202.1 `every_encounter_in_the_image_builds_and_runs_without_a_thrown_step`
+
+按 `IDX` 的 `EK_ENCOUNTER` **枚举**（`ENCT` 行里没有名字，名字只在 `IDX`），对镜像里**每一个**
+遭遇（34 个）跑一遍 `build_session_at(seed 7, name, hp 70, None, 0, 0)`，然后连打 12 个
+"结束回合"，断言：
+
+1. 每一个都能建 —— 这一段覆盖的是**去重 id**（`bronze_orb#2`）、`Spawn: false`（开场不在场，
+   等召唤）、`Owner`（主人必须在本场里）、`StartingStatuses`、血量掷骰、ASC 修正；
+2. 返回值不许是 `-3`（那才是"内核抛了"）；
+3. 死亡/无牌可打导致的 `-1`（观察没变）是**合法**的 —— 70 点血的假英雄打不过 Boss 是内容事实，
+   不是内核缺陷。这条测试问的是"能不能跑"，不是"能不能赢"。
+
+"至少 34 个"这条下限是**反证过的**：如果枚举写错（比如按 `ENCT` 行去取 id 取不到），
+`encounters` 会是空，`assert!` 立刻红 —— 而不是"0 个测试悄悄通过"。
+
+### 202.2 Act 2 切片：`act_two_bronze_automaton_summons_its_orbs_on_turn_one`
+
+wiki `Bronze Automaton`：`Spawn` 召唤 2 只 Bronze Orb，而 Orb 在遭遇里是 `Spawn: false`
+（它只是招式表的载体）。三段判据：开场**只有 Boss**（敌人数 1）；打几个回合之后是 **3**；
+三只的 id **互不相同**（回合机按 id 寻址，重名会让它在某处响亮失败）。
+
+负控：把 `if !spec.spawn() { continue }` 拿掉（Orb 变成预置）⇒ 红在 `left: 3 / right: 1`。
+
+### 202.3 Act 3 切片：`act_three_reptomancer_daggers_arrive_and_then_take_themselves_out`
+
+这份内容的 `enc_reptomancer` **预置**了两只匕首（`Spawn: true`），所以开场是 3 个敌人；
+§200 真正改的是**出口**：`dagger.explode` 会移除**正在行动的那个**（以前 `remove_combatant`
+直接拒绝）。判据：敌人数曾经到 3、然后在若干回合之内**掉下去**（有匕首炸掉了自己）、全程无 `-3`。
+
+负控：把 `remove_combatant` 的"当前行动者"守卫恢复（§200 之前的语义）⇒ 红在
+`a dagger must leave the fight by exploding (start 3, peak 4)` —— 匕首召唤了新的、却没有一个走。
+
+### 202.4 数字
+
+* **20/20 闸门绿**，单测 **881**（695 core + 79 wasm + 107 run；wasm 从 76 → 79）。
+* 四条对拍不变（182/182、62/62、124/124、394/394）。
+* 内容不动（镜像 73,904 B）：这一节只加**判据**，不加内容。
+
+### 202.5 工作包 C 的剩余（明确没做）
+
+* **浏览器侧的 Act2/Act3 闭环**（`web/act1_slice.mjs` 的姊妹）：它要"自己算路线走到第 2/3 幕"，
+  而路由、奖励、商店都已经是通的了 —— 缺的是一条**确定性的种子路线**。这一节用内核级切片
+  把"三幕的敌人能打"钉住了，但"三幕的浏览器闭环"仍然只有 Act1（`act1_slice.mjs`）。
+* **内容字段的 Wiki 来源追溯**（C 的第三条）：已经由 `AiNote` / `InvRef` / `docs/spec/` 部分承担，
+  系统性核对仍然是人工活。
