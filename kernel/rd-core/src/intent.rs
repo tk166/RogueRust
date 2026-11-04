@@ -1688,6 +1688,57 @@ mod tests {
         }
     }
 
+    /// §201: the Looter's pattern, asked of `select_action` directly.
+    ///
+    /// wiki `Thieves`: "Uses `Mug` for the first 2 turns. Has a 50% chance to use `Lunge` or 50%
+    /// chance to use `Smoke Bomb`. If `Lunge` is used on its third turn, it will then use
+    /// `Smoke Bomb` next. The turn after `Smoke Bomb` has been used, it will `Escape`."
+    ///
+    /// Four judgements, each one a way the rule set could be wrong:
+    /// 1. rounds 1 and 2 are **always** Mug -- 60 seeds each, because a rule that silently fails
+    ///    would fall back to the `Actions` **cycle** and only misfire on some seeds;
+    /// 2. round 3 is Lunge or Smoke Bomb, never Mug and never Escape;
+    /// 3. after Lunge, Smoke Bomb (not Lunge again, not Escape);
+    /// 4. after Smoke Bomb, Escape -- and it stays Escape (the counter is not rewritten by Escape,
+    ///    so the rule must be "last move was the bomb", not "round == 5").
+    #[test]
+    fn the_looter_mugs_twice_then_bombs_then_escapes() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let at = slot(&content, "enc_looter", 0);
+        let actor = cid("looter");
+        let ask = |round: i32, last: i32, seed: i32| -> &str {
+            let mut state = arena("looter");
+            state.random_seed = seed;
+            state.current_round = round;
+            set_counter(&mut state, &actor, "last_move", last);
+            select_action(&state, &content, at, &actor, round)
+                .expect("intent")
+                .expect("an action")
+                .action_id
+        };
+        for seed in 0..60 {
+            assert_eq!(ask(1, 0, seed), "looter.mug", "round 1 is always Mug");
+            assert_eq!(ask(2, 1, seed), "looter.mug", "round 2 is always Mug");
+        }
+        for seed in 0..60 {
+            let third = ask(3, 1, seed);
+            assert!(
+                third == "looter.lunge" || third == "looter.smoke_bomb",
+                "round 3 draws Lunge/Smoke Bomb, got {third}"
+            );
+        }
+        for seed in 0..20 {
+            assert_eq!(ask(4, 2, seed), "looter.smoke_bomb", "after Lunge, the bomb");
+            assert_eq!(ask(4, 3, seed), "looter.escape", "after the bomb, Escape");
+            assert_eq!(ask(9, 3, seed), "looter.escape", "and Escape keeps being right");
+        }
+    }
+
     /// §195.5: Awakened One's two phases by **weight**, and the guard that ends phase one.
     ///
     /// Phase 1 draws `Slash 75 / Soul Strike 25`; phase 2 opens with Dark Echo once and then draws

@@ -78,10 +78,12 @@ INV_COUNTS = {
     # 10 tier-A monsters + three sentry **rows** (one per instance: a combatant id must be unique
     # and the encounter record has no instance number, inv:§4.2) + the boss.
     # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster); §175: +3 (Nemesis / Reptomancer / Dagger).
-    "monsters": 46,
+    # §201: +1 (Looter).
+    "monsters": 47,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
-    "encounters": 33,
+    # §201: +1 (`enc_looter`, the solo Looter).
+    "encounters": 34,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -303,6 +305,11 @@ INV_MONSTERS = [
     ("reptomancer", 180, 190,
      ["reptomancer.spawn_dagger", "reptomancer.big_bite", "reptomancer.snake_strike"]),
     ("dagger", 20, 25, ["dagger.wound", "dagger.explode"]),
+    # §201: wiki `Thieves`. A7 raises HP to 46-50 and Thievery to 20; `EACT` has no ascension
+    # column, so the content pins the base numbers (a known, documented gap).
+    ("looter", 44, 48, ["looter.mug", "looter.lunge", "looter.smoke_bomb", "looter.escape"]),
+    # §201: wiki `Thieves` -- HP 44-48 (A7 46-50); Mug 10 (+ steal 15), Lunge 12, Smoke Bomb 6
+    # Block, Escape (leaves with the gold).
     # §147: the `Constricted` carrier (wiki HP 170; Strategic / Aggressive 16 / 22).
     # §148: the **cycle** is the two Aggressive moves; `Strategic` is a round-1 **rule**, not a
     # cycle slot (StS opens with it once). That is why it is absent from this list --
@@ -501,6 +508,13 @@ INV_ACTIONS = {
     # §200: Explode = 25 damage **and the dagger dies** (wiki: Explode 25, then it leaves the
     # fight). Before §200 the kernel refused to remove the acting combatant, so it only dealt damage.
     "dagger.explode": ("Attack", [("damage", 25, "event"), ("destroy", "source")]),
+    # §201: wiki `Thieves` -- every attack steals 15 (`Thievery`), Escape carries it away and the
+    # Looter leaves the fight (`destroy` after `carry` -- order matters, the counter must be read
+    # before the combatant is removed).
+    "looter.mug": ("Attack", [("damage", 10, "event"), ("counter", "stolen_gold", 15, True, "source")]),
+    "looter.lunge": ("Attack", [("damage", 12, "event"), ("counter", "stolen_gold", 15, True, "source")]),
+    "looter.smoke_bomb": ("Defend", [("block", 6, "source")]),
+    "looter.escape": ("Special", [("carry", "stolen_gold", "source"), ("destroy", "source")]),
     "taskmaster.scouring_whip": ("Attack", [("damage", 7, "event"),
                                             ("card", "wound", 1, "DiscardPile", "event")]),
 
@@ -650,6 +664,8 @@ INV_ELITE_POOL = {
     # §175: act 3's two, so every act's elite pool has the wiki's three.
     "enc_nemesis": ["nemesis"],
     "enc_reptomancer": ["reptomancer", "dagger", "dagger"],
+    # §201: the solo Looter (wiki: an act-1 normal encounter).
+    "enc_looter": ["looter"],
 }
 
 # inv:§4.3 -- the boss pool. `inv:§4.3` says the three act-1 bosses are picked equiprobably; this
@@ -660,7 +676,9 @@ INV_ACT_TABLES = {
     "Weak": ["enc_cultist", "enc_jaw_worm", "enc_small_slimes",
              "enc_louse", "enc_fungi_beast", "enc_slaver_red",
              # §153: the Gremlin Gang is an **act-1** encounter (wiki); it sat in act 2.
-             "enc_gremlin_gang"],
+             "enc_gremlin_gang",
+             # §201: the Looter is an act-1 normal encounter.
+             "enc_looter"],
     "Weak2": ["enc_chosen", "enc_shelled_parasite"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
@@ -952,6 +970,9 @@ def program_facts(root):
             # §178: the other half of a split. Recorded as a fact, not ignored -- "the boss is
             # replaced" is exactly the thing the old content got wrong.
             facts.append(("destroy", tgt(body["TargetSelector"])))
+        elif kind == "node.carryAwayStolenGold":
+            # §201: "flees with your gold" -- which counter is carried away, and from whom.
+            facts.append(("carry", body["CounterId"]["value"], tgt(body["TargetSelector"])))
         elif kind == "node.createCombatant":
             facts.append(("spawn", body["DefinitionId"], amount(body["Health"]) if body.get("Health") else 0))
         elif kind == "node.conditional":

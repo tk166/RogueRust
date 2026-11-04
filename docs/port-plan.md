@@ -13919,3 +13919,86 @@ Operation::ScalePercentPerStack   current * (100 + magnitude * stacks) / 100
 * 工作包 B 的**最后一半**是 Looter 的"偷钱逃跑"。它不是一条节点：内核没有金币，金币在运行层。
   下一次要做的是"内核记 `stolen_gold`（`Counters` 就够）→ 运行层在 `fight_end` 结算"这条约定，
   外加 Looter 的怪物行 / 三个动作 / 遭遇行。
+
+---
+
+## §201 Looter：偷钱 + 带着钱逃（工作包 B-4 的下半）
+
+§200 让"行动者可以自毁"，`Escape` 才有了落点；但 Looter 的另一半是**金币** —— 而内核里没有
+金币。wiki `Thieves` 的三句话就是全部规格：
+
+* `Thievery 15`："Steals X Gold whenever it attacks."
+* `Stolen gold is returned if this enemy is killed.`
+* `Escape`："Flees combat with your Gold."
+
+### 201.1 跨层的那一个数
+
+金币是**运行层**的（`RunState::gold`），内核的 `CombatState` 里没有。所以约定是**一个字段**：
+
+* `CombatState::gold_carried_away: i32` —— 只装"**已经带着离开**"的钱。不进哈希、不进快照
+  （参考没有这个字段，写进 `hash_golden` 会移动全部 85 个语料基线）。
+* 新节点 `node.carryAwayStolenGold`（`CounterId` + `TargetSelector`）：把目标身上那一格计数器的
+  **当前值**搬进上面那个字段，再把它**清零**。清零不是顺手：目标随后就被 `destroyCombatant`
+  摘掉，但"搬"与"复制"的区别只在这一行上（`30 + 30` 与 `30`）。
+* 内容侧偷钱就是 `node.setCombatantCounter` + `Relative: true`（`counter += 15`）——
+  **不需要新节点**。
+
+为什么"活着的敌人身上的钱不算丢失"：打赢 = 全灭，所以"小偷还活着"在胜利的局面里不存在；
+而死掉的那个的计数器留在它的尸体上（`Counters` 跟着 `Combatant` 走），运行层根本不看它。
+⇒ 结算只需要 `carried`，不需要"总共偷了多少"。
+
+`fight_end`（`kernel/rd-wasm/src/run.rs`）：读 `gold_carried_away`（**在** `take_session()` 之前），
+`apply_fight_outcome` 多收一个参数并 `adjust_gold(-carried)`（`adjust_gold` 本来就夹在 0 以上，
+正好是 wiki 的 "doesn't give back gold it didn't steal" 的另一头）。Smoke Bomb 的逃跑
+（`flee_fight`，`result = 3`）走同一条路 —— 逃跑也不退还。
+
+⚠️ 回放：`K_FIGHT_END` 那一行原来 `text` 是空的，现在写 `carried` 的十进制。**没有**塞进 `b`
+的位域（那个字已经装着档位与结果，再塞一个数就是"静默回放分歧"的温床）。旧记录读出来是 0，
+正好等于它们当时的结算。
+
+### 201.2 内容
+
+`looter`（HP 44-48，`Tier Normal`）+ 四个动作 + `enc_looter`（solo，进 act-1 的 `Weak` 池，
+权重 15 与 Gremlin Gang 同级）+ AI 四条规则（前两回合 Mug / `last_move` 是炸弹 ⇒ Escape /
+`last_move` 是 Lunge ⇒ 炸弹 / 否则 50-50）。四个动作都按 §195.5 的纪律写了
+`prev_move = last_move; last_move = k`（否则 `history.looter` 那一族判据会红 —— 它确实红了，
+说明那条闸门在工作）。
+
+⚠️ **偏差**（写进 `AiNote`）：`EACT` 没有 ascension 列，所以 A2 的 11/14 与 A17 的 `Thievery 20`
+没做 —— 这是全局已知缺口，不是这一节新欠的。
+
+### 201.3 判据
+
+* `a_looter_steals_thievery_gold_on_every_attack_and_carries_it_away`：两次 Mug 之后计数器 **30**
+  （不是 15、不是 0）、英雄 70→50（偷钱**不**代替伤害）、Escape 之后 Looter 不在名册、
+  `gold_carried_away == 30`、四步 `problems` 全空。
+  负控：`carryAwayStolenGold` 变成空操作 ⇒ 红在 `left: 0 / right: 30`，**而每一步都不报错** ——
+  那正是最坏的形状（被偷 30、逃走时一分没少、所有闸门都绿）。
+* `escaping_moves_the_counter_instead_of_copying_it`：逃走前 30/0、之后 0/30。与上一条分开写，
+  因为"搬"与"复制"只有这一条能分开（两条加起来查不出 30+30）。
+* `the_looter_mugs_twice_then_bombs_then_escapes`（`select_action` 直接问）：回合 1/2 **每 60 个种子
+  都是 Mug**（规则静默失效会退回 `Actions` 循环，只会偶尔错）、回合 3 只可能是 Lunge/Smoke Bomb、
+  Lunge 之后是炸弹、炸弹之后是 Escape（而且**一直是** Escape：规则问的是"上一招是炸弹"，
+  不是"第 5 回合"，所以 `round = 9` 也得是它）。
+* `the_gold_a_thief_carried_away_is_the_only_gold_lost`（运行层）：逃走 15 ⇒ 金币恰好少 15；
+  `carried = 0`（小偷被打死）⇒ 金币只按奖励涨；5 金币 + 带走 999 ⇒ 夹在 0。奖励金额是**量出来**
+  的（同一个种子先跑一次 `carried = 0`），不抄 `inv:§5` 的区间。
+  负控：结算改读"敌人身上的计数器"⇒ 第二条红（死掉的小偷也会扣钱）。
+
+### 201.4 顺带修好的两条**陈旧断言**（它们本来就该红）
+
+加进 act-1 池之后，种子的抽取顺序变了，两条测试的**手抄清单**当场报错：
+
+* `act_two_fights_act_two_enemies` 只认 `["acid_slime","spike_slime","jaw_worm","cultist"]` ——
+  那不是"act-1 池"，那是它当年见过的那四个。改成**整池**（含 looter/louse/fungi_beast/slaver/gremlin）。
+* `the_boss_is_offered_at_floor_16...` 只认 `slime_boss`/`time_eater` —— §194 已经把 act-1 的 Boss
+  池补到 wiki 的三个，它一直没跟上，只是种子恰好没抽到 Guardian。改成三个全认。
+
+这两条不是"放宽"，是**把代理指标换成它声称要测的东西**。
+
+### 201.5 数字
+
+* **20/20 闸门绿**，单测 **878**（695 + 76 + 107）；四条对拍不变（182/182、62/62、124/124、394/394）。
+* 内容：怪 46 → **47**、遭遇 33 → **34**、敌人动作 121 → **125**、镜像 72,556 → **73,904 B**
+  （core 62,216）。
+* 工作包 B **全部完成**（B-1 §196 / B-2 §197 / B-3 §198+§199 / B-4 §200+§201）。

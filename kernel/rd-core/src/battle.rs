@@ -3261,6 +3261,166 @@ mod tests {
         }
     }
 
+    /// §201：**Looter 偷钱 + 带着钱逃**。
+    ///
+    /// wiki `Thieves`：`Thievery 15`（"Steals X Gold whenever it attacks"）、`Escape`（"Flees
+    /// combat with your Gold"）。四个判据：
+    ///
+    /// 1. 每次攻击偷 15 —— 两次 Mug 之后计数器是 **30**（不是 15，也不是 0）；
+    /// 2. 英雄按 Mug 的 10 点掉血（偷钱**不**代替伤害）；
+    /// 3. Escape 之后 Looter **不在名册里**，而 `state.gold_carried_away` 是 **30** —— 钱从
+    ///    它的计数器搬到了战斗级的账上（它马上要被摘掉，留在身上就没人读得到）；
+    /// 4. 那只计数器**清零**（否则"搬走"会变成"再算一次"），且每一步都不报 `StepThrew`。
+    ///
+    /// 负控：`carryAwayStolenGold` 换成"什么都不做" ⇒ 判据 3 红在 `0 != 30`，而**每一步都不报错**。
+    /// 那正是最坏的形状：玩家被偷了 30，逃跑之后一分钱没少，而所有闸门都是绿的。
+    #[test]
+    fn a_looter_steals_thievery_gold_on_every_attack_and_carries_it_away() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let enemies = [PlanCombatant {
+            id: "looter",
+            max_health: 44,
+        }];
+        let deck: [DeckEntry; 0] = [];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "looter_thieves",
+            seed: 1,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 70,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        // `EnemyActs` ends turns until the Looter is on stage, so this script alternates on its own:
+        // the hero's turn is closed for it (`AdvanceTurnsUntilActive`), which is the reference's own
+        // loop. Four steps, two attacks, one escape.
+        let script = [
+            Step::EndOneTurn,
+            Step::EnemyActs {
+                enemy: "looter",
+                action: "looter.mug",
+                target: Some("hero"),
+            },
+            Step::EnemyActs {
+                enemy: "looter",
+                action: "looter.mug",
+                target: Some("hero"),
+            },
+            Step::EnemyActs {
+                enemy: "looter",
+                action: "looter.escape",
+                target: Some("hero"),
+            },
+        ];
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
+        let mut host = Host::new(&content);
+        let trace = drive(&mut state, &content, &plan, &script, &mut host);
+
+        assert_eq!(trace.hp(1, "hero"), 60, "Mug deals 10 (and steals 15)");
+        assert_eq!(trace.hp(2, "hero"), 50, "and again");
+        assert!(
+            state.combatant(&cid("looter")).is_none(),
+            "Escape removes the Looter from the fight"
+        );
+        assert_eq!(
+            state.gold_carried_away, 30,
+            "two attacks of Thievery 15 left with it"
+        );
+        for step in 0..4 {
+            assert!(
+                trace.kinds(step).is_empty(),
+                "step {step} reported {:?}",
+                trace.kinds(step)
+            );
+        }
+    }
+
+    /// §201：`stolen_gold` 是**按战斗员**记的，逃走时**清零**。
+    ///
+    /// 这条与上一条分开写，因为它们是两个不同的失败面：上一条证明"钱到了账上"，这一条证明
+    /// "钱没有被算两次"。判据：逃走前计数器 30、账上 0；逃走之后计数器 0、账上 30。
+    /// 只把两条加起来是查不出"复制而不是搬走"的（那会是 30 + 30）。
+    #[test]
+    fn escaping_moves_the_counter_instead_of_copying_it() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let enemies = [PlanCombatant {
+            id: "looter",
+            max_health: 44,
+        }];
+        let deck: [DeckEntry; 0] = [];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "looter_move",
+            seed: 1,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 70,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
+        let mut host = Host::new(&content);
+        build_fight(&mut state, &content, &plan).expect("the looter fight builds");
+        // The counter is what the content writes (`looter.mug`); set it directly so this test is
+        // about the escape only.
+        state
+            .combatant_mut(&cid("looter"))
+            .expect("looter")
+            .set_counter(
+                crate::state::CounterId::new("stolen_gold").expect("id"),
+                30,
+            )
+            .expect("set");
+        assert_eq!(state.gold_carried_away, 0, "nothing has left yet");
+
+        let config = turn_config_for(&plan).expect("config");
+        crate::turn::start_current_turn(&mut state, &config, &mut host).expect("turn 1");
+        let mut problems = Problems::new();
+        let mut out = FightOutcome::new();
+        run_fight(
+            &mut state,
+            &content,
+            &plan,
+            &[Step::EndOneTurn, Step::EnemyActs {
+                enemy: "looter",
+                action: "looter.escape",
+                target: Some("hero"),
+            }],
+            &mut host,
+            &mut out,
+        )
+        .expect("escape");
+        assert!(
+            state.combatant(&cid("looter")).is_none(),
+            "Escape removes the Looter"
+        );
+        assert_eq!(state.gold_carried_away, 30, "moved, not copied");
+        let _ = &mut problems;
+    }
+
     /// **`Step::EndOneTurn` 的核心判据**：一步只让**一个**战斗员上场（多敌人战斗的地基）。
     ///
     /// 场景（全真实内容；`queue_imp.desk_jab` = 8 伤、`stamp_goblin.rubber_stamp_rush` = 5 伤，

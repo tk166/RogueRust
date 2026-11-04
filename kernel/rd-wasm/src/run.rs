@@ -3398,6 +3398,11 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
         return -1;
     };
     let hero_hp = crate::combat_hero_health().unwrap_or(0);
+    // §201: gold an enemy escaped with (the Looter). Read **before** `take_session()` -- after that
+    // the fight is gone. It rides in the record's text so a replay settles the same amount; the
+    // `b` word is already a bitfield (tier in the low two bits, result above) and packing a third
+    // number into it is how a silent replay divergence gets born.
+    let carried_gold = crate::combat_gold_carried_away();
     // Captured before the run is borrowed mutably below.
     let elite_fight = run_slot().as_ref().is_some_and(|s| s.elite_fight);
     let boss_fight = run_slot().as_ref().is_some_and(|s| s.boss_fight);
@@ -3413,9 +3418,10 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
         K_FIGHT_END,
         hero_hp,
         (i32::from(boss_fight) << 1 | i32::from(elite_fight)) | (result << 4),
-        "",
+        &std::format!("{carried_gold}"),
     );
-    let verdict = apply_fight_outcome(session, hero_hp, result, elite_fight, boss_fight);
+    let verdict =
+        apply_fight_outcome(session, hero_hp, result, elite_fight, boss_fight, carried_gold);
     session.stamp();
     return verdict;
 }
@@ -3434,6 +3440,7 @@ fn flee_fight(slot: i32) -> i32 {
     let Some(hero_hp) = crate::combat_hero_health() else {
         return -1;
     };
+    let carried_gold = crate::combat_gold_carried_away();
     let Some(session) = run_slot().as_ref() else {
         return -1;
     };
@@ -3448,8 +3455,11 @@ fn flee_fight(slot: i32) -> i32 {
         let message = describe(&e);
         return fail(session, &message);
     }
-    session.log(K_FIGHT_END, hero_hp, 3 << 4, "");
-    let verdict = apply_fight_outcome(session, hero_hp, 3, false, false);
+    // §201: an escape still forfeits what the thieves carried away -- it is the same `fight_end`
+    // record, just with `result = 3` (no rewards), and the log has to carry the amount or a replay
+    // would settle a different run.
+    session.log(K_FIGHT_END, hero_hp, 3 << 4, &std::format!("{carried_gold}"));
+    let verdict = apply_fight_outcome(session, hero_hp, 3, false, false, carried_gold);
     session.stamp();
     if verdict < 0 {
         return verdict;
@@ -3464,6 +3474,7 @@ fn apply_fight_outcome(
     result: i32,
     elite_fight: bool,
     boss_fight: bool,
+    carried_gold: i32,
 ) -> i32 {
     // ⚠️ `in_fight` 清在这里，不是清在导出里。它原来在 `rd_run_fight_end` 里，而回放走的是
     // `replay_fight` ⇒ 回放一场战斗之后运行层仍然"在战斗中"，于是页面的"回档"被内核拒掉
@@ -3472,6 +3483,14 @@ fn apply_fight_outcome(
     // The fight is over: the run's health becomes the hero's.
     let delta = hero_hp - session.state.health();
     session.state.adjust_health(delta);
+    // §201: the gold the Looter escaped with is **gone** (wiki `Thieves`: "Flees combat with your
+    // Gold"). `carried_gold` counts only escapees -- an enemy you killed returns what it held
+    // ("Stolen gold is returned if this enemy is killed"), so a dead one's counter is not here.
+    // Capped at what the run actually has (`adjust_gold` clamps at 0), which is the wiki's
+    // "doesn't give back gold it didn't steal" read from the other end.
+    if carried_gold > 0 {
+        session.state.adjust_gold(-carried_gold);
+    }
     // `inv:§5`: the tier follows what was fought, and it moves gold and rarity together.
     // `inv:§4.3`: a boss pays 95-105 and its reward is always rare.
     let fight_kind = if boss_fight {
@@ -3618,11 +3637,11 @@ pub extern "C" fn rd_run_replay_diverged() -> i32 {
 }
 
 /// Apply a **recorded** fight outcome (the replay's path; a fight is never re-simulated).
-fn replay_fight(session: &mut RunSession, hero_hp: i32, flags: i32) -> i32 {
+fn replay_fight(session: &mut RunSession, hero_hp: i32, flags: i32, carried_gold: i32) -> i32 {
     let elite = flags & 1 != 0;
     let boss = flags & 2 != 0;
     let result = flags >> 4;
-    apply_fight_outcome(session, hero_hp, result, elite, boss)
+    apply_fight_outcome(session, hero_hp, result, elite, boss, carried_gold)
 }
 
 /// Replay the script in `(ptr, len)`. `0` = every step reproduced; `n > 0` = step `n` diverged;
@@ -3802,7 +3821,10 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
                 let Some(session) = run_slot().as_mut() else {
                     return -1;
                 };
-                let _ = replay_fight(session, a, b);
+                // §201: the gold an enemy escaped with is in the record's text (a plain
+                // decimal); an older record without it settles 0, which is what those runs did.
+                let carried = payload.parse::<i32>().unwrap_or(0);
+                let _ = replay_fight(session, a, b, carried);
             }
             K_FIGHT_BEGIN => {
                 let _ = rd_run_fight_begin();
@@ -4028,6 +4050,53 @@ mod tests {
         replay_diverged: 0,
         hash_failed: false,
         });
+    }
+
+    /// §201: **the gold a Looter escaped with is gone -- and it is the only gold that goes.**
+    ///
+    /// Three judgements, each locking one way the settlement could be wrong:
+    /// 1. `carried_gold = 15` on a victory takes 15 off the run's gold;
+    /// 2. a **killed** thief costs nothing (`carried_gold = 0`): its `stolen_gold` counter never
+    ///    reaches `gold_carried_away` (wiki: "Stolen gold is returned if this enemy is killed");
+    /// 3. the deduction is **clamped at 0** -- a run with 5 gold cannot lose 15.
+    ///
+    /// The victory reward also moves gold, so each case measures it first: case 2 settles the same
+    /// seed/health **with no escapee** and reads what the reward paid, then cases 1/3 subtract the
+    /// same reward from the expectation. (Hard-coding `inv:§5`'s 10-20 would make this test a second
+    /// copy of the reward table.)
+    ///
+    /// Negative control: make `apply_fight_outcome` read the enemies' counters instead of the
+    /// passed-in number and case 2 goes red -- a dead thief would still cost gold.
+    #[test]
+    fn the_gold_a_thief_carried_away_is_the_only_gold_lost() {
+        let deck = ["strike", "strike", "strike", "strike", "strike", "defend", "defend",
+                    "defend", "defend", "bash"];
+        let settle = |seed: i32, carried: i32, gold_before: i32| -> (i32, i32) {
+            test_run(seed, 70, 80, &deck);
+            run_slot().as_mut().expect("run").state.adjust_gold(gold_before);
+            let verdict = apply_fight_outcome(
+                run_slot().as_mut().expect("run"), 70, 1, false, false, carried);
+            assert!(verdict >= 0, "a settled victory must not fail: {verdict}");
+            (run_slot().as_ref().expect("run").state.gold(), verdict)
+        };
+
+        // The reward this seed pays, measured with no escapee at all.
+        let (no_escape, _) = settle(21, 0, 45);
+        let reward = no_escape - 45;
+        // 1: an escape costs exactly what the escapee carried.
+        let (escaped, _) = settle(21, 15, 45);
+        assert_eq!(escaped, 45 + reward - 15, "45 gold minus the 15 it escaped with");
+        // 2: a killed thief returns everything it held -- the reward is the only movement.
+        assert_eq!(no_escape, 45 + reward, "a dead thief costs nothing");
+        // 3: clamped at zero. Seed 23 pays its own reward, so measure that one too.
+        let (poor_no_escape, _) = settle(23, 0, 5);
+        let poor_reward = poor_no_escape - 5;
+        let (broke, _) = settle(23, 999, 5);
+        assert_eq!(
+            broke,
+            poor_reward.max(0),
+            "an escape cannot push gold below zero (5 gold, 999 carried)"
+        );
     }
 
     /// Start a run and **finish the blessing**, so every test below stands on floor 1 with a
@@ -5083,7 +5152,7 @@ mod tests {
             session.elite_fight = false;
             session.boss_fight = false;
             // 一场**赢了的**普通战斗，英雄掉了 5 点血。
-            let verdict = replay_fight(session, health - 5, 1 << 4);
+            let verdict = replay_fight(session, health - 5, 1 << 4, 0);
             // `apply_fight_outcome` 返回 `0.max(result)`：1 = 赢了（不是错误码）。
             assert_eq!(verdict, 1, "the outcome was applied");
         }
@@ -6816,7 +6885,8 @@ mod tests {
 
         let act_one = first_fight(false);
         assert!(
-            ["acid_slime", "spike_slime", "jaw_worm", "cultist"]
+            ["acid_slime", "spike_slime", "jaw_worm", "cultist", "looter", "louse",
+                 "fungi_beast", "slaver", "gremlin"]
                 .iter()
                 .any(|name| act_one.contains(name)),
             "act 1 must field act-1 monsters, got {act_one}"
@@ -6890,7 +6960,9 @@ mod tests {
         // not "the slime boss".
         let boss = names[0].to_lowercase();
         assert!(
-            boss.contains("slime_boss") || boss.contains("time_eater"),
+            // §194 filled the act-1 boss pool to the wiki's three; the pick is seeded, so the
+            // assertion is "one of the pool", not "the one this seed used to get".
+            boss.contains("slime_boss") || boss.contains("the_guardian") || boss.contains("hexaghost"),
             "the boss must come from the Boss pool; got {names:?}"
         );
 

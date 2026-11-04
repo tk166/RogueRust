@@ -135,6 +135,17 @@ pub enum NodeKind {
     /// 实例的定义改成 `<id>+`。没有 `+` 行的卡（`dazed`）**保持原样** —— 那是 StS 的
     /// `canUpgrade() == false`，不是错误。
     UpgradeCards,
+    /// `node.carryAwayStolenGold` —— **带着偷来的钱离开战斗**（§201，本内核自己的节点）。
+    ///
+    /// StS 的 Looter 有一条 `Escape`：`Flees combat with your Gold`。偷钱在内核里只是一个
+    /// **计数器**（内容用 `node.setCombatantCounter` + `Relative` 加），而"逃走时钱跟着消失"
+    /// 需要一次跨层的记账 —— 那个战斗员马上就要被 `destroyCombatant` 摘掉，计数器会一起没。
+    ///
+    /// 所以这个节点做一件事：把目标身上 `CounterId` 那一格的**当前值**搬进战斗级的
+    /// `gold_carried_away`，再把那一格清零（不重复计）。运行层在 `fight_end` 只看那一个数：
+    /// 活着的/被打死的敌人身上的钱**不算**丢失（wiki：`Stolen gold is returned if this enemy is
+    /// killed`），只有带走的才算。所以"总共偷了多少"不需要另一个字段。
+    CarryAwayStolenGold,
     /// `node.selectCards` —— **挑卡并搬卡**（§195.4，本内核自己的节点）。
     ///
     /// 参考的词表里有四个 `sel.*` 卡选择器，`sel.rs` 明确拒绝了它们（"卡选择器 / 玩家选择"），
@@ -175,6 +186,7 @@ impl NodeKind {
             NodeKind::EndTurn => "node.endTurn",
             NodeKind::ExtraTurn => "node.extraTurn",
             NodeKind::UpgradeCards => "node.upgradeCards",
+            NodeKind::CarryAwayStolenGold => "node.carryAwayStolenGold",
             NodeKind::SelectCards => "node.selectCards",
             NodeKind::Repeat => "node.repeat",
         }
@@ -183,7 +195,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 22] = [
+        const ALL: [NodeKind; 23] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -206,6 +218,8 @@ impl NodeKind {
             NodeKind::EndTurn,
             NodeKind::ExtraTurn,
             NodeKind::UpgradeCards,
+            // §201：带着偷来的钱逃走（Looter 的 `Escape`）。
+            NodeKind::CarryAwayStolenGold,
             NodeKind::SelectCards,
             NodeKind::Repeat,
         ];

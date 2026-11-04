@@ -444,6 +444,16 @@ pub(crate) fn combat_result() -> Option<i32> {
 }
 
 /// The hero's current health in the installed fight.
+/// §201: how much gold an enemy **carried away** with it (`node.carryAwayStolenGold`).
+///
+/// The kernel has no gold; this is the one number the run needs at `fight_end`, and it is the only
+/// thing that makes "the Looter escaped with your gold" visible outside the fight.
+pub(crate) fn combat_gold_carried_away() -> i32 {
+    slot()
+        .as_ref()
+        .map_or(0, |session| session.state.gold_carried_away)
+}
+
 pub(crate) fn combat_hero_health() -> Option<i32> {
     let session = slot().as_ref()?;
     let hero = session.hero_id()?;

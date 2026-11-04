@@ -121,7 +121,7 @@ wiki 常见而我们**没有**的：
 | **死亡拦截** | **有**（`STAT.DeathPrevention` + PreDown 拦截，§180）：`Percent` 是本移植的扩展 | — |
 | **自动打出** | **有**（`combat_autoplay_top`，§182，走普通 `play_card` + 每副本 0 费） | — |
 | **整手牌升级 / 整手牌改费** | **有**（§179：`combat_upgrade_hand`、`combat_randomize_costs`） | — |
-| **偷钱后逃跑**（Looter） | 没有 | 内容 + 一个"偷金币并 Escaped"的节目 |
+| ~~**偷钱后逃跑**（Looter）~~ | ✅ **已完成**（§201：`Thievery 15` 用 `setCombatantCounter` 记在敌人身上；`node.carryAwayStolenGold` 把逃走时带走的钱搬进 `CombatState::gold_carried_away`；运行层在 `fight_end` 扣 —— 死掉的小偷不扣，因为它的计数器不算「被带走」） | — |
 | **往牌库塞牌**（Hexaghost 的 Burn） | 机制**有**（`createCardInstance` + 区） | 内容 |
 | ~~形态切换 / 复活~~ | ✅ **已完成**（§195.1 Mode Shift 真累计受伤 / §195.2 `DeathPrevention` 真复活 / §195.8 Cultist 逃跑） | — |
 | **Giant Head 的 "It Is Time" 递增**（30 点、每次 +5） | **没有**：本项目是**简化版**（320 HP + Metallicize 4 + Glare/Count 两招，§130 记录） | 内容（wiki 的 500 HP 对一局切片太长） |
@@ -277,8 +277,8 @@ Sentry 的 Bolt 塞的就是它。
    **"下回合多能量"仍缺**：`TurnStartDraw` 这条管线能表达"下回合多抽"（`Draw Reduction` 的反向），
    但**能量**没有对应管线（`turn_start_refill` 只读配置）—— 那是所有 Energized 类卡与药水的前提。
 4. ~~**"行动者可以自毁"**（内核）~~ ✅ **已完成**（§200：`vacated_seat` 交接 + `dagger.explode` 自毁）。
-   **Looter 的偷钱逃走仍缺**：它要的是"金币"这个**跨层**概念（内核里没有金币，运行层才有），
-   所以那不是一条节点，而是一次"内核记 `stolen_gold` → 运行层在 `fight_end` 结算"的约定。
+   ~~**Looter 的偷钱逃走**~~ ✅ **已完成**（§201：`node.carryAwayStolenGold` +
+   `CombatState::gold_carried_away` + `fight_end` 结算）。**工作包 B 到这里全部完成。**
 5. **内容规模**（卡池 / 遗物 / 事件 / Act2 普通池）—— 纯量，不阻塞机制；**不要**当 P1（见审阅
    报告 §10.4 的反对意见）。
 6. **第四幕与钥匙**（运行层）—— 明确的范围外，等前面清完再说。

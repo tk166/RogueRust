@@ -3307,6 +3307,17 @@ pub struct CombatState {
     pub next_card_instance_number: i32,
     pub next_effect_chain_number: i64,
     pub next_program_execution_id: i64,
+    /// §201: 逃走的敌人**带走**的金币（Looter 的 `Escape`）。
+    ///
+    /// 内核里没有金币 —— 金币是运行层的。这一格是唯一的跨层约定：内容用
+    /// `node.carryAwayStolenGold` 把某个战斗员 `stolen_gold` 计数器的当前值搬进来，运行层在
+    /// `fight_end` 只看这一个数（活着的/被打死的敌人身上的钱**不算**丢失：wiki
+    /// `Stolen gold is returned if this enemy is killed`）。
+    ///
+    /// 不进哈希、不进快照（参考没有这个字段，写进 `hash_golden` 会移动全部 85 个语料基线）。
+    /// 它是**一场战斗内部**的账，而回放重放的是整场战斗，所以不需要进 `RDR1` 的每一行 ——
+    /// 只需要在 `fight_end` 那一行里带上（`run.rs` 把它写进了记录）。
+    pub gold_carried_away: i32,
     /// The run's Ascension level, 0–20 (§187). **Not** in the snapshot text: the reference has no
     /// such field, so writing it into `hash_golden` would move all 85 corpus cases. It is a
     /// fight-level constant (set once at build, never mutated mid-fight), and `hash_full` must
@@ -3465,6 +3476,7 @@ impl Empty for CombatState {
         turn_phase: CombatTurnPhase::WaitingToStartTurn,
         active_combatant_id: None,
         vacated_seat: None,
+        gold_carried_away: 0,
         end_turn_requested: false,
         forced_turn_ends: 0,
         ascension: 0,
@@ -3580,6 +3592,7 @@ impl CombatState {
             turn_phase: CombatTurnPhase::WaitingToStartTurn,
             active_combatant_id: None,
             vacated_seat: None,
+            gold_carried_away: 0,
             end_turn_requested: false,
             forced_turn_ends: 0,
             extra_turn_for: None,

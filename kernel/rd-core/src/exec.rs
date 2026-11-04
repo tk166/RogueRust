@@ -1599,6 +1599,9 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::CreateCombatant
         // §178：`destroyCombatant` 与 `createCombatant` 对称 —— 立即生效，不走效果队列。
         | NodeKind::DestroyCombatant
+        // §201：`carryAwayStolenGold` 同理 —— 它必须与 `destroyCombatant` **同一个 tick** 生效，
+        // 否则"钱搬走了但人还在"（或反过来）会有一个可观察的中间态。
+        | NodeKind::CarryAwayStolenGold
         | NodeKind::EndTurn
         | NodeKind::ExtraTurn
         // W4e 的 7 种（见模块头那张表）。
@@ -1766,6 +1769,9 @@ fn dispatch_node(
     NodeKind::ExtraTurn => extra_turn_node(node, ctx, frame, slot, stats),
     NodeKind::CreateCombatant => create_combatant_node(node, ctx, frame, slot, stats),
     NodeKind::DestroyCombatant => destroy_combatant_node(node, ctx, frame, slot, stats),
+        NodeKind::CarryAwayStolenGold => {
+            carry_away_stolen_gold_node(node, ctx, frame, slot, stats)
+        }
         NodeKind::SetCombatantCounter => set_combatant_counter_node(node, ctx, frame, slot, stats),
         NodeKind::ModifyStatusStacks => modify_status_stacks_node(node, ctx, frame, slot, stats),
         NodeKind::DrawCards => draw_cards_node(node, ctx, frame, slot, stats),
@@ -2357,6 +2363,57 @@ fn destroy_combatant_node(
                 c: 0,
             },
         );
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
+/// `node.carryAwayStolenGold`：**带着偷来的钱离开战斗**（§201，Looter 的 `Escape`）。
+///
+/// 字段：`CounterId`（内容给的计数器名，例如 `stolen_gold`）、`TargetSelector`（逃跑的那个）。
+///
+/// 做两件事：把目标身上那一格的**当前值**加进 `state.gold_carried_away`，再把那一格清零。
+/// 清零不是"顺手"：`Escape` 之后目标马上被 `destroyCombatant` 摘掉，但如果内容没删它（比如
+/// 一个"只带走一半"的变体），留着原值就会在 `fight_end` 被算成**两次**丢失。
+///
+/// ⚠️ **只有逃走的钱算丢失**。活着的敌人身上的 `stolen_gold` 不算 —— wiki 的原话是
+/// `Stolen gold is returned if this enemy is killed`，而"打赢时它还活着"这件事不存在
+/// （打赢 = 全灭）。所以运行层不需要另一个"总共偷了多少"的字段。
+fn carry_away_stolen_gold_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let _ = &mut *stats;
+    let counter_text = node
+        .str_field("CounterId")?
+        .ok_or(IrError::Missing("CounterId"))?;
+    let counter_id = CounterId::new(counter_text)?;
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut targets)?;
+    // 一个都解析不出来 ⇒ 响亮失败：`Escape` 少了这一步会让玩家**白拿**钱，而局面看起来
+    // 一切正常（`destroyCombatant` 照样把人摘掉）。
+    if count == 0 {
+        return Err(ExecError::NoSource);
+    }
+    for target in targets.iter().take(count) {
+        let Some(combatant) = ctx.state.combatant_mut(target) else {
+            continue; // 已经不在场：与 `destroyCombatant` 同一条"打尸体是 no-op"
+        };
+        let stolen = combatant
+            .counters()
+            .iter()
+            .find(|entry| entry.key == counter_id)
+            .map_or(0, |entry| entry.value);
+        if stolen <= 0 {
+            continue;
+        }
+        combatant.set_counter(counter_id, 0)?;
+        ctx.state.gold_carried_away = ctx.state.gold_carried_away.saturating_add(stolen);
     }
     resume_later(ctx.state, frame, slot)
 }
