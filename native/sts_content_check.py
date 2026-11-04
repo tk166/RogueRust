@@ -1276,6 +1276,19 @@ INV_ASC_VARIANTS = {
     'book_of_stabbing.multi_stab': [(3, [('repeat', ('expr', 'add'), 'damage', 7, 'event'), ('counter', 'book_stab_uses', 1, True, 'source')])],
     'byrd.peck': [(2, [('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event')])],
     'byrd.swoop': [(2, [('damage', 14, 'event')])],
+    # §204: wiki `Thieves` -- Looter's Mug 10 (A2: 11) and Lunge 12 (A2: 14). Thievery itself has an
+    # A17 row (15 -> 20) but `EACT` still has no ascension column, so the **steal** stays 15 (the
+    # note is in the monster's `AiNote`); only the damage moves here.
+    'looter.mug': [(2, [('damage', 11, 'event'),
+                        ('counter', 'stolen_gold', 15, True, 'source')])],
+    'looter.lunge': [(2, [('damage', 14, 'event'),
+                          ('counter', 'stolen_gold', 15, True, 'source')])],
+    # §204: wiki `Giant Head` -- Count deals (30; A3: 40). This content's base is 26 (§130's
+    # simplification), so the A3 row keeps the wiki's **+10 step**: 36.
+    'giant_head.count': [(3, [('damage', 36, 'event')])],
+    # §204: wiki `Lagavulin` -- Siphon Soul -1/-1 (A18: -2/-2).
+    'lagavulin.siphon_soul': [(18, [('modify', 'standard.strength', -2, 'event'),
+                                    ('modify', 'standard.dexterity', -2, 'event')])],
     'chosen.debilitate': [(2, [('damage', 12, 'event'), ('status', 'standard.vulnerable', 2, 'event')])],
     'chosen.poke': [(2, [('damage', 6, 'event'), ('damage', 6, 'event')])],
     'cultist.incantation': [(2, [('status', 'ritual', 4, 'source')])],
@@ -1487,6 +1500,79 @@ def check_ascension_variants(doc):
         fail("asc.unknown", "variants not pinned by the inventory: %s" % unknown)
     ok("ascension variants", "%d variants over %d actions pinned (A2/A3/A4 + A17-A19)"
        % (total, len(INV_ASC_VARIANTS)))
+    check_ascension_coverage(actions)
+
+
+# §204: the moves whose wiki page shows **no** ascension row. Each entry says which page was read;
+# "the wiki has no A-row here" is a decision, and a decision has to be written down or the next
+# reader cannot tell it from "nobody looked".
+INV_NO_ASC = {
+    # `Thieves` (native/wiki_asc/thieves.txt): Smoke Bomb is "Gains 6 Block" with no A-row; Escape
+    # is a rule, not a number.
+    'looter.smoke_bomb': 'wiki Thieves: 6 Block, no A-row',
+    'looter.escape': 'wiki Thieves: Escape has no numbers',
+    # `Cultist`: Dark Strike "Deals 6 damage." -- the Ritual stack is what ascension moves (already
+    # an `Incantation` variant).
+    'cultist.dark_strike': 'wiki Cultist: 6 damage, no A-row',
+    # `Jaw Worm`: Thrash "Deals 7 damage. Gains 5 Block." -- Chomp/Bellow carry the A-rows.
+    'jaw_worm.thrash': 'wiki Jaw Worm: Thrash has no A-row',
+    # `Fungi Beast`: Bite "Deals 6 damage." (Grow carries them).
+    'fungi_beast.bite': 'wiki Fungi Beast: Bite has no A-row',
+    # `Gremlin Leader`: Slash "Deals 6x3 damage." / Rally's numbers are pinned as A3/A18 variants
+    # already -- the *attack* has no A-row.
+    'gremlin_leader.summon': 'wiki Gremlin Leader: Summon has no numbers',
+    # `The Guardian`: Twin Slam "Deals 8x2 damage." / Whirlwind "Deals 5x4 damage." -- Fierce Bash
+    # and Vent Steam carry the A-rows (Vent Steam's Sharp Hide 3 -> A19: 4 is a counter, see below).
+    'the_guardian.twin_slam': 'wiki The Guardian: no A-row',
+    'the_guardian.whirlwind': 'wiki The Guardian: no A-row',
+    'the_guardian.charging_up': 'wiki The Guardian: Mode Shift moves, no A-row on the move itself',
+    # `Hexaghost`: Divider scales with HP ("(N+1)x6", no A-row); Activate/Inferno hold the A-rows.
+    'hexaghost.divider': 'wiki Hexaghost: Divider has no A-row',
+    'hexaghost.activate': 'wiki Hexaghost: Activate has no numbers',
+    # `Nemesis`: Scythe "Deals 45 damage." (Tri Attack/Tri Burn carry the A-rows).
+    'nemesis.scythe': 'wiki Nemesis: Scythe has no A-row',
+    # `Awakened One`: none of the five moves has an A-row; the ascension rows are on its starting
+    # powers (Regenerate / Curiosity / Strength), which are `StartingStatuses`.
+    'awakened_one.slash': 'wiki Awakened One: no A-row on moves',
+    'awakened_one.soul_strike': 'wiki Awakened One: no A-row on moves',
+    'awakened_one.tackle': 'wiki Awakened One: no A-row on moves',
+    'awakened_one.sludge': 'wiki Awakened One: no A-row on moves',
+    'awakened_one.dark_echo': 'wiki Awakened One: no A-row on moves',
+    'awakened_one.rebirth': 'wiki Awakened One: Rebirth is a rule, no numbers',
+    # `Donu and Deca`: Circle of Power "All enemies gain 3 Strength" (the beams and Square of
+    # Protection carry the A-rows).
+    'donu.circle_of_power': 'wiki Donu and Deca: Circle of Power has no A-row',
+    # Dagger: Wound 9 / Explode 25 -- neither has an A-row (the dagger's HP does).
+    'dagger.wound': 'wiki Reptomancer: dagger moves have no A-row',
+    'dagger.explode': 'wiki Reptomancer: Explode 25, no A-row',
+    'slime_boss.preparing': 'wiki Slime Boss: Preparing has no numbers',
+    'gremlin_wizard.charging': 'wiki Gremlin Wizard: Charging has no numbers',
+}
+
+# §204: how many actions still have **neither** a variant nor an exemption. This is a **ratchet**:
+# the number may only go down, and it is printed (not implied) so "we reviewed everything" cannot be
+# claimed without the count agreeing. The first measurement was 44.
+ASC_UNREVIEWED_CEILING = 40
+
+
+def check_ascension_coverage(actions):
+    """§204: every damage-dealing move carries a **decision**, and the undecided count shrinks."""
+    print("[7c] ascension coverage (port-plan.md §204)")
+    for aid, reason in INV_NO_ASC.items():
+        action = actions.get(aid)
+        if action is None:
+            fail("asc.exempt." + aid, "action missing")
+            continue
+        if action.get("ProgramAsc"):
+            fail("asc.exempt." + aid,
+                 "listed as 'no ascension row' (%s) but it **has** ProgramAsc" % reason)
+    pinned = set(INV_ASC_VARIANTS) | set(INV_NO_ASC)
+    unreviewed = sorted(a["Id"] for a in actions.values() if a["Id"] not in pinned)
+    ok("ascension coverage", "%d with variants + %d exempt = %d reviewed, %d undecided"
+       % (len(INV_ASC_VARIANTS), len(INV_NO_ASC), len(pinned), len(unreviewed)))
+    if len(unreviewed) > ASC_UNREVIEWED_CEILING:
+        fail("asc.unreviewed", "%d actions have no ascension decision (ceiling %d): %s"
+             % (len(unreviewed), ASC_UNREVIEWED_CEILING, ", ".join(unreviewed[:12])))
 
 
 def check_spawn_rolls(doc):

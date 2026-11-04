@@ -5443,6 +5443,116 @@ mod tests {
     ///
     /// **"总数 + 分布 + 抽样"三样一起比才有区分力**：只比抽样 → "少读一半遭遇"照样绿；
     /// 只比总数 → "两条记录互相搬了位置"照样绿；只比分布 → 抽样的 id/动作串错位看不出来。
+    /// §204：`ProgramAsc` 的**选取**在阈值两侧各测一次，而且每个变体只改 wiki 说的那个数。
+    ///
+    /// 这条是 §187/§192 机制的**端到端**判据：此前只有内容门的"变体与基础节目不同"，没有一条
+    /// 把"内容里写的 A2/A3/A18 行"与"`ascension_program` 选出来的节目"连起来。四行对应 §204
+    /// 新加的四个变体（wiki 出处 `native/wiki_asc/*.txt`）：
+    ///
+    /// * `looter.mug` A2 —— 伤害 10 → 11（**偷钱那格不动**：`Thievery` 的 A17 行还没有办法表达）；
+    /// * `looter.lunge` A2 —— 12 → 14；
+    /// * `giant_head.count` A3 —— 26 → 36（wiki 的 +10 步长落在本内容 26 的基线上）；
+    /// * `lagavulin.siphon_soul` A18 —— 力量/敏捷各 -1 → 各 -2。
+    ///
+    /// 每一行都在**阈值之下**与**阈值上**各问一次：只测一侧等于没测"阈值"这件事。
+    #[test]
+    fn an_ascension_variant_is_picked_on_the_threshold_and_only_changes_its_number() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&blob).expect("the image parses");
+        // (action, threshold, level below, base value, variant value)
+        let cases: [(&str, i32, i32, i64, i64); 4] = [
+            ("looter.mug", 2, 1, 10, 11),
+            ("looter.lunge", 2, 1, 12, 14),
+            ("giant_head.count", 3, 2, 26, 36),
+            ("lagavulin.siphon_soul", 18, 17, -1, -2),
+        ];
+        for (action, threshold, below, base_value, variant_value) in cases {
+            let row = content
+                .lookup_in(action, crate::content::EK_EACTION)
+                .unwrap_or_else(|| panic!("{action} must exist"))
+                .index;
+            let action_row = content.enemy_action(u32::from(row)).expect("EACT row");
+            // Below the threshold: no variant at all, so the caller falls back to `Program`.
+            assert!(
+                content.ascension_program(action_row, below).expect("read").is_none(),
+                "{action}: A{below} must not select a variant (the row is A{threshold})"
+            );
+            let variant = content
+                .ascension_program(action_row, threshold)
+                .expect("read")
+                .unwrap_or_else(|| panic!("{action}: A{threshold} must select a variant"));
+            let values = numeric_consts(&content, variant);
+            assert!(
+                values.contains(&variant_value),
+                "{action}: A{threshold} should carry {variant_value}, got {values:?}"
+            );
+            let base_count = values.iter().filter(|v| **v == base_value).count();
+            let variant_count = values.iter().filter(|v| **v == variant_value).count();
+            assert!(
+                variant_count >= 1,
+                "{action}: A{threshold} lost {variant_value} entirely: {values:?}"
+            );
+            // `lagavulin.siphon_soul` legitimately has **two** -1s in the base program (Strength and
+            // Dexterity), and the variant rewrites both; every other case must have removed its base
+            // number completely -- that is what "only the wiki's number moved" means.
+            if action != "lagavulin.siphon_soul" {
+                assert_eq!(
+                    base_count, 0,
+                    "{action}: the base value {base_value} survived into the A{threshold} variant"
+                );
+            }
+        }
+    }
+
+    /// Every integer `const` inside a program envelope, in tree order.
+    fn numeric_consts(content: &Content<'_>, envelope: crate::ir::NodeRef<'_>) -> Vec<i64> {
+        let mut out = Vec::new();
+        walk_consts(content, envelope, &mut out, 0);
+        out
+    }
+
+    fn walk_consts(
+        content: &Content<'_>,
+        node: crate::ir::NodeRef<'_>,
+        out: &mut Vec<i64>,
+        depth: u32,
+    ) {
+        if depth > 32 {
+            return;
+        }
+        // Amount-bearing value expressions. `const` is a **value kind** (`{"kind": "const",
+        // "value": {"Value": n}}`), not a node kind -- which is why this reads the field first and
+        // only then asks what kind of expression it holds.
+        for field in ["Amount", "Stacks", "Delta", "Count", "Health", "Value"] {
+            let Ok(Some(expr)) = node.node_field(field) else {
+                continue;
+            };
+            if expr.kind_str().map(|k| k == "const").unwrap_or(false) {
+                if let Ok(Some(value)) = expr.int_field("Value") {
+                    out.push(i64::from(value));
+                }
+            }
+        }
+        for field in ["Root", "Then", "Else", "Body"] {
+            if let Ok(Some(child)) = node.node_field(field) {
+                walk_consts(content, child, out, depth + 1);
+            }
+        }
+        let mut children = [0u16; 64];
+        if let Ok(count) = node.list_field("Children", &mut children) {
+            for index in 0..count.min(children.len()) {
+                let Some(id) = children.get(index).copied() else {
+                    continue;
+                };
+                walk_consts(content, node.child(id), out, depth + 1);
+            }
+        }
+    }
+
     #[test]
     fn every_encounter_enemy_record_reads() {
         with_core(|content, _blob| {

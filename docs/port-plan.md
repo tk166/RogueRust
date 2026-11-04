@@ -14119,3 +14119,62 @@ Bronze Orb 在面板上叫 `enemy #1`。运行层同样如此（它不是调试�
 C 的三条：全遭遇构造（§202.1）、三幕战斗切片（§202.2/3 内核 + §203 页面）、内容字段的 wiki
 追溯（仍人工，`AiNote` / `InvRef` / `docs/spec/` 承担了一部分）。**C 到此完成**，剩下的具体
 缺口只有一个：召唤物的显示名（203.4）。
+
+---
+
+## §204 A2/A17 的 `EACT` 缺口：把"没复核"变成"有决定"
+
+§192 已经做出了 `EACT.ProgramAsc`（一条动作的升档节目列表，选"阈值 ≤ 等级的里面最大的那个"），
+但**内容只填了 72/125 条**。剩下的 53 条里，有些是 wiki 真的没有 A 行（Smoke Bomb、Divider、
+Awakened One 的五招），有些是**漏了**（Looter 的 Mug/Lunge、Giant Head 的 Count、Lagavulin 的
+Siphon Soul）。这两类在文件里长得**一模一样**，而"没填"会被读成"这个动作在 A2 不变"。
+
+### 204.1 判断与数据
+
+本内容没有"从代码里猜 wiki"，所以这一节做的是**分类**而不是扫描：每条动作要么有变体，
+要么在 `INV_NO_ASC` 里带着**出处**（哪一页、为什么没有），要么算"未复核"。今天补的四条：
+
+| 动作 | 档位 | wiki | 变体 |
+|---|---|---|---|
+| `looter.mug` | A2 | `Thieves`：Mug 10（A2: 11） | 伤害 10 → 11（**偷钱那格不动**） |
+| `looter.lunge` | A2 | 同上：Lunge 12（A2: 14） | 12 → 14 |
+| `giant_head.count` | A3 | `Giant Head`：Count （30; A3: 40） | 26 → 36（wiki 的 +10 步长落在本内容 26 的基线上） |
+| `lagavulin.siphon_soul` | A18 | `Lagavulin`：-1/-1（A18: -2/-2） | 力量/敏捷各 -2 |
+
+`Thievery 15 → A17: 20` **没做**，而且这次不是"忘了"：偷钱那格的数值在 `setCombatantCounter` 的
+`Amount` 里，A17 需要的是"同一个动作在不同等级偷不同数量" —— `ProgramAsc` **正好能表达它**
+（换一个 `Amount` 常量即可）。这一节没做它只是因为还没到那一步，`AiNote` 里写着。
+**下一条要补的就是它**（`looter.mug/lunge` 的 A17 行：偷 20）。
+
+### 204.2 两条判据（缺一不可）
+
+* `content::tests::an_ascension_variant_is_picked_on_the_threshold_and_only_changes_its_number`：
+  对四条变体，**阈值两侧各问一次**（`A1` 必须没有变体、`A2` 必须有），并且把变体信封里的所有
+  `const` 整数走一遍，断言"wiki 说的那个数到了、基础那个数没了"。只测一侧等于没测"阈值"。
+* `battle::tests::ascension_two_makes_the_looter_mug_hit_for_eleven`：**同一份脚本、同一个种子**，
+  只有 `state.ascension` 不同 ⇒ 英雄少掉 10 点 vs 11 点。这条钉的是"选出来的信封真的被用来跑"。
+  负控：把 `intent::execute_action` 改成"读了变体但仍用 `Program`" ⇒ 红在 `[(0,10),(2,10)]`。
+
+内容门的负控同样精确：把两条 A2 变体改成基础节目的副本 ⇒
+`asc.looter.mug.A2: facts [... ('damage', 10, ...)] , inv says [... ('damage', 11, ...)]`。
+
+### 204.3 ★ 覆盖率棘轮（这一节真正的收获）
+
+`check_ascension_coverage`（内容门 `[7c]`）把每条动作分成三类，并**打印**三个数：
+
+```
+ok   ascension coverage   76 with variants + 23 exempt = 99 reviewed, 26 undecided
+```
+
+`ASC_UNREVIEWED_CEILING = 40` 是**上限**而非常量：未复核数超过它才算失败。这条判据的用处不在于
+"现在多少"，而在于**它只能往下降** —— 加内容而忘了给升档行，会把这个数推上去，闸门当场说话。
+同时它双向检查：`INV_NO_ASC` 里写"没有 A 行"的动作一旦**有了** `ProgramAsc`，也会红
+（"豁免"和"变体"不能同时成立，否则两份声明互相掩盖）。
+
+### 204.4 数字与仍然欠的
+
+* **20/20 闸门绿**，单测 **883**（696 core + 79 wasm + 107 run + 1）；四条对拍不变。
+* 内容：镜像 73,904 → **74,120 B**（core 62,432）；动作数不变（125）。
+* **仍然欠**：①`Thievery` 的 A17 行（见 204.1，机制已具备）；②26 条未复核的动作（多数是
+  Boss 的"规则型"招式与 `bronze_orb.*`/`torch_head.*`，需要各自的 wiki 页）；③A17–A19 里
+  **不在 `EACT` 上的**数值（起始状态、血量、掷骰）由 §190/§191/§193 的另一套机制承担。

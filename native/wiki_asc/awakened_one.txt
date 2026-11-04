@@ -89,11 +89,12 @@ Always starts Phase Two with {{Int|Awakened One|Dark Echo}}. Afterward, it has a
 The remaining {{M|Cultist|Cultists}} will flee when the Awakened One is defeated in Phase Two.
 
 == Trivia ==
-* The {{M|Cultist|Cultists}} in this fight are not {{BD|Minion|Minions}} despite fleeing when the Awakened One is defeated so {{KW|Fatal}} effects will still trigger when killing them.
-* {{R|Matryoshka}} and {{R|Eternal Feather}} both reference this boss in their flavor text.
-* According to {{R|Bird-Faced Urn|Bird-Faced Urn's}} flavor text, the Awakened One is the crow god Mazaleth.
+* The {{M|Cultist|Cultists}} in this fight are not {{BD|Minion|Minions}} despite fleeing when The Awakened One is defeated so {{KW|Fatal}} effects will still trigger when killing them.
+* {{R|Matryoshka}} and {{R|Eternal Feather}} both connect to the bird god Mazaleth which connects to the rest of the crow cult.
+* According to {{R|Bird-Faced Urn|Bird-Faced Urn's}} description, The Awakened one's god is called Mazaleth. Mazaleth is also mentioned in the description of the [[Slay the Spire 2:Mazaleth's Gift|potion]] Mazaleths gift.
 ** Fittingly, the {{R|Bird-Faced Urn}} has an effect triggered by playing {{QueryLink|Cards|type:power|Power}} cards, just like the Awakened One's {{BD|Curiosity}}.
 * A {{C|Ritual Dagger}} is stuck in its chest.
+* The Awakened One may be a byproduct of a ritual involving the [[Ritual Dagger]] and one [[Chosen]] transforming said Chosen into the avatar of Mazaleth.
 
 {{EnemyNav}}
 [[Category:Bosses]]

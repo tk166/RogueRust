@@ -3261,6 +3261,70 @@ mod tests {
         }
     }
 
+    /// §204：**A2 的伤害真的落地** —— 不是"节目形状对"，而是"英雄少掉 11 点"。
+    ///
+    /// 上一节级的判据（`content::tests::an_ascension_variant_is_picked_on_the_threshold...`）证明
+    /// `ascension_program` 选对了信封；这条证明**它真的被用来跑**：同样的种子、同样的脚本，
+    /// 只有 `state.ascension` 不同，Looter 的 Mug 打 10 还是 11。
+    ///
+    /// 为什么必须两条都有：`intent::execute_action` 里"选节目"和"跑节目"是两个地方，
+    /// 只测一边时另一边可以永远用 `Program`，而**所有闸门都是绿的**（这正是 §192 那次
+    /// "变体写了但没人读"的形状）。
+    #[test]
+    fn ascension_two_makes_the_looter_mug_hit_for_eleven() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut hits = Vec::new();
+        for ascension in [0u8, 2u8] {
+            let enemies = [PlanCombatant { id: "looter", max_health: 44 }];
+            let deck: [DeckEntry; 0] = [];
+            let res = resources();
+            let refill = refills();
+            let plan = FightPlan {
+                combat_id: "looter_asc",
+                seed: 1,
+                hero: PlanCombatant { id: "hero", max_health: 70 },
+                enemies: &enemies,
+                deck: &deck,
+                cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+                shuffle_draw_pile_on_start: false,
+                resources: &res,
+                turn_start_refills: &refill,
+            };
+            let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
+            state.set_ascension(ascension);
+            let mut host = Host::new(&content);
+            build_fight(&mut state, &content, &plan).expect("the looter fight builds");
+            let config = turn_config_for(&plan).expect("config");
+            crate::turn::start_current_turn(&mut state, &config, &mut host).expect("turn 1");
+            let mut out = FightOutcome::new();
+            run_fight(
+                &mut state,
+                &content,
+                &plan,
+                &[Step::EndOneTurn, Step::EnemyActs {
+                    enemy: "looter",
+                    action: "looter.mug",
+                    target: Some("hero"),
+                }],
+                &mut host,
+                &mut out,
+            )
+            .expect("mug");
+            let hp = state.combatant(&cid("hero")).expect("hero").health_current;
+            hits.push((ascension, 70 - hp));
+        }
+        assert_eq!(
+            hits,
+            vec![(0, 10), (2, 11)],
+            "Mug is 10 below A2 and 11 at A2 (wiki `Thieves`)"
+        );
+    }
+
     /// §201：**Looter 偷钱 + 带着钱逃**。
     ///
     /// wiki `Thieves`：`Thievery 15`（"Steals X Gold whenever it attacks"）、`Escape`（"Flees
