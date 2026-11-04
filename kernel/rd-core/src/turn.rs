@@ -399,6 +399,13 @@ fn ensure_active_combatant(state: &mut CombatState) -> Result<CombatantId, TurnE
         return Ok(active);
     }
 
+    // §200: 席位刚被腾空（行动者在自己的回合里自毁）。这一支**不许**走下面那条"认领第一个
+    // 活人" —— 那会把回合序从头开始，而正确的位置信息在 `vacated_seat` 里。正常出口是
+    // `advance_to_next_combatant`；走到这里说明有人绕过了它，响亮失败好过静默重排。
+    if state.vacated_seat.is_some() {
+        return Err(TurnError::NoActiveCombatant);
+    }
+
     // 没有活跃单位 ⇒ 认领回合序里第一个活人。`is_alive` 只读，两次不可变借用可以共存。
     match state
         .turn_order()
@@ -737,7 +744,15 @@ pub fn end_current_turn<H: TurnHost>(
     let _ = config;
 
     ensure_ongoing(state)?; // `:48`
-    let actor = ensure_active_combatant(state)?; // `:49`（`EnsureActiveCombatantExistsInTurnOrder`）
+    // §200: 行动者在自己的回合里自毁 ⇒ 没有行动者了，但**这个回合还欠一次收尾**。它连牌堆都被
+    // 摘掉了，所以每一段 per-actor 的工作（手牌生命周期、弃手牌、回合末触发器、按时长衰减）
+    // 都没有对象 —— 整段跳过，只翻相位、把席位交给继任者、消化队列。
+    let vacated = state.active_combatant_id.is_none() && state.vacated_seat.is_some();
+    let actor = if vacated {
+        None
+    } else {
+        Some(ensure_active_combatant(state)?) // `:49`（`EnsureActiveCombatantExistsInTurnOrder`）
+    };
 
     // `combat.MarkTurnEnded()`（`:51`）：不在回合中就抛（`CombatState.cs:332-338`）。
     if state.turn_phase != CombatTurnPhase::TurnInProgress {
@@ -757,21 +772,23 @@ pub fn end_current_turn<H: TurnHost>(
     // ⚠️ ① 在参考里是**同一个事件的分发**里的一个处理器，所以它不花链号（整批只花事件那一个）；
     // 本内核把 ② ③ ④ 拆成了钩子/直接调用，① 仍然排在最前（Burn 的伤害因此在弃手牌**之前**
     // 就进了效果队列 —— 与参考"before the end-of-turn discard, which is deferred"同构）。
-    host.hand_turn_end_lifecycle(state, &actor)?;
-    if stopped(state) {
-        return Ok(());
-    }
-    discard_hand(state, &actor, host)?;
-    if stopped(state) {
-        return Ok(());
-    }
-    host.run_turn_ended_triggers(state, &actor)?;
-    if stopped(state) {
-        return Ok(());
-    }
-    host.decrease_timed_statuses(state, &actor)?;
-    if stopped(state) {
-        return Ok(());
+    if let Some(actor) = actor {
+        host.hand_turn_end_lifecycle(state, &actor)?;
+        if stopped(state) {
+            return Ok(());
+        }
+        discard_hand(state, &actor, host)?;
+        if stopped(state) {
+            return Ok(());
+        }
+        host.run_turn_ended_triggers(state, &actor)?;
+        if stopped(state) {
+            return Ok(());
+        }
+        host.decrease_timed_statuses(state, &actor)?;
+        if stopped(state) {
+            return Ok(());
+        }
     }
 
     // ① 消化 TurnEnded。
@@ -885,18 +902,47 @@ pub fn advance_to_next_combatant<H: TurnHost>(
     state: &mut CombatState,
     host: &mut H,
 ) -> Result<(), TurnError> {
-    ensure_active_combatant(state)?; // `:172`
-    let active = state
-        .active_combatant_id
-        .ok_or(TurnError::NoActiveCombatant)?;
-    // `:174-177`：`First(x => x.id == activeId)` —— 找不到就是"活跃单位不在回合序里"。
-    let Some(cur) = state.turn_order().iter().position(|id| *id == active) else {
-        return Err(TurnError::ActiveNotInTurnOrder);
+    // §200: 行动者在自己的回合里自毁之后 `active` 是空的，但"它坐在哪一格"还在
+    // `vacated_seat` 里 —— 那一格现在坐着它的**继任者**。`cur` 取它的**前一格**，于是下面那个
+    // `(cur + offset) % len` 的第一站正好是继任者（它要是也倒了，循环照旧往下跳）。
+    //
+    // 三个分支都只算出 `cur`（"刚结束的那个席位"），推进本身仍然只有下面那一段。
+    let active = if state.active_combatant_id.is_some() || state.vacated_seat.is_none() {
+        ensure_active_combatant(state)?; // `:172`
+        state.active_combatant_id
+    } else {
+        // 席位被腾空：`ensure_active_combatant` 会**拒绝**认领（见那里的注释），所以不走它。
+        None
+    };
+    let cur = match (active, state.vacated_seat.take()) {
+        (Some(active), _) => {
+            // `:174-177`：`First(x => x.id == activeId)` —— 找不到就是"活跃单位不在回合序里"。
+            let Some(position) = state.turn_order().iter().position(|id| *id == active) else {
+                return Err(TurnError::ActiveNotInTurnOrder);
+            };
+            position
+        }
+        (None, Some(seat)) => {
+            let len = state.turn_order().len();
+            if len == 0 {
+                return Err(TurnError::NoTurnOrder);
+            }
+            // 前一格：`seat == 0` 时是末尾（于是 `(cur + 1) % len == 0`），`seat == len` 时也是
+            // 末尾（于是绕回 0）—— 两种都对。
+            let seat = usize::from(seat);
+            if seat == 0 {
+                len - 1
+            } else {
+                (seat - 1) % len
+            }
+        }
+        (None, None) => return Err(TurnError::NoActiveCombatant),
     };
 
     // **An extra turn beats the rotation** (`node.extraTurn`, `port-plan.md` §127): the actor that
     // asked for one simply stays active, and only the turn clock moves.
-    if state.extra_turn_for == Some(active) {
+    // §200: 行动者自毁时 `extra_turn_for` 已经在 `remove_combatant` 里清掉，所以这一支不会命中。
+    if state.active_combatant_id.is_some() && state.extra_turn_for == state.active_combatant_id {
         state.extra_turn_for = None;
         state.current_turn += 1;
         state.expire_temporary_rules_at_turn_boundary();

@@ -498,7 +498,9 @@ INV_ACTIONS = {
                                             ("status", "standard.weak", 1, "event")]),
     "dagger.wound": ("Attack", [("damage", 9, "event"),
                                 ("card", "wound", 1, "DiscardPile", "event")]),
-    "dagger.explode": ("Attack", [("damage", 25, "event")]),
+    # §200: Explode = 25 damage **and the dagger dies** (wiki: Explode 25, then it leaves the
+    # fight). Before §200 the kernel refused to remove the acting combatant, so it only dealt damage.
+    "dagger.explode": ("Attack", [("damage", 25, "event"), ("destroy", "source")]),
     "taskmaster.scouring_whip": ("Attack", [("damage", 7, "event"),
                                             ("card", "wound", 1, "DiscardPile", "event")]),
 

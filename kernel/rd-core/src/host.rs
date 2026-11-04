@@ -5238,12 +5238,114 @@ mod tests {
             "removing a combatant that is not in the fight must fail loudly"
         );
         assert!(
-            state.remove_combatant(&cid("hero")).is_err(),
-            "the active combatant cannot be removed mid-turn (the turn loop holds its id)"
-        );
-        assert!(
             state_text(&state) == snapshot,
             "a refusal must not move a single byte"
+        );
+        // §200：**当前行动者可以自毁**了（Reptomancer 的匕首在自己的回合里炸掉自己）。
+        // 席位不是"直接交给继任者"，而是**记下位置**等这一回合收尾时交接 —— 否则收尾时的
+        // 一次推进会让继任者被跳过（一次跳两格）。`hero` 是 `arena()` 里第一个单位，
+        // 也就是行动者。
+        assert_eq!(state.active_combatant_id, Some(cid("hero")), "the arena starts on hero");
+        state
+            .remove_combatant(&cid("hero"))
+            .expect("the active combatant may remove itself");
+        assert_eq!(
+            state.active_combatant_id, None,
+            "the seat is vacant until the turn is closed"
+        );
+        assert_eq!(
+            state.vacated_seat,
+            Some(0),
+            "the index the successor sits in after the shift-down"
+        );
+    }
+
+    /// §200: 行动者**在自己的回合里自毁** —— 席位必须交给它的**继任者**，而且只推一格。
+    ///
+    /// `arena()` 的回合序是 `[hero, enemy_a, enemy_b]`。让 `enemy_a` 当行动者再把它移除，然后
+    /// 收尾这一回合：
+    ///
+    /// * 继任者必须是 `enemy_b`（**不是** `hero`，也**不是** `enemy_b` 之后再跳一格）；
+    /// * `current_turn` 只 +1（一次推进就够 —— 这正是"把席位直接设成继任者"会做错的地方：
+    ///   那样收尾时还会再推进一格，`enemy_b` 永远轮不到）；
+    /// * `current_round` 不变（没有绕回回合序的起点）。
+    ///
+    /// 负控：把 `advance_to_next_combatant` 里"取前一格"改成 `cur = seat` ⇒ 这里红在
+    /// `active == hero`（跳过继任者）。
+    #[test]
+    fn a_combatant_that_removes_itself_hands_the_seat_to_its_successor() {
+        let mut state = arena();
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        state.active_combatant_id = Some(cid("enemy_a"));
+        state.turn_phase = crate::state::CombatTurnPhase::TurnInProgress;
+        let turn_before = state.current_turn;
+        let round_before = state.current_round;
+
+        state
+            .remove_combatant(&cid("enemy_a"))
+            .expect("the acting combatant may remove itself");
+
+        crate::turn::end_current_turn(&mut state, &config(), &mut host).expect("the turn closes");
+
+        assert_eq!(
+            state.active_combatant_id,
+            Some(cid("enemy_b")),
+            "the successor takes the seat"
+        );
+        assert_eq!(state.current_turn, turn_before + 1, "exactly one advance");
+        assert_eq!(state.current_round, round_before, "no wrap-around");
+        assert_eq!(state.vacated_seat, None, "the parked seat is consumed");
+    }
+
+    /// §200: 自毁的是**最后一个**席位 ⇒ 绕回回合序开头（英雄），回合数 +1、轮次 +1。
+    ///
+    /// 这与上一条合起来钉住"前一格"的两个边界：`seat == len`（末尾被移除，绕回 0）与
+    /// `seat == 0`（第一个被移除）。
+    #[test]
+    fn a_combatant_that_removes_itself_last_wraps_to_the_front() {
+        let mut state = arena();
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        state.active_combatant_id = Some(cid("enemy_b"));
+        state.turn_phase = crate::state::CombatTurnPhase::TurnInProgress;
+        let round_before = state.current_round;
+
+        state
+            .remove_combatant(&cid("enemy_b"))
+            .expect("the last seat may remove itself");
+        assert_eq!(state.vacated_seat, Some(2), "past the new end: the successor is index 0");
+
+        crate::turn::end_current_turn(&mut state, &config(), &mut host).expect("the turn closes");
+
+        assert_eq!(state.active_combatant_id, Some(cid("hero")), "wraps to the front");
+        assert_eq!(state.current_round, round_before + 1, "a new round started");
+    }
+
+    /// §200 的**反向**判据：席位空着的时候，`ensure_active_combatant` 不许"认领第一个活人"。
+    ///
+    /// 那是最省事、也最错的写法：它会静默把回合序从头开始，而"继任者"其实是那一格上的人。
+    /// 所以走到那条路上必须**响亮失败**（`NoActiveCombatant`），由
+    /// `advance_to_next_combatant` 负责交接。
+    #[test]
+    fn a_vacant_seat_is_not_silently_reclaimed_from_the_top() {
+        let mut state = arena();
+        let blob = core_image();
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        state.active_combatant_id = Some(cid("enemy_a"));
+        state.turn_phase = crate::state::CombatTurnPhase::TurnInProgress;
+        state.remove_combatant(&cid("enemy_a")).expect("self-removal");
+
+        // 让 `end_current_turn` 之外的人去问"现在轮到谁"：它必须拒绝，而不是回答 hero。
+        let verdict = crate::turn::advance_to_next_combatant(&mut state, &mut host);
+        assert!(verdict.is_ok(), "the hand-off is the one legal way forward");
+        assert_eq!(
+            state.active_combatant_id,
+            Some(cid("enemy_b")),
+            "and it hands over to the successor, not to the top of the order"
         );
     }
 

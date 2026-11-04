@@ -13857,3 +13857,65 @@ Operation::ScalePercentPerStack   current * (100 + magnitude * stacks) / 100
 * 新导出/新字符串 0 个（`TurnStartEnergy` 是内容里的管线名，不走 ABI）。
 * 还差：能量**上限**（`max`）还没有修饰器（只有补给数有）；`Energized` 类"只下一回合"要靠
   内容给自己挂衰减触发器（本内容暂时没有这种卡）。
+
+---
+
+## §200 行动者自毁 + 匕首的 Explode（工作包 B-4 的第一半）
+
+`remove_combatant` 一直**拒绝**移除当前行动者（`CapacityError::ActiveCombatant`，§178 的理由是
+"回合循环按 id 找它"）。于是 Reptomancer 的匕首只能打 25 点伤害、**永远留在场上** ——
+内容里那条 `AiNote` 自己写着"⚠️ 偏差：`Explode` 之后不自毁"。
+
+### 200.1 空出来的那一格决定继任者
+
+`remove_combatant` 现在允许移除当前行动者，但**不**直接把席位交给继任者，而是把"那一格"记进
+`CombatState::vacated_seat`（`u8`，`turn_order` 是 shift-down 的，所以被移除者原来那一格现在
+正好坐着继任者）。收尾这一回合时 `turn::advance_to_next_combatant` 用**它的前一格**当 `cur`，
+于是 `(cur + offset) % 各种` 的第一站正好是继任者。
+
+三种写法各自错在哪（都试过）：
+
+| 写法 | 后果 |
+|---|---|
+| 直接把 `active_combatant_id` 设成继任者 | 收尾时还会推进一格 ⇒ **继任者被跳过**（一次跳两格） |
+| `active = None`，让 `ensure_active_combatant` 认领第一个活人 | 回合序**从头开始**（静默重排） |
+| 什么都不做，等报错 | `ActiveNotInTurnOrder` ⇒ 回合卡死（`StepThrew(Turn)`） |
+
+另外两条细节：`extra_turn_for` 一起清掉（行动者都走了，"再来一回合"没有主人）；
+`ensure_active_combatant` 在"席位被腾空"时**拒绝**认领（`NoActiveCombatant`）—— 把"绕过了交接"
+变成响亮失败，而不是静默重排。
+
+`end_current_turn` 因此多了一条路径：行动者在自己的回合里自毁 ⇒ 没有行动者，但它连牌堆都被
+摘掉了，所以每一段 per-actor 工作（手牌生命周期 / 弃手牌 / 回合末触发器 / 按时长衰减）都没有
+对象，整段跳过，只翻相位、交接席位、消化队列。
+
+### 200.2 内容
+
+`dagger.explode` = `dealDamage 25` + `node.destroyCombatant(sel.source)`（wiki `Reptomancer`：
+"Explode: 25 damage and dies"）。内容门当场报出新事实
+(`action.dagger.explode: facts [('damage', 25, 'event'), ('destroy', 'source')], inv says [...]`),
+补上那一行之后 `STS_CONTENT PASS`。
+
+### 200.3 判据
+
+* `a_combatant_that_removes_itself_hands_the_seat_to_its_successor`：`[hero, enemy_a, enemy_b]`
+  里 `enemy_a` 当行动者时自毁 ⇒ 收尾后席位是 **`enemy_b`**，`current_turn` **只 +1**，
+  `current_round` 不变。负控（`cur = seat`）红在 `left: hero / right: enemy_b`。
+* `a_combatant_that_removes_itself_last_wraps_to_the_front`：末尾那一格被移除 ⇒
+  `vacated_seat == 2`（超出新长度）⇒ 绕回 `hero` 且轮次 +1。同一个负控红在 `left: enemy_a`。
+* `a_vacant_seat_is_not_silently_reclaimed_from_the_top`：席位空着时唯一合法的前进方式是交接。
+* `a_dagger_that_explodes_removes_itself_and_hands_the_seat_on`（端到端，全镜像，两只匕首）：
+  步 1 后英雄 45、`dagger_1` 不在名册；步 2 收尾把席位交给 `dagger_2`；步 3 之后英雄 20、
+  `Victory`、席位空。步 1/步 3 的伤害**就是**交接判据 —— 跳格或从头开始都会让步 3 撞
+  `StillHeroTurn` 且英雄停在 45。负控同上（`so is the second` 红）。
+* 老测试 `destroying_a_combatant_takes_it_out_of_the_roster_and_the_turn_order` 里那条
+  "当前行动者不许移除"的断言**被改写**：现在必须成立的是"移除合法、席位空着、`vacated_seat`
+  指向那一格"。这是**语义变更**，不是放宽判据。
+
+### 200.4 数字与剩下的
+
+* **20/20 闸门绿**，单测 **877**（692 / 107 / 75 / …）；四条对拍不变（182/182、62/62、124/124、394/394）。
+* 内容：镜像 72,392 → **72,556 B**（core 60,876 → 61,040）。
+* 工作包 B 的**最后一半**是 Looter 的"偷钱逃跑"。它不是一条节点：内核没有金币，金币在运行层。
+  下一次要做的是"内核记 `stolen_gold`（`Counters` 就够）→ 运行层在 `fight_end` 结算"这条约定，
+  外加 Looter 的怪物行 / 三个动作 / 遭遇行。

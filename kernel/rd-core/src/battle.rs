@@ -3166,6 +3166,101 @@ mod tests {
         assert_eq!(trace.hp(3, "hero"), 70, "Y 的动作一下都没出");
     }
 
+    /// §200：**匕首在自己的回合里炸掉自己** —— 席位交给下一只匕首，最后一只炸完战斗结束。
+    ///
+    /// 这是 Reptomancer 的节奏：4 只匕首，`Explode` = 25 伤害 + 自己消失（wiki `Reptomancer`：
+    /// "Explode: 25 damage and dies"）。§200 之前内核**拒绝移除当前行动者**
+    /// （`CapacityError::ActiveCombatant`），所以这条内容只能打伤害、匕首永远留场。
+    ///
+    /// 脚本（两只匕首 `dagger_1` / `dagger_2`，回合序 `[hero, dagger_1, dagger_2]`）：
+    ///
+    /// ```text
+    /// 步 0  EndOneTurn                     英雄回合结束 ⇒ dagger_1 上场
+    /// 步 1  EnemyActs{dagger_1, explode}   英雄 70 - 25 = 45；dagger_1 **离开战斗**，回合未收尾
+    /// 步 2  EndOneTurn                     收尾 dagger_1 的回合 ⇒ 席位交给 **dagger_2**
+    /// 步 3  EnemyActs{dagger_2, explode}   英雄 45 - 25 = 20；dagger_2 也走了 ⇒ Victory
+    /// ```
+    ///
+    /// 每条断言各锁一种坏实现：
+    /// 1. 步 1 之后匕首**不在名册里** —— 只打伤害的实现会留下一个 20 HP 的尸体；
+    /// 2. 步 3 真的造成伤害 —— 如果步 2 的交接跳过（`cur = seat`）或从头开始（认领第一个活人），
+    ///    步 3 会撞 `StillHeroTurn` 且英雄停在 45；
+    /// 3. 结束时 `result == Victory`、席位空着 —— 回合机不能在没有活人时继续转；
+    /// 4. **每一步的 `problems` 都是空的**（步 3 那一步除外：打完就结束，`CombatAlreadyEnded`
+    ///    才是对的 —— 这里脚本正好走出五步，最后一步之后没有"再推一次"）。
+    #[test]
+    fn a_dagger_that_explodes_removes_itself_and_hands_the_seat_on() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let enemies = [
+            PlanCombatant {
+                id: "dagger_1",
+                max_health: 20,
+            },
+            PlanCombatant {
+                id: "dagger_2",
+                max_health: 20,
+            },
+        ];
+        // An empty deck: this test is about the dagger, not about playing cards.
+        let deck: [DeckEntry; 0] = [];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "dagger_explode",
+            seed: 1,
+            hero: PlanCombatant {
+                id: "hero",
+                max_health: 70,
+            },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let script = [
+            Step::EndOneTurn,
+            Step::EnemyActs {
+                enemy: "dagger_1",
+                action: "dagger.explode",
+                target: Some("hero"),
+            },
+            Step::EndOneTurn,
+            Step::EnemyActs {
+                enemy: "dagger_2",
+                action: "dagger.explode",
+                target: Some("hero"),
+            },
+        ];
+
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
+        let mut host = Host::new(&content);
+        let trace = drive(&mut state, &content, &plan, &script, &mut host);
+
+        assert_eq!(state.combatant(&cid("dagger_1")), None, "the first dagger is gone");
+        assert_eq!(state.combatant(&cid("dagger_2")), None, "so is the second");
+        assert_eq!(trace.hp(1, "hero"), 45, "Explode is 25, once");
+        assert_eq!(trace.hp(3, "hero"), 20, "the second dagger reached its turn");
+        assert_eq!(trace.result, CombatResult::Victory, "the last enemy removed itself");
+        assert_eq!(
+            state.active_combatant_id, None,
+            "nobody holds the seat after the fight is over"
+        );
+        for step in 0..4 {
+            assert!(
+                trace.kinds(step).is_empty(),
+                "step {step} reported {:?}",
+                trace.kinds(step)
+            );
+        }
+    }
+
     /// **`Step::EndOneTurn` 的核心判据**：一步只让**一个**战斗员上场（多敌人战斗的地基）。
     ///
     /// 场景（全真实内容；`queue_imp.desk_jab` = 8 伤、`stamp_goblin.rubber_stamp_rush` = 5 伤，

@@ -3266,6 +3266,19 @@ pub struct CombatState {
     pub current_turn: i32,
     pub turn_phase: CombatTurnPhase,
     pub active_combatant_id: Option<CombatantId>,
+    /// §200: **哪一格被腾空了** —— 行动者在自己的回合里自毁时记下它的下标。
+    ///
+    /// 记的是**移除之后**数组里的位置：`turn_order` 是 shift-down 的，所以"被移除者原来那一格"
+    /// 现在正好坐着它的继任者。`None` = 没有腾空。
+    ///
+    /// 为什么不是"直接把 `active_combatant_id` 设成继任者"：那一刻行动者的回合**还没收尾**，
+    /// 收尾时回合机还会往前推一格 —— 继任者就永远轮不到了（一次性跳两格，静默）。
+    /// 为什么不是"`active = None`，让 `ensure_active_combatant` 认领第一个活人"：那会把回合序
+    /// **从头开始**，是另一种静默漂移。所以位置信息必须显式带着走，见
+    /// [`Self::vacate_active_seat`] 与 `turn::advance_to_next_combatant`。
+    ///
+    /// 不进哈希、不进快照：参考没有这个字段（与 `end_turn_requested` 同一类**瞬时**状态）。
+    pub vacated_seat: Option<u8>,
     /// Set by [`EffectRequest::EndTurn`]; the battle loop ends the turn and clears it. It is **not**
     /// cleared by the effect itself, because "who honours the request" must stay visible.
     pub end_turn_requested: bool,
@@ -3451,6 +3464,7 @@ impl Empty for CombatState {
         current_turn: 0,
         turn_phase: CombatTurnPhase::WaitingToStartTurn,
         active_combatant_id: None,
+        vacated_seat: None,
         end_turn_requested: false,
         forced_turn_ends: 0,
         ascension: 0,
@@ -3565,6 +3579,7 @@ impl CombatState {
             current_turn: 0,
             turn_phase: CombatTurnPhase::WaitingToStartTurn,
             active_combatant_id: None,
+            vacated_seat: None,
             end_turn_requested: false,
             forced_turn_ends: 0,
             extra_turn_for: None,
@@ -4225,12 +4240,17 @@ impl CombatState {
     /// how `Downed` triggers work. **Removal** is the stronger act: the bearer is gone, so no trigger
     /// can be collected from it ever again. That distinction is the whole point of this method.
     ///
-    /// Refuses (`StateError::Active`) to remove the combatant whose turn it is: the turn processor
-    /// addresses the active combatant **by id**, so deleting it mid-turn would leave a dangling id.
+    /// §200: removing the combatant **whose turn it is** is legal now (Reptomancer's dagger
+    /// explodes on its own turn). It used to be refused, which is why that Explode could only
+    /// damage the hero and never take the dagger with it.
+    ///
+    /// The seat is **not** handed over here: the removed actor's turn still has to be closed, and
+    /// closing it advances the rotation by one. So the position is parked in
+    /// [`Self::vacated_seat`] and `turn::advance_to_next_combatant` hands it to the successor --
+    /// the combatant that now sits in that grid cell. Anything else would either skip the
+    /// successor (one advance too many) or restart the order from the top.
     pub fn remove_combatant(&mut self, id: &CombatantId) -> StateResult<Combatant> {
-        if self.active_combatant_id == Some(*id) {
-            return Err(CapacityError::ActiveCombatant);
-        }
+        let removing_active = self.active_combatant_id == Some(*id);
         let mut index = None;
         for i in 0..self.combatants.len() {
             if self.combatants.get(i).map(|c| c.id) == Some(*id) {
@@ -4253,6 +4273,15 @@ impl CombatState {
             }
         }
         if let Some(from) = turn_index {
+            if removing_active {
+                // §200: the seat is vacant from now on; `from` is the grid cell the **successor**
+                // sits in once the shift-down below has run (or `len - 1`, i.e. past the end, when
+                // the actor was last -- the successor then wraps to index 0).
+                self.active_combatant_id = None;
+                self.vacated_seat = Some(u8::try_from(from).unwrap_or(0));
+                // "Another turn in a row" has no owner left: nobody is going to take it.
+                self.extra_turn_for = None;
+            }
             for j in from..len - 1 {
                 if let Some(moved) = self.turn_order.get(j + 1).copied() {
                     if let Some(slot) = self.turn_order.get_mut(j) {

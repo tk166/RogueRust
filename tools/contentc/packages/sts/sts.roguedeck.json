@@ -13403,24 +13403,43 @@
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.dealDamage",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 25
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.destroyCombatant",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  }
+                }
               }
-            },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 25
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -25414,7 +25433,7 @@
       "IntentRules": [],
       "Tier": "Normal",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Dagger",
-      "AiNote": "§175：wiki 数值（HP 20-25；Wound 9 + 1 Wound；Explode 25 且**自身死亡**）。⚠️ 偏差：`Explode` 之后不自毁 —— 内核没有 `destroyCombatant` 这个节点。",
+      "AiNote": "§175/§200：wiki 数值（HP 20-25；Wound 9 + 1 Wound；Explode 25 且**自身死亡**）。`dagger.explode` = 25 伤害 + `node.destroyCombatant(sel.source)`：匕首在自己的回合里炸掉自己。⚠️ §200 之前内核**拒绝移除当前行动者**，所以 Explode 只打伤害、匕首留在场上。",
       "Counters": [],
       "Spawn": true
     },

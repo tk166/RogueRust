@@ -3,19 +3,19 @@
   "description": "Slay the Spire Act 1 (Ironclad) -- the zero-new-ability (tier A) subset: 10 enemies, 3 weak encounters, the 10-card starting deck, 5 statuses.  No elite, no boss, no relic, map, events and potions (\u00a7133 / \u00a7143).  Every number is from docs/spec/sts-act1-inventory.md and is re-checked by native/sts_content_check.py (inv numbers, per-key round trip of both images, cross references, and the event vocabulary with its payloads).  Deliberately NOT pinned in expected_sha.txt: this package is meant to grow every milestone, so the gate is the inv contract, not a byte freeze.  Nothing here is kernel-verified yet (no fight has been driven from it).",
   "src": {
     "path": "tools/contentc/packages/sts/sts.roguedeck.json",
-    "bytes": 796305,
-    "sha256": "d0573479ca6d96bc42c25f5004cd18b5b3845343e95d41c60de76a7345b2f93a"
+    "bytes": 797082,
+    "sha256": "001e4e4b214bc4f391e45035530132a53328bf3b3589bbb38d25a6d4b087c1c2"
   },
   "images": {
     "full": {
       "file": "content.sts.rdcf",
-      "bytes": 72392,
-      "sha256": "d5211e0e04208e1fdf72129af09357bbcfe6cd97418eedbb53c1e807f6ac1437"
+      "bytes": 72556,
+      "sha256": "b61fee12f3d664b092fff4769a5f354bd0a896f7bd860545b3ec1427034356d2"
     },
     "core": {
       "file": "content.sts.core.rdcf",
-      "bytes": 60876,
-      "sha256": "32b82fc5f2313c1413751fbb4ed08800034583349f40cd73b2090d287e6bff6d"
+      "bytes": 61040,
+      "sha256": "1c07eb54323cca3c204608483e849da9f3ad596847fb19fe107388c3c6f8c672"
     }
   },
   "compiler": {
