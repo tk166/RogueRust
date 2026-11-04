@@ -4633,6 +4633,39 @@ pub fn fold_turn_start_draw(
     )
 }
 
+/// §199：回合开始**补给的资源**（能量）—— [`fold_turn_start_draw`] 的同形兄弟。
+///
+/// ⚠️ 与抽牌那条一样，"非正数原样返回"：`base <= 0` 时管线不跑，账本一笔不动（那条契约在
+/// `modifiers::apply` 的第一句里，这里只是把"要不要跑"的门放在同一个位置）。
+pub fn fold_turn_start_energy(
+    statuses: &[StatusInstance],
+    owner: &CombatantId,
+    base: i32,
+    content: Option<&Content<'_>>,
+) -> Result<i32, ExecError> {
+    if base <= 0 {
+        return Ok(base);
+    }
+    let Some(content) = content else {
+        return Ok(base);
+    };
+    let mut rows = [empty_row(); MAX_CANDIDATES];
+    let count = image_rows(
+        content,
+        statuses,
+        status_bind::Pipeline::TurnStartEnergy,
+        None,
+        &mut rows,
+    )?;
+    fold(
+        base,
+        statuses,
+        rows.get(..count).unwrap_or(&[]),
+        owner,
+        StatusMatch::Exact,
+    )
+}
+
 /// 格挡的单阶段（没有 stage 轴，`M:§3.2`）。
 fn block_stage<'a>(
     amount: i32,

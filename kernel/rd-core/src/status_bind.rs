@@ -154,6 +154,13 @@ pub enum Pipeline {
     Block,
     /// 回合开始的抽牌数（`turn.rs` 的地盘，**不进伤害管线**）。
     TurnStartDraw,
+    /// §199：回合开始**补给的资源**（能量）。本移植自己的管线 —— 参考的四条里没有它，
+    /// 而 `turn.rs` 的补能此前只读 `TurnConfig`，所以"下一回合多 1 点能量"这种东西
+    /// （`Berserk`、以及所有 Energized 类卡/药水）一个词都表达不出来。
+    ///
+    /// 与 [`Pipeline::TurnStartDraw`] 同形：`AddPerStack` 是每层幅值，`AddFlat` 是一次幅值，
+    /// `ScalePercent` 按百分比缩放（本内容没有用到后两条，但折叠器是同一个）。
+    TurnStartEnergy,
 }
 
 impl Pipeline {
@@ -169,6 +176,8 @@ impl Pipeline {
             "DamageReceived" => Some(Pipeline::DamageReceived),
             "BlockGain" => Some(Pipeline::Block),
             "TurnStartDraw" => Some(Pipeline::TurnStartDraw),
+            // §199: our own pipeline (the reference's four do not include it).
+            "TurnStartEnergy" => Some(Pipeline::TurnStartEnergy),
             _ => None,
         }
     }
@@ -181,6 +190,7 @@ impl Pipeline {
             Pipeline::DamageReceived => "DamageReceived",
             Pipeline::Block => "BlockGain",
             Pipeline::TurnStartDraw => "TurnStartDraw",
+            Pipeline::TurnStartEnergy => "TurnStartEnergy",
         }
     }
 }

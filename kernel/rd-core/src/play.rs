@@ -1854,6 +1854,9 @@ const fn cost_pipeline_of(pipeline: status_bind::Pipeline) -> Option<ModifierPip
         // 与从前一字不差 —— 一条 `BlockGain` spec 仍然不会被误当成费用 spec。
         status_bind::Pipeline::Block => Some(ModifierPipeline::Block),
         status_bind::Pipeline::TurnStartDraw => None,
+        // §199: 补能管线同样**不是**费用修饰器 —— 它改的是回合开始补多少，
+        // 而费用管线改的是这张牌要付多少。这条接缝逼着人回答，答案就是 None。
+        status_bind::Pipeline::TurnStartEnergy => None,
     }
 }
 

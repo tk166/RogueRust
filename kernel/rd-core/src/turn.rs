@@ -266,6 +266,15 @@ pub trait TurnHost {
         base
     }
 
+    /// §199：回合开始**补给多少能量**（`TurnStartEnergy` 管线之后的数）。默认 `base`。
+    ///
+    /// 判据与折叠全在 [`crate::exec::fold_turn_start_energy`]（复用 `exec.rs` 已经交付的候选表 +
+    /// `crate::modifiers::apply`，**不另写一份折叠**）。
+    fn turn_start_refill_count(&self, state: &CombatState, actor: &CombatantId, base: i32) -> i32 {
+        let _ = (state, actor);
+        base
+    }
+
     /// 回合结束时这一张是否**留在手里**（`CardZoneEffects.cs:413-428` 的第 ①② 条：
     /// `standard.retained_card` 标记、或卡定义的 `RetainInHandOnTurnEnd`）。默认 `false`。
     fn card_stays_in_hand_at_turn_end(
@@ -442,9 +451,14 @@ fn refill_resource<H: TurnHost>(
         .combatant(actor)
         .and_then(|c| c.resources().iter().find(|p| p.key == config.energy).copied());
 
+    // §199: the **base** the modifiers see is the configured refill (the pool's max when the pool
+    // declares one, which is how `standard.energy 3/3` reads), and the pipeline's result is what the
+    // resource is set to. Folding *before* `unspent_energy_carries` keeps the two knobs independent:
+    // "carry over" adds the leftover on top of the (possibly modified) refill.
     let (target, max) = match existing {
         Some(pool) => {
             let base = pool.pool.max.unwrap_or(config.energy_refill);
+            let base = host.turn_start_refill_count(state, actor, base);
             let target = if host.unspent_energy_carries(state, actor) {
                 base.saturating_add(pool.pool.current)
             } else {
@@ -452,7 +466,10 @@ fn refill_resource<H: TurnHost>(
             };
             (target, pool.pool.max)
         }
-        None => (config.energy_refill, Some(config.energy_refill)),
+        None => {
+            let base = host.turn_start_refill_count(state, actor, config.energy_refill);
+            (base, Some(base))
+        }
     };
 
     state

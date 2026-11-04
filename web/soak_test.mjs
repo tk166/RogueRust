@@ -209,7 +209,11 @@ const report = await evaluate(`(async () => {
       byId("handPanel").innerHTML,
       byId("enemies").innerHTML,
       byId("log").innerText.length,
-      text(byId("msg")).slice(0, 40),
+      // §199 修：原来只比 msg 面板的**前 40 字符**。战斗里那第一行是
+      // "round N · turn M · phase P · result R"，一行就可能超过 40 字符 —— 于是被拒的那半句被切在
+      // 40 之外，指纹看起来没变，一次**正常的拒绝**被记成死控件（一次抓到 58 次）。
+      // 判据要能看见证据，就不能先把它截掉。⚠️ 模板字符串里不许写反引号（FACT §2b）。
+      text(byId("msg")),
       byId("modal").hidden,
       // §161.3: a tick is a real UI change, and it lives nowhere else -- without this the walk
       // reports every tick as a **dead button** (§150's shape) because the page around it did not
@@ -504,6 +508,7 @@ const report = await evaluate(`(async () => {
             out.dead.push({
               runSeed, actions, kind: "fight-choice",
               label: text(picked).slice(0, 40),
+              msg: text(byId("msg")).slice(-120),
             });
           }
           invariants("seed " + runSeed + " action " + actions);

@@ -356,7 +356,11 @@ struct Session {
     /// step to copy, and `CombatantState.IntentKey` is a dead field there.
     intents: Vec<Intent>,
     /// `run_fight`'s "problems" for the last step, by `wire_name`. Observations, not failures.
-    problems: Vec<&'static str>,
+    /// §199: `String`, not `&'static str` -- `StepThrew(Script)` used to be the most a problem
+    /// could say, and that is exactly the level of detail nobody can act on. The refusal **code**
+    /// was already recorded in `FightOutcome::step_codes` (§177) and simply had nowhere to go. The
+    /// name comes from `battle::play_code_name` -- the one table -- so the two cannot drift.
+    problems: Vec<String>,
     /// Human-readable reason for the last non-`Ok` return.
     error: String,
     /// Reward for the last step, in 1/1000 (`env-abi.md` §7 + §10's "wasted energy" ruling).
@@ -1393,21 +1397,40 @@ impl Session {
                 // §152: the family, plus (for `Capacity`) **which** container. The name table
                 // lives in `state::Container::name_of` -- one place, not a copy here.
                 let cause_name = cause.wire_name();
-                let name = if *problem == rd_core::battle::Problem::StepThrew && cause_name == "Capacity" {
-                    let container = rd_core::state::Container::name_of(
-                        out.step_capacity.get(index).copied().unwrap_or(0),
-                    );
+                // §199: `cause_name == "Capacity"` was the only shape that could name the
+                // container, but a **play** that fills one reports the family `Script` and the code
+                // `Capacity` -- so the container name has to follow the *code*, not the family.
+                let container_code = out.step_capacity.get(index).copied().unwrap_or(0);
+                let name: String = if *problem == rd_core::battle::Problem::StepThrew
+                    && container_code != 0
+                {
+                    let container = rd_core::state::Container::name_of(container_code);
                     if container == "?" {
-                        "StepThrew(Capacity)"
+                        "StepThrew(Capacity)".to_string()
                     } else {
                         // The page reads this string; the container name is the actionable half.
-                        capacity_problem_text(container)
+                        capacity_problem_text(container).to_string()
                     }
                 } else if *problem == rd_core::battle::Problem::StepThrew && !cause_name.is_empty() {
-                    step_cause_text(cause_name)
+                    // §199: `Script` means `BattleError::Play(_)`/`Deck(_)` -- and under one family
+                    // name sit `Refused(Unplayable)` and `Unaffordable { need, have }`, which are
+                    // different bugs. The code is already in `step_codes`; spending it here is what
+                    // turns `StepThrew(Script)` into `StepThrew(Script:Entangled)`.
+                    let code = out.step_codes.get(index).copied().unwrap_or(0);
+                    if code == 0 {
+                        step_cause_text(cause_name).to_string()
+                    } else {
+                        format!(
+                            "{}({}:{})",
+                            "StepThrew",
+                            cause_name,
+                            rd_core::battle::play_code_name(code)
+                        )
+                    }
                 } else {
-                    problem.wire_name()
-                };                self.problems.push(name);
+                    problem.wire_name().to_string()
+                };
+                self.problems.push(name);
             }
         }
         Ok(())
@@ -1725,7 +1748,7 @@ pub extern "C" fn rd_env_problem_len() -> i32 {
     let Some(session) = slot().as_ref() else {
         return -1;
     };
-    let text = session.problems.first().copied().unwrap_or("");
+    let text = session.problems.first().map(String::as_str).unwrap_or("");
     write_scratch(text.as_bytes()) as i32
 }
 
@@ -3046,7 +3069,7 @@ pub extern "C" fn rd_env_bench_envelope() -> i32 {
         card: "__nonexistent__",
         target: None,
     }]) {
-        Ok(()) => i32::from(session.problems.first().copied() == Some("CardNotInHand")),
+        Ok(()) => i32::from(session.problems.first().map(String::as_str) == Some("CardNotInHand")),
         Err(_) => -1,
     }
 }

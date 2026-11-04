@@ -739,6 +739,8 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // which is a *node*, not a status rule.
         "standard.stasis" |
         "standard.stasis_ready" |
+        // §199: Berserk -- a `TurnStartEnergy` row (our own pipeline); the rule is the content row.
+        "standard.berserk" |
         // §198: Slow -- a `DamageReceived` row using the stack-linear scale, plus a `CardPlayed`
         // trigger. Like Draw Reduction, the kernel rule is the **content row** (the fold already
         // exists); `has_behaviour` only knows the hardcoded catalogue, so it goes on this list.

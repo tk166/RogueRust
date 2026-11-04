@@ -87,7 +87,7 @@ INV_COUNTS = {
     # It is the first content row that uses a `TurnStarted` trigger.
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
-    "statuses": 39,
+    "statuses": 40,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -229,6 +229,14 @@ INV_CARDS = {
                 "Facts": [("status", "standard.combust", 5, "source")]},
     # §197: the two block-retention cards. Facts are the status they apply; the retention itself is
     # the status' tag (checked by the kernel test, not by this table).
+    # §199: wiki `Berserk` -- 0 cost, Rare Power: "Gain (2;1) Vulnerable. At the start of your turn,
+    # gain 1 Energy." (`native/wiki_asc/berserk.txt`).
+    "berserk": {"Cost": 0, "Tags": ["power"],
+                "Facts": [("status", "standard.vulnerable", 2, "source"),
+                          ("status", "standard.berserk", 1, "source")]},
+    "berserk+": {"Cost": 0, "Tags": ["power"],
+                 "Facts": [("status", "standard.vulnerable", 1, "source"),
+                           ("status", "standard.berserk", 1, "source")]},
     "barricade": {"Cost": 3, "Tags": ["power"],
                   "Facts": [("status", "standard.barricade", 1, "source")]},
     "barricade+": {"Cost": 2, "Tags": ["power"],
@@ -769,6 +777,8 @@ INV_STATUSES = {
     "standard.stasis_ready": [],
     # §195.7: Draw Reduction -- the `TurnStartDraw` pipeline, minus one per stack.
     "standard.draw_reduction": [("TurnStartDraw", "AddPerStack", -1, 100, None)],
+    # §199: Berserk -- the first `TurnStartEnergy` row (our own pipeline; +1 energy per stack).
+    "standard.berserk": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
     # §198: Slow -- a `DamageReceived` row with the stack-linear scale (our own operation), plus a
     # `CardPlayed` trigger that grows it. No separate "clear" status: the wiki's "this turn" needs a
     # TurnEnded reset, which the trigger below does.

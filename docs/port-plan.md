@@ -13777,3 +13777,83 @@ Operation::ScalePercentPerStack   current * (100 + magnitude * stacks) / 100
 * **"下回合多能量"还没做**：`TurnStartDraw` 这条管线能表达"下回合多抽"（Draw Reduction 的反向，
   内容是纯数据），但**能量**没有对应管线（`turn_start_refill` 只从 `TurnConfig` 读）。它需要
   "回合开始的补能数也过一条修饰器管线"，与 `TurnStartDraw` 同形 —— 留作下一节（§199）。
+
+---
+
+## §199 回合开始补能的管线（`TurnStartEnergy`）+ **出牌路上的漏链**（工作包 B-4）
+
+§198 结尾留的那一句"能量没有对应管线"在这里补上。做它的过程中，soak 从**另一条路**上撞到
+一个更老、更贵的东西：**每一次出牌都漏一格链**，128 次之后整场战斗的每一次出牌都失败。
+两件事一起交付，因为它们是被同一个现象（`StepThrew(Script)`）牵出来的。
+
+### 199.1 能量也过一条修饰器管线
+
+* `status_bind::Pipeline` 新增 `TurnStartEnergy`（线上名同）。**参考只有四条管线**，这条是
+  本移植自己的扩展 —— 理由写在枚举上：`turn.rs` 的 `refill_resource` 此前只读 `TurnConfig`，
+  所以"每回合 +1 能量"这类东西（Berserk，以及所有 Energized 类卡/药水）**一个词都表达不出来**。
+* `exec::fold_turn_start_energy` 与 `fold_turn_start_draw` 逐句同形（同一张候选表、同一个
+  `modifiers::apply`、同一个 `StatusMatch::Exact`），`base <= 0` 同样原样返回、账本一笔不动。
+* `TurnHost::turn_start_refill_count(state, actor, base)`（默认 `base`）→ `Host` 委派到
+  `turn_start_refill_count_detail`（读不出来就返回 `base` 并把失败记进 `problems`）。
+* `turn::refill_resource`：**先折叠、再决定是否叠加"未花完的能量"**，两个旋钮因此正交。
+  池子声明了 `max` 时那个 `max` 就是基线（`standard.energy 3/3` 正是这样读的）。
+* `play.rs::cost_pipeline_of` 的穷尽 `match` 当场报错（那个接缝本来就是为此存在的）——
+  答案 `None`：补能管线改的是"回合开始补多少"，费用管线改的是"这张牌要付多少"。
+
+内容（wiki `Berserk`，Rare Power，0 费）：`Gain (2;1) Vulnerable. At the start of your turn, gain
+1 Energy.` ⇒ `standard.berserk` 一行 `TurnStartEnergy / AddPerStack / 1 / Priority 100`，
+`berserk` / `berserk+` 两张卡（Vulnerable 2/1 + 自身 1 层）。
+
+判据 `berserk_adds_one_energy_per_stack_at_turn_start`：**0/1/2 层 → 3/4/5**。它同时钉三件事：
+漏接管线停在 3；按层数而不是"有就给 1"（2 层必须比 1 层多）；**当回合打出不多给**（状态装在
+身上，下一次 `start_current_turn` 才生效）。负控：让钩子退回 `base`，红在
+`Berserk 1: turn 2 refills to 4`（left 3）。
+
+### 199.2 ★ `enqueue_effect` 在顶层建的那条根链没有还（**老 bug**）
+
+现象：soak 在一场 **44 回合**的战斗里，**每一次**出牌都被拒，消息 `rejected (-1) · StepThrew(Script)`。
+
+沿着"这句话为什么这么没用"一路查下去，三处各自都是**独立**的缺陷：
+
+1. **`capacity_code` 不拆 `PlayError`**。`BattleError::Play(PlayError::Capacity(_))` 落进
+   `StepCause::Script` 分支，而 `StepCause::capacity_code` 只认 `BattleError::Capacity` 与
+   `Turn(TurnError::Capacity)` ⇒ 家族名 `Script`、容器名 0 ⇒ 页面说 `StepThrew(Script:Capacity)`
+   —— 真话，但**唯一下一步可行动的信息（哪个容器）**被丢掉了。补上那一条 `match` 之后，
+   消息变成 `StepThrew(Capacity:Chains)`，当场指向 §151 那个形状。
+2. **`state.rs::enqueue_effect`**：`new_root_chain_in_arena` 建链那一次引用 **refs = 1 归调用方**，
+   队列条目自己再 `acquire` 一次（出队时还）。代码只写了后半句 ⇒ **每一次顶层入队漏一格链**。
+   `enqueue_event_at_root` 早就把同一件事写对了，注释里还写着"否则每条根事件漏一格链，而表现是
+   打到十几回合突然 `Full(Chains)`" —— 效果队列这一支漏了。改成
+   `let (chain, created) = ...` + 三条出口各还一次（成功与两条回滚路径）。
+3. **触发节目的帧**：三个 `execute_program*` 助手把 `ProgramRun` 直接丢掉（`.map(|_| ())`），
+   而 `begin` 建的/借的那条链归**帧**所有、只有 `reap_frames` 会还 ⇒ 同步跑完的触发节目也漏。
+   补一个 `teardown(state) = exec::reap_frames(state)`（只回收**终态**帧，挂起的帧留给宿主的
+   排空循环）。这一条在实测中被 ②掩盖着（② 漏的那一条与它混在同一个计数里），但它是真的：
+   修掉 ② 之后"有触发"的用例仍然多一条。
+
+判据 `a_card_play_leaves_no_chain_referenced`：**三条用例**（无触发对照 / `standard.slow` 的裸
+`applyStatus` / `standard.enrage` 的 `node.conditional`）出牌后 `live_chain_count() == 0`。
+第一条对照是关键：**连没有任何触发器的出牌也漏**，所以这不是派发路径的问题，是入队本身。
+负控：不还创建者的那一次 ⇒ 三条全红（`[(None,1), (slow,1), (enrage,1)]`）。
+
+判据 `a_capacity_error_inside_a_play_names_its_container`：包在 `Play` 里的容量错误必须说出
+`Chains`；直接的就是直接（回归）；**非**容量错误仍报 0（不许把所有 `Play` 错误都说成某种容器，
+那会让"哪个容器满"变成噪声）。负控：把那条 `match` 注释掉 ⇒ 红在 `left: 0, right: 21`。
+
+### 199.3 soak 闸门自己的两处
+
+这一轮里 `web-soak` 的"死控件"判据有两次**假红**，两次都修了（都在 `web/`）：
+
+* 指纹只比 `#msg` 的**前 40 字符**，而战斗里第一行 `round N · turn M · phase P · result R`
+  就可能超过 40 ⇒ "被拒"那半句被切在 40 之外，一次**正常的拒绝**被记成死控件（一次 58 个）。
+  判据要能看见证据，就不能先把它截掉 ⇒ 比**整条**消息。
+* `index.html` 手牌点击在 `options.length === 0` 时**静默 return**（不说话、不重渲染）——
+  死控件的教科书形状。改成说出来 + 重渲染。
+
+### 199.4 数字与剩下的
+
+* **20/20 闸门绿**，单测 **870**（688 / 107 / 75）；四条对拍不变（182/182、62/62、124/124、394/394）。
+* 内容：状态 39 → **40**、卡 49 → **51**、镜像 71,848 → **72,392 B**（core 60,876）。
+* 新导出/新字符串 0 个（`TurnStartEnergy` 是内容里的管线名，不走 ABI）。
+* 还差：能量**上限**（`max`）还没有修饰器（只有补给数有）；`Energized` 类"只下一回合"要靠
+  内容给自己挂衰减触发器（本内容暂时没有这种卡）。

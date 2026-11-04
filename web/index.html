@@ -2061,7 +2061,15 @@ function measure() {
     const hand = Number(btn.dataset.hand);
     const opts = RD_UI.playOptions(readActions()).get(hand) || [];
     if (opts.length === 1) { step(opts[0].actionIndex); return; }
-    if (!opts.length) return;
+    if (!opts.length) {
+      // ⚠️ §199 修：这里原来是**静默 return** —— 点了一张"看起来能打"的牌，内核却没有给这张牌任何
+      // 动作（战斗已经结束/守护者倒下/待决选牌挡着），于是页面既不说话也不重渲染，按钮看起来
+      // **像坏的**。`web-soak` 的死控件判据一次抓到 58 次（同一次点击重试 58 遍）。
+      // 现在：说出来 + 重渲染（状态可能已经变了，旧按钮该被换掉）。
+      say('<span class="warn">这张牌现在打不出：内核没有给出它的动作（战斗可能已结束或被选牌挡住）</span>');
+      render();
+      return;
+    }
     pending = (pending && pending.hand === hand) ? null : { hand };
     render();
   });

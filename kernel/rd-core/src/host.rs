@@ -1643,6 +1643,29 @@ impl<'a> Host<'a> {
         }
     }
 
+    /// §199：`TurnStartEnergy` 管线之后的补能数。
+    ///
+    /// 与 [`Self::turn_start_draw_count_detail`] 同一口径（读不出来 ⇒ 返回 `base`，并把失败记进
+    /// `problems` —— 这里没有"一张都不抽"那种显眼选项，能量为 0 只会让玩家莫名其妙地点不动牌）。
+    #[must_use]
+    pub fn turn_start_refill_count_detail(
+        &self,
+        state: &CombatState,
+        actor: &CombatantId,
+        base: i32,
+    ) -> i32 {
+        let Some(combatant) = state.combatant(actor) else {
+            return base;
+        };
+        match exec::fold_turn_start_energy(combatant.statuses(), actor, base, Some(self.content)) {
+            Ok(count) => count,
+            Err(e) => {
+                self.record(HostError::Exec(e));
+                base
+            }
+        }
+    }
+
     /// 格挡是否保留（`DefensivePoolEffects.cs:283-322` 的 `retains`）。
     ///
     /// 判据同样是"身上有 active 状态带 `retain_block` 标签"（`:297`）。镜像 23/23 无此标签
@@ -2517,6 +2540,12 @@ impl TurnHost for Host<'_> {
         self.block_is_retained_detail(state, actor)
     }
 
+    /// §199: the energy refill goes through the `TurnStartEnergy` pipeline (same shape as the draw
+    /// count).
+    fn turn_start_refill_count(&self, state: &CombatState, actor: &CombatantId, base: i32) -> i32 {
+        self.turn_start_refill_count_detail(state, actor, base)
+    }
+
     /// §197: the one-shot retentions are **spent here** -- the inherent method above does the work,
     /// and this delegation is what makes the turn machine reach it (without it the trait's default
     /// no-op runs and `Blur` keeps the block forever; my first version of this test caught exactly
@@ -2709,7 +2738,24 @@ fn execute_program_amount(
     let mut ctx = ExecContext::new(state, source, event_target, None, max_steps)
         .with_content(content);
     ctx.event_amount = event_amount;
-    exec::begin(root, &mut ctx, crate::state::ProgramTerminalHook::None).map(|_| ())
+    let outcome = exec::begin(root, &mut ctx, crate::state::ProgramTerminalHook::None);
+    // §199: `begin` **建/借一条效果链**，而那条引用归**帧**所有（见 `exec.rs` 里
+    // `begin_without_preflight` 的引用计数说明）。帧要 `reap_frames` 才会把它还回去 ——
+    // 这几个助手原来直接把 `ProgramRun` 丢掉（`.map(|_| ())`），于是**每一个同步跑完的触发节目
+    // 都漏一条链**：128 次之后整场战斗的每一次出牌都变成 `StepThrew(Capacity:Chains)`。
+    // 只在长战斗里出现（soak 里那场 44 回合），而且 §199 之前消息里连容器名都没有。
+    teardown(state);
+    outcome.map(|_| ())
+}
+
+/// §199: the one place a trigger program's effect chain is handed back.
+///
+/// `exec::begin` allocates (or borrows) one chain per program and the **frame** owns that
+/// reference; only `reap_frames` returns it, and it reaps **terminal** frames only -- so a frame
+/// that is still waiting for its continuations is untouched (the host's drain loop resumes it and
+/// reaps it then). Skipping this for synchronous trigger programs leaked one chain per trigger.
+fn teardown(state: &mut CombatState) {
+    exec::reap_frames(state);
 }
 
 fn execute_program(
@@ -2737,7 +2783,14 @@ fn execute_program_with_flags(
     let mut ctx = ExecContext::new(state, source, event_target, None, max_steps)
         .with_content(content);
     ctx.event_flags = event_flags;
-    exec::begin(root, &mut ctx, crate::state::ProgramTerminalHook::None).map(|_| ())
+    let outcome = exec::begin(root, &mut ctx, crate::state::ProgramTerminalHook::None);
+    // §199: `begin` **建/借一条效果链**，而那条引用归**帧**所有（见 `exec.rs` 里
+    // `begin_without_preflight` 的引用计数说明）。帧要 `reap_frames` 才会把它还回去 ——
+    // 这几个助手原来直接把 `ProgramRun` 丢掉（`.map(|_| ())`），于是**每一个同步跑完的触发节目
+    // 都漏一条链**：128 次之后整场战斗的每一次出牌都变成 `StepThrew(Capacity:Chains)`。
+    // 只在长战斗里出现（soak 里那场 44 回合），而且 §199 之前消息里连容器名都没有。
+    teardown(state);
+    outcome.map(|_| ())
 }
 
 /// The definition id of a card **instance**.
@@ -7730,6 +7783,42 @@ mod tests {
         turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
         assert_eq!(zone_count(&state, "hero", CardZone::Hand), 0);
         assert_eq!(zone_count(&state, "hero", CardZone::DiscardPile), 2);
+    }
+
+    /// §199：`TurnStartEnergy` 管线 —— `Berserk` 让回合开始补 **3 + 层数** 点能量。
+    ///
+    /// 三条判据，各锁一种坏实现：
+    /// 1. 一层 ⇒ 补 4（基础 3 + 1）。漏接管线（宿主返回 `base`）会停在 3；
+    /// 2. 两层 ⇒ 补 5 —— **按层数**，不是"有就给 1"（那样 2 层与 1 层同价）；
+    /// 3. 能量是**回合开始**补的，所以当回合打出 `Berserk` 的那一回合不该多出能量（它装在状态上，
+    ///    下一次 `start_current_turn` 才生效）。
+    #[test]
+    fn berserk_adds_one_energy_per_stack_at_turn_start() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        for (stacks, expected) in [(0, 3), (1, 4), (2, 5)] {
+            let mut host = Host::new(&content);
+            let mut state = solo();
+            // Turn 1 starts plain (energy 3), and the status is applied **during** it -- exactly how
+            // the card would be played -- so it takes effect from turn 2 on.
+            turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+            assert_eq!(energy_of(&state, "hero"), 3, "the configured refill");
+            if stacks > 0 {
+                give(&mut state, "hero", status("st_berserk", "standard.berserk", stacks));
+            }
+            turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+            turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+            assert_eq!(
+                energy_of(&state, "hero"),
+                expected,
+                "Berserk {stacks}: turn 2 refills to {expected}"
+            );
+        }
     }
 
     /// §198：`Slow` —— 受击伤害 `×(100 + 10×层数)/100`，并且**每打一张牌 +1 层**。

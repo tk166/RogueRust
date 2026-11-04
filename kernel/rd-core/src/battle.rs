@@ -396,6 +396,10 @@ impl StepCause {
         let capacity = match error {
             BattleError::Capacity(failure) => Some(failure),
             BattleError::Turn(crate::turn::TurnError::Capacity(failure)) => Some(failure),
+            // §199: a **play** can fill a container too, and that wrapper used to hide which one:
+            // the family came out as `Script` and the code as `Capacity`, so the message said
+            // `StepThrew(Script:Capacity)` -- true and useless. The container is right there.
+            BattleError::Play(crate::play::PlayError::Capacity(failure)) => Some(failure),
             _ => None,
         };
         match capacity {
@@ -4650,6 +4654,124 @@ mod tests {
             .find(|pool| pool.key.as_str() == "standard.block")
             .map_or(-1, |pool| pool.pool.current);
         assert_eq!(block, 7, "defend's 5 Block plus 2 from Dexterity");
+    }
+
+    /// §199：**出牌**路上撞到的容量错误，也要说得出**是哪个容器**。
+    ///
+    /// 这条判据是 soak 逼出来的：一场 44 回合的战斗里每次出牌都被拒，页面上只有
+    /// `StepThrew(Script)` —— 因为 `capacity_code` 只认 `BattleError::Capacity` 与
+    /// `Turn(TurnError::Capacity)` 两族，而出牌的错误包在 `PlayError` 里。于是"链满了"这条
+    /// 唯一可行动的线索（`Chains`）被丢掉了，剩下的是一句查不下去的"抛了"。
+    ///
+    /// 三条：包在 `Play` 里的容量错误要说对容器；直接的就是直接（回归）；**非**容量错误仍报 0
+    /// （不许把所有 `Play` 错误都说成某种容器 —— 那会让"哪个容器满"变成噪声）。
+    #[test]
+    fn a_capacity_error_inside_a_play_names_its_container() {
+        use crate::play::PlayError;
+        use crate::state::{CapacityError, Container};
+        let wrapped = BattleError::Play(PlayError::Capacity(CapacityError::Full(Container::Chains)));
+        assert_eq!(
+            StepCause::capacity_code(&wrapped),
+            Container::Chains.code(),
+            "a play that fills a container must name it"
+        );
+        let direct = BattleError::Capacity(CapacityError::Full(Container::Statuses));
+        assert_eq!(StepCause::capacity_code(&direct), Container::Statuses.code());
+        let not_capacity = BattleError::Play(PlayError::NotOngoing);
+        assert_eq!(
+            StepCause::capacity_code(&not_capacity),
+            0,
+            "only capacity errors may name a container"
+        );
+    }
+
+    /// §199：**一次出牌**之后，链的引用计数必须回到 0。
+    ///
+    /// 逼出这条测试的是 soak：一场 44 回合的战斗里，**每一次**出牌都被拒，页面上的消息从
+    /// `StepThrew(Script)` 变成 `StepThrew(Capacity:Chains)`。两处都修了：
+    ///
+    /// 1. `battle::StepCause::capacity_code` 现在会拆开 `PlayError::Capacity` —— 没有它，
+    ///    一个容量错误在页面上长得和"随便抛了个异常"一样（"抛了"是查不下去的）；
+    /// 2. **`enqueue_effect` 在顶层建的那条根链没有还**。`new_root_chain_in_arena` 建链时
+    ///    refs = 1 **归调用方**，队列条目再 `acquire` 一次（出队时还）；只有"入队"这一半写了，
+    ///    于是每次顶层入队漏一格，128 次之后整场战斗的每一次出牌都失败。
+    ///    `enqueue_event_at_root` 早就把同一件事写对了 —— 效果队列这一支漏了。
+    ///
+    /// 三条判据（用例故意选**形状不同**的两个触发，外加一条没有触发的对照）：
+    /// * 对照（敌人身上没有任何触发器）：出牌**本身**不许漏；
+    /// * `standard.slow`：program 是**裸的** `applyStatus`；
+    /// * `standard.enrage`：外面包着 `node.conditional`（`card.hasTag.attack`）。
+    ///
+    /// 为什么要三条：只有"有触发"才漏的话，那就是派发路径的问题；连对照也漏，那就是入队
+    /// 本身的问题 —— 事实是**连对照都漏**（每条出牌一次），所以测试的第一条用例就是对照。
+    #[test]
+    fn a_card_play_leaves_no_chain_referenced() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut leaked = Vec::new();
+        for definition in [None, Some("standard.slow"), Some("standard.enrage")] {
+            let enemies = [PlanCombatant { id: "sentry_1", max_health: 99 }];
+            let res = resources();
+            let refill = refills();
+            let deck = [DeckEntry { card: "strike", count: 8 }];
+            let plan = FightPlan {
+                combat_id: "sts_play_chain",
+                seed: 11,
+                hero: PlanCombatant { id: "hero", max_health: 200 },
+                enemies: &enemies,
+                deck: &deck,
+                cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+                shuffle_draw_pile_on_start: true,
+                resources: &res,
+                turn_start_refills: &refill,
+            };
+            let mut state = CombatState::new(CombatId::new("st_chn").expect("短 id"), 0);
+            build_fight_from_content(&mut state, &content, &plan).expect("builds");
+            let config = turn_config_for(&plan).expect("config");
+            let mut host = Host::new(&content);
+            turn::start_current_turn(&mut state, &config, &mut host).expect("start");
+            assert_eq!(state.live_chain_count(), 0, "{definition:?}: after start");
+            // The trigger's bearer is the **enemy**: inside a status trigger `sel.source` is the
+            // combatant that carries it (that is how Slow puts stacks on Giant Head).
+            if let Some(definition) = definition {
+                state
+                    .combatant_mut(&cid("sentry_1"))
+                    .expect("enemy")
+                    .push_status(
+                        StatusInstance::new(
+                            StatusInstanceId::new("status_trg").expect("id"),
+                            StatusDefinitionId::new(definition).expect("definition"),
+                            StatusPolarity::Debuff,
+                        )
+                        .with_stacks(1),
+                    )
+                    .expect("push");
+            }
+            let mut problems = Problems::new();
+            hero_plays(
+                &mut state,
+                &content,
+                &config,
+                Play {
+                    card: "strike",
+                    instance: None,
+                    target: Some("sentry_1"),
+                },
+                &mut host,
+                &cid("hero"),
+                &mut problems,
+            )
+            .expect("strike is playable");
+            leaked.push((definition, state.live_chain_count()));
+        }
+        assert!(
+            leaked.iter().all(|(_, live)| *live == 0),
+            "one card play leaked a chain: {leaked:?}"
+        );
     }
 
     /// §152：一场**长**战斗里每一步都必须**没有问题**。

@@ -3708,14 +3708,36 @@ impl CombatState {
         // `var chain = CurrentEffectChain ?? CreateRootEffectChain();`（`:386`）——
         // **发号发生在检查三列之前**（参考也是先 `??` 再 `Enqueue`）。一个"队列满了"的入队
         // 因此在参考里也已经消耗过一个链号；这里的顺序与它一致。
-        let chain = match self.current_chain {
-            ChainSlot::NONE => self.new_root_chain_in_arena()?,
-            chain => chain,
+        // §199: 这里是 `enqueue_event_at_root` 的同一条陷阱，只是藏在**效果**队列里：
+        // `new_root_chain_in_arena` 建出来的那一次引用**归调用方**（refs = 1），队列条目自己又
+        // `acquire` 一次（出队时还）。所以"建链"那一次也必须在入队成功之后还掉 —— 否则
+        // **每次顶层入队都漏一格链**，而表现是"打到一百多次出牌之后，每一次出牌都变成
+        // `StepThrew(Capacity:Chains)`"。soak 在一场 44 回合的战斗里撞到它（§199）。
+        let (chain, created) = match self.current_chain {
+            ChainSlot::NONE => (self.new_root_chain_in_arena()?, true),
+            chain => (chain, false),
         };
         // ⚠️ **队列条目持一次链引用**。参考靠 GC（条目里的链对象有人指着就活着）；
         // 我们靠 `ChainRecord::refs`。漏了这一句的后果不是"多一条链"，而是**链被提前回收**：
         // 帧的引用一放（`reap_frames`）条目手里的链就没了，下一次 `acquire` 报
         // `Full(Chains)` —— 实测在 `e2e_16` 上撞到过，而且它伪装成"容量不够"。
+        //
+        // 成功与每一条回滚路径都只走一次下面的 `release`（`created` 为真时），所以"建链那一次"
+        // 三条出口一条都不漏。
+        let outcome = self.enqueue_effect_rows(request, owner, chain);
+        if created {
+            self.chains.release(chain);
+        }
+        outcome
+    }
+
+    /// [`Self::enqueue_effect_with_owner`] 的三列同推（链已定），失败时自己回滚。
+    fn enqueue_effect_rows(
+        &mut self,
+        request: EffectRequest,
+        owner: Option<ProgramExecutionSlot>,
+        chain: ChainSlot,
+    ) -> StateResult<()> {
         self.chains.acquire(chain)?;
         self.pending_effects.push(request, Container::PendingEffects)?;
         if let Err(e) = self
