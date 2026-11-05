@@ -2212,6 +2212,30 @@ impl Default for ChainArena {
     }
 }
 
+/// §220：卡牌的**生命周期事件**（`CARD.LifecyclePrograms` 的键）。
+///
+/// 参考的 `CardLifecycleTrigger` 只有 `TurnEndInHand` 一个成员；这两个是**我们自己的扩展**，
+/// 与 §198 的 `Operation::ScalePercentPerStack` 同级 —— 被真实内容逼出来的
+/// （`void` 的"抽到时失去 1 能量"、`sentinel` 的"被消耗时 +2 能量"）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CardLifecycleEvent {
+    /// 从**抽牌堆进手牌**的那一刻（手牌搬回手牌不算"抽到"）。
+    Drawn,
+    /// 进入**消耗堆**的那一刻（打出即消耗、虚无、内容里 `moveCardToZone` 到消耗堆都算）。
+    Exhausted,
+}
+
+impl CardLifecycleEvent {
+    /// 镜像里 `LifecyclePrograms` 的键名。
+    #[must_use]
+    pub const fn wire_name(self) -> &'static str {
+        match self {
+            CardLifecycleEvent::Drawn => "Drawn",
+            CardLifecycleEvent::Exhausted => "Exhausted",
+        }
+    }
+}
+
 /// 一条**待解析的效果**。参考的 `IEffectRequest`。
 ///
 /// ⚠️ 批次 1 只声明**会被解析的四种**（也是本内容最常产生的那四种）。其余变体随
@@ -4622,6 +4646,7 @@ impl CombatState {
         }
         Ok(true)
     }
+
 
     /// Draws one card: takes the **front** of the draw pile and appends it to the hand.
     ///

@@ -3252,8 +3252,21 @@ fn draw_for(
     let mut reshuffles = 0usize;
     while drawn < count {
         while drawn < count {
-            if ctx.state.draw_card(owner)?.is_none() {
+            let Some(slot) = ctx.state.draw_card(owner)? else {
                 break;
+            };
+            // §220：抽到了 ⇒ 跑它的 `Drawn` 节目（没有节目就什么都不做，链号也不动）。
+            if let Some(content) = ctx.content {
+                if let Some(card) = ctx.state.card(slot) {
+                    let definition = card.definition_id;
+                    crate::host::run_card_lifecycle(
+                        ctx.state,
+                        content,
+                        *owner,
+                        definition,
+                        crate::state::CardLifecycleEvent::Drawn,
+                    )?;
+                }
             }
             drawn += 1;
         }
@@ -3877,6 +3890,22 @@ fn move_card_for(
     // `CardZones.cs:212-223`：`RemoveFromCurrentZone` → `SetZone` → `Top ? Insert(0) : Add`。
     // 内核的 `move_card` **复用池槽位**（别自己拼 push/remove，那样 22 轮就吃光 224 个槽）。
     ctx.state.move_card(owner, from_zone, to_zone, slot, placement)?;
+    // §220：这是**打出落区**与**内容自己搬牌**两条路的唯一实体 ⇒ `Exhausted` 节目在这里跑。
+    // 只搬牌不入队：入队会推进链号，而参考没有这条请求（§220 的对拍回归就死在那一格）。
+    if to_zone == CardZone::ExhaustPile {
+        if let Some(content) = ctx.content {
+            if let Some(card) = ctx.state.card(slot) {
+                let definition = card.definition_id;
+                crate::host::run_card_lifecycle(
+                    ctx.state,
+                    content,
+                    *owner,
+                    definition,
+                    crate::state::CardLifecycleEvent::Exhausted,
+                )?;
+            }
+        }
+    }
     Ok(())
 }
 

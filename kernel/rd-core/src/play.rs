@@ -738,6 +738,9 @@ fn plan_play<'c>(
     // ── 落点（`:298-302`）：法令 `PlayedCardsExhaust` 已被上面那道闸门否决，
     // 所以这里只剩卡定义自己的 `PlayedCardDestinationZone`。
     let destination = played_card_destination(&card)?;
+    // §220：打出即消耗的那些牌（`slimed` / `bandage_up` / `dark_shackles` / `apparition`）最终
+    // 通过 `MoveCardToZone` 请求落进消耗堆 —— `Exhausted` 通知在**那个请求**的解析处发，
+    // 所以这里什么都不用记（记在这里会漏掉"内容自己 moveCardToZone 到消耗堆"那条路）。
 
     // ── 节目与步数预算（`EffectProgram` 信封）。
     let (program, max_steps) = card_program(&card)?;

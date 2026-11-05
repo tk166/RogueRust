@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 51 | 25 | 26 | 0 | 47 | 4 | 11 | 0 |
+| 卡牌 | 51 | 27 | 24 | 0 | 47 | 4 | 11 | 0 |
 | 状态 | 44 | 41 | 1 | 2 | 0 | 44 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 9 | 9 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 13 | 9 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 361 | 234 | 111 | 16 | 224 | 48 | 74 | 0 |
+| **合计** | 361 | 236 | 109 | 16 | 224 | 48 | 74 | 0 |
 
-扫描到的具名测试：**909** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**911** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **12** 个位次、**9** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -279,8 +279,8 @@
 | metallicize+ | yes | — | CARD_DIFF | wiki:wiki_cards/metallicize.txt (via metallicize) | — | INV_CARDS |
 | patient_guard | yes | the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/the_keyword_cells_are_in_the_image |
 | patient_guard+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| sentinel | yes | the_keyword_cells_are_in_the_image, a_sink_appends_after_the_callers_prefix_and_a_tiny_sink_is_still_ok | — | wiki:wiki_cards/sentinel.txt | wiki 偏差：wiki 没有 Ethereal（旧版有），内容带 `ethereal`；而 wiki 的报酬是"被 Exhaust 时给能量"，内容没有这条触发器（`ethereal` 会在回合末把它送进消耗堆，但没有任何东西读"被消耗"）。 | §144/CARD_WIKI+INV_CARDS/the_keyword_cells_are_in_the_image |
-| sentinel+ | yes | — | CARD_DIFF | wiki:wiki_cards/sentinel.txt (via sentinel) | wiki 偏差：wiki 没有 Ethereal（旧版有），内容带 `ethereal`；而 wiki 的报酬是"被 Exhaust 时给能量"，内容没有这条触发器（`ethereal` 会在回合末把它送进消耗堆，但没有任何东西读"被消耗"）。 | INV_CARDS |
+| sentinel | yes | the_keyword_cells_are_in_the_image, a_sentinel_that_gets_exhausted_pays_two_energy …(+1) | — | wiki:wiki_cards/sentinel.txt | wiki 偏差：wiki 没有 Ethereal（旧版有），内容带 `ethereal`。§220 起"被 Exhaust 时给 2(3) 能量"**已经实现**（`LifecyclePrograms[Exhausted]`），所以这条偏差只剩 Ethereal 标签本身。 | §220/CARD_WIKI+INV_CARDS/the_keyword_cells_are_in_the_image |
+| sentinel+ | yes | a_sentinel_that_gets_exhausted_pays_two_energy | — | wiki:wiki_cards/sentinel.txt (via sentinel) | wiki 偏差：wiki 没有 Ethereal（旧版有），内容带 `ethereal`。§220 起"被 Exhaust 时给 2(3) 能量"**已经实现**（`LifecyclePrograms[Exhausted]`），所以这条偏差只剩 Ethereal 标签本身。 | INV_CARDS/a_sentinel_that_gets_exhausted_pays_two_energy |
 | slimed | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+2) | — | wiki:wiki_cards/slimed.txt | — | §192/§219/CARD_WIKI+INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+76) | — | wiki:wiki_cards/strike.txt | — | §6.5/§72.5/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, smithing_replaces_the_card_with_its_upgraded_row …(+6) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
@@ -290,7 +290,7 @@
 | twin_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/twin_strike.txt (via twin_strike) | — | INV_CARDS |
 | uppercut | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | wiki:wiki_cards/uppercut.txt | — | CARD_WIKI+INV_CARDS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | uppercut+ | yes | — | CARD_DIFF | wiki:wiki_cards/uppercut.txt (via uppercut) | — | INV_CARDS |
-| void | yes | — | CARD_DIFF | wiki:wiki_cards/void.txt | wiki 偏差：wiki: 抽到时失去 1 点能量。内容缺这条触发器（`OnDrawn` 对牌还没有载体），所以 Void 目前只是"不可出的虚无牌"。 | CARD_WIKI+INV_CARDS |
+| void | yes | a_void_drawn_from_the_pile_costs_one_energy | — | wiki:wiki_cards/void.txt | wiki 偏差：wiki: 抽到时失去 1 点能量。内容缺这条触发器（`OnDrawn` 对牌还没有载体），所以 Void 目前只是"不可出的虚无牌"。 | §220/CARD_WIKI+INV_CARDS/a_void_drawn_from_the_pile_costs_one_energy |
 | whirlwind | yes | an_upgraded_card_row_is_buildable, the_keyword_cells_are_in_the_image …(+5) | — | wiki:wiki_cards/whirlwind.txt | — | CARD_WIKI+INV_CARDS/an_upgraded_card_row_is_buildable |
 | whirlwind+ | yes | an_upgraded_card_row_is_buildable | — | wiki:wiki_cards/whirlwind.txt (via whirlwind) | — | INV_CARDS/an_upgraded_card_row_is_buildable |
 | wound | yes | — | CARD_DIFF | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS |

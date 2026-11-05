@@ -171,9 +171,12 @@ INV_CARDS = {
     # two are **fixtures** on purpose -- the Ironclad has no Retain and no Innate card in StS, so
     # the keyword has to be exercised by a card this package owns. Their numbers are this package's,
     # not the wiki's, and that is why they are named here rather than silently mixed in.
+    # §220：wiki 的 "If this card is Exhausted, gain 2 Energy." 现在有载体了
+    # （`LifecyclePrograms[Exhausted]`；`ethereal` 标签仍是本内容的简化 —— wiki 没有 Ethereal）。
     "sentinel": {"Cost": 1, "Tags": ["skill", "ethereal"],
                  "Facts": [("block", 5, "source")],
-                 "TurnEndHandDestinationZone": "ExhaustPile"},
+                 "TurnEndHandDestinationZone": "ExhaustPile",
+                 "Lifecycle": {"Exhausted": [("gain", "standard.energy", 2, "source")]}},
     "patient_guard": {"Cost": 1, "Tags": ["skill", "retain"],
                       "Facts": [("block", 5, "source")],
                       "RetainInHandOnTurnEnd": True},
@@ -204,8 +207,10 @@ INV_CARDS = {
     "uppercut+": {"Cost": 2, "Tags": ["attack"],
                   "Facts": [("damage", 13, "event"), ("status", "standard.weak", 2, "event"),
                             ("status", "standard.vulnerable", 2, "event")]},
+    # §220：节目挂在**定义**上，所以升级行有自己的一份（3 点能量）。
     "sentinel+": {"Cost": 1, "Tags": ["skill", "ethereal"],
-                  "Facts": [("block", 8, "source")]},
+                  "Facts": [("block", 8, "source")],
+                  "Lifecycle": {"Exhausted": [("gain", "standard.energy", 3, "source")]}},
     "patient_guard+": {"Cost": 1, "Tags": ["skill", "retain"],
                        "Facts": [("block", 8, "source")]},
     "swift_strike+": {"Cost": 1, "Tags": ["attack", "strike", "innate"],
@@ -262,13 +267,18 @@ INV_CARDS = {
     # ================= §194: the two junk cards the new bosses add =================
     # Hexaghost's Inferno shuffles **upgraded** Burns in (wiki: "Adds 3 Burns+"): 4 damage at turn
     # end instead of 2.
+    # §220：`burn+` 的回合末伤害**早就**是 4（wiki 的升级值），但一直没有被 pin ——
+    # 这条新闸门（`check_card_lifecycle`）第一次跑就把这个旧账翻出来了。
     "burn+": {"Cost": 1, "Tags": ["status", "unplayable", "junk"],
-              "Facts": []},
-    # Awakened One's Sludge adds a Void. The wiki's Void also makes you lose 1 Energy when drawn;
-    # nothing here can say "the card that just moved is this one", so that half is absent -- and the
-    # card's own text says only what happens.
+              "Facts": [],
+              "Lifecycle": {"TurnEndInHand": [("damage", 4, "source")]}},
+    # Awakened One's Sludge adds a Void. §220 gave the missing half a carrier:
+    # `LifecyclePrograms[Drawn]` fires from `state.move_card` (draw pile -> hand), so
+    # "Whenever this card is drawn, lose 1 Energy" is real now. (The old comment here said
+    # "nothing here can say 'the card that just moved is this one'" -- that was true until §220.)
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
-             "Facts": []},
+             "Facts": [],
+             "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
 }
 
 # inv:§4.1 -- the 10 zero-new-ability enemies: (hp_min, hp_max, action ids).
@@ -1021,6 +1031,13 @@ def program_facts(root):
         elif kind == "node.modifyStatusStacks":
             facts.append(("modify", body["StatusDefinitionId"]["value"],
                           amount(body["Delta"]), tgt(body["TargetSelector"])))
+        elif kind in ("node.gainResource", "node.loseResource"):
+            # §220: the two halves of "whenever this card is drawn, lose 1 Energy" /
+            # "if this card is Exhausted, gain 2 Energy". Recorded as facts so the gate can see them
+            # -- this function is the only vocabulary the checker has, and an unknown kind raises.
+            words = "gain" if kind == "node.gainResource" else "lose"
+            facts.append((words, body["ResourceId"], amount(body["Amount"]),
+                          tgt(body["TargetSelector"])))
         elif kind == "node.extraTurn":
             facts.append(("extraTurn", tgt(body["TargetSelector"])))
         elif kind == "node.endTurn":
@@ -1316,6 +1333,10 @@ def check_cards_and_actions(doc):
     ok("enemy actions", "%d actions x (intent, facts)" % len(INV_ACTIONS))
     check_intent_history(doc)
     check_time_variables(doc)
+    # §219：落区是**枚举名**（`zone_from_wire_name`），写错一个词 = 这张牌一打就抛。
+    ok("card zones", "%d zone cells x 7 known names" % check_card_zones(doc))
+    # §220：`CARD.LifecyclePrograms` 的键与事实（`Drawn` / `Exhausted` 是这一节新加的）。
+    ok("card lifecycle", "%d program(s) x (event key, facts)" % check_card_lifecycle(doc))
     ok("card wiki", "%d cards x (type, rarity, cost, keywords, facts)" % check_card_wiki(doc))
     check_ascension_variants(doc)
     check_ascension_health(doc)
@@ -1581,6 +1602,66 @@ def load_card_wiki():
             CARD_WIKI_DEVIATIONS[card_id] = deviation['why']
     CARD_WIKI = out
     return out
+
+
+CARD_ZONE_NAMES = {"DrawPile", "Hand", "DiscardPile", "ExhaustPile", "BanishedPile",
+                   "QueuePile", "SetAsidePile"}
+
+
+def check_card_zones(doc):
+    """§219：两个卡牌落区字段的值必须是内核认识的**枚举名**。
+
+    判据来自 `play.rs:1931` 的 `zone_from_wire_name`：它只认上表那七个串，别的一律
+    `IrError::UnknownKind` —— 也就是说"写错一个词"= 这张牌一打就抛。`bandage_up` /
+    `dark_shackles` 曾经写着 `"Exhaust"`（正确是 `"ExhaustPile"`），因为**没有任何测试打过它们**，
+    这个错从 §157 一路活到 §218 的卡牌 wiki 对照。
+    """
+    seen = 0
+    for card in doc["Cards"]:
+        for key in ("PlayedCardDestinationZone", "TurnEndHandDestinationZone"):
+            name = card.get(key)
+            if name is None:
+                continue
+            seen += 1
+            if name not in CARD_ZONE_NAMES:
+                fail("card." + card["Id"], "%s = %r 不是区名（认识的是 %s）"
+                     % (key, name, sorted(CARD_ZONE_NAMES)))
+    return seen
+
+
+CARD_LIFECYCLE_EVENTS = ("TurnEndInHand", "Drawn", "Exhausted")
+
+
+def check_card_lifecycle(doc):
+    """§220：`CARD.LifecyclePrograms` 的**键集合**与**事实**，两个方向都查。
+
+    这一层必须存在：这些节目不在卡的 `Program` 里，所以 `INV_CARDS` 的 `Facts` 一行**看不见**
+    它们 —— 内容把一条节目删掉/写错时，只有这张表会红。`void`（`Drawn`）与 `sentinel`
+    （`Exhausted`）是这一节新加的两条；`Drawn`/`Exhausted` 两个事件本身也是这一节新加的内核能力
+    （参考的 `CardLifecycleTrigger` 只有 `TurnEndInHand`）。
+    """
+    cards = {card["Id"]: card for card in doc["Cards"]}
+    seen = 0
+    for card_id in sorted(cards):
+        programs = cards[card_id].get("LifecyclePrograms") or {}
+        expected = (INV_CARDS.get(card_id) or {}).get("Lifecycle") or {}
+        for key in programs:
+            if key not in CARD_LIFECYCLE_EVENTS:
+                fail("card." + card_id, "生命周期事件 %r 内核不认识（认识的是 %s）"
+                     % (key, list(CARD_LIFECYCLE_EVENTS)))
+                continue
+            if key not in expected:
+                fail("card." + card_id, "有一条 `%s` 生命周期节目，`INV_CARDS` 没有记录" % key)
+                continue
+            seen += 1
+            facts = program_facts(programs[key]["Root"])
+            if facts != expected[key]:
+                fail("card." + card_id, "`%s` 节目事实 %s，inv says %s"
+                     % (key, facts, expected[key]))
+        for key in expected:
+            if key not in programs:
+                fail("card." + card_id, "`INV_CARDS` 记了 `%s` 节目，内容里没有" % key)
+    return seen
 
 
 def check_card_wiki(doc):

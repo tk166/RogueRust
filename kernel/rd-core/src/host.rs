@@ -128,10 +128,11 @@ use core::cell::Cell;
 
 use crate::content::{Content, ABSENT16, EK_CARD, NULL16};
 use crate::exec::{self, ExecContext};
+use crate::exec::ExecError;
 use crate::expr::ExprError;
 use crate::ir::{IrError, NodeRef, Value};
 use crate::state::{
-    CapacityError, CardSlot, CardZone, CombatEvent, CombatResult, CombatState,
+    CapacityError, CardDefinitionId, CardSlot, CardZone, CombatEvent, CombatResult, CombatState,
     CombatantId, Continuation, EventItem, StatusDefinitionId, StatusInstance,
     ZonePlacement, ID_CAP, MAX_CARDS_PER_ZONE, MAX_EFFECTS_PER_CYCLE, MAX_EVENTS_PER_CYCLE,
     MAX_QUEUE_CYCLES, MAX_STATUSES_PER_COMBATANT,
@@ -1418,7 +1419,9 @@ impl<'a> Host<'a> {
                 continue;
             };
             let definition = instance.definition_id;
-            if let Some(program) = card_lifecycle_turn_end_program(content, definition.as_str())? {
+            let decoded = card_lifecycle_program(content, definition.as_str(), None)
+                .map_err(|error| self.record(HostError::Exec(error)))?;
+            if let Some(program) = decoded {
                 if let Some(cell) = programs.get_mut(index) {
                     *cell = Some(program);
                 }
@@ -1464,6 +1467,25 @@ impl<'a> Host<'a> {
         match failure {
             Some(e) => Err(e),
             None => Ok(()),
+        }
+    }
+
+    /// §220：两个钩子的共同实体 —— 查内容、有节目才跑。
+    fn run_card_lifecycle_hook(
+        &mut self,
+        state: &mut CombatState,
+        actor: &CombatantId,
+        slot: CardSlot,
+        event: crate::state::CardLifecycleEvent,
+    ) -> Result<(), TurnError> {
+        let Some(card) = state.card(slot) else {
+            return Ok(());
+        };
+        let definition = card.definition_id;
+        let content = self.content;
+        match run_card_lifecycle(state, content, *actor, definition, event) {
+            Ok(()) => Ok(()),
+            Err(error) => Err(bridge(self.record(HostError::Exec(error)))),
         }
     }
 
@@ -2595,6 +2617,31 @@ impl TurnHost for Host<'_> {
         }
     }
 
+    /// §220：`Drawn` / `Exhausted` 两个生命周期事件。钩子默认空实现，这里把它接到
+    /// [`run_card_lifecycle`]（**没有节目就什么都不做** —— 不建链、不发号）。
+    fn card_drawn(
+        &mut self,
+        state: &mut CombatState,
+        actor: &CombatantId,
+        slot: CardSlot,
+    ) -> Result<(), TurnError> {
+        self.run_card_lifecycle_hook(state, actor, slot, crate::state::CardLifecycleEvent::Drawn)
+    }
+
+    fn card_exhausted(
+        &mut self,
+        state: &mut CombatState,
+        actor: &CombatantId,
+        slot: CardSlot,
+    ) -> Result<(), TurnError> {
+        self.run_card_lifecycle_hook(
+            state,
+            actor,
+            slot,
+            crate::state::CardLifecycleEvent::Exhausted,
+        )
+    }
+
     fn turn_end_hand_destination(
         &self,
         state: &CombatState,
@@ -2759,7 +2806,10 @@ fn teardown(state: &mut CombatState) {
     exec::reap_frames(state);
 }
 
-fn execute_program(
+/// §220：`pub(crate)` —— `exec::resolve_request` 也要跑节目（卡的 `Drawn`/`Exhausted`），
+/// 而复用这一个入口是**必须的**：它在末尾调 `teardown`（`reap_frames`），漏了那一步就是
+/// §199 那条"每个同步节目漏一条链"的回归。
+pub(crate) fn execute_program(
     state: &mut CombatState,
     content: &Content<'_>,
     root: NodeRef<'_>,
@@ -2922,11 +2972,11 @@ const TURN_END_IN_HAND_ORDINAL: &str = "0";
 
 /// `CARD.LifecyclePrograms[TurnEndInHand]` 的一个节目（`EffectProgram<CardLifecycleContext>`）。
 #[derive(Clone, Copy)]
-struct LifecycleProgram<'a> {
+pub(crate) struct LifecycleProgram<'a> {
     /// 节目根（信封里的 `Root`）。
-    root: NodeRef<'a>,
+    pub(crate) root: NodeRef<'a>,
     /// 信封里的 `MaxProgramSteps`（缺席 ⇒ 1024）。
-    max_steps: u32,
+    pub(crate) max_steps: u32,
 }
 
 /// 解一张卡的 `TurnEndInHand` 生命周期节目：`Ok(None)` = 这张卡没有那条节目。
@@ -2959,11 +3009,57 @@ struct LifecycleProgram<'a> {
 ///   只有 `TurnEndInHand` 一个成员，别的键 = 内容用了 v1 没实现的生命周期触发器）；
 /// * 值是 null、或信封里没有 `Root` ⇒ [`HostError::Content`]（前者参考会拿 null 节目去
 ///   `Execute` = 空引用；后者是坏信封）。
-fn card_lifecycle_turn_end_program<'a>(
+/// §220：跑一张牌的某条生命周期节目（**没有节目就什么都不做**）。
+///
+/// ⚠️ 这里刻意**不入队**：效果请求会 `??` 出根链、把 `next_effect_chain_number` 推进一格，
+/// 而参考实现根本没有这条请求 —— 第一版按"每张抽到的牌入队一条"实现，`FIGHT_DIFF` 立刻从
+/// 182/182 掉到 18/182（`chain_num` 行全错）。所以"有没有节目"必须先问内容：没有就**零开销**，
+/// 有就直接跑（`execute_program`，与回合末的生命周期节目同一条路）。
+pub(crate) fn run_card_lifecycle(
+    state: &mut CombatState,
+    content: &Content<'_>,
+    owner: CombatantId,
+    definition: CardDefinitionId,
+    event: crate::state::CardLifecycleEvent,
+) -> Result<(), ExecError> {
+    let decoded = card_lifecycle_program(content, definition.as_str(), Some(event))?;
+    let Some(program) = decoded else {
+        return Ok(());
+    };
+    execute_program(
+        state,
+        content,
+        program.root,
+        Some(owner),
+        Some(owner),
+        program.max_steps,
+    )
+}
+
+/// §220：`LifecyclePrograms` 的**键名** → 事件。`None` = 这个键内核不认识（必须响亮）。
+///
+/// 参考的 `CardLifecycleTrigger` 只有 `TurnEndInHand`（及其枚举序数 `0`）；`Drawn` / `Exhausted`
+/// 是**我们自己的扩展**（`void` 的"抽到时 -1 能量"、`sentinel` 的"被消耗时 +2 能量"），
+/// 与 §198 的 `Operation::ScalePercentPerStack` 同级。**不认识的键仍然拒绝**：
+/// 那是"内容写了本层读不懂的触发器"，不是"没有触发器"。
+#[must_use]
+pub fn lifecycle_name_matches(name: &str, wanted: Option<crate::state::CardLifecycleEvent>) -> Option<bool> {
+    let known: Option<Option<crate::state::CardLifecycleEvent>> = match name {
+        TURN_END_IN_HAND | TURN_END_IN_HAND_ORDINAL => Some(None),
+        "Drawn" => Some(Some(crate::state::CardLifecycleEvent::Drawn)),
+        "Exhausted" => Some(Some(crate::state::CardLifecycleEvent::Exhausted)),
+        _ => None,
+    };
+    known.map(|event| event == wanted)
+}
+
+pub(crate) fn card_lifecycle_program<'a>(
     content: &'a Content<'a>,
     definition_id: &str,
-) -> Result<Option<LifecycleProgram<'a>>, HostError> {
-    let row = card_row(content, definition_id).ok_or(HostError::Content("CARD row"))?;
+    wanted: Option<crate::state::CardLifecycleEvent>,
+) -> Result<Option<LifecycleProgram<'a>>, ExecError> {
+    let row = card_row(content, definition_id)
+        .ok_or(ExecError::Ir(IrError::Missing("CARD row")))?;
     let handle = row.lifecycle_programs();
     if handle == ABSENT16 || handle == NULL16 {
         // 整格缺席 / 显式 null ⇒ 参考那边是空字典 ⇒ 没有节目。
@@ -2971,37 +3067,42 @@ fn card_lifecycle_turn_end_program<'a>(
     }
     let term = content
         .term(handle)
-        .ok_or(HostError::Content("LifecyclePrograms"))?;
+        .ok_or(ExecError::Ir(IrError::Missing("LifecyclePrograms")))?;
     if term.op < crate::content::OP_FIRST_DYNAMIC {
         // `_arr`/`_str`/`_int`… 都不是"字典"的编码。
-        return Err(HostError::Content("LifecyclePrograms"));
+        return Err(ExecError::Ir(IrError::Missing("LifecyclePrograms")));
     }
     let opcode = content
         .opcode(term.op)
-        .ok_or(HostError::Content("LifecyclePrograms"))?;
+        .ok_or(ExecError::Ir(IrError::Missing("LifecyclePrograms")))?;
     let node = NodeRef::new(content, handle);
     let mut program: Option<NodeRef<'a>> = None;
     for index in 0..opcode.nfields() {
         let field = opcode
             .field(index)
-            .ok_or(HostError::Content("LifecyclePrograms"))?;
+            .ok_or(ExecError::Ir(IrError::Missing("LifecyclePrograms")))?;
         let name = content
             .string(field.name_str())
-            .ok_or(HostError::Content("LifecyclePrograms"))?;
-        if name != TURN_END_IN_HAND && name != TURN_END_IN_HAND_ORDINAL {
-            return Err(HostError::Unsupported("CardLifecycleTrigger"));
+            .ok_or(ExecError::Ir(IrError::Missing("LifecyclePrograms")))?;
+        // §220：不认识的键仍是 `UnknownKind`（"判别串不认识"），与 `zone_from_wire_name` 同形。
+        let matches = lifecycle_name_matches(name, wanted)
+            .ok_or(ExecError::Ir(IrError::UnknownKind))?;
+        if !matches {
+            continue;
         }
         if program.is_some() {
             // 两种拼法同时出现 ⇒ 同一个触发器写了两条节目。
-            return Err(HostError::Content("LifecyclePrograms"));
+            return Err(ExecError::Ir(IrError::Missing("LifecyclePrograms")));
         }
         match node.field(name)? {
             // `F_TERM` 的缺席哨兵 ⇒ 这个键没写。
             None | Some(Value::Absent) => {}
-            Some(Value::Null) => return Err(HostError::Content("LifecyclePrograms")),
+            Some(Value::Null) => {
+                return Err(ExecError::Ir(IrError::Missing("LifecyclePrograms")))
+            }
             Some(Value::Node(inner)) => program = Some(inner),
             // 声明成 `F_TERM` 却装了标量：`field()` 已经在这里报过错了，这一支不可达。
-            Some(_) => return Err(HostError::Content("LifecyclePrograms")),
+            Some(_) => return Err(ExecError::Ir(IrError::Missing("LifecyclePrograms"))),
         }
     }
     let Some(program) = program else {
@@ -3010,7 +3111,7 @@ fn card_lifecycle_turn_end_program<'a>(
     };
     let root = program
         .node_field("Root")?
-        .ok_or(HostError::Content("LifecyclePrograms"))?;
+        .ok_or(ExecError::Ir(IrError::Missing("LifecyclePrograms")))?;
     let max_steps = match program.int_field("MaxProgramSteps")? {
         Some(value) if value > 0 => u32::try_from(value).unwrap_or(DEFAULT_MAX_PROGRAM_STEPS),
         _ => DEFAULT_MAX_PROGRAM_STEPS,
@@ -3708,8 +3809,12 @@ mod tests {
         assert_eq!(content.term_count(), 15);
         assert_eq!(content.rows(crate::content::Table::Card).count(), 7);
         // 六张卡的解码结果**逐张**（这张表就是上面 `burn_image` 文档里那张表的机器版）：
-        // 四张有 `TurnEndInHand` 节目、`plain.card` 是空 `{}`、`curse.weird` 只有一个
-        // 内核没有的触发器 ⇒ 响亮。
+        // 四张有 `TurnEndInHand` 节目、`plain.card` 是空 `{}`。
+        //
+        // ⚠️ §220 把 `curse.weird` 的期望**翻了过来**：它只有 `Drawn` 一个键，而 `Drawn` 现在
+        // 是内核支持的事件（以前那一行断言的是"未知触发器必须响亮"）。"未知键仍然响亮"这条性质
+        // 改由 `lifecycle_name_matches` 的映射表直接钉（见下面一段），因为手搓镜像里没有别的怪键，
+        // 而新增一个键会改动那张镜像里被钉死的 term/opcode 计数。
         for (id, has_program) in [
             ("curse.burn", true),
             ("curse.burn_block", true),
@@ -3718,24 +3823,48 @@ mod tests {
             ("plain.card", false),
         ] {
             assert_eq!(
-                card_lifecycle_turn_end_program(&content, id)
+                card_lifecycle_program(&content, id, None)
                     .unwrap_or_else(|e| panic!("`{id}` 必须解得出来：{e:?}"))
                     .is_some(),
                 has_program,
                 "`{id}` 的 `TurnEndInHand` 节目是否存在"
             );
         }
-        // `LifecycleProgram` 没有 `PartialEq/Debug`（`NodeRef` 的身份是 term id，`match` 更诚实）。
-        match card_lifecycle_turn_end_program(&content, "curse.weird") {
-            Err(HostError::Unsupported("CardLifecycleTrigger")) => {}
-            other => panic!(
-                "`curse.weird` 只有 `Drawn`（内核没有的触发器）⇒ 必须响亮，实际 {:?}",
-                other.map(|p| p.map(|p| p.root.id()))
-            ),
-        }
+        // `curse.weird` 的键是 `Drawn`：问 `TurnEndInHand` ⇒ `Ok(None)`（不是错误），
+        // 问 `Drawn` ⇒ 解得出来。这条成对断言把"读错键"与"没有节目"分开。
+        assert!(
+            card_lifecycle_program(&content, "curse.weird", None).expect("decode").is_none(),
+            "`curse.weird` 没有 `TurnEndInHand` 节目"
+        );
+        assert!(
+            card_lifecycle_program(
+                &content,
+                "curse.weird",
+                Some(crate::state::CardLifecycleEvent::Drawn)
+            )
+            .expect("decode")
+            .is_some(),
+            "`curse.weird` 有 `Drawn` 节目"
+        );
+        // 未知键仍然必须响亮：映射表是唯一的口径（`None` = 不认识）。
+        assert_eq!(
+            lifecycle_name_matches("TurnEndInHand", None),
+            Some(true),
+            "参考的触发器"
+        );
+        assert_eq!(
+            lifecycle_name_matches("Exhausted", Some(crate::state::CardLifecycleEvent::Exhausted)),
+            Some(true),
+            "§220 新加的事件"
+        );
+        assert_eq!(
+            lifecycle_name_matches("Teleported", None),
+            None,
+            "不认识的键 ⇒ None ⇒ 解码报 `UnknownKind`（内容写了一个本层读不懂的触发器）"
+        );
         // `curse.burn_dual` 的生命周期节目是 `dealDamage{2}`，而它的**出牌**节目是
         // `dealDamage{7}` —— 两格的 term 必须不同，否则"读错格子"那条测试就没有区分力。
-        let lifecycle = card_lifecycle_turn_end_program(&content, "curse.burn_dual")
+        let lifecycle = card_lifecycle_program(&content, "curse.burn_dual", None)
             .unwrap()
             .expect("有节目");
         let card_program = crate::ir::Ir::new(&content)
@@ -7361,7 +7490,7 @@ mod tests {
                 continue;
             };
             cards += 1;
-            if card_lifecycle_turn_end_program(&content, id)
+            if card_lifecycle_program(&content, id, None)
                 .unwrap()
                 .is_some()
             {
@@ -7608,12 +7737,23 @@ mod tests {
         let blob = burn_image();
         let content = parse(&blob);
         let mut host = Host::new(&content);
+        // ⚠️ §220 给这条测试**换了前提**：`curse.weird` 的键是 `Drawn`，而 `Drawn` 现在内核支持
+        // （`void` 的"抽到时 -1 能量"）⇒ 回合末扫描对它**没有节目**，`Ok(())` 而不是响亮失败。
+        // 这正是"缺口写成断言"的用法：它红的那一刻，就是缺口被补上的那一刻（§144 的同款）。
         let mut state = duel(70);
         give_card(&mut state, "hero", CardZone::Hand, "w1", "curse.weird", None);
         assert_eq!(
             host.try_hand_turn_end_lifecycle(&mut state, &cid("hero")),
-            Err(HostError::Unsupported("CardLifecycleTrigger")),
-            "未知的生命周期触发器必须响亮"
+            Ok(()),
+            "`Drawn` 不再是未知触发器；回合末扫描只是没有 `TurnEndInHand` 节目"
+        );
+        // 而**真正**未知的键仍然必须响亮 —— 口径在映射表上（手搓镜像里没有别的怪键，
+        // 新增一个会改动那张镜像里被钉死的 term/opcode 计数）。
+        assert_eq!(lifecycle_name_matches("Teleported", None), None);
+        assert_eq!(
+            card_lifecycle_program(&content, "curse.weird", None).map(|p| p.is_some()),
+            Ok(false),
+            "`curse.weird` 没有 `TurnEndInHand` 节目"
         );
 
         let mut other = duel(70);
@@ -8004,6 +8144,84 @@ mod tests {
         turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
         assert_eq!(state.cards_played_this_turn, 0, "turn end resets the counter");
         assert_eq!(hit(&mut state), 10, "next turn starts over: back to 10");
+    }
+
+    /// §220：`LifecyclePrograms[Drawn]` —— wiki 的 "Whenever this card is drawn, lose 1 Energy."
+    ///
+    /// `Drawn` 与 `Exhausted` 是**内核新加的两个生命周期事件**（参考的 `CardLifecycleTrigger`
+    /// 只有 `TurnEndInHand`）。它们在 `state.move_card` 这个**唯一的落区漏斗**上发请求：
+    /// 抽牌堆→手牌 = `Drawn`，任何区→消耗堆 = `Exhausted`。选择在那个漏斗上发，是因为另一条路
+    /// 要在"回合开始的抽牌、`drawCards` 节点、药水、弃牌堆洗回"每一处各写一遍，漏一处就是静默少跑。
+    ///
+    /// 判据走真实状态机：**把手牌抽起来**（`draw_card`，不是直接摆牌），能量必须 -1。
+    #[test]
+    fn a_void_drawn_from_the_pile_costs_one_energy() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        // 抽牌堆顶端放一张 Void（`draw_card` 抽的是**队首**）。
+        give_card(&mut state, "hero", CardZone::DrawPile, "card_void", "void", None);
+        assert_eq!(energy_of(&state, "hero"), 3);
+
+        // 走**回合开始的抽牌**：那才是玩家真正抽到 Void 的路径。
+        // （`draw_cards_with_reshuffle` 让状态层去跑节目是不行的 —— 它不知道内容。）
+        turn::start_current_turn(&mut state, &config(), &mut host).expect("turn 1");
+        let drawn = zone_count(&state, "hero", CardZone::Hand);
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::Hand),
+            1,
+            "the void is in hand"
+        );
+        assert_eq!(
+            energy_of(&state, "hero"),
+            2,
+            "wiki: whenever this card is drawn, lose 1 Energy (drawn {drawn})",
+        );
+    }
+
+    /// §220：`LifecyclePrograms[Exhausted]` —— wiki 的 "If this card is Exhausted, gain 2 Energy."
+    ///
+    /// 消耗的入口不止"打出即消耗"：虚无（回合末）、内容里的 `moveCardToZone` 都算。所以判据用
+    /// **回合末的虚无清理**这条真实路径，而不是手动把牌塞进消耗堆。
+    #[test]
+    fn a_sentinel_that_gets_exhausted_pays_two_energy() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        // `sentinel+` 是 3 点能量（节目挂在**定义**上，所以升级行有自己的一份）。
+        for (card_id, expected) in [("sentinel", 2), ("sentinel+", 3)] {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            give_card(&mut state, "hero", CardZone::Hand, "card_sentinel", card_id, None);
+            turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+            // 回合开始会把能量补到上限（3/3）—— `gain 2` 会被上限吃掉，所以先把这一格腾出来。
+            // 不腾的话"给了 2 点"与"一点没给"在数值上完全一样（第一版就是这么写错的）。
+            give_energy(&mut state, "hero", 0);
+            let before = energy_of(&state, "hero");
+            // 回合末：`ethereal` 把它送进消耗堆 ⇒ `move_card` 发 `Exhausted` ⇒ 节目给能量。
+            turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+            // 入队不是执行，排空一次（`end_current_turn` 自己也排，这一步幂等）。
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            assert_eq!(
+                zone_count(&state, "hero", CardZone::ExhaustPile),
+                1,
+                "{card_id}: ethereal moves it to the exhaust pile at turn end"
+            );
+            assert_eq!(
+                energy_of(&state, "hero"),
+                before + expected,
+                "{card_id}: wiki says +{expected} Energy when exhausted"
+            );
+        }
     }
 
     /// §219：`Exhaust` 是**落区**，而且要真的能用 —— `bandage_up` / `dark_shackles` 曾经把

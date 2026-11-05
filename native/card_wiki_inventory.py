@@ -32,8 +32,8 @@ DEVIATIONS = {
         'plus_facts': [('status', 'standard.intangible', 2, 'source')],
     },
     'sentinel': {
-        'why': 'wiki 没有 Ethereal（旧版有），内容带 `ethereal`；而 wiki 的报酬是"被 Exhaust 时给能量"，'
-               '内容没有这条触发器（`ethereal` 会在回合末把它送进消耗堆，但没有任何东西读"被消耗"）。',
+        'why': 'wiki 没有 Ethereal（旧版有），内容带 `ethereal`。§220 起"被 Exhaust 时给 2(3) 能量"'
+               '**已经实现**（`LifecyclePrograms[Exhausted]`），所以这条偏差只剩 Ethereal 标签本身。',
         'content_keywords': ['Ethereal'],
     },
     'void': {

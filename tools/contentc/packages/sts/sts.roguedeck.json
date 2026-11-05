@@ -3622,7 +3622,35 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "LifecyclePrograms": {},
+      "LifecyclePrograms": {
+        "Exhausted": {
+          "Id": {
+            "Value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.gainResource",
+            "value": {
+              "TargetSelector": {
+                "kind": "sel.source",
+                "value": {
+                  "Cardinality": "ZeroOrOne",
+                  "RequiredContextCapabilities": "Source"
+                }
+              },
+              "ResourceId": "standard.energy",
+              "Amount": {
+                "kind": "const",
+                "value": {
+                  "Value": 2
+                }
+              },
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      },
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "ExhaustPile",
       "PlayedCardDestinationZone": "DiscardPile",
@@ -4466,7 +4494,35 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "LifecyclePrograms": {},
+      "LifecyclePrograms": {
+        "Exhausted": {
+          "Id": {
+            "Value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.gainResource",
+            "value": {
+              "TargetSelector": {
+                "kind": "sel.source",
+                "value": {
+                  "Cardinality": "ZeroOrOne",
+                  "RequiredContextCapabilities": "Source"
+                }
+              },
+              "ResourceId": "standard.energy",
+              "Amount": {
+                "kind": "const",
+                "value": {
+                  "Value": 3
+                }
+              },
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      },
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "ExhaustPile",
       "PlayedCardDestinationZone": "DiscardPile",
@@ -5534,7 +5590,35 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       },
-      "LifecyclePrograms": {},
+      "LifecyclePrograms": {
+        "Drawn": {
+          "Id": {
+            "Value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.loseResource",
+            "value": {
+              "TargetSelector": {
+                "kind": "sel.source",
+                "value": {
+                  "Cardinality": "ZeroOrOne",
+                  "RequiredContextCapabilities": "Source"
+                }
+              },
+              "ResourceId": "standard.energy",
+              "Amount": {
+                "kind": "const",
+                "value": {
+                  "Value": 1
+                }
+              },
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      },
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "ExhaustPile",
       "PlayedCardDestinationZone": "DiscardPile",

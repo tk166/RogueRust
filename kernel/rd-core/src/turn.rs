@@ -299,6 +299,31 @@ pub trait TurnHost {
         CardZone::DiscardPile
     }
 
+    /// §220：一张牌**被抽到**（从抽牌堆进手牌）—— 跑它的 `LifecyclePrograms[Drawn]`。
+    ///
+    /// 默认什么都不做：只有知道内容的宿主（[`crate::host::Host`]）才有节目可跑。做成钩子而不是
+    /// 写进 `move_card`，是因为"有没有节目"是**内容**知识，而状态层不该依赖效果队列/内容。
+    fn card_drawn(
+        &mut self,
+        state: &mut CombatState,
+        actor: &CombatantId,
+        slot: CardSlot,
+    ) -> Result<(), TurnError> {
+        let _ = (state, actor, slot);
+        Ok(())
+    }
+
+    /// §220：一张牌**进了消耗堆**（虚无、打出即消耗、内容搬牌）—— 跑 `LifecyclePrograms[Exhausted]`。
+    fn card_exhausted(
+        &mut self,
+        state: &mut CombatState,
+        actor: &CombatantId,
+        slot: CardSlot,
+    ) -> Result<(), TurnError> {
+        let _ = (state, actor, slot);
+        Ok(())
+    }
+
     /// `UnspentResourceCarries` 法令：回合开始补能量时是"补到"还是"累加"
     /// （`ResourceEffects.cs:84-96`：`refillTarget = (Max ?? DefaultMax) + Current`，且允许超上限）。
     /// 默认 `false` = 补到。
@@ -706,7 +731,26 @@ pub fn start_current_turn<H: TurnHost>(
     //    抽牌堆空了就重洗弃牌堆（两堆都空才抽不满，且那不是错误）。
     //    `drawn < wanted` 唯一可能的成因是"抽牌堆与弃牌堆都空了"（`CardZoneEffects.cs:59-60`）。
     let requested = host.turn_start_draw_count(state, &actor, config.draw_per_turn);
+    // §220：抽到的那几张可能有 `LifecyclePrograms[Drawn]`（`void` 的"抽到时 -1 能量"）。
+    // 手牌底部的"新尾巴"就是刚抽到的牌（`move_card` 用 `Bottom` 追加），所以先记下手牌长度，
+    // 抽完再把越界出来的那几张逐张交给宿主 —— 顺序按堆序，与抽牌顺序一致。
+    let hand_before = hand_size(state, &actor);
     let _drawn = draw_for_turn_start(state, &actor, config, requested)?;
+    if !stopped(state) {
+        let hand_after = hand_size(state, &actor);
+        for index in hand_before..hand_after {
+            let Some(slot) = state
+                .card_zones(&actor)
+                .and_then(|zones| zones.slot_at(CardZone::Hand, index))
+            else {
+                continue;
+            };
+            host.card_drawn(state, &actor, slot)?;
+            if stopped(state) {
+                break;
+            }
+        }
+    }
     if stopped(state) {
         return Ok(());
     }
@@ -1016,7 +1060,7 @@ pub fn hand_size(state: &CombatState, actor: &CombatantId) -> usize {
 pub fn discard_hand<H: TurnHost>(
     state: &mut CombatState,
     actor: &CombatantId,
-    host: &H,
+    host: &mut H,
 ) -> Result<usize, TurnError> {
     // 被 `RetainHandTag` 抑制（`Cards/CardTurnLifecycleEventHandlers.cs:46-55`）—— 本内核走
     // `host.hand_is_retained`，因为"哪些标记保留手牌"是内容决定的。抑制时返回 0（"一张都没弃"）。
@@ -1053,6 +1097,7 @@ pub fn discard_hand<H: TurnHost>(
         if destination == CardZone::Hand {
             continue;
         }
+        // 落点先记下来：真正的 `move_card` 在下面统一的循环里做，届时按同一个 (from, to) 发通知。
         moves[planned] = (slot, destination);
         planned += 1;
     }
@@ -1076,6 +1121,11 @@ pub fn discard_hand<H: TurnHost>(
     let mut moved = 0usize;
     for (slot, destination) in moves[..planned].iter().copied() {
         if state.move_card(actor, CardZone::Hand, destination, slot, ZonePlacement::Bottom)? {
+            // §220：虚无（`TurnEndHandDestinationZone = ExhaustPile`）走的就是这一条 ⇒
+            // `sentinel` 的"被消耗时给能量"从这里触发（经宿主，因为只有它知道内容）。
+            if destination == CardZone::ExhaustPile {
+                host.card_exhausted(state, actor, slot)?;
+            }
             moved += 1;
         }
     }
@@ -2487,7 +2537,7 @@ mod tests {
             stock_deck(&mut s, &hero, 10);
             let mut default_host = NullHost;
             start_current_turn(&mut s, &cfg, &mut default_host).unwrap();
-            let default_moved = discard_hand(&mut s, &hero, &default_host).unwrap();
+            let default_moved = discard_hand(&mut s, &hero, &mut default_host).unwrap();
             assert_eq!(default_moved, 5);
             assert_eq!(hand(&s, &hero), 0);
             assert_eq!(
@@ -2513,7 +2563,7 @@ mod tests {
                 to_hand: Some("card_000003"),
             };
             start_current_turn(&mut s2, &cfg, &mut host).unwrap();
-            let moved = discard_hand(&mut s2, &hero, &host).unwrap();
+            let moved = discard_hand(&mut s2, &hero, &mut host).unwrap();
 
             assert_eq!(moved, 3, "1 号与 5 号进弃牌堆、4 号进消耗堆；2 号与 3 号留下");
             assert_eq!(
@@ -2546,13 +2596,13 @@ mod tests {
 
             // 只有 1 号的落点是 `Hand` ⇒ 它留下，2/3 号进弃牌堆（逐张性的第二次物证：
             // 同一份手牌里"一张不动、两张动"）。
-            let host = CardPolicyHost {
+            let mut host = CardPolicyHost {
                 inner: NullHost,
                 stay: None,
                 to_exhaust: None,
                 to_hand: Some("card_000001"),
             };
-            assert_eq!(discard_hand(&mut s, &hero, &host).unwrap(), 2);
+            assert_eq!(discard_hand(&mut s, &hero, &mut host).unwrap(), 2);
             assert_eq!(
                 pile_ids(&s, &hero, CardZone::Hand),
                 vec!["card_000001".to_string()]
@@ -2560,10 +2610,10 @@ mod tests {
             assert_eq!(pile(&s, &hero, CardZone::DiscardPile), 2);
 
             // 手牌只剩那张"不动"的 ⇒ 一张都不搬、也不是错误。
-            assert_eq!(discard_hand(&mut s, &hero, &host).unwrap(), 0);
+            assert_eq!(discard_hand(&mut s, &hero, &mut host).unwrap(), 0);
             assert_eq!(hand(&s, &hero), 1);
             // 对照：默认宿主会把它弃掉 ⇒ 两条路结果不同。
-            assert_eq!(discard_hand(&mut s, &hero, &default_host).unwrap(), 1);
+            assert_eq!(discard_hand(&mut s, &hero, &mut default_host).unwrap(), 1);
             assert_eq!(hand(&s, &hero), 0);
         }
 
@@ -2578,12 +2628,12 @@ mod tests {
             assert_eq!(hand(&s, &hero), 3);
 
             // 保留宿主 ⇒ 一张不动、返回 0（`hand_is_retained` 先判）。
-            assert_eq!(discard_hand(&mut s, &hero, &RetainingHost::default()).unwrap(), 0);
+            assert_eq!(discard_hand(&mut s, &hero, &mut RetainingHost::default()).unwrap(), 0);
             assert_eq!(pile(&s, &hero, CardZone::Hand), 3);
             assert_eq!(pile(&s, &hero, CardZone::DiscardPile), 0);
 
             // `NullHost` ⇒ 整堆按 `Bottom` 搬到弃牌堆，**保序**。
-            assert_eq!(discard_hand(&mut s, &hero, &NullHost).unwrap(), 3);
+            assert_eq!(discard_hand(&mut s, &hero, &mut NullHost).unwrap(), 3);
             assert_eq!(hand(&s, &hero), 0);
             assert_eq!(
                 pile_ids(&s, &hero, CardZone::DiscardPile),
@@ -2595,11 +2645,11 @@ mod tests {
             );
 
             // 已经空了再弃一次 ⇒ 0 张，不是错误。
-            assert_eq!(discard_hand(&mut s, &hero, &NullHost).unwrap(), 0);
+            assert_eq!(discard_hand(&mut s, &hero, &mut NullHost).unwrap(), 0);
 
             // 未知单位 ⇒ 报错，不静默"成功弃了 0 张"。
             assert_eq!(
-                discard_hand(&mut s, &cid("nobody"), &NullHost),
+                discard_hand(&mut s, &cid("nobody"), &mut NullHost),
                 Err(TurnError::Capacity(CapacityError::MissingCombatant))
             );
         }
