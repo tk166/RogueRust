@@ -1,0 +1,53 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Void
+| Image         = Colorless-Void.png
+| Color         = Colorless
+| Type          = Status
+| Rarity        = Status
+| Cost          = -2
+| NoUpgrade     = true
+| Description   = {{KW|Unplayable}}.<br>{{KW|Ethereal}}.<br>Whenever this card is drawn, lose 1 {{KW|Energy}}.
+| GivesToPlayer = Energy, Ethereal, Unplayable
+| InteractsWith = Draw
+}}
+{{Keyword Infobox|Unplayable}} {{Keyword Infobox|Ethereal}} {{Keyword Infobox|Energy}}
+{{C|Void}} is an {{KW|Unplayable}} {{QueryLink|Cards|color:Colorless|Colorless}} {{QueryLink|Cards|Common:Common|Common}} {{QueryLink|Cards|type:Status|Status}} Card. Whenever this card is drawn, lose 1 {{Icon|CE}} '''Energy'''.
+
+== Obtaining Void ==
+Playing {{C|TURBO}} will add a {{C|Void}} to the player's discard pile.
+
+The following enemies can give the player {{C|Void}}:
+* {{M|Awakened One}}
+** {{Int|Awakened One|Sludge}} - Adds a {{C|Void}} into your draw pile.
+* {{M|Corrupt Heart}}
+** {{Int|Corrupt Heart|Debilitate}} - Adds 1 {{C|Void}} into your draw pile.
+
+== Interactions ==
+
+=== Synergies ===
+* Triggers the damage from {{C|Fire Breathing}}.
+* Draws cards with {{C|Evolve}}.
+* Is {{KW|Exhaust|Exhausted}} by {{C|Second Wind}} and triggers its {{KW|Block}} gain.
+* Can be {{KW|Exhaust|Exhausted}} with {{R|Medical Kit}} to trigger exhaust synergies such as {{C|Feel No Pain}} or {{R|Charon's Ashes}}, or will {{KW|Exhaust}} on its own at the end of your turn.
+* Energy is only lost when the card is drawn. If the card is added to your hand by other means, such as with {{C|Seek}}, {{C|Hologram}}, or {{P|Liquid Memories}}, the energy reduction can be evaded.
+
+=== Neutral ===
+* Is {{KW|Exhaust|Exhausted}} by {{C|Sever Soul}} and {{C|Second Wind}}, since it is not an {{QueryLink|Cards|Type:Attack|Attack}} card.
+
+=== Anti-Synergies ===
+* Prevents {{C|Clash}} from being played.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 30|* Void card now resolves 0.25s faster.}}
+{{Update History Table/row|Weekly 18|* Awakened One nerf: 2 Voids -> 1 Void
+* Void card can no longer get you to negative energy.}}
+{{Update History Table/row|Weekly 17|* Void: Replaces the Darkness debuff from the Awakened One.
+* Status Card - Void: Unplayable. When this card is drawn, lose 1 Energy. Ethereal.
+* Awakened One now gives you a Void card instead of the Darkness debuff.}}
+{{Update History Table/end}}
+
+{{DefectNav}}
+{{ColorlessNav}}
+[[Category:Cards]]

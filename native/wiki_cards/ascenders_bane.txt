@@ -1,0 +1,62 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Ascender's Bane
+| Image         = Curse-AscendersBane.png
+| Color         = Colorless
+| Type          = Curse
+| Cost          = -2
+| NoUpgrade     = true
+| Description   = {{KW|Unplayable}}. <br>{{KW|Ethereal}}. <br>Cannot be removed from your deck.
+| GivesToPlayer = Unplayable, Ethereal
+}}
+{{Keyword Infobox|Unplayable}} {{Keyword Infobox|Ethereal}}
+{{C|Ascender's Bane}} is an {{KW|Unplayable}} {{QueryLink|Cards|type:Curse|Curse}} Card. It is {{KW|Ethereal}}, and cannot be '''removed''' from your deck or {{KW|Transform|Transformed}} by any means.
+
+== Obtaining Ascender's Bane ==
+On {{Asc|10|Ascension 10}} and higher, runs begin with a copy of '''Ascender's Bane''' in your starting deck. As there is no way to remove the card, high Ascension runs must always contend with at least one {{QueryLink|Cards|type:Curse|Curse}} in the deck.
+
+As there is no other way to obtain a copy, '''Ascender's Bane''' is the only piece of game content locked behind [[Ascension]].
+
+== Interactions ==
+=== Order ===
+{{KW|Ethereal}} causes '''Ascender's Bane''' to {{KW|Exhaust}} after your hand is discarded for the turn. If this causes you to draw from {{C|Dark Embrace}} or gain a card from {{R|Dead Branch}}, those cards will remain in your hand until your next turn.
+
+=== Synergies ===
+As '''Ascender's Bane''' is a '''{{QueryLink|Cards|type:Curse|Curse}}''', it interacts with the following:
+* {{C|Fire Breathing}} will deal '''6(10)''' damage when it is drawn.
+* {{R|Du-Vu Doll}} will give you '''+1''' {{BD|Strength}} each combat.
+* {{R|Blue Candle}} can be used to {{KW|Exhaust}} it for 1 HP. 
+** However, as '''Ascender's Bane''' generally '''Exhausts''' at end of turn anyway, this is only helpful in unusual circumstances. For instance, losing the '''HP''' can trigger {{R|Centennial Puzzle}} at will.
+* When added to the deck, it will be negated by {{R|Omamori}}, or gain you '''6 max HP''' if you have {{R|Darkstone Periapt}} and ''not'' Omamori. However, since you start the game with your original copy, the only way for this to happen is if you duplicate the original.
+As Ascender's Bane is {{KW|Ethereal}}, it interacts with the following:
+* When it '''Exhausts''', {{C|Feel No Pain}} gains you {{KW|Block}}.
+* Similarly, {{C|Dark Embrace}} will draw you cards, and {{R|Dead Branch}} will generate a card to replace it. These cards will be kept in your hand until your next turn.
+* {{R|Charon's Ashes}} will deal damage to all enemies.
+* {{R|Strange Spoon}} only affects cards that {{KW|Exhaust}} when played, so it will never prevent '''Ascender's Bane''' from '''Exhausting''' (unless you are doing so with {{R|Blue Candle}}).
+
+=== Neutral ===
+* Being {{KW|Ethereal}}, Ascender's Bane will {{KW|Exhaust}} if it is in your hand at end of turn, even if it is {{KW|Retain|Retained}}.
+
+=== Anti-Synergies ===
+* If '''Ascender's Bane''' is discarded, you may end up drawing it again. This is sometimes the correct thing to do, but it does introduce a downside to {{C|Calculated Gamble}}, {{C|Storm of Steel}}, and {{C|Unload}}, which will all force you to discard it.
+** {{C|All-Out Attack}} may also sometimes discard it unnecessarily.
+* As {{C|Clash}} can only be played when all cards in your hand are {{QueryLink|Cards|type:Attack|Attacks}}, if it is drawn at the same time as '''Ascender's Bane''', it cannot be played.
+
+== Trivia ==
+Despite '''Ascender's Bane''''s in game text only saying it cannot be '''removed''', it also can't be '''Transformed'''. However it can be '''duplicated''' using {{E|Duplicator}} and {{R|Dolly's Mirror}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 21|* Ascender's Bane was using the wrong apostrophe, causing data upload issues.}}
+{{Update History Table/row|Weekly 18|* Ascender's Bane nerf: now has Ethereal.
+* Neow can no longer remove Ascender's Bane.}}
+{{Update History Table/row|Weekly 17|* Ascender's Bane: Replaces Parasite for Ascension 10.
+* Ascender's Bane can no longer be removed by Back to Basics event.
+* Ascender's Bane can no longer be removed through the Wheel event.
+* Ascender's Bane gets marked as seen when you obtain it now.
+* Curse Card - Ascender's Bane: Unplayable. Cannot be removed from your deck.
+* Ascension 10 now gives you Ascender's Bane rather than Parasite.}}
+{{Update History Table/end}}
+
+{{ColorlessNav}}
+[[Category:Cards]]

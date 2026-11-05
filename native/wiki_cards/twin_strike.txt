@@ -1,0 +1,25 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Twin Strike
+| Image       = Red-TwinStrike.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Common
+| Cost        = 1
+| Description = Deal (5;7) damage twice.
+}}
+{{C|Twin Strike}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 5 (7 if upgraded) damage twice. 
+
+== Interactions ==
+=== Synergies ===
+* Benefits 2 times from {{BD|Strength}} or {{BD|Vigor}}.
+* {{C|Twin Strike}} gets a damage increase of 3 for both hits from {{R|Strike Dummy}}, and adds to the damage of {{C|Perfected Strike}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Twin Strike to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{IroncladNav}}
+[[Category:Cards]]

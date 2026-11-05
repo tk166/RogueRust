@@ -1,0 +1,20 @@
+{{Card Infobox
+| Name         = Clothesline
+| Image        = Red-Clothesline.png
+| Color        = Red
+| Type         = Attack
+| Rarity       = Common
+| Cost         = 2
+| Description  = Deal (12;14) damage.<br>Apply (2;3) {{BD|Weak}}.
+| GivesToEnemy = Weak
+}}
+{{Power Infobox|Weak}}{{C|Clothesline}} is a 2 {{Icon|RE}} cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 12 (14 if upgraded) damage and applies 2 (3 if upgraded) {{BD|Weak}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Clothesline to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{IroncladNav}}
+[[Category:Cards]]

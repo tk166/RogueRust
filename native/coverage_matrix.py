@@ -580,6 +580,8 @@ CHECKER_TABLES = {
     'INV_STATUSES': 'status', 'INV_ASC_VARIANTS': 'action', 'INV_ASC_HP': 'monster',
     'INV_ROLLS': 'monster', 'INV_SPAWN_COUNTERS': 'monster', 'INV_NO_ASC': 'action',
     'INV_NO_ASC_HP': 'monster', 'INV_UNWIRED': 'action',
+    # §218：卡牌的 wiki 对照（表在 `card_wiki_inventory.py`，字段由 `wiki_cards.py` 从 dump 读）
+    'CARD_WIKI': 'card',
 }
 
 
@@ -587,7 +589,12 @@ def checker_table_of():
     """id → 它被钉在哪几张不变量表里。"""
     out = {}
     for table in CHECKER_TABLES:
-        value = getattr(C, table, None)
+        # §218：`CARD_WIKI` 是**延迟加载**的（初值 None，第一次用到才从 dump 解析），所以这里
+        # 不能只 `getattr` —— 直接问 checker 要那份 dict。
+        if table == 'CARD_WIKI':
+            value = C.load_card_wiki() if hasattr(C, 'load_card_wiki') else None
+        else:
+            value = getattr(C, table, None)
         if value is None:
             die(1, 'MATRIX FAIL: checker 里没有 %s（表名漂了？）' % table)
         keys = value.keys() if isinstance(value, dict) else [row[0] for row in value]
@@ -720,6 +727,11 @@ def build_rows(doc):
     gap_dev, boss_rows = gap_deviations()
     refs = status_refs(doc)
 
+    # §218：卡牌的页面按**基础 id** 存一份（升级行没有独立页面）。
+    card_wiki = {}
+    if hasattr(C, 'load_card_wiki'):
+        card_wiki = C.load_card_wiki()
+
     page_monsters = {}
     for mid, rel in wiki_of.items():
         for name in dumps.get(rel, []):
@@ -807,6 +819,12 @@ def build_rows(doc):
                 source = 'wiki:%s' % wiki_of[eid]
                 if not (tied & WIKI_TIE['monster']):
                     source += ' (未钉数字)'
+            elif kind == 'card':
+                base_id = eid[:-1] if eid.endswith('+') else eid
+                if base_id in card_wiki:
+                    source = 'wiki:wiki_cards/%s.txt' % base_id
+                    if base_id != eid:
+                        source += ' (via %s)' % base_id
             elif kind == 'action':
                 owner = info['owner']
                 if owner and owner in wiki_of:
@@ -825,6 +843,11 @@ def build_rows(doc):
                 source = '—'
 
             chunks = []
+            if kind == 'card':
+                base_id = eid[:-1] if eid.endswith('+') else eid
+                declared = getattr(C, 'CARD_WIKI_DEVIATIONS', {}).get(base_id)
+                if declared:
+                    chunks.append('wiki 偏差：%s' % declared)
             if eid in C.INV_UNWIRED:
                 chunks.append('unwired：没有敌人记录列出它（`INV_UNWIRED`）')
             if eid in C.INV_NO_ASC:

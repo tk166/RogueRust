@@ -1,0 +1,44 @@
+{{Card Infobox
+| Name          = Berserk
+| Image         = Red-Berserk.png
+| Color         = Red
+| Type          = Power
+| Rarity        = Rare
+| Cost          = 0
+| Description   = Gain (2;1) {{BD|Vulnerable}}.<br>At the start of your turn, gain {{Icon|RE}}.
+| GivesToPlayer = Vulnerable, Energy
+}}
+{{Power Infobox
+| Name          = Berserk
+| Image         = Icon Berserk.png
+| Description   = At the start of your turn, gain X {{Icon|RE}} Energy.
+| Type          = Buff
+| Stacks        = Intensity
+| BetweenTurns  = Permanent
+| Cap           = Integer limit, but you only gain up to 999 Energy. 
+| GivesToPlayer = Energy
+}}
+{{Power Infobox|Vulnerable}}
+{{C|Berserk}} is a 0 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 1 {{BD|Berserk}}, which gives that amount of {{Icon|RE}} '''Energy''' at the start of every turn. It debuffs you with 2 (1 if upgraded) {{BD|Vulnerable}}.
+
+== Interactions ==
+=== Synergies ===
+* {{R|Odd Mushroom}} reduces the severity of the {{BD|Vulnerable}} you get from this card.
+* {{R|Orange Pellets}} can remove the {{BD|Vulnerable}} you get from this card.
+* Sources of {{BD|Artifact}}, such as {{R|Clockwork Souvenir}}, {{P|Ancient Potion}}, {{C|Core Surge}} and {{C|Panacea}} can prevent this card from applying {{BD|Vulnerable}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V1.1|* Berserk card buffed. Self Vulnerable 3 -> 2.}}
+{{Update History Table/row|Weekly 42|* Updating icon for Berserk power.
+* Fix for Berserk card crash.}}
+{{Update History Table/row|Weekly 34|* Berserk card buff: Cost 1 -> 0. Upgrading now reduces Vulnerable from 3 -> 2.}}
+{{Update History Table/row|Weekly 33|* Berserk card buffed. Applies 3 Vulnerable to self instead of 5.}}
+{{Update History Table/row|Weekly 32|* Rework: Berserk card: Gain Vulnerable for several turns to gain +1 Energy per turn.}}
+{{Update History Table/row|Weekly 5|* Meat on the Bone, Red Skull, Slime's Split, and Berserk all trigger on less than or equal to 50% HP and desc are updated to reflect this}}
+{{Update History Table/row|Weekly 1|* Berserk Card buffed.}}
+{{Update History Table/row|?|* Added Berserk to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

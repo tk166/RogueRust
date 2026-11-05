@@ -8006,6 +8006,34 @@ mod tests {
         assert_eq!(hit(&mut state), 10, "next turn starts over: back to 10");
     }
 
+    /// §218（卡牌 wiki 对照抓到的真错）：`Blur` 一直**只给了状态、没给格挡**。
+    ///
+    /// wiki：*"Gain 5 (8) Block. Block is not removed at the start of your next turn."*
+    /// 这条同时钉两件事：格挡数值（5 / 8），以及状态本身还在（否则"下回合不清格挡"就不成立）。
+    #[test]
+    fn blur_gives_five_or_eight_block_and_the_status() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        for (card_id, expected_block) in [("blur", 5), ("blur+", 8)] {
+            let mut state = arena();
+            give_energy(&mut state, "hero", 3);
+            let card = card_in_hand(&mut state, &content, "hero", card_id);
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .unwrap_or_else(|error| panic!("{card_id}: {error:?}"));
+            assert_eq!(block_of(&state, "hero"), expected_block, "{card_id}: wiki's Block");
+            assert_eq!(stacks_of(&state, "hero", "standard.blur"), 1,
+                       "{card_id}: the status is what keeps the block next turn");
+        }
+    }
+
     /// §197：`Barricade`（永久）与 `Blur`（只保一次）—— 同一个 `retain_block` 标签，两种寿命。
     ///
     /// 内核早就有这条钩子（`block_is_retained` 读 active 状态的 `retain_block` tag），所以这一节

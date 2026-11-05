@@ -1,0 +1,60 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Dazed
+| Image         = Colorless-Dazed.png
+| Color         = Colorless
+| Type          = Status
+| Rarity        = Status
+| Cost          = -2
+| NoUpgrade     = true
+| Description   = {{KW|Unplayable}}.<br>{{KW|Ethereal}}.
+| GivesToPlayer = Unplayable, Ethereal
+}}
+{{Keyword Infobox|Unplayable}} {{Keyword Infobox|Ethereal}}
+{{C|Dazed}} is an {{KW|Unplayable}} {{QueryLink|Cards|color:Colorless|Colorless}} {{QueryLink|Cards|Common:Common|Common}} {{QueryLink|Cards|type:Status|Status}} Card.
+
+== Obtaining Dazed ==
+Playing {{C|Reckless Charge}} will add a {{C|Dazed}} to the player's draw pile.
+
+The following enemies can give the player {{C|Dazed}}:
+* {{M|Chosen}}
+** {{Int|Chosen|Hex}} - Applies {{BD|Hex}}.
+** {{BD|Hex}} - Whenever you play a non-{{QueryLink|Cards|type:Attack|Attack}} card, shuffle X {{C|Dazed}} into your draw pile.
+* {{M|Repulsor}}
+** {{Int|Repulsor|Daze}} - Adds 2 {{C|Dazed}} into your draw pile.
+* {{M|Sentry}}
+** {{Int|Sentry|Bolt}} - Adds 2({{Asc|18|3}}) {{C|Dazed}} into your discard pile.
+* {{M|Deca}}
+** {{Int|Deca|Beam}} - Adds 2 {{C|Dazed}} into your discard pile.
+* {{M|Corrupt Heart}}
+** {{Int|Corrupt Heart|Debilitate}} - Adds 1 {{C|Dazed}} into your draw pile.
+
+== Interactions ==
+
+=== Synergies ===
+* Triggers the damage from {{C|Fire Breathing}}.
+* Draws cards with {{C|Evolve}}.
+* Is {{KW|Exhaust|Exhausted}} by {{C|Second Wind}} and triggers its {{KW|Block}} gain.
+* Can be {{KW|Exhaust|Exhausted}} with {{R|Medical Kit}} to trigger exhaust synergies such as {{C|Feel No Pain}} or {{R|Charon's Ashes}}, or will {{KW|Exhaust}} on its own at the end of your turn.
+
+=== Neutral ===
+* Is {{KW|Exhaust|Exhausted}} by {{C|Sever Soul}} since it's not an {{QueryLink|Cards|Type:Attack|Attack}}.
+
+=== Anti-Synergies ===
+* Prevents {{C|Clash}} from being played.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.0|* Card preview tips now allow you to see cards such as Dazed when viewing Reckless Charge.}}
+{{Update History Table/row|Watcher 7|* Reckless Charge card now utilizes the card preview UX to show Dazed.}}
+{{Update History Table/row|Weekly 40|* Ascension 17 Repulsors no longer put 3 dazes into your draw pile.}}
+{{Update History Table/row|Weekly 20|* Reckless charge is now Common and shuffles a Dazed into your draw pile rather than making you Vulnerable.}}
+{{Update History Table/row|Weekly 7|* Sentry enemy now gives you 2x Dazed instead of Wounds.}}
+{{Update History Table/row|Weekly 5|* Dazed and Clumsy now exhaust even if retained via Well Laid Plans (all Ethereal cards).}}
+{{Update History Table/row|Weekly 3|* Dazed card is now Ethereal. Doesn't really impact gameplay.}}
+{{Update History Table/row|?|* Added Dazed to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+{{ColorlessNav}}
+[[Category:Cards]]

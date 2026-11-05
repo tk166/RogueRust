@@ -1,0 +1,45 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Dark Shackles
+| Image         = Colorless-DarkShackles.png
+| Color         = Colorless
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 0
+| Description   = Enemy loses (9;15) {{BD|Strength}} this turn.<br>{{KW|Exhaust}}.
+| GivesToEnemy  = Shackled, Strength (Negative)
+| GivesToPlayer = Exhaust
+}}
+{{Power Infobox|Shackled}} {{Keyword Infobox|Exhaust}}
+{{C|Dark Shackles}} is a 0 {{Icon|CE}}-cost {{QueryLink|Cards|color:Colorless|Colorless}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It applies '''negative''' 9 (15 if upgraded) {{BD|Strength}} to the target, and gives them the same amount of {{BD|Shackled}} to regain that missing {{BD|Strength}} at the end of their turn. {{C|Dark Shackles}} will then {{KW|Exhaust}} itself.
+
+== Obtaining Dark Shackles ==
+{{C|Dark Shackles}} is a {{QueryLink|Cards|color:Colorless|Colorless}} card, and therefore can be obtained in the following ways:
+* Can be bought from the [[Merchant]].
+* Can appear in the {{E|Sensory Stone}} event, from a choice of 3-9 {{QueryLink|Cards|color:Colorless|Colorless}} cards, depending on the option that is selected.
+* Can be obtained from Neow's [[First Blessing]] via the {{TS|green||'''Obtain an Uncommon Colorless Card'''}} bonus.
+* Can be obtained from [[Monsters]] and [[Elites]] with {{R|Prismatic Shard}}.
+** Also found in the [[Custom Mode|Daily Climb]] with the {{KW|Diverse}} or {{KW|Colorless Cards}} modifiers.
+* Can be obtained from the {{Frame|Success?}} option at {{E|Knowing Skull}}.
+
+== Interactions ==
+=== Neutral ===
+* The {{M|The Champ}}, the {{M|Awakened One}} and the {{M|Time Eater}} clear [[Debuff]s] when they are about to enter their second phase, meaning the {{BD|Strength}} penalty is maintained while {{BD|Shackled}} is removed. This means they get the {{BD|Strength}} penalty permanently instead of just that turn.
+** However, if this causes them to have '''negative''' {{BD|Strength}}, this will also be considered a [[Debuff]] and will be removed, leaving them with 0 {{BD|Strength}}.
+* The {{M|Corrupt Heart}} clears ''only'' '''negative''' {{BD|Strength}} when they buff (except for the turn 1 buff), meaning the {{BD|Strength}} penalty is removed but the {{BD|Shackled}} is maintained. This means it will permanently gain that amount of {{BD|Strength}} at the end of their turn.
+* {{C|Dark Shackles}} applies two effects per enemy: a [[Debuff]] to remove the {{BD|Strength}}, and {{BD|Shackled}} to add it back at end of turn. Despite this, enemies with {{BD|Artifact}} will still just lose one stack to negate the negative {{BD|Strength}}, without receiving the {{BD|Shackled}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 48|* Certain enemies no longer gain extra strength when removing Piercing Wail or Dark Shackles from themselves.}}
+{{Update History Table/row|Weekly 9|* Sadistic Nature no longer triggers twice from Shackles and Piercing Wail.}}
+{{Update History Table/row|Weekly 8|* Colorless cards can now be upgraded! This was also a good time to re-examine and balance several of the cards.
+* Dark Shackles+. -9 Str -> -15 Str}}
+{{Update History Table/row|Weekly 6|* Enemies that remove debuffs no longer keep the str gain portion of Piercing Wail/Dark Shackles.}}
+{{Update History Table/row|Weekly 4|* Fixed rare crash for Dark Shackles card.}}
+{{Update History Table/row|Weekly 3|* Dark Shackles now has a period in its description.}}
+{{Update History Table/row|?|* Added Dark Shackles to the game}}
+{{Update History Table/end}}
+
+{{ColorlessNav}}
+[[Category:Cards]]

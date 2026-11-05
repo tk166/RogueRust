@@ -30,7 +30,7 @@
  44  1  1   4 IR node.destroyCombatant                                        : TargetSelector:TERM
  45  0  0   4 IR node.endTurn                                                 : 
  46  1  1   4 IR node.extraTurn                                               : TargetSelector:TERM
- 47  3  3   8 IR node.gainBlock                                               : Amount:TERM ResultKey:TERM TargetSelector:TERM
+ 47  4  4  12 IR node.gainBlock                                               : Amount:TERM PoolId:STR(wrap) ResultKey:TERM TargetSelector:TERM
  48  3  3   8 IR node.heal                                                    : Amount:TERM ResultKey:TERM TargetSelector:TERM
  49  4  4  12 IR node.modifyStatusStacks                                      : Delta:TERM ResultKey:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
  50  3  3   8 IR node.repeat                                                  : Body:TERM Count:TERM MaxCount:INT

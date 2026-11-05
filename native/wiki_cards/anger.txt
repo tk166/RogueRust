@@ -1,0 +1,27 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Anger
+| Image       = Red-Anger.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Common
+| Cost        = 0
+| Description = Deal (6;8) damage.<br>Add a copy of this card into your discard pile.
+}}
+{{C|Anger}} is a 0 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 6 (8 if upgraded) damage, and adds a copy of itself into your discard pile.
+
+== Interactions ==
+=== Synergies ===
+* {{C|Anger}} works well with any draw, most notably with {{R|Unceasing Top}}.
+* The created copy will be upgraded if the original copy was upgraded, or if {{C|Master Reality}} is active.
+* Playing it multiple times, through an effect such as {{C|Double Tap}} or a {{P|Duplication Potion}}, will make multiple copies as well.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 34|* Anger card buff: 5 -> 6 damage. Upgraded 7 -> 8 damage.}}
+{{Update History Table/row|Weekly 21|* Anger card damage buffed by 1.}}
+{{Update History Table/row|?|* Added Anger to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

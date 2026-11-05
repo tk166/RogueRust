@@ -1,0 +1,75 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Burn
+| Image         = Colorless-Burn.png
+| Color         = Colorless
+| Type          = Status
+| Rarity        = Status
+| Cost          = -2
+| Description   = {{KW|Unplayable}}.<br>At the end of your turn, take (2;4) damage.
+| GivesToPlayer = Unplayable
+}}
+{{Keyword Infobox|Unplayable}}
+{{C|Burn}} is an {{KW|Unplayable}} {{QueryLink|Cards|color:Colorless|Colorless}} {{QueryLink|Cards|Common:Common|Common}} {{QueryLink|Cards|type:Status|Status}} Card. Burn is the ONLY status card that can be {{KW|Upgrade|Upgraded}}.
+
+== Obtaining Burn ==
+Playing {{C|Immolate}} or {{C|Overclock}} will add a Burn to the player's discard pile.
+
+The following enemies can give the player Burns:
+* {{M|Hexaghost}}
+** {{Int|Hexaghost|Sear}} - Adds 1({{Asc|19|2}}) {{C|Burn|Burns}} into your discard pile.
+** {{Int|Hexaghost|Inferno}} - Adds 3 {{C|Burn|Burns+}} into your discard pile. Upgrades all {{C|Burn|Burns}}. For the rest of combat, any {{C|Burn|Burns}} created by {{Int|Hexaghost|Sear}} will be upgraded.
+* {{M|Orb Walker}}
+** {{Int|Orb Walker|Laser}} - Adds a {{C|Burn}} into your draw pile, and another {{C|Burn}} into your discard pile.
+* {{M|Nemesis}}
+** {{Int|Nemesis|Tri Burn}} - Adds 3({{Asc|18|5}}) {{C|Burn|Burns}} into your discard pile.
+* {{M|Spire Spear}}
+** {{Int|Spire Spear|Burn Strike}} - Adds 2 {{C|Burn|Burns}} into your discard pile({{Asc|18|on top of your draw pile}}).
+* {{M|Corrupt Heart}}
+** {{Int|Corrupt Heart|Debilitate}} - Adds 1 {{C|Burn}} into your draw pile.
+
+== Interactions ==
+
+=== Synergies ===
+
+* If the player loses health due to unblocked damage from Burn while {{C|Rupture}} is in play, the damage from Burn will trigger Rupture's {{BD|Strength}} gain.
+* If the player loses health due to unblocked damage from Burn while possessing {{R|Self-Forming Clay}}, the damage from Burn will trigger Self-Forming Clay's {{KW|Block}} gain next turn.
+* Triggers the damage from {{C|Fire Breathing}}.
+* Draws cards with {{C|Evolve}}.
+* Is {{KW|Exhaust|exhausted}} by {{C|Second Wind}} and triggers its {{KW|Block}} gain.
+* Can be {{KW|Exhaust|exhausted}} with {{R|Medical Kit}} to trigger exhaust synergies such as {{C|Feel No Pain}} or {{R|Charon's Ashes}}.
+
+=== Neutral ===
+
+* Burn will contribute 1 {{KW|Block}} gained for {{R|Cloak Clasp}} as the relic triggers before Burn is discarded. This is overall a block penalty due to Burn's damage.
+* Burn's unblocked damage will be reduced by {{R|Tungsten Rod}}.
+* Burn will still be discarded after dealing damage at the end of the turn if the player has {{R|Runic Pyramid}} or {{KW|Retain|retains}} it using {{C|Equilibrium}}, {{C|Well-Laid Plans}}, or {{C|Meditate}}.
+* Is {{KW|Exhaust|exhausted}} by {{C|Sever Soul}} since it's not an {{QueryLink|Cards|Type:Attack|Attack}}.
+
+=== Anti-Synergies ===
+
+* If the player loses health due to unblocked damage from {{C|Burn}} while possessing {{R|Centennial Puzzle}} or {{R|Runic Cube}}, the drawn card(s) will be discarded with the rest of their hand.
+* Prevents {{C|Clash}} from being played.
+
+== Trivia ==
+
+* Burn is the only {{QueryLink|Cards|type:Status|Status}} card that has an upgraded version.
+** The only way to obtain a {{C|Burn}}+ is from the {{M|Hexaghost}} converting all Burns in the player's hand, draw pile, and discard pile with Burn+ following their ''Inferno'' attack. Additionally, after the first time ''Inferno'' is used, all of Hexaghost's attacks that would normally give the player a Burn will give the player a Burn+ instead.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.0|* Powers that gain Block at end of turn activate before cards like Burn play themselves.}}
+{{Update History Table/row|Watcher 11|* Powers that gain Block at end of turn activate before cards like Burn play themselves.}}
+{{Update History Table/row|Watcher 8|* Fixed Burns and related cards changing last card played for Crush Joints and similar cards.}}
+{{Update History Table/row|Weekly 51|* Burn cards no longer trigger Time Eater's ability at end of turn.
+Rebound card no longer puts Burns on top of your deck.}}
+{{Update History Table/row|Weekly 21|* Immolate card buff: Adds a Burn to discard pile instead of draw pile.}}
+{{Update History Table/row|Weekly 20|* Immolate now costs 2, deals considerably more damage, and shuffles a Burn into your draw pile.}}
+{{Update History Table/row|Weekly 10|* Fixed issue where Regret/Decay/Doubt/Burn fails to exhaust via Blue Candle and Medical Kit.}}
+{{Update History Table/row|?|* Added Burn to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+{{DefectNav}}
+{{ColorlessNav}}
+[[Category:Cards]]

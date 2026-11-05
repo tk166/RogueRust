@@ -1,0 +1,26 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Apparition
+| Image         = Colorless-Apparition.png
+| Color         = Colorless
+| Type          = Skill
+| Rarity        = Special
+| Cost          = 1
+| Description   = ({{KW|Ethereal}}. <br>;)Gain 1 {{BD|Intangible}}. <br>{{KW|Exhaust}}.
+| GivesToPlayer = Ethereal, Intangible, Exhaust
+}}
+{{Keyword Infobox|Ethereal}} {{Power Infobox|Intangible}} {{Keyword Infobox|Exhaust}}
+{{C|Apparition}} is a 1 {{Icon|CE}}-cost {{QueryLink|Cards|color:Colorless|Colorless}} {{QueryLink|Cards|rarity:Special|Special}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 1 {{BD|Intangible}} and then {{KW|Exhaust|Exhausts}}. Unless upgraded, it has {{KW|Ethereal}}, which means it will {{KW|Exhaust}} if it is in your hand when you end your turn.
+
+== Obtaining Apparition ==
+{{C|Apparition}} is an [[Events]]-only card, and the only way to obtain it is through the event {{E|Council of Ghosts}}, which will give 5 copies of {{C|Apparition}}, or 3 copies of {{C|Apparition}} above Ascension {{Asc|15}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 47|* Council of Ghosts event now only gives 3 Apparition on Ascension 15+.}}
+{{Update History Table/row|Weekly 44|* Bonfire Spirits event now correctly handles offering them a card with the Special rarity (like Bite, or Apparition).}}
+{{Update History Table/row|Weekly 18|* Event-only Card: Apparition.}}
+{{Update History Table/end}}
+
+{{ColorlessNav}}
+[[Category:Cards]]

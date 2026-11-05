@@ -1,0 +1,45 @@
+{{Sequel Disambiguation}} 
+{{Card Infobox
+| Name          = Buffer
+| Image         = Blue-Buffer.png
+| Color         = Blue
+| Type          = Power
+| Rarity        = Rare
+| Cost          = 2
+| Description   = Prevent the next (time;2 times) you would lose HP.
+| GivesToPlayer = Buffer
+}}
+{{Power Infobox
+| Name          = Buffer
+| Image         = Icon Buffer.png
+| Description   = Prevent the next X times you would lose HP.
+| Type          = Buff
+| Stacks        = Counter
+| BetweenTurns  = Conserved
+| Cap           = Integer limit
+| InteractsWith = Lose HP
+}}
+{{C|Buffer}} is a 2 {{Icon|BE}}-cost {{QueryLink|Cards|color:Blue|Defect}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 1 (2 if upgraded) {{BD|Buffer}}, preventing the next instance(s) of losing HP.
+
+== Update History ==
+* '''Weekly Patch 51: Recursion'''
+** Fixed Self-Forming Clay relic triggering incorrectly off of prevented damage from Buffer power.
+
+* '''Weekly Patch 49: The Designer'''
+** Painful Stabs power will no longer give wounds if the damage was prevented by Buffer.
+
+* '''Weekly Patch 44: Chrysalis'''
+** Effects that trigger on damage like Masterful Stab now interacts properly with damage prevention effects like Buffer.
+
+* '''Weekly Patch 35: Aggregate'''
+** Buffer is no longer lost when hit by 0 damage attacks.
+** Centennial Puzzle no longer draws cards when taking 0 damage as a result of things like Buffer.
+** Shelled Parasite now accounts for Buffer and Intangible with its life leech action.
+
+* '''Weekly Patch 27: Hello World'''
+** This week adds the long anticipated third character into the game!
+** A new character with unique mechanics, keywords, and art.
+** Content: 75 Cards.
+
+{{DefectNav}}
+[[Category:Cards]]

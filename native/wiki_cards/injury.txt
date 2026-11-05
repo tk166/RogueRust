@@ -1,0 +1,45 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Injury
+| Image         = Curse-Injury.png
+| Color         = Colorless
+| Type          = Curse
+| Cost          = -2
+| NoUpgrade     = true
+| Description   = {{KW|Unplayable}}.
+| GivesToPlayer = Unplayable
+}}
+{{Keyword Infobox|Unplayable}}
+{{C|Injury}} is an {{KW|Unplayable}} {{QueryLink|Cards|type:Curse|Curse}} Card.
+
+== Obtaining Writhe ==
+Like most {{QueryLink|Cards|type:Curse|Curses}}, Injury can be obtained from anything that gives a random Curse:
+* Can be part of Neow's [[Third Blessing]] in exchange for a reward.
+* {{E|Match and Keep}}.
+* {{R|Cursed Key}}.
+* {{KW|Transform|Transforming}} another Curse.
+
+In addition, Injury can be obtained from the {{E|Golden Idol}} Event when choosing {{Frame|Take}} and then {{Frame|Outrun}}.
+
+== Interactions ==
+=== Synergies ===
+As Injury is a '''{{QueryLink|Cards|type:Curse|Curse}}''', it interacts with the following:
+* {{C|Fire Breathing}} will deal damage when it is drawn.
+* {{R|Du-Vu Doll}} will give you 1 {{BD|Strength}} each combat.
+* {{R|Blue Candle}} can be used to {{KW|Exhaust}} it for 1 HP. 
+* When added to the deck, it will be negated by {{R|Omamori}}, or gain you 6 max HP if you have {{R|Darkstone Periapt}} and ''not'' Omamori.
+
+=== Anti-Synergies ===
+* As {{C|Clash}} can only be played when all cards in your hand are {{QueryLink|Cards|type:Attack|Attacks}}, if it is drawn at the same time as Injury, it cannot be played.
+
+== Trivia ==
+Injury can be seen as the Curse equivalent of the {{QueryLink|Cards|type:Status|Status}} {{C|Wound}}, with both being the most basic penalty cards of their respective types.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Injury to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{ColorlessNav}}
+[[Category:Cards]]

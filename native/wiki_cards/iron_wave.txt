@@ -1,0 +1,32 @@
+{{Sequel Disambiguation}} 
+{{Card Infobox
+| Name          = Iron Wave
+| Image         = Red-IronWave.png
+| Color         = Red
+| Type          = Attack
+| Rarity        = Common
+| Cost          = 1
+| Description   = Gain (5;7) {{KW|Block}}.<br>Deal (5;7) damage.
+| GivesToPlayer = Block
+}}
+{{Keyword Infobox|Block}}
+{{C|Iron Wave}} is a 1 {{Icon|RE}} cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It gives 5 (7 if upgraded) {{KW|Block}}, and deals 5 (7 if upgraded) damage.
+
+== Interactions ==
+=== Order ===
+* The {{KW|Block}} is gained before the damage is dealt or the card is resolved, meaning the {{KW|Block}} already protects from any damage sustained as a result of playing this card through effects like:
+** {{BD|Sharp Hide}} or {{BD|Thorns}}.
+** {{BD|Beat of Death}}.
+
+=== Neutral ===
+* Both values are affected separately by effects that change the amount of damage and {{KW|Block}}, such as {{BD|Strength}} and {{BD|Dexterity}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 1|* Fixed rare crash for IronWave VFX.}}
+{{Update History Table/row|Day 1 Patch|* Null pointer checks added for IronWave VFX to prevent a crash.}}
+{{Update History Table/row|?|* Added Iron Wave to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

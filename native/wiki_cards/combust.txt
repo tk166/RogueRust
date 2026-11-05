@@ -1,0 +1,40 @@
+{{Sequel Rename|Combust|Inferno}} 
+{{Card Infobox
+| Name        = Combust
+| Image       = Red-Combust.png
+| Color       = Red
+| Type        = Power
+| Rarity      = Uncommon
+| Cost        = 1
+| Description = At the end of your turn, lose 1 HP and deal (5;7) damage to ALL enemies.
+}}
+{{Power Infobox
+| Name         = Combust
+| Image        = Icon Combust.png
+| Description  = At the end of your turn, lose X HP and deal damage to ALL enemies.
+| Type         = Buff
+| Stacks       = Intensity
+| BetweenTurns =
+| Cap          =
+}}
+{{C|Combust}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 5 (7 if upgraded) {{BD|Combust}}, which deals that amount of damage to '''ALL''' enemies and costs you 1 HP every at the end of your turn.
+
+Playing {{C|Combust}} multiple times will increase the amount of {{BD|Combust}} and will increase the HP loss of the entire stack of {{BD|Combust}} by 1, for every copy played.
+
+== Interactions ==
+=== Synergies ===
+* {{R|Tungsten Rod}} completely negates the damage from the first play of {{C|Combust}}.
+* {{C|Combust}} can be used to reliably and repeatedly trigger {{C|Rupture}} and {{R|Self-Forming Clay}}, and lower the cost of {{C|Blood for Blood}}.
+
+=== Anti-Synergies ===
+* Since {{BD|Combust}} activates after you end your turn but before you discard your hand, any draw as a result of {{BD|Combust}}'s HP loss in combination with {{R|Runic Cube}} or {{R|Centennial Puzzle}} will be wasted.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 20|* Combust+ card damage buff. 6 -> 7.}}
+{{Update History Table/row|Weekly 19|* Combust card buff. Damage 4 -> 5.}}
+{{Update History Table/row|?|* Added Combust to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

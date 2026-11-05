@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 51 | 22 | 29 | 0 | 0 | 51 | 0 | 0 |
+| 卡牌 | 51 | 25 | 26 | 0 | 47 | 4 | 12 | 0 |
 | 状态 | 43 | 40 | 1 | 2 | 0 | 43 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 9 | 9 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 13 | 9 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 360 | 230 | 114 | 16 | 177 | 94 | 63 | 0 |
+| **合计** | 360 | 233 | 111 | 16 | 224 | 47 | 75 | 0 |
 
-扫描到的具名测试：**906** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**908** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **12** 个位次、**9** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -243,57 +243,57 @@
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
-| anger | yes | the_same_state_hashes_the_same_and_a_change_moves_it, the_potion_chance_walks_the_wikis_ten_percent …(+4) | — | spec:INV_CARDS | — | INV_CARDS/the_same_state_hashes_the_same_and_a_change_moves_it |
-| anger+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| apparition | yes | — | CARD_DIFF | spec:INV_CARDS | — | §149/INV_CARDS |
-| apparition+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| ascenders_bane | yes | — | CARD_DIFF | spec:INV_CARDS | — | §183/§189/INV_CARDS |
-| bandage_up | yes | colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | spec:INV_CARDS | — | §191/INV_CARDS/colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand |
-| barricade | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| barricade+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, a_new_run_is_before_the_map_with_a_known_start …(+4) | — | spec:INV_CARDS | — | §2/§2.1/INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
-| bash+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| berserk | yes | — | CARD_DIFF | spec:INV_CARDS | — | §197/§199/INV_CARDS |
-| berserk+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| blind | yes | colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | spec:INV_CARDS | — | INV_CARDS/colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand |
-| blur | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| blur+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| buffer | yes | — | CARD_DIFF | spec:INV_CARDS | — | §149/INV_CARDS |
-| buffer+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| burn | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade | — | spec:INV_CARDS | — | §175/INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
-| burn+ | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade | — | spec:INV_CARDS | — | INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
-| clothesline | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| clothesline+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| combust | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| combust+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| dark_shackles | yes | colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | spec:INV_CARDS | — | INV_CARDS/colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand |
-| dazed | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade, hex_shuffles_a_dazed_only_for_non_attack_cards | — | spec:INV_CARDS | — | §189/§191/INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+16) | — | spec:INV_CARDS | — | §3.1/§6.5/INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
-| defend+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| inflame | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| inflame+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| injury | yes | the_event_vocabulary_parses_and_refuses_what_it_does_not_know, an_event_option_can_apply_several_effects_at_once …(+1) | — | spec:INV_CARDS | — | §143/INV_CARDS/the_event_vocabulary_parses_and_refuses_what_it_does_not_know |
-| iron_wave | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, tied_rarities_are_broken_by_the_combat_rng | — | spec:INV_CARDS | — | §72.5/INV_CARDS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
-| iron_wave+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| metallicize | yes | decay_predicate_splits_the_two_groups, the_prototype_namespace_supplies_metallicize_and_ritual | — | spec:INV_CARDS | — | INV_CARDS/decay_predicate_splits_the_two_groups |
-| metallicize+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
+| anger | yes | the_same_state_hashes_the_same_and_a_change_moves_it, the_potion_chance_walks_the_wikis_ten_percent …(+5) | — | wiki:wiki_cards/anger.txt | — | CARD_WIKI+INV_CARDS/the_same_state_hashes_the_same_and_a_change_moves_it |
+| anger+ | yes | — | CARD_DIFF | wiki:wiki_cards/anger.txt (via anger) | — | INV_CARDS |
+| apparition | yes | a_special_card_is_known_and_never_put_in_a_reward | — | wiki:wiki_cards/apparition.txt | wiki 偏差：wiki: 基础带 Ethereal、升级去掉 Ethereal、两层都只给 1 层 Intangible + Exhaust；内容把升级做成"2 层 Intangible"、且没有 Ethereal/Exhaust 标签。升级轴方向性错了，但"无形"的强度在本内容的战斗里是等价的简化，先写明。 | §149/CARD_WIKI+INV_CARDS/a_special_card_is_known_and_never_put_in_a_reward |
+| apparition+ | yes | — | CARD_DIFF | wiki:wiki_cards/apparition.txt (via apparition) | wiki 偏差：wiki: 基础带 Ethereal、升级去掉 Ethereal、两层都只给 1 层 Intangible + Exhaust；内容把升级做成"2 层 Intangible"、且没有 Ethereal/Exhaust 标签。升级轴方向性错了，但"无形"的强度在本内容的战斗里是等价的简化，先写明。 | INV_CARDS |
+| ascenders_bane | yes | — | CARD_DIFF | wiki:wiki_cards/ascenders_bane.txt | — | §183/§189/CARD_WIKI+INV_CARDS |
+| bandage_up | yes | colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。另外 `Exhaust` 没有载体（见下一条的说明），所以内容也没有 exhaust tag。 | §191/CARD_WIKI+INV_CARDS/colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand |
+| barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
+| barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
+| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, a_new_run_is_before_the_map_with_a_known_start …(+5) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
+| bash+ | yes | — | CARD_DIFF | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS |
+| berserk | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt | — | §197/§199/CARD_WIKI+INV_CARDS |
+| berserk+ | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt (via berserk) | — | INV_CARDS |
+| blind | yes | colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/blind.txt | — | CARD_WIKI+INV_CARDS/colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand |
+| blur | yes | blur_gives_five_or_eight_block_and_the_status, a_special_card_is_known_and_never_put_in_a_reward | — | wiki:wiki_cards/blur.txt | — | §218/CARD_WIKI+INV_CARDS/blur_gives_five_or_eight_block_and_the_status |
+| blur+ | yes | blur_gives_five_or_eight_block_and_the_status | — | wiki:wiki_cards/blur.txt (via blur) | — | INV_CARDS/blur_gives_five_or_eight_block_and_the_status |
+| buffer | yes | — | CARD_DIFF | wiki:wiki_cards/buffer.txt | wiki 偏差：wiki 页已是 v2.3 的重做版（**Power** / Rare / 2 费，给 1-2 层 Buffer）；本内容按旧版（Skill / Uncommon / 1 费）。这不是抄错，是版本基线不同 —— 要跟随新版得改卡牌类型与费用，属于设计决定。 | §149/CARD_WIKI+INV_CARDS |
+| buffer+ | yes | — | CARD_DIFF | wiki:wiki_cards/buffer.txt (via buffer) | wiki 偏差：wiki 页已是 v2.3 的重做版（**Power** / Rare / 2 费，给 1-2 层 Buffer）；本内容按旧版（Skill / Uncommon / 1 费）。这不是抄错，是版本基线不同 —— 要跟随新版得改卡牌类型与费用，属于设计决定。 | INV_CARDS |
+| burn | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade | — | wiki:wiki_cards/burn.txt | wiki 偏差：wiki 升级版是"回合末受 4 点伤害"，内容只有基础版（`burn+` 那一行没有生命周期）。 | §175/CARD_WIKI+INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
+| burn+ | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade | — | wiki:wiki_cards/burn.txt (via burn) | wiki 偏差：wiki 升级版是"回合末受 4 点伤害"，内容只有基础版（`burn+` 那一行没有生命周期）。 | INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
+| clothesline | yes | — | CARD_DIFF | wiki:wiki_cards/clothesline.txt | — | CARD_WIKI+INV_CARDS |
+| clothesline+ | yes | — | CARD_DIFF | wiki:wiki_cards/clothesline.txt (via clothesline) | — | INV_CARDS |
+| combust | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt | — | CARD_WIKI+INV_CARDS |
+| combust+ | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt (via combust) | — | INV_CARDS |
+| dark_shackles | yes | colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/dark_shackles.txt | wiki 偏差：wiki 升级版是 15 层；内容没有 `dark_shackles+` 这一行。`Exhaust` 同 `bandage_up`：本内容还没有"打出即消耗"的载体。 | CARD_WIKI+INV_CARDS/colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand |
+| dazed | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade, hex_shuffles_a_dazed_only_for_non_attack_cards | — | wiki:wiki_cards/dazed.txt | — | §189/§191/CARD_WIKI+INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+16) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend+ | yes | — | CARD_DIFF | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS |
+| inflame | yes | — | CARD_DIFF | wiki:wiki_cards/inflame.txt | — | CARD_WIKI+INV_CARDS |
+| inflame+ | yes | — | CARD_DIFF | wiki:wiki_cards/inflame.txt (via inflame) | — | INV_CARDS |
+| injury | yes | the_event_vocabulary_parses_and_refuses_what_it_does_not_know, an_event_option_can_apply_several_effects_at_once …(+1) | — | wiki:wiki_cards/injury.txt | — | §143/CARD_WIKI+INV_CARDS/the_event_vocabulary_parses_and_refuses_what_it_does_not_know |
+| iron_wave | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, tied_rarities_are_broken_by_the_combat_rng | — | wiki:wiki_cards/iron_wave.txt | — | §72.5/CARD_WIKI+INV_CARDS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
+| iron_wave+ | yes | — | CARD_DIFF | wiki:wiki_cards/iron_wave.txt (via iron_wave) | — | INV_CARDS |
+| metallicize | yes | decay_predicate_splits_the_two_groups, the_prototype_namespace_supplies_metallicize_and_ritual | — | wiki:wiki_cards/metallicize.txt | — | CARD_WIKI+INV_CARDS/decay_predicate_splits_the_two_groups |
+| metallicize+ | yes | — | CARD_DIFF | wiki:wiki_cards/metallicize.txt (via metallicize) | — | INV_CARDS |
 | patient_guard | yes | the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/the_keyword_cells_are_in_the_image |
 | patient_guard+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| sentinel | yes | the_keyword_cells_are_in_the_image, a_sink_appends_after_the_callers_prefix_and_a_tiny_sink_is_still_ok | — | spec:INV_CARDS | — | §144/INV_CARDS/the_keyword_cells_are_in_the_image |
-| sentinel+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| slimed | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+1) | — | spec:INV_CARDS | — | §10/§192/INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+76) | — | spec:INV_CARDS | — | §6.5/§72.5/INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
-| strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, smithing_replaces_the_card_with_its_upgraded_row …(+6) | — | spec:INV_CARDS | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
+| sentinel | yes | the_keyword_cells_are_in_the_image, a_sink_appends_after_the_callers_prefix_and_a_tiny_sink_is_still_ok | — | wiki:wiki_cards/sentinel.txt | wiki 偏差：wiki 没有 Ethereal（旧版有），内容带 `ethereal`；而 wiki 的报酬是"被 Exhaust 时给能量"，内容没有这条触发器（`ethereal` 会在回合末把它送进消耗堆，但没有任何东西读"被消耗"）。 | §144/CARD_WIKI+INV_CARDS/the_keyword_cells_are_in_the_image |
+| sentinel+ | yes | — | CARD_DIFF | wiki:wiki_cards/sentinel.txt (via sentinel) | wiki 偏差：wiki 没有 Ethereal（旧版有），内容带 `ethereal`；而 wiki 的报酬是"被 Exhaust 时给能量"，内容没有这条触发器（`ethereal` 会在回合末把它送进消耗堆，但没有任何东西读"被消耗"）。 | INV_CARDS |
+| slimed | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+1) | — | wiki:wiki_cards/slimed.txt | wiki 偏差：wiki: 1 费、可出、Exhaust。内容把它做成 `unplayable + junk`（与 Wound/Burn 同一族），因为本内容的「状态牌」只有"抽到就是负担"这一种用法。修它要给它一条 Exhaust 生命周期，留作下一节。 | §10/§192/CARD_WIKI+INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+76) | — | wiki:wiki_cards/strike.txt | — | §6.5/§72.5/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, smithing_replaces_the_card_with_its_upgraded_row …(+6) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| twin_strike | yes | a_full_deck_archive_is_bigger_than_the_generic_scratch | — | spec:INV_CARDS | — | §72.5/INV_CARDS/a_full_deck_archive_is_bigger_than_the_generic_scratch |
-| twin_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| uppercut | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_CARDS | — | INV_CARDS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
-| uppercut+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| void | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
-| whirlwind | yes | an_upgraded_card_row_is_buildable, the_keyword_cells_are_in_the_image …(+5) | — | spec:INV_CARDS | — | INV_CARDS/an_upgraded_card_row_is_buildable |
-| whirlwind+ | yes | an_upgraded_card_row_is_buildable | — | spec:INV_CARDS | — | INV_CARDS/an_upgraded_card_row_is_buildable |
-| wound | yes | — | CARD_DIFF | spec:INV_CARDS | — | §173/INV_CARDS |
+| twin_strike | yes | a_full_deck_archive_is_bigger_than_the_generic_scratch | — | wiki:wiki_cards/twin_strike.txt | — | §72.5/CARD_WIKI+INV_CARDS/a_full_deck_archive_is_bigger_than_the_generic_scratch |
+| twin_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/twin_strike.txt (via twin_strike) | — | INV_CARDS |
+| uppercut | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | wiki:wiki_cards/uppercut.txt | — | CARD_WIKI+INV_CARDS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
+| uppercut+ | yes | — | CARD_DIFF | wiki:wiki_cards/uppercut.txt (via uppercut) | — | INV_CARDS |
+| void | yes | — | CARD_DIFF | wiki:wiki_cards/void.txt | wiki 偏差：wiki: 抽到时失去 1 点能量。内容缺这条触发器（`OnDrawn` 对牌还没有载体），所以 Void 目前只是"不可出的虚无牌"。 | CARD_WIKI+INV_CARDS |
+| whirlwind | yes | an_upgraded_card_row_is_buildable, the_keyword_cells_are_in_the_image …(+5) | — | wiki:wiki_cards/whirlwind.txt | — | CARD_WIKI+INV_CARDS/an_upgraded_card_row_is_buildable |
+| whirlwind+ | yes | an_upgraded_card_row_is_buildable | — | wiki:wiki_cards/whirlwind.txt (via whirlwind) | — | INV_CARDS/an_upgraded_card_row_is_buildable |
+| wound | yes | — | CARD_DIFF | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS |
 
 ## 状态（43）
 
@@ -303,7 +303,7 @@
 | standard.artifact | yes | artifact_turns_a_debuff_into_a_prevented_beat_naming_the_blocked_status, artifact_eats_one_debuff_and_nothing_else …(+6) | — | spec:INV_STATUSES | — | §116/§117/INV_STATUSES/artifact_turns_a_debuff_into_a_prevented_beat_naming_the_blocked_status |
 | standard.barricade | yes | barricade_keeps_block_forever_and_blur_only_for_one_turn | — | spec:INV_STATUSES | — | §197/INV_STATUSES/barricade_keeps_block_forever_and_blur_only_for_one_turn |
 | standard.berserk | yes | berserk_adds_one_energy_per_stack_at_turn_start | — | spec:INV_STATUSES | — | §199/§210/INV_STATUSES/berserk_adds_one_energy_per_stack_at_turn_start |
-| standard.blur | yes | barricade_keeps_block_forever_and_blur_only_for_one_turn | — | spec:INV_STATUSES | — | §197/INV_STATUSES/barricade_keeps_block_forever_and_blur_only_for_one_turn |
+| standard.blur | yes | blur_gives_five_or_eight_block_and_the_status, barricade_keeps_block_forever_and_blur_only_for_one_turn | — | spec:INV_STATUSES | — | §197/§218/INV_STATUSES/blur_gives_five_or_eight_block_and_the_status |
 | standard.buffer | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor | — | spec:INV_STATUSES | — | §125/§149/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
 | standard.combust | yes | flame_barrier_hits_back_and_combust_burns_everyone | — | spec:INV_STATUSES | — | §119/INV_STATUSES/flame_barrier_hits_back_and_combust_burns_everyone |
 | standard.constricted | yes | constricted_loses_its_stacks_of_hp_through_block_at_turn_end, statuses_outside_the_five_axes_are_readable_by_name …(+1) | — | spec:INV_STATUSES | — | §175/§214/INV_STATUSES/constricted_loses_its_stacks_of_hp_through_block_at_turn_end |

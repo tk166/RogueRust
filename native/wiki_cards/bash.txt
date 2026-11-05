@@ -1,0 +1,28 @@
+{{Sequel Disambiguation}}{{Card Infobox
+| Name         = Bash
+| Image        = Red-Bash.png
+| Color        = Red
+| Type         = Attack
+| Rarity       = Basic
+| Cost         = 2
+| Description  = Deal (8;10) damage.<br>Apply (2;3) {{BD|Vulnerable}}.
+| GivesToEnemy = Vulnerable
+}}
+{{Power Infobox|Vulnerable}}
+{{C|Bash}} is a 2 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Basic|Basic}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 8 (10 if upgraded) damage and applies 2 (3 if upgraded) {{BD|Vulnerable}} to the target.
+
+== Obtaining Bash ==
+The [[Ironclad]] starts the game with one copy of {{C|Bash}} in his deck. It cannot be obtained through regular card rewards, but can be obtained in the {{E|Match and Keep}} Event. 
+
+== Interactions ==
+=== Synergies ===
+* {{R|Paper Phrog}} increases the effectiveness of {{BD|Vulnerable}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 3|* Bash's description gets updated to be consistent with other cards.}}
+{{Update History Table/row|?|* Added Bash to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

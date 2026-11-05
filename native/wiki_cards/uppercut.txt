@@ -1,0 +1,28 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name         = Uppercut
+| Image        = Red-Uppercut.png
+| Color        = Red
+| Type         = Attack
+| Rarity       = Uncommon
+| Cost         = 2
+| Description  = Deal 13 damage.<br>Apply (1;2) {{BD|Weak}}.<br>Apply (1;2) {{BD|Vulnerable}}.
+| GivesToEnemy = Weak, Vulnerable
+}}
+{{Power Infobox|Weak}}{{Power Infobox|Vulnerable}}{{C|Uppercut}} is a 2 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 13 damage and applies 1 (2 if upgraded) {{BD|Weak}} and 1 (2 if upgraded) {{BD|Vulnerable}}.
+
+== Interactions ==
+=== Order ===
+* The {{BD|Weak}} applies first and the {{BD|Vulnerable}} applies afterwards, meaning enemies with one {{BD|Artifact}} will only receive the {{BD|Vulnerable}}.
+
+=== Synergies ===
+* {{R|Paper Phrog}} increases the effectiveness of {{BD|Vulnerable}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Uppercut to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{IroncladNav}}
+[[Category:Cards]]

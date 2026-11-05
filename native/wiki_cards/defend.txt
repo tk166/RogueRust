@@ -1,0 +1,26 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Defend (Ironclad)
+| DisplayName   = Defend
+| Image         = Red-Defend.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Basic
+| Cost          = 1
+| Description   = Gain (5;8) {{KW|Block}}.
+| GivesToPlayer = Block
+}}
+{{Keyword Infobox|Block}}
+{{C|Defend (Ironclad)|Defend}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Basic|Basic}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 5 (8 if upgraded) {{KW|Block}}.
+
+This page is for the Ironclad's version of Defend, go here for {{C|Defend (Silent)}}, {{C|Defend (Defect)}}, {{C|Defend (Watcher)}}
+
+== Obtaining Defend ==
+The [[Ironclad]] starts with 4 copies of {{C|Defend (Ironclad)|Defend}} in his deck. It cannot be obtained through regular card rewards.
+
+== Update History ==
+* '''Weekly Patch 1: The First of Many!'''
+** Falling Event can now hit Strikes and Defends, making the event potentially not as bad.
+
+{{IroncladNav}}
+[[Category:Cards]]

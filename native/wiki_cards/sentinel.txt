@@ -1,0 +1,26 @@
+{{Card Infobox
+| Name          = Sentinel
+| Image         = Red-Sentinel.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 1
+| Description   = Gain (5;8) {{KW|Block}}.<br>If this card is {{KW|Exhaust|Exhausted}},<br>gain {{Icon|RE}}{{Icon|RE}}(;{{Icon|RE}}).
+| GivesToPlayer = Block, Energy
+| InteractsWith = Exhaust
+}}
+{{Keyword Infobox|Block}} {{Keyword Infobox|Exhaust}} {{Keyword Infobox|Energy}}
+{{C|Sentinel}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 5 {{KW|Block}}. If {{C|Sentinel}} is {{KW|Exhaust|Exhausted}}, it will give 2 {{Icon|RE}} '''Energy''' instead.
+
+== Synergies ==
+=== Cards ===
+* Synergizes with any card that has a targeted {{KW|Exhaust}} or that {{KW|Exhaust|Exhausts}} {{QueryLink|Cards|type:Skill|Skill}} cards. Most notably, {{C|Corruption}} allows both effects of this card to be triggered.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 23|* Forcefield no longer uses Sentinel portrait.}}
+{{Update History Table/row|?|* Added Sentinel to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

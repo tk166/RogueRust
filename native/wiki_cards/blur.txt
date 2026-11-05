@@ -1,0 +1,29 @@
+{{Sequel Disambiguation}} 
+{{Card Infobox
+| Name          = Blur
+| Image         = Green-Blur.png
+| Color         = Green
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 1
+| Description   = Gain (5;8) {{KW|Block}}.<br>{{KW|Block}} is not removed at the start of your next turn.
+| GivesToPlayer = Block, Blur
+}}
+{{Power Infobox
+| Name          = Blur
+| Image         = Icon Blur.png
+| Description   = {{KW|Block}} is not removed at the beginning of your next X turns.
+| Type          = Buff
+| Stacks        = Duration
+| BetweenTurns  =
+| Cap           =
+| InteractsWith = Block
+}}
+{{C|Blur}} is a 1 {{Icon|GE}} cost {{QueryLink|Cards|color:Green|Silent}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 5 {{KW|Block}} and 1 {{BD|Blur}}, which prevents your {{KW|Block}} from being removed in between that amount of turns. 
+
+== Interactions ==
+=== Order ===
+* {{BD|Blur}} takes precedence over {{R|Calipers}}, effectively removing all effects of the relic for an amount of turns equal to your {{BD|Blur}}.
+
+{{SilentNav}}
+[[Category:Cards]]

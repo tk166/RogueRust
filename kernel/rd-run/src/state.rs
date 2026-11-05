@@ -234,7 +234,15 @@ pub const fn card_price_band(rarity: Rarity) -> (i32, i32) {
         // §160: `Event` joins this band for the same reason -- it is a **relic** rarity that no
         // card can carry, so reaching here at all means something upstream is confused. The Common
         // band is the "somebody has to get a number" answer, and a card is never Event.
-        Rarity::Common | Rarity::Basic | Rarity::Status | Rarity::Curse | Rarity::Event => (45, 55),
+        // §218: `Special` 是"事件专属的牌"（`apparition`）。商人**不卖**它 —— 真走到这里说明
+        // 上游把一张事件牌放上了货架，那是内容/池子的错；与 `Event` 一样给 Common 价（"总得有个
+        // 数字"），由调用方去挡。
+        Rarity::Common
+        | Rarity::Basic
+        | Rarity::Status
+        | Rarity::Curse
+        | Rarity::Event
+        | Rarity::Special => (45, 55),
         Rarity::Uncommon => (68, 82),
         Rarity::Rare => (135, 165),
     }
@@ -517,6 +525,12 @@ pub enum Rarity {
     /// Without this bucket the only way to say "event-only" was to lie about the rarity, and the
     /// content said `Rare`, so 17% of every elite reward could be an event relic.
     Event = 6,
+    /// §218：wiki 把**事件专属**的卡牌放在 `Special` 桶里（`apparition`）。
+    ///
+    /// 与 `Event`（遗物）同一个道理：这个桶让"事件才有"成为**可说的**，而不是靠"谎报成 Uncommon"
+    /// —— 谎报的后果是它进了普通奖励池（Apparition 是"获得 1 层无形"，不该每场奖励都能刷到）。
+    /// 所有按稀有度抽牌的地方都要把它排除。
+    Special = 7,
 }
 
 impl Rarity {
@@ -533,6 +547,8 @@ impl Rarity {
             // §160: the wiki's `Event` bucket (and the shape `Shop`/`Boss` would take). Droppable
             // relics are the three weighted bands; this one exists so "event-only" is sayable.
             "Event" => Some(Self::Event),
+            // §218: the wiki's bucket for event-only cards (`apparition`).
+            "Special" => Some(Self::Special),
             _ => None,
         }
     }
@@ -2483,7 +2499,10 @@ impl RunState {
         let mut eligible_len = 0usize;
         Self::pool_fits(pool.len())?;
         for index in 0..pool.len() {
-            if !matches!(pool[index].rarity, Rarity::Status | Rarity::Curse) {
+            if !matches!(
+                pool[index].rarity,
+                Rarity::Status | Rarity::Curse | Rarity::Special
+            ) {
                 eligible[eligible_len] = index;
                 eligible_len += 1;
             }
@@ -2773,7 +2792,10 @@ impl RunState {
         let mut eligible_len = 0usize;
         Self::pool_fits(card_pool.len())?;
         for index in 0..card_pool.len() {
-            if !matches!(card_pool[index].rarity, Rarity::Status | Rarity::Curse) {
+            if !matches!(
+                card_pool[index].rarity,
+                Rarity::Status | Rarity::Curse | Rarity::Special
+            ) {
                 eligible[eligible_len] = index;
                 eligible_len += 1;
             }
@@ -4601,6 +4623,32 @@ mod tests {
                 run.pick_relic(RunStream::Reward, &mixed),
                 Ok(RunId::new("anchor").expect("id")),
                 "the idol is never rolled, the anchor always is"
+            );
+        }
+    }
+
+    /// §218：wiki 的 `Special` 桶（事件专属的牌，`apparition`）—— 名字要能解析，**而且不进奖励**。
+    ///
+    /// 两半都是实战出来的：把 `apparition` 的稀有度从 Uncommon 改成 Special 时，
+    /// `Rarity::from_name("Special")` 返回 `None` �� `full_pool()` 拒掉整张牌表 ⇒ **每一个**
+    /// `rd_run_choose_start` 都以 -2 失败（6 条 wasm 测试同时红，报的是"taking blessing 0"）。
+    /// 所以"能解析"要单独钉一次，否则下次有人加桶忘了 `from_name`，症状会出现在离得很远的地方。
+    #[test]
+    fn a_special_card_is_known_and_never_put_in_a_reward() {
+        assert_eq!(Rarity::from_name("Special"), Some(Rarity::Special));
+        let pool = [
+            PoolCard { id: "apparition", rarity: Rarity::Special },
+            PoolCard { id: "anger", rarity: Rarity::Common },
+            PoolCard { id: "blur", rarity: Rarity::Uncommon },
+            PoolCard { id: "bash", rarity: Rarity::Basic },
+        ];
+        for seed in 0..40 {
+            let mut run = RunState::new(seed, 80, 0, &DECK).expect("a run");
+            run.roll_reward(&pool, &[], &[], FightKind::Normal).expect("a reward");
+            let cards: Vec<&str> = run.reward().cards().iter().map(RunId::as_str).collect();
+            assert!(
+                !cards.contains(&"apparition"),
+                "seed {seed}: an event-only card showed up as a reward: {cards:?}"
             );
         }
     }

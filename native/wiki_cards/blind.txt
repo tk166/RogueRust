@@ -1,0 +1,31 @@
+{{Card Infobox
+| Name         = Blind
+| Image        = Colorless-Blind.png
+| Color        = Colorless
+| Type         = Skill
+| Rarity       = Uncommon
+| Cost         = 0
+| Description  = Apply 2 {{BD|Weak}}(; to ALL enemies).
+| GivesToEnemy = Weak
+}} 
+{{Power Infobox|Weak}}
+{{C|Blind}} is a 0 {{Icon|CE}}-cost {{QueryLink|Cards|color:Colorless|Colorless}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It applies 2 {{BD|Weak}} to the target, or to '''ALL''' enemies if upgraded.
+
+== Obtaining Blind ==
+{{C|Blind}} is a {{QueryLink|Cards|color:Colorless|Colorless}} card, and therefore can be obtained in the following ways:
+* Can be bought from the [[Merchant]].
+* Can appear in the {{E|Sensory Stone}} event, from a choice of 3-9 {{QueryLink|Cards|color:Colorless|Colorless}} cards, depending on the option that is selected.
+* Can be obtained from Neow's [[First Blessing]] via the {{TS|green||'''Obtain an Uncommon Colorless Card'''}} bonus.
+* Can be obtained from [[Monsters]] and [[Elites]] with {{R|Prismatic Shard}}.
+** Also found in [[Custom Mode|Daily Climb]] with the {{KW|Diverse}} or {{KW|Colorless Cards}} modifiers.
+* Can be obtained from the {{Frame|Success?}} option at {{E|Knowing Skull}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 8|* Colorless cards can now be upgraded! This was also a good time to re-examine and balance several of the cards.
+* Blind can now upgrade (Single Target -> All enemies)}}
+{{Update History Table/row|?|* Added Blind to the game}}
+{{Update History Table/end}}
+
+{{ColorlessNav}}
+[[Category:Cards]]

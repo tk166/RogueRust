@@ -1,0 +1,27 @@
+{{Sequel Disambiguation}} {{Card Infobox
+| Name        = Strike (Ironclad)
+| DisplayName = Strike
+| Image       = Red-Strike.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Basic
+| Cost        = 1
+| Description = Deal (6;9) damage.
+}}
+{{C|Strike (Ironclad)|Strike}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Basic|Basic}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 6 (9 if upgraded) damage.
+
+This page is for Ironclad's version of Strike. Go here for {{C|Strike (Silent)}}, {{C|Strike (Defect)}}, {{C|Strike (Watcher)}}.
+
+== Obtaining Strike ==
+The [[Ironclad]] starts with 5 copies of {{C|Strike (Ironclad)|Strike}} in his deck. It cannot be obtained through regular card rewards.
+
+== Interactions ==
+=== Synergies ===
+* {{C|Strike (Ironclad)|Strike}} gets a damage increase of 3 from {{R|Strike Dummy}}, and adds to the damage of {{C|Perfected Strike}}.
+
+== Update History ==
+* '''Weekly Patch 1: The First of Many!'''
+** Falling Event can now hit Strikes and Defends, making the event potentially not as bad.
+
+{{IroncladNav}}
+[[Category:Cards]]

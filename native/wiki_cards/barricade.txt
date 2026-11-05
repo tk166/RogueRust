@@ -1,0 +1,41 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Barricade
+| Image         = Red-Barricade.png
+| Color         = Red
+| Type          = Power
+| Rarity        = Rare
+| Cost          = 3
+| CostPlus      = 2
+| Description   = {{KW|Block}} is not removed at the start of your turn.
+| GivesToPlayer = Barricade
+| PowerGives    = Block
+}}
+{{Power Infobox
+| Name          = Barricade
+| Image         = Icon Barricade.png
+| Description   = {{KW|Block}} is not removed at the beginning of your turn.
+| Type          = Buff
+| Stacks        = Does not stack
+| BetweenTurns  =
+| Cap           =
+| InteractsWith = Block
+}}
+{{C|Barricade}} is a 3 (2 if upgraded) {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 1 {{BD|Barricade}}, which prevents your {{KW|Block}} from being removed in between turns. As {{BD|Barricade}} does not stack, copies of {{C|Barricade}} played after the first have no additional effect.
+
+== Interactions ==
+=== Order ===
+* {{BD|Barricade}} takes precedence over {{R|Calipers}}, effectively removing all effects of the relic.
+
+=== Synergies ===
+* Synergizes well with ways to build up block, most notably {{C|Entrench}}.
+* Can enable {{C|Body Slam}} to do more damage through building up {{KW|Block}} over multiple turns.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 9|* Fixed issue where Orichalcum will start flashing even if you have Block from Barricade/Blur/Calipers.}}
+{{Update History Table/row|?|* Added Barricade to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

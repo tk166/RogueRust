@@ -1,0 +1,38 @@
+{{Card Infobox
+| Name          = Metallicize
+| Image         = Red-Metallicize.png
+| Color         = Red
+| Type          = Power
+| Rarity        = Uncommon
+| Cost          = 1
+| Description   = At the end of your turn, gain (3;4) {{KW|Block}}.
+| GivesToPlayer = Metallicize
+| PowerGives    = Block
+}}
+{{Power Infobox
+| Name          = Metallicize
+| Image         = Icon Metallicize.png
+| Description   = At the end of every turn, gain X {{KW|Block}}.
+| Type          = Buff
+| Stacks        = Intensity
+| BetweenTurns  =
+| Cap           =
+| GivesToPlayer = Block
+}}
+{{C|Metallicize}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 3 (4 if upgraded) {{BD|Metallicize}}, which grants that amount of {{KW|Block}} at the end of every turn.
+
+== Interactions ==
+=== Order ===
+* {{BD|Metallicize}} gives {{KW|Block}} ''after'' {{R|Orichalcum}} checks if you have block, meaning {{BD|Metallicize}} does not prevent the relic from activating.
+
+=== Neutral ===
+* The {{KW|Block}} gained by {{BD|Metallicize}} is unaffected by {{BD|Frail}}, {{BD|Dexterity}} or {{BD|No Block}} from a previously played {{C|Panic Button}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 42|* Updating SFX for Metallicize Power.}}
+{{Update History Table/row|?|* Added Metallicize to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

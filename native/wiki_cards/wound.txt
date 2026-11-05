@@ -1,0 +1,65 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Wound
+| Image         = Colorless-Wound.png
+| Color         = Colorless
+| Type          = Status
+| Rarity        = Status
+| Cost          = -2
+| NoUpgrade     = true
+| Description   = {{KW|Unplayable}}.
+| GivesToPlayer = Unplayable
+}}
+{{Keyword Infobox|Unplayable}}
+{{C|Wound}} is an {{KW|Unplayable}} {{QueryLink|Cards|color:Colorless|Colorless}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Status|Status}} Card.
+
+== Obtaining Wound ==
+
+* {{C|Wild Strike}} adds a Wound to the player's draw pile.
+* {{C|Power Through}} adds 2 Wounds to the player's hand. If one or more Wounds can't fit in the player's hand (i.e. they have 9 or 10 cards in hand already), the extra Wound(s) are added to the discard pile instead.
+* {{R|Mark of Pain}} adds 2 Wounds to the player's draw pile after they've finished drawing their opening hand for the start of combat.
+
+The following enemies can give the player Wounds:
+* {{M|Book of Stabbing}}
+** {{BD|Painful Stabs}} - Whenever you receive attack damage from this enemy, add a {{C|Wound}} into your discard pile.
+* {{M|Taskmaster}}
+** {{Int|Taskmaster|Scouring Whip}} - Adds 1({{Asc|3|2}} | {{Asc|18|3}}) {{C|Wound|Wounds}} into your draw pile.
+* {{M|Dagger}}
+** {{Int|Dagger|Wound}} - Adds a {{C|Wound}} into your discard pile.
+* {{M|Corrupt Heart}}
+** Gains {{BD|Painful Stabs}} every 5th time using {{Int|Corrupt Heart|Buff}} starting at the 3rd use.
+** {{Int|Corrupt Heart|Debilitate}} - Adds 1 {{C|Wound}} into your draw pile.
+
+== Interactions ==
+=== Order ===
+* {{R|Mark of Pain}} adds 2 Wounds to the player's draw pile after they've finished drawing their normal 5-card opening hand for the start of combat.
+** These Wounds '''can''' still end up in the opening hand due to {{R|Bag of Preparation}} drawing extra cards at the start of combat, as long as it was picked up after already having obtained {{R|Mark of Pain}} earlier.
+
+=== Synergies ===
+* Triggers the damage from {{C|Fire Breathing}}.
+* Draws cards with {{C|Evolve}}.
+* Is {{KW|Exhaust|exhausted}} by {{C|Second Wind}} and triggers its {{KW|Block}} gain.
+* Can be {{KW|Exhaust|exhausted}} with {{R|Medical Kit}} to trigger exhaust synergies such as {{C|Feel No Pain}} or {{R|Charon's Ashes}}.
+
+=== Neutral ===
+* Is {{KW|Exhaust|exhausted}} by {{C|Sever Soul}} since it's not an {{QueryLink|Cards|Type:Attack|Attack}}.
+
+=== Anti-Synergies ===
+* Prevents {{C|Clash}} from being played.
+
+== Trivia ==
+* This card's [[Beta Art]] shows the [[Silent]] having a very understandable reaction to a minor cut.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 49|* Painful Stabs power will no longer give wounds if the damage was prevented by Buffer.}}
+{{Update History Table/row|Weekly 18|* Evolve rework: No longer gives Wounds. Now triggers on any Status card, not just Wounds.}}
+{{Update History Table/row|Weekly 17|* Slimed: Replaces Wounds and Draw Reduction debuff from Slime enemies.}}
+{{Update History Table/row|Weekly 7|* Sentry enemy now gives you 2x Dazed instead of Wounds.}}
+{{Update History Table/row|Weekly 6|* Cards that create Wounds and others into your deck/discard now take considerably less time.}}
+{{Update History Table/row|?|* Added Wound to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+{{ColorlessNav}}
+[[Category:Cards]]

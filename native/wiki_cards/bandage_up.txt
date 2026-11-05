@@ -1,0 +1,39 @@
+{{Card Infobox
+| Name          = Bandage Up
+| Image         = Colorless-BandageUp.png
+| Color         = Colorless
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 0
+| Description   = Heal (4;6) HP.<br>{{KW|Exhaust}}.
+| GivesToPlayer = Exhaust, Heal
+}} 
+{{Keyword Infobox|Exhaust}}
+{{C|Bandage Up}} is a 0 {{Icon|CE}}-cost {{QueryLink|Cards|color:Colorless|Colorless}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It heals 4 (6 if upgraded) HP, and then {{KW|Exhaust|Exhausts}}.
+
+== Obtaining Bandage Up ==
+{{C|Bandage Up}} is a {{QueryLink|Cards|color:Colorless|Colorless}} card, and therefore can be obtained in the following ways:
+* Can be bought from the [[Merchant]].
+* Can appear in the {{E|Sensory Stone}} event, from a choice of 3-9 {{QueryLink|Cards|color:Colorless|Colorless}} cards, depending on the option that is selected.
+* Can be obtained from Neow's [[First Blessing]] via the {{TS|green||'''Obtain an Uncommon Colorless Card'''}} bonus.
+* Can be obtained from [[Monsters]] and [[Elites]] with {{R|Prismatic Shard}}.
+** Also found in the [[Custom Mode|Daily Climb]] with the {{KW|Diverse}} or {{KW|Colorless Cards}} modifiers.
+* Can be obtained from the {{Frame|Success?}} option at {{E|Knowing Skull}}.
+
+== Interactions ==
+=== Synergies ===
+* {{R|Magic Flower}} increases the effectiveness of the healing.
+
+=== Neutral ===
+* Healing cards cannot be generated mid-combat to avoid infinite healing, so {{C|Bandage Up}} cannot be created by {{C|Distraction}}, {{C|Chrysalis}} or {{R|Dead Branch}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 44|* All sources of random temporary card generation in combat (like Dead Branch) can no longer generate cards that provide healing.
+* New tip added to indicate that healing cards cannot be generated randomly during combat.}}
+{{Update History Table/row|Weekly 8|* Bandage Up now has upgrade functionality (4HP -> 6 HP)}}
+{{Update History Table/row|?|* Added Bandage Up to the game}}
+{{Update History Table/end}}
+
+{{ColorlessNav}}
+[[Category:Cards]]

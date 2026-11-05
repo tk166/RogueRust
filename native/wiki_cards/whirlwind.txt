@@ -1,0 +1,41 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Whirlwind
+| Image       = Red-Whirlwind.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Uncommon
+| Cost        = -1
+| Description = Deal (5;8) damage to ALL enemies X times.
+}}
+{{C|Whirlwind}} is an X {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 5 (8 if upgraded) damage to '''ALL''' enemies X times.
+
+When playing an X {{Icon|RE}}-cost card, all {{Icon|RE}} '''Energy''' that you currently have will be consumed. The {{Icon|RE}} '''Energy''' consumed this way will be used as the value for X.
+
+== Interactions ==
+=== Synergies ===
+* Benefits X times from {{BD|Strength}} or {{BD|Vigor}}.
+* {{R|Chemical X}} makes {{C|Whirlwind}} hit 2 more times, regardless of the amount of {{Icon|RE}} '''Energy''' used to play it.
+* If {{C|Whirlwind}} is used with 2 or more {{Icon|RE}} '''Energy''', it will be able to trigger {{R|Necronomicon}}.
+* If played using {{P|Distilled Chaos}}, {{C|Havoc}}, or {{C|Omniscience}}, it will play for the full current {{Icon|RE}} '''Energy''' without actually using any.
+* Can be used with 0 {{Icon|RE}} '''Energy''' to advance {{R|Ink Bottle}}, {{R|Nunchaku}}, {{R|Kunai}}, {{R|Shuriken}}, and {{R|Ornamental Fan}}.
+
+=== Neutral ===
+* If {{C|Whirlwind}} is duplicated with an effect such as a {{P|Duplication Potion}} or {{C|Double Tap}}, the value of X will also be used for the copy.
+* Being an X-cost, {{C|Whirlwind}} can be targeted by {{C|Recycle}} to double the current {{Icon|RE}} '''Energy'''.
+* It will not count as a 0-cost card for {{C|All for One}} or {{C|Scrape}}, even with {{C|Swivel}}'s {{BD|Free Attack Power}} active.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 46|* Adding VFX for Whirlwind card.}}
+{{Update History Table/row|Weekly 42|* Adding SFX for Whirlwind card + Guardian enemy.
+* Updating SFX for Whirlwind (card AND Guardian enemy).}}
+{{Update History Table/row|Weekly 40|* Whirlwind card gets an additional SFX.}}
+{{Update History Table/row|Weekly 27|* Fixed issue where playing cost X cards quickly after energy gain cards failed. Offering -> Whirlwind}}
+{{Update History Table/row|Weekly 10|* Removing 'Spend all [R].' from all X-cost cards for consistency.
+* Fixed bug where cost X cards do not work with energy gain cards if played too fast.}}
+{{Update History Table/row|?|* Added Whirlwind to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

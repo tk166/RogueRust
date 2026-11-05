@@ -3507,7 +3507,7 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "ExhaustPile",
       "PlayedCardDestinationZone": "DiscardPile",
-      "Rarity": "Common"
+      "Rarity": "Uncommon"
     },
     {
       "Id": "patient_guard",
@@ -3804,7 +3804,7 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile",
-      "Rarity": "Uncommon"
+      "Rarity": "Special"
     },
     {
       "Id": "buffer",
@@ -4351,7 +4351,7 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "ExhaustPile",
       "PlayedCardDestinationZone": "DiscardPile",
-      "Rarity": "Common"
+      "Rarity": "Uncommon"
     },
     {
       "Id": "patient_guard+",
@@ -4520,7 +4520,7 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile",
-      "Rarity": "Uncommon"
+      "Rarity": "Special"
     },
     {
       "Id": "buffer+",
@@ -5501,27 +5501,56 @@
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.applyStatus",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.source",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "Source"
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 5
+                    }
+                  },
+                  "PoolId": {
+                    "value": "standard.block"
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.blur"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
               }
-            },
-            "StatusDefinitionId": {
-              "value": "standard.blur"
-            },
-            "Stacks": {
-              "kind": "const",
-              "value": {
-                "Value": 1
-              }
-            },
-            "DurationTurns": 0,
-            "Charges": 0,
-            "ResultKey": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -5531,7 +5560,7 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "Hand",
       "PlayedCardDestinationZone": "DiscardPile",
-      "Rarity": "Rare"
+      "Rarity": "Uncommon"
     },
     {
       "Id": "barricade+",
@@ -5611,27 +5640,56 @@
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.applyStatus",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.source",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "Source"
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 8
+                    }
+                  },
+                  "PoolId": {
+                    "value": "standard.block"
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.blur"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
               }
-            },
-            "StatusDefinitionId": {
-              "value": "standard.blur"
-            },
-            "Stacks": {
-              "kind": "const",
-              "value": {
-                "Value": 1
-              }
-            },
-            "DurationTurns": 0,
-            "Charges": 0,
-            "ResultKey": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -5641,7 +5699,7 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "Hand",
       "PlayedCardDestinationZone": "DiscardPile",
-      "Rarity": "Rare"
+      "Rarity": "Uncommon"
     },
     {
       "Id": "berserk",

@@ -1,0 +1,58 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Slimed
+| Image         = Colorless-Slimed.png
+| Color         = Colorless
+| Type          = Status
+| Rarity        = Status
+| Cost          = 1
+| NoUpgrade     = true
+| Description   = {{KW|Exhaust}}.
+| GivesToPlayer = Exhaust
+}}
+{{Keyword Infobox|Exhaust}}
+{{C|Slimed}} is a 1 {{Icon|CE}}-cost {{QueryLink|Cards|color:Colorless|Colorless}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Status|Status}} Card. Slimed is the ONLY playable {{QueryLink|Cards|type:Status|Status}} card.
+
+== Obtaining Slimed ==
+The following enemies can give the player {{C|Slimed}}:
+* {{M|Spike Slime (L)}}
+** {{Int|Spike Slime (L)|Flame Tackle}} - Adds 2 {{C|Slimed}} into your discard pile.
+* {{M|Spike Slime (M)}}
+** {{Int|Spike Slime (M)|Flame Tackle}} - Adds a {{C|Slimed}} into your discard pile.
+* {{M|Acid Slime (L)}}
+** {{Int|Acid Slime (L)|Corrosive Spit}} - Adds 2 {{C|Slimed}} into your discard pile.
+* {{M|Acid Slime (M)}}
+** {{Int|Acid Slime (M)|Corrosive Spit}} - Adds a {{C|Slimed}} into your discard pile.
+* {{M|Slime Boss}}
+** {{Int|Slime Boss|Goop Spray}} - Adds 3({{Asc|19|5}}) {{C|Slimed}} into your discard pile.
+* {{M|Time Eater}} '''Only above {{Asc|19|Ascension}}.'''
+** {{Int|Time Eater|Head Slam}} - Adds 2 {{C|Slimed}} into your discard pile.
+* {{M|Corrupt Heart}}
+** {{Int|Corrupt Heart|Debilitate}} - Adds 1 {{C|Slimed}} into your draw pile.
+
+== Interactions ==
+=== Synergies ===
+* Triggers the damage from {{C|Fire Breathing}}.
+* Draws cards with {{C|Evolve}}.
+* Is {{KW|Exhaust|exhausted}} by {{C|Second Wind}} and triggers its {{KW|Block}} gain.
+* Can be {{KW|Exhaust|exhausted}} to trigger exhaust synergies such as {{C|Feel No Pain}} or {{R|Charon's Ashes}}.
+
+=== Neutral ===
+* Is {{KW|Exhaust|exhausted}} by {{C|Sever Soul}} since it's not an {{QueryLink|Cards|type:Attack|Attack}}.
+
+=== Anti-Synergies ===
+* Prevents {{C|Clash}} from being played.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 51|* Medical Kit relic will no longer cause Slimed cards to glow as if they could be played when you have no energy.
+* Medical Kit will no longer allow the player to sometimes play Slimed when out of energy.}}
+{{Update History Table/row|Weekly 42|* Updating SFX for Slimed Attack.}}
+{{Update History Table/row|Weekly 40|* Blue Candle and Medical Kit wording changed to better reflect how they work with cards like Slimed.}}
+{{Update History Table/row|Weekly 17|* Slimed: Replaces Wounds and Draw Reduction debuff from Slime enemies.
+* Status card - Slimed: Cost 1: Exhaust.
+* Several Slime enemies now give you Slimed rather than a debuff.}}
+{{Update History Table/end}}
+
+{{ColorlessNav}}
+[[Category:Cards]]
