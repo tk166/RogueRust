@@ -115,9 +115,9 @@ FACTS = {
                     [('damage', 17, 'event'), ('card', 'wound', 1, 'DrawPile', 'source')]),
     'ghostly_armor': ([('block', 10, 'source')], [('block', 13, 'source')]),
     'battle_trance': ([('draw', 3, 'source'),
-                       ('status', 'standard.draw_reduction', 1, 'source')],
+                       ('status', 'standard.no_draw', 1, 'source')],
                       [('draw', 4, 'source'),
-                       ('status', 'standard.draw_reduction', 1, 'source')]),
+                       ('status', 'standard.no_draw', 1, 'source')]),
     # §221：事件诅咒（没有数字，只有关键字；Doubt 的回合末效果在 `LifecyclePrograms` 里）。
     'doubt': ([], None),
     'writhe': ([], None),
@@ -173,6 +173,13 @@ FACTS = {
     # §230：`Deal 6 damage. Deals (2;3) additional damage for ALL your cards containing "Strike".`
     'perfected_strike': ([('damagePerTag', 6, 2, 'strike', 'event')],
                          [('damagePerTag', 6, 3, 'strike', 'event')]),
+    # §231：`Gain (7;9) Block. Exhaust a random card in your hand.`
+    'true_grit': ([('block', 7, 'source'),
+                   ('select', 'source', 'Hand', None, 'Random', 1, 'ExhaustPile')],
+                  [('block', 9, 'source'), ('choose', 'source', 'Hand', (), 1, 1, 'Exhaust')]),
+    # §231：`Deal (4;5) damage to ALL enemies. Heal unblocked damage dealt.`
+    'reaper': ([('damageHealLoss', 4, 'allEnemies')],
+               [('damageHealLoss', 5, 'allEnemies')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

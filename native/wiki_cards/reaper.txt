@@ -1,0 +1,57 @@
+ {{Card Infobox
+| Name          = Reaper
+| Image         = Red-Reaper.png
+| Color         = Red
+| Type          = Attack
+| Rarity        = Rare
+| Cost          = 2
+| Description   = Deal (4;5) damage to ALL enemies. Heal HP equal to unblocked damage.<br>{{KW|Exhaust}}.
+| GivesToPlayer = Heal, Exhaust
+}}
+{{Keyword Infobox|Exhaust}}
+{{C|Reaper}} is a 2 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 4 (5 if upgraded) damage to '''ALL''' enemies and heals you for the amount of unblocked damage it dealt. You will only heal for the amount of HP actually lost by the enemy, so killing an enemy with damage remaining will only heal you for the HP they had left. {{C|Reaper}} will then {{KW|Exhaust}} itself.
+
+== Interactions ==
+=== Order ===
+* The healing from {{C|Reaper}} takes effect ''after'' receiving damage from {{BD|Thorns}} or {{BD|Sharp Hide}}, but before taking damage from {{BD|Beat of Death}}.
+
+=== Synergies ===
+* {{R|Magic Flower}} increases the effectiveness of any healing from {{C|Reaper}}.
+* Any increase to the damage output of {{C|Reaper}} will also boost its healing:
+** {{BD|Vulnerable}} on any of the enemies, particularly with {{R|Paper Phrog}}.
+** Any positive amount of {{BD|Strength}}. 
+** {{BD|Vigor}}.
+** {{R|The Boot}} boosting its unblocked damage to 5.
+** Being in the {{KW|Wrath}} or {{KW|Divinity}} {{KW|Stance}}.
+
+=== Neutral ===
+* Healing cards cannot be generated mid-combat to avoid infinite healing, so {{C|Reaper}} cannot be created by {{C|Infernal Blade}}, {{C|Metamorphosis}} or {{R|Dead Branch}}. 
+** However, if you already have a {{C|Reaper}} cards can be generated that allow you to heal to full HP regardless:
+*** Sources of {{BD|Strength}}, like {{C|Spot Weakness}} or {{C|Demon Form}}.
+*** Ways to increase the amount of {{C|Reaper|Reapers}} played, like {{C|Dual Wield}} or {{C|Exhume}}.
+
+=== Anti-Synergies ===
+* {{C|Reaper}} suffers doubly from any penalty to its damage, meaning {{BD|Weak}} and negative {{BD|Strength}} are particularly harmful for this card.
+* {{C|Reaper}} relies on damaging enemies at the right moment, meaning that damage that you have no control over, such as from {{C|Combust}}, {{BD|Thorns}} or {{R|Stone Calendar}} can possibly reduce the healing you get from this card.
+
+== Bugs ==
+* '''Reaper''' can sometimes fail to heal under certain circumstances. 
+* After lethal damage is dealt, combat will be ended after 1 second when updateDeathAnimation concludes that enemies are done dying. '''Reaper's''' heal action is added to the bottom of the queue and a WaitAction is added to the top. If additional actions take long enough, '''Reaper's''' heal will never be reached before combat is ended.
+** This is most noticeable combats with multiple enemies, like {{M|Reptomancer}}, with delays like {{R|Charon's Ashes}}.
+
+== Trivia ==
+* The {{M|Jaw Worm}} and {{M|Red Louse}} are depicted in the card art.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V1.1|* Improved lifesteal logic for Reaper and Shelled Parasite.}}
+{{Update History Table/row|Weekly 55|* Reaper card now heals the correct amount if the player has The Boot relic.
+* Adding VFX for Reaper card.}}
+{{Update History Table/row|Weekly 44|* All sources of random temporary card generation in combat (like Dead Branch) can no longer generate cards that provide healing.
+* New tip added to indicate that healing cards cannot be generated randomly during combat.}}
+{{Update History Table/row|Weekly 6|* Reaper now heals as part of the attack now, not after (you heal before thorns hit you).}}
+{{Update History Table/row|?|* Added Reaper to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

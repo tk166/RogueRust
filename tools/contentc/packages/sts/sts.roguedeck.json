@@ -2744,6 +2744,55 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.no_draw",
+      "PackageId": "sts",
+      "NameKey": "No Draw",
+      "DescriptionKey": "You cannot draw additional cards this turn.",
+      "Polarity": "Debuff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "debuff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.modifyStatusStacks",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.no_draw"
+                },
+                "Delta": {
+                  "kind": "const",
+                  "value": {
+                    "Value": -99
+                  }
+                },
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -7451,7 +7500,7 @@
                     }
                   },
                   "StatusDefinitionId": {
-                    "value": "standard.draw_reduction"
+                    "value": "standard.no_draw"
                   },
                   "Stacks": {
                     "kind": "const",
@@ -7532,7 +7581,7 @@
                     }
                   },
                   "StatusDefinitionId": {
-                    "value": "standard.draw_reduction"
+                    "value": "standard.no_draw"
                   },
                   "Stacks": {
                     "kind": "const",
@@ -10083,6 +10132,267 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "true_grit",
+      "PackageId": "sts",
+      "NameKey": "True Grit",
+      "DescriptionKey": "Gain 7 Block. Exhaust a random card in your hand.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 7
+                    }
+                  },
+                  "PoolId": {
+                    "value": "standard.block"
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.selectCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "FromZone": "Hand",
+                  "Order": "Random",
+                  "Count": 1,
+                  "ToZone": "ExhaustPile",
+                  "Placement": "Bottom",
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "true_grit+",
+      "PackageId": "sts",
+      "NameKey": "True Grit+",
+      "DescriptionKey": "Gain 9 Block. Exhaust a card in your hand.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 9
+                    }
+                  },
+                  "PoolId": {
+                    "value": "standard.block"
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.chooseCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "FromZone": "Hand",
+                  "Min": 1,
+                  "Max": 1,
+                  "Then": "Exhaust",
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "reaper",
+      "PackageId": "sts",
+      "NameKey": "Reaper",
+      "DescriptionKey": "Deal 4 damage to ALL enemies. Heal unblocked damage dealt.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamageAndHealByLoss",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.allEnemies",
+              "value": {
+                "Cardinality": "Many",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 4
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "reaper+",
+      "PackageId": "sts",
+      "NameKey": "Reaper+",
+      "DescriptionKey": "Deal 5 damage to ALL enemies. Heal unblocked damage dealt.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamageAndHealByLoss",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.allEnemies",
+              "value": {
+                "Cardinality": "Many",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 5
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
     }
   ],
   "EnemyActions": [

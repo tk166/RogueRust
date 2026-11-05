@@ -91,7 +91,8 @@ INV_COUNTS = {
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
     # §208: +1 (`standard.flying`); §209: +1 (`standard.curl_up`); §213: +1 (`standard.hex`).
     # §227: +1 (`standard.nightmare_pending`, Nightmare 的"下一回合"载体).
-    "statuses": 45,
+    # §231: +1 (`standard.no_draw`, Battle Trance 的"本回合不能再抽").
+    "statuses": 46,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -155,6 +156,22 @@ INV_CARDS = {
     "warcry+": {"Cost": 0, "Tags": ["skill"],
                 "Facts": [("draw", 2, "source"),
                           ("choose", "source", "Hand", (), 1, 1, "ToDrawPileTop")],
+                "PlayedCardDestinationZone": "ExhaustPile"},
+    # ---- §231：True Grit（格挡 + 随机消耗一张）/ Reaper（打全体 + 按掉血回血） -----------------
+    # `True Grit`：数值只有格挡那一半；"随机消耗一张手牌"是 §195.4 的 `selectCards` 事实。
+    "true_grit": {"Cost": 1, "Tags": ["skill"],
+                  "Facts": [("block", 7, "source"),
+                            ("select", "source", "Hand", None, "Random", 1, "ExhaustPile")],
+                  "PlayedCardDestinationZone": "ExhaustPile"},
+    "true_grit+": {"Cost": 1, "Tags": ["skill"],
+                   "Facts": [("block", 9, "source"),
+                             ("choose", "source", "Hand", (), 1, 1, "Exhaust")],
+                   "PlayedCardDestinationZone": "ExhaustPile"},
+    "reaper": {"Cost": 2, "Tags": ["attack"],
+               "Facts": [("damageHealLoss", 4, "allEnemies")],
+               "PlayedCardDestinationZone": "ExhaustPile"},
+    "reaper+": {"Cost": 2, "Tags": ["attack"],
+                "Facts": [("damageHealLoss", 5, "allEnemies")],
                 "PlayedCardDestinationZone": "ExhaustPile"},
     # ---- §230：临时力量 / 力量翻倍 / 按 tag 数牌加伤 ------------------------------------------
     # `Flex`：加 2(4) 层力量，**同时**挂 2(4) 层 `standard.lose_strength`（回合末扣掉并自摘）。
@@ -273,9 +290,9 @@ INV_CARDS = {
                        "Facts": [("block", 13, "source")],
                        "TurnEndHandDestinationZone": "ExhaustPile"},
     "battle_trance": {"Cost": 0, "Tags": ["skill"],
-                      "Facts": [("draw", 3, "source"), ("status", "standard.draw_reduction", 1, "source")]},
+                      "Facts": [("draw", 3, "source"), ("status", "standard.no_draw", 1, "source")]},
     "battle_trance+": {"Cost": 0, "Tags": ["skill"],
-                       "Facts": [("draw", 4, "source"), ("status", "standard.draw_reduction", 1, "source")]},
+                       "Facts": [("draw", 4, "source"), ("status", "standard.no_draw", 1, "source")]},
     # §221：两张事件诅咒。Doubt 的"回合末 +1 Weak"是 `LifecyclePrograms[TurnEndInHand]`
     # （§220 的载体；手牌里过回合才付账）。Writhe 只有关键字，没有节目。
     "doubt": {"Cost": 1, "Tags": ["curse", "unplayable"], "Facts": [],
@@ -945,6 +962,8 @@ INV_STATUSES = {
     # §227: Nightmare 的"下一回合把留存的副本拿进手牌" —— 一条 TurnStarted 触发器，
     # 没有任何修饰器（和 `standard.thorns` 一样属于"行为全在触发器里"）。
     "standard.nightmare_pending": [],
+    # §231: Battle Trance 的"本回合不能再抽" —— 规则在内核的抽牌节点里，状态本身没有修饰器。
+    "standard.no_draw": [],
     # Declared inert by the kernel (`is_declared_inert`): it wants a TurnEnded content trigger,
     # not a modifier. `port-plan.md` §107.
     "standard.metallicize": [],
@@ -1235,6 +1254,10 @@ def program_facts(root):
             out.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.heal":
             out.append(("heal", amount(body["Amount"]), tgt(body["TargetSelector"])))
+        elif kind == "node.dealDamageAndHealByLoss":
+            # §231: "heal what you actually dealt" -- the `HealByLoss` half is part of the fact, or
+            # "4 damage to all" and "4 damage to all, healing what it dealt" would compare equal.
+            out.append(("damageHealLoss", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.dealDamageWithTagBonus":
             # §230: "6 damage, +2 per card with this tag" as one fact. The tag and the per-card bonus
             # are both part of it -- that is the whole identity of Perfected Strike.
@@ -2650,7 +2673,9 @@ def check_statuses(doc):
                      "standard.stasis", "standard.flying",
                      "standard.curl_up", "standard.plated_armor", "standard.hex",
                      # §227: Nightmare 的"下一回合"载体 —— `TurnStarted` 触发器。
-                     "standard.nightmare_pending"):
+                     "standard.nightmare_pending",
+                     # §231: Battle Trance 的"本回合不能再抽" —— `TurnEnded` 自摘。
+                     "standard.no_draw"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -2665,6 +2690,9 @@ def check_statuses(doc):
                         "standard.constricted": ["TurnEnded"],
                         # §175: the first `TurnStarted` trigger in this package.
                         "standard.phantom_veil": ["TurnStarted"],
+                        # §231: Battle Trance 的"本回合不能再抽" —— 一条 TurnEnded 自摘触发器
+                        # （规则本身在内核的抽牌节点里）。
+                        "standard.no_draw": ["TurnEnded"],
                         # §194: the Guardian's Sharp Hide and the Awakened One's Curiosity -- both
                         # `CardPlayed` filtered by the played card's tag, the Enrage shape.
                         "standard.sharp_hide": ["CardPlayed"],

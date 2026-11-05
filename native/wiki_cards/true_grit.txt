@@ -1,0 +1,29 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = True Grit
+| Image         = Red-TrueGrit.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Common
+| Cost          = 1
+| Description   = Gain (7;9) {{KW|Block}}.<br>{{KW|Exhaust}} 1 card( at random;).
+| GivesToPlayer = Exhaust, Block
+}}
+{{Keyword Infobox|Block}} {{Keyword Infobox|Exhaust}}
+{{C|True Grit}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 7 {{KW|Block}} and randomly {{KW|Exhaust|Exhausts}} one card in your hand. If it is upgraded, it allows you to select one card in hand to {{KW|Exhaust}} instead. If there are no other cards in hand when this card is played, no card will be {{KW|Exhaust|Exhausted}}.
+
+== Interactions ==
+=== Synergies ===
+* {{C|True Grit}} has {{KW|Exhaust}}-synergy with {{C|Dark Embrace}}, {{C|Feel No Pain}}, {{R|Charon's Ashes}}, and {{R|Dead Branch}}, and, if upgraded, can reliably {{KW|Exhaust}} {{C|Sentinel}}.
+* Upgraded {{C|True Grit}} can be used to get rid of unwanted cards in hand, such as {{QueryLink|Cards|type:Status|Status}} or {{QueryLink|Cards|type:Curse|Curse}} cards.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Watcher 4|* True Grit card now Exhausts randomly again.}}
+{{Update History Table/row|Weekly 47|* Fixed issue where True Grit card was not behaving correctly with seeded runs.}}
+{{Update History Table/row|Weekly 23|* True Grit card is now properly seeded.}}
+{{Update History Table/row|?|* Added True Grit to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

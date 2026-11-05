@@ -5638,10 +5638,16 @@ mod tests {
             0,
             "the observation must show what the kernel will charge"
         );
-        assert!(
-            slot_ref.hand_costs[free] != slot_ref.printed_energy_cost(&picked),
-            "and that is not its printed cost -- the per-copy price is doing the work"
-        );
+        // ⚠️ §231: 只有当这张牌**印刷价非 0** 时，"0 与印刷价不同"才说明每副本价格在起作用。
+        // 池子里的 0 费攻击（`body_slam+`）拿到的 delta 本来就是 `-0`（§161.5：0 费不算错误），
+        // 于是这条断言会随内容增长变成偶发红 —— 那不是回归，是断言把"打折"当成了"一定打折"。
+        let printed = slot_ref.printed_energy_cost(&picked);
+        if printed != 0 {
+            assert!(
+                slot_ref.hand_costs[free] != printed,
+                "and that is not its printed cost -- the per-copy price is doing the work"
+            );
+        }
         drop(slot_ref);
 
         // ★ …and the kernel charges it: play it, energy must not move.

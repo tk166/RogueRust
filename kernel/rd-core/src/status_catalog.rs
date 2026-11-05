@@ -780,7 +780,17 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // `has_behaviour` only knows the damage/block pipelines, so the reader-side rule lives in the
         // content's `PassiveModifiers`; the kernel rule that matters (`fold_turn_start_draw`) already
         // exists (§195.5's `Pipeline::TurnStartDraw`).
-        "standard.draw_reduction"
+        "standard.draw_reduction" |
+        // §231: "You cannot draw additional cards this turn" -- the kernel rule lives in
+        // `exec::draw_cards_node` (it zeroes the count of an **effect-driven** draw, and only while
+        // the status is present). The turn-start draw is deliberately not affected: that is not an
+        // "additional" card. The status removes itself with a content `TurnEnded` trigger.
+        "standard.no_draw" |
+        // §231: "You cannot draw additional cards this turn" -- the kernel rule lives in
+        // `exec::draw_cards_node` (it zeroes the count of an **effect-driven** draw, and only while
+        // the status is present). The turn-start draw is deliberately not affected: that is not an
+        // "additional" card. The status removes itself with a content `TurnEnded` trigger.
+        "standard.no_draw"
     )
 }
 

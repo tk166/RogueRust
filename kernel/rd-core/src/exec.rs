@@ -1100,7 +1100,20 @@ fn resolve_request(ctx: &mut ExecContext<'_>, request: &EffectRequest) -> Result
             ctx.state.end_turn_requested = true;
             Ok(())
         }
-        EffectRequest::DrawCards { owner, count } => draw_for(ctx, &owner, count),
+        // §231: `standard.no_draw` (Battle Trance) is honoured **here**, not in the node: a draw is a
+        // draw whether it came from `node.drawCards` or from a potion's `EffectRequest::DrawCards`.
+        // "Additional cards" excludes the turn-start draw, which never goes through this request.
+        EffectRequest::DrawCards { owner, count } => {
+            let blocked = ctx.state.combatant(&owner).is_some_and(|combatant| {
+                combatant
+                    .statuses()
+                    .iter()
+                    .filter(|instance| instance.definition_id.as_str() == "standard.no_draw")
+                    .fold(0i32, |sum, instance| sum.saturating_add(instance.stacks))
+                    > 0
+            });
+            draw_for(ctx, &owner, if blocked { 0 } else { count })
+        }
         EffectRequest::GainResource {
             target,
             key,
@@ -1641,6 +1654,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::AddCardCounter
         // §230：`dealDamageWithTagBonus`（数牌 + 打伤害）。同上。
         | NodeKind::DealDamageWithTagBonus
+        // §231：`dealDamageAndHealByLoss`（打伤害 + 按掉血回血）。同上。
+        | NodeKind::DealDamageAndHealByLoss
         // §195.7：`upgradeCards`（改定义 id），同上。
         | NodeKind::UpgradeCards
         // §146：`repeat`（X 费牌的"跑 X 遍"）。它有孩子，但预检只走一遍 Body ——
@@ -1806,6 +1821,9 @@ fn dispatch_node(
         NodeKind::SelectCards => select_cards_node(node, ctx, frame, slot, stats),
         NodeKind::ChooseCards => choose_cards_node(node, ctx, frame, slot, stats),
         NodeKind::AddCardCounter => add_card_counter_node(node, ctx, frame, slot, stats),
+        NodeKind::DealDamageAndHealByLoss => {
+            deal_damage_and_heal_by_loss_node(node, ctx, frame, slot, stats)
+        }
         NodeKind::DealDamageWithTagBonus => {
             deal_damage_with_tag_bonus_node(node, ctx, frame, slot, stats)
         }
@@ -2233,6 +2251,57 @@ fn deal_damage_node(
             Some(frame),
         )?;
         stats.effects = stats.effects.saturating_add(1);
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
+/// §231：`node.dealDamageAndHealByLoss` 的实体 —— 打伤害，然后按**实际掉的血**给来源回血。
+///
+/// `Reaper`：`Deal 4 (5) damage to ALL enemies. Heal unblocked damage dealt.`
+///
+/// 为什么必须是一个节点：参考用 `ResultKey` 把"这一击掉了多少血"传给下一个节点，而本内核
+/// **明确不支持 ResultKey**。`resolve_damage` 返回 `(blocked, health_lost)`，所以节点自己算。
+///
+/// ⚠️ 代价是这一击**立刻生效**（而不是入队后再结算）。这一条是有意为之：格挡/易伤/力量的读取
+/// 时点都在 `resolve_damage` 内部，与入队版一致；不同的只是它与**同一节目里后续节点**的相对顺序。
+/// `Reaper` 需要的恰恰是"先掉血、再按掉的血回血"，那个顺序在入队模型里拿不到。
+fn deal_damage_and_heal_by_loss_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let amount = eval_amount(node, "Amount", ctx)?;
+    let ignores_block = node.bool_field("IgnoresBlock")?.unwrap_or(false);
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    let source = ctx.source;
+
+    let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut targets)?;
+    if count == 0 {
+        return resume_later(ctx.state, frame, slot);
+    }
+    let mut lost_total = 0i32;
+    for target in targets.iter().take(count) {
+        let (_, lost) = resolve_damage(ctx, target, amount, ignores_block)?;
+        stats.effects = stats.effects.saturating_add(1);
+        lost_total = lost_total.saturating_add(lost);
+    }
+    // 回血走**请求**（不是同步写）：它要过与其它治疗同一条管线（上限钳制、`Healed` 事件）。
+    if lost_total > 0 {
+        if let Some(owner) = source {
+            ctx.state.enqueue_effect_with_owner(
+                EffectRequest::Heal {
+                    target: Some(owner),
+                    amount: lost_total,
+                },
+                Some(frame),
+            )?;
+            stats.effects = stats.effects.saturating_add(1);
+        }
     }
     resume_later(ctx.state, frame, slot)
 }
@@ -3466,6 +3535,8 @@ fn draw_cards_node(
 
     let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
     let resolved = resolve_targets(selector, ctx, &mut targets)?;
+    // §231: `standard.no_draw` is enforced in `resolve_request`, **not here** -- a draw is a draw
+    // whether it came from this node or from a potion's `EffectRequest::DrawCards`.
     for target in targets.iter().take(resolved) {
         ctx.state.enqueue_effect_with_owner(
             EffectRequest::DrawCards {
@@ -4092,6 +4163,9 @@ fn choose_cards_node(
         "Upgrade" => crate::state::ChoiceThen::Upgrade,
         // §227：Warcry —— 选一张放到抽牌堆顶。
         "ToDrawPileTop" => crate::state::ChoiceThen::ToDrawPileTop,
+        // §231：True Grit+ —— "选一张消耗掉"。内核的 `ChoiceThen::Exhaust` 一直存在（Elixir 那条药水
+        // 就在用），只是内容没有入口说"我要这个 then"。
+        "Exhaust" => crate::state::ChoiceThen::Exhaust,
         _ => return Err(ExecError::Ir(IrError::UnknownKind)),
     };
     if !(0..=MAX_SELECTED_CARDS as i32).contains(&min)
