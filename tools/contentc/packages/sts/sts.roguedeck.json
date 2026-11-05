@@ -7619,12 +7619,28 @@
               "kind": "node.conditional",
               "value": {
                 "Condition": {
-                  "kind": "not",
+                  "kind": "and",
                   "value": {
-                    "Condition": {
-                      "kind": "event.bool",
+                    "Left": {
+                      "kind": "not",
                       "value": {
-                        "FieldKey": "card.hasTag.attack"
+                        "Condition": {
+                          "kind": "event.bool",
+                          "value": {
+                            "FieldKey": "card.isResolving"
+                          }
+                        }
+                      }
+                    },
+                    "Right": {
+                      "kind": "not",
+                      "value": {
+                        "Condition": {
+                          "kind": "event.bool",
+                          "value": {
+                            "FieldKey": "card.hasTag.attack"
+                          }
+                        }
                       }
                     }
                   }
@@ -7729,12 +7745,28 @@
               "kind": "node.conditional",
               "value": {
                 "Condition": {
-                  "kind": "not",
+                  "kind": "and",
                   "value": {
-                    "Condition": {
-                      "kind": "event.bool",
+                    "Left": {
+                      "kind": "not",
                       "value": {
-                        "FieldKey": "card.hasTag.attack"
+                        "Condition": {
+                          "kind": "event.bool",
+                          "value": {
+                            "FieldKey": "card.isResolving"
+                          }
+                        }
+                      }
+                    },
+                    "Right": {
+                      "kind": "not",
+                      "value": {
+                        "Condition": {
+                          "kind": "event.bool",
+                          "value": {
+                            "FieldKey": "card.hasTag.attack"
+                          }
+                        }
                       }
                     }
                   }
@@ -7836,50 +7868,67 @@
             "Zone": "Hand",
             "MaxIterations": 64,
             "Body": {
-              "kind": "node.sequence",
+              "kind": "node.conditional",
               "value": {
-                "Children": [
-                  {
-                    "kind": "node.moveCardToZone",
-                    "value": {
-                      "CardExpression": {
-                        "kind": "cardInstance.iterated",
-                        "value": {}
-                      },
-                      "OwnerSelector": {
-                        "kind": "sel.source",
-                        "value": {
-                          "Cardinality": "ZeroOrOne",
-                          "RequiredContextCapabilities": "Source"
-                        }
-                      },
-                      "ToZone": "ExhaustPile",
-                      "Placement": "Bottom",
-                      "ResultKey": null
-                    }
-                  },
-                  {
-                    "kind": "node.dealDamage",
-                    "value": {
-                      "TargetSelector": {
-                        "kind": "sel.eventTarget",
-                        "value": {
-                          "Cardinality": "ZeroOrOne",
-                          "RequiredContextCapabilities": "EventTarget"
-                        }
-                      },
-                      "Amount": {
-                        "kind": "const",
-                        "value": {
-                          "Value": 7
-                        }
-                      },
-                      "ResultKey": null,
-                      "IgnoresBlock": false,
-                      "Element": null
+                "Condition": {
+                  "kind": "not",
+                  "value": {
+                    "Condition": {
+                      "kind": "event.bool",
+                      "value": {
+                        "FieldKey": "card.isResolving"
+                      }
                     }
                   }
-                ]
+                },
+                "Then": {
+                  "kind": "node.sequence",
+                  "value": {
+                    "Children": [
+                      {
+                        "kind": "node.moveCardToZone",
+                        "value": {
+                          "CardExpression": {
+                            "kind": "cardInstance.iterated",
+                            "value": {}
+                          },
+                          "OwnerSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "ToZone": "ExhaustPile",
+                          "Placement": "Bottom",
+                          "ResultKey": null
+                        }
+                      },
+                      {
+                        "kind": "node.dealDamage",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.eventTarget",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "EventTarget"
+                            }
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 7
+                            }
+                          },
+                          "ResultKey": null,
+                          "IgnoresBlock": false,
+                          "Element": null
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Else": null
               }
             }
           }
@@ -7928,50 +7977,67 @@
             "Zone": "Hand",
             "MaxIterations": 64,
             "Body": {
-              "kind": "node.sequence",
+              "kind": "node.conditional",
               "value": {
-                "Children": [
-                  {
-                    "kind": "node.moveCardToZone",
-                    "value": {
-                      "CardExpression": {
-                        "kind": "cardInstance.iterated",
-                        "value": {}
-                      },
-                      "OwnerSelector": {
-                        "kind": "sel.source",
-                        "value": {
-                          "Cardinality": "ZeroOrOne",
-                          "RequiredContextCapabilities": "Source"
-                        }
-                      },
-                      "ToZone": "ExhaustPile",
-                      "Placement": "Bottom",
-                      "ResultKey": null
-                    }
-                  },
-                  {
-                    "kind": "node.dealDamage",
-                    "value": {
-                      "TargetSelector": {
-                        "kind": "sel.eventTarget",
-                        "value": {
-                          "Cardinality": "ZeroOrOne",
-                          "RequiredContextCapabilities": "EventTarget"
-                        }
-                      },
-                      "Amount": {
-                        "kind": "const",
-                        "value": {
-                          "Value": 10
-                        }
-                      },
-                      "ResultKey": null,
-                      "IgnoresBlock": false,
-                      "Element": null
+                "Condition": {
+                  "kind": "not",
+                  "value": {
+                    "Condition": {
+                      "kind": "event.bool",
+                      "value": {
+                        "FieldKey": "card.isResolving"
+                      }
                     }
                   }
-                ]
+                },
+                "Then": {
+                  "kind": "node.sequence",
+                  "value": {
+                    "Children": [
+                      {
+                        "kind": "node.moveCardToZone",
+                        "value": {
+                          "CardExpression": {
+                            "kind": "cardInstance.iterated",
+                            "value": {}
+                          },
+                          "OwnerSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "ToZone": "ExhaustPile",
+                          "Placement": "Bottom",
+                          "ResultKey": null
+                        }
+                      },
+                      {
+                        "kind": "node.dealDamage",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.eventTarget",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "EventTarget"
+                            }
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 10
+                            }
+                          },
+                          "ResultKey": null,
+                          "IgnoresBlock": false,
+                          "Element": null
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Else": null
               }
             }
           }
@@ -7983,6 +8049,110 @@
       "TurnEndHandDestinationZone": "Hand",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
+    },
+    {
+      "Id": "dual_wield",
+      "PackageId": "sts",
+      "NameKey": "Dual Wield",
+      "DescriptionKey": "Choose an Attack or Power card. Add 1 copy of that card into your hand.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.chooseCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "Hand",
+            "Min": 1,
+            "Max": 1,
+            "Copies": 1,
+            "RequireAnyTag": [
+              "attack",
+              "power"
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "dual_wield+",
+      "PackageId": "sts",
+      "NameKey": "Dual Wield+",
+      "DescriptionKey": "Choose an Attack or Power card. Add 2 copies of that card into your hand.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.chooseCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "Hand",
+            "Min": 1,
+            "Max": 1,
+            "Copies": 2,
+            "RequireAnyTag": [
+              "attack",
+              "power"
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
     }
   ],
   "EnemyActions": [

@@ -1281,13 +1281,20 @@ function maybeShowChoice() {
     "1:2": "弃掉任意张手牌，然后抽同样多张",
     "1:3": "从弃牌堆拿一张回手牌（它这次免费）",
     "2:3": "从三张候选里选一张加进手牌（它这次免费）",
+    // §226: Dual Wield -- "copy it". The number of copies is the **content's** (base 1, `+` 2), so
+    // it comes from the kernel (`rd_env_choice_copies`) and is appended below.
+    "1:4": "选手牌里的一张来复制",
   };
   // The bound is the kernel's, not a guess: `min = max = 1` for Liquid Memories reads "1 张", a
   // "any number" question reads "0–N 张". Printing a literal range for a mandatory choice would be
   // the page inventing a rule.
   const span = min === max ? `${min} 张` : `${min}–${max} 张`;
+  // §226: a copy question also says **how many copies** each pick makes. Reading it from the kernel
+  // is the only honest source -- the page cannot tell `Dual Wield` from `Dual Wield+`.
+  const copies = kind === 4 ? ex.rd_env_choice_copies() : 0;
+  const tail = copies > 0 ? ` · 各复制 ${copies} 份` : "";
   document.getElementById("modalTitle").textContent =
-    `${titles[source + ":" + kind] || "选牌"} · ${span}`;
+    `${titles[source + ":" + kind] || "选牌"} · ${span}${tail}`;
   const body = document.getElementById("modalBody");
   body.innerHTML = "";
 

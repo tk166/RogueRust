@@ -200,7 +200,12 @@ Sentry 的 Bolt 塞的就是它。
 
 | 实体 | 我们 | wiki | 为什么留着 |
 |---|---|---|---|
-| `second_wind` / `fiend_fire` | 会把**自己**也算进"整手牌"：Second Wind 给 10 格挡（wiki 5）、Fiend Fire 打 21（wiki 14） | 打出的牌本身不计入 | 参考实现里打出的牌在节目期间**仍在手牌**（`onTerminal` 才落区，`play::tests` 与 `CARD_DIFF` 的 `archive_the_evidence` 都钉着这条）。改它要动落区时机 = 改哈希契约；§225 试过"快照跳过自己"，被那两条既有测试挡回 |
+> **`second_wind` / `fiend_fire` 的这一行已经删掉了（§226）**：它不是"表达不了"，而是"没人告诉内容
+> 哪一张是自己"。内核现在在 `forEachCardInZone` 的每一趟里把"这一张是不是正在结算的那张"填进
+> `event_flags`（`event.bool: card.isResolving`，只读、不改快照），内容用 `not(...)` 把它排除 ⇒
+> Second Wind 给 5（wiki 5）、Fiend Fire 打 14（wiki 14）。`archive_the_evidence` 那条参考契约
+> 一个字节都没动 —— 它不看这个位。
+
 | `doubt` | 回合末给 1 层 Weak，但它**在同一回合末就被自己的衰减吃掉** | 原版里 Doubt 的 Weak 会留到下一回合 | 我们的 `standard.weak` 衰减是一条 `TurnEnded` **触发器**（第 ③ 步），而卡牌生命周期节目在第 ① 步 —— 同一次回合末里刚上的 Weak 当场被扣。参考把衰减放在 `decrease_timed_statuses`，与卡程序的关系不同。要修得动回合末的处理器顺序（影响 Burn 等所有生命周期节目），留作单独一节 |
 | `standard.slow` | 放大**任何直接伤害**（`RestrictDamageKind: Direct`） | 只放大"**打出攻击牌**造成的伤害" | 要精确到卡牌标签需要 `RestrictSourceCardTag` 进镜像格式（`status_bind` 目前对非空值**响亮拒绝**），留作格式升级。基线（本回合牌数、每回合归零、不复合）已与 wiki 一致（§216） |
 

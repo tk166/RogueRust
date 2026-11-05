@@ -130,6 +130,10 @@ FACTS = {
                                       ('damage', 7, 'event')))],
                    [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),
                                       ('damage', 10, 'event')))]),
+    # §226：`Dual Wield` —— wiki 的 "Add (a copy;2 copies) of that card into your hand."
+    # 两行只差 `Copies`（1 / 2），这正是升级的全部内容。
+    'dual_wield': ([('chooseCopy', 'source', 'Hand', ('attack', 'power'), 1, 1, 1)],
+                   [('chooseCopy', 'source', 'Hand', ('attack', 'power'), 1, 1, 2)]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

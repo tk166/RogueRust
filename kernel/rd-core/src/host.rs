@@ -8134,12 +8134,15 @@ mod tests {
         assert_eq!(hit(&mut state), 10, "next turn starts over: back to 10");
     }
 
-    /// §225：`Second Wind` / `Fiend Fire` —— 整手牌逐张消耗，每张换一份效果。
+    /// §225/§226：`Second Wind` / `Fiend Fire` —— 整手牌逐张消耗，每张换一份效果。
     ///
-    /// 这两张牌同时钉住三件事：
+    /// 这两张牌同时钉住四件事：
     /// ① `forEachCardInZone` 的快照语义（循环体搬走卡不影响这一趟）；
-    /// ② 迭代卡的 **tag 位**被填进 `event_flags`（§225 A），否则"**非攻击**牌"会把攻击牌也算进去；
-    /// ③ 消耗走 `moveCardToZone` ⇒ `move_card_for` ⇒ `LifecyclePrograms[Exhausted]`（§220 那条路）。
+    /// ② 迭代卡的 **tag 位**被填进 `event_flags`（§225 A），否则"**非攻击**牌会把攻击牌也算进去"；
+    /// ③ §226：迭代的牌**是不是正在结算的那一张**（`event.bool: card.isResolving`）——
+    ///    打出的牌在参考里要到终态回调才离开手牌，所以循环看得见它，StS 的语义里它**不算**
+    ///    "手牌里的一张"。内容的 `not(card.isResolving)` 把这条差补上；
+    /// ④ 消耗走 `moveCardToZone` ⇒ `move_card_for` ⇒ `LifecyclePrograms[Exhausted]`（§220 那条路）。
     #[test]
     fn the_hand_exhausting_cards_do_what_their_pages_say() {
         let blob = std::fs::read(concat!(
@@ -8163,15 +8166,14 @@ mod tests {
         )
         .expect("second wind is playable");
         host.try_resolve_pending_queues(&mut state).expect("drain");
-        // ⚠️ **已知语义差（§225 记录）**：参考实现里打出的牌在节目期间**仍在手牌里**
-        // （`onTerminal` 才落区，`play::tests` 与 `CARD_DIFF` 的 `archive_the_evidence` 都钉着
-        // 这条）。所以这个循环把 `Second Wind` 自己也算进去 ⇒ 5×2 = 10，而 wiki 是 5。
-        // 改它要动参考的落区时机（哈希契约），因此这里如实断言我们的数字，差异写进
-        // `sts-wiki-gap.md` §G.2。
+        // 参考里打出的牌在节目期间**仍在手牌里**（`onTerminal` 才落区 —— `play::tests` 与
+        // `CARD_DIFF` 的 `archive_the_evidence` 都钉着这条，所以内核**不动**快照）。
+        // §226 让内容自己认得出"这一趟就是我"：`not(event.bool: card.isResolving)`。
+        // ⇒ 只给防御那 5 点，Second Wind 自己那份**不再算**。
         assert_eq!(
             block_of(&state, "hero"),
-            10,
-            "5 for the Skill + 5 for the Second Wind itself (declared deviation); exhausted: {:?}",
+            5,
+            "5 for the Skill only -- the card being played is not \"a card in your hand\";              exhausted: {:?}",
             zone_definitions(&state, "hero", CardZone::ExhaustPile)
         );
         assert_eq!(
@@ -8203,11 +8205,12 @@ mod tests {
         )
         .expect("fiend fire is playable");
         host.try_resolve_pending_queues(&mut state).expect("drain");
-        // 同理：三张牌（打击 / 防御 / Fiend Fire 自己）× 7 = 21 ⇒ 20 血的敌人归零。
+        // 同理：两张牌（打击 / 防御）× 7 = 14 ⇒ 20 血的敌人剩 6。Fiend Fire 自己不算
+        // （否则是 21，一场"多打了一张"的胜利）。
         assert_eq!(
             health(&state, "enemy_a"),
-            0,
-            "3 x 7 = 21 (the played card counts itself -- the same declared deviation)"
+            6,
+            "2 x 7 = 14, not 3 x 7 = 21: the played card is not \"in your hand\""
         );
         assert_eq!(
             zone_count(&state, "hero", CardZone::Hand),
@@ -8221,6 +8224,84 @@ mod tests {
                 "{expected} must be exhausted, got {exhausted:?}"
             );
         }
+    }
+
+    /// §226：`Dual Wield` —— **问玩家要一张 Attack 或 Power 牌，然后复制它**。
+    ///
+    /// 这是"复制载体"的端到端判据，一次钉住四段，缺一段就会出现"按钮是死的"那种失败：
+    /// ① 打出之后**真的**有一个待决问句（`then = Copy`、`copies = 1`）；
+    /// ② 选项是**收窄**过的：手里有攻击牌也有技能牌，问句只列攻击牌（`RequireAnyTag`）；
+    /// ③ 回答之后手牌多一张**同定义**的牌，原件还在；
+    /// ④ `Dual Wield` 自己按 `PlayedCardDestinationZone` 进消耗堆（wiki 的 `Exhaust`）。
+    #[test]
+    fn dual_wield_asks_for_an_attack_and_copies_it() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        give_card(&mut state, "hero", CardZone::Hand, "card_attack", "strike", None);
+        give_card(&mut state, "hero", CardZone::Hand, "card_skill", "defend", None);
+        let card = card_in_hand(&mut state, &content, "hero", "dual_wield");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("dual wield is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+
+        // ① 一个问题，`s then = Copy`、`copies = 1`、`min = max = 1`。
+        let choice = state.pending_choice().expect("dual wield asks a question");
+        assert!(
+            choice.then == crate::state::ChoiceThen::Copy,
+            "then = {:?}",
+            choice.then
+        );
+        assert_eq!(choice.copies, 1, "the printed card makes one copy");
+        assert_eq!((choice.min, choice.max), (1, 1), "exactly one card");
+
+        // ② 收窄：技能牌**不在**选项里（"choose an **Attack or Power** card"）。
+        let mut legal = [CardInstanceId::EMPTY; 8];
+        let count = state.choice_legal(&mut legal).expect("the options are listable");
+        assert_eq!(count, 1, "only the Attack qualifies, got {count}");
+        let picked = legal[0];
+        let picked_definition = state
+            .card(state.find_card(&cid("hero"), &picked).expect("in hand").1)
+            .expect("the card")
+            .definition_id;
+        assert_eq!(picked_definition.as_str(), "strike", "the Attack is the only option");
+
+        // ③ 回答 ⇒ 手牌多一张同样的牌，原件还在。
+        state
+            .resolve_choice(crate::state::ChoiceAnswer::Instances(&[picked]), 0)
+            .expect("the answer is taken");
+        let hand = zone_definitions(&state, "hero", CardZone::Hand);
+        assert_eq!(
+            hand.iter().filter(|id| id.as_str() == "strike").count(),
+            2,
+            "the strike and its copy, got {hand:?}"
+        );
+        assert!(hand.iter().any(|id| id.as_str() == "defend"), "the Skill is untouched");
+        assert!(!hand.iter().any(|id| id.as_str() == "dual_wield"), "{hand:?}");
+
+        // ④ 它自己进**弃牌堆**（`native/wiki_cards/dual_wield.txt` 没有 Exhaust —— 只有副本
+        // 进手牌。旧版 StS 才自我消耗，照 dump 走）。
+        let discards = zone_definitions(&state, "hero", CardZone::DiscardPile);
+        assert!(
+            discards.iter().any(|id| id.as_str() == "dual_wield"),
+            "dual wield goes to the discard pile, got {discards:?}"
+        );
+        let exhausted = zone_definitions(&state, "hero", CardZone::ExhaustPile);
+        assert!(
+            exhausted.is_empty(),
+            "nothing is exhausted here, got {exhausted:?}"
+        );
     }
 
     /// §225：**消耗审计** —— 内核里把牌送进消耗堆的路径必须**都**跑 `LifecyclePrograms[Exhausted]`。

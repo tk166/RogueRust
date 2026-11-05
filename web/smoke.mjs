@@ -104,6 +104,8 @@ const REQUIRED = [
   "rd_env_choice_confirm",
   // §161.5: where the options come from (a pile vs three offered definitions).
   "rd_env_choice_source",
+  // §226: how many copies a `Copy` question makes (Dual Wield).
+  "rd_env_choice_copies",
   // §161.3: the debug potion grant, used by `RD_DEBUG.givePotion` and by `browser_test`.
   "rd_run_grant_potion",
   // §161.9: the one-line run archive (copy / restore).

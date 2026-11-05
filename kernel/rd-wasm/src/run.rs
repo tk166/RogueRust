@@ -1752,6 +1752,8 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 max: hand.min(u8::MAX as usize) as u8,
                 then,
                 offered: rd_core::state::Bounded::new(),
+                copies: 0,
+                candidates: rd_core::state::Bounded::new(),
             };
             if let Err(e) = session.state.begin_choice(question) {
                 return refuse(&std::format!("这次选牌问不出口：{e}"));
@@ -1833,6 +1835,8 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 max: 1,
                 then: rd_core::state::ChoiceThen::ToHand,
                 offered,
+                copies: 0,
+                candidates: rd_core::state::Bounded::new(),
             };
             if let Err(e) = session.state.begin_choice(question) {
                 return refuse(&std::format!("这次选牌问不出口：{e}"));
@@ -1859,6 +1863,8 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 max: 1,
                 then: rd_core::state::ChoiceThen::ToHand,
                 offered: rd_core::state::Bounded::new(),
+                copies: 0,
+                candidates: rd_core::state::Bounded::new(),
             };
             if let Err(e) = session.state.begin_choice(question) {
                 return refuse(&std::format!("这次选牌问不出口：{e}"));

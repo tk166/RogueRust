@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 391 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 393 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 77 | 42 | 35 | 0 | 73 | 4 | 10 | 0 |
+| 卡牌 | 79 | 43 | 36 | 0 | 75 | 4 | 8 | 0 |
 | 状态 | 44 | 41 | 1 | 2 | 0 | 44 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 391 | 255 | 120 | 16 | 250 | 48 | 73 | 0 |
+| **合计** | 393 | 256 | 121 | 16 | 252 | 48 | 71 | 0 |
 
-扫描到的具名测试：**917** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**920** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -239,7 +239,7 @@
 | time_eater.ripple | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 
-## 卡牌（77）
+## 卡牌（79）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -251,7 +251,7 @@
 | bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
-| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, a_new_run_is_before_the_map_with_a_known_start …(+5) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
+| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, a_new_run_is_before_the_map_with_a_known_start …(+6) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
 | bash+ | yes | — | CARD_DIFF | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS |
 | battle_trance | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
@@ -274,10 +274,12 @@
 | combust+ | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt (via combust) | — | INV_CARDS |
 | dark_shackles | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/dark_shackles.txt | wiki 偏差：wiki 升级版是 15 层；内容没有 `dark_shackles+` 这一行。（`Exhaust` 同 `bandage_up`：由落区表达，不是偏差。） | §219/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | dazed | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade, hex_shuffles_a_dazed_only_for_non_attack_cards | — | wiki:wiki_cards/dazed.txt | — | §189/§191/CARD_WIKI+INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+18) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+20) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | — | CARD_DIFF | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS |
 | doubt | yes | e2e_7e_a_block_gain_spec_in_the_image_truncates_the_block_like_frail, e2e_8_strong_binder_gains_seven_block_then_applies_one_doubt …(+30) | — | wiki:wiki_cards/doubt.txt | ours 回合末给 1 层 Weak，但它在同一回合末就被自己的衰减吃掉 / wiki 原版里 Doubt 的 Weak 会留到下一回合 —— 我们的 `standard.weak` 衰减是一条 `TurnEnded` 触发器（第 ③ 步），而卡牌生命周期节目在第 ① 步 —— 同一次回合末里刚上的 Weak 当场被扣。参考把衰减放在 `decrease_timed_statuses`，与卡程序的关系不同。要修得动回合末的处理器顺序（影响 Burn 等所有生命周期节目），留作单独一节 | §220/§221/CARD_WIKI+INV_CARDS/e2e_7e_a_block_gain_spec_in_the_image_truncates_the_block_like_frail |
-| fiend_fire | yes | the_hand_exhausting_cards_do_what_their_pages_say | — | wiki:wiki_cards/fiend_fire.txt | ours 会把自己也算进"整手牌"：Second Wind 给 10 格挡（wiki 5）、Fiend Fire 打 21（wiki 14） / wiki 打出的牌本身不计入 —— 参考实现里打出的牌在节目期间仍在手牌（`onTerminal` 才落区，`play::tests` 与 `CARD_DIFF` 的 `archive_the_evidence` 都钉着这条）。改它要动落区时机 = 改哈希契约；§225 试过"快照跳过自己"，被那两条既有测试挡回 | CARD_WIKI+INV_CARDS/the_hand_exhausting_cards_do_what_their_pages_say |
+| dual_wield | yes | dual_wield_asks_for_an_attack_and_copies_it, a_dual_wield_question_reads_the_same_three_numbers_in_the_page_layer | — | wiki:wiki_cards/dual_wield.txt | — | §226/CARD_WIKI+INV_CARDS/dual_wield_asks_for_an_attack_and_copies_it |
+| dual_wield+ | yes | — | CARD_DIFF | wiki:wiki_cards/dual_wield.txt (via dual_wield) | — | INV_CARDS |
+| fiend_fire | yes | the_hand_exhausting_cards_do_what_their_pages_say | — | wiki:wiki_cards/fiend_fire.txt | — | CARD_WIKI+INV_CARDS/the_hand_exhausting_cards_do_what_their_pages_say |
 | fiend_fire+ | yes | — | CARD_DIFF | wiki:wiki_cards/fiend_fire.txt (via fiend_fire) | — | INV_CARDS |
 | ghostly_armor | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/ghostly_armor.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | ghostly_armor+ | yes | — | CARD_DIFF | wiki:wiki_cards/ghostly_armor.txt (via ghostly_armor) | — | INV_CARDS |
@@ -296,14 +298,14 @@
 | pommel_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/pommel_strike.txt (via pommel_strike) | — | INV_CARDS |
 | pummel | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/pummel.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | pummel+ | yes | — | CARD_DIFF | wiki:wiki_cards/pummel.txt (via pummel) | — | INV_CARDS |
-| second_wind | yes | the_hand_exhausting_cards_do_what_their_pages_say | — | wiki:wiki_cards/second_wind.txt | ours 会把自己也算进"整手牌"：Second Wind 给 10 格挡（wiki 5）、Fiend Fire 打 21（wiki 14） / wiki 打出的牌本身不计入 —— 参考实现里打出的牌在节目期间仍在手牌（`onTerminal` 才落区，`play::tests` 与 `CARD_DIFF` 的 `archive_the_evidence` 都钉着这条）。改它要动落区时机 = 改哈希契约；§225 试过"快照跳过自己"，被那两条既有测试挡回 | §10/§225/CARD_WIKI+INV_CARDS/the_hand_exhausting_cards_do_what_their_pages_say |
+| second_wind | yes | the_hand_exhausting_cards_do_what_their_pages_say | — | wiki:wiki_cards/second_wind.txt | — | §10/§225/CARD_WIKI+INV_CARDS/the_hand_exhausting_cards_do_what_their_pages_say |
 | second_wind+ | yes | — | CARD_DIFF | wiki:wiki_cards/second_wind.txt (via second_wind) | — | INV_CARDS |
 | sentinel | yes | the_keyword_cells_are_in_the_image, every_way_into_the_exhaust_pile_runs_the_exhausted_program …(+2) | — | wiki:wiki_cards/sentinel.txt | wiki 偏差：wiki 没有 Ethereal（旧版有），内容带 `ethereal`。§220 起"被 Exhaust 时给 2(3) 能量"**已经实现**（`LifecyclePrograms[Exhausted]`），所以这条偏差只剩 Ethereal 标签本身。 | §220/CARD_WIKI+INV_CARDS/the_keyword_cells_are_in_the_image |
 | sentinel+ | yes | a_sentinel_that_gets_exhausted_pays_two_energy | — | wiki:wiki_cards/sentinel.txt (via sentinel) | wiki 偏差：wiki 没有 Ethereal（旧版有），内容带 `ethereal`。§220 起"被 Exhaust 时给 2(3) 能量"**已经实现**（`LifecyclePrograms[Exhausted]`），所以这条偏差只剩 Ethereal 标签本身。 | INV_CARDS/a_sentinel_that_gets_exhausted_pays_two_energy |
 | shrug_it_off | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/shrug_it_off.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | shrug_it_off+ | yes | — | CARD_DIFF | wiki:wiki_cards/shrug_it_off.txt (via shrug_it_off) | — | INV_CARDS |
 | slimed | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+2) | — | wiki:wiki_cards/slimed.txt | — | §192/§219/CARD_WIKI+INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+77) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+79) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, smithing_replaces_the_card_with_its_upgraded_row …(+6) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -388,7 +390,7 @@
 | enc_gremlin_leader | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §5.3/§134 |
 | enc_gremlin_nob | yes | an_ascension_health_row_applies_at_its_own_level_and_not_below | — | — | — | §152/an_ascension_health_row_applies_at_its_own_level_and_not_below |
 | enc_hexaghost | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter, hexaghost_plays_the_wikis_seven_move_pattern_after_its_two_openers | — | — | — | §194/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
-| enc_jaw_worm | yes | uppercut_hurts_the_enemy_and_not_the_hero, a_jaw_worm_starts_with_block_and_a17_makes_it_bigger | — | — | — | §5.2/§130/uppercut_hurts_the_enemy_and_not_the_hero |
+| enc_jaw_worm | yes | uppercut_hurts_the_enemy_and_not_the_hero, a_dual_wield_question_reads_the_same_three_numbers_in_the_page_layer …(+1) | — | — | — | §5.2/§130/uppercut_hurts_the_enemy_and_not_the_hero |
 | enc_lagavulin | yes | lagavulin_can_be_fought_for_eight_rounds_including_siphon_soul | — | — | — | §173/lagavulin_can_be_fought_for_eight_rounds_including_siphon_soul |
 | enc_looter | yes | an_ascension_health_row_applies_at_its_own_level_and_not_below, the_looter_mugs_twice_then_bombs_then_escapes | — | — | — | §175/§201/an_ascension_health_row_applies_at_its_own_level_and_not_below |
 | enc_louse | yes | a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action, an_encounter_without_rolls_draws_nothing …(+2) | — | — | — | §130/§152/a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action |

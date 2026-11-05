@@ -1,0 +1,43 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Dual Wield
+| Image       = Red-DualWield.png
+| Color       = Red
+| Type        = Skill
+| Rarity      = Uncommon
+| Cost        = 1
+| Description = Choose an Attack or Power card. Add (a copy;2 copies) of that card into your hand.
+}}
+
+{{C|Dual Wield}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It allows you to select one {{QueryLink|Cards|type:Attack|Attack}} or {{QueryLink|Cards|type:Power|Power}} card in your hand, and add 1 copy (2 copies if upgraded) of that card into your hand.
+
+== Interactions ==
+=== Synergies ===
+* Duplicating any card with "Strike" in its name using {{C|Dual Wield}} will increase the damage of {{C|Perfected Strike}}, as it counts all cards in your deck during combat, not your actual deck.
+
+=== Neutral ===
+* When a card is copied, any changes to that card are also copied. The duration of these changes is initially the same for any copy as for the original. Once created, all copies behave fully independently.
+** A changed energy cost is copied, through something like {{R|Snecko Eye}}, {{C|Madness}} or {{P|Liquid Memories}}, or through the automatic energy change of cards like {{C|Blood for Blood}} and {{C|Masterful Stab}}.
+** Changes to the values of the card are copied, such as upgrades to {{C|Searing Blow}} or increased damage of {{C|Rampage}}.
+
+* If a copy created by {{C|Dual Wield}} exceeds the hand size limit, it gets added to the discard pile.
+
+== Bugs ==
+* While playing {{C|Dual Wield}} on {{C|Ritual Dagger}}, if the '''"Choose a Card"''' prompt opens, the original {{C|Ritual Dagger}} copy is lost, meaning any scaling it does within this combat will not be carried over outside of combat.
+** This can be prevented by making sure it is the only {{QueryLink|Cards|type:Attack|Attack}} or {{QueryLink|Cards|type:Power|Power}} card in hand, and therefore not opening the prompt. In this case, the leftmost {{C|Ritual Dagger}} is the original copy.
+
+* Under the effect of {{C|Master Reality}}, {{C|Dual Wield}} {{KW|Upgrade|Upgrades}} '''all''' cards, even the original card that was copied.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 40|* Card copy effects like Dual Wield should now also copy the "free to play once" effect from cards like Setup and Forethought.}}
+{{Update History Table/row|Weekly 12|* Copying cards from effects like Dual Wield now correctly displays cost as green if modified.}}
+{{Update History Table/row|Weekly 8|* Dual Wield card is now Uncommon (was Common).}}
+{{Update History Table/row|Weekly 3|* Dual Wield now properly works on ONLY Attacks and Powers as worded.}}
+{{Update History Table/row|Weekly 2|* Dual Wield can no longer duplicate skills, stopping the easy infinites.}}
+{{Update History Table/row|Weekly 1|* Dual Wield Card reworked and buffed.}}
+{{Update History Table/row|?|* Added Dual Wield to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

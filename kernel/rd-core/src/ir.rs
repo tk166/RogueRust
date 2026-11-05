@@ -146,6 +146,13 @@ pub enum NodeKind {
     /// 活着的/被打死的敌人身上的钱**不算**丢失（wiki：`Stolen gold is returned if this enemy is
     /// killed`），只有带走的才算。所以"总共偷了多少"不需要另一个字段。
     CarryAwayStolenGold,
+    /// `node.chooseCards` —— **问玩家要哪几张牌，然后复制它们**（§226，本内核自己的节点）。
+    ///
+    /// StS 的 `Dual Wield`（"选一张 Attack 或 Power 牌，造一份/两份副本"）此前**没有载体**：
+    /// `selectCards` 是内核自己按稀有度/顺序挑（不问人，而且它**搬**牌），而 `PendingChoice`
+    /// 只有药水那三条路（运行层发起，`then` 是消耗/弃抽/拿进手牌）。缺的是
+    /// **"玩家的选择" × "复制"** 这个组合。
+    ChooseCards,
     /// `node.selectCards` —— **挑卡并搬卡**（§195.4，本内核自己的节点）。
     ///
     /// 参考的词表里有四个 `sel.*` 卡选择器，`sel.rs` 明确拒绝了它们（"卡选择器 / 玩家选择"），
@@ -187,6 +194,7 @@ impl NodeKind {
             NodeKind::ExtraTurn => "node.extraTurn",
             NodeKind::UpgradeCards => "node.upgradeCards",
             NodeKind::CarryAwayStolenGold => "node.carryAwayStolenGold",
+            NodeKind::ChooseCards => "node.chooseCards",
             NodeKind::SelectCards => "node.selectCards",
             NodeKind::Repeat => "node.repeat",
         }
@@ -195,7 +203,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 23] = [
+        const ALL: [NodeKind; 24] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -221,6 +229,8 @@ impl NodeKind {
             // §201：带着偷来的钱逃走（Looter 的 `Escape`）。
             NodeKind::CarryAwayStolenGold,
             NodeKind::SelectCards,
+            // §226：问玩家要哪几张牌，然后复制（Dual Wield）。
+            NodeKind::ChooseCards,
             NodeKind::Repeat,
         ];
         let mut i = 0;

@@ -2544,9 +2544,28 @@ pub extern "C" fn rd_env_choice_kind() -> i32 {
             // §161.4: "take it into your hand and make it free" (Liquid Memories). A **new number**
             // rather than reusing one, because the page writes the sentence from it.
             ChoiceThen::ToHand => 3,
+            // §226: **copy** what was picked (Dual Wield). Again a new number: "复制" is a different
+            // sentence from "拿进手牌", and the copies are printed-price (no `cost_delta`).
+            ChoiceThen::Copy => 4,
         },
         None => 0,
     }
+}
+
+/// How many copies of each picked card a `Copy` question makes; `0` when it is not a copy
+/// question, `-1` when nothing is pending.
+///
+/// §226: the page has to be able to say "各复制 2 份" -- the number is the **content's** (base row 1,
+/// `+` row 2), so it must travel from the kernel instead of being inferred from the `+`.
+#[no_mangle]
+pub extern "C" fn rd_env_choice_copies() -> i32 {
+    let Ok(session) = ensure_session() else {
+        return -1;
+    };
+    session
+        .state
+        .pending_choice()
+        .map_or(-1, |choice| i32::from(choice.copies))
 }
 
 /// Where the options come from: `1` a pile of cards, `2` three offered card definitions,
@@ -2608,12 +2627,16 @@ pub extern "C" fn rd_env_choice_count() -> i32 {
         return 0;
     };
     // §161.5: an `Offered` question counts **definitions**, not cards in a pile.
-    match choice.source.zone() {
-        Some(zone) => session
-            .state
-            .card_zones(&choice.chooser)
-            .map_or(-1, |zones| zones.count(zone) as i32),
-        None => choice.offered.len() as i32,
+    if choice.source.zone().is_none() {
+        return choice.offered.len() as i32;
+    }
+    // §226: a pile question can be **narrowed** ("an Attack or Power card"), so the count is the
+    // kernel's `choice_legal`, not the pile size. Counting the pile would paint options that
+    // `resolve_choice` then refuses -- and the page's tick indices would be off by the filter.
+    let mut buffer = [rd_core::state::CardInstanceId::EMPTY; rd_core::state::MAX_CARDS_PER_ZONE];
+    match session.state.choice_legal(&mut buffer) {
+        Ok(count) => count as i32,
+        Err(_) => -1,
     }
 }
 
@@ -2718,18 +2741,18 @@ pub extern "C" fn rd_env_choice_confirm() -> i32 {
     let Some(zone) = choice.source.zone() else {
         return refuse_with_text("这个问句的选项不在牌区里");
     };
-    let count = zones.count(zone);
-    // Same enumeration the picker used (`rd_env_pile_len(3)`), and a loud cross-check that the slot
-    // table and the card pool still line up. A silent `zip` over two lists of different lengths
-    // would resolve a *different* question than the one that was asked.
-    let ids: Vec<rd_core::state::CardInstanceId> = session
-        .state
-        .zone_cards(&choice.chooser, zone)
-        .map(|card| card.id)
-        .collect();
-    if ids.len() != count {
-        return refuse_with_text("牌的槽位表与卡池不一致：选牌清单不完整");
+    // §226: **the same list the picker showed** -- `choice_legal`, not the pile. A narrowed
+    // question (Dual Wield) has fewer legal cards than the pile has, and indexing into the pile
+    // would resolve a different question than the one that was asked.
+    let mut legal = [rd_core::state::CardInstanceId::EMPTY; rd_core::state::MAX_CARDS_PER_ZONE];
+    let legal_count = match session.state.choice_legal(&mut legal) {
+        Ok(count) => count,
+        Err(_) => return refuse_with_text("这个问句的选项读不出来"),
+    };
+    if legal_count == 0 {
+        return refuse_with_text("这个问句没有合法选项");
     }
+    let ids: Vec<rd_core::state::CardInstanceId> = legal[..legal_count].to_vec();
     let mut picks: Vec<rd_core::state::CardInstanceId> = Vec::with_capacity(session.choice_picks.len());
     let mut wanted = session.choice_picks.clone();
     wanted.sort_unstable();
@@ -2798,6 +2821,21 @@ fn pile_card_id(zone: i32, index: i32) -> Option<std::string::String> {
                 .get(index as usize)
                 .map(|definition| definition.as_str().to_string());
         }
+        // §226: a pile question can be **narrowed**, so option `index` is the `index`-th element of
+        // `choice_legal` -- **not** the `index`-th card of the pile. Reading the pile here is how
+        // the picker would show card A while the kernel's count/answer meant card B.
+        let choice = session.state.pending_choice()?;
+        let mut legal = [rd_core::state::CardInstanceId::EMPTY; rd_core::state::MAX_CARDS_PER_ZONE];
+        let count = session.state.choice_legal(&mut legal).ok()?;
+        if index as usize >= count {
+            return None;
+        }
+        let id = legal[index as usize];
+        let slot = session.state.find_card(&choice.chooser, &id)?.1;
+        return session
+            .state
+            .card(slot)
+            .map(|card| card.definition_id.as_str().to_string());
     }
     let zone = pile_zone(session, zone)?;
     let hero = session.hero_id()?;
@@ -5384,6 +5422,102 @@ mod card_text_tests {
             2,
             "a DoT tick must not consume a Flying stack (damage.isAttack)"
         );
+        take_session();
+    }
+
+    /// §226：`Dual Wield` 在 **run/页面层**的那三个数：`kind = 4`、`copies = 1`、`count = 收窄后`。
+    ///
+    /// 这条判据存在的理由很具体：`rd_env_choice_count` / `rd_env_choice_confirm` /
+    /// `pile_card_id(3, i)` 原来各读一次**牌区**。收窄过的问句里合法选项比牌区少，三处只要有一处
+    /// 忘了改，页面就会画出内核随后要拒绝的那一项 —— 而"点了没反应"正是最难从日志里认出来的形态。
+    #[test]
+    fn a_dual_wield_question_reads_the_same_three_numbers_in_the_page_layer() {
+        let session = build_session_at(7, "enc_jaw_worm", 200, None, 0, 0)
+            .expect("the jaw worm fight builds");
+        install_session(session);
+        let hero = cid_in("hero");
+        // 手牌：一张攻击（唯一合法答案）+ 一张技能（必须被过滤掉）+ 那张牌自己。
+        let mut hand_index = None;
+        {
+            let session = slot().as_mut().expect("session");
+            for (index, definition) in ["strike", "defend", "dual_wield"].iter().enumerate() {
+                let definition = rd_core::state::CardDefinitionId::new(definition)
+                    .expect("short definition id");
+                session
+                    .state
+                    .create_card_instance(&hero, definition, rd_core::state::CardZone::Hand)
+                    .expect("the hand has room");
+                let _ = index;
+            }
+            session.reobserve();
+            // §161.4: the step names a **hand position**, so find the position of `dual_wield`.
+            hand_index = session.hand_zone().and_then(|zones| {
+                (0..zones.count(rd_core::state::CardZone::Hand)).find(|index| {
+                    zones
+                        .slot_at(rd_core::state::CardZone::Hand, *index)
+                        .and_then(|slot| session.state.card(slot))
+                        .is_some_and(|card| card.definition_id.as_str() == "dual_wield")
+                })
+            });
+        }
+        let hand_index = hand_index.expect("dual wield is in the hand");
+        let verdict = rd_env_step(i32::try_from(hand_index).unwrap());
+        assert_ne!(verdict, -3, "the play was refused: {}", session_error());
+        assert_eq!(rd_env_choice_pending(), 1, "playing it asks a question");
+        assert_eq!(rd_env_choice_kind(), 4, "4 = copy (the page writes the sentence from this)");
+        assert_eq!(rd_env_choice_copies(), 1, "the printed card makes one copy");
+        // ③ 收窄是**属性**，不是一个数字：手里本来就有起手牌，所以数"有几张"会把这条判据变
+        //    "照抄一遍过滤逻辑"。这里问的是：每一项都是 Attack/Power 吗？那张**技能**牌在不在？
+        let count = rd_env_choice_count();
+        assert!(count >= 1, "there is at least one Attack in hand, got {count}");
+        let mut options = Vec::new();
+        for index in 0..count {
+            options.push(pile_card_id(3, index).expect("every option is readable"));
+        }
+        // 起手牌组里带 Attack 标签的只有 `strike` / `bash`；技能牌一张都不许进选项。
+        for option in &options {
+            assert!(
+                option == "strike" || option == "bash",
+                "an option is not an Attack: {options:?}"
+            );
+        }
+        assert!(
+            !options.iter().any(|id| id == "defend"),
+            "the Skill we injected must not be an option: {options:?}"
+        );
+        assert!(
+            !options.iter().any(|id| id == "dual_wield"),
+            "the card being played must not be its own option: {options:?}"
+        );
+        // ④ 回答：挑出来的那一张的**同名牌**多一张（起手牌里本来就有同名副本，所以比的是增量）。
+        let picked = options[0].clone();
+        let count_in_hand = |definition: &str| -> usize {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .zone_cards(&hero, rd_core::state::CardZone::Hand)
+                .filter(|card| card.definition_id.as_str() == definition)
+                .count()
+        };
+        let before_copies = count_in_hand(&picked);
+        assert_eq!(rd_env_choice_pick(0, 1), 0);
+        assert_eq!(rd_env_choice_confirm(), 0, "{}", session_error());
+        assert_eq!(rd_env_choice_pending(), 0, "the question is answered");
+        assert_eq!(
+            count_in_hand(&picked),
+            before_copies + 1,
+            "one copy of `{picked}` landed in the hand"
+        );
+        let hand: Vec<String> = {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .zone_cards(&hero, rd_core::state::CardZone::Hand)
+                .map(|card| card.definition_id.as_str().to_string())
+                .collect()
+        };
+        assert!(hand.iter().any(|id| id == "defend"), "{hand:?}");
+        assert!(!hand.iter().any(|id| id == "dual_wield"), "{hand:?}");
         take_session();
     }
 

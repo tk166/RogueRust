@@ -124,6 +124,15 @@ INV_CARDS = {
                      "Facts": [("each", "Hand", (("move", "cardInstance.iterated", "ExhaustPile"),
                                                  ("block", 7, "source")))],
                      "PlayedCardDestinationZone": "ExhaustPile"},
+    # ---- §226：复制载体（Dual Wield） ----------------------------------------------------------
+    # 落区是 **DiscardPile**：`native/wiki_cards/dual_wield.txt` 的 Infobox 里没有 Exhaust，
+    # 正文也只说 "add 1 copy (2 copies if upgraded) of that card into your hand"。
+    "dual_wield": {"Cost": 1, "Tags": ["skill"],
+                   "Facts": [("chooseCopy", "source", "Hand", ("attack", "power"), 1, 1, 1)],
+                   "PlayedCardDestinationZone": "DiscardPile"},
+    "dual_wield+": {"Cost": 1, "Tags": ["skill"],
+                    "Facts": [("chooseCopy", "source", "Hand", ("attack", "power"), 1, 1, 2)],
+                    "PlayedCardDestinationZone": "DiscardPile"},
     "fiend_fire": {"Cost": 2, "Tags": ["attack"],
                    "Facts": [("each", "Hand", (("move", "cardInstance.iterated", "ExhaustPile"),
                                                ("damage", 7, "event")))],
@@ -1173,6 +1182,13 @@ def program_facts(root):
                           body.get("FallbackZone"), body["Order"],
                           # `Count` is a plain int field on this node (not an expression).
                           body["Count"], body["ToZone"]))
+        elif kind == "node.chooseCards":
+            # §226: "ask the player which cards, then copy them" as one fact. **Every** field that
+            # decides the question is part of it -- "an Attack or Power" vs "any card" is exactly
+            # the difference between Dual Wield and a card that does not exist yet.
+            out.append(("chooseCopy", tgt(body["OwnerSelector"]), body["FromZone"],
+                          tuple(body.get("RequireAnyTag") or ()),
+                          body["Min"], body["Max"], body["Copies"]))
         elif kind == "node.repeat":
             # §146: the body runs an unknown-at-authoring number of times, so its facts are tagged
             # by **the count expression** rather than unrolled. That keeps the inventory honest

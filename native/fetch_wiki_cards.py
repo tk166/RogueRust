@@ -71,6 +71,8 @@ PAGES = {
     # §225
     'second_wind': 'Second_Wind',
     'fiend_fire': 'Fiend_Fire',
+    # §226：复制载体（Dual Wield）
+    'dual_wield': 'Dual_Wield',
     # §221：事件给的两张诅咒
     'doubt': 'Doubt',
     'writhe': 'Writhe',
