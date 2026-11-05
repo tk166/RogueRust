@@ -146,6 +146,12 @@ FACTS = {
                    ('status', 'standard.nightmare_pending', 1, 'source')],
                   [('choose', 'source', 'Hand', (), 1, 1, 'Copy', 'SetAsidePile', 3),
                    ('status', 'standard.nightmare_pending', 1, 'source')]),
+    # §228：`Deal 3 damage to a random enemy (3;4) times.` —— 升级改次数。
+    'sword_boomerang': ([('damageRandom', 3, 'allEnemies', 3)],
+                        [('damageRandom', 3, 'allEnemies', 4)]),
+    # §228：`Deal damage equal to your Block.` —— `+` 只降费。
+    'body_slam': ([('damage', ('pool', 'standard.block', 'source'), 'event')],
+                  [('damage', ('pool', 'standard.block', 'source'), 'event')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

@@ -8713,6 +8713,234 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "sword_boomerang",
+      "PackageId": "sts",
+      "NameKey": "Sword Boomerang",
+      "DescriptionKey": "Deal 3 damage to a random enemy 3 times.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamageToRandomTarget",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.allEnemies",
+              "value": {
+                "Cardinality": "Many",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "Times": 3,
+            "IgnoresBlock": false,
+            "Element": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "sword_boomerang+",
+      "PackageId": "sts",
+      "NameKey": "Sword Boomerang+",
+      "DescriptionKey": "Deal 3 damage to a random enemy 4 times.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamageToRandomTarget",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.allEnemies",
+              "value": {
+                "Cardinality": "Many",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "Times": 4,
+            "IgnoresBlock": false,
+            "Element": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "body_slam",
+      "PackageId": "sts",
+      "NameKey": "Body Slam",
+      "DescriptionKey": "Deal damage equal to your Block.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "combatantDefensivePool",
+              "value": {
+                "Selector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "PoolId": {
+                  "value": "standard.block"
+                }
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "body_slam+",
+      "PackageId": "sts",
+      "NameKey": "Body Slam+",
+      "DescriptionKey": "Deal damage equal to your Block.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "combatantDefensivePool",
+              "value": {
+                "Selector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "PoolId": {
+                  "value": "standard.block"
+                }
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
     }
   ],
   "EnemyActions": [

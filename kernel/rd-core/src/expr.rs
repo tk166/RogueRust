@@ -350,6 +350,10 @@ const INT_KINDS: &[&str] = &[
     "combatantStacksByPolarity",
     "combatantCounter",
     "combatantCurrentResource",
+    // §228：某个战斗员某个**防御池**的当前值（"等于你的格挡"）。本内核自己的 kind —— 名字与
+    // 字段（`Selector` / `PoolId`）照 `combatantCurrentResource` 的形状，理由同 `currentHealth`：
+    // 镜像里没有这条 op，定义权在我们（`docs/spec/sts-act1-plan.md` §9-4）。
+    "combatantDefensivePool",
     "combatantCoord",
     "gridDistance",
     "roundNumber",
@@ -498,6 +502,25 @@ pub fn eval_int<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, Exp
         }
 
         // `CombatantCurrentResourceExpression`（`:890-897`）：`TryGetValue(ResourceId) ⇒ Current : 0`。
+        // §228: `DefensivePool.Current` for the named pool of one combatant. Missing pool ⇒ `0`
+        // (same rule as `combatantCurrentResource`: a pool that was never written reads as empty,
+        // not as an error -- "no block" is the normal state).
+        "combatantDefensivePool" => {
+            let key = node.str_field("PoolId")?.ok_or(IrError::Missing("PoolId"))?;
+            let Some(target) = read_single_target(node, ctx)? else {
+                return Ok(0);
+            };
+            let Some(combatant) = ctx.state.combatant(&target) else {
+                return Ok(0);
+            };
+            for pool in combatant.defensive_pools() {
+                if pool.key.as_str() == key {
+                    return Ok(pool.pool.current);
+                }
+            }
+            Ok(0)
+        }
+
         "combatantCurrentResource" => {
             let key = node.str_field("ResourceId")?.ok_or(IrError::Missing("ResourceId"))?;
             let Some(target) = read_single_target(node, ctx)? else {

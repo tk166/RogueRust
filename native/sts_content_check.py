@@ -156,6 +156,16 @@ INV_CARDS = {
                 "Facts": [("draw", 2, "source"),
                           ("choose", "source", "Hand", (), 1, 1, "ToDrawPileTop")],
                 "PlayedCardDestinationZone": "ExhaustPile"},
+    # ---- §228：随机目标 / 按格挡打伤害 -------------------------------------------------------
+    # 升级改的是**次数**（wiki: "(3;4) times"），不是伤害 —— 所以两行只差最后一个字段。
+    "sword_boomerang": {"Cost": 1, "Tags": ["attack"],
+                        "Facts": [("damageRandom", 3, "allEnemies", 3)]},
+    "sword_boomerang+": {"Cost": 1, "Tags": ["attack"],
+                         "Facts": [("damageRandom", 3, "allEnemies", 4)]},
+    "body_slam": {"Cost": 1, "Tags": ["attack"],
+                  "Facts": [("damage", ("pool", "standard.block", "source"), "event")]},
+    "body_slam+": {"Cost": 0, "Tags": ["attack"],
+                   "Facts": [("damage", ("pool", "standard.block", "source"), "event")]},
     "nightmare": {"Cost": 3, "Tags": ["skill"],
                   "Facts": [("choose", "source", "Hand", (), 1, 1, "Copy", "SetAsidePile", 3),
                             ("status", "standard.nightmare_pending", 1, "source")],
@@ -1102,6 +1112,10 @@ def tgt(selector):
 def amount(expr):
     if expr.get("kind") == "const":
         return expr["value"]["Value"]
+    if expr.get("kind") == "combatantDefensivePool":
+        # §228: a size that is a **defensive pool** ("equal to your Block"). Spelled with the pool key
+        # *and* the selector, so "your Block" and "their Block" cannot compare equal.
+        return ("pool", expr["value"]["PoolId"]["value"], tgt(expr["value"]["Selector"]))
     if expr.get("kind") == "combatantCounter":
         # §193: a damage/gain whose size is a **counter**. Spelled with its key *and* the selector,
         # so "the wrong unit's counter" is a visible fact and not an interchangeable number.
@@ -1145,6 +1159,11 @@ def program_facts(root):
             out.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.heal":
             out.append(("heal", amount(body["Amount"]), tgt(body["TargetSelector"])))
+        elif kind == "node.dealDamageToRandomTarget":
+            # §228: "each hit re-rolls a target" as a fact -- the **count** and the pool are part of
+            # it, because "3 hits to random enemies" and "3 hits to all enemies" differ only here.
+            out.append(("damageRandom", amount(body["Amount"]), tgt(body["TargetSelector"]),
+                        body["Times"]))
         elif kind == "node.gainBlock":
             out.append(("block", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.applyStatus":

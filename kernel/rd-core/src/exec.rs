@@ -1634,6 +1634,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::SelectCards
         // §226：`chooseCards`（问玩家 + 复制）。同上，只有字段没有孩子。
         | NodeKind::ChooseCards
+        // §228：`dealDamageToRandomTarget`（抽签 + 打伤害）。同上。
+        | NodeKind::DealDamageToRandomTarget
         // §195.7：`upgradeCards`（改定义 id），同上。
         | NodeKind::UpgradeCards
         // §146：`repeat`（X 费牌的"跑 X 遍"）。它有孩子，但预检只走一遍 Body ——
@@ -1798,6 +1800,9 @@ fn dispatch_node(
         NodeKind::MoveCardToZone => move_card_to_zone_node(node, ctx, frame, slot, stats),
         NodeKind::SelectCards => select_cards_node(node, ctx, frame, slot, stats),
         NodeKind::ChooseCards => choose_cards_node(node, ctx, frame, slot, stats),
+        NodeKind::DealDamageToRandomTarget => {
+            deal_damage_to_random_target_node(node, ctx, frame, slot, stats)
+        }
         NodeKind::UpgradeCards => upgrade_cards_node(node, ctx, frame, slot, stats),
     };
     outcome?;
@@ -2169,6 +2174,13 @@ fn dispatch_conditional(
 /// 的卡根本进不了排序。候选上限（容器容量）与 `Count`（搬几张）是**两个**数。
 pub const MAX_CARD_CANDIDATES: usize = crate::state::MAX_CARDS_PER_ZONE;
 
+/// §228：`node.dealDamageToRandomTarget` 的 `Times` 上限。
+///
+/// 24 是 `MAX_COMBATANTS` 的两倍，也是"一次出牌最多几条伤害请求"的量级上界（§225 的整手牌消耗
+/// 也是这个数量级）。再往上不是"更强的牌"，而是把效果队列（`MAX_PENDING_EFFECTS`）当无限用 ——
+/// 那条线会在运行期以 `Capacity` 响亮失败，但**内容层就该先说不像话**。
+pub const MAX_RANDOM_HITS: usize = 24;
+
 /// §226：`node.chooseCards` 一次最多造几份副本（`Copies` 的上限）。
 ///
 /// 取 4 而不是 99：StS 里复制牌的牌最多要 3 份（`Nightmare`），4 留一格；而"一次造几十份"
@@ -2205,6 +2217,66 @@ fn deal_damage_node(
         ctx.state.enqueue_effect_with_owner(
             EffectRequest::DealDamage {
                 target: Some(*target),
+                amount,
+                ignores_block,
+                source,
+            },
+            Some(frame),
+        )?;
+        stats.effects = stats.effects.saturating_add(1);
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
+/// §228：`node.dealDamageToRandomTarget` 的实体 —— `Times` 次命中，**每次**从候选池里重掷一个目标。
+///
+/// 三条语义（都能单独坏掉，所以各有一条判据）：
+/// * **每一击各自抽签**：不是"抽一次、打 N 下"。抽签用
+///   [`crate::rng::shuffled_pick_index`]（与洗牌同一个生成器），并且**每一击推进一格
+///   `random_step`** —— 与 `shuffle_candidates` 同一本账，否则两次同种抽签会给出同一个结果；
+/// * 候选池是**派发那一刻**解析出来的（`TargetSelector`），所以这一击抽到谁就是谁，中途死掉的目标
+///   不会再被抽到（`resolve_effect` 对已离场目标是 no-op，见 §178）；
+/// * 池子是空的 ⇒ **一击都没有**（不是错误）：一条对所有活敌的抽签，在没有活敌时本来就没有答案。
+fn deal_damage_to_random_target_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    // 求值顺序与 `dealDamage` 一致：先 `Amount`，再解析目标。
+    let amount = eval_amount(node, "Amount", ctx)?;
+    let ignores_block = node.bool_field("IgnoresBlock")?.unwrap_or(false);
+    let times = node.int_field("Times")?.ok_or(IrError::Missing("Times"))?;
+    if !(1..=MAX_RANDOM_HITS as i32).contains(&times) {
+        return Err(ExecError::Ir(IrError::Missing("Times")));
+    }
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    let source = ctx.source;
+
+    let mut pool = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut pool)?;
+    if count == 0 {
+        return resume_later(ctx.state, frame, slot);
+    }
+
+    for _ in 0..times {
+        let picked = crate::rng::shuffled_pick_index(
+            count,
+            ctx.state.random_seed,
+            ctx.state.random_step,
+        );
+        // 一格 `random_step` 一次抽签（`shuffle_candidates` 同一条账）。
+        ctx.state.random_step = ctx.state.random_step.saturating_add(1);
+        let Some(target) = pool.get(picked).copied() else {
+            // `shuffled_pick_index` 的返回值必在 `[0, count)`；走到这里说明那个不变量破了。
+            return Err(ExecError::Ir(IrError::List));
+        };
+        ctx.state.enqueue_effect_with_owner(
+            EffectRequest::DealDamage {
+                target: Some(target),
                 amount,
                 ignores_block,
                 source,

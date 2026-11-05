@@ -1,0 +1,34 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Body Slam
+| Image         = Red-BodySlam.png
+| Color         = Red
+| Type          = Attack
+| Rarity        = Common
+| Cost          = 1
+| CostPlus      = 0
+| Description   = Deal damage equal to your {{KW|Block}}.
+| InteractsWith = Block
+}}
+{{Keyword Infobox|Block}}
+{{C|Body Slam}} is a 1 (0 if upgraded) {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals damage equal to your current amount of {{KW|Block}}.
+
+== Interactions ==
+=== Order ===
+* If playing this card triggers {{R|Ornamental Fan}}, it will deal damage before gaining the additional {{KW|Block}}, meaning it will not contribute to that damage.
+
+=== Synergies ===
+* Synergizes with ways to build up block, such as {{C|Barricade}} or {{C|Blur}} to maintain it and {{C|Entrench}} to scale it.
+* If using {{R|Snecko Eye}} and upgraded with {{C|Armaments}} during combat, it's cost always turns to 0.
+
+=== Neutral ===
+* Regardless of dealing base damage equal to {{KW|Block}}, it still deals attack damage, and therefore also scales with {{BD|Strength}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Body Slam to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+{{IroncladNav}}
+
+[[Category:Cards]]

@@ -77,6 +77,9 @@ PAGES = {
     'armaments': 'Armaments',
     'warcry': 'Warcry',
     'nightmare': 'Nightmare',
+    # §228：随机目标（Sword Boomerang）与"按格挡打伤害"（Body Slam）
+    'sword_boomerang': 'Sword_Boomerang',
+    'body_slam': 'Body_Slam',
     # §221：事件给的两张诅咒
     'doubt': 'Doubt',
     'writhe': 'Writhe',

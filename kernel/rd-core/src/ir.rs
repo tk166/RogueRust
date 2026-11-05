@@ -146,6 +146,15 @@ pub enum NodeKind {
     /// 活着的/被打死的敌人身上的钱**不算**丢失（wiki：`Stolen gold is returned if this enemy is
     /// killed`），只有带走的才算。所以"总共偷了多少"不需要另一个字段。
     CarryAwayStolenGold,
+    /// `node.dealDamageToRandomTarget` —— **每次命中从候选池里随机挑一个目标**（§228）。
+    ///
+    /// StS 的 `Sword Boomerang` 是 "Deal 3 damage to a random enemy 3 (4) times"：不是"打所有敌人"，
+    /// 也不是"打同一个敌人"，而是**每一击各自重掷**。`TargetSelector` 给出的是**候选池**
+    /// （内容写 `sel.allEnemies`），抽签在节点里做。
+    ///
+    /// 为什么不是"随机选择器"：选择器解析拿的是 `&CombatState`（只读），而随机要推进
+    /// `random_step`（与洗牌/掷骰同一条账）—— 只有拿 `&mut ExecContext` 的节点能同时做这两件事。
+    DealDamageToRandomTarget,
     /// `node.chooseCards` —— **问玩家要哪几张牌，然后复制它们**（§226，本内核自己的节点）。
     ///
     /// StS 的 `Dual Wield`（"选一张 Attack 或 Power 牌，造一份/两份副本"）此前**没有载体**：
@@ -194,6 +203,7 @@ impl NodeKind {
             NodeKind::ExtraTurn => "node.extraTurn",
             NodeKind::UpgradeCards => "node.upgradeCards",
             NodeKind::CarryAwayStolenGold => "node.carryAwayStolenGold",
+            NodeKind::DealDamageToRandomTarget => "node.dealDamageToRandomTarget",
             NodeKind::ChooseCards => "node.chooseCards",
             NodeKind::SelectCards => "node.selectCards",
             NodeKind::Repeat => "node.repeat",
@@ -203,7 +213,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 24] = [
+        const ALL: [NodeKind; 25] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -231,6 +241,8 @@ impl NodeKind {
             NodeKind::SelectCards,
             // §226：问玩家要哪几张牌，然后复制（Dual Wield）。
             NodeKind::ChooseCards,
+            // §228：每次命中随机挑一个目标（Sword Boomerang）。
+            NodeKind::DealDamageToRandomTarget,
             NodeKind::Repeat,
         ];
         let mut i = 0;
