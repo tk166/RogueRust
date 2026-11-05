@@ -1,0 +1,46 @@
+{{Card Infobox
+| Name          = Limit Break
+| Image         = Red-LimitBreak.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Rare
+| Cost          = 1
+| Description   = Double your {{BD|Strength}}.(<br>{{KW|Exhaust}}.;)
+| GivesToPlayer = Strength, Exhaust
+| InteractsWith = Strength
+}}
+{{Power Infobox|Strength}} {{Keyword Infobox|Exhaust}}
+{{C|Limit Break}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Skill|Skill}} Card. It doubles the amount of {{BD|Strength}} you have. {{C|Limit Break}} will then {{KW|Exhaust}} itself, if it is not upgraded.
+
+== Interactions ==
+=== Synergies ===
+* Depends on {{BD|Strength}}, meaning it synergizes with sources of it:
+==== Cards ====
+* {{C|Inflame}}, {{C|Rupture}}, {{C|Spot Weakness}}, {{C|Demon Form}}.
+* {{C|Flex}} gives temporary {{BD|Strength}}, but doubling it will effectively allow you to keep the original amount permanently.
+* {{C|J.A.X.}}.
+* {{C|Reprogram}}.
+* {{C|Fasting}}, {{C|Wish}}.
+
+==== Relics ====
+* {{R|Brimstone}}, {{R|Du-Vu Doll}}, {{R|Girya}},  {{R|Red Skull}}, {{R|Shuriken}}, {{R|Sling of Courage}}, {{R|Vajra}}. 
+* {{R|Mutagenic Strength}} gives temporary {{BD|Strength}}, but doubling it will effectively allow you to keep the original amount permanently.
+==== c) Potions ====
+* {{P|Strength Potion}}, {{P|Cultist Potion}}.
+* {{P|Flex Potion}} gives temporary {{BD|Strength}}, but doubling it will effectively allow you to keep the original amount permanently.
+
+=== Neutral ===
+* {{C|Limit Break}} will have no effect if you have 0 {{BD|Strength}} when played, but will still {{KW|Exhaust}} if not {{KW|Upgrade|Upgraded}}.
+
+=== Anti-Synergies ===
+* This card also doubles negative {{BD|Strength}}. 
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 36|* Limit Break card now also doubles negative strength.}}
+{{Update History Table/row|Weekly 5|* Keywords for cards now cleared on upgrade (Limit break was showing exhaust tooltip post upgrade).}}
+{{Update History Table/row|?|* Added Limit Break to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

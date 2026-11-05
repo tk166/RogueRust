@@ -146,6 +146,15 @@ pub enum NodeKind {
     /// 活着的/被打死的敌人身上的钱**不算**丢失（wiki：`Stolen gold is returned if this enemy is
     /// killed`），只有带走的才算。所以"总共偷了多少"不需要另一个字段。
     CarryAwayStolenGold,
+    /// `node.dealDamageWithTagBonus` —— **基础伤害 + 每张带某个 tag 的牌一份加成**（§230）。
+    ///
+    /// `Perfected Strike`：`Deal 6 damage. Deals (2;3) additional damage for ALL your cards containing
+    /// "Strike".`（wiki 正文：**in your deck when this card is played**）
+    /// ⇒ `Amount + Bonus × (手牌 + 抽牌堆 + 弃牌堆里带该 tag 的牌数)`。
+    ///
+    /// 为什么不是表达式：查 tag 要读**内容**，而 `ExprContext` 只拿 `&CombatState`；"整片牌区里有几张"
+    /// 是节点层已经在做的事（`forEachCardInZone` 的 `TagFilter` 就在这一层读内容）。
+    DealDamageWithTagBonus,
     /// `node.addCardCounter` —— 给**一份副本**的 mark counter 加一个增量（§229，`Rampage`）。
     ///
     /// 参考引擎里 `Rampage` 涨的是 `CardInstance.misc` 这类**每副本**数据；本内核里每副本数据的
@@ -209,6 +218,7 @@ impl NodeKind {
             NodeKind::ExtraTurn => "node.extraTurn",
             NodeKind::UpgradeCards => "node.upgradeCards",
             NodeKind::CarryAwayStolenGold => "node.carryAwayStolenGold",
+            NodeKind::DealDamageWithTagBonus => "node.dealDamageWithTagBonus",
             NodeKind::AddCardCounter => "node.addCardCounter",
             NodeKind::DealDamageToRandomTarget => "node.dealDamageToRandomTarget",
             NodeKind::ChooseCards => "node.chooseCards",
@@ -220,7 +230,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 26] = [
+        const ALL: [NodeKind; 27] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -252,6 +262,8 @@ impl NodeKind {
             NodeKind::DealDamageToRandomTarget,
             // §229：给这份副本加一个计数器（Rampage）。
             NodeKind::AddCardCounter,
+            // §230：按"带某个 tag 的牌数"加伤的伤害（Perfected Strike）。
+            NodeKind::DealDamageWithTagBonus,
             NodeKind::Repeat,
         ];
         let mut i = 0;

@@ -1639,6 +1639,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::DealDamageToRandomTarget
         // §229：`addCardCounter`（给这份副本加计数器）。同上。
         | NodeKind::AddCardCounter
+        // §230：`dealDamageWithTagBonus`（数牌 + 打伤害）。同上。
+        | NodeKind::DealDamageWithTagBonus
         // §195.7：`upgradeCards`（改定义 id），同上。
         | NodeKind::UpgradeCards
         // §146：`repeat`（X 费牌的"跑 X 遍"）。它有孩子，但预检只走一遍 Body ——
@@ -1804,6 +1806,9 @@ fn dispatch_node(
         NodeKind::SelectCards => select_cards_node(node, ctx, frame, slot, stats),
         NodeKind::ChooseCards => choose_cards_node(node, ctx, frame, slot, stats),
         NodeKind::AddCardCounter => add_card_counter_node(node, ctx, frame, slot, stats),
+        NodeKind::DealDamageWithTagBonus => {
+            deal_damage_with_tag_bonus_node(node, ctx, frame, slot, stats)
+        }
         NodeKind::DealDamageToRandomTarget => {
             deal_damage_to_random_target_node(node, ctx, frame, slot, stats)
         }
@@ -2217,6 +2222,72 @@ fn deal_damage_node(
 
     let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
     let count = resolve_targets(selector, ctx, &mut targets)?;
+    for target in targets.iter().take(count) {
+        ctx.state.enqueue_effect_with_owner(
+            EffectRequest::DealDamage {
+                target: Some(*target),
+                amount,
+                ignores_block,
+                source,
+            },
+            Some(frame),
+        )?;
+        stats.effects = stats.effects.saturating_add(1);
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
+/// §230：`node.dealDamageWithTagBonus` 的实体 —— `Amount + Bonus × 带该 tag 的牌数`。
+///
+/// 数牌的范围是**手牌 + 抽牌堆 + 弃牌堆**，正好是 wiki 正文说的 "your deck when this card is played"
+/// （消耗/放逐/暂存里的牌不再是"你的牌组"）。正在结算的那张牌**仍在手牌里**（参考的落区在
+/// `onTerminal`，§225），所以它自己也数进去 —— 与 wiki 的 "increases not only the damage of other
+/// copies, but also of itself" 一致，不需要为它开特例。
+///
+/// 没有内容 ⇒ **响亮失败**（`Missing("content")`）：没有内容就查不了 tag，而"数到 0 张"会让这张牌
+/// 安静地只打基础伤害 —— 那正是"工具报成功、被测对象在失败"的形状。
+fn deal_damage_with_tag_bonus_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let base = eval_amount(node, "Amount", ctx)?;
+    let bonus = eval_amount(node, "Bonus", ctx)?;
+    let tag = node.str_field("Tag")?.ok_or(IrError::Missing("Tag"))?;
+    let ignores_block = node.bool_field("IgnoresBlock")?.unwrap_or(false);
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    let source = ctx.source;
+
+    let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut targets)?;
+    if count == 0 {
+        return resume_later(ctx.state, frame, slot);
+    }
+    let Some(content) = ctx.content else {
+        return Err(ExecError::Ir(IrError::Missing("content")));
+    };
+    // ⚠️ **"谁的牌"与"打谁"是两个槽**（这条第一版写错了：拿 `TargetSelector` 解出来的敌人去数手牌，
+    // 结果永远 0 张，牌只打基础伤害 —— 而"只打基础伤害"看起来完全正常）。数的是**出牌者**的牌堆。
+    let Some(owner) = ctx.source else {
+        return resume_later(ctx.state, frame, slot);
+    };
+
+    let mut tagged = 0i32;
+    for zone in [CardZone::Hand, CardZone::DrawPile, CardZone::DiscardPile] {
+        for card in ctx.state.zone_cards(&owner, zone) {
+            if content
+                .card_has_tag(card.definition_id.as_str(), tag)
+                .unwrap_or(false)
+            {
+                tagged = tagged.saturating_add(1);
+            }
+        }
+    }
+    let amount = base.saturating_add(bonus.saturating_mul(tagged));
     for target in targets.iter().take(count) {
         ctx.state.enqueue_effect_with_owner(
             EffectRequest::DealDamage {

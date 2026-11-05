@@ -156,6 +156,29 @@ INV_CARDS = {
                 "Facts": [("draw", 2, "source"),
                           ("choose", "source", "Hand", (), 1, 1, "ToDrawPileTop")],
                 "PlayedCardDestinationZone": "ExhaustPile"},
+    # ---- §230：临时力量 / 力量翻倍 / 按 tag 数牌加伤 ------------------------------------------
+    # `Flex`：加 2(4) 层力量，**同时**挂 2(4) 层 `standard.lose_strength`（回合末扣掉并自摘）。
+    "flex": {"Cost": 0, "Tags": ["skill"],
+             "Facts": [("status", "standard.strength", 2, "source"),
+                       ("status", "standard.lose_strength", 2, "source")]},
+    "flex+": {"Cost": 0, "Tags": ["skill"],
+              "Facts": [("status", "standard.strength", 4, "source"),
+                        ("status", "standard.lose_strength", 4, "source")]},
+    # `Limit Break`：增量 = 当前层数 ⇒ 翻倍。基础版**自消耗**，`+` 版不消耗（wiki 的括号是
+    # 「基础;升级」：`Double your Strength.(<br>Exhaust.;)`）。
+    "limit_break": {"Cost": 1, "Tags": ["skill"],
+                    "Facts": [("modify", "standard.strength", ("expr", "combatantStatusStacks"),
+                               "source")],
+                    "PlayedCardDestinationZone": "ExhaustPile"},
+    "limit_break+": {"Cost": 1, "Tags": ["skill"],
+                     "Facts": [("modify", "standard.strength", ("expr", "combatantStatusStacks"),
+                                "source")],
+                     "PlayedCardDestinationZone": "DiscardPile"},
+    # `Perfected Strike`：6 + 2(3) × 手牌+抽牌堆+弃牌堆里带 `strike` tag 的牌数。
+    "perfected_strike": {"Cost": 2, "Tags": ["attack", "strike"],
+                         "Facts": [("damagePerTag", 6, 2, "strike", "event")]},
+    "perfected_strike+": {"Cost": 2, "Tags": ["attack", "strike"],
+                          "Facts": [("damagePerTag", 6, 3, "strike", "event")]},
     # ---- §229：可无限升级（内容把行写够） ---------------------------------------------------
     # 八行 = 基础 + 7 次升级（12/16/20/…/40）。`+` 能叠几次**由行数决定**，内核不认识这张牌。
     "searing_blow": {"Cost": 2, "Tags": ["attack"],
@@ -1212,6 +1235,11 @@ def program_facts(root):
             out.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.heal":
             out.append(("heal", amount(body["Amount"]), tgt(body["TargetSelector"])))
+        elif kind == "node.dealDamageWithTagBonus":
+            # §230: "6 damage, +2 per card with this tag" as one fact. The tag and the per-card bonus
+            # are both part of it -- that is the whole identity of Perfected Strike.
+            out.append(("damagePerTag", amount(body["Amount"]), amount(body["Bonus"]),
+                        body["Tag"], tgt(body["TargetSelector"])))
         elif kind == "node.addCardCounter":
             # §229: "this card remembers something about itself" as a fact. The counter's **name** and
             # the delta are both part of it -- two cards that raise different counters must not compare

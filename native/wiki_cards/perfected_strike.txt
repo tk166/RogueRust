@@ -1,0 +1,43 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Perfected Strike
+| Image       = Red-PerfectedStrike.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Common
+| Cost        = 2
+| Description = Deal 6 damage.<br>Deals (2;3) additional damage for ALL your cards containing "Strike".
+}}
+{{C|Perfected Strike}} is a 2 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 6 damage, which is increased by 2 (3 if upgraded) for every card with "Strike" in its name that is in your deck when this card is played.
+
+== Interactions ==
+=== Synergies ===
+* {{R|Strike Dummy}} increases the damage of this card by 3.
+
+* Any card with "Strike" in the name increases the damage of this card by 2 (3 if this {{C|Perfected Strike}} upgraded):
+==== Cards ====
+* All basic Strikes: {{C|Strike (Ironclad)|Strike}}, {{C|Strike (Silent)|Strike}}, {{C|Strike (Defect)|Strike}}, and {{C|Strike (Watcher)|Strike}}.
+* {{C|Perfected Strike}} increases not only the damage of other copies, but also of itself.
+* {{C|Pommel Strike}}, {{C|Twin Strike}}, {{C|Wild Strike}}.
+* {{C|Swift Strike}}.
+* {{C|Sneaky Strike}}, {{C|Thunder Strike}}, {{C|Meteor Strike}}, {{C|Windmill Strike}}.
+
+=== Neutral ===
+* The damage is calculated at the time of playing {{C|Perfected Strike}}. This means that getting rid of cards with "Strike" in their name during combat, such as by {{KW|Exhaust|Exhausting}}, will decrease the damage dealt by {{C|Perfected Strike}}. Similarly, increasing the amount of those cards through for example {{R|Dead Branch}} or {{C|Dual Wield}} will increase the damage.
+
+== Trivia ==
+* This card's [[Beta Art]] shows a {{M|Gremlin Wizard}} admiring the [[Ironclad]]'s new sword.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Watcher 5|* Wheel Kick card was incorrectly affected by Strike Dummy/Perfected Strike.}}
+{{Update History Table/row|Weekly 28|* Fixed issue where Strike (blue), Thunder Strike, and Meteor Strike weren't used by Perfected Strike.}}
+{{Update History Table/row|Weekly 18|* Perfected Strike now counts Strikes from other characters.}}
+{{Update History Table/row|Weekly 1|* Clarified Perfected Strike's wording for new functionality.
+* Perfected Strike gets an updated description.
+* Perfected Strike reworked. Now counts ALL cards with the word Strike in its title. Swift Strike, Wild Strike, etc.}}
+{{Update History Table/row|?|* Added Perfected Strike to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

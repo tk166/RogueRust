@@ -84,6 +84,10 @@ PAGES = {
     'rampage': 'Rampage',
     'searing_blow': 'Searing_Blow',
     'rip_and_tear': 'Rip_and_Tear',
+    # §230：临时力量（Flex）、力量翻倍（Limit Break）、按牌组数加伤（Perfected Strike）
+    'flex': 'Flex',
+    'limit_break': 'Limit_Break',
+    'perfected_strike': 'Perfected_Strike',
     # §221：事件给的两张诅咒
     'doubt': 'Doubt',
     'writhe': 'Writhe',

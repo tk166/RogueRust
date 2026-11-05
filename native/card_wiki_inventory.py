@@ -162,6 +162,17 @@ FACTS = {
                  ('cardCounter', 'cardInstance.resolving', 'standard.rampage_bonus', 8)]),
     # §229：`Deal (12;16) damage. Can be Upgraded any number of times.` —— 每档 +4，`plus` 是**第一档**。
     'searing_blow': ([('damage', 12, 'event')], [('damage', 16, 'event')]),
+    # §230：`Gain (2;4) Strength. At the end of this turn, lose (2;4) Strength.`
+    'flex': ([('status', 'standard.strength', 2, 'source'),
+              ('status', 'standard.lose_strength', 2, 'source')],
+             [('status', 'standard.strength', 4, 'source'),
+              ('status', 'standard.lose_strength', 4, 'source')]),
+    # §230：`Double your Strength.`（基础版 Exhaust，`+` 不消耗 —— 升级**去掉** Exhaust）
+    'limit_break': ([('modify', 'standard.strength', ('expr', 'combatantStatusStacks'), 'source')],
+                    [('modify', 'standard.strength', ('expr', 'combatantStatusStacks'), 'source')]),
+    # §230：`Deal 6 damage. Deals (2;3) additional damage for ALL your cards containing "Strike".`
+    'perfected_strike': ([('damagePerTag', 6, 2, 'strike', 'event')],
+                         [('damagePerTag', 6, 3, 'strike', 'event')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

@@ -1,0 +1,33 @@
+{{Card Infobox
+| Name          = Flex
+| Image         = Red-Flex.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Common
+| Cost          = 0
+| Description   = Gain (2;4) {{BD|Strength}}.<br>At the end of this turn, lose (2;4) {{BD|Strength}}.
+| GivesToPlayer = Strength, Strength Down
+}}
+{{Power Infobox|Strength}} {{Power Infobox|Strength Down}}
+{{C|Flex}} is a 0 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 2 (4 if upgraded) {{BD|Strength}} and gives the same amount of {{BD|Strength Down}} to remove that missing {{BD|Strength}} at the end of your turn.
+
+== Interactions ==
+=== Order ===
+* Both {{BD|Strength Down}} and the actual subtraction of that {{BD|Strength}} at the end of the turn are considered separate debuffs, meaning {{BD|Artifact}} can prevent either one. 
+
+=== Synergies ===
+* {{C|Limit Break}} doubles your {{BD|Strength}} but does not affect {{BD|Strength Down}} so you will still only lose 2 (4 if upgraded) {{BD|Strength}} at the end of the turn, but the rest gained through {{C|Limit Break}} stays permanent.
+* {{R|Orange Pellets}} can remove the {{BD|Strength Down}} you get from this card, making the {{BD|Strength}} gain permanent.
+* Sources of {{BD|Artifact}}, such as {{R|Clockwork Souvenir}}, {{P|Ancient Potion}}, {{C|Core Surge}} and {{C|Panacea}} can prevent this card from applying {{BD|Strength Down}} or negate the {{BD|Strength}} removal at the end of your turn, and allow the {{BD|Strength}} gain to be permanent.
+
+=== Neutral ===
+* Since {{BD|Strength}} is capped to 999 while {{BD|Strength Down}} is effectively uncapped, it is possible to gain '''negative''' {{BD|Strength}} at the end of the turn, if {{C|Flex}} is played enough times in a single turn.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 24|* Flex Power's downside Debuff renamed for clarity.}}
+{{Update History Table/row|?|* Added Flex to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]
