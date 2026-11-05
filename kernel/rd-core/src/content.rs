@@ -4865,9 +4865,10 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            9,
-            "nine events: six for act 1, three for act 2, three for act 3 -- with `EventTables` \
-             sharing `purification_shrine` (§133 / §143)"
+            11,
+            "eleven distinct events (§221 added `the_ssssserpent` and `the_mausoleum`); the pools 
+             hold more *slots* than ids because `EventTables` share `purification_shrine` / 
+             `golden_idol` / `ancient_forge` across acts (§133 / §143)"
         );
         let mut ids = Vec::new();
         for index in 0..content.event_count() {
@@ -4919,6 +4920,9 @@ mod tests {
                 "purification_shrine",
                 "scrap_pile",
                 "shining_light",
+                // §221: the two rooms added with the second event batch
+                "the_mausoleum",
+                "the_ssssserpent",
                 "wandering_merchant"
             ]
         );

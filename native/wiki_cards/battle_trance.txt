@@ -1,0 +1,31 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Battle Trance
+| Image         = Red-BattleTrance.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 0
+| Description   = Draw (3;4) cards.<br>You cannot draw additional cards this turn.
+| GivesToPlayer = Draw, No Draw
+}}
+{{Power Infobox|No Draw}}
+{{C|Battle Trance}} is a 0 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It draws 3 (4 if upgraded) cards and gives one {{BD|No Draw}}, which prevents cards from being drawn for the rest of your turn.
+
+== Interactions ==
+=== Synergies ===
+* {{R|Orange Pellets}} can remove the {{BD|No Draw}} you get from this card.
+* Sources of {{BD|Artifact}}, such as {{R|Clockwork Souvenir}}, {{P|Ancient Potion}}, {{C|Core Surge}} and {{C|Panacea}} can prevent this card from applying {{BD|No Draw}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.0|* Fixed Escape Plan gaining Block when card drawn is blocked by No Draw power.}}
+{{Update History Table/row|Watcher 10|* Fixed Escape Plan gaining Block when card drawn is blocked by No Draw.
+* Fixed Ink Bottle drawing a card when activated by playing Battle Trance or Bullet Time.}}
+{{Update History Table/row|Weekly 33|* No Draw power now counts as a debuff.}}
+{{Update History Table/row|Weekly 4|* Evolve should no longer trigger even if No Draw power is active.}}
+{{Update History Table/row|?|* Added Battle Trance to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

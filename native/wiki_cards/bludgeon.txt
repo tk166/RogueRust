@@ -1,0 +1,20 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Bludgeon
+| Image       = Red-Bludgeon.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Rare
+| Cost        = 3
+| Description = Deal (32;42) damage.
+}}
+{{C|Bludgeon}} is a 3 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 32 (42 if upgraded) damage.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Bludgeon to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{IroncladNav}}
+[[Category:Cards]]

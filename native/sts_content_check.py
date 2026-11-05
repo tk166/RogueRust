@@ -113,6 +113,52 @@ INV_CARDS = {
     "bash": {"Cost": 2, "Tags": ["attack", "basic"],
              "Facts": [("damage", 8, "event"), ("status", "standard.vulnerable", 2, "event")]},
     # inv:§10 -- a status card created by two enemies (not part of the deck).
+    # ---- §221: ten more Ironclad cards (wiki numbers; `native/wiki_cards/<id>.txt`) ----------------
+    "cleave": {"Cost": 1, "Tags": ["attack"], "Facts": [("damage", 8, "allEnemies")]},
+    "cleave+": {"Cost": 1, "Tags": ["attack"], "Facts": [("damage", 11, "allEnemies")]},
+    "pommel_strike": {"Cost": 1, "Tags": ["attack", "strike"],
+                      "Facts": [("damage", 9, "event"), ("draw", 1, "source")]},
+    "pommel_strike+": {"Cost": 1, "Tags": ["attack", "strike"],
+                       "Facts": [("damage", 10, "event"), ("draw", 2, "source")]},
+    "shrug_it_off": {"Cost": 1, "Tags": ["skill", "block"],
+                     "Facts": [("block", 8, "source"), ("draw", 1, "source")]},
+    "shrug_it_off+": {"Cost": 1, "Tags": ["skill", "block"],
+                      "Facts": [("block", 11, "source"), ("draw", 1, "source")]},
+    "thunderclap": {"Cost": 1, "Tags": ["attack"],
+                    "Facts": [("damage", 4, "allEnemies"),
+                              ("status", "standard.vulnerable", 1, "allEnemies")]},
+    "thunderclap+": {"Cost": 1, "Tags": ["attack"],
+                     "Facts": [("damage", 7, "allEnemies"),
+                               ("status", "standard.vulnerable", 1, "allEnemies")]},
+    "bludgeon": {"Cost": 3, "Tags": ["attack"], "Facts": [("damage", 32, "event")]},
+    "bludgeon+": {"Cost": 3, "Tags": ["attack"], "Facts": [("damage", 42, "event")]},
+    "impervious": {"Cost": 2, "Tags": ["skill", "block"], "Facts": [("block", 30, "source")],
+                   "PlayedCardDestinationZone": "ExhaustPile"},
+    "impervious+": {"Cost": 2, "Tags": ["skill", "block"], "Facts": [("block", 40, "source")],
+                    "PlayedCardDestinationZone": "ExhaustPile"},
+    "pummel": {"Cost": 1, "Tags": ["attack"], "Facts": [("repeat", 4, "damage", 2, "event")],
+               "PlayedCardDestinationZone": "ExhaustPile"},
+    "pummel+": {"Cost": 1, "Tags": ["attack"], "Facts": [("repeat", 5, "damage", 2, "event")],
+                "PlayedCardDestinationZone": "ExhaustPile"},
+    "wild_strike": {"Cost": 1, "Tags": ["attack", "strike"],
+                    "Facts": [("damage", 12, "event"), ("card", "wound", 1, "DrawPile", "source")]},
+    "wild_strike+": {"Cost": 1, "Tags": ["attack", "strike"],
+                     "Facts": [("damage", 17, "event"), ("card", "wound", 1, "DrawPile", "source")]},
+    "ghostly_armor": {"Cost": 1, "Tags": ["skill", "block", "ethereal"],
+                      "Facts": [("block", 10, "source")],
+                      "TurnEndHandDestinationZone": "ExhaustPile"},
+    "ghostly_armor+": {"Cost": 1, "Tags": ["skill", "block", "ethereal"],
+                       "Facts": [("block", 13, "source")],
+                       "TurnEndHandDestinationZone": "ExhaustPile"},
+    "battle_trance": {"Cost": 0, "Tags": ["skill"],
+                      "Facts": [("draw", 3, "source"), ("status", "standard.draw_reduction", 1, "source")]},
+    "battle_trance+": {"Cost": 0, "Tags": ["skill"],
+                       "Facts": [("draw", 4, "source"), ("status", "standard.draw_reduction", 1, "source")]},
+    # §221：两张事件诅咒。Doubt 的"回合末 +1 Weak"是 `LifecyclePrograms[TurnEndInHand]`
+    # （§220 的载体；手牌里过回合才付账）。Writhe 只有关键字，没有节目。
+    "doubt": {"Cost": 1, "Tags": ["curse", "unplayable"], "Facts": [],
+              "Lifecycle": {"TurnEndInHand": [("status", "standard.weak", 1, "source")]}},
+    "writhe": {"Cost": 1, "Tags": ["curse", "unplayable", "innate"], "Facts": []},
     # §219：wiki 是"1 费、可出、Exhaust"。落区现在写得出来了（`PlayedCardDestinationZone`），
     # 所以不再需要 `unplayable` 这个简化。
     "slimed": {"Cost": 1, "Tags": ["status", "junk"], "Facts": [],
@@ -1031,6 +1077,9 @@ def program_facts(root):
         elif kind == "node.modifyStatusStacks":
             facts.append(("modify", body["StatusDefinitionId"]["value"],
                           amount(body["Delta"]), tgt(body["TargetSelector"])))
+        elif kind == "node.drawCards":
+            # §221：Pommel Strike / Shrug It Off / Battle Trance 的抽牌。
+            facts.append(("draw", amount(body["Count"]), tgt(body["TargetSelector"])))
         elif kind in ("node.gainResource", "node.loseResource"):
             # §220: the two halves of "whenever this card is drawn, lose 1 Energy" /
             # "if this card is Exhausted, gain 2 Energy". Recorded as facts so the gate can see them
@@ -2594,7 +2643,10 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       # +15 on rest, Meat on the Bone 12 HP at or below 50%).
                       "strawberry", "bronze_scales", "regal_pillow", "meat_on_the_bone",
                       # §157: two more Rare (Eternal Feather, Golden Idol) + Potion Belt.
-                      "eternal_feather", "golden_idol", "potion_belt")
+                      "eternal_feather", "golden_idol", "potion_belt",
+                      # §221: both are `StartCombatStatus` in the run layer -- 1 Vulnerable / 1
+                      # Dexterity at combat start, straight from the wiki.
+                      "bag_of_marbles", "oddly_smooth_stone")
 
 
 def check_relics(doc):

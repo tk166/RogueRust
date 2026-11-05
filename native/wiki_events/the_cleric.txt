@@ -1,0 +1,56 @@
+{{Event Infobox
+| Name  = The Cleric
+| Image = Event-Cleric.png
+}}
+{{E|The Cleric}} is a {{QueryLink|Events|shrine:Yes|shrine Event}} found exclusively in [[Act 1]]. It is one of the events affected by {{Asc|15|Ascension}}. It can only be encountered if the player has at least 35 [[Gold]]; enough to afford at least one of the options.
+
+== Options ==
+{{Frame|Heal}} {{TS|gold||35 [[Gold]]:}} {{TS|positive||Heal X HP.}}
+* X is equal to 25% of the player's Max HP, rounded down.
+
+{{Frame|Purify}} {{TS|gold||50}} {{Asc|15|(75)}} {{TS|gold||[[Gold]]:}} {{TS|positive||Remove a card from your deck.}}
+
+{{Frame|Leave}} Nothing happens.
+
+== Dialogue ==
+<blockquote>
+A strange blue humanoid with a golden helm(?) approaches you with a huge smile.
+
+{{TS||shake|"Hello friend!}} I am {{TS|blue||Cleric!}} Are you interested in my services?!" the creature shouts, loudly.
+
+{{Frame|Heal}}
+<blockquote><i>
+A warm golden light envelops your body and dissipates.
+
+The creature grins. "Cleric best healer. {{TS||shake|Have a good day!"}}
+</i></blockquote>
+
+{{Frame|Purify}}
+<blockquote><i>
+A cold blue flame envelops your body and dissipates.
+
+The creature grins. "Cleric talented. {{TS||shake|Have a good day!"}}
+</i></blockquote>
+
+{{Frame|Leave}}
+<blockquote><i>
+You don't trust this {{TS|blue||"Cleric",}} so you leave.
+</i></blockquote>
+</blockquote>
+
+== Trivia ==
+* Cleric is also encountered in the {{E|Old Beggar}} event.
+* {{R|Face of Cleric}} from the {{E|Face Trader}} event references Cleric. There is no special dialogue if the player encounters Cleric while owning his face.
+
+== Update History ==
+* '''Patch V1.1: The Dealer'''
+** You no longer run into The Cleric or Beggar events if you do not have enough gold.
+* '''Weekly Patch 50: The Final Act'''
+** Fixed softlock caused if you can't remove cards in: Back to Basics, Cleric, and Living Wall events.
+* '''Weekly Patch 15: Surprise Patch'''
+** Cleric now shows and uses correct gold costs on Ascension 15.
+* '''Weekly Patch 14: Bullet Time'''
+** Cleric Event text improvements.
+
+{{EventNav}}
+[[Category:Events]]

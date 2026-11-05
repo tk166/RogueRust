@@ -1,0 +1,26 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name         = Thunderclap
+| Image        = Red-Thunderclap.png
+| Color        = Red
+| Type         = Attack
+| Rarity       = Common
+| Cost         = 1
+| Description  = Deal (4;7) damage and apply 1 {{BD|Vulnerable}} to ALL enemies.
+| GivesToEnemy = Vulnerable
+}}
+{{Power Infobox|Vulnerable}}{{C|Thunderclap}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 4 (7 if upgraded) damage and applies 1 {{BD|Vulnerable}} to '''ALL''' enemies.
+
+== Interactions ==
+=== Synergies ===
+* {{R|Paper Phrog}} increases the effectiveness of {{BD|Vulnerable}}.
+* {{R|Champion Belt}} will apply 1 {{BD|Weak}} to '''ALL''' enemies to whom the {{BD|Vulnerable}} successfully applies.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 1|* Thunderclap VFX no longer appears on dead enemies during multi-enemy combats.}}
+{{Update History Table/row|?|* Added Thunderclap to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

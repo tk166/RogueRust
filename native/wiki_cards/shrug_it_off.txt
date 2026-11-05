@@ -1,0 +1,22 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Shrug It Off
+| Image         = Red-ShrugItOff.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Common
+| Cost          = 1
+| Description   = Gain (8;11) {{KW|Block}}.<br>Draw 1 card.
+| GivesToPlayer = Block, Draw
+}}
+{{Keyword Infobox|Block}}
+{{C|Shrug It Off}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 8 (11 if upgraded) {{KW|Block}} and draws 1 card.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Shrug It Off to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{IroncladNav}}
+[[Category:Cards]]

@@ -1,0 +1,51 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Writhe
+| Image         = Curse-Writhe.png
+| Color         = Colorless
+| Type          = Curse
+| Cost          = -2
+| NoUpgrade     = true
+| Description   = {{KW|Unplayable}}.<br>{{KW|Innate}}.
+| GivesToPlayer = Unplayable, Innate
+}}
+{{Keyword Infobox|Unplayable}} {{Keyword Infobox|Innate}}
+{{C|Writhe}} is an {{KW|Unplayable}} {{QueryLink|Cards|type:Curse|Curse}} Card. It is {{KW|Innate}}.
+
+== Obtaining Writhe ==
+Like most {{QueryLink|Cards|type:Curse|Curses}}, Writhe can be obtained from anything that gives a random Curse:
+* Can be part of Neow's [[Third Blessing]] in exchange for a reward.
+* {{E|Match and Keep}}.
+* {{R|Cursed Key}}.
+* {{KW|Transform|Transforming}} another Curse.
+
+In addition, Writhe can be obtained from two events:
+* {{E|The Mausoleum}} when choosing {{Frame|Open Coffin}}.
+* {{E|Winding Halls}} when choosing {{Frame|Pass On}}.
+
+== Interactions ==
+=== Synergies ===
+As Writhe is a '''{{QueryLink|Cards|type:Curse|Curse}}''', it interacts with the following:
+* {{C|Fire Breathing}} will deal damage when it is drawn.
+* {{R|Du-Vu Doll}} will give you 1 {{BD|Strength}} each combat.
+* {{R|Blue Candle}} can be used to {{KW|Exhaust}} it for 1 HP. 
+* When added to the deck, it will be negated by {{R|Omamori}}, or gain you 6 max HP if you have {{R|Darkstone Periapt}} and ''not'' {{R|Omamori}}.
+
+As Writhe is '''{{KW|Innate}}''', the downside of having it can be mitigated:
+* {{R|Gambling Chip}} allows you to discard it away at the start of combat, meaning you won't draw it until after the first shuffle.
+* {{R|Ring of the Snake}} and {{R|Bag of Preparation}} both draw you additional cards on your first turn, lessening the impact of an Innate curse in your starting hand.
+
+=== Anti-Synergies ===
+* As {{C|Clash}} can only be played when all cards in your hand are {{QueryLink|Cards|type:Attack|Attacks}}, if it is drawn at the same time as Writhe, it cannot be played.
+
+== Trivia ==
+As most Curses are only given in a single Event (not counting random ones), Writhe is tied with {{C|Parasite}} and {{C|Regret}} for being the Curse with the most ways to get it.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Writhe to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{ColorlessNav}}
+[[Category:Cards]]

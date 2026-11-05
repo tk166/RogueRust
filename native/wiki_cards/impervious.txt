@@ -1,0 +1,22 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Impervious
+| Image         = Red-Impervious.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Rare
+| Cost          = 2
+| Description   = Gain (30;40) {{KW|Block}}.<br>{{KW|Exhaust}}.
+| GivesToPlayer = Block, Exhaust
+}}
+{{Keyword Infobox|Block}} {{Keyword Infobox|Exhaust}}
+{{C|Impervious}} is a 2 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 30 (40 if upgraded) {{KW|Block}}. {{C|Impervious}} will then {{KW|Exhaust}} itself.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Impervious to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{IroncladNav}}
+[[Category:Cards]]

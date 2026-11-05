@@ -6073,6 +6073,1509 @@
       "TurnEndHandDestinationZone": "Hand",
       "PlayedCardDestinationZone": "DiscardPile",
       "Rarity": "Rare"
+    },
+    {
+      "Id": "cleave",
+      "PackageId": "sts",
+      "NameKey": "Cleave",
+      "DescriptionKey": "Deal 8 damage to ALL enemies.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.allEnemies",
+              "value": {
+                "Cardinality": "Any",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 8
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "cleave+",
+      "PackageId": "sts",
+      "NameKey": "Cleave+",
+      "DescriptionKey": "Deal 8 damage to ALL enemies.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.allEnemies",
+              "value": {
+                "Cardinality": "Any",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 11
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "pommel_strike",
+      "PackageId": "sts",
+      "NameKey": "Pommel Strike",
+      "DescriptionKey": "Deal 9 damage. Draw 1 card.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "strike"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 9
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.drawCards",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "pommel_strike+",
+      "PackageId": "sts",
+      "NameKey": "Pommel Strike+",
+      "DescriptionKey": "Deal 9 damage. Draw 1 card.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "strike"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.drawCards",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "shrug_it_off",
+      "PackageId": "sts",
+      "NameKey": "Shrug It Off",
+      "DescriptionKey": "Gain 8 Block. Draw 1 card.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "block"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 8
+                    }
+                  },
+                  "PoolId": {
+                    "value": "standard.block"
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.drawCards",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "shrug_it_off+",
+      "PackageId": "sts",
+      "NameKey": "Shrug It Off+",
+      "DescriptionKey": "Gain 8 Block. Draw 1 card.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "block"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 11
+                    }
+                  },
+                  "PoolId": {
+                    "value": "standard.block"
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.drawCards",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "thunderclap",
+      "PackageId": "sts",
+      "NameKey": "Thunderclap",
+      "DescriptionKey": "Deal 4 damage and apply 1 Vulnerable to ALL enemies.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.allEnemies",
+                    "value": {
+                      "Cardinality": "Any",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 4
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.allEnemies",
+                    "value": {
+                      "Cardinality": "Any",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.vulnerable"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "thunderclap+",
+      "PackageId": "sts",
+      "NameKey": "Thunderclap+",
+      "DescriptionKey": "Deal 4 damage and apply 1 Vulnerable to ALL enemies.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.allEnemies",
+                    "value": {
+                      "Cardinality": "Any",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 7
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.allEnemies",
+                    "value": {
+                      "Cardinality": "Any",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.vulnerable"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "bludgeon",
+      "PackageId": "sts",
+      "NameKey": "Bludgeon",
+      "DescriptionKey": "Deal 32 damage.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 3
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 32
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "bludgeon+",
+      "PackageId": "sts",
+      "NameKey": "Bludgeon+",
+      "DescriptionKey": "Deal 32 damage.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 3
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 42
+              }
+            },
+            "ResultKey": null,
+            "IgnoresBlock": false,
+            "Element": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "impervious",
+      "PackageId": "sts",
+      "NameKey": "Impervious",
+      "DescriptionKey": "Gain 30 Block. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "block"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.gainBlock",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 30
+              }
+            },
+            "PoolId": {
+              "value": "standard.block"
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "ExhaustPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "impervious+",
+      "PackageId": "sts",
+      "NameKey": "Impervious+",
+      "DescriptionKey": "Gain 30 Block. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "block"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.gainBlock",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 40
+              }
+            },
+            "PoolId": {
+              "value": "standard.block"
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "ExhaustPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "pummel",
+      "PackageId": "sts",
+      "NameKey": "Pummel",
+      "DescriptionKey": "Deal 2 damage 4 times. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.repeat",
+          "value": {
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 4
+              }
+            },
+            "Body": {
+              "kind": "node.dealDamage",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 2
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
+              }
+            }
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "ExhaustPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "pummel+",
+      "PackageId": "sts",
+      "NameKey": "Pummel+",
+      "DescriptionKey": "Deal 2 damage 4 times. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.repeat",
+          "value": {
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 5
+              }
+            },
+            "Body": {
+              "kind": "node.dealDamage",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 2
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
+              }
+            }
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "ExhaustPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "wild_strike",
+      "PackageId": "sts",
+      "NameKey": "Wild Strike",
+      "DescriptionKey": "Deal 12 damage. Shuffle a Wound into your draw pile.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "strike"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 12
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.createCardInstance",
+                "value": {
+                  "CardDefinitionId": {
+                    "value": "wound"
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "ToZone": "DrawPile",
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "wild_strike+",
+      "PackageId": "sts",
+      "NameKey": "Wild Strike+",
+      "DescriptionKey": "Deal 12 damage. Shuffle a Wound into your draw pile.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "strike"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 17
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.createCardInstance",
+                "value": {
+                  "CardDefinitionId": {
+                    "value": "wound"
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "ToZone": "DrawPile",
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "ghostly_armor",
+      "PackageId": "sts",
+      "NameKey": "Ghostly Armor",
+      "DescriptionKey": "Ethereal. Gain 10 Block.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "block"
+        },
+        {
+          "value": "ethereal"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.gainBlock",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 10
+              }
+            },
+            "PoolId": {
+              "value": "standard.block"
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "ExhaustPile",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "ghostly_armor+",
+      "PackageId": "sts",
+      "NameKey": "Ghostly Armor+",
+      "DescriptionKey": "Ethereal. Gain 10 Block.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "block"
+        },
+        {
+          "value": "ethereal"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.gainBlock",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 13
+              }
+            },
+            "PoolId": {
+              "value": "standard.block"
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "ExhaustPile",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "battle_trance",
+      "PackageId": "sts",
+      "NameKey": "Battle Trance",
+      "DescriptionKey": "Draw 3 cards. You cannot draw additional cards this turn.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.drawCards",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.draw_reduction"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "battle_trance+",
+      "PackageId": "sts",
+      "NameKey": "Battle Trance+",
+      "DescriptionKey": "Draw 3 cards. You cannot draw additional cards this turn.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.drawCards",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 4
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.draw_reduction"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "doubt",
+      "PackageId": "sts",
+      "NameKey": "Doubt",
+      "DescriptionKey": "At the end of your turn, gain 1 Weak.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": []
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {
+        "TurnEndInHand": {
+          "Id": {
+            "Value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.applyStatus",
+            "value": {
+              "TargetSelector": {
+                "kind": "sel.source",
+                "value": {
+                  "Cardinality": "ZeroOrOne",
+                  "RequiredContextCapabilities": "Source"
+                }
+              },
+              "StatusDefinitionId": {
+                "value": "standard.weak"
+              },
+              "Stacks": {
+                "kind": "const",
+                "value": {
+                  "Value": 1
+                }
+              },
+              "DurationTurns": 0,
+              "Charges": 0,
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      }
+    },
+    {
+      "Id": "writhe",
+      "PackageId": "sts",
+      "NameKey": "Writhe",
+      "DescriptionKey": "Innate. Unplayable.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        },
+        {
+          "value": "innate"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": []
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
     }
   ],
   "EnemyActions": [
@@ -32841,6 +34344,20 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"
+    },
+    {
+      "Id": "bag_of_marbles",
+      "DisplayName": "Bag of Marbles",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "oddly_smooth_stone",
+      "DisplayName": "Oddly Smooth Stone",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Common"
     }
   ],
   "Start": {
@@ -33350,6 +34867,62 @@
           "Amount": 10
         }
       ]
+    },
+    {
+      "Id": "the_ssssserpent",
+      "NameKey": "The Ssssserpent",
+      "DescriptionKey": "A giant serpent offers you a deal.",
+      "Label0": "Agree",
+      "Label1": "Disagree",
+      "Effects0": [
+        {
+          "Effect": "gold",
+          "Amount": 175
+        },
+        {
+          "Effect": "curse:doubt",
+          "Amount": 1
+        }
+      ],
+      "Effects1": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Effects0Asc": [
+        {
+          "Effect": "gold",
+          "Amount": 175
+        },
+        {
+          "Effect": "curse:doubt",
+          "Amount": 2
+        }
+      ]
+    },
+    {
+      "Id": "the_mausoleum",
+      "NameKey": "The Mausoleum",
+      "DescriptionKey": "A coffin waits in the dark.",
+      "Label0": "Open Coffin",
+      "Label1": "Leave",
+      "Effects0": [
+        {
+          "Effect": "relic:strawberry",
+          "Amount": 1
+        },
+        {
+          "Effect": "curse:writhe",
+          "Amount": 1
+        }
+      ],
+      "Effects1": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ]
     }
   ],
   "Potions": [
@@ -33648,6 +35221,9 @@
       },
       {
         "Id": "purification_shrine"
+      },
+      {
+        "Id": "the_mausoleum"
       }
     ],
     "Events3": [
@@ -33659,6 +35235,9 @@
       },
       {
         "Id": "purification_shrine"
+      },
+      {
+        "Id": "the_ssssserpent"
       }
     ]
   }

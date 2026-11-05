@@ -1,0 +1,65 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Doubt
+| Image         = Curse-Doubt.png
+| Color         = Colorless
+| Type          = Curse
+| Cost          = -2
+| NoUpgrade     = true
+| Description   = {{KW|Unplayable}}.<br>At the end of your turn, gain 1 {{BD|Weak}}.
+| GivesToPlayer = Weak, Unplayable
+}}
+{{Keyword Infobox|Unplayable}} {{Power Infobox|Weak}}
+{{C|Doubt}} is an {{KW|Unplayable}} {{QueryLink|Cards|type:Curse|Curse}} Card. If it is in your hand at end of turn, it will [[Keywords#Discard|discard]] itself, and apply 1 {{BD|Weak}} to you.
+
+== Obtaining Doubt ==
+Like most {{QueryLink|Cards|type:Curse|Curses}}, Doubt can be obtained from anything that gives a random Curse:
+* Can be part of Neow's [[Third Blessing]] in exchange for a reward.
+* {{E|Match and Keep}}.
+* {{R|Cursed Key}}.
+* {{KW|Transform|Transforming}} another Curse.
+
+In addition, Doubt can be obtained from {{E|The Ssssserpent}} Event when choosing {{Frame|Agree}} as well as {{E|Mind Bloom}} when choosing {{Frame|I am Healthy}}.
+
+== Interactions ==
+=== Order ===
+* Doubt will discard itself at the end of your turn before the rest of your hand, at the same time it applies the {{BD|Weak}}. This happens ''before'' {{KW|Retain}} happens, so you cannot choose to Retain it.
+<!--- I'm just including the main extra interactions here, but with the ones not relevant to the current page commented away. This allows easy transfew to related pages.--->
+* Doubt, {{C|Shame}}, {{C|Regret}}, {{C|Decay}}, and {{C|Burn|Burns}} all activate at the same time at end of turn. Visually they activate from left to right. However:
+** Regardless of the order of activation, {{C|Regret}} counts any copies of the others as being still in your hand when its damage is applied.
+<!---*** {{C|Regret}} does ''not'' take into account cards drawn from {{R|Runic Cube}} as a result of taking damage from these cards; it will always just use the number of cards in your hand when your turn ended.--->
+<!---** The damage for {{C|Decay}}, {{C|Burn}}, and {{C|Regret}} are applied from left to right. So, if you have 1 stack of {{BD|Buffer}} and two of them in hand, the left one will have its damage consumed, and the right one will apply.
+*** When selecting cards from your hand, such as to [[Keywords#Discard|discard]] or {{KW|Exhaust}}, you can freely reorder your hand, as selecting and then unselecting a card moves it to the last spot in your hand. If needed, this can be used to manipulate which card's damage is applied to you.--->
+** For Doubt and {{C|Shame}}, the [[Debuffs]] are applied from left to right. So, if you have 1 stack of {{BD|Artifact}} and both in hand, the left one will consume the Artifact and the right one will apply.
+*** When selecting cards from your hand, such as to [[Keywords#Discard|discard]] or {{KW|Exhaust}}, you can freely reorder your hand, as selecting and then unselecting a card moves it to the last spot in your hand. If needed, this can be used to manipulate which Curse's debuff is applied to you.
+=== Synergies ===
+As Doubt is a '''{{QueryLink|Cards|type:Curse|Curse}}''', it interacts with the following:
+* {{C|Fire Breathing}} will deal damage when it is drawn.
+* {{R|Du-Vu Doll}} will give you 1 {{BD|Strength}} each combat.
+* {{R|Blue Candle}} can be used to {{KW|Exhaust}} it for 1 HP. 
+* When added to the deck, it will be negated by {{R|Omamori}}, or gain you 6 max HP if you have {{R|Darkstone Periapt}} and ''not'' Omamori.
+
+The {{BD|Weak}} debuff can be dealt with in a few ways:
+* It can be prevented with sources of {{BD|Artifact}}, such as {{C|Core Surge}} and {{C|Panacea}}.
+* It can be removed during your next turn with {{R|Orange Pellets}}.
+* The downside can be ignored by having a damage plan that doesn't require {{QueryLink|Cards|type:Attack|Attack}} cards, such as {{C|Juggernaut}}, {{C|A Thousand Cuts}}, {{BD|Poison}}, {{KW|Lightning|Lightning Orbs}}, {{KW|Dark|Dark Orbs}}, or {{C|The Bomb}}.
+* {{R|Runic Pyramid}} and {{KW|Retain}} effects such as {{C|Well-Laid Plans}} can allow you to save your key Attacks for when the {{BD|Weak}} has cleared.
+* {{C|Vault}} can be used to skip to your next turn, clearing the debuff without giving the enemy a turn.
+
+=== Neutral ===
+* Doubt cannot be {{KW|Retain|Retained}}, and does not stay in your hand with {{R|Runic Pyramid}}, as it discards itself as part of its end of turn activation.
+
+=== Anti-Synergies ===
+* As {{C|Clash}} can only be played when all cards in your hand are {{QueryLink|Cards|type:Attack|Attacks}}, if it is drawn at the same time as Doubt, it cannot be played.
+
+== Trivia ==
+* The beta design of Doubt is a reference to the Press X to Doubt meme.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly |* Fixed issue where Regret/Decay/Doubt/Burn fails to exhaust via Blue Candle and Medical Kit.}}
+{{Update History Table/row|?|* Added Doubt to the game}}
+{{Update History Table/end}}
+
+{{ColorlessNav}}
+[[Category:Cards]]

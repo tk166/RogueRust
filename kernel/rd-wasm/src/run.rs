@@ -4748,7 +4748,13 @@ mod tests {
             }
             assert_eq!(rd_run_step(0), 0, "hop {hop}: enter ({})", run_error_text());
             let kind = rd_run_node_kind();
-            assert_eq!(rd_run_begin_node(), 0, "hop {hop}: begin a kind-{kind} node");
+            let pending_before = rd_run_pending();
+            let code = rd_run_begin_node();
+            assert_eq!(
+                code, 0,
+                "hop {hop}: begin a kind-{kind} node (pending was {pending_before}, why: {})",
+                run_error_text()
+            );
             match kind {
                 1 | 2 | 7 => {
                     assert_eq!(rd_run_fight_begin(), 0, "hop {hop}: begin the fight");

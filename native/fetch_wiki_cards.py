@@ -57,6 +57,20 @@ PAGES = {
     'void': 'Void',
     'injury': 'Injury',
     'ascenders_bane': "Ascender's_Bane",
+    # §221：这一节新增的 Ironclad 牌
+    'cleave': 'Cleave',
+    'pommel_strike': 'Pommel_Strike',
+    'shrug_it_off': 'Shrug_It_Off',
+    'thunderclap': 'Thunderclap',
+    'bludgeon': 'Bludgeon',
+    'impervious': 'Impervious',
+    'pummel': 'Pummel',
+    'wild_strike': 'Wild_Strike',
+    'ghostly_armor': 'Ghostly_Armor',
+    'battle_trance': 'Battle_Trance',
+    # §221：事件给的两张诅咒
+    'doubt': 'Doubt',
+    'writhe': 'Writhe',
     # 本内容独有（wiki 没有这两张）：留档，不编数字。
     'patient_guard': None,
     'swift_strike': None,

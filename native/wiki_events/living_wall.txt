@@ -1,0 +1,49 @@
+{{Event Infobox
+| Name  = Living Wall
+| Image = Event-LivingWall.png
+}}
+{{E|Living Wall}} is an [[Event]] found exclusively in [[Act 1]]. 
+
+== Options ==
+{{Frame|Forget}} {{TS|positive||Remove a card from your deck.}}
+<br>
+<br>
+{{Frame|Change}} {{TS|positive||[[Transform]] a card in your deck.}}
+<br>
+<br>
+{{Frame|Grow}} {{TS|positive||[[Upgrade]] a card in your deck.}}
+
+== Dialogue ==
+<blockquote>
+<i>
+As you come to a dead-end and begin to turn around, walls {{TS||shake|slam down}} from the ceiling, trapping you!
+<br><br>
+Three faces materialize from the walls and speak.
+<br>
+{{TS|blue||"Forget what you know, and I'll let you go."}}
+<br>
+{{TS|purple||"I require change to see a new space."}}
+<br>
+{{TS|gold||"If you want to pass me, then you must grow."}}
+</i>
+<br><br>
+
+{{Frame|Forget}}, {{Frame|Change}}, or {{Frame|Grow}} regardless of choice
+<br>
+<blockquote>
+<i>
+Satisfied, the walls in front of you merge back into the ceiling, leaving a path forward.</i>
+</blockquote></blockquote>
+
+== Update History ==
+* '''Weekly Patch 50: The Final Act'''
+** Fixed softlock caused if you can't remove cards in: Back to Basics, Cleric, and Living Wall events.
+
+* '''Weekly Patch 42: Reboot'''
+** Adding ambient SFX for Living Wall event.
+
+* '''Weekly Patch 23: Testing Continues...'''
+** Living Wall event's transformed card is now seeded.
+
+{{EventNav}}
+[[Category:Events]]

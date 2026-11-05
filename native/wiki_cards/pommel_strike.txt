@@ -1,0 +1,27 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Pommel Strike
+| Image         = Red-PommelStrike.png
+| Color         = Red
+| Type          = Attack
+| Rarity        = Common
+| Cost          = 1
+| Description   = Deal (9;10) damage.<br>Draw (1;2) (card;cards).
+| GivesToPlayer = Draw
+}}
+{{C|Pommel Strike}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 9 (10 if upgraded) damage, and draws 1 card (2 cards if upgraded).
+
+== Interactions ==
+=== Synergies ===
+* {{C|Pommel Strike}} gets a damage increase of 3 from {{R|Strike Dummy}}, and adds to the damage of {{C|Perfected Strike}}.
+
+* Two copies of upgraded Pommel Strike can be used to trigger {{R|Sundial}} perpetually. This combination can be further improved with something like {{R|The Abacus}} or {{R|Ornamental Fan}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Pommel Strike to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{IroncladNav}}
+[[Category:Cards]]

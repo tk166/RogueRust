@@ -1,0 +1,19 @@
+{{Card Infobox
+| Name        = Cleave
+| Image       = Red-Cleave.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Common
+| Cost        = 1
+| Description = Deal (8;11) damage to ALL enemies.
+}}
+{{C|Cleave}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 8 (11 if upgraded) damage to '''ALL''' enemies.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 20|* Cleave card damage buff. 7 -> 8 (10 -> 11).}}
+{{Update History Table/row|?|* Added Cleave to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

@@ -1,0 +1,26 @@
+{{Card Infobox
+| Name          = Pummel
+| Image         = Red-Pummel.png
+| Color         = Red
+| Type          = Attack
+| Rarity        = Uncommon
+| Cost          = 1
+| Description   = Deal 2 damage (4;5) times.<br>{{KW|Exhaust}}.
+| GivesToPlayer = Exhaust
+}}
+{{Keyword Infobox|Exhaust}}
+{{C|Pummel}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 2 damage 4 (5 if upgraded) times. {{C|Pummel}} will then {{KW|Exhaust}} itself.
+
+== Interactions ==
+=== Synergies ===
+* {{R|The Boot}} increases the damage of each hit of this card to 5. 
+* Benefits 4 (5 if upgraded) times from {{BD|Strength}} and {{BD|Vigor}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 31|* Optional UPGRADE_DESCRIPTION added for Pummel, Heavy Blade, Offering, and Reprogram}}
+{{Update History Table/row|?|* Added Pummel to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

@@ -264,7 +264,18 @@ pub const RARITY_OFFSET_START: i32 = -5;
 pub const RARITY_OFFSET_CAP: i32 = 40;
 /// The pools a shop or a chest draws from are caller-supplied (this crate knows no content), so the
 /// walk below needs a bound. Exceeding it is [`RunError::EmptyPool`]'s sibling: a loud error.
-pub const MAX_POOL: usize = 64;
+/// 一个奖励/商店/宝箱池最多装多少条。
+///
+/// ⚠️ §221：这个数从 64 抬到 96，**理由是内容量，不是"躲开一条红测试"**。铁匠铺的池是
+/// `full_pool(content)`：全部 `CARD` 行（基础 + `+` 升级行 + 状态/诅咒牌，因为升级要找得到目标、
+/// 而"哪些能当奖励"由 `pick_of` 按稀有度过滤）。§221 加了 10 张牌（+10 个 `+` 行）之后是 **68 行**，
+/// 于是 `PoolTooLarge { pool: 68, max: 64 }` —— 一个**走真实地图**的回放测试当场拒绝。
+///
+/// 为什么是 96 而不是"再大一点"：牌区的单区上限就是 96（`MAX_CARDS_PER_ZONE`），一个池子不该
+/// 比"能装下这些牌的牌区"更大；而 `u8` 编码（`as u8`）在 256 以下都安全。
+/// 内容继续长到超过 96 的那天，这条常量要跟着内容一起被重新论证 —— `pool_fits` 会**响亮拒绝**，
+/// 而不是静默截断（§161.1 的教训：截断会让"池子看起来装得下"）。
+pub const MAX_POOL: usize = 96;
 
 /// What the node under the cursor is waiting for.
 ///
@@ -1462,6 +1473,10 @@ impl RunState {
             "eternal_feather" => Some(RelicEffect::RestHealPerFiveCards(3)),
             "golden_idol" => Some(RelicEffect::FightGoldPercent(25)),
             "potion_belt" => Some(RelicEffect::ExtraPotionSlots(2)),
+            // §221（wiki `Bag of Marbles` / `Oddly Smooth Stone`）：开战给 1 层易伤 / 1 层敏捷。
+            // 两者都落在既有的 `StartCombatStatus` 上 —— 没有新机制，只是把内容接上。
+            "bag_of_marbles" => Some(RelicEffect::StartCombatStatus("standard.vulnerable", 1)),
+            "oddly_smooth_stone" => Some(RelicEffect::StartCombatStatus("standard.dexterity", 1)),
             _ => None,
         }
     }
@@ -4651,6 +4666,27 @@ mod tests {
                 "seed {seed}: an event-only card showed up as a reward: {cards:?}"
             );
         }
+    }
+
+    /// §221：**内容里的卡行数不许超过池子上限** —— 否则每一条走真实地图的路径都会在第一次
+    /// 奖励/商店处 `PoolTooLarge`（§221 加了 10 张牌之后就撞到过：68 > 64）。
+    ///
+    /// 这条判据的写法值得说一句：它不是"读一个常量比对另一个常量"，而是**从内容数行**。
+    /// `MAX_POOL` 是内核的定容上限（`pool_fits` 会响亮拒绝），而内容是该装进去的东西
+    /// —— 两者的关系必须由一条测试说出来，而不是靠"下次加卡时某条回放测试碰巧红"。
+    #[test]
+    fn the_card_pool_fits_the_constant() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = rd_core::content::Content::parse(&blob).expect("the image parses");
+        let rows = content.rows(rd_core::content::Table::Card).count();
+        assert!(
+            rows <= MAX_POOL,
+            "the content has {rows} card rows but a reward/shop pool holds at most              {MAX_POOL} -- every real map walk would fail at its first reward screen"
+        );
     }
 
     /// **一条超长的内容池必须响亮失败，不许被截成 64**（REVIEW P1，§161.1）。

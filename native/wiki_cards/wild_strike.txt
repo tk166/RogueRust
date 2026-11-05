@@ -1,0 +1,30 @@
+{{Card Infobox
+| Name        = Wild Strike
+| Image       = Red-WildStrike.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Common
+| Cost        = 1
+| Description = Deal (12;17) damage.<br>Shuffle a {{C|Wound}} into your draw pile.
+}}
+{{Small Card Infobox|Wound}}
+{{C|Wild Strike}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 12 (17 when upgraded) damage and adds a {{C|Wound}} into your draw pile.
+
+== Interactions ==
+=== Order === 
+* The {{C|Wound}} gets added into your draw pile ''before'' triggering {{R|Ink Bottle}}.
+
+=== Synergies ===
+* Synergizes with {{C|Fire Breathing}} and {{C|Evolve}}, as it creates a {{QueryLink|Cards|type:Status|Status}} card in your draw pile.
+* {{C|Wild Strike}} gets a damage increase of 3 from {{R|Strike Dummy}}, and adds to the damage of {{C|Perfected Strike}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 21|* Wild Strike card is now Common.}}
+{{Update History Table/row|Weekly 20|* Wild Strike card is now Uncommon.}}
+{{Update History Table/row|Weekly 1|* Perfected Strike reworked. Now counts ALL cards with the word Strike in its title. Swift Strike, Wild Strike, etc.}}
+{{Update History Table/row|?|* Added Wild Strike to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

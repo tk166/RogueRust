@@ -1,0 +1,68 @@
+{{Event Infobox
+| Name  = Bonfire Spirits
+| Image = Event-BonfireSpirits.png
+}} {{Small Relic Infobox|Spirit Poop}}
+{{E|Bonfire Spirits}} is a shrine [[Event]] found in all [[Acts]].
+
+Shrine events appear less frequently than other events.
+
+== Options ==
+{{Frame|Offer}} Receive a reward based on the offer.
+* Offer a card in your deck to remove. The reward you receive depends on the rarity of the card you give.
+
+== Dialogue ==
+<blockquote>
+<i>You happen upon what looks like a group of {{TS|purple||purple fire spirits}} {{TS||up|dancing}} around a large bonfire.</i>
+
+Before selecting {{Frame|Offer}}
+<blockquote>
+<i>The spirits toss small bones and fragments into the fire, which {{TS||up|brilliantly erupts}} each time.</i><br>
+<i>As you approach, the spirits all turn to you, expectantly...</i>
+</blockquote>
+
+{{Frame|Offer}}
+<blockquote>
+<i>You toss an offering into the bonfire.</i>
+
+When offering a {{QueryLink|Cards|rarity:Basic|Basic}} card
+<blockquote>
+<i>Nothing happens...</i><br>
+<i>The spirits seem to be ignoring you now. Disappointing...</i>
+</blockquote>
+
+When offering a {{QueryLink|Cards|rarity:Common|Common}} card
+<blockquote>
+<i>The flames grow slightly brighter.</i><br>
+<i>The spirits continue dancing. You feel slightly warmer from their presence..</i><br>
+<i>You {{TS|green||heal}} {{TS|blue||5}} HP.</i>
+</blockquote>
+
+When offering an {{QueryLink|Cards|rarity:Uncommon|Uncommon}} card
+<blockquote>
+<i>The flames erupt, growing significantly stronger!</i><br>
+<i>The spirits dance around you excitedly, filling you with a {{TS||up|sense of warmth.}}</i><br>
+<i>You are {{TS|green||healed}} to full HP.</i>
+</blockquote>
+
+When offering a {{QueryLink|Cards|rarity:Rare|Rare}} card
+<blockquote>
+<i>The flames {{TS||shake|burst}}, nearly knocking you off your feet, as the fire {{TS||shake|doubles}} in strength.</i><br>
+<i>The spirits dance around you excitedly before {{TS||up|merging into your form,}} filling you with warmth and strength.</i><br>
+<i>Your Max HP increases by {{TS|blue||10}} and you are {{TS|green||healed}} to full HP.</i>
+</blockquote>
+
+When offering a {{QueryLink|Cards|type:Curse|Curse}}
+<blockquote>
+<i>However, the spirits aren't happy you offered a {{TS|purple||Curse...}}</i><br>
+<i>The card fizzles a meek black smoke. You receive a... {{TS|purple|up|something}} in return.</i><br>
+(Gives {{R|Spirit Poop}})
+</blockquote>
+</blockquote>
+</blockquote>
+
+== Notes ==
+* This event treats {{QueryLink|Cards|rarity:Basic|Basic}} cards as a lower rarity than {{QueryLink|Cards|rarity:Common|Common}}.
+* Obtaining {{R|Spirit Poop}} adds the '''Poopy''' [[Score]] bonus which lowers your total score by one.
+
+{{EventNav}}
+[[Category:Events]]
