@@ -3381,6 +3381,47 @@ fn apply_combat_bonus(bonus: rd_run::state::CombatBonus) -> Result<(), String> {
         rd_core::exec::resolve_effect(&mut session.state, &item, Some(image))
             .map_err(|e| std::format!("遗物加状态 `{}` 失败：{e:?}", entry.id))?;
     }
+    // §224: 给**敌人**的那张表。走到这里说明遗物在战斗中生效（`bag_of_marbles`：
+    // "开战给所有敌人 1 层易伤"）。敌人是谁由战斗状态说了算 —— 不在这里另存一份名单。
+    if bonus.enemy_status_count > 0 {
+        let mut enemies: Vec<rd_core::state::CombatantId> = Vec::new();
+        for id in session.state.turn_order() {
+            let Some(combatant) = session.state.combatant(id) else {
+                continue;
+            };
+            if combatant.team_id.as_str() == "enemy" {
+                enemies.push(*id);
+            }
+        }
+        if enemies.is_empty() {
+            // 没有敌人 = 这场不是战斗（或者已经结束）。**不是错误**，但也不能静默：
+            // 记在会话错误里，让页面能显示"这件遗物没找到目标"。
+            session.error.push_str("开战状态没有目标（这场没有敌人）");
+        }
+        for entry in bonus.enemy_statuses.iter().take(bonus.enemy_status_count).flatten() {
+            let definition = rd_core::state::StatusDefinitionId::new(entry.id)
+                .map_err(|_| std::format!("`{}` 不是合法的状态 id", entry.id))?;
+            for enemy in &enemies {
+                let item = rd_core::state::EffectItem {
+                    request: rd_core::state::EffectRequest::ApplyStatus {
+                        target: Some(*enemy),
+                        definition,
+                        stacks: entry.stacks,
+                        duration: 0,
+                        charges: 0,
+                        source: None,
+                        source_card: None,
+                    },
+                    chain: rd_core::state::ChainSlot::NONE,
+                    owner: None,
+                };
+                let image = content();
+                rd_core::exec::resolve_effect(&mut session.state, &item, Some(image)).map_err(
+                    |e| std::format!("遗物给敌人加状态 `{}` 失败：{e:?}", entry.id),
+                )?;
+            }
+        }
+    }
     session.reobserve_after_external_change();
     Ok(())
 }

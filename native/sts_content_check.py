@@ -2649,8 +2649,10 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "strawberry", "bronze_scales", "regal_pillow", "meat_on_the_bone",
                       # §157: two more Rare (Eternal Feather, Golden Idol) + Potion Belt.
                       "eternal_feather", "golden_idol", "potion_belt",
-                      # §221: both are `StartCombatStatus` in the run layer -- 1 Vulnerable / 1
-                      # Dexterity at combat start, straight from the wiki.
+                      # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
+                      # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
+                      # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the
+                      # *hero* Vulnerable, which `ACT1_SLICE` caught as an unwinnable boss).
                       "bag_of_marbles", "oddly_smooth_stone")
 
 

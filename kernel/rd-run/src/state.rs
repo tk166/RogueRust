@@ -157,6 +157,14 @@ pub enum RelicEffect {
     /// Extra potion slots (`potion_belt`, wiki: +2). The wiki calls it the **only** way to raise the
     /// three slots, which is why the slot count is a method and not the array length (§157).
     ExtraPotionSlots(i32),
+    /// §224: start every fight with `stacks` of status `id` on **all enemies** (`bag_of_marbles`:
+    /// "At the start of each combat, apply 1 Vulnerable to ALL enemies").
+    ///
+    /// A separate variant rather than a `Target` on [`Self::StartCombatStatus`]: the two land on
+    /// different combatants and are applied by different code, and §222 already proved what happens
+    /// when the hero-shaped one is reused ("the hero became Vulnerable and the boss was
+    /// unwinnable" -- caught by `ACT1_SLICE`, not by any unit test).
+    StartCombatStatusOnEnemies(&'static str, i32),
 }
 
 /// `CombatBonus` 最多能带几种"开战时给的状态"（遗物数量远小于它）。
@@ -187,6 +195,14 @@ pub struct CombatBonus {
     pub statuses: [Option<CombatStatus>; MAX_COMBAT_STATUSES],
     /// How many of [`Self::statuses`] are set.
     pub status_count: usize,
+    /// §224: statuses **the enemies** start the fight with (`bag_of_marbles` = 1 Vulnerable each).
+    ///
+    /// A second list instead of a `Target` field on [`CombatStatus`]: hero statuses and enemy
+    /// statuses are applied by two different pieces of code (one combatant vs "every enemy slot"),
+    /// and a target field would make every existing reader ask a question with exactly two answers.
+    pub enemy_statuses: [Option<CombatStatus>; MAX_COMBAT_STATUSES],
+    /// How many of [`Self::enemy_statuses`] are set.
+    pub enemy_status_count: usize,
 }
 
 impl Default for CombatBonus {
@@ -195,6 +211,8 @@ impl Default for CombatBonus {
             block: 0,
             statuses: [None; MAX_COMBAT_STATUSES],
             status_count: 0,
+            enemy_statuses: [None; MAX_COMBAT_STATUSES],
+            enemy_status_count: 0,
         }
     }
 }
@@ -204,7 +222,9 @@ impl CombatBonus {
     /// one the caller can skip every write for.
     #[must_use]
     pub const fn is_empty(&self) -> bool {
-        self.block == 0 && self.status_count == 0
+        // ⚠️ `enemy_status_count` 必须在这条里 —— 漏了它，"只给敌人挂状态"的遗物会被
+        // `apply_combat_bonus` 的早退当成"这场战斗没有加成"，**静默不生效**。
+        self.block == 0 && self.status_count == 0 && self.enemy_status_count == 0
     }
 
     /// Add `stacks` of status `id`. `false` = the list is full (a **loud** failure: the caller must
@@ -215,6 +235,16 @@ impl CombatBonus {
         }
         self.statuses[self.status_count] = Some(CombatStatus { id, stacks });
         self.status_count += 1;
+        true
+    }
+
+    /// §224：同 [`Self::push_status`]，但**给敌人**。`false` = 表满（响亮，不静默丢一件遗物）。
+    pub fn push_enemy_status(&mut self, id: &'static str, stacks: i32) -> bool {
+        if self.enemy_status_count >= MAX_COMBAT_STATUSES {
+            return false;
+        }
+        self.enemy_statuses[self.enemy_status_count] = Some(CombatStatus { id, stacks });
+        self.enemy_status_count += 1;
         true
     }
 }
@@ -1307,6 +1337,8 @@ impl RunState {
             RelicEffect::EndOfCombatHeal(_)
             | RelicEffect::StartCombatBlock(_)
             | RelicEffect::StartCombatStatus(_, _)
+            // §224: 开战给敌人的状态也不是"拿到就生效"。
+            | RelicEffect::StartCombatStatusOnEnemies(_, _)
             | RelicEffect::RestHealBonus(_)
             | RelicEffect::EndOfCombatHealIfBelow { .. }
             // §157: none of these fires on pickup either -- the belt slot, the gold rate and the
@@ -1423,6 +1455,8 @@ impl RunState {
                     | RelicEffect::HealUp(_)
                     | RelicEffect::StartCombatBlock(_)
                     | RelicEffect::StartCombatStatus(_, _)
+                    // §224: 开战给敌人的状态也不是回合末效果。
+                    | RelicEffect::StartCombatStatusOnEnemies(_, _)
                     | RelicEffect::RestHealBonus(_)
                     | RelicEffect::RestHealPerFiveCards(_)
                     | RelicEffect::FightGoldPercent(_)
@@ -1473,10 +1507,14 @@ impl RunState {
             "eternal_feather" => Some(RelicEffect::RestHealPerFiveCards(3)),
             "golden_idol" => Some(RelicEffect::FightGoldPercent(25)),
             "potion_belt" => Some(RelicEffect::ExtraPotionSlots(2)),
-            // §221（wiki `Bag of Marbles` / `Oddly Smooth Stone`）：开战给 1 层易伤 / 1 层敏捷。
-            // 两者都落在既有的 `StartCombatStatus` 上 —— 没有新机制，只是把内容接上。
-            "bag_of_marbles" => Some(RelicEffect::StartCombatStatus("standard.vulnerable", 1)),
+            // §221/§224（wiki `Oddly Smooth Stone`）：开战给**英雄** 1 层敏捷。
             "oddly_smooth_stone" => Some(RelicEffect::StartCombatStatus("standard.dexterity", 1)),
+            // §224（wiki `Bag of Marbles`）：开战给**所有敌人** 1 层易伤。§222 曾把它挂成
+            // `StartCombatStatus`（加在英雄身上）⇒ 英雄自己变易伤、Boss 打不过，被 `ACT1_SLICE` 抓到。
+            "bag_of_marbles" => Some(RelicEffect::StartCombatStatusOnEnemies(
+                "standard.vulnerable",
+                1,
+            )),
             _ => None,
         }
     }
@@ -1497,6 +1535,26 @@ impl RunState {
         for slot in 0..self.relics_len as usize {
             match Self::relic_effect(self.relics[slot].as_str()) {
                 Some(RelicEffect::StartCombatBlock(amount)) => bonus.block += amount,
+                Some(RelicEffect::StartCombatStatusOnEnemies(id, stacks)) => {
+                    // §224: 给**敌人**的那张表。合并规则与英雄那张相同（两件遗物给同一条状态
+                    // 要相加，不是覆盖）。
+                    let mut merged = false;
+                    for entry in bonus.enemy_statuses.iter_mut().take(bonus.enemy_status_count) {
+                        if let Some(existing) = entry {
+                            if existing.id == id {
+                                existing.stacks += stacks;
+                                merged = true;
+                                break;
+                            }
+                        }
+                    }
+                    if !merged && !bonus.push_enemy_status(id, stacks) {
+                        // 表满 = 内容的一次冲突，不能静默丢。
+                        // `combat_bonus` 没有 Result 通道（它是纯读），所以这里的"响亮"是
+                        // 一条断言级的事实：内容里最多 4 件这类遗物。
+                        debug_assert!(false, "too many enemy combat-start statuses");
+                    }
+                }
                 Some(RelicEffect::StartCombatStatus(id, stacks)) => {
                     // Two relics granting the same status must **merge**, not overwrite: the same
                     // rule the kernel uses when a status is applied twice.
@@ -4666,6 +4724,40 @@ mod tests {
                 "seed {seed}: an event-only card showed up as a reward: {cards:?}"
             );
         }
+    }
+
+    /// §224：开战加成的**两张表** —— `oddly_smooth_stone` 给英雄，`bag_of_marbles` 给敌人。
+    ///
+    /// 判据的两半缺一不可：
+    /// * 英雄那张表**不许**拿到易伤（那正是 §222 的错误：一件"给敌人易伤"的遗物把英雄自己变脆，
+    ///   垂直切片里 Boss 直接打不过 —— 而单元测试一条都没红）；
+    /// * 敌人那张表**必须**有易伤，且 `is_empty` 要看它（漏了它，`apply_combat_bonus` 会早退，
+    ///   遗物静默不生效）。
+    #[test]
+    fn the_two_combat_start_carriers_land_on_the_right_side() {
+        let mut run = RunState::new(3, 80, 0, &DECK).expect("a run");
+        assert!(run.combat_bonus().is_empty(), "no relic, no bonus");
+        run.push_relic("oddly_smooth_stone").expect("the belt takes it");
+        let hero_side = run.combat_bonus();
+        assert_eq!(hero_side.status_count, 1, "the hero gets one status");
+        assert_eq!(hero_side.statuses[0].expect("set").id, "standard.dexterity");
+        assert_eq!(hero_side.enemy_status_count, 0, "and the enemies get none");
+
+        run.push_relic("bag_of_marbles").expect("the belt takes it");
+        let both = run.combat_bonus();
+        assert_eq!(
+            both.status_count, 1,
+            "the enemy-side relic must NOT add a hero status (that was §222's bug)"
+        );
+        assert_eq!(both.statuses[0].expect("set").id, "standard.dexterity");
+        assert_eq!(both.enemy_status_count, 1, "the enemies get one status");
+        assert_eq!(
+            both.enemy_statuses[0].expect("set").id,
+            "standard.vulnerable",
+            "wiki: apply 1 Vulnerable to ALL enemies"
+        );
+        assert_eq!(both.enemy_statuses[0].expect("set").stacks, 1);
+        assert!(!both.is_empty(), "`is_empty` must see the enemy list too");
     }
 
     /// §221：**内容里的卡行数不许超过池子上限** —— 否则每一条走真实地图的路径都会在第一次
