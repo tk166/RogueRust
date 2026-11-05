@@ -23,14 +23,6 @@ import io
 DEVIATIONS = {
     # §219：slimed 的偏差已经**修掉**了（现在可出、落区 ExhaustPile）—— 载体早就存在，
     # 只是 §218 把 wiki 的 `Exhaust` 当成了 tag。这里不再声明。
-    'apparition': {
-        'why': 'wiki: 基础带 Ethereal、升级去掉 Ethereal、两层都只给 1 层 Intangible + Exhaust；'
-               '内容把升级做成"2 层 Intangible"、且没有 Ethereal/Exhaust 标签。'
-               '升级轴方向性错了，但"无形"的强度在本内容的战斗里是等价的简化，先写明。',
-        # 只声明 Ethereal 的差别：Exhaust 我们**有**（落区 ExhaustPile），与 wiki 一致。
-        'content_keywords': ['Exhaust'],
-        'plus_facts': [('status', 'standard.intangible', 2, 'source')],
-    },
     'sentinel': {
         'why': 'wiki 没有 Ethereal（旧版有），内容带 `ethereal`。§220 起"被 Exhaust 时给 2(3) 能量"'
                '**已经实现**（`LifecyclePrograms[Exhausted]`），所以这条偏差只剩 Ethereal 标签本身。',
@@ -49,14 +41,6 @@ DEVIATIONS = {
         'why': 'wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。'
                '（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。）',
         'plus_facts': None,
-    },
-    'buffer': {
-        'why': 'wiki 页已是 v2.3 的重做版（**Power** / Rare / 2 费，给 1-2 层 Buffer）；'
-               '本内容按旧版（Skill / Uncommon / 1 费）。这不是抄错，是版本基线不同 —— '
-               '要跟随新版得改卡牌类型与费用，属于设计决定。',
-        'content_type': 'skill',
-        'content_rarity': 'Uncommon',
-        'content_cost': 1,
     },
     'dark_shackles': {
         'why': 'wiki 升级版是 15 层；内容没有 `dark_shackles+` 这一行。'
@@ -110,8 +94,9 @@ FACTS = {
                  ('status', 'standard.berserk', 1, 'source')],
                 [('status', 'standard.vulnerable', 1, 'source'),
                  ('status', 'standard.berserk', 1, 'source')]),
+    # §223：wiki —— 升级只去掉 Ethereal，两层都 1 层无形。
     'apparition': ([('status', 'standard.intangible', 1, 'source')],
-                   [('status', 'standard.intangible', 2, 'source')]),
+                   [('status', 'standard.intangible', 1, 'source')]),
     'sentinel': ([('block', 5, 'source')], [('block', 8, 'source')]),
     # ---- §221: the ten new cards, transcribed from `native/wiki_cards/*.txt` -------------------
     'cleave': ([('damage', 8, 'allEnemies')], [('damage', 11, 'allEnemies')]),

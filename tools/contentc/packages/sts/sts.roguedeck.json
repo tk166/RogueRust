@@ -3899,7 +3899,7 @@
       "Id": "apparition",
       "PackageId": "sts",
       "NameKey": "Apparition",
-      "DescriptionKey": "Gain 1 Intangible. Exhaust.",
+      "DescriptionKey": "Ethereal. Gain 1 Intangible. Exhaust.",
       "Costs": [
         {
           "ResourceId": {
@@ -3914,6 +3914,9 @@
         },
         {
           "value": "intangible"
+        },
+        {
+          "value": "ethereal"
         }
       ],
       "Program": {
@@ -3949,7 +3952,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "ExhaustPile",
       "PlayedCardDestinationZone": "ExhaustPile",
       "Rarity": "Special"
     },
@@ -3963,12 +3966,12 @@
           "ResourceId": {
             "value": "standard.energy"
           },
-          "Amount": 1
+          "Amount": 2
         }
       ],
       "Tags": [
         {
-          "value": "skill"
+          "value": "power"
         },
         {
           "value": "buffer"
@@ -4009,7 +4012,7 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
-      "Rarity": "Uncommon"
+      "Rarity": "Rare"
     },
     {
       "Id": "anger+",
@@ -4643,7 +4646,7 @@
       "Id": "apparition+",
       "PackageId": "sts",
       "NameKey": "Apparition+",
-      "DescriptionKey": "Gain 2 Intangible. Exhaust.",
+      "DescriptionKey": "Gain 1 Intangible. Exhaust.",
       "Costs": [
         {
           "ResourceId": {
@@ -4680,7 +4683,7 @@
             "Stacks": {
               "kind": "const",
               "value": {
-                "Value": 2
+                "Value": 1
               }
             },
             "DurationTurns": 0,
@@ -4693,7 +4696,7 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
-      "TurnEndHandDestinationZone": "DiscardPile",
+      "TurnEndHandDestinationZone": "Hand",
       "PlayedCardDestinationZone": "ExhaustPile",
       "Rarity": "Special"
     },
@@ -4707,12 +4710,12 @@
           "ResourceId": {
             "value": "standard.energy"
           },
-          "Amount": 1
+          "Amount": 2
         }
       ],
       "Tags": [
         {
-          "value": "skill"
+          "value": "power"
         },
         {
           "value": "buffer"
@@ -4753,7 +4756,7 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile",
-      "Rarity": "Uncommon"
+      "Rarity": "Rare"
     },
     {
       "Id": "inflame",

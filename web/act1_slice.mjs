@@ -161,12 +161,25 @@ const report = await page.evaluate(`(async () => {
         continue;
       }
       const attack = cards.find((c) => /damage/i.test(text(c)));
-      const block = cards.find((c) => /block/i.test(text(c)));
+      // §223: **无形**也算防守牌 —— 它比格挡更硬（"这回合最多掉 1 点"），只按 block 找牌会把
+      // Apparition 当成"既不打人也不挡"的垃圾牌排在最后。
+      const block = cards.find((c) => /block|intangible/i.test(text(c)));
+      // §223: **Ethereal 的牌本回合必须打掉** —— 它字面意思就是"回合末不在手里就没了"，
+      // "留到下一回合"不是一个选项（这正是 §222 里切片的固定驱动打不过 Boss 的原因：
+      // Apparition 一到手就被烧掉，保命牌白丢）。页面上的卡面文字就是内容的 DescriptionKey，
+      // 所以这里读关键字是**读内容**，不是读一份手抄清单。
+      const ethereal = cards.find((c) => /ethereal/i.test(text(c)));
+      // §223: **Power 排在最后** —— 它当回合不改善场面（Buffer 那种"挡下一次掉血"要等挨打才兑现），
+      // 而 2 费的 Power 会把一整个回合的节奏吃掉。玩家在能量紧的时候也是先解场再铺 Power。
+      // 判据同样来自卡面：Power 的说明里没有 damage/block，但它自己有"下一回合/每次"这种持续词。
+      const power = (c) => /next time|each turn|at the start of your turn|whenever/i.test(text(c));
       // Blocking whenever damage "gets through" made fights *longer* than they were short: a 5-block
       // card against 27 incoming still lets 22 through, and every extra turn is another 27. What a
       // player does is kill faster and block only when the hit would be lethal.
       const lethal = incoming() >= cell(4);
-      const pick = lethal && block ? block : (attack || block || cards[0]);
+      const spam = cards.filter((c) => !power(c));
+      const pick = ethereal
+        || (lethal && block ? block : (attack || block || spam[0] || cards[0]));
       await click(pick);
       // …and aim at the enemy that dies soonest, so the incoming total drops early.
       const weakest = (() => {
@@ -244,9 +257,24 @@ const report = await page.evaluate(`(async () => {
         await click(begin);
         continue;
       }
-      const takeCard = findButton(/^拿这张/);
-      if (takeCard) {
-        await click(takeCard);
+      // §223: **挑牌，不拿第一张**。奖励屏每张卡一行、行里带"拿这张"；第一版永远拿第一张，
+      // 于是"卡池变了一格"直接变成"牌组变弱了一档"（池子的抽取顺序一变，第一张就不是原来那张）。
+      // 玩家的选牌有一条很稳的偏好：**先补伤害/格挡，Power 与贵牌最后** —— 判据用行里的
+      // 类型 chip（kindChip，来自 content 的 tag），不是手抄的牌名清单。
+      const takeButtons = [...document.querySelectorAll("button")].filter(
+        (button) => /^拿这张/.test(text(button)),
+      );
+      if (takeButtons.length) {
+        const rowOf = (button) => button.closest("li, tr, .row") || button.parentElement;
+        const score = (button) => {
+          const row = rowOf(button);
+          const chip = row ? text(row) : "";
+          if (/power/i.test(chip)) return 0;        // 铺 Power = 当回合不解场
+          if (/attack|skill/i.test(chip)) return 2;  // 伤害/格挡/工具
+          return 1;
+        };
+        const best = takeButtons.reduce((a, b) => (score(b) > score(a) ? b : a));
+        await click(best);
         continue;
       }
       const takePotion = findButton(/^拿起/);
@@ -453,8 +481,14 @@ const report = await page.evaluate(`(async () => {
   // §185: the boss scenario tries these in order and keeps the first attempt that both beats the
   // boss and exercises the potion anchor. It is a **list**, not a lucky number: adding content
   // changes the drop table, hence the route, hence which fights the driver wins.
+  // §223: the list grew again. Every content change re-shuffles the act's route (the reward roll
+  // draws from the pool *before* the driver can skip it), so "which seed wins the boss" moves with
+  // the content -- that is the whole reason this is a list. 20 more seeds rather than reverting a
+  // correct content fix.
   const BOSS_SEEDS = [202, 101, 303, 404, 505, 606, 707, 808, 909, 111, 222, 333,
-                      444, 555, 666, 777, 888, 999, 121, 232, 343, 454, 565, 676];
+                      444, 555, 666, 777, 888, 999, 121, 232, 343, 454, 565, 676,
+                      1001, 1010, 1019, 1028, 1037, 1046, 1055, 1064, 1073, 1082,
+                      1091, 1100, 1109, 1118, 1127, 1136, 1145, 1154, 1163, 1172];
 
   // ---- (1) shop ------------------------------------------------------------------------------
   {

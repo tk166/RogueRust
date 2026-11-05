@@ -234,9 +234,13 @@ INV_CARDS = {
     # **每 X 一次**"，而不是被展开成 32 条。
     # §149: cards that hand out the damage-pipeline statuses (they exist so the statuses are
     # reachable in a run; `buffer` is a Defect power in StS, modelled here as a skill).
-    "apparition": {"Cost": 1, "Tags": ["skill", "intangible"],
-                   "Facts": [("status", "standard.intangible", 1, "source")]},
-    "buffer": {"Cost": 1, "Tags": ["skill", "buffer"],
+    # §223：wiki —— 基础带 Ethereal、升级**去掉** Ethereal，两层都只给 1 层无形 + Exhaust。
+    "apparition": {"Cost": 1, "Tags": ["skill", "intangible", "ethereal"],
+                   "Facts": [("status", "standard.intangible", 1, "source")],
+                   "TurnEndHandDestinationZone": "ExhaustPile",
+                   "PlayedCardDestinationZone": "ExhaustPile"},
+    # §223：跟 wiki 走 —— **Power** / Rare / 2 费（旧基线是 Skill / Uncommon / 1 费）。
+    "buffer": {"Cost": 2, "Tags": ["power", "buffer"],
                "Facts": [("status", "standard.buffer", 1, "source")]},
     # §147: the upgraded row -- same X mechanics, 8 damage per hit instead of 5.
     # §154: the ten `+` rows that were missing. The run upgrades by appending `+` to the card id, so
@@ -262,8 +266,9 @@ INV_CARDS = {
     "swift_strike+": {"Cost": 1, "Tags": ["attack", "strike", "innate"],
                       "Facts": [("damage", 9, "event")]},
     "apparition+": {"Cost": 1, "Tags": ["skill", "intangible"],
-                    "Facts": [("status", "standard.intangible", 2, "source")]},
-    "buffer+": {"Cost": 1, "Tags": ["skill", "buffer"],
+                    "Facts": [("status", "standard.intangible", 1, "source")],
+                    "PlayedCardDestinationZone": "ExhaustPile"},
+    "buffer+": {"Cost": 2, "Tags": ["power", "buffer"],
                 "Facts": [("status", "standard.buffer", 2, "source")]},
     "whirlwind+": {"Cost": 0, "Tags": ["attack", "x_cost"],
                    "Facts": [("repeat", ("expr", "x.cost"), "damage", 8, "allEnemies")]},
@@ -2748,9 +2753,11 @@ def check_upgrades(doc):
         if any(up > base for up, base in zip(up_cost, base_cost)) or len(up_cost) != len(base_cost):
             fail("cards.upgrades", "%s costs MORE than %s (%r > %r)"
                  % (card_id, card_id[:-1], up_cost, base_cost))
-        if [tag["value"] for tag in card.get("Tags") or []] != [
-            tag["value"] for tag in base.get("Tags") or []
-        ]:
+        # §223：升级行**可以少一个 `ethereal`** —— wiki 的 Apparition 就是"升级去掉 Ethereal"，
+        # 一刀切会让正确内容被判错。其它差别仍然红（"升级顺手换了类型/关键字"是抄写错误）。
+        base_tags = [tag["value"] for tag in base.get("Tags") or []]
+        up_tags = [tag["value"] for tag in card.get("Tags") or []]
+        if up_tags != base_tags and up_tags != [tag for tag in base_tags if tag != "ethereal"]:
             fail("cards.upgrades", "%s has different tags from %s" % (card_id, card_id[:-1]))
     upgraded = sum(1 for card_id in cards if card_id.endswith("+"))
     ok("card upgrades", "%d upgraded rows, every upgradable card has one" % upgraded)

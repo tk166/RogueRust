@@ -38,13 +38,13 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 73 | 40 | 33 | 0 | 69 | 4 | 12 | 0 |
+| 卡牌 | 73 | 40 | 33 | 0 | 69 | 4 | 8 | 0 |
 | 状态 | 44 | 41 | 1 | 2 | 0 | 44 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 9 | 6 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 387 | 251 | 120 | 16 | 246 | 48 | 75 | 0 |
+| **合计** | 387 | 251 | 120 | 16 | 246 | 48 | 71 | 0 |
 
 扫描到的具名测试：**914** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
@@ -245,8 +245,8 @@
 |---|---|---|---|---|---|---|
 | anger | yes | the_same_state_hashes_the_same_and_a_change_moves_it, the_potion_chance_walks_the_wikis_ten_percent …(+5) | — | wiki:wiki_cards/anger.txt | — | CARD_WIKI+INV_CARDS/the_same_state_hashes_the_same_and_a_change_moves_it |
 | anger+ | yes | — | CARD_DIFF | wiki:wiki_cards/anger.txt (via anger) | — | INV_CARDS |
-| apparition | yes | a_special_card_is_known_and_never_put_in_a_reward | — | wiki:wiki_cards/apparition.txt | wiki 偏差：wiki: 基础带 Ethereal、升级去掉 Ethereal、两层都只给 1 层 Intangible + Exhaust；内容把升级做成"2 层 Intangible"、且没有 Ethereal/Exhaust 标签。升级轴方向性错了，但"无形"的强度在本内容的战斗里是等价的简化，先写明。 | §149/CARD_WIKI+INV_CARDS/a_special_card_is_known_and_never_put_in_a_reward |
-| apparition+ | yes | — | CARD_DIFF | wiki:wiki_cards/apparition.txt (via apparition) | wiki 偏差：wiki: 基础带 Ethereal、升级去掉 Ethereal、两层都只给 1 层 Intangible + Exhaust；内容把升级做成"2 层 Intangible"、且没有 Ethereal/Exhaust 标签。升级轴方向性错了，但"无形"的强度在本内容的战斗里是等价的简化，先写明。 | INV_CARDS |
+| apparition | yes | a_special_card_is_known_and_never_put_in_a_reward | — | wiki:wiki_cards/apparition.txt | — | §149/§223/CARD_WIKI+INV_CARDS/a_special_card_is_known_and_never_put_in_a_reward |
+| apparition+ | yes | — | CARD_DIFF | wiki:wiki_cards/apparition.txt (via apparition) | — | INV_CARDS |
 | ascenders_bane | yes | — | CARD_DIFF | wiki:wiki_cards/ascenders_bane.txt | — | §183/§189/CARD_WIKI+INV_CARDS |
 | bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
@@ -262,8 +262,8 @@
 | bludgeon+ | yes | — | CARD_DIFF | wiki:wiki_cards/bludgeon.txt (via bludgeon) | — | INV_CARDS |
 | blur | yes | blur_gives_five_or_eight_block_and_the_status, a_special_card_is_known_and_never_put_in_a_reward | — | wiki:wiki_cards/blur.txt | — | §218/CARD_WIKI+INV_CARDS/blur_gives_five_or_eight_block_and_the_status |
 | blur+ | yes | blur_gives_five_or_eight_block_and_the_status | — | wiki:wiki_cards/blur.txt (via blur) | — | INV_CARDS/blur_gives_five_or_eight_block_and_the_status |
-| buffer | yes | — | CARD_DIFF | wiki:wiki_cards/buffer.txt | wiki 偏差：wiki 页已是 v2.3 的重做版（**Power** / Rare / 2 费，给 1-2 层 Buffer）；本内容按旧版（Skill / Uncommon / 1 费）。这不是抄错，是版本基线不同 —— 要跟随新版得改卡牌类型与费用，属于设计决定。 | §149/CARD_WIKI+INV_CARDS |
-| buffer+ | yes | — | CARD_DIFF | wiki:wiki_cards/buffer.txt (via buffer) | wiki 偏差：wiki 页已是 v2.3 的重做版（**Power** / Rare / 2 费，给 1-2 层 Buffer）；本内容按旧版（Skill / Uncommon / 1 费）。这不是抄错，是版本基线不同 —— 要跟随新版得改卡牌类型与费用，属于设计决定。 | INV_CARDS |
+| buffer | yes | — | CARD_DIFF | wiki:wiki_cards/buffer.txt | — | §223/CARD_WIKI+INV_CARDS |
+| buffer+ | yes | — | CARD_DIFF | wiki:wiki_cards/buffer.txt (via buffer) | — | INV_CARDS |
 | burn | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade | — | wiki:wiki_cards/burn.txt | wiki 偏差：wiki 升级版是"回合末受 4 点伤害"，内容只有基础版（`burn+` 那一行没有生命周期）。 | §175/CARD_WIKI+INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
 | burn+ | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade | — | wiki:wiki_cards/burn.txt (via burn) | wiki 偏差：wiki 升级版是"回合末受 4 点伤害"，内容只有基础版（`burn+` 那一行没有生命周期）。 | INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
 | cleave | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/cleave.txt | — | §10/§221/CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
@@ -326,7 +326,7 @@
 | standard.barricade | yes | barricade_keeps_block_forever_and_blur_only_for_one_turn | — | spec:INV_STATUSES | — | §197/INV_STATUSES/barricade_keeps_block_forever_and_blur_only_for_one_turn |
 | standard.berserk | yes | berserk_adds_one_energy_per_stack_at_turn_start | — | spec:INV_STATUSES | — | §199/§210/INV_STATUSES/berserk_adds_one_energy_per_stack_at_turn_start |
 | standard.blur | yes | blur_gives_five_or_eight_block_and_the_status, barricade_keeps_block_forever_and_blur_only_for_one_turn | — | spec:INV_STATUSES | — | §197/§218/INV_STATUSES/blur_gives_five_or_eight_block_and_the_status |
-| standard.buffer | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor | — | spec:INV_STATUSES | — | §125/§149/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
+| standard.buffer | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor | — | spec:INV_STATUSES | — | §149/§223/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
 | standard.combust | yes | flame_barrier_hits_back_and_combust_burns_everyone | — | spec:INV_STATUSES | — | §119/INV_STATUSES/flame_barrier_hits_back_and_combust_burns_everyone |
 | standard.constricted | yes | constricted_loses_its_stacks_of_hp_through_block_at_turn_end, statuses_outside_the_five_axes_are_readable_by_name …(+1) | — | spec:INV_STATUSES | — | §175/§214/INV_STATUSES/constricted_loses_its_stacks_of_hp_through_block_at_turn_end |
 | standard.curiosity | yes | the_awakened_one_survives_its_first_death_and_then_really_dies | — | spec:INV_STATUSES | — | §194/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
@@ -342,7 +342,7 @@
 | standard.flying | yes | flying_halves_attack_damage_and_loses_a_stack_per_hit | — | spec:INV_STATUSES | — | §208/§216/INV_STATUSES/flying_halves_attack_damage_and_loses_a_stack_per_hit |
 | standard.frail | yes | damage_table_rows_are_the_frozen_shape, standard_status_ids_are_byte_ordered_not_registration_ordered …(+3) | — | spec:INV_STATUSES | — | §196/§212/INV_STATUSES/damage_table_rows_are_the_frozen_shape |
 | standard.hex | yes | hex_shuffles_a_dazed_only_for_non_attack_cards | — | spec:INV_STATUSES | — | §210/§213/INV_STATUSES/hex_shuffles_a_dazed_only_for_non_attack_cards |
-| standard.intangible | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor | — | spec:INV_STATUSES | — | §149/§210/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
+| standard.intangible | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor | — | spec:INV_STATUSES | — | §210/§223/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
 | standard.lose_dexterity | yes | — | — | spec:INV_STATUSES | — | §158/INV_STATUSES |
 | standard.lose_strength | yes | flex_potion_gives_strength_and_takes_it_back | — | spec:INV_STATUSES | — | §158/INV_STATUSES/flex_potion_gives_strength_and_takes_it_back |
 | standard.metallicize | yes | metallicize_grants_block_at_the_end_of_the_turn, plated_armor_and_metallicize_both_pay_block_at_turn_end | — | spec:INV_STATUSES | — | §107/§194/INV_STATUSES/metallicize_grants_block_at_the_end_of_the_turn |
