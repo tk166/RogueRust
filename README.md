@@ -1,13 +1,13 @@
 # RogueRust
 
-一个 Slay the Spire 式的卡牌 Roguelike 工程：**战斗内核 + 运行层 + 内容编译器 + 浏览器前端 + 二十道聚合闸门**。
+一个 Slay the Spire 式的卡牌 Roguelike 工程：**战斗内核 + 运行层 + 内容编译器 + 浏览器前端 + 二十一道聚合闸门**。
 
 参考实现是 `RogueDeck-Core`（C#，MIT；仓库 `ref/RogueDeck-Core` 是只读浅克隆），按 commit
 `fd43e68ab91f40b475b745725abb17134b951c51` 冻结。
 移植的硬约束是三条：**能在 ESP32-P4 裸机上跑**（`no_std`、零分配、纯整数、`forbid(unsafe_code)`）、
 **能多开当强化学习训练环境**（确定性、可快照、可回放）、**与参考实现逐字节一致的状态指纹**（对拍可证）。
 
-> 主计划在 `docs/port-plan.md`（§1–§214，每一轮都留数字、记下被推翻的结论）。
+> 主计划在 `docs/port-plan.md`（§1–§215，每一轮都留数字、记下被推翻的结论）。
 > 这份 README 只交代**仓库现在是什么样、以及怎么把它跑起来玩**；为什么变成这样，在计划里。
 
 ---
@@ -24,7 +24,7 @@
 | **Rust**（rustup） | stable | 编译内核 → wasm | <https://rustup.rs> |
 | **wasm 目标** | `wasm32-unknown-unknown` | 同上 | `rustup target add wasm32-unknown-unknown` |
 | **Python** | 3.10+ | 起静态服务（也用于内容编译/闸门） | <https://www.python.org> |
-| *（可选）Node.js* | 18+ | 只有 20 道闸门里的浏览器测试需要 | <https://nodejs.org> |
+| *（可选）Node.js* | 18+ | 只有 21 道闸门里的浏览器测试需要 | <https://nodejs.org> |
 | *（可选）Chrome / Edge* | 任意近期版本 | 同上 | 系统自带即可 |
 
 > 只要**玩**，装 Rust + Python 就够；Node 与浏览器只在你要跑验收脚本时才需要。
@@ -49,7 +49,7 @@ Copy-Item .\target\wasm32-unknown-unknown\release\rd_wasm.wasm ..\web\rd_wasm.wa
 > **内容镜像已经编进 wasm**（`include_bytes!` 指向 `tools/contentc/packages/sts/out/content.sts.rdcf`），
 > 所以你**不需要**另外准备数据文件；只要镜像在仓库里（它在，且入库）。
 > 改了 `kernel/**` 或内容 JSON 之后**必须重编 wasm 并覆盖 `web/rd_wasm.wasm`** ——
-> 第 13 道闸门会比对它的 sha，陈旧就直接红。
+> 第 14 道闸门会比对它的 sha，陈旧就直接红。
 
 ### 1.3 起服务、打开浏览器
 
@@ -64,7 +64,7 @@ python -m http.server 8000
 
 <http://127.0.0.1:8000/web/index.html>
 
-地图页（第 16 道闸门的对象，只走图、不结算）：<http://127.0.0.1:8000/web/map.html>
+地图页（第 17 道闸门的对象，只走图、不结算）：<http://127.0.0.1:8000/web/map.html>
 
 > 为什么从**仓库根目录**起服务：页面先找 `./rd_wasm.wasm`，找不到再退回
 > `../kernel/target/wasm32-unknown-unknown/release/rd_wasm.wasm`。仓库根目录同时满足这两条，
@@ -174,14 +174,14 @@ python -m http.server 8000
 | `kernel/rd-firmware/` | 裸机启动壳（独立的 `[workspace]`，只在 riscv 目标上存在）——**只为证明链接得过** |
 | `kernel/rd-hashdump` `rd-rngdump` `rd-sizeprobe` `rd-fightdump` | 诊断二进制：哈希对拍、洗牌序列对拍、RISC-V 代码体积、把一局战斗逐步打出来 |
 | `tools/contentc/` | **Python 内容编译器**：JSON 源 → `rdcf` 二进制镜像（段目录 + 字符串池 + 效果程序 IR） |
-| `tools/acceptance.ps1` | **聚合验收**：20 道闸门，一道红就整体红 |
+| `tools/acceptance.ps1` | **聚合验收**：21 道闸门，一道红就整体红 |
 | `tools/rdcf_verify.py` `rdcf_terms.py` | 内容镜像的**独立**字节级校验（段目录 / count×stride / term 表形状） |
 | `web/` | 前端（零构建、零 CDN）：`index.html` + `ui_render.js`（战斗语义）+ `ui_panels.js`（14 个节点状态）+ `map.html` + `pixels.mjs`（像素度量）+ 门 13–20 的脚本 |
 | `native/RogueDeck.Oracle` `RogueDeck.Native` | C# 侧：对拍导出（NativeAOT）与 RL 环境 ABI |
 | `native/*.py` | 三类：**对拍/校验驱动**（`fight_diff.py`、`gap_check.py`、`sts_content_check.py`…）、**`doc_*.py`**（每一节往 `port-plan.md` 追加章节的脚本，与正文一一对应）、**`patch_*.py` / `negctl_*.py`**（那一节改动源码与**反证**的脚本，留作记录） |
 | `py/roguedeck_env/` | RL 环境的 Python 封装（`ctypes`，多进程 + 批量观察 + 吞吐基准） |
 | `corpus/` | 对拍语料：`golden_v1.jsonl`、`hash_cases/*.txt`、`coverage.json`（份数以闸门输出为准） |
-| `docs/` | `port-plan.md`（主计划 §1–§195）、`spec/`（21 份规格书）、`sts-wiki-gap.md`（缺口清单，数字由 `native/gap_check.py` 重算） |
+| `docs/` | `port-plan.md`（主计划 §1–§195）、`spec/`（21 份规格书）、`sts-wiki-gap.md`（缺口清单，数字由 `native/gap_check.py` 重算）、`coverage-matrix.md`（**生成物**：每个实体的 Implemented / RuntimeTested / WikiVerified / Deviation / Evidence，闸门 13） |
 | `ref/` | 参考实现的浅克隆位置（**不在本仓库**，见 §9） |
 | `sts/` | **早期 Python 原型**，已被 Rust 内核取代，保留作参照（不参与任何闸门） |
 

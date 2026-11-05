@@ -295,6 +295,7 @@ Sentry 的 Bolt 塞的就是它。
   `Reptomancer` / `Slavers` / `Taskmaster`。**页面会变**，所以只引页面名 + 核对日期。
 * 改了内容或内核规则之后，**跑一遍脚本**，把正文里对不上的句子改掉 —— 或者干脆改成"见脚本"。
   一句"我们有 26/33 瓶药水"如果没人重算，它会在下一次内容变更后变成谎话，而**没有任何闸门会红**。
+* **逐实体的账在 `docs/coverage-matrix.md`（生成物，闸门 13）**：它把"每个实体被验证到哪一步"写成 360 行 —— `Implemented` / `RuntimeTested`（`test:` 还是只有 `harness:`）/ `WikiVerified`（`wiki:<dump>` 还是只有 `spec:<TABLE>`）/ `Deviation` / `Evidence`。本文档 §G、§H 的两张表**被它直接解析**（改了这里而不改内容，那条闸门会点名是哪个 id 漂了）。`WikiVerified = —` 的那几类就是"还没回到 wiki 页看过"的清单。
 * ⚠️ **闸门看不见 wiki**：本轮重核抓到 `blind` 的稀有度与 Exhaust 都写错了，而 20 道闸门全绿
   （内容门对照的是 `docs/spec/` 的清单，清单本身也是人抄的）。⇒ 新内容落地时，**至少把稀有度
   与"是否 Exhaust"这两列回到单卡页看一眼**，它们是最容易"顺手抄邻居"的两格。
