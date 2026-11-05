@@ -1,0 +1,42 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Fiend Fire
+| Image         = Red-FiendFire.png
+| Color         = Red
+| Type          = Attack
+| Rarity        = Rare
+| Cost          = 2
+| Description   = {{KW|Exhaust}} your hand.<br>Deal (7;10) damage for each card {{KW|Exhaust|Exhausted}}.<br>{{KW|Exhaust}}.
+| GivesToPlayer = Exhaust
+| InteractsWith = Exhaust
+}}
+{{Keyword Infobox|Exhaust}}
+{{C|Fiend Fire}} is a 2 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Attack|Attack}} Card. It {{KW|Exhaust|Exhausts}} all cards in your hand, and deals 7 (10 if upgraded) damage for every card {{KW|Exhaust|Exhausted}} this way, excluding itself. {{C|Fiend Fire}} will then {{KW|Exhaust}} itself.
+
+== Interactions ==
+=== Order ===
+* If you have {{R|Dead Branch}} and {{C|Dark Embrace}} and play {{C|Fiend Fire}} to {{KW|Exhaust|Exhausts}} multiple cards, it resolves 1 card at a time. This means the order goes: 
+# Your hand is fully {{KW|Exhaust|Exhausted}}.
+# The 1st {{KW|Exhaust|Exhausted}} card generates a new card via {{R|Dead Branch}}.
+# The 1st {{KW|Exhaust|Exhausted}} card draws a card via {{C|Dark Embrace}}.
+# Moves onto the 2nd card, repeat steps 2 and 3.
+
+=== Synergies ===
+* {{C|Fiend Fire}} has {{KW|Exhaust}}-synergy with {{C|Dark Embrace}}, {{C|Feel No Pain}}, {{R|Charon's Ashes}} and {{R|Dead Branch}}, and can reliably {{KW|Exhaust}} {{C|Sentinel}}.
+* Benefits once from {{BD|Strength}} or {{BD|Vigor}} per hit, so per card {{KW|Exhaust|Exhausted}}.
+
+=== Neutral === 
+* {{C|Fiend Fire}} only has an effect if it has cards to {{KW|Exhaust}}. This means that playing it twice using for example {{C|Double Tap}} or {{R|Necronomicon}} does nothing, unless the cards are replaced in between through {{C|Dark Embrace}} or {{R|Dead Branch}}.
+
+=== Trivia ===
+* {{C|Fiend Fire}} appears as a cameo in [https://foursouls.com/cards/rwz-fiend_fire/ The Binding of Isaac: Four Souls].
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Watcher 11|* Fiend Fire card resolves 0.25s faster and 0.15s faster per card exhausted in fast mode.}}
+{{Update History Table/row|Watcher 1|* Fiend Fire: New wording (same effect): "Exhaust your hand. Deal 7 (10) damage for each card Exhausted. Exhaust."}}
+{{Update History Table/row|?|* Added Fiend Fire to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

@@ -7579,6 +7579,410 @@
       "TurnEndHandDestinationZone": "Hand",
       "RetainInHandOnTurnEnd": false,
       "LifecyclePrograms": {}
+    },
+    {
+      "Id": "second_wind",
+      "PackageId": "sts",
+      "NameKey": "Second Wind",
+      "DescriptionKey": "Exhaust all non-Attack cards in your hand. Gain 5 Block for each card Exhausted.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.forEachCardInZone",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Zone": "Hand",
+            "MaxIterations": 64,
+            "Body": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "not",
+                  "value": {
+                    "Condition": {
+                      "kind": "event.bool",
+                      "value": {
+                        "FieldKey": "card.hasTag.attack"
+                      }
+                    }
+                  }
+                },
+                "Then": {
+                  "kind": "node.sequence",
+                  "value": {
+                    "Children": [
+                      {
+                        "kind": "node.moveCardToZone",
+                        "value": {
+                          "CardExpression": {
+                            "kind": "cardInstance.iterated",
+                            "value": {}
+                          },
+                          "OwnerSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "ToZone": "ExhaustPile",
+                          "Placement": "Bottom",
+                          "ResultKey": null
+                        }
+                      },
+                      {
+                        "kind": "node.gainBlock",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 5
+                            }
+                          },
+                          "PoolId": {
+                            "value": "standard.block"
+                          },
+                          "ResultKey": null
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Else": null
+              }
+            }
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "ExhaustPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "second_wind+",
+      "PackageId": "sts",
+      "NameKey": "Second Wind+",
+      "DescriptionKey": "Exhaust all non-Attack cards in your hand. Gain 5 Block for each card Exhausted.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.forEachCardInZone",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Zone": "Hand",
+            "MaxIterations": 64,
+            "Body": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "not",
+                  "value": {
+                    "Condition": {
+                      "kind": "event.bool",
+                      "value": {
+                        "FieldKey": "card.hasTag.attack"
+                      }
+                    }
+                  }
+                },
+                "Then": {
+                  "kind": "node.sequence",
+                  "value": {
+                    "Children": [
+                      {
+                        "kind": "node.moveCardToZone",
+                        "value": {
+                          "CardExpression": {
+                            "kind": "cardInstance.iterated",
+                            "value": {}
+                          },
+                          "OwnerSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "ToZone": "ExhaustPile",
+                          "Placement": "Bottom",
+                          "ResultKey": null
+                        }
+                      },
+                      {
+                        "kind": "node.gainBlock",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 7
+                            }
+                          },
+                          "PoolId": {
+                            "value": "standard.block"
+                          },
+                          "ResultKey": null
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Else": null
+              }
+            }
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "ExhaustPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "fiend_fire",
+      "PackageId": "sts",
+      "NameKey": "Fiend Fire",
+      "DescriptionKey": "Exhaust your hand. Deal 7 damage for each card Exhausted. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.forEachCardInZone",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Zone": "Hand",
+            "MaxIterations": 64,
+            "Body": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.moveCardToZone",
+                    "value": {
+                      "CardExpression": {
+                        "kind": "cardInstance.iterated",
+                        "value": {}
+                      },
+                      "OwnerSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "ToZone": "ExhaustPile",
+                      "Placement": "Bottom",
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 7
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "ExhaustPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
+    },
+    {
+      "Id": "fiend_fire+",
+      "PackageId": "sts",
+      "NameKey": "Fiend Fire+",
+      "DescriptionKey": "Exhaust your hand. Deal 7 damage for each card Exhausted. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.forEachCardInZone",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Zone": "Hand",
+            "MaxIterations": 64,
+            "Body": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.moveCardToZone",
+                    "value": {
+                      "CardExpression": {
+                        "kind": "cardInstance.iterated",
+                        "value": {}
+                      },
+                      "OwnerSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "ToZone": "ExhaustPile",
+                      "Placement": "Bottom",
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 10
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "PlayedCardDestinationZone": "ExhaustPile",
+      "TurnEndHandDestinationZone": "Hand",
+      "RetainInHandOnTurnEnd": false,
+      "LifecyclePrograms": {}
     }
   ],
   "EnemyActions": [

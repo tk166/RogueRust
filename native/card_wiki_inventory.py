@@ -121,6 +121,15 @@ FACTS = {
     # §221：事件诅咒（没有数字，只有关键字；Doubt 的回合末效果在 `LifecyclePrograms` 里）。
     'doubt': ([], None),
     'writhe': ([], None),
+    # ---- §225：整手牌逐张消耗（数字来自 native/wiki_cards/*.txt） -----------------------------
+    'second_wind': ([('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),
+                                       ('block', 5, 'source')))],
+                    [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),
+                                       ('block', 7, 'source')))]),
+    'fiend_fire': ([('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),
+                                      ('damage', 7, 'event')))],
+                   [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),
+                                      ('damage', 10, 'event')))]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

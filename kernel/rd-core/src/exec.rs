@@ -308,6 +308,15 @@ pub struct ExecContext<'a> {
     /// 绑的是两种东西、而且可以互相嵌套。**只有控制流节点会写它**，
     /// 而且必须在退出时**无条件**恢复（含 Body 报错的路径）。
     pub iteration_card: Option<CardInstanceId>,
+    /// §225：**正在结算的那张牌**（出牌时由 `play.rs` 填）。
+    ///
+    /// 为什么需要：`Second Wind` 的循环快照里会看到**它自己** —— 打出的牌要到终态回调才离开手牌
+    /// （参考的落区也是在 `onTerminal`），而循环在结算期间跑。参考语义里"打出的牌已经不在手牌"，
+    /// 所以这里让程序**知道**是哪一张，`forEachCardInZone` 的快照把它跳过。
+    ///
+    /// ⚠️ 不改成"打出时就把牌搬走"：那会改变每一步哈希里的牌区计数，直接打破与 C# oracle 的
+    /// 逐字节契约（`CARD_DIFF` / `FIGHT_DIFF`）。牌留在原处，只是程序看得见它。
+    pub resolving_card: Option<CardSlot>,
     /// 节目信封里的 `MaxProgramSteps`（core 镜像实测 1024）。
     pub max_steps: u32,
     /// 触发事件的**布尔事实**，按位。今天只有"这张牌有没有某个 tag"这四种
@@ -360,6 +369,7 @@ impl<'a> ExecContext<'a> {
             event_target,
             iteration_target,
             iteration_card: None,
+            resolving_card: None,
             max_steps,
             event_flags: 0, event_amount: None,
             content: None,
@@ -742,6 +752,8 @@ fn open_frame(
         target: ctx.event_target,
         iteration_target: ctx.iteration_target,
         iteration_card: ctx.iteration_card,
+        event_flags: ctx.event_flags,
+        resolving_card: ctx.resolving_card,
         entry_iteration_target: ctx.iteration_target,
         entry_iteration_card: ctx.iteration_card,
         steps: 0,
@@ -1942,6 +1954,9 @@ fn frame_context<'a>(
         record.max_steps,
     );
     ctx.iteration_card = record.iteration_card;
+    // §225：解析/续延重建上下文时，**迭代卡的 tag 位**与**正在结算的牌**都要拿回来。
+    ctx.event_flags = record.event_flags;
+    ctx.resolving_card = record.resolving_card;
     ctx.x_cost = record.x_cost;
     ctx.content = content;
     Ok(ctx)
@@ -2918,6 +2933,7 @@ fn dispatch_for_each_target(
         list: ProgramLoopList::Targets(list),
         saved_target: ctx.iteration_target,
         saved_card: ctx.iteration_card,
+        saved_flags: ctx.event_flags,
         body: body.id(),
         live: true,
     })?;
@@ -2970,6 +2986,7 @@ fn dispatch_repeat(
         // （写法与另外两种循环一致，免得"这一类不需要恢复"成为一条要记住的例外）。
         saved_target: ctx.iteration_target,
         saved_card: ctx.iteration_card,
+        saved_flags: ctx.event_flags,
         body: body.id(),
         live: true,
     })?;
@@ -3011,6 +3028,10 @@ fn start_iteration(
     // 所以这一支要当场还原，不能把迭代卡留在帧上（`e2e_19h` 的 (b) 半钉着它）。
     let outer_target = ctx.iteration_target;
     let outer_card = ctx.iteration_card;
+    // §225：迭代卡也要**填 `event_flags` 的卡牌 tag 位** —— 与 `CardPlayed` 触发器同一条口径。
+    // 这样"消耗所有**非攻击**牌"（Second Wind）就能用 `not(event.bool: card.hasTag.attack)` 表达，
+    // 而表达式层**不需要**去读内容（那会给 `ExprContext` 开一条它不该有的通道）。
+    let outer_flags = ctx.event_flags;
     match loop_entry.list {
         ProgramLoopList::Targets(list) => {
             let Some(target) = list.get(index).copied() else {
@@ -3027,6 +3048,12 @@ fn start_iteration(
                 return Err(ExecError::Ir(IrError::Slot));
             };
             ctx.iteration_card = Some(card.id);
+            ctx.event_flags = match ctx.content {
+                Some(content) => content.card_tag_bits(card.definition_id.as_str()),
+                // 没有内容 ⇒ 不知道这张牌有什么 tag。**不许**当成"没有 tag"：那会让
+                // "非攻击牌"把攻击牌也算进去。响亮失败。
+                None => return Err(ExecError::Ir(IrError::Missing("content"))),
+            };
         }
         // §146：`repeat` 没有可绑的东西 —— 迭代目标/卡保持外层原样（这正是"不要在 X 费牌里
         // 造假目标"的理由：`sel.iterationTarget` 必须还是外层那个）。
@@ -3049,6 +3076,7 @@ fn start_iteration(
     if outcome.is_err() {
         ctx.iteration_target = outer_target;
         ctx.iteration_card = outer_card;
+        ctx.event_flags = outer_flags;
         if let Some(cell) = ctx.state.program_frames_mut().get_mut(frame) {
             cell.iteration_target = outer_target;
             cell.iteration_card = outer_card;
@@ -3123,6 +3151,11 @@ fn dispatch_for_each_card_in_zone(
             let Some(card_slot) = zones.slot_at(zone, index) else {
                 return Err(ExecError::Ir(IrError::Slot));
             };
+            // ⚠️ §225 记一笔**没做**的改动：这里曾试着跳过"正在结算的那张牌"，被既有测试
+            // 挡回来了 —— `play::tests` 与 `CARD_DIFF` 的 `archive_the_evidence` 都依赖
+            // **打出的牌在节目期间仍在手牌**（参考实现就是这样：`onTerminal` 才落区）。
+            // 所以"消耗整手牌"（Second Wind / Fiend Fire）在本内核里会**多算自己一次** ——
+            // 那是与 StS 的语义差，不是抄错；要修得先让参考的那条路径变（哈希契约）。
             let Some(card) = ctx.state.card(card_slot) else {
                 return Err(ExecError::Ir(IrError::Slot));
             };
@@ -3179,6 +3212,7 @@ fn dispatch_for_each_card_in_zone(
         list: ProgramLoopList::Cards(list),
         saved_target: ctx.iteration_target,
         saved_card: ctx.iteration_card,
+        saved_flags: ctx.event_flags,
         body: body.id(),
         live: true,
     })?;

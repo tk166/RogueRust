@@ -1,0 +1,32 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Second Wind
+| Image         = Red-SecondWind.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 1
+| Description   = {{KW|Exhaust}} all non-Attack cards in your hand. Gain (5;7) {{KW|Block}} for each card {{KW|Exhaust|Exhausted}}.
+| GivesToPlayer = Exhaust, Block
+| InteractsWith = Exhaust
+}}
+{{Keyword Infobox|Exhaust}} {{Keyword Infobox|Block}}
+{{C|Second Wind}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It {{KW|Exhaust|Exhausts}} all non-{{QueryLink|Cards|type:Attack|Attack}} cards in your hand, and you gain 5 (7 if upgraded) {{KW|Block}} for every card {{KW|Exhaust|Exhausted}} this way.
+
+== Interactions ==
+=== Order ===
+* {{C|Second Wind}} will already be removed from hand when {{KW|Exhaust|Exhausting}} all non-{{QueryLink|Cards|type:Attack|Attack}} cards in your hand, meaning it will not {{KW|Exhaust}} itself.
+
+=== Synergies ===
+* {{C|Second Wind}} has {{KW|Exhaust}}-synergy with {{C|Dark Embrace}}, {{C|Feel No Pain}}, {{R|Charon's Ashes}} and {{R|Dead Branch}}, and can reliably {{KW|Exhaust}} {{C|Sentinel}}.
+* Second Wind can be used to get rid of unwanted cards in hand, such as {{QueryLink|Cards|type:Status|Status}} or {{QueryLink|Cards|type:Curse|Curse}} cards.
+* Each card {{KW|Exhaust|Exhausted}} counts as a separate instance of gaining {{KW|Block}}, meaning it scales well with {{BD|Dexterity}} and can trigger {{C|Juggernaut}} multiple times.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V1.1|* Fixed Second Wind doing its effects in reverse and only gaining one instance of block.}}
+{{Update History Table/row|?|* Added Second Wind to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

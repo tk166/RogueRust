@@ -2823,6 +2823,29 @@ impl<'a> Content<'a> {
     /// ⚠️ 后者在镜像里**不是** `_obj{value: "..."}`，而是"op 6 + 一条无名 `F_STR` 字段"
     /// —— 按名字找 `value` 会一个标签都读不出来（实测，见下面的注释）。
     #[must_use]
+    /// §225：一张卡的 tag → `event.bool` 位图（`exec::CARD_HAS_TAG_*` 那四位）。
+    ///
+    /// 为什么放在 `Content` 上：它只依赖"这张定义的 tag 表"，而 tag 表只在这里。宿主（`CardPlayed`
+    /// 触发器的 flags）与 `forEachCardInZone` 的迭代卡（"消耗所有**非攻击**牌"）都要同一份映射 ——
+    /// 两处各写一遍就是第二份真相。
+    #[must_use]
+    pub fn card_tag_bits(&self, card: &str) -> u8 {
+        let mut bits = 0u8;
+        if self.card_has_tag(card, "attack") == Some(true) {
+            bits |= crate::exec::CARD_HAS_TAG_ATTACK;
+        }
+        if self.card_has_tag(card, "skill") == Some(true) {
+            bits |= crate::exec::CARD_HAS_TAG_SKILL;
+        }
+        if self.card_has_tag(card, "power") == Some(true) {
+            bits |= crate::exec::CARD_HAS_TAG_POWER;
+        }
+        if self.card_has_tag(card, "status") == Some(true) {
+            bits |= crate::exec::CARD_HAS_TAG_STATUS;
+        }
+        bits
+    }
+
     pub fn card_has_tag(&self, card: &str, tag: &str) -> Option<bool> {
         let entry = self.lookup_in(card, EK_CARD)?;
         let row = CardRow::new(self.row(Table::Card, entry.index as u32)?)?;

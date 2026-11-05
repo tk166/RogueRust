@@ -113,6 +113,25 @@ INV_CARDS = {
     "bash": {"Cost": 2, "Tags": ["attack", "basic"],
              "Facts": [("damage", 8, "event"), ("status", "standard.vulnerable", 2, "event")]},
     # inv:§10 -- a status card created by two enemies (not part of the deck).
+    # ---- §225：整手牌逐张消耗（Second Wind / Fiend Fire） -------------------------------------
+    # 循环体的事实包在 `("each", zone, (...))` 里：`move` 是"把**当前迭代的那张牌**送进消耗堆"，
+    # 后面那条是"每张牌换来的效果"。
+    "second_wind": {"Cost": 1, "Tags": ["skill"],
+                    "Facts": [("each", "Hand", (("move", "cardInstance.iterated", "ExhaustPile"),
+                                                ("block", 5, "source")))],
+                    "PlayedCardDestinationZone": "ExhaustPile"},
+    "second_wind+": {"Cost": 1, "Tags": ["skill"],
+                     "Facts": [("each", "Hand", (("move", "cardInstance.iterated", "ExhaustPile"),
+                                                 ("block", 7, "source")))],
+                     "PlayedCardDestinationZone": "ExhaustPile"},
+    "fiend_fire": {"Cost": 2, "Tags": ["attack"],
+                   "Facts": [("each", "Hand", (("move", "cardInstance.iterated", "ExhaustPile"),
+                                               ("damage", 7, "event")))],
+                   "PlayedCardDestinationZone": "ExhaustPile"},
+    "fiend_fire+": {"Cost": 2, "Tags": ["attack"],
+                    "Facts": [("each", "Hand", (("move", "cardInstance.iterated", "ExhaustPile"),
+                                                ("damage", 10, "event")))],
+                    "PlayedCardDestinationZone": "ExhaustPile"},
     # ---- §221: ten more Ironclad cards (wiki numbers; `native/wiki_cards/<id>.txt`) ----------------
     "cleave": {"Cost": 1, "Tags": ["attack"], "Facts": [("damage", 8, "allEnemies")]},
     "cleave+": {"Cost": 1, "Tags": ["attack"], "Facts": [("damage", 11, "allEnemies")]},
@@ -1057,54 +1076,80 @@ def program_facts(root):
     """
     facts = []
 
-    def walk(node):
+    def walk_into(node, out):
+        """收集子树的事实到 `out`（`walk` 的另一种落点，供 forEach 用）。"""
+        if not node:
+            return
+        walk(node, out)
+
+    def walk_into_keep(node):
+        """把子树的事实收进**当前**那一层（续延 `walk` 自己的 `out`）。"""
+        if node:
+            walk(node, current_out[0])
+
+    current_out = [None]
+
+    def walk(node, out=None):
+        if out is None:
+            out = facts
+        current_out[0] = out
         kind = node.get("kind")
         body = node.get("value") or {}
         if kind == "node.sequence":
             for child in body.get("Children") or []:
-                walk(child)
+                walk_into_keep(child)
         elif kind == "node.dealDamage":
-            facts.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
+            out.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.heal":
-            facts.append(("heal", amount(body["Amount"]), tgt(body["TargetSelector"])))
+            out.append(("heal", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.gainBlock":
-            facts.append(("block", amount(body["Amount"]), tgt(body["TargetSelector"])))
+            out.append(("block", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.applyStatus":
-            facts.append(("status", body["StatusDefinitionId"]["value"],
+            out.append(("status", body["StatusDefinitionId"]["value"],
                           amount(body["Stacks"]), tgt(body["TargetSelector"])))
         elif kind == "node.createCardInstance":
-            facts.append(("card", body["CardDefinitionId"]["value"],
+            out.append(("card", body["CardDefinitionId"]["value"],
                           amount(body["Count"]), body["ToZone"],
                           tgt(body["TargetSelector"])))
         elif kind == "node.setCombatantCounter":
-            facts.append(("counter", body["CounterId"]["value"], amount(body["Amount"]),
+            out.append(("counter", body["CounterId"]["value"], amount(body["Amount"]),
                           body["Relative"], tgt(body["TargetSelector"])))
         elif kind == "node.modifyStatusStacks":
-            facts.append(("modify", body["StatusDefinitionId"]["value"],
+            out.append(("modify", body["StatusDefinitionId"]["value"],
                           amount(body["Delta"]), tgt(body["TargetSelector"])))
+        elif kind == "node.forEachCardInZone":
+            # §225：Second Wind / Fiend Fire 的"整手牌逐张处理"。事实记成
+            # `("each", zone, (循环体的事实...))` —— 递归进一次体，把那些事实收进元组。
+            sub = []
+            walk_into(body.get("Body"), sub)
+            out.append(("each", body.get("Zone"), tuple(sub)))
+        elif kind == "node.moveCardToZone":
+            # §225：把**当前迭代的那张牌**送进消耗堆（Second Wind / Fiend Fire）。
+            target = body.get("CardExpression") or {}
+            out.append(("move", target.get("kind"), body.get("ToZone")))
         elif kind == "node.drawCards":
             # §221：Pommel Strike / Shrug It Off / Battle Trance 的抽牌。
-            facts.append(("draw", amount(body["Count"]), tgt(body["TargetSelector"])))
+            out.append(("draw", amount(body["Count"]), tgt(body["TargetSelector"])))
         elif kind in ("node.gainResource", "node.loseResource"):
             # §220: the two halves of "whenever this card is drawn, lose 1 Energy" /
             # "if this card is Exhausted, gain 2 Energy". Recorded as facts so the gate can see them
             # -- this function is the only vocabulary the checker has, and an unknown kind raises.
             words = "gain" if kind == "node.gainResource" else "lose"
-            facts.append((words, body["ResourceId"], amount(body["Amount"]),
+            out.append((words, body["ResourceId"], amount(body["Amount"]),
                           tgt(body["TargetSelector"])))
         elif kind == "node.extraTurn":
-            facts.append(("extraTurn", tgt(body["TargetSelector"])))
+            out.append(("extraTurn", tgt(body["TargetSelector"])))
         elif kind == "node.endTurn":
-            facts.append(("endTurn",))
+            out.append(("endTurn",))
         elif kind == "node.destroyCombatant":
             # §178: the other half of a split. Recorded as a fact, not ignored -- "the boss is
             # replaced" is exactly the thing the old content got wrong.
-            facts.append(("destroy", tgt(body["TargetSelector"])))
+            out.append(("destroy", tgt(body["TargetSelector"])))
         elif kind == "node.carryAwayStolenGold":
             # §201: "flees with your gold" -- which counter is carried away, and from whom.
-            facts.append(("carry", body["CounterId"]["value"], tgt(body["TargetSelector"])))
+            out.append(("carry", body["CounterId"]["value"], tgt(body["TargetSelector"])))
         elif kind == "node.createCombatant":
-            facts.append(("spawn", body["DefinitionId"], amount(body["Health"]) if body.get("Health") else 0))
+            out.append(("spawn", body["DefinitionId"], amount(body["Health"]) if body.get("Health") else 0))
         elif kind == "node.conditional":
             # A conditional states the facts of **both** branches, tagged with the condition, so the
             # inventory cannot hide a branch behind an `if` (port-plan.md §118).
@@ -1114,17 +1159,17 @@ def program_facts(root):
                 sub = body.get(branch)
                 if sub:
                     before = len(facts)
-                    walk(sub)
+                    walk_into_keep(sub)
                     facts[before:] = [("when", key) + f for f in facts[before:]]
         elif kind == "node.upgradeCards":
             # §195.7: "upgrade every <id>" -- which definition, and where.
-            facts.append(("upgrade", tgt(body["OwnerSelector"]),
+            out.append(("upgrade", tgt(body["OwnerSelector"]),
                           body["CardDefinitionId"]["value"],
                           body.get("FromZone"), body.get("Count")))
         elif kind == "node.selectCards":
             # §195.4: "pick which card" as a fact. Every field that decides *which* card is part of
             # the fact, because "steal the best card" and "steal the first card" differ only here.
-            facts.append(("select", tgt(body["OwnerSelector"]), body["FromZone"],
+            out.append(("select", tgt(body["OwnerSelector"]), body["FromZone"],
                           body.get("FallbackZone"), body["Order"],
                           # `Count` is a plain int field on this node (not an expression).
                           body["Count"], body["ToZone"]))

@@ -2700,6 +2700,14 @@ pub struct ProgramExecutionFrame {
     /// 与 `ExecContext::iteration_card` **同型**（`CardInstanceId`）：循环快照存的是**槽位**
     /// （省内存），每一趟开始时再换成 id —— 换的那一刻卡必须还在池里（换不到 ⇒ `IrError::Slot`）。
     pub iteration_card: Option<CardInstanceId>,
+    /// §225：正在结算的那张牌（`play.rs` 出牌时填）—— 续延重建上下文时要拿得回来。
+    pub resolving_card: Option<CardSlot>,
+    /// §225：`event_flags` 的帧内副本。
+    ///
+    /// 为什么它必须上帧：`forEachCardInZone` 每趟把**这一趟那张卡**的 tag 位填进 flags
+    /// （"消耗所有非攻击牌"要靠它），而续延会把上下文**从帧重建** —— flags 只在 `ExprContext`
+    /// 里、不上帧的话，退栈与续延两条路上都会读到最后一张/外层那张卡的 tag。
+    pub event_flags: u8,
     /// 已走的步数（`ProgramStepCount`）。
     pub steps: u32,
     /// 步数上限（信封上的 `MaxProgramSteps`）。
@@ -2728,6 +2736,8 @@ impl Empty for ProgramExecutionFrame {
         target: None,
         iteration_target: None,
         iteration_card: None,
+        resolving_card: None,
+        event_flags: 0,
         entry_iteration_target: None,
         entry_iteration_card: None,
         steps: 0,
@@ -3006,6 +3016,11 @@ pub struct ProgramLoop {
     pub saved_target: Option<CombatantId>,
     /// 进循环前的迭代卡（`PushIterationCard` 的旧值，`:495`）。
     pub saved_card: Option<CardInstanceId>,
+    /// §225：进循环前的 `event_flags`。
+    ///
+    /// 循环体里每趟都把**这一趟那张卡**的 tag 位填进 `ctx.event_flags`（"消耗所有非攻击牌"要靠它），
+    /// 所以出循环时必须把它还原 —— 否则循环之后的节点会读到最后一张卡的 tag。
+    pub saved_flags: u8,
     /// 迭代体（`Body` 的 IR 下标）。
     pub body: u16,
     /// 槽是否在用。
@@ -3017,6 +3032,7 @@ impl Empty for ProgramLoop {
         list: ProgramLoopList::None,
         saved_target: None,
         saved_card: None,
+        saved_flags: 0,
         body: 0,
         live: false,
     };

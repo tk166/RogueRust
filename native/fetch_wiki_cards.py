@@ -68,6 +68,9 @@ PAGES = {
     'wild_strike': 'Wild_Strike',
     'ghostly_armor': 'Ghostly_Armor',
     'battle_trance': 'Battle_Trance',
+    # §225
+    'second_wind': 'Second_Wind',
+    'fiend_fire': 'Fiend_Fire',
     # §221：事件给的两张诅咒
     'doubt': 'Doubt',
     'writhe': 'Writhe',

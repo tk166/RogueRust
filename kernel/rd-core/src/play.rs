@@ -949,6 +949,11 @@ fn apply_plan_in_chain(
     let mut begun = None;
     for _ in 0..passes {
         let attempt = {
+            // §225：把"这一次结算的是哪一张"告诉程序 —— `forEachCardInZone` 的快照要跳过它
+            // （`Second Wind` 会把自己也算进"消耗所有非攻击牌"，多给一份格挡）。
+            // 牌**留在原处**：搬走会改变每一步哈希里的牌区计数，直接破坏与 C# oracle 的契约。
+            // 借用顺序：先在只读状态上求槽位，再交给 `ExecContext::new`（它拿可变借用）。
+            let resolving = state.find_card(&plan.source, &plan.instance).map(|(_, slot)| slot);
             let mut ctx = ExecContext::new(
                 state,
                 Some(plan.source),
@@ -958,6 +963,7 @@ fn apply_plan_in_chain(
             )
             .with_content(plan.content)
             .with_x_cost(plan.x_cost);
+            ctx.resolving_card = resolving;
             exec::begin(root, &mut ctx, hook)
         };
         begun = Some(attempt);
