@@ -8699,6 +8699,190 @@ mod tests {
         }
     }
 
+    /// §229：`Rip and Tear` —— 7(9) 伤 × 2 次，每次随机。载体是 §228 那个节点，内核没加东西。
+    #[test]
+    fn rip_and_tear_hits_twice_for_seven() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        for (card_id, damage) in [("rip_and_tear", 7i32), ("rip_and_tear+", 9)] {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            give_energy(&mut state, "hero", 3);
+            for who in ["enemy_a", "enemy_b"] {
+                if let Some(combatant) = state.combatant_mut(&cid(who)) {
+                    combatant.health_max = 200;
+                    combatant.health_current = 200;
+                }
+            }
+            let card = card_in_hand(&mut state, &content, "hero", card_id);
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .expect("rip and tear is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            let a = 200 - health(&state, "enemy_a");
+            let b = 200 - health(&state, "enemy_b");
+            assert_eq!(a + b, 2 * damage, "{card_id}: two hits of {damage}, got a={a} b={b}");
+        }
+    }
+
+    /// §229：`Rampage` —— "Deal 8 damage. Increase **this card's** damage by 5(8) this combat."
+    ///
+    /// 三段判据，缺一段这条牌就可能"看起来能用"：
+    /// ① 第一次 8、第二次 13（涨的是**这一张**）；
+    /// ② 升级版每次涨 8（第二次 16）；
+    /// ③ **反例**：另一张 Rampage 的伤害**不变** —— 每副本计数器不是每定义，也不是每战斗员。
+    #[test]
+    fn rampage_grows_this_copy_and_only_this_copy() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // (牌, 第二次该掉的伤害)
+        for (card_id, second) in [("rampage", 13i32), ("rampage+", 16)] {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            give_energy(&mut state, "hero", 6);
+            for who in ["enemy_a", "enemy_b"] {
+                if let Some(combatant) = state.combatant_mut(&cid(who)) {
+                    combatant.health_max = 400;
+                    combatant.health_current = 400;
+                }
+            }
+            // **两份副本**：`card_a` 打两次，`card_b` 一次都不打，最后用它当反例。
+            let card_a = card_in_hand(&mut state, &content, "hero", card_id);
+            give_card(&mut state, "hero", CardZone::Hand, "card_b", card_id, None);
+            let card_b = card_in_hand(&mut state, &content, "hero", "card_b");
+
+            let mut hits = std::vec::Vec::new();
+            for _ in 0..2 {
+                let before = health(&state, "enemy_a");
+                // 每次出牌都回到手里（否则第二张打出的是"另一份副本"，而那正是另一条判据）。
+                crate::play::play_card(
+                    &mut state,
+                    Some(&content),
+                    &crate::play::PlayRequest::new(cid("hero"), card_a, Some(cid("enemy_a"))),
+                )
+                .expect("rampage is playable");
+                host.try_resolve_pending_queues(&mut state).expect("drain");
+                hits.push(before - health(&state, "enemy_a"));
+                // 把它捡回手牌：这份副本带着它自己的计数器（`mark_counters` 跟着槽位，不跟着牌区）。
+                let (from, slot) = state
+                    .find_card(&cid("hero"), &card_a)
+                    .expect("still in the fight");
+                if from != CardZone::Hand {
+                    state
+                        .move_card(
+                            &cid("hero"),
+                            from,
+                            CardZone::Hand,
+                            slot,
+                            crate::state::ZonePlacement::Bottom,
+                        )
+                        .expect("picked back up");
+                }
+            }
+            assert_eq!(
+                hits,
+                std::vec![8, second],
+                "{card_id}: 8 then {second} -- the bonus is this copy's own"
+            );
+
+            // ③ 反例：一份**没打过的**同名副本，伤害仍然是 8。
+            let before = health(&state, "enemy_a");
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card_b, Some(cid("enemy_a"))),
+            )
+            .expect("the second copy is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            assert_eq!(
+                before - health(&state, "enemy_a"),
+                8,
+                "{card_id}: the *other* copy has not grown -- the counter is per copy, not per definition"
+            );
+        }
+    }
+
+    /// §229：`Searing Blow` —— "Can be Upgraded **any number of times**"。
+    ///
+    /// 升级是"另一行 CARD"，所以"任意次"= id 能连续加 `+`。两条判据必须成对：
+    /// ① `searing_blow` 连升三级（`+` → `++` → `+++`），每次的伤害来自**新行**（12 → 16 → 20）；
+    /// ② **反例**：`strike` 升到 `strike+` 之后就**升不动了** —— 因为内容里没有 `strike++`，
+    ///    而不是因为内核有一条"以 `+` 结尾就拒绝"的规则（§229 把那条猜法换成了查表）。
+    #[test]
+    fn searing_blow_upgrades_more_than_once_but_strike_does_not() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // 升级的**规则**只有一处（`upgradable_definition`），所以直接用它的判据：
+        // 打一张牌之后它变成哪一行，等于"内容里是否存在 `<id>+`"。
+        let mut upgraded = std::vec::Vec::new();
+        let mut id = crate::state::CardDefinitionId::new("searing_blow").expect("短 id");
+        for _ in 0..3 {
+            let next = crate::state::upgraded_id(id.as_str())
+                .filter(|candidate| {
+                    content
+                        .lookup_in(candidate.as_str(), crate::content::EK_CARD)
+                        .is_some()
+                })
+                .expect("内容里有下一行");
+            upgraded.push(next.as_str().to_string());
+            id = next;
+        }
+        assert_eq!(
+            upgraded,
+            std::vec![
+                "searing_blow+".to_string(),
+                "searing_blow++".to_string(),
+                "searing_blow+++".to_string()
+            ],
+            "the id keeps growing `+` -- the cap is how many rows the content has"
+        );
+
+        // 真打一次：`searing_blow++` 打 20（12 + 4×2），不是 12 也不报错。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        let card = card_in_hand(&mut state, &content, "hero", "searing_blow++");
+        let before = health(&state, "enemy_a");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("searing blow is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(before - health(&state, "enemy_a"), 20, "third row = 12 + 4*2");
+
+        // ② 反例：`strike+` 没有下一行 ⇒ 不可再升级（不再靠"以 `+` 结尾"这条猜法）。
+        let stuck = crate::state::upgraded_id("strike+")
+            .filter(|candidate| {
+                content
+                    .lookup_in(candidate.as_str(), crate::content::EK_CARD)
+                    .is_some()
+            });
+        assert!(
+            stuck.is_none(),
+            "there is no `strike++` row, so `strike+` cannot be upgraded again"
+        );
+    }
+
     /// §225：**消耗审计** —— 内核里把牌送进消耗堆的路径必须**都**跑 `LifecyclePrograms[Exhausted]`。
     ///
     /// 这条测试是本节"确认消耗逻辑是否统一"的机器版。三条路径，一条都不能漏：

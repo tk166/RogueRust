@@ -1439,6 +1439,7 @@ fn play_condition_validator(state: &CombatState, card: &CardOnTable<'_>) -> Resu
         event_target: card.target,
         iteration_target: None,
         iteration_card: None,
+        resolving_card: None,
         // §195.1: a `PlayCondition` is evaluated outside any event, so there is no amount to read
         // (`eventAmount` reports `NoTarget` rather than 0).
         event_flags: 0,

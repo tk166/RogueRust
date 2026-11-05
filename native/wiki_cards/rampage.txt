@@ -1,0 +1,35 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Rampage
+| Image       = Red-Rampage.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Uncommon
+| Cost        = 1
+| Description = Deal 8 damage.<br>Increase this card's damage by (5;8) this combat.
+}}
+{{C|Rampage}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 8 damage, and increases this damage by 5 (8 if upgraded) for the rest of combat.
+
+== Interactions ==
+=== Synergies ===
+* It synergizes with anything that allows it to be played sooner, such as {{C|Headbutt}}, {{P|Liquid Memories}} or {{C|Secret Weapon}}.
+** Decreasing the size of the deck through {{KW|Exhaust|Exhausting}} cards can also increase the speed at which {{C|Rampage}} is played.
+
+* Playing it twice using an effect such as {{C|Double Tap}} or a {{P|Duplication Potion}} will scale it twice as well, and the second play already has a damage increase from the first play.
+
+=== Neutral ===
+* Using {{C|Dual Wield}} or {{C|Nightmare}} for creating copies of {{C|Rampage}} during combat will copy the current damage, but afterwards these copies will scale differently.
+
+* Adding more copies of {{C|Rampage}} to the deck does not increase scaling speed, as each copy scales separately.
+
+* Only the actual damage is affected by {{BD|Strength}}, the damage with which the card scales is not.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 46|* Fix for proper behavior when duplicating cards like Rampage and Genetic Algorithm with effects like Echo Form.}}
+{{Update History Table/row|Weekly 34|* Rampage card's ramp increased from 4 -> 5. No change to upgraded version.}}
+{{Update History Table/row|?|* Added Rampage to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

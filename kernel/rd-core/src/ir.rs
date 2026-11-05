@@ -146,6 +146,12 @@ pub enum NodeKind {
     /// 活着的/被打死的敌人身上的钱**不算**丢失（wiki：`Stolen gold is returned if this enemy is
     /// killed`），只有带走的才算。所以"总共偷了多少"不需要另一个字段。
     CarryAwayStolenGold,
+    /// `node.addCardCounter` —— 给**一份副本**的 mark counter 加一个增量（§229，`Rampage`）。
+    ///
+    /// 参考引擎里 `Rampage` 涨的是 `CardInstance.misc` 这类**每副本**数据；本内核里每副本数据的
+    /// 唯一载体就是 mark counter（每副本价格 `standard.card_cost_delta` 已经在用）。所以这个节点
+    /// 是"这张牌记住了一件事"的一般形态，而不是给 Rampage 写的特例。
+    AddCardCounter,
     /// `node.dealDamageToRandomTarget` —— **每次命中从候选池里随机挑一个目标**（§228）。
     ///
     /// StS 的 `Sword Boomerang` 是 "Deal 3 damage to a random enemy 3 (4) times"：不是"打所有敌人"，
@@ -203,6 +209,7 @@ impl NodeKind {
             NodeKind::ExtraTurn => "node.extraTurn",
             NodeKind::UpgradeCards => "node.upgradeCards",
             NodeKind::CarryAwayStolenGold => "node.carryAwayStolenGold",
+            NodeKind::AddCardCounter => "node.addCardCounter",
             NodeKind::DealDamageToRandomTarget => "node.dealDamageToRandomTarget",
             NodeKind::ChooseCards => "node.chooseCards",
             NodeKind::SelectCards => "node.selectCards",
@@ -213,7 +220,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 25] = [
+        const ALL: [NodeKind; 26] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -243,6 +250,8 @@ impl NodeKind {
             NodeKind::ChooseCards,
             // §228：每次命中随机挑一个目标（Sword Boomerang）。
             NodeKind::DealDamageToRandomTarget,
+            // §229：给这份副本加一个计数器（Rampage）。
+            NodeKind::AddCardCounter,
             NodeKind::Repeat,
         ];
         let mut i = 0;

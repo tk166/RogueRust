@@ -305,7 +305,15 @@ pub const RARITY_OFFSET_CAP: i32 = 40;
 /// 比"能装下这些牌的牌区"更大；而 `u8` 编码（`as u8`）在 256 以下都安全。
 /// 内容继续长到超过 96 的那天，这条常量要跟着内容一起被重新论证 —— `pool_fits` 会**响亮拒绝**，
 /// 而不是静默截断（§161.1 的教训：截断会让"池子看起来装得下"）。
-pub const MAX_POOL: usize = 96;
+///
+/// §229：**那一天到了**。`Searing Blow` 的 "Can be Upgraded any number of times" 在本内容里是
+/// "内容把行写够"（`searing_blow` / `+` / `++` … 共 8 行），于是 `CARD` 表到了 **101 行**，
+/// 一条真实走图的回放当场被 `PoolTooLarge { pool: 101, max: 96 }` 拒绝。
+///
+/// 抬到 112 而不是 128：上面那条"池子不该比牌区大"的推理错在**把池子当牌区**——这个池子是
+/// **目录**（基础行 + `+` 行 + 状态/诅咒牌），它不装在同一张牌区里，`u8` 也只是编码而不是语义。
+/// 真实约束是两条：`>= 内容行数`（`pool_fits` 会红，不许截断），以及"离 u8 远得很"。
+pub const MAX_POOL: usize = 112;
 
 /// What the node under the cursor is waiting for.
 ///
@@ -2648,7 +2656,9 @@ impl RunState {
         }
         match change {
             DeckChange::Remove => self.remove_at(index),
-            DeckChange::Upgrade => self.upgrade_at(index)?,
+            // §229: the pool is already in hand here -- passing it down is what lets `upgrade_at`
+            // **look up** the next row instead of guessing from a `+` suffix.
+            DeckChange::Upgrade => self.upgrade_at(index, pool)?,
             DeckChange::Transform => {
                 self.remove_at(index);
                 self.grant_random_cards(1, pool)?;
@@ -2657,27 +2667,21 @@ impl RunState {
         Ok(())
     }
 
-    /// Append the upgrade marker (`strike` → `strike+`).
+    /// Replace the deck card with its upgraded row (`strike` → `strike+`), **looked up in the pool**.
     ///
     /// Already upgraded is **not** an error: the blessing (or the event) simply has nothing to do.
     /// That is the reference's behaviour too -- StS lets you upgrade a card you already upgraded and
     /// nothing happens.
-    fn upgrade_at(&mut self, index: usize) -> Result<(), RunError> {
+    ///
+    /// §229: "nothing to do" is decided by **the content**, not by a `+` suffix. `upgraded_id` asks the
+    /// pool whether `<id>+` exists, so `Searing Blow` (whose id keeps growing `+`) upgrades again and
+    /// `strike+` (no `strike++` row) still does nothing -- one rule for every card, and the run layer
+    /// still owns no content.
+    fn upgrade_at(&mut self, index: usize, pool: &[PoolCard<'_>]) -> Result<(), RunError> {
         let id = self.deck[index].as_str();
-        if id.ends_with('+') {
+        let Some(upgraded) = upgraded_id(pool, id) else {
             return Ok(());
-        }
-        let mut buffer = [0u8; 64];
-        let mut len = 0usize;
-        for byte in id.as_bytes() {
-            if len < buffer.len() - 1 {
-                buffer[len] = *byte;
-                len += 1;
-            }
-        }
-        buffer[len] = b'+';
-        len += 1;
-        let upgraded = core::str::from_utf8(&buffer[..len]).map_err(|_| RunError::BadId)?;
+        };
         self.deck[index] = RunId::new(upgraded).map_err(|_| RunError::BadId)?;
         Ok(())
     }
@@ -4230,12 +4234,16 @@ mod tests {
     }
 
     /// This image's pool: three Basics plus the junk card (which must be filtered out).
-    fn basic_pool() -> [PoolCard<'static>; 4] {
+    fn basic_pool() -> [PoolCard<'static>; 5] {
         [
             PoolCard { id: "strike", rarity: Rarity::Basic },
             PoolCard { id: "defend", rarity: Rarity::Basic },
             PoolCard { id: "bash", rarity: Rarity::Basic },
             PoolCard { id: "slimed", rarity: Rarity::Status },
+            // §229: `upgrade_at` now **looks up** the next row instead of appending `+` blindly, so a
+            // fixture without `strike+` would make "upgrade" a silent no-op. That is the point of the
+            // change -- and the pool below is what a real caller passes (the whole `CARD` table).
+            PoolCard { id: "strike+", rarity: Rarity::Basic },
         ]
     }
 
@@ -5635,7 +5643,7 @@ mod tests {
 
     /// A pool with one **Curse** and one **Status**: the two rarities a `curse:` payload could
     /// plausibly name, and the difference the check has to see.
-    fn curse_pool() -> [PoolCard<'static>; 6] {
+    fn curse_pool() -> [PoolCard<'static>; 7] {
         [
             PoolCard { id: "strike", rarity: Rarity::Basic },
             PoolCard { id: "defend", rarity: Rarity::Basic },
@@ -5643,6 +5651,8 @@ mod tests {
             PoolCard { id: "injury", rarity: Rarity::Curse },
             PoolCard { id: "slimed", rarity: Rarity::Status },
             PoolCard { id: "c1", rarity: Rarity::Common },
+            // §229: an upgrade looks the next row up in the pool (no more blind `+` append).
+            PoolCard { id: "strike+", rarity: Rarity::Basic },
         ]
     }
 

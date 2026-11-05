@@ -80,6 +80,10 @@ PAGES = {
     # §228：随机目标（Sword Boomerang）与"按格挡打伤害"（Body Slam）
     'sword_boomerang': 'Sword_Boomerang',
     'body_slam': 'Body_Slam',
+    # §229：per-copy 计数器（Rampage）、可无限升级（Searing Blow）、随机双击（Rip and Tear）
+    'rampage': 'Rampage',
+    'searing_blow': 'Searing_Blow',
+    'rip_and_tear': 'Rip_and_Tear',
     # §221：事件给的两张诅咒
     'doubt': 'Doubt',
     'writhe': 'Writhe',

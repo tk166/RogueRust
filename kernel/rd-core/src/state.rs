@@ -1647,13 +1647,17 @@ pub const CARD_COST_OVERRIDE_COUNTER: &str = "standard.card_cost_override";
 /// [`CombatState::resolve_upgrade`]（升级玩家选中的那张）都调它 —— 两处各写一遍 `push(b'+')`
 /// 就是"同一个词表被两处认识"，迟早一处改成 `<id>+1` 而另一处没改。
 ///
-/// 返回 `None` 的两种情形都是**拒绝**、不是"随便给个值"：
-/// * id 已经以 `+` 结尾（升级过的不再升级）；
-/// * `+` 之后超出 [`ID_CAP`]（装不下就会被截断成一个**别的** id，那是撞名）。
+/// 返回 `None` 只有一种情形：`+` 之后超出 [`ID_CAP`]（装不下就会被截断成一个**别的** id，那是撞名）。
+///
+/// §229：**这里不再拒绝"已经以 `+` 结尾"**。那条规则是"防 `strike+` 变成 `strike++`"，而它真正该问
+/// 的是"内容里有没有 `strike++` 这一行" —— 那个问题只有拿得到内容的人能回答，所以它归
+/// `exec::upgradable_definition`（以及 `rd_run::upgrade_at` 的查表）。把"能加几次"写在**内容**里，
+/// `Searing Blow` 的 "Can be Upgraded any number of times" 就不需要任何新模型：
+/// 行写到哪儿，就能升到哪儿。
 #[must_use]
 pub fn upgraded_id(definition: &str) -> Option<CardDefinitionId> {
     let bytes = definition.as_bytes();
-    if bytes.last() == Some(&b'+') || bytes.len() + 1 > ID_CAP {
+    if bytes.len() + 1 > ID_CAP {
         return None;
     }
     let mut buffer = [0u8; ID_CAP];
@@ -6868,22 +6872,17 @@ mod tests {
             .definition_id;
         assert_eq!(definition.as_str(), "standard.strike+");
 
-        // 再升级一次 ⇒ **响亮拒绝**（`+` 只能加一次）。
-        s.begin_choice(PendingChoice {
-            chooser: cid("hero"),
-            source: ChoiceSource::Hand,
-            min: 1,
-            max: 1,
-            then: ChoiceThen::Upgrade,
-            offered: Bounded::new(),
-            candidates: Bounded::new(),
-        })
-        .expect("the question is answerable");
-        assert_eq!(
-            s.resolve_choice(ChoiceAnswer::Instances(&ids[..1]), 0),
-            Err(ChoiceError::NotUpgradable)
+        // §229：**内核只守机械那一半**。"能不能再升一次"要问内容（有没有 `<id>+` 那一行），而
+        // `CombatState` 里没有内容 —— §229 把原来那条"见到 `+` 结尾就拒绝"的**猜法**换成了查表，
+        // 查表发生在发问的节点里（`upgradable_definition`，判据见
+        // `armaments_gains_block_then_upgrades_the_chosen_card`：没有 `+` 行的 `dazed` 不进候选）。
+        //
+        // 于是这里能拒绝的只剩**装不下**：40 字节的 id 再加一个 `+` 会被截断成另一个 id（撞名）。
+        let long = "x".repeat(CardDefinitionId::CAP);
+        assert!(
+            upgraded_id(&std::format!("{long}+")).is_none(),
+            "a `+` that does not fit is refused -- truncating would mint a *different* id"
         );
-        assert!(s.pending_choice().is_some(), "a refusal keeps the question open");
     }
 
     /// §227：`ToDrawPileTop` —— 选中的牌搬到抽牌堆**顶**（`ZonePlacement::Top` = 下一张就抽它）。

@@ -156,6 +156,36 @@ INV_CARDS = {
                 "Facts": [("draw", 2, "source"),
                           ("choose", "source", "Hand", (), 1, 1, "ToDrawPileTop")],
                 "PlayedCardDestinationZone": "ExhaustPile"},
+    # ---- §229：可无限升级（内容把行写够） ---------------------------------------------------
+    # 八行 = 基础 + 7 次升级（12/16/20/…/40）。`+` 能叠几次**由行数决定**，内核不认识这张牌。
+    "searing_blow": {"Cost": 2, "Tags": ["attack"],
+                "Facts": [("damage", 12, "event")]},
+    "searing_blow+": {"Cost": 2, "Tags": ["attack"],
+                 "Facts": [("damage", 16, "event")]},
+    "searing_blow++": {"Cost": 2, "Tags": ["attack"],
+                  "Facts": [("damage", 20, "event")]},
+    "searing_blow+++": {"Cost": 2, "Tags": ["attack"],
+                   "Facts": [("damage", 24, "event")]},
+    "searing_blow++++": {"Cost": 2, "Tags": ["attack"],
+                    "Facts": [("damage", 28, "event")]},
+    "searing_blow+++++": {"Cost": 2, "Tags": ["attack"],
+                     "Facts": [("damage", 32, "event")]},
+    "searing_blow++++++": {"Cost": 2, "Tags": ["attack"],
+                      "Facts": [("damage", 36, "event")]},
+    "searing_blow+++++++": {"Cost": 2, "Tags": ["attack"],
+                       "Facts": [("damage", 40, "event")]},
+    # ---- §229：随机双击（§228 载体的第二个用户）/ 每副本计数器 ------------------------------
+    "rip_and_tear": {"Cost": 1, "Tags": ["attack"],
+                     "Facts": [("damageRandom", 7, "allEnemies", 2)]},
+    "rip_and_tear+": {"Cost": 1, "Tags": ["attack"],
+                      "Facts": [("damageRandom", 9, "allEnemies", 2)]},
+    # 伤害是 `8 + card.counter`，然后给这份副本加 5(8) —— 两件事都在事实里。
+    "rampage": {"Cost": 1, "Tags": ["attack"],
+                "Facts": [("damage", ("add", 8, ("cardCounter", "standard.rampage_bonus")), "event"),
+                          ("cardCounter", "cardInstance.resolving", "standard.rampage_bonus", 5)]},
+    "rampage+": {"Cost": 1, "Tags": ["attack"],
+                 "Facts": [("damage", ("add", 8, ("cardCounter", "standard.rampage_bonus")), "event"),
+                           ("cardCounter", "cardInstance.resolving", "standard.rampage_bonus", 8)]},
     # ---- §228：随机目标 / 按格挡打伤害 -------------------------------------------------------
     # 升级改的是**次数**（wiki: "(3;4) times"），不是伤害 —— 所以两行只差最后一个字段。
     "sword_boomerang": {"Cost": 1, "Tags": ["attack"],
@@ -1109,9 +1139,32 @@ def tgt(selector):
     return mapping[kind]
 
 
+def _has_card_counter(expr):
+    """Does this expression tree mention `card.counter` anywhere?"""
+    if not isinstance(expr, dict):
+        return False
+    if expr.get("kind") == "card.counter":
+        return True
+    value = expr.get("value")
+    if isinstance(value, dict):
+        return any(_has_card_counter(item) for item in value.values())
+    if isinstance(value, list):
+        return any(_has_card_counter(item) for item in value)
+    return False
+
+
 def amount(expr):
     if expr.get("kind") == "const":
         return expr["value"]["Value"]
+    if expr.get("kind") == "card.counter":
+        # §229: a size that is **this copy's** counter ("increase this card's damage by 5").
+        return ("cardCounter", expr["value"]["CounterId"]["value"])
+    if expr.get("kind") == "add" and _has_card_counter(expr):
+        # §229: an `add` that mentions **this copy's counter** is unwrapped, because "8 + what this
+        # card already gained" is a different rule from a generic `add`. Every other `add` keeps the
+        # old opaque shape (`('expr', 'add')`) -- unwrapping them all would rewrite facts that §193/
+        # §216 already froze, and a check that churns is a check nobody reads.
+        return ("add", amount(expr["value"]["Left"]), amount(expr["value"]["Right"]))
     if expr.get("kind") == "combatantDefensivePool":
         # §228: a size that is a **defensive pool** ("equal to your Block"). Spelled with the pool key
         # *and* the selector, so "your Block" and "their Block" cannot compare equal.
@@ -1159,6 +1212,12 @@ def program_facts(root):
             out.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.heal":
             out.append(("heal", amount(body["Amount"]), tgt(body["TargetSelector"])))
+        elif kind == "node.addCardCounter":
+            # §229: "this card remembers something about itself" as a fact. The counter's **name** and
+            # the delta are both part of it -- two cards that raise different counters must not compare
+            # equal, or "Rampage got stronger" and "some other bookkeeping moved" would look the same.
+            out.append(("cardCounter", body["CardExpression"]["kind"],
+                        body["CounterId"]["value"], amount(body["Delta"])))
         elif kind == "node.dealDamageToRandomTarget":
             # §228: "each hit re-rolls a target" as a fact -- the **count** and the pool are part of
             # it, because "3 hits to random enemies" and "3 hits to all enemies" differ only here.

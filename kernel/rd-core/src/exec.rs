@@ -403,6 +403,7 @@ impl<'a> ExecContext<'a> {
             event_target: self.event_target,
             iteration_target: self.iteration_target,
             iteration_card: self.iteration_card,
+            resolving_card: self.resolving_card,
             event_flags: self.event_flags,
             event_amount: self.event_amount,
             x_cost: self.x_cost,
@@ -1636,6 +1637,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::ChooseCards
         // §228：`dealDamageToRandomTarget`（抽签 + 打伤害）。同上。
         | NodeKind::DealDamageToRandomTarget
+        // §229：`addCardCounter`（给这份副本加计数器）。同上。
+        | NodeKind::AddCardCounter
         // §195.7：`upgradeCards`（改定义 id），同上。
         | NodeKind::UpgradeCards
         // §146：`repeat`（X 费牌的"跑 X 遍"）。它有孩子，但预检只走一遍 Body ——
@@ -1800,6 +1803,7 @@ fn dispatch_node(
         NodeKind::MoveCardToZone => move_card_to_zone_node(node, ctx, frame, slot, stats),
         NodeKind::SelectCards => select_cards_node(node, ctx, frame, slot, stats),
         NodeKind::ChooseCards => choose_cards_node(node, ctx, frame, slot, stats),
+        NodeKind::AddCardCounter => add_card_counter_node(node, ctx, frame, slot, stats),
         NodeKind::DealDamageToRandomTarget => {
             deal_damage_to_random_target_node(node, ctx, frame, slot, stats)
         }
@@ -2224,6 +2228,60 @@ fn deal_damage_node(
             Some(frame),
         )?;
         stats.effects = stats.effects.saturating_add(1);
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
+/// §229：`node.addCardCounter` 的实体 —— 给**一份副本**的某个 mark counter 加一个增量。
+///
+/// `{CardExpression, OwnerSelector, CounterId, Delta}`。`CardExpression` 通常是
+/// `cardInstance.resolving`（"这张牌自己变强"），也可以是 `cardInstance.iterated`。
+///
+/// 三条纪律：
+/// * 计数器**不存在**时按 0 起算（`set_mark_counter` 是字典语义）；
+/// * `Delta` 是**相对**量 —— 绝对值写 0 会把"已经涨过"抹掉，那种 bug 只在第二张以后才看得出来；
+/// * 计数器表满了 ⇒ `set_mark_counter` 自己报 `Capacity`（§161.4 那条预校验的反面：这里没有
+///   "先搬后写"的顺序问题，写入失败就是整体失败）。
+fn add_card_counter_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    _stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let card_expression = node
+        .node_field("CardExpression")?
+        .ok_or(IrError::Missing("CardExpression"))?;
+    let counter = node.str_field("CounterId")?.ok_or(IrError::Missing("CounterId"))?;
+    let delta = eval_amount(node, "Delta", ctx)?;
+    let owner_selector = node
+        .node_field("OwnerSelector")?
+        .ok_or(IrError::Missing("OwnerSelector"))?;
+    let card_id = {
+        let expr_ctx = ctx.expr_context();
+        expr::eval_card(card_expression, &expr_ctx)?
+    };
+    let mut owners = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let owner_count = resolve_targets(owner_selector, ctx, &mut owners)?;
+    let Some(owner) = owners.first().copied().filter(|_| owner_count > 0) else {
+        return resume_later(ctx.state, frame, slot);
+    };
+    let Some((_, card_slot)) = ctx.state.find_card(&owner, &card_id) else {
+        return Err(ExecError::Ir(IrError::Missing("CardExpression")));
+    };
+    let key = crate::state::CounterId::new(counter).map_err(|_| IrError::Missing("CounterId"))?;
+    let current = ctx
+        .state
+        .card(card_slot)
+        .and_then(|card| {
+            card.mark_counters()
+                .iter()
+                .find(|entry| entry.key == key)
+                .map(|entry| entry.value)
+        })
+        .unwrap_or(0);
+    if let Some(card) = ctx.state.card_mut(card_slot) {
+        card.set_mark_counter(key, current.saturating_add(delta))?;
     }
     resume_later(ctx.state, frame, slot)
 }
@@ -7022,6 +7080,7 @@ mod tests {
                     event_target: None,
                     iteration_target: None,
                     iteration_card: None,
+                    resolving_card: None,
                     event_flags: 0, event_amount: None,
                     x_cost: 0,
                 };
@@ -7124,6 +7183,7 @@ mod tests {
                             event_target: event_target.map(cid),
                             iteration_target: iteration_target.map(cid),
                             iteration_card: None,
+                            resolving_card: None,
                             event_flags: 0, event_amount: None,
                             x_cost: 0,
                         };

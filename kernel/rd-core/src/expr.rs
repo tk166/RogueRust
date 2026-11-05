@@ -212,7 +212,17 @@ pub struct ExprContext<'a> {
     /// 今天只有两个伤害事件会填它（= **实际掉的血**）；`0` 是合法数量，所以"没有上下文"必须是
     /// `None`，不能与"这一次伤害是 0"混成一个数。
     pub event_amount: Option<i32>,
-    /// **X 费牌的 X**（§146）：这一次出牌真的花掉了多少能量。
+
+    /// §229：**正在结算的那张牌**（出牌时由 `play.rs` 填；`card.counter` 读它）。
+    ///
+    /// §226 只把"是不是这一张"压成了一个 `event_flags` 位（`card.isResolving`）；`Rampage` 要读
+    /// 一个**整数**（这份副本已经涨了多少），位图不够用，所以这里第一次把槽本身交给表达式层。
+    ///
+    /// 没有它时（状态/遗物/敌人招式的节目）是 `None` —— 读它的两种表达式各自**响亮**处理，
+    /// 不许静默给 0：`cardInstance.resolving` 报 `NoTarget`，`card.counter` 也报 `NoTarget`。
+    pub resolving_card: Option<crate::state::CardSlot>,
+
+    /// X 费牌的 X（§146）：这一次出牌真的花掉了多少能量。
     ///
     /// 不是全局状态的一部分：它随一次出牌生、随那次出牌死，所以走上下文、
     /// 并且**存在节目帧上**（续延里重建上下文时要拿得回来）。
@@ -367,6 +377,8 @@ const INT_KINDS: &[&str] = &[
     "card.upgradeLevel",
     // §146：X 费牌的 X（本内核自己的 kind —— 参考里没有 X 费，见 `port-plan.md` §146）。
     "x.cost",
+    // §229：正在结算的那份副本的 mark counter（`Rampage` 的 "increase **this card's** damage"）。
+    "card.counter",
 ];
 
 /// 求值为**卡实例**的 kind（参考里 `ICombatExpression<_, CardInstance>` 的那些）。
@@ -374,7 +386,12 @@ const INT_KINDS: &[&str] = &[
 /// 镜像里只出现过 `cardInstance.iterated`（0 字段，`trecon:236` 实测 t152 这一条），
 /// 它读的是 `ForEachCardInZone` 绑定的当前迭代卡 —— 见 [`eval_card`] 与
 /// [`ExprContext::iteration_card`]。
-const CARD_KINDS: &[&str] = &["cardInstance.iterated"];
+const CARD_KINDS: &[&str] = &[
+    "cardInstance.iterated",
+    // §229: the card whose program is running -- the pair of §226's `card.isResolving` bit, but as a
+    // **value** instead of a fact (a counter write needs the instance, not the yes/no).
+    "cardInstance.resolving",
+];
 
 /// 求值为 `bool` 的 kind（`ICombatExpression<_, bool>` 的那些）。
 const BOOL_KINDS: &[&str] = &[
@@ -438,6 +455,22 @@ pub fn eval_int<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, Exp
         "const" => Ok(node.int_field("Value")?.ok_or(IrError::Missing("Value"))?),
         // §146：X 费牌的 X。零字段 —— 值只来自这次出牌付掉的能量。
         "x.cost" => Ok(ctx.x_cost),
+
+        // §229: the mark counter of **this copy**. Absent counter ⇒ `0` (an unbuffed card is not an
+        // error); no resolving card ⇒ `NoTarget` (`Rampage` outside a card program is a content bug,
+        // and "0 bonus damage" would hide it).
+        "card.counter" => {
+            let key = node.str_field("CounterId")?.ok_or(IrError::Missing("CounterId"))?;
+            let slot = ctx.resolving_card.ok_or(ExprError::NoTarget)?;
+            let card = ctx.state.card(slot).ok_or(ExprError::NoTarget)?;
+            let wanted = crate::state::CounterId::new(key).map_err(|_| ExprError::NoTarget)?;
+            for counter in card.mark_counters() {
+                if counter.key == wanted {
+                    return Ok(counter.value);
+                }
+            }
+            Ok(0)
+        }
 
         // `Saturate((long)l + r / - r / * r)`（`:256 / :280 / :304`）。
         "add" => {
@@ -598,6 +631,12 @@ pub fn eval_card<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<CardIns
     match kind {
         // `IteratedCardExpression.Evaluate => ctx.IteratedCard`。
         "cardInstance.iterated" => ctx.iteration_card.ok_or(ExprError::NoTarget),
+
+        // §229: "the card being resolved". Separate from `iterated` on purpose -- inside a
+        // `forEachCardInZone` over the hand both exist and they are **different** cards (§226).
+        "cardInstance.resolving" => ctx.resolving_card.map_or(Err(ExprError::NoTarget), |slot| {
+            ctx.state.card(slot).map(|card| card.id).ok_or(ExprError::NoTarget)
+        }),
         // 值类别是卡、但 v1 没有它的读法。**绝不返回空 id**。
         _ => Err(ExprError::UnsupportedKind),
     }
@@ -1094,6 +1133,7 @@ mod tests {
             event_target: Some(cid("enemy_a")),
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
+            resolving_card: None,
             event_flags: 0, event_amount: None,
             x_cost: 0,
         }
@@ -1116,6 +1156,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
+            resolving_card: None,
             event_flags: 0, event_amount: None,
             x_cost: 0,
         }
@@ -1148,6 +1189,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
+            resolving_card: None,
             event_flags: 0, event_amount: None,
             x_cost: 0,
         };
@@ -1212,6 +1254,7 @@ mod tests {
             event_target: Some(cid("hero")),
             iteration_target: None,
             iteration_card: None,
+            resolving_card: None,
             event_flags: 0, event_amount: None,
             x_cost: 0,
         };
@@ -1273,6 +1316,7 @@ mod tests {
             event_target: Some(cid("enemy_b")),
             iteration_target: Some(cid("enemy_a")),
             iteration_card: None,
+            resolving_card: None,
             event_flags: 0, event_amount: None,
             x_cost: 0,
         };
@@ -1300,6 +1344,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
+            resolving_card: None,
             event_flags: 0, event_amount: None,
             x_cost: 0,
         };
@@ -1322,6 +1367,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: None,
+            resolving_card: None,
             event_flags: 0, event_amount: None,
             x_cost: 0,
         };
@@ -1478,6 +1524,7 @@ mod tests {
             event_target: None,
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
+            resolving_card: None,
             event_flags: 0, event_amount: None,
             x_cost: 0,
         };
@@ -2015,6 +2062,7 @@ mod tests {
             event_target: Some(cid("enemy_a")),
             iteration_target: Some(cid("enemy_b")),
             iteration_card: None,
+            resolving_card: None,
             event_flags: 0, event_amount: None,
             x_cost: 0,
         };
@@ -2174,6 +2222,7 @@ mod tests {
             event_target: None,
             iteration_target: None,
             iteration_card: Some(card),
+            resolving_card: None,
             event_flags: 0, event_amount: None,
             x_cost: 0,
         };
@@ -2184,6 +2233,7 @@ mod tests {
         // 那是最坏的一种"通过"。
         let unbound = ExprContext {
             iteration_card: None,
+            resolving_card: None,
             ..bound
         };
         assert_eq!(eval_card(iterated, &unbound), Err(ExprError::NoTarget));

@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 404 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 416 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 89 | 51 | 38 | 0 | 85 | 4 | 8 | 0 |
+| 卡牌 | 101 | 59 | 42 | 0 | 91 | 10 | 8 | 0 |
 | 状态 | 45 | 42 | 1 | 2 | 0 | 45 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 404 | 265 | 123 | 16 | 262 | 49 | 71 | 0 |
+| **合计** | 416 | 273 | 127 | 16 | 268 | 55 | 71 | 0 |
 
-扫描到的具名测试：**928** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**931** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -239,7 +239,7 @@
 | time_eater.ripple | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 
-## 卡牌（89）
+## 卡牌（101）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -304,6 +304,18 @@
 | pommel_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/pommel_strike.txt (via pommel_strike) | — | INV_CARDS |
 | pummel | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/pummel.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | pummel+ | yes | — | CARD_DIFF | wiki:wiki_cards/pummel.txt (via pummel) | — | INV_CARDS |
+| rampage | yes | rampage_grows_this_copy_and_only_this_copy | — | wiki:wiki_cards/rampage.txt | — | CARD_WIKI+INV_CARDS/rampage_grows_this_copy_and_only_this_copy |
+| rampage+ | yes | rampage_grows_this_copy_and_only_this_copy | — | wiki:wiki_cards/rampage.txt (via rampage) | — | INV_CARDS/rampage_grows_this_copy_and_only_this_copy |
+| rip_and_tear | yes | rip_and_tear_hits_twice_for_seven | — | wiki:wiki_cards/rip_and_tear.txt | — | §228/§229/CARD_WIKI+INV_CARDS/rip_and_tear_hits_twice_for_seven |
+| rip_and_tear+ | yes | rip_and_tear_hits_twice_for_seven | — | wiki:wiki_cards/rip_and_tear.txt (via rip_and_tear) | — | INV_CARDS/rip_and_tear_hits_twice_for_seven |
+| searing_blow | yes | searing_blow_upgrades_more_than_once_but_strike_does_not | — | wiki:wiki_cards/searing_blow.txt | — | §229/CARD_WIKI+INV_CARDS/searing_blow_upgrades_more_than_once_but_strike_does_not |
+| searing_blow+ | yes | searing_blow_upgrades_more_than_once_but_strike_does_not | — | wiki:wiki_cards/searing_blow.txt (via searing_blow) | — | INV_CARDS/searing_blow_upgrades_more_than_once_but_strike_does_not |
+| searing_blow++ | yes | searing_blow_upgrades_more_than_once_but_strike_does_not | — | spec:INV_CARDS | — | INV_CARDS/searing_blow_upgrades_more_than_once_but_strike_does_not |
+| searing_blow+++ | yes | searing_blow_upgrades_more_than_once_but_strike_does_not | — | spec:INV_CARDS | — | INV_CARDS/searing_blow_upgrades_more_than_once_but_strike_does_not |
+| searing_blow++++ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
+| searing_blow+++++ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
+| searing_blow++++++ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
+| searing_blow+++++++ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
 | second_wind | yes | the_hand_exhausting_cards_do_what_their_pages_say | — | wiki:wiki_cards/second_wind.txt | — | §10/§225/CARD_WIKI+INV_CARDS/the_hand_exhausting_cards_do_what_their_pages_say |
 | second_wind+ | yes | — | CARD_DIFF | wiki:wiki_cards/second_wind.txt (via second_wind) | — | INV_CARDS |
 | sentinel | yes | the_keyword_cells_are_in_the_image, every_way_into_the_exhaust_pile_runs_the_exhausted_program …(+2) | — | wiki:wiki_cards/sentinel.txt | wiki 偏差：wiki 没有 Ethereal（旧版有），内容带 `ethereal`。§220 起"被 Exhaust 时给 2(3) 能量"**已经实现**（`LifecyclePrograms[Exhausted]`），所以这条偏差只剩 Ethereal 标签本身。 | §220/CARD_WIKI+INV_CARDS/the_keyword_cells_are_in_the_image |
@@ -312,7 +324,7 @@
 | shrug_it_off+ | yes | — | CARD_DIFF | wiki:wiki_cards/shrug_it_off.txt (via shrug_it_off) | — | INV_CARDS |
 | slimed | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+2) | — | wiki:wiki_cards/slimed.txt | — | §192/§219/CARD_WIKI+INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+82) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
-| strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+7) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
+| strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+8) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
 | sword_boomerang | yes | sword_boomerang_rerolls_a_target_for_each_hit | — | wiki:wiki_cards/sword_boomerang.txt | — | §228/CARD_WIKI+INV_CARDS/sword_boomerang_rerolls_a_target_for_each_hit |

@@ -152,6 +152,16 @@ FACTS = {
     # §228：`Deal damage equal to your Block.` —— `+` 只降费。
     'body_slam': ([('damage', ('pool', 'standard.block', 'source'), 'event')],
                   [('damage', ('pool', 'standard.block', 'source'), 'event')]),
+    # §229：`Deal (7;9) damage to a random enemy twice.` —— 升级改伤害，次数固定 2。
+    'rip_and_tear': ([('damageRandom', 7, 'allEnemies', 2)],
+                     [('damageRandom', 9, 'allEnemies', 2)]),
+    # §229：`Deal 8 damage. Increase this card's damage by (5;8) this combat.`
+    'rampage': ([('damage', ('add', 8, ('cardCounter', 'standard.rampage_bonus')), 'event'),
+                 ('cardCounter', 'cardInstance.resolving', 'standard.rampage_bonus', 5)],
+                [('damage', ('add', 8, ('cardCounter', 'standard.rampage_bonus')), 'event'),
+                 ('cardCounter', 'cardInstance.resolving', 'standard.rampage_bonus', 8)]),
+    # §229：`Deal (12;16) damage. Can be Upgraded any number of times.` —— 每档 +4，`plus` 是**第一档**。
+    'searing_blow': ([('damage', 12, 'event')], [('damage', 16, 'event')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),
