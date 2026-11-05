@@ -157,6 +157,19 @@ INV_CARDS = {
                 "Facts": [("draw", 2, "source"),
                           ("choose", "source", "Hand", (), 1, 1, "ToDrawPileTop")],
                 "PlayedCardDestinationZone": "ExhaustPile"},
+    # ---- §232：两张 X 费牌（载体全在：`repeat` + `x.cost`） -----------------------------------
+    "skewer": {"Cost": 0, "Tags": ["attack", "x_cost"],
+               "Facts": [("repeat", ("expr", "x.cost"), "damage", 7, "event")]},
+    "skewer+": {"Cost": 0, "Tags": ["attack", "x_cost"],
+                "Facts": [("repeat", ("expr", "x.cost"), "damage", 10, "event")]},
+    "malaise": {"Cost": 0, "Tags": ["skill", "x_cost"],
+                "Facts": [("modify", "standard.strength", ("expr", "subtract"), "event"),
+                          ("status", "standard.weak", ("expr", "x.cost"), "event")],
+                "PlayedCardDestinationZone": "ExhaustPile"},
+    "malaise+": {"Cost": 0, "Tags": ["skill", "x_cost"],
+                 "Facts": [("modify", "standard.strength", ("expr", "subtract"), "event"),
+                           ("status", "standard.weak", ("expr", "add"), "event")],
+                 "PlayedCardDestinationZone": "ExhaustPile"},
     # ---- §231：True Grit（格挡 + 随机消耗一张）/ Reaper（打全体 + 按掉血回血） -----------------
     # `True Grit`：数值只有格挡那一半；"随机消耗一张手牌"是 §195.4 的 `selectCards` 事实。
     "true_grit": {"Cost": 1, "Tags": ["skill"],

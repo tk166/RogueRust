@@ -1,0 +1,37 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Skewer
+| Image       = Green-Skewer.png
+| Color       = Green
+| Type        = Attack
+| Rarity      = Uncommon
+| Cost        = -1
+| Description = Deal (7;10) damage X times.
+}}
+{{C|Skewer}} is an X {{Icon|GE}}-cost {{QueryLink|Cards|color:Green|Silent}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 7 (10 if upgraded) damage to X times.
+
+When playing an X {{Icon|GE}}-cost card, all {{Icon|GE}} '''Energy''' that you currently have will be consumed. The {{Icon|GE}} '''Energy''' consumed this way will be used as the value for X.
+
+== Interactions ==
+=== Synergies ===
+* Benefits X times from {{BD|Strength}} or {{BD|Vigor}}.
+* {{R|Chemical X}} makes {{C|Skewer}} hit 2 more times, regardless of the amount of {{Icon|GE}} '''Energy''' used to play it.
+* If {{C|Skewer}} is used with 2 or more {{Icon|GE}} '''Energy''', it will be able to trigger {{R|Necronomicon}}.
+* If played using {{P|Distilled Chaos}}, {{C|Havoc}}, or {{C|Omniscience}}, it will play for the full current {{Icon|GE}} '''Energy''' without actually using any.
+* Can be used with 0 {{Icon|GE}} '''Energy''' to advance {{R|Ink Bottle}}, {{R|Nunchaku}}, {{R|Kunai}}, {{R|Shuriken}}, and {{R|Ornamental Fan}}.
+
+=== Neutral ===
+* If {{C|Skewer}} is duplicated with an effect such as a {{P|Duplication Potion}} or {{C|Double Tap}}, the value of X will also be used for the copy.
+* Being an X-cost, {{C|Skewer}} can be targeted by {{C|Recycle}} to double the current {{Icon|GE}} '''Energy'''.
+* It will not count as a 0-cost card for {{R|Wrist Blade}}, {{C|All for One}} or {{C|Scrape}}, even with {{C|Swivel}}'s {{BD|Free Attack Power}} active.
+
+== Trivia ==
+* The {{M|Red Louse}} is featured in the card art.
+
+== Update History ==
+* '''Weekly Patch 10: Quality of Life'''
+** Removing 'Spend all [R].' from all X-cost cards for consistency.
+** Fixed bug where cost X cards do not work with energy gain cards if played too fast.
+
+{{SilentNav}}
+[[Category:Cards]]

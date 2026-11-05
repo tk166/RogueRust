@@ -180,6 +180,14 @@ FACTS = {
     # §231：`Deal (4;5) damage to ALL enemies. Heal unblocked damage dealt.`
     'reaper': ([('damageHealLoss', 4, 'allEnemies')],
                [('damageHealLoss', 5, 'allEnemies')]),
+    # §232：`Deal (7;10) damage X times.`（X 费）
+    'skewer': ([('repeat', ('expr', 'x.cost'), 'damage', 7, 'event')],
+               [('repeat', ('expr', 'x.cost'), 'damage', 10, 'event')]),
+    # §232：`Enemy loses X Strength and gains X Weak. Exhaust.`（`+` 只降费 —— 两行事实相同）
+    'malaise': ([('modify', 'standard.strength', ('expr', 'subtract'), 'event'),
+                 ('status', 'standard.weak', ('expr', 'x.cost'), 'event')],
+                [('modify', 'standard.strength', ('expr', 'subtract'), 'event'),
+                 ('status', 'standard.weak', ('expr', 'add'), 'event')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

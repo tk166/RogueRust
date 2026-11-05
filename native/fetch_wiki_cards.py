@@ -91,6 +91,10 @@ PAGES = {
     # §231：格挡 + 随机消耗（True Grit）、打全体并按掉血回血（Reaper）
     'true_grit': 'True_Grit',
     'reaper': 'Reaper',
+    # §232：X 费 + 格挡翻倍
+    'skewer': 'Skewer',
+    'malaise': 'Malaise',
+    'entrench': 'Entrench',
     # §221：事件给的两张诅咒
     'doubt': 'Doubt',
     'writhe': 'Writhe',

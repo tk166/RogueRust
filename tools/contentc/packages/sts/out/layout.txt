@@ -47,7 +47,7 @@
  61  4  4  12 IR node.loseResource                                            : Amount:TERM ResourceId:STR ResultKey:TERM TargetSelector:TERM
  62  4  4  12 IR node.modifyStatusStacks                                      : Delta:TERM ResultKey:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
  63  5  5  12 IR node.moveCardToZone                                          : CardExpression:TERM OwnerSelector:TERM Placement:STR ResultKey:TERM ToZone:STR
- 64  3  3   8 IR node.repeat                                                  : Body:TERM Count:TERM MaxCount:INT
+ 64  4  4  12 IR node.repeat                                                  : Body:TERM Count:TERM MaxCount:INT ResultKey:TERM
  65  8  8  20 IR node.selectCards                                             : Count:INT FallbackZone:STR FromZone:STR Order:STR OwnerSelector:TERM Placement:STR ResultKey:TERM ToZone:STR
  66  2  3   8 IR node.sequence                                                : Children:TERMLIST ResultKey:TERM
  67  5  5  12 IR node.setCombatantCounter                                     : Amount:TERM CounterId:STR(wrap) Relative:BOOL ResultKey:TERM TargetSelector:TERM

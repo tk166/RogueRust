@@ -310,10 +310,11 @@ pub const RARITY_OFFSET_CAP: i32 = 40;
 /// "内容把行写够"（`searing_blow` / `+` / `++` … 共 8 行），于是 `CARD` 表到了 **101 行**，
 /// 一条真实走图的回放当场被 `PoolTooLarge { pool: 101, max: 96 }` 拒绝。
 ///
+/// §232 内容到 115 行时又抬了一次（112 → 128），理由同上：这条常量跟的是**目录行数**。
 /// 抬到 112 而不是 128：上面那条"池子不该比牌区大"的推理错在**把池子当牌区**——这个池子是
 /// **目录**（基础行 + `+` 行 + 状态/诅咒牌），它不装在同一张牌区里，`u8` 也只是编码而不是语义。
 /// 真实约束是两条：`>= 内容行数`（`pool_fits` 会红，不许截断），以及"离 u8 远得很"。
-pub const MAX_POOL: usize = 112;
+pub const MAX_POOL: usize = 128;
 
 /// What the node under the cursor is waiting for.
 ///
