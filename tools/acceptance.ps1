@@ -216,7 +216,7 @@ Write-Output "`n[13/21] 覆盖矩阵：每个实体被验证到哪一步（Imple
 #       看起来照样"有证据"，而它其实什么都没读。实测过一次：`strip_rust` 删字符导致函数体被
 #       切在很早的 `}` 上，33 瓶药水全报"没有任何证据"。
 $results += Invoke-Gate -Name 'coverage-matrix' -Exe $PY `
-  -ArgLine ((Join-Path $ROOT 'native\coverage_matrix.py') + ' --check') -Workdir $ROOT `
+  -ArgLine ((Join-Path $ROOT 'native\coverage_matrix.py') + ' --check --selftest') -Workdir $ROOT `
   -MustMatch 'COVERAGE_MATRIX PASS \(rows=\d+, tests=\d+, fresh\)' -TimeoutSec 300
 
 Write-Output "`n[14/21] 重编网页那一份 .wasm（web/** 是仓库里唯一被手工 Copy-Item 进来的二进制产物）"

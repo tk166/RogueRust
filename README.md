@@ -7,7 +7,7 @@
 移植的硬约束是三条：**能在 ESP32-P4 裸机上跑**（`no_std`、零分配、纯整数、`forbid(unsafe_code)`）、
 **能多开当强化学习训练环境**（确定性、可快照、可回放）、**与参考实现逐字节一致的状态指纹**（对拍可证）。
 
-> 主计划在 `docs/port-plan.md`（§1–§216，每一轮都留数字、记下被推翻的结论）。
+> 主计划在 `docs/port-plan.md`（§1–§217，每一轮都留数字、记下被推翻的结论）。
 > 这份 README 只交代**仓库现在是什么样、以及怎么把它跑起来玩**；为什么变成这样，在计划里。
 
 ---
@@ -181,7 +181,7 @@ python -m http.server 8000
 | `native/*.py` | 三类：**对拍/校验驱动**（`fight_diff.py`、`gap_check.py`、`sts_content_check.py`…）、**`doc_*.py`**（每一节往 `port-plan.md` 追加章节的脚本，与正文一一对应）、**`patch_*.py` / `negctl_*.py`**（那一节改动源码与**反证**的脚本，留作记录） |
 | `py/roguedeck_env/` | RL 环境的 Python 封装（`ctypes`，多进程 + 批量观察 + 吞吐基准） |
 | `corpus/` | 对拍语料：`golden_v1.jsonl`、`hash_cases/*.txt`、`coverage.json`（份数以闸门输出为准） |
-| `docs/` | `port-plan.md`（主计划 §1–§195）、`spec/`（21 份规格书）、`sts-wiki-gap.md`（缺口清单，数字由 `native/gap_check.py` 重算）、`coverage-matrix.md`（**生成物**：每个实体的 Implemented / RuntimeTested / WikiVerified / Deviation / Evidence，闸门 13） |
+| `docs/` | `port-plan.md`（主计划 §1–§195）、`spec/`（21 份规格书）、`sts-wiki-gap.md`（缺口清单，数字由 `native/gap_check.py` 重算）、`coverage-matrix.md`（**生成物**：每个实体的 Implemented / TestNamed / HarnessOnly / SourceTie / DeclaredDeviation / Evidence，闸门 13；带 `--selftest` 的五个对抗性夹具） |
 | `ref/` | 参考实现的浅克隆位置（**不在本仓库**，见 §9） |
 | `sts/` | **早期 Python 原型**，已被 Rust 内核取代，保留作参照（不参与任何闸门） |
 

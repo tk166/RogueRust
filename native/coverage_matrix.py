@@ -171,7 +171,9 @@ def build_entities(doc, by_test=None):
         reachable, why = aid in listed_actions, 'listed by a monster'
         if not reachable and aid in C.INV_UNWIRED:
             reachable, why = True, 'declared unwired (INV_UNWIRED)'
-        if not reachable and aid in everywhere:
+        # ⚠️ §217: 这里曾经写的是 `aid in everywhere` —— 而 `everywhere` 是**按类别的 dict**，
+        # 于是它在比"动作 id 与 dict 的键"，永远不成立（审阅 P2-A 点出来的正是这一行）。
+        if not reachable and aid in everywhere['EnemyActions']:
             reachable, why = True, 'referenced elsewhere'
         if owner in monsters:
             owning = owner
@@ -391,38 +393,127 @@ def strip_rust(text):
     return ''.join(out)
 
 
-def tests():
-    """→ [(crate, fn_name, body)]。函数体按花括号配对切；`#[test]` 必须在 `fn` 头上。"""
+def tests(kernel_root=None, crates=None):
+    """→ [(crate, fn_name, body)]，递归扫 `<kernel>/<crate>/src/**/*.rs`。
+
+    §217 补的两处盲区（都是"对账"发现的，不是猜的）：
+
+    * **不递归** ⇒ `rd-run/src/state/archive.rs` 的 8 条测试从来没被扫到；
+    * **`#[test]` 与 `fn` 之间隔着 doc 注释** ⇒ 旧的 head 正则只允许中间有更多 `#[...]`，
+      于是 `rd-wasm/src/run.rs:7041` 那 1 条也漏掉。
+
+    对账（ground truth 是 `cargo test -p <crate> -- --list`，不是 grep 的行数）：
+
+    ```text
+    cargo --list    rd-core 704 + rd-run 108 + rd-wasm 94 = 906   （其中 2 条 #[ignore]）
+    修前扫描器      893   （缺 9：8 条在嵌套目录 + 1 条被 doc 注释挡住）
+    修后扫描器      906   == cargo 的清单
+    ```
+
+    （grep 得到的"906 行含 `#[test]`"里另有 4 处是**注释里提到的** `#[test]` —— 它们本来就不是
+    测试，扫描器用 `strip_rust` 的位置检查把它们排除了。第一版按行数推"真实 902"是错的，
+    因为同一行里可能出现两个属性。）
+
+    ⚠️ 注释里提到的 `#[test]` 必须**不算**测试：判据是"这个位置在 `strip_rust` 之后是空格"
+    —— 那说明它落在注释或字符串里。（`strip_rust` 是等长替换，所以偏移可以直接比对。）
+    """
     found = []
-    head = re.compile(r'\s*(?:#\[[^\]]*\]\s*)*fn\s+([A-Za-z0-9_]+)')
-    for crate in TEST_CRATES:
-        src_dir = os.path.join(KERNEL, crate, 'src')
+    root = kernel_root or KERNEL
+    for crate in (crates or TEST_CRATES):
+        src_dir = os.path.join(root, crate, 'src')
         if not os.path.isdir(src_dir):
             continue
-        for name in sorted(os.listdir(src_dir)):
-            if not name.endswith('.rs'):
-                continue
-            text = io.open(os.path.join(src_dir, name), encoding='utf-8',
-                           errors='replace').read()
-            for match in re.finditer(r'#\[test\]', text):
-                got = head.match(text, match.end())
-                if not got:
+        for directory, _dirs, files in os.walk(src_dir):
+            for name in sorted(files):
+                if not name.endswith('.rs'):
                     continue
-                brace = text.find('{', got.end())
-                if brace < 0:
-                    continue
-                skeleton = strip_rust(text[brace:])
-                depth, end = 0, len(text) - 1
-                for offset, ch in enumerate(skeleton):
-                    if ch == '{':
-                        depth += 1
-                    elif ch == '}':
-                        depth -= 1
-                        if depth == 0:
-                            end = brace + offset
-                            break
-                found.append((crate, got.group(1), text[brace:end + 1]))
+                text = io.open(os.path.join(directory, name), encoding='utf-8',
+                               errors='replace').read()
+                skeleton = strip_rust(text)
+                for match in re.finditer(r'#\[test\]', text):
+                    if skeleton[match.start()] != "#":
+                        continue          # 这条 `#[test]` 在注释或字符串里
+                    got = head_of(text, match.end())
+                    if not got:
+                        continue
+                    brace = text.find("{", got.end())
+                    if brace < 0:
+                        continue
+                    depth, end = 0, len(text) - 1
+                    for offset, ch in enumerate(strip_rust(text[brace:])):
+                        if ch == "{":
+                            depth += 1
+                        elif ch == "}":
+                            depth -= 1
+                            if depth == 0:
+                                end = brace + offset
+                                break
+                    found.append((crate, got.group(1), text[brace:end + 1]))
     return found
+
+
+def head_of(text, position):
+    """从 `#[test]` 之后找 `fn <名字>`：允许更多 `#[...]` 属性**和 doc/行注释**。
+
+    ⚠️ 注释那一半是 §217 补的：`rd-wasm/src/run.rs:7041` 的 `#[test]` 与 `fn` 之间夹着
+    `/// ...`，旧写法（只允许 `#[...]`）把那条测试整个丢掉了。
+    """
+    pattern = re.compile(r"\s*(?:#\[[^\]\n]*\]\s*|//[^\n]*\n\s*)*fn\s+([A-Za-z0-9_]+)")
+    return pattern.match(text, position)
+
+
+def strip_comments(text):
+    """把注释替换成等长空格，**字符串原样保留**。
+
+    为什么要与 `strip_rust` 分开：抽"测试体里出现的字符串字面量"时，注释里的 `"spiker"` 不能算
+    引用（夹具 4 就是打这个）。花括号配对才需要连字符串一起抹掉。
+    """
+    out = list(text)
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            j = text.find(chr(10), i)
+            j = n if j < 0 else j
+            for position in range(i, j):
+                out[position] = " "
+            i = j
+        elif ch == "/" and i + 1 < n and text[i + 1] == "*":
+            j = text.find("*/", i + 2)
+            j = n if j < 0 else j + 2
+            for position in range(i, j):
+                if out[position] != chr(10):
+                    out[position] = " "
+            i = j
+        elif ch == '"' or (ch == "r" and i + 1 < n and text[i + 1] in '#"'):
+            # 字符串整体跳过（不抹），其中的 `//` 不是注释。
+            if ch == '"':
+                j = i + 1
+                while j < n and text[j] != '"':
+                    j += 2 if text[j] == chr(92) else 1
+                i = j + 1
+            else:
+                j, hashes = i + 1, 0
+                while j < n and text[j] == "#":
+                    hashes += 1
+                    j += 1
+                if j < n and text[j] == '"':
+                    closing = '"' + "#" * hashes
+                    k = text.find(closing, j + 1)
+                    i = n if k < 0 else k + len(closing)
+                else:
+                    i += 1
+        elif ch == "'":
+            if i + 2 < n and text[i + 2] == "'":
+                i += 3
+            elif i + 2 < n and text[i + 1] == chr(92):
+                j = text.find("'", i + 2)
+                i = n if j < 0 else j + 1
+            else:
+                i += 1
+        else:
+            i += 1
+    return "".join(out)
 
 
 def table_sweeps(found):
@@ -450,7 +541,8 @@ def tests_by_entity(found):
     index = {}
     for crate, fn, body in found:
         tokens = set()
-        for match in re.finditer(r'"([^"\\\n]{1,60})"', body):
+        # §217：先剥注释 —— 注释里写 `"spiker"` 不算引用（夹具 4 钉这个）。
+        for match in re.finditer(r'"([^"\\\n]{1,60})"', strip_comments(body)):
             tokens.add(match.group(1))
         for token in tokens:
             index.setdefault(token, []).append((crate, fn))
@@ -540,15 +632,26 @@ def gap_deviations():
         return re.sub(r'\s+', ' ', c.replace('**', '')).strip()
 
     in_g = in_h = False
+    armed = False          # §217：只在"仍然故意不修" / "放宽"那两张表下解析
     for line in lines:
         if line.startswith('### G.'):
             in_g, in_h = True, False
+            # §217：§G 有**两张**表 —— "已修"（历史：原值 → 现在）与"仍然故意不修"（现存偏差）。
+            # §215 把两张都解析了，于是 8 条早已修好的招式（`spiker.cut`、`chosen.poke` …）
+            # 在矩阵里被列成"现存偏差"，读起来像"ours 8 / wiki 7"。只认后一张。
+            armed = ('不修' in line) or ('放宽' in line)
             continue
         if line.startswith('## H.'):
             in_g, in_h = False, True
+            armed = False
             continue
         if line.startswith('### ') or line.startswith('## '):
-            in_g = in_h = False
+            in_g = in_h = armed = False
+        if not armed and in_g:
+            # "仍然**故意不修**"这句在表格**之前**，是那一表的开关。
+            if '故意不修' in line:
+                armed = True
+            continue
         if not (in_g or in_h) or not line.startswith('|'):
             continue
         cells = line.strip().strip('|').split('|')
@@ -641,14 +744,17 @@ def build_rows(doc):
             if entry not in bucket:
                 bucket.append(entry)
 
+    # §217：偏差表现在也会指到**状态**（`standard.slow` 的"只放大直接伤害"），所以存在性检查
+    # 要走全部类别 —— 只查动作与怪物时，一条合法的状态偏差会被判成"表漂了"。
+    all_ids = {ident for kind in KIND_ORDER for ident in entities[kind]}
     for ident in gap_dev:
-        if ident not in entities['action'] and ident not in entities['monster']:
+        if ident not in all_ids:
             problems.append('gap 文档里的 `%s` 在内容里不存在（偏差表漂了）' % ident)
 
     rows, summary = [], {}
     entity_meta = entities.pop('_meta', {})
     for kind in KIND_ORDER:
-        stats = {'rows': 0, 'test': 0, 'harness': 0, 'none': 0, 'wiki': 0, 'spec': 0,
+        stats = {'rows': 0, 'named': 0, 'harness': 0, 'none': 0, 'wiki': 0, 'spec': 0,
                  'dev': 0, 'orphan': 0}
         for eid in sorted(entities[kind]):
             info = entities[kind][eid]
@@ -670,47 +776,53 @@ def build_rows(doc):
             for _crate, fn in by_test.get(eid, []):
                 if fn not in names:
                     names.append(fn)
+            # `TestNamed`：这个 id 以**字符串字面量**出现在某条测试的函数体里。
+            # ⚠️ 它是"被引用"，不是"行为被断言"：`assert_eq!(id, "spiker")` 与"真打一场 spiker"
+            # 在这一列里长得一模一样（审阅 P2-A 的原话，这也是列名从 `RuntimeTested` 改过来的原因）。
+            test_named = '—'
+            harness = '—'
             if names:
-                runtime = 'test:' + ', '.join(names[:2])
+                test_named = ', '.join(names[:2])
                 if len(names) > 2:
-                    runtime += ' …(+%d)' % (len(names) - 2)
-                stats['test'] += 1
+                    test_named += ' …(+%d)' % (len(names) - 2)
+                stats['named'] += 1
             elif kind in HARNESS:
-                runtime = 'harness:' + HARNESS[kind]
+                harness = HARNESS[kind]
                 stats['harness'] += 1
             elif kind in sweeps:
-                runtime = 'harness:' + sweeps[kind][0]
+                harness = sweeps[kind][0]
                 if len(sweeps[kind]) > 1:
-                    runtime += ' …(+%d)' % (len(sweeps[kind]) - 1)
+                    harness += ' …(+%d)' % (len(sweeps[kind]) - 1)
                 stats['harness'] += 1
             elif kind == 'status' and eid in refs:
-                runtime = 'harness:' + '+'.join(sorted(
+                harness = '+'.join(sorted(
                     {'CARD_DIFF' if where == 'card' else 'ENEMY_DIFF' for where in refs[eid]}))
                 stats['harness'] += 1
             else:
-                runtime = '—'
                 stats['none'] += 1
 
             tied = table_of.get(eid, set())
-            wiki = None
+            source = None
             if kind == 'monster' and eid in wiki_of:
-                wiki = 'wiki:%s' % wiki_of[eid]
+                source = 'wiki:%s' % wiki_of[eid]
                 if not (tied & WIKI_TIE['monster']):
-                    wiki += ' (未钉数字)'
+                    source += ' (未钉数字)'
             elif kind == 'action':
                 owner = info['owner']
                 if owner and owner in wiki_of:
-                    wiki = 'wiki:%s' % wiki_of[owner]
+                    # §217：**写明"继承"** —— 动作的页面来自所属怪物，不是这条动作自己核过
+                    # （`maw.nom_nom` 就是反例：有 wiki 标签、时间变量却是错的）。
+                    source = 'wiki:%s (via %s)' % (wiki_of[owner], owner)
                     if not (tied & WIKI_TIE['action']):
                         # §190 之后的升档表才是“招式对上 wiki”的证据；只有 INV_ACTIONS 时，钉的是**基础值**。
-                        wiki += ' (仅基础值)' if 'INV_ACTIONS' in tied else ' (未钉数字)'
-            if wiki and wiki.startswith('wiki:'):
+                        source += ' · 仅基础值' if 'INV_ACTIONS' in tied else ' · 未钉数字'
+            if source and source.startswith('wiki:'):
                 stats['wiki'] += 1
             elif tied:
-                wiki = 'spec:' + '+'.join(sorted(tied))
+                source = 'spec:' + '+'.join(sorted(tied))
                 stats['spec'] += 1
             else:
-                wiki = '—'
+                source = '—'
 
             chunks = []
             if eid in C.INV_UNWIRED:
@@ -733,20 +845,12 @@ def build_rows(doc):
             if names:
                 evidence.append(names[0])
             rows.append({'kind': kind, 'id': eid, 'implemented': implemented,
-                         'runtime': runtime, 'wiki': wiki, 'deviation': deviation,
-                         'evidence': '/'.join(evidence) or '—'})
+                         'named': test_named, 'harness': harness, 'source': source,
+                         'deviation': deviation, 'evidence': '/'.join(evidence) or '—'})
             stats['rows'] += 1
         summary[kind] = stats
 
-    # 声明过的孤儿必须**仍然是孤儿**，且 id 仍然存在（否则这条声明已经烂了）。
-    reachable_ids = {row_id for kind in entities for row_id, info in entities[kind].items()
-                     if info['reachable']}
-    known_ids = {row_id for kind in entities for row_id in entities[kind]}
-    for ident, reason in sorted(ORPHAN_OK.items()):
-        if ident not in known_ids:
-            problems.append('`ORPHAN_OK` 声明的 `%s` 在内容里不存在（声明烂了）' % ident)
-        elif ident in reachable_ids:
-            problems.append('`%s` 已经被引用了，`ORPHAN_OK` 里那一条声明该删掉' % ident)
+    problems.extend(declaration_problems(entities))
 
     unused, duplicates = [], []
     covered = set()
@@ -787,37 +891,69 @@ HEADER = '''# 覆盖矩阵（**生成物，别手改**）
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
 下面这张 %d 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
+**⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
+*这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
+
 * **Implemented** —— 在内容里且**可达**（`orphan` = 内容长出一条没人引用的行，闸门红）。
-* **RuntimeTested** —— `test:<函数名>`：某条内核测试的函数体里出现了这个 id；
-  `harness:<名字>`：只有通用对拍层遍历到它（`ENEMY_DIFF` 跑每一条 `EACT`、`CARD_DIFF` 跑每一张卡）。
-  ⚠️ `harness` 比 `test` 弱：它只说明"跑过、程序文本与参考实现一致"，不说明"按 wiki 的数在跑"。
-* **WikiVerified** —— `wiki:<dump>`：`native/wiki_asc/` 或 `native/wiki_*.txt` 里有它的
-  Infobox，**并且** checker 钉了它的数字；`spec:<TABLE>`：只对上了 checker 里那份**也是人抄的**清单；
-  `—`：没有任何独立来源。**这一列是本页最大的洞，不粉饰**。
-* **Deviation** —— 声明过的偏差（`INV_UNWIRED` / `INV_NO_ASC` / `INV_NO_ASC_HP` /
+  可达性的口径按类别不同（怪=遭遇名单/`spawn`；动作=动作表/AI 规则；状态=程序/触发器/药水原子；
+  卡=起始牌组或按稀有度的牌池），逐条写在 `coverage_matrix.py` 的 `build_entities` 里。
+* **TestNamed** —— 这个 id 以**字符串字面量**出现在某条内核测试的函数体里（注释里的不算）。
+  ⚠️ **它是"被引用"，不是"行为被断言"**：`assert_eq!(id, "spiker")` 与"真打一场 spiker 的战斗"
+  在这一列里长得一模一样。§217 之前这一列叫 `RuntimeTested`，那个名字把"引用"读成了"验证"。
+  测试名来自递归扫描（`cargo test -- --list` 是它的独立对账：906 条）。
+* **HarnessOnly** —— 没有具名引用，但**整表遍历**盖到它了：`ENEMY_DIFF`（跑每一条 `EACT`）、
+  `CARD_DIFF`（跑每一张卡）、或内核里"遍历整张表"的测试（`the_potions_are_readable` 之类）。
+  这比 `TestNamed` 更弱：它只说明"跑过、程序文本与参考实现一致"。
+* **SourceTie** —— `wiki:<dump>`：`native/wiki_asc/`（或 `native/wiki_*.txt`）里有它的 Infobox
+  **并且** checker 钉了它的数字；动作那侧的括号 `(via <怪物>)` 是**必须写出来**的 ——
+  页面来自所属怪物，不是这条动作自己核过（`maw.nom_nom` 有 wiki 标签、时间变量却错了，就是反例）。
+  `spec:<TABLE>`：只对上了 `sts_content_check.py` 里那份**也是人抄的**清单。
+  `—`：没有任何独立来源 —— **这一列是本页最大的洞，不粉饰**。
+* **DeclaredDeviation** —— 声明过的偏差（`INV_UNWIRED` / `INV_NO_ASC` / `INV_NO_ASC_HP` /
   `docs/sts-wiki-gap.md` §G、§H 两张表，直接解析）。
 * **Evidence** —— `§N`（`sts_content_check.py` 引用到的 port-plan 小节）+ 不变量表 + 测试名。
 
-**怎么用**：想找下一件该干的活，就按 `WikiVerified = —` 或 `RuntimeTested = —` 排序看。
+**怎么用**：想找下一件该干的活，按 `SourceTie = —` 或 `TestNamed = —` 排下去就是待办。
+**不要**把 `TestNamed` 当成"已经验证过"——要验证语义，得去看那条测试**断言了什么**。
 '''
+
+
+def declaration_problems(entities):
+    """`ORPHAN_OK` 每一条都要**仍然成立**：id 还在、而且**仍然**没人引用。
+
+    抽成函数是为了让 `--selftest` 能直接问它（夹具 5）—— 这条检查是"恒真谓词"的反面，
+    必须能被证明会红。
+    """
+    reachable_ids = {row_id for kind in entities for row_id, info in entities[kind].items()
+                     if info['reachable']}
+    known_ids = {row_id for kind in entities for row_id in entities[kind]}
+    problems = []
+    for ident in sorted(ORPHAN_OK):
+        if ident not in known_ids:
+            problems.append('`ORPHAN_OK` 声明的 `%s` 在内容里不存在（声明烂了）' % ident)
+        elif ident in reachable_ids:
+            problems.append('`%s` 已经被引用了，`ORPHAN_OK` 里那一条声明该删掉' % ident)
+    return problems
 
 
 def render(rows, summary, meta):
     out = [HEADER % len(rows), '']
     out.append('## 汇总（每类实体数 × 证据强度）')
     out.append('')
-    out.append('| 类别 | 行数 | `test:` | `harness:` | `—` | `wiki:` | `spec:` | 有偏差 | orphan |')
+    out.append('| 类别 | 行数 | TestNamed | HarnessOnly | 两层都没有 | SourceTie:wiki | '
+               'SourceTie:spec | 有偏差声明 | orphan |')
     out.append('|---|---|---|---|---|---|---|---|---|')
-    total = {key: 0 for key in ('rows', 'test', 'harness', 'none', 'wiki', 'spec', 'dev', 'orphan')}
+    total = {key: 0 for key in ('rows', 'named', 'harness', 'none', 'wiki', 'spec', 'dev',
+                                'orphan')}
     for kind in KIND_ORDER:
         stats = summary[kind]
         out.append('| %s | %d | %d | %d | %d | %d | %d | %d | %d |' % (
-            KIND_LABEL[kind], stats['rows'], stats['test'], stats['harness'], stats['none'],
+            KIND_LABEL[kind], stats['rows'], stats['named'], stats['harness'], stats['none'],
             stats['wiki'], stats['spec'], stats['dev'], stats['orphan']))
         for key in total:
             total[key] += stats[key]
     out.append('| **合计** | %d | %d | %d | %d | %d | %d | %d | %d |' % (
-        total['rows'], total['test'], total['harness'], total['none'], total['wiki'],
+        total['rows'], total['named'], total['harness'], total['none'], total['wiki'],
         total['spec'], total['dev'], total['orphan']))
     out.append('')
     out.append('扫描到的具名测试：**%d** 条；wiki dump：**%d** 份（其中 %d 只怪有 dump）。'
@@ -837,12 +973,13 @@ def render(rows, summary, meta):
         out.append('')
         out.append('## %s（%d）' % (KIND_LABEL[kind], summary[kind]['rows']))
         out.append('')
-        out.append('| Entity | Implemented | RuntimeTested | WikiVerified | Deviation | Evidence |')
-        out.append('|---|---|---|---|---|---|')
+        out.append('| Entity | Implemented | TestNamed | HarnessOnly | SourceTie | '
+                   'DeclaredDeviation | Evidence |')
+        out.append('|---|---|---|---|---|---|---|')
         for row in rows:
             if row['kind'] != kind:
                 continue
-            cells = [row['id'], row['implemented'], row['runtime'], row['wiki'],
+            cells = [row['id'], row['implemented'], row['named'], row['harness'], row['source'],
                      row['deviation'], row['evidence']]
             out.append('| ' + ' | '.join(cell.replace('|', '\\|') for cell in cells) + ' |')
     out.append('')
@@ -861,10 +998,95 @@ def invariants(rows, problems):
         die(1, 'MATRIX FAIL: %d 行没有任何证据' % len(empty))
 
 
+def selftest():
+    """五个夹具，逐条打"扫描器能骗自己"的一种方式。任何一条不过 ⇒ 退出码 1。"""
+    import tempfile
+
+    failures = []
+
+    def check(name, got, expected):
+        if got != expected:
+            failures.append('%s: got %r, expected %r' % (name, got, expected))
+
+    root = tempfile.mkdtemp(prefix='coverage-selftest-')
+    crate = os.path.join(root, 'rd-core', 'src')
+    nested = os.path.join(crate, 'deep')
+    os.makedirs(nested)
+
+    io.open(os.path.join(crate, 'top.rs'), 'w', encoding='utf-8', newline=chr(10)).write(
+        '#[test]' + chr(10) + 'fn top_level() {' + chr(10) +
+        '    let _ = "spiker";' + chr(10) + '}' + chr(10) + chr(10) +
+        '#[test]' + chr(10) + '/// doc comment between attribute and fn' + chr(10) +
+        'fn behind_a_doc_comment() {' + chr(10) + '}' + chr(10) + chr(10) +
+        '/// this one had lost its `#[test]` (a comment mention)' + chr(10) +
+        '/// it mentions #[test] twice: #[test]' + chr(10) + 'fn not_a_test() {' + chr(10) + '}' +
+        chr(10) + chr(10) +
+        '#[test]' + chr(10) + 'fn id_only_in_a_comment() {' + chr(10) +
+        '    // "darkling" is only mentioned here, never used' + chr(10) +
+        '    assert!(true);' + chr(10) + '}' + chr(10))
+
+    io.open(os.path.join(nested, 'deep.rs'), 'w', encoding='utf-8', newline=chr(10)).write(
+        '#[test]' + chr(10) + 'fn nested_one() {' + chr(10) +
+        '    let _ = "chosen";' + chr(10) + '}' + chr(10))
+
+    found = tests(kernel_root=root, crates=['rd-core'])
+    names = sorted(fn for _crate, fn, _body in found)
+    # 夹具 1 / 2 / 3
+    check('nested', 'nested_one' in names, True)
+    check('doc comment between attribute and fn', 'behind_a_doc_comment' in names, True)
+    check('a #[test] inside a comment is not a test', 'not_a_test' in names, False)
+    check('exactly four real tests', len(names), 4)
+
+    # 夹具 4：id 只出现在**注释**里 ⇒ 不算 TestNamed（`darkling` 只在注释里；
+    # `spiker` / `chosen` 是字面量，必须被抓到）。
+    by_test = tests_by_entity(found)
+    check('id in a comment is not a reference', 'darkling' in by_test, False)
+    check('id in a string literal is a reference', 'spiker' in by_test, True)
+    check('id in a string literal in a nested file is a reference', 'chosen' in by_test, True)
+
+    # 夹具 5：自己提到自己不算"可达"；过时的声明必须红
+    entities = {
+        'monster': {
+            'ghost': {'reachable': False, 'why': 'nothing applies it', 'record': {}},
+            'real': {'reachable': True, 'why': 'encounter roster', 'record': {}},
+        },
+        'action': {'declared': {'reachable': True, 'why': 'declared unwired', 'record': {},
+                                'owner': None}},
+        'card': {}, 'status': {}, 'relic': {}, 'potion': {}, 'encounter': {}, 'event': {},
+    }
+    saved = dict(ORPHAN_OK)
+    try:
+        ORPHAN_OK.clear()
+        ORPHAN_OK['ghost'] = 'declared, and still an orphan'
+        check('declared orphan is fine', declaration_problems(entities), [])
+        ORPHAN_OK['real'] = 'no longer an orphan'
+        problems = declaration_problems(entities)
+        check('stale declaration is red', any('已经' in problem for problem in problems), True)
+        ORPHAN_OK.clear()
+        ORPHAN_OK['missing'] = 'the id is gone'
+        problems = declaration_problems(entities)
+        check('declaration for a missing id is red',
+              any('不存在' in problem for problem in problems), True)
+    finally:
+        ORPHAN_OK.clear()
+        ORPHAN_OK.update(saved)
+
+    if failures:
+        for failure in failures:
+            print('  !! selftest ' + failure)
+        die(1, 'MATRIX FAIL: 自检 %d 条不通过' % len(failures))
+    print('COVERAGE_MATRIX SELFTEST PASS (5 fixtures)')
+
+
 def main():
     parser = argparse.ArgumentParser(description='generate/verify docs/coverage-matrix.md')
     parser.add_argument('--check', action='store_true', help='只校验，不写盘')
+    parser.add_argument('--selftest', action='store_true',
+                        help='先跑扫描器自己的对抗性夹具（闸门里也跑）')
     args = parser.parse_args()
+
+    if args.selftest:
+        selftest()
 
     doc = load_content()
     rows, summary, problems, meta = build_rows(doc)
