@@ -8146,6 +8146,213 @@ mod tests {
         assert_eq!(hit(&mut state), 10, "next turn starts over: back to 10");
     }
 
+    /// §222：§221 加的十张牌 —— 一张表，每行说"打哪张、读哪一格、应当是多少"。
+    ///
+    /// 这一批之前只有通用层覆盖：内容门钉数字（`INV_CARDS`）、`CARD_DIFF` 跑程序文本，
+    /// **没有任何东西断言"这张牌打出来真的做了那件事"**。矩阵把它们标成 `harness`，这里把它们
+    /// 抬成具名测试。
+    ///
+    /// 判据口径：读**一个**可观察量（敌人血量 / 英雄格挡 / 手牌数 / 抽牌堆 / 弃牌堆 / 敌人状态），
+    /// 而不是"整份状态"，因为这些牌各自只动一格 —— 读整份会让"读错格子"也看起来正确。
+    #[test]
+    fn the_ten_cards_added_in_221_do_what_the_wiki_says() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // (card, 打出去之后的断言) —— 每一行都在 `arena()`（敌人 20 血、英雄 70）上跑。
+        for card_id in [
+            "cleave",
+            "pommel_strike",
+            "shrug_it_off",
+            "thunderclap",
+            "bludgeon",
+            "impervious",
+            "pummel",
+            "wild_strike",
+            "ghostly_armor",
+            "battle_trance",
+        ] {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            give_energy(&mut state, "hero", 3);
+            // 抽牌堆里得先有牌：`arena()` 的三个堆都是空的，而"抽 1 张"在空堆上**抽不到**
+            // （那不是错误，是参考的 `:59-60`）。不放牌的话 `draw` 那几行会静默读到 0。
+            for index in 0..3 {
+                give_card(&mut state, "hero", CardZone::DrawPile,
+                          &std::format!("card_seed_{index}"), "defend", None);
+            }
+            let card = card_in_hand(&mut state, &content, "hero", card_id);
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .unwrap_or_else(|error| panic!("{card_id}: {error:?}"));
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+
+            match card_id {
+                // 单体伤害
+                "pommel_strike" => {
+                    assert_eq!(health(&state, "enemy_a"), 11, "9 damage");
+                    assert_eq!(zone_count(&state, "hero", CardZone::Hand), 1, "draw 1");
+                }
+                // 血量**钳在 0**（伤害不会让血量变负），所以这里读的是"死了"，不是 -12。
+                "bludgeon" => assert_eq!(health(&state, "enemy_a"), 0, "32 damage kills 20 HP"),
+                // 全体伤害：两个敌人都要掉血（这是 `sel.allEnemies` 的唯一可观察差别）
+                "cleave" => {
+                    assert_eq!(health(&state, "enemy_a"), 12, "8 to enemy_a");
+                    assert_eq!(health(&state, "enemy_b"), 2, "8 to enemy_b");
+                }
+                "thunderclap" => {
+                    assert_eq!(health(&state, "enemy_a"), 16, "4 to enemy_a");
+                    assert_eq!(health(&state, "enemy_b"), 6, "4 to enemy_b");
+                    assert_eq!(
+                        stacks_of(&state, "enemy_a", "standard.vulnerable"),
+                        1,
+                        "and 1 Vulnerable on each"
+                    );
+                    assert_eq!(stacks_of(&state, "enemy_b", "standard.vulnerable"), 1);
+                }
+                // 多段：`repeat` 的每一段都过伤害管线（4×2 = 8）
+                "pummel" => {
+                    assert_eq!(health(&state, "enemy_a"), 12, "2 damage, 4 times");
+                    assert_eq!(
+                        zone_definitions(&state, "hero", CardZone::ExhaustPile),
+                        vec!["pummel".to_string()],
+                        "and it exhausts"
+                    );
+                }
+                // 格挡 + 消耗
+                "impervious" => {
+                    assert_eq!(block_of(&state, "hero"), 30, "30 Block");
+                    assert_eq!(
+                        zone_definitions(&state, "hero", CardZone::ExhaustPile),
+                        vec!["impervious".to_string()],
+                        "and it exhausts"
+                    );
+                }
+                "shrug_it_off" => {
+                    assert_eq!(block_of(&state, "hero"), 8, "8 Block");
+                    assert_eq!(zone_count(&state, "hero", CardZone::Hand), 1, "draw 1");
+                }
+                "ghostly_armor" => {
+                    assert_eq!(block_of(&state, "hero"), 10, "10 Block");
+                    // ⚠️ Ethereal 管的是"**回合末还在手里**"时的去向，跟"打出去"无关 ——
+                    // 打出去的牌照常进弃牌堆（第一版把这两件事混了，断言写成了"留在手里"）。
+                    assert_eq!(
+                        zone_definitions(&state, "hero", CardZone::DiscardPile),
+                        vec!["ghostly_armor".to_string()],
+                        "playing it sends it to the discard pile as usual"
+                    );
+                }
+                // Wound 进**抽牌堆**（不是弃牌堆 —— 那是 Wild Strike 与其它塞牌的区别）
+                "wild_strike" => {
+                    assert_eq!(health(&state, "enemy_a"), 8, "12 damage");
+                    // 抽牌堆里预置了 3 张 `defend`，Wound 进的是**抽牌堆**（不是弃牌堆）——
+                    // 这才是 Wild Strike 与其它塞牌的区别。
+                    assert_eq!(
+                        zone_definitions(&state, "hero", CardZone::DrawPile),
+                        vec!["defend".to_string(), "defend".to_string(),
+                             "defend".to_string(), "wound".to_string()],
+                        "a Wound goes into the DRAW pile"
+                    );
+                    assert_eq!(
+                        zone_count(&state, "hero", CardZone::DiscardPile),
+                        1,
+                        "only the played card itself is in the discard pile"
+                    );
+                }
+                // 抽 3 张 + "本回合不能再抽"
+                "battle_trance" => {
+                    assert_eq!(
+                        zone_count(&state, "hero", CardZone::Hand),
+                        3,
+                        "draw 3 (the card itself left the hand)"
+                    );
+                    assert_eq!(
+                        stacks_of(&state, "hero", "standard.draw_reduction"),
+                        1,
+                        "and the rest of the turn cannot draw"
+                    );
+                }
+                other => panic!("{other} has no assertion in this table"),
+            }
+        }
+    }
+
+    /// §222：两张事件诅咒 —— `doubt` 的"回合末 +1 Weak"是 `LifecyclePrograms[TurnEndInHand]`，
+    /// `writhe` 只是 `Innate` + `Unplayable`（没有节目 ⇒ 回合末什么都不发生）。
+    #[test]
+    fn the_two_event_curses_behave_as_their_pages_say() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // 先确认镜像里真的解得出这条节目（否则下面的 0 会是"没节目"，而不是"没触发"）。
+        assert!(
+            card_lifecycle_program(&content, "doubt", None)
+                .expect("decode")
+                .is_some(),
+            "doubt must carry a TurnEndInHand program"
+        );
+
+        // `doubt`：手里过回合 ⇒ 1 层 Weak。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_card(&mut state, "hero", CardZone::Hand, "card_doubt", "doubt", None);
+        turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+        assert_eq!(
+            zone_definitions(&state, "hero", CardZone::Hand),
+            vec!["doubt".to_string()],
+            "the curse is in hand when the turn ends"
+        );
+        // ① 节目**确实执行**：直接调生命周期（在回合末衰减之前），Weak 立刻可见。
+        //    这一步与下面 ② 分开，是因为 ② 里它会被自己的衰减吃掉 —— 那是**顺序**问题，
+        //    不是"节目没跑"（第一版把两件事混在一起，读到 0 就以为没实现）。
+        host.try_hand_turn_end_lifecycle(&mut state, &cid("hero")).expect("lifecycle");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(
+            stacks_of(&state, "hero", "standard.weak"),
+            1,
+            "the program runs: at the end of your turn, gain 1 Weak"
+        );
+
+        // ② 走**完整回合末**：节目在 ①（卡牌生命周期）跑，而 `standard.weak` 的衰减触发器在
+        //    ③（`TurnEnded`）—— 同一次回合末里刚上的 Weak 当场被扣掉。
+        //    ⚠️ 这是**已知的顺序偏差**（写进 `docs/sts-wiki-gap.md` §G.2 与偏差表）：参考里
+        //    Weak 的衰减在 `decrease_timed_statuses`（第 ④ 步）之前/之后与卡程序的关系不同，
+        //    所以原版里 Doubt 的 Weak 会留到下一回合。判据因此断言"被吃掉"，而不是假装它留着。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_card(&mut state, "hero", CardZone::Hand, "card_doubt2", "doubt", None);
+        turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+        turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+        assert_eq!(
+            stacks_of(&state, "hero", "standard.weak"),
+            0,
+            "known order deviation: the same turn-end decay eats the Weak it just applied"
+        );
+
+        // `writhe`：没有节目 ⇒ Weak 仍然是 0（成对，否则上面那条可能来自别处）。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_card(&mut state, "hero", CardZone::Hand, "card_writhe", "writhe", None);
+        turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+        turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+        assert_eq!(
+            stacks_of(&state, "hero", "standard.weak"),
+            0,
+            "writhe has no lifecycle program"
+        );
+    }
+
     /// §220：`LifecyclePrograms[Drawn]` —— wiki 的 "Whenever this card is drawn, lose 1 Energy."
     ///
     /// `Drawn` 与 `Exhausted` 是**内核新加的两个生命周期事件**（参考的 `CardLifecycleTrigger`
