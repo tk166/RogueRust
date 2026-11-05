@@ -1423,9 +1423,12 @@ mod tests {
         ))
         .expect("the sts image");
         let content = parse(&blob);
-        let at = slot(&content, "enc_spire_growth", 0);
-        let mut state = arena("spire_growth");
-        let actor = cid("spire_growth");
+        // §214 gave `spire_growth` a real AI (three rules), so the "first round has a rule, then a
+        // pure cycle" demonstration moved to a monster that still has **no** `IntentRules` at all:
+        // the blue Slaver (two moves, cycle order `stab` then `rake`).
+        let at = slot(&content, "enc_slavers", 2);
+        let mut state = arena("blue_slaver");
+        let actor = cid("blue_slaver");
 
         // ⚠️ `intent.round` 读的是**状态里的 `current_round`**，不是 `select_action` 的
         // `round` 实参（那是循环用的 1-based 回合）。真实战斗里两者一起前进，测试里就得手动
@@ -1439,15 +1442,14 @@ mod tests {
                 .action_id
         };
 
-        assert_eq!(pick(&mut state, 1), "spire_growth.strategic", "round 1 opens with Strategic");
+        assert_eq!(pick(&mut state, 1), "blue_slaver.stab", "round 1 is slot 0");
         assert_eq!(
             pick(&mut state, 2),
-            "spire_growth.aggressive_heavy",
+            "blue_slaver.rake",
             "the cycle is `(round-1) % 2` ⇒ round 2 is slot 1"
         );
-        assert_eq!(pick(&mut state, 3), "spire_growth.aggressive", "round 3 is slot 0");
-        // 成对：Strategic 只该出现一次 —— 第 4 回合又回到循环的 slot 1。
-        assert_eq!(pick(&mut state, 4), "spire_growth.aggressive_heavy");
+        assert_eq!(pick(&mut state, 3), "blue_slaver.stab", "round 3 is slot 0 again");
+        assert_eq!(pick(&mut state, 4), "blue_slaver.rake", "round 4 is slot 1 again");
     }
 
     // ================================================================ §195.3：带权抽签

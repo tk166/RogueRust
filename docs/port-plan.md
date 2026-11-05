@@ -14676,3 +14676,49 @@ AI 照 wiki 的句子：开局 `Poke`→`Hex`（**A17 改成 `Hex`→`Poke`**）
 * 内容：状态 42 → **43**、敌人动作 127 → **130**（`chosen.hex`/`drain`/`zap`）、
   镜像 78,116 → **79,508 B**（core 67,144）。
 * 全 47 只怪的 HP 现在与 wiki 一致（`INV_ASC_HP` 那张表就是对照物）。
+
+---
+
+## §214 Spiker 与 Spire Growth（第三幕的两只"数值对了、招式不对"）
+
+§213 把 HP 对完之后，剩下两只**名字对、招式错**的第三幕普通怪。wiki 原文
+（`native/wiki_asc/shapes.txt` 的 Spiker 段、`native/wiki_asc/spire_growth.txt`）：
+
+### 214.1 Spiker
+
+| 项 | wiki | 之前 |
+|---|---|---|
+| HP | **42-56**（A7: 44-60） | 42（无 A 级行） |
+| `Attack` | **7**（**A2: 9**） | `spiker.cut` 没有 A 行、数值也不是 7 |
+| `Buff Thorns` | **+2 Thorns**，**最多 6 次** | `spiker.spike` 是"4 伤害 + 2 格挡"（既不是攻击也不是加 Thorn） |
+| AI | 每回合 50/50；`Attack` 不能连两次；`Buff Thorns` 用满 6 次后只能 `Attack` | 纯循环（无规则） |
+
+两个 id 保留（`cut` 就是 wiki 的 `Attack`，`spike` 就是 `Buff Thorns`）——它们被遭遇行引用，
+改名会让"一条动作记录"和"一处名单"分家。次数上限用 `thorns_buffs` 计数器，动作自己 +1。
+
+### 214.2 Spire Growth
+
+| 项 | wiki | 之前 |
+|---|---|---|
+| HP | 170（A7: 190） | 170（无 A 级行） |
+| `Constrict` | 10 Constricted（**A2: 12**） | `strategic` 有，但**不在遭遇的 `Actions` 名单里** |
+| `Quick Tackle` | 16（**A2: 18**） | `aggressive` 有，无 A 行 |
+| `Smash` | 22（**A2: 25**） | `aggressive_heavy` 有，无 A 行 |
+| AI | 50/50 Tackle/Constrict；**上回合 Constrict 或玩家已 Constricted ⇒ Smash**；两招都不能连三次 | 只有 1 条规则 |
+
+### 214.3 判据
+
+* `spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times`：上次 `Attack` ⇒ 只能
+  `Buff Thorns`；`thorns_buffs >= 6` ⇒ **只能 `Attack`**（哪怕上次也是 Attack —— 两条规则同时
+  许可不可能，所以次数上限必须压过"不能连两次"）；无约束时两招都出得来。
+  负控：删掉"6 次上限"那条规则 ⇒ 红在 `left: spiker.spike / right: spiker.cut`。
+* `spire_growth_smashes_instead_of_choosing`：**两半分开测** —— 上回合 `Constrict`（走 `last_move`）
+  与玩家已 Constricted（走 `opponentHasStatus`）是两条不同的条件，各 40 个种子。
+* 顺带：`a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it` 原本拿
+  `spire_growth` 当"纯循环"的例子，§214 给了它真 AI 之后那条用例必然红 —— 改用**仍然没有规则**的
+  `blue_slaver`（两招、循环序 `stab`→`rake`），断言的形状不变。
+
+### 214.4 数字
+
+* **20/20 闸门绿**，单测 **900**（700 core + 93 wasm + 107 run）；四条对拍不变。
+* 内容：镜像 79,508 → **80,520 B**（core 68,088）；动作数与状态数都不变（这一节改的是数值与规则）。

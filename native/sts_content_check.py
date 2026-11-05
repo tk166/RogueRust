@@ -292,7 +292,9 @@ INV_MONSTERS = [
     ("chosen", 95, 99,
      ["chosen.poke", "chosen.hex", "chosen.debilitate", "chosen.drain", "chosen.zap"]),
     ("byrd", 25, 25, ["byrd.peck", "byrd.swoop"]),
-    ("spiker", 42, 42, ["spiker.cut", "spiker.spike"]),
+    # §214: wiki `Shapes#Spiker` -- HP 42-56 (A7 44-60). The two moves are the wiki's `Attack` and
+    # `Buff Thorns` (the ids are historical: `cut` = Attack, `spike` = Buff Thorns).
+    ("spiker", 42, 56, ["spiker.cut", "spiker.spike"]),
     ("orb_walker", 90, 90, ["orb_walker.laser", "orb_walker.claw"]),
     # §152: the rest of act 1's roster, wiki numbers.
     ("louse_red", 10, 15, ["louse_red.bite", "louse_red.grow", "louse_red.spit_web"]),
@@ -322,9 +324,10 @@ INV_MONSTERS = [
     # §147: the `Constricted` carrier (wiki HP 170; Strategic / Aggressive 16 / 22).
     # §148: the **cycle** is the two Aggressive moves; `Strategic` is a round-1 **rule**, not a
     # cycle slot (StS opens with it once). That is why it is absent from this list --
-    # `spire_growth.strategic` is still a real `EACT` row, and the gate checks that separately.
+    # §214: wiki `Spire Growth` -- three moves: Constrict (strategic), Quick Tackle (aggressive),
+    # Smash (aggressive_heavy). `strategic` is now **listed** by the record, not just an EACT row.
     ("spire_growth", 170, 170,
-     ["spire_growth.aggressive", "spire_growth.aggressive_heavy"]),
+     ["spire_growth.strategic", "spire_growth.aggressive", "spire_growth.aggressive_heavy"]),
     ("fat_gremlin", 13, 17, ["fat_gremlin.smash"]),
     ("sneaky_gremlin", 10, 14, ["sneaky_gremlin.puncture"]),
     ("blue_slaver", 46, 50, ["blue_slaver.stab", "blue_slaver.rake"]),
@@ -422,7 +425,10 @@ INV_ACTIONS = {
     "byrd.peck": ("Attack", [("damage", 1, "event")] * 5),
     "byrd.swoop": ("Attack", [("damage", 12, "event")]),
     "spiker.cut": ("Attack", [("damage", 7, "event")]),
-    "spiker.spike": ("Attack", [("damage", 4, "event"), ("block", 2, "source")]),
+    # §214: `spike` is the wiki's `Buff Thorns` (+2 Thorns) -- the id is historical. The counter is
+    # how "at most 6 times" is expressed (the AI rule reads it).
+    "spiker.spike": ("Buff", [("status", "standard.thorns", 2, "source"),
+                              ("counter", "thorns_buffs", 1, True, "source")]),
     "orb_walker.laser": ("Attack", [("damage", 10, "event"),
                                     ("status", "standard.weak", 2, "event")]),
     "orb_walker.claw": ("Attack", [("damage", 15, "event")]),
@@ -1344,6 +1350,12 @@ INV_ASC_VARIANTS = {
     'chosen.debilitate': [(2, [('damage', 12, 'event'),
                                ('status', 'standard.vulnerable', 2, 'event')])],
     'chosen.zap': [(2, [('damage', 21, 'event')])],
+    # §214: wiki `Shapes#Spiker` -- Attack 7 -> A2 9.
+    'spiker.cut': [(2, [('damage', 9, 'event')])],
+    # §214: wiki `Spire Growth` -- Constrict 10 -> A2 12, Quick Tackle 16 -> A2 18, Smash 22 -> A2 25.
+    'spire_growth.strategic': [(2, [('status', 'standard.constricted', 12, 'event')])],
+    'spire_growth.aggressive': [(2, [('damage', 18, 'event')])],
+    'spire_growth.aggressive_heavy': [(2, [('damage', 25, 'event')])],
     # §204: wiki `Lagavulin` -- Siphon Soul -1/-1 (A18: -2/-2).
     'lagavulin.siphon_soul': [(18, [('modify', 'standard.strength', -2, 'event'),
                                     ('modify', 'standard.dexterity', -2, 'event')])],
@@ -1791,7 +1803,7 @@ INV_NO_ASC = {
     # wiki `Shapes` (Spiker): its two moves are `Attack` (7 -> A2: 9) and `Buff Thorns`. This
     # content's `spiker.spike` is 4 damage + 2 Block -- a simplification of neither, so the wiki's
     # A2 row cannot be copied onto it without inventing a number.
-    'spiker.spike': 'this content is a simplification (4 dmg + 2 Block); wiki Spiker: Attack 7 -> A2: 9',
+    'spiker.spike': 'wiki Shapes#Spiker: Buff Thorns is always +2 Thorns, no A-row',
 }
 
 # §204: how many actions still have **neither** a variant nor an exemption. This is a **ratchet**:

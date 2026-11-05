@@ -9713,81 +9713,10 @@
       "Id": "spiker.cut",
       "PackageId": "sts",
       "NameKey": "Cut",
-      "DescriptionKey": "Cut — 8 damage",
+      "DescriptionKey": "Attack - 7 damage",
       "Intent": {
         "Kind": "Attack",
-        "Label": "Cut — 8 damage"
-      },
-      "Program": {
-        "Id": {
-          "Value": "(unnamed)"
-        },
-        "Root": {
-          "kind": "node.dealDamage",
-          "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
-              }
-            },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 7
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
-          }
-        },
-        "MaxNodeDepth": 64,
-        "MaxProgramSteps": 1024
-      },
-      "ProgramAsc": [
-        {
-          "AscensionMin": 2,
-          "Program": {
-            "Id": {
-              "Value": "(unnamed)"
-            },
-            "Root": {
-              "kind": "node.dealDamage",
-              "value": {
-                "TargetSelector": {
-                  "kind": "sel.eventTarget",
-                  "value": {
-                    "Cardinality": "ZeroOrOne",
-                    "RequiredContextCapabilities": "EventTarget"
-                  }
-                },
-                "Amount": {
-                  "kind": "const",
-                  "value": {
-                    "Value": 9
-                  }
-                },
-                "ResultKey": null,
-                "IgnoresBlock": false,
-                "Element": null
-              }
-            },
-            "MaxNodeDepth": 64,
-            "MaxProgramSteps": 1024
-          }
-        }
-      ]
-    },
-    {
-      "Id": "spiker.spike",
-      "PackageId": "sts",
-      "NameKey": "Spike",
-      "DescriptionKey": "Spike — 4 damage, +2 Block",
-      "Intent": {
-        "Kind": "Attack",
-        "Label": "Spike — 4 damage, +2 Block"
+        "Label": "Attack - 7 damage"
       },
       "Program": {
         "Id": {
@@ -9810,7 +9739,7 @@
                   "Amount": {
                     "kind": "const",
                     "value": {
-                      "Value": 4
+                      "Value": 7
                     }
                   },
                   "ResultKey": null,
@@ -9819,7 +9748,7 @@
                 }
               },
               {
-                "kind": "node.gainBlock",
+                "kind": "node.setCombatantCounter",
                 "value": {
                   "TargetSelector": {
                     "kind": "sel.source",
@@ -9828,13 +9757,257 @@
                       "RequiredContextCapabilities": "Source"
                     }
                   },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 9
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "spiker.spike",
+      "PackageId": "sts",
+      "NameKey": "Spike",
+      "DescriptionKey": "Buff Thorns - gains 2 Thorns",
+      "Intent": {
+        "Kind": "Buff",
+        "Label": "Buff Thorns +2"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.thorns"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "thorns_buffs"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": true
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
                   "Amount": {
                     "kind": "const",
                     "value": {
                       "Value": 2
                     }
                   },
-                  "ResultKey": null
+                  "Relative": false
                 }
               }
             ]
@@ -11709,37 +11882,95 @@
       "Id": "spire_growth.strategic",
       "PackageId": "sts",
       "NameKey": "Strategic",
-      "DescriptionKey": "Strategic - 2 Constricted",
+      "DescriptionKey": "Constrict - 10 Constricted",
       "Intent": {
         "Kind": "Debuff",
-        "Label": "Strategic - 2 Constricted"
+        "Label": "Constrict 10"
       },
       "Program": {
         "Id": {
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.applyStatus",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+            "Children": [
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.constricted"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false
+                }
               }
-            },
-            "StatusDefinitionId": {
-              "value": "standard.constricted"
-            },
-            "Stacks": {
-              "kind": "const",
-              "value": {
-                "Value": 10
-              }
-            },
-            "DurationTurns": 0,
-            "Charges": 0,
-            "ResultKey": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -11753,27 +11984,85 @@
               "Value": "(unnamed)"
             },
             "Root": {
-              "kind": "node.applyStatus",
+              "kind": "node.sequence",
               "value": {
-                "TargetSelector": {
-                  "kind": "sel.eventTarget",
-                  "value": {
-                    "Cardinality": "ZeroOrOne",
-                    "RequiredContextCapabilities": "EventTarget"
+                "Children": [
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.constricted"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 12
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": false
+                    }
                   }
-                },
-                "StatusDefinitionId": {
-                  "value": "standard.constricted"
-                },
-                "Stacks": {
-                  "kind": "const",
-                  "value": {
-                    "Value": 12
-                  }
-                },
-                "DurationTurns": 0,
-                "Charges": 0,
-                "ResultKey": null
+                ]
               }
             },
             "MaxNodeDepth": 64,
@@ -11786,34 +12075,92 @@
       "Id": "spire_growth.aggressive",
       "PackageId": "sts",
       "NameKey": "Aggressive",
-      "DescriptionKey": "Aggressive - 16 damage",
+      "DescriptionKey": "Quick Tackle - 16 damage",
       "Intent": {
         "Kind": "Attack",
-        "Label": "Aggressive - 16 damage"
+        "Label": "Quick Tackle - 16"
       },
       "Program": {
         "Id": {
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.dealDamage",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 16
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false
+                }
               }
-            },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 16
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -11827,24 +12174,82 @@
               "Value": "(unnamed)"
             },
             "Root": {
-              "kind": "node.dealDamage",
+              "kind": "node.sequence",
               "value": {
-                "TargetSelector": {
-                  "kind": "sel.eventTarget",
-                  "value": {
-                    "Cardinality": "ZeroOrOne",
-                    "RequiredContextCapabilities": "EventTarget"
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 18
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "Relative": false
+                    }
                   }
-                },
-                "Amount": {
-                  "kind": "const",
-                  "value": {
-                    "Value": 18
-                  }
-                },
-                "ResultKey": null,
-                "IgnoresBlock": false,
-                "Element": null
+                ]
               }
             },
             "MaxNodeDepth": 64,
@@ -11857,34 +12262,92 @@
       "Id": "spire_growth.aggressive_heavy",
       "PackageId": "sts",
       "NameKey": "Aggressive",
-      "DescriptionKey": "Aggressive - 22 damage",
+      "DescriptionKey": "Smash - 22 damage",
       "Intent": {
         "Kind": "Attack",
-        "Label": "Aggressive - 22 damage"
+        "Label": "Smash - 22"
       },
       "Program": {
         "Id": {
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.dealDamage",
+          "kind": "node.sequence",
           "value": {
-            "TargetSelector": {
-              "kind": "sel.eventTarget",
-              "value": {
-                "Cardinality": "ZeroOrOne",
-                "RequiredContextCapabilities": "EventTarget"
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 22
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "Relative": false
+                }
               }
-            },
-            "Amount": {
-              "kind": "const",
-              "value": {
-                "Value": 22
-              }
-            },
-            "ResultKey": null,
-            "IgnoresBlock": false,
-            "Element": null
+            ]
           }
         },
         "MaxNodeDepth": 64,
@@ -11898,24 +12361,82 @@
               "Value": "(unnamed)"
             },
             "Root": {
-              "kind": "node.dealDamage",
+              "kind": "node.sequence",
               "value": {
-                "TargetSelector": {
-                  "kind": "sel.eventTarget",
-                  "value": {
-                    "Cardinality": "ZeroOrOne",
-                    "RequiredContextCapabilities": "EventTarget"
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 25
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "Relative": false
+                    }
                   }
-                },
-                "Amount": {
-                  "kind": "const",
-                  "value": {
-                    "Value": 25
-                  }
-                },
-                "ResultKey": null,
-                "IgnoresBlock": false,
-                "Element": null
+                ]
               }
             },
             "MaxNodeDepth": 64,
@@ -24101,7 +24622,77 @@
             }
           ],
           "Position": 0,
-          "IntentRules": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "thorns_buffs"
+                        },
+                        "Op": "GreaterOrEqual",
+                        "Value": 6
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 90,
+              "Action": {
+                "value": "spiker.cut"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 80,
+              "Action": {
+                "value": "spiker.spike"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 60,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "spiker.cut"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "spiker.spike"
+                  },
+                  "Weight": 50
+                }
+              ]
+            }
+          ],
           "DisplayName": "Spiker",
           "Rolls": [],
           "Counters": [],
@@ -24111,7 +24702,9 @@
               "AscensionMin": 7,
               "MaxHealth": 44
             }
-          ]
+          ],
+          "HpMin": 42,
+          "HpMax": 56
         }
       ],
       "HeroResources": [
@@ -25374,6 +25967,9 @@
           "MaxHealth": 170,
           "Actions": [
             {
+              "value": "spire_growth.strategic"
+            },
+            {
               "value": "spire_growth.aggressive"
             },
             {
@@ -25385,16 +25981,180 @@
           "IntentRules": [
             {
               "Condition": {
-                "kind": "intent.round",
+                "kind": "intent.allOf",
                 "value": {
-                  "Op": "Equal",
-                  "Round": 1
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    },
+                    {
+                      "kind": "intent.opponentHasStatus",
+                      "value": {
+                        "Status": {
+                          "value": "standard.constricted"
+                        },
+                        "MinStacks": 1
+                      }
+                    }
+                  ]
                 }
               },
+              "Priority": 92,
+              "Action": {
+                "value": "spire_growth.aggressive_heavy"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 90,
+              "Action": {
+                "value": "spire_growth.aggressive_heavy"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.opponentHasStatus",
+                      "value": {
+                        "Status": {
+                          "value": "standard.constricted"
+                        },
+                        "MinStacks": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 89,
+              "Action": {
+                "value": "spire_growth.aggressive_heavy"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 80,
               "Action": {
                 "value": "spire_growth.strategic"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    }
+                  ]
+                }
               },
-              "Priority": 10
+              "Priority": 80,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "spire_growth.aggressive"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "spire_growth.strategic"
+                  },
+                  "Weight": 50
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 60,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "spire_growth.aggressive"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "spire_growth.strategic"
+                  },
+                  "Weight": 50
+                }
+              ]
             }
           ],
           "DisplayName": "Spire Growth",
@@ -25406,7 +26166,9 @@
               "AscensionMin": 7,
               "MaxHealth": 190
             }
-          ]
+          ],
+          "HpMin": 170,
+          "HpMax": 170
         }
       ],
       "HeroResources": [
@@ -28773,7 +29535,7 @@
       "Id": "spiker",
       "NameKey": "Spiker",
       "HpMin": 42,
-      "HpMax": 42,
+      "HpMax": 56,
       "MaxHealth": 42,
       "Actions": [
         {
@@ -28801,12 +29563,88 @@
           ]
         }
       ],
-      "IntentRules": [],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "thorns_buffs"
+                    },
+                    "Op": "GreaterOrEqual",
+                    "Value": 6
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 90,
+          "Action": {
+            "value": "spiker.cut"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 80,
+          "Action": {
+            "value": "spiker.spike"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 60,
+          "Choice": [
+            {
+              "Action": {
+                "value": "spiker.cut"
+              },
+              "Weight": 50
+            },
+            {
+              "Action": {
+                "value": "spiker.spike"
+              },
+              "Weight": 50
+            }
+          ]
+        }
+      ],
       "Tier": "Normal",
       "InvRef": "inv:§5.2",
-      "AiNote": "⚠️ 第二/三幕内容：不是 wiki 的数值照搬，而是**机制上真的不同**（port-plan.md §130）。",
+      "AiNote": "§214：wiki `Shapes#Spiker` —— HP 42-56（A7 44-60）、Thorns 3（A2 4 / A17 7，§207）、Attack 7（A2 9）、Buff Thorns +2（最多 6 次，之后只能 Attack）。每回合 50-50；Attack 不能连两次。",
       "Counters": [],
-      "Spawn": true
+      "Spawn": true,
+      "MaxHealthAsc": [
+        {
+          "AscensionMin": 7,
+          "MaxHealth": 44
+        }
+      ]
     },
     {
       "Id": "orb_walker",
@@ -29756,6 +30594,9 @@
       "MaxHealth": 170,
       "Actions": [
         {
+          "value": "spire_growth.strategic"
+        },
+        {
           "value": "spire_growth.aggressive"
         },
         {
@@ -29766,23 +30607,193 @@
       "IntentRules": [
         {
           "Condition": {
-            "kind": "intent.round",
+            "kind": "intent.allOf",
             "value": {
-              "Op": "Equal",
-              "Round": 1
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                },
+                {
+                  "kind": "intent.opponentHasStatus",
+                  "value": {
+                    "Status": {
+                      "value": "standard.constricted"
+                    },
+                    "MinStacks": 1
+                  }
+                }
+              ]
             }
           },
+          "Priority": 92,
+          "Action": {
+            "value": "spire_growth.aggressive_heavy"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 90,
+          "Action": {
+            "value": "spire_growth.aggressive_heavy"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.opponentHasStatus",
+                  "value": {
+                    "Status": {
+                      "value": "standard.constricted"
+                    },
+                    "MinStacks": 1
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 89,
+          "Action": {
+            "value": "spire_growth.aggressive_heavy"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 2
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 2
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 80,
           "Action": {
             "value": "spire_growth.strategic"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 3
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 3
+                  }
+                }
+              ]
+            }
           },
-          "Priority": 10
+          "Priority": 80,
+          "Choice": [
+            {
+              "Action": {
+                "value": "spire_growth.aggressive"
+              },
+              "Weight": 50
+            },
+            {
+              "Action": {
+                "value": "spire_growth.strategic"
+              },
+              "Weight": 50
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 60,
+          "Choice": [
+            {
+              "Action": {
+                "value": "spire_growth.aggressive"
+              },
+              "Weight": 50
+            },
+            {
+              "Action": {
+                "value": "spire_growth.strategic"
+              },
+              "Weight": 50
+            }
+          ]
         }
       ],
       "Tier": "Normal",
       "InvRef": "https://slayspiredb.com/sts1/bestiary/spire-growth",
-      "AiNote": "§147 第三幕普通怪；Constricted 的载体（wiki: Strategic / Aggressive 16 / 22）。",
+      "AiNote": "§214：wiki `Spire Growth` —— HP 170（A7 190）、Constrict 10（A2 12）、Quick Tackle 16（A2 18）、Smash 22（A2 25）。每回合 50-50 Quick Tackle/Constrict；若上回合 Constrict 或玩家已 Constricted ⇒ Smash；两招都不能连三次。",
       "Counters": [],
-      "Spawn": true
+      "Spawn": true,
+      "MaxHealthAsc": [
+        {
+          "AscensionMin": 7,
+          "MaxHealth": 190
+        }
+      ]
     },
     {
       "Id": "louse_red",
