@@ -21,18 +21,14 @@ import io
 
 # §218 的偏差声明（内容 vs wiki）。key = 基础 id；值里的字段只写**与 wiki 不同**的那几项。
 DEVIATIONS = {
-    'slimed': {
-        'why': 'wiki: 1 费、可出、Exhaust。内容把它做成 `unplayable + junk`（与 Wound/Burn 同一族），'
-               '因为本内容的「状态牌」只有"抽到就是负担"这一种用法。修它要给它一条 Exhaust 生命周期，'
-               '留作下一节。',
-        'content_keywords': ['Unplayable'],
-        'content_cost': 'unplayable',
-    },
+    # §219：slimed 的偏差已经**修掉**了（现在可出、落区 ExhaustPile）—— 载体早就存在，
+    # 只是 §218 把 wiki 的 `Exhaust` 当成了 tag。这里不再声明。
     'apparition': {
         'why': 'wiki: 基础带 Ethereal、升级去掉 Ethereal、两层都只给 1 层 Intangible + Exhaust；'
                '内容把升级做成"2 层 Intangible"、且没有 Ethereal/Exhaust 标签。'
                '升级轴方向性错了，但"无形"的强度在本内容的战斗里是等价的简化，先写明。',
-        'content_keywords': [],
+        # 只声明 Ethereal 的差别：Exhaust 我们**有**（落区 ExhaustPile），与 wiki 一致。
+        'content_keywords': ['Exhaust'],
         'plus_facts': [('status', 'standard.intangible', 2, 'source')],
     },
     'sentinel': {
@@ -50,10 +46,9 @@ DEVIATIONS = {
         'plus_facts': [],
     },
     'bandage_up': {
-        'why': 'wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。另外 `Exhaust` 没有载体'
-               '（见下一条的说明），所以内容也没有 exhaust tag。',
+        'why': 'wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。'
+               '（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。）',
         'plus_facts': None,
-        'content_keywords': [],
     },
     'buffer': {
         'why': 'wiki 页已是 v2.3 的重做版（**Power** / Rare / 2 费，给 1-2 层 Buffer）；'
@@ -64,10 +59,9 @@ DEVIATIONS = {
         'content_cost': 1,
     },
     'dark_shackles': {
-        'why': 'wiki 升级版是 15 层；内容没有 `dark_shackles+` 这一行。`Exhaust` 同 `bandage_up`：'
-               '本内容还没有"打出即消耗"的载体。',
+        'why': 'wiki 升级版是 15 层；内容没有 `dark_shackles+` 这一行。'
+               '（`Exhaust` 同 `bandage_up`：由落区表达，不是偏差。）',
         'plus_facts': None,
-        'content_keywords': [],
     },
 }
 
@@ -94,10 +88,12 @@ FACTS = {
                   [('repeat', ('expr', 'x.cost'), 'damage', 8, 'allEnemies')]),
     'bandage_up': ([('heal', 4, 'sourceDowned')], [('heal', 6, 'sourceDowned')]),
     'blind': ([('status', 'standard.weak', 2, 'allEnemies')], None),
-    'dark_shackles': ([('status', 'standard.lose_strength', 9, 'event'),
-                       ('status', 'standard.strength', -9, 'event')],
-                      [('status', 'standard.lose_strength', 15, 'event'),
-                       ('status', 'standard.strength', -15, 'event')]),
+    # "Enemy loses 9 (15) Strength **this turn**" = 立刻降 + 回合末还（§219）。
+    # 原来写的是 `applyStatus(strength, -9)`，而负层数会被内核拒绝 ⇒ 这张牌打出即 fault。
+    'dark_shackles': ([('modify', 'standard.strength', -9, 'event'),
+                       ('status', 'standard.regain_strength', 9, 'event')],
+                      [('modify', 'standard.strength', -15, 'event'),
+                       ('status', 'standard.regain_strength', 15, 'event')]),
     'inflame': ([('status', 'standard.strength', 2, 'source')],
                 [('status', 'standard.strength', 3, 'source')]),
     'metallicize': ([('status', 'standard.metallicize', 3, 'source')],

@@ -698,6 +698,10 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // kernel needs no new rule -- it already runs turn-ended triggers.
             | "standard.lose_strength"
             | "standard.lose_dexterity"
+            // §219: the **mirror** of the two above -- "give it back at the end of the turn" with the
+            // opposite sign (Dark Shackles takes Strength away for this turn only). Same shape, so
+            // the kernel needs no new rule.
+            | "standard.regain_strength"
             // §178: Nemesis's "intangible every other turn" carrier -- the first content status
             // whose trigger is `TurnStarted`. It was in the §175 patch and was reverted with it.
             | "standard.phantom_veil"

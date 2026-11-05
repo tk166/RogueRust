@@ -90,7 +90,7 @@ INV_COUNTS = {
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
     # §208: +1 (`standard.flying`); §209: +1 (`standard.curl_up`); §213: +1 (`standard.hex`).
-    "statuses": 43,
+    "statuses": 44,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -113,7 +113,10 @@ INV_CARDS = {
     "bash": {"Cost": 2, "Tags": ["attack", "basic"],
              "Facts": [("damage", 8, "event"), ("status", "standard.vulnerable", 2, "event")]},
     # inv:§10 -- a status card created by two enemies (not part of the deck).
-    "slimed": {"Cost": 1, "Tags": ["status", "unplayable", "junk"], "Facts": []},
+    # §219：wiki 是"1 费、可出、Exhaust"。落区现在写得出来了（`PlayedCardDestinationZone`），
+    # 所以不再需要 `unplayable` 这个简化。
+    "slimed": {"Cost": 1, "Tags": ["status", "junk"], "Facts": [],
+               "PlayedCardDestinationZone": "ExhaustPile"},
     # §183: the colorless pool. The Colorless Potion offers three of them; **no deck can hold them**,
     # which is why they have no `+` row (see NOT_UPGRADABLE_TAGS). Wiki values, base.
     # §189 `A10`：开局诅咒（wiki: Unplayable. Ethereal. Cannot be removed）。
@@ -125,9 +128,12 @@ INV_CARDS = {
                    "Facts": [("heal", 4, "sourceDowned")]},
     "blind": {"Cost": 0, "Tags": ["skill", "colorless"],
               "Facts": [("status", "standard.weak", 2, "allEnemies")]},
+    # §219：wiki 是"Enemy loses 9 Strength **this turn**"。原来的程序给敌人施
+    # `standard.strength` **-9 层**，而内核禁止负层数（`exec.rs:4063`）⇒ **打出即 `Effect(Modifier)`**。
+    # 现在换成"立刻 modify -9（钳在 0，参考行为）+ 回合末由 `regain_strength` 还回 9"。
     "dark_shackles": {"Cost": 0, "Tags": ["skill", "colorless"],
-                      "Facts": [("status", "standard.lose_strength", 9, "event"),
-                                ("status", "standard.strength", -9, "event")]},
+                      "Facts": [("modify", "standard.strength", -9, "event"),
+                                ("status", "standard.regain_strength", 9, "event")]},
     # inv:§2.1 "升级后" -- the upgraded rows. They are **separate CARD rows**, not a flag on the base
     # card (`sts-act1-plan.md` §6.5-2), and their numbers are the inventory's second column:
     # strike+ 9 damage, defend+ 8 Block, bash+ 10 damage + 3 Vulnerable.
@@ -813,6 +819,9 @@ INV_STATUSES = {
     # then removes itself.
     "standard.lose_strength": [],
     "standard.lose_dexterity": [],
+    # §219：`lose_strength` 的镜像 —— 回合末把"本回合被夺走的力量"还回去（`dark_shackles`）。
+    # 没有修饰器：整条规则就是那个 `TurnEnded` 触发器（与 `lose_strength` 同形、符号相反）。
+    "standard.regain_strength": [],
     # ================= §194 =================
     # Sharp Hide / Curiosity are the two the new bosses need, and both are `CardPlayed` triggers
     # filtered by a card tag -- the same shape as `standard.enrage`, which is why they are inert
@@ -1546,8 +1555,10 @@ NO_WIKI_PAGE = {
     'swift_strike': '本内容自有（样例包），wiki 没有这张牌',
 }
 
+# ⚠️ §219：`Exhaust` **不在**这张表里 —— 它不是 tag，而是落区（见 `check_card_zones` 与
+# `check_card_wiki` 的 ④）。留在表里会让它被当 tag 查两次，而内容里从来没有 `exhaust` tag。
 KEYWORD_TAGS = {'Unplayable': 'unplayable', 'Ethereal': 'ethereal',
-                'Exhaust': 'exhaust', 'Innate': 'innate', 'Retain': 'retain'}
+                'Innate': 'innate', 'Retain': 'retain'}
 
 
 def load_card_wiki():
@@ -1630,17 +1641,28 @@ def check_card_wiki(doc):
                        for resource, amount in costs):
                 fail("card." + card_id, "费用 %s，wiki 说 %d" % (costs, expected_cost))
 
-        # ④ 关键字：`{{KW|X}}`（不带竖线的才算）↔ tag
+        # ④ 关键字：`{{KW|X}}`（不带竖线的才算）↔ tag / 落区。
+        #    ⚠️ §219：`Exhaust` 不是 tag，而是 **`PlayedCardDestinationZone = ExhaustPile`**
+        #    （`play.rs:1931` 在那里把牌送进消耗堆）。§218 把它当 tag 比，于是 `bandage_up` /
+        #    `dark_shackles` 被误判成"缺载体" —— 它们其实有，只是落区写错了一个词
+        #    （那个拼写 bug 由 `check_card_zones` 与本节一起抓）。
         expected_keywords = deviation.get('content_keywords')
         if expected_keywords is None:
             expected_keywords = wiki['keywords']
-        expected_tags = {KEYWORD_TAGS[name] for name in expected_keywords}
+        expected_tags = {KEYWORD_TAGS[name] for name in expected_keywords
+                         if name in KEYWORD_TAGS}
         missing = expected_tags - tags
         if missing:
             fail("card." + card_id, "缺少关键字 tag %s（wiki %s）"
                  % (sorted(missing), wiki['keywords']))
-        # 反向：内容有 ethereal/exhaust 而 wiki 没有 —— 也要红（`sentinel` 就是这条）
-        extra = (tags & {'ethereal', 'exhaust', 'innate', 'retain'}) - expected_tags
+        exhaust_expected = "Exhaust" in expected_keywords
+        exhaust_actual = card.get("PlayedCardDestinationZone") == "ExhaustPile"
+        if exhaust_expected != exhaust_actual:
+            fail("card." + card_id, "wiki %s Exhaust，内容的落区是 %r"
+                 % ("有" if exhaust_expected else "没有",
+                    card.get("PlayedCardDestinationZone")))
+        # 反向：内容有 ethereal/innate/retain 而 wiki 没有 —— 也要红（`sentinel` 就是这条）
+        extra = (tags & {'ethereal', 'innate', 'retain'}) - expected_tags
         if extra and 'content_keywords' not in deviation:
             fail("card." + card_id, "多出关键字 tag %s（wiki 没有）" % sorted(extra))
 
@@ -2254,18 +2276,23 @@ def check_statuses(doc):
             if row.get("UsesStacks") is not True:
                 fail("status." + sid, "UsesStacks must be true (plan §G10), got %r"
                      % row.get("UsesStacks"))
-        elif sid in ("standard.lose_strength", "standard.lose_dexterity"):
+        elif sid in ("standard.lose_strength", "standard.lose_dexterity",
+                     "standard.regain_strength"):
             # §158: the "give back what Flex / Speed Potion lent" half. Two modifications, both by
             # an **expression** (`subtract(0, stacks)` -- the kernel has no `negate`, expr.rs:50),
             # and the order is part of the fact: the matched status first, then itself. Removing
             # the instance first would make its own stacks read 0 and the debt would be free.
             lends = {"standard.lose_strength": "standard.strength",
-                     "standard.lose_dexterity": "standard.dexterity"}[sid]
+                     "standard.lose_dexterity": "standard.dexterity",
+                     # §219：镜像 —— 回合末**加回**力量
+                     "standard.regain_strength": "standard.strength"}[sid]
             if triggers != ["TurnEnded"]:
                 fail("status." + sid, "expected exactly one TurnEnded trigger, got %s" % triggers)
             else:
                 facts = program_facts(row["Triggers"][0]["Program"]["Root"])
-                expected = [("modify", lends, ("expr", "subtract"), "source"),
+                # §219：`regain_strength` 是 `lose_strength` 的镜像 —— 回合末**加回**力量。
+                sign = "add" if sid == "standard.regain_strength" else "subtract"
+                expected = [("modify", lends, ("expr", sign), "source"),
                             ("modify", sid, ("expr", "subtract"), "source")]
                 if facts != expected:
                     fail("status." + sid, "the give-back program is %s, expected %s"

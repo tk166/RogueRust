@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 360 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 361 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 51 | 25 | 26 | 0 | 47 | 4 | 12 | 0 |
-| 状态 | 43 | 40 | 1 | 2 | 0 | 43 | 1 | 0 |
+| 卡牌 | 51 | 25 | 26 | 0 | 47 | 4 | 11 | 0 |
+| 状态 | 44 | 41 | 1 | 2 | 0 | 44 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 9 | 9 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 13 | 9 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 360 | 233 | 111 | 16 | 224 | 47 | 75 | 0 |
+| **合计** | 361 | 234 | 111 | 16 | 224 | 48 | 74 | 0 |
 
-扫描到的具名测试：**908** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**909** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **12** 个位次、**9** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -248,7 +248,7 @@
 | apparition | yes | a_special_card_is_known_and_never_put_in_a_reward | — | wiki:wiki_cards/apparition.txt | wiki 偏差：wiki: 基础带 Ethereal、升级去掉 Ethereal、两层都只给 1 层 Intangible + Exhaust；内容把升级做成"2 层 Intangible"、且没有 Ethereal/Exhaust 标签。升级轴方向性错了，但"无形"的强度在本内容的战斗里是等价的简化，先写明。 | §149/CARD_WIKI+INV_CARDS/a_special_card_is_known_and_never_put_in_a_reward |
 | apparition+ | yes | — | CARD_DIFF | wiki:wiki_cards/apparition.txt (via apparition) | wiki 偏差：wiki: 基础带 Ethereal、升级去掉 Ethereal、两层都只给 1 层 Intangible + Exhaust；内容把升级做成"2 层 Intangible"、且没有 Ethereal/Exhaust 标签。升级轴方向性错了，但"无形"的强度在本内容的战斗里是等价的简化，先写明。 | INV_CARDS |
 | ascenders_bane | yes | — | CARD_DIFF | wiki:wiki_cards/ascenders_bane.txt | — | §183/§189/CARD_WIKI+INV_CARDS |
-| bandage_up | yes | colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。另外 `Exhaust` 没有载体（见下一条的说明），所以内容也没有 exhaust tag。 | §191/CARD_WIKI+INV_CARDS/colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand |
+| bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
 | bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, a_new_run_is_before_the_map_with_a_known_start …(+5) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
@@ -266,7 +266,7 @@
 | clothesline+ | yes | — | CARD_DIFF | wiki:wiki_cards/clothesline.txt (via clothesline) | — | INV_CARDS |
 | combust | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt | — | CARD_WIKI+INV_CARDS |
 | combust+ | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt (via combust) | — | INV_CARDS |
-| dark_shackles | yes | colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/dark_shackles.txt | wiki 偏差：wiki 升级版是 15 层；内容没有 `dark_shackles+` 这一行。`Exhaust` 同 `bandage_up`：本内容还没有"打出即消耗"的载体。 | CARD_WIKI+INV_CARDS/colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand |
+| dark_shackles | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/dark_shackles.txt | wiki 偏差：wiki 升级版是 15 层；内容没有 `dark_shackles+` 这一行。（`Exhaust` 同 `bandage_up`：由落区表达，不是偏差。） | §219/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | dazed | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade, hex_shuffles_a_dazed_only_for_non_attack_cards | — | wiki:wiki_cards/dazed.txt | — | §189/§191/CARD_WIKI+INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
 | defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+16) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | — | CARD_DIFF | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS |
@@ -281,7 +281,7 @@
 | patient_guard+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
 | sentinel | yes | the_keyword_cells_are_in_the_image, a_sink_appends_after_the_callers_prefix_and_a_tiny_sink_is_still_ok | — | wiki:wiki_cards/sentinel.txt | wiki 偏差：wiki 没有 Ethereal（旧版有），内容带 `ethereal`；而 wiki 的报酬是"被 Exhaust 时给能量"，内容没有这条触发器（`ethereal` 会在回合末把它送进消耗堆，但没有任何东西读"被消耗"）。 | §144/CARD_WIKI+INV_CARDS/the_keyword_cells_are_in_the_image |
 | sentinel+ | yes | — | CARD_DIFF | wiki:wiki_cards/sentinel.txt (via sentinel) | wiki 偏差：wiki 没有 Ethereal（旧版有），内容带 `ethereal`；而 wiki 的报酬是"被 Exhaust 时给能量"，内容没有这条触发器（`ethereal` 会在回合末把它送进消耗堆，但没有任何东西读"被消耗"）。 | INV_CARDS |
-| slimed | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+1) | — | wiki:wiki_cards/slimed.txt | wiki 偏差：wiki: 1 费、可出、Exhaust。内容把它做成 `unplayable + junk`（与 Wound/Burn 同一族），因为本内容的「状态牌」只有"抽到就是负担"这一种用法。修它要给它一条 Exhaust 生命周期，留作下一节。 | §10/§192/CARD_WIKI+INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
+| slimed | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+2) | — | wiki:wiki_cards/slimed.txt | — | §192/§219/CARD_WIKI+INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+76) | — | wiki:wiki_cards/strike.txt | — | §6.5/§72.5/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, smithing_replaces_the_card_with_its_upgraded_row …(+6) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
@@ -295,7 +295,7 @@
 | whirlwind+ | yes | an_upgraded_card_row_is_buildable | — | wiki:wiki_cards/whirlwind.txt (via whirlwind) | — | INV_CARDS/an_upgraded_card_row_is_buildable |
 | wound | yes | — | CARD_DIFF | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS |
 
-## 状态（43）
+## 状态（44）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -329,6 +329,7 @@
 | standard.phase_split | yes | the_boss_phase_splits_once_at_low_health, a_phase_split_happens_once_even_under_three_hits | — | spec:INV_STATUSES | — | §121/§122/INV_STATUSES/the_boss_phase_splits_once_at_low_health |
 | standard.plated_armor | yes | a_long_fight_never_reports_a_step_problem, plated_armor_wears_down_to_nothing_without_an_error …(+4) | — | spec:INV_STATUSES | — | §209/§210/INV_STATUSES/a_long_fight_never_reports_a_step_problem |
 | standard.rage | yes (test-only) | rage_gives_block_only_for_an_attack, standard_status_ids_are_byte_ordered_not_registration_ordered …(+2) | — | spec:INV_STATUSES | — | §119/INV_STATUSES/rage_gives_block_only_for_an_attack |
+| standard.regain_strength | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable | — | spec:INV_STATUSES | — | §219/INV_STATUSES/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | standard.regen | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, regen_heals_at_the_end_of_the_turn …(+1) | — | spec:INV_STATUSES | — | §119/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
 | standard.sharp_hide | yes | sharp_hide_hurts_the_player_for_attacks_and_only_attacks, mode_shift_is_a_budget_drained_by_the_health_actually_lost | — | spec:INV_STATUSES | — | §194/§195.1/INV_STATUSES/sharp_hide_hurts_the_player_for_attacks_and_only_attacks |
 | standard.slow | yes | a_card_play_leaves_no_chain_referenced, a_slow_spec_on_a_pipeline_without_a_card_count_is_refused …(+1) | — | spec:INV_STATUSES | ours 放大任何直接伤害（`RestrictDamageKind: Direct`） / wiki 只放大"打出攻击牌造成的伤害" —— 要精确到卡牌标签需要 `RestrictSourceCardTag` 进镜像格式（`status_bind` 目前对非空值响亮拒绝），留作格式升级。基线（本回合牌数、每回合归零、不复合）已与 wiki 一致（§216） | §216/INV_STATUSES/a_card_play_leaves_no_chain_referenced |
@@ -336,7 +337,7 @@
 | standard.spore_cloud | yes | spore_cloud_weakens_the_killer_on_death | — | spec:INV_STATUSES | — | §116/§117/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
 | standard.stasis | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.1/§195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
-| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+47) | — | spec:INV_STATUSES | — | §208/§212/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
+| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+48) | — | spec:INV_STATUSES | — | §212/§219/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
 | standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, standard_status_ids_are_byte_ordered_not_registration_ordered …(+4) | — | spec:INV_STATUSES | — | §207/§214/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |
 | standard.time_warp | yes | the_twelfth_card_asks_for_the_turn_to_end | — | spec:INV_STATUSES | — | §122/§125/INV_STATUSES/the_twelfth_card_asks_for_the_turn_to_end |
 | standard.unawakened | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, the_awakened_one_draws_phase_one_by_weight_and_flips_on_the_guard | — | spec:INV_STATUSES | — | §180/§195.2/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
