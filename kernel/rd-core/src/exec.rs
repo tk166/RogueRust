@@ -3608,9 +3608,9 @@ fn upgrade_cards_node(
     let owner_selector = node
         .node_field("OwnerSelector")?
         .ok_or(IrError::Missing("OwnerSelector"))?;
-    let definition = node
-        .str_field("CardDefinitionId")?
-        .ok_or(IrError::Missing("CardDefinitionId"))?;
+    // §227: absent = "every definition in the zone" (Armaments+ upgrades the **whole hand**, and
+    // the content cannot name the definitions because it does not know what the player holds).
+    let definition = node.str_field("CardDefinitionId")?;
     let only_zone = match node.str_field("FromZone")? {
         Some(name) => Some(zone_from_wire_name(name).ok_or(ExecError::Ir(IrError::UnknownKind))?),
         None => None,
@@ -3627,29 +3627,16 @@ fn upgrade_cards_node(
         return resume_later(ctx.state, frame, slot);
     };
 
-    // The upgraded definition: `<id>+`, and only if the content has that row. A card without one
-    // (`dazed`) is left alone -- StS's `canUpgrade() == false`, not a content bug.
     let Some(content) = ctx.content else {
         return resume_later(ctx.state, frame, slot);
     };
-    let mut buffer = [0u8; 64];
-    let text = definition;
-    if text.len() + 1 >= buffer.len() {
-        return Err(ExecError::Ir(IrError::Missing("CardDefinitionId")));
-    }
-    buffer[..text.len()].copy_from_slice(text.as_bytes());
-    buffer[text.len()] = b'+';
-    let upgraded_text = core::str::from_utf8(&buffer[..text.len() + 1])
-        .map_err(|_| ExecError::Ir(IrError::Missing("CardDefinitionId")))?;
-    if content.lookup_in(upgraded_text, crate::content::EK_CARD).is_none() {
-        return resume_later(ctx.state, frame, slot);
-    }
-    let upgraded = crate::state::CardDefinitionId::new(upgraded_text)?;
-    let wanted = crate::state::CardDefinitionId::new(text)?;
+    let wanted = match definition {
+        Some(text) => Some(crate::state::CardDefinitionId::new(text)?),
+        None => None,
+    };
 
     let mut changed = 0usize;
-    // `CardZone::ALL` has four entries; a single named zone only walks its first slot of this array.
-    // `CardZone::ALL` has one entry per pile (7), not four.
+    // `CardZone::ALL` 一格一个牌区（7 个）；只点名一个区时只走那一个槽。
     let zones: [crate::state::CardZone; crate::state::CARD_ZONE_COUNT] = match only_zone {
         Some(zone) => [zone; crate::state::CARD_ZONE_COUNT],
         None => crate::state::CardZone::ALL,
@@ -3677,9 +3664,16 @@ fn upgrade_cards_node(
             let Some(card) = ctx.state.card(slot_ref) else {
                 continue;
             };
-            if card.definition_id != wanted {
-                continue;
+            if let Some(wanted) = wanted {
+                if card.definition_id != wanted {
+                    continue;
+                }
             }
+            // §227: **one** answer to "can this be upgraded" -- the same helper the player-facing
+            // `chooseCards{Then: Upgrade}` uses to narrow its options.
+            let Some(upgraded) = upgradable_definition(content, card.definition_id.as_str()) else {
+                continue;
+            };
             if let Some(card) = ctx.state.card_mut(slot_ref) {
                 card.definition_id = upgraded;
                 changed += 1;
@@ -3688,6 +3682,24 @@ fn upgrade_cards_node(
         }
     }
     resume_later(ctx.state, frame, slot)
+}
+
+/// §227：这张定义**升级版的样子**，只在内容真的有一行 `+` 时给出。
+///
+/// 两条路必须给出同一个答案：`upgrade_cards_node`（批量/整片牌区）与 `chooseCards` 的
+/// `Upgrade`（玩家选中的那一张）。所以判定只写这一遍，拼法只写 `state::upgraded_id` 那一遍。
+fn upgradable_definition(
+    content: &crate::content::Content<'_>,
+    definition: &str,
+) -> Option<crate::state::CardDefinitionId> {
+    let upgraded = crate::state::upgraded_id(definition)?;
+    if content
+        .lookup_in(upgraded.as_str(), crate::content::EK_CARD)
+        .is_none()
+    {
+        return None;
+    }
+    Some(upgraded)
 }
 
 /// §195.4：**挑** `FromZone`（空则 `FallbackZone`）里按 `Order` 排好的前 `Count` 张，搬去 `ToZone`。
@@ -3855,17 +3867,38 @@ fn choose_cards_node(
     };
     let min = node.int_field("Min")?.ok_or(IrError::Missing("Min"))?;
     let max = node.int_field("Max")?.ok_or(IrError::Missing("Max"))?;
-    let copies = node.int_field("Copies")?.ok_or(IrError::Missing("Copies"))?;
+    // §227：`Then` 决定"选完做什么"，所以它先被解析，再决定**哪些字段是必须的** ——
+    // "Copies 只在 Copy 上有意义"这条规则写在解析里，比写在注释里靠得住。
+    let then_name = node.str_field("Then")?.ok_or(IrError::Missing("Then"))?;
+    let then = match then_name {
+        "Copy" => {
+            let copies = node.int_field("Copies")?.ok_or(IrError::Missing("Copies"))?;
+            if !(1..=MAX_COPIES_PER_CHOICE as i32).contains(&copies) {
+                return Err(ExecError::Ir(IrError::Missing("Copies")));
+            }
+            // `ToZone` 缺席 ⇒ 手牌（Dual Wield 的语义）。副本进手牌是**最常见**的那一种，
+            // 但 Nightmare 要的是"先放进一边、下一回合再拿进手牌"，所以这个字段必须存在。
+            let into = match node.str_field("ToZone")? {
+                Some(name) => zone_from_wire_name(name).ok_or(ExecError::Ir(IrError::UnknownKind))?,
+                None => CardZone::Hand,
+            };
+            crate::state::ChoiceThen::Copy {
+                copies: u8::try_from(copies).map_err(|_| ExecError::Ir(IrError::Missing("Copies")))?,
+                into,
+            }
+        }
+        // §227：Armaments —— 选一张原地升级。候选会被下面收窄到"有 `+` 行"的牌。
+        "Upgrade" => crate::state::ChoiceThen::Upgrade,
+        // §227：Warcry —— 选一张放到抽牌堆顶。
+        "ToDrawPileTop" => crate::state::ChoiceThen::ToDrawPileTop,
+        _ => return Err(ExecError::Ir(IrError::UnknownKind)),
+    };
     if !(0..=MAX_SELECTED_CARDS as i32).contains(&min)
         || !(1..=MAX_SELECTED_CARDS as i32).contains(&max)
         || min > max
     {
         return Err(ExecError::Ir(IrError::Missing("Min")));
     }
-    if !(1..=MAX_COPIES_PER_CHOICE as i32).contains(&copies) {
-        return Err(ExecError::Ir(IrError::Missing("Copies")));
-    }
-
     let mut owners = [CombatantId::EMPTY; MAX_COMBATANTS];
     let owner_count = resolve_targets(owner_selector, ctx, &mut owners)?;
     let Some(owner) = owners.first().copied().filter(|_| owner_count > 0) else {
@@ -3879,6 +3912,19 @@ fn choose_cards_node(
 
     let mut candidates = crate::state::Bounded::new();
     for card in ctx.state.zone_cards(&owner, from_zone) {
+        // §227：`Upgrade` 的候选收窄是**自动**的，不是内容声明的：一张牌能不能升级，
+        // 问的是"内容里有没有它的 `+` 行"（`upgrade_cards_node` 用的同一条规则、同一个
+        // `state::upgraded_id` 拼法）。已经带 `+` 的牌与没有 `+` 行的牌都不进候选 ——
+        // 于是页面根本不会给玩家一个"点了什么都不发生"的选项。
+        if matches!(then, crate::state::ChoiceThen::Upgrade) {
+            let Some(content) = ctx.content else {
+                return Err(ExecError::Ir(IrError::Missing("content")));
+            };
+            // §227: same helper as `upgrade_cards_node` -- "can this be upgraded" has one answer.
+            if upgradable_definition(content, card.definition_id.as_str()).is_none() {
+                continue;
+            }
+        }
         if tag_count > 0 {
             // 没有内容 ⇒ 不知道这张牌有什么 tag。**不许**当成"没有 tag"（那会让
             // "只复制攻击牌"把技能牌也列出来）。响亮失败，与 `forEachCardInZone` 的
@@ -3925,9 +3971,8 @@ fn choose_cards_node(
         // 页面的计数和内核的判据就会各说一套。
         max: u8::try_from(max as usize).map_err(|_| ExecError::Ir(IrError::Missing("Max")))?
             .min(u8::try_from(available).unwrap_or(u8::MAX)),
-        then: crate::state::ChoiceThen::Copy,
+        then,
         offered: crate::state::Bounded::new(),
-        copies: u8::try_from(copies).map_err(|_| ExecError::Ir(IrError::Missing("Copies")))?,
         candidates,
     };
     if ctx.state.begin_choice(question).is_err() {

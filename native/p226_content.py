@@ -37,6 +37,7 @@ def dual_wield(copies, text, upgraded):
                     "Min": 1,
                     "Max": 1,
                     # 每张选中的牌造几份 —— 基础 1、`+` 2（就是升级的全部内容）。
+                    "Then": "Copy",
                     "Copies": copies,
                     # "Attack **或** Power"：过滤要读卡定义的 tag 表，所以由这个节点（拿得到内容）
                     # 算成 `PendingChoice::candidates` 交给内核守。

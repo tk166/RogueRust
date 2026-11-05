@@ -761,6 +761,10 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // §213: Hex -- likewise a pure content rule: a `CardPlayed` trigger that shuffles a Dazed
         // into the draw pile whenever the played card is **not** an Attack (`not(card.hasTag.attack)`).
         "standard.hex" |
+        // §227: Nightmare's "next turn, add the copies to your hand" -- the whole rule is a
+        // `TurnStarted` trigger that moves `SetAsidePile` into the hand and removes itself.
+        // The kernel needs no rule: the cards **are** the memory of what was copied.
+        "standard.nightmare_pending" |
         "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No

@@ -247,12 +247,25 @@ const report = await evaluate(`(async () => {
           out.choiceTicked += 1;
           groups[0].push({ kind: "choice-tick", el, label: text(el) });
         }
-        if (confirm) {
+        // 只有**可按**的确认键才是候选：min > 0 且一张都没勾时它是 disabled 的，
+        // 点它当然什么都不动 —— 那是测试自己造出来的"死控件"（§227 soak 报的 23 个）。
+        // A walk that only ever **adds** ticks overshoots max on a one-card question (Armaments:
+        // min = max = 1) and then has no way back -- confirm is disabled above the bound **by
+        // design**, so those five ticks were a dead end with no candidate left. A player can untick;
+        // the walk could not. This is the harness bug, not the page's.
+        const ticked = options.filter((el) => el.dataset.ticked === "1");
+        if (ticked.length && (unticked.length === 0 || random() < 0.4)) {
+          groups[0].push({ kind: "choice-untick", el: pick(ticked), label: text(pick(ticked)) });
+        }
+        if (confirm && !confirm.disabled) {
           // "Answer with nothing" is a real choice (both potions say "any number"), so it is
           // counted separately from "ticked something": a picker whose ticks never reach the
           // kernel and one nobody ever ticked look identical from the outside otherwise.
           if (!options.some((el) => el.dataset.ticked === "1")) out.choiceEmpty += 1;
-          groups[0].push({ kind: "choice-confirm", el, label: text(confirm) });
+          // ⚠️ 这里原来写的是简写 el，而变量叫 confirm —— 于是**第一次**有选牌弹窗走进来就抛
+          // ReferenceError。它一直没暴露，是因为 §227 之前随机走图从没在战斗里打开过选牌界面
+          // （药水那几条路都靠 act()，而手牌点击走 step()）。
+          groups[0].push({ kind: "choice-confirm", el: confirm, label: text(confirm) });
         }
         return groups;
       }
@@ -400,6 +413,24 @@ const report = await evaluate(`(async () => {
             duringFight: !byId("handPanel").hidden,
             envActions: ex.rd_env_action_count(),
             envDone: ex.rd_env_done(),
+            // §227: 卡住的判据必须能分开"内核有待决问句"与"页面没把问句画出来" ——
+            // 不然两种完全不同的 bug 在报告里长得一样。
+            envChoice: ex.rd_env_choice_pending(),
+            modalHidden: byId("modal").hidden,
+            errors: window.__soakErrors.slice(-3),
+            modalChoices: document.querySelectorAll("#modalBody [data-choice]").length,
+            modalMin: ex.rd_env_choice_min(),
+            modalMax: ex.rd_env_choice_max(),
+            modalPicked: (() => { let n = 0; for (let i = 0; i < 8; i++) { if (ex.rd_env_choice_selected(i) === 1) n += 1; } return n; })(),
+            modalConfirm: (() => {
+              const c = document.querySelector('#modalBody [data-panel-action="choice-confirm"]');
+              return c ? (c.disabled ? "disabled" : "enabled") : "absent";
+            })(),
+            modalBody: byId("modalBody").innerHTML.slice(0, 120),
+            envKind: ex.rd_env_choice_kind(),
+            envCount: ex.rd_env_choice_count(),
+            envActive: (() => { const b = ex.rd_env_scratch_buf(); ex.rd_env_observe_into(b);
+              return new Int32Array(ex.memory.buffer, b, ex.rd_env_observe_len())[3]; })(),
             envResult: ex.rd_env_result(),
             heroHp: ex.rd_run_observe(2),
             turnPhase: (() => { const b = ex.rd_env_scratch_buf(); ex.rd_env_observe_into(b);

@@ -1,0 +1,27 @@
+{{Card Infobox
+| Name          = Warcry
+| Image         = Red-Warcry.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Common
+| Cost          = 0
+| Description   = Draw (1;2) (card;cards).<br>Put a card from your hand onto the top of your draw pile.<br>{{KW|Exhaust}}.
+| GivesToPlayer = Draw, Exhaust
+}}
+{{Keyword Infobox|Exhaust}}
+{{C|Warcry}} is a 0 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Skill|Skill}} Card. It draws 1 card (2 cards if upgraded) and allows you to select one card in hand to place on top of your drawpile. {{C|Warcry}} will then {{KW|Exhaust}} itself.
+
+== Interactions ==
+=== Order ===
+* Selecting the card to put on top of your draw pile happens ''after'' drawing, meaning a card drawn this way can potentially be placed right back on top.
+
+* Although {{C|Mayhem}} plays the top card of the draw pile, it cannot be used in tandem with {{C|Warcry}} to play a specific card, as {{C|Mayhem}} activates ''after'' cards are drawn at the start of your turn, meaning the card will already be in hand.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 10|* Warcry tweaked so the unupgraded form is buffed (cost 0, draw 1 place 1).}}
+{{Update History Table/row|?|* Added Warcry to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

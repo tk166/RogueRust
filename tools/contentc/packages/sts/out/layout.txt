@@ -24,7 +24,7 @@
  38  1  1   4 IR maxHealth                                                    : Selector:TERM
  39  6  6  16 IR node.applyStatus                                             : Charges:INT DurationTurns:INT ResultKey:TERM Stacks:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
  40  2  2   8 IR node.carryAwayStolenGold                                     : CounterId:STR(wrap) TargetSelector:TERM
- 41  7  8  20 IR node.chooseCards                                             : Copies:INT FromZone:STR Max:INT Min:INT OwnerSelector:TERM RequireAnyTag:STRLIST ResultKey:TERM
+ 41  9 10  24 IR node.chooseCards                                             : Copies:INT FromZone:STR Max:INT Min:INT OwnerSelector:TERM RequireAnyTag:STRLIST ResultKey:TERM Then:STR ToZone:STR
  42  3  3   8 IR node.conditional                                             : Condition:TERM Else:TERM Then:TERM
  43  5  5  12 IR node.createCardInstance                                      : CardDefinitionId:STR(wrap) Count:TERM ResultKey:TERM TargetSelector:TERM ToZone:STR
  44  3  3   8 IR node.createCombatant                                         : DefinitionId:STR Health:TERM TeamId:STR
@@ -33,7 +33,7 @@
  47  3  3   8 IR node.drawCards                                               : Count:TERM ResultKey:TERM TargetSelector:TERM
  48  0  0   4 IR node.endTurn                                                 : 
  49  1  1   4 IR node.extraTurn                                               : TargetSelector:TERM
- 50  4  4  12 IR node.forEachCardInZone                                       : Body:TERM MaxIterations:INT OwnerSelector:TERM Zone:STR
+ 50  5  5  12 IR node.forEachCardInZone                                       : Body:TERM MaxIterations:INT OwnerSelector:TERM ResultKey:TERM Zone:STR
  51  4  4  12 IR node.gainBlock                                               : Amount:TERM PoolId:STR(wrap) ResultKey:TERM TargetSelector:TERM
  52  4  4  12 IR node.gainResource                                            : Amount:TERM ResourceId:STR ResultKey:TERM TargetSelector:TERM
  53  3  3   8 IR node.heal                                                    : Amount:TERM ResultKey:TERM TargetSelector:TERM
@@ -42,9 +42,9 @@
  56  5  5  12 IR node.moveCardToZone                                          : CardExpression:TERM OwnerSelector:TERM Placement:STR ResultKey:TERM ToZone:STR
  57  3  3   8 IR node.repeat                                                  : Body:TERM Count:TERM MaxCount:INT
  58  7  7  16 IR node.selectCards                                             : Count:INT FallbackZone:STR FromZone:STR Order:STR OwnerSelector:TERM ResultKey:TERM ToZone:STR
- 59  1  2   8 IR node.sequence                                                : Children:TERMLIST
+ 59  2  3   8 IR node.sequence                                                : Children:TERMLIST ResultKey:TERM
  60  5  5  12 IR node.setCombatantCounter                                     : Amount:TERM CounterId:STR(wrap) Relative:BOOL ResultKey:TERM TargetSelector:TERM
- 61  3  3   8 IR node.upgradeCards                                            : CardDefinitionId:STR(wrap) OwnerSelector:TERM ResultKey:TERM
+ 61  4  4  12 IR node.upgradeCards                                            : CardDefinitionId:STR(wrap) FromZone:STR OwnerSelector:TERM ResultKey:TERM
  62  1  1   4 IR not                                                          : Condition:TERM
  63  0  0   4 IR roundNumber                                                  : 
  64  2  2   8 IR sel.allAllies                                                : Cardinality:STR RequiredContextCapabilities:STR

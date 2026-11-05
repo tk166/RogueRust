@@ -1641,6 +1641,27 @@ pub const CARD_COST_DELTA_COUNTER: &str = "standard.card_cost_delta";
 /// （Snecko Eye 之类）都在这之上照常折叠 —— 顺序见 `play.rs` 的 `CostStage::CardInstance`。
 pub const CARD_COST_OVERRIDE_COUNTER: &str = "standard.card_cost_override";
 
+/// 一张牌的**升级版定义 id**：`<id>+`（本内容的约定，§195.7）。
+///
+/// 这是那个拼法的**唯一**实现：`exec::upgrade_cards_node`（按定义 id 批量升级）与
+/// [`CombatState::resolve_upgrade`]（升级玩家选中的那张）都调它 —— 两处各写一遍 `push(b'+')`
+/// 就是"同一个词表被两处认识"，迟早一处改成 `<id>+1` 而另一处没改。
+///
+/// 返回 `None` 的两种情形都是**拒绝**、不是"随便给个值"：
+/// * id 已经以 `+` 结尾（升级过的不再升级）；
+/// * `+` 之后超出 [`ID_CAP`]（装不下就会被截断成一个**别的** id，那是撞名）。
+#[must_use]
+pub fn upgraded_id(definition: &str) -> Option<CardDefinitionId> {
+    let bytes = definition.as_bytes();
+    if bytes.last() == Some(&b'+') || bytes.len() + 1 > ID_CAP {
+        return None;
+    }
+    let mut buffer = [0u8; ID_CAP];
+    buffer[..bytes.len()].copy_from_slice(bytes);
+    buffer[bytes.len()] = b'+';
+    CardDefinitionId::new(core::str::from_utf8(&buffer[..bytes.len() + 1]).ok()?).ok()
+}
+
 /// 一次候选最多几张（StS 的三张；留到 8 是因为 Attack/Skill/Power 三瓶都要同一个数，
 /// 而"三"写在三处的常量迟早只有一个被改）。
 pub const MAX_CHOICE_OFFERED: usize = 8;
@@ -1677,11 +1698,6 @@ pub struct PendingChoice {
     /// 其余来源必须留空；`begin_choice` 两边都校验，因为「候选」和「来源」不一致，等于问一个
     /// 玩家答不出来的问题。
     pub offered: Bounded<CardDefinitionId, MAX_CHOICE_OFFERED>,
-    /// 每张选中的牌**造几份副本**（§226）。只有 [`ChoiceThen::Copy`] 用得上。
-    ///
-    /// 其余 `then` 必须留 `0`，`begin_choice` **响亮拒绝** —— 静默忽略一个副本数，就是让
-    /// "它复制了两份"变成"它复制了零份"，而零份也是一次成功的复制。
-    pub copies: u8,
     /// **收窄后的合法清单**（§226）：非空 ⇒ 只有这些实例能被选。
     ///
     /// 为什么它必须在状态里：StS 的 `Dual Wield` 是「选一张 **Attack 或 Power** 牌复制」，而这个
@@ -1742,12 +1758,31 @@ pub enum ChoiceThen {
     /// 价格由 `resolve_choice` 的 `cost_delta` 参数给出，因为"免费"是**负数张牌代价**，
     /// 而那个数字只有知道内容的人算得出来（`CombatState` 里没有内容）。
     ToHand,
-    /// **复制**选中的牌（§226，Dual Wield）：原件**不动**，往手牌里造 [`PendingChoice::copies`] 份。
+    /// **复制**选中的牌（§226，Dual Wield / Nightmare）：原件**不动**，造 `copies` 份到 `into`。
     ///
     /// 与 [`Self::ToHand`] 的区别是"搬"与"造"：那个把那一份**搬**过去（顺带给它一个每副本价格），
-    /// 这个**造**新的 —— 新副本是印刷价（StS 的副本不是打折商品，所以 `Copies` 与 `cost_delta`
-    /// 互斥由 `resolve_choice` 的上游那条判据守住）。
-    Copy,
+    /// 这个**造**新的 —— 新副本是印刷价（StS 的副本不是打折商品，所以 `cost_delta` 对它
+    /// 不适用，`resolve_choice` 上游那条判据守住）。
+    ///
+    /// §227：`copies` / `into` 从 `PendingChoice` 的字段搬进**变体本身**。理由是"造几份、造到哪儿"
+    /// 是"复制"这个词的一部分：留在外面就要靠 `begin_choice` 校验"`then` 是 Copy 时 `copies` 非零"
+    /// 这类外部不变量，而**能构造出来的非法状态迟早会被构造出来**。
+    Copy {
+        /// 每张选中的牌造几份（`>= 1`）。
+        copies: u8,
+        /// 副本落在哪个牌区（Dual Wield = 手牌，Nightmare = `SetAsidePile`）。
+        into: CardZone,
+    },
+    /// **原地升级**选中的牌（§227，Armaments）：定义 id 变成 `<id>+`，牌**不动**。
+    ///
+    /// 内核只守**机械**那半（"`+` 只能加一次、id 不能超长"）；"这张牌有没有 `+` 行"是内容的
+    /// 事，所以由发问的节点把候选**收窄**到有 `+` 行的牌（`upgrade_cards_node` 用的是同一条规则）。
+    Upgrade,
+    /// 把选中的牌放到**抽牌堆顶**（§227，Warcry）。
+    ///
+    /// `Top` 不是排版选择：`ZonePlacement::Top` 的注释写着"front is the draw top"，所以
+    /// "下一张就抽它"与"塞进堆底"是两条不同的语义，内容不能靠顺序碰运气。
+    ToDrawPileTop,
 }
 
 impl ChoiceThen {
@@ -1758,9 +1793,12 @@ impl ChoiceThen {
             Self::Exhaust => CardZone::ExhaustPile,
             Self::DiscardThenDraw => CardZone::DiscardPile,
             Self::ToHand => CardZone::Hand,
-            // 副本进手牌；**原件不搬**（`resolve_from_pile` 的 `Copy` 分支在动第一张牌之前就
-            // 分流出去了），所以这个返回值的唯一用途是给容量判据当"新卡落在哪儿"。
-            Self::Copy => CardZone::Hand,
+            // 副本落在 `into`（**原件不搬**）；这个返回值的用途是给容量判据当"新卡落在哪儿"。
+            Self::Copy { into, .. } => into,
+            // 升级**不动牌**（`resolve_from_pile` 的 `Upgrade` 分支在搬牌之前就分流出去了），
+            // 这里填原处；它不会被当成搬迁目的地。
+            Self::Upgrade => CardZone::Hand,
+            Self::ToDrawPileTop => CardZone::DrawPile,
         }
     }
 }
@@ -1823,8 +1861,11 @@ pub enum ChoiceError {
     Duplicate,
     /// 答案的形状和问句的来源不匹配（`Instances` 回答 `Offered`，或反过来）。
     WrongAnswer,
-    /// 副本数与 `then` 不自洽（§226）：非 [`ChoiceThen::Copy`] 的问句带了非零 `copies`，或者
-    /// [`ChoiceThen::Copy`] 的 `copies` 是 0。
+    /// §227：选中的牌**升级不了**（id 已经以 `+` 结尾，或者 `+` 之后超出容量）。
+    ///
+    /// 这是**内核能看见的那一半**规则；"这张牌有没有 `+` 行"由发问的节点收窄候选来保证。
+    NotUpgradable,
+    /// 副本数与 `then` 不自洽（§226）：[`ChoiceThen::Copy`] 的 `copies` 是 0。
     ///
     /// **调用方（= 内容）的错，不是玩家的错**：静默取 `0` 或 `1` 都会把"复制"变成一个
     /// 看不出来的别的动作（零份 = 什么都没发生却扣了牌；一份 = 少了一份）。
@@ -1851,6 +1892,7 @@ impl core::fmt::Display for ChoiceError {
             Self::Count { picked, min, max } => {
                 write!(f, "picked {picked} cards, expected {min}..={max}")
             }
+            Self::NotUpgradable => f.write_str("the picked card cannot be upgraded any further"),
             Self::CopiesNotApplicable => {
                 f.write_str("copies belong to `Copy` questions only, and `Copy` needs at least one")
             }
@@ -4838,9 +4880,9 @@ impl CombatState {
                 max: choice.max,
             });
         }
-        // §226：副本数只有 `Copy` 用得上，两个方向都要拒（"复制 0 份"是一次成功的空操作，
-        // 那是最难发现的一种错）。
-        if (choice.copies != 0) != (choice.then == ChoiceThen::Copy) {
+        // §227：`copies` 已经在变体里了，所以只剩"0 份"这一种非法值 —— 它是一次**成功**的空
+        // 操作，那是最难发现的一种错。
+        if matches!(choice.then, ChoiceThen::Copy { copies: 0, .. }) {
             return Err(ChoiceError::CopiesNotApplicable);
         }
         // §226：收窄清单只能挂在**牌区来源**上，而且每一项**现在**都得在来源牌区里 ——
@@ -5014,10 +5056,14 @@ impl CombatState {
             slots[index] = slot;
         }
         // §226：`Copy` 是"造"而不是"搬"—— 原件留在原处，所以它和下面的目的牌区容量判据
-        // 是两件事（这里要的是**手牌的空位**，那要的是"要搬进去的那个区"）。分支放在
+        // 是两件事（这里要的是 `into` 的空位，那要的是"要搬进去的那个区"）。分支放在
         // "一个字节都没改"这条线之前，两支各自保证自己全验证完再动手。
-        if choice.then == ChoiceThen::Copy {
-            return self.resolve_copy(choice, &slots[..picked]);
+        if let ChoiceThen::Copy { copies, into } = choice.then {
+            return self.resolve_copy(choice, &slots[..picked], copies, into);
+        }
+        // §227：`Upgrade` 也不搬牌，只改那份副本的定义 id。
+        if choice.then == ChoiceThen::Upgrade {
+            return self.resolve_upgrade(choice, &slots[..picked]);
         }
         // (b) 目的牌区装得下。三条一起看，因为「搬第一张时才发现第三张装不下」正是要避免的。
         let destination_room = MAX_CARDS_PER_ZONE.saturating_sub(zones.count(destination));
@@ -5048,9 +5094,15 @@ impl CombatState {
             }
         }
 
+        // §227：`ToDrawPileTop` 与其它"搬"只差**落在哪一头**（`Top` = 下一张就抽它）。
+        let placement = match choice.then {
+            ChoiceThen::ToDrawPileTop => ZonePlacement::Top,
+            _ => ZonePlacement::Bottom,
+        };
+
         // ---- 到这里为止一个字节都没改。----
         for &slot in &slots[..picked] {
-            self.move_card(&choice.chooser, source, destination, slot, ZonePlacement::Bottom)?;
+            self.move_card(&choice.chooser, source, destination, slot, placement)?;
             // §161.4: the per-copy price rides **on the card**, so it travels with it through the
             // hand and the discard pile -- and `play.rs` zeroes it once the play is paid for.
             if choice.then == ChoiceThen::ToHand && cost_delta != 0 {
@@ -5066,9 +5118,9 @@ impl CombatState {
         Ok(ChoiceDone { picked, drawn })
     }
 
-    /// **复制**的答案（[`ChoiceThen::Copy`]，§226）。
+    /// **复制**的答案（[`ChoiceThen::Copy`]，§226/§227）。
     ///
-    /// 语义：选中的每一张**留在原处**，往手牌里再造 [`PendingChoice::copies`] 份**同定义**的副本。
+    /// 语义：选中的每一张**留在原处**，往 `into` 再造 `copies` 份**同定义**的副本。
     /// 副本是全新的实例 ⇒ 印刷价、没有每副本价格、没有 `queued_target_id`（StS 的副本就是
     /// 印刷的那张牌，不是被打折或被瞄过的那一份）。
     ///
@@ -5079,8 +5131,10 @@ impl CombatState {
         &mut self,
         choice: PendingChoice,
         slots: &[CardSlot],
+        copies: u8,
+        into: CardZone,
     ) -> Result<ChoiceDone, ChoiceError> {
-        let copies = usize::from(choice.copies);
+        let copies = usize::from(copies);
         if copies == 0 {
             return Err(ChoiceError::CopiesNotApplicable);
         }
@@ -5090,9 +5144,9 @@ impl CombatState {
             let Some(zones) = self.card_zones(&choice.chooser) else {
                 return Err(ChoiceError::NotInSource);
             };
-            if total > MAX_CARDS_PER_ZONE.saturating_sub(zones.count(CardZone::Hand)) {
+            if total > MAX_CARDS_PER_ZONE.saturating_sub(zones.count(into)) {
                 return Err(ChoiceError::Capacity(CapacityError::Full(
-                    Container::CardsInZone(CardZone::Hand),
+                    Container::CardsInZone(into),
                 )));
             }
         }
@@ -5121,13 +5175,55 @@ impl CombatState {
         let mut created = 0usize;
         for definition in &definitions[..picked] {
             for _ in 0..copies {
-                self.create_card_instance(&choice.chooser, *definition, CardZone::Hand)?;
+                self.create_card_instance(&choice.chooser, *definition, into)?;
                 created += 1;
             }
         }
         self.choice = None;
         Ok(ChoiceDone {
             picked: created,
+            drawn: 0,
+        })
+    }
+
+    /// **原地升级**的答案（[`ChoiceThen::Upgrade`]，§227，Armaments）。
+    ///
+    /// 语义：把每一张选中的牌的定义 id 换成 [`upgraded_id`]（`<id>+`），牌**不搬**。
+    ///
+    /// 内核只守**机械**那半：`+` 不能加两次、id 不能超长。**"这张牌有没有 `+` 行"是内容的事**，
+    /// 由发问的节点把候选收窄（这里没有 `Content`，也不该为了这一件事把它拖进来）——
+    /// 两条判据合起来才是完整规则，缺哪条都会让"升级了一张没有升级版的牌"变成一次静默成功。
+    fn resolve_upgrade(
+        &mut self,
+        choice: PendingChoice,
+        slots: &[CardSlot],
+    ) -> Result<ChoiceDone, ChoiceError> {
+        let picked = slots.len();
+        let mut upgraded = [CardDefinitionId::EMPTY; MAX_CHOICE_OFFERED];
+        if picked > upgraded.len() {
+            return Err(ChoiceError::Count {
+                picked,
+                min: choice.min,
+                max: choice.max,
+            });
+        }
+        // ---- 先把新 id 全部算出来：一张算不出来就整体拒绝，一个字节都不改。----
+        for (at, slot) in slots.iter().enumerate() {
+            let Some(card) = self.card(*slot) else {
+                return Err(ChoiceError::NotInSource);
+            };
+            upgraded[at] =
+                upgraded_id(card.definition_id.as_str()).ok_or(ChoiceError::NotUpgradable)?;
+        }
+        for (at, slot) in slots.iter().enumerate() {
+            let Some(card) = self.cards.as_mut_slice().get_mut(slot.index()) else {
+                return Err(ChoiceError::NotInSource);
+            };
+            card.definition_id = upgraded[at];
+        }
+        self.choice = None;
+        Ok(ChoiceDone {
+            picked,
             drawn: 0,
         })
     }
@@ -6158,7 +6254,6 @@ mod tests {
             max,
             then: ChoiceThen::Exhaust,
             offered: Bounded::new(),
-            copies: 0,
             candidates: Bounded::new(),
         }
     }
@@ -6178,7 +6273,6 @@ mod tests {
             max: 1,
             then: ChoiceThen::ToHand,
             offered,
-            copies: 0,
             candidates: Bounded::new(),
         }
     }
@@ -6382,7 +6476,6 @@ mod tests {
             max: 1,
             then: ChoiceThen::Exhaust,
             offered: Bounded::new(),
-            copies: 0,
             candidates: Bounded::new(),
         })
         .unwrap();
@@ -6427,7 +6520,6 @@ mod tests {
             max: 1,
             then: ChoiceThen::ToHand,
             offered: Bounded::new(),
-            copies: 0,
             candidates: Bounded::new(),
         })
         .unwrap();
@@ -6509,7 +6601,6 @@ mod tests {
             max: 1,
             then: ChoiceThen::ToHand,
             offered: Bounded::new(),
-            copies: 0,
             candidates: Bounded::new(),
         })
         .unwrap();
@@ -6565,7 +6656,6 @@ mod tests {
             max: 2,
             then: ChoiceThen::DiscardThenDraw,
             offered: Bounded::new(),
-            copies: 0,
             candidates: Bounded::new(),
         })
         .unwrap();
@@ -6671,18 +6761,23 @@ mod tests {
             source: ChoiceSource::Hand,
             min: 1,
             max: 1,
-            then: ChoiceThen::Copy,
+            then: ChoiceThen::Copy {
+                copies: 2,
+                into: CardZone::Hand,
+            },
             offered: Bounded::new(),
-            copies: 2,
             candidates,
         };
-        // ④ 先问自洽：`then = Exhaust` + `copies = 2` 是两个方向的错都拒。
+        // ④ "复制 0 份"仍要拒 —— 它是一次**成功**的空操作，那是最难发现的一种错。
+        //   （§227 之后"副本数"长在变体里，所以"`then = Exhaust` 却带 copies"已经构造不出来。）
         assert_eq!(
-            s.begin_choice(PendingChoice { then: ChoiceThen::Exhaust, ..question }),
-            Err(ChoiceError::CopiesNotApplicable)
-        );
-        assert_eq!(
-            s.begin_choice(PendingChoice { copies: 0, ..question }),
+            s.begin_choice(PendingChoice {
+                then: ChoiceThen::Copy {
+                    copies: 0,
+                    into: CardZone::Hand,
+                },
+                ..question
+            }),
             Err(ChoiceError::CopiesNotApplicable)
         );
         s.begin_choice(question).expect("the question is answerable");
@@ -6703,8 +6798,11 @@ mod tests {
         assert_eq!(pile_ids(&s, CardZone::Hand), before, "a refusal moves no card");
         assert_eq!(s.cards.len(), pool_before, "a refusal creates no card");
         assert_eq!(
-            s.pending_choice().map(|choice| choice.copies),
-            Some(2),
+            s.pending_choice().map(|choice| choice.then),
+            Some(ChoiceThen::Copy {
+                copies: 2,
+                into: CardZone::Hand,
+            }),
             "a refusal keeps the question open"
         );
 
@@ -6733,6 +6831,94 @@ mod tests {
             }
         }
         assert_eq!(copies, 2, "both new instances carry the picked definition");
+    }
+
+    /// §227：`Upgrade` —— 选中的牌**原地**升级（定义 id 变 `<id>+`），牌不搬。
+    ///
+    /// 三件事：升级真的发生、牌还在原处、而"已经带 `+` 的牌"再升级是**响亮拒绝**
+    /// （`NotUpgradable`，不是"什么都不做"）—— 后者是内核能看见的那一半规则，
+    /// 另一半（有没有 `+` 行）由发问的节点收窄候选。
+    #[test]
+    fn an_upgrade_choice_rewrites_the_definition_in_place() {
+        let mut s = fight();
+        s.add_combatant(hero()).unwrap();
+        s.create_card_instance(&cid("hero"), cdid("standard.strike"), CardZone::Hand)
+            .expect("the pool has room");
+        let ids = pile_ids(&s, CardZone::Hand);
+        s.begin_choice(PendingChoice {
+            chooser: cid("hero"),
+            source: ChoiceSource::Hand,
+            min: 1,
+            max: 1,
+            then: ChoiceThen::Upgrade,
+            offered: Bounded::new(),
+            candidates: Bounded::new(),
+        })
+        .expect("the question is answerable");
+
+        let done = s
+            .resolve_choice(ChoiceAnswer::Instances(&ids[..1]), 0)
+            .expect("upgraded");
+        assert_eq!(done.picked, 1);
+        // 牌还在手牌里的**同一个位置**（`Upgrade` 不搬牌）。
+        assert_eq!(pile_ids(&s, CardZone::Hand), ids, "the card did not move");
+        let definition = s
+            .card(s.find_card(&cid("hero"), &ids[0]).expect("still there").1)
+            .expect("the card")
+            .definition_id;
+        assert_eq!(definition.as_str(), "standard.strike+");
+
+        // 再升级一次 ⇒ **响亮拒绝**（`+` 只能加一次）。
+        s.begin_choice(PendingChoice {
+            chooser: cid("hero"),
+            source: ChoiceSource::Hand,
+            min: 1,
+            max: 1,
+            then: ChoiceThen::Upgrade,
+            offered: Bounded::new(),
+            candidates: Bounded::new(),
+        })
+        .expect("the question is answerable");
+        assert_eq!(
+            s.resolve_choice(ChoiceAnswer::Instances(&ids[..1]), 0),
+            Err(ChoiceError::NotUpgradable)
+        );
+        assert!(s.pending_choice().is_some(), "a refusal keeps the question open");
+    }
+
+    /// §227：`ToDrawPileTop` —— 选中的牌搬到抽牌堆**顶**（`ZonePlacement::Top` = 下一张就抽它）。
+    ///
+    /// 判据必须比"它在抽牌堆里"更强：先往抽牌堆放一张垫底的牌，然后问"谁在最前面"。
+    #[test]
+    fn a_to_draw_pile_top_choice_lands_on_the_draw_top() {
+        let mut s = fight();
+        s.add_combatant(hero()).unwrap();
+        s.create_card_instance(&cid("hero"), cdid("standard.strike"), CardZone::Hand)
+            .expect("the pool has room");
+        // 垫底：`standard.defend` 先进抽牌堆，所以它**不该**是下一张。
+        s.create_card_instance(&cid("hero"), cdid("standard.defend"), CardZone::DrawPile)
+            .expect("the pool has room");
+        let ids = pile_ids(&s, CardZone::Hand);
+        s.begin_choice(PendingChoice {
+            chooser: cid("hero"),
+            source: ChoiceSource::Hand,
+            min: 1,
+            max: 1,
+            then: ChoiceThen::ToDrawPileTop,
+            offered: Bounded::new(),
+            candidates: Bounded::new(),
+        })
+        .expect("the question is answerable");
+        s.resolve_choice(ChoiceAnswer::Instances(&ids[..1]), 0)
+            .expect("moved");
+
+        assert!(pile_ids(&s, CardZone::Hand).is_empty(), "it left the hand");
+        let draw = pile_ids(&s, CardZone::DrawPile);
+        assert_eq!(draw.len(), 2, "two cards in the draw pile, got {draw:?}");
+        assert_eq!(
+            draw[0], ids[0],
+            "the picked card is on **top** (index 0 is the draw top), got {draw:?}"
+        );
     }
 
     #[test]

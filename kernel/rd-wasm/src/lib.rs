@@ -2546,7 +2546,11 @@ pub extern "C" fn rd_env_choice_kind() -> i32 {
             ChoiceThen::ToHand => 3,
             // §226: **copy** what was picked (Dual Wield). Again a new number: "复制" is a different
             // sentence from "拿进手牌", and the copies are printed-price (no `cost_delta`).
-            ChoiceThen::Copy => 4,
+            ChoiceThen::Copy { .. } => 4,
+            // §227: "upgrade the picked card in place" (Armaments) and "put it on top of the draw
+            // pile" (Warcry) -- again new numbers, because each one gets its own sentence.
+            ChoiceThen::Upgrade => 5,
+            ChoiceThen::ToDrawPileTop => 6,
         },
         None => 0,
     }
@@ -2562,10 +2566,14 @@ pub extern "C" fn rd_env_choice_copies() -> i32 {
     let Ok(session) = ensure_session() else {
         return -1;
     };
-    session
-        .state
-        .pending_choice()
-        .map_or(-1, |choice| i32::from(choice.copies))
+    match session.state.pending_choice() {
+        // §227: the count lives **in the variant**, so a non-copy question cannot report one.
+        Some(choice) => match choice.then {
+            ChoiceThen::Copy { copies, .. } => i32::from(copies),
+            _ => 0,
+        },
+        None => -1,
+    }
 }
 
 /// Where the options come from: `1` a pile of cards, `2` three offered card definitions,
@@ -5518,6 +5526,55 @@ mod card_text_tests {
         };
         assert!(hand.iter().any(|id| id == "defend"), "{hand:?}");
         assert!(!hand.iter().any(|id| id == "dual_wield"), "{hand:?}");
+        take_session();
+    }
+
+    /// §227：一张牌在**页面层**提出的问句长什么样（`Armaments`）。
+    ///
+    /// 这一条是 soak 逼出来的：随机走图第一次打出 `Armaments` 时，战斗卡在"动作表空、没有问句"
+    /// 的形状上。要分清是内核没提问句、还是页面没把问句画出来，得先钉住内核这一侧：
+    /// 打出之后**必须**是"pending = 1 且动作表为空"（§161.3 的模态定义），而不是"两样都没有"。
+    #[test]
+    fn an_armaments_question_makes_the_page_layer_modal() {
+        let session = build_session_at(7, "enc_jaw_worm", 200, None, 0, 0)
+            .expect("the jaw worm fight builds");
+        install_session(session);
+        let hero = cid_in("hero");
+        let mut hand_index = None;
+        {
+            let session = slot().as_mut().expect("session");
+            let definition = rd_core::state::CardDefinitionId::new("armaments").expect("short id");
+            session
+                .state
+                .create_card_instance(&hero, definition, rd_core::state::CardZone::Hand)
+                .expect("the hand has room");
+            session.reobserve();
+            hand_index = session.hand_zone().and_then(|zones| {
+                (0..zones.count(rd_core::state::CardZone::Hand)).find(|index| {
+                    zones
+                        .slot_at(rd_core::state::CardZone::Hand, *index)
+                        .and_then(|slot| session.state.card(slot))
+                        .is_some_and(|card| card.definition_id.as_str() == "armaments")
+                })
+            });
+        }
+        let hand_index = hand_index.expect("armaments is in the hand");
+        let verdict = rd_env_step(i32::try_from(hand_index).unwrap());
+        assert_ne!(verdict, -3, "the play was refused: {}", session_error());
+        assert_eq!(
+            rd_env_choice_pending(),
+            1,
+            "playing it asks a question (soak 卡住的那一局：`pending = 1` 与 `动作表空` 必须同时成立)"
+        );
+        assert_eq!(rd_env_choice_kind(), 5, "5 = upgrade the picked card");
+        assert_eq!(rd_env_action_count(), 0, "a modal fight offers no other action");
+        assert!(rd_env_choice_count() >= 1, "the hand has upgradable cards");
+        // 页面上的勾选必须真的落进内核（`rd_env_choice_pick` → `choice_picks` → `selected`），
+        // 否则"确认"会永远停在 disabled 上：随机走图里 tick 了六次都没变灰的按钮就是这个形状。
+        assert_eq!(rd_env_choice_pick(0, 1), 0, "the tick is accepted");
+        assert_eq!(rd_env_choice_selected(0), 1, "the tick stuck");
+        assert_eq!(rd_env_choice_confirm(), 0, "{}", session_error());
+        assert_eq!(rd_env_choice_pending(), 0, "the question is answered");
         take_session();
     }
 

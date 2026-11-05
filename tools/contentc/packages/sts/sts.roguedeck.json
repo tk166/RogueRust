@@ -2653,6 +2653,97 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.nightmare_pending",
+      "PackageId": "sts",
+      "NameKey": "Nightmare",
+      "DescriptionKey": "At the start of your next turn, add the copies Nightmare set aside to your hand.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.forEachCardInZone",
+                    "value": {
+                      "OwnerSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "Zone": "SetAsidePile",
+                      "MaxIterations": 64,
+                      "Body": {
+                        "kind": "node.moveCardToZone",
+                        "value": {
+                          "CardExpression": {
+                            "kind": "cardInstance.iterated",
+                            "value": {}
+                          },
+                          "OwnerSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "ToZone": "Hand",
+                          "Placement": "Bottom",
+                          "ResultKey": null
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.modifyStatusStacks",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.nightmare_pending"
+                      },
+                      "Delta": {
+                        "kind": "const",
+                        "value": {
+                          "Value": -99
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  }
+                ],
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -8091,7 +8182,8 @@
               "attack",
               "power"
             ],
-            "ResultKey": null
+            "ResultKey": null,
+            "Then": "Copy"
           }
         },
         "MaxNodeDepth": 64,
@@ -8143,6 +8235,85 @@
               "attack",
               "power"
             ],
+            "ResultKey": null,
+            "Then": "Copy"
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "armaments",
+      "PackageId": "sts",
+      "NameKey": "Armaments",
+      "DescriptionKey": "Gain 5 Block. Upgrade a card in your hand for the rest of combat.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 5
+                    }
+                  },
+                  "PoolId": {
+                    "value": "standard.block"
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.chooseCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "FromZone": "Hand",
+                  "Min": 1,
+                  "Max": 1,
+                  "Then": "Upgrade",
+                  "ResultKey": null
+                }
+              }
+            ],
             "ResultKey": null
           }
         },
@@ -8153,6 +8324,395 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "armaments+",
+      "PackageId": "sts",
+      "NameKey": "Armaments+",
+      "DescriptionKey": "Gain 5 Block. Upgrade all cards in your hand for the rest of combat.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 5
+                    }
+                  },
+                  "PoolId": {
+                    "value": "standard.block"
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.upgradeCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "FromZone": "Hand",
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "warcry",
+      "PackageId": "sts",
+      "NameKey": "Warcry",
+      "DescriptionKey": "Draw 1 card. Put a card from your hand onto the top of your draw pile. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.drawCards",
+                "value": {
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "ResultKey": null,
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "node.chooseCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "FromZone": "Hand",
+                  "Min": 1,
+                  "Max": 1,
+                  "Then": "ToDrawPileTop",
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "warcry+",
+      "PackageId": "sts",
+      "NameKey": "Warcry+",
+      "DescriptionKey": "Draw 2 cards. Put a card from your hand onto the top of your draw pile. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.drawCards",
+                "value": {
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "ResultKey": null,
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "node.chooseCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "FromZone": "Hand",
+                  "Min": 1,
+                  "Max": 1,
+                  "Then": "ToDrawPileTop",
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "nightmare",
+      "PackageId": "sts",
+      "NameKey": "Nightmare",
+      "DescriptionKey": "Choose a card. Next turn, add 3 copies of that card into your hand. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 3
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.chooseCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "FromZone": "Hand",
+                  "Min": 1,
+                  "Max": 1,
+                  "Copies": 3,
+                  "ToZone": "SetAsidePile",
+                  "Then": "Copy",
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.nightmare_pending"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "nightmare+",
+      "PackageId": "sts",
+      "NameKey": "Nightmare+",
+      "DescriptionKey": "Choose a card. Next turn, add 3 copies of that card into your hand. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.chooseCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "FromZone": "Hand",
+                  "Min": 1,
+                  "Max": 1,
+                  "Copies": 3,
+                  "ToZone": "SetAsidePile",
+                  "Then": "Copy",
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.nightmare_pending"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
     }
   ],
   "EnemyActions": [

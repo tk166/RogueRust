@@ -1,0 +1,45 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Armaments
+| Image         = Red-Armaments.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Common
+| Cost          = 1
+| Description   = Gain 5 {{KW|Block}}.<br>{{KW|Upgrade}} (a card;all cards) in your hand for the rest of combat.
+| GivesToPlayer = Block, Upgrade
+}}
+{{Keyword Infobox|Block}} {{Keyword Infobox|Upgrade}}
+{{C|Armaments}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 5 {{KW|Block}}, and allows you to select one card in your hand to upgrade. If {{C|Armaments}} is upgraded, it upgrades your entire hand instead. These upgrades last until the end of combat.
+
+== Interactions ==
+=== Synergies ===
+* Can repeatedly upgrade {{C|Searing Blow}} for the duration of combat.
+
+=== Neutral ===
+* Using {{C|Armaments}} to {{KW|Upgrade}} a card that changes {{Icon|RE}}-cost when {{KW|Upgrade|Upgraded}} will immediately set it to that {{Icon|RE}}-cost. This also applies if the card previously had its cost randomized by {{BD|Confused}} or {{P|Snecko Oil}}, unless its cost initially got randomized to 0, in which case it remains 0 when upgraded.
+** A {{C|Blood for Blood}} that costs more than 0 {{Icon|RE}} '''Energy''' will always go down by 1 in {{Icon|RE}}-cost when {{KW|Upgrade|Upgraded}}, regardless of what cost it was randomized to.
+** For example, if an unupgraded {{C|Corruption}} is randomized to 1 {{Icon|RE}}-cost, upgrading it with {{C|Armaments}} will increase its cost to 2.
+
+* Although {{C|Burn}} has an upgraded version, it cannot be upgraded by the player, and is therefore unaffected by {{C|Armaments}}.
+
+=== Anti-Synergies ===
+* Having played {{C|Apotheosis}} or having your hand {{KW|Upgrade|Upgraded}} by {{P|Blessing of the Forge}} completely removes the second effect of {{C|Armaments}} for respectively that combat or that hand. Similarly, other sources of {{KW|Upgrade|Upgrades}}, such as {{R|Warped Tongs}} and {{C|Lesson Learned}} can reduce the effectiveness of this card.
+** Having {{C|Searing Blow}} causes an exception to this, as it can still be {{KW|Upgrade|Upgraded}} by {{C|Armaments}} even if {{KW|Upgrade|Upgraded}} before.
+
+== Trivia ==
+* This card's [[Beta Art]] shows three in-game [[Relics]]: {{R|Vajra}}, {{R|Champion Belt}}, and {{R|Lantern}}
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.0|* Fixed Armaments card not updating descriptions of upgraded cards.}}
+{{Update History Table/row|Watcher 9|* Fixed Armaments and Blessing of the Forge not updating descriptions of upgraded cards.}}
+{{Update History Table/row|Weekly 42|* Using more noticeable flashy VFX for cards upgraded via Armaments or Warped Tongs.}}
+{{Update History Table/row|Weekly 36|* Draw and Discard piles can now be opened from hand select screen (Gambling Chip, Armaments, etc).}}
+{{Update History Table/row|Weekly 5|* Previewing cards via Armaments wasn't applying powers. Fixed.}}
+{{Update History Table/row|Weekly 1|* Armaments' upgrade preview now displays values based on Powers applied to you.}}
+{{Update History Table/row|?|* Added Armaments to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

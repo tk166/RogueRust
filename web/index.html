@@ -1120,7 +1120,9 @@ function nodeLine() {
 function act(call, label) {
   const verdict = call();
   if (verdict < 0) {
-    say(`<span class="err">${esc(label)} 被拒 · ${esc(runError())}</span>`);
+    // §227: a **card choice** is answered through the env layer, so its refusal reason is in the
+    // env buffer -- `runError()` was empty for it and the page said "被拒 ·" with nothing after.
+    say(`<span class="err">${esc(label)} 被拒 · ${esc(runError() || lastError() || "（内核没有给理由）")}</span>`);
     // Re-render anyway: a refusal must never eat a pending choice. The player clicked something the
     // kernel would not take, and the panel it replaced (a blessing, a shop, an event) has to come
     // back -- otherwise the only way out is a reload.
@@ -1269,6 +1271,12 @@ function showCardDetail(where, slot) {
 /// Called from `act` after every action, because a potion is what opens one.
 function maybeShowChoice() {
   if (ex.rd_env_choice_pending() !== 1) return;
+  paintChoice();
+}
+
+/// The picker itself. Called from `render()` -- **one** exit, so no caller can forget it (§227: a
+/// hand click goes through `step`, not `act`, and a card can ask a question too).
+function paintChoice() {
   const kind = ex.rd_env_choice_kind();
   const count = ex.rd_env_choice_count();
   const min = ex.rd_env_choice_min();
@@ -1284,6 +1292,9 @@ function maybeShowChoice() {
     // §226: Dual Wield -- "copy it". The number of copies is the **content's** (base 1, `+` 2), so
     // it comes from the kernel (`rd_env_choice_copies`) and is appended below.
     "1:4": "选手牌里的一张来复制",
+    // §227: upgrade the picked card in place (Armaments) / put it on top of the draw pile (Warcry).
+    "1:5": "选手牌里的一张来升级",
+    "1:6": "选手牌里的一张放到抽牌堆顶",
   };
   // The bound is the kernel's, not a guess: `min = max = 1` for Liquid Memories reads "1 张", a
   // "any number" question reads "0–N 张". Printing a literal range for a mandatory choice would be
@@ -1304,8 +1315,24 @@ function maybeShowChoice() {
   const only = min > 0 ? `至少 ${min} 张` : "不选";
   confirm.textContent = min > 0 ? `确认（${min}–${max} 张）` : `确认（${only}也可以）`;
   const ticks = [];
+  // §227: `picked` is **read back from the kernel** (`rd_env_choice_selected`), not counted from the
+  // local `ticks` copy. A tick that does not reach the kernel must not enable the confirm button --
+  // and a tick that *does* reach it must not leave the button disabled just because this closure's
+  // copy is stale (the soak found exactly that: six ticks landed, the button stayed disabled, and
+  // the walk had no way forward). One writer per element still holds: the kernel is the writer of
+  // "ticked", this function is the only reader that paints it.
+  const pickCount = () => {
+    let n = 0;
+    for (let index = 0; index < count; index++) {
+      if (ex.rd_env_choice_selected(index) === 1) n += 1;
+    }
+    return n;
+  };
   const refresh = () => {
-    const picked = ticks.filter(Boolean).length;
+    for (let index = 0; index < count; index++) {
+      ticks[index] = ex.rd_env_choice_selected(index) === 1;
+    }
+    const picked = pickCount();
     // `min == 0` is both of today's consumers, so "confirm nothing" is a legal answer and the
     // button must stay pressable: a disabled primary button with no visible reason is the other
     // way this screen can dead-end.
@@ -1313,7 +1340,7 @@ function maybeShowChoice() {
     confirm.textContent = picked === 0 && min === 0
       ? "确认（一张也不选）"
       : `确认 ${picked} 张`;
-    for (const index in ticks) {
+    for (let index = 0; index < count; index++) {
       const button = body.querySelector(`[data-choice="${index}"]`);
       if (button) button.dataset.ticked = ticks[index] ? "1" : "0";
     }
@@ -1338,12 +1365,17 @@ function maybeShowChoice() {
     body.appendChild(button);
   }
   confirm.onclick = () => {
-    closeModal();
+    // §227: **answer first, then close.** `closeModal()` before the answer was refused by the
+    // §161.3 guard ("the question is still pending at that moment"), so the picker used to stay on
+    // screen after being answered -- a ghost modal whose only exit was the × button, and the × is
+    // exactly what the guard is there to stop. If the answer is refused the question really is
+    // still pending, and then `closeModal()` refuses too: the picker stays, which is correct.
     act(() => {
       const verdict = ex.rd_env_choice_confirm();
       ex.rd_env_choice_clear();
       return verdict;
     }, "选牌");
+    closeModal();
   };
   body.appendChild(confirm);
   document.getElementById("modal").hidden = false;
@@ -1746,6 +1778,13 @@ function render(verdict, reward) {
     else parts.push(`<span class="err">driver error (${v}) · ${esc(lastError())}</span>`);
   }
   document.getElementById("msg").innerHTML = parts.join("<br>");
+
+  // §227: **the picker is painted here.** It used to be two explicit calls (`act` and `step`), and a
+  // hand click goes through `step` -- but a **card** can ask a question too (Armaments / Warcry /
+  // Nightmare / Dual Wield) and the fight's action table is empty while one is pending (§161.3's
+  // modal). Missing the call left the fight with nothing clickable and nothing said. Hanging it off
+  // the render exit means no caller can forget it again.
+  maybeShowChoice();
 }
 
 // ---------------------------------------------------------------------------------------------

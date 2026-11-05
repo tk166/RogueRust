@@ -1,0 +1,50 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Nightmare
+| Image         = Green-Nightmare.png
+| Color         = Green
+| Type          = Skill
+| Rarity        = Rare
+| Cost          = 3
+| CostPlus      = 2
+| Description   = Choose a card.<br>Next turn, add 3 copies of that card into your hand. {{KW|Exhaust}}.
+| GivesToPlayer = Exhaust, Nightmare
+}}
+{{Power Infobox
+| Name         = Nightmare
+| Image        = Icon Nightmare.png
+| Description  = Add X copies of the chosen card into your hand next turn.
+| Type         = Buff
+| Stacks       = Intensity
+| BetweenTurns =
+| Cap          =
+}}
+{{C|Nightmare}} is a 3 (2 if upgraded) {{Icon|GE}}-cost {{QueryLink|Cards|color:Green|Silent}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Skill|Skill}} Card.
+
+== Interactions ==
+=== Neutral ===
+* When a card is copied, any alterations to that card are also copied, where the duration of these alterations is the same for the copy as for the original. After being copied, these cards behave fully independently. The alterations that are copied include but are not limited to:
+** A changed energy cost through something like {{R|Snecko Eye}}, {{C|Madness}} or {{P|Liquid Memories}}, or the automatic energy change of cards like {{C|Blood for Blood}} and {{C|Masterful Stab}}.
+** Changes to the values of the card, such as upgrades to {{C|Searing Blow}} or increased damage of {{C|Windmill Strike}}.
+* Changes that last for one turn, such as an energy discount through {{C|Bullet Time}} or the energy discount of {{C|Eviscerate}} are not copied.
+
+* If a copy created by this exceeds the hand size limit, it gets added to the discard pile.
+
+== Trivia ==
+* Internally called Night_Terror.
+
+== Update History ==
+* '''Weekly Patch 42: Reboot'''
+** Updating icon for Nightmare power.
+
+* '''Weekly Patch 9: Ascension'''
+** Nightmare no longer retains "cost for turn" when copying cards (as you get the copies next turn).
+
+* '''Weekly Patch 8: Ooh Shiny!'''
+** Nightmare+ card is nerfed. No longer adds 4 cards, just lowers energy cost.
+
+* '''Weekly Patch 6: We're Back!'''
+** New green card, Nightmare. Description withheld for spoiler reasons.
+
+{{SilentNav}}
+[[Category:Cards]]

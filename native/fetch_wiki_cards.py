@@ -73,6 +73,10 @@ PAGES = {
     'fiend_fire': 'Fiend_Fire',
     # §226：复制载体（Dual Wield）
     'dual_wield': 'Dual_Wield',
+    # §227：选牌之后**改**它（Armaments / Warcry）与延后复制（Nightmare）
+    'armaments': 'Armaments',
+    'warcry': 'Warcry',
+    'nightmare': 'Nightmare',
     # §221：事件给的两张诅咒
     'doubt': 'Doubt',
     'writhe': 'Writhe',

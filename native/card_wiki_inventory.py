@@ -132,8 +132,20 @@ FACTS = {
                                       ('damage', 10, 'event')))]),
     # §226：`Dual Wield` —— wiki 的 "Add (a copy;2 copies) of that card into your hand."
     # 两行只差 `Copies`（1 / 2），这正是升级的全部内容。
-    'dual_wield': ([('chooseCopy', 'source', 'Hand', ('attack', 'power'), 1, 1, 1)],
-                   [('chooseCopy', 'source', 'Hand', ('attack', 'power'), 1, 1, 2)]),
+    # §227：事实里多了 `Then`（以及 `Copy` 的落区与份数），因为同一个节点现在能表达三种"选完做什么"。
+    'dual_wield': ([('choose', 'source', 'Hand', ('attack', 'power'), 1, 1, 'Copy', 'Hand', 1)],
+                   [('choose', 'source', 'Hand', ('attack', 'power'), 1, 1, 'Copy', 'Hand', 2)]),
+    # wiki：`Gain 5 Block. Upgrade (a card;all cards) in your hand for the rest of combat.`
+    'armaments': ([('block', 5, 'source'), ('choose', 'source', 'Hand', (), 1, 1, 'Upgrade')],
+                  [('block', 5, 'source'), ('upgrade', 'source', None, 'Hand', None)]),
+    # wiki：`Draw (1;2) card(s). Put a card from your hand onto the top of your draw pile. Exhaust.`
+    'warcry': ([('draw', 1, 'source'), ('choose', 'source', 'Hand', (), 1, 1, 'ToDrawPileTop')],
+               [('draw', 2, 'source'), ('choose', 'source', 'Hand', (), 1, 1, 'ToDrawPileTop')]),
+    # wiki：`Choose a card. Next turn, add 3 copies of that card into your hand. Exhaust.`（`+` 只降费）
+    'nightmare': ([('choose', 'source', 'Hand', (), 1, 1, 'Copy', 'SetAsidePile', 3),
+                   ('status', 'standard.nightmare_pending', 1, 'source')],
+                  [('choose', 'source', 'Hand', (), 1, 1, 'Copy', 'SetAsidePile', 3),
+                   ('status', 'standard.nightmare_pending', 1, 'source')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

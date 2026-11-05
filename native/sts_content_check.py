@@ -90,7 +90,8 @@ INV_COUNTS = {
     # §180: +1 -- `standard.fairy_in_a_bottle`, the first row that uses `DeathPrevention`.
     # §181: +1 -- `standard.duplication`, the first `UsesCharges` status the kernel consumes.
     # §208: +1 (`standard.flying`); §209: +1 (`standard.curl_up`); §213: +1 (`standard.hex`).
-    "statuses": 44,
+    # §227: +1 (`standard.nightmare_pending`, Nightmare 的"下一回合"载体).
+    "statuses": 45,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -127,12 +128,42 @@ INV_CARDS = {
     # ---- §226：复制载体（Dual Wield） ----------------------------------------------------------
     # 落区是 **DiscardPile**：`native/wiki_cards/dual_wield.txt` 的 Infobox 里没有 Exhaust，
     # 正文也只说 "add 1 copy (2 copies if upgraded) of that card into your hand"。
+    # §227: the fact gained the `Then` (and, for `Copy`, where the copies land).
     "dual_wield": {"Cost": 1, "Tags": ["skill"],
-                   "Facts": [("chooseCopy", "source", "Hand", ("attack", "power"), 1, 1, 1)],
+                   "Facts": [("choose", "source", "Hand", ("attack", "power"), 1, 1, "Copy",
+                              "Hand", 1)],
                    "PlayedCardDestinationZone": "DiscardPile"},
     "dual_wield+": {"Cost": 1, "Tags": ["skill"],
-                    "Facts": [("chooseCopy", "source", "Hand", ("attack", "power"), 1, 1, 2)],
+                    "Facts": [("choose", "source", "Hand", ("attack", "power"), 1, 1, "Copy",
+                               "Hand", 2)],
                     "PlayedCardDestinationZone": "DiscardPile"},
+    # ---- §227：选完再改它 / 延后复制 ---------------------------------------------------------
+    # `armaments+` 的 `upgradeCards` 没有 `CardDefinitionId`（"整片手牌"）—— 这一条事实里
+    # 那个字段是 `None`，所以"升级了哪张"与"升级了整片"在清单上不可能被混起来。
+    "armaments": {"Cost": 1, "Tags": ["skill"],
+                  "Facts": [("block", 5, "source"),
+                            ("choose", "source", "Hand", (), 1, 1, "Upgrade")],
+                  "PlayedCardDestinationZone": "DiscardPile"},
+    "armaments+": {"Cost": 1, "Tags": ["skill"],
+                   "Facts": [("block", 5, "source"),
+                             ("upgrade", "source", None, "Hand", None)],
+                   "PlayedCardDestinationZone": "DiscardPile"},
+    "warcry": {"Cost": 0, "Tags": ["skill"],
+               "Facts": [("draw", 1, "source"),
+                         ("choose", "source", "Hand", (), 1, 1, "ToDrawPileTop")],
+               "PlayedCardDestinationZone": "ExhaustPile"},
+    "warcry+": {"Cost": 0, "Tags": ["skill"],
+                "Facts": [("draw", 2, "source"),
+                          ("choose", "source", "Hand", (), 1, 1, "ToDrawPileTop")],
+                "PlayedCardDestinationZone": "ExhaustPile"},
+    "nightmare": {"Cost": 3, "Tags": ["skill"],
+                  "Facts": [("choose", "source", "Hand", (), 1, 1, "Copy", "SetAsidePile", 3),
+                            ("status", "standard.nightmare_pending", 1, "source")],
+                  "PlayedCardDestinationZone": "ExhaustPile"},
+    "nightmare+": {"Cost": 2, "Tags": ["skill"],
+                   "Facts": [("choose", "source", "Hand", (), 1, 1, "Copy", "SetAsidePile", 3),
+                             ("status", "standard.nightmare_pending", 1, "source")],
+                   "PlayedCardDestinationZone": "ExhaustPile"},
     "fiend_fire": {"Cost": 2, "Tags": ["attack"],
                    "Facts": [("each", "Hand", (("move", "cardInstance.iterated", "ExhaustPile"),
                                                ("damage", 7, "event")))],
@@ -848,6 +879,9 @@ INV_BOSS_POOL = {
 # because a content image **disables** that catalog (exec.rs:2421-2426): with
 # content present the candidate rows come only from STAT.PassiveModifiers.
 INV_STATUSES = {
+    # §227: Nightmare 的"下一回合把留存的副本拿进手牌" —— 一条 TurnStarted 触发器，
+    # 没有任何修饰器（和 `standard.thorns` 一样属于"行为全在触发器里"）。
+    "standard.nightmare_pending": [],
     # Declared inert by the kernel (`is_declared_inert`): it wants a TurnEnded content trigger,
     # not a modifier. `port-plan.md` §107.
     "standard.metallicize": [],
@@ -1172,8 +1206,12 @@ def program_facts(root):
                     facts[before:] = [("when", key) + f for f in facts[before:]]
         elif kind == "node.upgradeCards":
             # §195.7: "upgrade every <id>" -- which definition, and where.
+            # §227: `CardDefinitionId` is optional now -- absent = "the whole zone" (Armaments+).
+            # `None` in the fact is what keeps "upgrade one definition" and "upgrade everything in
+            # hand" from ever comparing equal.
+            definition = body.get("CardDefinitionId")
             out.append(("upgrade", tgt(body["OwnerSelector"]),
-                          body["CardDefinitionId"]["value"],
+                          definition["value"] if definition else None,
                           body.get("FromZone"), body.get("Count")))
         elif kind == "node.selectCards":
             # §195.4: "pick which card" as a fact. Every field that decides *which* card is part of
@@ -1183,12 +1221,16 @@ def program_facts(root):
                           # `Count` is a plain int field on this node (not an expression).
                           body["Count"], body["ToZone"]))
         elif kind == "node.chooseCards":
-            # §226: "ask the player which cards, then copy them" as one fact. **Every** field that
-            # decides the question is part of it -- "an Attack or Power" vs "any card" is exactly
-            # the difference between Dual Wield and a card that does not exist yet.
-            out.append(("chooseCopy", tgt(body["OwnerSelector"]), body["FromZone"],
+            # §226/§227: "ask the player which cards, then do X to them" as one fact. **Every** field
+            # that decides the question is part of it -- "an Attack or Power" vs "any card" vs "only
+            # cards with a `+` row" is exactly the difference between these cards.
+            then = body["Then"]
+            extra = ()
+            if then == "Copy":
+                extra = (body.get("ToZone", "Hand"), body["Copies"])
+            out.append(("choose", tgt(body["OwnerSelector"]), body["FromZone"],
                           tuple(body.get("RequireAnyTag") or ()),
-                          body["Min"], body["Max"], body["Copies"]))
+                          body["Min"], body["Max"], then) + extra)
         elif kind == "node.repeat":
             # §146: the body runs an unknown-at-authoring number of times, so its facts are tagged
             # by **the count expression** rather than unrolled. That keeps the inventory honest
@@ -2500,7 +2542,9 @@ def check_statuses(doc):
                      "standard.phantom_veil",
                      "standard.sharp_hide", "standard.curiosity", "standard.mode_shift",
                      "standard.stasis", "standard.flying",
-                     "standard.curl_up", "standard.plated_armor", "standard.hex"):
+                     "standard.curl_up", "standard.plated_armor", "standard.hex",
+                     # §227: Nightmare 的"下一回合"载体 —— `TurnStarted` 触发器。
+                     "standard.nightmare_pending"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -2535,7 +2579,10 @@ def check_statuses(doc):
                         # out of `exec.rs` S6c, which could not tell poison from an attack.
                         "standard.plated_armor": ["DamageTaken"],
                         # §213: "whenever you play a non-Attack card" -- a CardPlayed trigger.
-                        "standard.hex": ["CardPlayed"]}[sid]
+                        "standard.hex": ["CardPlayed"],
+                        # §227: "next turn, add the copies to your hand" -- a `TurnStarted` trigger
+                        # (the second one in this package, after Phantom Veil).
+                        "standard.nightmare_pending": ["TurnStarted"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
