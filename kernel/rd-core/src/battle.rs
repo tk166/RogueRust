@@ -822,7 +822,13 @@ fn build_fight_with(
     // ⚠️ 这里**不**写 `*state = CombatState::new(..)`：语义一样，但那样会把 184 KB 的
     // 空状态常量模板带进 `.wasm`（实测占 `rd_wasm.wasm` 的 33%）。`reset_in_place`
     // 逐字段清零，字节等价（`state.rs` 的 `reset_in_place_matches_new_field_for_field`）。
+    // §216（审阅 P1-C 的另一面）：`reset_in_place` 现在严格等于 `new()` —— 它会把 `ascension`
+    // 清成 0。而**每个调用方都是"先 `set_ascension(level)` 再建战斗"**（`rd-wasm/src/lib.rs:803`
+    // 与下面几条测试都一样），蓝图里又没有难度这一格。所以这里显式把调用方设过的等级接回来：
+    // 清空是 `reset_in_place` 的契约，保留是**建战斗**的决定，两件事分开写。
+    let ascension = state.ascension();
     state.reset_in_place(combat_id, plan.seed);
+    state.set_ascension(ascension);
 
     // ── 步 2：战斗员（`:19-24`）==============================================
     add_combatant(state, &hero_id, plan.hero.max_health, PLAYER_TEAM)?;
@@ -3323,6 +3329,44 @@ mod tests {
             vec![(0, 10), (2, 11)],
             "Mug is 10 below A2 and 11 at A2 (wiki `Thieves`)"
         );
+    }
+
+    /// §216：`reset_in_place` 会把难度清成 0（它严格等于 `new()`），所以**建战斗**必须把
+    /// 调用方设过的等级接回来。没有这一条时，删掉那两行只会让"A2 的招式值"这类测试红，
+    /// 归因指不到"难度丢了"。
+    ///
+    /// ⚠️ 顺带钉住 `gold_carried_away` 不被接回来：它是**上一场**的账，接回来就是重复扣金币。
+    #[test]
+    fn building_a_fight_keeps_the_ascension_but_not_the_last_fights_gold() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let enemies = [PlanCombatant { id: "cultist", max_health: 48 }];
+        let deck: [DeckEntry; 0] = [];
+        let res = resources();
+        let refill = refills();
+        let plan = FightPlan {
+            combat_id: "ascension_survives",
+            seed: 3,
+            hero: PlanCombatant { id: "hero", max_health: 70 },
+            enemies: &enemies,
+            deck: &deck,
+            cards_drawn_per_turn: CARDS_DRAWN_PER_TURN,
+            shuffle_draw_pile_on_start: false,
+            resources: &res,
+            turn_start_refills: &refill,
+        };
+        let mut state = CombatState::new(CombatId::new("scratch").expect("短"), 0);
+        state.set_ascension(9);
+        state.gold_carried_away = 25;
+        state.vacated_seat = Some(2);
+        build_fight(&mut state, &content, &plan).expect("the cultist fight builds");
+        assert_eq!(state.ascension(), 9, "the difficulty level the caller set survives");
+        assert_eq!(state.gold_carried_away, 0, "last fight's stolen gold does not");
+        assert_eq!(state.vacated_seat, None, "and neither does its vacant seat");
     }
 
     /// §201：**Looter 偷钱 + 带着钱逃**。

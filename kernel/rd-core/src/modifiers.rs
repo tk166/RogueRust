@@ -59,6 +59,13 @@ pub enum Operation {
     /// 是"每打一张牌 +10%"，需要 `1 + 0.1 × stacks` 这种**与层数线性**的因子。用 `AddPerStack`
     /// 会变成"每层 +10 点平伤害"，用 `ScalePercent` 会忽略层数 —— 两种都是看起来能跑、数值却错一档。
     ScalePercentPerStack,
+    /// §216：`current * (100 + magnitude * **本回合已出的牌数**) / 100` —— `Slow`。
+    ///
+    /// 与 `ScalePercentPerStack` 的区别不在算术，在**计数器属于谁**：Slow 的计数每回合归零
+    /// （wiki：*"Slow resets at end of turn"*），而层数在本内核只能靠 `modifyStatusStacks` 衰减，
+    /// **减到 0 会删掉实例**（参考 `StatusEffects.cs:830-838`）—— 实例一删，`CardPlayed` 触发器
+    /// 就再也响不了。牌数是内核自己的账（`state.cards_played_this_turn`，`turn.rs:897` 每回合清零）。
+    ScalePercentPerCardPlayedThisTurn,
     /// 上限钳制到 `max(0, magnitude)`。
     ClampMax,
 }
@@ -113,6 +120,9 @@ pub struct Candidate {
     pub status_key: StatusKey,
     pub spec_index: u16,
     pub stacks: i32,
+    /// §216：本回合已出的牌数（`state.cards_played_this_turn`）。只有
+    /// [`Operation::ScalePercentPerCardPlayedThisTurn`] 读它；其它运算忽略。
+    pub cards_played_this_turn: i32,
     pub operation: Operation,
     pub magnitude: i32,
     pub once_per_action: bool,
@@ -285,6 +295,15 @@ pub fn apply(
             Operation::ScalePercentPerStack => {
                 let factor = i64::from(candidate.magnitude)
                     .saturating_mul(i64::from(candidate.stacks))
+                    .saturating_add(100);
+                let scaled = i64::from(current).saturating_mul(factor) / 100;
+                scaled.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+            }
+            // §216：`Slow` —— 因子读的是**本回合已出的牌数**，不是层数。
+            // 同样用 i64 中间量：`magnitude * cards` 在 i32 上会回绕。
+            Operation::ScalePercentPerCardPlayedThisTurn => {
+                let factor = i64::from(candidate.magnitude)
+                    .saturating_mul(i64::from(candidate.cards_played_this_turn))
                     .saturating_add(100);
                 let scaled = i64::from(current).saturating_mul(factor) / 100;
                 scaled.clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
@@ -579,6 +598,7 @@ mod tests {
             stacks,
             operation,
             magnitude,
+            cards_played_this_turn: 0,
             once_per_action: false,
             once_per_turn: false,
         }
@@ -729,6 +749,33 @@ mod tests {
         // 7*150/100 = 1050/100 = 10（10.5 截到 10）
         assert_eq!(run(7, &mut [vulnerable], &[1]).amount, 10);
         assert_eq!(7 * 150 % 100, 50);
+    }
+
+    /// §216：`ScalePercentPerCardPlayedThisTurn` 读的是**本回合牌数**，层数完全无关。
+    ///
+    /// 判据是 `(牌数, 层数)` 的组合：`(0, 5)` 与 `(5, 1)`、`(5, 99)` 一起出现，才能把
+    /// "读错了字段"与"读对了字段"分开 —— 只测 `(5, 1)` 的话，把实现写成 `stacks` 也会绿。
+    #[test]
+    fn scale_percent_per_card_played_reads_the_turn_count_not_the_stacks() {
+        for (cards, stacks, expected) in [(0, 5, 10), (5, 1, 15), (5, 99, 15), (10, 1, 20)] {
+            // id 只参与排序键（池子里只有四个标准 id，见 `POOL`），算术只看牌数与层数。
+            let mut candidate = cand(
+                150,
+                "standard.strength",
+                0,
+                stacks,
+                Operation::ScalePercentPerCardPlayedThisTurn,
+                10,
+            );
+            candidate.cards_played_this_turn = cards;
+            let mut list = [candidate];
+            let mut ledger = ClaimLedger::new();
+            let applied = apply(10, &mut list, POOL, &mut ledger, 1, &[1]);
+            assert_eq!(
+                applied.amount, expected,
+                "{cards} cards / {stacks} stacks: a 10-point hit lands for {expected}"
+            );
+        }
     }
 
     #[test]

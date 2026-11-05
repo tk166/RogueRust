@@ -4853,13 +4853,19 @@ mod card_text_tests {
 
     /// §212：`Nom Nom` = `5 × ceil(turn / 2)` —— wiki 的公式，逐回合验。
     ///
-    /// 用**第 1..6 回合**各打一次：N 必须是 `1,1,2,2,3,3`，也就是 5,5,10,10,15,15 点。
-    /// 这条测试专门钉三个容易错的写法：
-    /// * 向下取整（`turn / 2`）⇒ 第 1 回合就是 0 点（`repeat` 跑 0 次，**静默无伤害**）；
-    /// * 读成"用了几次"而不是"第几回合" ⇒ 序列会变成 5,10,15…；
+    /// 用**第 1..6 轮**各打一次：N 必须是 `1,1,2,2,3,3`，也就是 5,5,10,10,15,15 点。
+    ///
+    /// ⚠️ §216 起这一条**真的推进轮次**（`Session::exec(EndOneTurn)` 走回合机），不再写
+    /// `state.current_turn = turn`。旧写法测的是"一轮内行动者序号"—— 那个量在单怪场景里
+    /// **恒为 2**（绕回时置 1，`turn.rs:970`），所以旧公式 `ceil(turn/2)` 在真实玩法里永远 1 击，
+    /// 而测试却因为它伪造了 1..6 而全绿。这正是 review P1-B。
+    ///
+    /// 这条测试钉三个容易错的写法：
+    /// * 向下取整（`round / 2`）⇒ 第 1 轮就是 0 点（`repeat` 跑 0 次，**静默无伤害**）；
+    /// * 读成"用了几次"而不是"第几轮" ⇒ 序列会变成 5,10,15…；
     /// * 把 `repeat` 写成一次乘好的伤害 ⇒ 那就不是多段（格挡/荆棘的行为会不同）。
     #[test]
-    fn nom_nom_hits_five_damage_ceil_turn_over_two_times() {
+    fn nom_nom_hits_five_damage_ceil_round_over_two_times() {
         let blob = crate::IMAGE;
         let content = rd_core::content::Content::parse(blob).expect("image");
         let session = build_session_at(7, "enc_maw", 3000, None, 0, 0).expect("the maw fight");
@@ -4875,14 +4881,19 @@ mod card_text_tests {
                 .index,
         );
         let mut dealt = Vec::new();
-        for turn in 1..=6 {
+        for round in 1..=6 {
             let before = {
                 let session = slot().as_ref().expect("session");
+                assert_eq!(
+                    session.state.current_round, round,
+                    "round counter really advanced (no forging)"
+                );
                 hp(&session.state)
             };
             {
                 let session = slot().as_mut().expect("session");
-                session.state.current_turn = turn;
+                // 英雄结束回合 ⇒ Maw 上场（这一步只走一格回合，不让 AI 出招）。
+                session.exec(&[Step::EndOneTurn]).expect("the hero ends the turn");
                 rd_core::intent::execute_action(
                     &mut session.state,
                     &content,
@@ -4890,8 +4901,10 @@ mod card_text_tests {
                     action_row,
                     Some(hero),
                 )
-                .unwrap_or_else(|e| panic!("turn {turn}: {e:?}"));
+                .unwrap_or_else(|e| panic!("round {round}: {e:?}"));
                 rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+                // Maw 结束回合 ⇒ 下一轮、又轮到英雄。
+                session.exec(&[Step::EndOneTurn]).expect("the maw ends its turn");
             }
             let after = {
                 let session = slot().as_ref().expect("session");
@@ -4899,7 +4912,7 @@ mod card_text_tests {
             };
             dealt.push(before - after);
         }
-        assert_eq!(dealt, vec![5, 5, 10, 10, 15, 15], "5 x ceil(turn/2)");
+        assert_eq!(dealt, vec![5, 5, 10, 10, 15, 15], "5 x ceil(round/2)");
         take_session();
     }
 

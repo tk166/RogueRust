@@ -593,11 +593,16 @@ const NO_CANDIDATE: Candidate = Candidate {
     status_key: StatusKey { offset: 0, len: 0 },
     spec_index: 0,
     stacks: 0,
+    cards_played_this_turn: 0,
     operation: Operation::AddFlat,
     magnitude: 0,
     once_per_action: false,
     once_per_turn: false,
 };
+
+/// §216：**这条管线没有"本回合牌数"这个量**。`fold` 见到它就说明有人把 `Slow` 挂到了别的管线上
+/// （格挡、回合开始抽牌/补能）—— 那是内容错误，必须响亮，而不是安静地按恒等算。
+const NO_TURN_CARDS: i32 = -1;
 
 /// 目录里**真实存在**的 5 个"伤害/格挡修饰状态" —— 见模块头假设 A。
 ///
@@ -1196,6 +1201,7 @@ pub fn resolve_damage_of_kind(
                 &source,
                 content,
                 kind,
+                ctx.state.cards_played_this_turn,
             )?;
         }
     }
@@ -1217,6 +1223,7 @@ pub fn resolve_damage_of_kind(
             target,
             content,
             kind,
+            ctx.state.cards_played_this_turn,
         )?;
         health_before = target_combatant.health_current;
         // 池表**按吸收顺序**读出（见下面 S4 的说明）。切片本身是 key 排好序的，
@@ -4446,6 +4453,11 @@ fn image_operation(op: status_bind::ModifierOp) -> Operation {
         status_bind::ModifierOp::ScalePercent => Operation::ScalePercent,
         // §198: our own operation -- the status pipeline carries it straight through.
         status_bind::ModifierOp::ScalePercentPerStack => Operation::ScalePercentPerStack,
+        // §216: `Slow`'s "+10% per card played **this turn**" -- the factor reads the kernel's
+        // own counter, not the status' stacks.
+        status_bind::ModifierOp::ScalePercentPerCardPlayedThisTurn => {
+            Operation::ScalePercentPerCardPlayedThisTurn
+        }
         // §210: `Intangible`'s "all damage becomes 1" -- `min(current, max(0, 1))`.
         status_bind::ModifierOp::ClampMax => Operation::ClampMax,
     }
@@ -4490,11 +4502,14 @@ fn damage_stage<'a>(
     owner: &CombatantId,
     content: Option<&'a Content<'a>>,
     kind: BindDamageKind,
+    turn_cards: i32,
 ) -> Result<i32, ExecError> {
     // **口径只在这里定一次**：有镜像 ⇒ `Exact`（桥关闭），没有 ⇒ `Bridged`。
     let matching = StatusMatch::for_content(content);
     if let Some(content) = content {
-        return image_damage_stage(amount, statuses, stage, owner, content, matching, kind);
+        return image_damage_stage(
+            amount, statuses, stage, owner, content, matching, kind, turn_cards,
+        );
     }
 
     // ── 标准包路径的种类门（`PassiveModifiers.cs:87,155`）。
@@ -4529,6 +4544,7 @@ fn damage_stage<'a>(
         rows.get(..count).unwrap_or(&[]),
         owner,
         matching,
+        turn_cards,
     )
 }
 
@@ -4541,6 +4557,7 @@ fn image_damage_stage<'a>(
     content: &'a Content<'a>,
     matching: StatusMatch,
     kind: BindDamageKind,
+    turn_cards: i32,
 ) -> Result<i32, ExecError> {
     let pipeline = match stage {
         ModifierTarget::Source => status_bind::Pipeline::DamageDealt,
@@ -4554,6 +4571,7 @@ fn image_damage_stage<'a>(
         rows.get(..count).unwrap_or(&[]),
         owner,
         matching,
+        turn_cards,
     )
 }
 
@@ -4692,6 +4710,7 @@ pub fn fold_turn_start_draw(
         rows.get(..count).unwrap_or(&[]),
         owner,
         StatusMatch::Exact,
+        NO_TURN_CARDS,
     )
 }
 
@@ -4725,6 +4744,7 @@ pub fn fold_turn_start_energy(
         rows.get(..count).unwrap_or(&[]),
         owner,
         StatusMatch::Exact,
+        NO_TURN_CARDS,
     )
 }
 
@@ -4761,6 +4781,7 @@ fn block_stage<'a>(
         rows.get(..count).unwrap_or(&[]),
         owner,
         matching,
+        NO_TURN_CARDS,
     )
 }
 
@@ -4804,6 +4825,7 @@ fn image_block_stage<'a>(
         rows.get(..count).unwrap_or(&[]),
         owner,
         matching,
+        NO_TURN_CARDS,
     )
 }
 
@@ -4846,9 +4868,20 @@ fn fold<'a>(
     rows: &[Row<'a>],
     owner: &CombatantId,
     matching: StatusMatch,
+    turn_cards: i32,
 ) -> Result<i32, ExecError> {
     if amount <= 0 || rows.is_empty() {
         return Ok(amount);
+    }
+
+    // §216：`NO_TURN_CARDS`（-1）表示"这条管线里没有本回合牌数"。见到要它的 spec ⇒ 拒绝。
+    // 只写在这一个折叠器里：五条管线都从这里过，所以"挂错管线"只有这一条出口。
+    if turn_cards < 0
+        && rows
+            .iter()
+            .any(|row| row.operation == Operation::ScalePercentPerCardPlayedThisTurn)
+    {
+        return Err(ExecError::Modifier);
     }
 
     let mut pool = [0u8; STATUS_ID_POOL_CAP];
@@ -4872,6 +4905,7 @@ fn fold<'a>(
             status_key,
             spec_index: row.spec_index,
             stacks,
+            cards_played_this_turn: turn_cards,
             operation: row.operation,
             magnitude: row.magnitude,
             once_per_action: false,
@@ -5096,6 +5130,31 @@ mod tests {
             health,
             max,
         )
+    }
+
+    /// §216：`Slow` 的运算只在**有本回合牌数**的管线（伤害）里有意义。格挡/抽牌/补能那三条
+    /// 管线传 [`NO_TURN_CARDS`]（-1）⇒ 见到这条 spec **拒绝**，而不是安静地按恒等算。
+    ///
+    /// 成对：同一个 spec 给一个真牌数就正常算（1 张牌 ⇒ 11 点），证明拒绝的是"缺这个量"，
+    /// 不是"这条运算本身"。
+    #[test]
+    fn a_slow_spec_on_a_pipeline_without_a_card_count_is_refused() {
+        let mut row = empty_row();
+        row.status_id = "standard.slow";
+        row.operation = Operation::ScalePercentPerCardPlayedThisTurn;
+        row.magnitude = 10;
+        let statuses = [status("st_slow", "standard.slow", 1)];
+        let rows = [row];
+        assert_eq!(
+            fold(10, &statuses, &rows, &cid("hero"), StatusMatch::Bridged, NO_TURN_CARDS),
+            Err(ExecError::Modifier),
+            "no card count in this pipeline => refuse, do not silently apply identity"
+        );
+        assert_eq!(
+            fold(10, &statuses, &rows, &cid("hero"), StatusMatch::Bridged, 1),
+            Ok(11),
+            "one card played this turn: 10 * 110 / 100"
+        );
     }
 
     fn status(instance: &str, definition: &str, stacks: i32) -> StatusInstance {
@@ -7016,7 +7075,7 @@ mod tests {
         );
         let row = [damage_row(&status_catalog::damage_modifiers()[0], 0)];
         assert_eq!(
-            fold(6, &statuses, &row, &cid("hero"), StatusMatch::Bridged),
+            fold(6, &statuses, &row, &cid("hero"), StatusMatch::Bridged, 0),
             Ok(6),
             "没人在身 ⇒ 原样"
         );
@@ -7029,7 +7088,7 @@ mod tests {
             Some(0)
         );
         assert_eq!(
-            fold(6, &statuses, &row, &cid("hero"), StatusMatch::Bridged),
+            fold(6, &statuses, &row, &cid("hero"), StatusMatch::Bridged, 0),
             Ok(6),
             "0 层的力量 +1/层 = 不加；但这一行**确实被算过**"
         );
@@ -7039,14 +7098,14 @@ mod tests {
         give(&mut with_zero, "hero", status("w1", "weak", 0));
         let statuses = with_zero.combatant(&cid("hero")).unwrap().statuses().to_vec();
         assert_eq!(
-            fold(6, &statuses, &weak, &cid("hero"), StatusMatch::Bridged),
+            fold(6, &statuses, &weak, &cid("hero"), StatusMatch::Bridged, 0),
             Ok(4),
             "6*75/100"
         );
         // **同一个 `weak` 行、`Exact` 口径 ⇒ 不生效**：桥是 `Bridged` 才有的东西。
         // `standard.weak` 与实例 id `weak` 逐字节不等 ⇒ 这一行不参与 ⇒ 原样 6。
         assert_eq!(
-            fold(6, &statuses, &weak, &cid("hero"), StatusMatch::Exact),
+            fold(6, &statuses, &weak, &cid("hero"), StatusMatch::Exact, 0),
             Ok(6),
             "Exact 口径下 `standard.weak` 不等于 `weak`"
         );
@@ -7522,7 +7581,8 @@ mod tests {
                     ModifierTarget::Source,
                     &cid("hero"),
                     Some(&content),
-                    BindDamageKind::Direct
+                    BindDamageKind::Direct,
+                    0
                 ),
                 loud,
                 "{unknown}：伤害 Source 阶段"
@@ -7534,7 +7594,8 @@ mod tests {
                     ModifierTarget::Target,
                     &cid("hero"),
                     Some(&content),
-                    BindDamageKind::Direct
+                    BindDamageKind::Direct,
+                    0
                 ),
                 loud,
                 "{unknown}：伤害 Target 阶段"
@@ -7561,7 +7622,8 @@ mod tests {
                 ModifierTarget::Source,
                 &cid("hero"),
                 Some(&content),
-                BindDamageKind::Direct
+                BindDamageKind::Direct,
+                0
             ),
             Ok(6)
         );
@@ -7572,7 +7634,8 @@ mod tests {
                 ModifierTarget::Target,
                 &cid("hero"),
                 Some(&content),
-                BindDamageKind::Direct
+                BindDamageKind::Direct,
+                0
             ),
             Ok(6)
         );

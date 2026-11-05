@@ -7933,64 +7933,77 @@ mod tests {
         }
     }
 
-    /// §198：`Slow` —— 受击伤害 `×(100 + 10×层数)/100`，并且**每打一张牌 +1 层**。
+    /// §216（审阅 P1-A）：`Slow` 的因子是**本回合已出的牌数**，不是层数，也不是整场战斗的牌数。
     ///
-    /// 为什么要单独一条运算（`ScalePercentPerStack`）：`ScalePercent` 不读层数、`AddPerStack` 加的是
-    /// 平伤害，两种都能"跑起来"，但 Slow 10 层时它们的答案是 1.1 倍 / +100 点，而正确的是 2 倍。
-    /// 所以判据是**三个层数点**（0/5/10 层 → 10/15/20 点伤害，基数 10），线性与复合在这里分开：
-    /// 复合会给出 10 / 16 / 25。
+    /// wiki（`slay-the-spire.fandom.com/wiki/Slow`）：
+    /// *"For every card you have played **this turn**, enemy takes 10% more damage from Attacks,
+    /// not compounding. **Slow resets at end of turn**; enemy does NOT carry over stacks."*
+    ///
+    /// §198 把它做成了"每打一张牌 +1 层、永不衰减" ⇒ 第 2 回合再打 5 张就是 10 层（×200%）。
+    /// 那版测试只问"给定层数 → 伤害"，**没有一条跨回合断言**，所以三个层数点全绿也掩盖了它。
+    ///
+    /// 这一条补的正是缺的那半，而且是**真出牌、真结束回合**（不是伪造计数器 ——
+    /// `maw.nom_nom` 的 P1-B 就是被伪造计数器的测试放过的）：
+    /// ① 开局 0 张 ⇒ 10 点原样（标记状态在敌人身上，但计数为 0）；
+    /// ② 本回合真打 5 张 ⇒ 15 点；
+    /// ③ 回合真的结束 ⇒ 内核把牌数清零 ⇒ 又回到 10 点。
     #[test]
-    fn slow_scales_linearly_with_stacks_and_grows_on_every_card_played() {
+    fn slow_counts_the_cards_played_this_turn_and_starts_over_each_turn() {
         let blob = std::fs::read(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
         ))
         .expect("the sts image");
         let content = parse(&blob);
-
-        // (stacks, expected damage dealt to the hero from a 10-point hit)
-        for (stacks, expected) in [(0, 10), (5, 15), (10, 20)] {
-            let mut state = arena();
-            if stacks > 0 {
-                give(&mut state, "hero", status("st_slow", "standard.slow", stacks));
-            }
-            {
-                let mut ctx = crate::exec::ExecContext::new(
-                    &mut state,
-                    Some(cid("enemy_a")),
-                    Some(cid("hero")),
-                    None,
-                    64,
-                )
-                .with_content(&content);
-                crate::exec::resolve_damage(&mut ctx, &cid("hero"), 10, false).expect("the blow");
-            }
-            assert_eq!(
-                70 - health(&state, "hero"),
-                expected,
-                "Slow {stacks}: a 10-point hit lands for {expected}"
-            );
-        }
-
-        // "Whenever you play a card": the trigger grows it by one, for **every** card.
         let mut host = Host::new(&content);
         let mut state = arena();
-        give(&mut state, "hero", status("st_slow2", "standard.slow", 1));
-        let cards = [
-            card_in_hand(&mut state, &content, "hero", "strike"),
-            card_in_hand(&mut state, &content, "hero", "defend"),
-        ];
-        for (index, card) in cards.into_iter().enumerate() {
-            state
-                .enqueue_event(CombatEvent::CardPlayed { owner: cid("hero"), card })
-                .expect("queue");
-            host.try_resolve_pending_queues(&mut state).expect("triggers");
-            assert_eq!(
-                stacks_of(&state, "hero", "standard.slow"),
-                2 + index as i32,
-                "each card played adds one stack"
-            );
+        // 标记状态挂在**敌人**身上（它是 debuff，读的是受击一方）。
+        give(&mut state, "enemy_a", status("st_slow", "standard.slow", 1));
+        // ⚠️ `arena()` 的 enemy_a 只有 20 血，装不下 10 + 15 两笔：第二笔会被"最多掉到 0"
+        // 截断成 10，看起来正好像"加成没生效"。给自己留够血，这个测试才测的是加成。
+        state
+            .combatant_mut(&cid("enemy_a"))
+            .expect("enemy_a")
+            .health_current = 200;
+
+        // 一次 10 点直伤打在 enemy_a 上，返回实际掉了多少血。
+        let hit = |state: &mut CombatState| -> i32 {
+            let before = state.combatant(&cid("enemy_a")).expect("enemy_a").health_current;
+            let mut ctx = crate::exec::ExecContext::new(
+                state,
+                Some(cid("hero")),
+                Some(cid("enemy_a")),
+                None,
+                64,
+            )
+            .with_content(&content);
+            crate::exec::resolve_damage(&mut ctx, &cid("enemy_a"), 10, false).expect("the blow");
+            before - ctx.state.combatant(&cid("enemy_a")).expect("enemy_a").health_current
+        };
+
+        // ① 0 张牌：开局**不再自带 +10%**（旧内容的 `Stacks=1` 会在这里给 11 点）。
+        assert_eq!(state.cards_played_this_turn, 0);
+        assert_eq!(hit(&mut state), 10, "no cards played: a 10-point hit lands for 10");
+
+        // ② 真打 5 张（`defend` 是技能，不会顺手把 enemy_a 打死）。
+        give_energy(&mut state, "hero", 9);
+        for _ in 0..5 {
+            let card = card_in_hand(&mut state, &content, "hero", "defend");
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .expect("a defend costs 1 and needs no target");
         }
+        assert_eq!(state.cards_played_this_turn, 5, "the kernel counted the real plays");
+        assert_eq!(hit(&mut state), 15, "5 cards this turn: 10 * (100 + 10*5) / 100");
+
+        // ③ 回合真的结束（不是写 `cards_played_this_turn = 0`）⇒ 计数归零、加成消失。
+        turn::start_current_turn(&mut state, &config(), &mut host).unwrap();
+        turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
+        assert_eq!(state.cards_played_this_turn, 0, "turn end resets the counter");
+        assert_eq!(hit(&mut state), 10, "next turn starts over: back to 10");
     }
 
     /// §197：`Barricade`（永久）与 `Blur`（只保一次）—— 同一个 `retain_block` 标签，两种寿命。

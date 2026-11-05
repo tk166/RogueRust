@@ -846,7 +846,11 @@ INV_STATUSES = {
     # §198: Slow -- a `DamageReceived` row with the stack-linear scale (our own operation), plus a
     # `CardPlayed` trigger that grows it. No separate "clear" status: the wiki's "this turn" needs a
     # TurnEnded reset, which the trigger below does.
-    "standard.slow": [("DamageReceived", "ScalePercentPerStack", 10, 150, "Direct")],
+    # §216: the factor reads `state.cards_played_this_turn`, **not** the stacks. `Slow` resets at
+    # end of turn (wiki), and stacks cannot express "present with count 0" here: `modifyStatusStacks`
+    # to 0 deletes the instance (reference `StatusEffects.cs:830-838`) and then the `CardPlayed`
+    # trigger never fires again.
+    "standard.slow": [("DamageReceived", "ScalePercentPerCardPlayedThisTurn", 10, 150, "Direct")],
     # §197: Barricade (permanent) / Blur (one turn) -- both are "block is not cleared", which the
     # host already asks via the `retain_block` **tag**; no kernel rule, just a tag.
     "standard.barricade": [],
@@ -1300,6 +1304,7 @@ def check_cards_and_actions(doc):
     ok("cards", "%d cards x (cost, tags, facts)" % len(INV_CARDS))
     ok("enemy actions", "%d actions x (intent, facts)" % len(INV_ACTIONS))
     check_intent_history(doc)
+    check_time_variables(doc)
     check_ascension_variants(doc)
     check_ascension_health(doc)
     check_starting_status_ascension(doc)
@@ -1524,6 +1529,23 @@ INV_SPAWN_COUNTERS = {
 # ENEMY_DIFF harness cannot see (it runs every `EACT` row against a synthesised `<prefix>` enemy).
 # The day one of these gets a record, this table goes red and forces the roll to be written too.
 INV_UNWIRED = {"louse_green.bite", "louse_green.grow"}
+
+# §216: **每个程序读哪一个"时间变量"**，穷尽。这条表是被一次真 bug 逼出来的：
+# `maw.nom_nom` 用的是 `turnNumber`，而那是**一轮内的行动者序号**（`turn.rs:970` 绕回时置 1）——
+# 单怪场景里 Maw 出手时它恒为 2，于是 `ceil(turn/2)` **永远是 1 击**。wiki 说的是
+# "Current turn, divided by two"，指**轮次**（`roundNumber`）。
+#
+# ⚠️ 为什么事实表挡不住它：`INV_ACTIONS` 把这条动作钉成
+# `("repeat", ("expr", "divide"), "damage", 5, "event")` —— `turnNumber` 与 `roundNumber`
+# 在事实层面**一模一样**。所以这里钉的是**变量名**，两个方向都查：
+#   ① 表里声明的变量必须真的出现（改了内容就红）；
+#   ② 程序里出现的变量必须在表里（新写一个读时间变量的动作也红）。
+# 这条表的粒度是"哪个变量"，不是"哪个节点"：`turnNumber` 与 `roundNumber` 只差一个词，
+# 而它们一个是轮内序号、一个是轮次。
+TIME_VARIABLES = ("turnNumber", "roundNumber")
+INV_TIME_VARIABLES = {
+    "maw.nom_nom": ("roundNumber",),
+}
 
 
 # §206: the wiki's `AscHP` **lower bound** per monster, straight out of the `Enemy Infobox` dump in
@@ -1949,6 +1971,43 @@ def check_spawn_rolls(doc):
           sum(len(v) for v in INV_SPAWN_COUNTERS.values())))
 
 
+def check_time_variables(doc):
+    """§216：每个敌人动作读哪一个时间变量 —— 穷尽两个方向。
+
+    `turnNumber` = 一轮内的行动者序号（绕回置 1）；`roundNumber` = 第几轮。两者在**事实**层面
+    长得一样（都是"一个整数字段"），所以只有钉变量名才能抓住"用对了形状、用错了含义"。
+    """
+    seen = {}
+    for action in doc["EnemyActions"]:
+        names = set()
+        programs = [action.get("Program")]
+        programs += [entry.get("Program") for entry in (action.get("ProgramAsc") or [])]
+        for program in programs:
+            if program:
+                collect_time_variables(program["Root"], names)
+        if names:
+            seen[action["Id"]] = tuple(sorted(names))
+    for action_id in sorted(set(seen) | set(INV_TIME_VARIABLES)):
+        expected = tuple(sorted(INV_TIME_VARIABLES.get(action_id, ())))
+        actual = seen.get(action_id, ())
+        if expected != actual:
+            fail("action." + action_id,
+                 "time variables %s, inventory says %s" % (list(actual), list(expected)))
+    return len(INV_TIME_VARIABLES)
+
+
+def collect_time_variables(node, out):
+    if isinstance(node, dict):
+        kind = node.get("kind")
+        if kind in TIME_VARIABLES:
+            out.add(kind)
+        for value in node.values():
+            collect_time_variables(value, out)
+    elif isinstance(node, list):
+        for value in node:
+            collect_time_variables(value, out)
+
+
 def check_intent_history(doc):
     """§195.5：`last_move` / `prev_move` 这套历史是**内容状态**，所以它有自己的检查。
 
@@ -2074,7 +2133,7 @@ def check_statuses(doc):
                      "standard.time_warp", "standard.constricted",
                      "standard.phantom_veil",
                      "standard.sharp_hide", "standard.curiosity", "standard.mode_shift",
-                     "standard.stasis", "standard.slow", "standard.flying",
+                     "standard.stasis", "standard.flying",
                      "standard.curl_up", "standard.plated_armor", "standard.hex"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
@@ -2099,8 +2158,9 @@ def check_statuses(doc):
                         "standard.mode_shift": ["DamageTaken"],
                         # §195.4: "on death, the stolen card is returned" -- a Downed trigger.
                         "standard.stasis": ["Downed"],
-                        # §198: "whenever you play a card" -- Slow grows on CardPlayed.
-                        "standard.slow": ["CardPlayed"],
+                        # §216: Slow has **no** trigger any more -- the count lives in the kernel's
+                        # `cards_played_this_turn`, so it is checked by `INV_TIME_VARIABLES` and by
+                        # the modifier row (`INV_STATUSES`), not by a content trigger.
                         # §208: Byrd's Flying -- loses a stack when hit by an **attack**.
                         "standard.flying": ["DamageTaken"],
                         # §209: "the first time this enemy takes damage" -- a DamageTaken trigger.

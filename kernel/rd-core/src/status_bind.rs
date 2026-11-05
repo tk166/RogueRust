@@ -298,6 +298,11 @@ pub enum ModifierOp {
     ScalePercent,
     /// §198：`current * (100 + magnitude * stacks) / 100`（`Slow`）。
     ScalePercentPerStack,
+    /// §216：`current * (100 + magnitude * 本回合已出的牌数) / 100`（`Slow`）。
+    ///
+    /// 它与 `ScalePercentPerStack` 的差别**只在一个词**：两者都以字符串存在镜像里，写错一个词
+    /// 就是另一种语义，而数字看起来都合理。
+    ScalePercentPerCardPlayedThisTurn,
     /// §210：`min(current, max(0, magnitude))` —— "把所有伤害压到 1"（`Intangible`）。
     ///
     /// 内核的 `modifiers::Operation` 一直有它（`exec.rs` 的伤害管线也实现了），但这个**词表**
@@ -316,6 +321,8 @@ impl ModifierOp {
             "ScalePercent" => Some(ModifierOp::ScalePercent),
             // §198: our own operation (the reference has only the three above).
             "ScalePercentPerStack" => Some(ModifierOp::ScalePercentPerStack),
+            // §216: our own operation, like `ScalePercentPerStack` above.
+            "ScalePercentPerCardPlayedThisTurn" => Some(ModifierOp::ScalePercentPerCardPlayedThisTurn),
             // §210: the reference declares it; the binding simply had no spelling for it.
             "ClampMax" => Some(ModifierOp::ClampMax),
             _ => None,
@@ -330,6 +337,7 @@ impl ModifierOp {
             ModifierOp::AddFlat => "AddFlat",
             ModifierOp::ScalePercent => "ScalePercent",
             ModifierOp::ScalePercentPerStack => "ScalePercentPerStack",
+            ModifierOp::ScalePercentPerCardPlayedThisTurn => "ScalePercentPerCardPlayedThisTurn",
             ModifierOp::ClampMax => "ClampMax",
         }
     }

@@ -34,7 +34,7 @@
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
 | **合计** | 360 | 229 | 115 | 16 | 177 | 94 | 68 | 0 |
 
-扫描到的具名测试：**893** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**897** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **12** 个位次、**9** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -53,7 +53,7 @@
 | bronze_orb | yes | test:a_weighted_boss_never_repeats_the_move_the_wiki_forbids, a_minion_is_not_on_the_field_until_its_summon_lands …(+1) | wiki:wiki_asc/bronze_automaton.txt | gap §H: Orb 的 `Stasis` 用"最高稀有度"（并列随机），与 wiki 一致；"同一招不能三次"已做 | §194/§195.6/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | byrd | yes | test:flying_halves_attack_damage_and_loses_a_stack_per_hit | wiki:wiki_asc/byrd.txt | — | §208/§213/INV_ASC_HP+INV_MONSTERS/flying_halves_attack_damage_and_loses_a_stack_per_hit |
 | chosen | yes | test:hex_shuffles_a_dazed_only_for_non_attack_cards, chosen_swaps_its_opener_at_a17 …(+1) | wiki:wiki_asc/chosen.txt | — | §130/§213/INV_ASC_HP+INV_MONSTERS/hex_shuffles_a_dazed_only_for_non_attack_cards |
-| cultist | yes | test:a_fight_built_from_the_content_deck_can_play_a_strike, build_fight_still_treats_an_empty_deck_as_empty …(+4) | wiki:wiki_asc/cultist.txt | — | §5.2/§195.8/INV_ASC_HP+INV_MONSTERS/a_fight_built_from_the_content_deck_can_play_a_strike |
+| cultist | yes | test:building_a_fight_keeps_the_ascension_but_not_the_last_fights_gold, a_fight_built_from_the_content_deck_can_play_a_strike …(+5) | wiki:wiki_asc/cultist.txt | — | §5.2/§195.8/INV_ASC_HP+INV_MONSTERS/building_a_fight_keeps_the_ascension_but_not_the_last_fights_gold |
 | dagger | yes | — | wiki:wiki_asc/dagger.txt | — | §175/INV_ASC_HP+INV_MONSTERS |
 | darkling | yes | test:an_encounter_with_two_records_of_the_same_id_builds | wiki:wiki_asc/darkling.txt | — | §129/§137/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/an_encounter_with_two_records_of_the_same_id_builds |
 | deca | yes | test:donus_circle_of_power_buffs_the_enemy_team_and_not_the_player | wiki:wiki_asc/donu_and_deca.txt | gap §H: Artifact 层数不随 A19 变（`StartingStatuses` 没有升档轴） | §195.8/INV_ASC_HP+INV_MONSTERS/donus_circle_of_power_buffs_the_enemy_team_and_not_the_player |
@@ -70,7 +70,7 @@
 | looter | yes | test:ascension_two_makes_the_looter_mug_hit_for_eleven, a_looter_steals_thievery_gold_on_every_attack_and_carries_it_away …(+4) | wiki:wiki_asc/thieves.txt | — | §175/§201/INV_ASC_HP+INV_MONSTERS/ascension_two_makes_the_looter_mug_hit_for_eleven |
 | louse_green | orphan (declared) | — | wiki:wiki_asc/louses.txt | — | §152/INV_ASC_HP+INV_MONSTERS |
 | louse_red | yes | test:a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action, an_encounter_without_rolls_draws_nothing …(+2) | wiki:wiki_asc/louses.txt | — | §152/§209/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action |
-| maw | yes | test:nom_nom_hits_five_damage_ceil_turn_over_two_times, the_maw_follows_the_wikis_transition_table | wiki:wiki_asc/the_maw.txt | 无 AscHP：wiki The Maw: max HP does not change with ascension | §207/§212/INV_MONSTERS+INV_NO_ASC_HP/nom_nom_hits_five_damage_ceil_turn_over_two_times |
+| maw | yes | test:nom_nom_hits_five_damage_ceil_round_over_two_times, the_maw_follows_the_wikis_transition_table | wiki:wiki_asc/the_maw.txt | 无 AscHP：wiki The Maw: max HP does not change with ascension | §207/§212/INV_MONSTERS+INV_NO_ASC_HP/nom_nom_hits_five_damage_ceil_round_over_two_times |
 | nemesis | yes | — | wiki:wiki_asc/nemesis.txt | — | §175/INV_ASC_HP+INV_MONSTERS |
 | orb_walker | yes | — | wiki:wiki_asc/orb_walker.txt | — | §208/§214/INV_ASC_HP+INV_MONSTERS |
 | reptomancer | yes | — | wiki:wiki_asc/reptomancer.txt | — | §175/INV_ASC_HP+INV_MONSTERS |
@@ -172,7 +172,7 @@
 | louse_red.grow | yes | harness:ENEMY_DIFF | wiki:wiki_asc/louses.txt | — | §152/§193/INV_ACTIONS+INV_ASC_VARIANTS |
 | louse_red.spit_web | yes | harness:ENEMY_DIFF | wiki:wiki_asc/louses.txt (仅基础值) | 无升档：wiki Louses: Spit Web is 2 Weak, no A-row | §152/§193/INV_ACTIONS+INV_NO_ASC |
 | maw.drool | yes | test:the_maw_follows_the_wikis_transition_table | wiki:wiki_asc/the_maw.txt | — | §137/§212/INV_ACTIONS+INV_ASC_VARIANTS/the_maw_follows_the_wikis_transition_table |
-| maw.nom_nom | yes | test:nom_nom_hits_five_damage_ceil_turn_over_two_times, the_maw_follows_the_wikis_transition_table | wiki:wiki_asc/the_maw.txt (仅基础值) | 无升档：wiki The Maw: Nom Nom is 5 x ceil(turn/2), no A-row | §137/§212/INV_ACTIONS+INV_NO_ASC/nom_nom_hits_five_damage_ceil_turn_over_two_times |
+| maw.nom_nom | yes | test:nom_nom_hits_five_damage_ceil_round_over_two_times, the_maw_follows_the_wikis_transition_table | wiki:wiki_asc/the_maw.txt (仅基础值) | 无升档：wiki The Maw: Nom Nom is 5 x ceil(turn/2), no A-row | §137/§212/INV_ACTIONS+INV_NO_ASC/nom_nom_hits_five_damage_ceil_round_over_two_times |
 | maw.roar | yes | test:the_maw_follows_the_wikis_transition_table | wiki:wiki_asc/the_maw.txt | — | §137/§212/INV_ACTIONS+INV_ASC_VARIANTS/the_maw_follows_the_wikis_transition_table |
 | maw.slam | yes | test:the_maw_follows_the_wikis_transition_table | wiki:wiki_asc/the_maw.txt | — | §137/§212/INV_ACTIONS+INV_ASC_VARIANTS/the_maw_follows_the_wikis_transition_table |
 | nemesis.scythe | yes | harness:ENEMY_DIFF | wiki:wiki_asc/nemesis.txt (仅基础值) | 无升档：wiki Nemesis: Scythe has no A-row | §175/INV_ACTIONS+INV_NO_ASC |
@@ -270,7 +270,7 @@
 | sentinel | yes | test:the_keyword_cells_are_in_the_image, a_sink_appends_after_the_callers_prefix_and_a_tiny_sink_is_still_ok | spec:INV_CARDS | — | §144/INV_CARDS/the_keyword_cells_are_in_the_image |
 | sentinel+ | yes | harness:CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
 | slimed | yes | test:card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+1) | spec:INV_CARDS | — | §10/§192/INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
-| strike | yes | test:an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+77) | spec:INV_CARDS | — | §6.5/§72.5/INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | test:an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+76) | spec:INV_CARDS | — | §6.5/§72.5/INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | test:card_tags_are_readable_and_a_junk_card_is_not_a_reward, smithing_replaces_the_card_with_its_upgraded_row …(+6) | spec:INV_CARDS | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | test:an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | harness:CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -305,7 +305,7 @@
 | standard.entangled | yes | test:entangled_refuses_attacks_but_not_skills_and_expires_at_turn_end | spec:INV_STATUSES | — | §195.7/§196/INV_STATUSES/entangled_refuses_attacks_but_not_skills_and_expires_at_turn_end |
 | standard.fairy_in_a_bottle | yes | test:the_charm_catches_one_killing_blow_and_is_spent | spec:INV_STATUSES | — | §180/INV_STATUSES/the_charm_catches_one_killing_blow_and_is_spent |
 | standard.flame_barrier | yes (test-only) | test:flame_barrier_hits_back_and_combust_burns_everyone | spec:INV_STATUSES | — | §119/INV_STATUSES/flame_barrier_hits_back_and_combust_burns_everyone |
-| standard.flying | yes | test:flying_halves_attack_damage_and_loses_a_stack_per_hit | spec:INV_STATUSES | — | §207/§208/INV_STATUSES/flying_halves_attack_damage_and_loses_a_stack_per_hit |
+| standard.flying | yes | test:flying_halves_attack_damage_and_loses_a_stack_per_hit | spec:INV_STATUSES | — | §208/§216/INV_STATUSES/flying_halves_attack_damage_and_loses_a_stack_per_hit |
 | standard.frail | yes | test:damage_table_rows_are_the_frozen_shape, standard_status_ids_are_byte_ordered_not_registration_ordered …(+3) | spec:INV_STATUSES | — | §196/§212/INV_STATUSES/damage_table_rows_are_the_frozen_shape |
 | standard.hex | yes | test:hex_shuffles_a_dazed_only_for_non_attack_cards | spec:INV_STATUSES | — | §210/§213/INV_STATUSES/hex_shuffles_a_dazed_only_for_non_attack_cards |
 | standard.intangible | yes | test:the_damage_pipeline_honours_intangible_buffer_and_plated_armor | spec:INV_STATUSES | — | §149/§210/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
@@ -319,12 +319,12 @@
 | standard.rage | yes (test-only) | test:rage_gives_block_only_for_an_attack, standard_status_ids_are_byte_ordered_not_registration_ordered …(+2) | spec:INV_STATUSES | — | §119/INV_STATUSES/rage_gives_block_only_for_an_attack |
 | standard.regen | yes | test:the_awakened_one_survives_its_first_death_and_then_really_dies, regen_heals_at_the_end_of_the_turn …(+1) | spec:INV_STATUSES | — | §119/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
 | standard.sharp_hide | yes | test:sharp_hide_hurts_the_player_for_attacks_and_only_attacks, mode_shift_is_a_budget_drained_by_the_health_actually_lost | spec:INV_STATUSES | — | §194/§195.1/INV_STATUSES/sharp_hide_hurts_the_player_for_attacks_and_only_attacks |
-| standard.slow | yes | test:a_card_play_leaves_no_chain_referenced, slow_scales_linearly_with_stacks_and_grows_on_every_card_played | spec:INV_STATUSES | — | §195.4/§198/INV_STATUSES/a_card_play_leaves_no_chain_referenced |
+| standard.slow | yes | test:a_card_play_leaves_no_chain_referenced, a_slow_spec_on_a_pipeline_without_a_card_count_is_refused …(+1) | spec:INV_STATUSES | — | §216/INV_STATUSES/a_card_play_leaves_no_chain_referenced |
 | standard.split | yes | test:a_spawned_enemy_joins_the_turn_order_after_the_current_actor, a_phase_split_happens_once_even_under_three_hits …(+1) | spec:INV_STATUSES | — | §121/INV_STATUSES/a_spawned_enemy_joins_the_turn_order_after_the_current_actor |
 | standard.spore_cloud | yes | test:spore_cloud_weakens_the_killer_on_death | spec:INV_STATUSES | — | §116/§117/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
 | standard.stasis | yes | test:stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | spec:INV_STATUSES | — | §195.1/§195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stasis_ready | yes | test:stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
-| standard.strength | yes | test:dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+46) | spec:INV_STATUSES | — | §208/§212/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
+| standard.strength | yes | test:dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+47) | spec:INV_STATUSES | — | §208/§212/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
 | standard.thorns | yes | test:thorns_hurts_whoever_hits_its_owner, standard_status_ids_are_byte_ordered_not_registration_ordered …(+4) | spec:INV_STATUSES | — | §207/§214/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |
 | standard.time_warp | yes | test:the_twelfth_card_asks_for_the_turn_to_end | spec:INV_STATUSES | — | §122/§125/INV_STATUSES/the_twelfth_card_asks_for_the_turn_to_end |
 | standard.unawakened | yes | test:the_awakened_one_survives_its_first_death_and_then_really_dies, the_awakened_one_draws_phase_one_by_weight_and_flips_on_the_guard | spec:INV_STATUSES | — | §180/§195.2/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
@@ -353,7 +353,7 @@
 | enc_lagavulin | yes | test:lagavulin_can_be_fought_for_eight_rounds_including_siphon_soul | — | — | §173/lagavulin_can_be_fought_for_eight_rounds_including_siphon_soul |
 | enc_looter | yes | test:an_ascension_health_row_applies_at_its_own_level_and_not_below, the_looter_mugs_twice_then_bombs_then_escapes | — | — | §175/§201/an_ascension_health_row_applies_at_its_own_level_and_not_below |
 | enc_louse | yes | test:a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action, an_encounter_without_rolls_draws_nothing …(+2) | — | — | §130/§152/a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action |
-| enc_maw | yes | test:nom_nom_hits_five_damage_ceil_turn_over_two_times, the_maw_follows_the_wikis_transition_table | — | — | §147/§201/nom_nom_hits_five_damage_ceil_turn_over_two_times |
+| enc_maw | yes | test:nom_nom_hits_five_damage_ceil_round_over_two_times, the_maw_follows_the_wikis_transition_table | — | — | §147/§201/nom_nom_hits_five_damage_ceil_round_over_two_times |
 | enc_nemesis | yes | harness:entity_tables_decode_row_by_row …(+11) | — | — | §175 |
 | enc_orb_walker | yes | harness:entity_tables_decode_row_by_row …(+11) | — | — | §138/§201 |
 | enc_reptomancer | yes | test:act_three_reptomancer_daggers_arrive_and_then_take_themselves_out | — | — | §175/act_three_reptomancer_daggers_arrive_and_then_take_themselves_out |
