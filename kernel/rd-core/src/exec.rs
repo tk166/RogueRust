@@ -4719,6 +4719,8 @@ fn choose_cards_node(
         // §238：`Exhume`（"把消耗堆里一张拿回手牌"）—— 问句的来源牌区就是消耗堆，
         // 页面按 zone id 3 读它（§161.5 的契约），所以那边不用改。
         CardZone::ExhaustPile => crate::state::ChoiceSource::ExhaustPile,
+        // §244：Secret Technique / Secret Weapon —— 从抽牌堆里挑一张。
+        CardZone::DrawPile => crate::state::ChoiceSource::DrawPile,
         _ => return Err(ExecError::Ir(IrError::UnknownKind)),
     };
     let min = node.int_field("Min")?.ok_or(IrError::Missing("Min"))?;

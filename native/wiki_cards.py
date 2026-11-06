@@ -55,10 +55,17 @@ def parse(card_id):
         raise WikiCardError('%s: unknown Type %r' % (card_id, card_type))
     description = field('Description')
     cost_text = field('Cost')
-    try:
-        cost = int(cost_text)
-    except ValueError:
-        raise WikiCardError('%s: Cost is not an integer (%r)' % (card_id, cost_text))
+    # §244：数据模块的两种非数字费用 —— `X`（X 费，`Cost = -1`）与 `Unplayable`（`-2`）。
+    # 这里照抄那两个约定，而不是"解析失败就跳过"：跳过会让一张 X 费牌的费用**没人核对**。
+    if cost_text == 'X':
+        cost = -1
+    elif cost_text in ('Unplayable', '-', ''):
+        cost = -2
+    else:
+        try:
+            cost = int(cost_text)
+        except ValueError:
+            raise WikiCardError('%s: Cost is not an integer (%r)' % (card_id, cost_text))
 
     # `{{KW|Exhaust}}` 是关键字；`{{KW|Exhaust|Exhausted}}` 是**条件**（Sentinel 的
     # "if this card is Exhausted"），不是这张牌自带 Exhaust —— 有竖线的都不算关键字。

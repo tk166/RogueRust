@@ -1747,6 +1747,11 @@ pub enum ChoiceSource {
     DiscardPile,
     /// §238：**消耗堆**（Exhume「把消耗堆里一张拿回手牌」）。
     ExhaustPile,
+    /// §244：**抽牌堆**（Secret Technique / Secret Weapon「从抽牌堆里挑一张」）。
+    ///
+    /// 与 `Hand` / `DiscardPile` 的区别只在于"候选人看得见什么"：抽牌堆的顺序对玩家是已知的
+    /// （牌堆是公开信息），所以这里**不需要**打乱候选。
+    DrawPile,
     /// **三条候选**（Attack / Skill Potion「从三张随机 X 牌里选一张加进手牌」）。
     Offered,
 }
@@ -1761,6 +1766,7 @@ impl ChoiceSource {
             Self::Hand => Some(CardZone::Hand),
             Self::DiscardPile => Some(CardZone::DiscardPile),
             Self::ExhaustPile => Some(CardZone::ExhaustPile),
+            Self::DrawPile => Some(CardZone::DrawPile),
             Self::Offered => None,
         }
     }

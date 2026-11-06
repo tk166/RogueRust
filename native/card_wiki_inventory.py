@@ -280,6 +280,17 @@ FACTS = {
     'deep_breath': ([('shuffleDiscard', 'source'), ('draw', 1, 'source')], [('shuffleDiscard', 'source'), ('draw', 2, 'source')]),
     'insight': ([('draw', 2, 'source')], [('draw', 3, 'source')]),
     'miracle': ([('gain', 'standard.energy', 1, 'source')], [('gain', 'standard.energy', 2, 'source')]),
+    # ---- §244：无色 B 档（10 张）----------------------------------------------------------
+    'mayhem': ([('status', 'standard.mayhem', 1, 'source')], [('status', 'standard.mayhem', 1, 'source')]),
+    'magnetism': ([('status', 'standard.magnetism', 1, 'source')], [('status', 'standard.magnetism', 1, 'source')]),
+    'chrysalis': ([('createRandom', 'skill', 'DrawPile', 3, True)], [('createRandom', 'skill', 'DrawPile', 5, True)]),
+    'metamorphosis': ([('createRandom', 'attack', 'DrawPile', 3, True)], [('createRandom', 'attack', 'DrawPile', 5, True)]),
+    'jack_of_all_trades': ([('createRandom', 'colorless', 'Hand', 1, True)], [('createRandom', 'colorless', 'Hand', 2, True)]),
+    'transmutation': ([('createRandom', 'colorless', 'Hand', ('expr', 'x.cost'), True)], [('createRandom', 'colorless', 'Hand', ('expr', 'x.cost'), True)]),
+    'secret_technique': ([('choose', 'source', 'DrawPile', ('skill',), 1, 1, 'ToHand')], [('choose', 'source', 'DrawPile', ('skill',), 1, 1, 'ToHand')]),
+    'secret_weapon': ([('choose', 'source', 'DrawPile', ('attack',), 1, 1, 'ToHand')], [('choose', 'source', 'DrawPile', ('attack',), 1, 1, 'ToHand')]),
+    'violence': ([('select', 'source', 'DrawPile', None, 'Random', 3, 'Hand')], [('select', 'source', 'DrawPile', None, 'Random', 4, 'Hand')]),
+    'purity': ([('choose', 'source', 'Hand', (), 1, 3, 'Exhaust')], [('choose', 'source', 'Hand', (), 1, 5, 'Exhaust')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

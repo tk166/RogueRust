@@ -16642,3 +16642,79 @@ wiki 的 dump 是 `If the enemy intends to attack, gain (3;4) **Strength**.`（�
 
 以及一个内容约定：无色三张要"随机**无色**牌"（`jack_of_all_trades` `transmutation` `magnetism`）
 ⇒ 给 70 张无色加 `colorless` tag（纯内容字段，§240 的池子本来就按 tag 过滤）。
+
+---
+
+## §244 无色 B 档：`colorless` tag + 10 张（其中 8 张几乎白送）
+
+### 244.1 `colorless` tag：一个**内容约定**，内核零改动
+
+`jack_of_all_trades` / `transmutation` / `magnetism` 要"随机**无色**牌"，而本内容的 tag 一直只有
+**类型**（`attack/skill/power/status/curse`）与若干语义 tag（`ethereal`/`innate`/`x_cost`/`retain`/
+`hp_loss_cost`），**没有"颜色"维度**。
+
+补一个 `colorless` tag 就够了 —— §240 的随机池本来就是"按 tag 过滤"，所以**内核一行没改**。
+
+⚠️ 只给**真·无色牌**打（26 行）：`wound` / `dazed` 在数据模块里也是 `Color = Colorless`，但
+StS 的"随机无色牌"池子从不给它们 —— 一起打上去会让 `jack_of_all_trades` 发一张 `Wound`。
+这条不是理论：`colorless_potion_offers_...` 那条旧判据立刻抓到了池子变化。
+
+### 244.2 十张，八张零载体
+
+| 牌 | 用的既有载体 |
+|---|---|
+| `mayhem` | `TurnStarted` 触发器 + §241 `playTopCardOfDrawPile`（**零内核改动**） |
+| `magnetism` | `TurnStarted` + §240 随机造牌 |
+| `chrysalis` / `metamorphosis` | §240 `createRandomCardInstance{Tag, ToZone: DrawPile, Count}` |
+| `jack_of_all_trades` / `transmutation` | §240 + 新的 `colorless` tag（`transmutation` 还把 `x.cost` 当 `Count`） |
+| `violence` | `node.selectCards{Order: "Random", RequireTag: "attack"}`（**零内核改动**） |
+| `purity` | `chooseCards{Then: Exhaust, Min 1, Max 3/5}`（**零内核改动**） |
+| `secret_technique` / `secret_weapon` | §238 的 `ChoiceSource` + **一个新枚举值** `DrawPile` |
+
+唯一的内核改动是 `ChoiceSource::DrawPile`（与 §238 的 `ExhaustPile` 完全同形，含 wasm 那一行
+`source == 1`）。**两次"零内核改动"的批**说明 §237–§242 那批载体的复用面确实够宽。
+
+### 244.3 判据三条，各抓一类"抄错了但看着正常"
+
+1. `the_random_card_batch_picks_from_the_right_pool`：6 个 (牌, 张数, 牌区, tag) 组合。
+   **第 ③ 段是命门** —— `createRandomCardInstance` 只认一个 tag，把 `chrysalis` 写成 `attack`
+   内容门看不出来，只有"每一张产出的牌都带对了 tag"会红。顺带断言"产出里没有 `+` 行、没有 X 费牌"。
+2. `secret_technique_and_violence_reach_into_the_draw_pile`：问句来源区 = 抽牌堆；
+   `Secret Technique` 拿走后**抽牌堆只少一张**；`Violence` 拿走 3 张后**留下的正好是那张技能**
+   （证明它没有"随机 3 张"了事）。
+3. `magnetism_adds_a_colorless_card_every_turn`：跨回合的 `TurnStarted` 节目里跑随机造牌 ——
+   它同时验证 §242 那个决定（`ExprContext` 带内容）的回报：触发器里没有内容会**响亮**失败
+   （`Missing("content")`），不会静默不生效。
+
+### 244.4 顺带修掉一条"手抄白名单"的判据
+
+`colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand` 里写死了
+`["bandage_up", "blind", "dark_shackles"]`（§161.5 时内容里全部的无色牌）。加完 tag 它立刻红 ——
+而它真正想表达的是"池子里只有带 `colorless` tag 的牌"。改成**问内容**
+（`Content::parse(IMAGE)` + `card_has_tag`）之后，白名单不再随内容漂。
+
+这与 §4.20"同一个词表两处认识就一定漂"是同一类：**判据里的手抄清单也是第二份认识**。
+
+### 244.5 `MAX_POOL` 第五次抬（这次留了注解）
+
+192 → 224（§243）→ **256**（§244，229 行）。第六次红的时候应该做那个重构（池子改成调用方给的
+切片 `&[PoolCard]`），而不是再抬一次 —— 这句已经写进常量文档，别让它变成"再抬一次"的习惯。
+
+### 244.6 数字
+
+* 单测 **964**（759 core + 110 run + 95 wasm，+3）；四条对拍不变 `182 / 62 / 124 / 394`；
+* 内容：卡 **229 行**（+20）、状态 **58**（+2：`standard.mayhem` / `standard.magnetism`）、
+  镜像 **112,260 B**（core 88,168 B）；
+* 与 wiki 对账：口径内 **110 / 145**（无色 **35 / 70**；红 75/75）；
+* 矩阵 **557 行**、具名测试 **966**；21/21 闸门绿。
+
+### 244.7 还剩的无色（35 张）分档
+
+* **还能吃既有载体**（下一批）：`apotheosis`（`upgradeCards` 扩到全牌区）、`thinking_ahead`
+  （`ToDrawPileTop`）、`forethought`（`chooseCards` + `Placement: Bottom`）、`enlightenment` /
+  `madness`（绝对价计数器）、`discovery`（`Offered` 候选）、`panic_button`（`no_block` 类状态）；
+* **要新载体**：`the_bomb`（延迟结算）、`hand_of_greed`（Fatal 给金）、`mind_blast`（按抽牌堆张数
+  打伤害 —— 其实只差一个 `zoneCount` 表达式）、`beta`/`omega`（跨回合变牌）；
+* **诅咒 10 张**：多为"回合末自伤/自加状态"（`regret` `decay` `shame` 用 §237 的 `TurnEnded` +
+  §242 的费用/掉落规则就能做），`normality` / `pain` 要 `PlayCondition` 或 `CardPlayed` 钩子。
+  `parasite` / `curse_of_the_bell` / `necronomicurse` 与 run 层（牌组规则）交互，留到最后。

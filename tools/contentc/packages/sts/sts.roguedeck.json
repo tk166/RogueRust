@@ -3347,6 +3347,81 @@
       ],
       "PassiveModifiers": [],
       "Triggers": []
+    },
+    {
+      "Id": "standard.mayhem",
+      "PackageId": "sts",
+      "NameKey": "Mayhem",
+      "DescriptionKey": "At the start of your turn, play the top card of your draw pile.",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.playTopCardOfDrawPile",
+              "value": {
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.magnetism",
+      "PackageId": "sts",
+      "NameKey": "Magnetism",
+      "DescriptionKey": "At the start of your turn, add a random Colorless card into your hand.",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.createRandomCardInstance",
+              "value": {
+                "Tag": "colorless",
+                "ToZone": "Hand",
+                "Count": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 1
+                  }
+                },
+                "CostZero": true,
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -4425,6 +4500,9 @@
         },
         {
           "value": "innate"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Program": {
@@ -4611,6 +4689,9 @@
         },
         {
           "value": "ethereal"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Program": {
@@ -5300,6 +5381,9 @@
         },
         {
           "value": "innate"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Program": {
@@ -5355,6 +5439,9 @@
         },
         {
           "value": "intangible"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Program": {
@@ -16171,6 +16258,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -16226,6 +16316,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -16281,6 +16374,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -16336,6 +16432,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -16391,6 +16490,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -16468,6 +16570,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -16545,6 +16650,9 @@
       "Tags": [
         {
           "value": "attack"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -16624,6 +16732,9 @@
       "Tags": [
         {
           "value": "attack"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -16703,6 +16814,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -16753,6 +16867,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -16803,6 +16920,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Rare",
@@ -16853,6 +16973,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Rare",
@@ -16906,6 +17029,9 @@
         },
         {
           "value": "innate"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -16961,6 +17087,9 @@
         },
         {
           "value": "innate"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -17013,6 +17142,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -17081,6 +17213,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -17149,6 +17284,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -17220,6 +17358,9 @@
       "Tags": [
         {
           "value": "skill"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Uncommon",
@@ -17294,6 +17435,9 @@
         },
         {
           "value": "retain"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Special",
@@ -17347,6 +17491,9 @@
         },
         {
           "value": "retain"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Special",
@@ -17400,6 +17547,9 @@
         },
         {
           "value": "retain"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Special",
@@ -17454,6 +17604,9 @@
         },
         {
           "value": "retain"
+        },
+        {
+          "value": "colorless"
         }
       ],
       "Rarity": "Special",
@@ -17486,6 +17639,1060 @@
       },
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": true,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "mayhem",
+      "PackageId": "sts",
+      "NameKey": "Mayhem",
+      "DescriptionKey": "At the start of your turn, play the top card of your draw pile.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.mayhem"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "mayhem+",
+      "PackageId": "sts",
+      "NameKey": "Mayhem+",
+      "DescriptionKey": "At the start of your turn, play the top card of your draw pile.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.mayhem"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "magnetism",
+      "PackageId": "sts",
+      "NameKey": "Magnetism",
+      "DescriptionKey": "At the start of your turn, add a random Colorless card into your hand.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.magnetism"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "magnetism+",
+      "PackageId": "sts",
+      "NameKey": "Magnetism+",
+      "DescriptionKey": "At the start of your turn, add a random Colorless card into your hand.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.magnetism"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "chrysalis",
+      "PackageId": "sts",
+      "NameKey": "Chrysalis",
+      "DescriptionKey": "Shuffle 3 random Skills into your draw pile. They cost 0 this combat. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createRandomCardInstance",
+          "value": {
+            "Tag": "skill",
+            "ToZone": "DrawPile",
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "CostZero": true,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "chrysalis+",
+      "PackageId": "sts",
+      "NameKey": "Chrysalis+",
+      "DescriptionKey": "Shuffle 5 random Skills into your draw pile. They cost 0 this combat. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createRandomCardInstance",
+          "value": {
+            "Tag": "skill",
+            "ToZone": "DrawPile",
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 5
+              }
+            },
+            "CostZero": true,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "metamorphosis",
+      "PackageId": "sts",
+      "NameKey": "Metamorphosis",
+      "DescriptionKey": "Shuffle 3 random Attacks into your draw pile. They cost 0 this combat. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createRandomCardInstance",
+          "value": {
+            "Tag": "attack",
+            "ToZone": "DrawPile",
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "CostZero": true,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "metamorphosis+",
+      "PackageId": "sts",
+      "NameKey": "Metamorphosis+",
+      "DescriptionKey": "Shuffle 5 random Attacks into your draw pile. They cost 0 this combat. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createRandomCardInstance",
+          "value": {
+            "Tag": "attack",
+            "ToZone": "DrawPile",
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 5
+              }
+            },
+            "CostZero": true,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "jack_of_all_trades",
+      "PackageId": "sts",
+      "NameKey": "Jack of All Trades",
+      "DescriptionKey": "Add 1 random Colorless card into your hand. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createRandomCardInstance",
+          "value": {
+            "Tag": "colorless",
+            "ToZone": "Hand",
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "CostZero": true,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "jack_of_all_trades+",
+      "PackageId": "sts",
+      "NameKey": "Jack of All Trades+",
+      "DescriptionKey": "Add 2 random Colorless cards into your hand. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createRandomCardInstance",
+          "value": {
+            "Tag": "colorless",
+            "ToZone": "Hand",
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 2
+              }
+            },
+            "CostZero": true,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "transmutation",
+      "PackageId": "sts",
+      "NameKey": "Transmutation",
+      "DescriptionKey": "Add X random Colorless cards into your hand. They cost 0 this turn. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "x_cost"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createRandomCardInstance",
+          "value": {
+            "Tag": "colorless",
+            "ToZone": "Hand",
+            "Count": {
+              "kind": "x.cost",
+              "value": {}
+            },
+            "CostZero": true,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "transmutation+",
+      "PackageId": "sts",
+      "NameKey": "Transmutation+",
+      "DescriptionKey": "Add X random Colorless cards into your hand. They cost 0 this turn. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "x_cost"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createRandomCardInstance",
+          "value": {
+            "Tag": "colorless",
+            "ToZone": "Hand",
+            "Count": {
+              "kind": "x.cost",
+              "value": {}
+            },
+            "CostZero": true,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "secret_technique",
+      "PackageId": "sts",
+      "NameKey": "Secret Technique",
+      "DescriptionKey": "Put a Skill from your draw pile into your hand. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.chooseCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "DrawPile",
+            "Min": 1,
+            "Max": 1,
+            "Then": "ToHand",
+            "ToZone": "Hand",
+            "RequireAnyTag": [
+              "skill"
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "secret_technique+",
+      "PackageId": "sts",
+      "NameKey": "Secret Technique+",
+      "DescriptionKey": "Put a Skill from your draw pile into your hand.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.chooseCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "DrawPile",
+            "Min": 1,
+            "Max": 1,
+            "Then": "ToHand",
+            "ToZone": "Hand",
+            "RequireAnyTag": [
+              "skill"
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "secret_weapon",
+      "PackageId": "sts",
+      "NameKey": "Secret Weapon",
+      "DescriptionKey": "Put an Attack from your draw pile into your hand. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.chooseCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "DrawPile",
+            "Min": 1,
+            "Max": 1,
+            "Then": "ToHand",
+            "ToZone": "Hand",
+            "RequireAnyTag": [
+              "attack"
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "secret_weapon+",
+      "PackageId": "sts",
+      "NameKey": "Secret Weapon+",
+      "DescriptionKey": "Put an Attack from your draw pile into your hand.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.chooseCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "DrawPile",
+            "Min": 1,
+            "Max": 1,
+            "Then": "ToHand",
+            "ToZone": "Hand",
+            "RequireAnyTag": [
+              "attack"
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "violence",
+      "PackageId": "sts",
+      "NameKey": "Violence",
+      "DescriptionKey": "Put 3 random Attacks from your draw pile into your hand. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.selectCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "DrawPile",
+            "Order": "Random",
+            "Count": 3,
+            "ToZone": "Hand",
+            "RequireTag": "attack",
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "violence+",
+      "PackageId": "sts",
+      "NameKey": "Violence+",
+      "DescriptionKey": "Put 4 random Attacks from your draw pile into your hand. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.selectCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "DrawPile",
+            "Order": "Random",
+            "Count": 4,
+            "ToZone": "Hand",
+            "RequireTag": "attack",
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "purity",
+      "PackageId": "sts",
+      "NameKey": "Purity",
+      "DescriptionKey": "Exhaust up to 3 cards in your hand. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.chooseCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "Hand",
+            "Min": 1,
+            "Max": 3,
+            "Then": "Exhaust",
+            "ToZone": "Hand",
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "purity+",
+      "PackageId": "sts",
+      "NameKey": "Purity+",
+      "DescriptionKey": "Exhaust up to 5 cards in your hand. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.chooseCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "Hand",
+            "Min": 1,
+            "Max": 5,
+            "Then": "Exhaust",
+            "ToZone": "Hand",
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile"
     }

@@ -6163,10 +6163,13 @@ mod tests {
             unsafe { crate::rd_env_pile_card_id_into(3, slot, buffer.as_mut_ptr()) };
             names.push(String::from_utf8(buffer).expect("ascii ids"));
         }
-        let colorless = ["bandage_up", "blind", "dark_shackles"];
+        // §244：**不再手抄白名单**。原先写死 `["bandage_up", "blind", "dark_shackles"]`
+        // （§161.5 时内容里全部的无色牌），内容一长就红 —— 而它真正想表达的是"池子里只有
+        // 带 `colorless` tag 的牌"。改成问内容，白名单就不再随内容漂。
+        let content = Content::parse(IMAGE).expect("the packaged content parses");
         for name in &names {
             assert!(
-                colorless.contains(&name.as_str()),
+                content.card_has_tag(name, "colorless") == Some(true),
                 "{name} is not a colorless card -- the pool leaked: {names:?}"
             );
         }
@@ -6184,7 +6187,7 @@ mod tests {
         );
         let added: Vec<&String> = hand_after
             .iter()
-            .filter(|id| colorless.contains(&id.as_str()))
+            .filter(|id| content.card_has_tag(id.as_str(), "colorless") == Some(true))
             .collect();
         assert_eq!(added.len(), 1, "exactly one colorless card joined: {hand_after:?}");
     }
