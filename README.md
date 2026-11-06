@@ -133,35 +133,35 @@ python -m http.server 8000
 | **RL 环境** | `rd_env_*` ABI（`docs/spec/env-abi.md`）+ Python `ctypes` 封装（多进程、批量观察） |
 | **裸机** | `riscv32imac-unknown-none-elf` 真链接成 ELF，镜像占用有闸门 |
 
-**还不能**（诚实清单，逐条与 wiki 比对过，见 `docs/sts-wiki-gap.md`）。
-⚠️ 这一节每一轮都会与代码对一遍账 —— §195.1–§195.6 就把下面四条**已经修掉**的旧说法删了
-（Guardian 的 Mode Shift、Awakened One 的复活、Bronze Orb 的 Stasis、小兵预置）。
+**还不能**（诚实清单，逐条与 wiki 比对过；数字都由 `native/gap_check.py` 与
+`native/audit_card_gap.py` 重算，见 `docs/sts-wiki-gap.md`）。
 
-* **Boss 的机制降级已经清空**：三幕各三只、数值全部来自 wiki、抽签与排除规则是真的、小兵是真召唤、
-  Guardian 的 Mode Shift 是累计受伤、Awakened One 会真的复活且**带着两只 Cultist**（主人倒下时它们
-  逃跑，所以杀 Boss 即胜利）、Hexaghost 会升级已有的 Burn、Time Eater 的 `Draw Reduction` 精确。
-  仍与 wiki 不同的只剩**数值轴**两条（起始状态层数不随 Ascension 变、A9 的 `AscHP` 用百分比近似）
-  与一条**表达**差异（同一个 Boss 的"下一招"是 `(seed, round, slot)` 的派生值，不是随机流）。
-* **抽签是派生的，不是随机流**：§195.3 起意图层能带权抽签（The Champ 45/25/15/15、Collector 70/30、
-  Time Eater 45/35/20、Awakened One 75/25 与 50/50、Bronze Orb 75% 与 70/30），抽签值是
-  `(seed, round, slot)` 的**纯函数**（意图每次观察都要重算 ⇒ 必须是纯函数，且不进快照）。
-  "不能连续用同一招 / 同一招不能三次"由内容记 `last_move`/`prev_move` + 排除规则实现。
-  ⚠️ 依旧确定性的是 Slime Boss / Guardian / Hexaghost / Automaton / Donu & Deca 的循环
-  （wiki 本身就是固定顺序）。
-* **Ascension 的内容覆盖**：20 条规则全部有机制（§187–§189），A2/A3/A4 与 A17/A18/19 的
-  **数值**覆盖 **48 个动作 / 49 条变体**（§190–§192；一个动作可以有两个档位）。剩下的动作里多数
-  本来就没有升档（纯状态 / 召唤 / `Does nothing`）；`giant_head.*` 与 `maw.*` 是写明了的简化
-  （前者 320 HP 版，后者 wiki 无页）。每幕的 Boss 池都是三只，A20 的两场可以不同。
-  仍缺的两条数值轴：**起始状态的层数不随 Ascension 变**（Artifact 2→3、Regenerate 10→15），
-  以及 **A9 的 `AscHP` 不精确**（跑层施加的是百分比）。
-* **可变伤害**：`louse_red.bite`（5-7，A2 6-8）与 `darkling.nip`（7-11，A2 9-13）在**建战斗时**
-  抽一次并写进该敌人的计数器（wiki: *chosen at the start of combat*），动作读 `combatantCounter`。
-  `louse_green.*` 仍是常量 —— 这份内容没有绿虱的敌人记录，改动它等于埋一个"0 伤害"的地雷。
-* **状态**：缺 Barricade / Blur / Entangled / Slow，以及"下一回合多抽 / 多能量"。
-* **战斗流程**：敌人的"偷钱后逃跑"（Looter）没有；"行动者自己消失"做不到
-  （`remove_combatant` 拒绝移除当前行动者 ⇒ Reptomancer 的匕首不能自毁）。
-* **运行层**：篝火只有休息/打铁（缺 Recall / Lift / Toke / Dig）；一个事件选项只能有一条效果；
-  没有钥匙与第四幕；**无色牌不出售**（唯一来源是 Colorless Potion）。
+> 这一节只写**当前**的缺口。已经做完的条目**一律删掉** —— 留着会让人以为还得再做一次，
+> 比漏写更坏（§233 就是这么清掉 Barricade / Blur / Entangled / Slow 与"偷钱逃跑 / 自毁"的）。
+
+* **卡牌数量**：与 wiki 的 Cargo 卡表逐张对账，口径内 **54 / 145**。铁甲战士 **40 / 75**（缺 35），
+  无色 **14 / 70**（缺 56，其中**商店三档 31 张一张都没有**）。逐桶清单见
+  `docs/sts-wiki-gap.md` §A.1；重算用 `python -X utf8 native/audit_card_gap.py --offline`。
+* **缺的红卡里有一半要新载体**（不是只缺内容行）：`feed` 的 "If Fatal"、`heavy_blade` 的"力量算三次"、
+  `blood_for_blood` 的"每次掉血减 1 费"、`corruption` 的"技能 0 费 + 打出即消耗"、
+  `dark_embrace` / `feel_no_pain` / `fire_breathing` / `rupture` / `juggernaut` 的"每当…"触发器、
+  `double_tap` 的"下一张 **Attack** 打两次"（现有 `standard.duplication` 不限牌型）、
+  `clash` 的"手牌全是攻击才能打"、`exhume` 的"从消耗堆选一张"（`ChoiceSource` 还没有消耗堆）、
+  `havoc` / `infernal_blade` 的"打出/生成随机牌"。
+* **篝火**：只有 Rest / Smith。缺 **Recall**（红钥匙）/ **Lift**（`Girya`）/ **Toke**（`Peace Pipe`）/
+  **Dig**（`Shovel`），以及 `Coffee Dripper` / `Fusion Hammer` / `Dream Catcher` 三个改动选项的遗物。
+  wiki 语义与分层计划在 `docs/port-plan.md` §234（**一行代码都还没写**）。
+* **商店无色货架**：没有。无色牌目前的唯一来源是 Colorless Potion（§185）。
+* **状态**：缺"下一回合**多**抽 / **多**能量"（`Draw` / `Energized`）—— 现在只有本回合的
+  `combat_draw` / `combat_energy`，以及"下一回合**少**抽"的 `standard.draw_reduction`。
+* **遗物**：15 件，效果是 `rd-run` 里的手写规则。**总数未核对**（wiki 的 `Relics` 也能按 Cargo 表查，
+  但还没做 —— 下一轮补 `audit_relic_gap.py`，跟卡表那一套同样的形状）。
+* **事件**：14 个，选项支持**一串**效果（不是一条）；但真实事件的**剧情分支**被压缩过
+  （例：Golden Idol 的 Outrun / Smash / Hide 三选一在我们这里只有两选项）。
+* **Ascension**：20 条都有机制（14 条运行层规则 + 6 条走 `EACT.ProgramAsc`），A7/A8/A9 的生命值
+  按 wiki 的 `AscHP` **逐条钉住**（§206，`INV_ASC_HP`）。仍是**部分覆盖**的是 **A17/18/19 的动作**：
+  80 个动作有变体，其余 50 个还没有 wiki 出处（`gap_check.py` 打印 "without a variant: 50"）。
+* **第四幕与钥匙**：没有。`Recall` 就挂在它上面。
 
 ---
 
