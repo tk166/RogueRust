@@ -16023,3 +16023,58 @@ Amount}`：每个目标直接写（不入队），`max` 传 `None` 保持原上�
 * 内容：卡 **117 行**（+2）、镜像 **92,644 B**（core 76,448）。
 * 矩阵 **433 行**（+2）、扫描到的具名测试 **940**、wiki 对照 **47** 张。
 * `MAX_POOL` 112 → 128（§232 就抬过；这一节只跟着内容走）。
+
+---
+
+## §234 篝火四选项：先把 wiki 语义钉死，再分层做（本轮只到"计划 + 口径"）
+
+`docs/sts-wiki-gap.md` 的 §D 一直写着"篝火只有 Rest / Smith"。这一节把 wiki 的 `Rest Sites` 页
+（`?action=raw` 抓下来逐条读过）变成一张**可执行**的语义表，并把实现拆成不互相阻塞的几层。
+
+### 234.1 wiki 的三组选项（原文口径）
+
+| 组 | 选项 | 语义（wiki） | 我们 |
+|---|---|---|---|
+| 标准 | **Rest** | 回 30% 最大生命；`Coffee Dripper` / `Mark of the Bloom` 灰掉；**满血也可用** | **有**（`RunState::rest`） |
+| 标准 | **Smith** | 升级一张牌；`Fusion Hammer` 或**全升完**则灰掉 | **有**（`RunState::smith`） |
+| 标准 | **Recall** | 拿 **Ruby Key**；只在"当前存档已解锁第四幕"且本幕没拿过时出现 | **没有** |
+| 遗物 | **Lift**（`Girya`） | 每次 +1 力量、**最多 3 次**；之后**每场战斗开始**都带这些力量；用完选项灰掉 | **没有** |
+| 遗物 | **Toke**（`Peace Pipe`） | 从牌组里删一张 | **没有** |
+| 遗物 | **Dig**（`Shovel`） | 拿一个随机遗物，**只要 Common/Uncommon/Rare**（不是 Shop/Boss/Event） | **没有** |
+| 被动 | `Regal Pillow` / `Eternal Feather` | 休息 +15 / 进篝火按牌数回血 | **有**（§156/§157） |
+| 被动 | `Dream Catcher` | **休息之后**给一次卡牌奖励 | **没有** |
+
+### 234.2 分层（每层能独立验收，别一次改三层）
+
+1. **状态**：`RunState` 加两个字段 —— `girya_lifts: u8`（0..=3）与 `ruby_key: bool`。
+   ⚠️ 这两个字段**进存档与哈希**，所以存档 `VERSION: 2 → 3`（`state/archive.rs` 写入 2 字节、
+   读取要求同版本），并同步 `state_hash`。**先做这一层，因为它决定了后面所有层能不能落盘。**
+2. **可用性**：`RelicEffect` 加 6 个变体（`CampfireLift` / `CampfireToke` / `CampfireDig` /
+   `NoRest` / `NoSmith` / `RestCardReward`）。注意 `relic_effect` 是**一张表三个调用方**
+   （`push_relic` / `end_of_combat` / `combat_bonus`），新增变体会让三处的穷尽 `match` 编译报错 ——
+   这正是要的效果（新遗物不可能安静地什么都不做）。
+3. **动作**：`campfire_options()` 返回六个布尔（Rest/Smith/Recall/Lift/Toke/Dig），
+   `lift()` / `toke(index)` / `dig(relic_pool)` / `recall()` 各自把 `Pending::Rest` 收掉。
+   `toke` 复用 `remove_at`，`dig` 复用抽遗物的那条路（但要按"只要 Common/Uncommon/Rare"过滤）。
+4. **ABI + 页面**：`rd_run_campfire_options` / `rd_run_lift` / `rd_run_toke` / `rd_run_dig` /
+   `rd_run_recall`；页面篝火面板从"两个按钮"变成"按位显示"，`toke` 直接复用已有的**牌组选择器**
+   （`showDeckPicker`），`dig` 走既有的消息行。
+5. **内容**：`girya` / `peace_pipe` / `shovel` / `coffee_dripper` / `fusion_hammer` / `dream_catcher`
+   六行遗物。
+6. **`Lift` 的跨层传递**：力量不是"拿到就生效"，而是**每场战斗开始**。现有载体就是
+   `RelicEffect::StartCombatStatus("standard.strength", N)`（`vajra` 在用）—— 差别只在
+   **N 是运行期的**（`girya_lifts`），所以要么给 `combat_bonus` 加一条"把 lifts 折算成一次
+   `StartCombatStatus`"，要么在 `combat_bonus` 里直接读字段。两者都要判据：
+   **用过 2 次 Lift 之后开三场战斗，每场都带 2 层力量**（不是只有下一场）。
+
+### 234.3 一个必须提前说的风险（§233 的教训）
+
+加六行**遗物**会改变遗物池，而 `act1_slice` / `soak` 是**确定性的走图**：池子一变，掉落顺序变，
+"某个种子能不能打赢 Boss"就可能翻面（§233 就是这样红了 13 条，根因是驱动不会用 X 费牌）。
+所以这一步落地时要**单独跑** `web/act1_slice.mjs` 与 `web/soak_test.mjs`，并把它们当作"遗物池
+变动"的判据，而不是等 `acceptance.ps1` 一次性报红。
+
+### 234.4 本轮做到哪
+
+只做到 **§234.1 的口径固化 + 工具**（`native/audit_card_gap.py`、文档刷新、`gap_check.py` 去重）。
+上面六层一行代码都还没写 —— 写在这里是为了让下一轮**从第 1 层开始**，而不是重新读一遍 wiki。
