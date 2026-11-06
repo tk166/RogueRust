@@ -15620,6 +15620,98 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "infernal_blade",
+      "PackageId": "sts",
+      "NameKey": "Infernal Blade",
+      "DescriptionKey": "Add a random Attack into your hand. It costs 0 this turn. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createRandomCardInstance",
+          "value": {
+            "Tag": "attack",
+            "ToZone": "Hand",
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "CostZero": true,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "infernal_blade+",
+      "PackageId": "sts",
+      "NameKey": "Infernal Blade+",
+      "DescriptionKey": "Add a random Attack into your hand. It costs 0 this turn. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createRandomCardInstance",
+          "value": {
+            "Tag": "attack",
+            "ToZone": "Hand",
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "CostZero": true,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
     }
   ],
   "EnemyActions": [

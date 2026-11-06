@@ -250,6 +250,7 @@ FACTS = {
     # ---- §239：PlayCondition 的第一张（1 张） -------------------------------------------
     'clash': ([('damage', 14, 'event')], [('damage', 18, 'event')]),
     'burning_pact': ([('choose', 'source', 'Hand', (), 1, 1, 'Exhaust'), ('draw', 2, 'source')], [('choose', 'source', 'Hand', (), 1, 1, 'Exhaust'), ('draw', 3, 'source')]),
+    'infernal_blade': ([('createRandom', 'attack', 'Hand', 1, True)], [('createRandom', 'attack', 'Hand', 1, True)]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

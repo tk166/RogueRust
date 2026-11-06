@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 502 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 504 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 177 | 104 | 73 | 0 | 167 | 10 | 14 | 0 |
+| 卡牌 | 179 | 106 | 73 | 0 | 169 | 10 | 14 | 0 |
 | 状态 | 55 | 51 | 2 | 2 | 0 | 55 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 502 | 327 | 159 | 16 | 344 | 65 | 77 | 0 |
+| **合计** | 504 | 329 | 159 | 16 | 346 | 65 | 77 | 0 |
 
-扫描到的具名测试：**955** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**956** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -239,7 +239,7 @@
 | time_eater.ripple | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 
-## 卡牌（177）
+## 卡牌（179）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -333,6 +333,8 @@
 | immolate+ | yes | — | CARD_DIFF | wiki:wiki_cards/immolate.txt (via immolate) | — | INV_CARDS |
 | impervious | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/impervious.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | impervious+ | yes | — | CARD_DIFF | wiki:wiki_cards/impervious.txt (via impervious) | — | INV_CARDS |
+| infernal_blade | yes | infernal_blade_adds_a_random_attack_that_really_costs_zero | — | wiki:wiki_cards/infernal_blade.txt | — | §240/CARD_WIKI+INV_CARDS/infernal_blade_adds_a_random_attack_that_really_costs_zero |
+| infernal_blade+ | yes | infernal_blade_adds_a_random_attack_that_really_costs_zero | — | wiki:wiki_cards/infernal_blade.txt (via infernal_blade) | — | INV_CARDS/infernal_blade_adds_a_random_attack_that_really_costs_zero |
 | inflame | yes | — | CARD_DIFF | wiki:wiki_cards/inflame.txt | — | CARD_WIKI+INV_CARDS |
 | inflame+ | yes | — | CARD_DIFF | wiki:wiki_cards/inflame.txt (via inflame) | — | INV_CARDS |
 | injury | yes | evolve_and_fire_breathing_only_answer_to_the_right_tags, the_event_vocabulary_parses_and_refuses_what_it_does_not_know …(+2) | — | wiki:wiki_cards/injury.txt | — | §143/CARD_WIKI+INV_CARDS/evolve_and_fire_breathing_only_answer_to_the_right_tags |

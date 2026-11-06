@@ -104,6 +104,11 @@ pub enum NodeKind {
     DrawCards,
     /// `node.createCardInstance`。
     CreateCardInstance,
+    /// §240：**造一张随机牌**（`Infernal Blade`）。`{Tag, ToZone, Count, CostZero}`。
+    ///
+    /// 为什么要单独的节点：定义 id 不是内容写的，而是按 tag 从卡表里抽的 —— 那条"抽签"逻辑在
+    /// 内核里（`exec::create_random_card`），内容只说"要什么样的牌、落到哪儿"。
+    CreateRandomCardInstance,
     /// `node.moveCardToZone`。
     MoveCardToZone,
     /// `node.gainResource`。
@@ -245,6 +250,7 @@ impl NodeKind {
             NodeKind::LoseHp => "node.loseHp",
             NodeKind::GainMaxHealth => "node.gainMaxHealth",
             NodeKind::DealDamageAndGainMaxHealthIfFatal => "node.dealDamageAndGainMaxHealthIfFatal",
+            NodeKind::CreateRandomCardInstance => "node.createRandomCardInstance",
             NodeKind::DealDamageAndHealByLoss => "node.dealDamageAndHealByLoss",
             NodeKind::DealDamageWithTagBonus => "node.dealDamageWithTagBonus",
             NodeKind::AddCardCounter => "node.addCardCounter",
@@ -258,7 +264,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 32] = [
+        const ALL: [NodeKind; 33] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -299,6 +305,7 @@ impl NodeKind {
             // §238：抬高最大生命（Feed 的 "If Fatal"）。
             NodeKind::GainMaxHealth,
             NodeKind::DealDamageAndGainMaxHealthIfFatal,
+            NodeKind::CreateRandomCardInstance,
             // §233：把防御池设成某个值（Entrench）。
             NodeKind::SetDefensivePool,
             NodeKind::Repeat,

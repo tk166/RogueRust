@@ -2434,6 +2434,22 @@ pub enum EffectRequest {
         amount: i32,
     },
     /// `CreateCardInstanceEffectRequest`（`CardCreationEffects.cs:3-…`）。
+    /// §240：**造一张随机牌**（`Infernal Blade`："Add a random Attack into your hand."）。
+    ///
+    /// 与 [`Self::CreateCardInstance`] 的唯一区别是"定义不是内容写死的，而是按 tag 从卡表里抽"。
+    /// 抽签用 `random_step`，与其它随机（洗牌、随机目标）同一条账。
+    CreateRandomCard {
+        /// 归属战斗员。
+        owner: CombatantId,
+        /// 只从这个 tag 的牌里抽（`attack`）。
+        tag: crate::state::TagId,
+        /// 张数。
+        count: i32,
+        /// 落到哪个区。
+        to_zone: CardZone,
+        /// 造出来的这张**本回合费用为 0**（每副本价格 `-印刷费用`）。`false` = 不动费用。
+        cost_zero: bool,
+    },
     CreateCardInstance {
         /// 归属战斗员。
         owner: CombatantId,

@@ -493,6 +493,11 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §240：随机造牌（1 张） -----------------------------------------------------------
+    "infernal_blade": {"Cost": 1, "Tags": ["skill"],
+                            "Facts": [('createRandom', 'attack', 'Hand', 1, True)]},
+    "infernal_blade+": {"Cost": 0, "Tags": ["skill"],
+                             "Facts": [('createRandom', 'attack', 'Hand', 1, True)]},
     # ---- §239：clash 之后的两张（burning_pact） -------------------------------------------
     "burning_pact": {"Cost": 1, "Tags": ["skill"],
                           "Facts": [('choose', 'source', 'Hand', (), 1, 1, 'Exhaust'), ('draw', 2, 'source')]},
@@ -1431,6 +1436,12 @@ def program_facts(root):
             # §236: "Lose N HP" as a fact. It is **not** damage -- that difference is the whole
             # point (no Block, no modifiers, no "when attacked" hooks), so the fact says so.
             out.append(("loseHp", amount(body["Amount"]), tgt(body["TargetSelector"])))
+        elif kind == "node.createRandomCardInstance":
+            # §240: "add a random <tag> card" (Infernal Blade). The definition is NOT in the
+            # content -- the kernel draws it from the card table at resolve time.
+            out.append(("createRandom", body.get("Tag"), body.get("ToZone"),
+                        amount(body["Count"]) if "Count" in body else 1,
+                        bool(body.get("CostZero"))))
         elif kind == "node.dealDamageAndGainMaxHealthIfFatal":
             # §238: Feed -- damage and, **if that damage killed**, raise the source's Max HP.
             out.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))

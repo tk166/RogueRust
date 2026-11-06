@@ -16393,3 +16393,46 @@ Burning Pact 打完进弃牌堆。与 §235 的 `sever_soul` 同源，记在 `DE
 * 与 wiki 对账：口径内 **84 / 145**（红 **70 / 75**，缺 5：`blood_for_blood` `corruption`
   `havoc` `infernal_blade` `spot_weakness`；无色 14 / 70）；
 * 矩阵 **502 行**、具名测试 **955**；21/21 闸门绿。
+
+---
+
+## §240 `Infernal Blade`：按 tag 从卡表里随机造牌（"本回合 0 费"用绝对价格）
+
+"Add a random Attack into your hand. It costs 0 this turn. Exhaust." 三块载体都是通用的：
+
+| 块 | 形状 | 为什么这么切 |
+|---|---|---|
+| `node.createRandomCardInstance` | `{Tag, ToZone, Count, CostZero}` | 定义 id 不是内容写的，是**运行期从卡表里抽**的；内容只说"要什么样的牌、落到哪儿" |
+| `EffectRequest::CreateRandomCard` | 和 `CreateCardInstance` 同形多一个 `tag` | 抽签放在**排空那一刻**，与洗牌/随机目标同一本 `random_step` 账 |
+| `standard.card_cost_override` | **绝对**每副本价格 = 0 | 比 delta 更准（见下） |
+
+### 240.1 "0 费"用现成的**绝对**价格，不用 delta
+
+第一版写成"给一份 `-印刷费用` 的 delta"，还为此写了个 `printed_energy_cost`（把 `Costs` 列表再读
+一遍）。判据当场抓到它没生效（能量掉了 1 点），而查下去发现 `play.rs` 早就有**绝对**每副本价格那一格
+—— `mark_counter_opt(instance, CARD_COST_OVERRIDE_COUNTER)` 在 delta **之前**生效。
+
+用现成的那个：既不用算印刷费用，也不用第二份 `Costs` 读者（§4.20：同一个词表被两处认识就一定漂）。
+`printed_energy_cost` 因此**没有被留下来**。
+
+### 240.2 随机池里**有原因**排除的两类
+
+* **`+` 行**（`strike+`）：StS 的随机池是基础牌，升级行只是同一张牌的另一个定义；
+* **X 费牌**：`calculate_costs` 对 X 费牌**在费用阶段之前**就返回"全部能量"，绝对价格对它无效 ⇒
+  造出来会变成"标签写着 0 费、实际仍是全部能量"的假象。这与 §238 起既有的裁决同源
+  （Liquid Memories / Attack Potion 选到 X 费牌时拒绝）。
+
+### 240.3 判据
+
+`infernal_blade_adds_a_random_attack_that_really_costs_zero` **连造 40 次**，每次断言四件事：
+① 是攻击牌；② 不是 `+` 行；③ 不是 X 费牌；④ 那张牌**实际付款**是 0（不是"显示 0"）。
+随机性本身不钉（钉死就是钉死洗牌顺序），钉的是**池子的性质** —— 这比"某一次等于某张牌"强得多；
+另外断言 40 次至少抽到 3 种不同定义，否则"池子退化成一张牌"也会全绿。
+
+### 240.4 数字
+
+* 单测 **954**（749 core + 110 run + 95 wasm，+1）；四条对拍不变 `182 / 62 / 124 / 394`；
+* 内容：卡 **179 行**（+2）、镜像 **104,616 B**（core 83,680 B）；
+* 与 wiki 对账：口径内 **85 / 145**（红 **71 / 75**，缺 4：`blood_for_blood` `corruption`
+  `havoc` `spot_weakness`；无色 14 / 70）；
+* 矩阵 **504 行**、具名测试 **956**；21/21 闸门绿。
