@@ -21,6 +21,13 @@ import io
 
 # §218 的偏差声明（内容 vs wiki）。key = 基础 id；值里的字段只写**与 wiki 不同**的那几项。
 DEVIATIONS = {
+    # §236：Brutality 的 dump 是 `(;{{KW|Innate}}. <br>)At the start of your turn, lose 1 HP and
+    # draw 1 card.` —— 括号里是"基础;升级"，**Innate 只属于升级版**。词条解析器只看
+    # `{{KW|...}}` 出现与否，分不出"只属于升级"，所以这里显式声明基础版没有 Innate。
+    'brutality': {
+        'why': 'wiki 的 Innate 在 `(基础;升级)` 括号里 ⇒ 只有 brutality+ 是 Innate。',
+        'content_keywords': [],
+    },
     # §235：`Sever Soul` 的 dump 里 `{{KW|Exhaust}}` 是**动词**（"Exhaust all non-Attack cards in
     # your hand"），不是这张牌自己的关键字 —— 它自己不消耗。词条解析器只看 `{{KW|...}}` 标记，
     # 分不出"作为动词的 Exhaust"，所以这里显式声明：内容**没有** Exhaust 关键字。
@@ -216,6 +223,12 @@ FACTS = {
     'seeing_red': ([('gain', 'standard.energy', 2, 'source')], [('gain', 'standard.energy', 2, 'source')]),
     'sever_soul': ([('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),))], [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),))]),
     'shockwave': ([('status', 'standard.weak', 3, 'allEnemies'), ('status', 'standard.vulnerable', 3, 'allEnemies')], [('status', 'standard.weak', 5, 'allEnemies'), ('status', 'standard.vulnerable', 5, 'allEnemies')]),
+    # ---- §236：失去生命（5 张） -----------------------------------------------------------
+    'bloodletting': ([('loseHp', 3, 'source'), ('gain', 'standard.energy', 2, 'source')], [('loseHp', 3, 'source'), ('gain', 'standard.energy', 3, 'source')]),
+    'brutality': ([('status', 'standard.brutality', 1, 'source')], [('status', 'standard.brutality', 1, 'source')]),
+    'hemokinesis': ([('loseHp', 2, 'source'), ('damage', 15, 'event')], [('loseHp', 2, 'source'), ('damage', 20, 'event')]),
+    'offering': ([('loseHp', 6, 'source'), ('gain', 'standard.energy', 2, 'source'), ('draw', 3, 'source')], [('loseHp', 6, 'source'), ('gain', 'standard.energy', 2, 'source'), ('draw', 5, 'source')]),
+    'rupture': ([('status', 'standard.rupture', 1, 'source')], [('status', 'standard.rupture', 2, 'source')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

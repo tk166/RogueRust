@@ -114,20 +114,19 @@ python -X utf8 native/audit_card_gap.py --offline   # 只读索引，CI/无网�
 | Red · Skill · Rare | 5 | 2 | 3 |
 | Red · Power · Uncommon | 8 | 3 | 5 |
 | Red · Power · Rare | 6 | 3 | 3 |
-| **Red 小计** | **75** | **54** | **21** |
+| **Red 小计** | **75** | **59** | **16** |
 | Colorless · Attack（Uncommon / Rare / Special） | 11 | 1 | 10 |
 | Colorless · Skill（Uncommon / Rare / Special） | 33 | 4 | 29 |
 | Colorless · Power（Rare / Special） | 7 | 0 | 7 |
 | Colorless · Curse | 14 | 4 | 10 |
 | Colorless · Status 牌 | 5 | 5 | 0 |
 | **Colorless 小计** | **70** | **14** | **56** |
-| **合计（口径内）** | **145** | **68** | **77** |
+| **合计（口径内）** | **145** | **73** | **72** |
 
-**§235 之后还剩 21 张红卡**，按"要什么载体"分组（这是下一批的施工单）：
+**§236 之后还剩 16 张红卡**，按"要什么载体"分组（这是下一批的施工单）：
 
 | 需要的载体 | 牌 |
 |---|---|
-| **`loseHp` 节点**（现在没有"失去生命"这个动作，只有 `dealDamage`） | `bloodletting` `hemokinesis` `offering` `brutality` |
 | **触发器接钩子**（`BlockGained` / `CardsDrawn` / 卡被消耗 三个事件名都在词表里，但声明为 `NotHandled`） | `juggernaut` `evolve` `fire_breathing` `dark_embrace` `feel_no_pain` |
 | **`ChoiceSource::ExhaustPile`**（现在只有 Hand / DiscardPile / Offered） | `exhume` |
 | **动态费用 / 力量倍率 / Fatal / 技能 0 费 + 打出即消耗** | `blood_for_blood` `heavy_blade` `feed` `corruption` |

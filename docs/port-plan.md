@@ -16140,3 +16140,62 @@ Amount}`：每个目标直接写（不入队），`max` 传 `None` 保持原上�
 * 与 wiki 的卡表对账：口径内 **68 / 145**（红 **54 / 75**，缺 21；无色 14 / 70）；
 * 矩阵 **462 行**、具名测试 **944**、wiki 对照 **47** 张；
 * 21/21 闸门绿（`act1_slice` 用 seed 777 通关进第二幕，`soak` 三局都走到 floor 16）。
+
+---
+
+## §236 「失去生命」是一个动作，不是伤害（+ 5 张牌，含 Rupture 的 `from_card`）
+
+`docs/sts-wiki-gap.md` §A.1 的施工单第一条就是"没有 `loseHp` 这个动作"。这一节补上它，一次解锁
+`bloodletting` / `hemokinesis` / `offering` / `brutality` / `rupture` 五张牌（红卡 54 → **59 / 75**）。
+
+### 236.1 为什么 `Lose N HP` 不能拿 `dealDamage` 顶
+
+StS 的 `Lose HP` 与"受到伤害"是两件事，三处都不一样：
+
+| | 伤害 | `Lose HP` |
+|---|---|---|
+| 格挡 | 先扣格挡 | **完全不看格挡** |
+| 修饰器 | 力量/易伤/脆弱 | **一个都不吃** |
+| "被打"钩子 | Thorns / Flame Barrier / Curl Up / Flying 都响 | **一个都不响** |
+| "失去生命"钩子 | — | **要响**（Rupture） |
+
+所以内核加了 `exec::lose_health()`：直接写 `health_current`，但**复用掉血那套收尾**（0 血转
+`Downed`、主人的随从逃跑、发 `Downed` 事件、判胜负）。少了最后一步，"用一张牌把自己打死"不会
+结束战斗 —— 一个只在自伤牌上出现的死锁，判据第 ③ 段钉的就是它。
+
+### 236.2 `HpLost` 事件与 `from_card`
+
+新事件 `CombatEvent::HpLost { target, amount, from_card }`，Host 把它派给**失去生命的那一方**
+（Rupture 长在它身上），事实位带 `HP_LOSS_FROM_CARD`，内容用
+`event.bool: hpLoss.fromCard` 过滤。
+
+`from_card` 这一格不是洁癖：StS 的 Rupture 只认"**因为一张牌**失去生命" ——
+`Hemokinesis` 算，`Brutality` 每回合扣的那 1 点**不算**。没有这一格就只能二选一，而两种选法
+都会错一张牌。判据 ② 正是两侧都测：Bloodletting 掉 3 血给 2 层力量，Brutality 掉 1 血一层都不给。
+
+### 236.3 顺手修掉一个**零选项死锁**（soak 抓到）
+
+`Warcry` 的程序是"抽 1 张，然后问玩家把手里一张放到抽牌堆顶"。抽牌堆空时手牌只有**它自己** ⇒
+候选 = 它 ⇒ 问句成立；但出牌一结束它就离开手牌，于是 `choice_legal` 过滤候选后变成 **0 个**
+⇒ 页面画出一个"确认键永久禁用、× 也被 §161.3 挡住"的弹窗 —— soak 在 boss 战里卡死。
+
+修法与 §226 同一条洞见：**正在结算的那张牌不算"手牌里的牌"**。`choose_cards_node` 现在建候选时
+跳过 `ctx.resolving_card`，于是这种局面下**根本不提问**（`available == 0` 走 no-op 分支）。
+语义上也更对：StS 里打出的牌当时在 in-play 区。
+
+### 236.4 两处被 wiki 的括号纠正的内容
+
+1. `brutality` 的 dump 是 `(;{{KW|Innate}}. <br>)At the start of your turn…` —— 括号是"基础;升级"，
+   **Innate 只属于升级版**。词条解析器只看 `{{KW|...}}` 出现过没有，所以给 `brutality` 记了一条
+   `DEVIATIONS`（`content_keywords: []`）；同时把"升级行可以改关键字"的规则放宽到
+   `base_tags + ["innate"]`（与 §223 的"升级可以少一个 ethereal"对称）。
+2. `sever_soul` 那条（§235 记的）同源：`{{KW|Exhaust}}` 在那里是**动词**。
+
+### 236.5 数字
+
+* 单测 **944**（739 core + 110 run + 95 wasm，+2：`losing_hp_is_not_damage_but_it_is_hp_loss`、
+  `the_lose_hp_cards_do_what_their_pages_say`）；
+* 内容：卡 **155 行**（+10）、状态 **49**（+2：`standard.brutality` / `standard.rupture`）、
+  镜像 **99,420 B**（core 80,504 B）；
+* 与 wiki 对账：口径内 **73 / 145**（红 **59 / 75**，缺 16；无色 14 / 70）；
+* 矩阵 **474 行**、具名测试 **946**；21/21 闸门绿（soak 三局都到 floor 16）。

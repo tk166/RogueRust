@@ -128,7 +128,7 @@ python -m http.server 8000
 |---|---|
 | **战斗内核** | `rd-core` 21 个源文件、约 57k 行。出牌/结算/状态/意图/修饰器管线/效果程序 IR（栈式）/选择与目标/金色指纹；**零分配、纯整数、`forbid(unsafe_code)`** |
 | **运行层** | `rd-run` 约 7.9k 行。地图（15 行 × 7 列 + Boss）、幕、牌组、金币、遗物、药水、奖励屏、商店、事件、篝火、**Ascension 0–20（20/20 条都有机制）**、**存档（单行文本 + CRC）**、**回放（动作序列 + 每步哈希）** |
-| **内容** | **47 怪 / 34 遭遇 / 145 条卡行（75 张基础 + 70 条升级行）/ 47 状态 / 130 敌人动作 / 15 遗物 / 33 药水（满池）/ 14 事件（三幕 6+4+4）/ 10 张起始牌**。编译成 97,456 B 的 `rdcf` 镜像（core 镜像 79,280 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
+| **内容** | **47 怪 / 34 遭遇 / 155 条卡行（80 张基础 + 75 条升级行）/ 49 状态 / 130 敌人动作 / 15 遗物 / 33 药水（满池）/ 14 事件（三幕 6+4+4）/ 10 张起始牌**。编译成 99,420 B 的 `rdcf` 镜像（core 镜像 80,504 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
 | **前端** | `index.html`（战斗 + 运行层 + 存档 + 回放）、`map.html`（地图页）；`wasm32` + **148** 个 `i32` 的战斗观察向量（另有 19 个 slot 的运行层观察）、一组 `rd_env_*` / `rd_run_*` 导出（`web/smoke.mjs` 有一张手抄的 `REQUIRED` 表**逐条**对账，加导出必须同时改两处） |
 | **RL 环境** | `rd_env_*` ABI（`docs/spec/env-abi.md`）+ Python `ctypes` 封装（多进程、批量观察） |
 | **裸机** | `riscv32imac-unknown-none-elf` 真链接成 ELF，镜像占用有闸门 |
@@ -139,15 +139,16 @@ python -m http.server 8000
 > 这一节只写**当前**的缺口。已经做完的条目**一律删掉** —— 留着会让人以为还得再做一次，
 > 比漏写更坏（§233 就是这么清掉 Barricade / Blur / Entangled / Slow 与"偷钱逃跑 / 自毁"的）。
 
-* **卡牌数量**：与 wiki 的 Cargo 卡表逐张对账，口径内 **68 / 145**。铁甲战士 **54 / 75**（缺 21），
+* **卡牌数量**：与 wiki 的 Cargo 卡表逐张对账，口径内 **73 / 145**。铁甲战士 **59 / 75**（缺 16），
   无色 **14 / 70**（缺 56，其中**商店三档 31 张一张都没有**）。逐桶清单见
   `docs/sts-wiki-gap.md` §A.1；重算用 `python -X utf8 native/audit_card_gap.py --offline`。
 * **缺的红卡里有一半要新载体**（不是只缺内容行）：`feed` 的 "If Fatal"、`heavy_blade` 的"力量算三次"、
   `blood_for_blood` 的"每次掉血减 1 费"、`corruption` 的"技能 0 费 + 打出即消耗"、
-  `dark_embrace` / `feel_no_pain` / `fire_breathing` / `rupture` / `juggernaut` 的"每当…"触发器、
+  `dark_embrace` / `feel_no_pain` / `fire_breathing` / `juggernaut` 的"每当…"触发器、
   `double_tap` 的"下一张 **Attack** 打两次"（现有 `standard.duplication` 不限牌型）、
   `clash` 的"手牌全是攻击才能打"、`exhume` 的"从消耗堆选一张"（`ChoiceSource` 还没有消耗堆）、
-  `havoc` / `infernal_blade` 的"打出/生成随机牌"。
+  `havoc` / `infernal_blade` 的"打出/生成随机牌"、`burning_pact` 的"问完再继续"。
+  （"失去生命"与 Rupture 那条触发器在 §236 已经补齐，所以这张清单比上一版短了 5 条。）
 * **篝火**：只有 Rest / Smith。缺 **Recall**（红钥匙）/ **Lift**（`Girya`）/ **Toke**（`Peace Pipe`）/
   **Dig**（`Shovel`），以及 `Coffee Dripper` / `Fusion Hammer` / `Dream Catcher` 三个改动选项的遗物。
   wiki 语义与分层计划在 `docs/port-plan.md` §234（**一行代码都还没写**）。

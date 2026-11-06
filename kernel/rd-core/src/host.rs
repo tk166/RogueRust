@@ -365,6 +365,11 @@ pub enum TriggerEvent {
     CardPlayed,
     /// `CardCostPaid` —— 出牌付了费用。
     CardCostPaid,
+    /// §236：**失去生命**（不是伤害）。Bearer 是失去生命的那一方。
+    ///
+    /// 参考的实现里没有这个名字（它把这件事折进 `CardMovedToZone`/伤害事件），所以这一条是
+    /// **本内核自己的事件名** —— 理由与我们加 `HpLoss` 这个动作本身一样：`Lose HP` 不是伤害。
+    HpLost,
     /// `StatusApplied` —— 一条新状态实例落到某人身上。
     StatusApplied,
     /// `StatusMerged` —— 并进了已有实例。
@@ -392,6 +397,8 @@ impl TriggerEvent {
             "DamageTaken" => Some(TriggerEvent::DamageTaken),
             "Downed" => Some(TriggerEvent::Downed),
             "CardPlayed" => Some(TriggerEvent::CardPlayed),
+            // §236
+            "HpLost" => Some(TriggerEvent::HpLost),
             "CardCostPaid" => Some(TriggerEvent::CardCostPaid),
             "StatusApplied" => Some(TriggerEvent::StatusApplied),
             "StatusMerged" => Some(TriggerEvent::StatusMerged),
@@ -421,6 +428,7 @@ impl TriggerEvent {
             TriggerEvent::DamageTaken => "DamageTaken",
             TriggerEvent::Downed => "Downed",
             TriggerEvent::CardPlayed => "CardPlayed",
+            TriggerEvent::HpLost => "HpLost",
             TriggerEvent::CardCostPaid => "CardCostPaid",
             TriggerEvent::StatusApplied => "StatusApplied",
             TriggerEvent::StatusMerged => "StatusMerged",
@@ -884,6 +892,20 @@ impl<'a> Host<'a> {
         actor: &CombatantId,
         event: TriggerEvent,
     ) -> Result<(), HostError> {
+        self.run_triggers_with_flags(state, actor, event, 0)
+    }
+
+    /// §236：上一个加上**事件事实位**（`event.bool` 读它）。
+    ///
+    /// 只有 `HpLost` 用到：Rupture 要区分"牌付的代价"与"状态每回合扣的"。其它事件走 flags = 0
+    /// 那条，行为逐字不变。
+    fn run_triggers_with_flags(
+        &mut self,
+        state: &mut CombatState,
+        actor: &CombatantId,
+        event: TriggerEvent,
+        flags: u8,
+    ) -> Result<(), HostError> {
         let mut batch = TriggerBatch::new();
         self.collect_triggers(state, actor, event, &mut batch)?;
         batch.sort();
@@ -901,7 +923,15 @@ impl<'a> Host<'a> {
             let root = NodeRef::new(self.content, handle);
             // 执行号由 `exec::begin` 发（`EffectProgramExecution.cs:27`）。**这里不许再发一次**
             // （`event-queue-interface.md` §5.2 末的"双倍发号"警告）。
-            let outcome = execute_program(state, self.content, root, Some(*actor), None, steps);
+            let outcome = execute_program_with_flags(
+                state,
+                self.content,
+                root,
+                Some(*actor),
+                None,
+                steps,
+                flags,
+            );
             outcome.map_err(|e| self.record(HostError::Exec(e)))?;
         }
         Ok(())
@@ -2168,6 +2198,13 @@ impl Host<'_> {
             // `Downed`：Bearer = **倒下的那个**（Spore Cloud 之类"临死一击"）。
             CombatEvent::Downed { combatant, source } => {
                 self.run_downed_triggers(state, &combatant, source)
+            }
+            // §236: `HpLost` -- 派给**失去生命的那一方**（Rupture 长在它身上），
+            // 事实位带上"是不是一张牌付的代价"，节目用 `event.bool: hpLoss.fromCard` 过滤。
+            CombatEvent::HpLost { target, amount, from_card } => {
+                let _ = amount;
+                let flags = if from_card { crate::exec::HP_LOSS_FROM_CARD } else { 0 };
+                self.run_triggers_with_flags(state, &target, TriggerEvent::HpLost, flags)
             }
             // `CardPlayed`：派发给**所有战斗员**（Enrage 在敌人身上，由你出牌触发）。
             CombatEvent::CardPlayed { owner, card } => {
@@ -4044,6 +4081,8 @@ mod tests {
                     TriggerEvent::StatusRemoved => {}
                     TriggerEvent::StatusStacksChanged => status_stacks_changed += 1,
                     TriggerEvent::StatusApplicationPrevented => {}
+                    // §236：镜像（core）里没有 `HpLost` 触发器，计数恒 0。
+                    TriggerEvent::HpLost => {}
                     TriggerEvent::NotHandled => not_handled += 1,
                 }
                 // 信封上的步数预算：实测 25/25 都是 1024。
@@ -9794,6 +9833,206 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// §236：`Lose N HP` **不是伤害** —— 不吃格挡、不触发"被打"的钩子，但它**是**失去生命。
+    ///
+    /// 三件事分开测，因为它们的正确答案各不相同：
+    /// ① 有 10 点格挡时 `Hemokinesis` 仍然掉 2 血（格挡一点不动）—— 这排除了"用 dealDamage 实现"；
+    /// ② 掉血会响 `Rupture`（每层 +1 力量），而 Brutality 的每回合掉血**不响**（`hpLoss.fromCard`）；
+    /// ③ `Lose 6 HP` 在 2 血时只掉 2 —— 而且**把英雄打死时战斗真的结束**（0 血转 Downed 的收尾）。
+    #[test]
+    fn losing_hp_is_not_damage_but_it_is_hp_loss() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // ① 格挡不挡 `Lose HP`。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        give_block(&mut state, "hero", 10);
+        if let Some(enemy) = state.combatant_mut(&cid("enemy_a")) {
+            enemy.health_max = 100;
+            enemy.health_current = 100;
+        }
+        let card = card_in_hand(&mut state, &content, "hero", "hemokinesis");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("hemokinesis is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(health(&state, "hero"), 68, "70 - 2 HP: Block does not stop `Lose HP`");
+        assert_eq!(block_of(&state, "hero"), 10, "and the Block was not consumed");
+        assert_eq!(100 - health(&state, "enemy_a"), 15, "the damage half still lands");
+
+        // ② Rupture 只认"牌付的代价"。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 6);
+        give(&mut state, "hero", status("st_rup", "standard.rupture", 2));
+        turn::start_current_turn(&mut state, &config(), &mut host).expect("turn starts");
+        let card = card_in_hand(&mut state, &content, "hero", "bloodletting");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("bloodletting is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(
+            stacks_of(&state, "hero", "standard.strength"),
+            2,
+            "Bloodletting's 3 HP loss is `from a card` ⇒ Rupture 2 gains 2 Strength"
+        );
+        // Brutality 的每回合掉血**不算**"from a card"。
+        give(&mut state, "hero", status("st_bru", "standard.brutality", 1));
+        let strength_before = stacks_of(&state, "hero", "standard.strength");
+        turn::end_current_turn(&mut state, &config(), &mut host).expect("turn ends");
+        turn::start_current_turn(&mut state, &config(), &mut host).expect("next turn");
+        assert_eq!(
+            stacks_of(&state, "hero", "standard.strength"),
+            strength_before,
+            "Brutality's 1 HP per turn is not a card's cost ⇒ Rupture stays silent"
+        );
+
+        // ③ 血量不够时只掉剩下的，而且**能把自己打死**（0 血转 Downed、战斗判负）。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        if let Some(hero) = state.combatant_mut(&cid("hero")) {
+            hero.health_current = 2;
+        }
+        let card = card_in_hand(&mut state, &content, "hero", "offering");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("offering is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(health(&state, "hero"), 0, "6 HP from a 2 HP hero takes 2");
+        assert_eq!(
+            state.result,
+            crate::state::CombatResult::Defeat,
+            "losing the last HP must end the fight (the Downed bookkeeping is shared with damage)"
+        );
+    }
+
+    /// §236：5 张"失去生命"的牌各自的牌面。
+    #[test]
+    fn the_lose_hp_cards_do_what_their_pages_say() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let energy_of = |state: &CombatState| -> i32 {
+            state
+                .combatant(&cid("hero"))
+                .map_or(0, |combatant| {
+                    combatant
+                        .resources()
+                        .iter()
+                        .filter(|pool| pool.key.as_str() == "standard.energy")
+                        .map(|pool| pool.pool.current)
+                        .sum()
+                })
+        };
+
+        // bloodletting：-3 HP，+2/+3 能量（0 费，所以能量净值就是加的那些）。
+        for (card_id, gain) in [("bloodletting", 2i32), ("bloodletting+", 3)] {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            let card = card_in_hand(&mut state, &content, "hero", card_id);
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .expect("bloodletting is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            assert_eq!(health(&state, "hero"), 67, "{card_id}: lose 3");
+            // 起点能量是 0（0 费牌不需要预置），所以净值就是这张牌加的那些。
+            assert_eq!(energy_of(&state), gain, "{card_id}: gain {gain} Energy");
+        }
+
+        // offering：-6 HP，+2 能量，抽 3/5 张，自消耗。
+        for (card_id, draws) in [("offering", 3usize), ("offering+", 5)] {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            for index in 0..6 {
+                give_card(&mut state, "hero", CardZone::DrawPile,
+                          &std::format!("card_d{index}"), "defend", None);
+            }
+            let card = card_in_hand(&mut state, &content, "hero", card_id);
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .expect("offering is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            assert_eq!(health(&state, "hero"), 64, "{card_id}: lose 6");
+            assert_eq!(energy_of(&state), 2, "{card_id}: gain 2 Energy");
+            // 手牌：offer 自己离手，抽到 draws 张。
+            assert_eq!(zone_count(&state, "hero", CardZone::Hand) as usize, draws, "{card_id}");
+            assert!(
+                zone_definitions(&state, "hero", CardZone::ExhaustPile)
+                    .iter().any(|id| id.as_str() == card_id),
+                "{card_id} exhausts itself"
+            );
+        }
+
+        // brutality：挂上状态（每回合掉 1 血抽 1 张），`+` 版自带 Innate。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        turn::start_current_turn(&mut state, &config(), &mut host).expect("turn starts");
+        let card = card_in_hand(&mut state, &content, "hero", "brutality");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("brutality is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(stacks_of(&state, "hero", "standard.brutality"), 1);
+        let hp_before = health(&state, "hero");
+        // ⚠️ 战斗里有三个战斗员：结束英雄回合只是把席位交给敌人，所以"回到英雄"要循环，
+        // 不能只走一步（写死一步会让这条判据在敌人数量变化时安静地错）。
+        let mut hops = 0;
+        while state.active_combatant_id.as_ref() != Some(&cid("hero")) || hops == 0 {
+            turn::end_current_turn_and_start_next(&mut state, &config(), &mut host)
+                .expect("the turn passes");
+            hops += 1;
+            assert!(hops <= 4, "the turn never came back to the hero");
+        }
+        assert_eq!(
+            health(&state, "hero"),
+            hp_before - 1,
+            "Brutality takes 1 HP at the start of the turn"
+        );
+
+        // rupture：1 层 ⇒ 每次因牌失去生命 +1 力量（见上一条测试的 ②），这里只钉"挂得上"。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        let card = card_in_hand(&mut state, &content, "hero", "rupture+");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("rupture is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(stacks_of(&state, "hero", "standard.rupture"), 2, "rupture+ is 2");
     }
 
     /// §225：**消耗审计** —— 内核里把牌送进消耗堆的路径必须**都**跑 `LifecyclePrograms[Exhausted]`。

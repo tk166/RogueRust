@@ -768,6 +768,10 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // §235: Demon Form -- "at the start of your turn, gain N Strength". The whole rule is a
         // content `TurnStarted` trigger (Ritual's sibling), so the kernel needs no arm.
         "standard.demon_form" |
+        // §236: Brutality (TurnStarted -> lose HP + draw) and Rupture (HpLost -> Strength). Both are
+        // pure content triggers; the kernel owns the `loseHp` action and the `HpLost` event.
+        "standard.brutality" |
+        "standard.rupture" |
         "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No

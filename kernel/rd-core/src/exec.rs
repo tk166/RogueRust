@@ -1568,6 +1568,92 @@ pub fn update_standard_combat_result(state: &mut CombatState) {
     }
 }
 
+/// §236：「失去 N 点生命」—— `Lose HP`，**不是**伤害。
+///
+/// 直接写 `health_current`，但**复用掉血那套收尾**：0 血转 `Downed`、主人的随从逃跑、发 `Downed`
+/// 事件、判胜负。少了这一段，"用一张牌把自己打死"不会结束战斗（一个只在自伤牌上出现的死锁）。
+///
+/// 返回**真的**失去的血量：血量不够时就是剩下的那些（`Lose 6 HP` 在 2 血时只掉 2）。
+pub fn lose_health(
+    ctx: &mut ExecContext<'_>,
+    target: &CombatantId,
+    amount: i32,
+) -> Result<i32, ExecError> {
+    if amount < 0 {
+        return Err(ExecError::Modifier);
+    }
+    let Some(combatant) = ctx.state.combatant(target) else {
+        return Err(ExecError::MissingCombatant);
+    };
+    if combatant.lifecycle_state != crate::state::CombatantLifecycleState::Alive {
+        return Ok(0);
+    }
+    let current = combatant.health_current;
+    let lost = amount.min(current.max(0));
+    let after = current - lost;
+    // `from_card` 由上下文回答：节目里有没有"正在结算的那张牌"。
+    let from_card = ctx.resolving_card.is_some();
+    let combatant = ctx
+        .state
+        .combatant_mut(target)
+        .ok_or(ExecError::MissingCombatant)?;
+    combatant.health_current = after;
+    let went_down = lost > 0
+        && after == 0
+        && combatant.lifecycle_state == crate::state::CombatantLifecycleState::Alive;
+    if went_down {
+        combatant.lifecycle_state = crate::state::CombatantLifecycleState::Downed;
+        for other in ctx.state.combatants_mut() {
+            if other.owner == Some(*target)
+                && other.lifecycle_state == crate::state::CombatantLifecycleState::Alive
+            {
+                other.lifecycle_state = crate::state::CombatantLifecycleState::Escaped;
+            }
+        }
+        ctx.state
+            .enqueue_event(crate::state::CombatEvent::Downed {
+                combatant: *target,
+                source: ctx.source,
+            })
+            .map_err(ExecError::Capacity)?;
+    }
+    if lost > 0 {
+        ctx.state
+            .enqueue_event(crate::state::CombatEvent::HpLost {
+                target: *target,
+                amount: lost,
+                from_card,
+            })
+            .map_err(ExecError::Capacity)?;
+    }
+    update_standard_combat_result(ctx.state);
+    Ok(lost)
+}
+
+/// §236：`node.loseHp` 的实体 —— `{TargetSelector, Amount}`，每个目标各失去一次。
+///
+/// 与 `dealDamage` 的分工写在 [`lose_health`] 的文档里（一句话：不吃格挡、不吃修饰器、
+/// 不触发"被打"的钩子）。`Amount` 在**解析目标之前**求值，与其它产出型节点同一条口径。
+fn lose_hp_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let amount = eval_amount(node, "Amount", ctx)?;
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut targets)?;
+    for target in targets.iter().take(count) {
+        lose_health(ctx, target, amount)?;
+        stats.effects = stats.effects.saturating_add(1);
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
 /// `StandardCombatIds.PlayerTeam`（`StandardCombatIds.cs`：`new("player")`）。
 ///
 /// 与 `battle.rs` 的两个同名常量**是同一份事实**：那个模块用它们建战斗，
@@ -1656,6 +1742,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::DealDamageWithTagBonus
         // §231：`dealDamageAndHealByLoss`（打伤害 + 按掉血回血）。同上。
         | NodeKind::DealDamageAndHealByLoss
+        // §236：`loseHp`（失去生命）。同上。
+        | NodeKind::LoseHp
         // §233：`setDefensivePool`（把防御池设成某个值）。同上。
         | NodeKind::SetDefensivePool
         // §195.7：`upgradeCards`（改定义 id），同上。
@@ -1824,6 +1912,7 @@ fn dispatch_node(
         NodeKind::ChooseCards => choose_cards_node(node, ctx, frame, slot, stats),
         NodeKind::AddCardCounter => add_card_counter_node(node, ctx, frame, slot, stats),
         NodeKind::SetDefensivePool => set_defensive_pool_node(node, ctx, frame, slot, stats),
+        NodeKind::LoseHp => lose_hp_node(node, ctx, frame, slot, stats),
         NodeKind::DealDamageAndHealByLoss => {
             deal_damage_and_heal_by_loss_node(node, ctx, frame, slot, stats)
         }
@@ -4222,8 +4311,21 @@ fn choose_cards_node(
     let mut tag_cells = [0u16; MAX_SELECTED_CARDS];
     let tag_count = node.str_list_field("RequireAnyTag", &mut tag_cells)?;
 
+    // §236：**正在结算的那张牌不算"手牌里的牌"**（与 §226 同一条洞见，这里是它的后果版）。
+    //
+    // 不加这一步会造出一个**零选项的死锁**：`Warcry` 的程序是"抽 1 张，然后问玩家把手里一张放回
+    // 堆顶"。抽牌堆空时手牌只有它自己 ⇒ 候选 = 它 ⇒ 问句成立；但出牌一结束它就离开手牌，
+    // 于是 `choice_legal` 过滤候选后变成 0 个 ⇒ 页面画出一个"确认键永久禁用"的弹窗（soak 抓到）。
+    // 语义上也该排除：StS 里打出的牌当时在 in-play 区，不在手里。
+    let resolving = ctx
+        .resolving_card
+        .and_then(|slot| ctx.state.card(slot))
+        .map(|card| card.id);
     let mut candidates = crate::state::Bounded::new();
     for card in ctx.state.zone_cards(&owner, from_zone) {
+        if Some(card.id) == resolving {
+            continue;
+        }
         // §227：`Upgrade` 的候选收窄是**自动**的，不是内容声明的：一张牌能不能升级，
         // 问的是"内容里有没有它的 `+` 行"（`upgrade_cards_node` 用的同一条规则、同一个
         // `state::upgraded_id` 拼法）。已经带 `+` 的牌与没有 `+` 行的牌都不进候选 ——
@@ -4614,6 +4716,9 @@ pub const CARD_HAS_TAG_STATUS: u8 = 1 << 3;
 /// ⇒ 内核只提供**事实**，跳不跳过由内容说。没有正在结算的牌时这一位恒 0（状态/遗物/敌人招式
 /// 的节目里"没有哪张牌是自己"）。
 pub const CARD_IS_RESOLVING: u8 = 1 << 5;
+
+/// §236：这次失去生命是不是**一张牌**付的代价（`Rupture` 只认这一种）。
+pub const HP_LOSS_FROM_CARD: u8 = 1 << 6;
 
 /// Apply one status by **id string** -- a test-only door into [`apply_one_status`], so tests can
 /// exercise the Artifact gate without building a whole program (`port-plan.md` §117).

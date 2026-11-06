@@ -93,7 +93,8 @@ INV_COUNTS = {
     # §227: +1 (`standard.nightmare_pending`, Nightmare 的"下一回合"载体).
     # §231: +1 (`standard.no_draw`, Battle Trance 的"本回合不能再抽").
     # §235: +1 (`standard.demon_form`, Demon Form 的每回合加力量).
-    "statuses": 47,
+    # §236: +2 (`standard.brutality` / `standard.rupture`).
+    "statuses": 49,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -490,6 +491,27 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §236：失去生命（Lose HP 不是伤害） -------------------------------------------
+    "bloodletting": {"Cost": 0, "Tags": ["skill"],
+                          "Facts": [('loseHp', 3, 'source'), ('gain', 'standard.energy', 2, 'source')]},
+    "bloodletting+": {"Cost": 0, "Tags": ["skill"],
+                           "Facts": [('loseHp', 3, 'source'), ('gain', 'standard.energy', 3, 'source')]},
+    "brutality": {"Cost": 0, "Tags": ["power"],
+                       "Facts": [('status', 'standard.brutality', 1, 'source')]},
+    "brutality+": {"Cost": 0, "Tags": ["power", "innate"],
+                        "Facts": [('status', 'standard.brutality', 1, 'source')]},
+    "hemokinesis": {"Cost": 1, "Tags": ["attack"],
+                         "Facts": [('loseHp', 2, 'source'), ('damage', 15, 'event')]},
+    "hemokinesis+": {"Cost": 1, "Tags": ["attack"],
+                          "Facts": [('loseHp', 2, 'source'), ('damage', 20, 'event')]},
+    "offering": {"Cost": 0, "Tags": ["skill"],
+                      "Facts": [('loseHp', 6, 'source'), ('gain', 'standard.energy', 2, 'source'), ('draw', 3, 'source')]},
+    "offering+": {"Cost": 0, "Tags": ["skill"],
+                       "Facts": [('loseHp', 6, 'source'), ('gain', 'standard.energy', 2, 'source'), ('draw', 5, 'source')]},
+    "rupture": {"Cost": 1, "Tags": ["power"],
+                     "Facts": [('status', 'standard.rupture', 1, 'source')]},
+    "rupture+": {"Cost": 1, "Tags": ["power"],
+                      "Facts": [('status', 'standard.rupture', 2, 'source')]},
     # ---- §235：35 张红卡的第一批（14 张：纯内容，内核零改动） -----------------------------
     "carnage": {"Cost": 2, "Tags": ["attack", "ethereal"],
                      "Facts": [('damage', 20, 'event')]},
@@ -1044,6 +1066,9 @@ INV_STATUSES = {
     "standard.no_draw": [],
     # §235: Demon Form 的"每回合开始加力量" —— 规则在内容触发器里（`ritual` 的 TurnStarted 兄弟）。
     "standard.demon_form": [],
+    # §236: Brutality（每回合掉 1 血抽 1 张）与 Rupture（因牌失去生命时加力量）。
+    "standard.brutality": [],
+    "standard.rupture": [],
     # Declared inert by the kernel (`is_declared_inert`): it wants a TurnEnded content trigger,
     # not a modifier. `port-plan.md` §107.
     "standard.metallicize": [],
@@ -1343,6 +1368,10 @@ def program_facts(root):
             out.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.heal":
             out.append(("heal", amount(body["Amount"]), tgt(body["TargetSelector"])))
+        elif kind == "node.loseHp":
+            # §236: "Lose N HP" as a fact. It is **not** damage -- that difference is the whole
+            # point (no Block, no modifiers, no "when attacked" hooks), so the fact says so.
+            out.append(("loseHp", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.setDefensivePool":
             # §233: "set the pool to this" as a fact -- **gain** and **set** are different rules, so
             # they are different facts (a `GainBlock`-based Entrench would double *after* modifiers).
@@ -2771,7 +2800,9 @@ def check_statuses(doc):
                      # §231: Battle Trance 的"本回合不能再抽" —— `TurnEnded` 自摘。
                      "standard.no_draw",
                      # §235: Demon Form —— 每回合开始加力量（`TurnStarted`）。
-                     "standard.demon_form"):
+                     "standard.demon_form",
+                     # §236: Brutality（TurnStarted）与 Rupture（HpLost）。
+                     "standard.brutality", "standard.rupture"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -2788,6 +2819,9 @@ def check_statuses(doc):
                         "standard.phantom_veil": ["TurnStarted"],
                         # §235: Demon Form —— 每回合开始加力量。
                         "standard.demon_form": ["TurnStarted"],
+                        # §236
+                        "standard.brutality": ["TurnStarted"],
+                        "standard.rupture": ["HpLost"],
                         # §231: Battle Trance 的"本回合不能再抽" —— 一条 TurnEnded 自摘触发器
                         # （规则本身在内核的抽牌节点里）。
                         "standard.no_draw": ["TurnEnded"],
@@ -3099,7 +3133,15 @@ def check_upgrades(doc):
         # 一刀切会让正确内容被判错。其它差别仍然红（"升级顺手换了类型/关键字"是抄写错误）。
         base_tags = [tag["value"] for tag in base.get("Tags") or []]
         up_tags = [tag["value"] for tag in card.get("Tags") or []]
-        if up_tags != base_tags and up_tags != [tag for tag in base_tags if tag != "ethereal"]:
+        # §236：升级行**可以多一个 `innate`** —— wiki 把 Brutality 的升级写成
+        # `(;{{KW|Innate}}. / )At the start of your turn…`，那个括号就是"基础;升级"。
+        # 与 §223 的"升级可以少一个 ethereal"对称：两处都是**升级改变关键字**的真实写法，
+        # 一刀切会把正确内容判错。
+        if (
+            up_tags != base_tags
+            and up_tags != [tag for tag in base_tags if tag != "ethereal"]
+            and up_tags != base_tags + ["innate"]
+        ):
             fail("cards.upgrades", "%s has different tags from %s" % (card_id, card_id[:-1]))
     upgraded = sum(1 for card_id in cards if card_id.endswith("+"))
     ok("card upgrades", "%d upgraded rows, every upgradable card has one" % upgraded)

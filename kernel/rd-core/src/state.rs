@@ -2541,6 +2541,22 @@ pub enum CombatEvent {
         /// 受击侧一个事实都没有，于是这类状态只能"受任何伤害都触发"，数值就错了。
         is_attack: bool,
     },
+    /// §236：**失去生命**（不是伤害）。`Lose N HP` 的载体。
+    ///
+    /// 与 `DamageTaken` 分开是**语义**要求，不是洁癖：`Lose HP` 不吃格挡、不吃力量/易伤，也**不**
+    /// 触发"被打"的钩子（Thorns / Flame Barrier / Curl Up / Flying）。而 `Rupture`
+    /// （"每当你因为一张牌失去生命"）要响的正是它。
+    HpLost {
+        /// 失去生命的那一方。
+        target: CombatantId,
+        /// 真的失去了几点（可能因为血量不够而少于请求额）。
+        amount: i32,
+        /// **是不是一张牌付的代价**（`ctx.resolving_card.is_some()`）。
+        ///
+        /// StS 的 Rupture 只认"因为一张牌失去生命"：Hemokinesis 算，Brutality 每回合扣的那 1 点
+        /// **不算**。没有这一格就只能二选一，而两种选法都会错一张牌。
+        from_card: bool,
+    },
     /// `CardPlayed`（`CardPlay.cs:144`）：**有人打出了一张牌**。
     ///
     /// 派发给**所有战斗员**：`Enrage` 长在**敌人**身上而由**你出牌**触发，所以"只给出手的人"

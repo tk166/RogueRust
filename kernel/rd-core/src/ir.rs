@@ -151,6 +151,8 @@ pub enum NodeKind {
     /// 与 `node.gainBlock` 的分工是**设**与**加**：那个走格挡修饰管线（灵巧/脆弱），这个不走 ——
     /// "Double your Block" 翻倍的是当前格挡本身，不是"再获得等量格挡"。
     SetDefensivePool,
+    /// `node.loseHp` —— **失去生命**（§236）。不是伤害：不吃格挡、不吃修饰器、不触发"被打"的钩子。
+    LoseHp,
     /// `node.dealDamageAndHealByLoss` —— 打伤害，然后按**实际掉的血**给来源回血（§231，`Reaper`）。
     ///
     /// 参考靠 `ResultKey` 把"这一击掉了多少血"传给下一个节点；本内核不支持 `ResultKey`，而
@@ -229,6 +231,7 @@ impl NodeKind {
             NodeKind::UpgradeCards => "node.upgradeCards",
             NodeKind::CarryAwayStolenGold => "node.carryAwayStolenGold",
             NodeKind::SetDefensivePool => "node.setDefensivePool",
+            NodeKind::LoseHp => "node.loseHp",
             NodeKind::DealDamageAndHealByLoss => "node.dealDamageAndHealByLoss",
             NodeKind::DealDamageWithTagBonus => "node.dealDamageWithTagBonus",
             NodeKind::AddCardCounter => "node.addCardCounter",
@@ -242,7 +245,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 29] = [
+        const ALL: [NodeKind; 30] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -278,6 +281,8 @@ impl NodeKind {
             NodeKind::DealDamageWithTagBonus,
             // §231：打伤害并按实际掉血回血（Reaper）。
             NodeKind::DealDamageAndHealByLoss,
+            // §236：失去生命（Hemokinesis / Offering / Bloodletting / Brutality）。
+            NodeKind::LoseHp,
             // §233：把防御池设成某个值（Entrench）。
             NodeKind::SetDefensivePool,
             NodeKind::Repeat,

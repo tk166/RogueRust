@@ -705,6 +705,8 @@ pub fn eval_bool<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<bool, E
                 // answers the *fact*; whether to skip it is the content's call (see
                 // `exec::CARD_IS_RESOLVING` for the two rejected alternatives).
                 "card.isResolving" => crate::exec::CARD_IS_RESOLVING,
+                // §236: was this HP loss paid by a card? (Rupture only counts those.)
+                "hpLoss.fromCard" => crate::exec::HP_LOSS_FROM_CARD,
                 // §208: the receiving side's fact (see `DAMAGE_IS_ATTACK`'s doc).
                 "damage.isAttack" => crate::exec::DAMAGE_IS_ATTACK,
                 _ => return Err(ExprError::UnsupportedKind),
