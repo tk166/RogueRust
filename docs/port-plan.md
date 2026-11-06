@@ -16563,3 +16563,6 @@ wiki 的 dump 是 `If the enemy intends to attack, gain (3;4) **Strength**.`（�
 以及 §238.6 里那些"要新载体"的清单之外的东西（Boss 相位、A17+ 招式表、8 瓶药水等，见 §235/§236）。
 ⇒ 下一批的自然入口是**无色牌**：它们大多数是"已有载体的新内容"（`swift_strike` 那种），
 少数要新东西（`hand_of_greed` 的偷金、`mind_blast` 的"按手牌数打伤害"）。
+
+> 📘 **方法论沉淀**（压缩上下文后先读这份）：`docs/function_scaling_up_for_cards.md`
+> —— 一节怎么走、载体决策树、七个结构陷阱、判据三条硬要求、无色卡 56 张的分档与复用矩阵。
