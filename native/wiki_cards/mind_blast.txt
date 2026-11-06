@@ -1,0 +1,14 @@
+{{Card Infobox
+| Name          = Mind Blast
+| Color         = Colorless
+| Type          = Attack
+| Rarity        = Uncommon
+| Cost          = 2
+| CostPlus      = 1
+| Description   = {{KW|Innate}}.<br>Deal damage equal to the number of cards in your draw pile.
+}}
+
+<!-- §243：由 native/fetch_colorless_dumps.py 从
+     slaythespire.wiki.gg/wiki/Module:Cards/data 转写（`[a|b]` → `(a;b)`，
+     `$Keyword` → `{{KW|Keyword}}`）。数字仍以本行为准；实现前请核对
+     UNVERIFIED 标注。 -->

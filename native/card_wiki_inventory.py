@@ -268,6 +268,18 @@ FACTS = {
     'spot_weakness': ([('when', None, 'status', 'standard.strength', 3, 'source')], [('when', None, 'status', 'standard.strength', 4, 'source')]),
     'blood_for_blood': ([('damage', 18, 'event')], [('damage', 22, 'event')]),
     'corruption': ([('status', 'standard.corruption', 1, 'source')], [('status', 'standard.corruption', 1, 'source')]),
+    # ---- §243：无色 A 档（11 张）----------------------------------------------------------
+    'trip': ([('status', 'standard.vulnerable', 2, 'event')], [('status', 'standard.vulnerable', 2, 'allEnemies')]),
+    'panacea': ([('status', 'standard.artifact', 1, 'source')], [('status', 'standard.artifact', 2, 'source')]),
+    'finesse': ([('block', 2, 'source'), ('draw', 1, 'source')], [('block', 4, 'source'), ('draw', 1, 'source')]),
+    'flash_of_steel': ([('damage', 3, 'event'), ('draw', 1, 'source')], [('damage', 6, 'event'), ('draw', 1, 'source')]),
+    'good_instincts': ([('block', 6, 'source')], [('block', 9, 'source')]),
+    'master_of_strategy': ([('draw', 3, 'source')], [('draw', 4, 'source')]),
+    'dramatic_entrance': ([('damage', 8, 'allEnemies')], [('damage', 12, 'allEnemies')]),
+    'impatience': ([('when', None, 'draw', 2, 'source')], [('when', None, 'draw', 3, 'source')]),
+    'deep_breath': ([('shuffleDiscard', 'source'), ('draw', 1, 'source')], [('shuffleDiscard', 'source'), ('draw', 2, 'source')]),
+    'insight': ([('draw', 2, 'source')], [('draw', 3, 'source')]),
+    'miracle': ([('gain', 'standard.energy', 1, 'source')], [('gain', 'standard.energy', 2, 'source')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

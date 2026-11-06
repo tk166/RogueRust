@@ -16566,3 +16566,79 @@ wiki 的 dump 是 `If the enemy intends to attack, gain (3;4) **Strength**.`（�
 
 > 📘 **方法论沉淀**（压缩上下文后先读这份）：`docs/function_scaling_up_for_cards.md`
 > —— 一节怎么走、载体决策树、七个结构陷阱、判据三条硬要求、无色卡 56 张的分档与复用矩阵。
+
+---
+
+## §243 无色牌：先把 56 份原文抓下来，再做 A 档 11 张
+
+### 243.1 抓 dump：**两次搜索拿全 56 张**，不是 52 次逐页抓
+
+`slaythespire.wiki.gg/wiki/Module:Cards/data` 这个模块把每张牌的
+`Cost / CostPlus / Color / Type / Rarity / Text` 放在一张 Lua 表里 —— 一次 `web_search`
+就把 40 张无色牌全拿到（含 `[基础|升级]` 的数字、`$Keyword`、`Cost = -1`（X 费）/ `-2`（不可打））。
+第一次的 snippet 在表头之前被截断（诅咒段在表前），所以补了第二次搜索拿 10 张诅咒，并用
+`slayspiredb.com/sts1/curses-and-statuses` 做**第二来源**核对。
+
+落成 `native/fetch_colorless_dumps.py`（可重跑，已存在的整页 dump 不覆盖），生成 56 份
+`native/wiki_cards/<id>.txt`，转写约定写进脚本头：`[a|b]` → `(a;b)`、`$Keyword` → `{{KW|Keyword}}`。
+两张原文没取全的（`become_almighty` 整个缺席、`fame_and_fortune` 只有片段）**在 dump 里标
+`UNVERIFIED`** —— 宁可留空，也不能按记忆写内容（§2 硬规则第 1 条）。
+
+### 243.2 A 档 11 张：9 张内核零改动 + 2 个小载体
+
+| 牌 | 费用 | 需要什么 |
+|---|---|---|
+| `trip` | 0 | 纯内容（升级改**目标**：单体 → 全体） |
+| `panacea` `finesse` `good_instincts` `flash_of_steel` `master_of_strategy` `dramatic_entrance` | 0 | 纯内容（artifact / 格挡+抽 / 伤害+抽 / 全体伤害+innate） |
+| `insight` `miracle` | 0 | 纯内容 —— 但它们是最早两张真正用 `RetainInHandOnTurnEnd` 的牌 |
+| `impatience` | 0 | **`hand.hasCardWithTag`**（§242 把 `Content` 放进 `ExprContext` 之后才做得出来） |
+| `deep_breath` | 0 | **`node.shuffleDiscardIntoDraw`**（内核原先只有"抽空自动重洗"） |
+
+两个小载体的形状都照既有先例：
+* `hand.hasCardWithTag{Tag}` 是 bool 表达式，主人固定 `sel.source`（不做 `OwnerSelector`：
+  没有内容需要"别人的手牌"，一个没被走过、没判据的字段等于没测过的代码），并且**跳过正在结算的
+  那张牌**（§236 同一条洞见；`Impatience` 是技能所以包不包含答案一样，但按规则跳过而不是靠巧合）；
+* `shuffleDiscardIntoDraw` 是**请求**不是直接洗：`sequence[shuffle, draw]` 靠**队列顺序**表达
+  "先洗后抽"。
+
+### 243.3 三条判据
+
+1. `the_zero_cost_utility_batch_matches_its_pages`：11 张**基础和升级都测**（只测基础的话，
+   抄错升级数字全绿）。`trip` 单独断言"只打选中的那个敌人 / 升级打全体"。
+2. `impatience_only_draws_when_the_hand_has_no_attack`：手牌无攻击 ⇒ 抽 2；有攻击 ⇒ 一张不抽。
+3. `deep_breath_shuffles_the_discard_pile_back_first`：**两段** —— 抽牌堆空时抽到刚洗回去的那张；
+   抽牌堆**不空**时弃牌堆也必须被洗回去（没有第二段，一个"只靠抽空自动重洗"的实现也会全绿）。
+
+### 243.4 写判据时踩到的三个"帮手错了"（都不是被测代码的错）
+
+* `arena()` 的抽牌堆是空的 ⇒ "抽 1 张"与"抽 0 张"在手牌计数上分不开。判据里先垫 4 张。
+* 实例 id 上限 **16 字节**（`INSTANCE_TEXT_CAP`），而 `master_of_strategy` 有 19 个字符 ⇒
+  `card_in_hand`（拿定义名当实例 id）会 `IdTooLong`。改用短实例 id `card_x`。
+* `give_energy(n)` 把**上限也设成 n**（`set_resource(..., Some(3))`）⇒ `miracle` 的 +1/+2 被夹住。
+  判据里先把上限抬到 99。
+  ⇒ 三条都是"度量工具本身不对"，与 §7 那张"工具骗人"表同一类。
+
+另有一个真错：`not` 的内层字段叫 **`Condition`** 而不是 `Inner`（我按 `and`/`or` 的 `Left/Right`
+猜的），内容门照过、运行时才 `Ir(Missing("Condition"))` —— 说明**新表达式必须有一条真的判据**，
+只看内容门不够。
+
+### 243.5 数字
+
+* 单测 **961**（756 core + 110 run + 95 wasm，+3）；四条对拍不变 `182 / 62 / 124 / 394`；
+* 内容：卡 **209 行**（+22）、状态 56、镜像 **108,888 B**（core 86,268 B）；
+* wiki dump：**+56 份**（无色/诅咒），其中 45 张尚未实现 —— 它们现在是 `audit_card_gap` 的现成输入；
+* 与 wiki 对账：口径内 **100 / 145**（无色 **25 / 70**；红 75/75）；
+* 矩阵 **535 行**、具名测试 **963**；`MAX_POOL` 192 → 224（内容 209 行，第五节老规矩）；
+* 21/21 闸门绿。
+
+### 243.6 下一批（B 档）的第一件事
+
+按 `docs/function_scaling_up_for_cards.md` §9 的复用矩阵，B 档 20 张里最便宜的三组：
+
+1. **`mayhem`**（`TurnStarted` + §241 的 `playTopCardOfDrawPile`）—— 可能**零内核改动**；
+2. **`chrysalis` / `metamorphosis`**（§240 随机造牌 + `ToZone: DrawPile`）—— 差一个"造 N 张"；
+3. **`secret_technique` / `secret_weapon` / `violence`**（§238 的 `ChoiceSource`）—— 差
+   `ChoiceSource::DrawPile` + `RequireAnyTag`。
+
+以及一个内容约定：无色三张要"随机**无色**牌"（`jack_of_all_trades` `transmutation` `magnetism`）
+⇒ 给 70 张无色加 `colorless` tag（纯内容字段，§240 的池子本来就按 tag 过滤）。

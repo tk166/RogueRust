@@ -1,0 +1,13 @@
+{{Card Infobox
+| Name          = Finesse
+| Color         = Colorless
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 0
+| Description   = Gain (2;4) {{KW|Block}}.<br>Draw 1 card.
+}}
+
+<!-- §243：由 native/fetch_colorless_dumps.py 从
+     slaythespire.wiki.gg/wiki/Module:Cards/data 转写（`[a|b]` → `(a;b)`，
+     `$Keyword` → `{{KW|Keyword}}`）。数字仍以本行为准；实现前请核对
+     UNVERIFIED 标注。 -->

@@ -111,6 +111,8 @@ pub enum NodeKind {
     CreateRandomCardInstance,
     /// §241：**把抽牌堆顶那张打出去，然后消耗**（`Havoc`）。零字段。
     PlayTopCardOfDrawPile,
+    /// §243：**把弃牌堆洗回抽牌堆**（`Deep Breath`）。`{OwnerSelector}`。
+    ShuffleDiscardIntoDraw,
     /// `node.moveCardToZone`。
     MoveCardToZone,
     /// `node.gainResource`。
@@ -254,6 +256,7 @@ impl NodeKind {
             NodeKind::DealDamageAndGainMaxHealthIfFatal => "node.dealDamageAndGainMaxHealthIfFatal",
             NodeKind::CreateRandomCardInstance => "node.createRandomCardInstance",
             NodeKind::PlayTopCardOfDrawPile => "node.playTopCardOfDrawPile",
+            NodeKind::ShuffleDiscardIntoDraw => "node.shuffleDiscardIntoDraw",
             NodeKind::DealDamageAndHealByLoss => "node.dealDamageAndHealByLoss",
             NodeKind::DealDamageWithTagBonus => "node.dealDamageWithTagBonus",
             NodeKind::AddCardCounter => "node.addCardCounter",
@@ -267,7 +270,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 34] = [
+        const ALL: [NodeKind; 35] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -310,6 +313,7 @@ impl NodeKind {
             NodeKind::DealDamageAndGainMaxHealthIfFatal,
             NodeKind::CreateRandomCardInstance,
             NodeKind::PlayTopCardOfDrawPile,
+            NodeKind::ShuffleDiscardIntoDraw,
             // §233：把防御池设成某个值（Entrench）。
             NodeKind::SetDefensivePool,
             NodeKind::Repeat,

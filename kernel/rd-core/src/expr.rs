@@ -415,6 +415,11 @@ const BOOL_KINDS: &[&str] = &[
     // 这一条是**问题本身**（"它已经选的招是不是攻击"）。实现走 `intent::select_action` ——
     // 页面显示意图用的同一个纯函数，所以"牌看到的意图"与"玩家看到的意图"不可能不一致。
     "intent.targetIntendsAttack",
+    // §243：**手牌里有没有带某个 tag 的牌**（`Impatience`："If you have no Attacks in your hand"）。
+    //
+    // 为什么现在才做得出来：它要读 CARD 表的 tag，而 §242 才把 `Content` 按值放进
+    // `ExprContext`（`CombatState` 不拥有内容）。
+    "hand.hasCardWithTag",
 ];
 
 fn classify(kind: &str) -> Class {
@@ -701,6 +706,40 @@ pub fn eval_bool<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<bool, E
             } else {
                 eval_bool(child(node, "Right")?, ctx)
             }
+        }
+
+        // §243: "is there a card with this tag in the hand" (Impatience).
+        //
+        // 三处细节都是判据钉住的：
+        // * **正在结算的那张牌不算手牌**（§236 同一条洞见）—— `Impatience` 是技能，包不包含它
+        //   答案一样，但"换个牌名就可能不同"，所以按**规则**跳过，而不是靠巧合；
+        // * 没有内容 ⇒ 响亮失败（`UnsupportedKind`），不当成"手上没有"；
+        // * 主人固定 `sel.source`（"你手里"）—— 见下面那行注释。
+        "hand.hasCardWithTag" => {
+            let Some(content) = ctx.content else {
+                return Err(ExprError::UnsupportedKind);
+            };
+            let tag = node.str_field("Tag")?.ok_or(IrError::Missing("Tag"))?;
+            // 主人固定是 `sel.source`（"**你**手里有没有"）。不做 `OwnerSelector`：今天没有内容
+            // 需要"别人的手牌"，而一个没被任何内容走过、也没判据的字段等于没测过的代码。
+            let Some(owner) = ctx.source else {
+                return Ok(false);
+            };
+            let resolving = ctx
+                .resolving_card
+                .and_then(|slot| ctx.state.card(slot))
+                .map(|card| card.id);
+            let mut found = false;
+            for card in ctx.state.zone_cards(&owner, crate::state::CardZone::Hand) {
+                if Some(card.id) == resolving {
+                    continue;
+                }
+                if content.card_has_tag(card.definition_id.as_str(), tag) == Some(true) {
+                    found = true;
+                    break;
+                }
+            }
+            Ok(found)
         }
 
         // §242: "does the chosen target intend to attack this turn" (Spot Weakness).

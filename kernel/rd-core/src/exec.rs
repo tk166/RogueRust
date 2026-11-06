@@ -991,6 +991,7 @@ pub fn resolve_effect(
             | EffectRequest::CreateCardInstance { .. }
             | EffectRequest::CreateRandomCard { .. }
             | EffectRequest::PlayTopCardOfDrawPile { .. }
+            | EffectRequest::ShuffleDiscardIntoDraw { .. }
             | EffectRequest::MoveCardToZone { .. }
             | EffectRequest::EndTurn => None,
             EffectRequest::ExtraTurn { target } => target,
@@ -1024,6 +1025,7 @@ const fn request_target(request: &EffectRequest) -> Option<CombatantId> {
         | EffectRequest::CreateCardInstance { .. }
         | EffectRequest::CreateRandomCard { .. }
         | EffectRequest::PlayTopCardOfDrawPile { .. }
+        | EffectRequest::ShuffleDiscardIntoDraw { .. }
         | EffectRequest::MoveCardToZone { .. }
         | EffectRequest::EndTurn => None,
     }
@@ -1150,6 +1152,13 @@ fn resolve_request(ctx: &mut ExecContext<'_>, request: &EffectRequest) -> Result
             cost_zero,
         } => create_random_card_for(ctx, &owner, &tag, count, to_zone, cost_zero),
         EffectRequest::PlayTopCardOfDrawPile { owner } => play_top_card_for(ctx, &owner),
+        EffectRequest::ShuffleDiscardIntoDraw { owner } => {
+            // 重洗 0 张不是错误（弃牌堆空 ⇒ 什么都不做，`reshuffle_discard_into_draw` 自己返回 0）。
+            ctx.state
+                .reshuffle_discard_into_draw(&owner)
+                .map_err(ExecError::Capacity)?;
+            Ok(())
+        }
         EffectRequest::MoveCardToZone {
             owner,
             card,
@@ -1862,6 +1871,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::CreateRandomCardInstance
         // §241：`playTopCardOfDrawPile`（把抽牌堆顶打出去）。无孩子。
         | NodeKind::PlayTopCardOfDrawPile
+        // §243：`shuffleDiscardIntoDraw`（把弃牌堆洗回去）。无孩子。
+        | NodeKind::ShuffleDiscardIntoDraw
         // §238：`gainMaxHealth`（抬高上限）与它的 "If Fatal" 变体。无孩子。
         | NodeKind::GainMaxHealth
         | NodeKind::DealDamageAndGainMaxHealthIfFatal
@@ -2033,6 +2044,9 @@ fn dispatch_node(
         }
         NodeKind::PlayTopCardOfDrawPile => {
             play_top_card_of_draw_pile_node(node, ctx, frame, slot, stats)
+        }
+        NodeKind::ShuffleDiscardIntoDraw => {
+            shuffle_discard_into_draw_node(node, ctx, frame, slot, stats)
         }
         NodeKind::MoveCardToZone => move_card_to_zone_node(node, ctx, frame, slot, stats),
         NodeKind::SelectCards => select_cards_node(node, ctx, frame, slot, stats),
@@ -4126,6 +4140,32 @@ fn create_card_for(
         ctx.state.create_card_instance(owner, definition, zone)?;
     }
     Ok(())
+}
+
+/// §243：`node.shuffleDiscardIntoDraw` —— `{OwnerSelector}`，一条请求。
+///
+/// 只入队不直接洗：`sequence[shuffle, draw]` 靠**队列顺序**表达"先洗后抽"，
+/// 在派发时就把牌洗了会让同一棵树里的抽牌请求读到一个"已经洗过"的牌堆 ——
+/// 那在单测里看起来一样，但在"抽到刚洗回去的那张"这种局面里是另一个结果。
+fn shuffle_discard_into_draw_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    _stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let selector = node
+        .node_field("OwnerSelector")?
+        .ok_or(IrError::Missing("OwnerSelector"))?;
+    let mut owners = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut owners)?;
+    for owner in owners.iter().take(count) {
+        ctx.state.enqueue_effect_with_owner(
+            EffectRequest::ShuffleDiscardIntoDraw { owner: *owner },
+            Some(frame),
+        )?;
+    }
+    resume_later(ctx.state, frame, slot)
 }
 
 /// §241：`node.playTopCardOfDrawPile` —— 零字段，一条请求。

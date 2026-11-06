@@ -1,0 +1,13 @@
+{{Card Infobox
+| Name          = Regret
+| Color         = Curse
+| Type          = Curse
+| Rarity        = Curse
+| Unplayable    = yes
+| Description   = {{KW|Unplayable}}.<br>At the end of your turn, lose HP equal to the number of cards in your hand.
+}}
+
+<!-- §243：由 native/fetch_colorless_dumps.py 从
+     slaythespire.wiki.gg/wiki/Module:Cards/data 转写（`[a|b]` → `(a;b)`，
+     `$Keyword` → `{{KW|Keyword}}`）。数字仍以本行为准；实现前请核对
+     UNVERIFIED 标注。 -->

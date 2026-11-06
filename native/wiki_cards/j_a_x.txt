@@ -1,0 +1,13 @@
+{{Card Infobox
+| Name          = J.A.X.
+| Color         = Colorless
+| Type          = Skill
+| Rarity        = Special
+| Cost          = 0
+| Description   = Lose 3 HP.<br>Gain (2;3) {{KW|Strength}}.
+}}
+
+<!-- §243：由 native/fetch_colorless_dumps.py 从
+     slaythespire.wiki.gg/wiki/Module:Cards/data 转写（`[a|b]` → `(a;b)`，
+     `$Keyword` → `{{KW|Keyword}}`）。数字仍以本行为准；实现前请核对
+     UNVERIFIED 标注。 -->

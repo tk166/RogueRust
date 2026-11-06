@@ -1,0 +1,13 @@
+{{Card Infobox
+| Name          = Become Almighty
+| Color         = Colorless
+| Type          = Power
+| Rarity        = Special
+| Cost          = ?
+| Description   = UNVERIFIED: the wiki data module did not include this entry. Fetch the page before use.
+}}
+
+<!-- §243：由 native/fetch_colorless_dumps.py 从
+     slaythespire.wiki.gg/wiki/Module:Cards/data 转写（`[a|b]` → `(a;b)`，
+     `$Keyword` → `{{KW|Keyword}}`）。数字仍以本行为准；实现前请核对
+     UNVERIFIED 标注。 -->

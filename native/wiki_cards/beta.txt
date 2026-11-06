@@ -1,0 +1,14 @@
+{{Card Infobox
+| Name          = Beta
+| Color         = Colorless
+| Type          = Skill
+| Rarity        = Special
+| Cost          = 2
+| CostPlus      = 1
+| Description   = Shuffle an Omega into your draw pile.<br>{{KW|Exhaust}}.
+}}
+
+<!-- §243：由 native/fetch_colorless_dumps.py 从
+     slaythespire.wiki.gg/wiki/Module:Cards/data 转写（`[a|b]` → `(a;b)`，
+     `$Keyword` → `{{KW|Keyword}}`）。数字仍以本行为准；实现前请核对
+     UNVERIFIED 标注。 -->

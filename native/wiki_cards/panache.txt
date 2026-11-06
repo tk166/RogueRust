@@ -1,0 +1,13 @@
+{{Card Infobox
+| Name          = Panache
+| Color         = Colorless
+| Type          = Power
+| Rarity        = Rare
+| Cost          = 0
+| Description   = Every time you play 5 cards in a single turn, deal (10;14) damage to ALL enemies.
+}}
+
+<!-- §243：由 native/fetch_colorless_dumps.py 从
+     slaythespire.wiki.gg/wiki/Module:Cards/data 转写（`[a|b]` → `(a;b)`，
+     `$Keyword` → `{{KW|Keyword}}`）。数字仍以本行为准；实现前请核对
+     UNVERIFIED 标注。 -->

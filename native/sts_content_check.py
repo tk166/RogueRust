@@ -494,6 +494,51 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §243：无色 A 档（11 张 / 22 行）----------------------------------------------------
+    "trip": {"Cost": 0, "Tags": ["skill"],
+                  "Facts": [('status', 'standard.vulnerable', 2, 'event')]},
+    "trip+": {"Cost": 0, "Tags": ["skill"],
+                   "Facts": [('status', 'standard.vulnerable', 2, 'allEnemies')]},
+    "panacea": {"Cost": 0, "Tags": ["skill"],
+                     "Facts": [('status', 'standard.artifact', 1, 'source')]},
+    "panacea+": {"Cost": 0, "Tags": ["skill"],
+                      "Facts": [('status', 'standard.artifact', 2, 'source')]},
+    "finesse": {"Cost": 0, "Tags": ["skill"],
+                     "Facts": [('block', 2, 'source'), ('draw', 1, 'source')]},
+    "finesse+": {"Cost": 0, "Tags": ["skill"],
+                      "Facts": [('block', 4, 'source'), ('draw', 1, 'source')]},
+    "flash_of_steel": {"Cost": 0, "Tags": ["attack"],
+                            "Facts": [('damage', 3, 'event'), ('draw', 1, 'source')]},
+    "flash_of_steel+": {"Cost": 0, "Tags": ["attack"],
+                             "Facts": [('damage', 6, 'event'), ('draw', 1, 'source')]},
+    "good_instincts": {"Cost": 0, "Tags": ["skill"],
+                            "Facts": [('block', 6, 'source')]},
+    "good_instincts+": {"Cost": 0, "Tags": ["skill"],
+                             "Facts": [('block', 9, 'source')]},
+    "master_of_strategy": {"Cost": 0, "Tags": ["skill"],
+                                "Facts": [('draw', 3, 'source')]},
+    "master_of_strategy+": {"Cost": 0, "Tags": ["skill"],
+                                 "Facts": [('draw', 4, 'source')]},
+    "dramatic_entrance": {"Cost": 0, "Tags": ["attack", "innate"],
+                               "Facts": [('damage', 8, 'allEnemies')]},
+    "dramatic_entrance+": {"Cost": 0, "Tags": ["attack", "innate"],
+                                "Facts": [('damage', 12, 'allEnemies')]},
+    "impatience": {"Cost": 0, "Tags": ["skill"],
+                        "Facts": [('when', None, 'draw', 2, 'source')]},
+    "impatience+": {"Cost": 0, "Tags": ["skill"],
+                         "Facts": [('when', None, 'draw', 3, 'source')]},
+    "deep_breath": {"Cost": 0, "Tags": ["skill"],
+                         "Facts": [('shuffleDiscard', 'source'), ('draw', 1, 'source')]},
+    "deep_breath+": {"Cost": 0, "Tags": ["skill"],
+                          "Facts": [('shuffleDiscard', 'source'), ('draw', 2, 'source')]},
+    "insight": {"Cost": 0, "Tags": ["skill", "retain"],
+                     "Facts": [('draw', 2, 'source')]},
+    "insight+": {"Cost": 0, "Tags": ["skill", "retain"],
+                      "Facts": [('draw', 3, 'source')]},
+    "miracle": {"Cost": 0, "Tags": ["skill", "retain"],
+                     "Facts": [('gain', 'standard.energy', 1, 'source')]},
+    "miracle+": {"Cost": 0, "Tags": ["skill", "retain"],
+                      "Facts": [('gain', 'standard.energy', 2, 'source')]},
     # ---- §242：最后三张红卡（3 张） -------------------------------------------------------
     "spot_weakness": {"Cost": 1, "Tags": ["skill"],
                            "Facts": [('when', None, 'status', 'standard.strength', 3, 'source')]},
@@ -1457,6 +1502,9 @@ def program_facts(root):
             # §236: "Lose N HP" as a fact. It is **not** damage -- that difference is the whole
             # point (no Block, no modifiers, no "when attacked" hooks), so the fact says so.
             out.append(("loseHp", amount(body["Amount"]), tgt(body["TargetSelector"])))
+        elif kind == "node.shuffleDiscardIntoDraw":
+            # §243: Deep Breath -- "shuffle your discard pile into your draw pile".
+            out.append(("shuffleDiscard", tgt(body["OwnerSelector"])))
         elif kind == "node.playTopCardOfDrawPile":
             # §241: Havoc -- the card is the **top of the draw pile**, so no definition to name;
             # it always ends in the Exhaust pile ("and Exhaust it").

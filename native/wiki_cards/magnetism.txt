@@ -1,0 +1,14 @@
+{{Card Infobox
+| Name          = Magnetism
+| Color         = Colorless
+| Type          = Power
+| Rarity        = Rare
+| Cost          = 2
+| CostPlus      = 1
+| Description   = At the start of your turn, add a random Colorless card into your hand.
+}}
+
+<!-- §243：由 native/fetch_colorless_dumps.py 从
+     slaythespire.wiki.gg/wiki/Module:Cards/data 转写（`[a|b]` → `(a;b)`，
+     `$Keyword` → `{{KW|Keyword}}`）。数字仍以本行为准；实现前请核对
+     UNVERIFIED 标注。 -->

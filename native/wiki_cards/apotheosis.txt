@@ -1,0 +1,14 @@
+{{Card Infobox
+| Name          = Apotheosis
+| Color         = Colorless
+| Type          = Skill
+| Rarity        = Rare
+| Cost          = 2
+| CostPlus      = 1
+| Description   = {{KW|Upgrade}} ALL your cards for the rest of combat.<br>{{KW|Exhaust}}.
+}}
+
+<!-- §243：由 native/fetch_colorless_dumps.py 从
+     slaythespire.wiki.gg/wiki/Module:Cards/data 转写（`[a|b]` → `(a;b)`，
+     `$Keyword` → `{{KW|Keyword}}`）。数字仍以本行为准；实现前请核对
+     UNVERIFIED 标注。 -->

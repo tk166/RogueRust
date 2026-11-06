@@ -1,0 +1,13 @@
+{{Card Infobox
+| Name          = Normality
+| Color         = Curse
+| Type          = Curse
+| Rarity        = Curse
+| Unplayable    = yes
+| Description   = {{KW|Unplayable}}.<br>You cannot play more than 3 cards this turn.
+}}
+
+<!-- §243：由 native/fetch_colorless_dumps.py 从
+     slaythespire.wiki.gg/wiki/Module:Cards/data 转写（`[a|b]` → `(a;b)`，
+     `$Keyword` → `{{KW|Keyword}}`）。数字仍以本行为准；实现前请核对
+     UNVERIFIED 标注。 -->

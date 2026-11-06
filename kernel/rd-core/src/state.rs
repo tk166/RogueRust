@@ -2452,6 +2452,14 @@ pub enum EffectRequest {
         amount: i32,
     },
     /// `CreateCardInstanceEffectRequest`（`CardCreationEffects.cs:3-…`）。
+    /// §243：**把弃牌堆洗回抽牌堆**（`Deep Breath`）。
+    ///
+    /// 为什么是请求而不是节点里直接做：它必须**排在后面的抽牌之前**落地（`sequence` 是
+    /// "先派发完、再按队列顺序解析"，所以入队顺序就是语义）。
+    ShuffleDiscardIntoDraw {
+        /// 洗谁的牌。
+        owner: CombatantId,
+    },
     /// §241：**强制打出抽牌堆顶那张，然后把它消耗掉**（`Havoc`）。
     ///
     /// 为什么是一条请求而不是若干节点：出牌本身是 `play.rs` 的事（受理校验五条 + 费用 + 节目），

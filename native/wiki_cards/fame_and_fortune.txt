@@ -1,0 +1,13 @@
+{{Card Infobox
+| Name          = Fame and Fortune
+| Color         = Colorless
+| Type          = Skill
+| Rarity        = Special
+| Cost          = ?
+| Description   = Gain (25;30) Gold.<br>UNVERIFIED: the cost was not in the fetched excerpt.
+}}
+
+<!-- §243：由 native/fetch_colorless_dumps.py 从
+     slaythespire.wiki.gg/wiki/Module:Cards/data 转写（`[a|b]` → `(a;b)`，
+     `$Keyword` → `{{KW|Keyword}}`）。数字仍以本行为准；实现前请核对
+     UNVERIFIED 标注。 -->
