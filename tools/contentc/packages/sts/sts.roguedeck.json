@@ -15712,6 +15712,80 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "havoc",
+      "PackageId": "sts",
+      "NameKey": "Havoc",
+      "DescriptionKey": "Play the top card of your draw pile and Exhaust it.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.playTopCardOfDrawPile",
+          "value": {
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "havoc+",
+      "PackageId": "sts",
+      "NameKey": "Havoc+",
+      "DescriptionKey": "Play the top card of your draw pile and Exhaust it.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Common",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.playTopCardOfDrawPile",
+          "value": {
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
     }
   ],
   "EnemyActions": [

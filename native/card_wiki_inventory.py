@@ -21,6 +21,12 @@ import io
 
 # §218 的偏差声明（内容 vs wiki）。key = 基础 id；值里的字段只写**与 wiki 不同**的那几项。
 DEVIATIONS = {
+    # §241：`... and Exhaust **it**.` —— "it" 是被打出的**那张**牌，不是 Havoc 自己。
+    # 与 `burning_pact` / `sever_soul` 同源：wiki 的 `{{KW|Exhaust}}` 在这里是动词。
+    'havoc': {
+        'why': 'wiki 的 Exhaust 指的是被打出的那张牌（"and Exhaust **it**"），Havoc 自己进弃牌堆。',
+        'content_keywords': [],
+    },
     # §239：与 `sever_soul` 同源 —— wiki 的 `{{KW|Exhaust}} 1 card.` 里那个 Exhaust 是**动词**
     # （"消耗一张牌"），不是这张牌自己的关键字：Burning Pact 打完进弃牌堆。
     'burning_pact': {
@@ -251,6 +257,7 @@ FACTS = {
     'clash': ([('damage', 14, 'event')], [('damage', 18, 'event')]),
     'burning_pact': ([('choose', 'source', 'Hand', (), 1, 1, 'Exhaust'), ('draw', 2, 'source')], [('choose', 'source', 'Hand', (), 1, 1, 'Exhaust'), ('draw', 3, 'source')]),
     'infernal_blade': ([('createRandom', 'attack', 'Hand', 1, True)], [('createRandom', 'attack', 'Hand', 1, True)]),
+    'havoc': ([('playTopOfDrawPile', 'ExhaustPile')], [('playTopOfDrawPile', 'ExhaustPile')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

@@ -1456,6 +1456,9 @@ impl Session {
                 source: hero,
                 card: instance_id,
                 target,
+                // §241: a normal play lands where the card's `PlayedCardDestinationZone` says;
+                // only a forced play (`Havoc`) overrides it.
+                override_destination: None,
             };
             if can_play_card(&self.state, Some(self.content), &request).is_err() {
                 continue;

@@ -493,6 +493,11 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §241：强制出牌（1 张） -----------------------------------------------------------
+    "havoc": {"Cost": 1, "Tags": ["skill"],
+              "Facts": [('playTopOfDrawPile', 'ExhaustPile')]},
+    "havoc+": {"Cost": 0, "Tags": ["skill"],
+               "Facts": [('playTopOfDrawPile', 'ExhaustPile')]},
     # ---- §240：随机造牌（1 张） -----------------------------------------------------------
     "infernal_blade": {"Cost": 1, "Tags": ["skill"],
                             "Facts": [('createRandom', 'attack', 'Hand', 1, True)]},
@@ -1436,6 +1441,10 @@ def program_facts(root):
             # §236: "Lose N HP" as a fact. It is **not** damage -- that difference is the whole
             # point (no Block, no modifiers, no "when attacked" hooks), so the fact says so.
             out.append(("loseHp", amount(body["Amount"]), tgt(body["TargetSelector"])))
+        elif kind == "node.playTopCardOfDrawPile":
+            # §241: Havoc -- the card is the **top of the draw pile**, so no definition to name;
+            # it always ends in the Exhaust pile ("and Exhaust it").
+            out.append(("playTopOfDrawPile", "ExhaustPile"))
         elif kind == "node.createRandomCardInstance":
             # §240: "add a random <tag> card" (Infernal Blade). The definition is NOT in the
             # content -- the kernel draws it from the card table at resolve time.

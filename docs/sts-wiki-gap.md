@@ -114,16 +114,16 @@ python -X utf8 native/audit_card_gap.py --offline   # 只读索引，CI/无网�
 | Red · Skill · Rare | 5 | 2 | 3 |
 | Red · Power · Uncommon | 8 | 3 | 5 |
 | Red · Power · Rare | 6 | 3 | 3 |
-| **Red 小计** | **75** | **71** | **4** |
+| **Red 小计** | **75** | **72** | **3** |
 | Colorless · Attack（Uncommon / Rare / Special） | 11 | 1 | 10 |
 | Colorless · Skill（Uncommon / Rare / Special） | 33 | 4 | 29 |
 | Colorless · Power（Rare / Special） | 7 | 0 | 7 |
 | Colorless · Curse | 14 | 4 | 10 |
 | Colorless · Status 牌 | 5 | 5 | 0 |
 | **Colorless 小计** | **70** | **14** | **56** |
-| **合计（口径内）** | **145** | **85** | **60** |
+| **合计（口径内）** | **145** | **86** | **59** |
 
-**§240 之后还剩 4 张红卡**，按"要什么载体"分组（这是下一批的施工单）：
+**§241 之后还剩 3 张红卡**，按"要什么载体"分组（这是下一批的施工单）：
 
 | 需要的载体 | 牌 |
 |---|---|

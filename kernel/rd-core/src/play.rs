@@ -162,6 +162,11 @@ pub struct PlayRequest {
     /// ⚠️ 传 `None` **不是错误**：目标选择器会解析出空集，多目标节点打空，
     /// 单体节点则是"没有目标"。参考从不因为目标非法而拒绝出牌。
     pub target: Option<CombatantId>,
+    /// §241：**强制落区**（`Havoc`："Play the top card of your draw pile and **Exhaust** it."）。
+    ///
+    /// `None` = 听内容的 `PlayedCardDestinationZone`。这是"谁在出牌"的事，不是内容的事 ——
+    /// 同一张 `Strike` 平时进弃牌堆，被 `Havoc` 打出去就进消耗堆，而它的 CARD 行不能有两个值。
+    pub override_destination: Option<CardZone>,
 }
 
 impl PlayRequest {
@@ -172,6 +177,23 @@ impl PlayRequest {
             source,
             card,
             target,
+            override_destination: None,
+        }
+    }
+
+    /// §241：同上，但强制落区（`Havoc`）。
+    #[must_use]
+    pub const fn to_zone(
+        source: CombatantId,
+        card: CardInstanceId,
+        target: Option<CombatantId>,
+        zone: CardZone,
+    ) -> Self {
+        Self {
+            source,
+            card,
+            target,
+            override_destination: Some(zone),
         }
     }
 }
@@ -737,7 +759,10 @@ fn plan_play<'c>(
 
     // ── 落点（`:298-302`）：法令 `PlayedCardsExhaust` 已被上面那道闸门否决，
     // 所以这里只剩卡定义自己的 `PlayedCardDestinationZone`。
-    let destination = played_card_destination(&card)?;
+    let destination = match req.override_destination {
+        Some(zone) => zone,
+        None => played_card_destination(&card)?,
+    };
     // §220：打出即消耗的那些牌（`slimed` / `bandage_up` / `dark_shackles` / `apparition`）最终
     // 通过 `MoveCardToZone` 请求落进消耗堆 —— `Exhausted` 通知在**那个请求**的解析处发，
     // 所以这里什么都不用记（记在这里会漏掉"内容自己 moveCardToZone 到消耗堆"那条路）。

@@ -1243,6 +1243,14 @@ impl CardInstance {
         Ok(())
     }
 
+    /// §241：删掉一个 mark counter（"这张牌的强制价格撤销了"）。
+    ///
+    /// 与 `set_mark_counter(key, 0)` **不是**一回事：0 是一个合法的绝对价格（"它就是 0 费"），
+    /// 而"没有这个键"才是"听内容"。两者的区别正是 Havoc 打出一张被拒的牌时要恢复的东西。
+    pub fn remove_mark_counter(&mut self, key: CounterId) {
+        self.mark_counters.retain(|counter| counter.key != key);
+    }
+
     /// Builder: mark source combatant.
     #[must_use]
     pub fn with_mark_source(mut self, source: CombatantId) -> Self {
@@ -2434,6 +2442,16 @@ pub enum EffectRequest {
         amount: i32,
     },
     /// `CreateCardInstanceEffectRequest`（`CardCreationEffects.cs:3-…`）。
+    /// §241：**强制打出抽牌堆顶那张，然后把它消耗掉**（`Havoc`）。
+    ///
+    /// 为什么是一条请求而不是若干节点：出牌本身是 `play.rs` 的事（受理校验五条 + 费用 + 节目），
+    /// 而"从抽牌堆顶打一张"只是**选哪张**与**打完落哪儿**的差别 —— 中间那条路必须走同一个
+    /// `play_card`，否则"打出去的牌"会有两套语义（触发器的 `CardPlayed`、`cards_played_this_turn`、
+    /// 每副本价格的消费……全都要写第二遍）。
+    PlayTopCardOfDrawPile {
+        /// 谁在打。
+        owner: CombatantId,
+    },
     /// §240：**造一张随机牌**（`Infernal Blade`："Add a random Attack into your hand."）。
     ///
     /// 与 [`Self::CreateCardInstance`] 的唯一区别是"定义不是内容写死的，而是按 tag 从卡表里抽"。

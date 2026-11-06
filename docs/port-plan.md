@@ -16436,3 +16436,49 @@ Burning Pact 打完进弃牌堆。与 §235 的 `sever_soul` 同源，记在 `DE
 * 与 wiki 对账：口径内 **85 / 145**（红 **71 / 75**，缺 4：`blood_for_blood` `corruption`
   `havoc` `spot_weakness`；无色 14 / 70）；
 * 矩阵 **504 行**、具名测试 **956**；21/21 闸门绿。
+
+---
+
+## §241 `Havoc`：强制打出抽牌堆顶那张（不付费、进消耗堆、攻击随机选目标）
+
+"Play the top card of your draw pile and Exhaust it." 与 §240 的"造一张牌"是同一条线的另一半：
+那里是**造**，这里是**打出**。三块载体：
+
+| 块 | 形状 | 为什么 |
+|---|---|---|
+| `node.playTopCardOfDrawPile` | 零字段 | 抽牌堆顶是哪张**在排空那一刻**才读（派发时读会让同一张牌被打两次） |
+| `EffectRequest::PlayTopCardOfDrawPile` | `{owner}` | 出牌本身必须走同一个 `play_card`：受理校验五条、费用、节目、`CardPlayed` 触发器、`cards_played_this_turn`……全都不能有第二套 |
+| `PlayRequest::override_destination` | `Option<CardZone>` | 同一张 `Strike` 平时进弃牌堆，被 `Havoc` 打出去进消耗堆 —— 而它的 CARD 行不能有两个值 |
+
+### 241.1 四步，每一步都有"不能省"的理由
+
+1. **移到手牌**：`plan_play` 的受理校验要求实例在**手牌**里（`CardNotInHand`）。这不是绕过校验 ——
+   StS 里那张牌那时在 in-play 区，反正不在牌堆里；
+2. **绝对价格 = 0**：`Havoc` 不付这张牌的费。复用 §240 那一格（`standard.card_cost_override`），
+   而**不是**给 `PlayRequest` 再加一个 `free` 布尔 —— 同一个问题答两次就会漂；
+3. **目标**：攻击牌需要目标 ⇒ **随机一个活着的敌人**。不选目标的话 `sel.eventTarget` 解出空集，
+   伤害会安静地一点不打（这就是判据第 ④ 段存在的理由）；
+4. **落区 `ExhaustPile`**：`Havoc` 的文字是 "and Exhaust it"。
+
+被拒（例如抽到 `unplayable` 的牌）⇒ **放回抽牌堆顶**、什么都不发生，并且**撤掉那个 0 费标记**
+（否则它下次被正常抽到就莫名免费）。为了这一步给 `CardInstance` 加了 `remove_mark_counter` ——
+它与 `set_mark_counter(key, 0)` 不是一回事：**0 是一个合法的绝对价格**，而"没有这个键"才是"听内容"。
+
+### 241.2 又一处 `{{KW|Exhaust}}` 是动词
+
+`... and Exhaust **it**.` —— "it" 是被打出的**那张**牌，不是 `Havoc` 自己（它进弃牌堆）。
+与 §235 `sever_soul`、§239 `burning_pact` 同源，第三次了：这三处都是"Exhaust 有宾语"。
+
+### 241.3 判据
+
+`havoc_plays_the_top_card_for_free_into_the_exhaust_pile` 五段：① 打的是**顶**那张（底下那张不动）；
+② 能量只掉 `Havoc` 自己的 1 点（`Strike` 的 2 费一分没付）；③ 那张牌进**消耗堆**且**不在**弃牌堆；
+④ 随机一个敌人掉了 6 点；⑤ 抽牌堆空 ⇒ 什么都不做、**不报错**。
+
+### 241.4 数字
+
+* 单测 **955**（750 core + 110 run + 95 wasm，+1）；四条对拍不变 `182 / 62 / 124 / 394`；
+* 内容：卡 **181 行**（+2）、镜像 **104,856 B**（core 83,844 B）；
+* 与 wiki 对账：口径内 **86 / 145**（红 **72 / 75**，缺 3：`blood_for_blood` `corruption`
+  `spot_weakness`；无色 14 / 70）；
+* 矩阵 **506 行**、具名测试 **957**；21/21 闸门绿。

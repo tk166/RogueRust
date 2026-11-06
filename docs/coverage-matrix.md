@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 504 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 506 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 179 | 106 | 73 | 0 | 169 | 10 | 14 | 0 |
+| 卡牌 | 181 | 108 | 73 | 0 | 171 | 10 | 16 | 0 |
 | 状态 | 55 | 51 | 2 | 2 | 0 | 55 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 504 | 329 | 159 | 16 | 346 | 65 | 77 | 0 |
+| **合计** | 506 | 331 | 159 | 16 | 348 | 65 | 79 | 0 |
 
-扫描到的具名测试：**956** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**957** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -239,7 +239,7 @@
 | time_eater.ripple | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 
-## 卡牌（179）
+## 卡牌（181）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -290,7 +290,7 @@
 | dark_embrace+ | yes | — | CARD_DIFF | wiki:wiki_cards/dark_embrace.txt (via dark_embrace) | — | INV_CARDS |
 | dark_shackles | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/dark_shackles.txt | wiki 偏差：wiki 升级版是 15 层；内容没有 `dark_shackles+` 这一行。（`Exhaust` 同 `bandage_up`：由落区表达，不是偏差。） | §219/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | dazed | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade, armaments_gains_block_then_upgrades_the_chosen_card …(+2) | — | wiki:wiki_cards/dazed.txt | — | §189/§191/CARD_WIKI+INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+31) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+32) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -323,6 +323,8 @@
 | flex+ | yes | flex_gains_strength_that_the_turn_end_takes_back | — | wiki:wiki_cards/flex.txt (via flex) | — | INV_CARDS/flex_gains_strength_that_the_turn_end_takes_back |
 | ghostly_armor | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/ghostly_armor.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | ghostly_armor+ | yes | — | CARD_DIFF | wiki:wiki_cards/ghostly_armor.txt (via ghostly_armor) | — | INV_CARDS |
+| havoc | yes | havoc_plays_the_top_card_for_free_into_the_exhaust_pile | — | wiki:wiki_cards/havoc.txt | wiki 偏差：wiki 的 Exhaust 指的是被打出的那张牌（"and Exhaust **it**"），Havoc 自己进弃牌堆。 | §241/CARD_WIKI+INV_CARDS/havoc_plays_the_top_card_for_free_into_the_exhaust_pile |
+| havoc+ | yes | havoc_plays_the_top_card_for_free_into_the_exhaust_pile | — | wiki:wiki_cards/havoc.txt (via havoc) | wiki 偏差：wiki 的 Exhaust 指的是被打出的那张牌（"and Exhaust **it**"），Havoc 自己进弃牌堆。 | INV_CARDS/havoc_plays_the_top_card_for_free_into_the_exhaust_pile |
 | headbutt | yes | the_new_red_attacks_do_what_their_pages_say | — | wiki:wiki_cards/headbutt.txt | — | CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
 | headbutt+ | yes | — | CARD_DIFF | wiki:wiki_cards/headbutt.txt (via headbutt) | — | INV_CARDS |
 | heavy_blade | yes | heavy_blade_multiplies_strength_three_or_five_times | — | wiki:wiki_cards/heavy_blade.txt | — | CARD_WIKI+INV_CARDS/heavy_blade_multiplies_strength_three_or_five_times |
@@ -399,7 +401,7 @@
 | skewer | yes | skewer_hits_once_per_energy_spent | — | wiki:wiki_cards/skewer.txt | — | §232/CARD_WIKI+INV_CARDS/skewer_hits_once_per_energy_spent |
 | skewer+ | yes | — | CARD_DIFF | wiki:wiki_cards/skewer.txt (via skewer) | — | INV_CARDS |
 | slimed | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+2) | — | wiki:wiki_cards/slimed.txt | — | §192/§219/CARD_WIKI+INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+92) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+93) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+8) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
