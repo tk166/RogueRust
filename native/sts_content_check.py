@@ -99,7 +99,8 @@ INV_COUNTS = {
     # §242: +1 (`standard.corruption`).
     # §244: +2 (`standard.mayhem` / `standard.magnetism`).
     # §245: +1 (`standard.no_block_from_cards`).
-    "statuses": 59,
+    # §248: +1 (`standard.cap_cost_at`).
+    "statuses": 60,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -126,11 +127,11 @@ INV_CARDS = {
     # 循环体的事实包在 `("each", zone, (...))` 里：`move` 是"把**当前迭代的那张牌**送进消耗堆"，
     # 后面那条是"每张牌换来的效果"。
     "second_wind": {"Cost": 1, "Tags": ["skill"],
-                    "Facts": [("each", "Hand", (("move", "cardInstance.iterated", "ExhaustPile"),
+                    "Facts": [("each", "Hand", "PileOrder", None, (("move", "cardInstance.iterated", "ExhaustPile"),
                                                 ("block", 5, "source")))],
                     "PlayedCardDestinationZone": "ExhaustPile"},
     "second_wind+": {"Cost": 1, "Tags": ["skill"],
-                     "Facts": [("each", "Hand", (("move", "cardInstance.iterated", "ExhaustPile"),
+                     "Facts": [("each", "Hand", "PileOrder", None, (("move", "cardInstance.iterated", "ExhaustPile"),
                                                  ("block", 7, "source")))],
                      "PlayedCardDestinationZone": "ExhaustPile"},
     # ---- §226：复制载体（Dual Wield） ----------------------------------------------------------
@@ -249,10 +250,10 @@ INV_CARDS = {
     # 伤害是 `8 + card.counter`，然后给这份副本加 5(8) —— 两件事都在事实里。
     "rampage": {"Cost": 1, "Tags": ["attack"],
                 "Facts": [("damage", ("add", 8, ("cardCounter", "standard.rampage_bonus")), "event"),
-                          ("cardCounter", "cardInstance.resolving", "standard.rampage_bonus", 5)]},
+                          ("cardCounter", "cardInstance.resolving", "standard.rampage_bonus", 5, "Add")]},
     "rampage+": {"Cost": 1, "Tags": ["attack"],
                  "Facts": [("damage", ("add", 8, ("cardCounter", "standard.rampage_bonus")), "event"),
-                           ("cardCounter", "cardInstance.resolving", "standard.rampage_bonus", 8)]},
+                           ("cardCounter", "cardInstance.resolving", "standard.rampage_bonus", 8, "Add")]},
     # ---- §228：随机目标 / 按格挡打伤害 -------------------------------------------------------
     # 升级改的是**次数**（wiki: "(3;4) times"），不是伤害 —— 所以两行只差最后一个字段。
     "sword_boomerang": {"Cost": 1, "Tags": ["attack"],
@@ -272,11 +273,11 @@ INV_CARDS = {
                              ("status", "standard.nightmare_pending", 1, "source")],
                    "PlayedCardDestinationZone": "ExhaustPile"},
     "fiend_fire": {"Cost": 2, "Tags": ["attack"],
-                   "Facts": [("each", "Hand", (("move", "cardInstance.iterated", "ExhaustPile"),
+                   "Facts": [("each", "Hand", "PileOrder", None, (("move", "cardInstance.iterated", "ExhaustPile"),
                                                ("damage", 7, "event")))],
                    "PlayedCardDestinationZone": "ExhaustPile"},
     "fiend_fire+": {"Cost": 2, "Tags": ["attack"],
-                    "Facts": [("each", "Hand", (("move", "cardInstance.iterated", "ExhaustPile"),
+                    "Facts": [("each", "Hand", "PileOrder", None, (("move", "cardInstance.iterated", "ExhaustPile"),
                                                 ("damage", 10, "event")))],
                     "PlayedCardDestinationZone": "ExhaustPile"},
     # ---- §221: ten more Ironclad cards (wiki numbers; `native/wiki_cards/<id>.txt`) ----------------
@@ -496,6 +497,16 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §248：Enlightenment / Madness（2 张 / 4 行）----------------------------------------
+    # ---- §248：Enlightenment / Madness（2 张 / 4 行）----------------------------------------
+    "enlightenment": {"Cost": 0, "Tags": ["skill", "colorless"],
+                           "Facts": [('status', 'standard.cap_cost_at', 1, 'source')]},
+    "enlightenment+": {"Cost": 0, "Tags": ["skill", "colorless"],
+                            "Facts": [('status', 'standard.cap_cost_at', 1, 'source')]},
+    "madness": {"Cost": 1, "Tags": ["skill", "colorless"],
+                     "Facts": [('each', 'Hand', 'Random', 1, (('cardCounter', 'cardInstance.iterated', 'standard.card_cost_override', 0, 'Set'),))]},
+    "madness+": {"Cost": 0, "Tags": ["skill", "colorless"],
+                      "Facts": [('each', 'Hand', 'Random', 1, (('cardCounter', 'cardInstance.iterated', 'standard.card_cost_override', 0, 'Set'),))]},
     # ---- §247：Mind Blast / Enlightenment（2 张 / 4 行）-------------------------------------
     "mind_blast": {"Cost": 2, "Tags": ["attack", "innate", "colorless"],
                         "Facts": [('damage', ('expr', 'combatantZoneCount'), 'event')]},
@@ -743,9 +754,9 @@ INV_CARDS = {
     "seeing_red+": {"Cost": 0, "Tags": ["skill"],
                          "Facts": [('gain', 'standard.energy', 2, 'source')]},
     "sever_soul": {"Cost": 2, "Tags": ["attack"],
-                        "Facts": [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),))]},
+                        "Facts": [('each', 'Hand', 'PileOrder', None, (('move', 'cardInstance.iterated', 'ExhaustPile'),))]},
     "sever_soul+": {"Cost": 2, "Tags": ["attack"],
-                         "Facts": [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),))]},
+                         "Facts": [('each', 'Hand', 'PileOrder', None, (('move', 'cardInstance.iterated', 'ExhaustPile'),))]},
     "shockwave": {"Cost": 2, "Tags": ["skill"],
                        "Facts": [('status', 'standard.weak', 3, 'allEnemies'), ('status', 'standard.vulnerable', 3, 'allEnemies')]},
     "shockwave+": {"Cost": 2, "Tags": ["skill"],
@@ -1254,6 +1265,8 @@ INV_STATUSES = {
     "standard.magnetism": [],
     # §245: Panic Button -- the rule lives in `exec::gain_block_for` (keyed on this id).
     "standard.no_block_from_cards": [],
+    # §248: Enlightenment's "cost at most N" -- the rule is `CostStage::CapCostAt`.
+    "standard.cap_cost_at": [],
     # §237: the five trigger-hook powers. None has a passive modifier -- they are pure triggers
     # (`BlockGained` / `CardsDrawn` / `CardExhausted`).
     "standard.juggernaut": [],
@@ -1609,8 +1622,11 @@ def program_facts(root):
             # equal, or "Rampage got stronger" and "some other bookkeeping moved" would look the same.
             # §247：`Mode`（`Add` 缺席 / `Set` 覆盖）也是事实的一部分 —— "把价格设成 1" 与
             # "把价格加 1" 在同一个计数器上是两件事。
+            # §248：`Mode`（`Add` 缺席 / `Set` / `SetMin`）是事实的一部分 ——
+            # "把价格设成 1" 和 "把价格降到至多 1" 在最关键的 0 费牌上结果不同。
             out.append(("cardCounter", body["CardExpression"]["kind"],
-                        body["CounterId"]["value"], amount(body["Delta"])))
+                        body["CounterId"]["value"], amount(body["Delta"]),
+                        body.get("Mode", "Add")))
         elif kind == "node.dealDamageToRandomTarget":
             # §228: "each hit re-rolls a target" as a fact -- the **count** and the pool are part of
             # it, because "3 hits to random enemies" and "3 hits to all enemies" differ only here.
@@ -1636,7 +1652,10 @@ def program_facts(root):
             # `("each", zone, (循环体的事实...))` —— 递归进一次体，把那些事实收进元组。
             sub = []
             walk_into(body.get("Body"), sub)
-            out.append(("each", body.get("Zone"), tuple(sub)))
+            # §248：`Order` / `TakeFirst` 也是事实 —— "手里**每一张**"与"手里**随机一张**"
+            # 的差别只在这两个字段上（`Enlightenment` vs `Madness`）。
+            out.append(("each", body.get("Zone"), body.get("Order", "PileOrder"),
+                        body.get("TakeFirst"), tuple(sub)))
         elif kind == "node.moveCardToZone":
             # §225：把**当前迭代的那张牌**送进消耗堆（Second Wind / Fiend Fire）。
             target = body.get("CardExpression") or {}

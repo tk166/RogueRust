@@ -29,7 +29,7 @@
  43  2  2   8 IR max                                                          : Left:TERM Right:TERM
  44  1  1   4 IR maxHealth                                                    : Selector:TERM
  45  2  2   8 IR multiply                                                     : Left:TERM Right:TERM
- 46  5  5  12 IR node.addCardCounter                                          : CardExpression:TERM CounterId:STR(wrap) Delta:TERM OwnerSelector:TERM ResultKey:TERM
+ 46  6  6  16 IR node.addCardCounter                                          : CardExpression:TERM CounterId:STR(wrap) Delta:TERM Mode:STR OwnerSelector:TERM ResultKey:TERM
  47  6  6  16 IR node.applyStatus                                             : Charges:INT DurationTurns:INT ResultKey:TERM Stacks:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
  48  2  2   8 IR node.carryAwayStolenGold                                     : CounterId:STR(wrap) TargetSelector:TERM
  49 10 11  24 IR node.chooseCards                                             : Copies:INT DrawFirst:INT FromZone:STR Max:INT Min:INT OwnerSelector:TERM RequireAnyTag:STRLIST ResultKey:TERM Then:STR ToZone:STR
@@ -46,7 +46,7 @@
  60  3  3   8 IR node.drawCards                                               : Count:TERM ResultKey:TERM TargetSelector:TERM
  61  0  0   4 IR node.endTurn                                                 : 
  62  1  1   4 IR node.extraTurn                                               : TargetSelector:TERM
- 63  5  5  12 IR node.forEachCardInZone                                       : Body:TERM MaxIterations:INT OwnerSelector:TERM ResultKey:TERM Zone:STR
+ 63  8  8  20 IR node.forEachCardInZone                                       : Body:TERM MaxIterations:INT Order:STR OwnerSelector:TERM ResultKey:TERM SkipResolving:BOOL TakeFirst:INT Zone:STR
  64  4  4  12 IR node.gainBlock                                               : Amount:TERM PoolId:STR(wrap) ResultKey:TERM TargetSelector:TERM
  65  4  4  12 IR node.gainResource                                            : Amount:TERM ResourceId:STR ResultKey:TERM TargetSelector:TERM
  66  3  3   8 IR node.heal                                                    : Amount:TERM ResultKey:TERM TargetSelector:TERM

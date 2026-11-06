@@ -788,6 +788,8 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         "standard.magnetism" |
         // §245: Panic Button's "no Block from cards" (rule in `exec::gain_block_for`).
         "standard.no_block_from_cards" |
+        // §248: Enlightenment's "cost at most N" (`play.rs::CostStage::CapCostAt`).
+        "standard.cap_cost_at" |
         "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No

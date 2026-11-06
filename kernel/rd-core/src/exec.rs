@@ -2657,8 +2657,16 @@ fn add_card_counter_node(
                 .map(|entry| entry.value)
         })
         .unwrap_or(0);
+    // §248：`Mode` —— `Add`（缺席，既有行为）/ `Set`（覆盖成绝对值）。
+    // "按印刷费用降到至多 N"不走这里：印刷费用只有**费用管线**读得到，那条路是
+    // `CostStage::CapCostAt`（见 `play.rs`），不是"往牌上写一个数"。
+    let value = match node.str_field("Mode")? {
+        None | Some("Add") => current.saturating_add(delta),
+        Some("Set") => delta,
+        Some(_) => return Err(ExecError::Ir(IrError::UnknownKind)),
+    };
     if let Some(card) = ctx.state.card_mut(card_slot) {
-        card.set_mark_counter(key, current.saturating_add(delta))?;
+        card.set_mark_counter(key, value)?;
     }
     resume_later(ctx.state, frame, slot)
 }
@@ -3711,7 +3719,25 @@ fn dispatch_for_each_card_in_zone(
         .int_field("MaxIterations")?
         .unwrap_or(DEFAULT_CARD_IN_ZONE_MAX_ITERATIONS);
     // `TakeFirst` 缺席（`NULL_INT`）⇒ 全部匹配；`Some(n)` ⇒ `Enumerable.Take(n)`。
+    // §248：`SkipResolving` —— **把正在结算的那张牌从快照里去掉**。
+    //
+    // 为什么不是内容侧的 `event.bool: card.isResolving`：那一格是"这次派发里有没有正在结算的牌"，
+    // 对快照里的**每一张**都是同一个值 —— 用它做过滤会把整个循环跳过（实测正是如此）。
+    // "哪一张是自己"只有内核知道（§226 的 `cardInstance.resolving` 是值，不是事实位）。
+    let skip_resolving = node.bool_field("SkipResolving")?.unwrap_or(false);
+    let resolving_id = ctx
+        .resolving_card
+        .and_then(|slot| ctx.state.card(slot))
+        .map(|card| card.id);
+
     let take_first = node.int_field("TakeFirst")?;
+    // §248：`Order: "Random"` —— 洗一遍快照再取。`Madness` 要"手里**随机一张**"，
+    // 而 `TakeFirst` 只按牌堆序取（那会让"随机"变成"总是第一张"，而且看起来完全正常）。
+    let random_order = match node.str_field("Order")? {
+        None => false,
+        Some("Random") => true,
+        Some(_) => return Err(ExecError::Ir(IrError::UnknownKind)),
+    };
     let tag_filter = node.str_field("TagFilter")?;
     // `MarkFilter` 在本镜像的 opcode 字段表里**根本不存在**，所以这里恒 `None`。
     // 仍然读它：将来内容真用了 mark 过滤，本层**会照参考执行**而不是静默忽略一条过滤条件。
@@ -3776,9 +3802,25 @@ fn dispatch_for_each_card_in_zone(
                 // 不可达：`in_zone <= MAX_CARDS_PER_ZONE` 就是快照缓冲的长度。
                 return Err(ExecError::Ir(IrError::List));
             };
+            if skip_resolving && Some(ctx.state.card(card_slot).map(|c| c.id)) == Some(resolving_id) {
+                continue;
+            }
             *sink = card_slot;
             count += 1;
         }
+    }
+
+    // §248：`Order: "Random"` ⇒ 先把候选洗一遍（一次抽签，与洗牌同一本 `random_step` 账）。
+    //
+    // 注意 `shuffle_candidates` 是"算出下标重排"，不是"原地洗" —— 这里要给 `[CardSlot]`
+    // 洗，所以直接用 `rng::shuffle_slots`（同一本账、同一个帮手，不是第二套洗牌）。
+    if random_order {
+        crate::rng::shuffle_slots(
+            &mut slots[..count],
+            ctx.state.random_seed,
+            ctx.state.random_step,
+        );
+        ctx.state.random_step = ctx.state.random_step.saturating_add(1);
     }
 
     // ── `:463-464`：`Enumerable.Take(n)`。`n <= 0` ⇒ 空序列（**不是**截成 1，**不是**错误）。

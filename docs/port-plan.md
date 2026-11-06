@@ -16902,3 +16902,74 @@ StS 的"随机无色牌"池子从不给它们 —— 一起打上去会让 `jack
 2. **`forEachCardInZone` 的"随机取一张"** —— `Madness` 的另一半（现在只有 `TakeFirst`）；
 3. **`ToDrawPileBottom`** —— `Forethought` 的另一半；
 4. **`Discovery`** —— "造 3 张候选进 `Offered`"（`Offered` 目前只有药水在用）。
+
+---
+
+## §248 `Enlightenment` + `Madness`：费用修饰器落在**管线**上，不在"往牌上写数"
+
+### 248.1 第一版为什么错：节点侧读不到印刷费用
+
+§247 的结论是"要写对 `min(cost,1)` 就必须知道印刷费用"，于是先加了
+`play::printed_energy_cost`（内部调 `calculate_costs`，只有一份读者）。探针实测：
+**对任何定义都返回 `None`** —— `lookup_in` 有、`card(index)` 有、`CardInstanceId::new` 也行，
+但 `calculate_costs` 在那种调用里一律 `Err`。原因没查明。
+
+按 FACT §4 的纪律（**读不出来的度量不许硬上**），这里掉头：**让费用管线自己去做**。
+管线里的 `current` 就是印刷费用 —— 它本来就知道，不需要谁去"读"一遍。
+
+⇒ 新阶段 `CostStage::CapCostAt`（priority 220，紧跟技能减费之后、每副本价格之前）：
+状态 `standard.cap_cost_at` 的**层数就是 N**，`current > N` 才降到 N。
+`Enlightenment` 于是只是一句 `applyStatus(cap_cost_at, 1)`。
+
+这条形状顺带把 §247 那个坑关掉了：**`min` 写在一个地方**（阶段里），内容不再"给每张牌写一个数"，
+所以"0 费牌被抬成 1"在结构上不可能发生。
+
+### 248.2 `Madness`：随机一张 —— 两个坑
+
+`Reduce the cost of a random card in your hand to 0 this combat. Exhaust.`
+⇒ `forEachCardInZone{Hand, Order: "Random", TakeFirst: 1, SkipResolving: true}` +
+`addCardCounter{Mode: "Set", 0}`。
+
+1. **`Order: "Random"`**：原来只有 `TakeFirst`（按牌堆序），"随机"会退化成"总是第一张"。
+   新增 `rng::shuffle_slots`（与 `shuffle_indexes` 共用 `initial_state`/`next_u32`，
+   不是第二套洗牌算法）。判据用**换种子会换人**钉住它 —— 只断言"恰好一张免费"的话，
+   "总取第一张"也全绿。
+2. **不能选中自己**：打出的牌在终态回调之前仍留在手牌里（§225 的既有事实），于是随机有可能落到
+   `Madness` 自己身上 —— 那张牌随后进消耗堆，玩家会觉得"这牌什么都没做"（实测就是 seed=2
+   那种"三张都没免费"）。
+
+   第一版按 §226 的思路写内容侧条件 `not(event.bool: card.isResolving)` —— **错的**：那一格是
+   "这次派发里有没有正在结算的牌"，对快照里的**每一张**都是同一个值，于是整个循环被跳过。
+   "哪一张是自己"只有内核知道 ⇒ 新字段 `SkipResolving: true`（快照时按 `card.id` 排除）。
+   这是 §226 那条洞见的**第二次**应用，而两次的落点不同：`event.bool` 只能问"有没有"，
+   要"是哪一张"必须用值比较（`cardInstance.resolving`）或者内核侧过滤。
+
+### 248.3 判据
+
+* `enlightenment_caps_hand_costs_at_one`：2 费 → 1 / **3 费 → 1**（降到 1 不是减 1）/
+  **0 费仍 0**（`min` 而不是 `set`）。三段缺一段，"减 1"或"设 1"都能全绿。
+* `madness_frees_exactly_one_random_hand_card`：三张 2 费牌 ⇒ **恰好一张**免费（5 个种子）；
+  换 8 个种子**免费的那张会换人**（否则 `Order: Random` 没生效）；它自己进消耗堆。
+
+### 248.4 两处"事实形状"连带改动
+
+`forEachCardInZone` 的事实补了 `Order`/`TakeFirst`（"全体"与"随机一张"的差别只在这里），
+`addCardCounter` 的事实补了 `Mode`（`Add`/`Set`）。四处旧表（`second_wind` ×2、`sever_soul` ×2、
+`rampage` ×2）跟着改 —— 内容门逐条点名，改完就绿。
+
+### 248.5 数字
+
+* 单测 **964**（759 core + 110 run + 95 wasm，+2）；四条对拍不变 `182 / 62 / 124 / 394`；
+* 内容：卡 **241 行**（+4）、状态 **60**（+1：`standard.cap_cost_at`）、
+  镜像 **114,540 B**（core 89,500 B）；
+* 与 wiki 对账：口径内 **116 / 145**（无色 **41 / 70**；红 75/75）；
+* 矩阵 **571 行**、具名测试 **966**；21/21 闸门绿。
+
+### 248.6 下一批（无色 29 张）
+
+1. **`Forethought`** —— "选若干张放**堆底**且费用 0"：差 `ChoiceThen::ToDrawPileBottom`，
+   外加"选中的牌写价格"（`chooseCards` 现在只有 `ToHand` 会带 `cost_delta`）；
+2. **`Discovery`** —— "造 3 张候选进 `Offered`"（`Offered` 目前只有药水在用）；
+3. **`Panache` / `Sadistic Nature` / `Omega`** —— §237 的钩子 + 计数器，可能零内核改动；
+4. **`The Bomb`** —— 延迟结算（新容器）；
+5. **诅咒 10 张** —— `regret` / `decay` / `shame` 用 `TurnEnded` 就能做。

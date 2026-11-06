@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 566 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 571 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 237 | 128 | 109 | 0 | 227 | 10 | 18 | 0 |
-| 状态 | 59 | 52 | 5 | 2 | 0 | 59 | 1 | 0 |
+| 卡牌 | 241 | 130 | 111 | 0 | 231 | 10 | 18 | 0 |
+| 状态 | 60 | 52 | 6 | 2 | 0 | 60 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 566 | 352 | 198 | 16 | 404 | 69 | 81 | 0 |
+| **合计** | 571 | 354 | 201 | 16 | 408 | 70 | 81 | 0 |
 
-扫描到的具名测试：**964** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**966** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -239,7 +239,7 @@
 | time_eater.ripple | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 
-## 卡牌（237）
+## 卡牌（241）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -255,7 +255,7 @@
 | bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
-| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+11) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
+| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+13) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
 | bash+ | yes | — | CARD_DIFF | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
@@ -266,7 +266,7 @@
 | blood_for_blood+ | yes | — | CARD_DIFF | wiki:wiki_cards/blood_for_blood.txt (via blood_for_blood) | — | INV_CARDS |
 | bloodletting | yes | blood_for_blood_gets_cheaper_each_time_you_lose_hp, losing_hp_is_not_damage_but_it_is_hp_loss …(+1) | — | wiki:wiki_cards/bloodletting.txt | — | §236/CARD_WIKI+INV_CARDS/blood_for_blood_gets_cheaper_each_time_you_lose_hp |
 | bloodletting+ | yes | the_lose_hp_cards_do_what_their_pages_say | — | wiki:wiki_cards/bloodletting.txt (via bloodletting) | — | INV_CARDS/the_lose_hp_cards_do_what_their_pages_say |
-| bludgeon | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/bludgeon.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
+| bludgeon | yes | enlightenment_caps_hand_costs_at_one, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/bludgeon.txt | — | CARD_WIKI+INV_CARDS/enlightenment_caps_hand_costs_at_one |
 | bludgeon+ | yes | — | CARD_DIFF | wiki:wiki_cards/bludgeon.txt (via bludgeon) | — | INV_CARDS |
 | blur | yes | blur_gives_five_or_eight_block_and_the_status, a_special_card_is_known_and_never_put_in_a_reward | — | wiki:wiki_cards/blur.txt | — | §218/CARD_WIKI+INV_CARDS/blur_gives_five_or_eight_block_and_the_status |
 | blur+ | yes | blur_gives_five_or_eight_block_and_the_status | — | wiki:wiki_cards/blur.txt (via blur) | — | INV_CARDS/blur_gives_five_or_eight_block_and_the_status |
@@ -315,6 +315,8 @@
 | dropkick+ | yes | — | CARD_DIFF | wiki:wiki_cards/dropkick.txt (via dropkick) | — | INV_CARDS |
 | dual_wield | yes | dual_wield_asks_for_an_attack_and_copies_it, a_dual_wield_question_reads_the_same_three_numbers_in_the_page_layer | — | wiki:wiki_cards/dual_wield.txt | — | §226/§227/CARD_WIKI+INV_CARDS/dual_wield_asks_for_an_attack_and_copies_it |
 | dual_wield+ | yes | — | CARD_DIFF | wiki:wiki_cards/dual_wield.txt (via dual_wield) | — | INV_CARDS |
+| enlightenment | yes | enlightenment_caps_hand_costs_at_one | — | wiki:wiki_cards/enlightenment.txt | — | §248/CARD_WIKI+INV_CARDS/enlightenment_caps_hand_costs_at_one |
+| enlightenment+ | yes | — | CARD_DIFF | wiki:wiki_cards/enlightenment.txt (via enlightenment) | — | INV_CARDS |
 | entrench | yes | entrench_doubles_the_block_it_already_has | — | wiki:wiki_cards/entrench.txt | — | §233/CARD_WIKI+INV_CARDS/entrench_doubles_the_block_it_already_has |
 | entrench+ | yes | — | CARD_DIFF | wiki:wiki_cards/entrench.txt (via entrench) | — | INV_CARDS |
 | evolve | yes | — | CARD_DIFF | wiki:wiki_cards/evolve.txt | — | CARD_WIKI+INV_CARDS |
@@ -335,7 +337,7 @@
 | flame_barrier+ | yes | — | CARD_DIFF | wiki:wiki_cards/flame_barrier.txt (via flame_barrier) | — | INV_CARDS |
 | flash_of_steel | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/flash_of_steel.txt | — | CARD_WIKI+INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
 | flash_of_steel+ | yes | — | CARD_DIFF | wiki:wiki_cards/flash_of_steel.txt (via flash_of_steel) | — | INV_CARDS |
-| flex | yes | flex_gains_strength_that_the_turn_end_takes_back, a12_halves_the_upgrade_chance_in_acts_two_and_three | — | wiki:wiki_cards/flex.txt | — | §230/CARD_WIKI+INV_CARDS/flex_gains_strength_that_the_turn_end_takes_back |
+| flex | yes | flex_gains_strength_that_the_turn_end_takes_back, enlightenment_caps_hand_costs_at_one …(+1) | — | wiki:wiki_cards/flex.txt | — | §230/CARD_WIKI+INV_CARDS/flex_gains_strength_that_the_turn_end_takes_back |
 | flex+ | yes | flex_gains_strength_that_the_turn_end_takes_back | — | wiki:wiki_cards/flex.txt (via flex) | — | INV_CARDS/flex_gains_strength_that_the_turn_end_takes_back |
 | ghostly_armor | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/ghostly_armor.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | ghostly_armor+ | yes | — | CARD_DIFF | wiki:wiki_cards/ghostly_armor.txt (via ghostly_armor) | — | INV_CARDS |
@@ -372,6 +374,8 @@
 | juggernaut+ | yes | — | CARD_DIFF | wiki:wiki_cards/juggernaut.txt (via juggernaut) | — | INV_CARDS |
 | limit_break | yes | limit_break_doubles_strength_and_only_the_base_copy_exhausts | — | wiki:wiki_cards/limit_break.txt | — | CARD_WIKI+INV_CARDS/limit_break_doubles_strength_and_only_the_base_copy_exhausts |
 | limit_break+ | yes | limit_break_doubles_strength_and_only_the_base_copy_exhausts | — | wiki:wiki_cards/limit_break.txt (via limit_break) | — | INV_CARDS/limit_break_doubles_strength_and_only_the_base_copy_exhausts |
+| madness | yes | madness_frees_exactly_one_random_hand_card | — | wiki:wiki_cards/madness.txt | — | CARD_WIKI+INV_CARDS/madness_frees_exactly_one_random_hand_card |
+| madness+ | yes | — | CARD_DIFF | wiki:wiki_cards/madness.txt (via madness) | — | INV_CARDS |
 | magnetism | yes | — | CARD_DIFF | wiki:wiki_cards/magnetism.txt | — | CARD_WIKI+INV_CARDS |
 | magnetism+ | yes | — | CARD_DIFF | wiki:wiki_cards/magnetism.txt (via magnetism) | — | INV_CARDS |
 | malaise | yes | malaise_spends_the_energy_on_strength_loss_and_weak | — | wiki:wiki_cards/malaise.txt | — | CARD_WIKI+INV_CARDS/malaise_spends_the_energy_on_strength_loss_and_weak |
@@ -481,7 +485,7 @@
 | wound | yes | the_new_red_skills_do_what_their_pages_say, evolve_and_fire_breathing_only_answer_to_the_right_tags …(+1) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
-## 状态（59）
+## 状态（60）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -492,6 +496,7 @@
 | standard.blur | yes | blur_gives_five_or_eight_block_and_the_status, barricade_keeps_block_forever_and_blur_only_for_one_turn | — | spec:INV_STATUSES | — | §197/§218/INV_STATUSES/blur_gives_five_or_eight_block_and_the_status |
 | standard.brutality | yes | losing_hp_is_not_damage_but_it_is_hp_loss, the_lose_hp_cards_do_what_their_pages_say | — | spec:INV_STATUSES | — | §235/§236/INV_STATUSES/losing_hp_is_not_damage_but_it_is_hp_loss |
 | standard.buffer | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor | — | spec:INV_STATUSES | — | §149/§223/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
+| standard.cap_cost_at | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §245/§248/INV_STATUSES |
 | standard.combust | yes | flame_barrier_hits_back_and_combust_burns_everyone | — | spec:INV_STATUSES | — | §119/INV_STATUSES/flame_barrier_hits_back_and_combust_burns_everyone |
 | standard.constricted | yes | constricted_loses_its_stacks_of_hp_through_block_at_turn_end, statuses_outside_the_five_axes_are_readable_by_name …(+1) | — | spec:INV_STATUSES | — | §175/§214/INV_STATUSES/constricted_loses_its_stacks_of_hp_through_block_at_turn_end |
 | standard.corruption | yes | corruption_makes_skills_free_and_exhausts_them | — | spec:INV_STATUSES | — | §238/§242/INV_STATUSES/corruption_makes_skills_free_and_exhausts_them |
@@ -515,7 +520,7 @@
 | standard.frail | yes | entrench_doubles_the_block_it_already_has, damage_table_rows_are_the_frozen_shape …(+4) | — | spec:INV_STATUSES | — | §196/§212/INV_STATUSES/entrench_doubles_the_block_it_already_has |
 | standard.hex | yes | hex_shuffles_a_dazed_only_for_non_attack_cards | — | spec:INV_STATUSES | — | §210/§213/INV_STATUSES/hex_shuffles_a_dazed_only_for_non_attack_cards |
 | standard.intangible | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor | — | spec:INV_STATUSES | — | §210/§223/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
-| standard.juggernaut | yes | juggernaut_punishes_every_block_gain | — | spec:INV_STATUSES | — | §237/§245/INV_STATUSES/juggernaut_punishes_every_block_gain |
+| standard.juggernaut | yes | juggernaut_punishes_every_block_gain | — | spec:INV_STATUSES | — | §237/§248/INV_STATUSES/juggernaut_punishes_every_block_gain |
 | standard.lose_dexterity | yes | — | — | spec:INV_STATUSES | — | §158/INV_STATUSES |
 | standard.lose_strength | yes | flex_potion_gives_strength_and_takes_it_back | — | spec:INV_STATUSES | — | §158/§230/INV_STATUSES/flex_potion_gives_strength_and_takes_it_back |
 | standard.magnetism | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §242/§244/INV_STATUSES |

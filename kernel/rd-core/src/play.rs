@@ -447,6 +447,9 @@ const CORRUPTION_STATUS: &str = "standard.corruption";
 /// 用 tag 而不是新字段，理由与 `x_cost` 相同：这是**这张牌的费用语义**，而费用的语义已经由 tag
 /// 表达过一次（`battle::X_COST_TAG`）。
 const HP_LOSS_COST_TAG: &str = "hp_loss_cost";
+
+/// §248：`Enlightenment` —— 层数 = "费用至多 N"。
+const CAP_COST_AT_STATUS: &str = "standard.cap_cost_at";
 /// `StandardCombatIds.OneAttackPerTurnStatus`（`:35`）。
 const ONE_ATTACK_PER_TURN_STATUS: &str = "standard.one_attack_per_turn";
 /// §196：Red Slaver 的 `Entangled` —— "本回合不能打出 Attack"。
@@ -1631,6 +1634,13 @@ enum CostStage {
     DeclarativePassive,
     /// §242：`Blood for Blood` —— 每失去 1 次生命就便宜 1 点。
     HpLossCount,
+    /// §248：**把费用压到至多 N**（`Enlightenment` 的 "reduce to 1"）。
+    ///
+    /// 为什么是"阶段"而不是"给每张牌写绝对价"：**印刷费用在管线里**（`current` 就是它），
+    /// 而节点侧读不到它（§248 试过：`printed_energy_cost` 对着新解析的 row 调用
+    /// `calculate_costs` 一律返回 `Err`，原因未查明；按 FACT §4 的纪律，**读不出来的度量不许硬上**）。
+    /// 阶段里做这件事只有一个前提：状态说"至多 N"，管线说"现在是多少"。
+    CapCostAt,
     /// §242：`Corruption` —— 技能归 0（`Skills cost 0`）。
     CorruptionSkillsFree,
     CardInstance,
@@ -1650,6 +1660,7 @@ impl CostStage {
             CostStage::CorruptionSkillsFree => 1050,
             CostStage::CardInstance => 1100,
             CostStage::HpLossCount => 210,
+            CostStage::CapCostAt => 220,
         }
     }
 
@@ -1662,6 +1673,7 @@ impl CostStage {
             CostStage::DecreeNthCardFree => "standard.decree_free_nth_card",
             CostStage::DeclarativePassive => "standard.declarative_card_cost",
             CostStage::HpLossCount => "standard.hp_loss_cost",
+            CostStage::CapCostAt => "standard.cap_cost_at",
             CostStage::CorruptionSkillsFree => "standard.corruption_cost",
             CostStage::CardInstance => "standard.card_instance_cost",
         }
@@ -1678,12 +1690,13 @@ impl CostStage {
 }
 
 /// 执行序 = 升序后的固定表（`(priority, modifier_id)`）。
-const COST_STAGE_ORDER: [CostStage; 8] = [
+const COST_STAGE_ORDER: [CostStage; 9] = [
     CostStage::FreeNextCard,
     CostStage::FirstAttackEachTurnFree,
     CostStage::SkillCostReduction,
     // §242：紧跟技能减费（210），同一类"按东西减一点"的规则排在一起。
     CostStage::HpLossCount,
+    CostStage::CapCostAt,
     CostStage::DecreeNthCardFree,
     CostStage::DeclarativePassive,
     // §242：腐化排在每副本价格之前 —— "这一份的价格"比"全局规则"更具体。
@@ -1886,6 +1899,21 @@ fn run_cost_stage(
             }
             let source = source_of(state, &card.source)?;
             Ok(current.wrapping_sub(source.hp_losses))
+        }
+
+        // §248：`Enlightenment` —— "把手里每张牌的费用**降到至多** N"。
+        // 状态 `standard.cap_cost_at` 的**层数就是 N**（`Enlightenment` 挂 1 层 = 至多 1）。
+        // 只降不升（`min`）：0 费牌在 0 层以下没有东西可降，所以原样返回 —— 这正是 §247 那个坑。
+        CostStage::CapCostAt => {
+            if current <= 0 {
+                return Ok(current);
+            }
+            let source = source_of(state, &card.source)?;
+            let cap = total_status_stacks(source, CAP_COST_AT_STATUS);
+            if cap <= 0 || current <= cap {
+                return Ok(current);
+            }
+            Ok(cap)
         }
 
         // §242：`Corruption` —— 技能归 0。**绝对值**，不是"减 N"：减 N 需要一个够大的 N，
@@ -3465,10 +3493,10 @@ mod tests {
         // 排在每副本价格之前 —— "这一份的价格"比"全局规则"更具体）。
         assert_eq!(
             COST_STAGE_ORDER.map(|stage| stage.priority()),
-            [100, 150, 200, 210, 300, 1000, 1050, 1100]
+            [100, 150, 200, 210, 220, 300, 1000, 1050, 1100]
         );
         assert!(
-            !COST_STAGE_ORDER[0].prices_actions() && COST_STAGE_ORDER[5].prices_actions(),
+            !COST_STAGE_ORDER[0].prices_actions() && COST_STAGE_ORDER[6].prices_actions(),
             "只有 declarative 那条对动作也报价（`Cards/CardCostModifiers.cs:29` 默认 false、\
              `Effects/PassiveModifiers.cs:278` 声明 true）"
         );

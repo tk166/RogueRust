@@ -156,13 +156,13 @@ FACTS = {
     'doubt': ([], None),
     'writhe': ([], None),
     # ---- §225：整手牌逐张消耗（数字来自 native/wiki_cards/*.txt） -----------------------------
-    'second_wind': ([('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),
+    'second_wind': ([('each', 'Hand', 'PileOrder', None, (('move', 'cardInstance.iterated', 'ExhaustPile'),
                                        ('block', 5, 'source')))],
-                    [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),
+                    [('each', 'Hand', 'PileOrder', None, (('move', 'cardInstance.iterated', 'ExhaustPile'),
                                        ('block', 7, 'source')))]),
-    'fiend_fire': ([('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),
+    'fiend_fire': ([('each', 'Hand', 'PileOrder', None, (('move', 'cardInstance.iterated', 'ExhaustPile'),
                                       ('damage', 7, 'event')))],
-                   [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),
+                   [('each', 'Hand', 'PileOrder', None, (('move', 'cardInstance.iterated', 'ExhaustPile'),
                                       ('damage', 10, 'event')))]),
     # §226：`Dual Wield` —— wiki 的 "Add (a copy;2 copies) of that card into your hand."
     # 两行只差 `Copies`（1 / 2），这正是升级的全部内容。
@@ -191,9 +191,9 @@ FACTS = {
                      [('damageRandom', 9, 'allEnemies', 2)]),
     # §229：`Deal 8 damage. Increase this card's damage by (5;8) this combat.`
     'rampage': ([('damage', ('add', 8, ('cardCounter', 'standard.rampage_bonus')), 'event'),
-                 ('cardCounter', 'cardInstance.resolving', 'standard.rampage_bonus', 5)],
+                 ('cardCounter', 'cardInstance.resolving', 'standard.rampage_bonus', 5, 'Add')],
                 [('damage', ('add', 8, ('cardCounter', 'standard.rampage_bonus')), 'event'),
-                 ('cardCounter', 'cardInstance.resolving', 'standard.rampage_bonus', 8)]),
+                 ('cardCounter', 'cardInstance.resolving', 'standard.rampage_bonus', 8, 'Add')]),
     # §229：`Deal (12;16) damage. Can be Upgraded any number of times.` —— 每档 +4，`plus` 是**第一档**。
     'searing_blow': ([('damage', 12, 'event')], [('damage', 16, 'event')]),
     # §230：`Gain (2;4) Strength. At the end of this turn, lose (2;4) Strength.`
@@ -240,7 +240,7 @@ FACTS = {
     'rage': ([('status', 'standard.rage', 3, 'source')], [('status', 'standard.rage', 5, 'source')]),
     'reckless_charge': ([('damage', 7, 'event'), ('card', 'dazed', 1, 'DrawPile', 'source')], [('damage', 10, 'event'), ('card', 'dazed', 1, 'DrawPile', 'source')]),
     'seeing_red': ([('gain', 'standard.energy', 2, 'source')], [('gain', 'standard.energy', 2, 'source')]),
-    'sever_soul': ([('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),))], [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),))]),
+    'sever_soul': ([('each', 'Hand', 'PileOrder', None, (('move', 'cardInstance.iterated', 'ExhaustPile'),))], [('each', 'Hand', 'PileOrder', None, (('move', 'cardInstance.iterated', 'ExhaustPile'),))]),
     'shockwave': ([('status', 'standard.weak', 3, 'allEnemies'), ('status', 'standard.vulnerable', 3, 'allEnemies')], [('status', 'standard.weak', 5, 'allEnemies'), ('status', 'standard.vulnerable', 5, 'allEnemies')]),
     # ---- §236：失去生命（5 张） -----------------------------------------------------------
     'bloodletting': ([('loseHp', 3, 'source'), ('gain', 'standard.energy', 2, 'source')], [('loseHp', 3, 'source'), ('gain', 'standard.energy', 3, 'source')]),
@@ -297,6 +297,9 @@ FACTS = {
     'thinking_ahead': ([('draw', 2, 'source'), ('choose', 'source', 'Hand', (), 1, 1, 'ToDrawPileTop')], [('draw', 2, 'source'), ('choose', 'source', 'Hand', (), 1, 1, 'ToDrawPileTop')]),
     # ---- §247：Mind Blast / Enlightenment（2 张）------------------------------------------
     'mind_blast': ([('damage', ('expr', 'combatantZoneCount'), 'event')], [('damage', ('expr', 'combatantZoneCount'), 'event')]),
+    # ---- §248：Enlightenment / Madness（2 张）----------------------------------------------
+    'enlightenment': ([('status', 'standard.cap_cost_at', 1, 'source')], [('status', 'standard.cap_cost_at', 1, 'source')]),
+    'madness': ([('each', 'Hand', 'Random', 1, (('cardCounter', 'cardInstance.iterated', 'standard.card_cost_override', 0, 'Set'),))], [('each', 'Hand', 'Random', 1, (('cardCounter', 'cardInstance.iterated', 'standard.card_cost_override', 0, 'Set'),))]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

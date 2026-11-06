@@ -64,6 +64,22 @@ pub fn shuffle_indexes(out: &mut [u8], seed: i32, step: i32) {
     }
 }
 
+/// §248：把**一堆元素本身**原地洗一遍（同一套 Fisher–Yates，同一本 `(seed, step)` 账）。
+///
+/// `shuffle_indexes` 回答的是"下标怎么重排"（它的输出是下标）；这里回答的是"元素序列本身"。
+/// 两者共用 `initial_state`/`next_u32`，所以**没有第二套洗牌算法** —— 只是元素类型不同。
+pub fn shuffle_slots<T>(out: &mut [T], seed: i32, step: i32) {
+    let n = out.len();
+    if n <= 1 {
+        return;
+    }
+    let mut state = initial_state(seed, step);
+    for i in (1..n).rev() {
+        let j = (next_u32(&mut state) % (i as u32 + 1)) as usize;
+        out.swap(i, j);
+    }
+}
+
 /// Convenience for the common "pick one element" case, spelled out so nobody short-circuits it.
 #[must_use]
 pub fn shuffled_pick_index(count: usize, seed: i32, step: i32) -> usize {
