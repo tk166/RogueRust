@@ -16973,3 +16973,57 @@ StS 的"随机无色牌"池子从不给它们 —— 一起打上去会让 `jack
 3. **`Panache` / `Sadistic Nature` / `Omega`** —— §237 的钩子 + 计数器，可能零内核改动；
 4. **`The Bomb`** —— 延迟结算（新容器）；
 5. **诅咒 10 张** —— `regret` / `decay` / `shame` 用 `TurnEnded` 就能做。
+
+---
+
+## §249（未完成，卡在序列化层）`Omega` / `Panache` / `Sadistic Nature` / `The Bomb`
+
+这一节**没有任何代码进入仓库** —— 四张牌全部撞上同一个缺陷，回退干净，只留这份记录。
+
+### 249.1 现象
+
+给这四张牌各写一条**新建的状态触发器节目**（`TurnEnded` / `CardPlayed` / `StatusApplied`），
+内容门全过（`STS_CONTENT PASS`，事实与 wiki 对账一致），但**运行时**第一次跑就：
+
+```
+Effect(Expr(Ir(WrongKind("F_JSON"))))
+```
+
+`F_JSON` = 读到的那一格在镜像里是"通用 JSON 兜底"，而调用方要的是一个 term/str/int。
+换句话说：**序列化器把某个字段写成了兜底形状**，读取侧于是解不出来。
+
+### 249.2 已排除的（都试过）
+
+| 猜测 | 结果 |
+|---|---|
+| `remainder` 的字段名 | 换成 `combatantCounter` + `compare`，仍 `F_JSON` |
+| `combatantCounter.CounterId` 的写法（裸串 vs `{value}`） | 镜像内容里是**裸串**（`"time_warp"`），改对了仍需进一步定位 |
+| `node.modifyStatusStacks` 的 `Delta` | 与镜像内容逐字一致 |
+| `dealDamage.Amount = combatantStatusStacks` | §237 `juggernaut` 用同一组合且**绿** |
+| 程序形状（`sequence`/`conditional`/直接单节点） | 三种都试过，全 `F_JSON` |
+
+**共同点**：都是"**新增一条状态行 + 它自己的触发器节目**"。此前每节新增的状态触发器
+（§236 `brutality`/`rupture`、§237 五个、§244 `mayhem`/`magnetism`）都一次通过 ——
+所以更可能是**内容规模跨过某个阈值后**，`compile.py` 的 `pick_kind(classes)` 在某个
+`(op, field)` 上观察到了**混合存储类别**，于是退回 `F_JSON`。
+
+### 249.3 下一步该用什么工具查（别再用"改内容再试"猜）
+
+1. `python tools/contentc/reader.py --opcodes <image>` —— 看**出问题的那个 op** 的字段表：
+   哪些字段变成了 `JSON`，与 HEAD 版本（已知能跑）逐字段对比；
+2. `python tools/contentc/compile.py` 的 `pick_kind(classes)`：它按"观察到的类别集合"选存储，
+   `base` 里一旦混进 `arr…`/`obj` 之类就走 `F_JSON`。**打印那个集合**就知道是谁把它弄脏的；
+3. 找到后按 §4 的纪律修**序列化器**（让该字段成为 F_TERM），而不是把内容改得绕开它。
+
+### 249.4 一张牌一张牌地重排优先级
+
+| 牌 | 需要的载体 | 状态 |
+|---|---|---|
+| `Omega` | `TurnEnded` + `dealDamage(allEnemies, stacks)` | 内容已写好，卡在 §249.1 |
+| `Sadistic Nature` | §249 的 `status.isDebuff` / `status.appliedToOther` 两个事实位（**内核补丁已验证可编译**） | 同上 |
+| `Panache` | `cardsPlayedThisTurn` 或计数器 + `compare` | 同上 |
+| `The Bomb` | 层数=回合数 + "先判后减"的顺序 | 同上；另外"状态在自己触发器里自减"本身还要单独验一次 |
+
+⇒ **下一节的第一件事不是再写内容，而是查 `pick_kind`**（预计 30–60 分钟）。查清之后这四张
+基本是"内容 + 一条判据"的量，`Sadistic Nature` 还要带上那两个事实位的内核补丁（本轮的补丁
+已在工作区验证过编译通过，但没有提交 —— 重做时照 §249.2 的形状写即可）。
