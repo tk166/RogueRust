@@ -3454,6 +3454,9 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     // `b` word is already a bitfield (tier in the low two bits, result above) and packing a third
     // number into it is how a silent replay divergence gets born.
     let carried_gold = crate::combat_gold_carried_away();
+    // §250：这一场战斗里**赚到**的金币（`Hand of Greed` 的 "If Fatal, gain 20 Gold"）。
+    // 与 `carried_gold` 一起在 `take_session()` **之前**读 —— 之后战斗就没了。
+    let gained_gold = crate::combat_gold_gained();
     // Captured before the run is borrowed mutably below.
     let elite_fight = run_slot().as_ref().is_some_and(|s| s.elite_fight);
     let boss_fight = run_slot().as_ref().is_some_and(|s| s.boss_fight);
@@ -3469,10 +3472,18 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
         K_FIGHT_END,
         hero_hp,
         (i32::from(boss_fight) << 1 | i32::from(elite_fight)) | (result << 4),
-        &std::format!("{carried_gold}"),
+        // §250：两个数都在这一格里（`carried,gained`）—— 回放要能重算出同样的结算。
+        &std::format!("{carried_gold},{gained_gold}"),
     );
-    let verdict =
-        apply_fight_outcome(session, hero_hp, result, elite_fight, boss_fight, carried_gold);
+    let verdict = apply_fight_outcome(
+        session,
+        hero_hp,
+        result,
+        elite_fight,
+        boss_fight,
+        carried_gold,
+        gained_gold,
+    );
     session.stamp();
     return verdict;
 }
@@ -3492,6 +3503,9 @@ fn flee_fight(slot: i32) -> i32 {
         return -1;
     };
     let carried_gold = crate::combat_gold_carried_away();
+    // §250：逃走的战斗也要把"战斗里赚到的金币"带上 —— `Hand of Greed` 的钱不是奖励
+    // （Smoke Bomb 的 "no rewards" 说的是奖励），它已经在战斗里到手了。
+    let gained_gold = crate::combat_gold_gained();
     let Some(session) = run_slot().as_ref() else {
         return -1;
     };
@@ -3509,8 +3523,14 @@ fn flee_fight(slot: i32) -> i32 {
     // §201: an escape still forfeits what the thieves carried away -- it is the same `fight_end`
     // record, just with `result = 3` (no rewards), and the log has to carry the amount or a replay
     // would settle a different run.
-    session.log(K_FIGHT_END, hero_hp, 3 << 4, &std::format!("{carried_gold}"));
-    let verdict = apply_fight_outcome(session, hero_hp, 3, false, false, carried_gold);
+    session.log(
+        K_FIGHT_END,
+        hero_hp,
+        3 << 4,
+        &std::format!("{carried_gold},{gained_gold}"),
+    );
+    let verdict =
+        apply_fight_outcome(session, hero_hp, 3, false, false, carried_gold, gained_gold);
     session.stamp();
     if verdict < 0 {
         return verdict;
@@ -3526,6 +3546,7 @@ fn apply_fight_outcome(
     elite_fight: bool,
     boss_fight: bool,
     carried_gold: i32,
+    gained_gold: i32,
 ) -> i32 {
     // ⚠️ `in_fight` 清在这里，不是清在导出里。它原来在 `rd_run_fight_end` 里，而回放走的是
     // `replay_fight` ⇒ 回放一场战斗之后运行层仍然"在战斗中"，于是页面的"回档"被内核拒掉
@@ -3541,6 +3562,12 @@ fn apply_fight_outcome(
     // "doesn't give back gold it didn't steal" read from the other end.
     if carried_gold > 0 {
         session.state.adjust_gold(-carried_gold);
+    }
+    // §250：战斗里赚到的金币（`Hand of Greed`）。**在偷走的钱之后**结算，两个数各走各的路：
+    // 偷走的是"从现有金币里扣"（`adjust_gold` 自己钳到 0），赚到的是"往现有金币里加"。
+    // 顺序在这里不可观察（加法可交换），写下来是因为"哪个先"以后若变成乘数就会可观察。
+    if gained_gold > 0 {
+        session.state.adjust_gold(gained_gold);
     }
     // `inv:§5`: the tier follows what was fought, and it moves gold and rarity together.
     // `inv:§4.3`: a boss pays 95-105 and its reward is always rare.
@@ -3688,11 +3715,26 @@ pub extern "C" fn rd_run_replay_diverged() -> i32 {
 }
 
 /// Apply a **recorded** fight outcome (the replay's path; a fight is never re-simulated).
-fn replay_fight(session: &mut RunSession, hero_hp: i32, flags: i32, carried_gold: i32) -> i32 {
+fn replay_fight(session: &mut RunSession, hero_hp: i32, flags: i32, gold: (i32, i32)) -> i32 {
     let elite = flags & 1 != 0;
     let boss = flags & 2 != 0;
     let result = flags >> 4;
-    apply_fight_outcome(session, hero_hp, result, elite, boss, carried_gold)
+    let (carried_gold, gained_gold) = gold;
+    apply_fight_outcome(session, hero_hp, result, elite, boss, carried_gold, gained_gold)
+}
+
+/// §250：`K_FIGHT_END` 那一格文本里的两个数 —— `carried,gained`。
+///
+/// 老录像只有一个数（`carried`）。**第二个当 0** 是唯一向后兼容的读法：那时根本没有
+/// `gainGold` 这条节点，所以"没赚到"是事实而不是猜测。
+fn parse_fight_gold(text: &str) -> (i32, i32) {
+    match text.split_once(',') {
+        Some((carried, gained)) => (
+            carried.parse().unwrap_or(0),
+            gained.parse().unwrap_or(0),
+        ),
+        None => (text.parse().unwrap_or(0), 0),
+    }
 }
 
 /// Replay the script in `(ptr, len)`. `0` = every step reproduced; `n > 0` = step `n` diverged;
@@ -3874,8 +3916,8 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
                 };
                 // §201: the gold an enemy escaped with is in the record's text (a plain
                 // decimal); an older record without it settles 0, which is what those runs did.
-                let carried = payload.parse::<i32>().unwrap_or(0);
-                let _ = replay_fight(session, a, b, carried);
+                let gold = parse_fight_gold(payload);
+                let _ = replay_fight(session, a, b, gold);
             }
             K_FIGHT_BEGIN => {
                 let _ = rd_run_fight_begin();
@@ -4126,7 +4168,7 @@ mod tests {
             test_run(seed, 70, 80, &deck);
             run_slot().as_mut().expect("run").state.adjust_gold(gold_before);
             let verdict = apply_fight_outcome(
-                run_slot().as_mut().expect("run"), 70, 1, false, false, carried);
+                run_slot().as_mut().expect("run"), 70, 1, false, false, carried, 0);
             assert!(verdict >= 0, "a settled victory must not fail: {verdict}");
             (run_slot().as_ref().expect("run").state.gold(), verdict)
         };
@@ -5239,7 +5281,7 @@ mod tests {
             session.elite_fight = false;
             session.boss_fight = false;
             // 一场**赢了的**普通战斗，英雄掉了 5 点血。
-            let verdict = replay_fight(session, health - 5, 1 << 4, 0);
+            let verdict = replay_fight(session, health - 5, 1 << 4, (0, 0));
             // `apply_fight_outcome` 返回 `0.max(result)`：1 = 赢了（不是错误码）。
             assert_eq!(verdict, 1, "the outcome was applied");
         }

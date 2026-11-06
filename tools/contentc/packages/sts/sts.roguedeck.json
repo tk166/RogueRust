@@ -20364,6 +20364,1295 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "ritual_dagger",
+      "PackageId": "sts",
+      "NameKey": "ritual_dagger",
+      "DescriptionKey": "Deal 15 damage. If Fatal, permanently increase this card's damage by 3. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamageAndIfFatal",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "add",
+              "value": {
+                "Left": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 15
+                  }
+                },
+                "Right": {
+                  "kind": "multiply",
+                  "value": {
+                    "Left": {
+                      "kind": "card.counter",
+                      "value": {
+                        "CounterId": {
+                          "value": "standard.ritual_dagger_bonus"
+                        }
+                      }
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 3
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "Program": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.addCardCounter",
+                    "value": {
+                      "CardExpression": {
+                        "kind": "cardInstance.resolving",
+                        "value": {}
+                      },
+                      "OwnerSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "standard.ritual_dagger_bonus"
+                      },
+                      "Delta": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  }
+                ],
+                "ResultKey": null
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "ritual_dagger+",
+      "PackageId": "sts",
+      "NameKey": "ritual_dagger+",
+      "DescriptionKey": "Deal 15 damage. If Fatal, permanently increase this card's damage by 5. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamageAndIfFatal",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "add",
+              "value": {
+                "Left": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 15
+                  }
+                },
+                "Right": {
+                  "kind": "multiply",
+                  "value": {
+                    "Left": {
+                      "kind": "card.counter",
+                      "value": {
+                        "CounterId": {
+                          "value": "standard.ritual_dagger_bonus"
+                        }
+                      }
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 5
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "Program": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.addCardCounter",
+                    "value": {
+                      "CardExpression": {
+                        "kind": "cardInstance.resolving",
+                        "value": {}
+                      },
+                      "OwnerSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "standard.ritual_dagger_bonus"
+                      },
+                      "Delta": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 5
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  }
+                ],
+                "ResultKey": null
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "hand_of_greed",
+      "PackageId": "sts",
+      "NameKey": "hand_of_greed",
+      "DescriptionKey": "Deal 20 damage. If Fatal, gain 20 Gold.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamageAndIfFatal",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 20
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "Program": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.gainGold",
+                    "value": {
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 20
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  }
+                ],
+                "ResultKey": null
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "hand_of_greed+",
+      "PackageId": "sts",
+      "NameKey": "hand_of_greed+",
+      "DescriptionKey": "Deal 25 damage. If Fatal, gain 25 Gold.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamageAndIfFatal",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 25
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "Program": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.gainGold",
+                    "value": {
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 25
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  }
+                ],
+                "ResultKey": null
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "discovery",
+      "PackageId": "sts",
+      "NameKey": "discovery",
+      "DescriptionKey": "Choose 1 of 3 random cards to add into your hand. It costs 0 this turn. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.offerRandomCards",
+                "value": {
+                  "Count": 3,
+                  "Min": 1,
+                  "Max": 1,
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "discovery+",
+      "PackageId": "sts",
+      "NameKey": "discovery+",
+      "DescriptionKey": "Choose 1 of 3 random cards to add into your hand. It costs 0 this turn.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.offerRandomCards",
+                "value": {
+                  "Count": 3,
+                  "Min": 1,
+                  "Max": 1,
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "forethought",
+      "PackageId": "sts",
+      "NameKey": "forethought",
+      "DescriptionKey": "Put a card from your hand to the bottom of your draw pile. It costs 0 until played.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.chooseCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "FromZone": "Hand",
+                  "Min": 1,
+                  "Max": 1,
+                  "Then": "ToDrawPileBottomFree",
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "forethought+",
+      "PackageId": "sts",
+      "NameKey": "forethought+",
+      "DescriptionKey": "Put any number of cards from your hand to the bottom of your draw pile. They cost 0 until played.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.chooseCards",
+                "value": {
+                  "OwnerSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "FromZone": "Hand",
+                  "Min": 0,
+                  "Max": 10,
+                  "Then": "ToDrawPileBottomFree",
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "clumsy",
+      "PackageId": "sts",
+      "NameKey": "clumsy",
+      "DescriptionKey": "Unplayable. Ethereal.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        },
+        {
+          "value": "ethereal"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "ExhaustPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "curse_of_the_bell",
+      "PackageId": "sts",
+      "NameKey": "curse_of_the_bell",
+      "DescriptionKey": "Unplayable. Cannot be removed from your deck.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "decay",
+      "PackageId": "sts",
+      "NameKey": "decay",
+      "DescriptionKey": "Unplayable. At the end of your turn, take 2 damage.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {
+        "TurnEndInHand": {
+          "Id": {
+            "value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.sequence",
+            "value": {
+              "Children": [
+                {
+                  "kind": "node.dealDamage",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Amount": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 2
+                      }
+                    },
+                    "IgnoresBlock": false,
+                    "Element": null,
+                    "ResultKey": null
+                  }
+                }
+              ],
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      },
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "necronomicurse",
+      "PackageId": "sts",
+      "NameKey": "necronomicurse",
+      "DescriptionKey": "Unplayable. When Exhausted, a new copy appears in your hand.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {
+        "Exhausted": {
+          "Id": {
+            "value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.sequence",
+            "value": {
+              "Children": [
+                {
+                  "kind": "node.createCardCopy",
+                  "value": {
+                    "ToZone": "Hand",
+                    "ResultKey": null,
+                    "CardDefinitionId": "necronomicurse"
+                  }
+                }
+              ],
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      },
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "normality",
+      "PackageId": "sts",
+      "NameKey": "normality",
+      "DescriptionKey": "Unplayable. You cannot play more than 3 cards this turn.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {
+        "Drawn": {
+          "Id": {
+            "value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.sequence",
+            "value": {
+              "Children": [
+                {
+                  "kind": "node.setCombatantCounter",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "CounterId": {
+                      "value": "card_play_cap"
+                    },
+                    "Amount": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 3
+                      }
+                    },
+                    "Relative": false,
+                    "ResultKey": null
+                  }
+                }
+              ],
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        },
+        "TurnEndInHand": {
+          "Id": {
+            "value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.sequence",
+            "value": {
+              "Children": [
+                {
+                  "kind": "node.setCombatantCounter",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "CounterId": {
+                      "value": "card_play_cap"
+                    },
+                    "Amount": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 0
+                      }
+                    },
+                    "Relative": false,
+                    "ResultKey": null
+                  }
+                }
+              ],
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      },
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "pain",
+      "PackageId": "sts",
+      "NameKey": "pain",
+      "DescriptionKey": "Unplayable. While in hand, lose 1 HP when other cards are played.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {
+        "CardPlayedInHand": {
+          "Id": {
+            "value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.sequence",
+            "value": {
+              "Children": [
+                {
+                  "kind": "node.loseHp",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Amount": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 1
+                      }
+                    },
+                    "ResultKey": null
+                  }
+                }
+              ],
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      },
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "parasite",
+      "PackageId": "sts",
+      "NameKey": "parasite",
+      "DescriptionKey": "Unplayable. If transformed or removed from your deck, lose 3 Max HP.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "pride",
+      "PackageId": "sts",
+      "NameKey": "pride",
+      "DescriptionKey": "Innate. At the end of your turn, put a copy of this card on top of your draw pile. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "innate"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {
+        "TurnEndInHand": {
+          "Id": {
+            "value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.sequence",
+            "value": {
+              "Children": [
+                {
+                  "kind": "node.createCardCopy",
+                  "value": {
+                    "ToZone": "DrawPile",
+                    "Placement": "Top",
+                    "ResultKey": null,
+                    "CardDefinitionId": "pride"
+                  }
+                }
+              ],
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      },
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "regret",
+      "PackageId": "sts",
+      "NameKey": "regret",
+      "DescriptionKey": "Unplayable. At the end of your turn, lose HP equal to the number of cards in your hand.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {
+        "TurnEndInHand": {
+          "Id": {
+            "value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.sequence",
+            "value": {
+              "Children": [
+                {
+                  "kind": "node.loseHp",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Amount": {
+                      "kind": "combatantZoneCount",
+                      "value": {
+                        "Selector": {
+                          "kind": "sel.source",
+                          "value": {
+                            "Cardinality": "ZeroOrOne",
+                            "RequiredContextCapabilities": "Source"
+                          }
+                        },
+                        "Zone": "Hand"
+                      }
+                    },
+                    "ResultKey": null
+                  }
+                }
+              ],
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      },
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "shame",
+      "PackageId": "sts",
+      "NameKey": "shame",
+      "DescriptionKey": "Unplayable. At the end of your turn, gain 1 Frail.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "curse"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Curse",
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {
+        "TurnEndInHand": {
+          "Id": {
+            "value": "(unnamed)"
+          },
+          "Root": {
+            "kind": "node.sequence",
+            "value": {
+              "Children": [
+                {
+                  "kind": "node.applyStatus",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusDefinitionId": {
+                      "value": "standard.frail"
+                    },
+                    "Stacks": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 1
+                      }
+                    },
+                    "DurationTurns": 0,
+                    "Charges": 0,
+                    "ResultKey": null
+                  }
+                }
+              ],
+              "ResultKey": null
+            }
+          },
+          "MaxNodeDepth": 64,
+          "MaxProgramSteps": 1024
+        }
+      },
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
     }
   ],
   "EnemyActions": [

@@ -450,10 +450,23 @@ pub(crate) fn combat_result() -> Option<i32> {
 ///
 /// The kernel has no gold; this is the one number the run needs at `fight_end`, and it is the only
 /// thing that makes "the Looter escaped with your gold" visible outside the fight.
+/// §201: how much gold an enemy **carried away** with it (`node.carryAwayStolenGold`).
+///
+/// The kernel has no gold; this is the one number the run needs at `fight_end`, and it is the only
+/// thing that makes "the Looter escaped with your gold" visible outside the fight.
 pub(crate) fn combat_gold_carried_away() -> i32 {
     slot()
         .as_ref()
         .map_or(0, |session| session.state.gold_carried_away)
+}
+
+/// §250：这一场战斗里**赚到**的金币（`node.gainGold` 累加）。
+///
+/// 与 [`combat_gold_carried_away`] 成对：那本是"被偷走、要减"，这本是"赚到手、要加"。
+pub(crate) fn combat_gold_gained() -> i32 {
+    slot()
+        .as_ref()
+        .map_or(0, |session| session.state.gold_gained)
 }
 
 pub(crate) fn combat_hero_health() -> Option<i32> {
@@ -2556,6 +2569,12 @@ pub extern "C" fn rd_env_choice_kind() -> i32 {
             // pile" (Warcry) -- again new numbers, because each one gets its own sentence.
             ChoiceThen::Upgrade => 5,
             ChoiceThen::ToDrawPileTop => 6,
+            // §250: `Discovery` -- "add it to your hand, it costs 0". A **new number**: the page
+            // writes "免费" into the sentence from it, and reusing `ToHand` would silently promise
+            // a price the kernel is not charging.
+            ChoiceThen::ToHandFree => 7,
+            // §250: `Forethought` -- "on the **bottom** of your draw pile, costs 0".
+            ChoiceThen::ToDrawPileBottomFree => 8,
         },
         None => 0,
     }

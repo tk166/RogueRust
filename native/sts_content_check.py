@@ -118,6 +118,25 @@ INV_DECK = {"strike": 5, "defend": 4, "bash": 1}   # inv:§2.1
 
 # inv:§3.1 -- the 3 basic cards, as mechanically derived facts.
 INV_CARDS = {
+    # ---- §250：B/C/D/F 四组（14 张牌 / 18 行）-----------------------------
+    "ritual_dagger": {"Cost": 1, "Tags": ["attack", "colorless"], "Facts": [["damage", ["add", 15, ["multiply", ["cardCounter", "standard.ritual_dagger_bonus"], 3]], "event"], ["fatal", "cardCounter", "cardInstance.resolving", "standard.ritual_dagger_bonus", 3, "Add"]]},
+    "ritual_dagger+": {"Cost": 1, "Tags": ["attack", "colorless"], "Facts": [["damage", ["add", 15, ["multiply", ["cardCounter", "standard.ritual_dagger_bonus"], 5]], "event"], ["fatal", "cardCounter", "cardInstance.resolving", "standard.ritual_dagger_bonus", 5, "Add"]]},
+    "hand_of_greed": {"Cost": 2, "Tags": ["attack", "colorless"], "Facts": [["damage", 20, "event"], ["fatal", "gold", 20]]},
+    "hand_of_greed+": {"Cost": 2, "Tags": ["attack", "colorless"], "Facts": [["damage", 25, "event"], ["fatal", "gold", 25]]},
+    "discovery": {"Cost": 1, "Tags": ["skill", "colorless"], "Facts": [["offer", 3, 1, 1, "ToHandFree"]]},
+    "discovery+": {"Cost": 1, "Tags": ["skill", "colorless"], "Facts": [["offer", 3, 1, 1, "ToHandFree"]]},
+    "forethought": {"Cost": 0, "Tags": ["skill", "colorless"], "Facts": [["choose", "source", "Hand", [], 1, 1, "ToDrawPileBottomFree"]]},
+    "forethought+": {"Cost": 0, "Tags": ["skill", "colorless"], "Facts": [["choose", "source", "Hand", [], 0, 10, "ToDrawPileBottomFree"]]},
+    "clumsy": {"Cost": 1, "Tags": ["curse", "unplayable", "ethereal"], "Facts": []},
+    "curse_of_the_bell": {"Cost": 1, "Tags": ["curse", "unplayable"], "Facts": []},
+    "decay": {"Cost": 1, "Tags": ["curse", "unplayable"], "Facts": [], "Lifecycle": {"TurnEndInHand": [["damage", 2, "source"]]}},
+    "necronomicurse": {"Cost": 1, "Tags": ["curse", "unplayable"], "Facts": [], "Lifecycle": {"Exhausted": [["copySelf", "necronomicurse", "Hand", "Bottom", 1]]}},
+    "normality": {"Cost": 1, "Tags": ["curse", "unplayable"], "Facts": [], "Lifecycle": {"Drawn": [["counter", "card_play_cap", 3, False, "source"]], "TurnEndInHand": [["counter", "card_play_cap", 0, False, "source"]]}},
+    "pain": {"Cost": 1, "Tags": ["curse", "unplayable"], "Facts": [], "Lifecycle": {"CardPlayedInHand": [["loseHp", 1, "source"]]}},
+    "parasite": {"Cost": 1, "Tags": ["curse", "unplayable"], "Facts": []},
+    "pride": {"Cost": 1, "Tags": ["curse", "innate"], "Facts": [], "Lifecycle": {"TurnEndInHand": [["copySelf", "pride", "DrawPile", "Top", 1]]}},
+    "regret": {"Cost": 1, "Tags": ["curse", "unplayable"], "Facts": [], "Lifecycle": {"TurnEndInHand": [["loseHp", ["expr", "combatantZoneCount"], "source"]]}},
+    "shame": {"Cost": 1, "Tags": ["curse", "unplayable"], "Facts": [], "Lifecycle": {"TurnEndInHand": [["status", "standard.frail", 1, "source"]]}},
     "strike": {"Cost": 1, "Tags": ["attack", "basic", "strike"],
                "Facts": [("damage", 6, "event")]},
     "defend": {"Cost": 1, "Tags": ["skill", "basic", "defend"],
@@ -1749,6 +1768,36 @@ def program_facts(root):
             out.append(("choose", tgt(body["OwnerSelector"]), body["FromZone"],
                           tuple(body.get("RequireAnyTag") or ()),
                           body["Min"], body["Max"], then) + extra)
+        elif kind == "node.dealDamageAndIfFatal":
+            # §250: "deal N damage, and if that killed, do X". The fatal branch is a **sub-program**,
+            # so its facts are tagged `fatal` -- "deal 15 and grow" vs "deal 15" must never compare
+            # equal (that is exactly the Ritual Dagger / Hand of Greed shape).
+            before = len(facts)
+            walk(body["Program"])
+            fatal_facts = facts[before:]
+            del facts[before:]
+            if body.get("IgnoresBlock"):
+                out.append(("damageIgnoresBlock", tgt(body["TargetSelector"]),
+                            amount(body["Amount"])))
+            else:
+                out.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
+            facts.extend(("fatal",) + f for f in fatal_facts)
+        elif kind == "node.gainGold":
+            # §250: gold **inside** a fight (`Hand of Greed`). A fact of its own: the run's gold is
+            # not a combat resource, so it must not be folded into `gain`.
+            out.append(("gold", amount(body["Amount"])))
+        elif kind == "node.createCardCopy":
+            # §250: "a copy of **this** card" (Pride / Necronomicurse). `CardDefinitionId` is part of
+            # the fact because it is the **only** thing that decides *which* card is copied --
+            # leaving it out lets two different cards read as the same content (§250's first gate).
+            out.append(("copySelf", body.get("CardDefinitionId"), body["ToZone"],
+                        body.get("Placement", "Bottom"), body.get("Count", 1)))
+        elif kind == "node.offerRandomCards":
+            # §250: "offer N of the class pool, pick one, it arrives free" (`Discovery`). The `then`
+            # is fixed by the node (`ToHandFree`), so it is spelled out in the fact -- a second
+            # consumer with a different `then` would have to change this line too.
+            out.append(("offer", body.get("Count", 3), body.get("Min", 1),
+                        body.get("Max", 1), "ToHandFree"))
         elif kind == "node.repeat":
             # §146: the body runs an unknown-at-authoring number of times, so its facts are tagged
             # by **the count expression** rather than unrolled. That keeps the inventory honest
@@ -2013,7 +2062,7 @@ def check_cards_and_actions(doc):
         if costs and costs[0]["ResourceId"]["value"] != "standard.energy":
             fail("card." + cid, "cost resource %r" % costs[0]["ResourceId"])
         got = program_facts(card["Program"]["Root"])
-        if got != spec["Facts"]:
+        if got != _tuples(spec["Facts"]):
             fail("card." + cid, "facts %s, inv says %s" % (got, spec["Facts"]))
     actions = {a["Id"]: a for a in doc.get("EnemyActions") or []}
     for aid, (intent, facts) in INV_ACTIONS.items():
@@ -2327,7 +2376,34 @@ def check_card_zones(doc):
     return seen
 
 
-CARD_LIFECYCLE_EVENTS = ("TurnEndInHand", "Drawn", "Exhausted")
+CARD_LIFECYCLE_EVENTS = ("TurnEndInHand", "Drawn", "Exhausted",
+                         # §250：`pain` —— "这张牌在手上、别人打出牌时"。
+                         "CardPlayedInHand")
+
+
+def _tuples(value):
+    """把 `INV_CARDS` 的字面量转成 `program_facts` 的**形状**：`list[tuple]`。
+
+    `program_facts` 返回 `[('damage', 2, 'source')]`（外层 list、内层 tuple），而字面量写成了
+    `[['damage', 2, 'source']]`。两者打印出来几乎一样，但 `list != tuple` —— 不统一就会让每一条
+    生命周期节目都报"事实不符"，而那看起来像内容错（§250 第一版就是这么红的）。
+    """
+    if not isinstance(value, list):
+        return value
+    out = []
+    for item in value:
+        if isinstance(item, list):
+            out.append(tuple(_deep_tuple(sub) for sub in item))
+        else:
+            out.append(item)
+    return out
+
+
+def _deep_tuple(value):
+    """嵌套的 list 一律变 tuple（`('loseHp', ['expr', ...], ...)` 那种内层）。"""
+    if isinstance(value, list):
+        return tuple(_deep_tuple(item) for item in value)
+    return value
 
 
 def check_card_lifecycle(doc):
@@ -2353,7 +2429,7 @@ def check_card_lifecycle(doc):
                 continue
             seen += 1
             facts = program_facts(programs[key]["Root"])
-            if facts != expected[key]:
+            if facts != _tuples(expected[key]):
                 fail("card." + card_id, "`%s` 节目事实 %s，inv says %s"
                      % (key, facts, expected[key]))
         for key in expected:
@@ -2447,7 +2523,9 @@ def check_card_wiki(doc):
 
         # ⑤ 数字：基础行与升级行分开比（`INV_CARDS` 的 Facts 就是从程序里抽出来的同一套词表）
         checked += 1
-        base_facts = INV_CARDS[card_id]["Facts"]
+        # §250：字面量是 `list[list]`，wiki 那一侧来自 `program_facts` 的 `list[tuple]`；
+        # 归一化之后 `repr` 才可比（否则每条新牌都报"facts 不符"，那看起来像内容错）。
+        base_facts = _tuples(INV_CARDS[card_id]["Facts"])
         if sorted(map(repr, base_facts)) != sorted(map(repr, entry["base"])):
             fail("card." + card_id, "facts %s，wiki 说 %s" % (list(base_facts), entry["base"]))
         plus_id = card_id + "+"
@@ -2458,7 +2536,7 @@ def check_card_wiki(doc):
             if plus_id not in INV_CARDS:
                 fail("card." + plus_id, "wiki 有升级数字 %s，内容没有这一行" % (entry["plus"],))
             else:
-                plus_facts = INV_CARDS[plus_id]["Facts"]
+                plus_facts = _tuples(INV_CARDS[plus_id]["Facts"])
                 if sorted(map(repr, plus_facts)) != sorted(map(repr, entry["plus"])):
                     fail("card." + plus_id, "facts %s，wiki 说 %s"
                          % (list(plus_facts), entry["plus"]))

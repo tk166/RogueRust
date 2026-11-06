@@ -1809,6 +1809,21 @@ pub enum ChoiceThen {
     /// 内核只守**机械**那半（"`+` 只能加一次、id 不能超长"）；"这张牌有没有 `+` 行"是内容的
     /// 事，所以由发问的节点把候选**收窄**到有 `+` 行的牌（`upgrade_cards_node` 用的是同一条规则）。
     Upgrade,
+    /// §250：**拿进手牌，并且这一份的价格就是 0**（`Discovery`）。
+    ///
+    /// 与 [`Self::ToHand`] 的差别只有一点，但那一点必须由**内核**保证：`ToHand` 的价格来自
+    /// 调用方传的 `cost_delta`（药水/页面算的），而 `Discovery` 是一张**卡**发起的问句 ——
+    /// 页面没有任何理由知道"这次要传 0"。所以"免费"写进变体本身：
+    /// 落手牌 + 把 `standard.card_cost_override` 设成 0。
+    ///
+    /// ⚠️ 与 StS 的差别（与 [`CARD_COST_DELTA_COUNTER`] 同一条，写明了的不对称）：StS 的
+    /// "costs 0 **this turn**" 在回合结束过期；我们把"免费"记在**那一份副本**上、由出牌消费。
+    ToHandFree,
+    /// §250：**放到抽牌堆底，并且这一份的价格就是 0**（`Forethought`）。
+    ///
+    /// 为什么是"底"而不是"顶"：StS 的原文是 `the bottom of your draw pile` —— 那是"这一局
+    /// 别指望很快再见到它"的意思。`ToDrawPileTop`（Warcry）已经占住"顶"那个语义，两者不可互换。
+    ToDrawPileBottomFree,
     /// 把选中的牌放到**抽牌堆顶**（§227，Warcry）。
     ///
     /// `Top` 不是排版选择：`ZonePlacement::Top` 的注释写着"front is the draw top"，所以
@@ -1830,6 +1845,9 @@ impl ChoiceThen {
             // 这里填原处；它不会被当成搬迁目的地。
             Self::Upgrade => CardZone::Hand,
             Self::ToDrawPileTop => CardZone::DrawPile,
+            // §250：两个 `Free` 变体各自落在自己的牌区；价格不是牌区的一部分。
+            Self::ToHandFree => CardZone::Hand,
+            Self::ToDrawPileBottomFree => CardZone::DrawPile,
         }
     }
 }
@@ -2023,6 +2041,22 @@ impl CardZones {
         self.slots[zone.index()][at] = slot;
         self.counts[zone.index()] = (at + 1) as u8;
         Ok(())
+    }
+
+    /// §250：按 `placement` 追加或插到**头**。`Top` = 索引 0 = 抽牌堆头。
+    ///
+    /// 单独一层是为了让"从哪儿来"只有一个判断点：`create_card_instance_at` 与
+    /// `push_card_at` 都走它，所以"造一份副本放牌堆顶"不可能漏掉 `Top`。
+    fn push_slot_at(
+        &mut self,
+        zone: CardZone,
+        slot: u16,
+        placement: ZonePlacement,
+    ) -> StateResult<()> {
+        match placement {
+            ZonePlacement::Bottom => self.push_slot(zone, slot),
+            ZonePlacement::Top => self.insert_slot_front(zone, slot),
+        }
     }
 
     /// Inserts at the **front** of a pile. The reference's `ZonePlacement.Top` is
@@ -3575,6 +3609,15 @@ pub struct CombatState {
     /// 它是**一场战斗内部**的账，而回放重放的是整场战斗，所以不需要进 `RDR1` 的每一行 ——
     /// 只需要在 `fight_end` 那一行里带上（`run.rs` 把它写进了记录）。
     pub gold_carried_away: i32,
+    /// §250：**战斗里赚到的金币**（`Hand of Greed` 的 "If Fatal, gain 20 Gold"）。
+    ///
+    /// 与 [`Self::gold_carried_away`] 是**两本独立的账**，方向相反：那一本是"被偷走、要减"，
+    /// 这一本是"赚到手、要加"。合成一个 `gold_delta` 会让"偷 20 又赚 20"变成 0 —— 那在
+    /// 页面显示上看起来完全正常，而玩家的钱少了 20。
+    ///
+    /// 由内容节点 `node.gainGold` 累加，运行层在 `fight_end` 读一次（`rd-wasm` 的桥）。
+    /// ⚠️ **不进 `hash_golden`**：参考实现里没有这个字段，而那个指纹是逐字节复刻的。
+    pub gold_gained: i32,
     /// The run's Ascension level, 0–20 (§187). **Not** in the snapshot text: the reference has no
     /// such field, so writing it into `hash_golden` would move all 85 corpus cases. It is a
     /// fight-level constant (set once at build, never mutated mid-fight), and `hash_full` must
@@ -3736,6 +3779,7 @@ impl Empty for CombatState {
         active_combatant_id: None,
         vacated_seat: None,
         gold_carried_away: 0,
+        gold_gained: 0,
         end_turn_requested: false,
         forced_turn_ends: 0,
         ascension: 0,
@@ -3854,6 +3898,7 @@ impl CombatState {
             active_combatant_id: None,
             vacated_seat: None,
             gold_carried_away: 0,
+            gold_gained: 0,
             end_turn_requested: false,
             forced_turn_ends: 0,
             extra_turn_for: None,
@@ -4778,6 +4823,17 @@ impl CombatState {
         zone: CardZone,
         card: CardInstance,
     ) -> StateResult<CardSlot> {
+        self.push_card_at(owner, zone, card, ZonePlacement::Bottom)
+    }
+
+    /// §250：[`Self::push_card`] + 落在**哪一头**（`Top` = 索引 0 = 抽牌堆头）。
+    pub fn push_card_at(
+        &mut self,
+        owner: &CombatantId,
+        zone: CardZone,
+        card: CardInstance,
+        placement: ZonePlacement,
+    ) -> StateResult<CardSlot> {
         if self.cards.len() == MAX_CARD_INSTANCES {
             return Err(CapacityError::Full(Container::CardInstances));
         }
@@ -4789,7 +4845,7 @@ impl CombatState {
             .iter_mut()
             .find(|z| z.combatant_id() == owner)
             .ok_or(CapacityError::MissingCombatant)?;
-        zones.push_slot(zone, slot)?;
+        zones.push_slot_at(zone, slot, placement)?;
         self.cards.push(card, Container::CardInstances)?;
         Ok(CardSlot(slot))
     }
@@ -5139,7 +5195,16 @@ impl CombatState {
         cost_delta: i32,
     ) -> Result<ChoiceDone, ChoiceError> {
         let choice = self.choice.ok_or(ChoiceError::NotPending)?;
-        if cost_delta != 0 && choice.then != ChoiceThen::ToHand {
+        // §250：`Free` 变体自带价格语义（"就是 0"），所以调用方**不该**再传一个 delta ——
+        // 传了就是两个来源给同一份牌定价。
+        if cost_delta != 0
+            && !matches!(
+                choice.then,
+                ChoiceThen::ToHand
+                    | ChoiceThen::ToHandFree
+                    | ChoiceThen::ToDrawPileBottomFree
+            )
+        {
             return Err(ChoiceError::DeltaNotApplicable);
         }
         match (choice.source, answer) {
@@ -5220,7 +5285,13 @@ impl CombatState {
         // 手牌最终回到 `picked` 之前那么多。原来的判据是 `hand + picked > MAX` ⇒ 拒绝，那是**错**
         // 的（不是保守）：手牌 90、选 10 张明明做得成它却拒绝（REVIEW P1/P2，§161.10）。
 
-        if choice.then == ChoiceThen::ToHand && cost_delta != 0 {
+        // §250：`Free` 变体要占一个 mark counter（`card_cost_override`），所以与 `ToHand`
+        // 走同一条容量预检 —— 否则"搬完才发现那张牌的计数器表满了"。
+        let writes_a_price = matches!(
+            choice.then,
+            ChoiceThen::ToHandFree | ChoiceThen::ToDrawPileBottomFree
+        ) || (choice.then == ChoiceThen::ToHand && cost_delta != 0);
+        if writes_a_price {
             for &slot in &slots[..picked] {
                 let Some(card) = self.card(slot) else {
                     return Err(ChoiceError::NotInSource);
@@ -5242,10 +5313,15 @@ impl CombatState {
         // ---- 到这里为止一个字节都没改。----
         for &slot in &slots[..picked] {
             self.move_card(&choice.chooser, source, destination, slot, placement)?;
-            // §161.4: the per-copy price rides **on the card**, so it travels with it through the
-            // hand and the discard pile -- and `play.rs` zeroes it once the play is paid for.
-            if choice.then == ChoiceThen::ToHand && cost_delta != 0 {
-                self.write_price(slot, cost_delta)?;
+            match choice.then {
+                ChoiceThen::ToHand if cost_delta != 0 => self.write_price(slot, cost_delta)?,
+                // §250：`Free` 变体写的是**绝对**价格 0（`standard.card_cost_override`），
+                // 与 `createRandomCardInstance{CostZero}` 同一格 —— 它在 delta 之前生效，
+                // 也正是"这一份的价格就是 0"要的那一格。
+                ChoiceThen::ToHandFree | ChoiceThen::ToDrawPileBottomFree => {
+                    self.write_free_price(slot)?
+                }
+                _ => {}
             }
         }
         self.choice = None;
@@ -5422,6 +5498,18 @@ impl CombatState {
             if choice.then == ChoiceThen::ToHand && cost_delta != 0 {
                 self.write_price(slot, cost_delta)?;
             }
+            // §250：候选来源的**免费**变体（`Discovery`）。这一支与 `resolve_from_pile` 是两条
+            // 结算路（一个造新实例、一个搬旧实例），所以"免费"必须在两处都写 —— 只写一处就会
+            // 出现"从牌堆里拿的免费、从三选一里拿的不免费"，而那在页面上完全看不出来。
+            if matches!(
+                choice.then,
+                ChoiceThen::ToHandFree | ChoiceThen::ToDrawPileBottomFree
+            ) && self.write_free_price(slot).is_err()
+            {
+                return Err(ChoiceError::Capacity(CapacityError::Full(
+                    Container::MarkCounters,
+                )));
+            }
             created += 1;
         }
         self.choice = None;
@@ -5445,6 +5533,21 @@ impl CombatState {
         definition: CardDefinitionId,
         zone: CardZone,
     ) -> StateResult<CardSlot> {
+        self.create_card_instance_at(owner, definition, zone, ZonePlacement::Bottom)
+    }
+
+    /// §250：同 [`Self::create_card_instance`]，但能指定落在牌区的**哪一头**。
+    ///
+    /// `Pride`（"put a copy of this card **on top of** your draw pile"）要 `Top`。
+    /// 默认那条走 `Bottom`（追加），因为那是参考 `MoveCardToZone(placement = Bottom)` 的默认值 ——
+    /// 只有一个调用方需要"头"，所以**不改**老入口的含义。
+    pub fn create_card_instance_at(
+        &mut self,
+        owner: &CombatantId,
+        definition: CardDefinitionId,
+        zone: CardZone,
+        placement: ZonePlacement,
+    ) -> StateResult<CardSlot> {
         let number = self.next_card_instance_number;
         let mut buffer = [0u8; INSTANCE_TEXT_CAP];
         // 装不下是**不可能**的（`INSTANCE_TEXT_CAP` 是 32，最长情形 17）；真发生时返回 `None`
@@ -5452,9 +5555,24 @@ impl CombatState {
         let text = numbered_text(b"card_", number, &mut buffer)
             .ok_or(CapacityError::IdNotAscii)?;
         let id = CardInstanceId::new(text)?;
-        let slot = self.push_card(owner, zone, CardInstance::new(id, definition))?;
+        let slot = self.push_card_at(owner, zone, CardInstance::new(id, definition), placement)?;
         self.next_card_instance_number = number.saturating_add(1);
         Ok(slot)
+    }
+
+    /// §250：把"这一份免费"写到**那一份副本**上（`standard.card_cost_override = 0`）。
+    ///
+    /// 与 [`Self::write_price`] 的区别是**哪一格**：那个是"加/减多少"（随出牌清零），
+    /// 这个是"价格就是 0"（绝对覆盖）。两条结算路（搬旧实例 / 造新实例）都调它 ——
+    /// 一份实现，两个调用点，所以不可能只改一处。
+    fn write_free_price(&mut self, slot: CardSlot) -> Result<(), ChoiceError> {
+        let key = CounterId::new(CARD_COST_OVERRIDE_COUNTER)
+            .map_err(|_| ChoiceError::NotInSource)?;
+        let Some(card) = self.cards.as_mut_slice().get_mut(slot.index()) else {
+            return Err(ChoiceError::NotInSource);
+        };
+        card.set_mark_counter(key, 0)
+            .map_err(ChoiceError::Capacity)
     }
 
     /// 把每副本价格写到**那一份副本**上（[`CARD_COST_DELTA_COUNTER`]）。

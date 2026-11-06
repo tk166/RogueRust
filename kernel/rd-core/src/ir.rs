@@ -167,6 +167,37 @@ pub enum NodeKind {
     /// 与 `Heal` 分开：`Heal` 只动当前值（且被最大生命夹住），这条动的是**上限**，
     /// 并顺手把当前值一起抬高（StS 的 "raise your Max HP by N" 同时给你 N 点血）。
     GainMaxHealth,
+    /// §250：**打伤害，如果打死了就跑一段子节目**（`Ritual Dagger` / `Hand of Greed`）。
+    ///
+    /// 与 §238 那条（`DealDamageAndGainMaxHealthIfFatal`）是同一个动机的**一般形态**：
+    /// 整棵树先派发完请求、伤害才落地，所以"If Fatal"必须是**一个节点**。差别在于这条不把
+    /// "致命之后做什么"写死：那段节目是内容给的（涨这份副本的计数器 / 加金币 / 以后的任何事）。
+    ///
+    /// `Amount` 在打伤害**之前**求值 —— 所以 `Ritual Dagger` 读到的是**这一次**该打的伤害，
+    /// 子节目里涨的计数器只影响下一次。
+    DealDamageAndIfFatal,
+    /// §250：**在战斗里拿到金币**（`Hand of Greed` 的 "If Fatal, gain 20 Gold"）。
+    ///
+    /// 金币不是战斗资源（`gainResource` 只认 `ResourceId`），它是跨层的账：这里只累加
+    /// `CombatState.gold_gained`，运行层在 `fight_end` 读一次。
+    GainGold,
+    /// §250：**造"这一张"的副本**（`Pride` / `Necronomicurse`）。
+    ///
+    /// `createCardInstance` 要一个定义 id 的**字面量**；这两张牌要的是"当前正在结算的这份"
+    /// 的副本，而定义 id 只有 `cardInstance.resolving` 那类表达式拿得到、`createCardInstance`
+    /// 却只收字面串。参考实现里的对应节点就叫 `createCardCopy`。
+    ///
+    /// 字段：`{ToZone, Count?, Placement?}`（`Count` 缺席 = 1，`Placement` 缺席 = `Bottom`）。
+    CreateCardCopy,
+    /// §250：**问玩家三选一：从"职业牌池"里随机取 N 张**（`Discovery`）。
+    ///
+    /// 字段：`{Count, Min?, Max?}`。候选是**卡定义**（`ChoiceSource::Offered`），选完进手牌
+    /// 并且**这一份免费**（`ChoiceThen::ToHandFree`）。
+    ///
+    /// 池子规则见 `exec.rs` 的 `in_offer_pool`：非 `+` 行、不带 `colorless`/`curse`/`status`/
+    /// `junk`/`unplayable`、不是 X 费。**这是与 StS 的已知差别**（它是"你的职业牌池"，
+    /// 我们的内容没有职业 tag），记在 `port-plan.md` §250。
+    OfferRandomCards,
     /// §238：**打伤害，如果打死了就抬高自己的最大生命**（`Feed` 的 "If Fatal, raise your Max HP"）。
     ///
     /// 为什么必须是一个节点：整棵树**先派发完**再让请求落地，所以
@@ -254,6 +285,10 @@ impl NodeKind {
             NodeKind::LoseHp => "node.loseHp",
             NodeKind::GainMaxHealth => "node.gainMaxHealth",
             NodeKind::DealDamageAndGainMaxHealthIfFatal => "node.dealDamageAndGainMaxHealthIfFatal",
+            NodeKind::DealDamageAndIfFatal => "node.dealDamageAndIfFatal",
+            NodeKind::GainGold => "node.gainGold",
+            NodeKind::CreateCardCopy => "node.createCardCopy",
+            NodeKind::OfferRandomCards => "node.offerRandomCards",
             NodeKind::CreateRandomCardInstance => "node.createRandomCardInstance",
             NodeKind::PlayTopCardOfDrawPile => "node.playTopCardOfDrawPile",
             NodeKind::ShuffleDiscardIntoDraw => "node.shuffleDiscardIntoDraw",
@@ -270,7 +305,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 35] = [
+        const ALL: [NodeKind; 39] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -311,6 +346,11 @@ impl NodeKind {
             // §238：抬高最大生命（Feed 的 "If Fatal"）。
             NodeKind::GainMaxHealth,
             NodeKind::DealDamageAndGainMaxHealthIfFatal,
+            // §250：一般形态的 "If Fatal" + 金币 + 造这一张的副本 + 三选一候选。
+            NodeKind::DealDamageAndIfFatal,
+            NodeKind::GainGold,
+            NodeKind::CreateCardCopy,
+            NodeKind::OfferRandomCards,
             NodeKind::CreateRandomCardInstance,
             NodeKind::PlayTopCardOfDrawPile,
             NodeKind::ShuffleDiscardIntoDraw,

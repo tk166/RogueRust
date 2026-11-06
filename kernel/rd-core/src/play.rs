@@ -429,6 +429,17 @@ impl PlayReport {
 
 /// `StandardCombatIds.StunStatus`（`StandardCombatIds.cs:31`）。
 const STUN_STATUS: &str = "standard.stun";
+
+/// §250：**每回合出牌上限**的计数器名（`normality`："cannot play more than 3 cards this turn"）。
+///
+/// 为什么是一个**战斗员计数器**而不是状态：上限要**幂等**。`normality` 每回合都会被抽到一次
+/// （它不可打出、回合末进弃牌堆），若用状态的层数表达上限，抽到第二次就变成 6 层 —— 那会让
+/// "最多 3 张"在第 2 回合悄悄放宽。计数器用 `Relative = false` 覆盖写，重复设置无害。
+///
+/// 0 / 缺席 = 没有上限（不是"一张也不许出"）：`0` 是"清掉这条法令"的唯一写法，
+/// 内容在 `TurnEndInHand` 里用它 —— 与"上限为 0"撞在一起是不可能的（想禁止出牌的内容
+/// 会写 1，而 1 的语义是明确的）。
+const CARD_PLAY_CAP_COUNTER: &str = "card_play_cap";
 /// `StandardCombatIds.FreeNextCardStatus`（`:36`）。
 const FREE_NEXT_CARD_STATUS: &str = "standard.free_next_card";
 /// `StandardCombatIds.FirstAttackEachTurnFreeStatus`（`:37`）。
@@ -2238,10 +2249,34 @@ fn card_program<'a>(card: &CardOnTable<'a>) -> Result<(Option<NodeRef<'a>>, u32)
 /// 状态没进镜像"同时成立 —— 那时算费也会响。**真正的修法是把两个命名世界合掉**
 /// （让 `play.rs` 的状态常量跟 `applyStatus` 落进实例的 id 一个世界），那要动
 /// `exec.rs` / `content.rs` 或冻结面，不在"只准改 play.rs"的范围内。
+/// §250：读一个**战斗员计数器**的当前值（`node.setCombatantCounter` 写的那一格）。
+///
+/// 缺席 => `None`（"这个计数器根本不存在"，与"值是 0"分开：0 是内容显式清掉法令的写法）。
+fn combatant_counter(combatant: &Combatant, id: &str) -> Option<i32> {
+    combatant
+        .counters()
+        .iter()
+        .find(|counter| counter.key.as_str() == id)
+        .map(|counter| counter.value)
+}
+
 fn refuse_if_any_decree(state: &CombatState, card: &CardOnTable<'_>) -> Result<(), PlayError> {
     let Ok(combatant) = source_of(state, &card.source) else {
         return Ok(());
     };
+    // §250：`normality` 那条法令 —— 上限来自内容写的计数器（见 `CARD_PLAY_CAP_COUNTER`）。
+    //
+    // 与参考的对照：`CombatDecrees.cs:150-158` 是 `played >= cap` ⇒ 拒绝，消息里带两个数；
+    // 这里逐字相同，只是 `cap` 的**来源**是内容而不是 C# 里注册的一张表。
+    if let Some(cap) = combatant_counter(combatant, CARD_PLAY_CAP_COUNTER) {
+        let played = state.cards_played_this_turn;
+        if cap > 0 && played >= cap {
+            return Err(PlayError::Refused(Refusal::DecreeMaxCardsPerTurn {
+                cap,
+                played,
+            }));
+        }
+    }
     for status in combatant.statuses() {
         let Some(row) = status_bind::status_row(card.content, status.definition_id.as_str()) else {
             // 内容里没有这个状态定义 ⇒ 它当然也没有法令。**这一支是"查不到就跳过"**，

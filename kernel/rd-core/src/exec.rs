@@ -563,6 +563,13 @@ const REPEAT_DEFAULT_MAX_COUNT: i32 = 32;
 /// （`EffectProgramNativeNodes.cs:911`）—— `Count` 缺席 ⇒ **1 张**。
 const DEFAULT_CARD_INSTANCE_COUNT: i32 = 1;
 
+/// §250：`node.offerRandomCards` 的默认候选数（StS 的 "choose 1 of 3"）与它的上限。
+///
+/// 上限与 `MAX_SELECTED_CARDS` 同一个理由：候选表是**定容**的（`Container::ChoiceOptions`），
+/// 而"内容写了 200"会让 `Bounded::push` 在跑了一半的时候失败 —— 那是部分执行。
+pub const MAX_OFFERED_CARDS: usize = 8;
+const DEFAULT_OFFERED_CARDS: i32 = 3;
+
 /// 一次 `sequence` 最多几个孩子。
 ///
 /// 实测（core 镜像全表）：最长的 `Children` 是 **5**（`EnemyActions[218]`）。这里给 32 是 6 倍余量；
@@ -1705,6 +1712,278 @@ fn gain_max_health(
     Ok(())
 }
 
+/// §250：`node.dealDamageAndIfFatal` 的实体 —— `{TargetSelector, Amount, IgnoresBlock?, Element?,
+/// Program}`。
+///
+/// 三条顺序都是语义：
+/// 1. `Amount` **先**求值（`Ritual Dagger` 这一次的伤害不含"这一次涨的 3 点"）；
+/// 2. 每个目标依次挨打，`fatal` = "**有任何一个**目标真的倒了"；
+/// 3. 子节目在**伤害全部落地之后**才跑 —— 这正是"必须是一个节点"的理由（`sequence` 做不到）。
+fn deal_damage_and_if_fatal_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    depth: u32,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    // 与 `dispatch_conditional` 逐字同形：先把自己的槽置 `Pass`（"分支的完成 = 我的完成"），
+    // 再把子节目**派发到同一个槽**。不这么做就会出现 §250 踩到的那个错：
+    // 完成时不 `resume_later` ⇒ 父的续延拿不到帧 ⇒ `dispatch_node` 报 `ExecError::Modifier`。
+    if let Some(cell) = ctx.state.program_nodes_mut().get_mut(slot) {
+        cell.kind = ProgramNodeKind::Pass;
+    }
+    let amount = eval_amount(node, "Amount", ctx)?;
+    let ignores_block = node.bool_field("IgnoresBlock")?.unwrap_or(false);
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut targets)?;
+    let mut fatal = false;
+    for target in targets.iter().take(count) {
+        resolve_damage(ctx, target, amount, ignores_block)?;
+        stats.effects = stats.effects.saturating_add(1);
+        // 与 §238 逐字相同：Fatal = 目标**真的倒了**（血量 <= 0），不是"伤害超过血量"。
+        if ctx
+            .state
+            .combatant(target)
+            .is_some_and(|combatant| combatant.health_current <= 0)
+        {
+            fatal = true;
+        }
+    }
+    let branch = if fatal { node.node_field("Program")? } else { None };
+    match branch {
+        Some(body) => {
+            // 在**本节点的槽位**里就地跑子节目（与 `dispatch_conditional` 同一个手法）：
+            // 不新开节目槽，所以深度/步数预算仍然算在这棵树上。
+            dispatch_node(body, ctx, frame, slot, depth + 1, stats)?;
+            Ok(())
+        }
+        // 没打死 ⇒ 本节点就是"做完了"（与 `conditional` 的 `None` 分支同一条）。
+        None => resume_later(ctx.state, frame, slot),
+    }
+}
+
+/// §250：`node.gainGold` 的实体 —— `{Amount}`。
+///
+/// 直接写 `CombatState.gold_gained`（不走请求）：金币不是任何触发器看得见的东西。
+/// `Amount` 为负 => 拒绝（内容写错了，不许悄悄当 0）。
+fn gain_gold_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    _stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let amount = eval_amount(node, "Amount", ctx)?;
+    if amount < 0 {
+        return Err(ExecError::Modifier);
+    }
+    ctx.state.gold_gained = ctx.state.gold_gained.saturating_add(amount);
+    resume_later(ctx.state, frame, slot)
+}
+
+/// §250：`node.createCardCopy` —— `{ToZone, Count?, Placement?}`，造**当前正在结算的那一份**的副本。
+///
+/// "当前这一份"取自 `ctx.resolving_card` —— 与 `card.counter` 读同一个东西。那不是巧合，
+/// 而是"这一张牌自己"在内核里的唯一身份；没有它就没有答案（`MissingCombatant`）。
+fn create_card_copy_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    _stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let zone_text = node.str_field("ToZone")?.ok_or(IrError::Missing("ToZone"))?;
+    let zone = zone_from_wire_name(zone_text).ok_or(ExecError::Ir(IrError::UnknownKind))?;
+    let placement = match node.str_field("Placement")? {
+        None | Some("Bottom") => crate::state::ZonePlacement::Bottom,
+        Some("Top") => crate::state::ZonePlacement::Top,
+        Some(_) => return Err(ExecError::Ir(IrError::UnknownKind)),
+    };
+    let count = match node.node_field("Count")? {
+        None => DEFAULT_CARD_INSTANCE_COUNT,
+        Some(term) => {
+            let expr_ctx = ctx.expr_context();
+            expr::eval_int(term, &expr_ctx)?
+        }
+    };
+    if count < 0 {
+        return Err(ExecError::Modifier);
+    }
+    // §250：**优先**用内容写的 `CardDefinitionId`，否则用"正在结算的那一份"的定义。
+    //
+    // 为什么必须有第一条：这两张牌的节目挂在**生命周期**上（`Pride` 的 `TurnEndInHand`、
+    // `Necronomicurse` 的 `Exhausted`），而生命周期上下文**故意不绑卡槽**（§220 的偏离 #2：
+    // 参考的 `CardLifecycleContext` 有卡槽，本内核的 `ExecContext` 只有一个 `iteration_card`，
+    // 它的语义被钉死给 `forEachCardInZone`）。所以那里 `ctx.resolving_card` 是 `None` ——
+    // 一张诅咒的"自己"在那种上下文里只能由内容**指明**（它们没有 `+` 行，指明是精确的）。
+    let definition = match node.str_field("CardDefinitionId")? {
+        Some(text) => CardDefinitionId::new(text)?,
+        None => {
+            let Some(resolving) = ctx.resolving_card else {
+                return Err(ExecError::MissingCombatant);
+            };
+            let Some(definition) = ctx.state.card(resolving).map(|card| card.definition_id) else {
+                return Err(ExecError::MissingCombatant);
+            };
+            definition
+        }
+    };
+    let Some(owner) = ctx.source else {
+        return Err(ExecError::MissingCombatant);
+    };
+    for _ in 0..count {
+        ctx.state
+            .create_card_instance_at(&owner, definition, zone, placement)
+            .map_err(ExecError::Capacity)?;
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
+/// §250：`node.offerRandomCards` 的实体 —— `{Count?, Min?, Max?}`：**三选一**。
+///
+/// 与 `chooseCards` 的分工：那个问"**已有的**哪几张"（候选是实例），这个问"这几张**新的**
+/// 里要哪个"（候选是定义，`ChoiceSource::Offered`）。`then` 是 [`ChoiceThen::ToHandFree`] ——
+/// "加进手牌，它这次免费"的整个语义都在内核里，页面只管显示。
+///
+/// 抽签走 `random_step`（与随机造牌/洗牌同一本账）并且**去重**：三张候选不许重复。
+/// 池子不够 / 抽签凑不齐 => **不问**（一个凑不出候选的问句会把这局钉死；与 `chooseCards`
+/// 的"候选比 `Min` 还少就不问"同一条裁决）。
+fn offer_random_cards_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    _stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    // §250：`Count` 两种拼法都收 —— 字面整数（与 `Min`/`Max` 同一种字段类型）或表达式
+    // （与 `createRandomCardInstance` 同一种字段类型）。原因是"3 张候选"是这个节点的
+    // **语法**而不是运行期的值；但把表达式这条路堵死会让将来的"候选数 = 抽牌堆张数"要改节点。
+    // ⚠️ **先问 `int_field`**：这一格在本内容里是普通整数（与 `Min`/`Max` 同族），
+    // 而 `node_field` 对声明成 `F_INT` 的字段会**响亮报错**（`WrongKind("F_TERM")`）。
+    // 反过来的顺序在这里是错的 —— 这正是 §250 判据第三次红的那个错。
+    let count = match node.int_field("Count")? {
+        Some(value) => value,
+        None => match node.node_field("Count")? {
+            None => DEFAULT_OFFERED_CARDS,
+            Some(term) => {
+                let expr_ctx = ctx.expr_context();
+                expr::eval_int(term, &expr_ctx)?
+            }
+        },
+    };
+    if count <= 0 {
+        return Err(ExecError::Modifier);
+    }
+    let want = usize::try_from(count)
+        .unwrap_or(MAX_OFFERED_CARDS)
+        .min(MAX_OFFERED_CARDS);
+    // `PendingChoice` 的 `min`/`max` 是 `u8`；越界就是内容写错了（候选数上限 8）。
+    let min = u8::try_from(node.int_field("Min")?.unwrap_or(1)).map_err(|_| ExecError::Modifier)?;
+    let max = u8::try_from(node.int_field("Max")?.unwrap_or(1)).map_err(|_| ExecError::Modifier)?;
+    if min > max {
+        return Err(ExecError::Modifier);
+    }
+    let Some(content) = ctx.content else {
+        return Err(ExecError::Ir(IrError::Missing("content")));
+    };
+    let Some(chooser) = ctx.source else {
+        return Err(ExecError::MissingCombatant);
+    };
+
+    // 池子有多大 —— 先数一遍，再按去重的下标取定义（与 `pick_random_card_of_tag` 同一个手法）。
+    let mut total = 0usize;
+    for row in content.rows(crate::content::Table::Card) {
+        let Some(definition) = content.entity_id(crate::content::Table::Card, row.index()) else {
+            continue;
+        };
+        if in_offer_pool(content, definition) {
+            total += 1;
+        }
+    }
+    if total < want {
+        return resume_later(ctx.state, frame, slot);
+    }
+    let mut picked = [0usize; MAX_OFFERED_CARDS];
+    let mut picked_len = 0usize;
+    let mut guard = 0usize;
+    let guard_cap = total.saturating_mul(8).saturating_add(64);
+    while picked_len < want && guard < guard_cap {
+        let index =
+            crate::rng::shuffled_pick_index(total, ctx.state.random_seed, ctx.state.random_step);
+        ctx.state.random_step = ctx.state.random_step.saturating_add(1);
+        guard += 1;
+        if picked[..picked_len].contains(&index) {
+            continue;
+        }
+        let Some(entry) = picked.get_mut(picked_len) else {
+            break;
+        };
+        *entry = index;
+        picked_len += 1;
+    }
+    if picked_len < want {
+        return resume_later(ctx.state, frame, slot);
+    }
+
+    let mut offered = crate::state::Bounded::new();
+    let mut seen = 0usize;
+    for row in content.rows(crate::content::Table::Card) {
+        let Some(definition) = content.entity_id(crate::content::Table::Card, row.index()) else {
+            continue;
+        };
+        if !in_offer_pool(content, definition) {
+            continue;
+        }
+        let wanted = picked[..picked_len].contains(&seen);
+        seen += 1;
+        if !wanted {
+            continue;
+        }
+        let definition = CardDefinitionId::new(definition)?;
+        offered
+            .push(definition, crate::state::Container::ChoiceOptions)
+            .map_err(ExecError::Capacity)?;
+    }
+
+    let question = crate::state::PendingChoice {
+        chooser,
+        source: crate::state::ChoiceSource::Offered,
+        min,
+        max,
+        then: crate::state::ChoiceThen::ToHandFree,
+        offered,
+        candidates: crate::state::Bounded::new(),
+    };
+    // 已经有一个待决问句 => 嵌套提问，本内核明确不支持（与 `chooseCards` 同一条）。
+    ctx.state
+        .begin_choice(question)
+        .map_err(|_| ExecError::Modifier)?;
+    resume_later(ctx.state, frame, slot)
+}
+
+/// §250：`offerRandomCards` 的池子规则 —— **"你职业牌池里的真牌"**。
+///
+/// 从"排除了什么"来定义，因为我们的内容没有职业 tag（唯一的分色标记是 `colorless`）：
+/// * `+` 行是同一张牌的另一个定义（池子只收基础牌，与 `in_random_pool` 同一条）；
+/// * 无色牌 / 诅咒 / 状态 / 垃圾牌不是"职业牌池"的一部分；
+/// * 不可打出的牌进候选等于给玩家几张废纸；
+/// * X 费牌没有印刷费用（"免费"对它没有意义）。
+fn in_offer_pool(content: &crate::content::Content<'_>, definition: &str) -> bool {
+    if definition.contains('+') {
+        return false;
+    }
+    for tag in ["colorless", "curse", "status", "junk", "unplayable"] {
+        if content.card_has_tag(definition, tag) == Some(true) {
+            return false;
+        }
+    }
+    content.card_has_tag(definition, crate::battle::X_COST_TAG) != Some(true)
+}
+
 /// §238：`node.dealDamageAndGainMaxHealthIfFatal` 的实体 —— 与 `dealDamageAndHealByLoss` 同形，
 /// 只是"读完自己的结果"之后做的是抬上限而不是回血。
 fn deal_damage_and_gain_max_health_if_fatal_node(
@@ -1880,6 +2159,11 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::SetDefensivePool
         // §195.7：`upgradeCards`（改定义 id），同上。
         | NodeKind::UpgradeCards
+        // §250：四条（`dealDamageAndIfFatal` 的孩子在下面那道 match 里走，这里只登记）。
+        | NodeKind::DealDamageAndIfFatal
+        | NodeKind::GainGold
+        | NodeKind::CreateCardCopy
+        | NodeKind::OfferRandomCards
         // §146：`repeat`（X 费牌的"跑 X 遍"）。它有孩子，但预检只走一遍 Body ——
         // 次数是运行期的值，预检看不到它。
         | NodeKind::Repeat => {}
@@ -1915,6 +2199,14 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
                 Some(else_branch) => preflight(else_branch, max_steps, walk),
                 None => Ok(()),
             }
+        }
+        // §250：`DealDamageAndIfFatal` 的 `Program` 是**节点孩子**，与 `Then` 同一条理由：
+        // 预检走不进去，一棵超深的树就能绕过步数预算（而且"先打伤害再报错"= 部分执行）。
+        NodeKind::DealDamageAndIfFatal => {
+            if let Some(body) = node.node_field("Program")? {
+                preflight(body, max_steps, walk)?;
+            }
+            Ok(())
         }
         NodeKind::ForEachTarget => {
             // `ForEachTargetEffectNode.Children => [Body]`（`EffectProgramNodes.cs:255`）：
@@ -2023,6 +2315,13 @@ fn dispatch_node(
         NodeKind::Repeat => dispatch_repeat(node, ctx, frame, slot, stats),
         // 11 个产出型节点：**只造请求**，不写状态（`exec.rs` 的"请求 + 解析"拆分）。
         NodeKind::DealDamage => deal_damage_node(node, ctx, frame, slot, stats),
+        // §250：四条新节点。
+        NodeKind::DealDamageAndIfFatal => {
+            deal_damage_and_if_fatal_node(node, ctx, frame, slot, depth, stats)
+        }
+        NodeKind::GainGold => gain_gold_node(node, ctx, frame, slot, stats),
+        NodeKind::CreateCardCopy => create_card_copy_node(node, ctx, frame, slot, stats),
+        NodeKind::OfferRandomCards => offer_random_cards_node(node, ctx, frame, slot, stats),
         NodeKind::GainBlock => gain_block_node(node, ctx, frame, slot, stats),
         NodeKind::ApplyStatus => apply_status_node(node, ctx, frame, slot, stats),
         NodeKind::Heal => heal_node(node, ctx, frame, slot, stats),
@@ -4821,6 +5120,11 @@ fn choose_cards_node(
         "Upgrade" => crate::state::ChoiceThen::Upgrade,
         // §227：Warcry —— 选一张放到抽牌堆顶。
         "ToDrawPileTop" => crate::state::ChoiceThen::ToDrawPileTop,
+        // §250: `Forethought` -- bottom of the draw pile, and free until played.
+        "ToDrawPileBottomFree" => crate::state::ChoiceThen::ToDrawPileBottomFree,
+        // §250: `Discovery` 那条问句由 `offerRandomCards` 自己造（`then` 写死），但字符串
+        // 映射也登记上，免得将来有第二张牌想用同一条语义时只能在节点里再写一遍。
+        "ToHandFree" => crate::state::ChoiceThen::ToHandFree,
         // §231：True Grit+ —— "选一张消耗掉"。内核的 `ChoiceThen::Exhaust` 一直存在（Elixir 那条药水
         // 就在用），只是内容没有入口说"我要这个 then"。
         "Exhaust" => crate::state::ChoiceThen::Exhaust,

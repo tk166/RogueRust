@@ -17082,3 +17082,89 @@ StS 的"随机无色牌"池子从不给它们 —— 一起打上去会让 `jack
 3. `native/program_audit.py` 的 `unsupported` 集合；
 4. 仍然不中 ⇒ 写一条**只打印不 assert** 的探针（`std::panic!` 把 `Debug` 打出来）看**第一处**
    报错到底是哪一个 kind，而不是继续改内容。
+
+---
+
+## §250 B/C/D/F 四组：`ritual_dagger`、`hand_of_greed`、`discovery`/`forethought`、10 张诅咒
+
+**14 张牌 / 18 行落地**，内容 249 → **267 行**；`in-scope missing` 从 25 降到 **11**。
+四条对拍不变（182/182、62/62、124/124、394/394），`rd-core` 773 测试、`rd-run` 110、`rd-wasm` 95。
+
+### 250.1 新基建（四节点 + 两会话变体 + 一个生命周期键 + 一条法令来源）
+
+| 东西 | 谁要 | 为什么现有节点不行 |
+|---|---|---|
+| `node.dealDamageAndIfFatal{TargetSelector,Amount,IgnoresBlock?,Element?,Program}` | `Ritual Dagger` / `Hand of Greed` | 整棵树先派发、伤害后落地 ⇒ `sequence[dealDamage, conditional]` 里的条件求值时伤害还没结算。§238 那条把它写死成"抬最大生命"，这条把**致命之后做什么**交给子节目（涨计数器 / 给金币 / 以后任何事） |
+| `node.gainGold{Amount}` | `Hand of Greed` | 金币不是战斗资源（`gainResource` 只认 `ResourceId`），它是跨层的账 ⇒ `CombatState.gold_gained` |
+| `node.createCardCopy{ToZone,Count?,Placement?,CardDefinitionId?}` | `Pride` / `Necronomicurse` | `createCardInstance` 要定义 id **字面量**，而这两张要"这一张的副本" |
+| `node.offerRandomCards{Count?,Min?,Max?}` | `Discovery` | `createRandomCardInstance` 是"直接造进牌区"，而这里要**先问**（三选一，`ChoiceSource::Offered` 之前只有药水在用） |
+| `ChoiceThen::ToHandFree` / `ToDrawPileBottomFree` | `Discovery` / `Forethought` | "免费"不能靠调用方传 `cost_delta`：`Discovery` 是**一张卡**发起的问句，页面没有理由知道"这次要传 0" ⇒ 语义写进变体（写 `standard.card_cost_override = 0`） |
+| 生命周期键 `CardPlayedInHand` | `pain` | `TurnEndInHand`/`Drawn`/`Exhausted` 之外缺"我在手上、别人出牌时"。它比"造一个状态"干净：状态是**按持有者**的，而这句诅咒的语义就是"这一张在手上"这件事 |
+| 出牌上限（`card_play_cap` 计数器 + `Refusal::DecreeMaxCardsPerTurn`） | `normality` | 那条拒绝**早就存在**（`CombatDecrees.cs:150-158`），文档写着"本内容无法令 ⇒ 恒不触发"。给它一个来源即可：`.stun` 的先例（内核认识一个固定状态/计数器 id）说明这是既有做法 |
+
+`gold_gained` 的运行层桥：`rd-wasm` 在 `fight_end` 读一次，与 §201 的 `carried_gold`（偷走、要减）
+**两本账分开**（合成一个 `gold_delta` 会让"偷 20 又赚 20"变成 0，而页面上完全看不出来）。
+回放记录那一格从 `"{carried}"` 变成 `"{carried},{gained}"`，老录像第二个数当 0 —— 那时根本没有
+`gainGold` 这条节点，所以"没赚到"是事实而不是猜测。
+
+### 250.2 六个坑（都真踩了，且每个都有"看起来正常"的一面）
+
+1. **`dispatch_node` 的完成必须 `resume_later`**。我的"没打死"分支照着 `conditional` 的样子
+   置 `ProgramNodeKind::Pass` 然后 `Ok(())` —— 而 `conditional` 的 `None` 分支其实是
+   `resume_later`。症状是 `ExecError::Modifier`（"帧拿不到"），**离原因三个模块远**。
+   定位办法：在节点里临时 `panic!("PROBE amount={amount}")`（`no_std` 里没有 `eprintln`），
+   一路把 panic 往下挪 —— 三段就定位到了。
+2. **卡的生命周期节目里没有"当前这张牌"**（§220 的偏离 #2：`CardLifecycleContext` 的卡槽在内核里
+   故意不绑）⇒ `createCardCopy` 必须有 `CardDefinitionId` 这条腿，否则 `Pride`/`Necronomicurse`
+   报 `MissingCombatant`。
+3. **`INV_CARDS` 的字面量是 `list[list]`，`program_facts` 给 `list[tuple]`** ⇒ `list != tuple`，
+   所有新牌都报"事实不符"。归一化要写在**三处**（卡、生命周期、wiki 对照）—— 少一处就红一片，
+   而那看起来像内容错。为此加了 `_tuples()`（**外层保持 list**，内层转 tuple）。
+4. **`copySelf` 的事实漏了 `CardDefinitionId`** ⇒ 门是**假绿**的：两张不同的牌会被读成同一份内容。
+   这条正是 FACT §4.20（"同一个词表两处认识就一定漂"）的现场。
+5. **一个既有测试里躺着"假定义"**：`rampage_grows_this_copy_and_only_this_copy` 用
+   `card_in_hand(..., "card_b")` 造了一张**定义 id 叫 `card_b`、`CARD` 表里没有**的牌。
+   它从来没被打出过，所以一直没红；新钩子"出牌时读手牌里每一张的定义"把它暴露了。
+   ⇒ 修法是给那张反例一个真定义（判据关心的是"另一份不涨"，不是"它叫什么"）。
+6. **生命周期 ≠ 状态触发器（第二次踩）**：`TurnEndInHand` 由 `end_current_turn` 的第 1 号处理器跑
+   （`try_hand_turn_end_lifecycle`），**不是** `TurnEnded` 事件派发的东西；`Exhausted` 同理走
+   `run_card_lifecycle`。§249.4 第 2 条说的是**状态触发器**只对行动者派发，这一节又把卡的钩子
+   当成事件写过一次 —— 判据第一版 `lost 0` 就是这么来的。
+
+### 250.3 写明了的偏差（三条）
+
+1. **`ritual_dagger` 的成长只在这场战斗内**。StS 是"永久"（跨场，跟着牌组里的那一份走）。
+   我们的运行层不会把战斗实例的 mark counter 写回牌组 —— 与 §248 的每副本价格同一条不对称。
+2. **`discovery` 的候选池是"职业牌池"的近似**：非 `+` 行、不带 `colorless`/`curse`/`status`/
+   `junk`/`unplayable`、不是 X 费。StS 的池子是"你职业的牌"，而我们的内容**没有职业 tag**
+   （唯一的分色标记是 `colorless`）。这条写在 `exec.rs::in_offer_pool` 与内容脚本的注释里。
+3. **`parasite` 是惰性诅咒**：它的效果在"牌组移除"那一刻（run 层），本轮没有卡牌 run 钩子。
+   `normality` 的上限近似也是写明的：`Drawn` 设 3、`TurnEndInHand` 清 0 —— 而不是"整场战斗
+   只看手牌是否存在"。两者都把差别写在内容的注释里。
+
+### 250.4 判据（9 条，全在 `host.rs`）
+
+`ritual_dagger`（未致命 0 / 致命 +3 且下一次伤害 18）、`hand_of_greed`（未致命 0 / 致命 20 金币）、
+`discovery`（3 个候选、**互不相同**、都是真牌、选中那份带 `card_cost_override = 0`）、
+`forethought`（落在抽牌堆**底**、带免费那一格）、`decay`+`regret`+`shame`（一次测三条，
+因为载体同一个而失败模式不同）、`pride`（副本在**顶**、原件还在手牌）、
+`necronomicurse`（消耗后回手一份）、`pain`（有它掉 1、没它不掉 —— 两面都测）、
+`normality`（上限 3、第 4 张被 `DecreeMaxCardsPerTurn{cap:3,played:3}` 拒绝）。
+
+⚠️ 判据的纪律照 §249.4：**判据牌不许碰伤害**（这里出 `defend`）、**量差值不量绝对值**、
+**走显式入口不驱动整台回合机**。
+
+### 250.9 记下的一笔债：`MAX_POOL`（第 6 次抬，256 → 320）
+
+`MAX_POOL` 的注释两轮前就写着"再红就做那个重构，而不是再抬一次"。这一轮**又只抬了数**：
+内容 267 行 > 256。理由与代价都写清了 —— 重构要把 4 处 `[_; MAX_POOL]` 缓冲
+（`rd-run/src/state.rs:2129/2198/2227/2319`）改成调用方给的 `&[PoolCard]`，并把 `rd-wasm`
+的两条抽池调用一起改。**下一次因池子报红时先做它**（这不是"顺手"，是独立一节）。
+
+### 250.10 下一步（`in-scope missing` 还剩 11）
+
+* **A 组**（`bite` `expunger` `shiv` `smite` `beta`）：载体齐备，纯内容。
+* **E 组**（`become_almighty` `live_forever` `fame_and_fortune` `j.a.x.` `safety`）：先判范围
+  （观者 / StS2 被 wiki 归到 colorless）。
+* **剩下的**：`ritual_dagger` 的跨场成长（要"战斗实例的 mark counter 写回牌组"）、
+  `pain` 之外"手牌光环"类（`normality` 已通）、`forethought` 的 `Min=0` 现已可用。

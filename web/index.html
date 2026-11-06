@@ -1295,6 +1295,11 @@ function paintChoice() {
     // §227: upgrade the picked card in place (Armaments) / put it on top of the draw pile (Warcry).
     "1:5": "选手牌里的一张来升级",
     "1:6": "选手牌里的一张放到抽牌堆顶",
+    // §250: `Forethought` -- bottom of the draw pile, and "free until played" is the kernel's
+    // promise (kind 8), so the sentence has to say both; `Discovery` (kind 7) says "free" too but
+    // the candidates come from nowhere visible, so it is a different sentence (`2:7`).
+    "1:8": "选手牌里的一张放到抽牌堆底（它打出前免费）",
+    "2:7": "从三张候选里选一张加进手牌（它这次免费）",
   };
   // The bound is the kernel's, not a guess: `min = max = 1` for Liquid Memories reads "1 张", a
   // "any number" question reads "0–N 张". Printing a literal range for a mandatory choice would be
