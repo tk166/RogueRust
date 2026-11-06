@@ -2836,7 +2836,7 @@ pub struct ProgramExecutionFrame {
     /// 为什么它必须上帧：`forEachCardInZone` 每趟把**这一趟那张卡**的 tag 位填进 flags
     /// （"消耗所有非攻击牌"要靠它），而续延会把上下文**从帧重建** —— flags 只在 `ExprContext`
     /// 里、不上帧的话，退栈与续延两条路上都会读到最后一张/外层那张卡的 tag。
-    pub event_flags: u8,
+    pub event_flags: u16,
     /// 已走的步数（`ProgramStepCount`）。
     pub steps: u32,
     /// 步数上限（信封上的 `MaxProgramSteps`）。
@@ -3149,7 +3149,7 @@ pub struct ProgramLoop {
     ///
     /// 循环体里每趟都把**这一趟那张卡**的 tag 位填进 `ctx.event_flags`（"消耗所有非攻击牌"要靠它），
     /// 所以出循环时必须把它还原 —— 否则循环之后的节点会读到最后一张卡的 tag。
-    pub saved_flags: u8,
+    pub saved_flags: u16,
     /// 迭代体（`Body` 的 IR 下标）。
     pub body: u16,
     /// 槽是否在用。

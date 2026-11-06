@@ -1468,7 +1468,11 @@ fn play_condition_validator(state: &CombatState, card: &CardOnTable<'_>) -> Resu
         resolving_card: None,
         // §195.1: a `PlayCondition` is evaluated outside any event, so there is no amount to read
         // (`eventAmount` reports `NoTarget` rather than 0).
-        event_flags: 0,
+        //
+        // §239: the one fact a `PlayCondition` *can* ask about is the hand (`Clash`). It is computed
+        // **here** because this is the only place that has both the state and the content -- the
+        // cards' tags live in the `CARD` table, which `CombatState` does not own.
+        event_flags: crate::exec::PLAY_CONDITION_HAND_ALL_ATTACKS * u16::from(hand_is_all_attacks(state, card)),
         event_amount: None,
         x_cost: 0,
     };
@@ -1477,6 +1481,35 @@ fn play_condition_validator(state: &CombatState, card: &CardOnTable<'_>) -> Resu
         Ok(false) => Err(PlayError::Refused(Refusal::PlayConditionFalse)),
         Err(error) => Err(PlayError::Effect(exec::ExecError::Expr(error))),
     }
+}
+
+/// §239：手牌里**每一张**都是 Attack 吗（`Clash` 的前提）。
+///
+/// 空手牌算真（`all()` 的真空真值）—— 与 StS 无关但**不许**把它当假：那条路走不到
+/// （空手牌时没有牌可打），而"空手牌 ⇒ 条件为假"会让 `Clash` 在某种边角上无故被拒。
+///
+/// ⚠️ 正在结算的那张牌**仍在手牌里**（§225：落区在终态回调），而它的 `PlayCondition` 是在出牌
+/// **之前**求值的 —— 所以这里看到的是"手上所有的牌，包括 `Clash` 自己"。`Clash` 自己是 Attack，
+/// 于是答案相同；写在这里是因为**换个牌名就可能不同**（将来若有"手牌全是技能"的牌，自己就会被算进去）。
+fn hand_is_all_attacks(state: &CombatState, card: &CardOnTable<'_>) -> bool {
+    let Some(zones) = state.card_zones(&card.source) else {
+        return true;
+    };
+    let mut slot = 0usize;
+    while let Some(index) = zones.slot_at(CardZone::Hand, slot) {
+        slot += 1;
+        let Some(instance) = state.card(index) else {
+            continue;
+        };
+        if card
+            .content
+            .card_has_tag(instance.definition_id.as_str(), "attack")
+            != Some(true)
+        {
+            return false;
+        }
+    }
+    true
 }
 
 /// #4 one_attack_per_turn（Priority 200，`standard.one_attack_per_turn_validator`）。

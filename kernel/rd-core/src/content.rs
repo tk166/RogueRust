@@ -2829,8 +2829,8 @@ impl<'a> Content<'a> {
     /// 触发器的 flags）与 `forEachCardInZone` 的迭代卡（"消耗所有**非攻击**牌"）都要同一份映射 ——
     /// 两处各写一遍就是第二份真相。
     #[must_use]
-    pub fn card_tag_bits(&self, card: &str) -> u8 {
-        let mut bits = 0u8;
+    pub fn card_tag_bits(&self, card: &str) -> u16 {
+        let mut bits = 0u16;
         if self.card_has_tag(card, "attack") == Some(true) {
             bits |= crate::exec::CARD_HAS_TAG_ATTACK;
         }

@@ -206,7 +206,7 @@ pub struct ExprContext<'a> {
     /// 唯一读它的是 `cardInstance.iterated`（见 [`eval_card`]）。
     pub iteration_card: Option<CardInstanceId>,
     /// 触发事件的布尔事实（按位，见 `exec::CARD_HAS_TAG_*`）。`event.bool` 读它。
-    pub event_flags: u8,
+    pub event_flags: u16,
     /// §195.1：当前事件带的**数量**（`eventAmount` 专用）。`None` = 没有事件上下文。
     ///
     /// 今天只有两个伤害事件会填它（= **实际掉的血**）；`0` 是合法数量，所以"没有上下文"必须是
@@ -709,6 +709,9 @@ pub fn eval_bool<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<bool, E
                 "card.isResolving" => crate::exec::CARD_IS_RESOLVING,
                 // §236: was this HP loss paid by a card? (Rupture only counts those.)
                 "hpLoss.fromCard" => crate::exec::HP_LOSS_FROM_CARD,
+                // §239: the one fact a `PlayCondition` can ask about (`Clash`). Read only while a
+                // card's `PlayCondition` is being evaluated -- `sts_content_check.py` enforces that.
+                "playCondition.handIsAllAttacks" => crate::exec::PLAY_CONDITION_HAND_ALL_ATTACKS,
                 // §208: the receiving side's fact (see `DAMAGE_IS_ATTACK`'s doc).
                 "damage.isAttack" => crate::exec::DAMAGE_IS_ATTACK,
                 _ => return Err(ExprError::UnsupportedKind),

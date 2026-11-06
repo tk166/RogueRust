@@ -493,6 +493,16 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §239：clash 之后的两张（burning_pact） -------------------------------------------
+    "burning_pact": {"Cost": 1, "Tags": ["skill"],
+                          "Facts": [('choose', 'source', 'Hand', (), 1, 1, 'Exhaust'), ('draw', 2, 'source')]},
+    "burning_pact+": {"Cost": 1, "Tags": ["skill"],
+                           "Facts": [('choose', 'source', 'Hand', (), 1, 1, 'Exhaust'), ('draw', 3, 'source')]},
+    # ---- §239：PlayCondition 的第一张（1 张） ---------------------------------------------
+    "clash": {"Cost": 0, "Tags": ["attack"], "PlayCondition": "handIsAllAttacks",
+                   "Facts": [('damage', 14, 'event')]},
+    "clash+": {"Cost": 0, "Tags": ["attack"], "PlayCondition": "handIsAllAttacks",
+                    "Facts": [('damage', 18, 'event')]},
     # ---- §238：余额基建的第一批（4 张） ---------------------------------------------------
     "double_tap": {"Cost": 1, "Tags": ["skill"],
                         "Facts": [('status', 'standard.double_tap', 1, 'source')]},

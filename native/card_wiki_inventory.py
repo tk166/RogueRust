@@ -21,6 +21,13 @@ import io
 
 # §218 的偏差声明（内容 vs wiki）。key = 基础 id；值里的字段只写**与 wiki 不同**的那几项。
 DEVIATIONS = {
+    # §239：与 `sever_soul` 同源 —— wiki 的 `{{KW|Exhaust}} 1 card.` 里那个 Exhaust 是**动词**
+    # （"消耗一张牌"），不是这张牌自己的关键字：Burning Pact 打完进弃牌堆。
+    'burning_pact': {
+        'why': 'wiki 的 {{KW|Exhaust}} 是动词（消耗选中的一张牌），不是本牌的关键字；'
+               '牌本身打完进弃牌堆。',
+        'content_keywords': [],
+    },
     # §236：Brutality 的 dump 是 `(;{{KW|Innate}}. <br>)At the start of your turn, lose 1 HP and
     # draw 1 card.` —— 括号里是"基础;升级"，**Innate 只属于升级版**。词条解析器只看
     # `{{KW|...}}` 出现与否，分不出"只属于升级"，所以这里显式声明基础版没有 Innate。
@@ -240,6 +247,9 @@ FACTS = {
     'exhume': ([('choose', 'source', 'ExhaustPile', (), 1, 1, 'ToHand')], [('choose', 'source', 'ExhaustPile', (), 1, 1, 'ToHand')]),
     'feed': ([('damage', 10, 'event'), ('ifFatalGainMaxHealth', 3)], [('damage', 12, 'event'), ('ifFatalGainMaxHealth', 4)]),
     'heavy_blade': ([('damage', ('expr', 'add'), 'event')], [('damage', ('expr', 'add'), 'event')]),
+    # ---- §239：PlayCondition 的第一张（1 张） -------------------------------------------
+    'clash': ([('damage', 14, 'event')], [('damage', 18, 'event')]),
+    'burning_pact': ([('choose', 'source', 'Hand', (), 1, 1, 'Exhaust'), ('draw', 2, 'source')], [('choose', 'source', 'Hand', (), 1, 1, 'Exhaust'), ('draw', 3, 'source')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

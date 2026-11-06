@@ -16335,3 +16335,61 @@ pub(crate) const DUPLICATION_SCOPES: &[(&str, Option<&str>)] = &[
 | `havoc` / `infernal_blade` | "打/造一张随机牌" —— 需要 `EffectRequest::PlayCard` 这类**重入出牌**的载体 |
 | `spot_weakness` | 敌意意图的读取（`intent.*` 有两条，没有"敌人这回合要攻击"） |
 | `double_tap` 之外的 `bludgeon`? | （已实现；此表只列缺的） |
+
+---
+
+## §239 `Clash` 与 `Burning Pact`（顺带：关卡闸门的种子表又长了一次）
+
+### 239.1 `Clash`：`PlayCondition` 的第一张真实用户
+
+`play_condition_validator`（`play.rs`）从 §? 起就完整实现了，但**镜像里 62/62 行的
+`PlayCondition` 格都是 `ABSENT16`** —— 一条实例都没有，那条分支在真实内容里不可达。
+`Clash` 是它第一个用户："Can only be played if every card in your hand is an Attack."
+
+缺的不是校验器，是**它求值时能问的一个事实**：手牌全是攻击牌吗。卡牌 tag 在 `CARD` 表里，
+`CombatState` 不拥有内容 ⇒ 事实必须由**有内容的地方**算（`play_condition_validator` 同时有状态和
+内容），写进 `event_flags`，内容用 `event.bool` 问。
+
+两处结构改动：
+
+1. **事实位加宽到 `u16`**。bit 0..7 已经全部有主（4 个卡牌 tag + `isResolving` + `hpLossFromCard`
+   + `damage.isAttack` + `curse`），再加一位就必须加宽。加宽是机械改动，编译器把每一处点出来
+   （`ExprContext` / `ProgramLoop::saved_flags` / `ProgramRecord` / `execute_program_with_flags`）。
+2. **新位 `PLAY_CONDITION_HAND_ALL_ATTACKS`**（bit 8）。它**只在出牌校验时**被填 —— 别处问它得到
+   0（false）。这个"只在某处有效"的坑用一个判据堵：`sts_content_check.py` 里
+   `playCondition.*` 这个键**只许出现在卡的 `PlayCondition` 里**（放在事实表之外也查得到）。
+
+判据 `clash_refuses_unless_every_card_in_hand_is_an_attack` 三段：
+① 手牌含技能牌 ⇒ **拒**，且是 `Refusal::PlayConditionFalse`（不是"费用不够"）；② 手牌全攻击 ⇒ 打得出去
+（14 伤害）；③ **拒的时候一个字节都不改**（能量、手牌、敌人血量）。① 同时是"`PlayCondition` 真的进了
+镜像"的判据 —— 如果 `contentc` 没写那一格，① 会安静地通过。
+
+### 239.2 `Burning Pact`：一处**可见但终态等价**的顺序偏差
+
+wiki 原文是 `Exhaust 1 card. Draw (2;3) cards.` —— 没有 "if your hand is empty"（那是别的版本）。
+它需要"问一张、消耗掉、再抽"，而本内核把**整棵树先派发完**（同 §238.1 那条结构），于是抽牌请求在问句
+还没答之前就落地了。
+
+这个偏差**可以接受**，但不是"不用管"：候选清单在提问那一刻就快照了，所以"能消耗哪几张"两种顺序
+完全一样；终态也一样（`H \ {c} ∪ {d1,d2}`）。唯一看得见的是"问句开着时手牌已经多了两张"。
+判据把这一点**写成断言**（`hand == 3 + 2` 在 `pending_choice` 之后），这样将来顺序变了会有东西响。
+
+另一处：wiki 的 `{{KW|Exhaust}}` 在这里是**动词**（消耗选中的那张牌），不是本牌的关键字 ——
+Burning Pact 打完进弃牌堆。与 §235 的 `sever_soul` 同源，记在 `DEVIATIONS` 里。
+
+### 239.3 关卡闸门的种子表又长了一次（24 个）
+
+`ACT1_SLICE` 红过一次：`clash` 进池 ⇒ 奖励抽卡序列整体平移 ⇒ 原来能赢 boss 的那个种子换了人，
+44 个种子全灭（**不是**"boss 打不过了"：加种子后 seed 1217 以 90 血赢下来）。
+
+这不是第一次：§223 已经为同一件事加过 20 个种子，并写下了理由 —— 奖励池一变，整条路线就重掷。
+处理办法就是照那条理由继续加（这次 +24）。**断言形状没变**（"列表里存在一个能赢的种子"），
+所以这条闸门仍然会在"谁都赢不了"时报红 —— 加样本不等于放水。
+
+### 239.4 数字
+
+* 单测 **953**（748 core + 110 run + 95 wasm，+2）；
+* 内容：卡 **177 行**（+4）、镜像 **104,288 B**（core 83,464 B）；
+* 与 wiki 对账：口径内 **84 / 145**（红 **70 / 75**，缺 5：`blood_for_blood` `corruption`
+  `havoc` `infernal_blade` `spot_weakness`；无色 14 / 70）；
+* 矩阵 **502 行**、具名测试 **955**；21/21 闸门绿。

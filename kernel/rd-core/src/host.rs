@@ -922,7 +922,7 @@ impl<'a> Host<'a> {
         state: &mut CombatState,
         actor: &CombatantId,
         event: TriggerEvent,
-        flags: u8,
+        flags: u16,
     ) -> Result<(), HostError> {
         let mut batch = TriggerBatch::new();
         self.collect_triggers(state, actor, event, &mut batch)?;
@@ -2929,7 +2929,7 @@ fn execute_program_with_flags(
     source: Option<CombatantId>,
     event_target: Option<CombatantId>,
     max_steps: u32,
-    event_flags: u8,
+    event_flags: u16,
 ) -> Result<(), exec::ExecError> {
     let mut ctx = ExecContext::new(state, source, event_target, None, max_steps)
         .with_content(content);
@@ -2971,7 +2971,7 @@ fn card_definition_of<'a>(
 
 /// Which card tags the played card has, as `event.bool` bits (`Content::card_tag_bits` is the one
 /// table -- §225 moved it there so the `forEachCardInZone` iteration can share it).
-fn card_tag_flags(content: &Content<'_>, definition_id: &str) -> u8 {
+fn card_tag_flags(content: &Content<'_>, definition_id: &str) -> u16 {
     content.card_tag_bits(definition_id)
 }
 
@@ -9899,6 +9899,185 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// §239：`Burning Pact` —— "Exhaust 1 card. Draw 2 cards."
+    ///
+    /// 这条判据同时把一处**顺序偏差**写死成断言（不让它以后悄悄变）：StS 是"先消耗、再抽"，
+    /// 而本内核的节目会把整棵树先派发完 ⇒ 抽牌请求在**问句还开着的时候**就落地了。
+    ///
+    /// 为什么可以接受：候选清单在提问那一刻就快照了（`begin_choice` 的 `candidates`），所以
+    /// "能消耗哪几张"在两种顺序下**完全一样**；而**终态也完全一样**
+    /// （`H \ {c} ∪ {d1,d2}`）。唯一看得见差别的是"问句开着时手牌已经多了两张"。
+    #[test]
+    fn burning_pact_exhausts_a_card_and_draws() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        for index in 0..3 {
+            give_card(&mut state, "hero", CardZone::Hand,
+                      &std::format!("card_s{index}"), "strike", None);
+        }
+        for index in 0..2 {
+            give_card(&mut state, "hero", CardZone::DrawPile,
+                      &std::format!("card_d{index}"), "defend", None);
+        }
+        let card = card_in_hand(&mut state, &content, "hero", "burning_pact");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("burning pact is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+
+        let choice = state.pending_choice().expect("it asks which card to Exhaust");
+        assert_eq!(choice.source.zone(), Some(CardZone::Hand), "candidates come from hand");
+        assert_eq!((choice.min, choice.max), (1, 1), "exactly one card");
+        assert_eq!(
+            choice.then,
+            crate::state::ChoiceThen::Exhaust,
+            "the `then` is Exhaust, not a copy/upgrade"
+        );
+        // 偏差（见文档）：问句开着时，那两张**已经**抽到手里了。
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::Hand),
+            3 + 2,
+            "the draw already landed while the question is open (StS draws after the Exhaust)"
+        );
+
+        // 回答：消耗掉第一张 strike。
+        let picks = [state
+            .zone_cards(&cid("hero"), CardZone::Hand)
+            .find(|card| card.id.as_str() == "card_s0")
+            .expect("card_s0 is in hand")
+            .id];
+        state
+            .resolve_choice(crate::state::ChoiceAnswer::Instances(&picks), 0)
+            .expect("the answer is accepted");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+
+        assert_eq!(
+            zone_definitions(&state, "hero", CardZone::ExhaustPile),
+            [std::string::String::from("strike")],
+            "the chosen card is the only thing in the Exhaust pile"
+        );
+        assert_eq!(
+            zone_count(&state, "hero", CardZone::Hand),
+            4,
+            "3 - the exhausted one + the 2 drawn"
+        );
+        assert_eq!(
+            zone_definitions(&state, "hero", CardZone::DiscardPile),
+            [std::string::String::from("burning_pact")],
+            "Burning Pact itself is **not** exhausted (the wiki `Exhaust` there is a verb)"
+        );
+    }
+
+    /// §239：`Clash` —— **手牌全是攻击牌才能打**（`PlayCondition`）。
+    ///
+    /// 三段，缺一段这条判据就有一半是空的：
+    /// ① 手牌里有技能牌 ⇒ **拒**，而且是 `PlayConditionFalse` 这一种拒（不是"费用不够"或"打不出去"）；
+    /// ② 手牌全是攻击 ⇒ 打得出去、伤害是 14；
+    /// ③ 拒的时候**一个字节都不改**（能量、手牌、敌人的血）—— 出牌校验在 `apply_plan` 之前。
+    ///
+    /// 这条同时是"`PlayCondition` 那一格真的进了镜像"的判据：镜像里 62/62 行原本都是 `ABSENT16`，
+    /// 若 `contentc` 没把 JSON 的 `PlayCondition` 写进 CARD 行，① 会**通过**（永远可打）而 ② 也通过
+    /// ⇒ 只有 ① 能发现接线错了。
+    #[test]
+    fn clash_refuses_unless_every_card_in_hand_is_an_attack() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // ① 手牌 = Clash + Defend（技能）⇒ 拒。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        let clash = card_in_hand(&mut state, &content, "hero", "clash");
+        card_in_hand(&mut state, &content, "hero", "defend");
+        let energy_before = state
+            .combatant(&cid("hero"))
+            .map_or(0, |combatant| {
+                combatant
+                    .resources()
+                    .iter()
+                    .filter(|pool| pool.key.as_str() == "standard.energy")
+                    .map(|pool| pool.pool.current)
+                    .sum()
+            });
+        let hand_before = zone_count(&state, "hero", CardZone::Hand);
+        let enemy_before = health(&state, "enemy_a");
+        let refused = crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), clash, Some(cid("enemy_a"))),
+        );
+        match refused {
+            Err(crate::play::PlayError::Refused(crate::play::Refusal::PlayConditionFalse)) => {}
+            other => panic!("a Skill in hand must refuse Clash with PlayConditionFalse, got {other:?}"),
+        }
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        let energy_after = state
+            .combatant(&cid("hero"))
+            .map_or(0, |combatant| {
+                combatant
+                    .resources()
+                    .iter()
+                    .filter(|pool| pool.key.as_str() == "standard.energy")
+                    .map(|pool| pool.pool.current)
+                    .sum()
+            });
+        assert_eq!(energy_after, energy_before, "a refused play pays nothing");
+        assert_eq!(zone_count(&state, "hero", CardZone::Hand), hand_before, "and the hand is intact");
+        assert_eq!(health(&state, "enemy_a"), enemy_before, "and nobody took damage");
+
+        // ② 手牌全是攻击（Clash + Strike）⇒ 打得出去，14 伤害。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        if let Some(enemy) = state.combatant_mut(&cid("enemy_a")) {
+            enemy.health_max = 100;
+            enemy.health_current = 100;
+        }
+        let clash = card_in_hand(&mut state, &content, "hero", "clash");
+        card_in_hand(&mut state, &content, "hero", "strike");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), clash, Some(cid("enemy_a"))),
+        )
+        .expect("an all-attack hand lets Clash through");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(100 - health(&state, "enemy_a"), 14, "Clash deals 14");
+
+        // ③ 只有 Clash 自己一张手牌 —— 它自己是 Attack，所以也算"全是攻击"（边界）。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        if let Some(enemy) = state.combatant_mut(&cid("enemy_a")) {
+            enemy.health_max = 100;
+            enemy.health_current = 100;
+        }
+        let clash = card_in_hand(&mut state, &content, "hero", "clash+");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), clash, Some(cid("enemy_a"))),
+        )
+        .expect("Clash alone is still an all-attack hand");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(100 - health(&state, "enemy_a"), 18, "clash+ deals 18");
     }
 
     /// §238：`Heavy Blade` —— **力量算 3（升级 5）次**，而伤害数（14）不升级。

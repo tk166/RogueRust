@@ -324,7 +324,7 @@ pub struct ExecContext<'a> {
     ///
     /// 为什么不把卡实例塞进表达式上下文：那要把 `Content` 的寿命也拖进 `ExprContext`，
     /// 而这四个比特是**唯一**被用到的信息（`port-plan.md` §118）。
-    pub event_flags: u8,
+    pub event_flags: u16,
     /// §195.1：当前事件带的**数量**（`eventAmount` 读它）。今天只有伤害事件会填；`None` 与 `0`
     /// 严格区分（见 `expr::eval_int` 的 `eventAmount` 分支）。
     pub event_amount: Option<i32>,
@@ -4824,15 +4824,25 @@ fn zone_count(state: &CombatState, owner: &CombatantId, zone: CardZone) -> usize
 /// 与下面四个卡牌标签位**同一套仓位**：`event_flags` 是「这次事件的事实」的位图，谁来填由事件
 /// 种类决定（`CardPlayed` 填卡牌标签，`DamageTaken` 填这一个）。受击侧此前一个事实都没有，
 /// 于是 Flying 那种"只在被打时扣层"只能写成"受任何伤害都扣"。
-pub const DAMAGE_IS_ATTACK: u8 = 1 << 4;
+pub const DAMAGE_IS_ATTACK: u16 = 1 << 4;
 
-pub const CARD_HAS_TAG_ATTACK: u8 = 1 << 0;
-pub const CARD_HAS_TAG_SKILL: u8 = 1 << 1;
-pub const CARD_HAS_TAG_POWER: u8 = 1 << 2;
-pub const CARD_HAS_TAG_STATUS: u8 = 1 << 3;
+pub const CARD_HAS_TAG_ATTACK: u16 = 1 << 0;
+pub const CARD_HAS_TAG_SKILL: u16 = 1 << 1;
+pub const CARD_HAS_TAG_POWER: u16 = 1 << 2;
+pub const CARD_HAS_TAG_STATUS: u16 = 1 << 3;
 
 /// §237：`curse` 标签（`Fire Breathing` 要"Status **或** Curse"）。第 7 位是当时唯一空着的。
-pub const CARD_HAS_TAG_CURSE: u8 = 1 << 7;
+pub const CARD_HAS_TAG_CURSE: u16 = 1 << 7;
+
+/// §239：**这次出牌时，手牌里每一张都是 Attack**（`Clash` 的 `PlayCondition` 问的就是它）。
+///
+/// 为什么是"一位、一个问题"，不是"每位一个 tag"：这个事实只有 `PlayCondition` 会问，而
+/// `PlayCondition` 在**出牌校验**时求值 —— 那一刻有内容（能查卡牌 tag），所以由校验器算好这一位。
+/// 位宽的其它 8 位都是"事件事实"，这一位是"出牌前提"，靠注释与命名分开（`playCondition.` 前缀）。
+///
+/// ⚠️ 它**只在出牌校验时**被填。别的地方问它会得到 0（= false），所以
+/// `sts_content_check.py` 有一条判据：`playCondition.*` 这个键只许出现在卡的 `PlayCondition` 里。
+pub const PLAY_CONDITION_HAND_ALL_ATTACKS: u16 = 1 << 8;
 
 /// §226：这一趟迭代的牌**是不是正在结算的那一张**（`forEachCardInZone` 填，`event.bool` 读）。
 ///
@@ -4849,10 +4859,10 @@ pub const CARD_HAS_TAG_CURSE: u8 = 1 << 7;
 ///
 /// ⇒ 内核只提供**事实**，跳不跳过由内容说。没有正在结算的牌时这一位恒 0（状态/遗物/敌人招式
 /// 的节目里"没有哪张牌是自己"）。
-pub const CARD_IS_RESOLVING: u8 = 1 << 5;
+pub const CARD_IS_RESOLVING: u16 = 1 << 5;
 
 /// §236：这次失去生命是不是**一张牌**付的代价（`Rupture` 只认这一种）。
-pub const HP_LOSS_FROM_CARD: u8 = 1 << 6;
+pub const HP_LOSS_FROM_CARD: u16 = 1 << 6;
 
 /// Apply one status by **id string** -- a test-only door into [`apply_one_status`], so tests can
 /// exercise the Artifact gate without building a whole program (`port-plan.md` §117).

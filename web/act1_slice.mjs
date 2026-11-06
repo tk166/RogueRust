@@ -504,7 +504,14 @@ const report = await page.evaluate(`(async () => {
   const BOSS_SEEDS = [202, 101, 303, 404, 505, 606, 707, 808, 909, 111, 222, 333,
                       444, 555, 666, 777, 888, 999, 121, 232, 343, 454, 565, 676,
                       1001, 1010, 1019, 1028, 1037, 1046, 1055, 1064, 1073, 1082,
-                      1091, 1100, 1109, 1118, 1127, 1136, 1145, 1154, 1163, 1172];
+                      1091, 1100, 1109, 1118, 1127, 1136, 1145, 1154, 1163, 1172,
+                      // §239: the pool grew again (Clash / Burning Pact / Heavy Blade / Feed /
+                      // Double Tap / Exhume). Every content change re-rolls the act's rewards, so
+                      // "which seed wins the boss" moves -- the same reason §223 extended this list
+                      // instead of reverting a correct content fix.
+                      1181, 1190, 1199, 1208, 1217, 1226, 1235, 1244, 1253, 1262,
+                      1271, 1280, 1289, 1298, 1307, 1316, 1325, 1334, 1343, 1352,
+                      1361, 1370, 1379, 1388];
 
   // ---- (1) shop ------------------------------------------------------------------------------
   {
