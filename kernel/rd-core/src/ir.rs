@@ -153,6 +153,17 @@ pub enum NodeKind {
     SetDefensivePool,
     /// `node.loseHp` —— **失去生命**（§236）。不是伤害：不吃格挡、不吃修饰器、不触发"被打"的钩子。
     LoseHp,
+    /// §238：**抬高最大生命**（`Feed` 的 "If Fatal, raise your Max HP by 3"）。
+    ///
+    /// 与 `Heal` 分开：`Heal` 只动当前值（且被最大生命夹住），这条动的是**上限**，
+    /// 并顺手把当前值一起抬高（StS 的 "raise your Max HP by N" 同时给你 N 点血）。
+    GainMaxHealth,
+    /// §238：**打伤害，如果打死了就抬高自己的最大生命**（`Feed` 的 "If Fatal, raise your Max HP"）。
+    ///
+    /// 为什么必须是一个节点：整棵树**先派发完**再让请求落地，所以
+    /// `sequence[dealDamage, conditional]` 里的条件求值时伤害还没落地（结构上做不到）。
+    /// 同一个原因生出了 `DealDamageAndHealByLoss`（Reaper）—— 这里照那个形状办。
+    DealDamageAndGainMaxHealthIfFatal,
     /// `node.dealDamageAndHealByLoss` —— 打伤害，然后按**实际掉的血**给来源回血（§231，`Reaper`）。
     ///
     /// 参考靠 `ResultKey` 把"这一击掉了多少血"传给下一个节点；本内核不支持 `ResultKey`，而
@@ -232,6 +243,8 @@ impl NodeKind {
             NodeKind::CarryAwayStolenGold => "node.carryAwayStolenGold",
             NodeKind::SetDefensivePool => "node.setDefensivePool",
             NodeKind::LoseHp => "node.loseHp",
+            NodeKind::GainMaxHealth => "node.gainMaxHealth",
+            NodeKind::DealDamageAndGainMaxHealthIfFatal => "node.dealDamageAndGainMaxHealthIfFatal",
             NodeKind::DealDamageAndHealByLoss => "node.dealDamageAndHealByLoss",
             NodeKind::DealDamageWithTagBonus => "node.dealDamageWithTagBonus",
             NodeKind::AddCardCounter => "node.addCardCounter",
@@ -245,7 +258,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 30] = [
+        const ALL: [NodeKind; 32] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -283,6 +296,9 @@ impl NodeKind {
             NodeKind::DealDamageAndHealByLoss,
             // §236：失去生命（Hemokinesis / Offering / Bloodletting / Brutality）。
             NodeKind::LoseHp,
+            // §238：抬高最大生命（Feed 的 "If Fatal"）。
+            NodeKind::GainMaxHealth,
+            NodeKind::DealDamageAndGainMaxHealthIfFatal,
             // §233：把防御池设成某个值（Entrench）。
             NodeKind::SetDefensivePool,
             NodeKind::Repeat,

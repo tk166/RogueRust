@@ -1727,6 +1727,8 @@ pub enum ChoiceSource {
     Hand,
     /// 弃牌堆（Liquid Memories「把弃牌堆里一张拿回手牌」）。
     DiscardPile,
+    /// §238：**消耗堆**（Exhume「把消耗堆里一张拿回手牌」）。
+    ExhaustPile,
     /// **三条候选**（Attack / Skill Potion「从三张随机 X 牌里选一张加进手牌」）。
     Offered,
 }
@@ -1740,6 +1742,7 @@ impl ChoiceSource {
         match self {
             Self::Hand => Some(CardZone::Hand),
             Self::DiscardPile => Some(CardZone::DiscardPile),
+            Self::ExhaustPile => Some(CardZone::ExhaustPile),
             Self::Offered => None,
         }
     }

@@ -16264,3 +16264,74 @@ StS 的 `Lose HP` 与"受到伤害"是两件事，三处都不一样：
 * 与 wiki 对账：口径内 **78 / 145**（红 **64 / 75**，缺 11；无色 14 / 70）；
 * 矩阵 **489 行**、具名测试 **949**；`MAX_POOL` 160 → 192（内容 165 行，理由同 §229/§232/§235）；
 * 21/21 闸门绿。
+
+---
+
+## §238 余额基建（3 块）+ 4 张牌
+
+§A.1 剩下 11 张红卡里，这 4 张各自只缺一小块载体，而且三块载体都是通用的。
+
+### 238.1 ★ "If Fatal" 为什么必须是**一个节点**
+
+`Feed` = "Deal 10 damage. If Fatal, raise your Max HP by 3."。第一版写成
+`sequence[dealDamage, conditional(compare(currentHealth(target), 0, <=))]`，判据当场红：
+Max HP 一点没涨。
+
+原因是**结构**的，不是 bug：本内核与参考一样，**一次节目派发先把整棵树派发完，再让请求落地**
+（`dispatch_sequence` 逐个子节点派发），所以条件节点求值时那次伤害还躺在队列里。
+`dealDamageAndHealByLoss`（Reaper）之所以存在，正是同一个原因 —— 它在一个节点里同步
+`resolve_damage`，再读自己造成的损失。
+
+⇒ 加 `node.dealDamageAndGainMaxHealthIfFatal {TargetSelector, Amount, IgnoresBlock, MaxHealthGain}`，
+照 Reaper 那个形状。**判据**（`Fatal`）是"目标血量 ≤ 0"，不是"伤害超过血量" —— 被格挡吃掉的伤害
+不会让人死，而这条判据以后加"死亡拦截"（Fairy in a Bottle）时仍然对。
+
+顺带 `node.gainMaxHealth`（上限 +N，当前血也 +N）：抬上限的写法抽成**一个** helper `gain_max_health`，
+两个节点共用 —— 同一个语义写两遍，迟早有一遍会漂。
+
+### 238.2 复制的作用域是**一张表**
+
+`Duplication Potion` = "下一张**牌**打两次"，`Double Tap` = "下一张 **Attack** 打两次"。
+同一条机制、两个作用域，所以写成表而不是两个 if：
+
+```rust
+pub(crate) const DUPLICATION_SCOPES: &[(&str, Option<&str>)] = &[
+    (DUPLICATION_STATUS, None),                    // Duplication Potion: any card
+    ("standard.double_tap", Some("attack")),       // Double Tap: Attacks only
+];
+```
+
+每次出牌**最多**消费一条（StS 里两层"打两次"叠着也是打两次，不是四次）。
+判据三段：Attack 真的打两次 / 机会被花掉 / **Skill 不吃它且不花掉它** —— 第三段正是
+"Double Tap 与药水的唯一区别"，没有它这张牌就退化成第二瓶 Duplication Potion。
+
+### 238.3 `ChoiceSource::ExhaustPile`
+
+`Exhume` = "把消耗堆里一张拿回手牌"。`ChoiceThen::ToHand` **早就在**（Liquid Memories 那条药水在用），
+缺的是"从消耗堆问"。加一个来源变体即可，页面不用改：ABI 那边 `source == 1`（从牌区选）已经覆盖它，
+来源牌区由 zone id 3 报给页面（§161.5 的契约）。
+
+### 238.4 `Heavy Blade`：内核零改动
+
+`Deal 14 damage. Strength affects this card (3;5) times.` ⇒ 升级改的是**力量倍率**，不是伤害数。
+写成 `14 + (mult-1) × 力量`：伤害管线本来就会再加一次力量，于是得到 3×/5× 的效果。
+判据三档力量（0 / +3 / +3 升级版），**只测 0 力量会把倍率整条漏掉**（14 与倍率无关）。
+
+### 238.5 数字
+
+* 单测 **951**（746 core + 110 run + 95 wasm，+4）；四条对拍不变 `182 / 62 / 124 / 394`；
+* 内容：卡 **173 行**（+8）、状态 **55**（+1：`standard.double_tap`）、
+  镜像 **103,584 B**（core 83,048 B）；
+* 与 wiki 对账：口径内 **82 / 145**（红 **68 / 75**，缺 7；无色 14 / 70）；
+* 矩阵 **498 行**、具名测试 **953**；21/21 闸门绿。
+
+### 238.6 还剩的 7 张红卡，各自缺什么
+
+| 牌 | 缺的载体 |
+|---|---|
+| `clash` | "手牌全是攻击才能打" —— `PlayCondition` 那条校验器**已实现**（`play.rs:1429`），缺一个能读卡牌 tag 的 bool 表达式（`ExprContext` 里没有 `Content`） |
+| `blood_for_blood` | 费用表达式的入口（今天的费是 CARD 行的静态数字 + 每副本 delta） |
+| `burning_pact` | "问完再继续"：`chooseCards` 的 `Then` 结束后不回到节目剩余部分 |
+| `havoc` / `infernal_blade` | "打/造一张随机牌" —— 需要 `EffectRequest::PlayCard` 这类**重入出牌**的载体 |
+| `spot_weakness` | 敌意意图的读取（`intent.*` 有两条，没有"敌人这回合要攻击"） |
+| `double_tap` 之外的 `bludgeon`? | （已实现；此表只列缺的） |

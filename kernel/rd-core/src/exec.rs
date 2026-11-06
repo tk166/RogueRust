@@ -1630,6 +1630,97 @@ pub fn lose_health(
     Ok(lost)
 }
 
+/// `GainMaxHealth`：**抬高最大生命**，并把当前生命一起抬高 `Amount`（§238）。
+///
+/// StS 的写法是 "raise your Max HP by 3" —— 上限 +3 **并且**当前血 +3（`Feed` 就是这么回血的）。
+/// `Amount <= 0` ⇒ 抛（镜像里没有"降低上限"的牌，负数只可能是内容写错 ⇒ 响亮拒绝）。
+fn gain_max_health_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    _frame: ProgramExecutionSlot,
+    _slot: u16,
+    _stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let amount = eval_amount(node, "Amount", ctx)?;
+    if amount <= 0 {
+        return Err(ExecError::Modifier);
+    }
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut targets)?;
+    for target in targets.iter().take(count) {
+        gain_max_health(ctx.state, target, amount)?;
+    }
+    Ok(())
+}
+
+/// "抬高最大生命"的**唯一**实现：上限 +N，当前血也 +N（StS 的 "raise your Max HP by N"）。
+///
+/// 两个节点共用（`gainMaxHealth` 与 `dealDamageAndGainMaxHealthIfFatal`）—— 同一个语义写两遍，
+/// 迟早有一遍会漂。
+fn gain_max_health(
+    state: &mut crate::state::CombatState,
+    target: &CombatantId,
+    amount: i32,
+) -> Result<(), ExecError> {
+    let combatant = state
+        .combatant_mut(target)
+        .ok_or(ExecError::MissingCombatant)?;
+    combatant.health_max = combatant.health_max.saturating_add(amount);
+    combatant.health_current = combatant.health_current.saturating_add(amount);
+    Ok(())
+}
+
+/// §238：`node.dealDamageAndGainMaxHealthIfFatal` 的实体 —— 与 `dealDamageAndHealByLoss` 同形，
+/// 只是"读完自己的结果"之后做的是抬上限而不是回血。
+fn deal_damage_and_gain_max_health_if_fatal_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let amount = eval_amount(node, "Amount", ctx)?;
+    let ignores_block = node.bool_field("IgnoresBlock")?.unwrap_or(false);
+    let gain = node
+        .int_field("MaxHealthGain")?
+        .ok_or(IrError::Missing("MaxHealthGain"))?;
+    if gain <= 0 {
+        return Err(ExecError::Modifier);
+    }
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    let source = ctx.source;
+    let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut targets)?;
+    if count == 0 {
+        return resume_later(ctx.state, frame, slot);
+    }
+    let mut fatal = false;
+    for target in targets.iter().take(count) {
+        resolve_damage(ctx, target, amount, ignores_block)?;
+        stats.effects = stats.effects.saturating_add(1);
+        // "Fatal" 的判据是**目标真的倒了**（血量 ≤ 0），不是"伤害超过血量" —— 被格挡吃掉的
+        // 伤害不会让人死，而这条判据以后加"死亡拦截"（Fairy in a Bottle）时仍然对。
+        if ctx
+            .state
+            .combatant(target)
+            .is_some_and(|combatant| combatant.health_current <= 0)
+        {
+            fatal = true;
+        }
+    }
+    if fatal {
+        if let Some(owner) = source {
+            gain_max_health(ctx.state, &owner, gain)?;
+        }
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
 /// §236：`node.loseHp` 的实体 —— `{TargetSelector, Amount}`，每个目标各失去一次。
 ///
 /// 与 `dealDamage` 的分工写在 [`lose_health`] 的文档里（一句话：不吃格挡、不吃修饰器、
@@ -1744,6 +1835,9 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::DealDamageAndHealByLoss
         // §236：`loseHp`（失去生命）。同上。
         | NodeKind::LoseHp
+        // §238：`gainMaxHealth`（抬高上限）与它的 "If Fatal" 变体。无孩子。
+        | NodeKind::GainMaxHealth
+        | NodeKind::DealDamageAndGainMaxHealthIfFatal
         // §233：`setDefensivePool`（把防御池设成某个值）。同上。
         | NodeKind::SetDefensivePool
         // §195.7：`upgradeCards`（改定义 id），同上。
@@ -1913,6 +2007,10 @@ fn dispatch_node(
         NodeKind::AddCardCounter => add_card_counter_node(node, ctx, frame, slot, stats),
         NodeKind::SetDefensivePool => set_defensive_pool_node(node, ctx, frame, slot, stats),
         NodeKind::LoseHp => lose_hp_node(node, ctx, frame, slot, stats),
+        NodeKind::GainMaxHealth => gain_max_health_node(node, ctx, frame, slot, stats),
+        NodeKind::DealDamageAndGainMaxHealthIfFatal => {
+            deal_damage_and_gain_max_health_if_fatal_node(node, ctx, frame, slot, stats)
+        }
         NodeKind::DealDamageAndHealByLoss => {
             deal_damage_and_heal_by_loss_node(node, ctx, frame, slot, stats)
         }
@@ -4279,6 +4377,9 @@ fn choose_cards_node(
     let source = match from_zone {
         CardZone::Hand => crate::state::ChoiceSource::Hand,
         CardZone::DiscardPile => crate::state::ChoiceSource::DiscardPile,
+        // §238：`Exhume`（"把消耗堆里一张拿回手牌"）—— 问句的来源牌区就是消耗堆，
+        // 页面按 zone id 3 读它（§161.5 的契约），所以那边不用改。
+        CardZone::ExhaustPile => crate::state::ChoiceSource::ExhaustPile,
         _ => return Err(ExecError::Ir(IrError::UnknownKind)),
     };
     let min = node.int_field("Min")?.ok_or(IrError::Missing("Min"))?;
@@ -4310,6 +4411,9 @@ fn choose_cards_node(
         // §231：True Grit+ —— "选一张消耗掉"。内核的 `ChoiceThen::Exhaust` 一直存在（Elixir 那条药水
         // 就在用），只是内容没有入口说"我要这个 then"。
         "Exhaust" => crate::state::ChoiceThen::Exhaust,
+        // §238：Exhume —— "把选中的那张**拿进手牌**"。`ChoiceThen::ToHand` 一直存在
+        // （Liquid Memories 那条药水在用），这次是内容第一次点名它。
+        "ToHand" => crate::state::ChoiceThen::ToHand,
         _ => return Err(ExecError::Ir(IrError::UnknownKind)),
     };
     if !(0..=MAX_SELECTED_CARDS as i32).contains(&min)

@@ -938,12 +938,29 @@ fn apply_plan_in_chain(
     //
     // 两遍的帧同时存在，效果队列因此是 A 的请求在前、B 的请求在后 —— 对"打两次"来说，
     // 这就是要的顺序（节目本身只**入队**，状态在排空时才变）。
-    let duplicate = state
-        .combatant(&plan.source)
-        .is_some_and(|combatant| total_status_stacks(combatant, DUPLICATION_STATUS) > 0);
-    if duplicate {
+    // §238：**谁允许"打两次"，以及它认哪一种牌**。
+    //
+    // Duplication Potion 是"下一张牌"，Double Tap 是"下一张 **Attack**"。两者是同一条机制的两个
+    // 作用域，所以是一张**表**而不是两个 if —— 加第三种（将来的 Burst："下一张 Skill"）只加一行。
+    // 每次出牌**最多**消费一条（StS 里两层"打两次"叠着也还是一张牌打两次，不是四次）。
+    let definition = state
+        .find_card(&plan.source, &plan.instance)
+        .and_then(|(_, slot)| state.card(slot))
+        .map(|card| card.definition_id);
+    let duplicate_status = DUPLICATION_SCOPES.iter().find(|(status, tag)| {
+        state.combatant(&plan.source).is_some_and(|combatant| {
+            total_status_stacks(combatant, status) > 0
+                && tag.is_none_or(|tag| {
+                    definition.is_some_and(|definition| {
+                        plan.content.card_has_tag(definition.as_str(), tag) == Some(true)
+                    })
+                })
+        })
+    });
+    let duplicate = duplicate_status.is_some();
+    if let Some((status, _)) = duplicate_status {
         // 先把那一次花掉：否则第二遍的终态回调/下一次出牌又会看到它。
-        spend_one_charge(state, &plan.source, DUPLICATION_STATUS)?;
+        spend_one_charge(state, &plan.source, status)?;
     }
     let passes: usize = if duplicate { 2 } else { 1 };
     let mut begun = None;
@@ -1094,6 +1111,15 @@ struct CardPlayTerminalContext {
 /// `UsesCharges: true` 的内容侧写法让"下一张牌"是**消耗一层**而不是"这一回合都算"：
 /// 层数就是"还能打几次两遍"。
 const DUPLICATION_STATUS: &str = "standard.duplication";
+
+/// §238：`(状态 id, 只认哪个标签)` —— `None` = 任意牌（Duplication Potion），
+/// `Some("attack")` = 只认 Attack（Double Tap）。
+///
+/// 顺序有意义：先命中先生效（今天的两个范围不重叠，所以顺序只在"两者都有"时决定花掉哪一个）。
+pub(crate) const DUPLICATION_SCOPES: &[(&str, Option<&str>)] = &[
+    (DUPLICATION_STATUS, None),
+    ("standard.double_tap", Some("attack")),
+];
 
 fn card_program_terminal(
     state: &mut CombatState,

@@ -235,6 +235,11 @@ FACTS = {
     'feel_no_pain': ([('status', 'standard.feel_no_pain', 3, 'source')], [('status', 'standard.feel_no_pain', 4, 'source')]),
     'fire_breathing': ([('status', 'standard.fire_breathing', 6, 'source')], [('status', 'standard.fire_breathing', 10, 'source')]),
     'juggernaut': ([('status', 'standard.juggernaut', 5, 'source')], [('status', 'standard.juggernaut', 7, 'source')]),
+    # ---- §238：余额基建的第一批（4 张） -------------------------------------------------
+    'double_tap': ([('status', 'standard.double_tap', 1, 'source')], [('status', 'standard.double_tap', 2, 'source')]),
+    'exhume': ([('choose', 'source', 'ExhaustPile', (), 1, 1, 'ToHand')], [('choose', 'source', 'ExhaustPile', (), 1, 1, 'ToHand')]),
+    'feed': ([('damage', 10, 'event'), ('ifFatalGainMaxHealth', 3)], [('damage', 12, 'event'), ('ifFatalGainMaxHealth', 4)]),
+    'heavy_blade': ([('damage', ('expr', 'add'), 'event')], [('damage', ('expr', 'add'), 'event')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

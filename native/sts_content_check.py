@@ -95,7 +95,8 @@ INV_COUNTS = {
     # §235: +1 (`standard.demon_form`, Demon Form 的每回合加力量).
     # §236: +2 (`standard.brutality` / `standard.rupture`).
     # §237: +5 (five trigger-hook powers).
-    "statuses": 54,
+    # §238: +1 (`standard.double_tap`, the second duplication scope).
+    "statuses": 55,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -492,6 +493,23 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §238：余额基建的第一批（4 张） ---------------------------------------------------
+    "double_tap": {"Cost": 1, "Tags": ["skill"],
+                        "Facts": [('status', 'standard.double_tap', 1, 'source')]},
+    "double_tap+": {"Cost": 1, "Tags": ["skill"],
+                         "Facts": [('status', 'standard.double_tap', 2, 'source')]},
+    "exhume": {"Cost": 1, "Tags": ["skill"],
+                    "Facts": [('choose', 'source', 'ExhaustPile', (), 1, 1, 'ToHand')]},
+    "exhume+": {"Cost": 0, "Tags": ["skill"],
+                     "Facts": [('choose', 'source', 'ExhaustPile', (), 1, 1, 'ToHand')]},
+    "feed": {"Cost": 1, "Tags": ["attack"],
+                  "Facts": [('damage', 10, 'event'), ('ifFatalGainMaxHealth', 3)]},
+    "feed+": {"Cost": 1, "Tags": ["attack"],
+                   "Facts": [('damage', 12, 'event'), ('ifFatalGainMaxHealth', 4)]},
+    "heavy_blade": {"Cost": 2, "Tags": ["attack"],
+                         "Facts": [('damage', ('expr', 'add'), 'event')]},
+    "heavy_blade+": {"Cost": 2, "Tags": ["attack"],
+                          "Facts": [('damage', ('expr', 'add'), 'event')]},
     # ---- §237：触发器钩子的第一批（5 张 Power） -------------------------------------------
     "dark_embrace": {"Cost": 2, "Tags": ["power"],
                           "Facts": [('status', 'standard.dark_embrace', 1, 'source')]},
@@ -1086,6 +1104,8 @@ INV_STATUSES = {
     "standard.nightmare_pending": [],
     # §231: Battle Trance 的"本回合不能再抽" —— 规则在内核的抽牌节点里，状态本身没有修饰器。
     "standard.no_draw": [],
+    # §238: Double Tap's "next Attack is played twice" -- consumed by `play.rs`'s scope table.
+    "standard.double_tap": [],
     # §237: the five trigger-hook powers. None has a passive modifier -- they are pure triggers
     # (`BlockGained` / `CardsDrawn` / `CardExhausted`).
     "standard.juggernaut": [],
@@ -1401,6 +1421,13 @@ def program_facts(root):
             # §236: "Lose N HP" as a fact. It is **not** damage -- that difference is the whole
             # point (no Block, no modifiers, no "when attacked" hooks), so the fact says so.
             out.append(("loseHp", amount(body["Amount"]), tgt(body["TargetSelector"])))
+        elif kind == "node.dealDamageAndGainMaxHealthIfFatal":
+            # §238: Feed -- damage and, **if that damage killed**, raise the source's Max HP.
+            out.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
+            out.append(("ifFatalGainMaxHealth", body["MaxHealthGain"]))
+        elif kind == "node.gainMaxHealth":
+            # §238: "raise your Max HP by N" (Feed's "If Fatal"). Not a heal: it moves the ceiling.
+            out.append(("gainMaxHealth", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.setDefensivePool":
             # §233: "set the pool to this" as a fact -- **gain** and **set** are different rules, so
             # they are different facts (a `GainBlock`-based Entrench would double *after* modifiers).

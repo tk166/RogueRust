@@ -2591,7 +2591,10 @@ pub extern "C" fn rd_env_choice_source() -> i32 {
     match session.state.pending_choice() {
         Some(choice) => match choice.source {
             rd_core::state::ChoiceSource::Hand
-            | rd_core::state::ChoiceSource::DiscardPile => 1,
+            // §238: `ExhaustPile` 也是"从牌区里选"（Exhume），页面按 zone id 3 读来源牌区，
+            // 所以 ABI 这一格照旧是 1。
+            | rd_core::state::ChoiceSource::DiscardPile
+            | rd_core::state::ChoiceSource::ExhaustPile => 1,
             rd_core::state::ChoiceSource::Offered => 2,
         },
         None => 0,
