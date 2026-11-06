@@ -596,6 +596,8 @@ fn apply_starting_statuses(
                 .enqueue_effect(rd_core::state::EffectRequest::GainBlock {
                     target: Some(target),
                     amount: starting_block,
+                    // §245: 不是牌给的格挡（这里是测试/调试入口）。
+                    from_card: false,
                 })
                 .map_err(|e| format!("enqueue starting block: {}", detail(&e)))?;
             rd_core::exec::drain(&mut session.state, Some(&content), None)

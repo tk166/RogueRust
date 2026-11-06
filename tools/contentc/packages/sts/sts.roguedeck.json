@@ -3422,6 +3422,22 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.no_block_from_cards",
+      "PackageId": "sts",
+      "NameKey": "No Block From Cards",
+      "DescriptionKey": "You cannot gain Block from cards.",
+      "Polarity": "Debuff",
+      "UsesStacks": false,
+      "UsesDuration": true,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "debuff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
     }
   ],
   "Cards": [
@@ -18685,6 +18701,270 @@
             "Max": 5,
             "Then": "Exhaust",
             "ToZone": "Hand",
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "apotheosis",
+      "PackageId": "sts",
+      "NameKey": "Apotheosis",
+      "DescriptionKey": "Upgrade ALL your cards for the rest of combat. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.upgradeCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "apotheosis+",
+      "PackageId": "sts",
+      "NameKey": "Apotheosis+",
+      "DescriptionKey": "Upgrade ALL your cards for the rest of combat. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.upgradeCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "panic_button",
+      "PackageId": "sts",
+      "NameKey": "Panic Button",
+      "DescriptionKey": "Gain 30 Block. You cannot gain Block from cards for 2 turns. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 30
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.no_block_from_cards"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 2,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "panic_button+",
+      "PackageId": "sts",
+      "NameKey": "Panic Button+",
+      "DescriptionKey": "Gain 40 Block. You cannot gain Block from cards for 2 turns. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 40
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.no_block_from_cards"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 2,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ],
             "ResultKey": null
           }
         },

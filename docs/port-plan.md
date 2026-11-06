@@ -16718,3 +16718,68 @@ StS 的"随机无色牌"池子从不给它们 —— 一起打上去会让 `jack
 * **诅咒 10 张**：多为"回合末自伤/自加状态"（`regret` `decay` `shame` 用 §237 的 `TurnEnded` +
   §242 的费用/掉落规则就能做），`normality` / `pain` 要 `PlayCondition` 或 `CardPlayed` 钩子。
   `parasite` / `curse_of_the_bell` / `necronomicurse` 与 run 层（牌组规则）交互，留到最后。
+
+---
+
+## §245 无色「既有载体」组：`Apotheosis` / `Panic Button`（+ 一条被结构挡回的）
+
+### 245.1 `Apotheosis`：零内核改动，但判据必须**跨牌区**
+
+`Upgrade ALL your cards for the rest of combat` —— `upgradeCards` **不给 `FromZone` 就是全部牌区**
+（§227 起就是这样，Armaments 用它时给的是 `Hand`）。所以这张牌的内容就是一个节点。
+
+判据 `apotheosis_upgrades_every_zone` 在**四个牌区各放一张**再逐区断言 —— 只测手牌的话，
+"只升手牌"的实现也会全绿（那是 Armaments 的语义）。
+
+一处自嘲：第一版断言"消耗堆里应该有 `apotheosis`"，实际是 `apotheosis+` ——
+**它自己也升级了**（节目跑时它还在手牌里，节目完才进消耗堆）。判据抓到了我的错，不是代码的错。
+
+### 245.2 `Panic Button`：事实必须**带在请求上**
+
+`Gain (30;40) Block. You cannot gain Block **from cards** for 2 turns.`
+
+"from cards" 这个限定词是整张牌的难点：遗物/状态（Metallicize）给的格挡照样有效。第一版用
+`ctx.resolving_card.is_some()` 判断"这次格挡是不是一张牌给的"，判据立刻红 —— **格挡是请求，
+排空时才落地，那一刻既没有"正在结算的牌"也没有内容**。
+
+⇒ `EffectRequest::GainBlock` 加一格 `from_card: bool`，由派发方填（那时还在牌的节目里）。
+这正是 §237 那条老规矩的又一面："事实要在**知道它的地方**记下来，不能指望落地时还能问出来"。
+
+判据三段，第三段是价值所在：
+① 它自己那 30 点照常到账（先给格挡、后挂状态的队列顺序）；
+② 状态在身上时 **Defend 给 0**；
+③ 状态在身上时 **Metallicize 照常给 4** —— 少了这段，一个"有状态就全拦"的实现也全绿。
+
+状态 `standard.no_block_from_cards`（`UsesDuration: true`，2 回合），规则键在 id 上，写在
+`exec::gain_block_for` 的**最前面**（"拒绝 ⇒ 一个字节都不改"）。
+
+### 245.3 被结构挡回的：`Thinking Ahead`
+
+`Draw 2 cards. Put a card from your hand on top of your draw pile.` —— 内容写成
+`sequence[drawCards(2), chooseCards{Then: ToDrawPileTop}]`，运行时**不问问题**：
+`chooseCards` 在**派发时**就快照候选，而 `drawCards` 只是入队 ⇒ 那一刻手牌还是空的
+（`available < min` ⇒ 按"问不出来就不问"的规则跳过）。
+
+这是 §238.1 那条"整棵树先派发完"的第三个面孔（前两个是 `Feed` 的 If Fatal、`Burning Pact` 的
+顺序偏差）。**这两个可以接受**（候选快照的语义没坏），而这一个不行（问句根本没出现）。
+
+⇒ 已把这张牌从内容里撤掉，留成下一批的第一件事：给 `chooseCards` 加一个 `DrawFirst: N`
+（在同一个节点里先抽、再快照），或者做一个"同步抽牌"的节点。**别用"节点之间排空队列"去修** ——
+那会动每一步的哈希与 beat 计数（四条对拍当场红）。
+
+### 245.4 数字
+
+* 单测 **966**（761 core + 110 run + 95 wasm，+2）；四条对拍不变 `182 / 62 / 124 / 394`；
+* 内容：卡 **233 行**（+4）、状态 **59**（+1）、镜像 **113,032 B**（core 88,604 B）；
+* 与 wiki 对账：口径内 **112 / 145**（无色 **37 / 70**；红 75/75）；
+* 矩阵 **562 行**、具名测试 **968**；21/21 闸门绿。
+
+### 245.5 下一批（无色 33 张）
+
+1. **`Thinking Ahead` / `Warcry` 的正确形状**：`chooseCards.DrawFirst`（一次解锁两张，其中 Warcry
+   现在也有同一个隐患——它的抽牌请求可能还没落地）；
+2. **`Mind Blast`**：只差一个 `zoneCount(DrawPile)` 的 INT 表达式；
+3. **`Enlightenment` / `Madness`**：需要"给某张牌**设**绝对价"（`addCardCounter` 只会累加，
+   而 `card_cost_override` 要的是"设成 1 / 设成 0"）；
+4. **`Forethought`**：`ToDrawPileBottom` + 顺带把价格设 0；
+5. **`Discovery`**：内容侧没有"造 3 张候选进 `Offered`"的节点（`Offered` 现在是药水专用）。

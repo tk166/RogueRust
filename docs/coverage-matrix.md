@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 557 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 562 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 229 | 135 | 94 | 0 | 219 | 10 | 18 | 0 |
-| 状态 | 58 | 53 | 3 | 2 | 0 | 58 | 1 | 0 |
+| 卡牌 | 233 | 140 | 93 | 0 | 223 | 10 | 18 | 0 |
+| 状态 | 59 | 54 | 3 | 2 | 0 | 59 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 557 | 360 | 181 | 16 | 396 | 68 | 81 | 0 |
+| **合计** | 562 | 366 | 180 | 16 | 400 | 69 | 81 | 0 |
 
-扫描到的具名测试：**966** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**968** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -239,12 +239,14 @@
 | time_eater.ripple | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 
-## 卡牌（229）
+## 卡牌（233）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
 | anger | yes | warcry_draws_one_then_puts_the_chosen_card_on_top, perfected_strike_counts_the_tagged_cards_in_hand …(+8) | — | wiki:wiki_cards/anger.txt | — | CARD_WIKI+INV_CARDS/warcry_draws_one_then_puts_the_chosen_card_on_top |
 | anger+ | yes | — | CARD_DIFF | wiki:wiki_cards/anger.txt (via anger) | — | INV_CARDS |
+| apotheosis | yes | apotheosis_upgrades_every_zone | — | wiki:wiki_cards/apotheosis.txt | — | §245/CARD_WIKI+INV_CARDS/apotheosis_upgrades_every_zone |
+| apotheosis+ | yes | apotheosis_upgrades_every_zone | — | wiki:wiki_cards/apotheosis.txt (via apotheosis) | — | INV_CARDS/apotheosis_upgrades_every_zone |
 | apparition | yes | a_special_card_is_known_and_never_put_in_a_reward | — | wiki:wiki_cards/apparition.txt | — | §149/§223/CARD_WIKI+INV_CARDS/a_special_card_is_known_and_never_put_in_a_reward |
 | apparition+ | yes | — | CARD_DIFF | wiki:wiki_cards/apparition.txt (via apparition) | — | INV_CARDS |
 | armaments | yes | armaments_gains_block_then_upgrades_the_chosen_card, an_armaments_question_makes_the_page_layer_modal | — | wiki:wiki_cards/armaments.txt | — | §227/CARD_WIKI+INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
@@ -253,8 +255,8 @@
 | bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
-| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+11) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
-| bash+ | yes | — | CARD_DIFF | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS |
+| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+12) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
+| bash+ | yes | apotheosis_upgrades_every_zone | — | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS/apotheosis_upgrades_every_zone |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
 | berserk | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt | — | §197/§199/CARD_WIKI+INV_CARDS |
@@ -284,8 +286,8 @@
 | chrysalis+ | yes | the_random_card_batch_picks_from_the_right_pool | — | wiki:wiki_cards/chrysalis.txt (via chrysalis) | — | INV_CARDS/the_random_card_batch_picks_from_the_right_pool |
 | clash | yes | clash_refuses_unless_every_card_in_hand_is_an_attack, a12_halves_the_upgrade_chance_in_acts_two_and_three | — | wiki:wiki_cards/clash.txt | — | §239/CARD_WIKI+INV_CARDS/clash_refuses_unless_every_card_in_hand_is_an_attack |
 | clash+ | yes | clash_refuses_unless_every_card_in_hand_is_an_attack | — | wiki:wiki_cards/clash.txt (via clash) | — | INV_CARDS/clash_refuses_unless_every_card_in_hand_is_an_attack |
-| cleave | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/cleave.txt | — | §221/CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
-| cleave+ | yes | — | CARD_DIFF | wiki:wiki_cards/cleave.txt (via cleave) | — | INV_CARDS |
+| cleave | yes | apotheosis_upgrades_every_zone, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/cleave.txt | — | §221/CARD_WIKI+INV_CARDS/apotheosis_upgrades_every_zone |
+| cleave+ | yes | apotheosis_upgrades_every_zone | — | wiki:wiki_cards/cleave.txt (via cleave) | — | INV_CARDS/apotheosis_upgrades_every_zone |
 | clothesline | yes | — | CARD_DIFF | wiki:wiki_cards/clothesline.txt | — | CARD_WIKI+INV_CARDS |
 | clothesline+ | yes | — | CARD_DIFF | wiki:wiki_cards/clothesline.txt (via clothesline) | — | INV_CARDS |
 | combust | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt | — | CARD_WIKI+INV_CARDS |
@@ -298,8 +300,8 @@
 | dazed | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade, armaments_gains_block_then_upgrades_the_chosen_card …(+2) | — | wiki:wiki_cards/dazed.txt | — | §189/§191/CARD_WIKI+INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+38) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
-| defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+40) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, apotheosis_upgrades_every_zone | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | disarm | yes | the_new_red_skills_do_what_their_pages_say | — | wiki:wiki_cards/disarm.txt | — | CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
@@ -390,6 +392,8 @@
 | offering+ | yes | the_lose_hp_cards_do_what_their_pages_say | — | wiki:wiki_cards/offering.txt (via offering) | — | INV_CARDS/the_lose_hp_cards_do_what_their_pages_say |
 | panacea | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/panacea.txt | — | CARD_WIKI+INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
 | panacea+ | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/panacea.txt (via panacea) | — | INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
+| panic_button | yes | panic_button_only_blocks_block_from_cards | — | wiki:wiki_cards/panic_button.txt | — | CARD_WIKI+INV_CARDS/panic_button_only_blocks_block_from_cards |
+| panic_button+ | yes | — | CARD_DIFF | wiki:wiki_cards/panic_button.txt (via panic_button) | — | INV_CARDS |
 | patient_guard | yes | the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/the_keyword_cells_are_in_the_image |
 | patient_guard+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
 | perfected_strike | yes | perfected_strike_counts_the_tagged_cards_in_hand | — | wiki:wiki_cards/perfected_strike.txt | — | CARD_WIKI+INV_CARDS/perfected_strike_counts_the_tagged_cards_in_hand |
@@ -443,8 +447,8 @@
 | slimed | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+2) | — | wiki:wiki_cards/slimed.txt | — | §192/§219/CARD_WIKI+INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+96) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
-| strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+8) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+97) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+9) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
 | sword_boomerang | yes | sword_boomerang_rerolls_a_target_for_each_hit | — | wiki:wiki_cards/sword_boomerang.txt | — | §228/CARD_WIKI+INV_CARDS/sword_boomerang_rerolls_a_target_for_each_hit |
@@ -473,7 +477,7 @@
 | wound | yes | the_new_red_skills_do_what_their_pages_say, evolve_and_fire_breathing_only_answer_to_the_right_tags …(+1) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
-## 状态（58）
+## 状态（59）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -507,14 +511,15 @@
 | standard.frail | yes | entrench_doubles_the_block_it_already_has, damage_table_rows_are_the_frozen_shape …(+4) | — | spec:INV_STATUSES | — | §196/§212/INV_STATUSES/entrench_doubles_the_block_it_already_has |
 | standard.hex | yes | hex_shuffles_a_dazed_only_for_non_attack_cards | — | spec:INV_STATUSES | — | §210/§213/INV_STATUSES/hex_shuffles_a_dazed_only_for_non_attack_cards |
 | standard.intangible | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor | — | spec:INV_STATUSES | — | §210/§223/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
-| standard.juggernaut | yes | juggernaut_punishes_every_block_gain | — | spec:INV_STATUSES | — | §236/§237/INV_STATUSES/juggernaut_punishes_every_block_gain |
+| standard.juggernaut | yes | juggernaut_punishes_every_block_gain | — | spec:INV_STATUSES | — | §237/§245/INV_STATUSES/juggernaut_punishes_every_block_gain |
 | standard.lose_dexterity | yes | — | — | spec:INV_STATUSES | — | §158/INV_STATUSES |
 | standard.lose_strength | yes | flex_potion_gives_strength_and_takes_it_back | — | spec:INV_STATUSES | — | §158/§230/INV_STATUSES/flex_potion_gives_strength_and_takes_it_back |
 | standard.magnetism | yes | magnetism_adds_a_colorless_card_every_turn | — | spec:INV_STATUSES | — | §242/§244/INV_STATUSES/magnetism_adds_a_colorless_card_every_turn |
 | standard.mayhem | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §242/§244/INV_STATUSES |
-| standard.metallicize | yes | metallicize_grants_block_at_the_end_of_the_turn, plated_armor_and_metallicize_both_pay_block_at_turn_end | — | spec:INV_STATUSES | — | §107/§194/INV_STATUSES/metallicize_grants_block_at_the_end_of_the_turn |
+| standard.metallicize | yes | metallicize_grants_block_at_the_end_of_the_turn, plated_armor_and_metallicize_both_pay_block_at_turn_end …(+1) | — | spec:INV_STATUSES | — | §107/§194/INV_STATUSES/metallicize_grants_block_at_the_end_of_the_turn |
 | standard.mode_shift | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost | — | spec:INV_STATUSES | — | §195.1/INV_STATUSES/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
 | standard.nightmare_pending | yes | nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive | — | spec:INV_STATUSES | — | §213/§227/INV_STATUSES/nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive |
+| standard.no_block_from_cards | yes | panic_button_only_blocks_block_from_cards | — | spec:INV_STATUSES | — | §244/§245/INV_STATUSES/panic_button_only_blocks_block_from_cards |
 | standard.no_draw | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | spec:INV_STATUSES | — | §227/§231/INV_STATUSES/battle_trance_blocks_further_draws_only_this_turn |
 | standard.phantom_veil | yes | — | — | spec:INV_STATUSES | — | §175/§181/INV_STATUSES |
 | standard.phase_split | yes | the_boss_phase_splits_once_at_low_health, a_phase_split_happens_once_even_under_three_hits | — | spec:INV_STATUSES | — | §121/§122/INV_STATUSES/the_boss_phase_splits_once_at_low_health |

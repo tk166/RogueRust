@@ -98,7 +98,8 @@ INV_COUNTS = {
     # §238: +1 (`standard.double_tap`, the second duplication scope).
     # §242: +1 (`standard.corruption`).
     # §244: +2 (`standard.mayhem` / `standard.magnetism`).
-    "statuses": 58,
+    # §245: +1 (`standard.no_block_from_cards`).
+    "statuses": 59,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -495,6 +496,15 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §245：无色「既有载体」第一批（3 张 / 6 行）------------------------------------------
+    "apotheosis": {"Cost": 2, "Tags": ["skill", "colorless"],
+                        "Facts": [('upgrade', 'source', None, None, None)]},
+    "apotheosis+": {"Cost": 1, "Tags": ["skill", "colorless"],
+                         "Facts": [('upgrade', 'source', None, None, None)]},
+    "panic_button": {"Cost": 0, "Tags": ["skill", "colorless"],
+                          "Facts": [('block', 30, 'source'), ('status', 'standard.no_block_from_cards', 1, 'source')]},
+    "panic_button+": {"Cost": 0, "Tags": ["skill", "colorless"],
+                           "Facts": [('block', 40, 'source'), ('status', 'standard.no_block_from_cards', 1, 'source')]},
     # ---- §244：无色 B 档（10 张 / 20 行）---------------------------------------------------
     "mayhem": {"Cost": 2, "Tags": ["power", "colorless"],
                     "Facts": [('status', 'standard.mayhem', 1, 'source')]},
@@ -1232,6 +1242,8 @@ INV_STATUSES = {
     # §244: Mayhem / Magnetism -- both are a single `TurnStarted` trigger.
     "standard.mayhem": [],
     "standard.magnetism": [],
+    # §245: Panic Button -- the rule lives in `exec::gain_block_for` (keyed on this id).
+    "standard.no_block_from_cards": [],
     # §237: the five trigger-hook powers. None has a passive modifier -- they are pure triggers
     # (`BlockGained` / `CardsDrawn` / `CardExhausted`).
     "standard.juggernaut": [],

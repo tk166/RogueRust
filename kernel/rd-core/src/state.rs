@@ -2382,6 +2382,12 @@ pub enum EffectRequest {
         target: Option<CombatantId>,
         /// 金额。
         amount: i32,
+        /// §245：**这一次格挡是不是一张牌给的**（`Panic Button`："cannot gain Block **from cards**"）。
+        ///
+        /// 为什么必须带在请求上：请求是**排空时才落地**的，那一刻既没有"正在结算的牌"，
+        /// 也没有内容 —— 事实只能在**派发时**（还在牌节目里）记下来。第一版拿
+        /// `ctx.resolving_card` 判断，判据立刻红（Defend 照样给了 5 点格挡）。
+        from_card: bool,
     },
     /// `ApplyStatusEffectRequest`（`StatusEffects.cs:12-326`）。
     ApplyStatus {
@@ -7905,6 +7911,7 @@ mod tests {
             .enqueue_effect(EffectRequest::GainBlock {
                 target: Some(hero_id()),
                 amount: 3,
+                from_card: false,
             })
             .unwrap();
         assert!(state.ensure_effect_queue_aligned().is_ok());

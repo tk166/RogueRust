@@ -786,6 +786,8 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // §244: Mayhem / Magnetism (single `TurnStarted` triggers).
         "standard.mayhem" |
         "standard.magnetism" |
+        // §245: Panic Button's "no Block from cards" (rule in `exec::gain_block_for`).
+        "standard.no_block_from_cards" |
         "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No
