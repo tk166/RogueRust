@@ -370,6 +370,17 @@ pub enum TriggerEvent {
     /// 参考的实现里没有这个名字（它把这件事折进 `CardMovedToZone`/伤害事件），所以这一条是
     /// **本内核自己的事件名** —— 理由与我们加 `HpLoss` 这个动作本身一样：`Lose HP` 不是伤害。
     HpLost,
+    /// §237：**获得了格挡**。Bearer = 获得格挡的那一方（`Juggernaut`）。
+    ///
+    /// 与 `DamageTaken` 一样是**承受者侧**的名字，但方向相反：那一条是"我被打"，
+    /// 这一条是"我变厚了"。
+    BlockGained,
+    /// §237：**抽到了一张牌**。Bearer = 抽牌的人（`Evolve` / `Fire Breathing`）。
+    ///
+    /// 事实位给的是**抽到的那张牌**的标签（`card.hasTag.status|curse`，由 `card_tag_flags` 填）。
+    CardsDrawn,
+    /// §237：**一张牌被消耗了**。Bearer = 牌的主人（`Dark Embrace`）。
+    CardExhausted,
     /// `StatusApplied` —— 一条新状态实例落到某人身上。
     StatusApplied,
     /// `StatusMerged` —— 并进了已有实例。
@@ -397,6 +408,10 @@ impl TriggerEvent {
             "DamageTaken" => Some(TriggerEvent::DamageTaken),
             "Downed" => Some(TriggerEvent::Downed),
             "CardPlayed" => Some(TriggerEvent::CardPlayed),
+            // §237: the three trigger hooks that used to be `NotHandled`.
+            "BlockGained" => Some(TriggerEvent::BlockGained),
+            "CardsDrawn" => Some(TriggerEvent::CardsDrawn),
+            "CardExhausted" => Some(TriggerEvent::CardExhausted),
             // §236
             "HpLost" => Some(TriggerEvent::HpLost),
             "CardCostPaid" => Some(TriggerEvent::CardCostPaid),
@@ -408,7 +423,6 @@ impl TriggerEvent {
             // ── 参考有、本内核今天没有钩子接的 20 个（按 `EffectVocabulary.cs` 的声明序）──
             "Healed" | "StatusExpired"
             | "ResourceGained" | "StatusRemoved"
-            | "BlockGained" | "CardsDrawn"
             | "CardMovedToZone" | "CardInstanceCreated" | "StatusApplicationPrevented"
             | "StatusApplicationAmplified" | "ActionResolved" | "RuleAnnounced"
             | "ActionStarting" => Some(TriggerEvent::NotHandled),
@@ -428,6 +442,10 @@ impl TriggerEvent {
             TriggerEvent::DamageTaken => "DamageTaken",
             TriggerEvent::Downed => "Downed",
             TriggerEvent::CardPlayed => "CardPlayed",
+            // §237
+            TriggerEvent::BlockGained => "BlockGained",
+            TriggerEvent::CardsDrawn => "CardsDrawn",
+            TriggerEvent::CardExhausted => "CardExhausted",
             TriggerEvent::HpLost => "HpLost",
             TriggerEvent::CardCostPaid => "CardCostPaid",
             TriggerEvent::StatusApplied => "StatusApplied",
@@ -2206,6 +2224,22 @@ impl Host<'_> {
                 let flags = if from_card { crate::exec::HP_LOSS_FROM_CARD } else { 0 };
                 self.run_triggers_with_flags(state, &target, TriggerEvent::HpLost, flags)
             }
+            // §237: `BlockGained` -- Bearer 是获得格挡的那一方（Juggernaut）。
+            CombatEvent::BlockGained { combatant, .. } => {
+                self.run_triggers(state, &combatant, TriggerEvent::BlockGained)
+            }
+            // §237: `CardsDrawn` / `CardExhausted` -- Bearer 是牌的主人，事实位是**那张牌**的标签。
+            // 两者形状相同（"你身上有事发生，主语是一张牌"），所以共用一段。
+            CombatEvent::CardsDrawn { combatant, card }
+            | CombatEvent::CardExhausted { combatant, card } => {
+                let event = match item.event {
+                    CombatEvent::CardsDrawn { .. } => TriggerEvent::CardsDrawn,
+                    _ => TriggerEvent::CardExhausted,
+                };
+                let flags = card_definition_of(state, card)
+                    .map_or(0, |definition| card_tag_flags(self.content, definition));
+                self.run_triggers_with_flags(state, &combatant, event, flags)
+            }
             // `CardPlayed`：派发给**所有战斗员**（Enrage 在敌人身上，由你出牌触发）。
             CombatEvent::CardPlayed { owner, card } => {
                 self.run_card_played_triggers(state, &owner, card)
@@ -2662,7 +2696,22 @@ impl TurnHost for Host<'_> {
         actor: &CombatantId,
         slot: CardSlot,
     ) -> Result<(), TurnError> {
-        self.run_card_lifecycle_hook(state, actor, slot, crate::state::CardLifecycleEvent::Drawn)
+        let outcome =
+            self.run_card_lifecycle_hook(state, actor, slot, crate::state::CardLifecycleEvent::Drawn);
+        // §237：`CardsDrawn` 在**生命周期节目之后**发 —— StS 的顺序也是"牌进了手，再问有没有人
+        // 对'抽到它'有意见"。每张一条（`Evolve` 的单位是张，不是"抽牌动作"）。
+        if outcome.is_ok() {
+            if let Some(card) = state.card(slot) {
+                let event = crate::state::CombatEvent::CardsDrawn {
+                    combatant: *actor,
+                    card: card.id,
+                };
+                state
+                    .enqueue_event(event)
+                    .map_err(|e| bridge(self.record(HostError::Capacity(e))))?;
+            }
+        }
+        outcome
     }
 
     fn card_exhausted(
@@ -2671,12 +2720,26 @@ impl TurnHost for Host<'_> {
         actor: &CombatantId,
         slot: CardSlot,
     ) -> Result<(), TurnError> {
-        self.run_card_lifecycle_hook(
+        let outcome = self.run_card_lifecycle_hook(
             state,
             actor,
             slot,
             crate::state::CardLifecycleEvent::Exhausted,
-        )
+        );
+        // §237：`CardExhausted` 与 `LifecyclePrograms[Exhausted]` 同一个落点 —— 三条入堆路径
+        // （§225 的审计）都经过这里，所以"消耗了却没通知"这种漏法这次结构上不存在。
+        if outcome.is_ok() {
+            if let Some(card) = state.card(slot) {
+                let event = crate::state::CombatEvent::CardExhausted {
+                    combatant: *actor,
+                    card: card.id,
+                };
+                state
+                    .enqueue_event(event)
+                    .map_err(|e| bridge(self.record(HostError::Capacity(e))))?;
+            }
+        }
+        outcome
     }
 
     fn turn_end_hand_destination(
@@ -4081,8 +4144,11 @@ mod tests {
                     TriggerEvent::StatusRemoved => {}
                     TriggerEvent::StatusStacksChanged => status_stacks_changed += 1,
                     TriggerEvent::StatusApplicationPrevented => {}
-                    // §236：镜像（core）里没有 `HpLost` 触发器，计数恒 0。
+                    // §236/§237：镜像（core）里没有这几条触发器，计数恒 0。
                     TriggerEvent::HpLost => {}
+                    TriggerEvent::BlockGained => {}
+                    TriggerEvent::CardsDrawn => {}
+                    TriggerEvent::CardExhausted => {}
                     TriggerEvent::NotHandled => not_handled += 1,
                 }
                 // 信封上的步数预算：实测 25/25 都是 1024。
@@ -9833,6 +9899,196 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// §237：`BlockGained` 钩子 —— `Juggernaut` 按"加了几点格挡"次数结算。
+    ///
+    /// 两侧都测：**加格挡**会触发（每加一次一条），**没加**不触发（`block_stage` 修饰成 0，
+    /// 或者根本没这个状态）。第二条容易忘，而忘了它就意味着"手上有 Juggernaut 时，任何
+    /// 加 0 点格挡的东西都在打人"。
+    #[test]
+    fn juggernaut_punishes_every_block_gain() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // 没有 Juggernaut：加 5 点格挡不该伤到人。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        let enemy_before = health(&state, "enemy_a");
+        let card = card_in_hand(&mut state, &content, "hero", "defend");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("defend is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(
+            health(&state, "enemy_a"),
+            enemy_before,
+            "without Juggernaut, Block does not hurt anybody"
+        );
+
+        // Juggernaut 5 层：每**加**一次格挡打随机敌人 5 点。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 6);
+        give(&mut state, "hero", status("st_jug", "standard.juggernaut", 5));
+        let enemy_before = health(&state, "enemy_a") + health(&state, "enemy_b");
+        let card = card_in_hand(&mut state, &content, "hero", "defend");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("defend is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(block_of(&state, "hero"), 5, "Defend still blocks");
+        assert_eq!(
+            enemy_before - (health(&state, "enemy_a") + health(&state, "enemy_b")),
+            5,
+            "one Block gain ⇒ one 5 damage hit on a random enemy"
+        );
+
+        // 两张牌各加一次 ⇒ 两次（次数单位是"获得格挡"，不是"回合"）。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 6);
+        give(&mut state, "hero", status("st_jug", "standard.juggernaut", 5));
+        let enemy_before = health(&state, "enemy_a") + health(&state, "enemy_b");
+        for _ in 0..2 {
+            let card = card_in_hand(&mut state, &content, "hero", "defend");
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .expect("defend is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+        }
+        let lost = enemy_before - (health(&state, "enemy_a") + health(&state, "enemy_b"));
+        assert!(lost == 10, "two Block gains ⇒ two hits (lost {lost}, want 10)");
+    }
+
+    /// §237：`CardsDrawn` 钩子 —— `Evolve` 只认 **Status**，`Fire Breathing` 认 Status 或 Curse。
+    ///
+    /// 三张探针卡分别代表三个答案：`wound`（Status）⇒ 两个都响；`injury`（Curse）⇒ 只有
+    /// Fire Breathing 响；`strike`（Attack）⇒ 两个都不响。**只测第一个会漏掉"Curse 忘了加"**，
+    /// 只测第二个会漏掉"Status 被写成 Curse-only"。
+    #[test]
+    fn evolve_and_fire_breathing_only_answer_to_the_right_tags() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // 探针：`evolve`（抽 2）+ `fire_breathing`（打 6）。每场只放一张探针牌在抽牌堆顶。
+        let probe = |card_id: &str| -> (i32, usize) {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            give_energy(&mut state, "hero", 6);
+            give(&mut state, "hero", status("st_evo", "standard.evolve", 2));
+            give(&mut state, "hero", status("st_fb", "standard.fire_breathing", 6));
+            give_card(&mut state, "hero", CardZone::DrawPile,
+                      "card_probe", card_id, None);
+            // 探针下面再垫 3 张 —— 否则 `Evolve` 的"再抽 2"抽到空堆，手牌数就分不出
+            // "没触发"与"触发了但没牌"（正是 §4 那种"工具报成功"的形状）。
+            for index in 0..3 {
+                give_card(&mut state, "hero", CardZone::DrawPile,
+                          &std::format!("card_filler{index}"), "strike", None);
+            }
+            let enemy_before = health(&state, "enemy_a") + health(&state, "enemy_b");
+            // 抽 1 张：探针牌进手。
+            // ⚠️ 用 `pommel_strike`（抽 1）而不是 `battle_trance`（抽 3 + `no_draw`）：
+            // 后者会把 `Evolve` 的额外抽牌**按规则**挡掉，于是这条判据永远看不出 Evolve 响没响。
+            let card = card_in_hand(&mut state, &content, "hero", "pommel_strike");
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .expect("battle trance is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            let lost = enemy_before - (health(&state, "enemy_a") + health(&state, "enemy_b"));
+            (lost, zone_count(&state, "hero", CardZone::Hand) as usize)
+        };
+
+        // 基线：抽到一张非 Status/Curse（`strike`）⇒ 不额外抽、不打人。
+        let (base_lost, hand) = probe("strike");
+        assert_eq!(base_lost, 9, "Pommel Strike's own 9 is the yardstick (nothing extra)");
+        assert_eq!(hand, 1, "Pommel Strike draws 1 + nothing extra");
+
+        // Status（wound）⇒ Fire Breathing 打 6 × 全体（2 个敌人 ⇒ 12），Evolve 抽 2。
+        let (lost, hand) = probe("wound");
+        assert_eq!(lost, base_lost + 12, "Fire Breathing 6 to ALL enemies (2 enemies)");
+        assert_eq!(hand, 1 + 2, "the probe + Evolve 2");
+
+        // Curse（injury）⇒ 同样两项都响（`card.hasTag.curse` 就是为它加的位）。
+        let (lost, hand) = probe("injury");
+        assert_eq!(lost, base_lost + 12, "Curse is Fire Breathing's other half");
+        assert_eq!(hand, 1, "but Evolve is status-only, so it does not draw");
+    }
+
+    /// §237：`CardExhausted` 钩子 —— `Feel No Pain` 给格挡、`Dark Embrace` 抽牌。
+    ///
+    /// 三条入堆路径（§225 的审计）都要响，所以用两个不同的载体各测一次：
+    /// ① 打出即消耗（`offering`）；② 虚无（`carnage` 的回合末）。**内容搬牌**那条由 §225 的
+    /// `every_way_into_the_exhaust_pile_runs_the_exhausted_program` 钉着触发器节目的落点，
+    /// 而事件与节目同一处发 —— 所以这里不重复。
+    #[test]
+    fn exhausting_a_card_feeds_feel_no_pain_and_dark_embrace() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // ① 打出即消耗：Offering 自己进消耗堆 ⇒ 3 格挡 + 抽 1 张（在它自己的 3 张之后）。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "hero", status("st_fnp", "standard.feel_no_pain", 3));
+        give(&mut state, "hero", status("st_de", "standard.dark_embrace", 1));
+        for index in 0..6 {
+            give_card(&mut state, "hero", CardZone::DrawPile,
+                      &std::format!("card_d{index}"), "strike", None);
+        }
+        let card = card_in_hand(&mut state, &content, "hero", "offering");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("offering is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(block_of(&state, "hero"), 3, "Feel No Pain 3 for the exhausted Offering");
+        // Offering 抽 3，Dark Embrace 再抽 1 ⇒ 手牌 4 张（Offering 自己已经离手）。
+        assert_eq!(zone_count(&state, "hero", CardZone::Hand), 4, "3 + Dark Embrace's 1");
+
+        // ② 虚无：**留在手里**的 Carnage 在回合末从手牌进消耗堆，同样要响。
+        //    ⚠️ 别拿"打出去的 Carnage"测这一条 —— 它已经离手了，回合末没有东西可虚无；
+        //    第一版就是这么写的，而它安静地报了 0 格挡（`assert_eq!` 抓到了，但若断言写成
+        //    ">= 0" 就会全绿）。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give(&mut state, "hero", status("st_fnp", "standard.feel_no_pain", 3));
+        turn::start_current_turn(&mut state, &config(), &mut host).expect("turn starts");
+        assert_eq!(block_of(&state, "hero"), 0, "turn start clears Block");
+        give_card(&mut state, "hero", CardZone::Hand, "card_eth", "carnage", None);
+        // 回合末这一趟就够：虚无的落区与 `Feel No Pain` 都在 hero 的 turn-end 处理里。
+        turn::end_current_turn(&mut state, &config(), &mut host).expect("turn ends");
+        assert_eq!(
+            block_of(&state, "hero"),
+            3,
+            "the Ethereal Carnage exhausted at turn end ⇒ Feel No Pain 3"
+        );
     }
 
     /// §236：`Lose N HP` **不是伤害** —— 不吃格挡、不触发"被打"的钩子，但它**是**失去生命。

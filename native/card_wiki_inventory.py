@@ -229,6 +229,12 @@ FACTS = {
     'hemokinesis': ([('loseHp', 2, 'source'), ('damage', 15, 'event')], [('loseHp', 2, 'source'), ('damage', 20, 'event')]),
     'offering': ([('loseHp', 6, 'source'), ('gain', 'standard.energy', 2, 'source'), ('draw', 3, 'source')], [('loseHp', 6, 'source'), ('gain', 'standard.energy', 2, 'source'), ('draw', 5, 'source')]),
     'rupture': ([('status', 'standard.rupture', 1, 'source')], [('status', 'standard.rupture', 2, 'source')]),
+    # ---- §237：触发器钩子（5 张 Power） -------------------------------------------------
+    'dark_embrace': ([('status', 'standard.dark_embrace', 1, 'source')], [('status', 'standard.dark_embrace', 1, 'source')]),
+    'evolve': ([('status', 'standard.evolve', 1, 'source')], [('status', 'standard.evolve', 2, 'source')]),
+    'feel_no_pain': ([('status', 'standard.feel_no_pain', 3, 'source')], [('status', 'standard.feel_no_pain', 4, 'source')]),
+    'fire_breathing': ([('status', 'standard.fire_breathing', 6, 'source')], [('status', 'standard.fire_breathing', 10, 'source')]),
+    'juggernaut': ([('status', 'standard.juggernaut', 5, 'source')], [('status', 'standard.juggernaut', 7, 'source')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

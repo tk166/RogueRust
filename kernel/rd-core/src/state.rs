@@ -2568,6 +2568,37 @@ pub enum CombatEvent {
         /// （`Enrage` 只认技能牌）。
         card: crate::state::CardInstanceId,
     },
+    /// §237：**有人获得了格挡**。Bearer = 获得格挡的那一方。
+    ///
+    /// `amount` 是**真的加了**多少（修饰后），不是请求额 —— `Juggernaut` 不看这个数，但把它带上
+    /// 才对得起"事实"二字：将来有状态问"一次加了多少"时不用再改一次事件形状。
+    BlockGained {
+        /// 获得格挡的一方。
+        combatant: CombatantId,
+        /// 实际增量（被 `block_stage` 修饰之后）。
+        amount: i32,
+    },
+    /// §237：**有人抽到了一张牌**（每张一次，不是"抽了几张"一次）。
+    ///
+    /// StS 的 `Evolve` / `Fire Breathing` 都是"每当你**抽到**一张 Status/Curse" ⇒ 计数单位是**张**，
+    /// 所以这个事件必须一张一条。带 `card` 是为了让触发器能问"这张牌有 status tag 吗"
+    /// （`event.bool: card.hasTag.status`）。
+    CardsDrawn {
+        /// 抽牌的人。
+        combatant: CombatantId,
+        /// 抽到的那张牌。
+        card: crate::state::CardInstanceId,
+    },
+    /// §237：**一张牌被消耗了**（进了消耗堆）。`Dark Embrace` 就长在这上面。
+    ///
+    /// 三条入堆路径（§225 的审计：打出即消耗 / 虚无 / 内容 `moveCardToZone`）都在宿主侧汇到
+    /// `Host::card_exhausted`，事件就发在那一处 —— 与 `LifecyclePrograms[Exhausted]` 同一个落点。
+    CardExhausted {
+        /// 牌的主人。
+        combatant: CombatantId,
+        /// 被消耗的那张牌。
+        card: crate::state::CardInstanceId,
+    },
     /// `CardCostPaid`（`CardPlay.cs:138`）：出牌付了费用。
     CardCostPaid {
         /// 付钱的人。

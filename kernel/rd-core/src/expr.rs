@@ -701,6 +701,8 @@ pub fn eval_bool<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<bool, E
                 "card.hasTag.skill" => crate::exec::CARD_HAS_TAG_SKILL,
                 "card.hasTag.power" => crate::exec::CARD_HAS_TAG_POWER,
                 "card.hasTag.status" => crate::exec::CARD_HAS_TAG_STATUS,
+                // §237: `Fire Breathing` is the only reader today.
+                "card.hasTag.curse" => crate::exec::CARD_HAS_TAG_CURSE,
                 // §226: "this iterated card is the one being resolved right now". The kernel
                 // answers the *fact*; whether to skip it is the content's call (see
                 // `exec::CARD_IS_RESOLVING` for the two rejected alternatives).

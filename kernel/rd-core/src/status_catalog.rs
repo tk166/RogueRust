@@ -772,6 +772,12 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // pure content triggers; the kernel owns the `loseHp` action and the `HpLost` event.
         "standard.brutality" |
         "standard.rupture" |
+        // §237: the five trigger-hook powers (BlockGained / CardsDrawn / CardExhausted).
+        "standard.juggernaut" |
+        "standard.evolve" |
+        "standard.fire_breathing" |
+        "standard.dark_embrace" |
+        "standard.feel_no_pain" |
         "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No

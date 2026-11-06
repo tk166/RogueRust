@@ -2683,6 +2683,14 @@ fn gain_block_for(
                 c: 0,
             },
         );
+        // §237：`BlockGained` —— 与伤害事件同一形状（唯一出口处入队），Bearer 是**获得格挡的人**。
+        // 只在 `modified != 0` 时发：`Juggernaut` 是"每当你获得格挡"，加 0 点不算获得。
+        ctx.state
+            .enqueue_event(crate::state::CombatEvent::BlockGained {
+                combatant: *target,
+                amount: modified,
+            })
+            .map_err(ExecError::Capacity)?;
     }
     Ok(())
 }
@@ -3715,6 +3723,16 @@ fn draw_for(
                     )?;
                 }
             }
+            // §237：`CardsDrawn` 事件就在**同一个落点**发 —— 抽牌有两个入口（这条与
+            // `Host::card_drawn` 的回合开始那一路），两边都发才不漏。`Evolve` 的单位是"张"，
+            // 所以一张一条。
+            if let Some(card) = ctx.state.card(slot) {
+                let event = crate::state::CombatEvent::CardsDrawn {
+                    combatant: *owner,
+                    card: card.id,
+                };
+                ctx.state.enqueue_event(event).map_err(ExecError::Capacity)?;
+            }
             drawn += 1;
         }
         if drawn >= count {
@@ -4533,6 +4551,15 @@ fn move_card_for(
                 )?;
             }
         }
+        // §237：`CardExhausted` 事件与上面那段节目**同一个落点**（抽牌那边 `CardsDrawn` 同理）：
+        // 生命周期节目有几个入口，事件就有几个入口 —— 少一个就是"消耗了但没人被告知"。
+        if let Some(card) = ctx.state.card(slot) {
+            let event = crate::state::CombatEvent::CardExhausted {
+                combatant: *owner,
+                card: card.id,
+            };
+            ctx.state.enqueue_event(event).map_err(ExecError::Capacity)?;
+        }
     }
     Ok(())
 }
@@ -4699,6 +4726,9 @@ pub const CARD_HAS_TAG_ATTACK: u8 = 1 << 0;
 pub const CARD_HAS_TAG_SKILL: u8 = 1 << 1;
 pub const CARD_HAS_TAG_POWER: u8 = 1 << 2;
 pub const CARD_HAS_TAG_STATUS: u8 = 1 << 3;
+
+/// §237：`curse` 标签（`Fire Breathing` 要"Status **或** Curse"）。第 7 位是当时唯一空着的。
+pub const CARD_HAS_TAG_CURSE: u8 = 1 << 7;
 
 /// §226：这一趟迭代的牌**是不是正在结算的那一张**（`forEachCardInZone` 填，`event.bool` 读）。
 ///

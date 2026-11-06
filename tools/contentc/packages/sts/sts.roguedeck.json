@@ -2999,6 +2999,322 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.juggernaut",
+      "PackageId": "sts",
+      "NameKey": "Juggernaut",
+      "DescriptionKey": "Whenever you gain Block, deal damage equal to its stacks to a random enemy.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "BlockGained",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamageToRandomTarget",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.allEnemies",
+                  "value": {
+                    "Cardinality": "Any",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "Amount": {
+                  "kind": "combatantStatusStacks",
+                  "value": {
+                    "Selector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusId": {
+                      "value": "standard.juggernaut"
+                    }
+                  }
+                },
+                "IgnoresBlock": false,
+                "Times": 1,
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.evolve",
+      "PackageId": "sts",
+      "NameKey": "Evolve",
+      "DescriptionKey": "Whenever you draw a Status card, draw cards equal to its stacks.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardsDrawn",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "event.bool",
+                  "value": {
+                    "FieldKey": "card.hasTag.status"
+                  }
+                },
+                "Then": {
+                  "kind": "node.drawCards",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Count": {
+                      "kind": "combatantStatusStacks",
+                      "value": {
+                        "Selector": {
+                          "kind": "sel.source",
+                          "value": {
+                            "Cardinality": "ZeroOrOne",
+                            "RequiredContextCapabilities": "Source"
+                          }
+                        },
+                        "StatusId": {
+                          "value": "standard.evolve"
+                        }
+                      }
+                    },
+                    "ResultKey": null
+                  }
+                },
+                "Else": null,
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.fire_breathing",
+      "PackageId": "sts",
+      "NameKey": "Fire Breathing",
+      "DescriptionKey": "Whenever you draw a Status or Curse card, deal damage equal to its stacks to ALL enemies.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardsDrawn",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "or",
+                  "value": {
+                    "Left": {
+                      "kind": "event.bool",
+                      "value": {
+                        "FieldKey": "card.hasTag.status"
+                      }
+                    },
+                    "Right": {
+                      "kind": "event.bool",
+                      "value": {
+                        "FieldKey": "card.hasTag.curse"
+                      }
+                    }
+                  }
+                },
+                "Then": {
+                  "kind": "node.dealDamage",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.allEnemies",
+                      "value": {
+                        "Cardinality": "Any",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Amount": {
+                      "kind": "combatantStatusStacks",
+                      "value": {
+                        "Selector": {
+                          "kind": "sel.source",
+                          "value": {
+                            "Cardinality": "ZeroOrOne",
+                            "RequiredContextCapabilities": "Source"
+                          }
+                        },
+                        "StatusId": {
+                          "value": "standard.fire_breathing"
+                        }
+                      }
+                    },
+                    "IgnoresBlock": false,
+                    "Element": null,
+                    "ResultKey": null
+                  }
+                },
+                "Else": null,
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.dark_embrace",
+      "PackageId": "sts",
+      "NameKey": "Dark Embrace",
+      "DescriptionKey": "Whenever a card is Exhausted, draw cards equal to its stacks.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardExhausted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.drawCards",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "Count": {
+                  "kind": "combatantStatusStacks",
+                  "value": {
+                    "Selector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusId": {
+                      "value": "standard.dark_embrace"
+                    }
+                  }
+                },
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.feel_no_pain",
+      "PackageId": "sts",
+      "NameKey": "Feel No Pain",
+      "DescriptionKey": "Whenever a card is Exhausted, gain Block equal to its stacks.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardExhausted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.gainBlock",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "Amount": {
+                  "kind": "combatantStatusStacks",
+                  "value": {
+                    "Selector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "StatusId": {
+                      "value": "standard.feel_no_pain"
+                    }
+                  }
+                },
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -13972,6 +14288,562 @@
               "kind": "const",
               "value": {
                 "Value": 2
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "juggernaut",
+      "PackageId": "sts",
+      "NameKey": "Juggernaut",
+      "DescriptionKey": "Whenever you gain Block, deal 5 damage to a random enemy.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        },
+        {
+          "value": "block"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.juggernaut"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 5
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "juggernaut+",
+      "PackageId": "sts",
+      "NameKey": "Juggernaut+",
+      "DescriptionKey": "Whenever you gain Block, deal 7 damage to a random enemy.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        },
+        {
+          "value": "block"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.juggernaut"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 7
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "evolve",
+      "PackageId": "sts",
+      "NameKey": "Evolve",
+      "DescriptionKey": "Whenever you draw a Status card, draw 1 card.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.evolve"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "evolve+",
+      "PackageId": "sts",
+      "NameKey": "Evolve+",
+      "DescriptionKey": "Whenever you draw a Status card, draw 2 cards.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.evolve"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 2
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "fire_breathing",
+      "PackageId": "sts",
+      "NameKey": "Fire Breathing",
+      "DescriptionKey": "Whenever you draw a Status or Curse card, deal 6 damage to ALL enemies.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.fire_breathing"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 6
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "fire_breathing+",
+      "PackageId": "sts",
+      "NameKey": "Fire Breathing+",
+      "DescriptionKey": "Whenever you draw a Status or Curse card, deal 10 damage to ALL enemies.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.fire_breathing"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 10
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "dark_embrace",
+      "PackageId": "sts",
+      "NameKey": "Dark Embrace",
+      "DescriptionKey": "Whenever a card is Exhausted, draw 1 card.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.dark_embrace"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "dark_embrace+",
+      "PackageId": "sts",
+      "NameKey": "Dark Embrace+",
+      "DescriptionKey": "Whenever a card is Exhausted, draw 1 card.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.dark_embrace"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "feel_no_pain",
+      "PackageId": "sts",
+      "NameKey": "Feel No Pain",
+      "DescriptionKey": "Whenever a card is Exhausted, gain 3 Block.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.feel_no_pain"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "feel_no_pain+",
+      "PackageId": "sts",
+      "NameKey": "Feel No Pain+",
+      "DescriptionKey": "Whenever a card is Exhausted, gain 4 Block.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.feel_no_pain"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 4
               }
             },
             "DurationTurns": 0,

@@ -94,7 +94,8 @@ INV_COUNTS = {
     # §231: +1 (`standard.no_draw`, Battle Trance 的"本回合不能再抽").
     # §235: +1 (`standard.demon_form`, Demon Form 的每回合加力量).
     # §236: +2 (`standard.brutality` / `standard.rupture`).
-    "statuses": 49,
+    # §237: +5 (five trigger-hook powers).
+    "statuses": 54,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -491,6 +492,27 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §237：触发器钩子的第一批（5 张 Power） -------------------------------------------
+    "dark_embrace": {"Cost": 2, "Tags": ["power"],
+                          "Facts": [('status', 'standard.dark_embrace', 1, 'source')]},
+    "dark_embrace+": {"Cost": 1, "Tags": ["power"],
+                           "Facts": [('status', 'standard.dark_embrace', 1, 'source')]},
+    "evolve": {"Cost": 1, "Tags": ["power"],
+                    "Facts": [('status', 'standard.evolve', 1, 'source')]},
+    "evolve+": {"Cost": 1, "Tags": ["power"],
+                     "Facts": [('status', 'standard.evolve', 2, 'source')]},
+    "feel_no_pain": {"Cost": 1, "Tags": ["power"],
+                          "Facts": [('status', 'standard.feel_no_pain', 3, 'source')]},
+    "feel_no_pain+": {"Cost": 1, "Tags": ["power"],
+                           "Facts": [('status', 'standard.feel_no_pain', 4, 'source')]},
+    "fire_breathing": {"Cost": 1, "Tags": ["power"],
+                            "Facts": [('status', 'standard.fire_breathing', 6, 'source')]},
+    "fire_breathing+": {"Cost": 1, "Tags": ["power"],
+                             "Facts": [('status', 'standard.fire_breathing', 10, 'source')]},
+    "juggernaut": {"Cost": 2, "Tags": ["power", "block"],
+                        "Facts": [('status', 'standard.juggernaut', 5, 'source')]},
+    "juggernaut+": {"Cost": 2, "Tags": ["power", "block"],
+                         "Facts": [('status', 'standard.juggernaut', 7, 'source')]},
     # ---- §236：失去生命（Lose HP 不是伤害） -------------------------------------------
     "bloodletting": {"Cost": 0, "Tags": ["skill"],
                           "Facts": [('loseHp', 3, 'source'), ('gain', 'standard.energy', 2, 'source')]},
@@ -1064,6 +1086,13 @@ INV_STATUSES = {
     "standard.nightmare_pending": [],
     # §231: Battle Trance 的"本回合不能再抽" —— 规则在内核的抽牌节点里，状态本身没有修饰器。
     "standard.no_draw": [],
+    # §237: the five trigger-hook powers. None has a passive modifier -- they are pure triggers
+    # (`BlockGained` / `CardsDrawn` / `CardExhausted`).
+    "standard.juggernaut": [],
+    "standard.evolve": [],
+    "standard.fire_breathing": [],
+    "standard.dark_embrace": [],
+    "standard.feel_no_pain": [],
     # §235: Demon Form 的"每回合开始加力量" —— 规则在内容触发器里（`ritual` 的 TurnStarted 兄弟）。
     "standard.demon_form": [],
     # §236: Brutality（每回合掉 1 血抽 1 张）与 Rupture（因牌失去生命时加力量）。
@@ -2802,7 +2831,10 @@ def check_statuses(doc):
                      # §235: Demon Form —— 每回合开始加力量（`TurnStarted`）。
                      "standard.demon_form",
                      # §236: Brutality（TurnStarted）与 Rupture（HpLost）。
-                     "standard.brutality", "standard.rupture"):
+                     "standard.brutality", "standard.rupture",
+                     # §237: the five trigger-hook powers.
+                     "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
+                     "standard.dark_embrace", "standard.feel_no_pain"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -2822,6 +2854,12 @@ def check_statuses(doc):
                         # §236
                         "standard.brutality": ["TurnStarted"],
                         "standard.rupture": ["HpLost"],
+                        # §237
+                        "standard.juggernaut": ["BlockGained"],
+                        "standard.evolve": ["CardsDrawn"],
+                        "standard.fire_breathing": ["CardsDrawn"],
+                        "standard.dark_embrace": ["CardExhausted"],
+                        "standard.feel_no_pain": ["CardExhausted"],
                         # §231: Battle Trance 的"本回合不能再抽" —— 一条 TurnEnded 自摘触发器
                         # （规则本身在内核的抽牌节点里）。
                         "standard.no_draw": ["TurnEnded"],

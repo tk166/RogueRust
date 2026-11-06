@@ -16199,3 +16199,68 @@ StS 的 `Lose HP` 与"受到伤害"是两件事，三处都不一样：
   镜像 **99,420 B**（core 80,504 B）；
 * 与 wiki 对账：口径内 **73 / 145**（红 **59 / 75**，缺 16；无色 14 / 70）；
 * 矩阵 **474 行**、具名测试 **946**；21/21 闸门绿（soak 三局都到 floor 16）。
+
+---
+
+## §237 三个触发器钩子（`BlockGained` / `CardsDrawn` / `CardExhausted`）+ 5 张 Power
+
+§A.1 的施工单第二条："`BlockGained` / `CardsDrawn` / 卡被消耗 三个事件名都在词表里，但声明为
+`NotHandled`"。接上它们一次解锁 5 张红了很久的 Power（红卡 59 → **64 / 75**）。
+
+### 237.1 事件发在哪：跟着**生命周期节目**走
+
+三条钩子各有一个"事情的唯一出口"，事件就发在那里：
+
+| 事件 | 落点 | 为什么是这里 |
+|---|---|---|
+| `BlockGained` | `exec::gain_block_for`（唯一加格挡的地方） | 只在 `modified != 0` 时发 —— "加 0 点"不算获得 |
+| `CardsDrawn` | `exec::draw_for` **+** `Host::card_drawn` | 抽牌有两个入口（中途抽 / 回合开始），`Drawn` 节目在哪它们在哪儿 |
+| `CardExhausted` | `move_card_for` **+** `Host::card_exhausted` | 三条入堆路径（§225）都汇到这两处 |
+
+这条规则不是巧合：**事件与 `LifecyclePrograms` 同一个落点**。第一版只写在宿主钩子里，判据立刻红 ——
+`Pommel Strike` 的中途抽牌**不经过** `Host::card_drawn`（那条只有回合开始用），于是 `Evolve`
+安静地不响。这正是 §4 的形状："工具报成功，被测对象没反应"。
+
+### 237.2 `curse` 位与"同一把钥匙两把锁"
+
+`Fire Breathing` 要"Status **或** Curse"，而 `event.bool` 的卡牌标签位只有 4 个。加第 8 位
+`CARD_HAS_TAG_CURSE`，内容侧写成 `or(card.hasTag.status, card.hasTag.curse)`。
+
+标签位属于**事件的主语**，不写死是哪张牌：`CardPlayed` 的主语是打出的牌、`CardsDrawn` 是抽到的牌、
+`CardExhausted` 是被消耗的牌 —— 同一个 `card.hasTag.status` 在三个事件里各问各的主语。
+判据用三张探针卡（`wound` / `injury` / `strike`）把三个答案都钉住：只测 Status 会漏掉"Curse 忘了加"，
+只测 Curse 会漏掉"被写成 curse-only"。
+
+### 237.3 五张牌
+
+| 牌 | 费用 | 状态 | 触发器 |
+|---|---|---|---|
+| `juggernaut` | 2 | `standard.juggernaut` 层数 = 伤害（5/7） | `BlockGained` → `dealDamageToRandomTarget` |
+| `evolve` | 1 | 层数 = 抽牌数（1/2） | `CardsDrawn` + `card.hasTag.status` |
+| `fire_breathing` | 1 | 层数 = 伤害（6/10） | `CardsDrawn` + status**或**curse |
+| `dark_embrace` | 2 | 层数 = 抽牌数（恒 1） | `CardExhausted` |
+| `feel_no_pain` | 1 | 层数 = 格挡（3/4） | `CardExhausted` |
+
+`dark_embrace+` 的费用是 **1** 而不是 2 —— wiki 的 `CostPlus = 1` 给的是**升级后的费用**，
+抽牌数两级都是 1。这一格最容易写错（顺手把升级写成"抽 2"），`INV_CARDS` 的 `Cost` 列钉着它。
+
+`feel_no_pain` 之前被我列在"要 `HpLost`"那一栏，其实它是**消耗**触发 —— 写清单时按牌名猜语义就会
+猜错，所以每条都要回 wiki 原文。
+
+### 237.4 判据（三条，都测两侧）
+
+* `juggernaut_punishes_every_block_gain`：没状态 ⇒ 加格挡不伤人；有 ⇒ 每次**获得**打 5，两次获得打 10；
+* `evolve_and_fire_breathing_only_answer_to_the_right_tags`：三张探针卡各一个答案（见 237.2），
+  并且**用 `pommel_strike` 而不是 `battle_trance`** —— 后者的 `no_draw` 会把 `Evolve` 的额外抽牌
+  **按规则**挡掉，于是这条判据永远看不出 Evolve 响没响（"测了但测的是别的东西"）；
+* `exhausting_a_card_feeds_feel_no_pain_and_dark_embrace`：打出即消耗（`offering`）+ 虚无
+  （留在手里的 `carnage`）。第二段第一版拿"打出去的 carnage"测虚无，实际它已经离手 ——
+  断言写 `>= 0` 就会全绿，`assert_eq!(3)` 抓住了它。
+
+### 237.5 数字
+
+* 单测 **947**（742 core + 110 run + 95 wasm，+3）；四条对拍不变 `182 / 62 / 124 / 394`；
+* 内容：卡 **165 行**（+10）、状态 **54**（+5）、镜像 **102,172 B**（core 82,196 B）；
+* 与 wiki 对账：口径内 **78 / 145**（红 **64 / 75**，缺 11；无色 14 / 70）；
+* 矩阵 **489 行**、具名测试 **949**；`MAX_POOL` 160 → 192（内容 165 行，理由同 §229/§232/§235）；
+* 21/21 闸门绿。

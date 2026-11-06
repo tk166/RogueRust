@@ -2843,6 +2843,10 @@ impl<'a> Content<'a> {
         if self.card_has_tag(card, "status") == Some(true) {
             bits |= crate::exec::CARD_HAS_TAG_STATUS;
         }
+        // §237: `Fire Breathing` asks for "Status **or** Curse".
+        if self.card_has_tag(card, "curse") == Some(true) {
+            bits |= crate::exec::CARD_HAS_TAG_CURSE;
+        }
         bits
     }
 
