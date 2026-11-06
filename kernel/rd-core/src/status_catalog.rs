@@ -780,6 +780,9 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         "standard.feel_no_pain" |
         // §238: the second duplication scope ("next Attack twice", `play.rs::DUPLICATION_SCOPES`).
         "standard.double_tap" |
+        // §242: Corruption -- 两条规则都在 `play.rs` 里键在它上面（费用阶段 + 落区），
+        // 没有触发器也没有被动修饰器，所以它在这里、不在 `Triggers` 表里。
+        "standard.corruption" |
         "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No

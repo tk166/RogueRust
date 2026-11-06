@@ -16482,3 +16482,84 @@ Burning Pact 打完进弃牌堆。与 §235 的 `sever_soul` 同源，记在 `DE
 * 与 wiki 对账：口径内 **86 / 145**（红 **72 / 75**，缺 3：`blood_for_blood` `corruption`
   `spot_weakness`；无色 14 / 70）；
 * 矩阵 **506 行**、具名测试 **957**；21/21 闸门绿。
+
+---
+
+## §242 最后三张红卡：`Spot Weakness` / `Blood for Blood` / `Corruption` —— 红卡 75/75
+
+三张牌各缺一块**真正不同**的载体，恰好把三条"内容要问状态/规则"的路都走了一遍。
+
+### 242.1 `Spot Weakness`：意图是**纯函数**，但它需要 `encounter`
+
+wiki 的 dump 是 `If the enemy intends to attack, gain (3;4) **Strength**.`（不是 Weak —— 那是别的
+版本，按 dump 走）。
+
+"敌人这回合打算干什么"在内核里**早就有**：`intent::select_action(content, encounter, slot, actor, round)`
+是页面显示意图用的**纯函数**（它甚至有不消耗随机流的判据）。缺的只是它的两个输入：
+
+* `content` —— `ExprContext` 以前没有内容。**按值**加（`Content` 变 `Copy`：一个切片 + 两个整数），
+  避免把 `ExprContext<'a>` 变成 `<'a, 'c>` 并波及几十个签名；
+* `encounter` —— 它住在 wasm session 里，`CombatState` 没有。加一格 `pub encounter: u32`，
+  由 `battle::apply_spawn_setup`（**唯一**知道"这场战斗来自哪个遭遇"的地方）填写。
+
+`encounter` 是 **model-only**：`hash_golden` 是参考规范文本的逐字节复刻，参考没有这个字段 ⇒
+**四条对拍一个字节都没动**（实测 `182/62/124/394` 不变）。默认 `u32::MAX` = "没有遭遇"⇒ 意图解不出
+⇒ 事实为假，这是"响亮而安全"的那一侧。
+
+判据不去写死"哪只怪第一回合攻击"（会随内容漂），而是**问内核同一个函数**——玩家看到什么意图，
+牌就必须照什么办；另外断言"一个攻击、一个不攻击"**确实不同**，否则这条判据会因为两者都是攻击而永远绿。
+
+### 242.2 `Blood for Blood`：掉血次数是内核记账，费用阶段按 tag 认领
+
+"Costs 1 less for each time you lose HP this combat." 两个词各要一块：
+
+* **"each time you lose HP"** ⇒ `Combatant::hp_losses`（与 `cards_played_this_turn` 同一类记账；
+  `Lose HP` 与**真的掉血**两条路都记，被格挡吃干净的不算）；
+* **"this card's cost"** ⇒ 卡用 **tag** `hp_loss_cost` 声明，内核加一条费用阶段
+  `CostStage::HpLossCount`（210，紧跟技能减费）。用 tag 而不是新字段，理由与 `x_cost` 相同 ——
+  这本来就是**这张牌的费用语义**。
+
+判据三段：0 次 = 印刷 4 费 / 2 次 = 2 费 / **9 次 = 0 费**。第三段最容易漏：不夹 `max(0)` 的话
+"掉 6 次血"会变成负费用，而负费用在付款时会给能量。
+
+### 242.3 `Corruption`：一条状态、两条内核规则
+
+"Skills cost 0. Whenever you play a Skill, Exhaust it." —— 两句话恰好落在两个不同的阶段：
+
+| 句子 | 落在哪 |
+|---|---|
+| Skills cost 0 | `CostStage::CorruptionSkillsFree`（1050，排在每副本价格**之前** —— "这一份的价格"更具体） |
+| play a Skill, Exhaust it | **落区**：`corruption_destination`（`played_card_destination` 包一层） |
+
+第二句为什么放在落区、而不是"打完后跑一条触发器"：落区是"这张牌最终去哪儿"的**唯一**答案。
+写成触发器会"先搬去消耗堆、终态再搬去弃牌堆"—— 第二次搬会把它从消耗堆捞回来。
+
+两条规则都键在**内容里的状态 id** 上（`standard.corruption`），与 `standard.free_next_card` 等 4 条
+既有常量同形：**规则在核心里，状态在内容里**。
+
+判据三段，重点是"只认技能"：技能 ⇒ 免费 + 进消耗堆 + 效果照常（5 格挡）；攻击 ⇒ 照付 + 进弃牌堆；
+**没有 Corruption** ⇒ 技能照付 + 进弃牌堆（对照组 —— 否则第一段的"免费"可能本来就成立）。
+
+`{{KW|Exhaust}}` 第四次是动词（"Exhaust **it**"）⇒ `corruption` 记 `DEVIATIONS`。
+
+### 242.4 顺带被两个既有闸门抓到的两处
+
+1. `the_status_catalogue_is_honest`：新状态 `standard.corruption` 既没有触发器也没有被动修饰器，
+   目录要求"内核有规则或声明 inert" —— 它逼我把"两条规则键在这个 id 上"登记进 `status_catalog`。
+   没有这条闸门，一个"内容声明了、内核不认识"的状态会**安静地什么都不做**。
+2. `the_validator_order_is_priority_then_modifier_id`：我把 `HpLossCount` 插在数组**末尾**，
+   而它的 priority 是 210 ⇒ 顺序断言当场红。改成按 priority 排（210 紧跟 200）。
+
+### 242.5 数字
+
+* 单测 **958**（753 core + 110 run + 95 wasm，+3）；四条对拍不变 `182 / 62 / 124 / 394`；
+* 内容：卡 **187 行**（+6）、状态 **56**（+1）、镜像 **105,900 B**（core 84,468 B）；
+* 与 wiki 对账：**红卡 75 / 75，齐了**；口径内 **89 / 145**（无色 14 / 70）；
+* 矩阵 **513 行**、具名测试 **960**；21/21 闸门绿。
+
+### 242.6 红卡齐了之后还剩什么
+
+红卡 75/75 指的是**口径内**（wiki 的 Cargo 红卡表）。仍然**没有**的是无色牌（14/70）、诅咒（10 张）、
+以及 §238.6 里那些"要新载体"的清单之外的东西（Boss 相位、A17+ 招式表、8 瓶药水等，见 §235/§236）。
+⇒ 下一批的自然入口是**无色牌**：它们大多数是"已有载体的新内容"（`swift_strike` 那种），
+少数要新东西（`hand_of_greed` 的偷金、`mind_blast` 的"按手牌数打伤害"）。

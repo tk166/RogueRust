@@ -968,6 +968,9 @@ pub fn apply_spawn_setup(
     content: &Content<'_>,
     encounter: u32,
 ) -> Result<SpawnSetup, SpawnRollError> {
+    // §242：记下"这场战斗来自哪个遭遇" —— `spot_weakness` 要问敌人意图，而意图查询
+    // （`intent::locate_enemy`）需要遭遇号才能定位敌人槽位。这里是**唯一**知道那个号的地方。
+    state.encounter = encounter;
     let enemies = content
         .encounter_enemies(encounter)
         .map_err(SpawnRollError::Encounter)?;

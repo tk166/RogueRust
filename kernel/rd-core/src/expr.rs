@@ -206,6 +206,11 @@ pub struct ExprContext<'a> {
     /// 唯一读它的是 `cardInstance.iterated`（见 [`eval_card`]）。
     pub iteration_card: Option<CardInstanceId>,
     /// 触发事件的布尔事实（按位，见 `exec::CARD_HAS_TAG_*`）。`event.bool` 读它。
+    /// §242：内容（"敌人的意图"要查 `ENCT`/`EACT` 表）。按值 —— `Content` 是 `Copy`。
+    ///
+    /// `None` = 这个求值点没有内容（纯表达式单测）。需要内容的表达式在 `None` 时**响亮失败**
+    /// （`UnsupportedKind`），绝不"当成假"——那会让一张牌在某种调用路径上安静地不生效。
+    pub content: Option<crate::content::Content<'a>>,
     pub event_flags: u16,
     /// §195.1：当前事件带的**数量**（`eventAmount` 专用）。`None` = 没有事件上下文。
     ///
@@ -404,6 +409,12 @@ const BOOL_KINDS: &[&str] = &[
     "iterationTargetHasStatus",
     "intent.selfHasCounter",
     "intent.opponentCardsPlayed",
+    // §242：**目标这回合打算攻击吗**（`Spot Weakness`）。
+    //
+    // 与上面两条 `intent.*` 不是一回事：那两条是**敌人选招 DSL** 里的条件（"它选招时要满足什么"），
+    // 这一条是**问题本身**（"它已经选的招是不是攻击"）。实现走 `intent::select_action` ——
+    // 页面显示意图用的同一个纯函数，所以"牌看到的意图"与"玩家看到的意图"不可能不一致。
+    "intent.targetIntendsAttack",
 ];
 
 fn classify(kind: &str) -> Class {
@@ -689,6 +700,34 @@ pub fn eval_bool<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<bool, E
                 Ok(true)
             } else {
                 eval_bool(child(node, "Right")?, ctx)
+            }
+        }
+
+        // §242: "does the chosen target intend to attack this turn" (Spot Weakness).
+        //
+        // 三处齐全才回答：有内容（意图表）、有目标（`sel.eventTarget`）、有遭遇（`state.encounter`）。
+        // 任何一处缺 ⇒ `false` 而**不是**报错：这张牌在"没有目标"时本来就该什么都不做
+        // （内容侧那条 `conditional` 就是这么用的），报错会让一张普通牌在空目标下炸掉战斗。
+        // 但"有内容却说不出意图"（`ENCT` 行坏掉）是**内容 bug**，那时要响亮 —— 所以解不出来
+        // 的 `Err` 走 `UnsupportedKind`。
+        "intent.targetIntendsAttack" => {
+            let Some(content) = ctx.content else {
+                return Err(ExprError::UnsupportedKind);
+            };
+            let Some(target) = ctx.event_target else {
+                return Ok(false);
+            };
+            let Ok(Some(at)) = crate::intent::locate_enemy(&content, ctx.state.encounter, &target)
+            else {
+                return Ok(false);
+            };
+            let round = ctx.state.current_round;
+            match crate::intent::select_action(ctx.state, &content, at, &target, round) {
+                Ok(Some(choice)) => {
+                    Ok(choice.intent_kind == Some(crate::intent::IntentKind::Attack))
+                }
+                Ok(None) => Ok(false),
+                Err(_) => Err(ExprError::UnsupportedKind),
             }
         }
 
@@ -1135,6 +1174,7 @@ mod tests {
     /// 三个目标槽都指向不同单位：source=hero、event_target=enemy_a、iteration_target=enemy_b。
     fn full_ctx<'a>(state: &'a CombatState) -> ExprContext<'a> {
         ExprContext {
+            content: None,
             state,
             source: Some(cid("hero")),
             event_target: Some(cid("enemy_a")),
@@ -1158,6 +1198,7 @@ mod tests {
     /// `source = hero`、其余两个目标槽都空着（选择器用 `sel.source` 时用这个）。
     fn source_ctx(state: &CombatState) -> ExprContext<'_> {
         ExprContext {
+            content: None,
             state,
             source: Some(cid("hero")),
             event_target: None,
@@ -1191,6 +1232,7 @@ mod tests {
         // 常量与状态无关：**空状态**也给 6（证明上面那 6 不是被状态凑出来的）。
         let empty = CombatState::new(CombatId::new("c2").unwrap(), 7);
         let empty_ctx = ExprContext {
+            content: None,
             state: &empty,
             source: None,
             event_target: None,
@@ -1256,6 +1298,7 @@ mod tests {
         // 同一棵树换成 hero 当事件目标（hero 的 paperwork = 3+4 = 7）⇒ 28。
         // 两个宿主给出**不同**结果，证明读的确实是 event_target 而不是别的槽。
         let hero_ctx = ExprContext {
+            content: None,
             state: &state,
             source: Some(cid("hero")),
             event_target: Some(cid("hero")),
@@ -1318,6 +1361,7 @@ mod tests {
         // 把 iteration_target 挪到 enemy_a ⇒ 0；把 event_target 挪到 enemy_b ⇒ 5。
         // 两个方向都动，且两个数都是实打实存在过的计数器值（enemy_b：seen_panic=2、seen_paperwork=5）。
         let swapped = ExprContext {
+            content: None,
             state: &state,
             source: Some(cid("hero")),
             event_target: Some(cid("enemy_b")),
@@ -1346,6 +1390,7 @@ mod tests {
         assert_eq!(eval_int(node(&content, 337), &ctx), Ok(0));
         // 资源池缺席也走 0：把 source 指向 enemy_b（没有任何资源池）。
         let enemy_src = ExprContext {
+            content: None,
             state: &state,
             source: Some(cid("enemy_b")),
             event_target: None,
@@ -1369,6 +1414,7 @@ mod tests {
         let content = parse(&blob);
         let state = arena();
         let no_target = ExprContext {
+            content: None,
             state: &state,
             source: None,
             event_target: None,
@@ -1526,6 +1572,8 @@ mod tests {
         state.combatant_mut(&cid("enemy_a")).expect("enemy_a").health_current = 12;
 
         let no_target = ExprContext {
+
+            content: None,
             state: &state,
             source: Some(cid("hero")),
             event_target: None,
@@ -2064,6 +2112,7 @@ mod tests {
         let state = arena();
         let hero = cid("hero");
         let ctx = ExprContext {
+            content: None,
             state: &state,
             source: Some(hero),
             event_target: Some(cid("enemy_a")),
@@ -2224,6 +2273,7 @@ mod tests {
 
         // ---- 正例：绑了谁就返回谁 ----
         let bound = ExprContext {
+            content: None,
             state: &state,
             source: Some(cid("hero")),
             event_target: None,
@@ -2239,6 +2289,7 @@ mod tests {
         // 给空 id 会让 `moveCardToZone` 去找一张不存在的卡并静默不动 ——
         // 那是最坏的一种"通过"。
         let unbound = ExprContext {
+            content: None,
             iteration_card: None,
             resolving_card: None,
             ..bound

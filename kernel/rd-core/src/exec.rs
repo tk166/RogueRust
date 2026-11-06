@@ -404,6 +404,7 @@ impl<'a> ExecContext<'a> {
             iteration_target: self.iteration_target,
             iteration_card: self.iteration_card,
             resolving_card: self.resolving_card,
+            content: self.content.copied(),
             event_flags: self.event_flags,
             event_amount: self.event_amount,
             x_cost: self.x_cost,
@@ -1382,6 +1383,10 @@ pub fn resolve_damage_of_kind(
         .combatant_mut(target)
         .ok_or(ExecError::MissingCombatant)?;
     combatant.health_current = health_after;
+    // §242：每次真的掉血都记一笔（`Blood for Blood` 的费用递减；被格挡吃干净的不算）。
+    if health_lost > 0 {
+        combatant.hp_losses = combatant.hp_losses.saturating_add(1);
+    }
     // S8 的 `DamageDealt` 事件 → `MarkCombatantDownedOnZeroHealthHandler`
     // （`CombatantLifecycleEffects.cs`）：只有**真的掉了血**且落到 0 才转 Downed。
     let went_down = health_lost > 0
@@ -1637,6 +1642,12 @@ pub fn lose_health(
                 from_card,
             })
             .map_err(ExecError::Capacity)?;
+    }
+    // §242：`Lose HP` 也算"失去生命"（`Blood for Blood` 的费用递减）。
+    if lost > 0 {
+        if let Some(combatant) = ctx.state.combatant_mut(target) {
+            combatant.hp_losses = combatant.hp_losses.saturating_add(1);
+        }
     }
     update_standard_combat_result(ctx.state);
     Ok(lost)
@@ -7794,6 +7805,7 @@ mod tests {
             let mut state = arena();
             let expected = {
                 let expr_ctx = ExprContext {
+                    content: None,
                     state: &state,
                     source: Some(cid("hero")),
                     event_target: None,
@@ -7897,6 +7909,7 @@ mod tests {
                     let base = make();
                     let truth = {
                         let expr_ctx = ExprContext {
+                            content: None,
                             state: &base,
                             source: source.map(cid),
                             event_target: event_target.map(cid),

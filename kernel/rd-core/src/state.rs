@@ -1279,6 +1279,14 @@ pub struct Combatant {
     pub owner: Option<CombatantId>,
     pub lifecycle_state: CombatantLifecycleState,
     pub health_current: i32,
+    /// §242：这场战斗里**失去生命**的次数（`Blood for Blood` 的费用递减）。
+    ///
+    /// 与 `cards_played_this_turn` 同一类内核记账：它是一条**规则**的输入（"每次掉血减 1 费"），
+    /// 不是某张牌的状态。伤害造成的掉血与 `Lose HP` 都算（StS 的措辞是 "each time you lose HP"，
+    /// 不区分来源）。
+    ///
+    /// ⚠️ model-only：参考没有这个字段 ⇒ 不进 `hash_golden`（参考规范文本里没有它）。
+    pub hp_losses: i32,
     pub health_max: i32,
     resources: Bounded<ResourcePool, MAX_RESOURCES>,
     defensive_pools: Bounded<DefensivePool, MAX_DEFENSIVE_POOLS>,
@@ -1314,6 +1322,8 @@ impl Empty for Combatant {
         // marks the slot as vacant, and vacant slots are never read.
         lifecycle_state: CombatantLifecycleState::Alive,
         health_current: 0,
+        // §242: 本场战斗失去生命的次数（model-only）。
+        hp_losses: 0,
         health_max: 0,
         resources: Bounded::new(),
         defensive_pools: Bounded::new(),
@@ -3473,6 +3483,16 @@ pub struct CombatState {
     pub random_step: i32,
     pub result: CombatResult,
     pub current_round: i32,
+    /// §242：这场战斗来自哪个**遭遇**（`ENCT` 行号）。
+    ///
+    /// 为什么需要它：`spot_weakness` 要问"敌人这回合是不是打算攻击"，而那件事是
+    /// `intent::select_action(content, encounter, slot, actor, round)` 的**纯函数**结果 ——
+    /// 页面显示意图用的就是它。没有 `encounter` 就定位不到敌人槽位。
+    ///
+    /// ⚠️ **model-only**：参考没有这个字段，`hash_golden` 是参考规范文本的逐字节复刻
+    /// （`snapshot.rs`），所以加它**不移动任何基线**。`u32::MAX` = "没有遭遇"（纯内核测试的默认值）
+    /// ⇒ 意图查询一律解不出，`intent.*` 事实为假 —— 响亮而安全的那一侧。
+    pub encounter: u32,
     pub current_turn: i32,
     pub turn_phase: CombatTurnPhase,
     pub active_combatant_id: Option<CombatantId>,
@@ -3682,6 +3702,8 @@ impl Empty for CombatState {
         random_step: 0,
         result: CombatResult::Ongoing,
         current_round: 0,
+        // §242：空槽没有遭遇。
+        encounter: u32::MAX,
         current_turn: 0,
         turn_phase: CombatTurnPhase::WaitingToStartTurn,
         active_combatant_id: None,
@@ -3798,6 +3820,8 @@ impl CombatState {
             random_step: 0,
             result: CombatResult::Ongoing,
             current_round: 0,
+            // §242：纯内核测试没有遭遇 ⇒ 意图查询一律解不出（见字段文档）。
+            encounter: u32::MAX, 
             current_turn: 0,
             turn_phase: CombatTurnPhase::WaitingToStartTurn,
             active_combatant_id: None,

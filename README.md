@@ -128,7 +128,7 @@ python -m http.server 8000
 |---|---|
 | **战斗内核** | `rd-core` 21 个源文件、约 57k 行。出牌/结算/状态/意图/修饰器管线/效果程序 IR（栈式）/选择与目标/金色指纹；**零分配、纯整数、`forbid(unsafe_code)`** |
 | **运行层** | `rd-run` 约 7.9k 行。地图（15 行 × 7 列 + Boss）、幕、牌组、金币、遗物、药水、奖励屏、商店、事件、篝火、**Ascension 0–20（20/20 条都有机制）**、**存档（单行文本 + CRC）**、**回放（动作序列 + 每步哈希）** |
-| **内容** | **47 怪 / 34 遭遇 / 181 条卡行（93 张基础 + 88 条升级行）/ 55 状态 / 130 敌人动作 / 15 遗物 / 33 药水（满池）/ 14 事件（三幕 6+4+4）/ 10 张起始牌**。编译成 104,856 B 的 `rdcf` 镜像（core 镜像 83,844 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
+| **内容** | **47 怪 / 34 遭遇 / 187 条卡行（96 张基础 + 91 条升级行）/ 56 状态 / 130 敌人动作 / 15 遗物 / 33 药水（满池）/ 14 事件（三幕 6+4+4）/ 10 张起始牌**。编译成 105,900 B 的 `rdcf` 镜像（core 镜像 84,468 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
 | **前端** | `index.html`（战斗 + 运行层 + 存档 + 回放）、`map.html`（地图页）；`wasm32` + **148** 个 `i32` 的战斗观察向量（另有 19 个 slot 的运行层观察）、一组 `rd_env_*` / `rd_run_*` 导出（`web/smoke.mjs` 有一张手抄的 `REQUIRED` 表**逐条**对账，加导出必须同时改两处） |
 | **RL 环境** | `rd_env_*` ABI（`docs/spec/env-abi.md`）+ Python `ctypes` 封装（多进程、批量观察） |
 | **裸机** | `riscv32imac-unknown-none-elf` 真链接成 ELF，镜像占用有闸门 |
@@ -139,7 +139,7 @@ python -m http.server 8000
 > 这一节只写**当前**的缺口。已经做完的条目**一律删掉** —— 留着会让人以为还得再做一次，
 > 比漏写更坏（§233 就是这么清掉 Barricade / Blur / Entangled / Slow 与"偷钱逃跑 / 自毁"的）。
 
-* **卡牌数量**：与 wiki 的 Cargo 卡表逐张对账，口径内 **86 / 145**。铁甲战士 **72 / 75**（缺 3），
+* **卡牌数量**：与 wiki 的 Cargo 卡表逐张对账，口径内 **89 / 145**。铁甲战士 **75 / 75**（齐），
   无色 **14 / 70**（缺 56，其中**商店三档 31 张一张都没有**）。逐桶清单见
   `docs/sts-wiki-gap.md` §A.1；重算用 `python -X utf8 native/audit_card_gap.py --offline`。
 * **缺的红卡里有一半要新载体**（不是只缺内容行）：`feed` 的 "If Fatal"、`heavy_blade` 的"力量算三次"、

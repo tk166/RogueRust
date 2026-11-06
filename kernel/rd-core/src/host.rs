@@ -9901,6 +9901,270 @@ mod tests {
         }
     }
 
+    /// §242：`Spot Weakness` —— "If the enemy intends to attack, gain 3 Strength."
+    ///
+    /// 判据不去写死"哪只怪第一回合攻击"（那是内容的事，会随内容漂），而是**问内核同一个函数**
+    /// 玩家看到的那个意图（`intent::select_action` 是页面显示意图的纯函数），然后断言：
+    /// 牌的行为与它**一致**。两侧都测 —— 一个"打算攻击"的敌人与一个"不打算攻击"的，
+    /// 并且断言两者的意图**确实不同**（否则这条判据会因为两者都是攻击而永远绿）。
+    #[test]
+    fn spot_weakness_follows_the_enemy_intent() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // (遭遇行号, 敌人 id) —— 由内容决定，测试只断言"牌与意图一致"。
+        let probe = |encounter: u32, enemy: &str| -> (bool, i32) {
+            let mut state = CombatState::new(CombatId::new("c1").unwrap(), 42);
+            state
+                .add_combatant(unit("hero", "player", 70, 70))
+                .unwrap();
+            state.add_combatant(unit(enemy, "enemy", 40, 40)).unwrap();
+            state.encounter = encounter;
+            // 玩家看到的意图（同一函数）。
+            let at = crate::intent::locate_enemy(&content, encounter, &cid(enemy))
+                .expect("the encounter resolves")
+                .expect("the enemy is in that encounter");
+            let kind = crate::intent::select_action(&state, &content, at, &cid(enemy), 1)
+                .expect("the intent selects")
+                .and_then(|choice| choice.intent_kind);
+            let attacks = kind == Some(crate::intent::IntentKind::Attack);
+
+            let mut host = Host::new(&content);
+            give_energy(&mut state, "hero", 3);
+            let card = card_in_hand(&mut state, &content, "hero", "spot_weakness");
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid(enemy))),
+            )
+            .expect("spot weakness is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            (attacks, stacks_of(&state, "hero", "standard.strength"))
+        };
+
+        // 遭遇 0 = cultist（第一回合是 Incantation），遭遇 1 = jaw worm（第一回合是 Chomp）。
+        let (cultist_attacks, cultist_strength) = probe(0, "cultist");
+        let (worm_attacks, worm_strength) = probe(1, "jaw_worm");
+        assert!(
+            cultist_attacks != worm_attacks,
+            "this判据 needs one attacker and one non-attacker (cultist={cultist_attacks}, \
+             jaw_worm={worm_attacks})"
+        );
+        assert_eq!(
+            cultist_strength,
+            if cultist_attacks { 3 } else { 0 },
+            "the card must agree with the displayed intent (cultist)"
+        );
+        assert_eq!(
+            worm_strength,
+            if worm_attacks { 3 } else { 0 },
+            "the card must agree with the displayed intent (jaw worm)"
+        );
+
+        // 没有遭遇（`u32::MAX`）⇒ 意图解不出 ⇒ 不拿力量，而且**不报错**。
+        let mut state = CombatState::new(CombatId::new("c1").unwrap(), 42);
+        state.add_combatant(unit("hero", "player", 70, 70)).unwrap();
+        state.add_combatant(unit("jaw_worm", "enemy", 40, 40)).unwrap();
+        let mut host = Host::new(&content);
+        give_energy(&mut state, "hero", 3);
+        let card = card_in_hand(&mut state, &content, "hero", "spot_weakness");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("jaw_worm"))),
+        )
+        .expect("spot weakness is playable without an encounter");
+        host.try_resolve_pending_queues(&mut state).expect("no encounter is not an error");
+        assert_eq!(
+            stacks_of(&state, "hero", "standard.strength"),
+            0,
+            "no encounter ⇒ no intent ⇒ no Strength (and no error)"
+        );
+    }
+
+    /// §242：`Blood for Blood` —— **每失去 1 次生命便宜 1 点**，本场战斗累计。
+    ///
+    /// 三段：① 一次都没掉血 ⇒ 4 费（照印刷）；② 掉两次 ⇒ 2 费；③ 掉到超过印刷费 ⇒ **0 费**
+    /// （不是负数 —— `current.max(0)` 那一层）。第三段最容易漏：不夹的话"掉 6 次血"会变成负费用，
+    /// 而负费用在付款时会**给**能量。
+    ///
+    /// 掉血用伤害造（`strike` 打自己人太绕）：直接写 `hp_losses` 就绕过了被测的那条记账，
+    /// 所以这里用 `Lose HP` 走 `lose_hp` —— 它也算"失去生命"，顺带证明记账在**两条路**上都做了。
+    #[test]
+    fn blood_for_blood_gets_cheaper_each_time_you_lose_hp() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // 用 `bloodletting`（0 费，Lose 3 HP）造掉血：它自己不花钱，所以能量账干净。
+        let cost_after = |losses: i32| -> i32 {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            // 掉血那几张是 0 费的，但 `blood_for_blood` 自己要付钱 ⇒ 最后一次性给够。
+            for _ in 0..losses {
+                let card = card_in_hand(&mut state, &content, "hero", "bloodletting");
+                crate::play::play_card(
+                    &mut state,
+                    Some(&content),
+                    &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+                )
+                .expect("bloodletting is playable");
+                host.try_resolve_pending_queues(&mut state).expect("drain");
+            }
+            // 真的打出去，量**实际花掉的能量** —— 比读计划更接近玩家看到的东西，也不需要
+            // 给 `play.rs` 加一个只为测试存在的门（§4.14 那种"度量说谎"的老坑）。
+            give_energy(&mut state, "hero", 9);
+            let before: i32 = state
+                .combatant(&cid("hero"))
+                .map_or(0, |combatant| {
+                    combatant
+                        .resources()
+                        .iter()
+                        .filter(|pool| pool.key.as_str() == "standard.energy")
+                        .map(|pool| pool.pool.current)
+                        .sum()
+                });
+            if let Some(enemy) = state.combatant_mut(&cid("enemy_a")) {
+                enemy.health_max = 200;
+                enemy.health_current = 200;
+            }
+            let card = card_in_hand(&mut state, &content, "hero", "blood_for_blood");
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .expect("blood for blood is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            let after: i32 = state
+                .combatant(&cid("hero"))
+                .map_or(0, |combatant| {
+                    combatant
+                        .resources()
+                        .iter()
+                        .filter(|pool| pool.key.as_str() == "standard.energy")
+                        .map(|pool| pool.pool.current)
+                        .sum()
+                });
+            before - after
+        };
+
+        assert_eq!(cost_after(0), 4, "no HP loss yet ⇒ the printed 4");
+        assert_eq!(cost_after(2), 2, "two HP losses ⇒ 2");
+        assert_eq!(cost_after(9), 0, "more losses than the printed cost ⇒ 0, never negative");
+    }
+
+    /// §242：`Corruption` —— 技能**0 费**且打完**进消耗堆**；攻击牌两件事都不吃。
+    ///
+    /// 这条判据的重点是"只认技能"：`corruption` 的两条规则都按 `is_skill` 分流，写错一处就会
+    /// 让攻击牌也免费/也被消耗 —— 那两件事在页面上都"看起来很正常"（少花能量、牌没了）。
+    #[test]
+    fn corruption_makes_skills_free_and_exhausts_them() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // ① 技能：`defend`（1 费）不花能量，且进消耗堆。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        give(&mut state, "hero", status("st_corp", "standard.corruption", 1));
+        let card = card_in_hand(&mut state, &content, "hero", "defend");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("defend is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        let energy: i32 = state
+            .combatant(&cid("hero"))
+            .map_or(0, |combatant| {
+                combatant
+                    .resources()
+                    .iter()
+                    .filter(|pool| pool.key.as_str() == "standard.energy")
+                    .map(|pool| pool.pool.current)
+                    .sum()
+            });
+        assert_eq!(energy, 3, "a Skill under Corruption costs 0");
+        assert_eq!(block_of(&state, "hero"), 5, "and still does its job");
+        assert_eq!(
+            zone_definitions(&state, "hero", CardZone::ExhaustPile),
+            [std::string::String::from("defend")],
+            "the Skill is Exhausted after play"
+        );
+
+        // ② 攻击牌：`strike`（1 费）照付、照常进弃牌堆。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        give(&mut state, "hero", status("st_corp", "standard.corruption", 1));
+        let card = card_in_hand(&mut state, &content, "hero", "strike");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("strike is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        let energy: i32 = state
+            .combatant(&cid("hero"))
+            .map_or(0, |combatant| {
+                combatant
+                    .resources()
+                    .iter()
+                    .filter(|pool| pool.key.as_str() == "standard.energy")
+                    .map(|pool| pool.pool.current)
+                    .sum()
+            });
+        assert_eq!(energy, 2, "an Attack still pays its cost");
+        assert_eq!(
+            zone_definitions(&state, "hero", CardZone::DiscardPile),
+            [std::string::String::from("strike")],
+            "and an Attack is not Exhausted"
+        );
+
+        // ③ 没有 Corruption：技能照付、进弃牌堆（对照组 —— 否则 ① 的"免费"可能本来就成立）。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        let card = card_in_hand(&mut state, &content, "hero", "defend");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("defend is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        let energy: i32 = state
+            .combatant(&cid("hero"))
+            .map_or(0, |combatant| {
+                combatant
+                    .resources()
+                    .iter()
+                    .filter(|pool| pool.key.as_str() == "standard.energy")
+                    .map(|pool| pool.pool.current)
+                    .sum()
+            });
+        assert_eq!(energy, 2, "without Corruption a Skill pays 1");
+        assert_eq!(
+            zone_definitions(&state, "hero", CardZone::DiscardPile),
+            [std::string::String::from("defend")],
+            "and lands in the discard pile"
+        );
+    }
+
     /// §241：`Havoc` —— "Play the top card of your draw pile and Exhaust it."
     ///
     /// 四件事一起钉住，每一件都是"不做就看不出来"的那一类：

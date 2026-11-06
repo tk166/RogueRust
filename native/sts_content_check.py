@@ -96,7 +96,8 @@ INV_COUNTS = {
     # §236: +2 (`standard.brutality` / `standard.rupture`).
     # §237: +5 (five trigger-hook powers).
     # §238: +1 (`standard.double_tap`, the second duplication scope).
-    "statuses": 55,
+    # §242: +1 (`standard.corruption`).
+    "statuses": 56,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -493,6 +494,19 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §242：最后三张红卡（3 张） -------------------------------------------------------
+    "spot_weakness": {"Cost": 1, "Tags": ["skill"],
+                           "Facts": [('when', None, 'status', 'standard.strength', 3, 'source')]},
+    "spot_weakness+": {"Cost": 1, "Tags": ["skill"],
+                            "Facts": [('when', None, 'status', 'standard.strength', 4, 'source')]},
+    "blood_for_blood": {"Cost": 4, "Tags": ["attack", "hp_loss_cost"],
+                             "Facts": [('damage', 18, 'event')]},
+    "blood_for_blood+": {"Cost": 3, "Tags": ["attack", "hp_loss_cost"],
+                              "Facts": [('damage', 22, 'event')]},
+    "corruption": {"Cost": 3, "Tags": ["power"],
+                        "Facts": [('status', 'standard.corruption', 1, 'source')]},
+    "corruption+": {"Cost": 2, "Tags": ["power"],
+                         "Facts": [('status', 'standard.corruption', 1, 'source')]},
     # ---- §241：强制出牌（1 张） -----------------------------------------------------------
     "havoc": {"Cost": 1, "Tags": ["skill"],
               "Facts": [('playTopOfDrawPile', 'ExhaustPile')]},
@@ -1126,6 +1140,8 @@ INV_STATUSES = {
     "standard.no_draw": [],
     # §238: Double Tap's "next Attack is played twice" -- consumed by `play.rs`'s scope table.
     "standard.double_tap": [],
+    # §242: Corruption -- `UsesStacks: false`; both rules are kernel-side, keyed on this id.
+    "standard.corruption": [],
     # §237: the five trigger-hook powers. None has a passive modifier -- they are pure triggers
     # (`BlockGained` / `CardsDrawn` / `CardExhausted`).
     "standard.juggernaut": [],

@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 506 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 513 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 181 | 108 | 73 | 0 | 171 | 10 | 16 | 0 |
-| 状态 | 55 | 51 | 2 | 2 | 0 | 55 | 1 | 0 |
+| 卡牌 | 187 | 110 | 77 | 0 | 177 | 10 | 18 | 0 |
+| 状态 | 56 | 52 | 2 | 2 | 0 | 56 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 506 | 331 | 159 | 16 | 348 | 65 | 79 | 0 |
+| **合计** | 513 | 334 | 163 | 16 | 354 | 66 | 81 | 0 |
 
-扫描到的具名测试：**957** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**960** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -65,7 +65,7 @@
 | bronze_orb | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, a_minion_is_not_on_the_field_until_its_summon_lands …(+1) | — | wiki:wiki_asc/bronze_automaton.txt | gap §H: Orb 的 `Stasis` 用"最高稀有度"（并列随机），与 wiki 一致；"同一招不能三次"已做 | §194/§195.6/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | byrd | yes | flying_halves_attack_damage_and_loses_a_stack_per_hit | — | wiki:wiki_asc/byrd.txt | — | §208/§213/INV_ASC_HP+INV_MONSTERS/flying_halves_attack_damage_and_loses_a_stack_per_hit |
 | chosen | yes | hex_shuffles_a_dazed_only_for_non_attack_cards, chosen_swaps_its_opener_at_a17 …(+1) | — | wiki:wiki_asc/chosen.txt | — | §130/§213/INV_ASC_HP+INV_MONSTERS/hex_shuffles_a_dazed_only_for_non_attack_cards |
-| cultist | yes | building_a_fight_keeps_the_ascension_but_not_the_last_fights_gold, a_fight_built_from_the_content_deck_can_play_a_strike …(+5) | — | wiki:wiki_asc/cultist.txt | — | §5.2/§195.8/INV_ASC_HP+INV_MONSTERS/building_a_fight_keeps_the_ascension_but_not_the_last_fights_gold |
+| cultist | yes | building_a_fight_keeps_the_ascension_but_not_the_last_fights_gold, a_fight_built_from_the_content_deck_can_play_a_strike …(+6) | — | wiki:wiki_asc/cultist.txt | — | §5.2/§195.8/INV_ASC_HP+INV_MONSTERS/building_a_fight_keeps_the_ascension_but_not_the_last_fights_gold |
 | dagger | yes | — | — | wiki:wiki_asc/dagger.txt | — | §175/INV_ASC_HP+INV_MONSTERS |
 | darkling | yes | an_encounter_with_two_records_of_the_same_id_builds | — | wiki:wiki_asc/darkling.txt | — | §129/§137/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/an_encounter_with_two_records_of_the_same_id_builds |
 | deca | yes | donus_circle_of_power_buffs_the_enemy_team_and_not_the_player | — | wiki:wiki_asc/donu_and_deca.txt | gap §H: Artifact 层数不随 A19 变（`StartingStatuses` 没有升档轴） | §195.8/INV_ASC_HP+INV_MONSTERS/donus_circle_of_power_buffs_the_enemy_team_and_not_the_player |
@@ -77,7 +77,7 @@
 | gremlin_nob | yes | — | — | wiki:wiki_asc/gremlin_nob.txt | — | §152/INV_ASC_HP+INV_MONSTERS |
 | gremlin_wizard | yes | — | — | wiki:wiki_asc/gremlin_wizard.txt | — | §130/§138/INV_ASC_HP+INV_MONSTERS |
 | hexaghost | yes | hexaghost_plays_the_wikis_seven_move_pattern_after_its_two_openers, the_boss_is_offered_at_floor_16_and_clears_the_act | — | wiki:wiki_asc/hexaghost.txt | gap §H: Sear 后续塞的 Burn 不自动升级（wiki："for the rest of combat"）；Divider 读结算时 HP | INV_ASC_HP+INV_MONSTERS/hexaghost_plays_the_wikis_seven_move_pattern_after_its_two_openers |
-| jaw_worm | yes | a_jaw_worm_starts_with_block_and_a17_makes_it_bigger, act_two_fights_act_two_enemies | — | wiki:wiki_asc/jaw_worm.txt | — | §5.2/INV_ASC_HP+INV_MONSTERS/a_jaw_worm_starts_with_block_and_a17_makes_it_bigger |
+| jaw_worm | yes | spot_weakness_follows_the_enemy_intent, a_jaw_worm_starts_with_block_and_a17_makes_it_bigger …(+1) | — | wiki:wiki_asc/jaw_worm.txt | — | §5.2/INV_ASC_HP+INV_MONSTERS/spot_weakness_follows_the_enemy_intent |
 | lagavulin | yes | an_elite_node_fights_the_sentries_and_pays_the_elite_tier | — | wiki:wiki_asc/lagavulin.txt | — | §173/INV_ASC_HP+INV_MONSTERS/an_elite_node_fights_the_sentries_and_pays_the_elite_tier |
 | looter | yes | ascension_two_makes_the_looter_mug_hit_for_eleven, a_looter_steals_thievery_gold_on_every_attack_and_carries_it_away …(+4) | — | wiki:wiki_asc/thieves.txt | — | §175/§201/INV_ASC_HP+INV_MONSTERS/ascension_two_makes_the_looter_mug_hit_for_eleven |
 | louse_green | orphan (declared) | — | — | wiki:wiki_asc/louses.txt | — | §152/INV_ASC_HP+INV_MONSTERS |
@@ -239,7 +239,7 @@
 | time_eater.ripple | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 
-## 卡牌（181）
+## 卡牌（187）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -260,7 +260,9 @@
 | berserk | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt | — | §197/§199/CARD_WIKI+INV_CARDS |
 | berserk+ | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt (via berserk) | — | INV_CARDS |
 | blind | yes | colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/blind.txt | — | CARD_WIKI+INV_CARDS/colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand |
-| bloodletting | yes | losing_hp_is_not_damage_but_it_is_hp_loss, the_lose_hp_cards_do_what_their_pages_say | — | wiki:wiki_cards/bloodletting.txt | — | §236/CARD_WIKI+INV_CARDS/losing_hp_is_not_damage_but_it_is_hp_loss |
+| blood_for_blood | yes | blood_for_blood_gets_cheaper_each_time_you_lose_hp | — | wiki:wiki_cards/blood_for_blood.txt | — | CARD_WIKI+INV_CARDS/blood_for_blood_gets_cheaper_each_time_you_lose_hp |
+| blood_for_blood+ | yes | — | CARD_DIFF | wiki:wiki_cards/blood_for_blood.txt (via blood_for_blood) | — | INV_CARDS |
+| bloodletting | yes | blood_for_blood_gets_cheaper_each_time_you_lose_hp, losing_hp_is_not_damage_but_it_is_hp_loss …(+1) | — | wiki:wiki_cards/bloodletting.txt | — | §236/CARD_WIKI+INV_CARDS/blood_for_blood_gets_cheaper_each_time_you_lose_hp |
 | bloodletting+ | yes | the_lose_hp_cards_do_what_their_pages_say | — | wiki:wiki_cards/bloodletting.txt (via bloodletting) | — | INV_CARDS/the_lose_hp_cards_do_what_their_pages_say |
 | bludgeon | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/bludgeon.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | bludgeon+ | yes | — | CARD_DIFF | wiki:wiki_cards/bludgeon.txt (via bludgeon) | — | INV_CARDS |
@@ -286,11 +288,13 @@
 | clothesline+ | yes | — | CARD_DIFF | wiki:wiki_cards/clothesline.txt (via clothesline) | — | INV_CARDS |
 | combust | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt | — | CARD_WIKI+INV_CARDS |
 | combust+ | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt (via combust) | — | INV_CARDS |
+| corruption | yes | — | CARD_DIFF | wiki:wiki_cards/corruption.txt | wiki 偏差：wiki 的 Exhaust 指的是**被打出的那个技能**（"Exhaust it"），Corruption 自己进弃牌堆。 | CARD_WIKI+INV_CARDS |
+| corruption+ | yes | — | CARD_DIFF | wiki:wiki_cards/corruption.txt (via corruption) | wiki 偏差：wiki 的 Exhaust 指的是**被打出的那个技能**（"Exhaust it"），Corruption 自己进弃牌堆。 | INV_CARDS |
 | dark_embrace | yes | — | CARD_DIFF | wiki:wiki_cards/dark_embrace.txt | — | §237/CARD_WIKI+INV_CARDS |
 | dark_embrace+ | yes | — | CARD_DIFF | wiki:wiki_cards/dark_embrace.txt (via dark_embrace) | — | INV_CARDS |
 | dark_shackles | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand | — | wiki:wiki_cards/dark_shackles.txt | wiki 偏差：wiki 升级版是 15 层；内容没有 `dark_shackles+` 这一行。（`Exhaust` 同 `bandage_up`：由落区表达，不是偏差。） | §219/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | dazed | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade, armaments_gains_block_then_upgrades_the_chosen_card …(+2) | — | wiki:wiki_cards/dazed.txt | — | §189/§191/CARD_WIKI+INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+32) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+33) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -401,7 +405,9 @@
 | skewer | yes | skewer_hits_once_per_energy_spent | — | wiki:wiki_cards/skewer.txt | — | §232/CARD_WIKI+INV_CARDS/skewer_hits_once_per_energy_spent |
 | skewer+ | yes | — | CARD_DIFF | wiki:wiki_cards/skewer.txt (via skewer) | — | INV_CARDS |
 | slimed | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+2) | — | wiki:wiki_cards/slimed.txt | — | §192/§219/CARD_WIKI+INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+93) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
+| spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+94) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+8) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -425,7 +431,7 @@
 | wound | yes | the_new_red_skills_do_what_their_pages_say, evolve_and_fire_breathing_only_answer_to_the_right_tags …(+1) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
-## 状态（55）
+## 状态（56）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -438,6 +444,7 @@
 | standard.buffer | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor | — | spec:INV_STATUSES | — | §149/§223/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
 | standard.combust | yes | flame_barrier_hits_back_and_combust_burns_everyone | — | spec:INV_STATUSES | — | §119/INV_STATUSES/flame_barrier_hits_back_and_combust_burns_everyone |
 | standard.constricted | yes | constricted_loses_its_stacks_of_hp_through_block_at_turn_end, statuses_outside_the_five_axes_are_readable_by_name …(+1) | — | spec:INV_STATUSES | — | §175/§214/INV_STATUSES/constricted_loses_its_stacks_of_hp_through_block_at_turn_end |
+| standard.corruption | yes | corruption_makes_skills_free_and_exhausts_them | — | spec:INV_STATUSES | — | §238/§242/INV_STATUSES/corruption_makes_skills_free_and_exhausts_them |
 | standard.curiosity | yes | the_awakened_one_survives_its_first_death_and_then_really_dies | — | spec:INV_STATUSES | — | §194/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
 | standard.curl_up | yes | curl_up_pays_out_once_and_only_for_a_hit_that_draws_blood | — | spec:INV_STATUSES | — | §208/§209/INV_STATUSES/curl_up_pays_out_once_and_only_for_a_hit_that_draws_blood |
 | standard.dark_embrace | yes | exhausting_a_card_feeds_feel_no_pain_and_dark_embrace | — | spec:INV_STATUSES | — | §236/§237/INV_STATUSES/exhausting_a_card_feeds_feel_no_pain_and_dark_embrace |
@@ -458,7 +465,7 @@
 | standard.frail | yes | entrench_doubles_the_block_it_already_has, damage_table_rows_are_the_frozen_shape …(+4) | — | spec:INV_STATUSES | — | §196/§212/INV_STATUSES/entrench_doubles_the_block_it_already_has |
 | standard.hex | yes | hex_shuffles_a_dazed_only_for_non_attack_cards | — | spec:INV_STATUSES | — | §210/§213/INV_STATUSES/hex_shuffles_a_dazed_only_for_non_attack_cards |
 | standard.intangible | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor | — | spec:INV_STATUSES | — | §210/§223/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
-| standard.juggernaut | yes | juggernaut_punishes_every_block_gain | — | spec:INV_STATUSES | — | §237/§238/INV_STATUSES/juggernaut_punishes_every_block_gain |
+| standard.juggernaut | yes | juggernaut_punishes_every_block_gain | — | spec:INV_STATUSES | — | §237/§242/INV_STATUSES/juggernaut_punishes_every_block_gain |
 | standard.lose_dexterity | yes | — | — | spec:INV_STATUSES | — | §158/INV_STATUSES |
 | standard.lose_strength | yes | flex_potion_gives_strength_and_takes_it_back | — | spec:INV_STATUSES | — | §158/§230/INV_STATUSES/flex_potion_gives_strength_and_takes_it_back |
 | standard.metallicize | yes | metallicize_grants_block_at_the_end_of_the_turn, plated_armor_and_metallicize_both_pay_block_at_turn_end | — | spec:INV_STATUSES | — | §107/§194/INV_STATUSES/metallicize_grants_block_at_the_end_of_the_turn |
@@ -478,7 +485,7 @@
 | standard.spore_cloud | yes | spore_cloud_weakens_the_killer_on_death | — | spec:INV_STATUSES | — | §117/§237/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
 | standard.stasis | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.1/§195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
-| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+56) | — | spec:INV_STATUSES | — | §219/§230/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
+| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+57) | — | spec:INV_STATUSES | — | §230/§242/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
 | standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, standard_status_ids_are_byte_ordered_not_registration_ordered …(+4) | — | spec:INV_STATUSES | — | §214/§237/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |
 | standard.time_warp | yes | the_twelfth_card_asks_for_the_turn_to_end | — | spec:INV_STATUSES | — | §122/§125/INV_STATUSES/the_twelfth_card_asks_for_the_turn_to_end |
 | standard.unawakened | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, the_awakened_one_draws_phase_one_by_weight_and_flips_on_the_guard | — | spec:INV_STATUSES | — | §180/§195.2/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |

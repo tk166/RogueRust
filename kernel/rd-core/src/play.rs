@@ -435,6 +435,18 @@ const FREE_NEXT_CARD_STATUS: &str = "standard.free_next_card";
 const FIRST_ATTACK_FREE_STATUS: &str = "standard.first_attack_each_turn_free";
 /// `StandardCombatIds.SkillCostReductionStatus`（`:40`）。
 const SKILL_COST_REDUCTION_STATUS: &str = "standard.skill_cost_reduction";
+
+/// §242：`Corruption` 的状态 id（"Skills cost 0. Whenever you play a Skill, Exhaust it."）。
+///
+/// 与上面几个常量同形：**规则在核心里，状态在内容里**。两条规则都键在它上面 ——
+/// 一条费用阶段（`CostStage::CorruptionSkillsFree`），一条落区（`played_card_destination`）。
+const CORRUPTION_STATUS: &str = "standard.corruption";
+
+/// §242：`Blood for Blood` 的 tag —— "费用按本场战斗掉血次数递减"。
+///
+/// 用 tag 而不是新字段，理由与 `x_cost` 相同：这是**这张牌的费用语义**，而费用的语义已经由 tag
+/// 表达过一次（`battle::X_COST_TAG`）。
+const HP_LOSS_COST_TAG: &str = "hp_loss_cost";
 /// `StandardCombatIds.OneAttackPerTurnStatus`（`:35`）。
 const ONE_ATTACK_PER_TURN_STATUS: &str = "standard.one_attack_per_turn";
 /// §196：Red Slaver 的 `Entangled` —— "本回合不能打出 Attack"。
@@ -761,7 +773,8 @@ fn plan_play<'c>(
     // 所以这里只剩卡定义自己的 `PlayedCardDestinationZone`。
     let destination = match req.override_destination {
         Some(zone) => zone,
-        None => played_card_destination(&card)?,
+        // §242: `Corruption` overrides a Skill's landing zone (exhaust after play).
+        None => corruption_destination(state, &card, played_card_destination(&card)?),
     };
     // §220：打出即消耗的那些牌（`slimed` / `bandage_up` / `dark_shackles` / `apparition`）最终
     // 通过 `MoveCardToZone` 请求落进消耗堆 —— `Exhausted` 通知在**那个请求**的解析处发，
@@ -1497,6 +1510,9 @@ fn play_condition_validator(state: &CombatState, card: &CardOnTable<'_>) -> Resu
         // §239: the one fact a `PlayCondition` *can* ask about is the hand (`Clash`). It is computed
         // **here** because this is the only place that has both the state and the content -- the
         // cards' tags live in the `CARD` table, which `CombatState` does not own.
+        // §242: the content goes in by value so an expression can ask about the enemy's intent
+        // (`Spot Weakness`) -- that lookup reads the `ENCT`/`EACT` tables.
+        content: Some(*card.content),
         event_flags: crate::exec::PLAY_CONDITION_HAND_ALL_ATTACKS * u16::from(hand_is_all_attacks(state, card)),
         event_amount: None,
         x_cost: 0,
@@ -1613,6 +1629,10 @@ enum CostStage {
     SkillCostReduction,
     DecreeNthCardFree,
     DeclarativePassive,
+    /// §242：`Blood for Blood` —— 每失去 1 次生命就便宜 1 点。
+    HpLossCount,
+    /// §242：`Corruption` —— 技能归 0（`Skills cost 0`）。
+    CorruptionSkillsFree,
     CardInstance,
 }
 
@@ -1626,7 +1646,10 @@ impl CostStage {
             CostStage::SkillCostReduction => 200,
             CostStage::DecreeNthCardFree => 300,
             CostStage::DeclarativePassive => 1000,
+            // §242：腐化（"全局：技能归 0"）排在每副本价格之前 —— "这一份的价格"更具体。
+            CostStage::CorruptionSkillsFree => 1050,
             CostStage::CardInstance => 1100,
+            CostStage::HpLossCount => 210,
         }
     }
 
@@ -1638,6 +1661,8 @@ impl CostStage {
             CostStage::SkillCostReduction => "standard.skill_cost_reduction_cost",
             CostStage::DecreeNthCardFree => "standard.decree_free_nth_card",
             CostStage::DeclarativePassive => "standard.declarative_card_cost",
+            CostStage::HpLossCount => "standard.hp_loss_cost",
+            CostStage::CorruptionSkillsFree => "standard.corruption_cost",
             CostStage::CardInstance => "standard.card_instance_cost",
         }
     }
@@ -1653,12 +1678,16 @@ impl CostStage {
 }
 
 /// 执行序 = 升序后的固定表（`(priority, modifier_id)`）。
-const COST_STAGE_ORDER: [CostStage; 6] = [
+const COST_STAGE_ORDER: [CostStage; 8] = [
     CostStage::FreeNextCard,
     CostStage::FirstAttackEachTurnFree,
     CostStage::SkillCostReduction,
+    // §242：紧跟技能减费（210），同一类"按东西减一点"的规则排在一起。
+    CostStage::HpLossCount,
     CostStage::DecreeNthCardFree,
     CostStage::DeclarativePassive,
+    // §242：腐化排在每副本价格之前 —— "这一份的价格"比"全局规则"更具体。
+    CostStage::CorruptionSkillsFree,
     CostStage::CardInstance,
 ];
 
@@ -1833,6 +1862,44 @@ fn run_cost_stage(
 
         // `CombatDecrees.cs:181-203`：本回合第 `Amount` 张免费。法令闸门已否决 ⇒ 恒定原值。
         CostStage::DecreeNthCardFree => Ok(current),
+
+        // §242：`Blood for Blood` —— 每失去 1 次生命便宜 1 点（下限 0 由 `:474` 的 `max` 兜）。
+        // 计的是**本场战斗**（`Combatant::hp_losses`）；升级只是把印刷费用改小。
+        CostStage::HpLossCount => {
+            if current <= 0 {
+                return Ok(current);
+            }
+            // 这张牌自己声明"费用按掉血次数减"吗（tag）？定义 id 从**实例**读
+            // （`CardOnTable` 只有 `row`/`instance`，没有定义串）—— 与 `CardInstance` 阶段同一个查法。
+            let Some((_, slot)) = find_card_slot(state, &card.source, &card.instance) else {
+                return Ok(current);
+            };
+            let Some(instance) = state.card(slot) else {
+                return Ok(current);
+            };
+            if card
+                .content
+                .card_has_tag(instance.definition_id.as_str(), HP_LOSS_COST_TAG)
+                != Some(true)
+            {
+                return Ok(current);
+            }
+            let source = source_of(state, &card.source)?;
+            Ok(current.wrapping_sub(source.hp_losses))
+        }
+
+        // §242：`Corruption` —— 技能归 0。**绝对值**，不是"减 N"：减 N 需要一个够大的 N，
+        // 而那等于把"这条规则"写成"减 9"，两者在页面与指纹里长得不一样。
+        CostStage::CorruptionSkillsFree => {
+            if current <= 0 || !card.is_skill {
+                return Ok(current);
+            }
+            let source = source_of(state, &card.source)?;
+            if has_status(source, CORRUPTION_STATUS) {
+                return Ok(0);
+            }
+            Ok(current)
+        }
 
         // `Effects/PassiveModifiers.cs:271-290`：折叠所有 `CardCost` 规格。
         CostStage::DeclarativePassive => declarative_cost(state, card, current),
@@ -2022,6 +2089,24 @@ fn pay_costs(
 /// `PlayedCardDestinationZone`（构造默认 `DiscardPile`，`Cards/CardDefinitions.cs:106`）。
 /// 法令那一半由 `refuse_if_any_decree` 否决，剩下这一半是**读卡定义**的 ——
 /// 本内容实测 `DiscardPile` 48 / `ExhaustPile` 14（§5.3）。
+/// §242：`Corruption` 的**第二条规则** —— 打出技能后进消耗堆（"Whenever you play a Skill, Exhaust it"）。
+///
+/// 为什么放在**落区**而不是"打完后一条触发器"：落区是"这张牌最终去哪儿"的**唯一**答案，
+/// 而"先搬去消耗堆、终态再搬去弃牌堆"会让同一张牌走两趟（第二次搬会把它从消耗堆捞回来）。
+fn corruption_destination(
+    state: &CombatState,
+    card: &CardOnTable<'_>,
+    current: CardZone,
+) -> CardZone {
+    if !card.is_skill || current == CardZone::ExhaustPile {
+        return current;
+    }
+    match state.combatant(&card.source) {
+        Some(source) if has_status(source, CORRUPTION_STATUS) => CardZone::ExhaustPile,
+        _ => current,
+    }
+}
+
 fn played_card_destination(card: &CardOnTable<'_>) -> Result<CardZone, PlayError> {
     let handle = card.row.played_card_destination_zone();
     if handle == ABSENT16 || handle == NULL16 {
@@ -3376,12 +3461,14 @@ mod tests {
                 || (left.priority() == right.priority() && left.modifier_id() < right.modifier_id());
             assert!(ordered, "{left:?} 必须排在 {right:?} 之前");
         }
+        // §242：加了 `HpLossCount`（210，紧跟技能减费之后）与 `CorruptionSkillsFree`（1050，
+        // 排在每副本价格之前 —— "这一份的价格"比"全局规则"更具体）。
         assert_eq!(
             COST_STAGE_ORDER.map(|stage| stage.priority()),
-            [100, 150, 200, 300, 1000, 1100]
+            [100, 150, 200, 210, 300, 1000, 1050, 1100]
         );
         assert!(
-            !COST_STAGE_ORDER[0].prices_actions() && COST_STAGE_ORDER[4].prices_actions(),
+            !COST_STAGE_ORDER[0].prices_actions() && COST_STAGE_ORDER[5].prices_actions(),
             "只有 declarative 那条对动作也报价（`Cards/CardCostModifiers.cs:29` 默认 false、\
              `Effects/PassiveModifiers.cs:278` 声明 true）"
         );

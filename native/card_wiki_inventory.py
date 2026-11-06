@@ -21,6 +21,12 @@ import io
 
 # §218 的偏差声明（内容 vs wiki）。key = 基础 id；值里的字段只写**与 wiki 不同**的那几项。
 DEVIATIONS = {
+    # §242：`Whenever you play a Skill, {{KW|Exhaust}} **it**.` —— "it" 是那个技能，不是 Corruption
+    # 自己（Power 打完进弃牌堆）。第四次遇到"Exhaust 有宾语"。
+    'corruption': {
+        'why': 'wiki 的 Exhaust 指的是**被打出的那个技能**（"Exhaust it"），Corruption 自己进弃牌堆。',
+        'content_keywords': [],
+    },
     # §241：`... and Exhaust **it**.` —— "it" 是被打出的**那张**牌，不是 Havoc 自己。
     # 与 `burning_pact` / `sever_soul` 同源：wiki 的 `{{KW|Exhaust}}` 在这里是动词。
     'havoc': {
@@ -258,6 +264,10 @@ FACTS = {
     'burning_pact': ([('choose', 'source', 'Hand', (), 1, 1, 'Exhaust'), ('draw', 2, 'source')], [('choose', 'source', 'Hand', (), 1, 1, 'Exhaust'), ('draw', 3, 'source')]),
     'infernal_blade': ([('createRandom', 'attack', 'Hand', 1, True)], [('createRandom', 'attack', 'Hand', 1, True)]),
     'havoc': ([('playTopOfDrawPile', 'ExhaustPile')], [('playTopOfDrawPile', 'ExhaustPile')]),
+    # ---- §242：最后三张红卡（3 张） -------------------------------------------------------
+    'spot_weakness': ([('when', None, 'status', 'standard.strength', 3, 'source')], [('when', None, 'status', 'standard.strength', 4, 'source')]),
+    'blood_for_blood': ([('damage', 18, 'event')], [('damage', 22, 'event')]),
+    'corruption': ([('status', 'standard.corruption', 1, 'source')], [('status', 'standard.corruption', 1, 'source')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

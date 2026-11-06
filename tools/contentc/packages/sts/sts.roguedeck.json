@@ -3331,6 +3331,22 @@
       ],
       "PassiveModifiers": [],
       "Triggers": []
+    },
+    {
+      "Id": "standard.corruption",
+      "PackageId": "sts",
+      "NameKey": "Corruption",
+      "DescriptionKey": "Skills cost 0. Whenever you play a Skill, Exhaust it.",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
     }
   ],
   "Cards": [
@@ -15776,6 +15792,358 @@
         "Root": {
           "kind": "node.playTopCardOfDrawPile",
           "value": {
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "spot_weakness",
+      "PackageId": "sts",
+      "NameKey": "Spot Weakness",
+      "DescriptionKey": "If the enemy intends to attack, gain 3 Strength.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.conditional",
+          "value": {
+            "Condition": {
+              "kind": "intent.targetIntendsAttack",
+              "value": {}
+            },
+            "Then": {
+              "kind": "node.applyStatus",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.strength"
+                },
+                "Stacks": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 3
+                  }
+                },
+                "DurationTurns": 0,
+                "Charges": 0,
+                "ResultKey": null
+              }
+            },
+            "Else": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "spot_weakness+",
+      "PackageId": "sts",
+      "NameKey": "Spot Weakness+",
+      "DescriptionKey": "If the enemy intends to attack, gain 4 Strength.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.conditional",
+          "value": {
+            "Condition": {
+              "kind": "intent.targetIntendsAttack",
+              "value": {}
+            },
+            "Then": {
+              "kind": "node.applyStatus",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.strength"
+                },
+                "Stacks": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 4
+                  }
+                },
+                "DurationTurns": 0,
+                "Charges": 0,
+                "ResultKey": null
+              }
+            },
+            "Else": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "blood_for_blood",
+      "PackageId": "sts",
+      "NameKey": "Blood for Blood",
+      "DescriptionKey": "Costs 1 less for each time you lose HP this combat. Deal 18 damage.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 4
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "hp_loss_cost"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 18
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "blood_for_blood+",
+      "PackageId": "sts",
+      "NameKey": "Blood for Blood+",
+      "DescriptionKey": "Costs 1 less for each time you lose HP this combat. Deal 22 damage.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 3
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "hp_loss_cost"
+        }
+      ],
+      "Rarity": "Uncommon",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 22
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "corruption",
+      "PackageId": "sts",
+      "NameKey": "Corruption",
+      "DescriptionKey": "Skills cost 0. Whenever you play a Skill, Exhaust it.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 3
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.corruption"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "corruption+",
+      "PackageId": "sts",
+      "NameKey": "Corruption+",
+      "DescriptionKey": "Skills cost 0. Whenever you play a Skill, Exhaust it.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 2
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.corruption"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
             "ResultKey": null
           }
         },
