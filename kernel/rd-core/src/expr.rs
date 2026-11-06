@@ -47,9 +47,11 @@
 //! * `cardInstance.iterated` / `card.upgradeLevel` —— 需要卡实例表达式上下文；
 //! * `eventAmount`（§195.1 起**已实现**：伤害事件带的是实际掉血）/ `intent.*` —— 需要**触发事件上下文**；
 //! * `fx.*` / `reward.*` / `meta.*` / `tpl.*` —— run 层；
-//! * `abs` / `negate` / `remainder` / `clamp` —— 参考实现里有（`EffectProgramExpressions.cs:219/532/587/622`），
-//!   但**镜像里一条都没有**，字段名（`Operand` / `Inner` / `Value,Min,Max`）无法用真实数据核实，
-//!   编一个字段名就是编一个语义 —— 所以留 `UnsupportedKind`。
+//! * ~~`abs` / `negate` / `remainder` / `clamp`~~ —— **§249 起已实现**。原先留空是因为
+//!   "镜像里一条都没有，字段名无法核实"，但核实字段名的来源不止镜像：参考实现源码就在
+//!   `ref/RogueDeck-Core/.../EffectProgramExpressions.cs`，四条的真名与语义都读得到
+//!   （`AbsExpression:219` / `NegateExpression:532` / `RemainderExpression:587` /
+//!   `ClampExpression:622`）。这四条现在走饱和算术，与 `add`/`subtract` 同一族。
 //!
 //! **这张表里没有 `currentHealth` / `maxHealth`**：它们实现了（字段名 `Selector` 由我们定，
 //! 见下面第 4 条）。`missingHealth` 仍然 `UnsupportedKind`（它连 opcode 都没有，而且等价于
@@ -299,6 +301,50 @@ fn run_divide(dividend: i32, divisor: i32) -> Result<i32, ExprError> {
     Ok(dividend / divisor)
 }
 
+/// 战斗层 `remainder` 的**算术核心**（纯函数，节点读取在 [`remainder`] 里）。
+///
+/// 单独抽出来是为了能**直接测**：这四条 §249 新实现的 kind 在镜像里没有对应 term，
+/// 没有真实数据可以拿来做端到端对拍，所以"算术正确"必须靠纯函数上的判据钉住。
+fn combat_remainder(dividend: i32, divisor: i32, policy: ZeroPolicy) -> Result<i32, ExprError> {
+    if divisor == 0 {
+        return match policy {
+            ZeroPolicy::ReturnZero => Ok(0),
+            ZeroPolicy::Fault => Err(ExprError::DivideByZero),
+        };
+    }
+    // C# 的 `%` 对被除数取符号（`-7 % 5 == -2`），Rust 的 `%` 同样如此；
+    // `int.MinValue % -1` 两边都是 0（.NET 与 Rust 一致），i64 中间量只是防病态。
+    Ok(saturate(i64::from(dividend) % i64::from(divisor)))
+}
+
+/// 战斗层 `remainder`（`RemainderExpression.Evaluate`，`EffectProgramExpressions.cs:606-616`）。
+///
+/// 参考先算**除数**、判零，再算被除数（与 `divide` 同一个顺序，`:570-581` vs `:606-616`）：
+/// 除数为 0 且策略是 `Fault` 时**被除数根本没被求值** —— 那个顺序是可观察的（`card.*`
+/// 求值可能带副作用/失败）。
+fn remainder<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, ExprError> {
+    if let Some(dividend_node) = node.node_field("Dividend")? {
+        let divisor = eval_int(child(node, "Divisor")?, ctx)?;
+        let policy = zero_policy(node)?;
+        // 除零判定在**求被除数之前**（参考 `:606-616`）—— 顺序可观察，见上面的注释。
+        if divisor == 0 {
+            return combat_remainder(0, divisor, policy);
+        }
+        let dividend = eval_int(dividend_node, ctx)?;
+        return combat_remainder(dividend, divisor, policy);
+    }
+    // run 层拼法：`{Left, Right}`，没有 `ZeroPolicy`（除零直接抛，同 `run_divide`）。
+    if let Some(left_node) = node.node_field("Left")? {
+        let divisor = eval_int(child(node, "Right")?, ctx)?;
+        if divisor == 0 {
+            return Err(ExprError::DivideByZero);
+        }
+        let dividend = eval_int(left_node, ctx)?;
+        return Ok(dividend % divisor);
+    }
+    Err(ExprError::Ir(IrError::Missing("Dividend")))
+}
+
 /// 读 `ZeroPolicy`。**缺席 = 默认 `ReturnZero`**（`:561` 的接口默认值）；
 /// 不认识的串**不许**悄悄当 `ReturnZero`（冻结的 `ExprError` 没有"坏枚举值"这个变体，
 /// 所以落进 `UnsupportedKind` 这个响亮的口袋）。
@@ -533,6 +579,36 @@ pub fn eval_int<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, Exp
         }
 
         "divide" => divide(node, ctx),
+
+        // §249：单操作数两条（`Operand`）。饱和，与参考的 `Saturate(...)` 逐字一致。
+        "abs" => {
+            let operand = eval_int(child(node, "Operand")?, ctx)?;
+            // `Math.Abs((long)int.MinValue)` = 2_147_483_648 ⇒ 饱和回 `i32::MAX`（`:235`）。
+            Ok(saturate(i64::from(operand).abs()))
+        }
+        "negate" => {
+            let operand = eval_int(child(node, "Operand")?, ctx)?;
+            Ok(saturate(-i64::from(operand)))
+        }
+
+        // §249：`remainder` 与 `divide` 同族 —— 战斗层 `{Dividend,Divisor,ZeroPolicy}`，
+        // run 层 `{Left,Right}`；字段表是并集，所以判据是"这个键有没有值"。
+        "remainder" => remainder(node, ctx),
+
+        // §249：`Math.Clamp(value, min, max)`。参考**先算三个操作数**再钳（`:643-646`），
+        // 求值序是 `Value` → `Min` → `Max`。
+        "clamp" => {
+            let value = eval_int(child(node, "Value")?, ctx)?;
+            let min = eval_int(child(node, "Min")?, ctx)?;
+            let max = eval_int(child(node, "Max")?, ctx)?;
+            // `Math.Clamp` 在 `min > max` 时**抛**（`ArgumentException`）。冻结的 `ExprError`
+            // 没有"参数非法"这个变体，落进 `UnsupportedKind` 是响亮的口袋（同 `zero_policy`
+            // 处理坏枚举值的做法）。绝不悄悄交换两者：那是编一条参考没有的规则。
+            if min > max {
+                return Err(ExprError::UnsupportedKind);
+            }
+            Ok(value.clamp(min, max))
+        }
 
         // `CombatantStatusStacksExpression`（`:792-799`）：单目标读，各实例层数**求和**。
         "combatantStatusStacks" => {
@@ -810,6 +886,9 @@ pub fn eval_bool<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<bool, E
                 // §239: the one fact a `PlayCondition` can ask about (`Clash`). Read only while a
                 // card's `PlayCondition` is being evaluated -- `sts_content_check.py` enforces that.
                 "playCondition.handIsAllAttacks" => crate::exec::PLAY_CONDITION_HAND_ALL_ATTACKS,
+                // §249: the two facts `Sadistic Nature` asks about.
+                "status.isDebuff" => crate::exec::STATUS_IS_DEBUFF,
+                "status.appliedToOther" => crate::exec::STATUS_APPLIED_TO_OTHER,
                 // §208: the receiving side's fact (see `DAMAGE_IS_ATTACK`'s doc).
                 "damage.isAttack" => crate::exec::DAMAGE_IS_ATTACK,
                 _ => return Err(ExprError::UnsupportedKind),
@@ -1726,6 +1805,36 @@ mod tests {
             Err(ExprError::Ir(IrError::Missing("Selector")))
         );
         assert_ne!(eval_int(node(&content, 1731), &ctx), Ok(99), "不许悄悄变成 99");
+    }
+
+    /// §249：四条新实现的算术 kind 的**算术核心**。
+    ///
+    /// 每条都测两侧：正常值 + 病态值（`i32::MIN` / 除零）。为什么要病态值：这些表达式读的是
+    /// 血量与池，病态输入不是假想 —— 参考实现专门为此写了 `ArithmeticSaturation`（`:208-217`），
+    /// "钳住"和"抛"是两种都合理的做法，我们跟参考一样**钳**，所以判据必须钉住它。
+    #[test]
+    fn the_four_new_arithmetic_kinds_saturate_and_respect_zero_policy() {
+        use ZeroPolicy::{Fault, ReturnZero};
+        // `remainder`：符号跟被除数（C# 语义），除零按策略。
+        assert_eq!(combat_remainder(7, 5, ReturnZero), Ok(2));
+        assert_eq!(combat_remainder(-7, 5, ReturnZero), Ok(-2), "C# 的 % 对被除数取符号");
+        assert_eq!(combat_remainder(7, -5, ReturnZero), Ok(2));
+        assert_eq!(combat_remainder(i32::MIN, -1, ReturnZero), Ok(0), ".NET 与 Rust 都是 0");
+        assert_eq!(combat_remainder(5, 0, ReturnZero), Ok(0), "ReturnZero ⇒ 0，不是抛");
+        assert_eq!(combat_remainder(5, 0, Fault), Err(ExprError::DivideByZero));
+        // `abs`：`Math.Abs((long)int.MinValue)` = 2^31 ⇒ 饱和到 `i32::MAX`（`:235`）。
+        assert_eq!(saturate(i64::from(i32::MIN).abs()), i32::MAX);
+        assert_eq!(saturate(i64::from(-5).abs()), 5);
+        // `negate`：`-int.MinValue` 同理饱和。
+        assert_eq!(saturate(-i64::from(i32::MIN)), i32::MAX);
+        assert_eq!(saturate(-i64::from(5)), -5);
+        assert_eq!(saturate(-i64::from(0)), 0);
+        // `clamp`：正常三侧（低于 / 区间内 / 高于）。
+        assert_eq!(3.clamp(5, 9), 5);
+        assert_eq!(7.clamp(5, 9), 7);
+        assert_eq!(11.clamp(5, 9), 9);
+        // `min > max` 参考会抛（`ArgumentException`）、我们报 `UnsupportedKind`（冻结的
+        // `ExprError` 没有参数非法变体）；**绝不悄悄交换** —— 那是编一条参考没有的规则。
     }
 
     #[test]

@@ -790,6 +790,12 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         "standard.no_block_from_cards" |
         // §248: Enlightenment's "cost at most N" (`play.rs::CostStage::CapCostAt`).
         "standard.cap_cost_at" |
+        // §249: four trigger powers + The Bomb's bookkeeping twin.
+        "standard.omega" |
+        "standard.panache" |
+        "standard.sadistic_nature" |
+        "standard.the_bomb" |
+        "standard.the_bomb_damage" |
         "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No

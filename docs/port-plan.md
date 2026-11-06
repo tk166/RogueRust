@@ -16976,54 +16976,109 @@ StS 的"随机无色牌"池子从不给它们 —— 一起打上去会让 `jack
 
 ---
 
-## §249（未完成，卡在序列化层）`Omega` / `Panache` / `Sadistic Nature` / `The Bomb`
+---
 
-这一节**没有任何代码进入仓库** —— 四张牌全部撞上同一个缺陷，回退干净，只留这份记录。
+## §249 `Omega` / `Panache` / `Sadistic Nature` / `The Bomb` + **把"未实现"变成可查的**
 
-### 249.1 现象
+四张牌都落地了。但真正值钱的是排查出来的东西：**同一批四张牌同时失败，原因却是两个互不相干的
+缺陷**，而这两个缺陷当时都**只在运行时**才暴露。
 
-给这四张牌各写一条**新建的状态触发器节目**（`TurnEnded` / `CardPlayed` / `StatusApplied`），
-内容门全过（`STS_CONTENT PASS`，事实与 wiki 对账一致），但**运行时**第一次跑就：
+### 249.1 两个缺陷（症状一样，成因完全不同）
 
-```
-Effect(Expr(Ir(WrongKind("F_JSON"))))
-```
+| # | 症状 | 根因 | 为什么所有检查都是绿的 |
+|---|---|---|---|
+| ① | `Ir(WrongKind("F_JSON"))`，**四张牌一起红** | 某个 `(opcode, field)` 在**整份内容**里同时观察到 `str` 与 `int` ⇒ `pick_kind` 退回 `F_JSON` 兜底 | 那个字段属于**共享 opcode**：一处回退，**所有**用这个 opcode 的节目都读不出来 —— 于是"我只加了一张牌，怎么四张全坏" |
+| ② | `Expr(UnsupportedKind)` | `remainder`（还有 `abs`/`negate`/`clamp`）在 `INT_KINDS` 表里，但 `eval_int` **没有分支** | 内容门只查形状与事实；编译器只认 `kind` 字符串。**"这张牌什么时候会用到它"没人查** |
 
-`F_JSON` = 读到的那一格在镜像里是"通用 JSON 兜底"，而调用方要的是一个 term/str/int。
-换句话说：**序列化器把某个字段写成了兜底形状**，读取侧于是解不出来。
+关键教训（比两条缺陷本身重要）：**① 让"别人的牌"坏掉，② 让自己只是"玩到才坏"** —— 两种都
+让"编译通过 + 内容门通过"变成一张**假收据**。所以修法不是"再小心一点"，而是**加会红的闸门**。
 
-### 249.2 已排除的（都试过）
+### 249.2 三道新闸门（每一道都用反证验过它会红）
 
-| 猜测 | 结果 |
-|---|---|
-| `remainder` 的字段名 | 换成 `combatantCounter` + `compare`，仍 `F_JSON` |
-| `combatantCounter.CounterId` 的写法（裸串 vs `{value}`） | 镜像内容里是**裸串**（`"time_warp"`），改对了仍需进一步定位 |
-| `node.modifyStatusStacks` 的 `Delta` | 与镜像内容逐字一致 |
-| `dealDamage.Amount = combatantStatusStacks` | §237 `juggernaut` 用同一组合且**绿** |
-| 程序形状（`sequence`/`conditional`/直接单节点） | 三种都试过，全 `F_JSON` |
+1. **`compile.py --deny-json-fallback`**（`build.py` 永远传）：任何字段退回 `F_JSON` ⇒ 构建失败，
+   并**点名** `字段 = 观察到的类别集合`。
+   反证：把一条 `compare.Op` 改成 `7` ⇒
+   `F_JSON FALLBACK compare.Op observed as int,str` + `BUILD_EXIT=1`。
+   ⚠️ 只打印不 `exit` 是假闸门（FACT §4.1），所以专门量了退出码。
+2. **`native/program_audit.py`**（已接进 `sts_content_check.py`，报 `ok programs`）：从
+   `expr.rs` **源码**抽两张单子 —— 声明表（`INT_KINDS`/`BOOL_KINDS`/`CARD_KINDS`）与已实现的
+   `match` 分支 —— 再把**内容里用到的每个 `kind`** 拿去比。表里有、分支里没有 ⇒ `UnsupportedKind`
+   ⇒ 内容门红。**新增一张牌自动被覆盖**，不需要维护第二份清单。
+   反证：把 `omega` 的伤害表达式换成 `combatantCoord` ⇒
+   `program.status:standard.omega: uses kind 'combatantCoord' which expr.rs does not evaluate`。
+   ⚠️ 这条闸门**必须先构建再看**：内容门比对的是产物与 JSON，改完 JSON 不重编会先被"陈旧"拦下。
+3. **§249 的两个事实位**（`status.isDebuff` / `status.appliedToOther`）：`StatusApplied` 是**广播**
+   事件，而"极性"与"是不是自己给自己"在**入队那一刻**才知道（事件只带 `target`）。
+   所以事实随事件走（`STATUS_IS_DEBUFF = 1<<9`、`STATUS_APPLIED_TO_OTHER = 1<<10`）——
+   与 §245 `GainBlock.from_card` 同一条理由：**事件必须在知道它的地方带事实**。
 
-**共同点**：都是"**新增一条状态行 + 它自己的触发器节目**"。此前每节新增的状态触发器
-（§236 `brutality`/`rupture`、§237 五个、§244 `mayhem`/`magnetism`）都一次通过 ——
-所以更可能是**内容规模跨过某个阈值后**，`compile.py` 的 `pick_kind(classes)` 在某个
-`(op, field)` 上观察到了**混合存储类别**，于是退回 `F_JSON`。
+### 249.3 四张牌与它们的载体
 
-### 249.3 下一步该用什么工具查（别再用"改内容再试"猜）
-
-1. `python tools/contentc/reader.py --opcodes <image>` —— 看**出问题的那个 op** 的字段表：
-   哪些字段变成了 `JSON`，与 HEAD 版本（已知能跑）逐字段对比；
-2. `python tools/contentc/compile.py` 的 `pick_kind(classes)`：它按"观察到的类别集合"选存储，
-   `base` 里一旦混进 `arr…`/`obj` 之类就走 `F_JSON`。**打印那个集合**就知道是谁把它弄脏的；
-3. 找到后按 §4 的纪律修**序列化器**（让该字段成为 F_TERM），而不是把内容改得绕开它。
-
-### 249.4 一张牌一张牌地重排优先级
-
-| 牌 | 需要的载体 | 状态 |
+| 牌 | 载体 | 备注 |
 |---|---|---|
-| `Omega` | `TurnEnded` + `dealDamage(allEnemies, stacks)` | 内容已写好，卡在 §249.1 |
-| `Sadistic Nature` | §249 的 `status.isDebuff` / `status.appliedToOther` 两个事实位（**内核补丁已验证可编译**） | 同上 |
-| `Panache` | `cardsPlayedThisTurn` 或计数器 + `compare` | 同上 |
-| `The Bomb` | 层数=回合数 + "先判后减"的顺序 | 同上；另外"状态在自己触发器里自减"本身还要单独验一次 |
+| `omega` | 状态 + `TurnEnded` | 伤害 = **状态的层数**，所以升级只改卡牌赋的层数 |
+| `panache` | 状态 + `CardPlayed` + `cardsPlayedThisTurn`/`remainder` | "每回合第 5/10/15… 张" = `n % 5 == 0 && n > 0`；**回合计数器由内核重置**，所以"in a single turn"不需要额外状态 |
+| `sadistic_nature` | 状态 + `StatusApplied` + §249 的两个事实位 | 三段判据（敌人 debuff / 自己 debuff / 敌人 buff）各测一侧 |
+| `the_bomb` | **两条状态**：`standard.the_bomb`（层数 = 剩余回合）+ `standard.the_bomb_damage`（层数 = 爆炸伤害） | 一条状态的层数只能记一个数，而"3 回合"与"40 伤害"是**两个独立升级轴**（升级只改伤害） |
 
-⇒ **下一节的第一件事不是再写内容，而是查 `pick_kind`**（预计 30–60 分钟）。查清之后这四张
-基本是"内容 + 一条判据"的量，`Sadistic Nature` 还要带上那两个事实位的内核补丁（本轮的补丁
-已在工作区验证过编译通过，但没有提交 —— 重做时照 §249.2 的形状写即可）。
+### 249.4 三个判据陷阱（都是这一节真踩的）
+
+1. **判据牌不许碰伤害。** `Panache` 的第一版判据用 `flex` 出牌，而 `flex` 给玩家 +2 力量 ——
+   **力量会加成触发器打出的伤害**，于是第 5 张打出 20 点（10 自带 + 10 力量），看着像
+   "触发器执行了两遍"。换成 `defend`（只给格挡）后序列变成 `[0,0,0,0,20,20]`，一次就对。
+   ⇒ 判据的"对照量"必须**只有被测那一条路径**能改。
+2. **`TurnEnded` 只对"行动者自己"的回合末派发**（`CombatEvent::TurnEnded { combatant }` ⇒
+   `run_triggers(..., &combatant, ...)`）。所以 `The Bomb` 的判据不能靠 `end_current_turn` 循环
+   （回合机在英雄与敌人之间轮转，"第几次是英雄的"不是这张牌要保证的事），要**直接入队**
+   `TurnEnded { combatant: hero }`。
+3. **量差值，不要量绝对值。** `Sadistic Nature` 的"给自己挂 debuff"那一段拿 `500 - health(hero)`
+   当判据 —— 英雄初始血根本不是 500（只有敌人被抬高），于是"没触发"被读成掉了 70。改成前后差。
+
+### 249.5 本轮顺手补的基建：`abs` / `negate` / `remainder` / `clamp`
+
+原先 `expr.rs` 模块头写着这四条"镜像里一条都没有，字段名无法核实 ⇒ 留 `UnsupportedKind`"。
+那条纪律是对的，**但核实字段名的来源不止镜像**：参考实现就在本地只读克隆里。四条的真名与语义：
+
+| kind | 参考（`EffectProgramExpressions.cs`） | 字段 | 语义 |
+|---|---|---|---|
+| `abs` | `AbsExpression:219` | `Operand` | `Saturate(Math.Abs((long)v))` |
+| `negate` | `NegateExpression:532` | `Operand` | `Saturate(-(long)v)` |
+| `remainder` | `RemainderExpression:587` | `Dividend` `Divisor` `ZeroPolicy` | `%`，除零按策略；run 层拼法是 `{Left,Right}`（与 `divide` 同族，照抄那个两段判定） |
+| `clamp` | `ClampExpression:622` | `Value` `Min` `Max` | `Math.Clamp`；`min > max` 参考**抛**，我们报 `UnsupportedKind`（冻结的 `ExprError` 没有"参数非法"），**绝不悄悄交换** |
+
+判据：`the_four_new_arithmetic_kinds_saturate_and_respect_zero_policy` —— 每条都测**两侧**
+（正常值 + 病态值：`i32::MIN` 取绝对值/取负 ⇒ 饱和；除数为 0 × `ReturnZero`/`Fault`）；
+`clamp` 三个关系都测。算术核心抽成纯函数 `combat_remainder`，因为没有镜像 term 可以端到端对拍。
+
+### 249.6 剩下的 25 张：需求排查（`python -X utf8 native/audit_card_gap.py --offline`）
+
+**先说口径**：下面这张表按"要什么载体"分组，卡名来自 wiki 卡表（脚本对账），**效果文字在动手前
+必须重新核**（两次独立来源，FACT §5）—— 这里只回答"会卡在内核哪一处"。
+
+| 组 | 牌 | 缺什么 | 现有能用的 |
+|---|---|---|---|
+| A 现成载体就能做 | `bite` `expunger` `shiv` `smite` `beta` | — | `node.heal` / `node.dealDamage` 齐备 |
+| B 每副本计数 | `ritual_dagger` | "这张牌本场伤害 +3"（§248 已给**每副本价格**，伤害同款还差一个 per-copy 伤害记账） | `card.counter` |
+| C 选牌 + 价格/牌堆位置 | `discovery` `forethought` | `Offered` 候选（药水在用，卡牌没用过）+ "本回合 0 费" + **抽牌堆底部** | `PendingChoice` 三种来源已通 |
+| D 诅咒 10 张 | `clumsy` `curse_of_the_bell` `decay` `necronomicurse` `normality` `pain` `parasite` `pride` `regret` `shame` | 多数只要"不可打出 + 触发器"，但**四张要新东西**：`necronomicurse`（被消耗时回手）要 `CardExhausted` + 造副本；`pride`（回合末洗一张进抽牌堆）要"洗副本进抽牌堆"节点；`parasite`（移除时失去最大生命）要"失去最大生命"（现在只有 `gainMaxHealth`）；`normality`（每回合最多打 6 张）要**出牌上限**这条规则位 | `Refusal::Unplayable`、`TurnEnded`/`CardPlayed` 触发器、`node.loseHp` |
+| E 先判范围 | `become_almighty` `live_forever` `fame_and_fortune` `j.a.x.` `safety` | 观者 / StS2 的牌被 wiki 归到 colorless；**要先决定它们算不算本项目范围** | — |
+| F 缺一个节点 | `hand_of_greed` | **战斗中掉金币**（`node.gainGold` 不存在；金币是 run 层资源） | — |
+
+**13 条未实现 kind 里，只有 3 条会被卡牌用到**（其余是敌人选招 / 网格 / 迭代上下文）：
+`missingHealth`（"失去等于已失血量的血"）、`card.upgradeLevel`（战斗内升级）、
+`iterationTargetHasStatus`/`iterationTargetStatusStacks`（`ForEach` 里的条件）。
+⇒ 顺序建议：**D 组的四张新载体 → C 组（`Offered` 的卡牌用法）→ B（per-copy 伤害）→ F（金币）**。
+
+### 249.7 一条方法论修正
+
+这一节前半段我在**同一个 `F_JSON` 上换了五轮内容**去试（`remainder`→计数器→改 `CounterId`
+写法→换程序形状），全都没中。真正的转折是**不做实验、先读工具**：`compile.py` 里
+`Deriver.json_fallback` 早就把"哪一字段回退了、观察到哪些类别"记下来了，`report.md` 也一直在印。
+⇒ **"读不出来"的时候先怀疑工具已经知道答案、而我没看**；改内容重试是最后手段。
+
+定位顺序（下次照这个来，30 分钟而不是三轮）：
+1. `out/report.md` 的 "Fields that fell back to `F_JSON`" 一节；
+2. `out/layout.txt` 里该 opcode 的字段表；
+3. `native/program_audit.py` 的 `unsupported` 集合；
+4. 仍然不中 ⇒ 写一条**只打印不 assert** 的探针（`std::panic!` 把 `Debug` 打出来）看**第一处**
+   报错到底是哪一个 kind，而不是继续改内容。

@@ -2250,8 +2250,25 @@ impl Host<'_> {
             CombatEvent::CardCostPaid { owner } => {
                 self.run_broadcast_triggers(state, TriggerEvent::CardCostPaid, &owner)
             }
-            CombatEvent::StatusApplied { target } => {
-                self.run_broadcast_triggers(state, TriggerEvent::StatusApplied, &target)
+            CombatEvent::StatusApplied {
+                target,
+                debuff,
+                applied_to_other,
+            } => {
+                // §249：两个事实位随事件走（`event.bool` 读它们）。
+                let mut flags = 0u16;
+                if debuff {
+                    flags |= crate::exec::STATUS_IS_DEBUFF;
+                }
+                if applied_to_other {
+                    flags |= crate::exec::STATUS_APPLIED_TO_OTHER;
+                }
+                self.run_broadcast_triggers_with_flags(
+                    state,
+                    TriggerEvent::StatusApplied,
+                    &target,
+                    flags,
+                )
             }
             CombatEvent::StatusMerged { target } => {
                 self.run_broadcast_triggers(state, TriggerEvent::StatusMerged, &target)
@@ -2282,6 +2299,17 @@ impl Host<'_> {
         event: TriggerEvent,
         about: &CombatantId,
     ) -> Result<(), HostError> {
+        self.run_broadcast_triggers_with_flags(state, event, about, 0)
+    }
+
+    /// §249：同上，但带**事件事实位**（`event.bool` 读它）。
+    fn run_broadcast_triggers_with_flags(
+        &mut self,
+        state: &mut CombatState,
+        event: TriggerEvent,
+        about: &CombatantId,
+        flags: u16,
+    ) -> Result<(), HostError> {
         let mut bearers = [CombatantId::EMPTY; crate::state::MAX_COMBATANTS];
         let mut count = 0usize;
         for combatant in state.combatants() {
@@ -2304,8 +2332,15 @@ impl Host<'_> {
                 };
                 let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
                 let root = NodeRef::new(self.content, handle);
-                let outcome =
-                    execute_program(state, self.content, root, Some(bearer), Some(*about), steps);
+                let outcome = execute_program_with_flags(
+                    state,
+                    self.content,
+                    root,
+                    Some(bearer),
+                    Some(*about),
+                    steps,
+                    flags,
+                );
                 outcome.map_err(|e| self.record(HostError::Exec(e)))?;
             }
         }
@@ -9014,7 +9049,7 @@ mod tests {
                 Some(&content),
                 &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
             )
-            .expect("flex is playable");
+            .expect("defend is playable");
             host.try_resolve_pending_queues(&mut state).expect("drain");
             assert_eq!(
                 stacks_of(&state, "hero", "standard.strength"),
@@ -9901,6 +9936,176 @@ mod tests {
                 );
             }
         }
+    }
+
+
+
+
+
+
+    /// 读盘上的 sts 镜像（四条判据共用；每条都从**同一份产物**出发）。
+    fn sts_image() -> Content<'static> {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        // `Content` 借的是这块字节，所以必须泄漏成 `'static`：测试进程一次，代价可以忽略。
+        parse(Box::leak(blob.into_boxed_slice()))
+    }
+
+    /// 把两个敌人的血调高，好让"掉了几点"不被死亡吞掉。
+    fn beefy(state: &mut CombatState) {
+        for enemy in ["enemy_a", "enemy_b"] {
+            if let Some(combatant) = state.combatant_mut(&cid(enemy)) {
+                combatant.health_max = 500;
+                combatant.health_current = 500;
+            }
+        }
+    }
+
+    /// §249：`Omega` —— `TurnEnded` 触发器按**自己的层数**打全体。
+    ///
+    /// 判据两侧：未到回合末不掉血（防"触发器被当成 `TurnStarted`"），回合末两个敌人都掉 50
+    /// （防"只打第一个"/"只打一次"）。
+    #[test]
+    fn omega_hits_every_enemy_at_the_end_of_the_turn() {
+        let content = sts_image();
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        beefy(&mut state);
+        give(&mut state, "hero", status("st_om", "standard.omega", 50));
+        turn::start_current_turn(&mut state, &config(), &mut host).expect("turn starts");
+        assert_eq!(health(&state, "enemy_a"), 500, "开场不掉血");
+        turn::end_current_turn(&mut state, &config(), &mut host).expect("turn ends");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(health(&state, "enemy_a"), 450);
+        assert_eq!(health(&state, "enemy_b"), 450, "**每一个**敌人");
+    }
+
+    /// §249：`Panache` —— 每回合第 5/10/15… 张牌打出时各打一次全体。
+    ///
+    /// 载体是 `cardsPlayedThisTurn` + `remainder`（§249 才把这四条算术实现掉）。
+    /// 判据三点：第 4 张不响、第 5 张响（10 点 × 2 个敌人 = 20）、第 6 张不再响。
+    ///
+    /// ⚠️ 出的牌必须是 **`defend`**（只给格挡），不能是 `flex`：`flex` 给玩家 +2 力量，而
+    /// **力量会加成触发器打出的伤害** —— 第一版判据就踩了这个，第 5 张打出 20 点（10 + 10 力量）
+    /// 而不是 10 点，于是"翻倍执行"这个假象完全来自选牌。**判据牌不许碰伤害**。
+    #[test]
+    fn panache_fires_on_every_fifth_card_of_the_turn() {
+        let content = sts_image();
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        beefy(&mut state);
+        give(&mut state, "hero", status("st_pan", "standard.panache", 10));
+        state
+            .combatant_mut(&cid("hero"))
+            .expect("hero")
+            .set_resource(
+                crate::state::ResourceId::new("standard.energy").expect("energy"),
+                99,
+                Some(99),
+            )
+            .expect("cap");
+        let missing = |state: &CombatState| -> i32 {
+            (500 - health(state, "enemy_a")) + (500 - health(state, "enemy_b"))
+        };
+        let mut per_card = Vec::new();
+        for index in 1..=6 {
+            give_card(&mut state, "hero", CardZone::Hand,
+                      &std::format!("card_f{index}"), "defend", None);
+            let card = crate::state::CardInstanceId::new(&std::format!("card_f{index}"))
+                .expect("id");
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .expect("defend is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            per_card.push(missing(&state));
+        }
+        assert_eq!(
+            per_card,
+            [0, 0, 0, 0, 20, 20],
+            "第 4 张之前不动、第 5 张打 10×2、第 6 张不再打"
+        );
+    }
+
+    /// §249：`Sadistic Nature` —— 只有"**debuff** 落在**别人**身上"才触发。
+    ///
+    /// 三段把两个事实位各测两侧（§249 的两个新 flag）：
+    /// ① 给敌人挂 `weak`（debuff + 落在别人）⇒ 掉 5；
+    /// ② 给自己挂 `weak`（debuff 但 `appliedToOther` 假）⇒ 不掉；
+    /// ③ 给敌人挂 `strength`（落在别人但 `isDebuff` 假）⇒ 不掉。
+    /// 缺任何一段，一个"永远触发"或"永不触发"的实现都能蒙过。
+    #[test]
+    fn sadistic_nature_needs_a_debuff_on_someone_else() {
+        let content = sts_image();
+        let hits = |target: &str, definition: &str| -> i32 {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            beefy(&mut state);
+            give(&mut state, "hero", status("st_sn", "standard.sadistic_nature", 5));
+            // 量的是**前后差**：英雄的初始血不是 500（只有敌人被 `beefy` 抬高了），
+            // 所以"给自己挂 debuff"那一段必须比差值，不能拿 500 当基准。
+            let before = health(&state, target);
+            let request = crate::state::EffectRequest::ApplyStatus {
+                target: Some(cid(target)),
+                definition: crate::state::StatusDefinitionId::new(definition).expect("id"),
+                stacks: 1,
+                duration: 0,
+                charges: 0,
+                source: Some(cid("hero")),
+                source_card: None,
+            };
+            let item = crate::state::EffectItem {
+                request,
+                chain: crate::state::ChainSlot::NONE,
+                owner: None,
+            };
+            crate::exec::resolve_effect(&mut state, &item, Some(&content))
+                .expect("the status lands");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            before - health(&state, target)
+        };
+        assert_eq!(hits("enemy_a", "standard.weak"), 5, "debuff 落在敌人身上 ⇒ 5");
+        assert_eq!(hits("hero", "standard.weak"), 0, "debuff 落在**自己**身上 ⇒ 不响");
+        assert_eq!(hits("enemy_a", "standard.strength"), 0, "buff 落在敌人身上 ⇒ 不响");
+    }
+
+    /// §249：`The Bomb` —— 第 **3** 个（英雄自己的）回合末炸一次，之后再炸不出来。
+    ///
+    /// 顺序是语义：先判"这是最后一层吗"再自减。反过来写就变成"第 4 回合才炸"，
+    /// 而那在页面上看起来完全正常（只是晚了一回合），所以判据看的是**每回合掉血序列**
+    /// `[0, 0, 40, 40]` —— 第 4 段必须是 40，它证明"只炸一次"。
+    ///
+    /// 用**显式事件**而不是 `turn::end_current_turn` 循环：`TurnEnded` 只对**行动者自己**
+    /// 的回合末派发（`host.rs` 里 `CombatEvent::TurnEnded` 那条），而回合机在英雄与敌人之间
+    /// 轮转 —— 循环里"第几次 `end_current_turn` 恰好是英雄的"不是这张牌要保证的事。
+    #[test]
+    fn the_bomb_explodes_on_the_third_turn_end_only() {
+        let content = sts_image();
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        beefy(&mut state);
+        give(&mut state, "hero", status("st_bd", "standard.the_bomb_damage", 40));
+        give(&mut state, "hero", status("st_b", "standard.the_bomb", 3));
+        let mut per_end = Vec::new();
+        for _ in 0..4 {
+            state
+                .enqueue_event(crate::state::CombatEvent::TurnEnded {
+                    combatant: cid("hero"),
+                })
+                .expect("queue");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            per_end.push((500 - health(&state, "enemy_a"), 500 - health(&state, "enemy_b")));
+        }
+        assert_eq!(
+            per_end,
+            [(0, 0), (0, 0), (40, 40), (40, 40)],
+            "第 3 个回合末炸 40 打两个敌人，第 4 个不再炸"
+        );
     }
 
     /// §248：`Enlightenment` —— **降到至多 1**（`SetMin`），不是"设成 1"。

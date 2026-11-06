@@ -111,8 +111,12 @@ def build(name, m, dry_run=False):
         print("  %-10s %s -> %s" % (name, m["src"], m["out_dir"]))
         return 0
     os.makedirs(out_dir, exist_ok=True)
+    # §249: `--deny-json-fallback` is **not** optional.  A single (opcode, field) that
+    # falls back to `F_JSON` silently breaks every *other* program sharing that opcode
+    # at runtime, so it must fail the build while the culprit is still named.
     cmd = [sys.executable, "-B", COMPILE, "--src", src, "--out-dir", out_dir,
-           "--full-name", m["full_name"], "--core-name", m["core_name"], "--quiet"]
+           "--full-name", m["full_name"], "--core-name", m["core_name"], "--quiet",
+           "--deny-json-fallback"]
     r = subprocess.run(cmd, cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if r.returncode != 0:
         sys.stdout.write(r.stdout.decode("utf-8", "replace"))

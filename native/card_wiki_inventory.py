@@ -300,6 +300,11 @@ FACTS = {
     # ---- §248：Enlightenment / Madness（2 张）----------------------------------------------
     'enlightenment': ([('status', 'standard.cap_cost_at', 1, 'source')], [('status', 'standard.cap_cost_at', 1, 'source')]),
     'madness': ([('each', 'Hand', 'Random', 1, (('cardCounter', 'cardInstance.iterated', 'standard.card_cost_override', 0, 'Set'),))], [('each', 'Hand', 'Random', 1, (('cardCounter', 'cardInstance.iterated', 'standard.card_cost_override', 0, 'Set'),))]),
+    # ---- §249：Omega / Panache / Sadistic Nature / The Bomb（4 张）-------------------------
+    'omega': ([('status', 'standard.omega', 50, 'source')], [('status', 'standard.omega', 60, 'source')]),
+    'panache': ([('status', 'standard.panache', 10, 'source')], [('status', 'standard.panache', 14, 'source')]),
+    'sadistic_nature': ([('status', 'standard.sadistic_nature', 5, 'source')], [('status', 'standard.sadistic_nature', 7, 'source')]),
+    'the_bomb': ([('status', 'standard.the_bomb_damage', 40, 'source'), ('status', 'standard.the_bomb', 3, 'source')], [('status', 'standard.the_bomb_damage', 50, 'source'), ('status', 'standard.the_bomb', 3, 'source')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

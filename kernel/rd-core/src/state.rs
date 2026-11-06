@@ -2675,6 +2675,13 @@ pub enum CombatEvent {
     StatusApplied {
         /// 承受者。
         target: CombatantId,
+        /// §249：落下的这条是 **debuff** 吗（`Sadistic Nature` 只认 debuff）。
+        ///
+        /// 极性在**入队那一刻**才知道（事件本身不带定义），所以事实必须随事件一起走 ——
+        /// 与 §245 的 `GainBlock.from_card` 同一条理由。
+        debuff: bool,
+        /// §249：承受者**不是**施法者自己（`Sadistic Nature` 说的是 "to an **enemy**"）。
+        applied_to_other: bool,
     },
     /// 同上，但合进了已有实例（`StatusEffects.cs:135-139`）。
     StatusMerged {

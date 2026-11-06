@@ -5263,6 +5263,12 @@ pub const CARD_HAS_TAG_STATUS: u16 = 1 << 3;
 /// §237：`curse` 标签（`Fire Breathing` 要"Status **或** Curse"）。第 7 位是当时唯一空着的。
 pub const CARD_HAS_TAG_CURSE: u16 = 1 << 7;
 
+/// §249：刚落下的那条状态是 **debuff**（`Sadistic Nature`）。
+pub const STATUS_IS_DEBUFF: u16 = 1 << 9;
+
+/// §249：刚落下的那条状态**不是**施法者给自己的（`Sadistic Nature` 说 "to an **enemy**"）。
+pub const STATUS_APPLIED_TO_OTHER: u16 = 1 << 10;
+
 /// §239：**这次出牌时，手牌里每一张都是 Attack**（`Clash` 的 `PlayCondition` 问的就是它）。
 ///
 /// 为什么是"一位、一个问题"，不是"每位一个 tag"：这个事实只有 `PlayCondition` 会问，而
@@ -5439,7 +5445,13 @@ fn apply_one_status(
     let polarity = status_polarity(definition_id.as_str(), content)?;
     // 新实例走**唯一入口**：`push_new_status` 负责取号、造实例、自增。
     ctx.state
-        .enqueue_event(crate::state::CombatEvent::StatusApplied { target: *target })
+        .enqueue_event(crate::state::CombatEvent::StatusApplied {
+            target: *target,
+            // §249：极性此刻才知道（`polarity` 就是上一行算出来的那个）。
+            debuff: matches!(polarity, crate::state::StatusPolarity::Debuff),
+            // §249："落在别人身上" —— 给自己挂 debuff 不该触发 `Sadistic Nature`。
+            applied_to_other: ctx.source.map_or(true, |source| source != *target),
+        })
         .map_err(ExecError::Capacity)?;
     push_new_status(
         ctx.state,

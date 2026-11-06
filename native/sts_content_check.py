@@ -60,6 +60,7 @@ sys.path.insert(0, CONTENTC)
 import rdcfmt as F            # noqa: E402  (the frozen on-disk vocabulary)
 import reader as rdcf_reader  # noqa: E402  (the reference reader)
 import compile as contentc_compile  # noqa: E402  (strip_presentation + DOC_ROOT_KEYS)
+import program_audit as audit   # noqa: E402  (§249: 内容用到的表达式 kind 是否可实现)
 
 PKG_DIR = os.path.join(CONTENTC, "packages", "sts")
 SRC_PATH = os.path.join(PKG_DIR, "sts.roguedeck.json")
@@ -100,7 +101,8 @@ INV_COUNTS = {
     # §244: +2 (`standard.mayhem` / `standard.magnetism`).
     # §245: +1 (`standard.no_block_from_cards`).
     # §248: +1 (`standard.cap_cost_at`).
-    "statuses": 60,
+    # §249: +5 (`omega` / `panache` / `sadistic_nature` / `the_bomb` + its damage twin).
+    "statuses": 65,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -497,6 +499,23 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §249：Omega / Panache / Sadistic Nature / The Bomb（4 张 / 8 行）-------------------
+    "omega": {"Cost": 3, "Tags": ["power", "colorless"],
+                   "Facts": [('status', 'standard.omega', 50, 'source')]},
+    "omega+": {"Cost": 3, "Tags": ["power", "colorless"],
+                    "Facts": [('status', 'standard.omega', 60, 'source')]},
+    "panache": {"Cost": 0, "Tags": ["power", "colorless"],
+                     "Facts": [('status', 'standard.panache', 10, 'source')]},
+    "panache+": {"Cost": 0, "Tags": ["power", "colorless"],
+                      "Facts": [('status', 'standard.panache', 14, 'source')]},
+    "sadistic_nature": {"Cost": 0, "Tags": ["power", "colorless"],
+                             "Facts": [('status', 'standard.sadistic_nature', 5, 'source')]},
+    "sadistic_nature+": {"Cost": 0, "Tags": ["power", "colorless"],
+                              "Facts": [('status', 'standard.sadistic_nature', 7, 'source')]},
+    "the_bomb": {"Cost": 2, "Tags": ["skill", "colorless"],
+                      "Facts": [('status', 'standard.the_bomb_damage', 40, 'source'), ('status', 'standard.the_bomb', 3, 'source')]},
+    "the_bomb+": {"Cost": 2, "Tags": ["skill", "colorless"],
+                       "Facts": [('status', 'standard.the_bomb_damage', 50, 'source'), ('status', 'standard.the_bomb', 3, 'source')]},
     # ---- §248：Enlightenment / Madness（2 张 / 4 行）----------------------------------------
     # ---- §248：Enlightenment / Madness（2 张 / 4 行）----------------------------------------
     "enlightenment": {"Cost": 0, "Tags": ["skill", "colorless"],
@@ -1267,6 +1286,11 @@ INV_STATUSES = {
     "standard.no_block_from_cards": [],
     # §248: Enlightenment's "cost at most N" -- the rule is `CostStage::CapCostAt`.
     "standard.cap_cost_at": [],
+    "standard.the_bomb_damage": [],
+    "standard.the_bomb": [],
+    "standard.sadistic_nature": [],
+    "standard.panache": [],
+    "standard.omega": [],
     # §237: the five trigger-hook powers. None has a passive modifier -- they are pure triggers
     # (`BlockGained` / `CardsDrawn` / `CardExhausted`).
     "standard.juggernaut": [],
@@ -1951,6 +1975,29 @@ def check_cards_and_actions(doc):
     print("[3] card / enemy-action numbers (inv:§2.1, §3.1, §4.1)")
     programs = load_programs(doc)
     cards = {c["Id"]: c for c in doc.get("Cards") or []}
+    # ---- §249：**内容用到的每个表达式 kind，内核都求值得出来吗** --------------
+    #
+    # 这一条是 §249 的教训：`remainder` 在 `INT_KINDS` 表里有、能写进内容、能过其它
+    # 所有检查，但内核**没实现**它 ⇒ 只有玩到那张牌时才炸（`UnsupportedKind`）。
+    # 判据从 `expr.rs` 源码里抽（表 = 声明、match 分支 = 已实现），所以**新增一张牌就自动
+    # 被覆盖**，不需要维护第二份清单。
+    tables = audit.kind_tables()
+    _, done = audit.implemented()
+    unsupported = set()
+    for names in tables.values():
+        unsupported |= names - done
+    used = audit.content_kinds()
+    bad = {}
+    for kind, owner in used:
+        if kind.startswith("node.") or kind.startswith("sel."):
+            continue
+        if kind in unsupported:
+            bad.setdefault(kind, set()).add(owner)
+    for kind, owners in sorted(bad.items()):
+        fail("program." + sorted(owners)[0],
+             "uses kind %r which expr.rs does not evaluate (UnsupportedKind)" % kind)
+    ok("programs", "%d kind(s) used, all implemented"
+       % len({k for k, _ in used}))
     for cid, spec in INV_CARDS.items():
         card = cards.get(cid)
         if card is None:
@@ -3049,7 +3096,10 @@ def check_statuses(doc):
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
                      # §244
-                     "standard.mayhem", "standard.magnetism"):
+                     "standard.mayhem", "standard.magnetism",
+                     # §249：四个触发器 power（The Bomb 的记账搭档没有触发器）。
+                     "standard.omega", "standard.panache", "standard.sadistic_nature",
+                     "standard.the_bomb"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -3078,6 +3128,11 @@ def check_statuses(doc):
                         # §244
                         "standard.mayhem": ["TurnStarted"],
                         "standard.magnetism": ["TurnStarted"],
+                        # §249
+                        "standard.omega": ["TurnEnded"],
+                        "standard.panache": ["CardPlayed"],
+                        "standard.sadistic_nature": ["StatusApplied"],
+                        "standard.the_bomb": ["TurnEnded"],
                         # §231: Battle Trance 的"本回合不能再抽" —— 一条 TurnEnded 自摘触发器
                         # （规则本身在内核的抽牌节点里）。
                         "standard.no_draw": ["TurnEnded"],

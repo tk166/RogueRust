@@ -1318,6 +1318,13 @@ def main():
     ap.add_argument("--core-name", default="content.core.rdcf",
                     help="file name of the stripped image (default: content.core.rdcf)")
     ap.add_argument("--quiet", action="store_true")
+    # §249: a field that falls back to `F_JSON` is **never** acceptable in shipped
+    # content, because it does not just lose that one value: every other program that
+    # shares the opcode then dies at runtime with `WrongKind("F_JSON")`.  That is how
+    # four unrelated cards all failed at once (§249.1) while the report listed nothing
+    # a reader would notice.  `build.py` always passes this flag.
+    ap.add_argument("--deny-json-fallback", action="store_true",
+                    help="exit non-zero if any (opcode, field) needs the F_JSON escape")
     args = ap.parse_args()
 
     os.makedirs(args.out_dir, exist_ok=True)
@@ -1421,7 +1428,16 @@ def main():
     write_report(os.path.join(args.out_dir, "report.md"), args.src, len(raw), doc,
                  results, comp, t_load, peak)
 
-    if not args.quiet:
+    if args.deny_json_fallback and comp["deriver"].json_fallback:
+        for owner, field, classes in comp["deriver"].json_fallback:
+            sys.stderr.write(
+                "F_JSON FALLBACK %s.%s observed as %s\n"
+                % (owner, field, ",".join(classes)))
+        sys.stderr.write(
+            "JSON_FALLBACK_DENIED %d field(s); fix the content (or the deriver), "
+            "not the reader\n" % len(comp["deriver"].json_fallback))
+        raise SystemExit(1)
+
         print("source            : %s" % args.src)
         print("raw bytes         : %d" % len(raw))
         print("compact JSON      : %d" % compact_bytes(doc))
