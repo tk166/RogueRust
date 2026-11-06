@@ -1,0 +1,22 @@
+{{Card Infobox
+| Name          = Intimidate
+| Image         = Red-Intimidate.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 0
+| Description   = Apply (1;2) {{BD|Weak}} to ALL enemies.<br>{{KW|Exhaust}}.
+| GivesToEnemy  = Weak
+| GivesToPlayer = Exhaust
+}}
+{{Power Infobox|Weak}} {{Keyword Infobox|Exhaust}}
+{{C|Intimidate}} is a 0 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It applies 1 (2 if upgraded) {{BD|Weak}} to '''ALL''' enemies. {{C|Intimidate}} will then {{KW|Exhaust}} itself.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Intimidate to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{IroncladNav}}
+[[Category:Cards]]

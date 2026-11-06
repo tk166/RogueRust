@@ -1,0 +1,43 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Havoc
+| Image         = Red-Havoc.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Common
+| Cost          = 1
+| CostPlus      = 0
+| Description   = Play the top card of your draw pile and {{KW|Exhaust}} it.
+| GivesToPlayer = Exhaust
+}}
+{{Keyword Infobox|Exhaust}}
+{{C|Havoc}} is a 1 (0 if upgraded) {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It plays and {{KW|Exhaust|Exhausts}} the top card of your draw pile, without expending any {{Icon|RE}} '''Energy'''. X-cost cards will use your current {{Icon|RE}} '''Energy''' for X, without consuming that {{Icon|RE}} '''Energy'''.
+
+== Interactions ==
+=== Order ===
+* The top card being played and being {{KW|Exhaust|Exhausted}} are separate, meaning the resolution of the played card takes place ''before'' any results of {{KW|Exhaust|Exhausting}} that card can occur.
+** This means that {{BD|Beat of Death}} will trigger ''before'' {{C|Feel No Pain}} gives {{KW|Block}} as a result of the card being {{KW|Exhaust|Exhausted}} by {{C|Havoc}}.
+
+=== Synergies ===
+* {{C|Headbutt}}, {{C|Warcry}} and {{C|Thinking Ahead}} let you manipulate the top card of your draw pile, giving you more control over {{C|Havoc}}.
+* {{R|Frozen Eye}} allows you to see which card {{C|Havoc}} will target.
+
+=== Neutral ===
+* If your draw pile is empty when playing {{C|Havoc}}, it will shuffle your discard pile into your draw pile and target the new top card.
+* {{R|Strange Spoon}} has a 50% chance of saving a card that would be {{KW|Exhaust|Exhausted}} by {{C|Havoc}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.0|* Fixed Mayhem, Havoc, Distilled Chaos, and Omniscience sometimes not playing cards if original target is dead.}}
+{{Update History Table/row|Watcher 10|* Fixed Mayhem, Havoc, Distilled Chaos, and Omniscience sometimes not playing cards if original target is dead.}}
+{{Update History Table/row|Weekly 54|* Tingsha, Sword Boomerang, Bouncing Flask, Rip and Tear, Thunder Orbs, Havoc, and Juggernaut now utilize seeded enemy target randomization.}}
+{{Update History Table/row|Weekly 51|* Accuracy power now correctly works with Shivs played from the top of the deck via cards like Mayhem or Havoc.}}
+{{Update History Table/row|Weekly 35|* Fix for crash when playing Havoc against half dead enemies (Darkling/Awakened one).}}
+{{Update History Table/row|Weekly 33|* Havoc card now utilizes RNG to select its random target (save/load consistency).}}
+{{Update History Table/row|Weekly 23|* Havoc card's description: Exhaust was not capitalized.}}
+{{Update History Table/row|Weekly 3|* Havoc can now be played even when no cards are in your deck. (Discard will shuffle in)}}
+{{Update History Table/row|?|* Added Havoc to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

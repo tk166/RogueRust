@@ -1,0 +1,37 @@
+{{Card Infobox
+| Name          = Fire Breathing
+| Image         = Red-FireBreathing.png
+| Color         = Red
+| Type          = Power
+| Rarity        = Uncommon
+| Cost          = 1
+| Description   = Whenever you draw a {{QueryLink|Cards|type:Status|Status}} or {{QueryLink|Cards|type:Curse|Curse}} card, deal (6;10) damage to ALL enemies.
+| GivesToPlayer = Fire Breathing
+}}
+{{Power Infobox
+| Name          = Fire Breathing
+| Image         = Icon FireBreathing.png
+| Description   = Whenever you draw a {{QueryLink|Cards|type:Status|Status}} or {{QueryLink|Cards|type:Curse|Curse}} card, deal X damage to ALL enemies.
+| Type          = Buff
+| Stacks        = Intensity
+| BetweenTurns  =
+| Cap           =
+| InteractsWith = Draw
+}}
+{{C|Fire Breathing}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 6 (10 if upgraded) {{BD|Fire Breathing}}, which deals that amount of damage whenever a {{QueryLink|Cards|type:Status|Status}} card is drawn.
+
+== Interactions ==
+=== Neutral ===
+* {{BD|Fire Breathing}} only activates upon {{QueryLink|Cards|type:Status|Status}} or {{QueryLink|Cards|type:Curse|Curse}} cards being drawn. This means that cards created in hand, such as through {{C|Power Through}}, do not trigger it. 
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.0|* Fire Breathing card reworked.}}
+{{Update History Table/row|Watcher 8|* Damage value for Fire Breathing power's description is now blue.}}
+{{Update History Table/row|Watcher 1|* Fire Breathing: New effect: Cost 1, "Whenever you draw a Status or Curse card, deal 6 (10) damage to ALL enemies."}}
+{{Update History Table/row|Day 1 Patch|* Dropkick, Fire Breathing, and Shockwave portraits weren't rendering in card popup view.}}
+{{Update History Table/row|?|* Added Fire Breathing to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

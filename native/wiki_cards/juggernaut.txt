@@ -1,0 +1,49 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Juggernaut
+| Image       = Red-Juggernaut.png
+| Color       = Red
+| Type        = Power
+| Rarity      = Rare
+| Cost        = 2
+| Description = Whenever you gain {{KW|Block}}, deal (5;7) damage to a random enemy.
+| PowerGives  = Block
+}}
+{{Power Infobox
+| Name          = Juggernaut
+| Image         = Icon Juggernaut.png
+| Description   = Whenever you gain {{KW|Block}}, deal X damage to a random enemy.
+| Type          = Buff
+| Stacks        = Intensity
+| BetweenTurns  =
+| Cap           =
+| InteractsWith = Block
+}}
+{{Keyword Infobox|Block}}
+{{C|Juggernaut}} is a 2 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Power|Power}} Card. It grants 5 (7 if upgraded) {{BD|Juggernaut}}, which deals damage equal to that amount whenever you gain {{KW|Block}}.
+
+== Interactions ==
+=== Synergies ===
+* Synergizes with any source of block, but particularly with block that can activate multiple times, such as {{C|Rage}}, {{C|Second Wind}}, {{C|Feel No Pain}}, {{R|Ornamental Fan}} or {{R|The Abacus}}.
+
+=== Neutral ===
+* Juggernaut will only be triggered by gaining separate instances of {{KW|Block}}. This means that {{BD|Metallicize}}, {{BD|Plated Armor}} and {{BD|Next Turn Block}} will only trigger it only once each regardless of how many different sources they have.
+** For example, playing two {{C|Metallicize}} cards will still result in only one trigger of {{BD|Juggernaut}} per turn.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.0|* Fixed Juggernaut damage not changing targets if original target is dead.}}
+{{Update History Table/row|Watcher 10|* Fixed Juggernaut damage not changing targets if original target is dead.}}
+{{Update History Table/row|Weekly 54|* Tingsha, Sword Boomerang, Bouncing Flask, Rip and Tear, Thunder Orbs, Havoc, and Juggernaut now utilize seeded enemy target randomization.}}
+{{Update History Table/row|Weekly 42|* Updating icon for Juggernaut power.}}
+{{Update History Table/row|Weekly 37|* Juggernaut+ card buff: Upgrade amount 1 -> 2.}}
+{{Update History Table/row|Weekly 34|* Juggernaut card buff: Damage 3 -> 5. Upgraded 5 -> 6.}}
+{{Update History Table/row|Weekly 18|* Juggernaut was not working properly. Fixed.}}
+{{Update History Table/row|Weekly 3|* Juggernaut card nerf.}}
+{{Update History Table/row|Weekly 1|* Juggernaut's description gets simpler.}}
+{{Update History Table/row|Day 1 Patch|* Juggernaut power's value is now colored blue.}}
+{{Update History Table/row|?|* Added Juggernaut to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

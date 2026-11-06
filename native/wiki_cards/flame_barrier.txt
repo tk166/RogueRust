@@ -1,0 +1,46 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Flame Barrier
+| Image         = Red-FlameBarrier.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 2
+| Description   = Gain (12;16) {{KW|Block}}.<br>Whenever you are attacked this turn, deal (4;6) damage back.
+| GivesToPlayer = Flame Barrier, Block
+}}
+{{Power Infobox
+| Name         = Flame Barrier
+| Image        = Icon FlameBarrier.png
+| Description  = When attacked, deals X damage back.
+| Type         = Buff
+| Stacks       = Intensity
+| BetweenTurns =
+| Cap          =
+}}
+{{Keyword Infobox|Block}}
+{{C|Flame Barrier}} is a 2 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 12 (16 if upgraded) {{KW|Block}} and 4 (6 if upgraded) {{BD|Flame Barrier}}, which deals that amount of damage to every enemy that hits you for the rest of the turn.
+
+== Interactions ==
+=== Neutral ===
+* Only activates upon being hit by an enemy attack, so not when taking damage from:
+** {{BD|Sharp Hide}} or {{BD|Thorns}}.
+** {{BD|Explosive}}
+** {{BD|Constricted}}
+** {{BD|Beat of Death}}
+** Any damage from one of your cards, such as {{C|Burn}}, {{C|Pain}} or {{C|Bloodletting}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Watcher 13|* Flame Barrier card resolves 0.4s faster in fast mode.}}
+{{Update History Table/row|Weekly 44|* WORDING: Improving consistency for Flame Barrier and Thorns wording.}}
+{{Update History Table/row|Weekly 42|* Updating SFX for Flame Barrier Power.}}
+{{Update History Table/row|Weekly 40|* Flame Barrier card gets a new SFX.}}
+{{Update History Table/row|Weekly 36|* Thorns and Flame Barrier powers are made consistent.}}
+{{Update History Table/row|Weekly 5|* Card FlameBarrier+ gets buffed. Deals 2 more damage back.}}
+{{Update History Table/row|Weekly 2|* FlameBarrier, Flight, Malleable, and Torii now have more checks to ensure that their effects trigger correctly.}}
+{{Update History Table/row|?|* Added Flame Barrier to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

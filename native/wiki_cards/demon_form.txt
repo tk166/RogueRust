@@ -1,0 +1,33 @@
+{{Sequel Disambiguation}} 
+{{Card Infobox
+| Name          = Demon Form
+| Image         = Red-DemonForm.png
+| Color         = Red
+| Type          = Power
+| Rarity        = Rare
+| Cost          = 3
+| Description   = At the start of your turn, gain (2;3) {{BD|Strength}}.
+| GivesToPlayer = Demon Form
+| PowerGives    = Strength
+}}
+{{Power Infobox
+| Name          = Demon Form
+| Image         = Icon DemonForm.png
+| Description   = At the start of your turn, gain X {{BD|Strength}}.
+| Type          = Buff
+| Stacks        = Intensity
+| BetweenTurns  =
+| Cap           =
+| GivesToPlayer = Strength
+}} 
+{{Power Infobox|Strength}}
+{{C|Demon Form}} is a 3 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 2 (3 if upgraded) {{BD|Demon Form}}, which gives that amount of {{BD|Strength}} at the start of every turn.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 23|* Added power icon for Demon Form Power.}}
+{{Update History Table/row|?|* Added Demon Form to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

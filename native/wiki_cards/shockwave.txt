@@ -1,0 +1,30 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Shockwave
+| Image         = Red-Shockwave.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 2
+| Description   = Apply (3;5) {{BD|Weak}} and {{BD|Vulnerable}} to ALL enemies.<br>{{KW|Exhaust}}.
+| GivesToPlayer = Exhaust
+| GivesToEnemy  = Weak, Vulnerable
+}}
+{{Power Infobox|Weak}} {{Power Infobox|Vulnerable}} {{Keyword Infobox|Exhaust}}
+{{C|Shockwave}} is a 2 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It applies 3 (5 if upgraded) {{BD|Weak}} and 3 (5 if upgraded) {{BD|Vulnerable}} to '''ALL''' enemies. {{C|Shockwave}} will then {{KW|Exhaust}} itself.
+
+== Interactions == 
+=== Order ===
+* The {{BD|Weak}} applies first and the {{BD|Vulnerable}} applies afterwards, meaning enemies with one {{BD|Artifact}} will only receive the {{BD|Vulnerable}}.
+
+=== Synergies ===
+* {{R|Paper Phrog}} increases the effectiveness of {{BD|Vulnerable}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Day 1 Patch|* Dropkick, Fire Breathing, and Shockwave portraits weren't rendering in card popup view.}}
+{{Update History Table/row|?|* Added Shockwave to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

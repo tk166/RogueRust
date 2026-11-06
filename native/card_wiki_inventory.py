@@ -21,6 +21,14 @@ import io
 
 # §218 的偏差声明（内容 vs wiki）。key = 基础 id；值里的字段只写**与 wiki 不同**的那几项。
 DEVIATIONS = {
+    # §235：`Sever Soul` 的 dump 里 `{{KW|Exhaust}}` 是**动词**（"Exhaust all non-Attack cards in
+    # your hand"），不是这张牌自己的关键字 —— 它自己不消耗。词条解析器只看 `{{KW|...}}` 标记，
+    # 分不出"作为动词的 Exhaust"，所以这里显式声明：内容**没有** Exhaust 关键字。
+    'sever_soul': {
+        'why': 'wiki 的 {{KW|Exhaust}} 是动词（消耗手里的非攻击牌），不是本牌的关键字；'
+               '牌本身打完进弃牌堆。',
+        'content_keywords': [],
+    },
     # §219：slimed 的偏差已经**修掉**了（现在可出、落区 ExhaustPile）—— 载体早就存在，
     # 只是 §218 把 wiki 的 `Exhaust` 当成了 tag。这里不再声明。
     'sentinel': {
@@ -62,8 +70,8 @@ FACTS = {
                   [('block', 7, 'source'), ('damage', 7, 'event')]),
     'clothesline': ([('damage', 12, 'event'), ('status', 'standard.weak', 2, 'event')],
                     [('damage', 14, 'event'), ('status', 'standard.weak', 3, 'event')]),
-    'anger': ([('damage', 6, 'event'), ('card', 'anger', 1, 'DiscardPile', 'event')],
-              [('damage', 8, 'event'), ('card', 'anger+', 1, 'DiscardPile', 'event')]),
+    'anger': ([('damage', 6, 'event'), ('card', 'anger', 1, 'DiscardPile', 'source')],
+              [('damage', 8, 'event'), ('card', 'anger+', 1, 'DiscardPile', 'source')]),
     'uppercut': ([('damage', 13, 'event'), ('status', 'standard.weak', 1, 'event'),
                   ('status', 'standard.vulnerable', 1, 'event')],
                  [('damage', 13, 'event'), ('status', 'standard.weak', 2, 'event'),
@@ -193,6 +201,21 @@ FACTS = {
                    ('multiply', 2, ('pool', 'standard.block', 'source')), 'source')],
                  [('setPool', 'standard.block',
                    ('multiply', 2, ('pool', 'standard.block', 'source')), 'source')]),
+    # ---- §235：35 张红卡的第一批（14 张） -----------------------------------------------
+    'carnage': ([('damage', 20, 'event')], [('damage', 28, 'event')]),
+    'demon_form': ([('status', 'standard.demon_form', 2, 'source')], [('status', 'standard.demon_form', 3, 'source')]),
+    'disarm': ([('modify', 'standard.strength', -2, 'event')], [('modify', 'standard.strength', -3, 'event')]),
+    'dropkick': ([('damage', 5, 'event'), ('when', None, 'gain', 'standard.energy', 1, 'source'), ('when', None, 'draw', 1, 'source')], [('damage', 8, 'event'), ('when', None, 'gain', 'standard.energy', 1, 'source'), ('when', None, 'draw', 1, 'source')]),
+    'flame_barrier': ([('block', 12, 'source'), ('status', 'standard.flame_barrier', 4, 'source')], [('block', 16, 'source'), ('status', 'standard.flame_barrier', 6, 'source')]),
+    'headbutt': ([('damage', 9, 'event'), ('choose', 'source', 'DiscardPile', (), 1, 1, 'ToDrawPileTop')], [('damage', 12, 'event'), ('choose', 'source', 'DiscardPile', (), 1, 1, 'ToDrawPileTop')]),
+    'immolate': ([('damage', 21, 'allEnemies'), ('card', 'burn', 1, 'DiscardPile', 'source')], [('damage', 28, 'allEnemies'), ('card', 'burn', 1, 'DiscardPile', 'source')]),
+    'intimidate': ([('status', 'standard.weak', 1, 'allEnemies')], [('status', 'standard.weak', 2, 'allEnemies')]),
+    'power_through': ([('card', 'wound', 2, 'Hand', 'source'), ('block', 15, 'source')], [('card', 'wound', 2, 'Hand', 'source'), ('block', 20, 'source')]),
+    'rage': ([('status', 'standard.rage', 3, 'source')], [('status', 'standard.rage', 5, 'source')]),
+    'reckless_charge': ([('damage', 7, 'event'), ('card', 'dazed', 1, 'DrawPile', 'source')], [('damage', 10, 'event'), ('card', 'dazed', 1, 'DrawPile', 'source')]),
+    'seeing_red': ([('gain', 'standard.energy', 2, 'source')], [('gain', 'standard.energy', 2, 'source')]),
+    'sever_soul': ([('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),))], [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),))]),
+    'shockwave': ([('status', 'standard.weak', 3, 'allEnemies'), ('status', 'standard.vulnerable', 3, 'allEnemies')], [('status', 'standard.weak', 5, 'allEnemies'), ('status', 'standard.vulnerable', 5, 'allEnemies')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

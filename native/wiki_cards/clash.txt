@@ -1,0 +1,38 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Clash
+| Image       = Red-Clash.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Common
+| Cost        = 0
+| Description = Can only be played if every card in your hand is an Attack.<br>Deal (14;18) damage.
+}}
+{{C|Clash}} is a 0 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 14 (18 if upgraded) damage. It cannot be played if any card in hand is not an {{QueryLink|Cards|type:Attack|Attack}} Card.
+
+== Interactions ==
+=== Synergies ===
+* {{C|Sever Soul}} and {{C|Second Wind}}, and to a lesser degree {{C|Corruption}}, {{R|Blue Candle}}, and {{R|Medical Kit}} can be used to fulfill the requirement to play this card. 
+* Synergizes well with hand-management through effects such as {{KW|Exhaust}} or [[Keywords#Discard|Discard]].
+* When drawing {{C|Clash}} through {{R|Unceasing Top}}, it will be the only card in hand, meaning it can be played.
+
+=== Neutral ===
+* If the condition is not met, {{C|Clash}} will simply not be able to be played. This includes if it is played indirectly through effects such as {{P|Distilled Chaos}} or {{C|Havoc}}. These will cause {{C|Clash}} to simply discard itself without being played, unless {{KW|Exhaust|Exhausted}}. This means:
+** [[Time Eater]]'s {{BD|Time Warp}} is not triggered.
+** {{R|Ink Bottle}} is not advanced.
+** {{R|Nunchaku}}, {{R|Kunai}}, {{R|Shuriken}} and {{R|Ornamental Fan}} are not triggered.
+
+* While {{C|Havoc}} will not play an unplayable {{C|Clash}}, it will still {{KW|Exhaust}} it. This means all {{KW|Exhaust}} synergies will still trigger, like {{C|Feel No Pain}}.
+
+=== Anti-Synergies ===
+* As opposed to most cards and strategies in this game, this card pairs poorly with effects that allow you to draw cards, except for previously mentioned {{R|Unceasing Top}}. 
+* It pairs poorly with {{C|Dark Embrace}} or {{R|Dead Branch}}, since {{KW|Exhaust|Exhausting}} non-{{QueryLink|Cards|type:Attack|Attack}} cards is a way to enable you to play {{C|Clash}}, but either of these can possibly replace those cards with other non-{{QueryLink|Cards|type:Attack|Attack}} cards.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 52|* Adding VFX for Clash card.}}
+{{Update History Table/row|?|* Added Clash to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

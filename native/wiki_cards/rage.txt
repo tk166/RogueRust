@@ -1,0 +1,37 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Rage
+| Image         = Red-Rage.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 0
+| Description   = Whenever you play an Attack this turn, gain (3;5) {{KW|Block}}.
+| GivesToPlayer = Rage
+| PowerGives    = Block
+}}
+{{Power Infobox
+| Name          = Rage
+| Image         = Icon Anger.png
+| Description   = Whenever you play an {{QueryLink|Cards|type:Attack|Attack}} this turn, gain X {{KW|Block}}.
+| Type          = Buff
+| Stacks        = Intensity
+| BetweenTurns  = Removed
+| Cap           =
+| GivesToPlayer = Block
+}}
+{{C|Rage}} is a 0 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 3 (5 if upgraded) {{BD|Rage}}, which gives that amount of {{KW|Block}} every time an {{QueryLink|Cards|type:Attack|Attack}} is played this turn.
+
+== Interactions ==
+=== Neutral ===
+* The {{KW|Block}} gained by {{BD|Rage}} is unaffected by {{BD|Frail}}, {{BD|Dexterity}} or {{BD|No Block}} from a previously played {{C|Panic Button}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 22|* Fixing crashes for ZHS when viewing Rage card.}}
+{{Update History Table/row|Weekly 16|* Rage card gets a buff, cost 1 -> 0. Block 4 -> 3.}}
+{{Update History Table/row|?|* Added Rage to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

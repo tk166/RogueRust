@@ -1,0 +1,62 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Feed
+| Image         = Red-Feed.png
+| Color         = Red
+| Type          = Attack
+| Rarity        = Rare
+| Cost          = 1
+| Description   = Deal (10;12) damage.<br>If {{KW|Fatal}}, raise your Max HP by (3;4). {{KW|Exhaust}}.
+| GivesToPlayer = Exhaust
+| InteractsWith = Fatal
+}}
+{{Keyword Infobox|Fatal}} {{Keyword Infobox|Exhaust}}
+{{C|Feed}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 10 (12 if upgraded) damage, and if this damage is {{KW|Fatal}}, it will permanently increase your Max HP by 3 (4 if upgraded). {{C|Feed}} will then {{KW|Exhaust}} itself.
+
+== Interactions ==
+=== Synergies ===
+* As playing {{C|Feed}} at the right moment is crucial, it synergizes with {{R|Runic Pyramid}} and ways to {{KW|Retain}} it, such as {{C|Well-Laid Plans}}, {{C|Equilibrium}} or {{C|Meditate}}.
+
+* As one of the few cards that has benefits that remain outside of combat, triggering it as often as possible becomes an additional objective within combat. Given that {{C|Feed}} {{KW|Exhaust|Exhausts}} after use, it synergizes with:
+** {{R|Strange Spoon}}, which gives a 50% chance to not {{KW|Exhaust}} {{C|Feed}} when played, allowing it to be redrawn and used again.
+** {{C|Exhume}}, which can get {{C|Feed}} back once after being played, with the added benefit of putting it directly into your hand.
+
+=== Neutral ===
+* When duplicated through an effect such as {{C|Double Tap}} or a {{P|Duplication Potion}}, {{C|Feed}} will trigger its {{KW|Fatal}} effect even if only the second play was {{KW|Fatal}}.
+** As duplicated {{QueryLink|Cards|type:Attack|Attacks}} always target the same enemy with both plays, you cannot trigger {{C|Feed}} twice by duplicating it.
+
+* {{KW|Fatal}} does ''not'' trigger when {{BD|Minion|Minions}} are killed.
+** However, the {{M|Cultist}} enemies in {{M|Awakened One}} fight are not technically {{BD|Minion|Minions}}, and ''can'' trigger {{KW|Fatal}}.
+
+* {{KW|Fatal}} is not affected by {{M|Slime Boss}} or other Slime enemies splitting, and only triggers when reducing a Slime's health to 0, whether that Slime was spawned as the result of a split or not.
+* The first phase of {{M|Awakened One}} does not trigger {{KW|Fatal}}, but the second phase does.
+
+* In the {{M|Darkling|Three Darklings}} fight, an attack is only considered {{KW|Fatal}} if it kills the last {{M|Darkling}}; otherwise, unlimited triggers could be farmed on this fight.
+
+* {{KW|Fatal}} triggers on killing the {{M|Corrupt Heart}}, although this does not matter, as it ends the run.
+
+=== Anti-Synergies ===
+* Due to the limited number of {{KW|Fatal}} triggers available in any given combat, {{C|Feed}} does not synergize with other {{KW|Fatal}} cards:
+** {{C|Hand of Greed}}
+** {{C|Ritual Dagger}}
+** {{C|Lesson Learned}}
+* {{R|Mark of the Bloom}} prevents the healing from the Max HP increase, however the player will still gain Max HP.
+
+== Achievements ==
+=== Ooh Donut! ===
+* Unlocks when you kill {{M|Donu}} with '''Feed'''.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Watcher 9|* The new Fatal keyword applied to Ritual Dagger, Lesson Learned, Hand of Greed, and Feed means that the effect of these cards now trigger upon killing non-Minion enemies.
+* New Fatal keyword used by Feed, Lesson Learned, Hand of Greed, and Ritual Dagger.}}
+{{Update History Table/row|Weekly 52|* Adding VFX for Feed card.}}
+{{Update History Table/row|Weekly 46|* Feed now correctly works on the Awakened One when it is in its second form.}}
+{{Update History Table/row|Weekly 7|* Feed no longer works on Minions (New Power: Minion to lt you know who are minions).}}
+{{Update History Table/row|Weekly 4|* Fix rare crash with Feed card.}}
+{{Update History Table/row|Weekly 3|* Feed no longer works on enemies that go into a half dead state (Darkling, Awakened One).}}
+{{Update History Table/row|?|* Added Feed to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

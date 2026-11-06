@@ -1,0 +1,41 @@
+{{Card Infobox
+| Name          = Heavy Blade
+| Image         = Red-HeavyBlade.png
+| Color         = Red
+| Type          = Attack
+| Rarity        = Common
+| Cost          = 2
+| Description   = Deal 14 damage.<br>{{BD|Strength}} affects this card (3;5) times.
+| InteractsWith = Strength
+}}
+{{Power Infobox|Strength}}
+{{C|Heavy Blade}} is a 2 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 14 damage, with 3 (5 if upgraded) additional damage times the amount {{BD|Strength}} you have, instead of just 1 additional damage for every {{BD|Strength}}.  
+
+== Interactions ==
+=== Synergies ===
+* Synergizes well with sources of {{BD|Strength}}:
+
+==== Cards ====
+* {{C|Flex}}, {{C|Inflame}}, {{C|Rupture}}, {{C|Spot Weakness}}, {{C|Demon Form}}, {{C|Limit Break}}
+* {{C|J.A.X.}}
+* {{C|Reprogram}}
+* {{C|Fasting}}, {{C|Wish}}
+
+==== Relics ====
+* {{R|Brimstone}}, {{R|Du-Vu Doll}}, {{R|Girya}}, {{R|Mutagenic Strength}}, {{R|Red Skull}}, {{R|Shuriken}}, {{R|Sling of Courage}}, {{R|Vajra}}
+
+==== c) Potions ====
+* {{P|Flex Potion}}, {{P|Strength Potion}}, {{P|Cultist Potion}}
+
+=== Anti-Synergies ===
+* This card is also multiplicately affected by negative {{BD|Strength}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 31|* Optional UPGRADE_DESCRIPTION added for Pummel, Heavy Blade, Offering, and Reprogram}}
+{{Update History Table/row|Weekly 4|* Fixed rare crash for Heavy Blade.}}
+{{Update History Table/row|?|* Added Heavy Blade to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

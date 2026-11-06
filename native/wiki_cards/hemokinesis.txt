@@ -1,0 +1,27 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Hemokinesis
+| Image       = Red-Hemokinesis.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Uncommon
+| Cost        = 1
+| Description = Lose 2 HP.<br>Deal (15;20) damage.
+}}
+{{C|Hemokinesis}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Attack|Attack}} Card. It costs 2 HP to play, and deals 15 (20 if upgraded) damage. 
+
+== Interactions ==
+=== Synergies ===
+* {{C|Hemokinesis}} can be used to trigger {{C|Rupture}}, {{R|Runic Cube}} and {{R|Self-Forming Clay}}, lower the cost of {{C|Blood for Blood}}, and control the activation of {{R|Centennial Puzzle}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.2|* Hemokinesis card buffed. Damage increased from 14 -> 15.
+* Hemokinesis card buffed. HP loss decreased from 3 -> 2.
+* Hemokinesis+ card buffed. Damage increased from 18 -> 20.}}
+{{Update History Table/row|Weekly 55|* Adding VFX for Hemokinesis card.}}
+{{Update History Table/row|?|* Added Hemokinesis to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

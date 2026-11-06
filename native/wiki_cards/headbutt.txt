@@ -1,0 +1,29 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Headbutt
+| Image       = Red-Headbutt.png
+| Color       = Red
+| Type        = Attack
+| Rarity      = Common
+| Cost        = 1
+| Description = Deal (9;12) damage.<br>Put a card from your discard pile on top of your draw pile.
+}}
+{{C|Headbutt}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Common|Common}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 9 (12 if upgraded) damage, and allows you to select one card in your discard pile to place on top of your draw pile.
+
+== Interactions ==
+=== Order ===
+* Although {{C|Mayhem}} plays the top card of the draw pile, it cannot be used in tandem with {{C|Headbutt}} to play a specific card, as {{C|Mayhem}} activates ''after'' cards are drawn at the start of your turn, meaning the card will already be in hand.
+** This could still be achieved if you used {{C|Headbutt}} on more cards than you draw at the start of your turn. 
+
+=== Other ===
+* If there is only one card in your discard pile, it will automatically be placed on top of your draw pile.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 10|* Discard/Draw panels can be viewed during screens such as Survivor, Headbutt, and Gambling Chip now.}}
+{{Update History Table/row|Weekly 6|* Cards now teleport instantly (logically, not visually) fixing race conditions with Headbutt and Unceasing Top.}}
+{{Update History Table/row|?|* Added Headbutt to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

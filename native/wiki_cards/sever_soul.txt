@@ -1,0 +1,30 @@
+{{Card Infobox
+| Name          = Sever Soul
+| Image         = Red-SeverSoul.png
+| Color         = Red
+| Type          = Attack
+| Rarity        = Uncommon
+| Cost          = 2
+| Description   = {{KW|Exhaust}} all non-Attack cards in your hand.<br>Deal (16;22) damage.
+| GivesToPlayer = Block, Exhaust
+}}
+{{Keyword Infobox|Exhaust}}
+{{C|Sever Soul}} is a 2 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 16 (22 if upgraded) damage, and {{KW|Exhaust|Exhausts}} all non-{{QueryLink|Cards|type:Attack|Attack}} cards in your hand. 
+
+== Interactions ==
+=== Synergies ===
+* {{C|Sever Soul}} has {{KW|Exhaust}}-synergy with {{C|Dark Embrace}}, {{C|Feel No Pain}}, {{R|Charon's Ashes}} and {{R|Dead Branch}}, and can reliably {{KW|Exhaust}} {{C|Sentinel}}.
+* Sever Soul can be used to get rid of unwanted cards in hand, such as {{QueryLink|Cards|type:Status|Status}} or {{QueryLink|Cards|type:Curse|Curse}} cards.
+
+=== Neutral ===
+* The amount of cards {{KW|Exhaust|Exhausted}} through {{C|Sever Soul}} has no effect on the effectiveness of the card, even if no cards get {{KW|Exhaust|Exhausted}} at all.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.0|* Sever Soul+ card buffed. Damage increased from 20 -> 22.}}
+{{Update History Table/row|Watcher 1|* Sever Soul: Now deals 22 damage when upgraded (was 20)}}
+{{Update History Table/row|?|* Added Sever Soul to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

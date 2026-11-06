@@ -1,0 +1,24 @@
+{{Card Infobox
+| Name          = Disarm
+| Image         = Red-Disarm.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 1
+| Description   = Enemy loses (2;3) {{BD|Strength}}.<br>{{KW|Exhaust}}.
+| GivesToEnemy  = Strength (Negative)
+| GivesToPlayer = Exhaust
+}} 
+{{Power Infobox|Strength}} 
+{{Keyword Infobox|Exhaust}}
+{{C|Disarm}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives '''negative''' 2 (3 if upgraded) {{BD|Strength}} to the target. {{C|Disarm}} will then {{KW|Exhaust}} itself.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Disarm to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{IroncladNav}}
+[[Category:Cards]]
+[[Category:ToUpdate]]

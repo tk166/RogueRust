@@ -765,6 +765,9 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // `TurnStarted` trigger that moves `SetAsidePile` into the hand and removes itself.
         // The kernel needs no rule: the cards **are** the memory of what was copied.
         "standard.nightmare_pending" |
+        // §235: Demon Form -- "at the start of your turn, gain N Strength". The whole rule is a
+        // content `TurnStarted` trigger (Ritual's sibling), so the kernel needs no arm.
+        "standard.demon_form" |
         "standard.slow" |
         // §197: Barricade / Blur -- both are "block is not cleared", declared by the **tag**
         // `retain_block` / `retain_block_once` that `Host::block_is_retained` already reads. No

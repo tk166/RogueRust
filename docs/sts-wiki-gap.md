@@ -105,32 +105,37 @@ python -X utf8 native/audit_card_gap.py --offline   # 只读索引，CI/无网�
 | 桶（颜色 / 类型 / 稀有度） | wiki | 有 | 缺 |
 |---|---:|---:|---:|
 | Red · Attack · Basic | 2 | 2 | 0 |
-| Red · Attack · Common | 14 | 11 | 3 |
-| Red · Attack · Uncommon | 11 | 5 | 6 |
-| Red · Attack · Rare | 5 | 3 | 2 |
+| Red · Attack · Common | 14 | 12 | 2 |
+| Red · Attack · Uncommon | 11 | 9 | 2 |
+| Red · Attack · Rare | 5 | 4 | 1 |
 | Red · Skill · Basic | 1 | 1 | 0 |
 | Red · Skill · Common | 6 | 5 | 1 |
-| Red · Skill · Uncommon | 17 | 6 | 11 |
+| Red · Skill · Uncommon | 17 | 13 | 4 |
 | Red · Skill · Rare | 5 | 2 | 3 |
 | Red · Power · Uncommon | 8 | 3 | 5 |
-| Red · Power · Rare | 6 | 2 | 4 |
-| **Red 小计** | **75** | **40** | **35** |
-| Colorless · Attack · Uncommon / Rare / Special | 4 / 1 / 6 | 1 / 0 / 0 | 3 / 1 / 6 |
-| Colorless · Skill · Uncommon / Rare / Special | 16 / 10 / 7 | 3 / 0 / 1 | 13 / 10 / 6 |
-| Colorless · Power · Rare / Special | 4 / 3 | 0 / 0 | 4 / 3 |
-| Colorless · Curse（wiki 把诅咒也挂在 Colorless 下） | 14 | 4 | 10 |
+| Red · Power · Rare | 6 | 3 | 3 |
+| **Red 小计** | **75** | **54** | **21** |
+| Colorless · Attack（Uncommon / Rare / Special） | 11 | 1 | 10 |
+| Colorless · Skill（Uncommon / Rare / Special） | 33 | 4 | 29 |
+| Colorless · Power（Rare / Special） | 7 | 0 | 7 |
+| Colorless · Curse | 14 | 4 | 10 |
 | Colorless · Status 牌 | 5 | 5 | 0 |
 | **Colorless 小计** | **70** | **14** | **56** |
-| **合计（口径内）** | **145** | **54** | **91** |
+| **合计（口径内）** | **145** | **68** | **77** |
 
-缺的红卡（35 张）按类型列出来，方便挑下一批：
-* **Attack（11）**：`clash` `headbutt` `heavy_blade` `blood_for_blood` `carnage` `dropkick`
-  `hemokinesis` `reckless_charge` `sever_soul` `feed` `immolate`
-* **Skill（15）**：`havoc` `bloodletting` `burning_pact` `disarm` `flame_barrier`(卡) `infernal_blade`
-  `intimidate` `power_through` `rage`(卡) `seeing_red` `shockwave` `spot_weakness` `double_tap`
-  `exhume` `offering`
-* **Power（9）**：`dark_embrace` `evolve` `feel_no_pain` `fire_breathing` `rupture` `brutality`
-  `corruption` `demon_form` `juggernaut`
+**§235 之后还剩 21 张红卡**，按"要什么载体"分组（这是下一批的施工单）：
+
+| 需要的载体 | 牌 |
+|---|---|
+| **`loseHp` 节点**（现在没有"失去生命"这个动作，只有 `dealDamage`） | `bloodletting` `hemokinesis` `offering` `brutality` |
+| **触发器接钩子**（`BlockGained` / `CardsDrawn` / 卡被消耗 三个事件名都在词表里，但声明为 `NotHandled`） | `juggernaut` `evolve` `fire_breathing` `dark_embrace` `feel_no_pain` |
+| **`ChoiceSource::ExhaustPile`**（现在只有 Hand / DiscardPile / Offered） | `exhume` |
+| **动态费用 / 力量倍率 / Fatal / 技能 0 费 + 打出即消耗** | `blood_for_blood` `heavy_blade` `feed` `corruption` |
+| **"下一张 Attack 打两次"**（`standard.duplication` 不限牌型） | `double_tap` |
+| **"手牌全是攻击才能打"**（`PlayCondition` 目前只是 bool 表达式，读不到整手牌） | `clash` |
+| **随机生成/打出手牌** | `havoc` `infernal_blade` |
+| **"问完再继续"**（问句是异步的，程序没法在答案之后接着跑） | `burning_pact` |
+| **读敌人意图** | `spot_weakness` |
 
 > ⚠️ 注意 `flame_barrier` / `rage` / `evolve` 这类：它们的**状态**（`standard.flame_barrier` /
 > `standard.rage`）早就在内容里、触发器和管线都对，缺的只是**那张 Power 卡**本身 —— 也就是说

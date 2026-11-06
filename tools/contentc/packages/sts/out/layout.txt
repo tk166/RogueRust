@@ -7,7 +7,7 @@
  21  2  2   8 IR combatantCounter                                             : CounterId:STR Selector:TERM
  22  2  2   8 IR combatantDefensivePool                                       : PoolId:STR(wrap) Selector:TERM
  23  2  2   8 IR combatantStatusStacks                                        : Selector:TERM StatusId:STR(wrap)
- 24  3  3   8 IR compare                                                      : Left:TERM Op:STR Right:TERM
+ 24  4  4  12 IR compare                                                      : Left:TERM Op:STR ResultKey:TERM Right:TERM
  25  1  1   4 IR const                                                        : Value:INT
  26  1  1   4 IR currentHealth                                                : Selector:TERM
  27  1  1   4 IR currentTurn                                                  : Selector:TERM
@@ -30,7 +30,7 @@
  44  6  6  16 IR node.applyStatus                                             : Charges:INT DurationTurns:INT ResultKey:TERM Stacks:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
  45  2  2   8 IR node.carryAwayStolenGold                                     : CounterId:STR(wrap) TargetSelector:TERM
  46  9 10  24 IR node.chooseCards                                             : Copies:INT FromZone:STR Max:INT Min:INT OwnerSelector:TERM RequireAnyTag:STRLIST ResultKey:TERM Then:STR ToZone:STR
- 47  3  3   8 IR node.conditional                                             : Condition:TERM Else:TERM Then:TERM
+ 47  4  4  12 IR node.conditional                                             : Condition:TERM Else:TERM ResultKey:TERM Then:TERM
  48  5  5  12 IR node.createCardInstance                                      : CardDefinitionId:STR(wrap) Count:TERM ResultKey:TERM TargetSelector:TERM ToZone:STR
  49  3  3   8 IR node.createCombatant                                         : DefinitionId:STR Health:TERM TeamId:STR
  50  5  5  12 IR node.dealDamage                                              : Amount:TERM Element:TERM IgnoresBlock:BOOL ResultKey:TERM TargetSelector:TERM

@@ -1,0 +1,37 @@
+{{Card Infobox
+| Name          = Blood for Blood
+| Image         = Red-BloodforBlood.png
+| Color         = Red
+| Type          = Attack
+| Rarity        = Uncommon
+| Cost          = 4
+| CostPlus      = 3
+| Description   = Costs 1 less {{Icon|RE}}<br>for each time you lose HP this combat.<br>Deal (18;22) damage.
+| InteractsWith = Lose HP
+}}
+{{C|Blood for Blood}} is a 4 (3 if upgraded) {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 18 (22 if upgraded) damage, and costs 1 less {{Icon|RE}} '''Energy''' for every time you have lost HP this combat, no matter the source or amount of this HP loss.
+
+== Interactions ==
+=== Synergies ===
+* Unlike most other cards with {{Icon|RE}} '''Energy'''-reducing upgrades that have had their cost randomized by {{BD|Confused}} or {{P|Snecko Oil}}, a {{C|Blood for Blood}} that costs more than 0 {{Icon|RE}} '''Energy''' will always go down by 1 in {{Icon|RE}}-cost when {{KW|Upgrade|Upgraded}}.
+
+=== Neutral ===
+* When reducing the {{Icon|RE}}-cost of {{C|Blood for Blood}} through an effect such as {{P|Liquid Memories}} or {{C|Enlightenment}}, losing HP or upgrading {{C|Blood for Blood}} will continue to lower the cost as normal.
+** If the original {{Icon|RE}}-cost reduction was temporary, such as through an unupgraded {{C|Enlightenment}}, any cost reductions as a result of upgrading or losing HP will apply to the cost {{C|Blood for Blood}} had before this reduction once it wears off.
+
+* If this card is created during combat, such as through {{C|Metamorphosis}}, an {{P|Attack Potion}} or {{R|Dead Branch}}, it will account for HP lost before it existed. 
+** This is unlike {{C|Masterful Stab}}, which will start at 0 {{Icon|GE}}-cost. 
+
+== Trivia ==
+* '''Blood For Blood''' was briefly included in Slay the Spire 2's early development, before being removed in [[sts2:V0.40.0 - Pre-release Version|V0.40.0]] along with Entrench.<ref>https://youtu.be/ttVtllHkb4E&t=50</ref>
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 49|* Fixed cards like Blood for Blood and Masterful Stab being affected outside of combat.}}
+{{Update History Table/row|Weekly 18|* Blood for Blood card buff. 16 -> 18. Upgraded: 18 -> 22.}}
+{{Update History Table/row|Weekly 8|* Fixed issue where Blood for Blood cost was permanently lowered if damaged at Neow.}}
+{{Update History Table/row|?|* Added Blood for Blood to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

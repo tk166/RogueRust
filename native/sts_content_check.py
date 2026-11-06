@@ -92,7 +92,8 @@ INV_COUNTS = {
     # §208: +1 (`standard.flying`); §209: +1 (`standard.curl_up`); §213: +1 (`standard.hex`).
     # §227: +1 (`standard.nightmare_pending`, Nightmare 的"下一回合"载体).
     # §231: +1 (`standard.no_draw`, Battle Trance 的"本回合不能再抽").
-    "statuses": 46,
+    # §235: +1 (`standard.demon_form`, Demon Form 的每回合加力量).
+    "statuses": 47,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -357,7 +358,7 @@ INV_CARDS = {
     "clothesline": {"Cost": 2, "Tags": ["attack"],
                     "Facts": [("damage", 12, "event"), ("status", "standard.weak", 2, "event")]},
     "anger": {"Cost": 0, "Tags": ["attack"],
-              "Facts": [("damage", 6, "event"), ("card", "anger", 1, "DiscardPile", "event")]},
+              "Facts": [("damage", 6, "event"), ("card", "anger", 1, "DiscardPile", "source")]},
     "uppercut": {"Cost": 2, "Tags": ["attack"],
                  "Facts": [("damage", 13, "event"), ("status", "standard.weak", 1, "event"),
                            ("status", "standard.vulnerable", 1, "event")]},
@@ -406,7 +407,7 @@ INV_CARDS = {
     # a card without one becomes an id the image does not contain -- and the next fight refuses to
     # build (`UnknownCard(CardDefinitionId("iron_wave+"))`, reported from the browser).
     "anger+": {"Cost": 0, "Tags": ["attack"],
-               "Facts": [("damage", 8, "event"), ("card", "anger+", 1, "DiscardPile", "event")]},
+               "Facts": [("damage", 8, "event"), ("card", "anger+", 1, "DiscardPile", "source")]},
     "twin_strike+": {"Cost": 1, "Tags": ["attack", "strike"],
                      "Facts": [("damage", 7, "event"), ("damage", 7, "event")]},
     "iron_wave+": {"Cost": 1, "Tags": ["attack", "block"],
@@ -489,6 +490,63 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §235：35 张红卡的第一批（14 张：纯内容，内核零改动） -----------------------------
+    "carnage": {"Cost": 2, "Tags": ["attack", "ethereal"],
+                     "Facts": [('damage', 20, 'event')]},
+    "carnage+": {"Cost": 2, "Tags": ["attack", "ethereal"],
+                      "Facts": [('damage', 28, 'event')]},
+    "demon_form": {"Cost": 3, "Tags": ["power"],
+                        "Facts": [('status', 'standard.demon_form', 2, 'source')]},
+    "demon_form+": {"Cost": 3, "Tags": ["power"],
+                         "Facts": [('status', 'standard.demon_form', 3, 'source')]},
+    "disarm": {"Cost": 1, "Tags": ["skill"],
+                    "Facts": [('modify', 'standard.strength', -2, 'event')]},
+    "disarm+": {"Cost": 1, "Tags": ["skill"],
+                     "Facts": [('modify', 'standard.strength', -3, 'event')]},
+    "dropkick": {"Cost": 1, "Tags": ["attack"],
+                      "Facts": [('damage', 5, 'event'), ('when', None, 'gain', 'standard.energy', 1, 'source'), ('when', None, 'draw', 1, 'source')]},
+    "dropkick+": {"Cost": 1, "Tags": ["attack"],
+                       "Facts": [('damage', 8, 'event'), ('when', None, 'gain', 'standard.energy', 1, 'source'), ('when', None, 'draw', 1, 'source')]},
+    "flame_barrier": {"Cost": 2, "Tags": ["skill", "block"],
+                           "Facts": [('block', 12, 'source'), ('status', 'standard.flame_barrier', 4, 'source')]},
+    "flame_barrier+": {"Cost": 2, "Tags": ["skill", "block"],
+                            "Facts": [('block', 16, 'source'), ('status', 'standard.flame_barrier', 6, 'source')]},
+    "headbutt": {"Cost": 1, "Tags": ["attack"],
+                      "Facts": [('damage', 9, 'event'), ('choose', 'source', 'DiscardPile', (), 1, 1, 'ToDrawPileTop')]},
+    "headbutt+": {"Cost": 1, "Tags": ["attack"],
+                       "Facts": [('damage', 12, 'event'), ('choose', 'source', 'DiscardPile', (), 1, 1, 'ToDrawPileTop')]},
+    "immolate": {"Cost": 2, "Tags": ["attack"],
+                      "Facts": [('damage', 21, 'allEnemies'), ('card', 'burn', 1, 'DiscardPile', 'source')]},
+    "immolate+": {"Cost": 2, "Tags": ["attack"],
+                       "Facts": [('damage', 28, 'allEnemies'), ('card', 'burn', 1, 'DiscardPile', 'source')]},
+    "intimidate": {"Cost": 0, "Tags": ["skill"],
+                        "Facts": [('status', 'standard.weak', 1, 'allEnemies')]},
+    "intimidate+": {"Cost": 0, "Tags": ["skill"],
+                         "Facts": [('status', 'standard.weak', 2, 'allEnemies')]},
+    "power_through": {"Cost": 1, "Tags": ["skill", "block"],
+                           "Facts": [('card', 'wound', 2, 'Hand', 'source'), ('block', 15, 'source')]},
+    "power_through+": {"Cost": 1, "Tags": ["skill", "block"],
+                            "Facts": [('card', 'wound', 2, 'Hand', 'source'), ('block', 20, 'source')]},
+    "rage": {"Cost": 0, "Tags": ["skill"],
+                  "Facts": [('status', 'standard.rage', 3, 'source')]},
+    "rage+": {"Cost": 0, "Tags": ["skill"],
+                   "Facts": [('status', 'standard.rage', 5, 'source')]},
+    "reckless_charge": {"Cost": 0, "Tags": ["attack"],
+                             "Facts": [('damage', 7, 'event'), ('card', 'dazed', 1, 'DrawPile', 'source')]},
+    "reckless_charge+": {"Cost": 0, "Tags": ["attack"],
+                              "Facts": [('damage', 10, 'event'), ('card', 'dazed', 1, 'DrawPile', 'source')]},
+    "seeing_red": {"Cost": 1, "Tags": ["skill"],
+                        "Facts": [('gain', 'standard.energy', 2, 'source')]},
+    "seeing_red+": {"Cost": 0, "Tags": ["skill"],
+                         "Facts": [('gain', 'standard.energy', 2, 'source')]},
+    "sever_soul": {"Cost": 2, "Tags": ["attack"],
+                        "Facts": [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),))]},
+    "sever_soul+": {"Cost": 2, "Tags": ["attack"],
+                         "Facts": [('each', 'Hand', (('move', 'cardInstance.iterated', 'ExhaustPile'),))]},
+    "shockwave": {"Cost": 2, "Tags": ["skill"],
+                       "Facts": [('status', 'standard.weak', 3, 'allEnemies'), ('status', 'standard.vulnerable', 3, 'allEnemies')]},
+    "shockwave+": {"Cost": 2, "Tags": ["skill"],
+                        "Facts": [('status', 'standard.weak', 5, 'allEnemies'), ('status', 'standard.vulnerable', 5, 'allEnemies')]},
 }
 
 # inv:§4.1 -- the 10 zero-new-ability enemies: (hp_min, hp_max, action ids).
@@ -984,6 +1042,8 @@ INV_STATUSES = {
     "standard.nightmare_pending": [],
     # §231: Battle Trance 的"本回合不能再抽" —— 规则在内核的抽牌节点里，状态本身没有修饰器。
     "standard.no_draw": [],
+    # §235: Demon Form 的"每回合开始加力量" —— 规则在内容触发器里（`ritual` 的 TurnStarted 兄弟）。
+    "standard.demon_form": [],
     # Declared inert by the kernel (`is_declared_inert`): it wants a TurnEnded content trigger,
     # not a modifier. `port-plan.md` §107.
     "standard.metallicize": [],
@@ -2709,7 +2769,9 @@ def check_statuses(doc):
                      # §227: Nightmare 的"下一回合"载体 —— `TurnStarted` 触发器。
                      "standard.nightmare_pending",
                      # §231: Battle Trance 的"本回合不能再抽" —— `TurnEnded` 自摘。
-                     "standard.no_draw"):
+                     "standard.no_draw",
+                     # §235: Demon Form —— 每回合开始加力量（`TurnStarted`）。
+                     "standard.demon_form"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -2724,6 +2786,8 @@ def check_statuses(doc):
                         "standard.constricted": ["TurnEnded"],
                         # §175: the first `TurnStarted` trigger in this package.
                         "standard.phantom_veil": ["TurnStarted"],
+                        # §235: Demon Form —— 每回合开始加力量。
+                        "standard.demon_form": ["TurnStarted"],
                         # §231: Battle Trance 的"本回合不能再抽" —— 一条 TurnEnded 自摘触发器
                         # （规则本身在内核的抽牌节点里）。
                         "standard.no_draw": ["TurnEnded"],

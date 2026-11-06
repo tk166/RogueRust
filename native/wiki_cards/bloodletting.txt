@@ -1,0 +1,27 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Bloodletting
+| Image         = Red-Bloodletting.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 0
+| Description   = Lose 3 HP.<br>Gain {{Icon|RE}}{{Icon|RE}}(;{{Icon|RE}}).
+| GivesToPlayer = Energy, Lose HP
+}}
+{{C|Bloodletting}} is a 0 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It costs 3 HP to play, and gives 2 (3 if upgraded) {{Icon|RE}} '''Energy'''.
+
+== Interactions ==
+=== Synergies ===
+* {{C|Bloodletting}} can be used to trigger {{C|Rupture}}, {{R|Runic Cube}} and {{R|Self-Forming Clay}}, lower the cost of {{C|Blood for Blood}}, and control the activation of {{R|Centennial Puzzle}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.2|* Bloodletting card buffed. Energy gain increased from 1 -> 2.
+* Bloodletting+ card buffed. Energy gain increased from 2 -> 3.}}
+{{Update History Table/row|Weekly 4|* Bloodletting card buffed. ''(Lose 4 HP -> Lose 3 HP)''}}
+{{Update History Table/row|?|* Added Bloodletting to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

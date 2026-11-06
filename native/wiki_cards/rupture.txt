@@ -1,0 +1,66 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Rupture
+| Image         = Red-Rupture.png
+| Color         = Red
+| Type          = Power
+| Rarity        = Uncommon
+| Cost          = 1
+| Description   = Whenever you lose HP from a card,<br>gain (1;2) {{BD|Strength}}.
+| GivesToPlayer = Rupture
+| PowerGives    = Strength, Lose HP
+}}
+{{Power Infobox
+| Name          = Rupture
+| Image         = Icon Rupture.png
+| Description   = Whenever you lose HP from a card, gain X {{BD|Strength}}.
+| Type          = Buff
+| Stacks        = Intensity
+| BetweenTurns  =
+| Cap           =
+| GivesToPlayer = Strength
+| InteractsWith = Lose HP
+}}
+{{C|Rupture}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 1 (2 if upgraded) {{BD|Rupture}}, which gives that amount of {{BD|Strength}} whenever a card causes you to lose HP.
+
+== Interactions ==
+=== Order ===
+* {{C|Hemokinesis}} will not benefit from the {{BD|Strength}} gained as a result of {{BD|Rupture}} until played again, as {{BD|Rupture}} triggers ''after'' the card is already resolved.
+
+* HP loss caused by {{C|Pain}} applies ''after'' the effects of the card that triggered it, meaning {{BD|Rupture}} will trigger ''after'' the card that triggered {{C|Pain}} has already dealt damage.
+** However, if you have {{C|Pain}} in hand and use a different card to cause an {{QueryLink|Cards|type:Attack|Attack}} to be played, such as through {{C|Havoc}}, the first card will trigger {{C|Pain}} and therefore {{BD|Rupture}} ''before'' the {{QueryLink|Cards|type:Attack|Attack}} takes effect.
+
+=== Synergies ===
+* Playing any {{QueryLink|Cards|type:Curse|Curse}} with {{R|Blue Candle}} triggers {{BD|Rupture}}.
+
+* {{C|Reaper}} gives healing based on damage dealt, and therefore increases with {{BD|Strength}}. This can be used to regain HP lost as a result of triggering this card.
+
+* Any card that can cause you to lose HP can trigger {{BD|Rupture}}:
+==== Cards ====
+* {{C|Bloodletting}}, {{C|Hemokinesis}} and {{C|J.A.X.}} can repeatedly be played to trigger it.
+* {{C|Offering}} can be played to trigger it and then {{KW|Exhaust|Exhausts}}.
+* {{C|Combust}} and {{C|Brutality}} will trigger it every turn.
+* {{C|Regret}} will trigger it if it is in your hand at the end of your turn.
+* {{C|Pain}} makes every other card in hand cost 1 HP, allowing you to rack up large quantities of {{BD|Strength}} quickly.
+* {{C|Burn}} and {{C|Decay}} deal damage instead of causing HP loss directly. This will still trigger {{BD|Rupture}}, as long as the damage is not fully negated by {{KW|Block}}, and therefore causes you to lose HP.
+
+=== Neutral ===
+* The amount of {{BD|Strength}} gained from triggering {{BD|Rupture}} does not scale with the amount of HP lost.
+
+* Losing HP when playing a card, as a result of {{BD|Thorns}}, {{BD|Sharp Hide}} or {{BD|Beat of Death}}, will not trigger {{BD|Rupture}}.
+
+== Trivia ==
+* Technically {{C|Blasphemy}} deals 99999 damage instead of killing the player directly. In theory this could be used to activate {{C|Rupture}}, although unpractical in reality.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.2|* Rupture+ card buffed. Strength gain increased from 1 -> 2.
+* Rupture+ card nerfed. Energy cost 0 -> 1.}}
+{{Update History Table/row|Watcher 4|* Rupture and Tungsten Rod relics now interact correctly.}}
+{{Update History Table/row|Weekly 50|* Regret card wording improved to clarify interactions with cards like Rupture.}}
+{{Update History Table/row|Weekly 42|* Updating icon for Rupture power.}}
+{{Update History Table/row|?|* Added Rupture to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

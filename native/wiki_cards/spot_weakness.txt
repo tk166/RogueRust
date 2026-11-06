@@ -1,0 +1,28 @@
+{{Card Infobox
+| Name          = Spot Weakness
+| Image         = Red-SpotWeakness.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 1
+| Description   = If the enemy intends to attack, gain (3;4) {{BD|Strength}}.
+| GivesToPlayer = Strength
+}} 
+{{Power Infobox|Strength}}
+{{C|Spot Weakness}} is a 1 {{Icon|RE}} cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 3 (4 if upgraded) {{BD|Strength}} if the target's [[Intent]] is to attack.
+
+== Interactions ==
+=== Neutral ===
+* When [[Intent|Intents]] are obscured by {{R|Runic Dome}}, it can be harder to know if this card will have an effect. However, {{C|Spot Weakness}} can still be played on a target, and this can be used to determine if the target is attacking when you are unsure.
+
+* It does not matter if the target's attack has an additional effect or deals 0 damage, as long as attacking is part of the [[Intent]], this card will activate its effects.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Watcher 8|* Go For the Eyes and Spot Weakness cards no longer have a gold border on the first turn of combat.}}
+{{Update History Table/row|Weekly 1|* Spot Weakness rare crash fix.}}
+{{Update History Table/row|?|* Added Spot Weakness to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

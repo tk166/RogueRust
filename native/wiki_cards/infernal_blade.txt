@@ -1,0 +1,39 @@
+{{Sequel Disambiguation}} 
+{{Card Infobox
+| Name          = Infernal Blade
+| Image         = Red-InfernalBlade.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 1
+| CostPlus      = 0
+| Description   = Add a random Attack into your hand.<br>It costs 0 this turn.<br>{{KW|Exhaust}}.
+| GivesToPlayer = Exhaust
+}}
+{{Keyword Infobox|Exhaust}}
+{{C|Infernal Blade}} is a 1 (0 if upgraded) {{Icon|RE}} cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It will generate a random {{QueryLink|Cards|type:Attack|Attack}} card, which will have its normal cost replaced by 0 for this turn. {{C|Infernal Blade}} will then {{KW|Exhaust}} itself. X-cost {{QueryLink|Cards|type:Attack|Attack}} cards generated this way will still consume all your energy. 
+
+{{C|Infernal Blade}} can only generate cards you can find in card rewards through character choice or custom run modifiers, and is not affected by {{R|Prismatic Shard}}.
+
+== Interactions ==
+=== Neutral ===
+* Some {{QueryLink|Cards|type:Attack|Attack}} cards cannot be generated, as they have some permanent effect out of combat, or can only be obtained from another source.
+** {{C|Feed}}
+** {{C|Reaper}}
+** {{C|Lesson Learned}}
+** {{C|Bite}}
+** {{C|Ritual Dagger}}
+** {{C|Shiv}}
+** {{C|Smite}}
+** {{C|Through Violence}}
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 44|* All sources of random temporary card generation in combat (like  Dead Branch) can no longer generate cards that provide healing.
+* New tip added to indicate that healing cards cannot be generated randomly during combat.}}
+{{Update History Table/row|Weekly 23|* White Noise no longer uses Infernal Blade's art.}}
+{{Update History Table/row|?|* Added Infernal Blade to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

@@ -1,0 +1,38 @@
+{{Card Infobox
+| Name          = Brutality
+| Image         = Red-Brutality.png
+| Color         = Red
+| Type          = Power
+| Rarity        = Rare
+| Cost          = 0
+| Description   = (;{{KW|Innate}}.<br>)At the start of your turn, lose 1 HP and draw 1 card.
+| GivesToPlayer = Lose HP, Draw, Innate
+}}
+{{Power Infobox
+| Name         = Brutality
+| Image        = Icon Brutality.png
+| Description  = At the start of your turn, lose X HP and draw X cards.
+| Type         = Buff
+| Stacks       = Intensity
+| BetweenTurns =
+| Cap          =
+}}
+{{C|Brutality}} is a 0 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 1 {{BD|Brutality}}, which costs that amount of HP and draws that amount of cards at the start of every turn.
+
+== Interactions ==
+=== Synergies ===
+* {{R|Tungsten Rod}} completely negates the damage from the first stack of {{BD|Brutality}}.
+* {{C|Brutality}} can be used to reliably and repeatedly trigger {{C|Rupture}}, {{R|Runic Cube}} and {{R|Self-Forming Clay}}, and lower the cost of {{C|Blood for Blood}}.
+
+=== Neutral ===
+* {{BD|Brutality}} can trigger {{R|Centennial Puzzle}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 42|* Updating icon for Brutality power.}}
+{{Update History Table/row|Weekly 1|* Brutality Card buffed.}}
+{{Update History Table/row|?|* Added Brutality to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

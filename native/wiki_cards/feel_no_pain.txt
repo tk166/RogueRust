@@ -1,0 +1,44 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Feel No Pain
+| Image       = Red-FeelNoPain.png
+| Color       = Red
+| Type        = Power
+| Rarity      = Uncommon
+| Cost        = 1
+| Description = Whenever a card is {{KW|Exhaust|Exhausted}},<br>gain (3;4) {{KW|Block}}.
+| PowerGives  = Block, Exhaust
+}}
+{{Power Infobox
+| Name          = Feel No Pain
+| Image         = Icon FeelNoPain.png
+| Description   = Whenever you {{KW|Exhaust}} a card, gain X {{KW|Block}}.
+| Type          = Buff
+| Stacks        = Intensity
+| BetweenTurns  =
+| Cap           =
+| InteractsWith = Exhaust
+| GivesToPlayer = Block
+}}
+{{Keyword Infobox|Block}}
+{{C|Feel No Pain}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 3 (4 if upgraded) {{BD|Feel No Pain}}, which gives that amount of {{KW|Block}} whenever a card is {{KW|Exhaust|Exhausted}}.
+
+== Interactions ==
+=== Order ===
+* When playing a card that {{KW|Exhaust|Exhausts}} a card, {{BD|Feel No Pain}} gives {{KW|Block}} ''after'' the played card is resolved. 
+** Enemy {{BD|Thorns}} deals knockback damage ''before'' {{BD|Feel No Pain}} gives {{KW|Block}} when playing an {{QueryLink|Cards|type:Attack|Attack}} card that {{KW|Exhaust|Exhausts}} something, such as {{C|Pummel}}, {{C|Sever Soul}} or {{C|Fiend Fire}}.
+** {{BD|Beat of Death}} deals damage ''before'' {{BD|Feel No Pain}} gives {{KW|Block}} when {{KW|Exhaust|Exhausting}} another card because of a played card.
+
+=== Neutral ===
+* The {{KW|Block}} gained by {{BD|Feel No Pain}} is unaffected by {{BD|Frail}}, {{BD|Dexterity}} or {{BD|No Block}} from a previously played {{C|Panic Button}}.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Watcher 11|* Feel No Pain power resolves 0.15s faster per exhaust in fast mode.}}
+{{Update History Table/row|Weekly 23|* Feel No Pain+ card nerfed: Upgrade is now +1 rather than +2.}}
+{{Update History Table/row|Weekly 21|* Feel No Pain card nerf. 4 -> 3 block. Upgraded: 6 -> 5 Block.}}
+{{Update History Table/row|?|* Added Feel No Pain to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

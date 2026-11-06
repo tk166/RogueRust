@@ -1,0 +1,35 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Offering
+| Image         = Red-Offering.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Rare
+| Cost          = 0
+| Description   = Lose 6 HP.<br>Gain {{Icon|RE}} {{Icon|RE}}.<br>Draw (3;5) cards.<br>{{KW|Exhaust}}.
+| GivesToPlayer = Lose HP, Energy, Exhaust, Draw
+}}
+{{Keyword Infobox|Energy}} {{Keyword Infobox|Exhaust}}
+{{C|Offering}} is a 0 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Skill|Skill}} Card. It costs 6 HP to play, gives 2 {{Icon|RE}} energy and draws 3 (5 if upgraded) cards.
+
+== Interactions ==
+=== Synergies ===
+* {{C|Offering}} can be used to trigger {{C|Rupture}}, {{R|Runic Cube}} and {{R|Self-Forming Clay}} and {{R|Runic Cube}}, and lower the cost of {{C|Blood for Blood}}.
+
+=== Neutral ===
+* {{C|Offering}} can trigger {{R|Centennial Puzzle}}, which could be wasteful, as the combined total draw can exceed the hand size limit.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V1.1|* Offering card is now faster in Fast Mode.}}
+{{Update History Table/row|Weekly 46|* Adding VFX for Offering card.}}
+{{Update History Table/row|Weekly 37|* Offering card nerf: HP Loss increased from 5 -> 6.}}
+{{Update History Table/row|Weekly 34|* Offering card nerf: Self damage increased from 4 -> 5.}}
+{{Update History Table/row|Weekly 31|* Optional UPGRADE_DESCRIPTION added for Pummel, Heavy Blade, Offering, and Reprogram}}
+{{Update History Table/row|Weekly 27|* Fixed issue where playing cost X cards quickly after energy gain cards failed. Offering -> Whirlwind}}
+{{Update History Table/row|Weekly 6|* Offering card gets a minor change. HP Loss is now 4. Card draw upgrades from 3 -> 5.}}
+{{Update History Table/row|?|* Added Offering to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

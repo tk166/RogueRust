@@ -1,0 +1,31 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name          = Burning Pact
+| Image         = Red-BurningPact.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 1
+| Description   = {{KW|Exhaust}} 1 card.<br>Draw (2;3) cards.
+| GivesToPlayer = Exhaust, Draw
+}}
+{{Keyword Infobox|Exhaust}}
+{{C|Burning Pact}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It makes you select one card in hand to {{KW|Exhaust}} and draws 2 (3 if upgraded) cards.
+
+== Interactions ==
+=== Order ===
+* Selecting a card to {{KW|Exhaust}} happens ''before'' drawing, meaning a card that is already in hand when this card is played must be {{KW|Exhaust|Exhausted}}. If there are no other cards in hand when this card is played, no card will be {{KW|Exhaust|Exhausted}}.
+
+=== Synergies ===
+* Has {{KW|Exhaust}}-synergy with {{C|Dark Embrace}}, {{C|Feel No Pain}}, {{R|Charon's Ashes}} and {{R|Dead Branch}}, and can reliably {{KW
+|Exhaust}} {{C|Sentinel}}.
+* {{C|Burning Pact}} can be used to get rid of unwanted cards in hand, such as {{QueryLink|Cards|type:Status|Status}} or {{QueryLink|Cards|type:Curse|Curse}} cards.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Burning Pact to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{IroncladNav}}
+[[Category:Cards]]

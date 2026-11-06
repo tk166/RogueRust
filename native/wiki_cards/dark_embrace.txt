@@ -1,0 +1,41 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Dark Embrace
+| Image       = Red-DarkEmbrace.png
+| Color       = Red
+| Type        = Power
+| Rarity      = Uncommon
+| Cost        = 2
+| CostPlus    = 1
+| Description = Whenever a card is {{KW|Exhaust|Exhausted}},<br>draw 1 card.
+| PowerGives  = Draw, Exhaust
+}}
+{{Power Infobox
+| Name          = Dark Embrace
+| Image         = Icon DarkEmbrace.png
+| Description   = Whenever a card is {{KW|Exhaust|Exhausted}}, draw X cards.
+| Type          = Buff
+| Stacks        = Intensity
+| BetweenTurns  =
+| Cap           =
+| InteractsWith = Exhaust
+| GivesToPlayer = Draw
+}}
+{{Keyword Infobox|Exhaust}} 
+{{C|Dark Embrace}} is a 2 (1 if upgraded) {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 1 {{BD|Dark Embrace}}, which draws 1 card every time a card is {{KW|Exhaust|Exhausted}}.
+
+== Interactions ==
+=== Order ===
+* When playing a card that {{KW|Exhaust|Exhausts}} a card, {{BD|Dark Embrace}} draws ''after'' the played card is resolved. If the played card draws or adds cards to your hand, that will happen ''before'' {{BD|Dark Embrace}} is triggered. 
+** For example, when bringing a card back with {{C|Exhume}}, it will place that card in your hand first, and only then draw cards through {{BD|Dark Embrace}}. This means that if your hand is full when playing that {{C|Exhume}}, it will still function as normal, and the draw of {{BD|Dark Embrace}} will be wasted.
+
+* {{KW|Ethereal}} cards {{KW|Exhaust}} at the end of your turn, but cards drawn through {{BD|Dark Embrace}} this way are not discarded, effectively giving you extra cards in hand next turn.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Watcher 8|* Dark Embrace card rarity changed from Rare -> Uncommon.}}
+{{Update History Table/row|?|* Added Dark Embrace to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

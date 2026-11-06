@@ -1,0 +1,40 @@
+{{Card Infobox
+| Name          = Dropkick
+| Image         = Red-Dropkick.png
+| Color         = Red
+| Type          = Attack
+| Rarity        = Uncommon
+| Cost          = 1
+| Description   = Deal (5;8) damage.<br>If the enemy has {{BD|Vulnerable}}, gain {{Icon|RE}} and draw 1 card.
+| GivesToPlayer = Draw, Energy
+| InteractsWith = Vulnerable
+}}
+{{Power Infobox|Vulnerable}} {{Keyword Infobox|Energy}}
+{{C|Dropkick}} is a 1 {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Attack|Attack}} Card. It deals 5 (8 if upgraded) damage. If the target has {{BD|Vulnerable}}, gain 1 {{Icon|RE}} '''Energy''' and draw 1 card.
+
+== Interactions ==
+=== Neutral ===
+* No matter what {{Icon|RE}}-cost {{C|Dropkick}} has, the player will always gain 1 {{Icon|RE}} '''Energy''' if it is played on a target with {{BD|Vulnerable}}. This can be used to your advantage by reducing the cost below 1, but can lose you {{Icon|RE}} '''Energy''' as well if the cost is increased:
+
+==== Cards ====
+* {{C|Setup}} sets the cost to 0, resulting in 1 {{Icon|RE}} '''Energy''' gain.
+* {{C|Bullet Time}} sets the cost to 0, resulting in 1 {{Icon|RE}} '''Energy''' gain, although this extra energy is often useless.
+* {{C|Madness}} sets the cost to 0, resulting in 1 {{Icon|RE}} '''Energy''' gain.
+
+==== Relics and potions ====
+* If {{C|Dropkick}} is selected from an {{P|Attack Potion}} it will have a cost of 0, resulting in 1 {{Icon|RE}} '''Energy''' gain.
+* {{BD|Confused}} and {{P|Snecko Oil}} will randomize the cost from 0 to 3, which can result in a neutral, gained or lost amount of energy.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V2.2|* Fixed Dropkick card not glowing under some conditions.}}
+{{Update History Table/row|V2.0|* Various cards with special requirements now emit a gold glow (like Dropkick).
+* Dropkick card now resolves its actions in order of its description.}}
+{{Update History Table/row|Watcher 10|* Dropkick card now resolves its actions in order of its description.}}
+{{Update History Table/row|Weekly 1|* Fixed rare crash with Dropkick.}}
+{{Update History Table/row|Day 1 Patch|* Dropkick, Fire Breathing, and Shockwave portraits weren't rendering in card popup view.}}
+{{Update History Table/row|?|* Added Dropkick to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

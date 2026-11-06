@@ -1,0 +1,38 @@
+{{Card Infobox
+| Name          = Exhume
+| Image         = Red-Exhume.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Rare
+| Cost          = 1
+| CostPlus      = 0
+| Description   = Put a card from your {{KW|Exhaust}} pile into your hand.<br>{{KW|Exhaust}}.
+| GivesToPlayer = Exhaust
+| InteractsWith = Ehxaust
+}}
+{{Keyword Infobox|Exhaust}}
+{{C|Exhume}} is a 1 (0 if upgraded) {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Skill|Skill}} Card. It puts a previously {{KW|Exhaust|Exhausted}} card back in your hand. {{C|Exhume}} will then {{KW|Exhaust}} itself.
+
+== Interactions ==
+=== Synergy ===
+* As {{C|Exhume}} {{KW|Exhaust|Exhausts}} itself and gives back another card which was already {{KW|Exhaust|Exhausted}}, it has {{KW|Exhaust}}-synergy with {{C|Dark Embrace}}, {{C|Feel No Pain}}, {{R|Charon's Ashes}}, and {{R|Dead Branch}}.
+
+* {{C|Exhume}} is most useful for its flexibity, as it can allow an additional play of any card that was previously {{KW|Exhaust|Exhausted}}, effectively acting as a copy of whatever {{KW|Exhaust|Exhausted}} card is most useful at the time.
+** In the case of cards that scale themselves, such as {{C|Ritual Dagger}} or {{C|Rampage}}, {{C|Exhume}} is better than a second copy of that card, as it allows you to benefit from the previous scaling of that card, and scale that exact same card again.
+
+=== Neutral ===
+* {{C|Exhume}} cannot be used to put another {{KW|Exhaust|Exhausted}} {{C|Exhume}} back in your hand.
+** This is done to prevent degenerate strategies that would be too easy to create an infinite damage combo. For example, by repeatedly using {{C|Exhume}}+ to bring back another {{C|Exhume}}+ and infinitely trigger the damage from {{R|Letter Opener}} without spending any {{KW|Energy}} or needing to draw cards.
+
+== Trivia ==
+* This card is the only way to bring back an {{KW|Exhaust|Exhausted}} card. 
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 19|* Put vs Place wording inconsistency on Thinking Ahead and Exhume cards.}}
+{{Update History Table/row|Weekly 7|* Exhume card can no longer return an Exhume card to your hnd.}}
+{{Update History Table/row|?|* Added Exhume to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

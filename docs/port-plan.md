@@ -16078,3 +16078,65 @@ Amount}`：每个目标直接写（不入队），`max` 传 `None` 保持原上�
 
 只做到 **§234.1 的口径固化 + 工具**（`native/audit_card_gap.py`、文档刷新、`gap_check.py` 去重）。
 上面六层一行代码都还没写 —— 写在这里是为了让下一轮**从第 1 层开始**，而不是重新读一遍 wiki。
+
+---
+
+## §235 红卡第一批（14 张，内核零改动）+ 一条老 bug 与一次"假红"的复盘
+
+`docs/sts-wiki-gap.md` §A.1 的施工单里，35 张缺的红卡按"要什么载体"分过组。这一节做掉**完全不需要
+新载体**的那 14 张，把红卡从 40/75 推到 **54/75**。
+
+### 235.1 14 张牌与它们的载体（全部长在既有节点上）
+
+| 牌 | wiki | 用的东西 |
+|---|---|---|
+| `carnage` | Ethereal + (20;28) | `ethereal` tag + `dealDamage` |
+| `disarm` | 敌人 -(2;3) 力量，Exhaust | `modifyStatusStacks` 负增量 |
+| `immolate` | (21;28) 全体 + 塞一张 Burn | `createCardInstance` |
+| `intimidate` / `shockwave` | 全体 Weak（+Vulnerable） | `applyStatus(allEnemies)` |
+| `seeing_red` | +2 能量，Exhaust | `gainResource` |
+| `flame_barrier` / `rage` | 本回合"每当…" | `standard.flame_barrier` / `standard.rage`（层数就是数值） |
+| `power_through` | 两张 Wound 进手牌 + 格挡 | `createCardInstance` ×2 |
+| `reckless_charge` | (7;10) + 一张 Dazed 洗进抽牌堆 | `createCardInstance` → DrawPile |
+| `sever_soul` | 消耗手里非攻击牌 + (16;22) | `forEachCardInZone`（Second Wind 的形状） |
+| `dropkick` | 伤害 + 若易伤则 +1 能量抽 1 | `conditional` + `combatantStatusStacks` |
+| `headbutt` | 伤害 + 从弃牌堆挑一张放回堆顶 | `chooseCards{FromZone: DiscardPile, Then: ToDrawPileTop}`（§227 的载体） |
+| `demon_form` | 每回合开始 +(2;3) 力量 | 新状态 `standard.demon_form`（`TurnStarted`，`ritual` 的兄弟） |
+
+### 235.2 顺手抓到的一条**老 bug**：`Anger` 的复制品塞给了敌人
+
+`node.createCardInstance` 的 `TargetSelector` 是"**新牌落在谁的牌堆**"。`anger` 一直写的是
+`sel.eventTarget`（= 被打的敌人）⇒ 玩家打一张 Anger，复制品进的是**敌人的**弃牌堆，玩家永远看不到。
+判据 `anger_puts_its_copy_in_your_own_discard_pile` 现在钉住"两张都在自己的弃牌堆里"。
+同一批里 `immolate` / `reckless_charge` 我一开始也照抄了这个错误写法，被上面那条判据一起抓出来。
+
+### 235.3 一次"假红"的复盘（值得记下来）
+
+这一批落地过程中，`act1_slice` / `soak` / `browser_test` 三道闸门同时红，症状是**每局都死在第 1 层**。
+按 §233 的经验先怀疑"驱动不会用新牌"，用二分脚本（移除一半新卡 → 重建内容+wasm → 跑 soak）定位，
+结果**基线竟然是绿的** —— 也就是说红不是内容造成的，而是**半修好的内容 + 陈旧 wasm**：
+
+* 内容里 `dropkick` 的条件写成了 `node.compare`（节点前缀），表达式应是 `compare`。内核把它当
+  "不是表达式"，于是**整条出牌程序 fault**（`Effect(Expr(NotAnExpression))`）；走图一拿到这张牌就空过一回合。
+* 我改完内容只重建了内容镜像，**没有重建 wasm**，而镜像是**编进 wasm** 的（§233 已经踩过一次）。
+  于是闸门跑的是"旧镜像 + 新 driver"的混合体。
+
+两个教训（都已写进 `native/p235_*.py` 的注释）：
+1. **改内容后必须重建 wasm**，"内容门绿"不代表"游戏里跑的是那份内容"；
+2. 闸门红时先问"**被测的那份东西是哪一份**"，再问"它哪里错了"。二分的价值不只是找元凶，
+   它顺手把"红是不是真的"也证伪了一次。
+
+### 235.4 容量常量第三次抬界（并记下真正的杠杆）
+
+`MAX_POOL` 128 → 160（内容 145 行）。注释里写明：**这个常量每加一批牌就要抬一次，说明形状不对**
+——真正的杠杆是让池子变成调用方给的切片（`&[PoolCard]`）、由 `pool_fits` 校验长度，那样 `rd-run` 里
+那些 `[_; MAX_POOL]` 的定长缓冲会一起消失。留作"内容再长一批就做"的重构项（超限是**响亮**拒绝，
+不影响正确性）。
+
+### 235.5 数字
+
+* 单测 **941**（737 core + 110 run + 94 wasm，+3：攻击批 / 技能批 / Demon Form，外加 Anger 那条）；
+* 内容：卡 **145 行**（+28）、状态 **47**（+1）、镜像 **97,456 B**（core 79,280 B）；
+* 与 wiki 的卡表对账：口径内 **68 / 145**（红 **54 / 75**，缺 21；无色 14 / 70）；
+* 矩阵 **462 行**、具名测试 **944**、wiki 对照 **47** 张；
+* 21/21 闸门绿（`act1_slice` 用 seed 777 通关进第二幕，`soak` 三局都走到 floor 16）。

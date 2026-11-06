@@ -1,0 +1,40 @@
+{{Sequel Disambiguation}}
+{{Card Infobox
+| Name        = Corruption
+| Image       = Red-Corruption.png
+| Color       = Red
+| Type        = Power
+| Rarity      = Rare
+| Cost        = 3
+| CostPlus    = 2
+| Description = Skills cost 0.<br>Whenever you play a Skill, {{KW|Exhaust}} it.
+| PowerGives  = Exhaust
+}}
+{{Power Infobox
+| Name          = Corruption
+| Image         = Icon Corruption.png
+| Description   = {{QueryLink|Cards|type:Skill|Skills}} cost 0. Whenever you play a {{QueryLink|Cards|type:Skill|Skill}}, {{KW|Exhaust}} it.
+| Type          = Buff
+| Stacks        = Does not stack
+| BetweenTurns  =
+| GivesToPlayer = Exhaust
+}}
+{{C|Corruption}} is a 3 (2 if upgraded) {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Power|Power}} Card. It gives 1 {{BD|Corruption}}, which makes all {{QueryLink|Cards|type:Skill|Skills}} have an {{Icon|RE}}-cost of 0, and {{KW|Exhaust|Exhausts}} them after they are played. As {{BD|Corruption}} does not stack, copies of {{C|Corruption}} played after the first have no additional effect.
+
+== Interactions ==
+=== Synergies ===
+* Synergizes well with anything that benefits from {{KW|Exhaust}}, most notably {{C|Dark Embrace}}, as it allows you to keep drawing new {{QueryLink|Cards|type:Skill|Skills}}, and {{R|Dead Branch}}, as it allows you to keep playing any {{QueryLink|Cards|type:Skill|Skills}} you draw or create. 
+
+=== Neutral ===
+* With {{BD|Corruption}}, when randomizing the '''Energy''' {{Icon|RE}}-cost of cards through {{BD|Confused}} or {{P|Snecko Oil}}, the cost of all {{QueryLink|Cards|type:Skill|Skill}} cards will remain 0.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|V1.1|* Confusion and Corruption cards utilize improved hooks.}}
+{{Update History Table/row|Watcher 8|* Corruption card rarity changed from Uncommon -> Rare.}}
+{{Update History Table/row|Weekly 44|* Corruption and other cost reducing cards no longer make X cost cards like Transmutation and Malaise display cost 0.}}
+{{Update History Table/row|?|* Added Corruption to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]

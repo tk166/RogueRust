@@ -453,10 +453,16 @@ const report = await evaluate(`(async () => {
 
   // Tamper the **second** record's hash: the page must name that step, not just "failed".
   const parts = script.split(";");
-  // parts[0] is the head, so parts[2] is the **second** record (step 2).
-  const cells = parts[2].split(",");
-  cells[3] = cells[3].slice(0, 15) + (cells[3].slice(15) === "0" ? "1" : "0");
-  parts[2] = cells.join(",");
+  // §235: 这一段原来是直接 parts[2].split(",")，脚本变短时会抛 TypeError: reading 'slice'
+  // —— 一个看不出原因的崩溃。现在把"记录不够"变成一个读得懂的断言：数一数有几条。
+  out.scriptRecords = parts.length;
+  if (parts.length > 2) {
+    const cells = parts[2].split(",");
+    if (cells.length > 3) {
+      cells[3] = cells[3].slice(0, 15) + (cells[3].slice(15) === "0" ? "1" : "0");
+      parts[2] = cells.join(",");
+    }
+  }
   document.getElementById("scriptBox").value = parts.join(";");
   document.getElementById("scriptReplay").onclick();
   await sleep(0);

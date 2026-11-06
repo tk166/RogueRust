@@ -1,0 +1,22 @@
+{{Card Infobox
+| Name          = Seeing Red
+| Image         = Red-SeeingRed.png
+| Color         = Red
+| Type          = Skill
+| Rarity        = Uncommon
+| Cost          = 1
+| CostPlus      = 0
+| Description   = Gain {{Icon|RE}} {{Icon|RE}}.<br>{{KW|Exhaust}}.
+| GivesToPlayer = Exhaust, Energy
+}}
+{{Keyword Infobox|Exhaust}}
+{{C|Seeing Red}} is a 1 (0) {{Icon|RE}}-cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Uncommon|Uncommon}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 2 {{Icon|RE}} '''Energy'''. {{C|Seeing Red}} will then {{KW|Exhaust}} itself.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|?|* Added Seeing Red to the game}}
+{{Update History Table/end}}
+{{No Update History}}
+
+{{IroncladNav}}
+[[Category:Cards]]

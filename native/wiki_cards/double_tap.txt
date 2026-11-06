@@ -1,0 +1,57 @@
+{{Sequel Rename|Double Tap|One-Two Punch}} 
+{{Card Infobox
+| Name        = Double Tap
+| Image       = Red-DoubleTap.png
+| Color       = Red
+| Type        = Skill
+| Rarity      = Rare
+| Cost        = 1
+| Description = This turn, your next (Attack is;2 Attacks are) played twice.
+}}
+{{Power Infobox
+| Name         = Double Tap
+| Image        = Icon DoubleTap.png
+| Description  = Your next X {{QueryLink|Cards|type:Attack|Attacks}} are played twice this turn.
+| Type         = Buff
+| Stacks       = Counter
+| BetweenTurns =
+| Cap          =
+}}
+{{C|Double Tap}} is a 1 {{Icon|RE}} cost {{QueryLink|Cards|color:Red|Ironclad}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives 1 (2 if upgraded) stacks of {{BD|Double Tap}}, which will make the following {{QueryLink|Cards|type:Attack|Attack}} card(s) this turn play twice, for the first amount of cards equal to the amount of {{BD|Double Tap}}. 
+
+Having more than 1 {{BD|Double Tap}} will not increase the amount of times a single {{QueryLink|Cards|type:Attack|Attack}} card is duplicated, but increases the amount of cards that can be duplicated when played.
+
+The second play of these cards counts as a separate card being played, but this card is not added to your draw or discard pile, and is not {{KW|Exhaust|Exhausted}} unless the card would {{KW|Exhaust}} upon being played normally. 
+
+The second play of these cards does not expend any {{Icon|RE}} '''Energy'''. The second play of an X-cost {{QueryLink|Cards|type:Attack|Attack}} card will use the same value of X as the first.
+
+== Interactions ==
+=== Order ===
+* The second play of an {{QueryLink|Cards|type:Attack|Attack}} card only starts after the first play is fully resolved. In effect, it is as if the two cards were played with a pause in between, resulting in interactions including but not limited to:
+** The second play of {{C|Headbutt}} will be able to target the first play in the discard pile. 
+** {{BD|Vigor}} will be consumed by the first play, and will not be used for the second play.
+** {{BD|Strength}} gained by {{R|Shuriken}} by the first play will already affect the second play.
+** {{BD|Malleable}} will already give the target {{KW|Block}} after the first play.
+
+=== Neutral ===
+* The second play of an {{QueryLink|Cards|type:Attack|Attack}} card counts as the play of a wholly separate card. All consequences of playing that card will still apply:
+** The effects of the card itself.
+** Anything that triggers or increments upon playing an ({{QueryLink|Cards|type:Attack|Attack}}) card, including but not limited to: 
+*** Effects such as {{BD|Rage}}.
+*** Relics such as {{R|Shuriken}} and {{R|Ink Bottle}}.
+*** Card limits such as {{R|Velvet Choker}} and the Time Eater's {{BD|Time Warp}}.  
+
+== Trivia ==
+
+* Along with {{C|Burst}} and {{C|Amplify}}, one of the three 'play a card twice' Skills in the game.
+
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Weekly 46|* Fix for proper behavior when duplicating cards like Rampage and Genetic Algorithm with effects like Echo Form.}}
+{{Update History Table/row|Weekly 42|* Updating icon for Double Tap power.}}
+{{Update History Table/row|Weekly 28|* Fixed issue where cards stayed after combat with Echo Form or Double Tap.}}
+{{Update History Table/row|?|* Added Double Tap to the game}}
+{{Update History Table/end}}
+
+{{IroncladNav}}
+[[Category:Cards]]
