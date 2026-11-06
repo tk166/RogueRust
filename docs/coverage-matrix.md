@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 562 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 564 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 233 | 140 | 93 | 0 | 223 | 10 | 18 | 0 |
+| 卡牌 | 235 | 141 | 94 | 0 | 225 | 10 | 18 | 0 |
 | 状态 | 59 | 54 | 3 | 2 | 0 | 59 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 562 | 366 | 180 | 16 | 400 | 69 | 81 | 0 |
+| **合计** | 564 | 367 | 181 | 16 | 402 | 69 | 81 | 0 |
 
-扫描到的具名测试：**968** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**970** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -239,7 +239,7 @@
 | time_eater.ripple | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 
-## 卡牌（233）
+## 卡牌（235）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -255,7 +255,7 @@
 | bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
-| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+12) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
+| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+13) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
 | bash+ | yes | apotheosis_upgrades_every_zone | — | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS/apotheosis_upgrades_every_zone |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
@@ -300,7 +300,7 @@
 | dazed | yes | upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade, armaments_gains_block_then_upgrades_the_chosen_card …(+2) | — | wiki:wiki_cards/dazed.txt | — | §189/§191/CARD_WIKI+INV_CARDS/upgrading_burns_walks_every_pile_and_skips_cards_without_an_upgrade |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+40) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+41) | — | wiki:wiki_cards/defend.txt | — | §3.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, apotheosis_upgrades_every_zone | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -453,6 +453,8 @@
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
 | sword_boomerang | yes | sword_boomerang_rerolls_a_target_for_each_hit | — | wiki:wiki_cards/sword_boomerang.txt | — | §228/CARD_WIKI+INV_CARDS/sword_boomerang_rerolls_a_target_for_each_hit |
 | sword_boomerang+ | yes | sword_boomerang_rerolls_a_target_for_each_hit | — | wiki:wiki_cards/sword_boomerang.txt (via sword_boomerang) | — | INV_CARDS/sword_boomerang_rerolls_a_target_for_each_hit |
+| thinking_ahead | yes | thinking_ahead_draws_first_and_puts_the_card_on_top | — | wiki:wiki_cards/thinking_ahead.txt | — | §246/CARD_WIKI+INV_CARDS/thinking_ahead_draws_first_and_puts_the_card_on_top |
+| thinking_ahead+ | yes | — | CARD_DIFF | wiki:wiki_cards/thinking_ahead.txt (via thinking_ahead) | — | INV_CARDS |
 | thunderclap | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/thunderclap.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | thunderclap+ | yes | — | CARD_DIFF | wiki:wiki_cards/thunderclap.txt (via thunderclap) | — | INV_CARDS |
 | transmutation | yes | — | CARD_DIFF | wiki:wiki_cards/transmutation.txt | — | CARD_WIKI+INV_CARDS |
@@ -468,7 +470,7 @@
 | violence | yes | secret_technique_and_violence_reach_into_the_draw_pile | — | wiki:wiki_cards/violence.txt | — | CARD_WIKI+INV_CARDS/secret_technique_and_violence_reach_into_the_draw_pile |
 | violence+ | yes | — | CARD_DIFF | wiki:wiki_cards/violence.txt (via violence) | — | INV_CARDS |
 | void | yes | a_void_drawn_from_the_pile_costs_one_energy | — | wiki:wiki_cards/void.txt | wiki 偏差：wiki: 抽到时失去 1 点能量。内容缺这条触发器（`OnDrawn` 对牌还没有载体），所以 Void 目前只是"不可出的虚无牌"。 | §220/CARD_WIKI+INV_CARDS/a_void_drawn_from_the_pile_costs_one_energy |
-| warcry | yes | warcry_draws_one_then_puts_the_chosen_card_on_top | — | wiki:wiki_cards/warcry.txt | — | CARD_WIKI+INV_CARDS/warcry_draws_one_then_puts_the_chosen_card_on_top |
+| warcry | yes | warcry_draws_one_then_puts_the_chosen_card_on_top, warcry_offers_the_card_it_just_drew | — | wiki:wiki_cards/warcry.txt | — | CARD_WIKI+INV_CARDS/warcry_draws_one_then_puts_the_chosen_card_on_top |
 | warcry+ | yes | — | CARD_DIFF | wiki:wiki_cards/warcry.txt (via warcry) | — | INV_CARDS |
 | whirlwind | yes | an_upgraded_card_row_is_buildable, the_keyword_cells_are_in_the_image …(+5) | — | wiki:wiki_cards/whirlwind.txt | — | CARD_WIKI+INV_CARDS/an_upgraded_card_row_is_buildable |
 | whirlwind+ | yes | an_upgraded_card_row_is_buildable | — | wiki:wiki_cards/whirlwind.txt (via whirlwind) | — | INV_CARDS/an_upgraded_card_row_is_buildable |

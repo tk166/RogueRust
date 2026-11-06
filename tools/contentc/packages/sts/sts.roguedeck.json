@@ -9130,47 +9130,21 @@
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.sequence",
+          "kind": "node.chooseCards",
           "value": {
-            "Children": [
-              {
-                "kind": "node.drawCards",
-                "value": {
-                  "Count": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 1
-                    }
-                  },
-                  "ResultKey": null,
-                  "TargetSelector": {
-                    "kind": "sel.source",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "Source"
-                    }
-                  }
-                }
-              },
-              {
-                "kind": "node.chooseCards",
-                "value": {
-                  "OwnerSelector": {
-                    "kind": "sel.source",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "Source"
-                    }
-                  },
-                  "FromZone": "Hand",
-                  "Min": 1,
-                  "Max": 1,
-                  "Then": "ToDrawPileTop",
-                  "ResultKey": null
-                }
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
               }
-            ],
-            "ResultKey": null
+            },
+            "FromZone": "Hand",
+            "Min": 1,
+            "Max": 1,
+            "Then": "ToDrawPileTop",
+            "ResultKey": null,
+            "DrawFirst": 1
           }
         },
         "MaxNodeDepth": 64,
@@ -9205,47 +9179,21 @@
           "Value": "(unnamed)"
         },
         "Root": {
-          "kind": "node.sequence",
+          "kind": "node.chooseCards",
           "value": {
-            "Children": [
-              {
-                "kind": "node.drawCards",
-                "value": {
-                  "Count": {
-                    "kind": "const",
-                    "value": {
-                      "Value": 2
-                    }
-                  },
-                  "ResultKey": null,
-                  "TargetSelector": {
-                    "kind": "sel.source",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "Source"
-                    }
-                  }
-                }
-              },
-              {
-                "kind": "node.chooseCards",
-                "value": {
-                  "OwnerSelector": {
-                    "kind": "sel.source",
-                    "value": {
-                      "Cardinality": "ZeroOrOne",
-                      "RequiredContextCapabilities": "Source"
-                    }
-                  },
-                  "FromZone": "Hand",
-                  "Min": 1,
-                  "Max": 1,
-                  "Then": "ToDrawPileTop",
-                  "ResultKey": null
-                }
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
               }
-            ],
-            "ResultKey": null
+            },
+            "FromZone": "Hand",
+            "Min": 1,
+            "Max": 1,
+            "Then": "ToDrawPileTop",
+            "ResultKey": null,
+            "DrawFirst": 2
           }
         },
         "MaxNodeDepth": 64,
@@ -18975,6 +18923,112 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "thinking_ahead",
+      "PackageId": "sts",
+      "NameKey": "Thinking Ahead",
+      "DescriptionKey": "Draw 2 cards. Put a card from your hand on top of your draw pile. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.chooseCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "Hand",
+            "Min": 1,
+            "Max": 1,
+            "Then": "ToDrawPileTop",
+            "ToZone": "Hand",
+            "DrawFirst": 2,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "thinking_ahead+",
+      "PackageId": "sts",
+      "NameKey": "Thinking Ahead+",
+      "DescriptionKey": "Draw 2 cards. Put a card from your hand on top of your draw pile.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.chooseCards",
+          "value": {
+            "OwnerSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "FromZone": "Hand",
+            "Min": 1,
+            "Max": 1,
+            "Then": "ToDrawPileTop",
+            "ToZone": "Hand",
+            "DrawFirst": 2,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
     }
   ],
   "EnemyActions": [

@@ -496,6 +496,11 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §246：Thinking Ahead（1 张 / 2 行）-------------------------------------------------
+    "thinking_ahead": {"Cost": 0, "Tags": ["skill", "colorless"],
+                            "Facts": [('draw', 2, 'source'), ('choose', 'source', 'Hand', (), 1, 1, 'ToDrawPileTop')]},
+    "thinking_ahead+": {"Cost": 0, "Tags": ["skill", "colorless"],
+                             "Facts": [('draw', 2, 'source'), ('choose', 'source', 'Hand', (), 1, 1, 'ToDrawPileTop')]},
     # ---- §245：无色「既有载体」第一批（3 张 / 6 行）------------------------------------------
     "apotheosis": {"Cost": 2, "Tags": ["skill", "colorless"],
                         "Facts": [('upgrade', 'source', None, None, None)]},
@@ -1687,6 +1692,10 @@ def program_facts(root):
             extra = ()
             if then == "Copy":
                 extra = (body.get("ToZone", "Hand"), body["Copies"])
+            # §246：`DrawFirst` 是节点内部的一次抽牌 —— 事实必须写出来，否则"抽 1 张"
+            # 会从对账表里消失，而它正是 Warcry / Thinking Ahead 的第一句。
+            if body.get("DrawFirst"):
+                out.append(("draw", body["DrawFirst"], tgt(body["OwnerSelector"])))
             out.append(("choose", tgt(body["OwnerSelector"]), body["FromZone"],
                           tuple(body.get("RequireAnyTag") or ()),
                           body["Min"], body["Max"], then) + extra)

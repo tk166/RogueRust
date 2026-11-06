@@ -31,7 +31,7 @@
  45  5  5  12 IR node.addCardCounter                                          : CardExpression:TERM CounterId:STR(wrap) Delta:TERM OwnerSelector:TERM ResultKey:TERM
  46  6  6  16 IR node.applyStatus                                             : Charges:INT DurationTurns:INT ResultKey:TERM Stacks:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
  47  2  2   8 IR node.carryAwayStolenGold                                     : CounterId:STR(wrap) TargetSelector:TERM
- 48  9 10  24 IR node.chooseCards                                             : Copies:INT FromZone:STR Max:INT Min:INT OwnerSelector:TERM RequireAnyTag:STRLIST ResultKey:TERM Then:STR ToZone:STR
+ 48 10 11  24 IR node.chooseCards                                             : Copies:INT DrawFirst:INT FromZone:STR Max:INT Min:INT OwnerSelector:TERM RequireAnyTag:STRLIST ResultKey:TERM Then:STR ToZone:STR
  49  4  4  12 IR node.conditional                                             : Condition:TERM Else:TERM ResultKey:TERM Then:TERM
  50  5  5  12 IR node.createCardInstance                                      : CardDefinitionId:STR(wrap) Count:TERM ResultKey:TERM TargetSelector:TERM ToZone:STR
  51  3  3   8 IR node.createCombatant                                         : DefinitionId:STR Health:TERM TeamId:STR

@@ -1786,6 +1786,13 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 if image.card_has_tag(id, tag) != Some(true) {
                     continue;
                 }
+                // §246：**X 费牌不进这个池子**。这瓶药给的是"加进手牌、本回合 0 费"，靠的是
+                // 每副本绝对价；而 X 费牌的费用在**费用阶段之前**就换成"全部能量"，绝对价对它
+                // 不可见 ⇒ 选到它会在 `priced_delta` 那里被拒（§238/§240 的既有裁决）。
+                // 与其让玩家点了才被拒，不如一开始就不发 —— §240 的随机池是同一条规则。
+                if image.card_has_tag(id, rd_core::battle::X_COST_TAG) == Some(true) {
+                    continue;
+                }
                 let Some(rarity) = rd_run::state::Rarity::from_name(
                     image.string(row.rarity()).unwrap_or(""),
                 ) else {
@@ -6176,7 +6183,12 @@ mod tests {
 
         // Pick the first answer and confirm.
         assert_eq!(crate::rd_env_choice_pick(0, 1), 0, "tick the first option");
-        assert_eq!(crate::rd_env_choice_confirm(), 0, "confirm it");
+        assert_eq!(
+            crate::rd_env_choice_confirm(),
+            0,
+            "confirm it: {}",
+            run_error_text()
+        );
         assert_eq!(crate::rd_env_choice_pending(), 0, "the question is answered");
 
         let hand_after = hand_ids();

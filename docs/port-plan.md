@@ -16783,3 +16783,60 @@ StS 的"随机无色牌"池子从不给它们 —— 一起打上去会让 `jack
    而 `card_cost_override` 要的是"设成 1 / 设成 0"）；
 4. **`Forethought`**：`ToDrawPileBottom` + 顺带把价格设 0；
 5. **`Discovery`**：内容侧没有"造 3 张候选进 `Offered`"的节点（`Offered` 现在是药水专用）。
+
+---
+
+## §246 `chooseCards.DrawFirst`：把"先抽再问"变成问句节点自己的事
+
+### 246.1 为什么必须在**问句节点内部**抽牌
+
+`Warcry` / `Thinking Ahead` 的原文都是"Draw N cards. **Put a card from your hand on top**…"，
+抽到的牌**必须**是候选。而整棵树是**先派发完、再让请求落地**的（§238.1），所以
+`sequence[drawCards, chooseCards]` 里的候选快照发生在抽牌落地**之前** ⇒ 抽到的牌永远不在候选里；
+手牌本来就空时（只有 Warcry 自己）连问句都不出现。
+
+这是那条结构限制的**第三个面孔**，而这次它不可接受（问句根本没出现，§245 就是这么撤掉
+`Thinking Ahead` 的）。修法：`chooseCards` 加一个 `DrawFirst: N`，在**节点内部同步**抽牌。
+
+> 为什么不改全局时序（"节点之间排空队列"）：那会动每一步的哈希与 beat 计数，
+> 四条对拍（`182/62/124/394`）当场红。**局部同步**是对拍的唯一活路。
+
+### 246.2 Warcry 是被顺手修掉的既有 bug
+
+`Warcry` 原来就是 `sequence[drawCards(1), chooseCards]` —— 同一个错形状。归正后它的对账
+事实**一字不变**（`draw 1` + `choose … ToDrawPileTop`），所以三张表都不用改：形状对了，事实没动。
+判据 `warcry_offers_the_card_it_just_drew` 是**回归判据**：手牌只有 Warcry、抽牌堆一张 ⇒
+修好之前这里不会提问，修好之后提问、并且放回去的就是抽到的那张。
+
+### 246.3 判据里省掉了一个断言（并说明为什么可以省）
+
+"抽到的两张在候选里"这件事**不需要**单独断言：`resolve_choice` 自己会校验选中的实例在候选表里
+（`state.rs` 的 `candidates.contains(id)`），不在就 `WrongAnswer`。所以"对抽到的那张 resolve 成功"
+本身就是证据 —— 比数一遍候选更硬，也不会因为将来加一个 helper 而漂。
+
+### 246.4 顺带修掉一个真的池子 bug：无色药水会发 X 费牌
+
+`colorless_potion_offers_three_colorless_cards_and_the_pick_lands_in_hand` 红了（`-2`，
+`refuse_with_text`）。真因不在这一节的改动，而在 §244：`transmutation` 是 **X 费牌**，进了
+"无色牌"池。那瓶药承诺的是"加进手牌、本回合 0 费"，靠**每副本绝对价**；而 X 费牌的费用在
+费用阶段**之前**就换成"全部能量"，绝对价对它不可见 ⇒ 选到它会在 `priced_delta` 那里被拒
+（§238/§240 的既有裁决）。**与其让玩家点了才被拒，不如一开始就不发** —— 现在池子里排除
+`x_cost` 牌，与 §240 的随机池同一条规则。
+
+§244 那次没红，是因为当时随机没抽到它（两张牌之差）。**这类"池子里混进了一张特殊牌"的 bug
+只能被 RNG 撞出来** —— 判据能做的只是"每次都把池子的性质问一遍"。
+
+### 246.5 数字
+
+* 单测 **968**（763 core + 110 run + 95 wasm，+2）；四条对拍不变 `182 / 62 / 124 / 394`；
+* 内容：卡 **235 行**（+2）、镜像 **113,396 B**（core 88,780 B）；
+* 与 wiki 对账：口径内 **113 / 145**（无色 **38 / 70**；红 75/75）；
+* 矩阵 **564 行**、具名测试 **970**；21/21 闸门绿。
+
+### 246.6 下一批
+
+1. **`Mind Blast`**：只差一个 `zoneCount(DrawPile)` 的 INT 表达式（"按抽牌堆张数打伤害"）；
+2. **"给某张牌**设**绝对价"**（`Enlightenment` 设 1 / `Madness` 设 0 / `Forethought` 设 0）：
+   `addCardCounter` 只会**累加**，需要一个"设"的形态；
+3. **`Forethought`** 还要一个 `ToDrawPileBottom`；
+4. **`Discovery`**：内容侧没有"造 3 张候选进 `Offered`"的节点（`Offered` 现在只有药水在用）。

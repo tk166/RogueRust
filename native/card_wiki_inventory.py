@@ -294,6 +294,7 @@ FACTS = {
     # ---- §245：无色「既有载体」第一批（3 张）----------------------------------------------
     'apotheosis': ([('upgrade', 'source', None, None, None)], [('upgrade', 'source', None, None, None)]),
     'panic_button': ([('block', 30, 'source'), ('status', 'standard.no_block_from_cards', 1, 'source')], [('block', 40, 'source'), ('status', 'standard.no_block_from_cards', 1, 'source')]),
+    'thinking_ahead': ([('draw', 2, 'source'), ('choose', 'source', 'Hand', (), 1, 1, 'ToDrawPileTop')], [('draw', 2, 'source'), ('choose', 'source', 'Hand', (), 1, 1, 'ToDrawPileTop')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

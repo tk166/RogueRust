@@ -4799,6 +4799,22 @@ fn choose_cards_node(
         return resume_later(ctx.state, frame, slot);
     };
 
+    // §246：`DrawFirst: N` —— **先抽 N 张（同步），再快照候选**。`Warcry` / `Thinking Ahead`
+    // 的原文都是"Draw N cards. Put a card from your hand on top…"，抽到的牌**必须**是候选。
+    //
+    // 为什么这里的抽牌是**同步**的（与 `node.drawCards` 的"只入队"不同）：整棵树是**先派发完**
+    // 再让请求落地的（§238.1），所以 `sequence[drawCards, chooseCards]` 里的候选快照发生在
+    // 抽牌落地**之前** —— 抽到的那张永远不在候选里，手牌本来就空时甚至连问句都不出现。
+    // 把抽牌放进**问句节点内部**是唯一不动全局时序的修法（"节点之间排空队列"会动每一步的
+    // 哈希与 beat 计数，四条对拍当场红）。
+    let draw_first = node.int_field("DrawFirst")?.unwrap_or(0);
+    if draw_first < 0 {
+        return Err(ExecError::Modifier);
+    }
+    if draw_first > 0 {
+        draw_for(ctx, &owner, draw_first)?;
+    }
+
     // `RequireAnyTag` 缺席 ⇒ 不过滤。空数组也当"不过滤"（与 `selectCards` 的 `RequireTag`
     // 对空串的处理同一条理由：一个空集合当过滤条件，等于"一张都挑不到"）。
     let mut tag_cells = [0u16; MAX_SELECTED_CARDS];
