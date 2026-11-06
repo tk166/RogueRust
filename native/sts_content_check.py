@@ -496,6 +496,11 @@ INV_CARDS = {
     "void": {"Cost": 1, "Tags": ["status", "unplayable", "ethereal", "junk"],
              "Facts": [],
              "Lifecycle": {"Drawn": [("lose", "standard.energy", 1, "source")]}},
+    # ---- §247：Mind Blast / Enlightenment（2 张 / 4 行）-------------------------------------
+    "mind_blast": {"Cost": 2, "Tags": ["attack", "innate", "colorless"],
+                        "Facts": [('damage', ('expr', 'combatantZoneCount'), 'event')]},
+    "mind_blast+": {"Cost": 1, "Tags": ["attack", "innate", "colorless"],
+                         "Facts": [('damage', ('expr', 'combatantZoneCount'), 'event')]},
     # ---- §246：Thinking Ahead（1 张 / 2 行）-------------------------------------------------
     "thinking_ahead": {"Cost": 0, "Tags": ["skill", "colorless"],
                             "Facts": [('draw', 2, 'source'), ('choose', 'source', 'Hand', (), 1, 1, 'ToDrawPileTop')]},
@@ -1602,6 +1607,8 @@ def program_facts(root):
             # §229: "this card remembers something about itself" as a fact. The counter's **name** and
             # the delta are both part of it -- two cards that raise different counters must not compare
             # equal, or "Rampage got stronger" and "some other bookkeeping moved" would look the same.
+            # §247：`Mode`（`Add` 缺席 / `Set` 覆盖）也是事实的一部分 —— "把价格设成 1" 与
+            # "把价格加 1" 在同一个计数器上是两件事。
             out.append(("cardCounter", body["CardExpression"]["kind"],
                         body["CounterId"]["value"], amount(body["Delta"])))
         elif kind == "node.dealDamageToRandomTarget":

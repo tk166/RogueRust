@@ -384,6 +384,12 @@ const INT_KINDS: &[&str] = &[
     "x.cost",
     // §229：正在结算的那份副本的 mark counter（`Rampage` 的 "increase **this card's** damage"）。
     "card.counter",
+    // §247：**一个牌区里现在有几张牌**（`Mind Blast` 的"按抽牌堆张数打伤害"）。
+    //
+    // 字段照 `combatantStatusStacks` 的形状：`Selector`（谁）+ `Zone`（哪个区，牌区枚举名）。
+    // 不认识的区名 ⇒ `Missing("Zone")`，绝不"当成 0"—— 0 是一个**合法**答案（空牌区），
+    // 拼错的区名与"空牌区"必须分得开。
+    "combatantZoneCount",
 ];
 
 /// 求值为**卡实例**的 kind（参考里 `ICombatExpression<_, CardInstance>` 的那些）。
@@ -471,6 +477,20 @@ pub fn eval_int<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, Exp
         "const" => Ok(node.int_field("Value")?.ok_or(IrError::Missing("Value"))?),
         // §146：X 费牌的 X。零字段 —— 值只来自这次出牌付掉的能量。
         "x.cost" => Ok(ctx.x_cost),
+
+        // §247: how many cards are in a zone right now (Mind Blast).
+        "combatantZoneCount" => {
+            let zone_name = node.str_field("Zone")?.ok_or(IrError::Missing("Zone"))?;
+            let zone = crate::exec::zone_from_wire_name(zone_name)
+                .ok_or(IrError::Missing("Zone"))?;
+            // 单目标读（与 `currentHealth`/`maxHealth` 同一个帮手）：一个牌区的张数是"那个人的"，
+            // 而多目标对"张数"没有良定义的答案（是加起来还是取一个？）—— 与那两个 kind 同一条裁决。
+            let Some(owner) = read_single_target(node, ctx)? else {
+                return Ok(0);
+            };
+            let cards = ctx.state.card_zones(&owner).map_or(0, |zones| zones.count(zone));
+            Ok(i32::try_from(cards).unwrap_or(i32::MAX))
+        }
 
         // §229: the mark counter of **this copy**. Absent counter ⇒ `0` (an unbuffed card is not an
         // error); no resolving card ⇒ `NoTarget` (`Rampage` outside a card program is a content bug,

@@ -16840,3 +16840,65 @@ StS 的"随机无色牌"池子从不给它们 —— 一起打上去会让 `jack
    `addCardCounter` 只会**累加**，需要一个"设"的形态；
 3. **`Forethought`** 还要一个 `ToDrawPileBottom`；
 4. **`Discovery`**：内容侧没有"造 3 张候选进 `Offered`"的节点（`Offered` 现在只有药水在用）。
+
+---
+
+## §247 `zoneCount`（`Mind Blast`）+ 一条被**语义**挡回的"设绝对价"
+
+### 247.1 `combatantZoneCount{Selector, Zone}`
+
+`Mind Blast`：`Innate. Deal damage equal to the number of cards in your draw pile.`
+
+在此之前内核**没有任何表达式能数一个牌区有几张**（只有 `hand.hasCardWithTag` 那条 bool 与 §239 的
+`handIsAllAttacks` 这类"手牌专用"事实）。新 kind 照 `combatantStatusStacks` 的形状：
+`Selector` + `Zone`（牌区枚举名），单目标读（复用 `read_single_target`）、多目标对"张数"没有
+良定义的答案，与 `currentHealth`/`maxHealth` 同一条裁决。
+
+不认识的区名 ⇒ `Missing("Zone")`，**绝不当成 0** —— 0 是一个合法答案（空牌区），
+"拼错的区名"与"空牌区"必须分得开。
+
+判据三段：抽牌堆 7 张 ⇒ 打 7；空 ⇒ 打 0（且不报错）；11 张 ⇒ 打 11（**每次重读**，
+写死成常量会让第一段也过）。
+
+### 247.2 被挡回的：`Enlightenment`（"设绝对价"不等于"设成 1"）
+
+原文：`Reduce the cost of all cards in your hand to 1 this turn.`
+
+第一版按"给每张手牌写 `card_cost_override = 1`"实现（`forEachCardInZone` + `addCardCounter`
+加一个 `Mode: "Set"`），判据立刻红 —— 而且是**语义**红，不是实现红：
+
+> 判据同时放一张 2 费与一张 **0 费**牌。2 费那张变成 1 ✓，可 0 费那张**被抬成了 1**。
+> "reduce … **to** 1" 是 `min(cost, 1)`，不是 `set 1` —— 后者会把免费牌变成收费牌，
+> 而那在页面上看起来完全正常（玩家只会觉得"我的 0 费牌怎么要钱了"）。
+
+要写对就得知道**印刷费用**（每张牌不一样），而"读 `Costs` 列表"这件事 §240 已经收口过一次
+（那时我把 `printed_energy_cost` 删了，因为绝对价够了）。所以这一张的正确做法是：
+**一个 `min(cost, 1)` 的费用语义**（读印刷费用 + 只在更高时下调），不是"写一个覆盖值"。
+
+⇒ 这一节只落 `Mind Blast`，`Enlightenment` / `Madness`（随机一张、"this combat"）/ `Forethought`
+（还要 `ToDrawPileBottom`）留成下一批，它们共同缺的是**"按印刷费用决定"的费用修饰器**，
+而不是"写绝对值"的节点。`Mode: "Set"` 也一并**回退**了 —— 没有内容用它，留着就是未测死的代码
+（而它错的那一面恰好是"把免费牌变收费"，最难被注意）。
+
+### 247.3 顺带：事实形状变了，旧表的 4 张 Rampage 行要跟着改
+
+给 `addCardCounter` 的事实加 `Mode` 字段时，`rampage` / `rampage+` 的期望值差一个 `'Add'`。
+内容门把两条行都点出来了（"facts A，inv says B"）—— 这是**改事实形状必须同步旧表**的例行代价，
+也是"事实表是对账的单一来源"这个选择的另一面。
+
+### 247.4 数字
+
+* 单测 **962**（757 core + 110 run + 95 wasm，+0 —— 这一节撤掉了一张牌，判据也一起撤了）；
+  四条对拍不变 `182 / 62 / 124 / 394`；
+* 内容：卡 **237 行**（+2：`mind_blast` / `mind_blast+`）、镜像 **113,684 B**（core 88,964 B）；
+* 与 wiki 对账：口径内 **114 / 145**（无色 **39 / 70**；红 75/75）；
+* 矩阵 **566 行**、具名测试 **964**；21/21 闸门绿。
+
+### 247.5 下一批（无色 31 张）
+
+1. **"按印刷费用决定"的费用修饰器** —— 一次解锁 `Enlightenment`（min(cost,1)）/ `Madness`
+   （随机一张 → 0）/ `Forethought`（选若干 → 0 且放堆底）；它需要一个**印刷费用的唯一读者**
+   （调用 `calculate_costs`，不是再解析一遍 `Costs`）；
+2. **`forEachCardInZone` 的"随机取一张"** —— `Madness` 的另一半（现在只有 `TakeFirst`）；
+3. **`ToDrawPileBottom`** —— `Forethought` 的另一半；
+4. **`Discovery`** —— "造 3 张候选进 `Offered`"（`Offered` 目前只有药水在用）。

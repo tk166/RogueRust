@@ -5160,7 +5160,7 @@ fn card_definition_has_tag(
 /// 镜像里 `ToZone` 存的是**枚举名原文**（实测 `"DiscardPile"` / `"Hand"`），flags 是 0（裸串）。
 /// ⚠️ 不能用 `state::CardZone::wire_name()` 反查：那是**哈希的**短名（`disc`/`hand`），
 /// 与内容里的枚举名是两套词。不认识的串返回 `None`，由调用方响亮拒绝。
-fn zone_from_wire_name(name: &str) -> Option<CardZone> {
+pub(crate) fn zone_from_wire_name(name: &str) -> Option<CardZone> {
     match name {
         "DrawPile" => Some(CardZone::DrawPile),
         "Hand" => Some(CardZone::Hand),
