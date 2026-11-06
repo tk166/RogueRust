@@ -146,6 +146,11 @@ pub enum NodeKind {
     /// 活着的/被打死的敌人身上的钱**不算**丢失（wiki：`Stolen gold is returned if this enemy is
     /// killed`），只有带走的才算。所以"总共偷了多少"不需要另一个字段。
     CarryAwayStolenGold,
+    /// `node.setDefensivePool` —— 把某个防御池**设成**某个值（§233，`Entrench`）。
+    ///
+    /// 与 `node.gainBlock` 的分工是**设**与**加**：那个走格挡修饰管线（灵巧/脆弱），这个不走 ——
+    /// "Double your Block" 翻倍的是当前格挡本身，不是"再获得等量格挡"。
+    SetDefensivePool,
     /// `node.dealDamageAndHealByLoss` —— 打伤害，然后按**实际掉的血**给来源回血（§231，`Reaper`）。
     ///
     /// 参考靠 `ResultKey` 把"这一击掉了多少血"传给下一个节点；本内核不支持 `ResultKey`，而
@@ -223,6 +228,7 @@ impl NodeKind {
             NodeKind::ExtraTurn => "node.extraTurn",
             NodeKind::UpgradeCards => "node.upgradeCards",
             NodeKind::CarryAwayStolenGold => "node.carryAwayStolenGold",
+            NodeKind::SetDefensivePool => "node.setDefensivePool",
             NodeKind::DealDamageAndHealByLoss => "node.dealDamageAndHealByLoss",
             NodeKind::DealDamageWithTagBonus => "node.dealDamageWithTagBonus",
             NodeKind::AddCardCounter => "node.addCardCounter",
@@ -236,7 +242,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 28] = [
+        const ALL: [NodeKind; 29] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -272,6 +278,8 @@ impl NodeKind {
             NodeKind::DealDamageWithTagBonus,
             // §231：打伤害并按实际掉血回血（Reaper）。
             NodeKind::DealDamageAndHealByLoss,
+            // §233：把防御池设成某个值（Entrench）。
+            NodeKind::SetDefensivePool,
             NodeKind::Repeat,
         ];
         let mut i = 0;

@@ -9245,6 +9245,143 @@ mod tests {
         );
     }
 
+    /// §233：`Entrench` —— "Double your Block."（`+` 只降费）
+    ///
+    /// 两端都测：格挡 7 ⇒ 14；格挡 0 ⇒ **仍然 0**（这是"翻倍"而不是"获得格挡"的判据 ——
+    /// 一个用 `gainBlock` 写成"再加一份"的实现，在格挡 0 时会**给出 0**也没错，但格挡 7 时它会
+    /// 变成 14 也一样对……所以还要一条 `+` 费的判据：`entrench+` 打出去只花 1 费）。
+    /// 更强的那条在下面：`gainBlock` 版本会吃"脆弱"（格挡 -25%），`set` 版本不吃。
+    #[test]
+    fn entrench_doubles_the_block_it_already_has() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        for (block, expected) in [(7i32, 14i32), (0, 0)] {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            give_energy(&mut state, "hero", 3);
+            give_block(&mut state, "hero", block);
+            let card = card_in_hand(&mut state, &content, "hero", "entrench");
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .expect("entrench is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            assert_eq!(
+                block_of(&state, "hero"),
+                expected,
+                "block {block}: Entrench doubles what is there, it does not add a copy"
+            );
+        }
+
+        // ⚠️ 判据的核心：**脆弱不吃这道翻倍**。`GainBlock` 那一版会被 `standard.frail` 打 25% 折，
+        // 而 wiki 说的是 "Double your Block" —— 翻的是**已有的格挡**，不是"再获得等量格挡"。
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        give_energy(&mut state, "hero", 3);
+        give_block(&mut state, "hero", 8);
+        give(&mut state, "hero", status("st_frail", "standard.frail", 1));
+        let card = card_in_hand(&mut state, &content, "hero", "entrench");
+        crate::play::play_card(
+            &mut state,
+            Some(&content),
+            &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+        )
+        .expect("entrench is playable");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(
+            block_of(&state, "hero"),
+            16,
+            "Frail must not discount a doubling -- a `GainBlock` implementation would give 8 + 6"
+        );
+    }
+
+    /// §232：`Skewer` —— "Deal 7 (10) damage X times."（X 费，`repeat` + `x.cost`）
+    ///
+    /// 判据钉的是"X 次"，不是"打了一次"：能量 3 ⇒ 3 次命中、每次 7。
+    #[test]
+    fn skewer_hits_once_per_energy_spent() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        for (energy, hits) in [(3i32, 3i32), (1, 1)] {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            give_energy(&mut state, "hero", energy);
+            if let Some(enemy) = state.combatant_mut(&cid("enemy_a")) {
+                enemy.health_max = 400;
+                enemy.health_current = 400;
+            }
+            let card = card_in_hand(&mut state, &content, "hero", "skewer");
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .expect("skewer is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            assert_eq!(
+                400 - health(&state, "enemy_a"),
+                7 * hits,
+                "energy {energy}: 7 damage x {hits} hits, and nothing left over"
+            );
+            assert_eq!(stacks_of(&state, "hero", "standard.strength"), 0, "no side effects");
+        }
+    }
+
+    /// §232：`Malaise` —— "Enemy loses X Strength and gains X Weak. Exhaust."（`+` 是 X+1）
+    #[test]
+    fn malaise_spends_the_energy_on_strength_loss_and_weak() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+
+        // (牌, 能量, 该掉多少层力量 / 该上多少层 Weak)
+        for (card_id, energy, amount) in [("malaise", 2i32, 2i32), ("malaise+", 2, 3)] {
+            let mut host = Host::new(&content);
+            let mut state = arena();
+            give_energy(&mut state, "hero", energy);
+            give(&mut state, "enemy_a", status("st_a", "standard.strength", 5));
+            let card = card_in_hand(&mut state, &content, "hero", card_id);
+            crate::play::play_card(
+                &mut state,
+                Some(&content),
+                &crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a"))),
+            )
+            .expect("malaise is playable");
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            assert_eq!(
+                stacks_of(&state, "enemy_a", "standard.strength"),
+                5 - amount,
+                "{card_id}: X = {energy} energy spent (upgraded is X+1)"
+            );
+            assert_eq!(
+                stacks_of(&state, "enemy_a", "standard.weak"),
+                amount,
+                "{card_id}: the same X stacks of Weak"
+            );
+            assert!(
+                zone_definitions(&state, "hero", CardZone::ExhaustPile)
+                    .iter()
+                    .any(|id| id.as_str() == card_id),
+                "{card_id} exhausts itself"
+            );
+        }
+    }
+
     /// §225：**消耗审计** —— 内核里把牌送进消耗堆的路径必须**都**跑 `LifecyclePrograms[Exhausted]`。
     ///
     /// 这条测试是本节"确认消耗逻辑是否统一"的机器版。三条路径，一条都不能漏：

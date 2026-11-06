@@ -1656,6 +1656,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::DealDamageWithTagBonus
         // §231：`dealDamageAndHealByLoss`（打伤害 + 按掉血回血）。同上。
         | NodeKind::DealDamageAndHealByLoss
+        // §233：`setDefensivePool`（把防御池设成某个值）。同上。
+        | NodeKind::SetDefensivePool
         // §195.7：`upgradeCards`（改定义 id），同上。
         | NodeKind::UpgradeCards
         // §146：`repeat`（X 费牌的"跑 X 遍"）。它有孩子，但预检只走一遍 Body ——
@@ -1821,6 +1823,7 @@ fn dispatch_node(
         NodeKind::SelectCards => select_cards_node(node, ctx, frame, slot, stats),
         NodeKind::ChooseCards => choose_cards_node(node, ctx, frame, slot, stats),
         NodeKind::AddCardCounter => add_card_counter_node(node, ctx, frame, slot, stats),
+        NodeKind::SetDefensivePool => set_defensive_pool_node(node, ctx, frame, slot, stats),
         NodeKind::DealDamageAndHealByLoss => {
             deal_damage_and_heal_by_loss_node(node, ctx, frame, slot, stats)
         }
@@ -2489,6 +2492,40 @@ fn deal_damage_to_random_target_node(
 /// `GainBlock`：`Amount` → `TargetSelector` → **每个目标一条请求**（`:775`）。
 ///
 /// 格挡修饰管线（灵巧/脆弱）在解析时读目标的状态（`DefensivePoolEffects.cs:11-105`）。
+/// §233：`node.setDefensivePool` 的实体 —— `{TargetSelector, PoolId, Amount}`。
+///
+/// **每个目标直接写**（不入队）：这是一个"设"，不是"加"，所以没有修饰器要跑、也没有事件要发。
+/// `max` 传 `None` ⇒ 保持那一格原有的上限（`set_defensive_pool` 的字典语义）。
+///
+/// 负值是**内容 bug**，借 [`ExecError::Modifier`] 响亮失败（与 `gainBlock` 的受理不变量同一条）。
+fn set_defensive_pool_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let amount = eval_amount(node, "Amount", ctx)?;
+    let pool = node.str_field("PoolId")?.ok_or(IrError::Missing("PoolId"))?;
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    if amount < 0 {
+        return Err(ExecError::Modifier);
+    }
+    let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut targets)?;
+    let key = crate::state::DefensivePoolId::new(pool)?;
+    for target in targets.iter().take(count) {
+        let Some(combatant) = ctx.state.combatant_mut(target) else {
+            continue;
+        };
+        combatant.set_defensive_pool(key, amount, None)?;
+        stats.effects = stats.effects.saturating_add(1);
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
 fn gain_block_node(
     node: NodeRef<'_>,
     ctx: &mut ExecContext<'_>,

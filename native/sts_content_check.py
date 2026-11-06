@@ -157,6 +157,13 @@ INV_CARDS = {
                 "Facts": [("draw", 2, "source"),
                           ("choose", "source", "Hand", (), 1, 1, "ToDrawPileTop")],
                 "PlayedCardDestinationZone": "ExhaustPile"},
+    # ---- §233：Entrench（格挡翻倍 = set 而不是 gain） ----------------------------------------
+    "entrench": {"Cost": 2, "Tags": ["skill"],
+                 "Facts": [("setPool", "standard.block",
+                            ("multiply", 2, ("pool", "standard.block", "source")), "source")]},
+    "entrench+": {"Cost": 1, "Tags": ["skill"],
+                  "Facts": [("setPool", "standard.block",
+                             ("multiply", 2, ("pool", "standard.block", "source")), "source")]},
     # ---- §232：两张 X 费牌（载体全在：`repeat` + `x.cost`） -----------------------------------
     "skewer": {"Cost": 0, "Tags": ["attack", "x_cost"],
                "Facts": [("repeat", ("expr", "x.cost"), "damage", 7, "event")]},
@@ -1194,27 +1201,36 @@ def tgt(selector):
     return mapping[kind]
 
 
-def _has_card_counter(expr):
-    """Does this expression tree mention `card.counter` anywhere?"""
+def _has_dynamic_size(expr):
+    """Does this expression tree mention a size the kernel has to read from state?
+
+    Two kinds so far: `card.counter` (§229) and `combatantDefensivePool` (§233). Both make an
+    `add`/`multiply` worth unwrapping; anything else stays opaque on purpose.
+    """
     if not isinstance(expr, dict):
         return False
-    if expr.get("kind") == "card.counter":
+    if expr.get("kind") in ("card.counter", "combatantDefensivePool"):
         return True
     value = expr.get("value")
     if isinstance(value, dict):
-        return any(_has_card_counter(item) for item in value.values())
+        return any(_has_dynamic_size(item) for item in value.values())
     if isinstance(value, list):
-        return any(_has_card_counter(item) for item in value)
+        return any(_has_dynamic_size(item) for item in value)
     return False
 
 
 def amount(expr):
     if expr.get("kind") == "const":
         return expr["value"]["Value"]
+    if expr.get("kind") == "multiply" and _has_dynamic_size(expr):
+        # §233: an `add`/`multiply` that mentions a **dynamic** size (this copy's counter, or a
+        # defensive pool) is unwrapped; every other one keeps the old opaque shape (`('expr', ...)`),
+        # because rewriting those would churn facts §193/§216 already froze.
+        return ("multiply", amount(expr["value"]["Left"]), amount(expr["value"]["Right"]))
     if expr.get("kind") == "card.counter":
         # §229: a size that is **this copy's** counter ("increase this card's damage by 5").
         return ("cardCounter", expr["value"]["CounterId"]["value"])
-    if expr.get("kind") == "add" and _has_card_counter(expr):
+    if expr.get("kind") == "add" and _has_dynamic_size(expr):
         # §229: an `add` that mentions **this copy's counter** is unwrapped, because "8 + what this
         # card already gained" is a different rule from a generic `add`. Every other `add` keeps the
         # old opaque shape (`('expr', 'add')`) -- unwrapping them all would rewrite facts that §193/
@@ -1267,6 +1283,11 @@ def program_facts(root):
             out.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
         elif kind == "node.heal":
             out.append(("heal", amount(body["Amount"]), tgt(body["TargetSelector"])))
+        elif kind == "node.setDefensivePool":
+            # §233: "set the pool to this" as a fact -- **gain** and **set** are different rules, so
+            # they are different facts (a `GainBlock`-based Entrench would double *after* modifiers).
+            out.append(("setPool", body["PoolId"]["value"], amount(body["Amount"]),
+                        tgt(body["TargetSelector"])))
         elif kind == "node.dealDamageAndHealByLoss":
             # §231: "heal what you actually dealt" -- the `HealByLoss` half is part of the fact, or
             # "4 damage to all" and "4 damage to all, healing what it dealt" would compare equal.

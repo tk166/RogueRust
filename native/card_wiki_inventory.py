@@ -188,6 +188,11 @@ FACTS = {
                  ('status', 'standard.weak', ('expr', 'x.cost'), 'event')],
                 [('modify', 'standard.strength', ('expr', 'subtract'), 'event'),
                  ('status', 'standard.weak', ('expr', 'add'), 'event')]),
+    # §233：`Double your Block.`（`+` 只降费）—— `set` 语义，所以事实是 `setPool`。
+    'entrench': ([('setPool', 'standard.block',
+                   ('multiply', 2, ('pool', 'standard.block', 'source')), 'source')],
+                 [('setPool', 'standard.block',
+                   ('multiply', 2, ('pool', 'standard.block', 'source')), 'source')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

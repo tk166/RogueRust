@@ -1747,9 +1747,10 @@ function render(verdict, reward) {
       <button class="card${card.armed ? " picking" : ""}${card.playable ? "" : " unaffordable"}"
               data-hand="${card.slot}"
               data-action="${card.directActionIndex}"
+              data-cost="${card.cost}"
               style="animation-delay:${order * 40}ms"
               title="card definition slot ${card.definitionSlot}" ${card.playable ? "" : "disabled"}>
-        <div><span class="cost-badge">${card.cost}</span><span class="title">${esc(cardTitle(card.slot) || card.name)}</span>${
+        <div><span class="cost-badge">${esc(card.costText)}</span><span class="title">${esc(cardTitle(card.slot) || card.name)}</span>${
           kindChip(handKind(card.slot))}</div>
         ${cardText(card.slot) ? `<div class="text">${esc(cardText(card.slot))}</div>` : ""}
         <div class="meta">slot ${card.slot}${card.note ? ` · ${esc(card.note)}` : ""}</div>

@@ -160,10 +160,25 @@ const report = await page.evaluate(`(async () => {
         await click(byId("endTurn"));
         continue;
       }
-      const attack = cards.find((c) => /damage/i.test(text(c)));
+      // §233: X 费牌是**收尾牌**，不是普通攻击。Malaise / Skewer 会烧掉全部能量：把它们当一张
+      // "能打人的牌"随手打出，等于整个回合只做了半件事 —— 固定驱动因此输掉 boss，而牌本身完全正确。
+      // 所以 X 费牌（data-cost 是 ABI 的 -2 哨兵）只在能量够多（>=3）时才进候选。
+      const isXCost = (c) => c.dataset.cost === "-2";
+      const xRich = cell(8) >= 3;
+      const attack = cards.find((c) => /damage/i.test(text(c)) && (!isXCost(c) || xRich));
       // §223: **无形**也算防守牌 —— 它比格挡更硬（"这回合最多掉 1 点"），只按 block 找牌会把
       // Apparition 当成"既不打人也不挡"的垃圾牌排在最后。
-      const block = cards.find((c) => /block|intangible/i.test(text(c)));
+      // §233: **"提到 Block" 不等于"提供格挡"**。Entrench 的卡面是 "Double your Block." —— 它把
+      // **当前**格挡翻倍，没有格挡时打出去等于花 2 费什么都不做。原来这条 /block/ 会把它当救援牌。
+      // 与 §223 修"无形不算防守牌"同一类：驱动程序对卡面的读法错了，不是引擎错了。
+      const block = cards.find(
+        (c) => /gain[^.]*block|intangible/i.test(text(c)) && !isXCost(c),
+      );
+      // …而倍数牌只在**格挡已经够大**时才值那笔费：5 变 10 是 2 费换 5 点，12 变 24 才是好交易。
+      // 这条阈值是**玩家规则**，不是为了让闸门变绿：没有它，任何"翻倍"牌都会把固定驱动拖瘦，
+      // boss 场景就变成一次赌博（§233 复现：40+ 次尝试全死）。
+      const doubling = cards.find((c) => /double your block/i.test(text(c)));
+      const worthDoubling = cell(6) >= 10;
       // §223: **Ethereal 的牌本回合必须打掉** —— 它字面意思就是"回合末不在手里就没了"，
       // "留到下一回合"不是一个选项（这正是 §222 里切片的固定驱动打不过 Boss 的原因：
       // Apparition 一到手就被烧掉，保命牌白丢）。页面上的卡面文字就是内容的 DescriptionKey，
@@ -177,8 +192,9 @@ const report = await page.evaluate(`(async () => {
       // card against 27 incoming still lets 22 through, and every extra turn is another 27. What a
       // player does is kill faster and block only when the hit would be lethal.
       const lethal = incoming() >= cell(4);
-      const spam = cards.filter((c) => !power(c));
+      const spam = cards.filter((c) => !power(c) && (!isXCost(c) || xRich));
       const pick = ethereal
+        || (doubling && worthDoubling ? doubling : null)
         || (lethal && block ? block : (attack || block || spam[0] || cards[0]));
       await click(pick);
       // …and aim at the enemy that dies soonest, so the incoming total drops early.
@@ -843,6 +859,17 @@ const report = await page.evaluate(`(async () => {
       attempt.ms = Math.round(performance.now() - t0);
       attempts.push({
         seed: attempt.seed,
+        // §233 诊断：**没进第二幕**而失败的那些尝试，把牌组记下来。这条字段是 §233 定位根因时
+        // 最有用的一条（牌组里没有 entrench，却出现了 X 费牌 ⇒ 说明彩票换了、驱动不会用它们）。
+        // 只在失败时带，免得把成功的 44 条记录撑大。
+        ...(attempt.actAfter === 2 ? {} : {
+          deck: (() => {
+            const out = [];
+            const n = ex.rd_run_deck_count();
+            for (let i = 0; i < n; i++) out.push(deckId(i));
+            return out.join(",");
+          })(),
+        }),
         actAfter: attempt.actAfter,
         hpAfter: attempt.hpAfter,
         floor: attempt.floor,
