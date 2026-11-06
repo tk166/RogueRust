@@ -10,9 +10,10 @@
 > **两份来源**：`slaythespire.wiki.gg`（每条带页面名）+ 本仓库实现（§ 号指向 `docs/port-plan.md`）。
 > 只有两边都看过的结论才写成"有"或"没有"；只在一处看到的写成"未核对"。
 >
-> **最近一次重核：2026-11-03**（本轮把 7 瓶药水、3 张无色牌、Act 2/3 精英逐个回到 wiki 页面核对；
-> 抓到一处**内容写错**：`blind` 的稀有度写成 Common、且被写成 Exhaust —— wiki 是
-> **Uncommon**、**不 Exhaust**，已修）。
+> **最近一次重核：§233 之后**（刷新了四件事：① §1.1 的 pastable 数字；② 状态清单与
+> "声明为 inert"的条数；③ **新增 §A.1 的卡牌盘点** —— 与 wiki 的 Cargo 卡表逐张对账，工具是
+> `native/audit_card_gap.py`，离线索引 `native/wiki_card_index.json`；④ 篝火/无色货架两节的现状）。
+> 上一版写着 §195 时代的数字（"49 卡行 / 39 状态 / 71,848 B"）与本轮之前的状态清单，**都已过期**。
 
 ---
 
@@ -35,12 +36,13 @@
 |---|---|---|
 | 战斗内核 | 出牌 / 结算 / 状态 / 意图 / 修饰器管线 / 效果程序 IR / 选择与目标 / 金色指纹 | `SEMANTICS-v1.md`，§1–§128 |
 | 卡牌关键词 | Exhaust / Ethereal / Innate / Retain / Unplayable / X 费 全部有载体 | §144 / §146 |
-| 状态 | 内容里每一条状态要么有内核规则、要么**显式声明为 inert**（`is_declared_inert()`，7 条，`gap_check.py` 打印）。⚠️ "在 inert 名单上"只说明"内核没有硬编码规则" —— 它的行为在内容的触发器里，**这不等价于"StS 语义全对"**（审阅 §4.2） | §147 / §149 / §158 / §180 / §181 / §195.1–§195.7 |
+| 状态 | 内容里每一条状态要么有内核规则、要么**显式声明为 inert**（`is_declared_inert()`，**18 条**，`gap_check.py` 打印全名）。⚠️ "在 inert 名单上"只说明"内核没有硬编码规则" —— 它的行为在内容的触发器里，**这不等价于"StS 语义全对"**（审阅 §4.2） | §147 / §149 / §158 / §180 / §181 / §195.1–§195.7 |
 | 三幕骨架 | 地图 15 行 × 7 列 + Boss 行、每幕独立的遭遇/事件池、幕间切换 | §130 / §131 / §133 / §137 |
 | 战斗流程 | 召唤随从（敌人槽上限 6）、Boss 分裂、半血换招、**销毁战斗员**（§178） | §121 / §124 / §138–§140 / §178 |
 | 运行层 | 商店（卡/遗物/药水/删卡 + 价格）、篝火（休息/打铁）、宝箱、事件、奖励屏、**脱战**（§179） | §143 / §161.8 / §179 |
 | 药水 | **全部 33 瓶**（Ironclad 口径）都能喝，效果词表见 `gap_check.py` | §152 / §158 / §179–§185 |
-| Ascension | **20 / 20 条都有机制**（13 条运行层规则，每条在阈值两侧各测一次）+ **A2/A3/A4 与 A17/18/19 的数值**：**79 条变体 / 72 个动作**（`gap_check.py` 的 pastable 区块）+ 事件列表的 A15 变体 | §159 / §187–§192、`gap_check.py` |
+| 卡牌（**数量**） | **117 行 = 61 张基础 + 56 条升级行**；其中 Red（铁甲战士）**40 / 75**，Colorless **14 / 70**（含诅咒与衍生牌）。**逐张盘点见 §A.1** | §218–§233 / `audit_card_gap.py` |
+| Ascension | **20 / 20 条都有机制**，但分成两半：**14 条是 `rd-run` 的规则常量**（A1 A5–A16 A20，`gap_check.py` 打印），**6 条走内容数据**（A2/A3/A4 与 A17/18/19 的 `EACT.ProgramAsc`）。数值侧：**89 条变体 / 80 个动作** + 事件列表的 A15 变体。逐条见 §E | §159 / §187–§192、`gap_check.py` |
 | 存档 / 回放 | 单行文本 + CRC（`RDA1`）；动作序列 + 每步哈希（`RDR1`）；内容指纹 | §161.9 / §163 / §164 / §166 |
 | 前端 | 战斗 + 运行层 + 存档 + 回放；真浏览器闸门（真指针点击 + 像素判据 + 切片五场景） | §165 / §168 / §185 |
 | 诊断 | 一步之内的有序事件（beats）、**拒绝码**与**宿主失败原文**导出（§177） | `env-abi.md` §12 |
@@ -53,15 +55,16 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 46 / encounters 33 / cards 49 (base 29 + plus 20) / statuses 39 /
-enemy actions 121 / relics 13 / potions 33 / events 12 (6+3+3) / start deck 10
-ascension variants 79 over 72 actions
-image full   content.sts.rdcf             71848 B
-image core   content.sts.core.rdcf        60544 B
+monsters 47 / encounters 34 / cards 117 (base 61 + plus 56) / statuses 46 /
+enemy actions 130 / relics 15 / potions 33 / events 14 (6+4+4) / start deck 10
+ascension variants 89 over 80 actions
+image full   content.sts.rdcf             92644 B
+image core   content.sts.core.rdcf        76448 B
 ```
 
-> ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`45` 是**卡行**（27 基础 + 18 升级），不是 45 张职业卡；
-> `79 / 72` 是**变体 / 动作**；`12` 是三个幕的事件池之和（`6+3+3`），不是单池大小。
+> ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
+> —— 而且其中包含状态/诅咒牌与多档升级行（`searing_blow+`…`++++++`）；
+> `89 / 80` 是**变体 / 动作**；`14` 是三个幕的事件池之和（`6+4+4`），不是单池大小。
 ---
 
 ## 2. 缺口
@@ -73,7 +76,7 @@ image core   content.sts.core.rdcf        60544 B
 | Exhaust / Ethereal / Innate / Retain / Unplayable / X 费 | `Keywords` 页 | **有**（内容侧；X 费走 `x_cost` tag + `x.cost` + `node.repeat`） | — |
 | **Duplication**（不是 Double Damage） | `Keywords` / `Duplication` 页 | **有**：`standard.duplication` + `play.rs` 把"下一张牌打两遍"做出来了（§181，Duplication Potion 在用） | — |
 | **Double Damage**（"本回合攻击伤害 ×2"的倍率） | 同上 | **没有**，而且**与本项目无关**：它是 Watcher 的 Divinity / Blasphemy 语境；`standard.duplication` 是**追加打出一次**，不是倍率 | 不做（Ironclad 范围外） |
-| **Double Tap / Entangled / Divinity** | 各自单卡页 | **Double Tap**（下一张 Attack 打两次）没有；**Entangled**（本回合不能打 Attack）没有；**Divinity** 是 Watcher 姿态，范围外 | 前两条见 §3 的顺序表 |
+| **Double Tap / Entangled / Divinity** | 各自单卡页 | **Double Tap**（下一张 Attack 打两次）**还没有**（缺的是"限 Attack 的追加打出"，`standard.duplication` 是不限牌的）；**Entangled 有**（`standard.entangled` + `play::Validator::Entangled`，Red Slaver 在用）；**Divinity** 是 Watcher 姿态，口径外 | Double Tap 见 §3 的顺序表 |
 | **Exhaust 触发链**（"每当一张牌被消耗…"） | 触发器 | **载体有**（`LifecyclePrograms` 的 `CardExhausted`），**没有一张牌用它** | 内容 |
 | **升级牌在战斗中回退**（"until end of combat" 的临时性） | — | **不适用**：我们照 wiki 的"for the rest of combat"，升级是**本场战斗内持久**的（§179） | — |
 
@@ -83,6 +86,63 @@ image core   content.sts.core.rdcf        60544 B
 > ⚠️ **术语分开写**（审阅 §5.3）：**倍率**（Double Damage ×2）、**追加打出**（Duplication 任意牌 /
 > Double Tap 限 Attack）、**姿态**（Divinity，Watcher）是三件不同的事。本项目只有第二件，
 > 写文档时不要用"Double Damage"指它。
+
+### A.1 卡牌盘点：与 wiki 的 **Cargo 卡表**逐张对账（§233 起）
+
+口径：wiki 的 `Color` 字段（Red=铁甲战士 / Colorless=无色 / Curse / Status），**只把
+Red + Colorless + Curse + Status 算进范围**；其它颜色只统计、不算缺口。StS2 的行（`Slay the Spire 2:`
+前缀，共 604 条）一律剔除。名字 → id 的归一是 `lower().replace(" ", "_").replace("'", "")`。
+
+跑法（会重新拉表并写离线索引）：
+
+```
+python -X utf8 native/audit_card_gap.py --write     # 需要代理；写 native/wiki_card_index.json
+python -X utf8 native/audit_card_gap.py --offline   # 只读索引，CI/无网时用
+```
+
+当前结果（`audit_card_gap.py --offline` 的输出，**数字照抄脚本**，别手写）：
+
+| 桶（颜色 / 类型 / 稀有度） | wiki | 有 | 缺 |
+|---|---:|---:|---:|
+| Red · Attack · Basic | 2 | 2 | 0 |
+| Red · Attack · Common | 14 | 11 | 3 |
+| Red · Attack · Uncommon | 11 | 5 | 6 |
+| Red · Attack · Rare | 5 | 3 | 2 |
+| Red · Skill · Basic | 1 | 1 | 0 |
+| Red · Skill · Common | 6 | 5 | 1 |
+| Red · Skill · Uncommon | 17 | 6 | 11 |
+| Red · Skill · Rare | 5 | 2 | 3 |
+| Red · Power · Uncommon | 8 | 3 | 5 |
+| Red · Power · Rare | 6 | 2 | 4 |
+| **Red 小计** | **75** | **40** | **35** |
+| Colorless · Attack · Uncommon / Rare / Special | 4 / 1 / 6 | 1 / 0 / 0 | 3 / 1 / 6 |
+| Colorless · Skill · Uncommon / Rare / Special | 16 / 10 / 7 | 3 / 0 / 1 | 13 / 10 / 6 |
+| Colorless · Power · Rare / Special | 4 / 3 | 0 / 0 | 4 / 3 |
+| Colorless · Curse（wiki 把诅咒也挂在 Colorless 下） | 14 | 4 | 10 |
+| Colorless · Status 牌 | 5 | 5 | 0 |
+| **Colorless 小计** | **70** | **14** | **56** |
+| **合计（口径内）** | **145** | **54** | **91** |
+
+缺的红卡（35 张）按类型列出来，方便挑下一批：
+* **Attack（11）**：`clash` `headbutt` `heavy_blade` `blood_for_blood` `carnage` `dropkick`
+  `hemokinesis` `reckless_charge` `sever_soul` `feed` `immolate`
+* **Skill（15）**：`havoc` `bloodletting` `burning_pact` `disarm` `flame_barrier`(卡) `infernal_blade`
+  `intimidate` `power_through` `rage`(卡) `seeing_red` `shockwave` `spot_weakness` `double_tap`
+  `exhume` `offering`
+* **Power（9）**：`dark_embrace` `evolve` `feel_no_pain` `fire_breathing` `rupture` `brutality`
+  `corruption` `demon_form` `juggernaut`
+
+> ⚠️ 注意 `flame_barrier` / `rage` / `evolve` 这类：它们的**状态**（`standard.flame_barrier` /
+> `standard.rage`）早就在内容里、触发器和管线都对，缺的只是**那张 Power 卡**本身 —— 也就是说
+> 这批红卡里有一半只差内容行。
+
+> ⚠️ **"缺 91 张"不等于"91 张都要写"**：其中 12 张是别的角色的衍生牌（口径外），
+> 31 张无色牌需要**无色货架**（商店）作为入口 —— 这两块在 §D 里单列。
+> 铁甲战士本体缺的 **35 张**才是"内容工作量"的主干，且多数只差内容行（载体在 §218–§233 已经补齐）。
+
+> ⚠️ 同一张牌在我们的内容里也可能挂在别的颜色下（`malaise` / `nightmare` / `rip_and_tear` /
+> `skewer` 是静默猎手牌、`blur` / `buffer` 是故障机器人牌，都在本内容里做过）。脚本把它们列成
+> "content-only"，这是**有意的**：口径是"能玩的机制"，不是"只抄一个职业"。
 
 ### B. 状态 —— wiki 常见而我们没有的
 
@@ -101,11 +161,13 @@ wiki 常见而我们**没有**的：
 
 | 状态 | wiki 语义 | 需要 |
 |---|---|---|
-| **Barricade / Blur** | 格挡不被清 / 本回合不清 | 内核（回合开始的清格挡要能跳过；`Block` 页点名这两个） |
-| **Entangled** | 本回合不能打攻击牌 | 内核（`can_play_card` 的判据 + 回合末清） |
-| **Slow** | 每打一张牌它受的伤害 +10% | 内核（伤害管线的修饰器） |
-| **Draw / Energized（下一回合多抽 / 多能量）** | 回合开始结算 | 内核（回合开始的发牌/能量）—— 现在只有**本回合**的 `combat_draw` / `combat_energy` |
+| **Draw / Energized（**下一回合**多抽 / 多能量）** | 回合开始结算 | 内核（回合开始的发牌/能量）—— 现在只有**本回合**的 `combat_draw` / `combat_energy`，以及"下一回合**少**抽"的 `standard.draw_reduction` |
 | **Poison / Focus / Orbs / Stance / Scry** | 其他角色的语言 | **不做**（口径之外） |
+
+> §233 修正：上一版把 **Barricade / Blur / Entangled / Slow** 列在这里 —— 四条**都已经实现了**
+> （`standard.barricade` / `.blur` / `.entangled` / `.slow`，其中 slow 走 `RestrictDamageKind`，
+> 见 §G.2 那条"只用 Direct 伤害放大"的声明）。删掉它们是因为缺口清单不能留着已经做完的条目 ——
+> 那种陈旧比漏写更坏，它让人以为还得再做一次。
 
 **已实现但值得记下的偏差**：`standard.poison` 若将来引入，参考实现的毒**不随回合衰减**（只有层数轴），
 与《杀戮尖塔》不同 —— 别照 StS 直觉写。
@@ -137,13 +199,13 @@ wiki 常见而我们**没有**的：
 | **精英池** | 每幕 **3 个**：Act1 `three_sentries / gremlin_nob / lagavulin`、Act2 `gremlin_leader / book_of_stabbing / slavers`、Act3 `giant_head / nemesis / reptomancer` | — （wiki 的每幕 3 个齐了） |
 | ~~Boss 池~~ | ✅ **每幕三只**（§194）：Slime Boss / Guardian / Hexaghost，Champ / Automaton / Collector，Time Eater / Awakened One / Donu & Deca | — |
 | 药水 | **33 / 33**（Ironclad 口径） | — （见 §D.1，全部落地） |
-| 遗物 | **13 件**（7 Common / 4 Uncommon / 1 Rare / 1 Event）。效果是 `rd-run` 里的**手写规则**，不是数据 | 内容 + 内核（每件一条规则）；总数**未核对**（wiki 的 `Relics List` 是模板生成的，取不到可直接引用的清单） |
-| 篝火选项 | **只有 Rest / Smith**；wiki 的 `Rest Sites` 页另有 **Recall**（红钥匙，依赖第四幕）与三件遗物开启的 **Lift / Toke / Dig** | 内核（新选项类型）+ 内容 |
-| 商店 | **有**（卡/遗物/药水/删卡，价格按稀有度；A16 加价）。⚠️ **无色牌不出售**：我们没有 StS 的无色货架，无色牌的唯一来源是 Colorless Potion（§185） | 内核（无色货架）+ 内容 |
-| 事件 | **9 个**，每个选项是**一串**效果（§188），从 A15 起换用 `Effects*Asc` 的糟版本。词表仍是闭集：`heal / gold / damage / max_hp / nothing / remove_card / upgrade_card / transform_card / curse:<id> / relic:<id>` | 内容（缺真实事件的剧情分支：Golden Idol 的 Outrun/Smash/Hide 三选一在我们这里压成两选项，见 inventory §7） |
+| 遗物 | **15 件**（9 Common / 4 Uncommon / 1 Rare / 1 Event，`gap_check.py` 打印）。效果是 `rd-run` 里的**手写规则**，不是数据 | 内容 + 内核（每件一条规则）。⚠️ 总数**仍未核对**（wiki 的 `Relics List` 是模板生成的；`Relics` 的 Cargo 表可以像卡表那样查，但还没做 —— 下一轮补 `audit_relic_gap.py`） |
+| 篝火选项 | **只有 Rest / Smith**。wiki 的 `Rest Sites` 页有三组：① 标准 = Rest（30%，`Coffee Dripper`/`Mark of the Bloom` 灰掉，满血也可用）/ Smith（`Fusion Hammer` 或全升完则灰）/ **Recall**（拿 Ruby Key，只在 Act 4 已解锁且本幕没拿过时出现）；② 遗物开启 = `Girya`→**Lift**（每次 +1 力量、最多 3 次，之后**每场战斗开始**都带这些力量）/ `Peace Pipe`→**Toke**（删一张）/ `Shovel`→**Dig**（随机遗物，只要 Common/Uncommon/Rare）；③ 被动 = `Regal Pillow`（休息 +15，**已有**）/ `Eternal Feather`（进篝火按牌数回血，**已有**）/ `Dream Catcher`（休息后给一张卡奖励，**没有**） | 内核（新选项类型 + "每场战斗开始加力量"的跨层传递）+ 内容（`girya` / `peace_pipe` / `shovel` / `coffee_dripper` / `fusion_hammer` / `dream_catcher` 六件遗物） |
+| 商店 | **有**（卡/遗物/药水/删卡，价格按稀有度；A16 加价）。⚠️ **无色牌不出售**：没有 StS 的无色货架，无色牌的唯一来源是 Colorless Potion（§185）。**且内容里只有 3 张 `colorless` tag 的牌**（`audit_card_gap.py` 说 Colorless 桶 14/70） | 内核（无色货架：`stock_shop` 再加一排）+ 内容（31 张商店三档无色牌，见 §A.1） |
+| 事件 | **14 个**（三幕 6+4+4，`gap_check.py` 打印），每个选项是**一串**效果（§188），从 A15 起换用 `Effects*Asc` 的糟版本。词表仍是闭集：`heal / gold / damage / max_hp / nothing / remove_card / upgrade_card / transform_card / curse:<id> / relic:<id>` | 内容（缺真实事件的剧情分支：Golden Idol 的 Outrun/Smash/Hide 三选一在我们这里压成两选项，见 inventory §7） |
 | 塔底 Neow | **9 项**祝福 | 内容（缺"用初始遗物换 Boss 遗物"这类交易） |
 | **钥匙（红/蓝/绿）与第四幕** | 没有 | 内核 + 内容 |
-| **Ascension 1–20** | **9 条 / 20 条**，见 §E | 内核（其余 11 条） |
+| **Ascension 1–20** | **20 / 20 条有机制**：14 条是运行层规则常量（A1 A5–A16 A20，`gap_check.py` 打印），A2/A3/A4 与 A17/18/19 走内容的 `EACT.ProgramAsc`。⚠️ A17/18/19 仍是**部分覆盖**（还有动作没有 wiki 出处），见 §E 与 §A.1 的说明 | 内容（补 17/18/19 的剩余动作） |
 
 #### D.1 药水池：**7 瓶全部落地**（留档，不再算缺口）
 
@@ -223,7 +285,9 @@ Sentry 的 Bolt 塞的就是它。
 
 ### E. Ascension 逐条
 
-`Module:Ascension`（wiki）列了 20 条，全部**累计**。我们的 9 条在阈值两侧各有一条测试。
+`Module:Ascension`（wiki）列了 20 条，全部**累计**。**14 条**运行层规则各自在阈值两侧各有一条测试
+（`gap_check.py` 的 "consulted somewhere: 14"），**另 6 条**（A2/A3/A4/A17/18/19）靠内容的
+`EACT.ProgramAsc` 变体实现 —— 所以机制层面是 **20/20**，但 17/18/19 的**动作覆盖**还不全。
 
 | # | wiki 效果 | 状态 | 若要做，卡在哪 |
 |---|---|---|---|
@@ -296,9 +360,15 @@ Sentry 的 Bolt 塞的就是它。
 4. ~~**"行动者可以自毁"**（内核）~~ ✅ **已完成**（§200：`vacated_seat` 交接 + `dagger.explode` 自毁）。
    ~~**Looter 的偷钱逃走**~~ ✅ **已完成**（§201：`node.carryAwayStolenGold` +
    `CombatState::gold_carried_away` + `fight_end` 结算）。**工作包 B 到这里全部完成。**
-5. **内容规模**（卡池 / 遗物 / 事件 / Act2 普通池）—— 纯量，不阻塞机制；**不要**当 P1（见审阅
-   报告 §10.4 的反对意见）。
-6. **第四幕与钥匙**（运行层）—— 明确的范围外，等前面清完再说。
+5. **篝火选项**（运行层 + 内容，§233 之后的第一件事）：`Lift` / `Toke` / `Dig` + 开它们的
+   `girya` / `peace_pipe` / `shovel` 三件遗物，外加 `coffee_dripper` / `fusion_hammer` /
+   `dream_catcher` 三个"关闭/追加选项"的遗物。**`Recall` 与红钥匙**属于第四幕，跟着第 7 条。
+   *成本*：`toke`/`dig` 是既有能力的复用（删牌、抽遗物），`lift` 要多一条"每场战斗开始加力量"的
+   跨层传递 —— 那是这个包里唯一的新东西。
+6. **卡池规模**（§A.1 的 35 张红卡 + 31 张商店无色牌）—— 纯量，不阻塞机制；**不要**当 P1
+   （见审阅报告 §10.4 的反对意见）。但**无色货架**（商店里那一排）是内核的小改动 + 那 31 张的内容，
+   可以整批做。
+7. **第四幕与钥匙**（运行层）—— 明确的范围外，等前面清完再说；`Recall` 挂在它上面。
 
 ---
 

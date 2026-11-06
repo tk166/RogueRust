@@ -1,0 +1,7922 @@
+[
+ {
+  "Page": "A Thousand Cuts",
+  "Name": "A Thousand Cuts",
+  "Color": "Green",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Accuracy",
+  "Name": "Accuracy",
+  "Color": "Green",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Acrobatics",
+  "Name": "Acrobatics",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Adrenaline",
+  "Name": "Adrenaline",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "After Image",
+  "Name": "After Image",
+  "Color": "Green",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Aggregate",
+  "Name": "Aggregate",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Alchemize",
+  "Name": "Alchemize",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "All for One",
+  "Name": "All for One",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "All-Out Attack",
+  "Name": "All-Out Attack",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Alpha",
+  "Name": "Alpha",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Alpha",
+  "Name": "Beta",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Special",
+  "Cost": "2"
+ },
+ {
+  "Page": "Alpha",
+  "Name": "Omega",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Special",
+  "Cost": "3"
+ },
+ {
+  "Page": "Amplify",
+  "Name": "Amplify",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Anger",
+  "Name": "Anger",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Apotheosis",
+  "Name": "Apotheosis",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Apparition",
+  "Name": "Apparition",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Special",
+  "Cost": "1"
+ },
+ {
+  "Page": "Armaments",
+  "Name": "Armaments",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Ascender's Bane",
+  "Name": "Ascender's Bane",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Auto-Shields",
+  "Name": "Auto-Shields",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Backflip",
+  "Name": "Backflip",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Backstab",
+  "Name": "Backstab",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Ball Lightning",
+  "Name": "Ball Lightning",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Bandage Up",
+  "Name": "Bandage Up",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Bane",
+  "Name": "Bane",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Barrage",
+  "Name": "Barrage",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Barricade",
+  "Name": "Barricade",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Bash",
+  "Name": "Bash",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "2"
+ },
+ {
+  "Page": "Battle Hymn",
+  "Name": "Battle Hymn",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Battle Trance",
+  "Name": "Battle Trance",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Beam Cell",
+  "Name": "Beam Cell",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Berserk",
+  "Name": "Berserk",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Biased Cognition",
+  "Name": "Biased Cognition",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Bite",
+  "Name": "Bite",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Special",
+  "Cost": "1"
+ },
+ {
+  "Page": "Blade Dance",
+  "Name": "Blade Dance",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Blasphemy",
+  "Name": "Blasphemy",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Blind",
+  "Name": "Blind",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Blizzard",
+  "Name": "Blizzard",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Blood for Blood",
+  "Name": "Blood for Blood",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "4"
+ },
+ {
+  "Page": "Bloodletting",
+  "Name": "Bloodletting",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Bludgeon",
+  "Name": "Bludgeon",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Blur",
+  "Name": "Blur",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Board Game:Ball Lightning",
+  "Name": "Ball Lightning",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Board Game:Beam Cell",
+  "Name": "Beam Cell",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Board Game:Chaos",
+  "Name": "Chaos",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Board Game:Compile Driver",
+  "Name": "Compile Driver",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Board Game:Coolheaded",
+  "Name": "Coolheaded",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Board Game:Defend (Defect)",
+  "Name": "Defend (Defect)",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Board Game:Go for the Eyes",
+  "Name": "Go for the Eyes",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Board Game:Hyperbeam",
+  "Name": "Hyperbeam",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Board Game:Loop",
+  "Name": "Loop",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Board Game:Meteor Strike",
+  "Name": "Meteor Strike",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "5"
+ },
+ {
+  "Page": "Board Game:Multi-Cast",
+  "Name": "Multi-Cast",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Board Game:Recycle",
+  "Name": "Recycle",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Board Game:Stack",
+  "Name": "Stack",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Board Game:Strike (Defect)",
+  "Name": "Strike (Defect)",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Board Game:Tempest",
+  "Name": "Tempest",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Board Game:Zap",
+  "Name": "Zap",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Body Slam",
+  "Name": "Body Slam",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Boot Sequence",
+  "Name": "Boot Sequence",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Bouncing Flask",
+  "Name": "Bouncing Flask",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Bowling Bash",
+  "Name": "Bowling Bash",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Brilliance",
+  "Name": "Brilliance",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Brutality",
+  "Name": "Brutality",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Buffer",
+  "Name": "Buffer",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Bullet Time",
+  "Name": "Bullet Time",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Bullseye",
+  "Name": "Bullseye",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Burn",
+  "Name": "Burn",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Burning Pact",
+  "Name": "Burning Pact",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Burst",
+  "Name": "Burst",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Calculated Gamble",
+  "Name": "Calculated Gamble",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Caltrops",
+  "Name": "Caltrops",
+  "Color": "Green",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Capacitor",
+  "Name": "Capacitor",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Carnage",
+  "Name": "Carnage",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Carve Reality",
+  "Name": "Carve Reality",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Catalyst",
+  "Name": "Catalyst",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Chaos",
+  "Name": "Chaos",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Charge Battery",
+  "Name": "Charge Battery",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Chill",
+  "Name": "Chill",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Choke",
+  "Name": "Choke",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Chrysalis",
+  "Name": "Chrysalis",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Clash",
+  "Name": "Clash",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Claw",
+  "Name": "Claw",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Cleave",
+  "Name": "Cleave",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Cloak and Dagger",
+  "Name": "Cloak and Dagger",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Clothesline",
+  "Name": "Clothesline",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Clumsy",
+  "Name": "Clumsy",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Cold Snap",
+  "Name": "Cold Snap",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Collect",
+  "Name": "Collect",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Combust",
+  "Name": "Combust",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Compile Driver",
+  "Name": "Compile Driver",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Concentrate",
+  "Name": "Concentrate",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Conclude",
+  "Name": "Conclude",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Conjure Blade",
+  "Name": "Conjure Blade",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Conjure Blade",
+  "Name": "Expunger",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Special",
+  "Cost": "1"
+ },
+ {
+  "Page": "Consecrate",
+  "Name": "Consecrate",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Consume",
+  "Name": "Consume",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Coolheaded",
+  "Name": "Coolheaded",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Core Surge",
+  "Name": "Core Surge",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Corpse Explosion",
+  "Name": "Corpse Explosion",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Corruption",
+  "Name": "Corruption",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Creative AI",
+  "Name": "Creative AI",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Crescendo",
+  "Name": "Crescendo",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Crippling Cloud",
+  "Name": "Crippling Cloud",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Crush Joints",
+  "Name": "Crush Joints",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Curse of the Bell",
+  "Name": "Curse of the Bell",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Cut Through Fate",
+  "Name": "Cut Through Fate",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Dagger Spray",
+  "Name": "Dagger Spray",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Dagger Throw",
+  "Name": "Dagger Throw",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Dark Embrace",
+  "Name": "Dark Embrace",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Dark Shackles",
+  "Name": "Dark Shackles",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Darkness",
+  "Name": "Darkness",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Dash",
+  "Name": "Dash",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Dazed",
+  "Name": "Dazed",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Deadly Poison",
+  "Name": "Deadly Poison",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Decay",
+  "Name": "Decay",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Deceive Reality",
+  "Name": "Deceive Reality",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Deceive Reality",
+  "Name": "Safety",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Special",
+  "Cost": "1"
+ },
+ {
+  "Page": "Deep Breath",
+  "Name": "Deep Breath",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Defend (Defect)",
+  "Name": "Defend (Defect)",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Defend (Ironclad)",
+  "Name": "Defend (Ironclad)",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Defend (Silent)",
+  "Name": "Defend (Silent)",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Defend (Watcher)",
+  "Name": "Defend (Watcher)",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Deflect",
+  "Name": "Deflect",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Defragment",
+  "Name": "Defragment",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Demon Form",
+  "Name": "Demon Form",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Deus Ex Machina",
+  "Name": "Deus Ex Machina",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Deva Form",
+  "Name": "Deva Form",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Devotion",
+  "Name": "Devotion",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Die Die Die",
+  "Name": "Die Die Die",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Disarm",
+  "Name": "Disarm",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Discovery",
+  "Name": "Discovery",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Distraction",
+  "Name": "Distraction",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Dodge and Roll",
+  "Name": "Dodge and Roll",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Doom and Gloom",
+  "Name": "Doom and Gloom",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Doppelganger",
+  "Name": "Doppelganger",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Double Energy",
+  "Name": "Double Energy",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Double Tap",
+  "Name": "Double Tap",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Doubt",
+  "Name": "Doubt",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Dramatic Entrance",
+  "Name": "Dramatic Entrance",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Dropkick",
+  "Name": "Dropkick",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Dual Wield",
+  "Name": "Dual Wield",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Dualcast",
+  "Name": "Dualcast",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Echo Form",
+  "Name": "Echo Form",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Electrodynamics",
+  "Name": "Electrodynamics",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Empty Body",
+  "Name": "Empty Body",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Empty Fist",
+  "Name": "Empty Fist",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Empty Mind",
+  "Name": "Empty Mind",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Endless Agony",
+  "Name": "Endless Agony",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Enlightenment",
+  "Name": "Enlightenment",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Entrench",
+  "Name": "Entrench",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Envenom",
+  "Name": "Envenom",
+  "Color": "Green",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Equilibrium",
+  "Name": "Equilibrium",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Eruption",
+  "Name": "Eruption",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "2"
+ },
+ {
+  "Page": "Escape Plan",
+  "Name": "Escape Plan",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Establishment",
+  "Name": "Establishment",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Evaluate",
+  "Name": "Evaluate",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Eviscerate",
+  "Name": "Eviscerate",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Evolve",
+  "Name": "Evolve",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Exhume",
+  "Name": "Exhume",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Expertise",
+  "Name": "Expertise",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Fasting",
+  "Name": "Fasting",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Fear No Evil",
+  "Name": "Fear No Evil",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Feed",
+  "Name": "Feed",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Feel No Pain",
+  "Name": "Feel No Pain",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Fiend Fire",
+  "Name": "Fiend Fire",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Finesse",
+  "Name": "Finesse",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Finisher",
+  "Name": "Finisher",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Fire Breathing",
+  "Name": "Fire Breathing",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Fission",
+  "Name": "Fission",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Flame Barrier",
+  "Name": "Flame Barrier",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Flash of Steel",
+  "Name": "Flash of Steel",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Flechettes",
+  "Name": "Flechettes",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Flex",
+  "Name": "Flex",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Flurry of Blows",
+  "Name": "Flurry of Blows",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Flying Knee",
+  "Name": "Flying Knee",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Flying Sleeves",
+  "Name": "Flying Sleeves",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Follow-Up",
+  "Name": "Follow-Up",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Footwork",
+  "Name": "Footwork",
+  "Color": "Green",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Force Field",
+  "Name": "Force Field",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "4"
+ },
+ {
+  "Page": "Foreign Influence",
+  "Name": "Foreign Influence",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Foresight",
+  "Name": "Foresight",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Forethought",
+  "Name": "Forethought",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "FTL",
+  "Name": "FTL",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Fusion",
+  "Name": "Fusion",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Genetic Algorithm",
+  "Name": "Genetic Algorithm",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Ghostly Armor",
+  "Name": "Ghostly Armor",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Glacier",
+  "Name": "Glacier",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Glass Knife",
+  "Name": "Glass Knife",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Go for the Eyes",
+  "Name": "Go for the Eyes",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Good Instincts",
+  "Name": "Good Instincts",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Grand Finale",
+  "Name": "Grand Finale",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Halt",
+  "Name": "Halt",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Hand of Greed",
+  "Name": "Hand of Greed",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Havoc",
+  "Name": "Havoc",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Headbutt",
+  "Name": "Headbutt",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Heatsinks",
+  "Name": "Heatsinks",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Heavy Blade",
+  "Name": "Heavy Blade",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Heel Hook",
+  "Name": "Heel Hook",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Hello World",
+  "Name": "Hello World",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Hemokinesis",
+  "Name": "Hemokinesis",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Hologram",
+  "Name": "Hologram",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Hyperbeam",
+  "Name": "Hyperbeam",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Immolate",
+  "Name": "Immolate",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Impatience",
+  "Name": "Impatience",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Impervious",
+  "Name": "Impervious",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Indignation",
+  "Name": "Indignation",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Infernal Blade",
+  "Name": "Infernal Blade",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Infinite Blades",
+  "Name": "Infinite Blades",
+  "Color": "Green",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Inflame",
+  "Name": "Inflame",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Injury",
+  "Name": "Injury",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Inner Peace",
+  "Name": "Inner Peace",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Insight",
+  "Name": "Insight",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Special",
+  "Cost": "0"
+ },
+ {
+  "Page": "Intimidate",
+  "Name": "Intimidate",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Iron Wave",
+  "Name": "Iron Wave",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "J.A.X.",
+  "Name": "J.A.X.",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Special",
+  "Cost": "0"
+ },
+ {
+  "Page": "Jack of All Trades",
+  "Name": "Jack of All Trades",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Judgment",
+  "Name": "Judgment",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Juggernaut",
+  "Name": "Juggernaut",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Just Lucky",
+  "Name": "Just Lucky",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Leap",
+  "Name": "Leap",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Leg Sweep",
+  "Name": "Leg Sweep",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Lesson Learned",
+  "Name": "Lesson Learned",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Like Water",
+  "Name": "Like Water",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Limit Break",
+  "Name": "Limit Break",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Loop",
+  "Name": "Loop",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Machine Learning",
+  "Name": "Machine Learning",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Madness",
+  "Name": "Madness",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Magnetism",
+  "Name": "Magnetism",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Malaise",
+  "Name": "Malaise",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Master of Strategy",
+  "Name": "Master of Strategy",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Master Reality",
+  "Name": "Master Reality",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Masterful Stab",
+  "Name": "Masterful Stab",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Mayhem",
+  "Name": "Mayhem",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Meditate",
+  "Name": "Meditate",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Melter",
+  "Name": "Melter",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Mental Fortress",
+  "Name": "Mental Fortress",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Metallicize",
+  "Name": "Metallicize",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Metamorphosis",
+  "Name": "Metamorphosis",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Meteor Strike",
+  "Name": "Meteor Strike",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "5"
+ },
+ {
+  "Page": "Mind Blast",
+  "Name": "Mind Blast",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Miracle",
+  "Name": "Miracle",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Special",
+  "Cost": "0"
+ },
+ {
+  "Page": "Multi-Cast",
+  "Name": "Multi-Cast",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Necronomicurse",
+  "Name": "Necronomicurse",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Neutralize",
+  "Name": "Neutralize",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "0"
+ },
+ {
+  "Page": "Nightmare",
+  "Name": "Nightmare",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Nirvana",
+  "Name": "Nirvana",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Normality",
+  "Name": "Normality",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Noxious Fumes",
+  "Name": "Noxious Fumes",
+  "Color": "Green",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Offering",
+  "Name": "Offering",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Omniscience",
+  "Name": "Omniscience",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "4"
+ },
+ {
+  "Page": "Outmaneuver",
+  "Name": "Outmaneuver",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Overclock",
+  "Name": "Overclock",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Pain",
+  "Name": "Pain",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Panacea",
+  "Name": "Panacea",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Panache",
+  "Name": "Panache",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Panic Button",
+  "Name": "Panic Button",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Parasite",
+  "Name": "Parasite",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Perfected Strike",
+  "Name": "Perfected Strike",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Perseverance",
+  "Name": "Perseverance",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Phantasmal Killer",
+  "Name": "Phantasmal Killer",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Piercing Wail",
+  "Name": "Piercing Wail",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Poisoned Stab",
+  "Name": "Poisoned Stab",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Pommel Strike",
+  "Name": "Pommel Strike",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Power Through",
+  "Name": "Power Through",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Pray",
+  "Name": "Pray",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Predator",
+  "Name": "Predator",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Prepared",
+  "Name": "Prepared",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Pressure Points",
+  "Name": "Pressure Points",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Pride",
+  "Name": "Pride",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "1"
+ },
+ {
+  "Page": "Prostrate",
+  "Name": "Prostrate",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Protect",
+  "Name": "Protect",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Pummel",
+  "Name": "Pummel",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Purity",
+  "Name": "Purity",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Quick Slash",
+  "Name": "Quick Slash",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Rage",
+  "Name": "Rage",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Ragnarok",
+  "Name": "Ragnarok",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Rainbow",
+  "Name": "Rainbow",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Rampage",
+  "Name": "Rampage",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Reach Heaven",
+  "Name": "Reach Heaven",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Reach Heaven",
+  "Name": "Through Violence",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Special",
+  "Cost": "0"
+ },
+ {
+  "Page": "Reaper",
+  "Name": "Reaper",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Reboot",
+  "Name": "Reboot",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Rebound",
+  "Name": "Rebound",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Reckless Charge",
+  "Name": "Reckless Charge",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Recursion",
+  "Name": "Recursion",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Recycle",
+  "Name": "Recycle",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Reflex",
+  "Name": "Reflex",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Regret",
+  "Name": "Regret",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Reinforced Body",
+  "Name": "Reinforced Body",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Reprogram",
+  "Name": "Reprogram",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Riddle with Holes",
+  "Name": "Riddle with Holes",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Rip and Tear",
+  "Name": "Rip and Tear",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Ritual Dagger",
+  "Name": "Ritual Dagger",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Special",
+  "Cost": "1"
+ },
+ {
+  "Page": "Rupture",
+  "Name": "Rupture",
+  "Color": "Red",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Rushdown",
+  "Name": "Rushdown",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Sadistic Nature",
+  "Name": "Sadistic Nature",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Sanctity",
+  "Name": "Sanctity",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Sands of Time",
+  "Name": "Sands of Time",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "4"
+ },
+ {
+  "Page": "Sash Whip",
+  "Name": "Sash Whip",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Scrape",
+  "Name": "Scrape",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Scrawl",
+  "Name": "Scrawl",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Searing Blow",
+  "Name": "Searing Blow",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Second Wind",
+  "Name": "Second Wind",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Secret Technique",
+  "Name": "Secret Technique",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Secret Weapon",
+  "Name": "Secret Weapon",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Seeing Red",
+  "Name": "Seeing Red",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Seek",
+  "Name": "Seek",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Self Repair",
+  "Name": "Self Repair",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Sentinel",
+  "Name": "Sentinel",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Setup",
+  "Name": "Setup",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Sever Soul",
+  "Name": "Sever Soul",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Shame",
+  "Name": "Shame",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Shiv",
+  "Name": "Shiv",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Special",
+  "Cost": "0"
+ },
+ {
+  "Page": "Shockwave",
+  "Name": "Shockwave",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Shrug It Off",
+  "Name": "Shrug It Off",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Signature Move",
+  "Name": "Signature Move",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Simmering Fury",
+  "Name": "Simmering Fury",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Skewer",
+  "Name": "Skewer",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Skim",
+  "Name": "Skim",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Abrasive",
+  "Name": "Abrasive",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Abundance",
+  "Name": "Abundance",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Ancient",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Accelerant",
+  "Name": "Accelerant",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Accuracy",
+  "Name": "Accuracy",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Acrobatics",
+  "Name": "Acrobatics",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Adaptive Strike",
+  "Name": "Adaptive Strike",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Adrenaline",
+  "Name": "Adrenaline",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Afterimage",
+  "Name": "Afterimage",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Afterlife",
+  "Name": "Afterlife",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Aggression",
+  "Name": "Aggression",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Alchemize",
+  "Name": "Alchemize",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Alignment",
+  "Name": "Alignment",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:All for One",
+  "Name": "All for One",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Anger",
+  "Name": "Anger",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Anointed",
+  "Name": "Anointed",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Anticipate",
+  "Name": "Anticipate",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Apotheosis",
+  "Name": "Apotheosis",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Ancient",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Apparition",
+  "Name": "Apparition",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Ancient",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Armaments",
+  "Name": "Armaments",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Arsenal",
+  "Name": "Arsenal",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Ascender's Bane",
+  "Name": "Ascender's Bane",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Ashen Strike",
+  "Name": "Ashen Strike",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Assassinate",
+  "Name": "Assassinate",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Astral Pulse",
+  "Name": "Astral Pulse",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Automation",
+  "Name": "Automation",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Backflip",
+  "Name": "Backflip",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Backstab",
+  "Name": "Backstab",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Bad Luck",
+  "Name": "Bad Luck",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Ball Lightning",
+  "Name": "Ball Lightning",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Banshee's Cry",
+  "Name": "Banshee's Cry",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "9"
+ },
+ {
+  "Page": "Slay the Spire 2:Barrage",
+  "Name": "Barrage",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Barricade",
+  "Name": "Barricade",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Bash",
+  "Name": "Bash",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Battle Trance",
+  "Name": "Battle Trance",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Beacon of Hope",
+  "Name": "Beacon of Hope",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Beam Cell",
+  "Name": "Beam Cell",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Beat Down",
+  "Name": "Beat Down",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Beat into Shape",
+  "Name": "Beat into Shape",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Beckon",
+  "Name": "Beckon",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:BEGONE!",
+  "Name": "BEGONE!",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:BEGONE!",
+  "Name": "Minion Strike",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Token",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Believe in You",
+  "Name": "Believe in You",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Biased Cognition",
+  "Name": "Biased Cognition",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Ancient",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Big Bang",
+  "Name": "Big Bang",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Black Hole",
+  "Name": "Black Hole",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Blade Dance",
+  "Name": "Blade Dance",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Blade of Ink",
+  "Name": "Blade of Ink",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Blade Symphony",
+  "Name": "Blade Symphony",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Blaze",
+  "Name": "Blaze",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Blight Strike",
+  "Name": "Blight Strike",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Blood Wall",
+  "Name": "Blood Wall",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Bloodletting",
+  "Name": "Bloodletting",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Bludgeon",
+  "Name": "Bludgeon",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Blur",
+  "Name": "Blur",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Body Slam",
+  "Name": "Body Slam",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Bodyguard",
+  "Name": "Bodyguard",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Bolas",
+  "Name": "Bolas",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Bombardment",
+  "Name": "Bombardment",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Bone Shards",
+  "Name": "Bone Shards",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Boost Away",
+  "Name": "Boost Away",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Boot Sequence",
+  "Name": "Boot Sequence",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Borrowed Time",
+  "Name": "Borrowed Time",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Bouncing Flask",
+  "Name": "Bouncing Flask",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Brand",
+  "Name": "Brand",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Break",
+  "Name": "Break",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Ancient",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Breakthrough",
+  "Name": "Breakthrough",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Brightest Flame",
+  "Name": "Brightest Flame",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Ancient",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Bubble Bubble",
+  "Name": "Bubble Bubble",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Buffer",
+  "Name": "Buffer",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Bulk Up",
+  "Name": "Bulk Up",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Bullet Time",
+  "Name": "Bullet Time",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Bully",
+  "Name": "Bully",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Bulwark",
+  "Name": "Bulwark",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Bundle of Joy",
+  "Name": "Bundle of Joy",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Burn",
+  "Name": "Burn",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Burning Pact",
+  "Name": "Burning Pact",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Burst",
+  "Name": "Burst",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Bury",
+  "Name": "Bury",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "4"
+ },
+ {
+  "Page": "Slay the Spire 2:Byrd Swoop",
+  "Name": "Byrd Swoop",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Event",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Byrdonis Egg",
+  "Name": "Byrdonis Egg",
+  "Color": "Colorless",
+  "Type": "Quest",
+  "Rarity": "Quest",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Cacophony",
+  "Name": "Cacophony",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Calamity",
+  "Name": "Calamity",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Calcify",
+  "Name": "Calcify",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Calculated Gamble",
+  "Name": "Calculated Gamble",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Call of the Void",
+  "Name": "Call of the Void",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Caltrops",
+  "Name": "Caltrops",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Capacitor",
+  "Name": "Capacitor",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Capture Spirit",
+  "Name": "Capture Spirit",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Cascade",
+  "Name": "Cascade",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Slay the Spire 2:Catastrophe",
+  "Name": "Catastrophe",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Celestial Might",
+  "Name": "Celestial Might",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Chaos",
+  "Name": "Chaos",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Charge Battery",
+  "Name": "Charge Battery",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:CHARGE!!",
+  "Name": "CHARGE!!",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:CHARGE!!",
+  "Name": "Minion Dive Bomb",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Token",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Child of the Stars",
+  "Name": "Child of the Stars",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Chill",
+  "Name": "Chill",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Cinder",
+  "Name": "Cinder",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Clash",
+  "Name": "Clash",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Event",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Claw",
+  "Name": "Claw",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Cleanse",
+  "Name": "Cleanse",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Cloak and Dagger",
+  "Name": "Cloak and Dagger",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Cloak of Stars",
+  "Name": "Cloak of Stars",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Clumsy",
+  "Name": "Clumsy",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Cold Snap",
+  "Name": "Cold Snap",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Collision Course",
+  "Name": "Collision Course",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Colossus",
+  "Name": "Colossus",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Comet",
+  "Name": "Comet",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Compact",
+  "Name": "Compact",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Compact",
+  "Name": "Fuel",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Token",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Compile Driver",
+  "Name": "Compile Driver",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Concoct",
+  "Name": "Concoct",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Conflagration",
+  "Name": "Conflagration",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Conqueror",
+  "Name": "Conqueror",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Constellation",
+  "Name": "Constellation",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Consuming Shadow",
+  "Name": "Consuming Shadow",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Convergence",
+  "Name": "Convergence",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Coolant",
+  "Name": "Coolant",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Coolheaded",
+  "Name": "Coolheaded",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Coordinate",
+  "Name": "Coordinate",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Corrosive Wave",
+  "Name": "Corrosive Wave",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Corruption",
+  "Name": "Corruption",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Ancient",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Cosmic Indifference",
+  "Name": "Cosmic Indifference",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Countdown",
+  "Name": "Countdown",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Crash Landing",
+  "Name": "Crash Landing",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Creative AI",
+  "Name": "Creative AI",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Crescent Spear",
+  "Name": "Crescent Spear",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Crimson Mantle",
+  "Name": "Crimson Mantle",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Cruelty",
+  "Name": "Cruelty",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Crush Under",
+  "Name": "Crush Under",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Curse of the Bell",
+  "Name": "Curse of the Bell",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Dagger Spray",
+  "Name": "Dagger Spray",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Dagger Throw",
+  "Name": "Dagger Throw",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Danse Macabre",
+  "Name": "Danse Macabre",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Dark Embrace",
+  "Name": "Dark Embrace",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Dark Shackles",
+  "Name": "Dark Shackles",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Darkness",
+  "Name": "Darkness",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Dash",
+  "Name": "Dash",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Dazed",
+  "Name": "Dazed",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Deadly Poison",
+  "Name": "Deadly Poison",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Death March",
+  "Name": "Death March",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Death's Door",
+  "Name": "Death's Door",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Deathbringer",
+  "Name": "Deathbringer",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Debilitate",
+  "Name": "Debilitate",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Debris",
+  "Name": "Debris",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Debt",
+  "Name": "Debt",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Decay",
+  "Name": "Decay",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Decisions, Decisions",
+  "Name": "Decisions, Decisions",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Defend (Defect)",
+  "Name": "Defend (Defect)",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Defend (Ironclad)",
+  "Name": "Defend (Ironclad)",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Defend (Necrobinder)",
+  "Name": "Defend (Necrobinder)",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Defend (Regent)",
+  "Name": "Defend (Regent)",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Defend (Silent)",
+  "Name": "Defend (Silent)",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Defile",
+  "Name": "Defile",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Deflect",
+  "Name": "Deflect",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Defragment",
+  "Name": "Defragment",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Defy",
+  "Name": "Defy",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Delay",
+  "Name": "Delay",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Demesne",
+  "Name": "Demesne",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Demon Form",
+  "Name": "Demon Form",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Demonic Shield",
+  "Name": "Demonic Shield",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Devastate",
+  "Name": "Devastate",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Devour Life",
+  "Name": "Devour Life",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Dirge",
+  "Name": "Dirge",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Slay the Spire 2:Discovery",
+  "Name": "Discovery",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Disintegration",
+  "Name": "Disintegration",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Dismantle",
+  "Name": "Dismantle",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Distraction",
+  "Name": "Distraction",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Dodge and Roll",
+  "Name": "Dodge and Roll",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Dominate",
+  "Name": "Dominate",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Double Energy",
+  "Name": "Double Energy",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Doubt",
+  "Name": "Doubt",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Dowsing",
+  "Name": "Dowsing",
+  "Color": "Colorless",
+  "Type": "Quest",
+  "Rarity": "Quest",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Drain Power",
+  "Name": "Drain Power",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Dramatic Entrance",
+  "Name": "Dramatic Entrance",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Dredge",
+  "Name": "Dredge",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Drum of Battle",
+  "Name": "Drum of Battle",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Dual Wield",
+  "Name": "Dual Wield",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Dualcast",
+  "Name": "Dualcast",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Dying Star",
+  "Name": "Dying Star",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Echo Form",
+  "Name": "Echo Form",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Echoing Slash",
+  "Name": "Echoing Slash",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Eidolon",
+  "Name": "Eidolon",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:End of Days",
+  "Name": "End of Days",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Energy Surge",
+  "Name": "Energy Surge",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Enfeebling Touch",
+  "Name": "Enfeebling Touch",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Enlightenment",
+  "Name": "Enlightenment",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Enthralled",
+  "Name": "Enthralled",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Entrench",
+  "Name": "Entrench",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Entropy",
+  "Name": "Entropy",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Envenom",
+  "Name": "Envenom",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Equilibrium",
+  "Name": "Equilibrium",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Eradicate",
+  "Name": "Eradicate",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Slay the Spire 2:Escape Plan",
+  "Name": "Escape Plan",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Eternal Armor",
+  "Name": "Eternal Armor",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Evil Eye",
+  "Name": "Evil Eye",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Expect a Fight",
+  "Name": "Expect a Fight",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Expertise",
+  "Name": "Expertise",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Expose",
+  "Name": "Expose",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Exterminate",
+  "Name": "Exterminate",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Fade",
+  "Name": "Fade",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Falling Star",
+  "Name": "Falling Star",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Fan of Knives",
+  "Name": "Fan of Knives",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Fasten",
+  "Name": "Fasten",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Fear",
+  "Name": "Fear",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Feed",
+  "Name": "Feed",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Feeding Frenzy",
+  "Name": "Feeding Frenzy",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Feel No Pain",
+  "Name": "Feel No Pain",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Feral",
+  "Name": "Feral",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Fetch",
+  "Name": "Fetch",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Fiend Fire",
+  "Name": "Fiend Fire",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Fight Me!",
+  "Name": "Fight Me!",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Fight Through",
+  "Name": "Fight Through",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Finesse",
+  "Name": "Finesse",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Finisher",
+  "Name": "Finisher",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Fisticuffs",
+  "Name": "Fisticuffs",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Flak Cannon",
+  "Name": "Flak Cannon",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Flame Barrier",
+  "Name": "Flame Barrier",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Flanking",
+  "Name": "Flanking",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Flash of Steel",
+  "Name": "Flash of Steel",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Flatten",
+  "Name": "Flatten",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Flechettes",
+  "Name": "Flechettes",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Flick-Flack",
+  "Name": "Flick-Flack",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Focused Strike",
+  "Name": "Focused Strike",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Folly",
+  "Name": "Folly",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Footwork",
+  "Name": "Footwork",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Forbidden Grimoire",
+  "Name": "Forbidden Grimoire",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Ancient",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Foregone Conclusion",
+  "Name": "Foregone Conclusion",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Forgotten Ritual",
+  "Name": "Forgotten Ritual",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Frantic Escape",
+  "Name": "Frantic Escape",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Friendship",
+  "Name": "Friendship",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:FTL",
+  "Name": "FTL",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Furnace",
+  "Name": "Furnace",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Fusion",
+  "Name": "Fusion",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Gamma Blast",
+  "Name": "Gamma Blast",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Gang Up",
+  "Name": "Gang Up",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Gather Light",
+  "Name": "Gather Light",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Genesis",
+  "Name": "Genesis",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Genetic Algorithm",
+  "Name": "Genetic Algorithm",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Glacier",
+  "Name": "Glacier",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Glasswork",
+  "Name": "Glasswork",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Glimmer",
+  "Name": "Glimmer",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Glimpse Beyond",
+  "Name": "Glimpse Beyond",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Glitterstream",
+  "Name": "Glitterstream",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Glow",
+  "Name": "Glow",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Go for the Eyes",
+  "Name": "Go for the Eyes",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Gold Axe",
+  "Name": "Gold Axe",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Grand Finale",
+  "Name": "Grand Finale",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Grave Warden",
+  "Name": "Grave Warden",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Graveblast",
+  "Name": "Graveblast",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Greed",
+  "Name": "Greed",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:GUARDS!!!",
+  "Name": "GUARDS!!!",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:GUARDS!!!",
+  "Name": "Minion Sacrifice",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Token",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Guiding Star",
+  "Name": "Guiding Star",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Guilty",
+  "Name": "Guilty",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Gunk Up",
+  "Name": "Gunk Up",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Hailstorm",
+  "Name": "Hailstorm",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Hammer Time",
+  "Name": "Hammer Time",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Hand of Greed",
+  "Name": "Hand of Greed",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Hand Trick",
+  "Name": "Hand Trick",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Hang",
+  "Name": "Hang",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Haunt",
+  "Name": "Haunt",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Havoc",
+  "Name": "Havoc",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Haze",
+  "Name": "Haze",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Headbutt",
+  "Name": "Headbutt",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Heavenly Drill",
+  "Name": "Heavenly Drill",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Slay the Spire 2:Hegemony",
+  "Name": "Hegemony",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Heirloom Hammer",
+  "Name": "Heirloom Hammer",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Helix Drill",
+  "Name": "Helix Drill",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Hello World",
+  "Name": "Hello World",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Hellraiser",
+  "Name": "Hellraiser",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Hemokinesis",
+  "Name": "Hemokinesis",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Hibernate",
+  "Name": "Hibernate",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Hidden Cache",
+  "Name": "Hidden Cache",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Hidden Daggers",
+  "Name": "Hidden Daggers",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Hidden Gem",
+  "Name": "Hidden Gem",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:High Five",
+  "Name": "High Five",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Hologram",
+  "Name": "Hologram",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Hotfix",
+  "Name": "Hotfix",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Howl from Beyond",
+  "Name": "Howl from Beyond",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Huddle Up",
+  "Name": "Huddle Up",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Hyperbeam",
+  "Name": "Hyperbeam",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:I Am Invincible",
+  "Name": "I Am Invincible",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Ice Lance",
+  "Name": "Ice Lance",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Ignition",
+  "Name": "Ignition",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Imitation Learning",
+  "Name": "Imitation Learning",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Impatience",
+  "Name": "Impatience",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Impervious",
+  "Name": "Impervious",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Infection",
+  "Name": "Infection",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Infernal Blade",
+  "Name": "Infernal Blade",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Inferno",
+  "Name": "Inferno",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Infinite Blades",
+  "Name": "Infinite Blades",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Inflame",
+  "Name": "Inflame",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Injury",
+  "Name": "Injury",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Intercept",
+  "Name": "Intercept",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Invoke",
+  "Name": "Invoke",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Iron Wave",
+  "Name": "Iron Wave",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Iteration",
+  "Name": "Iteration",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Jack of All Trades",
+  "Name": "Jack of All Trades",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Jackpot",
+  "Name": "Jackpot",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Juggernaut",
+  "Name": "Juggernaut",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Juggling",
+  "Name": "Juggling",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Kingly Kick",
+  "Name": "Kingly Kick",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "4"
+ },
+ {
+  "Page": "Slay the Spire 2:Kingly Punch",
+  "Name": "Kingly Punch",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Knife Trap",
+  "Name": "Knife Trap",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Knockdown",
+  "Name": "Knockdown",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Knockout Blow",
+  "Name": "Knockout Blow",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Know Thy Place",
+  "Name": "Know Thy Place",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Lantern Key",
+  "Name": "Lantern Key",
+  "Color": "Colorless",
+  "Type": "Quest",
+  "Rarity": "Quest",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Largesse",
+  "Name": "Largesse",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Leading Strike",
+  "Name": "Leading Strike",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Leap",
+  "Name": "Leap",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Leg Sweep",
+  "Name": "Leg Sweep",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Legion of Bone",
+  "Name": "Legion of Bone",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Lethality",
+  "Name": "Lethality",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Lift",
+  "Name": "Lift",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Lightning Rod",
+  "Name": "Lightning Rod",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Loop",
+  "Name": "Loop",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Lunar Blast",
+  "Name": "Lunar Blast",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Machine Learning",
+  "Name": "Machine Learning",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mad Science",
+  "Name": "Mad Science (Chaos)",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mad Science",
+  "Name": "Mad Science (Choking)",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mad Science",
+  "Name": "Mad Science (Curious)",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mad Science",
+  "Name": "Mad Science (Energized)",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mad Science",
+  "Name": "Mad Science (Expertise)",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mad Science",
+  "Name": "Mad Science (Improvement)",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mad Science",
+  "Name": "Mad Science (Sapping)",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mad Science",
+  "Name": "Mad Science (Violence)",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mad Science",
+  "Name": "Mad Science (Wisdom)",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mad Science/data",
+  "Name": "Mad Science",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Make It So",
+  "Name": "Make It So",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Malaise",
+  "Name": "Malaise",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mangle",
+  "Name": "Mangle",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Manifest Authority",
+  "Name": "Manifest Authority",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Master of Strategy",
+  "Name": "Master of Strategy",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Master Planner",
+  "Name": "Master Planner",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Maul",
+  "Name": "Maul",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Ancient",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mayhem",
+  "Name": "Mayhem",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Melancholy",
+  "Name": "Melancholy",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Memento Mori",
+  "Name": "Memento Mori",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Metamorphosis",
+  "Name": "Metamorphosis",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Meteor Shower",
+  "Name": "Meteor Shower",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Ancient",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Meteor Strike",
+  "Name": "Meteor Strike",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "5"
+ },
+ {
+  "Page": "Slay the Spire 2:Midnight",
+  "Name": "Midnight",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "12"
+ },
+ {
+  "Page": "Slay the Spire 2:Mimic",
+  "Name": "Mimic",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mind Blast",
+  "Name": "Mind Blast",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Mind Rot",
+  "Name": "Mind Rot",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Mirage",
+  "Name": "Mirage",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Misery",
+  "Name": "Misery",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Modded",
+  "Name": "Modded",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Molten Fist",
+  "Name": "Molten Fist",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Momentum Strike",
+  "Name": "Momentum Strike",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Monarch's Gaze",
+  "Name": "Monarch's Gaze",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Monologue",
+  "Name": "Monologue",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Multi-Cast",
+  "Name": "Multi-Cast",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Slay the Spire 2:Murder",
+  "Name": "Murder",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Necro Mastery",
+  "Name": "Necro Mastery",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Negative Pulse",
+  "Name": "Negative Pulse",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Neow's Fury",
+  "Name": "Neow's Fury",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Ancient",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Neurosurge",
+  "Name": "Neurosurge",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Neutralize",
+  "Name": "Neutralize",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Neutron Aegis",
+  "Name": "Neutron Aegis",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Nightmare",
+  "Name": "Nightmare",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:No Escape",
+  "Name": "No Escape",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Normality",
+  "Name": "Normality",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Nostalgia",
+  "Name": "Nostalgia",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Not Yet",
+  "Name": "Not Yet",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Noxious Fumes",
+  "Name": "Noxious Fumes",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Null",
+  "Name": "Null",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Oblivion",
+  "Name": "Oblivion",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Offering",
+  "Name": "Offering",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Omnislice",
+  "Name": "Omnislice",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:One for All",
+  "Name": "One for All",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:One-Two Punch",
+  "Name": "One-Two Punch",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Orbit",
+  "Name": "Orbit",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Outbreak",
+  "Name": "Outbreak",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Outmaneuver",
+  "Name": "Outmaneuver",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Outrage",
+  "Name": "Outrage",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Overclock",
+  "Name": "Overclock",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Pact's End",
+  "Name": "Pact's End",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Pagestorm",
+  "Name": "Pagestorm",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Pale Blue Dot",
+  "Name": "Pale Blue Dot",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Panache",
+  "Name": "Panache",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Panic Button",
+  "Name": "Panic Button",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Parry",
+  "Name": "Parry",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Parse",
+  "Name": "Parse",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Particle Wall",
+  "Name": "Particle Wall",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Patter",
+  "Name": "Patter",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Peck",
+  "Name": "Peck",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Perfected Strike",
+  "Name": "Perfected Strike",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Phantom Blades",
+  "Name": "Phantom Blades",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Photon Cut",
+  "Name": "Photon Cut",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Piercing Wail",
+  "Name": "Piercing Wail",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Pillage",
+  "Name": "Pillage",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Pillar of Creation",
+  "Name": "Pillar of Creation",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Pinpoint",
+  "Name": "Pinpoint",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Plot",
+  "Name": "Plot",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Poisoned Stab",
+  "Name": "Poisoned Stab",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Poke",
+  "Name": "Poke",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Pommel Strike",
+  "Name": "Pommel Strike",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Poor Sleep",
+  "Name": "Poor Sleep",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Pounce",
+  "Name": "Pounce",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Precise Cut",
+  "Name": "Precise Cut",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Predator",
+  "Name": "Predator",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Prep Time",
+  "Name": "Prep Time",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Prepared",
+  "Name": "Prepared",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Primal Force",
+  "Name": "Giant Rock",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Token",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Primal Force",
+  "Name": "Primal Force",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Production",
+  "Name": "Production",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Prolong",
+  "Name": "Prolong",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Prophesize",
+  "Name": "Prophesize",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Protector",
+  "Name": "Protector",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Ancient",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Prowess",
+  "Name": "Prowess",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Pull Aggro",
+  "Name": "Pull Aggro",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Pull from Below",
+  "Name": "Pull from Below",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Purity",
+  "Name": "Purity",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Putrefy",
+  "Name": "Putrefy",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Pyre",
+  "Name": "Pyre",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Quadcast",
+  "Name": "Quadcast",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Ancient",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Quasar",
+  "Name": "Quasar",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Radiant Pearl",
+  "Name": "Luminesce",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Token",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Radiate",
+  "Name": "Radiate",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Rage",
+  "Name": "Rage",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Rainbow",
+  "Name": "Rainbow",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Rally",
+  "Name": "Rally",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Rampage",
+  "Name": "Rampage",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Rattle",
+  "Name": "Rattle",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Reanimate",
+  "Name": "Reanimate",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Reap",
+  "Name": "Reap",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Reaper Form",
+  "Name": "Reaper Form",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Reave",
+  "Name": "Reave",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Reboot",
+  "Name": "Reboot",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Rebound",
+  "Name": "Rebound",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Refine Blade",
+  "Name": "Refine Blade",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Reflect",
+  "Name": "Reflect",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Reflex",
+  "Name": "Reflex",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Refract",
+  "Name": "Refract",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Regret",
+  "Name": "Regret",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Relax",
+  "Name": "Relax",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Ancient",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Rend",
+  "Name": "Rend",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Resonance",
+  "Name": "Resonance",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Restlessness",
+  "Name": "Restlessness",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Ricochet",
+  "Name": "Ricochet",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Right Hand Hand",
+  "Name": "Right Hand Hand",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Rip and Tear",
+  "Name": "Rip and Tear",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Rocket Punch",
+  "Name": "Rocket Punch",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Rolling Boulder",
+  "Name": "Rolling Boulder",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Royal Gamble",
+  "Name": "Royal Gamble",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Royalties",
+  "Name": "Royalties",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Rupture",
+  "Name": "Rupture",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sacrifice",
+  "Name": "Sacrifice",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Salvo",
+  "Name": "Salvo",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Scavenge",
+  "Name": "Scavenge",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Scourge",
+  "Name": "Scourge",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Scrape",
+  "Name": "Scrape",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Scrawl",
+  "Name": "Scrawl",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sculpting Strike",
+  "Name": "Sculpting Strike",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Seance",
+  "Name": "Seance",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Second Wind",
+  "Name": "Second Wind",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Secret Technique",
+  "Name": "Secret Technique",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Secret Weapon",
+  "Name": "Secret Weapon",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Seeker Strike",
+  "Name": "Seeker Strike",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Seeking Edge",
+  "Name": "Seeking Edge",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sentry Mode",
+  "Name": "Sentry Mode",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Sentry Mode",
+  "Name": "Sweeping Gaze",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Token",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Serpent Form",
+  "Name": "Serpent Form",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Setup Strike",
+  "Name": "Setup Strike",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Seven Stars",
+  "Name": "Seven Stars",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Severance",
+  "Name": "Severance",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Shadow Shield",
+  "Name": "Shadow Shield",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Shadow Step",
+  "Name": "Shadow Step",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Shadowmeld",
+  "Name": "Shadowmeld",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Shame",
+  "Name": "Shame",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Shared Fate",
+  "Name": "Shared Fate",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Shatter",
+  "Name": "Shatter",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Shining Strike",
+  "Name": "Shining Strike",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Shiv",
+  "Name": "Shiv",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Token",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Shockwave",
+  "Name": "Shockwave",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Shroud",
+  "Name": "Shroud",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Shrug It Off",
+  "Name": "Shrug It Off",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sic 'Em",
+  "Name": "Sic 'Em",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sidestep",
+  "Name": "Sidestep",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Signal Boost",
+  "Name": "Signal Boost",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Skewer",
+  "Name": "Skewer",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Slay the Spire 2:Skim",
+  "Name": "Skim",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sleight of Flesh",
+  "Name": "Sleight of Flesh",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Slice",
+  "Name": "Slice",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Slimed",
+  "Name": "Slimed",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sloth",
+  "Name": "Sloth",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Smokestack",
+  "Name": "Smokestack",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Snakebite",
+  "Name": "Snakebite",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Snap",
+  "Name": "Snap",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sneaky",
+  "Name": "Sneaky",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Solar Strike",
+  "Name": "Solar Strike",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Soot",
+  "Name": "Soot",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Soul",
+  "Name": "Soul",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Token",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Soul Storm",
+  "Name": "Soul Storm",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Soulbound",
+  "Name": "Soulbound",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sovereign Blade",
+  "Name": "Sovereign Blade",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Token",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Sow",
+  "Name": "Sow",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Spectrum Shift",
+  "Name": "Spectrum Shift",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Speedster",
+  "Name": "Speedster",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Spinner",
+  "Name": "Spinner",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Spirit of Ash",
+  "Name": "Spirit of Ash",
+  "Color": "Necrobinder",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Spite",
+  "Name": "Spite",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Splash",
+  "Name": "Splash",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Spoils Map",
+  "Name": "Spoils Map",
+  "Color": "Colorless",
+  "Type": "Quest",
+  "Rarity": "Quest",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Spoils of Battle",
+  "Name": "Spoils of Battle",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Spore Mind",
+  "Name": "Spore Mind",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Spur",
+  "Name": "Spur",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Squash",
+  "Name": "Squash",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Squeeze",
+  "Name": "Squeeze",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Stack",
+  "Name": "Stack",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Stampede",
+  "Name": "Stampede",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Stardust",
+  "Name": "Stardust",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Stoke",
+  "Name": "Stoke",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Stomp",
+  "Name": "Stomp",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Stone Armor",
+  "Name": "Stone Armor",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Storm",
+  "Name": "Storm",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Storm of Steel",
+  "Name": "Storm of Steel",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Strangle",
+  "Name": "Strangle",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Stratagem",
+  "Name": "Stratagem",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Strike (Defect)",
+  "Name": "Strike (Defect)",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Strike (Ironclad)",
+  "Name": "Strike (Ironclad)",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Strike (Necrobinder)",
+  "Name": "Strike (Necrobinder)",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Strike (Regent)",
+  "Name": "Strike (Regent)",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Strike (Silent)",
+  "Name": "Strike (Silent)",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Subroutine",
+  "Name": "Subroutine",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sucker Punch",
+  "Name": "Sucker Punch",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Summon Forth",
+  "Name": "Summon Forth",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sunder",
+  "Name": "Sunder",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Supercritical",
+  "Name": "Supercritical",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Supermassive",
+  "Name": "Supermassive",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Suppress",
+  "Name": "Suppress",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Ancient",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Survivor",
+  "Name": "Survivor",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sweeping Beam",
+  "Name": "Sweeping Beam",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sword Boomerang",
+  "Name": "Sword Boomerang",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Sword Sage",
+  "Name": "Sword Sage",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Synchronize",
+  "Name": "Synchronize",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Synthesis",
+  "Name": "Synthesis",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Tactician",
+  "Name": "Tactician",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Tag Team",
+  "Name": "Tag Team",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Tank",
+  "Name": "Tank",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Taunt",
+  "Name": "Taunt",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Tear Asunder",
+  "Name": "Tear Asunder",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Tempest",
+  "Name": "Tempest",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Slay the Spire 2:Terraforming",
+  "Name": "Terraforming",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Tesla Coil",
+  "Name": "Tesla Coil",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:The Ball",
+  "Name": "The Ball",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:The Bomb",
+  "Name": "The Bomb",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:The Gambit",
+  "Name": "The Gambit",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:The Hunt",
+  "Name": "The Hunt",
+  "Color": "Silent",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:The Scythe",
+  "Name": "The Scythe",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:The Sealed Throne",
+  "Name": "The Sealed Throne",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Ancient",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:The Smith",
+  "Name": "The Smith",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Thinking Ahead",
+  "Name": "Thinking Ahead",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Thrash",
+  "Name": "Thrash",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Thrumming Hatchet",
+  "Name": "Thrumming Hatchet",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Thunder",
+  "Name": "Thunder",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Thunderclap",
+  "Name": "Thunderclap",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Time's Up",
+  "Name": "Time's Up",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Tools of the Trade",
+  "Name": "Tools of the Trade",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Toric Toughness",
+  "Name": "Toric Toughness",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Event",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Toxic",
+  "Name": "Toxic",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Tracking",
+  "Name": "Tracking",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Transfigure",
+  "Name": "Transfigure",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Trash to Treasure",
+  "Name": "Trash to Treasure",
+  "Color": "Defect",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Tremble",
+  "Name": "Tremble",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:True Grit",
+  "Name": "True Grit",
+  "Color": "Ironclad",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:TURBO",
+  "Name": "TURBO",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Tutor",
+  "Name": "Tutor",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Twin Strike",
+  "Name": "Twin Strike",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Tyranny",
+  "Name": "Tyranny",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Ultimate Defend",
+  "Name": "Ultimate Defend",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Ultimate Strike",
+  "Name": "Ultimate Strike",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Undeath",
+  "Name": "Undeath",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Underworld",
+  "Name": "Underworld",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Unleash",
+  "Name": "Unleash",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Unmovable",
+  "Name": "Unmovable",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Unrelenting",
+  "Name": "Unrelenting",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Untouchable",
+  "Name": "Untouchable",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Up My Sleeve",
+  "Name": "Up My Sleeve",
+  "Color": "Silent",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Uppercut",
+  "Name": "Uppercut",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Uproar",
+  "Name": "Uproar",
+  "Color": "Defect",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Veilpiercer",
+  "Name": "Veilpiercer",
+  "Color": "Necrobinder",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Venerate",
+  "Name": "Venerate",
+  "Color": "Regent",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Vicious",
+  "Name": "Vicious",
+  "Color": "Ironclad",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Void",
+  "Name": "Void",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Void Form",
+  "Name": "Void Form",
+  "Color": "Regent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Volley",
+  "Name": "Volley",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Slay the Spire 2:Voltaic",
+  "Name": "Voltaic",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Waste Away",
+  "Name": "Waste Away",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Well-Laid Plans",
+  "Name": "Well-Laid Plans",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:Whirlwind",
+  "Name": "Whirlwind",
+  "Color": "Ironclad",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Slay the Spire 2:Whistle",
+  "Name": "Whistle",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Ancient",
+  "Cost": "2"
+ },
+ {
+  "Page": "Slay the Spire 2:White Noise",
+  "Name": "White Noise",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Wish",
+  "Name": "Wish",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Ancient",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Wisp",
+  "Name": "Wisp",
+  "Color": "Necrobinder",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slay the Spire 2:Wither",
+  "Name": "Wither",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Wound",
+  "Name": "Wound",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Wraith Form",
+  "Name": "Wraith Form",
+  "Color": "Silent",
+  "Type": "Power",
+  "Rarity": "Ancient",
+  "Cost": "3"
+ },
+ {
+  "Page": "Slay the Spire 2:Writhe",
+  "Name": "Writhe",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Slay the Spire 2:Wrought in War",
+  "Name": "Wrought in War",
+  "Color": "Regent",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slay the Spire 2:Zap",
+  "Name": "Zap",
+  "Color": "Defect",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Slice",
+  "Name": "Slice",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Slimed",
+  "Name": "Slimed",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "1"
+ },
+ {
+  "Page": "Smite",
+  "Name": "Smite",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Special",
+  "Cost": "1"
+ },
+ {
+  "Page": "Sneaky Strike",
+  "Name": "Sneaky Strike",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Spirit Shield",
+  "Name": "Spirit Shield",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Spot Weakness",
+  "Name": "Spot Weakness",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Stack",
+  "Name": "Stack",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Static Discharge",
+  "Name": "Static Discharge",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Steam Barrier",
+  "Name": "Steam Barrier",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Storm",
+  "Name": "Storm",
+  "Color": "Blue",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Storm of Steel",
+  "Name": "Storm of Steel",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Streamline",
+  "Name": "Streamline",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "2"
+ },
+ {
+  "Page": "Strike (Defect)",
+  "Name": "Strike (Defect)",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Strike (Ironclad)",
+  "Name": "Strike (Ironclad)",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Strike (Silent)",
+  "Name": "Strike (Silent)",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Strike (Watcher)",
+  "Name": "Strike (Watcher)",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Study",
+  "Name": "Study",
+  "Color": "Purple",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Sucker Punch",
+  "Name": "Sucker Punch",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Sunder",
+  "Name": "Sunder",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "3"
+ },
+ {
+  "Page": "Survivor",
+  "Name": "Survivor",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ },
+ {
+  "Page": "Sweeping Beam",
+  "Name": "Sweeping Beam",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Swift Strike",
+  "Name": "Swift Strike",
+  "Color": "Colorless",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Swivel",
+  "Name": "Swivel",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Sword Boomerang",
+  "Name": "Sword Boomerang",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Tactician",
+  "Name": "Tactician",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Talk to the Hand",
+  "Name": "Talk to the Hand",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Tantrum",
+  "Name": "Tantrum",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Tempest",
+  "Name": "Tempest",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Terror",
+  "Name": "Terror",
+  "Color": "Green",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "The Bomb",
+  "Name": "The Bomb",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "2"
+ },
+ {
+  "Page": "Thinking Ahead",
+  "Name": "Thinking Ahead",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Third Eye",
+  "Name": "Third Eye",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Thunder Strike",
+  "Name": "Thunder Strike",
+  "Color": "Blue",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Thunderclap",
+  "Name": "Thunderclap",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Tools of the Trade",
+  "Name": "Tools of the Trade",
+  "Color": "Green",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Tranquility",
+  "Name": "Tranquility",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Transmutation",
+  "Name": "Transmutation",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "-1"
+ },
+ {
+  "Page": "Trip",
+  "Name": "Trip",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "True Grit",
+  "Name": "True Grit",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "TURBO",
+  "Name": "TURBO",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Twin Strike",
+  "Name": "Twin Strike",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Unload",
+  "Name": "Unload",
+  "Color": "Green",
+  "Type": "Attack",
+  "Rarity": "Rare",
+  "Cost": "1"
+ },
+ {
+  "Page": "Uppercut",
+  "Name": "Uppercut",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Vault",
+  "Name": "Vault",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Vigilance",
+  "Name": "Vigilance",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "2"
+ },
+ {
+  "Page": "Violence",
+  "Name": "Violence",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "0"
+ },
+ {
+  "Page": "Void",
+  "Name": "Void",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Wallop",
+  "Name": "Wallop",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Warcry",
+  "Name": "Warcry",
+  "Color": "Red",
+  "Type": "Skill",
+  "Rarity": "Common",
+  "Cost": "0"
+ },
+ {
+  "Page": "Wave of the Hand",
+  "Name": "Wave of the Hand",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Weave",
+  "Name": "Weave",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "0"
+ },
+ {
+  "Page": "Well-Laid Plans",
+  "Name": "Well-Laid Plans",
+  "Color": "Green",
+  "Type": "Power",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Wheel Kick",
+  "Name": "Wheel Kick",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Whirlwind",
+  "Name": "Whirlwind",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "-1"
+ },
+ {
+  "Page": "White Noise",
+  "Name": "White Noise",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Wild Strike",
+  "Name": "Wild Strike",
+  "Color": "Red",
+  "Type": "Attack",
+  "Rarity": "Common",
+  "Cost": "1"
+ },
+ {
+  "Page": "Windmill Strike",
+  "Name": "Windmill Strike",
+  "Color": "Purple",
+  "Type": "Attack",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Wish",
+  "Name": "Become Almighty",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Special",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Wish",
+  "Name": "Fame and Fortune",
+  "Color": "Colorless",
+  "Type": "Skill",
+  "Rarity": "Special",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Wish",
+  "Name": "Live Forever",
+  "Color": "Colorless",
+  "Type": "Power",
+  "Rarity": "Special",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Wish",
+  "Name": "Wish",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Worship",
+  "Name": "Worship",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "2"
+ },
+ {
+  "Page": "Wound",
+  "Name": "Wound",
+  "Color": "Colorless",
+  "Type": "Status",
+  "Rarity": "Status",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Wraith Form",
+  "Name": "Wraith Form",
+  "Color": "Green",
+  "Type": "Power",
+  "Rarity": "Rare",
+  "Cost": "3"
+ },
+ {
+  "Page": "Wreath of Flame",
+  "Name": "Wreath of Flame",
+  "Color": "Purple",
+  "Type": "Skill",
+  "Rarity": "Uncommon",
+  "Cost": "1"
+ },
+ {
+  "Page": "Writhe",
+  "Name": "Writhe",
+  "Color": "Colorless",
+  "Type": "Curse",
+  "Rarity": "Curse",
+  "Cost": "-2"
+ },
+ {
+  "Page": "Zap",
+  "Name": "Zap",
+  "Color": "Blue",
+  "Type": "Skill",
+  "Rarity": "Basic",
+  "Cost": "1"
+ }
+]

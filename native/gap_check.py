@@ -51,6 +51,8 @@ def main():
         # prose next to the code.
         body = re.sub(r"//[^" + chr(10) + r"]*", "", inert.group(1))
         ids = [i for i in re.findall(r'"([^"]*)"', body) if i]
+        # §233：这张名单里出现过重复项（一个 id 被两个条目各写一次），而 "声明了 N 条" 应该数 名字 而不是 行数。
+        ids = list(dict.fromkeys(ids))
         print(f"  declared inert: {len(ids)}"
               + (f" ({', '.join(ids)})" if ids else " -- every status in the content has a rule"))
 

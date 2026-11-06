@@ -7,7 +7,7 @@
 移植的硬约束是三条：**能在 ESP32-P4 裸机上跑**（`no_std`、零分配、纯整数、`forbid(unsafe_code)`）、
 **能多开当强化学习训练环境**（确定性、可快照、可回放）、**与参考实现逐字节一致的状态指纹**（对拍可证）。
 
-> 主计划在 `docs/port-plan.md`（§1–§225，每一轮都留数字、记下被推翻的结论）。
+> 主计划在 `docs/port-plan.md`（§1–§233，每一轮都留数字、记下被推翻的结论）。
 > 这份 README 只交代**仓库现在是什么样、以及怎么把它跑起来玩**；为什么变成这样，在计划里。
 
 ---
@@ -86,7 +86,8 @@ python -m http.server 8000
    * 敌人头顶的**意图**图标是它下一步要做什么（攻击数值、格挡、上状态…）；
    * 药水在顶部腰带里，点 **「用」**（有的药水要先点敌人选目标）。
 5. **奖励屏**：赢下战斗后挑金币 / 卡 / 药水 / 遗物，然后继续走图。
-6. **篝火**：休息（回血）或打铁（升一张牌）；**商店**：买卡/遗物/药水，或花钱删牌。
+6. **篝火**：休息（回 30% 血）或打铁（升一张牌）；**商店**：买卡/遗物/药水，或花钱删牌。
+   （wiki 的篝火另有三件遗物开启的 **Lift / Toke / Dig** 与 **Recall**（红钥匙）—— 见 §2 的诚实清单）
 7. 打穿第 16 层的 **Boss** 就进入下一幕（共三幕骨架）；中途死了可以「开始 / 重开」。
 
 **顶部的几个按钮**：存档 / 回档（单行文本 + CRC）、导出 / 导入回放脚本（`RDR1` 格式，
@@ -127,7 +128,7 @@ python -m http.server 8000
 |---|---|
 | **战斗内核** | `rd-core` 21 个源文件、约 57k 行。出牌/结算/状态/意图/修饰器管线/效果程序 IR（栈式）/选择与目标/金色指纹；**零分配、纯整数、`forbid(unsafe_code)`** |
 | **运行层** | `rd-run` 约 7.9k 行。地图（15 行 × 7 列 + Boss）、幕、牌组、金币、遗物、药水、奖励屏、商店、事件、篝火、**Ascension 0–20（20/20 条都有机制）**、**存档（单行文本 + CRC）**、**回放（动作序列 + 每步哈希）** |
-| **内容** | **47 怪 / 34 遭遇 / 51 条卡行（30 张基础 + 21 张 `+`）/ 43 状态 / 130 敌人动作 / 13 遗物 / 33 药水（满池）/ 12 事件（三幕 6+3+3）/ 10 张起始牌**。编译成 85,460 B 的 `rdcf` 镜像（core 镜像 71,840 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄** |
+| **内容** | **47 怪 / 34 遭遇 / 117 条卡行（61 张基础 + 56 条升级行）/ 46 状态 / 130 敌人动作 / 15 遗物 / 33 药水（满池）/ 14 事件（三幕 6+4+4）/ 10 张起始牌**。编译成 92,644 B 的 `rdcf` 镜像（core 镜像 76,448 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
 | **前端** | `index.html`（战斗 + 运行层 + 存档 + 回放）、`map.html`（地图页）；`wasm32` + **148** 个 `i32` 的战斗观察向量（另有 19 个 slot 的运行层观察）、一组 `rd_env_*` / `rd_run_*` 导出（`web/smoke.mjs` 有一张手抄的 `REQUIRED` 表**逐条**对账，加导出必须同时改两处） |
 | **RL 环境** | `rd_env_*` ABI（`docs/spec/env-abi.md`）+ Python `ctypes` 封装（多进程、批量观察） |
 | **裸机** | `riscv32imac-unknown-none-elf` 真链接成 ELF，镜像占用有闸门 |
@@ -181,7 +182,7 @@ python -m http.server 8000
 | `native/*.py` | 三类：**对拍/校验驱动**（`fight_diff.py`、`gap_check.py`、`sts_content_check.py`…）、**`doc_*.py`**（每一节往 `port-plan.md` 追加章节的脚本，与正文一一对应）、**`patch_*.py` / `negctl_*.py`**（那一节改动源码与**反证**的脚本，留作记录） |
 | `py/roguedeck_env/` | RL 环境的 Python 封装（`ctypes`，多进程 + 批量观察 + 吞吐基准） |
 | `corpus/` | 对拍语料：`golden_v1.jsonl`、`hash_cases/*.txt`、`coverage.json`（份数以闸门输出为准） |
-| `docs/` | `port-plan.md`（主计划 §1–§195）、`spec/`（21 份规格书）、`sts-wiki-gap.md`（缺口清单，数字由 `native/gap_check.py` 重算）、`coverage-matrix.md`（**生成物**：每个实体的 Implemented / TestNamed / HarnessOnly / SourceTie / DeclaredDeviation / Evidence，闸门 13；带 `--selftest` 的五个对抗性夹具） |
+| `docs/` | `port-plan.md`（主计划 §1–§233）、`spec/`（21 份规格书）、`sts-wiki-gap.md`（缺口清单；"我们有多少"由 `native/gap_check.py` 重算，"还差哪些牌"由 `native/audit_card_gap.py` 与 wiki 卡表对账）、`coverage-matrix.md`（**生成物**：每个实体的 Implemented / TestNamed / HarnessOnly / SourceTie / DeclaredDeviation / Evidence，闸门 13；带 `--selftest` 的五个对抗性夹具） |
 | `ref/` | 参考实现的浅克隆位置（**不在本仓库**，见 §9） |
 | `sts/` | **早期 Python 原型**，已被 Rust 内核取代，保留作参照（不参与任何闸门） |
 
@@ -209,7 +210,7 @@ python -m http.server 8000
 ```powershell
 & .\tools\cargo.ps1 test -p rd-core -p rd-run -p rd-wasm --release      # 单元测试
 & .\tools\cargo.ps1 clippy --all-targets -p rd-core -p rd-run -p rd-wasm # 零告警是硬要求
-& .\tools\acceptance.ps1                                               # 20 道闸门，约 5 分钟
+& .\tools\acceptance.ps1                                               # 21 道闸门，约 5 分钟
 & .\tools\acceptance.ps1 -SkipSlow                                     # 跳过 soak / 浏览器
 python tools/contentc/build.py --package sts                           # 改内容 JSON 之后
 ```
