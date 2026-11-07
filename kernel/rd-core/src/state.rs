@@ -143,7 +143,14 @@ pub const MAX_COMBATANTS: usize = 12;
 ///
 /// The reference caps summons the same way; the number is 4 because the player has to be able to see
 /// and target every one of them, and the observation publishes six slots in total.
-pub const MAX_ENEMIES_IN_FIGHT: usize = 4;
+///
+/// ⚠️ §257: it was **4**, and that number was a lie about `Reptomancer`: the wiki lets it keep
+/// **four Daggers** alive (`Reptomancer + 4 = 5`) on top of the two the encounter starts with.
+/// At 4 the summon action failed with `Capacity(Full(Combatants))` -- loudly, which is why this
+/// showed up at all -- but a loudly-refused *correct* action is still wrong. 6 matches the
+/// observation's six enemy slots (`MAX_ENEMY_SLOTS`), so "the cap" and "the things the page can
+/// show" are now the same number instead of two numbers that disagree.
+pub const MAX_ENEMIES_IN_FIGHT: usize = 6;
 /// Total card *instances* in one fight - not per combatant. See the module table.
 pub const MAX_CARD_INSTANCES: usize = 224;
 /// Entries in a single pile of a single combatant.

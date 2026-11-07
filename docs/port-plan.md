@@ -17519,3 +17519,105 @@ on its own, it will begin the fourth turn unstunned"）。
 * `Book of Stabbing` 的 A3+/A18+（7×N、24；A18 时 Single Stab 也让 N 递增）。
 * `Blue Slaver` 的 A17"不连续 Rake"。
 * 五个精英的 `AiNote` 里多数已写明各自的偏差 —— 下次动它们先读那一段。
+
+---
+
+## §257 五个精英的机制收尾：唤醒、禁令、匕首上限、A3/A18 数值、A17 规则
+
+§256 把"这五个精英早就在"钉成了事实，并把两处真错（蓝皮强盗戴着时间扭曲、Book of Stabbing
+缺 Painful Stabs）修掉。这一节把 §256.4 列出的五条缺口全部做完。
+
+### 257.1 先修两处**阈值**错（`EACT.ProgramAsc` 的 4/19 是 Boss 的档）
+
+镜像里 `ProgramAsc` 的阈值规律是干净的：**普通怪 A2/A17、精英 A3/A18、Boss A4/A19**
+（Boss 另有 A9 档）。逐只数下来只有两个例外，而且都是 +1：
+
+| 动作 | 原来 | 现在 | 依据 |
+|---|---|---|---|
+| `nemesis.tri_attack` | A4 | **A3** | wiki 上标 `3` |
+| `nemesis.tri_burn` | A19 | **A18** | wiki 上标 `18` |
+| `reptomancer.big_bite` | A4 | **A3** | wiki 上标 `3` |
+| `reptomancer.snake_strike` | A4 | **A3** | wiki 上标 `3` |
+| `reptomancer.spawn_dagger` | A19 | **A18** | wiki 上标 `18` |
+
+数字本身都是对的，只是门槛高了一级 —— 这种错**在 A0 完全跑不出来**，只在 A3/A18 的边界上错一格。
+判据：`book_of_stabbing_multistab_starts_at_two_hits` 在 A0 与 A3 各测一遍伤害。
+
+### 257.2 `Lagavulin`：受伤即警醒（wiki 的另一半）
+
+> If it takes any damage, it will be stunned for one turn and then proceed to attack. If three turns
+> pass without any damage taken, it will awake and immediately begin attacking. Once awoken, its
+> Metallicize will be removed.
+
+**零内核改动**，载体是一个状态 + 两条触发器：
+
+| 触发器 | 条件 | 动作 |
+|---|---|---|
+| `DamageTaken`（bearer = 挨打的它） | `eventAmount > 0` | 摘 `metallicize 8` · 置 `lagavulin_woken = 1` · 摘掉自己 |
+| `TurnStarted`（它自己的回合） | `roundNumber > 3` | 摘 `metallicize 8` · 摘掉自己 |
+
+"摘掉自己"是这条设计的要点：状态一没，触发器就不再响 ⇒ 天然只醒一次。
+而**"被吵醒才眩晕"**靠 `lagavulin_woken` 这条计数器区分 —— 自己睡满三回合醒来的那一回合
+直接出招（`lagavulin.stunned` 那一招会把记号清零）。
+
+顺带修掉了**普通出招顺序**：原来 `Actions` 只有 `[siphon_soul, attack]`、靠 `(round-1) % 2`
+轮流，醒来后是 attack / siphon / attack / siphon，而 wiki 是 **Attack、Attack、Siphon Soul**。
+改成三档计数器 `lagavulin_step`（每招 `(step+1) % 3`）之后才是真的循环。
+
+判据两条，正好是 wiki 的两半：`lagavulin_wakes_when_it_loses_health_and_loses_a_turn`
+与 `lagavulin_wakes_on_its_own_unstunned_and_cycles_attack_attack_siphon`。
+
+### 257.3 `Reptomancer`：匕首上限 + A18 双召（**需要一个新的意图条件**）
+
+wiki：「Only 4 Daggers can be in play at any time. If Spawn Dagger was chosen with 4 Daggers in play,
+it will use Snake Strike instead.」
+
+"在场几只"不是任何已有条件的形状：`selfHasCounter` 读的是**自己身上的计数器**，而匕首会死、会新召
+—— "匕首死了谁来减计数器"没有答案（`Downed` 的 bearer 是**倒下的那个**，它身上的状态随它一起没了）。
+
+而这判断**必须落在选择层**：`Snake Strike` 与 `Spawn Dagger` 的意图图标不一样，塞进动作节目会让
+界面显示"召唤"却打出蛇击。⇒ 新条件 `intent.enemyAliveCount`（`Op, Value`）：
+**敌方阵营里还活着的战斗员个数，含出手者**。`Reptomancer + 4 把匕首 = 5`，所以"匕首已满"写成
+`GreaterOrEqual 5`。
+
+**顺带撞出一个容量常量在说谎**：`MAX_ENEMIES_IN_FIGHT` 是 **4**，而 Reptomancer 的合法上限是
+5（它 + 4 把匕首），遭遇开局还就带 2 把。原值下第 3 次召唤会 `Capacity(Full(Combatants))`
+—— **响亮失败**，所以它才浮出水面；但"一个**正确**的动作被响亮拒绝"仍然是错的。
+改成 **6**，与 `rd-wasm` 观察向量的 `MAX_ENEMY_SLOTS = 6` 对齐：从今以后"容量"和"页面能显示几个"
+是同一个数字，而不是两个互相矛盾的数字。
+
+### 257.4 `Book of Stabbing`：N 的 off-by-one 与 A18 的第二颗星号
+
+wiki：「N is equal to **2** plus the number of times Multi-Stab has been previously used」——
+内容里写的是 `3 + 已用次数`，**第一次就多打一整下**（18 而不是 12）。改成 2。
+
+A18：「N increments even on the Single Stab attack」。用一个 `AscensionMin: 18` 的计数器
+`book_stab_single_bump`（A18 起为 1）表达：`big_stab` 末尾 `book_stab_uses += bump`。
+这沿用了镜像里已有的惯例 —— **升阶常量放 `Monsters[].Counters` 的 `AscensionMin` 档**
+（`giant_head` 的 `it_is_time_damage` 就是这么写的），动作节目读计数器。
+
+### 257.5 `Nemesis` / `Blue Slaver`：`last_move` / `prev_move` 禁令
+
+这两条是**同一种机制**：每条动作节目末尾写"上一步是什么"（`prev_move ← last_move`、
+`last_move ← 本招代号`，镜像里 85 条动作的既有约定），规则再用两个等于判断表达禁令。
+
+| 怪 | 禁令（wiki） | 规则 |
+|---|---|---|
+| `Nemesis` | Tri Burn 与 Scythe 各不连两次；Tri Attack 不连三次；首回合 50/50 | 3 条 + 首回合 1 条 + 默认 35/35/30 |
+| `Blue Slaver` | 同一种攻击不连三次；**A17 起** Rake 不连两次 | 3 条（其中一条带 `ascensionAtLeast 17`）+ 默认 60/40 |
+
+`Blue Slaver` 的默认也改了：原来**没有任何规则**，靠循环（每回合固定 A→B→A→B），
+而 wiki 是"每回合 60% Stab / 40% Rake"。改成带权抽签后，`intent.rs` 里那条
+「第一回合命中规则、之后落回循环」的示范测试**不能再拿蓝皮强盗当样板**（它现在有 AI 了），
+换成了 Jaw Worm（三招、零规则）。
+
+### 257.6 这一节的教训
+
+1. **阈值是和数字同等重要的数据**：`4/19` 与 `3/18` 的差在 A0 一场都跑不出来，
+   而它决定了整条 A3/A18 边界。判据必须**在边界两侧各跑一遍**。
+2. **"想要的容量"与"写下的容量"要对齐**：`MAX_ENEMIES_IN_FIGHT = 4` 在 Reptomancer 之前
+   谁也看不出来，因为没有任何内容同时要 5 个敌人。响亮失败救了这一节。
+3. **带理由的既有决定要先核实理由**（§256.3 的 Lagavulin 眩晕），但**没有理由的沉默默认值**
+   要直接改（Blue Slaver 的循环 → 60/40 抽签）。
+4. **新动作要进 `EnemyActions` 表**，不只是写进 `dict`：内容门当场抓住了
+   `action 'lagavulin.stunned' has no EACT row`。

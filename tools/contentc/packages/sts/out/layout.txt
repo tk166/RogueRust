@@ -12,14 +12,14 @@
  26  4  4  12 IR compare                                                      : Left:TERM Op:STR ResultKey:TERM Right:TERM
  27  1  1   4 IR const                                                        : Value:INT
  28  1  1   4 IR currentHealth                                                : Selector:TERM
- 29  1  1   4 IR currentTurn                                                  : Selector:TERM
- 30  5  5  12 IR divide                                                       : Dividend:TERM Divisor:TERM Left:TERM Right:TERM ZeroPolicy:STR
- 31  1  1   4 IR event.bool                                                   : FieldKey:STR
- 32  0  0   4 IR eventAmount                                                  : 
- 33  1  1   4 IR hand.hasCardWithTag                                          : Tag:STR
- 34  1  2   8 IR intent.allOf                                                 : Conditions:TERMLIST
- 35  1  2   8 IR intent.anyOf                                                 : Conditions:TERMLIST
- 36  1  1   4 IR intent.ascensionAtLeast                                      : Value:INT
+ 29  5  5  12 IR divide                                                       : Dividend:TERM Divisor:TERM Left:TERM Right:TERM ZeroPolicy:STR
+ 30  1  1   4 IR event.bool                                                   : FieldKey:STR
+ 31  0  0   4 IR eventAmount                                                  : 
+ 32  1  1   4 IR hand.hasCardWithTag                                          : Tag:STR
+ 33  1  2   8 IR intent.allOf                                                 : Conditions:TERMLIST
+ 34  1  2   8 IR intent.anyOf                                                 : Conditions:TERMLIST
+ 35  1  1   4 IR intent.ascensionAtLeast                                      : Value:INT
+ 36  2  2   8 IR intent.enemyAliveCount                                       : Op:STR Value:INT
  37  2  2   8 IR intent.healthPercent                                         : Op:STR Percent:INT
  38  1  1   4 IR intent.not                                                   : Condition:TERM
  39  2  2   8 IR intent.opponentHasStatus                                     : MinStacks:INT Status:STR(wrap)
@@ -132,18 +132,19 @@
 146  3  6  16 OBJ _obj(Events,Events2,Events3)                                 : Events:TERMLIST Events2:TERMLIST Events3:TERMLIST
 147  1  1   4 OBJ _obj(Exhausted)                                              : Exhausted:TERM
 148  1  1   4 OBJ _obj(Id)                                                     : Id:STR
-149  4  4  12 OBJ _obj(Id,MaxNodeDepth,MaxProgramSteps,Root)                   : Id:TERM MaxNodeDepth:INT MaxProgramSteps:INT Root:TERM
-150  2  2   8 OBJ _obj(Id,Root)                                                : Id:STR(Wrap) Root:TERM
-151  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
-152  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
-153  3  3   8 OBJ _obj(Key,Max,Min)                                            : Key:STR Max:INT Min:INT
-154  2  2   8 OBJ _obj(Key,Value)                                              : Key:STR Value:INT
-155  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
-156  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
-157  3  3   8 OBJ _obj(Percent,Repeating,SurvivingHealth)                      : Percent:INT Repeating:BOOL SurvivingHealth:INT
-158  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
-159  1  1   4 OBJ _obj(TurnEndInHand)                                          : TurnEndInHand:TERM
-160  1  1   4 OBJ _obj(gold)                                                   : gold:INT
+149  3  3   8 OBJ _obj(Id,Intent,Program)                                      : Id:STR Intent:TERM Program:TERM
+150  4  4  12 OBJ _obj(Id,MaxNodeDepth,MaxProgramSteps,Root)                   : Id:TERM MaxNodeDepth:INT MaxProgramSteps:INT Root:TERM
+151  2  2   8 OBJ _obj(Id,Root)                                                : Id:STR(Wrap) Root:TERM
+152  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
+153  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
+154  3  3   8 OBJ _obj(Key,Max,Min)                                            : Key:STR Max:INT Min:INT
+155  2  2   8 OBJ _obj(Key,Value)                                              : Key:STR Value:INT
+156  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
+157  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
+158  3  3   8 OBJ _obj(Percent,Repeating,SurvivingHealth)                      : Percent:INT Repeating:BOOL SurvivingHealth:INT
+159  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
+160  1  1   4 OBJ _obj(TurnEndInHand)                                          : TurnEndInHand:TERM
+161  1  1   4 OBJ _obj(gold)                                                   : gold:INT
 
 # reserved opcodes:
   0 reserved : (no fields)

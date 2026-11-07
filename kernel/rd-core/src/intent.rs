@@ -326,11 +326,20 @@ pub enum ConditionKind {
     /// 可声明的表，是每只怪 `getMove` 里的一段 `if`。内核不给每只怪写代码，所以把那个
     /// `if` 交给内容：`AscensionMin` 管"同一个招式换数值"，这个条件管"哪条规则先生效"。
     AscensionAtLeast,
+    /// `intent.enemyAliveCount`（`Op, Value`）：**敌方阵营里还活着的战斗员个数**，**含出手者**。
+    ///
+    /// 本移植自己的条件（§257），为 `Reptomancer` 的"最多 4 把匕首，满了就改用 Snake Strike"
+    /// 而加。为什么不复用 `selfHasCounter`：匕首会死、会新召，而"匕首死了谁来减计数器"没有答案
+    /// —— `Downed` 的 bearer 是**倒下的那个**，它身上的状态随它一起没了。
+    ///
+    /// 口径是"**数得出来**的东西"：活着的战斗员个数。`Reptomancer + 4 匕首 = 5`，
+    /// 所以"匕首已满"写成 `GreaterOrEqual 5`。
+    EnemyAliveCount,
 }
 
 impl ConditionKind {
     /// 全部成员（顺序 = 规格书 §3.5 那张表的顺序）。
-    pub const ALL: [ConditionKind; 11] = [
+    pub const ALL: [ConditionKind; 12] = [
         ConditionKind::HealthPercent,
         ConditionKind::Round,
         ConditionKind::SelfHasStatus,
@@ -342,6 +351,7 @@ impl ConditionKind {
         ConditionKind::AnyOf,
         ConditionKind::Not,
         ConditionKind::AscensionAtLeast,
+        ConditionKind::EnemyAliveCount,
     ];
 
     /// 判别串（= `OPD[op].name`，也 = `RunJson.cs:141-151` 注册的那个键）。
@@ -359,6 +369,7 @@ impl ConditionKind {
             ConditionKind::AnyOf => "intent.anyOf",
             ConditionKind::Not => "intent.not",
             ConditionKind::AscensionAtLeast => "intent.ascensionAtLeast",
+            ConditionKind::EnemyAliveCount => "intent.enemyAliveCount",
         }
     }
 
@@ -736,6 +747,30 @@ pub fn condition_matches(
                 .int_field("Value")?
                 .ok_or(IntentError::Missing("Value"))?;
             Ok(ascension_at_least(state.ascension(), value))
+        }
+        // `intent.enemyAliveCount`（§257）：敌方阵营里**还活着**的战斗员个数（含出手者）。
+        //
+        // 出手者自己不在状态里 ⇒ `false`（与 `selfHasCounter` 的 `:89-90` 同一条约定：
+        // 状态层查不到就不匹配，不是错误）。
+        ConditionKind::EnemyAliveCount => {
+            let Some(actor_state) = state.combatant(actor) else {
+                return Ok(false);
+            };
+            let op = compare_op(condition)?;
+            let value = condition
+                .int_field("Value")?
+                .ok_or(IntentError::Missing("Value"))?;
+            let team = actor_state.team_id;
+            let alive = state
+                .combatants()
+                .iter()
+                .filter(|other| {
+                    other.team_id == team
+                        && other.lifecycle_state == crate::state::CombatantLifecycleState::Alive
+                })
+                .count();
+            let alive = i32::try_from(alive).unwrap_or(i32::MAX);
+            Ok(op.apply(alive, value))
         }
         ConditionKind::SelfHasCounter => {
             let counter = condition
@@ -1424,11 +1459,12 @@ mod tests {
         .expect("the sts image");
         let content = parse(&blob);
         // §214 gave `spire_growth` a real AI (three rules), so the "first round has a rule, then a
-        // pure cycle" demonstration moved to a monster that still has **no** `IntentRules` at all:
-        // the blue Slaver (two moves, cycle order `stab` then `rake`).
-        let at = slot(&content, "enc_slavers", 2);
-        let mut state = arena("blue_slaver");
-        let actor = cid("blue_slaver");
+        // pure cycle" demonstration moved to a monster with **no** `IntentRules` at all. §257 then
+        // gave the blue Slaver a real AI too (60/40 draw + the two "no repeats" rules), so the
+        // fixture is the Jaw Worm: three moves, no rules, cycle order `chomp` / `thrash` / `bellow`.
+        let at = slot(&content, "enc_jaw_worm", 0);
+        let mut state = arena("jaw_worm");
+        let actor = cid("jaw_worm");
 
         // ⚠️ `intent.round` 读的是**状态里的 `current_round`**，不是 `select_action` 的
         // `round` 实参（那是循环用的 1-based 回合）。真实战斗里两者一起前进，测试里就得手动
@@ -1442,14 +1478,14 @@ mod tests {
                 .action_id
         };
 
-        assert_eq!(pick(&mut state, 1), "blue_slaver.stab", "round 1 is slot 0");
+        assert_eq!(pick(&mut state, 1), "jaw_worm.chomp", "round 1 is slot 0");
         assert_eq!(
             pick(&mut state, 2),
-            "blue_slaver.rake",
-            "the cycle is `(round-1) % 2` ⇒ round 2 is slot 1"
+            "jaw_worm.thrash",
+            "the cycle is `(round-1) % 3` ⇒ round 2 is slot 1"
         );
-        assert_eq!(pick(&mut state, 3), "blue_slaver.stab", "round 3 is slot 0 again");
-        assert_eq!(pick(&mut state, 4), "blue_slaver.rake", "round 4 is slot 1 again");
+        assert_eq!(pick(&mut state, 3), "jaw_worm.bellow", "round 3 is slot 2");
+        assert_eq!(pick(&mut state, 4), "jaw_worm.chomp", "round 4 wraps to slot 0");
     }
 
     // ================================================================ §195.3：带权抽签
@@ -2493,7 +2529,7 @@ mod tests {
     // ---------------------------------------------------------------- 词表
 
     #[test]
-    fn condition_kinds_are_the_eleven_registered_wire_names() {
+    fn condition_kinds_are_the_twelve_registered_wire_names() {
         // 名字来自 `Run\Serialization\RunJson.cs:141-151` 的注册表（规格书 §3.5 逐条读过）。
         let names = [
             "intent.healthPercent",
@@ -2508,6 +2544,8 @@ mod tests {
             "intent.not",
             // §187：本移植自己的条件（StS 的 A17/18/19 是每只怪 `getMove` 里的一段 `if`）。
             "intent.ascensionAtLeast",
+            // §257：敌方阵营里还活着的战斗员个数（`Reptomancer` 的 4 把匕首上限）。
+            "intent.enemyAliveCount",
         ];
         assert_eq!(ConditionKind::ALL.len(), names.len());
         for (kind, name) in ConditionKind::ALL.into_iter().zip(names) {
@@ -2524,8 +2562,9 @@ mod tests {
             .into_iter()
             .filter(|kind| kind.is_supported())
             .collect();
-        // **11/11 全部实现**（`opponentCardsPlayed` 在 §128 补上，靠回合级出牌统计；
-        // `ascensionAtLeast` 在 §187 补上，读 `CombatState::ascension()`）。
+        // **12/12 全部实现**（`opponentCardsPlayed` 在 §128 补上，靠回合级出牌统计；
+        // `ascensionAtLeast` 在 §187 补上，读 `CombatState::ascension()`；
+        // `enemyAliveCount` 在 §257 补上，读 `CombatState::combatants()`）。
         assert_eq!(
             supported,
             vec![
@@ -2540,6 +2579,7 @@ mod tests {
                 ConditionKind::AnyOf,
                 ConditionKind::Not,
                 ConditionKind::AscensionAtLeast,
+                ConditionKind::EnemyAliveCount,
             ]
         );
     }

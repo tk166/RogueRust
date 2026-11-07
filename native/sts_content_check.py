@@ -103,7 +103,8 @@ INV_COUNTS = {
     # §248: +1 (`standard.cap_cost_at`).
     # §249: +5 (`omega` / `panache` / `sadistic_nature` / `the_bomb` + its damage twin).
     # §256: +1 (`painful_stabs`).
-    "statuses": 66,
+    # §257: +1 (`lagavulin_asleep`).
+    "statuses": 67,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -875,7 +876,8 @@ INV_MONSTERS = [
     # §173: the wiki's act-1 elite #2 and act-2 elites #2/#3.
     # Lagavulin: HP 109-111, Metallicize 8, Sleep for rounds 1-3 (`intent.round` rule), then
     # `siphon_soul`/`attack` alternating -- the order is chosen so round 4 is the Attack.
-    ("lagavulin", 109, 111, ["lagavulin.siphon_soul", "lagavulin.attack"]),
+    ("lagavulin", 109, 111, ["lagavulin.siphon_soul", "lagavulin.attack",
+                            "lagavulin.sleep", "lagavulin.stunned"]),
     ("book_of_stabbing", 160, 164,
      ["book_of_stabbing.multi_stab", "book_of_stabbing.big_stab"]),
     ("taskmaster", 54, 60, ["taskmaster.scouring_whip"]),
@@ -1082,12 +1084,20 @@ INV_ACTIONS = {
     # §173: the three elites that bring the act-1 and act-2 pools up to the wiki's three each.
     # `Sleep` is an **empty** program on purpose: the turn is taken and nothing happens.
     "lagavulin.sleep": ("Unknown", []),
-    "lagavulin.attack": ("Attack", [("damage", 18, "event")]),
+    # §257: waking up by damage costs it a turn; the move itself only clears the "just woke" flag.
+    "lagavulin.stunned": ("Unknown",
+                          [("counter", "lagavulin_woken", 0, False, "source")]),
+    "lagavulin.attack": ("Attack",
+                         [("damage", 18, "event"),
+                          # §257：三阶出招循环（Attack / Attack / Siphon Soul）的计数器。
+                          ("counter", "lagavulin_step", ("expr", "remainder"), False, "source")]),
     # The wiki's Siphon Soul is "-1 Strength, -1 Dexterity" -- and it must be **`modifyStatusStacks`**,
     # not `applyStatus` with negative stacks: the latter throws `Exec` (§174), which the driver records
     # as `StepThrew` and then the fight is stuck with that enemy as the active combatant.
     "lagavulin.siphon_soul": ("Debuff", [("modify", "standard.strength", -1, "event"),
-                                        ("modify", "standard.dexterity", -1, "event")]),
+                                        ("modify", "standard.dexterity", -1, "event"),
+                                        ("counter", "lagavulin_step", ("expr", "remainder"),
+                                         False, "source")]),
     # "6×N damage, N = times Multi Stab was used this combat + 2". The order is damage-then-bump
     # because `setCombatantCounter` is a **queued effect**: a program cannot read a counter it just
     # wrote (measured: bump-then-repeat still counted the old value). "completed uses + 3" is
@@ -1095,7 +1105,11 @@ INV_ACTIONS = {
     "book_of_stabbing.multi_stab": ("Attack",
                                     [("repeat", ("expr", "add"), "damage", 6, "event"),
                                      ("counter", "book_stab_uses", 1, True, "source")]),
-    "book_of_stabbing.big_stab": ("Attack", [("damage", 21, "event")]),
+    "book_of_stabbing.big_stab": ("Attack",
+                                  [("damage", 21, "event"),
+                                   # §257：A18 起 Single Stab 也推进 N（wiki 的第二颗星号）。
+                                   ("counter", "book_stab_uses",
+                                    ("counter", "book_stab_single_bump", "source"), True, "source")]),
     # §175: act 3's two elites and the Dagger they summon.
     "nemesis.tri_attack": ("Attack", [("damage", 6, "event"), ("damage", 6, "event"),
                                       ("damage", 6, "event")]),
@@ -1338,6 +1352,8 @@ INV_STATUSES = {
     "standard.cap_cost_at": [],
     # §256：Book of Stabbing 的 "受伤就塞 Wound"（规则全在触发器里）。
     "standard.painful_stabs": [],
+    # §257：Lagavulin 的 Asleep —— 两条触发器（挨打醒 / 睡满三回合醒），无被动修饰器。
+    "standard.lagavulin_asleep": [],
     "standard.the_bomb_damage": [],
     "standard.the_bomb": [],
     "standard.sadistic_nature": [],
@@ -1980,7 +1996,11 @@ def check_monsters(doc):
 # §148: the intent-rule vocabulary (`intent.rs::ConditionKind`) and its operators.
 INTENT_CONDITIONS = ("intent.healthPercent", "intent.round", "intent.selfHasStatus",
                      "intent.opponentHasStatus", "intent.selfHasCounter", "intent.selfResource",
-                     "intent.opponentCardsPlayed", "intent.allOf", "intent.anyOf", "intent.not")
+                     "intent.opponentCardsPlayed", "intent.allOf", "intent.anyOf", "intent.not",
+                     # §187 / §257：本移植自己的两条。`ascensionAtLeast` 早就在用，清单里一直
+                     # 漏着 —— 这条清单是"内核认识哪些条件"的副本，漏一条就等于给内容开了个
+                     # 不受检的口子。
+                     "intent.ascensionAtLeast", "intent.enemyAliveCount")
 INTENT_OPS = ("Equal", "NotEqual", "Less", "LessOrEqual", "Greater", "GreaterOrEqual")
 
 
@@ -2146,9 +2166,12 @@ INV_ASC_VARIANTS = {
     'acid_slime_m.corrosive_spit': [(2, [('damage', 8, 'event'), ('card', 'slimed', 1, 'DiscardPile', 'event')])],
     'acid_slime_m.tackle': [(2, [('damage', 12, 'event')])],
     'acid_slime_s.tackle': [(2, [('damage', 4, 'event')])],
-    'blue_slaver.rake': [(2, [('damage', 8, 'event'), ('status', 'standard.weak', 1, 'event')])],
+    'blue_slaver.rake': [(2, [('damage', 8, 'event'), ('status', 'standard.weak', 1, 'event')]),
+                        (17, [('damage', 8, 'event'), ('status', 'standard.weak', 2, 'event')])],
     'blue_slaver.stab': [(2, [('damage', 13, 'event')])],
-    'book_of_stabbing.big_stab': [(3, [('damage', 24, 'event')])],
+    'book_of_stabbing.big_stab': [(3, [('damage', 24, 'event'),
+                                      ('counter', 'book_stab_uses',
+                                       ('counter', 'book_stab_single_bump', 'source'), True, 'source')])],
     'book_of_stabbing.multi_stab': [(3, [('repeat', ('expr', 'add'), 'damage', 7, 'event'), ('counter', 'book_stab_uses', 1, True, 'source')])],
     'byrd.peck': [(2, [('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event'), ('damage', 1, 'event')])],
     'byrd.swoop': [(2, [('damage', 14, 'event')])],
@@ -2188,7 +2211,9 @@ INV_ASC_VARIANTS = {
     'spire_growth.aggressive_heavy': [(2, [('damage', 25, 'event')])],
     # §204: wiki `Lagavulin` -- Siphon Soul -1/-1 (A18: -2/-2).
     'lagavulin.siphon_soul': [(18, [('modify', 'standard.strength', -2, 'event'),
-                                    ('modify', 'standard.dexterity', -2, 'event')])],
+                                    ('modify', 'standard.dexterity', -2, 'event'),
+                                    ('counter', 'lagavulin_step', ('expr', 'remainder'),
+                                     False, 'source')])],
     'chosen.debilitate': [(2, [('damage', 12, 'event'), ('status', 'standard.vulnerable', 2, 'event')])],
     'chosen.poke': [(2, [('damage', 6, 'event'), ('damage', 6, 'event')])],
     'cultist.incantation': [(2, [('status', 'ritual', 4, 'source')])],
@@ -2204,16 +2229,18 @@ INV_ASC_VARIANTS = {
         (17, [('status', 'standard.strength', 5, 'source'), ('block', 9, 'source')]),
     ],
     'jaw_worm.chomp': [(2, [('damage', 12, 'event')])],
-    'lagavulin.attack': [(3, [('damage', 20, 'event')])],
+    'lagavulin.attack': [(3, [('damage', 20, 'event'),
+                              ('counter', 'lagavulin_step', ('expr', 'remainder'), False,
+                               'source')])],
     'louse_green.grow': [(17, [('status', 'standard.strength', 4, 'source')])],
     'louse_red.grow': [(17, [('status', 'standard.strength', 4, 'source')])],
-    'nemesis.tri_attack': [(4, [('damage', 7, 'event'), ('damage', 7, 'event'), ('damage', 7, 'event')])],
-    'nemesis.tri_burn': [(19, [('card', 'burn', 5, 'DiscardPile', 'event')])],
+    'nemesis.tri_attack': [(3, [('damage', 7, 'event'), ('damage', 7, 'event'), ('damage', 7, 'event')])],
+    'nemesis.tri_burn': [(18, [('card', 'burn', 5, 'DiscardPile', 'event')])],
     'orb_walker.claw': [(2, [('damage', 16, 'event')])],
     'orb_walker.laser': [(2, [('damage', 11, 'event'), ('status', 'standard.weak', 2, 'event')])],
-    'reptomancer.big_bite': [(4, [('damage', 34, 'event')])],
-    'reptomancer.snake_strike': [(4, [('damage', 16, 'event'), ('damage', 16, 'event'), ('status', 'standard.weak', 1, 'event')])],
-    'reptomancer.spawn_dagger': [(19, [('spawn', 'dagger', 22), ('spawn', 'dagger', 22)])],
+    'reptomancer.big_bite': [(3, [('damage', 34, 'event')])],
+    'reptomancer.snake_strike': [(3, [('damage', 16, 'event'), ('damage', 16, 'event'), ('status', 'standard.weak', 1, 'event')])],
+    'reptomancer.spawn_dagger': [(18, [('spawn', 'dagger', 22), ('spawn', 'dagger', 22)])],
     'sentry.beam': [(3, [('damage', 10, 'event')])],
     'sentry.bolt': [(18, [('card', 'dazed', 3, 'DiscardPile', 'event')])],
     'shelled_parasite.double_strike': [(2, [('damage', 7, 'event'), ('damage', 7, 'event')])],
@@ -2347,6 +2374,12 @@ INV_SPAWN_COUNTERS = {
     # The **base** lives here (one place); the cap lives in the program's two variants.
     "giant_head": [("it_is_time_damage", 30, 0),
                    ("it_is_time_damage", 40, 3)],
+    # §257: `Book of Stabbing` -- N = 2 + Multi-Stab uses (the base), and that A18 makes the
+    # **Single Stab** push N too. Both are content state, not wiki numbers on their own; the wiki
+    # numbers they produce are pinned by `INV_ACTIONS` / `INV_ASC_VARIANTS`.
+    "book_of_stabbing": [("book_stab_hits_base", 2, 0),
+                         ("book_stab_single_bump", 0, 0),
+                         ("book_stab_single_bump", 1, 18)],
 }
 
 # §193: actions that exist in `EACT` but that **no enemy record lists**. They must not be converted
@@ -2867,6 +2900,7 @@ INV_NO_ASC = {
     'louse_red.spit_web': 'wiki Louses: Spit Web is 2 Weak, no A-row',
     # `Lagavulin`: Sleep does nothing.
     'lagavulin.sleep': 'wiki Lagavulin: Sleep does nothing',
+    'lagavulin.stunned': 'wiki Lagavulin: Stunned does nothing (a lost turn, no numbers)',
     # `The Guardian`: Vent Steam applies 2 Weak + 2 Vulnerable, flat (the Sharp Hide / Mode Shift
     # numbers live on `defensive_mode` / `twin_slam`, which have their own rows).
     'the_guardian.vent_steam': 'wiki The Guardian: Vent Steam has no A-row',
@@ -3217,6 +3251,7 @@ def check_statuses(doc):
                      "standard.brutality", "standard.rupture",
                      # §256
                      "standard.painful_stabs",
+                     "standard.lagavulin_asleep",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3246,6 +3281,9 @@ def check_statuses(doc):
                         "standard.rupture": ["HpLost"],
                         # §256：Book of Stabbing 的 Painful Stabs（`DamageDealt` 的 bearer 是**出手方**）。
                         "standard.painful_stabs": ["DamageDealt"],
+                        # §257：Lagavulin 的 Asleep。`DamageTaken`（bearer = **挨打的那个**）负责
+                        # "被打掉血就醒"，`TurnStarted` 负责"睡满三回合自己醒"。
+                        "standard.lagavulin_asleep": ["DamageTaken", "TurnStarted"],
                         # §237
                         "standard.juggernaut": ["BlockGained"],
                         "standard.evolve": ["CardsDrawn"],
