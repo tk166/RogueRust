@@ -8195,7 +8195,10 @@ mod tests {
             MAX_RUN_POTIONS >= usize::from(rd_run::state::BASE_POTION_SLOTS) + 2,
             "storage must hold the three slots plus the belt's two"
         );
-        assert_eq!(MAX_RUN_RELICS, 24);
+        // §260: 24 -> 48，与 `rd-run` 的 `MAX_RUN_RELICS` 同步（内容已有 30 件遗物，24 装不下
+        // 一局的后半程）。⚠️ 这个数字必须 <= 255：存档把 `relics_len` 写成一个字节。
+        assert_eq!(MAX_RUN_RELICS, 48);
+        assert!(MAX_RUN_RELICS < 256, "the archive writes `relics_len` as one byte");
         assert_eq!(MAX_RUN_DECK, 60);
         assert_eq!(NODES_PER_ROW, 6);
     }

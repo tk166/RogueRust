@@ -105,7 +105,8 @@ INV_COUNTS = {
     # §249: +5 (`omega` / `panache` / `sadistic_nature` / `the_bomb` + its damage twin).
     # §256: +1 (`painful_stabs`).
     # §257: +1 (`lagavulin_asleep`).
-    "statuses": 67,
+    # §260: +8 (the eight relic carrier statuses).
+    "statuses": 75,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1363,6 +1364,15 @@ INV_STATUSES = {
     "standard.painful_stabs": [],
     # §257：Lagavulin 的 Asleep —— 两条触发器（挨打醒 / 睡满三回合醒），无被动修饰器。
     "standard.lagavulin_asleep": [],
+    # §260：八件遗物的载体状态 —— 全是"一条触发器 + 无被动修饰器"。
+    "standard.orichalcum": [],
+    "standard.mercury_hourglass": [],
+    "standard.horn_cleat": [],
+    "standard.captains_wheel": [],
+    "standard.stone_calendar": [],
+    "standard.cloak_clasp": [],
+    "standard.incense_burner": [],
+    "standard.pocketwatch": [],
     "standard.the_bomb_damage": [],
     "standard.the_bomb": [],
     "standard.sadistic_nature": [],
@@ -3267,6 +3277,10 @@ def check_statuses(doc):
                      # §256
                      "standard.painful_stabs",
                      "standard.lagavulin_asleep",
+                     # §260
+                     "standard.orichalcum", "standard.mercury_hourglass", "standard.horn_cleat",
+                     "standard.captains_wheel", "standard.stone_calendar", "standard.cloak_clasp",
+                     "standard.incense_burner", "standard.pocketwatch",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3299,6 +3313,15 @@ def check_statuses(doc):
                         # §257：Lagavulin 的 Asleep。`DamageTaken`（bearer = **挨打的那个**）负责
                         # "被打掉血就醒"，`TurnStarted` 负责"睡满三回合自己醒"。
                         "standard.lagavulin_asleep": ["DamageTaken", "TurnStarted"],
+                        # §260：八件遗物的载体状态。
+                        "standard.orichalcum": ["TurnEnded"],
+                        "standard.mercury_hourglass": ["TurnStarted"],
+                        "standard.horn_cleat": ["TurnStarted"],
+                        "standard.captains_wheel": ["TurnStarted"],
+                        "standard.stone_calendar": ["TurnEnded"],
+                        "standard.cloak_clasp": ["TurnEnded"],
+                        "standard.incense_burner": ["TurnStarted"],
+                        "standard.pocketwatch": ["TurnStarted"],
                         # §237
                         "standard.juggernaut": ["BlockGained"],
                         "standard.evolve": ["CardsDrawn"],
@@ -3524,7 +3547,11 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       # `mark_of_the_bloom`), one closes Smith (`fusion_hammer`), one adds a card
                       # reward to Rest (`dream_catcher`).
                       "girya", "peace_pipe", "shovel", "coffee_dripper", "mark_of_the_bloom",
-                      "fusion_hammer", "dream_catcher")
+                      "fusion_hammer", "dream_catcher",
+                      # §260: 战斗开始类 / 回合末类八件 —— 全部是 `StartCombatStatus`，
+                      # 规则在内容状态里（`TurnStarted` / `TurnEnded` 触发器）。
+                      "orichalcum", "mercury_hourglass", "horn_cleat", "captains_wheel",
+                      "stone_calendar", "cloak_clasp", "incense_burner", "pocketwatch")
 
 
 def check_relics(doc):

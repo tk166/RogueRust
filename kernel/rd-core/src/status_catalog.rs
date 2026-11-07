@@ -662,6 +662,15 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // §257: Lagavulin's `Asleep` -- two content triggers (`DamageTaken` wakes it,
             // `TurnStarted` after round 3 wakes it on its own). No kernel rule beyond the hooks.
             | "standard.lagavulin_asleep"
+            // §260: eight relics whose whole rule is a content trigger on a hero status.
+            | "standard.orichalcum"
+            | "standard.mercury_hourglass"
+            | "standard.horn_cleat"
+            | "standard.captains_wheel"
+            | "standard.stone_calendar"
+            | "standard.cloak_clasp"
+            | "standard.incense_burner"
+            | "standard.pocketwatch"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

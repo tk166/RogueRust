@@ -28,8 +28,13 @@ use crate::streams::{RunError, RunRng, RunStream};
 /// truncation.
 pub const MAX_RUN_DECK: usize = 60;
 /// The most relics a run may hold. `inv:§6` has 140 obtainable, but a single run sees on the order
-/// of a dozen; twenty-four is "what a run needs", not "what a budget allows".
-pub const MAX_RUN_RELICS: usize = 24;
+/// of a dozen; **48** is "what a run needs", not "what a budget allows".
+///
+/// §260: it was **24**, and it was raised because the content passed it (30 relics, and the
+/// "largest run" hash fixture pushes *every* relic in the image). A capacity that content growth
+/// trips is fine -- it fails loudly (`Capacity`) instead of silently dropping a relic -- but 24 was
+/// also too small for a real run (endgame runs hold 30+).
+pub const MAX_RUN_RELICS: usize = 48;
 /// The potion belt (`inv:§9.3`: hold at most 3).
 /// How many acts a run has. Killing the boss of an act before the last one **advances**; killing the
 /// last one wins the run.
@@ -945,7 +950,14 @@ pub const MAX_STEP_TARGETS: usize = NODES_PER_ROW;
 /// A tripwire, not a budget. Measured value lives in [`RunState::size_bytes`]; this bound is here so
 /// that adding a field cannot quietly double the run's memory. `CombatState`'s equivalent has the
 /// same job (`rd-core/src/state.rs::state_fits_the_sram_plan`).
-pub const RUN_STATE_TRIPWIRE_BYTES: usize = 8 * 1024;
+///
+/// §260: raised 8 KB -> **12 KB**. What the extra 4 KB buys: `MAX_RUN_RELICS` 24 -> 48
+/// (48 × 41 B of belt + the bookkeeping), which is the difference between "a run that cannot hold
+/// the endgame relic list" and one that can. The growth is a **capacity**, and per the discipline it
+/// was checked for behaviour: `relics_len`/`relics` are written and read symmetrically, the archive
+/// writes `relics_len` as one byte (48 < 256, so the format is unchanged), and
+/// `MAX_RUN_RELICS > 255` would have been the only case that changes the wire format.
+pub const RUN_STATE_TRIPWIRE_BYTES: usize = 12 * 1024;
 
 /// A deck/relic/potion id. `Ident<ID_CAP>` is 41 bytes (`ID_CAP` 40 + a length byte).
 pub type RunId = Ident<ID_CAP>;
@@ -1715,6 +1727,20 @@ impl RunState {
             // §259：`Fusion Hammer` 关闭 Smith；`Dream Catcher` 让休息额外给一次卡牌奖励。
             "fusion_hammer" => Some(RelicEffect::NoSmith),
             "dream_catcher" => Some(RelicEffect::RestCardReward),
+            // §260：**战斗开始类 / 回合末类**八件 —— 全部走 `StartCombatStatus`：遗物本身没有
+            // 逻辑，它只是"开战时挂一条带触发器的状态"（`TurnStarted` / `TurnEnded` 由内核派发，
+            // 规则全在内容里）。这条路能成立，是因为内容状态已经能读
+            // `combatantDefensivePool` / `combatantZoneCount` / `cardsPlayedLastTurn`。
+            "orichalcum" => Some(RelicEffect::StartCombatStatus("standard.orichalcum", 1)),
+            "mercury_hourglass" => {
+                Some(RelicEffect::StartCombatStatus("standard.mercury_hourglass", 1))
+            }
+            "horn_cleat" => Some(RelicEffect::StartCombatStatus("standard.horn_cleat", 1)),
+            "captains_wheel" => Some(RelicEffect::StartCombatStatus("standard.captains_wheel", 1)),
+            "stone_calendar" => Some(RelicEffect::StartCombatStatus("standard.stone_calendar", 1)),
+            "cloak_clasp" => Some(RelicEffect::StartCombatStatus("standard.cloak_clasp", 1)),
+            "incense_burner" => Some(RelicEffect::StartCombatStatus("standard.incense_burner", 1)),
+            "pocketwatch" => Some(RelicEffect::StartCombatStatus("standard.pocketwatch", 1)),
             _ => None,
         }
     }
@@ -4625,6 +4651,34 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §260：八件遗物的**接线** —— 每件都必须把**它自己那条**状态挂到英雄身上。
+    ///
+    /// 一条表一个断言（不是"至少有一个"）：`StartCombatStatus` 的参数写错（抄了邻居的状态 id）
+    /// 只有逐条比才看得出来，而抄邻居在这个仓库里已经发生过不止一次（§186）。
+    #[test]
+    fn the_eight_turn_shaped_relics_wire_their_own_status() {
+        let expectations = [
+            ("orichalcum", "standard.orichalcum"),
+            ("mercury_hourglass", "standard.mercury_hourglass"),
+            ("horn_cleat", "standard.horn_cleat"),
+            ("captains_wheel", "standard.captains_wheel"),
+            ("stone_calendar", "standard.stone_calendar"),
+            ("cloak_clasp", "standard.cloak_clasp"),
+            ("incense_burner", "standard.incense_burner"),
+            ("pocketwatch", "standard.pocketwatch"),
+        ];
+        for (relic, status_id) in expectations {
+            let mut run = ironclad();
+            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            let bonus = run.combat_bonus();
+            assert_eq!(bonus.status_count, 1, "{relic}: exactly one combat-start status");
+            let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
+            assert_eq!(entry.id, status_id, "{relic}: wires its own status");
+            assert_eq!(entry.stacks, 1, "{relic}: one stack");
+            assert_eq!(bonus.block, 0, "{relic}: no start-of-combat Block");
+        }
     }
 
     // ---- settling a node ---------------------------------------------------------------------

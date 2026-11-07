@@ -4119,6 +4119,687 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.orichalcum",
+      "PackageId": "sts",
+      "NameKey": "Orichalcum",
+      "DescriptionKey": "If you end your turn without Block, gain 6 Block.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Left": {
+                      "kind": "combatantDefensivePool",
+                      "value": {
+                        "Selector": {
+                          "kind": "sel.source",
+                          "value": {
+                            "Cardinality": "ZeroOrOne",
+                            "RequiredContextCapabilities": "Source"
+                          }
+                        },
+                        "PoolId": {
+                          "value": "standard.block"
+                        }
+                      }
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 0
+                      }
+                    },
+                    "Op": "Equal"
+                  }
+                },
+                "Then": {
+                  "kind": "node.gainBlock",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Amount": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 6
+                      }
+                    },
+                    "ResultKey": null
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.cloak_clasp",
+      "PackageId": "sts",
+      "NameKey": "Cloak Clasp",
+      "DescriptionKey": "At the end of your turn, gain 1 Block for each card in your hand.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.gainBlock",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "Amount": {
+                  "kind": "combatantZoneCount",
+                  "value": {
+                    "Selector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Zone": "Hand"
+                  }
+                },
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.stone_calendar",
+      "PackageId": "sts",
+      "NameKey": "Stone Calendar",
+      "DescriptionKey": "At the end of turn 7, deal 52 damage to ALL enemies.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "stone_calendar_turns"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 6
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.dealDamage",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.allEnemies",
+                            "value": {}
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 52
+                            }
+                          },
+                          "ResultKey": null,
+                          "IgnoresBlock": false,
+                          "Element": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "stone_calendar_turns"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.mercury_hourglass",
+      "PackageId": "sts",
+      "NameKey": "Mercury Hourglass",
+      "DescriptionKey": "At the start of your turn, deal 3 damage to ALL enemies.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.allEnemies",
+                  "value": {}
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 3
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.horn_cleat",
+      "PackageId": "sts",
+      "NameKey": "Horn Cleat",
+      "DescriptionKey": "At the start of your 2nd turn, gain 14 Block.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "horn_cleat_turns"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 1
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.gainBlock",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 14
+                            }
+                          },
+                          "ResultKey": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "horn_cleat_turns"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.captains_wheel",
+      "PackageId": "sts",
+      "NameKey": "Captain's Wheel",
+      "DescriptionKey": "At the start of your 3rd turn, gain 18 Block.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "captains_wheel_turns"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 2
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.gainBlock",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 18
+                            }
+                          },
+                          "ResultKey": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "captains_wheel_turns"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.incense_burner",
+      "PackageId": "sts",
+      "NameKey": "Incense Burner",
+      "DescriptionKey": "Every 6 turns, gain 1 Intangible.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "remainder",
+                            "value": {
+                              "Left": {
+                                "kind": "combatantCounter",
+                                "value": {
+                                  "Selector": {
+                                    "kind": "sel.source",
+                                    "value": {
+                                      "Cardinality": "ZeroOrOne",
+                                      "RequiredContextCapabilities": "Source"
+                                    }
+                                  },
+                                  "CounterId": "incense_burner_turns"
+                                }
+                              },
+                              "Right": {
+                                "kind": "const",
+                                "value": {
+                                  "Value": 6
+                                }
+                              }
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 5
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.applyStatus",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "StatusDefinitionId": {
+                            "value": "standard.intangible"
+                          },
+                          "Stacks": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 1
+                            }
+                          }
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "incense_burner_turns"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.pocketwatch",
+      "PackageId": "sts",
+      "NameKey": "Pocketwatch",
+      "DescriptionKey": "Whenever you play 3 or less cards during your turn, draw 3 additional cards at the start of your next turn.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Left": {
+                      "kind": "cardsPlayedLastTurn",
+                      "value": {}
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 3
+                      }
+                    },
+                    "Op": "LessOrEqual"
+                  }
+                },
+                "Then": {
+                  "kind": "node.drawCards",
+                  "value": {
+                    "Count": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 3
+                      }
+                    },
+                    "ResultKey": null,
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    }
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -54147,6 +54828,20 @@
       "Rarity": "Starter"
     },
     {
+      "Id": "captains_wheel",
+      "DisplayName": "Captain's Wheel",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "cloak_clasp",
+      "DisplayName": "Cloak Clasp",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "coffee_dripper",
       "DisplayName": "Coffee Dripper",
       "Rarity": "Boss",
@@ -54189,6 +54884,20 @@
       "Rarity": "Event"
     },
     {
+      "Id": "horn_cleat",
+      "DisplayName": "Horn Cleat",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "incense_burner",
+      "DisplayName": "Incense Burner",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "mark_of_the_bloom",
       "DisplayName": "Mark of the Bloom",
       "Rarity": "Event",
@@ -54203,11 +54912,25 @@
       "Rarity": "Uncommon"
     },
     {
+      "Id": "mercury_hourglass",
+      "DisplayName": "Mercury Hourglass",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "oddly_smooth_stone",
       "DisplayName": "Oddly Smooth Stone",
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"
+    },
+    {
+      "Id": "orichalcum",
+      "DisplayName": "Orichalcum",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "peace_pipe",
@@ -54222,6 +54945,13 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "pocketwatch",
+      "DisplayName": "Pocketwatch",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "potion_belt",
@@ -54240,6 +54970,13 @@
     {
       "Id": "shovel",
       "DisplayName": "Shovel",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "stone_calendar",
+      "DisplayName": "Stone Calendar",
       "Rarity": "Rare",
       "RunPrograms": null,
       "CombatRules": null

@@ -17804,3 +17804,69 @@ assert!(run.node_resolved(), "the node is settled right away");
 
 **遗物池变动**的风险（§234.3 提前写过）单独验了：`ACT1_SLICE PASS`（16 层 Boss 路）与
 `SOAK_TEST PASS`（106 点击 / 5 场战斗），然后是 21/21 闸门。
+
+---
+
+## §260 遗物第一批：**战斗开始类 + 回合末类八件**（零内核改动）
+
+### 260.1 这批为什么不需要内核改动
+
+两个现成的载体一拼就够了：
+
+1. `RelicEffect::StartCombatStatus(id, stacks)` —— 开战时把一条**内容状态**挂到英雄身上
+   （`vajra` 早就这么用）；
+2. 内容状态可以有 `TurnStarted` / `TurnEnded` 触发器（`standard.combust` / `standard.mayhem`
+   就是英雄侧的样板），而判断条件够用：`combatantDefensivePool`、`combatantZoneCount`、
+   `cardsPlayedLastTurn`、`sel.allEnemies` + `dealDamage` / `gainBlock` / `drawCards`。
+
+⇒ **遗物 = 开战时挂一条带触发器的状态**。八件里没有一行 Rust 逻辑，全部是内容。
+
+| 遗物 | 稀有度 | 规则（wiki 原话） | 实现 |
+|---|---|---|---|
+| `orichalcum` | Common | 回合末**没有格挡**时给 6 | `TurnEnded` + `compare(block, 0, Equal)` |
+| `mercury_hourglass` | Uncommon | 回合初对所有敌人 3 伤害 | `TurnStarted` + `sel.allEnemies` |
+| `horn_cleat` | Uncommon | **第 2 回合**初 14 格挡 | 计数器 |
+| `captains_wheel` | Rare | **第 3 回合**初 18 格挡 | 计数器 |
+| `stone_calendar` | Rare | 第 7 回合末对所有敌人 52 伤害 | 计数器 |
+| `cloak_clasp` | Rare | 回合末按手牌张数给格挡 | `combatantZoneCount(Hand)` |
+| `incense_burner` | Rare | 每 6 回合 1 层无形 | 计数器取模 |
+| `pocketwatch` | Rare | 上回合 ≤3 张 ⇒ 这回合初抽 3 | `cardsPlayedLastTurn` |
+
+**"第 N 回合"一律用状态自己的计数器**，不用 `turnNumber`：后者是**整场战斗**的行动者序号
+（多敌人战斗里会跳），而 wiki 说的是"**你的**第 N 回合"。
+
+### 260.2 ★ 又踩一次"入队效果读不到刚写的值"
+
+第一版把"第 N 回合"写成 `自增 → 判断`，结果全部**晚一回合**（Horn Cleat 在第 3 回合才给 14）。
+原因 §190 就记过：`setCombatantCounter` 是**入队效果**，同一节目里读不到它刚写的值。
+修法是把顺序倒过来——`判断（读到 N-1）→ 自增`。
+
+⚠️ 这条错误的形状值得记：判据报的是 `turn 2: +14 Block` 失败（`left: 0, right: 14`），
+看起来像"计数器没生效"，实际是"延迟一回合"。**如果没有逐回合断言，只断言"最终给了 14"，
+它会全绿**（第 3 回合确实给了）。
+
+### 260.3 两个容量一起抬（都是"内容涨了才暴露"）
+
+| 常量 | 原值 → 新值 | 为什么 |
+|---|---|---|
+| `MAX_RUN_RELICS` | 24 → **48** | 内容已有 30 件遗物；`hash.rs` 的"尽可能满"夹具会推入镜像里**每一件**遗物，24 装不下 |
+| `RUN_STATE_TRIPWIRE_BYTES` | 8 KB → **12 KB** | 上面那次容量扩张让 `RunState` 变成 8864 B |
+
+按 §45.4 的纪律先问"这是预算还是语义"：`relics_len` 在存档里是**一个字节**，48 < 256 ⇒
+线格式不变；`relics`/`relics_len` 读写对称。所以是预算，不是语义。
+同时把那个"推入镜像里每一件遗物"的夹具改成**按容量截断**——它测的是哈希，不该因为内容多一件
+变红（红出来的 `Capacity` 说的还是夹具自己）。
+
+### 260.4 判据（两半，缺一不可）
+
+| 测试 | 钉住什么 |
+|---|---|
+| `the_eight_turn_shaped_relics_wire_their_own_status`（rd-run） | **接线**：八件各自挂**自己那条**状态、1 层、且不带开战格挡。逐条比，因为"抄了邻居的状态 id"只有逐条比才看得出（§186 踩过） |
+| `the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names`（rd-wasm） | **规则**：每条都两面测 —— Orichalcum 有格挡时不动/无格挡时 +6；Horn Cleat 第 1 回合 0、第 2 回合 14、第 3 回合不再给；Stone Calendar 第 1–6 回合 0、第 7 回合 52；Incense Burner 第 1–5 回合 0、第 6 回合 1；Pocketwatch 4 张不抽 / 3 张抽 3 |
+
+只测一半会漏什么：只有接线 ⇒ "每回合都给 14"的错会绿；只有规则 ⇒ "遗物没接上线"会绿。
+
+### 260.5 遗物账
+
+`docs/relic-inventory.md` 重新生成：**22 → 30 件有实现**（193 件 wiki 总数不变）。
+`ACT1_SLICE PASS` / `SOAK_TEST PASS`（遗物池又变了一次），再 21/21 闸门。

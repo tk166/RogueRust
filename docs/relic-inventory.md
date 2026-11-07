@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 22 |
-| 3 | 缺（wiki 有、内容没有） | 171 |
+| 2 | 内容里的遗物 | 30 |
+| 3 | 缺（wiki 有、内容没有） | 163 |
 
 ## Starter（4）
 
@@ -47,7 +47,7 @@
 | 缺 | `nunchaku` | Nunchaku | Shared | Every time you play 10 {{QueryLink\|Cards\|type:Attack\|Attacks}}, gain 1 $Energy. |
 | 有 | `oddly_smooth_stone` | Oddly Smooth Stone | Shared | At the start of each combat, gain 1 $Dexterity. |
 | 缺 | `omamori` | Omamori | Shared | Negate the next 2 {{QueryLink\|Cards\|type:Curse\|Curses}} you obtain. |
-| 缺 | `orichalcum` | Orichalcum | Shared | If you end your turn without $Block, gain 6 $Block. |
+| 有 | `orichalcum` | Orichalcum | Shared | If you end your turn without $Block, gain 6 $Block. |
 | 缺 | `pen_nib` | Pen Nib | Shared | Every 10th {{QueryLink\|Cards\|type:Attack\|Attack}} you play deals double damage. |
 | 有 | `potion_belt` | Potion Belt | Shared | Upon pickup, gain 2 [[Potions\|Potion]] slots. |
 | 缺 | `preserved_insect` | Preserved Insect | Shared | Enemies in Elite combats have 25% less HP. |
@@ -77,13 +77,13 @@
 | 缺 | `frozen_egg` | Frozen Egg | Shared | Whenever you add a {{QueryLink\|Cards\|type:Power\|Power}} card to your deck, $Upgrade it. |
 | 缺 | `gold_plated_cables` | Gold-Plated Cables | Defect | Your rightmost $Orb triggers its passive an additional time. |
 | 缺 | `gremlin_horn` | Gremlin Horn | Shared | Whenever an enemy dies, gain 1 $Energy and draw 1 card. |
-| 缺 | `horn_cleat` | Horn Cleat | Shared | At the start of your 2nd turn, gain 14 $Block. |
+| 有 | `horn_cleat` | Horn Cleat | Shared | At the start of your 2nd turn, gain 14 $Block. |
 | 缺 | `ink_bottle` | Ink Bottle | Shared | Whenever you play 10 cards, draw 1 card. |
 | 缺 | `kunai` | Kunai | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 1 $Dexterity |
 | 缺 | `letter_opener` | Letter Opener | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Skill\|Skills}} in a single turn, deal 5 damage to ALL enemies. |
 | 缺 | `matryoshka` | Matryoshka | Shared | The next 2 non-boss chests you open contain 2 Relics. |
 | 有 | `meat_on_the_bone` | Meat on the Bone | Shared | If your HP is at or below 50% at the end of combat, heal 12 HP. |
-| 缺 | `mercury_hourglass` | Mercury Hourglass | Shared | At the start of your turn, deal 3 damage to ALL enemies. |
+| 有 | `mercury_hourglass` | Mercury Hourglass | Shared | At the start of your turn, deal 3 damage to ALL enemies. |
 | 缺 | `molten_egg` | Molten Egg | Shared | Whenever you add an {{QueryLink\|Cards\|type:Attack\|Attack}} card to your deck, $Upgrade it. |
 | 缺 | `mummified_hand` | Mummified Hand | Shared | Whenever you play a {{QueryLink\|Cards\|type:Power\|Power}} card, a random card in your hand costs 0 that turn. |
 | 缺 | `ninja_scroll` | Ninja Scroll | Silent | At the start each combat, add 3 {{C\|Shiv\|Shivs}} into your hand. |
@@ -110,10 +110,10 @@
 |---|---|---|---|---|
 | 缺 | `bird_faced_urn` | Bird-Faced Urn | Shared | Whenever you play a {{QueryLink\|Cards\|type:Power\|Power}} card, heal 2 HP. |
 | 缺 | `calipers` | Calipers | Shared | At the start of your turn, lose 15 $Block rather than all of your $Block. |
-| 缺 | `captains_wheel` | Captain's Wheel | Shared | At the start of your 3rd turn, gain 18 $Block. |
+| 有 | `captains_wheel` | Captain's Wheel | Shared | At the start of your 3rd turn, gain 18 $Block. |
 | 缺 | `champion_belt` | Champion Belt | Ironclad | Whenever you apply $Vulnerable, also apply 1 $Weak. |
 | 缺 | `charons_ashes` | Charon's Ashes | Ironclad | Whenever you $Exhaust a card, deal 3 damage to ALL enemies. |
-| 缺 | `cloak_clasp` | Cloak Clasp | Watcher | At the end of your turn, gain 1 $Block for each card in your hand. |
+| 有 | `cloak_clasp` | Cloak Clasp | Watcher | At the end of your turn, gain 1 $Block for each card in your hand. |
 | 缺 | `dead_branch` | Dead Branch | Shared | Whenever you $Exhaust a card, add a random card to your hand. |
 | 缺 | `du_vu_doll` | Du-Vu Doll | Shared | For each {{QueryLink\|Cards\|type:Curse\|Curse}} in your deck, start each combat with 1 $Strength. |
 | 缺 | `emotion_chip` | Emotion Chip | Defect | If you lost HP during the previous turn, trigger the passive ability of all $Orbs at the start of your turn. |
@@ -123,16 +123,16 @@
 | 有 | `girya` | Girya | Shared | You can now gain $Strength at Rest Sites (up to 3 times). |
 | 缺 | `golden_eye` | Golden Eye | Watcher | Whenever you $Scry, $Scry 2 additional cards. |
 | 缺 | `ice_cream` | Ice Cream | Shared | $Energy is now conserved between turns. |
-| 缺 | `incense_burner` | Incense Burner | Shared | Every 6 turns, gain 1 $Intangible. |
+| 有 | `incense_burner` | Incense Burner | Shared | Every 6 turns, gain 1 $Intangible. |
 | 缺 | `lizard_tail` | Lizard Tail | Shared | When you would die, heal to 50% of your Max HP instead (works once). |
 | 缺 | `magic_flower` | Magic Flower | Ironclad | Healing is 50% more effective during combat. |
 | 缺 | `mango` | Mango | Shared | Upon pickup, raise your Max HP by 14. |
 | 缺 | `old_coin` | Old Coin | Shared | Upon pickup, gain 300 [[Gold]]. |
 | 有 | `peace_pipe` | Peace Pipe | Shared | You can now remove cards from your deck at Rest Sites. |
-| 缺 | `pocketwatch` | Pocketwatch | Shared | Whenever you play 3 or less cards during your turn, draw 3 additional cards at the start of your next turn. |
+| 有 | `pocketwatch` | Pocketwatch | Shared | Whenever you play 3 or less cards during your turn, draw 3 additional cards at the start of your next turn. |
 | 缺 | `prayer_wheel` | Prayer Wheel | Shared | Normal enemies drop an additional card reward. |
 | 有 | `shovel` | Shovel | Shared | You can now Dig for relics at Rest Sites. |
-| 缺 | `stone_calendar` | Stone Calendar | Shared | At the end of turn 7, deal 52 damage to ALL enemies. |
+| 有 | `stone_calendar` | Stone Calendar | Shared | At the end of turn 7, deal 52 damage to ALL enemies. |
 | 缺 | `the_specimen` | The Specimen | Silent | Whenever an enemy dies, transfer any $Poison it has to a random enemy. |
 | 有 | `thread_and_needle` | Thread and Needle | Shared | At the start of each combat, gain 4 $Plated Armor. |
 | 缺 | `tingsha` | Tingsha | Silent | Whenever you discard a card during your turn, deal 3 damage to a random enemy. |

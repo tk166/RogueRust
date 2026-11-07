@@ -394,7 +394,12 @@ mod tests {
         let deck: std::vec::Vec<&str> = std::vec![card; crate::state::MAX_RUN_DECK];
         let mut state =
             RunState::new_with_ascension(7, 80, i32::MAX, &deck, 0).expect("a maximal run");
-        for relic in relics {
+        // §260: push **as many as fit**. The fixture is "a run as full as the capacity allows",
+        // not "a run holding every relic in the image" -- the latter turns every content batch into
+        // a red fixture, and the failure it produces (`Capacity`) is about the *fixture*, not about
+        // the hash. The `assert_eq!` below still pins that the belt ended up exactly full.
+        let take = relics.len().min(crate::state::MAX_RUN_RELICS);
+        for relic in &relics[..take] {
             state
                 .push_relic(relic)
                 .unwrap_or_else(|error| panic!("pushing relic {relic} must work: {error:?}"));
@@ -407,7 +412,11 @@ mod tests {
         }
         // 夹具就是它自称的那个 —— 这三条是这次修复的核心。
         assert_eq!(state.deck().len(), crate::state::MAX_RUN_DECK, "the deck is not full");
-        assert_eq!(state.relics().len(), relics.len(), "a relic push was refused");
+        assert_eq!(
+            state.relics().len(),
+            relics.len().min(crate::state::MAX_RUN_RELICS),
+            "a relic push was refused"
+        );
         assert_eq!(state.potions().len(), slots, "a potion push was refused");
         state
     }
