@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 100 |
-| 3 | 缺（wiki 有、内容没有） | 93 |
+| 2 | 内容里的遗物 | 105 |
+| 3 | 缺（wiki 有、内容没有） | 88 |
 
 ## Starter（4）
 
@@ -28,7 +28,7 @@
 |---|---|---|---|---|
 | 有 | `akabeko` | Akabeko | Shared | Your first {{QueryLink\|Cards\|type:Attack\|Attack}} each combat deals 8 additional damage |
 | 有 | `anchor` | Anchor | Shared | Start each combat with 10 $Block. |
-| 缺 | `ancient_tea_set` | Ancient Tea Set | Shared | Whenever you enter a Rest Site, start the next combat with 2 extra $Energy. |
+| 有 | `ancient_tea_set` | Ancient Tea Set | Shared | Whenever you enter a Rest Site, start the next combat with 2 extra $Energy. |
 | 有 | `art_of_war` | Art of War | Shared | If you do not play any {{QueryLink\|Cards\|type:Attack\|Attacks}} during your turn, gain an additional $Energy next turn. |
 | 有 | `bag_of_marbles` | Bag of Marbles | Shared | At the start of each combat, apply 1 $Vulnerable to ALL enemies. |
 | 有 | `bag_of_preparation` | Bag of Preparation | Shared | At the start of each combat, draw 2 additional cards. |
@@ -43,7 +43,7 @@
 | 缺 | `juzu_bracelet` | Juzu Bracelet | Shared | Regular enemy combats are no longer encountered in ? rooms. |
 | 有 | `lantern` | Lantern | Shared | Gain 1 $Energy on the first turn of each combat. |
 | 有 | `maw_bank` | Maw Bank | Shared | Whenever you climb a floor, gain 12 [[Gold]]. No longer works when you spend any [[Gold]] at a shop. |
-| 缺 | `meal_ticket` | Meal Ticket | Shared | Whenever you enter a shop, heal 15 HP. |
+| 有 | `meal_ticket` | Meal Ticket | Shared | Whenever you enter a shop, heal 15 HP. |
 | 有 | `nunchaku` | Nunchaku | Shared | Every time you play 10 {{QueryLink\|Cards\|type:Attack\|Attacks}}, gain 1 $Energy. |
 | 有 | `oddly_smooth_stone` | Oddly Smooth Stone | Shared | At the start of each combat, gain 1 $Dexterity. |
 | 有 | `omamori` | Omamori | Shared | Negate the next 2 {{QueryLink\|Cards\|type:Curse\|Curses}} you obtain. |
@@ -58,7 +58,7 @@
 | 有 | `strawberry` | Strawberry | Shared | Upon pickup, raise your Max HP by 7. |
 | 有 | `the_boot` | The Boot | Shared | Whenever you would deal 4 or less unblocked {{QueryLink\|Cards\|type:Attack\|Attack}} damage, increase it to 5. |
 | 缺 | `tiny_chest` | Tiny Chest | Shared | Every 4th ? room is a Treasure room. |
-| 缺 | `toy_ornithopter` | Toy Ornithopter | Shared | Whenever you use a [[Potions\|potion]], heal 5 HP. |
+| 有 | `toy_ornithopter` | Toy Ornithopter | Shared | Whenever you use a [[Potions\|potion]], heal 5 HP. |
 | 有 | `vajra` | Vajra | Shared | At the start of each combat, gain 1 $Strength. |
 | 缺 | `war_paint` | War Paint | Shared | Upon pick up, $Upgrade 2 random {{QueryLink\|Cards\|type:Skill\|Skills}}. |
 | 缺 | `whetstone` | Whetstone | Shared | Upon pickup, $Upgrade 2 random {{QueryLink\|Cards\|type:Attack\|Attacks}}. |
@@ -172,7 +172,7 @@
 | 缺 | `sacred_bark` | Sacred Bark | Shared | Double the effectiveness of [[Potions\|potions]]. |
 | 有 | `slavers_collar` | Slaver's Collar | Shared | During Boss and Elite combats, gain 1 $Energy at the start of your turn. |
 | 缺 | `snecko_eye` | Snecko Eye | Shared | At the start of your turn, draw 2 additional cards. Start each combat $Confused. |
-| 缺 | `sozu` | Sozu | Shared | Gain 1 $Energy at the start of your turn. You can no longer obtain [[Potions\|potions]]. |
+| 有 | `sozu` | Sozu | Shared | Gain 1 $Energy at the start of your turn. You can no longer obtain [[Potions\|potions]]. |
 | 缺 | `tiny_house` | Tiny House | Shared | Upon pickup, obtain 1 [[Potions\|Potion]]. <br>Gain 50 [[Gold]]. <br>Raise your Max HP by 5. <br>Obtain 1 card. <br>$Upgrade 1 random card. |
 | 缺 | `velvet_choker` | Velvet Choker | Shared | Gain 1 $Energy at the start of your turn. You cannot play more than 6 cards per turn. |
 | 缺 | `violet_lotus` | Violet Lotus | Watcher | Whenever you exit $Calm, gain an additional $Energy. |
@@ -223,7 +223,7 @@
 | 有 | `odd_mushroom` | Odd Mushroom | Shared | When $Vulnerable, take 25% more attack damage rather than 50%. |
 | 有 | `red_mask` | Red Mask | Shared | At the start of each combat, apply 1 $Weak to ALL enemies. |
 | 缺 | `spirit_poop` | Spirit Poop | Shared | It's unpleasant. |
-| 缺 | `ssserpent_head` | Ssserpent Head | Shared | Whenever you enter a ? room, gain 50 [[Gold]]. |
+| 有 | `ssserpent_head` | Ssserpent Head | Shared | Whenever you enter a ? room, gain 50 [[Gold]]. |
 | 缺 | `warped_tongs` | Warped Tongs | Shared | At the start of your turn, $Upgrade a random card in your hand for the rest of combat. |
 
 ## Special（2）

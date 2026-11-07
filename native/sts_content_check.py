@@ -118,7 +118,8 @@ INV_COUNTS = {
     # §268: +5 (the zero-infrastructure tail).
     # §269: +2 (`slavers_collar` / `busted_crown` energy carriers).
     # §270: +1 (`ectoplasm`'s energy carrier).
-    "statuses": 122,
+    # §271: +2 (`sozu` energy carrier + `ancient_tea_set`'s one-shot program).
+    "statuses": 124,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1437,6 +1438,10 @@ INV_STATUSES = {
     "standard.busted_crown": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
     # §270：`ectoplasm` 的能量那一半（"不能再得金币"在运行层）。
     "standard.ectoplasm": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
+    # §271：`sozu` 的每回合 +1 能量（"不能再获得药水"在运行层）。
+    "standard.sozu": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
+    # `ancient_tea_set` 没有**被动修饰器**：它是 `TurnStarted` 触发器（抄 `lantern` 的程序）。
+    "standard.ancient_tea_set": [],
     # §267：零基建批次。
     "standard.ring_of_the_serpent": [('TurnStartDraw', 'AddFlat', 1, 100, None)],
     "standard.philosophers_stone": [('TurnStartEnergy', 'AddPerStack', 1, 100, None)],
@@ -3431,6 +3436,7 @@ def check_statuses(doc):
                      "standard.runic_pyramid", "standard.lizard_tail", "standard.unceasing_top",
                      # §269
                      "standard.slavers_collar", "standard.busted_crown", "standard.ectoplasm",
+                     "standard.sozu", "standard.ancient_tea_set",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3564,6 +3570,10 @@ def check_statuses(doc):
                         "standard.busted_crown": [],
                         # §270
                         "standard.ectoplasm": [],
+                        # §271
+                        # `sozu` 是**修饰器**（每回合 +1 能量），没有触发器。
+                        "standard.sozu": [],
+                        "standard.ancient_tea_set": ["TurnStarted"],
                         "standard.champion_belt": ["StatusApplied"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
@@ -3821,7 +3831,10 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       # §270: 加牌类 + 金币/商店类。
                       "omamori", "ceramic_fish", "darkstone_periapt", "molten_egg", "toxic_egg",
                       "frozen_egg", "bloody_idol", "ectoplasm", "maw_bank", "membership_card",
-                      "smiling_mask")
+                      "smiling_mask",
+                      # §271: 节点类 + 药水类。
+                      "meal_ticket", "ancient_tea_set", "ssserpent_head", "sozu",
+                      "toy_ornithopter")
 
 
 def check_relics(doc):

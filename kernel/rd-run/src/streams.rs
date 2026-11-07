@@ -210,6 +210,11 @@ pub enum RunError {
     NoSuchOffer,
     /// There is no potion to take (the reward offered none).
     NoSuchPotion,
+    /// §271：`sozu` —— 不能再获得药水。
+    ///
+    /// 自己的变体而不是复用 `Capacity`：容量满了是"腾一格再来"，这里是"永远不行"，
+    /// 页面要说的话完全不同。
+    PotionGainBlocked,
     /// `take_relic` on a reward table that has no relic (§155).
     NoSuchRelic,
     /// You tried to walk on before settling the node you are standing on.

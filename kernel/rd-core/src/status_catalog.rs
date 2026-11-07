@@ -748,6 +748,9 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.busted_crown"
             // §270: `ectoplasm`'s energy half (its "no more gold" half is run-layer).
             | "standard.ectoplasm"
+            // §271: `sozu`'s energy half and `ancient_tea_set`'s one-shot energy.
+            | "standard.sozu"
+            | "standard.ancient_tea_set"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

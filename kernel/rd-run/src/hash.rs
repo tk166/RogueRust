@@ -62,6 +62,11 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
         .str("maw_bank=")
         .u32(u32::from(state.maw_bank_broken()))
         .str("\n");
+    // §271：`ancient_tea_set` 欠着的那一场（进篝火之后、下一场战斗之前）。
+    writer
+        .str("tea_set=")
+        .u32(u32::from(state.tea_set_pending()))
+        .str("\n");
     writer.str("boss_beaten=").u32(u32::from(state.boss_beaten())).str("\n");
     writer.str("pending=").u32(u32::from(pending_code(state.pending()))).str("\n");
     // `RunId` **就是** `Ident<CAP>`，所以 `event()` 已经是 `&str`（再 `.as_str()` 会掉进

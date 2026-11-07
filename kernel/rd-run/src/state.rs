@@ -35,9 +35,11 @@ use crate::streams::{RunError, RunRng, RunStream};
 ///
 /// 两个消费者（[`RunState::combat_bonus_for`] / [`RunState::reward_card_count`]）各自挑自己认识的
 /// 变体、忽略其余 —— 所以这张表**只有一处**，而不是"每个消费者一张"。
-const RELIC_SECOND_HALVES: [(&str, RelicEffect); 2] = [
+const RELIC_SECOND_HALVES: [(&str, RelicEffect); 3] = [
     ("busted_crown", RelicEffect::RewardCardDelta(-2, KindMask::ALL)),
     ("ectoplasm", RelicEffect::StartCombatStatus("standard.ectoplasm", 1)),
+    // §271：`sozu` 的第一半是"不能再获得药水"（运行时判断），第二半是每回合 +1 能量。
+    ("sozu", RelicEffect::StartCombatStatus("standard.sozu", 1)),
 ];
 
 /// §269：一组"哪几类战斗"的位掩码（[`RelicEffect::StartCombatStatusInKinds`] 等使用）。
@@ -210,6 +212,20 @@ pub enum RelicEffect {
     RewardCardDelta(i32, KindMask),
     /// §269：**药水必掉**（`white_beast_statue`）。
     PotionAlwaysDrops,
+    /// §271：`meal_ticket` —— 进商店回 15 血。
+    ShopEntryHeal(i32),
+    /// §271：`ssserpent_head` —— 进 `?` 房 +50 金币。
+    UnknownRoomGold(i32),
+    /// §271：`ancient_tea_set` —— 进篝火 ⇒ **下一场**战斗开战 +`stacks` 能量（状态 id + 层数）。
+    ///
+    /// 带状态 id 而不是硬编码：能量是内容的事（`standard.ancient_tea_set` 的
+    /// `TurnStarted` 触发器），运行层只负责"这一场要不要挂它"。
+    RestEntryNextCombatEnergy(&'static str, i32),
+    /// §271：`sozu` —— 不能再获得药水（第一半；"每回合 +1 能量"在 `RELIC_SECOND_HALVES`）。
+    NoPotionGain,
+    /// §271：`toy_ornithopter` —— 用一瓶药水回 5 血（血量在**战斗**里，所以这条只给数字，
+    /// 由 `rd_env_use_potion` 在战斗员身上兑现）。
+    PotionUseHeal(i32),
     /// §270：`omamori` —— 拾取时给 2 次"挡诅咒"。
     Omamori(u8),
     /// §270：`darkstone_periapt` —— 得到诅咒 ⇒ 上限 +6。
@@ -1236,6 +1252,11 @@ pub struct RunState {
     /// §270：`maw_bank` 已经在商店花过钱 ⇒ 不再给爬层金币（wiki："No longer works when you spend
     /// any Gold at a shop"）。布尔就够 —— wiki 只有"失效没失效"，没有次数。
     maw_bank_broken: bool,
+    /// §271：`ancient_tea_set` —— 刚进过篝火 ⇒ **下一场**战斗开战多 2 能量。
+    ///
+    /// 为什么是运行期字段、而不是"在篝火那一刻直接加能量"：那时没有战斗，能量无处可加
+    /// （能量是战斗状态的资源）。所以只记"欠一场"，开战那一刻兑现、然后清掉。
+    tea_set_pending: bool,
     deck: [RunId; MAX_RUN_DECK],
     /// §253：与 `deck` **同下标**的每副本数据（`RunMark::NONE` = 没有）。
     /// 牌组重排时必须跟着搬（`remove_card` 里那条 `deck[i] = deck[i+1]` 旁边的同一行）。
@@ -1372,6 +1393,7 @@ impl RunState {
             ruby_key: false,
             omamori_charges: 0,
             maw_bank_broken: false,
+            tea_set_pending: false,
             deck: [RunId::EMPTY; MAX_RUN_DECK],
             marks: [RunMark::NONE; MAX_RUN_DECK],
             deck_len: 0,
@@ -1725,6 +1747,34 @@ impl RunState {
         self.omamori_charges
     }
 
+    /// §271：欠下一场"开战 +2 能量"（`ancient_tea_set`）。
+    ///
+    /// 公开是给两个调用方：`begin_node` 的篝火分支（真实路径），以及判据里"直接欠上、
+    /// 只看开战有没有消费"的那一段（它不该为了造局面去走一遍篝火）。
+    pub fn owe_tea_set_for_the_next_fight(&mut self) {
+        if self.holds_relic_effect(RelicEffect::RestEntryNextCombatEnergy(
+            "standard.ancient_tea_set",
+            1,
+        )) {
+            self.tea_set_pending = true;
+        }
+    }
+
+    /// §271：`ancient_tea_set` 是否欠着一场"开战 +2 能量"。
+    #[must_use]
+    pub const fn tea_set_pending(&self) -> bool {
+        self.tea_set_pending
+    }
+
+    /// §271：**兑现**那一场 —— 由战斗构建方在"开战加成已经应用"之后调用。
+    ///
+    /// ⚠️ 清理点只有这一个，而且它必须在**应用之后**：先清再算的话，`combat_bonus_for` 就
+    /// 永远读不到它，`ancient_tea_set` 会变成一个什么都不做的遗物（而且所有判据都还是绿的，
+    /// 因为没有任何东西"错"）。
+    pub fn clear_tea_set(&mut self) {
+        self.tea_set_pending = false;
+    }
+
     /// §270：`maw_bank` 是否已经失效（在商店花过钱）。
     #[must_use]
     pub const fn maw_bank_broken(&self) -> bool {
@@ -1852,6 +1902,11 @@ impl RunState {
             | RelicEffect::FloorClimbGold(_)
             | RelicEffect::RemovePriceFlat(_)
             | RelicEffect::ShopDiscountPercent(_)
+            | RelicEffect::ShopEntryHeal(_)
+            | RelicEffect::UnknownRoomGold(_)
+            | RelicEffect::RestEntryNextCombatEnergy(_, _)
+            | RelicEffect::NoPotionGain
+            | RelicEffect::PotionUseHeal(_)
             | RelicEffect::RestCardReward => {}
         }
         self.relics[slot] = id;
@@ -1893,7 +1948,15 @@ impl RunState {
     }
 
     /// Add a potion. Past [`Self::potion_slots`] this is an error (the belt is full).
+    /// §271：`sozu` —— "You can no longer obtain Potions"。
+    ///
+    /// 拒绝而不是静默不加入：`push_potion` 的所有调用方（奖励屏、事件、商店、调试入口）
+    /// 都刚把一瓶药水递到玩家手里，**悄悄收下又悄悄丢掉**正是这个仓库一直在禁的那种损失。
+    /// 所以除了这里，`roll_reward` 还会**不再掷**药水 —— 奖励屏上根本不会出现那一格。
     pub fn push_potion(&mut self, potion_id: &str) -> Result<(), RunError> {
+        if self.holds_relic_effect(RelicEffect::NoPotionGain) {
+            return Err(RunError::PotionGainBlocked);
+        }
         let id = RunId::new(potion_id).map_err(|_| RunError::BadId)?;
         let slot = self.potions_len as usize;
         if slot >= usize::from(self.potion_slots()) || slot >= MAX_RUN_POTIONS {
@@ -1991,6 +2054,11 @@ impl RunState {
                     | RelicEffect::FloorClimbGold(_)
                     | RelicEffect::RemovePriceFlat(_)
                     | RelicEffect::ShopDiscountPercent(_)
+                    | RelicEffect::ShopEntryHeal(_)
+                    | RelicEffect::UnknownRoomGold(_)
+                    | RelicEffect::RestEntryNextCombatEnergy(_, _)
+                    | RelicEffect::NoPotionGain
+                    | RelicEffect::PotionUseHeal(_)
                     | RelicEffect::RestCardReward,
                 ) => {}
                 None => {
@@ -2194,6 +2262,16 @@ impl RunState {
             "maw_bank" => Some(RelicEffect::FloorClimbGold(12)),
             "smiling_mask" => Some(RelicEffect::RemovePriceFlat(50)),
             "membership_card" => Some(RelicEffect::ShopDiscountPercent(50)),
+            // §271：**节点类**三件（都落在 `begin_node` 的 `NodeKind` 分支上）。
+            "meal_ticket" => Some(RelicEffect::ShopEntryHeal(15)),
+            "ssserpent_head" => Some(RelicEffect::UnknownRoomGold(50)),
+            "ancient_tea_set" => Some(RelicEffect::RestEntryNextCombatEnergy(
+                "standard.ancient_tea_set",
+                1,
+            )),
+            // §271：药水类两件。
+            "sozu" => Some(RelicEffect::NoPotionGain),
+            "toy_ornithopter" => Some(RelicEffect::PotionUseHeal(5)),
             // `black_blood`：战后回 12（wiki 的 "Replaces Burning Blood" 那一半见 §268.3）。
             "black_blood" => Some(RelicEffect::EndOfCombatHeal(12)),
             // §269：`busted_crown` 的**能量**那一半（无条件挂）。它的另一半（奖励卡数 -2）在
@@ -2362,9 +2440,38 @@ impl RunState {
                     | RelicEffect::FloorClimbGold(_)
                     | RelicEffect::RemovePriceFlat(_)
                     | RelicEffect::ShopDiscountPercent(_)
+                    | RelicEffect::ShopEntryHeal(_)
+                    | RelicEffect::UnknownRoomGold(_)
+                    | RelicEffect::RestEntryNextCombatEnergy(_, _)
+                    | RelicEffect::NoPotionGain
+                    | RelicEffect::PotionUseHeal(_)
                     | RelicEffect::RestCardReward,
                 )
                 | None => {}
+            }
+        }
+        // §271：`ancient_tea_set` —— 篝火之后的那**一场**多 2 能量。挂的是内容状态
+        // （`standard.ancient_tea_set` 自己的 `TurnStarted` 程序），运行层只说"挂哪一条"。
+        if self.tea_set_pending {
+            if let Some(RelicEffect::RestEntryNextCombatEnergy(id, stacks)) =
+                self.first_relic_effect_of(RelicEffect::RestEntryNextCombatEnergy(
+                    "standard.ancient_tea_set",
+                    1,
+                ))
+            {
+                let mut merged = false;
+                for entry in bonus.statuses.iter_mut().take(bonus.status_count) {
+                    if let Some(existing) = entry {
+                        if existing.id == id {
+                            existing.stacks += stacks;
+                            merged = true;
+                            break;
+                        }
+                    }
+                }
+                if !merged {
+                    let _ = bonus.push_status(id, stacks);
+                }
             }
         }
         // §270：`RELIC_SECOND_HALVES` 里属于"开战加成"的那一类（`ectoplasm` 的每回合 +1 能量）。
@@ -2871,6 +2978,11 @@ impl RunState {
                     | RelicEffect::FloorClimbGold(_)
                     | RelicEffect::RemovePriceFlat(_)
                     | RelicEffect::ShopDiscountPercent(_)
+                    | RelicEffect::ShopEntryHeal(_)
+                    | RelicEffect::UnknownRoomGold(_)
+                    | RelicEffect::RestEntryNextCombatEnergy(_, _)
+                    | RelicEffect::NoPotionGain
+                    | RelicEffect::PotionUseHeal(_)
                     | RelicEffect::RestCardReward,
                 )
                 | None => {}
@@ -3028,11 +3140,22 @@ impl RunState {
                 if heal > 0 {
                     self.heal_after_combat(heal);
                 }
+                // §271：`ancient_tea_set` —— "Whenever you enter a Rest Site, start the next
+                // combat with 2 extra Energy"。**进门就欠上**（与上面那条 `Eternal Feather`
+                // 同一个理由：wiki 说"on entering"，不是"on Rest"）。
+                self.owe_tea_set_for_the_next_fight();
                 Pending::Rest
             }
             NodeKind::Treasure => Pending::Chest,
             NodeKind::Shop => {
                 self.stock_shop(card_pool, relic_pool)?;
+                // §271：`meal_ticket` —— "Whenever you enter a shop, heal 15 HP"。
+                // 与 `Eternal Feather` 同一条规矩：**进门就付**，不是"买了东西才付"。
+                if let Some(RelicEffect::ShopEntryHeal(amount)) =
+                    self.first_relic_effect_of(RelicEffect::ShopEntryHeal(15))
+                {
+                    self.heal_after_combat(amount);
+                }
                 Pending::Shop
             }
             // An elite is a fight like any other: what differs is the pool it draws from and what
@@ -3040,7 +3163,16 @@ impl RunState {
             NodeKind::Elite => Pending::None,
             // A `?` room is an **event** (`inv:§7.3`). The run layer reads no content, so the caller
             // picks which event (`EV`) and then calls `begin_event` -- nothing to settle here.
-            NodeKind::Unknown => Pending::None,
+            NodeKind::Unknown => {
+                // §271：`ssserpent_head` —— "Whenever you enter a ? room, gain 50 Gold"。
+                // 走 `adjust_gold`，所以 `ectoplasm` 该拦就拦、`bloody_idol` 该回血就回血。
+                if let Some(RelicEffect::UnknownRoomGold(amount)) =
+                    self.first_relic_effect_of(RelicEffect::UnknownRoomGold(50))
+                {
+                    self.adjust_gold(amount);
+                }
+                Pending::None
+            }
             // Nothing is left that M1 refuses; the arm stays so a new kind cannot be silently
             // accepted.
             other => return Err(RunError::NodeNotSettleable(other as u8)),
@@ -3990,7 +4122,10 @@ impl RunState {
         } else {
             (self.potion_chance + POTION_DROP_STEP).min(100)
         };
-        let drop = rolled && self.potion_room();
+        // §271：`sozu` —— 奖励屏上根本不该出现药水那一格。掷骰照旧（随机流的位置不动），
+        // 只把"要不要给"按成 false。⚠️ 与 `push_potion` 的拒绝是**两件事**：这里是不发，
+        // 那里是"别的路（事件/商店/调试）递过来的也收不了"。
+        let drop = rolled && self.potion_room() && !self.holds_relic_effect(RelicEffect::NoPotionGain);
 
         let mut used = [false; MAX_POOL];
         let mut cards = [RunId::EMPTY; MAX_REWARD_CARDS];
@@ -5386,6 +5521,155 @@ mod tests {
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
     }
 
+    /// §271：**节点类** —— 三个 `begin_node` 分支各管一件事。
+    ///
+    /// 走的是 `walk_to`（与 §268 那条"节点都能结算"的判据同一招）：它把游标真的挪到一个
+    /// 指定类型的节点上，所以 `begin_node` 里的分支**真的**被执行到。
+    #[test]
+    fn the_node_relics_pay_on_the_right_kind_of_room() {
+        // ---- `meal_ticket`：进商店回 15（**进门就付**，不是买了东西才付）。
+        let mut run = ironclad();
+        run.push_relic("meal_ticket").expect("meal_ticket");
+        if walk_to(&mut run, crate::map::NodeKind::Shop) {
+            run.adjust_health(-30);
+            let hp = run.health();
+            run.begin_node(&TYPED_CARDS, &RELICS).expect("enter the shop");
+            assert_eq!(run.pending(), Pending::Shop);
+            assert_eq!(run.health(), hp + 15, "meal_ticket: +15 on entering a shop");
+        }
+
+        // 反面：同一件遗物进**别的**房间不回血。
+        let mut run = ironclad();
+        run.push_relic("meal_ticket").expect("meal_ticket");
+        if walk_to(&mut run, crate::map::NodeKind::Rest) {
+            run.adjust_health(-30);
+            let hp = run.health();
+            run.begin_node(&TYPED_CARDS, &RELICS).expect("enter the campfire");
+            assert_eq!(run.health(), hp, "meal_ticket must not pay on a rest site");
+        }
+
+        // ---- `ssserpent_head`：进 `?` 房 +50 金。
+        let mut run = ironclad();
+        run.push_relic("ssserpent_head").expect("ssserpent_head");
+        if walk_to(&mut run, crate::map::NodeKind::Unknown) {
+            let gold = run.gold();
+            let kind = run.begin_node(&TYPED_CARDS, &RELICS).expect("enter the ? room");
+            assert_eq!(kind, crate::map::NodeKind::Unknown);
+            assert_eq!(run.gold(), gold + 50, "ssserpent_head: +50 per ? room");
+        }
+
+        // 反面：没有这件遗物时一分钱不多。
+        let mut run = ironclad();
+        if walk_to(&mut run, crate::map::NodeKind::Unknown) {
+            let gold = run.gold();
+            run.begin_node(&TYPED_CARDS, &RELICS).expect("enter the ? room");
+            assert_eq!(run.gold(), gold, "no ssserpent_head ⇒ no gold");
+        }
+
+        // ---- `ancient_tea_set`：进篝火 ⇒ **下一场**战斗开战 +2 能量；打完一场就没了。
+        let mut run = ironclad();
+        run.push_relic("ancient_tea_set").expect("ancient_tea_set");
+        assert_eq!(
+            run.combat_bonus_for(FightKind::Normal).status_count,
+            0,
+            "before any rest site there is nothing pending"
+        );
+        if walk_to(&mut run, crate::map::NodeKind::Rest) {
+            run.begin_node(&TYPED_CARDS, &RELICS).expect("enter the campfire");
+            assert!(run.tea_set_pending(), "a rest site owes the next fight 2 energy");
+            let bonus = run.combat_bonus_for(FightKind::Normal);
+            assert_eq!(bonus.status_count, 1, "the pending status is in the bonus");
+            let entry = bonus.statuses[0].expect("an entry");
+            assert_eq!(entry.id, "standard.ancient_tea_set", "its own status, not lantern's");
+            assert_eq!(entry.stacks, 1, "one stack of a +2 status");
+
+            // 兑现：清掉之后**下一场**就不该再有它（"the next combat" 只是一场）。
+            run.clear_tea_set();
+            assert_eq!(
+                run.combat_bonus_for(FightKind::Normal).status_count,
+                0,
+                "the charge is for one combat only"
+            );
+        }
+
+        // 反面：没有这件遗物时进篝火不欠任何东西。
+        let mut run = ironclad();
+        if walk_to(&mut run, crate::map::NodeKind::Rest) {
+            run.begin_node(&TYPED_CARDS, &RELICS).expect("enter the campfire");
+            assert!(!run.tea_set_pending(), "no relic ⇒ nothing pending");
+            assert_eq!(run.combat_bonus_for(FightKind::Normal).status_count, 0);
+        }
+    }
+
+    /// §271：**药水类** —— `sozu` 拦药水（两个入口），`toy_ornithopter` 的 5 由 wasm 兑现
+    /// （这里只钉运行层那一半：遗物表里的数字）。
+    #[test]
+    fn sozu_refuses_potions_at_both_doors() {
+        // ---- 门 1：`push_potion` 拒绝（事件/调试入口递过来的也收不了）。
+        let mut run = ironclad();
+        run.push_relic("sozu").expect("sozu");
+        let before = run;
+        assert_eq!(
+            run.push_potion("fire_potion"),
+            Err(RunError::PotionGainBlocked),
+            "sozu: you can no longer obtain potions"
+        );
+        assert_eq!(run.potions().len(), 0, "nothing entered the belt");
+        assert!(run == before, "a refused potion must not change the run");
+
+        // ---- 门 2：奖励屏上**根本不该出现**那一格（不发，而不是"发了再拒绝"）。
+        // 用一条固定种子把"40% 掉率"的随机流走满：无论掷骰结果如何，`sozu` 之下都没有药水。
+        for seed in 0..24 {
+            let mut run = RunState::new(seed, 80, i32::MAX, &["strike"; 10]).expect("a run");
+            run.push_relic("sozu").expect("sozu");
+            run.roll_reward(&TYPED_CARDS, &POTIONS, &RELICS, FightKind::Normal)
+                .expect("a reward");
+            assert_eq!(
+                run.reward().potion.as_str(),
+                "",
+                "seed {seed}: sozu must not offer a potion"
+            );
+        }
+        // 反面：没有 `sozu` 时 24 个种子里**至少有一个**掉药水（否则上一条什么也没证明）。
+        let mut any = false;
+        for seed in 0..24 {
+            let mut run = RunState::new(seed, 80, i32::MAX, &["strike"; 10]).expect("a run");
+            run.roll_reward(&TYPED_CARDS, &POTIONS, &RELICS, FightKind::Normal)
+                .expect("a reward");
+            if !run.reward().potion.as_str().is_empty() {
+                any = true;
+            }
+        }
+        assert!(any, "the control must actually drop a potion somewhere");
+
+        // ---- `sozu` 的另一半：每回合 +1 能量的载体。
+        let mut run = ironclad();
+        run.push_relic("sozu").expect("sozu");
+        let bonus = run.combat_bonus_for(FightKind::Normal);
+        assert_eq!(bonus.status_count, 1, "sozu's energy half is granted");
+        assert_eq!(
+            bonus.statuses[0].expect("an entry").id,
+            "standard.sozu",
+            "the carrier is sozu's own status"
+        );
+    }
+
+    /// §271：`toy_ornithopter` 的参数只存在于遗物表里（wasm 通过
+    /// `RunState::relic_effect` 读它，不在 wasm 里写第二个 5）。
+    #[test]
+    fn the_potion_relics_carry_their_own_numbers() {
+        use crate::state::RelicEffect;
+        let mut run = ironclad();
+        run.push_relic("toy_ornithopter").expect("toy_ornithopter");
+        assert_eq!(
+            RunState::relic_effect("toy_ornithopter"),
+            Some(RelicEffect::PotionUseHeal(5)),
+            "the heal amount lives in the relic table, not in the wasm layer"
+        );
+        // 反面：不是"任何遗物都给 +5"。
+        assert_eq!(RunState::relic_effect("burning_blood"), Some(RelicEffect::EndOfCombatHeal(6)));
+    }
+
     /// §270：**加牌类** —— 所有落点都在 `push_card` 一处。
     #[test]
     fn the_add_card_relics_fire_at_the_one_add_point() {
@@ -6114,6 +6398,13 @@ mod tests {
         id: "burning_blood",
         rarity: Rarity::Common,
     }];
+    /// §271：三瓶药水（`roll_reward` 的 `pick_potion` 要一个非空池子；`sozu` 那条判据
+    /// 要证明"永远不发"，所以池子得**本来就会**发）。
+    const POTIONS: [PoolPotion<'static>; 3] = [
+        PoolPotion { id: "fire_potion", rarity: Rarity::Common },
+        PoolPotion { id: "block_potion", rarity: Rarity::Common },
+        PoolPotion { id: "energy_potion", rarity: Rarity::Uncommon },
+    ];
     /// The starting deck (inv:§2.1), in order.
     const DECK: [&str; 10] = [
         "strike", "strike", "strike", "strike", "strike",

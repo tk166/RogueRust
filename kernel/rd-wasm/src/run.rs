@@ -2404,12 +2404,57 @@ fn atom_needs_a_fight(atom: &str) -> bool {
 }
 
 /// Take the used potion off the belt: the one tail every potion shares.
+/// §271：`toy_ornithopter` —— "Whenever you use a potion, heal 5 HP"。
+///
+/// ⚠️ 回的是**战斗里**的血，不是 `run.health`：一场战斗的 HP 在战斗状态里，结束时才折回运行层
+/// （见 `fight_end`）。改运行层那一份会被折回覆盖 —— 玩家看不到回血，而且没有任何地方会报错。
+/// 所以这里只在"战斗里且英雄还活着"时动手；不在战斗里就是**不做事**（药水只能在战斗中喝）。
+fn heal_on_potion_use() {
+    // 两个 slot 各管一件事：**运行层**认识遗物，**战斗层**认识血量。混用会得到一个
+    // "编译不过"（第一次就这么写的：`&session.state` 是 `&Box<CombatState>`）。
+    let Some(amount) = run_slot()
+        .as_ref()
+        .and_then(|run| relic_amount(&run.state, "toy_ornithopter"))
+    else {
+        return;
+    };
+    let Some(session) = crate::slot().as_mut() else {
+        return;
+    };
+    let Some(hero) = session.hero_id() else {
+        return;
+    };
+    if let Some(combatant) = session.state.combatant_mut(&hero) {
+        let healed = (combatant.health_current + amount).min(combatant.health_max);
+        combatant.health_current = healed;
+    }
+    session.reobserve_after_external_change();
+}
+
+/// §271：某件遗物带的那个数字（`toy_ornithopter` 的 5）。
+///
+/// 遗物的参数只在 `rd-run` 的遗物表里，所以这里问它、而不是在 wasm 里再写一个 5。
+fn relic_amount(state: &rd_run::state::RunState, relic: &str) -> Option<i32> {
+    use rd_run::state::RelicEffect;
+    if !state.relics().iter().any(|held| held.as_str() == relic) {
+        return None;
+    }
+    match rd_run::state::RunState::relic_effect(relic) {
+        Some(RelicEffect::PotionUseHeal(amount)) => Some(amount),
+        _ => None,
+    }
+}
+
 fn consume_used_potion(slot: i32) -> i32 {
     let Some(run) = run_slot().as_mut() else {
         return -1;
     };
     match run.state.drop_potion(slot as usize) {
-        Ok(()) => 0,
+        // §271：药水**真的**用掉了才回血（`drop_potion` 是这一步的唯一成功判据）。
+        Ok(()) => {
+            heal_on_potion_use();
+            0
+        }
         Err(e) => {
             let message = describe(&e);
             fail(run, &message)
@@ -3527,6 +3572,10 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // §269：**按战斗类型**算 —— 有三件遗物只在精英/Boss 战里生效（`sling_of_courage` /
     // `slavers_collar` / `pantograph`）。放在 `fight_kind` 之后，是因为它就是那个参数。
     let bonus = session.state.combat_bonus_for(fight_kind);
+    // §271：`ancient_tea_set` —— 加成**已经算出来**，现在才允许清掉"欠一场"。
+    // ⚠️ 顺序反了（先清再算）它就永远读不到，`ancient_tea_set` 变成一件什么都不做的遗物，
+    // 而所有判据仍然绿 —— 没有任何东西"错"。
+    session.state.clear_tea_set();
     // §187：A2/A3/A4 与 A17/18/19 都需要这一个数（内核不会猜它）。
     let ascension = session.state.ascension();
     // 可失败段收在一个块里：`entries` 借着 `state`（`DeckEntry<'static>` 的要求），块一结束借用就死，
@@ -8398,6 +8447,102 @@ mod tests {
         assert!(titles.iter().any(|t| t == "Bash"));
         assert_eq!(rd_run_deck_title_len(99), -1);
         assert_eq!(rd_run_deck_id_len(-1), -1);
+    }
+
+    /// §271：`toy_ornithopter` —— 喝一瓶药水，**战斗里的英雄**回 5 血。
+    ///
+    /// ⚠️ 判据的关键是"回的是战斗里那一份"：改 `run.health` 也会"看起来回了 5"，
+    /// 但战斗结束折回时会被覆盖 —— 所以这里读的是**战斗员**的血。
+    #[test]
+    fn drinking_a_potion_heals_five_with_the_toy_ornithopter() {
+        for (relic, want_heal) in [(Some("toy_ornithopter"), true), (None, false)] {
+            test_run(
+                7, 80, 80,
+                &["strike", "strike", "strike", "strike", "strike",
+                  "defend", "defend", "defend", "defend", "bash"],
+            );
+            if let Some(relic) = relic {
+                run_slot()
+                    .as_mut()
+                    .expect("a run")
+                    .state
+                    .push_relic(relic)
+                    .unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            }
+            assert!(
+                run_slot().as_ref().expect("a run").state.reachable().get(0).is_some(),
+                "a floor-1 node"
+            );
+            assert_eq!(rd_run_step(0), 0, "walk onto it");
+            assert_eq!(rd_run_fight_begin(), 0, "a fight begins");
+
+            let before = {
+                let session = crate::slot().as_ref().expect("a fight");
+                let hero = session.hero_id().expect("a hero");
+                session.state.combatant(&hero).expect("the hero").health_current
+            };
+            let potion = b"block_potion";
+            unsafe {
+                assert_eq!(rd_run_grant_potion(potion.as_ptr(), potion.len() as i32), 0);
+            }
+            assert_eq!(rd_env_use_potion(0, 0), 0, "the potion is used");
+            let after = {
+                let session = crate::slot().as_ref().expect("still in the fight");
+                let hero = session.hero_id().expect("a hero");
+                session.state.combatant(&hero).expect("the hero").health_current
+            };
+            if want_heal {
+                assert_eq!(after, (before + 5).min(80), "toy_ornithopter heals 5 in combat");
+            } else {
+                assert_eq!(after, before, "without the relic a potion heals nothing");
+            }
+        }
+    }
+
+    /// §271：`ancient_tea_set` —— "欠一场"在**真的开战**之后被清掉，而那一场真的拿到了状态。
+    #[test]
+    fn the_tea_set_charge_is_spent_by_the_next_fight() {
+        test_run(
+            7, 80, 80,
+            &["strike", "strike", "strike", "strike", "strike",
+              "defend", "defend", "defend", "defend", "bash"],
+        );
+        run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .push_relic("ancient_tea_set")
+            .expect("ancient_tea_set");
+        // 直接欠上：篝火那条路在 `rd-run` 的判据里逐条验过，这里只验"开战消费"。
+        run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .owe_tea_set_for_the_next_fight();
+        assert!(run_slot().as_ref().expect("a run").state.tea_set_pending());
+
+        assert!(
+            run_slot().as_ref().expect("a run").state.reachable().get(0).is_some(),
+            "a floor-1 node"
+        );
+        assert_eq!(rd_run_step(0), 0, "walk onto it");
+        assert_eq!(rd_run_fight_begin(), 0, "a fight begins");
+
+        assert!(
+            !run_slot().as_ref().expect("a run").state.tea_set_pending(),
+            "the charge is spent by the fight it was owed to"
+        );
+        // 而且那一场**真的**挂上了状态（否则"清掉了"这件事毫无意义）。
+        let granted = {
+            let session = crate::slot().as_ref().expect("a fight");
+            let hero = session.hero_id().expect("a hero");
+            let combatant = session.state.combatant(&hero).expect("the hero");
+            combatant
+                .statuses()
+                .iter()
+                .any(|status| status.definition_id.as_str() == "standard.ancient_tea_set")
+        };
+        assert!(granted, "the fight must have the tea set status on the hero");
     }
 
     #[test]
