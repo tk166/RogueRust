@@ -2394,10 +2394,12 @@ impl Host<'_> {
             }
             CombatEvent::StatusApplied {
                 target,
+                definition,
                 debuff,
                 applied_to_other,
             } => {
-                // §249：两个事实位随事件走（`event.bool` 读它们）。
+                // §249：两个事实位随事件走（`event.bool` 读它们）；§264：状态 id 也随事件走
+                // （`event.statusIs` 读它，`champion_belt` 用）。
                 let mut flags = 0u16;
                 if debuff {
                     flags |= crate::exec::STATUS_IS_DEBUFF;
@@ -2405,11 +2407,12 @@ impl Host<'_> {
                 if applied_to_other {
                     flags |= crate::exec::STATUS_APPLIED_TO_OTHER;
                 }
-                self.run_broadcast_triggers_with_flags(
+                self.run_broadcast_triggers_with_facts(
                     state,
                     TriggerEvent::StatusApplied,
                     &target,
                     flags,
+                    Some(definition),
                 )
             }
             CombatEvent::StatusMerged { target } => {
@@ -2452,6 +2455,20 @@ impl Host<'_> {
         about: &CombatantId,
         flags: u16,
     ) -> Result<(), HostError> {
+        self.run_broadcast_triggers_with_facts(state, event, about, flags, None)
+    }
+
+    /// §264：同 [`Self::run_broadcast_triggers_with_flags`]，外加**这一事件带的状态 id**
+    /// （`event.statusIs` 读它）。与 `execute_program_amount` 单开一个入口同一理由：
+    /// 其它事件的调用方没有"哪条状态"可言。
+    fn run_broadcast_triggers_with_facts(
+        &mut self,
+        state: &mut CombatState,
+        event: TriggerEvent,
+        about: &CombatantId,
+        flags: u16,
+        event_status: Option<crate::state::StatusDefinitionId>,
+    ) -> Result<(), HostError> {
         let mut bearers = [CombatantId::EMPTY; crate::state::MAX_COMBATANTS];
         let mut count = 0usize;
         for combatant in state.combatants() {
@@ -2474,7 +2491,7 @@ impl Host<'_> {
                 };
                 let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
                 let root = NodeRef::new(self.content, handle);
-                let outcome = execute_program_with_flags(
+                let outcome = execute_program_with_facts(
                     state,
                     self.content,
                     root,
@@ -2482,6 +2499,7 @@ impl Host<'_> {
                     Some(*about),
                     steps,
                     flags,
+                    event_status,
                 );
                 outcome.map_err(|e| self.record(HostError::Exec(e)))?;
             }
@@ -3170,9 +3188,25 @@ fn execute_program_with_flags(
     max_steps: u32,
     event_flags: u16,
 ) -> Result<(), exec::ExecError> {
+    execute_program_with_facts(state, content, root, source, event_target, max_steps, event_flags, None)
+}
+
+/// §264：[`execute_program_with_flags`] 加上**事件带的状态 id**（`event.statusIs` 读它）。
+#[allow(clippy::too_many_arguments)]
+fn execute_program_with_facts(
+    state: &mut CombatState,
+    content: &Content<'_>,
+    root: NodeRef<'_>,
+    source: Option<CombatantId>,
+    event_target: Option<CombatantId>,
+    max_steps: u32,
+    event_flags: u16,
+    event_status: Option<crate::state::StatusDefinitionId>,
+) -> Result<(), exec::ExecError> {
     let mut ctx = ExecContext::new(state, source, event_target, None, max_steps)
         .with_content(content);
     ctx.event_flags = event_flags;
+    ctx.event_status = event_status;
     let outcome = exec::begin(root, &mut ctx, crate::state::ProgramTerminalHook::None);
     // §199: `begin` **建/借一条效果链**，而那条引用归**帧**所有（见 `exec.rs` 里
     // `begin_without_preflight` 的引用计数说明）。帧要 `reap_frames` 才会把它还回去 ——
@@ -5459,6 +5493,7 @@ mod tests {
                 amount: 5,
                 ignores_block: false,
                 source: Some(cid("hero")),
+                source_card: None,
             })
             .expect("queue a hit at something that is gone");
         host.try_resolve_pending_queues(&mut state).expect("a vanished target is a no-op");
@@ -5667,6 +5702,7 @@ mod tests {
                     amount: 2,
                     ignores_block: false,
                     source: Some(cid("hero")),
+                    source_card: None,
                 })
                 .expect("queue a hit");
         }
@@ -11610,6 +11646,7 @@ mod tests {
                     amount: 6,
                     ignores_block: false,
                     source: Some(cid("enemy_a")),
+                    source_card: None,
                 },
                 chain: crate::state::ChainSlot::NONE,
                 owner: None,
@@ -11648,6 +11685,7 @@ mod tests {
                     amount: 6,
                     ignores_block: false,
                     source: Some(cid("enemy_a")),
+                    source_card: None,
                 },
                 chain: crate::state::ChainSlot::NONE,
                 owner: None,

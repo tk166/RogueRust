@@ -328,6 +328,17 @@ pub struct ExecContext<'a> {
     /// §195.1：当前事件带的**数量**（`eventAmount` 读它）。今天只有伤害事件会填；`None` 与 `0`
     /// 严格区分（见 `expr::eval_int` 的 `eventAmount` 分支）。
     pub event_amount: Option<i32>,
+    /// §264：**这条请求的来源卡定义**（排空一条 `DealDamage` 请求时由请求本身填）。
+    ///
+    /// 与 `resolving_card` 是两件事：那个是"节目帧正在结算哪一份副本"（出牌时才有），
+    /// 这个是"这条**已入队**的伤害请求当初是被哪张牌发起的"。折叠
+    /// `RestrictSourceCardTag` 时先看 `resolving_card`，没有再看它。
+    pub source_card_hint: Option<CardDefinitionId>,
+    /// §264：当前事件带的**状态定义 id**（`event.statusIs` 读它）。只有 `StatusApplied` 会填。
+    ///
+    /// 为什么不能像 `event_flags` 那样压成位：位图装得下"是不是 debuff"这种**封闭**事实，
+    /// 而状态 id 是开放词汇（内容涨它就涨）。
+    pub event_status: Option<StatusDefinitionId>,
     /// 内容镜像。`Some` ⇒ 状态元数据走 [`crate::status_bind`]（参考实现的路）；
     /// `None` ⇒ 走标准包目录（oracle/env 的路）。**只有它决定命名空间桥开不开**。
     pub content: Option<&'a Content<'a>>,
@@ -371,7 +382,7 @@ impl<'a> ExecContext<'a> {
             iteration_card: None,
             resolving_card: None,
             max_steps,
-            event_flags: 0, event_amount: None,
+            event_flags: 0, event_amount: None, event_status: None, source_card_hint: None,
             content: None,
             x_cost: 0,
         }
@@ -407,6 +418,7 @@ impl<'a> ExecContext<'a> {
             content: self.content.copied(),
             event_flags: self.event_flags,
             event_amount: self.event_amount,
+            event_status: self.event_status,
             x_cost: self.x_cost,
         }
     }
@@ -1103,6 +1115,7 @@ fn resolve_request(ctx: &mut ExecContext<'_>, request: &EffectRequest) -> Result
             target,
             amount,
             ignores_block,
+            source_card,
             ..
         } => {
             let Some(target) = target else { return Ok(()) };
@@ -1110,6 +1123,9 @@ fn resolve_request(ctx: &mut ExecContext<'_>, request: &EffectRequest) -> Result
             if amount < 0 {
                 return Err(ExecError::Modifier);
             }
+            // §264：把"这条伤害是哪张牌发起的"交给折叠器 —— 排空时上下文里没有帧，
+            // 所以它是**请求自带的**那一份信息。
+            ctx.source_card_hint = source_card;
             resolve_damage_of_kind(ctx, &target, amount, ignores_block, BindDamageKind::Direct)?;
             Ok(())
         }
@@ -1317,7 +1333,31 @@ pub fn resolve_damage_of_kind(
 
     // Source 阶段读**出手者**的状态。没有来源 ⇒ 整个阶段跳过，**不是错误**
     // （`PassiveModifiers.cs:248-249` 的 `combatant is null ⇒ return currentAmount`）。
+    // §264：来源卡的**定义 id**（`RestrictSourceCardTag` 的门要它）。没有正在结算的牌 ⇒ `None`，
+    // 于是"要求来源卡带标签"的 spec 自动不生效 —— 与参考的 `DamageDealtSourceHasTagFilter`
+    // 在"没有牌"时的答案一致。
+    // §264：来源卡 = "正在结算的那一份"（出牌帧里有）**或**"这条请求当初被哪张牌发起"
+    // （排空一条已入队的伤害请求时只有后者）。两者都没有 ⇒ `None`，于是
+    // `RestrictSourceCardTag` 的 spec 不生效 —— 那是这条门在"没有来源卡"时的正确答案。
+    // 先把 hint **拷出来**（`CardDefinitionId` 是定长拷贝类型）：`as_str()` 借的是这份本地值，
+    // 而不是 `ctx` 里那个字段 —— 否则借用会一直挂到函数末尾，后面的可变借用全被挡。
+    let hint = ctx.source_card_hint;
+    let source_card: Option<&str> = match ctx
+        .resolving_card
+        .and_then(|slot| ctx.state.card(slot))
+        .map(|card| card.definition_id.as_str())
+    {
+        Some(card) => Some(card),
+        None => hint.as_ref().map(|id| id.as_str()),
+    };
+    // 对面阵营的状态（改写的来源，见 `apply_status_magnitude_overrides`）。两次只读借用
+    // 同时成立，所以先各取一次、在同一个作用域里用完。
     if let Some(source) = ctx.source {
+        let opposite: &[StatusInstance] = ctx
+            .state
+            .combatant(target)
+            .map(|c| c.statuses())
+            .unwrap_or(&[]);
         if let Some(source_combatant) = ctx.state.combatant(&source) {
             amount = damage_stage(
                 amount,
@@ -1327,6 +1367,8 @@ pub fn resolve_damage_of_kind(
                 content,
                 kind,
                 ctx.state.cards_played_this_turn,
+                source_card,
+                opposite,
             )?;
         }
     }
@@ -1341,6 +1383,12 @@ pub fn resolve_damage_of_kind(
             .state
             .combatant(target)
             .ok_or(ExecError::MissingCombatant)?;
+        let opposite: &[StatusInstance] = ctx
+            .state
+            .combatant(&ctx.source.unwrap_or(*target))
+            .filter(|_| ctx.source.is_some())
+            .map(|c| c.statuses())
+            .unwrap_or(&[]);
         amount = damage_stage(
             amount,
             target_combatant.statuses(),
@@ -1349,6 +1397,8 @@ pub fn resolve_damage_of_kind(
             content,
             kind,
             ctx.state.cards_played_this_turn,
+            source_card,
+            opposite,
         )?;
         health_before = target_combatant.health_current;
         // 池表**按吸收顺序**读出（见下面 S4 的说明）。切片本身是 key 排好序的，
@@ -3085,6 +3135,12 @@ fn deal_damage_node(
                 amount,
                 ignores_block,
                 source,
+                // §264：正在结算的那张牌（`RestrictSourceCardTag` 的门要用它，而结算发生在
+                // **入队之后** —— 所以必须随请求走，不能靠排空时的上下文）。
+                source_card: ctx
+                    .resolving_card
+                    .and_then(|slot| ctx.state.card(slot))
+                    .map(|card| card.definition_id),
             },
             Some(frame),
         )?;
@@ -3202,6 +3258,12 @@ fn deal_damage_with_tag_bonus_node(
                 amount,
                 ignores_block,
                 source,
+                // §264：正在结算的那张牌（`RestrictSourceCardTag` 的门要用它，而结算发生在
+                // **入队之后** —— 所以必须随请求走，不能靠排空时的上下文）。
+                source_card: ctx
+                    .resolving_card
+                    .and_then(|slot| ctx.state.card(slot))
+                    .map(|card| card.definition_id),
             },
             Some(frame),
         )?;
@@ -3324,6 +3386,10 @@ fn deal_damage_to_random_target_node(
                 amount,
                 ignores_block,
                 source,
+                source_card: ctx
+                    .resolving_card
+                    .and_then(|slot| ctx.state.card(slot))
+                    .map(|card| card.definition_id),
             },
             Some(frame),
         )?;
@@ -6080,6 +6146,8 @@ fn apply_one_status(
     ctx.state
         .enqueue_event(crate::state::CombatEvent::StatusApplied {
             target: *target,
+            // §264：哪条状态（`champion_belt` 只认易伤）。
+            definition: definition_id,
             // §249：极性此刻才知道（`polarity` 就是上一行算出来的那个）。
             debuff: matches!(polarity, crate::state::StatusPolarity::Debuff),
             // §249："落在别人身上" —— 给自己挂 debuff 不该触发 `Sadistic Nature`。
@@ -6387,6 +6455,8 @@ const EMPTY_PASSIVE_MODIFIER: PassiveModifier = PassiveModifier {
     magnitude: 0,
     priority: 0,
     restrict_damage_kind: None,
+    restrict_source_card_tag: None,
+    applies_to_status: None,
 };
 
 /// 伤害的一个阶段：从**读谁的状态**到候选表，再从候选表到新数值。
@@ -6398,12 +6468,15 @@ fn damage_stage<'a>(
     content: Option<&'a Content<'a>>,
     kind: BindDamageKind,
     turn_cards: i32,
+    source_card: Option<&str>,
+    opposite: &[StatusInstance],
 ) -> Result<i32, ExecError> {
     // **口径只在这里定一次**：有镜像 ⇒ `Exact`（桥关闭），没有 ⇒ `Bridged`。
     let matching = StatusMatch::for_content(content);
     if let Some(content) = content {
         return image_damage_stage(
-            amount, statuses, stage, owner, content, matching, kind, turn_cards,
+            amount, statuses, stage, owner, content, matching, kind, turn_cards, source_card,
+            opposite,
         );
     }
 
@@ -6444,6 +6517,7 @@ fn damage_stage<'a>(
 }
 
 /// 镜像路径的一个伤害阶段：候选行来自每个在身状态**自己的** `PassiveModifiers`。
+#[allow(clippy::too_many_arguments)]
 fn image_damage_stage<'a>(
     amount: i32,
     statuses: &[StatusInstance],
@@ -6453,13 +6527,24 @@ fn image_damage_stage<'a>(
     matching: StatusMatch,
     kind: BindDamageKind,
     turn_cards: i32,
+    source_card: Option<&str>,
+    opposite: &[StatusInstance],
 ) -> Result<i32, ExecError> {
     let pipeline = match stage {
         ModifierTarget::Source => status_bind::Pipeline::DamageDealt,
         ModifierTarget::Target => status_bind::Pipeline::DamageReceived,
     };
     let mut rows = [empty_row(); MAX_CANDIDATES];
-    let count = image_rows(content, statuses, pipeline, Some(kind), &mut rows)?;
+    let mut count = image_rows(content, statuses, pipeline, Some(kind), source_card, &mut rows)?;
+    // §264：**对面阵营的改写**（`AppliesToStatusId`）。形状：
+    //
+    //   折叠 DamageDealt（出手者的贡献）时，改写来自**承受者**；
+    //   折叠 DamageReceived（承受者的贡献）时，改写来自**出手者**。
+    //
+    // 为什么是"对面"而不是"同一个战斗员"：这两件遗物说的都是**对手身上的那条状态**
+    // （`paper_phrog`："敌人有易伤时吃 75% 而不是 50%"；`paper_krane`："敌人有虚弱时打 40% 而不是
+    // 25% 少"），而状态挂在被打/打人的那一方。把改写限制在同侧会让这两条规则无处安放。
+    count = apply_status_magnitude_overrides(content, opposite, pipeline, Some(kind), &mut rows, count)?;
     fold(
         amount,
         statuses,
@@ -6468,6 +6553,95 @@ fn image_damage_stage<'a>(
         matching,
         turn_cards,
     )
+}
+
+/// §264：`AppliesToStatusId` —— **改写另一条状态在本管线里的幅值**。
+///
+/// 形状是"一条 spec 改一条 spec 的数字"：`paper_phrog` 的 spec 说
+/// "`standard.vulnerable` 在这条管线里按 **175** 算"，于是易伤自己那条 `ScalePercent 150`
+/// 在本次折叠里变成 175。规则本身（易伤乘 1.5）仍然只写在易伤身上，一个数字只有一份定义。
+///
+/// 四条细节：
+///
+/// 1. **只改幅值，不改运算**：哪条状态怎么算（`AddPerStack` / `ScalePercent`）仍由那条状态自己说。
+///    改写方只提供"换句话说这个数是多少"。
+/// 2. **同名多条改写**：后来的覆盖先前的（内容里不会出现两条都指同一状态，出现也不静默 ——
+///    见下面的 `debug_assert`）。
+/// 3. **那条状态不在身** ⇒ 改写什么都不做（没有贡献可改）。这不是错误。
+/// 4. 改写**不产生贡献**：带 `applies_to_status` 的 spec 在 [`image_rows`] 里被跳过。
+fn apply_status_magnitude_overrides<'a>(
+    content: &'a Content<'a>,
+    opposite: &[StatusInstance],
+    pipeline: status_bind::Pipeline,
+    damage_kind: Option<BindDamageKind>,
+    rows: &mut [Row<'a>],
+    count: usize,
+) -> Result<usize, ExecError> {
+    // 先收改写表（很小：今天最多一条）。
+    let mut targets = [crate::state::StatusDefinitionId::EMPTY; status_bind::MAX_MODIFIERS];
+    let mut magnitudes = [0i32; status_bind::MAX_MODIFIERS];
+    let mut overrides = 0usize;
+    let mut buffer = [EMPTY_PASSIVE_MODIFIER; status_bind::MAX_MODIFIERS];
+    let mut seen = [crate::state::StatusDefinitionId::EMPTY; status_bind::MAX_MODIFIERS];
+    let mut seen_count = 0usize;
+    for status in opposite {
+        let id = status.definition_id.as_str();
+        // 与 `image_rows` 同一条去重口径（按定义）。
+        if seen.get(..seen_count).unwrap_or(&[]).iter().any(|s| s.as_str() == id) {
+            continue;
+        }
+        if seen_count < seen.len() {
+            seen[seen_count] = status.definition_id;
+            seen_count += 1;
+        }
+        let decoded = status_bind::decode_required(content, id, &mut buffer)?;
+        for index in 0..decoded.modifier_count {
+            let spec = *buffer.get(index).ok_or(ExecError::Modifier)?;
+            if spec.pipeline != pipeline {
+                continue;
+            }
+            if let Some(kind) = damage_kind {
+                if !damage_kind_passes(spec.restrict_damage_kind, kind) {
+                    continue;
+                }
+            }
+            let Some(target) = spec.applies_to_status else {
+                continue;
+            };
+            if overrides > 0
+                && targets.get(..overrides).unwrap_or(&[]).iter().any(|t| *t == target)
+            {
+                // 两条改写指同一条状态：内容冲突，取后一条但**不静默**。
+                debug_assert!(false, "two `AppliesToStatusId` overrides for one status");
+                continue;
+            }
+            let Some(slot) = targets.get_mut(overrides) else {
+                return Err(ExecError::Modifier);
+            };
+            *slot = target;
+            if let Some(cell) = magnitudes.get_mut(overrides) {
+                *cell = spec.magnitude;
+            }
+            overrides += 1;
+        }
+    }
+    if overrides == 0 {
+        return Ok(count);
+    }
+    // 然后按表改那些已经是贡献的行。
+    for row in rows.get_mut(..count).unwrap_or(&mut []) {
+        for index in 0..overrides {
+            let Some(target) = targets.get(index) else {
+                break;
+            };
+            if row.status_id == target.as_str() {
+                if let Some(magnitude) = magnitudes.get(index) {
+                    row.magnitude = *magnitude;
+                }
+            }
+        }
+    }
+    Ok(count)
 }
 
 /// 把"这个战斗员身上的状态"摊成候选行：**每个在身定义**贡献它自己那些
@@ -6499,6 +6673,7 @@ fn image_rows<'a>(
     statuses: &[StatusInstance],
     pipeline: status_bind::Pipeline,
     damage_kind: Option<BindDamageKind>,
+    source_card: Option<&str>,
     rows: &mut [Row<'a>],
 ) -> Result<usize, ExecError> {
     let mut buffer = [EMPTY_PASSIVE_MODIFIER; status_bind::MAX_MODIFIERS];
@@ -6529,6 +6704,22 @@ fn image_rows<'a>(
                 if !damage_kind_passes(spec.restrict_damage_kind, kind) {
                     continue;
                 }
+            }
+            // §264：`RestrictSourceCardTag` —— 来源卡必须带那个标签。
+            // 没有来源卡（敌人行动、状态跳伤）⇒ 这条 spec 不生效（参考的
+            // `DamageDealtSourceHasTagFilter` 同一条：没有牌就没有"这张牌带的标签"）。
+            if let Some(tag) = spec.restrict_source_card_tag {
+                let Some(card) = source_card else {
+                    continue;
+                };
+                if content.card_has_tag(card, tag.as_str()) != Some(true) {
+                    continue;
+                }
+            }
+            // §264：带 `AppliesToStatusId` 的 spec **不是一份贡献**，是一条改写 ——
+            // 它由 `apply_status_magnitude_overrides` 单独消费。
+            if spec.applies_to_status.is_some() {
+                continue;
             }
             let Some(slot) = rows.get_mut(count) else {
                 return Err(ExecError::Modifier);
@@ -6596,6 +6787,9 @@ pub fn fold_turn_start_draw(
         statuses,
         status_bind::Pipeline::TurnStartDraw,
         None,
+        // §264：这三条管线没有"来源卡"可言，所以 `RestrictSourceCardTag` 的 spec 在这里
+        // 一律不生效（与参考的 `damageKind: null` 同一个口径：那条门在那里也整段跳过）。
+        None,
         &mut rows,
     )?;
     // 有镜像 ⇒ `Exact`（桥关闭），与 `damage_stage` 里同一条口径。
@@ -6630,6 +6824,9 @@ pub fn fold_turn_start_energy(
         content,
         statuses,
         status_bind::Pipeline::TurnStartEnergy,
+        None,
+        // §264：这三条管线没有"来源卡"可言，所以 `RestrictSourceCardTag` 的 spec 在这里
+        // 一律不生效（与参考的 `damageKind: null` 同一个口径：那条门在那里也整段跳过）。
         None,
         &mut rows,
     )?;
@@ -6711,6 +6908,9 @@ fn image_block_stage<'a>(
         content,
         statuses,
         status_bind::Pipeline::Block,
+        None,
+        // §264：这三条管线没有"来源卡"可言，所以 `RestrictSourceCardTag` 的 spec 在这里
+        // 一律不生效（与参考的 `damageKind: null` 同一个口径：那条门在那里也整段跳过）。
         None,
         &mut rows,
     )?;
@@ -8587,7 +8787,7 @@ mod tests {
                     iteration_target: None,
                     iteration_card: None,
                     resolving_card: None,
-                    event_flags: 0, event_amount: None,
+                    event_flags: 0, event_amount: None, event_status: None,
                     x_cost: 0,
                 };
                 crate::expr::eval_int(amount_expression, &expr_ctx).expect("常量")
@@ -8691,7 +8891,7 @@ mod tests {
                             iteration_target: iteration_target.map(cid),
                             iteration_card: None,
                             resolving_card: None,
-                            event_flags: 0, event_amount: None,
+                            event_flags: 0, event_amount: None, event_status: None,
                             x_cost: 0,
                         };
                         match crate::expr::eval_bool(condition, &expr_ctx) {
@@ -9481,7 +9681,9 @@ mod tests {
                     &cid("hero"),
                     Some(&content),
                     BindDamageKind::Direct,
-                    0
+                    0,
+                    None,
+                    &[]
                 ),
                 loud,
                 "{unknown}：伤害 Source 阶段"
@@ -9494,7 +9696,9 @@ mod tests {
                     &cid("hero"),
                     Some(&content),
                     BindDamageKind::Direct,
-                    0
+                    0,
+                    None,
+                    &[]
                 ),
                 loud,
                 "{unknown}：伤害 Target 阶段"
@@ -9522,7 +9726,9 @@ mod tests {
                 &cid("hero"),
                 Some(&content),
                 BindDamageKind::Direct,
-                0
+                0,
+                None,
+                &[]
             ),
             Ok(6)
         );
@@ -9534,7 +9740,9 @@ mod tests {
                 &cid("hero"),
                 Some(&content),
                 BindDamageKind::Direct,
-                0
+                0,
+                None,
+                &[]
             ),
             Ok(6)
         );

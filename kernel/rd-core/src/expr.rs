@@ -219,6 +219,11 @@ pub struct ExprContext<'a> {
     /// 今天只有两个伤害事件会填它（= **实际掉的血**）；`0` 是合法数量，所以"没有上下文"必须是
     /// `None`，不能与"这一次伤害是 0"混成一个数。
     pub event_amount: Option<i32>,
+    /// §264：当前事件带的状态定义 id（`event.statusIs` 读它）。
+    ///
+    /// 存**值**而不是 `&'a str`：`StatusDefinitionId` 是定长拷贝类型（`Ident`），
+    /// 而 `&str` 只能借到临时值 —— 那会让 `expr_context()` 无法返回它。
+    pub event_status: Option<crate::state::StatusDefinitionId>,
 
     /// §229：**正在结算的那张牌**（出牌时由 `play.rs` 填；`card.counter` 读它）。
     ///
@@ -457,6 +462,11 @@ const BOOL_KINDS: &[&str] = &[
     "or",
     "not",
     "event.bool",
+    // §264：**这条事件带的是哪条状态**（`champion_belt`："施加易伤时也给 1 层虚弱"）。
+    //
+    // 与 `event.bool` 是两件事：那位是"事件的某个**封闭**事实"，这条是"事件的**开放**词"。
+    // 放在同一组里因为它们都由同一个事件槽提供、都只在触发器里问。
+    "event.statusIs",
     "firstCardPlayedHasTag",
     "iterationTargetHasStatus",
     "intent.selfHasCounter",
@@ -864,6 +874,22 @@ pub fn eval_bool<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<bool, E
                 Ok(None) => Ok(false),
                 Err(_) => Err(ExprError::UnsupportedKind),
             }
+        }
+
+        // §264：`event.statusIs { StatusId }` —— 这次事件带的状态是不是它。
+        //
+        // 没有事件状态时答 `false`（不是错误）：一条 `StatusApplied` 触发器在别的事件里被复用时，
+        // "不是它"是唯一说得通的答案 —— 与 `event.bool` 在没填位时答 false 同一口径。
+        "event.statusIs" => {
+            // 与 `status_bind` 里那两个参数同一条口径：内容里的 `{"value": X}` 被压成
+            // **普通字符串格**，所以用 `str_field`（用 `node_field` 会报 `WrongKind("F_TERM")`）。
+            let wanted = node
+                .str_field("StatusId")?
+                .ok_or(IrError::Missing("StatusId"))?;
+            Ok(match ctx.event_status {
+                Some(id) => id.as_str() == wanted,
+                None => false,
+            })
         }
 
         "event.bool" => {
@@ -1320,6 +1346,7 @@ mod tests {
             iteration_card: None,
             resolving_card: None,
             event_flags: 0, event_amount: None,
+            event_status: None,
             x_cost: 0,
         }
     }
@@ -1344,6 +1371,7 @@ mod tests {
             iteration_card: None,
             resolving_card: None,
             event_flags: 0, event_amount: None,
+            event_status: None,
             x_cost: 0,
         }
     }
@@ -1378,6 +1406,7 @@ mod tests {
             iteration_card: None,
             resolving_card: None,
             event_flags: 0, event_amount: None,
+            event_status: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(amount, &empty_ctx), Ok(6));
@@ -1444,6 +1473,7 @@ mod tests {
             iteration_card: None,
             resolving_card: None,
             event_flags: 0, event_amount: None,
+            event_status: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(amount, &hero_ctx), Ok(28));
@@ -1507,6 +1537,7 @@ mod tests {
             iteration_card: None,
             resolving_card: None,
             event_flags: 0, event_amount: None,
+            event_status: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 1000), &swapped), Ok(0));
@@ -1536,6 +1567,7 @@ mod tests {
             iteration_card: None,
             resolving_card: None,
             event_flags: 0, event_amount: None,
+            event_status: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 1131), &enemy_src), Ok(0));
@@ -1560,6 +1592,7 @@ mod tests {
             iteration_card: None,
             resolving_card: None,
             event_flags: 0, event_amount: None,
+            event_status: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 92), &no_target), Ok(0));
@@ -1719,6 +1752,7 @@ mod tests {
             iteration_card: None,
             resolving_card: None,
             event_flags: 0, event_amount: None,
+            event_status: None,
             x_cost: 0,
         };
         assert_eq!(eval_int(node(&content, 1527), &no_target), Ok(0));
@@ -2288,6 +2322,7 @@ mod tests {
             iteration_card: None,
             resolving_card: None,
             event_flags: 0, event_amount: None,
+            event_status: None,
             x_cost: 0,
         };
 
@@ -2449,6 +2484,7 @@ mod tests {
             iteration_card: Some(card),
             resolving_card: None,
             event_flags: 0, event_amount: None,
+            event_status: None,
             x_cost: 0,
         };
         assert_eq!(eval_card(iterated, &bound), Ok(card));

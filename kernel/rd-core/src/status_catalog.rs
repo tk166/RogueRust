@@ -703,6 +703,12 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // **tag** (`damage_over_time`, `host.rs::TAG_DAMAGE_OVER_TIME`) instead of by id. Its
             // decay is a content `TurnEnded` trigger, so it has behaviour on both sides.
             | "standard.poison"
+            // §264: two `AppliesToStatusId` rewriters (`paper_phrog` / `paper_krane`, consumed by
+            // `exec::apply_status_magnitude_overrides`) and one `event.statusIs` listener
+            // (`champion_belt`).
+            | "standard.paper_phrog"
+            | "standard.paper_krane"
+            | "standard.champion_belt"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

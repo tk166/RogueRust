@@ -111,7 +111,8 @@ INV_COUNTS = {
     # §262: +8 (seven carriers + `double_damage`).
     # §263: +5 (enemy-death pair + three damage rewrites) +1 (`standard.poison`, the first
     # damage-over-time status this content has -- The Specimen needs it).
-    "statuses": 93,
+    # §264: +3 (two `AppliesToStatusId` rewriters + `champion_belt`).
+    "statuses": 96,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1394,6 +1395,7 @@ INV_STATUSES = {
     "standard.ink_bottle": [],
     "standard.pen_nib": [],
     # §262: Pen Nib 的翻倍载体 —— 唯一一条"自己带的修饰器"就在它身上（×200 直接伤害）。
+    # §264：`RestrictSourceCardTag: attack` 把 §262 那条"翻倍挡不住非攻击伤害"的偏差消掉了。
     "standard.double_damage": [("DamageDealt", "ScalePercent", 200, 250, "Direct")],
     # §263：`gremlin_horn` 有一条触发器；其余四条**没有触发器也没有修饰器** ——
     # 规则在内核（`exec.rs::S6a` 与倒下点的毒转移），状态只是载体。
@@ -1404,6 +1406,12 @@ INV_STATUSES = {
     "standard.tungsten_rod": [],
     # §263：毒 —— **内核按 tag 读**（`damage_over_time`），自减 1 层由内容触发器做。
     "standard.poison": [],
+    # §264：两条 `AppliesToStatusId` 改写 + 一条 `event.statusIs` 监听。
+    # §264：两条**改写**。幅值与 `standard.vulnerable` / `standard.weak` 自己的那条对齐在
+    # 同一个 `Priority`（300 / 200）—— 改写只换数字，不换排序。
+    "standard.paper_phrog": [("DamageReceived", "ScalePercent", 175, 300, "Direct")],
+    "standard.paper_krane": [("DamageDealt", "ScalePercent", 60, 200, "Direct")],
+    "standard.champion_belt": [],
     "standard.the_bomb_damage": [],
     "standard.the_bomb": [],
     "standard.sadistic_nature": [],
@@ -3240,6 +3248,18 @@ def _walk_conditions(condition):
         yield from _walk_conditions(value["Condition"])
 
 
+# §264：`PassiveModifiers` 的两个**参数**键。只登记真的用了它们的行；
+# 其余行的这两个键必须是 null（下面的循环逐条断言）—— "内容悄悄用了一个参数而这里没写"
+# 会红，这正是我们要的。
+SPEC_PARAMS = {
+    # 遗物改写别的状态的幅值：`(AppliesToStatusId, RestrictSourceCardTag)`
+    "standard.paper_phrog": ("standard.vulnerable", None),
+    "standard.paper_krane": ("standard.weak", None),
+    # §262 的翻倍现在只对攻击牌生效（§264 解开了那个参数）。
+    "standard.double_damage": (None, "attack"),
+}
+
+
 def check_statuses(doc):
     print("[4] status rows (inv:§10)")
     statuses = {s["Id"]: s for s in doc.get("Statuses") or []}
@@ -3248,10 +3268,26 @@ def check_statuses(doc):
         if row is None:
             fail("status." + sid, "missing")
             continue
+        # §264：spec 现在最多有 7 个键，后两个（`AppliesToStatusId` / `RestrictSourceCardTag`）
+        # 是**参数**。比对分两半：
+        #   * 前 5 个字段进主元组（和以前一样，所有行都写着）；
+        #   * 后两个参数只在**声明了**的条目上比对 —— 见下面的 `PARAMS` 表。
+        # 为什么不让每一行都写成 7 元组：那会把 20 多条无关的行一起改，而"改得越多越容易手滑"
+        # 是这个仓库反复吃亏的形状。
         got = [(m["Pipeline"], m["Operation"], m["Magnitude"], m["Priority"],
-                m["RestrictDamageKind"]) for m in row.get("PassiveModifiers") or []]
+                m["RestrictDamageKind"])
+               for m in row.get("PassiveModifiers") or []]
         if got != mods:
             fail("status." + sid, "passive modifiers %s, expected %s" % (got, mods))
+        # §264：两个参数键。声明过的行逐条比对；没声明的行必须是 null。
+        want = SPEC_PARAMS.get(sid, (None, None))
+        filled = ((row.get("PassiveModifiers") or [{}])[0].get("AppliesToStatusId"),
+                  (row.get("PassiveModifiers") or [{}])[0].get("RestrictSourceCardTag"))
+        filled_ids = tuple((v or {}).get("value") for v in filled)
+        if filled_ids != want:
+            fail("status." + sid,
+                 "modifier params (AppliesToStatusId, RestrictSourceCardTag) = %r, expected %r"
+                 % (filled_ids, want))
         triggers = [t["Event"] for t in row.get("Triggers") or []]
         if sid in INV_DECAYING:
             # plan §G10 -- stacks are the clock, and it is a TurnEnded trigger
@@ -3324,6 +3360,9 @@ def check_statuses(doc):
                      # §263
                      "standard.gremlin_horn", "standard.the_specimen", "standard.the_boot",
                      "standard.torii", "standard.tungsten_rod", "standard.poison",
+                     # §264：**只有 champion_belt 有触发器**；paper_phrog / paper_krane 是
+                     # 纯修饰器载体（改写别的状态），所以它们在 `INV_STATUSES` 那张表里。
+                     "standard.champion_belt",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3428,7 +3467,10 @@ def check_statuses(doc):
                         "standard.hex": ["CardPlayed"],
                         # §227: "next turn, add the copies to your hand" -- a `TurnStarted` trigger
                         # (the second one in this package, after Phantom Veil).
-                        "standard.nightmare_pending": ["TurnStarted"]}[sid]
+                        "standard.nightmare_pending": ["TurnStarted"],
+                        # §264: "whenever you apply Vulnerable" -- a StatusApplied trigger whose
+                        # condition is `event.statusIs(vulnerable)`.
+                        "standard.champion_belt": ["StatusApplied"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
@@ -3666,7 +3708,9 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "kunai", "shuriken", "ornamental_fan", "letter_opener", "nunchaku",
                       "ink_bottle", "pen_nib",
                       # §263: 敌人死亡类两件 + 伤害管线数值改写三件。
-                      "gremlin_horn", "the_specimen", "the_boot", "torii", "tungsten_rod")
+                      "gremlin_horn", "the_specimen", "the_boot", "torii", "tungsten_rod",
+                      # §264: 改写别的状态幅值两件 + 施加易伤时附带虚弱一件。
+                      "paper_phrog", "paper_krane", "champion_belt")
 
 
 def check_relics(doc):

@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 47 |
-| 3 | 缺（wiki 有、内容没有） | 146 |
+| 2 | 内容里的遗物 | 50 |
+| 3 | 缺（wiki 有、内容没有） | 143 |
 
 ## Starter（4）
 
@@ -89,8 +89,8 @@
 | 缺 | `ninja_scroll` | Ninja Scroll | Silent | At the start each combat, add 3 {{C\|Shiv\|Shivs}} into your hand. |
 | 有 | `ornamental_fan` | Ornamental Fan | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 4 $Block. |
 | 缺 | `pantograph` | Pantograph | Shared | At the start of Boss combats, heal 25 HP. |
-| 缺 | `paper_krane` | Paper Krane | Silent | Enemies with $Weak deal 40% less damage rather than 25%. |
-| 缺 | `paper_phrog` | Paper Phrog | Ironclad | Enemies with $Vulnerable take 75% more damage rather than 50%. |
+| 有 | `paper_krane` | Paper Krane | Silent | Enemies with $Weak deal 40% less damage rather than 25%. |
+| 有 | `paper_phrog` | Paper Phrog | Ironclad | Enemies with $Vulnerable take 75% more damage rather than 50%. |
 | 有 | `pear` | Pear | Shared | Upon pickup, raise your Max HP by 10. |
 | 缺 | `question_card` | Question Card | Shared | Future card rewards have 1 additional card to choose from. |
 | 缺 | `self_forming_clay` | Self-Forming Clay | Ironclad | Whenever you lose HP, gain 3 $Block next turn. |
@@ -111,7 +111,7 @@
 | 缺 | `bird_faced_urn` | Bird-Faced Urn | Shared | Whenever you play a {{QueryLink\|Cards\|type:Power\|Power}} card, heal 2 HP. |
 | 有 | `calipers` | Calipers | Shared | At the start of your turn, lose 15 $Block rather than all of your $Block. |
 | 有 | `captains_wheel` | Captain's Wheel | Shared | At the start of your 3rd turn, gain 18 $Block. |
-| 缺 | `champion_belt` | Champion Belt | Ironclad | Whenever you apply $Vulnerable, also apply 1 $Weak. |
+| 有 | `champion_belt` | Champion Belt | Ironclad | Whenever you apply $Vulnerable, also apply 1 $Weak. |
 | 缺 | `charons_ashes` | Charon's Ashes | Ironclad | Whenever you $Exhaust a card, deal 3 damage to ALL enemies. |
 | 有 | `cloak_clasp` | Cloak Clasp | Watcher | At the end of your turn, gain 1 $Block for each card in your hand. |
 | 缺 | `dead_branch` | Dead Branch | Shared | Whenever you $Exhaust a card, add a random card to your hand. |

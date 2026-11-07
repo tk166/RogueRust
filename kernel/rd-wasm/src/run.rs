@@ -7551,10 +7551,29 @@ mod tests {
             assert_eq!(rd_env_step(action), 0);
             guard += 1;
         }
+        let floor_before = rd_run_observe(0);
         let result = rd_run_fight_end();
         println!("boss fight: result={result} steps={guard} hp={}", rd_run_observe(2));
         if result == 1 {
-            assert_eq!(rd_run_boss_beaten(), 1, "a won boss fight clears the act");
+            // ⚠️ §264：这里原来断言 `boss_beaten == 1`。**那是错的**：`mark_boss_beaten` 在
+            // "不是最后一幕"时**进下一幕**并把 `boss_beaten` 复位（它只在最后一幕的 Boss 倒下后
+            // 为真，因为那才是赢下一局）。这条判据一直靠"机器人刚好输掉这场 Boss"而成立 ——
+            // 内容一改（遗物池 47 → 50，奖励掷骰就变了）它赢了，于是红。
+            //
+            // 真正的机制是**两条**：赢了 ⇒ 幕数前进（非最后一幕）或 `boss_beaten`（最后一幕）。
+            // 观察向量里**没有** act 这一格（它是冻结的 ABI），所以"进了下一幕"用它的
+            // 可观察后果来判：新一幕从 floor 0 / node -1 开始。
+            let beaten = rd_run_boss_beaten();
+            let floor_after = rd_run_observe(0);
+            if beaten == 1 {
+                // 最后一幕的 Boss 倒下 ⇒ 这一局赢了，幕不再前进。
+                assert_eq!(result, 1, "a won run reports victory");
+            } else {
+                assert_eq!(
+                    floor_after, 0,
+                    "a won boss fight starts the next act at floor 0 (was {floor_before})"
+                );
+            }
             let gold = rd_run_reward_gold();
             assert!(
                 (95..=105).contains(&gold),

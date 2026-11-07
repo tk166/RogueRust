@@ -5069,7 +5069,9 @@
           "Priority": 250,
           "RestrictDamageKind": "Direct",
           "AppliesToStatusId": null,
-          "RestrictSourceCardTag": null
+          "RestrictSourceCardTag": {
+            "value": "attack"
+          }
         }
       ],
       "Triggers": [
@@ -6261,6 +6263,125 @@
                   }
                 },
                 "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.paper_phrog",
+      "PackageId": "sts",
+      "NameKey": "Paper Phrog",
+      "DescriptionKey": "Enemies with Vulnerable take 75% more damage rather than 50%.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "DamageReceived",
+          "Operation": "ScalePercent",
+          "Magnitude": 175,
+          "Priority": 300,
+          "RestrictDamageKind": "Direct",
+          "AppliesToStatusId": {
+            "value": "standard.vulnerable"
+          },
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.paper_krane",
+      "PackageId": "sts",
+      "NameKey": "Paper Krane",
+      "DescriptionKey": "Enemies with Weak deal 40% less damage rather than 25%.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "DamageDealt",
+          "Operation": "ScalePercent",
+          "Magnitude": 60,
+          "Priority": 200,
+          "RestrictDamageKind": "Direct",
+          "AppliesToStatusId": {
+            "value": "standard.weak"
+          },
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.champion_belt",
+      "PackageId": "sts",
+      "NameKey": "Champion Belt",
+      "DescriptionKey": "Whenever you apply Vulnerable, also apply 1 Weak.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "StatusApplied",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "event.statusIs",
+                  "value": {
+                    "StatusId": {
+                      "value": "standard.vulnerable"
+                    },
+                    "ResultKey": null
+                  }
+                },
+                "Then": {
+                  "kind": "node.applyStatus",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.eventTarget",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "EventTarget"
+                      }
+                    },
+                    "StatusDefinitionId": {
+                      "value": "standard.weak"
+                    },
+                    "Stacks": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 1
+                      }
+                    }
+                  }
+                },
+                "Else": null
               }
             },
             "MaxNodeDepth": 64,
@@ -56317,6 +56438,13 @@
       "CombatRules": null
     },
     {
+      "Id": "champion_belt",
+      "DisplayName": "Champion Belt",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "cloak_clasp",
       "DisplayName": "Cloak Clasp",
       "Rarity": "Rare",
@@ -56473,6 +56601,20 @@
     {
       "Id": "ornamental_fan",
       "DisplayName": "Ornamental Fan",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "paper_krane",
+      "DisplayName": "Paper Krane",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "paper_phrog",
+      "DisplayName": "Paper Phrog",
       "Rarity": "Uncommon",
       "RunPrograms": null,
       "CombatRules": null

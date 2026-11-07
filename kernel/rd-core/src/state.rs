@@ -2429,6 +2429,12 @@ pub enum EffectRequest {
         ignores_block: bool,
         /// 出手方（修饰器来源阶段读它；也是 `DamageDealt` 事件的 `SourceCombatantId`）。
         source: Option<CombatantId>,
+        /// §264：**来源卡的定义**（与 `ApplyStatus::source_card` 同一个形状）。
+        ///
+        /// 为什么必须随请求走：卡片的伤害是**入队**的（`deal_damage_node` → 排空时才结算），
+        /// 而排空那一刻的上下文里没有"正在结算哪张牌"（`resolving_card` 是节目帧的东西）。
+        /// 于是 `RestrictSourceCardTag` 这类**只在折叠时问**的门会拿到 `None` —— 静默不生效。
+        source_card: Option<CardDefinitionId>,
     },
     /// `GainBlockEffectRequest`（`DefensivePoolEffects.cs:3-167`）。
     GainBlock {
@@ -2751,6 +2757,12 @@ pub enum CombatEvent {
     StatusApplied {
         /// 承受者。
         target: CombatantId,
+        /// §264：**落下的那条状态是哪个定义**（`champion_belt`："施加易伤时也给 1 层虚弱"）。
+        ///
+        /// 与下面两个 bool 事实同一套理由（"事件那一刻才知道的东西随事件走"），但**不能**压成
+        /// 位：状态 id 是开放词汇，一位装不下。所以这是第一个"事件带字符串"的槽 ——
+        /// 表达式侧由 `event.statusIs` 读它。
+        definition: StatusDefinitionId,
         /// §249：落下的这条是 **debuff** 吗（`Sadistic Nature` 只认 debuff）。
         ///
         /// 极性在**入队那一刻**才知道（事件本身不带定义），所以事实必须随事件一起走 ——
@@ -8250,6 +8262,7 @@ mod tests {
             state
                 .enqueue_effect(EffectRequest::DealDamage {
                     target: Some(hero_id()),
+                    source_card: None,
                     amount: 2,
                     ignores_block: false,
                     source: None,

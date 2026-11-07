@@ -361,6 +361,15 @@ pub struct PassiveModifier {
     pub priority: i32,
     /// `RestrictDamageKind`：`None` = null（不限种类，但也**不能**作用于"别的种类"以外的任何门）。
     pub restrict_damage_kind: Option<DamageKind>,
+    /// §264：`RestrictSourceCardTag` —— **来源卡必须带这个标签**才生效。
+    ///
+    /// 之前这里是"非 null 就 `Unsupported`"的拒绝位。现在解成**标签 id**、由 `exec::image_rows`
+    /// 在**摊候选时**用内容精确判定（那一刻手里有 `Content`，`card_has_tag` 能回答任意标签，
+    /// 不必把标签压进 `event_flags` 那 5 位）。
+    pub restrict_source_card_tag: Option<crate::state::TagId>,
+    /// §264：`AppliesToStatusId` —— 这条 spec **不是一份贡献，而是一条改写**：
+    /// "名为这个的状态，在本次折叠里按我给的幅值算"（`paper_phrog`：易伤 150 → 175）。
+    pub applies_to_status: Option<crate::state::StatusDefinitionId>,
 }
 
 /// [`decode`] 的成功结果。**故意不带 `modifiers` 切片** —— 见模块头"为什么接口是暂存区 + 条数"。
@@ -769,13 +778,29 @@ fn decode_spec<'a>(
         None => None,
     };
 
-    // 五个"本层表示不了"的键：镜像里全是 null/false，非空即为"内容用到了我们还不懂的东西"。
-    for key in [
-        "AppliesToStatusId",
-        "RestrictSourceCardTag",
-        "MagnitudeExpression",
-        "RestrictElement",
-    ] {
+    // §264：这两个键**现在解得动了** —— 它们是"参数"，不是"用到了我们还不懂的东西"。
+    // 解析方式是读 `{"value": "..."}` 里的那个 id（与 `node.setDefensivePool` 的 `PoolId`
+    // 同一个形状：包装对象 + 一个 id 格）。
+    // ⚠️ 用 `str_field`，**不是** `node_field`：内容里的 `{"value": "standard.vulnerable"}`
+    // 会被编译器压成**普通字符串格**（与 `node.setDefensivePool.PoolId`、
+    // `node.applyStatus.StatusDefinitionId` 同一个形状）。用 `node_field` 会报
+    // `WrongKind("F_TERM")` —— §264 就是这么红的，而它在"回合开始抽牌"那条管线上先炸
+    // （`fold_turn_start_draw` 会把每个在身状态都解码一遍）。
+    let restrict_source_card_tag = match node.str_field("RestrictSourceCardTag")? {
+        None => None,
+        Some(text) => Some(
+            crate::state::TagId::new(text).map_err(|_| BindError::Missing("RestrictSourceCardTag"))?,
+        ),
+    };
+    let applies_to_status = match node.str_field("AppliesToStatusId")? {
+        None => None,
+        Some(text) => Some(
+            crate::state::StatusDefinitionId::new(text)
+                .map_err(|_| BindError::Missing("AppliesToStatusId"))?,
+        ),
+    };
+    // 剩下两个仍然"表示不了"：`MagnitudeExpression` 要表达式求值器、`RestrictElement` 要元素体系。
+    for key in ["MagnitudeExpression", "RestrictElement"] {
         if node.node_field(key)?.is_some() {
             return Err(BindError::Unsupported(key));
         }
@@ -792,6 +817,8 @@ fn decode_spec<'a>(
         magnitude,
         priority,
         restrict_damage_kind,
+        restrict_source_card_tag,
+        applies_to_status,
     })
 }
 
@@ -853,6 +880,8 @@ mod tests {
             magnitude: 0,
             priority: 0,
             restrict_damage_kind: None,
+            restrict_source_card_tag: None,
+            applies_to_status: None,
         }; MAX_MODIFIERS];
 
         for id in &ids {
@@ -942,6 +971,8 @@ mod tests {
             magnitude: 0,
             priority: 0,
             restrict_damage_kind: None,
+            restrict_source_card_tag: None,
+            applies_to_status: None,
         }; MAX_MODIFIERS];
 
         for (id, polarity, pipeline, operation, magnitude, priority, kind) in cases {
@@ -1056,6 +1087,8 @@ mod tests {
             magnitude: 0,
             priority: 0,
             restrict_damage_kind: None,
+            restrict_source_card_tag: None,
+            applies_to_status: None,
         }; MAX_MODIFIERS];
 
         // 一、查不到 ⇒ 响亮。三种成因同一种报法（自造 id / 标准包 id / 拼错）：
@@ -1100,6 +1133,8 @@ mod tests {
             magnitude: 7,
             priority: 0,
             restrict_damage_kind: None,
+            restrict_source_card_tag: None,
+            applies_to_status: None,
         }; 1];
         let decoded = decode(&content, "doubt", &mut one).unwrap().unwrap();
         assert_eq!(decoded.modifier_count, 1);
@@ -1139,6 +1174,8 @@ mod tests {
             magnitude: 0,
             priority: 0,
             restrict_damage_kind: None,
+            restrict_source_card_tag: None,
+            applies_to_status: None,
         }; MAX_MODIFIERS];
         assert_eq!(
             decode(&content, "doubt", &mut buffer),

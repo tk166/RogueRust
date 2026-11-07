@@ -1806,6 +1806,11 @@ impl RunState {
             "the_boot" => Some(RelicEffect::StartCombatStatus("standard.the_boot", 1)),
             "torii" => Some(RelicEffect::StartCombatStatus("standard.torii", 1)),
             "tungsten_rod" => Some(RelicEffect::StartCombatStatus("standard.tungsten_rod", 1)),
+            // §264：**改写别的状态幅值**（两条 `AppliesToStatusId`）+ 施加易伤时附带虚弱
+            // （`event.statusIs`）。三件都是纯内容，内核只提供"参数"这两条基建。
+            "paper_phrog" => Some(RelicEffect::StartCombatStatus("standard.paper_phrog", 1)),
+            "paper_krane" => Some(RelicEffect::StartCombatStatus("standard.paper_krane", 1)),
+            "champion_belt" => Some(RelicEffect::StartCombatStatus("standard.champion_belt", 1)),
             _ => None,
         }
     }
@@ -4734,6 +4739,25 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §264：三件的接线。
+    #[test]
+    fn the_status_parameter_relics_wire_their_own_carrier() {
+        let carrier = [
+            ("paper_phrog", "standard.paper_phrog"),
+            ("paper_krane", "standard.paper_krane"),
+            ("champion_belt", "standard.champion_belt"),
+        ];
+        for (relic, status_id) in carrier {
+            let mut run = ironclad();
+            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            let bonus = run.combat_bonus();
+            assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
+            let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
+            assert_eq!(entry.id, status_id, "{relic}: its own carrier");
+            assert_eq!(entry.stacks, 1, "{relic}: one stack");
+        }
     }
 
     /// §263：五件（敌人死亡类 + 伤害改写类）的**接线**。

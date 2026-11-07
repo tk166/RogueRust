@@ -1618,6 +1618,8 @@ fn play_condition_validator(state: &CombatState, card: &CardOnTable<'_>) -> Resu
         iteration_target: None,
         iteration_card: None,
         resolving_card: None,
+        // §264: 出牌校验同样不在任何事件里，所以也没有"哪条状态"可读。
+        event_status: None,
         // §195.1: a `PlayCondition` is evaluated outside any event, so there is no amount to read
         // (`eventAmount` reports `NoTarget` rather than 0).
         //
@@ -2575,6 +2577,8 @@ const NO_SPEC: status_bind::PassiveModifier = status_bind::PassiveModifier {
     magnitude: 0,
     priority: 0,
     restrict_damage_kind: None,
+    restrict_source_card_tag: None,
+    applies_to_status: None,
 };
 
 // ===========================================================================

@@ -18102,3 +18102,80 @@ standard.poison  Debuff  tags: [debuff, damage_over_time]
 
 遗物 **42 → 47 件**；`rd-core` 788 / `rd-run` 122 / `rd-wasm` 113；内容 93 状态 / 47 遗物；
 四条对拍全过（182/182 · 62/62 · 124/124 · 394/394）；`ACT1_SLICE PASS` / `SOAK_TEST PASS`；21/21。
+
+---
+
+## §264 基建：`PassiveModifiers` 的三个**参数** + 三件遗物（顺带消掉 §262 的一条偏差）
+
+### 264.1 三条新能力
+
+| 键 / 节点 | 之前 | 现在 |
+|---|---|---|
+| `RestrictSourceCardTag` | 非 null ⇒ `Unsupported`（§262 因此留了偏差） | 解成**标签 id**，折叠时用内容精确判定 |
+| `AppliesToStatusId` | 非 null ⇒ `Unsupported` | 解成**状态 id**，语义是"改写那条状态的幅值" |
+| `event.statusIs { StatusId }` | 不存在 | 新表达式：**这次事件带的是哪条状态** |
+
+三条都不是"加个字段"，判据都落在数字上（见 264.4）。
+
+`AppliesToStatusId` 的语义是这批的**核心发明**（参考里那个键的用途更窄）：
+一条 spec 说"`standard.vulnerable` 在**这条管线**里按 175 算"，于是易伤自己那条
+`ScalePercent 150` 在本次折叠里被换成 175。规则（易伤乘 1.5）仍然只写在易伤身上 —— 一个数字
+只有一份定义，改写只提供"换个说法这个数是多少"。
+
+**改写来自对面阵营**：折叠 `DamageDealt`（出手者的贡献）时改写来自**承受者**；折叠
+`DamageReceived`（承受者的贡献）时改写来自**出手方**。理由：`paper_phrog`/`paper_krane` 说的都是
+**对手身上那条状态**，而状态挂在被打 / 打人的那一方；限制在同侧会让这两条规则无处安放。
+
+### 264.2 三件遗物（纯内容）
+
+| 遗物 | 稀有度 | 怎么写的 |
+|---|---|---|
+| `paper_phrog` | Uncommon | `DamageReceived / ScalePercent 175` + `AppliesToStatusId: standard.vulnerable` |
+| `paper_krane` | Rare | `DamageDealt / ScalePercent 60` + `AppliesToStatusId: standard.weak` |
+| `champion_belt` | Rare | `StatusApplied` 触发器 + `event.statusIs(standard.vulnerable)` ⇒ 给**被施加方** 1 层虚弱 |
+
+⚠️ `champion_belt` 只能这么写：用 `event.bool("status.isDebuff")` 会把**所有** debuff 都算进来
+（那会变成"施加任何 debuff 都附带虚弱"），而位图装不下状态 id —— 所以这一个是**事件带字符串**的
+第一个槽（`CombatEvent::StatusApplied.definition` → `ExecContext::event_status`）。
+
+### 264.3 ★ 两个"解开了但没生效"的坑
+
+**(1) `{"value": X}` 会被编译器压成普通字符串格。**
+`status_bind` 一开始用 `node.node_field("AppliesToStatusId")` + `term.str_field("value")`，
+于是 `WrongKind("F_TERM")`；而它**先在回合开始抽牌那条管线上炸**（`fold_turn_start_draw` 会把每个
+在身状态解码一遍），报错位置离现场很远。正确读法是 `node.str_field("AppliesToStatusId")` ——
+与 `node.setDefensivePool.PoolId`、`node.applyStatus.StatusDefinitionId` 同一条口径。
+`event.statusIs` 的 `StatusId` 犯过同一个错，同一条修法。
+
+**(2) 卡牌伤害是**入队**的，排空时上下文里没有"正在结算哪张牌"。**
+`ctx.resolving_card` 是节目帧的东西，而 `DealDamage` 请求在**排空**时才结算 ⇒
+`RestrictSourceCardTag` 拿到 `None`，整条门静默不生效（§262 的 Pen Nib 判据当场报
+"第 10 击打 6 而不是 12"）。修法：让请求自带 `source_card`（与 `ApplyStatus.source_card` 同一形状），
+排空时写进 `ExecContext::source_card_hint`，折叠时**先看帧、再看 hint**。
+
+### 264.4 判据
+
+`the_status_parameter_infrastructure_changes_the_right_number`（rd-wasm）一条覆盖三条基建，
+每条都两面：
+
+| 判据 | 正面 | 反面 |
+|---|---|---|
+| `AppliesToStatusId` | 有 Paper Phrog：10 点吃 **17** | 没有：10 点吃 **15**（基线 150%） |
+| 同上（出手侧） | 有 Paper Krane：敌人 10 点打 **6** | 没有：打 **7**（基线 75%） |
+| `event.statusIs` | 施加易伤 ⇒ 多 1 层虚弱 | 施加**脆弱** ⇒ 0 层 |
+| `RestrictSourceCardTag` | 带攻击卡 ⇒ 翻倍（§262 的判据） | 没有来源卡的直伤 ⇒ **不翻** |
+
+⚠️ 判据的两处夹具教训：① 敌人血太薄会被一击打死（"掉 10 血"其实是**血量截断**，看着像折叠失败）——
+用 `enc_cultist`（48 血）；② §263 的死亡类判据要**两个敌人**，别被 §264 的夹具替换误伤。
+
+### 264.5 顺手修掉的一条夹具假设（`the_boss_is_offered_at_floor_16`）
+
+它原来断言"赢下 Boss ⇒ `boss_beaten == 1`"，但 `mark_boss_beaten` 在**非最后一幕**是**进下一幕**
+并复位那个标志（`boss_beaten` 只在最后一幕的 Boss 倒下后为真）。这条判据一直靠"机器人在第 16 层
+刚好输掉"而成立；遗物池 47 → 50 让奖励掷骰变了、它赢了，于是红。
+⇒ 改成判**机制**：赢 ⇒ 幕前进（可观察后果：新一幕从 floor 0 开始），最后一幕才判 `boss_beaten`。
+
+### 264.6 账
+
+遗物 **47 → 50 件**；`rd-core` 788 / `rd-run` 123 / `rd-wasm` 114；内容 96 状态 / 50 遗物；
+四条对拍全过；`ACT1_SLICE` / `SOAK` / `MAP_RENDER` PASS；21/21。

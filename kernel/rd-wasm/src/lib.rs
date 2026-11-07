@@ -5423,6 +5423,7 @@ mod card_text_tests {
                     amount: 5,
                     ignores_block: false,
                     source: Some(cid_in("hero")),
+                    source_card: None,
                 },
                 chain: rd_core::state::ChainSlot::NONE,
                 owner: None,
@@ -6059,6 +6060,311 @@ mod card_text_tests {
         );
     }
 
+    /// §264：三条基建（`AppliesToStatusId` / `RestrictSourceCardTag` / `event.statusIs`）+ 三件遗物。
+    #[test]
+    fn the_status_parameter_infrastructure_changes_the_right_number() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+
+        let session_for = |carrier: Option<&str>, seed: i32| {
+            let deck: &'static [rd_core::battle::DeckEntry<'static>] = Box::leak(
+                vec![rd_core::battle::DeckEntry { card: "strike", count: 1 }; 20].into_boxed_slice(),
+            );
+            let mut session =
+                build_session_at_unstarted(seed, "enc_cultist", 200, Some(deck), 0, 0)
+                .unwrap_or_else(|e| panic!("{carrier:?}: {e}"));
+            install_session(session);
+            if let Some(carrier) = carrier {
+                let session = slot().as_mut().expect("session");
+                let item = rd_core::state::EffectItem {
+                    request: rd_core::state::EffectRequest::ApplyStatus {
+                        target: Some(cid_in("hero")),
+                        definition: rd_core::state::StatusDefinitionId::new(carrier)
+                            .expect("a status id"),
+                        stacks: 1,
+                        duration: 0,
+                        charges: 0,
+                        source: None,
+                        source_card: None,
+                    },
+                    chain: rd_core::state::ChainSlot::NONE,
+                    owner: None,
+                };
+                rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                    .expect("apply the carrier");
+            }
+            let standard = standard_turn_config().expect("standard turn config");
+            let session = slot().as_mut().expect("session");
+            start_first_turn(&mut session.state, &standard, &mut session.host)
+                .unwrap_or_else(|e| panic!("start({carrier:?}): {e:?} / {:?}", session.host.last_failure()));
+            session.reobserve();
+        };
+        let first_enemy = || -> String {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map(|c| String::from(c.id.as_str()))
+                .expect("an enemy")
+        };
+        let enemy_hp = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map_or(-1, |c| c.health_current)
+        };
+        let hero_hp = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in("hero")).map_or(-1, |c| c.health_current)
+        };
+        let stacks_of = |who: &str, status_id: &str| -> i32 {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in(who)).map_or(0, |c| {
+                c.statuses()
+                    .iter()
+                    .filter(|s| s.definition_id.as_str() == status_id)
+                    .map(|s| s.stacks)
+                    .sum()
+            })
+        };
+        let apply = |who: &str, status_id: &str, stacks: i32| {
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(cid_in(who)),
+                    definition: rd_core::state::StatusDefinitionId::new(status_id)
+                        .expect("a status id"),
+                    stacks,
+                    duration: 0,
+                    charges: 0,
+                    source: Some(cid_in("hero")),
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("apply");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        };
+        let hit = |who: &str, amount: i32| {
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::DealDamage {
+                    target: Some(cid_in(who)),
+                    amount,
+                    ignores_block: false,
+                    source: Some(cid_in("hero")),
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("damage");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        };
+
+        // ---- 基线：敌人有易伤时 10 点伤害吃 15 点（150%）。基准错了后面全是误报。
+        session_for(None, 81);
+        let target = first_enemy();
+        apply(&target, "standard.vulnerable", 1);
+        let before = enemy_hp();
+        hit(&target, 10);
+        assert_eq!(before - enemy_hp(), 15, "baseline: Vulnerable = 150%");
+
+        // ---- Paper Phrog：同样 10 点吃 17 点（175%）。
+        session_for(Some("standard.paper_phrog"), 82);
+        let target = first_enemy();
+        apply(&target, "standard.vulnerable", 1);
+        let before = enemy_hp();
+        hit(&target, 10);
+        assert_eq!(before - enemy_hp(), 17, "Paper Phrog: Vulnerable = 175%");
+        take_session();
+
+        // ---- Paper Krane：敌人有虚弱时打 10 点只吃 6 点（60%，基线 75%）。
+        // 虚弱挂在**出手方**（敌人），所以这里让敌人打英雄。
+        session_for(None, 83);
+        {
+            let session = slot().as_mut().expect("session");
+            let enemy = session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map(|c| c.id)
+                .expect("an enemy");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(enemy),
+                    definition: rd_core::state::StatusDefinitionId::new("standard.weak")
+                        .expect("weak"),
+                    stacks: 1,
+                    duration: 0,
+                    charges: 0,
+                    source: Some(cid_in("hero")),
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("weaken the enemy");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        }
+        let before = hero_hp();
+        {
+            // 敌人打英雄 10 点：出手方是敌人。
+            let session = slot().as_mut().expect("session");
+            let enemy = session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map(|c| c.id)
+                .expect("an enemy");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::DealDamage {
+                    target: Some(cid_in("hero")),
+                    amount: 10,
+                    ignores_block: false,
+                    source: Some(enemy),
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("damage");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        }
+        assert_eq!(before - hero_hp(), 7, "baseline: Weak = 75% (10 -> 7)");
+        take_session();
+
+        session_for(Some("standard.paper_krane"), 84);
+        {
+            let session = slot().as_mut().expect("session");
+            let enemy = session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map(|c| c.id)
+                .expect("an enemy");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(enemy),
+                    definition: rd_core::state::StatusDefinitionId::new("standard.weak")
+                        .expect("weak"),
+                    stacks: 1,
+                    duration: 0,
+                    charges: 0,
+                    source: Some(cid_in("hero")),
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("weaken the enemy");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        }
+        let before = hero_hp();
+        {
+            let session = slot().as_mut().expect("session");
+            let enemy = session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map(|c| c.id)
+                .expect("an enemy");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::DealDamage {
+                    target: Some(cid_in("hero")),
+                    amount: 10,
+                    ignores_block: false,
+                    source: Some(enemy),
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("damage");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        }
+        // 60% of 10 = 6。
+        assert_eq!(before - hero_hp(), 6, "Paper Krane: Weak = 60% (10 -> 6)");
+        take_session();
+
+        // ---- Champion Belt：施加易伤 ⇒ 那一方多 1 层虚弱；施加**别的** debuff ⇒ 不附带。
+        session_for(Some("standard.champion_belt"), 85);
+        let target = first_enemy();
+        apply(&target, "standard.vulnerable", 1);
+        assert_eq!(
+            stacks_of(&target, "standard.weak"),
+            1,
+            "Champion Belt: applying Vulnerable also applies 1 Weak"
+        );
+        take_session();
+
+        session_for(Some("standard.champion_belt"), 86);
+        let target = first_enemy();
+        // 施加**脆弱**（另一个 debuff）：不该附带虚弱。
+        apply(&target, "standard.frail", 1);
+        assert_eq!(
+            stacks_of(&target, "standard.weak"),
+            0,
+            "Champion Belt: only Vulnerable triggers it (frail must not)"
+        );
+        take_session();
+
+        // ---- RestrictSourceCardTag：Pen Nib 的翻倍**只对攻击牌**。
+        //
+        // 直接给英雄上 `standard.double_damage`，然后造一次"**没有来源卡**"的直接伤害：
+        // §262 时它会被翻倍（那条偏差）；§264 起不翻 —— 因为 spec 要求来源卡带 `attack`。
+        session_for(None, 87);
+        {
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(cid_in("hero")),
+                    definition: rd_core::state::StatusDefinitionId::new("standard.double_damage")
+                        .expect("double damage"),
+                    stacks: 1,
+                    duration: 0,
+                    charges: 0,
+                    source: None,
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("arm the doubling");
+        }
+        let target = first_enemy();
+        let before = enemy_hp();
+        hit(&target, 5);
+        assert_eq!(
+            before - enemy_hp(),
+            5,
+            "RestrictSourceCardTag: damage with no source card is NOT doubled"
+        );
+        take_session();
+    }
+
     /// §263：**敌人死亡**两件 + **伤害管线数值改写**三件。
     ///
     /// 一条测试覆盖五件，因为它们的公共前提是同一个："造一场能被我方精确控制伤害的战斗"。
@@ -6071,6 +6377,7 @@ mod card_text_tests {
             let deck: &'static [rd_core::battle::DeckEntry<'static>] = Box::leak(
                 vec![rd_core::battle::DeckEntry { card, count: 1 }; 20].into_boxed_slice(),
             );
+            // §263 的死亡类规则需要**两个敌人**（"敌人死了"要有另一个在场）。
             let session = build_session_at_unstarted(seed, "enc_two_louses", 200, Some(deck), 0, 0)
                 .unwrap_or_else(|e| panic!("{carrier}: {e}"));
             install_session(session);
@@ -6147,6 +6454,8 @@ mod card_text_tests {
                     // §263：出手方 = 英雄。**The Boot 是出手侧规则**，`source: None` 时
                     // 它读不到"谁在打"，整条规则静默不生效 —— 判据会报"4 点还是 4 点"。
                     source: Some(cid_in("hero")),
+                    // §264：测试里没有来源卡（那是 `RestrictSourceCardTag` 的门要的东西）。
+                    source_card: None,
                 },
                 chain: rd_core::state::ChainSlot::NONE,
                 owner: None,
@@ -6527,6 +6836,9 @@ mod card_text_tests {
             1,
             "Pen Nib: the doubling is armed after the 9th attack"
         );
+        // ⚠️ §264：翻倍的 spec 现在带 `RestrictSourceCardTag: attack`，所以它**只对带来源卡的
+        // 攻击**生效 —— 用"投一条 DealDamage 请求"来测会得到 6（没有来源卡 ⇒ 不翻）。
+        // 这里改成真的打一张攻击牌（`strike` 6 点）。
         let before = enemy_hp();
         play_one("attack");
         assert_eq!(
