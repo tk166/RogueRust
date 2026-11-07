@@ -121,8 +121,8 @@ INV_COUNTS = {
     # §269: +2 (`slavers_collar` / `busted_crown` energy carriers).
     # §270: +1 (`ectoplasm`'s energy carrier).
     # §271: +2 (`sozu` energy carrier + `ancient_tea_set`'s one-shot program).
-    # §282: +1 (`standard.confusion`).
-    "statuses": 127,
+    # §282: +1 (`standard.confusion`)；§283: +1 (`standard.snecko_eye`).
+    "statuses": 128,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -985,7 +985,9 @@ INV_ACTIONS = {
     # A 档在 `INV_ASC_VARIANTS` 里。Perplexing Glare 只挂 Confused（没有伤害）。
     "snecko.perplexing_glare": ("Debuff", [("status", "standard.confusion", 1, "event")]),
     "snecko.bite": ("Attack", [("damage", 15, "event")]),
-    "snecko.tail_whip": ("AttackDebuff", [("damage", 8, "event"),
+    # §283: 意图是内核的**闭集**（Attack/Defend/Buff/Debuff/Special），没有 `AttackDebuff`；
+    # wiki 那一条是"攻击 + 易伤"，按主效果归到 `Attack`（与 `lamaga.tackle` 同类）。
+    "snecko.tail_whip": ("Attack", [("damage", 8, "event"),
                                           ("status", "standard.vulnerable", 2, "event")]),
     # §193: `N = Number between (7-11;{{Asc|2|9-13}}), chosen at the start of combat` -- the amount
     # is a counter the fight rolls at spawn, not a constant (the range lives in `INV_ROLLS`).
@@ -1426,6 +1428,9 @@ INV_STATUSES = {
     # 像 §231 的 `standard.no_draw`）。所以内容这一行没有任何修饰器与触发器：它是个**开关**，
     # 不是一段程序。这正是 `no_draw` 那条注释说过的同一类载体。
     "standard.confusion": [],
+    # §283: `standard.snecko_eye` —— 两条规则全在**触发器**里（`TurnStarted`：首回合挂
+    # Confused、每回合 `drawCards 2`），所以内容这一行的被动修饰器是空的。
+    "standard.snecko_eye": [],
     "standard.nightmare_pending": [],
     # §276：两条 50% 分裂（L 史莱姆）。行为全在 `DamageTaken` 触发器里，没有被动修饰器
     # （触发器清单在下面那张专门的表里）。
@@ -3557,7 +3562,9 @@ def check_statuses(doc):
                      "standard.mayhem", "standard.magnetism",
                      # §249：四个触发器 power（The Bomb 的记账搭档没有触发器）。
                      "standard.omega", "standard.panache", "standard.sadistic_nature",
-                     "standard.the_bomb"):
+                     "standard.the_bomb",
+                     # §283: `snecko_eye`（Boss 遗物的载体）。
+                     "standard.snecko_eye"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -3690,7 +3697,10 @@ def check_statuses(doc):
                         "standard.champion_belt": ["StatusApplied"],
                         # §276：L 史莱姆的 50% 分裂（spawn 的血量是**当前血**）。
                         "standard.split_spike_l": ["DamageTaken"],
-                        "standard.split_acid_l": ["DamageTaken"]}[sid]
+                        "standard.split_acid_l": ["DamageTaken"],
+                        # §283: `snecko_eye` 的**全部**规则都在一条 `TurnStarted` 触发器里
+                        # （首回合挂 Confused、每回合抽 2）。
+                        "standard.snecko_eye": ["TurnStarted"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
@@ -3928,6 +3938,9 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "strawberry", "bronze_scales", "regal_pillow", "meat_on_the_bone",
                       # §157: two more Rare (Eternal Feather, Golden Idol) + Potion Belt.
                       "eternal_feather", "golden_idol", "potion_belt",
+                      # §283: `snecko_eye`（Boss）—— 开战挂 `standard.snecko_eye`，
+                      # 两条规则（首回合 Confused + 每回合抽 2）都在那条状态的触发器里。
+                      "snecko_eye",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

@@ -7104,6 +7104,54 @@ mod tests {
         }
     }
 
+    /// §283：`snecko_eye`（Boss 遗物）—— 每回合多抽 2 张，且**开局就被挂 Confused**。
+    ///
+    /// 两侧：带 Eye 时手牌 7 张（5 + 2）且状态里有 `standard.confusion`；不带时 5 张、没有。
+    #[test]
+    fn snecko_eye_draws_two_more_and_confuses_at_the_start() {
+        let fight = |with_eye: bool, seed: i32| -> (usize, bool) {
+            test_run(seed, 80, 80, &["strike"; 12]);
+            assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+            assert_eq!(rd_run_begin_node(), 0);
+            if with_eye {
+                let pool = reward_pool(content()).expect("the card pool");
+                run_slot()
+                    .as_mut()
+                    .expect("run")
+                    .state
+                    .push_relic("snecko_eye", &pool)
+                    .expect("snecko_eye is implemented");
+            }
+            assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+            let session = crate::slot().as_ref().expect("env session");
+            let confused = session
+                .state
+                .combatants()
+                .iter()
+                .filter(|c| c.team_id.as_str() == "player")
+                .any(|c| {
+                    c.statuses()
+                        .iter()
+                        .any(|s| s.definition_id.as_str() == "standard.confusion")
+                });
+            (session.hand_costs.len(), confused)
+        };
+
+        let (plain_hand, plain_confused) = fight(false, 7);
+        assert_eq!(plain_hand, 5, "without Snecko Eye the opening hand is five");
+        assert!(!plain_confused, "and nothing is Confused");
+
+        let (eye_hand, eye_confused) = fight(true, 7);
+        assert_eq!(
+            eye_hand, 7,
+            "Snecko Eye draws 2 additional cards (5 + 2 = 7), got {eye_hand}"
+        );
+        assert!(
+            eye_confused,
+            "Snecko Eye starts each combat with Confused"
+        );
+    }
+
     /// §282：`Confusion`（wiki: *Confused*）—— 抽到的牌价格重掷成 0..3。
     ///
     /// 四件事，每件都对应一种"看起来正常"的坏实现：

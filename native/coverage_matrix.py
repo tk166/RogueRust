@@ -38,6 +38,7 @@ Evidence      `§N`（该实体在 checker 里被引用到的 port-plan 小节�
 import argparse
 import io
 import json
+import io
 import os
 import re
 import sys
@@ -77,6 +78,25 @@ ORPHAN_OK = {
     # 前者进了 `enc_swarm_of_slimes`，后者是 L 史莱姆分裂的产物（`createCombatant`）。
     # 留着的后果是"孤儿的豁免"永远有效，下次真有记录掉线也看不出来（§258 的教训）。
 }
+
+
+def relic_granted_statuses():
+    """`rd-run` 的 `relic_effect` 表里，遗物开战授予的状态 id（§283）。
+
+    为什么需要它：`snecko_eye` 这样的遗物在内容里只有一行（Id/DisplayName/Rarity），
+    它挂哪条状态是**内核**的映射。不加这一处，覆盖矩阵会把那条状态判成孤儿 ——
+    而"孤儿"这条不变量的意义是"没人引用"，不是"引用写在 Rust 里"。
+    """
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'kernel', 'rd-run',
+                        'src', 'state.rs')
+    if not os.path.isfile(path):
+        return ''
+    text = io.open(path, encoding='utf-8').read()
+    found = set()
+    for match in re.finditer(r'StartCombatStatus(?:OnEnemies|PerCurse)?\("([a-z0-9_.]+)"',
+                             text):
+        found.add(match.group(1))
+    return chr(10).join(sorted(found))
 
 
 def die(code, message):
@@ -199,6 +219,11 @@ def build_entities(doc, by_test=None):
     # ⚠️ 不能用"字符串相等"判状态可达：药水的 `Effect` 是
     # `combat_status:standard.duplication` 这种原子列表（§158），状态 id 只是子串。
     blob = chr(10).join(sorted(everywhere['Statuses']))
+    # §283：**遗物 → 状态**的映射住在内核（`rd-run` 的 `relic_effect` 表），内容里看不到 ——
+    # 于是 `standard.snecko_eye` 会被判成"没人引用它"，而它其实是 `snecko_eye` 遗物的载体。
+    # 把那张表里 `StartCombatStatus*` 的**状态 id 字面量**也算作引用源：这是"引用"的**第二处**
+    # 真实位置，不是豁免（豁免是 `ORPHAN_OK`，而它的注释说过"留着的豁免永远有效"）。
+    blob += chr(10) + relic_granted_statuses()
     for sid in statuses:
         found = re.search(r'(?<![a-z0-9_])' + re.escape(sid) + r'(?![a-z0-9_])', blob)
         tested = bool((by_test or {}).get(sid))

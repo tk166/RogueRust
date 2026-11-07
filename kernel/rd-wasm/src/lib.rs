@@ -6267,9 +6267,87 @@ mod card_text_tests {
         );
     }
 
-    /// §268：零基建档收尾 —— 掉血兑现 / Power 回血 / 保留手牌 / 死亡预防 / 手牌空抽牌。
-    #[test]
-    fn the_zero_infrastructure_tail_lights_up_the_existing_channels() {
+/// §283：Snecko 的 "will not use Bite three times in a row"。
+///
+/// 内核的 `intent.selfHasCounter` 只读**一个**计数器，所以内容在每个动作里写了
+/// `prev_move = last_move; last_move = 本招`。判据两侧：
+/// * 反面：只有**上一次**是 Bite ⇒ 仍可能出 Bite（否则"永远不出 Bite"也会全绿，
+///   而那会让 Snecko 变成一只只会 Tail Whip 的怪）；
+/// * 正面：最近**两次**都是 Bite ⇒ 只能 Tail Whip。
+#[test]
+fn snecko_never_bites_three_times_in_a_row() {
+    let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+    let snecko_next_move = |prev: i32, last: i32, round: i32| -> String {
+        let deck: &'static [DeckEntry<'static>] =
+            Box::leak(vec![DeckEntry { card: "strike", count: 20 }].into_boxed_slice());
+        let session = build_session_at_unstarted(7, "enc_snecko", 200, Some(deck), 0, 0)
+            .unwrap_or_else(|e| panic!("enc_snecko: {e}"));
+        install_session(session);
+        let image = &content;
+        let (enemy, encounter) = {
+            let session = slot().as_ref().expect("session");
+            let enemy = session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .expect("the snecko")
+                .id
+                .clone();
+            (enemy, session.encounter)
+        };
+        {
+            let session = slot().as_mut().expect("session");
+            let combatant = session.state.combatant_mut(&enemy).expect("the snecko");
+            combatant
+                .set_counter(rd_core::state::CounterId::new("prev_move").expect("id"), prev)
+                .expect("prev_move fits");
+            combatant
+                .set_counter(rd_core::state::CounterId::new("last_move").expect("id"), last)
+                .expect("last_move fits");
+            session.state.current_round = round;
+        }
+        let session = slot().as_ref().expect("session");
+        let at = rd_core::intent::locate_enemy(image, encounter, &enemy)
+            .expect("locate")
+            .expect("the snecko has a record");
+        let choice = rd_core::intent::select_action(
+            &session.state,
+            image,
+            at,
+            &enemy,
+            round,
+        )
+        .expect("select_action")
+        .expect("the snecko must pick something");
+        choice.action_id.to_string()
+    };
+
+    // Bite 的索引是 2、Tail Whip 是 3（内容里写死的）。
+    let (bite, tail_whip) = (2, 3);
+    let mut saw_bite = false;
+    for round in 2..12 {
+        if snecko_next_move(tail_whip, bite, round).ends_with(".bite") {
+            saw_bite = true;
+            break;
+        }
+    }
+    assert!(
+        saw_bite,
+        "after a single Bite the snecko never picked Bite again -- the rule is always on"
+    );
+    for round in 2..12 {
+        let picked = snecko_next_move(bite, bite, round);
+        assert!(
+            picked.ends_with(".tail_whip"),
+            "round {round}: two Bites in a row must force Tail Whip, got {picked}"
+        );
+    }
+}
+
+/// §268：零基建档收尾 —— 掉血兑现 / Power 回血 / 保留手牌 / 死亡预防 / 手牌空抽牌。
+#[test]
+fn the_zero_infrastructure_tail_lights_up_the_existing_channels() {
         let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
 
         let session_for = |carrier: Option<&str>, card: &'static str, seed: i32| {

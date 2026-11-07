@@ -2588,6 +2588,9 @@ impl RunState {
             "champion_belt" => Some(RelicEffect::StartCombatStatus("standard.champion_belt", 1)),
             // §265：**改状态施加**三件（放大 / 免疫 / 免疫）+ 开战给敌人上毒一件。
             "snecko_skull" => Some(RelicEffect::StartCombatStatus("standard.snecko_skull", 1)),
+            // §283：`snecko_eye`（Boss）—— 开战挂**一条状态**，它的两条规则全在内容里
+            // （`standard.snecko_eye` 的 `TurnStarted` 触发器：首回合挂 Confused + 每回合抽 2）。
+            "snecko_eye" => Some(RelicEffect::StartCombatStatus("standard.snecko_eye", 1)),
             "ginger" => Some(RelicEffect::StartCombatStatus("standard.ginger", 1)),
             "turnip" => Some(RelicEffect::StartCombatStatus("standard.turnip", 1)),
             // `twisted_funnel` 走**敌人**那张表（§224 的 `StartCombatStatusOnEnemies`）。

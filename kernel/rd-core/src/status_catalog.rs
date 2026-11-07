@@ -750,6 +750,10 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // "有没有"，抽到的牌重掷成 0..3）。它像 §231 的 `standard.no_draw`：内容那一行
             // 没有任何修饰器/触发器，它是个**开关**。⚠️ 因此这条清单是它唯一的"有人读"证据。
             | "standard.confusion"
+            // §283: `standard.snecko_eye` —— 两条规则全在**内容触发器**里（`TurnStarted`：
+            // 首回合挂 Confused、每回合抽 2），本清单收录它是因为"内容声明了、内核有规则"
+            // 这条判据要一个说法（与 §261 的 `lantern` 同类）。
+            | "standard.snecko_eye"
             // §270: `ectoplasm`'s energy half (its "no more gold" half is run-layer).
             | "standard.ectoplasm"
             // §271: `sozu`'s energy half and `ancient_tea_set`'s one-shot energy.
