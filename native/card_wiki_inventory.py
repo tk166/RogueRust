@@ -319,6 +319,12 @@ FACTS = {
     'pride': ([], None),
     'regret': ([], None),
     'shame': ([], None),
+    # ---- §251：A 组 5 张 ------------------------------------------------------------------
+    'bite': ([('damage', 7, 'event'), ('heal', 2, 'source')], [('damage', 8, 'event'), ('heal', 3, 'source')]),
+    'expunger': ([('repeat', ('cardCounter', 'standard.expunger_x'), 'damage', 9, 'event')], [('repeat', ('cardCounter', 'standard.expunger_x'), 'damage', 15, 'event')]),
+    'shiv': ([('damage', 4, 'event')], [('damage', 6, 'event')]),
+    'smite': ([('damage', 12, 'event')], [('damage', 16, 'event')]),
+    'beta': ([('card', 'omega', 1, 'DrawPile', 'source')], [('card', 'omega', 1, 'DrawPile', 'source')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

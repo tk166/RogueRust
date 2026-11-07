@@ -17154,12 +17154,13 @@ StS 的"随机无色牌"池子从不给它们 —— 一起打上去会让 `jack
 ⚠️ 判据的纪律照 §249.4：**判据牌不许碰伤害**（这里出 `defend`）、**量差值不量绝对值**、
 **走显式入口不驱动整台回合机**。
 
-### 250.9 记下的一笔债：`MAX_POOL`（第 6 次抬，256 → 320）
+### 250.9 `MAX_POOL` 256 → 320 是**正常扩容**，不是债
 
-`MAX_POOL` 的注释两轮前就写着"再红就做那个重构，而不是再抬一次"。这一轮**又只抬了数**：
-内容 267 行 > 256。理由与代价都写清了 —— 重构要把 4 处 `[_; MAX_POOL]` 缓冲
-（`rd-run/src/state.rs:2129/2198/2227/2319`）改成调用方给的 `&[PoolCard]`，并把 `rd-wasm`
-的两条抽池调用一起改。**下一次因池子报红时先做它**（这不是"顺手"，是独立一节）。
+（这一节原先写成"第 6 次抬，欠一次重构"。用户判断：**加牌就要加池子上限，这是正常需求**，
+不需要为它做 `&[PoolCard]` 那种重构。记在这里，免得下一次有人照着旧说法去做无用功。）
+
+上限的语义是"内容装得进去"，所以它跟着内容行数走：267 行 → 320 留出一批余量。
+`pool_fits` 仍然**响亮拒绝**超限（不是截断），`u8` 只做编码不做语义 —— 这两条才是真约束。
 
 ### 250.10 下一步（`in-scope missing` 还剩 11）
 
@@ -17168,3 +17169,52 @@ StS 的"随机无色牌"池子从不给它们 —— 一起打上去会让 `jack
   （观者 / StS2 被 wiki 归到 colorless）。
 * **剩下的**：`ritual_dagger` 的跨场成长（要"战斗实例的 mark counter 写回牌组"）、
   `pain` 之外"手牌光环"类（`normality` 已通）、`forethought` 的 `Min=0` 现已可用。
+
+---
+
+## §251 A 组 5 张：`bite` / `expunger` / `shiv` / `smite` / `beta`
+
+**零内核改动** —— 全部用 §249/§250 已有的载体。内容 267 → **277 行**，`in-scope missing` 25 → **6**。
+
+| 牌 | 费 | 正文（wiki） | 载体 |
+|---|---|---|---|
+| `bite` | 1 | Deal 7 damage. Heal 2 HP.（升级 8 / 3） | `dealDamage` + `heal`（**固定**回血量，不是 Reaper 的"按掉血回"） |
+| `expunger` | 1 | Deal 9 damage **X times**（升级 15） | `repeat{Count: card.counter}` |
+| `shiv` | 0 | Deal 4 damage. Exhaust.（升级 6） | 纯内容 |
+| `smite` | 1 | **Retain.** Deal 12 damage. Exhaust.（升级 16） | `RetainInHandOnTurnEnd` + `retain` tag |
+| `beta` | 2 | Shuffle an **Omega** into draw pile. Exhaust.（升级只把费降到 1） | `createCardInstance{omega → DrawPile}` —— §249 那张 Omega 终于有**来源**了 |
+
+### 251.1 两处写明的取舍
+
+1. **`expunger` 的 X 是每副本的**。wiki 说得极明确：X **不是**"打出它时的能量"，而是"**造它的
+   那张 `Conjure Blade` 被打出时的能量**" ⇒ 它从造出来那一刻就固定在**那一份副本**上。
+   内核里"每副本数据"的唯一载体是 mark counter（§248 的价格、§250 的 `ritual_dagger` 都在用），
+   所以 X 读 `card.counter("standard.expunger_x")`。`Conjure Blade` 是**观者**牌、不在范围
+   ⇒ 今天没有内容会写非 0，于是它打出 0 次伤害 —— 那正是 wiki 写的
+   "If X is 0, this card does nothing"。**这不是缺口，是造它的牌还没做。**
+2. **`beta` 的 "shuffle into draw pile" 在这里是"放到底"**：`createCardInstance{ToZone: DrawPile}`
+   是追加。StS 是随机洗入。不做 `Placement: "Random"` 的理由：假随机会把"这张牌抽不到"变成
+   一个难查的 bug，而真实需求（`Pride` 要"顶"、`Necronomicurse` 要"手牌"、`Beta` 要"底"）
+   都不需要它 —— 等真有内容要"随机位置"时再做那个动作。
+
+### 251.2 判据（4 条，全在 `host.rs`）
+
+`bite`（伤害 7/8 与回血 2/3，两条行各测一次）、`expunger`（**计数器缺席 ⇒ 0 伤害**、手写 3 ⇒ 27）、
+`shiv`+`smite`（伤害 4/12、都 Exhaust，但 **Retain 让没打出的那张留在手上** —— 这是两张牌唯一的
+区别，只测伤害会漏掉它）、`beta`（抽牌堆多一张 **omega**、Beta 自己进消耗堆）。
+
+判据纪律照旧：**判据牌不碰伤害**、**量差值**、**走显式入口**。这一节运气好，四条一次全过 ——
+因为 §249/§250 已经把三件事讲清楚了：新节点要有 `resume_later` 的完成语义、`retain` 要
+**tag 与字段同时**写（内容门会抓）、每副本数据只能放 mark counter。
+
+### 251.3 `retain` 那条小教训
+
+内容门报的是 `Cards.smite: retain tag absent but RetainInHandOnTurnEnd is True` —— 也就是说
+它**两个方向都查**（tag 有、字段没有 也红）。这正是"同一个词表两处认识就一定漂"的正向用法：
+把两处都写进清单，漂的那一侧立刻可见。
+
+### 251.4 剩下的 6 张
+
+`become_almighty` `live_forever` `fame_and_fortune` `j.a.x.` `safety` `hand_of_greed`?（已做）
+—— 前五张是**观者 / StS2 被 wiki 归到 colorless** 的牌，下一节第一件事是**先判范围**：
+它们算不算本项目（Ironclad + colorless）的范围。判完再决定做不做。

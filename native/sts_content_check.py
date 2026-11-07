@@ -118,6 +118,17 @@ INV_DECK = {"strike": 5, "defend": 4, "bash": 1}   # inv:§2.1
 
 # inv:§3.1 -- the 3 basic cards, as mechanically derived facts.
 INV_CARDS = {
+    # ---- §251：A 组（5 张 / 10 行）---------------------------------------------------------
+    "bite": {"Cost": 1, "Tags": ["attack", "colorless"], "Facts": [["damage", 7, "event"], ["heal", 2, "source"]]},
+    "bite+": {"Cost": 1, "Tags": ["attack", "colorless"], "Facts": [["damage", 8, "event"], ["heal", 3, "source"]]},
+    "expunger": {"Cost": 1, "Tags": ["attack", "colorless"], "Facts": [["repeat", ["cardCounter", "standard.expunger_x"], "damage", 9, "event"]]},
+    "expunger+": {"Cost": 1, "Tags": ["attack", "colorless"], "Facts": [["repeat", ["cardCounter", "standard.expunger_x"], "damage", 15, "event"]]},
+    "shiv": {"Cost": 0, "Tags": ["attack", "colorless"], "Facts": [["damage", 4, "event"]]},
+    "shiv+": {"Cost": 0, "Tags": ["attack", "colorless"], "Facts": [["damage", 6, "event"]]},
+    "smite": {"Cost": 1, "Tags": ["attack", "colorless", "retain"], "Facts": [["damage", 12, "event"]]},
+    "smite+": {"Cost": 1, "Tags": ["attack", "colorless", "retain"], "Facts": [["damage", 16, "event"]]},
+    "beta": {"Cost": 2, "Tags": ["skill", "colorless"], "Facts": [["card", "omega", 1, "DrawPile", "source"]]},
+    "beta+": {"Cost": 1, "Tags": ["skill", "colorless"], "Facts": [["card", "omega", 1, "DrawPile", "source"]]},
     # ---- §250：B/C/D/F 四组（14 张牌 / 18 行）-----------------------------
     "ritual_dagger": {"Cost": 1, "Tags": ["attack", "colorless"], "Facts": [["damage", ["add", 15, ["multiply", ["cardCounter", "standard.ritual_dagger_bonus"], 3]], "event"], ["fatal", "cardCounter", "cardInstance.resolving", "standard.ritual_dagger_bonus", 3, "Add"]]},
     "ritual_dagger+": {"Cost": 1, "Tags": ["attack", "colorless"], "Facts": [["damage", ["add", 15, ["multiply", ["cardCounter", "standard.ritual_dagger_bonus"], 5]], "event"], ["fatal", "cardCounter", "cardInstance.resolving", "standard.ritual_dagger_bonus", 5, "Add"]]},

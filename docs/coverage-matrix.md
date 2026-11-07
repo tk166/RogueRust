@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 602 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 612 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 267 | 141 | 126 | 0 | 255 | 12 | 18 | 0 |
+| 卡牌 | 277 | 148 | 129 | 0 | 265 | 12 | 18 | 0 |
 | 状态 | 65 | 57 | 6 | 2 | 0 | 65 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 602 | 370 | 216 | 16 | 432 | 77 | 81 | 0 |
+| **合计** | 612 | 377 | 219 | 16 | 442 | 77 | 81 | 0 |
 
-扫描到的具名测试：**980** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**984** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -239,7 +239,7 @@
 | time_eater.ripple | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 
-## 卡牌（267）
+## 卡牌（277）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -261,6 +261,10 @@
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
 | berserk | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt | — | §197/§199/CARD_WIKI+INV_CARDS |
 | berserk+ | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt (via berserk) | — | INV_CARDS |
+| beta | yes | — | CARD_DIFF | wiki:wiki_cards/beta.txt | — | CARD_WIKI+INV_CARDS |
+| beta+ | yes | beta_shuffles_an_omega_into_the_draw_pile | — | wiki:wiki_cards/beta.txt (via beta) | — | INV_CARDS/beta_shuffles_an_omega_into_the_draw_pile |
+| bite | yes | bite_deals_its_damage_and_heals_a_fixed_amount | — | wiki:wiki_cards/bite.txt | — | §3.1/§251/CARD_WIKI+INV_CARDS/bite_deals_its_damage_and_heals_a_fixed_amount |
+| bite+ | yes | bite_deals_its_damage_and_heals_a_fixed_amount | — | wiki:wiki_cards/bite.txt (via bite) | — | INV_CARDS/bite_deals_its_damage_and_heals_a_fixed_amount |
 | blind | yes | — | CARD_DIFF | wiki:wiki_cards/blind.txt | — | CARD_WIKI+INV_CARDS |
 | blood_for_blood | yes | blood_for_blood_gets_cheaper_each_time_you_lose_hp | — | wiki:wiki_cards/blood_for_blood.txt | — | CARD_WIKI+INV_CARDS/blood_for_blood_gets_cheaper_each_time_you_lose_hp |
 | blood_for_blood+ | yes | — | CARD_DIFF | wiki:wiki_cards/blood_for_blood.txt (via blood_for_blood) | — | INV_CARDS |
@@ -328,6 +332,8 @@
 | evolve+ | yes | — | CARD_DIFF | wiki:wiki_cards/evolve.txt (via evolve) | — | INV_CARDS |
 | exhume | yes | exhume_pulls_a_card_out_of_the_exhaust_pile | — | wiki:wiki_cards/exhume.txt | — | CARD_WIKI+INV_CARDS/exhume_pulls_a_card_out_of_the_exhaust_pile |
 | exhume+ | yes | — | CARD_DIFF | wiki:wiki_cards/exhume.txt (via exhume) | — | INV_CARDS |
+| expunger | yes | expunger_repeats_by_its_per_copy_x | — | wiki:wiki_cards/expunger.txt | — | §251/CARD_WIKI+INV_CARDS/expunger_repeats_by_its_per_copy_x |
+| expunger+ | yes | — | CARD_DIFF | wiki:wiki_cards/expunger.txt (via expunger) | — | INV_CARDS |
 | feed | yes | feed_only_raises_max_hp_on_a_fatal_blow | — | wiki:wiki_cards/feed.txt | — | CARD_WIKI+INV_CARDS/feed_only_raises_max_hp_on_a_fatal_blow |
 | feed+ | yes | — | CARD_DIFF | wiki:wiki_cards/feed.txt (via feed) | — | INV_CARDS |
 | feel_no_pain | yes | — | CARD_DIFF | wiki:wiki_cards/feel_no_pain.txt | — | CARD_WIKI+INV_CARDS |
@@ -407,7 +413,7 @@
 | normality | yes | normality_caps_the_cards_played_this_turn | — | wiki:wiki_cards/normality.txt | — | CARD_WIKI+INV_CARDS/normality_caps_the_cards_played_this_turn |
 | offering | yes | exhausting_a_card_feeds_feel_no_pain_and_dark_embrace, losing_hp_is_not_damage_but_it_is_hp_loss …(+1) | — | wiki:wiki_cards/offering.txt | — | CARD_WIKI+INV_CARDS/exhausting_a_card_feeds_feel_no_pain_and_dark_embrace |
 | offering+ | yes | the_lose_hp_cards_do_what_their_pages_say | — | wiki:wiki_cards/offering.txt (via offering) | — | INV_CARDS/the_lose_hp_cards_do_what_their_pages_say |
-| omega | yes | — | CARD_DIFF | wiki:wiki_cards/omega.txt | — | §249/CARD_WIKI+INV_CARDS |
+| omega | yes | beta_shuffles_an_omega_into_the_draw_pile | — | wiki:wiki_cards/omega.txt | — | §249/CARD_WIKI+INV_CARDS/beta_shuffles_an_omega_into_the_draw_pile |
 | omega+ | yes | — | CARD_DIFF | wiki:wiki_cards/omega.txt (via omega) | — | INV_CARDS |
 | pain | yes | pain_costs_a_hit_point_per_card_played_while_held | — | wiki:wiki_cards/pain.txt | — | CARD_WIKI+INV_CARDS/pain_costs_a_hit_point_per_card_played_while_held |
 | panacea | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/panacea.txt | — | CARD_WIKI+INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
@@ -441,7 +447,7 @@
 | regret | yes | the_turn_end_curses_do_their_own_thing, an_event_can_give_a_curse_but_only_a_real_one | — | wiki:wiki_cards/regret.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | rip_and_tear | yes | rip_and_tear_hits_twice_for_seven | — | wiki:wiki_cards/rip_and_tear.txt | — | §228/§229/CARD_WIKI+INV_CARDS/rip_and_tear_hits_twice_for_seven |
 | rip_and_tear+ | yes | rip_and_tear_hits_twice_for_seven | — | wiki:wiki_cards/rip_and_tear.txt (via rip_and_tear) | — | INV_CARDS/rip_and_tear_hits_twice_for_seven |
-| ritual_dagger | yes | ritual_dagger_only_grows_when_it_kills | — | wiki:wiki_cards/ritual_dagger.txt | — | §3.1/§250/CARD_WIKI+INV_CARDS/ritual_dagger_only_grows_when_it_kills |
+| ritual_dagger | yes | ritual_dagger_only_grows_when_it_kills | — | wiki:wiki_cards/ritual_dagger.txt | — | §250/CARD_WIKI+INV_CARDS/ritual_dagger_only_grows_when_it_kills |
 | ritual_dagger+ | yes | — | CARD_DIFF | wiki:wiki_cards/ritual_dagger.txt (via ritual_dagger) | — | INV_CARDS |
 | rupture | yes | — | CARD_DIFF | wiki:wiki_cards/rupture.txt | — | CARD_WIKI+INV_CARDS |
 | rupture+ | yes | the_lose_hp_cards_do_what_their_pages_say | — | wiki:wiki_cards/rupture.txt (via rupture) | — | INV_CARDS/the_lose_hp_cards_do_what_their_pages_say |
@@ -468,6 +474,8 @@
 | sever_soul | yes | the_new_red_attacks_do_what_their_pages_say | — | wiki:wiki_cards/sever_soul.txt | wiki 偏差：wiki 的 {{KW\|Exhaust}} 是动词（消耗手里的非攻击牌），不是本牌的关键字；牌本身打完进弃牌堆。 | CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
 | sever_soul+ | yes | — | CARD_DIFF | wiki:wiki_cards/sever_soul.txt (via sever_soul) | wiki 偏差：wiki 的 {{KW\|Exhaust}} 是动词（消耗手里的非攻击牌），不是本牌的关键字；牌本身打完进弃牌堆。 | INV_CARDS |
 | shame | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/shame.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
+| shiv | yes | shiv_and_smite_differ_in_retain_not_only_in_damage | — | wiki:wiki_cards/shiv.txt | — | CARD_WIKI+INV_CARDS/shiv_and_smite_differ_in_retain_not_only_in_damage |
+| shiv+ | yes | — | CARD_DIFF | wiki:wiki_cards/shiv.txt (via shiv) | — | INV_CARDS |
 | shockwave | yes | the_new_red_skills_do_what_their_pages_say | — | wiki:wiki_cards/shockwave.txt | — | CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | shockwave+ | yes | the_new_red_skills_do_what_their_pages_say | — | wiki:wiki_cards/shockwave.txt (via shockwave) | — | INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | shrug_it_off | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/shrug_it_off.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
@@ -475,6 +483,8 @@
 | skewer | yes | skewer_hits_once_per_energy_spent | — | wiki:wiki_cards/skewer.txt | — | §232/CARD_WIKI+INV_CARDS/skewer_hits_once_per_energy_spent |
 | skewer+ | yes | — | CARD_DIFF | wiki:wiki_cards/skewer.txt (via skewer) | — | INV_CARDS |
 | slimed | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, card_rarity_is_readable_and_the_schema_moved_the_version …(+2) | — | wiki:wiki_cards/slimed.txt | — | §192/§219/CARD_WIKI+INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
+| smite | yes | shiv_and_smite_differ_in_retain_not_only_in_damage | — | wiki:wiki_cards/smite.txt | — | CARD_WIKI+INV_CARDS/shiv_and_smite_differ_in_retain_not_only_in_damage |
+| smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
 | strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+96) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
