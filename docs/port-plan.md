@@ -17720,3 +17720,87 @@ pressing a card did not spend energy (3 -> 3/3)
 **教训与 §4.23 同形**：一个断言的下限/分支如果从来没被走到，它是不是绿的与实现无关。
 这次的触发方式值得记：**不是**改断言，而是**改内容**（多了一条遭遇）把它撞醒的 ——
 所以"内容一改就红的那些闸门"不只是回归护栏，它们还在**证明自己此前有没有真的在跑**。
+
+---
+
+## §259 遗物信息拉齐 + 篝火六选项（§234 那六层全部落地）
+
+§234 只留了计划。这一节把六层全做完，并且**先**把"遗物到底是什么"变成可复核的数字。
+
+### 259.1 `native/audit_relic_gap.py` + `docs/relic-inventory.md`：信息先对齐
+
+数据源换了：不抓 `Relics List` 页（模板拼的，机器抽取会丢字段），改抓 **`Module:Relics/data`**
+（Lua 表，每个遗物一段 `{Image, Description, Rarity, Character, Flavor}`），存到
+`native/wiki_relics/relics_data.lua.txt`（51 KB，离线可复核）。
+
+第一次跑出来的账：
+
+| 项 | 值 |
+|---|---|
+| wiki 遗物 | **193**（Blight 13 / Boss 30 / Common 36 / Event 18 / Rare 34 / Shop 20 / Special 2 / Starter 4 / Uncommon 36） |
+| 内容里的遗物 | 15 → **22** |
+| 缺 | 171 |
+
+顺带抓出**两处元数据写错**（这是"信息"那半的真正价值）：
+
+| 遗物 | 我们 | wiki |
+|---|---|---|
+| `burning_blood` | Common | **Starter** |
+| `regal_pillow` | Uncommon | **Common** |
+
+⚠️ 这里有个必须先解决的前提：内容门要求**内容里的每件遗物内核都实现了效果**（反向也查）。
+所以"把 193 条都塞进 content"这条路是错的 —— 一件没效果的遗物被抽出来是本仓库最恨的形态。
+⇒ 信息拉齐落在**生成物清单**上（`docs/relic-inventory.md`，`--write` 生成、193 行、逐条标
+"有/缺"），功能仍然只做一件进一件。同时给 `Rarity` 补上 `Starter`(8) / `Boss`(9) 两个
+**不可掉落**的桶，这样 `Burning Blood` 与 `Coffee Dripper` 不必再谎报成 Common/Rare。
+
+### 259.2 六层（§234.2 的施工单）
+
+| 层 | 落了什么 |
+|---|---|
+| 1 状态 | `RunState` 加 `girya_lifts: u8` / `ruby_key: bool`；存档 **`VERSION 2 → 3`**（`ruby_key` 进 `flags` 的第 3 位，`girya_lifts` 单独一字节）；两者都进 `run_hash` |
+| 2 效果 | `RelicEffect` 加 6 个变体（`CampfireLift` / `CampfireToke` / `CampfireDig` / `NoRest` / `NoSmith` / `RestCardReward`）—— 穷尽 `match` 当场逼出**三处**调用方（`push_relic` / `end_of_combat` / `combat_bonus`） |
+| 3 动作 | `campfire_options()` + `lift()` / `toke()` / `dig()` / `recall()`；`rest()` 持有 `Dream Catcher` 时停在奖励屏，`roll_rest_card_reward()` 滚三张卡 |
+| 4 ABI | `rd_run_campfire_options`（**一个位掩码**：Rest 1 / Smith 2 / Recall 4 / Lift 8 / Toke 16 / Dig 32）、`rd_run_lift` / `_toke` / `_dig` / `_recall` / `_girya_lifts`；四个动作进回放脚本（`lift`/`toke`/`dig`/`recall`） |
+| 5 内容 | 七行遗物（`girya` / `peace_pipe` / `shovel` / `coffee_dripper` / `mark_of_the_bloom` / `fusion_hammer` / `dream_catcher`），稀有度照 wiki |
+| 6 跨层 | `Lift` 在 `combat_bonus` 里按 `girya_lifts` 折算成 `standard.strength`，与 `Vajra` **相加**、**每场战斗都带** |
+
+### 259.3 三个"哪种写错看不出来"的设计决定
+
+1. **选项是算出来的，不是存下来的**。存一份布尔表就会与"持有哪些遗物 / Lift 用了几次 / 牌组
+   还有没有可升的牌"漂移，而漂移在界面上只表现为"一个本该灰掉的按钮能点"。
+2. **`toke` 与商店删牌共用 `remove_deck_card`**，但 `removed_cards += 1`（商店的 +25 计价步数）
+   **留在商店那条路上**。第一版把两者一起搬走了，`buying_and_removing_are_paid_for_and_never_silent`
+   立刻红（"+25 per use, across shops: 75 vs 100"）—— 抽共用函数时**顺带把语义也搬走**是最容易犯的错。
+3. **`dig` 在抽之前过滤稀有度**，不是抽到之后重掷：重掷会让"池子里只有 Event 遗物"变成死循环。
+   而 `dig` 用的是 `Chest` 那条随机流（新开一条会让既有种子的洗牌序列整体平移）。
+
+### 259.4 ★ 判据自己也会写错：一条**永远成立**的断言
+
+`dream_catcher` 的判据第一版写着：
+
+```rust
+assert!(run.node_resolved(), "the node is settled right away");
+```
+
+它一直是绿的，但什么也没证明 —— `at_campfire()` 只设了 `pending = Pending::Rest`，
+`node` 还是 **-1**，而 `node_resolved()` 在 `node < 0` 时直接返回 `false`… 于是这个断言在
+"有遗物 / 没遗物"两种情形下**都失败**（我原以为它是恒真），换来的是一次误导性的红灯。
+修法是给 `at_campfire()` 一个真的节点光标（`node = 5`），并在注释里写清"负节点是'还没开始'，
+不是'已结算'"。这条与 §4.23 / §258.7 同形：**断言的成立条件本身也要被证明**。
+
+### 259.5 判据（8 条）
+
+| 测试 | 钉住什么 |
+|---|---|
+| `campfire_options_follow_the_relics_the_wiki_names` | 六件遗物各自开关哪个选项；Lift 用满 3 次后消失且第 4 次被拒 |
+| `resting_is_legal_at_full_health_and_smithing_is_not_legal_with_nothing_to_upgrade` | 满血可休息（回 0）；全升完则 Smith 灰 |
+| `toke_removes_a_card_without_charging_for_it` | 删牌不收钱、**不涨商店价**、`marks` 跟着牌走 |
+| `dig_only_rolls_common_uncommon_or_rare` | 24 个种子，池子里的 Boss/Event 一件都抽不到 |
+| `lift_strength_applies_to_every_later_fight_and_stacks_with_vajra` | 2 次 Lift ⇒ 每场 2 层；+Vajra ⇒ 合并成 3 层（一条，不是两条） |
+| `recall_grants_the_ruby_key_once` | 拿钥匙后选项消失、第二次被拒 |
+| `dream_catcher_turns_rest_into_a_card_reward_and_only_with_the_relic` | 有 ⇒ 进奖励屏（无金币/药水、3 张卡）；**没有 ⇒ 直接结算** |
+| `the_campfire_fields_survive_a_save_and_a_hash` | 存档往返 + 哈希；只差一次 Lift 或一枚钥匙，哈希必须不同 |
+
+**遗物池变动**的风险（§234.3 提前写过）单独验了：`ACT1_SLICE PASS`（16 层 Boss 路）与
+`SOAK_TEST PASS`（106 点击 / 5 场战斗），然后是 21/21 闸门。

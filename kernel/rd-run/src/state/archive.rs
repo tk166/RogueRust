@@ -40,8 +40,13 @@ use crate::streams::{RunRng, RunStream};
 
 /// 头部的定界串。改格式就改它（`RDA2`），旧存档于是**响亮**地不认识。
 pub const MAGIC: &str = "RDA1";
-/// payload 的版本号（在 CRC 覆盖范围内）。§166：2 = 带内容指纹。
-const VERSION: u8 = 2;
+/// payload 的版本号（在 CRC 覆盖范围内）。§166：2 = 带内容指纹；§259：3 = 篝火字段
+/// （`girya_lifts` / `ruby_key`）。
+///
+/// 加字段就**必须**抬版本：旧读法会把新字节当成下一个字段的开头，于是"存档能读、
+/// 但读出来是另一局游戏" —— 那是最坏的一种兼容。抬高之后旧存档是 `ArchiveError::Version`，
+/// 响亮且可解释。
+const VERSION: u8 = 3;
 /// payload 缓冲。实测一局约 300–900 B；4 KB 是"内容翻倍也不会撞上"的余量。
 pub const MAX_PAYLOAD: usize = 4096;
 /// 一行文本的缓冲：base64 是 4/3，RLE 最坏 2×（每个字节都是 0xFF 时）。
@@ -506,10 +511,15 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
     writer.int(state.health_max)?;
     writer.int(state.gold)?;
     writer.int(state.removed_cards)?;
+    writer.byte(state.girya_lifts)?;
     writer.int(state.potion_chance)?;
     writer.int(state.rarity_offset)?;
     writer.byte(state.act)?;
-    let flags = u8::from(state.map_generation_failed) | (u8::from(state.boss_beaten) << 1);
+    // §259：第 3 位是红钥匙。`girya_lifts` 单独一个字节 —— 它是计数（0..=3），
+    // 塞进位域会让"读到 4"变成"两个无关的布尔都亮"。
+    let flags = u8::from(state.map_generation_failed)
+        | (u8::from(state.boss_beaten) << 1)
+        | (u8::from(state.ruby_key) << 2);
     writer.byte(flags)?;
     writer.byte(pending_to_u8(state.pending))?;
 
@@ -611,6 +621,7 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     let health_max = reader.int()?;
     let gold = reader.int()?;
     let removed_cards = reader.int()?;
+    let girya_lifts = reader.byte()?;
     let potion_chance = reader.int()?;
     let rarity_offset = reader.int()?;
     let act = reader.byte()?;
@@ -740,6 +751,12 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     restored.health_max = health_max;
     restored.gold = gold;
     restored.removed_cards = removed_cards;
+    // §259：容量是语义 —— 读到 4 不是"夹到 3"，是**存档坏了**。
+    if girya_lifts > crate::state::GIRYA_MAX_LIFTS {
+        return Err(ArchiveError::BadField("girya_lifts"));
+    }
+    restored.girya_lifts = girya_lifts;
+    restored.ruby_key = flags & 0b100 != 0;
     restored.deck = deck;
     restored.deck_len = deck_len as u8;
     restored.relics = relics;

@@ -3518,7 +3518,13 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the
                       # *hero* Vulnerable, which `ACT1_SLICE` caught as an unwinnable boss).
-                      "bag_of_marbles", "oddly_smooth_stone")
+                      "bag_of_marbles", "oddly_smooth_stone",
+                      # §259: the seven campfire relics. Three **open** an option (`girya` Lift,
+                      # `peace_pipe` Toke, `shovel` Dig), two **close** Rest (`coffee_dripper`,
+                      # `mark_of_the_bloom`), one closes Smith (`fusion_hammer`), one adds a card
+                      # reward to Rest (`dream_catcher`).
+                      "girya", "peace_pipe", "shovel", "coffee_dripper", "mark_of_the_bloom",
+                      "fusion_hammer", "dream_catcher")
 
 
 def check_relics(doc):
@@ -3757,7 +3763,10 @@ def check_relic_rarities(doc):
     # §160: `Event` is a **legal** relic rarity that is *not* droppable -- the wiki's navbox puts
     # `golden_idol` there. The kernel's `pick_relic_avoiding` filters any band that is not in
     # `RELIC_RARITY_WEIGHTS`, so an `Event` relic is holdable (and pays out) but never rolled.
-    allowed = tuple(RELAPSE_RARITIES) + ("Event",)
+    # §259：`Starter` 与 `Boss` 也是**合法但不可掉落**的桶（`Burning Blood` 是起手遗物，
+    # `Coffee Dripper` / `Fusion Hammer` 是 Boss 遗物）。它们与 `Event` 同一条道理：桶让"这是什么"
+    # 能说实话，而 `pick_relic_avoiding` 只从 `RELIC_RARITY_WEIGHTS` 的三档里抽，所以抽不到。
+    allowed = tuple(RELAPSE_RARITIES) + ("Event", "Starter", "Boss")
     missing = [relic.get("Id") for relic in relics if relic.get("Rarity") not in allowed]
     if missing:
         fail("Relics.rarity", "no usable Rarity on %s" % (missing,))

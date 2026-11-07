@@ -125,16 +125,26 @@ const RD_PANELS = (() => {
   }
 
   function describeRest(s) {
-    return {
-      title: `篝火 · 回复 ${s.restHeal}`,
-      lines: [],
-      rows: [],
-      buttons: [
-        { id: "rest", label: "休息", action: { kind: "rest" } },
-        { id: "smith", label: "打铁（选一张升级）", action: { kind: "smith" } },
-        { id: "leave", label: "离开", action: { kind: "leave" } },
-      ],
-    };
+    // §259: the campfire is **six** options now, and which ones exist is the kernel's answer
+    // (`rd_run_campfire_options` -> a bit mask). The page must not decide ("if I hold Girya show
+    // Lift"): that would be a second copy of the rule, and the two copies would drift the moment a
+    // relic also closes an option (`Coffee Dripper`).
+    const bits = Number.isFinite(s.campfire) ? s.campfire : 0;
+    const buttons = [];
+    if (bits & 1) buttons.push({ id: "rest", label: `休息（+${s.restHeal}）`, action: { kind: "rest" } });
+    if (bits & 2) buttons.push({ id: "smith", label: "打铁（选一张升级）", action: { kind: "smith" } });
+    if (bits & 8) buttons.push({ id: "lift", label: `举铁（力量 +1，已用 ${s.giryaLifts}/3）`, action: { kind: "lift" } });
+    if (bits & 16) buttons.push({ id: "toke", label: "抽烟斗（删一张牌）", action: { kind: "toke" } });
+    if (bits & 32) buttons.push({ id: "dig", label: "挖掘（拿一件随机遗物）", action: { kind: "dig" } });
+    if (bits & 4) buttons.push({ id: "recall", label: "回想（拿红钥匙）", action: { kind: "recall" } });
+    buttons.push({ id: "leave", label: "离开", action: { kind: "leave" } });
+    const lines = [];
+    // A greyed-out option is information: say *why* it is missing instead of leaving the player
+    // wondering whether the page forgot it.
+    if (!(bits & 1)) lines.push("休息被遗物关闭（Coffee Dripper / Mark of the Bloom）");
+    if (!(bits & 2)) lines.push("打铁不可用（Fusion Hammer，或牌组里已经没有可升级的牌）");
+    if (s.giryaLifts >= 3 && (s.relics || []).includes("girya")) lines.push("举铁已用满 3 次");
+    return { title: `篝火 · 回复 ${s.restHeal}`, lines, rows: [], buttons };
   }
 
   function describeShop(s) {

@@ -38,6 +38,12 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
     writer.str("gold=").i32(state.gold()).str("\n");
     writer.str("act=").u32(u32::from(state.act())).str("\n");
     writer.str("removed=").i32(state.removed_cards()).str("\n");
+    // §259：新的**运行期状态**必须进指纹，否则"两局只差一次 Lift"会哈希相同。
+    writer.str("girya=").i32(i32::from(state.girya_lifts())).str("\n");
+    writer
+        .str("ruby=")
+        .i32(i32::from(state.ruby_key()))
+        .str("\n");
     writer
         .str("potion_chance=")
         .i32(state.potion_chance())

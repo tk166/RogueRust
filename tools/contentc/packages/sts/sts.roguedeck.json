@@ -54112,92 +54112,8 @@
   },
   "Relics": [
     {
-      "Id": "burning_blood",
-      "DisplayName": "Burning Blood",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Common"
-    },
-    {
       "Id": "anchor",
       "DisplayName": "Anchor",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Common"
-    },
-    {
-      "Id": "vajra",
-      "DisplayName": "Vajra",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Common"
-    },
-    {
-      "Id": "pear",
-      "DisplayName": "Pear",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Uncommon"
-    },
-    {
-      "Id": "blood_vial",
-      "DisplayName": "Blood Vial",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Common"
-    },
-    {
-      "Id": "thread_and_needle",
-      "DisplayName": "Thread and Needle",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Rare"
-    },
-    {
-      "Id": "strawberry",
-      "DisplayName": "Strawberry",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Common"
-    },
-    {
-      "Id": "bronze_scales",
-      "DisplayName": "Bronze Scales",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Common"
-    },
-    {
-      "Id": "regal_pillow",
-      "DisplayName": "Regal Pillow",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Uncommon"
-    },
-    {
-      "Id": "meat_on_the_bone",
-      "DisplayName": "Meat on the Bone",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Uncommon"
-    },
-    {
-      "Id": "eternal_feather",
-      "DisplayName": "Eternal Feather",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Uncommon"
-    },
-    {
-      "Id": "golden_idol",
-      "DisplayName": "Golden Idol",
-      "RunPrograms": null,
-      "CombatRules": null,
-      "Rarity": "Event"
-    },
-    {
-      "Id": "potion_belt",
-      "DisplayName": "Potion Belt",
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"
@@ -54210,8 +54126,141 @@
       "Rarity": "Common"
     },
     {
+      "Id": "blood_vial",
+      "DisplayName": "Blood Vial",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "bronze_scales",
+      "DisplayName": "Bronze Scales",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "burning_blood",
+      "DisplayName": "Burning Blood",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Starter"
+    },
+    {
+      "Id": "coffee_dripper",
+      "DisplayName": "Coffee Dripper",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "dream_catcher",
+      "DisplayName": "Dream Catcher",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "eternal_feather",
+      "DisplayName": "Eternal Feather",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "fusion_hammer",
+      "DisplayName": "Fusion Hammer",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "girya",
+      "DisplayName": "Girya",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "golden_idol",
+      "DisplayName": "Golden Idol",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Event"
+    },
+    {
+      "Id": "mark_of_the_bloom",
+      "DisplayName": "Mark of the Bloom",
+      "Rarity": "Event",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "meat_on_the_bone",
+      "DisplayName": "Meat on the Bone",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Uncommon"
+    },
+    {
       "Id": "oddly_smooth_stone",
       "DisplayName": "Oddly Smooth Stone",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "peace_pipe",
+      "DisplayName": "Peace Pipe",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "pear",
+      "DisplayName": "Pear",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "potion_belt",
+      "DisplayName": "Potion Belt",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "regal_pillow",
+      "DisplayName": "Regal Pillow",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "shovel",
+      "DisplayName": "Shovel",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "strawberry",
+      "DisplayName": "Strawberry",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Common"
+    },
+    {
+      "Id": "thread_and_needle",
+      "DisplayName": "Thread and Needle",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "vajra",
+      "DisplayName": "Vajra",
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"

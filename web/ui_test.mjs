@@ -59,8 +59,17 @@ const PANEL_STATES = [
   ["fight", { ...BASE, kind: 1, actionCount: 1 }, ["begin_fight"], ["开始战斗"], "战斗节点"],
   ["fight settled", { ...BASE, kind: 1, resolved: true }, [], [], "已结算"],
   ["boss", { ...BASE, kind: 7, actionCount: 1 }, ["begin_fight"], ["开始战斗"], "Boss"],
-  ["rest", { ...BASE, kind: 3, pending: 1, hpMax: 80 }, ["rest", "smith", "leave"],
-    ["休息", "打铁", "离开"], "篝火"],
+  // §259: the campfire is a **bit mask** from the kernel now. `campfire: 63` = all six options
+  // (Rest 1 | Smith 2 | Recall 4 | Lift 8 | Toke 16 | Dig 32).
+  ["rest", { ...BASE, kind: 3, pending: 1, hpMax: 80, campfire: 63, giryaLifts: 1, restHeal: 24 },
+    ["rest", "smith", "lift", "toke", "dig", "recall", "leave"],
+    ["休息", "打铁", "举铁", "抽烟斗", "挖掘", "回想", "离开"], "篝火"],
+  // The **falsifiable half**: with `Coffee Dripper` the kernel clears the Rest bit, and the page
+  // must not draw a Rest button. A test that only checked the all-six case would keep passing if
+  // the page ignored the mask and always rendered everything.
+  ["rest without rest", {
+      ...BASE, kind: 3, pending: 1, hpMax: 80, campfire: 2, giryaLifts: 0, restHeal: 24,
+    }, ["smith", "leave"], ["打铁", "离开"], "篝火"],
   ["chest", { ...BASE, kind: 6, pending: 3 }, ["open_chest", "leave"], ["开箱", "离开"], "宝箱"],
   ["shop", { ...BASE, kind: 4, pending: 2, removePrice: 75, shopCards: [
       { id: "anger", title: "", chip: "", price: 50 }, { id: "uppercut", title: "", chip: "", price: -1 }],

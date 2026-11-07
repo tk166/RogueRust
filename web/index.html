@@ -916,6 +916,9 @@ function runSnapshot() {
     blessingNeeds: 0,
     eventNeeds: 0,
     restHeal: 0,
+    // §259: 篝火的六个选项（位掩码，见 `rd_run_campfire_options`）与 Girya 已用次数。
+    campfire: 0,
+    giryaLifts: 0,
     removePrice: 0,
     rewardGold: 0,
     eventText: "",
@@ -942,6 +945,9 @@ function runSnapshot() {
       break;
     case 1:
       snapshot.restHeal = Math.floor((snapshot.hpMax * 30) / 100);
+      // §259: the options come from the kernel, not from the page's idea of which relics exist.
+      snapshot.campfire = ex.rd_run_campfire_options();
+      snapshot.giryaLifts = ex.rd_run_girya_lifts();
       break;
     case 2:
       snapshot.removePrice = ex.rd_run_remove_price();
@@ -1036,6 +1042,13 @@ const PANEL_ACTIONS = {
       act(() => ex.rd_run_pick_blessing_card(index), "祝福选牌")),
   begin_fight: () => beginFight(),
   rest: () => act(() => ex.rd_run_rest(), "休息"),
+  // §259: 篝火的另外四个选项。`toke` 复用牌组选择器（与商店删牌同一个 UI），`lift`/`dig`/`recall`
+  // 都是一次点击就结算。
+  lift: () => act(() => ex.rd_run_lift(), "举铁"),
+  toke: () =>
+    showDeckPicker("抽烟斗：选一张移除", (index) => act(() => ex.rd_run_toke(index), "抽烟斗")),
+  dig: () => act(() => ex.rd_run_dig(), "挖掘"),
+  recall: () => act(() => ex.rd_run_recall(), "回想"),
   smith: () =>
     showDeckPicker("打铁：选一张升级", (index) => act(() => ex.rd_run_smith(index), "打铁")),
   leave: () => act(() => ex.rd_run_leave(), "离开"),

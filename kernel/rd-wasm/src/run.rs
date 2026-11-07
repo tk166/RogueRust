@@ -107,6 +107,11 @@ const K_DROP_POTION: u8 = 18;
 const K_FIGHT_END: u8 = 19;
 const K_FIGHT_BEGIN: u8 = 20;
 const K_GRANT_POTION: u8 = 21;
+// §259：篝火新增的四个动作。它们**进回放脚本**，所以"同一份脚本重放"也覆盖它们。
+const K_LIFT: u8 = 22;
+const K_TOKE: u8 = 23;
+const K_DIG: u8 = 24;
+const K_RECALL: u8 = 25;
 
 const fn rec_kind_name(kind: u8) -> &'static str {
     match kind {
@@ -131,6 +136,10 @@ const fn rec_kind_name(kind: u8) -> &'static str {
         K_FIGHT_END => "fight_end",
         K_FIGHT_BEGIN => "fight_begin",
         K_GRANT_POTION => "grant_potion",
+        K_LIFT => "lift",
+        K_TOKE => "toke",
+        K_DIG => "dig",
+        K_RECALL => "recall",
         _ => "?",
     }
 }
@@ -158,6 +167,11 @@ fn rec_kind_from_name(name: &str) -> Option<u8> {
         "fight_end" => K_FIGHT_END,
         "fight_begin" => K_FIGHT_BEGIN,
         "grant_potion" => K_GRANT_POTION,
+        // §259
+        "lift" => K_LIFT,
+        "toke" => K_TOKE,
+        "dig" => K_DIG,
+        "recall" => K_RECALL,
         _ => return None,
     })
 }
@@ -1124,6 +1138,23 @@ pub extern "C" fn rd_run_rest() -> i32 {
     };
     session.log(K_REST, -1, -1, "");
     let outcome = session.state.rest();
+    // §259：`Dream Catcher` —— 休息之后停在奖励屏，卡池在这里（内容在 wasm 层可达）现滚。
+    // 失败（池子太小）要让 `rest` 的结果仍然可见：`rest` 已经把血回了、节点还没结算，
+    // 所以"滚不出奖励"是**响亮**的错误而不是静默跳过。
+    if let Ok(healed) = outcome {
+        if session.state.pending() == rd_run::state::Pending::Reward {
+            // 卡池的形状（`PoolCard`，带稀有度）由 `full_pool` 给 —— 与战斗奖励同一条来路。
+            match full_pool(content()) {
+                Ok(pool) => {
+                    if let Err(error) = session.state.roll_rest_card_reward(&pool) {
+                        set_error(&describe(&error));
+                    }
+                }
+                Err(message) => set_error(&message),
+            }
+        }
+        return healed;
+    }
     finish(session, outcome)
 }
 
@@ -1153,6 +1184,98 @@ pub extern "C" fn rd_run_smith(index: i32) -> i32 {
         return fail(session, &message);
     }
     let outcome = session.state.smith(index as usize, &upgraded.clone()).map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// §259：篝火上有哪些选项，**一个位掩码**。
+///
+/// 位序是硬约定（页面按它读）：`Rest 1 | Smith 2 | Recall 4 | Lift 8 | Toke 16 | Dig 32`。
+/// 为什么不是六个 `is_*_allowed` 导出：页面一次渲染就要全部六个，六个导出是六次往返，而
+/// "漏了一个导出"只表现为那个按钮永远不出现 —— 那是本仓库最恨的失败形态。
+///
+/// `-1` = 没有局；否则 `0..=63`。
+#[no_mangle]
+pub extern "C" fn rd_run_campfire_options() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    let options = session.state.campfire_options();
+    let mut bits = 0i32;
+    for (flag, bit) in [
+        (options.rest, 1),
+        (options.smith, 2),
+        (options.recall, 4),
+        (options.lift, 8),
+        (options.toke, 16),
+        (options.dig, 32),
+    ] {
+        if flag {
+            bits |= bit;
+        }
+    }
+    bits
+}
+
+/// §259：`Girya` 已经用过几次 `Lift`（0..=3）。没有局 ⇒ `-1`。
+///
+/// 单独一个导出（而不是塞进 `rd_run_observe` 的某个格子）：观察向量是**冻结的 ABI**，
+/// 加一格要动 `smoke.mjs` 的长度对账与页面所有偏移。这是一次点击才读一次的标量。
+#[no_mangle]
+pub extern "C" fn rd_run_girya_lifts() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    i32::from(session.state.girya_lifts())
+}
+
+/// §259：`Lift`（`Girya`）。返回**累计用过几次**（1..=3），或 `-2`（拒绝）。
+#[no_mangle]
+pub extern "C" fn rd_run_lift() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_LIFT, -1, -1, "");
+    let outcome = session.state.lift().map(i32::from);
+    finish(session, outcome)
+}
+
+/// §259：`Toke`（`Peace Pipe`）—— 删掉牌组第 `index` 张。
+#[no_mangle]
+pub extern "C" fn rd_run_toke(index: i32) -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_TOKE, index, -1, "");
+    if index < 0 {
+        return -1;
+    }
+    let outcome = session.state.toke(index as usize).map(|()| 0i32);
+    finish(session, outcome)
+}
+
+/// §259：`Dig`（`Shovel`）—— 抽一件遗物（只 Common/Uncommon/Rare）。
+///
+/// 抽到的 id 通过 `rd_run_relic_slot` 系列读（与宝箱同一条路）：这里只返回 `0`，
+/// 因为"抽到了哪件"属于观察，不属于返回值。
+#[no_mangle]
+pub extern "C" fn rd_run_dig() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_DIG, -1, -1, "");
+    let relics = relic_pool(content());
+    let outcome = session.state.dig(&relics).map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// §259：`Recall` —— 拿红钥匙。
+#[no_mangle]
+pub extern "C" fn rd_run_recall() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_RECALL, -1, -1, "");
+    let outcome = session.state.recall().map(|()| 0i32);
     finish(session, outcome)
 }
 

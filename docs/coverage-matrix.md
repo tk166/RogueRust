@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 631 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 638 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -42,11 +42,11 @@
 | 状态 | 67 | 59 | 6 | 2 | 0 | 67 | 1 | 0 |
 | 遭遇 | 35 | 28 | 7 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
+| 遗物 | 22 | 18 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 631 | 416 | 206 | 9 | 458 | 79 | 81 | 0 |
+| **合计** | 638 | 423 | 206 | 9 | 458 | 79 | 81 | 0 |
 
-扫描到的具名测试：**1008** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**1016** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -243,7 +243,7 @@
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
-| anger | yes | warcry_draws_one_then_puts_the_chosen_card_on_top, perfected_strike_counts_the_tagged_cards_in_hand …(+8) | — | wiki:wiki_cards/anger.txt | — | CARD_WIKI+INV_CARDS/warcry_draws_one_then_puts_the_chosen_card_on_top |
+| anger | yes | warcry_draws_one_then_puts_the_chosen_card_on_top, perfected_strike_counts_the_tagged_cards_in_hand …(+9) | — | wiki:wiki_cards/anger.txt | — | CARD_WIKI+INV_CARDS/warcry_draws_one_then_puts_the_chosen_card_on_top |
 | anger+ | yes | — | CARD_DIFF | wiki:wiki_cards/anger.txt (via anger) | — | INV_CARDS |
 | apotheosis | yes | — | CARD_DIFF | wiki:wiki_cards/apotheosis.txt | — | §245/CARD_WIKI+INV_CARDS |
 | apotheosis+ | yes | — | CARD_DIFF | wiki:wiki_cards/apotheosis.txt (via apotheosis) | — | INV_CARDS |
@@ -272,7 +272,7 @@
 | blood_for_blood+ | yes | — | CARD_DIFF | wiki:wiki_cards/blood_for_blood.txt (via blood_for_blood) | — | INV_CARDS |
 | bloodletting | yes | blood_for_blood_gets_cheaper_each_time_you_lose_hp, losing_hp_is_not_damage_but_it_is_hp_loss …(+1) | — | wiki:wiki_cards/bloodletting.txt | — | §236/CARD_WIKI+INV_CARDS/blood_for_blood_gets_cheaper_each_time_you_lose_hp |
 | bloodletting+ | yes | the_lose_hp_cards_do_what_their_pages_say | — | wiki:wiki_cards/bloodletting.txt (via bloodletting) | — | INV_CARDS/the_lose_hp_cards_do_what_their_pages_say |
-| bludgeon | yes | enlightenment_caps_hand_costs_at_one, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/bludgeon.txt | — | CARD_WIKI+INV_CARDS/enlightenment_caps_hand_costs_at_one |
+| bludgeon | yes | enlightenment_caps_hand_costs_at_one, the_ten_cards_added_in_221_do_what_the_wiki_says …(+1) | — | wiki:wiki_cards/bludgeon.txt | — | CARD_WIKI+INV_CARDS/enlightenment_caps_hand_costs_at_one |
 | bludgeon+ | yes | — | CARD_DIFF | wiki:wiki_cards/bludgeon.txt (via bludgeon) | — | INV_CARDS |
 | blur | yes | blur_gives_five_or_eight_block_and_the_status, a_special_card_is_known_and_never_put_in_a_reward | — | wiki:wiki_cards/blur.txt | — | §218/CARD_WIKI+INV_CARDS/blur_gives_five_or_eight_block_and_the_status |
 | blur+ | yes | blur_gives_five_or_eight_block_and_the_status | — | wiki:wiki_cards/blur.txt (via blur) | — | INV_CARDS/blur_gives_five_or_eight_block_and_the_status |
@@ -354,7 +354,7 @@
 | flame_barrier+ | yes | — | CARD_DIFF | wiki:wiki_cards/flame_barrier.txt (via flame_barrier) | — | INV_CARDS |
 | flash_of_steel | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/flash_of_steel.txt | — | CARD_WIKI+INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
 | flash_of_steel+ | yes | — | CARD_DIFF | wiki:wiki_cards/flash_of_steel.txt (via flash_of_steel) | — | INV_CARDS |
-| flex | yes | flex_gains_strength_that_the_turn_end_takes_back, enlightenment_caps_hand_costs_at_one …(+1) | — | wiki:wiki_cards/flex.txt | — | §230/CARD_WIKI+INV_CARDS/flex_gains_strength_that_the_turn_end_takes_back |
+| flex | yes | flex_gains_strength_that_the_turn_end_takes_back, enlightenment_caps_hand_costs_at_one …(+2) | — | wiki:wiki_cards/flex.txt | — | §230/CARD_WIKI+INV_CARDS/flex_gains_strength_that_the_turn_end_takes_back |
 | flex+ | yes | flex_gains_strength_that_the_turn_end_takes_back | — | wiki:wiki_cards/flex.txt (via flex) | — | INV_CARDS/flex_gains_strength_that_the_turn_end_takes_back |
 | forethought | yes | forethought_puts_the_pick_on_the_bottom_of_the_draw_pile | — | wiki:wiki_cards/forethought.txt | — | CARD_WIKI+INV_CARDS/forethought_puts_the_pick_on_the_bottom_of_the_draw_pile |
 | forethought+ | yes | — | CARD_DIFF | wiki:wiki_cards/forethought.txt (via forethought) | — | INV_CARDS |
@@ -521,7 +521,7 @@
 | true_grit+ | yes | true_grit_gains_block_and_exhausts_exactly_one_card | — | wiki:wiki_cards/true_grit.txt (via true_grit) | — | INV_CARDS/true_grit_gains_block_and_exhausts_exactly_one_card |
 | twin_strike | yes | a_full_deck_archive_is_bigger_than_the_generic_scratch | — | wiki:wiki_cards/twin_strike.txt | — | §72.5/CARD_WIKI+INV_CARDS/a_full_deck_archive_is_bigger_than_the_generic_scratch |
 | twin_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/twin_strike.txt (via twin_strike) | — | INV_CARDS |
-| uppercut | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | wiki:wiki_cards/uppercut.txt | — | CARD_WIKI+INV_CARDS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
+| uppercut | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+3) | — | wiki:wiki_cards/uppercut.txt | — | CARD_WIKI+INV_CARDS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | uppercut+ | yes | — | CARD_DIFF | wiki:wiki_cards/uppercut.txt (via uppercut) | — | INV_CARDS |
 | violence | yes | — | CARD_DIFF | wiki:wiki_cards/violence.txt | — | CARD_WIKI+INV_CARDS |
 | violence+ | yes | — | CARD_DIFF | wiki:wiki_cards/violence.txt (via violence) | — | INV_CARDS |
@@ -600,7 +600,7 @@
 | standard.spore_cloud | yes | spore_cloud_weakens_the_killer_on_death | — | spec:INV_STATUSES | — | §117/§249/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
 | standard.stasis | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.1/§195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
-| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+63) | — | spec:INV_STATUSES | — | §242/§252/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
+| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+64) | — | spec:INV_STATUSES | — | §242/§252/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
 | standard.the_bomb | yes | the_bomb_explodes_on_the_third_turn_end_only | — | spec:INV_STATUSES | — | §249/§257/INV_STATUSES/the_bomb_explodes_on_the_third_turn_end_only |
 | standard.the_bomb_damage | yes | the_bomb_explodes_on_the_third_turn_end_only | — | spec:INV_STATUSES | — | §256/§257/INV_STATUSES/the_bomb_explodes_on_the_third_turn_end_only |
 | standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, standard_status_ids_are_byte_ordered_not_registration_ordered …(+4) | — | spec:INV_STATUSES | — | §214/§249/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |
@@ -656,7 +656,7 @@
 | ancient_forge | yes | the_unknown_room_events_are_readable, an_event_that_edits_the_deck_owes_a_pick_first …(+3) | — | — | — | the_unknown_room_events_are_readable |
 | ancient_writing | yes | the_unknown_room_events_are_readable, an_event_choice_that_edits_the_deck_owes_a_pick | — | — | — | the_unknown_room_events_are_readable |
 | forgotten_altar | yes | the_unknown_room_events_are_readable, an_event_choice_that_edits_the_deck_owes_a_pick | — | — | — | the_unknown_room_events_are_readable |
-| golden_idol | yes | the_unknown_room_events_are_readable, an_event_relic_is_never_drawn …(+5) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
+| golden_idol | yes | the_unknown_room_events_are_readable, dig_only_rolls_common_uncommon_or_rare …(+6) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
 | old_shrine | yes | the_unknown_room_events_are_readable, an_event_can_give_a_relic_only_if_the_kernel_can_run_it | — | — | — | the_unknown_room_events_are_readable |
 | purification_shrine | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | scrap_pile | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
@@ -665,25 +665,32 @@
 | the_ssssserpent | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | wandering_merchant | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 
-## 遗物（15）
+## 遗物（22）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
-| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+6) | — | — | — | the_same_state_hashes_the_same_and_a_change_moves_it |
+| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+7) | — | — | — | the_same_state_hashes_the_same_and_a_change_moves_it |
 | bag_of_marbles | yes | the_two_combat_start_carriers_land_on_the_right_side | — | — | — | §221/§224/the_two_combat_start_carriers_land_on_the_right_side |
 | blood_vial | yes | the_relic_pool_fires_at_the_three_hooks_it_has | — | — | — | the_relic_pool_fires_at_the_three_hooks_it_has |
 | bronze_scales | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §156 |
 | burning_blood | yes | capacity_is_an_error_not_a_truncation, burning_blood_heals_six_at_the_end_of_a_fight …(+7) | — | — | — | capacity_is_an_error_not_a_truncation |
+| coffee_dripper | yes | campfire_options_follow_the_relics_the_wiki_names, dig_only_rolls_common_uncommon_or_rare | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
+| dream_catcher | yes | dream_catcher_turns_rest_into_a_card_reward_and_only_with_the_relic | — | — | — | dream_catcher_turns_rest_into_a_card_reward_and_only_with_the_relic |
 | eternal_feather | yes | the_eternal_feather_pays_per_whole_group_of_five_on_entering, the_new_relics_pay_out | — | — | — | §156/§157/the_eternal_feather_pays_per_whole_group_of_five_on_entering |
-| golden_idol | yes | the_unknown_room_events_are_readable, an_event_relic_is_never_drawn …(+5) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
+| fusion_hammer | yes | campfire_options_follow_the_relics_the_wiki_names | — | — | — | campfire_options_follow_the_relics_the_wiki_names |
+| girya | yes | campfire_options_follow_the_relics_the_wiki_names, dig_only_rolls_common_uncommon_or_rare …(+2) | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
+| golden_idol | yes | the_unknown_room_events_are_readable, dig_only_rolls_common_uncommon_or_rare …(+6) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
+| mark_of_the_bloom | yes | campfire_options_follow_the_relics_the_wiki_names | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
 | meat_on_the_bone | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §156 |
 | oddly_smooth_stone | yes | the_two_combat_start_carriers_land_on_the_right_side | — | — | — | §221/§224/the_two_combat_start_carriers_land_on_the_right_side |
+| peace_pipe | yes | campfire_options_follow_the_relics_the_wiki_names, toke_removes_a_card_without_charging_for_it …(+1) | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
 | pear | yes | the_relic_pool_fires_at_the_three_hooks_it_has | — | — | — | the_relic_pool_fires_at_the_three_hooks_it_has |
 | potion_belt | yes | capacity_is_an_error_not_a_truncation, the_ascension_rules_are_each_their_own_level …(+1) | — | — | — | §156/§157/capacity_is_an_error_not_a_truncation |
 | regal_pillow | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §156 |
+| shovel | yes | campfire_options_follow_the_relics_the_wiki_names, dig_only_rolls_common_uncommon_or_rare | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
 | strawberry | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §156 |
 | thread_and_needle | yes | the_relic_pool_fires_at_the_three_hooks_it_has, an_elite_pays_a_relic_and_a_normal_fight_does_not | — | — | — | the_relic_pool_fires_at_the_three_hooks_it_has |
-| vajra | yes | every_invariant_names_itself_when_violated, a_relic_you_already_hold_is_not_offered_again …(+3) | — | — | — | every_invariant_names_itself_when_violated |
+| vajra | yes | every_invariant_names_itself_when_violated, a_relic_you_already_hold_is_not_offered_again …(+5) | — | — | — | every_invariant_names_itself_when_violated |
 
 ## 药水（33）
 

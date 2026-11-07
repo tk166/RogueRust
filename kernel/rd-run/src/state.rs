@@ -165,6 +165,43 @@ pub enum RelicEffect {
     /// when the hero-shaped one is reused ("the hero became Vulnerable and the boss was
     /// unwinnable" -- caught by `ACT1_SLICE`, not by any unit test).
     StartCombatStatusOnEnemies(&'static str, i32),
+    /// §259: this relic **adds** a rest-site option (`girya` → Lift, `peace_pipe` → Toke,
+    /// `shovel` → Dig).
+    ///
+    /// One variant per option instead of `CampfireOption(u8)` with a bit: the option list is a
+    /// closed set of six (Rest/Smith/Recall/Lift/Toke/Dig), and a bit field would let a typo pick
+    /// the wrong bit silently. `campfire_options` matches on these three by name.
+    CampfireLift,
+    /// See [`Self::CampfireLift`].
+    CampfireToke,
+    /// See [`Self::CampfireLift`].
+    CampfireDig,
+    /// §259: this relic **removes** Rest (`coffee_dripper`, `mark_of_the_bloom`).
+    NoRest,
+    /// §259: this relic **removes** Smith (`fusion_hammer`).
+    NoSmith,
+    /// §259: resting also pays a card reward (`dream_catcher`).
+    RestCardReward,
+}
+
+/// §259：篝火上有哪些选项（`RunState::campfire_options`）。
+///
+/// 六个布尔字段而不是位域：位域会让"选错一位"变成"另一个选项静默可用"，而这里是**界面唯一**
+/// 的信息来源（页面按这些布尔渲染按钮），错了一位就是一个永远点不亮的按钮。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct CampfireOptions {
+    /// 回 30% 最大生命（`Coffee Dripper` / `Mark of the Bloom` 关闭它；**满血也能用**）。
+    pub rest: bool,
+    /// 升级一张牌（`Fusion Hammer` 或全升完关闭它）。
+    pub smith: bool,
+    /// 拿红钥匙（拿到之后关闭）。
+    pub recall: bool,
+    /// `Girya`：力量 +1（最多 3 次）。
+    pub lift: bool,
+    /// `Peace Pipe`：删一张牌。
+    pub toke: bool,
+    /// `Shovel`：拿一件随机遗物（只 Common/Uncommon/Rare）。
+    pub dig: bool,
 }
 
 /// `CombatBonus` 最多能带几种"开战时给的状态"（遗物数量远小于它）。
@@ -272,7 +309,11 @@ pub const fn card_price_band(rarity: Rarity) -> (i32, i32) {
         | Rarity::Status
         | Rarity::Curse
         | Rarity::Event
-        | Rarity::Special => (45, 55),
+        | Rarity::Special
+        // §259: `Starter`/`Boss` 是**遗物**的桶，牌不可能带着它 —— 与 `Event` 同一条理由：
+        // 走到这里说明上游把遗物的稀有度用在了牌上，给 Common 价、由调用方去挡。
+        | Rarity::Starter
+        | Rarity::Boss => (45, 55),
         Rarity::Uncommon => (68, 82),
         Rarity::Rare => (135, 165),
     }
@@ -284,6 +325,12 @@ pub const SHOP_REMOVE_BASE: i32 = 75;
 pub const SHOP_REMOVE_STEP: i32 = 25;
 /// `inv:§8.1`: a rest site heals 30% of maximum HP, rounded down.
 pub const REST_HEAL_PERCENT: i32 = 30;
+
+/// §259：`Girya` 的 `Lift` 最多用 3 次（wiki：`Lift` up to 3 times）。
+///
+/// 它是**容量**也是**语义**：存档读到 4 不是夹到 3，而是存档坏了（`ArchiveError::BadField`）。
+/// 用满之后选项从 `campfire_options()` 里消失。
+pub const GIRYA_MAX_LIFTS: u8 = 3;
 /// `inv:§3.5`: a reward screen shows three cards, all different.
 pub const MAX_REWARD_CARDS: usize = 3;
 /// `inv:§5`: a normal fight pays 10–20 gold (elite 25–35, boss 95–105).
@@ -591,6 +638,14 @@ pub enum Rarity {
     /// Without this bucket the only way to say "event-only" was to lie about the rarity, and the
     /// content said `Rare`, so 17% of every elite reward could be an event relic.
     Event = 6,
+    /// §259：wiki 的遗物桶里还有 `Starter`（起手遗物）与 `Boss`（Boss 遗物）。
+    ///
+    /// 它们**不进掉落权重表**（`RELIC_RARITY_WEIGHTS` 只有三档），所以 `pick_relic` 永远抽不到
+    /// —— 与 `Event` 同一条道理：桶存在的意义是"能说实话"（`Burning Blood` 是 Starter，
+    /// 不是 Common；`Coffee Dripper` 是 Boss，不是 Rare），而不是让它们从宝箱里掉出来。
+    Starter = 8,
+    /// See [`Self::Starter`].
+    Boss = 9,
     /// §218：wiki 把**事件专属**的卡牌放在 `Special` 桶里（`apparition`）。
     ///
     /// 与 `Event`（遗物）同一个道理：这个桶让"事件才有"成为**可说的**，而不是靠"谎报成 Uncommon"
@@ -615,6 +670,9 @@ impl Rarity {
             "Event" => Some(Self::Event),
             // §218: the wiki's bucket for event-only cards (`apparition`).
             "Special" => Some(Self::Special),
+            // §259: the two relic buckets above.
+            "Starter" => Some(Self::Starter),
+            "Boss" => Some(Self::Boss),
             _ => None,
         }
     }
@@ -986,6 +1044,13 @@ pub struct RunState {
     /// `-1` before the first step (`run-layer.md` §6.2 invariant 1).
     node: i32,
     removed_cards: i32,
+    /// §259：`Girya` 用过几次 `Lift`（0..=`GIRYA_MAX_LIFTS`）。
+    ///
+    /// 它**不是**"力量层数"：力量是每场战斗开始时按这个数折算出来的（`combat_bonus`），
+    /// 所以这个字段跨战斗留存、而战斗里的力量不留存。用满 3 次之后 `Lift` 选项消失。
+    girya_lifts: u8,
+    /// §259：`Recall` 拿到的红钥匙（Act 4 的门票）。一个布尔就够 —— wiki 只有"拿没拿"。
+    ruby_key: bool,
     deck: [RunId; MAX_RUN_DECK],
     /// §253：与 `deck` **同下标**的每副本数据（`RunMark::NONE` = 没有）。
     /// 牌组重排时必须跟着搬（`remove_card` 里那条 `deck[i] = deck[i+1]` 旁边的同一行）。
@@ -1118,6 +1183,8 @@ impl RunState {
             gold,
             node: -1,
             removed_cards: 0,
+            girya_lifts: 0,
+            ruby_key: false,
             deck: [RunId::EMPTY; MAX_RUN_DECK],
             marks: [RunMark::NONE; MAX_RUN_DECK],
             deck_len: 0,
@@ -1298,6 +1365,18 @@ impl RunState {
     pub const fn removed_cards(&self) -> i32 {
         self.removed_cards
     }
+
+    /// §259：`Girya` 已经用过几次 `Lift`。
+    #[must_use]
+    pub const fn girya_lifts(&self) -> u8 {
+        self.girya_lifts
+    }
+
+    /// §259：拿到红钥匙了吗（`Recall`）。
+    #[must_use]
+    pub const fn ruby_key(&self) -> bool {
+        self.ruby_key
+    }
     /// The map.
     #[must_use]
     pub const fn map(&self) -> &RunMap {
@@ -1439,7 +1518,15 @@ impl RunState {
             // rest bonus are read where they are used.
             | RelicEffect::RestHealPerFiveCards(_)
             | RelicEffect::FightGoldPercent(_)
-            | RelicEffect::ExtraPotionSlots(_) => {}
+            | RelicEffect::ExtraPotionSlots(_)
+            // §259: the campfire relics change **which options exist**, they do not pay out when
+            // they arrive (`CampfireLift` pays at combat start, via `combat_bonus`).
+            | RelicEffect::CampfireLift
+            | RelicEffect::CampfireToke
+            | RelicEffect::CampfireDig
+            | RelicEffect::NoRest
+            | RelicEffect::NoSmith
+            | RelicEffect::RestCardReward => {}
         }
         self.relics[slot] = id;
         self.relics_len += 1;
@@ -1554,7 +1641,14 @@ impl RunState {
                     | RelicEffect::RestHealBonus(_)
                     | RelicEffect::RestHealPerFiveCards(_)
                     | RelicEffect::FightGoldPercent(_)
-                    | RelicEffect::ExtraPotionSlots(_),
+                    | RelicEffect::ExtraPotionSlots(_)
+                    // §259: none of the campfire relics pays out at the end of a fight.
+                    | RelicEffect::CampfireLift
+                    | RelicEffect::CampfireToke
+                    | RelicEffect::CampfireDig
+                    | RelicEffect::NoRest
+                    | RelicEffect::NoSmith
+                    | RelicEffect::RestCardReward,
                 ) => {}
                 None => {
                     return Err(RunError::UnsupportedRelic {
@@ -1609,6 +1703,18 @@ impl RunState {
                 "standard.vulnerable",
                 1,
             )),
+            // §259（wiki `Rest Sites`）：三件**开选项**的遗物 + 三件**改选项**的遗物。
+            // 六件的数字都在这一行里，因为 `Lift`/`Toke`/`Dig` 没有"数值"可言 —— 它们改的是
+            // 选项集合，而选项集合是 `campfire_options` 现算的。
+            "girya" => Some(RelicEffect::CampfireLift),
+            "peace_pipe" => Some(RelicEffect::CampfireToke),
+            "shovel" => Some(RelicEffect::CampfireDig),
+            // 两件关闭 Rest：`Coffee Dripper`（Boss）/ `Mark of the Bloom`（事件）。
+            "coffee_dripper" => Some(RelicEffect::NoRest),
+            "mark_of_the_bloom" => Some(RelicEffect::NoRest),
+            // §259：`Fusion Hammer` 关闭 Smith；`Dream Catcher` 让休息额外给一次卡牌奖励。
+            "fusion_hammer" => Some(RelicEffect::NoSmith),
+            "dream_catcher" => Some(RelicEffect::RestCardReward),
             _ => None,
         }
     }
@@ -1649,6 +1755,27 @@ impl RunState {
                         debug_assert!(false, "too many enemy combat-start statuses");
                     }
                 }
+                // §259：`Girya` 的力量**不是常量**，而是"用过几次 Lift"。
+                // 这里把它折成与 `StartCombatStatus` 同一张表，于是后面的合并规则、去重规则、
+                // 与 `Vajra` 相加的规则全都自动成立（用过 2 次 Lift + Vajra = 3 层）。
+                Some(RelicEffect::CampfireLift) => {
+                    if self.girya_lifts > 0 {
+                        let stacks = i32::from(self.girya_lifts);
+                        let mut merged = false;
+                        for entry in bonus.statuses.iter_mut().take(bonus.status_count) {
+                            if let Some(existing) = entry {
+                                if existing.id == "standard.strength" {
+                                    existing.stacks += stacks;
+                                    merged = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if !merged {
+                            let _ = bonus.push_status("standard.strength", stacks);
+                        }
+                    }
+                }
                 Some(RelicEffect::StartCombatStatus(id, stacks)) => {
                     // Two relics granting the same status must **merge**, not overwrite: the same
                     // rule the kernel uses when a status is applied twice.
@@ -1674,7 +1801,16 @@ impl RunState {
                     | RelicEffect::RestHealBonus(_)
                     | RelicEffect::RestHealPerFiveCards(_)
                     | RelicEffect::FightGoldPercent(_)
-                    | RelicEffect::ExtraPotionSlots(_),
+                    | RelicEffect::ExtraPotionSlots(_)
+                    // §259: the six campfire-shaped effects do nothing at combat start **except**
+                    // `CampfireLift`, which is folded in explicitly just above (it is a run-time
+                    // count, not a constant, so it cannot be a `StartCombatStatus`).
+                    | RelicEffect::CampfireLift
+                    | RelicEffect::CampfireToke
+                    | RelicEffect::CampfireDig
+                    | RelicEffect::NoRest
+                    | RelicEffect::NoSmith
+                    | RelicEffect::RestCardReward,
                 )
                 | None => {}
             }
@@ -2027,6 +2163,168 @@ impl RunState {
         self.marked_up(SHOP_REMOVE_BASE + SHOP_REMOVE_STEP * self.removed_cards)
     }
 
+    /// §259：篝火上有哪些选项（wiki `Rest Sites`）。
+    ///
+    /// 六个布尔**现算**，不缓存：它们各自依赖不同的运行期状态（持有哪些遗物、`Girya` 用了几次、
+    /// 牌组里还有没有可升的牌、当前幕有没有拿过红钥匙）。存一份就会与真实状态漂移，而漂移在
+    /// 界面上只表现为"一个本该灰掉的按钮能点"。
+    ///
+    /// | 选项 | 谁给的 | 灰掉的条件（wiki） |
+    /// |---|---|---|
+    /// | Rest | 默认 | `Coffee Dripper` / `Mark of the Bloom`；**满血也能用** |
+    /// | Smith | 默认 | `Fusion Hammer`；**全升完** |
+    /// | Recall | 默认 | 本幕已经拿过红钥匙（`ruby_key`） |
+    /// | Lift | `Girya` | 已经用满 3 次 |
+    /// | Toke | `Peace Pipe` | 牌组空 |
+    /// | Dig | `Shovel` | 从不（总是可用） |
+    #[must_use]
+    pub fn campfire_options(&self) -> CampfireOptions {
+        let mut options = CampfireOptions {
+            rest: true,
+            smith: true,
+            // §259：红钥匙一局只有一把；拿到之后 Recall 就没了（wiki："if you have not already
+            // obtained the Ruby Key this act"）。
+            recall: !self.ruby_key,
+            // `Lift` / `Toke` / `Dig` 默认**都没有**：它们由遗物开出来（下面那趟循环）。
+            lift: false,
+            toke: false,
+            dig: false,
+        };
+        for slot in 0..self.relics_len as usize {
+            match Self::relic_effect(self.relics[slot].as_str()) {
+                Some(RelicEffect::NoRest) => options.rest = false,
+                Some(RelicEffect::NoSmith) => options.smith = false,
+                Some(RelicEffect::CampfireLift) => {
+                    options.lift = self.girya_lifts < GIRYA_MAX_LIFTS;
+                }
+                // `Peace Pipe`：牌组非空才有意义（空牌组没有可删的）。
+                Some(RelicEffect::CampfireToke) => options.toke = self.deck_len > 0,
+                Some(RelicEffect::CampfireDig) => options.dig = true,
+                // 其余遗物不改变选项集合 —— 列出来是为了让"新增一个变体"在这里编译报错。
+                Some(
+                    RelicEffect::EndOfCombatHeal(_)
+                    | RelicEffect::EndOfCombatHealIfBelow { .. }
+                    | RelicEffect::MaxHealthUp(_)
+                    | RelicEffect::HealUp(_)
+                    | RelicEffect::StartCombatBlock(_)
+                    | RelicEffect::StartCombatStatus(_, _)
+                    | RelicEffect::StartCombatStatusOnEnemies(_, _)
+                    | RelicEffect::RestHealBonus(_)
+                    | RelicEffect::RestHealPerFiveCards(_)
+                    | RelicEffect::FightGoldPercent(_)
+                    | RelicEffect::ExtraPotionSlots(_)
+                    | RelicEffect::RestCardReward,
+                )
+                | None => {}
+            }
+        }
+        // "全升完 ⇒ Smith 灰掉"：`+` 行在内容里是**另一张卡**，所以"能不能升"要看
+        // "这张牌的 id 加上 `+` 之后是不是同一张卡" —— 但运行层不认识内容，所以判据只能是
+        // "牌组里有没有一个不带 `+` 的 id"。这与 `upgraded_id` 的来路（调用方给的映射）一致。
+        let mut upgradable = false;
+        for slot in 0..self.deck_len as usize {
+            if !self.deck[slot].as_str().ends_with('+') {
+                upgradable = true;
+                break;
+            }
+        }
+        options.smith = options.smith && upgradable;
+        options
+    }
+
+    /// §259：`Lift`（`Girya`）—— 力量 +1 的上限记一次，**当回合不回血、不给状态**。
+    ///
+    /// 力量从**下一场战斗开始**起生效，并且之后每场都带（`combat_bonus` 按 `girya_lifts` 折算）。
+    /// 用满 3 次之后这一步是 `WrongPhase`（选项已经不在列表里了，走到这里说明调用方在猜）。
+    pub fn lift(&mut self) -> Result<u8, RunError> {
+        if self.pending != Pending::Rest {
+            return Err(RunError::WrongPhase);
+        }
+        if self.girya_lifts >= GIRYA_MAX_LIFTS {
+            return Err(RunError::WrongPhase);
+        }
+        if !self.holds_relic_effect(RelicEffect::CampfireLift) {
+            return Err(RunError::UnsupportedRelic { index: 0 });
+        }
+        self.girya_lifts += 1;
+        self.pending = Pending::None;
+        self.mark_resolved();
+        Ok(self.girya_lifts)
+    }
+
+    /// §259：`Toke`（`Peace Pipe`）—— 从牌组里删一张，**不收钱**。
+    pub fn toke(&mut self, card: usize) -> Result<(), RunError> {
+        if self.pending != Pending::Rest {
+            return Err(RunError::WrongPhase);
+        }
+        if !self.holds_relic_effect(RelicEffect::CampfireToke) {
+            return Err(RunError::UnsupportedRelic { index: 0 });
+        }
+        self.remove_deck_card(card)?;
+        self.pending = Pending::None;
+        self.mark_resolved();
+        Ok(())
+    }
+
+    /// §259：`Dig`（`Shovel`）—— 抽一件遗物，**候选池只含 Common/Uncommon/Rare**。
+    ///
+    /// `relic_pool` 是调用方给的**全量**池（含 Boss/Shop/Event）；过滤在这里做，因为"哪些稀有度
+    /// 能被抽到"是规则，而"内容里有哪些遗物"是内容。
+    pub fn dig(&mut self, relic_pool: &[PoolRelic<'_>]) -> Result<RunId, RunError> {
+        if self.pending != Pending::Rest {
+            return Err(RunError::WrongPhase);
+        }
+        if !self.holds_relic_effect(RelicEffect::CampfireDig) {
+            return Err(RunError::UnsupportedRelic { index: 0 });
+        }
+        let mut candidates = [PoolRelic {
+            id: "",
+            rarity: Rarity::Common,
+        }; MAX_POOL];
+        let mut count = 0usize;
+        for entry in relic_pool {
+            if matches!(entry.rarity, Rarity::Common | Rarity::Uncommon | Rarity::Rare) {
+                if count >= candidates.len() {
+                    return Err(RunError::Capacity);
+                }
+                candidates[count] = *entry;
+                count += 1;
+            }
+        }
+        // §259：用 `Chest` 这条流 —— 遗物抽取本来就跑在它上面（`open_chest`），而 `Dig`
+        // 就是"从同一口井里再舀一次"。新开一条流会让**既有种子的洗牌序列整体平移**，
+        // 那是 §233 那种"池子一变、某局能不能赢就翻面"的另一形态。
+        let relic = self.pick_relic(RunStream::Chest, &candidates[..count])?;
+        self.pending = Pending::None;
+        self.mark_resolved();
+        Ok(relic)
+    }
+
+    /// §259：`Recall` —— 拿红钥匙（Act 4 的门票）。
+    pub fn recall(&mut self) -> Result<(), RunError> {
+        if self.pending != Pending::Rest {
+            return Err(RunError::WrongPhase);
+        }
+        if self.ruby_key {
+            return Err(RunError::WrongPhase);
+        }
+        self.ruby_key = true;
+        self.pending = Pending::None;
+        self.mark_resolved();
+        Ok(())
+    }
+
+    /// §259：这件遗物在不在腰上、以及它的效果是不是 `wanted`（`Copy` 比较，因为变体都是无载荷
+    /// 的单元变体）。
+    fn holds_relic_effect(&self, wanted: RelicEffect) -> bool {
+        for slot in 0..self.relics_len as usize {
+            if Self::relic_effect(self.relics[slot].as_str()) == Some(wanted) {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Declare what the node under the cursor needs. `card_pool` / `relic_pool` are the content's
     /// candidate ids -- this crate reads no content, so the caller supplies them.
     ///
@@ -2101,8 +2399,18 @@ impl RunState {
         }
         let before = self.health;
         self.heal_after_combat(self.rest_heal());
-        self.pending = Pending::None;
-        self.mark_resolved();
+        // §259：`Dream Catcher`（"Whenever you Rest, you may add a card to your deck"）—— 休息之后
+        // 停在**奖励屏**：节点还没结算，等 `take_card`/`skip_reward` 收尾。
+        // ⚠️ 这里**不**自己滚卡：卡池在内容里，运行层不认识它（调用方随后调
+        // `roll_rest_card_reward`）。与 `roll_reward` 的分工一致。
+        self.pending = if self.holds_relic_effect(RelicEffect::RestCardReward) {
+            Pending::Reward
+        } else {
+            Pending::None
+        };
+        if self.pending == Pending::None {
+            self.mark_resolved();
+        }
         Ok(self.health - before)
     }
 
@@ -2492,14 +2800,6 @@ impl RunState {
         if self.pending != Pending::Shop {
             return Err(RunError::WrongPhase);
         }
-        if card >= self.deck_len as usize {
-            return Err(RunError::BadCard(card as u8));
-        }
-        // §189 `A10`：Ascender's Bane 的卡面写着 "Cannot be removed"，StS 也把这一条写在这张卡
-        // 自己的代码里。拒绝发生在**扣钱之前**，所以"拒绝 ⇒ 一个字节都不改"。
-        if self.deck[card].as_str() == ASCENDERS_BANE {
-            return Err(RunError::CannotRemove);
-        }
         let price = self.remove_card_price();
         if self.gold < price {
             return Err(RunError::NotEnoughGold {
@@ -2507,22 +2807,40 @@ impl RunState {
                 gold: self.gold,
             });
         }
+        // §259：**先搬再扣钱之前先验**（`remove_deck_card` 里的两条拒绝：越界、Ascender's Bane）
+        // 仍在扣钱之前 —— 顺序与原来一致，所以"拒绝 ⇒ 一个字节都不改"照旧成立。
+        self.remove_deck_card(card)?;
         self.adjust_gold(-price);
+        // §259：`removed_cards` 是**商店服务的计价步数**（+25/次），不是"删过几张牌" ——
+        // 所以它留在这里，而不是搬进共用的 `remove_deck_card`（`Toke` 不该让商店涨价）。
+        self.removed_cards += 1;
+        Ok(price)
+    }
+
+    /// §259：从牌组里删掉第 `card` 张（**不收钱、不改 `removed_cards`**）。
+    ///
+    /// 商店（`remove_card`）与篝火的 `Toke` 共用这一段。抽出来是因为**复制的那一份一定会漏
+    /// `marks`**：§253 已经在同一个循环里踩过一次（"删掉一张牌，另一张继承了它的伤害"，
+    /// 页面上完全看不出来）。
+    fn remove_deck_card(&mut self, card: usize) -> Result<(), RunError> {
+        if card >= self.deck_len as usize {
+            return Err(RunError::BadCard(card as u8));
+        }
+        // §189 `A10`：Ascender's Bane 的卡面写着 "Cannot be removed"，StS 也把这一条写在这张卡
+        // 自己的代码里。
+        if self.deck[card].as_str() == ASCENDERS_BANE {
+            return Err(RunError::CannotRemove);
+        }
         // Shift the tail down; deck order is observable, so the order of the survivors is kept.
         for index in card..(self.deck_len as usize - 1) {
             self.deck[index] = self.deck[index + 1];
-            // §253：**mark 跟着牌走**。漏了这一行就会出现"删掉一张牌，另一张继承了它的伤害" ——
-            // 而那在页面上完全看不出来（两张牌都还在，只是数字变了）。
+            // §253：**mark 跟着牌走**。
             self.marks[index] = self.marks[index + 1];
         }
-        // **`len` 之后必须是 EMPTY**，与 `Bounded` 的不变式同一条（REVIEW P1，§161.10）。
-        // 少了这一行，被删的那张牌仍留在尾槽里：`deck()` 看不见它，但**结构相等看不见的是另一回事**
-        // —— 存档只写前 `len` 项，于是"删过牌的局"回档后与原局不相等，而 round-trip 测试查不出来
-        // （它从来不在删牌之后存档）。`drop_potion` 早就是这么写的，是这一个兄弟漏了。
+        // **`len` 之后必须是 EMPTY**（REVIEW P1，§161.10）。
         self.deck[self.deck_len as usize - 1] = RunId::EMPTY;
         self.deck_len -= 1;
-        self.removed_cards += 1;
-        Ok(price)
+        Ok(())
     }
 
     /// Roll the pre-run pair and enter [`Pending::Start`].
@@ -3071,6 +3389,82 @@ impl RunState {
             relic,
         };
         self.pending = Pending::Reward;
+        Ok(())
+    }
+
+    /// §259：`Dream Catcher` —— 休息之后给**一次卡牌奖励**（wiki："Whenever you Rest, you may add a
+    /// card to your deck"）。
+    ///
+    /// 为什么不复用 [`Self::roll_reward`]：那条路会一并掷**金币 / 药水 / 精英遗物**，而这里
+    /// wiki 只给卡。把三样都掷一遍会让"休息"变成"打了一场普通怪"，而且 `run_hash` 会跟着变
+    /// —— 那是**另一种游戏规则**，不是省事。
+    ///
+    /// 前置：`pending == Pending::Reward` 表示"刚休息完、还没拿奖励"（`rest()` 在有这件遗物时
+    /// 就停在这里）。池子里的 `Status` / `Curse` / `Special` 不是奖励，照 `roll_reward` 的规矩排除。
+    pub fn roll_rest_card_reward(&mut self, card_pool: &[PoolCard<'_>]) -> Result<(), RunError> {
+        if self.pending != Pending::Reward {
+            return Err(RunError::WrongPhase);
+        }
+        let mut eligible = [0usize; MAX_POOL];
+        let mut eligible_len = 0usize;
+        Self::pool_fits(card_pool.len())?;
+        for index in 0..card_pool.len() {
+            if !matches!(
+                card_pool[index].rarity,
+                Rarity::Status | Rarity::Curse | Rarity::Special
+            ) {
+                eligible[eligible_len] = index;
+                eligible_len += 1;
+            }
+        }
+        if eligible_len < MAX_REWARD_CARDS {
+            return Err(RunError::PoolTooSmall {
+                pool: eligible_len,
+                need: MAX_REWARD_CARDS,
+            });
+        }
+        let eligible = &eligible[..eligible_len];
+        let mut used = [false; MAX_POOL];
+        let mut cards = [RunId::EMPTY; MAX_REWARD_CARDS];
+        for slot in 0..MAX_REWARD_CARDS {
+            // `Dream Catcher` 的奖励是**普通怪**档位（wiki 没有单独的概率表）。
+            let (rare_top, uncommon_top) = reward_bands(FightKind::Normal, self.rarity_offset);
+            let roll = self.rng.roll(RunStream::Reward, 100)? as i32;
+            let band = if roll < rare_top {
+                Rarity::Rare
+            } else if roll < uncommon_top {
+                Rarity::Uncommon
+            } else {
+                Rarity::Common
+            };
+            let mut picked = self.pick_of(card_pool, eligible, &used, Some(band))?;
+            if picked.is_none() {
+                picked = self.pick_of(card_pool, eligible, &used, Some(Rarity::Basic))?;
+            }
+            if picked.is_none() {
+                picked = self.pick_of(card_pool, eligible, &used, None)?;
+            }
+            let Some(index) = picked else {
+                return Err(RunError::PoolTooSmall {
+                    pool: eligible_len,
+                    need: MAX_REWARD_CARDS,
+                });
+            };
+            used[index] = true;
+            cards[slot] = RunId::new(card_pool[index].id).map_err(|_| RunError::BadId)?;
+            if band == Rarity::Rare {
+                self.rarity_offset = RARITY_OFFSET_START;
+            } else {
+                self.rarity_offset = (self.rarity_offset + 1).min(RARITY_OFFSET_CAP);
+            }
+        }
+        self.reward = Reward {
+            gold: 0,
+            cards,
+            cards_len: MAX_REWARD_CARDS as u8,
+            potion: RunId::EMPTY,
+            relic: RunId::EMPTY,
+        };
         Ok(())
     }
 
@@ -3967,6 +4361,270 @@ mod tests {
             "Burning Blood 是唯一一条战斗结束回血"
         );
         assert_eq!(run.health(), wounded + BURNING_BLOOD_HEAL);
+    }
+
+    // ================================================================ §259 篝火四选项
+
+    /// 一个只有牌组的局，用来测篝火的选项集合（地图/战斗都不参与）。
+    fn campfire_run() -> RunState {
+        let mut run = ironclad();
+        run.adjust_health(-20);
+        run
+    }
+
+    /// `Pending::Rest` 需要一个真的篝火节点。
+    ///
+    /// ⚠️ `node` 必须是**非负**：`mark_resolved()` / `node_resolved()` 在 `node < 0` 时是
+    /// 空操作（那不是"已结算"，是"还没开始"）。第一版忘了这一条，于是"节点已结算"的断言
+    /// 在两种情形下都是 `false` —— 一个**永远成立**的断言什么也证明不了。
+    fn at_campfire(run: &mut RunState) {
+        run.pending = Pending::Rest;
+        run.node = 5;
+    }
+
+    /// §259：**六件遗物各自改变哪个选项**，以及"满血也能休息 / 全升完则不能打铁"。
+    #[test]
+    fn campfire_options_follow_the_relics_the_wiki_names() {
+        let mut run = campfire_run();
+        let base = run.campfire_options();
+        assert!(base.rest && base.smith && base.recall, "defaults: Rest / Smith / Recall");
+        assert!(!base.lift && !base.toke && !base.dig, "no relic ⇒ no relic option");
+
+        // Girya 开 Lift；用过 3 次之后消失（wiki：up to 3 times）。
+        run.push_relic("girya").expect("girya");
+        assert!(run.campfire_options().lift, "Girya adds Lift");
+        for expected in 1..=3u8 {
+            at_campfire(&mut run);
+            assert_eq!(run.lift(), Ok(expected), "Lift #{expected}");
+        }
+        assert!(!run.campfire_options().lift, "after three uses Lift is gone");
+        at_campfire(&mut run);
+        assert_eq!(run.lift(), Err(RunError::WrongPhase), "a fourth Lift is refused");
+
+        // Peace Pipe 开 Toke（然后它还能删牌）；Shovel 开 Dig。
+        let mut run = campfire_run();
+        run.push_relic("peace_pipe").expect("peace pipe");
+        run.push_relic("shovel").expect("shovel");
+        let options = run.campfire_options();
+        assert!(options.toke && options.dig, "Peace Pipe / Shovel add their options");
+
+        // Coffee Dripper 与 Mark of the Bloom 关 Rest；Fusion Hammer 关 Smith。
+        for relic in ["coffee_dripper", "mark_of_the_bloom"] {
+            let mut run = campfire_run();
+            run.push_relic(relic).expect(relic);
+            assert!(!run.campfire_options().rest, "{relic} removes Rest");
+            assert!(run.campfire_options().smith, "{relic} does not touch Smith");
+        }
+        let mut run = campfire_run();
+        run.push_relic("fusion_hammer").expect("fusion hammer");
+        assert!(!run.campfire_options().smith, "Fusion Hammer removes Smith");
+        assert!(run.campfire_options().rest, "Fusion Hammer does not touch Rest");
+    }
+
+    /// §259：**满血也能休息**（wiki 明写），而"牌组全升完 ⇒ 打铁不可用"。
+    ///
+    /// 后半条是"选项是算出来的"的直接后果：`+` 行在内容里是另一张卡，所以判据只能是
+    /// "牌组里还有没有不带 `+` 的 id"。
+    #[test]
+    fn resting_is_legal_at_full_health_and_smithing_is_not_legal_with_nothing_to_upgrade() {
+        let mut run = campfire_run();
+        run.health = run.health_max;
+        at_campfire(&mut run);
+        assert_eq!(run.rest(), Ok(0), "full health: Rest is still legal, it just heals 0");
+
+        let mut run = campfire_run();
+        assert!(run.campfire_options().smith, "an un-upgraded deck can Smith");
+        for slot in 0..run.deck_len as usize {
+            let upgraded = std::format!("{}+", run.deck[slot].as_str());
+            run.deck[slot] = RunId::new(&upgraded).expect("an id");
+        }
+        assert!(
+            !run.campfire_options().smith,
+            "everything is upgraded ⇒ Smith is greyed out"
+        );
+    }
+
+    /// §259：`Toke` 删牌**不收钱**，且与商店删牌共用同一段搬移（`marks` 跟着走）。
+    #[test]
+    fn toke_removes_a_card_without_charging_for_it() {
+        let mut run = campfire_run();
+        run.push_relic("peace_pipe").expect("peace pipe");
+        let gold = run.gold();
+        let before = run.deck_len;
+        let second_mark = run.marks[1];
+        at_campfire(&mut run);
+        assert_eq!(run.toke(0), Ok(()), "Toke removes deck[0]");
+        assert_eq!(run.deck_len, before - 1, "one card fewer");
+        assert_eq!(run.gold(), gold, "Toke is free (unlike the shop's `remove_card`)");
+        // §253 的那条纪律：mark 跟着牌走 —— 删掉第一张之后，第二张的 mark 必须还在它身上。
+        assert_eq!(run.marks[0], second_mark, "the per-copy mark moves with its card");
+        assert_eq!(run.removed_cards(), 0, "Toke is not a paid removal (no price step)");
+    }
+
+    /// §259：`Dig` 只抽 **Common/Uncommon/Rare**（wiki 原话），Boss/Shop/Event 一件都不许出。
+    #[test]
+    fn dig_only_rolls_common_uncommon_or_rare() {
+        let mut run = campfire_run();
+        run.push_relic("shovel").expect("shovel");
+        let pool = [
+            PoolRelic {
+                id: "coffee_dripper",
+                rarity: Rarity::Boss,
+            },
+            PoolRelic {
+                id: "golden_idol",
+                rarity: Rarity::Event,
+            },
+            PoolRelic {
+                id: "anchor",
+                rarity: Rarity::Common,
+            },
+            PoolRelic {
+                id: "vajra",
+                rarity: Rarity::Uncommon,
+            },
+            PoolRelic {
+                id: "girya",
+                rarity: Rarity::Rare,
+            },
+        ];
+        for seed in 0..24 {
+            let mut run = campfire_run();
+            run.seed = seed;
+            run.push_relic("shovel").expect("shovel");
+            at_campfire(&mut run);
+            let dug = run.dig(&pool).expect("dig");
+            assert!(
+                ["anchor", "vajra", "girya"].contains(&dug.as_str()),
+                "seed {seed}: Dig produced {dug} -- only Common/Uncommon/Rare are allowed"
+            );
+        }
+        let _ = pool;
+    }
+
+    /// §259：`Lift` 的力量**每场战斗都带**（不是"只下一场"），而且与 `Vajra` **相加**。
+    #[test]
+    fn lift_strength_applies_to_every_later_fight_and_stacks_with_vajra() {
+        let mut run = campfire_run();
+        run.push_relic("girya").expect("girya");
+        for _ in 0..2 {
+            at_campfire(&mut run);
+            run.lift().expect("lift");
+        }
+        let bonus = run.combat_bonus();
+        assert_eq!(bonus.status_count, 1, "strength is one merged entry");
+        assert_eq!(bonus.statuses[0].map(|s| s.id), Some("standard.strength"));
+        assert_eq!(bonus.statuses[0].map(|s| s.stacks), Some(2), "two Lifts ⇒ 2 Strength");
+
+        // 第二场、第三场战斗都还是 2（它读的是 `girya_lifts`，不是"上一次的遗留"）。
+        for _ in 0..2 {
+            let again = run.combat_bonus();
+            assert_eq!(again.statuses[0].map(|s| s.stacks), Some(2), "every fight carries it");
+        }
+
+        // 与 Vajra 相加，不是覆盖。
+        run.push_relic("vajra").expect("vajra");
+        let merged = run.combat_bonus();
+        assert_eq!(merged.status_count, 1, "one merged Strength entry");
+        assert_eq!(merged.statuses[0].map(|s| s.stacks), Some(3), "2 from Girya + 1 from Vajra");
+    }
+
+    /// §259：`Dream Catcher`（wiki："Whenever you Rest, you may add a card to your deck"）。
+    ///
+    /// 两侧：**有**它 ⇒ 休息之后停在奖励屏（节点**还没**结算）；**没有**它 ⇒ 直接结算。
+    /// 只测一侧的话，"所有人休息都进奖励屏"也会绿。
+    #[test]
+    fn dream_catcher_turns_rest_into_a_card_reward_and_only_with_the_relic() {
+        let pool = [
+            PoolCard { id: "anger", rarity: Rarity::Common },
+            PoolCard { id: "flex", rarity: Rarity::Common },
+            PoolCard { id: "uppercut", rarity: Rarity::Uncommon },
+            PoolCard { id: "bludgeon", rarity: Rarity::Rare },
+        ];
+
+        // 没有遗物：休息完就结束，节点已结算。
+        let mut run = campfire_run();
+        at_campfire(&mut run);
+        assert!(run.rest().is_ok());
+        assert_eq!(run.pending(), Pending::None, "no Dream Catcher ⇒ no reward screen");
+        assert!(run.node_resolved(), "the node is settled right away");
+        assert_eq!(
+            run.roll_rest_card_reward(&pool),
+            Err(RunError::WrongPhase),
+            "and there is no reward to roll"
+        );
+
+        // 有遗物：停在奖励屏，三张卡，节点**未**结算。
+        let mut run = campfire_run();
+        run.push_relic("dream_catcher").expect("dream catcher");
+        at_campfire(&mut run);
+        assert!(run.rest().is_ok());
+        assert_eq!(run.pending(), Pending::Reward, "Dream Catcher ⇒ a reward screen");
+        assert!(!run.node_resolved(), "the node waits for the card choice");
+        run.roll_rest_card_reward(&pool).expect("a card reward");
+        assert_eq!(run.reward_cards().len(), 3, "three cards, like any reward");
+        assert_eq!(run.reward_gold(), 0, "Dream Catcher pays no gold");
+        assert!(run.reward_potion().is_none(), "and no potion");
+        // 拿走一张：卡那一排花掉，但**药水/遗物那两格还在**（与战斗奖励同一条规矩，
+        // `take_card` 的注释写着为什么）⇒ 收尾要 `leave()`。
+        assert!(run.take_card(0).is_ok());
+        assert_eq!(run.reward_cards().len(), 0, "the card row is spent by one pick");
+        assert_eq!(run.pending(), Pending::Reward, "the screen is still open for the rest");
+        assert!(run.leave().is_ok());
+        assert_eq!(run.pending(), Pending::None);
+        assert!(run.node_resolved(), "leaving the reward screen settles the node");
+    }
+
+    /// §259：`Recall` 拿红钥匙，然后 Recall 就不再出现（wiki：一局只有一把）。
+    #[test]
+    fn recall_grants_the_ruby_key_once() {
+        let mut run = campfire_run();
+        assert!(run.campfire_options().recall, "Recall is offered by default");
+        at_campfire(&mut run);
+        assert_eq!(run.recall(), Ok(()));
+        assert!(run.ruby_key(), "the key is in the run state");
+        assert!(!run.campfire_options().recall, "a second Recall is not offered");
+        at_campfire(&mut run);
+        assert_eq!(run.recall(), Err(RunError::WrongPhase), "and it is refused");
+    }
+
+    /// §259：两个新字段**进存档与哈希**。
+    ///
+    /// 存档 `VERSION` 也跟着抬到 3 —— 这条判据不做"旧存档能不能读"的兼容（那是 `Version` 错误
+    /// 该做的事），它钉的是"写出去、读回来，两个字段都在"。
+    #[test]
+    fn the_campfire_fields_survive_a_save_and_a_hash() {
+        // ⚠️ 用**没有节点光标**的局：`archive::restore` 会核 "floor 与 node 的行号一致"，
+        // 而 `at_campfire` 故意把 node 设成 5（测结算用），两者的前提不同。
+        let mut run = ironclad();
+        run.push_relic("girya").expect("girya");
+        run.push_relic("peace_pipe").expect("peace pipe");
+        for _ in 0..3 {
+            run.pending = Pending::Rest;
+            run.lift().expect("lift");
+        }
+        run.pending = Pending::Rest;
+        run.recall().expect("recall");
+        let baseline = crate::hash::run_hash(&run).expect("a hash");
+
+        // 走**真实的公开入口**（`archive::write` / `restore`），不是测试专用包装 ——
+        // 包装会绕过信封（MAGIC / base64 / RLE / CRC），而"字段进没进 payload"正是要测的东西。
+        let mut buf = [0u8; crate::state::archive::MAX_ARCHIVE];
+        let len = crate::state::archive::write(&run, 7, &mut buf).expect("write");
+        let text = std::str::from_utf8(&buf[..len]).expect("ascii");
+        let mut restored = ironclad();
+        crate::state::archive::restore(text, 7, &mut restored).expect("read");
+        assert_eq!(restored.girya_lifts(), 3, "girya_lifts round-trips");
+        assert!(restored.ruby_key(), "ruby_key round-trips");
+        assert_eq!(crate::hash::run_hash(&restored).expect("a hash"), baseline, "the hash round-trips too");
+
+        // 反过来：只差一次 Lift 的两局，哈希必须不同（否则"忘了同步哈希"看不出来）。
+        let mut other = restored.clone();
+        other.girya_lifts = 2;
+        assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "girya_lifts is in the hash");
+        let mut other = restored.clone();
+        other.ruby_key = false;
+        assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
     }
 
     // ---- settling a node ---------------------------------------------------------------------
