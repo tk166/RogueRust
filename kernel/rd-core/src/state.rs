@@ -2570,6 +2570,12 @@ pub enum EffectRequest {
         count: i32,
         /// 落到哪个区。
         to_zone: CardZone,
+        /// §255：造出来时给它写一个**每副本计数器**（`Conjure Blade` 的 "X 等于我花的能量"）。
+        ///
+        /// 为什么必须在**造**的那一步写：`Expunger` 的 X 存在它自己的 mark counter 上，
+        /// 而"造出来但 X 是 0"与 wiki 说的"能造出打 0 次的 Expunger"**完全不可区分** ——
+        /// 分成两步就会出现一个无法观测、也无法证伪的中间态。
+        mark: Option<(CounterId, i32)>,
     },
     /// `MoveCardToZoneEffectRequest`（`CardZoneEffects.cs:155-216`）。
     ///

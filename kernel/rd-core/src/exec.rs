@@ -1155,7 +1155,8 @@ fn resolve_request(ctx: &mut ExecContext<'_>, request: &EffectRequest) -> Result
             definition,
             count,
             to_zone,
-        } => create_card_for(ctx, &owner, definition, count, to_zone),
+            mark,
+        } => create_card_for(ctx, &owner, definition, count, to_zone, mark),
         EffectRequest::CreateRandomCard {
             owner,
             tag,
@@ -4630,6 +4631,22 @@ fn create_card_instance_node(
     if count < 0 {
         return Err(ExecError::Modifier);
     }
+    // §255：可选的"造出来时写一个每副本计数器"（`Conjure Blade` 的 X 就是它花的能量）。
+    // `MarkCounterId` 缺席 ⇒ `None` ⇒ 与以前逐字相同。
+    let mark = match node.str_field("MarkCounterId")? {
+        None => None,
+        Some(key) => {
+            let key = crate::state::CounterId::new(key)?;
+            let value = match node.node_field("MarkValue")? {
+                None => 0,
+                Some(term) => {
+                    let expr_ctx = ctx.expr_context();
+                    expr::eval_int(term, &expr_ctx)?
+                }
+            };
+            Some((key, value))
+        }
+    };
     let selector = node
         .node_field("TargetSelector")?
         .ok_or(IrError::Missing("TargetSelector"))?;
@@ -4643,6 +4660,7 @@ fn create_card_instance_node(
                 definition: definition_id,
                 count,
                 to_zone: zone,
+                mark,
             },
             Some(frame),
         )?;
@@ -4661,6 +4679,7 @@ fn create_card_for(
     definition: CardDefinitionId,
     count: i32,
     zone: CardZone,
+    mark: Option<(crate::state::CounterId, i32)>,
 ) -> Result<(), ExecError> {
     if count < 0 {
         return Err(ExecError::Modifier);
@@ -4668,7 +4687,16 @@ fn create_card_for(
     for _ in 0..count {
         // §161.5: 铸号搬到了 `state::CombatState::create_card_instance`（`Offered` 也要用它）。
         // 这里是**第二个调用方**，不是第二份实现 —— 两条铸号路径会给出两个"下一个是几"。
-        ctx.state.create_card_instance(owner, definition, zone)?;
+        let created = ctx.state.create_card_instance(owner, definition, zone)?;
+        // §255：造出来那一步就写每副本计数器（`Conjure Blade` 的 X）—— 分成两步会留下
+        // "造好了但 X 是 0"的中间态，而那与"造出打 0 次的 Expunger"不可区分。
+        if let Some((key, value)) = mark {
+            let card = ctx
+                .state
+                .card_mut(created)
+                .ok_or(ExecError::MissingCombatant)?;
+            card.set_mark_counter(key, value).map_err(ExecError::Capacity)?;
+        }
     }
     Ok(())
 }

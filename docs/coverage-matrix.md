@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 626 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 628 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 291 | 159 | 132 | 0 | 279 | 12 | 18 | 0 |
+| 卡牌 | 293 | 161 | 132 | 0 | 281 | 12 | 18 | 0 |
 | 状态 | 65 | 57 | 6 | 2 | 0 | 65 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 626 | 388 | 222 | 16 | 456 | 77 | 81 | 0 |
+| **合计** | 628 | 390 | 222 | 16 | 458 | 77 | 81 | 0 |
 
-扫描到的具名测试：**993** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**995** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -239,7 +239,7 @@
 | time_eater.ripple | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 
-## 卡牌（291）
+## 卡牌（293）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -259,7 +259,7 @@
 | bash+ | yes | — | CARD_DIFF | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
-| become_almighty | yes | the_wish_options_are_unplayable_by_hand, play_card_from_program_respects_unplayable_unless_told_otherwise …(+1) | — | wiki:wiki_cards/become_almighty.txt | — | §3.1/§254/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
+| become_almighty | yes | the_wish_options_are_unplayable_by_hand, play_card_from_program_respects_unplayable_unless_told_otherwise …(+1) | — | wiki:wiki_cards/become_almighty.txt | — | §254/§255/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
 | become_almighty+ | yes | wish_plus_offers_the_upgraded_options | — | wiki:wiki_cards/become_almighty.txt (via become_almighty) | — | INV_CARDS/wish_plus_offers_the_upgraded_options |
 | berserk | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt | — | §197/§199/CARD_WIKI+INV_CARDS |
 | berserk+ | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt (via berserk) | — | INV_CARDS |
@@ -299,6 +299,8 @@
 | clumsy | yes | — | CARD_DIFF | wiki:wiki_cards/clumsy.txt | — | CARD_WIKI+INV_CARDS |
 | combust | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt | — | CARD_WIKI+INV_CARDS |
 | combust+ | yes | — | CARD_DIFF | wiki:wiki_cards/combust.txt (via combust) | — | INV_CARDS |
+| conjure_blade | yes | conjure_blade_stores_the_energy_as_the_expungers_x, conjure_blade_with_no_energy_makes_a_zero_x_expunger | — | wiki:wiki_cards/conjure_blade.txt | — | §3.1/§255/CARD_WIKI+INV_CARDS/conjure_blade_stores_the_energy_as_the_expungers_x |
+| conjure_blade+ | yes | conjure_blade_stores_the_energy_as_the_expungers_x | — | wiki:wiki_cards/conjure_blade.txt (via conjure_blade) | — | INV_CARDS/conjure_blade_stores_the_energy_as_the_expungers_x |
 | corruption | yes | — | CARD_DIFF | wiki:wiki_cards/corruption.txt | wiki 偏差：wiki 的 Exhaust 指的是**被打出的那个技能**（"Exhaust it"），Corruption 自己进弃牌堆。 | CARD_WIKI+INV_CARDS |
 | corruption+ | yes | — | CARD_DIFF | wiki:wiki_cards/corruption.txt (via corruption) | wiki 偏差：wiki 的 Exhaust 指的是**被打出的那个技能**（"Exhaust it"），Corruption 自己进弃牌堆。 | INV_CARDS |
 | curse_of_the_bell | yes | — | CARD_DIFF | wiki:wiki_cards/curse_of_the_bell.txt | — | CARD_WIKI+INV_CARDS |
@@ -334,9 +336,9 @@
 | evolve+ | yes | — | CARD_DIFF | wiki:wiki_cards/evolve.txt (via evolve) | — | INV_CARDS |
 | exhume | yes | exhume_pulls_a_card_out_of_the_exhaust_pile | — | wiki:wiki_cards/exhume.txt | — | CARD_WIKI+INV_CARDS/exhume_pulls_a_card_out_of_the_exhaust_pile |
 | exhume+ | yes | — | CARD_DIFF | wiki:wiki_cards/exhume.txt (via exhume) | — | INV_CARDS |
-| expunger | yes | expunger_repeats_by_its_per_copy_x | — | wiki:wiki_cards/expunger.txt | — | §251/CARD_WIKI+INV_CARDS/expunger_repeats_by_its_per_copy_x |
+| expunger | yes | expunger_repeats_by_its_per_copy_x, conjure_blade_stores_the_energy_as_the_expungers_x | — | wiki:wiki_cards/expunger.txt | — | §251/§255/CARD_WIKI+INV_CARDS/expunger_repeats_by_its_per_copy_x |
 | expunger+ | yes | — | CARD_DIFF | wiki:wiki_cards/expunger.txt (via expunger) | — | INV_CARDS |
-| fame_and_fortune | yes | the_wish_options_are_unplayable_by_hand, wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/fame_and_fortune.txt | — | §3.1/§254/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
+| fame_and_fortune | yes | the_wish_options_are_unplayable_by_hand, wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/fame_and_fortune.txt | — | §254/§255/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
 | fame_and_fortune+ | yes | wish_plus_offers_the_upgraded_options | — | wiki:wiki_cards/fame_and_fortune.txt (via fame_and_fortune) | — | INV_CARDS/wish_plus_offers_the_upgraded_options |
 | feed | yes | feed_only_raises_max_hp_on_a_fatal_blow | — | wiki:wiki_cards/feed.txt | — | CARD_WIKI+INV_CARDS/feed_only_raises_max_hp_on_a_fatal_blow |
 | feed+ | yes | — | CARD_DIFF | wiki:wiki_cards/feed.txt (via feed) | — | INV_CARDS |
@@ -395,7 +397,7 @@
 | juggernaut+ | yes | — | CARD_DIFF | wiki:wiki_cards/juggernaut.txt (via juggernaut) | — | INV_CARDS |
 | limit_break | yes | limit_break_doubles_strength_and_only_the_base_copy_exhausts | — | wiki:wiki_cards/limit_break.txt | — | CARD_WIKI+INV_CARDS/limit_break_doubles_strength_and_only_the_base_copy_exhausts |
 | limit_break+ | yes | limit_break_doubles_strength_and_only_the_base_copy_exhausts | — | wiki:wiki_cards/limit_break.txt (via limit_break) | — | INV_CARDS/limit_break_doubles_strength_and_only_the_base_copy_exhausts |
-| live_forever | yes | the_wish_options_are_unplayable_by_hand, wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/live_forever.txt | — | §3.1/§254/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
+| live_forever | yes | the_wish_options_are_unplayable_by_hand, wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/live_forever.txt | — | §254/§255/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
 | live_forever+ | yes | wish_plus_offers_the_upgraded_options | — | wiki:wiki_cards/live_forever.txt (via live_forever) | — | INV_CARDS/wish_plus_offers_the_upgraded_options |
 | madness | yes | madness_frees_exactly_one_random_hand_card | — | wiki:wiki_cards/madness.txt | — | CARD_WIKI+INV_CARDS/madness_frees_exactly_one_random_hand_card |
 | madness+ | yes | — | CARD_DIFF | wiki:wiki_cards/madness.txt (via madness) | — | INV_CARDS |
@@ -530,7 +532,7 @@
 | whirlwind+ | yes | an_upgraded_card_row_is_buildable | — | wiki:wiki_cards/whirlwind.txt (via whirlwind) | — | INV_CARDS/an_upgraded_card_row_is_buildable |
 | wild_strike | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/wild_strike.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | wild_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/wild_strike.txt (via wild_strike) | — | INV_CARDS |
-| wish | yes | wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/wish.txt | — | §3.1/§254/CARD_WIKI+INV_CARDS/wish_offers_three_cards_and_plays_the_pick_at_once |
+| wish | yes | wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/wish.txt | — | §254/§255/CARD_WIKI+INV_CARDS/wish_offers_three_cards_and_plays_the_pick_at_once |
 | wish+ | yes | wish_plus_offers_the_upgraded_options | — | wiki:wiki_cards/wish.txt (via wish) | — | INV_CARDS/wish_plus_offers_the_upgraded_options |
 | wound | yes | the_new_red_skills_do_what_their_pages_say, evolve_and_fire_breathing_only_answer_to_the_right_tags …(+1) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |

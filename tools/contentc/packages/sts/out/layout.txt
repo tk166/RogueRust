@@ -36,7 +36,7 @@
  50 10 11  24 IR node.chooseCards                                             : Copies:INT DrawFirst:INT FromZone:STR Max:INT Min:INT OwnerSelector:TERM RequireAnyTag:STRLIST ResultKey:TERM Then:STR ToZone:STR
  51  4  4  12 IR node.conditional                                             : Condition:TERM Else:TERM ResultKey:TERM Then:TERM
  52  4  4  12 IR node.createCardCopy                                          : CardDefinitionId:STR Placement:STR ResultKey:TERM ToZone:STR
- 53  5  5  12 IR node.createCardInstance                                      : CardDefinitionId:STR(wrap) Count:TERM ResultKey:TERM TargetSelector:TERM ToZone:STR
+ 53  7  7  16 IR node.createCardInstance                                      : CardDefinitionId:STR(wrap) Count:TERM MarkCounterId:STR MarkValue:TERM ResultKey:TERM TargetSelector:TERM ToZone:STR
  54  3  3   8 IR node.createCombatant                                         : DefinitionId:STR Health:TERM TeamId:STR
  55  5  5  12 IR node.createRandomCardInstance                                : CostZero:BOOL Count:TERM ResultKey:TERM Tag:STR ToZone:STR
  56  5  5  12 IR node.dealDamage                                              : Amount:TERM Element:TERM IgnoresBlock:BOOL ResultKey:TERM TargetSelector:TERM

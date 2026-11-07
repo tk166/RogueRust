@@ -17411,3 +17411,52 @@ the current fight — it funds the run instead"），`fight_end` 才进运行层
 绕法是让产物字节不一样：`RUSTFLAGS="-C codegen-units=16" python -X utf8 native/fight_diff.py`
 （`fight_diff.py` 用 `cargo run`，`RUSTFLAGS` 会传给子进程 ⇒ 重编出不同字节）。
 四条对拍照样 182/182、62/62、124/124、394/394。
+
+---
+
+## §255 `Conjure Blade`：`Expunger` 的 X 终于能非 0（顺带把审计口径扩到紫色）
+
+`Conjure Blade` 是**观者**牌 ⇒ 在审计的旧口径（`Red + Colorless + Curse + Status`）里
+**从来没有被统计过** —— 所以它不是"漏做了"，是"看不见"。这一节两件事一起做：
+把口径补上，并把这张牌实现掉。内容 291 → **293 行**，`rd-core` 786 测试。
+
+### 255.1 牌面（wiki 的两句话决定实现）
+
+* 基础：`Shuffle an Expunger into your draw pile. Exhaust.`
+* 升级：`Shuffle an Expunger **with X+1** into your draw pile. Exhaust.`
+  （dump 里的写法是 `Shuffle an {{C|Expunger}}(; with X+1) into ...` —— 括号里那段是**升级插入**。）
+* 正文补的那句是关键：「which deals 9 (15 if upgraded) damage **X (X+1 if Conjure Blade was
+  upgraded)** times」⇒ **升级 Conjure Blade 加的是"次数 +1"**；而 `Expunger` 自己那 9→15 是
+  **它自己的升级**（靠 Master Reality，不是这张牌）。
+* 还有一句：「it is possible to generate an Expunger that deals damage **0 times**」⇒ X 可以是 0。
+
+⇒ `Conjure Blade` = `createCardInstance{expunger → DrawPile, MarkCounterId: standard.expunger_x,
+MarkValue: x.cost}`；升级版把 `x.cost` 换成 `add(x.cost, 1)`。X 费与 `whirlwind`/`skewer`
+同一套（Cost 0 + `x_cost` tag），X 的读法就是 `x.cost`。
+
+### 255.2 为什么"造牌时写计数器"必须是一个动作
+
+`Expunger` 的 X 存在**它自己**的每副本计数器上（§251 就是这么读的），所以"造出来"与
+"带上那个数"必须是**同一件事**：分成两步会留下"造好了但 X 是 0"的中间态，而它与 wiki 说的
+"能造出打 0 次的 Expunger"**完全不可区分** —— 一个既不可观测、也无法证伪的偏差。
+
+所以给 `node.createCardInstance` 加两个可选字段 `MarkCounterId` / `MarkValue`
+（缺席 = 与以前逐字相同），请求侧对应 `mark: Option<(CounterId, i32)>`。
+
+### 255.3 审计口径：把 `Purple` 加进 `IN_SCOPE`
+
+`native/audit_card_gap.py` 的 `IN_SCOPE` 扩成 `Red + Colorless + Curse + Status + Purple`。
+代价是诚实的：脚本立刻报 **`in-scope missing: 73`（have 147 of 220）** —— 观者还有 73 张没做。
+**那比"装作没有这批牌"好**：范围既然扩了，"缺多少"就该是可见的数字，而不是一个 0。
+
+### 255.4 判据（2 条）
+
+1. `conjure_blade_stores_the_energy_as_the_expungers_x` —— 四段：① 抽牌堆里多一张 `expunger`、
+   `Conjure Blade` 自己进消耗堆；② 那张 `Expunger` 的计数器 == 这次花的能量（3）；
+   ③ 把它打出来 ⇒ **27**（9 × 3）—— 这一段才是"X 真的接上了"的证据，只看计数器会漏掉
+   "计数器写了但节目没读它"；④ 升级版 ⇒ 计数器 4、打出来 **36**。
+2. `conjure_blade_with_no_energy_makes_a_zero_x_expunger` —— 零能量打 ⇒ X = 0 ⇒ 打出来
+   **一点血都不掉**。这一条与上一条互补：上一条证明"接上了"，这一条证明"0 不被当成 1"。
+
+⚠️ 两条判据都必须**在打 `Expunger` 之前补能量**：它自己是 1 费，而 X 费那张已经把能量花光了
+（第一版判据就是被 `Unaffordable` 挡下来的 —— 那其实是判据写对了、测试搭错了）。

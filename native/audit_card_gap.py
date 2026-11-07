@@ -41,7 +41,9 @@ INDEX = os.path.join('native', 'wiki_card_index.json')
 CONTENT = 'tools/contentc/packages/sts/sts.roguedeck.json'
 
 # 本内容的范围：铁甲战士 + 无色 + 诅咒 + 状态。
-IN_SCOPE = ('Red', 'Colorless', 'Curse', 'Status')
+# §255：观者也纳入范围（§254 决定：`Wish` 落地之后紫卡就算）。
+# 代价是诚实的：紫色还有一批没做，脚本会把它们列成 missing —— 那比"装作没有这批牌"好。
+IN_SCOPE = ('Red', 'Colorless', 'Curse', 'Status', 'Purple')
 
 # 消歧页 → 内容里的 id。名字里带括号的页面在 wiki 上是"同一张牌的不同职业版本"。
 SPECIAL = {

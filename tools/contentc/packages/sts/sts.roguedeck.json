@@ -23149,6 +23149,147 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "conjure_blade",
+      "PackageId": "sts",
+      "NameKey": "conjure_blade",
+      "DescriptionKey": "Shuffle an Expunger into your draw pile. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "x_cost"
+        },
+        {
+          "value": "watcher"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createCardInstance",
+          "value": {
+            "CardDefinitionId": {
+              "value": "expunger"
+            },
+            "ToZone": "DrawPile",
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "MarkCounterId": "standard.expunger_x",
+            "MarkValue": {
+              "kind": "x.cost",
+              "value": {}
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "conjure_blade+",
+      "PackageId": "sts",
+      "NameKey": "conjure_blade+",
+      "DescriptionKey": "Shuffle an Expunger with X+1 into your draw pile. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "x_cost"
+        },
+        {
+          "value": "watcher"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.createCardInstance",
+          "value": {
+            "CardDefinitionId": {
+              "value": "expunger"
+            },
+            "ToZone": "DrawPile",
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Count": {
+              "kind": "const",
+              "value": {
+                "Value": 1
+              }
+            },
+            "MarkCounterId": "standard.expunger_x",
+            "MarkValue": {
+              "kind": "add",
+              "value": {
+                "Left": {
+                  "kind": "x.cost",
+                  "value": {}
+                },
+                "Right": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 1
+                  }
+                }
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
     }
   ],
   "EnemyActions": [

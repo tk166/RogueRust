@@ -32,6 +32,8 @@ PAGES = {
     # §254：Watcher 的 `Wish` —— 它的三个选项（`become_almighty` 等）是 colorless 的特殊牌，
     # 而 Wish 本身是紫卡。我们把它纳进来（用户决定：紫卡也算），所以它要有一份 dump。
     'wish': 'Wish',
+    # §255: Expunger 的造牌者。
+    'conjure_blade': 'Conjure_Blade',
     # Ironclad commons/uncommons/rares
     'anger': 'Anger',
     'twin_strike': 'Twin_Strike',

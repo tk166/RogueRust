@@ -118,6 +118,9 @@ INV_DECK = {"strike": 5, "defend": 4, "bash": 1}   # inv:§2.1
 
 # inv:§3.1 -- the 3 basic cards, as mechanically derived facts.
 INV_CARDS = {
+    # ---- §255：Conjure Blade / Conjure Blade+（2 行）----------------------------------------
+    "conjure_blade": {"Cost": 0, "Tags": ["skill", "x_cost", "watcher"], "Facts": [["card", "expunger", 1, "DrawPile", "source"]]},
+    "conjure_blade+": {"Cost": 0, "Tags": ["skill", "x_cost", "watcher"], "Facts": [["card", "expunger", 1, "DrawPile", "source"]]},
     # ---- §254：Wish / Wish+（2 行）----------------------------------------------------------
     "wish": {"Cost": 3, "Tags": ["skill", "watcher"], "Facts": [["offerList", ["become_almighty", "live_forever", "fame_and_fortune"], 1, 1, "PlayChosen"]]},
     "wish+": {"Cost": 3, "Tags": ["skill", "watcher"], "Facts": [["offerList", ["become_almighty+", "live_forever+", "fame_and_fortune+"], 1, 1, "PlayChosen"]]},
