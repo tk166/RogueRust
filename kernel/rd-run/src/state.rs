@@ -1848,6 +1848,16 @@ impl RunState {
             "red_mask" => Some(RelicEffect::StartCombatStatusOnEnemies("standard.weak", 1)),
             // 拾取即生效。
             "mango" => Some(RelicEffect::MaxHealthUp(14)),
+            // §268：零基建档收尾 —— 掉血兑现 / Power 回血 / 保留手牌 / 死亡预防 / 手牌空抽牌。
+            "self_forming_clay" => {
+                Some(RelicEffect::StartCombatStatus("standard.self_forming_clay", 1))
+            }
+            "bird_faced_urn" => Some(RelicEffect::StartCombatStatus("standard.bird_faced_urn", 1)),
+            "runic_pyramid" => Some(RelicEffect::StartCombatStatus("standard.runic_pyramid", 1)),
+            "lizard_tail" => Some(RelicEffect::StartCombatStatus("standard.lizard_tail", 1)),
+            "unceasing_top" => Some(RelicEffect::StartCombatStatus("standard.unceasing_top", 1)),
+            // `black_blood`：战后回 12（wiki 的 "Replaces Burning Blood" 那一半见 §268.3）。
+            "black_blood" => Some(RelicEffect::EndOfCombatHeal(12)),
             "twisted_funnel" => {
                 Some(RelicEffect::StartCombatStatusOnEnemies("standard.poison", 4))
             }
@@ -4779,6 +4789,34 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §268：零基建档收尾的接线（5 条载体 + `black_blood` 的战后回血）。
+    #[test]
+    fn the_zero_infrastructure_tail_wires_its_carriers() {
+        let carrier = [
+            ("self_forming_clay", "standard.self_forming_clay"),
+            ("bird_faced_urn", "standard.bird_faced_urn"),
+            ("runic_pyramid", "standard.runic_pyramid"),
+            ("lizard_tail", "standard.lizard_tail"),
+            ("unceasing_top", "standard.unceasing_top"),
+        ];
+        for (relic, status_id) in carrier {
+            let mut run = ironclad();
+            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            let bonus = run.combat_bonus();
+            assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
+            let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
+            assert_eq!(entry.id, status_id, "{relic}: its own carrier");
+        }
+
+        // `black_blood` 没有载体：它的效果是战后的 `EndOfCombatHeal(12)`。
+        let mut run = ironclad();
+        run.push_relic("black_blood").expect("black_blood");
+        run.adjust_health(-30);
+        let before = run.health();
+        assert_eq!(run.end_of_combat(), Ok(12), "Black Blood: heals 12 after a fight");
+        assert_eq!(run.health(), before + 12);
     }
 
     /// §267：零基建批次的接线（13 条状态 + 5 条"直接挂那条状态"）。

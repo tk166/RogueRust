@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 74 |
-| 3 | 缺（wiki 有、内容没有） | 119 |
+| 2 | 内容里的遗物 | 80 |
+| 3 | 缺（wiki 有、内容没有） | 113 |
 
 ## Starter（4）
 
@@ -93,7 +93,7 @@
 | 有 | `paper_phrog` | Paper Phrog | Ironclad | Enemies with $Vulnerable take 75% more damage rather than 50%. |
 | 有 | `pear` | Pear | Shared | Upon pickup, raise your Max HP by 10. |
 | 缺 | `question_card` | Question Card | Shared | Future card rewards have 1 additional card to choose from. |
-| 缺 | `self_forming_clay` | Self-Forming Clay | Ironclad | Whenever you lose HP, gain 3 $Block next turn. |
+| 有 | `self_forming_clay` | Self-Forming Clay | Ironclad | Whenever you lose HP, gain 3 $Block next turn. |
 | 有 | `shuriken` | Shuriken | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 1 $Strength. |
 | 缺 | `singing_bowl` | Singing Bowl | Shared | When adding cards to your deck, you may raise your Max HP by 2 instead. |
 | 缺 | `strike_dummy` | Strike Dummy | Shared | Cards containing \"Strike\" deal 3 additional damage. |
@@ -108,7 +108,7 @@
 
 | 状态 | id | 名称 | 归属 | wiki 描述 |
 |---|---|---|---|---|
-| 缺 | `bird_faced_urn` | Bird-Faced Urn | Shared | Whenever you play a {{QueryLink\|Cards\|type:Power\|Power}} card, heal 2 HP. |
+| 有 | `bird_faced_urn` | Bird-Faced Urn | Shared | Whenever you play a {{QueryLink\|Cards\|type:Power\|Power}} card, heal 2 HP. |
 | 有 | `calipers` | Calipers | Shared | At the start of your turn, lose 15 $Block rather than all of your $Block. |
 | 有 | `captains_wheel` | Captain's Wheel | Shared | At the start of your 3rd turn, gain 18 $Block. |
 | 有 | `champion_belt` | Champion Belt | Ironclad | Whenever you apply $Vulnerable, also apply 1 $Weak. |
@@ -124,7 +124,7 @@
 | 缺 | `golden_eye` | Golden Eye | Watcher | Whenever you $Scry, $Scry 2 additional cards. |
 | 有 | `ice_cream` | Ice Cream | Shared | $Energy is now conserved between turns. |
 | 有 | `incense_burner` | Incense Burner | Shared | Every 6 turns, gain 1 $Intangible. |
-| 缺 | `lizard_tail` | Lizard Tail | Shared | When you would die, heal to 50% of your Max HP instead (works once). |
+| 有 | `lizard_tail` | Lizard Tail | Shared | When you would die, heal to 50% of your Max HP instead (works once). |
 | 缺 | `magic_flower` | Magic Flower | Ironclad | Healing is 50% more effective during combat. |
 | 有 | `mango` | Mango | Shared | Upon pickup, raise your Max HP by 14. |
 | 缺 | `old_coin` | Old Coin | Shared | Upon pickup, gain 300 [[Gold]]. |
@@ -140,7 +140,7 @@
 | 缺 | `tough_bandages` | Tough Bandages | Silent | Whenever you discard a card during your turn, gain 3 $Block. |
 | 有 | `tungsten_rod` | Tungsten Rod | Shared | Whenever you would lose HP, lose 1 less. |
 | 有 | `turnip` | Turnip | Shared | You can no longer become $Frail. |
-| 缺 | `unceasing_top` | Unceasing Top | Shared | Whenever you have no cards in hand during your turn, draw a card. |
+| 有 | `unceasing_top` | Unceasing Top | Shared | Whenever you have no cards in hand during your turn, draw a card. |
 | 缺 | `wing_boots` | Wing Boots | Shared | You may ignore paths when choosing the next room to travel to 3 times. |
 
 ## Boss（30）
@@ -148,7 +148,7 @@
 | 状态 | id | 名称 | 归属 | wiki 描述 |
 |---|---|---|---|---|
 | 缺 | `astrolabe` | Astrolabe | Shared | Upon pickup, $Transform 3 cards, then $Upgrade them. |
-| 缺 | `black_blood` | Black Blood | Ironclad | Replaces {{R\|Burning Blood}}. At the end of combat, heal 12 HP. |
+| 有 | `black_blood` | Black Blood | Ironclad | Replaces {{R\|Burning Blood}}. At the end of combat, heal 12 HP. |
 | 缺 | `black_star` | Black Star | Shared | Elites now drop an additional relic when defeated. |
 | 缺 | `busted_crown` | Busted Crown | Shared | Gain 1 $Energy at the start of your turn. Future card rewards have 2 less cards to choose from. |
 | 缺 | `calling_bell` | Calling Bell | Shared | Upon pickup, obtain a unique {{QueryLink\|Cards\|type:Curse\|Curse}} and 3 relics. |
@@ -168,7 +168,7 @@
 | 有 | `ring_of_the_serpent` | Ring of the Serpent | Silent | Replaces {{R\|Ring of the Snake}}. At the start of your turn, draw 1 additional card. |
 | 有 | `runic_cube` | Runic Cube | Ironclad | Whenever you lose HP, draw 1 card. |
 | 缺 | `runic_dome` | Runic Dome | Shared | Gain 1 $Energy at the start of your turn. You can no longer see enemy intents. |
-| 缺 | `runic_pyramid` | Runic Pyramid | Shared | At the end of your turn, you no longer discard your hand. |
+| 有 | `runic_pyramid` | Runic Pyramid | Shared | At the end of your turn, you no longer discard your hand. |
 | 缺 | `sacred_bark` | Sacred Bark | Shared | Double the effectiveness of [[Potions\|potions]]. |
 | 缺 | `slavers_collar` | Slaver's Collar | Shared | During Boss and Elite combats, gain 1 $Energy at the start of your turn. |
 | 缺 | `snecko_eye` | Snecko Eye | Shared | At the start of your turn, draw 2 additional cards. Start each combat $Confused. |

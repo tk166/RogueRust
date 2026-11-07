@@ -7923,6 +7923,389 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.self_forming_clay",
+      "PackageId": "sts",
+      "NameKey": "Self-Forming Clay",
+      "DescriptionKey": "Whenever you lose HP, gain 3 Block next turn.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Left": {
+                      "kind": "eventAmount",
+                      "value": {}
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 0
+                      }
+                    },
+                    "Op": "Greater"
+                  }
+                },
+                "Then": {
+                  "kind": "node.setCombatantCounter",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "CounterId": {
+                      "value": "self_forming_clay_pending"
+                    },
+                    "Amount": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 1
+                      }
+                    },
+                    "Relative": true
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        },
+        {
+          "Event": "HpLost",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.setCombatantCounter",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "CounterId": {
+                  "value": "self_forming_clay_pending"
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 1
+                  }
+                },
+                "Relative": true
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        },
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "self_forming_clay_pending"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Op": "Greater"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.gainBlock",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "Amount": {
+                            "kind": "multiply",
+                            "value": {
+                              "Left": {
+                                "kind": "combatantCounter",
+                                "value": {
+                                  "Selector": {
+                                    "kind": "sel.source",
+                                    "value": {
+                                      "Cardinality": "ZeroOrOne",
+                                      "RequiredContextCapabilities": "Source"
+                                    }
+                                  },
+                                  "CounterId": "self_forming_clay_pending"
+                                }
+                              },
+                              "Right": {
+                                "kind": "const",
+                                "value": {
+                                  "Value": 3
+                                }
+                              }
+                            }
+                          },
+                          "ResultKey": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "self_forming_clay_pending"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 0
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.bird_faced_urn",
+      "PackageId": "sts",
+      "NameKey": "Bird-Faced Urn",
+      "DescriptionKey": "Whenever you play a Power card, heal 2 HP.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardPlayed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "event.bool",
+                  "value": {
+                    "FieldKey": "card.hasTag.power"
+                  }
+                },
+                "Then": {
+                  "kind": "node.heal",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Amount": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 2
+                      }
+                    },
+                    "ResultKey": null
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.runic_pyramid",
+      "PackageId": "sts",
+      "NameKey": "Runic Pyramid",
+      "DescriptionKey": "At the end of your turn, you no longer discard your hand.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "retain_hand"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.lizard_tail",
+      "PackageId": "sts",
+      "NameKey": "Lizard Tail",
+      "DescriptionKey": "When you would die, heal to 50% of your Max HP instead (works once).",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [],
+      "DeathPrevention": {
+        "SurvivingHealth": 0,
+        "Percent": 50,
+        "Repeating": false
+      }
+    },
+    {
+      "Id": "standard.unceasing_top",
+      "PackageId": "sts",
+      "NameKey": "Unceasing Top",
+      "DescriptionKey": "Whenever you have no cards in hand during your turn, draw a card.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardPlayed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Left": {
+                      "kind": "combatantZoneCount",
+                      "value": {
+                        "Selector": {
+                          "kind": "sel.source",
+                          "value": {
+                            "Cardinality": "ZeroOrOne",
+                            "RequiredContextCapabilities": "Source"
+                          }
+                        },
+                        "Zone": "Hand"
+                      }
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 0
+                      }
+                    },
+                    "Op": "Equal"
+                  }
+                },
+                "Then": {
+                  "kind": "node.drawCards",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Count": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 1
+                      }
+                    },
+                    "ResultKey": null
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -57951,6 +58334,20 @@
       "CombatRules": null
     },
     {
+      "Id": "bird_faced_urn",
+      "DisplayName": "Bird-Faced Urn",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "black_blood",
+      "DisplayName": "Black Blood",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "blood_vial",
       "DisplayName": "Blood Vial",
       "RunPrograms": null,
@@ -58168,6 +58565,13 @@
       "CombatRules": null
     },
     {
+      "Id": "lizard_tail",
+      "DisplayName": "Lizard Tail",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "mango",
       "DisplayName": "Mango",
       "Rarity": "Rare",
@@ -58343,6 +58747,20 @@
       "CombatRules": null
     },
     {
+      "Id": "runic_pyramid",
+      "DisplayName": "Runic Pyramid",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "self_forming_clay",
+      "DisplayName": "Self-Forming Clay",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "shovel",
       "DisplayName": "Shovel",
       "Rarity": "Rare",
@@ -58423,6 +58841,13 @@
       "Id": "twisted_funnel",
       "DisplayName": "Twisted Funnel",
       "Rarity": "Shop",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "unceasing_top",
+      "DisplayName": "Unceasing Top",
+      "Rarity": "Rare",
       "RunPrograms": null,
       "CombatRules": null
     },

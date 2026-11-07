@@ -734,6 +734,14 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.charons_ashes"
             | "standard.duality"
             | "standard.akabeko"
+            // §268: `retain_hand` is a **tag** the host already reads (`hand_is_retained`), and
+            // `DeathPrevention` is a **row** `status_bind::death_prevention` already decodes -- these
+            // are the first content rows that actually use either.
+            | "standard.self_forming_clay"
+            | "standard.bird_faced_urn"
+            | "standard.runic_pyramid"
+            | "standard.lizard_tail"
+            | "standard.unceasing_top"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

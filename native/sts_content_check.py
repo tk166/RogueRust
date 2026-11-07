@@ -115,7 +115,8 @@ INV_COUNTS = {
     # §265: +3 (`snecko_skull` / `ginger` / `turnip`).
     # §266: +2 (`red_skull` / `odd_mushroom`).
     # §267: +13 (the zero-infrastructure relic batch).
-    "statuses": 114,
+    # §268: +5 (the zero-infrastructure tail).
+    "statuses": 119,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1422,6 +1423,13 @@ INV_STATUSES = {
     # §266：`red_skull` 带 `Condition`（HP ≤ 50%），`odd_mushroom` 带 `OverrideScope: Self`。
     "standard.red_skull": [("DamageDealt", "AddFlat", 3, 100, "Direct")],
     "standard.odd_mushroom": [("DamageReceived", "ScalePercent", 125, 300, "Direct")],
+    # §268：五条载体。`runic_pyramid` 的全部行为是 `retain_hand` **标签**，`lizard_tail` 的是
+    # `DeathPrevention` **行** —— 两者在内核侧都已接好，这批是第一次有内容去用。
+    "standard.self_forming_clay": [],
+    "standard.bird_faced_urn": [],
+    "standard.runic_pyramid": [],
+    "standard.lizard_tail": [],
+    "standard.unceasing_top": [],
     # §267：零基建批次。
     "standard.ring_of_the_serpent": [('TurnStartDraw', 'AddFlat', 1, 100, None)],
     "standard.philosophers_stone": [('TurnStartEnergy', 'AddPerStack', 1, 100, None)],
@@ -3411,6 +3419,9 @@ def check_statuses(doc):
                      "standard.charons_ashes",
                      "standard.duality",
                      "standard.akabeko",
+                     # §268（`black_blood` 没有状态）
+                     "standard.self_forming_clay", "standard.bird_faced_urn",
+                     "standard.runic_pyramid", "standard.lizard_tail", "standard.unceasing_top",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3533,6 +3544,12 @@ def check_statuses(doc):
                         "standard.charons_ashes": ['CardExhausted'],
                         "standard.duality": ['CardPlayed'],
                         "standard.akabeko": ['CardPlayed'],
+                        # §268
+                        "standard.self_forming_clay": ['DamageTaken', 'HpLost', 'TurnStarted'],
+                        "standard.bird_faced_urn": ['CardPlayed'],
+                        "standard.runic_pyramid": [],
+                        "standard.lizard_tail": [],
+                        "standard.unceasing_top": ['CardPlayed'],
                         "standard.champion_belt": ["StatusApplied"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
@@ -3779,7 +3796,10 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       # §266: 条件修饰器 + 同侧改写。
                       "red_skull", "odd_mushroom",
                       # §267: 零基建批次。
-                      "ring_of_the_snake", "ring_of_the_serpent", "philosophers_stone", "happy_flower", "art_of_war", "brimstone", "mark_of_pain", "mutagenic_strength", "centennial_puzzle", "runic_cube", "charons_ashes", "duality", "akabeko", "clockwork_souvenir", "red_mask", "gremlin_visage", "fossilized_helix", "mango")
+                      "ring_of_the_snake", "ring_of_the_serpent", "philosophers_stone", "happy_flower", "art_of_war", "brimstone", "mark_of_pain", "mutagenic_strength", "centennial_puzzle", "runic_cube", "charons_ashes", "duality", "akabeko", "clockwork_souvenir", "red_mask", "gremlin_visage", "fossilized_helix", "mango",
+                      # §268: 零基建档收尾。
+                      "self_forming_clay", "bird_faced_urn", "runic_pyramid", "lizard_tail",
+                      "unceasing_top", "black_blood")
 
 
 def check_relics(doc):
