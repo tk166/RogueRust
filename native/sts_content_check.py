@@ -3882,9 +3882,14 @@ REQUIRES_NUMERIC = ("gold", "health", "max_health", "health_percent", "deck_coun
 REQUIRES_NUMERIC_OPS = ("at_least", "at_most")
 REQUIRES_PRESENCE_OPS = ("has", "lacks")
 
+# §280：百分比现在**允许一位小数**（真内容里有 12.5%）。正则与
+# `rd-run::state::parse_permille` 的规则逐条对应：1..=100、可选一位小数、无符号。
+PERCENT_RE = re.compile(r"^(100|[0-9]{1,2})(\.(?!0)[0-9])?$")
+PAY_GOLD_RE = re.compile(r"^(?!0)[0-9]{1,3}$")
+
 # §278: `damage_pct:<n>` / `max_hp_pct:<n>` 的 kind（数字在词里，不在 Amount 格）。
 EVENT_PERCENT_EFFECTS = ("damage_pct", "max_hp_pct")
-EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing",
+EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing", "heal_full",
                       "remove_card", "upgrade_card", "transform_card")
 # Mirrors `rd_run::state::RunState::relic_effect`. Kept as a literal list on purpose: this file is
 # the **second opinion** -- if the two disagree, one of them is wrong and the gate says so.
@@ -4253,6 +4258,47 @@ def check_card_keywords(doc):
 EVENT_DECK_EDITS = ("remove_card", "upgrade_card", "transform_card")
 
 
+def check_requirement_atom(atoms, where_root, relics, cards, counts):
+    """一条 `Requires` 原子（§279/§280）。两条 `Requires*` 走同一个函数 —— 
+    两份清单一定会漂，而漂了之后是"某一档的条件永远不成立".
+    """
+    for index, atom in enumerate(atoms):
+        where = "%s[%d]" % (where_root, index)
+        kind_name = atom.get('Kind')
+        if kind_name not in REQUIRES_KINDS:
+            fail(where, "词表外的条件 %r" % (kind_name,))
+            continue
+        numeric = kind_name in REQUIRES_NUMERIC
+        allowed = REQUIRES_NUMERIC_OPS if numeric else REQUIRES_PRESENCE_OPS
+        op = atom.get('Op')
+        if op is None:
+            fail(where, "missing Op")
+            continue
+        if op not in allowed:
+            fail(where, "Op %r does not fit Kind %r (allowed: %s)"
+                 % (op, kind_name, " / ".join(allowed)))
+            continue
+        if numeric:
+            amount = atom.get('Amount')
+            if not isinstance(amount, int):
+                fail(where, "numeric Kind needs an integer Amount, got %r" % (amount,))
+                continue
+            if kind_name == 'health_percent' and not 1 <= amount <= 100:
+                fail(where, "percentage %d is outside 1..=100" % amount)
+            if kind_name == 'ascension' and not 0 <= amount <= 20:
+                fail(where, "ascension %d is outside 0..=20" % amount)
+        else:
+            target = atom.get('Id')
+            if not isinstance(target, str) or not target:
+                fail(where, "presence Kind needs an Id, got %r" % (target,))
+                continue
+            if kind_name == 'relic' and target not in relics:
+                fail(where, "relic %r is not in Relics" % (target,))
+            if kind_name == 'card' and target not in cards:
+                fail(where, "card %r is not in Cards" % (target,))
+        counts["conditions"] += 1
+
+
 def check_event_vocabulary(doc):
     """§278：每个事件是一棵**段树**，逐段检查选项与效果。
 
@@ -4269,7 +4315,8 @@ def check_event_vocabulary(doc):
     cards = {c["Id"]: c.get("Rarity") for c in doc.get("Cards") or []}
     relics = {r["Id"] for r in doc.get("Relics") or []}
     counts = {"bare": 0, "curse": 0, "relic": 0, "percent": 0, "effects": 0, "asc": 0,
-              "options": 0, "steps": 0, "conditional": 0, "conditions": 0}
+              "options": 0, "steps": 0, "conditional": 0, "conditions": 0,
+              "cost": 0}
     reached = set()
     for room in rooms:
         entry = room.get("Entry")
@@ -4360,19 +4407,27 @@ def check_event_vocabulary(doc):
                             fail(where, "relic:%s 的效果内核没实现（%s）"
                                  % (payload, " / ".join(IMPLEMENTED_RELICS)))
                         continue
-                    if kind in ("damage_pct", "max_hp_pct"):
+                    if kind in ("damage_pct", "max_hp_pct", "heal_pct"):
                         counts["percent"] += 1
-                        # 百分比必须在 1..=100：`0` 是一条什么也不做的效果（页面上还写着
-                        # "按上限 0% 受伤"），而 `150` 会把最大 HP 扣成负数。
-                        try:
-                            percent = int(payload)
-                        except (TypeError, ValueError):
-                            fail(where, "百分比不是整数: %r" % (payload,))
-                            continue
-                        if not 1 <= percent <= 100:
-                            fail(where, "百分比 %d 不在 1..=100" % percent)
-                        if entry.get("Amount") not in (0, None):
+                        # §280：百分比允许**一位小数**（真内容里有 12.5%）。解析规则与
+                        # `rd-run::state::parse_permille` 逐条一致：1..=100、可选一位小数、
+                        # 无符号。两边漂了会变成"内容门说 12.5 合法、内核当成非法"。
+                        if not PERCENT_RE.match(payload or ""):
+                            fail(where, "百分比 %r 不是 1..=100 的百分数（可带一位小数）"
+                                 % (payload,))
+                        elif float(payload) <= 0 or float(payload) > 100:
+                            fail(where, "百分比 %r 不在 1..=100" % (payload,))
+                        if kind == "heal_pct" and entry.get("Amount") not in (0, None):
                             fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
+                        if kind != "heal_pct" and entry.get("Amount") not in (0, None):
+                            fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
+                        continue
+                    if kind == "gold_cost":
+                        counts["cost"] += 1
+                        if not PAY_GOLD_RE.match(payload or ""):
+                            fail(where, "gold_cost:%r 必须是正整数金币" % (payload,))
+                        if entry.get("Amount") not in (0, None):
+                            fail(where, "gold_cost 的 Amount 必须是 0（数字在词里）")
                         continue
                     fail(where, "词表外的效果 %r" % (effect,))
                 if edits > 1:
@@ -4390,43 +4445,24 @@ def check_event_vocabulary(doc):
                     fail(label + '.Requires',
                          "%d atom(s) (the kernel's MAX_REQUIREMENTS is %d)"
                          % (len(requires), REQUIRES_MAX))
-                for index, atom in enumerate(requires):
-                    where = "%s.Requires%d" % (label, index)
-                    kind_name = atom.get('Kind')
-                    if kind_name not in REQUIRES_KINDS:
-                        fail(where, "词表外的条件 %r" % (kind_name,))
-                        continue
-                    numeric = kind_name in REQUIRES_NUMERIC
-                    allowed = REQUIRES_NUMERIC_OPS if numeric else REQUIRES_PRESENCE_OPS
-                    op = atom.get('Op')
-                    if op is None:
-                        fail(where, "missing Op")
-                        continue
-                    if op not in allowed:
-                        fail(where, "Op %r does not fit Kind %r (allowed: %s)"
-                             % (op, kind_name, " / ".join(allowed)))
-                        continue
-                    if numeric:
-                        amount = atom.get('Amount')
-                        if not isinstance(amount, int):
-                            fail(where, "numeric Kind needs an integer Amount, got %r" % (amount,))
-                            continue
-                        if kind_name == 'health_percent' and not 1 <= amount <= 100:
-                            fail(where, "percentage %d is outside 1..=100" % amount)
-                        if kind_name == 'ascension' and not 0 <= amount <= 20:
-                            fail(where, "ascension %d is outside 0..=20" % amount)
-                    else:
-                        target = atom.get('Id')
-                        if not isinstance(target, str) or not target:
-                            fail(where, "presence Kind needs an Id, got %r" % (target,))
-                            continue
-                        if kind_name == 'relic' and target not in relics:
-                            fail(where, "relic %r is not in Relics" % (target,))
-                        if kind_name == 'card' and target not in cards:
-                            fail(where, "card %r is not in Cards" % (target,))
-                    counts["conditions"] += 1
+                check_requirement_atom(requires, label + ".Requires", relics, cards, counts)
                 if requires:
                     counts["conditional"] += 1
+            # ── §280：A15 的条件变体（`RequiresAsc`）—— 与 `EffectsAsc` 成对出现。
+            requires_asc = option.get('RequiresAsc')
+            if requires_asc is not None:
+                if not isinstance(requires_asc, list) or not requires_asc:
+                    fail(label + '.RequiresAsc', "must be a non-empty list: %r" % (requires_asc,))
+                elif requires is None:
+                    fail(label + '.RequiresAsc',
+                         "an A15 variant without a base `Requires` (the base is what A0-14 use)")
+                else:
+                    # ⚠️ 条件变体必须**真的不一样**：与 `EffectsAsc` 同一条规矩（§188）。
+                    if requires_asc == requires:
+                        fail(label + '.RequiresAsc',
+                             "the A15 list equals the base -- this ascension changes nothing")
+                    check_requirement_atom(requires_asc, label + ".RequiresAsc",
+                                           relics, cards, counts)
 
             # §188：A15 的变体必须**真的不一样**。
             base = option.get("Effects") or []

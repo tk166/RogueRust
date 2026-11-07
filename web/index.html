@@ -673,7 +673,8 @@ const eventLabel = (slot) =>
   readText((k) => ex.rd_run_event_label_len(k), (p, k) => ex.rd_run_event_label_into(k, p), slot);
 // §278: 11 = damage_pct:<n>, 12 = max_hp_pct:<n> -- 数字在词里，amount 是 0。
 const EVENT_EFFECTS = ["", "回复", "金币", "受伤", "最大 HP", "什么也不做", "移除一张牌",
-  "升级一张牌", "转化一张牌", "诅咒", "遗物", "按上限百分比受伤", "按上限百分比失去最大 HP"];
+  "升级一张牌", "转化一张牌", "诅咒", "遗物", "按上限百分比受伤", "按上限百分比失去最大 HP",
+  "花金币", "按上限百分比回复", "回满血"];
 
 // The pre-run blessing (`inv:§7.1`): two offers, each a gain and a (possibly empty) cost.
 const startOffer = (slot) =>

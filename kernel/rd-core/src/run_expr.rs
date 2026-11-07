@@ -100,6 +100,12 @@ pub enum RequirementError {
     Malformed,
 }
 
+/// A15（"事件变糟"）的阈值 —— `rd-run::state::A_EVENTS_WORSE` 的同一个数。
+///
+/// 为什么在 `rd-core` 里再写一份：`rd-core` 不能依赖 `rd-run`（那是运行层）。漂移由
+/// `rd-wasm` 的一条判据钉住（两条常量相等），这比让 `rd-core` 认识"事件"这个概念要好。
+pub const A15: u8 = 15;
+
 /// 一条选项最多几个条件原子。
 ///
 /// 四条是**容量**，不是规则：真实内容里每条 `Requires` 只有一句。超了报错，不截断。
@@ -121,9 +127,20 @@ pub fn option_is_available<'a>(
     // —— 与 §278 的 `Effects` 是同一个形状。用 `field()` 读它只会得到 `Malformed`
     // （或者更糟：把"一个节点"当成"一张列表"，于是条件永远是"无条件"）。
     // 解包交给 `term_list_field_or_empty`：它把**缺席**当空列表（绝大多数选项本来就没有条件）。
+    // §280：A15 的价目常常不同（`The Cleric` 的 Purify 50 → 75），于是**条件**也要有
+    // `RequiresAsc`：它只在 A15 起生效，并且**取代**基础那一串（与 `EffectsAsc` 的语义相同）。
+    let key = if facts.ascension >= A15
+        && node.term_list_field_or_empty("RequiresAsc", &mut [0u16; MAX_REQUIREMENTS + 1])
+            .map(|count| count > 0)
+            .unwrap_or(false)
+    {
+        "RequiresAsc"
+    } else {
+        "Requires"
+    };
     let mut terms = [0u16; MAX_REQUIREMENTS + 1];
     let count = node
-        .term_list_field_or_empty("Requires", &mut terms)
+        .term_list_field_or_empty(key, &mut terms)
         .map_err(|error| match error {
             // 列表比缓冲还长 ⇒ 超容量（不是"形状坏了"）。
             IrError::List => RequirementError::TooMany,

@@ -142,6 +142,9 @@ pub const A_SHOP_PRICE: u8 = 16;
 /// §188：事件变得更糟（wiki: *Unfavorable Events — many events have less positive outcomes
 /// and more severe consequences*）。内容用 `Effects*Asc` 给出变体；没有变体的选项照旧。
 pub const A_EVENTS_WORSE: u8 = 15;
+
+// §280：`rd_core::run_expr::A15` 是同一个数的第二份（`rd-core` 不能依赖 `rd-run`）。
+// `rd-wasm` 有一条判据钉住它们相等 —— 两个数字漂开会让"A15 的价目"与"A15 的条件"分家。
 /// §189：精英更常见（wiki: *Elites are more common* — 8% → 16%）。
 pub const A_ELITE_MORE: u8 = 1;
 /// §189：开局带 Ascender's Bane（wiki: *Start with Ascender's Bane*）。
@@ -731,6 +734,13 @@ pub const START_OFFERS: [StartOffer; 8] = [
 /// | `remove_card` / `upgrade_card` / `transform_card` | a deck edit: the run enters [`Pending::EventCard`] and waits for an index |
 /// | `damage_pct:<n>` | lose `floor(max HP × n / 100)` HP (the wiki's *Smash*, A15 rides in the `...Asc` list) |
 /// | `max_hp_pct:<n>` | lose `max(1, floor(max HP × n / 100))` **max** HP (the wiki's *Hide*) |
+/// | `gold_cost:<n>` | **pay** `n` gold; refused when short (the wiki's *Cleric*) |
+/// | `heal_pct:<n>` | heal `floor(max HP × n / 100)` HP (the Cleric's *Heal*) |
+/// | `heal_full` | heal to the maximum (the Moai Head's *Jump Inside*) |
+///
+/// ⚠️ `damage_pct` / `max_hp_pct` / `heal_pct` 的 `<n>` **允许一位小数**（`12.5`），内部按
+/// **千分**存。原因：真内容里就有 12.5%（`The Moai Head` 的 Jump Inside），而整数百分比
+/// 表达不了它 —— 而"四舍五入到 12%"是**另一个规则**，不是同一个规则的近似。
 /// | `curse:<card id>` | add that card to the deck (the id must be in the pool) |
 /// | `relic:<relic id>` | grant that relic (the id must have an implemented effect) |
 /// | `relic_lose:<relic id>` | **drop** that relic (the id must be held — the wiki's `Forgotten Altar` exchange) |
@@ -752,10 +762,18 @@ pub enum EventEffect {
     Gold(i32),
     /// Lose HP -- an event can hurt.
     LoseHealth(i32),
-    /// §278：按**最大 HP 的百分比**掉血（`damage_pct`）。`Golden Idol` 的 Smash 25%（A15 35%）。
+    /// §278：按**最大 HP 的千分比**掉血（`damage_pct`）。`Golden Idol` 的 Smash 25%（A15 35%）。
+    ///
+    /// §280 起单位是**千分**（`250` = 25%），因为真内容里有 12.5%。
     LoseHealthPercent(i32),
-    /// §278：按**最大 HP 的百分比**扣上限（`max_hp_pct`）。`Golden Idol` 的 Hide 8%（A15 10%）。
+    /// §278：按**最大 HP 的千分比**扣上限（`max_hp_pct`）。`Golden Idol` 的 Hide 8%（A15 10%）。
     LoseMaxHealthPercent(i32),
+    /// §280：**付** `n` 金币（`gold_cost`）。不够就拒绝 —— 不是"扣到 0 为止"。
+    GoldCost(i32),
+    /// §280：按**最大 HP 的千分比**回血（`heal_pct`）。`The Cleric` 的 Heal 25%。
+    HealPercent(i32),
+    /// §280：回满血（`heal_full`）。`The Moai Head` 的 Jump Inside。
+    HealFull,
     /// Raise the maximum, and the current HP with it.
     GainMaxHealth(i32),
     /// Nothing at all -- a real, declared choice, not a missing one.
@@ -775,9 +793,48 @@ pub enum EventEffect {
     LoseRelic,
 }
 
-/// §278：`floor(base × percent / 100)`，用整数算（内核不碰浮点）。
-fn percent_of(base: i32, percent: i32) -> i32 {
-    base.saturating_mul(percent) / 100
+/// §280：`floor(base × tenths / 1000)`，用整数算（内核不碰浮点）。
+///
+/// 参数是**千分比**（`250` = 25%，`125` = 12.5%）。§278 时它是百分比；改成千分是因为真内容
+/// 里就有 12.5%（`The Moai Head`）。名字一起改了 —— 留着 `percent_of` 而语义变成千分，
+/// 是那种"看着对、算出来差十倍"的错。
+fn permille_of(base: i32, tenths: i32) -> i32 {
+    base.saturating_mul(tenths) / 1000
+}
+
+/// §280：把 `"25"` / `"12.5"` 这样的**百分字符串**解成千分值（`250` / `125`）。
+///
+/// 只接受：1..=100 的百分比、可选**一位**小数、没有符号。`None` = 词表外（调用方拒绝）。
+/// 为什么不用 `f32`：内核 `no_std` 里不碰浮点（这条纪律让"同一个内容在任何平台算出同一个数"
+/// 是**结构上**成立的，而不是靠约定）。
+fn parse_permille(text: &str) -> Option<i32> {
+    let (whole, fraction) = match text.split_once('.') {
+        Some((whole, fraction)) => (whole, Some(fraction)),
+        None => (text, None),
+    };
+    if whole.is_empty() || whole.len() > 2 {
+        return None;
+    }
+    let whole: i32 = whole.parse().ok()?;
+    let tenths = match fraction {
+        None => 0,
+        Some(fraction) => {
+            // 恰好一位小数；`12.50` 与 `12.` 都是词表外（它们表达同一件事的不同拼法，
+            // 而两套拼法迟早会有一处被忘掉）。
+            if fraction.len() != 1 {
+                return None;
+            }
+            fraction.parse::<i32>().ok()?
+        }
+    };
+    if !(1..=100).contains(&whole) {
+        return None;
+    }
+    if whole == 100 && tenths > 0 {
+        return None;
+    }
+    let total = whole.checked_mul(10)?.checked_add(tenths)?;
+    Some(total)
 }
 
 impl EventEffect {
@@ -793,6 +850,8 @@ impl EventEffect {
             "damage" => (Self::LoseHealth(amount), None),
             "max_hp" => (Self::GainMaxHealth(amount), None),
             "nothing" => (Self::Nothing, None),
+            // §280：`The Moai Head` 的 `[Jump Inside]`："Heal to full HP".
+            "heal_full" => (Self::HealFull, None),
             "remove_card" => (Self::RemoveCard, None),
             "upgrade_card" => (Self::UpgradeCard, None),
             "transform_card" => (Self::TransformCard, None),
@@ -811,17 +870,27 @@ impl EventEffect {
                     "relic_lose" => (Self::LoseRelic, Some(payload)),
                     // §278：`damage_pct:25` —— **数字在词里**（`Amount` 那一格与它无关），
                     // 因为 A15 的 35% 是另一条效果，而不是同一个数字换了值。
-                    "damage_pct" => match payload.parse::<i32>() {
-                        Ok(percent) if percent > 0 && percent <= 100 => {
-                            (Self::LoseHealthPercent(percent), None)
+                    "damage_pct" => match parse_permille(payload) {
+                        Some(tenths) => (Self::LoseHealthPercent(tenths), None),
+                        None => return None,
+                    },
+                    "max_hp_pct" => match parse_permille(payload) {
+                        Some(tenths) => (Self::LoseMaxHealthPercent(tenths), None),
+                        None => return None,
+                    },
+                    // §280：**付钱**。与 `gold`（正增量）是两条不同的路：那一条随手就可能
+                    // 把金币夹到 0，而"花 75 只有 50"必须响亮拒绝。
+                    "gold_cost" => match parse_permille(payload) {
+                        // 金币是整数，不能有小数；`parse_permille` 顺带把 `12.5` 变成 `125`，
+                        // 所以这里只接受**整百分**（千分值是 10 的倍数）。
+                        Some(tenths) if tenths % 10 == 0 && tenths > 0 => {
+                            (Self::GoldCost(tenths / 10), None)
                         }
                         _ => return None,
                     },
-                    "max_hp_pct" => match payload.parse::<i32>() {
-                        Ok(percent) if percent > 0 && percent <= 100 => {
-                            (Self::LoseMaxHealthPercent(percent), None)
-                        }
-                        _ => return None,
+                    "heal_pct" => match parse_permille(payload) {
+                        Some(tenths) => (Self::HealPercent(tenths), None),
+                        None => return None,
                     },
                     _ => return None,
                 }
@@ -4608,12 +4677,31 @@ impl RunState {
             // §278：百分比在**应用时**才乘最大 HP（内容里写 `25`，不是写死 "20"）。
             // `floor` 而不是四舍五入：wiki 的 Hide 明说 "the larger of 1 and Max HP × 8%",
             // 也就是下限 1 的**向下取整** —— Smash 用同一个取整，否则两处会给出不同的数。
-            EventEffect::LoseHealthPercent(percent) => {
-                let loss = percent_of(self.health_max, percent);
+            EventEffect::LoseHealthPercent(tenths) => {
+                let loss = permille_of(self.health_max, tenths);
                 self.adjust_health(-loss);
             }
-            EventEffect::LoseMaxHealthPercent(percent) => {
-                let loss = percent_of(self.health_max, percent).max(1);
+            EventEffect::HealPercent(tenths) => {
+                let amount = permille_of(self.health_max, tenths);
+                self.heal_after_combat(amount);
+            }
+            // §280："Heal to full HP" —— 不是"回 999"，而是"回到上限"（上限是会变的）。
+            EventEffect::HealFull => {
+                let full = self.health_max;
+                self.heal_after_combat(full);
+            }
+            EventEffect::GoldCost(cost) => {
+                if self.gold < cost {
+                    // **响亮**：夹到 0 会让"花 75 只有 50"变成"白拿服务"，而屏幕上一切正常。
+                    return Err(RunError::NotEnoughGold {
+                        price: cost,
+                        gold: self.gold,
+                    });
+                }
+                self.adjust_gold(-cost);
+            }
+            EventEffect::LoseMaxHealthPercent(tenths) => {
+                let loss = permille_of(self.health_max, tenths).max(1);
                 // 上限夹在 1：wiki 只说"损失至少 1"，没说上限可以变成 0 —— 而 0 会让下一次
                 // 百分比计算除以 0（`percent_of` 用的是 base × pct / 100，base=0 ⇒ 永远 0），
                 // 于是"下次 Hide 不掉血"这种荒唐事会安静地发生。
@@ -9446,7 +9534,7 @@ mod tests {
         assert_eq!(post_before, hp_max);
         let hp_before = run.health();
         run.resolve_event_effects(
-            &[(EventEffect::LoseHealthPercent(25), None)],
+            &[(EventEffect::LoseHealthPercent(250), None)],
             None,
             &pool,
         )
@@ -9474,7 +9562,7 @@ mod tests {
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
         run.begin_event("golden_idol", "golden_idol.boulder").expect("the boulder");
         let before = run.health_max();
-        run.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(8), None)], None, &pool)
+        run.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(80), None)], None, &pool)
             .expect("hiding");
         assert_eq!(run.health_max(), before - (before * 8 / 100), "8% of max, floored");
         assert!(
@@ -9484,12 +9572,82 @@ mod tests {
         // 1 HP 的上限也只会掉 1（下限 1），不会掉到 0 或负数。
         let mut tiny = RunState::new(7, 1, 0, &["strike"; 5]).expect("a 1 HP run");
         tiny.begin_event("golden_idol", "golden_idol.boulder").expect("the boulder");
-        tiny.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(50), None)], None, &pool)
+        tiny.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(500), None)], None, &pool)
             .expect("hiding");
         // 损失 = max(1, floor(1 × 50%)) = 1，但上限**夹在 1**（0 上限会让下一次百分比
         // 永远算出 0 伤害）。
         assert_eq!(tiny.health_max(), 1, "max HP never reaches 0");
         assert!(tiny.health() >= 0, "HP never goes negative");
+    }
+
+    /// §280：**付不起就拒绝，不是扣到 0 为止**。
+    ///
+    /// `adjust_gold(-75)` 会把 50 金币夹成 0 —— 玩家**白拿了服务**，而屏幕上一切正常
+    /// （这正是 `gold_cost` 存在的理由）。判据是"整份局面不动一个字节"。
+    #[test]
+    fn paying_more_gold_than_you_have_is_refused_not_clamped() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 20, &["strike"; 5]).expect("a run with 20 gold");
+        run.begin_event("the_cleric", "the_cleric").expect("the event");
+        let before = run;
+        let outcome = run.resolve_event_effects(
+            &[(EventEffect::GoldCost(35), None), (EventEffect::HealPercent(250), None)],
+            None,
+            &pool,
+        );
+        assert_eq!(
+            outcome,
+            Err(RunError::NotEnoughGold { price: 35, gold: 20 }),
+            "a cost you cannot pay is refused"
+        );
+        assert!(run == before, "and the heal does not land either");
+        // 付得起的时候：金币真的少了、血真的回了 25%（`250` 千分 = 25%）。
+        let mut rich = RunState::new(7, 80, 100, &["strike"; 5]).expect("a rich run");
+        rich.begin_event("the_cleric", "the_cleric").expect("the event");
+        rich.adjust_health(-40);                      // 40/80 = 50%
+        rich.resolve_event_effects(
+            &[(EventEffect::GoldCost(35), None), (EventEffect::HealPercent(250), None)],
+            None,
+            &pool,
+        )
+        .expect("35 gold is affordable");
+        assert_eq!(rich.gold(), 65, "35 gold left the purse");
+        assert_eq!(rich.health(), 60, "40 + floor(80 × 25%)");
+    }
+
+    /// §280：`heal_full` 回的是**当前上限**（不是写死的 999），而且上限后来变了它还成立。
+    #[test]
+    fn heal_full_reaches_the_current_maximum() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.adjust_health(-50);                       // 30/80
+        run.begin_event("the_moai_head", "the_moai_head").expect("the event");
+        run.resolve_event_effects(&[(EventEffect::HealFull, None)], None, &pool)
+            .expect("jump inside");
+        assert_eq!(run.health(), run.health_max, "heal_full reaches the maximum");
+    }
+
+    /// §280：`max_hp_pct:12.5` —— 千分单位存在的理由。
+    ///
+    /// 80 上限的 12.5% = 10 HP。整数百分比会把它算成 9（12%）或 10（13%，那是另一个数），
+    /// 所以这条判据钉的是"小数真的进了计算"，而不只是"解析接受 12.5"。
+    #[test]
+    fn a_fractional_percentage_reaches_the_arithmetic() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("the_moai_head", "the_moai_head").expect("the event");
+        let before = run.health_max();
+        run.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(125), None)], None, &pool)
+            .expect("the moai head");
+        assert_eq!(run.health_max(), before - 10, "12.5% of 80 is exactly 10");
+        // 解析层：`12.5` 与 `12` 必须是两个不同的数（一个拼写错误不该被悄悄接受成整数）。
+        assert_eq!(EventEffect::parse("max_hp_pct:12.5", 0), Some((EventEffect::LoseMaxHealthPercent(125), None)));
+        assert_eq!(EventEffect::parse("max_hp_pct:12", 0), Some((EventEffect::LoseMaxHealthPercent(120), None)));
+        // 两位小数、`12.`、`100.5` 都是词表外。
+        assert_eq!(EventEffect::parse("max_hp_pct:12.55", 0), None);
+        assert_eq!(EventEffect::parse("max_hp_pct:12.", 0), None);
+        assert_eq!(EventEffect::parse("max_hp_pct:100.5", 0), None);
+        assert_eq!(EventEffect::parse("max_hp_pct:0", 0), None);
     }
 
     /// §278：`next` **形状不合法**时，整个事件不动一个字节（含 `event_step`）。

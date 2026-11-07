@@ -64110,6 +64110,16 @@
       "Id": "the_mausoleum",
       "NameKey": "The Mausoleum",
       "Entry": "the_mausoleum"
+    },
+    {
+      "Id": "the_cleric",
+      "NameKey": "The Cleric",
+      "Entry": "the_cleric"
+    },
+    {
+      "Id": "the_moai_head",
+      "NameKey": "The Moai Head",
+      "Entry": "the_moai_head"
     }
   ],
   "Potions": [
@@ -64396,7 +64406,10 @@
         "Id": "ancient_writing"
       },
       {
-        "Id": "forgotten_altar"
+        "Id": "the_ssssserpent"
+      },
+      {
+        "Id": "the_cleric"
       }
     ],
     "Events2": [
@@ -64411,6 +64424,9 @@
       },
       {
         "Id": "the_mausoleum"
+      },
+      {
+        "Id": "forgotten_altar"
       }
     ],
     "Events3": [
@@ -64424,7 +64440,7 @@
         "Id": "purification_shrine"
       },
       {
-        "Id": "the_ssssserpent"
+        "Id": "the_moai_head"
       }
     ]
   },
@@ -64955,6 +64971,238 @@
     {
       "Id": "forgotten_altar.desecrate",
       "TextKey": "You lash out and smash the statue in front of you. A dark wail echoes all around you, and you can feel the cursed magic seep into your bones.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_cleric",
+      "TextKey": "A strange blue humanoid with a golden helm approaches you with a huge smile. \"Hello friend! I am Cleric! Are you interested in my services?!\" he shouts, loudly.",
+      "Options": [
+        {
+          "Label": "Heal (35 Gold)",
+          "Requires": [
+            {
+              "Kind": "gold",
+              "Op": "at_least",
+              "Amount": 35
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "gold_cost:35",
+              "Amount": 0
+            },
+            {
+              "Effect": "heal_pct:25",
+              "Amount": 0
+            }
+          ],
+          "Next": "the_cleric.heal"
+        },
+        {
+          "Label": "Purify (50 Gold)",
+          "Requires": [
+            {
+              "Kind": "gold",
+              "Op": "at_least",
+              "Amount": 50
+            }
+          ],
+          "RequiresAsc": [
+            {
+              "Kind": "gold",
+              "Op": "at_least",
+              "Amount": 75
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "gold_cost:50",
+              "Amount": 0
+            },
+            {
+              "Effect": "remove_card",
+              "Amount": 0
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "gold_cost:75",
+              "Amount": 0
+            },
+            {
+              "Effect": "remove_card",
+              "Amount": 0
+            }
+          ],
+          "Next": "the_cleric.purify"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "the_cleric.declined"
+        }
+      ]
+    },
+    {
+      "Id": "the_cleric.heal",
+      "TextKey": "A warm golden light envelops your body and dissipates. The creature grins. \"Cleric best healer. Have a good day!\"",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_cleric.purify",
+      "TextKey": "A cold blue flame envelops your body and dissipates. The creature grins. \"Cleric talented. Have a good day!\"",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_cleric.declined",
+      "TextKey": "You don't trust this \"Cleric\", so you leave.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_moai_head",
+      "TextKey": "Before you, an enormous stony head emerges from a large wall segment. The head's mouth is wide open, and it reveals large intimidating teeth stained red with blood.",
+      "Options": [
+        {
+          "Label": "Jump Inside",
+          "Effects": [
+            {
+              "Effect": "heal_full",
+              "Amount": 0
+            },
+            {
+              "Effect": "max_hp_pct:12.5",
+              "Amount": 0
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "heal_full",
+              "Amount": 0
+            },
+            {
+              "Effect": "max_hp_pct:18",
+              "Amount": 0
+            }
+          ],
+          "Next": "the_moai_head.inside"
+        },
+        {
+          "Label": "Offer: Golden Idol",
+          "Requires": [
+            {
+              "Kind": "relic",
+              "Op": "has",
+              "Id": "golden_idol"
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "relic_lose:golden_idol",
+              "Amount": 1
+            },
+            {
+              "Effect": "gold",
+              "Amount": 333
+            }
+          ],
+          "Next": "the_moai_head.offer"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "the_moai_head.leave"
+        }
+      ]
+    },
+    {
+      "Id": "the_moai_head.inside",
+      "TextKey": "The huge molars slam down from above, crushing you whole. Darkness. Sometime later you see a sliver of light, and hear the sound of stony teeth slowly rising upwards.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_moai_head.offer",
+      "TextKey": "You jump back as the gigantic molars smash down on the idol, grinding it into dust. As the teeth rise again, gold pours forth in a torrent from the opening.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_moai_head.leave",
+      "TextKey": "You leave, wondering what could have been.",
       "Options": [
         {
           "Label": "Leave",

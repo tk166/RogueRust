@@ -1966,6 +1966,8 @@ fn effect_code(effect: &str) -> i32 {
         "damage" => 3,
         "max_hp" => 4,
         "nothing" => 5,
+        // §280：裸词。`heal_full` 不带数字，但页面要能写出"回满血"。
+        "heal_full" => 15,
         "remove_card" => 6,
         "upgrade_card" => 7,
         "transform_card" => 8,
@@ -1981,6 +1983,9 @@ fn effect_code(effect: &str) -> i32 {
                     // §278：百分比原子。**数字在词里**（`damage_pct:25`），所以 `amount` 那格是 0。
                     "damage_pct" => 11,
                     "max_hp_pct" => 12,
+                    // §280：付钱 / 按上限百分比回血 / 回满血。
+                    "gold_cost" => 13,
+                    "heal_pct" => 14,
                     _ => -1,
                 };
             }
@@ -3044,6 +3049,10 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         // （`effect_amount` 返回词里的数字，页面就能写"按上限 25% 受伤"）。
         EventEffect::LoseHealthPercent(_) => 11,
         EventEffect::LoseMaxHealthPercent(_) => 12,
+        // §280
+        EventEffect::GoldCost(_) => 13,
+        EventEffect::HealPercent(_) => 14,
+        EventEffect::HealFull => 15,
         // §279：失去遗物只有**事件**会用（`relic_lose:<id>`），与 `GainCurse`/`GainRelic`
         // 同一条规矩：这两个码是"这个选项点名了一件遗物"，只有**内容字符串**知道 id，
         // 而 `effect_code_of` 拿到的是已经解析过的枚举 —— 所以答 `-1` 而不是复用 10/13。
@@ -3058,15 +3067,20 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::Gold(n)
         | EventEffect::LoseHealth(n)
         | EventEffect::GainMaxHealth(n)
+        // §280：11/12 与 14 的"数"是**千分比**（`250` = 25%，`125` = 12.5%）——
+        // 页面按它显示 `25%` / `12.5%`，所以这一处**不能**给它换算成百分比。
         | EventEffect::LoseHealthPercent(n)
-        | EventEffect::LoseMaxHealthPercent(n) => n,
+        | EventEffect::LoseMaxHealthPercent(n)
+        | EventEffect::HealPercent(n)
+        | EventEffect::GoldCost(n) => n,
         EventEffect::Nothing
         | EventEffect::RemoveCard
         | EventEffect::UpgradeCard
         | EventEffect::TransformCard
         | EventEffect::GainCurse
         | EventEffect::GainRelic
-        | EventEffect::LoseRelic => 0,
+        | EventEffect::LoseRelic
+        | EventEffect::HealFull => 0,
     }
 }
 
@@ -6261,9 +6275,7 @@ mod tests {
                 3 => {
                     let _ = rd_run_rest();
                 }
-                4 => {
-                    let _ = rd_run_choose(0);
-                }
+                4 => settle_event(),
                 5 | 6 => {
                     if kind == 6 {
                         let _ = rd_run_open_chest();
@@ -7236,7 +7248,7 @@ mod tests {
             );
 
             // ── 第二段：Smash 按最大 HP 的百分比，A15 换的是**另一条效果**。
-            let want = if level >= 15 { 35 } else { 25 };
+            let want = if level >= 15 { 350 } else { 250 };
             assert_eq!(rd_run_event_effect_at(1, 0), DAMAGE_PCT_CODE, "Smash is a percentage");
             assert_eq!(
                 rd_run_event_amount_at(1, 0),
@@ -7244,7 +7256,7 @@ mod tests {
                 "A{level}: Smash's percentage must be {want}% (wiki: 25% / A15 35%)"
             );
             // Hide 也一样，只是它扣的是**上限**。
-            let want_hide = if level >= 15 { 10 } else { 8 };
+            let want_hide = if level >= 15 { 100 } else { 80 };
             assert_eq!(rd_run_event_effect_at(2, 0), MAX_HP_PCT_CODE, "Hide is a percentage");
             assert_eq!(
                 rd_run_event_amount_at(2, 0),
@@ -7262,8 +7274,9 @@ mod tests {
             assert_eq!(rd_run_observe(3), hp_max, "A{level}: max HP is untouched by Smash");
             assert_eq!(
                 rd_run_observe(2),
-                hp - (hp_max * want / 100),
-                "A{level}: Smash takes floor(max HP × {want}%)"
+                // §280：`want` 是**千分**（250 = 25%），所以除数是 1000。
+                hp - (hp_max * want / 1000),
+                "A{level}: Smash takes floor(max HP × {want}‰)"
             );
             assert_ne!(
                 rd_run_node_resolved(),
@@ -7271,6 +7284,89 @@ mod tests {
                 "A{level}: the room must not be *un*settled after the last step"
             );
         }
+    }
+
+    /// §280：`the_cleric` 的 `Purify` 价目在 A15 是 75 —— **条件**跟着换（`RequiresAsc`）。
+    ///
+    /// 判据两侧：同一个 60 金币的局，A0 可选、A15 不可选。只测一档的话，
+    /// "忽略 A15"与"永远用 A15"都能通过。
+    #[test]
+    fn the_a15_requirement_variant_gates_the_cleric_price() {
+        // `rd-core` 的 A15 是 `rd-run` 的同一个数的第二份 —— 漂开会让"价目"与"条件"分家。
+        assert_eq!(
+            rd_core::run_expr::A15,
+            rd_run::state::A_EVENTS_WORSE,
+            "the two A15 constants must be the same number"
+        );
+        for (level, want_available) in [(0u8, true), (14, true), (15, false), (20, false)] {
+            reset(7);
+            // `RunState` 没有 `set_ascension`（等级是构造参数，因为每条规则都要在阈值两侧
+            // 各测一次，见 §159）。所以这里**重建**一个会话，与 `a15_swaps_...` 同一个做法。
+            let state = rd_run::state::RunState::new_with_ascension(
+                7, 80, 60, &["strike"; 5], level,
+            )
+            .expect("a run");
+            *run_slot() = Some(RunSession {
+                state: Box::new(state),
+                error: String::new(),
+                elite_fight: false,
+                boss_fight: false,
+                in_fight: false,
+                journal: Vec::new(),
+                head: std::format!("RDR1,S,7,{level},{}", content_pin_text()),
+                replaying: false,
+                replay_checked: 0,
+                replay_diverged: 0,
+                hash_failed: false,
+            });
+            let session = run_slot().as_mut().expect("a run");
+            assert!(
+                session
+                    .state
+                    .begin_event("the_cleric", "the_cleric")
+                    .is_ok()
+            );
+            assert_eq!(rd_run_observe(4), 60, "the purse is 60");
+            // 槽 0 = Heal（35 金币，两档都一样）。
+            assert_eq!(
+                rd_run_event_option_available(0),
+                1,
+                "A{level}: 35 gold is affordable, so Heal is offered"
+            );
+            // 槽 1 = Purify（50 / A15 75）。
+            assert_eq!(
+                rd_run_event_option_available(1),
+                i32::from(want_available),
+                "A{level}: Purify needs {} gold",
+                if level >= 15 { 75 } else { 50 }
+            );
+        }
+        // 再验一次"付得起"的那一侧：A15 + 80 金币 ⇒ 可选。
+        reset(7);
+        let mut state = rd_run::state::RunState::new_with_ascension(7, 80, 80, &["strike"; 5], 15)
+            .expect("a run");
+        assert!(
+            state.begin_event("the_cleric", "the_cleric").is_ok(),
+            "the event opens"
+        );
+        *run_slot() = Some(RunSession {
+            state: Box::new(state),
+            error: String::new(),
+            elite_fight: false,
+            boss_fight: false,
+            in_fight: false,
+            journal: Vec::new(),
+            head: std::format!("RDR1,S,7,15,{}", content_pin_text()),
+            replaying: false,
+            replay_checked: 0,
+            replay_diverged: 0,
+            hash_failed: false,
+        });
+        assert_eq!(
+            rd_run_event_option_available(1),
+            1,
+            "A15 with 80 gold: the 75 gold Purify is offered"
+        );
     }
 
     /// The hand's definition ids, in pile order (`hand_costs` has the prices).
@@ -7759,6 +7855,36 @@ mod tests {
     /// Needed since "you settle a node before you walk on" (`RunError::NodeNotSettled`): a test that
     /// walks the map has to finish each node first, and doing it through the ABI is what keeps these
     /// tests about *walking* rather than about the run layer's internals.
+    /// §279/§280：把一屏事件**走到收尾**（挑第一个**可用**的选项，多段就一路点下去）。
+    ///
+    /// 为什么不能盲选槽 0：它可能是一条**条件选项**（`the_cleric` 的 Heal 要 35 金币、
+    /// `forgotten_altar` 的 Offer 要金像）。盲选会点一条锁着的路，内核拒（-2），屏幕上
+    /// 什么都没变，于是下一格报 "walk" 失败、**指到地图**。而这种洞会在两个 walker 里
+    /// 各出现一次 —— 所以只有这一个助手。
+    fn settle_event() {
+        let mut guard = 0;
+        while rd_run_pending() == 5 && guard < 8 {
+            guard += 1;
+            let mut slot = -1;
+            for candidate in 0..rd_run_event_option_count() {
+                if rd_run_event_option_available(candidate) == 1 {
+                    slot = candidate;
+                    break;
+                }
+            }
+            if slot < 0 {
+                // 没有可用选项：让调用方的那条断言响亮（不要在这里静默退出循环）。
+                break;
+            }
+            if rd_run_choose(slot) != 0 {
+                break;
+            }
+            if rd_run_event_needs() > 0 {
+                let _ = rd_run_pick_event_card(0);
+            }
+        }
+    }
+
     fn settle_here() {
         if rd_run_node_kind() < 0 {
             return;
@@ -7785,12 +7911,7 @@ mod tests {
                 4 => {
                     let _ = rd_run_skip_reward();
                 }
-                5 => {
-                    let _ = rd_run_choose(0);
-                    if rd_run_event_needs() > 0 {
-                        let _ = rd_run_pick_event_card(0);
-                    }
-                }
+                5 => settle_event(),
                 7 | 8 => {
                     let _ = rd_run_pick_event_card(0);
                 }

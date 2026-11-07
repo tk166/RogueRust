@@ -3273,7 +3273,7 @@ pub struct EventOption<'a> {
     pub asc_count: u8,
     /// §278：下一段的节点 id。**空串 = 这一段是终点**（选项生效后事件收尾）。
     pub next: &'a str,
-    /// §279：这个选项在镜像里的 term —— 条件（`Requires`）由
+    /// §279/§280：这个选项在镜像里的 term —— 条件（`Requires` / `RequiresAsc`）由
     /// [`crate::run_expr::option_is_available`] 按它读。`ABSENT16` = 没有 term（不该出现）。
     pub term: u16,
 }
@@ -5106,10 +5106,10 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            11,
-            "eleven distinct events (§221 added `the_ssssserpent` and `the_mausoleum`); the pools 
-             hold more *slots* than ids because `EventTables` share `purification_shrine` / 
-             `golden_idol` / `ancient_forge` across acts (§133 / §143)"
+            13,
+            "§280 补了 `the_cleric` 与 `the_moai_head`（两条都带条件选项）。pools 的**位次**比
+             id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
+             跨幕复用（§133 / §143）"
         );
         let mut ids = Vec::new();
         for index in 0..content.event_count() {
@@ -5169,6 +5169,7 @@ mod tests {
             "damage",
             "max_hp",
             "nothing",
+            "heal_full",
             "remove_card",
             "upgrade_card",
             "transform_card",
@@ -5185,6 +5186,9 @@ mod tests {
                 || prefix(effect, "relic_lose:")
                 || prefix(effect, "damage_pct:")
                 || prefix(effect, "max_hp_pct:")
+                // §280：付钱 / 按上限百分比回血；`heal_full` 是裸词，在 `bare` 里。
+                || prefix(effect, "gold_cost:")
+                || prefix(effect, "heal_pct:")
         };
         for node in &walk {
             let step = content.event_step(*node).expect("step");
@@ -5219,7 +5223,9 @@ mod tests {
                 "scrap_pile",
                 "shining_light",
                 // §221: the two rooms added with the second event batch
+                "the_cleric",
                 "the_mausoleum",
+                "the_moai_head",
                 "the_ssssserpent",
                 "wandering_merchant"
             ]

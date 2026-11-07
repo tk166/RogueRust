@@ -303,7 +303,7 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 
 | 缺口 | 缺什么载体 | 方案 |
 |---|---|---|
-| ~~真实事件的**剧情分支**被合并 + 条件选项~~ | **§278/§279 已做**：`EVND` 段表（选项数不固定）+ `EV.Entry` + `Requires`（闭词表，6 数值 kind / 2 存在 kind）+ `relic_lose`；`golden_idol` 补成两段三选一，`forgotten_altar` 补成 4 选项（1 条条件）+ 3 个后续屏。 |
+| ~~真实事件的**剧情分支**被合并 + 条件选项~~ | **§278/§279/§280 已做**：`EVND` 段表（选项数不固定）+ `EV.Entry` + `Requires`/`RequiresAsc`（闭词表，6 数值 kind / 2 存在 kind）+ `relic_lose` / `gold_cost` / `heal_pct` / `heal_full` / 小数百分比（千分）。**事件级条件（"这个事件出不出现"）仍未做** —— 见 `docs/event-gaps.md` §3.1。 |
 | 战斗中**每回合重掷**的随机没有值节点 | 一个"从程序里问随机数"的表达式 | `randomInt(Min,Max)` 走 `CombatState` 现有 RNG；★ 结果要在计划里固化（预检也会求值） |
 
 ### G. ★ 基础值偏差：§191 修掉了 8 条，剩 3 条是写明了的简化

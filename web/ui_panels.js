@@ -28,7 +28,20 @@ const RD_PANELS = (() => {
     "转化一张牌",
     "获得一张诅咒",
     "获得遗物",
+    "按上限百分比受伤",     // 11（§278）
+    "按上限百分比减少最大 HP", // 12
+    "花金币",               // 13（§280）
+    "按上限百分比回复",     // 14
+    "回满血",               // 15
   ];
+
+  /// §280：11/12/14 的"数"是**千分比**（`250` = 25%，`125` = 12.5%）。
+  /// 这是唯一需要小数的一位，所以单独一个格式化函数（而不是让每个调用点自己除）。
+  function permilleText(tenths) {
+    const whole = Math.floor(tenths / 10);
+    const rest = tenths % 10;
+    return rest === 0 ? `${whole}%` : `${whole}.${rest}%`;
+  }
 
   /// Kind number -> what to call it. Order is `run-layer.md` §7.2.
   const KIND_NAMES = ["", "战斗", "精英", "篝火", "商人", "未知", "宝箱", "Boss"];
@@ -36,8 +49,13 @@ const RD_PANELS = (() => {
   /// The effect phrase for an offer/choice half, or `""` when it does nothing.
   function effectText(code, amount) {
     if (code === 5 || code < 0) return "";
+    // §280：百分比三项的数是千分比，要写成 `25%` / `12.5%`（不是 `250`）。
+    if (code === 11 || code === 12 || code === 14) {
+      return `${EFFECT_LABELS[code] || "?"} ${permilleText(amount)}`;
+    }
     // §143: codes 6..=10 are not "amount" effects -- the number belongs to the number effects
     // only, so appending it would print "升级一张牌 0".
+    if (code >= 13) return EFFECT_LABELS[code] || "?";
     if (code >= 6) return EFFECT_LABELS[code] || "?";
     return `${EFFECT_LABELS[code] || "?"} ${amount}`;
   }
