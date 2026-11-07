@@ -478,6 +478,78 @@ pub(crate) fn combat_hero_health() -> Option<i32> {
         .map(|combatant| combatant.health_current)
 }
 
+/// §253：按**创建顺序**取英雄的第 `index` 张战斗卡（返回 `(实例 id, 定义 id)`）。
+///
+/// 为什么不是"把牌位号拼成 `card_{i:06}`"：那要依赖"实例号从几开始"这件事，而实测它是
+/// **从 1 起**（`a_broken_slot` 那条判据的探针看到的是 `card_000001..card_000005`）。
+/// 一个魔法偏移量迟早会漂，而**顺序**是稳定的：发牌按牌组顺序进行，实例 id 是零填充的
+/// （`card_%06d`），所以"按 id 字符串排序" == "按创建顺序排序"。
+///
+/// 战斗中新造的牌 id 更大，永远排在后面 ⇒ 取前 `deck_len` 个就是发出去的那副牌组。
+pub(crate) fn combat_card_in_creation_order(
+    index: usize,
+) -> Option<(
+    rd_core::state::CardInstanceId,
+    rd_core::state::CardDefinitionId,
+)> {
+    let session = slot().as_ref()?;
+    let hero = session.hero_id()?;
+    let zones = session.state.card_zones(&hero)?;
+    let mut cards = std::vec::Vec::new();
+    for zone in rd_core::state::CardZone::ALL {
+        for at in 0..zones.count(zone) {
+            let Some(slot) = zones.slot_at(zone, at) else {
+                continue;
+            };
+            let Some(card) = session.state.card(slot) else {
+                continue;
+            };
+            cards.push((card.id, card.definition_id));
+        }
+    }
+    cards.sort_by(|left, right| left.0.as_str().cmp(right.0.as_str()));
+    cards.get(index).copied()
+}
+
+/// §253：按**实例 id** 找那一份战斗卡（`None` = 不在这个牌区集合里）。
+///
+/// 用于"运行层的牌位 ↔ 战斗实例"的对号（`apply_run_marks` / `capture_run_marks`）。
+/// 拷贝出 `definition_id` 而不是借出去：调用方马上要拿 `&mut` 去写状态。
+pub(crate) fn combat_card_by_instance(
+    instance: &rd_core::state::CardInstanceId,
+) -> Option<CombatCardSummary> {
+    let session = slot().as_ref()?;
+    let hero = session.hero_id()?;
+    let (_, slot) = session.state.find_card(&hero, instance)?;
+    let card = session.state.card(slot)?;
+    Some(CombatCardSummary {
+        definition_id: card.definition_id,
+        marks: card.mark_counters().iter().copied().collect(),
+    })
+}
+
+/// 一份战斗卡在"跨场对号"时要看的东西（定义 + 每副本 mark）。
+pub(crate) struct CombatCardSummary {
+    /// 卡定义 id。
+    pub(crate) definition_id: rd_core::state::CardDefinitionId,
+    /// 它身上的 mark counter（每副本数据）。
+    pub(crate) marks: std::vec::Vec<rd_core::state::Counter>,
+}
+
+/// §253：把一格每副本数据写到指定的那一份战斗卡上。
+pub(crate) fn combat_set_mark(
+    instance: &rd_core::state::CardInstanceId,
+    key: &str,
+    value: i32,
+) -> Result<(), &'static str> {
+    let session = slot().as_mut().ok_or("没有正在进行的战斗")?;
+    let hero = session.hero_id().ok_or("找不到英雄")?;
+    let (_, slot) = session.state.find_card(&hero, instance).ok_or("那一份牌不在牌区里")?;
+    let key = rd_core::state::CounterId::new(key).map_err(|_| "mark counter 的名字装不下")?;
+    let card = session.state.card_mut(slot).ok_or("那一份牌不存在")?;
+    card.set_mark_counter(key, value).map_err(|_| "那张牌的计数器表满了")
+}
+
 /// Put the hero at `value` health.
 ///
 /// Needed because the fight is built at the hero's **maximum** (`build_fight_from_content` uses
@@ -1474,6 +1546,9 @@ impl Session {
                 // §241: a normal play lands where the card's `PlayedCardDestinationZone` says;
                 // only a forced play (`Havoc`) overrides it.
                 override_destination: None,
+                // §253: the page never plays an `unplayable` card — that is the whole point of the
+                // tag, and only `node.playCard` with `IgnoreUnplayable` (i.e. `Wish`) may do it.
+                ignore_unplayable: false,
             };
             if can_play_card(&self.state, Some(self.content), &request).is_err() {
                 continue;

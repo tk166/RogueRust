@@ -189,6 +189,18 @@ pub enum NodeKind {
     ///
     /// 字段：`{ToZone, Count?, Placement?}`（`Count` 缺席 = 1，`Placement` 缺席 = `Bottom`）。
     CreateCardCopy,
+    /// §253：**由别的牌把一张牌打出来**（`Wish` 的三个选项；参考的 `node.playCard`）。
+    ///
+    /// 字段：`{PlayerSelector, CardExpression, CardTargetSelector?, IgnoreUnplayable?}`。
+    ///
+    /// 与 `node.playTopCardOfDrawPile`（`Havoc`）的区别：那个"从抽牌堆顶拿一张、强制 Exhaust"，
+    /// 这个"把**指定的**那一份按它自己的落区打出去"。两者共用底层的 `play_card` 管线，
+    /// 所以费用、事件、触发器、修饰器都只有一份实现。
+    ///
+    /// `IgnoreUnplayable` 是本内核多出来的一格，理由写在 `play.rs::play_card_from_program`：
+    /// StS 的 `Wish` **会**打出 `unplayable` 的牌，而参考的 `playCard` 对它是 no-op。
+    /// 默认 `false` ⇒ 与参考逐字相同。
+    PlayCard,
     /// §250：**问玩家三选一：从"职业牌池"里随机取 N 张**（`Discovery`）。
     ///
     /// 字段：`{Count, Min?, Max?}`。候选是**卡定义**（`ChoiceSource::Offered`），选完进手牌
@@ -287,6 +299,7 @@ impl NodeKind {
             NodeKind::DealDamageAndGainMaxHealthIfFatal => "node.dealDamageAndGainMaxHealthIfFatal",
             NodeKind::DealDamageAndIfFatal => "node.dealDamageAndIfFatal",
             NodeKind::GainGold => "node.gainGold",
+            NodeKind::PlayCard => "node.playCard",
             NodeKind::CreateCardCopy => "node.createCardCopy",
             NodeKind::OfferRandomCards => "node.offerRandomCards",
             NodeKind::CreateRandomCardInstance => "node.createRandomCardInstance",
@@ -305,7 +318,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 39] = [
+        const ALL: [NodeKind; 40] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -349,6 +362,7 @@ impl NodeKind {
             // §250：一般形态的 "If Fatal" + 金币 + 造这一张的副本 + 三选一候选。
             NodeKind::DealDamageAndIfFatal,
             NodeKind::GainGold,
+            NodeKind::PlayCard,
             NodeKind::CreateCardCopy,
             NodeKind::OfferRandomCards,
             NodeKind::CreateRandomCardInstance,

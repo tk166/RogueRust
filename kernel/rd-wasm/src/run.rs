@@ -290,6 +290,74 @@ fn run_slot() -> &'static mut Option<RunSession> {
 /// the same `static mut` -- two live references to one object, which is undefined behaviour. It
 /// showed up as an **access violation** in `rust-units` (exit 0xC0000005) rather than as a wrong
 /// answer, which is the only good thing about it.
+/// §253：第 `slot` 个牌位对应的战斗实例（按**创建顺序**，见
+/// [`crate::combat_card_in_creation_order`]）。
+fn deck_slot_instance(slot: usize) -> Option<rd_core::state::CardInstanceId> {
+    crate::combat_card_in_creation_order(slot).map(|(id, _)| id)
+}
+
+/// §253：`fight_begin` 之后，把运行层的每副本 mark 写进**对应的那一份**战斗实例。
+///
+/// 校验三件事（任何一条不成立都报错，不静默）：
+/// 1. 那个牌位在战斗里有对应的实例；
+/// 2. 它的定义就是 `deck[slot]`；
+/// 3. 写 mark 成功（计数器表装得下）。
+///
+/// **对号靠"创建顺序"**，不是"把牌位号拼成实例 id"（见
+/// [`crate::combat_card_in_creation_order`]）。
+fn apply_run_marks(session: &mut RunSession) -> Result<(), std::string::String> {
+    let deck_len = session.state.deck().len();
+    for slot in 0..deck_len {
+        let Some(mark) = session.state.mark(slot) else {
+            continue;
+        };
+        let expected = session.state.deck()[slot].as_str().to_string();
+        let Some((instance, definition)) = crate::combat_card_in_creation_order(slot) else {
+            return Err(std::format!(
+                "牌位 {slot}（{expected}）在战斗里找不到对应的那一份"
+            ));
+        };
+        if definition.as_str() != expected {
+            return Err(std::format!(
+                "牌位 {slot} 的对应关系漂了：战斗里那一份是 `{}`，牌组里是 `{expected}`",
+                definition.as_str()
+            ));
+        }
+        crate::combat_set_mark(&instance, mark.key.as_str(), mark.value)
+            .map_err(|reason| std::format!("牌位 {slot} 的跨场数据写不进去：{reason}"))?;
+    }
+    Ok(())
+}
+
+/// §253：`fight_end`（`take_session` **之前**）把战斗实例上的 mark 读回运行层。
+///
+/// 与 [`apply_run_marks`] 同一套对号。**定义对不上就跳过那一个牌位**：一张牌在战斗里被
+/// 变形/移出时它的实例可能已经不在，那不是错误（StS 里那些牌本来就不成长）。
+/// 但"牌位存在而实例不见了"也不报错 —— 那是战斗把它弄没了，不是对号漂了；
+/// 对号漂了会表现为"定义对不上"，那一条在 `apply_run_marks` 里已经是错误。
+fn capture_run_marks(session: &mut RunSession) {
+    let deck_len = session.state.deck().len();
+    for slot in 0..deck_len {
+        let expected = session.state.deck()[slot].as_str().to_string();
+        let Some((instance, definition)) = crate::combat_card_in_creation_order(slot) else {
+            continue;
+        };
+        if definition.as_str() != expected {
+            continue;
+        }
+        let Some(card) = crate::combat_card_by_instance(&instance) else {
+            continue;
+        };
+        for counter in &card.marks {
+            let key = counter.key.as_str().to_string();
+            if key.is_empty() {
+                continue;
+            }
+            let _ = session.state.set_mark(slot, &key, counter.value);
+        }
+    }
+}
+
 fn fail(session: &mut RunSession, message: &str) -> i32 {
     session.error.clear();
     session.error.push_str(message);
@@ -3264,25 +3332,25 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         // `RunState` 自己的存储。于是"失败就恢复 `*session.state = before`"与"牌组项还指着那块内存"
         // 只能二选一：借用检查器拒绝它，而如果绕过检查，回滚会覆写战斗正在读的字节。
         // 拷贝出独立字符串之后，`FightPlan` 与 `RunState` 再无别名，回滚才是安全的。
-        let mut counts: Vec<(std::string::String, u16)> = Vec::new();
-        for id in session.state.deck() {
-            let id = id.as_str();
-            match counts.iter_mut().find(|(name, _)| name.as_str() == id) {
-                Some((_, count)) => *count += 1,
-                None => counts.push((std::string::String::from(id), 1)),
-            }
-        }
-        let entries: &'static [rd_core::battle::DeckEntry<'static>] =
-            Box::leak(
-                counts
-                    .into_iter()
-                    .map(|(card, count)| rd_core::battle::DeckEntry {
-                        card: Box::leak(card.into_boxed_str()),
-                        count,
-                    })
-                    .collect::<Vec<_>>()
-                    .into_boxed_slice(),
-            );
+        // §253：**一个牌位一条 entry**（`count = 1`），不再按定义 id 分组。
+        //
+        // 分组会打乱顺序 —— `[dagger, strike, dagger]` 变成 `[(dagger,2), (strike,1)]`，
+        // 于是"第 i 个战斗实例"对不上"第 i 个牌位"。而 `ritual_dagger` 的跨场成长正是按牌位
+        // 记的，所以那一步的压缩就是那个缺口的一部分。发牌是**按顺序**取号的
+        // （`battle.rs` 步 4，`next_card_instance_number` 从 0 起），所以 1:1 之后
+        // 第 i 个牌位 = 实例 `card_{i:06}`，这条对应关系可以在装好战斗后**校验**（见下）。
+        let entries: &'static [rd_core::battle::DeckEntry<'static>] = Box::leak(
+            session
+                .state
+                .deck()
+                .iter()
+                .map(|id| rd_core::battle::DeckEntry {
+                    card: Box::leak(std::string::String::from(id.as_str()).into_boxed_str()),
+                    count: 1,
+                })
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        );
         match crate::build_session_at(
             fight_seed,
             encounters[pick],
@@ -3295,6 +3363,10 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
                 crate::install_session(combat);
                 // The fight is built at the hero's maximum; a run usually enters wounded.
                 crate::set_combat_hero_health(session.state.health());
+                // §253：把运行层的每副本数据写进**对应的那一份**战斗实例。
+                if let Err(message) = apply_run_marks(session) {
+                    return fail(session, &message);
+                }
                 // ... and then the relics get their turn. A failure here is a **content** problem
                 // (a relic promising Block the kernel cannot write), so it is reported, not ignored.
                 apply_combat_bonus(bonus).err()
@@ -3457,6 +3529,11 @@ pub extern "C" fn rd_run_fight_end() -> i32 {
     // §250：这一场战斗里**赚到**的金币（`Hand of Greed` 的 "If Fatal, gain 20 Gold"）。
     // 与 `carried_gold` 一起在 `take_session()` **之前**读 —— 之后战斗就没了。
     let gained_gold = crate::combat_gold_gained();
+    // §253：每副本数据（`Ritual Dagger` 的跨场成长）也要在 `take_session()` **之前**读回运行层 ——
+    // 之后战斗就没了。它写在运行层自己的牌位上（`RunState::set_mark`），所以这里只需要 `&mut RunState`。
+    if let Some(session) = run_slot().as_mut() {
+        capture_run_marks(session);
+    }
     // Captured before the run is borrowed mutably below.
     let elite_fight = run_slot().as_ref().is_some_and(|s| s.elite_fight);
     let boss_fight = run_slot().as_ref().is_some_and(|s| s.boss_fight);
@@ -3506,6 +3583,10 @@ fn flee_fight(slot: i32) -> i32 {
     // §250：逃走的战斗也要把"战斗里赚到的金币"带上 —— `Hand of Greed` 的钱不是奖励
     // （Smoke Bomb 的 "no rewards" 说的是奖励），它已经在战斗里到手了。
     let gained_gold = crate::combat_gold_gained();
+    // §253：逃走也把跨场数据带回去（与 `rd_run_fight_end` 同一条）。
+    if let Some(session) = run_slot().as_mut() {
+        capture_run_marks(session);
+    }
     let Some(session) = run_slot().as_ref() else {
         return -1;
     };
@@ -4161,6 +4242,114 @@ mod tests {
     /// Negative control: make `apply_fight_outcome` read the enemies' counters instead of the
     /// passed-in number and case 2 goes red -- a dead thief would still cost gold.
     #[test]
+    /// §253：`Ritual Dagger` 的成长**跨战斗存活** —— 这才是 wiki 那个 "permanently"。
+    ///
+    /// 判据走真实的两场战斗，而不是"调一下 set_mark 再读回来"（那样只测了存取器）：
+    /// ① 第一场：把那一条 counters 写成 3（模拟"致命击杀了一次"），`fight_end`；
+    /// ② 运行层的牌位 0 上应当有 `standard.ritual_dagger_bonus = 3`；
+    /// ③ 第二场：`fight_begin` 之后，**新的那一份实例**上应当带着 3 ——
+    ///    于是它这一场打出的伤害是 15 + 3×3 = 24（而不是 15）。
+    ///
+    /// 第 ③ 段是整件事的意义：只测 ② 的话，"存进去了但没人读"也能过。
+    #[test]
+    fn ritual_dagger_growth_survives_the_fight() {
+        let deck = ["ritual_dagger", "strike", "strike", "strike", "strike", "strike",
+                    "defend", "defend", "defend", "defend"];
+        test_run(11, 70, 80, &deck);
+        // ① 第一场：把牌位 0 那一份的计数器写成 3，然后结算这场战斗。
+        assert_eq!(walk_into_first_combat(), 0, "the first fight starts: {}", run_error_text());
+        // 牌位 0 的实例：按**创建顺序**取第 0 个（§253 的对应关系本身要钉住）。
+        let (instance, definition) =
+            crate::combat_card_in_creation_order(0).expect("slot 0 exists in the fight");
+        assert_eq!(
+            definition.as_str(),
+            "ritual_dagger",
+            "§253: deck slot 0 is the card created first"
+        );
+        crate::combat_set_mark(&instance, "standard.ritual_dagger_bonus", 3)
+            .expect("the mark is writable");
+        rd_run_fight_end();
+        // ② 运行层记下了它。
+        let session = run_slot().as_ref().expect("a run");
+        let mark = session.state.mark(0).expect("slot 0 carries a mark");
+        assert_eq!(mark.key.as_str(), "standard.ritual_dagger_bonus");
+        assert_eq!(mark.value, 3, "the growth survived fight_end");
+
+        // ③ 第二场：新的那一份实例带着同一个值。
+        assert_eq!(walk_into_first_combat(), 0, "the second fight starts: {}", run_error_text());
+        let fresh = crate::combat_card_by_instance(&instance).expect("the same slot exists");
+        assert_eq!(fresh.definition_id.as_str(), "ritual_dagger");
+        let carried = fresh
+            .marks
+            .iter()
+            .find(|counter| counter.key.as_str() == "standard.ritual_dagger_bonus")
+            .map(|counter| counter.value);
+        assert_eq!(carried, Some(3), "the next fight's copy starts grown");
+    }
+
+    /// §253：**对号关系坏了要响亮**，不许静默丢弃。
+    ///
+    /// 反证：把牌组第 0 位换成另一张牌**但保留它的 mark**（直接写运行层），于是"牌位 0 的
+    /// 实例"与"牌位 0 的定义"对不上 —— `apply_run_marks` 必须报错，而不是"跳过那个牌位"。
+    /// 跳过就是这一节要消灭的那种错：成长没了，而页面上什么都看不出来。
+    #[test]
+    fn a_broken_slot_correspondence_is_an_error_not_a_silent_skip() {
+        let deck = ["strike", "strike", "defend", "defend", "bash"];
+        test_run(12, 70, 80, &deck);
+        {
+            let session = run_slot().as_mut().expect("a run");
+            // 牌位 0 是 `strike`，但我们把它的 mark 指到 `ritual_dagger` 的计数器上 ——
+            // 对号本身仍然成立（实例 0 就是 strike），所以这一条**不该**报错；它证明
+            // "key 是谁"不影响对号。真正会报错的是下面那一步。
+            session
+                .state
+                .set_mark(0, "standard.ritual_dagger_bonus", 3)
+                .expect("the mark is writable");
+        }
+        assert_eq!(walk_into_first_combat(), 0, "the fight starts: {}", run_error_text());
+
+        // 现在把战斗里那一份实例的**定义**换掉：模拟"牌位 ↔ 实例"漂了。
+        {
+            let session = crate::slot().as_mut().expect("a fight");
+            let hero = session.hero_id().expect("a hero");
+            let instance = crate::combat_card_in_creation_order(0)
+                .expect("slot 0 exists")
+                .0;
+            let (_, index) = session.state.find_card(&hero, &instance).expect("it exists");
+            let card = session.state.card_mut(index).expect("the card");
+            card.definition_id =
+                rd_core::state::CardDefinitionId::new("defend").expect("a definition");
+        }
+        let message = {
+            let session = run_slot().as_mut().expect("a run");
+            apply_run_marks(session).expect_err("a drifted correspondence must be loud")
+        };
+        assert!(
+            message.contains("漂了"),
+            "the message must name the drift, got {message:?}"
+        );
+    }
+
+    /// §253：走一步到**第一个战斗节点**并开战（返回 0 = 成）。
+    ///
+    /// 判据需要"真的在打一场普通战斗"，而第一层第一个节点是随种子变化的（可能是篝火/商店）。
+    /// 所以按 action 表逐个试，遇到 `kind == 1`（`Combat`）就走进去 ——
+    /// 这比硬编一个种子稳：换种子不会让判据变成"什么都没测"。
+    fn walk_into_first_combat() -> i32 {
+        let actions = rd_run_action_count();
+        for action in 0..actions {
+            let target = rd_run_action_arg(action, 0);
+            if rd_run_map_node(target, NODE_FIELD_KIND) != 1 {
+                continue;
+            }
+            let stepped = rd_run_step(action);
+            assert_eq!(stepped, 0, "stepping onto a combat node: {}", run_error_text());
+            assert_eq!(rd_run_begin_node(), 0, "begin: {}", run_error_text());
+            return rd_run_fight_begin();
+        }
+        panic!("seed offered no combat node on floor 1");
+    }
+
     fn the_gold_a_thief_carried_away_is_the_only_gold_lost() {
         let deck = ["strike", "strike", "strike", "strike", "strike", "defend", "defend",
                     "defend", "defend", "bash"];

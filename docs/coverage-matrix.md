@@ -46,7 +46,7 @@
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
 | **合计** | 624 | 383 | 225 | 16 | 454 | 77 | 81 | 0 |
 
-扫描到的具名测试：**987** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**991** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -259,7 +259,7 @@
 | bash+ | yes | — | CARD_DIFF | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
-| become_almighty | yes | the_wish_options_are_unplayable_by_hand | — | wiki:wiki_cards/become_almighty.txt | — | CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
+| become_almighty | yes | the_wish_options_are_unplayable_by_hand, play_card_from_program_respects_unplayable_unless_told_otherwise | — | wiki:wiki_cards/become_almighty.txt | — | CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
 | become_almighty+ | yes | — | CARD_DIFF | wiki:wiki_cards/become_almighty.txt (via become_almighty) | — | INV_CARDS |
 | berserk | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt | — | §197/§199/CARD_WIKI+INV_CARDS |
 | berserk+ | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt (via berserk) | — | INV_CARDS |
@@ -309,7 +309,7 @@
 | decay | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/decay.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+42) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+44) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -455,7 +455,7 @@
 | regret | yes | the_turn_end_curses_do_their_own_thing, an_event_can_give_a_curse_but_only_a_real_one | — | wiki:wiki_cards/regret.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | rip_and_tear | yes | rip_and_tear_hits_twice_for_seven | — | wiki:wiki_cards/rip_and_tear.txt | — | §228/§229/CARD_WIKI+INV_CARDS/rip_and_tear_hits_twice_for_seven |
 | rip_and_tear+ | yes | rip_and_tear_hits_twice_for_seven | — | wiki:wiki_cards/rip_and_tear.txt (via rip_and_tear) | — | INV_CARDS/rip_and_tear_hits_twice_for_seven |
-| ritual_dagger | yes | ritual_dagger_only_grows_when_it_kills | — | wiki:wiki_cards/ritual_dagger.txt | — | §250/CARD_WIKI+INV_CARDS/ritual_dagger_only_grows_when_it_kills |
+| ritual_dagger | yes | ritual_dagger_only_grows_when_it_kills, ritual_dagger_growth_survives_the_fight | — | wiki:wiki_cards/ritual_dagger.txt | — | §250/CARD_WIKI+INV_CARDS/ritual_dagger_only_grows_when_it_kills |
 | ritual_dagger+ | yes | — | CARD_DIFF | wiki:wiki_cards/ritual_dagger.txt (via ritual_dagger) | — | INV_CARDS |
 | rupture | yes | — | CARD_DIFF | wiki:wiki_cards/rupture.txt | — | CARD_WIKI+INV_CARDS |
 | rupture+ | yes | the_lose_hp_cards_do_what_their_pages_say | — | wiki:wiki_cards/rupture.txt (via rupture) | — | INV_CARDS/the_lose_hp_cards_do_what_their_pages_say |
@@ -484,7 +484,7 @@
 | sever_soul | yes | the_new_red_attacks_do_what_their_pages_say | — | wiki:wiki_cards/sever_soul.txt | wiki 偏差：wiki 的 {{KW\|Exhaust}} 是动词（消耗手里的非攻击牌），不是本牌的关键字；牌本身打完进弃牌堆。 | CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
 | sever_soul+ | yes | — | CARD_DIFF | wiki:wiki_cards/sever_soul.txt (via sever_soul) | wiki 偏差：wiki 的 {{KW\|Exhaust}} 是动词（消耗手里的非攻击牌），不是本牌的关键字；牌本身打完进弃牌堆。 | INV_CARDS |
 | shame | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/shame.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
-| shiv | yes | shiv_and_smite_differ_in_retain_not_only_in_damage | — | wiki:wiki_cards/shiv.txt | — | CARD_WIKI+INV_CARDS/shiv_and_smite_differ_in_retain_not_only_in_damage |
+| shiv | yes | shiv_and_smite_differ_in_retain_not_only_in_damage, play_card_from_program_is_a_quiet_no_op_when_it_cannot_play | — | wiki:wiki_cards/shiv.txt | — | CARD_WIKI+INV_CARDS/shiv_and_smite_differ_in_retain_not_only_in_damage |
 | shiv+ | yes | — | CARD_DIFF | wiki:wiki_cards/shiv.txt (via shiv) | — | INV_CARDS |
 | shockwave | yes | the_new_red_skills_do_what_their_pages_say | — | wiki:wiki_cards/shockwave.txt | — | CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | shockwave+ | yes | the_new_red_skills_do_what_their_pages_say | — | wiki:wiki_cards/shockwave.txt (via shockwave) | — | INV_CARDS/the_new_red_skills_do_what_their_pages_say |
@@ -497,7 +497,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+96) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+97) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+8) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -594,7 +594,7 @@
 | standard.spore_cloud | yes | spore_cloud_weakens_the_killer_on_death | — | spec:INV_STATUSES | — | §117/§249/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
 | standard.stasis | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.1/§195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
-| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+60) | — | spec:INV_STATUSES | — | §242/§252/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
+| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+61) | — | spec:INV_STATUSES | — | §242/§252/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
 | standard.the_bomb | yes | the_bomb_explodes_on_the_third_turn_end_only | — | spec:INV_STATUSES | — | §248/§249/INV_STATUSES/the_bomb_explodes_on_the_third_turn_end_only |
 | standard.the_bomb_damage | yes | the_bomb_explodes_on_the_third_turn_end_only | — | spec:INV_STATUSES | — | §245/§248/INV_STATUSES/the_bomb_explodes_on_the_third_turn_end_only |
 | standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, standard_status_ids_are_byte_ordered_not_registration_ordered …(+4) | — | spec:INV_STATUSES | — | §214/§249/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |

@@ -1766,6 +1766,60 @@ fn deal_damage_and_if_fatal_node(
     }
 }
 
+/// §253：`node.playCard` 的实体 —— `{PlayerSelector, CardExpression, CardTargetSelector?,
+/// IgnoreUnplayable?}`。
+///
+/// 它**不自己实现出牌**：把"哪一份、谁打、打谁、要不要越过 `unplayable`"整理成一个请求，
+/// 剩下的交给 [`crate::play::play_card_from_program`] —— 费用、事件、触发器、修饰器因此
+/// 只有一份实现（与 `Havoc` 的 `play_top_card_for` 同一层）。
+fn play_card_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    _stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let player_selector = node
+        .node_field("PlayerSelector")?
+        .ok_or(IrError::Missing("PlayerSelector"))?;
+    let mut players = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(player_selector, ctx, &mut players)?;
+    let Some(player) = players.first().copied().filter(|player| count > 0) else {
+        // 参考：`TryGetCombatant` 失败 ⇒ no-op（`PlayCardEffects.cs:33-37`）。
+        return resume_later(ctx.state, frame, slot);
+    };
+    let card_expression = node
+        .node_field("CardExpression")?
+        .ok_or(IrError::Missing("CardExpression"))?;
+    let card = {
+        let expr_ctx = ctx.expr_context();
+        crate::expr::eval_card(card_expression, &expr_ctx)?
+    };
+    let target = match node.node_field("CardTargetSelector")? {
+        Some(selector) => {
+            let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+            let resolved = resolve_targets(selector, ctx, &mut targets)?;
+            targets.first().copied().filter(|_| resolved > 0)
+        }
+        None => None,
+    };
+    let ignore_unplayable = node.bool_field("IgnoreUnplayable")?.unwrap_or(false);
+    let Some(content) = ctx.content else {
+        return Err(ExecError::Ir(IrError::Missing("content")));
+    };
+    // 四种"跳过"由 `play_card_from_program` 自己判定并返回 `Ok(false)`（参考全是 no-op，
+    // 不是错误）—— 只有"内容坏了"才走 `Err`。
+    crate::play::play_card_from_program(
+        ctx.state,
+        content,
+        &player,
+        &card,
+        target,
+        ignore_unplayable,
+    )?;
+    resume_later(ctx.state, frame, slot)
+}
+
 /// §250：`node.gainGold` 的实体 —— `{Amount}`。
 ///
 /// 直接写 `CombatState.gold_gained`（不走请求）：金币不是任何触发器看得见的东西。
@@ -2162,6 +2216,7 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         // §250：四条（`dealDamageAndIfFatal` 的孩子在下面那道 match 里走，这里只登记）。
         | NodeKind::DealDamageAndIfFatal
         | NodeKind::GainGold
+        | NodeKind::PlayCard
         | NodeKind::CreateCardCopy
         | NodeKind::OfferRandomCards
         // §146：`repeat`（X 费牌的"跑 X 遍"）。它有孩子，但预检只走一遍 Body ——
@@ -2320,6 +2375,7 @@ fn dispatch_node(
             deal_damage_and_if_fatal_node(node, ctx, frame, slot, depth, stats)
         }
         NodeKind::GainGold => gain_gold_node(node, ctx, frame, slot, stats),
+        NodeKind::PlayCard => play_card_node(node, ctx, frame, slot, stats),
         NodeKind::CreateCardCopy => create_card_copy_node(node, ctx, frame, slot, stats),
         NodeKind::OfferRandomCards => offer_random_cards_node(node, ctx, frame, slot, stats),
         NodeKind::GainBlock => gain_block_node(node, ctx, frame, slot, stats),

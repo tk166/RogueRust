@@ -162,6 +162,15 @@ pub struct PlayRequest {
     /// ⚠️ 传 `None` **不是错误**：目标选择器会解析出空集，多目标节点打空，
     /// 单体节点则是"没有目标"。参考从不因为目标非法而拒绝出牌。
     pub target: Option<CombatantId>,
+    /// §253：**越过 `unplayable` 那道门**（`Wish` 打出 `Become Almighty` / `Live Forever` /
+    /// `Fame and Fortune` 就是这么一回事）。
+    ///
+    /// 为什么是请求上的一格、而不是"给节点开个后门"：受理校验在 `plan_play` 里，
+    /// **它读的是请求**（与 `override_destination` 同一条理由 —— "谁在出牌"不是内容的事）。
+    /// 默认 `false` = 参考行为（`PlayCardEffects.cs:54-58` 对 `unplayable` 是 no-op）。
+    ///
+    /// ⚠️ 它**只**掀这一道门：`stun` / 法令 / `PlayCondition` 全部照旧。
+    pub ignore_unplayable: bool,
     /// §241：**强制落区**（`Havoc`："Play the top card of your draw pile and **Exhaust** it."）。
     ///
     /// `None` = 听内容的 `PlayedCardDestinationZone`。这是"谁在出牌"的事，不是内容的事 ——
@@ -172,11 +181,27 @@ pub struct PlayRequest {
 impl PlayRequest {
     /// 常用形状：给一个人、一张卡、一个目标。
     #[must_use]
+    /// §253：`Wish` 那条路 —— 打一张**天生不可打出**的牌。
+    ///
+    /// 单独一个构造函数（而不是让调用方手改字段）：这是**唯一**该越过那道门的情形，
+    /// 而"谁越过了它"值得在调用点一眼看见。
+    pub const fn playable_by_effect(
+        source: CombatantId,
+        card: CardInstanceId,
+        target: Option<CombatantId>,
+    ) -> Self {
+        let mut request = Self::new(source, card, target);
+        request.ignore_unplayable = true;
+        request
+    }
+
     pub const fn new(source: CombatantId, card: CardInstanceId, target: Option<CombatantId>) -> Self {
         Self {
             source,
             card,
             target,
+            // §253：默认与参考一致（不越门）。
+            ignore_unplayable: false,
             override_destination: None,
         }
     }
@@ -193,6 +218,8 @@ impl PlayRequest {
             source,
             card,
             target,
+            // §253：默认与参考一致（不越门）。
+            ignore_unplayable: false,
             override_destination: Some(zone),
         }
     }
@@ -506,6 +533,75 @@ const DEFAULT_MAX_PROGRAM_STEPS: u32 = 1024;
 /// 参考在 `Faulted` 终态下**已经**扣过费、且把卡**直接搬**到了落区（`Cards/CardPlay.cs:254-261`），
 /// 规格书 §7.1 最后一行明写"状态是否逐字节不变 = **否**"。所以本函数在 effect fault 时
 /// 返回 `Err(PlayError::Effect(..))`，而状态**已经变了**（费用已付、卡已落区）。
+/// §253：**由效果节目打出一张牌**（`node.playCard`；`Wish` 的三个选项就是这么被打出来的）。
+///
+/// 返回 `Ok(true)` = 真的打出去了，`Ok(false)` = 参考那种"安静什么都不做"（六种情形见
+/// `port-plan.md` §253 的表）。只有**内容坏了**（那一份实例在内容里找不到定义）才 `Err`。
+///
+/// 参数 `ignore_unplayable` 是本内核多出来的一格：StS 的 `Wish` 会打出 `unplayable` 的牌，
+/// 而参考的 `playCard` 对它是 no-op（`PlayCardEffects.cs:54-58`）。默认调用方传 `false`
+/// ⇒ 与参考逐字相同。它**只**掀 `unplayable` 这一道门：`stun` / 法令 / `PlayCondition` 全照旧。
+pub(crate) fn play_card_from_program(
+    state: &mut CombatState,
+    content: &crate::content::Content<'_>,
+    player: &CombatantId,
+    card: &crate::state::CardInstanceId,
+    target: Option<CombatantId>,
+    ignore_unplayable: bool,
+) -> Result<bool, ExecError> {
+    // 1. 玩家在不在、倒没倒。
+    let alive = state
+        .combatant(player)
+        .is_some_and(|combatant| combatant.health_current > 0);
+    if !alive {
+        return Ok(false);
+    }
+    // 2. 那一份在不在这个人的牌区里。
+    let Some((zone, slot)) = state.find_card(player, card) else {
+        return Ok(false);
+    };
+    // 3. 只在手牌里打。参考在同一条路上用 `cardInstance.Zone != Hand` 判，`plan_play` 也会判；
+    //    这里先判一次是为了"不在手牌 ⇒ 什么都不发生"，而不是"报一个拒绝"。
+    if zone != CardZone::Hand {
+        return Ok(false);
+    }
+    let Some(definition) = state.card(slot).map(|card| card.definition_id) else {
+        return Ok(false);
+    };
+    // 5. `unplayable` 那道门（默认照参考关着）。
+    if !ignore_unplayable
+        && content.card_has_tag(definition.as_str(), "unplayable") == Some(true)
+    {
+        return Ok(false);
+    }
+    // 4. 付不起 / 6. 被 `stun`/法令/`PlayCondition` 拒 ⇒ 参考都是 no-op，不是错误。
+    //
+    // 第 5 道门（`unplayable`）不在这里判 —— 它住在受理校验链里（`unplayable_validator`），
+    // 由**请求上的 `ignore_unplayable`** 决定跳不跳。上面那次预检只是为了"不在手牌/付不起"
+    // 这类情形连校验链都不进；真正说了算的是请求。
+    let request = if ignore_unplayable {
+        PlayRequest::playable_by_effect(*player, *card, target)
+    } else {
+        PlayRequest::new(*player, *card, target)
+    };
+    match play_card(state, Some(content), &request) {
+        Ok(_) => Ok(true),
+        // 参考对"付不起"也是 no-op（`:60-70`）；`Refused` 是 `stun`/法令/`PlayCondition` 那几道门
+        // —— 那些**本内核也不越**（`Wish` 只推翻"这张牌天生不可打出"），所以同样 no-op。
+        Err(PlayError::Refused(_)) | Err(PlayError::Unaffordable { .. }) => Ok(false),
+        Err(PlayError::MissingResource { .. }) => Ok(false),
+        // `SourceUnavailable` / `CardNotInHand` 这些在第 1~3 步已经排除了；走到了说明状态自相矛盾，
+        // **不许当成 no-op** —— 那会让一个真 bug 安静地变成"这张牌没打出去"。
+        // 走到这里的都是"状态自相矛盾"（第 1~3 步已经排除过）。**不许静默**：
+        // 冻结的 `ExecError` 没有"这一条路不许发生"的变体，`UnsupportedNode` 是它既有的
+        // 响亮口袋（内容/状态不合法 ⇒ 整场战斗报错，而不是"这张牌没打出去"）。
+        Err(error) => {
+            let _ = error;
+            Err(ExecError::UnsupportedNode)
+        }
+    }
+}
+
 pub fn play_card(
     state: &mut CombatState,
     content: Option<&Content<'_>>,
@@ -694,6 +790,8 @@ struct CardOnTable<'a> {
     /// 不是一条独立的费用条目：`Costs` 里那个 `Amount` 对 X 费牌**没有意义**（内容门要求它
     /// 是 0 或缺席），真正的费用在出牌那一刻才读得出来。
     is_x_cost: bool,
+    /// §253：这次出牌**允许越过 `unplayable`**（`Wish` 那条路）。来自请求，不是卡属性。
+    ignore_unplayable: bool,
 }
 
 /// 六阶段里的前五阶段：**纯读**，任何拒绝都不改状态。
@@ -754,6 +852,8 @@ fn plan_play<'c>(
         is_attack: card_has_tag(content, row, ATTACK_TAG)?,
         is_skill: card_has_tag(content, row, SKILL_TAG)?,
         is_x_cost: card_has_tag(content, row, X_COST_TAG)?,
+        // §253：这一格来自**请求**（"谁在出牌"的事），不是卡属性。
+        ignore_unplayable: req.ignore_unplayable,
     };
 
     // ── 法令闸门（规格书 §8.2/§8.3）：v1 没有法令实现，所以"内容里真的有法令"
@@ -1616,6 +1716,11 @@ fn entangled_validator(
 /// `Cards/CardPlayValidators.cs:23-35`：卡带 `unplayable` 标签即拒。
 /// 本内容 2 张（`red_tape` / `unsigned_form`，都是 0 费咒卡，§1.4 实测）。
 fn unplayable_validator(card: &CardOnTable<'_>) -> Result<(), PlayError> {
+    // §253：`Wish` 那条路会明确越过这一道（请求上的 `ignore_unplayable`）。
+    // 其余四道门（stun / 法令 / `PlayCondition` / one_attack）**不受它影响**。
+    if card.ignore_unplayable {
+        return Ok(());
+    }
     if card_has_tag(card.content, card.row, UNPLAYABLE_TAG)? {
         return Err(PlayError::Refused(Refusal::Unplayable));
     }
@@ -3609,6 +3714,7 @@ mod tests {
             is_attack: card_has_tag(content, row, ATTACK_TAG).expect("Tags 可解"),
             is_skill: card_has_tag(content, row, SKILL_TAG).expect("Tags 可解"),
             is_x_cost: card_has_tag(content, row, X_COST_TAG).expect("Tags 可解"),
+            ignore_unplayable: false,
         }
     }
 

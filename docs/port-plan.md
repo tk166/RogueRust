@@ -17278,3 +17278,75 @@ the current fight — it funds the run instead"），`fight_end` 才进运行层
   `skewer`）是**我们自己的内容**被 wiki 归到别的颜色 —— 不是缺口。
 * 下一步不是"再加牌"，而是把**已有的不对称**收掉：`Wish`/`playCard` 那条通道、§250.3 的
   `ritual_dagger` 跨场成长、敌人侧还缺的 5 个精英（`Lagavulin` 等，见 §249.6 的旧表）。
+
+---
+
+## §253 两条真实缺口：`node.playCard` 通道、`ritual_dagger` 的跨场成长
+
+§250.3 与 §252.1 各自记过一条"写明了的不对称"。这一节把它们收掉，加 5 条判据。
+
+### 253.1 `node.playCard`：由别的牌把一张牌打出来
+
+参考的形状（`EffectProgramContracts.cs:527-536`）：`PlayerSelector` / `CardExpression` /
+`CardTargetSelector?` / `ResultKey?`；处理器（`Cards/PlayCardEffects.cs:21-96`）走**完整出牌
+管线**，并在六种情形下 **no-op（不抛）**：玩家不在/倒了、实例不在其牌区、**不在手牌**、
+**付不起**、**带 `unplayable` tag**、被规则禁止（`stun`/法令/`PlayCondition`）。
+
+**我们多一格 `IgnoreUnplayable`**（默认 `false` ⇒ 与参考逐字相同）。理由写在 wiki 里：
+`Become Almighty` 的正文是 "It can only be obtained and **played** through Watcher's Wish"，
+而这三张牌**都是 unplayable**。参考的 `playCard` 对它们 no-op ⇒ 照抄就表达不出 `Wish`。
+所以这一格是**写明的扩展**，而不是偷偷改规则：默认值保持参考行为，只有明确写 `true` 的内容
+才越过那道门。
+
+**它只掀一道门**：`unplayable` 是卡自己的属性，而 `stun`/法令/`PlayCondition` 都是"现在不许
+出牌" —— `Wish` 的语义只推翻前者。造一个"跳过全部校验"的后门会把"Wish 能打诅咒"解释成
+"Wish 能在被击晕时出牌"。
+
+实现上分两层，因为"受理校验在 `plan_play`、而它读的是**请求**"：
+
+* `PlayRequest.ignore_unplayable`（与 `override_destination` 同一类：**谁在出牌**的事，
+  不是内容的事）+ `PlayRequest::playable_by_effect(..)` 这个具名构造函数
+  —— "谁越过了那道门"在调用点一眼可见；
+* `play_card_from_program(..)`（`play.rs`）做参考那六种 no-op 的判定，然后交给 `play_card`。
+  费用、事件、触发器、修饰器因此**只有一份实现**（与 `Havoc` 的 `play_top_card_for` 同层）。
+
+判据两条（`host.rs`）：① 默认 ⇒ `Ok(false)`、牌还在手上、力量没变（**参考行为**）、
+越门 ⇒ `Ok(true)`、+3 力量、牌离手；② 三种 no-op 各测一次（实例不存在 / 不在手牌 / 付不起）
+—— 它们必须是"安静什么都不做"，变成 `Err` 会让一张牌的边角情况炸掉整场战斗。
+
+> ⚠️ 仍然缺的一步：`Wish` 本身（观者牌、不在范围）还没有内容。这一节交付的是**通道**：
+> 等 `Wish` 落地时，它的"打出选中的那张"直接写 `node.playCard{IgnoreUnplayable: true}` 即可。
+
+### 253.2 `ritual_dagger` 的跨场成长
+
+缺口在**层与层的接缝**上：运行层把牌组压成 `(定义 id, 张数)` 交给战斗（
+`rd-wasm/src/run.rs` 里那段 `counts`），**每副本身份在那一步就丢了**。三处一起改：
+
+1. **运行层留一格**：`RunState.marks: [RunMark; MAX_RUN_DECK]`，每个**牌位**一个
+   `(key, value)`。不进 run hash（与 `CombatState.gold_carried_away` 同一条：参考没有这个概念）。
+   **牌组重排时它必须跟着走**（`remove_card` 的 `deck[i] = deck[i+1]` 旁边同一行）——
+   漏了就会"删掉一张牌，另一张继承了它的伤害"，而那在页面上完全看不出来。
+2. **牌位 ↔ 实例的对号**：不再按定义分组（`[dagger, strike, dagger]` 分组后变成
+   `[(dagger,2),(strike,1)]`，顺序就丢了），改成**一个牌位一条 `DeckEntry`（count 1）**；
+   对号按**创建顺序**取（`combat_card_in_creation_order`）。
+   ⚠️ **不要**用"把牌位号拼成 `card_{i:06}`"：实测实例号**从 1 起**，那个魔法偏移迟早会漂。
+   实例 id 是零填充的（`card_%06d`），所以"按 id 字符串排序" == "按创建顺序排序"，
+   而战斗中新造的牌 id 更大、永远排在后面。
+3. **两头接**：`fight_begin` 装好战斗后 `apply_run_marks` 写进去；`fight_end`（**`take_session`
+   之前**）`capture_run_marks` 读回来。逃走（Smoke Bomb）那条路也读回。
+
+**对号漂了要响亮**：`apply_run_marks` 校验"那个牌位在战斗里的实例定义 == `deck[slot]`"，
+对不上就报错并**点名**。这一条正是 §252.1 那种"静默丢数据"的反面 ——
+判据里有一条反证（把战斗里那一份的定义改掉 ⇒ 必须报错，且消息里要有"漂了"）。
+
+判据（`run.rs`）：① 两场真实战斗 —— 第一场把牌位 0 的计数器写成 3，`fight_end` 后运行层记着它，
+第二场**新的那一份实例**带着 3（这才是"成长"的意义：只测"存进去了"会漏掉"没人读"）；
+② 反证：对号漂了必须报错。
+
+### 253.3 这一节的两个坑
+
+1. **判据得先走到战斗节点**：`rd_run_step(0)` 落到的第一层节点是随种子变化的（可能是篝火），
+   所以判据里写了一个 `walk_into_first_combat()`：按 action 表找 `kind == 1`（`Combat`）的节点。
+   硬编种子会让判据在换种子时"什么都没测"。
+2. **别把测试脚手架当语义**：`test_run` 里的战斗是"走到节点再 `rd_run_begin_node`"两步起的，
+   少一步就只拿到"还没有走到任何节点"。

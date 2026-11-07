@@ -1806,6 +1806,12 @@ def program_facts(root):
             else:
                 out.append(("damage", amount(body["Amount"]), tgt(body["TargetSelector"])))
             facts.extend(("fatal",) + f for f in fatal_facts)
+        elif kind == "node.playCard":
+            # §253: "play that card **through the full pipeline**" (`Wish`). `IgnoreUnplayable` is
+            # part of the fact: "play it even though it is unplayable" and "play it only if it is
+            # playable" are two different content promises.
+            out.append(("playCard", tgt(body["PlayerSelector"]),
+                        body.get("IgnoreUnplayable", False)))
         elif kind == "node.gainGold":
             # §250: gold **inside** a fight (`Hand of Greed`). A fact of its own: the run's gold is
             # not a combat resource, so it must not be folded into `gain`.

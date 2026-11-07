@@ -892,6 +892,35 @@ pub const RUN_STATE_TRIPWIRE_BYTES: usize = 8 * 1024;
 /// A deck/relic/potion id. `Ident<ID_CAP>` is 41 bytes (`ID_CAP` 40 + a length byte).
 pub type RunId = Ident<ID_CAP>;
 
+/// §253：**跟着牌位走的一格每副本数据**（`key` = mark counter 的名字，`value` = 它的值）。
+///
+/// 存在的理由只有一条：`Ritual Dagger` 的 "permanently increase this card's damage by 3"
+/// 里那个 *permanently* 是**跨战斗**的，而战斗层的一次性实例在 `fight_end` 就没了。
+///
+/// ⚠️ 它**不进 run hash**（`hash.rs` 逐字段写）：参考的运行层没有这个概念，而那个指纹要与
+/// 参考对齐。与 §201 的 `CombatState.gold_carried_away` 同一条裁决。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct RunMark {
+    /// mark counter 的名字；`RunId::EMPTY` = 这个牌位没有跨场数据。
+    pub key: RunId,
+    /// 它的值。
+    pub value: i32,
+}
+
+impl RunMark {
+    /// 没有跨场数据。
+    pub const NONE: Self = Self {
+        key: RunId::EMPTY,
+        value: 0,
+    };
+
+    /// 这一格是不是空的。
+    #[must_use]
+    pub fn is_none(self) -> bool {
+        self.key.as_str().is_empty()
+    }
+}
+
 /// Where the cursor can legally go next. At most one row's worth of nodes.
 ///
 /// Holds **global** node indices, because that is what every consumer wants: the internal storage
@@ -958,6 +987,9 @@ pub struct RunState {
     node: i32,
     removed_cards: i32,
     deck: [RunId; MAX_RUN_DECK],
+    /// §253：与 `deck` **同下标**的每副本数据（`RunMark::NONE` = 没有）。
+    /// 牌组重排时必须跟着搬（`remove_card` 里那条 `deck[i] = deck[i+1]` 旁边的同一行）。
+    marks: [RunMark; MAX_RUN_DECK],
     deck_len: u8,
     relics: [RunId; MAX_RUN_RELICS],
     relics_len: u8,
@@ -1087,6 +1119,7 @@ impl RunState {
             node: -1,
             removed_cards: 0,
             deck: [RunId::EMPTY; MAX_RUN_DECK],
+            marks: [RunMark::NONE; MAX_RUN_DECK],
             deck_len: 0,
             relics: [RunId::EMPTY; MAX_RUN_RELICS],
             relics_len: 0,
@@ -1292,6 +1325,42 @@ impl RunState {
     pub fn deck(&self) -> &[RunId] {
         &self.deck[..self.deck_len as usize]
     }
+    /// §253：第 `slot` 个牌位的跨场 mark（`None` = 那个牌位没有）。
+    ///
+    /// `slot` 越界 ⇒ `None`（查询不是写入，越界没有可报告的东西）。
+    #[must_use]
+    pub fn mark(&self, slot: usize) -> Option<RunMark> {
+        if slot >= self.deck_len as usize {
+            return None;
+        }
+        self.marks.get(slot).copied().filter(|mark| !mark.is_none())
+    }
+
+    /// §253：写一个牌位的跨场 mark（`key` 为空 ⇒ 清掉）。越界 ⇒ 拒绝。
+    ///
+    /// **拒绝而不是扩写**：牌位是牌组的，写一个不存在的牌位说明调用方算错了下标，
+    /// 而"多出来的那一格"永远没有人读 —— 那是静默丢数据。
+    pub fn set_mark(&mut self, slot: usize, key: &str, value: i32) -> Result<(), RunError> {
+        if slot >= self.deck_len as usize {
+            // 借用既有的 `Capacity`（"这个定容容器装不下"）：`RunError` 是冻结的枚举，
+            // 而"写一个不存在的牌位"与"牌组装不下"是同一类事实 —— 都是"那一格不存在"。
+            // 绝不悄悄忽略：忽略就是"长大丢了但没人知道"。
+            return Err(RunError::Capacity);
+        }
+        if key.is_empty() {
+            if let Some(cell) = self.marks.get_mut(slot) {
+                *cell = RunMark::NONE;
+            }
+            return Ok(());
+        }
+        // 与 `push_card`/`add_relic` 同一条：id 装不下是 `BadId`，不是容量问题。
+        let id = RunId::new(key).map_err(|_| RunError::BadId)?;
+        if let Some(cell) = self.marks.get_mut(slot) {
+            *cell = RunMark { key: id, value };
+        }
+        Ok(())
+    }
+
     /// The relics, in acquisition order.
     #[must_use]
     pub fn relics(&self) -> &[RunId] {
@@ -2442,6 +2511,9 @@ impl RunState {
         // Shift the tail down; deck order is observable, so the order of the survivors is kept.
         for index in card..(self.deck_len as usize - 1) {
             self.deck[index] = self.deck[index + 1];
+            // §253：**mark 跟着牌走**。漏了这一行就会出现"删掉一张牌，另一张继承了它的伤害" ——
+            // 而那在页面上完全看不出来（两张牌都还在，只是数字变了）。
+            self.marks[index] = self.marks[index + 1];
         }
         // **`len` 之后必须是 EMPTY**，与 `Bounded` 的不变式同一条（REVIEW P1，§161.10）。
         // 少了这一行，被删的那张牌仍留在尾槽里：`deck()` 看不见它，但**结构相等看不见的是另一回事**
