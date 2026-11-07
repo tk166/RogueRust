@@ -3834,7 +3834,9 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "smiling_mask",
                       # §271: 节点类 + 药水类。
                       "meal_ticket", "ancient_tea_set", "ssserpent_head", "sozu",
-                      "toy_ornithopter")
+                      "toy_ornithopter",
+                      # §272: `?` 房分流的两件（规则在 roll_unknown_room 里，不需要状态）。
+                      "tiny_chest", "juzu_bracelet")
 
 
 def check_relics(doc):

@@ -922,7 +922,9 @@ pub extern "C" fn rd_run_observe(index: i32) -> i32 {
         }
         16 => state.reachable().len() as i32,
         17 => state.removed_cards(),
-        18 => 0, // reserved (`env-abi.md` §11.3)
+        // §272：`?` 房掷出了什么（`UnknownRoom` 的判别值；0 = 还没掷 / 不是 `?` 房）。
+        // 这一格原来是保留位 —— 长度不变，所以页面索引不用动。
+        18 => i32::from(state.unknown_room() as u8),
         _ => return i32::MIN,
     };
     value
@@ -1142,7 +1144,12 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
     // A `?` room needs an event, and the events live in the content (`EV`) -- so the pick happens
     // here, where both sides are reachable. The `Event` stream is what `run-layer.md` §3.2 reserves
     // for exactly this.
-    if kind == rd_run::map::NodeKind::Unknown {
+    // §272：`?` 房先看它掷出了什么。只有 `Event` 才开事件；`Monster` 什么都不做（页面会显示
+    // "开始战斗"，`fight_begin` 认这个组合）；`Shop` / `Treasure` 的 `pending` 已经由 `begin_node`
+    // 摆好了（与商店/宝藏节点同一条路）。
+    if kind == rd_run::map::NodeKind::Unknown
+        && session.state.unknown_room() == rd_run::state::UnknownRoom::Event
+    {
         let image = content;
         // **The act decides which `?` rooms can appear** (`port-plan.md` §133): `Events` /
         // `Events2` / `Events3`. A missing pool is a content gap and says so.
@@ -3493,8 +3500,13 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         })
         .unwrap_or(-1)
     };
+    // §272：`?` 房（kind 5）掷出 Monster 时也是一场**普通**战斗（这个项目里唯一会变成战斗的
+    // 非战斗节点）。判据是 `unknown_room()` —— 不是"kind 是 5 就行"：事件、宝箱、商人都还是 5。
+    let unknown_fight =
+        kind == i32::from(rd_run::map::NodeKind::Unknown as u8)
+            && session.state.unknown_room() == rd_run::state::UnknownRoom::Monster;
     // 1 = Combat, 2 = Elite, 7 = Boss (`run-layer.md` §7.2; the boss is floor 16, off the map).
-    if kind != 1 && kind != 2 && kind != 7 {
+    if kind != 1 && kind != 2 && kind != 7 && !unknown_fight {
         let message = std::format!("当前节点不是战斗（kind {kind}）");
         return fail(session, &message);
     }
@@ -3523,6 +3535,7 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // **The act decides the pool** (`port-plan.md` §130): `Weak` / `Weak2` / `Weak3`, and the same
     // for elites and bosses. Before this, act 2 and act 3 replayed act 1's encounters -- the
     // downgrade §101 documented. The suffix is empty for act 1 so the original names still work.
+    // §272：`?` 房的战斗用本幕的**普通**池（wiki：`?` 房的怪物是普通遭遇）—— 也就是 `_` 那一支。
     let base = match kind {
         2 => "Elite",
         7 => "Boss",
@@ -4574,6 +4587,48 @@ mod tests {
         unsafe { std::slice::from_raw_parts(ptr, len as usize).to_vec() }
     }
 
+    /// 走到一个 `?` 房上并返回 `true`（**不** `begin_node`）。
+    fn walk_to_unknown_room() -> bool {
+        for _ in 0..40 {
+            settle_here();
+            let mut choice = -1;
+            for action in 0..rd_run_action_count() {
+                let node = rd_run_action_arg(action, 0);
+                if node >= 0 && node_kind(node) == 5 {
+                    choice = action;
+                    break;
+                }
+            }
+            if choice >= 0 {
+                return rd_run_step(choice) == 0;
+            }
+            if rd_run_step(0) != 0 {
+                return false;
+            }
+        }
+        false
+    }
+
+    /// §272：把游标推到一个 `?` 房上（不 `begin_node`）—— 走一步、结算、再走一步。
+    ///
+    /// 为什么不做 `begin_node`：结算一个节点有它自己的动作（休息/离开/开宝箱），而这条判据只
+    /// 关心"走到 `?` 房"这件事。`mark_resolved` 是那条最短路径（结算位是公开的）。
+    fn walk_until_unknown(seed: i32) -> bool {
+        test_run(seed, 80, 80, &["strike"; 10]);
+        for _ in 0..10 {
+            if rd_run_step(0) != 0 {
+                return false;
+            }
+            // ⚠️ **先看类型、再结算**：反过来的话，返回时那个 `?` 房已经被标成"已结算"，
+            // `begin_node` 会一路报 `NodeResolved`（第一版就是这么写的，1828 次走图零个结果）。
+            if rd_run_node_kind() == i32::from(rd_run::map::NodeKind::Unknown as u8) {
+                return true;
+            }
+            run_slot().as_mut().expect("a run").state.mark_resolved();
+        }
+        false
+    }
+
     /// **7 migrated / 20 to go** -- the count lives in `reset`'s doc comment, and this line points at
     /// it rather than repeating it (`docs/port-plan.md` §106).
     #[cfg(test)]
@@ -5411,22 +5466,32 @@ mod tests {
                 "hop {hop}: begin a kind-{kind} node (pending was {pending_before}, why: {})",
                 run_error_text()
             );
-            match kind {
-                1 | 2 | 7 => {
-                    assert_eq!(rd_run_fight_begin(), 0, "hop {hop}: begin the fight");
-                    assert!(rd_run_fight_end() >= 0, "hop {hop}: end the fight");
-                }
-                3 => {
+            // §272：按 **`pending`** 结算，不再按 `kind`。`?` 房现在会掷出四种结果，
+            // "kind == 5 ⇒ 走事件" 这条假设已经不成立（它会把 `?` 商人的货架留在那儿，
+            // 下一步就是 `NodeNotSettled` —— 这条判据当初就是这么红的）。
+            let pending = rd_run_pending();
+            match pending {
+                1 => {
                     let _ = rd_run_rest();
                 }
-                5 => {
+                2 => {
                     let _ = rd_run_leave();
                 }
-                6 => {
+                3 => {
                     let _ = rd_run_open_chest();
                     let _ = rd_run_leave();
                 }
-                _ => {}
+                _ => {
+                    // 没有待决：要么是一场战斗（战斗节点，或 `?` 房掷出了怪物），要么什么都不用做。
+                    let fight = kind == 1 || kind == 2 || kind == 7
+                        || (kind == 5
+                            && run_slot().as_ref().expect("a run").state.unknown_room()
+                                == rd_run::state::UnknownRoom::Monster);
+                    if fight {
+                        assert_eq!(rd_run_fight_begin(), 0, "hop {hop}: begin the fight");
+                        assert!(rd_run_fight_end() >= 0, "hop {hop}: end the fight");
+                    }
+                }
             }
             // `?` 房在 M1 是"有内容的空"（§6.3）：`begin_node` 给它 `Pending::None` 而节点**没结算**，
             // 所以它要么靠事件选项走、要么靠"离开"。不处理它，下一步就是"无处可走"。
@@ -7369,6 +7434,41 @@ mod tests {
         if rd_run_begin_node() != 0 {
             return;
         }
+        // §272：`?` 房现在会**掷**出四种结果，所以它不能只按 kind 结算 —— 它自己会变成
+        // 商店（摆好货架）/ 宝箱 / 一场普通战斗。按 `pending` 分派一次，kind 只用来兜住
+        // "没有待决但其实是战斗"的那种情况。
+        let pending = rd_run_pending();
+        if pending != 0 {
+            match pending {
+                1 => {
+                    let _ = rd_run_rest();
+                }
+                2 => {
+                    let _ = rd_run_leave();
+                }
+                3 => {
+                    let _ = rd_run_open_chest();
+                }
+                4 => {
+                    let _ = rd_run_skip_reward();
+                }
+                5 => {
+                    let _ = rd_run_choose(0);
+                    if rd_run_event_needs() > 0 {
+                        let _ = rd_run_pick_event_card(0);
+                    }
+                }
+                7 | 8 => {
+                    let _ = rd_run_pick_event_card(0);
+                }
+                _ => {}
+            }
+            // 待决解完之后可能又出现一个新的待决（`Dream Catcher` 的奖励屏）。
+            while rd_run_pending() == 4 {
+                let _ = rd_run_skip_reward();
+            }
+            return;
+        }
         match kind {
             // A fight: start it and fold it straight back (the epilogue marks the node resolved).
             1 | 2 | 7 => {
@@ -7382,14 +7482,10 @@ mod tests {
                 let _ = rd_run_leave();
             }
             5 => {
-                // §143: a `?`-room choice can now **owe a deck index** (`remove_card` /
-                // `upgrade_card` / `transform_card`). Without this the run would sit in
-                // `Pending::EventCard` with no reachable node, and every caller of `settle_here`
-                // would see "-1: no such action" and blame the map.
-                let _ = rd_run_choose(0);
-                if rd_run_event_needs() > 0 {
-                    let _ = rd_run_pick_event_card(0);
-                }
+                // §272：走到这里说明 `?` 房**没有待决**，也就是它掷出了怪物（事件会留下
+                // `Pending::Event`，而商店/宝箱已经被上面那段处理掉）。那就开一场普通战斗。
+                let _ = rd_run_fight_begin();
+                let _ = rd_run_fight_end();
             }
             6 => {
                 let _ = rd_run_open_chest();
@@ -8060,7 +8156,28 @@ mod tests {
     /// still refused it. 7 of 8 seeds were unwinnable because of it (`port-plan.md` §73.3).
     #[test]
     fn an_unknown_room_opens_an_event_and_resolves_it() {
-        reset(7);
+        // §272：`?` 房现在会**掷**结果，所以"seed 7 的那个 `?` 房是事件"不再是必然 —— 这条判据
+        // 要的是**事件**那条路，于是它得先找一个真掷出事件的种子（85% 的房都是，所以几乎必中）。
+        let mut seed = 7;
+        let mut outcome = rd_run::state::UnknownRoom::Unresolved;
+        for candidate in 0..64 {
+            reset(candidate);
+            if walk_to_unknown_room() {
+                let code = rd_run_begin_node();
+                assert_eq!(code, 0, "seed {candidate}: begin (why: {})", run_error_text());
+                outcome = run_slot().as_ref().expect("a run").state.unknown_room();
+                if outcome == rd_run::state::UnknownRoom::Event {
+                    seed = candidate;
+                    break;
+                }
+            }
+        }
+        assert_eq!(
+            outcome,
+            rd_run::state::UnknownRoom::Event,
+            "no seed in 64 produced an event ? room for this test"
+        );
+        reset(seed);
         let mut found = false;
         for _ in 0..40 {
             settle_here();
@@ -8085,8 +8202,16 @@ mod tests {
         assert_eq!(
             rd_run_begin_node(),
             0,
-            "the unknown room must open an event; kernel said {:?}",
+            "the unknown room must settle; kernel said {:?}",
             run_error_text()
+        );
+        // §272：`?` 房现在会**掷**结果（10/3/2，其余事件）。这条判据测的是**事件**那条路，
+        // 所以它必须先证明这个房真的掷出了事件 —— 否则它测的就是另一条规则，而失败信息
+        // 会变成一条看不懂的 `Pending` 断言。
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.unknown_room(),
+            rd_run::state::UnknownRoom::Event,
+            "this test is about the event path: the ? room must have rolled an event"
         );
         assert_eq!(rd_run_pending(), 5, "Pending::Event");
 
@@ -8447,6 +8572,61 @@ mod tests {
         assert!(titles.iter().any(|t| t == "Bash"));
         assert_eq!(rd_run_deck_title_len(99), -1);
         assert_eq!(rd_run_deck_id_len(-1), -1);
+    }
+
+    /// §272：`?` 房掷出怪物 ⇒ `fight_begin` 接受它（用本幕的**普通**池）；掷出事件则拒绝。
+    ///
+    /// ⚠️ 判据真的**走到一个 `?` 房、让它自己掷**（不是自己把 `unknown_room` 改成 Monster ——
+    /// 那样会把"掷骰"这一段整个绕过去）。
+    #[test]
+    fn an_unknown_room_can_start_an_ordinary_fight() {
+        let mut monster_seed = None;
+        for seed in 0..2000 {
+            if !walk_until_unknown(seed) {
+                continue;
+            }
+            if rd_run_begin_node() != 0 {
+                continue;
+            }
+            if run_slot().as_ref().expect("a run").state.unknown_room()
+                == rd_run::state::UnknownRoom::Monster
+            {
+                monster_seed = Some(seed);
+                break;
+            }
+        }
+        let seed = monster_seed.expect("no seed produced a monster ? room in 2000 tries");
+        // 地图上它仍然是 `?`（战斗**不**改节点的类型）。
+        assert_eq!(
+            rd_run_node_kind(),
+            i32::from(rd_run::map::NodeKind::Unknown as u8),
+            "seed {seed}: the map still says ?"
+        );
+        assert_eq!(rd_run_fight_begin(), 0, "seed {seed}: a ? fight begins");
+        assert!(
+            run_slot().as_ref().expect("a run").in_fight,
+            "seed {seed}: the session is in a fight now"
+        );
+
+        // 反面：掷出**事件**的 `?` 房不许开战。
+        for seed in 0..2000 {
+            if !walk_until_unknown(seed) {
+                continue;
+            }
+            if rd_run_begin_node() != 0 {
+                continue;
+            }
+            if run_slot().as_ref().expect("a run").state.unknown_room()
+                == rd_run::state::UnknownRoom::Event
+            {
+                assert!(
+                    rd_run_fight_begin() < 0,
+                    "seed {seed}: an event ? room must not start a fight"
+                );
+                return;
+            }
+        }
+        panic!("no seed produced an event ? room in 2000 tries");
     }
 
     /// §271：`toy_ornithopter` —— 喝一瓶药水，**战斗里的英雄**回 5 血。

@@ -58811,6 +58811,13 @@
       "CombatRules": null
     },
     {
+      "Id": "juzu_bracelet",
+      "DisplayName": "Juzu Bracelet",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "kunai",
       "DisplayName": "Kunai",
       "Rarity": "Uncommon",
@@ -59180,6 +59187,13 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Rare"
+    },
+    {
+      "Id": "tiny_chest",
+      "DisplayName": "Tiny Chest",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "torii",

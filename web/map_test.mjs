@@ -75,10 +75,15 @@ const settleHere = () => {
   if (ex.rd_run_node_kind() < 0) return;
   const kind = ex.rd_run_node_kind();
   if (ex.rd_run_begin_node() !== 0) return;
-  if (kind === 1 || kind === 2 || kind === 7) { ex.rd_run_fight_begin(); ex.rd_run_fight_end(); }
-  else if (kind === 3) ex.rd_run_rest();
-  else if (kind === 4) ex.rd_run_leave();
-  else if (kind === 5) {
+  // §272: a `?` room now **rolls** its outcome (event / fight / merchant / treasure), so settling
+  // by node kind is a stale assumption -- a `?` merchant leaves its shelf open and the next step is
+  // refused. Dispatch on `pending` (what the node actually wants) and keep `kind` only for
+  // "no pending, but it is a fight" (a combat node, or a `?` room that rolled one).
+  const pending = ex.rd_run_pending();
+  if (pending === 1) ex.rd_run_rest();
+  else if (pending === 2) ex.rd_run_leave();
+  else if (pending === 3) ex.rd_run_open_chest();
+  else if (pending === 5) {
     // §143: an event choice may **owe a deck index**. A helper that stops at `rd_run_choose` leaves
     // the run in `Pending::EventCard`, where `reachable()` is empty -- so the *next* step is refused
     // and the failure points at the map instead of at this line. (`rd-wasm`'s Rust test helper had
@@ -86,7 +91,9 @@ const settleHere = () => {
     ex.rd_run_choose(0);
     if (ex.rd_run_event_needs() > 0) ex.rd_run_pick_event_card(0);
   }
-  else if (kind === 6) ex.rd_run_open_chest();
+  else if (pending === 7 || pending === 8) ex.rd_run_pick_event_card(0);
+  else if (kind === 1 || kind === 2 || kind === 7) { ex.rd_run_fight_begin(); ex.rd_run_fight_end(); }
+  else if (kind === 5) { ex.rd_run_fight_begin(); ex.rd_run_fight_end(); }
   // §263: a fight pays out a **reward screen**, and a pending reward blocks the next step
   // (`action index out of range`). The map walk has no interest in rewards, so skip them the way
   // the Rust helper does (`rd-wasm`'s `run::tests` loops on `pending == 4` too).

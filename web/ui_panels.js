@@ -114,8 +114,15 @@ const RD_PANELS = (() => {
         buttons: [],
       };
     }
+    // §272：`?` 房掷出怪物时也是一场普通战斗（kind 仍是 5，靠 `unknownRoom === 2` 认出来）。
     const name =
-      s.kind === 7 ? `Boss · ${s.bossName}` : s.kind === 2 ? "精英节点（3 × Sentry）" : "战斗节点";
+      s.kind === 7
+        ? `Boss · ${s.bossName}`
+        : s.kind === 2
+          ? "精英节点（3 × Sentry）"
+          : s.kind === 5
+            ? "? 房 · 普通战斗"
+            : "战斗节点";
     return {
       title: name,
       lines: [],
@@ -324,7 +331,9 @@ const RD_PANELS = (() => {
       case 1:
         return describeRest(s);
       case 0:
+        // §272：`?` 房（5）掷出怪物（`unknownRoom === 2`）时是战斗。
         if (s.kind === 1 || s.kind === 2 || s.kind === 7) return describeFight(s);
+        if (s.kind === 5 && s.unknownRoom === 2) return describeFight(s);
         if (s.kind >= 0 && s.actionCount === 0) {
           // No moves and nothing to settle: the act has run out of map (the last row, with no way
           // onward). Saying so beats an empty panel that looks like a bug.

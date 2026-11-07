@@ -46,12 +46,13 @@ pub const MAGIC: &str = "RDA1";
 /// 加字段就**必须**抬版本：旧读法会把新字节当成下一个字段的开头，于是"存档能读、
 /// 但读出来是另一局游戏" —— 那是最坏的一种兼容。抬高之后旧存档是 `ArchiveError::Version`，
 /// 响亮且可解释。
+/// §272：5 → 6（`unknown_room` + `tiny_chest_rooms`）。
 /// §271：4 → 5（`tea_set_pending`）。
 /// §270：3 → 4（`omamori_charges` + `maw_bank_broken`）。
 ///
 /// 为什么**必须**抬版本而不是"在末尾多写两个字节就行"：旧存档读到末尾会缺字段，
 /// 而"缺字段"与"字段是 0"在字节上无法区分 —— 那正是版本号要回答的问题。
-const VERSION: u8 = 5;
+const VERSION: u8 = 6;
 /// payload 缓冲。实测一局约 300–900 B；4 KB 是"内容翻倍也不会撞上"的余量。
 pub const MAX_PAYLOAD: usize = 4096;
 /// 一行文本的缓冲：base64 是 4/3，RLE 最坏 2×（每个字节都是 0xFF 时）。
@@ -533,6 +534,9 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
     writer.byte(u8::from(state.maw_bank_broken))?;
     // §271
     writer.byte(u8::from(state.tea_set_pending))?;
+    // §272
+    writer.byte(state.unknown_room as u8)?;
+    writer.byte(state.tiny_chest_rooms)?;
 
     writer.byte(state.deck_len)?;
     for card in state.deck.iter().take(state.deck_len as usize) {
@@ -643,6 +647,9 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     let maw_bank_broken = reader.byte()?;
     // §271
     let tea_set_pending = reader.byte()?;
+    // §272
+    let unknown_room = reader.byte()?;
+    let tiny_chest_rooms = reader.byte()?;
 
     let mut deck = [RunId::EMPTY; MAX_RUN_DECK];
     let deck_len = reader.byte()? as usize;
@@ -780,6 +787,19 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     restored.omamori_charges = omamori_charges;
     restored.maw_bank_broken = maw_bank_broken != 0;
     restored.tea_set_pending = tea_set_pending != 0;
+    // §272：容量是语义 —— 读到 5 种之外的值是**存档坏了**。
+    restored.unknown_room = match unknown_room {
+        0 => crate::state::UnknownRoom::Unresolved,
+        1 => crate::state::UnknownRoom::Event,
+        2 => crate::state::UnknownRoom::Monster,
+        3 => crate::state::UnknownRoom::Shop,
+        4 => crate::state::UnknownRoom::Treasure,
+        _ => return Err(ArchiveError::BadField("unknown_room")),
+    };
+    if tiny_chest_rooms >= crate::state::TINY_CHEST_ROOMS {
+        return Err(ArchiveError::BadField("tiny_chest_rooms"));
+    }
+    restored.tiny_chest_rooms = tiny_chest_rooms;
     restored.deck = deck;
     restored.deck_len = deck_len as u8;
     restored.relics = relics;

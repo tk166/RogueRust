@@ -67,6 +67,16 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
         .str("tea_set=")
         .u32(u32::from(state.tea_set_pending()))
         .str("\n");
+    // §272：`?` 房的分流结果与 `tiny_chest` 的计数。
+    // 结果**必须**进指纹：它决定"这一格开事件还是开一场战斗"，是两局之间真实的行为差异。
+    writer
+        .str("unknown_room=")
+        .u32(u32::from(state.unknown_room() as u8))
+        .str("\n");
+    writer
+        .str("tiny_chest=")
+        .u32(u32::from(state.tiny_chest_rooms()))
+        .str("\n");
     writer.str("boss_beaten=").u32(u32::from(state.boss_beaten())).str("\n");
     writer.str("pending=").u32(u32::from(pending_code(state.pending()))).str("\n");
     // `RunId` **就是** `Ident<CAP>`，所以 `event()` 已经是 `&str`（再 `.as_str()` 会掉进

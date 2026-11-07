@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 105 |
-| 3 | 缺（wiki 有、内容没有） | 88 |
+| 2 | 内容里的遗物 | 107 |
+| 3 | 缺（wiki 有、内容没有） | 86 |
 
 ## Starter（4）
 
@@ -40,7 +40,7 @@
 | 缺 | `data_disk` | Data Disk | Defect | Start each combat with 1 $Focus. |
 | 有 | `dream_catcher` | Dream Catcher | Shared | Whenever you Rest, you may add a card to your deck. |
 | 有 | `happy_flower` | Happy Flower | Shared | Every 3 turns, gain 1 $Energy. |
-| 缺 | `juzu_bracelet` | Juzu Bracelet | Shared | Regular enemy combats are no longer encountered in ? rooms. |
+| 有 | `juzu_bracelet` | Juzu Bracelet | Shared | Regular enemy combats are no longer encountered in ? rooms. |
 | 有 | `lantern` | Lantern | Shared | Gain 1 $Energy on the first turn of each combat. |
 | 有 | `maw_bank` | Maw Bank | Shared | Whenever you climb a floor, gain 12 [[Gold]]. No longer works when you spend any [[Gold]] at a shop. |
 | 有 | `meal_ticket` | Meal Ticket | Shared | Whenever you enter a shop, heal 15 HP. |
@@ -57,7 +57,7 @@
 | 有 | `snecko_skull` | Snecko Skull | Silent | Whenever you apply $Poison, apply an additional 1 $Poison. |
 | 有 | `strawberry` | Strawberry | Shared | Upon pickup, raise your Max HP by 7. |
 | 有 | `the_boot` | The Boot | Shared | Whenever you would deal 4 or less unblocked {{QueryLink\|Cards\|type:Attack\|Attack}} damage, increase it to 5. |
-| 缺 | `tiny_chest` | Tiny Chest | Shared | Every 4th ? room is a Treasure room. |
+| 有 | `tiny_chest` | Tiny Chest | Shared | Every 4th ? room is a Treasure room. |
 | 有 | `toy_ornithopter` | Toy Ornithopter | Shared | Whenever you use a [[Potions\|potion]], heal 5 HP. |
 | 有 | `vajra` | Vajra | Shared | At the start of each combat, gain 1 $Strength. |
 | 缺 | `war_paint` | War Paint | Shared | Upon pick up, $Upgrade 2 random {{QueryLink\|Cards\|type:Skill\|Skills}}. |

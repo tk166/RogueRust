@@ -212,6 +212,10 @@ pub enum RelicEffect {
     RewardCardDelta(i32, KindMask),
     /// §269：**药水必掉**（`white_beast_statue`）。
     PotionAlwaysDrops,
+    /// §272：`juzu_bracelet` —— `?` 房不再出**普通**战斗（wiki 原文：removes the 10% base chance）。
+    NoUnknownMonster,
+    /// §272：`tiny_chest` —— 每第 4 个 `?` 房是宝箱。
+    TinyChestEveryFourth,
     /// §271：`meal_ticket` —— 进商店回 15 血。
     ShopEntryHeal(i32),
     /// §271：`ssserpent_head` —— 进 `?` 房 +50 金币。
@@ -528,6 +532,34 @@ pub const RARITY_OFFSET_CAP: i32 = 40;
 /// 它的容量本来就该跟着内容走，而"超限"这条路是 `pool_fits` 的**响亮拒绝**（不是截断），
 /// 所以抬数不改变任何语义，也不欠任何东西。真约束只有两条：`>= 内容行数`，以及"离 `u8` 远得很"。
 pub const MAX_POOL: usize = 320;
+
+/// §272：`?` 房的结果（wiki `Unknown Location`）。
+///
+/// 结果是**运行期状态**：`Event` 由调用方去开事件、`Monster` 由调用方开一场普通战斗，
+/// 而 `Shop` / `Treasure` 在 `begin_node` 里当场变成 `Pending::Shop` / `Pending::Chest`。
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[repr(u8)]
+pub enum UnknownRoom {
+    /// 还没掷过（一个 `?` 房在 `begin_node` 之前）。
+    #[default]
+    Unresolved = 0,
+    /// 一个事件（`begin_event`，`inv:§7.3`）。
+    Event = 1,
+    /// 一场**普通**战斗（用本幕的 `Weak*` 池，与战斗节点同一条路）。
+    Monster = 2,
+    /// 商人（当场摆货架）。
+    Shop = 3,
+    /// 宝箱（`Pending::Chest`）。
+    Treasure = 4,
+}
+
+/// §272：`?` 房三条基础概率（wiki 的 10 / 3 / 2，单位 percent）。
+pub const UNKNOWN_MONSTER_BASE: i32 = 10;
+pub const UNKNOWN_SHOP_BASE: i32 = 3;
+pub const UNKNOWN_TREASURE_BASE: i32 = 2;
+
+/// §272：`tiny_chest` —— 每到第几个 `?` 房强制宝箱（wiki："Every 4th ? room"）。
+pub const TINY_CHEST_ROOMS: u8 = 4;
 
 /// What the node under the cursor is waiting for.
 ///
@@ -1257,6 +1289,14 @@ pub struct RunState {
     /// 为什么是运行期字段、而不是"在篝火那一刻直接加能量"：那时没有战斗，能量无处可加
     /// （能量是战斗状态的资源）。所以只记"欠一场"，开战那一刻兑现、然后清掉。
     tea_set_pending: bool,
+    /// §272：光标下那个 `?` 房**掷出了什么**（`begin_node` 之前是 `Unresolved`）。
+    ///
+    /// 为什么要有这个字段：`begin_node` 只能返回 `NodeKind`，而"事件"与"普通战斗"都是
+    /// `NodeKind::Unknown` —— 调用方（`rd-wasm`）必须靠它区分"开事件"还是"开一场战斗"。
+    unknown_room: UnknownRoom,
+    /// §272：`tiny_chest` 已经数到第几个 `?` 房（0..`TINY_CHEST_ROOMS`）。只在这件遗物在
+    /// 身上时增长；换幕归零（与三条概率同一个理由）。
+    tiny_chest_rooms: u8,
     deck: [RunId; MAX_RUN_DECK],
     /// §253：与 `deck` **同下标**的每副本数据（`RunMark::NONE` = 没有）。
     /// 牌组重排时必须跟着搬（`remove_card` 里那条 `deck[i] = deck[i+1]` 旁边的同一行）。
@@ -1394,6 +1434,8 @@ impl RunState {
             omamori_charges: 0,
             maw_bank_broken: false,
             tea_set_pending: false,
+            unknown_room: UnknownRoom::Unresolved,
+            tiny_chest_rooms: 0,
             deck: [RunId::EMPTY; MAX_RUN_DECK],
             marks: [RunMark::NONE; MAX_RUN_DECK],
             deck_len: 0,
@@ -1668,11 +1710,107 @@ impl RunState {
     pub fn potions(&self) -> &[RunId] {
         &self.potions[..self.potions_len as usize]
     }
-    /// The `?` room odds (`inv:§7.5`).
+    /// The `?` room **miss counters** (`inv:§7.5`)：连续"没出现"的次数。
+    ///
+    /// §272：它们是[`Self::unknown_room_odds`]的输入，不是概率本身 —— 概率 = 基础 × (1 + 这里)。
     #[must_use]
     pub const fn unknown_odds(&self) -> [i32; 3] {
         self.unknown
     }
+
+    /// §272：掷一次 `?` 房的结果，并把三条计数器按规则推进。
+    ///
+    /// 参数全在本结构体里（三条 `unknown` 计数、遗物表、随机流），所以它是**唯一**决定
+    /// "`?` 房变成什么"的地方 —— `begin_node` 只是按结果摆好状态，不是第二个裁决者。
+    pub fn roll_unknown_room(&mut self) -> Result<UnknownRoom, RunError> {
+        // 三条基础概率 × (1 + 连续没出现次数)。`juzu_bracelet` 把 Monster 那条按成 0。
+        let [monster, shop, treasure] = self.unknown_room_odds();
+        // **总是**掷一次（理由见 §272 的模块注释：随机流的位置不随遗物变化）。
+        // ⚠️ 这一掷在下面所有写操作**之前**，所以 `Err` 时状态一个字节都没动。
+        let roll = self.rng.roll(RunStream::Event, 100)? as i32;
+        let mut outcome = if roll < monster {
+            UnknownRoom::Monster
+        } else if roll < monster + shop {
+            UnknownRoom::Shop
+        } else if roll < monster + shop + treasure {
+            UnknownRoom::Treasure
+        } else {
+            UnknownRoom::Event
+        };
+        // §272：`tiny_chest` —— "Every 4th ? room is a Treasure room"。
+        // 它**覆盖结果**而不是"再掷一次"：再掷一次会让"第 4 个"这个计数变得不可观察
+        // （玩家看到的结果与计数对不上），而且要多烧一个随机数。
+        if self.holds_relic_effect(RelicEffect::TinyChestEveryFourth) {
+            self.tiny_chest_rooms += 1;
+            if self.tiny_chest_rooms >= TINY_CHEST_ROOMS {
+                self.tiny_chest_rooms = 0;
+                outcome = UnknownRoom::Treasure;
+            }
+        } else {
+            // 没有这件遗物时计数必须停在地上：否则"拿到它的那一刻"就凭空多出几次。
+            self.tiny_chest_rooms = 0;
+        }
+        // 三条计数：命中的归零、其余 +1（wiki："increases whenever a `?` room does not contain
+        // that type … If a shop is found, the shop chance will be reset back to 3%"）。
+        match outcome {
+            UnknownRoom::Monster => {
+                self.unknown[0] = 0;
+                self.unknown[1] += 1;
+                self.unknown[2] += 1;
+            }
+            UnknownRoom::Shop => {
+                self.unknown[1] = 0;
+                self.unknown[0] += 1;
+                self.unknown[2] += 1;
+            }
+            UnknownRoom::Treasure => {
+                self.unknown[2] = 0;
+                self.unknown[0] += 1;
+                self.unknown[1] += 1;
+            }
+            UnknownRoom::Event => {
+                self.unknown[0] += 1;
+                self.unknown[1] += 1;
+                self.unknown[2] += 1;
+            }
+            UnknownRoom::Unresolved => {}
+        }
+        self.unknown_room = outcome;
+        Ok(outcome)
+    }
+
+    /// §272：三条概率**现在**是多少（percent），给页面与判据用。
+    ///
+    /// 与 [`Self::roll_unknown_room`] 用同一组常量与同一个公式 —— 页面上写的 10/3/2 必须与
+    /// 真正掷骰的那三个数一致（否则玩家看到的是第三份定价）。
+    #[must_use]
+    pub fn unknown_room_odds(&self) -> [i32; 3] {
+        let juzu = self.holds_relic_effect(RelicEffect::NoUnknownMonster);
+        let monster = if juzu {
+            0
+        } else {
+            (UNKNOWN_MONSTER_BASE * (1 + self.unknown[0])).min(100)
+        };
+        [
+            monster,
+            (UNKNOWN_SHOP_BASE * (1 + self.unknown[1])).min(100),
+            (UNKNOWN_TREASURE_BASE * (1 + self.unknown[2])).min(100),
+        ]
+    }
+
+    /// §272：`tiny_chest` 数到第几个 `?` 房了（给指纹与判据用）。
+    #[must_use]
+    pub const fn tiny_chest_rooms(&self) -> u8 {
+        self.tiny_chest_rooms
+    }
+
+    /// §272：光标下那个 `?` 房掷出了什么（`Unresolved` = 还没掷 / 不是 `?` 房）。
+    #[must_use]
+    pub const fn unknown_room(&self) -> UnknownRoom {
+        self.unknown_room
+    }
+
+
 
     /// The measured size, for the tripwire and for anyone printing a memory table.
     #[must_use]
@@ -1907,6 +2045,8 @@ impl RunState {
             | RelicEffect::RestEntryNextCombatEnergy(_, _)
             | RelicEffect::NoPotionGain
             | RelicEffect::PotionUseHeal(_)
+            | RelicEffect::NoUnknownMonster
+            | RelicEffect::TinyChestEveryFourth
             | RelicEffect::RestCardReward => {}
         }
         self.relics[slot] = id;
@@ -2059,6 +2199,8 @@ impl RunState {
                     | RelicEffect::RestEntryNextCombatEnergy(_, _)
                     | RelicEffect::NoPotionGain
                     | RelicEffect::PotionUseHeal(_)
+                    | RelicEffect::NoUnknownMonster
+                    | RelicEffect::TinyChestEveryFourth
                     | RelicEffect::RestCardReward,
                 ) => {}
                 None => {
@@ -2272,6 +2414,9 @@ impl RunState {
             // §271：药水类两件。
             "sozu" => Some(RelicEffect::NoPotionGain),
             "toy_ornithopter" => Some(RelicEffect::PotionUseHeal(5)),
+            // §272：`?` 房分流的两件（规则在 `roll_unknown_room` 里）。
+            "juzu_bracelet" => Some(RelicEffect::NoUnknownMonster),
+            "tiny_chest" => Some(RelicEffect::TinyChestEveryFourth),
             // `black_blood`：战后回 12（wiki 的 "Replaces Burning Blood" 那一半见 §268.3）。
             "black_blood" => Some(RelicEffect::EndOfCombatHeal(12)),
             // §269：`busted_crown` 的**能量**那一半（无条件挂）。它的另一半（奖励卡数 -2）在
@@ -2445,6 +2590,8 @@ impl RunState {
                     | RelicEffect::RestEntryNextCombatEnergy(_, _)
                     | RelicEffect::NoPotionGain
                     | RelicEffect::PotionUseHeal(_)
+                    | RelicEffect::NoUnknownMonster
+                    | RelicEffect::TinyChestEveryFourth
                     | RelicEffect::RestCardReward,
                 )
                 | None => {}
@@ -2705,6 +2852,12 @@ impl RunState {
         self.act += 1;
         // §157: the wiki resets the potion chance "at the start of each Act".
         self.potion_chance = POTION_DROP_START;
+        // §272：`?` 房的三条概率也换幕归零（wiki："The values for all types are reset in between
+        // acts"）。⚠️ 这三条计数在 §272 之前**根本没有消费者**，所以"换幕归零"这条规则也一直
+        // 没有实现 —— 现在它有了。
+        self.unknown = [0; 3];
+        self.tiny_chest_rooms = 0;
+        self.unknown_room = UnknownRoom::Unresolved;
         self.node = -1;
         self.floor = 0;
         self.pending = Pending::None;
@@ -2983,6 +3136,8 @@ impl RunState {
                     | RelicEffect::RestEntryNextCombatEnergy(_, _)
                     | RelicEffect::NoPotionGain
                     | RelicEffect::PotionUseHeal(_)
+                    | RelicEffect::NoUnknownMonster
+                    | RelicEffect::TinyChestEveryFourth
                     | RelicEffect::RestCardReward,
                 )
                 | None => {}
@@ -3166,12 +3321,26 @@ impl RunState {
             NodeKind::Unknown => {
                 // §271：`ssserpent_head` —— "Whenever you enter a ? room, gain 50 Gold"。
                 // 走 `adjust_gold`，所以 `ectoplasm` 该拦就拦、`bloody_idol` 该回血就回血。
+                // wiki 的原话是 "whatever it resolves to"，所以它在掷骰**之前**付。
                 if let Some(RelicEffect::UnknownRoomGold(amount)) =
                     self.first_relic_effect_of(RelicEffect::UnknownRoomGold(50))
                 {
                     self.adjust_gold(amount);
                 }
-                Pending::None
+                // §272：`?` 房分流（wiki `Unknown Location`）。四种结果各走各的既有通道：
+                //   宝箱 → `Pending::Chest`（与宝藏节点同一条路）
+                //   商人 → 当场摆货架 + `Pending::Shop`（与商店节点同一条路）
+                //   战斗 / 事件 → `Pending::None`，由调用方按 `unknown_room()` 决定开哪一场
+                match self.roll_unknown_room()? {
+                    UnknownRoom::Treasure => Pending::Chest,
+                    UnknownRoom::Shop => {
+                        self.stock_shop(card_pool, relic_pool)?;
+                        Pending::Shop
+                    }
+                    UnknownRoom::Monster | UnknownRoom::Event | UnknownRoom::Unresolved => {
+                        Pending::None
+                    }
+                }
             }
             // Nothing is left that M1 refuses; the arm stays so a new kind cannot be silently
             // accepted.
@@ -5519,6 +5688,191 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §272：`?` 房的**概率公式**（wiki 的 10 / 3 / 2，每次"没出现"加一个基础值、命中归零）。
+    #[test]
+    fn the_unknown_room_odds_walk_the_wikis_base_values() {
+        let mut run = ironclad();
+        assert_eq!(
+            run.unknown_room_odds(),
+            [10, 3, 2],
+            "an act starts at the wiki's base chances"
+        );
+
+        // 三次都没出商店 ⇒ 商店变成 3 × 4 = 12（wiki 的例子是"四个 ? 房没商店 ⇒ 15%"）。
+        let mut run = ironclad();
+        run.unknown = [0, 3, 0];
+        assert_eq!(run.unknown_room_odds(), [10, 12, 2], "shop: 3 × (1 + 3 misses)");
+        run.unknown = [0, 4, 0];
+        assert_eq!(run.unknown_room_odds()[1], 15, "…and 15 after four, as the wiki says");
+
+        // 三条各自独立推进：怪物连续 5 次没出现 ⇒ 60%。
+        run.unknown = [5, 4, 0];
+        assert_eq!(run.unknown_room_odds()[0], 60, "monster: 10 × (1 + 5)");
+
+        // `juzu_bracelet` 把怪物那条按成 0（Event 因此变成 95% 的基础档）。
+        run.push_relic("juzu_bracelet").expect("juzu_bracelet");
+        assert_eq!(run.unknown_room_odds()[0], 0, "juzu_bracelet removes the monster band");
+        assert_eq!(run.unknown_room_odds()[1], 15, "…and leaves the shop band alone");
+    }
+
+    /// §272：掷骰**真的**用了那三个数。
+    ///
+    /// 2000 个种子：基础概率下怪物 10%、商人 3%、宝箱 2%。区间取得很宽（±4 个点），
+    /// 因为要证明的是"量级对"，不是"随机数好看"。⚠️ 这条判据的价值在于它**会**红：
+    /// 把三条基础值写反、或把前缀累加写成独立掷骰，它立刻偏离。
+    #[test]
+    fn the_unknown_room_roll_matches_the_odds() {
+        const SEEDS: i32 = 2000;
+        let mut counts = [0i32; 4]; // monster, shop, treasure, event
+        for seed in 0..SEEDS {
+            let mut run = RunState::new(seed, 80, i32::MAX, &["strike"; 10]).expect("a run");
+            match run.roll_unknown_room().expect("a roll") {
+                UnknownRoom::Monster => counts[0] += 1,
+                UnknownRoom::Shop => counts[1] += 1,
+                UnknownRoom::Treasure => counts[2] += 1,
+                UnknownRoom::Event => counts[3] += 1,
+                UnknownRoom::Unresolved => panic!("a roll must resolve"),
+            }
+        }
+        let per_cent = |n: i32| n * 100 / SEEDS;
+        assert!(
+            (6..=14).contains(&per_cent(counts[0])),
+            "monster {}% is not near 10% (counts {counts:?})",
+            per_cent(counts[0])
+        );
+        assert!(
+            (1..=6).contains(&per_cent(counts[1])),
+            "shop {}% is not near 3% (counts {counts:?})",
+            per_cent(counts[1])
+        );
+        assert!(
+            (0..=5).contains(&per_cent(counts[2])),
+            "treasure {}% is not near 2% (counts {counts:?})",
+            per_cent(counts[2])
+        );
+        // 事件吃掉剩下的（基础 85%）。
+        assert!(
+            (78..=92).contains(&per_cent(counts[3])),
+            "event {}% is not near 85% (counts {counts:?})",
+            per_cent(counts[3])
+        );
+    }
+
+    /// §272：`tiny_chest` 每第 4 个 `?` 房是宝箱；`juzu_bracelet` 永不出现怪物。
+    #[test]
+    fn tiny_chest_and_juzu_bracelet_change_the_roll() {
+        // ---- `tiny_chest`：四次里**必有一次**宝箱，而且是第 4 次。
+        let mut run = ironclad();
+        run.push_relic("tiny_chest").expect("tiny_chest");
+        let mut treasure_at = None;
+        for index in 1..=4u8 {
+            let outcome = run.roll_unknown_room().expect("a roll");
+            if outcome == UnknownRoom::Treasure {
+                treasure_at = Some(index);
+            }
+        }
+        assert_eq!(
+            treasure_at,
+            Some(TINY_CHEST_ROOMS),
+            "the 4th ? room is forced to be a treasure room"
+        );
+        assert_eq!(run.tiny_chest_rooms(), 0, "the counter resets after it pays");
+        // 宝箱出现 ⇒ treasure 的 miss 计数归零。
+        assert_eq!(run.unknown_odds()[2], 0, "a treasure resets the treasure counter");
+
+        // 反面：没有这件遗物时计数永远是 0（不增长）。
+        let mut run = ironclad();
+        for _ in 0..6 {
+            run.roll_unknown_room().expect("a roll");
+        }
+        assert_eq!(run.tiny_chest_rooms(), 0, "without the relic the counter stays put");
+
+        // ---- `juzu_bracelet`：怪物**永不**出现，哪怕怪物计数已经堆到必然会出的地步。
+        let mut run = ironclad();
+        run.push_relic("juzu_bracelet").expect("juzu_bracelet");
+        run.unknown = [9, 0, 0]; // 没有 juzu 时这里已经 100% 怪物
+        for seed in 0..200 {
+            run.unknown[0] = 9;
+            let outcome = run.roll_unknown_room().expect("a roll");
+            assert_ne!(
+                outcome, UnknownRoom::Monster,
+                "seed {seed}: juzu_bracelet must keep monsters out of ? rooms"
+            );
+        }
+    }
+
+    /// §272：`begin_node` 的**四种结果**各走既有通道（这也是 `?` 房与内核其余部分的接线判据）。
+    #[test]
+    fn an_unknown_room_settles_into_the_channel_its_result_names() {
+        use crate::map::NodeKind;
+        // 四种结果各造一次：直接对着 `?` 房节点反复 `begin_node`，直到四种都见到。
+        // 判定标准是**可观察的三件事**：pending、unknown_room()、以及商人的货架。
+        let mut seen_treasure = false;
+        let mut seen_shop = false;
+        let mut seen_monster = false;
+        let mut seen_event = false;
+        for seed in 0..400 {
+            let mut run = RunState::new(seed, 80, i32::MAX, &["strike"; 10]).expect("a run");
+            if !walk_to(&mut run, NodeKind::Unknown) {
+                continue;
+            }
+            let kind = run.begin_node(&TYPED_CARDS, &RELICS).expect("enter the ? room");
+            assert_eq!(kind, NodeKind::Unknown, "a ? room stays a ? room on the map");
+            match run.unknown_room() {
+                UnknownRoom::Treasure => {
+                    assert_eq!(run.pending(), Pending::Chest, "a treasure opens the chest flow");
+                    seen_treasure = true;
+                }
+                UnknownRoom::Shop => {
+                    assert_eq!(run.pending(), Pending::Shop, "a merchant opens the shop flow");
+                    assert!(
+                        !run.shop().cards().is_empty(),
+                        "…and the shelf is stocked by `begin_node` itself"
+                    );
+                    seen_shop = true;
+                }
+                UnknownRoom::Monster => {
+                    assert_eq!(run.pending(), Pending::None, "a fight is the caller's business");
+                    seen_monster = true;
+                }
+                UnknownRoom::Event => {
+                    assert_eq!(run.pending(), Pending::None, "an event is the caller's business");
+                    seen_event = true;
+                }
+                UnknownRoom::Unresolved => panic!("begin_node must resolve the room"),
+            }
+        }
+        assert!(seen_treasure, "no seed produced a treasure ? room");
+        assert!(seen_shop, "no seed produced a merchant ? room");
+        assert!(seen_monster, "no seed produced a fight ? room");
+        assert!(seen_event, "no seed produced an event ? room");
+    }
+
+    /// §272：换幕把三条概率（与 `tiny_chest` 的计数）归零 —— wiki："reset in between acts"。
+    ///
+    /// ⚠️ 这三条计数在 §272 之前**根本没有消费者**，所以"换幕归零"这条规则也一直没有实现。
+    #[test]
+    fn an_act_change_resets_the_unknown_room_odds() {
+        let mut run = ironclad();
+        run.unknown = [7, 5, 3];
+        run.tiny_chest_rooms = 2;
+        run.unknown_room = UnknownRoom::Monster;
+        // 走到 Boss 并结算它：那是唯一会换幕的路径。
+        run.node = i32::from(crate::map::BOSS_NODE);
+        run.floor = crate::map::ROWS as i32 + 1;
+        let act = run.act();
+        run.mark_boss_beaten();
+        assert_ne!(run.act(), act, "the boss advances the act");
+        assert_eq!(run.unknown_odds(), [0, 0, 0], "the three counters reset");
+        assert_eq!(run.tiny_chest_rooms(), 0, "the tiny chest counter resets too");
+        assert_eq!(
+            run.unknown_room(),
+            UnknownRoom::Unresolved,
+            "the resolved room is not carried into the next act"
+        );
+        assert_eq!(run.unknown_room_odds(), [10, 3, 2], "back to the base chances");
     }
 
     /// §271：**节点类** —— 三个 `begin_node` 分支各管一件事。

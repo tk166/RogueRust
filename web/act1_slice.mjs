@@ -560,17 +560,31 @@ const report = await page.evaluate(`(async () => {
   }
 
   // ---- (2) event (the question-mark room) ----------------------------------------------------
+  //
+  // §272：? 房现在会**掷**结果（事件 85% / 战斗 10% / 商人 3% / 宝箱 2%，随连空递增）。
+  // 所以"地图上有一个 ? 节点"不再等于"这里能测事件" —— 这个场景按种子重试，直到那个房
+  // 真的掷出**事件**（pending === 5）。不加这一步，掷出商人时会以一条看不懂的
+  // "选了选项什么都没变"失败（第一版就是这样）。
+  // ⚠️ 这一段注释里**不能有反引号**：整段是模板字符串的一部分，一个反引号就会截断它。
   {
     const t0 = performance.now();
-    const started = await startTowards("event", "unknown", SEEDS);
-    const row = { name: "event", seed: started.seed, ok: started.ok, skipped: started.skipped || false, ms: 0 };
-    if (started.ok) {
+    let row = { name: "event", seed: null, ok: false, skipped: false, ms: 0 };
+    for (const seed of SEEDS) {
+      const started = await startTowards("event", "unknown", [seed]);
+      if (!started.ok) continue;
       const plan = planTo("unknown");
       for (let step = 0; step < plan.length; step++) {
         await click(document.querySelector('[data-node="' + plan[step] + '"]'));
-        // the last node IS the event: do not let settle answer it for us
+        // the last node IS the room: do not let settle answer it for us
         if (step + 1 < plan.length) await settle(120);
       }
+      if (ex.rd_run_pending() !== 5) {
+        // 这个种子上的 ? 房掷出了别的东西（战斗/商人/宝箱）：记下来，换下一个种子。
+        row.rolled = ex.rd_run_observe(18);
+        continue;
+      }
+      row = { name: "event", seed, ok: true, skipped: false, ms: 0 };
+      row.rolled = ex.rd_run_observe(18);
       row.kind = ex.rd_run_node_kind();
       row.text = text(panel()).slice(0, 120);
       const options = buttons().map((b) => text(b)).filter(Boolean);
@@ -579,6 +593,10 @@ const report = await page.evaluate(`(async () => {
       row.deckBefore = deckIds().length;
       row.hpBefore = hp();
       row.goldBefore = gold();
+      // §272：事件付的不只是牌/血/金币 —— 有的选项只给**遗物**（或药水）。断言"什么都没变"
+      // 必须把这两样也算进来，否则一个合法的"给遗物"选项会被判成无操作。
+      row.relicsBefore = relicCount();
+      row.potionsBefore = ex.rd_run_observe(7);
       // choose the first option, then answer any follow-up the page asks for
       const first = buttons()[0];
       if (first) await click(first);
@@ -590,8 +608,23 @@ const report = await page.evaluate(`(async () => {
       row.deckAfter = deckIds().length;
       row.hpAfter = hp();
       row.goldAfter = gold();
+      row.relicsAfter = relicCount();
+      row.potionsAfter = ex.rd_run_observe(7);
       row.pendingAfter = ex.rd_run_pending();
+      // 有的选项确实**什么都不付**（Nothing 型选项 / 只是"离开"）。那不是 bug，但测不到
+      // 这条判据要测的东西 —— 所以换下一个种子（与 boss 场景扫种子的做法一致）。
+      const changed =
+        row.deckAfter !== row.deckBefore ||
+        row.hpAfter !== row.hpBefore ||
+        row.goldAfter !== row.goldBefore ||
+        row.relicsAfter !== row.relicsBefore ||
+        row.potionsAfter !== row.potionsBefore;
+      if (!changed) {
+        row.noop = true;
+        continue;
+      }
       row.done = true;
+      break;
     }
     row.ms = Math.round(performance.now() - t0);
     out.scenarios.push(row);
@@ -952,7 +985,10 @@ if (!event.skipped) {
   want(
     event.deckAfter !== event.deckBefore ||
       event.hpAfter !== event.hpBefore ||
-      event.goldAfter !== event.goldBefore,
+      event.goldAfter !== event.goldBefore ||
+      // §272：遗物与药水也算"变了" —— 有的选项只给这两样。
+      event.relicsAfter !== event.relicsBefore ||
+      event.potionsAfter !== event.potionsBefore,
     `event: choosing an option changed nothing (deck ${event.deckBefore}->${event.deckAfter}, ` +
       `hp ${event.hpBefore}->${event.hpAfter}, gold ${event.goldBefore}->${event.goldAfter})`
   );
