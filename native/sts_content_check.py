@@ -4101,6 +4101,24 @@ def check_potions(doc):
         for atom in atoms:
             kind, _, payload = atom.partition(":")
             if kind in POTION_KINDS:
+                # §281：`combat_randomize_costs:<min>:<max>` 的**范围**在 payload 里 —— 以前
+                # 它是 wasm 里的常数 0..=3，注释还写着"wiki 没给范围"。范围是内容属性，
+                # 所以现在必须写清楚；不写就是内容错误（不是"用缺省"）。
+                if kind == "combat_randomize_costs":
+                    parts = payload.split(":") if payload else []
+                    if len(parts) != 2:
+                        fail(label, "`%s` needs a `min:max` payload, got %r"
+                             % (kind, payload))
+                    else:
+                        try:
+                            low, high = int(parts[0]), int(parts[1])
+                        except ValueError:
+                            fail(label, "`%s` payload is not two integers: %r" % (kind, payload))
+                        else:
+                            if not 0 <= low <= high <= 9:
+                                fail(label, "`%s` range %d..=%d is outside 0..=9"
+                                     % (kind, low, high))
+                    continue
                 if payload and kind != "choice_offered":
                     fail(label, "`%s` takes no payload" % kind)
                 if kind == "choice_offered":

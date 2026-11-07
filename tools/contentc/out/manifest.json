@@ -339,10 +339,10 @@
     }
   },
   "timing_seconds": {
-    "json_load": 0.0657,
-    "derive": 0.2296,
-    "encode": 0.3056,
-    "serialize": 0.0508
+    "json_load": 0.0652,
+    "derive": 0.1337,
+    "encode": 0.1803,
+    "serialize": 0.0264
   },
   "peak_heap_mib": 29.3
 }

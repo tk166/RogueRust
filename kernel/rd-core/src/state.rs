@@ -4822,6 +4822,32 @@ impl CombatState {
     ///    少加或多加这一步，之后每一次随机都会错位，而 `step=` 行是哈希可见的。
     ///
     /// 容量不足时**在动手之前**返回 `Err`，一个字节也不改。
+    /// §281：**一次**战斗随机抽取，返回 `min..=max`（含两端）。
+    ///
+    /// 这是战斗随机流的**唯一入口**：`random_step` 推进一次，`random_seed` **不动** ——
+    /// 与洗牌同一条约定（`(seed, step)` 派生，见 `crate::rng`）。之前的 `Snecko Oil` 在
+    /// `rd-wasm` 里手抄了这条规则，而且**同时改 seed**，于是两条路会分家。
+    ///
+    /// `max <= min` ⇒ 直接返回 `min` 且**不推进** step（没有掷骰就没有消耗）：
+    /// 内容写 `randomInt(3,3)` 是"常数"而不是"一次随机"，让它消耗随机流会让同一个种子
+    /// 因为一句无害的内容改写而整局偏移。
+    ///
+    /// ⚠️ 取模有**偏置**（`value % span`）：`span` 不是 2 的幂时低值略多。参考实现的
+    /// `Random.Next(min, max)` 也带同样的偏置形态，而"除以 `u32::MAX` 再缩放"会引入浮点。
+    /// 这条偏差**写在测试里**（只钉"每一档都到过"与"同种子同序列"，不钉分布均匀性）。
+    pub fn draw_in_range(&mut self, min: i32, max: i32) -> i32 {
+        if max <= min {
+            return min;
+        }
+        let value = crate::rng::draw_u32(self.random_seed, self.random_step);
+        self.random_step = self.random_step.saturating_add(1);
+        // i64 算跨度：`max - min + 1` 在 `min = i32::MIN` 时会溢出。
+        let span = (i64::from(max) - i64::from(min) + 1) as u64;
+        let offset = (u64::from(value) % span) as i64;
+        let answer = i64::from(min) + offset;
+        i32::try_from(answer).unwrap_or(max)
+    }
+
     pub fn reshuffle_discard_into_draw(&mut self, owner: &CombatantId) -> StateResult<usize> {
         let count = {
             let Some(zones) = self.card_zones.as_slice().iter().find(|z| z.combatant_id() == owner)
@@ -7689,6 +7715,76 @@ mod tests {
     // ── 重洗（参考 `CardZoneEffects.cs:49-82` + `CardZones.cs:260-297`）──────────────────────
 
     #[test]
+    /// §281：`draw_in_range` —— **每一档都到过**（不是"总是 min"），而且 `step` 每次恰好 +1。
+    ///
+    /// 两侧都要：只看"落在范围内"的话，一个**永远返回 min** 的实现也全绿（范围检查是它的
+    /// 子集）。所以这里钉"跨度 4 的抽取里四个值都出现过"。
+    #[test]
+    fn a_draw_covers_its_whole_range_and_advances_one_step() {
+        let mut state = CombatState::new(CombatId::new("fight").unwrap(), 1234);
+        let step_before = state.random_step;
+        let seed_before = state.random_seed;
+        let mut seen = [false; 4];
+        for index in 0..64 {
+            let value = state.draw_in_range(0, 3);
+            assert!(
+                (0..=3).contains(&value),
+                "draw {index} gave {value}, outside 0..=3"
+            );
+            seen[value as usize] = true;
+        }
+        assert_eq!(seen, [true; 4], "64 draws over 0..=3 must hit every value");
+        assert_eq!(
+            state.random_step - step_before,
+            64,
+            "one draw = one step (the shuffle's convention)"
+        );
+        assert_eq!(
+            state.random_seed, seed_before,
+            "the seed must NOT move -- only `step` does (that is what makes a seed replayable)"
+        );
+        // `max <= min` 是常数，**不消耗**随机流。
+        let step = state.random_step;
+        assert_eq!(state.draw_in_range(7, 7), 7);
+        assert_eq!(state.draw_in_range(9, 3), 9, "an inverted range is the low end");
+        assert_eq!(state.random_step, step, "a constant range draws nothing");
+    }
+
+    /// §281：同一个种子 ⇒ 同一个序列；换一个种子 ⇒ 换一条序列（两侧）。
+    #[test]
+    fn a_draw_sequence_replays_from_its_seed() {
+        let mut a = CombatState::new(CombatId::new("fight").unwrap(), 4242);
+        let mut b = CombatState::new(CombatId::new("fight").unwrap(), 4242);
+        let mut c = CombatState::new(CombatId::new("fight").unwrap(), 4243);
+        let mut same = 0;
+        let mut differ = 0;
+        for _ in 0..32 {
+            let x = a.draw_in_range(0, 9);
+            let y = b.draw_in_range(0, 9);
+            let z = c.draw_in_range(0, 9);
+            assert_eq!(x, y, "the same seed must replay the same sequence");
+            if x != z {
+                differ += 1;
+            } else {
+                same += 1;
+            }
+        }
+        assert!(
+            differ > 0,
+            "a different seed produced the same 32 draws -- the seed is not being read"
+        );
+        assert!(same < 32, "and they must not agree on everything either");
+        // 抽取与洗牌共用 `(seed, step)` 的派生：把 step 推到同一个值，两种随机的
+        // "下一个数"必须一致（否则两条路对同一个种子的看法会分家）。
+        let mut d = CombatState::new(CombatId::new("fight").unwrap(), 77);
+        d.random_step = 5;
+        assert_eq!(
+            d.draw_in_range(0, 1000),
+            (crate::rng::draw_u32(77, 5) % 1001) as i32,
+            "the draw must derive from (seed, step) exactly like the shuffle does"
+        );
+    }
+
     fn reshuffling_appends_the_whole_discard_pile_in_the_rng_order_and_advances_the_step() {
         let mut s = fight();
         s.add_combatant(hero()).unwrap();

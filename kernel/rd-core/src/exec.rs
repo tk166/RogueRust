@@ -6371,11 +6371,48 @@ fn numbered_instance_text<'b>(
 fn eval_amount(
     node: NodeRef<'_>,
     field: &'static str,
-    ctx: &ExecContext<'_>,
+    ctx: &mut ExecContext<'_>,
 ) -> Result<i32, ExecError> {
     let expression = node.node_field(field)?.ok_or(IrError::Missing(field))?;
+    // §281：`randomInt` 只能**在这里**取数 —— 这个函数手上有 `&mut ExecContext`（能推进
+    // `random_step`），而 `expr::eval_int` 拿的是 `&CombatState`（只读）。
+    //
+    // 为什么在派发点抽而不是"先做一遍计划"：计划要跟**节目帧**一起存进续延才能跨挂起，
+    // 而"每个数值节点在派发时抽一次"天然只需要一个 `&mut`。代价写在注释里：**嵌套**的
+    // `randomInt` 不支持（会响亮拒绝），而真内容只把它放在 `Amount` 上。
+    if expression.kind_str() == Ok("randomInt") {
+        let (min, max) = random_bounds(expression, ctx)?;
+        return Ok(draw_random(ctx.state, min, max));
+    }
     let expr_ctx = ctx.expr_context();
     Ok(expr::eval_int(expression, &expr_ctx)?)
+}
+
+/// §281：**战斗随机数**的唯一入口（表达式节点与药水都走它）。
+///
+/// 为什么要有这一层而不是各处直接 `state.draw_in_range`：§281 之前 `Snecko Oil` 在
+/// `rd-wasm` 里手抄了 `next_u32 % 4` 并**同时**改 `random_seed`，于是与洗牌的约定分家。
+/// 把"抽一次"收成**一个函数**之后，"一次抽取"的含义只有一处定义
+/// （`CombatState::draw_in_range` 的 `(seed, step)` 派生 + step+1）。
+#[must_use]
+pub fn draw_random(state: &mut crate::state::CombatState, min: i32, max: i32) -> i32 {
+    state.draw_in_range(min, max)
+}
+
+/// §281：`randomInt{Min, Max}` 的两端（都是 int 表达式，**但不许**自己再是 `randomInt`）。
+///
+/// 两端分开求值、都走 `expr::eval_int`，所以它们可以是 `combatantCounter` / `x.cost` 之类；
+/// 而嵌套的 `randomInt` 会在 `eval_int` 里报 `RandomNeedsADraw`（宁可拒绝也不猜）。
+fn random_bounds(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+) -> Result<(i32, i32), ExecError> {
+    let lo = node.node_field("Min")?.ok_or(IrError::Missing("Min"))?;
+    let hi = node.node_field("Max")?.ok_or(IrError::Missing("Max"))?;
+    let expr_ctx = ctx.expr_context();
+    let min = expr::eval_int(lo, &expr_ctx)?;
+    let max = expr::eval_int(hi, &expr_ctx)?;
+    Ok((min, max))
 }
 
 /// 解析一个 `TargetSelector` 字段，返回目标个数（写进 `out`）。

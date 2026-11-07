@@ -2074,7 +2074,14 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
         return refuse("战斗里找不到英雄");
     };
     for atom in potion.effect.split(',') {
-        match atom {
+        // §281：`kind` 与 `payload` 分开 —— `combat_randomize_costs:0:3` 的范围在 payload 里，
+        // 而 `match atom` 是拿**整个原子串**匹配的（那样带参数的原子永远匹配不上，
+        // 会掉进最后的 `other =>` 分支报"未知的药水效果"）。
+        let (atom_kind, atom_payload) = match atom.split_once(':') {
+            Some((kind, payload)) => (kind, Some(payload)),
+            None => (atom, None),
+        };
+        match atom_kind {
         "combat_block" => {
             let Ok(key) = rd_core::state::DefensivePoolId::new("standard.block") else {
                 return refuse("`standard.block` 不是合法的防守池 id");
@@ -2243,7 +2250,7 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
             // §161.3: these two do not resolve here -- they **ask a question**. The bottle is
             // consumed by the tail below (the wiki's potion is drunk either way), and the fight
             // stays modal until `rd_env_choice_confirm`.
-            let then = if atom == "choice_hand_exhaust" {
+            let then = if atom_kind == "choice_hand_exhaust" {
                 rd_core::state::ChoiceThen::Exhaust
             } else {
                 rd_core::state::ChoiceThen::DiscardThenDraw
@@ -2272,10 +2279,13 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
             }
             session.choice_picks.clear();
         }
-        other if other.starts_with("choice_offered:") => {
+        "choice_offered" => {
             // §161.5: Attack / Skill Potion -- "choose 1 of 3 random <type> cards to add to your
             // hand; it costs 0 this turn".
-            let Some((_, tag)) = other.split_once(':') else {
+            // §281：payload 由外层统一拆好（之前这里是拿**整串**再切一次 —— 那在我把
+            // `match atom` 改成 `match atom_kind` 之后就永远切不到了，于是 Attack Potion
+            // 掉进 `other =>` 报"未知的药水效果"，而屏幕上只是"喝了没反应"）。
+            let Some(tag) = atom_payload else {
                 return refuse("`choice_offered` 缺少 `:<tag>`");
             };
             let image = content();
@@ -2395,12 +2405,11 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
             }
             session.choice_picks.clear();
         }
-        other if other.starts_with("combat_status") => {
+        "combat_status" | "combat_status_target" => {
             // `combat_status:<id>` = the hero; `combat_status_target:<id>` = the chosen enemy.
-            let (needs_target, status_id) = match other.split_once(':') {
-                Some(("combat_status", id)) => (false, id),
-                Some(("combat_status_target", id)) => (true, id),
-                _ => return refuse(&std::format!("药水效果 `{other}` 缺少 `:<状态 id>`")),
+            let needs_target = atom_kind == "combat_status_target";
+            let Some(status_id) = atom_payload else {
+                return refuse(&std::format!("药水效果 `{atom}` 缺少 `:<状态 id>`"));
             };
             let Ok(definition) = rd_core::state::StatusDefinitionId::new(status_id) else {
                 return refuse(&std::format!("`{status_id}` 不是合法的状态 id"));
@@ -2572,11 +2581,14 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
         }
         "combat_randomize_costs" => {
             // Snecko Oil, part 2. Part 1 is the `combat_draw` atom next to it in the content
-            // (`Effect: "combat_draw,combat_randomize_costs"`).
+            // (`Effect: "combat_draw,combat_randomize_costs:0:3"`).
             //
-            // The draw is `amount` (5); the randomized price is **0..=3** -- that is the whole
-            // content of this rule, so it is a constant here rather than a field nobody could
-            // source from the wiki ("Randomize the costs" gives no range; StS uses 0-3).
+            // The draw is `amount` (5); the randomized price range comes from the **atom
+            // payload** (§281). Before that the range was a constant here, with a comment that
+            // admitted it: "the wiki gives no range; StS uses 0-3". A range is a **content**
+            // property -- the kernel deciding it means every future potion with a different
+            // range would need an edit here.
+            let (min_cost, max_cost) = cost_range(atom_payload);
             let Some(zones) = session.state.card_zones(&hero) else {
                 return refuse("英雄没有牌区");
             };
@@ -2594,13 +2606,10 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                 return refuse("价格覆盖的计数器名不合法");
             };
             for slot in &slots[..count] {
-                // One draw per card, each advancing `random_step` by one -- the same convention the
-                // shuffle uses (`state.rs`: "洗完之后 `random_step += 1`"), so a replay of the same
-                // seed randomizes the same ways.
-                let mut seed = session.state.random_seed as u32;
-                let roll = rd_core::rng::next_u32(&mut seed) % 4;
-                session.state.random_seed = seed as i32;
-                session.state.random_step = session.state.random_step.saturating_add(1);
+                // §281：**一次**抽取，走 `CombatState::draw_in_range`（战斗随机流的唯一入口）。
+                // 老实现手抄了 `next_u32` 并**同时**写回 `random_seed`，于是与洗牌那条路
+                // 对"下一个随机数"的看法分家 —— 而症状是"同种子两次跑出不同牌序"。
+                let roll = rd_core::exec::draw_random(&mut session.state, min_cost, max_cost);
                 if let Some(card) =
                     session.state.card_mut(rd_core::state::CardSlot::from_index(*slot))
                 {
@@ -2644,6 +2653,24 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
 /// 写成 `rd_core::state::MAX_CHOICE_OFFERED` 的名字会让"三"看起来像个容量上限 ——
 /// 它其实是这条规则的**全部内容**，改它就得改药水的说明文字。
 const MAX_OFFERED: usize = 3;
+
+/// §281：`combat_randomize_costs:0:3` 的**范围**（`min:max`，两端都含）。
+///
+/// 缺省 `0..=3` 是 StS 的实际范围（wiki 只说 "Randomize the costs"）—— 但缺省只用于
+/// **旧内容**：新内容应当写清楚，而内容门会要求它写。
+fn cost_range(payload: Option<&str>) -> (i32, i32) {
+    let Some(payload) = payload else {
+        return (0, 3);
+    };
+    let mut parts = payload.split(':');
+    let (Some(min), Some(max), None) = (parts.next(), parts.next(), parts.next()) else {
+        return (0, 3);
+    };
+    match (min.parse::<i32>(), max.parse::<i32>()) {
+        (Ok(min), Ok(max)) if 0 <= min && min <= max => (min, max),
+        _ => (0, 3),
+    }
+}
 
 /// Is this potion atom about a **fight**? (§158)
 ///
@@ -7019,6 +7046,60 @@ mod tests {
             assert!(
                 (0..=3).contains(cost),
                 "hand[{index}] costs {cost}, outside the randomized band 0..=3"
+            );
+        }
+    }
+
+    /// §281：价格随机化**可复现**（同种子同序列），而且每张牌恰好消耗**一次**随机。
+    ///
+    /// 老实现（`next_u32(&mut seed) % 4` + 同时写回 `random_seed`）会让"一次抽取"变成两笔账：
+    /// `random_seed` 动了、`random_step` 也动了。这条判据钉的是**只动 step、恰好 N 次**。
+    #[test]
+    fn the_price_roll_is_reproducible_and_costs_one_step_per_card() {
+        let prices_with_seed = |seed: i32| -> (Vec<i32>, i32, i32) {
+            test_run(seed, 80, 80, &["strike"; 10]);
+            assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+            assert_eq!(rd_run_begin_node(), 0);
+            assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+            let (step_before, seed_before) = {
+                let session = crate::slot().as_ref().expect("env session");
+                (session.state.random_step, session.state.random_seed)
+            };
+            assert_eq!(drink("snecko_oil", -1), 0, "drinking it must work");
+            let session = crate::slot().as_ref().expect("env session");
+            let taken = session.hand_len() as i32;
+            (
+                session.hand_costs.clone(),
+                session.state.random_step - step_before,
+                session.state.random_seed - seed_before,
+            )
+        };
+
+        let (first, steps, seed_delta) = prices_with_seed(7);
+        assert_eq!(
+            steps,
+            first.len() as i32,
+            "one draw per hand card: {} card(s) but {steps} step(s)",
+            first.len()
+        );
+        assert_eq!(
+            seed_delta, 0,
+            "the seed must not move -- only `step` does (the shuffle's convention)"
+        );
+        // 两侧 ①：**同一个种子**再跑一遍，价格逐个相同。
+        let (again, _, _) = prices_with_seed(7);
+        assert_eq!(again, first, "the same seed must randomize the same way");
+        // 两侧 ②：换一个种子，至少有一张不同（否则种子根本没被读）。
+        let (other, _, _) = prices_with_seed(8);
+        assert!(
+            other.iter().zip(first.iter()).any(|(a, b)| a != b),
+            "seed 8 produced the same prices as seed 7 -- the seed is not being read: {other:?}"
+        );
+        // 范围仍在 0..=3（来自内容，不是 wasm 的常数）。
+        for (index, cost) in first.iter().enumerate() {
+            assert!(
+                (0..=3).contains(cost),
+                "hand[{index}] costs {cost}, outside the content's 0..=3"
             );
         }
     }

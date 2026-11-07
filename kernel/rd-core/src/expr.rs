@@ -178,6 +178,11 @@ pub enum ExprError {
     /// `int.MinValue / -1` 在 C# 里抛 `OverflowException`（`RunExpressions.cs:294`）——
     /// 内核如实报 `Overflow`，而战斗层拼法走 `(long)` 饱和成 `i32::MAX`。
     Overflow,
+    /// §281：`randomInt` 出现在一个**只读求值**的位置（嵌套在别的表达式里，或者在显示路径上）。
+    ///
+    /// 与 `UnsupportedKind` 分开是有意义的诊断：那个是"内核还不懂这个 kind"，这个是
+    /// "这个位置抽不了" —— 修法完全不同（前者要写实现，后者要改内容或改调用点）。
+    RandomNeedsADraw,
 }
 
 impl From<IrError> for ExprError {
@@ -433,6 +438,13 @@ const INT_KINDS: &[&str] = &[
     "card.upgradeLevel",
     // §146：X 费牌的 X（本内核自己的 kind —— 参考里没有 X 费，见 `port-plan.md` §146）。
     "x.cost",
+    // §281：一个**随机整数**（`{Min, Max}`，两端都含）。
+    //
+    // ⚠️ 它**不在** `eval_int` 里取数 —— 求值器是只读的（`&CombatState`），抽数要写
+    // `random_step`。真正的取数在派发点（`exec::eval_amount`），见那里的注释。
+    // 放进 `INT_KINDS` 是因为**值类别**是 int：这样 `eval_bool` 会说"问错了问题"
+    // （`WrongValueKind`）而不是"还没实现"，两者是不同的诊断。
+    "randomInt",
     // §229：正在结算的那份副本的 mark counter（`Rampage` 的 "increase **this card's** damage"）。
     "card.counter",
     // §247：**一个牌区里现在有几张牌**（`Mind Blast` 的"按抽牌堆张数打伤害"）。
@@ -533,6 +545,10 @@ pub fn eval_int<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, Exp
         "const" => Ok(node.int_field("Value")?.ok_or(IrError::Missing("Value"))?),
         // §146：X 费牌的 X。零字段 —— 值只来自这次出牌付掉的能量。
         "x.cost" => Ok(ctx.x_cost),
+        // §281：随机整数**不能**在这里取（求值器是只读的）。派发点会先看到这个 kind 并
+        // 自己抽一次（`exec::eval_amount`）；走到这里说明它被**嵌套**在别的表达式里，
+        // 而那是我明确不做的一种形状 —— 响亮拒绝而不是猜一个数。
+        "randomInt" => Err(ExprError::RandomNeedsADraw),
 
         // §247: how many cards are in a zone right now (Mind Blast).
         "combatantZoneCount" => {

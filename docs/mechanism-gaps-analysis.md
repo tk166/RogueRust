@@ -66,7 +66,29 @@ EV 行：Id | NameKey | DescriptionKey | Label0 | Effects0 | Effects0Asc | Label
 一套内容和一套判据 —— 而 StS 的事件树**最深的也只有 3 段**（`docs/spec` 里 14 个事件的人工核对
 记录），A + B 覆盖了全部。
 
-### ✅ 状态：**方案 A 已落地**（`port-plan.md` §278）
+### ✅ 状态：§281 已落地（`randomInt` 值节点 + 统一的随机入口）
+
+```
+rng::draw_u32(seed, step)                   纯函数，与洗牌同一份派生
+CombatState::draw_in_range(min, max)        唯一入口：派生 → 取模 → step+1（seed 不动）
+exec::draw_random(state, min, max)          表达式节点与药水共用的那一层
+expr::randomInt{Min, Max}                   值节点：**只能在派发点取数**，嵌套 ⇒ 响亮拒绝
+```
+
+⚠️ **本节原文有一个错判，已更正**：它说"表达式在**预检阶段**也会被求值（`resolve_damage`
+的 S4 池要算数值），预检一次执行再算一次会让随机数被吃掉两次"。
+
+**检查之后是错的**：`exec::preflight` 只做结构检查、不求值；`resolve_damage` 拿到的是算好的
+`base`，一次派发只求值一次。真正的约束是另外两条 —— **求值器只读**（`&CombatState`，抽数要写
+`random_step`），所以取数只能在派发点；**显示路径**（意图面板）想算伤害，而它已经按
+"非字面量答 `-1`"处理。下面保留原文。
+
+另：StS **没有**随机伤害值（wiki 扫描：`Mad Gremlin`/`Gremlin Wizard`/`Snecko` 的招式都是定值。
+`Gremlin Wizard` 的 50/50 是**选招**，`IntentRules.Choice` 早就能表达）。所以 `randomInt`
+今天没有内容消费者 —— 这一节把它接到**已经在掷骰**的 `Snecko Oil` 上，并把范围从 wasm 常数
+搬进内容（`combat_randomize_costs:0:3`）。
+
+### （原文）✅ 状态：**方案 A 已落地**（`port-plan.md` §278）
 
 `EVND` 段 + `EV.Entry` 已经做了，11 个旧事件机械迁移（语义快照逐字段比对），
 `golden_idol` 补成真树（两段 + 三选一）。**方案 B（条件选项）仍未做** —— 见下面的清单。

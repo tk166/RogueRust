@@ -41,6 +41,17 @@ pub fn next_u32(state: &mut u32) -> u32 {
     v ^ (v >> 16)
 }
 
+/// **一次抽取**：`(seed, step)` → 一个 32 位数。纯函数 —— 不碰任何状态。
+///
+/// 与 [`shuffle_indexes`] 用同一份 `(seed, step)` 派生（`initial_state` + `next_u32`），
+/// 所以"同一个种子 ⇒ 同一个序列"这条性质对**两种**随机都成立，而不是只有洗牌有。
+#[inline]
+#[must_use]
+pub fn draw_u32(seed: i32, step: i32) -> u32 {
+    let mut state = initial_state(seed, step);
+    next_u32(&mut state)
+}
+
 /// Fills `out` with `0..out.len()` shuffled by `(seed, step)`.
 ///
 /// The reference signature returns a freshly allocated `int[]`; this one writes into caller

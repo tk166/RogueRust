@@ -64343,7 +64343,7 @@
       "Id": "snecko_oil",
       "NameKey": "Snecko Oil",
       "DescriptionKey": "Draw 5 cards. Randomize the costs of all cards in your hand for the rest of combat.",
-      "Effect": "combat_draw,combat_randomize_costs",
+      "Effect": "combat_draw,combat_randomize_costs:0:3",
       "Amount": 5,
       "Rarity": "Rare"
     },

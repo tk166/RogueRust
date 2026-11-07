@@ -46,7 +46,7 @@
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
 | **合计** | 807 | 584 | 214 | 9 | 465 | 138 | 82 | 0 |
 
-扫描到的具名测试：**1074** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
+扫描到的具名测试：**1077** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
 
 事件：池里有 **16** 个位次、**13** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -506,7 +506,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+124) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+125) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+11) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -893,7 +893,7 @@
 | regen_potion | yes | the_potions_are_readable, potions_are_drawn_by_rarity_weight | — | — | — | the_potions_are_readable |
 | skill_potion | yes | the_potions_are_readable, every_potion_in_the_table_classifies_as_known | — | — | — | the_potions_are_readable |
 | smoke_bomb | yes | the_potions_are_readable, smoke_bomb_ends_a_normal_fight_and_refuses_a_boss | — | — | — | the_potions_are_readable |
-| snecko_oil | yes | the_potions_are_readable, snecko_oil_draws_five_and_randomizes_every_price_in_hand | — | — | — | the_potions_are_readable |
+| snecko_oil | yes | the_potions_are_readable, snecko_oil_draws_five_and_randomizes_every_price_in_hand …(+1) | — | — | — | the_potions_are_readable |
 | speed_potion | yes | the_potions_are_readable | — | — | — | the_potions_are_readable |
 | strength_potion | yes | the_potions_are_readable, the_new_potion_shapes_all_do_something | — | — | — | the_potions_are_readable |
 | swift_potion | yes | the_potions_are_readable, the_new_potion_shapes_all_do_something …(+1) | — | — | — | the_potions_are_readable |

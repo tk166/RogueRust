@@ -60,7 +60,10 @@ wiki 对 `The Cleric` / `The Moai Head` / `The Joust` / `Tomb of Lord Red Mask` 
 
 ### 3.2 随机结果（`The Joust` 的 70/30）
 
-`mechanism-gaps-analysis.md` 缺口二的 `randomInt`。仍**未做** —— 那是它自己的 §281。
+**战斗侧**已经做了（§281：`randomInt` + 统一入口），但 `The Joust` 要的是**运行层**的
+概率（70/30 的胜负），走 `RunStream::Event` 那条流 —— 那是事件那一节的活，与战斗随机不同流。
+同一类还缺：`Scrap Ooze` 的 25%→35%…（每次失败 +10% 且 HP 代价 +1）—— 它还要一个
+"可重复的选项 + 递增状态"，属于事件机制的下一次改动。
 
 ### 3.3 "从手上任选一件遗物"（`N'loth`）
 

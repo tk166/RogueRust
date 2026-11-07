@@ -5426,16 +5426,35 @@ mod tests {
                     potion.id,
                     potion.effect
                 );
-                // The payload form is only for the two status kinds and §161.5's tag kind, and only
-                // those need it. (A `kind` that carries a payload it ignores is the same silent shape
-                // as a payload-less kind that reads one.)
+                // The payload form is only for the two status kinds, §161.5's tag kind, and
+                // §281's `combat_randomize_costs:<min>:<max>` -- and only those need it. (A `kind`
+                // that carries a payload it ignores is the same silent shape as a payload-less
+                // kind that reads one.)
+                //
+                // §281：价格范围从 wasm 的常数搬到了这里。范围是**内容**的属性（同一瓶药在别的
+                // 内容包里可以有别的范围），而常数会被下一个作者当成"内核的决定"。
+                let wants_payload = kind.starts_with("combat_status")
+                    || *kind == "choice_offered"
+                    || *kind == "combat_randomize_costs";
                 assert_eq!(
                     payload.is_some(),
-                    kind.starts_with("combat_status") || *kind == "choice_offered",
+                    wants_payload,
                     "{}: payload presence does not match {:?}",
                     potion.id,
                     kind
                 );
+                if *kind == "combat_randomize_costs" {
+                    let Some(payload) = payload else { unreachable!() };
+                    let parts: std::vec::Vec<&str> = payload.split(':').collect();
+                    assert_eq!(parts.len(), 2, "{}: `min:max`", potion.id);
+                    let low: i32 = parts[0].parse().expect("an integer");
+                    let high: i32 = parts[1].parse().expect("an integer");
+                    assert!(
+                        (0..=9).contains(&low) && low <= high && high <= 9,
+                        "{}: the range {low}..={high} is outside 0..=9",
+                        potion.id
+                    );
+                }
             }
             // Two atoms read no amount: `potion_fill` fills whatever is empty, and the §161.3
             // choice atoms take the player's answer instead of a number. The rule is per-atom
@@ -5532,7 +5551,8 @@ mod tests {
         // Pinning the **string**, not just the count: an atom nobody dispatches passes a count.
         for (id, effect, amount) in [
             ("blessing_of_the_forge", "combat_upgrade_hand", 0),
-            ("snecko_oil", "combat_draw,combat_randomize_costs", 5),
+            // §281：范围（0..=3）现在写在内容里 —— 之前它是 `rd-wasm` 的常数。
+            ("snecko_oil", "combat_draw,combat_randomize_costs:0:3", 5),
             ("smoke_bomb", "combat_flee", 0),
         ] {
             let index = (0..content.potion_count())

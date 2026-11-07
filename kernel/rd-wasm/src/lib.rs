@@ -1291,7 +1291,26 @@ impl Session {
             // （`printed_energy_cost` 也自己读了一遍 `Costs`）。它**不**覆盖别的费用修饰器（"下一张
             // 免费"之类），`the_discount_follows_the_copy...` 那条测试把这个差距钉在**可观察**的
             // 层面：显示 0 与真的收 0 必须同时成立。
-            if cost > 0 {
+            // §281：★ **绝对覆盖优先**（Snecko Oil 把每张牌的价格掷成 0..=3）。顺序必须与
+            // `play.rs` 的那条费用修饰器逐字一致 —— 它是先看 `CARD_COST_OVERRIDE_COUNTER`
+            // （"这一份副本就值 N"），再看 delta。第一版这里只读 delta，于是
+            // "显示 = 印刷价、内核收 = 掷出来的数"，而两条**都**在 0..=3 里时看不出来
+            // （`strike` 的印刷价是 1）—— 于是 §179 的判据一直是空的，直到 §281 把
+            // "同一组价格"也钉进去才红。
+            let override_cost = rd_core::state::CounterId::new(
+                rd_core::state::CARD_COST_OVERRIDE_COUNTER,
+            )
+            .ok()
+            .and_then(|key| {
+                instance
+                    .mark_counters()
+                    .iter()
+                    .find(|counter| counter.key == key)
+                    .map(|counter| counter.value)
+            });
+            if let Some(absolute) = override_cost {
+                cost = absolute.max(0);
+            } else if cost > 0 {
                 if let Ok(key) = rd_core::state::CounterId::new(
                     rd_core::state::CARD_COST_DELTA_COUNTER,
                 ) {
