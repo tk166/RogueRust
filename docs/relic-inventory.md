@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 42 |
-| 3 | 缺（wiki 有、内容没有） | 151 |
+| 2 | 内容里的遗物 | 47 |
+| 3 | 缺（wiki 有、内容没有） | 146 |
 
 ## Starter（4）
 
@@ -56,7 +56,7 @@
 | 缺 | `smiling_mask` | Smiling Mask | Shared | The merchant's card removal service now always costs 50 [[Gold]]. |
 | 缺 | `snecko_skull` | Snecko Skull | Silent | Whenever you apply $Poison, apply an additional 1 $Poison. |
 | 有 | `strawberry` | Strawberry | Shared | Upon pickup, raise your Max HP by 7. |
-| 缺 | `the_boot` | The Boot | Shared | Whenever you would deal 4 or less unblocked {{QueryLink\|Cards\|type:Attack\|Attack}} damage, increase it to 5. |
+| 有 | `the_boot` | The Boot | Shared | Whenever you would deal 4 or less unblocked {{QueryLink\|Cards\|type:Attack\|Attack}} damage, increase it to 5. |
 | 缺 | `tiny_chest` | Tiny Chest | Shared | Every 4th ? room is a Treasure room. |
 | 缺 | `toy_ornithopter` | Toy Ornithopter | Shared | Whenever you use a [[Potions\|potion]], heal 5 HP. |
 | 有 | `vajra` | Vajra | Shared | At the start of each combat, gain 1 $Strength. |
@@ -76,7 +76,7 @@
 | 有 | `eternal_feather` | Eternal Feather | Shared | For every 5 cards in your deck, heal 3 HP whenever you enter a Rest Site. |
 | 缺 | `frozen_egg` | Frozen Egg | Shared | Whenever you add a {{QueryLink\|Cards\|type:Power\|Power}} card to your deck, $Upgrade it. |
 | 缺 | `gold_plated_cables` | Gold-Plated Cables | Defect | Your rightmost $Orb triggers its passive an additional time. |
-| 缺 | `gremlin_horn` | Gremlin Horn | Shared | Whenever an enemy dies, gain 1 $Energy and draw 1 card. |
+| 有 | `gremlin_horn` | Gremlin Horn | Shared | Whenever an enemy dies, gain 1 $Energy and draw 1 card. |
 | 有 | `horn_cleat` | Horn Cleat | Shared | At the start of your 2nd turn, gain 14 $Block. |
 | 有 | `ink_bottle` | Ink Bottle | Shared | Whenever you play 10 cards, draw 1 card. |
 | 有 | `kunai` | Kunai | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 1 $Dexterity |
@@ -133,12 +133,12 @@
 | 缺 | `prayer_wheel` | Prayer Wheel | Shared | Normal enemies drop an additional card reward. |
 | 有 | `shovel` | Shovel | Shared | You can now Dig for relics at Rest Sites. |
 | 有 | `stone_calendar` | Stone Calendar | Shared | At the end of turn 7, deal 52 damage to ALL enemies. |
-| 缺 | `the_specimen` | The Specimen | Silent | Whenever an enemy dies, transfer any $Poison it has to a random enemy. |
+| 有 | `the_specimen` | The Specimen | Silent | Whenever an enemy dies, transfer any $Poison it has to a random enemy. |
 | 有 | `thread_and_needle` | Thread and Needle | Shared | At the start of each combat, gain 4 $Plated Armor. |
 | 缺 | `tingsha` | Tingsha | Silent | Whenever you discard a card during your turn, deal 3 damage to a random enemy. |
-| 缺 | `torii` | Torii | Shared | Whenever you would receive 5 or less unblocked {{QueryLink\|Cards\|type:Attack\|Attack}} damage, reduce it to 1. |
+| 有 | `torii` | Torii | Shared | Whenever you would receive 5 or less unblocked {{QueryLink\|Cards\|type:Attack\|Attack}} damage, reduce it to 1. |
 | 缺 | `tough_bandages` | Tough Bandages | Silent | Whenever you discard a card during your turn, gain 3 $Block. |
-| 缺 | `tungsten_rod` | Tungsten Rod | Shared | Whenever you would lose HP, lose 1 less. |
+| 有 | `tungsten_rod` | Tungsten Rod | Shared | Whenever you would lose HP, lose 1 less. |
 | 缺 | `turnip` | Turnip | Shared | You can no longer become $Frail. |
 | 缺 | `unceasing_top` | Unceasing Top | Shared | Whenever you have no cards in hand during your turn, draw a card. |
 | 缺 | `wing_boots` | Wing Boots | Shared | You may ignore paths when choosing the next room to travel to 3 times. |

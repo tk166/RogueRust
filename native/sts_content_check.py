@@ -109,7 +109,9 @@ INV_COUNTS = {
     # §261: +4 (`lantern` / `bag_of_preparation` / `ice_cream` / `calipers` -- `du_vu_doll`
     # grants plain Strength, so it needs no carrier).
     # §262: +8 (seven carriers + `double_damage`).
-    "statuses": 87,
+    # §263: +5 (enemy-death pair + three damage rewrites) +1 (`standard.poison`, the first
+    # damage-over-time status this content has -- The Specimen needs it).
+    "statuses": 93,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1393,6 +1395,15 @@ INV_STATUSES = {
     "standard.pen_nib": [],
     # §262: Pen Nib 的翻倍载体 —— 唯一一条"自己带的修饰器"就在它身上（×200 直接伤害）。
     "standard.double_damage": [("DamageDealt", "ScalePercent", 200, 250, "Direct")],
+    # §263：`gremlin_horn` 有一条触发器；其余四条**没有触发器也没有修饰器** ——
+    # 规则在内核（`exec.rs::S6a` 与倒下点的毒转移），状态只是载体。
+    "standard.gremlin_horn": [],
+    "standard.the_specimen": [],
+    "standard.the_boot": [],
+    "standard.torii": [],
+    "standard.tungsten_rod": [],
+    # §263：毒 —— **内核按 tag 读**（`damage_over_time`），自减 1 层由内容触发器做。
+    "standard.poison": [],
     "standard.the_bomb_damage": [],
     "standard.the_bomb": [],
     "standard.sadistic_nature": [],
@@ -1526,6 +1537,8 @@ INV_STATUSES = {
 INV_DECAYING = {
     # §195.7: one turn -- applied during the enemy's turn, gone by the end of the player's next.
     "standard.draw_reduction",
+    # §263: 毒也是"层数就是时钟"（`TurnEnded` 减 1）。
+    "standard.poison",
     # §196: "this turn" -- same decay idiom as Weak.
     "standard.entangled","standard.vulnerable", "standard.weak", "standard.frail"}
 
@@ -3308,6 +3321,9 @@ def check_statuses(doc):
                      "standard.kunai", "standard.shuriken", "standard.ornamental_fan",
                      "standard.letter_opener", "standard.nunchaku", "standard.ink_bottle",
                      "standard.pen_nib", "standard.double_damage",
+                     # §263
+                     "standard.gremlin_horn", "standard.the_specimen", "standard.the_boot",
+                     "standard.torii", "standard.tungsten_rod", "standard.poison",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3364,6 +3380,14 @@ def check_statuses(doc):
                         "standard.ink_bottle": ["CardPlayed"],
                         "standard.pen_nib": ["CardPlayed"],
                         "standard.double_damage": ["CardPlayed"],
+                        # §263
+                        "standard.gremlin_horn": ["FoeDowned"],
+                        "standard.the_specimen": [],
+                        "standard.the_boot": [],
+                        "standard.torii": [],
+                        "standard.tungsten_rod": [],
+                        # §263：毒的自减是 `TurnEnded`（"层数就是时钟"，与 vulnerable/weak 同一写法）。
+                        "standard.poison": ["TurnEnded"],
                         # §237
                         "standard.juggernaut": ["BlockGained"],
                         "standard.evolve": ["CardsDrawn"],
@@ -3640,7 +3664,9 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "lantern", "bag_of_preparation", "ice_cream", "calipers", "du_vu_doll",
                       # §262: "每第 N 张某类型牌"七件 —— 全部 `CardPlayed` 触发器 + 自己的计数器。
                       "kunai", "shuriken", "ornamental_fan", "letter_opener", "nunchaku",
-                      "ink_bottle", "pen_nib")
+                      "ink_bottle", "pen_nib",
+                      # §263: 敌人死亡类两件 + 伤害管线数值改写三件。
+                      "gremlin_horn", "the_specimen", "the_boot", "torii", "tungsten_rod")
 
 
 def check_relics(doc):

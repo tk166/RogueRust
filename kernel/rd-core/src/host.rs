@@ -366,6 +366,18 @@ pub enum TriggerEvent {
     ///
     /// 只认字面名 `Downed`；参考里还有 `CombatantLifecycleChanged` 之类的旁支，本内核没建模。
     Downed,
+    /// §263：**敌对阵营里有人倒下了**（`gremlin_horn` / `the_specimen`：*"whenever an enemy dies"*）。
+    ///
+    /// 与 [`Self::Downed`] 是**两个**事件，不是一个带参数的事件：
+    ///
+    /// * `Downed` 的 Bearer 是**倒下的那个**（`Spore Cloud` / `Split` / `Stasis` 都是写在自己身上
+    ///   的死亡反应），派发范围只有它自己；
+    /// * `FoeDowned` 派给**另一个阵营的每个战斗员**，Bearer 是"活着的那个"、`EventTarget` 是
+    ///   倒下的那个。
+    ///
+    /// 把它们合成一个"派给所有人"的 `Downed` 会让现有内容**改变行为**：`standard.split` 会长在
+    /// 每只史莱姆身上，然后任何一只死掉都会触发**其它**史莱姆的分裂。
+    FoeDowned,
     /// `CardPlayed` —— 有人打出一张牌。**派发给所有战斗员**：`Enrage` 是"敌人反应你的出牌"。
     CardPlayed,
     /// `CardCostPaid` —— 出牌付了费用。
@@ -412,6 +424,8 @@ impl TriggerEvent {
             "DamageDealt" => Some(TriggerEvent::DamageDealt),
             "DamageTaken" => Some(TriggerEvent::DamageTaken),
             "Downed" => Some(TriggerEvent::Downed),
+            // §263：本内核自己的名字（参考没有"别人的死"这个事件）。理由同 `HpLost`。
+            "FoeDowned" => Some(TriggerEvent::FoeDowned),
             "CardPlayed" => Some(TriggerEvent::CardPlayed),
             // §237: the three trigger hooks that used to be `NotHandled`.
             "BlockGained" => Some(TriggerEvent::BlockGained),
@@ -446,6 +460,7 @@ impl TriggerEvent {
             TriggerEvent::DamageDealt => "DamageDealt",
             TriggerEvent::DamageTaken => "DamageTaken",
             TriggerEvent::Downed => "Downed",
+            TriggerEvent::FoeDowned => "FoeDowned",
             TriggerEvent::CardPlayed => "CardPlayed",
             // §237
             TriggerEvent::BlockGained => "BlockGained",
@@ -2557,6 +2572,43 @@ impl Host<'_> {
             let outcome = execute_program(state, self.content, root, Some(bearer), source, steps);
             outcome.map_err(|e| self.record(HostError::Exec(e)))?;
         }
+
+        // §263：**"敌人死了"** —— 派给**另一个阵营**的每个战斗员（`gremlin_horn` / `the_specimen`）。
+        //
+        // 只派给敌方阵营而不是所有人：见 `TriggerEvent::FoeDowned` 的文档（`split` 那条反例）。
+        // `EventTarget` = 倒下的那个，所以节目能读它的层数（`the_specimen` 要读毒）。
+        let fallen_team = state.combatant(&bearer).map(|c| c.team_id);
+        let Some(fallen_team) = fallen_team else {
+            return Ok(());
+        };
+        let mut others = [CombatantId::EMPTY; crate::state::MAX_COMBATANTS];
+        let mut other_count = 0usize;
+        for combatant in state.combatants() {
+            if combatant.team_id != fallen_team && other_count < others.len() {
+                others[other_count] = combatant.id;
+                other_count += 1;
+            }
+        }
+        for index in 0..other_count {
+            let listener = others[index];
+            let mut batch = TriggerBatch::new();
+            self.collect_triggers(state, &listener, TriggerEvent::FoeDowned, &mut batch)?;
+            batch.sort();
+            for i in 0..batch.len {
+                if state.result != CombatResult::Ongoing {
+                    break;
+                }
+                let Some(handle) = batch.root.get(i).copied() else {
+                    break;
+                };
+                let steps =
+                    batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
+                let root = NodeRef::new(self.content, handle);
+                let outcome =
+                    execute_program(state, self.content, root, Some(listener), Some(bearer), steps);
+                outcome.map_err(|e| self.record(HostError::Exec(e)))?;
+            }
+        }
         Ok(())
     }
 
@@ -4373,6 +4425,8 @@ mod tests {
                     TriggerEvent::BlockGained => {}
                     TriggerEvent::CardsDrawn => {}
                     TriggerEvent::CardExhausted => {}
+                    // §263：本内核自己的事件名（"敌对阵营有人倒下"）。镜像里 0 条，计数恒 0。
+                    TriggerEvent::FoeDowned => {}
                     TriggerEvent::NotHandled => not_handled += 1,
                 }
                 // 信封上的步数预算：实测 25/25 都是 1024。

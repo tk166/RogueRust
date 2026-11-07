@@ -6059,6 +6059,221 @@ mod card_text_tests {
         );
     }
 
+    /// §263：**敌人死亡**两件 + **伤害管线数值改写**三件。
+    ///
+    /// 一条测试覆盖五件，因为它们的公共前提是同一个："造一场能被我方精确控制伤害的战斗"。
+    #[test]
+    fn the_enemy_death_and_damage_rewrite_relics_change_the_right_number() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+
+        // 两个敌人的战斗：打死一个，看另一个/英雄侧的反应。
+        let session_for = |carrier: &str, card: &'static str, seed: i32| {
+            let deck: &'static [rd_core::battle::DeckEntry<'static>] = Box::leak(
+                vec![rd_core::battle::DeckEntry { card, count: 1 }; 20].into_boxed_slice(),
+            );
+            let session = build_session_at_unstarted(seed, "enc_two_louses", 200, Some(deck), 0, 0)
+                .unwrap_or_else(|e| panic!("{carrier}: {e}"));
+            install_session(session);
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(cid_in("hero")),
+                    definition: rd_core::state::StatusDefinitionId::new(carrier)
+                        .expect("a status id"),
+                    stacks: 1,
+                    duration: 0,
+                    charges: 0,
+                    source: None,
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("apply the carrier");
+            let standard = standard_turn_config().expect("standard turn config");
+            start_first_turn(&mut session.state, &standard, &mut session.host)
+                .expect("start the first turn");
+            session.reobserve();
+        };
+        let enemies = || -> Vec<(String, i32)> {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatants()
+                .iter()
+                .filter(|c| c.team_id.as_str() == "enemy")
+                .map(|c| (String::from(c.id.as_str()), c.health_current))
+                .collect()
+        };
+        let energy = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatant(&cid_in("hero"))
+                .map_or(-1, |c| {
+                    c.resources()
+                        .iter()
+                        .find(|p| p.key.as_str() == "standard.energy")
+                        .map_or(-1, |p| p.pool.current)
+                })
+        };
+        let hand_count = || -> usize {
+            let session = slot().as_ref().expect("session");
+            session.state.zone_cards(&cid_in("hero"), rd_core::state::CardZone::Hand).count()
+        };
+        let poison_of = |id: &str| -> i32 {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in(id)).map_or(0, |c| {
+                c.statuses()
+                    .iter()
+                    .filter(|s| s.definition_id.as_str() == "standard.poison")
+                    .map(|s| s.stacks)
+                    .sum()
+            })
+        };
+        let hero_hp = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in("hero")).map_or(-1, |c| c.health_current)
+        };
+        // 直接对某个战斗员打一拳（绕过出牌：伤害额精确可控）。
+        let hit = |who: &str, amount: i32| {
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::DealDamage {
+                    target: Some(cid_in(who)),
+                    amount,
+                    ignores_block: false,
+                    // §263：出手方 = 英雄。**The Boot 是出手侧规则**，`source: None` 时
+                    // 它读不到"谁在打"，整条规则静默不生效 —— 判据会报"4 点还是 4 点"。
+                    source: Some(cid_in("hero")),
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("damage");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        };
+
+        // ---- Gremlin Horn：敌人死亡 ⇒ +1 能量、抽 1 张。
+        session_for("standard.gremlin_horn", "strike", 71);
+        let names = enemies();
+        assert!(names.len() >= 2, "this fixture needs two enemies, got {names:?}");
+        let target = names[0].0.clone();
+        let energy_before = energy();
+        let hand_before = hand_count();
+        hit(&target, 999);
+        assert_eq!(enemies()[0].1, 0, "the louse is down");
+        assert_eq!(energy(), energy_before + 1, "Gremlin Horn: +1 Energy on a kill");
+        assert_eq!(hand_count(), hand_before + 1, "Gremlin Horn: draw 1 on a kill");
+        take_session();
+
+        // ---- The Specimen：死者身上的毒搬给**另一个**敌人（不是英雄、不是死者自己）。
+        session_for("standard.the_specimen", "strike", 72);
+        {
+            let session = slot().as_mut().expect("session");
+            let first = session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map(|c| c.id)
+                .expect("an enemy");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(first),
+                    definition: rd_core::state::StatusDefinitionId::new("standard.poison")
+                        .expect("poison"),
+                    stacks: 4,
+                    duration: 0,
+                    charges: 0,
+                    source: None,
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("poison the first louse");
+        }
+        let names = enemies();
+        let dying = names[0].0.clone();
+        let survivor = names[1].0.clone();
+        hit(&dying, 999);
+        // ⚠️ 尸体上的层数**不会**被清掉（内核不清理倒下者的状态，也没有理由清）——
+        // 要钉的是"搬过去了"，不是"搬空了"。
+        assert_eq!(poison_of(&survivor), 4, "The Specimen: the Poison moves to the other enemy");
+        assert_eq!(poison_of("hero"), 0, "…and not to the hero");
+        take_session();
+
+        // ---- The Boot：4 点未被格挡的攻击伤害 ⇒ 5。
+        session_for("standard.the_boot", "strike", 73);
+        let names = enemies();
+        let who = names[0].0.clone();
+        let before = names[0].1;
+        hit(&who, 4);
+        let after = enemies()[0].1;
+        assert_eq!(before - after, 5, "The Boot: 4 unblocked damage becomes 5");
+        take_session();
+
+        // 反面：5 点不在阈值内，原样。
+        session_for("standard.the_boot", "strike", 74);
+        let names = enemies();
+        let who = names[0].0.clone();
+        let before = names[0].1;
+        hit(&who, 5);
+        assert_eq!(before - enemies()[0].1, 5, "The Boot: 5 is already above the threshold");
+        take_session();
+
+        // ---- Torii：5 点未被格挡的攻击伤害 ⇒ 1（承受侧，所以打的是英雄）。
+        session_for("standard.torii", "strike", 75);
+        let before = hero_hp();
+        hit("hero", 5);
+        assert_eq!(before - hero_hp(), 1, "Torii: 5 unblocked damage becomes 1");
+        take_session();
+
+        // 反面：6 点不在阈值内，原样。
+        session_for("standard.torii", "strike", 76);
+        let before = hero_hp();
+        hit("hero", 6);
+        assert_eq!(before - hero_hp(), 6, "Torii: 6 is above the threshold");
+        take_session();
+
+        // ---- Tungsten Rod：每次掉血少掉 1 点（**任何**来源：这里走"失去生命"那条路 ——
+        // `bloodletting` 是 0 费、-3 HP，牌组的 20 张全是它，所以开局手里一定有）。
+        session_for("standard.tungsten_rod", "bloodletting", 77);
+        let before = hero_hp();
+        {
+            let session = slot().as_mut().expect("session");
+            let hero = cid_in("hero");
+            let instance = session
+                .state
+                .zone_cards(&hero, rd_core::state::CardZone::Hand)
+                .next()
+                .map(|card| card.id)
+                .expect("bloodletting in hand");
+            rd_core::play::play_card(
+                &mut session.state,
+                Some(&content),
+                &rd_core::play::PlayRequest::new(hero, instance, None),
+            )
+            .expect("bloodletting is playable");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        }
+        assert_eq!(before - hero_hp(), 2, "Tungsten Rod: 3 HP loss becomes 2");
+        take_session();
+
+        // 伤害那条路也一样（被格挡吃干净的那一下**不该**再减 —— 它本来就没掉血）。
+        session_for("standard.tungsten_rod", "strike", 78);
+        let before = hero_hp();
+        hit("hero", 5);
+        assert_eq!(before - hero_hp(), 4, "Tungsten Rod: 5 damage becomes 4");
+        take_session();
+    }
+
     /// §262：七件"每第 N 张某类型牌"的遗物 —— 真的打牌。
     ///
     /// 一条测试覆盖七件，因为它们的规则形状是**同一个**（`CardPlayed` + 自己的模 N 计数器），

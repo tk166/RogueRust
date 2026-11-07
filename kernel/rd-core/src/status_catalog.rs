@@ -690,6 +690,19 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.ink_bottle"
             | "standard.pen_nib"
             | "standard.double_damage"
+            // §263: one content-trigger carrier (`gremlin_horn`, the new `FoeDowned` event) plus four
+            // statuses whose whole rule lives in the kernel: `the_specimen` (poison transfer at the
+            // downed site) and the three damage rewrites (`the_boot` / `torii` / `tungsten_rod`,
+            // `exec.rs::S6a`). Like `standard.buffer`, they are "the kernel reads this id".
+            | "standard.gremlin_horn"
+            | "standard.the_specimen"
+            | "standard.the_boot"
+            | "standard.torii"
+            | "standard.tungsten_rod"
+            // §263: `standard.poison` —— the first status in this content that the kernel ticks by
+            // **tag** (`damage_over_time`, `host.rs::TAG_DAMAGE_OVER_TIME`) instead of by id. Its
+            // decay is a content `TurnEnded` trigger, so it has behaviour on both sides.
+            | "standard.poison"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

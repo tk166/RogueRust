@@ -6081,6 +6081,193 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.gremlin_horn",
+      "PackageId": "sts",
+      "NameKey": "Gremlin Horn",
+      "DescriptionKey": "Whenever an enemy dies, gain 1 Energy and draw 1 card.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "FoeDowned",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.gainResource",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "ResourceId": "standard.energy",
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.drawCards",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "Count": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.the_specimen",
+      "PackageId": "sts",
+      "NameKey": "The Specimen",
+      "DescriptionKey": "Whenever an enemy dies, transfer any Poison it has to a random enemy.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.the_boot",
+      "PackageId": "sts",
+      "NameKey": "The Boot",
+      "DescriptionKey": "Whenever you would deal 4 or less unblocked Attack damage, increase it to 5.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.torii",
+      "PackageId": "sts",
+      "NameKey": "Torii",
+      "DescriptionKey": "Whenever you would receive 5 or less unblocked Attack damage, reduce it to 1.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.tungsten_rod",
+      "PackageId": "sts",
+      "NameKey": "Tungsten Rod",
+      "DescriptionKey": "Whenever you would lose HP, lose 1 less.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.poison",
+      "PackageId": "sts",
+      "NameKey": "Poison",
+      "DescriptionKey": "At the start of its turn, lose HP equal to its Poison, then lose 1 Poison.",
+      "Polarity": "Debuff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "debuff",
+        "damage_over_time"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.modifyStatusStacks",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.poison"
+                },
+                "Delta": {
+                  "kind": "const",
+                  "value": {
+                    "Value": -1
+                  }
+                },
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -56186,6 +56373,13 @@
       "Rarity": "Event"
     },
     {
+      "Id": "gremlin_horn",
+      "DisplayName": "Gremlin Horn",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "horn_cleat",
       "DisplayName": "Horn Cleat",
       "Rarity": "Uncommon",
@@ -56354,11 +56548,39 @@
       "Rarity": "Common"
     },
     {
+      "Id": "the_boot",
+      "DisplayName": "The Boot",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "the_specimen",
+      "DisplayName": "The Specimen",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "thread_and_needle",
       "DisplayName": "Thread and Needle",
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Rare"
+    },
+    {
+      "Id": "torii",
+      "DisplayName": "Torii",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "tungsten_rod",
+      "DisplayName": "Tungsten Rod",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "vajra",

@@ -438,6 +438,47 @@ const BLOCK_POOL_ID: &str = "standard.block";
 /// * `standard.plated_armor` —— 挨到"没被挡住的伤害"时掉 1 层（另一半在 `host`，回合结束给格挡）。
 const BUFFER_STATUS: &str = "standard.buffer";
 
+/// §263：**伤害管线上的三个"数值改写"遗物**。它们**不是** `PassiveModifiers`：
+///
+/// | 遗物 | 规则（wiki 原话） | 时点 |
+/// |---|---|---|
+/// | `the_boot` | "4 or less **unblocked** Attack damage ⇒ 5" | 扣格挡**之后**，出手方 |
+/// | `torii` | "5 or less **unblocked** Attack damage ⇒ 1" | 扣格挡**之后**，承受方 |
+/// | `tungsten_rod` | "Whenever you would lose HP, lose 1 less" | 掉血 |
+///
+/// # 为什么不能用 `PassiveModifiers` 写
+///
+/// 那张表跑在**扣格挡之前**（S2 阶段，和力量/虚弱同一条管线），而这三条规则说的都是
+/// **unblocked** 那一半 —— 扣格挡之前那个数还不是它们要判的数。
+///
+/// 第二个理由是**两个数**：`(≤4 ⇒ 5)` 需要"阈值"和"替换值"两个参数，而一条
+/// `PassiveModifierSpec` 只有一个 `Magnitude`（`RestrictDamageKind`/`Priority` 都另有用途）。
+/// 硬把阈值塞进 `Priority` 之类会是"一个字段两个意思"，那正是本仓库反复吃亏的形状。
+///
+/// ⇒ 与 `Buffer` / `DeathPrevention` 同一条路：**内核认这三个状态 id，数字是 wiki 的常量**。
+/// 内容里那三条状态是"载体 + 页面显示"，规则在这里。⚠️ 这也意味着改数字要改代码 ——
+/// 这三条 wiki 数字从来没变过（它们不是"能力值"，是遗物的定义）。
+///
+/// # 顺序
+///
+/// 出手方（`the_boot`）→ 承受方（`torii`）→ 掉血（`tungsten_rod`）。这条顺序只在一处可见：
+/// The Boot 把 4 抬到 5、Torii 再把 5 压到 1 —— 反过来则 4 先变 1、The Boot 就无事可做。
+const THE_BOOT: (&str, i32, i32) = ("standard.the_boot", 4, 5);
+const TORII: (&str, i32, i32) = ("standard.torii", 5, 1);
+const TUNGSTEN_ROD: (&str, i32) = ("standard.tungsten_rod", 1);
+
+/// §263：`The Specimen` —— "whenever an enemy dies, transfer any Poison it has to a random enemy"。
+///
+/// 为什么这条是**内核规则**而不是像 `gremlin_horn` 那样一条 `FoeDowned` 内容触发器：
+/// 节目需要"随机一个活着的**同伴阵营**"，而这个选择器不存在 —— `sel.*` 里只有
+/// `allEnemies` / `lowestHealthEnemy` 这类确定性选择器，随机抽取要动 `random_step`，
+/// 那是 `ExecContext` 的可变侧（`random_living_opponent` 就是因此才长成一个函数而不是选择器）。
+///
+/// 所以走与 `Buffer` / `DeathPrevention` 同一条先例：**内核认这个状态 id**，其余交给内容。
+const THE_SPECIMEN: &str = "standard.the_specimen";
+/// `The Specimen` 搬的那条状态（wiki: "any Poison it has"）。
+const POISON_STATUS: &str = "standard.poison";
+
 /// 给 `definition` 减 **1 层**；减到 0 就把实例删掉。返回是否真的减了（没有这条实例 ⇒ `false`）。
 ///
 /// "删掉"和"留一条 0 层实例"仍然不是等价物（理由同 `remove_status_at`：0 层实例会出现在
@@ -1378,6 +1419,41 @@ pub fn resolve_damage_of_kind(
     };
     let mut health_lost = (health_before - health_after).max(0);
 
+    // ── S6a：**§263 的三个数值改写**（`The Boot` / `Torii` / `Tungsten Rod`）。
+    //
+    // 位置是语义：这三条说的都是 **unblocked** 那个数，所以必须在 S4 扣完格挡之后。
+    // 只认**攻击**（`DamageKind::Direct`，与 `damage.isAttack` 同一口径）：毒的一跳不吃
+    // The Boot / Torii（wiki 写的是 "Attack damage"）。
+    if remaining > 0 && matches!(kind, BindDamageKind::Direct) {
+        // 出手方：4 或更少 ⇒ 5。
+        if let Some(source) = ctx.source {
+            if carries_status(ctx.state, &source, THE_BOOT.0) && remaining <= THE_BOOT.1 {
+                health_after = if health_before >= THE_BOOT.2 {
+                    health_before - THE_BOOT.2
+                } else {
+                    0
+                };
+                health_lost = (health_before - health_after).max(0);
+            }
+        }
+        // 承受方：5 或更少 ⇒ 1。**读的是上一步之后的值**（Boot 抬到 5 之后会被压成 1）。
+        let after_boot = (health_before - health_after).max(0);
+        if carries_status(ctx.state, target, TORII.0) && after_boot > 0 && after_boot <= TORII.1 {
+            health_after = if health_before >= TORII.2 {
+                health_before - TORII.2
+            } else {
+                0
+            };
+            health_lost = (health_before - health_after).max(0);
+        }
+    }
+    // 承受方：每次掉血少掉 1 点（**任何**来源的掉血都算 —— 这一条 wiki 没写 "attack"）。
+    if health_lost > 0 && carries_status(ctx.state, target, TUNGSTEN_ROD.0) {
+        let trimmed = (health_lost - TUNGSTEN_ROD.1).max(0);
+        health_after = health_before - trimmed;
+        health_lost = trimmed;
+    }
+
     // ── S6b：**`Buffer`**（§149）—— "挡下下一次掉血"。
     //
     // 判据是"**本来要掉血**"（`health_lost > 0`），所以**被格挡吃干净的那些不消耗 Buffer** ——
@@ -1447,6 +1523,61 @@ pub fn resolve_damage_of_kind(
                 && other.lifecycle_state == CombatantLifecycleState::Alive
             {
                 other.lifecycle_state = CombatantLifecycleState::Escaped;
+            }
+        }
+        // §263：`The Specimen` —— 倒下的是敌人、而**对面阵营**有人戴着它 ⇒ 把毒搬给一个随机同伴。
+        //
+        // 放在 `Downed` 入队**之前**：这条规则读的是"死的那一刻它身上还有几层毒"，而
+        // `Downed` 的触发器（`spore_cloud` / `split`）会改状态表 —— 顺序在这里是语义。
+        if let Some(team) = ctx.state.combatant(target).map(|c| c.team_id) {
+            let stacks = ctx
+                .state
+                .combatant(target)
+                .map(|c| {
+                    c.statuses()
+                        .iter()
+                        .filter(|status| status.definition_id.as_str() == POISON_STATUS)
+                        .map(|status| status.stacks)
+                        .sum::<i32>()
+                })
+                .unwrap_or(0);
+            if stacks > 0 {
+                // 「对面阵营有人戴着它」——问一次布尔就够，不需要记住是谁（毒是"搬给死者阵营"，
+                // 与戴的人是谁无关）。
+                let carried = ctx.state.combatants().iter().any(|combatant| {
+                    combatant.team_id != team
+                        && combatant.health_current > 0
+                        && carries_status(ctx.state, &combatant.id, THE_SPECIMEN)
+                });
+                if carried {
+                    // 随机一个**活着的同伴**（与死者同阵营、且不是死者自己）。
+                    let mut pool = [CombatantId::EMPTY; crate::state::MAX_COMBATANTS];
+                    let mut count = 0usize;
+                    for combatant in ctx.state.combatants() {
+                        if combatant.team_id != team || combatant.id == *target {
+                            continue;
+                        }
+                        if combatant.health_current <= 0 {
+                            continue;
+                        }
+                        if let Some(cell) = pool.get_mut(count) {
+                            *cell = combatant.id;
+                            count += 1;
+                        }
+                    }
+                    if count > 0 {
+                        let picked = crate::rng::shuffled_pick_index(
+                            count,
+                            ctx.state.random_seed,
+                            ctx.state.random_step,
+                        );
+                        ctx.state.random_step = ctx.state.random_step.saturating_add(1);
+                        if let Some(receiver) = pool.get(picked).copied() {
+                            let definition = StatusDefinitionId::new(POISON_STATUS)?;
+                            apply_one_status(ctx, &receiver, definition, stacks, 0, 0)?;
+                        }
+                    }
+                }
             }
         }
         // `Downed` 事件：`Spore Cloud` 这一批触发器等它（`port-plan.md` §117）。
@@ -1651,7 +1782,17 @@ pub fn lose_health(
         return Ok(0);
     }
     let current = combatant.health_current;
-    let lost = amount.min(current.max(0));
+    // §263：`Tungsten Rod` —— "whenever you would lose HP, lose 1 less"。**这条路径也要**：
+    // "失去生命"不是伤害（`bloodletting` / `offering` / 敌人的某些招式都走这里），
+    // 而 wiki 说的是 "would lose HP"，不是 "would take damage"。
+    // ⚠️ 这一条只在 `resolve_damage_of_kind` 里写的话，掉血类卡牌一点都没被减免 —— §263 的判据
+    // 就是这个形状红的（"3 HP loss becomes 2" 报 3）。
+    let reduced = if carries_status(ctx.state, target, TUNGSTEN_ROD.0) {
+        (amount - TUNGSTEN_ROD.1).max(0)
+    } else {
+        amount
+    };
+    let lost = reduced.min(current.max(0));
     let after = current - lost;
     // `from_card` 由上下文回答：节目里有没有"正在结算的那张牌"。
     let from_card = ctx.resolving_card.is_some();

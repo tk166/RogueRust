@@ -1799,6 +1799,13 @@ impl RunState {
             // `pen_nib` 的状态在**第 9 张**攻击时挂 `standard.double_damage`（见内容脚本的注释）：
             // `CardPlayed` 触发器在卡牌节目**之后**派发，所以"第 10 张挂"会翻倍到第 11 张。
             "pen_nib" => Some(RelicEffect::StartCombatStatus("standard.pen_nib", 1)),
+            // §263：**敌人死亡时**（第一条走新事件 `FoeDowned` 的内容触发器）+ **伤害管线改写**
+            // 三件（规则在内核 `exec.rs::S6a`，这里只挂载体）。
+            "gremlin_horn" => Some(RelicEffect::StartCombatStatus("standard.gremlin_horn", 1)),
+            "the_specimen" => Some(RelicEffect::StartCombatStatus("standard.the_specimen", 1)),
+            "the_boot" => Some(RelicEffect::StartCombatStatus("standard.the_boot", 1)),
+            "torii" => Some(RelicEffect::StartCombatStatus("standard.torii", 1)),
+            "tungsten_rod" => Some(RelicEffect::StartCombatStatus("standard.tungsten_rod", 1)),
             _ => None,
         }
     }
@@ -4727,6 +4734,27 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §263：五件（敌人死亡类 + 伤害改写类）的**接线**。
+    #[test]
+    fn the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier() {
+        let carrier = [
+            ("gremlin_horn", "standard.gremlin_horn"),
+            ("the_specimen", "standard.the_specimen"),
+            ("the_boot", "standard.the_boot"),
+            ("torii", "standard.torii"),
+            ("tungsten_rod", "standard.tungsten_rod"),
+        ];
+        for (relic, status_id) in carrier {
+            let mut run = ironclad();
+            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            let bonus = run.combat_bonus();
+            assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
+            let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
+            assert_eq!(entry.id, status_id, "{relic}: its own carrier");
+            assert_eq!(entry.stacks, 1, "{relic}: one stack");
+        }
     }
 
     /// §262：七件"每第 N 张某类型牌"的**接线**。

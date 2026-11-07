@@ -87,6 +87,10 @@ const settleHere = () => {
     if (ex.rd_run_event_needs() > 0) ex.rd_run_pick_event_card(0);
   }
   else if (kind === 6) ex.rd_run_open_chest();
+  // §263: a fight pays out a **reward screen**, and a pending reward blocks the next step
+  // (`action index out of range`). The map walk has no interest in rewards, so skip them the way
+  // the Rust helper does (`rd-wasm`'s `run::tests` loops on `pending == 4` too).
+  while (ex.rd_run_pending() === 4) ex.rd_run_skip_reward();
 };
 
 const view = () => M.describeMap(io);

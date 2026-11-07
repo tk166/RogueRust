@@ -18019,3 +18019,86 @@ carries over*）。本内核的表达：**能量池 `max = None`**，上限的�
 必须从 `TurnConfig::energy_refill` / `turn_start_refill_count` 那一侧派生，**不要**回头给池子塞
 一个 `Some(n)`：那会把"本回合能拿到多少"和"最多能有几"重新混成一个数，并重新引入 §261 的
 "满池加能量静默无效"。
+
+---
+
+## §263 遗物第四批：**敌人死亡时**两件 + **伤害管线数值改写**三件
+
+### 263.1 五件与它们各自的接缝
+
+| 遗物 | 规则（wiki 原话） | 稀有度 | 载体 |
+|---|---|---|---|
+| `gremlin_horn` | "Whenever an enemy dies, gain 1 Energy and draw 1 card." | Uncommon | 内容状态 + **新事件** `FoeDowned` |
+| `the_specimen` | "Whenever an enemy dies, transfer any Poison it has to a random enemy." | Rare | **内核规则**（要随机） |
+| `the_boot` | "4 or less **unblocked** Attack damage ⇒ 5." | Common | 内核规则（`exec.rs::S6a`，出手侧） |
+| `torii` | "5 or less **unblocked** Attack damage ⇒ 1." | Rare | 内核规则（同上，承受侧） |
+| `tungsten_rod` | "Whenever you would lose HP, lose 1 less." | Rare | 内核规则（伤害路径 + `lose_health`） |
+
+### 263.2 新事件 `FoeDowned`（为什么不是把 `Downed` 广播）
+
+`Downed` 的 Bearer 是**倒下的那个**，`Spore Cloud` / `Split` / `Stasis` 都长在它身上。把它改成
+"派给所有人"会让现有内容**改变行为**：`standard.split` 长在每只史莱姆身上，任何一只死掉都会
+触发**其它**史莱姆分裂。
+
+⇒ 新开一个名字，只派给**另一个阵营**：Bearer = 活着的那个，`EventTarget` = 倒下的那个。
+这也是 `HpLost` 之后第二个"本内核自己的事件名"（参考没有"别人的死"这个概念）。
+
+### 263.3 为什么后三件不是 `PassiveModifiers`
+
+那张表跑在**扣格挡之前**（S2 阶段，与力量/虚弱同一条管线），而这三条规则说的都是
+**unblocked** 那一半 —— 扣格挡之前那个数还不是它们要判的数。第二个理由是**两个参数**
+（阈值 + 替换值），而一条 spec 只有一个 `Magnitude`。
+
+⇒ 与 `Buffer` / `DeathPrevention` 同一先例：内核认这三个状态 id，数字是 wiki 的常量
+（`THE_BOOT` / `TORII` / `TUNGSTEN_ROD`）。顺序是**出手方 → 承受方 → 掉血**，这条顺序只在
+一处可见：The Boot 把 4 抬到 5、Torii 再把 5 压到 1。
+
+⚠️ `tungsten_rod` **必须写在两条路径上**：`resolve_damage_of_kind`（伤害）与
+`exec::lose_health`（"失去生命"，如 `bloodletting` / `offering`）。只写前者时判据报
+"3 HP loss becomes 2" 得到 3 —— wiki 说的是 "would lose **HP**"，不是 "take damage"。
+
+### 263.4 ★ 前置缺口：内容里**根本没有毒**
+
+`the_specimen` 的规则要读 `poison`，而这份内容一个毒源都没有（铁甲战士没有，1 幕敌人也没有），
+所以 `standard.poison` 这个状态**不存在** —— 第一次跑判据时它报 `Bind(Missing("STAT row"))`
+（伤害管线要给**每一个**状态查 `STAT` 行，查不到就响亮失败，这条实现本身是对的）。
+
+⇒ 顺手把毒补成一条**纯内容**状态，这也是这批唯一的"基建"新增：
+
+```
+standard.poison  Debuff  tags: [debuff, damage_over_time]
+                 TurnEnded → modifyStatusStacks(self, -1)
+```
+
+* `damage_over_time` 是内核那条**按标签**读的通道（`host.rs::TAG_DAMAGE_OVER_TIME`）：回合开始
+  按层数掉血、且**无视格挡**（`DamageKind::Dot`）；
+* 自减 1 层用 `TurnEnded` 触发器，与 `vulnerable`/`weak` 同一个"层数就是时钟"的写法。
+
+### 263.5 判据
+
+| 测试 | 钉住 |
+|---|---|
+| `the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier`（rd-run） | 五件各挂自己的载体、1 层 |
+| `the_enemy_death_and_damage_rewrite_relics_change_the_right_number`（rd-wasm） | Gremlin Horn：打死一只 ⇒ +1 能量、+1 手牌；The Specimen：先给 A 上 4 层毒、打死 A ⇒ **B 得到 4 层**、英雄 0；The Boot：4 ⇒ 5 且 5 ⇒ 5（阈值外不动）；Torii：5 ⇒ 1 且 6 ⇒ 6；Tungsten Rod：`bloodletting` 的 3 点掉血 ⇒ 2，伤害 5 ⇒ 4 |
+
+三处判据文字值得记：
+
+* **尸体上的毒不会被清**（内核不清理倒下者的状态）—— 要钉的是"搬过去了"，不是"搬空了"；
+* `hit()` 必须带**出手方**（`Dealer`）：The Boot 是出手侧规则，`source: None` 时静默不生效，
+  判据会报"4 点还是 4 点"；
+* 夹具从 `enc_cultist`（1 个敌人）换成 `enc_two_louses` —— 死亡类规则需要"还有另一个敌人"。
+
+### 263.6 顺手修掉的一处夹具缺口（`web-map` 红）
+
+遗物池从 42 涨到 47 之后，`map_test.mjs` 的全图行走在第 15 层被拒：
+`err=action index out of range pending=4`。`pending == 4` 是**奖励屏** —— 这一层第一次真的把东西
+发出来了，而夹具的 `settleHere()` 从来不管奖励屏（`rd-wasm` 自己的测试 helper 是
+`while pending == 4 { skip_reward }`）。
+
+⇒ 在 `settleHere()` 末尾照样跳过。这是**夹具**的缺口，不是产品缺陷：地图行走不关心奖励，
+但"挂着一个待决问句就走不动"这件事必须在夹具里表达出来，否则下次内容一涨就换一个门红。
+
+### 263.7 账
+
+遗物 **42 → 47 件**；`rd-core` 788 / `rd-run` 122 / `rd-wasm` 113；内容 93 状态 / 47 遗物；
+四条对拍全过（182/182 · 62/62 · 124/124 · 394/394）；`ACT1_SLICE PASS` / `SOAK_TEST PASS`；21/21。
