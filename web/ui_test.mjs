@@ -90,6 +90,17 @@ const PANEL_STATES = [
   ["event", { ...BASE, kind: 5, pending: 5, eventText: "old_shrine — A shrine",
       choices: [{ label: "Pray", effect: 1, amount: 15 }, { label: "Leave", effect: 5, amount: 0 }] },
     ["event_choice", "event_choice"], ["Pray", "Leave"], "未知房间"],
+  // §279: 条件不成立的选项**不画**，而留下的那个按钮必须带**它自己的槽号** ——
+  // 如果面板用"过滤后的下标"，这里的 `Leave`（槽 1）会变成一个打给槽 0 的按钮，
+  // 而屏幕上完全正常。
+  ["event with a locked option", { ...BASE, kind: 5, pending: 5,
+      eventText: "forgotten_altar — An altar",
+      choices: [
+        { slot: 0, available: false, label: "Offer: Golden Idol", effect: 10, amount: 1, effects: [] },
+        { slot: 1, available: true, label: "Sacrifice", effect: 4, amount: 5, effects: [] },
+        { slot: 2, available: true, label: "Leave", effect: 5, amount: 0, effects: [] },
+      ] },
+    ["event_choice", "event_choice"], ["Sacrifice", "Leave"], "未知房间"],
   // §143: the two new event states. A deck-editing choice shows as a named effect (no amount), and
   // the pick phase names **which** edit is owed.
   ["event deck edit", { ...BASE, kind: 5, pending: 5, eventText: "ancient_writing — Glyphs",

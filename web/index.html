@@ -1025,6 +1025,10 @@ function runSnapshot() {
           });
         }
         snapshot.choices.push({
+          // §279: 槽号与"可不可选"都留着 —— 面板按 `available` 决定画不画，
+          // 而按钮的动作必须带**原来的槽号**（过滤后下标会漂）。
+          slot,
+          available: ex.rd_run_event_option_available(slot) !== 0,
           label: eventLabel(slot),
           effect: ex.rd_run_event_effect(slot),
           amount: ex.rd_run_event_amount(slot),
@@ -2094,6 +2098,21 @@ function measure() {
       // §161.3: put a potion on the belt by id (a `POT` row). **Debug surface only** -- the
       // reasoning is `rd_run_grant_potion`'s own doc. A checker that has to hope for a 40% drop of
       // Elixir (two of twenty-two potions) is not a checker.
+      // §279：打开指定事件（理由同 `givePotion`：种子不会恰好给你想要的那一屏）。
+      // 条件选项只住在 `forgotten_altar` 上，而它要 `?` 房掷骰 + 三幕池子抽中才出现。
+      startAnEvent: (id, ascension = 0) => {
+        const bytes = new TextEncoder().encode(id);
+        const ptr = ex.rd_env_scratch_buf();
+        new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
+        const verdict = ex.rd_run_begin_event(ptr, bytes.length);
+        // ⚠️ 面板的写者是 `renderNode()`（不是战斗侧的 `render()`）—— 第一次写成了 `render()`，
+        // 于是内核已经打开了事件、屏幕上还挂着**祝福**那两个按钮（DOM 与状态不一致）。
+        if (verdict === 0) {
+          renderTopBar();
+          renderNode();
+        }
+        return verdict;
+      },
       givePotion: (id) => {
         const bytes = new TextEncoder().encode(id);
         const ptr = ex.rd_env_scratch_buf();

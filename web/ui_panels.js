@@ -252,7 +252,11 @@ const RD_PANELS = (() => {
   }
 
   function describeEvent(s) {
-    const buttons = (s.choices || []).map((choice, slot) => {
+    // §279：条件不成立的选项**不画**（wiki 的 `[Locked] Requires: …` 是另一套 UI，我们没有
+    // 锁标，所以直接不给按钮）。★ 槽号必须用**条目自己的 `slot`**，不能用过滤后的下标 ——
+    // 否则"第二段的第 2 个按钮"会打给内核第 1 个槽，而屏幕上一切正常。
+    const buttons = (s.choices || []).filter((choice) => choice.available !== false)
+      .map((choice) => {
       // §188：`effects` 是整张列表（遗物 + 诅咒就是两条）；没有就退回单条的旧字段。
       const list = Array.isArray(choice.effects) && choice.effects.length
         ? choice.effects
@@ -261,6 +265,7 @@ const RD_PANELS = (() => {
         .map((entry) => effectText(entry.effect, entry.amount))
         .filter((text) => text !== "")
         .join("、");
+      const slot = choice.slot;
       return {
         id: `choice-${slot}`,
         label: choice.label,

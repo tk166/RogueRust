@@ -30,6 +30,7 @@ pub mod ir;
 pub mod modifiers;
 pub mod play;
 pub mod rng;
+pub mod run_expr;
 pub mod sel;
 pub mod snapshot;
 pub mod state;

@@ -3273,6 +3273,9 @@ pub struct EventOption<'a> {
     pub asc_count: u8,
     /// §278：下一段的节点 id。**空串 = 这一段是终点**（选项生效后事件收尾）。
     pub next: &'a str,
+    /// §279：这个选项在镜像里的 term —— 条件（`Requires`）由
+    /// [`crate::run_expr::option_is_available`] 按它读。`ABSENT16` = 没有 term（不该出现）。
+    pub term: u16,
 }
 
 impl<'a> EventOption<'a> {
@@ -3331,6 +3334,7 @@ impl<'a> EventStep<'a> {
             }; MAX_EVENT_EFFECTS],
             asc_count: 0,
             next: "",
+            term: ABSENT16,
         }; MAX_EVENT_OPTIONS],
         count: 0,
     };
@@ -3432,6 +3436,8 @@ impl<'a> Content<'a> {
                 asc: [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS],
                 asc_count: 0,
                 next: node.str_field("Next").ok().flatten().unwrap_or(""),
+                // §279：条件要按 term 读（`Requires` 是嵌套列表，读成 `&str` 就丢结构了）。
+                term: element,
             };
             // ⚠️ `Effects` / `EffectsAsc` 在镜像里是 **`F_TERMLIST`**（kind 5：起点 + 条数），
             // 不是 `F_TERM` —— 用 `field()` 读它会拿到"一个节点"而不是"一张列表"，而错误的
@@ -5106,8 +5112,6 @@ mod tests {
              `golden_idol` / `ancient_forge` across acts (§133 / §143)"
         );
         let mut ids = Vec::new();
-        // §278：**每一步都必须可达**（否则内容里躺着一段谁也看不见的剧情，而屏幕上一切正常）。
-        let mut reached: Vec<&str> = Vec::new();
         for index in 0..content.event_count() {
             let (id, _name, entry) = content.event(index).expect("event {index}");
             ids.push(id);
@@ -5115,53 +5119,90 @@ mod tests {
                 .event_step(entry)
                 .unwrap_or_else(|| panic!("{id}: entry `{entry}` names no step"));
             assert!(!step.text.is_empty(), "{id} has no body text");
+            // §279：**入口段**至少两个选项（它才是一个"选择"）；**后续段**可以只有一个
+            // （wiki 的后续屏就是单个 `[Leave]`）。§278 第一版把"至少两个"套在每一段上。
             assert!(
                 step.count >= 2,
-                "{id}: {} option(s) -- an event needs at least two",
+                "{id}: {} option(s) -- an entry step needs at least two",
                 step.count
             );
             let choices = step.options;
             assert!(!choices[0].label.is_empty(), "{id} choice 0 has no label");
-            assert!(!choices[1].label.is_empty(), "{id} choice 1 has no label");
-            reached.push(entry);
+            if step.count >= 2 {
+                assert!(!choices[1].label.is_empty(), "{id} choice 1 has no label");
+            }
+        }
+        // ★ §279：**走遍每一段**（沿 `Next` 传递），而不是只查入口段。
+        // §278 的百分比原子就住在 `golden_idol.boulder` 上，而那段不是入口 —— 旧写法
+        // 一条都没检查过它，测试却一直是绿的。
+        let mut walk: std::vec::Vec<&str> = std::vec::Vec::new();
+        for index in 0..content.event_count() {
+            let (_, _, entry) = content.event(index).expect("event");
+            walk.push(entry);
+        }
+        let mut at = 0;
+        while at < walk.len() {
+            let step = content.event_step(walk[at]).expect("a reachable step");
+            assert!(!step.text.is_empty(), "step `{}` has no body text", walk[at]);
             for option in step.options() {
                 if let Some(next) = option.goes_on() {
-                    assert!(
-                        content.event_step(next).is_some(),
-                        "{id}: option `{}` points at `{next}`, which is not a step",
-                        option.label
-                    );
-                    reached.push(next);
+                    let step = content.event_step(next).unwrap_or_else(|| {
+                        panic!("step `{}`: option `{}` points at `{next}`", walk[at],
+                               option.label)
+                    });
+                    // 后续段可以只有一个选项（`[Leave]`），但**不能一个都没有** ——
+                    // 那样这个屏就是一个没有按钮的房间。
+                    assert!(step.count >= 1, "step `{next}` has no option at all");
+                    if !walk.contains(&next) {
+                        walk.push(next);
+                    }
                 }
             }
-            // The **shape** of the vocabulary is the run layer's business (`EventEffect::parse`);
-            // what is pinned here is that the image carries none of the outside: a parsing rule
-            // this test cannot see is a rule the content gate alone would have to defend.
-            let bare = [
-                "heal",
-                "gold",
-                "damage",
-                "max_hp",
-                "nothing",
-                "remove_card",
-                "upgrade_card",
-                "transform_card",
-            ];
-            for choice in &choices {
+            at += 1;
+        }
+        // The **shape** of the vocabulary is the run layer's business (`EventEffect::parse`);
+        // what is pinned here is that the image carries none of the outside: a parsing rule
+        // this test cannot see is a rule the content gate alone would have to defend.
+        let bare = [
+            "heal",
+            "gold",
+            "damage",
+            "max_hp",
+            "nothing",
+            "remove_card",
+            "upgrade_card",
+            "transform_card",
+        ];
+        // §278/§279：`kind:n` 形式的原子（数字在词里）。列在这里而不是用"有冒号就算"，
+        // 因为"有冒号就算"会让一个拼错的 kind 静默通过。
+        let prefix = |effect: &str, kind: &str| {
+            effect.starts_with(kind) && effect.len() > kind.len()
+        };
+        let inside = |effect: &str| {
+            bare.contains(&effect)
+                || prefix(effect, "curse:")
+                || prefix(effect, "relic:")
+                || prefix(effect, "relic_lose:")
+                || prefix(effect, "damage_pct:")
+                || prefix(effect, "max_hp_pct:")
+        };
+        for node in &walk {
+            let step = content.event_step(*node).expect("step");
+            for choice in step.options() {
                 // §188：一个选项是一张列表，所以**每一条**都要在闭词表里。
                 for spec in &choice.effects[..usize::from(choice.count)] {
-                    let effect = spec.effect;
-                    let inside = bare.contains(&effect)
-                        || (effect.starts_with("curse:") && effect.len() > "curse:".len())
-                        || (effect.starts_with("relic:") && effect.len() > "relic:".len());
-                    assert!(inside, "{id}: unknown effect {effect:?}");
+                    assert!(
+                        inside(spec.effect),
+                        "{node}: unknown effect {:?}",
+                        spec.effect
+                    );
                 }
                 for spec in &choice.asc[..usize::from(choice.asc_count)] {
-                    let effect = spec.effect;
-                    let inside = bare.contains(&effect)
-                        || (effect.starts_with("curse:") && effect.len() > "curse:".len())
-                        || (effect.starts_with("relic:") && effect.len() > "relic:".len());
-                    assert!(inside, "{id}: unknown A15 effect {effect:?}");
+                    assert!(
+                        inside(spec.effect),
+                        "{node}: unknown A15 effect {:?}",
+                        spec.effect
+                    );
                 }
             }
         }
@@ -5184,14 +5225,15 @@ mod tests {
             ]
         );
         // ★ 没有孤儿段：`EVND` 里每一行都要被某个 `EV.Entry` 或某个 `Next` 指到。
-        reached.sort_unstable();
-        reached.dedup();
+        // 传递闭包（`walk`）与表里的行数必须相等：少一个就是一段谁也看不见的剧情。
+        walk.sort_unstable();
+        walk.dedup();
         assert_eq!(
-            reached.len() as u32,
+            walk.len() as u32,
             content.event_step_count(),
             "{} step(s) in the image, {} reachable -- an unreachable step is a scene nobody can see",
             content.event_step_count(),
-            reached.len()
+            walk.len()
         );
 
         // §278：这棵树是这一节存在的理由 —— `golden_idol` 有**两段**，第二段是**三选一**，
@@ -5264,10 +5306,41 @@ mod tests {
             "upgrade_card",
             "the upgrade event must survive the round trip"
         );
+        // §279：`forgotten_altar` 的第一个选项现在是**条件选项**（要有金像才出现），
+        // 它的第一条效果是"失去金像" —— 这正是 `relic_lose:<id>` 的唯一用法。
         assert_eq!(
             effect_of("forgotten_altar")[0],
-            "curse:injury",
+            "relic_lose:golden_idol",
             "a `kind:payload` effect must survive the round trip **with its payload**"
+        );
+        // §279：条件也要真的在镜像里（`Requires` 是 term 列表，读丢一个字段就变成"无条件"）。
+        let index = (0..content.event_count())
+            .find(|index| content.event(*index).map(|e| e.0) == Some("forgotten_altar"))
+            .expect("forgotten_altar");
+        let (_, _, entry) = content.event(index).expect("event");
+        let step = content.event_step(entry).expect("first step");
+        let offered = step.options()[0];
+        let facts_with = crate::run_expr::RunFacts {
+            gold: 0,
+            health: 80,
+            health_max: 80,
+            ascension: 0,
+            relics: &["golden_idol"],
+            deck: &["strike"],
+        };
+        let facts_without = crate::run_expr::RunFacts {
+            relics: &[],
+            ..facts_with
+        };
+        assert_eq!(
+            crate::run_expr::option_is_available(&content, offered.term, &facts_with),
+            Ok(true),
+            "holding the Golden Idol unlocks `[Offer: Golden Idol]`"
+        );
+        assert_eq!(
+            crate::run_expr::option_is_available(&content, offered.term, &facts_without),
+            Ok(false),
+            "without it the option is locked -- the wiki's `[Locked] Requires: Golden Idol`"
         );
         assert_eq!(effect_of("purification_shrine")[0], "remove_card");
 

@@ -88,8 +88,22 @@ const settleHere = () => {
     // the run in `Pending::EventCard`, where `reachable()` is empty -- so the *next* step is refused
     // and the failure points at the map instead of at this line. (`rd-wasm`'s Rust test helper had
     // the same hole; both were found by the same walk.)
-    ex.rd_run_choose(0);
-    if (ex.rd_run_event_needs() > 0) ex.rd_run_pick_event_card(0);
+    //
+    // §279：★ 不能盲选槽 0 —— 它可能是一条**条件选项**（`forgotten_altar` 的 `[Offer: Golden Idol]`
+    // 要有金像）。盲选会点一条锁着的路，内核拒（-2），屏幕上却什么都没变，于是下一格
+    // 报"step refused"，指到地图而不是这里。选**第一个可用的**槽。
+    // 同时 §278 的事件是**多段**的：走完一段还留在 `Pending::Event`，所以这里要一路点到收尾。
+    let guard = 0;
+    while (ex.rd_run_pending() === 5 && guard < 8) {
+      guard++;
+      let slot = -1;
+      for (let candidate = 0, n = ex.rd_run_event_option_count(); candidate < n; candidate++) {
+        if (ex.rd_run_event_option_available(candidate) === 1) { slot = candidate; break; }
+      }
+      if (slot < 0) break;                       // 没有可用选项：留给调用方报错
+      if (ex.rd_run_choose(slot) !== 0) break;   // 内核拒了：同上
+      if (ex.rd_run_event_needs() > 0) ex.rd_run_pick_event_card(0);
+    }
   }
   else if (pending === 7 || pending === 8) ex.rd_run_pick_event_card(0);
   else if (kind === 1 || kind === 2 || kind === 7) { ex.rd_run_fight_begin(); ex.rd_run_fight_end(); }

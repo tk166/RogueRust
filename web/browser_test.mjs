@@ -366,6 +366,27 @@ const report = await evaluate(`(async () => {
   out.apHandGrew = out.apHandAfter === cardsBefore + 1;
   out.apFreeShown = out.apCosts.filter((cost) => cost === 0).length;
 
+  // (l) **§279: a locked option is not drawn.** 'forgotten_altar' 的第一个选项是条件选项
+  // （要持有金像）。这一屏的判据是**DOM**：内核说不可选，页面上就不能有那个按钮 ——
+  // 画出来的死按钮比藏起来少一条路更糟。反面（可选的那个**必须**画出来）用同一个屏幕的
+  // 按钮数对上：4 个选项、1 个锁着 ⇒ 3 个按钮。
+  window.RD_DEBUG.startWithSeed(4321, 0);
+  await sleep(0);
+  out.condOpened = window.RD_DEBUG.startAnEvent("forgotten_altar");
+  out.condKind = ex.rd_run_node_kind();
+  out.condPending = ex.rd_run_pending();
+  out.condOptions = ex.rd_run_event_option_count();
+  out.condAvailable = [];
+  for (let slot = 0; slot < out.condOptions; slot++) {
+    out.condAvailable.push(ex.rd_run_event_option_available(slot));
+  }
+  out.condButtons = [...panel().querySelectorAll("[data-panel-action]")].map((el) => text(el));
+  out.condLockedDrawn = out.condButtons.some((label) => /Golden Idol/.test(label));
+  // 点一个**锁着**的槽：内核必须拒（-2），而且屏幕不能变（事件还开着、选项还在）。
+  out.condRefused = ex.rd_run_choose(0);
+  out.condPendingAfterRefusal = ex.rd_run_pending();
+  await sleep(0);
+
   // (k) **§161.9: the one-line archive.**
   window.RD_DEBUG.startWithSeed(4321, 0);
   await sleep(0);
@@ -1188,6 +1209,22 @@ want(typeof act3.leftCount === "number" && act3.leftCount < 3,
   `inFight ${act3.inFight} msg ${JSON.stringify(act3.msg)})`);
 want(!act3.errorEnd, `act 3: a step threw: ${act3.errorEnd}`);
 
+// §279：条件选项的 DOM 半 —— 4 个选项、1 个锁着 ⇒ 3 个按钮，且锁着的那个**不在** DOM 里。
+want(report.condOpened === 0, `§279: \`forgotten_altar\` did not open (${report.condOpened})`);
+want(report.condPending === 5, `§279: the event screen is not open (pending ${report.condPending})`);
+want(report.condOptions === 4, `§279: expected 4 options, got ${report.condOptions}`);
+want(JSON.stringify(report.condAvailable) === JSON.stringify([0, 1, 1, 1]),
+  `§279: availability must be [0,1,1,1] (locked first), got ${JSON.stringify(report.condAvailable)}`);
+want(report.condButtons.length === 3,
+  `§279: 4 options with 1 locked must draw **3** buttons, got ` +
+  `${report.condButtons.length} ${JSON.stringify(report.condButtons)}`);
+want(!report.condLockedDrawn,
+  `§279: the locked option is drawn as a button: ${JSON.stringify(report.condButtons)}`);
+want(report.condRefused === -2,
+  `§279: clicking a locked option must be refused with -2, got ${report.condRefused}`);
+want(report.condPendingAfterRefusal === 5,
+  `§279: a refused click must leave the event open, pending ${report.condPendingAfterRefusal}`);
+
 
 if (problems.length) {
   for (const problem of problems) console.error("  - " + problem);
@@ -1227,6 +1264,9 @@ console.log("  potion            belt " + report.potionInBelt + " -> " + report.
   (report.potionThrew ? " · THREW " + report.potionThrew : ""));
 console.log("  act 2 (orbs)      " + JSON.stringify(report.act2 && report.act2.after) +
   " · opening " + JSON.stringify(report.act2 && report.act2.opening));
+console.log("  §279 locked       " + report.condOptions + " option(s) · available " +
+  JSON.stringify(report.condAvailable) + " · drawn " + report.condButtons.length +
+  " · locked drawn " + report.condLockedDrawn + " · refused " + report.condRefused);
 console.log("  act 3 (daggers)   " + JSON.stringify({
   opening: report.act3 && report.act3.openingCount, left: report.act3 && report.act3.leftCount,
   done: report.act3 && report.act3.done, result: report.act3 && report.act3.result,

@@ -112,6 +112,8 @@ const K_LIFT: u8 = 22;
 const K_TOKE: u8 = 23;
 const K_DIG: u8 = 24;
 const K_RECALL: u8 = 25;
+// §279：打开**指定**事件（调试入口，理由同 `K_GRANT_POTION`）。
+const K_BEGIN_EVENT: u8 = 26;
 
 const fn rec_kind_name(kind: u8) -> &'static str {
     match kind {
@@ -140,6 +142,7 @@ const fn rec_kind_name(kind: u8) -> &'static str {
         K_TOKE => "toke",
         K_DIG => "dig",
         K_RECALL => "recall",
+        K_BEGIN_EVENT => "begin_event",
         _ => "?",
     }
 }
@@ -172,6 +175,7 @@ fn rec_kind_from_name(name: &str) -> Option<u8> {
         "toke" => K_TOKE,
         "dig" => K_DIG,
         "recall" => K_RECALL,
+        "begin_event" => K_BEGIN_EVENT,
         _ => return None,
     })
 }
@@ -1682,6 +1686,31 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
     let Some(choice) = event_choice(slot) else {
         return -1;
     };
+    // §279：**条件不成立的槽**要在这里拒。页面已经按 `rd_run_event_option_available`
+    // 把它藏起来了，但"藏起来"不等于"点不到"（页面可能是旧快照，或者有人直接调 ABI）。
+    // 拒绝用 `fail`（-2 + 文本），因为它和"相位没了"是同一类事：这个操作现在不合法。
+    {
+        let Some(session) = run_slot().as_ref() else {
+            return -1;
+        };
+        match option_available(session, slot) {
+            Some(Ok(true)) => {}
+            Some(Ok(false)) => {
+                let Some(session) = run_slot().as_mut() else {
+                    return -1;
+                };
+                return fail(session, "这个选项的条件现在不成立（`Requires`）");
+            }
+            Some(Err(error)) => {
+                let message = std::format!("事件的 `Requires` 读不出来: {error:?}");
+                let Some(session) = run_slot().as_mut() else {
+                    return -1;
+                };
+                return fail(session, &message);
+            }
+            None => return -1,
+        }
+    }
     // §188：选项是**一串**效果，而 A15（事件变糟）给的是**另一串**。
     let level = run_slot().as_ref().map_or(0, |s| s.state.ascension());
     let specs = choice.effects_at(level, rd_run::state::A_EVENTS_WORSE);
@@ -1839,6 +1868,63 @@ pub extern "C" fn rd_run_event_option_count() -> i32 {
 fn open_step(session: &RunSession) -> Option<rd_core::content::EventStep<'static>> {
     let image = content();
     image.event_step(session.state.event_step())
+}
+
+/// §279：把局面摊成条件求值要的事实。
+///
+/// 为什么在这里摊、而不是让 `run_expr` 直接拿 `&RunState`：`RunState` 住在 `rd-run`，而
+/// `rd-run` **不读内容**（§133 的纪律）。条件引用的是**内容里的 id**（遗物 id / 卡 id），
+/// 所以求值只能在同时握有内容与局面的这一层发生。
+fn run_facts<'a>(
+    session: &'a RunSession,
+    relics: &'a [&'a str],
+    deck: &'a [&'a str],
+) -> rd_core::run_expr::RunFacts<'a> {
+    rd_core::run_expr::RunFacts {
+        gold: session.state.gold(),
+        health: session.state.health(),
+        health_max: session.state.health_max(),
+        ascension: session.state.ascension(),
+        relics,
+        deck,
+    }
+}
+
+/// §279：选项 `slot` 的条件现在成立吗？`None` = 没有这个槽。
+///
+/// 返回 `Some(Err)` 是**内容/镜像**的问题（认不出的 kind、缺字段），要响亮 —— 绝不能
+/// 默认成立（"条件坏了 ⇒ 按钮全亮"比"按钮全灭"更难发现，因为屏幕看起来一切正常）。
+fn option_available(session: &RunSession, slot: i32) -> Option<Result<bool, rd_core::run_expr::RequirementError>> {
+    if slot < 0 {
+        return None;
+    }
+    let step = open_step(session)?;
+    let option = *step.options.get(slot as usize)?;
+    let relics: Vec<&str> = session.state.relics().iter().map(|id| id.as_str()).collect();
+    let deck: Vec<&str> = session.state.deck().iter().map(|id| id.as_str()).collect();
+    let facts = run_facts(session, &relics, &deck);
+    Some(rd_core::run_expr::option_is_available(content(), option.term, &facts))
+}
+
+/// §279：选项 `slot` 现在可不可选（`1` 可选 / `0` 不可选 / `-1` 没有这个槽）。
+///
+/// 页面用它来决定**画不画**这个按钮。与 `rd_run_choose` 判的是同一个函数，所以
+/// "显示的按钮点下去没用"与"藏起来的按钮其实能点"这两种错都不可能只在一侧出现。
+#[no_mangle]
+pub extern "C" fn rd_run_event_option_available(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    match option_available(session, slot) {
+        Some(Ok(true)) => 1,
+        Some(Ok(false)) => 0,
+        // 条件坏了：**不可选**（0），并留一条消息给页面 —— 不是"可选"。
+        Some(Err(error)) => {
+            set_error(&std::format!("事件的 `Requires` 读不出来: {error:?}"));
+            0
+        }
+        None => -1,
+    }
 }
 
 /// §278：事件 id → 它的入口段 id（`EV.Entry`）。
@@ -2903,6 +2989,40 @@ fn start_offer(slot: i32) -> Option<rd_run::state::StartOffer> {
     session.state.start_offers().map(|offers| offers[slot as usize])
 }
 
+/// 打开指定的 `?` 房事件。**For tests and the page's `?debug` surface only.**
+///
+/// 与 `rd_run_grant_potion` 同一条理由：种子不会恰好给你想要的那一屏。`?` 房要掷骰、
+/// 地图上未必有 `?`、抽中的事件还要按三幕池子选 —— 而 §279 的条件选项只住在
+/// `forgotten_altar` 那一屏上，没有这个入口就只能在单元测试里验它。
+///
+/// 它**不是** `cfg` 门：发货的 `.wasm` 与测过的必须是同一个二进制。
+///
+/// `0` 打开，`-1` 没有 run / 指针坏，`-2` 拒绝（没有这个事件、或当前节点已结算）。
+///
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_begin_event(ptr: *const u8, len: i32) -> i32 {
+    if ptr.is_null() || len <= 0 {
+        return -1;
+    }
+    let bytes = std::slice::from_raw_parts(ptr, len as usize);
+    let Ok(id) = std::str::from_utf8(bytes) else {
+        return -2;
+    };
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_BEGIN_EVENT, -1, -1, id);
+    let Some(entry) = lookup_entry(id) else {
+        let message = std::format!("`{id}` 不是内容的 EV 行");
+        return fail(session, &message);
+    };
+    let outcome = session.state.begin_event(id, entry).map(|_| 0i32);
+    finish(session, outcome)
+}
+
 /// `EventEffect` as the same small integers the event ABI uses.
 ///
 /// ⚠️ The five number effects are `1..=5` and stay there; `6..=8` are the deck edits. `GainCurse`
@@ -2924,7 +3044,10 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         // （`effect_amount` 返回词里的数字，页面就能写"按上限 25% 受伤"）。
         EventEffect::LoseHealthPercent(_) => 11,
         EventEffect::LoseMaxHealthPercent(_) => 12,
-        EventEffect::GainCurse | EventEffect::GainRelic => -1,
+        // §279：失去遗物只有**事件**会用（`relic_lose:<id>`），与 `GainCurse`/`GainRelic`
+        // 同一条规矩：这两个码是"这个选项点名了一件遗物"，只有**内容字符串**知道 id，
+        // 而 `effect_code_of` 拿到的是已经解析过的枚举 —— 所以答 `-1` 而不是复用 10/13。
+        EventEffect::GainCurse | EventEffect::GainRelic | EventEffect::LoseRelic => -1,
     }
 }
 
@@ -2942,7 +3065,8 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::UpgradeCard
         | EventEffect::TransformCard
         | EventEffect::GainCurse
-        | EventEffect::GainRelic => 0,
+        | EventEffect::GainRelic
+        | EventEffect::LoseRelic => 0,
     }
 }
 
@@ -4563,6 +4687,9 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
             }
             K_GRANT_POTION => {
                 let _ = rd_run_grant_potion(payload.as_ptr(), payload.len() as i32);
+            }
+            K_BEGIN_EVENT => {
+                let _ = rd_run_begin_event(payload.as_ptr(), payload.len() as i32);
             }
             _ => {}
         }
@@ -8561,10 +8688,56 @@ mod tests {
                 .is_ok(),
             "the content must carry `forgotten_altar`"
         );
-        assert_eq!(rd_run_event_effect(0), 9, "choice 0 is `curse:<id>`");
-        assert_eq!(rd_run_choose(0), 0, "an event may hand you a curse");
-        assert_eq!(rd_run_pending(), 0, "a curse needs no pick");
+        // ── §279：第一个选项是**条件选项**（要持有金像）。刚开局没有 ⇒ 不可选。
+        assert_eq!(rd_run_event_option_count(), 4, "four options on that screen");
+        assert_eq!(rd_run_event_option_available(0), 0, "no Golden Idol ⇒ locked");
+        assert_eq!(
+            rd_run_choose(0),
+            -2,
+            "and clicking it anyway is refused **with a message** (not silently ignored)"
+        );
+        assert_eq!(rd_run_pending(), 5, "a refused choice leaves the event open");
+        // 第 3 个选项（下标 2）是 `Desecrate`（`curse:decay`），而且它把玩家带去下一段。
+        assert_eq!(rd_run_event_effect(2), 9, "choice 2 is `curse:<id>`");
+        assert_eq!(rd_run_choose(2), 0, "an event may hand you a curse");
         assert_eq!(rd_run_deck_count(), deck_before + 1, "the curse went into the deck");
+        assert_eq!(rd_run_pending(), 5, "§278: `Desecrate` has its own follow-up screen");
+        assert_eq!(rd_run_event_option_count(), 1, "which is a single `[Leave]`");
+        assert_eq!(rd_run_choose(0), 0, "leaving ends the event");
+        assert_eq!(rd_run_pending(), 0, "nothing is owed");
+
+        // ── §279 **另一侧**：把金像塞给这位玩家，同一个槽就变成可选。
+        // 两侧必须都在（只有一侧的话，"条件永远不成立"与"条件永远成立"都长得像对的）。
+        reset(7);
+        let session = run_slot().as_mut().expect("a run");
+        let pool = reward_pool(content()).expect("the card pool");
+        session
+            .state
+            .push_relic("golden_idol", &pool)
+            .expect("golden_idol is implemented");
+        assert!(
+            session
+                .state
+                .begin_event("forgotten_altar", "forgotten_altar")
+                .is_ok()
+        );
+        assert_eq!(
+            rd_run_event_option_available(0),
+            1,
+            "holding the Golden Idol unlocks `[Offer: Golden Idol]`"
+        );
+        assert_eq!(rd_run_choose(0), 0, "and it can be taken");
+        // 交换：失去金像、得到血像。
+        let session = run_slot().as_ref().expect("a run");
+        assert!(
+            !session.state.relics().iter().any(|id| id.as_str() == "golden_idol"),
+            "the Golden Idol is gone"
+        );
+        assert!(
+            session.state.relics().iter().any(|id| id.as_str() == "bloody_idol"),
+            "and the Bloody Idol took its place"
+        );
+        assert_eq!(rd_run_pending(), 5, "§279: the exchange has its own screen");
     }
 
     /// **Balance probe, not a gate.** Plays a whole act with the dumbest reasonable policy and

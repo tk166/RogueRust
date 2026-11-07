@@ -64665,30 +64665,65 @@
     },
     {
       "Id": "forgotten_altar",
-      "TextKey": "A stone bowl waits for an offering.",
+      "TextKey": "In front of you sits an altar to a forgotten god. Atop the altar sits an ornate female statue with arms outstretched. She calls out to you, demanding sacrifice.",
       "Options": [
         {
-          "Label": "Take the offering",
-          "Effects": [
+          "Label": "Offer: Golden Idol",
+          "Requires": [
             {
-              "Effect": "curse:injury",
-              "Amount": 0
+              "Kind": "relic",
+              "Op": "has",
+              "Id": "golden_idol"
             }
           ],
-          "Next": "",
-          "EffectsAsc": [
+          "Effects": [
             {
-              "Effect": "curse:injury",
+              "Effect": "relic_lose:golden_idol",
               "Amount": 1
             },
             {
-              "Effect": "damage",
-              "Amount": 6
+              "Effect": "relic:bloody_idol",
+              "Amount": 1
             }
-          ]
+          ],
+          "Next": "forgotten_altar.offer"
         },
         {
-          "Label": "Walk away",
+          "Label": "Sacrifice",
+          "Effects": [
+            {
+              "Effect": "max_hp",
+              "Amount": 5
+            },
+            {
+              "Effect": "damage_pct:25",
+              "Amount": 0
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "max_hp",
+              "Amount": 5
+            },
+            {
+              "Effect": "damage_pct:35",
+              "Amount": 0
+            }
+          ],
+          "Next": "forgotten_altar.sacrifice"
+        },
+        {
+          "Label": "Desecrate",
+          "Effects": [
+            {
+              "Effect": "curse:decay",
+              "Amount": 1
+            }
+          ],
+          "Next": "forgotten_altar.desecrate"
+        },
+        {
+          "Label": "Leave",
           "Effects": [
             {
               "Effect": "nothing",
@@ -64751,15 +64786,15 @@
               "Amount": 1
             }
           ],
-          "Next": "",
+          "Next": "the_ssssserpent.wealth",
           "EffectsAsc": [
             {
               "Effect": "gold",
-              "Amount": 175
+              "Amount": 150
             },
             {
               "Effect": "curse:doubt",
-              "Amount": 2
+              "Amount": 1
             }
           ]
         },
@@ -64771,7 +64806,7 @@
               "Amount": 0
             }
           ],
-          "Next": ""
+          "Next": "the_ssssserpent.refusal"
         }
       ]
     },
@@ -64846,6 +64881,86 @@
           "EffectsAsc": [
             {
               "Effect": "max_hp_pct:10",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_ssssserpent.wealth",
+      "TextKey": "\"Yeeeeeeessssssssssessss! Thisss will all be worthhh it. The serpent rears its head and blasts a stream of gold upwards! You gather all the gold and get going.\"",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_ssssserpent.refusal",
+      "TextKey": "The serpent stares at you with a look of extreme disappointment.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "forgotten_altar.offer",
+      "TextKey": "As you gently set the idol onto the altar a cold wind swirls throughout the room. Your golden idol begins to dull in color and begins bleeding from its eyes.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "forgotten_altar.sacrifice",
+      "TextKey": "You stand on the altar and cut your wrists. Everything goes dark. You wake up a short time later feeling a new potential surging through you.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "forgotten_altar.desecrate",
+      "TextKey": "You lash out and smash the statue in front of you. A dark wail echoes all around you, and you can feel the cursed magic seep into your bones.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
               "Amount": 0
             }
           ],

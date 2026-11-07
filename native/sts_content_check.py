@@ -3873,6 +3873,15 @@ def check_weak_pool_table(doc):
 # the authority on the **payloads**, which the run layer cannot check on its own (it does not know
 # the content): a `curse:` id must be a Curse card in the pool, and a `relic:` id must be a relic
 # whose effect the kernel implements.
+# §279：事件选项的条件（`Requires`）。词表与 `rd-core::run_expr` 的那两张表**必须一致** ——
+# 不一致时判据在这里红，而如果只在求值器里漂，"点下去与画出来"就会判成两个不同的答案。
+REQUIRES_MAX = 4
+REQUIRES_KINDS = ("gold", "health", "max_health", "health_percent", "deck_count", "ascension",
+                  "relic", "card")
+REQUIRES_NUMERIC = ("gold", "health", "max_health", "health_percent", "deck_count", "ascension")
+REQUIRES_NUMERIC_OPS = ("at_least", "at_most")
+REQUIRES_PRESENCE_OPS = ("has", "lacks")
+
 # §278: `damage_pct:<n>` / `max_hp_pct:<n>` 的 kind（数字在词里，不在 Amount 格）。
 EVENT_PERCENT_EFFECTS = ("damage_pct", "max_hp_pct")
 EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing",
@@ -4260,7 +4269,7 @@ def check_event_vocabulary(doc):
     cards = {c["Id"]: c.get("Rarity") for c in doc.get("Cards") or []}
     relics = {r["Id"] for r in doc.get("Relics") or []}
     counts = {"bare": 0, "curse": 0, "relic": 0, "percent": 0, "effects": 0, "asc": 0,
-              "options": 0, "steps": 0}
+              "options": 0, "steps": 0, "conditional": 0, "conditions": 0}
     reached = set()
     for room in rooms:
         entry = room.get("Entry")
@@ -4283,8 +4292,13 @@ def check_event_vocabulary(doc):
             fail(label_root, "Options is not a list: %r" % (options,))
             continue
         counts["options"] += len(options)
-        if len(options) < 2:
-            fail(label_root, "%d option(s) -- an event step needs at least two" % len(options))
+        # ⚠️ §279 修正：**入口段**至少两个选项（它才是一个"选择"），**后续段**可以只有一个
+        # （wiki 的后续屏就是单个 `[Leave]`，以及 `The Ssssserpent` 的 `[Continue]`）。
+        # §278 第一版把"至少两个"套在了每一段上，于是真事件一进来就红。
+        entry_id = {room.get('Entry') for room in rooms if room.get('Entry')}
+        if len(options) < (2 if node_id in entry_id else 1):
+            fail(label_root,
+                 "%d option(s) -- an entry step needs two, a follow-up needs one" % len(options))
         if len(options) > 4:
             fail(label_root, "%d options (the kernel's MAX_EVENT_OPTIONS is 4)" % len(options))
         for index, option in enumerate(options):
@@ -4330,6 +4344,14 @@ def check_event_vocabulary(doc):
                             fail(where, "curse:%s 的 Rarity 是 %s，不是 Curse"
                                  % (payload, cards[payload]))
                         continue
+                    if kind == "relic_lose" and payload:
+                        # §279：**失去**一件遗物（`Forgotten Altar` 的金像换血像）。
+                        # 必须是**内容里真的有**的遗物；"失去一件不该有的" 由运行层拒
+                        # （`RunError::NoSuchRelic`），但那要等到玩家点下去 —— 这里先拦。
+                        counts["relic"] += 1
+                        if payload not in relics:
+                            fail(where, "relic_lose:%s 不在 Relics 表里" % payload)
+                        continue
                     if kind == "relic" and payload:
                         counts["relic"] += 1
                         if payload not in relics:
@@ -4356,6 +4378,56 @@ def check_event_vocabulary(doc):
                 if edits > 1:
                     fail(label + kind_label,
                          "%d 个改牌效果（待答选牌只有一个位置）" % edits)
+            # ── §279：条件（`Requires`）────────────────────────────────────────────
+            requires = option.get('Requires')
+            if requires is not None:
+                if not isinstance(requires, list):
+                    fail(label + '.Requires', "not a list: %r" % (requires,))
+                    requires = []
+                if not requires:
+                    fail(label + '.Requires', "empty list -- a condition that asks nothing")
+                if len(requires) > REQUIRES_MAX:
+                    fail(label + '.Requires',
+                         "%d atom(s) (the kernel's MAX_REQUIREMENTS is %d)"
+                         % (len(requires), REQUIRES_MAX))
+                for index, atom in enumerate(requires):
+                    where = "%s.Requires%d" % (label, index)
+                    kind_name = atom.get('Kind')
+                    if kind_name not in REQUIRES_KINDS:
+                        fail(where, "词表外的条件 %r" % (kind_name,))
+                        continue
+                    numeric = kind_name in REQUIRES_NUMERIC
+                    allowed = REQUIRES_NUMERIC_OPS if numeric else REQUIRES_PRESENCE_OPS
+                    op = atom.get('Op')
+                    if op is None:
+                        fail(where, "missing Op")
+                        continue
+                    if op not in allowed:
+                        fail(where, "Op %r does not fit Kind %r (allowed: %s)"
+                             % (op, kind_name, " / ".join(allowed)))
+                        continue
+                    if numeric:
+                        amount = atom.get('Amount')
+                        if not isinstance(amount, int):
+                            fail(where, "numeric Kind needs an integer Amount, got %r" % (amount,))
+                            continue
+                        if kind_name == 'health_percent' and not 1 <= amount <= 100:
+                            fail(where, "percentage %d is outside 1..=100" % amount)
+                        if kind_name == 'ascension' and not 0 <= amount <= 20:
+                            fail(where, "ascension %d is outside 0..=20" % amount)
+                    else:
+                        target = atom.get('Id')
+                        if not isinstance(target, str) or not target:
+                            fail(where, "presence Kind needs an Id, got %r" % (target,))
+                            continue
+                        if kind_name == 'relic' and target not in relics:
+                            fail(where, "relic %r is not in Relics" % (target,))
+                        if kind_name == 'card' and target not in cards:
+                            fail(where, "card %r is not in Cards" % (target,))
+                    counts["conditions"] += 1
+                if requires:
+                    counts["conditional"] += 1
+
             # §188：A15 的变体必须**真的不一样**。
             base = option.get("Effects") or []
             asc = option.get("EffectsAsc") or []
@@ -4368,10 +4440,17 @@ def check_event_vocabulary(doc):
         fail("EventNodes", "unreachable step(s): %s" % ", ".join(str(o) for o in orphans))
     ok("event steps",
        "%d room(s) -> %d step(s) (%.2f steps/room), %d option(s), %d effect(s) "
-       "(%d in A15 lists), %d bare / %d curse: / %d relic: / %d percent"
+       "(%d in A15 lists), %d bare / %d curse: / %d relic: / %d percent; "
+       "%d conditional option(s) over %d atom(s)"
        % (len(rooms), counts["steps"], counts["steps"] / max(len(rooms), 1),
           counts["options"], counts["effects"], counts["asc"], counts["bare"],
-          counts["curse"], counts["relic"], counts["percent"]))
+          counts["curse"], counts["relic"], counts["percent"],
+          counts["conditional"], counts["conditions"]))
+    # ★ §279 反真空：条件机制没人用 == 它不存在。一条都没有时，`rd-core::run_expr` 的八条
+    # 判据仍然全绿（它们喂的是人造事实）—— 而**镜像里没有一条 `Requires`**这件事，
+    # 只有这一句能红。
+    if counts["conditional"] == 0:
+        fail("EventNodes", "no option has `Requires` -- the §279 condition layer is unused")
     # The three per-act pools must name rooms that exist, or the `?` room picks nothing.
     known = {room.get("Id") for room in rooms}
     tables = doc.get("EventTables") or {}

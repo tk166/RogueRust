@@ -40,6 +40,19 @@ EV 行：Id | NameKey | DescriptionKey | Label0 | Effects0 | Effects0Asc | Label
   都进指纹）。`resolve_event` 只前进一段；`Pending::Event` 在多段里保持。
 * 页面：`ui_panels.js::describeEvent` 已经是"一段文本 + 按钮"，**不用改**。
 
+### ✅ 状态：**方案 B 已落地**（`port-plan.md` §279）
+
+`Requires`（一串原子，AND）+ `relic_lose:<id>` 已经做了，`forgotten_altar` 补成 4 选项
+（含一条条件）+ 3 个后续屏。
+
+⚠️ **本节的原文有一句是错的**，保留并更正：它说"表达式词汇表已经够（金币/牌组/遗物/HP 都
+读得到）"。**检查之后是错的** —— `expr` 的每一个 kind 都挂在战斗状态上（`currentHealth` 是
+某个战斗员的血、`combatantZoneCount` 是战斗中的牌区、`hand.hasCardWithTag` 是手牌），
+`ExprContext` 拿的是 `&CombatState`。所以落地时用的是**第二份、封闭的**词汇表
+（`rd-core::run_expr` 的 6 个数值 kind + 2 个存在 kind），它读的是 `RunFacts`。
+
+下面保留当时的分析原文（作为"为什么当时以为可以复用"的记录）。
+
 **B. 条件选项**（A 之后再做）
 
 * 每个选项加一格 `Requires`（复用 `expr` 的布尔表达式 + `ExprContext::content`）。
