@@ -76,6 +76,8 @@ STRIDED = {
     "REL": ("relics", "REL"),
     "EV": ("events", "EV"),
     "POT": ("potions", "POT"),
+    # §278: 事件的第 N 段。
+    "EVND": ("event_nodes", "EVND"),
 }
 
 

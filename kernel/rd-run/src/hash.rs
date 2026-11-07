@@ -90,6 +90,9 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
     // `RunId` **就是** `Ident<CAP>`，所以 `event()` 已经是 `&str`（再 `.as_str()` 会掉进
     // `str_as_str` 那个不稳定 feature）。
     writer.str("event=").str(state.event()).str("\n");
+    // §278：事件的**第几段**。同一句 `event=golden_idol` 可以是两个完全不同的屏幕
+    // （"拿走神像" vs "巨石追来，三选一"），而只有这一段文字能把它俩分开。
+    writer.str("event_step=").str(state.event_step()).str("\n");
     writer
         .str("last_encounter=")
         .str(state.last_encounter().as_str())

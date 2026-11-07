@@ -1660,7 +1660,10 @@ PROBLEMS = []
 # The document keys the compiler turns into **entity rows** (not root keys). UnknownRooms is the
 # ?-room table (EV); the key is named that way because the reference document uses Events for a
 # dict of its own shape and ENTITY_SECTIONS is a global mapping.
-ROW_TABLES = ("Cards", "Statuses", "EnemyActions", "Encounters", "Relics")
+# §278: `EventNodes` 与 `Events`(旧键) 一样是**实体表**，不是根键 —— 它按 `EntitySections`
+# 进 `EVND` 段，回读时也按表比，所以必须从"根键"那一侧排除，否则会要求镜像里有一份
+# `EventNodes` 根指针（而它**故意**没有：同一份内容存两遍就是两份额度）。
+ROW_TABLES = ("Cards", "Statuses", "EnemyActions", "Encounters", "Relics", "EventNodes")
 
 
 def fail(where, message):
@@ -3870,6 +3873,8 @@ def check_weak_pool_table(doc):
 # the authority on the **payloads**, which the run layer cannot check on its own (it does not know
 # the content): a `curse:` id must be a Curse card in the pool, and a `relic:` id must be a relic
 # whose effect the kernel implements.
+# §278: `damage_pct:<n>` / `max_hp_pct:<n>` 的 kind（数字在词里，不在 Amount 格）。
+EVENT_PERCENT_EFFECTS = ("damage_pct", "max_hp_pct")
 EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing",
                       "remove_card", "upgrade_card", "transform_card")
 # Mirrors `rd_run::state::RunState::relic_effect`. Kept as a literal list on purpose: this file is
@@ -4240,29 +4245,67 @@ EVENT_DECK_EDITS = ("remove_card", "upgrade_card", "transform_card")
 
 
 def check_event_vocabulary(doc):
-    """§143 + §188：每个选项是一个**效果列表**，每个效果都在闭词表里。
+    """§278：每个事件是一棵**段树**，逐段检查选项与效果。
 
-    三条判据（每一条对应一种没有症状的错误）：
-    * 词表外的效果 ⇒ 下面的 `fail`（点下去一个死按钮）；
+    判据（每一条对应一种没有症状的错误）：
+    * 词表外的效果 ⇒ `fail`（点下去一个死按钮）；
     * `Effects*Asc` 与基础**一模一样** ⇒ "A15 变糟"什么都没变；
-    * 一个选项里**两个改牌效果** ⇒ 待答的选牌只有一个位置，一定丢一个。
+    * 一个选项里**两个改牌效果** ⇒ 待答的选牌只有一个位置，一定丢一个；
+    * `EV.Entry` / `Next` 指向不存在的段、或者存在**孤儿段** ⇒ 剧情走不到/看不见。
     """
-    print("[6c] event vocabulary (port-plan.md §143 / §188)")
+    print("[6c] event vocabulary (port-plan.md §278)")
     rooms = doc.get("UnknownRooms") or []
+    nodes = doc.get("EventNodes") or []
+    node_ids = [node.get("Id") for node in nodes]
     cards = {c["Id"]: c.get("Rarity") for c in doc.get("Cards") or []}
     relics = {r["Id"] for r in doc.get("Relics") or []}
-    counts = {"bare": 0, "curse": 0, "relic": 0, "effects": 0, "asc": 0}
+    counts = {"bare": 0, "curse": 0, "relic": 0, "percent": 0, "effects": 0, "asc": 0,
+              "options": 0, "steps": 0}
+    reached = set()
     for room in rooms:
-        for slot in ("0", "1"):
-            base = room.get("Effects" + slot) or []
-            asc = room.get("Effects" + slot + "Asc") or []
-            label = "UnknownRooms.%s.Effects%s" % (room.get("Id"), slot)
-            if not isinstance(base, list):
-                fail(label, "not a list: %r" % (base,))
-                continue
-            if len(base) > 4 or len(asc) > 4:
-                fail(label, "more than 4 effects (the kernel's MAX_EVENT_EFFECTS)")
-            for kind_label, effects in (("", base), ("Asc", asc)):
+        entry = room.get("Entry")
+        if not entry:
+            fail("UnknownRooms.%s" % room.get("Id"), "no Entry (this event has no first step)")
+        elif entry not in node_ids:
+            fail("UnknownRooms.%s.Entry" % room.get("Id"),
+                 "names %r, which is not in EventNodes" % (entry,))
+        else:
+            reached.add(entry)
+
+    for node in nodes:
+        counts["steps"] += 1
+        node_id = node.get("Id")
+        label_root = "EventNodes.%s" % node_id
+        if not node.get("TextKey"):
+            fail(label_root, "empty TextKey (a step with no body text)")
+        options = node.get("Options") or []
+        if not isinstance(options, list):
+            fail(label_root, "Options is not a list: %r" % (options,))
+            continue
+        counts["options"] += len(options)
+        if len(options) < 2:
+            fail(label_root, "%d option(s) -- an event step needs at least two" % len(options))
+        if len(options) > 4:
+            fail(label_root, "%d options (the kernel's MAX_EVENT_OPTIONS is 4)" % len(options))
+        for index, option in enumerate(options):
+            label = "%s.Options%d" % (label_root, index)
+            if not option.get("Label"):
+                fail(label, "empty Label (an unlabeled button)")
+            nxt = option.get("Next") or ""
+            if nxt:
+                if nxt not in node_ids:
+                    fail(label + ".Next", "names %r, which is not in EventNodes" % (nxt,))
+                else:
+                    reached.add(nxt)
+            for kind_label, key in (("", "Effects"), ("Asc", "EffectsAsc")):
+                effects = option.get(key)
+                if effects is None:
+                    effects = []
+                if not isinstance(effects, list):
+                    fail(label + "." + key, "not a list: %r" % (effects,))
+                    continue
+                if len(effects) > 4:
+                    fail(label + "." + key, "more than 4 effects (the kernel's MAX_EVENT_EFFECTS)")
                 edits = 0
                 for entry in effects:
                     effect = entry.get("Effect")
@@ -4275,6 +4318,8 @@ def check_event_vocabulary(doc):
                         counts["asc"] += 1
                     if effect in EVENT_BARE_EFFECTS:
                         counts["bare"] += 1
+                        if effect in EVENT_DECK_EDITS:
+                            edits += 1
                         continue
                     kind, _, payload = effect.partition(":")
                     if kind == "curse" and payload:
@@ -4293,18 +4338,40 @@ def check_event_vocabulary(doc):
                             fail(where, "relic:%s 的效果内核没实现（%s）"
                                  % (payload, " / ".join(IMPLEMENTED_RELICS)))
                         continue
+                    if kind in ("damage_pct", "max_hp_pct"):
+                        counts["percent"] += 1
+                        # 百分比必须在 1..=100：`0` 是一条什么也不做的效果（页面上还写着
+                        # "按上限 0% 受伤"），而 `150` 会把最大 HP 扣成负数。
+                        try:
+                            percent = int(payload)
+                        except (TypeError, ValueError):
+                            fail(where, "百分比不是整数: %r" % (payload,))
+                            continue
+                        if not 1 <= percent <= 100:
+                            fail(where, "百分比 %d 不在 1..=100" % percent)
+                        if entry.get("Amount") not in (0, None):
+                            fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
+                        continue
                     fail(where, "词表外的效果 %r" % (effect,))
-                edits = sum(1 for e in effects if e.get("Effect") in EVENT_DECK_EDITS)
                 if edits > 1:
                     fail(label + kind_label,
                          "%d 个改牌效果（待答选牌只有一个位置）" % edits)
             # §188：A15 的变体必须**真的不一样**。
+            base = option.get("Effects") or []
+            asc = option.get("EffectsAsc") or []
             if asc and asc == base:
                 fail(label + "Asc", "the A15 list equals the base -- this ascension does nothing")
-    ok("event effects",
-       "%d rooms, %d effect(s) (%d in A15 lists), %d bare / %d curse: / %d relic:"
-       % (len(rooms), counts["effects"], counts["asc"], counts["bare"],
-          counts["curse"], counts["relic"]))
+
+    # ★ 孤儿段：内容里有、却谁也走不到它。
+    orphans = [node_id for node_id in node_ids if node_id not in reached]
+    if orphans:
+        fail("EventNodes", "unreachable step(s): %s" % ", ".join(str(o) for o in orphans))
+    ok("event steps",
+       "%d room(s) -> %d step(s) (%.2f steps/room), %d option(s), %d effect(s) "
+       "(%d in A15 lists), %d bare / %d curse: / %d relic: / %d percent"
+       % (len(rooms), counts["steps"], counts["steps"] / max(len(rooms), 1),
+          counts["options"], counts["effects"], counts["asc"], counts["bare"],
+          counts["curse"], counts["relic"], counts["percent"]))
     # The three per-act pools must name rooms that exist, or the `?` room picks nothing.
     known = {room.get("Id") for room in rooms}
     tables = doc.get("EventTables") or {}

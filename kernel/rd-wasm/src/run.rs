@@ -1190,7 +1190,12 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
         let Some(id) = events.get(pick as usize).copied() else {
             return fail(session, "事件读不出来");
         };
-        if let Err(e) = session.state.begin_event(id) {
+        // §278：入口段从内容里取（`EV.Entry`）—— 运行层只记"从哪一段开始"。
+        let entry = match lookup_entry(id) {
+            Some(entry) => entry,
+            None => return fail(session, "事件的入口段读不出来（`EV.Entry` 空）"),
+        };
+        if let Err(e) = session.state.begin_event(id, entry) {
             let message = describe(&e);
             return fail(session, &message);
         }
@@ -1632,7 +1637,16 @@ pub extern "C" fn rd_run_event_effect_at(slot: i32, index: i32) -> i32 {
 /// §188: effect `index` of choice `slot`'s amount.
 #[no_mangle]
 pub extern "C" fn rd_run_event_amount_at(slot: i32, index: i32) -> i32 {
-    event_effect_spec(slot, index).map_or(0, |spec| i32::from(spec.amount))
+    let Some(spec) = event_effect_spec(slot, index) else {
+        return 0;
+    };
+    // §278：**读效果真正会用的那个数字**，而不是内容那一格。百分比原子把数字写在词里
+    // （`damage_pct:25`，`Amount` 是 0），于是"内容里的 amount"与"屏幕上要显示的数"
+    // 会分成两回事 —— 页面会显示"按上限 0% 受伤"。解一次词，让两边只有一个来源。
+    match rd_run::state::EventEffect::parse(spec.effect, i32::from(spec.amount)) {
+        Some((effect, _)) => effect_amount(effect),
+        None => i32::from(spec.amount),
+    }
 }
 
 /// Effect `index` of choice `slot` **for this run's ascension**.
@@ -1653,6 +1667,18 @@ fn event_effect_spec(slot: i32, index: i32) -> Option<rd_core::content::EffectSp
 /// returns `0` in both cases -- "taken" and "taken, now pick a card" are both accepted.
 #[no_mangle]
 pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
+    // ★ 先判**相位**，再看"这个槽有没有选项"：事件收尾之后，`event_step` 是空的，
+    // 于是 `event_choice` 会返回 `None` —— 若不先判相位，一个"已经开始/已经结束"的
+    // 重复点击会报成"没有这个选项"（-1），而契约是"相位没了"（-2）。
+    // 这两者对**页面**是不同的意思：-1 是内容错了，-2 是按钮该消失。
+    {
+        let Some(session) = run_slot().as_ref() else {
+            return -1;
+        };
+        if session.state.pending() != rd_run::state::Pending::Event {
+            return -2;
+        }
+    }
     let Some(choice) = event_choice(slot) else {
         return -1;
     };
@@ -1683,9 +1709,11 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
         Ok(pool) => pool,
         Err(message) => return fail(session, &message),
     };
+    // §278：这一段选完之后还去不去下一段，**由内容**说（`option.Next`）。
+    let next = choice.goes_on();
     let outcome = session
         .state
-        .resolve_event_effects(&parsed[..specs.len()], &pool)
+        .resolve_event_effects(&parsed[..specs.len()], next, &pool)
         .map(|_| 0i32);
     finish(session, outcome)
 }
@@ -1777,23 +1805,57 @@ pub extern "C" fn rd_run_pickup_card(index: i32) -> i32 {
 }
 
 /// The open event's choices, from the content.
-fn event_choice(slot: i32) -> Option<rd_core::content::EventChoice<'static>> {
+fn event_choice(slot: i32) -> Option<rd_core::content::EventOption<'static>> {
     let session = run_slot().as_ref()?;
-    if slot < 0 || slot > 1 {
+    if slot < 0 {
         return None;
     }
-    let (_, _, choices) = lookup_event(session)?;
-    Some(choices[slot as usize])
+    let step = open_step(session)?;
+    if slot as usize >= step.options().len() {
+        return None;
+    }
+    Some(step.options()[slot as usize])
 }
 
 fn open_event(session: &RunSession) -> Option<String> {
-    let (id, text, _) = lookup_event(session)?;
-    Some(std::format!("{id} — {text}"))
+    let (id, _name, _entry) = lookup_event(session)?;
+    let step = open_step(session)?;
+    Some(std::format!("{id} — {}", step.text))
+}
+
+/// §278：当前这一段有几个按钮。**由内容决定**，不是页面写死的 2（`golden_idol` 的第二段是三选一）。
+#[no_mangle]
+pub extern "C" fn rd_run_event_option_count() -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    match open_step(session) {
+        Some(step) => i32::from(step.count),
+        None => -1,
+    }
+}
+
+/// §278：打开的那一段（正文 + 按钮）。节点 id 来自**运行层**（`event_step`），不是页面猜的。
+fn open_step(session: &RunSession) -> Option<rd_core::content::EventStep<'static>> {
+    let image = content();
+    image.event_step(session.state.event_step())
+}
+
+/// §278：事件 id → 它的入口段 id（`EV.Entry`）。
+fn lookup_entry(id: &str) -> Option<&'static str> {
+    let image = content();
+    for index in 0..image.event_count() {
+        let event = image.event(index)?;
+        if event.0 == id {
+            return Some(event.2);
+        }
+    }
+    None
 }
 
 fn lookup_event(
     session: &RunSession,
-) -> Option<(&'static str, &'static str, [rd_core::content::EventChoice<'static>; 2])> {
+) -> Option<(&'static str, &'static str, &'static str)> {
     let wanted = session.state.event();
     let image = content();
     for index in 0..image.event_count() {
@@ -1807,8 +1869,10 @@ fn lookup_event(
 
 /// The content's closed vocabulary, as integers.
 ///
-/// `1..=5` are the number effects (unchanged since §9); `6..=10` are the §143 additions. A caller
-/// that sees `-1` must not guess -- that is the whole point of a closed vocabulary.
+/// `1..=5` are the number effects (unchanged since §9); `6..=10` are the §143 additions;
+/// `11..=12` are §278's percentages (`damage_pct:<n>` / `max_hp_pct:<n>`, the number is **in the
+/// word** and the amount cell is 0). A caller that sees `-1` must not guess -- that is the whole
+/// point of a closed vocabulary.
 fn effect_code(effect: &str) -> i32 {
     match effect {
         "heal" => 1,
@@ -1828,6 +1892,9 @@ fn effect_code(effect: &str) -> i32 {
                 return match kind {
                     "curse" => 9,
                     "relic" => 10,
+                    // §278：百分比原子。**数字在词里**（`damage_pct:25`），所以 `amount` 那格是 0。
+                    "damage_pct" => 11,
+                    "max_hp_pct" => 12,
                     _ => -1,
                 };
             }
@@ -2853,6 +2920,10 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         EventEffect::RemoveCard => 6,
         EventEffect::UpgradeCard => 7,
         EventEffect::TransformCard => 8,
+        // §278 的百分比原子：数字在词里，所以码是 11/12 而 `amount` 读作"那一个百分比"
+        // （`effect_amount` 返回词里的数字，页面就能写"按上限 25% 受伤"）。
+        EventEffect::LoseHealthPercent(_) => 11,
+        EventEffect::LoseMaxHealthPercent(_) => 12,
         EventEffect::GainCurse | EventEffect::GainRelic => -1,
     }
 }
@@ -2863,7 +2934,9 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         EventEffect::Heal(n)
         | EventEffect::Gold(n)
         | EventEffect::LoseHealth(n)
-        | EventEffect::GainMaxHealth(n) => n,
+        | EventEffect::GainMaxHealth(n)
+        | EventEffect::LoseHealthPercent(n)
+        | EventEffect::LoseMaxHealthPercent(n) => n,
         EventEffect::Nothing
         | EventEffect::RemoveCard
         | EventEffect::UpgradeCard
@@ -6983,14 +7056,10 @@ mod tests {
     #[test]
     fn a15_swaps_the_event_effect_list() {
         const CURSE_CODE: i32 = 9;
-        const DAMAGE_CODE: i32 = 3;
+        const DAMAGE_PCT_CODE: i32 = 11;
+        const MAX_HP_PCT_CODE: i32 = 12;
         const RELIC_CODE: i32 = 10;
-        for (level, want_second) in [
-            (0u8, CURSE_CODE),
-            (14, CURSE_CODE),
-            (15, DAMAGE_CODE),
-            (20, DAMAGE_CODE),
-        ] {
+        for level in [0u8, 14, 15, 20] {
             let mut state = rd_run::state::RunState::new_with_ascension(
                 7,
                 80,
@@ -7000,7 +7069,7 @@ mod tests {
             )
             .expect("a run");
             assert_eq!(state.ascension(), level, "the run knows its level");
-            state.begin_event("golden_idol").expect("open the event");
+            state.begin_event("golden_idol", "golden_idol").expect("open the event");
             *run_slot() = Some(RunSession {
                 state: Box::new(state),
                 error: String::new(),
@@ -7015,25 +7084,64 @@ mod tests {
                 hash_failed: false,
             });
 
+            // ── 第一段：`Take it` 只有**一条**效果（遗物），而且它把玩家带去巨石那段。
             assert_eq!(
                 rd_run_event_effect_count(0),
-                2,
-                "A{level}: the first option has two effects"
+                1,
+                "A{level}: taking the idol is one effect now (the curse lives in the next step)"
             );
-            assert_eq!(
-                rd_run_event_effect_at(0, 0),
-                RELIC_CODE,
-                "the relic comes first at every level"
-            );
-            assert_eq!(
-                rd_run_event_effect_at(0, 1),
-                want_second,
-                "A{level}: the second effect must be {want_second}"
-            );
+            assert_eq!(rd_run_event_effect_at(0, 0), RELIC_CODE, "the relic");
             assert_eq!(
                 rd_run_event_effect(0),
                 rd_run_event_effect_at(0, 0),
                 "the legacy accessor is the head of the list"
+            );
+            assert_eq!(rd_run_choose(0), 0, "A{level}: take the idol");
+            // ★ 房间**没有**结算：还有一段。
+            assert_eq!(rd_run_pending(), 5, "A{level}: the event is still open");
+            // -1 = 这个会话还没有站在任何节点上（`begin_event` 直接开的），所以"结算"这件事
+            // 根本还不存在 —— 判据是"没有变成 1"，而不是"等于 0"。
+            assert_ne!(rd_run_node_resolved(), 1, "A{level}: nothing is settled yet");
+            assert_eq!(
+                rd_run_event_option_count(),
+                3,
+                "A{level}: the boulder step is a **three**-way choice"
+            );
+
+            // ── 第二段：Smash 按最大 HP 的百分比，A15 换的是**另一条效果**。
+            let want = if level >= 15 { 35 } else { 25 };
+            assert_eq!(rd_run_event_effect_at(1, 0), DAMAGE_PCT_CODE, "Smash is a percentage");
+            assert_eq!(
+                rd_run_event_amount_at(1, 0),
+                want,
+                "A{level}: Smash's percentage must be {want}% (wiki: 25% / A15 35%)"
+            );
+            // Hide 也一样，只是它扣的是**上限**。
+            let want_hide = if level >= 15 { 10 } else { 8 };
+            assert_eq!(rd_run_event_effect_at(2, 0), MAX_HP_PCT_CODE, "Hide is a percentage");
+            assert_eq!(
+                rd_run_event_amount_at(2, 0),
+                want_hide,
+                "A{level}: Hide's percentage must be {want_hide}% (wiki: 8% / A15 10%)"
+            );
+            // Outrun 的诅咒在两个档位上**相同**（wiki 没有给它 A15 变体）。
+            assert_eq!(rd_run_event_effect_at(0, 0), CURSE_CODE, "Outrun is the curse");
+            assert_eq!(rd_run_event_effect_count(0), 1, "one curse, no A15 variant");
+
+            // ── 走完第二段，房间这才结算。
+            let hp_max = rd_run_observe(3);
+            let hp = rd_run_observe(2);
+            assert_eq!(rd_run_choose(1), 0, "A{level}: smash the boulder");
+            assert_eq!(rd_run_observe(3), hp_max, "A{level}: max HP is untouched by Smash");
+            assert_eq!(
+                rd_run_observe(2),
+                hp - (hp_max * want / 100),
+                "A{level}: Smash takes floor(max HP × {want}%)"
+            );
+            assert_ne!(
+                rd_run_node_resolved(),
+                0,
+                "A{level}: the room must not be *un*settled after the last step"
             );
         }
     }
@@ -8417,7 +8525,7 @@ mod tests {
             .as_mut()
             .expect("a run")
             .state
-            .begin_event("ancient_writing")
+            .begin_event("ancient_writing", "ancient_writing")
             .is_ok();
         assert!(opened, "the content must carry `ancient_writing`");
 
@@ -8449,7 +8557,7 @@ mod tests {
                 .as_mut()
                 .expect("a run")
                 .state
-                .begin_event("forgotten_altar")
+                .begin_event("forgotten_altar", "forgotten_altar")
                 .is_ok(),
             "the content must carry `forgotten_altar`"
         );

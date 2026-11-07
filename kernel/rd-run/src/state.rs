@@ -729,6 +729,8 @@ pub const START_OFFERS: [StartOffer; 8] = [
 /// |---|---|
 /// | `heal` / `gold` / `damage` / `max_hp` / `nothing` + `AmountN` | the five number effects |
 /// | `remove_card` / `upgrade_card` / `transform_card` | a deck edit: the run enters [`Pending::EventCard`] and waits for an index |
+/// | `damage_pct:<n>` | lose `floor(max HP × n / 100)` HP (the wiki's *Smash*, A15 rides in the `...Asc` list) |
+/// | `max_hp_pct:<n>` | lose `max(1, floor(max HP × n / 100))` **max** HP (the wiki's *Hide*) |
 /// | `curse:<card id>` | add that card to the deck (the id must be in the pool) |
 /// | `relic:<relic id>` | grant that relic (the id must have an implemented effect) |
 ///
@@ -749,6 +751,10 @@ pub enum EventEffect {
     Gold(i32),
     /// Lose HP -- an event can hurt.
     LoseHealth(i32),
+    /// §278：按**最大 HP 的百分比**掉血（`damage_pct`）。`Golden Idol` 的 Smash 25%（A15 35%）。
+    LoseHealthPercent(i32),
+    /// §278：按**最大 HP 的百分比**扣上限（`max_hp_pct`）。`Golden Idol` 的 Hide 8%（A15 10%）。
+    LoseMaxHealthPercent(i32),
     /// Raise the maximum, and the current HP with it.
     GainMaxHealth(i32),
     /// Nothing at all -- a real, declared choice, not a missing one.
@@ -763,6 +769,11 @@ pub enum EventEffect {
     GainCurse,
     /// Grant the relic named beside this effect.
     GainRelic,
+}
+
+/// §278：`floor(base × percent / 100)`，用整数算（内核不碰浮点）。
+fn percent_of(base: i32, percent: i32) -> i32 {
+    base.saturating_mul(percent) / 100
 }
 
 impl EventEffect {
@@ -793,6 +804,20 @@ impl EventEffect {
                 match kind {
                     "curse" => (Self::GainCurse, Some(payload)),
                     "relic" => (Self::GainRelic, Some(payload)),
+                    // §278：`damage_pct:25` —— **数字在词里**（`Amount` 那一格与它无关），
+                    // 因为 A15 的 35% 是另一条效果，而不是同一个数字换了值。
+                    "damage_pct" => match payload.parse::<i32>() {
+                        Ok(percent) if percent > 0 && percent <= 100 => {
+                            (Self::LoseHealthPercent(percent), None)
+                        }
+                        _ => return None,
+                    },
+                    "max_hp_pct" => match payload.parse::<i32>() {
+                        Ok(percent) if percent > 0 && percent <= 100 => {
+                            (Self::LoseMaxHealthPercent(percent), None)
+                        }
+                        _ => return None,
+                    },
                     _ => return None,
                 }
             }
@@ -1374,6 +1399,15 @@ pub struct RunState {
     act: u8,
     /// The `?`-room event under the cursor, while `Pending::Event`.
     event: RunId,
+    /// §278：这个事件**现在走到哪一段**（`EVND.Id`）。空 = 还没开事件。
+    ///
+    /// 为什么不把它放在 `rd-wasm`：页面要知道"现在显示哪段正文、有哪几个按钮"，而那是
+    /// **局面**的一部分 —— 同一句 `event=golden_idol` 可以是两个完全不同的屏幕。
+    event_step: RunId,
+    /// §278：这一段选完之后要去的那一段，**在等一次牌组编辑的时候**先记在这里。
+    ///
+    /// 与 `event_follow` 是两件事：一个是"欠哪次编辑"，一个是"编辑完了去哪儿"。
+    event_next: RunId,
     /// The encounter the **previous** fight used (`port-plan.md` §153), so the next normal fight can
     /// avoid repeating it.
     ///
@@ -1497,6 +1531,8 @@ impl RunState {
             bosses_fought: 0,
             act: 1,
             event: RunId::EMPTY,
+            event_step: RunId::EMPTY,
+            event_next: RunId::EMPTY,
             last_encounter: RunId::EMPTY,
             // Rolled by `offer_start_choice`; until then the pair is not a choice anyone can take.
             start_offers: [0, 1],
@@ -4334,7 +4370,15 @@ impl RunState {
         };
         self.apply_deck_change(change, index, pool)?;
         self.event_follow = None;
+        // §278：这一段还可能把玩家带去下一段 —— 那么选牌只是它的**一件**事，房间不结算。
+        if !self.event_next.as_str().is_empty() {
+            self.event_step = self.event_next;
+            self.event_next = RunId::EMPTY;
+            self.pending = Pending::Event;
+            return Ok(());
+        }
         self.pending = Pending::None;
+        self.event_step = RunId::EMPTY;
         // The room is settled **now**: picking a card is the last thing the choice asked for.
         self.mark_resolved();
         Ok(())
@@ -4392,12 +4436,19 @@ impl RunState {
     }
 
     /// Open event `id` in the `?` room under the cursor.
-    pub fn begin_event(&mut self, id: &str) -> Result<(), RunError> {
+    /// 打开 `?` 房的事件。`entry` 是内容里这一段事件的**入口节点**（`EV.Entry`）。
+    ///
+    /// 为什么入口由调用方给：run 层**不读内容**（这条纪律从 §133 就在）。它只记住
+    /// "这个事件从哪一段开始"，于是页面要显示哪一段正文是**状态**，不是每次重算的推导。
+    pub fn begin_event(&mut self, id: &str, entry: &str) -> Result<(), RunError> {
         if self.node_resolved() {
             return Err(RunError::NodeResolved);
         }
         let id = RunId::new(id).map_err(|_| RunError::NoSuchEvent)?;
+        let entry = RunId::new(entry).map_err(|_| RunError::NoSuchEvent)?;
         self.event = id;
+        self.event_step = entry;
+        self.event_next = RunId::EMPTY;
         self.pending = Pending::Event;
         Ok(())
     }
@@ -4406,6 +4457,12 @@ impl RunState {
     #[must_use]
     pub fn event(&self) -> &str {
         self.event.as_str()
+    }
+
+    /// §278：事件**当前所在的那一段**（`EVND.Id`）。空 = 这个事件只有一段（或还没开）。
+    #[must_use]
+    pub fn event_step(&self) -> &str {
+        self.event_step.as_str()
     }
 
     /// Take one choice of the open event.
@@ -4438,6 +4495,7 @@ impl RunState {
         }
         self.apply_event_effect(effect, named, pool)?;
         self.pending = Pending::None;
+        self.event_step = RunId::EMPTY;
         self.mark_resolved();
         Ok(())
     }
@@ -4449,14 +4507,24 @@ impl RunState {
     ///
     /// 改牌类效果（`remove_card` / `upgrade_card` / `transform_card`）**最多一条**：它们变成一个
     /// 待答问题（`Pending::EventCard`），而队列里只有一个位置 ⇒ 两个就是内容错误。
+    ///
+    /// `next`（§278）是这一段选完之后要去的那一段：`Some` ⇒ 应用完效果**收在同一段事件的下一步**，
+    /// `Pending` 仍是 `Event`、房间**不结算**；`None` ⇒ 照旧收尾。这就是"事件是一棵树"的全部
+    /// 运行层实现 —— 没有第二套状态机，只有"这一段做完了"与"还有下一段"。
     pub fn resolve_event_effects(
         &mut self,
         effects: &[(EventEffect, Option<&str>)],
+        next: Option<&str>,
         pool: &[PoolCard<'_>],
     ) -> Result<(), RunError> {
         if self.pending != Pending::Event {
             return Err(RunError::WrongPhase);
         }
+        // `next` 在动手之前就要验：一个坏 id 必须在**一个字节都没改**之前被拒。
+        let next_id = match next {
+            Some(next) => RunId::new(next).map_err(|_| RunError::NoSuchEvent)?,
+            None => RunId::EMPTY,
+        };
         let before = *self;
         let mut follow: Option<DeckChange> = None;
         for (effect, named) in effects {
@@ -4480,11 +4548,20 @@ impl RunState {
         match follow {
             Some(change) => {
                 self.event_follow = Some(change);
+                // 编辑完了还要去下一段：**先记下来**，等 `pick_event_card` 收尾时再走。
+                self.event_next = next_id;
                 self.pending = Pending::EventCard;
             }
-            None => {
+            None if next_id.as_str().is_empty() => {
                 self.pending = Pending::None;
+                self.event_step = RunId::EMPTY;
                 self.mark_resolved();
+            }
+            None => {
+                self.event_step = next_id;
+                self.event_next = RunId::EMPTY;
+                // 还留在 `Pending::Event`：玩家面前换了一段正文/一组按钮，房间没结算。
+                self.pending = Pending::Event;
             }
         }
         Ok(())
@@ -4502,6 +4579,23 @@ impl RunState {
             EventEffect::Heal(n) => self.heal_after_combat(n),
             EventEffect::Gold(n) => self.adjust_gold(n),
             EventEffect::LoseHealth(n) => self.adjust_health(-n),
+            // §278：百分比在**应用时**才乘最大 HP（内容里写 `25`，不是写死 "20"）。
+            // `floor` 而不是四舍五入：wiki 的 Hide 明说 "the larger of 1 and Max HP × 8%",
+            // 也就是下限 1 的**向下取整** —— Smash 用同一个取整，否则两处会给出不同的数。
+            EventEffect::LoseHealthPercent(percent) => {
+                let loss = percent_of(self.health_max, percent);
+                self.adjust_health(-loss);
+            }
+            EventEffect::LoseMaxHealthPercent(percent) => {
+                let loss = percent_of(self.health_max, percent).max(1);
+                // 上限夹在 1：wiki 只说"损失至少 1"，没说上限可以变成 0 —— 而 0 会让下一次
+                // 百分比计算除以 0（`percent_of` 用的是 base × pct / 100，base=0 ⇒ 永远 0），
+                // 于是"下次 Hide 不掉血"这种荒唐事会安静地发生。
+                self.health_max = (self.health_max - loss).max(1);
+                if self.health > self.health_max {
+                    self.health = self.health_max;
+                }
+            }
             EventEffect::GainMaxHealth(n) => {
                 self.health_max += n;
                 self.adjust_health(n);
@@ -9212,7 +9306,7 @@ mod tests {
         let pool = curse_pool();
         // Remove
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
-        run.begin_event("ancient_forge").expect("opening the event");
+        run.begin_event("ancient_forge", "ancient_forge").expect("opening the event");
         assert_eq!(run.pending(), Pending::Event);
         run.resolve_event(EventEffect::RemoveCard, None, &pool)
             .expect("taking 'remove a card'");
@@ -9226,7 +9320,7 @@ mod tests {
 
         // Upgrade
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
-        run.begin_event("ancient_forge").expect("opening the event");
+        run.begin_event("ancient_forge", "ancient_forge").expect("opening the event");
         run.resolve_event(EventEffect::UpgradeCard, None, &pool)
             .expect("taking 'upgrade a card'");
         run.pick_event_card(1, &pool).expect("upgrading the second card");
@@ -9235,7 +9329,7 @@ mod tests {
 
         // Transform: same size, and every entry is a real pool card.
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
-        run.begin_event("ancient_forge").expect("opening the event");
+        run.begin_event("ancient_forge", "ancient_forge").expect("opening the event");
         run.resolve_event(EventEffect::TransformCard, None, &pool)
             .expect("taking 'transform a card'");
         run.pick_event_card(0, &pool).expect("transforming the first card");
@@ -9257,7 +9351,7 @@ mod tests {
     fn an_event_option_can_apply_several_effects_at_once() {
         let pool = curse_pool();
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
-        run.begin_event("golden_idol").expect("opening the event");
+        run.begin_event("golden_idol", "golden_idol").expect("opening the event");
         let gold_before = run.gold();
         let deck_before = run.deck_len;
 
@@ -9267,6 +9361,7 @@ mod tests {
                 (EventEffect::GainCurse, Some("injury")),
                 (EventEffect::Gold(7), None),
             ],
+            None,
             &pool,
         )
         .expect("the list applies");
@@ -9280,6 +9375,110 @@ mod tests {
         assert_eq!(run.pending(), Pending::None, "no pick is owed");
     }
 
+    /// §278：事件是**一棵树** —— 走完一段不结算，走完最后一段才结算。
+    #[test]
+    fn an_event_tree_advances_one_step_at_a_time() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("golden_idol", "golden_idol").expect("open the event");
+        assert_eq!(run.event_step(), "golden_idol", "the run starts on the entry step");
+        assert_eq!(run.pending(), Pending::Event);
+
+        // ── 第一段：拿到遗物，**并且**被带去下一段。
+        run.resolve_event_effects(
+            &[(EventEffect::GainRelic, Some("golden_idol"))],
+            Some("golden_idol.boulder"),
+            &pool,
+        )
+        .expect("taking the idol");
+        assert_eq!(
+            run.event_step(),
+            "golden_idol.boulder",
+            "the run must be standing on the **second** step now"
+        );
+        assert_eq!(
+            run.pending(),
+            Pending::Event,
+            "the room is **not** settled: there is another step"
+        );
+        // 房间有没有"结算"在无节点的会话里问不出来（`node_resolved` 对 `node < 0` 恒 false），
+        // 所以判据用**相位**：这一段还开着，就能再选一次。
+        assert_eq!(run.pending(), Pending::Event, "still open for the next step");
+
+        // ── 第二段：百分比扣血，然后收尾。
+        let hp_max = run.health_max();
+        let post_before = run.health_max;
+        assert_eq!(post_before, hp_max);
+        let hp_before = run.health();
+        run.resolve_event_effects(
+            &[(EventEffect::LoseHealthPercent(25), None)],
+            None,
+            &pool,
+        )
+        .expect("smashing the boulder");
+        assert_eq!(
+            run.health(),
+            hp_before - (hp_max * 25 / 100),
+            "Smash takes floor(max HP × 25%)"
+        );
+        assert_eq!(run.health_max(), hp_max, "Smash does not touch the maximum");
+        assert_eq!(run.event_step(), "", "the step is cleared when the tree ends");
+        assert_eq!(run.pending(), Pending::None, "nothing is owed");
+        // 「收尾了」的判据是**相位关了**：再选一次必须被拒（无节点的会话问不出 `node_resolved`）。
+        assert_eq!(
+            run.resolve_event_effects(&[], None, &pool),
+            Err(RunError::WrongPhase),
+            "a second choice after the tree ended is a phase error"
+        );
+    }
+
+    /// §278：`max_hp_pct` 扣的是**上限**，并且当前 HP 跟着夹住；下限是 1。
+    #[test]
+    fn losing_max_health_by_percent_never_goes_below_one() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("golden_idol", "golden_idol.boulder").expect("the boulder");
+        let before = run.health_max();
+        run.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(8), None)], None, &pool)
+            .expect("hiding");
+        assert_eq!(run.health_max(), before - (before * 8 / 100), "8% of max, floored");
+        assert!(
+            run.health() <= run.health_max(),
+            "the current HP must be clamped to the new maximum"
+        );
+        // 1 HP 的上限也只会掉 1（下限 1），不会掉到 0 或负数。
+        let mut tiny = RunState::new(7, 1, 0, &["strike"; 5]).expect("a 1 HP run");
+        tiny.begin_event("golden_idol", "golden_idol.boulder").expect("the boulder");
+        tiny.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(50), None)], None, &pool)
+            .expect("hiding");
+        // 损失 = max(1, floor(1 × 50%)) = 1，但上限**夹在 1**（0 上限会让下一次百分比
+        // 永远算出 0 伤害）。
+        assert_eq!(tiny.health_max(), 1, "max HP never reaches 0");
+        assert!(tiny.health() >= 0, "HP never goes negative");
+    }
+
+    /// §278：`next` **形状不合法**时，整个事件不动一个字节（含 `event_step`）。
+    ///
+    /// ⚠️ 这一条只可能拒"形状"，不可能拒"这个段不存在" —— run 层**不读内容**（§133 的纪律）。
+    /// "`Next` 指向一个不存在的段"由**内容门**拒（`sts_content_check` 的 `[6c]`：入口段必须
+    /// 在表里、`Next` 必须在表里、而且每个段都要可达）。两层各拒各的，谁也不猜对方的。
+    #[test]
+    fn a_malformed_next_step_is_refused_before_anything_moves() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("golden_idol", "golden_idol").expect("the event");
+        let before = run;
+        let outcome = run.resolve_event_effects(
+            &[(EventEffect::Gold(30), None)],
+            // `Ident::new` 只拒两种东西：**非 ASCII** 与**超长**（空格、点、大写都合法）。
+            // 所以"形状不合法"这条判据只能用非 ASCII 的例子。
+            Some("巨石"),
+            &pool,
+        );
+        assert_eq!(outcome, Err(RunError::NoSuchEvent), "a malformed step id is refused");
+        assert!(run == before, "not one byte moved (the gold did not land either)");
+    }
+
     /// §188: a list that fails **in the middle** must not half-apply.
     ///
     /// The second entry is a curse naming a card the pool does not know, which `apply_event_effect`
@@ -9288,7 +9487,7 @@ mod tests {
     fn a_failing_effect_rolls_the_whole_list_back() {
         let pool = curse_pool();
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
-        run.begin_event("golden_idol").expect("the event");
+        run.begin_event("golden_idol", "golden_idol").expect("the event");
         let before = run;
 
         let outcome = run.resolve_event_effects(
@@ -9296,6 +9495,7 @@ mod tests {
                 (EventEffect::Gold(30), None),
                 (EventEffect::GainCurse, Some("no_such_curse")),
             ],
+            None,
             &pool,
         );
         assert!(outcome.is_err(), "an unknown curse must be refused");
@@ -9309,10 +9509,11 @@ mod tests {
     fn two_deck_edits_in_one_option_are_refused() {
         let pool = curse_pool();
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
-        run.begin_event("ancient_forge").expect("the event");
+        run.begin_event("ancient_forge", "ancient_forge").expect("the event");
         let before = run;
         let outcome = run.resolve_event_effects(
             &[(EventEffect::RemoveCard, None), (EventEffect::UpgradeCard, None)],
+            None,
             &pool,
         );
         assert_eq!(outcome, Err(RunError::TwoDeckChanges));
@@ -9323,7 +9524,7 @@ mod tests {
     fn an_event_can_give_a_curse_but_only_a_real_one() {
         let pool = curse_pool();
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
-        run.begin_event("golden_idol").expect("opening the event");
+        run.begin_event("golden_idol", "golden_idol").expect("opening the event");
         run.resolve_event(EventEffect::GainCurse, Some("injury"), &pool)
             .expect("an event may hand you a curse");
         assert_eq!(run.deck_len, 6);
@@ -9333,7 +9534,7 @@ mod tests {
         // A payload that is not in the pool: **refused**, because a phantom id in the deck stays
         // invisible until the card is drawn.
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
-        run.begin_event("golden_idol").expect("opening the event");
+        run.begin_event("golden_idol", "golden_idol").expect("opening the event");
         assert_eq!(
             run.resolve_event(EventEffect::GainCurse, Some("regret"), &pool),
             Err(RunError::NoSuchCard)
@@ -9356,7 +9557,7 @@ mod tests {
     fn an_event_can_give_a_relic_only_if_the_kernel_can_run_it() {
         let pool = curse_pool();
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
-        run.begin_event("old_shrine").expect("opening the event");
+        run.begin_event("old_shrine", "old_shrine").expect("opening the event");
         run.resolve_event(EventEffect::GainRelic, Some("burning_blood"), &pool)
             .expect("Burning Blood is implemented");
         assert_eq!(run.relics().len(), 1);
@@ -9365,7 +9566,7 @@ mod tests {
         // An unimplemented relic is refused **while the event is open**, not at the end of the
         // next fight (`RunError::UnsupportedRelic` used to be reachable only there).
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
-        run.begin_event("old_shrine").expect("opening the event");
+        run.begin_event("old_shrine", "old_shrine").expect("opening the event");
         assert_eq!(
             run.resolve_event(EventEffect::GainRelic, Some("no_such_relic"), &pool),
             Err(RunError::UnsupportedRelic { index: 0 })
@@ -9517,7 +9718,7 @@ mod tests {
     fn a_deck_edit_event_on_an_empty_deck_is_refused() {
         let pool = curse_pool();
         let mut run = RunState::new(7, 80, 0, &[]).expect("a run with no cards");
-        run.begin_event("ancient_forge").expect("opening the event");
+        run.begin_event("ancient_forge", "ancient_forge").expect("opening the event");
         assert_eq!(
             run.resolve_event(EventEffect::RemoveCard, None, &pool),
             Err(RunError::DeckEmpty)
@@ -9530,7 +9731,7 @@ mod tests {
         let pool = curse_pool();
         // In the event's pick phase, the blessing picker refuses.
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
-        run.begin_event("ancient_forge").expect("opening the event");
+        run.begin_event("ancient_forge", "ancient_forge").expect("opening the event");
         run.resolve_event(EventEffect::RemoveCard, None, &pool)
             .expect("taking 'remove a card'");
         assert_eq!(

@@ -54,9 +54,12 @@ pub const DIRECTORY_ENTRY_BYTES: usize = 12;
 ///    `AscensionMin` cell went away (§192), so that row's stride moved 20 -> 16. One action can now
 ///    carry two thresholds (Jaw Worm's Bellow raises Strength at A2 *and* Block at A17); a reader
 ///    that kept version 6 would read the list term id as if it were the one envelope.
-pub const FORMAT_VERSION: u16 = 7;
-/// 目录项数（头里 `nsec`）。0..=14 有名字，15..19 保留。
-pub const SECTION_COUNT: usize = 20;
+/// 8: `EV` shrank to `{Id, NameKey, Entry}` and the body moved to a new `EVND` node table (§278),
+///    so `EV`'s stride went 20 -> 8 and `nsec` went 20 -> 21. A reader that kept version 7 would
+///    read the first node id as if it were the body text -- plausible-looking, silently wrong.
+pub const FORMAT_VERSION: u16 = 8;
+/// 目录项数（头里 `nsec`）。0..=14 有名字，15..17 保留（§278 起 17 = `EVND`），18..20 保留。
+pub const SECTION_COUNT: usize = 21;
 /// 头部 `flags` 的 bit0：表现层已剥（`content.core.rdcf`）。
 pub const FLAG_PRESENTATION_STRIPPED: u16 = 1;
 
@@ -79,14 +82,16 @@ pub const S_EV: usize = 15;
 /// The potion table (`POT`). `rdcfmt.S_POT`, and -- like every section id -- the index of its entry
 /// in `rdcfmt.SEC_ORDER`.
 pub const S_POT: usize = 16;
+/// §278：事件节点表（`EVND`）。`rdcfmt.S_EVND` —— 加段时**只能追加**（段号 = 目录下标）。
+pub const S_EVND: usize = 17;
 pub const S_ROOT: usize = 12;
 pub const S_IDX: usize = 13;
 pub const S_TAGS: usize = 14;
 
-/// 段号 → 段名；15..19 是保留段，名字为空串。
+/// 段号 → 段名；18..20 是保留段，名字为空串（§278 起 17 = `EVND`）。
 pub const SECTION_NAMES: [&str; SECTION_COUNT] = [
     "STR", "STRO", "OPD", "OPF", "TRM", "TRW", "AUX", "CARD", "STAT", "EACT", "ENCT", "REL", "ROOT",
-    "IDX", "TAGS", "", "", "", "", "",
+    "IDX", "TAGS", "EV", "", "POT", "", "", "",
 ];
 
 /// 段名 → 段号（大小写敏感，只认 spec 里的那 15 个名字）。
@@ -147,6 +152,13 @@ pub const F_JSON: u8 = 7;
 /// 四条是**容量**，不是规则：超了就是内容错误（`ContentError::TooManyEventEffects`），
 /// **不截断** —— 截断会把"遗物 + 诅咒 + 金币"悄悄变成两条，而屏幕上仍然显示三条的文案。
 pub const MAX_EVENT_EFFECTS: usize = 4;
+
+/// §278：一段事件最多有几个选项（`EVND.Options` 的长度上限）。
+///
+/// 四条同样是**容量**，不是规则：真实 StS 的 `Golden Idol` 就是三选一（Outrun/Smash/Hide），
+/// 而"两选一"只是最常见的情况。超了报错，**不截断** —— 截断会让第 4 个按钮静默消失，
+/// 玩家看到的是"事件只有三条路"，与内容里写的不同。
+pub const MAX_EVENT_OPTIONS: usize = 4;
 
 /// §192：一条敌人动作最多带几个升档变体（`EACT.ProgramAsc` 列表的长度上限）。
 ///
@@ -1303,6 +1315,8 @@ pub enum Table {
     Event,
     /// Potions (`POT`, from the document key `Potions`).
     Potion,
+    /// §278：事件的**第 N 段**（`EVND`，来自文档键 `EventNodes`）。
+    EventNode,
 }
 
 impl Table {
@@ -1311,7 +1325,7 @@ impl Table {
     /// §167：原来是五张（漏了 `Event` 与 `Potion`）。少报不会报错 —— `for table in Table::ALL`
     /// 只是少走两圈，于是"每张表都检查过"这句话在两张表上是假的。
     /// 与枚举的一致性由 `every_table_is_in_all`（穷尽 `match`）钉住：加变体不加进 `ALL` 编译不过。
-    pub const ALL: [Table; 7] = [
+    pub const ALL: [Table; 8] = [
         Table::Card,
         Table::Status,
         Table::EnemyAction,
@@ -1319,6 +1333,7 @@ impl Table {
         Table::Relic,
         Table::Event,
         Table::Potion,
+        Table::EventNode,
     ];
 
     /// 段号（`rdcfmt.S_*`）。
@@ -1332,6 +1347,7 @@ impl Table {
             Table::Relic => S_REL,
             Table::Event => S_EV,
             Table::Potion => S_POT,
+            Table::EventNode => S_EVND,
         }
     }
 
@@ -1346,6 +1362,7 @@ impl Table {
             Table::Relic => "REL",
             Table::Event => "EV",
             Table::Potion => "POT",
+            Table::EventNode => "EVND",
         }
     }
 
@@ -1360,6 +1377,7 @@ impl Table {
             Table::Relic => "REL",
             Table::Event => "EV",
             Table::Potion => "POT",
+            Table::EventNode => "EVND",
         }
     }
 
@@ -1374,6 +1392,7 @@ impl Table {
             S_REL => Some(Table::Relic),
             S_EV => Some(Table::Event),
             S_POT => Some(Table::Potion),
+            S_EVND => Some(Table::EventNode),
             _ => None,
         }
     }
@@ -1391,6 +1410,8 @@ impl Table {
             // `from_entity_kind(EK_EVENT)` stays `None`.
             Table::Event => EK_EVENT,
             Table::Potion => EK_POTION,
+            // 节点没有自己的实体类别：它只从 `EV.Entry` 走，`EK_*` 里没有这一类。
+            Table::EventNode => EK_EVENT,
         }
     }
 
@@ -1418,6 +1439,7 @@ impl Table {
             Table::Relic => &REL_SCHEMA,
             Table::Event => &EV_SCHEMA,
             Table::Potion => &POT_SCHEMA,
+            Table::EventNode => &EVND_SCHEMA,
         }
     }
 
@@ -1797,20 +1819,29 @@ entity_row!(
 );
 
 entity_row!(
-    /// `?` 房事件行（`EV`，stride 20，10 格）。
-    EvRow, Event, EV_SCHEMA, 20, 10, {
+    /// `?` 房事件行（`EV`，stride 8，3 格）。
+    ///
+    /// §278：这一层只剩**入口** —— 一个名字 + 指向第一段的节点 id。正文、按钮、效果、后继
+    /// 都在 [`EvndRow`]（`EVND`）里，因为"一句话属于某一段"，而一段事件可以有多段。
+    EvRow, Event, EV_SCHEMA, 8, 3, {
         ("Id", F_STR, 0) => id => 0,
         ("NameKey", F_STR, 0) => name_key => 1,
-        ("DescriptionKey", F_STR, 0) => description_key => 2,
-        ("Label0", F_STR, 0) => label0 => 3,
-        /// `Effects0`（term：`[{Effect, Amount}]\`，§188）。
-        ("Effects0", F_TERM, 0) => effects0 => 4,
-        /// `Effects0Asc`（term）：A15 的变体（wiki: *Unfavorable Events*）。
-        ("Effects0Asc", F_TERM, 0) => effects0_asc => 5,
-        ("Label1", F_STR, 0) => label1 => 6,
-        ("Effects1", F_TERM, 0) => effects1 => 7,
-        ("Effects1Asc", F_TERM, 0) => effects1_asc => 8,
-        ("extra", F_TERM, 0) => extra => 9,
+        /// 第一个节点（`EVND.Id`）。空串 = 内容错误（这个事件没有正文）。
+        ("Entry", F_STR, 0) => entry => 2,
+    }
+);
+
+entity_row!(
+    /// 事件的**第 N 段**（`EVND`，stride 8，3 格）。
+    ///
+    /// `Options` 是 term 列表，元素 `{Label, Effects, EffectsAsc, Next}` —— 选项数因此不再
+    /// 固定 2（`golden_idol` 的巨石追来那一段是**三选一**），而效果仍复用 §188 的形状。
+    EvndRow, EventNode, EVND_SCHEMA, 8, 3, {
+        ("Id", F_STR, 0) => id => 0,
+        /// 这一段的正文（`STR` 串号）。
+        ("TextKey", F_STR, 0) => text_key => 1,
+        /// 选项列表（term：`[{Label, Effects, EffectsAsc, Next}]`）。
+        ("Options", F_TERM, 0) => options => 2,
     }
 );
 
@@ -3224,9 +3255,9 @@ impl<'a> Content<'a> {
     }
 }
 
-/// One choice of a `?`-room event: the button text, the effect's name, and its amount.
+/// §278：一个事件选项 —— 按钮文字、效果列表（§188 的形状）、以及**后继**。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct EventChoice<'a> {
+pub struct EventOption<'a> {
     /// What the button says.
     pub label: &'a str,
     /// The effects, in order (§188). `heal` / `gold` / `damage` / `max_hp` / `nothing` /
@@ -3240,9 +3271,11 @@ pub struct EventChoice<'a> {
     pub asc: [EffectSpec<'a>; MAX_EVENT_EFFECTS],
     /// How many of `asc` are real.
     pub asc_count: u8,
+    /// §278：下一段的节点 id。**空串 = 这一段是终点**（选项生效后事件收尾）。
+    pub next: &'a str,
 }
 
-impl<'a> EventChoice<'a> {
+impl<'a> EventOption<'a> {
     /// The list that applies at `ascension`: the A15 variant when the row has one, else the base.
     #[must_use]
     pub fn effects_at(&self, ascension: u8, a15: u8) -> &[EffectSpec<'a>] {
@@ -3252,6 +3285,55 @@ impl<'a> EventChoice<'a> {
             &self.effects[..usize::from(self.count)]
         }
     }
+
+    /// §278：这个选项是否把事件带向另一段。
+    #[must_use]
+    pub fn goes_on(&self) -> Option<&'a str> {
+        if self.next.is_empty() {
+            None
+        } else {
+            Some(self.next)
+        }
+    }
+}
+
+/// §278：事件的**一段** —— 正文 + 若干选项。事件是一棵树，`EV.Entry` 指向第一段。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct EventStep<'a> {
+    /// 这一段的正文。
+    pub text: &'a str,
+    /// 选项（前 [`EventStep::count`] 条有效）。
+    pub options: [EventOption<'a>; MAX_EVENT_OPTIONS],
+    /// 选项条数。
+    pub count: u8,
+}
+
+impl<'a> EventStep<'a> {
+    /// 有效的选项切片。
+    #[must_use]
+    pub fn options(&self) -> &[EventOption<'a>] {
+        &self.options[..usize::from(self.count)]
+    }
+
+    /// `Empty` 实现要一个 const：一个"没有正文也没有选项"的段。
+    pub const EMPTY: Self = Self {
+        text: "",
+        options: [EventOption {
+            label: "",
+            effects: [EffectSpec {
+                effect: "nothing",
+                amount: 0,
+            }; MAX_EVENT_EFFECTS],
+            count: 0,
+            asc: [EffectSpec {
+                effect: "nothing",
+                amount: 0,
+            }; MAX_EVENT_EFFECTS],
+            asc_count: 0,
+            next: "",
+        }; MAX_EVENT_OPTIONS],
+        count: 0,
+    };
 }
 
 /// One event effect: a closed-vocabulary word (with an optional `:` payload) and its amount.
@@ -3269,7 +3351,7 @@ impl crate::state::Empty for EffectSpec<'_> {
 }
 
 impl<'a> Content<'a> {
-    /// The `?`-room events in the image, in table order: `(id, choices)`.
+    /// `EV` 表的行数（= 事件的个数）。
     ///
     /// `count` is the table's row count; a row whose id cannot be read is skipped rather than
     /// reported as an empty event -- `usize::MAX` marks "unreadable" so a caller cannot mistake it
@@ -3279,55 +3361,101 @@ impl<'a> Content<'a> {
         self.section(S_EV).map_or(0, |section| section.count)
     }
 
-    /// Event `index`: its id, its body text, and its two choices. `None` when the row is unusable.
+    /// `EVND` 表的行数（= 事件段的总数）。
     #[must_use]
-    pub fn event(&'a self, index: u32) -> Option<(&'a str, &'a str, [EventChoice<'a>; 2])> {
-        let row = EvRow::new(self.row(Table::Event, index)?)?;
-        let id = self.string(row.id())?;
-        let text = self
-            .string(row.description_key())
-            .filter(|text| !text.is_empty())
-            .unwrap_or("");
-        let mut choices = [EventChoice {
-            label: "",
-            effects: [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS],
-            count: 0,
-            asc: [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS],
-            asc_count: 0,
-        }; 2];
-        for (slot, (label_cell, base_cell, asc_cell)) in [
-            (row.label0(), row.effects0(), row.effects0_asc()),
-            (row.label1(), row.effects1(), row.effects1_asc()),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let mut base = [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS];
-            let count = self.effect_list(base_cell, &mut base)?;
-            let mut asc = [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS];
-            let asc_count = self.effect_list(asc_cell, &mut asc)?;
-            choices[slot] = EventChoice {
-                label: self.string(label_cell).unwrap_or(""),
-                effects: base,
-                count,
-                asc,
-                asc_count,
-            };
-        }
-        Some((id, text, choices))
+    pub fn event_step_count(&self) -> u32 {
+        self.section(S_EVND).map_or(0, |section| section.count)
     }
 
-    /// 读一个效果列表（`_arr` of `_obj{Effect: F_STR, Amount: F_INT}`，§188）。
+    /// Event `index`: its id, its name, and the id of its **first step**.
     ///
-    /// 返回条数。缺席/null 是**合法的空列表**（"这个选项没有效果"），但**越界**不是：
-    /// 超过 [`MAX_EVENT_EFFECTS`] 直接报错，不截断。
-    fn effect_list(
+    /// §278：正文不在这一层了 —— 一句话属于**某一段**，而一段事件可以有多段。要正文请用
+    /// [`Content::event_step`]，它按节点 id 取。
+    #[must_use]
+    pub fn event(&'a self, index: u32) -> Option<(&'a str, &'a str, &'a str)> {
+        let row = EvRow::new(self.row(Table::Event, index)?)?;
+        let id = self.string(row.id())?;
+        let name = self
+            .string(row.name_key())
+            .filter(|name| !name.is_empty())
+            .unwrap_or(id);
+        // 空 `Entry` 是内容错误（它会让页面显示一个没有任何按钮的房间），所以这里返回
+        // `None` 而不是"一个没有正文的事件"。
+        let entry = self.string(row.entry()).filter(|entry| !entry.is_empty())?;
+        Some((id, name, entry))
+    }
+
+    /// §278：按节点 id 取一段事件。`None` = 内容里没有这一段。
+    #[must_use]
+    pub fn event_step(&'a self, node: &str) -> Option<EventStep<'a>> {
+        let count = self.event_step_count();
+        for index in 0..count {
+            let row = EvndRow::new(self.row(Table::EventNode, index)?)?;
+            if self.string(row.id())? != node {
+                continue;
+            }
+            let text = self
+                .string(row.text_key())
+                .filter(|text| !text.is_empty())
+                .unwrap_or("");
+            let mut step = EventStep::EMPTY;
+            step.text = text;
+            // ⚠️ `option_list` **只填数组**，条数要在这里记 —— 第一版写了句"它已经把条数写进
+            // `count`"，而它没有，于是每一段都是"有正文、0 个选项"，测试立刻报红。
+            step.count = self.option_list(row.options(), &mut step.options)?;
+            return Some(step);
+        }
+        None
+    }
+
+    /// 读一个选项列表（`_arr` of `_obj{Label: F_STR, Effects: arr, EffectsAsc: arr, Next: F_STR}`）。
+    ///
+    /// 返回条数（同时写进 `out[..count]`）。缺席/null 是**合法的空列表**，但**越界**不是：
+    /// 超过 [`MAX_EVENT_OPTIONS`] 直接报错，不截断。
+    fn option_list(
         &'a self,
         cell: u16,
-        out: &mut [EffectSpec<'a>; MAX_EVENT_EFFECTS],
+        out: &mut [EventOption<'a>; MAX_EVENT_OPTIONS],
     ) -> Option<u8> {
+        let (start, count) = self.list_bounds(cell)?;
+        let count = usize::from(count);
+        if count > MAX_EVENT_OPTIONS {
+            return None;
+        }
+        for index in 0..count {
+            let element = self.aux(start.checked_add(index as u16)?)?;
+            let node = crate::ir::NodeRef::new(self, element);
+            let mut option = EventOption {
+                label: node.str_field("Label").ok().flatten().unwrap_or(""),
+                effects: [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS],
+                count: 0,
+                asc: [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS],
+                asc_count: 0,
+                next: node.str_field("Next").ok().flatten().unwrap_or(""),
+            };
+            // ⚠️ `Effects` / `EffectsAsc` 在镜像里是 **`F_TERMLIST`**（kind 5：起点 + 条数），
+            // 不是 `F_TERM` —— 用 `field()` 读它会拿到"一个节点"而不是"一张列表"，而错误的
+            // 形状在这里只会安静地变成"这个选项没有效果"。所以走 `term_list_field`（它直接
+            // 给出元素的 term 号），再用 `effect_list_from_terms` 解。
+            let mut base_terms = [0u16; MAX_EVENT_EFFECTS];
+            let base_count = node
+                .term_list_field("Effects", &mut base_terms)
+                .unwrap_or_else(|_| node.term_list_field_or_empty("Effects", &mut base_terms).unwrap_or(0));
+            let mut asc_terms = [0u16; MAX_EVENT_EFFECTS];
+            let asc_count = node
+                .term_list_field("EffectsAsc", &mut asc_terms)
+                .unwrap_or_else(|_| node.term_list_field_or_empty("EffectsAsc", &mut asc_terms).unwrap_or(0));
+            option.count = self.effect_list_from_terms(&base_terms, base_count, &mut option.effects)?;
+            option.asc_count = self.effect_list_from_terms(&asc_terms, asc_count, &mut option.asc)?;
+            out[index] = option;
+        }
+        Some(count as u8)
+    }
+
+    /// 一个列表 term 的 `(起址, 条数)`；缺席/null ⇒ `Some((0, 0))`，形状不对 ⇒ `None`。
+    fn list_bounds(&self, cell: u16) -> Option<(u16, u16)> {
         if cell == ABSENT16 || cell == NULL16 {
-            return Some(0);
+            return Some((0, 0));
         }
         let term = self.term(cell)?;
         if term.op != OP_ARR {
@@ -3336,14 +3464,30 @@ impl<'a> Content<'a> {
         let start = term.slot(0)?;
         let count = term.slot(1)?;
         if count == LIST_ABSENT || count == LIST_NULL {
-            return Some(0);
+            return Some((0, 0));
         }
-        let count = usize::from(count);
+        Some((start, count))
+    }
+
+    /// 读一个效果列表（`_arr` of `_obj{Effect: F_STR, Amount: F_INT}`，§188）。
+    ///
+    /// 返回条数。缺席/null 是**合法的空列表**（"这个选项没有效果"），但**越界**不是：
+    /// 超过 [`MAX_EVENT_EFFECTS`] 直接报错，不截断。
+    ///
+    /// ⚠️ §278：参数从"一个 term 格"改成"一串元素 term 号"—— 因为 `F_TERMLIST` 的解包
+    /// （起点 + 条数）由 `ir::NodeRef::term_list_field` 做，这里只负责把元素解释成效果。
+    /// 第一版自己解 `(start, count)`，而两处解包一旦漂了，"效果列表"会安静地变成空的。
+    fn effect_list_from_terms(
+        &'a self,
+        terms: &[u16; MAX_EVENT_EFFECTS],
+        count: usize,
+        out: &mut [EffectSpec<'a>; MAX_EVENT_EFFECTS],
+    ) -> Option<u8> {
         if count > MAX_EVENT_EFFECTS {
             return None;
         }
-        for index in 0..count {
-            let element = self.aux(start.checked_add(index as u16)?)?;
+        for (index, element) in terms.iter().enumerate().take(count) {
+            let element = *element;
             let node = crate::ir::NodeRef::new(self, element);
             // 这里返回 Option（与 `Content::event` 的其他读取一致），所以 `Result` 要展开成
             // `None`：**类型不对**说明镜像坏了，不是"这个元素没有效果"。
@@ -3743,39 +3887,39 @@ mod tests {
 
     /// `manifest.json` → `variants.core.sections`（逐字抄写，不改）。
     const CORE_SECTIONS: [(usize, &str, u32, u32, u32); 15] = [
-        (0, "STR", 272, 31051, 1375),
-        (1, "STRO", 31324, 5504, 1376),
-        (2, "OPD", 36828, 1040, 130),
-        (3, "OPF", 37868, 1412, 353),
-        (4, "TRM", 39280, 20760, 2143),
-        (5, "TRW", 60040, 4286, 2143),
-        (6, "AUX", 64328, 4156, 2078),
-        (7, "CARD", 68484, 1984, 62),
-        (8, "STAT", 70468, 920, 23),
-        (9, "EACT", 71388, 6304, 394),
-        (10, "ENCT", 77692, 1744, 109),
-        (11, "REL", 79436, 588, 49),
-        (12, "ROOT", 80024, 64, 16),
-        (13, "IDX", 80088, 5528, 691),
+        (0, "STR", 284, 31051, 1375),
+        (1, "STRO", 31336, 5504, 1376),
+        (2, "OPD", 36840, 1040, 130),
+        (3, "OPF", 37880, 1412, 353),
+        (4, "TRM", 39292, 20760, 2143),
+        (5, "TRW", 60052, 4286, 2143),
+        (6, "AUX", 64340, 4156, 2078),
+        (7, "CARD", 68496, 1984, 62),
+        (8, "STAT", 70480, 920, 23),
+        (9, "EACT", 71400, 6304, 394),
+        (10, "ENCT", 77704, 1744, 109),
+        (11, "REL", 79448, 588, 49),
+        (12, "ROOT", 80036, 64, 16),
+        (13, "IDX", 80100, 5528, 691),
         (14, "TAGS", 0, 0, 0),
     ];
 
     /// `manifest.json` → `variants.full.sections`。
     const FULL_SECTIONS: [(usize, &str, u32, u32, u32); 15] = [
-        (0, "STR", 272, 76799, 3140),
-        (1, "STRO", 77072, 12564, 3141),
-        (2, "OPD", 89636, 1112, 139),
-        (3, "OPF", 90748, 2996, 749),
-        (4, "TRM", 93744, 34004, 2895),
-        (5, "TRW", 127748, 5790, 2895),
-        (6, "AUX", 133540, 7620, 3810),
-        (7, "CARD", 141160, 1984, 62),
-        (8, "STAT", 143144, 920, 23),
-        (9, "EACT", 144064, 6304, 394),
-        (10, "ENCT", 150368, 1744, 109),
-        (11, "REL", 152112, 588, 49),
-        (12, "ROOT", 152700, 68, 17),
-        (13, "IDX", 152768, 5528, 691),
+        (0, "STR", 284, 76799, 3140),
+        (1, "STRO", 77084, 12564, 3141),
+        (2, "OPD", 89648, 1112, 139),
+        (3, "OPF", 90760, 2996, 749),
+        (4, "TRM", 93756, 34004, 2895),
+        (5, "TRW", 127760, 5790, 2895),
+        (6, "AUX", 133552, 7620, 3810),
+        (7, "CARD", 141172, 1984, 62),
+        (8, "STAT", 143156, 920, 23),
+        (9, "EACT", 144076, 6304, 394),
+        (10, "ENCT", 150380, 1744, 109),
+        (11, "REL", 152124, 588, 49),
+        (12, "ROOT", 152712, 68, 17),
+        (13, "IDX", 152780, 5528, 691),
         (14, "TAGS", 0, 0, 0),
     ];
 
@@ -4079,7 +4223,7 @@ mod tests {
     #[test]
     fn the_core_image_matches_the_manifest() {
         with_core(|content, blob| {
-            assert_eq!(blob.len(), 85_616);
+            assert_eq!(blob.len(), 85_628);
             assert_eq!(content.total_size() as usize, blob.len());
             assert_eq!(content.version(), FORMAT_VERSION);
             assert_eq!(content.flags(), 1);
@@ -4087,7 +4231,8 @@ mod tests {
             assert_eq!(content.schema_version(), 1);
             assert_eq!(content.content_hash(), 0xD107_5DE5);
             assert_eq!(content.section_count(), SECTION_COUNT);
-            assert_eq!(content.section_count(), 20, "头里 nsec = 20（15 有名字 + 5 保留）");
+            // §278: 21 = 17 个有名字的段 + 4 个保留段（18..20）。
+            assert_eq!(content.section_count(), 21, "头里 nsec = 21");
 
             for (index, name, offset, bytes, count) in CORE_SECTIONS {
                 let by_id = content
@@ -4104,8 +4249,12 @@ mod tests {
                 assert_eq!(by_name, by_id, "{name} 按名取和按号取必须一样");
             }
 
-            // 目录 + 各段正好铺满文件：第一段从目录尾（272）开始，最后一段接到文件尾。
-            assert_eq!(content.section(S_STR).unwrap().offset, 272);
+            // 目录 + 各段正好铺满文件：第一段从目录尾开始，最后一段接到文件尾。
+            // §278：目录尾 = 32 + 12 × 21 = 284（加一个段就 +12，所以这个数**算**出来，别手抄）。
+            assert_eq!(
+                content.section(S_STR).unwrap().offset as usize,
+                HEADER_BYTES + DIRECTORY_ENTRY_BYTES * SECTION_COUNT
+            );
             assert_eq!(
                 content.section(S_IDX).unwrap().end(),
                 content.total_size() as u64
@@ -4121,8 +4270,8 @@ mod tests {
             assert_eq!(content.section(S_TAGS).unwrap().count, 0);
             assert!(content.section(S_TAGS).unwrap().is_empty());
 
-            // 段外越界：nsec 是 20，段号 20 起就没有了。
-            assert!(content.section(20).is_none());
+            // 段外越界：nsec 是 21，段号 21 起就没有了。
+            assert!(content.section(21).is_none());
             assert!(content.section(usize::MAX).is_none());
             assert!(content.section_by_name("NOPE").is_none());
             assert!(content.section_by_name("").is_none());
@@ -4137,7 +4286,7 @@ mod tests {
     #[test]
     fn the_full_image_also_reads() {
         let blob = read_image(FULL_IMAGE);
-        assert_eq!(blob.len(), 158_296);
+        assert_eq!(blob.len(), 158_308);
         let content = Content::parse(&blob).expect("full 镜像必须能解析");
         assert_eq!(content.flags(), 0);
         assert!(!content.presentation_stripped());
@@ -4775,7 +4924,7 @@ mod tests {
         assert_eq!(content.card_rarity("slimed"), Some("Status"));
         assert_eq!(content.card_rarity("no_such_card"), None);
         assert_eq!((CardRow::STRIDE, CardRow::CELLS), (32, 16));
-        assert_eq!(FORMAT_VERSION, 7);
+        assert_eq!(FORMAT_VERSION, 8);
         assert_eq!(content.version(), FORMAT_VERSION);
         // The roguedeck image has no `Rarity` key at all: the cell is there and reads as absent,
         // which is `None` rather than an error.
@@ -4957,12 +5106,34 @@ mod tests {
              `golden_idol` / `ancient_forge` across acts (§133 / §143)"
         );
         let mut ids = Vec::new();
+        // §278：**每一步都必须可达**（否则内容里躺着一段谁也看不见的剧情，而屏幕上一切正常）。
+        let mut reached: Vec<&str> = Vec::new();
         for index in 0..content.event_count() {
-            let (id, text, choices) = content.event(index).expect("event {index}");
+            let (id, _name, entry) = content.event(index).expect("event {index}");
             ids.push(id);
-            assert!(!text.is_empty(), "{id} has no body text");
+            let step = content
+                .event_step(entry)
+                .unwrap_or_else(|| panic!("{id}: entry `{entry}` names no step"));
+            assert!(!step.text.is_empty(), "{id} has no body text");
+            assert!(
+                step.count >= 2,
+                "{id}: {} option(s) -- an event needs at least two",
+                step.count
+            );
+            let choices = step.options;
             assert!(!choices[0].label.is_empty(), "{id} choice 0 has no label");
             assert!(!choices[1].label.is_empty(), "{id} choice 1 has no label");
+            reached.push(entry);
+            for option in step.options() {
+                if let Some(next) = option.goes_on() {
+                    assert!(
+                        content.event_step(next).is_some(),
+                        "{id}: option `{}` points at `{next}`, which is not a step",
+                        option.label
+                    );
+                    reached.push(next);
+                }
+            }
             // The **shape** of the vocabulary is the run layer's business (`EventEffect::parse`);
             // what is pinned here is that the image carries none of the outside: a parsing rule
             // this test cannot see is a rule the content gate alone would have to defend.
@@ -5012,29 +5183,67 @@ mod tests {
                 "wandering_merchant"
             ]
         );
-        // Spot-check the pair this section exists for: **relic + curse**, and the A15 branch is a
-        // different list (`port-plan.md` §188).
+        // ★ 没有孤儿段：`EVND` 里每一行都要被某个 `EV.Entry` 或某个 `Next` 指到。
+        reached.sort_unstable();
+        reached.dedup();
+        assert_eq!(
+            reached.len() as u32,
+            content.event_step_count(),
+            "{} step(s) in the image, {} reachable -- an unreachable step is a scene nobody can see",
+            content.event_step_count(),
+            reached.len()
+        );
+
+        // §278：这棵树是这一节存在的理由 —— `golden_idol` 有**两段**，第二段是**三选一**，
+        // 而三选一的代价按**最大 HP 的百分比**算（wiki: Smash 25%/A15 35%，Hide 8%/A15 10%）。
         let index = (0..content.event_count())
             .find(|index| content.event(*index).map(|e| e.0) == Some("golden_idol"))
             .expect("golden_idol");
-        let (_, _, choices) = content.event(index).unwrap();
-        assert_eq!(choices[0].count, 2, "two effects in one option");
+        let (_, _, entry) = content.event(index).unwrap();
+        let step = content.event_step(entry).expect("golden_idol's first step");
+        let choices = step.options;
+        assert_eq!(step.count, 2, "the first step still has two options");
+        // 第一段：拿遗物，**然后**去下一段。旧内容把"遗物 + 诅咒"挤在一个选项里，
+        // 那正是"两屏被压成一屏"的形状。
+        assert_eq!(choices[0].count, 1, "taking the idol is only half of it now");
         assert_eq!(choices[0].effects[0].effect, "relic:golden_idol");
-        assert_eq!(choices[0].effects[1].effect, "curse:injury");
-        assert_eq!(choices[0].asc_count, 2, "and an A15 variant of the same length");
-        assert_eq!(choices[0].asc[1].effect, "damage", "A15: the idol costs HP instead");
-        assert_eq!(choices[0].asc[1].amount, 20, "25% of 80, the wiki's Smash branch");
+        assert_eq!(
+            choices[0].goes_on(),
+            Some("golden_idol.boulder"),
+            "`Take it` must lead to the boulder scene"
+        );
+        assert_eq!(choices[0].asc_count, 0, "the relic itself is the same at every ascension");
+
+        // 第二段：三个逃生选项。
+        let boulder = content
+            .event_step("golden_idol.boulder")
+            .expect("the boulder step");
+        assert!(!boulder.text.is_empty(), "the boulder step has its own text");
+        assert_eq!(boulder.count, 3, "**three** escape options, not two");
+        let escape = boulder.options;
+        assert_eq!(escape[0].label, "Outrun");
+        assert_eq!(escape[0].effects[0].effect, "curse:injury");
+        assert_eq!(escape[0].asc_count, 0, "Outrun's curse does not get worse");
+        assert_eq!(escape[1].label, "Smash");
+        assert_eq!(escape[1].effects[0].effect, "damage_pct:25");
+        assert_eq!(escape[1].asc[0].effect, "damage_pct:35", "A15: 25% -> 35%");
+        assert_eq!(escape[2].label, "Hide");
+        assert_eq!(escape[2].effects[0].effect, "max_hp_pct:8");
+        assert_eq!(escape[2].asc[0].effect, "max_hp_pct:10", "A15: 8% -> 10%");
 
         // `effects_at` is the **only** place the level decides which list applies.
-        assert_eq!(choices[0].effects_at(0, 15)[1].effect, "curse:injury");
-        assert_eq!(choices[0].effects_at(14, 15)[1].effect, "curse:injury");
-        assert_eq!(choices[0].effects_at(15, 15)[1].effect, "damage");
-        assert_eq!(choices[0].effects_at(20, 15)[1].effect, "damage");
+        assert_eq!(escape[1].effects_at(0, 15)[0].effect, "damage_pct:25");
+        assert_eq!(escape[1].effects_at(14, 15)[0].effect, "damage_pct:25");
+        assert_eq!(escape[1].effects_at(15, 15)[0].effect, "damage_pct:35");
+        assert_eq!(escape[1].effects_at(20, 15)[0].effect, "damage_pct:35");
+        assert_eq!(escape[2].effects_at(14, 15)[0].effect, "max_hp_pct:8");
+        assert_eq!(escape[2].effects_at(15, 15)[0].effect, "max_hp_pct:10");
 
         // Leaving costs nothing, and `nothing` has no worse version.
         assert_eq!(choices[1].count, 1);
         assert_eq!(choices[1].effects[0].effect, "nothing");
         assert_eq!(choices[1].asc_count, 0, "no A15 variant where nothing happens");
+        assert_eq!(choices[1].goes_on(), None, "`Leave it` ends the event");
 
         // §143: the three new choices really carry the new vocabulary **out of the binary**, so a
         // writer that quietly dropped a colon would be caught here and not by a dead button.
@@ -5042,7 +5251,9 @@ mod tests {
             let index = (0..content.event_count())
                 .find(|index| content.event(*index).map(|e| e.0) == Some(id))
                 .unwrap_or_else(|| panic!("{id} must be in the image"));
-            let (_, _, choices) = content.event(index).expect("event");
+            let (_, _, entry) = content.event(index).expect("event");
+            let step = content.event_step(entry).expect("first step");
+            let choices = step.options;
             std::vec![
                 std::string::String::from(choices[0].effects[0].effect),
                 std::string::String::from(choices[1].effects[0].effect),
@@ -5390,8 +5601,14 @@ mod tests {
         );
 
         // 字符串池：STRO 不再严格递增。
+        // §278：STRO 的 offsets 从 `section(S_STRO).offset` 开始（也不再手抄 31_324）。
         let mut blob = original.clone();
-        patch32(&mut blob, 31_324, 100);
+        let stro = Content::parse(&original)
+            .expect("original parses")
+            .section(S_STRO)
+            .expect("STRO");
+        let stro_offset = stro.offset as usize;
+        patch32(&mut blob, stro_offset, 100);
         let content = Content::parse(&blob).unwrap();
         assert_eq!(
             content.validate(),
@@ -5413,9 +5630,14 @@ mod tests {
             })
         );
 
-        // 字符串池：末项越过池尾。
+        // 字符串池：末项越过池尾（起点从 STRO 段偏移算，§278 起不再手抄）。
         let mut blob = original.clone();
-        patch32(&mut blob, 31_324 + 4 * 1_375, 40_000);
+        let stro_offset = Content::parse(&original)
+            .expect("original parses")
+            .section(S_STRO)
+            .expect("STRO")
+            .offset as usize;
+        patch32(&mut blob, stro_offset + 4 * 1_375, 40_000);
         let content = Content::parse(&blob).unwrap();
         assert_eq!(
             content.validate(),
@@ -5507,11 +5729,12 @@ mod tests {
                 | Table::Encounter
                 | Table::Relic
                 | Table::Event
-                | Table::Potion => {}
+                | Table::Potion
+                | Table::EventNode => {}
             }
             assert!(Table::ALL.contains(&table));
         }
-        assert_eq!(Table::ALL.len(), 7, "七张关键表，一张不少");
+        assert_eq!(Table::ALL.len(), 8, "§278: 七张关键表 + 事件节点表");
         // 段号的往返：`from_section(section_id(t)) == t`。
         for table in Table::ALL {
             assert_eq!(Table::from_section(table.section_id()), Some(table));

@@ -161,22 +161,27 @@ MAGIC = 0x46434452          # b'RDCF'
 # 5: `EACT` gained `ProgramAsc` + `AscensionMin` (§187), so that row's stride moved 16 -> 20.
 # 6: `EV` replaced its four `Effect*/Amount*` cells with four effect **lists** (§188); same stride,
 #    different meaning.
-FORMAT_VERSION = 7
+# 7: `EV` shrank to `{Id, NameKey, Entry}` and the event body moved to the new `EVND` node table
+#    (§278). `EV`'s stride went 10 -> 4 cells, and `NSEC` went 20 -> 21, so **nothing** of the old
+#    image decodes any more -- this is the one change where a stale reader cannot possibly look
+#    plausible, which is why it is a version bump rather than a reinterpretation.
+FORMAT_VERSION = 8
 HEADER_SIZE = 32
-NSEC = 20
+NSEC = 21
 
 # ------------------------------------------------------------------ sections
 S_STR, S_STRO, S_OPD, S_OPF, S_TRM, S_TRW, S_AUX = 0, 1, 2, 3, 4, 5, 6
 S_CARD, S_STAT, S_EACT, S_ENCT, S_REL = 7, 8, 9, 10, 11
 S_EV = 15
 S_POT = 16
+S_EVND = 17
 S_ROOT, S_IDX = 12, 13
 S_TAGS = 14
 SEC_NAMES = {
     S_STR: "STR", S_STRO: "STRO", S_OPD: "OPD", S_OPF: "OPF", S_TRM: "TRM",
     S_TRW: "TRW", S_AUX: "AUX", S_CARD: "CARD", S_STAT: "STAT", S_EACT: "EACT",
-    S_ENCT: "ENCT", S_REL: "REL", S_EV: "EV", S_POT: "POT", S_ROOT: "ROOT",
-    S_IDX: "IDX", S_TAGS: "TAGS",
+    S_ENCT: "ENCT", S_REL: "REL", S_EV: "EV", S_POT: "POT", S_EVND: "EVND",
+    S_ROOT: "ROOT", S_IDX: "IDX", S_TAGS: "TAGS",
 }
 # Every section the writer can emit, **in section-id order**.
 #
@@ -187,7 +192,8 @@ SEC_NAMES = {
 #     ROOT/IDX/TAGS down one slot: the image kept the right *bytes* under the wrong *ids*, and the
 #     kernel read 0 events while the manifest said 4.
 SEC_ORDER = [S_STR, S_STRO, S_OPD, S_OPF, S_TRM, S_TRW, S_AUX,
-             S_CARD, S_STAT, S_EACT, S_ENCT, S_REL, S_ROOT, S_IDX, S_TAGS, S_EV, S_POT]
+             S_CARD, S_STAT, S_EACT, S_ENCT, S_REL, S_ROOT, S_IDX, S_TAGS, S_EV, S_POT,
+             S_EVND]
 
 # --------------------------------------------------------------- field kinds
 F_STR, F_INT, F_BOOL, F_TERM, F_TERMLIST, F_STRLIST, F_JSON = 1, 2, 3, 4, 5, 6, 7
@@ -288,13 +294,20 @@ REL_ROW = [
     # numbers). The row is 12 bytes = six `u16` cells, so this is a sixth cell, not a longer row.
     ("Rarity", F_STR, 0), ("extra", F_TERM, 0),
 ]
+# §278：`EV` 现在只是**入口**：一句名字 + 指向第一个节点的 id。正文、按钮、效果、后继
+# 全部搬到 `EVND`（见下）。`DescriptionKey` 不再是事件这一层的格 —— 一句话属于**某一段**，
+# 而一段可以有任意多段（Golden Idol 的"巨石追来"是一段独立的文本）。
 EV_ROW = [
-    ("Id", F_STR, 0), ("NameKey", F_STR, 0), ("DescriptionKey", F_STR, 0),
-    # §188: 每个选项的效果是一个 **term 列表**（`{Effect, Amount}` 元素），而不是
-    # "一个词 + 一个数"。`...Asc` 是 A15（"Unfavorable Events"）的变体。
-    # 四格换四格 ⇒ 行宽仍是 10 格 / 20 B，但**格的含义变了** ⇒ FORMAT_VERSION 动。
-    ("Label0", F_STR, 0), ("Effects0", F_TERM, 0), ("Effects0Asc", F_TERM, 0),
-    ("Label1", F_STR, 0), ("Effects1", F_TERM, 0), ("Effects1Asc", F_TERM, 0),
+    ("Id", F_STR, 0), ("NameKey", F_STR, 0), ("Entry", F_STR, 0),
+    ("extra", F_TERM, 0),
+]
+
+# §278：**事件的第 N 段**。`Options` 是一个 term 列表，元素形如
+#   `{Label, Effects, EffectsAsc, Next}`
+# —— 选项数因此不再固定 2（Golden Idol 的 Outrun/Smash/Hide 是三选一），而"效果"仍复用
+# §188 的 `{Effect, Amount}` 列表。`Next` 缺席/空 = 这一段是终点。
+EVND_ROW = [
+    ("Id", F_STR, 0), ("TextKey", F_STR, 0), ("Options", F_TERM, 0),
     ("extra", F_TERM, 0),
 ]
 
@@ -308,7 +321,8 @@ POT_ROW = [
 ]
 
 ROW_SCHEMAS = {"CARD": CARD_ROW, "STATUS": STATUS_ROW, "EACT": EACT_ROW,
-               "ENCT": ENCT_ROW, "REL": REL_ROW, "EV": EV_ROW, "POT": POT_ROW}
+               "ENCT": ENCT_ROW, "REL": REL_ROW, "EV": EV_ROW, "POT": POT_ROW,
+               "EVND": EVND_ROW}
 
 
 def align4(n):

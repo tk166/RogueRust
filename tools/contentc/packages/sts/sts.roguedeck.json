@@ -64059,315 +64059,57 @@
     {
       "Id": "golden_idol",
       "NameKey": "Golden Idol",
-      "DescriptionKey": "An idol of gold sits on a mossy altar.",
-      "Label0": "Take it",
-      "Label1": "Leave it",
-      "Effects0": [
-        {
-          "Effect": "relic:golden_idol",
-          "Amount": 1
-        },
-        {
-          "Effect": "curse:injury",
-          "Amount": 1
-        }
-      ],
-      "Effects1": [
-        {
-          "Effect": "nothing",
-          "Amount": 0
-        }
-      ],
-      "Effects0Asc": [
-        {
-          "Effect": "relic:golden_idol",
-          "Amount": 1
-        },
-        {
-          "Effect": "damage",
-          "Amount": 20
-        }
-      ]
+      "Entry": "golden_idol"
     },
     {
       "Id": "shining_light",
       "NameKey": "Shining Light",
-      "DescriptionKey": "A shaft of light falls through the ceiling.",
-      "Label0": "Step into it",
-      "Label1": "Walk on",
-      "Effects0": [
-        {
-          "Effect": "max_hp",
-          "Amount": 2
-        }
-      ],
-      "Effects1": [
-        {
-          "Effect": "nothing",
-          "Amount": 0
-        }
-      ],
-      "Effects0Asc": [
-        {
-          "Effect": "max_hp",
-          "Amount": 1
-        }
-      ]
+      "Entry": "shining_light"
     },
     {
       "Id": "old_shrine",
       "NameKey": "Old Shrine",
-      "DescriptionKey": "A shrine that still answers.",
-      "Label0": "Pray",
-      "Label1": "Leave",
-      "Effects0": [
-        {
-          "Effect": "heal",
-          "Amount": 15
-        }
-      ],
-      "Effects1": [
-        {
-          "Effect": "nothing",
-          "Amount": 0
-        }
-      ],
-      "Effects0Asc": [
-        {
-          "Effect": "heal",
-          "Amount": 8
-        }
-      ]
+      "Entry": "old_shrine"
     },
     {
       "Id": "scrap_pile",
       "NameKey": "Scrap Pile",
-      "DescriptionKey": "A heap of bent metal.",
-      "Label0": "Dig through",
-      "Label1": "Leave",
-      "Effects0": [
-        {
-          "Effect": "gold",
-          "Amount": 45
-        }
-      ],
-      "Effects1": [
-        {
-          "Effect": "nothing",
-          "Amount": 0
-        }
-      ],
-      "Effects0Asc": [
-        {
-          "Effect": "gold",
-          "Amount": 20
-        }
-      ]
+      "Entry": "scrap_pile"
     },
     {
       "Id": "ancient_forge",
       "NameKey": "Ancient Forge",
-      "DescriptionKey": "A cold forge still holds one glowing coal.",
-      "Label0": "Temper your body",
-      "Label1": "Pocket the coal",
-      "Effects0": [
-        {
-          "Effect": "max_hp",
-          "Amount": 6
-        }
-      ],
-      "Effects1": [
-        {
-          "Effect": "gold",
-          "Amount": 45
-        }
-      ],
-      "Effects0Asc": [
-        {
-          "Effect": "max_hp",
-          "Amount": 3
-        }
-      ],
-      "Effects1Asc": [
-        {
-          "Effect": "gold",
-          "Amount": 22
-        }
-      ]
+      "Entry": "ancient_forge"
     },
     {
       "Id": "wandering_merchant",
       "NameKey": "Wandering Merchant",
-      "DescriptionKey": "A merchant offers a tonic for what ails you.",
-      "Label0": "Drink it",
-      "Label1": "Ask for coin instead",
-      "Effects0": [
-        {
-          "Effect": "heal",
-          "Amount": 18
-        }
-      ],
-      "Effects1": [
-        {
-          "Effect": "gold",
-          "Amount": 25
-        }
-      ],
-      "Effects0Asc": [
-        {
-          "Effect": "heal",
-          "Amount": 9
-        }
-      ],
-      "Effects1Asc": [
-        {
-          "Effect": "gold",
-          "Amount": 12
-        }
-      ]
+      "Entry": "wandering_merchant"
     },
     {
       "Id": "ancient_writing",
       "NameKey": "Ancient Writing",
-      "DescriptionKey": "Glyphs older than the Spire cover the wall.",
-      "Label0": "Study the glyphs",
-      "Label1": "Leave them be",
-      "Effects0": [
-        {
-          "Effect": "upgrade_card",
-          "Amount": 0
-        }
-      ],
-      "Effects1": [
-        {
-          "Effect": "nothing",
-          "Amount": 0
-        }
-      ],
-      "Effects0Asc": [
-        {
-          "Effect": "upgrade_card",
-          "Amount": 0
-        },
-        {
-          "Effect": "damage",
-          "Amount": 8
-        }
-      ]
+      "Entry": "ancient_writing"
     },
     {
       "Id": "forgotten_altar",
       "NameKey": "Forgotten Altar",
-      "DescriptionKey": "A stone bowl waits for an offering.",
-      "Label0": "Take the offering",
-      "Label1": "Walk away",
-      "Effects0": [
-        {
-          "Effect": "curse:injury",
-          "Amount": 0
-        }
-      ],
-      "Effects1": [
-        {
-          "Effect": "nothing",
-          "Amount": 0
-        }
-      ],
-      "Effects0Asc": [
-        {
-          "Effect": "curse:injury",
-          "Amount": 1
-        },
-        {
-          "Effect": "damage",
-          "Amount": 6
-        }
-      ]
+      "Entry": "forgotten_altar"
     },
     {
       "Id": "purification_shrine",
       "NameKey": "Purification Shrine",
-      "DescriptionKey": "Cold water runs over a stone basin.",
-      "Label0": "Wash a card away",
-      "Label1": "Leave",
-      "Effects0": [
-        {
-          "Effect": "remove_card",
-          "Amount": 0
-        }
-      ],
-      "Effects1": [
-        {
-          "Effect": "nothing",
-          "Amount": 0
-        }
-      ],
-      "Effects0Asc": [
-        {
-          "Effect": "remove_card",
-          "Amount": 0
-        },
-        {
-          "Effect": "damage",
-          "Amount": 10
-        }
-      ]
+      "Entry": "purification_shrine"
     },
     {
       "Id": "the_ssssserpent",
       "NameKey": "The Ssssserpent",
-      "DescriptionKey": "A giant serpent offers you a deal.",
-      "Label0": "Agree",
-      "Label1": "Disagree",
-      "Effects0": [
-        {
-          "Effect": "gold",
-          "Amount": 175
-        },
-        {
-          "Effect": "curse:doubt",
-          "Amount": 1
-        }
-      ],
-      "Effects1": [
-        {
-          "Effect": "nothing",
-          "Amount": 0
-        }
-      ],
-      "Effects0Asc": [
-        {
-          "Effect": "gold",
-          "Amount": 175
-        },
-        {
-          "Effect": "curse:doubt",
-          "Amount": 2
-        }
-      ]
+      "Entry": "the_ssssserpent"
     },
     {
       "Id": "the_mausoleum",
       "NameKey": "The Mausoleum",
-      "DescriptionKey": "A coffin waits in the dark.",
-      "Label0": "Open Coffin",
-      "Label1": "Leave",
-      "Effects0": [
-        {
-          "Effect": "relic:strawberry",
-          "Amount": 1
-        },
-        {
-          "Effect": "curse:writhe",
-          "Amount": 1
-        }
-      ],
-      "Effects1": [
-        {
-          "Effect": "nothing",
-          "Amount": 0
-        }
-      ]
+      "Entry": "the_mausoleum"
     }
   ],
   "Potions": [
@@ -64685,5 +64427,431 @@
         "Id": "the_ssssserpent"
       }
     ]
-  }
+  },
+  "EventNodes": [
+    {
+      "Id": "golden_idol",
+      "TextKey": "An idol of gold sits on a mossy altar.",
+      "Options": [
+        {
+          "Label": "Take it",
+          "Effects": [
+            {
+              "Effect": "relic:golden_idol",
+              "Amount": 1
+            }
+          ],
+          "Next": "golden_idol.boulder"
+        },
+        {
+          "Label": "Leave it",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "shining_light",
+      "TextKey": "A shaft of light falls through the ceiling.",
+      "Options": [
+        {
+          "Label": "Step into it",
+          "Effects": [
+            {
+              "Effect": "max_hp",
+              "Amount": 2
+            }
+          ],
+          "Next": "",
+          "EffectsAsc": [
+            {
+              "Effect": "max_hp",
+              "Amount": 1
+            }
+          ]
+        },
+        {
+          "Label": "Walk on",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "old_shrine",
+      "TextKey": "A shrine that still answers.",
+      "Options": [
+        {
+          "Label": "Pray",
+          "Effects": [
+            {
+              "Effect": "heal",
+              "Amount": 15
+            }
+          ],
+          "Next": "",
+          "EffectsAsc": [
+            {
+              "Effect": "heal",
+              "Amount": 8
+            }
+          ]
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "scrap_pile",
+      "TextKey": "A heap of bent metal.",
+      "Options": [
+        {
+          "Label": "Dig through",
+          "Effects": [
+            {
+              "Effect": "gold",
+              "Amount": 45
+            }
+          ],
+          "Next": "",
+          "EffectsAsc": [
+            {
+              "Effect": "gold",
+              "Amount": 20
+            }
+          ]
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "ancient_forge",
+      "TextKey": "A cold forge still holds one glowing coal.",
+      "Options": [
+        {
+          "Label": "Temper your body",
+          "Effects": [
+            {
+              "Effect": "max_hp",
+              "Amount": 6
+            }
+          ],
+          "Next": "",
+          "EffectsAsc": [
+            {
+              "Effect": "max_hp",
+              "Amount": 3
+            }
+          ]
+        },
+        {
+          "Label": "Pocket the coal",
+          "Effects": [
+            {
+              "Effect": "gold",
+              "Amount": 45
+            }
+          ],
+          "Next": "",
+          "EffectsAsc": [
+            {
+              "Effect": "gold",
+              "Amount": 22
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "wandering_merchant",
+      "TextKey": "A merchant offers a tonic for what ails you.",
+      "Options": [
+        {
+          "Label": "Drink it",
+          "Effects": [
+            {
+              "Effect": "heal",
+              "Amount": 18
+            }
+          ],
+          "Next": "",
+          "EffectsAsc": [
+            {
+              "Effect": "heal",
+              "Amount": 9
+            }
+          ]
+        },
+        {
+          "Label": "Ask for coin instead",
+          "Effects": [
+            {
+              "Effect": "gold",
+              "Amount": 25
+            }
+          ],
+          "Next": "",
+          "EffectsAsc": [
+            {
+              "Effect": "gold",
+              "Amount": 12
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Id": "ancient_writing",
+      "TextKey": "Glyphs older than the Spire cover the wall.",
+      "Options": [
+        {
+          "Label": "Study the glyphs",
+          "Effects": [
+            {
+              "Effect": "upgrade_card",
+              "Amount": 0
+            }
+          ],
+          "Next": "",
+          "EffectsAsc": [
+            {
+              "Effect": "upgrade_card",
+              "Amount": 0
+            },
+            {
+              "Effect": "damage",
+              "Amount": 8
+            }
+          ]
+        },
+        {
+          "Label": "Leave them be",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "forgotten_altar",
+      "TextKey": "A stone bowl waits for an offering.",
+      "Options": [
+        {
+          "Label": "Take the offering",
+          "Effects": [
+            {
+              "Effect": "curse:injury",
+              "Amount": 0
+            }
+          ],
+          "Next": "",
+          "EffectsAsc": [
+            {
+              "Effect": "curse:injury",
+              "Amount": 1
+            },
+            {
+              "Effect": "damage",
+              "Amount": 6
+            }
+          ]
+        },
+        {
+          "Label": "Walk away",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "purification_shrine",
+      "TextKey": "Cold water runs over a stone basin.",
+      "Options": [
+        {
+          "Label": "Wash a card away",
+          "Effects": [
+            {
+              "Effect": "remove_card",
+              "Amount": 0
+            }
+          ],
+          "Next": "",
+          "EffectsAsc": [
+            {
+              "Effect": "remove_card",
+              "Amount": 0
+            },
+            {
+              "Effect": "damage",
+              "Amount": 10
+            }
+          ]
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_ssssserpent",
+      "TextKey": "A giant serpent offers you a deal.",
+      "Options": [
+        {
+          "Label": "Agree",
+          "Effects": [
+            {
+              "Effect": "gold",
+              "Amount": 175
+            },
+            {
+              "Effect": "curse:doubt",
+              "Amount": 1
+            }
+          ],
+          "Next": "",
+          "EffectsAsc": [
+            {
+              "Effect": "gold",
+              "Amount": 175
+            },
+            {
+              "Effect": "curse:doubt",
+              "Amount": 2
+            }
+          ]
+        },
+        {
+          "Label": "Disagree",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_mausoleum",
+      "TextKey": "A coffin waits in the dark.",
+      "Options": [
+        {
+          "Label": "Open Coffin",
+          "Effects": [
+            {
+              "Effect": "relic:strawberry",
+              "Amount": 1
+            },
+            {
+              "Effect": "curse:writhe",
+              "Amount": 1
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "golden_idol.boulder",
+      "TextKey": "As you grab the Idol and stow it away, a giant boulder smashes through the ceiling into the ground next to you. You realize that the floor is slanted downwards as the boulder starts to roll towards you.",
+      "Options": [
+        {
+          "Label": "Outrun",
+          "Effects": [
+            {
+              "Effect": "curse:injury",
+              "Amount": 1
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Smash",
+          "Effects": [
+            {
+              "Effect": "damage_pct:25",
+              "Amount": 0
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "damage_pct:35",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Hide",
+          "Effects": [
+            {
+              "Effect": "max_hp_pct:8",
+              "Amount": 0
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "max_hp_pct:10",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    }
+  ]
 }

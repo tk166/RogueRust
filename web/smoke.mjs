@@ -94,6 +94,8 @@ const REQUIRED = [
   "rd_run_start_gain_amount", "rd_run_start_cost", "rd_run_start_cost_amount",
   "rd_run_choose_start",
   "rd_run_event_text_len", "rd_run_event_text_into", "rd_run_event_label_len",
+  // §278: 选项数由内容决定（Golden Idol 的第二段是三选一）。
+  "rd_run_event_option_count",
   "rd_run_event_label_into", "rd_run_event_effect", "rd_run_event_amount", "rd_run_choose",
   "rd_run_event_needs", "rd_run_pick_event_card",
   // §274：拾取时欠着的牌组编辑（`empty_cage` / `astrolabe`）。

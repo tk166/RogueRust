@@ -55,9 +55,12 @@ ENTITY_SECTIONS = [("CARD", "Cards"), ("STATUS", "Statuses"), ("EACT", "EnemyAct
     # **Not** `Events`: the reference document uses that key for a dict of its own shape.
     ("EV", "UnknownRooms"),
     # `Potions` is free in the reference document (checked: it has no such key).
-    ("POT", "Potions")]
+    ("POT", "Potions"),
+    # §278：事件的**第 N 段**。`EV` 只剩入口，正文/按钮/后继都在这里。
+    ("EVND", "EventNodes")]
 SEC_OF = {"CARD": F.S_CARD, "STATUS": F.S_STAT, "EACT": F.S_EACT,
-          "ENCT": F.S_ENCT, "REL": F.S_REL, "EV": F.S_EV, "POT": F.S_POT}
+          "ENCT": F.S_ENCT, "REL": F.S_REL, "EV": F.S_EV, "POT": F.S_POT,
+          "EVND": F.S_EVND}
 
 # Document keys: top-level keys that are **build metadata, not game data**.
 #
@@ -975,6 +978,7 @@ def write_report(path, src_path, raw_len, doc, results, comp, t_load, peak_bytes
             F.S_REL: "relic rows (%d B each)" % F.row_stride("REL"),
         F.S_EV: "event rows (%d B each)" % F.row_stride("EV"),
         F.S_POT: "potion rows (%d B each)" % F.row_stride("POT"),
+        F.S_EVND: "event-node rows (%d B each)" % F.row_stride("EVND"),
             F.S_ROOT: "root pointers", F.S_IDX: "8-byte id entries"}
     for sec, off, size, cnt in results["full"]["sections"]:
         if not size:
@@ -1386,6 +1390,9 @@ def main():
             "encounters": {"count": len(enc.rows["ENCT"]), "stride": F.row_stride("ENCT")},
             "relics": {"count": len(enc.rows["REL"]), "stride": F.row_stride("REL")},
         "events": {"count": len(enc.rows.get("EV", [])), "stride": F.row_stride("EV")},
+        # §278: 事件段表。`rdcf_verify` 的 STRIDED 清单按 schema 名对齐，漏一条它会自己报红。
+        "event_nodes": {"count": len(enc.rows.get("EVND", [])),
+                        "stride": F.row_stride("EVND")},
         "potions": {"count": len(enc.rows.get("POT", [])), "stride": F.row_stride("POT")},
             "roots": {"count": len(enc.root_entries)},
             "id_index": {"count": len(enc.idx)},
