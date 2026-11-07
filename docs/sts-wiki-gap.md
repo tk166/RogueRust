@@ -282,6 +282,23 @@ wiki 常见而我们**没有**的：
 | 不做 | 13 | 无尽模式 `Blight` 桶 | `accursed` `hauntings` `muzzle` |
 | 其他角色 | ~15 | `Watcher`/`Silent`/`Defect` 专属 | `pure_water` `cracked_core` `ninja_scroll` `emotion_chip` |
 
+### D.3 遭遇：Act 1 的池子与还缺的三件（§275）
+
+Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有一个 `Weak`（既有简化）。
+§275 补了"只用现有怪物"的三场（`3 Louses` / `2 Fungi Beasts` / `Blue Slaver` solo），
+现在 `Weak` 池 12 条、遭遇 38 个。
+
+还缺三件，各缺一块**别的东西**（不是"抄一条遭遇"）：
+
+| 缺的 | 缺什么载体 |
+|---|---|
+| `Swarm of Slimes`（3 spike S + 2 acid S） | **第 5 个敌人槽**：`MAX_ENEMY_SLOTS = 4`，而观察向量/页面偏移/存档都按它排布 |
+| Large Slime（Spike L / Acid L） | **L 系史莱姆怪物**（只有 M/S 两种） |
+| Exordium Thugs / Wildlife | **动态组合规则**（"First enemy: Louse 或 Medium Slime…"），我们的遭遇是静态列表 |
+
+⚠️ 五个**精英**遭遇（Lagavulin / Book of Stabbing / Slavers / Nemesis / Reptomancer）
+**早就在内容里**且各有具名运行时判据 —— 旧文档说"缺这五个"是过期信息（§275.1）。
+
 ### G. ★ 基础值偏差：§191 修掉了 8 条，剩 3 条是写明了的简化
 
 §190 补 A 数值时发现"有招式的基础值就和 wiki 不一致"。**这些不能加升档变体**（在错的地基上加层

@@ -85,7 +85,7 @@ INV_COUNTS = {
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
     # §258: +1 (`enc_two_louses` -- the green louse was unreachable).
-    "encounters": 35,
+    "encounters": 38,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -1303,6 +1303,13 @@ INV_ELITE_POOL = {
     "enc_reptomancer": ["reptomancer", "dagger", "dagger"],
     # §201: the solo Looter (wiki: an act-1 normal encounter).
     "enc_looter": ["looter"],
+    # §275: act 1's **hard** pool, the three that need no new monsters (wiki.gg `Exordium` and
+    # slayspiredb agree). ⚠️ StS rolls each Louse's colour independently; static content can only
+    # write one mix, so `3 Louses` is 1 green + 2 red (a **documented** deviation).
+    # ⛔ `Swarm of Slimes` needs 5 enemies and `MAX_ENEMY_SLOTS` is 4 -- not in this batch.
+    "enc_three_louses": ["louse_green", "louse_red", "louse_red"],
+    "enc_two_fungi_beasts": ["fungi_beast", "fungi_beast"],
+    "enc_blue_slaver": ["blue_slaver"],
 }
 
 # inv:§4.3 -- the boss pool. `inv:§4.3` says the three act-1 bosses are picked equiprobably; this
@@ -1317,7 +1324,10 @@ INV_ACT_TABLES = {
              # §201: the Looter is an act-1 normal encounter.
              "enc_looter",
              # §258: "2 Red or Green Louses" -- the only place the green louse is reachable.
-             "enc_two_louses"],
+             "enc_two_louses",
+             # §275: act 1's hard pool —— the three that need no new monsters.
+             # （⛔ `Swarm of Slimes` 要 5 个敌人槽，`MAX_ENEMY_SLOTS` 是 4 ⇒ 不做，见 §275 文档。）
+             "enc_three_louses", "enc_two_fungi_beasts", "enc_blue_slaver"],
     "Weak2": ["enc_chosen", "enc_shelled_parasite"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
