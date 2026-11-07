@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 89 |
-| 3 | 缺（wiki 有、内容没有） | 104 |
+| 2 | 内容里的遗物 | 100 |
+| 3 | 缺（wiki 有、内容没有） | 93 |
 
 ## Starter（4）
 
@@ -35,25 +35,25 @@
 | 有 | `blood_vial` | Blood Vial | Shared | At the start of each combat, heal 2 HP. |
 | 有 | `bronze_scales` | Bronze Scales | Shared | Start each combat with 3 $Thorns. |
 | 有 | `centennial_puzzle` | Centennial Puzzle | Shared | The first time you lose HP each combat, draw 3 cards. |
-| 缺 | `ceramic_fish` | Ceramic Fish | Shared | Whenever you add a card to your deck, gain 9 [[Gold]]. |
+| 有 | `ceramic_fish` | Ceramic Fish | Shared | Whenever you add a card to your deck, gain 9 [[Gold]]. |
 | 缺 | `damaru` | Damaru | Watcher | At the start of your turn, gain 1 $Mantra. |
 | 缺 | `data_disk` | Data Disk | Defect | Start each combat with 1 $Focus. |
 | 有 | `dream_catcher` | Dream Catcher | Shared | Whenever you Rest, you may add a card to your deck. |
 | 有 | `happy_flower` | Happy Flower | Shared | Every 3 turns, gain 1 $Energy. |
 | 缺 | `juzu_bracelet` | Juzu Bracelet | Shared | Regular enemy combats are no longer encountered in ? rooms. |
 | 有 | `lantern` | Lantern | Shared | Gain 1 $Energy on the first turn of each combat. |
-| 缺 | `maw_bank` | Maw Bank | Shared | Whenever you climb a floor, gain 12 [[Gold]]. No longer works when you spend any [[Gold]] at a shop. |
+| 有 | `maw_bank` | Maw Bank | Shared | Whenever you climb a floor, gain 12 [[Gold]]. No longer works when you spend any [[Gold]] at a shop. |
 | 缺 | `meal_ticket` | Meal Ticket | Shared | Whenever you enter a shop, heal 15 HP. |
 | 有 | `nunchaku` | Nunchaku | Shared | Every time you play 10 {{QueryLink\|Cards\|type:Attack\|Attacks}}, gain 1 $Energy. |
 | 有 | `oddly_smooth_stone` | Oddly Smooth Stone | Shared | At the start of each combat, gain 1 $Dexterity. |
-| 缺 | `omamori` | Omamori | Shared | Negate the next 2 {{QueryLink\|Cards\|type:Curse\|Curses}} you obtain. |
+| 有 | `omamori` | Omamori | Shared | Negate the next 2 {{QueryLink\|Cards\|type:Curse\|Curses}} you obtain. |
 | 有 | `orichalcum` | Orichalcum | Shared | If you end your turn without $Block, gain 6 $Block. |
 | 有 | `pen_nib` | Pen Nib | Shared | Every 10th {{QueryLink\|Cards\|type:Attack\|Attack}} you play deals double damage. |
 | 有 | `potion_belt` | Potion Belt | Shared | Upon pickup, gain 2 [[Potions\|Potion]] slots. |
 | 有 | `preserved_insect` | Preserved Insect | Shared | Enemies in Elite combats have 25% less HP. |
 | 有 | `red_skull` | Red Skull | Ironclad | While your HP is at or below 50%, you have 3 additional $Strength. |
 | 有 | `regal_pillow` | Regal Pillow | Shared | Whenever you Rest, heal an additional 15 HP. |
-| 缺 | `smiling_mask` | Smiling Mask | Shared | The merchant's card removal service now always costs 50 [[Gold]]. |
+| 有 | `smiling_mask` | Smiling Mask | Shared | The merchant's card removal service now always costs 50 [[Gold]]. |
 | 有 | `snecko_skull` | Snecko Skull | Silent | Whenever you apply $Poison, apply an additional 1 $Poison. |
 | 有 | `strawberry` | Strawberry | Shared | Upon pickup, raise your Max HP by 7. |
 | 有 | `the_boot` | The Boot | Shared | Whenever you would deal 4 or less unblocked {{QueryLink\|Cards\|type:Attack\|Attack}} damage, increase it to 5. |
@@ -71,10 +71,10 @@
 | 缺 | `bottled_flame` | Bottled Flame | Shared | Upon pickup, choose an {{QueryLink\|Cards\|type:Attack\|Attack}} card. <br>At the start of each combat, this card will be in your hand. |
 | 缺 | `bottled_lightning` | Bottled Lightning | Shared | Upon pickup, choose a {{QueryLink\|Cards\|type:Skill\|Skill}} card. <br>At the start of each combat, this card will be in your hand. |
 | 缺 | `bottled_tornado` | Bottled Tornado | Shared | Upon pickup, choose a {{QueryLink\|Cards\|type:Power\|Power}} card. <br>At the start of each combat, this card will be in your hand. |
-| 缺 | `darkstone_periapt` | Darkstone Periapt | Shared | Whenever you obtain a {{QueryLink\|Cards\|type:Curse\|Curse}}, increase your Max HP by 6 |
+| 有 | `darkstone_periapt` | Darkstone Periapt | Shared | Whenever you obtain a {{QueryLink\|Cards\|type:Curse\|Curse}}, increase your Max HP by 6 |
 | 有 | `duality` | Duality | Watcher | Whenever you play an {{QueryLink\|Cards\|type:Attack\|Attack}}, gain 1 temporary $Dexterity. |
 | 有 | `eternal_feather` | Eternal Feather | Shared | For every 5 cards in your deck, heal 3 HP whenever you enter a Rest Site. |
-| 缺 | `frozen_egg` | Frozen Egg | Shared | Whenever you add a {{QueryLink\|Cards\|type:Power\|Power}} card to your deck, $Upgrade it. |
+| 有 | `frozen_egg` | Frozen Egg | Shared | Whenever you add a {{QueryLink\|Cards\|type:Power\|Power}} card to your deck, $Upgrade it. |
 | 缺 | `gold_plated_cables` | Gold-Plated Cables | Defect | Your rightmost $Orb triggers its passive an additional time. |
 | 有 | `gremlin_horn` | Gremlin Horn | Shared | Whenever an enemy dies, gain 1 $Energy and draw 1 card. |
 | 有 | `horn_cleat` | Horn Cleat | Shared | At the start of your 2nd turn, gain 14 $Block. |
@@ -84,7 +84,7 @@
 | 缺 | `matryoshka` | Matryoshka | Shared | The next 2 non-boss chests you open contain 2 Relics. |
 | 有 | `meat_on_the_bone` | Meat on the Bone | Shared | If your HP is at or below 50% at the end of combat, heal 12 HP. |
 | 有 | `mercury_hourglass` | Mercury Hourglass | Shared | At the start of your turn, deal 3 damage to ALL enemies. |
-| 缺 | `molten_egg` | Molten Egg | Shared | Whenever you add an {{QueryLink\|Cards\|type:Attack\|Attack}} card to your deck, $Upgrade it. |
+| 有 | `molten_egg` | Molten Egg | Shared | Whenever you add an {{QueryLink\|Cards\|type:Attack\|Attack}} card to your deck, $Upgrade it. |
 | 缺 | `mummified_hand` | Mummified Hand | Shared | Whenever you play a {{QueryLink\|Cards\|type:Power\|Power}} card, a random card in your hand costs 0 that turn. |
 | 缺 | `ninja_scroll` | Ninja Scroll | Silent | At the start each combat, add 3 {{C\|Shiv\|Shivs}} into your hand. |
 | 有 | `ornamental_fan` | Ornamental Fan | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 4 $Block. |
@@ -101,7 +101,7 @@
 | 缺 | `symbiotic_virus` | Symbiotic Virus | Defect | At the start of each combat, $Channel 1 $Dark. |
 | 缺 | `teardrop_locket` | Teardrop Locket | Watcher | Start each combat in $Calm. |
 | 缺 | `the_courier` | The Courier | Shared | The Merchant restocks [[Cards\|cards]], [[Relics\|relics]], and [[Potions\|potions]]. All prices are reduced by 20%. |
-| 缺 | `toxic_egg` | Toxic Egg | Shared | Whenever you add a {{QueryLink\|Cards\|type:Skill\|Skill}} card to your deck, $Upgrade it. |
+| 有 | `toxic_egg` | Toxic Egg | Shared | Whenever you add a {{QueryLink\|Cards\|type:Skill\|Skill}} card to your deck, $Upgrade it. |
 | 有 | `white_beast_statue` | White Beast Statue | Shared | [[Potions]] always appear in combat rewards. |
 
 ## Rare（34）
@@ -154,7 +154,7 @@
 | 缺 | `calling_bell` | Calling Bell | Shared | Upon pickup, obtain a unique {{QueryLink\|Cards\|type:Curse\|Curse}} and 3 relics. |
 | 有 | `coffee_dripper` | Coffee Dripper | Shared | Gain 1 $Energy at the start of your turn. You can no longer Rest at Rest Sites. |
 | 缺 | `cursed_key` | Cursed Key | Shared | Gain 1 $Energy at the start of your turn. Whenever you open a non-Boss chest, obtain a {{QueryLink\|Cards\|type:Curse\|Curse}}. |
-| 缺 | `ectoplasm` | Ectoplasm | Shared | Gain 1 $Energy at the start of your turn. You can no longer gain [[Gold]]. |
+| 有 | `ectoplasm` | Ectoplasm | Shared | Gain 1 $Energy at the start of your turn. You can no longer gain [[Gold]]. |
 | 缺 | `empty_cage` | Empty Cage | Shared | Upon pickup, remove 2 cards from your deck. |
 | 缺 | `frozen_core` | Frozen Core | Defect | Replaces {{R\|Cracked Core}}. If you end your turn with any empty $Orb slots, $Channel 1 $Frost. |
 | 有 | `fusion_hammer` | Fusion Hammer | Shared | Gain 1 $Energy at the start of your turn. You can no longer Smith at Rest Sites. |
@@ -192,7 +192,7 @@
 | 缺 | `lees_waffle` | Lee's Waffle | Shared | Upon pickup, raise your Max HP by 7 and heal all of your HP. |
 | 缺 | `medical_kit` | Medical Kit | Shared | $Unplayable {{QueryLink\|Cards\|type:Status\|Status}} cards can now be played. Whenever you play a {{QueryLink\|Cards\|type:Status\|Status}} card, $Exhaust it. |
 | 缺 | `melange` | Melange | Watcher | Whenever you shuffle your draw pile, $Scry 3. |
-| 缺 | `membership_card` | Membership Card | Shared | 50% discount on all products! |
+| 有 | `membership_card` | Membership Card | Shared | 50% discount on all products! |
 | 缺 | `orange_pellets` | Orange Pellets | Shared | Whenever you play a {{QueryLink\|Cards\|type:Power\|Power}}, {{QueryLink\|Cards\|type:Attack\|Attack}}, and {{QueryLink\|Cards\|type:Skill\|Skill}} in the same turn, remove all of your [[Debuffs\|debuffs]]. |
 | 缺 | `orrery` | Orrery | Shared | Upon pickup, choose and add 5 cards to your deck. |
 | 缺 | `prismatic_shard` | Prismatic Shard | Shared | Combat reward screens now contain {{QueryLink\|Cards\|color:Colorless\|Colorless}} cards and cards from other colors. |
@@ -207,7 +207,7 @@
 
 | 状态 | id | 名称 | 归属 | wiki 描述 |
 |---|---|---|---|---|
-| 缺 | `bloody_idol` | Bloody Idol | Shared | Whenever you gain [[Gold]], heal 5 HP. |
+| 有 | `bloody_idol` | Bloody Idol | Shared | Whenever you gain [[Gold]], heal 5 HP. |
 | 缺 | `cultist_headpiece` | Cultist Headpiece | Shared | You feel more talkative. |
 | 缺 | `enchiridion` | Enchiridion | Shared | At the start of each combat, add a random {{QueryLink\|Cards\|type:Power\|Power}} card into your hand. It costs 0 for that turn. |
 | 缺 | `face_of_cleric` | Face of Cleric | Shared | At the end of combat, raise your Max HP by 1. |

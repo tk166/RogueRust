@@ -8358,6 +8358,32 @@
         }
       ],
       "Triggers": []
+    },
+    {
+      "Id": "standard.ectoplasm",
+      "PackageId": "sts",
+      "NameKey": "Ectoplasm",
+      "DescriptionKey": "Gain 1 Energy at the start of your turn. You can no longer gain Gold.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartEnergy",
+          "Operation": "AddPerStack",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": []
     }
   ],
   "Cards": [
@@ -58414,6 +58440,13 @@
       "Rarity": "Common"
     },
     {
+      "Id": "bloody_idol",
+      "DisplayName": "Bloody Idol",
+      "Rarity": "Event",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "brimstone",
       "DisplayName": "Brimstone",
       "Rarity": "Shop",
@@ -58463,6 +58496,13 @@
       "CombatRules": null
     },
     {
+      "Id": "ceramic_fish",
+      "DisplayName": "Ceramic Fish",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "champion_belt",
       "DisplayName": "Champion Belt",
       "Rarity": "Rare",
@@ -58498,6 +58538,13 @@
       "CombatRules": null
     },
     {
+      "Id": "darkstone_periapt",
+      "DisplayName": "Darkstone Periapt",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "dream_catcher",
       "DisplayName": "Dream Catcher",
       "Rarity": "Common",
@@ -58519,6 +58566,13 @@
       "CombatRules": null
     },
     {
+      "Id": "ectoplasm",
+      "DisplayName": "Ectoplasm",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "eternal_feather",
       "DisplayName": "Eternal Feather",
       "RunPrograms": null,
@@ -58529,6 +58583,13 @@
       "Id": "fossilized_helix",
       "DisplayName": "Fossilized Helix",
       "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "frozen_egg",
+      "DisplayName": "Frozen Egg",
+      "Rarity": "Uncommon",
       "RunPrograms": null,
       "CombatRules": null
     },
@@ -58659,6 +58720,13 @@
       "CombatRules": null
     },
     {
+      "Id": "maw_bank",
+      "DisplayName": "Maw Bank",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "meat_on_the_bone",
       "DisplayName": "Meat on the Bone",
       "RunPrograms": null,
@@ -58666,8 +58734,22 @@
       "Rarity": "Uncommon"
     },
     {
+      "Id": "membership_card",
+      "DisplayName": "Membership Card",
+      "Rarity": "Shop",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "mercury_hourglass",
       "DisplayName": "Mercury Hourglass",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "molten_egg",
+      "DisplayName": "Molten Egg",
       "Rarity": "Uncommon",
       "RunPrograms": null,
       "CombatRules": null
@@ -58699,6 +58781,13 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"
+    },
+    {
+      "Id": "omamori",
+      "DisplayName": "Omamori",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "orichalcum",
@@ -58883,6 +58972,13 @@
       "CombatRules": null
     },
     {
+      "Id": "smiling_mask",
+      "DisplayName": "Smiling Mask",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "snecko_skull",
       "DisplayName": "Snecko Skull",
       "Rarity": "Common",
@@ -58928,6 +59024,13 @@
       "Id": "torii",
       "DisplayName": "Torii",
       "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "toxic_egg",
+      "DisplayName": "Toxic Egg",
+      "Rarity": "Uncommon",
       "RunPrograms": null,
       "CombatRules": null
     },

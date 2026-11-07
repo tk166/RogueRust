@@ -746,6 +746,8 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // (`KindMask` decides that on the run side).
             | "standard.slavers_collar"
             | "standard.busted_crown"
+            // §270: `ectoplasm`'s energy half (its "no more gold" half is run-layer).
+            | "standard.ectoplasm"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

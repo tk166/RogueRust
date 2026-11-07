@@ -20,7 +20,7 @@
 //! 并且**故意**不用任何参考实现没有的行名。
 
 use crate::map::NodeKind;
-use crate::state::{Pending, RunState};
+use crate::state::{Pending, PoolCard, RunState};
 use crate::streams::RunStream;
 use rd_core::writer::TextWriter;
 
@@ -51,6 +51,16 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
     writer
         .str("rarity_offset=")
         .i32(state.rarity_offset())
+        .str("\n");
+    // §270：两件遗物各自的**计数器**。不进指纹的话，"`omamori` 还剩 1 次"与"还剩 2 次"、
+    // "`maw_bank` 已经失效"与"还有效"都会哈希相同 —— 而那正是两条规则的**全部**区别。
+    writer
+        .str("omamori=")
+        .u32(u32::from(state.omamori_charges()))
+        .str("\n");
+    writer
+        .str("maw_bank=")
+        .u32(u32::from(state.maw_bank_broken()))
         .str("\n");
     writer.str("boss_beaten=").u32(u32::from(state.boss_beaten())).str("\n");
     writer.str("pending=").u32(u32::from(pending_code(state.pending()))).str("\n");
@@ -262,7 +272,7 @@ mod tests {
         probe.adjust_health(-1);
         probes.push(("health", probe));
         let mut probe = run();
-        probe.push_card("anger").expect("deck room");
+        probe.push_card(PoolCard::plain("anger")).expect("deck room");
         probes.push(("deck", probe));
         let mut probe = run();
         probe.push_relic("anchor").expect("relic room");

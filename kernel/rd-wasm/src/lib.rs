@@ -394,9 +394,14 @@ static mut OBS: [i32; OBS_LEN] = [0; OBS_LEN];
 /// Scratch for error / card-name bytes handed across the boundary.
 static mut SCRATCH: [u8; 1024] = [0; 1024];
 
-/// Capacity of the replay-script buffer. A three-act run's script is a few KB; 24 KiB is ~10x
-/// headroom, and `rd_run_script_fill` refuses rather than truncating if it is ever not enough.
-pub const MAX_SCRIPT: usize = 24 * 1024;
+/// Capacity of the replay-script buffer. `rd_run_script_fill` refuses rather than truncating if it
+/// is ever not enough.
+///
+/// §270：**实测 25,983 字节**（`browser_test` 那条三幕回放），旧值 24 KiB 已经不成立 ——
+/// 上一版的注释写着"~10x headroom"，那是脚本还只有 2.4 KB 的时候量的。抬到 48 KiB（≈1.9x）。
+/// ⚠️ 这条常量**随内容增长而变**，所以每次"内容变大之后"都要用 `rd_run_script_capacity`
+/// 的实际用法验证一次，而不是相信注释里的倍数。
+pub const MAX_SCRIPT: usize = 48 * 1024;
 
 /// The **replay script** buffer (§164). Its own buffer for the same reason as `ARCHIVE`: a script
 /// grows with the run (a 40-step walk measures ~1.6 KB, a three-act run several KB) and `SCRATCH`

@@ -480,6 +480,30 @@ fn card_pool(content: &'static Content<'static>) -> Vec<&'static str> {
     out
 }
 
+/// §270：一张牌的**类型** —— 读 `Content::card_tag_bits`（"tag → 位图"的唯一映射，
+/// `exec::CARD_HAS_TAG_*` 用的也是它），所以这里**不是**第二份类型词表。
+///
+/// ⚠️ 顺序即优先级：一张牌同时带 `attack` 与 `skill` 时归 Attack（内容里不存在这样的牌；
+/// 真有的话"哪个蛋管它"就必须是一次显式决定，而不是靠 tag 表的插入顺序）。
+fn card_kind(content: &'static Content<'static>, id: &str) -> rd_run::state::CardKind {
+    use rd_core::exec;
+    use rd_run::state::CardKind;
+    let bits = content.card_tag_bits(id);
+    if bits & exec::CARD_HAS_TAG_ATTACK != 0 {
+        CardKind::Attack
+    } else if bits & exec::CARD_HAS_TAG_SKILL != 0 {
+        CardKind::Skill
+    } else if bits & exec::CARD_HAS_TAG_POWER != 0 {
+        CardKind::Power
+    } else if bits & exec::CARD_HAS_TAG_CURSE != 0 {
+        CardKind::Curse
+    } else if bits & exec::CARD_HAS_TAG_STATUS != 0 {
+        CardKind::Status
+    } else {
+        CardKind::Other
+    }
+}
+
 /// The cards a **reward screen** may offer.
 ///
 /// `inv:§3.5`: Act 1 never offers an upgraded card (upgrade probability 0%), so the `x+` rows are
@@ -509,9 +533,37 @@ fn full_pool(
                 .ok_or_else(|| std::format!("卡 `{id}` 的 Rarity `{name}` 不认识"))?,
             None => return Err(std::format!("卡 `{id}` 没有 Rarity")),
         };
-        pool.push(rd_run::state::PoolCard { id, rarity });
+        pool.push(rd_run::state::PoolCard {
+            id,
+            rarity,
+            // §270：类型（三个蛋与两条诅咒规则要它）与 `+` 行（三个蛋要它）。
+            // ⚠️ 这里只填 id/rarity，`kind`/`upgraded` 在下面第二趟补 —— 因为 `+` 行要在
+            // **整个池子**里找，而池子正是这一趟在攒的。
+            kind: rd_run::state::CardKind::Other,
+            upgraded: None,
+        });
+    }
+    // 第二趟：把 `kind` 与 `upgraded` 填上。`upgraded` 走 `rd_run::state::upgraded_id` ——
+    // A12（奖励升级）用的就是它，所以"什么是 `+` 行"**只有一处**答案。
+    for index in 0..pool.len() {
+        let id = pool[index].id;
+        pool[index].kind = card_kind(content, id);
+        pool[index].upgraded = rd_run::state::upgraded_id(&pool, id);
     }
     Ok(pool)
+}
+
+/// §270：**一张**牌，按 id —— `take_card` / `buy_card` 要把"这一屏那一张"交给运行层
+/// （三个蛋与两条诅咒规则要看类型）。走 `full_pool` 的同一个构造点，所以类型与 `+` 行的解析
+/// 只有一处。
+fn pool_card_by_id(
+    content: &'static Content<'static>,
+    id: &str,
+) -> Result<rd_run::state::PoolCard<'static>, String> {
+    full_pool(content)?
+        .into_iter()
+        .find(|card| card.id == id)
+        .ok_or_else(|| std::format!("卡 `{id}` 不在池子里"))
 }
 
 /// The reward pool: the same cards minus the upgraded rows (`inv:§3.5`: Act 1 never offers one).
@@ -1331,7 +1383,11 @@ pub unsafe extern "C" fn rd_run_shop_card_id_into(slot: i32, ptr: *mut u8) -> i3
 /// The price of shop card `slot`; `-1` once sold.
 #[no_mangle]
 pub extern "C" fn rd_run_shop_card_price(slot: i32) -> i32 {
-    shop_offer(run_slot().as_ref(), slot, true).map_or(-1, |offer| offer.price)
+    // §270：显示价 = `shop_price(挂牌价)`，`buy_card` 扣的也是它 —— 两处同一个函数。
+    let session = run_slot();
+    let session = session.as_ref();
+    shop_offer(session, slot, true)
+        .map_or(-1, |offer| session.map_or(offer.price, |s| s.state.shop_price(offer.price)))
 }
 
 /// How many relics the merchant is selling.
@@ -1362,7 +1418,10 @@ pub unsafe extern "C" fn rd_run_shop_relic_id_into(slot: i32, ptr: *mut u8) -> i
 /// The price of shop relic `slot`; `-1` once sold.
 #[no_mangle]
 pub extern "C" fn rd_run_shop_relic_price(slot: i32) -> i32 {
-    shop_offer(run_slot().as_ref(), slot, false).map_or(-1, |offer| offer.price)
+    let session = run_slot();
+    let session = session.as_ref();
+    shop_offer(session, slot, false)
+        .map_or(-1, |offer| session.map_or(offer.price, |s| s.state.shop_price(offer.price)))
 }
 
 fn shop_offer(
@@ -1399,7 +1458,15 @@ pub extern "C" fn rd_run_buy_card(slot: i32) -> i32 {
     if slot < 0 {
         return -1;
     }
-    let outcome = session.state.buy_card(slot as usize).map(|_| 0i32);
+    let content = content();
+    let Some(id) = session.state.shop().cards().get(slot as usize).map(|o| o.id) else {
+        return -1;
+    };
+    let card = match pool_card_by_id(content, id.as_str()) {
+        Ok(card) => card,
+        Err(_) => return -1,
+    };
+    let outcome = session.state.buy_card(slot as usize, card).map(|_| 0i32);
     finish(session, outcome)
 }
 
@@ -1990,7 +2057,14 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                     // 一个认不出的稀有度会让"这张牌该不该在池子里"变成一个猜 —— 拒绝。
                     return refuse(&std::format!("`{id}` 的稀有度认不出来"));
                 };
-                pool.push(rd_run::state::PoolCard { id, rarity });
+                // §270：药水选出来的牌不进牌组（是"给一张手牌"），所以类型/`+` 行都用不到 ——
+                // 但字段仍要填，而且**显式**填 `Other`/`None` 比 `..Default` 更诚实。
+                pool.push(rd_run::state::PoolCard {
+                    id,
+                    rarity,
+                    kind: rd_run::state::CardKind::Other,
+                    upgraded: None,
+                });
             }
             // 三张是**规则**，不是上限：少于三张时这瓶药给不出它承诺的东西。
             if pool.len() < MAX_OFFERED {
@@ -3169,7 +3243,15 @@ pub extern "C" fn rd_run_take_card(slot: i32) -> i32 {
     if slot < 0 {
         return -1;
     }
-    let outcome = session.state.take_card(slot as usize).map(|_| 0i32);
+    let content = content();
+    let Some(id) = session.state.reward().cards().get(slot as usize).copied() else {
+        return -1;
+    };
+    let card = match pool_card_by_id(content, id.as_str()) {
+        Ok(card) => card,
+        Err(_) => return -1,
+    };
+    let outcome = session.state.take_card(slot as usize, card).map(|_| 0i32);
     finish(session, outcome)
 }
 
@@ -5883,7 +5965,7 @@ mod tests {
         {
             let session = run_slot().as_mut().expect("a run");
             for _ in 0..rd_run::state::MAX_RUN_DECK.saturating_sub(session.state.deck().len()) {
-                let _ = session.state.push_card("strike");
+                let _ = session.state.push_card(rd_run::state::PoolCard::plain("strike"));
             }
         }
         let big = rd_run_archive_fill();

@@ -46,7 +46,11 @@ pub const MAGIC: &str = "RDA1";
 /// 加字段就**必须**抬版本：旧读法会把新字节当成下一个字段的开头，于是"存档能读、
 /// 但读出来是另一局游戏" —— 那是最坏的一种兼容。抬高之后旧存档是 `ArchiveError::Version`，
 /// 响亮且可解释。
-const VERSION: u8 = 3;
+/// §270：3 → 4（`omamori_charges` + `maw_bank_broken`）。
+///
+/// 为什么**必须**抬版本而不是"在末尾多写两个字节就行"：旧存档读到末尾会缺字段，
+/// 而"缺字段"与"字段是 0"在字节上无法区分 —— 那正是版本号要回答的问题。
+const VERSION: u8 = 4;
 /// payload 缓冲。实测一局约 300–900 B；4 KB 是"内容翻倍也不会撞上"的余量。
 pub const MAX_PAYLOAD: usize = 4096;
 /// 一行文本的缓冲：base64 是 4/3，RLE 最坏 2×（每个字节都是 0xFF 时）。
@@ -522,6 +526,10 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
         | (u8::from(state.ruby_key) << 2);
     writer.byte(flags)?;
     writer.byte(pending_to_u8(state.pending))?;
+    // §270：两件遗物的计数器。`omamori` 是 0..=2 的计数、`maw_bank` 是布尔 —— 都单独一个字节，
+    // 因为"读到 3 次"必须是**存档坏了**（见下面 restore 的那条判据）。
+    writer.byte(state.omamori_charges)?;
+    writer.byte(u8::from(state.maw_bank_broken))?;
 
     writer.byte(state.deck_len)?;
     for card in state.deck.iter().take(state.deck_len as usize) {
@@ -627,6 +635,9 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     let act = reader.byte()?;
     let flags = reader.byte()?;
     let pending = pending_from_u8(reader.byte()?)?;
+    // §270
+    let omamori_charges = reader.byte()?;
+    let maw_bank_broken = reader.byte()?;
 
     let mut deck = [RunId::EMPTY; MAX_RUN_DECK];
     let deck_len = reader.byte()? as usize;
@@ -757,6 +768,12 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     }
     restored.girya_lifts = girya_lifts;
     restored.ruby_key = flags & 0b100 != 0;
+    // §270：容量是语义 —— `omamori` 只有 2 次，读到 3 是**存档坏了**，不是"夹到 2"。
+    if omamori_charges > crate::state::OMAMORI_CHARGES {
+        return Err(ArchiveError::BadField("omamori_charges"));
+    }
+    restored.omamori_charges = omamori_charges;
+    restored.maw_bank_broken = maw_bank_broken != 0;
     restored.deck = deck;
     restored.deck_len = deck_len as u8;
     restored.relics = relics;
@@ -952,7 +969,7 @@ mod tests {
     fn a_full_deck_archive_is_bigger_than_the_generic_scratch() {
         let mut run = RunState::new_with_ascension(7, 80, 99, &[], 0).expect("a run");
         for _ in 0..MAX_RUN_DECK {
-            run.push_card("twin_strike").expect("deck room");
+            run.push_card(crate::state::PoolCard::plain("twin_strike")).expect("deck room");
         }
         let mut out = [0u8; MAX_ARCHIVE];
         let len = write(&run, CONTENT, &mut out).expect("write");
