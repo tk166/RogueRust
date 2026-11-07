@@ -17952,3 +17952,70 @@ carries over*）。本内核的表达：**能量池 `max = None`**，上限的�
 遗物 **30 → 35 件**；`rd-core` 788 / `rd-run` 120 / `rd-wasm` 111；内容 79 状态 / 35 遗物；
 四条对拍全过（`FIGHT_DIFF 182/182`、`CARD_DIFF 62/62`、`CARD_MULTI 124/124`、`ENEMY_DIFF 394/394`）；
 `ACT1_SLICE PASS` / `SOAK_TEST PASS`，再 21/21。
+
+---
+
+## §262 遗物第三批：**"每第 N 张某类型牌"**七件（零内核改动 + 三个地雷）
+
+### 262.1 七件共用一个机制
+
+| 遗物 | 触发 | 效果 |
+|---|---|---|
+| `kunai` | 第 3 张 Attack | +1 敏捷 |
+| `shuriken` | 第 3 张 Attack | +1 力量 |
+| `ornamental_fan` | 第 3 张 Attack | +4 格挡 |
+| `letter_opener` | 第 3 张 Skill | 对所有敌人 5 伤害 |
+| `nunchaku` | 第 10 张 Attack | +1 能量 |
+| `ink_bottle` | 第 10 张**任何**牌 | 抽 1 张 |
+| `pen_nib` | 第 10 张 Attack | **那次攻击**双倍伤害 |
+
+零内核改动，因为内核早就给了三样东西：`CardPlayed` 触发器（派发给出牌者本人，`rage`/`enrage`
+早就在用）、`event.bool { FieldKey: "card.hasTag.attack" }`（宿主派发时算好卡牌 tag 位）、
+以及 `remainder` + `combatantCounter`（模 N 计数器）。`pen_nib` 的翻倍靠内容里的
+`PassiveModifiers`（`DamageDealt` × `ScalePercent` 200，`Priority` 250 —— 必须排在力量的加法之后）。
+
+### 262.2 ★ 三个地雷（都是这次踩出来的）
+
+**(1) `conditional.Else` 里放请求节点会 `Exec(Modifier)`。**
+用原子量记录 `Modifier` 的**行号**才定位到：真正炸的是 `apply_one_status` 的受理不变量
+（"三轴负数一律 fault"）—— 而那条负数来自 **`applyStatus(-1)` 想"摘掉自己"**。
+两件事叠在一起：
+* 摘层数必须用 `node.modifyStatusStacks`（`Delta: -1`），`applyStatus` 不接受负数；
+* 嵌套 `conditional`（`cond(gate, seq(cond(...), bump))`）在假分支上会提前退帧，同一形状
+  平铺成两条顶层 `conditional` 就正常（§260 的 `incense_burner` 一直是这么写的）。
+
+⇒ 内容一律**不用 `Else`**，并在 `sts_content_check.py` 里加了 `[9] conditional.Else` 守卫
+（这条是**内核债**的挡板：要解锁 `Else`，先修续延并加"嵌套 conditional 返回后兄弟节点仍能派发"
+的判据，那时删掉这条检查）。
+
+**(2) "命中后清零"会让周期漂。**
+`pen_nib` 的**挂**在第 9 张、**吃**在第 10 张，两个时点不同。若命中即清零，下一轮变成
+"第 19 张挂"⇒ 被翻倍的是第 19 张，每轮漂一位。改成**不清零、一直累加、模 N 命中**：
+命中点 `N-1, 2N-1, 3N-1…`，对任何 N 都严格是"每第 N 张"。
+
+**(3) `PlayRequest` 的 `target = None` ⇒ 伤害静默不发生。**
+`strike` 的 `dealDamage(sel.target)` 解析不出人，一点伤害都没有，**也不报错**。
+判据只看"格挡/状态/手牌"完全看不出来 —— 是 `pen_nib` 的"这一击打了几点"抓到的。
+（同一批里 `letter_opener` 用 `sel.allEnemies`，所以它不受影响：这正说明"只有需要选目标的牌
+才踩得到"。）
+
+### 262.3 判据
+
+| 测试 | 钉住 |
+|---|---|
+| `the_every_nth_card_relics_wire_their_own_carrier`（rd-run） | 七件各挂自己的载体、1 层（抄邻居 id 只有逐条比才看得出） |
+| `the_every_nth_card_relics_count_the_right_kind_of_card`（rd-wasm） | **真的打牌**并排空队列：Kunai 1/2 张不给、3 张给 1；Shuriken 打 3 张**技能**一点不给（tag 门的反面）；Fan 第 3 张 +4；Letter Opener 第 3 张 5 点；Nunchaku 第 10 张的 +1 抵掉它自己的 1 费；Ink Bottle 第 10 张手牌数**不变**；Pen Nib 第 9 张挂翻倍、第 10 张打 12、第 11 张回 6、且翻倍被那同一击花掉 |
+
+### 262.4 账
+
+遗物 **35 → 42 件**；`rd-core` 788 / `rd-run` 121 / `rd-wasm` 112；内容 87 状态 / 42 遗物；
+四条对拍全过；`ACT1_SLICE PASS` / `SOAK_TEST PASS`，21/21。
+
+### 262.5 能量上限（承 §261，按用户要求补的注释）
+
+`build_session_at_with` 里能量池的 `max = None` 与 `HERO_ENERGY_REFILL` 两处都写明了：
+**"3" 只是标准包的回合补给量，不是能量的固有上限** —— 事件/状态/别的玩法模式会动它
+（某些玩法里回合开始就能有 7 点）。将来要做"真上限"（显示、上限规则、超上限的合法性）时，
+必须从 `TurnConfig::energy_refill` / `turn_start_refill_count` 那一侧派生，**不要**回头给池子塞
+一个 `Some(n)`：那会把"本回合能拿到多少"和"最多能有几"重新混成一个数，并重新引入 §261 的
+"满池加能量静默无效"。

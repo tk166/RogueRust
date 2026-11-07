@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 35 |
-| 3 | 缺（wiki 有、内容没有） | 158 |
+| 2 | 内容里的遗物 | 42 |
+| 3 | 缺（wiki 有、内容没有） | 151 |
 
 ## Starter（4）
 
@@ -44,11 +44,11 @@
 | 有 | `lantern` | Lantern | Shared | Gain 1 $Energy on the first turn of each combat. |
 | 缺 | `maw_bank` | Maw Bank | Shared | Whenever you climb a floor, gain 12 [[Gold]]. No longer works when you spend any [[Gold]] at a shop. |
 | 缺 | `meal_ticket` | Meal Ticket | Shared | Whenever you enter a shop, heal 15 HP. |
-| 缺 | `nunchaku` | Nunchaku | Shared | Every time you play 10 {{QueryLink\|Cards\|type:Attack\|Attacks}}, gain 1 $Energy. |
+| 有 | `nunchaku` | Nunchaku | Shared | Every time you play 10 {{QueryLink\|Cards\|type:Attack\|Attacks}}, gain 1 $Energy. |
 | 有 | `oddly_smooth_stone` | Oddly Smooth Stone | Shared | At the start of each combat, gain 1 $Dexterity. |
 | 缺 | `omamori` | Omamori | Shared | Negate the next 2 {{QueryLink\|Cards\|type:Curse\|Curses}} you obtain. |
 | 有 | `orichalcum` | Orichalcum | Shared | If you end your turn without $Block, gain 6 $Block. |
-| 缺 | `pen_nib` | Pen Nib | Shared | Every 10th {{QueryLink\|Cards\|type:Attack\|Attack}} you play deals double damage. |
+| 有 | `pen_nib` | Pen Nib | Shared | Every 10th {{QueryLink\|Cards\|type:Attack\|Attack}} you play deals double damage. |
 | 有 | `potion_belt` | Potion Belt | Shared | Upon pickup, gain 2 [[Potions\|Potion]] slots. |
 | 缺 | `preserved_insect` | Preserved Insect | Shared | Enemies in Elite combats have 25% less HP. |
 | 缺 | `red_skull` | Red Skull | Ironclad | While your HP is at or below 50%, you have 3 additional $Strength. |
@@ -78,23 +78,23 @@
 | 缺 | `gold_plated_cables` | Gold-Plated Cables | Defect | Your rightmost $Orb triggers its passive an additional time. |
 | 缺 | `gremlin_horn` | Gremlin Horn | Shared | Whenever an enemy dies, gain 1 $Energy and draw 1 card. |
 | 有 | `horn_cleat` | Horn Cleat | Shared | At the start of your 2nd turn, gain 14 $Block. |
-| 缺 | `ink_bottle` | Ink Bottle | Shared | Whenever you play 10 cards, draw 1 card. |
-| 缺 | `kunai` | Kunai | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 1 $Dexterity |
-| 缺 | `letter_opener` | Letter Opener | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Skill\|Skills}} in a single turn, deal 5 damage to ALL enemies. |
+| 有 | `ink_bottle` | Ink Bottle | Shared | Whenever you play 10 cards, draw 1 card. |
+| 有 | `kunai` | Kunai | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 1 $Dexterity |
+| 有 | `letter_opener` | Letter Opener | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Skill\|Skills}} in a single turn, deal 5 damage to ALL enemies. |
 | 缺 | `matryoshka` | Matryoshka | Shared | The next 2 non-boss chests you open contain 2 Relics. |
 | 有 | `meat_on_the_bone` | Meat on the Bone | Shared | If your HP is at or below 50% at the end of combat, heal 12 HP. |
 | 有 | `mercury_hourglass` | Mercury Hourglass | Shared | At the start of your turn, deal 3 damage to ALL enemies. |
 | 缺 | `molten_egg` | Molten Egg | Shared | Whenever you add an {{QueryLink\|Cards\|type:Attack\|Attack}} card to your deck, $Upgrade it. |
 | 缺 | `mummified_hand` | Mummified Hand | Shared | Whenever you play a {{QueryLink\|Cards\|type:Power\|Power}} card, a random card in your hand costs 0 that turn. |
 | 缺 | `ninja_scroll` | Ninja Scroll | Silent | At the start each combat, add 3 {{C\|Shiv\|Shivs}} into your hand. |
-| 缺 | `ornamental_fan` | Ornamental Fan | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 4 $Block. |
+| 有 | `ornamental_fan` | Ornamental Fan | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 4 $Block. |
 | 缺 | `pantograph` | Pantograph | Shared | At the start of Boss combats, heal 25 HP. |
 | 缺 | `paper_krane` | Paper Krane | Silent | Enemies with $Weak deal 40% less damage rather than 25%. |
 | 缺 | `paper_phrog` | Paper Phrog | Ironclad | Enemies with $Vulnerable take 75% more damage rather than 50%. |
 | 有 | `pear` | Pear | Shared | Upon pickup, raise your Max HP by 10. |
 | 缺 | `question_card` | Question Card | Shared | Future card rewards have 1 additional card to choose from. |
 | 缺 | `self_forming_clay` | Self-Forming Clay | Ironclad | Whenever you lose HP, gain 3 $Block next turn. |
-| 缺 | `shuriken` | Shuriken | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 1 $Strength. |
+| 有 | `shuriken` | Shuriken | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 1 $Strength. |
 | 缺 | `singing_bowl` | Singing Bowl | Shared | When adding cards to your deck, you may raise your Max HP by 2 instead. |
 | 缺 | `strike_dummy` | Strike Dummy | Shared | Cards containing \"Strike\" deal 3 additional damage. |
 | 缺 | `sundial` | Sundial | Shared | Every 3 times you shuffle your draw pile, gain 2 $Energy. |

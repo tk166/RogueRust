@@ -108,7 +108,8 @@ INV_COUNTS = {
     # §260: +8 (the eight relic carrier statuses).
     # §261: +4 (`lantern` / `bag_of_preparation` / `ice_cream` / `calipers` -- `du_vu_doll`
     # grants plain Strength, so it needs no carrier).
-    "statuses": 79,
+    # §262: +8 (seven carriers + `double_damage`).
+    "statuses": 87,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1381,6 +1382,17 @@ INV_STATUSES = {
     "standard.bag_of_preparation": [],
     "standard.ice_cream": [],
     "standard.calipers": [],
+    # §262：六条纯触发器 + Pen Nib 的载体 + 翻倍载体（后者带 1 条 `PassiveModifiers`，
+    # 由下面的修饰器表单独核对）。
+    "standard.kunai": [],
+    "standard.shuriken": [],
+    "standard.ornamental_fan": [],
+    "standard.letter_opener": [],
+    "standard.nunchaku": [],
+    "standard.ink_bottle": [],
+    "standard.pen_nib": [],
+    # §262: Pen Nib 的翻倍载体 —— 唯一一条"自己带的修饰器"就在它身上（×200 直接伤害）。
+    "standard.double_damage": [("DamageDealt", "ScalePercent", 200, 250, "Direct")],
     "standard.the_bomb_damage": [],
     "standard.the_bomb": [],
     "standard.sadistic_nature": [],
@@ -3292,6 +3304,10 @@ def check_statuses(doc):
                      # §261
                      "standard.lantern", "standard.bag_of_preparation", "standard.ice_cream",
                      "standard.calipers",
+                     # §262
+                     "standard.kunai", "standard.shuriken", "standard.ornamental_fan",
+                     "standard.letter_opener", "standard.nunchaku", "standard.ink_bottle",
+                     "standard.pen_nib", "standard.double_damage",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3339,6 +3355,15 @@ def check_statuses(doc):
                         # 这两条**故意**没有触发器：规则由内核读标签实现。
                         "standard.ice_cream": [],
                         "standard.calipers": [],
+                        # §262：七条都是 `CardPlayed`；翻倍载体自己也带一条（下一张攻击打完摘掉自己）。
+                        "standard.kunai": ["CardPlayed"],
+                        "standard.shuriken": ["CardPlayed"],
+                        "standard.ornamental_fan": ["CardPlayed"],
+                        "standard.letter_opener": ["CardPlayed"],
+                        "standard.nunchaku": ["CardPlayed"],
+                        "standard.ink_bottle": ["CardPlayed"],
+                        "standard.pen_nib": ["CardPlayed"],
+                        "standard.double_damage": ["CardPlayed"],
                         # §237
                         "standard.juggernaut": ["BlockGained"],
                         "standard.evolve": ["CardsDrawn"],
@@ -3395,6 +3420,47 @@ def check_statuses(doc):
              % facts)
     ok("statuses", "%d rows x (modifiers, turn clock)" % len(INV_STATUSES))
 
+
+def check_conditional_else(doc):
+    """§262 的地雷：`conditional.Else` 里放**请求节点**会 `Exec(Modifier)` 炸掉。
+
+    复现（§262，二分记录）：`conditional(gate, seq(cond, bump))` 失败；
+    `Else = seq()`（空）正常；同一个 `bump` 放在 `Then` 里也正常。
+    症状是 `Exec(Modifier)` —— 现场看起来像"层数写负了"，实际是续延在嵌套 conditional 的
+    假分支上把帧提前退掉了。内核那笔债还没还（`exec.rs` 的 `resume_later` 路径），
+    所以这里**先挡住内容**：本内容一律不用 `Else`。
+
+    内容需要"否则"时，写成平铺的两条 `conditional`（`and(...)` 之类组合条件），或者
+    把不需要的分支留空。要真正解锁 `Else`，先修内核并加一条"嵌套 conditional 返回后兄弟节点
+    仍能派发"的判据 —— 那时删掉这条检查。
+    """
+    print("[9] conditional.Else (kernel debt, §262)")
+
+    def walk(where, node, path):
+        if not isinstance(node, dict):
+            return
+        kind = node.get("kind")
+        value = node.get("value") or {}
+        if kind == "node.conditional":
+            otherwise = value.get("Else")
+            if otherwise not in (None, {}):
+                if not (isinstance(otherwise, dict) and otherwise.get("kind") == "node.sequence"
+                        and not ((otherwise.get("value") or {}).get("Children"))):
+                    fail(where, "conditional.Else is used at %s -- see check_conditional_else "
+                                "(it faults with Exec(Modifier) today)" % path)
+        for key, child in value.items():
+            walk(where, child, path + "/" + key)
+        if isinstance(node, list):
+            pass
+
+    for section, rows in (("Statuses", doc.get("Statuses") or []),
+                          ("Cards", doc.get("Cards") or []),
+                          ("EnemyActions", doc.get("EnemyActions") or []),
+                          ("Events", doc.get("Events") or []),
+                          ("Relics", doc.get("Relics") or [])):
+        for row in rows:
+            walk("%s.%s" % (section, row.get("Id")), row, "")
+    ok("conditional.Else", "unused everywhere (flatten instead)")
 
 def check_relations(doc):
     print("[5] cross references (deck/encounters/actions/statuses)")
@@ -3571,7 +3637,10 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "stone_calendar", "cloak_clasp", "incense_burner", "pocketwatch",
                       # §261: 战斗开始类五件 —— 两条走 `TurnStarted`（第 1 回合），
                       # 两条走**标签**（内核回合机读），一条走 `per_curse`（数牌组）。
-                      "lantern", "bag_of_preparation", "ice_cream", "calipers", "du_vu_doll")
+                      "lantern", "bag_of_preparation", "ice_cream", "calipers", "du_vu_doll",
+                      # §262: "每第 N 张某类型牌"七件 —— 全部 `CardPlayed` 触发器 + 自己的计数器。
+                      "kunai", "shuriken", "ornamental_fan", "letter_opener", "nunchaku",
+                      "ink_bottle", "pen_nib")
 
 
 def check_relics(doc):
@@ -4464,6 +4533,7 @@ def main():
     check_monsters(doc)
     check_cards_and_actions(doc)
     check_statuses(doc)
+    check_conditional_else(doc)
     check_relations(doc)
     check_weak_pool_table(doc)
     check_event_vocabulary(doc)

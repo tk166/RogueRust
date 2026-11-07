@@ -146,8 +146,11 @@ const HERO_HP: i32 = 80;
 const DEBUG_HERO_HP: i32 = 400;
 /// Starting / per-turn energy (the standard package's `3`).
 const ENERGY: i32 = 3;
-/// §261：观察向量里报的"能量上限" = 每回合补给量。它与 [`ENERGY`] 同源（`build_session_at_with`
-/// 用 `ENERGY` 建池的初值与补给量），所以不构成第二份真相。
+/// §261：观察向量里报的"能量上限" = **每回合补给量**（不是池子上的 max —— 池子故意没有天花板）。
+///
+/// ⚠️ 这个数字是"标准包的回合补给"，不是"能量的合法上限"：事件/状态/别的玩法模式可以把它抬到
+/// 别的值（某些玩法回合开始就有 7 点）。等"改补给量"的内容真的出现时，这里要改成读
+/// `TurnConfig::energy_refill` 那一侧的**派生值**，而不是继续用这个常量。
 const HERO_ENERGY_REFILL: i32 = ENERGY;
 
 // =============================================================================================
@@ -908,6 +911,13 @@ fn build_session_at_with(
     // 上限的**规则**没有消失：它在回合开始那一步（`refill_resource` 把 current 设成 base=3，
     // 于是回合初永远是 3 点，上一回合的余额不留）。`max = None` 说的是"这个池没有硬天花板"，
     // 而那正是参考的表达。
+    //
+    // ⚠️ **"3" 只是本内容（标准包）的回合补给量，不是能量的固有上限**。事件的"加能量"、
+    // 状态/遗物改补给量、以及别的玩法模式都会动它 —— 例如某些玩法里回合开始就能有 **7 点**。
+    // 所以将来要"真正的上限"（显示、上限类规则、超上限的合法性判断）时，必须从
+    // `TurnConfig::energy_refill` / 补给流水线（`turn_start_refill_count`）那一侧派生，
+    // **不要**回头给这个池子塞一个 `Some(n)` —— 那会把"本回合能拿到多少"和"最多能有几"重新
+    // 混成一个数，并重新引入 §261 查出的那个"满池加能量静默无效"。
     // §261：**建池时 current = 0**，3 点由第 1 回合的补给给。之前写的是 `ENERGY`，
     // 于是"带携带的补给"（Ice Cream）在第 1 回合会把 3 点算成 3 + 3 = 6 —— 一个只在
     // `unspent_energy_carries` 存在时才会暴露的重复计数（它是 `base + current`，不是 `base`）。
@@ -6047,6 +6057,282 @@ mod card_text_tests {
             ["louse_green.bite", "louse_green.spit_web"],
             "wiki: Green Louse = Bite + Spit Web"
         );
+    }
+
+    /// §262：七件"每第 N 张某类型牌"的遗物 —— 真的打牌。
+    ///
+    /// 一条测试覆盖七件，因为它们的规则形状是**同一个**（`CardPlayed` + 自己的模 N 计数器），
+    /// 而每条的内部判据不同：三条挂在"第 3 张攻击"上，一条挂"第 3 张技能"（tag 门的反面），
+    /// 两条挂"第 10 张"，Pen Nib 还多一条"翻倍只持续一次"。
+    #[test]
+    fn the_every_nth_card_relics_count_the_right_kind_of_card() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+
+        // 一场战斗：牌组全 `strike`（攻击，6 伤害）或全 `defend`（技能），对手取 Gremlin Nob
+        // （82 HP ⇒ 挨得住 10 次攻击，不会中途被打死而改变后面的判据）。
+        let session_for = |card: &'static str, carrier: &str, seed: i32, enemy: &str| {
+            let deck: &'static [rd_core::battle::DeckEntry<'static>] = Box::leak(
+                vec![rd_core::battle::DeckEntry { card, count: 1 }; 20].into_boxed_slice(),
+            );
+            let session = build_session_at_unstarted(seed, enemy, 200, Some(deck), 0, 0)
+                .unwrap_or_else(|e| panic!("{carrier}: {e}"));
+            install_session(session);
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(cid_in("hero")),
+                    definition: rd_core::state::StatusDefinitionId::new(carrier)
+                        .expect("a status id"),
+                    stacks: 1,
+                    duration: 0,
+                    charges: 0,
+                    source: None,
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("apply the carrier");
+            let standard = standard_turn_config().expect("standard turn config");
+            start_first_turn(&mut session.state, &standard, &mut session.host)
+                .expect("start the first turn");
+            session.reobserve();
+        };
+
+        // 打一张手牌（按 tag 挑），然后**排空队列** —— 触发器就在排空时跑。
+        // `zone_cards` 给的是**牌实例**（不是槽位），而 `PlayRequest` 要的是实例 id。
+        let play_one = |tag: &str| {
+            let session = slot().as_mut().expect("session");
+            let hero = cid_in("hero");
+            // ⚠️ **必须给目标**：`PlayRequest` 的 target 为 `None` 时，`strike` 的
+            // `dealDamage(sel.target)` 解析不出人 ⇒ 一点伤害都不发生，而且**不报错**。
+            // 判据只看"格挡/状态/手牌"的话，这个坑完全看不出来（§262：Pen Nib 的伤害判据抓到它）。
+            let enemy = session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map(|c| c.id)
+                .expect("an enemy");
+            let instance = session
+                .state
+                .zone_cards(&hero, rd_core::state::CardZone::Hand)
+                .find(|card| content.card_has_tag(card.definition_id.as_str(), tag) == Some(true))
+                .map(|card| card.id)
+                .unwrap_or_else(|| panic!("no `{tag}` card in hand"));
+            rd_core::play::play_card(
+                &mut session.state,
+                Some(&content),
+                &rd_core::play::PlayRequest::new(hero, instance, Some(enemy)),
+            )
+            .expect("play the card");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state)
+                .unwrap_or_else(|e| {
+                    panic!("drain after `{tag}`: {e:?} / last={:?}", host.last_failure())
+                });
+        };
+        // 手牌空了就补 —— 判据关心的是"打了几张"，不是"一回合能不能打这么多"。
+        let top_up = || {
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::DrawCards {
+                    owner: cid_in("hero"),
+                    count: 10,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("draw");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::GainResource {
+                    target: Some(cid_in("hero")),
+                    key: rd_core::state::ResourceId::new("standard.energy").expect("energy"),
+                    amount: 50,
+                    default_max: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("energy");
+        };
+        let hand_count = || -> usize {
+            let session = slot().as_ref().expect("session");
+            session.state.zone_cards(&cid_in("hero"), rd_core::state::CardZone::Hand).count()
+        };
+        let status_stacks = |status_id: &str| -> i32 {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatant(&cid_in("hero"))
+                .map_or(0, |c| {
+                    c.statuses()
+                        .iter()
+                        .filter(|s| s.definition_id.as_str() == status_id)
+                        .map(|s| s.stacks)
+                        .sum()
+                })
+        };
+        let block = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in("hero")).map_or(-1, |c| {
+                c.defensive_pools()
+                    .iter()
+                    .find(|pool| pool.key.as_str() == "standard.block")
+                    .map_or(0, |pool| pool.pool.current)
+            })
+        };
+        let enemy_hp = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map_or(-1, |c| c.health_current)
+        };
+        let hero_hp = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatant(&cid_in("hero"))
+                .map_or(-1, |c| c.health_current)
+        };
+
+        // ---- Kunai：第 3 张攻击才 +1 敏捷（第 2 张不给）。
+        session_for("strike", "standard.kunai", 61, "enc_gremlin_nob");
+        top_up();
+        play_one("attack");
+        assert_eq!(status_stacks("standard.dexterity"), 0, "Kunai: after 1 attack");
+        play_one("attack");
+        assert_eq!(status_stacks("standard.dexterity"), 0, "Kunai: after 2 attacks");
+        play_one("attack");
+        assert_eq!(status_stacks("standard.dexterity"), 1, "Kunai: every 3rd attack");
+        play_one("attack");
+        assert_eq!(status_stacks("standard.dexterity"), 1, "Kunai: the 4th gives nothing");
+        take_session();
+
+        // ---- Shuriken：同上，但给力量。**技能的 3 张不算**（tag 门的反面）。
+        session_for("defend", "standard.shuriken", 62, "enc_gremlin_nob");
+        top_up();
+        for n in 1..=3 {
+            play_one("skill");
+            assert_eq!(
+                status_stacks("standard.strength"),
+                0,
+                "Shuriken: 3 skills still give nothing (it counts Attacks, #{n})"
+            );
+        }
+        take_session();
+
+        // ---- Ornamental Fan：第 3 张攻击 +4 格挡。
+        session_for("strike", "standard.ornamental_fan", 63, "enc_gremlin_nob");
+        top_up();
+        let before = block();
+        play_one("attack");
+        play_one("attack");
+        // 攻击牌自己能给格挡吗？`strike` 不能，所以这里的差值只可能来自遗物。
+        assert_eq!(block(), before, "Ornamental Fan: no Block before the 3rd attack");
+        play_one("attack");
+        assert_eq!(block(), before + 4, "Ornamental Fan: 3rd attack ⇒ +4 Block");
+        take_session();
+
+        // ---- Letter Opener：第 3 张**技能**对所有敌人 5 伤害。
+        session_for("defend", "standard.letter_opener", 64, "enc_gremlin_nob");
+        top_up();
+        let before = enemy_hp();
+        play_one("skill");
+        play_one("skill");
+        assert_eq!(enemy_hp(), before, "Letter Opener: nothing before the 3rd Skill");
+        play_one("skill");
+        assert_eq!(enemy_hp(), before - 5, "Letter Opener: 3rd Skill ⇒ 5 damage to ALL");
+        take_session();
+
+        // ---- Nunchaku：第 10 张攻击 +1 能量。
+        session_for("strike", "standard.nunchaku", 65, "enc_gremlin_nob");
+        top_up();
+        for _ in 1..=9 {
+            play_one("attack");
+        }
+        let energy_before = {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatant(&cid_in("hero"))
+                .map_or(-1, |c| {
+                    c.resources()
+                        .iter()
+                        .find(|p| p.key.as_str() == "standard.energy")
+                        .map_or(-1, |p| p.pool.current)
+                })
+        };
+        // 第 10 张：`strike` 花 1 点，遗物给 1 点 ⇒ 净 0。
+        play_one("attack");
+        let energy_after = {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatant(&cid_in("hero"))
+                .map_or(-1, |c| {
+                    c.resources()
+                        .iter()
+                        .find(|p| p.key.as_str() == "standard.energy")
+                        .map_or(-1, |p| p.pool.current)
+                })
+        };
+        assert_eq!(
+            energy_after, energy_before,
+            "Nunchaku: the 10th attack's +1 Energy cancels its own 1-cost"
+        );
+        take_session();
+
+        // ---- Ink Bottle：第 10 张**任何**牌抽 1 张（这里用技能牌，证明它不看类型）。
+        session_for("defend", "standard.ink_bottle", 66, "enc_gremlin_nob");
+        top_up();
+        for _ in 1..=9 {
+            play_one("skill");
+        }
+        let before = hand_count();
+        play_one("skill");
+        // 打掉 1 张、抽回 1 张 ⇒ 手牌数**不变**（前 9 张每次都少 1）。
+        assert_eq!(hand_count(), before, "Ink Bottle: the 10th card draws 1 back");
+        take_session();
+
+        // ---- Pen Nib：第 10 张攻击**双倍伤害**，第 11 张回到单倍。
+        session_for("strike", "standard.pen_nib", 67, "enc_gremlin_nob");
+        top_up();
+        for _ in 1..=9 {
+            play_one("attack");
+        }
+        assert_eq!(
+            status_stacks("standard.double_damage"),
+            1,
+            "Pen Nib: the doubling is armed after the 9th attack"
+        );
+        let before = enemy_hp();
+        play_one("attack");
+        assert_eq!(
+            before - enemy_hp(),
+            12,
+            "Pen Nib: the 10th attack deals 12, not 6"
+        );
+        assert_eq!(
+            status_stacks("standard.double_damage"),
+            0,
+            "Pen Nib: the doubling is spent by that same attack"
+        );
+        let before = enemy_hp();
+        play_one("attack");
+        assert_eq!(
+            before - enemy_hp(),
+            6,
+            "Pen Nib: the 11th attack is back to single damage"
+        );
+        let _ = hero_hp();
+        take_session();
     }
 
     /// §261：**满能量时"加能量"必须真的加**（参考的 `CanExceedMax`）。

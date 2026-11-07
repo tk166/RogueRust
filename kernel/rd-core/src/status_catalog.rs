@@ -679,6 +679,17 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.bag_of_preparation"
             | "standard.ice_cream"
             | "standard.calipers"
+            // §262: the seven "every Nth card" relics + Pen Nib's doubling carrier. All of them are
+            // a single `CardPlayed` trigger reading `event.bool(card.hasTag.*)`; the doubling carrier
+            // additionally has one `PassiveModifiers` entry (`DamageDealt` x 200).
+            | "standard.kunai"
+            | "standard.shuriken"
+            | "standard.ornamental_fan"
+            | "standard.letter_opener"
+            | "standard.nunchaku"
+            | "standard.ink_bottle"
+            | "standard.pen_nib"
+            | "standard.double_damage"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

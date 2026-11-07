@@ -1788,6 +1788,17 @@ impl RunState {
             // `du_vu_doll`：1 力量 / 每张诅咒。层数由**战斗构建方**数牌组算出来（见
             // `per_curse_statuses`）—— `rd-run` 不读内容，所以它不可能自己数。
             "du_vu_doll" => Some(RelicEffect::StartCombatStatusPerCurse("standard.strength", 1)),
+            // §262：**每第 N 张某类型牌**那一类 —— 计数据在状态自己的计数器上，
+            // 只数哪种牌由内容问 `event.bool(card.hasTag.attack|skill)` 决定。
+            "kunai" => Some(RelicEffect::StartCombatStatus("standard.kunai", 1)),
+            "shuriken" => Some(RelicEffect::StartCombatStatus("standard.shuriken", 1)),
+            "ornamental_fan" => Some(RelicEffect::StartCombatStatus("standard.ornamental_fan", 1)),
+            "letter_opener" => Some(RelicEffect::StartCombatStatus("standard.letter_opener", 1)),
+            "nunchaku" => Some(RelicEffect::StartCombatStatus("standard.nunchaku", 1)),
+            "ink_bottle" => Some(RelicEffect::StartCombatStatus("standard.ink_bottle", 1)),
+            // `pen_nib` 的状态在**第 9 张**攻击时挂 `standard.double_damage`（见内容脚本的注释）：
+            // `CardPlayed` 触发器在卡牌节目**之后**派发，所以"第 10 张挂"会翻倍到第 11 张。
+            "pen_nib" => Some(RelicEffect::StartCombatStatus("standard.pen_nib", 1)),
             _ => None,
         }
     }
@@ -4716,6 +4727,32 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §262：七件"每第 N 张某类型牌"的**接线**。
+    ///
+    /// 逐条比状态 id：这七件全是 1 层、全走 `StartCombatStatus`，所以"抄了邻居的状态 id"
+    /// 只有逐条比才看得出来（这个仓库已经踩过两次，§186 / §260）。
+    #[test]
+    fn the_every_nth_card_relics_wire_their_own_carrier() {
+        let carrier = [
+            ("kunai", "standard.kunai"),
+            ("shuriken", "standard.shuriken"),
+            ("ornamental_fan", "standard.ornamental_fan"),
+            ("letter_opener", "standard.letter_opener"),
+            ("nunchaku", "standard.nunchaku"),
+            ("ink_bottle", "standard.ink_bottle"),
+            ("pen_nib", "standard.pen_nib"),
+        ];
+        for (relic, status_id) in carrier {
+            let mut run = ironclad();
+            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            let bonus = run.combat_bonus();
+            assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
+            let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
+            assert_eq!(entry.id, status_id, "{relic}: its own carrier");
+            assert_eq!(entry.stacks, 1, "{relic}: one stack");
+        }
     }
 
     /// §261：五件"战斗开始类"遗物的**接线**。
