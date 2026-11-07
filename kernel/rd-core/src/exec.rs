@@ -6026,6 +6026,73 @@ fn apply_one_status(
         return Err(ExecError::Modifier);
     }
 
+    // ── §265：**免疫**（`ginger`："你不能再被虚弱"、`turnip`："…脆弱"）。
+    //
+    // 位置在 Artifact **之前**：免疫是永久的、不消耗任何层数，所以它不该先把 Artifact 吃掉
+    // （否则"戴着 Ginger 又戴着 Artifact 的人挨一记虚弱"会白白损失一层 Artifact）。
+    // 判据是**承受者**身上有一条 `StatusImmunity` spec，且它的 `AppliesToStatusId` 正是这条状态。
+    if stacks > 0 {
+        if let Some(content) = ctx.content {
+            let target_statuses = ctx
+                .state
+                .combatant(target)
+                .ok_or(ExecError::MissingCombatant)?
+                .statuses();
+            let mut rows = [empty_row(); MAX_CANDIDATES];
+            let blocked = status_scoped_rows(
+                content,
+                target_statuses,
+                status_bind::Pipeline::StatusImmunity,
+                definition_id.as_str(),
+                &mut rows,
+            )? > 0;
+            if blocked {
+                return Ok(());
+            }
+        }
+    }
+
+    // ── §265：**放大**（`snecko_skull`："你施加中毒时多施 1 层"）。
+    //
+    // 读**施加者**（`ctx.source`）身上的状态 —— "你施加"里的"你"。折叠走同一个 `fold`
+    // （所以 `AddFlat` / `AddPerStack` / `ScalePercent` 的语义与别处一字不差）。
+    // `stacks == 0` 不算一次施加，跳过（与 Artifact 那条门同一条口径）。
+    let stacks = if stacks > 0 {
+        match (ctx.content, ctx.source) {
+            (Some(content), Some(source)) => {
+                let source_statuses = ctx
+                    .state
+                    .combatant(&source)
+                    .ok_or(ExecError::MissingCombatant)?
+                    .statuses();
+                let mut rows = [empty_row(); MAX_CANDIDATES];
+                let count = status_scoped_rows(
+                    content,
+                    source_statuses,
+                    status_bind::Pipeline::StatusStacks,
+                    definition_id.as_str(),
+                    &mut rows,
+                )?;
+                if count == 0 {
+                    stacks
+                } else {
+                    let cards = ctx.state.cards_played_this_turn;
+                    fold(
+                        stacks,
+                        source_statuses,
+                        rows.get(..count).unwrap_or(&[]),
+                        &source,
+                        StatusMatch::for_content(Some(content)),
+                        cards,
+                    )?
+                }
+            }
+            _ => stacks,
+        }
+    } else {
+        stacks
+    };
+
     // **Artifact 先过一道**（wiki: "negate the next debuff"）。只挡 Debuff，也只挡真正要加的
     // 层数（`stacks == 0` 不算一次施加）。吃掉一层 Artifact 就返回 —— 目标一点状态都不沾。
     if stacks > 0 {
@@ -6553,6 +6620,57 @@ fn image_damage_stage<'a>(
         matching,
         turn_cards,
     )
+}
+
+/// §265：**带参数的行构造** —— 只收 `AppliesToStatusId == 指定状态` 的那几条 spec。
+///
+/// 与 [`image_rows`] 的区别只有一条：那里 `AppliesToStatusId` 被当成"改写"而**跳过**，
+/// 这里它是**过滤器**（"这条 spec 是给哪条状态写的"）。两条新管线（`StatusStacks` /
+/// `StatusImmunity`）用的是后一种语义 —— 它们的 spec 天生就绑在某条状态上。
+fn status_scoped_rows<'a>(
+    content: &'a Content<'a>,
+    statuses: &[StatusInstance],
+    pipeline: status_bind::Pipeline,
+    scoped_to: &str,
+    rows: &mut [Row<'a>],
+) -> Result<usize, ExecError> {
+    let mut buffer = [EMPTY_PASSIVE_MODIFIER; status_bind::MAX_MODIFIERS];
+    let mut count = 0usize;
+    let mut seen = [""; status_bind::MAX_MODIFIERS];
+    let mut seen_count = 0usize;
+    for status in statuses {
+        let id = status.definition_id.as_str();
+        if seen.get(..seen_count).unwrap_or(&[]).contains(&id) {
+            continue;
+        }
+        if seen_count < seen.len() {
+            seen[seen_count] = id;
+            seen_count += 1;
+        }
+        let decoded = status_bind::decode_required(content, id, &mut buffer)?;
+        for index in 0..decoded.modifier_count {
+            let spec = *buffer.get(index).ok_or(ExecError::Modifier)?;
+            if spec.pipeline != pipeline {
+                continue;
+            }
+            match spec.applies_to_status {
+                Some(scoped) if scoped.as_str() == scoped_to => {}
+                _ => continue,
+            }
+            let Some(slot) = rows.get_mut(count) else {
+                return Err(ExecError::Modifier);
+            };
+            *slot = Row {
+                priority: spec.priority,
+                status_id: decoded.id,
+                operation: image_operation(spec.operation),
+                magnitude: spec.magnitude,
+                spec_index: u16::try_from(index).map_err(|_| ExecError::Modifier)?,
+            };
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 
 /// §264：`AppliesToStatusId` —— **改写另一条状态在本管线里的幅值**。

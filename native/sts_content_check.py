@@ -112,7 +112,8 @@ INV_COUNTS = {
     # §263: +5 (enemy-death pair + three damage rewrites) +1 (`standard.poison`, the first
     # damage-over-time status this content has -- The Specimen needs it).
     # §264: +3 (two `AppliesToStatusId` rewriters + `champion_belt`).
-    "statuses": 96,
+    # §265: +3 (`snecko_skull` / `ginger` / `turnip`).
+    "statuses": 99,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1412,6 +1413,11 @@ INV_STATUSES = {
     "standard.paper_phrog": [("DamageReceived", "ScalePercent", 175, 300, "Direct")],
     "standard.paper_krane": [("DamageDealt", "ScalePercent", 60, 200, "Direct")],
     "standard.champion_belt": [],
+    # §265：`StatusStacks` / `StatusImmunity` 的载体（spec 的 `AppliesToStatusId` 是**过滤器**）。
+    # 免疫那条的 `Operation`/`Magnitude` 不参与计算（判定只问"有没有这条 spec"），所以写 0。
+    "standard.snecko_skull": [("StatusStacks", "AddFlat", 1, 100, None)],
+    "standard.ginger": [("StatusImmunity", "AddFlat", 0, 100, None)],
+    "standard.turnip": [("StatusImmunity", "AddFlat", 0, 100, None)],
     "standard.the_bomb_damage": [],
     "standard.the_bomb": [],
     "standard.sadistic_nature": [],
@@ -3255,6 +3261,10 @@ SPEC_PARAMS = {
     # 遗物改写别的状态的幅值：`(AppliesToStatusId, RestrictSourceCardTag)`
     "standard.paper_phrog": ("standard.vulnerable", None),
     "standard.paper_krane": ("standard.weak", None),
+    # §265：新管线的 spec 天生绑在某条状态上。
+    "standard.snecko_skull": ("standard.poison", None),
+    "standard.ginger": ("standard.weak", None),
+    "standard.turnip": ("standard.frail", None),
     # §262 的翻倍现在只对攻击牌生效（§264 解开了那个参数）。
     "standard.double_damage": (None, "attack"),
 }
@@ -3710,7 +3720,9 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       # §263: 敌人死亡类两件 + 伤害管线数值改写三件。
                       "gremlin_horn", "the_specimen", "the_boot", "torii", "tungsten_rod",
                       # §264: 改写别的状态幅值两件 + 施加易伤时附带虚弱一件。
-                      "paper_phrog", "paper_krane", "champion_belt")
+                      "paper_phrog", "paper_krane", "champion_belt",
+                      # §265: 改状态施加三件 + 开战给敌人上毒一件。
+                      "snecko_skull", "ginger", "turnip", "twisted_funnel")
 
 
 def check_relics(doc):
@@ -3952,7 +3964,10 @@ def check_relic_rarities(doc):
     # §259：`Starter` 与 `Boss` 也是**合法但不可掉落**的桶（`Burning Blood` 是起手遗物，
     # `Coffee Dripper` / `Fusion Hammer` 是 Boss 遗物）。它们与 `Event` 同一条道理：桶让"这是什么"
     # 能说实话，而 `pick_relic_avoiding` 只从 `RELIC_RARITY_WEIGHTS` 的三档里抽，所以抽不到。
-    allowed = tuple(RELAPSE_RARITIES) + ("Event", "Starter", "Boss")
+    # §265：`Shop` 是第四种"合法但不可掉落"的桶（`twisted_funnel` 只在商店卖）。与 `Event`
+    # 完全同一条理由：`pick_relic_avoiding` 只从 `RELIC_RARITY_WEIGHTS` 的三档抽，所以这个桶
+    # 能持有、能结算，但**永远抽不到**；桶的意义是让"这是什么"说实话。
+    allowed = tuple(RELAPSE_RARITIES) + ("Event", "Starter", "Boss", "Shop")
     missing = [relic.get("Id") for relic in relics if relic.get("Rarity") not in allowed]
     if missing:
         fail("Relics.rarity", "no usable Rarity on %s" % (missing,))

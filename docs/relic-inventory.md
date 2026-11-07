@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 50 |
-| 3 | 缺（wiki 有、内容没有） | 143 |
+| 2 | 内容里的遗物 | 54 |
+| 3 | 缺（wiki 有、内容没有） | 139 |
 
 ## Starter（4）
 
@@ -54,7 +54,7 @@
 | 缺 | `red_skull` | Red Skull | Ironclad | While your HP is at or below 50%, you have 3 additional $Strength. |
 | 有 | `regal_pillow` | Regal Pillow | Shared | Whenever you Rest, heal an additional 15 HP. |
 | 缺 | `smiling_mask` | Smiling Mask | Shared | The merchant's card removal service now always costs 50 [[Gold]]. |
-| 缺 | `snecko_skull` | Snecko Skull | Silent | Whenever you apply $Poison, apply an additional 1 $Poison. |
+| 有 | `snecko_skull` | Snecko Skull | Silent | Whenever you apply $Poison, apply an additional 1 $Poison. |
 | 有 | `strawberry` | Strawberry | Shared | Upon pickup, raise your Max HP by 7. |
 | 有 | `the_boot` | The Boot | Shared | Whenever you would deal 4 or less unblocked {{QueryLink\|Cards\|type:Attack\|Attack}} damage, increase it to 5. |
 | 缺 | `tiny_chest` | Tiny Chest | Shared | Every 4th ? room is a Treasure room. |
@@ -119,7 +119,7 @@
 | 缺 | `emotion_chip` | Emotion Chip | Defect | If you lost HP during the previous turn, trigger the passive ability of all $Orbs at the start of your turn. |
 | 缺 | `fossilized_helix` | Fossilized Helix | Shared | Prevent the first time you would lose HP in combat. |
 | 缺 | `gambling_chip` | Gambling Chip | Shared | At the start of each combat, discard any number of cards, then draw that many cards. |
-| 缺 | `ginger` | Ginger | Shared | You can no longer become $Weakened. |
+| 有 | `ginger` | Ginger | Shared | You can no longer become $Weakened. |
 | 有 | `girya` | Girya | Shared | You can now gain $Strength at Rest Sites (up to 3 times). |
 | 缺 | `golden_eye` | Golden Eye | Watcher | Whenever you $Scry, $Scry 2 additional cards. |
 | 有 | `ice_cream` | Ice Cream | Shared | $Energy is now conserved between turns. |
@@ -139,7 +139,7 @@
 | 有 | `torii` | Torii | Shared | Whenever you would receive 5 or less unblocked {{QueryLink\|Cards\|type:Attack\|Attack}} damage, reduce it to 1. |
 | 缺 | `tough_bandages` | Tough Bandages | Silent | Whenever you discard a card during your turn, gain 3 $Block. |
 | 有 | `tungsten_rod` | Tungsten Rod | Shared | Whenever you would lose HP, lose 1 less. |
-| 缺 | `turnip` | Turnip | Shared | You can no longer become $Frail. |
+| 有 | `turnip` | Turnip | Shared | You can no longer become $Frail. |
 | 缺 | `unceasing_top` | Unceasing Top | Shared | Whenever you have no cards in hand during your turn, draw a card. |
 | 缺 | `wing_boots` | Wing Boots | Shared | You may ignore paths when choosing the next room to travel to 3 times. |
 
@@ -201,7 +201,7 @@
 | 缺 | `strange_spoon` | Strange Spoon | Shared | Cards which $Exhaust when played will instead discard 50% of the time. |
 | 缺 | `the_abacus` | The Abacus | Shared | Whenever you shuffle your draw pile, gain 6 $Block. |
 | 缺 | `toolbox` | Toolbox | Shared | At the start of each combat, choose 1 of 3 random {{QueryLink\|Cards\|color:Colorless\|Colorless}} cards and add the chosen card into your hand. |
-| 缺 | `twisted_funnel` | Twisted Funnel | Silent | At the start of each combat, apply 4 $Poison to ALL enemies. |
+| 有 | `twisted_funnel` | Twisted Funnel | Silent | At the start of each combat, apply 4 $Poison to ALL enemies. |
 
 ## Event（18）
 

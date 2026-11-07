@@ -6389,6 +6389,90 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.snecko_skull",
+      "PackageId": "sts",
+      "NameKey": "Snecko Skull",
+      "DescriptionKey": "Whenever you apply Poison, apply an additional 1 Poison.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "StatusStacks",
+          "Operation": "AddFlat",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": {
+            "value": "standard.poison"
+          },
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.ginger",
+      "PackageId": "sts",
+      "NameKey": "Ginger",
+      "DescriptionKey": "You can no longer become Weakened.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "StatusImmunity",
+          "Operation": "AddFlat",
+          "Magnitude": 0,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": {
+            "value": "standard.weak"
+          },
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.turnip",
+      "PackageId": "sts",
+      "NameKey": "Turnip",
+      "DescriptionKey": "You can no longer become Frail.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "StatusImmunity",
+          "Operation": "AddFlat",
+          "Magnitude": 0,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": {
+            "value": "standard.frail"
+          },
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": []
     }
   ],
   "Cards": [
@@ -56487,6 +56571,13 @@
       "CombatRules": null
     },
     {
+      "Id": "ginger",
+      "DisplayName": "Ginger",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "girya",
       "DisplayName": "Girya",
       "Rarity": "Rare",
@@ -56676,6 +56767,13 @@
       "CombatRules": null
     },
     {
+      "Id": "snecko_skull",
+      "DisplayName": "Snecko Skull",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "stone_calendar",
       "DisplayName": "Stone Calendar",
       "Rarity": "Rare",
@@ -56721,6 +56819,20 @@
       "Id": "tungsten_rod",
       "DisplayName": "Tungsten Rod",
       "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "turnip",
+      "DisplayName": "Turnip",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "twisted_funnel",
+      "DisplayName": "Twisted Funnel",
+      "Rarity": "Shop",
       "RunPrograms": null,
       "CombatRules": null
     },

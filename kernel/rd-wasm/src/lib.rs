@@ -6060,6 +6060,143 @@ mod card_text_tests {
         );
     }
 
+    /// §265：`StatusStacks` / `StatusImmunity` 两条管线 + 四件遗物。
+    #[test]
+    fn the_status_application_relics_change_what_lands_on_the_target() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+
+        let session_for = |carrier: Option<&str>, seed: i32| {
+            let deck: &'static [rd_core::battle::DeckEntry<'static>] = Box::leak(
+                vec![rd_core::battle::DeckEntry { card: "strike", count: 1 }; 20].into_boxed_slice(),
+            );
+            let session = build_session_at_unstarted(seed, "enc_cultist", 200, Some(deck), 0, 0)
+                .unwrap_or_else(|e| panic!("{carrier:?}: {e}"));
+            install_session(session);
+            if let Some(carrier) = carrier {
+                let session = slot().as_mut().expect("session");
+                let item = rd_core::state::EffectItem {
+                    request: rd_core::state::EffectRequest::ApplyStatus {
+                        target: Some(cid_in("hero")),
+                        definition: rd_core::state::StatusDefinitionId::new(carrier)
+                            .expect("a status id"),
+                        stacks: 1,
+                        duration: 0,
+                        charges: 0,
+                        source: None,
+                        source_card: None,
+                    },
+                    chain: rd_core::state::ChainSlot::NONE,
+                    owner: None,
+                };
+                rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                    .expect("apply the carrier");
+            }
+            let standard = standard_turn_config().expect("standard turn config");
+            let session = slot().as_mut().expect("session");
+            start_first_turn(&mut session.state, &standard, &mut session.host)
+                .expect("start the first turn");
+            session.reobserve();
+        };
+        let enemy = || -> String {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map(|c| String::from(c.id.as_str()))
+                .expect("an enemy")
+        };
+        let stacks_of = |who: &str, status_id: &str| -> i32 {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in(who)).map_or(0, |c| {
+                c.statuses()
+                    .iter()
+                    .filter(|s| s.definition_id.as_str() == status_id)
+                    .map(|s| s.stacks)
+                    .sum()
+            })
+        };
+        // 由**英雄**施加（"你施加"里的"你"）。
+        let apply_from_hero = |who: &str, status_id: &str, stacks: i32| {
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(cid_in(who)),
+                    definition: rd_core::state::StatusDefinitionId::new(status_id)
+                        .expect("a status id"),
+                    stacks,
+                    duration: 0,
+                    charges: 0,
+                    source: Some(cid_in("hero")),
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("apply");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        };
+
+        // ---- 基线：没有遗物时，1 层就是 1 层。
+        session_for(None, 91);
+        let target = enemy();
+        apply_from_hero(&target, "standard.poison", 1);
+        assert_eq!(stacks_of(&target, "standard.poison"), 1, "baseline: 1 Poison stays 1");
+
+        // ---- Snecko Skull：你施加的中毒多 1 层。
+        session_for(Some("standard.snecko_skull"), 92);
+        let target = enemy();
+        apply_from_hero(&target, "standard.poison", 1);
+        assert_eq!(
+            stacks_of(&target, "standard.poison"),
+            2,
+            "Snecko Skull: 1 Poison becomes 2"
+        );
+        // 反面：只对**中毒**。虚弱照旧 1 层（`AppliesToStatusId` 是过滤器）。
+        apply_from_hero(&target, "standard.weak", 1);
+        assert_eq!(
+            stacks_of(&target, "standard.weak"),
+            1,
+            "Snecko Skull: Weak is untouched (the parameter filters by status)"
+        );
+        take_session();
+
+        // ---- Ginger：**你自己**撒不上虚弱（免疫挂在承受者身上 ⇒ 这里打的是英雄）。
+        session_for(Some("standard.ginger"), 93);
+        apply_from_hero("hero", "standard.weak", 1);
+        assert_eq!(stacks_of("hero", "standard.weak"), 0, "Ginger: Weak is refused");
+        apply_from_hero("hero", "standard.frail", 1);
+        assert_eq!(stacks_of("hero", "standard.frail"), 1, "Ginger: Frail still lands");
+        take_session();
+
+        // ---- Turnip：脆弱撒不上，虚弱照旧。
+        session_for(Some("standard.turnip"), 94);
+        apply_from_hero("hero", "standard.frail", 1);
+        assert_eq!(stacks_of("hero", "standard.frail"), 0, "Turnip: Frail is refused");
+        apply_from_hero("hero", "standard.weak", 1);
+        assert_eq!(stacks_of("hero", "standard.weak"), 1, "Turnip: Weak still lands");
+        take_session();
+
+        // ---- Twisted Funnel：开战时所有敌人 4 层中毒（走 `StartCombatStatusOnEnemies`）。
+        {
+            let deck: &'static [rd_core::battle::DeckEntry<'static>] = Box::leak(
+                vec![rd_core::battle::DeckEntry { card: "strike", count: 1 }; 20].into_boxed_slice(),
+            );
+            // 直接走运行层：把遗物塞进 run，再走 `combat_bonus()` 的敌人表。
+            let mut run = rd_run::state::RunState::new(11, 80, i32::MAX, &["strike"; 10])
+                .expect("a run");
+            run.push_relic("twisted_funnel").expect("twisted_funnel");
+            let bonus = run.combat_bonus();
+            assert_eq!(bonus.enemy_status_count, 1, "one enemy status");
+            let entry = bonus.enemy_statuses[0].expect("an entry");
+            assert_eq!(entry.id, "standard.poison", "Twisted Funnel applies Poison");
+            assert_eq!(entry.stacks, 4, "…4 stacks");
+        }
+    }
+
     /// §264：三条基建（`AppliesToStatusId` / `RestrictSourceCardTag` / `event.statusIs`）+ 三件遗物。
     #[test]
     fn the_status_parameter_infrastructure_changes_the_right_number() {

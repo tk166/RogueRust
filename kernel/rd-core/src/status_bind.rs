@@ -161,6 +161,18 @@ pub enum Pipeline {
     /// 与 [`Pipeline::TurnStartDraw`] 同形：`AddPerStack` 是每层幅值，`AddFlat` 是一次幅值，
     /// `ScalePercent` 按百分比缩放（本内容没有用到后两条，但折叠器是同一个）。
     TurnStartEnergy,
+    /// §265：**施加某条状态时的层数**（`snecko_skull`："你施加中毒时多施 1 层"）。
+    ///
+    /// 本移植自己的管线（参考的枚举里没有）：它配 `AppliesToStatusId` 用，语义是
+    /// "这条 spec 只对**那条状态**生效"。折叠发生在 `exec::apply_one_status` 里，
+    /// 读的是**施加者**（`ctx.source`）身上的状态 —— "你施加"里的"你"。
+    StatusStacks,
+    /// §265：**某条状态不能再被施加**（`ginger`："你不能再被虚弱"、`turnip`："…脆弱"）。
+    ///
+    /// 同样配 `AppliesToStatusId`：`AppliesToStatusId = standard.weak` 就是"虚弱无效"。
+    /// 判定在 `exec::apply_one_status` 的最前面，读**承受者**身上的状态。有这一条 spec ⇒
+    /// 这次施加**一个字节都不改**（与 `Artifact` 的区别：它不消耗层数、永久有效）。
+    StatusImmunity,
 }
 
 impl Pipeline {
@@ -178,6 +190,9 @@ impl Pipeline {
             "TurnStartDraw" => Some(Pipeline::TurnStartDraw),
             // §199: our own pipeline (the reference's four do not include it).
             "TurnStartEnergy" => Some(Pipeline::TurnStartEnergy),
+            // §265: two more of our own (`StatusStacks` / `StatusImmunity`).
+            "StatusStacks" => Some(Pipeline::StatusStacks),
+            "StatusImmunity" => Some(Pipeline::StatusImmunity),
             _ => None,
         }
     }
@@ -191,6 +206,8 @@ impl Pipeline {
             Pipeline::Block => "BlockGain",
             Pipeline::TurnStartDraw => "TurnStartDraw",
             Pipeline::TurnStartEnergy => "TurnStartEnergy",
+            Pipeline::StatusStacks => "StatusStacks",
+            Pipeline::StatusImmunity => "StatusImmunity",
         }
     }
 }

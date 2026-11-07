@@ -18179,3 +18179,57 @@ standard.poison  Debuff  tags: [debuff, damage_over_time]
 
 遗物 **47 → 50 件**；`rd-core` 788 / `rd-run` 123 / `rd-wasm` 114；内容 96 状态 / 50 遗物；
 四条对拍全过；`ACT1_SLICE` / `SOAK` / `MAP_RENDER` PASS；21/21。
+
+---
+
+## §265 遗物第六批：**改状态施加**四件 + 两条新管线
+
+### 265.1 四件
+
+| 遗物 | 稀有度 | wiki 原话 | 靠什么 |
+|---|---|---|---|
+| `snecko_skull` | Common | "Whenever you apply Poison, apply an additional 1 Poison." | 新管线 `StatusStacks` |
+| `ginger` | Rare | "You can no longer become Weakened." | 新管线 `StatusImmunity` |
+| `turnip` | Rare | "You can no longer become Frail." | 同上 |
+| `twisted_funnel` | Shop | "At the start of each combat, apply 4 Poison to ALL enemies." | 已有 `StartCombatStatusOnEnemies`（**零基建**） |
+
+### 265.2 `AppliesToStatusId` 的**第二种语义**
+
+§264 把它当"**改写**另一条状态的幅值"（`paper_phrog`：易伤 150 → 175）。这里它是**过滤器**：
+"这条 spec 是给哪条状态写的"。
+
+两种语义不冲突，因为读取方不同：伤害那几条管线走 `image_rows`（把带 `AppliesToStatusId` 的
+spec **跳过**、交给改写器），而这两条新管线走 `status_scoped_rows`（把它当过滤条件）。
+
+| 管线 | 读谁 | 什么时候 |
+|---|---|---|
+| `StatusStacks` | **施加者**（`ctx.source`） | `apply_one_status` 里、Artifact 之前 |
+| `StatusImmunity` | **承受者** | 同上，且排在 `StatusStacks` **之前** |
+
+免疫排在放大之前、也在 Artifact 之前：免疫是永久且不消耗层数的，让它先吃掉一层 Artifact
+就是"戴着 Ginger 又戴着 Artifact 的人挨一记虚弱，白掉一层 Artifact"。
+
+放大复用同一个 `fold` —— `AddFlat` / `AddPerStack` / `ScalePercent` 的语义与别处一字不差，
+不另写一份算术（那正是本仓库反复吃亏的形状）。
+
+### 265.3 ★ 判据里那两处"打错人"
+
+第一批判据红在 `Ginger: Weak is refused` 得到 1 —— 因为我把虚弱撒在**敌人**身上。
+`Ginger` 说的是 "**You** can no longer become Weakened"：免疫长在**承受者**身上，
+所以要打的是**英雄**。同一批里 `Snecko Skull` 反过来 —— 它读**施加者**，所以要打**敌人**。
+
+⇒ 这两件的判据天然是一对：**谁是"你"由规则决定，不是由夹具决定**。
+三条判据都做了反面（`Snecko Skull` 不动虚弱、`Ginger` 不挡脆弱、`Turnip` 不挡虚弱），
+外加一条"没有遗物时 1 层就是 1 层"的基线 —— 没有基线，三条判据都可能因为别的原因给出 0/2。
+
+### 265.4 顺带：`Shop` 成为第四个"合法但不可掉落"的桶
+
+`twisted_funnel` 只在商店卖。内容门的稀有度表原来认 `Common/Uncommon/Rare + Event/Starter/Boss`，
+现在加上 `Shop`。理由与 `Event` 完全一样：`pick_relic_avoiding` 只从
+`RELIC_RARITY_WEIGHTS` 的三档里抽，所以这个桶**能持有、能结算、永远抽不到**；
+桶的意义是让"这是什么"说实话，而不是把它塞进 `Rare` 里撒谎。
+
+### 265.5 账
+
+遗物 **50 → 54 件**；`rd-core` 788 / `rd-run` 124 / `rd-wasm` 115；内容 99 状态 / 54 遗物；
+四条对拍全过；`ACT1_SLICE` / `SOAK` / `MAP_RENDER` PASS；21/21。

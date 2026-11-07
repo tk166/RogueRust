@@ -2164,6 +2164,9 @@ const fn cost_pipeline_of(pipeline: status_bind::Pipeline) -> Option<ModifierPip
         // §199: 补能管线同样**不是**费用修饰器 —— 它改的是回合开始补多少，
         // 而费用管线改的是这张牌要付多少。这条接缝逼着人回答，答案就是 None。
         status_bind::Pipeline::TurnStartEnergy => None,
+        // §265：这两条改的是**状态施加**（层数 / 无效），与费用无关。
+        status_bind::Pipeline::StatusStacks => None,
+        status_bind::Pipeline::StatusImmunity => None,
     }
 }
 

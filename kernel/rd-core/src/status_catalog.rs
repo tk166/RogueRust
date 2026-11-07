@@ -709,6 +709,12 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.paper_phrog"
             | "standard.paper_krane"
             | "standard.champion_belt"
+            // §265: two `StatusStacks`/`StatusImmunity` carriers (`snecko_skull` / `ginger` /
+            // `turnip`) -- the parameter is `AppliesToStatusId` and the fold lives in
+            // `exec::apply_one_status`.
+            | "standard.snecko_skull"
+            | "standard.ginger"
+            | "standard.turnip"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

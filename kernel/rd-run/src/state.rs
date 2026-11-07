@@ -1811,6 +1811,14 @@ impl RunState {
             "paper_phrog" => Some(RelicEffect::StartCombatStatus("standard.paper_phrog", 1)),
             "paper_krane" => Some(RelicEffect::StartCombatStatus("standard.paper_krane", 1)),
             "champion_belt" => Some(RelicEffect::StartCombatStatus("standard.champion_belt", 1)),
+            // §265：**改状态施加**三件（放大 / 免疫 / 免疫）+ 开战给敌人上毒一件。
+            "snecko_skull" => Some(RelicEffect::StartCombatStatus("standard.snecko_skull", 1)),
+            "ginger" => Some(RelicEffect::StartCombatStatus("standard.ginger", 1)),
+            "turnip" => Some(RelicEffect::StartCombatStatus("standard.turnip", 1)),
+            // `twisted_funnel` 走**敌人**那张表（§224 的 `StartCombatStatusOnEnemies`）。
+            "twisted_funnel" => {
+                Some(RelicEffect::StartCombatStatusOnEnemies("standard.poison", 4))
+            }
             _ => None,
         }
     }
@@ -4739,6 +4747,36 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §265：四件的接线（三件挂英雄、一件挂敌人）。
+    #[test]
+    fn the_status_application_relics_wire_their_own_carrier() {
+        let carrier = [
+            ("snecko_skull", "standard.snecko_skull"),
+            ("ginger", "standard.ginger"),
+            ("turnip", "standard.turnip"),
+        ];
+        for (relic, status_id) in carrier {
+            let mut run = ironclad();
+            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            let bonus = run.combat_bonus();
+            assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
+            let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
+            assert_eq!(entry.id, status_id, "{relic}: its own carrier");
+            assert_eq!(entry.stacks, 1, "{relic}: one stack");
+            assert_eq!(bonus.enemy_status_count, 0, "{relic}: nothing for the enemies");
+        }
+
+        // `twisted_funnel` 走**敌人**那张表（§224）。
+        let mut run = ironclad();
+        run.push_relic("twisted_funnel").expect("twisted_funnel");
+        let bonus = run.combat_bonus();
+        assert_eq!(bonus.status_count, 0, "twisted_funnel: nothing for the hero");
+        assert_eq!(bonus.enemy_status_count, 1, "twisted_funnel: one enemy status");
+        let entry = bonus.enemy_statuses[0].expect("an entry");
+        assert_eq!(entry.id, "standard.poison", "Poison for the enemies");
+        assert_eq!(entry.stacks, 4, "4 stacks");
     }
 
     /// §264：三件的接线。
