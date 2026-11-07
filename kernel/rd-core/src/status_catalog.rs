@@ -771,6 +771,11 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.split"
             // Boss phase (half HP / low HP split, §122).
             | "standard.phase_split"
+            // §276: the L slimes' 50% split -- a `DamageTaken` trigger that spawns **two of the
+            // M form with the current HP**, so it is its own status (the boss ones use a constant
+            // 10 HP and a fixed pair).
+            | "standard.split_spike_l"
+            | "standard.split_acid_l"
             // Time Warp: a CardPlayed trigger that ends the turn (§125).
             | "standard.time_warp"
             // Constricted: a `TurnEnded` trigger that deals its own stacks, **ignoring Block**

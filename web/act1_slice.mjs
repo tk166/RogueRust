@@ -487,6 +487,34 @@ const report = await page.evaluate(`(async () => {
     return { seed: null, ok: false };
   }
 
+  /// §276：startTowards 只保证"地图上**能到达**"那个类型的节点，不保证"**活着走到**"。
+  /// 弱池加了 4 条 L 史莱姆与 Swarm of Slimes（5 个敌人）之后，Act 1 变硬 —— 旧表里第一个
+  /// 能到达商人的种子（101）会在半路被打死，于是走图停在战斗节点上，而报错说的是
+  /// "光标在 kind 1，期待 4"，看起来像路线规划器坏了。这条把重试推到**走完再看**。
+  async function startOn(name, kindName, seeds) {
+    for (const seed of seeds) {
+      const started = await startTowards(name, kindName, [seed]);
+      if (!started.ok) continue;
+      const plan = planTo(kindName);
+      if (!plan || !plan.length) continue;
+      let ok = true;
+      for (let step = 0; step < plan.length; step++) {
+        const target = document.querySelector('[data-node="' + plan[step] + '"]');
+        if (!target) { ok = false; break; }
+        await click(target);
+        if (step + 1 < plan.length) {
+          // 中途的节点要结算掉（战斗要打完、事件要选完），否则下一步的点击会被拒。
+          const settled = await settle(120);
+          if (!settled || ex.rd_run_observe(1) !== plan[step]) { ok = false; break; }
+        }
+      }
+      if (!ok) continue;
+      return { seed, ok: true, skipped: false };
+    }
+    const none = await startTowards(name, kindName, seeds);
+    return { seed: none.seed, ok: false, skipped: none.skipped || false };
+  }
+
   const out = { scenarios: [], errors: [] };
   window.__sliceErrors = [];
   window.addEventListener("error", (event) => window.__sliceErrors.push(String(event.message)));
@@ -516,15 +544,9 @@ const report = await page.evaluate(`(async () => {
   // ---- (1) shop ------------------------------------------------------------------------------
   {
     const t0 = performance.now();
-    const started = await startTowards("shop", "shop", SEEDS);
+    const started = await startOn("shop", "shop", SEEDS);
     const row = { name: "shop", seed: started.seed, ok: started.ok, skipped: started.skipped || false, ms: 0 };
     if (started.ok) {
-      const plan = planTo("shop");
-      for (let step = 0; step + 1 < plan.length; step++) {
-        await click(document.querySelector('[data-node="' + plan[step] + '"]'));
-        await settle(120);
-      }
-      await click(document.querySelector('[data-node="' + plan[plan.length - 1] + '"]'));
       row.kind = ex.rd_run_node_kind();
       row.cards = [...panel().querySelectorAll(".shop-item")].length;
       row.goldBefore = gold();
@@ -633,14 +655,9 @@ const report = await page.evaluate(`(async () => {
   // ---- (3) rest site: smith ------------------------------------------------------------------
   {
     const t0 = performance.now();
-    const started = await startTowards("rest", "rest", SEEDS);
+    const started = await startOn("rest", "rest", SEEDS);
     const row = { name: "rest", seed: started.seed, ok: started.ok, skipped: started.skipped || false, ms: 0 };
     if (started.ok) {
-      const plan = planTo("rest");
-      for (let step = 0; step < plan.length; step++) {
-        await click(document.querySelector('[data-node="' + plan[step] + '"]'));
-        if (step + 1 < plan.length) await settle(120);
-      }
       row.kind = ex.rd_run_node_kind();
       row.hpBefore = hp();
       row.deckBefore = deckIds();
@@ -668,14 +685,9 @@ const report = await page.evaluate(`(async () => {
   // ---- (4) elite: win it, and its relic -------------------------------------------------------
   {
     const t0 = performance.now();
-    const started = await startTowards("elite", "elite", SEEDS);
+    const started = await startOn("elite", "elite", SEEDS);
     const row = { name: "elite", seed: started.seed, ok: started.ok, skipped: started.skipped || false, ms: 0 };
     if (started.ok) {
-      const plan = planTo("elite");
-      for (let step = 0; step < plan.length; step++) {
-        await click(document.querySelector('[data-node="' + plan[step] + '"]'));
-        if (step + 1 < plan.length) await settle(120);
-      }
       row.kind = ex.rd_run_node_kind();
       row.relicsBefore = relicCount();
       const begin = findButton(/^开始战斗/);

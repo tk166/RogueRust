@@ -8517,6 +8517,268 @@
         }
       ],
       "Triggers": []
+    },
+    {
+      "Id": "standard.split_spike_l",
+      "PackageId": "sts",
+      "NameKey": "Split",
+      "DescriptionKey": "When its HP is at or below 50%, it splits into 2 smaller Slimes with its current HP.",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Op": "LessOrEqual",
+                    "Left": {
+                      "kind": "multiply",
+                      "value": {
+                        "Left": {
+                          "kind": "currentHealth",
+                          "value": {
+                            "Selector": {
+                              "kind": "sel.source",
+                              "value": {
+                                "Cardinality": "ZeroOrOne",
+                                "RequiredContextCapabilities": "Source"
+                              }
+                            }
+                          }
+                        },
+                        "Right": {
+                          "kind": "const",
+                          "value": {
+                            "Value": 2
+                          }
+                        }
+                      }
+                    },
+                    "Right": {
+                      "kind": "maxHealth",
+                      "value": {
+                        "Selector": {
+                          "kind": "sel.source",
+                          "value": {
+                            "Cardinality": "ZeroOrOne",
+                            "RequiredContextCapabilities": "Source"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "Then": {
+                  "kind": "node.sequence",
+                  "value": {
+                    "Children": [
+                      {
+                        "kind": "node.createCombatant",
+                        "value": {
+                          "DefinitionId": "spike_slime_m",
+                          "TeamId": "enemy",
+                          "Health": {
+                            "kind": "currentHealth",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "kind": "node.createCombatant",
+                        "value": {
+                          "DefinitionId": "spike_slime_m",
+                          "TeamId": "enemy",
+                          "Health": {
+                            "kind": "currentHealth",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "kind": "node.destroyCombatant",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.sourceIncludingDowned",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.split_acid_l",
+      "PackageId": "sts",
+      "NameKey": "Split",
+      "DescriptionKey": "When its HP is at or below 50%, it splits into 2 smaller Slimes with its current HP.",
+      "Polarity": "Buff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Op": "LessOrEqual",
+                    "Left": {
+                      "kind": "multiply",
+                      "value": {
+                        "Left": {
+                          "kind": "currentHealth",
+                          "value": {
+                            "Selector": {
+                              "kind": "sel.source",
+                              "value": {
+                                "Cardinality": "ZeroOrOne",
+                                "RequiredContextCapabilities": "Source"
+                              }
+                            }
+                          }
+                        },
+                        "Right": {
+                          "kind": "const",
+                          "value": {
+                            "Value": 2
+                          }
+                        }
+                      }
+                    },
+                    "Right": {
+                      "kind": "maxHealth",
+                      "value": {
+                        "Selector": {
+                          "kind": "sel.source",
+                          "value": {
+                            "Cardinality": "ZeroOrOne",
+                            "RequiredContextCapabilities": "Source"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "Then": {
+                  "kind": "node.sequence",
+                  "value": {
+                    "Children": [
+                      {
+                        "kind": "node.createCombatant",
+                        "value": {
+                          "DefinitionId": "acid_slime_m",
+                          "TeamId": "enemy",
+                          "Health": {
+                            "kind": "currentHealth",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "kind": "node.createCombatant",
+                        "value": {
+                          "DefinitionId": "acid_slime_m",
+                          "TeamId": "enemy",
+                          "Health": {
+                            "kind": "currentHealth",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "kind": "node.destroyCombatant",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.sourceIncludingDowned",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -47661,6 +47923,951 @@
         "Kind": "Unknown",
         "Label": "Stunned - loses a turn"
       }
+    },
+    {
+      "Id": "spike_slime_l.lick",
+      "PackageId": "sts",
+      "NameKey": "Lick",
+      "DescriptionKey": "Lick - 2 Frail",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Lick - 2 Frail"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.frail"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 17,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.frail"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "spike_slime_l.flame_tackle",
+      "PackageId": "sts",
+      "NameKey": "Flame Tackle",
+      "DescriptionKey": "Flame Tackle - 16 damage, 2 Slimed",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Flame Tackle - 16 damage, 2 Slimed"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 16
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.createCardInstance",
+                "value": {
+                  "CardDefinitionId": {
+                    "value": "slimed"
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "ToZone": "DiscardPile",
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 18
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.createCardInstance",
+                    "value": {
+                      "CardDefinitionId": {
+                        "value": "slimed"
+                      },
+                      "Count": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "ToZone": "DiscardPile",
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "acid_slime_l.corrosive_spit",
+      "PackageId": "sts",
+      "NameKey": "Corrosive Spit",
+      "DescriptionKey": "Corrosive Spit - 11 damage, 2 Slimed",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Corrosive Spit - 11 damage, 2 Slimed"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 11
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.createCardInstance",
+                "value": {
+                  "CardDefinitionId": {
+                    "value": "slimed"
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "ToZone": "DiscardPile",
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 12
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.createCardInstance",
+                    "value": {
+                      "CardDefinitionId": {
+                        "value": "slimed"
+                      },
+                      "Count": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "ToZone": "DiscardPile",
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "acid_slime_l.lick",
+      "PackageId": "sts",
+      "NameKey": "Lick",
+      "DescriptionKey": "Lick - 2 Weak",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Lick - 2 Weak"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.weak"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "acid_slime_l.tackle",
+      "PackageId": "sts",
+      "NameKey": "Tackle",
+      "DescriptionKey": "Tackle - 16 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Tackle - 16 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 16
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 18
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Encounters": [
@@ -54549,6 +55756,603 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_swarm_of_slimes"
+      },
+      "Enemies": [
+        {
+          "Id": "spike_slime_s",
+          "MaxHealth": 10,
+          "Actions": [
+            {
+              "value": "spike_slime_s.tackle"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.thorns"
+              },
+              "Stacks": 3
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Spike Slime (S)",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 11
+            }
+          ]
+        },
+        {
+          "Id": "spike_slime_s",
+          "MaxHealth": 10,
+          "Actions": [
+            {
+              "value": "spike_slime_s.tackle"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.thorns"
+              },
+              "Stacks": 3
+            }
+          ],
+          "Position": 1,
+          "IntentRules": [],
+          "DisplayName": "Spike Slime (S)",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 11
+            }
+          ]
+        },
+        {
+          "Id": "spike_slime_s",
+          "MaxHealth": 10,
+          "Actions": [
+            {
+              "value": "spike_slime_s.tackle"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.thorns"
+              },
+              "Stacks": 3
+            }
+          ],
+          "Position": 2,
+          "IntentRules": [],
+          "DisplayName": "Spike Slime (S)",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 11
+            }
+          ]
+        },
+        {
+          "Id": "acid_slime_s",
+          "MaxHealth": 8,
+          "Actions": [
+            {
+              "value": "acid_slime_s.tackle"
+            },
+            {
+              "value": "acid_slime_s.lick"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 3,
+          "IntentRules": [],
+          "DisplayName": "Acid Slime (S)",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 9
+            }
+          ]
+        },
+        {
+          "Id": "acid_slime_s",
+          "MaxHealth": 8,
+          "Actions": [
+            {
+              "value": "acid_slime_s.tackle"
+            },
+            {
+              "value": "acid_slime_s.lick"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 4,
+          "IntentRules": [],
+          "DisplayName": "Acid Slime (S)",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 9
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_spike_slime_l"
+      },
+      "Enemies": [
+        {
+          "Id": "spike_slime_l",
+          "MaxHealth": 64,
+          "Actions": [
+            {
+              "value": "spike_slime_l.lick"
+            },
+            {
+              "value": "spike_slime_l.flame_tackle"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.split_spike_l"
+              },
+              "Stacks": 1
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    },
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 17
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 72,
+              "Action": {
+                "value": "spike_slime_l.flame_tackle"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 70,
+              "Action": {
+                "value": "spike_slime_l.lick"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 70,
+              "Action": {
+                "value": "spike_slime_l.flame_tackle"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 10,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "spike_slime_l.flame_tackle"
+                  },
+                  "Weight": 30
+                },
+                {
+                  "Action": {
+                    "value": "spike_slime_l.lick"
+                  },
+                  "Weight": 70
+                }
+              ]
+            }
+          ],
+          "DisplayName": "Spike Slime (L)",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 67
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_acid_slime_l"
+      },
+      "Enemies": [
+        {
+          "Id": "acid_slime_l",
+          "MaxHealth": 65,
+          "Actions": [
+            {
+              "value": "acid_slime_l.corrosive_spit"
+            },
+            {
+              "value": "acid_slime_l.lick"
+            },
+            {
+              "value": "acid_slime_l.tackle"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.split_acid_l"
+              },
+              "Stacks": 1
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    },
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 17
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 74,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "acid_slime_l.corrosive_spit"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "acid_slime_l.tackle"
+                  },
+                  "Weight": 50
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 2
+                }
+              },
+              "Priority": 73,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "acid_slime_l.corrosive_spit"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "acid_slime_l.lick"
+                  },
+                  "Weight": 50
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 70,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "acid_slime_l.tackle"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "acid_slime_l.lick"
+                  },
+                  "Weight": 50
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 70,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "acid_slime_l.corrosive_spit"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "acid_slime_l.tackle"
+                  },
+                  "Weight": 50
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 10,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "acid_slime_l.corrosive_spit"
+                  },
+                  "Weight": 30
+                },
+                {
+                  "Action": {
+                    "value": "acid_slime_l.tackle"
+                  },
+                  "Weight": 40
+                },
+                {
+                  "Action": {
+                    "value": "acid_slime_l.lick"
+                  },
+                  "Weight": 30
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.ascensionAtLeast",
+                "value": {
+                  "Value": 17
+                }
+              },
+              "Priority": 9,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "acid_slime_l.corrosive_spit"
+                  },
+                  "Weight": 30
+                },
+                {
+                  "Action": {
+                    "value": "acid_slime_l.tackle"
+                  },
+                  "Weight": 30
+                },
+                {
+                  "Action": {
+                    "value": "acid_slime_l.lick"
+                  },
+                  "Weight": 40
+                }
+              ]
+            }
+          ],
+          "DisplayName": "Acid Slime (L)",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 68
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -59138,6 +60942,412 @@
       "AiNote": "§201/§205：wiki `Thieves` —— HP 44-48（A7 46-50）、Thievery 15（A17 20）、Mug 10（A2 11）、Lunge 12（A2 14）、Smoke Bomb 6 格挡、Escape 带着钱逃走。模式：前两回合 Mug；之后 50/50 Lunge/Smoke Bomb；Lunge 之后 Smoke Bomb；Smoke Bomb 之后 Escape。⚠️ 仍然差的：A7 的 HP （血量是 `ENCT` 行上的数，不受 `EACT.ProgramAsc` 管）。",
       "Counters": [],
       "Spawn": true
+    },
+    {
+      "Id": "spike_slime_l",
+      "NameKey": "Spike Slime (L)",
+      "HpMin": 64,
+      "HpMax": 70,
+      "MaxHealth": 64,
+      "Actions": [
+        {
+          "value": "spike_slime_l.lick"
+        },
+        {
+          "value": "spike_slime_l.flame_tackle"
+        }
+      ],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.split_spike_l"
+          },
+          "Stacks": 1
+        }
+      ],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 2
+                  }
+                },
+                {
+                  "kind": "intent.ascensionAtLeast",
+                  "value": {
+                    "Value": 17
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 72,
+          "Action": {
+            "value": "spike_slime_l.flame_tackle"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 70,
+          "Action": {
+            "value": "spike_slime_l.lick"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 2
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 2
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 70,
+          "Action": {
+            "value": "spike_slime_l.flame_tackle"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 10,
+          "Choice": [
+            {
+              "Action": {
+                "value": "spike_slime_l.flame_tackle"
+              },
+              "Weight": 30
+            },
+            {
+              "Action": {
+                "value": "spike_slime_l.lick"
+              },
+              "Weight": 70
+            }
+          ]
+        }
+      ],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "§276：加权选择 + 不连招（读 last_move/prev_move）+ 50% 分裂",
+      "Counters": [],
+      "Spawn": true,
+      "MaxHealthAsc": [
+        {
+          "AscensionMin": 7,
+          "MaxHealth": 67
+        }
+      ]
+    },
+    {
+      "Id": "acid_slime_l",
+      "NameKey": "Acid Slime (L)",
+      "HpMin": 65,
+      "HpMax": 69,
+      "MaxHealth": 65,
+      "Actions": [
+        {
+          "value": "acid_slime_l.corrosive_spit"
+        },
+        {
+          "value": "acid_slime_l.lick"
+        },
+        {
+          "value": "acid_slime_l.tackle"
+        }
+      ],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.split_acid_l"
+          },
+          "Stacks": 1
+        }
+      ],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 3
+                  }
+                },
+                {
+                  "kind": "intent.ascensionAtLeast",
+                  "value": {
+                    "Value": 17
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 74,
+          "Choice": [
+            {
+              "Action": {
+                "value": "acid_slime_l.corrosive_spit"
+              },
+              "Weight": 50
+            },
+            {
+              "Action": {
+                "value": "acid_slime_l.tackle"
+              },
+              "Weight": 50
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 2
+            }
+          },
+          "Priority": 73,
+          "Choice": [
+            {
+              "Action": {
+                "value": "acid_slime_l.corrosive_spit"
+              },
+              "Weight": 50
+            },
+            {
+              "Action": {
+                "value": "acid_slime_l.lick"
+              },
+              "Weight": 50
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 1
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 70,
+          "Choice": [
+            {
+              "Action": {
+                "value": "acid_slime_l.tackle"
+              },
+              "Weight": 50
+            },
+            {
+              "Action": {
+                "value": "acid_slime_l.lick"
+              },
+              "Weight": 50
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 3
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "prev_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 3
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 70,
+          "Choice": [
+            {
+              "Action": {
+                "value": "acid_slime_l.corrosive_spit"
+              },
+              "Weight": 50
+            },
+            {
+              "Action": {
+                "value": "acid_slime_l.tackle"
+              },
+              "Weight": 50
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 10,
+          "Choice": [
+            {
+              "Action": {
+                "value": "acid_slime_l.corrosive_spit"
+              },
+              "Weight": 30
+            },
+            {
+              "Action": {
+                "value": "acid_slime_l.tackle"
+              },
+              "Weight": 40
+            },
+            {
+              "Action": {
+                "value": "acid_slime_l.lick"
+              },
+              "Weight": 30
+            }
+          ]
+        },
+        {
+          "Condition": {
+            "kind": "intent.ascensionAtLeast",
+            "value": {
+              "Value": 17
+            }
+          },
+          "Priority": 9,
+          "Choice": [
+            {
+              "Action": {
+                "value": "acid_slime_l.corrosive_spit"
+              },
+              "Weight": 30
+            },
+            {
+              "Action": {
+                "value": "acid_slime_l.tackle"
+              },
+              "Weight": 30
+            },
+            {
+              "Action": {
+                "value": "acid_slime_l.lick"
+              },
+              "Weight": 40
+            }
+          ]
+        }
+      ],
+      "Tier": "A",
+      "InvRef": "inv:§4.1",
+      "AiNote": "§276：加权选择 + 不连招（读 last_move/prev_move）+ 50% 分裂",
+      "Counters": [],
+      "Spawn": true,
+      "MaxHealthAsc": [
+        {
+          "AscensionMin": 7,
+          "MaxHealth": 68
+        }
+      ]
     }
   ],
   "EncounterTables": {
@@ -59190,6 +61400,18 @@
       {
         "Id": "enc_blue_slaver",
         "Weight": 14
+      },
+      {
+        "Id": "enc_swarm_of_slimes",
+        "Weight": 7
+      },
+      {
+        "Id": "enc_spike_slime_l",
+        "Weight": 7
+      },
+      {
+        "Id": "enc_acid_slime_l",
+        "Weight": 7
       }
     ],
     "Note": "§194：三幕的 Boss 池各自补齐到 wiki 的『三选一』（Boss = Slime Boss / The Guardian / Hexaghost；Boss2 = The Champ / Bronze Automaton / The Collector；Boss3 = Time Eater / Awakened One / Donu & Deca）。A20 的两场 Boss 因此可以是不同的一对。",

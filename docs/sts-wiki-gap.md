@@ -292,8 +292,8 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 
 | 缺的 | 缺什么载体 |
 |---|---|
-| `Swarm of Slimes`（3 spike S + 2 acid S） | **第 5 个敌人槽**：`MAX_ENEMY_SLOTS = 4`，而观察向量/页面偏移/存档都按它排布 |
-| Large Slime（Spike L / Acid L） | **L 系史莱姆怪物**（只有 M/S 两种） |
+| ~~`Swarm of Slimes`~~ | **§276 已做**：`MAX_ENEMY_SLOTS` 与内核上限**早就是 6**，卡住的只是内容门里的镜像（4）。 |
+| ~~Large Slime（Spike L / Acid L）~~ | **§276 已做**：两只 L 史莱姆 + **50% 分裂**（阈值 = 一半最大血，血量继承当前血）。 |
 | Exordium Thugs / Wildlife | **动态组合规则**（"First enemy: Louse 或 Medium Slime…"），我们的遭遇是静态列表 |
 
 ⚠️ 五个**精英**遭遇（Lagavulin / Book of Stabbing / Slavers / Nemesis / Reptomancer）

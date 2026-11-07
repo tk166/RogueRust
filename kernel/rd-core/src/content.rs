@@ -3416,7 +3416,11 @@ fn list_field<'a>(
 /// separate rows in the wiki's easy pool, and the second one is the only place the green louse is
 /// reachable. The reader **refuses** a longer list rather than cutting it (`:3042`), which is how
 /// this surfaced: a silently truncated pool would just make one encounter never roll.
-pub const MAX_POOL_IDS: usize = 12;
+/// §276: it was **12**, and act 1's weak pool reached **13** when `Swarm of Slimes` joined
+/// (`3 Louses` / `2 Fungi Beasts` / `Blue Slaver` / `Swarm` were added in §275–§276).
+/// Same discipline as §258: the reader **refuses** a longer list rather than cutting it, so this
+/// shows up as a red test instead of an encounter that can never roll.
+pub const MAX_POOL_IDS: usize = 16;
 
 /// The field name of each entry in an `EncounterTables` pool.
 const ENCOUNTER_ID_FIELD: &str = "Id";

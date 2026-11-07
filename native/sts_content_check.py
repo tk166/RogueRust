@@ -80,12 +80,12 @@ INV_COUNTS = {
     # and the encounter record has no instance number, inv:§4.2) + the boss.
     # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster); §175: +3 (Nemesis / Reptomancer / Dagger).
     # §201: +1 (Looter).
-    "monsters": 47,
+    "monsters": 49,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
     # §258: +1 (`enc_two_louses` -- the green louse was unreachable).
-    "encounters": 38,
+    "encounters": 41,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -119,7 +119,7 @@ INV_COUNTS = {
     # §269: +2 (`slavers_collar` / `busted_crown` energy carriers).
     # §270: +1 (`ectoplasm`'s energy carrier).
     # §271: +2 (`sozu` energy carrier + `ancient_tea_set`'s one-shot program).
-    "statuses": 124,
+    "statuses": 126,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -851,7 +851,10 @@ INV_CARDS = {
 # inv:§4.1 -- the 10 zero-new-ability enemies: (hp_min, hp_max, action ids).
 # §140: mirrors `rd_core::state::MAX_ENEMIES_IN_FIGHT`. The kernel enforces it on **summons**;
 # this file enforces it on what the content **places**.
-MAX_ENEMIES_IN_FIGHT = 4
+# ⚠️ §276：这里曾经是 4，而内核与画面在 §257 就涨到了 6（Reptomancer 的四把匕首）。
+# 镜像没跟着涨 ⇒ "内核能跑"的 `Swarm of Slimes`（5 个敌人）被闸门挡住，而**闸门报的是内容的错**。
+# 现在两边都是 6；`rd-wasm::MAX_ENEMY_SLOTS` 也是 6，三个数是同一个。
+MAX_ENEMIES_IN_FIGHT = 6
 
 INV_MONSTERS = [
     ("spike_slime_s", 10, 14, ["spike_slime_s.tackle"]),
@@ -920,6 +923,10 @@ INV_MONSTERS = [
     ("sneaky_gremlin", 10, 14, ["sneaky_gremlin.puncture"]),
     ("blue_slaver", 46, 50, ["blue_slaver.stab", "blue_slaver.rake"]),
     ("acid_slime_s", 8, 12, ["acid_slime_s.tackle", "acid_slime_s.lick"]),
+    # §276: the L slimes (act 1, wiki.gg `Slimes`). HP 64-70 / 65-69, A7 67-73 / 68-72.
+    ("spike_slime_l", 64, 70, ["spike_slime_l.lick", "spike_slime_l.flame_tackle"]),
+    ("acid_slime_l", 65, 69, ["acid_slime_l.corrosive_spit", "acid_slime_l.lick",
+                              "acid_slime_l.tackle"]),
     ("acid_slime_m", 28, 32, ["acid_slime_m.corrosive_spit",
                               "acid_slime_m.tackle", "acid_slime_m.lick"]),
     ("spike_slime_m", 28, 32, ["spike_slime_m.flame_tackle", "spike_slime_m.lick"]),
@@ -1079,6 +1086,14 @@ INV_ACTIONS = {
                                                ("card", "slimed", 1, "DiscardPile", "event")]),
     "acid_slime_m.tackle": ("Attack", [("damage", 10, "event")]),
     "acid_slime_m.lick": ("Debuff", [("status", "standard.weak", 1, "event")]),
+    # §276: the L slimes. Lick's A17 档（3 Frail）与 A2 的伤害档见 INV_ASC_VARIANTS。
+    "spike_slime_l.lick": ("Debuff", [("status", "standard.frail", 2, "event")]),
+    "spike_slime_l.flame_tackle": ("Attack", [("damage", 16, "event"),
+                                              ("card", "slimed", 2, "DiscardPile", "event")]),
+    "acid_slime_l.corrosive_spit": ("Attack", [("damage", 11, "event"),
+                                               ("card", "slimed", 2, "DiscardPile", "event")]),
+    "acid_slime_l.lick": ("Debuff", [("status", "standard.weak", 2, "event")]),
+    "acid_slime_l.tackle": ("Attack", [("damage", 16, "event")]),
     "spike_slime_m.flame_tackle": ("Attack", [("damage", 8, "event"),
                                               ("card", "slimed", 1, "DiscardPile", "event")]),
     "spike_slime_m.lick": ("Debuff", [("status", "standard.frail", 1, "event")]),
@@ -1310,6 +1325,13 @@ INV_ELITE_POOL = {
     "enc_three_louses": ["louse_green", "louse_red", "louse_red"],
     "enc_two_fungi_beasts": ["fungi_beast", "fungi_beast"],
     "enc_blue_slaver": ["blue_slaver"],
+    # §276: `Swarm of Slimes` —— 3× Spike (S) + 2× Acid (S)。内容里**第一个 5 敌人**的遭遇，
+    # 也是 `acid_slime_s` 第一次真正上场（此前只有 roster 行、没有遭遇用到它）。
+    "enc_swarm_of_slimes": ["spike_slime_s", "spike_slime_s", "spike_slime_s",
+                            "acid_slime_s", "acid_slime_s"],
+    # §276: 原作 `Large Slime` 是"随机 Spike L 或 Acid L"（重量 2）；静态内容拆成两条各 7。
+    "enc_spike_slime_l": ["spike_slime_l"],
+    "enc_acid_slime_l": ["acid_slime_l"],
 }
 
 # inv:§4.3 -- the boss pool. `inv:§4.3` says the three act-1 bosses are picked equiprobably; this
@@ -1327,7 +1349,11 @@ INV_ACT_TABLES = {
              "enc_two_louses",
              # §275: act 1's hard pool —— the three that need no new monsters.
              # （⛔ `Swarm of Slimes` 要 5 个敌人槽，`MAX_ENEMY_SLOTS` 是 4 ⇒ 不做，见 §275 文档。）
-             "enc_three_louses", "enc_two_fungi_beasts", "enc_blue_slaver"],
+             "enc_three_louses", "enc_two_fungi_beasts", "enc_blue_slaver",
+             # §276：5 个敌人 —— 镜像对齐到 6 之后才允许进场。
+             "enc_swarm_of_slimes",
+             # §276：L 史莱姆（原作 `Large Slime` 的两种掷法，拆成两条）。
+             "enc_spike_slime_l", "enc_acid_slime_l"],
     "Weak2": ["enc_chosen", "enc_shelled_parasite"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
@@ -1370,6 +1396,10 @@ INV_STATUSES = {
     # §227: Nightmare 的"下一回合把留存的副本拿进手牌" —— 一条 TurnStarted 触发器，
     # 没有任何修饰器（和 `standard.thorns` 一样属于"行为全在触发器里"）。
     "standard.nightmare_pending": [],
+    # §276：两条 50% 分裂（L 史莱姆）。行为全在 `DamageTaken` 触发器里，没有被动修饰器
+    # （触发器清单在下面那张专门的表里）。
+    "standard.split_spike_l": [],
+    "standard.split_acid_l": [],
     # §231: Battle Trance 的"本回合不能再抽" —— 规则在内核的抽牌节点里，状态本身没有修饰器。
     "standard.no_draw": [],
     # §238: Double Tap's "next Attack is played twice" -- consumed by `play.rs`'s scope table.
@@ -2279,6 +2309,13 @@ INV_ASC_VARIANTS = {
     # action id: [(AscensionMin, facts), ...] —— §192 起是**列表**：一个动作可以有两个档位
     # （`jaw_worm.bellow` 的 Strength 在 A2 升、Block 在 A17 升）。单档位的动作仍然只写一项。
     # 每一行都是 wiki 的数字；出处见 `native/wiki_asc/<monster>.txt`。
+    # §276: L slimes -- A2 的伤害档 + Spike Lick 的 A17 档。
+    'spike_slime_l.flame_tackle': [(2, [('damage', 18, 'event'),
+                                       ('card', 'slimed', 2, 'DiscardPile', 'event')])],
+    'spike_slime_l.lick': [(17, [('status', 'standard.frail', 3, 'event')])],
+    'acid_slime_l.corrosive_spit': [(2, [('damage', 12, 'event'),
+                                        ('card', 'slimed', 2, 'DiscardPile', 'event')])],
+    'acid_slime_l.tackle': [(2, [('damage', 18, 'event')])],
     'acid_slime_m.corrosive_spit': [(2, [('damage', 8, 'event'), ('card', 'slimed', 1, 'DiscardPile', 'event')])],
     'acid_slime_m.tackle': [(2, [('damage', 12, 'event')])],
     'acid_slime_s.tackle': [(2, [('damage', 4, 'event')])],
@@ -2777,7 +2814,7 @@ INV_ASC_HP = {
     'spike_slime_s': 11, 'fat_gremlin': 14, 'sneaky_gremlin': 11, 'blue_slaver': 48,
     'acid_slime_s': 9, 'acid_slime_m': 29, 'spike_slime_m': 29, 'jaw_worm': 42,
     'cultist': 50, 'gremlin_wizard': 22, 'sentry_1': 39, 'sentry_2': 39, 'sentry_3': 39,
-    'slime_boss': 150, 'time_eater': 480, 'shelled_parasite': 70, 'chosen': 98, 'byrd': 26,
+    'spike_slime_l': 67, 'acid_slime_l': 68, 'slime_boss': 150, 'time_eater': 480, 'shelled_parasite': 70, 'chosen': 98, 'byrd': 26,
     'spiker': 44, 'orb_walker': 92, 'the_champ': 440, 'gremlin_leader': 145, 'giant_head': 520,
     'darkling': 50, 'spire_growth': 190, 'louse_red': 11, 'louse_green': 12, 'fungi_beast': 24,
     'slaver_red': 48, 'gremlin_nob': 85, 'lagavulin': 112, 'book_of_stabbing': 168,
@@ -2953,6 +2990,9 @@ def check_ascension_variants(doc):
 # "the wiki has no A-row here" is a decision, and a decision has to be written down or the next
 # reader cannot tell it from "nobody looked".
 INV_NO_ASC = {
+    # §276: `acid_slime_l.lick` 本身没有升阶数字 —— wiki 的 A17 改的是**招式权重**
+    # （30/40/30 → 30/30/40）与"Lick 不能连两次"，两条都在 IntentRules 里，不在动作里。
+    'acid_slime_l.lick': 'wiki Slimes: A17 moves the weights and the no-repeat rule, not the stacks',
     # `Thieves` (native/wiki_asc/thieves.txt): Smoke Bomb is "Gains 6 Block" with no A-row; Escape
     # is a rule, not a number.
     'looter.smoke_bomb': 'wiki Thieves: 6 Block, no A-row',
@@ -3447,6 +3487,8 @@ def check_statuses(doc):
                      # §269
                      "standard.slavers_collar", "standard.busted_crown", "standard.ectoplasm",
                      "standard.sozu", "standard.ancient_tea_set",
+                     # §276：L 史莱姆的两条 50% 分裂。
+                     "standard.split_spike_l", "standard.split_acid_l",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3584,7 +3626,10 @@ def check_statuses(doc):
                         # `sozu` 是**修饰器**（每回合 +1 能量），没有触发器。
                         "standard.sozu": [],
                         "standard.ancient_tea_set": ["TurnStarted"],
-                        "standard.champion_belt": ["StatusApplied"]}[sid]
+                        "standard.champion_belt": ["StatusApplied"],
+                        # §276：L 史莱姆的 50% 分裂（spawn 的血量是**当前血**）。
+                        "standard.split_spike_l": ["DamageTaken"],
+                        "standard.split_acid_l": ["DamageTaken"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:

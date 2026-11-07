@@ -73,12 +73,9 @@ MIN_TESTS = 500          # 扫不到 500 条测试 = 扫描器坏了，不是"�
 # 悄悄消失好；而声明本身也要被检查 —— 有一天它被接进遭遇了（或者 id 被删了），这里会红，
 # 逼着把声明删掉。
 ORPHAN_OK = {
-    'acid_slime_s': '`enc_small_slimes` 只放 `acid_slime_m` + `spike_slime_s`（StS 的 Small Slimes 是'
-                    '随机 1-3 只混编，这里钉了一种组合）；记录与两条动作保留给扩池用',
-    'spike_slime_m': '同上：中号尖刺史莱姆只在 Boss 分裂路径上出现过，遭遇池里没有它',
-    # §258: `louse_green` 已经接进 `enc_two_louses`（并带上与红虱同一份 `Rolls`），
-    # 所以这条声明按它自己的约定删掉了 —— 留着的后果是"孤儿的豁免"永远有效，
-    # 下次真有记录掉线也看不出来。
+    # §276: `acid_slime_s` 与 `spike_slime_m` 的声明按这张表自己的约定删掉了 ——
+    # 前者进了 `enc_swarm_of_slimes`，后者是 L 史莱姆分裂的产物（`createCombatant`）。
+    # 留着的后果是"孤儿的豁免"永远有效，下次真有记录掉线也看不出来（§258 的教训）。
 }
 
 

@@ -1404,10 +1404,17 @@ pub unsafe extern "C" fn rd_run_shop_card_id_into(slot: i32, ptr: *mut u8) -> i3
 #[no_mangle]
 pub extern "C" fn rd_run_shop_card_price(slot: i32) -> i32 {
     // §270：显示价 = `shop_price(挂牌价)`，`buy_card` 扣的也是它 —— 两处同一个函数。
+    // ⚠️ §276：**售罄的哨兵是 `price < 0`**（页面画"已售"），它**不能**过折扣 ——
+    // `shop_price(-1)` 里那个 `.max(0)` 会把它变成 0，于是页面把卖掉的格子画成"0 金可买"，
+    // 点下去被内核拒（`EmptyOffer`）。soak 就是靠"点了一个启用的控件却什么都没变"抓到的。
     let session = run_slot();
     let session = session.as_ref();
-    shop_offer(session, slot, true)
-        .map_or(-1, |offer| session.map_or(offer.price, |s| s.state.shop_price(offer.price)))
+    shop_offer(session, slot, true).map_or(-1, |offer| {
+        if offer.price < 0 {
+            return offer.price;
+        }
+        session.map_or(offer.price, |s| s.state.shop_price(offer.price))
+    })
 }
 
 /// How many relics the merchant is selling.
@@ -1440,8 +1447,13 @@ pub unsafe extern "C" fn rd_run_shop_relic_id_into(slot: i32, ptr: *mut u8) -> i
 pub extern "C" fn rd_run_shop_relic_price(slot: i32) -> i32 {
     let session = run_slot();
     let session = session.as_ref();
-    shop_offer(session, slot, false)
-        .map_or(-1, |offer| session.map_or(offer.price, |s| s.state.shop_price(offer.price)))
+    shop_offer(session, slot, false).map_or(-1, |offer| {
+        // 同上：售罄的 `-1` 不过折扣。
+        if offer.price < 0 {
+            return offer.price;
+        }
+        session.map_or(offer.price, |s| s.state.shop_price(offer.price))
+    })
 }
 
 fn shop_offer(
@@ -8019,10 +8031,21 @@ mod tests {
                 // 而它们**本来就该**改这个数（§145/§149）。钉的是"药水真的走了伤害管线、打了
                 // 至少 20 点"，而 `== enemy_before - 20` 会让每次内容变动都可能翻红 ——
                 // 它已经因为卡池多两张（§149）而红过一次。
+                // ⚠️ §276：这条断言原来写"掉血 ≥ 20"，而 `dropped` 是**血量差** —— 敌人只剩
+                // 10 血时过量伤害照样被截断成 10。弱池新增条目让这个种子换了个遭遇，于是它红了。
+                // 判据装在了切口**下游**：药水走没走伤害管线，与"这一只还剩多少血"是两件事。
+                // 现在钉两条更硬、且与敌人血量无关的事：
+                //   ① 它真的掉了血（`> 0`），并且敌方**死掉或掉到 0**都算数；
+                //   ② 掉血量不可能超过"它原本的血"与"药水的 20"里较小的那个 —— 超过说明管线
+                //      打了两次（这才是真正要防的回归）。
                 let dropped = enemy_before - first_enemy_hp();
                 assert!(
-                    dropped >= 20,
-                    "20 damage through the pipeline, got {dropped}"
+                    dropped > 0,
+                    "the fire potion must reach the damage pipeline (dropped {dropped})"
+                );
+                assert!(
+                    dropped <= enemy_before.min(20),
+                    "the potion deals 20 at most, so it cannot drop {dropped} off {enemy_before}"
                 );
                 assert_eq!(rd_run_potion_count(), after_energy - 1);
             }
