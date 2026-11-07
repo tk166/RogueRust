@@ -4359,6 +4359,54 @@ def check_requirement_atom(atoms, where_root, relics, cards, counts):
         counts["conditions"] += 1
 
 
+# §284：**没有目标**的事件。它们的触发器程序里 `sel.eventTarget` 恒为空集 ⇒ 任何
+# "对 eventTarget 做事"的节点都会静默什么都不做。参考语义是对的（空集不是错误），
+# 所以这条只能在**内容**这一层拦（静态、响亮）。
+INV_TARGETLESS_EVENTS = ("TurnStarted", "TurnEnded", "FoeDowned")
+
+
+def check_targetless_trigger_selectors(doc):
+    """§284：无目标事件的触发器里不许用 `sel.eventTarget`。"""
+    print("[6g] targetless triggers (port-plan.md §284)")
+    problems = 0
+    checked = 0
+
+    def visit(node, where):
+        nonlocal problems
+        if isinstance(node, list):
+            for index, item in enumerate(node):
+                visit(item, "%s[%d]" % (where, index))
+            return
+        if not isinstance(node, dict):
+            return
+        kind = node.get("kind")
+        if kind == "sel.eventTarget":
+            fail(where, "`sel.eventTarget` in a trigger for an event that has no target -- "
+                        "it resolves to the empty set, so the node silently does nothing")
+            problems += 1
+        for key, value in node.items():
+            if key == "kind":
+                continue
+            visit(value, where + "." + key if where else key)
+
+    def triggers_of(rows, label):
+        nonlocal checked
+        for row in rows or []:
+            row_id = row.get("Id")
+            for index, trigger in enumerate(row.get("Triggers") or []):
+                event = trigger.get("Event")
+                if event not in INV_TARGETLESS_EVENTS:
+                    continue
+                checked += 1
+                visit(trigger.get("Program"),
+                      "%s.%s.Triggers[%d](%s)" % (label, row_id, index, event))
+
+    triggers_of(doc.get("Statuses"), "Statuses")
+    triggers_of(doc.get("Relics"), "Relics")
+    ok("targetless triggers", "%d trigger program(s) checked, %d bad selector(s)"
+       % (checked, problems))
+
+
 def check_event_vocabulary(doc):
     """§278：每个事件是一棵**段树**，逐段检查选项与效果。
 
@@ -5073,6 +5121,7 @@ def main():
     check_relations(doc)
     check_weak_pool_table(doc)
     check_event_vocabulary(doc)
+    check_targetless_trigger_selectors(doc)
     check_upgrades(doc)
     check_relic_rarities(doc)
     check_potions(doc)

@@ -312,7 +312,7 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 |---|---|---|---|
 | Bite 连招 | "will not use Bite three times in a row" | **§283 已做**：内容多记一格 `prev_move`（`prev_move = last_move`），规则 `prev==Bite && last==Bite ⇒ Tail Whip` | 一致 |
 | `Snecko Eye` 遗物 | 开局自挂 Confused + 每回合多抽 2 | **§283 已做**（`standard.snecko_eye` 的 `TurnStarted` 触发器） | 一致 |
-| Confused 的"何时挂" | 开局挂一次；`Orange Pellets` 清掉后不再回来 | **每回合都挂一次**（不叠加，所以只有"清掉后会回来"这一处偏差） | **偏差**：首回合判定写在触发器里读不到 source 计数器（恒 0），与其假装在判，不如显式偏差 |
+| Confused 的"何时挂" | 开局挂一次；`Orange Pellets` 清掉后不再回来 | **开局挂一次**（`snecko_eye_turns` 计数器判第一次 `TurnStarted`） | 一致 —— §283 记的"每回合都挂"是**错记**，真因是 `sel.eventTarget` 在无目标事件里恒空 + 脚本幂等守卫让修正没落进镜像（见 §284） |
 | `Snecko Eye` 的多抽 | `TurnStartDraw` 修饰器 | `TurnStarted` 触发器里的 `drawCards 2` | 可观察等价（`max_hand_size` 是 `i32::MAX`，上限不参与） |
 | Confused 的清状态语义 | `Orange Pellets` 清掉后，已重掷的牌保留新价 | 天然一致（价格在副本计数器上） | 一致，无专门判据 |
 

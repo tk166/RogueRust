@@ -8786,7 +8786,7 @@
       "NameKey": "Confused",
       "DescriptionKey": "Whenever you draw a card, randomize its cost (0-3).",
       "Polarity": "Debuff",
-      "UsesStacks": true,
+      "UsesStacks": false,
       "UsesDuration": false,
       "UsesCharges": false,
       "StackingBehavior": "MergeWithExistingInstance",
@@ -8823,7 +8823,62 @@
               "value": {
                 "Children": [
                   {
-                    "kind": "node.applyStatus",
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "snecko_eye_turns"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.applyStatus",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "StatusDefinitionId": {
+                            "value": "standard.confusion"
+                          },
+                          "Stacks": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 1
+                            }
+                          },
+                          "DurationTurns": 0,
+                          "Charges": 0,
+                          "ResultKey": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
                     "value": {
                       "TargetSelector": {
                         "kind": "sel.source",
@@ -8832,18 +8887,16 @@
                           "RequiredContextCapabilities": "Source"
                         }
                       },
-                      "StatusDefinitionId": {
-                        "value": "standard.confusion"
+                      "CounterId": {
+                        "value": "snecko_eye_turns"
                       },
-                      "Stacks": {
+                      "Amount": {
                         "kind": "const",
                         "value": {
                           "Value": 1
                         }
                       },
-                      "DurationTurns": 0,
-                      "Charges": 0,
-                      "ResultKey": null
+                      "Relative": false
                     }
                   },
                   {

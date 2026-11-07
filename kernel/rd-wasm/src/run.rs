@@ -7150,6 +7150,69 @@ mod tests {
             eye_confused,
             "Snecko Eye starts each combat with Confused"
         );
+
+        // ★ §284：**首回合才挂**。把 Confused 摘掉（模拟 `Orange Pellets`），再推进一回合 ——
+        // 它**不该**回来。这条判据是"触发器里的 `combatantCounter(sel.source)` 真的读到了
+        // 拥有者的计数器"的唯一证据：若那个读数是恒 0，条件恒真、第二回合会再挂一次。
+        test_run(7, 80, 80, &["strike"; 12]);
+        assert_eq!(rd_run_step(0), 0, "floor 1");
+        assert_eq!(rd_run_begin_node(), 0);
+        {
+            let pool = reward_pool(content()).expect("the card pool");
+            run_slot()
+                .as_mut()
+                .expect("run")
+                .state
+                .push_relic("snecko_eye", &pool)
+                .expect("snecko_eye is implemented");
+        }
+        assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+        let hero = crate::slot().as_ref().expect("session").hero_id().expect("hero");
+        {
+            let session = crate::slot().as_mut().expect("session");
+            let combatant = session.state.combatant_mut(&hero).expect("the hero");
+            let before = combatant.statuses().len();
+            let slot = (0..before)
+                .find(|i| combatant.statuses()[*i].definition_id.as_str() == "standard.confusion")
+                .expect("the eye applied Confused");
+            assert!(combatant.remove_status(slot), "the test must really remove Confused");
+            assert_eq!(combatant.statuses().len(), before - 1);
+        }
+        // 推进到下一回合（敌人回合 → 英雄回合），让 TurnStarted 再跑一次。
+        {
+            let config = rd_core::battle::standard_turn_config().expect("config");
+            let image = content();
+            let session = crate::slot().as_mut().expect("session");
+            for _ in 0..8 {
+                let mut host = rd_core::host::Host::new(image);
+                rd_core::turn::end_current_turn_and_start_next(
+                    &mut session.state,
+                    &config,
+                    &mut host,
+                )
+                .expect("the turn advances");
+                if session
+                    .state
+                    .active_combatant_id
+                    .as_ref()
+                    .is_some_and(|id| id.as_str() == hero.as_str())
+                {
+                    break;
+                }
+            }
+        }
+        let session = crate::slot().as_ref().expect("session");
+        let reapplied = session
+            .state
+            .combatant(&hero)
+            .expect("the hero")
+            .statuses()
+            .iter()
+            .any(|s| s.definition_id.as_str() == "standard.confusion");
+        assert!(
+            !reapplied,
+            "Confused came back on the second turn -- the trigger's counter read is not working"
+        );
     }
 
     /// §282：`Confusion`（wiki: *Confused*）—— 抽到的牌价格重掷成 0..3。
