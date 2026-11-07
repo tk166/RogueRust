@@ -4576,6 +4576,71 @@ fn draw_cards_node(
 /// 内层抽到抽不满为止，然后看弃牌堆 —— 两堆都空就**抽不满但不是错误**（`:59-60` 的 `break`）。
 /// `reshuffles` 那个计数器是**结构性兜底**：本循环体内没有任何东西往弃牌堆放牌，
 /// 所以正常路径上每次调用最多重洗一次；它保证将来有人往循环里加动作时这里不会变成死循环。
+/// §282：`Confusion` 的状态 id（wiki 的 *Confused*；`Snecko` 的 Perplexing Glare 与
+/// `Snecko Eye` 都挂这一条）。
+pub const CONFUSION_STATUS: &str = "standard.confusion";
+/// §282：重掷范围（wiki："randomize its cost … 0 to 3"，四档**等概率**）。
+pub const CONFUSION_MIN: i32 = 0;
+pub const CONFUSION_MAX: i32 = 3;
+
+/// §282：`Confusion` 的重掷 —— 抽到的那一张，费用变成 `draw_in_range(0, 3)`。
+///
+/// **两个调用点**（抽牌有两条路）：`draw_for`（节点/药水的抽牌请求）与
+/// `turn::draw_for_turn_start`（回合开始的 5 张）。两处都调它 —— 只装一处就会漂。
+/// 抄两份必然漂，所以它是 `pub`。
+///
+/// 三个"不做"与 wiki 逐条对应：
+/// * **X 费牌不动**（费用是 `x.cost`，掷了没人读）。只能按 **tag** 判 —— "印刷价 0 就不掷"
+///   会让 0 费普通牌免疫，而 wiki 的表格明说 0 费牌有 75% 会**变贵**；
+/// * **不可打出的牌不动**（印刷价 -2，掷成 0 会把诅咒变成免费的）；
+/// * 重掷是**绝对覆盖**（`CARD_COST_OVERRIDE_COUNTER`），会盖掉此前一切费用改动
+///   （wiki: "Overwrite the current cost of Blood for Blood …"）。
+pub fn confuse_drawn_card(
+    state: &mut crate::state::CombatState,
+    content: Option<&crate::content::Content<'_>>,
+    owner: &CombatantId,
+    slot: crate::state::CardSlot,
+) {
+    // 只有**持有者**有这条状态时才掷（不叠加，所以"有没有"就够了 —— 参考的 stack 上限是 1）。
+    let confused = state.combatant(owner).is_some_and(|combatant| {
+        combatant
+            .statuses()
+            .iter()
+            .any(|instance| instance.definition_id.as_str() == CONFUSION_STATUS)
+    });
+    if !confused {
+        return;
+    }
+    let Some(card) = state.card(slot) else {
+        return;
+    };
+    let definition = card.definition_id;
+    if let Some(content) = content {
+        // 两条豁免都是 **tag**（内容说了算）：`x_cost`（费用是 `x.cost`）与
+        // `unplayable`（诅咒/状态牌，重掷成 0 会把它们变成免费的）。
+        //
+        // ⚠️ 不能用"印刷价 <= 0 就跳过"来判 X 费牌：0 费的**普通**牌会被 Confusion 变贵
+        // （wiki 的表格：Normal Cost 0 → 75% chance of becoming more expensive），
+        // 于是那条捷径会让 0 费牌免疫 —— 一条静默的行为偏差。
+        if content.card_has_tag(definition.as_str(), crate::battle::X_COST_TAG) == Some(true) {
+            return;
+        }
+        if content.card_has_tag(definition.as_str(), "unplayable") == Some(true) {
+            return;
+        }
+    }
+    // §281 的唯一入口：派生 → 取模 → `random_step += 1`。
+    let roll = draw_random(state, CONFUSION_MIN, CONFUSION_MAX);
+    let Ok(key) = crate::state::CounterId::new(crate::state::CARD_COST_OVERRIDE_COUNTER) else {
+        return;
+    };
+    if let Some(card) = state.card_mut(slot) {
+        // 装不下就是容量问题（每副本的计数器表很小）。**静默失败**会让这张牌按印刷价出牌 ——
+        // 那正是"屏幕说 0 费、内核收 2"的形态，所以交给"显示 = 实收"那几条判据去红。
+        let _ = card.set_mark_counter(key, roll);
+    }
+}
+
 fn draw_for(
     ctx: &mut ExecContext<'_>,
     owner: &CombatantId,
@@ -4596,6 +4661,9 @@ fn draw_for(
             let Some(slot) = ctx.state.draw_card(owner)? else {
                 break;
             };
+            // §282：`Confusion` —— "Whenever you draw a card, randomize its cost"（wiki）。
+            // 放在 `Drawn` 节目**之前**：那张牌的节目读到的是"这次抽到的价"。
+            confuse_drawn_card(ctx.state, ctx.content, owner, slot);
             // §220：抽到了 ⇒ 跑它的 `Drawn` 节目（没有节目就什么都不做，链号也不动）。
             if let Some(content) = ctx.content {
                 if let Some(card) = ctx.state.card(slot) {

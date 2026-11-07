@@ -746,6 +746,10 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // (`KindMask` decides that on the run side).
             | "standard.slavers_collar"
             | "standard.busted_crown"
+            // §282: `standard.confusion` —— 规则**全在内核**（`exec::draw_for` 里按 id 看
+            // "有没有"，抽到的牌重掷成 0..3）。它像 §231 的 `standard.no_draw`：内容那一行
+            // 没有任何修饰器/触发器，它是个**开关**。⚠️ 因此这条清单是它唯一的"有人读"证据。
+            | "standard.confusion"
             // §270: `ectoplasm`'s energy half (its "no more gold" half is run-layer).
             | "standard.ectoplasm"
             // §271: `sozu`'s energy half and `ancient_tea_set`'s one-shot energy.

@@ -2788,6 +2788,12 @@ impl Host<'_> {
 // =============================================================================================
 
 impl TurnHost for Host<'_> {
+    /// §282：`Confusion` 的重掷要按 **tag** 豁免（`x_cost` / `unplayable`），所以宿主要把
+    /// 内容交出去。`NullHost` 保持默认的 `None`（标准包路径没有内容）。
+    fn confusion_content(&self) -> Option<&crate::content::Content<'_>> {
+        Some(self.content())
+    }
+
     fn activate_pending_statuses(
         &mut self,
         state: &mut CombatState,

@@ -306,6 +306,14 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 | ~~真实事件的**剧情分支**被合并 + 条件选项~~ | **§278/§279/§280 已做**：`EVND` 段表（选项数不固定）+ `EV.Entry` + `Requires`/`RequiresAsc`（闭词表，6 数值 kind / 2 存在 kind）+ `relic_lose` / `gold_cost` / `heal_pct` / `heal_full` / 小数百分比（千分）。**事件级条件（"这个事件出不出现"）仍未做** —— 见 `docs/event-gaps.md` §3.1。 |
 | 战斗中**每回合重掷**的随机没有值节点 | 一个"从程序里问随机数"的表达式 | `randomInt(Min,Max)` 走 `CombatState` 现有 RNG；★ 结果要在计划里固化（预检也会求值） |
 
+### F.4 Snecko（§282）
+
+| 项 | wiki | 我们 | 性质 |
+|---|---|---|---|
+| Bite 连招 | "will not use Bite three times in a row" | 加权 `Choice` 60/40，**可能连三次** | **偏差** —— 要记"最近两次招式"，而 `selfHasCounter(last_move)` 只记上一条 |
+| `Snecko Eye` 遗物 | 开局自挂 Confused + 每回合多抽 2 | **没做**（机制已就绪，属遗物那一节） | 缺 |
+| Confused 的清状态语义 | `Orange Pellets` 清掉后，已重掷的牌保留新价 | 天然一致（价格在副本计数器上） | 一致，无专门判据 |
+
 ### G. ★ 基础值偏差：§191 修掉了 8 条，剩 3 条是写明了的简化
 
 §190 补 A 数值时发现"有招式的基础值就和 wiki 不一致"。**这些不能加升档变体**（在错的地基上加层

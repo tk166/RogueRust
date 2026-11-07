@@ -80,12 +80,14 @@ INV_COUNTS = {
     # and the encounter record has no instance number, inv:§4.2) + the boss.
     # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster); §175: +3 (Nemesis / Reptomancer / Dagger).
     # §201: +1 (Looter).
-    "monsters": 49,
+    # §282: +1 (`snecko`, Act 2's normal enemy carrying `Confusion`).
+    "monsters": 50,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
     # §258: +1 (`enc_two_louses` -- the green louse was unreachable).
-    "encounters": 43,
+    # §282: +1 (`enc_snecko`).
+    "encounters": 44,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -119,7 +121,8 @@ INV_COUNTS = {
     # §269: +2 (`slavers_collar` / `busted_crown` energy carriers).
     # §270: +1 (`ectoplasm`'s energy carrier).
     # §271: +2 (`sozu` energy carrier + `ancient_tea_set`'s one-shot program).
-    "statuses": 126,
+    # §282: +1 (`standard.confusion`).
+    "statuses": 127,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -857,6 +860,8 @@ INV_CARDS = {
 MAX_ENEMIES_IN_FIGHT = 6
 
 INV_MONSTERS = [
+    # §282: Act 2 的普通怪 Snecko —— 114-120 血（表里是下界），三个动作。
+    ("snecko", 114, 120, ["snecko.perplexing_glare", "snecko.bite", "snecko.tail_whip"]),
     ("spike_slime_s", 10, 14, ["spike_slime_s.tackle"]),
     # §129: the wiki's act-3 boss, parked in the Boss pool (acts still share content).
     # §137: the act-3 normal pool gets thicker.
@@ -976,6 +981,12 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    # §282: Snecko（wiki `Module:Enemies/data`）。Bite 15 / Tail Whip 8 + 2 易伤；
+    # A 档在 `INV_ASC_VARIANTS` 里。Perplexing Glare 只挂 Confused（没有伤害）。
+    "snecko.perplexing_glare": ("Debuff", [("status", "standard.confusion", 1, "event")]),
+    "snecko.bite": ("Attack", [("damage", 15, "event")]),
+    "snecko.tail_whip": ("AttackDebuff", [("damage", 8, "event"),
+                                          ("status", "standard.vulnerable", 2, "event")]),
     # §193: `N = Number between (7-11;{{Asc|2|9-13}}), chosen at the start of combat` -- the amount
     # is a counter the fight rolls at spawn, not a constant (the range lives in `INV_ROLLS`).
     "darkling.nip": ("Attack", [("damage", ("counter", "roll.nip", "source"), "event")]),
@@ -1295,6 +1306,8 @@ INV_WEAK_POOL = {
     # §147: the carrier for `Constricted` (act 3, wiki HP 170).
     "enc_spire_growth": ["spire_growth"],
     "enc_maw": ["maw"],
+    # §282: Snecko —— Act 2 的**普通**敌人，独自出现（wiki: "always alone"，114-120 血）。
+    "enc_snecko": ["snecko"],
 }
 INV_WEAK_WEIGHT = 100  # inv:§5.2 权重之和 100（6 个遭遇按 20/16/16/16/16/16 分）
 
@@ -1366,7 +1379,9 @@ INV_ACT_TABLES = {
              "enc_spike_slime_l", "enc_acid_slime_l",
              # §277：组合槽的两条。
              "enc_exordium_thugs", "enc_exordium_wildlife"],
-    "Weak2": ["enc_chosen", "enc_shelled_parasite"],
+    "Weak2": ["enc_chosen", "enc_shelled_parasite",
+              # §282: Act 2 的普通怪 Snecko（`Confusion` 的载体）。
+              "enc_snecko"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
     "Elite": ["enc_gremlin_nob", "enc_lagavulin", "enc_three_sentries"],
@@ -1407,6 +1422,10 @@ INV_BOSS_POOL = {
 INV_STATUSES = {
     # §227: Nightmare 的"下一回合把留存的副本拿进手牌" —— 一条 TurnStarted 触发器，
     # 没有任何修饰器（和 `standard.thorns` 一样属于"行为全在触发器里"）。
+    # §282: `standard.confusion` —— **行为全在内核**（`exec::draw_for` 里按 id 看"有没有"，
+    # 像 §231 的 `standard.no_draw`）。所以内容这一行没有任何修饰器与触发器：它是个**开关**，
+    # 不是一段程序。这正是 `no_draw` 那条注释说过的同一类载体。
+    "standard.confusion": [],
     "standard.nightmare_pending": [],
     # §276：两条 50% 分裂（L 史莱姆）。行为全在 `DamageTaken` 触发器里，没有被动修饰器
     # （触发器清单在下面那张专门的表里）。
@@ -2349,6 +2368,12 @@ INV_ASC_VARIANTS = {
     # §205: Thievery 15 -> A17: 20. A variant is a **whole program**, so the A17 row has to carry the
     # A2 damage bump as well -- otherwise A17 would *lose* it (the picker takes the largest
     # threshold, not a stack of deltas).
+    # §282: Snecko（wiki `Module:Enemies/data`：Bite 15→18 @A2；Tail Whip 8→10 @A2，
+    # 并在 **A17** 多 2 层 Weak）。
+    'snecko.bite': [(2, [('damage', 18, 'event')])],
+    'snecko.tail_whip': [(2, [('damage', 10, 'event'), ('status', 'standard.vulnerable', 2, 'event')]),
+                        (17, [('damage', 10, 'event'), ('status', 'standard.vulnerable', 2, 'event'),
+                              ('status', 'standard.weak', 2, 'event')])],
     'looter.mug': [(2, [('damage', 11, 'event'),
                         ('counter', 'stolen_gold', 15, True, 'source')]),
                    (17, [('damage', 11, 'event'),
@@ -2834,6 +2859,8 @@ INV_ASC_HP = {
     'darkling': 50, 'spire_growth': 190, 'louse_red': 11, 'louse_green': 12, 'fungi_beast': 24,
     'slaver_red': 48, 'gremlin_nob': 85, 'lagavulin': 112, 'book_of_stabbing': 168,
     'taskmaster': 57, 'nemesis': 200, 'reptomancer': 190, 'dagger': 20, 'the_guardian': 250,
+    # §282: wiki `Module:Enemies/data` -- Snecko BaseHP 114-120 / AscHP 120-125. 表里的数是**下界**。
+    'snecko': 120,
     'hexaghost': 264, 'bronze_automaton': 320, 'bronze_orb': 54, 'the_collector': 300,
     'torch_head': 40, 'awakened_one': 320, 'donu': 265, 'deca': 265, 'looter': 46,
 }
@@ -3010,6 +3037,8 @@ INV_NO_ASC = {
     'acid_slime_l.lick': 'wiki Slimes: A17 moves the weights and the no-repeat rule, not the stacks',
     # `Thieves` (native/wiki_asc/thieves.txt): Smoke Bomb is "Gains 6 Block" with no A-row; Escape
     # is a rule, not a number.
+    # §282: Perplexing Glare 只挂 Confused，wiki 没有 A 档（`Module:Enemies/data` 里只有一行）。
+    'snecko.perplexing_glare': 'wiki Snecko: Perplexing Glare has no A-row (it only applies Confused)',
     'looter.smoke_bomb': 'wiki Thieves: 6 Block, no A-row',
     'looter.escape': 'wiki Thieves: Escape has no numbers',
     # `Cultist`: Dark Strike "Deals 6 damage." -- the Ritual stack is what ascension moves (already

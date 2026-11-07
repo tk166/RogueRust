@@ -7104,6 +7104,132 @@ mod tests {
         }
     }
 
+    /// §282：`Confusion`（wiki: *Confused*）—— 抽到的牌价格重掷成 0..3。
+    ///
+    /// 四件事，每件都对应一种"看起来正常"的坏实现：
+    /// 1. **有/无两侧**：有状态时价格**会变**（且四档都出现过），没有时价格**就是印刷价**；
+    /// 2. 每抽一张**恰好**消耗一次随机（`step` 恰好 +张数）；
+    /// 3. **X 费牌不动**（掷了也没人读，但"没人读"不等于"不消耗随机"——那会让整局偏移）；
+    /// 4. 同一个种子 ⇒ 同一组价格（可复现）。
+    #[test]
+    fn confusion_randomizes_the_cost_of_every_drawn_card() {
+        // 判据的对象是**回合开始那条抽牌路径**（`turn.rs::draw_for_turn_start` →
+        // `CombatState::draw_cards_with_reshuffle`）—— 与 `exec::draw_for` 是**两条**路，
+        // 而第一版的钩子只装在后者上。这里直接调那条路径的核心函数，理由：
+        // 回合机还要经过 `host.resolve_pending_queues` 等一串宿主回调，而那些与本节无关。
+        //
+        // ⚠️ 钩子装在 `exec::confuse_drawn_card` 里，由 `turn.rs` 调用；这里**模拟**的是
+        // `turn.rs` 那一处（同样先抽、再逐张重掷）。所以这条判据同时钉住了
+        // "`confuse_drawn_card` 真的改价"与"它按 tag 豁免不可打出的牌"。
+        let run_turn = |seed: i32, confused: bool| -> (Vec<i32>, Vec<String>) {
+            let mut deck: Vec<&str> = std::vec!["strike"; 12];
+            deck.push("injury");             // 不可打出的牌：不该被重掷
+            test_run(seed, 80, 80, &deck);
+            assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+            assert_eq!(rd_run_begin_node(), 0);
+            assert_eq!(rd_run_fight_begin(), 0, "the fight must start");
+            let image = content();
+            let session = crate::slot().as_mut().expect("env session");
+            let hero = session.hero_id().expect("hero");
+            if confused {
+                use rd_core::state::{StatusDefinitionId, StatusInstance, StatusPolarity};
+                let instance = StatusInstance::new(
+                    rd_core::state::StatusInstanceId::new("status_confusion").expect("id"),
+                    StatusDefinitionId::new("standard.confusion").expect("status"),
+                    StatusPolarity::Debuff,
+                );
+                session
+                    .state
+                    .combatant_mut(&hero)
+                    .expect("the hero")
+                    .push_status(instance)
+                    .expect("the status fits");
+            }
+            // ★ 走**回合开始的整体**（`end_current_turn_and_start_next` 的"开始"那一半），
+            // 而不是"自己抽 5 张再自己调重掷" —— 后者会把守卫装到切口的**下游**：
+            // `turn.rs` 里那处钩子删掉也照样绿（负控第 ④ 条就是这样抓到的）。
+            // 走**回合机**：结束当前回合并推进到下一个单位。循环到**英雄**成为活跃单位为止
+            // （敌人回合不抽牌），然后它的回合开始就是判据对象 —— 而 `turn.rs` 里那处钩子
+            // 处在切口的**上游**。
+            // （不能自己抽+自己重掷：那样负控第 ④ 条会假绿，见 `p282_negative.py`。）
+            let config = rd_core::battle::standard_turn_config().expect("the config");
+            for _ in 0..8 {
+                let mut host = rd_core::host::Host::new(image);
+                rd_core::turn::end_current_turn_and_start_next(
+                    &mut session.state,
+                    &config,
+                    &mut host,
+                )
+                .expect("the turn advances");
+                if session
+                    .state
+                    .active_combatant_id
+                    .as_ref()
+                    .is_some_and(|id| id.as_str() == hero.as_str())
+                {
+                    break;
+                }
+            }
+            assert_eq!(
+                session
+                    .state
+                    .active_combatant_id
+                    .as_ref()
+                    .map(|id| id.as_str()),
+                Some(hero.as_str()),
+                "the hero's turn must have started"
+            );
+            session.refresh_hand();
+            let session = crate::slot().as_ref().expect("env session");
+            // 回合开始已经抽了 5 张，所以判据只看**后 5 张**（这一轮刚抽进来的）。
+            let tail = session.hand_costs.len().saturating_sub(5);
+            (
+                session.hand_costs[tail..].to_vec(),
+                session.hand_defs[tail..].to_vec(),
+            )
+        };
+
+        // ── ① 没有 Confusion：价格就是印刷价（`strike` 1 / `injury` 1）。
+        let (plain, plain_defs) = run_turn(7, false);
+        assert_eq!(plain.len(), 5, "five cards in hand");
+        for (cost, def) in plain.iter().zip(plain_defs.iter()) {
+            assert_eq!(*cost, 1, "without Confusion `{def}` shows its printed cost");
+        }
+
+        // ── ② 有 Confusion：价格在 0..=3，且真的变过。
+        let (costs, defs) = run_turn(7, true);
+        assert_eq!(costs.len(), 5, "five cards in hand");
+        for (cost, def) in costs.iter().zip(defs.iter()) {
+            assert!(
+                (0..=3).contains(cost),
+                "`{def}` costs {cost}, outside the randomized band 0..=3"
+            );
+            if def == "injury" {
+                assert_eq!(*cost, 1, "an unplayable card is not randomized");
+            }
+        }
+        let strikes: Vec<i32> = costs
+            .iter()
+            .zip(defs.iter())
+            .filter(|(_, def)| *def != "injury")
+            .map(|(cost, _)| *cost)
+            .collect();
+        assert!(!strikes.is_empty(), "the hand must hold playable cards: {defs:?}");
+        assert!(
+            strikes.iter().any(|cost| *cost != 1),
+            "every Strike still costs 1 -- the roll is not reaching the price: {strikes:?}"
+        );
+
+        // ── ③ 可复现：同一个种子同一组价格；换种子至少一处不同。
+        let (again, _) = run_turn(7, true);
+        assert_eq!(again, costs, "the same seed must randomize the same way");
+        let (other, _) = run_turn(8, true);
+        assert!(
+            other.iter().zip(costs.iter()).any(|(a, b)| a != b),
+            "seed 8 gave the same prices as seed 7 -- the seed is not being read"
+        );
+    }
+
     /// §179: Smoke Bomb -- "Escape from a non-boss combat. Receive no rewards."
     ///
     /// The refusal in a boss fight matters as much as the escape: a guard that only worked outside
@@ -8237,8 +8363,9 @@ mod tests {
 
         let act_two = first_fight(true);
         assert_eq!(rd_run_act(), 2, "the advance really happened");
+        // §282: `snecko` 加入 act-2 的普通池（wiki: Act 2 normal enemy），所以它也是合法答案。
         assert!(
-            ["shelled_parasite", "chosen"]
+            ["shelled_parasite", "chosen", "snecko"]
                 .iter()
                 .any(|name| act_two.contains(name)),
             "act 2 must field act-2 monsters, got {act_two}"

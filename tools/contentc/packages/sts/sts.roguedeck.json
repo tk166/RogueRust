@@ -8779,6 +8779,23 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.confusion",
+      "PackageId": "sts",
+      "NameKey": "Confused",
+      "DescriptionKey": "Whenever you draw a card, randomize its cost (0-3).",
+      "Polarity": "Debuff",
+      "UsesStacks": false,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "debuff",
+        "confusion"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
     }
   ],
   "Cards": [
@@ -48868,6 +48885,367 @@
           }
         }
       ]
+    },
+    {
+      "Id": "snecko.perplexing_glare",
+      "PackageId": "sts",
+      "NameKey": "Perplexing Glare",
+      "DescriptionKey": "Perplexing Glare - Applies Confused",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Perplexing Glare - Applies Confused"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.confusion"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "Id": "snecko.bite",
+      "PackageId": "sts",
+      "NameKey": "Bite",
+      "DescriptionKey": "Bite - 15 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Bite - 15 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 15
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              }
+            ]
+          }
+        }
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 18
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Id": "snecko.tail_whip",
+      "PackageId": "sts",
+      "NameKey": "Tail Whip",
+      "DescriptionKey": "Tail Whip - 8 damage, 2 Vulnerable",
+      "Intent": {
+        "Kind": "AttackDebuff",
+        "Label": "Tail Whip - 8 damage, 2 Vulnerable"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.sequence",
+                "value": {
+                  "Children": [
+                    {
+                      "kind": "node.dealDamage",
+                      "value": {
+                        "TargetSelector": {
+                          "kind": "sel.eventTarget",
+                          "value": {
+                            "Cardinality": "ZeroOrOne",
+                            "RequiredContextCapabilities": "EventTarget"
+                          }
+                        },
+                        "Amount": {
+                          "kind": "const",
+                          "value": {
+                            "Value": 8
+                          }
+                        },
+                        "ResultKey": null,
+                        "IgnoresBlock": false,
+                        "Element": null
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.vulnerable"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        }
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.sequence",
+                    "value": {
+                      "Children": [
+                        {
+                          "kind": "node.dealDamage",
+                          "value": {
+                            "TargetSelector": {
+                              "kind": "sel.eventTarget",
+                              "value": {
+                                "Cardinality": "ZeroOrOne",
+                                "RequiredContextCapabilities": "EventTarget"
+                              }
+                            },
+                            "Amount": {
+                              "kind": "const",
+                              "value": {
+                                "Value": 10
+                              }
+                            },
+                            "ResultKey": null,
+                            "IgnoresBlock": false,
+                            "Element": null
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.vulnerable"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "AscensionMin": 17,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.sequence",
+                    "value": {
+                      "Children": [
+                        {
+                          "kind": "node.dealDamage",
+                          "value": {
+                            "TargetSelector": {
+                              "kind": "sel.eventTarget",
+                              "value": {
+                                "Cardinality": "ZeroOrOne",
+                                "RequiredContextCapabilities": "EventTarget"
+                              }
+                            },
+                            "Amount": {
+                              "kind": "const",
+                              "value": {
+                                "Value": 10
+                              }
+                            },
+                            "ResultKey": null,
+                            "IgnoresBlock": false,
+                            "Element": null
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.vulnerable"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.weak"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
     }
   ],
   "Encounters": [
@@ -57807,6 +58185,90 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_snecko"
+      },
+      "Enemies": [
+        {
+          "Id": "snecko",
+          "MaxHealth": 114,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 120
+            }
+          ],
+          "HpMin": 114,
+          "HpMax": 120,
+          "Actions": [
+            {
+              "value": "snecko.perplexing_glare"
+            },
+            {
+              "value": "snecko.bite"
+            },
+            {
+              "value": "snecko.tail_whip"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.round",
+                "value": {
+                  "Op": "Equal",
+                  "Round": 1
+                }
+              },
+              "Action": {
+                "value": "snecko.perplexing_glare"
+              },
+              "Priority": 90
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 10,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "snecko.bite"
+                  },
+                  "Weight": 60
+                },
+                {
+                  "Action": {
+                    "value": "snecko.tail_whip"
+                  },
+                  "Weight": 40
+                }
+              ]
+            }
+          ],
+          "Rolls": [],
+          "Counters": []
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -62802,6 +63264,71 @@
           "MaxHealth": 68
         }
       ]
+    },
+    {
+      "Id": "snecko",
+      "NameKey": "Snecko",
+      "HpMin": 114,
+      "HpMax": 120,
+      "MaxHealth": 114,
+      "MaxHealthAsc": [
+        {
+          "AscensionMin": 7,
+          "MaxHealth": 120
+        }
+      ],
+      "Actions": [
+        {
+          "value": "snecko.perplexing_glare"
+        },
+        {
+          "value": "snecko.bite"
+        },
+        {
+          "value": "snecko.tail_whip"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.round",
+            "value": {
+              "Op": "Equal",
+              "Round": 1
+            }
+          },
+          "Action": {
+            "value": "snecko.perplexing_glare"
+          },
+          "Priority": 90
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 10,
+          "Choice": [
+            {
+              "Action": {
+                "value": "snecko.bite"
+              },
+              "Weight": 60
+            },
+            {
+              "Action": {
+                "value": "snecko.tail_whip"
+              },
+              "Weight": 40
+            }
+          ]
+        }
+      ],
+      "Rolls": [],
+      "Counters": []
     }
   ],
   "EncounterTables": {
@@ -62912,6 +63439,10 @@
       },
       {
         "Id": "enc_chosen",
+        "Weight": 50
+      },
+      {
+        "Id": "enc_snecko",
         "Weight": 50
       }
     ],

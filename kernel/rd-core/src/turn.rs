@@ -148,6 +148,16 @@ impl From<CapacityError> for TurnError {
 
 /// 效果系统在回合机四个点上的接缝。**实现这个 trait 就等于实现那四步。**
 pub trait TurnHost {
+    /// §282：`Confusion` 的重掷需要**内容**（豁免按 tag 判）。trait 上给一个默认实现
+    /// （`None` ⇒ 不重掷），由 `Host` 覆写成真的内容 —— 不覆写就是"回合开始的牌不重掷"，
+    /// 而那有判据（`confusion_randomizes_the_cost_of_every_drawn_card` 的第二半）。
+    ///
+    /// 为什么不是"把 content 塞进 `CombatState`"：`CombatState` 是**局面**（进指纹、要可复制），
+    /// 而内容是只读的外部表；两者混在一起会让快照语义变糊。
+    fn confusion_content(&self) -> Option<&crate::content::Content<'_>> {
+        None
+    }
+
     /// turn-start 处理器 #3：`pending_turns--`，归零的转正（`StatusEffects.cs:409`）。
     fn activate_pending_statuses(
         &mut self,
@@ -777,6 +787,14 @@ pub fn start_current_turn<H: TurnHost>(
             else {
                 continue;
             };
+            // §282：`Confusion` —— 回合开始的这 5 张**也**要重掷。抽牌有两条路
+            // （`exec::draw_for` 与这里的 `draw_cards_with_reshuffle`），只在一条上装钩子
+            // 会让"回合开始的牌不重掷"，而屏幕上一切正常。所以两个调用点都调**同一个**
+            // `exec::confuse_drawn_card`（`pub` 就是为了这个）。
+            //
+            // 顺序：重掷在 `Drawn` 节目**之前** —— 那张牌的节目读到的是"这次抽到的价"。
+            let confusion_content = host.confusion_content();
+            crate::exec::confuse_drawn_card(state, confusion_content, &actor, slot);
             host.card_drawn(state, &actor, slot)?;
             if stopped(state) {
                 break;
