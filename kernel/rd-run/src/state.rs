@@ -35,11 +35,13 @@ use crate::streams::{RunError, RunRng, RunStream};
 ///
 /// 两个消费者（[`RunState::combat_bonus_for`] / [`RunState::reward_card_count`]）各自挑自己认识的
 /// 变体、忽略其余 —— 所以这张表**只有一处**，而不是"每个消费者一张"。
-const RELIC_SECOND_HALVES: [(&str, RelicEffect); 3] = [
+const RELIC_SECOND_HALVES: [(&str, RelicEffect); 4] = [
     ("busted_crown", RelicEffect::RewardCardDelta(-2, KindMask::ALL)),
     ("ectoplasm", RelicEffect::StartCombatStatus("standard.ectoplasm", 1)),
     // §271：`sozu` 的第一半是"不能再获得药水"（运行时判断），第二半是每回合 +1 能量。
     ("sozu", RelicEffect::StartCombatStatus("standard.sozu", 1)),
+    // §273：`the_courier` 的第一半是 -20%（`ShopDiscountPercent`），第二半是"买完补货"。
+    ("the_courier", RelicEffect::CourierRestock),
 ];
 
 /// §269：一组"哪几类战斗"的位掩码（[`RelicEffect::StartCombatStatusInKinds`] 等使用）。
@@ -212,6 +214,8 @@ pub enum RelicEffect {
     RewardCardDelta(i32, KindMask),
     /// §269：**药水必掉**（`white_beast_statue`）。
     PotionAlwaysDrops,
+    /// §273：`the_courier` —— 商人**补货**（买走一格就补一格）。
+    CourierRestock,
     /// §272：`juzu_bracelet` —— `?` 房不再出**普通**战斗（wiki 原文：removes the 10% base chance）。
     NoUnknownMonster,
     /// §272：`tiny_chest` —— 每第 4 个 `?` 房是宝箱。
@@ -2047,6 +2051,7 @@ impl RunState {
             | RelicEffect::PotionUseHeal(_)
             | RelicEffect::NoUnknownMonster
             | RelicEffect::TinyChestEveryFourth
+            | RelicEffect::CourierRestock
             | RelicEffect::RestCardReward => {}
         }
         self.relics[slot] = id;
@@ -2201,6 +2206,7 @@ impl RunState {
                     | RelicEffect::PotionUseHeal(_)
                     | RelicEffect::NoUnknownMonster
                     | RelicEffect::TinyChestEveryFourth
+                    | RelicEffect::CourierRestock
                     | RelicEffect::RestCardReward,
                 ) => {}
                 None => {
@@ -2414,6 +2420,8 @@ impl RunState {
             // §271：药水类两件。
             "sozu" => Some(RelicEffect::NoPotionGain),
             "toy_ornithopter" => Some(RelicEffect::PotionUseHeal(5)),
+            // §273：`the_courier` —— 两个半：-20% 折扣（`ShopDiscountPercent`）+ 买完补货。
+            "the_courier" => Some(RelicEffect::ShopDiscountPercent(20)),
             // §272：`?` 房分流的两件（规则在 `roll_unknown_room` 里）。
             "juzu_bracelet" => Some(RelicEffect::NoUnknownMonster),
             "tiny_chest" => Some(RelicEffect::TinyChestEveryFourth),
@@ -2592,6 +2600,7 @@ impl RunState {
                     | RelicEffect::PotionUseHeal(_)
                     | RelicEffect::NoUnknownMonster
                     | RelicEffect::TinyChestEveryFourth
+                    | RelicEffect::CourierRestock
                     | RelicEffect::RestCardReward,
                 )
                 | None => {}
@@ -3138,6 +3147,7 @@ impl RunState {
                     | RelicEffect::PotionUseHeal(_)
                     | RelicEffect::NoUnknownMonster
                     | RelicEffect::TinyChestEveryFourth
+                    | RelicEffect::CourierRestock
                     | RelicEffect::RestCardReward,
                 )
                 | None => {}
@@ -3303,14 +3313,8 @@ impl RunState {
             }
             NodeKind::Treasure => Pending::Chest,
             NodeKind::Shop => {
-                self.stock_shop(card_pool, relic_pool)?;
-                // §271：`meal_ticket` —— "Whenever you enter a shop, heal 15 HP"。
-                // 与 `Eternal Feather` 同一条规矩：**进门就付**，不是"买了东西才付"。
-                if let Some(RelicEffect::ShopEntryHeal(amount)) =
-                    self.first_relic_effect_of(RelicEffect::ShopEntryHeal(15))
-                {
-                    self.heal_after_combat(amount);
-                }
+                // §273：与 `?` 房掷出商人时**同一条路**（摆货架 + `meal_ticket`）。
+                self.enter_shop(card_pool, relic_pool)?;
                 Pending::Shop
             }
             // An elite is a fight like any other: what differs is the pool it draws from and what
@@ -3334,7 +3338,9 @@ impl RunState {
                 match self.roll_unknown_room()? {
                     UnknownRoom::Treasure => Pending::Chest,
                     UnknownRoom::Shop => {
-                        self.stock_shop(card_pool, relic_pool)?;
+                        // §273：**同一个** `enter_shop` —— `?` 房变成商店也要触发 `meal_ticket`
+                        // （wiki 的 Planisphere 页：*"a ? that turns into a shop triggers both"*）。
+                        self.enter_shop(card_pool, relic_pool)?;
                         Pending::Shop
                     }
                     UnknownRoom::Monster | UnknownRoom::Event | UnknownRoom::Unresolved => {
@@ -3458,6 +3464,114 @@ impl RunState {
                 max: MAX_POOL,
             });
         }
+        Ok(())
+    }
+
+    /// §273：**进一次商店** —— 摆货架 + `meal_ticket` 的 15 血。
+    ///
+    /// 为什么必须是一个函数：`?` 房掷出商人时走的是 `begin_node` 的 Unknown 分支，而商店节点走
+    /// 的是 `NodeKind::Shop` 分支。§272 之前只有后者调用这里的效果，于是
+    /// "`?` 房变成商店"**不回血** —— 而 wiki 明确说这两件事都要触发
+    /// （Planisphere 页：*"a ? that turns into a shop triggers both"*）。
+    /// 一处实现、两个调用方，才能让"进商店"只有一个意思。
+    fn enter_shop(
+        &mut self,
+        card_pool: &[PoolCard<'_>],
+        relic_pool: &[PoolRelic<'_>],
+    ) -> Result<(), RunError> {
+        self.stock_shop(card_pool, relic_pool)?;
+        // `meal_ticket` —— "Whenever you enter a shop, heal 15 HP"。与 `Eternal Feather`
+        // 同一条规矩：**进门就付**，不是"买了东西才付"。
+        if let Some(RelicEffect::ShopEntryHeal(amount)) =
+            self.first_relic_effect_of(RelicEffect::ShopEntryHeal(15))
+        {
+            self.heal_after_combat(amount);
+        }
+        Ok(())
+    }
+
+    /// §273：`the_courier` 的**第二半** —— 买走一格就补一格（同价位的重新掷一次）。
+    ///
+    /// 只补被买走的那一格，不重摆整个货架：wiki 说的是 "The Merchant **restocks** cards,
+    /// relics, and potions"，也就是"货架不会因为你买了就变少"。
+    ///
+    /// 池子里没货了（牌池就这么大 / 遗物已经全在手上）⇒ 那一格留空（`price = -1`），
+    /// **不是**错误：那正是"商人的货卖完了"。
+    fn restock_card_slot(&mut self, slot: usize, card_pool: &[PoolCard<'_>]) -> Result<(), RunError> {
+        // 货架上还活着的卡（含其它格子）都不能再被补进来：货架不该出现两张一样的牌。
+        let mut used = [false; MAX_POOL];
+        let mut eligible = [0usize; MAX_POOL];
+        let mut eligible_len = 0usize;
+        Self::pool_fits(card_pool.len())?;
+        for index in 0..card_pool.len() {
+            if matches!(
+                card_pool[index].rarity,
+                Rarity::Status | Rarity::Curse | Rarity::Special
+            ) {
+                continue;
+            }
+            let mut on_shelf = false;
+            for other in 0..self.shop.cards_len as usize {
+                if other != slot && self.shop.cards[other].price >= 0
+                    && self.shop.cards[other].id == RunId::new(card_pool[index].id)
+                        .unwrap_or(RunId::EMPTY)
+                {
+                    on_shelf = true;
+                    break;
+                }
+            }
+            if !on_shelf {
+                eligible[eligible_len] = index;
+                eligible_len += 1;
+            }
+        }
+        if eligible_len == 0 {
+            self.shop.cards[slot] = Offer {
+                id: RunId::EMPTY,
+                price: -1,
+            };
+            return Ok(());
+        }
+        let pick = self.rng.roll(RunStream::Shop, eligible_len as u32)? as usize;
+        let card = card_pool[eligible[pick]];
+        let (low, high) = card_price_band(card.rarity);
+        let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
+        self.shop.cards[slot] = Offer {
+            id: RunId::new(card.id).map_err(|_| RunError::BadId)?,
+            // 与陈列时同一条规矩：涨价在**挂牌**那一刻算，折扣在付款时算（`shop_price`）。
+            price: self.marked_up(price),
+        };
+        used[0] = false;
+        Ok(())
+    }
+
+    /// §273：`the_courier` 的遗物那一半（同上）。
+    fn restock_relic_slot(
+        &mut self,
+        slot: usize,
+        relic_pool: &[PoolRelic<'_>],
+    ) -> Result<(), RunError> {
+        let mut shelved: [RunId; MAX_SHOP_RELICS] = [RunId::EMPTY; MAX_SHOP_RELICS];
+        let mut len = 0usize;
+        for other in 0..self.shop.relics_len as usize {
+            if other != slot && self.shop.relics[other].price >= 0 {
+                shelved[len] = self.shop.relics[other].id;
+                len += 1;
+            }
+        }
+        let picked = self.pick_relic_avoiding(RunStream::Shop, relic_pool, &shelved[..len])?;
+        if picked.as_str().is_empty() {
+            self.shop.relics[slot] = Offer {
+                id: RunId::EMPTY,
+                price: -1,
+            };
+            return Ok(());
+        }
+        let price = 143 + self.rng.roll(RunStream::Shop, 15)? as i32;
+        self.shop.relics[slot] = Offer {
+            id: picked,
+            price: self.marked_up(price),
+        };
         Ok(())
     }
 
@@ -3699,7 +3813,14 @@ impl RunState {
     }
 
     /// Buy the card in `slot`. The id stays readable through [`RunState::shop`].
-    pub fn buy_card(&mut self, slot: usize, card: PoolCard<'_>) -> Result<(), RunError> {
+    /// §273：`card_pool` 是**补货**用的（`the_courier`）—— 买走一格就补一格，而补什么只有池子
+    /// 知道。没有这件遗物时它不被读到，但签名统一（一处规则、一个入口）。
+    pub fn buy_card(
+        &mut self,
+        slot: usize,
+        card: PoolCard<'_>,
+        card_pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
         if self.pending != Pending::Shop {
             return Err(RunError::WrongPhase);
         }
@@ -3730,11 +3851,22 @@ impl RunState {
         self.adjust_gold(-self.shop_price(offer.price));
         self.maw_bank_broken = true;
         self.shop.cards[slot].price = -1;
+        // §273：`the_courier` —— "The Merchant restocks cards, relics, and potions"：买走的那一格
+        // **立刻补上**（而不是留空）。走 `RELIC_SECOND_HALVES` 的同一张表，所以"这件遗物有哪两半"
+        // 仍然只有一处。
+        if self.holds_relic("the_courier") {
+            self.restock_card_slot(slot, card_pool)?;
+        }
         Ok(())
     }
 
     /// Buy the relic in `slot`.
-    pub fn buy_relic(&mut self, slot: usize) -> Result<(), RunError> {
+    /// §273：`relic_pool` 同上（`the_courier` 的补货）。
+    pub fn buy_relic(
+        &mut self,
+        slot: usize,
+        relic_pool: &[PoolRelic<'_>],
+    ) -> Result<(), RunError> {
         if self.pending != Pending::Shop {
             return Err(RunError::WrongPhase);
         }
@@ -3758,6 +3890,10 @@ impl RunState {
         // §270：`maw_bank` "No longer works when you spend any Gold at a shop"。
         self.maw_bank_broken = true;
         self.shop.relics[slot].price = -1;
+        // §273：`the_courier` 补货（同上）。
+        if self.holds_relic("the_courier") {
+            self.restock_relic_slot(slot, relic_pool)?;
+        }
         Ok(())
     }
 
@@ -4883,6 +5019,18 @@ pub fn state_fits_the_tripwire() -> (usize, usize) {
 mod tests {
     use super::*;
 
+    /// §273：**比货架多**的一份池子（7 张 vs `MAX_SHOP_CARDS` = 5）—— 补货判据要它，否则
+    /// "买走一格再补一格"根本补不出来（3 张的池子被 3 格货架一次用尽）。
+    const SHOP_CARDS: [PoolCard<'static>; 7] = [
+        PoolCard { id: "strike", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
+        PoolCard { id: "defend", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None },
+        PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
+        PoolCard { id: "bash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
+        PoolCard { id: "clash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
+        PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None },
+        PoolCard { id: "havoc", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None },
+    ];
+
     /// §270：带**类型**的一份小卡池（几条判据要"加一张 Attack / Skill"）。
     /// 名字不叫 `CARDS`：那个已经是"七张 `&str`"的老常量。
     const TYPED_CARDS: [PoolCard<'static>; 3] = [
@@ -4908,7 +5056,12 @@ mod tests {
             .cards()
             .get(slot)
             .map_or(RunId::EMPTY, |offer| offer.id);
-        run.buy_card(slot, PoolCard::plain(id.as_str()))
+        run.buy_card(slot, PoolCard::plain(id.as_str()), &TYPED_CARDS)
+    }
+
+    /// §273：买**遗物**那一格（补货要池子，所以这里也带一份）。
+    fn buy_relic_at(run: &mut RunState, slot: usize) -> Result<(), RunError> {
+        run.buy_relic(slot, &RELICS)
     }
     use crate::map::NodeKind;
 
@@ -5688,6 +5841,163 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §273：`?` 房掷出商人 ⇒ 与商店节点**同一条**进门路径（`meal_ticket` 也要付）。
+    ///
+    /// ⚠️ 这条判据钉的正是 §272 留下的缺口：`begin_node` 的 Unknown 分支当时只 `stock_shop`，
+    /// 于是 `?`→商店 不回血。wiki 的 Planisphere 页写过 *"a ? that turns into a shop triggers
+    /// both"*。
+    #[test]
+    fn an_unknown_room_that_becomes_a_shop_pays_the_shop_entry_relics() {
+        use crate::map::NodeKind;
+
+        fn enter_unknown_shop(mut seed: i32) -> Option<(RunState, i32)> {
+            // 走到一个 `?` 房并 `begin_node`，直到掷出**商人**（约 3% ⇒ 400 个种子足够）。
+            for _ in 0..4000 {
+                let mut run = RunState::new(seed, 80, i32::MAX, &["strike"; 10]).expect("a run");
+                if !walk_to(&mut run, NodeKind::Unknown) {
+                    seed += 1;
+                    continue;
+                }
+                let ok = run.begin_node(&TYPED_CARDS, &RELICS).is_ok();
+                if ok && run.unknown_room() == UnknownRoom::Shop {
+                    let hp = run.health();
+                    return Some((run, hp));
+                }
+                seed += 1;
+            }
+            None
+        }
+
+        let Some((run, hp)) = enter_unknown_shop(0) else {
+            panic!("no seed produced a merchant ? room in 4000 tries");
+        };
+        assert_eq!(
+            run.pending(),
+            Pending::Shop,
+            "a merchant ? room opens the shop flow"
+        );
+        assert!(
+            !run.shop().cards().is_empty(),
+            "…and the shelf is stocked by the same `enter_shop`"
+        );
+        // 反面对照：没有 `meal_ticket` 时血量不动（这个 run 没这件遗物）。
+        let mut plain = run;
+        assert_eq!(plain.health(), hp.min(plain.health_max()), "no relic ⇒ no heal");
+
+        // 有了 `meal_ticket`：同一个 `?` 房要多 15 血。
+        let mut with_relic = None;
+        let mut seed = 0;
+        while seed < 4000 {
+            let mut run = RunState::new(seed, 80, i32::MAX, &["strike"; 10]).expect("a run");
+            run.push_relic("meal_ticket").expect("meal_ticket");
+            run.adjust_health(-30);
+            if !walk_to(&mut run, NodeKind::Unknown) {
+                seed += 1;
+                continue;
+            }
+            let before = run.health();
+            let ok = run.begin_node(&TYPED_CARDS, &RELICS).is_ok();
+            if ok && run.unknown_room() == UnknownRoom::Shop {
+                with_relic = Some((before, run.health()));
+                break;
+            }
+            seed += 1;
+        }
+        let (before, after) = with_relic.expect("no merchant ? room with the relic in 4000 tries");
+        assert_eq!(
+            after,
+            (before + 15).min(80),
+            "meal_ticket must pay on a `?` room that becomes a shop, not just on a shop node"
+        );
+
+        // 而普通商店节点仍然照旧（同一个 `enter_shop` 的另一个调用方）。
+        let mut run = RunState::new(7, 80, i32::MAX, &["strike"; 10]).expect("a run");
+        run.push_relic("meal_ticket").expect("meal_ticket");
+        run.adjust_health(-30);
+        let before = run.health();
+        run.pending = Pending::Shop;
+        run.stock_shop(&TYPED_CARDS, &RELICS).expect("stock");
+        // `stock_shop` 本身**不**回血（回血在 `enter_shop` 里）—— 这条断言把"两个函数的分工"
+        // 钉住：想验 `enter_shop` 就得走 `begin_node`，而不是直接调它。
+        assert_eq!(run.health(), before, "stocking alone does not pay the entry heal");
+    }
+
+    /// §273：`the_courier` —— 半价之外的"买完补货"。
+    #[test]
+    fn the_courier_restocks_the_slot_it_sells() {
+        // ---- 折扣：20%（与 `membership_card` 的 50% 相加）。
+        let mut run = ironclad();
+        assert_eq!(run.shop_price(100), 100);
+        run.push_relic("the_courier").expect("the_courier");
+        assert_eq!(run.shop_price(100), 80, "the_courier: 20% off");
+        run.push_relic("membership_card").expect("membership_card");
+        assert_eq!(run.shop_price(100), 30, "the two discounts add up (50 + 20)");
+
+        // ---- 补货：**货架不缩水**。这才是 wiki 那句 "The Merchant restocks …" 的意思 ——
+        // 它没说"一定给你另一张"（同一张回来是允许的），所以判据不钉那件事。
+        let mut run = ironclad();
+        run.push_relic("the_courier").expect("the_courier");
+        run.adjust_gold(2000);
+        run.pending = Pending::Shop;
+        run.enter_shop(&SHOP_CARDS, &RELICS).expect("enter the shop");
+        let live = |run: &RunState| {
+            run.shop()
+                .cards()
+                .iter()
+                .filter(|offer| offer.price >= 0)
+                .count()
+        };
+        let mut cards_on_shelf = live(&run);
+        assert_eq!(cards_on_shelf, MAX_SHOP_CARDS.min(SHOP_CARDS.len()));
+        for slot in 0..2 {
+            buy_card_at(&mut run, slot).expect("buy a card");
+            assert_eq!(
+                live(&run),
+                cards_on_shelf,
+                "the_courier: the shelf must not shrink (slot {slot})"
+            );
+            cards_on_shelf = live(&run);
+        }
+        // 而且货架上不出现两张一样的牌（补货也不能撞上别的活着的那一格）。
+        let mut ids: Vec<RunId> = run
+            .shop()
+            .cards()
+            .iter()
+            .filter(|offer| offer.price >= 0)
+            .map(|offer| offer.id)
+            .collect();
+        let total = ids.len();
+        ids.sort_unstable();
+        ids.dedup();
+        assert_eq!(ids.len(), total, "the shelf must not hold duplicates");
+
+        // 反面：没有 `the_courier` 时那一格留空（`price = -1`）。
+        let mut plain = ironclad();
+        plain.adjust_gold(2000);
+        plain.pending = Pending::Shop;
+        plain.enter_shop(&SHOP_CARDS, &RELICS).expect("enter the shop");
+        buy_card_at(&mut plain, 0).expect("buy the first card");
+        assert_eq!(
+            plain.shop().cards()[0].price,
+            -1,
+            "without the_courier a bought slot stays empty"
+        );
+
+        // ---- 遗物那一半：买走之后那一格也补货（池子里还有 `burning_blood` 之外的就补）。
+        let mut run = ironclad();
+        run.push_relic("the_courier").expect("the_courier");
+        run.adjust_gold(2000);
+        run.pending = Pending::Shop;
+        run.enter_shop(&TYPED_CARDS, &RELICS).expect("enter the shop");
+        if run.shop().relics().first().is_some_and(|o| o.price >= 0) {
+            buy_relic_at(&mut run, 0).expect("buy the relic");
+            let slot = run.shop().relics()[0];
+            // 池子只有一件遗物（`RELICS`），买走之后**没有**可补的 ⇒ 那一格必须是空的。
+            // 这条"反面"很重要：补货不能凭空造货。
+            assert_eq!(slot.price, -1, "an exhausted relic pool cannot restock");
+        }
     }
 
     /// §272：`?` 房的**概率公式**（wiki 的 10 / 3 / 2，每次"没出现"加一个基础值、命中归零）。
@@ -7414,7 +7724,7 @@ mod tests {
         let gold = run.gold();
         let price = run.shop().relics()[0].price;
         assert_eq!(
-            run.buy_relic(0),
+            buy_relic_at(&mut run, 0),
             Err(RunError::Capacity),
             "a full relic belt must refuse the relic"
         );
@@ -7709,7 +8019,7 @@ mod tests {
         // (a) 相位：还没进节点的每一种"结算"动作。
         let mut run = ironclad();
         refused!(&mut run, buy_card_at(&mut run, 0), "buy without a shop");
-        refused!(&mut run, run.buy_relic(0), "buy a relic without a shop");
+        refused!(&mut run, buy_relic_at(&mut run, 0), "buy a relic without a shop");
         refused!(&mut run, run.rest(), "rest without a rest site");
         refused!(&mut run, run.smith(0, "strike+"), "smith without a rest site");
         refused!(&mut run, run.remove_card(0), "remove without a shop");

@@ -59175,6 +59175,13 @@
       "CombatRules": null
     },
     {
+      "Id": "the_courier",
+      "DisplayName": "The Courier",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "the_specimen",
       "DisplayName": "The Specimen",
       "Rarity": "Rare",

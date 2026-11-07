@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 107 |
-| 3 | 缺（wiki 有、内容没有） | 86 |
+| 2 | 内容里的遗物 | 108 |
+| 3 | 缺（wiki 有、内容没有） | 85 |
 
 ## Starter（4）
 
@@ -100,7 +100,7 @@
 | 缺 | `sundial` | Sundial | Shared | Every 3 times you shuffle your draw pile, gain 2 $Energy. |
 | 缺 | `symbiotic_virus` | Symbiotic Virus | Defect | At the start of each combat, $Channel 1 $Dark. |
 | 缺 | `teardrop_locket` | Teardrop Locket | Watcher | Start each combat in $Calm. |
-| 缺 | `the_courier` | The Courier | Shared | The Merchant restocks [[Cards\|cards]], [[Relics\|relics]], and [[Potions\|potions]]. All prices are reduced by 20%. |
+| 有 | `the_courier` | The Courier | Shared | The Merchant restocks [[Cards\|cards]], [[Relics\|relics]], and [[Potions\|potions]]. All prices are reduced by 20%. |
 | 有 | `toxic_egg` | Toxic Egg | Shared | Whenever you add a {{QueryLink\|Cards\|type:Skill\|Skill}} card to your deck, $Upgrade it. |
 | 有 | `white_beast_statue` | White Beast Statue | Shared | [[Potions]] always appear in combat rewards. |
 

@@ -1473,7 +1473,14 @@ pub extern "C" fn rd_run_buy_card(slot: i32) -> i32 {
         Ok(card) => card,
         Err(_) => return -1,
     };
-    let outcome = session.state.buy_card(slot as usize, card).map(|_| 0i32);
+    let pool = match full_pool(content) {
+        Ok(pool) => pool,
+        Err(_) => return -1,
+    };
+    let outcome = session
+        .state
+        .buy_card(slot as usize, card, &pool)
+        .map(|_| 0i32);
     finish(session, outcome)
 }
 
@@ -1487,7 +1494,12 @@ pub extern "C" fn rd_run_buy_relic(slot: i32) -> i32 {
     if slot < 0 {
         return -1;
     }
-    let outcome = session.state.buy_relic(slot as usize).map(|_| 0i32);
+    // §273：补货要池子（`the_courier`）。绑定一次再借出去 —— `relic_pool` 返回 `Vec`。
+    let relics = relic_pool(content());
+    let outcome = session
+        .state
+        .buy_relic(slot as usize, &relics)
+        .map(|_| 0i32);
     finish(session, outcome)
 }
 

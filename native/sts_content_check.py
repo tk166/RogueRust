@@ -3836,7 +3836,9 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "meal_ticket", "ancient_tea_set", "ssserpent_head", "sozu",
                       "toy_ornithopter",
                       # §272: `?` 房分流的两件（规则在 roll_unknown_room 里，不需要状态）。
-                      "tiny_chest", "juzu_bracelet")
+                      "tiny_chest", "juzu_bracelet",
+                      # §273: 商店族收尾（-20% + 买完补货）。
+                      "the_courier")
 
 
 def check_relics(doc):
