@@ -97,7 +97,7 @@
 111  6  6  16 OBJ _obj(Amount,DescriptionKey,Effect,Id,NameKey,Rarity)         : Amount:INT DescriptionKey:STR Effect:STR Id:STR NameKey:STR Rarity:STR
 112  2  2   8 OBJ _obj(Amount,Effect)                                          : Amount:INT Effect:STR
 113  2  2   8 OBJ _obj(Amount,ResourceId)                                      : Amount:INT ResourceId:STR(wrap)
-114  8  8  20 OBJ _obj(AppliesToStatusId,Condition,Magnitude,Operation,Pipeline,Priority,RestrictDamageKind,RestrictSourceCardTag) : AppliesToStatusId:TERM Condition:TERM Magnitude:INT Operation:STR Pipeline:STR Priority:INT RestrictDamageKind:STR RestrictSourceCardTag:TERM
+114  8  8  20 OBJ _obj(AppliesToStatusId,Condition,Magnitude,Operation,Pipeline,Priority,RestrictDamageKind,RestrictSourceCardTag) : AppliesToStatusId:TERM Condition:TERM Magnitude:INT Operation:STR Pipeline:STR Priority:INT RestrictDamageKind:STR RestrictSourceCardTag:STR(wrap)
 115  8  8  20 OBJ _obj(AppliesToStatusId,Magnitude,Operation,OverrideScope,Pipeline,Priority,RestrictDamageKind,RestrictSourceCardTag) : AppliesToStatusId:STR(wrap) Magnitude:INT Operation:STR OverrideScope:STR Pipeline:STR Priority:INT RestrictDamageKind:STR RestrictSourceCardTag:TERM
 116  7  7  16 OBJ _obj(AppliesToStatusId,Magnitude,Operation,Pipeline,Priority,RestrictDamageKind,RestrictSourceCardTag) : AppliesToStatusId:STR(wrap) Magnitude:INT Operation:STR Pipeline:STR Priority:INT RestrictDamageKind:STR RestrictSourceCardTag:STR(wrap)
 117  3  4  12 OBJ _obj(Asc,Stacks,StatusDefinitionId)                          : Asc:TERMLIST Stacks:INT StatusDefinitionId:STR(wrap)

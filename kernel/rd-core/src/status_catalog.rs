@@ -719,6 +719,21 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // same-side magnitude override (`odd_mushroom`, `OverrideScope: Self`).
             | "standard.red_skull"
             | "standard.odd_mushroom"
+            // §267: the zero-infrastructure batch -- every one of these is a content trigger or a
+            // `TurnStartDraw`/`TurnStartEnergy` modifier; none of them needed a kernel change.
+            | "standard.ring_of_the_snake"
+            | "standard.ring_of_the_serpent"
+            | "standard.philosophers_stone"
+            | "standard.happy_flower"
+            | "standard.art_of_war"
+            | "standard.brimstone"
+            | "standard.mark_of_pain"
+            | "standard.mutagenic_strength"
+            | "standard.centennial_puzzle"
+            | "standard.runic_cube"
+            | "standard.charons_ashes"
+            | "standard.duality"
+            | "standard.akabeko"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

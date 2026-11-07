@@ -1819,6 +1819,35 @@ impl RunState {
             // §266：条件修饰器（`red_skull`）+ 同侧改写（`odd_mushroom`）。
             "red_skull" => Some(RelicEffect::StartCombatStatus("standard.red_skull", 1)),
             "odd_mushroom" => Some(RelicEffect::StartCombatStatus("standard.odd_mushroom", 1)),
+            // §267：零基建批次 —— 轮次轴 / 反应轴（全部 `StartCombatStatus` + 内容触发器）。
+            "ring_of_the_snake" => Some(RelicEffect::StartCombatStatus("standard.ring_of_the_snake", 1)),
+            "ring_of_the_serpent" => {
+                Some(RelicEffect::StartCombatStatus("standard.ring_of_the_serpent", 1))
+            }
+            "philosophers_stone" => {
+                Some(RelicEffect::StartCombatStatus("standard.philosophers_stone", 1))
+            }
+            "happy_flower" => Some(RelicEffect::StartCombatStatus("standard.happy_flower", 1)),
+            "art_of_war" => Some(RelicEffect::StartCombatStatus("standard.art_of_war", 1)),
+            "brimstone" => Some(RelicEffect::StartCombatStatus("standard.brimstone", 1)),
+            "mark_of_pain" => Some(RelicEffect::StartCombatStatus("standard.mark_of_pain", 1)),
+            "mutagenic_strength" => {
+                Some(RelicEffect::StartCombatStatus("standard.mutagenic_strength", 1))
+            }
+            "centennial_puzzle" => {
+                Some(RelicEffect::StartCombatStatus("standard.centennial_puzzle", 1))
+            }
+            "runic_cube" => Some(RelicEffect::StartCombatStatus("standard.runic_cube", 1)),
+            "charons_ashes" => Some(RelicEffect::StartCombatStatus("standard.charons_ashes", 1)),
+            "duality" => Some(RelicEffect::StartCombatStatus("standard.duality", 1)),
+            "akabeko" => Some(RelicEffect::StartCombatStatus("standard.akabeko", 1)),
+            // 开战载体：不需要自己的状态，直接把**那条**状态挂上去。
+            "clockwork_souvenir" => Some(RelicEffect::StartCombatStatus("standard.artifact", 1)),
+            "gremlin_visage" => Some(RelicEffect::StartCombatStatus("standard.weak", 1)),
+            "fossilized_helix" => Some(RelicEffect::StartCombatStatus("standard.buffer", 1)),
+            "red_mask" => Some(RelicEffect::StartCombatStatusOnEnemies("standard.weak", 1)),
+            // 拾取即生效。
+            "mango" => Some(RelicEffect::MaxHealthUp(14)),
             "twisted_funnel" => {
                 Some(RelicEffect::StartCombatStatusOnEnemies("standard.poison", 4))
             }
@@ -4750,6 +4779,56 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §267：零基建批次的接线（13 条状态 + 5 条"直接挂那条状态"）。
+    #[test]
+    fn the_zero_infrastructure_batch_wires_the_right_carrier() {
+        let carrier = [
+            ("ring_of_the_snake", "standard.ring_of_the_snake"),
+            ("ring_of_the_serpent", "standard.ring_of_the_serpent"),
+            ("philosophers_stone", "standard.philosophers_stone"),
+            ("happy_flower", "standard.happy_flower"),
+            ("art_of_war", "standard.art_of_war"),
+            ("brimstone", "standard.brimstone"),
+            ("mark_of_pain", "standard.mark_of_pain"),
+            ("mutagenic_strength", "standard.mutagenic_strength"),
+            ("centennial_puzzle", "standard.centennial_puzzle"),
+            ("runic_cube", "standard.runic_cube"),
+            ("charons_ashes", "standard.charons_ashes"),
+            ("duality", "standard.duality"),
+            ("akabeko", "standard.akabeko"),
+            // 开战载体：直接挂那条状态。
+            ("clockwork_souvenir", "standard.artifact"),
+            ("gremlin_visage", "standard.weak"),
+            ("fossilized_helix", "standard.buffer"),
+        ];
+        for (relic, status_id) in carrier {
+            let mut run = ironclad();
+            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            let bonus = run.combat_bonus();
+            assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
+            let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
+            assert_eq!(entry.id, status_id, "{relic}: its own carrier");
+        }
+
+        // `red_mask` 走**敌人**那张表。
+        let mut run = ironclad();
+        run.push_relic("red_mask").expect("red_mask");
+        let bonus = run.combat_bonus();
+        assert_eq!(bonus.status_count, 0, "red_mask: nothing for the hero");
+        assert_eq!(bonus.enemy_status_count, 1, "red_mask: one enemy status");
+        assert_eq!(
+            bonus.enemy_statuses[0].expect("entry").id,
+            "standard.weak",
+            "red_mask applies Weak to the enemies"
+        );
+
+        // `mango` 拾取即 +14 Max HP。
+        let before = ironclad().health_max();
+        let mut after = ironclad();
+        after.push_relic("mango").expect("mango");
+        assert_eq!(after.health_max(), before + 14, "mango: +14 max HP on pickup");
     }
 
     /// §266：两件的接线。

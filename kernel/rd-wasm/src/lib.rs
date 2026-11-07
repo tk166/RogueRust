@@ -6060,6 +6060,518 @@ mod card_text_tests {
         );
     }
 
+    /// §267：零基建批次的**反应轴**（掉血 / 消耗 / 出牌 / 回合初）。
+    ///
+    /// 这一组的关键是**次数**："第一次掉血"、"每出一张攻击牌"、"每次消耗" —— 写成"每次都算"
+    /// 或"只算一次"都不会报错，只会让数字慢慢不对，所以每条都断言**两次事件之后**的值。
+    #[test]
+    fn the_reaction_relics_fire_the_right_number_of_times() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+
+        let session_for = |carrier: &str, card: &'static str, seed: i32| {
+            let deck: &'static [rd_core::battle::DeckEntry<'static>] = Box::leak(
+                vec![rd_core::battle::DeckEntry { card, count: 1 }; 20].into_boxed_slice(),
+            );
+            let session = build_session_at_unstarted(seed, "enc_cultist", 200, Some(deck), 0, 0)
+                .unwrap_or_else(|e| panic!("{carrier}: {e}"));
+            install_session(session);
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(cid_in("hero")),
+                    definition: rd_core::state::StatusDefinitionId::new(carrier)
+                        .expect("a status id"),
+                    stacks: 1,
+                    duration: 0,
+                    charges: 0,
+                    source: None,
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("apply the carrier");
+            let standard = standard_turn_config().expect("standard turn config");
+            let session = slot().as_mut().expect("session");
+            start_first_turn(&mut session.state, &standard, &mut session.host)
+                .expect("start the first turn");
+            session.reobserve();
+        };
+        let hand = || -> usize {
+            let session = slot().as_ref().expect("session");
+            session.state.zone_cards(&cid_in("hero"), rd_core::state::CardZone::Hand).count()
+        };
+        let enemy_hp = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map_or(-1, |c| c.health_current)
+        };
+        let hero_stacks = |status_id: &str| -> i32 {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in("hero")).map_or(0, |c| {
+                c.statuses()
+                    .iter()
+                    .filter(|s| s.definition_id.as_str() == status_id)
+                    .map(|s| s.stacks)
+                    .sum()
+            })
+        };
+        // 让英雄失去 `amount` 点血。**必须带出手方**：`Host::run_damage_taken_triggers` 的第一句
+        // 就是"没有出手方就跳过"（与参考同一条），所以 `source: None` 的伤害**不会**触发掉血类
+        // 遗物 —— §267 的判据就是这么红的（"第一次掉血抽 3 张"得到 5）。
+        let lose_hp = |amount: i32| {
+            let session = slot().as_mut().expect("session");
+            let attacker = session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map(|c| c.id)
+                .expect("an enemy");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::DealDamage {
+                    target: Some(cid_in("hero")),
+                    amount,
+                    ignores_block: true,
+                    source: Some(attacker),
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("damage");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        };
+        // 打一张手牌（按 tag 挑）并排空队列。
+        let play_one = |tag: &str| {
+            let session = slot().as_mut().expect("session");
+            let hero = cid_in("hero");
+            let enemy = session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "enemy")
+                .map(|c| c.id)
+                .expect("an enemy");
+            let instance = session
+                .state
+                .zone_cards(&hero, rd_core::state::CardZone::Hand)
+                .find(|card| content.card_has_tag(card.definition_id.as_str(), tag) == Some(true))
+                .map(|card| card.id)
+                .unwrap_or_else(|| panic!("no `{tag}` card in hand"));
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::GainResource {
+                    target: Some(hero),
+                    key: rd_core::state::ResourceId::new("standard.energy").expect("energy"),
+                    amount: 30,
+                    default_max: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("energy");
+            rd_core::play::play_card(
+                &mut session.state,
+                Some(&content),
+                &rd_core::play::PlayRequest::new(hero, instance, Some(enemy)),
+            )
+            .expect("play the card");
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        };
+
+        // ---- Centennial Puzzle：**只**第一次掉血抽 3 张。
+        session_for("standard.centennial_puzzle", "strike", 221);
+        let before = hand();
+        lose_hp(3);
+        assert_eq!(hand(), before + 3, "Centennial Puzzle: the first HP loss draws 3");
+        let before = hand();
+        lose_hp(3);
+        assert_eq!(hand(), before, "…and the second one draws nothing");
+        take_session();
+
+        // ---- Runic Cube：**每次**掉血抽 1 张。
+        session_for("standard.runic_cube", "strike", 222);
+        let before = hand();
+        lose_hp(3);
+        assert_eq!(hand(), before + 1, "Runic Cube: 1 card per HP loss");
+        let before = hand();
+        lose_hp(3);
+        assert_eq!(hand(), before + 1, "…and again");
+        take_session();
+
+        // ---- Charon's Ashes：每消耗一张牌 ⇒ 对敌人 3 点。
+        // `offering` 出完就自消耗（牌组里全是它），所以"消耗"是真出牌造成的。
+        session_for("standard.charons_ashes", "offering", 223);
+        let before = enemy_hp();
+        play_one("skill");
+        assert!(
+            before - enemy_hp() >= 3,
+            "Charon's Ashes: exhausting a card deals at least 3 to the enemy"
+        );
+        take_session();
+
+        // ---- Duality：每出一张攻击牌 +1 敏捷，并挂上"回合末归还"的孪生。
+        session_for("standard.duality", "strike", 224);
+        let before = hero_stacks("standard.dexterity");
+        play_one("attack");
+        assert_eq!(
+            hero_stacks("standard.dexterity"),
+            before + 1,
+            "Duality: +1 Dexterity per Attack"
+        );
+        assert_eq!(
+            hero_stacks("standard.lose_dexterity"),
+            1,
+            "…and the twin that gives it back at end of turn"
+        );
+        take_session();
+
+        // ---- Akabeko：**第一张**攻击 +8，第二张不再加。
+        session_for("standard.akabeko", "strike", 225);
+        {
+            let before = enemy_hp();
+            play_one("attack");
+            assert_eq!(before - enemy_hp(), 14, "Akabeko: the first Attack deals 6 + 8");
+        }
+        {
+            let before = enemy_hp();
+            play_one("attack");
+            assert_eq!(before - enemy_hp(), 6, "Akabeko: the second Attack is back to 6");
+        }
+        take_session();
+
+        // ---- Brimstone：**每次**回合初自己 +2 力量、敌人 +1 力量。
+        //
+        // ⚠️ 第 1 回合的开始也算一次（`start_first_turn` 就在那一刻派的触发器），所以
+        // "开局 2 力量、打完一回合 4 力量"才是对的 —— 第一版断言写成 2，是**夹具**算错回合数。
+        session_for("standard.brimstone", "strike", 226);
+        assert_eq!(
+            hero_stacks("standard.strength"),
+            2,
+            "Brimstone: +2 Strength at the first turn start"
+        );
+        {
+            // 这一刻 Cultist 的 `Ritual` 还没跑（它在**它的**回合末才给），所以这个数只可能
+            // 来自 Brimstone。
+            let session = slot().as_ref().expect("session");
+            let only_brimstone: i32 = session
+                .state
+                .combatants()
+                .iter()
+                .filter(|c| c.team_id.as_str() == "enemy")
+                .map(|c| {
+                    c.statuses()
+                        .iter()
+                        .filter(|s| s.definition_id.as_str() == "standard.strength")
+                        .map(|s| s.stacks)
+                        .sum::<i32>()
+                })
+                .sum();
+            assert_eq!(
+                only_brimstone, 1,
+                "Brimstone: +1 Strength for the enemies at the first turn start"
+            );
+        }
+        {
+            let session = slot().as_mut().expect("session");
+            session.step_end_turn().expect("end turn 1");
+        }
+        assert_eq!(
+            hero_stacks("standard.strength"),
+            4,
+            "Brimstone: another +2 at the second turn start"
+        );
+        let enemy_strength = {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatants()
+                .iter()
+                .filter(|c| c.team_id.as_str() == "enemy")
+                .map(|c| {
+                    c.statuses()
+                        .iter()
+                        .filter(|s| s.definition_id.as_str() == "standard.strength")
+                        .map(|s| s.stacks)
+                        .sum::<i32>()
+                })
+                .sum::<i32>()
+        };
+        // 敌人是 Cultist，它自己的 `Ritual` 在**它的回合末**给 3 点力量 ⇒ 数字里混着两件事。
+        // 所以这里钉的是**两层**：Brimstone 那一层（第 1 回合开始就已经是 1）与合计
+        // （1 + 3 仪式 + 1 第二回合开始 = 5）。写清楚来源，比断言一个"看起来该是 2"的数好。
+        assert_eq!(
+            enemy_strength, 5,
+            "Brimstone: 1 + the Cultist's own Ritual 3 + another 1 at the second turn start"
+        );
+        take_session();
+    }
+
+    /// §267：零基建批次的**轮次轴**（抽牌 / 能量 / 周期）。
+    #[test]
+    fn the_turn_axis_relics_move_draw_energy_and_periods() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+
+        let session_for = |carrier: Option<&str>, steps: i32| {
+            let deck: &'static [rd_core::battle::DeckEntry<'static>] = Box::leak(
+                vec![rd_core::battle::DeckEntry { card: "defend", count: 1 }; 20].into_boxed_slice(),
+            );
+            let session = build_session_at_unstarted(207, "enc_cultist", 200, Some(deck), 0, 0)
+                .unwrap_or_else(|e| panic!("{carrier:?}: {e}"));
+            install_session(session);
+            if let Some(carrier) = carrier {
+                let session = slot().as_mut().expect("session");
+                let item = rd_core::state::EffectItem {
+                    request: rd_core::state::EffectRequest::ApplyStatus {
+                        target: Some(cid_in("hero")),
+                        definition: rd_core::state::StatusDefinitionId::new(carrier)
+                            .expect("a status id"),
+                        stacks: 1,
+                        duration: 0,
+                        charges: 0,
+                        source: None,
+                        source_card: None,
+                    },
+                    chain: rd_core::state::ChainSlot::NONE,
+                    owner: None,
+                };
+                rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                    .expect("apply the carrier");
+            }
+            let standard = standard_turn_config().expect("standard turn config");
+            let session = slot().as_mut().expect("session");
+            start_first_turn(&mut session.state, &standard, &mut session.host)
+                .expect("start the first turn");
+            session.reobserve();
+            for _ in 0..steps {
+                let session = slot().as_mut().expect("session");
+                session.step_end_turn().expect("end turn");
+            }
+        };
+        let energy = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in("hero")).map_or(-1, |c| {
+                c.resources()
+                    .iter()
+                    .find(|p| p.key.as_str() == "standard.energy")
+                    .map_or(-1, |p| p.pool.current)
+            })
+        };
+        let hand = || -> usize {
+            let session = slot().as_ref().expect("session");
+            session.state.zone_cards(&cid_in("hero"), rd_core::state::CardZone::Hand).count()
+        };
+
+        // ---- 基线：第 1 回合 3 能量 / 5 张手牌。
+        session_for(None, 0);
+        assert_eq!(energy(), 3, "baseline energy");
+        assert_eq!(hand(), 5, "baseline hand");
+        take_session();
+
+        // ---- Ring of the Snake：**第 1 回合**多 2 张（7 张），第 2 回合回到 5。
+        session_for(Some("standard.ring_of_the_snake"), 0);
+        assert_eq!(hand(), 7, "Ring of the Snake: 5 + 2 on turn 1");
+        {
+            let session = slot().as_mut().expect("session");
+            session.step_end_turn().expect("end turn");
+        }
+        assert_eq!(hand(), 5, "Ring of the Snake: back to 5 from turn 2");
+        take_session();
+
+        // ---- Ring of the Serpent：**每回合**多 1 张（6 张），第 2 回合仍是 6。
+        session_for(Some("standard.ring_of_the_serpent"), 0);
+        assert_eq!(hand(), 6, "Ring of the Serpent: 5 + 1 on turn 1");
+        {
+            let session = slot().as_mut().expect("session");
+            session.step_end_turn().expect("end turn");
+        }
+        assert_eq!(hand(), 6, "Ring of the Serpent: still 6 on turn 2");
+        take_session();
+
+        // ---- Philosopher's Stone：每回合 4 能量。
+        session_for(Some("standard.philosophers_stone"), 0);
+        assert_eq!(energy(), 4, "Philosopher's Stone: 3 + 1");
+        take_session();
+
+        // ---- Happy Flower：**每 3 回合**才给 1 点（第 1、2 回合不给，第 3 回合给）。
+        session_for(Some("standard.happy_flower"), 0);
+        assert_eq!(energy(), 3, "Happy Flower: nothing on turn 1");
+        {
+            let session = slot().as_mut().expect("session");
+            session.step_end_turn().expect("end turn");
+        }
+        assert_eq!(energy(), 3, "Happy Flower: nothing on turn 2");
+        {
+            let session = slot().as_mut().expect("session");
+            session.step_end_turn().expect("end turn");
+        }
+        assert_eq!(energy(), 4, "Happy Flower: the 3rd turn pays");
+        take_session();
+
+        // ---- Art of War：这回合不出攻击牌 ⇒ 下回合 +1 能量。
+        //
+        // 牌组全是 `defend`（技能），所以"没出攻击"成立。
+        session_for(Some("standard.art_of_war"), 0);
+        {
+            let session = slot().as_mut().expect("session");
+            session.step_end_turn().expect("end turn");
+        }
+        assert_eq!(energy(), 4, "Art of War: no Attack last turn ⇒ 3 + 1");
+        take_session();
+    }
+
+    /// §267：零基建批次的**开战载体**（挂对了，且只挂一次）。
+    #[test]
+    fn the_combat_start_carriers_land_the_right_status() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+
+        let session_for = |carrier: Option<(&str, i32)>, seed: i32| {
+            let deck: &'static [rd_core::battle::DeckEntry<'static>] = Box::leak(
+                vec![rd_core::battle::DeckEntry { card: "defend", count: 1 }; 20].into_boxed_slice(),
+            );
+            let session = build_session_at_unstarted(seed, "enc_cultist", 200, Some(deck), 0, 0)
+                .unwrap_or_else(|e| panic!("{carrier:?}: {e}"));
+            install_session(session);
+            if let Some((carrier, stacks)) = carrier {
+                let session = slot().as_mut().expect("session");
+                let item = rd_core::state::EffectItem {
+                    request: rd_core::state::EffectRequest::ApplyStatus {
+                        target: Some(cid_in("hero")),
+                        definition: rd_core::state::StatusDefinitionId::new(carrier)
+                            .expect("a status id"),
+                        stacks,
+                        duration: 0,
+                        charges: 0,
+                        source: None,
+                        source_card: None,
+                    },
+                    chain: rd_core::state::ChainSlot::NONE,
+                    owner: None,
+                };
+                rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                    .expect("apply the carrier");
+            }
+            let standard = standard_turn_config().expect("standard turn config");
+            let session = slot().as_mut().expect("session");
+            start_first_turn(&mut session.state, &standard, &mut session.host)
+                .expect("start the first turn");
+            session.reobserve();
+        };
+        let hero_stacks = |status_id: &str| -> i32 {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in("hero")).map_or(0, |c| {
+                c.statuses()
+                    .iter()
+                    .filter(|s| s.definition_id.as_str() == status_id)
+                    .map(|s| s.stacks)
+                    .sum()
+            })
+        };
+        let enemy_stacks = |status_id: &str| -> i32 {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatants()
+                .iter()
+                .filter(|c| c.team_id.as_str() == "enemy")
+                .map(|c| {
+                    c.statuses()
+                        .iter()
+                        .filter(|s| s.definition_id.as_str() == status_id)
+                        .map(|s| s.stacks)
+                        .sum::<i32>()
+                })
+                .sum()
+        };
+
+        // ---- Clockwork Souvenir：开战 1 层 Artifact。
+        session_for(Some(("standard.artifact", 1)), 211);
+        assert_eq!(hero_stacks("standard.artifact"), 1, "Clockwork Souvenir: 1 Artifact");
+        take_session();
+
+        // ---- `red_mask` / `gremlin_visage` 的**落点**由 `combat_bonus` 决定（敌人表 /
+        // 英雄表），而那是运行层的事 ⇒ 它们的判据在 rd-run 的接线测试里（`enemy_status_count`
+        // vs `status_count`）。这条 wasm 判据只测"落下去之后有没有用"，所以这里不重复。
+
+        // ---- Fossilized Helix：开战 1 层 Buffer（挡住第一次掉血）。
+        session_for(Some(("standard.buffer", 1)), 214);
+        assert_eq!(hero_stacks("standard.buffer"), 1, "Fossilized Helix: 1 Buffer");
+        let hp_before = {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in("hero")).map_or(-1, |c| c.health_current)
+        };
+        {
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::DealDamage {
+                    target: Some(cid_in("hero")),
+                    amount: 9,
+                    ignores_block: false,
+                    source: None,
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("damage");
+        }
+        let hp_after = {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in("hero")).map_or(-1, |c| c.health_current)
+        };
+        assert_eq!(hp_before - hp_after, 0, "Fossilized Helix: the first HP loss is prevented");
+        assert_eq!(hero_stacks("standard.buffer"), 0, "…and the Buffer is spent");
+        take_session();
+
+        // ---- Mutagenic Strength：开战 3 力量，**第一回合末**失去 3。
+        //
+        // 这条判据必须跑**一个真回合**（不是手工驱动触发器）："第一回合末"是 `TurnEnded` 的
+        // 计数器口径，而计数器的第一跳只有真的结束过一回合才会发生。
+        session_for(Some(("standard.mutagenic_strength", 1)), 215);
+        assert_eq!(hero_stacks("standard.mutagenic_strength"), 1, "the carrier is on");
+        // 载体本身给 3 力量是**开局**的事，这里手工补上（与遗物的 `combat_bonus` 等价）。
+        {
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(cid_in("hero")),
+                    definition: rd_core::state::StatusDefinitionId::new("standard.strength")
+                        .expect("strength"),
+                    stacks: 3,
+                    duration: 0,
+                    charges: 0,
+                    source: None,
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("3 strength");
+        }
+        assert_eq!(hero_stacks("standard.strength"), 3, "3 Strength at combat start");
+        {
+            let session = slot().as_mut().expect("session");
+            session.step_end_turn().expect("end turn 1");
+        }
+        assert_eq!(
+            hero_stacks("standard.strength"),
+            0,
+            "Mutagenic Strength: the 3 Strength is gone at the end of turn 1"
+        );
+        take_session();
+    }
+
     /// §266：条件修饰器（`red_skull`）+ 同侧改写（`odd_mushroom`）。
     #[test]
     fn the_conditional_and_self_scoped_modifiers_change_the_right_number() {

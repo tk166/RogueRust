@@ -114,7 +114,8 @@ INV_COUNTS = {
     # §264: +3 (two `AppliesToStatusId` rewriters + `champion_belt`).
     # §265: +3 (`snecko_skull` / `ginger` / `turnip`).
     # §266: +2 (`red_skull` / `odd_mushroom`).
-    "statuses": 101,
+    # §267: +13 (the zero-infrastructure relic batch).
+    "statuses": 114,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1421,6 +1422,21 @@ INV_STATUSES = {
     # §266：`red_skull` 带 `Condition`（HP ≤ 50%），`odd_mushroom` 带 `OverrideScope: Self`。
     "standard.red_skull": [("DamageDealt", "AddFlat", 3, 100, "Direct")],
     "standard.odd_mushroom": [("DamageReceived", "ScalePercent", 125, 300, "Direct")],
+    # §267：零基建批次。
+    "standard.ring_of_the_serpent": [('TurnStartDraw', 'AddFlat', 1, 100, None)],
+    "standard.philosophers_stone": [('TurnStartEnergy', 'AddPerStack', 1, 100, None)],
+    "standard.akabeko": [('DamageDealt', 'AddFlat', 8, 100, 'Direct')],
+    "standard.ring_of_the_snake": [],
+    "standard.happy_flower": [],
+    # §267：`art_of_war` 的能量走 `TurnStartEnergy` + `Condition`（回合末立的待决标记）。
+    "standard.art_of_war": [("TurnStartEnergy", "AddFlat", 1, 100, None)],
+    "standard.brimstone": [],
+    "standard.mark_of_pain": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
+    "standard.mutagenic_strength": [],
+    "standard.centennial_puzzle": [],
+    "standard.runic_cube": [],
+    "standard.charons_ashes": [],
+    "standard.duality": [],
     "standard.turnip": [("StatusImmunity", "AddFlat", 0, 100, None)],
     "standard.the_bomb_damage": [],
     "standard.the_bomb": [],
@@ -3271,6 +3287,8 @@ SPEC_PARAMS = {
     "standard.turnip": ("standard.frail", None),
     # §266
     "standard.odd_mushroom": ("standard.vulnerable", None),
+    # §267：`akabeko` 的 +8 只对攻击牌（`RestrictSourceCardTag`）。
+    "standard.akabeko": (None, "attack"),
     # §262 的翻倍现在只对攻击牌生效（§264 解开了那个参数）。
     "standard.double_damage": (None, "attack"),
 }
@@ -3379,6 +3397,20 @@ def check_statuses(doc):
                      # §264：**只有 champion_belt 有触发器**；paper_phrog / paper_krane 是
                      # 纯修饰器载体（改写别的状态），所以它们在 `INV_STATUSES` 那张表里。
                      "standard.champion_belt",
+                     # §267
+                     "standard.ring_of_the_snake",
+                     "standard.ring_of_the_serpent",
+                     "standard.philosophers_stone",
+                     "standard.happy_flower",
+                     "standard.art_of_war",
+                     "standard.brimstone",
+                     "standard.mark_of_pain",
+                     "standard.mutagenic_strength",
+                     "standard.centennial_puzzle",
+                     "standard.runic_cube",
+                     "standard.charons_ashes",
+                     "standard.duality",
+                     "standard.akabeko",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3486,6 +3518,21 @@ def check_statuses(doc):
                         "standard.nightmare_pending": ["TurnStarted"],
                         # §264: "whenever you apply Vulnerable" -- a StatusApplied trigger whose
                         # condition is `event.statusIs(vulnerable)`.
+                        # §267
+                        "standard.ring_of_the_snake": ['TurnStarted'],
+                        "standard.ring_of_the_serpent": [],
+                        "standard.philosophers_stone": [],
+                        "standard.happy_flower": ['TurnStarted'],
+                        "standard.art_of_war": ['CardPlayed', 'TurnEnded', 'TurnStarted'],
+                        "standard.brimstone": ['TurnStarted'],
+                        "standard.mark_of_pain": ['TurnStarted'],
+                        "standard.mutagenic_strength": ['TurnEnded'],
+                        # §267：伤害与"失去生命"是**两条路**，掉血类遗物两条都要听。
+                        "standard.centennial_puzzle": ['DamageTaken', 'HpLost'],
+                        "standard.runic_cube": ['DamageTaken', 'HpLost'],
+                        "standard.charons_ashes": ['CardExhausted'],
+                        "standard.duality": ['CardPlayed'],
+                        "standard.akabeko": ['CardPlayed'],
                         "standard.champion_belt": ["StatusApplied"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
@@ -3730,7 +3777,9 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       # §265: 改状态施加三件 + 开战给敌人上毒一件。
                       "snecko_skull", "ginger", "turnip", "twisted_funnel",
                       # §266: 条件修饰器 + 同侧改写。
-                      "red_skull", "odd_mushroom")
+                      "red_skull", "odd_mushroom",
+                      # §267: 零基建批次。
+                      "ring_of_the_snake", "ring_of_the_serpent", "philosophers_stone", "happy_flower", "art_of_war", "brimstone", "mark_of_pain", "mutagenic_strength", "centennial_puzzle", "runic_cube", "charons_ashes", "duality", "akabeko", "clockwork_souvenir", "red_mask", "gremlin_visage", "fossilized_helix", "mango")
 
 
 def check_relics(doc):

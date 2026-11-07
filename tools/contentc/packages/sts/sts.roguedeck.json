@@ -6580,6 +6580,1349 @@
         }
       ],
       "Triggers": []
+    },
+    {
+      "Id": "standard.ring_of_the_snake",
+      "PackageId": "sts",
+      "NameKey": "Ring of the Snake",
+      "DescriptionKey": "At the start of each combat, draw 2 additional cards.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "ring_of_the_snake_turns"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.drawCards",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "Count": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 2
+                            }
+                          },
+                          "ResultKey": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "ring_of_the_snake_turns"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.ring_of_the_serpent",
+      "PackageId": "sts",
+      "NameKey": "Ring of the Serpent",
+      "DescriptionKey": "At the start of your turn, draw 1 additional card.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartDraw",
+          "Operation": "AddFlat",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.philosophers_stone",
+      "PackageId": "sts",
+      "NameKey": "Philosopher's Stone",
+      "DescriptionKey": "Gain 1 Energy at the start of your turn. ALL enemies start combat with 1 Strength.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartEnergy",
+          "Operation": "AddPerStack",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.happy_flower",
+      "PackageId": "sts",
+      "NameKey": "Happy Flower",
+      "DescriptionKey": "Every 3 turns, gain 1 Energy.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "remainder",
+                            "value": {
+                              "Left": {
+                                "kind": "combatantCounter",
+                                "value": {
+                                  "Selector": {
+                                    "kind": "sel.source",
+                                    "value": {
+                                      "Cardinality": "ZeroOrOne",
+                                      "RequiredContextCapabilities": "Source"
+                                    }
+                                  },
+                                  "CounterId": "happy_flower_turns"
+                                }
+                              },
+                              "Right": {
+                                "kind": "const",
+                                "value": {
+                                  "Value": 3
+                                }
+                              }
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 2
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.gainResource",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "ResourceId": "standard.energy",
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 1
+                            }
+                          },
+                          "ResultKey": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "happy_flower_turns"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.art_of_war",
+      "PackageId": "sts",
+      "NameKey": "Art of War",
+      "DescriptionKey": "If you do not play any Attacks during your turn, gain an additional Energy next turn.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartEnergy",
+          "Operation": "AddFlat",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null,
+          "Condition": {
+            "kind": "compare",
+            "value": {
+              "Left": {
+                "kind": "combatantCounter",
+                "value": {
+                  "Selector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": "art_of_war_pending"
+                }
+              },
+              "Right": {
+                "kind": "const",
+                "value": {
+                  "Value": 0
+                }
+              },
+              "Op": "Greater"
+            }
+          }
+        }
+      ],
+      "Triggers": [
+        {
+          "Event": "CardPlayed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "event.bool",
+                  "value": {
+                    "FieldKey": "card.hasTag.attack"
+                  }
+                },
+                "Then": {
+                  "kind": "node.setCombatantCounter",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "CounterId": {
+                      "value": "art_of_war_attacks"
+                    },
+                    "Amount": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 1
+                      }
+                    },
+                    "Relative": true
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        },
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "art_of_war_attacks"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.setCombatantCounter",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": {
+                            "value": "art_of_war_pending"
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 1
+                            }
+                          },
+                          "Relative": true
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "art_of_war_attacks"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 0
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        },
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.setCombatantCounter",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "CounterId": {
+                  "value": "art_of_war_pending"
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 0
+                  }
+                },
+                "Relative": false
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.brimstone",
+      "PackageId": "sts",
+      "NameKey": "Brimstone",
+      "DescriptionKey": "At the start of your turn, gain 2 Strength and ALL enemies gain 1 Strength.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.strength"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.allEnemies",
+                        "value": {}
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.strength"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.mark_of_pain",
+      "PackageId": "sts",
+      "NameKey": "Mark of Pain",
+      "DescriptionKey": "Gain 1 Energy at the start of your turn. At the start of combat, shuffle 2 Wounds into your draw pile.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartEnergy",
+          "Operation": "AddPerStack",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "mark_of_pain_turns"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.createCardInstance",
+                        "value": {
+                          "CardDefinitionId": {
+                            "value": "wound"
+                          },
+                          "Count": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 2
+                            }
+                          },
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "ToZone": "DrawPile",
+                          "ResultKey": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "mark_of_pain_turns"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.mutagenic_strength",
+      "PackageId": "sts",
+      "NameKey": "Mutagenic Strength",
+      "DescriptionKey": "Start each combat with 3 Strength. At the end of your first turn, lose 3 Strength.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "mutagenic_strength_turns"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.modifyStatusStacks",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "StatusDefinitionId": {
+                            "value": "standard.strength"
+                          },
+                          "Delta": {
+                            "kind": "const",
+                            "value": {
+                              "Value": -3
+                            }
+                          },
+                          "ResultKey": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "mutagenic_strength_turns"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.centennial_puzzle",
+      "PackageId": "sts",
+      "NameKey": "Centennial Puzzle",
+      "DescriptionKey": "The first time you lose HP each combat, draw 3 cards.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Left": {
+                      "kind": "eventAmount",
+                      "value": {}
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 0
+                      }
+                    },
+                    "Op": "Greater"
+                  }
+                },
+                "Then": {
+                  "kind": "node.sequence",
+                  "value": {
+                    "Children": [
+                      {
+                        "kind": "node.conditional",
+                        "value": {
+                          "Condition": {
+                            "kind": "compare",
+                            "value": {
+                              "Left": {
+                                "kind": "combatantCounter",
+                                "value": {
+                                  "Selector": {
+                                    "kind": "sel.source",
+                                    "value": {
+                                      "Cardinality": "ZeroOrOne",
+                                      "RequiredContextCapabilities": "Source"
+                                    }
+                                  },
+                                  "CounterId": "centennial_puzzle_hits"
+                                }
+                              },
+                              "Right": {
+                                "kind": "const",
+                                "value": {
+                                  "Value": 0
+                                }
+                              },
+                              "Op": "Equal"
+                            }
+                          },
+                          "Then": {
+                            "kind": "node.drawCards",
+                            "value": {
+                              "TargetSelector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "Count": {
+                                "kind": "const",
+                                "value": {
+                                  "Value": 3
+                                }
+                              },
+                              "ResultKey": null
+                            }
+                          },
+                          "Else": null
+                        }
+                      },
+                      {
+                        "kind": "node.setCombatantCounter",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": {
+                            "value": "centennial_puzzle_hits"
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 1
+                            }
+                          },
+                          "Relative": true
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        },
+        {
+          "Event": "HpLost",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "centennial_puzzle_hits"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.drawCards",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "Count": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 3
+                            }
+                          },
+                          "ResultKey": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "centennial_puzzle_hits"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.runic_cube",
+      "PackageId": "sts",
+      "NameKey": "Runic Cube",
+      "DescriptionKey": "Whenever you lose HP, draw 1 card.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DamageTaken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Left": {
+                      "kind": "eventAmount",
+                      "value": {}
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 0
+                      }
+                    },
+                    "Op": "Greater"
+                  }
+                },
+                "Then": {
+                  "kind": "node.drawCards",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Count": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 1
+                      }
+                    },
+                    "ResultKey": null
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        },
+        {
+          "Event": "HpLost",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.drawCards",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "Count": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 1
+                  }
+                },
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.charons_ashes",
+      "PackageId": "sts",
+      "NameKey": "Charon's Ashes",
+      "DescriptionKey": "Whenever you Exhaust a card, deal 3 damage to ALL enemies.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardExhausted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.dealDamage",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.allEnemies",
+                  "value": {}
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 3
+                  }
+                },
+                "ResultKey": null,
+                "IgnoresBlock": false,
+                "Element": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.duality",
+      "PackageId": "sts",
+      "NameKey": "Duality",
+      "DescriptionKey": "Whenever you play an Attack, gain 1 temporary Dexterity.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardPlayed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "event.bool",
+                  "value": {
+                    "FieldKey": "card.hasTag.attack"
+                  }
+                },
+                "Then": {
+                  "kind": "node.sequence",
+                  "value": {
+                    "Children": [
+                      {
+                        "kind": "node.applyStatus",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "StatusDefinitionId": {
+                            "value": "standard.dexterity"
+                          },
+                          "Stacks": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 1
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "kind": "node.applyStatus",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "StatusDefinitionId": {
+                            "value": "standard.lose_dexterity"
+                          },
+                          "Stacks": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 1
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.akabeko",
+      "PackageId": "sts",
+      "NameKey": "Akabeko",
+      "DescriptionKey": "Your first Attack each combat deals 8 additional damage.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "DamageDealt",
+          "Operation": "AddFlat",
+          "Magnitude": 8,
+          "Priority": 100,
+          "RestrictDamageKind": "Direct",
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": {
+            "value": "attack"
+          },
+          "Condition": {
+            "kind": "compare",
+            "value": {
+              "Left": {
+                "kind": "combatantCounter",
+                "value": {
+                  "Selector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": "akabeko_attacks"
+                }
+              },
+              "Right": {
+                "kind": "const",
+                "value": {
+                  "Value": 0
+                }
+              },
+              "Op": "Equal"
+            }
+          }
+        }
+      ],
+      "Triggers": [
+        {
+          "Event": "CardPlayed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "event.bool",
+                  "value": {
+                    "FieldKey": "card.hasTag.attack"
+                  }
+                },
+                "Then": {
+                  "kind": "node.setCombatantCounter",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "CounterId": {
+                      "value": "akabeko_attacks"
+                    },
+                    "Amount": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 1
+                      }
+                    },
+                    "Relative": true
+                  }
+                },
+                "Else": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -56573,11 +57916,25 @@
   },
   "Relics": [
     {
+      "Id": "akabeko",
+      "DisplayName": "Akabeko",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "anchor",
       "DisplayName": "Anchor",
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"
+    },
+    {
+      "Id": "art_of_war",
+      "DisplayName": "Art of War",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "bag_of_marbles",
@@ -56599,6 +57956,13 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"
+    },
+    {
+      "Id": "brimstone",
+      "DisplayName": "Brimstone",
+      "Rarity": "Shop",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "bronze_scales",
@@ -56629,8 +57993,22 @@
       "CombatRules": null
     },
     {
+      "Id": "centennial_puzzle",
+      "DisplayName": "Centennial Puzzle",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "champion_belt",
       "DisplayName": "Champion Belt",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "charons_ashes",
+      "DisplayName": "Charon's Ashes",
       "Rarity": "Rare",
       "RunPrograms": null,
       "CombatRules": null
@@ -56639,6 +58017,13 @@
       "Id": "cloak_clasp",
       "DisplayName": "Cloak Clasp",
       "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "clockwork_souvenir",
+      "DisplayName": "Clockwork Souvenir",
+      "Rarity": "Shop",
       "RunPrograms": null,
       "CombatRules": null
     },
@@ -56664,11 +58049,25 @@
       "CombatRules": null
     },
     {
+      "Id": "duality",
+      "DisplayName": "Duality",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "eternal_feather",
       "DisplayName": "Eternal Feather",
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "fossilized_helix",
+      "DisplayName": "Fossilized Helix",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "fusion_hammer",
@@ -56702,6 +58101,20 @@
       "Id": "gremlin_horn",
       "DisplayName": "Gremlin Horn",
       "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "gremlin_visage",
+      "DisplayName": "Gremlin Visage",
+      "Rarity": "Event",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "happy_flower",
+      "DisplayName": "Happy Flower",
+      "Rarity": "Common",
       "RunPrograms": null,
       "CombatRules": null
     },
@@ -56755,6 +58168,20 @@
       "CombatRules": null
     },
     {
+      "Id": "mango",
+      "DisplayName": "Mango",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "mark_of_pain",
+      "DisplayName": "Mark of Pain",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "mark_of_the_bloom",
       "DisplayName": "Mark of the Bloom",
       "Rarity": "Event",
@@ -56776,9 +58203,16 @@
       "CombatRules": null
     },
     {
+      "Id": "mutagenic_strength",
+      "DisplayName": "Mutagenic Strength",
+      "Rarity": "Event",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "nunchaku",
       "DisplayName": "Nunchaku",
-      "Rarity": "Uncommon",
+      "Rarity": "Common",
       "RunPrograms": null,
       "CombatRules": null
     },
@@ -56813,7 +58247,7 @@
     {
       "Id": "paper_krane",
       "DisplayName": "Paper Krane",
-      "Rarity": "Rare",
+      "Rarity": "Uncommon",
       "RunPrograms": null,
       "CombatRules": null
     },
@@ -56841,7 +58275,14 @@
     {
       "Id": "pen_nib",
       "DisplayName": "Pen Nib",
-      "Rarity": "Uncommon",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "philosophers_stone",
+      "DisplayName": "Philosopher's Stone",
+      "Rarity": "Boss",
       "RunPrograms": null,
       "CombatRules": null
     },
@@ -56860,6 +58301,13 @@
       "Rarity": "Common"
     },
     {
+      "Id": "red_mask",
+      "DisplayName": "Red Mask",
+      "Rarity": "Event",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "red_skull",
       "DisplayName": "Red Skull",
       "Rarity": "Common",
@@ -56872,6 +58320,27 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"
+    },
+    {
+      "Id": "ring_of_the_serpent",
+      "DisplayName": "Ring of the Serpent",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "ring_of_the_snake",
+      "DisplayName": "Ring of the Snake",
+      "Rarity": "Starter",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "runic_cube",
+      "DisplayName": "Runic Cube",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "shovel",
