@@ -742,6 +742,10 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.runic_pyramid"
             | "standard.lizard_tail"
             | "standard.unceasing_top"
+            // §269: two `TurnStartEnergy` carriers, only granted in certain fight kinds
+            // (`KindMask` decides that on the run side).
+            | "standard.slavers_collar"
+            | "standard.busted_crown"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

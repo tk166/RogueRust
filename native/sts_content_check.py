@@ -116,7 +116,8 @@ INV_COUNTS = {
     # §266: +2 (`red_skull` / `odd_mushroom`).
     # §267: +13 (the zero-infrastructure relic batch).
     # §268: +5 (the zero-infrastructure tail).
-    "statuses": 119,
+    # §269: +2 (`slavers_collar` / `busted_crown` energy carriers).
+    "statuses": 121,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1430,6 +1431,9 @@ INV_STATUSES = {
     "standard.runic_pyramid": [],
     "standard.lizard_tail": [],
     "standard.unceasing_top": [],
+    # §269：两条 `TurnStartEnergy` 载体（挂不挂由运行层的 `KindMask` 决定）。
+    "standard.slavers_collar": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
+    "standard.busted_crown": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
     # §267：零基建批次。
     "standard.ring_of_the_serpent": [('TurnStartDraw', 'AddFlat', 1, 100, None)],
     "standard.philosophers_stone": [('TurnStartEnergy', 'AddPerStack', 1, 100, None)],
@@ -3422,6 +3426,8 @@ def check_statuses(doc):
                      # §268（`black_blood` 没有状态）
                      "standard.self_forming_clay", "standard.bird_faced_urn",
                      "standard.runic_pyramid", "standard.lizard_tail", "standard.unceasing_top",
+                     # §269
+                     "standard.slavers_collar", "standard.busted_crown",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3550,6 +3556,9 @@ def check_statuses(doc):
                         "standard.runic_pyramid": [],
                         "standard.lizard_tail": [],
                         "standard.unceasing_top": ['CardPlayed'],
+                        # §269（两条能量载体都没有触发器）
+                        "standard.slavers_collar": [],
+                        "standard.busted_crown": [],
                         "standard.champion_belt": ["StatusApplied"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
@@ -3799,7 +3808,11 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "ring_of_the_snake", "ring_of_the_serpent", "philosophers_stone", "happy_flower", "art_of_war", "brimstone", "mark_of_pain", "mutagenic_strength", "centennial_puzzle", "runic_cube", "charons_ashes", "duality", "akabeko", "clockwork_souvenir", "red_mask", "gremlin_visage", "fossilized_helix", "mango",
                       # §268: 零基建档收尾。
                       "self_forming_clay", "bird_faced_urn", "runic_pyramid", "lizard_tail",
-                      "unceasing_top", "black_blood")
+                      "unceasing_top", "black_blood",
+                      # §269: 战斗类型层 + 奖励层。
+                      "preserved_insect", "pantograph", "slavers_collar", "sling_of_courage",
+                      "question_card", "busted_crown", "prayer_wheel", "white_beast_statue",
+                      "black_star")
 
 
 def check_relics(doc):

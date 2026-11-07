@@ -3434,7 +3434,6 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     let max_health = session.state.health_max();
     // §145: what the relics do **when a fight starts**. Read off the run *before* the session is
     // installed, because `combat_bonus` borrows the run and the applier borrows the fight.
-    let bonus = session.state.combat_bonus();
     // §159 `A7` / `A8` / `A9`: the node's kind decides which of the three rules (if any) raises the
     // enemies' maximum health. Read here, before the run is borrowed by the fight.
     let fight_kind = match kind {
@@ -3443,6 +3442,9 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         _ => rd_run::state::FightKind::Normal,
     };
     let enemy_health_percent = session.state.enemy_health_bonus_percent(fight_kind);
+    // §269：**按战斗类型**算 —— 有三件遗物只在精英/Boss 战里生效（`sling_of_courage` /
+    // `slavers_collar` / `pantograph`）。放在 `fight_kind` 之后，是因为它就是那个参数。
+    let bonus = session.state.combat_bonus_for(fight_kind);
     // §187：A2/A3/A4 与 A17/18/19 都需要这一个数（内核不会猜它）。
     let ascension = session.state.ascension();
     // 可失败段收在一个块里：`entries` 借着 `state`（`DeckEntry<'static>` 的要求），块一结束借用就死，
@@ -3695,6 +3697,20 @@ fn apply_combat_bonus_statuses(
 /// started (turn 1's clear step has already run by then). See
 /// [`apply_combat_bonus_statuses`] for why the split exists.
 fn apply_combat_bonus_block(bonus: rd_run::state::CombatBonus) -> Result<(), String> {
+    // §269：`pantograph` —— Boss 战开战回 25。**上限由这里钳**（血量归战斗状态管），
+    // 运行层只表达"想回多少"。放在格挡那一半里是因为它俩都在"第 1 回合开始之后"生效。
+    if bonus.start_heal > 0 {
+        if let Some(session) = crate::slot().as_mut() {
+            if let Some(hero) = session.hero_id() {
+                if let Some(combatant) = session.state.combatant_mut(&hero) {
+                    let healed = (combatant.health_current + bonus.start_heal)
+                        .min(combatant.health_max);
+                    combatant.health_current = healed;
+                }
+            }
+            session.reobserve_after_external_change();
+        }
+    }
     if bonus.block == 0 {
         return Ok(());
     }

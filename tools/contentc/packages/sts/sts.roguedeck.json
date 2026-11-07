@@ -8306,6 +8306,58 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.slavers_collar",
+      "PackageId": "sts",
+      "NameKey": "Slaver's Collar",
+      "DescriptionKey": "During Boss and Elite combats, gain 1 Energy at the start of your turn.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartEnergy",
+          "Operation": "AddPerStack",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.busted_crown",
+      "PackageId": "sts",
+      "NameKey": "Busted Crown",
+      "DescriptionKey": "Gain 1 Energy at the start of your turn. Future card rewards have 2 less cards to choose from.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartEnergy",
+          "Operation": "AddPerStack",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": []
     }
   ],
   "Cards": [
@@ -58348,6 +58400,13 @@
       "CombatRules": null
     },
     {
+      "Id": "black_star",
+      "DisplayName": "Black Star",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "blood_vial",
       "DisplayName": "Blood Vial",
       "RunPrograms": null,
@@ -58374,6 +58433,13 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Starter"
+    },
+    {
+      "Id": "busted_crown",
+      "DisplayName": "Busted Crown",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "calipers",
@@ -58649,6 +58715,13 @@
       "CombatRules": null
     },
     {
+      "Id": "pantograph",
+      "DisplayName": "Pantograph",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "paper_krane",
       "DisplayName": "Paper Krane",
       "Rarity": "Uncommon",
@@ -58703,6 +58776,27 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"
+    },
+    {
+      "Id": "prayer_wheel",
+      "DisplayName": "Prayer Wheel",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "preserved_insect",
+      "DisplayName": "Preserved Insect",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "question_card",
+      "DisplayName": "Question Card",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "red_mask",
@@ -58771,6 +58865,20 @@
       "Id": "shuriken",
       "DisplayName": "Shuriken",
       "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "slavers_collar",
+      "DisplayName": "Slaver's Collar",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "sling_of_courage",
+      "DisplayName": "Sling of Courage",
+      "Rarity": "Shop",
       "RunPrograms": null,
       "CombatRules": null
     },
@@ -58857,6 +58965,13 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"
+    },
+    {
+      "Id": "white_beast_statue",
+      "DisplayName": "White Beast Statue",
+      "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
     }
   ],
   "Start": {

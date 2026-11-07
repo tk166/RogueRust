@@ -24,6 +24,37 @@ pub mod archive;
 
 use crate::streams::{RunError, RunRng, RunStream};
 
+/// §269：奖励卡数的**第二半**（见 [`RunState::reward_card_count`]）。
+///
+/// 只有一件：`busted_crown` 的 "card rewards have 2 less cards"（它的第一半 —— 每回合 +1 能量
+/// —— 走 `relic_effect`）。表里用**遗物 id**，所以查的时候要经过 `relic_effect_static`。
+const EXTRA_REWARD_CARD_DELTAS: [(&str, i32); 1] = [("busted_crown", -2)];
+
+/// §269：一组"哪几类战斗"的位掩码（[`RelicEffect::StartCombatStatusInKinds`] 等使用）。
+///
+/// 用位而不是 `[bool; 3]`：遗物表里写成常量字面量（`NORMAL | ELITE`），读起来就是 wiki 那句话
+/// （"精英与 Boss 战"）。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct KindMask(pub u8);
+
+impl KindMask {
+    pub const NORMAL: KindMask = KindMask(1);
+    pub const ELITE: KindMask = KindMask(2);
+    pub const BOSS: KindMask = KindMask(4);
+    pub const ALL: KindMask = KindMask(7);
+
+    /// 这张掩码是否覆盖 `kind`。
+    #[must_use]
+    pub const fn covers(self, kind: FightKind) -> bool {
+        let bit = match kind {
+            FightKind::Normal => 1,
+            FightKind::Elite => 2,
+            FightKind::Boss => 4,
+        };
+        self.0 & bit != 0
+    }
+}
+
 /// The most cards a run's deck may hold. See the module docs: exceeding it is an error, never a
 /// truncation.
 pub const MAX_RUN_DECK: usize = 60;
@@ -154,6 +185,30 @@ pub enum RelicEffect {
     /// (`du_vu_doll`: 1 Strength per Curse). The count comes from the content image, so it is
     /// resolved by the fight builder -- see [`CombatBonus::per_curse_statuses`].
     StartCombatStatusPerCurse(&'static str, i32),
+    /// §269：**只在某几类战斗里**开战挂状态（`sling_of_courage`：精英战 +2 力量、
+    /// `slavers_collar`：Boss/精英战每回合 +1 能量）。
+    ///
+    /// 为什么不是"再开一张表"：这条规则的两个参数（哪类战斗 + 哪条状态）都属于**运行层**
+    /// （`FightKind` 是它自己的枚举），内容不知道"精英"是什么。
+    StartCombatStatusInKinds(&'static str, i32, KindMask),
+    /// §269：**只在某几类战斗里**开战治疗（`pantograph`：Boss 战回 25）。
+    ///
+    /// 上限由战斗构建方钳（血量是战斗状态的事），所以这里只给"想回多少"。
+    StartCombatHealInKinds(i32, KindMask),
+    /// §269：战斗奖励的**卡牌张数**修正（`question_card` +1、`busted_crown` -2、
+    /// `prayer_wheel` 普通战 +1）。
+    RewardCardDelta(i32, KindMask),
+    /// §269：**药水必掉**（`white_beast_statue`）。
+    PotionAlwaysDrops,
+    /// §269：精英战敌人血量百分比修正（`preserved_insect`：-25）。与升阶的
+    /// `enemy_health_bonus_percent` 走**同一条通道**，所以两个修正自动叠加。
+    EliteEnemyHealthPercent(i32),
+
+    /// §269：精英多掉一件遗物（`black_star`）。
+    ///
+    /// ⚠️ 这件**直接塞进包**而不是进奖励屏：奖励屏只有一个遗物槽（`Reward::relic`），
+    /// 加第二个槽要改 ABI 与页面。写在这里是为了让偏差**可查**，而不是让它悄悄消失。
+    EliteExtraRelic,
     /// Resting heals this much more (`regal_pillow`, wiki: +15).
     RestHealBonus(i32),
     /// Heal `amount` at the end of a fight **only when HP is at or below `percent` of maximum**
@@ -260,6 +315,9 @@ pub struct CombatBonus {
     pub per_curse_statuses: [Option<CombatStatus>; MAX_COMBAT_STATUSES],
     /// How many of [`Self::per_curse_statuses`] are set.
     pub per_curse_status_count: usize,
+    /// §269：开战时**先回这么多血**（`pantograph`：Boss 战 +25）。上限由战斗构建方钳
+    /// （血量归战斗状态管，运行层只表达"想回多少"）。
+    pub start_heal: i32,
 }
 
 impl Default for CombatBonus {
@@ -272,6 +330,7 @@ impl Default for CombatBonus {
             enemy_status_count: 0,
             per_curse_statuses: [None; MAX_COMBAT_STATUSES],
             per_curse_status_count: 0,
+            start_heal: 0,
         }
     }
 }
@@ -287,6 +346,7 @@ impl CombatBonus {
             && self.status_count == 0
             && self.enemy_status_count == 0
             && self.per_curse_status_count == 0
+            && self.start_heal == 0
     }
 
     /// Add `stacks` of status `id`. `false` = the list is full (a **loud** failure: the caller must
@@ -368,7 +428,11 @@ pub const REST_HEAL_PERCENT: i32 = 30;
 /// 用满之后选项从 `campfire_options()` 里消失。
 pub const GIRYA_MAX_LIFTS: u8 = 3;
 /// `inv:§3.5`: a reward screen shows three cards, all different.
-pub const MAX_REWARD_CARDS: usize = 3;
+pub const MAX_REWARD_CARDS: usize = 4;
+/// §269：**一屏默认给几张**（`inv:§3.5` 的三张）。与 [`MAX_REWARD_CARDS`]（**存储**上限）分开：
+/// `question_card` 让一屏变 4 张，而"存储 4"与"默认给 3"是两个数 —— 混成一个的话，
+/// 加一张牌就要动所有下标。
+pub const BASE_REWARD_CARDS: usize = 3;
 /// `inv:§5`: a normal fight pays 10–20 gold (elite 25–35, boss 95–105).
 pub const NORMAL_FIGHT_GOLD: (i32, i32) = (10, 20);
 /// `inv:§3.5`: the pity offset starts at −5%, ticks +1% per non-rare roll, resets on a rare.
@@ -1366,17 +1430,25 @@ impl RunState {
     /// `A7` / `A8` / `A9` (§159): how much extra maximum health this kind of fight's enemies get,
     /// in percent. `0` below the level that owns the kind, so the three rules stay three rules.
     #[must_use]
-    pub const fn enemy_health_bonus_percent(&self, kind: FightKind) -> i32 {
+    /// §269：不再是 `const fn` —— `preserved_insect` 要看遗物表，而查表不是常量表达式。
+    /// 调用点（`fight_begin`）本来就是普通函数，所以这条改动没有传播成本。
+    pub fn enemy_health_bonus_percent(&self, kind: FightKind) -> i32 {
+        // §269：`preserved_insect` —— 精英战敌人血量 -25%。与升阶的 +75% 走**同一条通道**
+        // （战斗构建方只读这一个数），所以两个修正自动叠加、顺序无关（先升阶后遗物，
+        // 整数加法可交换）。⚠️ 不能为它另开一条路径：那会让"精英血量"有两个来源。
+        let preserved_insect = matches!(kind, FightKind::Elite)
+            && self.holds_relic_effect(RelicEffect::EliteEnemyHealthPercent(-25));
         let level = match kind {
             FightKind::Normal => A_NORMAL_HP,
             FightKind::Elite => A_ELITE_HP,
             FightKind::Boss => A_BOSS_HP,
         };
-        if self.at_least(level) {
+        let ascension = if self.at_least(level) {
             ASCENDED_ENEMY_HEALTH_PERCENT
         } else {
             0
-        }
+        };
+        ascension - if preserved_insect { 25 } else { 0 }
     }
     /// 0 before the first step, then 1..=ROWS.
     #[must_use]
@@ -1554,6 +1626,14 @@ impl RunState {
             | RelicEffect::StartCombatBlock(_)
             | RelicEffect::StartCombatStatus(_, _)
             | RelicEffect::StartCombatStatusPerCurse(_, _)
+            // §269：六个新变体都不是"拿到就生效"（两个按战斗类型、三个在奖励结算时、
+            // 一个改精英血量）。
+            | RelicEffect::StartCombatStatusInKinds(_, _, _)
+            | RelicEffect::StartCombatHealInKinds(_, _)
+            | RelicEffect::RewardCardDelta(_, _)
+            | RelicEffect::PotionAlwaysDrops
+            | RelicEffect::EliteExtraRelic
+            | RelicEffect::EliteEnemyHealthPercent(_)
             // §224: 开战给敌人的状态也不是"拿到就生效"。
             | RelicEffect::StartCombatStatusOnEnemies(_, _)
             | RelicEffect::RestHealBonus(_)
@@ -1694,6 +1774,12 @@ impl RunState {
                     | RelicEffect::CampfireDig
                     | RelicEffect::NoRest
                     | RelicEffect::NoSmith
+                    | RelicEffect::StartCombatStatusInKinds(_, _, _)
+                    | RelicEffect::StartCombatHealInKinds(_, _)
+                    | RelicEffect::RewardCardDelta(_, _)
+                    | RelicEffect::PotionAlwaysDrops
+                    | RelicEffect::EliteExtraRelic
+                    | RelicEffect::EliteEnemyHealthPercent(_)
                     | RelicEffect::RestCardReward,
                 ) => {}
                 None => {
@@ -1856,8 +1942,39 @@ impl RunState {
             "runic_pyramid" => Some(RelicEffect::StartCombatStatus("standard.runic_pyramid", 1)),
             "lizard_tail" => Some(RelicEffect::StartCombatStatus("standard.lizard_tail", 1)),
             "unceasing_top" => Some(RelicEffect::StartCombatStatus("standard.unceasing_top", 1)),
+            // §269：**战斗类型**层（只在精英/Boss 战里生效的三件）。
+            //   `sling_of_courage`：精英战 +2 力量；
+            //   `slavers_collar`：Boss/精英战每回合 +1 能量（`TurnStartEnergy` 修饰器）；
+            //   `pantograph`：Boss 战开战回 25。
+            "sling_of_courage" => Some(RelicEffect::StartCombatStatusInKinds(
+                "standard.strength",
+                2,
+                KindMask::ELITE,
+            )),
+            "slavers_collar" => Some(RelicEffect::StartCombatStatusInKinds(
+                "standard.slavers_collar",
+                1,
+                KindMask(2 | 4),
+            )),
+            "pantograph" => {
+                Some(RelicEffect::StartCombatHealInKinds(25, KindMask::BOSS))
+            }
+            // §269：**奖励层**五件。
+            //   `question_card`：卡牌奖励 +1 张（任何战斗）；
+            //   `busted_crown`：卡牌奖励 -2 张（能量那一半走 `busted_crown_energy` 状态）；
+            //   `prayer_wheel`：**普通怪**多 1 张；
+            //   `white_beast_statue`：药水必掉；
+            //   `black_star`：精英多掉一件遗物（直接塞进包，理由见变体的文档）。
+            "preserved_insect" => Some(RelicEffect::EliteEnemyHealthPercent(-25)),
+            "question_card" => Some(RelicEffect::RewardCardDelta(1, KindMask::ALL)),
+            "prayer_wheel" => Some(RelicEffect::RewardCardDelta(1, KindMask::NORMAL)),
+            "white_beast_statue" => Some(RelicEffect::PotionAlwaysDrops),
+            "black_star" => Some(RelicEffect::EliteExtraRelic),
             // `black_blood`：战后回 12（wiki 的 "Replaces Burning Blood" 那一半见 §268.3）。
             "black_blood" => Some(RelicEffect::EndOfCombatHeal(12)),
+            // §269：`busted_crown` 的**能量**那一半（无条件挂）。它的另一半（奖励卡数 -2）在
+            // `EXTRA_REWARD_CARD_DELTAS` 里 —— 一件遗物有两半，而 `relic_effect` 只能表达一个。
+            "busted_crown" => Some(RelicEffect::StartCombatStatus("standard.busted_crown", 1)),
             "twisted_funnel" => {
                 Some(RelicEffect::StartCombatStatusOnEnemies("standard.poison", 4))
             }
@@ -1877,6 +1994,16 @@ impl RunState {
     /// player expects and what the belt's order must not silently decide.
     #[must_use]
     pub fn combat_bonus(&self) -> CombatBonus {
+        self.combat_bonus_for(FightKind::Normal)
+    }
+
+    /// §269：**按战斗类型**算的开战加成 —— 有几件遗物只在精英/Boss 战里生效
+    /// （`sling_of_courage` / `slavers_collar` / `pantograph`）。
+    ///
+    /// 旧入口 [`Self::combat_bonus`] 保留为 `Normal`：它的调用方（大量测试、`rd-wasm` 的
+    /// 非战斗路径）没有"这一场是什么类型"这个概念，而 `Normal` 正是那些地方唯一说得通的答案。
+    #[must_use]
+    pub fn combat_bonus_for(&self, kind: FightKind) -> CombatBonus {
         let mut bonus = CombatBonus::default();
         for slot in 0..self.relics_len as usize {
             match Self::relic_effect(self.relics[slot].as_str()) {
@@ -1920,6 +2047,29 @@ impl RunState {
                         if !merged {
                             let _ = bonus.push_status("standard.strength", stacks);
                         }
+                    }
+                }
+                Some(RelicEffect::StartCombatStatusInKinds(id, stacks, kinds)) => {
+                    // §269：掩码不覆盖这一场 ⇒ 这条遗物今天不存在。
+                    if kinds.covers(kind) {
+                        let mut merged = false;
+                        for entry in bonus.statuses.iter_mut().take(bonus.status_count) {
+                            if let Some(existing) = entry {
+                                if existing.id == id {
+                                    existing.stacks += stacks;
+                                    merged = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if !merged {
+                            let _ = bonus.push_status(id, stacks);
+                        }
+                    }
+                }
+                Some(RelicEffect::StartCombatHealInKinds(amount, kinds)) => {
+                    if kinds.covers(kind) {
+                        bonus.start_heal += amount;
                     }
                 }
                 Some(RelicEffect::StartCombatStatusPerCurse(id, stacks)) => {
@@ -1973,6 +2123,12 @@ impl RunState {
                     | RelicEffect::CampfireDig
                     | RelicEffect::NoRest
                     | RelicEffect::NoSmith
+                    | RelicEffect::StartCombatStatusInKinds(_, _, _)
+                    | RelicEffect::StartCombatHealInKinds(_, _)
+                    | RelicEffect::RewardCardDelta(_, _)
+                    | RelicEffect::PotionAlwaysDrops
+                    | RelicEffect::EliteExtraRelic
+                    | RelicEffect::EliteEnemyHealthPercent(_)
                     | RelicEffect::RestCardReward,
                 )
                 | None => {}
@@ -2377,6 +2533,12 @@ impl RunState {
                     | RelicEffect::RestHealPerFiveCards(_)
                     | RelicEffect::FightGoldPercent(_)
                     | RelicEffect::ExtraPotionSlots(_)
+                    | RelicEffect::StartCombatStatusInKinds(_, _, _)
+                    | RelicEffect::StartCombatHealInKinds(_, _)
+                    | RelicEffect::RewardCardDelta(_, _)
+                    | RelicEffect::PotionAlwaysDrops
+                    | RelicEffect::EliteExtraRelic
+                    | RelicEffect::EliteEnemyHealthPercent(_)
                     | RelicEffect::RestCardReward,
                 )
                 | None => {}
@@ -3448,10 +3610,14 @@ impl RunState {
                 eligible_len += 1;
             }
         }
-        if eligible_len < MAX_REWARD_CARDS {
+        // §269：奖励的**卡数**是可变的（`question_card` +1、`busted_crown` -2、
+        // `prayer_wheel` 普通战 +1）。`MAX_REWARD_CARDS` 是**存储**上限，与"这一屏给几张"
+        // 是两个数 —— 把两者混成一个，加一张牌就要动所有下标。
+        let wanted = self.reward_card_count(kind);
+        if eligible_len < wanted {
             return Err(RunError::PoolTooSmall {
                 pool: eligible_len,
-                need: MAX_REWARD_CARDS,
+                need: wanted,
             });
         }
         let eligible = &eligible[..eligible_len];
@@ -3473,7 +3639,10 @@ impl RunState {
         // The roll happens even when the belt is full (the wiki's Colosseum note relies on that),
         // so the chance keeps moving; only the **offer** is suppressed below.
         let chance = self.potion_chance.clamp(0, 100) as u32;
-        let rolled = self.rng.roll(RunStream::Potion, 100)? < chance;
+        // §269：`white_beast_statue` —— "Potions always appear in combat rewards"。
+        // 掷骰照旧（随机流的位置不动，回放才稳定），只把**结果** OR 成真。
+        let always = self.holds_relic_effect(RelicEffect::PotionAlwaysDrops);
+        let rolled = always || self.rng.roll(RunStream::Potion, 100)? < chance;
         self.potion_chance = if rolled {
             (self.potion_chance - POTION_DROP_STEP).max(0)
         } else {
@@ -3483,7 +3652,7 @@ impl RunState {
 
         let mut used = [false; MAX_POOL];
         let mut cards = [RunId::EMPTY; MAX_REWARD_CARDS];
-        for slot in 0..MAX_REWARD_CARDS {
+        for slot in 0..wanted {
             // One roll, banded -- see `reward_bands`.
             let (rare_top, uncommon_top) = reward_bands(kind, self.rarity_offset);
             let roll = self.rng.roll(RunStream::Reward, 100)? as i32;
@@ -3545,15 +3714,66 @@ impl RunState {
         if matches!(kind, FightKind::Elite | FightKind::Boss) {
             relic = self.pick_relic(RunStream::Reward, relic_pool)?;
         }
+        // §269：`black_star` —— "Elites now drop an additional relic when defeated"。
+        // ⚠️ 第二件**直接进包**（奖励屏只有一个遗物槽）。这不是"更省事"，是**代价最小**：
+        // 加第二个槽要改 `Reward` 结构、ABI 与页面三处。偏差写在这里，别让它悄悄消失。
+        if matches!(kind, FightKind::Elite)
+            && self.holds_relic_effect(RelicEffect::EliteExtraRelic)
+        {
+            let extra = self.pick_relic(RunStream::Reward, relic_pool)?;
+            if extra.as_str() != "" {
+                if let Ok(id) = RunId::new(extra.as_str()) {
+                    let _ = self.push_relic(id.as_str());
+                }
+            }
+        }
         self.reward = Reward {
             gold: paid,
             cards,
-            cards_len: MAX_REWARD_CARDS as u8,
+            cards_len: wanted as u8,
             potion,
             relic,
         };
         self.pending = Pending::Reward;
         Ok(())
+    }
+
+    /// §269：这一屏**给几张**卡牌奖励。
+    ///
+    /// 基数 3（`inv:§3.5`）加上所有遗物的 `RewardCardDelta`（掩码覆盖这一场才算），再钳到
+    /// `1..=MAX_REWARD_CARDS`。**下限 1**：`busted_crown` 的 -2 不能把一屏变成 0 张
+    /// （那就不是"少两张"，而是"没有奖励" —— 另一条规则）。
+    #[must_use]
+    pub fn reward_card_count(&self, kind: FightKind) -> usize {
+        let mut count = BASE_REWARD_CARDS as i32;
+        // §269：一件遗物有**两半**时（`busted_crown` = 每回合 +1 能量 **且** 奖励卡数 -2），
+        // `relic_effect` 只能表达一个（它返回单个变体）。把第二半写在这张显式的小表里，
+        // 比让 `relic_effect` 长出"返回多个"要小得多 —— 而"哪一半写在哪"在这里是**唯一的**。
+        for (relic, delta) in EXTRA_REWARD_CARD_DELTAS.iter().copied() {
+            if Self::relic_effect(relic).is_some() && {
+                // 只问"有没有这件遗物"：表里的 id 是常量，`relic_effect` 一定认识它。
+                let mut held = false;
+                for slot in 0..self.relics_len as usize {
+                    if self.relics[slot].as_str() == relic {
+                        held = true;
+                        break;
+                    }
+                }
+                held
+            } {
+                count += delta;
+            }
+        }
+        for slot in 0..self.relics_len as usize {
+            if let Some(RelicEffect::RewardCardDelta(delta, kinds)) =
+                Self::relic_effect(self.relics[slot].as_str())
+            {
+                if kinds.covers(kind) {
+                    count += delta;
+                }
+            }
+        }
+        count.clamp(1, MAX_REWARD_CARDS as i32) as usize
     }
 
     /// §259：`Dream Catcher` —— 休息之后给**一次卡牌奖励**（wiki："Whenever you Rest, you may add a
@@ -3581,16 +3801,19 @@ impl RunState {
                 eligible_len += 1;
             }
         }
-        if eligible_len < MAX_REWARD_CARDS {
+        // §269：`Dream Catcher` 那一屏固定 **3** 张（`BASE_REWARD_CARDS`）—— 它是"休息之后的
+        // 一次卡牌奖励"，与战斗奖励屏的张数规则无关（`question_card` 说的是 "card rewards"，
+        // 而这里给的是"一次奖励"；把它也算进来会让休息变成打一场怪）。存储仍是 4 张的容量。
+        if eligible_len < BASE_REWARD_CARDS {
             return Err(RunError::PoolTooSmall {
                 pool: eligible_len,
-                need: MAX_REWARD_CARDS,
+                need: BASE_REWARD_CARDS,
             });
         }
         let eligible = &eligible[..eligible_len];
         let mut used = [false; MAX_POOL];
         let mut cards = [RunId::EMPTY; MAX_REWARD_CARDS];
-        for slot in 0..MAX_REWARD_CARDS {
+        for slot in 0..BASE_REWARD_CARDS {
             // `Dream Catcher` 的奖励是**普通怪**档位（wiki 没有单独的概率表）。
             let (rare_top, uncommon_top) = reward_bands(FightKind::Normal, self.rarity_offset);
             let roll = self.rng.roll(RunStream::Reward, 100)? as i32;
@@ -3625,7 +3848,7 @@ impl RunState {
         self.reward = Reward {
             gold: 0,
             cards,
-            cards_len: MAX_REWARD_CARDS as u8,
+            cards_len: BASE_REWARD_CARDS as u8,
             potion: RunId::EMPTY,
             relic: RunId::EMPTY,
         };
@@ -4791,6 +5014,134 @@ mod tests {
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
     }
 
+    /// §269：**战斗类型层** —— 同一个遗物在不同 `FightKind` 下给出不同的加成。
+    #[test]
+    fn the_kind_gated_relics_only_fire_in_their_own_kinds() {
+        use crate::state::{FightKind, KindMask};
+
+        // ---- Sling of Courage：**只有**精英战 +2 力量。
+        let mut run = ironclad();
+        run.push_relic("sling_of_courage").expect("sling");
+        for (kind, want) in [
+            (FightKind::Normal, 0),
+            (FightKind::Elite, 1),
+            (FightKind::Boss, 0),
+        ] {
+            let bonus = run.combat_bonus_for(kind);
+            assert_eq!(bonus.status_count, want, "sling_of_courage in {kind:?}");
+            if want == 1 {
+                let entry = bonus.statuses[0].expect("entry");
+                assert_eq!(entry.id, "standard.strength");
+                assert_eq!(entry.stacks, 2, "sling_of_courage: +2 Strength");
+            }
+        }
+
+        // ---- Slaver's Collar：Boss 与精英战各 +1 能量的载体；普通战没有。
+        let mut run = ironclad();
+        run.push_relic("slavers_collar").expect("collar");
+        for (kind, want) in [
+            (FightKind::Normal, 0),
+            (FightKind::Elite, 1),
+            (FightKind::Boss, 1),
+        ] {
+            let bonus = run.combat_bonus_for(kind);
+            assert_eq!(bonus.status_count, want, "slavers_collar in {kind:?}");
+            if want == 1 {
+                assert_eq!(bonus.statuses[0].expect("entry").id, "standard.slavers_collar");
+            }
+        }
+
+        // ---- Pantograph：**只有** Boss 战开战回 25。
+        let mut run = ironclad();
+        run.push_relic("pantograph").expect("pantograph");
+        assert_eq!(run.combat_bonus_for(FightKind::Normal).start_heal, 0);
+        assert_eq!(run.combat_bonus_for(FightKind::Elite).start_heal, 0);
+        assert_eq!(run.combat_bonus_for(FightKind::Boss).start_heal, 25);
+
+        // ---- Preserved Insect：**只有**精英战的敌人血量 -25%。
+        let mut run = ironclad();
+        run.push_relic("preserved_insect").expect("insect");
+        assert_eq!(run.enemy_health_bonus_percent(FightKind::Normal), 0);
+        assert_eq!(
+            run.enemy_health_bonus_percent(FightKind::Elite),
+            -25,
+            "preserved_insect: elite enemies lose 25% HP"
+        );
+        assert_eq!(run.enemy_health_bonus_percent(FightKind::Boss), 0);
+
+        // 与升阶的 +75% 叠加（同一条通道 ⇒ 加法）：A7 对精英给 +75，于是净 +50。
+        let mut ascended = RunState::new_with_ascension(
+            7,
+            80,
+            i32::MAX,
+            &["strike"; 10],
+            A_ELITE_HP,
+        )
+        .expect("an ascended run");
+        ascended.push_relic("preserved_insect").expect("insect");
+        // ⚠️ 本内核的升阶血量增量是 `ASCENDED_ENEMY_HEALTH_PERCENT = 10`（不是 wiki 的 +75% 那套
+        // 分数），所以 A8 精英是 +10，叠加 `preserved_insect` 的 -25 得 **-15**。
+        // 断言写成"两半相加"而不是硬编码某个数：`10 + (-25)`。
+        assert_eq!(
+            ascended.enemy_health_bonus_percent(FightKind::Elite),
+            ASCENDED_ENEMY_HEALTH_PERCENT - 25,
+            "the ascension bonus and the relic share one channel"
+        );
+        assert!(
+            KindMask::ELITE.covers(FightKind::Elite) && !KindMask::ELITE.covers(FightKind::Boss),
+            "the mask itself"
+        );
+    }
+
+    /// §269：**奖励层** —— 卡数 / 药水 / 额外遗物。
+    #[test]
+    fn the_reward_layer_relics_change_the_payout() {
+        use crate::state::{FightKind, BASE_REWARD_CARDS, MAX_REWARD_CARDS};
+
+        // 卡数：基线 3。
+        let run = ironclad();
+        assert_eq!(run.reward_card_count(FightKind::Normal), 3, "baseline");
+        // 存储容量（4）与"默认给几张"（3）是**两个**常量；这里钉的是后者。
+        assert_eq!(
+            run.reward_card_count(FightKind::Normal),
+            BASE_REWARD_CARDS + 0,
+            "the default screen is BASE_REWARD_CARDS"
+        );
+        assert!(BASE_REWARD_CARDS < MAX_REWARD_CARDS, "storage must have room for +1");
+
+        // Question Card：任何战斗 +1。
+        let mut run = ironclad();
+        run.push_relic("question_card").expect("question_card");
+        assert_eq!(run.reward_card_count(FightKind::Normal), 4, "question_card: +1");
+        assert_eq!(run.reward_card_count(FightKind::Boss), 4, "…and on a boss too");
+
+        // Prayer Wheel：**只有**普通怪 +1。
+        let mut run = ironclad();
+        run.push_relic("prayer_wheel").expect("prayer_wheel");
+        assert_eq!(run.reward_card_count(FightKind::Normal), 4, "prayer_wheel: normal +1");
+        assert_eq!(run.reward_card_count(FightKind::Elite), 3, "…and not on an elite");
+
+        // Busted Crown：-2（钳到下限 1）+ 每回合 +1 能量的载体。
+        let mut run = ironclad();
+        run.push_relic("busted_crown").expect("busted_crown");
+        assert_eq!(run.reward_card_count(FightKind::Normal), 1, "busted_crown: 3 - 2");
+        assert_eq!(
+            run.combat_bonus_for(FightKind::Normal).status_count,
+            1,
+            "busted_crown also grants its energy carrier"
+        );
+        assert_eq!(
+            run.combat_bonus_for(FightKind::Normal).statuses[0].expect("entry").id,
+            "standard.busted_crown"
+        );
+
+        // 两件一起：+1 -2 = 2。
+        let mut run = ironclad();
+        run.push_relic("question_card").expect("q");
+        run.push_relic("busted_crown").expect("b");
+        assert_eq!(run.reward_card_count(FightKind::Normal), 2, "+1 and -2 make 2");
+    }
+
     /// §268：零基建档收尾的接线（5 条载体 + `black_blood` 的战后回血）。
     #[test]
     fn the_zero_infrastructure_tail_wires_its_carriers() {
@@ -5330,7 +5681,8 @@ mod tests {
             );
             assert_eq!(run.gold(), gold_before + reward.gold(), "seed {seed}");
             let cards: Vec<&str> = reward.cards().iter().map(RunId::as_str).collect();
-            assert_eq!(cards.len(), MAX_REWARD_CARDS);
+            // §269：一屏的张数是 `BASE_REWARD_CARDS`（3），而 `MAX_REWARD_CARDS`（4）只是**存储**。
+            assert_eq!(cards.len(), BASE_REWARD_CARDS);
             let mut sorted = cards.clone();
             sorted.sort_unstable();
             sorted.dedup();

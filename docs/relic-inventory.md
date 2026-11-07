@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 80 |
-| 3 | 缺（wiki 有、内容没有） | 113 |
+| 2 | 内容里的遗物 | 89 |
+| 3 | 缺（wiki 有、内容没有） | 104 |
 
 ## Starter（4）
 
@@ -50,7 +50,7 @@
 | 有 | `orichalcum` | Orichalcum | Shared | If you end your turn without $Block, gain 6 $Block. |
 | 有 | `pen_nib` | Pen Nib | Shared | Every 10th {{QueryLink\|Cards\|type:Attack\|Attack}} you play deals double damage. |
 | 有 | `potion_belt` | Potion Belt | Shared | Upon pickup, gain 2 [[Potions\|Potion]] slots. |
-| 缺 | `preserved_insect` | Preserved Insect | Shared | Enemies in Elite combats have 25% less HP. |
+| 有 | `preserved_insect` | Preserved Insect | Shared | Enemies in Elite combats have 25% less HP. |
 | 有 | `red_skull` | Red Skull | Ironclad | While your HP is at or below 50%, you have 3 additional $Strength. |
 | 有 | `regal_pillow` | Regal Pillow | Shared | Whenever you Rest, heal an additional 15 HP. |
 | 缺 | `smiling_mask` | Smiling Mask | Shared | The merchant's card removal service now always costs 50 [[Gold]]. |
@@ -88,11 +88,11 @@
 | 缺 | `mummified_hand` | Mummified Hand | Shared | Whenever you play a {{QueryLink\|Cards\|type:Power\|Power}} card, a random card in your hand costs 0 that turn. |
 | 缺 | `ninja_scroll` | Ninja Scroll | Silent | At the start each combat, add 3 {{C\|Shiv\|Shivs}} into your hand. |
 | 有 | `ornamental_fan` | Ornamental Fan | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 4 $Block. |
-| 缺 | `pantograph` | Pantograph | Shared | At the start of Boss combats, heal 25 HP. |
+| 有 | `pantograph` | Pantograph | Shared | At the start of Boss combats, heal 25 HP. |
 | 有 | `paper_krane` | Paper Krane | Silent | Enemies with $Weak deal 40% less damage rather than 25%. |
 | 有 | `paper_phrog` | Paper Phrog | Ironclad | Enemies with $Vulnerable take 75% more damage rather than 50%. |
 | 有 | `pear` | Pear | Shared | Upon pickup, raise your Max HP by 10. |
-| 缺 | `question_card` | Question Card | Shared | Future card rewards have 1 additional card to choose from. |
+| 有 | `question_card` | Question Card | Shared | Future card rewards have 1 additional card to choose from. |
 | 有 | `self_forming_clay` | Self-Forming Clay | Ironclad | Whenever you lose HP, gain 3 $Block next turn. |
 | 有 | `shuriken` | Shuriken | Shared | Every time you play 3 {{QueryLink\|Cards\|type:Attack\|Attacks}} in a single turn, gain 1 $Strength. |
 | 缺 | `singing_bowl` | Singing Bowl | Shared | When adding cards to your deck, you may raise your Max HP by 2 instead. |
@@ -102,7 +102,7 @@
 | 缺 | `teardrop_locket` | Teardrop Locket | Watcher | Start each combat in $Calm. |
 | 缺 | `the_courier` | The Courier | Shared | The Merchant restocks [[Cards\|cards]], [[Relics\|relics]], and [[Potions\|potions]]. All prices are reduced by 20%. |
 | 缺 | `toxic_egg` | Toxic Egg | Shared | Whenever you add a {{QueryLink\|Cards\|type:Skill\|Skill}} card to your deck, $Upgrade it. |
-| 缺 | `white_beast_statue` | White Beast Statue | Shared | [[Potions]] always appear in combat rewards. |
+| 有 | `white_beast_statue` | White Beast Statue | Shared | [[Potions]] always appear in combat rewards. |
 
 ## Rare（34）
 
@@ -130,7 +130,7 @@
 | 缺 | `old_coin` | Old Coin | Shared | Upon pickup, gain 300 [[Gold]]. |
 | 有 | `peace_pipe` | Peace Pipe | Shared | You can now remove cards from your deck at Rest Sites. |
 | 有 | `pocketwatch` | Pocketwatch | Shared | Whenever you play 3 or less cards during your turn, draw 3 additional cards at the start of your next turn. |
-| 缺 | `prayer_wheel` | Prayer Wheel | Shared | Normal enemies drop an additional card reward. |
+| 有 | `prayer_wheel` | Prayer Wheel | Shared | Normal enemies drop an additional card reward. |
 | 有 | `shovel` | Shovel | Shared | You can now Dig for relics at Rest Sites. |
 | 有 | `stone_calendar` | Stone Calendar | Shared | At the end of turn 7, deal 52 damage to ALL enemies. |
 | 有 | `the_specimen` | The Specimen | Silent | Whenever an enemy dies, transfer any $Poison it has to a random enemy. |
@@ -149,8 +149,8 @@
 |---|---|---|---|---|
 | 缺 | `astrolabe` | Astrolabe | Shared | Upon pickup, $Transform 3 cards, then $Upgrade them. |
 | 有 | `black_blood` | Black Blood | Ironclad | Replaces {{R\|Burning Blood}}. At the end of combat, heal 12 HP. |
-| 缺 | `black_star` | Black Star | Shared | Elites now drop an additional relic when defeated. |
-| 缺 | `busted_crown` | Busted Crown | Shared | Gain 1 $Energy at the start of your turn. Future card rewards have 2 less cards to choose from. |
+| 有 | `black_star` | Black Star | Shared | Elites now drop an additional relic when defeated. |
+| 有 | `busted_crown` | Busted Crown | Shared | Gain 1 $Energy at the start of your turn. Future card rewards have 2 less cards to choose from. |
 | 缺 | `calling_bell` | Calling Bell | Shared | Upon pickup, obtain a unique {{QueryLink\|Cards\|type:Curse\|Curse}} and 3 relics. |
 | 有 | `coffee_dripper` | Coffee Dripper | Shared | Gain 1 $Energy at the start of your turn. You can no longer Rest at Rest Sites. |
 | 缺 | `cursed_key` | Cursed Key | Shared | Gain 1 $Energy at the start of your turn. Whenever you open a non-Boss chest, obtain a {{QueryLink\|Cards\|type:Curse\|Curse}}. |
@@ -170,7 +170,7 @@
 | 缺 | `runic_dome` | Runic Dome | Shared | Gain 1 $Energy at the start of your turn. You can no longer see enemy intents. |
 | 有 | `runic_pyramid` | Runic Pyramid | Shared | At the end of your turn, you no longer discard your hand. |
 | 缺 | `sacred_bark` | Sacred Bark | Shared | Double the effectiveness of [[Potions\|potions]]. |
-| 缺 | `slavers_collar` | Slaver's Collar | Shared | During Boss and Elite combats, gain 1 $Energy at the start of your turn. |
+| 有 | `slavers_collar` | Slaver's Collar | Shared | During Boss and Elite combats, gain 1 $Energy at the start of your turn. |
 | 缺 | `snecko_eye` | Snecko Eye | Shared | At the start of your turn, draw 2 additional cards. Start each combat $Confused. |
 | 缺 | `sozu` | Sozu | Shared | Gain 1 $Energy at the start of your turn. You can no longer obtain [[Potions\|potions]]. |
 | 缺 | `tiny_house` | Tiny House | Shared | Upon pickup, obtain 1 [[Potions\|Potion]]. <br>Gain 50 [[Gold]]. <br>Raise your Max HP by 5. <br>Obtain 1 card. <br>$Upgrade 1 random card. |
@@ -197,7 +197,7 @@
 | 缺 | `orrery` | Orrery | Shared | Upon pickup, choose and add 5 cards to your deck. |
 | 缺 | `prismatic_shard` | Prismatic Shard | Shared | Combat reward screens now contain {{QueryLink\|Cards\|color:Colorless\|Colorless}} cards and cards from other colors. |
 | 缺 | `runic_capacitor` | Runic Capacitor | Defect | Start each combat with 3 additional $Orb slots. |
-| 缺 | `sling_of_courage` | Sling of Courage | Shared | Start each Elite combat with 2 $Strength. |
+| 有 | `sling_of_courage` | Sling of Courage | Shared | Start each Elite combat with 2 $Strength. |
 | 缺 | `strange_spoon` | Strange Spoon | Shared | Cards which $Exhaust when played will instead discard 50% of the time. |
 | 缺 | `the_abacus` | The Abacus | Shared | Whenever you shuffle your draw pile, gain 6 $Block. |
 | 缺 | `toolbox` | Toolbox | Shared | At the start of each combat, choose 1 of 3 random {{QueryLink\|Cards\|color:Colorless\|Colorless}} cards and add the chosen card into your hand. |
