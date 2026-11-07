@@ -150,6 +150,10 @@ pub enum RelicEffect {
     /// `standard.plated_armor` *means* -- the kernel does. A per-status arm here would be a second
     /// list to keep in step with the content.
     StartCombatStatus(&'static str, i32),
+    /// §261: start every fight with `stacks` of status `id` **per Curse in the deck**
+    /// (`du_vu_doll`: 1 Strength per Curse). The count comes from the content image, so it is
+    /// resolved by the fight builder -- see [`CombatBonus::per_curse_statuses`].
+    StartCombatStatusPerCurse(&'static str, i32),
     /// Resting heals this much more (`regal_pillow`, wiki: +15).
     RestHealBonus(i32),
     /// Heal `amount` at the end of a fight **only when HP is at or below `percent` of maximum**
@@ -245,6 +249,17 @@ pub struct CombatBonus {
     pub enemy_statuses: [Option<CombatStatus>; MAX_COMBAT_STATUSES],
     /// How many of [`Self::enemy_statuses`] are set.
     pub enemy_status_count: usize,
+    /// §261: statuses whose stacks are a **count over the deck** rather than a number
+    /// (`du_vu_doll`: 1 Strength per Curse). `stacks` here is the amount **per qualifying card**.
+    ///
+    /// A third list, for the same reason the second exists: the number is not the run layer's to
+    /// compute. "Which cards are Curses" is a content question
+    /// (`Content::card_has_tag(id, "curse")`), and `rd-run` deliberately reads no content -- it must
+    /// work with only the image's *ids*. So the run says **what** (this status, this much per
+    /// curse) and the fight builder, which owns the image, does the counting.
+    pub per_curse_statuses: [Option<CombatStatus>; MAX_COMBAT_STATUSES],
+    /// How many of [`Self::per_curse_statuses`] are set.
+    pub per_curse_status_count: usize,
 }
 
 impl Default for CombatBonus {
@@ -255,6 +270,8 @@ impl Default for CombatBonus {
             status_count: 0,
             enemy_statuses: [None; MAX_COMBAT_STATUSES],
             enemy_status_count: 0,
+            per_curse_statuses: [None; MAX_COMBAT_STATUSES],
+            per_curse_status_count: 0,
         }
     }
 }
@@ -266,7 +283,10 @@ impl CombatBonus {
     pub const fn is_empty(&self) -> bool {
         // ⚠️ `enemy_status_count` 必须在这条里 —— 漏了它，"只给敌人挂状态"的遗物会被
         // `apply_combat_bonus` 的早退当成"这场战斗没有加成"，**静默不生效**。
-        self.block == 0 && self.status_count == 0 && self.enemy_status_count == 0
+        self.block == 0
+            && self.status_count == 0
+            && self.enemy_status_count == 0
+            && self.per_curse_status_count == 0
     }
 
     /// Add `stacks` of status `id`. `false` = the list is full (a **loud** failure: the caller must
@@ -277,6 +297,17 @@ impl CombatBonus {
         }
         self.statuses[self.status_count] = Some(CombatStatus { id, stacks });
         self.status_count += 1;
+        true
+    }
+
+    /// §261：同 [`Self::push_status`]，但层数是"每张诅咒多少"（`du_vu_doll`）。
+    /// `false` = 表满（响亮，不静默丢一件遗物）。
+    pub fn push_per_curse_status(&mut self, id: &'static str, stacks: i32) -> bool {
+        if self.per_curse_status_count >= MAX_COMBAT_STATUSES {
+            return false;
+        }
+        self.per_curse_statuses[self.per_curse_status_count] = Some(CombatStatus { id, stacks });
+        self.per_curse_status_count += 1;
         true
     }
 
@@ -1522,6 +1553,7 @@ impl RunState {
             RelicEffect::EndOfCombatHeal(_)
             | RelicEffect::StartCombatBlock(_)
             | RelicEffect::StartCombatStatus(_, _)
+            | RelicEffect::StartCombatStatusPerCurse(_, _)
             // §224: 开战给敌人的状态也不是"拿到就生效"。
             | RelicEffect::StartCombatStatusOnEnemies(_, _)
             | RelicEffect::RestHealBonus(_)
@@ -1648,6 +1680,8 @@ impl RunState {
                     | RelicEffect::HealUp(_)
                     | RelicEffect::StartCombatBlock(_)
                     | RelicEffect::StartCombatStatus(_, _)
+                    // §261: 数牌组算层数的那一支同样不是回合末效果。
+                    | RelicEffect::StartCombatStatusPerCurse(_, _)
                     // §224: 开战给敌人的状态也不是回合末效果。
                     | RelicEffect::StartCombatStatusOnEnemies(_, _)
                     | RelicEffect::RestHealBonus(_)
@@ -1741,6 +1775,19 @@ impl RunState {
             "cloak_clasp" => Some(RelicEffect::StartCombatStatus("standard.cloak_clasp", 1)),
             "incense_burner" => Some(RelicEffect::StartCombatStatus("standard.incense_burner", 1)),
             "pocketwatch" => Some(RelicEffect::StartCombatStatus("standard.pocketwatch", 1)),
+            // §261：同样走 `StartCombatStatus`，但规则有两处不同：
+            // * `lantern` / `bag_of_preparation` 只在**第 1 回合**生效（状态自己数回合）；
+            // * `ice_cream` / `calipers` 没有触发器 —— 它们靠**标签**让内核的回合机改变行为
+            //   （`unspent_energy_carries` / `block_loss_cap`）。内容是"内核读得懂的词汇"。
+            "lantern" => Some(RelicEffect::StartCombatStatus("standard.lantern", 1)),
+            "bag_of_preparation" => {
+                Some(RelicEffect::StartCombatStatus("standard.bag_of_preparation", 1))
+            }
+            "ice_cream" => Some(RelicEffect::StartCombatStatus("standard.ice_cream", 1)),
+            "calipers" => Some(RelicEffect::StartCombatStatus("standard.calipers", 15)),
+            // `du_vu_doll`：1 力量 / 每张诅咒。层数由**战斗构建方**数牌组算出来（见
+            // `per_curse_statuses`）—— `rd-run` 不读内容，所以它不可能自己数。
+            "du_vu_doll" => Some(RelicEffect::StartCombatStatusPerCurse("standard.strength", 1)),
             _ => None,
         }
     }
@@ -1800,6 +1847,23 @@ impl RunState {
                         if !merged {
                             let _ = bonus.push_status("standard.strength", stacks);
                         }
+                    }
+                }
+                Some(RelicEffect::StartCombatStatusPerCurse(id, stacks)) => {
+                    // §261：与上一支同样的合并规则（两件遗物给同一条状态要相加）。
+                    let mut merged = false;
+                    for entry in bonus.per_curse_statuses.iter_mut().take(bonus.per_curse_status_count)
+                    {
+                        if let Some(existing) = entry {
+                            if existing.id == id {
+                                existing.stacks += stacks;
+                                merged = true;
+                                break;
+                            }
+                        }
+                    }
+                    if !merged {
+                        let _ = bonus.push_per_curse_status(id, stacks);
                     }
                 }
                 Some(RelicEffect::StartCombatStatus(id, stacks)) => {
@@ -2234,6 +2298,7 @@ impl RunState {
                     | RelicEffect::HealUp(_)
                     | RelicEffect::StartCombatBlock(_)
                     | RelicEffect::StartCombatStatus(_, _)
+                    | RelicEffect::StartCombatStatusPerCurse(_, _)
                     | RelicEffect::StartCombatStatusOnEnemies(_, _)
                     | RelicEffect::RestHealBonus(_)
                     | RelicEffect::RestHealPerFiveCards(_)
@@ -4651,6 +4716,42 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §261：五件"战斗开始类"遗物的**接线**。
+    ///
+    /// 逐条比，而且 `calipers` 比的是**15 层**、`du_vu_doll` 比的是它落在 **per_curse 那张表**
+    /// 上（不是 `statuses`）。抄错数字、抄错表，只有逐条比才看得出来（§186/§260 都踩过）。
+    #[test]
+    fn the_five_combat_start_relics_wire_their_own_carrier() {
+        // (遗物, 状态 id, 层数)
+        let carrier = [
+            ("lantern", "standard.lantern", 1),
+            ("bag_of_preparation", "standard.bag_of_preparation", 1),
+            ("ice_cream", "standard.ice_cream", 1),
+            ("calipers", "standard.calipers", 15),
+        ];
+        for (relic, status_id, stacks) in carrier {
+            let mut run = ironclad();
+            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            let bonus = run.combat_bonus();
+            assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
+            let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
+            assert_eq!(entry.id, status_id, "{relic}: its own carrier");
+            assert_eq!(entry.stacks, stacks, "{relic}: the stacks are the wiki's number");
+            assert_eq!(bonus.per_curse_status_count, 0, "{relic}: not a per-curse relic");
+        }
+
+        // `du_vu_doll` 落在**另一张表**上：层数是"每张诅咒多少"，不是总数。
+        let mut run = ironclad();
+        run.push_relic("du_vu_doll").expect("du_vu_doll");
+        let bonus = run.combat_bonus();
+        assert_eq!(bonus.status_count, 0, "du_vu_doll has no fixed-stack status");
+        assert_eq!(bonus.per_curse_status_count, 1, "du_vu_doll uses the per-curse table");
+        let entry = bonus.per_curse_statuses[0].expect("an entry");
+        assert_eq!(entry.id, "standard.strength", "du_vu_doll grants Strength");
+        assert_eq!(entry.stacks, 1, "1 Strength per Curse");
+        assert!(!bonus.is_empty(), "a per-curse relic is not an empty bonus");
     }
 
     /// §260：八件遗物的**接线** —— 每件都必须把**它自己那条**状态挂到英雄身上。

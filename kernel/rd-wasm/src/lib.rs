@@ -146,6 +146,9 @@ const HERO_HP: i32 = 80;
 const DEBUG_HERO_HP: i32 = 400;
 /// Starting / per-turn energy (the standard package's `3`).
 const ENERGY: i32 = 3;
+/// §261：观察向量里报的"能量上限" = 每回合补给量。它与 [`ENERGY`] 同源（`build_session_at_with`
+/// 用 `ENERGY` 建池的初值与补给量），所以不构成第二份真相。
+const HERO_ENERGY_REFILL: i32 = ENERGY;
 
 // =============================================================================================
 // The observation vector (`docs/spec/env-abi.md` §4) — 12 + 5 + 4×8 + 4×5 + 10×4 + 5 + 8 = 122
@@ -770,6 +773,40 @@ fn build_session_at(
     enemy_health_percent: i32,
     ascension: u8,
 ) -> Result<Session, String> {
+    build_session_at_with(seed, encounter_name, hero_hp, deck, enemy_health_percent, ascension, true)
+}
+
+/// §261: 同 [`build_session_at`]，但**停在英雄第 1 回合开始之前**（`WaitingToStartTurn`）。
+///
+/// 存在的理由只有一个：**遗物的"开战"效果必须在第 1 回合开始之前生效**，否则它们会错过
+/// 第 1 回合的每一个时点：
+///
+/// * `bag_of_preparation`（开战多抽 2 张）的 `TurnStarted` 触发器在第 1 回合已经过去了；
+/// * `lantern`（第 1 回合 +1 能量）同理；
+/// * `mercury_hourglass`（每次回合初对所有敌人 3 点）会少打第 1 回合。
+///
+/// `build_session_at` 会把第 1 回合**立刻**开起来（那是给页面用的，玩家一进场就该看到 5 张手牌），
+/// 于是 run 层的"先建、再挂遗物状态、再开打"这条顺序需要一个不开始的入口。
+fn build_session_at_unstarted(
+    seed: i32,
+    encounter_name: &str,
+    hero_hp: i32,
+    deck: Option<&'static [DeckEntry<'static>]>,
+    enemy_health_percent: i32,
+    ascension: u8,
+) -> Result<Session, String> {
+    build_session_at_with(seed, encounter_name, hero_hp, deck, enemy_health_percent, ascension, false)
+}
+
+fn build_session_at_with(
+    seed: i32,
+    encounter_name: &str,
+    hero_hp: i32,
+    deck: Option<&'static [DeckEntry<'static>]>,
+    enemy_health_percent: i32,
+    ascension: u8,
+    start_the_first_turn: bool,
+) -> Result<Session, String> {
     let content: &'static Content<'static> =
         Box::leak(Box::new(Content::parse(IMAGE).map_err(|e| format!("RDCF 镜像解析失败: {}", detail(&e)))?));
 
@@ -857,8 +894,25 @@ fn build_session_at(
 
     // `FightPlan` borrows these, and the plan outlives the call that builds it ⇒ leak them. Two
     // tiny slices per `reset()`; a long-lived process would want a fixed-size buffer instead.
+    //
+    // §261: **能量的 `max` 是 `None`** —— 这不是"忘了写上限"，是参考的那个 `CanExceedMax` 字段
+    // （`Blueprints.cs:153-157` 的原话：*a "gain 1 Energy" card played on a full pool still gives the
+    // point; the turn-start refill sets it back to Max, so nothing carries over*）。
+    //
+    // ⚠️ 之前写的是 `Some(ENERGY)`，于是 `gainResource`（`ResourceEffects.cs:215` 的夹上限）
+    // 把每一次**满池时的加能量都抹成 0**：`bloodletting` / `offering` / `seeing_red` /
+    // `dropkick` / `sentinel` / `miracle` 六张牌在满能量时**静默无效**。之所以一直没人发现，
+    // 是因为 rd-core 的 `arena()` 夹具从能量 **0** 起跑（`host.rs` 那句注释："0 费牌不需要预置"）——
+    // 夹上限需要一个"满池"的起点才看得见。
+    //
+    // 上限的**规则**没有消失：它在回合开始那一步（`refill_resource` 把 current 设成 base=3，
+    // 于是回合初永远是 3 点，上一回合的余额不留）。`max = None` 说的是"这个池没有硬天花板"，
+    // 而那正是参考的表达。
+    // §261：**建池时 current = 0**，3 点由第 1 回合的补给给。之前写的是 `ENERGY`，
+    // 于是"带携带的补给"（Ice Cream）在第 1 回合会把 3 点算成 3 + 3 = 6 —— 一个只在
+    // `unspent_energy_carries` 存在时才会暴露的重复计数（它是 `base + current`，不是 `base`）。
     let resources: &'static [(ResourceId, i32, Option<i32>)] =
-        Box::leak(vec![(energy, ENERGY, Some(ENERGY))].into_boxed_slice());
+        Box::leak(vec![(energy, 0, None)].into_boxed_slice());
     let refills: &'static [(ResourceId, i32)] = Box::leak(vec![(energy, ENERGY)].into_boxed_slice());
 
     let plan = FightPlan {
@@ -969,8 +1023,10 @@ fn build_session_at(
         .map_err(|e| format!("apply_spawn_setup: {:?}", e))?;
     // §175b: apply the encounter's `StartingStatuses` **before** the first turn starts.
     apply_starting_statuses(&mut session, content, encounter)?;
-    start_first_turn(&mut session.state, &standard, &mut session.host)
-        .map_err(|e| format!("start_first_turn: {}", detail(&e)))?;
+    if start_the_first_turn {
+        start_first_turn(&mut session.state, &standard, &mut session.host)
+            .map_err(|e| format!("start_first_turn: {}", detail(&e)))?;
+    }
     session.reobserve();
     // `run_fight` needs a `&mut Host`; keep it warm so the first step does not allocate.
     let _ = session.host.take_failure();
@@ -1388,16 +1444,10 @@ impl Session {
         // No `ward` pool exists in this content ⇒ "this implementation does not produce it".
         obs[H_HERO_WARD] = -1;
         obs[H_ENERGY] = self.energy_now();
-        obs[H_ENERGY_MAX] = self
-            .hero_id()
-            .and_then(|id| self.state.combatant(&id))
-            .and_then(|c| {
-                c.resources()
-                    .iter()
-                    .find(|p| p.key.as_str() == "standard.energy")
-                    .and_then(|p| p.pool.max)
-            })
-            .unwrap_or(-1);
+        // §261: 能量的"上限"是**回合补给量**（标准包 3），不是池子上的字段 —— 池子故意没有
+        // 天花板（满池加能量仍该给，见 `build_session_at_with` 的注释）。页面要的那个数字
+        // 是"这一回合本来该有多少"，所以它来自 `TurnConfig`，与内核那一步的唯一出处相同。
+        obs[H_ENERGY_MAX] = HERO_ENERGY_REFILL;
         obs[H_HAND_COUNT] = self.hand_len() as i32;
         obs[H_ENEMY_COUNT] = roster.len().min(MAX_ENEMY_SLOTS) as i32;
 
@@ -5997,6 +6047,218 @@ mod card_text_tests {
             ["louse_green.bite", "louse_green.spit_web"],
             "wiki: Green Louse = Bite + Spit Web"
         );
+    }
+
+    /// §261：**满能量时"加能量"必须真的加**（参考的 `CanExceedMax`）。
+    ///
+    /// 这条钉的是一个**在这次改动之前就存在**的缺口：能量池曾经硬写 `max = 3`，而
+    /// `gainResource` 会夹到上限（`ResourceEffects.cs:215`），于是六张加能量的牌
+    /// （`bloodletting` / `offering` / `seeing_red` / `dropkick` / `sentinel` / `miracle`）
+    /// 在满能量时**静默无效**。
+    ///
+    /// ⚠️ 为什么一直没红：rd-core 的 `arena()` 夹具从能量 **0** 起跑（那句注释还写着
+    /// "0 费牌不需要预置"）—— 夹上限需要一个**满池**的起点才看得见。夹具的起点掩盖了一条规则，
+    /// 这是它最贵的形状。
+    ///
+    /// 这里直接走 `resolve_effect(GainResource)`：它就是 `node.gainResource` 的实体
+    /// （`exec.rs::gain_one_resource`），而"夹不夹"正是那个函数的唯一判据。
+    #[test]
+    fn gaining_energy_on_a_full_pool_actually_gains() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+        install_session(build_session_at(51, "enc_cultist", 200, None, 0, 0).expect("a fight"));
+        let energy = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatant(&cid_in("hero"))
+                .map_or(-1, |c| {
+                    c.resources()
+                        .iter()
+                        .find(|pool| pool.key.as_str() == "standard.energy")
+                        .map_or(-1, |pool| pool.pool.current)
+                })
+        };
+        assert_eq!(energy(), 3, "turn 1 starts full");
+        let session = slot().as_mut().expect("session");
+        let item = rd_core::state::EffectItem {
+            request: rd_core::state::EffectRequest::GainResource {
+                target: Some(cid_in("hero")),
+                key: rd_core::state::ResourceId::new("standard.energy").expect("energy"),
+                amount: 2,
+                default_max: None,
+            },
+            chain: rd_core::state::ChainSlot::NONE,
+            owner: None,
+        };
+        rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+            .expect("gain 2");
+        assert_eq!(energy(), 5, "gain 2 on a full pool ⇒ 5, not clamped back to 3");
+        // 反面：回合开始把它**收回** 3（"nothing carries over"），所以上一个断言不是靠"没有上限"
+        // 侥幸成立的 —— 余额真的会在回合边界消失。
+        let session = slot().as_mut().expect("session");
+        session.step_end_turn().expect("end turn");
+        assert_eq!(energy(), 3, "the refill takes it back to 3 next turn");
+        take_session();
+    }
+
+    /// §261：五件"战斗开始类"遗物 —— **跑真回合**。
+    ///
+    /// 用 `step_end_turn()`（完整一轮）而不是手工调触发器：`lantern` / `bag_of_preparation`
+    /// 的正确性依附于 turn-start 七步的**顺序**；`ice_cream` / `calipers` 是那七步里的两个分支。
+    /// 只调触发器的话，`lantern` 会"看起来生效"（能量确实 +1），却测不到它是否在补能量之后。
+    #[test]
+    fn the_combat_start_relics_change_the_right_step_of_the_turn() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+
+        // 一个辅助：建一场对 Cultist 的战斗，并给英雄挂上某条载体状态（layer = 层数）。
+        //
+        // ⚠️ **必须用 `build_session_at_unstarted`**：这批遗物里有三条的规则绑在第 1 回合的
+        // 具体时点上。用 `build_session_at`（它会立刻把第 1 回合开起来）测的话，状态是**事后**
+        // 挂上去的，`lantern` / `bag_of_preparation` 根本不会生效 —— §261 的第一版测试就是这么
+        // 红的，而它红的形状（"能量还是 3"）看起来像内核没实现。
+        let setup = |status_id: &str, stacks: i32, seed: i32| {
+            let session = build_session_at_unstarted(seed, "enc_cultist", 200, None, 0, 0)
+                .unwrap_or_else(|e| panic!("{status_id}: {e}"));
+            install_session(session);
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(cid_in("hero")),
+                    definition: rd_core::state::StatusDefinitionId::new(status_id)
+                        .expect("a status id"),
+                    stacks,
+                    duration: 0,
+                    charges: 0,
+                    source: None,
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("apply the carrier");
+            // 挂好状态、再开第 1 回合 —— 这正是 run 层 `fight_begin` 现在的顺序。
+            let standard = standard_turn_config().expect("standard turn config");
+            start_first_turn(&mut session.state, &standard, &mut session.host)
+                .expect("start the first turn");
+            session.reobserve();
+        };
+        let energy = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session
+                .state
+                .combatant(&cid_in("hero"))
+                .map_or(-1, |c| {
+                    c.resources()
+                        .iter()
+                        .find(|pool| pool.key.as_str() == "standard.energy")
+                        .map_or(-1, |pool| pool.pool.current)
+                })
+        };
+        let hand = || -> usize {
+            let session = slot().as_ref().expect("session");
+            session.state.zone_cards(&cid_in("hero"), rd_core::state::CardZone::Hand).count()
+        };
+        let block = || -> i32 {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in("hero")).map_or(-1, |c| {
+                c.defensive_pools()
+                    .iter()
+                    .find(|pool| pool.key.as_str() == "standard.block")
+                    .map_or(0, |pool| pool.pool.current)
+            })
+        };
+        let end_turn = || {
+            let session = slot().as_mut().expect("session");
+            session.step_end_turn().expect("end turn");
+        };
+        let give_block = |amount: i32| {
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::GainBlock {
+                    target: Some(cid_in("hero")),
+                    amount,
+                    from_card: false,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("block");
+        };
+
+        // ---- 基准：不带遗物时第 1 回合 3 能量 / 5 张手牌。基准错了后面全是误报。
+        {
+            install_session(
+                build_session_at(41, "enc_cultist", 200, None, 0, 0).expect("baseline"),
+            );
+            assert_eq!(energy(), 3, "baseline: 3 energy on turn 1");
+            assert_eq!(hand(), 5, "baseline: 5 cards on turn 1");
+            take_session();
+        }
+
+        // ---- Lantern：第 1 回合 4 点（3 + 1），第 2 回合回到 3 点。
+        setup("standard.lantern", 1, 42);
+        assert_eq!(energy(), 4, "Lantern: 3 + 1 on the first turn");
+        end_turn();
+        // ⚠️ 第 2 回合是 3 —— 而且这一条才是真正的判据：如果 +1 发生在补能量**之前**，
+        // 第 1 回合照样是 4，只有"第 2 回合回到 3"和"能量不是 3+1+…"能区分。
+        assert_eq!(energy(), 3, "Lantern: back to 3 from turn 2 on");
+        take_session();
+
+        // ---- Bag of Preparation：第 1 回合 7 张（5 + 2），第 2 回合回到 5 张。
+        setup("standard.bag_of_preparation", 1, 43);
+        assert_eq!(hand(), 7, "Bag of Preparation: 5 + 2 on the first turn");
+        end_turn();
+        assert_eq!(hand(), 5, "Bag of Preparation: back to 5 from turn 2 on");
+        take_session();
+
+        // ---- Ice Cream：没用掉的能量跨回合累积。
+        setup("standard.ice_cream", 1, 44);
+        assert_eq!(energy(), 3, "Ice Cream: still 3 at the start");
+        // 花掉 1 点：剩 2。下一回合应当是 2 + 3 = 5（而不是 3）。
+        {
+            let session = slot().as_mut().expect("session");
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::LoseResource {
+                    target: Some(cid_in("hero")),
+                    key: rd_core::state::ResourceId::new("standard.energy").expect("energy"),
+                    amount: 1,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                .expect("spend 1");
+        }
+        assert_eq!(energy(), 2, "Ice Cream: 2 left after spending 1");
+        end_turn();
+        assert_eq!(energy(), 5, "Ice Cream: 2 carried + 3 refilled");
+        take_session();
+
+        // ---- Calipers：回合开始只失去 15 点，而不是全部。
+        setup("standard.calipers", 15, 45);
+        give_block(40);
+        assert_eq!(block(), 40, "Calipers: 40 Block in place");
+        end_turn();
+        // 回合开始那一刻是 40 —— 防御方（Cultist）的回合里英雄不掉格挡，所以下一回合开始
+        // 还是 40 ⇒ 失去 15 ⇒ 25。
+        assert_eq!(block(), 25, "Calipers: 40 - 15 = 25, not 0");
+        take_session();
+
+        // 少于 15 点 ⇒ 全没（`max(0, live - 15)`）。
+        setup("standard.calipers", 15, 46);
+        give_block(6);
+        end_turn();
+        assert_eq!(block(), 0, "Calipers: 6 - 15 clamps to 0");
+        take_session();
+
+        // 不带 Calipers ⇒ 全清（默认路径没被这次改动破坏）。
+        install_session(build_session_at(47, "enc_cultist", 200, None, 0, 0).expect("plain"));
+        give_block(40);
+        end_turn();
+        assert_eq!(block(), 0, "without Calipers the block is cleared as before");
+        take_session();
     }
 
     /// §260：回合末/回合初那八条状态**真的按回合生效**。

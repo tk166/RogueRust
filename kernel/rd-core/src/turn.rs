@@ -257,6 +257,24 @@ pub trait TurnHost {
         false
     }
 
+    /// §261: **回合开始时留下多少格挡**（`Calipers`："失去 15 点格挡而不是全部"）。
+    ///
+    /// 与 [`Self::block_is_retained`] 是两个钩子，不是一个带参数的：`block_is_retained` 是
+    /// **布尔**判定、"清不清"，参考在处理器时点就采样（那时本回合任何效果都还没生效）；
+    /// 而"留多少"作用在**清空那一刻的实时值**上 —— "失去 15"说的就是此刻这 15 点。
+    /// 一个布尔表达不了 `max(0, current - 15)`，硬塞进去会让那个时点语义跟着一起漂。
+    ///
+    /// 默认 0 = 一点不留（= 参考的 `ClearBlock`）。
+    fn block_kept_at_turn_start(
+        &self,
+        state: &CombatState,
+        actor: &CombatantId,
+        live: i32,
+    ) -> i32 {
+        let _ = (state, actor, live);
+        0
+    }
+
     /// `TurnStartDraw` 修饰流水线后的抽牌张数（`CardTurnLifecycleEventHandlers.cs:25-31`）。
     /// 默认返回 `base`（= `TurnConfig::draw_per_turn` 原值）。
     ///
@@ -598,12 +616,13 @@ fn draw_for_turn_start(
 ///
 /// 注册表里"哪些池在回合开始清空"由 `DefensivePoolDefinition.ClearsOnOwnerTurnStart` 决定
 /// （`:299-304`）；本内核用 `config.block_pool` 表达这一条（标准包只有一个这样的池）。
-fn clear_turn_start_pool(
+fn clear_turn_start_pool<H: TurnHost>(
     state: &mut CombatState,
     actor: &CombatantId,
     config: &TurnConfig,
     observed_current: Option<i32>,
     retained: bool,
+    host: &H,
 ) -> Result<(), TurnError> {
     // ⚠️ "清不清"用的是**回合入口采样到的** `observed_current`，不是这里的实时值。
     //
@@ -634,10 +653,23 @@ fn clear_turn_start_pool(
             .find(|p| p.key == config.block_pool)
             .and_then(|p| p.pool.max)
     });
+    // §261: **清多少**问宿主（`Calipers` 留 `max(0, live - 15)`）。默认 0 = 全清。
+    // 读实时值是刻意的：参考里"清空请求"排在队列效果之后生效，而"失去 15"说的就是
+    // 那一刻的 15 —— 见 `block_kept_at_turn_start` 的文档。
+    let live = state
+        .combatant(actor)
+        .and_then(|c| {
+            c.defensive_pools()
+                .iter()
+                .find(|p| p.key == config.block_pool)
+                .map(|p| p.pool.current)
+        })
+        .unwrap_or(0);
+    let kept = host.block_kept_at_turn_start(state, actor, live).clamp(0, live.max(0));
     state
         .combatant_mut(actor)
         .ok_or(CapacityError::MissingCombatant)?
-        .set_defensive_pool(config.block_pool, 0, live_max)?;
+        .set_defensive_pool(config.block_pool, kept, live_max)?;
     Ok(())
 }
 
@@ -757,7 +789,7 @@ pub fn start_current_turn<H: TurnHost>(
 
     // 7. 清 Block。它在队列解析**之后** —— 所以第 5 步里排队的 `gainBlock` 会被这一次清空抹掉，
     //    **前提**是回合入口那一刻池里已经有格挡（判定用的是入口采样值，见 `observed_block`）。
-    clear_turn_start_pool(state, &actor, config, observed_block, block_retained)?;
+    clear_turn_start_pool(state, &actor, config, observed_block, block_retained, host)?;
     if stopped(state) {
         return Ok(());
     }

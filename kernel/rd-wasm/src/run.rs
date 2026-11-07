@@ -3474,7 +3474,9 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
         );
-        match crate::build_session_at(
+        // §261：**建好但不开始** —— "开战"遗物要赶在第 1 回合开始之前生效（`bag_of_preparation`
+        // 多抽的两张、`lantern` 的第 1 回合 +1 能量、`mercury_hourglass` 的第 1 回合 3 点）。
+        match crate::build_session_at_unstarted(
             fight_seed,
             encounters[pick],
             max_health,
@@ -3490,9 +3492,24 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
                 if let Err(message) = apply_run_marks(session) {
                     return fail(session, &message);
                 }
-                // ... and then the relics get their turn. A failure here is a **content** problem
-                // (a relic promising Block the kernel cannot write), so it is reported, not ignored.
-                apply_combat_bonus(bonus).err()
+                // §261: 遗物的两半落在**两个不同的时点**上：
+                //   ① 状态 —— 第 1 回合**开始之前**（否则错过第 1 回合的触发器）；
+                //   ② 格挡 —— 第 1 回合**开始之后**（否则被第 1 回合的清格挡抹掉，`anchor` 会变 0）。
+                // 失败一律上报：遗物承诺了内核写不进去的东西，属于内容错误。
+                apply_combat_bonus_statuses(bonus, entries).and_then(|()| {
+                    let standard = crate::standard_turn_config()
+                        .map_err(|e| std::format!("standard_turn_config: {}", crate::detail(&e)))?;
+                    // 两个字段同时可变 ⇒ 显式拆借，别拿整个 `session`。
+                    let session = crate::slot().as_mut();
+                    let Some(session) = session else {
+                        return Err("战斗会话不见了".to_string());
+                    };
+                    let crate::Session { state, host, .. } = session;
+                    crate::start_first_turn(state, &standard, host)
+                        .map_err(|e| std::format!("start_first_turn: {}", crate::detail(&e)))
+                })
+                .and_then(|()| apply_combat_bonus_block(bonus))
+                .err()
             }
             Err(message) => Some(message),
         }
@@ -3507,6 +3524,13 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     session.elite_fight = kind == 2;
     session.boss_fight = kind == 7;
     session.in_fight = true;
+    // §261: 观察向量在这里刷**唯一一次**。之前它藏在 `build_session_at` 的末尾（那时第 1 回合
+    // 还没开始），而现在的顺序是"建 → 挂遗物 → 开第 1 回合 → 加格挡"，中间所有写入都发生在那次
+    // 刷新**之后** ⇒ 页面/测试读到的是开战前的空手牌、0 格挡（§84 的同一形状：状态对了，观察没跟上）。
+    // 放在提交点还顺带保证：失败路径（`fail_begin`）什么都不发。
+    if let Some(combat) = crate::slot().as_mut() {
+        combat.reobserve_after_external_change();
+    }
     0
 }
 
@@ -3524,12 +3548,30 @@ fn fail_begin(session: &mut RunSession, before: rd_run::state::RunState, message
     -2
 }
 
-/// Put a [`rd_run::state::CombatBonus`] into the fight that was just installed (§145).
+/// §261: the **statuses** half of [`apply_combat_bonus`] -- and they go in **before the hero's first
+/// turn starts**.
 ///
-/// Both writes go through the **same public APIs the game itself uses**: Block through
-/// `set_defensive_pool`, Strength through an `ApplyStatus` effect. A relic that took a shortcut here
+/// # Why the two halves are separate functions
+///
+/// They belong at **two different steps of turn 1**, and that is not a style choice:
+///
+/// * a status with a `TurnStarted` trigger must exist *before* turn 1's trigger step, or it misses
+///   turn 1 entirely (`bag_of_preparation` = 5+2 opening hand, `lantern` = 3+1 energy,
+///   `mercury_hourglass` = 3 damage on turn 1);
+/// * the start-of-combat **Block** must arrive *after* turn 1's clear step, or turn 1 wipes it
+///   (`anchor`: StS keeps those 10 points on turn 1 -- the clear belongs to turn 2).
+///
+/// So the caller does: build unstarted → statuses → start turn 1 → block. Ordering the other way
+/// round passes every test that only reads "block == 10" at some point after the fight began, which
+/// is exactly how a bug like this survives.
+///
+/// Both halves write through the **same public APIs the game itself uses**: Block through
+/// `set_defensive_pool`, a status through an `ApplyStatus` effect. A relic that took a shortcut here
 /// would be a second status pipeline, and the two would drift on the first modifier change.
-fn apply_combat_bonus(bonus: rd_run::state::CombatBonus) -> Result<(), String> {
+fn apply_combat_bonus_statuses(
+    bonus: rd_run::state::CombatBonus,
+    deck: &[rd_core::battle::DeckEntry<'static>],
+) -> Result<(), String> {
     if bonus.is_empty() {
         return Ok(());
     }
@@ -3539,31 +3581,49 @@ fn apply_combat_bonus(bonus: rd_run::state::CombatBonus) -> Result<(), String> {
     let Some(hero) = session.hero_id() else {
         return Err("战斗里找不到英雄".to_string());
     };
+    // §261: 格挡那一半在 [`apply_combat_bonus_block`] —— 它必须**晚于**第 1 回合的清格挡。
     if bonus.block != 0 {
-        let key = rd_core::state::DefensivePoolId::new("standard.block")
-            .map_err(|_| "`standard.block` 不是合法的防守池 id".to_string())?;
-        let combatant = session
-            .state
-            .combatant_mut(&hero)
-            .ok_or_else(|| "拿不到英雄的战斗员".to_string())?;
-        let current = combatant
-            .defensive_pools()
-            .iter()
-            .find(|pool| pool.key.as_str() == "standard.block")
-            .map_or(0, |pool| pool.pool.current);
-        combatant
-            .set_defensive_pool(key, current + bonus.block, None)
-            .map_err(|e| std::format!("遗物加格挡失败：{e:?}"))?;
-        let after = combatant
-            .defensive_pools()
-            .iter()
-            .find(|pool| pool.key.as_str() == "standard.block")
-            .map_or(-1, |pool| pool.pool.current);
-        if after != current + bonus.block {
-            return Err(std::format!(
-                "遗物格挡写进去读到 {after}，期望 {}",
-                current + bonus.block
-            ));
+        // 这里什么都不做是**对的**，不是漏写：见上面的文档。
+    }
+    // §261: `du_vu_doll` —— 层数 = 每张诅咒 × 牌组里的诅咒张数。
+    //
+    // 计数**在这里**而不是在 `rd-run`：`rd-run` 只拿得到 id 字符串，"哪张牌是诅咒"是内容里
+    // `card_has_tag(id, "curse")` 的答案。牌组是**牌位**列表（§253：一牌一条 entry），所以
+    // `count` 就是把命中的条数加起来。
+    if bonus.per_curse_status_count > 0 {
+        let image = content();
+        let mut curses = 0i32;
+        for entry in deck {
+            if image.card_has_tag(entry.card, "curse") == Some(true) {
+                // §253：一个牌位一条 entry，但 `count` 仍然乘上去（此刻它恒为 1，未来的
+                // 压缩分组会让它不是 1 —— 乘上去的那一版才是对的）。
+                curses += i32::from(entry.count);
+            }
+        }
+        for entry in bonus.per_curse_statuses.iter().take(bonus.per_curse_status_count).flatten() {
+            let stacks = entry.stacks * curses;
+            if stacks <= 0 {
+                // 0 张诅咒 ⇒ **一张都不挂**。挂一条 0 层力量会出现在页面上（"力量 0"），
+                // 而 wiki 的规则是"每张诅咒给 1 点"，零张就是什么都没有。
+                continue;
+            }
+            let definition = rd_core::state::StatusDefinitionId::new(entry.id)
+                .map_err(|_| std::format!("`{}` 不是合法的状态 id", entry.id))?;
+            let item = rd_core::state::EffectItem {
+                request: rd_core::state::EffectRequest::ApplyStatus {
+                    target: Some(hero),
+                    definition,
+                    stacks,
+                    duration: 0,
+                    charges: 0,
+                    source: None,
+                    source_card: None,
+                },
+                chain: rd_core::state::ChainSlot::NONE,
+                owner: None,
+            };
+            rd_core::exec::resolve_effect(&mut session.state, &item, Some(image))
+                .map_err(|e| std::format!("遗物加状态 `{}` 失败：{e:?}", entry.id))?;
         }
     }
     for entry in bonus.statuses.iter().take(bonus.status_count).flatten() {
@@ -3628,6 +3688,50 @@ fn apply_combat_bonus(bonus: rd_run::state::CombatBonus) -> Result<(), String> {
         }
     }
     session.reobserve_after_external_change();
+    Ok(())
+}
+
+/// §261: the **Block** half of [`apply_combat_bonus`] -- applied **after** the hero's first turn has
+/// started (turn 1's clear step has already run by then). See
+/// [`apply_combat_bonus_statuses`] for why the split exists.
+fn apply_combat_bonus_block(bonus: rd_run::state::CombatBonus) -> Result<(), String> {
+    if bonus.block == 0 {
+        return Ok(());
+    }
+    let Some(session) = crate::slot().as_mut() else {
+        return Err("战斗会话不见了".to_string());
+    };
+    let Some(hero) = session.hero_id() else {
+        return Err("战斗里找不到英雄".to_string());
+    };
+    let key = rd_core::state::DefensivePoolId::new("standard.block")
+        .map_err(|_| "`standard.block` 不是合法的防守池 id".to_string())?;
+    let combatant = session
+        .state
+        .combatant_mut(&hero)
+        .ok_or_else(|| "拿不到英雄的战斗员".to_string())?;
+    let current = combatant
+        .defensive_pools()
+        .iter()
+        .find(|pool| pool.key.as_str() == "standard.block")
+        .map_or(0, |pool| pool.pool.current);
+    combatant
+        .set_defensive_pool(key, current + bonus.block, None)
+        .map_err(|e| std::format!("遗物加格挡失败：{e:?}"))?;
+    let after = combatant
+        .defensive_pools()
+        .iter()
+        .find(|pool| pool.key.as_str() == "standard.block")
+        .map_or(-1, |pool| pool.pool.current);
+    if after != current + bonus.block {
+        return Err(std::format!(
+            "遗物格挡写进去读到 {after}，期望 {}",
+            current + bonus.block
+        ));
+    }
+    // 观察向量不在这里刷 —— 它在 `fight_begin` 的**提交点**统一刷一次（一个写者）。
+    // §84 的形状：写进状态却不重新观察，页面看到的是旧值（这里曾经是 0）。
+    let _ = &session;
     Ok(())
 }
 

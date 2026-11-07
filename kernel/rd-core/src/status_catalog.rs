@@ -671,6 +671,14 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.cloak_clasp"
             | "standard.incense_burner"
             | "standard.pocketwatch"
+            // §261: two more content-trigger carriers (`lantern` / `bag_of_preparation` fire once on
+            // turn 1) plus two **tag-only** statuses -- `ice_cream` (`unspent_energy_carries`) and
+            // `calipers` (`block_loss_cap`). The tag-only pair has no trigger at all: the kernel's
+            // turn machine reads their tags, which is behaviour, so they are not inert.
+            | "standard.lantern"
+            | "standard.bag_of_preparation"
+            | "standard.ice_cream"
+            | "standard.calipers"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

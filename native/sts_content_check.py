@@ -106,7 +106,9 @@ INV_COUNTS = {
     # §256: +1 (`painful_stabs`).
     # §257: +1 (`lagavulin_asleep`).
     # §260: +8 (the eight relic carrier statuses).
-    "statuses": 75,
+    # §261: +4 (`lantern` / `bag_of_preparation` / `ice_cream` / `calipers` -- `du_vu_doll`
+    # grants plain Strength, so it needs no carrier).
+    "statuses": 79,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1373,6 +1375,12 @@ INV_STATUSES = {
     "standard.cloak_clasp": [],
     "standard.incense_burner": [],
     "standard.pocketwatch": [],
+    # §261：前两条有触发器（第 1 回合 +1 能量 / 多抽 2 张）；后两条**没有触发器**，
+    # 它们的作用是给内核回合机看的两条标签。
+    "standard.lantern": [],
+    "standard.bag_of_preparation": [],
+    "standard.ice_cream": [],
+    "standard.calipers": [],
     "standard.the_bomb_damage": [],
     "standard.the_bomb": [],
     "standard.sadistic_nature": [],
@@ -3281,6 +3289,9 @@ def check_statuses(doc):
                      "standard.orichalcum", "standard.mercury_hourglass", "standard.horn_cleat",
                      "standard.captains_wheel", "standard.stone_calendar", "standard.cloak_clasp",
                      "standard.incense_burner", "standard.pocketwatch",
+                     # §261
+                     "standard.lantern", "standard.bag_of_preparation", "standard.ice_cream",
+                     "standard.calipers",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3322,6 +3333,12 @@ def check_statuses(doc):
                         "standard.cloak_clasp": ["TurnEnded"],
                         "standard.incense_burner": ["TurnStarted"],
                         "standard.pocketwatch": ["TurnStarted"],
+                        # §261
+                        "standard.lantern": ["TurnStarted"],
+                        "standard.bag_of_preparation": ["TurnStarted"],
+                        # 这两条**故意**没有触发器：规则由内核读标签实现。
+                        "standard.ice_cream": [],
+                        "standard.calipers": [],
                         # §237
                         "standard.juggernaut": ["BlockGained"],
                         "standard.evolve": ["CardsDrawn"],
@@ -3551,7 +3568,10 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       # §260: 战斗开始类 / 回合末类八件 —— 全部是 `StartCombatStatus`，
                       # 规则在内容状态里（`TurnStarted` / `TurnEnded` 触发器）。
                       "orichalcum", "mercury_hourglass", "horn_cleat", "captains_wheel",
-                      "stone_calendar", "cloak_clasp", "incense_burner", "pocketwatch")
+                      "stone_calendar", "cloak_clasp", "incense_burner", "pocketwatch",
+                      # §261: 战斗开始类五件 —— 两条走 `TurnStarted`（第 1 回合），
+                      # 两条走**标签**（内核回合机读），一条走 `per_curse`（数牌组）。
+                      "lantern", "bag_of_preparation", "ice_cream", "calipers", "du_vu_doll")
 
 
 def check_relics(doc):

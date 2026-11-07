@@ -161,6 +161,11 @@ pub const TAG_RETAIN_BLOCK_ONCE: &str = "retain_block_once";
 ///
 /// 镜像 23/23 状态都不带它 ⇒ [`Host::block_is_retained`] 恒 `false`。
 pub const TAG_RETAIN_BLOCK: &str = "retain_block";
+/// §261: 能量**不**在回合边界重置（`Ice Cream`："Energy is now conserved between turns"）。
+/// 这条在参考里是法令 `UnspentResourceCarries`，本内核一直硬编码 `false` —— 现在有内容用它了。
+pub const TAG_UNSPENT_ENERGY_CARRIES: &str = "unspent_energy_carries";
+/// §261: 回合开始**只失去 N 点**格挡（`Calipers`），N = 该状态的层数。
+pub const TAG_BLOCK_LOSS_CAP: &str = "block_loss_cap";
 
 /// 节目信封上 `MaxProgramSteps` 缺席时的兜底：参考构造函数要求 `> 0`，默认 1024
 /// （`EffectProgramContracts.cs:560-563`）。镜像里 25 条触发器信封实测都是 1024。
@@ -1945,6 +1950,31 @@ impl<'a> Host<'a> {
     /// active-only 是规格：`retain_hand` / `retain_block` 读的都是 `Statuses`
     /// （`CardTurnLifecycleEventHandlers.cs:48`、`DefensivePoolEffects.cs:297`），
     /// 而待转正的实例不在 `Statuses` 里（`CombatantState.cs:27-28`）。
+    /// §261：**第一条**带 `tag` 的生效状态的层数。`None` = 没有这样的状态。
+    ///
+    /// 为什么"第一条"而不是"求和"：这条给的是**参数**（`Calipers` 的 15），不是可以累加的层数；
+    /// 两条带同一个标签的状态相加等于"失去 30"，那是没人要过的规则。内容门钉住"每个标签至多一条
+    /// 状态定义"，所以这里的"第一条"是唯一的。
+    fn active_status_stacks_with_tag(
+        &self,
+        state: &CombatState,
+        actor: &CombatantId,
+        tag: &str,
+    ) -> Result<Option<i32>, HostError> {
+        let Some(combatant) = state.combatant(actor) else {
+            return Ok(None);
+        };
+        for instance in combatant.statuses() {
+            if !is_active(instance) {
+                continue;
+            }
+            if status_bind::has_tag(self.content, instance.definition_id.as_str(), tag)? {
+                return Ok(Some(instance.stacks));
+            }
+        }
+        Ok(None)
+    }
+
     fn any_active_status_with_tag(
         &self,
         state: &CombatState,
@@ -2912,16 +2942,33 @@ impl TurnHost for Host<'_> {
     }
 
     fn unspent_energy_carries(&self, state: &CombatState, actor: &CombatantId) -> bool {
-        // 法令 `UnspentResourceCarries`（`ResourceEffects.cs:84-96`）。判据是**状态定义**上的
-        // `CombatRules` 里有没有这个开关（`CombatDecrees.cs:39-42`）。
+        // 法令 `UnspentResourceCarries`（`ResourceEffects.cs:84-96`）。参考的判据是状态定义上的
+        // `CombatRules` 开关（`CombatDecrees.cs:39-42`）；本内核那条路**没接通**（`status_bind`
+        // 不读 `CombatRules`，见 §199 的实测），所以历来到这里都是硬编码 `false`。
         //
-        // ⚠️ 实测（同样钉在测试里）：`STAT.CombatRules` 在 **23/23** 状态上是
-        // `ABSENT16`（整格不存在），`REL.CombatRules` 在 **49/49** 遗物上是空 `[]`。
-        // ⇒ 恒 `false`，而 `false` 正是参考在没有该法令时的行为（"补到"，不是"累加"）。
-        // `status_bind` 也根本不接 `CombatRules`（见到非空会怎样没有定义）——
-        // 所以这一条是**今天正确的默认值**，不是"忘了做"；两条测试把它钉住。
-        let _ = (state, actor);
-        false
+        // §261：改成读**标签**。这正是 `retain_block` 已经用过的那条路（§197），而它今天
+        // 真的被内容用着（`Barricade` / `Blur`）—— 一条**有消费者**的路比一条"表里齐全但没人读"
+        // 的路可靠。内容里 `standard.ice_cream` 带 `unspent_energy_carries` 标签。
+        match self.any_active_status_with_tag(state, actor, TAG_UNSPENT_ENERGY_CARRIES) {
+            Ok(carries) => carries,
+            Err(e) => {
+                // 读不出来 ⇒ 按默认（"补到"，不累加）。这一支不可达：`has_tag` 只查段表。
+                self.record(e);
+                false
+            }
+        }
+    }
+
+    /// §261: `Calipers` —— 回合开始**只失去 N 点**格挡，N = 状态层数（wiki：15）。
+    fn block_kept_at_turn_start(&self, state: &CombatState, actor: &CombatantId, live: i32) -> i32 {
+        match self.active_status_stacks_with_tag(state, actor, TAG_BLOCK_LOSS_CAP) {
+            Ok(Some(cap)) => live - cap.min(live.max(0)),
+            Ok(None) => 0,
+            Err(e) => {
+                self.record(e);
+                0 // 读不出来 ⇒ 按默认（全清）
+            }
+        }
     }
 }
 

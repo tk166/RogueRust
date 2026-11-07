@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 30 |
-| 3 | 缺（wiki 有、内容没有） | 163 |
+| 2 | 内容里的遗物 | 35 |
+| 3 | 缺（wiki 有、内容没有） | 158 |
 
 ## Starter（4）
 
@@ -31,7 +31,7 @@
 | 缺 | `ancient_tea_set` | Ancient Tea Set | Shared | Whenever you enter a Rest Site, start the next combat with 2 extra $Energy. |
 | 缺 | `art_of_war` | Art of War | Shared | If you do not play any {{QueryLink\|Cards\|type:Attack\|Attacks}} during your turn, gain an additional $Energy next turn. |
 | 有 | `bag_of_marbles` | Bag of Marbles | Shared | At the start of each combat, apply 1 $Vulnerable to ALL enemies. |
-| 缺 | `bag_of_preparation` | Bag of Preparation | Shared | At the start of each combat, draw 2 additional cards. |
+| 有 | `bag_of_preparation` | Bag of Preparation | Shared | At the start of each combat, draw 2 additional cards. |
 | 有 | `blood_vial` | Blood Vial | Shared | At the start of each combat, heal 2 HP. |
 | 有 | `bronze_scales` | Bronze Scales | Shared | Start each combat with 3 $Thorns. |
 | 缺 | `centennial_puzzle` | Centennial Puzzle | Shared | The first time you lose HP each combat, draw 3 cards. |
@@ -41,7 +41,7 @@
 | 有 | `dream_catcher` | Dream Catcher | Shared | Whenever you Rest, you may add a card to your deck. |
 | 缺 | `happy_flower` | Happy Flower | Shared | Every 3 turns, gain 1 $Energy. |
 | 缺 | `juzu_bracelet` | Juzu Bracelet | Shared | Regular enemy combats are no longer encountered in ? rooms. |
-| 缺 | `lantern` | Lantern | Shared | Gain 1 $Energy on the first turn of each combat. |
+| 有 | `lantern` | Lantern | Shared | Gain 1 $Energy on the first turn of each combat. |
 | 缺 | `maw_bank` | Maw Bank | Shared | Whenever you climb a floor, gain 12 [[Gold]]. No longer works when you spend any [[Gold]] at a shop. |
 | 缺 | `meal_ticket` | Meal Ticket | Shared | Whenever you enter a shop, heal 15 HP. |
 | 缺 | `nunchaku` | Nunchaku | Shared | Every time you play 10 {{QueryLink\|Cards\|type:Attack\|Attacks}}, gain 1 $Energy. |
@@ -109,20 +109,20 @@
 | 状态 | id | 名称 | 归属 | wiki 描述 |
 |---|---|---|---|---|
 | 缺 | `bird_faced_urn` | Bird-Faced Urn | Shared | Whenever you play a {{QueryLink\|Cards\|type:Power\|Power}} card, heal 2 HP. |
-| 缺 | `calipers` | Calipers | Shared | At the start of your turn, lose 15 $Block rather than all of your $Block. |
+| 有 | `calipers` | Calipers | Shared | At the start of your turn, lose 15 $Block rather than all of your $Block. |
 | 有 | `captains_wheel` | Captain's Wheel | Shared | At the start of your 3rd turn, gain 18 $Block. |
 | 缺 | `champion_belt` | Champion Belt | Ironclad | Whenever you apply $Vulnerable, also apply 1 $Weak. |
 | 缺 | `charons_ashes` | Charon's Ashes | Ironclad | Whenever you $Exhaust a card, deal 3 damage to ALL enemies. |
 | 有 | `cloak_clasp` | Cloak Clasp | Watcher | At the end of your turn, gain 1 $Block for each card in your hand. |
 | 缺 | `dead_branch` | Dead Branch | Shared | Whenever you $Exhaust a card, add a random card to your hand. |
-| 缺 | `du_vu_doll` | Du-Vu Doll | Shared | For each {{QueryLink\|Cards\|type:Curse\|Curse}} in your deck, start each combat with 1 $Strength. |
+| 有 | `du_vu_doll` | Du-Vu Doll | Shared | For each {{QueryLink\|Cards\|type:Curse\|Curse}} in your deck, start each combat with 1 $Strength. |
 | 缺 | `emotion_chip` | Emotion Chip | Defect | If you lost HP during the previous turn, trigger the passive ability of all $Orbs at the start of your turn. |
 | 缺 | `fossilized_helix` | Fossilized Helix | Shared | Prevent the first time you would lose HP in combat. |
 | 缺 | `gambling_chip` | Gambling Chip | Shared | At the start of each combat, discard any number of cards, then draw that many cards. |
 | 缺 | `ginger` | Ginger | Shared | You can no longer become $Weakened. |
 | 有 | `girya` | Girya | Shared | You can now gain $Strength at Rest Sites (up to 3 times). |
 | 缺 | `golden_eye` | Golden Eye | Watcher | Whenever you $Scry, $Scry 2 additional cards. |
-| 缺 | `ice_cream` | Ice Cream | Shared | $Energy is now conserved between turns. |
+| 有 | `ice_cream` | Ice Cream | Shared | $Energy is now conserved between turns. |
 | 有 | `incense_burner` | Incense Burner | Shared | Every 6 turns, gain 1 $Intangible. |
 | 缺 | `lizard_tail` | Lizard Tail | Shared | When you would die, heal to 50% of your Max HP instead (works once). |
 | 缺 | `magic_flower` | Magic Flower | Ironclad | Healing is 50% more effective during combat. |

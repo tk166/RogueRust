@@ -17870,3 +17870,85 @@ assert!(run.node_resolved(), "the node is settled right away");
 
 `docs/relic-inventory.md` 重新生成：**22 → 30 件有实现**（193 件 wiki 总数不变）。
 `ACT1_SLICE PASS` / `SOAK_TEST PASS`（遗物池又变了一次），再 21/21 闸门。
+
+---
+
+## §261 遗物第二批：战斗开始类五件（**顺手挖出两个既有缺口**）
+
+### 261.1 五件与它们各自的接缝
+
+| 遗物 | 稀有度 | 规则 | 载体 |
+|---|---|---|---|
+| `lantern` | Common | 第 1 回合 +1 能量 | 内容状态 + `TurnStarted`（判断在自增前） |
+| `bag_of_preparation` | Common | 开战多抽 2 张 | 同上（`drawCards` 在 turn-start 抽牌**之前**跑） |
+| `ice_cream` | Rare | 能量跨回合保留 | 内容状态 + **标签** `unspent_energy_carries` |
+| `calipers` | Rare | 回合开始只失去 15 格挡 | 内容状态 + 标签 `block_loss_cap`，**层数 = 15** |
+| `du_vu_doll` | Rare | 每张诅咒 +1 力量 | `CombatBonus::per_curse_statuses`（内容数牌组） |
+
+前两件仍然**零内核改动**：`turn.rs` 文件头那张七步表是规格（补能量 #2 → 触发器 #4/#5 → 抽牌 #6 →
+清格挡 #7），所以"第 1 回合多 1 点能量""开战多抽 2 张"只是触发器在正确位置做正确的事。
+
+`ice_cream` / `calipers` 走**标签**，这是内核里唯一"有消费者"的法律通道（`retain_block` 早就这么用，
+`Barricade`/`Blur` 在用）。⚠️ `unspent_energy_carries` 之前是硬编码 `false`（§199 记过：参考的
+`CombatRules` 那条路本内核没接通），所以这次不是"新增一条法律"，是把那条**死路**换成有内容走的路。
+
+`du_vu_doll` 需要第三张表（`per_curse_statuses`）：层数 = 每张诅咒多少，而"哪张牌是诅咒"是内容问题
+（`Content::card_has_tag(id, "curse")`），`rd-run` 故意不读内容 ⇒ 层数由**拥有镜像的** `rd-wasm` 数。
+
+### 261.2 ★ 缺口一：开战遗物**全都错过了第 1 回合**
+
+`build_session_at` 在 `apply_combat_bonus` **之前**就把第 1 回合开起来了（它是给页面用的，
+玩家一进场就该看到 5 张手牌）。于是：
+
+* `bag_of_preparation` 的 `TurnStarted` 在第 1 回合**已经过去** ⇒ 少抽 2 张；
+* `lantern` 的第 1 回合 +1 能量 ⇒ 从未发生；
+* **§260 的 `mercury_hourglass`（每次回合初对所有敌人 3 点）少打了第 1 回合** —— 上一批就带着这个偏差。
+
+修法不是"补一次触发器"（会双发），而是把顺序改对：
+
+```
+build_session_at_unstarted → 挂遗物状态 → start_first_turn → 加格挡
+```
+
+**为什么格挡必须晚一步**：`start_current_turn` 第 7 步会清格挡（采样点在回合入口，StS 里
+`Anchor` 的 10 点在第 1 回合是该留着的）。所以状态与格挡落在**第 1 回合的两个不同步骤**上：
+
+* 状态 —— 触发器之前（否则错过第 1 回合）；
+* 格挡 —— 清格挡之后（否则被第 1 回合抹成 0）。
+
+只测"开战后某个时刻 block == 10"两个顺序都过 —— 这就是这种错能活着的原因。
+
+### 261.3 ★★ 缺口二：满能量时"加能量"是**静默无效**（六张牌）
+
+能量池硬写 `max = 3`，而 `gainResource` 会夹到上限（`ResourceEffects.cs:215`）⇒
+`bloodletting` / `offering` / `seeing_red` / `dropkick` / `sentinel` / `miracle` 六张牌在
+**满能量时一点能量都不给**。
+
+参考里这是池的第三个字段 `CanExceedMax`（`Blueprints.cs:153-157` 原话：*a "gain 1 Energy" card
+played on a full pool still gives the point; the turn-start refill sets it back to Max, so nothing
+carries over*）。本内核的表达：**能量池 `max = None`**，上限的规则留在"回合开始把 current 设成 3"
+那一步（`refill_resource` 的 base），于是"回合边界收回去"照样成立，而回合内的加能量能真的加上。
+
+⚠️ **为什么六张牌一直没人发现**：rd-core 的 `arena()` 夹具从能量 **0** 起跑（注释写着
+"0 费牌不需要预置"）。夹上限需要一个**满池**的起点才看得见 —— 夹具的起点掩盖了一条规则，
+这是测试夹具最贵的形状。
+
+顺带修掉一个只在 `ice_cream` 存在时才暴露的重复计数：建池时 `current = ENERGY` 会让
+"携带式补给"（`base + current`）在第 1 回合算成 3 + 3 = 6 ⇒ 建池 current 改 0，3 点由第 1 回合补给给。
+
+### 261.4 判据
+
+| 测试 | 钉住 |
+|---|---|
+| `the_five_combat_start_relics_wire_their_own_carrier`（rd-run） | 接线：四条各自的状态与层数（`calipers` 比 15），`du_vu_doll` 落在 `per_curse` 那张表且 `is_empty() == false` |
+| `the_combat_start_relics_change_the_right_step_of_the_turn`（rd-wasm） | 行为：**跑真回合**（`step_end_turn`）—— Lantern 1 回合 4 能量/2 回合 3；Bag 1 回合 7 张/2 回合 5；Ice Cream 剩 2 ⇒ 下回合 5；Calipers 40 ⇒ 25、6 ⇒ 0、无遗物 ⇒ 0 |
+| `gaining_energy_on_a_full_pool_actually_gains`（rd-wasm） | 缺口二：满池 +2 ⇒ 5，且下一回合收回 3（反面证明不是"没有上限"侥幸成立） |
+
+`the_relic_pool_pays_out_when_a_fight_starts` 在拆分时抓到过"格挡写进去了但没 `reobserve`"
+（页面看到 0，§84 的老形状）—— 观察向量现在只在 `fight_begin` 的**提交点**刷一次（一个写者）。
+
+### 261.5 账
+
+遗物 **30 → 35 件**；`rd-core` 788 / `rd-run` 120 / `rd-wasm` 111；内容 79 状态 / 35 遗物；
+四条对拍全过（`FIGHT_DIFF 182/182`、`CARD_DIFF 62/62`、`CARD_MULTI 124/124`、`ENEMY_DIFF 394/394`）；
+`ACT1_SLICE PASS` / `SOAK_TEST PASS`，再 21/21。
