@@ -6239,7 +6239,7 @@ mod tests {
                     .add_combatant(unit("louse_red", "enemy", 10, 10))
                     .expect("the louse");
                 state.set_ascension(ascension);
-                let draws = crate::battle::apply_spawn_setup(&mut state, &content, encounter)
+                let draws = crate::battle::apply_spawn_setup(&mut state, &content, encounter, &[])
                     .expect("the encounter rolls")
                     .draws;
                 // §209: the louse now declares **two** rolls (`roll.bite` and `roll.curl_up`), so
@@ -6322,7 +6322,7 @@ mod tests {
         // Deliberately *not* the encounter's own enemy set: the rolls are looked up by the record
         // ids the encounter names, and `louse_red` is one of them, so a fight with the right
         // combatant must still draw.
-        let draws = crate::battle::apply_spawn_setup(&mut state, &content, encounter)
+        let draws = crate::battle::apply_spawn_setup(&mut state, &content, encounter, &[])
             .expect("rolls")
             .draws;
         assert!(draws >= 1, "enc_louse names louse_red, which rolls");
@@ -6336,7 +6336,7 @@ mod tests {
                 .expect("enc_cultist")
                 .index,
         );
-        let draws = crate::battle::apply_spawn_setup(&mut state, &content, encounter)
+        let draws = crate::battle::apply_spawn_setup(&mut state, &content, encounter, &[])
             .expect("no rolls is not an error")
             .draws;
         assert_eq!(draws, 0, "cultist declares `Rolls: []`");
@@ -6505,7 +6505,7 @@ mod tests {
         // so the setup has to be run for the real encounter -- and then the number read from the
         // state is what the content declared.
         let mut host = Host::new(&content);
-        let drawn = crate::battle::apply_spawn_setup(&mut state, &content, encounter)
+        let drawn = crate::battle::apply_spawn_setup(&mut state, &content, encounter, &[])
             .expect("spawn setup");
         assert_eq!(drawn.counters, 1, "one fixed counter (the Mode Shift budget)");
         assert_eq!(drawn.draws, 0, "a stated value must not cost a random step");

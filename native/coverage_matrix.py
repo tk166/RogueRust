@@ -116,7 +116,13 @@ def build_entities(doc, by_test=None):
     roster = set()
     for enc in doc['Encounters']:
         for enemy in enc.get('Enemies') or []:
-            roster.add(enemy['Id'])
+            # §277：**组合槽**没有自己的 `Id`（它只是"从这里挑一只"）—— 每只候选都是上得了场的
+            # 怪物，所以都要进 roster，否则它们会被误报成"内容里有、没人引用"。
+            if 'Candidates' in enemy:
+                for candidate in enemy['Candidates']:
+                    roster.add(candidate['Id'])
+            else:
+                roster.add(enemy['Id'])
 
     listed_actions = set()
     for monster in doc['Monsters']:

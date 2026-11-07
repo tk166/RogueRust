@@ -660,12 +660,34 @@ fn apply_starting_statuses(
     session: &mut Session,
     content: &'static Content<'static>,
     encounter: u32,
+    slot_ids: &[&str],
 ) -> Result<(), String> {
     let enemies = content
         .encounter_enemies(encounter)
         .map_err(|e| format!("encounter_enemies: {}", detail(&e)))?;
-    for spec in enemies.iter() {
-        let spec = spec.map_err(|e| format!("ENCT enemy record: {}", detail(&e)))?;
+    for (slot, spec) in enemies.iter().enumerate() {
+        let mut spec = spec.map_err(|e| format!("ENCT enemy record: {}", detail(&e)))?;
+        // §277：组合槽要读**挑中的那条候选**（起始状态/格挡都挂在它身上）。决策由构建方做，
+        // 这里跟着 `slot_ids` 走 —— 与 `apply_spawn_setup` 同一条规矩。
+        if let Some(chosen) = slot_ids.get(slot) {
+            let candidates = spec
+                .candidates()
+                .map_err(|e| format!("ENCT enemy Candidates: {}", detail(&e)))?;
+            for index in 0..candidates.len() {
+                let element = candidates.term(index).ok_or_else(|| {
+                    "ENCT enemy Candidates: malformed element".to_string()
+                })?;
+                let candidate = rd_core::content::EnemySpec::from_term(content, element);
+                if candidate
+                    .id()
+                    .map_err(|e| format!("ENCT enemy id: {}", detail(&e)))?
+                    == *chosen
+                {
+                    spec = candidate;
+                    break;
+                }
+            }
+        }
         let id = spec.id().map_err(|e| format!("ENCT enemy id: {}", detail(&e)))?;
         let Ok(target) = rd_core::state::CombatantId::new(id) else {
             return Err(format!("`{id}` is not a usable combatant id"));
@@ -806,6 +828,35 @@ fn build_session_at_unstarted(
     build_session_at_with(seed, encounter_name, hero_hp, deck, enemy_health_percent, ascension, false)
 }
 
+/// §277：`Candidates` 的加权抽取 —— 用**这一场战斗的 seed** 派生。
+///
+/// 为什么不开一条新的 `RunStream`：遭遇已经在 `RunStream::Combat` 上滚过一次，组合属于
+/// "把这场战斗搭出来"（`Rolls` 初始化计数器也在同一层）。新开一条流只会让 `run_hash` 的
+/// 随机流计数多一格，而那一格不影响任何运行层状态。判据是"同一个 seed 永远同一场"。
+///
+/// 实现刻意是**一个 splitmix 步**：够均匀、无状态、可复现，且不依赖任何一个 RNG 结构体。
+fn pick_candidate(seed: i32, slot: usize, weights: &[i32]) -> usize {
+    let total: i64 = weights.iter().map(|w| i64::from((*w).max(1))).sum();
+    if total <= 0 {
+        return 0;
+    }
+    let mut x = (seed as u32)
+        .wrapping_add((slot as u32).wrapping_mul(0x9E37_79B9))
+        .wrapping_add(0x85EB_CA6B);
+    x ^= x >> 16;
+    x = x.wrapping_mul(0x7FEB_352D);
+    x ^= x >> 15;
+    let roll = i64::from(x % (total as u32)) as i64;
+    let mut edge = 0i64;
+    for (index, weight) in weights.iter().enumerate() {
+        edge += i64::from((*weight).max(1));
+        if roll < edge {
+            return index;
+        }
+    }
+    weights.len().saturating_sub(1)
+}
+
 fn build_session_at_with(
     seed: i32,
     encounter_name: &str,
@@ -834,6 +885,8 @@ fn build_session_at_with(
     // ⚠️ Before this, `enc_darklings` could not be built at all: it sits in the act-3 weak pool, so a
     // real run that rolled it ended in `Capacity(DuplicateCombatant)`.
     let mut enemies: Vec<PlanCombatant<'static>> = Vec::new();
+    // §277：每个槽挑中的怪物 id（组合槽用它；固定槽就是它自己的 id）。
+    let mut slot_ids: Vec<&'static str> = Vec::new();
     let mut seen_ids: Vec<&'static str> = Vec::new();
     // (combatant id, its master's id) for the records that declare an `Owner`.
     let mut owners: Vec<(&'static str, &'static str)> = Vec::new();
@@ -843,6 +896,39 @@ fn build_session_at_with(
         .iter()
     {
         let spec = spec.map_err(|e| format!("ENCT enemy record: {}", detail(&e)))?;
+        // §277：**组合槽** —— 这条记录可能只是"从这里挑一只"。挑中的那条与固定记录同形，
+        // 所以下面整段原样复用（id / MaxHealth / MaxHealthAsc / Spawn / Owner）。
+        let mut weight_list: Vec<i32> = Vec::new();
+        let mut candidate_terms: Vec<u16> = Vec::new();
+        {
+            let candidates = spec
+                .candidates()
+                .map_err(|e| format!("ENCT enemy Candidates: {}", detail(&e)))?;
+            for index in 0..candidates.len() {
+                let element = candidates
+                    .term(index)
+                    .ok_or_else(|| "ENCT enemy Candidates: malformed element".to_string())?;
+                let candidate = rd_core::content::EnemySpec::from_term(content, element);
+                weight_list.push(
+                    candidate
+                        .weight()
+                        .map_err(|e| format!("ENCT enemy Weight: {}", detail(&e)))?
+                        .unwrap_or(1),
+                );
+                candidate_terms.push(element);
+            }
+        }
+        let chosen = if candidate_terms.is_empty() {
+            spec
+        } else {
+            let slot_index = seen_ids.len();
+            let pick = pick_candidate(seed, slot_index, &weight_list);
+            rd_core::content::EnemySpec::from_term(content, candidate_terms[pick])
+        };
+        // §277：把**这个槽挑中了谁**记下来，交给 `apply_spawn_setup` 读（它要按挑中的那条记录
+        // 掷 `Rolls`）。决策只做一次，那边只读。
+        slot_ids.push(chosen.id().map_err(|e| format!("ENCT enemy id: {}", detail(&e)))?);
+        let spec = chosen;
         let id: &'static str = spec.id().map_err(|e| format!("ENCT enemy id: {}", detail(&e)))?;
         // `MaxHealth` 缺席 ⇒ 响亮失败。参考在这里有默认值吗？没有可靠出处 ⇒ 不编一个。
         let max_health = spec
@@ -1034,10 +1120,10 @@ fn build_session_at_with(
     // One draw per roll, `random_step += 1`, so the RNG ledger still says exactly what happened.
     // §195.1: the same call also writes the **fixed** spawn counters (`Counters`), which is how a
     // content status can find an initialised budget (The Guardian's Mode Shift 30/35/40).
-    rd_core::battle::apply_spawn_setup(&mut session.state, content, encounter)
+    rd_core::battle::apply_spawn_setup(&mut session.state, content, encounter, &slot_ids)
         .map_err(|e| format!("apply_spawn_setup: {:?}", e))?;
     // §175b: apply the encounter's `StartingStatuses` **before** the first turn starts.
-    apply_starting_statuses(&mut session, content, encounter)?;
+    apply_starting_statuses(&mut session, content, encounter, &slot_ids)?;
     if start_the_first_turn {
         start_first_turn(&mut session.state, &standard, &mut session.host)
             .map_err(|e| format!("start_first_turn: {}", detail(&e)))?;
@@ -3653,6 +3739,103 @@ mod tests {
     ///
     /// 判据不止"能建"：还要**有敌人、首轮能选出意图**（`select_action` 对每个敌人都不报错），
     /// 因为"建起来但意图层炸"与"建不起来"对玩家是同一件事。
+    /// §277：`Exordium Thugs` / `Wildlife` 是**组合槽** —— 不同 seed 会挑到不同候选，
+    /// 而且挑中的那只在战斗里就是它（招式、血量都来自它自己的记录）。
+    #[test]
+    fn the_composed_encounters_pick_from_their_candidates() {
+        // 每个槽里可能出现的怪物（wiki 的"或"表）。
+        let thugs_first = ["louse_red", "louse_green", "acid_slime_m", "spike_slime_m"];
+        let thugs_second = ["slaver_red", "blue_slaver", "cultist", "looter"];
+
+        let mut seen_first: Vec<String> = Vec::new();
+        let mut seen_second: Vec<String> = Vec::new();
+        let mut seen_hp: Vec<i32> = Vec::new();
+        for seed in 0..64 {
+            let Ok(session) = build_session_at(seed, "enc_exordium_thugs", 70, None, 0, 0) else {
+                continue;
+            };
+            let enemies: Vec<_> = session
+                .state
+                .combatants()
+                .iter()
+                .filter(|c| c.team_id.as_str() == "enemy")
+                .collect();
+            assert_eq!(
+                enemies.len(),
+                2,
+                "seed {seed}: a composed encounter still places exactly two enemies"
+            );
+            let first = enemies[0].definition_id.as_str();
+            let second = enemies[1].definition_id.as_str();
+            assert!(
+                thugs_first.contains(&first),
+                "seed {seed}: the first slot picked `{first}`, which is not one of the wiki's four"
+            );
+            assert!(
+                thugs_second.contains(&second),
+                "seed {seed}: the second slot picked `{second}`, not one of the wiki's four"
+            );
+            // 血量必须来自**被挑中的那条候选**（不同候选不同血 ⇒ 反过来证明"用了候选的记录"）。
+            seen_hp.push(enemies[0].health_max);
+            if !seen_first.iter().any(|s| s == first) {
+                seen_first.push(if let Some(found) = thugs_first.iter().find(|c| **c == first) {
+                    (*found).to_string()
+                } else {
+                    String::from("?")
+                });
+            }
+            if !seen_second.iter().any(|s| s == second) {
+                seen_second.push(second.to_string());
+            }
+            // 挑中的那只必须**有招式**：意图层能给它选出下一步（`select_action` 走的就是
+            // 它自己的记录）。候选只写 Id 的话这里会是 `None`。
+            let hero = session
+                .state
+                .combatants()
+                .iter()
+                .find(|c| c.team_id.as_str() == "player")
+                .expect("a hero")
+                .id;
+            for enemy in &enemies {
+                let at = rd_core::intent::locate_enemy(session.content, session.encounter, &enemy.id)
+                    .expect("locate")
+                    .unwrap_or_else(|| panic!("seed {seed}: `{:?}` has no record", enemy.id));
+                let choice = rd_core::intent::select_action(
+                    &session.state,
+                    session.content,
+                    at,
+                    &enemy.id,
+                    1,
+                )
+                .unwrap_or_else(|e| panic!("seed {seed}: select_action: {e:?}"));
+                assert!(
+                    choice.is_some(),
+                    "seed {seed}: `{:?}` picked no action -- a candidate with no record",
+                    enemy.id
+                );
+            }
+            let _ = hero;
+        }
+        assert!(
+            seen_first.len() >= 2,
+            "64 seeds produced only {:?} for the first slot -- the composition is not random",
+            seen_first
+        );
+        assert!(
+            seen_second.len() >= 2,
+            "64 seeds produced only {:?} for the second slot",
+            seen_second
+        );
+        let mut distinct_hp = seen_hp.clone();
+        distinct_hp.sort_unstable();
+        distinct_hp.dedup();
+        assert!(
+            distinct_hp.len() >= 2,
+            "every seed gave the same HP {:?} -- the HP is not coming from the candidate",
+            distinct_hp
+        );
+    }
+
     #[test]
     fn every_pool_encounter_builds_and_can_pick_its_first_intents() {
         let pools = [

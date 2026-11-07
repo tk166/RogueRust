@@ -481,8 +481,40 @@ pub fn locate_enemy(
     for (index, id) in ids.iter().enumerate().take(count) {
         // 借用视图的"根"取 `&'a Content<'a>`；这里只需要读一个 `F_STR`，用短生命周期即可。
         let record = NodeRef::new(content, *id);
-        let Some(record_id) = record.str_field("Id")? else {
-            continue;
+        // §277：**组合槽**没有自己的 `Id`（它只是"从这里挑一只"）—— 挑中的是候选里的某一条，
+        // 所以"这个战斗员属于哪个槽"要按**候选的 id**认。找不到任何匹配就只能跳过这一槽
+        // （那说明它属于别的槽）。
+        let record_id = match record.str_field("Id")? {
+            Some(found) => found,
+            None => {
+                let mut matched: Option<&str> = None;
+                if let Ok(candidates) = content
+                    .encounter_enemies(encounter)
+                    .map(|list| list.get(index))
+                {
+                    if let Ok(spec) = candidates {
+                        if let Ok(list) = spec.candidates() {
+                            for at in 0..list.len() {
+                                let element = match list.term(at) {
+                                    Some(element) => element,
+                                    None => continue,
+                                };
+                                let candidate = crate::content::EnemySpec::from_term(content, element);
+                                if let Ok(candidate_id) = candidate.id() {
+                                    if candidate_id == raw || candidate_id == definition {
+                                        matched = Some(candidate_id);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                match matched {
+                    Some(found) => found,
+                    None => continue,
+                }
+            }
         };
         if record_id == raw {
             return Ok(Some(EnemySlot {
@@ -612,7 +644,7 @@ pub fn select_action<'a>(
     actor: &CombatantId,
     round: i32,
 ) -> Result<Option<ActionChoice<'a>>, IntentError> {
-    let record = enemy_record(content, at)?;
+    let record = enemy_record(content, at, Some(actor))?;
 
     // ── B0：`byId.TryGetValue(enemyId, out var enemy)` 不命中（`:156-157`）。
     let record_id = record.str_field("Id")?.ok_or(IntentError::Missing("Id"))?;
@@ -1137,7 +1169,11 @@ fn arr_items(
 }
 
 /// `ENCT[at.encounter].Enemies[at.index]` 这个 enemy record 对象。
-fn enemy_record<'a>(content: &'a Content<'a>, at: EnemySlot) -> Result<NodeRef<'a>, IntentError> {
+fn enemy_record<'a>(
+    content: &'a Content<'a>,
+    at: EnemySlot,
+    actor: Option<&CombatantId>,
+) -> Result<NodeRef<'a>, IntentError> {
     let mut ids = [0u16; MAX_ENEMIES];
     let count = encounter_enemy_ids(content, at.encounter, &mut ids)?;
     let index = usize::from(at.index);
@@ -1147,7 +1183,53 @@ fn enemy_record<'a>(content: &'a Content<'a>, at: EnemySlot) -> Result<NodeRef<'
             index: at.index,
         });
     }
-    Ok(NodeRef::new(content, ids[index]))
+    let slot = NodeRef::new(content, ids[index]);
+    // §277：**组合槽**本身没有 `Id`/招式（它只是"从这里挑一只"）。挑中的那条候选才是这个槽的
+    // 记录，而"挑中谁"由构建方决定并写进了战斗员 id —— 所以这里按 `Id` 回查候选，
+    // 命中就返回那条候选的 term。**这是"槽位 → 记录"的唯一入口**，改这一处，
+    // 意图层（`select_action` / `intent_for` / 计数器）全部跟着通。
+    if slot.str_field("Id")?.is_none() {
+        if let Some(actor) = actor {
+            if let Some(found) = candidate_record(content, at.encounter, index, actor.as_str())? {
+                return Ok(found);
+            }
+        }
+    }
+    Ok(slot)
+}
+
+/// §277：组合槽里**与这个战斗员同名**的那条候选（`None` = 这个槽不是组合槽）。
+fn candidate_record<'a>(
+    content: &'a Content<'a>,
+    encounter: u32,
+    index: usize,
+    combatant: &str,
+) -> Result<Option<NodeRef<'a>>, IntentError> {
+    let list = match content.encounter_enemies(encounter) {
+        Ok(list) => list,
+        Err(_) => return Ok(None),
+    };
+    let spec = match list.get(index) {
+        Ok(spec) => spec,
+        Err(_) => return Ok(None),
+    };
+    let candidates = match spec.candidates() {
+        Ok(candidates) => candidates,
+        Err(_) => return Ok(None),
+    };
+    let definition = combatant.split('#').next().unwrap_or(combatant);
+    for at in 0..candidates.len() {
+        let Some(element) = candidates.term(at) else {
+            continue;
+        };
+        let candidate = crate::content::EnemySpec::from_term(content, element);
+        if let Ok(id) = candidate.id() {
+            if id == combatant || id == definition {
+                return Ok(Some(NodeRef::new(content, element)));
+            }
+        }
+    }
+    Ok(None)
 }
 
 /// `EACT[action_row]` 的 `Program` 格指向的信封（`_obj(Id,MaxNodeDepth,MaxProgramSteps,Root)`）。
@@ -1435,7 +1517,7 @@ mod tests {
 
     /// 某个槽位上 enemy record 的 `Id`（= 战斗员 id，规格书 §5.3 的关联方式）。
     fn record_id<'a>(content: &'a Content<'a>, at: EnemySlot) -> &'a str {
-        enemy_record(content, at)
+        enemy_record(content, at, None)
             .unwrap()
             .str_field("Id")
             .unwrap()
@@ -1975,7 +2057,7 @@ mod tests {
 
     fn signpost(content: &Content<'_>) -> Signpost {
         let at = slot(content, "city_normal_ordinance_04", 0);
-        let record = enemy_record(content, at).unwrap();
+        let record = enemy_record(content, at, None).unwrap();
         let mut rules = [0u16; MAX_INTENT_RULES];
         let count = record.term_list_field("IntentRules", &mut rules).unwrap();
         assert_eq!(count, 3, "§3.6：contradictory_signpost 有 3 条规则");
@@ -2289,7 +2371,7 @@ mod tests {
         let base = parse(&blob);
         let at = slot(&base, "city_easy_01", 0);
         let actor = cid(record_id(&base, at));
-        let record = enemy_record(&base, at).unwrap().id();
+        let record = enemy_record(&base, at, None).unwrap().id();
         // `Actions` 是 `F_STRLIST`（两个槽：AUX 起址 + 个数）⇒ 个数槽 = 首槽 + 1。
         let count_slot = field_slot(&base, record, "Actions") + 1;
         let count_pos = term_slot_pos(&base, record, count_slot);
@@ -2779,6 +2861,7 @@ mod tests {
                         encounter: index,
                         index: u16::try_from(slot).unwrap(),
                     },
+                    None,
                 )
                 .unwrap();
                 assert_eq!(private.id(), *element, "ENCT[{index}][{slot}] 的 term");

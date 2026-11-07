@@ -56353,6 +56353,1460 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_exordium_thugs"
+      },
+      "Enemies": [
+        {
+          "Position": 0,
+          "Candidates": [
+            {
+              "Id": "louse_red",
+              "MaxHealth": 10,
+              "Actions": [
+                {
+                  "value": "louse_red.bite"
+                },
+                {
+                  "value": "louse_red.grow"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.curl_up"
+                  },
+                  "Stacks": 1
+                }
+              ],
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.ascensionAtLeast",
+                          "value": {
+                            "Value": 17
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_red.bite"
+                  },
+                  "Priority": 70
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_red.grow"
+                  },
+                  "Priority": 60
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_red.bite"
+                  },
+                  "Priority": 60
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "louse_red.bite"
+                      },
+                      "Weight": 75
+                    },
+                    {
+                      "Action": {
+                        "value": "louse_red.grow"
+                      },
+                      "Weight": 25
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Red Louse",
+              "Rolls": [
+                {
+                  "Key": "roll.bite",
+                  "Min": 5,
+                  "Max": 7
+                },
+                {
+                  "Key": "roll.bite",
+                  "Min": 6,
+                  "Max": 8,
+                  "AscensionMin": 2
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 3,
+                  "Max": 7
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 4,
+                  "Max": 8,
+                  "AscensionMin": 7
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 9,
+                  "Max": 12,
+                  "AscensionMin": 17
+                }
+              ],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 11
+                }
+              ],
+              "Weight": 1
+            },
+            {
+              "Id": "louse_green",
+              "MaxHealth": 11,
+              "Actions": [
+                {
+                  "value": "louse_green.bite"
+                },
+                {
+                  "value": "louse_green.spit_web"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.curl_up"
+                  },
+                  "Stacks": 1
+                }
+              ],
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.ascensionAtLeast",
+                          "value": {
+                            "Value": 17
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_green.bite"
+                  },
+                  "Priority": 70
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_green.spit_web"
+                  },
+                  "Priority": 60
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_green.bite"
+                  },
+                  "Priority": 60
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "louse_green.bite"
+                      },
+                      "Weight": 75
+                    },
+                    {
+                      "Action": {
+                        "value": "louse_green.spit_web"
+                      },
+                      "Weight": 25
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Green Louse",
+              "Rolls": [
+                {
+                  "Key": "roll.bite",
+                  "Min": 5,
+                  "Max": 7
+                },
+                {
+                  "Key": "roll.bite",
+                  "Min": 6,
+                  "Max": 8,
+                  "AscensionMin": 2
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 3,
+                  "Max": 7
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 4,
+                  "Max": 8,
+                  "AscensionMin": 7
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 9,
+                  "Max": 12,
+                  "AscensionMin": 17
+                }
+              ],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 12
+                }
+              ],
+              "Weight": 1
+            },
+            {
+              "Id": "acid_slime_m",
+              "MaxHealth": 28,
+              "Actions": [
+                {
+                  "value": "acid_slime_m.corrosive_spit"
+                },
+                {
+                  "value": "acid_slime_m.tackle"
+                },
+                {
+                  "value": "acid_slime_m.lick"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.spore_cloud"
+                  },
+                  "Stacks": 1
+                }
+              ],
+              "IntentRules": [],
+              "DisplayName": "Acid Slime (M)",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 29
+                }
+              ],
+              "Weight": 1
+            },
+            {
+              "Id": "spike_slime_m",
+              "MaxHealth": 28,
+              "Actions": [
+                {
+                  "value": "spike_slime_m.flame_tackle"
+                },
+                {
+                  "value": "spike_slime_m.lick"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.metallicize"
+                  },
+                  "Stacks": 3
+                }
+              ],
+              "IntentRules": [],
+              "DisplayName": "Spike Slime (M)",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 29
+                }
+              ],
+              "Weight": 1
+            }
+          ]
+        },
+        {
+          "Position": 1,
+          "Candidates": [
+            {
+              "Id": "slaver_red",
+              "MaxHealth": 46,
+              "Actions": [
+                {
+                  "value": "slaver_red.stab"
+                },
+                {
+                  "value": "slaver_red.scrape"
+                },
+                {
+                  "value": "slaver_red.entangle"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.entangle_ready"
+                  },
+                  "Stacks": 1
+                }
+              ],
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.round",
+                    "value": {
+                      "Op": "Equal",
+                      "Round": 1
+                    }
+                  },
+                  "Action": {
+                    "value": "slaver_red.stab"
+                  },
+                  "Priority": 75
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.selfHasStatus",
+                    "value": {
+                      "Status": {
+                        "value": "standard.entangle_ready"
+                      },
+                      "MinStacks": 1
+                    }
+                  },
+                  "Priority": 70,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "slaver_red.entangle"
+                      },
+                      "Weight": 25
+                    },
+                    {
+                      "Action": {
+                        "value": "slaver_red.scrape"
+                      },
+                      "Weight": 50
+                    },
+                    {
+                      "Action": {
+                        "value": "slaver_red.stab"
+                      },
+                      "Weight": 25
+                    }
+                  ]
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 58,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "slaver_red.scrape"
+                      },
+                      "Weight": 100
+                    }
+                  ]
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 57,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "slaver_red.stab"
+                      },
+                      "Weight": 100
+                    }
+                  ]
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 40,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "slaver_red.stab"
+                      },
+                      "Weight": 55
+                    },
+                    {
+                      "Action": {
+                        "value": "slaver_red.scrape"
+                      },
+                      "Weight": 45
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Slaver",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 48
+                }
+              ],
+              "Weight": 1
+            },
+            {
+              "Id": "blue_slaver",
+              "MaxHealth": 46,
+              "Actions": [
+                {
+                  "value": "blue_slaver.stab"
+                },
+                {
+                  "value": "blue_slaver.rake"
+                }
+              ],
+              "StartingStatuses": [],
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.ascensionAtLeast",
+                          "value": {
+                            "Value": 17
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "blue_slaver.stab"
+                  },
+                  "Priority": 70
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "blue_slaver.rake"
+                  },
+                  "Priority": 60
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "blue_slaver.stab"
+                  },
+                  "Priority": 60
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "blue_slaver.stab"
+                      },
+                      "Weight": 60
+                    },
+                    {
+                      "Action": {
+                        "value": "blue_slaver.rake"
+                      },
+                      "Weight": 40
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Blue Slaver",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 48
+                }
+              ],
+              "Weight": 1
+            },
+            {
+              "Id": "cultist",
+              "MaxHealth": 48,
+              "Actions": [
+                {
+                  "value": "cultist.incantation"
+                },
+                {
+                  "value": "cultist.dark_strike"
+                }
+              ],
+              "StartingStatuses": [],
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.selfHasCounter",
+                    "value": {
+                      "Counter": {
+                        "value": "ritual_owner_turns"
+                      },
+                      "Op": "GreaterOrEqual",
+                      "Value": 1
+                    }
+                  },
+                  "Action": {
+                    "value": "cultist.dark_strike"
+                  },
+                  "Priority": 10
+                }
+              ],
+              "DisplayName": "Cultist",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 50
+                }
+              ],
+              "Weight": 1
+            },
+            {
+              "Id": "looter",
+              "MaxHealth": 44,
+              "Actions": [
+                {
+                  "value": "looter.mug"
+                },
+                {
+                  "value": "looter.lunge"
+                },
+                {
+                  "value": "looter.smoke_bomb"
+                },
+                {
+                  "value": "looter.escape"
+                }
+              ],
+              "StartingStatuses": [],
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.round",
+                    "value": {
+                      "Op": "LessOrEqual",
+                      "Round": 2
+                    }
+                  },
+                  "Action": {
+                    "value": "looter.mug"
+                  },
+                  "Priority": 80
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 3
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "looter.escape"
+                  },
+                  "Priority": 70
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "looter.smoke_bomb"
+                  },
+                  "Priority": 60
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "looter.lunge"
+                      },
+                      "Weight": 50
+                    },
+                    {
+                      "Action": {
+                        "value": "looter.smoke_bomb"
+                      },
+                      "Weight": 50
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Looter",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 46
+                }
+              ],
+              "Weight": 1
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_exordium_wildlife"
+      },
+      "Enemies": [
+        {
+          "Position": 0,
+          "Candidates": [
+            {
+              "Id": "fungi_beast",
+              "MaxHealth": 22,
+              "Actions": [
+                {
+                  "value": "fungi_beast.bite"
+                },
+                {
+                  "value": "fungi_beast.grow"
+                }
+              ],
+              "StartingStatuses": [],
+              "IntentRules": [],
+              "DisplayName": "Fungi Beast",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 24
+                }
+              ],
+              "Weight": 1
+            },
+            {
+              "Id": "jaw_worm",
+              "MaxHealth": 40,
+              "Actions": [
+                {
+                  "value": "jaw_worm.chomp"
+                },
+                {
+                  "value": "jaw_worm.thrash"
+                },
+                {
+                  "value": "jaw_worm.bellow"
+                }
+              ],
+              "StartingStatuses": [],
+              "IntentRules": [],
+              "DisplayName": "Jaw Worm",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 42
+                }
+              ],
+              "StartingBlock": 6,
+              "StartingBlockAsc": [
+                {
+                  "AscensionMin": 17,
+                  "Amount": 9
+                }
+              ],
+              "Weight": 1
+            }
+          ]
+        },
+        {
+          "Position": 1,
+          "Candidates": [
+            {
+              "Id": "louse_red",
+              "MaxHealth": 10,
+              "Actions": [
+                {
+                  "value": "louse_red.bite"
+                },
+                {
+                  "value": "louse_red.grow"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.curl_up"
+                  },
+                  "Stacks": 1
+                }
+              ],
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.ascensionAtLeast",
+                          "value": {
+                            "Value": 17
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_red.bite"
+                  },
+                  "Priority": 70
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_red.grow"
+                  },
+                  "Priority": 60
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_red.bite"
+                  },
+                  "Priority": 60
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "louse_red.bite"
+                      },
+                      "Weight": 75
+                    },
+                    {
+                      "Action": {
+                        "value": "louse_red.grow"
+                      },
+                      "Weight": 25
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Red Louse",
+              "Rolls": [
+                {
+                  "Key": "roll.bite",
+                  "Min": 5,
+                  "Max": 7
+                },
+                {
+                  "Key": "roll.bite",
+                  "Min": 6,
+                  "Max": 8,
+                  "AscensionMin": 2
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 3,
+                  "Max": 7
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 4,
+                  "Max": 8,
+                  "AscensionMin": 7
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 9,
+                  "Max": 12,
+                  "AscensionMin": 17
+                }
+              ],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 11
+                }
+              ],
+              "Weight": 1
+            },
+            {
+              "Id": "louse_green",
+              "MaxHealth": 11,
+              "Actions": [
+                {
+                  "value": "louse_green.bite"
+                },
+                {
+                  "value": "louse_green.spit_web"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.curl_up"
+                  },
+                  "Stacks": 1
+                }
+              ],
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.ascensionAtLeast",
+                          "value": {
+                            "Value": 17
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_green.bite"
+                  },
+                  "Priority": 70
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_green.spit_web"
+                  },
+                  "Priority": 60
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        },
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "prev_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Action": {
+                    "value": "louse_green.bite"
+                  },
+                  "Priority": 60
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "louse_green.bite"
+                      },
+                      "Weight": 75
+                    },
+                    {
+                      "Action": {
+                        "value": "louse_green.spit_web"
+                      },
+                      "Weight": 25
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Green Louse",
+              "Rolls": [
+                {
+                  "Key": "roll.bite",
+                  "Min": 5,
+                  "Max": 7
+                },
+                {
+                  "Key": "roll.bite",
+                  "Min": 6,
+                  "Max": 8,
+                  "AscensionMin": 2
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 3,
+                  "Max": 7
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 4,
+                  "Max": 8,
+                  "AscensionMin": 7
+                },
+                {
+                  "Key": "roll.curl_up",
+                  "Min": 9,
+                  "Max": 12,
+                  "AscensionMin": 17
+                }
+              ],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 12
+                }
+              ],
+              "Weight": 1
+            },
+            {
+              "Id": "acid_slime_m",
+              "MaxHealth": 28,
+              "Actions": [
+                {
+                  "value": "acid_slime_m.corrosive_spit"
+                },
+                {
+                  "value": "acid_slime_m.tackle"
+                },
+                {
+                  "value": "acid_slime_m.lick"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.spore_cloud"
+                  },
+                  "Stacks": 1
+                }
+              ],
+              "IntentRules": [],
+              "DisplayName": "Acid Slime (M)",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 29
+                }
+              ],
+              "Weight": 1
+            },
+            {
+              "Id": "spike_slime_m",
+              "MaxHealth": 28,
+              "Actions": [
+                {
+                  "value": "spike_slime_m.flame_tackle"
+                },
+                {
+                  "value": "spike_slime_m.lick"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.metallicize"
+                  },
+                  "Stacks": 3
+                }
+              ],
+              "IntentRules": [],
+              "DisplayName": "Spike Slime (M)",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 29
+                }
+              ],
+              "Weight": 1
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -61412,6 +62866,14 @@
       {
         "Id": "enc_acid_slime_l",
         "Weight": 7
+      },
+      {
+        "Id": "enc_exordium_thugs",
+        "Weight": 10
+      },
+      {
+        "Id": "enc_exordium_wildlife",
+        "Weight": 10
       }
     ],
     "Note": "§194：三幕的 Boss 池各自补齐到 wiki 的『三选一』（Boss = Slime Boss / The Guardian / Hexaghost；Boss2 = The Champ / Bronze Automaton / The Collector；Boss3 = Time Eater / Awakened One / Donu & Deca）。A20 的两场 Boss 因此可以是不同的一对。",

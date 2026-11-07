@@ -32,7 +32,10 @@ const flag = (name, fallback) => {
   const at = argv.indexOf(`--${name}`);
   return at >= 0 && argv[at + 1] ? Number(argv[at + 1]) : fallback;
 };
-const SEED_COUNT = flag("seeds", 3);
+// §277：**3 → 5**。弱池从 9 条涨到 17 条（§275–§277 添了三场、两只 L 史莱姆、Swarm、
+// 两条组合槽），随机游走命中"宝箱/精英"的概率跟着降 —— 3 个种子已经抽不到遗物，于是
+// "the walk never gained a relic" 那条**覆盖**断言红了。按 FACTS 的规矩：**加样本，不改断言形状**。
+const SEED_COUNT = flag("seeds", 5);
 const STEPS = flag("steps", 350);
 const FIRST_SEED = flag("seed", 12345);
 

@@ -85,7 +85,7 @@ INV_COUNTS = {
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
     # §258: +1 (`enc_two_louses` -- the green louse was unreachable).
-    "encounters": 41,
+    "encounters": 43,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -1332,6 +1332,16 @@ INV_ELITE_POOL = {
     # §276: 原作 `Large Slime` 是"随机 Spike L 或 Acid L"（重量 2）；静态内容拆成两条各 7。
     "enc_spike_slime_l": ["spike_slime_l"],
     "enc_acid_slime_l": ["acid_slime_l"],
+    # §277：两条**组合槽**遭遇。清单里用 `|` 表示"任一只"（顺序是排序后的集合，
+    # 与 `check_relations` 的 slot_name 一致）。
+    "enc_exordium_thugs": [
+        "acid_slime_m|louse_green|louse_red|spike_slime_m",
+        "blue_slaver|cultist|looter|slaver_red",
+    ],
+    "enc_exordium_wildlife": [
+        "fungi_beast|jaw_worm",
+        "acid_slime_m|louse_green|louse_red|spike_slime_m",
+    ],
 }
 
 # inv:§4.3 -- the boss pool. `inv:§4.3` says the three act-1 bosses are picked equiprobably; this
@@ -1353,7 +1363,9 @@ INV_ACT_TABLES = {
              # §276：5 个敌人 —— 镜像对齐到 6 之后才允许进场。
              "enc_swarm_of_slimes",
              # §276：L 史莱姆（原作 `Large Slime` 的两种掷法，拆成两条）。
-             "enc_spike_slime_l", "enc_acid_slime_l"],
+             "enc_spike_slime_l", "enc_acid_slime_l",
+             # §277：组合槽的两条。
+             "enc_exordium_thugs", "enc_exordium_wildlife"],
     "Weak2": ["enc_chosen", "enc_shelled_parasite"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
@@ -2852,7 +2864,7 @@ def check_starting_status_ascension(doc):
     seen = set()
     for encounter in doc.get("Encounters") or []:
         eid = encounter["Id"]["Value"] if isinstance(encounter["Id"], dict) else encounter["Id"]
-        for enemy in encounter.get("Enemies") or []:
+        for enemy in encounter_enemy_records(encounter):
             monster = enemy["Id"]
             want = INV_STATUS_ASC.get(monster)
             rows = enemy.get("StartingStatuses") or []
@@ -2901,7 +2913,7 @@ def check_ascension_health(doc):
     for encounter in doc.get("Encounters") or []:
         eid = encounter["Id"]["Value"] if isinstance(encounter["Id"], dict) else encounter["Id"]
         level = level_of.get(eid, 7)
-        for enemy in encounter.get("Enemies") or []:
+        for enemy in encounter_enemy_records(encounter):
             monster = enemy["Id"]
             want = INV_ASC_HP.get(monster)
             if want is None:
@@ -3117,12 +3129,29 @@ def check_ascension_coverage(actions):
              % (len(unreviewed), ASC_UNREVIEWED_CEILING, ", ".join(unreviewed[:12])))
 
 
+def encounter_enemy_records(encounter):
+    """§277：一条遭遇里的**每一条敌人记录** —— 固定记录原样、**组合槽展开成它的候选**。
+
+    组合槽（`Candidates`）没有自己的 `Id`/血量：它只是"从这里挑一只"。闸门里凡是要看
+    "这条记录是哪只怪、多少血"的地方都必须走这个函数，否则 KeyError -- 而那种失败会指向
+    闸门自己而不是内容（§276 的一次性踩过）。
+    """
+    for enemy in encounter.get("Enemies") or []:
+        if "Candidates" in enemy:
+            for candidate in enemy["Candidates"]:
+                yield candidate
+        else:
+            yield enemy
+
+
 def check_spawn_rolls(doc):
     """§193: 每条计数器读取都必须被**列出这条动作的那个敌人的**掷骰覆盖。"""
     print("[7b] spawn rolls (port-stage/§193)")
     records = {}
     for encounter in doc.get("Encounters") or []:
-        for record in encounter["Enemies"]:
+        for record in encounter_enemy_records(encounter):
+            # §277：组合槽的候选是**完整记录**（克隆自既有行 + 一个 `Weight`），所以它们与固定
+            # 记录走同一段检查 —— 不需要任何豁免。
             records.setdefault(record["Id"], []).append(record)
 
     # ① 记录侧的形态：只有表里的敌人掷骰，而且范围/档位逐个对得上。
@@ -3736,7 +3765,13 @@ def check_relations(doc):
         if eid not in pool:
             fail("encounter." + eid,
                  "not in the inventory's weak (inv:§5.2), elite (inv:§5.3) or boss (inv:§4.3) pool")
-        listed = [e["Id"] for e in enc.get("Enemies") or []]
+        # §277：**组合槽**在清单里写成 "a|b|c"（"任一只"），固定记录就是 id。
+        def slot_name(enemy):
+            if "Candidates" in enemy:
+                return "|".join(sorted({c["Id"] for c in enemy["Candidates"]}))
+            return enemy["Id"]
+
+        listed = [slot_name(e) for e in enc.get("Enemies") or []]
         if listed != pool.get(eid):
             fail("encounter." + eid, "enemies %s, the inventory says %s"
                  % (listed, pool.get(eid)))
@@ -3752,7 +3787,7 @@ def check_relations(doc):
         if len(enc.get("Enemies") or []) > MAX_ENEMIES_IN_FIGHT:
             fail("encounter." + eid, "%d enemies, the cap is %d"
                  % (len(enc.get("Enemies") or []), MAX_ENEMIES_IN_FIGHT))
-        for inline in enc.get("Enemies") or []:
+        for inline in encounter_enemy_records(enc):
             mid = inline["Id"]
             entry = roster.get(mid)
             if entry is None:

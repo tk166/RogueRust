@@ -963,10 +963,17 @@ pub struct SpawnSetup {
     pub counters: u32,
 }
 
+/// §277：`resolved` 是**构建方已经决定好的**每槽怪物 id（组合槽用它；空切片 = 用记录自己的 `Id`）。
+///
+/// 为什么由调用方传进来而不是在这里再算一次：组合槽的抽取要用**战斗 seed**，而这里只有
+/// `CombatState`。更重要的是一条纪律——"挑哪一只"只能有**一个**决定点（构建方），
+/// 这里只**读**那个决定。算两遍就是两份真相：louse 的 `Rolls`（咬击/蜷缩）会按不同的怪物去掷，
+/// 而且**不会崩**。
 pub fn apply_spawn_setup(
     state: &mut CombatState,
     content: &Content<'_>,
     encounter: u32,
+    resolved: &[&str],
 ) -> Result<SpawnSetup, SpawnRollError> {
     // §242：记下"这场战斗来自哪个遭遇" —— `spot_weakness` 要问敌人意图，而意图查询
     // （`intent::locate_enemy`）需要遭遇号才能定位敌人槽位。这里是**唯一**知道那个号的地方。
@@ -979,7 +986,29 @@ pub fn apply_spawn_setup(
     let mut counters_written = 0u32;
     for slot in 0..enemies.len() {
         let spec = enemies.get(slot).map_err(SpawnRollError::Encounter)?;
-        let id = spec.id().map_err(SpawnRollError::Encounter)?;
+        // §277：组合槽的 id 由调用方给（它就是构建方挑中的那一条）。
+        let id = match resolved.get(slot) {
+            Some(chosen) if !chosen.is_empty() => *chosen,
+            _ => spec.id().map_err(SpawnRollError::Encounter)?,
+        };
+        let spec = match spec.candidates() {
+            Ok(list) if list.len() > 0 => {
+                // 用**挑中的那条候选记录**读 `Rolls`（候选是完整记录）。
+                let mut chosen = spec;
+                for index in 0..list.len() {
+                    let element = list.term(index).ok_or(SpawnRollError::Encounter(
+                        crate::content::EncounterError::MissingField("Candidates"),
+                    ))?;
+                    let candidate = crate::content::EnemySpec::from_term(content, element);
+                    if candidate.id().map_err(SpawnRollError::Encounter)? == id {
+                        chosen = candidate;
+                        break;
+                    }
+                }
+                chosen
+            }
+            _ => spec,
+        };
         let mut rolls = [crate::content::SpawnRoll {
             key: "",
             min: 0,

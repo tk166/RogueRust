@@ -294,10 +294,17 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 |---|---|
 | ~~`Swarm of Slimes`~~ | **§276 已做**：`MAX_ENEMY_SLOTS` 与内核上限**早就是 6**，卡住的只是内容门里的镜像（4）。 |
 | ~~Large Slime（Spike L / Acid L）~~ | **§276 已做**：两只 L 史莱姆 + **50% 分裂**（阈值 = 一半最大血，血量继承当前血）。 |
-| Exordium Thugs / Wildlife | **动态组合规则**（"First enemy: Louse 或 Medium Slime…"），我们的遭遇是静态列表 |
+| ~~Exordium Thugs / Wildlife~~ | **§277 已做**：组合槽（`Candidates` 加权候选表）+ 两条遭遇。 |
 
 ⚠️ 五个**精英**遭遇（Lagavulin / Book of Stabbing / Slavers / Nemesis / Reptomancer）
 **早就在内容里**且各有具名运行时判据 —— 旧文档说"缺这五个"是过期信息（§275.1）。
+
+### D.4 两个**表达不了**的机制缺口（分析见 `docs/mechanism-gaps-analysis.md`）
+
+| 缺口 | 缺什么载体 | 方案 |
+|---|---|---|
+| 真实事件的**剧情分支**被合并（Golden Idol 三选一只有两个） | "事件的第 N 段"这个实体（`EV` 行是"两段文本 + 两串效果"） | `EVND` 节点表（每选项多一格 `Next`），`EV` 行退化成入口；再做条件选项 |
+| 战斗中**每回合重掷**的随机没有值节点 | 一个"从程序里问随机数"的表达式 | `randomInt(Min,Max)` 走 `CombatState` 现有 RNG；★ 结果要在计划里固化（预检也会求值） |
 
 ### G. ★ 基础值偏差：§191 修掉了 8 条，剩 3 条是写明了的简化
 

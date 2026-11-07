@@ -2121,6 +2121,49 @@ impl<'a> EnemySpec<'a> {
         self.list_any("StartingStatuses")
     }
 
+    /// §277：这一条记录是不是**组合槽** —— `Candidates` 是一个加权候选表（对象列表），
+    /// 建战斗时挑一个。缺键 / 空列表都表示"不是组合槽"（固定记录）。
+    ///
+    /// 元素的形状与 `Enemies` 的元素**相同**（`Id` + `MaxHealth` + `MaxHealthAsc` + `Weight`），
+    /// 所以调用方可以用 [`Self::from_term`] 把一个候选当成一条普通记录来读。
+    pub fn candidates(&self) -> Result<SlotList<'a>, EncounterError> {
+        match self.list_any("Candidates") {
+            Err(EncounterError::MissingField("Candidates"))
+            | Err(EncounterError::WrongFieldKind("Candidates")) => Ok(SlotList {
+                content: self.content,
+                start: 0,
+                count: 0,
+                kind: F_TERMLIST,
+            }),
+            other => other,
+        }
+    }
+
+    /// §277：把一个**列表元素**当成一条敌人记录。
+    ///
+    /// 存在的理由只有一个：`Candidates` 的元素与 `Enemies` 的元素同形，所以 `id()` /
+    /// `max_health()` / `max_health_asc()` / `spawn()` / `owner()` 全部可以复用 —— 不写第二套
+    /// 访问器（写两套就会漂，比如一边认 `MaxHealthAsc`、另一边忘了）。
+    #[must_use]
+    pub const fn from_term(content: &'a Content<'a>, term: u16) -> Self {
+        Self { content, term }
+    }
+
+    /// §277：候选的相对权重（`Candidates` 元素的 `Weight`）。缺席 ⇒ `None`（调用方按 1 处理）。
+    pub fn weight(&self) -> Result<Option<i32>, EncounterError> {
+        let (kind, at) = match self.field_at("Weight") {
+            Err(EncounterError::MissingField("Weight")) => return Ok(None),
+            other => other?,
+        };
+        if kind != F_INT {
+            return Err(EncounterError::WrongFieldKind("Weight"));
+        }
+        match self.slot(at)? {
+            ABSENT_INT | NULL_INT => Ok(None),
+            other => Ok(Some(i32::from(other as i16))),
+        }
+    }
+
     /// §208: `StartingBlock`（`F_INT`）—— 开局就挂在敌人身上的格挡。
     ///
     /// 为什么不能塞进 `StartingStatuses`：Block 是**防御池**（`EffectRequest::GainBlock`），不是
@@ -3418,9 +3461,12 @@ fn list_field<'a>(
 /// this surfaced: a silently truncated pool would just make one encounter never roll.
 /// §276: it was **12**, and act 1's weak pool reached **13** when `Swarm of Slimes` joined
 /// (`3 Louses` / `2 Fungi Beasts` / `Blue Slaver` / `Swarm` were added in §275–§276).
+/// §277: **16 → 24** — the two composed encounters (`Exordium Thugs` / `Wildlife`) and the two
+/// L slimes took the pool to 17, and the wiki's act-1 pool has ~20 entries, so this is the number
+/// that will keep biting. 24 leaves room for the rest of it.
 /// Same discipline as §258: the reader **refuses** a longer list rather than cutting it, so this
 /// shows up as a red test instead of an encounter that can never roll.
-pub const MAX_POOL_IDS: usize = 16;
+pub const MAX_POOL_IDS: usize = 24;
 
 /// The field name of each entry in an `EncounterTables` pool.
 const ENCOUNTER_ID_FIELD: &str = "Id";
