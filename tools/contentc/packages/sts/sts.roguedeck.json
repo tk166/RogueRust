@@ -58538,6 +58538,13 @@
       "CombatRules": null
     },
     {
+      "Id": "astrolabe",
+      "DisplayName": "Astrolabe",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "bag_of_marbles",
       "DisplayName": "Bag of Marbles",
       "RunPrograms": null,
@@ -58713,6 +58720,13 @@
       "CombatRules": null
     },
     {
+      "Id": "empty_cage",
+      "DisplayName": "Empty Cage",
+      "Rarity": "Boss",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "eternal_feather",
       "DisplayName": "Eternal Feather",
       "RunPrograms": null,
@@ -58832,6 +58846,13 @@
       "CombatRules": null
     },
     {
+      "Id": "lees_waffle",
+      "DisplayName": "Lee's Waffle",
+      "Rarity": "Shop",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "letter_opener",
       "DisplayName": "Letter Opener",
       "Rarity": "Uncommon",
@@ -58937,6 +58958,13 @@
       "Rarity": "Common"
     },
     {
+      "Id": "old_coin",
+      "DisplayName": "Old Coin",
+      "Rarity": "Rare",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "omamori",
       "DisplayName": "Omamori",
       "Rarity": "Common",
@@ -58954,6 +58982,13 @@
       "Id": "ornamental_fan",
       "DisplayName": "Ornamental Fan",
       "Rarity": "Uncommon",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "pandoras_box",
+      "DisplayName": "Pandora's Box",
+      "Rarity": "Boss",
       "RunPrograms": null,
       "CombatRules": null
     },
@@ -59257,6 +59292,20 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"
+    },
+    {
+      "Id": "war_paint",
+      "DisplayName": "War Paint",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
+      "Id": "whetstone",
+      "DisplayName": "Whetstone",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "white_beast_statue",

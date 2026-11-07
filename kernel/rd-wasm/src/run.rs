@@ -770,7 +770,16 @@ pub extern "C" fn rd_run_start(seed: i32, ascension: i32) -> i32 {
                         return -9;
                     }
                 }
-                if let Err(e) = state.push_relic(id) {
+                // §274：`push_relic` 要卡池（拾取类遗物要看牌的类型与 `+` 行）。开局这一刻
+                // 牌组已经建好，所以池子从内容现取。
+                let starting_pool = match full_pool(content) {
+                    Ok(pool) => pool,
+                    Err(message) => {
+                        set_error(&message);
+                        return -10;
+                    }
+                };
+                if let Err(e) = state.push_relic(id, &starting_pool) {
                     set_error(&std::format!("push_relic({id}): {}", describe(&e)));
                     return -10;
                 }
@@ -1347,7 +1356,11 @@ pub extern "C" fn rd_run_open_chest() -> i32 {
     };
     session.log(K_CHEST, -1, -1, "");
     let relics = relic_pool(content());
-    let outcome = session.state.open_chest(&relics).map(|_| 0i32);
+    let pool = match full_pool(content()) {
+        Ok(pool) => pool,
+        Err(_) => return -1,
+    };
+    let outcome = session.state.open_chest(&pool, &relics).map(|_| 0i32);
     finish(session, outcome)
 }
 
@@ -1494,11 +1507,15 @@ pub extern "C" fn rd_run_buy_relic(slot: i32) -> i32 {
     if slot < 0 {
         return -1;
     }
-    // §273：补货要池子（`the_courier`）。绑定一次再借出去 —— `relic_pool` 返回 `Vec`。
+    // §273/§274：补货要**遗物**池子，拾取类遗物要**卡**池子。两个都绑定一次再借出去。
     let relics = relic_pool(content());
+    let pool = match full_pool(content()) {
+        Ok(pool) => pool,
+        Err(_) => return -1,
+    };
     let outcome = session
         .state
-        .buy_relic(slot as usize, &relics)
+        .buy_relic(slot as usize, &pool, &relics)
         .map(|_| 0i32);
     finish(session, outcome)
 }
@@ -1673,6 +1690,8 @@ pub extern "C" fn rd_run_event_needs() -> i32 {
         Some(DeckChange::Remove) => 1,
         Some(DeckChange::Upgrade) => 2,
         Some(DeckChange::Transform) => 3,
+        // §274：`astrolabe` 会用到它，但事件从不用它 —— 给一个明确的值而不是 panic。
+        Some(DeckChange::TransformAndUpgrade) => 4,
         None => 0,
     }
 }
@@ -1694,6 +1713,53 @@ pub extern "C" fn rd_run_pick_event_card(index: i32) -> i32 {
     let outcome = session
         .state
         .pick_event_card(index as usize, &pool)
+        .map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// §274：还欠几次"拾取时的牌组编辑"（`0` = 不欠，`-1` = 没有一局）。
+///
+/// 与 `rd_run_event_needs` 是**两件事**：那个是"事件问句"（走 `Pending::EventCard`），
+/// 这个是"遗物问句"（不走 `pending`），所以它可以和奖励屏、宝箱屏**同时**存在 ——
+/// 这正是打完 Boss 拿 Boss 遗物、还想接着拿卡牌奖励那条路径需要的。
+#[no_mangle]
+pub extern "C" fn rd_run_pickup_picks() -> i32 {
+    run_slot().as_ref().map_or(-1, |run| i32::from(run.state.pickup_picks()))
+}
+
+/// §274：欠的是哪一种编辑：`0` 不欠、`1` 移除、`2` 升级、`3` 改造、`4` 改造并升级、`-1` 没有一局。
+#[no_mangle]
+pub extern "C" fn rd_run_pickup_change() -> i32 {
+    use rd_run::state::DeckChange;
+    let Some(run) = run_slot().as_ref() else {
+        return -1;
+    };
+    match run.state.pickup_change() {
+        None => 0,
+        Some(DeckChange::Remove) => 1,
+        Some(DeckChange::Upgrade) => 2,
+        Some(DeckChange::Transform) => 3,
+        Some(DeckChange::TransformAndUpgrade) => 4,
+    }
+}
+
+/// §274：兑现一次拾取时的牌组编辑（牌组下标 `index`）。
+#[no_mangle]
+pub extern "C" fn rd_run_pickup_card(index: i32) -> i32 {
+    if index < 0 {
+        return -1;
+    }
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_EVENT_CARD, index, -1, "");
+    let pool = match full_pool(content()) {
+        Ok(pool) => pool,
+        Err(message) => return fail(session, &message),
+    };
+    let outcome = session
+        .state
+        .pickup_card(index as usize, &pool)
         .map(|_| 0i32);
     finish(session, outcome)
 }
@@ -2640,6 +2706,8 @@ pub extern "C" fn rd_run_start_needs(slot: i32) -> i32 {
         BlessingFollowUp::Deck(DeckChange::Remove) => 1,
         BlessingFollowUp::Deck(DeckChange::Upgrade) => 2,
         BlessingFollowUp::Deck(DeckChange::Transform) => 3,
+        // §274：恩惠不用它（`astrolabe` 才用），但映射要穷尽。
+        BlessingFollowUp::Deck(DeckChange::TransformAndUpgrade) => 4,
     }
 }
 
@@ -2655,6 +2723,8 @@ pub extern "C" fn rd_run_blessing_needs() -> i32 {
         Some(BlessingFollowUp::Deck(DeckChange::Remove)) => 1,
         Some(BlessingFollowUp::Deck(DeckChange::Upgrade)) => 2,
         Some(BlessingFollowUp::Deck(DeckChange::Transform)) => 3,
+        // §274：恩惠不用它（`astrolabe` 才用），但映射要穷尽。
+        Some(BlessingFollowUp::Deck(DeckChange::TransformAndUpgrade)) => 4,
         Some(BlessingFollowUp::None) | Some(BlessingFollowUp::GainThreeCards) | None => 0,
     }
 }
@@ -3200,7 +3270,11 @@ pub extern "C" fn rd_run_take_relic() -> i32 {
         return -1;
     };
     session.log(K_TAKE_RELIC, -1, -1, "");
-    let outcome = session.state.take_relic().map(|_| 0i32);
+    let pool = match full_pool(content()) {
+        Ok(pool) => pool,
+        Err(_) => return -1,
+    };
+    let outcome = session.state.take_relic(&pool).map(|_| 0i32);
     finish(session, outcome)
 }
 
@@ -7061,8 +7135,8 @@ mod tests {
         test_run(7, 80, 80, &["strike"; 10]);
         {
             let session = run_slot().as_mut().expect("session");
-            session.state.push_relic("anchor").expect("anchor");
-            session.state.push_relic("vajra").expect("vajra");
+            session.state.push_relic("anchor", &[]).expect("anchor");
+            session.state.push_relic("vajra", &[]).expect("vajra");
             // 开局那件 Burning Blood 也还在 —— 顺便钉住"三件遗物各管各的钩子"。
             assert_eq!(session.state.combat_bonus().block, 10);
             assert_eq!(session.state.combat_bonus().status_count, 1, "Vajra grants one status");
@@ -8658,7 +8732,7 @@ mod tests {
                     .as_mut()
                     .expect("a run")
                     .state
-                    .push_relic(relic)
+                    .push_relic(relic, &[])
                     .unwrap_or_else(|e| panic!("{relic}: {e:?}"));
             }
             assert!(
@@ -8703,7 +8777,7 @@ mod tests {
             .as_mut()
             .expect("a run")
             .state
-            .push_relic("ancient_tea_set")
+            .push_relic("ancient_tea_set", &[])
             .expect("ancient_tea_set");
         // 直接欠上：篝火那条路在 `rd-run` 的判据里逐条验过，这里只验"开战消费"。
         run_slot()

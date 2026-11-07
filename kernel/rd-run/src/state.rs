@@ -214,6 +214,16 @@ pub enum RelicEffect {
     RewardCardDelta(i32, KindMask),
     /// §269：**药水必掉**（`white_beast_statue`）。
     PotionAlwaysDrops,
+    /// §274：`old_coin` —— 拾取时 +300 金币。
+    PickupGold(i32),
+    /// §274：`lee's_waffle` —— 拾取时上限 +7、**回满血**。
+    PickupMaxHealthAndHealAll(i32),
+    /// §274：`war_paint`(Skill) / `whetstone`(Attack) —— 拾取时随机升级 2 张**该类型**的牌。
+    PickupUpgradeRandom(CardKind, u8),
+    /// §274：`pandoras_box` —— 拾取时把牌组里**所有** Strike / Defend 改造掉。
+    PickupTransformStaples,
+    /// §274：`astrolabe` —— 拾取时改造 3 张（玩家选），**然后**升级它们。
+    PickupPick(DeckChange, u8),
     /// §273：`the_courier` —— 商人**补货**（买走一格就补一格）。
     CourierRestock,
     /// §272：`juzu_bracelet` —— `?` 房不再出**普通**战斗（wiki 原文：removes the 10% base chance）。
@@ -557,6 +567,10 @@ pub enum UnknownRoom {
     Treasure = 4,
 }
 
+/// §274：`pandoras_box` 认的两个"基础牌" id（内容的命名，不是运行层编的规则）。
+pub const STAPLE_STRIKE: &str = "strike";
+pub const STAPLE_DEFEND: &str = "defend";
+
 /// §272：`?` 房三条基础概率（wiki 的 10 / 3 / 2，单位 percent）。
 pub const UNKNOWN_MONSTER_BASE: i32 = 10;
 pub const UNKNOWN_SHOP_BASE: i32 = 3;
@@ -644,6 +658,9 @@ pub enum DeckChange {
     Upgrade,
     /// Remove it and grant a random card from the pool.
     Transform,
+    /// §274：`astrolabe` —— 改造，**然后**升级改造出来的那张（wiki："Transform 3 cards, then
+    /// Upgrade them"）。一个变体而不是"两次编辑"：两次编辑之间那张牌可能已经不在原位。
+    TransformAndUpgrade,
 }
 
 impl DeckChange {
@@ -1039,7 +1056,19 @@ pub const fn upgrade_chance_percent(act: u8, ascension: u8) -> i32 {
 ///
 /// 公开是因为 `rd-wasm` 的 `full_pool` 要在**建池子那一趟**把 `PoolCard::upgraded` 填好 ——
 /// 那个答案只有这里能给，别处再拼一次 `id + "+"` 就是第二份真相。
+/// 一张牌的 `+` 行：**先**读 `PoolCard::upgraded`（§270 引入的字段，`full_pool` 在池子那一趟
+/// 就把它解析好了），字段缺席时再按命名约定在池子里找。
+///
+/// ⚠️ 为什么要有两段：`upgraded` 是**新**的、唯一的"这张牌的 `+` 行"；按命名找是给
+/// **只给基础行**的池子（老测试、以及"池子里同时有基础行与 `+` 行"的正式路径）。
+/// 两段都留是妥协，所以顺序写死：字段优先。§274 的第一版只认命名，于是"池子里只有基础行、
+/// `+` 行挂在字段上"那种池子会**静默升不动**（判据报"升级 0 张"）。
 pub fn upgraded_id<'a>(pool: &[PoolCard<'a>], base: &str) -> Option<&'a str> {
+    if let Some(card) = pool.iter().find(|card| card.id == base) {
+        if let Some(upgraded) = card.upgraded {
+            return Some(upgraded);
+        }
+    }
     pool.iter()
         .map(|card| card.id)
         .find(|id| id.len() == base.len() + 1 && id.starts_with(base) && id.ends_with('+'))
@@ -1301,6 +1330,13 @@ pub struct RunState {
     /// §272：`tiny_chest` 已经数到第几个 `?` 房（0..`TINY_CHEST_ROOMS`）。只在这件遗物在
     /// 身上时增长；换幕归零（与三条概率同一个理由）。
     tiny_chest_rooms: u8,
+    /// §274：拾取时**欠着**的牌组编辑（`empty_cage` = 移除 2 张、`astrolabe` = 改造 3 张）。
+    ///
+    /// 为什么不是 `Pending` 的一个变体：`pending` 是"**这个节点**要什么"，一个流程一个写者。
+    /// 而拾取可能发生在**另一个屏开着的时候**（打完 Boss 的奖励屏、宝箱），把 `pending` 抢过来
+    /// 会把那一屏顶掉 —— 玩家会丢掉还没拿的卡牌奖励。所以欠的这几步走自己的通道。
+    pickup_change: Option<DeckChange>,
+    pickup_picks: u8,
     deck: [RunId; MAX_RUN_DECK],
     /// §253：与 `deck` **同下标**的每副本数据（`RunMark::NONE` = 没有）。
     /// 牌组重排时必须跟着搬（`remove_card` 里那条 `deck[i] = deck[i+1]` 旁边的同一行）。
@@ -1440,6 +1476,8 @@ impl RunState {
             tea_set_pending: false,
             unknown_room: UnknownRoom::Unresolved,
             tiny_chest_rooms: 0,
+            pickup_change: None,
+            pickup_picks: 0,
             deck: [RunId::EMPTY; MAX_RUN_DECK],
             marks: [RunMark::NONE; MAX_RUN_DECK],
             deck_len: 0,
@@ -1977,17 +2015,24 @@ impl RunState {
 
     /// Add a relic. Past [`MAX_RUN_RELICS`] this is an error.
     ///
-    /// **The single grant point** (§145): every way a relic can arrive — chest, shop, elite reward,
-    /// an event's `relic:<id>` — goes through here, so three things happen exactly once:
+    /// **The single grant point** (§145): every way a relic can arrive -- chest, shop, elite reward,
+    /// an event's `relic:<id>` -- goes through here, so three things happen exactly once:
     ///
     /// 1. an **unimplemented** relic is refused ([`RunError::UnsupportedRelic`]) while the player is
     ///    still looking at whatever handed it over, instead of at the end of the next fight;
-    /// 2. the relic's **grant-time** effect fires (`MaxHealthUp` / `HealUp`);
+    /// 2. the relic's **grant-time** effect fires (`MaxHealthUp` / `HealUp` / §274 的七件拾取类);
     /// 3. it enters the belt.
     ///
     /// Doing (2) at the call sites instead would mean four copies of "and then Pear's max HP goes
     /// up", which is how a relic comes to work in a chest but not in a shop.
-    pub fn push_relic(&mut self, relic_id: &str) -> Result<(), RunError> {
+    ///
+    /// §274：`pool` 是**卡池**。四件拾取类遗物要看牌的类型（Attack/Skill）与 `+` 行，而运行层
+    /// 只存牌 id —— 与 `push_card(PoolCard)` 同一条纪律：内容的事在有内容的那一层解析。
+    pub fn push_relic(
+        &mut self,
+        relic_id: &str,
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
         let Some(effect) = Self::relic_effect(relic_id) else {
             return Err(RunError::UnsupportedRelic {
                 index: self.relics_len,
@@ -2007,7 +2052,83 @@ impl RunState {
                 // you by the same amount.
                 self.adjust_health(amount);
             }
-            RelicEffect::HealUp(amount) => self.heal_after_combat(amount),
+            // §274：`old_coin` —— +300 金币。走 `adjust_gold`，所以 `ectoplasm` 该拦就拦、
+            // `bloody_idol` 该回血就回血。
+            RelicEffect::PickupGold(amount) => self.adjust_gold(amount),
+            // §274：`lee's_waffle` —— 上限 +7 **且**回满。两件事分开写：`MaxHealthUp` 只回
+            // "和上限一样多"的那 7 点，而 wiki 说的是 "heal **all** of your HP"。
+            RelicEffect::PickupMaxHealthAndHealAll(amount) => {
+                self.health_max += amount;
+                self.health = self.health_max;
+            }
+            // §274：`war_paint` / `whetstone` —— 随机升级 2 张**该类型**的牌。
+            // 只动"有 `+` 行、且还没升级"的牌：升级一张已经升级的牌是空操作，
+            // 而把它的名额用掉就等于"随机升级 2 张"却什么都没发生。
+            RelicEffect::PickupUpgradeRandom(kind, count) => {
+                let mut candidates = [0u8; MAX_RUN_DECK];
+                let mut found = 0usize;
+                for index in 0..self.deck_len as usize {
+                    let card = self.deck[index].as_str();
+                    let Some(facts) = pool.iter().find(|entry| entry.id == card) else {
+                        continue;
+                    };
+                    if facts.kind == kind && facts.upgraded.is_some() {
+                        candidates[found] = index as u8;
+                        found += 1;
+                    }
+                }
+                // 只升级 `count` 张，用**这个**随机流（拾取是奖励的一种）。
+                // ⚠️ 升级目标取 `PoolCard::upgraded`（"这张牌的 `+` 行"），**不是**再调
+                // `upgraded_id` 去池子里按命名找一遍 —— 那个函数要求池子里**同时**有基础行与
+                // `+` 行，而这里传进来的池子只有基础行（`+` 行挂在字段上）。同一个事实两种查法
+                // 必然漂：第一版就是这么写的，判据报"升级了 0 张"。
+                let mut remaining = found;
+                let mut picked = 0u8;
+                let mut pool_indexes = [0u8; MAX_RUN_DECK];
+                for slot in 0..found {
+                    pool_indexes[slot] = candidates[slot];
+                }
+                while picked < count && remaining > 0 {
+                    let roll = self.rng.roll(RunStream::Reward, remaining as u32)? as usize;
+                    let index = pool_indexes[roll] as usize;
+                    let card = self.deck[index].as_str();
+                    if let Some(facts) = pool.iter().find(|entry| entry.id == card) {
+                        if let Some(upgraded) = facts.upgraded {
+                            self.deck[index] =
+                                RunId::new(upgraded).map_err(|_| RunError::BadId)?;
+                        }
+                    }
+                    // 把用掉的那个换到尾部，然后缩小窗口（不放回抽样）。
+                    pool_indexes[roll] = pool_indexes[remaining - 1];
+                    remaining -= 1;
+                    picked += 1;
+                }
+            }
+            // §274：`pandoras_box` —— 把**所有** Strike / Defend 改造掉。
+            // "Strike / Defend" 按**内容 id 的前缀**认（`strike` / `defend`，含它们的 `+` 行）：
+            // 这是内容自己的命名，不是我们在运行层编的规则 —— 所以两条 id 写在这里而不是猜。
+            RelicEffect::PickupTransformStaples => {
+                // ⚠️ **不要**在命中之后 `index += 1`：`remove_at` 会把后面的牌前移到这一格，
+                // 于是前进一格就跳过了刚移过来的那张（第一版就是这样，5 张基础牌只改了 2 张）。
+                // 命中时下标**不动**、重新看同一格；没命中才前进。
+                let mut index = 0usize;
+                while index < self.deck_len as usize {
+                    let card = self.deck[index].as_str().trim_end_matches('+');
+                    if card == STAPLE_STRIKE || card == STAPLE_DEFEND {
+                        self.apply_deck_change(DeckChange::Transform, index, pool)?;
+                    } else {
+                        index += 1;
+                    }
+                }
+            }
+            // §274：`astrolabe` / `empty_cage` —— **欠着**几次牌组编辑，由页面来问。
+            // ⚠️ 这里**不动** `pending`：它属于正在进行的那个流程（奖励屏/宝箱/事件），
+            // 抢过来会把玩家正看着的那一屏顶掉。
+            RelicEffect::PickupPick(change, picks) => {
+                self.pickup_change = Some(change);
+                self.pickup_picks = picks;
+            }
+                        RelicEffect::HealUp(amount) => self.heal_after_combat(amount),
             RelicEffect::EndOfCombatHeal(_)
             | RelicEffect::StartCombatBlock(_)
             | RelicEffect::StartCombatStatus(_, _)
@@ -2052,6 +2173,11 @@ impl RunState {
             | RelicEffect::NoUnknownMonster
             | RelicEffect::TinyChestEveryFourth
             | RelicEffect::CourierRestock
+            | RelicEffect::PickupGold(_)
+            | RelicEffect::PickupMaxHealthAndHealAll(_)
+            | RelicEffect::PickupUpgradeRandom(_, _)
+            | RelicEffect::PickupTransformStaples
+            | RelicEffect::PickupPick(_, _)
             | RelicEffect::RestCardReward => {}
         }
         self.relics[slot] = id;
@@ -2207,6 +2333,11 @@ impl RunState {
                     | RelicEffect::NoUnknownMonster
                     | RelicEffect::TinyChestEveryFourth
                     | RelicEffect::CourierRestock
+                    | RelicEffect::PickupGold(_)
+                    | RelicEffect::PickupMaxHealthAndHealAll(_)
+                    | RelicEffect::PickupUpgradeRandom(_, _)
+                    | RelicEffect::PickupTransformStaples
+                    | RelicEffect::PickupPick(_, _)
                     | RelicEffect::RestCardReward,
                 ) => {}
                 None => {
@@ -2425,6 +2556,14 @@ impl RunState {
             // §272：`?` 房分流的两件（规则在 `roll_unknown_room` 里）。
             "juzu_bracelet" => Some(RelicEffect::NoUnknownMonster),
             "tiny_chest" => Some(RelicEffect::TinyChestEveryFourth),
+            // §274：**拾取类**（全部落在 `push_relic` 的副作用区）。
+            "old_coin" => Some(RelicEffect::PickupGold(300)),
+            "lees_waffle" => Some(RelicEffect::PickupMaxHealthAndHealAll(7)),
+            "war_paint" => Some(RelicEffect::PickupUpgradeRandom(CardKind::Skill, 2)),
+            "whetstone" => Some(RelicEffect::PickupUpgradeRandom(CardKind::Attack, 2)),
+            "pandoras_box" => Some(RelicEffect::PickupTransformStaples),
+            "astrolabe" => Some(RelicEffect::PickupPick(DeckChange::TransformAndUpgrade, 3)),
+            "empty_cage" => Some(RelicEffect::PickupPick(DeckChange::Remove, 2)),
             // `black_blood`：战后回 12（wiki 的 "Replaces Burning Blood" 那一半见 §268.3）。
             "black_blood" => Some(RelicEffect::EndOfCombatHeal(12)),
             // §269：`busted_crown` 的**能量**那一半（无条件挂）。它的另一半（奖励卡数 -2）在
@@ -2601,6 +2740,11 @@ impl RunState {
                     | RelicEffect::NoUnknownMonster
                     | RelicEffect::TinyChestEveryFourth
                     | RelicEffect::CourierRestock
+                    | RelicEffect::PickupGold(_)
+                    | RelicEffect::PickupMaxHealthAndHealAll(_)
+                    | RelicEffect::PickupUpgradeRandom(_, _)
+                    | RelicEffect::PickupTransformStaples
+                    | RelicEffect::PickupPick(_, _)
                     | RelicEffect::RestCardReward,
                 )
                 | None => {}
@@ -3148,6 +3292,11 @@ impl RunState {
                     | RelicEffect::NoUnknownMonster
                     | RelicEffect::TinyChestEveryFourth
                     | RelicEffect::CourierRestock
+                    | RelicEffect::PickupGold(_)
+                    | RelicEffect::PickupMaxHealthAndHealAll(_)
+                    | RelicEffect::PickupUpgradeRandom(_, _)
+                    | RelicEffect::PickupTransformStaples
+                    | RelicEffect::PickupPick(_, _)
                     | RelicEffect::RestCardReward,
                 )
                 | None => {}
@@ -3406,7 +3555,12 @@ impl RunState {
     ///
     /// Chest type and gold follow `inv:§8.3` exactly (50/33/17 by type; a per-type chance of gold;
     /// the ranges 23–27 / 45–55 / 68–82). The relic is drawn from the caller's pool.
-    pub fn open_chest(&mut self, relic_pool: &[PoolRelic<'_>]) -> Result<ChestOutcome, RunError> {
+    /// §274：`card_pool` 是给 `push_relic` 的（拾取类遗物要看牌的类型与 `+` 行）。
+    pub fn open_chest(
+        &mut self,
+        card_pool: &[PoolCard<'_>],
+        relic_pool: &[PoolRelic<'_>],
+    ) -> Result<ChestOutcome, RunError> {
         if self.pending != Pending::Chest {
             return Err(RunError::WrongPhase);
         }
@@ -3434,7 +3588,7 @@ impl RunState {
             if picked.as_str().is_empty() {
                 None
             } else {
-                self.push_relic(picked.as_str())?;
+                self.push_relic(picked.as_str(), card_pool)?;
                 Some(picked)
             }
         };
@@ -3865,6 +4019,7 @@ impl RunState {
     pub fn buy_relic(
         &mut self,
         slot: usize,
+        card_pool: &[PoolCard<'_>],
         relic_pool: &[PoolRelic<'_>],
     ) -> Result<(), RunError> {
         if self.pending != Pending::Shop {
@@ -3885,7 +4040,7 @@ impl RunState {
             });
         }
         // §160: the same commit-point rule as `buy_card` -- the failing half must come first.
-        self.push_relic(offer.id.as_str())?;
+        self.push_relic(offer.id.as_str(), card_pool)?;
         self.adjust_gold(-self.shop_price(offer.price));
         // §270：`maw_bank` "No longer works when you spend any Gold at a shop"。
         self.maw_bank_broken = true;
@@ -4136,6 +4291,36 @@ impl RunState {
     /// Shares [`Self::apply_deck_change`] with the blessing path on purpose: "upgrade a card" is
     /// one behaviour, and a second copy of it is how `strike+` would come to mean one thing in a
     /// blessing and another in an event.
+    /// §274：还欠几次"拾取时的牌组编辑"（0 = 不欠）。
+    #[must_use]
+    pub const fn pickup_picks(&self) -> u8 {
+        self.pickup_picks
+    }
+
+    /// §274：欠的是哪一种编辑（`Remove` = 移除、`Transform` = 改造、`TransformAndUpgrade` = 改造并升级）。
+    #[must_use]
+    pub const fn pickup_change(&self) -> Option<DeckChange> {
+        self.pickup_change
+    }
+
+    /// §274：**兑现一次**拾取时的牌组编辑。
+    ///
+    /// 与 `pick_event_card` 的区别：不走 `pending`、**不 `mark_resolved`** —— 节点是那个流程的事
+    /// （宝箱要 `leave`、奖励屏要 `skip_reward`），这里只还欠着的那一步。
+    pub fn pickup_card(&mut self, index: usize, pool: &[PoolCard<'_>]) -> Result<(), RunError> {
+        let Some(change) = self.pickup_change else {
+            return Err(RunError::WrongPhase);
+        };
+        // ⚠️ 先验后改：`apply_deck_change` 里的拒绝（越界 / Ascender's Bane / 没有 `+` 行）
+        // 必须发生在 `pickup_picks` 递减**之前**，否则一次被拒的点击会白白吃掉一次额度。
+        self.apply_deck_change(change, index, pool)?;
+        self.pickup_picks = self.pickup_picks.saturating_sub(1);
+        if self.pickup_picks == 0 {
+            self.pickup_change = None;
+        }
+        Ok(())
+    }
+
     pub fn pick_event_card(
         &mut self,
         index: usize,
@@ -4173,6 +4358,15 @@ impl RunState {
             DeckChange::Transform => {
                 self.remove_at(index);
                 self.grant_random_cards(1, pool)?;
+            }
+            // §274：`astrolabe` —— 改造**然后**升级。升级目标是"刚被塞进来的那一张"，
+            // 而它一定在牌组**末尾**（`grant_random_cards` 是 append）—— 所以这里按下标取
+            // 那个末尾格，而不是"再找一张同名的"（改造可能给出与别处重名的牌）。
+            DeckChange::TransformAndUpgrade => {
+                self.remove_at(index);
+                self.grant_random_cards(1, pool)?;
+                let last = self.deck_len as usize - 1;
+                self.upgrade_at(last, pool)?;
             }
         }
         Ok(())
@@ -4345,7 +4539,7 @@ impl RunState {
                         index: self.relics_len,
                     });
                 }
-                self.push_relic(id)?;
+                self.push_relic(id, pool)?;
             }
             // Deck edits never reach here: `resolve_event` turns them into a pending pick.
             EventEffect::RemoveCard | EventEffect::UpgradeCard | EventEffect::TransformCard => {
@@ -4505,7 +4699,7 @@ impl RunState {
             let extra = self.pick_relic(RunStream::Reward, relic_pool)?;
             if extra.as_str() != "" {
                 if let Ok(id) = RunId::new(extra.as_str()) {
-                    let _ = self.push_relic(id.as_str());
+                    let _ = self.push_relic(id.as_str(), card_pool);
                 }
             }
         }
@@ -4663,7 +4857,8 @@ impl RunState {
     /// Goes through [`Self::push_relic`] -- the single grant point (§145) -- so a fight-won relic is
     /// validated and its run-level effects fire exactly like a chest's. A full relic list is an
     /// **error**, not a silent drop.
-    pub fn take_relic(&mut self) -> Result<(), RunError> {
+    /// §274：`pool` 给 `push_relic`（拾取类遗物要看牌的类型与 `+` 行）。
+    pub fn take_relic(&mut self, pool: &[PoolCard<'_>]) -> Result<(), RunError> {
         if self.pending != Pending::Reward {
             return Err(RunError::WrongPhase);
         }
@@ -4671,7 +4866,7 @@ impl RunState {
         if id.as_str().is_empty() {
             return Err(RunError::NoSuchRelic);
         }
-        self.push_relic(id.as_str())?;
+        self.push_relic(id.as_str(), pool)?;
         self.reward.relic = RunId::EMPTY;
         Ok(())
     }
@@ -5061,7 +5256,7 @@ mod tests {
 
     /// §273：买**遗物**那一格（补货要池子，所以这里也带一份）。
     fn buy_relic_at(run: &mut RunState, slot: usize) -> Result<(), RunError> {
-        run.buy_relic(slot, &RELICS)
+        run.buy_relic(slot, &TYPED_CARDS, &RELICS)
     }
     use crate::map::NodeKind;
 
@@ -5114,7 +5309,7 @@ mod tests {
                     run.begin_node(&pool, &RELICS).expect("begin the chest");
                     run.check_invariants().expect("a chest is pending");
                     // `open_chest` 自己结算这个节点（之后 `leave` 会是 WrongPhase）。
-                    run.open_chest(&RELICS).expect("open");
+                    run.open_chest(&TYPED_CARDS, &RELICS).expect("open");
                     run.check_invariants().expect("after the chest");
                 }
                 Some(NodeKind::Shop) => {
@@ -5187,8 +5382,8 @@ mod tests {
         let mut run = base();
         // 先让手上真的有两件**不同的**遗物，再把第二件写成第一件 —— 否则会先撞上
         // "len 之后的槽位不是空的"，那一条不是这条测试要问的。
-        run.push_relic("anchor").expect("relic room");
-        run.push_relic("vajra").expect("relic room");
+        run.push_relic("anchor", &TYPED_CARDS).expect("relic room");
+        run.push_relic("vajra", &TYPED_CARDS).expect("relic room");
         run.relics[1] = run.relics[0];
         assert_eq!(
             run.check_invariants(),
@@ -5356,9 +5551,9 @@ mod tests {
         assert_eq!(run.deck().len(), MAX_RUN_DECK);
         // The same for relics, whose bound is smaller than the content pool.
         for _ in 0..MAX_RUN_RELICS {
-            run.push_relic("burning_blood").unwrap();
+            run.push_relic("burning_blood", &TYPED_CARDS).unwrap();
         }
-        assert_eq!(run.push_relic("burning_blood"), Err(RunError::Capacity));
+        assert_eq!(run.push_relic("burning_blood", &TYPED_CARDS), Err(RunError::Capacity));
         // Potions, on a **fresh** run: this one's relic list is already full, so `potion_belt`
         // could not be granted here. The rule is three slots (`inv:§9.3`, §157) even though the
         // storage is five, so that the belt relic can hand out two more.
@@ -5367,7 +5562,7 @@ mod tests {
             potion_run.push_potion("fire_potion").unwrap();
         }
         assert_eq!(potion_run.push_potion("fire_potion"), Err(RunError::Capacity));
-        potion_run.push_relic("potion_belt").expect("the belt");
+        potion_run.push_relic("potion_belt", &TYPED_CARDS).expect("the belt");
         for _ in 0..2 {
             potion_run.push_potion("fire_potion").expect("the belt's two slots");
         }
@@ -5408,7 +5603,7 @@ mod tests {
     #[test]
     fn burning_blood_heals_six_at_the_end_of_a_fight() {
         let mut run = ironclad();
-        run.push_relic("burning_blood").unwrap();
+        run.push_relic("burning_blood", &TYPED_CARDS).unwrap();
         run.adjust_health(-20);
         assert_eq!(run.health(), 60);
         assert_eq!(run.end_of_combat(), Ok(6));
@@ -5434,7 +5629,7 @@ mod tests {
     fn a_relic_with_no_implemented_effect_is_an_error() {
         let mut run = ironclad();
         assert_eq!(
-            run.push_relic("no_such_relic"),
+            run.push_relic("no_such_relic", &TYPED_CARDS),
             Err(RunError::UnsupportedRelic { index: 0 }),
             "一件内核跑不了的遗物必须在**授予那一刻**被拒"
         );
@@ -5463,7 +5658,7 @@ mod tests {
         },
     ];
         let mut run = ironclad();
-        run.push_relic("burning_blood").expect("the starter relic");
+        run.push_relic("burning_blood", &TYPED_CARDS).expect("the starter relic");
 
         // The chest: with only one un-held relic in the pool, every chest must give that one.
         // Repeated because the draw is random -- one iteration would pass by luck.
@@ -5473,7 +5668,7 @@ mod tests {
                 .filter(|entry| !run.relics().iter().any(|held| held.as_str() == entry.id))
                 .count();
             run.pending = Pending::Chest;
-            let outcome = run.open_chest(&pool).expect("a chest");
+            let outcome = run.open_chest(&TYPED_CARDS, &pool).expect("a chest");
             let got = outcome.relic.map(|id| id.as_str().to_string());
             if unheld == 0 {
                 assert_eq!(got, None, "round {round}: nothing left to give ⇒ no relic, not a copy");
@@ -5488,7 +5683,7 @@ mod tests {
 
         // The merchant: same filter, and the shelves only hold un-held relics.
         let mut run = ironclad();
-        run.push_relic("anchor").expect("anchor");
+        run.push_relic("anchor", &TYPED_CARDS).expect("anchor");
         run.stock_shop(&basic_pool(), &pool).expect("a shop");
         for offer in run.shop().relics() {
             assert_ne!(
@@ -5506,7 +5701,7 @@ mod tests {
         let mut run = ironclad();
         let before_max = run.health_max();
         let before = run.health();
-        run.push_relic("pear").expect("pear is implemented");
+        run.push_relic("pear", &TYPED_CARDS).expect("pear is implemented");
         assert_eq!(run.health_max(), before_max + 10);
         assert_eq!(run.health(), before + 10);
 
@@ -5514,17 +5709,17 @@ mod tests {
         let mut run = ironclad();
         run.adjust_health(-20);
         let low = run.health();
-        run.push_relic("blood_vial").expect("blood vial is implemented");
+        run.push_relic("blood_vial", &TYPED_CARDS).expect("blood vial is implemented");
         assert_eq!(run.health(), low + 2);
 
         // 开战时：Anchor 10 Block、Vajra 1 力量，而且**两件一起**是相加不是覆盖。
         let mut run = ironclad();
         assert!(run.combat_bonus().is_empty(), "没有遗物就没有加成");
-        run.push_relic("anchor").expect("anchor");
+        run.push_relic("anchor", &TYPED_CARDS).expect("anchor");
         let block_only = run.combat_bonus();
         assert_eq!(block_only.block, 10);
         assert_eq!(block_only.status_count, 0);
-        run.push_relic("vajra").expect("vajra");
+        run.push_relic("vajra", &TYPED_CARDS).expect("vajra");
         let both = run.combat_bonus();
         assert_eq!(both.block, 10, "两件遗物的加成必须相加");
         assert_eq!(both.status_count, 1);
@@ -5538,7 +5733,7 @@ mod tests {
 
         // §149：`Thread and Needle` 是同一个通用口 —— 4 层 Plated Armor。
         let mut run = ironclad();
-        run.push_relic("thread_and_needle").expect("thread and needle");
+        run.push_relic("thread_and_needle", &TYPED_CARDS).expect("thread and needle");
         let bonus = run.combat_bonus();
         assert_eq!(
             bonus.statuses[0],
@@ -5551,8 +5746,8 @@ mod tests {
 
         // 两件给**同一条**状态的遗物必须合并（不是覆盖）：Vajra + 再一件 1 力量。
         let mut run = ironclad();
-        run.push_relic("vajra").expect("vajra");
-        run.push_relic("vajra").expect("vajra again");
+        run.push_relic("vajra", &TYPED_CARDS).expect("vajra");
+        run.push_relic("vajra", &TYPED_CARDS).expect("vajra again");
         let merged = run.combat_bonus();
         assert_eq!(merged.status_count, 1, "同名状态只有一条");
         assert_eq!(merged.statuses[0].map(|s| s.stacks), Some(2));
@@ -5560,7 +5755,7 @@ mod tests {
         // 结束战斗时：只有 Burning Blood 在这条钩子上，其余四件**什么都不做**（不是"也回血"）。
         let mut run = ironclad();
         for id in ["anchor", "vajra", "pear", "blood_vial"] {
-            run.push_relic(id).expect("implemented");
+            run.push_relic(id, &TYPED_CARDS).expect("implemented");
         }
         run.adjust_health(-30);
         let wounded = run.health();
@@ -5570,7 +5765,7 @@ mod tests {
             "这四件在战斗结束时不回血"
         );
         assert_eq!(run.health(), wounded);
-        run.push_relic("burning_blood").expect("burning blood");
+        run.push_relic("burning_blood", &TYPED_CARDS).expect("burning blood");
         assert_eq!(
             run.end_of_combat(),
             Ok(BURNING_BLOOD_HEAL),
@@ -5607,7 +5802,7 @@ mod tests {
         assert!(!base.lift && !base.toke && !base.dig, "no relic ⇒ no relic option");
 
         // Girya 开 Lift；用过 3 次之后消失（wiki：up to 3 times）。
-        run.push_relic("girya").expect("girya");
+        run.push_relic("girya", &TYPED_CARDS).expect("girya");
         assert!(run.campfire_options().lift, "Girya adds Lift");
         for expected in 1..=3u8 {
             at_campfire(&mut run);
@@ -5619,20 +5814,20 @@ mod tests {
 
         // Peace Pipe 开 Toke（然后它还能删牌）；Shovel 开 Dig。
         let mut run = campfire_run();
-        run.push_relic("peace_pipe").expect("peace pipe");
-        run.push_relic("shovel").expect("shovel");
+        run.push_relic("peace_pipe", &TYPED_CARDS).expect("peace pipe");
+        run.push_relic("shovel", &TYPED_CARDS).expect("shovel");
         let options = run.campfire_options();
         assert!(options.toke && options.dig, "Peace Pipe / Shovel add their options");
 
         // Coffee Dripper 与 Mark of the Bloom 关 Rest；Fusion Hammer 关 Smith。
         for relic in ["coffee_dripper", "mark_of_the_bloom"] {
             let mut run = campfire_run();
-            run.push_relic(relic).expect(relic);
+            run.push_relic(relic, &TYPED_CARDS).expect(relic);
             assert!(!run.campfire_options().rest, "{relic} removes Rest");
             assert!(run.campfire_options().smith, "{relic} does not touch Smith");
         }
         let mut run = campfire_run();
-        run.push_relic("fusion_hammer").expect("fusion hammer");
+        run.push_relic("fusion_hammer", &TYPED_CARDS).expect("fusion hammer");
         assert!(!run.campfire_options().smith, "Fusion Hammer removes Smith");
         assert!(run.campfire_options().rest, "Fusion Hammer does not touch Rest");
     }
@@ -5664,7 +5859,7 @@ mod tests {
     #[test]
     fn toke_removes_a_card_without_charging_for_it() {
         let mut run = campfire_run();
-        run.push_relic("peace_pipe").expect("peace pipe");
+        run.push_relic("peace_pipe", &TYPED_CARDS).expect("peace pipe");
         let gold = run.gold();
         let before = run.deck_len;
         let second_mark = run.marks[1];
@@ -5681,7 +5876,7 @@ mod tests {
     #[test]
     fn dig_only_rolls_common_uncommon_or_rare() {
         let mut run = campfire_run();
-        run.push_relic("shovel").expect("shovel");
+        run.push_relic("shovel", &TYPED_CARDS).expect("shovel");
         let pool = [
             PoolRelic {
                 id: "coffee_dripper",
@@ -5707,7 +5902,7 @@ mod tests {
         for seed in 0..24 {
             let mut run = campfire_run();
             run.seed = seed;
-            run.push_relic("shovel").expect("shovel");
+            run.push_relic("shovel", &TYPED_CARDS).expect("shovel");
             at_campfire(&mut run);
             let dug = run.dig(&pool).expect("dig");
             assert!(
@@ -5722,7 +5917,7 @@ mod tests {
     #[test]
     fn lift_strength_applies_to_every_later_fight_and_stacks_with_vajra() {
         let mut run = campfire_run();
-        run.push_relic("girya").expect("girya");
+        run.push_relic("girya", &TYPED_CARDS).expect("girya");
         for _ in 0..2 {
             at_campfire(&mut run);
             run.lift().expect("lift");
@@ -5739,7 +5934,7 @@ mod tests {
         }
 
         // 与 Vajra 相加，不是覆盖。
-        run.push_relic("vajra").expect("vajra");
+        run.push_relic("vajra", &TYPED_CARDS).expect("vajra");
         let merged = run.combat_bonus();
         assert_eq!(merged.status_count, 1, "one merged Strength entry");
         assert_eq!(merged.statuses[0].map(|s| s.stacks), Some(3), "2 from Girya + 1 from Vajra");
@@ -5772,7 +5967,7 @@ mod tests {
 
         // 有遗物：停在奖励屏，三张卡，节点**未**结算。
         let mut run = campfire_run();
-        run.push_relic("dream_catcher").expect("dream catcher");
+        run.push_relic("dream_catcher", &TYPED_CARDS).expect("dream catcher");
         at_campfire(&mut run);
         assert!(run.rest().is_ok());
         assert_eq!(run.pending(), Pending::Reward, "Dream Catcher ⇒ a reward screen");
@@ -5813,8 +6008,8 @@ mod tests {
         // ⚠️ 用**没有节点光标**的局：`archive::restore` 会核 "floor 与 node 的行号一致"，
         // 而 `at_campfire` 故意把 node 设成 5（测结算用），两者的前提不同。
         let mut run = ironclad();
-        run.push_relic("girya").expect("girya");
-        run.push_relic("peace_pipe").expect("peace pipe");
+        run.push_relic("girya", &TYPED_CARDS).expect("girya");
+        run.push_relic("peace_pipe", &TYPED_CARDS).expect("peace pipe");
         for _ in 0..3 {
             run.pending = Pending::Rest;
             run.lift().expect("lift");
@@ -5841,6 +6036,182 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §274：`old_coin` / `lee's_waffle` —— 两件"改数字"的拾取。
+    #[test]
+    fn the_pickup_number_relics_change_only_their_own_number() {
+        // ---- `old_coin`：+300 金币。
+        let mut run = ironclad();
+        let gold = run.gold();
+        run.push_relic("old_coin", &TYPED_CARDS).expect("old_coin");
+        assert_eq!(run.gold(), gold + 300, "old_coin: +300 gold on pickup");
+
+        // 与 `ectoplasm` 一起：金币被拦 ⇒ 一分不给（"gain Gold" 那条规则只有一处）。
+        let mut blocked = ironclad();
+        blocked.push_relic("ectoplasm", &TYPED_CARDS).expect("ectoplasm");
+        let gold = blocked.gold();
+        blocked.push_relic("old_coin", &TYPED_CARDS).expect("old_coin");
+        assert_eq!(blocked.gold(), gold, "ectoplasm blocks the coin's gold too");
+
+        // ---- `lee's_waffle`：上限 +7 **且回满**（不是"回 7 点"）。
+        let mut run = ironclad();
+        run.adjust_health(-50);
+        let max_before = run.health_max();
+        assert!(run.health() < max_before - 20, "the hero must be hurt for this to mean anything");
+        run.push_relic("lees_waffle", &TYPED_CARDS).expect("lees_waffle");
+        assert_eq!(run.health_max(), max_before + 7, "lee's_waffle: +7 max HP");
+        assert_eq!(run.health(), run.health_max(), "…and heal **all** of it");
+    }
+
+    /// §274：`war_paint` / `whetstone` —— 随机升级 2 张**自己那一类**的牌。
+    #[test]
+    fn the_upgrade_eggs_upgrade_two_of_their_own_kind() {
+        // 池子里给足"可升的攻击/技能"，并让它们都有 `+` 行。
+        const POOL: [PoolCard<'static>; 6] = [
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("strike+") },
+            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("bash+") },
+            PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("anger+") },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: Some("defend+") },
+            PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: Some("flex+") },
+            PoolCard { id: "clash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("clash+") },
+        ];
+        let attacks = |run: &RunState| {
+            run.deck()
+                .iter()
+                .filter(|id| {
+                    let base = id.as_str().trim_end_matches('+');
+                    POOL.iter().any(|c| c.id == base && c.kind == CardKind::Attack)
+                })
+                .filter(|id| id.as_str().ends_with('+'))
+                .count()
+        };
+        let skills = |run: &RunState| {
+            run.deck()
+                .iter()
+                .filter(|id| {
+                    let base = id.as_str().trim_end_matches('+');
+                    POOL.iter().any(|c| c.id == base && c.kind == CardKind::Skill)
+                })
+                .filter(|id| id.as_str().ends_with('+'))
+                .count()
+        };
+
+        // ---- `whetstone`：攻击牌 +2，**技能一张都不动**。
+        let mut run = RunState::new(11, 80, i32::MAX, &["strike", "strike", "strike", "defend", "defend"]).expect("a run");
+        run.push_relic("whetstone", &POOL).expect("whetstone");
+        assert_eq!(attacks(&run), 2, "whetstone upgrades exactly 2 Attacks");
+        assert_eq!(skills(&run), 0, "…and no Skills (that is war_paint's job)");
+
+        // ---- `war_paint`：技能牌 +2，攻击不动。
+        let mut run = RunState::new(11, 80, i32::MAX, &["strike", "strike", "defend", "defend", "defend"]).expect("a run");
+        run.push_relic("war_paint", &POOL).expect("war_paint");
+        assert_eq!(skills(&run), 2, "war_paint upgrades exactly 2 Skills");
+        assert_eq!(attacks(&run), 0, "…and no Attacks");
+
+        // ---- 只有 1 张可升时只升 1 张（"2 张"不是硬指标）。
+        let mut run = RunState::new(11, 80, i32::MAX, &["strike", "defend", "defend", "defend", "defend"]).expect("a run");
+        run.push_relic("whetstone", &POOL).expect("whetstone");
+        assert_eq!(attacks(&run), 1, "with one Attack the relic upgrades one");
+
+        // ---- 已经升级过的牌**不吃名额**：牌组全是 `strike+` ⇒ 一张都不再加。
+        let mut run = RunState::new(11, 80, i32::MAX, &["strike+", "strike+", "defend"]).expect("a run");
+        let before: Vec<RunId> = run.deck().to_vec();
+        run.push_relic("whetstone", &POOL).expect("whetstone");
+        assert_eq!(run.deck(), &before[..], "nothing to upgrade ⇒ the deck is untouched");
+    }
+
+    /// §274：`pandoras_box` —— 把**所有** Strike / Defend 改造掉，**别的牌不动**。
+    #[test]
+    fn pandoras_box_transforms_every_staple_and_nothing_else() {
+        const POOL: [PoolCard<'static>; 3] = [
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("strike+") },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: Some("defend+") },
+            // 改造的**来源**：内容里能抽出什么。`bash` 不是 Strike/Defend，所以它只会**出现**
+            // 在结果里，不会被当成目标。
+            PoolCard { id: "bash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("bash+") },
+        ];
+        let mut run = RunState::new(7, 80, i32::MAX, &["strike", "strike", "defend", "bash", "clash"]).expect("a run");
+        run.push_relic("pandoras_box", &POOL).expect("pandoras_box");
+        let deck: Vec<&str> = run.deck().iter().map(RunId::as_str).collect();
+        assert_eq!(deck.len(), 5, "transform replaces, it does not remove");
+        assert!(
+            !deck.iter().any(|id| *id == "strike" || *id == "defend"),
+            "every Strike and Defend is gone: {deck:?}"
+        );
+        // 两张**非基础牌**（`bash` / `clash`）原样留着。`bash` 同时也是改造的来源，
+        // 所以"留着的那张"与"改造出来的"会重名 —— 数**个数**而不是"存在"。
+        assert_eq!(
+            deck.iter().filter(|id| **id == "clash").count(),
+            1,
+            "a non-staple card is not transformed: {deck:?}"
+        );
+        assert!(
+            deck.iter().filter(|id| **id == "bash").count() >= 1,
+            "the original bash survives (the transforms may add more): {deck:?}"
+        );
+    }
+
+    /// §274：`astrolabe` / `empty_cage` —— 它们**欠着**牌组编辑，而不抢 `pending`。
+    ///
+    /// 这条判据钉的正是"叠在奖励屏上"的能力：拾取发生在 `Pending::Reward` 里，
+    /// 拿完遗物之后那一屏必须**还在**（否则玩家会丢掉还没拿的卡牌奖励）。
+    #[test]
+    fn the_pickup_picks_do_not_take_over_the_screen() {
+        // ---- `empty_cage`：欠 2 次"移除"。
+        let mut run = ironclad();
+        run.pending = Pending::Reward;
+        run.push_relic("empty_cage", &TYPED_CARDS).expect("empty_cage");
+        assert_eq!(run.pending(), Pending::Reward, "the screen behind must survive");
+        assert_eq!(run.pickup_picks(), 2, "empty_cage owes two removals");
+        assert_eq!(run.pickup_change(), Some(DeckChange::Remove));
+
+        let before = run.deck().len();
+        run.pickup_card(0, &TYPED_CARDS).expect("first removal");
+        assert_eq!(run.deck().len(), before - 1);
+        assert_eq!(run.pickup_picks(), 1, "one left");
+        assert_eq!(run.pending(), Pending::Reward, "still not touching the screen");
+        run.pickup_card(0, &TYPED_CARDS).expect("second removal");
+        assert_eq!(run.deck().len(), before - 2);
+        assert_eq!(run.pickup_picks(), 0, "done");
+        assert_eq!(run.pickup_change(), None, "and the debt is cleared");
+        assert_eq!(run.pending(), Pending::Reward, "the reward screen is still there");
+
+        // 拒绝不消耗额度：越界的下标不许把 `pickup_picks` 吃掉。
+        let mut run = ironclad();
+        run.push_relic("empty_cage", &TYPED_CARDS).expect("empty_cage");
+        assert_eq!(
+            run.pickup_card(99, &TYPED_CARDS),
+            Err(RunError::BadCard(99u8)),
+            "an out-of-range pick is refused"
+        );
+        assert_eq!(run.pickup_picks(), 2, "a refused pick must not spend the debt");
+
+        // ---- `astrolabe`：欠 3 次"改造并升级"，而且**改造出来的那张被升级了**。
+        const POOL: [PoolCard<'static>; 4] = [
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("strike+") },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: Some("defend+") },
+            PoolCard { id: "bash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("bash+") },
+            PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: Some("flex+") },
+        ];
+        let mut run = RunState::new(7, 80, i32::MAX, &["strike", "strike", "defend", "bash", "clash"]).expect("a run");
+        run.push_relic("astrolabe", &POOL).expect("astrolabe");
+        assert_eq!(run.pickup_picks(), 3, "astrolabe owes three transforms");
+        assert_eq!(run.pickup_change(), Some(DeckChange::TransformAndUpgrade));
+        for _ in 0..3 {
+            run.pickup_card(0, &POOL).expect("transform and upgrade");
+        }
+        assert_eq!(run.pickup_picks(), 0);
+        let deck: Vec<&str> = run.deck().iter().map(RunId::as_str).collect();
+        assert_eq!(deck.len(), 5, "transform keeps the count");
+        // 3 张被改造过 ⇒ 牌组里现在有 **3 张升级版**（改造出来的那些）。
+        // ⚠️ 不按下标断言：`pickup_card(0)` 每次都改第 0 格，改造出来的牌可能落回同一格，
+        // 所以"哪三张"是随机的 —— 只数**张数**才是这条规则说的话。
+        assert_eq!(
+            deck.iter().filter(|id| id.ends_with('+')).count(),
+            3,
+            "astrolabe upgrades what it transforms: {deck:?}"
+        );
     }
 
     /// §273：`?` 房掷出商人 ⇒ 与商店节点**同一条**进门路径（`meal_ticket` 也要付）。
@@ -5891,7 +6262,7 @@ mod tests {
         let mut seed = 0;
         while seed < 4000 {
             let mut run = RunState::new(seed, 80, i32::MAX, &["strike"; 10]).expect("a run");
-            run.push_relic("meal_ticket").expect("meal_ticket");
+            run.push_relic("meal_ticket", &TYPED_CARDS).expect("meal_ticket");
             run.adjust_health(-30);
             if !walk_to(&mut run, NodeKind::Unknown) {
                 seed += 1;
@@ -5914,7 +6285,7 @@ mod tests {
 
         // 而普通商店节点仍然照旧（同一个 `enter_shop` 的另一个调用方）。
         let mut run = RunState::new(7, 80, i32::MAX, &["strike"; 10]).expect("a run");
-        run.push_relic("meal_ticket").expect("meal_ticket");
+        run.push_relic("meal_ticket", &TYPED_CARDS).expect("meal_ticket");
         run.adjust_health(-30);
         let before = run.health();
         run.pending = Pending::Shop;
@@ -5930,15 +6301,15 @@ mod tests {
         // ---- 折扣：20%（与 `membership_card` 的 50% 相加）。
         let mut run = ironclad();
         assert_eq!(run.shop_price(100), 100);
-        run.push_relic("the_courier").expect("the_courier");
+        run.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
         assert_eq!(run.shop_price(100), 80, "the_courier: 20% off");
-        run.push_relic("membership_card").expect("membership_card");
+        run.push_relic("membership_card", &TYPED_CARDS).expect("membership_card");
         assert_eq!(run.shop_price(100), 30, "the two discounts add up (50 + 20)");
 
         // ---- 补货：**货架不缩水**。这才是 wiki 那句 "The Merchant restocks …" 的意思 ——
         // 它没说"一定给你另一张"（同一张回来是允许的），所以判据不钉那件事。
         let mut run = ironclad();
-        run.push_relic("the_courier").expect("the_courier");
+        run.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
         run.adjust_gold(2000);
         run.pending = Pending::Shop;
         run.enter_shop(&SHOP_CARDS, &RELICS).expect("enter the shop");
@@ -5987,7 +6358,7 @@ mod tests {
 
         // ---- 遗物那一半：买走之后那一格也补货（池子里还有 `burning_blood` 之外的就补）。
         let mut run = ironclad();
-        run.push_relic("the_courier").expect("the_courier");
+        run.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
         run.adjust_gold(2000);
         run.pending = Pending::Shop;
         run.enter_shop(&TYPED_CARDS, &RELICS).expect("enter the shop");
@@ -6022,7 +6393,7 @@ mod tests {
         assert_eq!(run.unknown_room_odds()[0], 60, "monster: 10 × (1 + 5)");
 
         // `juzu_bracelet` 把怪物那条按成 0（Event 因此变成 95% 的基础档）。
-        run.push_relic("juzu_bracelet").expect("juzu_bracelet");
+        run.push_relic("juzu_bracelet", &TYPED_CARDS).expect("juzu_bracelet");
         assert_eq!(run.unknown_room_odds()[0], 0, "juzu_bracelet removes the monster band");
         assert_eq!(run.unknown_room_odds()[1], 15, "…and leaves the shop band alone");
     }
@@ -6075,7 +6446,7 @@ mod tests {
     fn tiny_chest_and_juzu_bracelet_change_the_roll() {
         // ---- `tiny_chest`：四次里**必有一次**宝箱，而且是第 4 次。
         let mut run = ironclad();
-        run.push_relic("tiny_chest").expect("tiny_chest");
+        run.push_relic("tiny_chest", &TYPED_CARDS).expect("tiny_chest");
         let mut treasure_at = None;
         for index in 1..=4u8 {
             let outcome = run.roll_unknown_room().expect("a roll");
@@ -6101,7 +6472,7 @@ mod tests {
 
         // ---- `juzu_bracelet`：怪物**永不**出现，哪怕怪物计数已经堆到必然会出的地步。
         let mut run = ironclad();
-        run.push_relic("juzu_bracelet").expect("juzu_bracelet");
+        run.push_relic("juzu_bracelet", &TYPED_CARDS).expect("juzu_bracelet");
         run.unknown = [9, 0, 0]; // 没有 juzu 时这里已经 100% 怪物
         for seed in 0..200 {
             run.unknown[0] = 9;
@@ -6193,7 +6564,7 @@ mod tests {
     fn the_node_relics_pay_on_the_right_kind_of_room() {
         // ---- `meal_ticket`：进商店回 15（**进门就付**，不是买了东西才付）。
         let mut run = ironclad();
-        run.push_relic("meal_ticket").expect("meal_ticket");
+        run.push_relic("meal_ticket", &TYPED_CARDS).expect("meal_ticket");
         if walk_to(&mut run, crate::map::NodeKind::Shop) {
             run.adjust_health(-30);
             let hp = run.health();
@@ -6204,7 +6575,7 @@ mod tests {
 
         // 反面：同一件遗物进**别的**房间不回血。
         let mut run = ironclad();
-        run.push_relic("meal_ticket").expect("meal_ticket");
+        run.push_relic("meal_ticket", &TYPED_CARDS).expect("meal_ticket");
         if walk_to(&mut run, crate::map::NodeKind::Rest) {
             run.adjust_health(-30);
             let hp = run.health();
@@ -6214,7 +6585,7 @@ mod tests {
 
         // ---- `ssserpent_head`：进 `?` 房 +50 金。
         let mut run = ironclad();
-        run.push_relic("ssserpent_head").expect("ssserpent_head");
+        run.push_relic("ssserpent_head", &TYPED_CARDS).expect("ssserpent_head");
         if walk_to(&mut run, crate::map::NodeKind::Unknown) {
             let gold = run.gold();
             let kind = run.begin_node(&TYPED_CARDS, &RELICS).expect("enter the ? room");
@@ -6232,7 +6603,7 @@ mod tests {
 
         // ---- `ancient_tea_set`：进篝火 ⇒ **下一场**战斗开战 +2 能量；打完一场就没了。
         let mut run = ironclad();
-        run.push_relic("ancient_tea_set").expect("ancient_tea_set");
+        run.push_relic("ancient_tea_set", &TYPED_CARDS).expect("ancient_tea_set");
         assert_eq!(
             run.combat_bonus_for(FightKind::Normal).status_count,
             0,
@@ -6271,7 +6642,7 @@ mod tests {
     fn sozu_refuses_potions_at_both_doors() {
         // ---- 门 1：`push_potion` 拒绝（事件/调试入口递过来的也收不了）。
         let mut run = ironclad();
-        run.push_relic("sozu").expect("sozu");
+        run.push_relic("sozu", &TYPED_CARDS).expect("sozu");
         let before = run;
         assert_eq!(
             run.push_potion("fire_potion"),
@@ -6285,7 +6656,7 @@ mod tests {
         // 用一条固定种子把"40% 掉率"的随机流走满：无论掷骰结果如何，`sozu` 之下都没有药水。
         for seed in 0..24 {
             let mut run = RunState::new(seed, 80, i32::MAX, &["strike"; 10]).expect("a run");
-            run.push_relic("sozu").expect("sozu");
+            run.push_relic("sozu", &TYPED_CARDS).expect("sozu");
             run.roll_reward(&TYPED_CARDS, &POTIONS, &RELICS, FightKind::Normal)
                 .expect("a reward");
             assert_eq!(
@@ -6308,7 +6679,7 @@ mod tests {
 
         // ---- `sozu` 的另一半：每回合 +1 能量的载体。
         let mut run = ironclad();
-        run.push_relic("sozu").expect("sozu");
+        run.push_relic("sozu", &TYPED_CARDS).expect("sozu");
         let bonus = run.combat_bonus_for(FightKind::Normal);
         assert_eq!(bonus.status_count, 1, "sozu's energy half is granted");
         assert_eq!(
@@ -6324,7 +6695,7 @@ mod tests {
     fn the_potion_relics_carry_their_own_numbers() {
         use crate::state::RelicEffect;
         let mut run = ironclad();
-        run.push_relic("toy_ornithopter").expect("toy_ornithopter");
+        run.push_relic("toy_ornithopter", &TYPED_CARDS).expect("toy_ornithopter");
         assert_eq!(
             RunState::relic_effect("toy_ornithopter"),
             Some(RelicEffect::PotionUseHeal(5)),
@@ -6339,7 +6710,7 @@ mod tests {
     fn the_add_card_relics_fire_at_the_one_add_point() {
         // ---- `omamori`：挡掉接下来 2 个**诅咒**，第 3 个进牌组；非诅咒完全不挡。
         let mut run = ironclad();
-        run.push_relic("omamori").expect("omamori");
+        run.push_relic("omamori", &TYPED_CARDS).expect("omamori");
         assert_eq!(run.omamori_charges(), OMAMORI_CHARGES, "grant gives 2");
 
         let curse = PoolCard { kind: CardKind::Curse, ..PoolCard::plain("injury") };
@@ -6355,7 +6726,7 @@ mod tests {
 
         // 非诅咒：一次都不能被挡（这条是反面 —— 没有它，`omamori` 会挡住整副牌）。
         let mut run = ironclad();
-        run.push_relic("omamori").expect("omamori");
+        run.push_relic("omamori", &TYPED_CARDS).expect("omamori");
         let before = run.deck().len();
         run.push_card(PoolCard { kind: CardKind::Attack, ..PoolCard::plain("anger") })
             .expect("an attack");
@@ -6364,7 +6735,7 @@ mod tests {
 
         // ---- `darkstone_periapt`：诅咒 ⇒ 上限 +6。**被 `omamori` 挡掉的那个不算**（顺序即规则）。
         let mut run = ironclad();
-        run.push_relic("darkstone_periapt").expect("periapt");
+        run.push_relic("darkstone_periapt", &TYPED_CARDS).expect("periapt");
         let max_before = run.health_max();
         run.push_card(PoolCard { kind: CardKind::Curse, ..PoolCard::plain("injury") })
             .expect("curse");
@@ -6374,8 +6745,8 @@ mod tests {
         assert_eq!(run.health_max(), max_before + 6, "a non-curse does not");
 
         let mut both = ironclad();
-        both.push_relic("omamori").expect("omamori");
-        both.push_relic("darkstone_periapt").expect("periapt");
+        both.push_relic("omamori", &TYPED_CARDS).expect("omamori");
+        both.push_relic("darkstone_periapt", &TYPED_CARDS).expect("periapt");
         let max_before = both.health_max();
         both.push_card(PoolCard { kind: CardKind::Curse, ..PoolCard::plain("injury") })
             .expect("negated curse");
@@ -6393,7 +6764,7 @@ mod tests {
             ("frozen_egg", CardKind::Power, CardKind::Attack),
         ] {
             let mut run = ironclad();
-            run.push_relic(relic).expect("an egg");
+            run.push_relic(relic, &TYPED_CARDS).expect("an egg");
             let matching = PoolCard {
                 id: "bash",
                 rarity: Rarity::Common,
@@ -6424,7 +6795,7 @@ mod tests {
 
         // 没有 `+` 行时保持原样（内容的事，不报错）。
         let mut run = ironclad();
-        run.push_relic("molten_egg").expect("egg");
+        run.push_relic("molten_egg", &TYPED_CARDS).expect("egg");
         let before = run.deck().len();
         run.push_card(PoolCard {
             id: "bash",
@@ -6437,7 +6808,7 @@ mod tests {
 
         // ---- `ceramic_fish`：加任何牌 +9 金币。
         let mut run = ironclad();
-        run.push_relic("ceramic_fish").expect("fish");
+        run.push_relic("ceramic_fish", &TYPED_CARDS).expect("fish");
         let gold_before = run.gold();
         run.push_card(PoolCard { kind: CardKind::Skill, ..PoolCard::plain("defend") })
             .expect("a skill");
@@ -6445,8 +6816,8 @@ mod tests {
 
         // `omamori` 挡掉的那一张**不给钱**（没进牌组 ⇒ 不算"add a card"）。
         let mut both = ironclad();
-        both.push_relic("omamori").expect("omamori");
-        both.push_relic("ceramic_fish").expect("fish");
+        both.push_relic("omamori", &TYPED_CARDS).expect("omamori");
+        both.push_relic("ceramic_fish", &TYPED_CARDS).expect("fish");
         let gold_before = both.gold();
         both.push_card(PoolCard { kind: CardKind::Curse, ..PoolCard::plain("injury") })
             .expect("negated");
@@ -6458,7 +6829,7 @@ mod tests {
     fn the_gold_and_shop_relics_change_only_their_own_number() {
         // ---- `ectoplasm`：得金币变 0（**花出去**不受影响），且每回合 +1 能量的载体照旧。
         let mut run = ironclad();
-        run.push_relic("ectoplasm").expect("ectoplasm");
+        run.push_relic("ectoplasm", &TYPED_CARDS).expect("ectoplasm");
         let gold = run.gold();
         run.adjust_gold(100);
         assert_eq!(run.gold(), gold, "ectoplasm: you can no longer gain Gold");
@@ -6479,7 +6850,7 @@ mod tests {
 
         // ---- `bloody_idol`：**真的**得到金币才回 5 血。
         let mut run = ironclad();
-        run.push_relic("bloody_idol").expect("idol");
+        run.push_relic("bloody_idol", &TYPED_CARDS).expect("idol");
         run.adjust_health(-10);
         let hp = run.health();
         run.adjust_gold(12);
@@ -6489,8 +6860,8 @@ mod tests {
 
         // 与 `ectoplasm` 一起：金币没涨 ⇒ **不回血**（"gained" 判的是实际差，不是 `delta > 0`）。
         let mut both = ironclad();
-        both.push_relic("bloody_idol").expect("idol");
-        both.push_relic("ectoplasm").expect("ectoplasm");
+        both.push_relic("bloody_idol", &TYPED_CARDS).expect("idol");
+        both.push_relic("ectoplasm", &TYPED_CARDS).expect("ectoplasm");
         both.adjust_health(-10);
         let hp = both.health();
         both.adjust_gold(12);
@@ -6502,7 +6873,7 @@ mod tests {
 
         // ---- `maw_bank`：爬一层 +12；在商店花过钱之后失效。
         let mut run = ironclad();
-        run.push_relic("maw_bank").expect("maw_bank");
+        run.push_relic("maw_bank", &TYPED_CARDS).expect("maw_bank");
         let gold = run.gold();
         let target = run.reachable().get(0).expect("a floor-1 node");
         run.enter_node(target).expect("climb");
@@ -6526,7 +6897,7 @@ mod tests {
         // ---- `smiling_mask`：删牌服务固定 50（`removed_cards` 的 +25/次 对它失效）。
         let mut run = ironclad();
         assert_eq!(run.remove_card_price(), SHOP_REMOVE_BASE, "the first removal");
-        run.push_relic("smiling_mask").expect("mask");
+        run.push_relic("smiling_mask", &TYPED_CARDS).expect("mask");
         assert_eq!(
             run.remove_card_price(),
             SHOP_REMOVE_FLAT,
@@ -6536,7 +6907,7 @@ mod tests {
         // ---- `membership_card`：所有商品半价；**显示价与实付价是同一个函数**。
         let mut run = ironclad();
         assert_eq!(run.shop_price(100), 100, "no discount without the relic");
-        run.push_relic("membership_card").expect("membership_card");
+        run.push_relic("membership_card", &TYPED_CARDS).expect("membership_card");
         assert_eq!(run.shop_price(100), 50, "membership_card: 50% off");
         // ⚠️ `remove_card_price()` **本身已经**含折扣（它内部就调 `shop_price`），所以这里不能再
         // 套一层 —— 第一版套了，得到 18 而不是 37（"半价的半价"）。
@@ -6554,8 +6925,8 @@ mod tests {
     #[test]
     fn a_discounted_purchase_charges_the_discounted_price() {
         let mut run = ironclad();
-        run.push_relic("membership_card").expect("membership_card");
-        run.push_relic("maw_bank").expect("maw_bank");
+        run.push_relic("membership_card", &TYPED_CARDS).expect("membership_card");
+        run.push_relic("maw_bank", &TYPED_CARDS).expect("maw_bank");
         run.adjust_gold(2000);
         run.pending = Pending::Shop;
         run.stock_shop(&TYPED_CARDS, &RELICS).expect("stock the shop");
@@ -6595,7 +6966,7 @@ mod tests {
 
         // ---- Sling of Courage：**只有**精英战 +2 力量。
         let mut run = ironclad();
-        run.push_relic("sling_of_courage").expect("sling");
+        run.push_relic("sling_of_courage", &TYPED_CARDS).expect("sling");
         for (kind, want) in [
             (FightKind::Normal, 0),
             (FightKind::Elite, 1),
@@ -6612,7 +6983,7 @@ mod tests {
 
         // ---- Slaver's Collar：Boss 与精英战各 +1 能量的载体；普通战没有。
         let mut run = ironclad();
-        run.push_relic("slavers_collar").expect("collar");
+        run.push_relic("slavers_collar", &TYPED_CARDS).expect("collar");
         for (kind, want) in [
             (FightKind::Normal, 0),
             (FightKind::Elite, 1),
@@ -6627,14 +6998,14 @@ mod tests {
 
         // ---- Pantograph：**只有** Boss 战开战回 25。
         let mut run = ironclad();
-        run.push_relic("pantograph").expect("pantograph");
+        run.push_relic("pantograph", &TYPED_CARDS).expect("pantograph");
         assert_eq!(run.combat_bonus_for(FightKind::Normal).start_heal, 0);
         assert_eq!(run.combat_bonus_for(FightKind::Elite).start_heal, 0);
         assert_eq!(run.combat_bonus_for(FightKind::Boss).start_heal, 25);
 
         // ---- Preserved Insect：**只有**精英战的敌人血量 -25%。
         let mut run = ironclad();
-        run.push_relic("preserved_insect").expect("insect");
+        run.push_relic("preserved_insect", &TYPED_CARDS).expect("insect");
         assert_eq!(run.enemy_health_bonus_percent(FightKind::Normal), 0);
         assert_eq!(
             run.enemy_health_bonus_percent(FightKind::Elite),
@@ -6652,7 +7023,7 @@ mod tests {
             A_ELITE_HP,
         )
         .expect("an ascended run");
-        ascended.push_relic("preserved_insect").expect("insect");
+        ascended.push_relic("preserved_insect", &TYPED_CARDS).expect("insect");
         // ⚠️ 本内核的升阶血量增量是 `ASCENDED_ENEMY_HEALTH_PERCENT = 10`（不是 wiki 的 +75% 那套
         // 分数），所以 A8 精英是 +10，叠加 `preserved_insect` 的 -25 得 **-15**。
         // 断言写成"两半相加"而不是硬编码某个数：`10 + (-25)`。
@@ -6685,19 +7056,19 @@ mod tests {
 
         // Question Card：任何战斗 +1。
         let mut run = ironclad();
-        run.push_relic("question_card").expect("question_card");
+        run.push_relic("question_card", &TYPED_CARDS).expect("question_card");
         assert_eq!(run.reward_card_count(FightKind::Normal), 4, "question_card: +1");
         assert_eq!(run.reward_card_count(FightKind::Boss), 4, "…and on a boss too");
 
         // Prayer Wheel：**只有**普通怪 +1。
         let mut run = ironclad();
-        run.push_relic("prayer_wheel").expect("prayer_wheel");
+        run.push_relic("prayer_wheel", &TYPED_CARDS).expect("prayer_wheel");
         assert_eq!(run.reward_card_count(FightKind::Normal), 4, "prayer_wheel: normal +1");
         assert_eq!(run.reward_card_count(FightKind::Elite), 3, "…and not on an elite");
 
         // Busted Crown：-2（钳到下限 1）+ 每回合 +1 能量的载体。
         let mut run = ironclad();
-        run.push_relic("busted_crown").expect("busted_crown");
+        run.push_relic("busted_crown", &TYPED_CARDS).expect("busted_crown");
         assert_eq!(run.reward_card_count(FightKind::Normal), 1, "busted_crown: 3 - 2");
         assert_eq!(
             run.combat_bonus_for(FightKind::Normal).status_count,
@@ -6711,8 +7082,8 @@ mod tests {
 
         // 两件一起：+1 -2 = 2。
         let mut run = ironclad();
-        run.push_relic("question_card").expect("q");
-        run.push_relic("busted_crown").expect("b");
+        run.push_relic("question_card", &TYPED_CARDS).expect("q");
+        run.push_relic("busted_crown", &TYPED_CARDS).expect("b");
         assert_eq!(run.reward_card_count(FightKind::Normal), 2, "+1 and -2 make 2");
     }
 
@@ -6728,7 +7099,7 @@ mod tests {
         ];
         for (relic, status_id) in carrier {
             let mut run = ironclad();
-            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            run.push_relic(relic, &TYPED_CARDS).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
             let bonus = run.combat_bonus();
             assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
             let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
@@ -6737,7 +7108,7 @@ mod tests {
 
         // `black_blood` 没有载体：它的效果是战后的 `EndOfCombatHeal(12)`。
         let mut run = ironclad();
-        run.push_relic("black_blood").expect("black_blood");
+        run.push_relic("black_blood", &TYPED_CARDS).expect("black_blood");
         run.adjust_health(-30);
         let before = run.health();
         assert_eq!(run.end_of_combat(), Ok(12), "Black Blood: heals 12 after a fight");
@@ -6768,7 +7139,7 @@ mod tests {
         ];
         for (relic, status_id) in carrier {
             let mut run = ironclad();
-            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            run.push_relic(relic, &TYPED_CARDS).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
             let bonus = run.combat_bonus();
             assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
             let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
@@ -6777,7 +7148,7 @@ mod tests {
 
         // `red_mask` 走**敌人**那张表。
         let mut run = ironclad();
-        run.push_relic("red_mask").expect("red_mask");
+        run.push_relic("red_mask", &TYPED_CARDS).expect("red_mask");
         let bonus = run.combat_bonus();
         assert_eq!(bonus.status_count, 0, "red_mask: nothing for the hero");
         assert_eq!(bonus.enemy_status_count, 1, "red_mask: one enemy status");
@@ -6790,7 +7161,7 @@ mod tests {
         // `mango` 拾取即 +14 Max HP。
         let before = ironclad().health_max();
         let mut after = ironclad();
-        after.push_relic("mango").expect("mango");
+        after.push_relic("mango", &TYPED_CARDS).expect("mango");
         assert_eq!(after.health_max(), before + 14, "mango: +14 max HP on pickup");
     }
 
@@ -6803,7 +7174,7 @@ mod tests {
         ];
         for (relic, status_id) in carrier {
             let mut run = ironclad();
-            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            run.push_relic(relic, &TYPED_CARDS).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
             let bonus = run.combat_bonus();
             assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
             let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
@@ -6822,7 +7193,7 @@ mod tests {
         ];
         for (relic, status_id) in carrier {
             let mut run = ironclad();
-            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            run.push_relic(relic, &TYPED_CARDS).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
             let bonus = run.combat_bonus();
             assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
             let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
@@ -6833,7 +7204,7 @@ mod tests {
 
         // `twisted_funnel` 走**敌人**那张表（§224）。
         let mut run = ironclad();
-        run.push_relic("twisted_funnel").expect("twisted_funnel");
+        run.push_relic("twisted_funnel", &TYPED_CARDS).expect("twisted_funnel");
         let bonus = run.combat_bonus();
         assert_eq!(bonus.status_count, 0, "twisted_funnel: nothing for the hero");
         assert_eq!(bonus.enemy_status_count, 1, "twisted_funnel: one enemy status");
@@ -6852,7 +7223,7 @@ mod tests {
         ];
         for (relic, status_id) in carrier {
             let mut run = ironclad();
-            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            run.push_relic(relic, &TYPED_CARDS).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
             let bonus = run.combat_bonus();
             assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
             let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
@@ -6873,7 +7244,7 @@ mod tests {
         ];
         for (relic, status_id) in carrier {
             let mut run = ironclad();
-            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            run.push_relic(relic, &TYPED_CARDS).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
             let bonus = run.combat_bonus();
             assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
             let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
@@ -6899,7 +7270,7 @@ mod tests {
         ];
         for (relic, status_id) in carrier {
             let mut run = ironclad();
-            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            run.push_relic(relic, &TYPED_CARDS).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
             let bonus = run.combat_bonus();
             assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
             let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
@@ -6923,7 +7294,7 @@ mod tests {
         ];
         for (relic, status_id, stacks) in carrier {
             let mut run = ironclad();
-            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            run.push_relic(relic, &TYPED_CARDS).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
             let bonus = run.combat_bonus();
             assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
             let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
@@ -6934,7 +7305,7 @@ mod tests {
 
         // `du_vu_doll` 落在**另一张表**上：层数是"每张诅咒多少"，不是总数。
         let mut run = ironclad();
-        run.push_relic("du_vu_doll").expect("du_vu_doll");
+        run.push_relic("du_vu_doll", &TYPED_CARDS).expect("du_vu_doll");
         let bonus = run.combat_bonus();
         assert_eq!(bonus.status_count, 0, "du_vu_doll has no fixed-stack status");
         assert_eq!(bonus.per_curse_status_count, 1, "du_vu_doll uses the per-curse table");
@@ -6962,7 +7333,7 @@ mod tests {
         ];
         for (relic, status_id) in expectations {
             let mut run = ironclad();
-            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            run.push_relic(relic, &TYPED_CARDS).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
             let bonus = run.combat_bonus();
             assert_eq!(bonus.status_count, 1, "{relic}: exactly one combat-start status");
             let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
@@ -7119,7 +7490,7 @@ mod tests {
         let gold_before = run.gold();
         assert_eq!(run.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Treasure));
         assert_eq!(run.pending(), Pending::Chest);
-        let outcome = run.open_chest(&RELICS).unwrap();
+        let outcome = run.open_chest(&TYPED_CARDS, &RELICS).unwrap();
         // `inv:§8.3`: the three chest types and their gold ranges.
         let (low, high) = match outcome.chest {
             0 => (23, 27),
@@ -7139,7 +7510,7 @@ mod tests {
         );
         assert_eq!(run.relics().len(), 1);
         assert_eq!(run.pending(), Pending::None);
-        assert_eq!(run.open_chest(&RELICS), Err(RunError::WrongPhase));
+        assert_eq!(run.open_chest(&TYPED_CARDS, &RELICS), Err(RunError::WrongPhase));
     }
 
     #[test]
@@ -7237,7 +7608,7 @@ mod tests {
         assert_eq!(run.pending(), Pending::None);
         // And every settling action refuses when nothing is pending.
         assert_eq!(run.rest(), Err(RunError::WrongPhase));
-        assert_eq!(run.open_chest(&RELICS), Err(RunError::WrongPhase));
+        assert_eq!(run.open_chest(&TYPED_CARDS, &RELICS), Err(RunError::WrongPhase));
         assert_eq!(buy_card_at(&mut run, 0), Err(RunError::WrongPhase));
         assert_eq!(run.leave(), Err(RunError::WrongPhase));
     }
@@ -7429,7 +7800,7 @@ mod tests {
         // "5 with the belt, or 4 on ascension 11 and higher").
         let mut a11 = RunState::new_with_ascension(11, 80, 0, &DECK, 11).expect("A11");
         assert_eq!(a11.potion_slots(), 2);
-        a11.push_relic("potion_belt").expect("the belt");
+        a11.push_relic("potion_belt", &TYPED_CARDS).expect("the belt");
         assert_eq!(a11.potion_slots(), 4);
 
         // A16: everything costs 10% more, including the removal service.
@@ -7668,7 +8039,7 @@ mod tests {
             "the fourth is refused without the belt"
         );
 
-        run.push_relic("potion_belt").expect("the belt");
+        run.push_relic("potion_belt", &TYPED_CARDS).expect("the belt");
         assert_eq!(run.potion_slots(), BASE_POTION_SLOTS + 2, "two more slots");
         assert!(run.push_potion("fire_potion").is_ok(), "the fourth fits now");
         assert!(run.push_potion("fire_potion").is_ok(), "and the fifth");
@@ -7719,7 +8090,7 @@ mod tests {
 
         // Same shape for relics: the array is smaller, so this one is easier to reach.
         while (run.relics_len as usize) < MAX_RUN_RELICS {
-            run.push_relic("anchor").expect("room until the cap");
+            run.push_relic("anchor", &TYPED_CARDS).expect("room until the cap");
         }
         let gold = run.gold();
         let price = run.shop().relics()[0].price;
@@ -7743,7 +8114,7 @@ mod tests {
         for (cards, want) in [(5usize, 3), (8, 3), (9, 3), (10, 6), (14, 6)] {
             let deck: Vec<&str> = vec!["strike"; cards];
             let mut run = RunState::new(71, 80, 0, &deck).expect("a run");
-            run.push_relic("eternal_feather").expect("the feather");
+            run.push_relic("eternal_feather", &TYPED_CARDS).expect("the feather");
             assert_eq!(
                 run.rest_site_entry_heal(),
                 want,
@@ -7753,7 +8124,7 @@ mod tests {
 
         // 触发点是**进入**：Rest 与 Smith 都吃到，而且只吃一次。
         let mut resting = RunState::new(71, 80, 0, &DECK).expect("a run");
-        resting.push_relic("eternal_feather").expect("the feather");
+        resting.push_relic("eternal_feather", &TYPED_CARDS).expect("the feather");
         assert!(walk_to(&mut resting, NodeKind::Rest));
         resting.adjust_health(-40);
         assert_eq!(resting.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Rest));
@@ -7764,7 +8135,7 @@ mod tests {
         assert_eq!(resting.health(), after_entry + 24);
 
         let mut smithing = RunState::new(71, 80, 0, &DECK).expect("a run");
-        smithing.push_relic("eternal_feather").expect("the feather");
+        smithing.push_relic("eternal_feather", &TYPED_CARDS).expect("the feather");
         assert!(walk_to(&mut smithing, NodeKind::Rest));
         smithing.adjust_health(-40);
         assert_eq!(smithing.begin_node(&basic_pool(), &RELICS), Ok(NodeKind::Rest));
@@ -7857,13 +8228,13 @@ mod tests {
     fn the_two_combat_start_carriers_land_on_the_right_side() {
         let mut run = RunState::new(3, 80, 0, &DECK).expect("a run");
         assert!(run.combat_bonus().is_empty(), "no relic, no bonus");
-        run.push_relic("oddly_smooth_stone").expect("the belt takes it");
+        run.push_relic("oddly_smooth_stone", &TYPED_CARDS).expect("the belt takes it");
         let hero_side = run.combat_bonus();
         assert_eq!(hero_side.status_count, 1, "the hero gets one status");
         assert_eq!(hero_side.statuses[0].expect("set").id, "standard.dexterity");
         assert_eq!(hero_side.enemy_status_count, 0, "and the enemies get none");
 
-        run.push_relic("bag_of_marbles").expect("the belt takes it");
+        run.push_relic("bag_of_marbles", &TYPED_CARDS).expect("the belt takes it");
         let both = run.combat_bonus();
         assert_eq!(
             both.status_count, 1,
@@ -8080,7 +8451,7 @@ mod tests {
                         let _ = run.rest();
                     }
                     NodeKind::Treasure => {
-                        let _ = run.open_chest(&RELICS);
+                        let _ = run.open_chest(&TYPED_CARDS, &RELICS);
                     }
                     NodeKind::Shop => {
                         let _ = run.leave();
@@ -8103,7 +8474,7 @@ mod tests {
         // Ten cards = two groups of five.
         let mut run = RunState::new(71, 80, 0, &DECK).expect("a run");
         let base = run.rest_heal();
-        run.push_relic("eternal_feather").expect("the feather");
+        run.push_relic("eternal_feather", &TYPED_CARDS).expect("the feather");
         assert_eq!(run.deck_len, 10, "the fixture deck is ten cards");
         // §160: the feather is **not** part of `rest_heal` any more -- it pays on entering the rest
         // site, so `rest_heal` (the Rest button) is unchanged and the entry heal is its own number.
@@ -8148,7 +8519,7 @@ mod tests {
         assert_eq!(plain.fight_gold_percent(), 100);
 
         let mut idol = RunState::new(81, 80, 0, &DECK).expect("a run");
-        idol.push_relic("golden_idol").expect("the idol");
+        idol.push_relic("golden_idol", &TYPED_CARDS).expect("the idol");
         assert_eq!(idol.fight_gold_percent(), 125);
         idol.roll_reward(&cards, &[], &[], FightKind::Normal)
             .expect("a reward");
@@ -8272,7 +8643,7 @@ mod tests {
             .expect("a normal reward");
         assert_eq!(run.reward_relic(), None, "a normal fight pays no relic");
         assert_eq!(
-            run.take_relic(),
+            run.take_relic(&TYPED_CARDS),
             Err(RunError::NoSuchRelic),
             "and taking one says so instead of doing nothing"
         );
@@ -8287,7 +8658,7 @@ mod tests {
             relics.iter().any(|entry| entry.id == offered),
             "{offered} is not in the pool"
         );
-        run.take_relic().expect("take it");
+        run.take_relic(&TYPED_CARDS).expect("take it");
         assert_eq!(run.relics().len(), before + 1, "the relic list grew");
         assert_eq!(
             run.relics().last().map(|id| id.as_str()),
@@ -8295,12 +8666,12 @@ mod tests {
             "and it is the one that was offered"
         );
         assert_eq!(run.reward_relic(), None, "the row is empty after taking it");
-        assert_eq!(run.take_relic(), Err(RunError::NoSuchRelic), "taking twice fails");
+        assert_eq!(run.take_relic(&TYPED_CARDS), Err(RunError::NoSuchRelic), "taking twice fails");
 
         // A held relic is never offered again: hold all three and the elite pays nothing.
         let mut run = RunState::new(5, 80, 0, &DECK).expect("a run");
         for relic in relics.iter().map(|entry| entry.id) {
-            run.push_relic(relic).expect("grant");
+            run.push_relic(relic, &TYPED_CARDS).expect("grant");
         }
         run.roll_reward(&pool, &[], &relics, FightKind::Elite)
             .expect("an elite reward with every relic held");

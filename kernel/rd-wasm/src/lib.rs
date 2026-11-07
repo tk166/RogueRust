@@ -7128,7 +7128,7 @@ mod card_text_tests {
             // 直接走运行层：把遗物塞进 run，再走 `combat_bonus()` 的敌人表。
             let mut run = rd_run::state::RunState::new(11, 80, i32::MAX, &["strike"; 10])
                 .expect("a run");
-            run.push_relic("twisted_funnel").expect("twisted_funnel");
+            run.push_relic("twisted_funnel", &[]).expect("twisted_funnel");
             let bonus = run.combat_bonus();
             assert_eq!(bonus.enemy_status_count, 1, "one enemy status");
             let entry = bonus.enemy_statuses[0].expect("an entry");

@@ -900,6 +900,10 @@ function runSnapshot() {
     /// §272：`?` 房掷出了什么（0 = 还没掷 / 不是 `?` 房，1 事件 / 2 怪物 / 3 商人 / 4 宝箱）。
     /// 页面上"这一格要不要显示开始战斗"就靠它 —— kind 5 + unknownRoom 2。
     unknownRoom: ex.rd_run_observe(18),
+    /// §274：遗物欠着几次牌组编辑（`empty_cage` = 2、`astrolabe` = 3），以及是哪一种。
+    /// 它们是**独立于 `pending`** 的一对字段 —— 见 `ui_panels.js::describePickupCard`。
+    pickupPicks: ex.rd_run_pickup_picks(),
+    pickupChange: ex.rd_run_pickup_change(),
     resolved: ex.rd_run_node_resolved() === 1,
     actionCount: ex.rd_run_action_count(),
     floor: ex.rd_run_observe(0),
@@ -1044,6 +1048,9 @@ const PANEL_ACTIONS = {
     showDeckPicker("祝福：选一张牌", (index) =>
       act(() => ex.rd_run_pick_blessing_card(index), "祝福选牌")),
   begin_fight: () => beginFight(),
+  /// §274：拾取时的牌组编辑（`pickupPicks > 0` 时面板上只有这一个按钮）。
+  pickup_card: () =>
+    showDeckPicker("选一张牌", (index) => act(() => ex.rd_run_pickup_card(index), "拾取")),
   rest: () => act(() => ex.rd_run_rest(), "休息"),
   // §259: 篝火的另外四个选项。`toke` 复用牌组选择器（与商店删牌同一个 UI），`lift`/`dig`/`recall`
   // 都是一次点击就结算。

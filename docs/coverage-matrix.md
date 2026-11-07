@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 781 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 788 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 40 | 0 | 7 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 73 | 57 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 293 | 163 | 130 | 0 | 281 | 12 | 18 | 0 |
+| 卡牌 | 293 | 164 | 129 | 0 | 281 | 12 | 18 | 0 |
 | 状态 | 124 | 117 | 6 | 1 | 0 | 124 | 1 | 0 |
 | 遭遇 | 35 | 28 | 7 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 遗物 | 108 | 102 | 6 | 0 | 0 | 0 | 0 | 0 |
+| 遗物 | 115 | 109 | 6 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 781 | 567 | 206 | 8 | 458 | 136 | 81 | 0 |
+| **合计** | 788 | 575 | 205 | 8 | 458 | 136 | 81 | 0 |
 
-扫描到的具名测试：**1055** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**1059** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -243,8 +243,8 @@
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
-| anger | yes | warcry_draws_one_then_puts_the_chosen_card_on_top, perfected_strike_counts_the_tagged_cards_in_hand …(+10) | — | wiki:wiki_cards/anger.txt | — | CARD_WIKI+INV_CARDS/warcry_draws_one_then_puts_the_chosen_card_on_top |
-| anger+ | yes | — | CARD_DIFF | wiki:wiki_cards/anger.txt (via anger) | — | INV_CARDS |
+| anger | yes | warcry_draws_one_then_puts_the_chosen_card_on_top, perfected_strike_counts_the_tagged_cards_in_hand …(+11) | — | wiki:wiki_cards/anger.txt | — | CARD_WIKI+INV_CARDS/warcry_draws_one_then_puts_the_chosen_card_on_top |
+| anger+ | yes | the_upgrade_eggs_upgrade_two_of_their_own_kind | — | wiki:wiki_cards/anger.txt (via anger) | — | INV_CARDS/the_upgrade_eggs_upgrade_two_of_their_own_kind |
 | apotheosis | yes | — | CARD_DIFF | wiki:wiki_cards/apotheosis.txt | — | §245/CARD_WIKI+INV_CARDS |
 | apotheosis+ | yes | — | CARD_DIFF | wiki:wiki_cards/apotheosis.txt (via apotheosis) | — | INV_CARDS |
 | apparition | yes | a_special_card_is_known_and_never_put_in_a_reward | — | wiki:wiki_cards/apparition.txt | — | §149/§223/CARD_WIKI+INV_CARDS/a_special_card_is_known_and_never_put_in_a_reward |
@@ -255,8 +255,8 @@
 | bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
-| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+16) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
-| bash+ | yes | the_add_card_relics_fire_at_the_one_add_point | — | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS/the_add_card_relics_fire_at_the_one_add_point |
+| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+19) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
+| bash+ | yes | the_upgrade_eggs_upgrade_two_of_their_own_kind, pandoras_box_transforms_every_staple_and_nothing_else …(+2) | — | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS/the_upgrade_eggs_upgrade_two_of_their_own_kind |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
 | become_almighty | yes | the_wish_options_are_unplayable_by_hand, play_card_from_program_respects_unplayable_unless_told_otherwise …(+1) | — | wiki:wiki_cards/become_almighty.txt | — | §254/§255/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
@@ -290,8 +290,8 @@
 | carnage+ | yes | the_new_red_attacks_do_what_their_pages_say | — | wiki:wiki_cards/carnage.txt (via carnage) | — | INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
 | chrysalis | yes | — | CARD_DIFF | wiki:wiki_cards/chrysalis.txt | — | CARD_WIKI+INV_CARDS |
 | chrysalis+ | yes | — | CARD_DIFF | wiki:wiki_cards/chrysalis.txt (via chrysalis) | — | INV_CARDS |
-| clash | yes | clash_refuses_unless_every_card_in_hand_is_an_attack, a12_halves_the_upgrade_chance_in_acts_two_and_three | — | wiki:wiki_cards/clash.txt | — | §239/CARD_WIKI+INV_CARDS/clash_refuses_unless_every_card_in_hand_is_an_attack |
-| clash+ | yes | clash_refuses_unless_every_card_in_hand_is_an_attack | — | wiki:wiki_cards/clash.txt (via clash) | — | INV_CARDS/clash_refuses_unless_every_card_in_hand_is_an_attack |
+| clash | yes | clash_refuses_unless_every_card_in_hand_is_an_attack, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+3) | — | wiki:wiki_cards/clash.txt | — | §239/CARD_WIKI+INV_CARDS/clash_refuses_unless_every_card_in_hand_is_an_attack |
+| clash+ | yes | clash_refuses_unless_every_card_in_hand_is_an_attack, the_upgrade_eggs_upgrade_two_of_their_own_kind | — | wiki:wiki_cards/clash.txt (via clash) | — | INV_CARDS/clash_refuses_unless_every_card_in_hand_is_an_attack |
 | cleave | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/cleave.txt | — | §221/CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | cleave+ | yes | — | CARD_DIFF | wiki:wiki_cards/cleave.txt (via cleave) | — | INV_CARDS |
 | clothesline | yes | — | CARD_DIFF | wiki:wiki_cards/clothesline.txt | — | CARD_WIKI+INV_CARDS |
@@ -311,8 +311,8 @@
 | decay | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/decay.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+51) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
-| defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+54) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+2) | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | disarm | yes | the_new_red_skills_do_what_their_pages_say | — | wiki:wiki_cards/disarm.txt | — | CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
@@ -354,8 +354,8 @@
 | flame_barrier+ | yes | — | CARD_DIFF | wiki:wiki_cards/flame_barrier.txt (via flame_barrier) | — | INV_CARDS |
 | flash_of_steel | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/flash_of_steel.txt | — | CARD_WIKI+INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
 | flash_of_steel+ | yes | — | CARD_DIFF | wiki:wiki_cards/flash_of_steel.txt (via flash_of_steel) | — | INV_CARDS |
-| flex | yes | flex_gains_strength_that_the_turn_end_takes_back, enlightenment_caps_hand_costs_at_one …(+2) | — | wiki:wiki_cards/flex.txt | — | §230/CARD_WIKI+INV_CARDS/flex_gains_strength_that_the_turn_end_takes_back |
-| flex+ | yes | flex_gains_strength_that_the_turn_end_takes_back | — | wiki:wiki_cards/flex.txt (via flex) | — | INV_CARDS/flex_gains_strength_that_the_turn_end_takes_back |
+| flex | yes | flex_gains_strength_that_the_turn_end_takes_back, enlightenment_caps_hand_costs_at_one …(+4) | — | wiki:wiki_cards/flex.txt | — | §230/CARD_WIKI+INV_CARDS/flex_gains_strength_that_the_turn_end_takes_back |
+| flex+ | yes | flex_gains_strength_that_the_turn_end_takes_back, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+1) | — | wiki:wiki_cards/flex.txt (via flex) | — | INV_CARDS/flex_gains_strength_that_the_turn_end_takes_back |
 | forethought | yes | forethought_puts_the_pick_on_the_bottom_of_the_draw_pile | — | wiki:wiki_cards/forethought.txt | — | CARD_WIKI+INV_CARDS/forethought_puts_the_pick_on_the_bottom_of_the_draw_pile |
 | forethought+ | yes | — | CARD_DIFF | wiki:wiki_cards/forethought.txt (via forethought) | — | INV_CARDS |
 | ghostly_armor | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/ghostly_armor.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
@@ -499,8 +499,8 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+111) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
-| strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+8) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+114) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+11) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
 | sword_boomerang | yes | sword_boomerang_rerolls_a_target_for_each_hit | — | wiki:wiki_cards/sword_boomerang.txt | — | §228/CARD_WIKI+INV_CARDS/sword_boomerang_rerolls_a_target_for_each_hit |
@@ -722,7 +722,7 @@
 | the_ssssserpent | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | wandering_merchant | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 
-## 遗物（108）
+## 遗物（115）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -730,6 +730,7 @@
 | anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+7) | — | — | — | the_same_state_hashes_the_same_and_a_change_moves_it |
 | ancient_tea_set | yes | the_node_relics_pay_on_the_right_kind_of_room, the_tea_set_charge_is_spent_by_the_next_fight | — | — | — | §271/the_node_relics_pay_on_the_right_kind_of_room |
 | art_of_war | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
+| astrolabe | yes | the_pickup_picks_do_not_take_over_the_screen | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
 | bag_of_marbles | yes | the_two_combat_start_carriers_land_on_the_right_side | — | — | — | §221/§224/the_two_combat_start_carriers_land_on_the_right_side |
 | bag_of_preparation | yes | the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |
 | bird_faced_urn | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
@@ -754,7 +755,8 @@
 | dream_catcher | yes | dream_catcher_turns_rest_into_a_card_reward_and_only_with_the_relic | — | — | — | dream_catcher_turns_rest_into_a_card_reward_and_only_with_the_relic |
 | du_vu_doll | yes | the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |
 | duality | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
-| ectoplasm | yes | the_gold_and_shop_relics_change_only_their_own_number | — | — | — | §270/the_gold_and_shop_relics_change_only_their_own_number |
+| ectoplasm | yes | the_pickup_number_relics_change_only_their_own_number, the_gold_and_shop_relics_change_only_their_own_number | — | — | — | §270/the_pickup_number_relics_change_only_their_own_number |
+| empty_cage | yes | the_pickup_picks_do_not_take_over_the_screen | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
 | eternal_feather | yes | the_eternal_feather_pays_per_whole_group_of_five_on_entering, the_new_relics_pay_out | — | — | — | §156/§157/the_eternal_feather_pays_per_whole_group_of_five_on_entering |
 | fossilized_helix | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | frozen_egg | yes | the_add_card_relics_fire_at_the_one_add_point | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |
@@ -772,6 +774,7 @@
 | juzu_bracelet | yes | the_unknown_room_odds_walk_the_wikis_base_values, tiny_chest_and_juzu_bracelet_change_the_roll | — | — | — | §271/§272/the_unknown_room_odds_walk_the_wikis_base_values |
 | kunai | yes | the_every_nth_card_relics_wire_their_own_carrier | — | — | — | §261/§262/the_every_nth_card_relics_wire_their_own_carrier |
 | lantern | yes | the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |
+| lees_waffle | yes | the_pickup_number_relics_change_only_their_own_number | — | — | — | §273/§274/the_pickup_number_relics_change_only_their_own_number |
 | letter_opener | yes | the_every_nth_card_relics_wire_their_own_carrier | — | — | — | §261/§262/the_every_nth_card_relics_wire_their_own_carrier |
 | lizard_tail | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
 | mango | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
@@ -787,9 +790,11 @@
 | nunchaku | yes | the_every_nth_card_relics_wire_their_own_carrier | — | — | — | §261/§262/the_every_nth_card_relics_wire_their_own_carrier |
 | odd_mushroom | yes | the_conditional_modifier_relics_wire_their_own_carrier | — | — | — | §265/§266/the_conditional_modifier_relics_wire_their_own_carrier |
 | oddly_smooth_stone | yes | the_two_combat_start_carriers_land_on_the_right_side | — | — | — | §221/§224/the_two_combat_start_carriers_land_on_the_right_side |
+| old_coin | yes | the_pickup_number_relics_change_only_their_own_number | — | — | — | §273/§274/the_pickup_number_relics_change_only_their_own_number |
 | omamori | yes | the_add_card_relics_fire_at_the_one_add_point | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |
 | orichalcum | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
 | ornamental_fan | yes | the_every_nth_card_relics_wire_their_own_carrier | — | — | — | §261/§262/the_every_nth_card_relics_wire_their_own_carrier |
+| pandoras_box | yes | pandoras_box_transforms_every_staple_and_nothing_else | — | — | — | §273/§274/pandoras_box_transforms_every_staple_and_nothing_else |
 | pantograph | yes | the_kind_gated_relics_only_fire_in_their_own_kinds | — | — | — | §268/§269/the_kind_gated_relics_only_fire_in_their_own_kinds |
 | paper_krane | yes | the_status_parameter_relics_wire_their_own_carrier | — | — | — | §263/§264/the_status_parameter_relics_wire_their_own_carrier |
 | paper_phrog | yes | the_status_parameter_relics_wire_their_own_carrier | — | — | — | §263/§264/the_status_parameter_relics_wire_their_own_carrier |
@@ -833,6 +838,8 @@
 | twisted_funnel | yes | the_status_application_relics_wire_their_own_carrier, the_status_application_relics_change_what_lands_on_the_target | — | — | — | §264/§265/the_status_application_relics_wire_their_own_carrier |
 | unceasing_top | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
 | vajra | yes | every_invariant_names_itself_when_violated, a_relic_you_already_hold_is_not_offered_again …(+5) | — | — | — | every_invariant_names_itself_when_violated |
+| war_paint | yes | the_upgrade_eggs_upgrade_two_of_their_own_kind | — | — | — | §273/§274/the_upgrade_eggs_upgrade_two_of_their_own_kind |
+| whetstone | yes | the_upgrade_eggs_upgrade_two_of_their_own_kind | — | — | — | §273/§274/the_upgrade_eggs_upgrade_two_of_their_own_kind |
 | white_beast_statue | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §269 |
 
 ## 药水（33）

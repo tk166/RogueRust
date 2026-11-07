@@ -46,13 +46,14 @@ pub const MAGIC: &str = "RDA1";
 /// 加字段就**必须**抬版本：旧读法会把新字节当成下一个字段的开头，于是"存档能读、
 /// 但读出来是另一局游戏" —— 那是最坏的一种兼容。抬高之后旧存档是 `ArchiveError::Version`，
 /// 响亮且可解释。
+/// §274：6 → 7（`pickup_change` + `pickup_picks`）。
 /// §272：5 → 6（`unknown_room` + `tiny_chest_rooms`）。
 /// §271：4 → 5（`tea_set_pending`）。
 /// §270：3 → 4（`omamori_charges` + `maw_bank_broken`）。
 ///
 /// 为什么**必须**抬版本而不是"在末尾多写两个字节就行"：旧存档读到末尾会缺字段，
 /// 而"缺字段"与"字段是 0"在字节上无法区分 —— 那正是版本号要回答的问题。
-const VERSION: u8 = 6;
+const VERSION: u8 = 7;
 /// payload 缓冲。实测一局约 300–900 B；4 KB 是"内容翻倍也不会撞上"的余量。
 pub const MAX_PAYLOAD: usize = 4096;
 /// 一行文本的缓冲：base64 是 4/3，RLE 最坏 2×（每个字节都是 0xFF 时）。
@@ -424,6 +425,8 @@ const fn deck_change_to_u8(change: DeckChange) -> u8 {
         DeckChange::Remove => 1,
         DeckChange::Upgrade => 2,
         DeckChange::Transform => 3,
+        // §274
+        DeckChange::TransformAndUpgrade => 4,
     }
 }
 
@@ -432,6 +435,8 @@ fn deck_change_from_u8(value: u8) -> Result<DeckChange, ArchiveError> {
         1 => DeckChange::Remove,
         2 => DeckChange::Upgrade,
         3 => DeckChange::Transform,
+        // §274
+        4 => DeckChange::TransformAndUpgrade,
         _ => return Err(ArchiveError::BadField("deck_change")),
     })
 }
@@ -443,6 +448,8 @@ const fn blessing_to_u8(follow: BlessingFollowUp) -> u8 {
         BlessingFollowUp::Deck(DeckChange::Remove) => 2,
         BlessingFollowUp::Deck(DeckChange::Upgrade) => 3,
         BlessingFollowUp::Deck(DeckChange::Transform) => 4,
+        // §274（恩惠目前不用它，但编码要穷尽）
+        BlessingFollowUp::Deck(DeckChange::TransformAndUpgrade) => 5,
     }
 }
 
@@ -453,6 +460,8 @@ fn blessing_from_u8(value: u8) -> Result<BlessingFollowUp, ArchiveError> {
         2 => BlessingFollowUp::Deck(DeckChange::Remove),
         3 => BlessingFollowUp::Deck(DeckChange::Upgrade),
         4 => BlessingFollowUp::Deck(DeckChange::Transform),
+        // §274
+        5 => BlessingFollowUp::Deck(DeckChange::TransformAndUpgrade),
         _ => return Err(ArchiveError::BadField("blessing_follow")),
     })
 }
@@ -537,6 +546,12 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
     // §272
     writer.byte(state.unknown_room as u8)?;
     writer.byte(state.tiny_chest_rooms)?;
+    // §274：哪一种编辑（0 = 不欠）+ 还欠几次。
+    writer.byte(match state.pickup_change() {
+        None => 0u8,
+        Some(change) => deck_change_to_u8(change),
+    })?;
+    writer.byte(state.pickup_picks())?;
 
     writer.byte(state.deck_len)?;
     for card in state.deck.iter().take(state.deck_len as usize) {
@@ -650,6 +665,9 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     // §272
     let unknown_room = reader.byte()?;
     let tiny_chest_rooms = reader.byte()?;
+    // §274
+    let pickup_change = reader.byte()?;
+    let pickup_picks = reader.byte()?;
 
     let mut deck = [RunId::EMPTY; MAX_RUN_DECK];
     let deck_len = reader.byte()? as usize;
@@ -800,6 +818,13 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
         return Err(ArchiveError::BadField("tiny_chest_rooms"));
     }
     restored.tiny_chest_rooms = tiny_chest_rooms;
+    // §274：0 = 不欠；其余必须与 `deck_change_to_u8` 对得上（读到 5 是**存档坏了**）。
+    restored.pickup_change = if pickup_change == 0 {
+        None
+    } else {
+        Some(deck_change_from_u8(pickup_change)?)
+    };
+    restored.pickup_picks = pickup_picks;
     restored.deck = deck;
     restored.deck_len = deck_len as u8;
     restored.relics = relics;
@@ -922,7 +947,7 @@ mod tests {
         run.adjust_gold(23);
         run.adjust_health(-11);
         run.push_potion("fire_potion").expect("belt room");
-        run.push_relic("burning_blood").expect("relic room");
+        run.push_relic("burning_blood", &[]).expect("relic room");
         run
     }
 

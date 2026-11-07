@@ -286,6 +286,28 @@ const RD_PANELS = (() => {
     };
   }
 
+  /// §274: a relic that owes a deck edit (`empty_cage` 2 removals, `astrolabe` 3 transforms).
+  ///
+  /// **不靠 `pending`**：遗物欠的这几步可以叠在奖励屏/宝箱屏上（打完 Boss 拿 Boss 遗物、还想接着
+  /// 拿卡牌奖励那条路径）。所以判据是 `pickupPicks > 0`，而它在 `describe` **最前面** ——
+  /// 于是它压过后面所有面板，选完自然回到原来那一屏。
+  function describePickupCard(s) {
+    const names = {
+      1: "移除哪一张牌？",
+      2: "升级哪一张牌？",
+      3: "转化哪一张牌？",
+      4: "转化并升级哪一张牌？",
+    };
+    const what = names[s.pickupChange] || "选一张牌";
+    const left = s.pickupPicks > 1 ? `（还要选 ${s.pickupPicks} 张）` : "";
+    return {
+      title: "遗物 · " + what + left,
+      lines: [],
+      rows: [],
+      buttons: [{ id: "pick", label: "选一张牌", action: { kind: "pickup_card" } }],
+    };
+  }
+
   /// §143: an event choice that edits the deck leaves a pick owed (`Pending::EventCard` = 8).
   ///
   /// Its own state rather than reusing the blessing panel: the two are finished by two different
@@ -311,6 +333,9 @@ const RD_PANELS = (() => {
   /// The whole decision, in one place. `snapshot` is plain data (see `runSnapshot()` in
   /// `index.html`); this function is pure and is what `ui_test.mjs` exercises.
   function describe(s) {
+    // §274：遗物欠着的牌组编辑**优先于一切面板** —— 它可能叠在奖励屏/宝箱屏上，
+    // 而"还要选几张"是玩家此刻唯一能做的事。
+    if (s.pickupPicks > 0) return describePickupCard(s);
     if (s.cleared) return describeCleared(s);
     if (s.runOver) return describeOver(s);
     switch (s.pending) {

@@ -77,6 +77,14 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
         .str("tiny_chest=")
         .u32(u32::from(state.tiny_chest_rooms()))
         .str("\n");
+    // §274：拾取时欠着的牌组编辑（`empty_cage` / `astrolabe`）。不进指纹的话，
+    // "还欠 2 次"与"还欠 1 次"会哈希相同 —— 而那正是这两件遗物的全部区别。
+    writer
+        .str("pickup=")
+        .str(deck_change_code(state.pickup_change()))
+        .str("/")
+        .u32(u32::from(state.pickup_picks()))
+        .str("\n");
     writer.str("boss_beaten=").u32(u32::from(state.boss_beaten())).str("\n");
     writer.str("pending=").u32(u32::from(pending_code(state.pending()))).str("\n");
     // `RunId` **就是** `Ident<CAP>`，所以 `event()` 已经是 `&str`（再 `.as_str()` 会掉进
@@ -223,6 +231,10 @@ fn follow_code(follow: Option<crate::state::BlessingFollowUp>) -> &'static str {
         Some(crate::state::BlessingFollowUp::Deck(crate::state::DeckChange::Transform)) => {
             "transform"
         }
+        // §274：`astrolabe` 用得到它（恩惠里目前不用，但映射要穷尽 —— 这是编译器的闸门）。
+        Some(crate::state::BlessingFollowUp::Deck(
+            crate::state::DeckChange::TransformAndUpgrade,
+        )) => "transform_and_upgrade",
     }
 }
 
@@ -232,6 +244,7 @@ fn deck_change_code(change: Option<crate::state::DeckChange>) -> &'static str {
         Some(crate::state::DeckChange::Remove) => "remove",
         Some(crate::state::DeckChange::Upgrade) => "upgrade",
         Some(crate::state::DeckChange::Transform) => "transform",
+        Some(crate::state::DeckChange::TransformAndUpgrade) => "transform_and_upgrade",
     }
 }
 
@@ -290,7 +303,7 @@ mod tests {
         probe.push_card(PoolCard::plain("anger")).expect("deck room");
         probes.push(("deck", probe));
         let mut probe = run();
-        probe.push_relic("anchor").expect("relic room");
+        probe.push_relic("anchor", &[]).expect("relic room");
         probes.push(("relics", probe));
         let mut probe = run();
         probe.push_potion("fire_potion").expect("belt room");
@@ -426,7 +439,7 @@ mod tests {
         let take = relics.len().min(crate::state::MAX_RUN_RELICS);
         for relic in &relics[..take] {
             state
-                .push_relic(relic)
+                .push_relic(relic, &[])
                 .unwrap_or_else(|error| panic!("pushing relic {relic} must work: {error:?}"));
         }
         let slots = usize::from(state.potion_slots());
