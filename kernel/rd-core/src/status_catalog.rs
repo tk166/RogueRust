@@ -657,6 +657,8 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.poison"
             | "standard.stun"
             | "standard.artifact"
+            // §256: `Painful Stabs`（Book of Stabbing）—— 纯触发器状态，规则全在内容里。
+            | "standard.painful_stabs"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

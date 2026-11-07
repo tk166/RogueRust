@@ -11466,6 +11466,144 @@ mod tests {
         assert_eq!(health(&state, "enemy_a"), 500, "X = 0 deals nothing");
     }
 
+    /// §256：`Book of Stabbing` 的 **Painful Stabs** —— 造成**未被格挡**伤害时往你的弃牌堆塞 Wound。
+    ///
+    /// 这条机制之前完全没有（状态、触发器、挂载三样都缺），所以判据要钉住三件事：
+    /// ① 敌人身上**确实**挂着 `standard.painful_stabs`（挂载点：`enc_book_of_stabbing` 的
+    ///    `StartingStatuses`，与名册那行同源）；
+    /// ② 一次**掉血**的攻击 ⇒ 弃牌堆多一张 `wound`；
+    /// ③ 一次**被格挡吃光**的攻击 ⇒ **一张都不多**（wiki 的判据是 "unblocked damage" ——
+    ///    只测 ② 的话，"每次攻击都塞"这种错会绿）。
+    #[test]
+    fn painful_stabs_shuffles_a_wound_only_on_unblocked_damage() {
+        let content = sts_image();
+        let mut host = Host::new(&content);
+        let mut state = arena();
+        // 敌人身上挂 Painful Stabs（与 `enc_book_of_stabbing` 的起始状态一致）。
+        give(&mut state, "enemy_a", status("ps1", "standard.painful_stabs", 1));
+        let wound_in_discard = |state: &CombatState| -> usize {
+            let Some(zones) = state.card_zones(&cid("hero")) else {
+                return 0;
+            };
+            let mut wounds = 0usize;
+            for index in 0..zones.count(CardZone::DiscardPile) {
+                let Some(slot) = zones.slot_at(CardZone::DiscardPile, index) else {
+                    continue;
+                };
+                if let Some(card) = state.card(slot) {
+                    if card.definition_id.as_str() == "wound" {
+                        wounds += 1;
+                    }
+                }
+            }
+            wounds
+        };
+
+        // ② 未被格挡：走真实的伤害管线（源 = 敌人，目标 = 英雄）。
+        let before = wound_in_discard(&state);
+        crate::exec::resolve_effect(
+            &mut state,
+            &crate::state::EffectItem {
+                request: crate::state::EffectRequest::DealDamage {
+                    target: Some(cid("hero")),
+                    amount: 6,
+                    ignores_block: false,
+                    source: Some(cid("enemy_a")),
+                },
+                chain: crate::state::ChainSlot::NONE,
+                owner: None,
+            },
+            Some(&content),
+        )
+        .expect("the hit lands");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(
+            wound_in_discard(&state),
+            before + 1,
+            "unblocked damage ⇒ one Wound in the hero's discard pile"
+        );
+
+        // ③ 被格挡吃光：英雄先攒够格挡，6 点伤害一滴都不掉 ⇒ 不该多 Wound。
+        let before = wound_in_discard(&state);
+        crate::exec::resolve_effect(
+            &mut state,
+            &crate::state::EffectItem {
+                request: crate::state::EffectRequest::GainBlock {
+                    target: Some(cid("hero")),
+                    amount: 20,
+                    from_card: false,
+                },
+                chain: crate::state::ChainSlot::NONE,
+                owner: None,
+            },
+            Some(&content),
+        )
+        .expect("block");
+        crate::exec::resolve_effect(
+            &mut state,
+            &crate::state::EffectItem {
+                request: crate::state::EffectRequest::DealDamage {
+                    target: Some(cid("hero")),
+                    amount: 6,
+                    ignores_block: false,
+                    source: Some(cid("enemy_a")),
+                },
+                chain: crate::state::ChainSlot::NONE,
+                owner: None,
+            },
+            Some(&content),
+        )
+        .expect("the blocked hit lands");
+        host.try_resolve_pending_queues(&mut state).expect("drain");
+        assert_eq!(
+            wound_in_discard(&state),
+            before,
+            "fully blocked ⇒ no Wound (the rule is 'unblocked damage')"
+        );
+    }
+
+    /// §256：五个精英的**数字**与内容对齐（wiki 的 HP）。
+    ///
+    /// 读的是**内容镜像**（`ENCT` 的 `Enemies` 列表），不是跑战斗：这些是"内容抄得对不对"的问题，
+    /// 而一场战斗只看得见其中一两个数。它同时钉住一条**过期结论**：文档里曾写"精英只有 4 个、
+    /// 缺 Lagavulin/Book of Stabbing/Slavers/Nemesis/Reptomancer" —— 这五个早就在池子里了。
+    #[test]
+    fn the_five_elite_encounters_match_the_wiki_numbers() {
+        let content = sts_image();
+        let expectations: &[(&str, &str, i32)] = &[
+            ("enc_lagavulin", "lagavulin", 109),
+            ("enc_book_of_stabbing", "book_of_stabbing", 160),
+            ("enc_slavers", "taskmaster", 54),
+            ("enc_slavers", "slaver_red", 46),
+            ("enc_slavers", "blue_slaver", 46),
+            ("enc_nemesis", "nemesis", 185),
+            ("enc_reptomancer", "reptomancer", 180),
+            ("enc_reptomancer", "dagger", 20),
+        ];
+        for (encounter_id, enemy_id, hp) in expectations {
+            let entry = content
+                .lookup_in(encounter_id, crate::content::EK_ENCOUNTER)
+                .unwrap_or_else(|| panic!("{encounter_id} is in the image"));
+            let list = content
+                .encounter_enemies(u32::from(entry.index))
+                .unwrap_or_else(|error| panic!("{encounter_id}: {error:?}"));
+            let mut found = false;
+            for index in 0..list.len() {
+                let spec = list.get(index).expect("each enemy record decodes");
+                if spec.id().expect("an id") != *enemy_id {
+                    continue;
+                }
+                found = true;
+                assert_eq!(
+                    spec.max_health().expect("a health cell"),
+                    Some(*hp),
+                    "{encounter_id}/{enemy_id}: wiki HP"
+                );
+            }
+            assert!(found, "{encounter_id} contains {enemy_id}");
+        }
+    }
+
     /// §248：`Enlightenment` —— **降到至多 1**（`SetMin`），不是"设成 1"。
     ///
     /// 三段，第二段是这一节存在的全部理由（§247 就是被它挡回的）：

@@ -3841,6 +3841,79 @@
       ],
       "PassiveModifiers": [],
       "Triggers": []
+    },
+    {
+      "Id": "standard.painful_stabs",
+      "PackageId": "sts",
+      "NameKey": "Painful Stabs",
+      "DescriptionKey": "Whenever this enemy deals unblocked damage, shuffle a Wound into your discard pile.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DamageDealt",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "compare",
+                  "value": {
+                    "Left": {
+                      "kind": "eventAmount",
+                      "value": {}
+                    },
+                    "Right": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 0
+                      }
+                    },
+                    "Op": "Greater"
+                  }
+                },
+                "Then": {
+                  "kind": "node.createCardInstance",
+                  "value": {
+                    "CardDefinitionId": {
+                      "value": "wound"
+                    },
+                    "ToZone": "DiscardPile",
+                    "TargetSelector": {
+                      "kind": "sel.eventTarget",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "EventTarget"
+                      }
+                    },
+                    "Count": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 1
+                      }
+                    },
+                    "ResultKey": null
+                  }
+                },
+                "Else": null,
+                "ResultKey": null
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -44085,7 +44158,14 @@
               "value": "book_of_stabbing.big_stab"
             }
           ],
-          "StartingStatuses": [],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.painful_stabs"
+              },
+              "Stacks": 1
+            }
+          ],
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Book of Stabbing",
@@ -44332,14 +44412,7 @@
               "value": "blue_slaver.rake"
             }
           ],
-          "StartingStatuses": [
-            {
-              "StatusDefinitionId": {
-                "value": "standard.time_warp"
-              },
-              "Stacks": 1
-            }
-          ],
+          "StartingStatuses": [],
           "Position": 0,
           "IntentRules": [],
           "DisplayName": "Blue Slaver",
@@ -46145,14 +46218,7 @@
           "value": "blue_slaver.rake"
         }
       ],
-      "StartingStatuses": [
-        {
-          "StatusDefinitionId": {
-            "value": "standard.time_warp"
-          },
-          "Stacks": 1
-        }
-      ],
+      "StartingStatuses": [],
       "IntentRules": [],
       "Tier": "A",
       "InvRef": "inv:§4.1",
@@ -48616,7 +48682,14 @@
           "value": "book_of_stabbing.big_stab"
         }
       ],
-      "StartingStatuses": [],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.painful_stabs"
+          },
+          "Stacks": 1
+        }
+      ],
       "IntentRules": [],
       "Tier": "Elite",
       "InvRef": "https://slaythespire.wiki.gg/wiki/Book_of_Stabbing",

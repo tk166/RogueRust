@@ -17460,3 +17460,62 @@ MarkValue: x.cost}`；升级版把 `x.cost` 换成 `add(x.cost, 1)`。X 费与 `
 
 ⚠️ 两条判据都必须**在打 `Expunger` 之前补能量**：它自己是 1 费，而 X 费那张已经把能量花光了
 （第一版判据就是被 `Unaffordable` 挡下来的 —— 那其实是判据写对了、测试搭错了）。
+
+---
+
+## §256 五个精英：**它们早就在了**，缺的是语义（修掉两处真错 + 一条新机制）
+
+### 256.1 先纠正一条过期结论
+
+文档/交接里一直写着"精英只有 4 个遭遇，缺 `Lagavulin` / `Book of Stabbing` / `Slavers` /
+`Nemesis` / `Reptomancer`"。**这条已经过期很久了**：五个 `ENCT` 行都在，`Monsters` 名册里
+47 个敌人一个不少，`EACT` 130 条动作也都接上了，三张精英池（`Elite` / `Elite2` / `Elite3`）
+各三选一齐全：
+
+```
+Elite  : enc_three_sentries / enc_gremlin_nob / enc_lagavulin
+Elite2 : enc_gremlin_leader / enc_book_of_stabbing / enc_slavers
+Elite3 : enc_giant_head / enc_nemesis / enc_reptomancer
+```
+
+核法是**内容**而不是记忆：`content.encounter_enemies(..)` 逐行读 `ENCT` 的 `Enemies`，
+再比对 wiki 的 HP。这条现在是一条测试（`the_five_elite_encounters_match_the_wiki_numbers`），
+所以下次谁再说"缺这 5 个"，跑一下测试就知道。
+
+### 256.2 修掉的两处真错
+
+| # | 问题 | 依据 |
+|---|---|---|
+| 1 | `enc_slavers` 的 `blue_slaver` 挂着 **`standard.time_warp`** | 那是**时间吞噬者**的能力；蓝皮强盗不该有。wiki 的 A17 规则是"不连续 Rake"，不是时间扭曲 |
+| 2 | `Book of Stabbing` 缺 **Painful Stabs** | wiki：「Whenever you receive unblocked damage from one of its attacks, a Wound is shuffled into your discard pile.」 |
+
+**Painful Stabs 零内核改动**：`DamageDealt` 的 bearer 是**出手方**、`eventTarget` 是**承受者**、
+`eventAmount` 是**实际掉血**（= 未被格挡的部分）—— 三要素齐了，所以整条规则就是
+"`eventAmount > 0` ⇒ 往 `eventTarget` 的弃牌堆造一张 `wound`"。新状态
+`standard.painful_stabs` 挂在 `enc_book_of_stabbing` 的 `StartingStatuses` 上。
+
+判据两侧都测：掉血的攻击 ⇒ 弃牌堆 +1 张 Wound；**被格挡吃光**的同一次攻击 ⇒ 一张都不多
+（wiki 的判据是 "unblocked damage" —— 只测第一侧的话，"每次攻击都塞"这种错会绿）。
+
+### 256.3 一处**差点改错**的地方（值得记）
+
+我先给 `Lagavulin` 加了 `lagavulin.stunned` 动作 + "第 4 回合眩晕"的规则。查 wiki 才发现：
+**只有"被攻击唤醒"才眩晕一回合**；"睡满 3 回合自己醒来"是**直接攻击**（"If Lagavulin wakes up
+on its own, it will begin the fourth turn unstunned"）。
+
+也就是说**原作者的设计是对的**，而且他在 `AiNote` 里写明了理由（"Actions 刻意排成
+`[siphon_soul, attack]`，使第 4 回合正好是 Attack"）。我把那处改动**撤回**了 ——
+覆盖一个带理由的既有决定之前，先去核实理由本身。
+
+### 256.4 仍然没做的（写下来，别假装做了）
+
+* `Lagavulin` 的"**受伤即警醒 + 眩晕一回合**"（wiki 的另一半）。载体是清楚的：
+  给它挂一个带 `DamageTaken` 触发器的状态 ⇒ 置计数器 + 摘掉 `metallicize`，
+  再让 `IntentRules` 在计数器命中时选 `stunned` 动作。**不需要内核改动**，但要做一次
+  "计数器用过就清"的往返，属于独立一小节。
+* `Lagavulin` 的 A3+/A18+ 数值（Attack 20；Siphon Soul -2/-2）与"醒来摘掉 Metallicize"。
+* `Nemesis` 的 AI 约束（"Tri Burn / Scythe 不连续两次、Tri Attack 不连续三次"）。
+* `Reptomancer` 的"最多 4 把匕首"与 A18 一次召 2 把。
+* `Book of Stabbing` 的 A3+/A18+（7×N、24；A18 时 Single Stab 也让 N 递增）。
+* `Blue Slaver` 的 A17"不连续 Rake"。
+* 五个精英的 `AiNote` 里多数已写明各自的偏差 —— 下次动它们先读那一段。

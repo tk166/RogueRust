@@ -102,7 +102,8 @@ INV_COUNTS = {
     # §245: +1 (`standard.no_block_from_cards`).
     # §248: +1 (`standard.cap_cost_at`).
     # §249: +5 (`omega` / `panache` / `sadistic_nature` / `the_bomb` + its damage twin).
-    "statuses": 65,
+    # §256: +1 (`painful_stabs`).
+    "statuses": 66,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1335,6 +1336,8 @@ INV_STATUSES = {
     "standard.no_block_from_cards": [],
     # §248: Enlightenment's "cost at most N" -- the rule is `CostStage::CapCostAt`.
     "standard.cap_cost_at": [],
+    # §256：Book of Stabbing 的 "受伤就塞 Wound"（规则全在触发器里）。
+    "standard.painful_stabs": [],
     "standard.the_bomb_damage": [],
     "standard.the_bomb": [],
     "standard.sadistic_nature": [],
@@ -3212,6 +3215,8 @@ def check_statuses(doc):
                      "standard.demon_form",
                      # §236: Brutality（TurnStarted）与 Rupture（HpLost）。
                      "standard.brutality", "standard.rupture",
+                     # §256
+                     "standard.painful_stabs",
                      # §237: the five trigger-hook powers.
                      "standard.juggernaut", "standard.evolve", "standard.fire_breathing",
                      "standard.dark_embrace", "standard.feel_no_pain",
@@ -3239,6 +3244,8 @@ def check_statuses(doc):
                         # §236
                         "standard.brutality": ["TurnStarted"],
                         "standard.rupture": ["HpLost"],
+                        # §256：Book of Stabbing 的 Painful Stabs（`DamageDealt` 的 bearer 是**出手方**）。
+                        "standard.painful_stabs": ["DamageDealt"],
                         # §237
                         "standard.juggernaut": ["BlockGained"],
                         "standard.evolve": ["CardsDrawn"],
