@@ -22313,6 +22313,746 @@
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
       "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "through_violence",
+      "PackageId": "sts",
+      "NameKey": "through_violence",
+      "DescriptionKey": "Retain. Deal 20 damage. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "colorless"
+        },
+        {
+          "value": "retain"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 20
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": true,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "through_violence+",
+      "PackageId": "sts",
+      "NameKey": "through_violence+",
+      "DescriptionKey": "Retain. Deal 30 damage. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "attack"
+        },
+        {
+          "value": "colorless"
+        },
+        {
+          "value": "retain"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.dealDamage",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.eventTarget",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "EventTarget"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 30
+              }
+            },
+            "IgnoresBlock": false,
+            "Element": null,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": true,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "j.a.x.",
+      "PackageId": "sts",
+      "NameKey": "j.a.x.",
+      "DescriptionKey": "Lose 3 HP. Gain 2 Strength.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.loseHp",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.strength"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "j.a.x.+",
+      "PackageId": "sts",
+      "NameKey": "j.a.x.+",
+      "DescriptionKey": "Lose 3 HP. Gain 3 Strength.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 0
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.loseHp",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.strength"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              }
+            ],
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "safety",
+      "PackageId": "sts",
+      "NameKey": "safety",
+      "DescriptionKey": "Retain. Gain 12 Block. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        },
+        {
+          "value": "retain"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.gainBlock",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 12
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": true,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "safety+",
+      "PackageId": "sts",
+      "NameKey": "safety+",
+      "DescriptionKey": "Retain. Gain 16 Block. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        },
+        {
+          "value": "retain"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.gainBlock",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 16
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": true,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "become_almighty",
+      "PackageId": "sts",
+      "NameKey": "become_almighty",
+      "DescriptionKey": "Gain 3 Strength.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        },
+        {
+          "value": "colorless"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.strength"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 3
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "become_almighty+",
+      "PackageId": "sts",
+      "NameKey": "become_almighty+",
+      "DescriptionKey": "Gain 4 Strength.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        },
+        {
+          "value": "colorless"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.strength"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 4
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "live_forever",
+      "PackageId": "sts",
+      "NameKey": "live_forever",
+      "DescriptionKey": "Gain 6 Plated Armor.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        },
+        {
+          "value": "colorless"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.plated_armor"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 6
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "live_forever+",
+      "PackageId": "sts",
+      "NameKey": "live_forever+",
+      "DescriptionKey": "Gain 8 Plated Armor.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "power"
+        },
+        {
+          "value": "colorless"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.applyStatus",
+          "value": {
+            "TargetSelector": {
+              "kind": "sel.source",
+              "value": {
+                "Cardinality": "ZeroOrOne",
+                "RequiredContextCapabilities": "Source"
+              }
+            },
+            "StatusDefinitionId": {
+              "value": "standard.plated_armor"
+            },
+            "Stacks": {
+              "kind": "const",
+              "value": {
+                "Value": 8
+              }
+            },
+            "DurationTurns": 0,
+            "Charges": 0,
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "fame_and_fortune",
+      "PackageId": "sts",
+      "NameKey": "fame_and_fortune",
+      "DescriptionKey": "Gain 25 Gold.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.gainGold",
+          "value": {
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 25
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
+    },
+    {
+      "Id": "fame_and_fortune+",
+      "PackageId": "sts",
+      "NameKey": "fame_and_fortune+",
+      "DescriptionKey": "Gain 30 Gold.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 1
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "colorless"
+        },
+        {
+          "value": "unplayable"
+        }
+      ],
+      "Rarity": "Special",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.gainGold",
+          "value": {
+            "Amount": {
+              "kind": "const",
+              "value": {
+                "Value": 30
+              }
+            },
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "DiscardPile"
     }
   ],
   "EnemyActions": [

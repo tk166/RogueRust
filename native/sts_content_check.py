@@ -118,6 +118,19 @@ INV_DECK = {"strike": 5, "defend": 4, "bash": 1}   # inv:§2.1
 
 # inv:§3.1 -- the 3 basic cards, as mechanically derived facts.
 INV_CARDS = {
+    # ---- §252：剩下 6 张 / 12 行 ------------------------------------------------------------
+    "through_violence": {"Cost": 0, "Tags": ["attack", "colorless", "retain"], "Facts": [["damage", 20, "event"]]},
+    "through_violence+": {"Cost": 0, "Tags": ["attack", "colorless", "retain"], "Facts": [["damage", 30, "event"]]},
+    "j.a.x.": {"Cost": 0, "Tags": ["skill", "colorless"], "Facts": [["loseHp", 3, "source"], ["status", "standard.strength", 2, "source"]]},
+    "j.a.x.+": {"Cost": 0, "Tags": ["skill", "colorless"], "Facts": [["loseHp", 3, "source"], ["status", "standard.strength", 3, "source"]]},
+    "safety": {"Cost": 1, "Tags": ["skill", "colorless", "retain"], "Facts": [["block", 12, "source"]]},
+    "safety+": {"Cost": 1, "Tags": ["skill", "colorless", "retain"], "Facts": [["block", 16, "source"]]},
+    "become_almighty": {"Cost": 1, "Tags": ["power", "colorless", "unplayable"], "Facts": [["status", "standard.strength", 3, "source"]]},
+    "become_almighty+": {"Cost": 1, "Tags": ["power", "colorless", "unplayable"], "Facts": [["status", "standard.strength", 4, "source"]]},
+    "live_forever": {"Cost": 1, "Tags": ["power", "colorless", "unplayable"], "Facts": [["status", "standard.plated_armor", 6, "source"]]},
+    "live_forever+": {"Cost": 1, "Tags": ["power", "colorless", "unplayable"], "Facts": [["status", "standard.plated_armor", 8, "source"]]},
+    "fame_and_fortune": {"Cost": 1, "Tags": ["skill", "colorless", "unplayable"], "Facts": [["gold", 25]]},
+    "fame_and_fortune+": {"Cost": 1, "Tags": ["skill", "colorless", "unplayable"], "Facts": [["gold", 30]]},
     # ---- §251：A 组（5 张 / 10 行）---------------------------------------------------------
     "bite": {"Cost": 1, "Tags": ["attack", "colorless"], "Facts": [["damage", 7, "event"], ["heal", 2, "source"]]},
     "bite+": {"Cost": 1, "Tags": ["attack", "colorless"], "Facts": [["damage", 8, "event"], ["heal", 3, "source"]]},

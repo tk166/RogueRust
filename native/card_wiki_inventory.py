@@ -325,6 +325,13 @@ FACTS = {
     'shiv': ([('damage', 4, 'event')], [('damage', 6, 'event')]),
     'smite': ([('damage', 12, 'event')], [('damage', 16, 'event')]),
     'beta': ([('card', 'omega', 1, 'DrawPile', 'source')], [('card', 'omega', 1, 'DrawPile', 'source')]),
+    # ---- §252：剩下 6 张 ------------------------------------------------------------------
+    'through_violence': ([('damage', 20, 'event')], [('damage', 30, 'event')]),
+    'j.a.x.': ([('loseHp', 3, 'source'), ('status', 'standard.strength', 2, 'source')], [('loseHp', 3, 'source'), ('status', 'standard.strength', 3, 'source')]),
+    'safety': ([('block', 12, 'source')], [('block', 16, 'source')]),
+    'become_almighty': ([('status', 'standard.strength', 3, 'source')], [('status', 'standard.strength', 4, 'source')]),
+    'live_forever': ([('status', 'standard.plated_armor', 6, 'source')], [('status', 'standard.plated_armor', 8, 'source')]),
+    'fame_and_fortune': ([('gold', 25)], [('gold', 30)]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

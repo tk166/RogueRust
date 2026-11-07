@@ -40,7 +40,14 @@ def parse(card_id):
     """
     path = os.path.join(DIR, card_id + '.txt')
     if not os.path.isfile(path):
-        raise WikiCardError('%s: no dump under native/wiki_cards/ (fetch it first)' % card_id)
+        # §252：`j.a.x.` 的 dump 落在 `j_a_x.txt` —— 文件名里的点会被当成扩展名，
+        # 所以抓取时把点换成了下划线。这里**只做路径别名**，卡 id 本身仍是 `j.a.x.`。
+        # 尾点也要去掉：`j.a.x.` → `j_a_x`（不是 `j_a_x_`）。
+        alias = os.path.join(DIR, card_id.replace('.', '_').rstrip('_') + '.txt')
+        if os.path.isfile(alias):
+            path = alias
+        else:
+            raise WikiCardError('%s: no dump under native/wiki_cards/ (fetch it first)' % card_id)
     text = io.open(path, encoding='utf-8').read()
     if '{{Card Infobox' not in text:
         raise WikiCardError('%s: the dump has no `{{Card Infobox` -- wrong page?' % card_id)
@@ -59,7 +66,11 @@ def parse(card_id):
     # 这里照抄那两个约定，而不是"解析失败就跳过"：跳过会让一张 X 费牌的费用**没人核对**。
     if cost_text == 'X':
         cost = -1
-    elif cost_text in ('Unplayable', '-', ''):
+    elif cost_text in ('Unplayable', '-', '', '?'):
+        # §252：`?` 是第三种写法 —— wiki 用它标"这张牌没有可打出的费用"（`Wish` 的三个选项：
+        # `become_almighty` / `live_forever` / `fame_and_fortune` 的 Infobox 里就是 `Cost = ?`）。
+        # 它与 `Unplayable` **同义**（玩家在手上打不出），所以落同一个 `-2`；不新增一个码位，
+        # 因为下游（`sts_content_check`）只区分"数字 / X / 不可打出"这三类。
         cost = -2
     else:
         try:

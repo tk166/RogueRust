@@ -17218,3 +17218,63 @@ StS 的"随机无色牌"池子从不给它们 —— 一起打上去会让 `jack
 `become_almighty` `live_forever` `fame_and_fortune` `j.a.x.` `safety` `hand_of_greed`?（已做）
 —— 前五张是**观者 / StS2 被 wiki 归到 colorless** 的牌，下一节第一件事是**先判范围**：
 它们算不算本项目（Ironclad + colorless）的范围。判完再决定做不做。
+
+---
+
+## §252 剩下 6 张：`through_violence` / `j.a.x.` / `safety` / Wish 的三个选项
+
+**`in-scope missing` = 0（145/145）** —— 本项目的卡表首次与 wiki 对齐。内容 277 → **289 行**。
+
+| 牌 | 费 | 正文（wiki） | 载体 |
+|---|---|---|---|
+| `through_violence` | 0 | **Retain.** Deal 20 damage. Exhaust.（升级 30） | 纯内容（`retain` + 消耗落区） |
+| `j.a.x.` | 0 | Lose 3 HP. Gain 2 Strength.（升级 3；**不 Exhaust**） | `loseHp` + `applyStatus` |
+| `safety` | 1 | **Retain.** Gain 12 Block. Exhaust.（升级 16） | `gainBlock` |
+| `become_almighty` | 不可打出 | Gain 3 Strength.（升级 4） | `applyStatus(strength)` |
+| `live_forever` | 不可打出 | Gain 6 Plated Armor.（升级 8） | `applyStatus(plated_armor)` |
+| `fame_and_fortune` | 不可打出 | Gain 25 Gold.（升级 30） | `gainGold`（§250） |
+
+**零内核改动**。`j.a.x.` 的 HP 代价走 `node.loseHp`（与 `bloodletting`/`offering` 同一格）而
+**不是**费用资源 —— wiki 的 Synergies 第一条就是 "trigger Rupture"，那条触发器只认 `HpLost`。
+`fame_and_fortune` 的金币走 §250 的 `gainGold`：本场战斗内它什么都不做（wiki: "does nothing for
+the current fight — it funds the run instead"），`fight_end` 才进运行层。
+
+### 252.1 一个**明确写下的缺口**：没有"由别的牌把它打出来"这条通道
+
+`become_almighty` / `live_forever` / `fame_and_fortune` 在 StS 里「只能由 `Wish` 造出来并**由它
+打出**」。内核里唯一的"强制出牌"通道是 `play_top_card_for`（`Havoc`），而它走**同一套受理校验**
+—— `unplayable` 会被拒（那条路自己的注释写着："被拒（例如抽到一张 `unplayable` 的牌）⇒ 放回
+抽牌堆顶"）。`Wish` 绕过的不是 `Havoc` 那条路，而是"玩家从手牌出牌"这件事本身。
+
+所以判据**只钉得住半边**：
+
+* 钉住了：三张在手上都 `Refused(Unplayable)`，且一个字节都不动（状态/金币没变、牌还在手上）；
+* **没钉**："被 `Wish` 打出后效果发生"。它们的节目与数值由内容门逐字比对 wiki
+  （`Gain 3 Strength` / `Gain 6 Plated Armor` / `Gain 25 Gold` 都在 `INV_CARDS` 里），
+  但"谁来触发"要等 `Wish`（观者牌，不在范围）落地。
+
+**没有为了让判据变绿去造一条假的出牌通道** —— 那会把"玩家打不出"这个真属性抹掉。
+将来若真要做 `Wish`，缺的东西是明确的：**一条"以某个来源把它当作被打出"的动作**
+（参考实现里对应 `node.playCard`，我们的节点表里还没有）。
+
+### 252.2 两处工具修正（都是"文件名/约定"层面，不改语义）
+
+1. `wiki_cards.parse` 原先只认 `Cost = X` / `Unplayable` / `-` / 空；这三张的 Infobox 写的是
+   `Cost = ?` ⇒ 现在 `?` 与 `Unplayable` **同义**（落同一个 `-2`）。不新增码位：下游只区分
+   "数字 / X / 不可打出"三类。
+2. `j.a.x.` 的 dump 落在 `j_a_x.txt`（文件系统会把点当扩展名）。解析器加了**路径别名**
+   （`.`→`_` 并去掉尾点），卡 id 本身仍是 `j.a.x.`。
+
+### 252.3 判据（3 条）
+
+`through_violence`+`safety`（20/12、都 Exhaust、**Retain 留住没打出的那张** —— 两张牌只在
+"产出什么"上不同，只测一张会漏掉另一张忘写 `retain`）、`j.a.x.`（两次共掉 6 血、力量 +4、
+**不消耗**、且掉血不吃格挡）、Wish 三选项（上面那半边）。
+
+### 252.4 现在的账
+
+* **卡表 145/145**（`Python native/audit_card_gap.py --offline` 报 `in-scope missing: 0`）。
+* `content-only` 那 7 张（`blur` `buffer` `malaise` `nightmare` `patient_guard` `rip_and_tear`
+  `skewer`）是**我们自己的内容**被 wiki 归到别的颜色 —— 不是缺口。
+* 下一步不是"再加牌"，而是把**已有的不对称**收掉：`Wish`/`playCard` 那条通道、§250.3 的
+  `ritual_dagger` 跨场成长、敌人侧还缺的 5 个精英（`Lagavulin` 等，见 §249.6 的旧表）。
