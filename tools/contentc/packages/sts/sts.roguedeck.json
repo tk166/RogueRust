@@ -6473,6 +6473,113 @@
         }
       ],
       "Triggers": []
+    },
+    {
+      "Id": "standard.red_skull",
+      "PackageId": "sts",
+      "NameKey": "Red Skull",
+      "DescriptionKey": "While your HP is at or below 50%, you have 3 additional Strength.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "DamageDealt",
+          "Operation": "AddFlat",
+          "Magnitude": 3,
+          "Priority": 100,
+          "RestrictDamageKind": "Direct",
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null,
+          "Condition": {
+            "kind": "compare",
+            "value": {
+              "Left": {
+                "kind": "multiply",
+                "value": {
+                  "Left": {
+                    "kind": "currentHealth",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      }
+                    }
+                  },
+                  "Right": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 100
+                    }
+                  }
+                }
+              },
+              "Right": {
+                "kind": "multiply",
+                "value": {
+                  "Left": {
+                    "kind": "maxHealth",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      }
+                    }
+                  },
+                  "Right": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 50
+                    }
+                  }
+                }
+              },
+              "Op": "LessOrEqual"
+            }
+          }
+        }
+      ],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.odd_mushroom",
+      "PackageId": "sts",
+      "NameKey": "Odd Mushroom",
+      "DescriptionKey": "When Vulnerable, take 25% more attack damage rather than 50%.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "DamageReceived",
+          "Operation": "ScalePercent",
+          "Magnitude": 125,
+          "Priority": 300,
+          "RestrictDamageKind": "Direct",
+          "AppliesToStatusId": {
+            "value": "standard.vulnerable"
+          },
+          "RestrictSourceCardTag": null,
+          "OverrideScope": "Self"
+        }
+      ],
+      "Triggers": []
     }
   ],
   "Cards": [
@@ -56676,6 +56783,13 @@
       "CombatRules": null
     },
     {
+      "Id": "odd_mushroom",
+      "DisplayName": "Odd Mushroom",
+      "Rarity": "Event",
+      "RunPrograms": null,
+      "CombatRules": null
+    },
+    {
       "Id": "oddly_smooth_stone",
       "DisplayName": "Oddly Smooth Stone",
       "RunPrograms": null,
@@ -56744,6 +56858,13 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Common"
+    },
+    {
+      "Id": "red_skull",
+      "DisplayName": "Red Skull",
+      "Rarity": "Common",
+      "RunPrograms": null,
+      "CombatRules": null
     },
     {
       "Id": "regal_pillow",

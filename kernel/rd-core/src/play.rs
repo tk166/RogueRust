@@ -2582,6 +2582,8 @@ const NO_SPEC: status_bind::PassiveModifier = status_bind::PassiveModifier {
     restrict_damage_kind: None,
     restrict_source_card_tag: None,
     applies_to_status: None,
+    override_scope: status_bind::OverrideScope::Other,
+    condition: None,
 };
 
 // ===========================================================================

@@ -1844,7 +1844,13 @@ impl<'a> Host<'a> {
         let Some(combatant) = state.combatant(actor) else {
             return base;
         };
-        match exec::fold_turn_start_energy(combatant.statuses(), actor, base, Some(self.content)) {
+        match exec::fold_turn_start_energy(
+            combatant.statuses(),
+            actor,
+            base,
+            Some(self.content),
+            Some(state),
+        ) {
             Ok(count) => count,
             Err(e) => {
                 self.record(HostError::Exec(e));
@@ -1951,7 +1957,13 @@ impl<'a> Host<'a> {
         let Some(combatant) = state.combatant(actor) else {
             return base; // 参考：`TryGetCombatant` 失败 ⇒ 上下文工厂 null ⇒ 不跑
         };
-        match exec::fold_turn_start_draw(combatant.statuses(), actor, base, Some(self.content)) {
+        match exec::fold_turn_start_draw(
+            combatant.statuses(),
+            actor,
+            base,
+            Some(self.content),
+            Some(state),
+        ) {
             Ok(count) => count,
             Err(e) => {
                 self.record(HostError::Exec(e));

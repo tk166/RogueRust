@@ -1816,6 +1816,9 @@ impl RunState {
             "ginger" => Some(RelicEffect::StartCombatStatus("standard.ginger", 1)),
             "turnip" => Some(RelicEffect::StartCombatStatus("standard.turnip", 1)),
             // `twisted_funnel` 走**敌人**那张表（§224 的 `StartCombatStatusOnEnemies`）。
+            // §266：条件修饰器（`red_skull`）+ 同侧改写（`odd_mushroom`）。
+            "red_skull" => Some(RelicEffect::StartCombatStatus("standard.red_skull", 1)),
+            "odd_mushroom" => Some(RelicEffect::StartCombatStatus("standard.odd_mushroom", 1)),
             "twisted_funnel" => {
                 Some(RelicEffect::StartCombatStatusOnEnemies("standard.poison", 4))
             }
@@ -4747,6 +4750,24 @@ mod tests {
         let mut other = restored.clone();
         other.ruby_key = false;
         assert_ne!(crate::hash::run_hash(&other).expect("a hash"), baseline, "ruby_key is in the hash");
+    }
+
+    /// §266：两件的接线。
+    #[test]
+    fn the_conditional_modifier_relics_wire_their_own_carrier() {
+        let carrier = [
+            ("red_skull", "standard.red_skull"),
+            ("odd_mushroom", "standard.odd_mushroom"),
+        ];
+        for (relic, status_id) in carrier {
+            let mut run = ironclad();
+            run.push_relic(relic).unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            let bonus = run.combat_bonus();
+            assert_eq!(bonus.status_count, 1, "{relic}: one combat-start status");
+            let entry = bonus.statuses[0].unwrap_or_else(|| panic!("{relic}: an entry"));
+            assert_eq!(entry.id, status_id, "{relic}: its own carrier");
+            assert_eq!(entry.stacks, 1, "{relic}: one stack");
+        }
     }
 
     /// §265：四件的接线（三件挂英雄、一件挂敌人）。

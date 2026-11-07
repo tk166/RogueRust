@@ -387,6 +387,41 @@ pub struct PassiveModifier {
     /// §264：`AppliesToStatusId` —— 这条 spec **不是一份贡献，而是一条改写**：
     /// "名为这个的状态，在本次折叠里按我给的幅值算"（`paper_phrog`：易伤 150 → 175）。
     pub applies_to_status: Option<crate::state::StatusDefinitionId>,
+    /// §266：`OverrideScope` —— 改写**改的是哪一面**的贡献。
+    ///
+    /// * `Other`（默认）：改**对手身上**那条状态（`paper_phrog`："**敌人**有易伤时吃 75%"）；
+    /// * `Self`：改**自己身上**那条状态（`odd_mushroom`："**你**有易伤时只受 25%"）。
+    ///
+    /// 为什么必须显式说：同一对"持有者 / 目标"里，两条遗物的主语正好相反，而折叠时
+    /// 两边都可能看到这条 spec —— 让它自己说"我改的是谁"比让内核猜可靠。
+    pub override_scope: OverrideScope,
+    /// §266：`Condition` —— 一条**布尔表达式**，为假时这条 spec 整条不生效。
+    ///
+    /// 存的是镜像里的**节点句柄**（`u16`，`NodeRef::id()`），不是解好的值：
+    /// 求值要用折叠那一刻的状态（`red_skull`："**HP ≤ 50%** 时 +3 力量"），
+    /// 而解码发生在很外层、没有状态。
+    pub condition: Option<u16>,
+}
+
+/// §266：改写的**作用面**（见 [`PassiveModifier::override_scope`]）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OverrideScope {
+    /// 改对手身上那条状态（`paper_phrog` / `paper_krane`）。
+    Other,
+    /// 改自己身上那条状态（`odd_mushroom`）。
+    Self_,
+}
+
+impl OverrideScope {
+    /// 镜像里的字面串（`"Self"` / `"Other"`）。缺省是 `Other` —— 与 §264 的语义一致。
+    #[must_use]
+    pub fn from_wire_name(name: &str) -> Option<Self> {
+        match name {
+            "Self" => Some(OverrideScope::Self_),
+            "Other" => Some(OverrideScope::Other),
+            _ => None,
+        }
+    }
 }
 
 /// [`decode`] 的成功结果。**故意不带 `modifiers` 切片** —— 见模块头"为什么接口是暂存区 + 条数"。
@@ -816,7 +851,14 @@ fn decode_spec<'a>(
                 .map_err(|_| BindError::Missing("AppliesToStatusId"))?,
         ),
     };
-    // 剩下两个仍然"表示不了"：`MagnitudeExpression` 要表达式求值器、`RestrictElement` 要元素体系。
+    // §266：`OverrideScope`（字符串，缺省 Other）与 `Condition`（布尔表达式，直接存句柄）。
+    let override_scope = match node.str_field("OverrideScope")? {
+        None => OverrideScope::Other,
+        Some(name) => OverrideScope::from_wire_name(name).ok_or(BindError::Operation)?,
+    };
+    let condition = node.node_field("Condition")?.map(|term| term.id());
+
+    // 剩下两个仍然"表示不了"：`MagnitudeExpression` 要活的幅值求值器、`RestrictElement` 要元素体系。
     for key in ["MagnitudeExpression", "RestrictElement"] {
         if node.node_field(key)?.is_some() {
             return Err(BindError::Unsupported(key));
@@ -836,6 +878,8 @@ fn decode_spec<'a>(
         restrict_damage_kind,
         restrict_source_card_tag,
         applies_to_status,
+        override_scope,
+        condition,
     })
 }
 
@@ -899,6 +943,8 @@ mod tests {
             restrict_damage_kind: None,
             restrict_source_card_tag: None,
             applies_to_status: None,
+            override_scope: OverrideScope::Other,
+            condition: None,
         }; MAX_MODIFIERS];
 
         for id in &ids {
@@ -990,6 +1036,8 @@ mod tests {
             restrict_damage_kind: None,
             restrict_source_card_tag: None,
             applies_to_status: None,
+            override_scope: OverrideScope::Other,
+            condition: None,
         }; MAX_MODIFIERS];
 
         for (id, polarity, pipeline, operation, magnitude, priority, kind) in cases {
@@ -1061,14 +1109,31 @@ mod tests {
                     names.push(content.string(field.name_str()).unwrap_or(""));
                 }
                 names.sort_unstable();
-                assert_eq!(
-                    names, expected,
-                    "spec 对象的字段表必须正好是这 7 个键（op = {}）",
+                // §266：`OverrideScope` / `Condition` 是**按需出现**的两个键（不是每条 spec 都有），
+                // 所以判据从"正好 7 个"改成"**前 7 个必须都在**，允许 §266 的那两个"。
+                // ⚠️ 这条改动本身就是信号：镜像里出现第 8 个键说明内核的解码表要跟上，
+                // 而"允许"必须写成**白名单**，不能写成"不认识的都放过"。
+                let missing: Vec<&str> = expected
+                    .iter()
+                    .copied()
+                    .filter(|key| !names.iter().any(|name| name == key))
+                    .collect();
+                assert!(missing.is_empty(), "spec 对象缺键 {missing:?}（op = {}）", element_term.op);
+                let extra: Vec<&str> = names
+                    .iter()
+                    .copied()
+                    .filter(|name| !expected.iter().any(|key| key == name))
+                    .collect();
+                assert!(
+                    extra.iter().all(|key| *key == "OverrideScope" || *key == "Condition"),
+                    "spec 对象出现了内核不认识的键 {extra:?}（op = {}）",
                     element_term.op
                 );
                 checked += 1;
             }
         }
+        // ⚠️ 这条读的是 **core 镜像**（），不是 sts 包
+        // —— 所以 sts 里 §266 新增的那两条**不在这里**，5 仍然是 5。
         assert_eq!(checked, 5, "实测 5 条 spec");
         // 顺手钉住 term 段的规模没被别的测试改动（同 `ir.rs` 的口径）。
         assert!(content.section(S_TRM).is_some());
@@ -1106,6 +1171,8 @@ mod tests {
             restrict_damage_kind: None,
             restrict_source_card_tag: None,
             applies_to_status: None,
+            override_scope: OverrideScope::Other,
+            condition: None,
         }; MAX_MODIFIERS];
 
         // 一、查不到 ⇒ 响亮。三种成因同一种报法（自造 id / 标准包 id / 拼错）：
@@ -1152,6 +1219,8 @@ mod tests {
             restrict_damage_kind: None,
             restrict_source_card_tag: None,
             applies_to_status: None,
+            override_scope: OverrideScope::Other,
+            condition: None,
         }; 1];
         let decoded = decode(&content, "doubt", &mut one).unwrap().unwrap();
         assert_eq!(decoded.modifier_count, 1);
@@ -1193,6 +1262,8 @@ mod tests {
             restrict_damage_kind: None,
             restrict_source_card_tag: None,
             applies_to_status: None,
+            override_scope: OverrideScope::Other,
+            condition: None,
         }; MAX_MODIFIERS];
         assert_eq!(
             decode(&content, "doubt", &mut buffer),

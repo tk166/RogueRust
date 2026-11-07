@@ -10,8 +10,8 @@
 | # | 统计 | 值 |
 |---|---|---|
 | 1 | wiki 遗物总数 | 193 |
-| 2 | 内容里的遗物 | 54 |
-| 3 | 缺（wiki 有、内容没有） | 139 |
+| 2 | 内容里的遗物 | 56 |
+| 3 | 缺（wiki 有、内容没有） | 137 |
 
 ## Starter（4）
 
@@ -51,7 +51,7 @@
 | 有 | `pen_nib` | Pen Nib | Shared | Every 10th {{QueryLink\|Cards\|type:Attack\|Attack}} you play deals double damage. |
 | 有 | `potion_belt` | Potion Belt | Shared | Upon pickup, gain 2 [[Potions\|Potion]] slots. |
 | 缺 | `preserved_insect` | Preserved Insect | Shared | Enemies in Elite combats have 25% less HP. |
-| 缺 | `red_skull` | Red Skull | Ironclad | While your HP is at or below 50%, you have 3 additional $Strength. |
+| 有 | `red_skull` | Red Skull | Ironclad | While your HP is at or below 50%, you have 3 additional $Strength. |
 | 有 | `regal_pillow` | Regal Pillow | Shared | Whenever you Rest, heal an additional 15 HP. |
 | 缺 | `smiling_mask` | Smiling Mask | Shared | The merchant's card removal service now always costs 50 [[Gold]]. |
 | 有 | `snecko_skull` | Snecko Skull | Silent | Whenever you apply $Poison, apply an additional 1 $Poison. |
@@ -220,7 +220,7 @@
 | 缺 | `necronomicon` | Necronomicon | Shared | The first {{QueryLink\|Cards\|type:Attack\|Attack}} played each turn that costs 2 or more is played twice. Upon pickup, obtain a special {{QueryLink\|Cards\|type:Curse\|Curse}}. |
 | 缺 | `neows_lament` | Neow's Lament | Shared | Enemies in your first 3 combats will have 1 HP. |
 | 缺 | `nilrys_codex` | Nilry's Codex | Shared | At the end of each turn, you may shuffle 1 of 3 random cards to shuffle into your draw pile. |
-| 缺 | `odd_mushroom` | Odd Mushroom | Shared | When $Vulnerable, take 25% more attack damage rather than 50%. |
+| 有 | `odd_mushroom` | Odd Mushroom | Shared | When $Vulnerable, take 25% more attack damage rather than 50%. |
 | 缺 | `red_mask` | Red Mask | Shared | At the start of each combat, apply 1 $Weak to ALL enemies. |
 | 缺 | `spirit_poop` | Spirit Poop | Shared | It's unpleasant. |
 | 缺 | `ssserpent_head` | Ssserpent Head | Shared | Whenever you enter a ? room, gain 50 [[Gold]]. |

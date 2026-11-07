@@ -113,7 +113,8 @@ INV_COUNTS = {
     # damage-over-time status this content has -- The Specimen needs it).
     # §264: +3 (two `AppliesToStatusId` rewriters + `champion_belt`).
     # §265: +3 (`snecko_skull` / `ginger` / `turnip`).
-    "statuses": 99,
+    # §266: +2 (`red_skull` / `odd_mushroom`).
+    "statuses": 101,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1417,6 +1418,9 @@ INV_STATUSES = {
     # 免疫那条的 `Operation`/`Magnitude` 不参与计算（判定只问"有没有这条 spec"），所以写 0。
     "standard.snecko_skull": [("StatusStacks", "AddFlat", 1, 100, None)],
     "standard.ginger": [("StatusImmunity", "AddFlat", 0, 100, None)],
+    # §266：`red_skull` 带 `Condition`（HP ≤ 50%），`odd_mushroom` 带 `OverrideScope: Self`。
+    "standard.red_skull": [("DamageDealt", "AddFlat", 3, 100, "Direct")],
+    "standard.odd_mushroom": [("DamageReceived", "ScalePercent", 125, 300, "Direct")],
     "standard.turnip": [("StatusImmunity", "AddFlat", 0, 100, None)],
     "standard.the_bomb_damage": [],
     "standard.the_bomb": [],
@@ -3265,6 +3269,8 @@ SPEC_PARAMS = {
     "standard.snecko_skull": ("standard.poison", None),
     "standard.ginger": ("standard.weak", None),
     "standard.turnip": ("standard.frail", None),
+    # §266
+    "standard.odd_mushroom": ("standard.vulnerable", None),
     # §262 的翻倍现在只对攻击牌生效（§264 解开了那个参数）。
     "standard.double_damage": (None, "attack"),
 }
@@ -3722,7 +3728,9 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       # §264: 改写别的状态幅值两件 + 施加易伤时附带虚弱一件。
                       "paper_phrog", "paper_krane", "champion_belt",
                       # §265: 改状态施加三件 + 开战给敌人上毒一件。
-                      "snecko_skull", "ginger", "turnip", "twisted_funnel")
+                      "snecko_skull", "ginger", "turnip", "twisted_funnel",
+                      # §266: 条件修饰器 + 同侧改写。
+                      "red_skull", "odd_mushroom")
 
 
 def check_relics(doc):

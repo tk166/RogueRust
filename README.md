@@ -128,7 +128,7 @@ python -m http.server 8000
 |---|---|
 | **战斗内核** | `rd-core` 21 个源文件、约 57k 行。出牌/结算/状态/意图/修饰器管线/效果程序 IR（栈式）/选择与目标/金色指纹；**零分配、纯整数、`forbid(unsafe_code)`** |
 | **运行层** | `rd-run` 约 7.9k 行。地图（15 行 × 7 列 + Boss）、幕、牌组、金币、遗物、药水、奖励屏、商店、事件、篝火、**Ascension 0–20（20/20 条都有机制）**、**存档（单行文本 + CRC）**、**回放（动作序列 + 每步哈希）** |
-| **内容** | **47 怪 / 35 遭遇 / 293 条卡行（154 张基础 + 139 条升级行）/ 99 状态 / 130 敌人动作 / 54 遗物 / 33 药水（满池）/ 14 事件（三幕 6+4+4）/ 10 张起始牌**；**79 个动作有升阶变体**（91 个变体）。编译成 136,196 B 的 `rdcf` 镜像（core 镜像 105,448 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
+| **内容** | **47 怪 / 35 遭遇 / 293 条卡行（154 张基础 + 139 条升级行）/ 101 状态 / 130 敌人动作 / 56 遗物 / 33 药水（满池）/ 14 事件（三幕 6+4+4）/ 10 张起始牌**；**79 个动作有升阶变体**（91 个变体）。编译成 136,792 B 的 `rdcf` 镜像（core 镜像 105,876 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
 | **前端** | `index.html`（战斗 + 运行层 + 存档 + 回放）、`map.html`（地图页）；`wasm32` + **148** 个 `i32` 的战斗观察向量（另有 19 个 slot 的运行层观察）、一组 `rd_env_*` / `rd_run_*` 导出（`web/smoke.mjs` 有一张手抄的 `REQUIRED` 表**逐条**对账，加导出必须同时改两处） |
 | **RL 环境** | `rd_env_*` ABI（`docs/spec/env-abi.md`）+ Python `ctypes` 封装（多进程、批量观察） |
 | **裸机** | `riscv32imac-unknown-none-elf` 真链接成 ELF，镜像占用有闸门 |
@@ -148,7 +148,7 @@ python -m http.server 8000
   最多 3 次、之后每场战斗带这些力量）/ **Toke**（`Peace Pipe`，删牌免费）/ **Dig**（`Shovel`，
   只抽 Common/Uncommon/Rare）；`Coffee Dripper` / `Mark of the Bloom` 关 Rest、`Fusion Hammer` 关
   Smith、`Dream Catcher` 让休息额外给一次卡牌奖励。仍缺的是**第四幕本身**（红钥匙的用处）。
-* **遗物**：**54 / 193**（`native/audit_relic_gap.py` 的账；逐条清单在 **`docs/relic-inventory.md`**，
+* **遗物**：**56 / 193**（`native/audit_relic_gap.py` 的账；逐条清单在 **`docs/relic-inventory.md`**，
   由 `--write` 生成、193 行、标明"有/缺"）。数据源是 wiki 的 `Module:Relics/data`（Lua 表，离线留档）。
   效果仍是手写规则，但**"回合末/回合初"这一类已经零内核改动**（§260）：遗物只是"开战时挂一条带
   触发器的内容状态"，规则写在内容里（`orichalcum` / `mercury_hourglass` / `horn_cleat` /
@@ -159,8 +159,10 @@ python -m http.server 8000
   （`the_boot` / `torii` / `tungsten_rod`）、以及**改写别的状态幅值**（`paper_phrog` /
   `paper_krane`，靠 `PassiveModifiers.AppliesToStatusId`）与"施加易伤时附带虚弱"
   （`champion_belt`，靠 `event.statusIs`）、以及**改状态施加**（`snecko_skull` 多施一层毒、
-  `ginger`/`turnip` 让虚弱/脆弱撒不上，靠两条本移植自己的管线 `StatusStacks` / `StatusImmunity`）。
-  **内容门要求"内容里的每件遗物内核都实现"**，所以缺的 139 件不会半吊子地出现在池子里。
+  `ginger`/`turnip` 让虚弱/脆弱撒不上，靠两条本移植自己的管线 `StatusStacks` / `StatusImmunity`）、
+  **条件修饰器**（`red_skull`："HP ≤ 50% 时 +3 力量"，靠 `PassiveModifiers.Condition` 这条布尔
+  表达式）与**同侧改写**（`odd_mushroom`："你有易伤时只受 25%"，靠 `OverrideScope = Self`）。
+  **内容门要求"内容里的每件遗物内核都实现"**，所以缺的 137 件不会半吊子地出现在池子里。
   ⚠️ `Blight`（无尽模式）13 件不做；`Starter`/`Boss`/`Shop`/`Event` 是不可掉落的桶。
 * **事件**：14 个（三幕 6+4+4，与 wiki 的池子对齐），选项支持**一串**效果；A15 的 10/11 个房间有
   变体。仍是压缩过的：真实事件的**剧情分支**被合并（例：Golden Idol 的 Outrun / Smash / Hide

@@ -18233,3 +18233,64 @@ spec **跳过**、交给改写器），而这两条新管线走 `status_scoped_r
 
 遗物 **50 → 54 件**；`rd-core` 788 / `rd-run` 124 / `rd-wasm` 115；内容 99 状态 / 54 遗物；
 四条对拍全过；`ACT1_SLICE` / `SOAK` / `MAP_RENDER` PASS；21/21。
+
+---
+
+## §266 遗物第八批：**条件修饰器**（`red_skull`）+ **同侧改写**（`odd_mushroom`）
+
+| 遗物 | 稀有度 | wiki 原话 | 靠什么 |
+|---|---|---|---|
+| `red_skull` | Common | "While your HP is at or below 50%, you have 3 additional Strength." | 新键 `PassiveModifiers.Condition` |
+| `odd_mushroom` | Event | "When Vulnerable, take 25% more attack damage rather than 50%." | 新键 `PassiveModifiers.OverrideScope = Self` |
+
+### 266.1 `Condition`：一条布尔表达式
+
+为假时那条 spec **整条不生效**。存的是镜像里的**节点句柄**（`u16`，不是解好的值）：
+求值要用**折叠那一刻**的状态 —— `red_skull` 的"HP ≤ 50%"必须随血量立刻变，而不是在某个
+事件时点算一次、再靠触发器维持（后者是"用触发器模拟修饰器"，会在治疗、吸血、药剂这些
+路径上各漏一次）。
+
+主语是**这条 spec 的持有者**（`sel.source` = 持有者）。内容写
+
+```
+compare(multiply(currentHealth, 100), LessOrEqual, multiply(maxHealth, 50))
+```
+
+—— 两句整数比较，**不用除法**：比例式 `health*100/max` 会在整数除法上截断，
+而两边同乘不会。
+
+代价是四条管线都要把 `CombatState` 传进 `image_rows`（`Condition` 只在折叠时求值）。
+"没有状态上下文"这条路径**响亮拒绝**（`ExprError::NoTarget`），而不是当成"条件成立" ——
+后者会让 `red_skull` 在满血时也给力量，一个数字看着合理的静默错。
+
+### 266.2 `OverrideScope`：改写改的是哪一面
+
+§264 的改写只来自**对面**（`paper_phrog`："**敌人**有易伤时吃 75%"）。`odd_mushroom` 反过来：
+"**你**有易伤时只受 25%"。同一对"持有者 / 目标"里，两条遗物的主语正好相反，而折叠时两边都
+可能看到这条 spec ⇒ 让它自己说，比让内核猜可靠。
+
+* `Other`（**缺省**）：改对手身上那条状态 —— §264 那两件一个字都不用改；
+* `Self`：改自己身上那条状态。
+
+### 266.3 判据（每条都两个方向）
+
+| 判据 | 正面 | 反面 |
+|---|---|---|
+| `Condition` | HP 45% ⇒ 10 点变 **13**；**正好 50% 也算**（wiki: "at or below"） | HP 100% ⇒ 仍是 **10** |
+| `OverrideScope: Self` | 自己戴易伤 ⇒ 吃 **12**（125%） | 没有遗物 ⇒ 吃 **15**（150%） |
+| **不越界** | —— | `odd_mushroom` 挂在英雄身上时，**敌人**的易伤仍是 **150%**（若被当成 `Other` 会变 12） |
+
+最后那条是 `OverrideScope` **唯一的存在理由**：没有它，一件遗物会同时改敌我两侧。
+
+### 266.4 镜像格式的一个副作用（`status_bind` 的"7 个键"判据）
+
+`PassiveModifiers` 的元素是**通用对象**（字段 = JSON 的键），所以加键**不用改 schema**。
+但 `status_bind::the_spec_objects_declare_exactly_the_seven_keys_we_read` 断言"镜像里的 spec
+对象正好 7 个键" —— 它现在是"**前 7 个必须都在** + 多出来的只能是白名单里的两个"。
+⚠️ "允许"必须写成**白名单**（不是"不认识的都放过"）：那个测试的意义就是"镜像出现第 8 个键时
+叫内核跟上"。
+
+### 266.5 账
+
+遗物 **54 → 56 件**；`rd-core` 788 / `rd-run` 125 / `rd-wasm` 116；内容 101 状态 / 56 遗物；
+四条对拍全过；`ACT1_SLICE` / `SOAK` / `MAP_RENDER` PASS；21/21。

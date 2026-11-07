@@ -1369,6 +1369,7 @@ pub fn resolve_damage_of_kind(
                 ctx.state.cards_played_this_turn,
                 source_card,
                 opposite,
+                Some(ctx.state),
             )?;
         }
     }
@@ -1399,6 +1400,7 @@ pub fn resolve_damage_of_kind(
             ctx.state.cards_played_this_turn,
             source_card,
             opposite,
+            Some(ctx.state),
         )?;
         health_before = target_combatant.health_current;
         // 池表**按吸收顺序**读出（见下面 S4 的说明）。切片本身是 key 排好序的，
@@ -3503,7 +3505,7 @@ fn gain_block_for(
     }
     let snapshot = *ctx.state.combatant(target).ok_or(ExecError::MissingCombatant)?;
     let content = ctx.content;
-    let modified = block_stage(amount, snapshot.statuses(), target, content)?;
+    let modified = block_stage(amount, snapshot.statuses(), target, content, Some(ctx.state))?;
     if modified != 0 {
         let (current, max, _) = block_pool(&snapshot);
         let total = i64::from(current) + i64::from(modified);
@@ -6524,6 +6526,8 @@ const EMPTY_PASSIVE_MODIFIER: PassiveModifier = PassiveModifier {
     restrict_damage_kind: None,
     restrict_source_card_tag: None,
     applies_to_status: None,
+    override_scope: status_bind::OverrideScope::Other,
+    condition: None,
 };
 
 /// 伤害的一个阶段：从**读谁的状态**到候选表，再从候选表到新数值。
@@ -6537,13 +6541,14 @@ fn damage_stage<'a>(
     turn_cards: i32,
     source_card: Option<&str>,
     opposite: &[StatusInstance],
+    state: Option<&CombatState>,
 ) -> Result<i32, ExecError> {
     // **口径只在这里定一次**：有镜像 ⇒ `Exact`（桥关闭），没有 ⇒ `Bridged`。
     let matching = StatusMatch::for_content(content);
     if let Some(content) = content {
         return image_damage_stage(
             amount, statuses, stage, owner, content, matching, kind, turn_cards, source_card,
-            opposite,
+            opposite, state,
         );
     }
 
@@ -6596,13 +6601,22 @@ fn image_damage_stage<'a>(
     turn_cards: i32,
     source_card: Option<&str>,
     opposite: &[StatusInstance],
+    state: Option<&CombatState>,
 ) -> Result<i32, ExecError> {
     let pipeline = match stage {
         ModifierTarget::Source => status_bind::Pipeline::DamageDealt,
         ModifierTarget::Target => status_bind::Pipeline::DamageReceived,
     };
     let mut rows = [empty_row(); MAX_CANDIDATES];
-    let mut count = image_rows(content, statuses, pipeline, Some(kind), source_card, &mut rows)?;
+    let mut count = image_rows(
+        content,
+        statuses,
+        pipeline,
+        Some(kind),
+        source_card,
+        state.map(|state| (state, owner)),
+        &mut rows,
+    )?;
     // §264：**对面阵营的改写**（`AppliesToStatusId`）。形状：
     //
     //   折叠 DamageDealt（出手者的贡献）时，改写来自**承受者**；
@@ -6611,7 +6625,9 @@ fn image_damage_stage<'a>(
     // 为什么是"对面"而不是"同一个战斗员"：这两件遗物说的都是**对手身上的那条状态**
     // （`paper_phrog`："敌人有易伤时吃 75% 而不是 50%"；`paper_krane`："敌人有虚弱时打 40% 而不是
     // 25% 少"），而状态挂在被打/打人的那一方。把改写限制在同侧会让这两条规则无处安放。
-    count = apply_status_magnitude_overrides(content, opposite, pipeline, Some(kind), &mut rows, count)?;
+    count = apply_status_magnitude_overrides(
+        content, statuses, opposite, pipeline, Some(kind), &mut rows, count,
+    )?;
     fold(
         amount,
         statuses,
@@ -6620,6 +6636,40 @@ fn image_damage_stage<'a>(
         matching,
         turn_cards,
     )
+}
+
+/// §266：`Condition` 求值 —— 为假时那条 spec 不生效。
+///
+/// 没有条件（`None`）⇒ `true`；有条件但没有状态上下文 ⇒ **响亮拒绝**（`ExprError::NoTarget`
+/// 经 `ExecError::Expr` 传上去）。理由：把"读不到状态"当成"条件成立"就是让 `red_skull`
+/// 在 HP 满的时候也给力量 —— 一个数字看着合理的静默错。
+fn spec_condition_passes(
+    content: &Content<'_>,
+    condition: Option<u16>,
+    ctx: Option<(&CombatState, &CombatantId)>,
+) -> Result<bool, ExecError> {
+    let Some(handle) = condition else {
+        return Ok(true);
+    };
+    let Some((state, owner)) = ctx else {
+        return Err(ExecError::Expr(crate::expr::ExprError::NoTarget));
+    };
+    let node = NodeRef::new(content, handle);
+    let context = crate::expr::ExprContext {
+        content: Some(*content),
+        state,
+        // 主语是**这条 spec 的持有者**（"**你**的 HP ≤ 50%"）。
+        source: Some(*owner),
+        event_target: None,
+        iteration_target: None,
+        iteration_card: None,
+        resolving_card: None,
+        event_flags: 0,
+        event_amount: None,
+        event_status: None,
+        x_cost: 0,
+    };
+    crate::expr::eval_bool(node, &context).map_err(ExecError::Expr)
 }
 
 /// §265：**带参数的行构造** —— 只收 `AppliesToStatusId == 指定状态` 的那几条 spec。
@@ -6689,6 +6739,7 @@ fn status_scoped_rows<'a>(
 /// 4. 改写**不产生贡献**：带 `applies_to_status` 的 spec 在 [`image_rows`] 里被跳过。
 fn apply_status_magnitude_overrides<'a>(
     content: &'a Content<'a>,
+    own: &[StatusInstance],
     opposite: &[StatusInstance],
     pipeline: status_bind::Pipeline,
     damage_kind: Option<BindDamageKind>,
@@ -6702,7 +6753,18 @@ fn apply_status_magnitude_overrides<'a>(
     let mut buffer = [EMPTY_PASSIVE_MODIFIER; status_bind::MAX_MODIFIERS];
     let mut seen = [crate::state::StatusDefinitionId::EMPTY; status_bind::MAX_MODIFIERS];
     let mut seen_count = 0usize;
-    for status in opposite {
+    // §266：两面都收 —— 改写的 `OverrideScope` 决定它作用在哪一面：
+    // `Other`（`paper_phrog`）落在**对手**，`Self`（`odd_mushroom`）落在**自己**。
+    let mut sources = [&[] as &[StatusInstance]; 2];
+    sources[0] = own;
+    sources[1] = opposite;
+    for (side, list) in sources.iter().enumerate() {
+      let wants = if side == 0 {
+          status_bind::OverrideScope::Self_
+      } else {
+          status_bind::OverrideScope::Other
+      };
+    for status in *list {
         let id = status.definition_id.as_str();
         // 与 `image_rows` 同一条去重口径（按定义）。
         if seen.get(..seen_count).unwrap_or(&[]).iter().any(|s| s.as_str() == id) {
@@ -6726,6 +6788,9 @@ fn apply_status_magnitude_overrides<'a>(
             let Some(target) = spec.applies_to_status else {
                 continue;
             };
+            if spec.override_scope != wants {
+                continue;
+            }
             if overrides > 0
                 && targets.get(..overrides).unwrap_or(&[]).iter().any(|t| *t == target)
             {
@@ -6742,6 +6807,7 @@ fn apply_status_magnitude_overrides<'a>(
             }
             overrides += 1;
         }
+    }
     }
     if overrides == 0 {
         return Ok(count);
@@ -6792,6 +6858,10 @@ fn image_rows<'a>(
     pipeline: status_bind::Pipeline,
     damage_kind: Option<BindDamageKind>,
     source_card: Option<&str>,
+    // §266：求 `Condition` 要的那份状态与主语。`None` = 这条调用路径没有状态可读
+    // （目前没有 —— 四条管线的调用方都持有 `CombatState`；留着 `Option` 是为了让
+    // "拿不到状态"这条路径显式存在，而不是悄悄当成"条件为真"）。
+    condition_ctx: Option<(&CombatState, &CombatantId)>,
     rows: &mut [Row<'a>],
 ) -> Result<usize, ExecError> {
     let mut buffer = [EMPTY_PASSIVE_MODIFIER; status_bind::MAX_MODIFIERS];
@@ -6837,6 +6907,10 @@ fn image_rows<'a>(
             // §264：带 `AppliesToStatusId` 的 spec **不是一份贡献**，是一条改写 ——
             // 它由 `apply_status_magnitude_overrides` 单独消费。
             if spec.applies_to_status.is_some() {
+                continue;
+            }
+            // §266：`Condition` 为假 ⇒ 这条 spec 整条不生效（`red_skull` 的 "HP ≤ 50%"）。
+            if !spec_condition_passes(content, spec.condition, condition_ctx)? {
                 continue;
             }
             let Some(slot) = rows.get_mut(count) else {
@@ -6890,6 +6964,7 @@ pub fn fold_turn_start_draw(
     owner: &CombatantId,
     base: i32,
     content: Option<&Content<'_>>,
+    state: Option<&CombatState>,
 ) -> Result<i32, ExecError> {
     // `:137-138`：非正数原样返回，管线不跑（账本也因此一笔没动）。
     if base <= 0 {
@@ -6908,6 +6983,7 @@ pub fn fold_turn_start_draw(
         // §264：这三条管线没有"来源卡"可言，所以 `RestrictSourceCardTag` 的 spec 在这里
         // 一律不生效（与参考的 `damageKind: null` 同一个口径：那条门在那里也整段跳过）。
         None,
+        state.map(|state| (state, owner)),
         &mut rows,
     )?;
     // 有镜像 ⇒ `Exact`（桥关闭），与 `damage_stage` 里同一条口径。
@@ -6930,6 +7006,7 @@ pub fn fold_turn_start_energy(
     owner: &CombatantId,
     base: i32,
     content: Option<&Content<'_>>,
+    state: Option<&CombatState>,
 ) -> Result<i32, ExecError> {
     if base <= 0 {
         return Ok(base);
@@ -6946,6 +7023,7 @@ pub fn fold_turn_start_energy(
         // §264：这三条管线没有"来源卡"可言，所以 `RestrictSourceCardTag` 的 spec 在这里
         // 一律不生效（与参考的 `damageKind: null` 同一个口径：那条门在那里也整段跳过）。
         None,
+        state.map(|state| (state, owner)),
         &mut rows,
     )?;
     fold(
@@ -6964,10 +7042,11 @@ fn block_stage<'a>(
     statuses: &[StatusInstance],
     owner: &CombatantId,
     content: Option<&'a Content<'a>>,
+    state: Option<&CombatState>,
 ) -> Result<i32, ExecError> {
     let matching = StatusMatch::for_content(content);
     if let Some(content) = content {
-        return image_block_stage(amount, statuses, owner, content, matching);
+        return image_block_stage(amount, statuses, owner, content, matching, state);
     }
 
     let mut rows = [empty_row(); MAX_CANDIDATES];
@@ -7019,6 +7098,7 @@ fn image_block_stage<'a>(
     owner: &CombatantId,
     content: &'a Content<'a>,
     matching: StatusMatch,
+    state: Option<&CombatState>,
 ) -> Result<i32, ExecError> {
     let mut rows = [empty_row(); MAX_CANDIDATES];
     // `damage_kind: None` = 参考的 `damageKind: null`（见函数头）。
@@ -7030,6 +7110,7 @@ fn image_block_stage<'a>(
         // §264：这三条管线没有"来源卡"可言，所以 `RestrictSourceCardTag` 的 spec 在这里
         // 一律不生效（与参考的 `damageKind: null` 同一个口径：那条门在那里也整段跳过）。
         None,
+        state.map(|state| (state, owner)),
         &mut rows,
     )?;
     fold(
@@ -8087,21 +8168,21 @@ mod tests {
         // `panic 2` ⇒ 5 - 2 = 3（`PassiveModifiers.cs:206-213` 的 `AddPerStack -1`）。
         let panicked = [status("st_p2", "panic", 2)];
         assert_eq!(
-            fold_turn_start_draw(&panicked, &cid("hero"), 5, Some(&content)),
+            fold_turn_start_draw(&panicked, &cid("hero"), 5, Some(&content), None),
             Ok(3)
         );
 
         // 每层 -1，逐层线性（不是"有就减 1"）。
         let one = [status("st_p1", "panic", 1)];
         assert_eq!(
-            fold_turn_start_draw(&one, &cid("hero"), 5, Some(&content)),
+            fold_turn_start_draw(&one, &cid("hero"), 5, Some(&content), None),
             Ok(4)
         );
 
         // 减到负数 ⇒ 折叠器末尾 `Math.Max(0, ·)`（`:216`）兜住。
         let deep = [status("st_p7", "panic", 7)];
         assert_eq!(
-            fold_turn_start_draw(&deep, &cid("hero"), 5, Some(&content)),
+            fold_turn_start_draw(&deep, &cid("hero"), 5, Some(&content), None),
             Ok(0)
         );
 
@@ -8109,20 +8190,20 @@ mod tests {
         // （`:137-138`）；`content == None` ⇒ 标准包没有 TurnStartDraw 管线 ⇒ 原值。
         let none: [StatusInstance; 0] = [];
         assert_eq!(
-            fold_turn_start_draw(&none, &cid("hero"), 5, Some(&content)),
+            fold_turn_start_draw(&none, &cid("hero"), 5, Some(&content), None),
             Ok(5)
         );
         assert_eq!(
-            fold_turn_start_draw(&panicked, &cid("hero"), 0, Some(&content)),
+            fold_turn_start_draw(&panicked, &cid("hero"), 0, Some(&content), None),
             Ok(0)
         );
-        assert_eq!(fold_turn_start_draw(&panicked, &cid("hero"), 5, None), Ok(5));
+        assert_eq!(fold_turn_start_draw(&panicked, &cid("hero"), 5, None, None), Ok(5));
 
         // `priority` 不参与（镜像里只有一条 spec）—— 但 `signature_pending` 之类
         // 别的管线上的 spec 必须被管线门挡掉，否则"少抽 2 张"会变成别的东西。
         let wrong_pipeline = [status("st_sig", "signature_pending", 4)];
         assert_eq!(
-            fold_turn_start_draw(&wrong_pipeline, &cid("hero"), 5, Some(&content)),
+            fold_turn_start_draw(&wrong_pipeline, &cid("hero"), 5, Some(&content), None),
             Ok(5),
             "DamageReceived 的 spec 不许影响抽牌数"
         );
@@ -8308,7 +8389,7 @@ mod tests {
         let statuses = [status("st_frail", "signature_pending", 0)];
         for (base, expect) in [(7, 5), (5, 3), (3, 2), (1, 0), (0, 0)] {
             assert_eq!(
-                block_stage(base, &statuses, &cid("hero"), Some(&content)),
+                block_stage(base, &statuses, &cid("hero"), Some(&content), None),
                 Ok(expect),
                 "{base}*75/100 向零截断"
             );
@@ -8317,7 +8398,7 @@ mod tests {
         let none: [StatusInstance; 0] = [];
         for base in [7, 5, 3, 1] {
             assert_eq!(
-                block_stage(base, &none, &cid("hero"), Some(&content)),
+                block_stage(base, &none, &cid("hero"), Some(&content), None),
                 Ok(base)
             );
         }
@@ -9801,7 +9882,8 @@ mod tests {
                     BindDamageKind::Direct,
                     0,
                     None,
-                    &[]
+                    &[],
+                    None
                 ),
                 loud,
                 "{unknown}：伤害 Source 阶段"
@@ -9816,18 +9898,19 @@ mod tests {
                     BindDamageKind::Direct,
                     0,
                     None,
-                    &[]
+                    &[],
+                    None
                 ),
                 loud,
                 "{unknown}：伤害 Target 阶段"
             );
             assert_eq!(
-                block_stage(5, &statuses, &cid("hero"), Some(&content)),
+                block_stage(5, &statuses, &cid("hero"), Some(&content), None),
                 loud,
                 "{unknown}：格挡管线"
             );
             assert_eq!(
-                fold_turn_start_draw(&statuses, &cid("hero"), 5, Some(&content)),
+                fold_turn_start_draw(&statuses, &cid("hero"), 5, Some(&content), None),
                 loud,
                 "{unknown}：回合开始抽牌"
             );
@@ -9846,7 +9929,8 @@ mod tests {
                 BindDamageKind::Direct,
                 0,
                 None,
-                &[]
+                &[],
+                None
             ),
             Ok(6)
         );
@@ -9860,24 +9944,25 @@ mod tests {
                 BindDamageKind::Direct,
                 0,
                 None,
-                &[]
+                &[],
+                None
             ),
             Ok(6)
         );
         assert_eq!(
-            block_stage(5, &empty, &cid("hero"), Some(&content)),
+            block_stage(5, &empty, &cid("hero"), Some(&content), None),
             Ok(5)
         );
         assert_eq!(
-            fold_turn_start_draw(&empty, &cid("hero"), 5, Some(&content)),
+            fold_turn_start_draw(&empty, &cid("hero"), 5, Some(&content), None),
             Ok(5)
         );
 
         // 三、没有镜像 ⇒ 标准包路径根本不查 `STAT` 表（候选行来自 `status_catalog`，
         //     实例 id 靠 5 条别名的桥匹配）⇒ "查不到"在那条路上不是问题，也不该报错。
         let none: [StatusInstance; 0] = [];
-        assert_eq!(block_stage(5, &none, &cid("hero"), None), Ok(5));
-        assert_eq!(fold_turn_start_draw(&none, &cid("hero"), 5, None), Ok(5));
+        assert_eq!(block_stage(5, &none, &cid("hero"), None, None), Ok(5));
+        assert_eq!(fold_turn_start_draw(&none, &cid("hero"), 5, None, None), Ok(5));
 
         // 四、端到端：一个自造 id 在身时，真牌**打不出来**（而不是安静地少算一半）。
         let ir = Ir::new(&content);
