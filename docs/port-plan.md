@@ -17621,3 +17621,102 @@ A18：「N increments even on the Single Stab attack」。用一个 `AscensionMi
    要直接改（Blue Slaver 的循环 → 60/40 抽签）。
 4. **新动作要进 `EnemyActions` 表**，不只是写进 `dict`：内容门当场抓住了
    `action 'lagavulin.stunned' has no EACT row`。
+
+---
+
+## §258 查漏：Ascension 那一批（§187–§190）的残留缺口
+
+§187 做维度、§188 做事件列表与 A15、§189 做 A1/A10/A12/A20、§190 把升档数据从 13 条补到 42 条。
+这一节回头逐条核，抓到三类残留 —— 关键在**先做一个能穷尽对账的脚本**，而不是靠眼睛。
+
+### 258.1 `native/audit_asc_gap.py`：把"wiki 说升档"与"我们有变体"逐条对上
+
+两边：`native/wiki_asc/*.txt`（wikitext 原样，`{{Asc|N|…}}` 是唯一可信来源）与内容镜像的
+`ProgramAsc` 阈值。三种输出：`MISSING` / `MISMATCH` / `EXTRA`。
+
+第一次跑出来 118 条 wiki 行、3 条 `MISSING`、10 条 `MISMATCH`。**10 条里 9 条是脚本自己的误报**，
+而误报本身有两种有价值的形状：
+
+* **升档维度长在别处**：`louse_red.bite` / `darkling.nip` 的 A2 不是 `ProgramAsc`，而是
+  `ENCT.Enemies[].Rolls` 的 `{Min, Max, AscensionMin}`（开局掷的伤害值）。脚本只看动作，所以看不见。
+* **升档写在"另一招"上**：`the_champ` 的 A19 是"Gloat 被 Defensive Stance 顶替"（招式表替换），
+  `the_collector.buff` 的 A9/A19 在同一行 Effect 里 —— 正则按 `{{Intents Table/row}}` 切，
+  多档位混排时容易只取到第一档。
+
+真正要修的是三条：
+
+| 招式 | wiki | 我们 | 修法 |
+|---|---|---|---|
+| `time_eater.head_slam` | A4: 26 → **32**（A19 另加 2 张 Slimed） | 只有 A19 档，且伤害停在 26 | 补 A4，A19 也带 32 |
+| `slaver_red.scrape` | A17: Vulnerable 1 → **2** | 只有 A2 档 | 补 A17（伤害仍 9） |
+| `louse_green.bite` | **5-7（A2: 6-8）随机** | 写死 6 | 改读开局掷的 `roll.bite` |
+
+### 258.2 第三条顺带把**整族虱子**翻出来了
+
+wiki 上 **红虱子 = Bite + Grow，绿虱子 = Bite + Spit Web**；内容是**反的** ——
+`louse_red` 身上挂着 `louse_red.spit_web`，`louse_green` 有 `grow` 而没有 Spit Web。
+更糟的是 `louse_green` **没有任何遭遇用它** —— 内容门早就把它记在 `INV_UNWIRED` 里
+（"存在但玩家永远见不到"的死内容），那条清单正是为这种事准备的。
+
+修法：`louse_red.spit_web` 改名成 `louse_green.spit_web`、删掉 `louse_green.grow`、
+绿虱子的 Bite 改成读 `roll.bite`、两只都补 AI（wiki 原话：25%/75% 抽签、同招不连三次、
+**A17 起**另一招不连两次）、并新增 `enc_two_louses`（红 + 绿）进 1 幕弱池 —— 绿虱子这才真的能被遇到。
+
+⚠️ 写死的 `6` 不只是"少了个随机"：它在 A0 比红虱子的 5-7 **偏高**、在 A2 又比 6-8 **偏低**，
+两个方向都错，而屏幕上只有一个数，看不出来。
+
+### 258.3 又一次撞到"容量是语义"（第三次了）
+
+* `MAX_POOL_IDS` 是 **8**，而 1 幕弱池现在要 **9** 条（wiki 的 easy pool 里"1 Louse"与"2 Louses"
+  是两条）。读侧是**拒绝**而不是截断，所以它响亮地红了 ⇒ 抬到 12。
+* §257 已经抬过一次 `MAX_ENEMIES_IN_FIGHT`（4 → 6，Reptomancer 的 4 把匕首）。
+
+两条都是同一条纪律的实例：**常量就是语义，溢出必须响亮失败** —— 而"响亮"的价值就在这里：
+若当时是静默截断，第 9 条遭遇就永远不会出现，没有任何闸门会红。
+
+### 258.4 顺手修掉一处**测试自己的错**
+
+`winning_heals_through_the_relic` 的上限写的是 `.min(start)`，而 `start` 是**当前**血量（73）
+不是最大值（80）。它一直绿着，只因为旧的首场遭遇恰好把血打到"打完 +6 也补不回 73"的地步；
+§258 换了首场遭遇（弱池多了第 9 条）之后暴露出来。改成 `.min(health_max())` ——
+Burning Blood 的全部意义就是"补到当前以上、不超过上限"。
+
+### 258.5 README 的"还不能"重写
+
+那一节落后了很多（还写着"无色 14/70、缺 56"），现在按 `gap_check.py` /
+`audit_card_gap.py` / `audit_asc_gap.py` 的**实际输出**重写：口径内 **147/220**，
+**缺的 73 张全是观者**（攻击 27 / 技能 34 / 能力 12），铁甲战士与无色都齐了；
+并按"基建聚类"给出下一批的顺序（姿态 → Mantra/Divinity → Scry → Retain/Establishment → Alpha 链）。
+
+### 258.6 判据
+
+| 测试 | 钉住什么 |
+|---|---|
+| `louse_bites_are_rolled_at_spawn_and_the_green_one_reads_its_roll` | 掷值落在 5-7 / A2 6-8 **且真的会变**；绿虱子打出的伤害**等于**它的掷值（写死 6 会红） |
+| `time_eater_head_slam_reaches_32_at_a4` | A3=26 / **A4=32** / A19=32（边界两侧） |
+| `slaver_red_scrape_applies_two_vulnerable_from_a17` | A16=1 层 / **A17=2 层** |
+| `the_two_louses_have_the_moves_the_wiki_gives_them` | 读镜像的 `ENCT.Enemies[].Actions`：红 = Bite+Grow、绿 = Bite+Spit Web |
+
+### 258.7 ★ 一条**从来没生效过**的浏览器断言（又一次 `§4.23` 的形状）
+
+加了 `enc_two_louses` 之后 `web-browser` 闸门红了：
+
+```
+pressing a card did not spend energy (3 -> 3/3)
+```
+
+查下去发现两件事叠在一起：
+
+1. 测试点完牌之后去找目标，用的是 `#enemies .enemy` —— 而页面的类是 **`enemy-panel`**，
+   这个选择器**一个元素都匹配不到**。它一直绿，只因为首张可出的牌碰巧是**不需要目标**的
+   `Defend`（点一下就打出，`energyAfter != energyBefore`，那条分支根本不进）。
+2. §258 让 1 幕弱池多了一条遭遇 ⇒ 首场遭遇变了 ⇒ 首张可出的牌变成需要目标的 `Strike`
+   ⇒ 那条死分支第一次真的跑起来 ⇒ 立刻暴露。
+
+修法：选择器改成页面自己的标记 `#enemies [data-target-slot]`（"这一只可以被瞄准"），
+并把失败信息扩成"哪张牌、几张手牌、命中与否、被谁挡住" —— 原来的信息连"这次点的是哪张牌"
+都答不出来，那本身就违反"判据必须能自解释"。
+
+**教训与 §4.23 同形**：一个断言的下限/分支如果从来没被走到，它是不是绿的与实现无关。
+这次的触发方式值得记：**不是**改断言，而是**改内容**（多了一条遭遇）把它撞醒的 ——
+所以"内容一改就红的那些闸门"不只是回归护栏，它们还在**证明自己此前有没有真的在跑**。

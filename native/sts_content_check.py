@@ -84,7 +84,8 @@ INV_COUNTS = {
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
-    "encounters": 34,
+    # §258: +1 (`enc_two_louses` -- the green louse was unreachable).
+    "encounters": 35,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -867,8 +868,10 @@ INV_MONSTERS = [
     ("spiker", 42, 56, ["spiker.cut", "spiker.spike"]),
     ("orb_walker", 90, 90, ["orb_walker.laser", "orb_walker.claw"]),
     # §152: the rest of act 1's roster, wiki numbers.
-    ("louse_red", 10, 15, ["louse_red.bite", "louse_red.grow", "louse_red.spit_web"]),
-    ("louse_green", 11, 16, ["louse_green.bite", "louse_green.grow"]),
+    # §258: the two louses had each other's move -- wiki says Red = Bite + Grow,
+    # Green = Bite + Spit Web.
+    ("louse_red", 10, 15, ["louse_red.bite", "louse_red.grow"]),
+    ("louse_green", 11, 16, ["louse_green.bite", "louse_green.spit_web"]),
     ("fungi_beast", 22, 28, ["fungi_beast.bite", "fungi_beast.grow"]),
     ("slaver_red", 46, 50, ["slaver_red.stab", "slaver_red.scrape", "slaver_red.entangle"]),
     ("gremlin_nob", 82, 86,
@@ -1024,9 +1027,10 @@ INV_ACTIONS = {
     # §193: `N = Number between (5-7;{{Asc|2|6-8}}), chosen at the start of combat`.
     "louse_red.bite": ("Attack", [("damage", ("counter", "roll.bite", "source"), "event")]),
     "louse_red.grow": ("Buff", [("status", "standard.strength", 3, "source")]),
-    "louse_red.spit_web": ("Debuff", [("status", "standard.weak", 2, "event")]),
-    "louse_green.bite": ("Attack", [("damage", 6, "event")]),
-    "louse_green.grow": ("Buff", [("status", "standard.strength", 3, "source")]),
+    # §258: Spit Web is the **Green** Louse's move (the id used to say `louse_red`), and the
+    # green Bite is the same spawn-time roll as the red one -- not a hard-coded 6.
+    "louse_green.spit_web": ("Debuff", [("status", "standard.weak", 2, "event")]),
+    "louse_green.bite": ("Attack", [("damage", ("counter", "roll.bite", "source"), "event")]),
     "fungi_beast.bite": ("Attack", [("damage", 6, "event")]),
     "fungi_beast.grow": ("Buff", [("status", "standard.strength", 3, "source")]),
     # §196: Red Slaver's third move -- wiki: "Applies 1 Entangled" (+ the once-per-combat flag).
@@ -1254,6 +1258,9 @@ INV_WEAK_POOL = {
     "enc_darklings": ["darkling", "darkling"],
     # §152: the rest of act 1's weak pool, wiki numbers (see patch_152_enemies.py).
     "enc_louse": ["louse_red"],
+    # §258: wiki act-1 easy pool has both "1 Louse" and "2 Louses"; the 2-louse row is also the
+    # only place the **green** louse appears (it used to have a roster row and no encounter).
+    "enc_two_louses": ["louse_red", "louse_green"],
     "enc_fungi_beast": ["fungi_beast"],
     "enc_slaver_red": ["slaver_red"],
     # §147: the carrier for `Constricted` (act 3, wiki HP 170).
@@ -1294,7 +1301,9 @@ INV_ACT_TABLES = {
              # §153: the Gremlin Gang is an **act-1** encounter (wiki); it sat in act 2.
              "enc_gremlin_gang",
              # §201: the Looter is an act-1 normal encounter.
-             "enc_looter"],
+             "enc_looter",
+             # §258: "2 Red or Green Louses" -- the only place the green louse is reachable.
+             "enc_two_louses"],
     "Weak2": ["enc_chosen", "enc_shelled_parasite"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
@@ -2232,7 +2241,6 @@ INV_ASC_VARIANTS = {
     'lagavulin.attack': [(3, [('damage', 20, 'event'),
                               ('counter', 'lagavulin_step', ('expr', 'remainder'), False,
                                'source')])],
-    'louse_green.grow': [(17, [('status', 'standard.strength', 4, 'source')])],
     'louse_red.grow': [(17, [('status', 'standard.strength', 4, 'source')])],
     'nemesis.tri_attack': [(3, [('damage', 7, 'event'), ('damage', 7, 'event'), ('damage', 7, 'event')])],
     'nemesis.tri_burn': [(18, [('card', 'burn', 5, 'DiscardPile', 'event')])],
@@ -2245,7 +2253,8 @@ INV_ASC_VARIANTS = {
     'sentry.bolt': [(18, [('card', 'dazed', 3, 'DiscardPile', 'event')])],
     'shelled_parasite.double_strike': [(2, [('damage', 7, 'event'), ('damage', 7, 'event')])],
     'shelled_parasite.suck': [(2, [('damage', 12, 'event'), ('block', 2, 'source')])],
-    'slaver_red.scrape': [(2, [('damage', 9, 'event'), ('status', 'standard.vulnerable', 1, 'event')])],
+    'slaver_red.scrape': [(2, [('damage', 9, 'event'), ('status', 'standard.vulnerable', 1, 'event')]),
+                          (17, [('damage', 9, 'event'), ('status', 'standard.vulnerable', 2, 'event')])],
     'slaver_red.stab': [(2, [('damage', 14, 'event')])],
     'slime_boss.goop_spray': [(19, [('card', 'slimed', 5, 'DiscardPile', 'event')])],
     'slime_boss.slam': [(4, [('damage', 38, 'event')])],
@@ -2324,7 +2333,9 @@ INV_ASC_VARIANTS = {
     # Time Eater (Reverberate 7x3->A4 8x3, Head Slam +2 Slimed at A19, Ripple +Frail at A19).
     'time_eater.reverberate': [(4, [('damage', 8, 'event'), ('damage', 8, 'event'),
                                     ('damage', 8, 'event')])],
-    'time_eater.head_slam': [(19, [('damage', 26, 'event'),
+    'time_eater.head_slam': [(4, [('damage', 32, 'event'),
+                                 ('status', 'standard.draw_reduction', 1, 'event')]),
+                             (19, [('damage', 32, 'event'),
                                    ('card', 'slimed', 2, 'DiscardPile', 'event'),
                                    ('status', 'standard.draw_reduction', 1, 'event')])],
     'time_eater.ripple': [(19, [('block', 20, 'source'),
@@ -2356,9 +2367,11 @@ INV_ROLLS = {
     "louse_red": [("roll.bite", 5, 7, 0), ("roll.bite", 6, 8, 2),
                   ("roll.curl_up", 3, 7, 0), ("roll.curl_up", 4, 8, 7),
                   ("roll.curl_up", 9, 12, 17)],
-    # `louse_green` has a roster row but **no encounter** uses it (this content ships `enc_louse`
-    # with the red one only), so an inventory row for it would be "names an enemy that never
-    # appears" -- the gate rejects that, correctly.
+    # §258: the green louse is reachable now (`enc_two_louses`), and wiki gives it the same
+    # spawn-time roll as the red one: Bite 5-7 (A2: 6-8), Curl Up 3-7 (A7: 4-8, A17: 9-12).
+    "louse_green": [("roll.bite", 5, 7, 0), ("roll.bite", 6, 8, 2),
+                    ("roll.curl_up", 3, 7, 0), ("roll.curl_up", 4, 8, 7),
+                    ("roll.curl_up", 9, 12, 17)],
     "darkling": [("roll.nip", 7, 11, 0), ("roll.nip", 9, 13, 2)],
 }
 
@@ -2386,7 +2399,8 @@ INV_SPAWN_COUNTERS = {
 # to a counter read -- a counter nobody rolls reads 0, and 0 damage is a landmine that the
 # ENEMY_DIFF harness cannot see (it runs every `EACT` row against a synthesised `<prefix>` enemy).
 # The day one of these gets a record, this table goes red and forces the roll to be written too.
-INV_UNWIRED = {"louse_green.bite", "louse_green.grow"}
+# §258: the green louse now has `enc_two_louses`, so nothing is unwired any more.
+INV_UNWIRED = set()
 
 # §218：每张卡的 wiki 页面。**字段**（type / rarity / cost / 关键字）在检查时从 dump 里读
 # （`native/wiki_cards.py`），**数字**在 `native/card_wiki_inventory.py` 里人工冻结
@@ -2897,7 +2911,8 @@ INV_NO_ASC = {
     'darkling.nip': 'wiki Darkling: Nip is rolled at spawn (A2 changes the roll, §193)',
     'louse_red.bite': 'wiki Louses: Bite is rolled at spawn (A2 changes the roll, §193)',
     'louse_green.bite': 'wiki Louses: Bite is rolled at spawn (A2 changes the roll, §193)',
-    'louse_red.spit_web': 'wiki Louses: Spit Web is 2 Weak, no A-row',
+    'louse_green.spit_web': 'wiki Green Louse: Spit Web is 2 Weak at every ascension',
+    'louse_green.spit_web': 'wiki Green Louse: Spit Web is 2 Weak, no A-row',
     # `Lagavulin`: Sleep does nothing.
     'lagavulin.sleep': 'wiki Lagavulin: Sleep does nothing',
     'lagavulin.stunned': 'wiki Lagavulin: Stunned does nothing (a lost turn, no numbers)',

@@ -6730,8 +6730,14 @@ mod tests {
 
         assert_eq!(rd_run_fight_end(), 1, "the run must report a victory");
         let session = run_slot().as_ref().unwrap();
-        // `Burning Blood`: +6, capped at the maximum (`inv:§2`).
-        let expected = (fight_hp + rd_run::state::BURNING_BLOOD_HEAL).min(start);
+        // `Burning Blood`: +6, capped at the **maximum** (`inv:§2`).
+        //
+        // ⚠️ 这里曾经写 `.min(start)` —— `start` 是**当前**血量（73），不是最大值（80）。
+        // 它一直绿着，只是因为旧的内容让这一场恰好把血打到"打完 +6 也补不回 73"的地步（§258 换了
+        // 首场遭遇才暴露）：`min(当前)` 把"回血能把血补到当前以上"当成错误，而 Burning Blood
+        // 的全部意义就是补到当前以上（只要不超过上限）。
+        let cap = session.state.health_max();
+        let expected = (fight_hp + rd_run::state::BURNING_BLOOD_HEAL).min(cap);
         assert_eq!(
             session.state.health(),
             expected,

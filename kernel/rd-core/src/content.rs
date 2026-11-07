@@ -3412,7 +3412,11 @@ fn list_field<'a>(
 }
 
 /// 一个池里最多认多少个遭遇 id（`EncounterTables` 的条目数，本内容 4）。
-pub const MAX_POOL_IDS: usize = 8;
+/// §258: it was **8**, and the act-1 weak pool needs **9** -- "1 Louse" and "2 Louses" are two
+/// separate rows in the wiki's easy pool, and the second one is the only place the green louse is
+/// reachable. The reader **refuses** a longer list rather than cutting it (`:3042`), which is how
+/// this surfaced: a silently truncated pool would just make one encounter never roll.
+pub const MAX_POOL_IDS: usize = 12;
 
 /// The field name of each entry in an `EncounterTables` pool.
 const ENCOUNTER_ID_FIELD: &str = "Id";

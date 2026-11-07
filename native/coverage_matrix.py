@@ -76,8 +76,9 @@ ORPHAN_OK = {
     'acid_slime_s': '`enc_small_slimes` 只放 `acid_slime_m` + `spike_slime_s`（StS 的 Small Slimes 是'
                     '随机 1-3 只混编，这里钉了一种组合）；记录与两条动作保留给扩池用',
     'spike_slime_m': '同上：中号尖刺史莱姆只在 Boss 分裂路径上出现过，遭遇池里没有它',
-    'louse_green': '`enc_louse` 只有红虱（§193：绿虱的动作仍在 `EACT` 里、读常量而不是计数器）；'
-                   '记录保留，接线那天连同 `Rolls` 一起写',
+    # §258: `louse_green` 已经接进 `enc_two_louses`（并带上与红虱同一份 `Rolls`），
+    # 所以这条声明按它自己的约定删掉了 —— 留着的后果是"孤儿的豁免"永远有效，
+    # 下次真有记录掉线也看不出来。
 }
 
 

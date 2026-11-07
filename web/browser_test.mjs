@@ -1074,13 +1074,26 @@ async function realStart(seed, trail) {
   // If that was a fight, press a card -- the single most important button in the game -- then
   // 结束回合. The card may want a target, so an armed card is followed by a real click on an enemy.
   pointer.energyBefore = await readCell(8);
+  // Which card is first? A failure here used to say only "did not spend energy", which cannot
+  // distinguish "the card was 0-cost" from "the click never played anything".
+  pointer.cardLabel = await page.evaluate(
+    "(document.querySelector('#hand button.card:not([disabled])') || {}).innerText || null");
+  pointer.handCount = await page.evaluate(
+    "document.querySelectorAll('#hand button.card').length");
   const card = await page.clickSelector("#hand button.card:not([disabled])", 0);
   pointer.cardHits = card.hits;
   pointer.cardMissing = !!card.missing;
+  pointer.cardCover = card.cover || null;
+  pointer.cardBox = card.box || null;
   await settle();
   pointer.energyAfter = await readCell(8);
   if (pointer.cardHits && pointer.energyAfter === pointer.energyBefore) {
-    const enemy = await page.clickSelector("#enemies .enemy", 0);
+    // ⚠️ This used to be `#enemies .enemy`, which matches **nothing** -- the page's class is
+    // `enemy-panel`. It stayed green only because the first playable card happened to be a
+    // self-targeted Defend (one click plays it, so the armed branch never ran). §258: the act-1
+    // pool gained a second encounter, the first card became a Strike, and the dead selector showed
+    // up. `[data-target-slot]` is the page's own "this one is aimable" marker.
+    const enemy = await page.clickSelector("#enemies [data-target-slot]", 0);
     pointer.enemyHits = enemy.hits;
     await settle();
     pointer.energyAfterTarget = await readCell(8);
@@ -1135,7 +1148,11 @@ if (report.pointer.inFightAfterNode) {
   const spent = report.pointer.energyAfter !== report.pointer.energyBefore ||
     report.pointer.energyAfterTarget !== report.pointer.energyBefore;
   want(spent, `pressing a card did not spend energy (${report.pointer.energyBefore} -> ` +
-    `${report.pointer.energyAfter}/${report.pointer.energyAfterTarget})`);
+    `${report.pointer.energyAfter}/${report.pointer.energyAfterTarget}); card ` +
+    `${JSON.stringify(report.pointer.cardLabel)} of ${report.pointer.handCount} in hand, ` +
+    `hit=${report.pointer.cardHits} cover=${JSON.stringify(report.pointer.cardCover)} ` +
+    `box=${JSON.stringify(report.pointer.cardBox)}, enemy click ${report.pointer.enemyHits}, ` +
+    `round after end ${report.pointer.roundAfterEnd}`);
   want(report.pointer.endTurnHits === true, "结束回合 was covered");
   want(report.pointer.roundAfterEnd > 0,
     `结束回合 did not leave the round (round ${report.pointer.roundAfterEnd})`);
