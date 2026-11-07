@@ -1,0 +1,117 @@
+{{Sequel Disambiguation}} 
+{{Card Infobox
+| Name          = Wish
+| Image         = Purple-Wish.png
+| Color         = Purple
+| Type          = Skill
+| Rarity        = Rare
+| Cost          = 3
+| Description   = Choose one:<br>Gain (6;8) {{BD|Plated Armor}}, (3;4) {{BD|Strength}}, or (25;30) Gold. {{KW|Exhaust}}.
+| GivesToPlayer = Plated Armor, Strength, Exhaust
+}}
+{{C|Wish}} is a 3 {{Icon|PE}}-cost {{QueryLink|Cards|color:Purple|Watcher}} {{QueryLink|Cards|rarity:Rare|Rare}} {{QueryLink|Cards|type:Skill|Skill}} Card. It gives the choice between 3 cards, of which the chosen one gets played immediately:
+* {{C|Live Forever}}, which gives 6 (8 if {{C|Wish}} was upgraded) {{BD|Plated Armor}}
+* {{C|Become Almighty}}, which gives 3 (4 if {{C|Wish}} was upgraded) {{BD|Strength}}
+* {{C|Fame and Fortune}}, which gives 25 (30 if {{C|Wish}} was upgraded) [[Gold]].
+
+== Interactions ==
+=== Neutral ===
+* Despite the fact that {{C|Wish}} technically creates a card, {{C|Master Reality}} does NOT upgrade that card. Upgrading {{C|Wish}} itself is the only way to upgrade the cards that it creates.
+
+== Trivia ==
+* {{C|Wish}} is the only card in the game that creates, then immediately plays a card. The three cards that {{C|Wish}} creates never enter your hand and cannot be added to the deck.
+* The beta design of '''Become Almighty''' is a reference to All Might, a character from My Hero Academia.
+
+{{Clear}}
+
+== Options ==
+<tabber>
+|-| Live Forever =
+<span id="Live Forever"></span>
+{{Card Infobox
+| Name          = Live Forever
+| Link          = Wish#Live Forever
+| Image         = Colorless-LiveForever.png
+| Color         = Colorless
+| Type          = Power
+| Rarity        = Special
+| Cost          = -2
+| Description   = Gain (6;8) {{BD|Plated Armor}}.
+| GivesToPlayer = Plated Armor
+| Tags          = NoList
+}}
+{{Power Infobox|Plated Armor}}
+{{C|Live Forever}} is an unplayable {{QueryLink|Cards|rarity:Special|Special}} {{QueryLink|Cards|type:Power|Power}} Card. It can only be obtained and played through {{QueryLink|Cards|color:Purple|Watcher's}} {{C|Wish}}. It gives 6 (8 if upgraded through playing an upgraded {{C|Wish}}) {{BD|Plated Armor}}. 
+
+== Interactions ==
+=== Order ===
+* {{BD|Plated Armor}} gives {{KW|Block}} after {{R|Orichalcum}} checks if you have block.
+
+=== Neutral ===
+* The {{KW|Block}} gained by {{BD|Plated Armor}} is unaffected by {{BD|Frail}}, {{BD|Dexterity}} or {{BD|No Block}} from a previously played {{C|Panic Button}}.
+
+|-| Become Almighty =
+<span id="Become Almighty"></span>
+{{Card Infobox
+| Name          = Become Almighty
+| Link          = Wish#Become Almighty
+| Image         = Colorless-BecomeAlmighty.png
+| Color         = Colorless
+| Type          = Power
+| Rarity        = Special
+| Cost          = -2
+| Description   = Gain (3;4) {{BD|Strength}}.
+| GivesToPlayer = Strength
+| Tags          = NoList
+}}
+{{Power Infobox|Strength}}
+{{C|Become Almighty}} is an unplayable {{QueryLink|Cards|rarity:Special|Special}} {{QueryLink|Cards|type:Power|Power}} Card. It can only be obtained and played through {{QueryLink|Cards|color:Purple|Watcher's}} {{C|Wish}}. It gives 3 (4 if upgraded through playing an upgraded {{C|Wish}}) {{BD|Strength}}. 
+
+|-| Fame and Fortune =
+<span id="Fame and Fortune"></span>
+{{Card Infobox
+| Name          = Fame and Fortune
+| Link          = Wish#Fame and Fortune
+| Image         = Colorless-FameandFortune.png
+| Color         = Colorless
+| Type          = Skill
+| Rarity        = Special
+| Cost          = -2
+| Description   = Gain (25;30) Gold
+| GivesToPlayer = Gold
+| Tags          = NoList
+}}
+{{C|Fame and Fortune}} is an unplayable {{QueryLink|Cards|rarity:Special|Special}} {{QueryLink|Cards|type:Power|Power}} Card. It can only be obtained and played through {{QueryLink|Cards|color:Purple|Watcher's}} {{C|Wish}}. It gives 25 (30 if upgraded through playing an upgraded {{C|Wish}}) gold. 
+
+== Interactions ==
+=== Positive ===
+* {{R|Bloody Idol}} heals for 5 HP when [[Gold]] is collected.
+
+=== Anti-Synergies ===
+* {{R|Ectoplasm}} will fully negate the effect of this card.
+
+</tabber>
+{{Clear}}
+== Update History ==
+{{Update History Table/start}}
+{{Update History Table/row|Watcher 10|* Become Almighty and Live Forever cards get updated VFX.}}
+{{Update History Table/row|Watcher 9|* Fixed Stance Potion and Wish sometimes not showing the Peek button.
+* Adding beta art for Live Forever and Pressure Points cards.
+* Fixing up Live Forever and Like Water card portraits not showing up.
+* Plated Armor text on Live Forever is now gold color.}}
+{{Update History Table/row|Watcher 8|* Wish's Live Forever option now gives Plated Armor (instead of Plated Armor each turn).}}
+{{Update History Table/row|Watcher 7|* When using Wish card, cards shown in the Choose One screen are now marked as seen (for Card Library).
+* Fame and Fortune card gets a VFX.}}
+
+{{Update History Table/row|Watcher 6|* Wish card gets nerfed. Cost 2 -> 3.}}
+{{Update History Table/row|Watcher 5|* Wish card no longer loses HP, costs 2, and its effects are reduced.
+* Fixed bug where players could not return to Choose One screen (Stance Potion/Wish) after looking at map/deck/settings.}}
+{{Update History Table/row|Watcher 4|* Wish card's effects are now on Omniscience card.
+* Wish card reworked.}}
+{{Update History Table/row|Watcher 3|* Fixed Spirit Shield card applying wrong values when played in non-standard ways (eg Wish).}}
+{{Update History Table/row|Watcher 1|* Added Wish, Live Forever, Become Almighty, and Fame and Fortune to the game ''(likely)''}}
+{{Update History Table/end}}
+
+{{WatcherNav}}
+{{ColorlessNav}}
+[[Category:Cards]]

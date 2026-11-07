@@ -2650,6 +2650,9 @@ pub extern "C" fn rd_env_choice_kind() -> i32 {
             ChoiceThen::ToHandFree => 7,
             // §250: `Forethought` -- "on the **bottom** of your draw pile, costs 0".
             ChoiceThen::ToDrawPileBottomFree => 8,
+            // §254: `Wish` -- "pick one, and **it is played at once**". A new number because the
+            // sentence is unlike every other one ("拿进手牌" vs "立刻打出").
+            ChoiceThen::PlayChosen => 9,
         },
         None => 0,
     }

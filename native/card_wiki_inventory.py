@@ -332,6 +332,8 @@ FACTS = {
     'become_almighty': ([('status', 'standard.strength', 3, 'source')], [('status', 'standard.strength', 4, 'source')]),
     'live_forever': ([('status', 'standard.plated_armor', 6, 'source')], [('status', 'standard.plated_armor', 8, 'source')]),
     'fame_and_fortune': ([('gold', 25)], [('gold', 30)]),
+    # ---- §254：Wish（紫卡；项目范围已含观者）--------------------------------------------
+    'wish': ([('offerList', ('become_almighty', 'live_forever', 'fame_and_fortune'), 1, 1, 'PlayChosen')], [('offerList', ('become_almighty+', 'live_forever+', 'fame_and_fortune+'), 1, 1, 'PlayChosen')]),
     # 没有数字的牌：纯关键字/状态牌。
     'slimed': ([], None),
     'wound': ([], None),

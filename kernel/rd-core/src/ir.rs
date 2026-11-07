@@ -189,6 +189,17 @@ pub enum NodeKind {
     ///
     /// 字段：`{ToZone, Count?, Placement?}`（`Count` 缺席 = 1，`Placement` 缺席 = `Bottom`）。
     CreateCardCopy,
+    /// §254：**给一张固定的候选表，选中的那张被立刻打出**（`Wish`）。
+    ///
+    /// 字段：`{Definitions, Min?, Max?, Then?}`。`Definitions` 是**卡定义 id 的表**
+    /// （`F_STRLIST`），按给定顺序成为三个候选。
+    ///
+    /// 与 `node.offerRandomCards`（`Discovery`）的分工：那个从**随机池**里抽，"抽到什么"是运行期
+    /// 的事；这个的候选是**内容写死的** —— `Wish` 的三个选项永远是那三张。合并成一个节点会让
+    /// "候选是固定的"这件事没有地方可写。
+    ///
+    /// `Then` 缺席 = `ToHandFree`（与 `Discovery` 同义）；`Wish` 写 `PlayChosen`。
+    OfferCards,
     /// §253：**由别的牌把一张牌打出来**（`Wish` 的三个选项；参考的 `node.playCard`）。
     ///
     /// 字段：`{PlayerSelector, CardExpression, CardTargetSelector?, IgnoreUnplayable?}`。
@@ -300,6 +311,7 @@ impl NodeKind {
             NodeKind::DealDamageAndIfFatal => "node.dealDamageAndIfFatal",
             NodeKind::GainGold => "node.gainGold",
             NodeKind::PlayCard => "node.playCard",
+            NodeKind::OfferCards => "node.offerCards",
             NodeKind::CreateCardCopy => "node.createCardCopy",
             NodeKind::OfferRandomCards => "node.offerRandomCards",
             NodeKind::CreateRandomCardInstance => "node.createRandomCardInstance",
@@ -318,7 +330,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 40] = [
+        const ALL: [NodeKind; 41] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -363,6 +375,7 @@ impl NodeKind {
             NodeKind::DealDamageAndIfFatal,
             NodeKind::GainGold,
             NodeKind::PlayCard,
+            NodeKind::OfferCards,
             NodeKind::CreateCardCopy,
             NodeKind::OfferRandomCards,
             NodeKind::CreateRandomCardInstance,

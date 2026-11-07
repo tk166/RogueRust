@@ -1809,6 +1809,17 @@ pub enum ChoiceThen {
     /// 内核只守**机械**那半（"`+` 只能加一次、id 不能超长"）；"这张牌有没有 `+` 行"是内容的
     /// 事，所以由发问的节点把候选**收窄**到有 `+` 行的牌（`upgrade_cards_node` 用的是同一条规则）。
     Upgrade,
+    /// §254：**选中的那张被立刻打出**（`Wish`）。
+    ///
+    /// wiki 的原话是 "Wish is the only card in the game that creates, then immediately plays a
+    /// card. The three cards that Wish creates **never enter your hand**"。所以这个变体的语义是
+    /// "造 → 打"一步完成：`resolve_offered` 把实例造进手牌（`plan_play` 的受理前提），
+    /// 同时入队一条 [`EffectRequest::PlayCard`]；排空时它被真的打出去，
+    /// 于是玩家看不到"手牌里多了一张废牌"这个中间态。
+    ///
+    /// ⚠️ 它打出去的牌**一定**是 `unplayable` 的（`Become Almighty` / `Live Forever` /
+    /// `Fame and Fortune` 都是）—— 入队的那条请求带 `ignore_unplayable = true`（§253）。
+    PlayChosen,
     /// §250：**拿进手牌，并且这一份的价格就是 0**（`Discovery`）。
     ///
     /// 与 [`Self::ToHand`] 的差别只有一点，但那一点必须由**内核**保证：`ToHand` 的价格来自
@@ -1847,6 +1858,8 @@ impl ChoiceThen {
             Self::ToDrawPileTop => CardZone::DrawPile,
             // §250：两个 `Free` 变体各自落在自己的牌区；价格不是牌区的一部分。
             Self::ToHandFree => CardZone::Hand,
+            // §254：先造进手牌（受理前提），紧接着入队"打出它"。
+            Self::PlayChosen => CardZone::Hand,
             Self::ToDrawPileBottomFree => CardZone::DrawPile,
         }
     }
@@ -2505,6 +2518,22 @@ pub enum EffectRequest {
     ShuffleDiscardIntoDraw {
         /// 洗谁的牌。
         owner: CombatantId,
+    },
+    /// §254：**把一张牌打出去**（`Wish` 的"选中的那张立刻被打出"）。
+    ///
+    /// 为什么在请求这一层而不是在 `resolve_choice` 里直接打：那个函数住在 `CombatState` 上，
+    /// 而那个结构**没有内容** —— 出牌要 `Content` 才判得出费用与 tag。所以"打出"只能发生在
+    /// **排空期**（`ctx.content` 在那儿）。与 §241 `Havoc` 的 `play_top_card_for` 同层。
+    PlayCard {
+        /// 谁在打（`Wish` 的施法者）。
+        owner: CombatantId,
+        /// 打哪一份实例。
+        card: CardInstanceId,
+        /// 给这张牌指定的出牌目标（`None` = 由选择器自己解）。
+        target: Option<CombatantId>,
+        /// §253：**越过 `unplayable`** —— `Wish` 的三个选项全是 unplayable，而 wiki 说
+        /// Wish 就是**会**打出它们。
+        ignore_unplayable: bool,
     },
     /// §241：**强制打出抽牌堆顶那张，然后把它消耗掉**（`Havoc`）。
     ///
@@ -5497,6 +5526,24 @@ impl CombatState {
             let slot = self.create_card_instance(&choice.chooser, *definition, destination)?;
             if choice.then == ChoiceThen::ToHand && cost_delta != 0 {
                 self.write_price(slot, cost_delta)?;
+            }
+            // §254：`Wish` —— 造完立刻入队"打出它"。
+            //
+            // 顺序是语义：**先**入队再继续（同一轮循环里不会有别的请求插到它前面），
+            // 而那条请求带 `ignore_unplayable`（这三张牌都是 unplayable）。
+            // 目标给 `None`：Wish 的三个选项都不需要目标（它们打的是自己/运行层）。
+            if choice.then == ChoiceThen::PlayChosen {
+                let instance = self
+                    .card(slot)
+                    .map(|card| card.id)
+                    .ok_or(ChoiceError::NotInSource)?;
+                self.enqueue_effect(EffectRequest::PlayCard {
+                    owner: choice.chooser,
+                    card: instance,
+                    target: None,
+                    ignore_unplayable: true,
+                })
+                .map_err(ChoiceError::Capacity)?;
             }
             // §250：候选来源的**免费**变体（`Discovery`）。这一支与 `resolve_from_pile` 是两条
             // 结算路（一个造新实例、一个搬旧实例），所以"免费"必须在两处都写 —— 只写一处就会

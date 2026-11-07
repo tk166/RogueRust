@@ -17350,3 +17350,64 @@ the current fight — it funds the run instead"），`fight_end` 才进运行层
    硬编种子会让判据在换种子时"什么都没测"。
 2. **别把测试脚手架当语义**：`test_run` 里的战斗是"走到节点再 `rd_run_begin_node`"两步起的，
    少一步就只拿到"还没有走到任何节点"。
+
+---
+
+## §254 `Wish`：全游戏唯一"先造一张、再立刻打出它"的牌
+
+**项目范围从"铁甲战士 + 无色"扩到含观者**（用户决定：紫卡算，`J.A.X.` 这类对战士有用的
+事件必拿卡也算）。内容 289 → **291 行**，`Wish` / `Wish+` 落地；`rd-core` 784 测试。
+
+### 254.1 三行 wiki 决定了实现形状
+
+> `Choose one: Gain 6 (8) Plated Armor, 3 (4) Strength, or 25 (30) Gold. Exhaust.`
+> **Wish is the only card in the game that creates, then immediately plays a card.**
+> **The three cards that Wish creates never enter your hand and cannot be added to the deck.**
+
+1. **选项是固定的三张定义** ⇒ 新节点 `node.offerCards{Definitions, Min?, Max?, Then?}`。
+   与 `offerRandomCards`（`Discovery`）分开：那个从**随机池**抽，这个的候选是**内容写死的**；
+   合并会让"候选是固定的"没有地方可表达。
+2. **选中那张要被打出，而它 `unplayable`** ⇒ §253 的 `IgnoreUnplayable` 正是为此铺的路。
+3. **它从不进手牌**，而 `plan_play` 要求实例在**手牌**（`Havoc` 也这么绕）。
+   ⇒ `ChoiceThen::PlayChosen`：`resolve_offered` 把实例造进手牌，**同时**入队一条
+   `EffectRequest::PlayCard`；排空时它被真的打出去。中间那个"手牌里有一张"的状态在
+   **同一个调用里**就被消费掉，玩家看不到。
+
+### 254.2 为什么"打出"必须是一条请求
+
+`resolve_choice` 住在 `CombatState` 上，而那个结构**没有内容** —— `plan_play` 要 `Content`
+才判得出费用与 tag。所以"打出"只能发生在**排空期**（`ctx.content` 在那儿）。
+`EffectRequest::PlayCard{owner, card, target, ignore_unplayable}` 与 §241 `Havoc` 的
+`play_top_card_for` 同层，两者共用 `play::play_card_from_program`（§253）——
+费用/事件/触发器/修饰器仍然只有一份实现。
+
+### 254.3 那三张选项的落区：`BanishedPile`（不是 `ExhaustPile`）
+
+§252 给它们写的是 `DiscardPile`（抄 Power 卡的老约定）。但一张"只会被 `Wish` 打出"的牌
+留在弃牌堆里就是一张永远打不出的废牌。改成 `ExhaustPile` 被内容门挡下 ——
+它的考据规则是对的：**落区写 `ExhaustPile` ⇒ wiki 必须写 Exhaust**，而这三张的 Infobox
+里没有 Exhaust。
+
+正解是 `BanishedPile`：内核里"离场、但不是 Exhaust"的那一格。
+（`Wish` 自己 wiki 写明 Exhaust ⇒ 它的落区就是 `ExhaustPile`。）
+
+### 254.4 判据（2 条）
+
+1. `wish_offers_three_cards_and_plays_the_pick_at_once` —— 三个选项**各测一次**，因为它们的
+   载体同一条路而**效果落在三个完全不同的地方**（状态 / 状态 / 战斗层的金币账）：
+   ① 问句是 `Offered` + `PlayChosen`，候选**恰好是那三张、按内容给的顺序**；
+   ② 选 `become_almighty` ⇒ 力量 +3；③ 选 `live_forever` ⇒ 板甲 +6；
+   ④ 选 `fame_and_fortune` ⇒ `gold_gained` +25；⑤ **手牌不多一张**、那张牌在 `BanishedPile`、
+   只有 `Wish` 自己进了消耗堆。
+2. `wish_plus_offers_the_upgraded_options` —— `Wish+` 的候选是三张 `+` 版本，选第一张 ⇒ 力量 **+4**
+   （not +3）。只断言候选表的话，"候选对了但打出的是基础版"会漏掉。
+   这一条正好对上 wiki 那句 "Upgrading Wish itself is the only way to upgrade the cards that
+   it creates"。
+
+### 254.5 本机环境的一个坑（记下来，免得下次再查半小时）
+
+跑对拍时 `rd-fightdump.exe` 突然 `os error 32` / "拒绝访问"，而且**改名也没用、重编出同样的字节
+也一样** —— 那是按**二进制内容**的执行阻止（杀毒/.NET 程序保护策略那一类）。
+绕法是让产物字节不一样：`RUSTFLAGS="-C codegen-units=16" python -X utf8 native/fight_diff.py`
+（`fight_diff.py` 用 `cargo run`，`RUSTFLAGS` 会传给子进程 ⇒ 重编出不同字节）。
+四条对拍照样 182/182、62/62、124/124、394/394。

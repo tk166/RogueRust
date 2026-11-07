@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 624 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 626 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -38,15 +38,15 @@
 |---|---|---|---|---|---|---|---|---|
 | 怪物 | 47 | 33 | 0 | 14 | 47 | 0 | 11 | 0 |
 | 敌人动作 | 130 | 59 | 71 | 0 | 130 | 0 | 51 | 0 |
-| 卡牌 | 289 | 154 | 135 | 0 | 277 | 12 | 18 | 0 |
+| 卡牌 | 291 | 159 | 132 | 0 | 279 | 12 | 18 | 0 |
 | 状态 | 65 | 57 | 6 | 2 | 0 | 65 | 1 | 0 |
 | 遭遇 | 34 | 25 | 9 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 11 | 11 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 15 | 11 | 4 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 624 | 383 | 225 | 16 | 454 | 77 | 81 | 0 |
+| **合计** | 626 | 388 | 222 | 16 | 456 | 77 | 81 | 0 |
 
-扫描到的具名测试：**991** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
+扫描到的具名测试：**993** 条；wiki dump：**45** 份（其中 47 只怪有 dump）。
 
 事件：池里有 **14** 个位次、**11** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -239,7 +239,7 @@
 | time_eater.ripple | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids | — | wiki:wiki_asc/time_eater.txt (via time_eater) | — | §195.7/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head.tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/torch_head.txt (via torch_head) · 仅基础值 | 无升档：wiki Torch Head: Tackle is 7, no A-row | INV_ACTIONS+INV_NO_ASC |
 
-## 卡牌（289）
+## 卡牌（291）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -259,8 +259,8 @@
 | bash+ | yes | — | CARD_DIFF | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
-| become_almighty | yes | the_wish_options_are_unplayable_by_hand, play_card_from_program_respects_unplayable_unless_told_otherwise | — | wiki:wiki_cards/become_almighty.txt | — | CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
-| become_almighty+ | yes | — | CARD_DIFF | wiki:wiki_cards/become_almighty.txt (via become_almighty) | — | INV_CARDS |
+| become_almighty | yes | the_wish_options_are_unplayable_by_hand, play_card_from_program_respects_unplayable_unless_told_otherwise …(+1) | — | wiki:wiki_cards/become_almighty.txt | — | §3.1/§254/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
+| become_almighty+ | yes | wish_plus_offers_the_upgraded_options | — | wiki:wiki_cards/become_almighty.txt (via become_almighty) | — | INV_CARDS/wish_plus_offers_the_upgraded_options |
 | berserk | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt | — | §197/§199/CARD_WIKI+INV_CARDS |
 | berserk+ | yes | — | CARD_DIFF | wiki:wiki_cards/berserk.txt (via berserk) | — | INV_CARDS |
 | beta | yes | — | CARD_DIFF | wiki:wiki_cards/beta.txt | — | CARD_WIKI+INV_CARDS |
@@ -336,8 +336,8 @@
 | exhume+ | yes | — | CARD_DIFF | wiki:wiki_cards/exhume.txt (via exhume) | — | INV_CARDS |
 | expunger | yes | expunger_repeats_by_its_per_copy_x | — | wiki:wiki_cards/expunger.txt | — | §251/CARD_WIKI+INV_CARDS/expunger_repeats_by_its_per_copy_x |
 | expunger+ | yes | — | CARD_DIFF | wiki:wiki_cards/expunger.txt (via expunger) | — | INV_CARDS |
-| fame_and_fortune | yes | the_wish_options_are_unplayable_by_hand | — | wiki:wiki_cards/fame_and_fortune.txt | — | CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
-| fame_and_fortune+ | yes | — | CARD_DIFF | wiki:wiki_cards/fame_and_fortune.txt (via fame_and_fortune) | — | INV_CARDS |
+| fame_and_fortune | yes | the_wish_options_are_unplayable_by_hand, wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/fame_and_fortune.txt | — | §3.1/§254/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
+| fame_and_fortune+ | yes | wish_plus_offers_the_upgraded_options | — | wiki:wiki_cards/fame_and_fortune.txt (via fame_and_fortune) | — | INV_CARDS/wish_plus_offers_the_upgraded_options |
 | feed | yes | feed_only_raises_max_hp_on_a_fatal_blow | — | wiki:wiki_cards/feed.txt | — | CARD_WIKI+INV_CARDS/feed_only_raises_max_hp_on_a_fatal_blow |
 | feed+ | yes | — | CARD_DIFF | wiki:wiki_cards/feed.txt (via feed) | — | INV_CARDS |
 | feel_no_pain | yes | — | CARD_DIFF | wiki:wiki_cards/feel_no_pain.txt | — | CARD_WIKI+INV_CARDS |
@@ -395,8 +395,8 @@
 | juggernaut+ | yes | — | CARD_DIFF | wiki:wiki_cards/juggernaut.txt (via juggernaut) | — | INV_CARDS |
 | limit_break | yes | limit_break_doubles_strength_and_only_the_base_copy_exhausts | — | wiki:wiki_cards/limit_break.txt | — | CARD_WIKI+INV_CARDS/limit_break_doubles_strength_and_only_the_base_copy_exhausts |
 | limit_break+ | yes | limit_break_doubles_strength_and_only_the_base_copy_exhausts | — | wiki:wiki_cards/limit_break.txt (via limit_break) | — | INV_CARDS/limit_break_doubles_strength_and_only_the_base_copy_exhausts |
-| live_forever | yes | the_wish_options_are_unplayable_by_hand | — | wiki:wiki_cards/live_forever.txt | — | CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
-| live_forever+ | yes | — | CARD_DIFF | wiki:wiki_cards/live_forever.txt (via live_forever) | — | INV_CARDS |
+| live_forever | yes | the_wish_options_are_unplayable_by_hand, wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/live_forever.txt | — | §3.1/§254/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
+| live_forever+ | yes | wish_plus_offers_the_upgraded_options | — | wiki:wiki_cards/live_forever.txt (via live_forever) | — | INV_CARDS/wish_plus_offers_the_upgraded_options |
 | madness | yes | madness_frees_exactly_one_random_hand_card | — | wiki:wiki_cards/madness.txt | — | CARD_WIKI+INV_CARDS/madness_frees_exactly_one_random_hand_card |
 | madness+ | yes | — | CARD_DIFF | wiki:wiki_cards/madness.txt (via madness) | — | INV_CARDS |
 | magnetism | yes | — | CARD_DIFF | wiki:wiki_cards/magnetism.txt | — | CARD_WIKI+INV_CARDS |
@@ -507,7 +507,7 @@
 | the_bomb+ | yes | — | CARD_DIFF | wiki:wiki_cards/the_bomb.txt (via the_bomb) | — | INV_CARDS |
 | thinking_ahead | yes | — | CARD_DIFF | wiki:wiki_cards/thinking_ahead.txt | — | §246/CARD_WIKI+INV_CARDS |
 | thinking_ahead+ | yes | — | CARD_DIFF | wiki:wiki_cards/thinking_ahead.txt (via thinking_ahead) | — | INV_CARDS |
-| through_violence | yes | through_violence_and_safety_differ_only_in_what_they_produce | — | wiki:wiki_cards/through_violence.txt | — | §3.1/§252/CARD_WIKI+INV_CARDS/through_violence_and_safety_differ_only_in_what_they_produce |
+| through_violence | yes | through_violence_and_safety_differ_only_in_what_they_produce | — | wiki:wiki_cards/through_violence.txt | — | §252/§254/CARD_WIKI+INV_CARDS/through_violence_and_safety_differ_only_in_what_they_produce |
 | through_violence+ | yes | — | CARD_DIFF | wiki:wiki_cards/through_violence.txt (via through_violence) | — | INV_CARDS |
 | thunderclap | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/thunderclap.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | thunderclap+ | yes | — | CARD_DIFF | wiki:wiki_cards/thunderclap.txt (via thunderclap) | — | INV_CARDS |
@@ -530,6 +530,8 @@
 | whirlwind+ | yes | an_upgraded_card_row_is_buildable | — | wiki:wiki_cards/whirlwind.txt (via whirlwind) | — | INV_CARDS/an_upgraded_card_row_is_buildable |
 | wild_strike | yes | the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/wild_strike.txt | — | CARD_WIKI+INV_CARDS/the_ten_cards_added_in_221_do_what_the_wiki_says |
 | wild_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/wild_strike.txt (via wild_strike) | — | INV_CARDS |
+| wish | yes | wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/wish.txt | — | §3.1/§254/CARD_WIKI+INV_CARDS/wish_offers_three_cards_and_plays_the_pick_at_once |
+| wish+ | yes | wish_plus_offers_the_upgraded_options | — | wiki:wiki_cards/wish.txt (via wish) | — | INV_CARDS/wish_plus_offers_the_upgraded_options |
 | wound | yes | the_new_red_skills_do_what_their_pages_say, evolve_and_fire_breathing_only_answer_to_the_right_tags …(+1) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
@@ -582,7 +584,7 @@
 | standard.panache | yes | panache_fires_on_every_fifth_card_of_the_turn | — | spec:INV_STATUSES | — | §244/§249/INV_STATUSES/panache_fires_on_every_fifth_card_of_the_turn |
 | standard.phantom_veil | yes | — | — | spec:INV_STATUSES | — | §175/§181/INV_STATUSES |
 | standard.phase_split | yes | the_boss_phase_splits_once_at_low_health, a_phase_split_happens_once_even_under_three_hits | — | spec:INV_STATUSES | — | §121/§122/INV_STATUSES/the_boss_phase_splits_once_at_low_health |
-| standard.plated_armor | yes | a_long_fight_never_reports_a_step_problem, plated_armor_wears_down_to_nothing_without_an_error …(+5) | — | spec:INV_STATUSES | — | §209/§210/INV_STATUSES/a_long_fight_never_reports_a_step_problem |
+| standard.plated_armor | yes | a_long_fight_never_reports_a_step_problem, plated_armor_wears_down_to_nothing_without_an_error …(+6) | — | spec:INV_STATUSES | — | §209/§210/INV_STATUSES/a_long_fight_never_reports_a_step_problem |
 | standard.rage | yes | rage_gives_block_only_for_an_attack, the_new_red_skills_do_what_their_pages_say …(+3) | — | spec:INV_STATUSES | — | §119/INV_STATUSES/rage_gives_block_only_for_an_attack |
 | standard.regain_strength | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable | — | spec:INV_STATUSES | — | §219/INV_STATUSES/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | standard.regen | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, regen_heals_at_the_end_of_the_turn …(+1) | — | spec:INV_STATUSES | — | §119/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
@@ -594,7 +596,7 @@
 | standard.spore_cloud | yes | spore_cloud_weakens_the_killer_on_death | — | spec:INV_STATUSES | — | §117/§249/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
 | standard.stasis | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.1/§195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
-| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+61) | — | spec:INV_STATUSES | — | §242/§252/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
+| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+63) | — | spec:INV_STATUSES | — | §242/§252/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
 | standard.the_bomb | yes | the_bomb_explodes_on_the_third_turn_end_only | — | spec:INV_STATUSES | — | §248/§249/INV_STATUSES/the_bomb_explodes_on_the_third_turn_end_only |
 | standard.the_bomb_damage | yes | the_bomb_explodes_on_the_third_turn_end_only | — | spec:INV_STATUSES | — | §245/§248/INV_STATUSES/the_bomb_explodes_on_the_third_turn_end_only |
 | standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, standard_status_ids_are_byte_ordered_not_registration_ordered …(+4) | — | spec:INV_STATUSES | — | §214/§249/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |

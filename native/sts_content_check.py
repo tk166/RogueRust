@@ -118,6 +118,9 @@ INV_DECK = {"strike": 5, "defend": 4, "bash": 1}   # inv:§2.1
 
 # inv:§3.1 -- the 3 basic cards, as mechanically derived facts.
 INV_CARDS = {
+    # ---- §254：Wish / Wish+（2 行）----------------------------------------------------------
+    "wish": {"Cost": 3, "Tags": ["skill", "watcher"], "Facts": [["offerList", ["become_almighty", "live_forever", "fame_and_fortune"], 1, 1, "PlayChosen"]]},
+    "wish+": {"Cost": 3, "Tags": ["skill", "watcher"], "Facts": [["offerList", ["become_almighty+", "live_forever+", "fame_and_fortune+"], 1, 1, "PlayChosen"]]},
     # ---- §252：剩下 6 张 / 12 行 ------------------------------------------------------------
     "through_violence": {"Cost": 0, "Tags": ["attack", "colorless", "retain"], "Facts": [["damage", 20, "event"]]},
     "through_violence+": {"Cost": 0, "Tags": ["attack", "colorless", "retain"], "Facts": [["damage", 30, "event"]]},
@@ -1812,6 +1815,12 @@ def program_facts(root):
             # playable" are two different content promises.
             out.append(("playCard", tgt(body["PlayerSelector"]),
                         body.get("IgnoreUnplayable", False)))
+        elif kind == "node.offerCards":
+            # §254: "offer these exact cards, and the pick is played at once" (`Wish`). The
+            # **list** is the fact: which three cards, in which order, is the whole card.
+            out.append(("offerList", tuple(body.get("Definitions") or ()),
+                        body.get("Min", 1), body.get("Max", 1),
+                        body.get("Then", "ToHandFree")))
         elif kind == "node.gainGold":
             # §250: gold **inside** a fight (`Hand of Greed`). A fact of its own: the run's gold is
             # not a combat resource, so it must not be folded into `gain`.

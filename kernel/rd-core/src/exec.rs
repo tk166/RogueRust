@@ -1000,6 +1000,8 @@ pub fn resolve_effect(
             | EffectRequest::PlayTopCardOfDrawPile { .. }
             | EffectRequest::ShuffleDiscardIntoDraw { .. }
             | EffectRequest::MoveCardToZone { .. }
+            // §254：见 `request_target` 的同一条注释。
+            | EffectRequest::PlayCard { .. }
             | EffectRequest::EndTurn => None,
             EffectRequest::ExtraTurn { target } => target,
         },
@@ -1034,6 +1036,9 @@ const fn request_target(request: &EffectRequest) -> Option<CombatantId> {
         | EffectRequest::PlayTopCardOfDrawPile { .. }
         | EffectRequest::ShuffleDiscardIntoDraw { .. }
         | EffectRequest::MoveCardToZone { .. }
+        // §254：`PlayCard` 不针对战斗员（它的 `target` 是"给这张牌指定的出牌目标"，
+        // 与"这条请求针对谁"不是一回事）—— 所以不进那张存在性检查表。
+        | EffectRequest::PlayCard { .. }
         | EffectRequest::EndTurn => None,
     }
 }
@@ -1159,6 +1164,29 @@ fn resolve_request(ctx: &mut ExecContext<'_>, request: &EffectRequest) -> Result
             cost_zero,
         } => create_random_card_for(ctx, &owner, &tag, count, to_zone, cost_zero),
         EffectRequest::PlayTopCardOfDrawPile { owner } => play_top_card_for(ctx, &owner),
+        // §254：`Wish` 的那张牌 —— 与 `Havoc` 共用 `play_card_from_program`（§253）。
+        EffectRequest::PlayCard {
+            owner,
+            card,
+            target,
+            ignore_unplayable,
+        } => {
+            let Some(content) = ctx.content else {
+                return Err(ExecError::Ir(IrError::Missing("content")));
+            };
+            let played = crate::play::play_card_from_program(
+                ctx.state,
+                content,
+                &owner,
+                &card,
+                target,
+                ignore_unplayable,
+            )?;
+            // 参考对"打不出去"是 no-op（§253 的六种）；这里也一样 —— 但**必须**让那张牌留在
+            // 原处而不是凭空消失。`play_card_from_program` 的 no-op 不改状态，所以什么都不用做。
+            let _ = played;
+            Ok(())
+        }
         EffectRequest::ShuffleDiscardIntoDraw { owner } => {
             // 重洗 0 张不是错误（弃牌堆空 ⇒ 什么都不做，`reshuffle_discard_into_draw` 自己返回 0）。
             ctx.state
@@ -1897,6 +1925,80 @@ fn create_card_copy_node(
     resume_later(ctx.state, frame, slot)
 }
 
+/// §254：`node.offerCards` 的实体 —— `{Definitions, Min?, Max?, Then?}`。
+///
+/// 三个候选是**内容写死的**（`Definitions` 是 `F_STRLIST`），按给定顺序进问句。
+/// `Then` 决定选完做什么：`ToHandFree`（进手牌、这次免费，与 `Discovery` 同义）或
+/// `PlayChosen`（**立刻打出它**，`Wish`）。
+///
+/// 与 `offerRandomCards` 共用"问句怎么建"这件事的形状（`PendingChoice` + `ChoiceSource::Offered`），
+/// 但**不共用抽签**：这里一个随机都不掷 —— 抽签会让"Wish 的三个选项是固定的"变成运气。
+fn offer_cards_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    _stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let mut ids = [0u16; MAX_OFFERED_CARDS];
+    let count = node.str_list_field("Definitions", &mut ids)?;
+    if count == 0 || count > MAX_OFFERED_CARDS {
+        return Err(ExecError::Modifier);
+    }
+    let Some(content) = ctx.content else {
+        return Err(ExecError::Ir(IrError::Missing("content")));
+    };
+    let Some(chooser) = ctx.source else {
+        return Err(ExecError::MissingCombatant);
+    };
+    let min = u8::try_from(node.int_field("Min")?.unwrap_or(1)).map_err(|_| ExecError::Modifier)?;
+    let max = u8::try_from(node.int_field("Max")?.unwrap_or(1)).map_err(|_| ExecError::Modifier)?;
+    if min > max {
+        return Err(ExecError::Modifier);
+    }
+    // `Then` 缺席 ⇒ `ToHandFree`（与 `Discovery` 同一条默认）。
+    let then = match node.str_field("Then")? {
+        None | Some("ToHandFree") => crate::state::ChoiceThen::ToHandFree,
+        Some("PlayChosen") => crate::state::ChoiceThen::PlayChosen,
+        Some(_) => return Err(ExecError::Ir(IrError::UnknownKind)),
+    };
+
+    let mut offered = crate::state::Bounded::new();
+    for index in 0..count {
+        let Some(text) = ids.get(index).copied().and_then(|id| content.string(id)) else {
+            return Err(ExecError::Ir(IrError::Missing("Definitions")));
+        };
+        // 定义必须在 `CARD` 表里 —— 一个指向不存在的牌的候选会让"选中"那一步炸，
+        // 而那时玩家已经点了（不可回退）。所以**建问句之前**就验。
+        // 与 `host::card_row` 同一条查法（`lookup_in(.., EK_CARD)`）：那个函数是 `host` 私有的，
+        // 而这里只需要"这张定义在不在 CARD 表里"这一个答案。
+        if content
+            .lookup_in(text, crate::content::EK_CARD)
+            .is_none()
+        {
+            return Err(ExecError::Ir(IrError::Missing("CARD row")));
+        }
+        let definition = CardDefinitionId::new(text)?;
+        offered
+            .push(definition, crate::state::Container::ChoiceOptions)
+            .map_err(ExecError::Capacity)?;
+    }
+
+    let question = crate::state::PendingChoice {
+        chooser,
+        source: crate::state::ChoiceSource::Offered,
+        min,
+        max,
+        then,
+        offered,
+        candidates: crate::state::Bounded::new(),
+    };
+    ctx.state
+        .begin_choice(question)
+        .map_err(|_| ExecError::Modifier)?;
+    resume_later(ctx.state, frame, slot)
+}
+
 /// §250：`node.offerRandomCards` 的实体 —— `{Count?, Min?, Max?}`：**三选一**。
 ///
 /// 与 `chooseCards` 的分工：那个问"**已有的**哪几张"（候选是实例），这个问"这几张**新的**
@@ -2217,6 +2319,7 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::DealDamageAndIfFatal
         | NodeKind::GainGold
         | NodeKind::PlayCard
+        | NodeKind::OfferCards
         | NodeKind::CreateCardCopy
         | NodeKind::OfferRandomCards
         // §146：`repeat`（X 费牌的"跑 X 遍"）。它有孩子，但预检只走一遍 Body ——
@@ -2376,6 +2479,7 @@ fn dispatch_node(
         }
         NodeKind::GainGold => gain_gold_node(node, ctx, frame, slot, stats),
         NodeKind::PlayCard => play_card_node(node, ctx, frame, slot, stats),
+        NodeKind::OfferCards => offer_cards_node(node, ctx, frame, slot, stats),
         NodeKind::CreateCardCopy => create_card_copy_node(node, ctx, frame, slot, stats),
         NodeKind::OfferRandomCards => offer_random_cards_node(node, ctx, frame, slot, stats),
         NodeKind::GainBlock => gain_block_node(node, ctx, frame, slot, stats),

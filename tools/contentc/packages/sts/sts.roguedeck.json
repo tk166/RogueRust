@@ -22771,7 +22771,7 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "BanishedPile"
     },
     {
       "Id": "become_almighty+",
@@ -22832,7 +22832,7 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "BanishedPile"
     },
     {
       "Id": "live_forever",
@@ -22893,7 +22893,7 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "BanishedPile"
     },
     {
       "Id": "live_forever+",
@@ -22954,7 +22954,7 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "BanishedPile"
     },
     {
       "Id": "fame_and_fortune",
@@ -23003,7 +23003,7 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "BanishedPile"
     },
     {
       "Id": "fame_and_fortune+",
@@ -23052,7 +23052,103 @@
       "LifecyclePrograms": {},
       "RetainInHandOnTurnEnd": false,
       "TurnEndHandDestinationZone": "DiscardPile",
-      "PlayedCardDestinationZone": "DiscardPile"
+      "PlayedCardDestinationZone": "BanishedPile"
+    },
+    {
+      "Id": "wish",
+      "PackageId": "sts",
+      "NameKey": "wish",
+      "DescriptionKey": "Choose one: Gain 6 Plated Armor, 3 Strength, or 25 Gold. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 3
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "watcher"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.offerCards",
+          "value": {
+            "Definitions": [
+              "become_almighty",
+              "live_forever",
+              "fame_and_fortune"
+            ],
+            "Min": 1,
+            "Max": 1,
+            "Then": "PlayChosen",
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
+    },
+    {
+      "Id": "wish+",
+      "PackageId": "sts",
+      "NameKey": "wish+",
+      "DescriptionKey": "Choose one: Gain 8 Plated Armor, 4 Strength, or 30 Gold. Exhaust.",
+      "Costs": [
+        {
+          "ResourceId": {
+            "value": "standard.energy"
+          },
+          "Amount": 3
+        }
+      ],
+      "Tags": [
+        {
+          "value": "skill"
+        },
+        {
+          "value": "watcher"
+        }
+      ],
+      "Rarity": "Rare",
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.offerCards",
+          "value": {
+            "Definitions": [
+              "become_almighty+",
+              "live_forever+",
+              "fame_and_fortune+"
+            ],
+            "Min": 1,
+            "Max": 1,
+            "Then": "PlayChosen",
+            "ResultKey": null
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "LifecyclePrograms": {},
+      "RetainInHandOnTurnEnd": false,
+      "TurnEndHandDestinationZone": "DiscardPile",
+      "PlayedCardDestinationZone": "ExhaustPile"
     }
   ],
   "EnemyActions": [
