@@ -10176,6 +10176,138 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.nilrys_codex",
+      "PackageId": "sts",
+      "NameKey": "Nilry's Codex",
+      "DescriptionKey": "At the end of each turn, you may shuffle 1 of 3 random cards into your draw pile.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnEnded",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.offerRandomCards",
+              "value": {
+                "Count": 3,
+                "Min": 0,
+                "Max": 1,
+                "Then": "ToDrawPileTop"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.warped_tongs",
+      "PackageId": "sts",
+      "NameKey": "Warped Tongs",
+      "DescriptionKey": "At the start of your turn, Upgrade a random card in your hand for the rest of combat.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.upgradeCards",
+              "value": {
+                "OwnerSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "FromZone": "Hand",
+                "Count": 1,
+                "Random": true
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.mummified_hand",
+      "PackageId": "sts",
+      "NameKey": "Mummified Hand",
+      "DescriptionKey": "Whenever you play a Power card, a random card in your hand costs 0 that turn.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardPlayed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "event.bool",
+                  "value": {
+                    "FieldKey": "card.hasTag.power"
+                  }
+                },
+                "Then": {
+                  "kind": "node.setCardCostOverride",
+                  "value": {
+                    "OwnerSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "FromZone": "Hand",
+                    "Count": 1,
+                    "Random": true,
+                    "Amount": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 0
+                      }
+                    }
+                  }
+                },
+                "Else": null
+              }
+            }
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -66858,6 +66990,27 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Rare"
+    },
+    {
+      "Id": "nilrys_codex",
+      "DisplayName": "Nilry's Codex",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Event"
+    },
+    {
+      "Id": "warped_tongs",
+      "DisplayName": "Warped Tongs",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Event"
+    },
+    {
+      "Id": "mummified_hand",
+      "DisplayName": "Mummified Hand",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Uncommon"
     }
   ],
   "Start": {

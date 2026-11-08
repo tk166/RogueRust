@@ -144,6 +144,14 @@ pub enum NodeKind {
     /// 实例的定义改成 `<id>+`。没有 `+` 行的卡（`dazed`）**保持原样** —— 那是 StS 的
     /// `canUpgrade() == false`，不是错误。
     UpgradeCards,
+    /// §300：**把一张牌的价格改写成绝对值**（`mummified_hand`：手牌一张变 0 费）。
+    ///
+    /// 写的是 `standard.card_cost_override` 那一格（§161.4：绝对价，在 delta 之前生效、
+    /// 出牌付款后由内核清零）。参考实现里对应 `CardInstanceCostModifier`，但它挂在卡**自己**
+    /// 的字段上、由 C# 代码直接改；本内核的等价物就是这个 mark counter，所以内容需要一个
+    /// 能写它的节点 —— 在此之前只有 `createRandomCardInstance{CostZero}` 与内核的
+    /// `playTopCardOfDrawPile` 会写它。
+    SetCardCostOverride,
     /// `node.carryAwayStolenGold` —— **带着偷来的钱离开战斗**（§201，本内核自己的节点）。
     ///
     /// StS 的 Looter 有一条 `Escape`：`Flees combat with your Gold`。偷钱在内核里只是一个
@@ -303,6 +311,7 @@ impl NodeKind {
             NodeKind::EndTurn => "node.endTurn",
             NodeKind::ExtraTurn => "node.extraTurn",
             NodeKind::UpgradeCards => "node.upgradeCards",
+            NodeKind::SetCardCostOverride => "node.setCardCostOverride",
             NodeKind::CarryAwayStolenGold => "node.carryAwayStolenGold",
             NodeKind::SetDefensivePool => "node.setDefensivePool",
             NodeKind::LoseHp => "node.loseHp",
@@ -330,7 +339,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 41] = [
+        const ALL: [NodeKind; 42] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -353,6 +362,7 @@ impl NodeKind {
             NodeKind::EndTurn,
             NodeKind::ExtraTurn,
             NodeKind::UpgradeCards,
+            NodeKind::SetCardCostOverride,
             // §201：带着偷来的钱逃走（Looter 的 `Escape`）。
             NodeKind::CarryAwayStolenGold,
             NodeKind::SelectCards,

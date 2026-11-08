@@ -129,8 +129,9 @@ INV_COUNTS = {
     # §296: +1 (`standard.chemical_x` —— 内核规则的开关，内容那一行是载体)。
     # §297: +3 (`strike_dummy` 的内容程序 + `velvet_choker` / `runic_dome` 的开关)。
     # §298: +3 (`magic_flower` / `medical_kit` / `blue_candle`)。
-    # §299: +3 (C 类三件 —— 行为全在内容程序里).
-    "statuses": 142,
+    # §299: +3 (C 类三件 —— 行为全在内容程序里)。
+    # §300: +3 (三个新原子各自解锁的那一件).
+    "statuses": 145,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1576,6 +1577,10 @@ INV_STATUSES = {
     "standard.enchiridion": [],
     "standard.orange_pellets": [],
     "standard.dead_branch": [],
+    # §300：三件同样没有被动修饰器（规则在触发器里）。
+    "standard.nilrys_codex": [],
+    "standard.warped_tongs": [],
+    "standard.mummified_hand": [],
     # §267：零基建批次。
     "standard.ring_of_the_serpent": [('TurnStartDraw', 'AddFlat', 1, 100, None)],
     "standard.philosophers_stone": [('TurnStartEnergy', 'AddPerStack', 1, 100, None)],
@@ -2102,6 +2107,16 @@ def program_facts(root):
             # consumer with a different `then` would have to change this line too.
             out.append(("offer", body.get("Count", 3), body.get("Min", 1),
                         body.get("Max", 1), "ToHandFree"))
+        elif kind == "node.setCardCostOverride":
+            # §300：把牌的价格改写成绝对值（`mummified_hand`）。事实里要带 `Random`：
+            # "手牌里**随机**一张变 0 费"与"第一张变 0 费"是两条不同的承诺。
+            out.append(("freeCard", tgt(body["OwnerSelector"]), body.get("FromZone", "Hand"),
+                        body.get("Count", 1), body.get("Random", False),
+                        amount(body["Amount"]) if body.get("Amount") else 0))
+        elif kind == "node.upgradeCards":
+            # §300：`Random` 进事实 —— "随机升级一张"与"升级第一张"不同。
+            out.append(("upgrade", tgt(body["OwnerSelector"]), body.get("FromZone"),
+                        body.get("Count"), body.get("Random", False)))
         elif kind == "node.repeat":
             # §146: the body runs an unknown-at-authoring number of times, so its facts are tagged
             # by **the count expression** rather than unrolled. That keeps the inventory honest
@@ -3657,7 +3672,9 @@ def check_statuses(doc):
                      "standard.magic_flower", "standard.medical_kit",
                      "standard.blue_candle",
                      "standard.enchiridion", "standard.orange_pellets",
-                     "standard.dead_branch"):
+                     "standard.dead_branch",
+                     "standard.nilrys_codex", "standard.warped_tongs",
+                     "standard.mummified_hand"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -3815,7 +3832,11 @@ def check_statuses(doc):
                         # §299
                         "standard.enchiridion": ["TurnStarted"],
                         "standard.orange_pellets": ["CardPlayed"],
-                        "standard.dead_branch": ["CardExhausted"]}[sid]
+                        "standard.dead_branch": ["CardExhausted"],
+                        # §300
+                        "standard.nilrys_codex": ["TurnEnded"],
+                        "standard.warped_tongs": ["TurnStarted"],
+                        "standard.mummified_hand": ["CardPlayed"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
@@ -4116,6 +4137,8 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "magic_flower", "medical_kit", "blue_candle",
                       # §299：C 类三件（纯内容程序）。
                       "enchiridion", "orange_pellets", "dead_branch",
+                      # §300：三个新原子各自解锁的那一件。
+                      "nilrys_codex", "warped_tongs", "mummified_hand",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

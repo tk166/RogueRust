@@ -375,6 +375,14 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 | `Masked Bandits` `[Pay]` | 失去**全部**金币 | **原子已做**（`gold_all`），内容未接 | 缺：三个名册外敌人 + 25-35 的区间覆盖 |
 | 无色牌的入口 | 事件 / 药水 / 商店无色格 | 事件与无色药水有；商店无色格没有 | 缺 |
 
+### F.20 遗物：三个原子（§300）
+
+| 项 | wiki | 我们 | 性质 |
+|---|---|---|---|
+| `nilrys_codex` | 回合末三选一，**洗入**抽牌堆 | **已做**，但进的是抽牌堆**顶** | **偏差**（牌区只有 Top/Bottom） |
+| `warped_tongs` | 回合初随机升级手牌一张 | **已做**（`upgradeCards.Random`） | 一致 |
+| `mummified_hand` | 打 Power ⇒ 手牌随机一张变 0 费 | **已做**（新节点 `setCardCostOverride`） | 一致（0 费由出牌消费，见 §161.4） |
+
 ### F.19 遗物：C 类纯内容程序（§299）
 
 | 项 | wiki | 我们 | 性质 |
@@ -382,9 +390,9 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 | `enchiridion` | 开战加一张随机 Power 牌、这次免费 | **已做**（纯内容） | 一致 |
 | `orange_pellets` | 一回合内 Power+Attack+Skill ⇒ +3 力量/敏捷 | **已做**（纯内容，三个计数器） | 一致（Focus 属 Defect，本角色没有 ⇒ 只给力量+敏捷） |
 | `dead_branch` | 每消耗一张牌 ⇒ 手牌加一张随机牌 | **已做**（新增通配 tag `*`） | **偏差**：池子是"任意基础牌"（含无色），wiki 是"你的职业牌池" |
-| `nilrys_codex` | 回合末三选一塞进抽牌堆 | **没做**：`offerRandomCards` 的收尾写死 `ToHandFree` | 缺原子 |
-| `warped_tongs` | 回合初随机升级手牌一张 | **没做**：没有"手牌里随机一张"的选择器 | 缺原子 |
-| `mummified_hand` | 打 Power ⇒ 手牌一张变 0 费 | **没做**：没有内容原子写 `card_cost_override` | 缺原子 |
+| `nilrys_codex` | 回合末三选一塞进抽牌堆 | **§300 已做**（`offerRandomCards.Then`；进**顶**不是洗入） | 已修 |
+| `warped_tongs` | 回合初随机升级手牌一张 | **§300 已做**（`upgradeCards.Random`） | 已修 |
+| `mummified_hand` | 打 Power ⇒ 手牌一张变 0 费 | **§300 已做**（新节点 `setCardCostOverride`） | 已修 |
 
 ### F.18 遗物：治疗与放行（§298）
 

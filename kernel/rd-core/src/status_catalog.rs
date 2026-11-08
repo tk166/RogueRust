@@ -783,6 +783,10 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.enchiridion"
             | "standard.orange_pellets"
             | "standard.dead_branch"
+            // §300: 三件用新原子的遗物 —— 行为全在内容触发器里。
+            | "standard.nilrys_codex"
+            | "standard.warped_tongs"
+            | "standard.mummified_hand"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

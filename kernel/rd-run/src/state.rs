@@ -3163,6 +3163,13 @@ impl RunState {
                 Some(RelicEffect::StartCombatStatus("standard.orange_pellets", 1))
             }
             "dead_branch" => Some(RelicEffect::StartCombatStatus("standard.dead_branch", 1)),
+            // §300：三件各用一个新原子（`offerRandomCards.Then` / `upgradeCards.Random` /
+            // `setCardCostOverride`），规则仍全在内容里。
+            "nilrys_codex" => Some(RelicEffect::StartCombatStatus("standard.nilrys_codex", 1)),
+            "warped_tongs" => Some(RelicEffect::StartCombatStatus("standard.warped_tongs", 1)),
+            "mummified_hand" => {
+                Some(RelicEffect::StartCombatStatus("standard.mummified_hand", 1))
+            }
             _ => None,
         }
     }
