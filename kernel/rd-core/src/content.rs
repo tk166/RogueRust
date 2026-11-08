@@ -3097,13 +3097,23 @@ impl<'a> Content<'a> {
         best
     }
 
-    /// §288：事件池**按楼层筛过**的 ids（`EventTables.<pool>` 的条目可以带 `MinFloor`）。
+    /// §288/§289/§291：事件池**按局面筛过**的 ids（`EventTables.<pool>` 的条目可以带
+    /// `MinFloor` / `MaxFloor` / `MinGold`）。
+    ///
+    /// `MinGold` 是 wiki 的门槛：`The Joust` "can only be encountered with more than
+    /// 50 Gold"。它挡的是**一整个卡死**：那个事件没有 `[Leave]`，而两个押注项都要
+    /// 50 金币 —— 金币不够时进来就是"零可用按钮"。
     ///
     /// `Dead Adventurer` 只在第 7 层之后出现（wiki）。**先筛后掷**：调用方拿到的列表就是
     /// 可掷的范围，于是"池子里有几个"不改变"筛掉几个"之后的随机流位置 —— 若改成
     /// "掷了发现不合格再重掷"，随机数会被它看不见的规则吃掉。
     #[must_use]
-    pub fn event_pool_at(&'a self, pool: &str, floor: i32) -> Option<[&'a str; MAX_POOL_IDS]> {
+    pub fn event_pool_at(
+        &'a self,
+        pool: &str,
+        floor: i32,
+        gold: i32,
+    ) -> Option<[&'a str; MAX_POOL_IDS]> {
         let hop = match pool {
             "Events" => "EventTables.Events",
             "Events2" => "EventTables.Events2",
@@ -3149,6 +3159,8 @@ impl<'a> Content<'a> {
             let mut min_floor = 0i32;
             // §289：上界（`The Colosseum` 只在第二幕上半场）。缺席 = 没有上界。
             let mut max_floor = 0i32;
+            // §291：金币门槛（`The Joust` 只在 >50 金币时出现）。
+            let mut min_gold = 0i32;
             for slot in 0..element_opcode.nfields() {
                 let sub = element_opcode.field(slot)?;
                 let sub_width = usize::from(sub.slots()?);
@@ -3162,10 +3174,16 @@ impl<'a> Content<'a> {
                     min_floor = slot_int(element_term.slot(offset)?);
                 } else if sub_name == "MaxFloor" && sub.kind() == F_INT {
                     max_floor = slot_int(element_term.slot(offset)?);
+                } else if sub_name == "MinGold" && sub.kind() == F_INT {
+                    min_gold = slot_int(element_term.slot(offset)?);
                 }
                 offset = offset.checked_add(sub_width)?;
             }
-            if id.is_empty() || floor < min_floor || (max_floor != 0 && floor > max_floor) {
+            if id.is_empty()
+                || floor < min_floor
+                || (max_floor != 0 && floor > max_floor)
+                || gold < min_gold
+            {
                 continue;
             }
             if count == MAX_POOL_IDS {
@@ -5757,14 +5775,14 @@ mod tests {
         // §288：**楼层门槛** —— `Dead Adventurer` 只在第 7 层之后出现（wiki）。
         // 两侧都要验：第 6 层筛掉它，第 7 层它在。
         {
-            let low = content.event_pool_at("Events", 6).expect("the act-1 pool");
+            let low = content.event_pool_at("Events", 6, 0).expect("the act-1 pool");
             let at_six: std::vec::Vec<&str> =
                 low.iter().filter(|id| !id.is_empty()).copied().collect();
             assert!(
                 !at_six.contains(&"dead_adventurer"),
                 "floor 6 must not offer Dead Adventurer: {at_six:?}"
             );
-            let high = content.event_pool_at("Events", 7).expect("the act-1 pool");
+            let high = content.event_pool_at("Events", 7, 0).expect("the act-1 pool");
             let ids: std::vec::Vec<&str> = high.iter().filter(|id| !id.is_empty()).copied().collect();
             assert!(
                 ids.contains(&"dead_adventurer"),
@@ -5786,14 +5804,14 @@ mod tests {
 
         // §289：`The Colosseum` 只在**上半场**（`MaxFloor`）—— 两侧都要验。
         {
-            let at_3 = content.event_pool_at("Events2", 3).expect("act-2 pool");
+            let at_3 = content.event_pool_at("Events2", 3, 0).expect("act-2 pool");
             let ids: std::vec::Vec<&str> =
                 at_3.iter().filter(|id| !id.is_empty()).copied().collect();
             assert!(
                 ids.contains(&"the_colosseum"),
                 "floor 3 is the top half: {ids:?}"
             );
-            let at_9 = content.event_pool_at("Events2", 9).expect("act-2 pool");
+            let at_9 = content.event_pool_at("Events2", 9, 0).expect("act-2 pool");
             let ids: std::vec::Vec<&str> =
                 at_9.iter().filter(|id| !id.is_empty()).copied().collect();
             assert!(
@@ -5808,7 +5826,13 @@ mod tests {
                 .filter(|id| !id.is_empty())
                 .copied()
                 .collect();
-            assert_eq!(all.len(), ids.len() + 1, "exactly one event has an upper bound");
+            // §291：第 9 层同时筛掉两件 —— `the_colosseum`（`MaxFloor: 7`）与 `the_joust`
+            // （`MinGold: 51`，而这条判据喂的是 0 金币）。
+            assert_eq!(
+                all.len(),
+                ids.len() + 2,
+                "two act-2 events are gated (upper floor + min gold)"
+            );
         }
 
         // §290：`The Nest` —— `[Smash and Grab]` 99（A15 50）金币、`[Stay in Line]` 给 Ritual Dagger
@@ -5830,6 +5854,52 @@ mod tests {
             for option in nest.options() {
                 let next = option.goes_on().expect("both lead to a screen");
                 assert_eq!(content.event_step(next).expect("the screen").count, 1);
+            }
+        }
+
+        // §291：`The Joust` 的金币门槛 —— wiki "can only be encountered with more than 50 Gold"。
+        // 两侧都要验：50 金币时它**不出现**（否则那个没有 `[Leave]` 的房间会零按钮卡死），
+        // 51 金币时它出现。
+        {
+            let poor = content.event_pool_at("Events2", 3, 50).expect("act-2 pool");
+            let ids: std::vec::Vec<&str> =
+                poor.iter().filter(|id| !id.is_empty()).copied().collect();
+            assert!(
+                !ids.contains(&"the_joust"),
+                "50 gold must not offer The Joust: {ids:?}"
+            );
+            let rich = content.event_pool_at("Events2", 3, 51).expect("act-2 pool");
+            let ids: std::vec::Vec<&str> =
+                rich.iter().filter(|id| !id.is_empty()).copied().collect();
+            assert!(
+                ids.contains(&"the_joust"),
+                "51 gold must offer The Joust: {ids:?}"
+            );
+
+            // "付不起就别画"：两个押注项带着 `Requires: gold at_least 50` ——
+            // 50 金币可选、49 金币**不可选**（按钮不画，于是没有人能点出一条 `-2`）。
+            let offer = content.event_step("the_joust.offer").expect("the offer step");
+            assert_eq!(offer.count, 2, "Murderer / Owner, and **no** Leave");
+            let facts = |gold: i32| crate::run_expr::RunFacts {
+                gold,
+                health: 80,
+                health_max: 80,
+                ascension: 0,
+                relics: &[],
+                deck: &[],
+                max_hit_damage: 0,
+            };
+            for option in offer.options() {
+                assert!(
+                    crate::run_expr::option_is_available(&content, option.term, &facts(50))
+                        .expect("the condition reads"),
+                    "with 50 gold the bet is available"
+                );
+                assert!(
+                    !crate::run_expr::option_is_available(&content, option.term, &facts(49))
+                        .expect("the condition reads"),
+                    "with 49 gold the bet is hidden (a drawn button would be refused)"
+                );
             }
         }
 

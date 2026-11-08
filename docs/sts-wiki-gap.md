@@ -320,18 +320,19 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 
 | 项 | wiki | 我们 | 性质 |
 |---|---|---|---|
-| 奖赏/赔付的时机 | 到达结果屏就生效 | 结果屏 `[Leave]` 上兑（多一次点击） | **偏差**：效果挂在选项上，"进入某段时执行"还没做 |
-| `Wing Statue` `[Destroy]` | 只在牌组有"单次 ≥10 伤害的攻击牌"时出现 | **总是**出现 | **偏差**：条件词表问不了"某张牌打多少" |
+| 奖赏/赔付的时机 | 到达结果屏就生效 | **已修**：段的进入效果（`Effects` 挂在 `EVND` 行上） | 一致（§286） |
+| `Wing Statue` `[Destroy]` | 只在牌组有"单次 ≥10 伤害的攻击牌"时出现 | **已修**：`Requires: card_damage at_least 10`（从效果程序读） | 一致（§287） |
 | `Scrap Ooze` 的遗物 | 50/33/17 稀有度、随机 | 同（`pick_relic`），并排除已持有 | 一致 |
-| `Dead Adventurer` | 25%/35% 精英归来（事件中途开战斗） | **没做** | 缺：事件里开战斗没有载体 |
+| `Dead Adventurer` | 25%/35% 精英归来（事件中途开战斗） | **已修**：`Fight` + `Encounter` + 战后欠账 | 一致（§286 / §287） |
+| `The Joust` 的**出现条件** | 只有 **>50 金币**时才遇到（且没有"不赌"的选项） | **已修**：`MinGold: 51` + 押注项 `Requires: gold at_least 50` | 一致（§291；此前会**卡死**） |
 
 ### F.6 事件中途开战斗（§286）
 
 | 项 | wiki | 我们 | 性质 |
 |---|---|---|---|
-| `Dead Adventurer` 战后补偿 | 战斗胜利补发"还没搜到"的奖励，另加 25-35 金币 | **不补**（奖励流程 `roll_reward(kind)` 不知道差额） | **偏差**：缺"把奖励差额带进战斗结算"的通道 |
-| `Dead Adventurer` 的 Lagavulin | 这场伏击**不睡觉**，开局直接 Siphon Soul | 睡眠是遭遇的静态属性，没按"这次不睡"覆盖 | **偏差**：`ENCT` 没有这一列 |
-| `Dead Adventurer` 的出现楼层 | 只出现在第 7 层之后 | 事件池无按楼层筛 | 缺：`EV` 没有楼层门槛 |
+| `Dead Adventurer` 战后补偿 | 战斗胜利补发"还没搜到"的奖励，另加 25-35 金币 | **已修**：`fight_gold_bonus` / `fight_no_relic` | 一致（§287） |
+| `Dead Adventurer` 的 Lagavulin | 这场伏击**不睡觉**，开局直接 Siphon Soul | **已修**：事件自己的池 `EliteEvent` + `enc_lagavulin_awake` | 一致（§287） |
+| `Dead Adventurer` 的出现楼层 | 只出现在第 7 层之后 | **已修**：`MinFloor: 7` | 一致（§288） |
 | 奖赏时机（§285 的偏差） | 到达结果屏就生效 | **已修**：段落进入效果（§286） | 一致 |
 | 伏击的档位 | 精英 | 精英（同一套 `elite_fight`） | 一致 |
 
@@ -343,7 +344,7 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 | `Wing Statue` 条件的口径 | "printed damage per hit" | 基础伤害（力量/附魔不算） | 一致（与 wiki 的措辞同义） |
 | `Dead Adventurer` 战后补偿 | 补发"还没搜到"的奖励，且已搜到的从战斗奖励里去掉 | **已做**（`fight_gold_bonus` / `fight_no_relic`） | 一致 |
 | `Dead Adventurer` 的 Lagavulin | 这场伏击**不睡**，第一回合 Siphon Soul | **已做**（`Encounter: "EliteEvent"` + `enc_lagavulin_awake`） | 一致 |
-| `Dead Adventurer` 的出现楼层 | 第 7 层之后 | 事件池无按楼层筛 | 缺 |
+| `Dead Adventurer` 的出现楼层 | 第 7 层之后 | **已修**：`MinFloor: 7`（§288），§291 又把上界与金币门槛补齐 | 一致 |
 
 ### F.8 事件战斗与楼层门槛（§288）
 
@@ -372,6 +373,14 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 | `Ritual Dagger` 卡面 | 1 费 Special、15 伤害、Fatal 永久 +3（+5）、Exhaust | 内容里早就有；每副本成长 `standard.ritual_dagger_bonus` | 一致 |
 | `Masked Bandits` `[Pay]` | 失去**全部**金币 | **原子已做**（`gold_all`），内容未接 | 缺：三个名册外敌人 + 25-35 的区间覆盖 |
 | 无色牌的入口 | 事件 / 药水 / 商店无色格 | 事件与无色药水有；商店无色格没有 | 缺 |
+
+### F.11 F.5 的审计与"付不起就别画"（§291）
+
+| 项 | wiki | 我们 | 性质 |
+|---|---|---|---|
+| `The Joust` 的出现条件 | 只有 >50 金币时遇到 | **已修**（`MinGold: 51`） | 一致 |
+| `The Joust` 押注项的可用性 | 付不起就不该有这条路 | **已修**（`Requires: gold at_least 50` + 门 G1 强制） | 一致 |
+| 某段**全部**选项都带条件 | （StS 用"事件根本不会出现"来避免） | 不可静态验证；今天内容里没有这种段（审计脚本 B 段） | 结构性假设 |
 
 ### G. ★ 基础值偏差：§191 修掉了 8 条，剩 3 条是写明了的简化
 

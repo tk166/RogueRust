@@ -4803,6 +4803,37 @@ def check_event_vocabulary(doc):
                     fail(label + ".Next", "names %r, which is not in EventNodes" % (nxt,))
                 else:
                     reached.add(nxt)
+            # §291 G1：**付不起就别画**。一个选项带 `gold_cost:<n>`，就必须带
+            # `Requires: gold at_least n` —— 否则按钮照画、点下去内核 `-2`、屏幕不变
+            # （`The Joust` 的两个押注项曾经就是这样，而它没有 `[Leave]` ⇒ 卡死）。
+            # ⚠️ **同版本配对**：`EffectsAsc` 的价目配 `RequiresAsc`（缺席才退回 `Requires`）。
+            # 按"两串合并"去查会把 A15 的 75 拿去对基础的 50（`The Cleric` 就是这么被判红的）
+            # —— 那正是 `effects_at`/`Requires` 本来就有的语义：`Asc` **取代**基础，不是叠加。
+            for key, req_key in (("Effects", "Requires"), ("EffectsAsc", "RequiresAsc")):
+                # ⚠️ `or []`：两个 key 都可能**缺席**（`The Joust` 的押注项本来就没有条件）——
+                # 缺了 `or []` 时 `any(None)` 会让门**崩掉**，而"崩溃"看起来像"抓住了问题"
+                # （退出码非 0、没有那句话），负控就是这么被骗的。
+                reqs = option.get(req_key) or []
+                if req_key == "RequiresAsc" and not reqs:
+                    reqs = option.get("Requires") or []
+                for spec in option.get(key) or []:
+                    word = spec.get("Effect") or ""
+                    if not word.startswith("gold_cost:"):
+                        continue
+                    try:
+                        price = int(word.split(":", 1)[1])
+                    except ValueError:
+                        continue            # 词法错误由 check_effects 报
+                    covered = any(
+                        r.get("Kind") == "gold" and r.get("Op") == "at_least"
+                        and isinstance(r.get("Amount"), int)
+                        and r.get("Amount") >= price
+                        for r in reqs
+                    )
+                    if not covered:
+                        fail(label, "pays %d gold but has no `Requires: gold at_least %d` -- "
+                                    "the button would be drawn and then refused"
+                             % (price, price))
             for kind_label, key in (("", "Effects"), ("Asc", "EffectsAsc")):
                 edits = check_effects(label, option.get(key), kind_label)
                 if edits > 1:
@@ -4877,13 +4908,16 @@ def check_event_vocabulary(doc):
             # 所以"上界超过地图长度"是内容错误：那条事件永远出不来，而屏幕上一切正常。
             low = row.get("MinFloor", 0)
             high = row.get("MaxFloor", 0)
+            min_gold = row.get("MinGold", 0)
             where = "EventTables.%s.%s" % (name, row.get("Id"))
-            for key, value in (("MinFloor", low), ("MaxFloor", high)):
+            for key, value in (("MinFloor", low), ("MaxFloor", high), ("MinGold", min_gold)):
                 if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                     fail(where + "." + key, "must be a non-negative int, got %r" % (value,))
             if high and high > 15:
                 fail(where + ".MaxFloor", "%d is past the act's 15 rows (that event never "
                                           "appears)" % high)
+            if min_gold and (min_gold < 1 or min_gold > 999):
+                fail(where + ".MinGold", "must be 1..=999, got %r" % (min_gold,))
             if high and low and high < low:
                 fail(where, "MaxFloor %d is below MinFloor %d" % (high, low))
     ok("event pools", "act1=%d act2=%d act3=%d"

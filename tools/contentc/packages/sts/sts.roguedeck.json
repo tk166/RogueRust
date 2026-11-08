@@ -66082,7 +66082,8 @@
         "Id": "forgotten_altar"
       },
       {
-        "Id": "the_joust"
+        "Id": "the_joust",
+        "MinGold": 51
       },
       {
         "Id": "the_colosseum",
@@ -67408,6 +67409,13 @@
               "Weight": 30,
               "Next": "the_joust.murderer_lost"
             }
+          ],
+          "Requires": [
+            {
+              "Kind": "gold",
+              "Op": "at_least",
+              "Amount": 50
+            }
           ]
         },
         {
@@ -67426,6 +67434,13 @@
             {
               "Weight": 70,
               "Next": "the_joust.owner_lost"
+            }
+          ],
+          "Requires": [
+            {
+              "Kind": "gold",
+              "Op": "at_least",
+              "Amount": 50
             }
           ]
         }

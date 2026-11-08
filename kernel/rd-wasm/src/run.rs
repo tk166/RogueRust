@@ -1194,7 +1194,9 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
         // §288：**先按楼层筛**再掷（`Dead Adventurer` 只在第 7 层之后出现）。
         // 先筛后掷而不是"掷了不合格再重掷"：后者会让随机数被看不见的规则吃掉。
         let floor = session.state.floor();
-        let Some(pool) = image.event_pool_at(pool_name, floor) else {
+        // §291：`MinGold` 与楼层同一个筛子（`The Joust` 只在 >50 金币时出现）。
+        let gold = session.state.gold();
+        let Some(pool) = image.event_pool_at(pool_name, floor, gold) else {
             let message = std::format!("内容里没有 `EventTables.{pool_name}` 池（第 {act} 幕）");
             return fail(session, &message);
         };
