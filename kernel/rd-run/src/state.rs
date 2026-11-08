@@ -3139,6 +3139,10 @@ impl RunState {
             "orrery" => Some(RelicEffect::PickupAddCards(5)),
             "tiny_house" => Some(RelicEffect::PickupTinyHouse),
             "singing_bowl" => Some(RelicEffect::SingingBowl(2)),
+            // §294：两件"洗牌"遗物 —— 第一半都是开战挂一条内容状态，规则全在
+            // `DeckShuffled` 触发器里（`standard.the_abacus` / `standard.sundial`）。
+            "the_abacus" => Some(RelicEffect::StartCombatStatus("standard.the_abacus", 1)),
+            "sundial" => Some(RelicEffect::StartCombatStatus("standard.sundial", 1)),
             _ => None,
         }
     }

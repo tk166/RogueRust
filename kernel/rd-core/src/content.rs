@@ -7059,4 +7059,6 @@ mod tests {
             assert_eq!(content.encounter_enemies(u32::from(encounter.index)).unwrap().len(), 1);
         });
     }
+
+
 }

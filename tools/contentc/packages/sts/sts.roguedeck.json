@@ -8949,6 +8949,166 @@
         }
       ],
       "Triggers": []
+    },
+    {
+      "Id": "standard.the_abacus",
+      "PackageId": "sts",
+      "NameKey": "The Abacus",
+      "DescriptionKey": "Whenever you shuffle your draw pile, gain 6 Block.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DeckShuffled",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.gainBlock",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.source",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "Source"
+                  }
+                },
+                "Amount": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 6
+                  }
+                },
+                "ResultKey": null
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.sundial",
+      "PackageId": "sts",
+      "NameKey": "Sundial",
+      "DescriptionKey": "Every 3 times you shuffle your draw pile, gain 2 Energy.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "DeckShuffled",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "remainder",
+                            "value": {
+                              "Left": {
+                                "kind": "combatantCounter",
+                                "value": {
+                                  "Selector": {
+                                    "kind": "sel.source",
+                                    "value": {
+                                      "Cardinality": "ZeroOrOne",
+                                      "RequiredContextCapabilities": "Source"
+                                    }
+                                  },
+                                  "CounterId": "sundial_shuffles"
+                                }
+                              },
+                              "Right": {
+                                "kind": "const",
+                                "value": {
+                                  "Value": 3
+                                }
+                              }
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 2
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.gainResource",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "ResourceId": "standard.energy",
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 2
+                            }
+                          },
+                          "ResultKey": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "sundial_shuffles"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -65537,6 +65697,20 @@
     {
       "Id": "singing_bowl",
       "DisplayName": "Singing Bowl",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "the_abacus",
+      "DisplayName": "The Abacus",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Shop"
+    },
+    {
+      "Id": "sundial",
+      "DisplayName": "Sundial",
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Uncommon"

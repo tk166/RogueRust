@@ -762,6 +762,9 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // §292: `cursed_key` —— 规则就是内容那一行 `TurnStartEnergy / AddPerStack 1`
             // （与 `busted_crown` 同形状）；第二半"非 Boss 宝箱多一张诅咒"在运行层。
             | "standard.cursed_key"
+            // §294: 两件洗牌遗物 —— 行为全在内容的 `DeckShuffled` 触发器里。
+            | "standard.the_abacus"
+            | "standard.sundial"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

@@ -279,7 +279,7 @@ wiki 常见而我们**没有**的：
 | 档 | 件数 | 缺什么 | 例子 |
 |---|---|---|---|
 | 轻资产 | ~20 | 有钩子、缺一条判断 | `face_of_cleric` `sacred_bark` `golden_eye` `wing_boots` |
-| 中资产 | ~30 | 缺一个**事实/事件** | `sundial` `the_abacus`（缺 `DeckShuffled`）、`tough_bandages` `tingsha`（缺 `CardDiscarded`）、`hand_drill`（缺"打穿格挡"）、`bottled_*`（拾取时绑牌）、`gambling_chip` `singing_bowl` |
+| 中资产 | ~30 | 缺一个**事实/事件** | `tough_bandages` `tingsha`（缺 `CardDiscarded`）、`hand_drill`（缺"打穿格挡"）、`bottled_*`（拾取时绑牌）、`gambling_chip`（§293/§294 之后的余项） |
 | 不做 | 13 | 无尽模式 `Blight` 桶 | `accursed` `hauntings` `muzzle` |
 | 其他角色 | ~15 | `Watcher`/`Silent`/`Defect` 专属 | `pure_water` `cracked_core` `ninja_scroll` `emotion_chip` |
 
@@ -374,6 +374,14 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 | `Ritual Dagger` 卡面 | 1 费 Special、15 伤害、Fatal 永久 +3（+5）、Exhaust | 内容里早就有；每副本成长 `standard.ritual_dagger_bonus` | 一致 |
 | `Masked Bandits` `[Pay]` | 失去**全部**金币 | **原子已做**（`gold_all`），内容未接 | 缺：三个名册外敌人 + 25-35 的区间覆盖 |
 | 无色牌的入口 | 事件 / 药水 / 商店无色格 | 事件与无色药水有；商店无色格没有 | 缺 |
+
+### F.14 遗物：洗牌触发器（§294）
+
+| 项 | wiki | 我们 | 性质 |
+|---|---|---|---|
+| `the_abacus` | 每次洗牌 +6 格挡 | **已做**（`DeckShuffled` + 内容 `gainBlock`） | 一致 |
+| `sundial` | 每 3 次洗牌 +2 能量 | **已做**（计数器在内容里） | 一致 |
+| 空弃牌堆算不算"洗过" | 不算 | **不算**（早退 ⇒ 不发事件） | 一致 |
 
 ### F.13 遗物：加牌问句（§293）
 

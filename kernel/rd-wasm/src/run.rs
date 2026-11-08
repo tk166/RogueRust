@@ -10617,4 +10617,161 @@ mod tests {
         }
     }
 
+
+    /// §294：`DeckShuffled` —— 洗牌那一刻派发，`the_abacus` / `sundial` 都吃得到。
+    ///
+    /// 三段：① 遗物开战真的挂了内容状态；② 洗一次牌 ⇒ `the_abacus` +6 格挡；
+    /// ③ `sundial` 数**次数**：1、2 次不给，第 3 次给 2 能量。
+    #[test]
+    fn the_shuffle_trigger_pays_the_abacus_and_sundial() {
+        use rd_core::state::CardZone;
+
+        // 读一个池子的数值（`defensive_pools()` / `resources()` 都是 `&[Pool]`）。
+        let block_of = |state: &rd_core::state::CombatState, hero: &rd_core::state::CombatantId| {
+            state
+                .combatant(hero)
+                .and_then(|c| {
+                    c.defensive_pools()
+                        .iter()
+                        .find(|entry| entry.key.as_str() == "standard.block")
+                        .map(|entry| entry.pool.current)
+                })
+                .unwrap_or(0)
+        };
+        let energy_of = |state: &rd_core::state::CombatState, hero: &rd_core::state::CombatantId| {
+            state
+                .combatant(hero)
+                .and_then(|c| {
+                    c.resources()
+                        .iter()
+                        .find(|entry| entry.key.as_str() == "standard.energy")
+                        .map(|entry| entry.pool.current)
+                })
+                .unwrap_or(0)
+        };
+
+        for relic in ["the_abacus", "sundial", ""] {
+            let deck = ["strike", "strike", "strike", "strike", "strike",
+                        "defend", "defend", "defend", "defend", "bash"];
+            test_run(7, 80, 80, &deck);
+            if !relic.is_empty() {
+                run_slot()
+                    .as_mut()
+                    .expect("a run")
+                    .state
+                    .push_relic(relic, &[])
+                    .unwrap_or_else(|e| panic!("{relic}: {e:?}"));
+            }
+            assert_eq!(rd_run_step(0), 0, "walk onto floor 1");
+            assert_eq!(rd_run_fight_begin(), 0, "a fight begins");
+
+            // ① 遗物真的挂了内容状态（`statuses()` 给的是 `definition_id`）。
+            let want_status = match relic {
+                "the_abacus" => Some("standard.the_abacus"),
+                "sundial" => Some("standard.sundial"),
+                _ => None,
+            };
+            if let Some(want) = want_status {
+                let session = crate::slot().as_ref().expect("a fight");
+                let hero = session.hero_id().expect("a hero");
+                let image = content();
+                let has = session
+                    .state
+                    .combatant(&hero)
+                    .expect("the hero")
+                    .statuses()
+                    .iter()
+                    .any(|status| {
+                        let _ = image;
+                        status.definition_id.as_str() == want
+                    });
+                assert!(has, "`{relic}` must put `{want}` on the hero at combat start");
+            }
+
+            // ② 洗一次牌：把一张手牌塞进弃牌堆，再调内核的重洗，然后排空事件。
+            let (block_before, energy_before, shuffled) = {
+                let session = crate::slot().as_mut().expect("a fight");
+                let hero = session.hero_id().expect("a hero");
+                let block = block_of(&session.state, &hero);
+                let energy = energy_of(&session.state, &hero);
+                // 搬牌用 `move_all_cards`（整堆搬）—— `CardSlot` 的构造在 crate 外不可见。
+                // 抽牌堆先清空到弃牌堆（保证弃牌堆**只**有这一批），再整体洗回来。
+                session
+                    .state
+                    .move_all_cards(&hero, CardZone::DrawPile, CardZone::DiscardPile)
+                    .expect("empty the draw pile");
+                session
+                    .state
+                    .move_all_cards(&hero, CardZone::Hand, CardZone::DiscardPile)
+                    .expect("the hand goes to the discard pile");
+                let moved = session
+                    .state
+                    .card_zones(&hero)
+                    .expect("zones")
+                    .count(CardZone::DiscardPile);
+                let n = session
+                    .state
+                    .reshuffle_discard_into_draw(&hero)
+                    .expect("the shuffle");
+                // 事件是**入队**的，排空由宿主负责（与真的一回合同一条路）。
+                let image = content();
+                let mut host = rd_core::host::Host::new(image);
+                host.try_resolve_pending_queues(&mut session.state)
+                    .expect("the events resolve");
+                (block, energy, n)
+            };
+            assert!(shuffled > 0, "the discard pile went back ({shuffled} cards)");
+            let session = crate::slot().as_ref().expect("a fight");
+            let hero = session.hero_id().expect("a hero");
+            let block_after = block_of(&session.state, &hero);
+            let energy_after = energy_of(&session.state, &hero);
+            let want_block = if relic == "the_abacus" { 6 } else { 0 };
+            assert_eq!(
+                block_after - block_before,
+                want_block,
+                "`{relic}`: block after one shuffle"
+            );
+            assert_eq!(
+                energy_after, energy_before,
+                "`{relic}`: sundial must not pay on the first shuffle"
+            );
+            assert_eq!(
+                session.state.pending_event_count(),
+                0,
+                "the event queue is drained"
+            );
+
+            // ③ `sundial`：第 3 次才付 2 能量。
+            if relic == "sundial" {
+                for shuffle in 2..=3 {
+                    let session = crate::slot().as_mut().expect("a fight");
+                    let hero = session.hero_id().expect("a hero");
+                    // "洗之前"的能量 —— 每次循环都要重新读，不能提到循环外。
+                    let before = energy_of(&session.state, &hero);
+                    // 每次洗牌前把抽牌堆清到弃牌堆（保证"洗了多少"可数）。
+                    session
+                        .state
+                        .move_all_cards(&hero, CardZone::DrawPile, CardZone::DiscardPile)
+                        .expect("empty the draw pile");
+                    session
+                        .state
+                        .reshuffle_discard_into_draw(&hero)
+                        .expect("the shuffle");
+                    let image = content();
+                    let mut host = rd_core::host::Host::new(image);
+                    host.try_resolve_pending_queues(&mut session.state)
+                        .expect("the events resolve");
+                    let after = energy_of(&session.state, &hero);
+                    if shuffle == 3 {
+                        assert_eq!(after - before, 2, "sundial pays on the 3rd shuffle");
+                    } else {
+                        assert_eq!(after, before, "and not on the 2nd");
+                    }
+                }
+            }
+            // 收尾：这一场结束（否则下一条判据的 `test_run` 会撞上活着的一场）。
+            let _ = rd_run_fight_end();
+        }
+    }
+
 }

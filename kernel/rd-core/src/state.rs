@@ -2748,6 +2748,17 @@ pub enum CombatEvent {
         /// 被消耗的那张牌。
         card: crate::state::CardInstanceId,
     },
+    /// §294：**有人把弃牌堆洗回了抽牌堆**（`the_abacus` / `sundial`）。
+    ///
+    /// 参考的 25 个触发器里没有这一个（它把洗牌折进 `CardMovedToZone`）。这是**本内核自己的
+    /// 事件名**，与 §237 的 `CardsDrawn` / `CardExhausted` 同级：被真实内容逼出来的扩展。
+    ///
+    /// Bearer 是**洗牌的那个人**（弃牌堆的主人）。发在
+    /// [`CombatState::reshuffle_discard_into_draw`] 里 —— 三条洗牌的路都经过它。
+    DeckShuffled {
+        /// 洗牌的人。
+        combatant: CombatantId,
+    },
     /// `CardCostPaid`（`CardPlay.cs:138`）：出牌付了费用。
     CardCostPaid {
         /// 付钱的人。
@@ -4891,6 +4902,12 @@ impl CombatState {
         }
         // 只有真的洗了才推进 —— 空弃牌堆上面已经早退，没有这一步。
         self.random_step += 1;
+        // §294：洗完了才通知（空弃牌堆**不算**洗过牌 —— `sundial` 的"每 3 次"不能数空的）。
+        // ⚠️ 入队而不是立刻派发：这里没有 `Host`；事件由回合机的事件循环解析，
+        // 与 `CardsDrawn` / `CardExhausted` 同一条路。
+        self.enqueue_event(CombatEvent::DeckShuffled {
+            combatant: *owner,
+        })?;
         Ok(count)
     }
 

@@ -398,6 +398,11 @@ pub enum TriggerEvent {
     CardsDrawn,
     /// §237：**一张牌被消耗了**。Bearer = 牌的主人（`Dark Embrace`）。
     CardExhausted,
+    /// §294：**有人洗了牌**。Bearer = 洗牌的那个人（`the_abacus` / `sundial`）。
+    ///
+    /// 参考的 25 个成员里没有它（洗牌被折进 `CardMovedToZone`），所以这是本内核的扩展 ——
+    /// 与 [`Self::CardsDrawn`] / [`Self::CardExhausted`] 同一类：内容真的需要它。
+    DeckShuffled,
     /// `StatusApplied` —— 一条新状态实例落到某人身上。
     StatusApplied,
     /// `StatusMerged` —— 并进了已有实例。
@@ -431,6 +436,8 @@ impl TriggerEvent {
             "BlockGained" => Some(TriggerEvent::BlockGained),
             "CardsDrawn" => Some(TriggerEvent::CardsDrawn),
             "CardExhausted" => Some(TriggerEvent::CardExhausted),
+            // §294：本内核的扩展（参考没有这个名字）。
+            "DeckShuffled" => Some(TriggerEvent::DeckShuffled),
             // §236
             "HpLost" => Some(TriggerEvent::HpLost),
             "CardCostPaid" => Some(TriggerEvent::CardCostPaid),
@@ -466,6 +473,7 @@ impl TriggerEvent {
             TriggerEvent::BlockGained => "BlockGained",
             TriggerEvent::CardsDrawn => "CardsDrawn",
             TriggerEvent::CardExhausted => "CardExhausted",
+            TriggerEvent::DeckShuffled => "DeckShuffled",
             TriggerEvent::HpLost => "HpLost",
             TriggerEvent::CardCostPaid => "CardCostPaid",
             TriggerEvent::StatusApplied => "StatusApplied",
@@ -2381,6 +2389,11 @@ impl Host<'_> {
             // §237: `BlockGained` -- Bearer 是获得格挡的那一方（Juggernaut）。
             CombatEvent::BlockGained { combatant, .. } => {
                 self.run_triggers(state, &combatant, TriggerEvent::BlockGained)
+            }
+            // §294: `DeckShuffled` -- Bearer 是洗牌的人（`the_abacus` / `sundial`）。
+            // 没有事实位：`sundial` 数的是**次数**不是张数，它用自己的计数器。
+            CombatEvent::DeckShuffled { combatant } => {
+                self.run_triggers(state, &combatant, TriggerEvent::DeckShuffled)
             }
             // §237: `CardsDrawn` / `CardExhausted` -- Bearer 是牌的主人，事实位是**那张牌**的标签。
             // 两者形状相同（"你身上有事发生，主语是一张牌"），所以共用一段。
@@ -4479,6 +4492,8 @@ mod tests {
                     TriggerEvent::CardExhausted => {}
                     // §263：本内核自己的事件名（"敌对阵营有人倒下"）。镜像里 0 条，计数恒 0。
                     TriggerEvent::FoeDowned => {}
+                    // §294：同上（"洗了牌"）。core 镜像里 0 条，计数恒 0。
+                    TriggerEvent::DeckShuffled => {}
                     TriggerEvent::NotHandled => not_handled += 1,
                 }
                 // 信封上的步数预算：实测 25/25 都是 1024。
