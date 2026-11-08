@@ -273,7 +273,8 @@ wiki 常见而我们**没有**的：
 **内容门要求"内容里的每件遗物内核都实现"**，所以缺的那 78 件不会半吊子地出现在池子里
 （`audit_relic_gap.py` 的 `IMPLEMENTED: … 内核不认识` 必须为 0）。
 
-**剩下 78 件按"缺哪块载体"分档**（细节见方法论文档 §3 / §8）：
+**§292 之后是 66 件**（Wave 1 做了 11 件 + 修了 `Shop` 档的静默缺口；逐件清单见
+`port-plan.md` §292.6）。按"缺哪块载体"分档（细节见方法论文档 §3 / §8）：
 
 | 档 | 件数 | 缺什么 | 例子 |
 |---|---|---|---|
@@ -373,6 +374,16 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 | `Ritual Dagger` 卡面 | 1 费 Special、15 伤害、Fatal 永久 +3（+5）、Exhaust | 内容里早就有；每副本成长 `standard.ritual_dagger_bonus` | 一致 |
 | `Masked Bandits` `[Pay]` | 失去**全部**金币 | **原子已做**（`gold_all`），内容未接 | 缺：三个名册外敌人 + 25-35 的区间覆盖 |
 | 无色牌的入口 | 事件 / 药水 / 商店无色格 | 事件与无色药水有；商店无色格没有 | 缺 |
+
+### F.12 遗物：Wave 1 与 `Shop` 档（§292）
+
+| 项 | wiki | 我们 | 性质 |
+|---|---|---|---|
+| `Shop` 稀有度的遗物 | 只在商人处卖（14 件） | **已修**：`Rarity::Shop` + 货架抽样 | 一致（§292.1；此前**永远拿不到**） |
+| `cultist_headpiece` / `spirit_poop` | 一句 flavor | **已做**：`RelicEffect::Nothing` | 一致 |
+| `face_of_cleric` / `matryoshka` / `nloths_hungry_face` / `cursed_key` / `calling_bell` / `cauldron` / `dollys_mirror` / `nloths_gift` / `sacred_bark` | 见 §292.2 | **已做**（各带两侧判据） | 一致 |
+| `cauldron` 装不下的 2 瓶 | 一瓶一瓶问"要不要丢掉旧的" | **丢在欠账上**（不静默消失，进 run hash） | **偏差**（缺丢弃问句） |
+| `matryoshka` 的第二件 | 分别进奖励屏 | 直接进腰带 | **偏差**（与 `black_star` 同一条：奖励屏只有一个遗物槽） |
 
 ### F.11 F.5 的审计与"付不起就别画"（§291）
 

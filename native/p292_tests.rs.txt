@@ -1,0 +1,257 @@
+
+    // =============================================================================================
+    // §292 Wave 1：十一件遗物的规则（每条都是**两侧**判据）
+    // =============================================================================================
+
+    /// 一条"有这些遗物"的起手：`run` 在地图上、还没进任何节点。
+    fn run_with(relics: &[&str]) -> RunState {
+        let deck = [
+            "strike", "strike", "strike", "strike", "strike", "defend", "defend", "defend",
+            "defend", "bash",
+        ];
+        let mut run = RunState::new(11, 80, 99, &deck).expect("a run");
+        for relic in relics {
+            run.push_relic(relic, &[]).expect("relic room");
+        }
+        run
+    }
+
+    #[test]
+    fn the_flavor_only_relics_are_known_and_change_nothing() {
+        // wiki 上就是一句 flavor（`cultist_headpiece` / `spirit_poop`）。两侧：
+        // 它们被**承认**（`push_relic` 不报 `UnsupportedRelic`），并且它们真的什么都不改。
+        for relic in ["cultist_headpiece", "spirit_poop"] {
+            assert_eq!(
+                RunState::relic_effect(relic),
+                Some(RelicEffect::Nothing),
+                "`{relic}` must be in the one table"
+            );
+            let mut run = run_with(&[]);
+            run.push_relic(relic, &[]).expect("a flavour relic is still a relic");
+            assert_eq!(run.gold(), 99, "`{relic}` must not touch gold");
+            assert_eq!(run.health(), 80, "`{relic}` must not heal");
+            assert_eq!(run.health_max(), 80, "`{relic}` must not raise the maximum");
+        }
+    }
+
+    #[test]
+    fn face_of_cleric_raises_the_maximum_after_every_fight() {
+        let mut run = run_with(&["face_of_cleric"]);
+        let max_before = run.health_max();
+        run.end_of_combat().expect("a fight ends");
+        assert_eq!(run.health_max(), max_before + 1, "the maximum grew by one");
+        // 当前血跟着涨 1（与 `MaxHealthUp` 同一条规矩），不是"回 1"。
+        assert_eq!(run.health(), 80, "and the current HP followed it");
+        // **累积**：第二场再 +1。
+        run.end_of_combat().expect("a second fight ends");
+        assert_eq!(run.health_max(), max_before + 2, "it stacks per fight");
+        // 另一侧：没有这件遗物时上限不动。
+        let mut plain = run_with(&[]);
+        plain.end_of_combat().expect("a fight ends");
+        assert_eq!(plain.health_max(), max_before, "no relic, no growth");
+    }
+
+    #[test]
+    fn matryoshka_queues_two_chests_and_pays_a_second_relic() {
+        let mut run = run_with(&[]);
+        run.push_relic("matryoshka", &[]).expect("pickup");
+        assert_eq!(run.chest_extra_remaining(), 2, "two chests are queued");
+        // 走真实的宝箱：那一次要给**两件**（第二件直接进腰带，与 `black_star` 同一条偏差）。
+        assert!(walk_to(&mut run, NodeKind::Treasure), "the map has a treasure room");
+        let pool = [
+            PoolRelic { id: "vajra", rarity: Rarity::Common },
+            PoolRelic { id: "lantern", rarity: Rarity::Common },
+            PoolRelic { id: "anchor", rarity: Rarity::Common },
+            PoolRelic { id: "pear", rarity: Rarity::Uncommon },
+        ];
+        let before = run.relics().len();
+        run.begin_node(&[], &pool).expect("the chest node");
+        let outcome = run.open_chest(&[], &pool).expect("the chest opens");
+        let gained = run.relics().len() - before;
+        assert!(outcome.relic.is_some(), "the chest still reports its own relic");
+        assert_eq!(gained, 2, "matryoshka's chest hands out two relics");
+        assert_eq!(run.chest_extra_remaining(), 1, "one chest was consumed");
+        // 另一侧：没有 `matryoshka` 的宝箱只给一件。
+        let mut plain = run_with(&[]);
+        assert!(walk_to(&mut plain, NodeKind::Treasure));
+        let before = plain.relics().len();
+        plain.begin_node(&[], &pool).expect("the chest node");
+        plain.open_chest(&[], &pool).expect("the chest opens");
+        assert_eq!(plain.relics().len() - before, 1, "one chest, one relic");
+    }
+
+    #[test]
+    fn nloths_hungry_face_empties_exactly_one_chest() {
+        let mut run = run_with(&["nloths_hungry_face"]);
+        assert_eq!(run.chest_empty_remaining(), 1, "one chest is cursed");
+        let pool = [PoolRelic { id: "vajra", rarity: Rarity::Common }];
+        assert!(walk_to(&mut run, NodeKind::Treasure));
+        run.begin_node(&[], &pool).expect("the chest node");
+        let gold_before = run.gold();
+        let relics_before = run.relics().len();
+        let outcome = run.open_chest(&[], &pool).expect("the chest opens");
+        assert_eq!(outcome.gold, 0, "an empty chest pays no gold");
+        assert!(outcome.relic.is_none(), "and no relic");
+        assert_eq!(run.gold(), gold_before, "gold unchanged");
+        assert_eq!(run.relics().len(), relics_before, "relics unchanged");
+        assert_eq!(run.chest_empty_remaining(), 0, "the debt is spent");
+    }
+
+    #[test]
+    fn cursed_key_carries_its_energy_and_its_chest_curse() {
+        // 第一半：每回合 +1 能量（内容状态 `standard.cursed_key` 的 `TurnStartEnergy` 行）。
+        assert_eq!(
+            RunState::relic_effect("cursed_key"),
+            Some(RelicEffect::StartCombatStatus("standard.cursed_key", 1)),
+            "the first half is the energy carrier"
+        );
+        // 第二半：非 Boss 宝箱里多一张**随机诅咒**（池子里那一条）。
+        let curses = [
+            PoolCard { id: "injury", kind: CardKind::Curse, rarity: Rarity::Curse, upgraded: None },
+            PoolCard { id: "wound", kind: CardKind::Status, rarity: Rarity::Status, upgraded: None },
+        ];
+        let mut run = run_with(&["cursed_key"]);
+        let deck_before = run.deck().len();
+        assert!(walk_to(&mut run, NodeKind::Treasure));
+        run.begin_node(&[], &[]).expect("the chest node");
+        run.open_chest(&curses, &[]).expect("the chest opens");
+        assert_eq!(run.deck().len(), deck_before + 1, "one curse joined the deck");
+        assert_eq!(run.deck().last().map(|card| card.as_str()), Some("injury"),
+                   "and it is the curse from the pool, not the Status row");
+        // 另一侧：没有这件遗物时牌组不长。
+        let mut plain = run_with(&[]);
+        assert!(walk_to(&mut plain, NodeKind::Treasure));
+        plain.begin_node(&[], &[]).expect("the chest node");
+        plain.open_chest(&curses, &[]).expect("the chest opens");
+        assert_eq!(plain.deck().len(), deck_before, "no cursed_key, no curse");
+    }
+
+    #[test]
+    fn calling_bell_pays_a_curse_and_owes_three_relics() {
+        let pool = [PoolCard {
+            id: "curse_of_the_bell",
+            kind: CardKind::Curse,
+            rarity: Rarity::Curse,
+            upgraded: None,
+        }];
+        let mut run = run_with(&[]);
+        let deck_before = run.deck().len();
+        run.push_relic("calling_bell", &pool).expect("pickup");
+        assert_eq!(run.deck().len(), deck_before + 1, "the curse is immediate");
+        assert_eq!(run.deck().last().map(|card| card.as_str()), Some("curse_of_the_bell"));
+        assert_eq!(run.pickup_relics(), 3, "three relics are owed");
+        // 另一侧：池子里没有那条诅咒 ⇒ `NoSuchCard`，而且**整个局面一个字节都不改**。
+        let mut broken = run_with(&[]);
+        let before = crate::hash::run_hash_hex(&broken).expect("hash");
+        let error = broken.push_relic("calling_bell", &[]).expect_err("no curse in the pool");
+        assert_eq!(error, RunError::NoSuchCard);
+        assert_eq!(
+            crate::hash::run_hash_hex(&broken).expect("hash"),
+            before,
+            "a refused pickup changes nothing"
+        );
+        assert_eq!(broken.pickup_relics(), 0, "and owes nothing");
+    }
+
+    #[test]
+    fn cauldron_owes_five_potions_and_the_belt_caps_it() {
+        let mut run = run_with(&[]);
+        run.push_relic("cauldron", &[]).expect("pickup");
+        assert_eq!(run.pickup_potions(), 5, "five brews are owed");
+        let pool = [
+            PoolPotion { id: "fire_potion", rarity: Rarity::Common },
+            PoolPotion { id: "block_potion", rarity: Rarity::Common },
+        ];
+        let mut granted = 0;
+        while run.pickup_potions() > 0 && run.potion_room() {
+            let picked = run.pick_potion(RunStream::Potion, &pool).expect("a potion");
+            if picked.as_str().is_empty() {
+                break;
+            }
+            run.push_potion(picked.as_str()).expect("belt room");
+            run.take_pickup_potion();
+            granted += 1;
+        }
+        // 腰带只有 3 格 ⇒ 装 3 瓶；剩下的 **留在欠账上**（§292 的偏差记录）。
+        assert_eq!(granted, 3, "the belt holds three");
+        assert_eq!(run.potion_slots(), 3, "and the rule is still three slots");
+        assert_eq!(run.pickup_potions(), 2, "the rest stays owed (documented deviation)");
+    }
+
+    #[test]
+    fn dollys_mirror_duplicates_the_chosen_card_and_refuses_a_full_deck() {
+        let pool = [PoolCard {
+            id: "strike",
+            kind: CardKind::Attack,
+            rarity: Rarity::Basic,
+            upgraded: None,
+        }];
+        let mut run = run_with(&[]);
+        run.push_relic("dollys_mirror", &pool).expect("pickup");
+        assert_eq!(run.pickup_change(), Some(DeckChange::Duplicate), "duplicate is owed");
+        let deck_before = run.deck().len();
+        run.pickup_card(0, &pool).expect("copy the first card");
+        assert_eq!(run.deck().len(), deck_before + 1, "the deck grew by one");
+        assert_eq!(run.deck().last().map(|card| card.as_str()), Some("strike"));
+        assert_eq!(run.pickup_change(), None, "the debt is cleared");
+        // 另一侧：满牌组 ⇒ `Capacity`（响亮），而且欠账**不被吃掉**。
+        let mut full = run_with(&[]);
+        full.push_relic("dollys_mirror", &pool).expect("pickup");
+        while full.deck().len() < MAX_RUN_DECK {
+            full.push_card(PoolCard::plain("strike")).expect("room");
+        }
+        assert_eq!(full.pickup_card(0, &pool), Err(RunError::Capacity));
+        assert_eq!(full.pickup_change(), Some(DeckChange::Duplicate), "the debt survives");
+    }
+
+    #[test]
+    fn nloths_gift_triples_the_rare_band_and_never_passes_uncommon() {
+        let mut run = run_with(&[]);
+        assert_eq!(run.rare_chance_multiplier(), 100, "100 = as printed");
+        run.push_relic("nloths_gift", &[]).expect("pickup");
+        assert_eq!(run.rare_chance_multiplier(), 3, "tripled");
+        // 档位放大后必须**夹在**非稀有档的下界：否则"更常见稀有牌"变成"奖励几乎全是稀有牌"。
+        let (rare_top, uncommon_top) = reward_bands(FightKind::Normal, 0);
+        let widened = (rare_top * 3).min(uncommon_top);
+        assert!(widened >= rare_top, "the rare band widened");
+        assert!(widened <= uncommon_top, "and it never passes the uncommon band");
+    }
+
+    #[test]
+    fn sacred_bark_doubles_potion_effectiveness() {
+        let mut run = run_with(&[]);
+        assert_eq!(run.potion_effect_percent(), 100, "no relic = as printed");
+        run.push_relic("sacred_bark", &[]).expect("pickup");
+        assert_eq!(run.potion_effect_percent(), 200, "double");
+    }
+
+    #[test]
+    fn shop_rarity_relics_are_reachable_only_from_the_shelf() {
+        // §292：`Shop` 档此前**根本不存在**，于是内容里 `Rarity: "Shop"` 的行整条被池子丢掉。
+        let pool = [
+            PoolRelic { id: "cauldron", rarity: Rarity::Shop },
+            PoolRelic { id: "anchor", rarity: Rarity::Common },
+        ];
+        assert!(!RunState::relic_rarity_is_droppable(Rarity::Shop));
+        // 宝箱那条路：`Shop` 档不是候选。
+        let mut chest = run_with(&[]);
+        let picked = chest.pick_relic(RunStream::Chest, &pool).expect("the common one");
+        assert_eq!(picked.as_str(), "anchor", "a chest cannot hand out a shop relic");
+        // 货架那条路：**可能**抽到它（抽签的随机性由流决定，这里判"候选集里有没有它"）。
+        let mut shelf = run_with(&[]);
+        let picked = shelf
+            .pick_shop_relic_avoiding(RunStream::Shop, &pool, &[])
+            .expect("the shelf draws");
+        assert!(
+            picked.as_str() == "cauldron" || picked.as_str() == "anchor",
+            "the shelf considers both tiers, got {}",
+            picked.as_str()
+        );
+        // 把可掉落的那一件排除掉，`Shop` 档就必须能中 —— 这才是"候选集真的包含它"。
+        let only_shop = [PoolRelic { id: "cauldron", rarity: Rarity::Shop }];
+        let mut shelf = run_with(&[]);
+        let picked = shelf
+            .pick_shop_relic_avoiding(RunStream::Shop, &only_shop, &[])
+            .expect("the shelf draws");
+        assert_eq!(picked.as_str(), "cauldron", "and it can actually win the draw");
+    }

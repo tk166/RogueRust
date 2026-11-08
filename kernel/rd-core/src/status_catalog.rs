@@ -759,6 +759,9 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // §271: `sozu`'s energy half and `ancient_tea_set`'s one-shot energy.
             | "standard.sozu"
             | "standard.ancient_tea_set"
+            // §292: `cursed_key` —— 规则就是内容那一行 `TurnStartEnergy / AddPerStack 1`
+            // （与 `busted_crown` 同形状）；第二半"非 Boss 宝箱多一张诅咒"在运行层。
+            | "standard.cursed_key"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

@@ -122,8 +122,9 @@ INV_COUNTS = {
     # §269: +2 (`slavers_collar` / `busted_crown` energy carriers).
     # §270: +1 (`ectoplasm`'s energy carrier).
     # §271: +2 (`sozu` energy carrier + `ancient_tea_set`'s one-shot program).
-    # §282: +1 (`standard.confusion`)；§283: +1 (`standard.snecko_eye`).
-    "statuses": 128,
+    # §282: +1 (`standard.confusion`)；§283: +1 (`standard.snecko_eye`)。
+    # §292: +1 (`standard.cursed_key` —— 每回合 +1 能量的载体，与 `busted_crown` 同形状).
+    "statuses": 129,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1547,6 +1548,8 @@ INV_STATUSES = {
     "standard.sozu": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
     # `ancient_tea_set` 没有**被动修饰器**：它是 `TurnStarted` 触发器（抄 `lantern` 的程序）。
     "standard.ancient_tea_set": [],
+    # §292：`cursed_key` 的每回合 +1 能量（"非 Boss 宝箱多一张诅咒"在运行层的第二半）。
+    "standard.cursed_key": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
     # §267：零基建批次。
     "standard.ring_of_the_serpent": [('TurnStartDraw', 'AddFlat', 1, 100, None)],
     "standard.philosophers_stone": [('TurnStartEnergy', 'AddPerStack', 1, 100, None)],
@@ -3615,7 +3618,8 @@ def check_statuses(doc):
                      "standard.omega", "standard.panache", "standard.sadistic_nature",
                      "standard.the_bomb",
                      # §283: `snecko_eye`（Boss 遗物的载体）。
-                     "standard.snecko_eye"):
+                     # §292: `cursed_key`（同样是 Boss 遗物的能量载体）。
+                     "standard.snecko_eye", "standard.cursed_key"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -3751,7 +3755,9 @@ def check_statuses(doc):
                         "standard.split_acid_l": ["DamageTaken"],
                         # §283: `snecko_eye` 的**全部**规则都在一条 `TurnStarted` 触发器里
                         # （首回合挂 Confused、每回合抽 2）。
-                        "standard.snecko_eye": ["TurnStarted"]}[sid]
+                        "standard.snecko_eye": ["TurnStarted"],
+                        # §292：`cursed_key` 是**修饰器**（每回合 +1 能量），没有触发器。
+                        "standard.cursed_key": []}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
@@ -4034,6 +4040,10 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       # §283: `snecko_eye`（Boss）—— 开战挂 `standard.snecko_eye`，
                       # 两条规则（首回合 Confused + 每回合抽 2）都在那条状态的触发器里。
                       "snecko_eye",
+                      # §292 Wave 1：11 件（flavor-only 两件、拾取欠账两件、宝箱三件、奖励/药水/复制各一件）。
+                      "cultist_headpiece", "spirit_poop", "face_of_cleric", "matryoshka",
+                      "nloths_hungry_face", "cursed_key", "calling_bell", "cauldron",
+                      "dollys_mirror", "nloths_gift", "sacred_bark",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

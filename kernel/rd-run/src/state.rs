@@ -35,13 +35,15 @@ use crate::streams::{RunError, RunRng, RunStream};
 ///
 /// 两个消费者（[`RunState::combat_bonus_for`] / [`RunState::reward_card_count`]）各自挑自己认识的
 /// 变体、忽略其余 —— 所以这张表**只有一处**，而不是"每个消费者一张"。
-const RELIC_SECOND_HALVES: [(&str, RelicEffect); 4] = [
+const RELIC_SECOND_HALVES: [(&str, RelicEffect); 5] = [
     ("busted_crown", RelicEffect::RewardCardDelta(-2, KindMask::ALL)),
     ("ectoplasm", RelicEffect::StartCombatStatus("standard.ectoplasm", 1)),
     // §271：`sozu` 的第一半是"不能再获得药水"（运行时判断），第二半是每回合 +1 能量。
     ("sozu", RelicEffect::StartCombatStatus("standard.sozu", 1)),
     // §273：`the_courier` 的第一半是 -20%（`ShopDiscountPercent`），第二半是"买完补货"。
     ("the_courier", RelicEffect::CourierRestock),
+    // §292：`cursed_key` 的第一半是每回合 +1 能量，第二半是"非 Boss 宝箱里多一张诅咒"。
+    ("cursed_key", RelicEffect::ChestAddsCurse),
 ];
 
 /// §269：一组"哪几类战斗"的位掩码（[`RelicEffect::StartCombatStatusInKinds`] 等使用）。
@@ -316,6 +318,44 @@ pub enum RelicEffect {
     NoSmith,
     /// §259: resting also pays a card reward (`dream_catcher`).
     RestCardReward,
+    /// §292：wiki 上只有一句 flavor（`cultist_headpiece`：*"You feel more talkative."*、
+    /// `spirit_poop`：*"It's unpleasant."*）。**"没有效果"也是一种效果**：它在表里有名字，
+    /// 于是"内核认识这件遗物"与"它什么都不做"可以同时成立 —— 而不是靠"表里查不到"来表示，
+    /// 那会让 `UnsupportedRelic` 把一件合法的遗物挡在腰带外面。
+    Nothing,
+    /// §292：`face_of_cleric` —— 战斗结束时**永久** +1 最大生命（wiki: *"At the end of combat,
+    /// raise your Max HP by 1."*）。与 `MaxHealthUp` 的区别只是**时点**：那个在拾取那一刻。
+    EndOfCombatMaxHealthUp(i32),
+    /// §292：`matryoshka` —— 接下来 `chests` 个**非 Boss** 宝箱各给**两件**遗物。
+    ChestExtraRelic { chests: u8 },
+    /// §292：`nloths_hungry_face` —— 接下来 `chests` 个非 Boss 宝箱是**空的**。
+    NextChestEmpty(u8),
+    /// §292：`cursed_key` —— 每开一个非 Boss 宝箱，牌组里多一张随机诅咒。
+    ///
+    /// 它是**第二半**（第一半是每回合 +1 能量，走 `StartCombatStatus`），所以挂在
+    /// [`RELIC_SECOND_HALVES`] 里。
+    ChestAddsCurse,
+    /// §292：`calling_bell` —— 拾取时给一张**指名**诅咒 + `relics` 件遗物。
+    ///
+    /// 遗物给不出来（`push_relic` 没有遗物池）⇒ 记成**欠账**，由调用方兑现
+    /// （[`RunState::pickup_relics`]）。
+    PickupCurseAndRelics {
+        /// 内容的 `CARD` 行 id（`curse_of_the_bell`）。
+        curse: &'static str,
+        /// 还给几件遗物。
+        relics: u8,
+    },
+    /// §292：`cauldron` —— 拾取时酿 `count` 瓶随机药水。
+    ///
+    /// 同一条欠账通道：[`RunState::pickup_potions`]。腰带满了就停（见 §292 的偏差记录）。
+    PickupPotions(u8),
+    /// §292：`dollys_mirror` —— 拾取时**复制**一张牌（玩家选，`DeckChange::Duplicate`）。
+    PickupDuplicate(u8),
+    /// §292：`nloths_gift` —— 战斗奖励里**稀有档**的宽度乘以 `times`（wiki: *"Triples the
+    /// chance of finding Rare cards"*）。
+    RareCardChanceMultiplier(i32),
+    /// §292：`sacred_bark` —— 药水效果乘以 `percent`（wiki: *"Double the effectiveness"* = 200）。
+    PotionEffectPercent(i32),
 }
 
 /// §259：篝火上有哪些选项（`RunState::campfire_options`）。
@@ -479,6 +519,8 @@ pub const fn card_price_band(rarity: Rarity) -> (i32, i32) {
         // §259: `Starter`/`Boss` 是**遗物**的桶，牌不可能带着它 —— 与 `Event` 同一条理由：
         // 走到这里说明上游把遗物的稀有度用在了牌上，给 Common 价、由调用方去挡。
         | Rarity::Starter
+        // §292：`Shop` 同样是**遗物**的桶（`cauldron` 那一批），牌不可能带着它。
+        | Rarity::Shop
         | Rarity::Boss => (45, 55),
         Rarity::Uncommon => (68, 82),
         Rarity::Rare => (135, 165),
@@ -668,11 +710,19 @@ pub enum DeckChange {
     /// §274：`astrolabe` —— 改造，**然后**升级改造出来的那张（wiki："Transform 3 cards, then
     /// Upgrade them"）。一个变体而不是"两次编辑"：两次编辑之间那张牌可能已经不在原位。
     TransformAndUpgrade,
+    /// §292：`dollys_mirror` —— **复制**这一张（wiki: *"obtain an additional copy of a card in
+    /// your deck"*）。牌组满了 ⇒ `push_card` 的 `Capacity`（响亮，不静默丢牌）。
+    Duplicate,
 }
 
 impl DeckChange {
-    /// The three values, for `PartialEq`-driven UI code and for tests that want to enumerate.
-    pub const ALL: [Self; 3] = [Self::Remove, Self::Upgrade, Self::Transform];
+    /// The four values, for `PartialEq`-driven UI code and for tests that want to enumerate.
+    pub const ALL: [Self; 4] = [
+        Self::Remove,
+        Self::Upgrade,
+        Self::Transform,
+        Self::TransformAndUpgrade,
+    ];
 }
 
 pub const START_OFFERS: [StartOffer; 8] = [
@@ -1109,6 +1159,15 @@ pub enum Rarity {
     Starter = 8,
     /// See [`Self::Starter`].
     Boss = 9,
+    /// §292：wiki 的 `Shop` 桶（`cauldron` / `dollys_mirror` / `membership_card` … 共 14 件）。
+    ///
+    /// ⚠️ **这个桶此前不存在**，于是内容里 `Rarity: "Shop"` 的行在 [`Self::from_name`] 里
+    /// 解析成 `None`、整条被 `relic_pool` 丢掉 —— `membership_card` 因此**永远拿不到**，
+    /// 而没有任何闸门会红（"池子里没有它"看起来就像"这件遗物是事件专属"）。
+    ///
+    /// 它同样**不在** `RELIC_RARITY_WEIGHTS` 里（宝箱/精英奖励抽不到），唯一来源是商店货架
+    /// （`pick_shop_relic_avoiding`，按 Rare 档计权与计价 —— 见那里的注释）。
+    Shop = 10,
     /// §218：wiki 把**事件专属**的卡牌放在 `Special` 桶里（`apparition`）。
     ///
     /// 与 `Event`（遗物）同一个道理：这个桶让"事件才有"成为**可说的**，而不是靠"谎报成 Uncommon"
@@ -1136,6 +1195,8 @@ impl Rarity {
             // §259: the two relic buckets above.
             "Starter" => Some(Self::Starter),
             "Boss" => Some(Self::Boss),
+            // §292
+            "Shop" => Some(Self::Shop),
             _ => None,
         }
     }
@@ -1471,6 +1532,8 @@ pub const fn rarity_code(rarity: Rarity) -> u8 {
         Rarity::Event => 8,
         Rarity::Starter => 9,
         Rarity::Boss => 10,
+        // §292
+        Rarity::Shop => 11,
     }
 }
 
@@ -1487,6 +1550,8 @@ pub const fn rarity_of_code(code: u8) -> Rarity {
         8 => Rarity::Event,
         9 => Rarity::Starter,
         10 => Rarity::Boss,
+        // §292
+        11 => Rarity::Shop,
         _ => Rarity::Common,
     }
 }
@@ -1724,6 +1789,21 @@ pub struct RunState {
     /// The Ascension level, `0`..=[`MAX_ASCENSION`] (§159). Cumulative: level `N` carries rules
     /// `1..=N`, and every rule asks [`RunState::at_least`] for its own number.
     ascension: u8,
+    /// §292：`matryoshka` —— 还剩几个非 Boss 宝箱会给**两件**遗物（0 = 没有）。
+    ///
+    /// 计数而不是布尔：wiki 是 "The **next 2** non-boss chests"。
+    chest_extra: u8,
+    /// §292：`nloths_hungry_face` —— 还剩几个非 Boss 宝箱是空的（wiki: "The **next** non-Boss
+    /// chest"，所以只有 1）。
+    chest_empty: u8,
+    /// §292：拾取时**欠着**的遗物件数（`calling_bell` 的 3 件）。
+    ///
+    /// 为什么是欠账：`push_relic` 只拿得到**卡池**（拾取类遗物要看牌的类型），遗物池在调用方
+    /// 手里。把签名加一个参数会动到每一次 `push_relic` 调用（包括 800 条判据），而记欠账的
+    /// 语义更清楚 —— "这件遗物的另外三件**还没到**，谁有池子谁付"。
+    pickup_relics: u8,
+    /// §292：拾取时**欠着**的几瓶药水（`cauldron` 的 5 瓶）。同 [`Self::pickup_relics`]。
+    pickup_potions: u8,
 }
 
 impl Pending {
@@ -1847,6 +1927,10 @@ impl RunState {
             resolved: [0; 2],
             rarity_offset: RARITY_OFFSET_START,
             ascension,
+            chest_extra: 0,
+            chest_empty: 0,
+            pickup_relics: 0,
+            pickup_potions: 0,
         };
         for id in starting_deck {
             state.push_card(PoolCard::plain(id))?;
@@ -2491,6 +2575,32 @@ impl RunState {
                 self.pickup_change = Some(change);
                 self.pickup_picks = picks;
             }
+            // §292：`dollys_mirror` —— 复制一张（同一条欠账通道：`Duplicate` 是"选下标"的编辑）。
+            RelicEffect::PickupDuplicate(picks) => {
+                self.pickup_change = Some(DeckChange::Duplicate);
+                self.pickup_picks = picks;
+            }
+            // §292：`calling_bell` —— 诅咒**当场**进牌组（牌池在这里就有，`omamori` 该挡就挡），
+            // 遗物记成欠账（遗物池在调用方手里）。
+            RelicEffect::PickupCurseAndRelics { curse, relics } => {
+                // 诅咒必须是**这张镜像里真的存在**的诅咒：拼错的 id 会变成一张幽灵卡，直到
+                // 某场战斗抽到它才暴露（与 `GainCurse` 同一条理由）。
+                let Some(row) = pool.iter().find(|card| card.id == curse) else {
+                    return Err(RunError::NoSuchCard);
+                };
+                if row.rarity != Rarity::Curse {
+                    return Err(RunError::NoSuchCard);
+                }
+                self.push_card(PoolCard { kind: CardKind::Curse, ..*row })?;
+                self.pickup_relics = self.pickup_relics.saturating_add(relics);
+            }
+            // §292：`cauldron` —— 5 瓶药水记成欠账。
+            RelicEffect::PickupPotions(count) => {
+                self.pickup_potions = self.pickup_potions.saturating_add(count);
+            }
+            // §292：宝箱的那两件计数器。
+            RelicEffect::ChestExtraRelic { chests } => self.chest_extra = chests,
+            RelicEffect::NextChestEmpty(chests) => self.chest_empty = chests,
                         RelicEffect::HealUp(amount) => self.heal_after_combat(amount),
             RelicEffect::EndOfCombatHeal(_)
             | RelicEffect::StartCombatBlock(_)
@@ -2541,6 +2651,14 @@ impl RunState {
             | RelicEffect::PickupUpgradeRandom(_, _)
             | RelicEffect::PickupTransformStaples
             | RelicEffect::PickupPick(_, _)
+            // §292：这几件同样不是"拿到就生效" —— 它们分别在战斗结束（`face_of_cleric`）、
+            // 奖励掷骰（`nloths_gift`）、药水结算（`sacred_bark`）和**第二半**（`cursed_key`）
+            // 上兑现，以及"没有效果"。
+            | RelicEffect::Nothing
+            | RelicEffect::EndOfCombatMaxHealthUp(_)
+            | RelicEffect::ChestAddsCurse
+            | RelicEffect::RareCardChanceMultiplier(_)
+            | RelicEffect::PotionEffectPercent(_)
             | RelicEffect::RestCardReward => {}
         }
         self.relics[slot] = id;
@@ -2642,6 +2760,12 @@ impl RunState {
                 }
                 // §156: Meat on the Bone -- "if your HP is at or below 50%". The percentage is read
                 // off the **current** maximum (Pear/Strawberry move it), same as the intent rules do.
+                // §292：`face_of_cleric` —— 上限 +1（当前血跟着涨 1，与 `MaxHealthUp`
+                // 同一条规矩）。它**不计入** `healed`：涨上限不是治疗，返回值是"这一场回了多少"。
+                Some(RelicEffect::EndOfCombatMaxHealthUp(amount)) => {
+                    self.health_max += amount;
+                    self.adjust_health(amount);
+                }
                 Some(RelicEffect::EndOfCombatHealIfBelow { percent, amount }) => {
                     let max = self.health_max.max(1);
                     if self.health * 100 <= max * percent {
@@ -2701,6 +2825,16 @@ impl RunState {
                     | RelicEffect::PickupUpgradeRandom(_, _)
                     | RelicEffect::PickupTransformStaples
                     | RelicEffect::PickupPick(_, _)
+                    // §292：新变体里的这些同样不是回合末效果（`EndOfCombatMaxHealthUp` 在上面）。
+                    | RelicEffect::Nothing
+                    | RelicEffect::ChestExtraRelic { .. }
+                    | RelicEffect::NextChestEmpty(_)
+                    | RelicEffect::ChestAddsCurse
+                    | RelicEffect::PickupCurseAndRelics { .. }
+                    | RelicEffect::PickupPotions(_)
+                    | RelicEffect::PickupDuplicate(_)
+                    | RelicEffect::RareCardChanceMultiplier(_)
+                    | RelicEffect::PotionEffectPercent(_)
                     | RelicEffect::RestCardReward,
                 ) => {}
                 None => {
@@ -2938,8 +3072,113 @@ impl RunState {
             "twisted_funnel" => {
                 Some(RelicEffect::StartCombatStatusOnEnemies("standard.poison", 4))
             }
+            // §292 Wave 1：十一件。前两件的"效果"就是"没有效果"。
+            "cultist_headpiece" => Some(RelicEffect::Nothing),
+            "spirit_poop" => Some(RelicEffect::Nothing),
+            "face_of_cleric" => Some(RelicEffect::EndOfCombatMaxHealthUp(1)),
+            "matryoshka" => Some(RelicEffect::ChestExtraRelic { chests: 2 }),
+            "nloths_hungry_face" => Some(RelicEffect::NextChestEmpty(1)),
+            // 第一半是能量（第二半 `ChestAddsCurse` 在 `RELIC_SECOND_HALVES`）。
+            "cursed_key" => Some(RelicEffect::StartCombatStatus("standard.cursed_key", 1)),
+            "calling_bell" => Some(RelicEffect::PickupCurseAndRelics {
+                curse: "curse_of_the_bell",
+                relics: 3,
+            }),
+            "cauldron" => Some(RelicEffect::PickupPotions(5)),
+            "dollys_mirror" => Some(RelicEffect::PickupDuplicate(1)),
+            "nloths_gift" => Some(RelicEffect::RareCardChanceMultiplier(3)),
+            "sacred_bark" => Some(RelicEffect::PotionEffectPercent(200)),
             _ => None,
         }
+    }
+
+    /// §292：某件遗物的**第二半**是不是这个变体（[`RELIC_SECOND_HALVES`] 的反查）。
+    ///
+    /// 与 [`Self::holds_relic_effect`] 分开：那个按**变体值**查第一半，而第二半的变体与第一半
+    /// 不同类（`cursed_key` 的第一半是 `StartCombatStatus`）。把它们合成一个"查所有半边"的函数
+    /// 会让 `busted_crown` 的 `RewardCardDelta` 在"每回合 +1 能量"的调用点上被误认为存在。
+    fn holds_second_half(&self, wanted: RelicEffect) -> bool {
+        for (relic, effect) in RELIC_SECOND_HALVES.iter().copied() {
+            if effect == wanted && self.holds_relic(relic) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// §292：还剩几个非 Boss 宝箱会给两件遗物（`matryoshka` 的 2）。
+    #[must_use]
+    pub const fn chest_extra_remaining(&self) -> u8 {
+        self.chest_extra
+    }
+
+    /// §292：还剩几个非 Boss 宝箱是空的（`nloths_hungry_face` 的 1）。
+    #[must_use]
+    pub const fn chest_empty_remaining(&self) -> u8 {
+        self.chest_empty
+    }
+
+    /// §292：拾取时**欠着**的遗物件数（`calling_bell` 的 3）。调用方用它的遗物池兑换。
+    #[must_use]
+    pub const fn pickup_relics(&self) -> u8 {
+        self.pickup_relics
+    }
+
+    /// §292：兑现**一件**欠着的遗物。`push_relic` 由调用方做（它才有池子），这里只减计数。
+    pub fn take_pickup_relic(&mut self) {
+        self.pickup_relics = self.pickup_relics.saturating_sub(1);
+    }
+
+    /// §292：拾取时**欠着**的药水瓶数（`cauldron` 的 5）。
+    #[must_use]
+    pub const fn pickup_potions(&self) -> u8 {
+        self.pickup_potions
+    }
+
+    /// §292：兑现**一瓶**欠着的药水（同 [`Self::take_pickup_relic`]）。
+    pub fn take_pickup_potion(&mut self) {
+        self.pickup_potions = self.pickup_potions.saturating_sub(1);
+    }
+
+    /// §292：`nloths_gift` —— 稀有档宽度的倍率（`100` = 不放大）。
+    #[must_use]
+    pub fn rare_chance_multiplier(&self) -> i32 {
+        match self.first_relic_effect_of(RelicEffect::RareCardChanceMultiplier(3)) {
+            Some(RelicEffect::RareCardChanceMultiplier(times)) if times > 0 => times,
+            _ => 100,
+        }
+    }
+
+    /// §292：`sacred_bark` —— 药水效果百分比（`100` = 原样，`200` = 翻倍）。
+    #[must_use]
+    pub fn potion_effect_percent(&self) -> i32 {
+        match self.first_relic_effect_of(RelicEffect::PotionEffectPercent(200)) {
+            Some(RelicEffect::PotionEffectPercent(percent)) if percent > 0 => percent,
+            _ => 100,
+        }
+    }
+
+    /// §292：往牌组里塞**一张随机诅咒**（`cursed_key`）。
+    ///
+    /// 诅咒的集合来自池子（`Rarity::Curse`），不是一张写死的表：内容加一条诅咒，这里自动看见。
+    /// 池子里一条诅咒都没有 ⇒ **什么都不做**（不是错误：那说明这份内容没有诅咒，而
+    /// `cursed_key` 的承诺"obtain a Curse"在这里没有可给的）。
+    fn add_random_curse(&mut self, pool: &[PoolCard<'_>]) -> Result<(), RunError> {
+        let mut curses = [0usize; MAX_POOL];
+        let mut count = 0usize;
+        Self::pool_fits(pool.len())?;
+        for (slot, entry) in pool.iter().enumerate() {
+            if entry.rarity == Rarity::Curse {
+                curses[count] = slot;
+                count += 1;
+            }
+        }
+        if count == 0 {
+            return Ok(());
+        }
+        let roll = self.rng.roll(RunStream::Chest, count as u32)? as usize;
+        let row = pool[curses[roll]];
+        self.push_card(PoolCard { kind: CardKind::Curse, ..row })
     }
 
     /// Does this kernel implement relic `id`'s effect? See [`Self::relic_effect`].
@@ -3111,7 +3350,18 @@ impl RunState {
                     | RelicEffect::PickupUpgradeRandom(_, _)
                     | RelicEffect::PickupTransformStaples
                     | RelicEffect::PickupPick(_, _)
-                    | RelicEffect::RestCardReward,
+                    | RelicEffect::RestCardReward
+                // §292：新变体在 `relic_effect` 的两个钩子上都不生效（宝箱/拾取/奖励/药水/没有效果）。
+                | RelicEffect::Nothing
+                | RelicEffect::EndOfCombatMaxHealthUp(_)
+                | RelicEffect::ChestExtraRelic { .. }
+                | RelicEffect::NextChestEmpty(_)
+                | RelicEffect::ChestAddsCurse
+                | RelicEffect::PickupCurseAndRelics { .. }
+                | RelicEffect::PickupPotions(_)
+                | RelicEffect::PickupDuplicate(_)
+                | RelicEffect::RareCardChanceMultiplier(_)
+                | RelicEffect::PotionEffectPercent(_),
                 )
                 | None => {}
             }
@@ -3668,7 +3918,18 @@ impl RunState {
                     | RelicEffect::PickupUpgradeRandom(_, _)
                     | RelicEffect::PickupTransformStaples
                     | RelicEffect::PickupPick(_, _)
-                    | RelicEffect::RestCardReward,
+                    | RelicEffect::RestCardReward
+                // §292：新变体在 `relic_effect` 的两个钩子上都不生效（宝箱/拾取/奖励/药水/没有效果）。
+                | RelicEffect::Nothing
+                | RelicEffect::EndOfCombatMaxHealthUp(_)
+                | RelicEffect::ChestExtraRelic { .. }
+                | RelicEffect::NextChestEmpty(_)
+                | RelicEffect::ChestAddsCurse
+                | RelicEffect::PickupCurseAndRelics { .. }
+                | RelicEffect::PickupPotions(_)
+                | RelicEffect::PickupDuplicate(_)
+                | RelicEffect::RareCardChanceMultiplier(_)
+                | RelicEffect::PotionEffectPercent(_),
                 )
                 | None => {}
             }
@@ -3935,6 +4196,20 @@ impl RunState {
         if self.pending != Pending::Chest {
             return Err(RunError::WrongPhase);
         }
+        // §292：三件"宝箱格子"的遗物。**先读、后掷** —— 掷骰的次数与顺序必须与
+        // "身上有没有这些遗物"无关，否则同一颗种子会因为一件遗物把整条随机流错开。
+        //
+        // ⚠️ 读的是**进入这一刻**的计数：`matryoshka` 自己在某个宝箱里被抽到的那一次，
+        // 那个宝箱不算"接下来两个"之一（wiki 说的是 "The **next** 2"）。
+        let hungry = self.chest_empty > 0;
+        let extra_relic = self.chest_extra > 0;
+        let curse_key = self.holds_second_half(RelicEffect::ChestAddsCurse);
+        if hungry {
+            self.chest_empty -= 1;
+        }
+        if extra_relic {
+            self.chest_extra -= 1;
+        }
         let roll = self.rng.roll(RunStream::Chest, 100)?;
         let (chest, gold_chance, low, high) = match roll {
             0..=49 => (0u8, 50u32, 23, 27),   // 50%
@@ -3946,14 +4221,22 @@ impl RunState {
             let span = (high - low + 1) as u32;
             gold = low + self.rng.roll(RunStream::Chest, span)? as i32;
         }
-        self.adjust_gold(gold);
+        // ⚠️ 空宝箱要把**回报的那个数**也清零：`ChestOutcome.gold` 是页面显示的那一格，
+        // 只跳过 `adjust_gold` 会让"显示 47、实际 0"（§4.10 的"尺寸说谎"同一形态）。
+        if hungry {
+            gold = 0;
+        } else {
+            self.adjust_gold(gold);
+        }
         // A chest always holds a relic in `inv:§8.3`; an empty pool is a content problem, not "an
         // empty chest".
         //
         // §145: **already-held relics are filtered out** — a chest that hands you a second
         // Burning Blood is a bug the player sees immediately, and before the pool had more than one
         // entry it was the *only* thing this could do.
-        let relic = {
+        let relic = if hungry {
+            None
+        } else {
             // §156: the same weighted draw as an elite reward, and the same "not one you hold".
             let picked = self.pick_relic(RunStream::Chest, relic_pool)?;
             if picked.as_str().is_empty() {
@@ -3963,6 +4246,19 @@ impl RunState {
                 Some(picked)
             }
         };
+        // §292：`matryoshka` 的**第二件**。它直接进腰带、不进 `ChestOutcome` —— 与
+        // `black_star` 的"精英多给一件"同一条已记录的偏差（奖励屏只有一个遗物槽）。
+        if extra_relic && !hungry {
+            let second = self.pick_relic(RunStream::Chest, relic_pool)?;
+            if !second.as_str().is_empty() {
+                self.push_relic(second.as_str(), card_pool)?;
+            }
+        }
+        // §292：`cursed_key` —— 非 Boss 宝箱里多一张随机诅咒。`push_card` 会走 `omamori`
+        // 的挡诅咒（这是对的：护符正是为这种情况存在的）。
+        if curse_key && !hungry {
+            self.add_random_curse(card_pool)?;
+        }
         self.pending = Pending::None;
         self.mark_resolved();
         Ok(ChestOutcome { chest, gold, relic })
@@ -4132,7 +4428,8 @@ impl RunState {
         // (both via `pick_relic`, the one function the chest and the elite reward share).
         let mut shelved: [RunId; MAX_SHOP_RELICS] = [RunId::EMPTY; MAX_SHOP_RELICS];
         for slot in 0..MAX_SHOP_RELICS {
-            let picked = self.pick_relic_avoiding(
+            // §292：商店还要卖 **Shop 稀有度** 的那批（`cauldron` / `dollys_mirror` / …）。
+            let picked = self.pick_shop_relic_avoiding(
                 RunStream::Shop,
                 relic_pool,
                 &shelved[..slot],
@@ -4308,6 +4605,24 @@ impl RunState {
         self.pick_relic_inner(stream, pool, reserved, None)
     }
 
+    /// §292：商店的遗物抽样 —— 与 [`Self::pick_relic`] 同一条权重路，但候选集是
+    /// **可掉落三档 ∪ `Shop` 档**。
+    ///
+    /// 为什么需要它：`Shop` 稀有度（wiki 的 14 件）不在 `RELIC_RARITY_WEIGHTS` 里，所以
+    /// `pick_relic` 永远抽不到它 —— 而"商人卖的遗物"正是它们**唯一**的来源。§292 之前
+    /// 内容里的 `membership_card` 就因此**永远拿不到**（没有任何闸门会红）。
+    ///
+    /// ⚠️ `Shop` 档按 **Rare** 的档位计权：wiki 只给了商店价（143–157，不看稀有度），
+    /// 没说"Shop 档该多常见" —— 这个数是**模型**，不是 wiki 的数字。
+    fn pick_shop_relic_avoiding(
+        &mut self,
+        stream: RunStream,
+        pool: &[PoolRelic<'_>],
+        reserved: &[RunId],
+    ) -> Result<RunId, RunError> {
+        self.pick_relic_inner_with(stream, pool, reserved, None, true)
+    }
+
     /// [`Self::pick_relic`] 的实体：`forced` = 锁定档位（`None` = 按权重掷）。
     fn pick_relic_inner(
         &mut self,
@@ -4315,6 +4630,18 @@ impl RunState {
         pool: &[PoolRelic<'_>],
         reserved: &[RunId],
         forced: Option<Rarity>,
+    ) -> Result<RunId, RunError> {
+        self.pick_relic_inner_with(stream, pool, reserved, forced, false)
+    }
+
+    /// 实体：`allow_shop` = 候选集里要不要让 `Shop` 档也进来（商店货架要，宝箱/精英奖励不要）。
+    fn pick_relic_inner_with(
+        &mut self,
+        stream: RunStream,
+        pool: &[PoolRelic<'_>],
+        reserved: &[RunId],
+        forced: Option<Rarity>,
+        allow_shop: bool,
     ) -> Result<RunId, RunError> {
         // Never a second copy of a held relic (§145) -- the filter every source shares.
         // §160: **not-droppable rarities are not candidates at all.** `Event` (and `Shop`/`Boss`,
@@ -4327,7 +4654,8 @@ impl RunState {
         let mut count = 0usize;
         Self::pool_fits(pool.len())?;
         for (slot, entry) in pool.iter().enumerate() {
-            if !Self::relic_rarity_is_droppable(entry.rarity) {
+            let shoppable = allow_shop && entry.rarity == Rarity::Shop;
+            if !Self::relic_rarity_is_droppable(entry.rarity) && !shoppable {
                 continue;
             }
             if self.relics().iter().any(|held| held.as_str() == entry.id)
@@ -4336,7 +4664,12 @@ impl RunState {
                 continue;
             }
             candidates[count] = slot;
-            rarities[count] = entry.rarity;
+            // §292：`Shop` 档按 **Rare** 档计权（见 `pick_shop_relic_avoiding`）。
+            rarities[count] = if entry.rarity == Rarity::Shop {
+                Rarity::Rare
+            } else {
+                entry.rarity
+            };
             count += 1;
         }
         if count == 0 {
@@ -4779,6 +5112,16 @@ impl RunState {
                 self.grant_random_cards(1, pool)?;
                 let last = self.deck_len as usize - 1;
                 self.upgrade_at(last, pool)?;
+            }
+            // §292：`dollys_mirror` —— 复制那一行（**下标不动**：原件留着，副本进末尾）。
+            // 用池子里那一行而不是"id + `+`"推断，理由与 `upgrade_at` 相同：`+` 是内容的事。
+            DeckChange::Duplicate => {
+                let id = self.deck[index].as_str();
+                let Some(row) = pool.iter().find(|card| card.id == id) else {
+                    return Err(RunError::NoSuchCard);
+                };
+                let copy = *row;
+                self.push_card(copy)?;
             }
         }
         Ok(())
@@ -5319,7 +5662,12 @@ impl RunState {
         let mut cards = [RunId::EMPTY; MAX_REWARD_CARDS];
         for slot in 0..wanted {
             // One roll, banded -- see `reward_bands`.
-            let (rare_top, uncommon_top) = reward_bands(kind, self.rarity_offset);
+            // §292：`nloths_gift` —— "Triples the chance of finding Rare cards"。
+            // 乘的是**稀有档的宽度**（`reward_bands` 的第一段），并且夹在非稀有档的下界：
+            // 稀有档比普通档还宽就不是"更常见稀有牌"而是"奖励几乎全是稀有牌"了。
+            let (mut rare_top, uncommon_top) = reward_bands(kind, self.rarity_offset);
+            let rare_mult = self.rare_chance_multiplier();
+            rare_top = (rare_top * rare_mult / 100).min(uncommon_top);
             let roll = self.rng.roll(RunStream::Reward, 100)? as i32;
             let band = if roll < rare_top {
                 Rarity::Rare
@@ -11059,4 +11407,262 @@ mod tests {
         );
         assert_eq!(run.pending(), Pending::BlessingCard);
     }
+
+    // =============================================================================================
+    // §292 Wave 1：十一件遗物的规则（每条都是**两侧**判据）
+    // =============================================================================================
+
+    /// 一条"有这些遗物"的起手：`run` 在地图上、还没进任何节点。
+    fn run_with(relics: &[&str]) -> RunState {
+        let deck = [
+            "strike", "strike", "strike", "strike", "strike", "defend", "defend", "defend",
+            "defend", "bash",
+        ];
+        let mut run = RunState::new(11, 80, 99, &deck).expect("a run");
+        for relic in relics {
+            run.push_relic(relic, &[]).expect("relic room");
+        }
+        run
+    }
+
+    #[test]
+    fn the_flavor_only_relics_are_known_and_change_nothing() {
+        // wiki 上就是一句 flavor（`cultist_headpiece` / `spirit_poop`）。两侧：
+        // 它们被**承认**（`push_relic` 不报 `UnsupportedRelic`），并且它们真的什么都不改。
+        for relic in ["cultist_headpiece", "spirit_poop"] {
+            assert_eq!(
+                RunState::relic_effect(relic),
+                Some(RelicEffect::Nothing),
+                "`{relic}` must be in the one table"
+            );
+            let mut run = run_with(&[]);
+            run.push_relic(relic, &[]).expect("a flavour relic is still a relic");
+            assert_eq!(run.gold(), 99, "`{relic}` must not touch gold");
+            assert_eq!(run.health(), 80, "`{relic}` must not heal");
+            assert_eq!(run.health_max(), 80, "`{relic}` must not raise the maximum");
+        }
+    }
+
+    #[test]
+    fn face_of_cleric_raises_the_maximum_after_every_fight() {
+        let mut run = run_with(&["face_of_cleric"]);
+        let max_before = run.health_max();
+        run.end_of_combat().expect("a fight ends");
+        assert_eq!(run.health_max(), max_before + 1, "the maximum grew by one");
+        // 当前血跟着涨 1（与 `MaxHealthUp` / wiki 的 "raise your Max HP" 同一条规矩）。
+        assert_eq!(run.health(), 81, "and the current HP followed it");
+        // **累积**：第二场再 +1。
+        run.end_of_combat().expect("a second fight ends");
+        assert_eq!(run.health_max(), max_before + 2, "it stacks per fight");
+        // 另一侧：没有这件遗物时上限不动。
+        let mut plain = run_with(&[]);
+        plain.end_of_combat().expect("a fight ends");
+        assert_eq!(plain.health_max(), max_before, "no relic, no growth");
+    }
+
+    #[test]
+    fn matryoshka_queues_two_chests_and_pays_a_second_relic() {
+        let mut run = run_with(&[]);
+        run.push_relic("matryoshka", &[]).expect("pickup");
+        assert_eq!(run.chest_extra_remaining(), 2, "two chests are queued");
+        // 走真实的宝箱：那一次要给**两件**（第二件直接进腰带，与 `black_star` 同一条偏差）。
+        assert!(walk_to(&mut run, NodeKind::Treasure), "the map has a treasure room");
+        let pool = [
+            PoolRelic { id: "vajra", rarity: Rarity::Common },
+            PoolRelic { id: "lantern", rarity: Rarity::Common },
+            PoolRelic { id: "anchor", rarity: Rarity::Common },
+            PoolRelic { id: "pear", rarity: Rarity::Uncommon },
+        ];
+        let before = run.relics().len();
+        run.begin_node(&[], &pool).expect("the chest node");
+        let outcome = run.open_chest(&[], &pool).expect("the chest opens");
+        let gained = run.relics().len() - before;
+        assert!(outcome.relic.is_some(), "the chest still reports its own relic");
+        assert_eq!(gained, 2, "matryoshka's chest hands out two relics");
+        assert_eq!(run.chest_extra_remaining(), 1, "one chest was consumed");
+        // 另一侧：没有 `matryoshka` 的宝箱只给一件。
+        let mut plain = run_with(&[]);
+        assert!(walk_to(&mut plain, NodeKind::Treasure));
+        let before = plain.relics().len();
+        plain.begin_node(&[], &pool).expect("the chest node");
+        plain.open_chest(&[], &pool).expect("the chest opens");
+        assert_eq!(plain.relics().len() - before, 1, "one chest, one relic");
+    }
+
+    #[test]
+    fn nloths_hungry_face_empties_exactly_one_chest() {
+        let mut run = run_with(&["nloths_hungry_face"]);
+        assert_eq!(run.chest_empty_remaining(), 1, "one chest is cursed");
+        let pool = [PoolRelic { id: "vajra", rarity: Rarity::Common }];
+        assert!(walk_to(&mut run, NodeKind::Treasure));
+        run.begin_node(&[], &pool).expect("the chest node");
+        let gold_before = run.gold();
+        let relics_before = run.relics().len();
+        let outcome = run.open_chest(&[], &pool).expect("the chest opens");
+        assert_eq!(outcome.gold, 0, "an empty chest pays no gold");
+        assert!(outcome.relic.is_none(), "and no relic");
+        assert_eq!(run.gold(), gold_before, "gold unchanged");
+        assert_eq!(run.relics().len(), relics_before, "relics unchanged");
+        assert_eq!(run.chest_empty_remaining(), 0, "the debt is spent");
+    }
+
+    #[test]
+    fn cursed_key_carries_its_energy_and_its_chest_curse() {
+        // 第一半：每回合 +1 能量（内容状态 `standard.cursed_key` 的 `TurnStartEnergy` 行）。
+        assert_eq!(
+            RunState::relic_effect("cursed_key"),
+            Some(RelicEffect::StartCombatStatus("standard.cursed_key", 1)),
+            "the first half is the energy carrier"
+        );
+        // 第二半：非 Boss 宝箱里多一张**随机诅咒**（池子里那一条）。
+        let curses = [
+            PoolCard { id: "injury", kind: CardKind::Curse, rarity: Rarity::Curse, upgraded: None },
+            PoolCard { id: "wound", kind: CardKind::Status, rarity: Rarity::Status, upgraded: None },
+        ];
+        let mut run = run_with(&["cursed_key"]);
+        let deck_before = run.deck().len();
+        assert!(walk_to(&mut run, NodeKind::Treasure));
+        run.begin_node(&[], &[]).expect("the chest node");
+        run.open_chest(&curses, &[]).expect("the chest opens");
+        assert_eq!(run.deck().len(), deck_before + 1, "one curse joined the deck");
+        assert_eq!(run.deck().last().map(|card| card.as_str()), Some("injury"),
+                   "and it is the curse from the pool, not the Status row");
+        // 另一侧：没有这件遗物时牌组不长。
+        let mut plain = run_with(&[]);
+        assert!(walk_to(&mut plain, NodeKind::Treasure));
+        plain.begin_node(&[], &[]).expect("the chest node");
+        plain.open_chest(&curses, &[]).expect("the chest opens");
+        assert_eq!(plain.deck().len(), deck_before, "no cursed_key, no curse");
+    }
+
+    #[test]
+    fn calling_bell_pays_a_curse_and_owes_three_relics() {
+        let pool = [PoolCard {
+            id: "curse_of_the_bell",
+            kind: CardKind::Curse,
+            rarity: Rarity::Curse,
+            upgraded: None,
+        }];
+        let mut run = run_with(&[]);
+        let deck_before = run.deck().len();
+        run.push_relic("calling_bell", &pool).expect("pickup");
+        assert_eq!(run.deck().len(), deck_before + 1, "the curse is immediate");
+        assert_eq!(run.deck().last().map(|card| card.as_str()), Some("curse_of_the_bell"));
+        assert_eq!(run.pickup_relics(), 3, "three relics are owed");
+        // 另一侧：池子里没有那条诅咒 ⇒ `NoSuchCard`，而且**整个局面一个字节都不改**。
+        let mut broken = run_with(&[]);
+        let before = crate::hash::run_hash_hex(&broken).expect("hash");
+        let error = broken.push_relic("calling_bell", &[]).expect_err("no curse in the pool");
+        assert_eq!(error, RunError::NoSuchCard);
+        assert_eq!(
+            crate::hash::run_hash_hex(&broken).expect("hash"),
+            before,
+            "a refused pickup changes nothing"
+        );
+        assert_eq!(broken.pickup_relics(), 0, "and owes nothing");
+    }
+
+    #[test]
+    fn cauldron_owes_five_potions_and_the_belt_caps_it() {
+        let mut run = run_with(&[]);
+        run.push_relic("cauldron", &[]).expect("pickup");
+        assert_eq!(run.pickup_potions(), 5, "five brews are owed");
+        let pool = [
+            PoolPotion { id: "fire_potion", rarity: Rarity::Common },
+            PoolPotion { id: "block_potion", rarity: Rarity::Common },
+        ];
+        let mut granted = 0;
+        while run.pickup_potions() > 0 && run.potion_room() {
+            let picked = run.pick_potion(RunStream::Potion, &pool).expect("a potion");
+            if picked.as_str().is_empty() {
+                break;
+            }
+            run.push_potion(picked.as_str()).expect("belt room");
+            run.take_pickup_potion();
+            granted += 1;
+        }
+        // 腰带只有 3 格 ⇒ 装 3 瓶；剩下的 **留在欠账上**（§292 的偏差记录）。
+        assert_eq!(granted, 3, "the belt holds three");
+        assert_eq!(run.potion_slots(), 3, "and the rule is still three slots");
+        assert_eq!(run.pickup_potions(), 2, "the rest stays owed (documented deviation)");
+    }
+
+    #[test]
+    fn dollys_mirror_duplicates_the_chosen_card_and_refuses_a_full_deck() {
+        let pool = [PoolCard {
+            id: "strike",
+            kind: CardKind::Attack,
+            rarity: Rarity::Basic,
+            upgraded: None,
+        }];
+        let mut run = run_with(&[]);
+        run.push_relic("dollys_mirror", &pool).expect("pickup");
+        assert_eq!(run.pickup_change(), Some(DeckChange::Duplicate), "duplicate is owed");
+        let deck_before = run.deck().len();
+        run.pickup_card(0, &pool).expect("copy the first card");
+        assert_eq!(run.deck().len(), deck_before + 1, "the deck grew by one");
+        assert_eq!(run.deck().last().map(|card| card.as_str()), Some("strike"));
+        assert_eq!(run.pickup_change(), None, "the debt is cleared");
+        // 另一侧：满牌组 ⇒ `Capacity`（响亮），而且欠账**不被吃掉**。
+        let mut full = run_with(&[]);
+        full.push_relic("dollys_mirror", &pool).expect("pickup");
+        while full.deck().len() < MAX_RUN_DECK {
+            full.push_card(PoolCard::plain("strike")).expect("room");
+        }
+        assert_eq!(full.pickup_card(0, &pool), Err(RunError::Capacity));
+        assert_eq!(full.pickup_change(), Some(DeckChange::Duplicate), "the debt survives");
+    }
+
+    #[test]
+    fn nloths_gift_triples_the_rare_band_and_never_passes_uncommon() {
+        let mut run = run_with(&[]);
+        assert_eq!(run.rare_chance_multiplier(), 100, "100 = as printed");
+        run.push_relic("nloths_gift", &[]).expect("pickup");
+        assert_eq!(run.rare_chance_multiplier(), 3, "tripled");
+        // 档位放大后必须**夹在**非稀有档的下界：否则"更常见稀有牌"变成"奖励几乎全是稀有牌"。
+        let (rare_top, uncommon_top) = reward_bands(FightKind::Normal, 0);
+        let widened = (rare_top * 3).min(uncommon_top);
+        assert!(widened >= rare_top, "the rare band widened");
+        assert!(widened <= uncommon_top, "and it never passes the uncommon band");
+    }
+
+    #[test]
+    fn sacred_bark_doubles_potion_effectiveness() {
+        let mut run = run_with(&[]);
+        assert_eq!(run.potion_effect_percent(), 100, "no relic = as printed");
+        run.push_relic("sacred_bark", &[]).expect("pickup");
+        assert_eq!(run.potion_effect_percent(), 200, "double");
+    }
+
+    #[test]
+    fn shop_rarity_relics_are_reachable_only_from_the_shelf() {
+        // §292：`Shop` 档此前**根本不存在**，于是内容里 `Rarity: "Shop"` 的行整条被池子丢掉。
+        let pool = [
+            PoolRelic { id: "cauldron", rarity: Rarity::Shop },
+            PoolRelic { id: "anchor", rarity: Rarity::Common },
+        ];
+        assert!(!RunState::relic_rarity_is_droppable(Rarity::Shop));
+        // 宝箱那条路：`Shop` 档不是候选。
+        let mut chest = run_with(&[]);
+        let picked = chest.pick_relic(RunStream::Chest, &pool).expect("the common one");
+        assert_eq!(picked.as_str(), "anchor", "a chest cannot hand out a shop relic");
+        // 货架那条路：**可能**抽到它（抽签的随机性由流决定，这里判"候选集里有没有它"）。
+        let mut shelf = run_with(&[]);
+        let picked = shelf
+            .pick_shop_relic_avoiding(RunStream::Shop, &pool, &[])
+            .expect("the shelf draws");
+        assert!(
+            picked.as_str() == "cauldron" || picked.as_str() == "anchor",
+            "the shelf considers both tiers, got {}",
+            picked.as_str()
+        );
+        // 把可掉落的那一件排除掉，`Shop` 档就必须能中 —— 这才是"候选集真的包含它"。
+        let only_shop = [PoolRelic { id: "cauldron", rarity: Rarity::Shop }];
+        let mut shelf = run_with(&[]);
+        let picked = shelf
+            .pick_shop_relic_avoiding(RunStream::Shop, &only_shop, &[])
+            .expect("the shelf draws");
+        assert_eq!(picked.as_str(), "cauldron", "and it can actually win the draw");
+    }
+
 }

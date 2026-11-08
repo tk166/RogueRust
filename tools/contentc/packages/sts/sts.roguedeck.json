@@ -8923,6 +8923,32 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.cursed_key",
+      "PackageId": "sts",
+      "NameKey": "Cursed Key",
+      "DescriptionKey": "Gain 1 Energy at the start of your turn.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartEnergy",
+          "Operation": "AddPerStack",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null
+        }
+      ],
+      "Triggers": []
     }
   ],
   "Cards": [
@@ -65416,6 +65442,83 @@
       "Rarity": "Boss",
       "RunPrograms": null,
       "CombatRules": null
+    },
+    {
+      "Id": "cultist_headpiece",
+      "DisplayName": "Cultist Headpiece",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Event"
+    },
+    {
+      "Id": "spirit_poop",
+      "DisplayName": "Spirit Poop",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Event"
+    },
+    {
+      "Id": "face_of_cleric",
+      "DisplayName": "Face of Cleric",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Event"
+    },
+    {
+      "Id": "nloths_hungry_face",
+      "DisplayName": "N'loth's Hungry Face",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Event"
+    },
+    {
+      "Id": "nloths_gift",
+      "DisplayName": "N'loth's Gift",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Event"
+    },
+    {
+      "Id": "matryoshka",
+      "DisplayName": "Matryoshka",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Uncommon"
+    },
+    {
+      "Id": "cursed_key",
+      "DisplayName": "Cursed Key",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Boss"
+    },
+    {
+      "Id": "calling_bell",
+      "DisplayName": "Calling Bell",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Boss"
+    },
+    {
+      "Id": "sacred_bark",
+      "DisplayName": "Sacred Bark",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Boss"
+    },
+    {
+      "Id": "cauldron",
+      "DisplayName": "Cauldron",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Shop"
+    },
+    {
+      "Id": "dollys_mirror",
+      "DisplayName": "Dolly's Mirror",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Shop"
     }
   ],
   "Start": {

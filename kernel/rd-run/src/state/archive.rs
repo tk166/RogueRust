@@ -427,6 +427,8 @@ const fn deck_change_to_u8(change: DeckChange) -> u8 {
         DeckChange::Transform => 3,
         // §274
         DeckChange::TransformAndUpgrade => 4,
+        // §292：`dollys_mirror`
+        DeckChange::Duplicate => 5,
     }
 }
 
@@ -437,6 +439,8 @@ fn deck_change_from_u8(value: u8) -> Result<DeckChange, ArchiveError> {
         3 => DeckChange::Transform,
         // §274
         4 => DeckChange::TransformAndUpgrade,
+        // §292
+        5 => DeckChange::Duplicate,
         _ => return Err(ArchiveError::BadField("deck_change")),
     })
 }
@@ -450,6 +454,8 @@ const fn blessing_to_u8(follow: BlessingFollowUp) -> u8 {
         BlessingFollowUp::Deck(DeckChange::Transform) => 4,
         // §274（恩惠目前不用它，但编码要穷尽）
         BlessingFollowUp::Deck(DeckChange::TransformAndUpgrade) => 5,
+        // §292
+        BlessingFollowUp::Deck(DeckChange::Duplicate) => 6,
     }
 }
 

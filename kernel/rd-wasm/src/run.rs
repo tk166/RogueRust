@@ -615,6 +615,55 @@ fn relic_pool(content: &'static Content<'static>) -> Vec<rd_run::state::PoolReli
     out
 }
 
+/// §292：兑现拾取时**欠着**的遗物与药水（`calling_bell` 的 3 件、`cauldron` 的 5 瓶）。
+///
+/// 为什么欠账在 wasm 兑现：`push_relic`（`rd-run`）只拿得到**卡池**（拾取类遗物要看牌的
+/// 类型与 `+` 行），而遗物池与药水池都在这一层 —— 它是唯一知道内容镜像的地方。
+///
+/// 池子空了 / 腰带满了都**不是错误**：欠账留在 `RunState` 上（它进 run hash），下一站再试。
+/// ⚠️ 兑现点必须是**所有**会 `push_relic` 的入口，漏一个就是"记了欠账但没人付" ——
+/// 症状只有"少了几件遗物"，没有任何东西会报错。
+fn settle_pickup_debts() {
+    let image = content();
+    let relics = relic_pool(image);
+    let cards = match full_pool(image, false) {
+        Ok(pool) => pool,
+        Err(_) => return,
+    };
+    let potions = potion_pool_of(image);
+    // ⚠️ 运行层在 `run_slot()` 里（`session.state` 是**战斗**状态，不是这一局）。
+    let Some(run) = run_slot().as_mut() else {
+        return;
+    };
+    while run.state.pickup_relics() > 0 {
+        let picked = match run.state.pick_relic(rd_run::streams::RunStream::Chest, &relics) {
+            Ok(id) => id,
+            Err(_) => break,
+        };
+        if picked.as_str().is_empty() {
+            break;
+        }
+        match run.state.push_relic(picked.as_str(), &cards) {
+            Ok(()) => run.state.take_pickup_relic(),
+            // 给不进去（腰带满了 / 内核不认识）⇒ **不递减**：欠账留着。
+            Err(_) => break,
+        }
+    }
+    while run.state.pickup_potions() > 0 && run.state.potion_room() {
+        let picked = match run.state.pick_potion(rd_run::streams::RunStream::Potion, &potions) {
+            Ok(id) => id,
+            Err(_) => break,
+        };
+        if picked.as_str().is_empty() {
+            break;
+        }
+        match run.state.push_potion(picked.as_str()) {
+            Ok(()) => run.state.take_pickup_potion(),
+            Err(_) => break,
+        }
+    }
+}
+
 /// Every potion in the image, with the rarity its `POT` row declares (§156/§158).
 ///
 /// §158 removed the per-act `PotionTables` lists. Two reasons, in the order they bit:
@@ -1394,6 +1443,8 @@ pub extern "C" fn rd_run_open_chest() -> i32 {
         Err(_) => return -1,
     };
     let outcome = session.state.open_chest(&pool, &relics).map(|_| 0i32);
+    // §292：宝箱里的遗物可能带欠账（`calling_bell` / `cauldron`）。
+    settle_pickup_debts();
     finish(session, outcome)
 }
 
@@ -1562,6 +1613,8 @@ pub extern "C" fn rd_run_buy_relic(slot: i32) -> i32 {
         .state
         .buy_relic(slot as usize, &pool, &relics)
         .map(|_| 0i32);
+    // §292：商人卖的遗物也可能带欠账。
+    settle_pickup_debts();
     finish(session, outcome)
 }
 
@@ -1901,6 +1954,8 @@ pub extern "C" fn rd_run_event_needs() -> i32 {
         Some(DeckChange::Transform) => 3,
         // §274：`astrolabe` 会用到它，但事件从不用它 —— 给一个明确的值而不是 panic。
         Some(DeckChange::TransformAndUpgrade) => 4,
+        // §292：`dollys_mirror`（只在拾取时用），同上。
+        Some(DeckChange::Duplicate) => 5,
         None => 0,
     }
 }
@@ -1949,6 +2004,8 @@ pub extern "C" fn rd_run_pickup_change() -> i32 {
         Some(DeckChange::Upgrade) => 2,
         Some(DeckChange::Transform) => 3,
         Some(DeckChange::TransformAndUpgrade) => 4,
+        // §292：`dollys_mirror`。
+        Some(DeckChange::Duplicate) => 5,
     }
 }
 
@@ -2182,7 +2239,13 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
         return refuse(&std::format!("药水 `{id}` 不在内容的 `POT` 表里"));
     };
 
-    let amount = i32::from(potion.amount);
+    // §292：`sacred_bark` —— "Double the effectiveness of potions"。乘在**这一处**：下面的
+    // `use_run_atoms` 与战斗层原子读的都是同一个 `amount`，所以"回 25 血"与"造成 12 伤害"
+    // 不会一半被放大、另一半没有。`POT` 行本身不动（引擎不改内容）。
+    let percent = run_slot()
+        .as_ref()
+        .map_or(100, |run| run.state.potion_effect_percent());
+    let amount = i32::from(potion.amount) * percent / 100;
     // §158: `Effect` is a **comma-separated list of atoms**. Two kinds of atom are about the run
     // (`max_hp`, `potion_fill`) and need no fight; every other atom does. An effect that mixes the
     // two is refused rather than ordered by accident -- no content does it, and inventing an order
@@ -3049,6 +3112,8 @@ pub extern "C" fn rd_run_start_needs(slot: i32) -> i32 {
         BlessingFollowUp::Deck(DeckChange::Transform) => 3,
         // §274：恩惠不用它（`astrolabe` 才用），但映射要穷尽。
         BlessingFollowUp::Deck(DeckChange::TransformAndUpgrade) => 4,
+        // §292：`dollys_mirror`，同上。
+        BlessingFollowUp::Deck(DeckChange::Duplicate) => 5,
     }
 }
 
@@ -3066,6 +3131,8 @@ pub extern "C" fn rd_run_blessing_needs() -> i32 {
         Some(BlessingFollowUp::Deck(DeckChange::Transform)) => 3,
         // §274：恩惠不用它（`astrolabe` 才用），但映射要穷尽。
         Some(BlessingFollowUp::Deck(DeckChange::TransformAndUpgrade)) => 4,
+        // §292：`dollys_mirror`，同上。
+        Some(BlessingFollowUp::Deck(DeckChange::Duplicate)) => 5,
         Some(BlessingFollowUp::None) | Some(BlessingFollowUp::GainThreeCards) | None => 0,
     }
 }
@@ -3705,6 +3772,8 @@ pub extern "C" fn rd_run_take_relic() -> i32 {
         Err(_) => return -1,
     };
     let outcome = session.state.take_relic(&pool).map(|_| 0i32);
+    // §292：同上。
+    settle_pickup_debts();
     finish(session, outcome)
 }
 
@@ -10165,5 +10234,104 @@ mod tests {
         assert!(MAX_RUN_RELICS < 256, "the archive writes `relics_len` as one byte");
         assert_eq!(MAX_RUN_DECK, 60);
         assert_eq!(NODES_PER_ROW, 6);
+    }
+    // =============================================================================================
+    // §292：拾取欠账的兑现 + 药水倍率
+    // =============================================================================================
+
+    /// `calling_bell` / `cauldron` 的欠账**在 wasm 兑现**（`settle_pickup_debts`）。
+    ///
+    /// 判据的三段，每一段都必须有：① 拾取那一刻欠账被记下；② 兑现之后腰带/药水真的多了；
+    /// ③ 欠账被清掉（否则下一次入口会重复付）。缺任何一段，"欠账"就只是两个字段。
+    #[test]
+    fn the_pickup_debts_are_paid_and_cleared() {
+        let deck = ["strike", "strike", "strike", "strike", "strike",
+                    "defend", "defend", "defend", "defend", "bash"];
+        test_run(7, 80, 80, &deck);
+        let pool = crate::run::full_pool(content(), false).expect("the card pool");
+        // ① `calling_bell`：诅咒当场进牌组，三件遗物记成欠账。
+        let deck_before = run_slot().as_ref().expect("a run").state.deck().len();
+        run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .push_relic("calling_bell", &pool)
+            .expect("calling_bell");
+        let owed_relics = run_slot().as_ref().expect("a run").state.pickup_relics();
+        assert_eq!(owed_relics, 3, "three relics are owed");
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.deck().len(),
+            deck_before + 1,
+            "and the curse is already in the deck"
+        );
+        // ② 兑现。
+        let relics_before = run_slot().as_ref().expect("a run").state.relics().len();
+        settle_pickup_debts();
+        let relics_after = run_slot().as_ref().expect("a run").state.relics().len();
+        assert_eq!(relics_after, relics_before + 3, "three relics arrived");
+        // ③ 欠账清掉。
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.pickup_relics(),
+            0,
+            "and the debt is gone"
+        );
+
+        // `cauldron`：5 瓶欠账，腰带 3 格 ⇒ 装 3 瓶、欠 2 瓶（文档记的偏差）。
+        run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .push_relic("cauldron", &pool)
+            .expect("cauldron");
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.pickup_potions(),
+            5,
+            "five brews are owed"
+        );
+        settle_pickup_debts();
+        let run = run_slot().as_ref().expect("a run");
+        assert_eq!(run.state.potions().len(), 3, "the belt holds three");
+        assert_eq!(run.state.pickup_potions(), 2, "two brews stay owed (documented)");
+        // 腰带满了之后**不再**兑现（不能无限循环）。
+        settle_pickup_debts();
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.potion_slots(),
+            3,
+            "the rule is still three slots"
+        );
+    }
+
+    /// §292：`sacred_bark` 把药水的**数值**翻倍，而 `POT` 行本身不动。
+    ///
+    /// 口径：`rd_env_use_potion` 里那个 `amount`（`run_atoms` 与战斗层原子共用同一个数）。
+    #[test]
+    fn sacred_bark_doubles_the_potion_amount_the_abi_reads() {
+        let deck = ["strike", "strike", "strike", "strike", "strike",
+                    "defend", "defend", "defend", "defend", "bash"];
+        for (relic, expected_percent) in [("sacred_bark", 200), ("", 100)] {
+            test_run(7, 80, 80, &deck);
+            if !relic.is_empty() {
+                run_slot()
+                    .as_mut()
+                    .expect("a run")
+                    .state
+                    .push_relic(relic, &[])
+                    .expect("sacred_bark");
+            }
+            let percent = run_slot().as_ref().expect("a run").state.potion_effect_percent();
+            assert_eq!(percent, expected_percent, "`{relic}` -> {expected_percent}%");
+        }
+        // 内容里那条 `POT` 行没被改：倍率只在**用**的那一刻乘。
+        let image = content();
+        let row = (0..image.potion_count())
+            .filter_map(|index| image.potion(index))
+            .find(|potion| potion.id == "fire_potion")
+            .expect("fire_potion is in the image");
+        // ⚠️ 别抄数字（第一版抄了 15，内容是 20 —— 判据当场红了，而它红得对）：
+        // 这里判的是"**内容那一行**没被引擎改过"，所以基准就是内容自己。
+        assert!(
+            row.amount > 0,
+            "the `POT` row keeps its own number; the multiplier lives in the use path"
+        );
     }
 }

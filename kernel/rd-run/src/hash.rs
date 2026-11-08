@@ -238,6 +238,10 @@ fn follow_code(follow: Option<crate::state::BlessingFollowUp>) -> &'static str {
         Some(crate::state::BlessingFollowUp::Deck(
             crate::state::DeckChange::TransformAndUpgrade,
         )) => "transform_and_upgrade",
+        // §292：`dollys_mirror`（恩惠目前不用它，映射要穷尽 —— 编译器的闸门）。
+        Some(crate::state::BlessingFollowUp::Deck(crate::state::DeckChange::Duplicate)) => {
+            "duplicate"
+        }
     }
 }
 
@@ -248,6 +252,7 @@ fn deck_change_code(change: Option<crate::state::DeckChange>) -> &'static str {
         Some(crate::state::DeckChange::Upgrade) => "upgrade",
         Some(crate::state::DeckChange::Transform) => "transform",
         Some(crate::state::DeckChange::TransformAndUpgrade) => "transform_and_upgrade",
+        Some(crate::state::DeckChange::Duplicate) => "duplicate",
     }
 }
 
