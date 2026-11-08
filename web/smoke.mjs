@@ -106,6 +106,12 @@ const REQUIRED = [
   "rd_run_event_needs", "rd_run_pick_event_card",
   // §274：拾取时欠着的牌组编辑（`empty_cage` / `astrolabe`）。
   "rd_run_pickup_picks", "rd_run_pickup_change", "rd_run_pickup_card",
+  // §293
+  "rd_run_pickup_add", "rd_run_pickup_offer_count",
+  "rd_run_pickup_offer_title_len", "rd_run_pickup_offer_title_into",
+  "rd_run_pickup_add_card", "rd_run_pickup_add_skip", "rd_run_pickup_add_max_hp",
+  "rd_run_take_max_hp_instead",
+  "rd_run_grant_relic",
   "rd_run_reward_gold", "rd_run_reward_card_count", "rd_run_reward_card_id_len",
   "rd_run_reward_card_id_into", "rd_run_reward_card_title_len", "rd_run_reward_card_title_into",
   "rd_run_take_card", "rd_run_skip_reward",

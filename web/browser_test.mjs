@@ -406,6 +406,45 @@ const report = await evaluate(`(async () => {
   out.wingPendingAfter = ex.rd_run_pending();
   await sleep(0);
 
+  // (l3) **§293: the "pick a card to add" question (orrery / tiny_house / singing_bowl).**
+  // A Shop-rarity and a Boss-rarity relic are exactly the two a seed will not hand you, so the
+  // page's debug surface grants them -- the same reason givePotion exists.
+  // (No backticks in this block: it is inside a template literal.)
+  window.RD_DEBUG.startWithSeed(4321, 0);
+  await sleep(0);
+  out.addGranted = window.RD_DEBUG.giveRelic("orrery");
+  out.addOwed = ex.rd_run_pickup_add();
+  out.addOffer = ex.rd_run_pickup_offer_count();
+  await sleep(0);
+  // The panel must be the add-cards one, with one row per offered card and a slot that matches.
+  out.addRows = [...panel().querySelectorAll("[data-panel-action]")]
+    .map((el) => text(el));
+  out.addHeading = text(panel()).slice(0, 40);
+  // 点第一行：牌组 +1、欠账 -1（这是"面板真的能操作内核"的那一步）。
+  const deckBefore = ex.rd_run_deck_count();
+  if (out.addRows.length > 0) {
+    panel().querySelectorAll("[data-panel-action]")[0].click();
+    await sleep(0);
+  }
+  out.addDeckGrew = ex.rd_run_deck_count() - deckBefore;
+  out.addOwedAfter = ex.rd_run_pickup_add();
+
+  // singing_bowl：+2 上限的按钮**只在持有那件遗物时**才画（否则是死按钮）。
+  window.RD_DEBUG.startWithSeed(4321, 0);
+  await sleep(0);
+  window.RD_DEBUG.giveRelic("orrery");
+  await sleep(0);
+  out.addButtonsNoBowl = [...panel().querySelectorAll("[data-panel-action]")].map((el) => text(el));
+  window.RD_DEBUG.giveRelic("singing_bowl");
+  await sleep(0);
+  out.addButtonsWithBowl = [...panel().querySelectorAll("[data-panel-action]")].map((el) => text(el));
+  const maxBefore = ex.rd_run_observe(3);
+  const bowlBtn = [...panel().querySelectorAll("[data-panel-action]")]
+    .find((el) => /上限/.test(text(el)));
+  if (bowlBtn) { bowlBtn.click(); await sleep(0); }
+  out.addMaxHpGrew = ex.rd_run_observe(3) - maxBefore;
+  out.addOwedAfterBowl = ex.rd_run_pickup_add();
+
   // (k) **§161.9: the one-line archive.**
   window.RD_DEBUG.startWithSeed(4321, 0);
   await sleep(0);
@@ -1246,6 +1285,30 @@ want(report.wingRefused === -2,
 want(report.wingPendingAfter === 5,
   `§287: a refused click must leave the event open, pending ${report.wingPendingAfter}`);
 
+// §293：加牌问句 —— 面板真的出现、行带内核槽号、点了真的加牌、+2 上限只在有遗物时画。
+want(report.addGranted === 0, `§293: giveRelic(orrery) failed (${report.addGranted})`);
+want(report.addOwed === 5, `§293: orrery must owe 5 cards, got ${report.addOwed}`);
+want(report.addOffer >= 3, `§293: expected at least 3 offered cards, got ${report.addOffer}`);
+want(report.addRows.length >= 4,
+  `§293: the panel must draw one row per card plus the skip button, got ` +
+  `${report.addRows.length} ${JSON.stringify(report.addRows)}`);
+want(/挑一张牌加入牌组/.test(report.addHeading),
+  `§293: the panel heading is ${JSON.stringify(report.addHeading)}`);
+want(report.addDeckGrew === 1,
+  `§293: clicking a row must add exactly one card, got ${report.addDeckGrew}`);
+want(report.addOwedAfter === 4,
+  `§293: the debt must go 5 -> 4, got ${report.addOwedAfter}`);
+want(!report.addButtonsNoBowl.some((label) => /上限/.test(label)),
+  `§293: without singing_bowl the +2 上限 button must not be drawn, got ` +
+  `${JSON.stringify(report.addButtonsNoBowl)}`);
+want(report.addButtonsWithBowl.some((label) => /上限/.test(label)),
+  `§293: with singing_bowl the +2 上限 button must be drawn, got ` +
+  `${JSON.stringify(report.addButtonsWithBowl)}`);
+want(report.addMaxHpGrew === 2,
+  `§293: the +2 上限 button must raise max HP by 2, got ${report.addMaxHpGrew}`);
+want(report.addOwedAfterBowl === 4,
+  `§293: and it spends one pick (5 -> 4), got ${report.addOwedAfterBowl}`);
+
 // §279：条件选项的 DOM 半 —— 4 个选项、1 个锁着 ⇒ 3 个按钮，且锁着的那个**不在** DOM 里。
 want(report.condOpened === 0, `§279: \`forgotten_altar\` did not open (${report.condOpened})`);
 want(report.condPending === 5, `§279: the event screen is not open (pending ${report.condPending})`);
@@ -1313,4 +1376,7 @@ console.log("  act 3 (daggers)   " + JSON.stringify({
   hp: report.act3 && report.act3.hp, inFight: report.act3 && report.act3.inFight,
   msg: report.act3 && report.act3.msg,
 }));
+console.log("  §293 add cards    owed " + report.addOwed + " -> " + report.addOwedAfter +
+  " · offer " + report.addOffer + " · rows " + report.addRows.length +
+  " · deck +" + report.addDeckGrew + " · bowl +" + report.addMaxHpGrew + " max HP");
 console.log("BROWSER_TEST PASS");

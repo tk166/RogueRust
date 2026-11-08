@@ -112,6 +112,11 @@ pub const POTION_DROP_STEP: i32 = 10;
 /// `Burning Blood`: "At the end of combat, heal 6 HP" (`inv:§2`).
 pub const BURNING_BLOOD_HEAL: i32 = 6;
 
+/// §293：`tiny_house` 的四件事（wiki: *"obtain 1 Potion, gain 50 Gold, raise your Max HP by 5,
+/// obtain 1 card"*）。四个数写在一处，因为它们是**同一句 wiki**。
+pub const TINY_HOUSE_GOLD: i32 = 50;
+pub const TINY_HOUSE_MAX_HEALTH: i32 = 5;
+
 // =============================================================================================
 // Ascension (`port-plan.md` §159)
 // =============================================================================================
@@ -356,6 +361,16 @@ pub enum RelicEffect {
     RareCardChanceMultiplier(i32),
     /// §292：`sacred_bark` —— 药水效果乘以 `percent`（wiki: *"Double the effectiveness"* = 200）。
     PotionEffectPercent(i32),
+    /// §293：`orrery`(5) / `tiny_house`(1) —— 往牌组里加 `count` 张牌，玩家从**三选一**里挑。
+    ///
+    /// 走 [`RunState::pickup_add`] 那条欠账通道（不是 `Pending`）：拾取可能发生在另一个屏开着
+    /// 的时候，把 `pending` 抢过来会把那一屏顶掉（§274 的老账）。
+    PickupAddCards(u8),
+    /// §293：`tiny_house` —— +50 金币、上限 +5、一瓶药水、一张牌。四件事一件遗物。
+    PickupTinyHouse,
+    /// §293：`singing_bowl` —— 加牌时**可以**改拿 +`amount` 上限（wiki: *"you may raise your Max
+    /// HP by 2 instead"*）。它自己不给牌，只在两个"加牌"的问句上多一个按钮。
+    SingingBowl(i32),
 }
 
 /// §259：篝火上有哪些选项（`RunState::campfire_options`）。
@@ -1804,6 +1819,14 @@ pub struct RunState {
     pickup_relics: u8,
     /// §292：拾取时**欠着**的几瓶药水（`cauldron` 的 5 瓶）。同 [`Self::pickup_relics`]。
     pickup_potions: u8,
+    /// §293：欠着**几张牌**要加进牌组（`orrery` 的 5、`tiny_house` 的 1）。
+    ///
+    /// 与 `pickup_picks` 分开：那个是"改**已有**的一张"，这个是"从候选里**加**一张"。
+    /// 两件事共用一个字段会让"还要选几张"说不清是哪一种。
+    pickup_add: u8,
+    /// §293：这一次可以挑的那几张（`pickup_add > 0` 时有意义）。
+    pickup_offer: [RunId; MAX_REWARD_CARDS],
+    pickup_offer_len: u8,
 }
 
 impl Pending {
@@ -1931,6 +1954,9 @@ impl RunState {
             chest_empty: 0,
             pickup_relics: 0,
             pickup_potions: 0,
+            pickup_add: 0,
+            pickup_offer: [RunId::EMPTY; MAX_REWARD_CARDS],
+            pickup_offer_len: 0,
         };
         for id in starting_deck {
             state.push_card(PoolCard::plain(id))?;
@@ -2601,6 +2627,23 @@ impl RunState {
             // §292：宝箱的那两件计数器。
             RelicEffect::ChestExtraRelic { chests } => self.chest_extra = chests,
             RelicEffect::NextChestEmpty(chests) => self.chest_empty = chests,
+            // §293：`orrery` —— 欠 5 张，先抽一手候着。
+            RelicEffect::PickupAddCards(count) => {
+                self.pickup_add = self.pickup_add.saturating_add(count);
+                self.roll_pickup_offer(pool)?;
+            }
+            // §293：`tiny_house` —— 四件事。金币走 `adjust_gold`（所以 `ectoplasm` 该拦就拦、
+            // `bloody_idol` 该回血就回血），上限 +5 与 `MaxHealthUp` 同一条规矩（当前血跟着涨）。
+            RelicEffect::PickupTinyHouse => {
+                self.adjust_gold(TINY_HOUSE_GOLD);
+                self.health_max += TINY_HOUSE_MAX_HEALTH;
+                self.adjust_health(TINY_HOUSE_MAX_HEALTH);
+                self.pickup_potions = self.pickup_potions.saturating_add(1);
+                self.pickup_add = self.pickup_add.saturating_add(1);
+                self.roll_pickup_offer(pool)?;
+            }
+            // §293：`singing_bowl` 在拾取这一刻**什么都不做**（它只是"加牌"问句上多一个按钮）。
+            RelicEffect::SingingBowl(_) => {}
                         RelicEffect::HealUp(amount) => self.heal_after_combat(amount),
             RelicEffect::EndOfCombatHeal(_)
             | RelicEffect::StartCombatBlock(_)
@@ -2835,6 +2878,10 @@ impl RunState {
                     | RelicEffect::PickupDuplicate(_)
                     | RelicEffect::RareCardChanceMultiplier(_)
                     | RelicEffect::PotionEffectPercent(_)
+                    // §293：加牌的问句走自己的通道，不在这三个钩子上。
+                    | RelicEffect::PickupAddCards(_)
+                    | RelicEffect::PickupTinyHouse
+                    | RelicEffect::SingingBowl(_)
                     | RelicEffect::RestCardReward,
                 ) => {}
                 None => {
@@ -3088,6 +3135,10 @@ impl RunState {
             "dollys_mirror" => Some(RelicEffect::PickupDuplicate(1)),
             "nloths_gift" => Some(RelicEffect::RareCardChanceMultiplier(3)),
             "sacred_bark" => Some(RelicEffect::PotionEffectPercent(200)),
+            // §293：加牌的三个入口（`orrery` / `tiny_house` / `singing_bowl`）。
+            "orrery" => Some(RelicEffect::PickupAddCards(5)),
+            "tiny_house" => Some(RelicEffect::PickupTinyHouse),
+            "singing_bowl" => Some(RelicEffect::SingingBowl(2)),
             _ => None,
         }
     }
@@ -3156,6 +3207,166 @@ impl RunState {
             Some(RelicEffect::PotionEffectPercent(percent)) if percent > 0 => percent,
             _ => 100,
         }
+    }
+
+    /// §293：欠着**几张牌**要加进牌组（`orrery` 的 5、`tiny_house` 的 1）。0 = 不欠。
+    #[must_use]
+    pub const fn pickup_add(&self) -> u8 {
+        self.pickup_add
+    }
+
+    /// §293：这一次**可以挑**的那几张牌（`pickup_add == 0` 时是空切片）。
+    #[must_use]
+    pub fn pickup_offer(&self) -> &[RunId] {
+        &self.pickup_offer[..self.pickup_offer_len as usize]
+    }
+
+    /// §293：抽一手"可以挑的牌"（三张，档位与战斗奖励同一套）。
+    ///
+    /// ⚠️ **不动** `rarity_offset`：那是"战斗奖励的稀有度保底"（`inv:§3.5`），而 orrery /
+    /// tiny_house 不是战斗奖励 —— 让一件商店遗物重置那条保底会让"三场没出稀有"凭空消失。
+    fn roll_pickup_offer(&mut self, pool: &[PoolCard<'_>]) -> Result<(), RunError> {
+        self.pickup_offer = [RunId::EMPTY; MAX_REWARD_CARDS];
+        self.pickup_offer_len = 0;
+        // 与 `roll_reward` 同一条过滤：状态/诅咒/特殊牌不进候选。
+        let mut eligible = [0usize; MAX_POOL];
+        let mut eligible_len = 0usize;
+        Self::pool_fits(pool.len())?;
+        for index in 0..pool.len() {
+            if !matches!(
+                pool[index].rarity,
+                Rarity::Status | Rarity::Curse | Rarity::Special
+            ) {
+                eligible[eligible_len] = index;
+                eligible_len += 1;
+            }
+        }
+        if eligible_len == 0 {
+            return Err(RunError::PoolTooSmall {
+                pool: 0,
+                need: 1,
+            });
+        }
+        let eligible = &eligible[..eligible_len];
+        let mut used = [false; MAX_POOL];
+        let wanted = MAX_REWARD_CARDS.min(eligible_len);
+        for slot in 0..wanted {
+            let (rare_top, uncommon_top) = reward_bands(FightKind::Normal, self.rarity_offset);
+            let roll = self.rng.roll(RunStream::Reward, 100)? as i32;
+            let band = if roll < rare_top {
+                Rarity::Rare
+            } else if roll < uncommon_top {
+                Rarity::Uncommon
+            } else {
+                Rarity::Common
+            };
+            // 与 `roll_reward` 同一条兜底链：空档先落 `Basic`，再落"剩下什么给什么"。
+            let mut picked = self.pick_of(pool, eligible, &used, Some(band))?;
+            if picked.is_none() {
+                picked = self.pick_of(pool, eligible, &used, Some(Rarity::Basic))?;
+            }
+            if picked.is_none() {
+                picked = self.pick_of(pool, eligible, &used, None)?;
+            }
+            let Some(index) = picked else { break };
+            used[index] = true;
+            self.pickup_offer[slot] =
+                RunId::new(pool[index].id).map_err(|_| RunError::BadId)?;
+            self.pickup_offer_len = (slot + 1) as u8;
+        }
+        Ok(())
+    }
+
+    /// §293：挑 `slot` 那一张加进牌组。
+    ///
+    /// **先验后改**：牌组满了（`Capacity`）时欠账**不递减**，否则一次被拒的点击会白白吃掉
+    /// 一次额度（§274 的 `pickup_card` 踩过同一个坑）。
+    pub fn pickup_add_card(
+        &mut self,
+        slot: usize,
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
+        if self.pickup_add == 0 {
+            return Err(RunError::WrongPhase);
+        }
+        let Some(id) = self.pickup_offer.get(slot).copied() else {
+            return Err(RunError::EmptyOffer(slot as u8));
+        };
+        if id == RunId::EMPTY {
+            return Err(RunError::EmptyOffer(slot as u8));
+        }
+        let Some(row) = pool.iter().find(|card| card.id == id.as_str()) else {
+            return Err(RunError::NoSuchCard);
+        };
+        let row = *row;
+        self.push_card(row)?;
+        self.pickup_add -= 1;
+        if self.pickup_add == 0 {
+            self.pickup_offer = [RunId::EMPTY; MAX_REWARD_CARDS];
+            self.pickup_offer_len = 0;
+        } else {
+            // 下一次挑的是**新的一手** —— 同一手牌不能给两次（StS 的"挑 5 张"是 5 次奖励屏）。
+            self.roll_pickup_offer(pool)?;
+        }
+        Ok(())
+    }
+
+    /// §293：跳过这一次（少拿一张牌）。StS 的奖励屏可以跳过，orrery 的每一次也是。
+    pub fn pickup_add_skip(&mut self) -> Result<(), RunError> {
+        if self.pickup_add == 0 {
+            return Err(RunError::WrongPhase);
+        }
+        self.pickup_add -= 1;
+        self.pickup_offer = [RunId::EMPTY; MAX_REWARD_CARDS];
+        self.pickup_offer_len = 0;
+        Ok(())
+    }
+
+    /// §293：`singing_bowl` —— 把这一次"加牌"换成 **+`amount` 上限**。
+    ///
+    /// 没有这件遗物 ⇒ `UnsupportedRelic`（不是"静默不给"：那个按钮本来就不该出现，
+    /// 出现说明调用方在猜）。
+    pub fn pickup_add_max_hp(&mut self) -> Result<(), RunError> {
+        let Some(RelicEffect::SingingBowl(amount)) =
+            self.first_relic_effect_of(RelicEffect::SingingBowl(2))
+        else {
+            return Err(RunError::UnsupportedRelic { index: 0 });
+        };
+        if self.pickup_add == 0 {
+            return Err(RunError::WrongPhase);
+        }
+        self.health_max += amount;
+        self.adjust_health(amount);
+        self.pickup_add -= 1;
+        self.pickup_offer = [RunId::EMPTY; MAX_REWARD_CARDS];
+        self.pickup_offer_len = 0;
+        Ok(())
+    }
+
+    /// §293：`singing_bowl` 在**战斗奖励屏**上的那一条 —— 不拿牌，改拿 +`amount` 上限。
+    ///
+    /// 与 [`Self::take_card`] 同一条规矩：它只花掉**卡牌那一行**，金币/药水/遗物都还留在屏上
+    /// （`inv:§9.3`：药水是它自己的一份 offer）。
+    pub fn take_max_hp_instead(&mut self) -> Result<(), RunError> {
+        if self.pending != Pending::Reward {
+            return Err(RunError::WrongPhase);
+        }
+        let Some(RelicEffect::SingingBowl(amount)) =
+            self.first_relic_effect_of(RelicEffect::SingingBowl(2))
+        else {
+            return Err(RunError::UnsupportedRelic { index: 0 });
+        };
+        // 牌已经被拿走了 ⇒ 没有"换成上限"这回事（否则可以拿一张牌再加 2 点上限）。
+        if self.reward.cards_len == 0 {
+            return Err(RunError::EmptyOffer(0));
+        }
+        self.health_max += amount;
+        self.adjust_health(amount);
+        for row in self.reward.cards.iter_mut() {
+            *row = RunId::EMPTY;
+        }
+        self.reward.cards_len = 0;
+        Ok(())
     }
 
     /// §292：往牌组里塞**一张随机诅咒**（`cursed_key`）。
@@ -3361,7 +3572,11 @@ impl RunState {
                 | RelicEffect::PickupPotions(_)
                 | RelicEffect::PickupDuplicate(_)
                 | RelicEffect::RareCardChanceMultiplier(_)
-                | RelicEffect::PotionEffectPercent(_),
+                | RelicEffect::PotionEffectPercent(_)
+                // §293：加牌的问句走自己的通道，不在这三个钩子上。
+                | RelicEffect::PickupAddCards(_)
+                | RelicEffect::PickupTinyHouse
+                | RelicEffect::SingingBowl(_),
                 )
                 | None => {}
             }
@@ -3929,7 +4144,11 @@ impl RunState {
                 | RelicEffect::PickupPotions(_)
                 | RelicEffect::PickupDuplicate(_)
                 | RelicEffect::RareCardChanceMultiplier(_)
-                | RelicEffect::PotionEffectPercent(_),
+                | RelicEffect::PotionEffectPercent(_)
+                // §293：加牌的问句走自己的通道，不在这三个钩子上。
+                | RelicEffect::PickupAddCards(_)
+                | RelicEffect::PickupTinyHouse
+                | RelicEffect::SingingBowl(_),
                 )
                 | None => {}
             }
@@ -11663,6 +11882,150 @@ mod tests {
             .pick_shop_relic_avoiding(RunStream::Shop, &only_shop, &[])
             .expect("the shelf draws");
         assert_eq!(picked.as_str(), "cauldron", "and it can actually win the draw");
+    }
+
+
+    // =============================================================================================
+    // §293：拾取时"挑一张牌**加**进牌组"（`orrery` / `tiny_house` / `singing_bowl`）
+    // =============================================================================================
+
+    /// §293：`orrery` —— 欠 5 张，每一次挑都会**换一手新的候选**（同一手不能给两次）。
+    #[test]
+    fn orrery_owes_five_cards_and_rolls_a_new_hand_each_time() {
+        let pool = [
+            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "anger", kind: CardKind::Attack, rarity: Rarity::Common, upgraded: None },
+        ];
+        let mut run = run_with(&[]);
+        let deck_before = run.deck().len();
+        run.push_relic("orrery", &pool).expect("pickup");
+        assert_eq!(run.pickup_add(), 5, "five cards are owed");
+        // ⚠️ 别抄数字：`MAX_REWARD_CARDS` 是 4（`question_card` 要 4 张），不是"三选一"的 3。
+        // 一手最多 `MAX_REWARD_CARDS` 张，池子小就少给（不复制同一张）。
+        assert_eq!(
+            run.pickup_offer().len(),
+            MAX_REWARD_CARDS.min(pool.len()),
+            "a hand is rolled"
+        );
+        // 挑一张：牌组 +1、欠账 -1、候选**换一手**（不是同一手再给一次）。
+        // 借用先结束：`pickup_offer()` 借的是 `run`，而下面要 `&mut run`。
+        let hand_before: std::vec::Vec<std::string::String> = run
+            .pickup_offer()
+            .iter()
+            .map(|id| std::string::String::from(id.as_str()))
+            .collect();
+        run.pickup_add_card(0, &pool).expect("the first pick");
+        assert_eq!(run.deck().len(), deck_before + 1, "one card joined the deck");
+        assert_eq!(run.pickup_add(), 4, "the debt went down");
+        // ⚠️ 这一条是"换一手"的唯一判据：只数欠账的话，"同一手给两次"照样绿
+        // （第一版就是这样，负控当场把它揭穿了）。
+        let hand_after: std::vec::Vec<std::string::String> = run
+            .pickup_offer()
+            .iter()
+            .map(|id| std::string::String::from(id.as_str()))
+            .collect();
+        assert_ne!(hand_before, hand_after, "the next pick rolls a **new** hand");
+        // 一路挑到 0：欠账清了、候选清空。
+        for _ in 0..4 {
+            run.pickup_add_card(0, &pool).expect("the next pick");
+        }
+        assert_eq!(run.pickup_add(), 0, "the debt is spent");
+        assert!(run.pickup_offer().is_empty(), "and the hand is cleared");
+        assert_eq!(run.deck().len(), deck_before + 5, "five cards arrived");
+        // 另一侧：欠账为 0 时再加就是 `WrongPhase`（不是静默什么都不做）。
+        assert_eq!(run.pickup_add_card(0, &pool), Err(RunError::WrongPhase));
+        assert_eq!(run.pickup_add_skip(), Err(RunError::WrongPhase));
+    }
+
+    /// §293：`tiny_house` —— 四件事一次做完（+50 金、上限 +5、一瓶药水欠账、一张牌欠账）。
+    #[test]
+    fn tiny_house_does_all_four_things() {
+        let pool = [
+            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
+        ];
+        let mut run = run_with(&[]);
+        let (gold, health, max, potions) =
+            (run.gold(), run.health(), run.health_max(), run.pickup_potions());
+        run.push_relic("tiny_house", &pool).expect("pickup");
+        assert_eq!(run.gold(), gold + 50, "+50 gold");
+        assert_eq!(run.health_max(), max + 5, "+5 max HP");
+        assert_eq!(run.health(), health + 5, "and the current HP followed it");
+        assert_eq!(run.pickup_potions(), potions + 1, "one potion is owed");
+        assert_eq!(run.pickup_add(), 1, "one card is owed");
+        assert_eq!(
+            run.pickup_offer().len(),
+            MAX_REWARD_CARDS.min(pool.len()),
+            "with a hand to pick from"
+        );
+    }
+
+    /// §293：`singing_bowl` —— 两条"换成 +2 上限"的路：加牌问句、战斗奖励屏。
+    #[test]
+    fn singing_bowl_trades_a_card_for_two_max_hp_in_both_places() {
+        let pool = [
+            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
+        ];
+        // ① 加牌问句上的那一个。
+        let mut run = run_with(&["singing_bowl"]);
+        run.push_relic("orrery", &pool).expect("pickup");
+        let max_before = run.health_max();
+        let deck_before = run.deck().len();
+        run.pickup_add_max_hp().expect("trade the card for max HP");
+        assert_eq!(run.health_max(), max_before + 2, "+2 max HP");
+        assert_eq!(run.deck().len(), deck_before, "and no card was added");
+        assert_eq!(run.pickup_add(), 4, "the pick was spent");
+        // 另一侧：**没有** `singing_bowl` ⇒ `UnsupportedRelic`，而且局面不变。
+        let mut plain = run_with(&[]);
+        plain.push_relic("orrery", &pool).expect("pickup");
+        let before = crate::hash::run_hash_hex(&plain).expect("hash");
+        assert_eq!(
+            plain.pickup_add_max_hp(),
+            Err(RunError::UnsupportedRelic { index: 0 })
+        );
+        assert_eq!(crate::hash::run_hash_hex(&plain).expect("hash"), before, "nothing moved");
+
+        // ② 战斗奖励屏上的那一个：不拿牌、改拿 +2 上限，金币/药水/遗物都还在屏上。
+        let mut run = run_with(&["singing_bowl"]);
+        let potions = [
+            PoolPotion { id: "fire_potion", rarity: Rarity::Common },
+            PoolPotion { id: "block_potion", rarity: Rarity::Common },
+            PoolPotion { id: "energy_potion", rarity: Rarity::Uncommon },
+        ];
+        run.roll_reward(&pool, &potions, &[], FightKind::Normal)
+            .expect("the reward screen");
+        if run.pending() == Pending::Reward {
+            let max_before = run.health_max();
+            run.take_max_hp_instead().expect("trade the reward");
+            assert_eq!(run.health_max(), max_before + 2, "+2 max HP");
+            assert_eq!(run.reward().cards().len(), 0, "and the card row is spent");
+            assert_eq!(run.pending(), Pending::Reward, "the screen stays for the potion/relic");
+            // 第二次调它就是 `EmptyOffer`（不能拿两次）。
+            assert_eq!(run.take_max_hp_instead(), Err(RunError::EmptyOffer(0)));
+        }
+    }
+
+    /// §293：牌组满了 ⇒ `Capacity`，而且**欠账不被吃掉**（§274 的 `pickup_card` 踩过同一个坑）。
+    #[test]
+    fn a_full_deck_refuses_the_pick_without_eating_the_debt() {
+        let pool = [
+            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
+        ];
+        let mut run = run_with(&[]);
+        run.push_relic("orrery", &pool).expect("pickup");
+        while run.deck().len() < MAX_RUN_DECK {
+            run.push_card(PoolCard::plain("strike")).expect("room");
+        }
+        let owed = run.pickup_add();
+        assert_eq!(run.pickup_add_card(0, &pool), Err(RunError::Capacity));
+        assert_eq!(run.pickup_add(), owed, "the debt survives a refused pick");
     }
 
 }

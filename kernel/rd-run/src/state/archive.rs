@@ -46,6 +46,7 @@ pub const MAGIC: &str = "RDA1";
 /// 加字段就**必须**抬版本：旧读法会把新字节当成下一个字段的开头，于是"存档能读、
 /// 但读出来是另一局游戏" —— 那是最坏的一种兼容。抬高之后旧存档是 `ArchiveError::Version`，
 /// 响亮且可解释。
+/// §293：7 → 8（`pickup_add` + `pickup_offer`）。
 /// §274：6 → 7（`pickup_change` + `pickup_picks`）。
 /// §272：5 → 6（`unknown_room` + `tiny_chest_rooms`）。
 /// §271：4 → 5（`tea_set_pending`）。
@@ -53,7 +54,7 @@ pub const MAGIC: &str = "RDA1";
 ///
 /// 为什么**必须**抬版本而不是"在末尾多写两个字节就行"：旧存档读到末尾会缺字段，
 /// 而"缺字段"与"字段是 0"在字节上无法区分 —— 那正是版本号要回答的问题。
-const VERSION: u8 = 7;
+const VERSION: u8 = 8;
 /// payload 缓冲。实测一局约 300–900 B；4 KB 是"内容翻倍也不会撞上"的余量。
 pub const MAX_PAYLOAD: usize = 4096;
 /// 一行文本的缓冲：base64 是 4/3，RLE 最坏 2×（每个字节都是 0xFF 时）。
@@ -558,6 +559,12 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
         Some(change) => deck_change_to_u8(change),
     })?;
     writer.byte(state.pickup_picks())?;
+    // §293：欠着几张牌要加 + 这一手是哪几张（`pickup_offer` 的长度是 3 或 0）。
+    writer.byte(state.pickup_add())?;
+    writer.byte(state.pickup_offer().len() as u8)?;
+    for card in state.pickup_offer() {
+        writer.id(*card)?;
+    }
 
     writer.byte(state.deck_len)?;
     for card in state.deck.iter().take(state.deck_len as usize) {
@@ -674,6 +681,16 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     // §274
     let pickup_change = reader.byte()?;
     let pickup_picks = reader.byte()?;
+    // §293：欠着几张牌 + 这一手是哪几张。
+    let pickup_add = reader.byte()?;
+    let pickup_offer_len = reader.byte()? as usize;
+    if pickup_offer_len > MAX_REWARD_CARDS {
+        return Err(ArchiveError::BadField("pickup_offer"));
+    }
+    let mut pickup_offer = [RunId::EMPTY; MAX_REWARD_CARDS];
+    for slot in 0..pickup_offer_len {
+        pickup_offer[slot] = reader.id()?;
+    }
 
     let mut deck = [RunId::EMPTY; MAX_RUN_DECK];
     let deck_len = reader.byte()? as usize;
@@ -831,6 +848,9 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
         Some(deck_change_from_u8(pickup_change)?)
     };
     restored.pickup_picks = pickup_picks;
+    restored.pickup_add = pickup_add;
+    restored.pickup_offer = pickup_offer;
+    restored.pickup_offer_len = pickup_offer_len as u8;
     restored.deck = deck;
     restored.deck_len = deck_len as u8;
     restored.relics = relics;

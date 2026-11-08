@@ -65519,6 +65519,27 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Shop"
+    },
+    {
+      "Id": "orrery",
+      "DisplayName": "Orrery",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Shop"
+    },
+    {
+      "Id": "tiny_house",
+      "DisplayName": "Tiny House",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Boss"
+    },
+    {
+      "Id": "singing_bowl",
+      "DisplayName": "Singing Bowl",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Uncommon"
     }
   ],
   "Start": {

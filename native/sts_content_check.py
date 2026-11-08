@@ -4044,6 +4044,10 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "cultist_headpiece", "spirit_poop", "face_of_cleric", "matryoshka",
                       "nloths_hungry_face", "cursed_key", "calling_bell", "cauldron",
                       "dollys_mirror", "nloths_gift", "sacred_bark",
+                      # §293：加牌的三件（`orrery` / `tiny_house` / `singing_bowl`）。
+                      "orrery", "tiny_house", "singing_bowl",
+                      # §293：加牌的三件（`orrery` / `tiny_house` / `singing_bowl`）。
+                      "orrery", "tiny_house", "singing_bowl",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

@@ -85,6 +85,16 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
         .str("/")
         .u32(u32::from(state.pickup_picks()))
         .str("\n");
+    // §293：欠着的"加牌"次数与**这一手是哪三张**。后者也要进：同一局、同一个欠账次数，
+    // 换一手候选就是换了一次选择（而"挑到哪张"决定牌组）。
+    writer
+        .str("pickup_add=")
+        .u32(u32::from(state.pickup_add()))
+        .str("/");
+    for card in state.pickup_offer() {
+        writer.str(card.as_str()).str(",");
+    }
+    writer.str("\n");
     writer.str("boss_beaten=").u32(u32::from(state.boss_beaten())).str("\n");
     writer.str("pending=").u32(u32::from(pending_code(state.pending()))).str("\n");
     // `RunId` **就是** `Ident<CAP>`，所以 `event()` 已经是 `&str`（再 `.as_str()` 会掉进

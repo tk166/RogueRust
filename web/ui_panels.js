@@ -261,11 +261,21 @@ const RD_PANELS = (() => {
         button: { label: "拿起", action: { kind: "take_relic" } },
       });
     }
+    const buttons = [{ id: "skip", label: "跳过", action: { kind: "skip_reward" } }];
+    // §293：`singing_bowl` —— "加牌时可以不拿牌、改拿 +2 上限"。只在**牌还在**的时候画：
+    // 牌已经被拿走之后，这条动作会被内核拒（`EmptyOffer`），画出来就是死按钮。
+    if (s.singingBowl && (s.rewardCards || []).length > 0) {
+      buttons.unshift({
+        id: "max_hp",
+        label: "+2 上限（不拿牌）",
+        action: { kind: "take_max_hp_instead" },
+      });
+    }
     return {
       title: `战斗奖励 · 已得 ${s.rewardGold} 金 · 选一张牌`,
       lines: [],
       rows,
-      buttons: [{ id: "skip", label: "跳过", action: { kind: "skip_reward" } }],
+      buttons,
     };
   }
 
@@ -346,6 +356,33 @@ const RD_PANELS = (() => {
     };
   }
 
+  /// §293: a relic that owes **cards to add** (`orrery` 5, `tiny_house` 1).
+  ///
+  /// 与 `describePickupCard` 同一个位置、同一条理由（独立于 `pending`、优先级最高、选完回到原屏）。
+  /// ★ 每个候选的按钮带的是**内核的槽号**（`slot`），不是数组下标 —— §161.8 的教训。
+  function describePickupAdd(s) {
+    const left = s.pickupAdd > 1 ? `（还要选 ${s.pickupAdd} 张）` : "";
+    const rows = (s.pickupOffer || []).map((card) => ({
+      label: card.title || `#${card.slot}`,
+      sub: "",
+      value: "",
+      disabled: false,
+      button: { label: "加这张", action: { kind: "pickup_add_card", slot: card.slot } },
+    }));
+    const buttons = [{ id: "skip", label: "跳过", action: { kind: "pickup_add_skip" } }];
+    // ⚠️ 只在**持有 `singing_bowl`** 时画这个按钮：`pickup_add_max_hp` 没有那件遗物会
+    // `UnsupportedRelic`，画出来就是一个点了没反应的死按钮。
+    if (s.singingBowl) {
+      buttons.unshift({ id: "max_hp", label: "+2 上限", action: { kind: "pickup_add_max_hp" } });
+    }
+    return {
+      title: "遗物 · 挑一张牌加入牌组 " + left,
+      lines: [],
+      rows,
+      buttons,
+    };
+  }
+
   function describeIdle(s) {
     if (s.kind < 0) {
       return { title: "", lines: ["还没出发 · 点亮的节点可以走"], rows: [], buttons: [] };
@@ -359,6 +396,8 @@ const RD_PANELS = (() => {
     // §274：遗物欠着的牌组编辑**优先于一切面板** —— 它可能叠在奖励屏/宝箱屏上，
     // 而"还要选几张"是玩家此刻唯一能做的事。
     if (s.pickupPicks > 0) return describePickupCard(s);
+    // §293：加牌的欠账压过一切面板（与上面那条同一个理由）。
+    if (s.pickupAdd > 0) return describePickupAdd(s);
     if (s.cleared) return describeCleared(s);
     if (s.runOver) return describeOver(s);
     switch (s.pending) {

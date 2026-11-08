@@ -910,6 +910,12 @@ function runSnapshot() {
     /// 它们是**独立于 `pending`** 的一对字段 —— 见 `ui_panels.js::describePickupCard`。
     pickupPicks: ex.rd_run_pickup_picks(),
     pickupChange: ex.rd_run_pickup_change(),
+    /// §293：还欠几张牌要**加**进牌组（`orrery` = 5、`tiny_house` = 1），以及这一手是哪几张。
+    /// 与 `pickupPicks` 是**两件事**（那个是"改已有的一张"，这个是"从候选里加一张"）。
+    pickupAdd: ex.rd_run_pickup_add(),
+    pickupOffer: [],
+    /// §293：`singing_bowl` 在身上吗（奖励屏与加牌问句各多一个"换成 +2 上限"的按钮）。
+    singingBowl: false,
     resolved: ex.rd_run_node_resolved() === 1,
     actionCount: ex.rd_run_action_count(),
     floor: ex.rd_run_observe(0),
@@ -1043,6 +1049,33 @@ function runSnapshot() {
     default:
       break;
   }
+  // §293：加牌的欠账独立于 `pending`（拾取可能发生在别的屏开着的时候），所以在这里填。
+  if (snapshot.pickupAdd > 0) {
+    for (let slot = 0, n = ex.rd_run_pickup_offer_count(); slot < n; slot++) {
+      snapshot.pickupOffer.push({
+        slot,
+        title: readText(
+          (k) => ex.rd_run_pickup_offer_title_len(k),
+          (ptr, k) => ex.rd_run_pickup_offer_title_into(k, ptr),
+          slot
+        ),
+      });
+    }
+    // ⚠️ 这条判据必须是"**我持有的遗物里有没有** `singing_bowl`"，不是"有没有欠账"：
+    // 见 `describePickupAdd` 的注释 —— 一个永远画出来的 +2 按钮就是死按钮。
+    for (let i = 0, n = ex.rd_run_observe(6); i < n; i++) {
+      const id = readText((k) => ex.rd_run_relic_id_len(k),
+                          (ptr, k) => ex.rd_run_relic_id_into(k, ptr), i);
+      if (id === "singing_bowl") snapshot.singingBowl = true;
+    }
+  }
+  if (snapshot.pending === 4 && !snapshot.singingBowl) {
+    for (let i = 0, n = ex.rd_run_observe(6); i < n; i++) {
+      const id = readText((k) => ex.rd_run_relic_id_len(k),
+                          (ptr, k) => ex.rd_run_relic_id_into(k, ptr), i);
+      if (id === "singing_bowl") snapshot.singingBowl = true;
+    }
+  }
   return snapshot;
 }
 
@@ -1062,6 +1095,11 @@ const PANEL_ACTIONS = {
   /// §274：拾取时的牌组编辑（`pickupPicks > 0` 时面板上只有这一个按钮）。
   pickup_card: () =>
     showDeckPicker("选一张牌", (index) => act(() => ex.rd_run_pickup_card(index), "拾取")),
+  // §293：加牌问句的四个动作。
+  pickup_add_card: (a) => act(() => ex.rd_run_pickup_add_card(a.slot), "加牌"),
+  pickup_add_skip: () => act(() => ex.rd_run_pickup_add_skip(), "跳过加牌"),
+  pickup_add_max_hp: () => act(() => ex.rd_run_pickup_add_max_hp(), "换成上限"),
+  take_max_hp_instead: () => act(() => ex.rd_run_take_max_hp_instead(), "换成上限"),
   rest: () => act(() => ex.rd_run_rest(), "休息"),
   // §259: 篝火的另外四个选项。`toke` 复用牌组选择器（与商店删牌同一个 UI），`lift`/`dig`/`recall`
   // 都是一次点击就结算。
@@ -2104,6 +2142,18 @@ function measure() {
       // Elixir (two of twenty-two potions) is not a checker.
       // §279：打开指定事件（理由同 `givePotion`：种子不会恰好给你想要的那一屏）。
       // 条件选项只住在 `forgotten_altar` 上，而它要 `?` 房掷骰 + 三幕池子抽中才出现。
+      // §293：按 id 塞一件遗物（同一类理由：`orrery` 只在商人货架、`tiny_house` 只在一幕末尾）。
+      giveRelic: (id) => {
+        const bytes = new TextEncoder().encode(id);
+        const ptr = ex.rd_env_scratch_buf();
+        new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
+        const verdict = ex.rd_run_grant_relic(ptr, bytes.length);
+        if (verdict === 0) {
+          renderTopBar();
+          renderNode();
+        }
+        return verdict;
+      },
       startAnEvent: (id, ascension = 0) => {
         const bytes = new TextEncoder().encode(id);
         const ptr = ex.rd_env_scratch_buf();

@@ -107,6 +107,13 @@ const K_DROP_POTION: u8 = 18;
 const K_FIGHT_END: u8 = 19;
 const K_FIGHT_BEGIN: u8 = 20;
 const K_GRANT_POTION: u8 = 21;
+/// §293：加牌问句的四个动作（见 `LOG_KINDS`）。
+const K_PICKUP_ADD_CARD: u8 = 0x5a;
+const K_PICKUP_ADD_SKIP: u8 = 0x5b;
+const K_PICKUP_ADD_MAX_HP: u8 = 0x5c;
+const K_TAKE_MAX_HP: u8 = 0x5d;
+/// §293：`RD_DEBUG.giveRelic`（理由同 `K_GRANT_POTION`）。
+const K_GRANT_RELIC: u8 = 0x5e;
 // §259：篝火新增的四个动作。它们**进回放脚本**，所以"同一份脚本重放"也覆盖它们。
 const K_LIFT: u8 = 22;
 const K_TOKE: u8 = 23;
@@ -138,6 +145,19 @@ const fn rec_kind_name(kind: u8) -> &'static str {
         K_FIGHT_END => "fight_end",
         K_FIGHT_BEGIN => "fight_begin",
         K_GRANT_POTION => "grant_potion",
+    // §293：加牌问句的四个动作。它们都改运行层（牌组/上限），所以必须进脚本 ——
+    // 否则"调用之后的哈希"会把它们的效果算进去，而回放里没人做这件事。
+    K_PICKUP_ADD_CARD => "pickup_add_card",
+    K_PICKUP_ADD_SKIP => "pickup_add_skip",
+    K_PICKUP_ADD_MAX_HP => "pickup_add_max_hp",
+    K_TAKE_MAX_HP => "take_max_hp_instead",
+    K_GRANT_RELIC => "grant_relic",
+    // §293：加牌问句的四个动作。它们都改运行层（牌组/上限），所以必须进脚本 ——
+    // 否则"调用之后的哈希"会把它们的效果算进去，而回放里没人做这件事。
+    K_PICKUP_ADD_CARD => "pickup_add_card",
+    K_PICKUP_ADD_SKIP => "pickup_add_skip",
+    K_PICKUP_ADD_MAX_HP => "pickup_add_max_hp",
+    K_TAKE_MAX_HP => "take_max_hp_instead",
         K_LIFT => "lift",
         K_TOKE => "toke",
         K_DIG => "dig",
@@ -2009,6 +2029,115 @@ pub extern "C" fn rd_run_pickup_change() -> i32 {
     }
 }
 
+
+/// §293：还欠着几张牌要加进牌组（`orrery` 的 5、`tiny_house` 的 1）。`-1` = 没有一局。
+#[no_mangle]
+pub extern "C" fn rd_run_pickup_add() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |run| i32::from(run.state.pickup_add()))
+}
+
+/// §293：这一手有几张候选（0 = 没有欠账）。
+#[no_mangle]
+pub extern "C" fn rd_run_pickup_offer_count() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |run| run.state.pickup_offer().len() as i32)
+}
+
+/// §293：候选 `slot` 的**显示名**长度（内容里的 `CARD` 行标题）。
+#[no_mangle]
+pub extern "C" fn rd_run_pickup_offer_title_len(slot: i32) -> i32 {
+    if slot < 0 {
+        return -1;
+    }
+    let Some(run) = run_slot().as_ref() else {
+        return -1;
+    };
+    let Some(id) = run.state.pickup_offer().get(slot as usize) else {
+        return -1;
+    };
+    // 与奖励屏同一个取名字函数（`deck_title` + `write_out`）—— 两处各写一份就会漂。
+    deck_title(content(), id.as_str())
+        .unwrap_or(id.as_str())
+        .len() as i32
+}
+
+/// §293：把候选 `slot` 的显示名写进 `ptr`（`rd_run_pickup_offer_title_len(slot)` 个字节）。
+///
+/// # Safety
+///
+/// `ptr` must point at that many writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_pickup_offer_title_into(slot: i32, ptr: *mut u8) -> i32 {
+    if slot < 0 || ptr.is_null() {
+        return -1;
+    }
+    let Some(run) = run_slot().as_ref() else {
+        return -1;
+    };
+    let Some(id) = run.state.pickup_offer().get(slot as usize) else {
+        return -1;
+    };
+    write_out(deck_title(content(), id.as_str()).unwrap_or(id.as_str()), ptr)
+}
+
+/// §293：把候选 `slot` 加进牌组。
+#[no_mangle]
+pub extern "C" fn rd_run_pickup_add_card(slot: i32) -> i32 {
+    if slot < 0 {
+        return -1;
+    }
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_PICKUP_ADD_CARD, slot, -1, "");
+    let pool = match full_pool(content(), false) {
+        Ok(pool) => pool,
+        Err(_) => return -1,
+    };
+    let outcome = session
+        .state
+        .pickup_add_card(slot as usize, &pool)
+        .map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// §293：跳过这一次（`orrery` 的每一次奖励屏都可以跳过）。
+#[no_mangle]
+pub extern "C" fn rd_run_pickup_add_skip() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_PICKUP_ADD_SKIP, -1, -1, "");
+    let outcome = session.state.pickup_add_skip().map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// §293：`singing_bowl` —— 把这一次"加牌"换成 +2 上限。
+#[no_mangle]
+pub extern "C" fn rd_run_pickup_add_max_hp() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_PICKUP_ADD_MAX_HP, -1, -1, "");
+    let outcome = session.state.pickup_add_max_hp().map(|_| 0i32);
+    finish(session, outcome)
+}
+
+/// §293：`singing_bowl` 在**战斗奖励屏**上的那一条 —— 不拿牌，改拿 +2 上限。
+#[no_mangle]
+pub extern "C" fn rd_run_take_max_hp_instead() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_TAKE_MAX_HP, -1, -1, "");
+    let outcome = session.state.take_max_hp_instead().map(|_| 0i32);
+    finish(session, outcome)
+}
+
+
 /// §274：兑现一次拾取时的牌组编辑（牌组下标 `index`）。
 #[no_mangle]
 pub extern "C" fn rd_run_pickup_card(index: i32) -> i32 {
@@ -3544,6 +3673,57 @@ pub unsafe extern "C" fn rd_run_grant_potion(ptr: *const u8, len: i32) -> i32 {
         Ok(()) => 0,
         Err(e) => {
             set_error(&std::format!("放不进腰带：{e:?}"));
+            -2
+        }
+    }
+}
+
+/// §293：按 id 塞一件遗物进腰带。**只给测试与页面的 `?debug` 表面用**。
+///
+/// 理由与 `rd_run_grant_potion` 逐字相同：种子不会恰好给你想要的那一屏 —— `orrery` 是 Shop
+/// 档（只在商人货架）、`tiny_house` 是 Boss 档（只在一幕末尾），而"加牌问句"要靠它们才出现。
+/// 一个必须刷到商店才验证得了的面板，等于没有验证。
+///
+/// `0` 已给出、`-1` 没有一局 / 指针坏、`-2` 被拒（未知 id、腰带满、或池子里没有这件）。
+///
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_grant_relic(ptr: *const u8, len: i32) -> i32 {
+    if ptr.is_null() || len <= 0 {
+        return -1;
+    }
+    let bytes = std::slice::from_raw_parts(ptr, len as usize);
+    let Ok(id) = std::str::from_utf8(bytes) else {
+        return -2;
+    };
+    // 与 `grant_potion` 同一条规矩：它改运行层，必须进脚本。
+    if let Some(session) = run_slot().as_mut() {
+        session.log(K_GRANT_RELIC, -1, -1, id);
+    }
+    let image = content();
+    let relics = relic_pool(image);
+    let cards = match full_pool(image, false) {
+        Ok(pool) => pool,
+        Err(_) => return -1,
+    };
+    if !relics.iter().any(|relic| relic.id == id) {
+        set_error(&std::format!("`{id}` 不是内容的 REL 行"));
+        return -2;
+    }
+    let Some(run) = run_slot().as_mut() else {
+        return -1;
+    };
+    match run.state.push_relic(id, &cards) {
+        Ok(()) => {
+            // §292/§293：拾取欠账（`calling_bell` / `cauldron`）在这里也要兑现，
+            // 与宝箱/奖励/商店三个真入口同一条规矩。
+            settle_pickup_debts();
+            0
+        }
+        Err(e) => {
+            set_error(&std::format!("`{id}` 放不进腰带：{e:?}"));
             -2
         }
     }
@@ -10334,4 +10514,107 @@ mod tests {
             "the `POT` row keeps its own number; the multiplier lives in the use path"
         );
     }
+    // =============================================================================================
+    // §293：加牌问句的 ABI 端到端
+    // =============================================================================================
+
+    /// §293：`orrery` 的欠账能**通过 ABI** 挑完 —— 导出、候选名、加牌、欠账递减全走一遍。
+    ///
+    /// 这条判据钉的是"页面能做的事内核真的做得到"：`rd_run_pickup_offer_title_*` 拿到的名字
+    /// 必须非空（否则面板上是一行 `#0`），而 `rd_run_pickup_add_card` 必须真的动牌组。
+    #[test]
+    fn the_pickup_add_round_trip_works_through_the_abi() {
+        let deck = ["strike", "strike", "strike", "strike", "strike",
+                    "defend", "defend", "defend", "defend", "bash"];
+        test_run(7, 80, 80, &deck);
+        let pool = crate::run::full_pool(content(), false).expect("the card pool");
+        run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .push_relic("orrery", &pool)
+            .expect("orrery");
+        assert_eq!(rd_run_pickup_add(), 5, "five picks owed");
+        let count = rd_run_pickup_offer_count();
+        assert!(count >= 3, "a hand to pick from, got {count}");
+        // 每个候选都要有**非空**的显示名（`#slot` 是页面兜底，文档里说它不该出现）。
+        for slot in 0..count {
+            let len = rd_run_pickup_offer_title_len(slot);
+            assert!(len > 0, "slot {slot} has no title");
+            let mut buffer = std::vec![0u8; len as usize];
+            let written = unsafe { rd_run_pickup_offer_title_into(slot, buffer.as_mut_ptr()) };
+            assert_eq!(written, len);
+            let title = std::string::String::from_utf8(buffer).expect("utf-8");
+            assert!(!title.is_empty() && !title.starts_with('#'), "title was `{title}`");
+        }
+        let deck_before = run_slot().as_ref().expect("a run").state.deck().len();
+        assert_eq!(rd_run_pickup_add_card(0), 0, "the pick goes through");
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.deck().len(),
+            deck_before + 1,
+            "and the deck grew"
+        );
+        assert_eq!(rd_run_pickup_add(), 4, "the debt went down");
+        // 跳过一次：欠账再 -1，牌组不动。
+        let deck_now = run_slot().as_ref().expect("a run").state.deck().len();
+        assert_eq!(rd_run_pickup_add_skip(), 0, "skipping is allowed");
+        assert_eq!(rd_run_pickup_add(), 3, "the debt went down again");
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.deck().len(),
+            deck_now,
+            "and no card arrived"
+        );
+        // 没有 `singing_bowl` ⇒ 换成上限被拒（`-2`），而不是静默成功。
+        while rd_run_pickup_add() > 0 {
+            assert_eq!(rd_run_pickup_add_skip(), 0);
+        }
+        // `-2`（被拒），不是 `-1`（没有一局）：这里有一局，只是没有 `singing_bowl`。
+        assert_eq!(rd_run_pickup_add_max_hp(), -2, "refused without the relic");
+    }
+
+    /// §293：`singing_bowl` 在**奖励屏**上把牌换成 +2 上限，`-2` 表示被拒。
+    #[test]
+    fn singing_bowl_trades_a_reward_card_through_the_abi() {
+        let deck = ["strike", "strike", "strike", "strike", "strike",
+                    "defend", "defend", "defend", "defend", "bash"];
+        for (relic, expect_ok) in [(true, true), (false, false)] {
+            test_run(7, 80, 80, &deck);
+            if relic {
+                run_slot()
+                    .as_mut()
+                    .expect("a run")
+                    .state
+                    .push_relic("singing_bowl", &[])
+                    .expect("singing_bowl");
+            }
+            let pool = crate::run::full_pool(content(), false).expect("the card pool");
+            assert_eq!(rd_run_step(0), 0, "walk onto floor 1");
+            assert_eq!(rd_run_fight_begin(), 0, "a fight begins");
+            // 赢不了也无所谓：奖励屏是 `roll_reward` 的事，这里直接造一个。
+            run_slot()
+                .as_mut()
+                .expect("a run")
+                .state
+                .roll_reward(&pool, &[], &[], rd_run::state::FightKind::Normal)
+                .expect("a reward screen");
+            let max_before = run_slot().as_ref().expect("a run").state.health_max();
+            let outcome = rd_run_take_max_hp_instead();
+            if expect_ok {
+                assert_eq!(outcome, 0, "the trade goes through");
+                assert_eq!(
+                    run_slot().as_ref().expect("a run").state.health_max(),
+                    max_before + 2,
+                    "+2 max HP"
+                );
+            } else {
+                assert_eq!(outcome, -2, "refused without the relic");
+                assert_eq!(
+                    run_slot().as_ref().expect("a run").state.health_max(),
+                    max_before,
+                    "and nothing moved"
+                );
+            }
+        }
+    }
+
 }

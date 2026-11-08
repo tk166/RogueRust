@@ -113,6 +113,13 @@ const PANEL_STATES = [
   ["run over", { ...BASE, runOver: true, runOverWhy: "倒了", floor: 7 },
     ["restart", "next_seed"], ["再来一局", "换一个 seed"], "结束了"],
   ["idle before start", { ...BASE }, [], [], "还没出发"],
+  // §293：加牌问句（`orrery` = 5、`tiny_house` = 1）。三个候选是**行**，动作带内核的槽号；
+  // 按钮是"跳过"，而**持有 `singing_bowl`** 时才多一个"+2 上限"。
+  ["pickup add cards", { ...BASE, kind: 3, pending: 3, pickupAdd: 2, singingBowl: true,
+      pickupOffer: [
+        { slot: 0, title: "Strike" }, { slot: 1, title: "Bash" }, { slot: 2, title: "Anger" },
+      ] },
+    ["pickup_add_max_hp", "pickup_add_skip"], ["+2 上限", "跳过"], "挑一张牌加入牌组"],
 ];
 
 {
@@ -136,6 +143,44 @@ const PANEL_STATES = [
     rewardCards: [{ id: "anger", title: "Anger", chip: "" }] });
   if ((noRelic.rows || []).some((row) => String(row.label).includes("遗物"))) {
     fail("a normal fight drew a relic row");
+  }
+
+  {
+    // §293：加牌问句的**每一行**都必须带 `pickup_add_card` 与**内核的槽号**（数组下标会漂 ——
+    // §161.8 的教训），而且没有 `singing_bowl` 时不许出现"+2 上限"（那是死按钮）。
+    const withBowl = P.describe({ ...BASE, kind: 3, pickupAdd: 3, singingBowl: true,
+      pickupOffer: [{ slot: 0, title: "Strike" }, { slot: 1, title: "Bash" }] });
+    if ((withBowl.rows || []).length !== 2) {
+      fail(`pickup add: ${withBowl.rows.length} rows, expected 2`);
+    }
+    withBowl.rows.forEach((row, index) => {
+      const action = row.button && row.button.action;
+      if (!action || action.kind !== "pickup_add_card") {
+        fail(`pickup add row ${index} has action ${JSON.stringify(action)}`);
+      }
+      if (action.slot !== index) {
+        fail(`pickup add row ${index} carries slot ${action.slot}, expected ${index}`);
+      }
+    });
+    if (!withBowl.buttons.some((b) => b.action.kind === "pickup_add_max_hp")) {
+      fail("pickup add with singing_bowl draws no +2 上限 button");
+    }
+    const withoutBowl = P.describe({ ...BASE, kind: 3, pickupAdd: 1, singingBowl: false,
+      pickupOffer: [{ slot: 0, title: "Strike" }] });
+    if (withoutBowl.buttons.some((b) => b.action.kind === "pickup_add_max_hp")) {
+      fail("pickup add without singing_bowl still draws the +2 上限 button (a dead button)");
+    }
+    // 奖励屏上同理：`singing_bowl` 只在牌还在时才有那个按钮。
+    const rewardWithBowl = P.describe({ ...BASE, kind: 2, pending: 4, rewardGold: 20,
+      singingBowl: true, rewardCards: [{ id: "anger", title: "Anger", chip: "" }] });
+    if (!rewardWithBowl.buttons.some((b) => b.action.kind === "take_max_hp_instead")) {
+      fail("a reward with singing_bowl draws no max-HP button");
+    }
+    const rewardTaken = P.describe({ ...BASE, kind: 2, pending: 4, rewardGold: 20,
+      singingBowl: true, rewardCards: [] });
+    if (rewardTaken.buttons.some((b) => b.action.kind === "take_max_hp_instead")) {
+      fail("a reward whose cards are gone still draws the max-HP button (a dead button)");
+    }
   }
 
   for (const [name, snapshot, kinds, labels, titlePart] of PANEL_STATES) {
