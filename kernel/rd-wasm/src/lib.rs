@@ -9567,4 +9567,124 @@ fn the_zero_infrastructure_tail_lights_up_the_existing_channels() {
         take_session();
     }
 
+    /// §306：`runic_pyramid` —— 回合末整手牌**保留**。
+    ///
+    /// 三层：基线（没有遗物时清空）、有遗物（一张不少）、`Ethereal` 仍然消耗。
+    /// 基线那一层是必须的：只验"有遗物时保留"的话，一条"永远保留"的实现也全绿 ——
+    /// 而那会让整局游戏的手牌越滚越多，并且**没有任何东西会红**。
+    #[test]
+    fn runic_pyramid_keeps_the_whole_hand_and_ethereal_still_exhausts() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+        let deck: &'static [rd_core::battle::DeckEntry<'static>] = Box::leak(
+            vec![
+                rd_core::battle::DeckEntry { card: "strike", count: 10 },
+                // `dazed` 是 Ethereal：回合末进消耗堆。它必须**不**受整手保留的影响。
+                rd_core::battle::DeckEntry { card: "dazed", count: 4 },
+            ]
+            .into_boxed_slice(),
+        );
+
+        /// 打到"回合末"为止：把手牌里能打的都打掉，然后结束回合。返回（回合末手牌数, 消耗堆）。
+        let play_a_turn = || -> (usize, usize) {
+            let standard = standard_turn_config().expect("standard turn config");
+            let session = slot().as_mut().expect("session");
+            start_first_turn(&mut session.state, &standard, &mut session.host)
+                .expect("start the first turn");
+            // 打掉所有打得起的牌（不打就分不清"保留"与"没打完"）。
+            for _ in 0..20 {
+                let session = slot().as_mut().expect("session");
+                let hero = cid_in("hero");
+                let Some(card) = session
+                    .state
+                    .zone_cards(&hero, rd_core::state::CardZone::Hand)
+                    .next()
+                    .map(|card| card.id)
+                else {
+                    break;
+                };
+                let target = session
+                    .state
+                    .combatants()
+                    .iter()
+                    .find(|c| c.team_id.as_str() == "enemy")
+                    .map(|c| c.id);
+                let request = rd_core::play::PlayRequest::new(hero, card, target);
+                if rd_core::play::play_card(&mut session.state, Some(&content), &request).is_err() {
+                    break;
+                }
+                let mut host = rd_core::host::Host::new(&content);
+                let _ = host.try_resolve_pending_queues(&mut session.state);
+            }
+            let session = slot().as_mut().expect("session");
+            let mut host = rd_core::host::Host::new(&content);
+            rd_core::turn::end_current_turn(&mut session.state, &standard, &mut host)
+                .expect("the turn ends");
+            let session = slot().as_ref().expect("session");
+            let hero = cid_in("hero");
+            let hand = session
+                .state
+                .zone_cards(&hero, rd_core::state::CardZone::Hand)
+                .count();
+            let exhaust = session
+                .state
+                .zone_cards(&hero, rd_core::state::CardZone::ExhaustPile)
+                .count();
+            (hand, exhaust)
+        };
+
+        let start = |pyramid: bool| {
+            let session = build_session_at_unstarted(61, "enc_cultist", 200, Some(deck), 0, 0)
+                .expect("a session");
+            install_session(session);
+            if pyramid {
+                let session = slot().as_mut().expect("session");
+                let item = rd_core::state::EffectItem {
+                    request: rd_core::state::EffectRequest::ApplyStatus {
+                        target: Some(cid_in("hero")),
+                        definition: rd_core::state::StatusDefinitionId::new(
+                            "standard.runic_pyramid",
+                        )
+                        .expect("a status id"),
+                        stacks: 1,
+                        duration: 0,
+                        charges: 0,
+                        source: None,
+                        source_card: None,
+                    },
+                    chain: rd_core::state::ChainSlot::NONE,
+                    owner: None,
+                };
+                rd_core::exec::resolve_effect(&mut session.state, &item, Some(&content))
+                    .expect("apply the carrier");
+            }
+        };
+
+        // ① 基线：没有遗物 ⇒ 回合末手牌清空（只剩 `dazed` 之外的牌都被打掉了）。
+        start(false);
+        let (without_hand, without_exhaust) = play_a_turn();
+        take_session();
+        assert_eq!(
+            without_hand, 0,
+            "without the relic the hand is discarded at end of turn"
+        );
+
+        // ② 有遗物 ⇒ 手牌一张不少。
+        start(true);
+        let (with_hand, with_exhaust) = play_a_turn();
+        take_session();
+        assert!(
+            with_hand > 0,
+            "with `runic_pyramid` the unplayed hand stays (got {with_hand})"
+        );
+        // ③ `Ethereal` **仍然**消耗，而且**与有没有遗物无关**：整手保留不是"什么都在手里"。
+        // wiki `Runic_Pyramid`: *"Still fires: Ethereal cards still Exhaust"*.
+        // 判据是**相等**而不是"更多"：两边的 Ethereal 张数应当一模一样（第一版写成 `>`，
+        // 修好之后 with 1 = without 1 就红了 —— 断言本身说错了话）。
+        assert!(with_exhaust > 0, "the deck has ethereal cards to exhaust");
+        assert_eq!(
+            with_exhaust, without_exhaust,
+            "the relic must not change how many ethereal cards exhaust"
+        );
+    }
+
 }

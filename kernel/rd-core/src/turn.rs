@@ -1091,8 +1091,13 @@ pub fn hand_size(state: &CombatState, actor: &CombatantId) -> usize {
 /// 把当前活跃单位的手牌按**回合末落点逐张**搬走（`MoveHandCardsOnTurnEndEffectHandler`，
 /// `Effects/CardZoneEffects.cs:346-428`）。
 ///
-/// 被 `host.hand_is_retained(...)` 抑制（`Cards/CardTurnLifecycleEventHandlers.cs:46-55`）——
-/// 那是**整手**保留，先短路，一张都不碰。返回**实际搬走**的张数。
+/// `host.hand_is_retained(...)`（`Cards/CardTurnLifecycleEventHandlers.cs:46-55`）是**整手不弃**，
+/// 但它**不赦免 Ethereal**：wiki 的 `Keywords` 写 "If an Ethereal card is in your hand at the end
+/// of your turn, it is Exhausted"，`Runic_Pyramid` 页也写 "Still fires: Ethereal cards still
+/// Exhaust"。所以整手保留只抑制"弃"那一档，落点 = 消耗堆的那一档照旧搬。
+///
+/// ⚠️ 旧实现是**整段短路**（`return Ok(0)`），于是 Ethereal 也留在手里 —— 那个偏差没有任何东西
+/// 会红，因为覆盖矩阵里这件遗物只被"挂上状态"那条测试认领过。返回**实际搬走**的张数。
 ///
 /// 其余三档逐张判定，顺序就是手牌原序（参考也先 `zones.Hand.ToArray()` 再逐张处理，
 /// `CardZoneEffects.cs:355`，因为下面的移动改的正是这个堆）：
@@ -1112,11 +1117,9 @@ pub fn discard_hand<H: TurnHost>(
     actor: &CombatantId,
     host: &mut H,
 ) -> Result<usize, TurnError> {
-    // 被 `RetainHandTag` 抑制（`Cards/CardTurnLifecycleEventHandlers.cs:46-55`）—— 本内核走
-    // `host.hand_is_retained`，因为"哪些标记保留手牌"是内容决定的。抑制时返回 0（"一张都没弃"）。
-    if host.hand_is_retained(state, actor) {
-        return Ok(0);
-    }
+    // 整手保留（`RetainHandTag`，本内核走 `host.hand_is_retained` —— "哪些标记保留手牌"是内容
+    // 决定的）。它只抑制"弃"，**不**赦免 Ethereal（见文档注释里的两句 wiki 原文）。
+    let hand_retained = host.hand_is_retained(state, actor);
 
     // 先把"哪张去哪"按手牌原序定下来。`CardSlot` 不带隐含顺序信息，所以顺序靠这个数组保持。
     //
@@ -1140,11 +1143,15 @@ pub fn discard_hand<H: TurnHost>(
         if planned == MAX_CARDS_PER_ZONE {
             break; // 不可达：手牌本身就在同一个上限里
         }
-        if host.card_stays_in_hand_at_turn_end(state, actor, slot) {
-            continue;
-        }
+        // 落点先算：它是**这张牌自己的**答案（Ethereal ⇒ 消耗堆，Retain ⇒ 手牌），
+        // 而"整手保留"与"这张有 Retain"都只该在**非** Ethereal 的牌上生效。
         let destination = host.turn_end_hand_destination(state, actor, slot);
         if destination == CardZone::Hand {
+            continue;
+        }
+        if destination != CardZone::ExhaustPile
+            && (hand_retained || host.card_stays_in_hand_at_turn_end(state, actor, slot))
+        {
             continue;
         }
         // 落点先记下来：真正的 `move_card` 在下面统一的循环里做，届时按同一个 (from, to) 发通知。
