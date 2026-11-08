@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 859 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 865 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -39,14 +39,14 @@
 | 怪物 | 50 | 42 | 0 | 8 | 49 | 1 | 11 | 0 |
 | 敌人动作 | 138 | 73 | 65 | 0 | 135 | 3 | 53 | 0 |
 | 卡牌 | 293 | 165 | 128 | 0 | 281 | 12 | 18 | 0 |
-| 状态 | 139 | 130 | 6 | 3 | 0 | 139 | 1 | 0 |
+| 状态 | 142 | 133 | 6 | 3 | 0 | 142 | 1 | 0 |
 | 遭遇 | 47 | 36 | 11 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 19 | 19 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 遗物 | 140 | 129 | 11 | 0 | 0 | 0 | 0 | 0 |
+| 遗物 | 143 | 129 | 14 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 859 | 627 | 221 | 11 | 465 | 155 | 83 | 0 |
+| **合计** | 865 | 630 | 224 | 11 | 465 | 158 | 83 | 0 |
 
-扫描到的具名测试：**1129** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
+扫描到的具名测试：**1132** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
 
 事件：池里有 **22** 个位次、**19** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -322,7 +322,7 @@
 | decay | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/decay.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+68) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+69) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+2) | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -420,7 +420,7 @@
 | master_of_strategy+ | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/master_of_strategy.txt (via master_of_strategy) | — | INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
 | mayhem | yes | — | CARD_DIFF | wiki:wiki_cards/mayhem.txt | — | §244/CARD_WIKI+INV_CARDS |
 | mayhem+ | yes | — | CARD_DIFF | wiki:wiki_cards/mayhem.txt (via mayhem) | — | INV_CARDS |
-| metallicize | yes | decay_predicate_splits_the_two_groups, the_prototype_namespace_supplies_metallicize_and_ritual | — | wiki:wiki_cards/metallicize.txt | — | CARD_WIKI+INV_CARDS/decay_predicate_splits_the_two_groups |
+| metallicize | yes | orange_pellets_pays_once_all_three_card_kinds_were_played, decay_predicate_splits_the_two_groups …(+1) | — | wiki:wiki_cards/metallicize.txt | — | CARD_WIKI+INV_CARDS/orange_pellets_pays_once_all_three_card_kinds_were_played |
 | metallicize+ | yes | — | CARD_DIFF | wiki:wiki_cards/metallicize.txt (via metallicize) | — | INV_CARDS |
 | metamorphosis | yes | — | CARD_DIFF | wiki:wiki_cards/metamorphosis.txt | — | CARD_WIKI+INV_CARDS |
 | metamorphosis+ | yes | — | CARD_DIFF | wiki:wiki_cards/metamorphosis.txt (via metamorphosis) | — | INV_CARDS |
@@ -510,7 +510,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+158) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+160) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+11) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -548,7 +548,7 @@
 | wound | yes | the_new_red_skills_do_what_their_pages_say, painful_stabs_shuffles_a_wound_only_on_unblocked_damage …(+4) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
-## 状态（139）
+## 状态（142）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -583,14 +583,16 @@
 | standard.curl_up | yes | curl_up_pays_out_once_and_only_for_a_hit_that_draws_blood | — | spec:INV_STATUSES | — | §208/§209/INV_STATUSES/curl_up_pays_out_once_and_only_for_a_hit_that_draws_blood |
 | standard.cursed_key | yes | cursed_key_carries_its_energy_and_its_chest_curse | — | spec:INV_STATUSES | — | §292/§294/INV_STATUSES/cursed_key_carries_its_energy_and_its_chest_curse |
 | standard.dark_embrace | yes | exhausting_a_card_feeds_feel_no_pain_and_dark_embrace | — | spec:INV_STATUSES | — | §237/§276/INV_STATUSES/exhausting_a_card_feeds_feel_no_pain_and_dark_embrace |
+| standard.dead_branch | yes | dead_branch_adds_a_random_base_card_when_a_card_is_exhausted | — | spec:INV_STATUSES | — | §299/INV_STATUSES/dead_branch_adds_a_random_base_card_when_a_card_is_exhausted |
 | standard.demon_form | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §231/§235/INV_STATUSES |
-| standard.dexterity | yes | dexterity_from_the_content_scales_a_real_defend, global_status_lines_use_the_gs_prefix_and_list_order …(+8) | — | spec:INV_STATUSES | — | §174/§204/INV_STATUSES/dexterity_from_the_content_scales_a_real_defend |
+| standard.dexterity | yes | dexterity_from_the_content_scales_a_real_defend, orange_pellets_pays_once_all_three_card_kinds_were_played …(+9) | — | spec:INV_STATUSES | — | §174/§204/INV_STATUSES/dexterity_from_the_content_scales_a_real_defend |
 | standard.double_damage | yes (test-only) | the_status_parameter_infrastructure_changes_the_right_number, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §264/§267/INV_STATUSES/the_status_parameter_infrastructure_changes_the_right_number |
 | standard.double_tap | yes | double_tap_only_covers_the_next_attack | — | spec:INV_STATUSES | — | §231/§238/INV_STATUSES/double_tap_only_covers_the_next_attack |
 | standard.draw_reduction | yes | draw_reduction_costs_exactly_one_turns_draw_and_then_expires | — | spec:INV_STATUSES | — | §10/§195.7/INV_STATUSES/draw_reduction_costs_exactly_one_turns_draw_and_then_expires |
 | standard.duality | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_reaction_relics_fire_the_right_number_of_times | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.duplication | yes | duplication_plays_the_program_twice_but_pays_and_counts_once | — | spec:INV_STATUSES | — | §181/INV_STATUSES/duplication_plays_the_program_twice_but_pays_and_counts_once |
 | standard.ectoplasm | yes | the_gold_and_shop_relics_change_only_their_own_number | — | spec:INV_STATUSES | — | §269/§270/INV_STATUSES/the_gold_and_shop_relics_change_only_their_own_number |
+| standard.enchiridion | yes | enchiridion_adds_a_free_power_card_on_the_first_turn | — | spec:INV_STATUSES | — | §299/INV_STATUSES/enchiridion_adds_a_free_power_card_on_the_first_turn |
 | standard.enrage | yes | a_card_play_leaves_no_chain_referenced, enrage_answers_only_a_skill | — | spec:INV_STATUSES | — | §117/INV_STATUSES/a_card_play_leaves_no_chain_referenced |
 | standard.entangle_ready | yes | — | ENEMY_DIFF | spec:INV_STATUSES | — | §196/INV_STATUSES |
 | standard.entangled | yes | entangled_refuses_attacks_but_not_skills_and_expires_at_turn_end | — | spec:INV_STATUSES | — | §196/§263/INV_STATUSES/entangled_refuses_attacks_but_not_skills_and_expires_at_turn_end |
@@ -634,6 +636,7 @@
 | standard.nunchaku | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
 | standard.odd_mushroom | yes | the_conditional_modifier_relics_wire_their_own_carrier, the_conditional_and_self_scoped_modifiers_change_the_right_number | — | spec:INV_STATUSES | — | §266/INV_STATUSES/the_conditional_modifier_relics_wire_their_own_carrier |
 | standard.omega | yes | omega_hits_every_enemy_at_the_end_of_the_turn | — | spec:INV_STATUSES | — | §244/§249/INV_STATUSES/omega_hits_every_enemy_at_the_end_of_the_turn |
+| standard.orange_pellets | yes | orange_pellets_pays_once_all_three_card_kinds_were_played | — | spec:INV_STATUSES | — | §299/INV_STATUSES/orange_pellets_pays_once_all_three_card_kinds_were_played |
 | standard.orichalcum | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §257/§260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
 | standard.ornamental_fan | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §261/§262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
 | standard.painful_stabs | yes | painful_stabs_shuffles_a_wound_only_on_unblocked_damage | — | spec:INV_STATUSES | — | §248/§256/INV_STATUSES/painful_stabs_shuffles_a_wound_only_on_unblocked_damage |
@@ -673,7 +676,7 @@
 | standard.stasis | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.1/§195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stone_calendar | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
-| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+69) | — | spec:INV_STATUSES | — | §242/§252/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
+| standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+70) | — | spec:INV_STATUSES | — | §242/§252/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
 | standard.strike_dummy | yes | strike_dummy_only_boosts_cards_that_carry_the_strike_tag | — | spec:INV_STATUSES | — | §296/§297/INV_STATUSES/strike_dummy_only_boosts_cards_that_carry_the_strike_tag |
 | standard.sundial | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | spec:INV_STATUSES | — | §292/§294/INV_STATUSES/the_shuffle_trigger_pays_the_abacus_and_sundial |
 | standard.the_abacus | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | spec:INV_STATUSES | — | §292/§294/INV_STATUSES/the_shuffle_trigger_pays_the_abacus_and_sundial |
@@ -768,7 +771,7 @@
 | wing_statue | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | world_of_goop | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 
-## 遗物（140）
+## 遗物（143）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -804,12 +807,14 @@
 | cultist_headpiece | yes | the_flavor_only_relics_are_known_and_change_nothing | — | — | — | §283/§292/the_flavor_only_relics_are_known_and_change_nothing |
 | cursed_key | yes | cursed_key_carries_its_energy_and_its_chest_curse | — | — | — | §292/cursed_key_carries_its_energy_and_its_chest_curse |
 | darkstone_periapt | yes | the_add_card_relics_fire_at_the_one_add_point | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |
+| dead_branch | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §298/§299 |
 | dollys_mirror | yes | dollys_mirror_duplicates_the_chosen_card_and_refuses_a_full_deck | — | — | — | §292/dollys_mirror_duplicates_the_chosen_card_and_refuses_a_full_deck |
 | dream_catcher | yes | dream_catcher_turns_rest_into_a_card_reward_and_only_with_the_relic | — | — | — | dream_catcher_turns_rest_into_a_card_reward_and_only_with_the_relic |
 | du_vu_doll | yes | the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |
 | duality | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | ectoplasm | yes | the_pickup_number_relics_change_only_their_own_number, the_gold_and_shop_relics_change_only_their_own_number | — | — | — | §270/the_pickup_number_relics_change_only_their_own_number |
 | empty_cage | yes | the_pickup_picks_do_not_take_over_the_screen | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
+| enchiridion | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §298/§299 |
 | eternal_feather | yes | the_eternal_feather_pays_per_whole_group_of_five_on_entering, the_new_relics_pay_out | — | — | — | §156/§157/the_eternal_feather_pays_per_whole_group_of_five_on_entering |
 | face_of_cleric | yes | face_of_cleric_raises_the_maximum_after_every_fight | — | — | — | §283/§292/face_of_cleric_raises_the_maximum_after_every_fight |
 | fossilized_helix | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
@@ -852,6 +857,7 @@
 | oddly_smooth_stone | yes | the_two_combat_start_carriers_land_on_the_right_side | — | — | — | §221/§224/the_two_combat_start_carriers_land_on_the_right_side |
 | old_coin | yes | the_pickup_number_relics_change_only_their_own_number | — | — | — | §273/§274/the_pickup_number_relics_change_only_their_own_number |
 | omamori | yes | the_add_card_relics_fire_at_the_one_add_point | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |
+| orange_pellets | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §298/§299 |
 | orichalcum | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
 | ornamental_fan | yes | the_every_nth_card_relics_wire_their_own_carrier | — | — | — | §261/§262/the_every_nth_card_relics_wire_their_own_carrier |
 | orrery | yes | orrery_owes_five_cards_and_rolls_a_new_hand_each_time, singing_bowl_trades_a_card_for_two_max_hp_in_both_places …(+2) | — | — | — | §293/orrery_owes_five_cards_and_rolls_a_new_hand_each_time |

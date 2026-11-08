@@ -128,8 +128,9 @@ INV_COUNTS = {
     # §295: +1 (`standard.hand_drill` —— `BlockBroken` 触发器)。
     # §296: +1 (`standard.chemical_x` —— 内核规则的开关，内容那一行是载体)。
     # §297: +3 (`strike_dummy` 的内容程序 + `velvet_choker` / `runic_dome` 的开关)。
-    # §298: +3 (`magic_flower` / `medical_kit` / `blue_candle`).
-    "statuses": 139,
+    # §298: +3 (`magic_flower` / `medical_kit` / `blue_candle`)。
+    # §299: +3 (C 类三件 —— 行为全在内容程序里).
+    "statuses": 142,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1571,6 +1572,10 @@ INV_STATUSES = {
     "standard.magic_flower": [],
     "standard.medical_kit": [],
     "standard.blue_candle": [],
+    # §299：C 类三件都没有被动修饰器（规则在触发器里）。
+    "standard.enchiridion": [],
+    "standard.orange_pellets": [],
+    "standard.dead_branch": [],
     # §267：零基建批次。
     "standard.ring_of_the_serpent": [('TurnStartDraw', 'AddFlat', 1, 100, None)],
     "standard.philosophers_stone": [('TurnStartEnergy', 'AddPerStack', 1, 100, None)],
@@ -3650,7 +3655,9 @@ def check_statuses(doc):
                      "standard.strike_dummy", "standard.velvet_choker",
                      "standard.runic_dome",
                      "standard.magic_flower", "standard.medical_kit",
-                     "standard.blue_candle"):
+                     "standard.blue_candle",
+                     "standard.enchiridion", "standard.orange_pellets",
+                     "standard.dead_branch"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -3804,7 +3811,11 @@ def check_statuses(doc):
                         "standard.magic_flower": [],
                         "standard.medical_kit": [],
                         # `blue_candle` 的"失去 1 生命"是一条 `CardPlayed` 触发器。
-                        "standard.blue_candle": ["CardPlayed"]}[sid]
+                        "standard.blue_candle": ["CardPlayed"],
+                        # §299
+                        "standard.enchiridion": ["TurnStarted"],
+                        "standard.orange_pellets": ["CardPlayed"],
+                        "standard.dead_branch": ["CardExhausted"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
@@ -4103,6 +4114,8 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "strike_dummy", "velvet_choker", "runic_dome",
                       # §298：最后三件。
                       "magic_flower", "medical_kit", "blue_candle",
+                      # §299：C 类三件（纯内容程序）。
+                      "enchiridion", "orange_pellets", "dead_branch",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

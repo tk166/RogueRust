@@ -5309,7 +5309,14 @@ fn in_random_pool(
     if definition.contains('+') {
         return false;
     }
-    if content.card_has_tag(definition, tag.as_str()) != Some(true) {
+    // §299：`*` = **任意基础牌**（`dead_branch` 的"a random card"）。
+    //
+    // 需要这一条的理由：`createRandomCardInstance` 的池子按 tag 过滤，而"任意牌"没有这样的
+    // tag —— 一张牌要么 attack / skill / power，要么都不是。`*` 只跳过**这一道**门；
+    // 上面"`+` 行不进池"与下面"`x_cost` 不进池"两条是池子的规矩，通配**不**越过它们。
+    if tag.as_str() != "*"
+        && content.card_has_tag(definition, tag.as_str()) != Some(true)
+    {
         return false;
     }
     // X 费牌没有"印刷费用"这个数（`printed_energy_cost` 返回 `None`），排除。

@@ -3157,6 +3157,12 @@ impl RunState {
             "magic_flower" => Some(RelicEffect::StartCombatStatus("standard.magic_flower", 1)),
             "medical_kit" => Some(RelicEffect::StartCombatStatus("standard.medical_kit", 1)),
             "blue_candle" => Some(RelicEffect::StartCombatStatus("standard.blue_candle", 1)),
+            // §299：C 类三件 —— 规则**全在内容程序**里（触发器 + 原子），内核只认状态。
+            "enchiridion" => Some(RelicEffect::StartCombatStatus("standard.enchiridion", 1)),
+            "orange_pellets" => {
+                Some(RelicEffect::StartCombatStatus("standard.orange_pellets", 1))
+            }
+            "dead_branch" => Some(RelicEffect::StartCombatStatus("standard.dead_branch", 1)),
             _ => None,
         }
     }

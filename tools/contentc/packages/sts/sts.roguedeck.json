@@ -9341,6 +9341,841 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.enchiridion",
+      "PackageId": "sts",
+      "NameKey": "Enchiridion",
+      "DescriptionKey": "At the start of each combat, add a random Power card into your hand. It costs 0 this turn.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "TurnStarted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "compare",
+                        "value": {
+                          "Left": {
+                            "kind": "combatantCounter",
+                            "value": {
+                              "Selector": {
+                                "kind": "sel.source",
+                                "value": {
+                                  "Cardinality": "ZeroOrOne",
+                                  "RequiredContextCapabilities": "Source"
+                                }
+                              },
+                              "CounterId": "enchiridion_turns"
+                            }
+                          },
+                          "Right": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 0
+                            }
+                          },
+                          "Op": "Equal"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.createRandomCardInstance",
+                        "value": {
+                          "Tag": "power",
+                          "ToZone": "Hand",
+                          "Count": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 1
+                            }
+                          },
+                          "CostZero": true,
+                          "ResultKey": null
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "enchiridion_turns"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": true
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.orange_pellets",
+      "PackageId": "sts",
+      "NameKey": "Orange Pellets",
+      "DescriptionKey": "Whenever you play a Power, Attack, and Skill in the same turn, gain 3 Strength and 3 Dexterity.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardPlayed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "event.bool",
+                        "value": {
+                          "FieldKey": "card.hasTag.power"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.sequence",
+                        "value": {
+                          "Children": [
+                            {
+                              "kind": "node.setCombatantCounter",
+                              "value": {
+                                "TargetSelector": {
+                                  "kind": "sel.source",
+                                  "value": {
+                                    "Cardinality": "ZeroOrOne",
+                                    "RequiredContextCapabilities": "Source"
+                                  }
+                                },
+                                "CounterId": {
+                                  "value": "orange_pellets_power"
+                                },
+                                "Amount": {
+                                  "kind": "const",
+                                  "value": {
+                                    "Value": 1
+                                  }
+                                },
+                                "Relative": true
+                              }
+                            },
+                            {
+                              "kind": "node.conditional",
+                              "value": {
+                                "Condition": {
+                                  "kind": "and",
+                                  "value": {
+                                    "Left": {
+                                      "kind": "compare",
+                                      "value": {
+                                        "Left": {
+                                          "kind": "combatantCounter",
+                                          "value": {
+                                            "Selector": {
+                                              "kind": "sel.source",
+                                              "value": {
+                                                "Cardinality": "ZeroOrOne",
+                                                "RequiredContextCapabilities": "Source"
+                                              }
+                                            },
+                                            "CounterId": "orange_pellets_attack"
+                                          }
+                                        },
+                                        "Right": {
+                                          "kind": "const",
+                                          "value": {
+                                            "Value": 1
+                                          }
+                                        },
+                                        "Op": "GreaterOrEqual"
+                                      }
+                                    },
+                                    "Right": {
+                                      "kind": "compare",
+                                      "value": {
+                                        "Left": {
+                                          "kind": "combatantCounter",
+                                          "value": {
+                                            "Selector": {
+                                              "kind": "sel.source",
+                                              "value": {
+                                                "Cardinality": "ZeroOrOne",
+                                                "RequiredContextCapabilities": "Source"
+                                              }
+                                            },
+                                            "CounterId": "orange_pellets_skill"
+                                          }
+                                        },
+                                        "Right": {
+                                          "kind": "const",
+                                          "value": {
+                                            "Value": 1
+                                          }
+                                        },
+                                        "Op": "GreaterOrEqual"
+                                      }
+                                    }
+                                  }
+                                },
+                                "Then": {
+                                  "kind": "node.sequence",
+                                  "value": {
+                                    "Children": [
+                                      {
+                                        "kind": "node.applyStatus",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "StatusDefinitionId": {
+                                            "value": "standard.strength"
+                                          },
+                                          "Stacks": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 3
+                                            }
+                                          },
+                                          "Duration": null,
+                                          "ResultKey": null
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.applyStatus",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "StatusDefinitionId": {
+                                            "value": "standard.dexterity"
+                                          },
+                                          "Stacks": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 3
+                                            }
+                                          },
+                                          "Duration": null,
+                                          "ResultKey": null
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.setCombatantCounter",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "CounterId": {
+                                            "value": "orange_pellets_power"
+                                          },
+                                          "Amount": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 0
+                                            }
+                                          },
+                                          "Relative": false
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.setCombatantCounter",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "CounterId": {
+                                            "value": "orange_pellets_attack"
+                                          },
+                                          "Amount": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 0
+                                            }
+                                          },
+                                          "Relative": false
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.setCombatantCounter",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "CounterId": {
+                                            "value": "orange_pellets_skill"
+                                          },
+                                          "Amount": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 0
+                                            }
+                                          },
+                                          "Relative": false
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                "Else": null
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "event.bool",
+                        "value": {
+                          "FieldKey": "card.hasTag.attack"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.sequence",
+                        "value": {
+                          "Children": [
+                            {
+                              "kind": "node.setCombatantCounter",
+                              "value": {
+                                "TargetSelector": {
+                                  "kind": "sel.source",
+                                  "value": {
+                                    "Cardinality": "ZeroOrOne",
+                                    "RequiredContextCapabilities": "Source"
+                                  }
+                                },
+                                "CounterId": {
+                                  "value": "orange_pellets_attack"
+                                },
+                                "Amount": {
+                                  "kind": "const",
+                                  "value": {
+                                    "Value": 1
+                                  }
+                                },
+                                "Relative": true
+                              }
+                            },
+                            {
+                              "kind": "node.conditional",
+                              "value": {
+                                "Condition": {
+                                  "kind": "and",
+                                  "value": {
+                                    "Left": {
+                                      "kind": "compare",
+                                      "value": {
+                                        "Left": {
+                                          "kind": "combatantCounter",
+                                          "value": {
+                                            "Selector": {
+                                              "kind": "sel.source",
+                                              "value": {
+                                                "Cardinality": "ZeroOrOne",
+                                                "RequiredContextCapabilities": "Source"
+                                              }
+                                            },
+                                            "CounterId": "orange_pellets_power"
+                                          }
+                                        },
+                                        "Right": {
+                                          "kind": "const",
+                                          "value": {
+                                            "Value": 1
+                                          }
+                                        },
+                                        "Op": "GreaterOrEqual"
+                                      }
+                                    },
+                                    "Right": {
+                                      "kind": "compare",
+                                      "value": {
+                                        "Left": {
+                                          "kind": "combatantCounter",
+                                          "value": {
+                                            "Selector": {
+                                              "kind": "sel.source",
+                                              "value": {
+                                                "Cardinality": "ZeroOrOne",
+                                                "RequiredContextCapabilities": "Source"
+                                              }
+                                            },
+                                            "CounterId": "orange_pellets_skill"
+                                          }
+                                        },
+                                        "Right": {
+                                          "kind": "const",
+                                          "value": {
+                                            "Value": 1
+                                          }
+                                        },
+                                        "Op": "GreaterOrEqual"
+                                      }
+                                    }
+                                  }
+                                },
+                                "Then": {
+                                  "kind": "node.sequence",
+                                  "value": {
+                                    "Children": [
+                                      {
+                                        "kind": "node.applyStatus",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "StatusDefinitionId": {
+                                            "value": "standard.strength"
+                                          },
+                                          "Stacks": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 3
+                                            }
+                                          },
+                                          "Duration": null,
+                                          "ResultKey": null
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.applyStatus",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "StatusDefinitionId": {
+                                            "value": "standard.dexterity"
+                                          },
+                                          "Stacks": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 3
+                                            }
+                                          },
+                                          "Duration": null,
+                                          "ResultKey": null
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.setCombatantCounter",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "CounterId": {
+                                            "value": "orange_pellets_power"
+                                          },
+                                          "Amount": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 0
+                                            }
+                                          },
+                                          "Relative": false
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.setCombatantCounter",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "CounterId": {
+                                            "value": "orange_pellets_attack"
+                                          },
+                                          "Amount": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 0
+                                            }
+                                          },
+                                          "Relative": false
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.setCombatantCounter",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "CounterId": {
+                                            "value": "orange_pellets_skill"
+                                          },
+                                          "Amount": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 0
+                                            }
+                                          },
+                                          "Relative": false
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                "Else": null
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "Else": null
+                    }
+                  },
+                  {
+                    "kind": "node.conditional",
+                    "value": {
+                      "Condition": {
+                        "kind": "event.bool",
+                        "value": {
+                          "FieldKey": "card.hasTag.skill"
+                        }
+                      },
+                      "Then": {
+                        "kind": "node.sequence",
+                        "value": {
+                          "Children": [
+                            {
+                              "kind": "node.setCombatantCounter",
+                              "value": {
+                                "TargetSelector": {
+                                  "kind": "sel.source",
+                                  "value": {
+                                    "Cardinality": "ZeroOrOne",
+                                    "RequiredContextCapabilities": "Source"
+                                  }
+                                },
+                                "CounterId": {
+                                  "value": "orange_pellets_skill"
+                                },
+                                "Amount": {
+                                  "kind": "const",
+                                  "value": {
+                                    "Value": 1
+                                  }
+                                },
+                                "Relative": true
+                              }
+                            },
+                            {
+                              "kind": "node.conditional",
+                              "value": {
+                                "Condition": {
+                                  "kind": "and",
+                                  "value": {
+                                    "Left": {
+                                      "kind": "compare",
+                                      "value": {
+                                        "Left": {
+                                          "kind": "combatantCounter",
+                                          "value": {
+                                            "Selector": {
+                                              "kind": "sel.source",
+                                              "value": {
+                                                "Cardinality": "ZeroOrOne",
+                                                "RequiredContextCapabilities": "Source"
+                                              }
+                                            },
+                                            "CounterId": "orange_pellets_power"
+                                          }
+                                        },
+                                        "Right": {
+                                          "kind": "const",
+                                          "value": {
+                                            "Value": 1
+                                          }
+                                        },
+                                        "Op": "GreaterOrEqual"
+                                      }
+                                    },
+                                    "Right": {
+                                      "kind": "compare",
+                                      "value": {
+                                        "Left": {
+                                          "kind": "combatantCounter",
+                                          "value": {
+                                            "Selector": {
+                                              "kind": "sel.source",
+                                              "value": {
+                                                "Cardinality": "ZeroOrOne",
+                                                "RequiredContextCapabilities": "Source"
+                                              }
+                                            },
+                                            "CounterId": "orange_pellets_attack"
+                                          }
+                                        },
+                                        "Right": {
+                                          "kind": "const",
+                                          "value": {
+                                            "Value": 1
+                                          }
+                                        },
+                                        "Op": "GreaterOrEqual"
+                                      }
+                                    }
+                                  }
+                                },
+                                "Then": {
+                                  "kind": "node.sequence",
+                                  "value": {
+                                    "Children": [
+                                      {
+                                        "kind": "node.applyStatus",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "StatusDefinitionId": {
+                                            "value": "standard.strength"
+                                          },
+                                          "Stacks": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 3
+                                            }
+                                          },
+                                          "Duration": null,
+                                          "ResultKey": null
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.applyStatus",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "StatusDefinitionId": {
+                                            "value": "standard.dexterity"
+                                          },
+                                          "Stacks": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 3
+                                            }
+                                          },
+                                          "Duration": null,
+                                          "ResultKey": null
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.setCombatantCounter",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "CounterId": {
+                                            "value": "orange_pellets_power"
+                                          },
+                                          "Amount": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 0
+                                            }
+                                          },
+                                          "Relative": false
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.setCombatantCounter",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "CounterId": {
+                                            "value": "orange_pellets_attack"
+                                          },
+                                          "Amount": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 0
+                                            }
+                                          },
+                                          "Relative": false
+                                        }
+                                      },
+                                      {
+                                        "kind": "node.setCombatantCounter",
+                                        "value": {
+                                          "TargetSelector": {
+                                            "kind": "sel.source",
+                                            "value": {
+                                              "Cardinality": "ZeroOrOne",
+                                              "RequiredContextCapabilities": "Source"
+                                            }
+                                          },
+                                          "CounterId": {
+                                            "value": "orange_pellets_skill"
+                                          },
+                                          "Amount": {
+                                            "kind": "const",
+                                            "value": {
+                                              "Value": 0
+                                            }
+                                          },
+                                          "Relative": false
+                                        }
+                                      }
+                                    ]
+                                  }
+                                },
+                                "Else": null
+                              }
+                            }
+                          ]
+                        }
+                      },
+                      "Else": null
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "Id": "standard.dead_branch",
+      "PackageId": "sts",
+      "NameKey": "Dead Branch",
+      "DescriptionKey": "Whenever you Exhaust a card, add a random card to your hand.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardExhausted",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.createRandomCardInstance",
+              "value": {
+                "Tag": "*",
+                "ToZone": "Hand",
+                "Count": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 1
+                  }
+                },
+                "CostZero": false,
+                "ResultKey": null
+              }
+            }
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -66002,6 +66837,27 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "enchiridion",
+      "DisplayName": "Enchiridion",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Event"
+    },
+    {
+      "Id": "orange_pellets",
+      "DisplayName": "Orange Pellets",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Shop"
+    },
+    {
+      "Id": "dead_branch",
+      "DisplayName": "Dead Branch",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Rare"
     }
   ],
   "Start": {

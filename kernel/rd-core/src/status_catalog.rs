@@ -779,6 +779,10 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.magic_flower"
             | "standard.medical_kit"
             | "standard.blue_candle"
+            // §299: C 类三件 —— 行为全在内容触发器里。
+            | "standard.enchiridion"
+            | "standard.orange_pellets"
+            | "standard.dead_branch"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"
