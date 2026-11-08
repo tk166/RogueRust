@@ -33,7 +33,7 @@
  47  1  1   4 IR maxHealth                                                    : Selector:TERM
  48  2  2   8 IR multiply                                                     : Left:TERM Right:TERM
  49  6  6  16 IR node.addCardCounter                                          : CardExpression:TERM CounterId:STR(wrap) Delta:TERM Mode:STR OwnerSelector:TERM ResultKey:TERM
- 50  6  6  16 IR node.applyStatus                                             : Charges:INT DurationTurns:INT ResultKey:TERM Stacks:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
+ 50  7  7  16 IR node.applyStatus                                             : Charges:INT Duration:TERM DurationTurns:INT ResultKey:TERM Stacks:TERM StatusDefinitionId:STR(wrap) TargetSelector:TERM
  51  2  2   8 IR node.carryAwayStolenGold                                     : CounterId:STR(wrap) TargetSelector:TERM
  52 10 11  24 IR node.chooseCards                                             : Copies:INT DrawFirst:INT FromZone:STR Max:INT Min:INT OwnerSelector:TERM RequireAnyTag:STRLIST ResultKey:TERM Then:STR ToZone:STR
  53  4  4  12 IR node.conditional                                             : Condition:TERM Else:TERM ResultKey:TERM Then:TERM

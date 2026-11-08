@@ -398,6 +398,9 @@ pub enum TriggerEvent {
     CardsDrawn,
     /// §237：**一张牌被消耗了**。Bearer = 牌的主人（`Dark Embrace`）。
     CardExhausted,
+    /// §295：**有人把另一方的格挡打穿了**。Bearer = 打破格挡的人，EventTarget = 挨打的那一方
+    /// （`hand_drill`）。同样是本内核的扩展（参考没有这个名字）。
+    BlockBroken,
     /// §294：**有人洗了牌**。Bearer = 洗牌的那个人（`the_abacus` / `sundial`）。
     ///
     /// 参考的 25 个成员里没有它（洗牌被折进 `CardMovedToZone`），所以这是本内核的扩展 ——
@@ -438,6 +441,8 @@ impl TriggerEvent {
             "CardExhausted" => Some(TriggerEvent::CardExhausted),
             // §294：本内核的扩展（参考没有这个名字）。
             "DeckShuffled" => Some(TriggerEvent::DeckShuffled),
+            // §295：同上（"格挡被打穿"）。
+            "BlockBroken" => Some(TriggerEvent::BlockBroken),
             // §236
             "HpLost" => Some(TriggerEvent::HpLost),
             "CardCostPaid" => Some(TriggerEvent::CardCostPaid),
@@ -474,6 +479,7 @@ impl TriggerEvent {
             TriggerEvent::CardsDrawn => "CardsDrawn",
             TriggerEvent::CardExhausted => "CardExhausted",
             TriggerEvent::DeckShuffled => "DeckShuffled",
+            TriggerEvent::BlockBroken => "BlockBroken",
             TriggerEvent::HpLost => "HpLost",
             TriggerEvent::CardCostPaid => "CardCostPaid",
             TriggerEvent::StatusApplied => "StatusApplied",
@@ -939,6 +945,46 @@ impl<'a> Host<'a> {
         event: TriggerEvent,
     ) -> Result<(), HostError> {
         self.run_triggers_with_flags(state, actor, event, 0)
+    }
+
+    /// §295：上一个加上**事件目标**（节目里的 `sel.eventTarget`）。
+    ///
+    /// 与 [`Self::run_triggers`] 的区别只有一处：`execute_program` 的第 5 个参数。`Downed` 那条
+    /// （`run_downed_triggers`）自己内联了同样的循环，因为它还要在之后派 `FoeDowned`；
+    /// 这里只派一个事件，所以走这条通用路径。
+    ///
+    /// ⚠️ 不能"合并进 `run_triggers` 加一个 `Option<CombatantId>` 参数"：那会把 25 处调用点
+    /// 全部改一遍，而其中 24 处要传 `None` —— "绝大多数传同一个值"的参数是签名在说谎。
+    fn run_triggers_with_target(
+        &mut self,
+        state: &mut CombatState,
+        actor: &CombatantId,
+        event: TriggerEvent,
+        target: CombatantId,
+    ) -> Result<(), HostError> {
+        let mut batch = TriggerBatch::new();
+        self.collect_triggers(state, actor, event, &mut batch)?;
+        batch.sort();
+        for i in 0..batch.len {
+            if state.result != CombatResult::Ongoing {
+                break;
+            }
+            let Some(handle) = batch.root.get(i).copied() else {
+                break;
+            };
+            let steps = batch.max_steps.get(i).copied().unwrap_or(DEFAULT_MAX_PROGRAM_STEPS);
+            let root = NodeRef::new(self.content, handle);
+            let outcome = execute_program(
+                state,
+                self.content,
+                root,
+                Some(*actor),
+                Some(target),
+                steps,
+            );
+            outcome.map_err(|e| self.record(HostError::Exec(e)))?;
+        }
+        Ok(())
     }
 
     /// §236：上一个加上**事件事实位**（`event.bool` 读它）。
@@ -2389,6 +2435,12 @@ impl Host<'_> {
             // §237: `BlockGained` -- Bearer 是获得格挡的那一方（Juggernaut）。
             CombatEvent::BlockGained { combatant, .. } => {
                 self.run_triggers(state, &combatant, TriggerEvent::BlockGained)
+            }
+            // §295: `BlockBroken` -- Bearer 是**打破格挡的人**，`EventTarget` 是**格挡被打穿的
+            // 那一方**。与 `DamageDealt` 同一方向（出手方 → 承受方），所以 `hand_drill` 的
+            // 节目可以用 `sel.eventTarget` 把易伤落到挨打的那只怪身上。
+            CombatEvent::BlockBroken { combatant, target } => {
+                self.run_triggers_with_target(state, &combatant, TriggerEvent::BlockBroken, target)
             }
             // §294: `DeckShuffled` -- Bearer 是洗牌的人（`the_abacus` / `sundial`）。
             // 没有事实位：`sundial` 数的是**次数**不是张数，它用自己的计数器。
@@ -4494,6 +4546,8 @@ mod tests {
                     TriggerEvent::FoeDowned => {}
                     // §294：同上（"洗了牌"）。core 镜像里 0 条，计数恒 0。
                     TriggerEvent::DeckShuffled => {}
+                    // §295：同上（"格挡被打穿"）。core 镜像里 0 条，计数恒 0。
+                    TriggerEvent::BlockBroken => {}
                     TriggerEvent::NotHandled => not_handled += 1,
                 }
                 // 信封上的步数预算：实测 25/25 都是 1024。
@@ -14357,4 +14411,122 @@ mod tests {
         assert_eq!(health(&state, "hero"), 70);
         assert_eq!(host.last_failure(), None, "一次失败都不该记下");
     }
+    /// §295：`BlockBroken` + `hand_drill` —— 打穿格挡才给易伤，三种反例都不触发。
+    ///
+    /// 为什么判在 `host.rs`：这里能造一场最小战斗、能直接入队一条伤害请求、能**真的**跑
+    /// 事件循环（`try_resolve_pending_queues`）—— 而 `hand_drill` 的整条规则是**内容程序**，
+    /// 所以两边都得是真的：真镜像 + 真派发。
+    ///
+    /// 三种反例是这条判据的重点（少一条，"每次攻击都加易伤"这种错也能全绿）：
+    /// ① 格挡本来就是 0；② 没打穿（格挡还有剩）；③ 自己打自己（`source == target`）。
+    #[test]
+    fn breaking_a_block_applies_vulnerable_on_the_target_only() {
+        use crate::state::EffectRequest;
+
+        // `sts_image()` 已经是一个 `Content`（不是字节），所以直接用。
+        let content = sts_image();
+        let mut host = Host::new(&content);
+
+        let mut state = arena();
+        let hero = cid("hero");
+        let foe = cid("enemy_a");
+        // `hand_drill` 的状态（内容里那条名字就叫 `standard.hand_drill`）。
+        give(&mut state, "hero", status("st1", "standard.hand_drill", 1));
+
+        let vulnerable = |state: &CombatState, who: &CombatantId| -> i32 {
+            state
+                .combatant(who)
+                .map(|c| {
+                    c.statuses()
+                        .iter()
+                        .filter(|s| s.definition_id.as_str() == "standard.vulnerable")
+                        .map(|s| s.stacks)
+                        .sum()
+                })
+                .unwrap_or(0)
+        };
+        // 打一次伤害：入队 → 排空（`BlockBroken` 也在这一步派发）。
+        let hit = |state: &mut CombatState, source: CombatantId, target: CombatantId, amount: i32,
+                   host: &mut Host| {
+            state
+                .enqueue_effect_with_owner(
+                    EffectRequest::DealDamage {
+                        target: Some(target),
+                        amount,
+                        ignores_block: false,
+                        source: Some(source),
+                        source_card: None,
+                    },
+                    None,
+                )
+                .unwrap();
+            host.try_resolve_pending_queues(state).unwrap();
+        };
+
+        // 反例 ①：格挡 0 ⇒ 打掉"0"不算打破。
+        assert_eq!(vulnerable(&state, &foe), 0, "clean start");
+        hit(&mut state, hero, foe, 3, &mut host);
+        assert_eq!(vulnerable(&state, &foe), 0, "no block to break -> nothing");
+
+        // 反例 ②：3 格挡、打 2 点 ⇒ 没打穿 ⇒ 不给。
+        state
+            .combatant_mut(&foe)
+            .unwrap()
+            .set_defensive_pool(DefensivePoolId::new("standard.block").unwrap(), 3, None)
+            .unwrap();
+        hit(&mut state, hero, foe, 2, &mut host);
+        assert_eq!(vulnerable(&state, &foe), 0, "2 into 3 block does not break it");
+
+        // 正例：还剩 1 格挡、打 2 点 ⇒ 打穿 ⇒ **2 层易伤在敌人身上**。
+        state
+            .combatant_mut(&foe)
+            .unwrap()
+            .set_defensive_pool(DefensivePoolId::new("standard.block").unwrap(), 1, None)
+            .unwrap();
+        let foe_health_before = state.combatant(&foe).unwrap().health_current;
+        hit(&mut state, hero, foe, 2, &mut host);
+        assert_eq!(
+            vulnerable(&state, &foe),
+            2,
+            "breaking the block pays 2 Vulnerable"
+        );
+        assert_eq!(
+            vulnerable(&state, &hero),
+            0,
+            "and never on the hero (that is what `sel.eventTarget` buys)"
+        );
+        // 1 点被格挡吃掉，所以血量只掉 1 —— 顺带钉住"格挡真的吸收了"。
+        assert_eq!(
+            state.combatant(&foe).unwrap().health_current,
+            foe_health_before - 1,
+            "the block absorbed one point"
+        );
+
+        // 反例 ③：自己打自己（`source == target`）⇒ 不算"an enemy's Block"。
+        state
+            .combatant_mut(&hero)
+            .unwrap()
+            .set_defensive_pool(DefensivePoolId::new("standard.block").unwrap(), 1, None)
+            .unwrap();
+        hit(&mut state, hero, hero, 2, &mut host);
+        assert_eq!(
+            vulnerable(&state, &hero),
+            0,
+            "hitting yourself is not an enemy's block"
+        );
+        assert_eq!(state.pending_event_count(), 0, "the queue is drained");
+        // 没有这张牌/这条状态时**什么都不发生**（负控的另一半在这里：状态不在身上）。
+        let mut bare = arena();
+        bare.combatant_mut(&foe)
+            .unwrap()
+            .set_defensive_pool(DefensivePoolId::new("standard.block").unwrap(), 1, None)
+            .unwrap();
+        hit(&mut bare, hero, foe, 2, &mut host);
+        assert_eq!(
+            vulnerable(&bare, &foe),
+            0,
+            "without the status nothing fires"
+        );
+    }
+
 }

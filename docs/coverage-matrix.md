@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 843 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 845 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -39,14 +39,14 @@
 | 怪物 | 50 | 42 | 0 | 8 | 49 | 1 | 11 | 0 |
 | 敌人动作 | 138 | 73 | 65 | 0 | 135 | 3 | 53 | 0 |
 | 卡牌 | 293 | 165 | 128 | 0 | 281 | 12 | 18 | 0 |
-| 状态 | 131 | 123 | 6 | 2 | 0 | 131 | 1 | 0 |
+| 状态 | 132 | 124 | 6 | 2 | 0 | 132 | 1 | 0 |
 | 遭遇 | 47 | 36 | 11 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 19 | 19 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 遗物 | 132 | 127 | 5 | 0 | 0 | 0 | 0 | 0 |
+| 遗物 | 133 | 127 | 6 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 843 | 618 | 215 | 10 | 465 | 147 | 83 | 0 |
+| **合计** | 845 | 619 | 216 | 10 | 465 | 148 | 83 | 0 |
 
-扫描到的具名测试：**1121** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
+扫描到的具名测试：**1122** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
 
 事件：池里有 **22** 个位次、**19** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -548,11 +548,11 @@
 | wound | yes | the_new_red_skills_do_what_their_pages_say, painful_stabs_shuffles_a_wound_only_on_unblocked_damage …(+3) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
-## 状态（131）
+## 状态（132）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
-| ritual | yes | ritual_grants_strength_at_the_end_of_the_turn, decay_predicate_splits_the_two_groups …(+1) | — | spec:INV_STATUSES | — | INV_STATUSES/ritual_grants_strength_at_the_end_of_the_turn |
+| ritual | yes | ritual_grants_strength_at_the_end_of_the_turn, decay_predicate_splits_the_two_groups …(+1) | — | spec:INV_STATUSES | — | §295/INV_STATUSES/ritual_grants_strength_at_the_end_of_the_turn |
 | standard.akabeko | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_reaction_relics_fire_the_right_number_of_times | — | spec:INV_STATUSES | — | §266/§267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.ancient_tea_set | yes (test-only) | the_node_relics_pay_on_the_right_kind_of_room, the_tea_set_charge_is_spent_by_the_next_fight | — | spec:INV_STATUSES | — | §269/§271/INV_STATUSES/the_node_relics_pay_on_the_right_kind_of_room |
 | standard.art_of_war | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
@@ -601,6 +601,7 @@
 | standard.frail | yes | entrench_doubles_the_block_it_already_has, the_turn_end_curses_do_their_own_thing …(+7) | — | spec:INV_STATUSES | — | §265/§276/INV_STATUSES/entrench_doubles_the_block_it_already_has |
 | standard.ginger | yes | the_status_application_relics_wire_their_own_carrier, the_status_application_relics_change_what_lands_on_the_target | — | spec:INV_STATUSES | — | §265/INV_STATUSES/the_status_application_relics_wire_their_own_carrier |
 | standard.gremlin_horn | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/§264/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
+| standard.hand_drill | yes | breaking_a_block_applies_vulnerable_on_the_target_only | — | spec:INV_STATUSES | — | §294/§295/INV_STATUSES/breaking_a_block_applies_vulnerable_on_the_target_only |
 | standard.happy_flower | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.hex | yes | hex_shuffles_a_dazed_only_for_non_attack_cards | — | spec:INV_STATUSES | — | §210/§213/INV_STATUSES/hex_shuffles_a_dazed_only_for_non_attack_cards |
 | standard.horn_cleat | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §256/§260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
@@ -638,7 +639,7 @@
 | standard.pen_nib | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
 | standard.phantom_veil | yes | — | — | spec:INV_STATUSES | — | §175/§181/INV_STATUSES |
 | standard.phase_split | yes | the_boss_phase_splits_once_at_low_health, a_phase_split_happens_once_even_under_three_hits | — | spec:INV_STATUSES | — | §121/§122/INV_STATUSES/the_boss_phase_splits_once_at_low_health |
-| standard.philosophers_stone | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
+| standard.philosophers_stone | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §267/§295/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.plated_armor | yes | a_long_fight_never_reports_a_step_problem, plated_armor_wears_down_to_nothing_without_an_error …(+6) | — | spec:INV_STATUSES | — | §209/§210/INV_STATUSES/a_long_fight_never_reports_a_step_problem |
 | standard.pocketwatch | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
 | standard.poison | yes | modifier_rows_match_exactly_and_through_the_documented_namespace_bridge, combatant_status_lines_keep_instance_order_and_include_pending …(+16) | — | spec:INV_STATUSES | — | §263/§265/INV_STATUSES/modifier_rows_match_exactly_and_through_the_documented_namespace_bridge |
@@ -646,7 +647,7 @@
 | standard.red_skull | yes | the_conditional_modifier_relics_wire_their_own_carrier, the_conditional_and_self_scoped_modifiers_change_the_right_number | — | spec:INV_STATUSES | — | §266/INV_STATUSES/the_conditional_modifier_relics_wire_their_own_carrier |
 | standard.regain_strength | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable | — | spec:INV_STATUSES | — | §219/INV_STATUSES/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | standard.regen | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, regen_heals_at_the_end_of_the_turn …(+1) | — | spec:INV_STATUSES | — | §119/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
-| standard.ring_of_the_serpent | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §267/§294/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
+| standard.ring_of_the_serpent | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §267/§295/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.ring_of_the_snake | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §264/§267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.runic_cube | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_reaction_relics_fire_the_right_number_of_times | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.runic_pyramid | yes | the_zero_infrastructure_tail_wires_its_carriers, the_zero_infrastructure_tail_lights_up_the_existing_channels | — | spec:INV_STATUSES | — | §268/INV_STATUSES/the_zero_infrastructure_tail_wires_its_carriers |
@@ -663,7 +664,7 @@
 | standard.split | yes | a_spawned_enemy_joins_the_turn_order_after_the_current_actor, a_phase_split_happens_once_even_under_three_hits …(+1) | — | spec:INV_STATUSES | — | §121/INV_STATUSES/a_spawned_enemy_joins_the_turn_order_after_the_current_actor |
 | standard.split_acid_l | yes | a_large_slime_splits_at_half_health_with_its_current_hp | — | spec:INV_STATUSES | — | §269/§276/INV_STATUSES/a_large_slime_splits_at_half_health_with_its_current_hp |
 | standard.split_spike_l | yes | a_large_slime_splits_at_half_health_with_its_current_hp, a_large_slime_above_half_health_does_not_split | — | spec:INV_STATUSES | — | §269/§276/INV_STATUSES/a_large_slime_splits_at_half_health_with_its_current_hp |
-| standard.spore_cloud | yes | spore_cloud_weakens_the_killer_on_death | — | spec:INV_STATUSES | — | §117/§294/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
+| standard.spore_cloud | yes | spore_cloud_weakens_the_killer_on_death | — | spec:INV_STATUSES | — | §116/§117/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
 | standard.stasis | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.1/§195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stone_calendar | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
@@ -674,14 +675,14 @@
 | standard.the_bomb_damage | yes | the_bomb_explodes_on_the_third_turn_end_only | — | spec:INV_STATUSES | — | INV_STATUSES/the_bomb_explodes_on_the_third_turn_end_only |
 | standard.the_boot | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.the_specimen | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
-| standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, standard_status_ids_are_byte_ordered_not_registration_ordered …(+4) | — | spec:INV_STATUSES | — | §292/§294/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |
+| standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, standard_status_ids_are_byte_ordered_not_registration_ordered …(+4) | — | spec:INV_STATUSES | — | §214/§294/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |
 | standard.time_warp | yes | the_twelfth_card_asks_for_the_turn_to_end | — | spec:INV_STATUSES | — | §122/§125/INV_STATUSES/the_twelfth_card_asks_for_the_turn_to_end |
 | standard.torii | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.tungsten_rod | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.turnip | yes | the_status_application_relics_wire_their_own_carrier, the_status_application_relics_change_what_lands_on_the_target | — | spec:INV_STATUSES | — | §265/INV_STATUSES/the_status_application_relics_wire_their_own_carrier |
 | standard.unawakened | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, the_awakened_one_draws_phase_one_by_weight_and_flips_on_the_guard | — | spec:INV_STATUSES | — | §180/§195.2/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
 | standard.unceasing_top | yes | the_zero_infrastructure_tail_wires_its_carriers, the_zero_infrastructure_tail_lights_up_the_existing_channels | — | spec:INV_STATUSES | — | §268/INV_STATUSES/the_zero_infrastructure_tail_wires_its_carriers |
-| standard.vulnerable | yes | the_def_table_is_a_side_table_not_a_copy_per_beat, clear_wipes_the_names_too …(+25) | — | spec:INV_STATUSES | — | §282/§283/INV_STATUSES/the_def_table_is_a_side_table_not_a_copy_per_beat |
+| standard.vulnerable | yes | the_def_table_is_a_side_table_not_a_copy_per_beat, clear_wipes_the_names_too …(+26) | — | spec:INV_STATUSES | — | §282/§283/INV_STATUSES/the_def_table_is_a_side_table_not_a_copy_per_beat |
 | standard.weak | yes | the_def_table_is_a_side_table_not_a_copy_per_beat, clear_wipes_the_names_too …(+33) | — | spec:INV_STATUSES | — | §263/§265/INV_STATUSES/the_def_table_is_a_side_table_not_a_copy_per_beat |
 
 ## 遭遇（47）
@@ -760,7 +761,7 @@
 | wing_statue | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | world_of_goop | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 
-## 遗物（132）
+## 遗物（133）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -810,6 +811,7 @@
 | golden_idol | yes | the_unknown_room_events_are_readable, every_kind_answers_both_sides …(+14) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
 | gremlin_horn | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier | — | — | — | §262/§263/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | gremlin_visage | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
+| hand_drill | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §294/§295 |
 | happy_flower | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | horn_cleat | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
 | ice_cream | yes | the_five_combat_start_relics_wire_their_own_carrier, the_fight_reward_overrides_are_exact | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |

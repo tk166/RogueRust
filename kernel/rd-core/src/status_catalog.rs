@@ -765,6 +765,8 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // §294: 两件洗牌遗物 —— 行为全在内容的 `DeckShuffled` 触发器里。
             | "standard.the_abacus"
             | "standard.sundial"
+            // §295: `hand_drill` —— 行为全在内容的 `BlockBroken` 触发器里。
+            | "standard.hand_drill"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

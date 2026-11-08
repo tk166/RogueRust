@@ -3143,6 +3143,8 @@ impl RunState {
             // `DeckShuffled` 触发器里（`standard.the_abacus` / `standard.sundial`）。
             "the_abacus" => Some(RelicEffect::StartCombatStatus("standard.the_abacus", 1)),
             "sundial" => Some(RelicEffect::StartCombatStatus("standard.sundial", 1)),
+            // §295：`hand_drill` —— 同样是"开战挂一条内容状态"，规则全在 `BlockBroken` 触发器里。
+            "hand_drill" => Some(RelicEffect::StartCombatStatus("standard.hand_drill", 1)),
             _ => None,
         }
     }

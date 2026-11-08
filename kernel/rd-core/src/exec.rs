@@ -1433,6 +1433,13 @@ pub fn resolve_damage_of_kind(
     // `Combatant::defensive_pools()` 的 key 字节序**直接就是**（`Bounded::upsert` 维护）。
     // ⇒ 对所有优先级相同的池（标准包只有 `standard.block`，`AbsorbPriority: 0`），
     // 这个顺序与参考**逐字相同**。见模块头的偏差说明。
+    // §295：吸收**之前**的格挡总量（`BlockBroken` 要判断"原本有、现在没了"）。
+    let mut block_before = 0i32;
+    for index in 0..pool_count {
+        if let Some(pool) = pools.get(index) {
+            block_before += pool.pool.current;
+        }
+    }
     let mut blocked = 0;
     if !ignores_block {
         let mut remaining_for_pools = amount;
@@ -1459,6 +1466,29 @@ pub fn resolve_damage_of_kind(
             combatant.set_defensive_pool(pool.key, pool.pool.current - absorbed, pool.pool.max)?;
             blocked += absorbed;
             remaining_for_pools -= absorbed;
+        }
+    }
+
+    // ── S4b：**§295 `BlockBroken`** —— 格挡**被打穿**的那一刻。
+    //
+    // 判据是三条同时成立（每一条都有反例）：
+    //   ① 出手方存在且**不是**自己（`hand_drill` 是"an enemy's Block"，自己打自己不算）；
+    //   ② 挨打方**原本有**格挡（`block_before > 0`）—— 否则"格挡 0 打掉 0"会变成"每次攻击都
+    //      加易伤"（那件遗物会强得离谱，而且没有任何东西会红）；
+    //   ③ 这一次伤害把**整池格挡全吃掉**（`blocked == block_before`）。
+    //
+    // `ignores_block`（毒 / `Constricted`）走不进这一段：那些伤害根本没碰格挡。
+    // 事件**入队**而不是立刻执行 —— 与 `BlockGained` 同一条路，解析在回合机的事件循环里。
+    if !ignores_block && block_before > 0 && blocked == block_before {
+        if let Some(source) = ctx.source {
+            if source != *target {
+                ctx.state
+                    .enqueue_event(crate::state::CombatEvent::BlockBroken {
+                        combatant: source,
+                        target: *target,
+                    })
+                    .map_err(ExecError::Capacity)?;
+            }
         }
     }
 

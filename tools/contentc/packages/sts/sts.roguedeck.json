@@ -9109,6 +9109,54 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.hand_drill",
+      "PackageId": "sts",
+      "NameKey": "Hand Drill",
+      "DescriptionKey": "Whenever you break an enemy's Block, apply 2 Vulnerable.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "BlockBroken",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.applyStatus",
+              "value": {
+                "TargetSelector": {
+                  "kind": "sel.eventTarget",
+                  "value": {
+                    "Cardinality": "ZeroOrOne",
+                    "RequiredContextCapabilities": "EventTarget"
+                  }
+                },
+                "StatusDefinitionId": {
+                  "value": "standard.vulnerable"
+                },
+                "Stacks": {
+                  "kind": "const",
+                  "value": {
+                    "Value": 2
+                  }
+                },
+                "Duration": null,
+                "ResultKey": null
+              }
+            }
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -65714,6 +65762,13 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "hand_drill",
+      "DisplayName": "Hand Drill",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Shop"
     }
   ],
   "Start": {

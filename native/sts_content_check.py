@@ -124,8 +124,9 @@ INV_COUNTS = {
     # §271: +2 (`sozu` energy carrier + `ancient_tea_set`'s one-shot program).
     # §282: +1 (`standard.confusion`)；§283: +1 (`standard.snecko_eye`)。
     # §292: +1 (`standard.cursed_key` —— 每回合 +1 能量的载体，与 `busted_crown` 同形状)。
-    # §294: +2 (`standard.the_abacus` / `standard.sundial` —— `DeckShuffled` 触发器的头两位).
-    "statuses": 131,
+    # §294: +2 (`standard.the_abacus` / `standard.sundial` —— `DeckShuffled` 触发器的头两位)。
+    # §295: +1 (`standard.hand_drill` —— `BlockBroken` 触发器).
+    "statuses": 132,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1554,6 +1555,8 @@ INV_STATUSES = {
     # §294：两件"洗牌"遗物的载体 —— 行为**全在触发器里**，没有被动修饰器。
     "standard.the_abacus": [],
     "standard.sundial": [],
+    # §295：行为全在 `BlockBroken` 触发器里。
+    "standard.hand_drill": [],
     # §267：零基建批次。
     "standard.ring_of_the_serpent": [('TurnStartDraw', 'AddFlat', 1, 100, None)],
     "standard.philosophers_stone": [('TurnStartEnergy', 'AddPerStack', 1, 100, None)],
@@ -3625,7 +3628,8 @@ def check_statuses(doc):
                      # §292: `cursed_key`（同样是 Boss 遗物的能量载体）。
                      # §294：`DeckShuffled` 的两个用户。
                      "standard.snecko_eye", "standard.cursed_key",
-                     "standard.the_abacus", "standard.sundial"):
+                     "standard.the_abacus", "standard.sundial",
+                     "standard.hand_drill"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -3766,7 +3770,9 @@ def check_statuses(doc):
                         "standard.cursed_key": [],
                         # §294：两件洗牌遗物都**只有**一条 `DeckShuffled` 触发器。
                         "standard.the_abacus": ["DeckShuffled"],
-                        "standard.sundial": ["DeckShuffled"]}[sid]
+                        "standard.sundial": ["DeckShuffled"],
+                        # §295
+                        "standard.hand_drill": ["BlockBroken"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
@@ -4057,6 +4063,8 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "orrery", "tiny_house", "singing_bowl",
                       # §294：洗牌的两件（`DeckShuffled` 触发器的头两位）。
                       "the_abacus", "sundial",
+                      # §295：`BlockBroken` 的第一个用户。
+                      "hand_drill",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

@@ -2759,6 +2759,21 @@ pub enum CombatEvent {
         /// 洗牌的人。
         combatant: CombatantId,
     },
+    /// §295：**有人把另一方的格挡打穿了**（`hand_drill`）。
+    ///
+    /// 参考的 25 个触发器里没有它；这是**本内核自己的事件名**（与 §237 的 `CardsDrawn`、
+    /// §294 的 `DeckShuffled` 同级：被真实内容逼出来的扩展）。
+    ///
+    /// * `combatant` = **打破格挡的人**（Bearer ⇒ 遗物/状态的"你的"指它）；
+    /// * `target` = **格挡被打穿的那一方**（`sel.eventTarget` ⇒ "apply 2 Vulnerable" 落在它身上）。
+    ///
+    /// 与 [`Self::DamageDealt`] 同一形状（Bearer = 出手方、EventTarget = 承受方），所以不新造方向。
+    BlockBroken {
+        /// 出手方（打破格挡的人）。
+        combatant: CombatantId,
+        /// 格挡被打穿的那一方。
+        target: CombatantId,
+    },
     /// `CardCostPaid`（`CardPlay.cs:138`）：出牌付了费用。
     CardCostPaid {
         /// 付钱的人。
