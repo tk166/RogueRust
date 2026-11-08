@@ -65758,6 +65758,11 @@
       "Id": "the_colosseum",
       "NameKey": "The Colosseum",
       "Entry": "the_colosseum"
+    },
+    {
+      "Id": "the_nest",
+      "NameKey": "The Nest",
+      "Entry": "the_nest"
     }
   ],
   "Potions": [
@@ -66082,6 +66087,9 @@
       {
         "Id": "the_colosseum",
         "MaxFloor": 7
+      },
+      {
+        "Id": "the_nest"
       }
     ],
     "Events3": [
@@ -68388,6 +68396,74 @@
         },
         {
           "Label": "COWARDICE",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_nest",
+      "TextKey": "A long line of hooded figures can be seen entering an unassuming cathedral. Naturally, you join the line and are quickly surrounded by Cultists! They ignore you as they gleefully chant and wave their weapons around. You eye a Donation Box...",
+      "Options": [
+        {
+          "Label": "Smash and Grab",
+          "Effects": [
+            {
+              "Effect": "gold",
+              "Amount": 99
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "gold",
+              "Amount": 50
+            }
+          ],
+          "Next": "the_nest.grabbed"
+        },
+        {
+          "Label": "Stay in Line",
+          "Effects": [
+            {
+              "Effect": "card:ritual_dagger",
+              "Amount": 0
+            },
+            {
+              "Effect": "damage",
+              "Amount": 6
+            }
+          ],
+          "Next": "the_nest.dagger"
+        }
+      ]
+    },
+    {
+      "Id": "the_nest.grabbed",
+      "TextKey": "They didn't even notice.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_nest.dagger",
+      "TextKey": "You decide to stay in line (out of fear) to see what will happen. A well-dressed cultist hands you an Ornate Dagger. Like the others before you, you slash your forearm and let the blood drip into a misshapen bowl.",
+      "Options": [
+        {
+          "Label": "Leave",
           "Effects": [
             {
               "Effect": "nothing",

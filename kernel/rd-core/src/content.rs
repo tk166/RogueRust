@@ -5391,9 +5391,9 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            18,
+            19,
             "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
-             `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`（`scrap_pile` 改成 Scrap Ooze 的 9 段链）。pools 的**位次**比
+             `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`，§290 补了 `the_nest`（`scrap_pile` 改成 Scrap Ooze 的 9 段链）。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5489,6 +5489,8 @@ mod tests {
             "fight_no_relic",
             "fight_gold_set",
             "fight_gold_bonus",
+            // §290：失去**全部**金币（`Masked Bandits` 的 `[Pay]`）。
+            "gold_all",
         ];
         // §278/§279：`kind:n` 形式的原子（数字在词里）。列在这里而不是用"有冒号就算"，
         // 因为"有冒号就算"会让一个拼错的 kind 静默通过。
@@ -5498,6 +5500,8 @@ mod tests {
         let inside = |effect: &str| {
             bare.contains(&effect)
                 || prefix(effect, "curse:")
+                // §290：给指定的一张牌（`The Nest` 的 `Ritual Dagger`）。
+                || prefix(effect, "card:")
                 || prefix(effect, "relic:")
                 || prefix(effect, "relic_lose:")
                 || prefix(effect, "damage_pct:")
@@ -5554,6 +5558,7 @@ mod tests {
                 "the_joust",
                 "the_mausoleum",
                 "the_moai_head",
+                "the_nest",
                 "the_ssssserpent",
                 "wandering_merchant",
                 "wing_statue",
@@ -5804,6 +5809,28 @@ mod tests {
                 .copied()
                 .collect();
             assert_eq!(all.len(), ids.len() + 1, "exactly one event has an upper bound");
+        }
+
+        // §290：`The Nest` —— `[Smash and Grab]` 99（A15 50）金币、`[Stay in Line]` 给 Ritual Dagger
+        // 并掉 6 血；两个选项都去一屏"Leave"（wiki 的 Screen 3/4）。
+        {
+            let nest = content.event_step("the_nest").expect("the nest");
+            assert_eq!(nest.count, 2, "two options, no decline");
+            let grab = nest.options()[0];
+            assert_eq!(grab.label, "Smash and Grab");
+            assert_eq!(grab.effects[0].effect, "gold");
+            assert_eq!(grab.effects[0].amount, 99, "99 gold on the base");
+            let asc = grab.effects_at(15, 15);
+            assert_eq!(asc[0].amount, 50, "A15 pays 50");
+            let stay = nest.options()[1];
+            assert_eq!(stay.label, "Stay in Line");
+            assert_eq!(stay.effects[0].effect, "card:ritual_dagger", "§290 `card:<id>`");
+            assert_eq!(stay.effects[1].effect, "damage");
+            assert_eq!(stay.effects[1].amount, 6, "6 HP");
+            for option in nest.options() {
+                let next = option.goes_on().expect("both lead to a screen");
+                assert_eq!(content.event_step(next).expect("the screen").count, 1);
+            }
         }
 
         // ★ 没有孤儿段：`EVND` 里每一行都要被某个 `EV.Entry` 或某个 `Next` 指到。

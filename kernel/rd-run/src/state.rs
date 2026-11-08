@@ -748,6 +748,8 @@ pub const START_OFFERS: [StartOffer; 8] = [
 /// | `fight_relic:<relic id>` | the **next** fight pays **exactly** that relic |
 /// | `fight_potion_chance:<pct>` | the **next** fight rolls its potion at `pct`, independent of the
 ///   act's moving chance (which it also leaves untouched) |
+/// | `card:<card id>` | grant **that** card (`The Nest`'s `Ritual Dagger`; any rarity) |
+/// | `gold_all` | lose **all** gold (`Masked Bandits`'s `[Pay]`) -- no amount, the run decides |
 /// | `relic_random` | grant a **random** relic (Scrap Ooze). 运行层只认 `relic:<id>` —— 抽样由
 ///   **有内容池的那一层**（`rd-wasm`）先解析成具体 id，理由同 `curse:` 的载荷 |
 /// | `heal_pct:<n>` | heal `floor(max HP × n / 100)` HP (the Cleric's *Heal*) |
@@ -801,6 +803,12 @@ pub enum EventEffect {
     FightRelic,
     /// §289：**下一场战斗**的药水概率**独立**于那一幕的移动概率（`fight_potion_chance:<pct>`）。
     FightPotionChance(u8),
+    /// §290：给**指定**的一张牌（`card:<id>`）。与 `GainCurse` 的区别只有一条：
+    /// 它不要求 `Rarity::Curse`（`Ritual Dagger` 是 `Special`）。
+    GainCard,
+    /// §290：失去**全部**金币（`gold_all`）—— `Masked Bandits` 的 `[Pay]`。
+    /// 没有金额：金额就是"现在有多少"。
+    LoseAllGold,
     /// §285：**随机一件遗物**（`relic_random`）。运行层**不**抽 —— 它没有遗物池。
     /// 由 `rd-wasm` 在调用前解析成 `GainRelic` + 具体 id（与 `curse:`/`relic:` 的载荷同一条路）。
     GainRandomRelic,
@@ -952,6 +960,8 @@ impl EventEffect {
             // 会让它永远解析不出来（没有冒号 ⇒ `?` 直接 `None`）—— §285 真踩了这个坑，
             // 由 §286 的"事件中途开战斗"走图判据抓到（页面只是少一个按钮，没人报错）。
             "relic_random" => (Self::GainRandomRelic, None),
+            // §290：`gold_all` 不带载荷（金额由局面决定）。
+            "gold_all" => (Self::LoseAllGold, None),
             // §280：`The Moai Head` 的 `[Jump Inside]`："Heal to full HP".
             "heal_full" => (Self::HealFull, None),
             "remove_card" => (Self::RemoveCard, None),
@@ -968,6 +978,8 @@ impl EventEffect {
                 }
                 match kind {
                     "curse" => (Self::GainCurse, Some(payload)),
+                    // §290：`card:<id>` —— 与 `curse:` 同一个形状，只是不要求诅咒。
+                    "card" => (Self::GainCard, Some(payload)),
                     "relic" => (Self::GainRelic, Some(payload)),
                     "relic_lose" => (Self::LoseRelic, Some(payload)),
                     // §278：`damage_pct:25` —— **数字在词里**（`Amount` 那一格与它无关），
@@ -5132,6 +5144,24 @@ impl RunState {
                 // `curse:` 载荷按定义就是诅咒（上面刚验过池子里它是 `Rarity::Curse`）。
                 self.push_card(PoolCard { kind: CardKind::Curse, ..PoolCard::plain(id) })?;
             }
+            EventEffect::GainCard => {
+                // 载荷必须是**这张镜像里真的存在**的卡：一个拼错的 id 会变成牌组里一张
+                // 幽灵卡，直到某场战斗抽到它才暴露。稀有度**不限制**（`Ritual Dagger` 是 Special）。
+                let Some(id) = named else {
+                    return Err(RunError::UnsupportedEventEffect);
+                };
+                let Some(row) = pool.iter().find(|card| card.id == id) else {
+                    return Err(RunError::NoSuchCard);
+                };
+                self.push_card(*row)?;
+            }
+            EventEffect::LoseAllGold => {
+                // §290：`[Pay]` —— 永远付得起（金额就是现有金币），所以这里**不会**报
+                // `NotEnoughGold`。`adjust_gold` 走的是"失去"那一条，`ectoplasm`
+                // （拦"获得金币"）不该在这里插手。
+                let all = self.gold;
+                self.adjust_gold(-all);
+            }
             // §287：记在运行层，由 `roll_reward` 消费（一场战斗的账）。
             EventEffect::FightGoldBonus(n) => {
                 self.fight_gold_bonus = self.fight_gold_bonus.saturating_add(n as i16);
@@ -5938,10 +5968,17 @@ mod tests {
 
     /// §270：带**类型**的一份小卡池（几条判据要"加一张 Attack / Skill"）。
     /// 名字不叫 `CARDS`：那个已经是"七张 `&str`"的老常量。
-    const TYPED_CARDS: [PoolCard<'static>; 3] = [
+    const TYPED_CARDS: [PoolCard<'static>; 4] = [
         PoolCard { id: "strike", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
         PoolCard { id: "defend", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None },
         PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
+        // §290：`The Nest` 给的那张牌（`Special` 稀有度 ⇒ `curse:` 给不了它，只能走 `card:`）。
+        PoolCard {
+            id: "ritual_dagger",
+            rarity: Rarity::Special,
+            kind: CardKind::Attack,
+            upgraded: Some("ritual_dagger+"),
+        },
     ];
 
     /// §270：这次"拿牌"的**那一张**。`take_card` / `buy_card` 现在要把牌本身交进去
@@ -9893,7 +9930,7 @@ mod tests {
             "relic",
             "curse:",           // empty payload
             "relic:",
-            "card:injury",      // no such kind
+            "cards:injury",     // no such kind (§290：`card:` 现在**是**合法的)
             "curse:injury:x",   // the id itself contains ':' -- only the first ':' splits
             "blessing",         // a plausible-looking word that is not in the table
             "",
@@ -10122,6 +10159,89 @@ mod tests {
         assert_eq!(run.event_fight_pool(), "", "and its pool with it");
         // 再问一次：没有第二次"回去"（否则一场战斗能被回两次）。
         assert!(!run.resume_event_after_fight(), "the resume is a one-shot");
+    }
+
+    /// §290：`gold_all` —— 失去**全部**金币，而且**永远付得起**（金额由局面决定）。
+    ///
+    /// 两侧：有钱 ⇒ 归零；没钱 ⇒ 仍然是 0（不报 `NotEnoughGold` —— 那是 `gold_cost` 的规矩）。
+    #[test]
+    fn gold_all_takes_everything_and_never_refuses() {
+        let pool = curse_pool();
+        let mut rich = RunState::new(7, 80, 120, &["strike"; 5]).expect("a run");
+        rich.begin_event("probe", "probe").expect("the event");
+        rich.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::LoseAllGold, None)],
+                ..EventMove::none()
+            },
+            &pool,
+        )
+        .expect("paying everything is never refused");
+        assert_eq!(rich.gold(), 0, "80 gold becomes 0");
+
+        let mut broke = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        broke.begin_event("probe", "probe").expect("the event");
+        broke.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::LoseAllGold, None)],
+                ..EventMove::none()
+            },
+            &pool,
+        )
+        .expect("with no gold the choice is still available");
+        assert_eq!(broke.gold(), 0, "and it stays 0 (not negative)");
+    }
+
+    /// §290：`card:<id>` —— 给**指定**的一张牌，而且走的是 `push_card`（不是第二套加牌逻辑）。
+    ///
+    /// 判据钉三件事：
+    /// ① 那张牌进了牌组（`Ritual Dagger` 是 `Special` 稀有度 —— `curse:` 给不了它）；
+    /// ② `ceramic_fish` 那类"加牌给钱"的遗物**照旧**生效（证明走的是同一条路）；
+    /// ③ 拼错的 id 被拒（`NoSuchCard`），而**不是**静默加一张幽灵卡。
+    #[test]
+    fn a_named_card_goes_through_the_one_add_card_path() {
+        let pool = TYPED_CARDS;
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.push_relic("ceramic_fish", &pool).expect("the fish");
+        run.begin_event("the_nest", "the_nest").expect("the event");
+        let gold_before = run.gold();
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::GainCard, Some("ritual_dagger")),
+                           (EventEffect::LoseHealth(6), None)],
+                ..EventMove::none()
+            },
+            &pool,
+        )
+        .expect("the dagger lands");
+        assert!(
+            run.deck().iter().any(|card| card.as_str() == "ritual_dagger"),
+            "the named card is in the deck: {:?}",
+            run.deck().iter().map(|c| c.as_str()).collect::<std::vec::Vec<_>>()
+        );
+        assert_eq!(run.health(), 74, "the 6 HP cost landed");
+        assert_eq!(
+            run.gold(),
+            gold_before + 9,
+            "`ceramic_fish` pays for **any** card -- so this went through `push_card`"
+        );
+
+        // 拼错的 id ⇒ 拒绝，而且**什么都没改**（整结构体相等）。
+        let mut typo = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        typo.begin_event("the_nest", "the_nest").expect("the event");
+        let before = typo;
+        assert_eq!(
+            typo.resolve_event_effects(
+                &EventMove {
+                    effects: &[(EventEffect::GainCard, Some("ritual_daggr"))],
+                    ..EventMove::none()
+                },
+                &pool,
+            ),
+            Err(RunError::NoSuchCard),
+            "a misspelt card id must be refused"
+        );
+        assert!(typo == before, "not one byte moved");
     }
 
     /// §289：**指名遗物**（`fight_relic:<id>`）—— 命中 / 不在池里 / 已持有，三种都要答得清。

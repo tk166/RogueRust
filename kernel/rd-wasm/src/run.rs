@@ -516,8 +516,16 @@ fn card_kind(content: &'static Content<'static>, id: &str) -> rd_run::state::Car
 /// `STATUS` rows only), so a tag filter here would be a guess. Written down in the plan's downgrade
 /// table rather than papered over.
 /// Every card with its rarity -- what the merchant draws from.
+///
+/// §290：`include_colorless` 是**一个**开关，不是第二个池子构造器。
+///
+/// 无色牌（`ritual_dagger` 之类）在 StS 里靠**事件/药水/商店的无色格**进牌组，不进普通奖励池。
+/// 事件指名给牌（`The Nest` 的 `card:ritual_dagger`）是官方入口，所以那条路必须看得见它们；
+/// 而"奖励屏能抽到哪些"仍然把无色剔掉。两条规则同一个构造器 + 一个布尔参数 ——
+/// 抄成两份池子会让"商店卖不卖无色"与"事件给不给无色"漂成两个答案。
 fn full_pool(
     content: &'static Content<'static>,
+    include_colorless: bool,
 ) -> Result<Vec<rd_run::state::PoolCard<'static>>, String> {
     let mut pool = Vec::new();
     for id in card_pool(content) {
@@ -529,7 +537,7 @@ fn full_pool(
         // `full_pool`, so filtering only rewards left the three new cards for sale -- the driver
         // bought them, its deck got weaker, and eleven of twelve seeds died early. One rule, one
         // owner (the ping-pong between two lists is exactly how such a leak survives).
-        if content.card_has_tag(id, "colorless") == Some(true) {
+        if !include_colorless && content.card_has_tag(id, "colorless") == Some(true) {
             continue;
         }
         let rarity = match content.card_rarity(id) {
@@ -564,7 +572,7 @@ fn pool_card_by_id(
     content: &'static Content<'static>,
     id: &str,
 ) -> Result<rd_run::state::PoolCard<'static>, String> {
-    full_pool(content)?
+    full_pool(content, false)?
         .into_iter()
         .find(|card| card.id == id)
         .ok_or_else(|| std::format!("卡 `{id}` 不在池子里"))
@@ -578,7 +586,7 @@ fn reward_pool(
     // §189 `A12`：`+` 行**必须在池子里**（升级要找得到目标），但**不能被当成
     // 基础奖励直接选中** —— 后一条由 `pick_of` 负责（它跳过 `+`）。两条在不同层，
     // 因为它们回答的是不同的问题："池子里有什么" 与 "这一次能拿哪一张"。
-    for card in full_pool(content)? {
+    for card in full_pool(content, false)? {
         // `rd-run` drops `Status`/`Curse` from the roll itself -- one rule, one owner.
         pool.push(card);
     }
@@ -776,7 +784,7 @@ pub extern "C" fn rd_run_start(seed: i32, ascension: i32) -> i32 {
                 }
                 // §274：`push_relic` 要卡池（拾取类遗物要看牌的类型与 `+` 行）。开局这一刻
                 // 牌组已经建好，所以池子从内容现取。
-                let starting_pool = match full_pool(content) {
+                let starting_pool = match full_pool(content, false) {
                     Ok(pool) => pool,
                     Err(message) => {
                         set_error(&message);
@@ -1151,7 +1159,7 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
     };
     session.log(K_BEGIN, -1, -1, "");
     let content = content();
-    let cards = match full_pool(content) {
+    let cards = match full_pool(content, false) {
         Ok(cards) => cards,
         Err(message) => return fail(session, &message),
     };
@@ -1235,7 +1243,7 @@ pub extern "C" fn rd_run_rest() -> i32 {
     if let Ok(healed) = outcome {
         if session.state.pending() == rd_run::state::Pending::Reward {
             // 卡池的形状（`PoolCard`，带稀有度）由 `full_pool` 给 —— 与战斗奖励同一条来路。
-            match full_pool(content()) {
+            match full_pool(content(), false) {
                 Ok(pool) => {
                     if let Err(error) = session.state.roll_rest_card_reward(&pool) {
                         set_error(&describe(&error));
@@ -1379,7 +1387,7 @@ pub extern "C" fn rd_run_open_chest() -> i32 {
     };
     session.log(K_CHEST, -1, -1, "");
     let relics = relic_pool(content());
-    let pool = match full_pool(content()) {
+    let pool = match full_pool(content(), false) {
         Ok(pool) => pool,
         Err(_) => return -1,
     };
@@ -1521,7 +1529,7 @@ pub extern "C" fn rd_run_buy_card(slot: i32) -> i32 {
         Ok(card) => card,
         Err(_) => return -1,
     };
-    let pool = match full_pool(content) {
+    let pool = match full_pool(content, false) {
         Ok(pool) => pool,
         Err(_) => return -1,
     };
@@ -1544,7 +1552,7 @@ pub extern "C" fn rd_run_buy_relic(slot: i32) -> i32 {
     }
     // §273/§274：补货要**遗物**池子，拾取类遗物要**卡**池子。两个都绑定一次再借出去。
     let relics = relic_pool(content());
-    let pool = match full_pool(content()) {
+    let pool = match full_pool(content(), false) {
         Ok(pool) => pool,
         Err(_) => return -1,
     };
@@ -1748,7 +1756,13 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
         return -1;
     };
     session.log(K_CHOOSE, slot, -1, "");
-    let pool = match reward_pool(content()) {
+    // §290：**事件的池子用 `full_pool`**，不是 `reward_pool`。
+    //
+    // `reward_pool` 剔掉了带 `colorless` 标签的牌（§183/§185："无色牌不进牌组"），而那条规则
+    // 管的是**奖励与商店**——事件是"点名给这一张"（`The Nest` 的 `Ritual Dagger` 正是无色），
+    // 按奖励池子过滤会让这条选项变成 `NoSuchCard`（玩家看到的是一个死按钮）。
+    // 反例就在池子里：`curse:` 与 `card:` 的校验都只看"这一张在不在池里"。
+    let pool = match full_pool(content(), true) {
         Ok(pool) => pool,
         Err(message) => return fail(session, &message),
     };
@@ -1946,7 +1960,7 @@ pub extern "C" fn rd_run_pickup_card(index: i32) -> i32 {
         return -1;
     };
     session.log(K_EVENT_CARD, index, -1, "");
-    let pool = match full_pool(content()) {
+    let pool = match full_pool(content(), false) {
         Ok(pool) => pool,
         Err(message) => return fail(session, &message),
     };
@@ -3228,7 +3242,11 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::FightExtraRelic(_)
         // §289：指名遗物与独立药水概率，落点同样在战斗结算里。
         | EventEffect::FightRelic
-        | EventEffect::FightPotionChance(_) => -1,
+        | EventEffect::FightPotionChance(_)
+        // §290：`gold_all` 与 `card:<id>` 的落点是"金币清零 / 牌组加一张"，
+        // 页面上没有一条"效果码"能画它们（`-1` 与 `relic_random` 同一条规矩）。
+        | EventEffect::LoseAllGold
+        | EventEffect::GainCard => -1,
     }
 }
 
@@ -3261,6 +3279,8 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::FightRelicRarity(_)
         | EventEffect::FightExtraRelic(_)
         | EventEffect::FightRelic
+        | EventEffect::GainCard
+        | EventEffect::LoseAllGold
         | EventEffect::GainCurse
         | EventEffect::GainRelic
         | EventEffect::LoseRelic
@@ -3678,7 +3698,7 @@ pub extern "C" fn rd_run_take_relic() -> i32 {
         return -1;
     };
     session.log(K_TAKE_RELIC, -1, -1, "");
-    let pool = match full_pool(content()) {
+    let pool = match full_pool(content(), false) {
         Ok(pool) => pool,
         Err(_) => return -1,
     };
@@ -5640,7 +5660,7 @@ mod tests {
     fn the_elite_relic_reward_round_trips_through_the_abi() {
         reset(7);
         let relics = relic_pool(content());
-        let pool = match full_pool(content()) {
+        let pool = match full_pool(content(), false) {
             Ok(pool) => pool,
             Err(message) => panic!("{message}"),
         };
@@ -9582,6 +9602,64 @@ mod tests {
     }
 
         /// §287：`Dead Adventurer` 的伏击用的是**醒着**的 Lagavulin —— wiki："This event's
+    /// Lagavulin does not enter combat Asleep. It instead starts the fight with Siphon Soul."
+    ///
+    /// 判据钉的是**两件**事，因为任意一件单独都能"看着对"：
+    /// ① 开场的敌人身上**没有** `standard.lagavulin_asleep`；
+    /// ② 第一回合的意图是 `lagavulin.siphon_soul`（不是攻击 —— 计数器初值必须是 2）。
+    ///
+    /// **反向**（普通精英池里那份仍然睡着）由内容门钉着：它会拿每条 `ENCT` 记录的
+    /// `StartingStatuses` 去对 wiki 清单，把睡眠状态从 `enc_lagavulin` 删掉会立刻红。
+    #[test]
+    /// §290：`The Nest` 的两个选项真走一遍 —— 金币 99，匕首给牌 + 掉 6 血。
+    ///
+    /// 走的是**内容 → 内核**的整条路（`card:<id>` 的载荷要在真镜像里解析成一张牌），
+    /// 所以它同时钉住词表 / 池子 / 给牌三处。A15 的 50 由 `rd-core` 的内容判据钉
+    /// （`EffectsAsc` 是另一份列表，`test_run` 只造 0 级局）。
+    #[test]
+    fn the_nest_grants_the_dagger_and_the_gold() {
+        // ① 金币：99。
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        let session = run_slot().as_mut().expect("a run");
+        session
+            .state
+            .begin_event("the_nest", "the_nest")
+            .expect("the nest opens");
+        assert_eq!(rd_run_event_option_count(), 2, "two options, no decline");
+        let gold_before = session.state.gold();
+        assert_eq!(rd_run_choose(0), 0, "{}", run_error_text());
+        let session = run_slot().as_ref().expect("a run");
+        assert_eq!(session.state.gold(), gold_before + 99, "the donation box pays 99");
+
+        // ② 匕首：牌进牌组、掉 6 血。
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        let session = run_slot().as_mut().expect("a run");
+        session
+            .state
+            .begin_event("the_nest", "the_nest")
+            .expect("the nest opens");
+        let deck_before = session.state.deck().len();
+        let health_before = session.state.health();
+        assert_eq!(rd_run_choose(1), 0, "{}", run_error_text());
+        let session = run_slot().as_ref().expect("a run");
+        assert_eq!(session.state.deck().len(), deck_before + 1, "one card added");
+        assert!(
+            session
+                .state
+                .deck()
+                .iter()
+                .any(|card| card.as_str() == "ritual_dagger"),
+            "the deck holds the dagger: {:?}",
+            session.state.deck().iter().map(|c| c.as_str()).collect::<Vec<_>>()
+        );
+        assert_eq!(session.state.health(), health_before - 6, "the ritual costs 6 HP");
+    }
+
+    /// §287：`Dead Adventurer` 的伏击用的是**醒着**的 Lagavulin —— wiki："This event's
     /// Lagavulin does not enter combat Asleep. It instead starts the fight with Siphon Soul."
     ///
     /// 判据钉的是**两件**事，因为任意一件单独都能"看着对"：

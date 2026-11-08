@@ -4542,6 +4542,23 @@ def check_event_vocabulary(doc):
                 counts["effects"] += 1
                 if kind_label:
                     counts["asc"] += 1
+                if effect.startswith("card:"):
+                    # §290：给**指定**的一张牌（`The Nest` 的 `Ritual Dagger`）。稀有度不限制
+                    # （`Special` 也要能加），但 id 必须在 `Cards` 里 —— 拼错的 id 会变成牌组里
+                    # 一张幽灵卡，直到某场战斗抽到它才暴露。
+                    payload = effect.split(":", 1)[1]
+                    if not payload:
+                        fail(where, "card: needs a card id")
+                    elif payload not in cards:
+                        fail(where, "card:%s 不是内容里的卡" % payload)
+                    continue
+                if effect == "gold_all":
+                    # §290：失去**全部**金币（`Masked Bandits` 的 `[Pay]`）。
+                    if entry.get("Amount") not in (0, None):
+                        fail(where, "gold_all takes no Amount (the run decides the sum)")
+                    counts["bare"] += 1
+                    counts["effects"] += 1
+                    continue
                 if effect in EVENT_BARE_EFFECTS:
                     counts["bare"] += 1
                     if effect in EVENT_DECK_EDITS:

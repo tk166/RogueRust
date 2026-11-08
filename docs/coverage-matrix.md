@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 823 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 824 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -41,14 +41,14 @@
 | 卡牌 | 293 | 164 | 129 | 0 | 281 | 12 | 18 | 0 |
 | 状态 | 128 | 120 | 6 | 2 | 0 | 128 | 1 | 0 |
 | 遭遇 | 47 | 36 | 11 | 0 | 0 | 0 | 0 | 0 |
-| 事件 | 18 | 18 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 事件 | 19 | 19 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 116 | 111 | 5 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 823 | 597 | 216 | 10 | 465 | 144 | 83 | 0 |
+| **合计** | 824 | 598 | 216 | 10 | 465 | 144 | 83 | 0 |
 
-扫描到的具名测试：**1097** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
+扫描到的具名测试：**1101** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
 
-事件：池里有 **21** 个位次、**18** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
+事件：池里有 **22** 个位次、**19** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
 同一页面的早期副本（内容同源，矩阵只用 `wiki_asc/` 那一份）：`wiki_book_of_stabbing.txt`、`wiki_lagavulin.txt`、`wiki_nemesis.txt`、`wiki_reptomancer.txt`、`wiki_slavers.txt`、`wiki_taskmaster.txt`
 
@@ -468,7 +468,7 @@
 | regret | yes | the_turn_end_curses_do_their_own_thing, every_kind_answers_both_sides …(+1) | — | wiki:wiki_cards/regret.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | rip_and_tear | yes | rip_and_tear_hits_twice_for_seven | — | wiki:wiki_cards/rip_and_tear.txt | — | §228/§229/CARD_WIKI+INV_CARDS/rip_and_tear_hits_twice_for_seven |
 | rip_and_tear+ | yes | rip_and_tear_hits_twice_for_seven | — | wiki:wiki_cards/rip_and_tear.txt (via rip_and_tear) | — | INV_CARDS/rip_and_tear_hits_twice_for_seven |
-| ritual_dagger | yes | ritual_dagger_only_grows_when_it_kills, ritual_dagger_growth_survives_the_fight | — | wiki:wiki_cards/ritual_dagger.txt | — | §250/CARD_WIKI+INV_CARDS/ritual_dagger_only_grows_when_it_kills |
+| ritual_dagger | yes | ritual_dagger_only_grows_when_it_kills, a_named_card_goes_through_the_one_add_card_path …(+2) | — | wiki:wiki_cards/ritual_dagger.txt | — | §250/CARD_WIKI+INV_CARDS/ritual_dagger_only_grows_when_it_kills |
 | ritual_dagger+ | yes | — | CARD_DIFF | wiki:wiki_cards/ritual_dagger.txt (via ritual_dagger) | — | INV_CARDS |
 | rupture | yes | — | CARD_DIFF | wiki:wiki_cards/rupture.txt | — | CARD_WIKI+INV_CARDS |
 | rupture+ | yes | the_lose_hp_cards_do_what_their_pages_say | — | wiki:wiki_cards/rupture.txt (via rupture) | — | INV_CARDS/the_lose_hp_cards_do_what_their_pages_say |
@@ -510,7 +510,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+141) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+144) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+11) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -733,7 +733,7 @@
 | enc_two_fungi_beasts | yes | the_act_one_hard_pool_encounters_match_the_wiki_numbers | — | — | — | §258/§275/the_act_one_hard_pool_encounters_match_the_wiki_numbers |
 | enc_two_louses | yes | louse_bites_are_rolled_at_spawn_and_the_green_one_reads_its_roll, the_two_louses_have_the_moves_the_wiki_gives_them …(+1) | — | — | — | §201/§258/louse_bites_are_rolled_at_spawn_and_the_green_one_reads_its_roll |
 
-## 事件（18）
+## 事件（19）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -751,6 +751,7 @@
 | the_joust | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | the_mausoleum | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | the_moai_head | yes | the_unknown_room_events_are_readable, heal_full_reaches_the_current_maximum …(+1) | — | — | — | the_unknown_room_events_are_readable |
+| the_nest | yes | the_unknown_room_events_are_readable, a_named_card_goes_through_the_one_add_card_path …(+1) | — | — | — | the_unknown_room_events_are_readable |
 | the_ssssserpent | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | wandering_merchant | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | wing_statue | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
@@ -779,7 +780,7 @@
 | calipers | yes | the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |
 | captains_wheel | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
 | centennial_puzzle | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
-| ceramic_fish | yes | the_add_card_relics_fire_at_the_one_add_point | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |
+| ceramic_fish | yes | the_add_card_relics_fire_at_the_one_add_point, a_named_card_goes_through_the_one_add_card_path | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |
 | champion_belt | yes | the_status_parameter_relics_wire_their_own_carrier | — | — | — | §263/§264/the_status_parameter_relics_wire_their_own_carrier |
 | charons_ashes | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | cloak_clasp | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
