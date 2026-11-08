@@ -1634,8 +1634,12 @@ pub type RunId = Ident<ID_CAP>;
 /// 存在的理由只有一条：`Ritual Dagger` 的 "permanently increase this card's damage by 3"
 /// 里那个 *permanently* 是**跨战斗**的，而战斗层的一次性实例在 `fight_end` 就没了。
 ///
-/// ⚠️ 它**不进 run hash**（`hash.rs` 逐字段写）：参考的运行层没有这个概念，而那个指纹要与
-/// 参考对齐。与 §201 的 `CombatState.gold_carried_away` 同一条裁决。
+/// §308：**它进 run hash**。旧版本这里写着"不进" —— 那是把两个指纹混为一谈：`hash_golden`
+/// （参考引擎逐字节复刻，参考的运行层确实没有这个概念）与 `hash.rs`（**我们自己**的行动回放
+/// 指纹，判据是"同一串动作之后同一局"）。后者只要一个字段影响**未来行为**就必须覆盖它，
+/// 否则"两局哈希相同"这句话会漏掉"牌还是那张牌、但是伤害不同"。
+/// 与 §201 的 `CombatState.gold_carried_away` 是**不同**的裁决：那个字段在战斗指纹里确实
+/// 没有消费者（跨场结算在 run 层）。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct RunMark {
     /// mark counter 的名字；`RunId::EMPTY` = 这个牌位没有跨场数据。
@@ -2400,6 +2404,10 @@ impl RunState {
         } else {
             id
         };
+        // §308：新牌**没有**跨场历史。`remove_deck_card` 已经把尾槽清干净了，但 `slot` 可能
+        // 不是尾槽（比如 Duplicate 在一张带 mark 的牌前面插一张是不可能的 —— 这里是**防御**）：
+        // 无论哪种，写牌位的同时把 mark 归零，才是"一张新牌"。
+        self.marks[slot] = RunMark::NONE;
         self.deck[slot] = chosen;
         self.deck_len += 1;
         // §270：`darkstone_periapt` —— "Whenever you obtain a Curse, increase your Max HP by 6"。
@@ -3361,6 +3369,73 @@ impl RunState {
         (mask, offer)
     }
 
+    /// §308：与 `deck` **同下标**的每副本数据（只到活动前缀）。
+    ///
+    /// 给 `hash.rs` 用的：跨场的 `Ritual Dagger` 成长必须进指纹，否则"同一串动作"可以长出
+    /// 两种牌组（伤害不同、哈希相同）。
+    #[must_use]
+    pub fn marks(&self) -> &[RunMark] {
+        &self.marks[..self.deck_len as usize]
+    }
+
+    /// §308：这一幕已经倒下几个 Boss（`A20` 的第三幕双 Boss 进度）。进存档与指纹：
+    /// 回档之后"还欠不欠第二场"是玩家能看见的东西。
+    #[must_use]
+    pub const fn bosses_fought(&self) -> u8 {
+        self.bosses_fought
+    }
+
+    /// §308：战斗之后要回到的事件段（空 = 战斗结算整个房间）。
+    #[must_use]
+    pub const fn event_resume(&self) -> RunId {
+        self.event_resume
+    }
+
+    /// §308：这一段选完之后要去的那一段（在等一次牌组编辑时先记在这里）。
+    #[must_use]
+    pub const fn event_next(&self) -> RunId {
+        self.event_next
+    }
+
+    /// §308：下一场战斗的金币加成 / 定数 / 不掉遗物 / 指名遗物 / 稀有度锁 / 独立药水概率。
+    ///
+    /// 六个都**只活到下一场战斗**，但"下一场"是从存档之后开始的那一场 —— 所以它们必须
+    /// 跟着存档走，否则 `Dead Adventurer` 的金币加成与"这件遗物已经搜到了"都会消失。
+    #[must_use]
+    pub const fn fight_gold_bonus(&self) -> i16 {
+        self.fight_gold_bonus
+    }
+    /// §308：同上。
+    #[must_use]
+    pub const fn fight_gold_set(&self) -> i16 {
+        self.fight_gold_set
+    }
+    /// §308：同上。
+    #[must_use]
+    pub const fn fight_no_relic(&self) -> bool {
+        self.fight_no_relic
+    }
+    /// §308：同上。
+    #[must_use]
+    pub const fn fight_relic_rarity(&self) -> u8 {
+        self.fight_relic_rarity
+    }
+    /// §308：同上。
+    #[must_use]
+    pub const fn fight_extra_relic(&self) -> u8 {
+        self.fight_extra_relic
+    }
+    /// §308：同上。
+    #[must_use]
+    pub const fn fight_relic(&self) -> RunId {
+        self.fight_relic
+    }
+    /// §308：同上（`255` = 不覆盖）。
+    #[must_use]
+    pub const fn fight_potion_chance(&self) -> u8 {
+        self.fight_potion_chance
+    }
+
     /// §303：`wing_boots` 还能飞几次（没有遗物时恒 0）。
     #[must_use]
     pub fn wing_boots_left(&self) -> u8 {
@@ -3370,6 +3445,15 @@ impl RunState {
             return 0;
         };
         uses.saturating_sub(self.wing_boots_used)
+    }
+
+    /// §308：`wing_boots` **已经飞过几次**（[`Self::wing_boots_left`] 是它的补数）。
+    ///
+    /// 两个都进指纹：剩余次数决定"还能不能飞"，而用过几次是它自己的事实
+    /// （这件遗物丢掉再捡回来会重置 `used`，而 `left` 也会跟着回到满值）。
+    #[must_use]
+    pub const fn wing_boots_used(&self) -> u8 {
+        self.wing_boots_used
     }
 
     /// §303：这一步**能不能飞** —— 也就是"站在地图里、还有次数、下一层真的有房间"。
@@ -5365,6 +5449,10 @@ impl RunState {
         }
         // **`len` 之后必须是 EMPTY**（REVIEW P1，§161.10）。
         self.deck[self.deck_len as usize - 1] = RunId::EMPTY;
+        // §308：`marks` 的尾槽同理 —— 否则被删那张牌的成长留在尾槽，下一张**加进来**的牌
+        // 会继承它（`push_card` 只写 `deck[slot]`）。这条在存档里也是硬要求：marks 只写
+        // 活动前缀，尾槽有值就意味着"存档丢了数据"。
+        self.marks[self.deck_len as usize - 1] = RunMark::NONE;
         self.deck_len -= 1;
         Ok(())
     }
@@ -6687,6 +6775,17 @@ impl RunState {
         if self.rarity_offset < RARITY_OFFSET_START || self.rarity_offset > RARITY_OFFSET_CAP {
             return Err(RunError::Invariant("rarity_offset is outside its pity band"));
         }
+        // §308：`marks` 只允许在活动前缀里有值。尾槽有 mark = "被删那张牌的成长还留在原地"，
+        // 而 `push_card` 的下一次写入会让新牌**继承**它。
+        for slot in self.deck_len as usize..MAX_RUN_DECK {
+            if !self.marks[slot].is_none() {
+                return Err(RunError::Invariant("a per-copy mark outlived its card"));
+            }
+        }
+        // §308：一幕里最多倒下一个 Boss（`A20` 的第三幕要打两个，但计数只到 1 就换幕）。
+        if self.bosses_fought > 1 {
+            return Err(RunError::Invariant("bosses_fought must be 0 or 1"));
+        }
 
         // 已结算位图只许指向地图上的节点（哨兵与越界位都不算）。
         for word in 0..self.resolved.len() {
@@ -7495,6 +7594,64 @@ mod tests {
         // §253 的那条纪律：mark 跟着牌走 —— 删掉第一张之后，第二张的 mark 必须还在它身上。
         assert_eq!(run.marks[0], second_mark, "the per-copy mark moves with its card");
         assert_eq!(run.removed_cards(), 0, "Toke is not a paid removal (no price step)");
+    }
+
+
+    /// §308：删掉一张带成长的牌，**尾槽的 mark 必须归零**。
+    ///
+    /// 这个缺陷在 §253 修"删牌时 mark 跟着牌走"时漏了反方向：`remove_deck_card` 清了
+    /// `deck` 的尾槽，却没清 `marks` 的尾槽。于是"被删那张牌的成长"留在原地 —— 而存档
+    /// 只写活动前缀，尾槽有值会让 round-trip 报"丢数据"，更坏的是它会**被下一张牌继承**。
+    #[test]
+    fn a_removed_cards_mark_does_not_live_on_in_the_tail() {
+        let mut run = campfire_run();
+        run.push_relic("peace_pipe", &TYPED_CARDS).expect("peace pipe");
+        let last = run.deck_len as usize - 1;
+        run.set_mark(last, "standard.ritual_dagger_bonus", 7)
+            .expect("the last slot exists");
+        at_campfire(&mut run);
+        assert_eq!(run.toke(last), Ok(()), "Toke removes the marked card");
+        // 尾槽（新的 `deck_len`，也就是被腾出来的那一格）必须是空的。
+        assert!(run.marks[run.deck_len as usize].is_none(), "the tail slot was cleared");
+    }
+
+    /// §308：新不变量**自己**会响 —— 不是"我知道它写了"，而是"塞一条尾槽 mark 进去它必须报错"。
+    ///
+    /// ⚠️ 不拿 `at_campfire` 那种助手去测这条：它的 `node = 5` + `floor = 0` 本来就违反
+    /// "楼层 = 行号"，于是"有错"与"错在我这一块"分不开（第一版就是这么写的，报的是 floor）。
+    #[test]
+    fn a_mark_beyond_the_deck_is_an_invariant_violation() {
+        let mut run = ironclad();
+        let tail = run.deck_len as usize;
+        run.marks[tail] = RunMark {
+            key: RunId::new("standard.ritual_dagger_bonus").expect("an id"),
+            value: 5,
+        };
+        assert!(
+            matches!(run.check_invariants(), Err(RunError::Invariant(what)) if what == "a per-copy mark outlived its card".to_owned()),
+            "the tail slot must be refused"
+        );
+    }
+
+    /// §308：新加进来的牌**没有**跨场历史，哪怕它落在了一个曾经有 mark 的牌位上。
+    #[test]
+    fn a_newly_added_card_never_inherits_a_mark() {
+        let mut run = campfire_run();
+        run.push_relic("peace_pipe", &TYPED_CARDS).expect("peace pipe");
+        // 先在**末尾之后**那一格放一条 mark（模拟"删牌留下的尾槽"这一种历史残骸）。
+        run.marks[run.deck_len as usize] = RunMark {
+            key: RunId::new("standard.ritual_dagger_bonus").expect("an id"),
+            value: 5,
+        };
+        let card = run.deck()[0];
+        run.push_card(PoolCard {
+            id: card.as_str().trim_end_matches('+'),
+            rarity: Rarity::Starter,
+            ..*TYPED_CARDS.iter().find(|entry| entry.id == card.as_str())
+                .expect("the first card is in the pool")
+        })
+        .expect("room for one more");
+        assert!(run.mark(run.deck_len as usize - 1).is_none(), "a new card has no mark");
     }
 
     /// §259：`Dig` 只抽 **Common/Uncommon/Rare**（wiki 原话），Boss/Shop/Event 一件都不许出。

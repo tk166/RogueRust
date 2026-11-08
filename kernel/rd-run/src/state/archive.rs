@@ -33,8 +33,8 @@
 use crate::map::{MapNode, MapRow, NodeKind, RunMap, MAX_OUT_EDGES, NODES_PER_ROW, ROWS};
 use super::RunId;
 use crate::state::{
-    BlessingFollowUp, DeckChange, Offer, Pending, Reward, RunState, ShopStock, MAX_REWARD_CARDS,
-    MAX_RUN_DECK, MAX_RUN_POTIONS, MAX_RUN_RELICS, MAX_SHOP_CARDS, MAX_SHOP_RELICS,
+    BlessingFollowUp, DeckChange, Offer, Pending, Reward, RunMark, RunState, ShopStock,
+    MAX_REWARD_CARDS, MAX_RUN_DECK, MAX_RUN_POTIONS, MAX_RUN_RELICS, MAX_SHOP_CARDS, MAX_SHOP_RELICS,
 };
 use crate::streams::{RunRng, RunStream};
 
@@ -56,11 +56,15 @@ pub const MAGIC: &str = "RDA1";
 ///
 /// 为什么**必须**抬版本而不是"在末尾多写两个字节就行"：旧存档读到末尾会缺字段，
 /// 而"缺字段"与"字段是 0"在字节上无法区分 —— 那正是版本号要回答的问题。
-const VERSION: u8 = 10;
-/// payload 缓冲。实测一局约 300–900 B；4 KB 是"内容翻倍也不会撞上"的余量。
-pub const MAX_PAYLOAD: usize = 4096;
+const VERSION: u8 = 11;  // §308：事件链 + 宝箱计数器 + 每副本 mark。
+/// payload 缓冲。实测一局约 300–900 B；§308 之后**最坏情况**（60 张牌各带一条 mark）
+/// 是 **5653 B 文本**（`a_deck_where_every_copy_carries_a_mark_still_fits` 打出来的），
+/// 折成 payload 约 4.5 KB —— 8 KB 是它上面一层。这个数不是拍的：那条判据就是拿它压的。
+pub const MAX_PAYLOAD: usize = 8192;
 /// 一行文本的缓冲：base64 是 4/3，RLE 最坏 2×（每个字节都是 0xFF 时）。
-pub const MAX_ARCHIVE: usize = 16384;
+/// §308：16 KB → 24 KB。payload 抬到 8 KB 之后，base64（4/3）与 RLE（最坏 2×）
+/// 一起算下来要 21.8 KB —— 24 KB 是那个上界的余量，而不是"看着宽裕"。
+pub const MAX_ARCHIVE: usize = 24576;
 
 /// 存档失败的原因。每一条都**别**降级成"差不多能用"。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -572,9 +576,37 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
         writer.id(*card)?;
     }
 
+    // ══ §308：审阅报告 §2 查出来的漏网字段。**这一整块的理由是同一个**：它们都影响
+    // "存档之后的那一局"（事件走到第几段、宝箱还欠几件、A20 还欠不欠第二个 Boss、
+    // 下一场战斗的奖励怎么算）。判据不是"我记得加"，而是 `native/check_state_fields.py`
+    // 穷尽遍历 `RunState` 的字段表 —— 少一个就红。
+    writer.id(state.event_step)?;
+    writer.id(state.event_resume)?;
+    writer.id(state.event_next)?;
+    writer.id(state.event_fight_pool)?;
+    writer.id(state.fight_relic)?;
+    writer.byte(state.event_fight)?;
+    writer.byte(state.bosses_fought)?;
+    writer.byte(state.chest_extra)?;
+    writer.byte(state.chest_empty)?;
+    writer.byte(state.pickup_relics)?;
+    writer.byte(state.pickup_potions)?;
+    writer.byte(state.fight_relic_rarity)?;
+    writer.byte(state.fight_extra_relic)?;
+    writer.byte(state.fight_potion_chance)?;
+    writer.int(i32::from(state.fight_gold_bonus))?;
+    writer.int(i32::from(state.fight_gold_set))?;
+    writer.byte(u8::from(state.fight_no_relic))?;
+
     writer.byte(state.deck_len)?;
     for card in state.deck.iter().take(state.deck_len as usize) {
         writer.id(*card)?;
+    }
+    // §308：每副本数据，**只写活动前缀**。尾槽必须为空这条由 `check_invariants` 保证 ——
+    // 于是"前缀外有值"会是 `Invariant`，而不是"存档悄悄少了一格"。
+    for mark in state.marks.iter().take(state.deck_len as usize) {
+        writer.id(mark.key)?;
+        writer.int(mark.value)?;
     }
     writer.byte(state.relics_len)?;
     for relic in state.relics.iter().take(state.relics_len as usize) {
@@ -702,6 +734,29 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
         pickup_offer[slot] = reader.id()?;
     }
 
+    // §308：与写侧同序 —— 事件链 / 宝箱计数器 / 下场的奖励覆盖。
+    let event_step = reader.id()?;
+    let event_resume = reader.id()?;
+    let event_next = reader.id()?;
+    let event_fight_pool = reader.id()?;
+    let fight_relic = reader.id()?;
+    let event_fight = reader.byte()?;
+    let bosses_fought = reader.byte()?;
+    let chest_extra = reader.byte()?;
+    let chest_empty = reader.byte()?;
+    let pickup_relics = reader.byte()?;
+    let pickup_potions = reader.byte()?;
+    let fight_relic_rarity = reader.byte()?;
+    let fight_extra_relic = reader.byte()?;
+    let fight_potion_chance = reader.byte()?;
+    let fight_gold_bonus = reader.int()? as i16;
+    let fight_gold_set = reader.int()? as i16;
+    let fight_no_relic = reader.byte()?;
+    // §308：容量是语义 —— 读到 2 是**存档坏了**，不是"夹到 1"。
+    if bosses_fought > 1 {
+        return Err(ArchiveError::BadField("bosses_fought"));
+    }
+
     let mut deck = [RunId::EMPTY; MAX_RUN_DECK];
     let deck_len = reader.byte()? as usize;
     if deck_len > MAX_RUN_DECK {
@@ -709,6 +764,14 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     }
     for slot in 0..deck_len {
         deck[slot] = reader.id()?;
+    }
+    // §308：每副本 mark（与 deck 同下标、同长度）。
+    let mut marks = [RunMark::NONE; MAX_RUN_DECK];
+    for slot in 0..deck_len {
+        marks[slot] = RunMark {
+            key: reader.id()?,
+            value: reader.int()?,
+        };
     }
     let mut relics = [RunId::EMPTY; MAX_RUN_RELICS];
     let relics_len = reader.byte()? as usize;
@@ -865,6 +928,25 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     restored.pickup_offer_len = pickup_offer_len as u8;
     restored.deck = deck;
     restored.deck_len = deck_len as u8;
+    // §308
+    restored.marks = marks;
+    restored.event_step = event_step;
+    restored.event_resume = event_resume;
+    restored.event_next = event_next;
+    restored.event_fight_pool = event_fight_pool;
+    restored.event_fight = event_fight;
+    restored.bosses_fought = bosses_fought;
+    restored.chest_extra = chest_extra;
+    restored.chest_empty = chest_empty;
+    restored.pickup_relics = pickup_relics;
+    restored.pickup_potions = pickup_potions;
+    restored.fight_relic = fight_relic;
+    restored.fight_relic_rarity = fight_relic_rarity;
+    restored.fight_extra_relic = fight_extra_relic;
+    restored.fight_potion_chance = fight_potion_chance;
+    restored.fight_gold_bonus = fight_gold_bonus;
+    restored.fight_gold_set = fight_gold_set;
+    restored.fight_no_relic = fight_no_relic != 0;
     restored.relics = relics;
     restored.relics_len = relics_len as u8;
     restored.potions = potions;
@@ -989,6 +1071,47 @@ mod tests {
         run
     }
 
+    /// §308：**每一格都填上非默认值**的夹具。
+    ///
+    /// 为什么需要它：`sample()` 只设了六个字段（种子/牌组/金币/血/一瓶药水/一件遗物），于是
+    /// `a_saved_run_round_trips_byte_identically` 的判据"整局相等"对后来新增的字段**完全瞎** ——
+    /// 漏写 18 个字段它照样绿（审阅报告 §2 抓到的正是这一点）。
+    ///
+    /// 规矩：**`RunState` 每加一个字段，这里加一行**，然后拿"删掉对应那条 `writer...`"做负控，
+    /// 确认那条判据会红。只加字节不加这一行，等于又养了一条瞎的判据。
+    fn sample_full() -> RunState {
+        let mut run = sample();
+        // 每副本成长（`Ritual Dagger`）：两张牌各一条，**键与下标都不同** —— 只写值的话，
+        // "第 0 张 9 点"与"第 1 张 9 点"会是同一局。
+        run.set_mark(0, "standard.ritual_dagger_bonus", 9)
+            .expect("slot 0 is in the deck");
+        run.set_mark(1, "standard.ritual_dagger_bonus", 4)
+            .expect("slot 1 is in the deck");
+        // 事件链：正在第 2 段、打完伏击回到第 3 段、编辑完去第 4 段。
+        run.event = RunId::new("dead_adventurer").expect("an id");
+        run.event_step = RunId::new("dead_adventurer.ambush").expect("an id");
+        run.event_resume = RunId::new("dead_adventurer.after").expect("an id");
+        run.event_next = RunId::new("dead_adventurer.reward").expect("an id");
+        run.event_fight = 2;
+        run.event_fight_pool = RunId::new("EliteEvent").expect("an id");
+        // 下一场战斗的六个覆盖（`Dead Adventurer` 那一套）。
+        run.fight_gold_bonus = 30;
+        run.fight_gold_set = 44;
+        run.fight_no_relic = true;
+        run.fight_relic_rarity = 3;
+        run.fight_extra_relic = 1;
+        run.fight_relic = RunId::new("thread_and_needle").expect("an id");
+        run.fight_potion_chance = 70;
+        // 宝箱与拾取欠账（`matryoshka` / `nloths_hungry_face` / `calling_bell` / `cauldron`）。
+        run.chest_extra = 2;
+        run.chest_empty = 1;
+        run.pickup_relics = 3;
+        run.pickup_potions = 5;
+        // `A20` 的两场 Boss 进度。
+        run.bosses_fought = 1;
+        run
+    }
+
     /// §166: 另一份内容编的存档，必须在**还原之前**被拒。
     ///
     /// 这条测试差的不是"能不能验出来"，而是**在哪一步验出来**：原来（不存内容指纹）它会在
@@ -1022,7 +1145,9 @@ mod tests {
 
     #[test]
     fn a_saved_run_round_trips_byte_identically() {
-        let run = sample();
+        // §308：`sample_full()` 而不是 `sample()` —— 后者每一个新字段都在默认值，
+        // 于是"漏还原一个字段就红"这句注释是**假的**。
+        let run = sample_full();
         let mut first = [0u8; MAX_ARCHIVE];
         let first_len = write(&run, CONTENT, &mut first).expect("write");
         let text = core::str::from_utf8(&first[..first_len]).expect("ascii");
@@ -1036,6 +1161,32 @@ mod tests {
         restore(text, CONTENT, &mut restored).expect("restore");
         // `RunState` 派生 `PartialEq`，所以判据是**整局相等** —— 漏还原一个字段就红。
         assert_eq!(restored, run, "the archive lost a field");
+    }
+
+
+    /// §308：**最坏情况**要装得下 —— 60 个牌位各带一条成长（`Ritual Dagger` 的键是最长的之一）。
+    ///
+    /// 这条不是在测"能不能少写字节"，是在测"存档不会在某一天突然存不上"：容量如果不够，
+    /// `write` 会返回 `TooLong`（响亮），但那时玩家的存档已经打不开了。所以先用满长度压一遍。
+    #[test]
+    fn a_deck_where_every_copy_carries_a_mark_still_fits() {
+        let mut run = sample_full();
+        let key = "standard.ritual_dagger_bonus";
+        for slot in 0..MAX_RUN_DECK {
+            run.deck[slot] = RunId::new(key).expect("an id");
+        }
+        // `set_mark` 的口径是"牌位必须存在" —— 所以先把 `deck_len` 撑满。
+        run.deck_len = MAX_RUN_DECK as u8;
+        for slot in 0..MAX_RUN_DECK {
+            run.set_mark(slot, key, slot as i32 * 3).expect("every slot exists");
+        }
+        let mut out = [0u8; MAX_ARCHIVE];
+        let len = write(&run, CONTENT, &mut out).expect("the worst case still fits");
+        assert!(len <= MAX_ARCHIVE, "the archive must fit its published capacity");
+        let text = core::str::from_utf8(&out[..len]).expect("ascii");
+        let mut restored = RunState::new_with_ascension(1, 80, 0, &[], 0).expect("a skeleton");
+        restore(text, CONTENT, &mut restored).expect("restore the worst case");
+        assert_eq!(restored, run, "60 marks survive the round trip");
     }
 
     #[test]

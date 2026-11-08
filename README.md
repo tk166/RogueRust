@@ -24,7 +24,7 @@
 | **Rust**（rustup） | stable | 编译内核 → wasm | <https://rustup.rs> |
 | **wasm 目标** | `wasm32-unknown-unknown` | 同上 | `rustup target add wasm32-unknown-unknown` |
 | **Python** | 3.10+ | 起静态服务（也用于内容编译/闸门） | <https://www.python.org> |
-| *（可选）Node.js* | 18+ | 只有 21 道闸门里的浏览器测试需要 | <https://nodejs.org> |
+| *（可选）Node.js* | 18+ | 只有 22 道闸门里的浏览器测试需要 | <https://nodejs.org> |
 | *（可选）Chrome / Edge* | 任意近期版本 | 同上 | 系统自带即可 |
 
 > 只要**玩**，装 Rust + Python 就够；Node 与浏览器只在你要跑验收脚本时才需要。
@@ -198,7 +198,7 @@ python -m http.server 8000
 | `kernel/rd-firmware/` | 裸机启动壳（独立的 `[workspace]`，只在 riscv 目标上存在）——**只为证明链接得过** |
 | `kernel/rd-hashdump` `rd-rngdump` `rd-sizeprobe` `rd-fightdump` | 诊断二进制：哈希对拍、洗牌序列对拍、RISC-V 代码体积、把一局战斗逐步打出来 |
 | `tools/contentc/` | **Python 内容编译器**：JSON 源 → `rdcf` 二进制镜像（段目录 + 字符串池 + 效果程序 IR） |
-| `tools/acceptance.ps1` | **聚合验收**：21 道闸门（含 `coverage-matrix`），一道红就整体红 |
+| `tools/acceptance.ps1` | **聚合验收**：22 道闸门（含 `coverage-matrix` 与 `state-fields`），一道红就整体红 |
 | `tools/rdcf_verify.py` `rdcf_terms.py` | 内容镜像的**独立**字节级校验（段目录 / count×stride / term 表形状） |
 | `web/` | 前端（零构建、零 CDN）：`index.html` + `ui_render.js`（战斗语义）+ `ui_panels.js`（14 个节点状态）+ `map.html` + `pixels.mjs`（像素度量）+ 门 13–20 的脚本 |
 | `native/RogueDeck.Oracle` `RogueDeck.Native` | C# 侧：对拍导出（NativeAOT）与 RL 环境 ABI |
@@ -233,14 +233,14 @@ python -m http.server 8000
 ```powershell
 & .\tools\cargo.ps1 test -p rd-core -p rd-run -p rd-wasm --release      # 单元测试
 & .\tools\cargo.ps1 clippy --all-targets -p rd-core -p rd-run -p rd-wasm # 零告警是硬要求
-& .\tools\acceptance.ps1                                               # 21 道闸门，约 5 分钟
+& .\tools\acceptance.ps1                                               # 22 道闸门，约 5 分钟
 & .\tools\acceptance.ps1 -SkipSlow                                     # 跳过 soak / 浏览器
 python tools/contentc/build.py --package sts                           # 改内容 JSON 之后
 ```
 
 `acceptance.ps1` 有**真参数块**（`-SkipSlow`、`-UnitsFloor`），不是位置参数。
 
-### 5.2 21 道闸门
+### 5.2 22 道闸门
 
 下表写的是每道闸门**必须打印出来的证据串**（`Invoke-Gate -MustMatch`），不是某次运行的数字。
 数字每次跑都不同，抄进文档就会过期（§169）；要看数字就自己跑一遍。
@@ -268,6 +268,7 @@ python tools/contentc/build.py --package sts                           # 改内�
 | 19 | `web-slice` | `ACT1_SLICE PASS`（自己算路线走遍每种节点，Boss 场景**重试到赢**） |
 | 20 | `web-pixel` | `PIXEL_TEST PASS`（像素判据 + 故障注入自检） |
 | 21 | `coverage-matrix` | `COVERAGE_MATRIX PASS (rows=N, tests=N, fresh)` + `SELFTEST PASS (5 fixtures)`（生成物必须与盘上一致；孤儿行 / 偏差表漂移 / 扫描器自坏都是红） |
+| 22 | `state-fields` | `STATE_FIELDS PASS (63 fields, …)`（穷尽读 `RunState` 的字段表：每个字段必须出现在存档的写侧与指纹里；豁免必须带理由，豁免的字段被删也是红） |
 
 闸门的共同要求是**拿到证据串**，而不是只看退出码 —— 一个 `exit 0` 的闸门可能什么都没跑。
 每道闸门存在的理由写在 `tools/acceptance.ps1` 的注释里，逐条来历在 `docs/port-plan.md`。
@@ -276,7 +277,7 @@ python tools/contentc/build.py --package sts                           # 改内�
 
 ## 6. 四条对拍（不在验收里）
 
-与 C# 参考实现逐字节比状态。它们**不进那 21 道闸门**，因为需要那份约 111 MB 的第三方克隆和一份 NativeAOT 构建：
+与 C# 参考实现逐字节比状态。它们**不进那 22 道闸门**，因为需要那份约 111 MB 的第三方克隆和一份 NativeAOT 构建：
 
 ```powershell
 python native/fight_diff.py      # 一场一场比：FIGHT_DIFF n/n

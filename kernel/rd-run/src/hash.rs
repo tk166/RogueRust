@@ -20,7 +20,7 @@
 //! 并且**故意**不用任何参考实现没有的行名。
 
 use crate::map::NodeKind;
-use crate::state::{Pending, PoolCard, RunState};
+use crate::state::{Pending, PoolCard, RunMark, RunState};
 use crate::streams::RunStream;
 use rd_core::writer::TextWriter;
 
@@ -100,6 +100,8 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
     writer
         .str("pickup_add=")
         .u32(u32::from(state.pickup_add()))
+        .str("/")
+        .u32(state.pickup_offer().len() as u32)
         .str("/");
     for card in state.pickup_offer() {
         writer.str(card.as_str()).str(",");
@@ -113,6 +115,76 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
     // §278：事件的**第几段**。同一句 `event=golden_idol` 可以是两个完全不同的屏幕
     // （"拿走神像" vs "巨石追来，三选一"），而只有这一段文字能把它俩分开。
     writer.str("event_step=").str(state.event_step()).str("\n");
+    // ══ §308：审阅报告 §2 的另一半 —— 上面那些字段进了存档，**也必须进指纹**。
+    // 理由只有一个：它们都改变"以后会怎样"。`Ritual Dagger` 的成长尤其明显：
+    // 不入指纹的话，"同一串动作"能长出两种牌组（伤害不同、哈希相同），
+    // 而回放判据正是"同一串动作 ⇒ 同一局"。
+    writer.str("bosses_fought=").u32(u32::from(state.bosses_fought())).str("\n");
+    // §308：地图生成失败是个**行为差异**（没有地图可走），而"空白地图"不是它唯一的证据。
+    writer
+        .str("map_failed=")
+        .u32(u32::from(state.map_generation_failed()))
+        .str("\n");
+    // §303：`wing_boots` 已经飞过几次。派生值 `wing_boots_left()` 已经进指纹，但**用过的次数**
+    // 是它自己的事实（`wing_boots` 丢掉再捡回来会重置），所以两个都写。
+    writer
+        .str("wb_used=")
+        .u32(u32::from(state.wing_boots_used()))
+        .str("\n");
+    writer
+        .str("chest=")
+        .u32(u32::from(state.chest_extra_remaining()))
+        .str("/")
+        .u32(u32::from(state.chest_empty_remaining()))
+        .str("\n");
+    writer
+        .str("pickup_owed=")
+        .u32(u32::from(state.pickup_relics()))
+        .str("/")
+        .u32(u32::from(state.pickup_potions()))
+        .str("\n");
+    writer.str("event_resume=").str(state.event_resume().as_str()).str("\n");
+    writer.str("event_next=").str(state.event_next().as_str()).str("\n");
+    writer
+        .str("event_fight=")
+        .u32(u32::from(state.event_fight()))
+        .str("/")
+        .str(state.event_fight_pool())
+        .str("\n");
+    writer
+        .str("fight_next=")
+        .i32(i32::from(state.fight_gold_bonus()))
+        .str("/")
+        .i32(i32::from(state.fight_gold_set()))
+        .str("/")
+        .u32(u32::from(state.fight_relic_rarity()))
+        .str("/")
+        .u32(u32::from(state.fight_extra_relic()))
+        .str("/")
+        .u32(u32::from(state.fight_potion_chance()))
+        .str("/")
+        .str(state.fight_relic().as_str())
+        .str("/")
+        .u32(u32::from(u8::from(state.fight_no_relic())))
+        .str("\n");
+    // 每副本 mark：与 `deck` 同下标，**只写有值的那几格**（`Ritual Dagger` 在一局里通常只有一格）。
+    // 带下标是必须的："第 3 张有 5 点成长"与"第 7 张有 5 点成长"是两局。空数组时这一行是
+    // `marks=0` —— 于是"没有 mark"与"mark 全被清掉"仍然是同一局（清掉就是没有）。
+    writer.str("marks=").u32(state.marks().iter().filter(|m| !m.is_none()).count() as u32);
+    writer.str("\n");
+    for (index, mark) in state.marks().iter().enumerate() {
+        if mark.is_none() {
+            continue;
+        }
+        writer
+            .str("m")
+            .u32(index as u32)
+            .str("=")
+            .str(mark.key.as_str())
+            .str(",")
+            .i32(mark.value)
+            .str("\n");
+    }
     writer
         .str("last_encounter=")
         .str(state.last_encounter().as_str())
@@ -520,5 +592,32 @@ mod tests {
         assert!(text.contains("map_rows=15"), "the map is written");
         // 行数是个便宜的"没有半行"判据。
         assert!(text.lines().count() > 100, "{} lines", text.lines().count());
+    }
+
+    /// §308：**同一个动作序列、只有某一张牌的成长不同** ⇒ 指纹必须不同。
+    ///
+    /// 这是审阅报告的最小复现 #5。`Ritual Dagger` 的"永久成长"是跨战斗的（`RunMark`），
+    /// 不进指纹的话，回放判据"同一串动作 ⇒ 同一局"就漏掉了整张牌的伤害。
+    #[test]
+    fn a_per_copy_mark_is_visible_in_the_fingerprint() {
+        let mut run = RunState::new_with_ascension(7, 80, 99, &["strike", "bash"], 0)
+            .expect("a run");
+        let mut buffer = [0u8; MAX_TEXT];
+        let mut writer = TextWriter::new(&mut buffer);
+        write_run_input(&mut writer, &run);
+        let first = writer.as_str().to_owned();
+        run.set_mark(0, "standard.ritual_dagger_bonus", 3).expect("slot 0");
+        let mut buffer = [0u8; MAX_TEXT];
+        let mut writer = TextWriter::new(&mut buffer);
+        write_run_input(&mut writer, &run);
+        let second = writer.as_str().to_owned();
+        assert_ne!(first, second, "a mark must change the fingerprint");
+        // 值不同也算不同局：键一样、值不一样同样是"那张牌不一样"。
+        run.set_mark(0, "standard.ritual_dagger_bonus", 6).expect("slot 0");
+        let mut buffer = [0u8; MAX_TEXT];
+        let mut writer = TextWriter::new(&mut buffer);
+        write_run_input(&mut writer, &run);
+        let third = writer.as_str().to_owned();
+        assert_ne!(second, third, "a different mark value is a different run");
     }
 }

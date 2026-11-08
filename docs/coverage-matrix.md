@@ -46,7 +46,7 @@
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
 | **合计** | 878 | 638 | 228 | 12 | 465 | 162 | 83 | 0 |
 
-扫描到的具名测试：**1147** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
+扫描到的具名测试：**1152** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
 
 事件：池里有 **22** 个位次、**19** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -266,7 +266,7 @@
 | bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, strange_spoon_turns_about_half_of_the_exhausts_into_discards …(+1) | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
-| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+37) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
+| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+38) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
 | bash+ | yes | the_unknown_room_events_are_readable, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+3) | — | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS/the_unknown_room_events_are_readable |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
@@ -510,7 +510,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+173) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+174) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+11) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -874,7 +874,7 @@
 | pantograph | yes | the_kind_gated_relics_only_fire_in_their_own_kinds | — | — | — | §268/§269/the_kind_gated_relics_only_fire_in_their_own_kinds |
 | paper_krane | yes | the_status_parameter_relics_wire_their_own_carrier | — | — | — | §263/§264/the_status_parameter_relics_wire_their_own_carrier |
 | paper_phrog | yes | the_status_parameter_relics_wire_their_own_carrier | — | — | — | §263/§264/the_status_parameter_relics_wire_their_own_carrier |
-| peace_pipe | yes | campfire_options_follow_the_relics_the_wiki_names, toke_removes_a_card_without_charging_for_it …(+1) | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
+| peace_pipe | yes | campfire_options_follow_the_relics_the_wiki_names, toke_removes_a_card_without_charging_for_it …(+3) | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
 | pear | yes | the_relic_pool_fires_at_the_three_hooks_it_has, matryoshka_queues_two_chests_and_pays_a_second_relic | — | — | — | the_relic_pool_fires_at_the_three_hooks_it_has |
 | pen_nib | yes | the_every_nth_card_relics_wire_their_own_carrier | — | — | — | §262/the_every_nth_card_relics_wire_their_own_carrier |
 | philosophers_stone | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
