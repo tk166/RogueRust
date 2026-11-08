@@ -345,6 +345,15 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 | `Dead Adventurer` 的 Lagavulin | 这场伏击**不睡**，第一回合 Siphon Soul | **已做**（`Encounter: "EliteEvent"` + `enc_lagavulin_awake`） | 一致 |
 | `Dead Adventurer` 的出现楼层 | 第 7 层之后 | 事件池无按楼层筛 | 缺 |
 
+### F.8 事件战斗与楼层门槛（§288）
+
+| 项 | wiki | 我们 | 性质 |
+|---|---|---|---|
+| `The Colosseum` 第一场 | 打 Blue Slaver + Red Slaver，**没有奖励**，打完继续事件 | **已做**（`After` + "回到事件不发奖励"） | 一致 |
+| `The Colosseum` VICTORY | Taskmaster + Gremlin Nob；100 金币、1 稀有、1 罕见、选牌、（有时药水） | **已做**（`fight_gold_set:100` + 两个稀有度词）；药水走精英池概率 | 基本一致 |
+| `The Colosseum` 出现位置 | 只有 Act 2，且只有**上半场** | 只在 `Events2`（Act 2）；"上半场"没做 | 缺 `MaxFloor` |
+| `Dead Adventurer` 的出现楼层 | 第 7 层之后 | **已做**（`MinFloor: 7`） | 一致 |
+
 ### G. ★ 基础值偏差：§191 修掉了 8 条，剩 3 条是写明了的简化
 
 §190 补 A 数值时发现"有招式的基础值就和 wiki 不一致"。**这些不能加升档变体**（在错的地基上加层

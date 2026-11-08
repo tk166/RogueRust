@@ -3064,6 +3064,9 @@ impl<'a> Content<'a> {
             // §287：**事件**引来的精英池（`Dead Adventurer` 的伏击要用"醒着的 Lagavulin"）。
             // 不加幕后缀：它不是本幕的标准池，是事件自己的池。
             "EliteEvent" => "EncounterTables.EliteEvent",
+            // §288：`The Colosseum` 的两场战斗（都在事件里，没有别的入口）。
+            "ColosseumSlavers" => "EncounterTables.ColosseumSlavers",
+            "ColosseumChampions" => "EncounterTables.ColosseumChampions",
             _ => return None,
         };
         self.id_pool("EncounterTables", pool, hop)
@@ -3092,6 +3095,88 @@ impl<'a> Content<'a> {
             }
         }
         best
+    }
+
+    /// §288：事件池**按楼层筛过**的 ids（`EventTables.<pool>` 的条目可以带 `MinFloor`）。
+    ///
+    /// `Dead Adventurer` 只在第 7 层之后出现（wiki）。**先筛后掷**：调用方拿到的列表就是
+    /// 可掷的范围，于是"池子里有几个"不改变"筛掉几个"之后的随机流位置 —— 若改成
+    /// "掷了发现不合格再重掷"，随机数会被它看不见的规则吃掉。
+    #[must_use]
+    pub fn event_pool_at(&'a self, pool: &str, floor: i32) -> Option<[&'a str; MAX_POOL_IDS]> {
+        let hop = match pool {
+            "Events" => "EventTables.Events",
+            "Events2" => "EventTables.Events2",
+            "Events3" => "EventTables.Events3",
+            _ => return None,
+        };
+        let root = self.root_by_name("EventTables")?;
+        let table = self.term(root)?;
+        if table.op < OP_FIRST_DYNAMIC {
+            return None;
+        }
+        let opcode = self.opcode(table.op)?;
+        let mut list = None;
+        let mut at = 0usize;
+        for position in 0..opcode.nfields() {
+            let field = opcode.field(position)?;
+            let width = usize::from(field.slots()?);
+            if self.string(field.name_str())? == pool {
+                list = Some(slot_list(self, &table, at, field.kind(), hop).ok()?);
+                break;
+            }
+            at += width;
+        }
+        let list = list?;
+        if list.len() > MAX_POOL_IDS {
+            return None;
+        }
+        let mut out = [""; MAX_POOL_IDS];
+        let mut count = 0usize;
+        for index in 0..list.len() {
+            // ⚠️ 池条目的 `Id` 在镜像里是**字符串槽**（`F_STRLIST` 的元素），所以这里必须
+            // 照 `id_pool` 的方式**手解对象槽** —— `NodeRef::str_field("Id")` 走的是
+            // `F_STR` 字段那条路，对池条目只会返回 `None`（第一版就是这样：`MinFloor`
+            // 读不到、门槛静默失效，而"筛过"和"没筛过"的列表一模一样）。
+            let element = list.cell(index)?;
+            let element_term = self.term(element)?;
+            if element_term.op < OP_FIRST_DYNAMIC {
+                return None;
+            }
+            let element_opcode = self.opcode(element_term.op)?;
+            let mut offset = 0usize;
+            let mut id = "";
+            let mut min_floor = 0i32;
+            for slot in 0..element_opcode.nfields() {
+                let sub = element_opcode.field(slot)?;
+                let sub_width = usize::from(sub.slots()?);
+                let sub_name = self.string(sub.name_str())?;
+                // 字段名走常量：内容门把裸 `"Id"` 当成"内核在别处也读这个键"的证据
+                // （`Characters[].Id` 就被误判成读过），与 `ENCOUNTER_ID_FIELD` 同一个理由。
+                if sub_name == EVENT_POOL_ID_FIELD && sub.kind() == F_STR {
+                    id = self.string(element_term.slot(offset)?)?;
+                } else if sub_name == "MinFloor" && sub.kind() == F_INT {
+                    // 槽编码与 `Row::cell` 一样：`ABSENT_INT` / `NULL_INT` 都是"没有"。
+                    let raw = element_term.slot(offset)?;
+                    min_floor = if raw == ABSENT_INT || raw == NULL_INT {
+                        0
+                    } else {
+                        i32::from(raw as i16)
+                    };
+                }
+                offset = offset.checked_add(sub_width)?;
+            }
+            if id.is_empty() || floor < min_floor {
+                continue;
+            }
+            if count == MAX_POOL_IDS {
+                // 池子比读得下的还长 ⇒ 拒绝，不截断（与 `id_pool` 同一条纪律）。
+                return None;
+            }
+            out[count] = id;
+            count += 1;
+        }
+        Some(out)
     }
 
     /// The `?`-room event ids of one act (`port-plan.md` §133).
@@ -3208,6 +3293,9 @@ impl<'a> Content<'a> {
             // §287：**事件**引来的精英池（`Dead Adventurer` 的伏击要用"醒着的 Lagavulin"）。
             // 不加幕后缀：它不是本幕的标准池，是事件自己的池。
             "EliteEvent" => "EncounterTables.EliteEvent",
+            // §288：`The Colosseum` 的两场战斗（都在事件里，没有别的入口）。
+            "ColosseumSlavers" => "EncounterTables.ColosseumSlavers",
+            "ColosseumChampions" => "EncounterTables.ColosseumChampions",
             _ => return None,
         };
         let root = self.root_by_name("EncounterTables")?;
@@ -3324,6 +3412,8 @@ pub struct EventOption<'a> {
     pub branches_asc_len: u8,
     /// §287：这一场战斗用哪个**遭遇池**（`Encounter`；空 = 按档位用本幕的标准池）。
     pub fight_pool: &'a str,
+    /// §288：打赢之后**回到事件**的哪一段（`After`；空 = 战斗结算整个房间）。
+    pub fight_after: &'a str,
     /// §286：**这个选项是一场战斗**。`0` = 不是，`1` = 普通怪，`2` = 精英。
     /// 选了它，事件就**收尾**（房间由那一场战斗结算），战后不回到事件。
     pub fight: u8,
@@ -3426,6 +3516,7 @@ impl<'a> EventStep<'a> {
             branches_asc: [(0, ""); MAX_EVENT_BRANCHES],
             branches_asc_len: 0,
             fight_pool: "",
+            fight_after: "",
             fight: 0,
             term: ABSENT16,
         }; MAX_EVENT_OPTIONS],
@@ -3554,6 +3645,7 @@ impl<'a> Content<'a> {
                 branches_asc_len: 0,
                 // §286：`Fight: "elite"` ⇒ 2，`"monster"` ⇒ 1。别的字 ⇒ 0（内容门拦）。
                 fight_pool: node.str_field("Encounter").ok().flatten().unwrap_or(""),
+                fight_after: node.str_field("After").ok().flatten().unwrap_or(""),
                 fight: match node.str_field("Fight").ok().flatten().unwrap_or("") {
                     "monster" => 1,
                     "elite" => 2,
@@ -3775,6 +3867,10 @@ pub const MAX_POOL_IDS: usize = 24;
 
 /// The field name of each entry in an `EncounterTables` pool.
 const ENCOUNTER_ID_FIELD: &str = "Id";
+
+/// §288：事件池条目的 id 字段（与 `ENCOUNTER_ID_FIELD` 同一个理由：裸字面量会被内容门
+/// 当成"内核在别处也读这个键"）。
+const EVENT_POOL_ID_FIELD: &str = "Id";
 
 /// The `Weight` of each entry in an `EncounterTables` pool (`port-plan.md` §153).
 ///
@@ -5156,7 +5252,7 @@ mod tests {
         // §287：**事件**的池。它与上面九个的性质不同 —— 事件可以**复用**本幕的遭遇
         // （`Dead Adventurer` 的伏击就是"三个精英之一"，其中一个换了开场），所以它不参与
         // "一个遭遇只属于一个池"那条不变式；它参与的是"每个 ENCT 行都可达"。
-        const EVENT_POOLS: [&str; 1] = ["EliteEvent"];
+        const EVENT_POOLS: [&str; 3] = ["EliteEvent", "ColosseumSlavers", "ColosseumChampions"];
         let mut seen: Vec<&str> = Vec::new();
         for name in POOLS {
             let pool = content
@@ -5284,9 +5380,9 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            17,
+            18,
             "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
-             `the_joust`，§286 补了 `dead_adventurer`（`scrap_pile` 改成 Scrap Ooze 的 9 段链）。pools 的**位次**比
+             `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`（`scrap_pile` 改成 Scrap Ooze 的 9 段链）。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5338,6 +5434,18 @@ mod tests {
                         walk.push(target);
                     }
                 }
+                // §288：`After`（打完回到事件）是**第三条边** —— 只沿 `Next`/分支走会把
+                // 事件的后半段判成"孤儿段"（`The Colosseum` 的 `the_colosseum.after`）。
+                if !option.fight_after.is_empty() {
+                    let step = content.event_step(option.fight_after).unwrap_or_else(|| {
+                        panic!("step `{}`: option `{}` After `{}` is not a step",
+                               walk[at], option.label, option.fight_after)
+                    });
+                    assert!(step.count >= 1, "step `{}` has no option at all", option.fight_after);
+                    if !walk.contains(&option.fight_after) {
+                        walk.push(option.fight_after);
+                    }
+                }
                 if let Some(next) = option.goes_on() {
                     let step = content.event_step(next).unwrap_or_else(|| {
                         panic!("step `{}`: option `{}` points at `{next}`", walk[at],
@@ -5366,6 +5474,10 @@ mod tests {
             "remove_card",
             "upgrade_card",
             "transform_card",
+            // §287/§288：下一场战斗的奖励修正里**不带载荷**的两条（其余的载荷是稀有度名）。
+            "fight_no_relic",
+            "fight_gold_set",
+            "fight_gold_bonus",
         ];
         // §278/§279：`kind:n` 形式的原子（数字在词里）。列在这里而不是用"有冒号就算"，
         // 因为"有冒号就算"会让一个拼错的 kind 静默通过。
@@ -5385,6 +5497,10 @@ mod tests {
                 // §285：区间金币（可负）与"随机一件遗物"（裸词）。
                 || prefix(effect, "gold_random:")
                 || effect == "relic_random"
+                // §287/§288：下一场战斗的奖励修正（`Dead Adventurer` 的欠账、`The Colosseum`
+                // 的定数奖励）。词法的检查交给内容门，这里只回答"这个镜像里有没有它"。
+                || prefix(effect, "fight_relic_rarity:")
+                || prefix(effect, "fight_extra_relic:")
         };
         for node in &walk {
             let step = content.event_step(*node).expect("step");
@@ -5420,6 +5536,7 @@ mod tests {
                 "scrap_pile",
                 "shining_light",
                 "the_cleric",
+                "the_colosseum",
                 "the_joust",
                 "the_mausoleum",
                 "the_moai_head",
@@ -5598,6 +5715,56 @@ mod tests {
                 "a deck whose best hit is 6 must hide [Destroy]"
             );
         }
+        // §288：`The Colosseum` —— 第一场 `After` 回到事件，第二场按定数奖励。
+        {
+            let intro = content.event_step("the_colosseum").expect("the arena");
+            let option = intro.options()[0];
+            assert_eq!(option.label, "Fight");
+            assert_eq!(option.fight, 1, "the slavers are an ordinary fight");
+            assert_eq!(option.fight_pool, "ColosseumSlavers");
+            assert_eq!(
+                option.fight_after, "the_colosseum.after",
+                "the first fight returns to the event"
+            );
+            let after = content.event_step("the_colosseum.after").expect("the outcome step");
+            let victory = after.options()[0];
+            assert_eq!(victory.label, "VICTORY");
+            assert_eq!(victory.fight, 2, "the champions are an elite-tier fight");
+            assert_eq!(victory.fight_pool, "ColosseumChampions");
+            assert!(victory.fight_after.is_empty(), "VICTORY ends the event");
+            assert_eq!(after.options()[1].label, "COWARDICE");
+        }
+
+        // §288：**楼层门槛** —— `Dead Adventurer` 只在第 7 层之后出现（wiki）。
+        // 两侧都要验：第 6 层筛掉它，第 7 层它在。
+        {
+            let low = content.event_pool_at("Events", 6).expect("the act-1 pool");
+            let at_six: std::vec::Vec<&str> =
+                low.iter().filter(|id| !id.is_empty()).copied().collect();
+            assert!(
+                !at_six.contains(&"dead_adventurer"),
+                "floor 6 must not offer Dead Adventurer: {at_six:?}"
+            );
+            let high = content.event_pool_at("Events", 7).expect("the act-1 pool");
+            let ids: std::vec::Vec<&str> = high.iter().filter(|id| !id.is_empty()).copied().collect();
+            assert!(
+                ids.contains(&"dead_adventurer"),
+                "floor 7 must offer Dead Adventurer: {ids:?}"
+            );
+            // 门槛只影响那一个：其余事件在两层都在（否则"门槛"其实是"整张表变短了"）。
+            let all: std::vec::Vec<&str> =
+                content.event_pool("Events").expect("the whole pool")
+                    .iter().filter(|id| !id.is_empty()).copied().collect();
+            assert_eq!(
+                all.len(),
+                at_six.len() + 1,
+                "exactly one event is gated: {all:?} vs {at_six:?}"
+            );
+            for id in &at_six {
+                assert!(all.contains(id), "{id} must also be on the unfiltered list");
+            }
+        }
+
         // ★ 没有孤儿段：`EVND` 里每一行都要被某个 `EV.Entry` 或某个 `Next` 指到。
         // 传递闭包（`walk`）与表里的行数必须相等：少一个就是一段谁也看不见的剧情。
         walk.sort_unstable();

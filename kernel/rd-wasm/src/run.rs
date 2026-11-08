@@ -1183,7 +1183,10 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
             2 => "Events2",
             _ => "Events3",
         };
-        let Some(pool) = image.event_pool(pool_name) else {
+        // §288：**先按楼层筛**再掷（`Dead Adventurer` 只在第 7 层之后出现）。
+        // 先筛后掷而不是"掷了不合格再重掷"：后者会让随机数被看不见的规则吃掉。
+        let floor = session.state.floor();
+        let Some(pool) = image.event_pool_at(pool_name, floor) else {
             let message = std::format!("内容里没有 `EventTables.{pool_name}` 池（第 {act} 幕）");
             return fail(session, &message);
         };
@@ -1858,6 +1861,8 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
         fight: choice.fight,
         // §287：`Encounter`（池名）。空 = 按档位用本幕的标准池。
         fight_pool: choice.fight_pool,
+        // §288：`After`（打完回到事件哪一段）。空 = 战斗结算整个房间。
+        fight_after: choice.fight_after,
     };
     let outcome = session
         .state
@@ -3216,7 +3221,11 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         // §287：这两条是"下一场战斗的欠账"，不是看不见的效果 —— 但它们的**落点**在战斗
         // 结算里，所以页面这一侧没有码可画（`-1`），与 `relic_random` 同一条规矩。
         | EventEffect::FightGoldBonus(_)
-        | EventEffect::FightNoRelic => -1,
+        | EventEffect::FightNoRelic
+        // §288：同理 —— 落点在战斗结算里（`The Colosseum` 的定数奖励）。
+        | EventEffect::FightGoldSet(_)
+        | EventEffect::FightRelicRarity(_)
+        | EventEffect::FightExtraRelic(_) => -1,
     }
 }
 
@@ -3237,11 +3246,15 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         EventEffect::GoldRandom(_, high) => high,
         // §287：欠账金币的"数量"就是它本身（页面写"下一场战斗多得 N 金币"）。
         EventEffect::FightGoldBonus(n) => n,
+        // §288：定数金币同理。
+        EventEffect::FightGoldSet(n) => n,
         EventEffect::Nothing
         | EventEffect::RemoveCard
         | EventEffect::UpgradeCard
         | EventEffect::TransformCard
         | EventEffect::FightNoRelic
+        | EventEffect::FightRelicRarity(_)
+        | EventEffect::FightExtraRelic(_)
         | EventEffect::GainCurse
         | EventEffect::GainRelic
         | EventEffect::LoseRelic
@@ -4547,6 +4560,14 @@ fn apply_fight_outcome(
         if let Err(e) = session.state.end_of_combat() {
             let message = describe(&e);
             return fail(session, &message);
+        }
+        // §288：**这一场打完要回到事件**？（`The Colosseum` 的第一场）
+        //
+        // 在掷奖励**之前**问，问到就返回：wiki 说那场战斗 "gives no rewards" —— 它的奖励是
+        // "事件继续"。节点的账也还没花完（事件还要走到 `[COWARDICE]`/`[VICTORY]`），
+        // 所以这里**不能** `mark_resolved`。
+        if session.state.resume_event_after_fight() {
+            return 1;
         }
         // Then the reward screen (`inv:§5` gold, `inv:§3.5` three distinct cards). A reward that
         // could not be rolled is a refusal, not a silent victory with no spoils.
@@ -9658,6 +9679,107 @@ mod tests {
             break;
         }
         assert!(found, "400 seeds never rolled the awake Lagavulin out of the event pool");
+    }
+
+    /// §288：`The Colosseum` 的两场战斗各自用**它的池**，而池里那一行就是内容里的遭遇。
+    ///
+    /// 按名判据（`enc_colosseum_slavers` / `enc_colosseum_champions` 各一条）：覆盖矩阵要每个
+    /// 遭遇都有证据，而"证据"必须是一条**真的读它**的判据 —— 不是矩阵里写一行字。
+    #[test]
+    fn enc_colosseum_slavers_and_champions_are_the_event_fights() {
+        let content = content();
+        let slavers = content.encounter_pool("ColosseumSlavers").expect("the first pool");
+        let ids: Vec<&str> = slavers.iter().filter(|id| !id.is_empty()).copied().collect();
+        assert_eq!(ids, ["enc_colosseum_slavers"], "one encounter, no randomness");
+        let champions = content.encounter_pool("ColosseumChampions").expect("the second pool");
+        let ids: Vec<&str> = champions.iter().filter(|id| !id.is_empty()).copied().collect();
+        assert_eq!(ids, ["enc_colosseum_champions"], "one encounter, no randomness");
+
+        // 两个池各只有一条 ⇒ 事件打的是**写死**的那一场（不是"本幕精英随机一个"）。
+        // 而同名的段把这两条 pool 名字写进了选项 —— 两处必须一致，否则玩家会被拉去打别的。
+        let intro = content.event_step("the_colosseum").expect("the arena");
+        assert_eq!(intro.options()[0].fight_pool, "ColosseumSlavers");
+        let after = content.event_step("the_colosseum.after").expect("the outcome");
+        assert_eq!(after.options()[0].fight_pool, "ColosseumChampions");
+    }
+
+    /// §288：`The Colosseum` —— 第一场打完**回到事件**（且不给奖励），第二场按**定数**结算。
+    ///
+    /// 这条测的是 `apply_fight_outcome` 里那**一段接线**（跑图助手不会真打赢一场），
+    /// 所以直接喂 `result = 1`。三件一起钉：
+    /// ① 胜利之后 `pending` 回到 `Event`（事件还开着、房间没结算）；
+    /// ② 这一场**没有**奖励（金币没动、`pending` 不是 `Reward`）；
+    /// ③ `[VICTORY]` 那场是 **100** 金币（`fight_gold_set` 换掉了区间）。
+    #[test]
+    fn the_colosseum_fight_returns_and_the_victory_pays_exactly_once() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+
+        // 开事件、选 `[Fight]`（第一场：奴隶主二人组，`After` 回到 `.after`）。
+        let session = run_slot().as_mut().expect("a run");
+        session
+            .state
+            .begin_event("the_colosseum", "the_colosseum")
+            .expect("the arena");
+        assert_eq!(rd_run_event_option_count(), 1, "one option: [Fight]");
+        assert_eq!(rd_run_choose(0), 0, "{}", run_error_text());
+        assert_eq!(
+            session.state.event().to_owned(),
+            "the_colosseum",
+            "§288: the event stays open across the fight"
+        );
+        assert_eq!(session.state.event_step(), "", "no step is open during the fight");
+
+        // 胜利结算（直接喂 `result = 1`）。
+        let gold_before = session.state.gold();
+        let hp = session.state.health();
+        let outcome = apply_fight_outcome(session, hp, 1, false, false, 0, 0);
+        assert_eq!(outcome, 1, "a win reports 1: {}", run_error_text());
+        assert_eq!(
+            session.state.pending(),
+            rd_run::state::Pending::Event,
+            "§288: the fight returns to the event, not to a reward screen"
+        );
+        assert_eq!(
+            session.state.event_step(),
+            "the_colosseum.after",
+            "§288: back on the outcome step"
+        );
+        assert_eq!(session.state.gold(), gold_before, "§288: that fight pays nothing");
+        assert!(!session.state.node_resolved(), "the node has not paid yet");
+
+        // `[VICTORY]`：定数奖励。先把这一段"走完"（回到事件时节点还没结算，
+        // 而 `begin_event` 只拒**已经结算**的节点，所以这里不用 `mark_resolved`）。
+        session
+            .state
+            .begin_event("the_colosseum", "the_colosseum.after")
+            .expect("the outcome step");
+        assert_eq!(rd_run_event_option_count(), 2, "[VICTORY] / [COWARDICE]");
+        assert_eq!(rd_run_choose(0), 0, "{}", run_error_text());
+        assert_eq!(rd_run_fight_begin(), 0, "{}", run_error_text());
+        assert!(crate::slot().is_some(), "a fight is installed");
+        // 这一场真打要一整套出牌 API ⇒ 走同一条结算入口喂 `result = 1`。
+        crate::take_session();
+        let session = run_slot().as_mut().expect("a run");
+        session.in_fight = true;
+        let hp = session.state.health();
+        assert_eq!(
+            apply_fight_outcome(session, hp, 1, true, false, 0, 0),
+            1,
+            "{}",
+            run_error_text()
+        );
+        assert_eq!(
+            session.state.reward_gold(),
+            100,
+            "§288: `fight_gold_set` makes it exactly 100"
+        );
+        assert_eq!(
+            session.state.pending(),
+            rd_run::state::Pending::Reward,
+            "the champions pay a reward screen"
+        );
     }
 
 /// §286：**内容里的每一个事件效果词，内核都必须解析得出来**。

@@ -58871,6 +58871,420 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_colosseum_slavers"
+      },
+      "Enemies": [
+        {
+          "Id": "blue_slaver",
+          "MaxHealth": 46,
+          "Actions": [
+            {
+              "value": "blue_slaver.stab"
+            },
+            {
+              "value": "blue_slaver.rake"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 17
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Action": {
+                "value": "blue_slaver.stab"
+              },
+              "Priority": 70
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Action": {
+                "value": "blue_slaver.rake"
+              },
+              "Priority": 60
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Action": {
+                "value": "blue_slaver.stab"
+              },
+              "Priority": 60
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 10,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "blue_slaver.stab"
+                  },
+                  "Weight": 60
+                },
+                {
+                  "Action": {
+                    "value": "blue_slaver.rake"
+                  },
+                  "Weight": 40
+                }
+              ]
+            }
+          ],
+          "DisplayName": "Blue Slaver",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 48
+            }
+          ]
+        },
+        {
+          "Id": "slaver_red",
+          "MaxHealth": 46,
+          "Actions": [
+            {
+              "value": "slaver_red.stab"
+            },
+            {
+              "value": "slaver_red.scrape"
+            },
+            {
+              "value": "slaver_red.entangle"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.entangle_ready"
+              },
+              "Stacks": 1
+            }
+          ],
+          "Position": 1,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.round",
+                "value": {
+                  "Op": "Equal",
+                  "Round": 1
+                }
+              },
+              "Action": {
+                "value": "slaver_red.stab"
+              },
+              "Priority": 75
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasStatus",
+                "value": {
+                  "Status": {
+                    "value": "standard.entangle_ready"
+                  },
+                  "MinStacks": 1
+                }
+              },
+              "Priority": 70,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "slaver_red.entangle"
+                  },
+                  "Weight": 25
+                },
+                {
+                  "Action": {
+                    "value": "slaver_red.scrape"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "slaver_red.stab"
+                  },
+                  "Weight": 25
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 58,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "slaver_red.scrape"
+                  },
+                  "Weight": 100
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "prev_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 57,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "slaver_red.stab"
+                  },
+                  "Weight": 100
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 40,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "slaver_red.stab"
+                  },
+                  "Weight": 55
+                },
+                {
+                  "Action": {
+                    "value": "slaver_red.scrape"
+                  },
+                  "Weight": 45
+                }
+              ]
+            }
+          ],
+          "DisplayName": "Slaver",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 48
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_colosseum_champions"
+      },
+      "Enemies": [
+        {
+          "Id": "taskmaster",
+          "MaxHealth": 54,
+          "Actions": [
+            {
+              "value": "taskmaster.scouring_whip"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Taskmaster",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 57
+            }
+          ]
+        },
+        {
+          "Id": "gremlin_nob",
+          "MaxHealth": 82,
+          "Actions": [
+            {
+              "value": "gremlin_nob.bellow"
+            },
+            {
+              "value": "gremlin_nob.rush"
+            },
+            {
+              "value": "gremlin_nob.skull_bash"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": 1,
+          "IntentRules": [],
+          "DisplayName": "Gremlin Nob",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 85
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -64176,6 +64590,18 @@
         "Id": "enc_lagavulin_awake",
         "Weight": 1
       }
+    ],
+    "ColosseumSlavers": [
+      {
+        "Id": "enc_colosseum_slavers",
+        "Weight": 1
+      }
+    ],
+    "ColosseumChampions": [
+      {
+        "Id": "enc_colosseum_champions",
+        "Weight": 1
+      }
     ]
   },
   "Relics": [
@@ -65327,6 +65753,11 @@
       "Id": "dead_adventurer",
       "NameKey": "Dead Adventurer",
       "Entry": "dead_adventurer"
+    },
+    {
+      "Id": "the_colosseum",
+      "NameKey": "The Colosseum",
+      "Entry": "the_colosseum"
     }
   ],
   "Potions": [
@@ -65625,7 +66056,8 @@
         "Id": "wing_statue"
       },
       {
-        "Id": "dead_adventurer"
+        "Id": "dead_adventurer",
+        "MinFloor": 7
       }
     ],
     "Events2": [
@@ -65646,6 +66078,9 @@
       },
       {
         "Id": "the_joust"
+      },
+      {
+        "Id": "the_colosseum"
       }
     ],
     "Events3": [
@@ -67899,6 +68334,61 @@
           "Effects": [],
           "Fight": "elite",
           "Encounter": "EliteEvent",
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_colosseum",
+      "TextKey": "Groggy and with a throbbing head, you awaken to find yourself thrown in the center of a massive stadium with an overflowing audience of Slavers, Cultists, and other denizens of the City!",
+      "Options": [
+        {
+          "Label": "Fight",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Fight": "monster",
+          "Encounter": "ColosseumSlavers",
+          "After": "the_colosseum.after",
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_colosseum.after",
+      "TextKey": "The crowd roars. Across the arena, the gate of the champions grinds open.",
+      "Options": [
+        {
+          "Label": "VICTORY",
+          "Effects": [
+            {
+              "Effect": "fight_gold_set",
+              "Amount": 100
+            },
+            {
+              "Effect": "fight_relic_rarity:rare",
+              "Amount": 0
+            },
+            {
+              "Effect": "fight_extra_relic:uncommon",
+              "Amount": 0
+            }
+          ],
+          "Fight": "elite",
+          "Encounter": "ColosseumChampions",
+          "Next": ""
+        },
+        {
+          "Label": "COWARDICE",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
           "Next": ""
         }
       ]

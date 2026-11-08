@@ -1410,6 +1410,21 @@ INV_EVENT_VARIANTS = {
     ),
 }
 
+# §288：**事件专属**的遭遇 —— wiki 的池子表里没有它们（它们不是随机遭遇），只在某个事件里
+# 出现。登记在这里的价值：敌人组成是**写下来的**（不是"内容里随手拼的"），而且它们
+# **不算**进 wiki 的遭遇数。今天只有 `The Colosseum` 的两场。
+INV_EVENT_ONLY = {
+    # id: (敌人列表, wiki 依据)
+    "enc_colosseum_slavers": (
+        ["blue_slaver", "slaver_red"],
+        "The Colosseum `[Fight]`: \"a Blue Slaver and Red Slaver\", no rewards",
+    ),
+    "enc_colosseum_champions": (
+        ["taskmaster", "gremlin_nob"],
+        "The Colosseum `[VICTORY]`: \"a Taskmaster and a Gremlin Nob\"",
+    ),
+}
+
 INV_BOSS_POOL = {
     # Act 1.
     "enc_slime_boss": ["slime_boss"],
@@ -2130,7 +2145,8 @@ def check_quantities(doc):
         "monsters": len(doc.get("Monsters") or []),
         # §287：事件**变体**不算进 wiki 的遭遇数（它们由 `INV_EVENT_VARIANTS` 单独盯着）。
         "encounters": len([e for e in doc.get("Encounters") or []
-                           if e["Id"]["Value"] not in INV_EVENT_VARIANTS]),
+                           if e["Id"]["Value"] not in INV_EVENT_VARIANTS
+                           and e["Id"]["Value"] not in INV_EVENT_ONLY]),
         "deck": len((doc.get("Start") or {}).get("Deck") or []),
         "statuses": len(doc.get("Statuses") or []),
     }
@@ -2153,11 +2169,12 @@ def check_quantities(doc):
     actual_ids = sorted(e["Id"]["Value"] for e in doc.get("Encounters") or [])
     # §287：事件**变体**不算进 wiki 清单，但**必须**在 `INV_EVENT_VARIANTS` 里登记过 ——
     # 否则"凭空多了一个遭遇"会被这条判据放过。
-    stray = sorted(set(actual_ids) - set(declared) - set(INV_EVENT_VARIANTS))
+    stray = sorted(set(actual_ids) - set(declared) - set(INV_EVENT_VARIANTS)
+                   - set(INV_EVENT_ONLY))
     if stray:
         fail("encounters.ids", "undeclared encounter ids %s (neither a pool member nor an "
                                "`INV_EVENT_VARIANTS` entry)" % stray)
-    if sorted(set(actual_ids) - set(INV_EVENT_VARIANTS)) != declared:
+    if sorted(set(actual_ids) - set(INV_EVENT_VARIANTS) - set(INV_EVENT_ONLY)) != declared:
         fail("encounters.ids", "encounter ids %s != inv %s"
              % (sorted(set(actual_ids) - set(INV_EVENT_VARIANTS)), declared))
     if sorted(s["Id"] for s in doc.get("Statuses") or []) != sorted(INV_STATUSES):
@@ -2968,8 +2985,10 @@ def check_ascension_health(doc):
     unpinned = set()
     for encounter in doc.get("Encounters") or []:
         eid = encounter["Id"]["Value"] if isinstance(encounter["Id"], dict) else encounter["Id"]
-        if eid in INV_EVENT_VARIANTS:
-            continue                      # 变体的 HP/开场由那条变体判据盯着
+        if eid in INV_EVENT_VARIANTS or eid in INV_EVENT_ONLY:
+            # 变体的 HP/开场由变体判据盯着；事件专属遭遇的 HP 档取决于**它在哪个池**
+            # （`ColosseumChampions` 是精英档），不取决于它的 id 前缀。
+            continue
         level = level_of.get(eid, 7)
         for enemy in encounter_enemy_records(encounter):
             monster = enemy["Id"]
@@ -3852,10 +3871,23 @@ def check_relations(doc):
         if variant.get("Enemies") == proto.get("Enemies"):
             fail("encounter." + eid, "the variant is identical to its prototype -- dead weight")
 
+    for eid, (enemies, note) in sorted(INV_EVENT_ONLY.items()):
+        enc = next((e for e in doc.get("Encounters") or []
+                    if e["Id"]["Value"] == eid), None)
+        if enc is None:
+            fail("encounter." + eid, "an event-only encounter is registered but missing (%s)" % note)
+            continue
+        got = [enemy["Id"] for enemy in encounter_enemy_records(enc)]
+        if got != enemies:
+            fail("encounter." + eid,
+                 "enemies %s, the event says %s (%s)" % (got, enemies, note))
+
     for enc in doc.get("Encounters") or []:
         eid = enc["Id"]["Value"]
         if eid in INV_EVENT_VARIANTS:
             continue                      # 变体由上面那条检查盯着
+        if eid in INV_EVENT_ONLY:
+            continue                      # 事件专属（上面刚查过组成）
         if eid in INV_WEAK_POOL:
             pool = INV_WEAK_POOL
         elif eid in INV_ELITE_POOL:
@@ -4555,6 +4587,21 @@ def check_event_vocabulary(doc):
                     if kind != "heal_pct" and entry.get("Amount") not in (0, None):
                         fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
                     continue
+                if kind in ("fight_gold_set", "fight_relic_rarity", "fight_extra_relic"):
+                    # §288：`The Colosseum` 的定数奖励。
+                    if kind == "fight_gold_set":
+                        amount = entry.get("Amount")
+                        if not isinstance(amount, int) or not (1 <= amount <= 999):
+                            fail(where, "fight_gold_set needs a positive Amount, got %r"
+                                 % (amount,))
+                    else:
+                        if payload not in ("common", "uncommon", "rare"):
+                            fail(where, "%s needs `:common` / `:uncommon` / `:rare`, got %r"
+                                 % (kind, payload))
+                        if entry.get("Amount") not in (0, None):
+                            fail(where, "%s takes no Amount" % kind)
+                    counts["effects"] += 1
+                    continue
                 if kind in ("fight_gold_bonus", "fight_no_relic"):
                     # §287：**下一场战斗**的奖励修正（Dead Adventurer 的战后补偿）。
                     if kind == "fight_gold_bonus":
@@ -4669,7 +4716,19 @@ def check_event_vocabulary(doc):
             for dead in ("Chance", "NextFail"):
                 if dead in option:
                     fail(label, "`%s` is gone (§286) -- use `Branches`" % dead)
+            # §288：`After`（打完**回到事件**）只出现在战斗选项上，而且必须是真的一段。
+            after = option.get("After")
+            if after is not None:
+                if not option.get("Fight"):
+                    fail(label + ".After", "`After` needs `Fight` (only a fight returns to an event)")
+                if not after:
+                    fail(label + ".After", "is empty")
+                elif after not in node_ids:
+                    fail(label + ".After", "names %r, which is not in EventNodes" % (after,))
+                else:
+                    reached.add(after)
             # §286：`Fight` 与后继**互斥** —— 战斗结算整个房间，之后不回到事件。
+            # §288：`After` 是**例外**：它正是"打完回到事件"，所以它不带 Next/Branches。
             fight = option.get("Fight")
             if fight is not None:
                 if fight not in ("monster", "elite"):

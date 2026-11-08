@@ -738,6 +738,9 @@ pub const START_OFFERS: [StartOffer; 8] = [
 /// | `gold_random:<min>:<max>` | gain `runif(min, max)` gold (the Goop's "lose 20-50 Gold") |
 /// | `fight_gold_bonus` | the **next** fight pays `Amount` extra gold (`Dead Adventurer`'s 30) |
 /// | `fight_no_relic` | the **next** fight pays no relic (that search already found one) |
+/// | `fight_gold_set:<n>` | the **next** fight pays exactly `n` gold (`The Colosseum`'s 100) |
+/// | `fight_relic_rarity:<rarity>` | the **next** fight's relic is locked to that rarity |
+/// | `fight_extra_relic:<rarity>` | the **next** fight pays a **second** relic of that rarity |
 /// | `relic_random` | grant a **random** relic (Scrap Ooze). 运行层只认 `relic:<id>` —— 抽样由
 ///   **有内容池的那一层**（`rd-wasm`）先解析成具体 id，理由同 `curse:` 的载荷 |
 /// | `heal_pct:<n>` | heal `floor(max HP × n / 100)` HP (the Cleric's *Heal*) |
@@ -779,6 +782,13 @@ pub enum EventEffect {
     FightGoldBonus(i32),
     /// §287：**下一场战斗**不掉遗物（那一件已经在搜索里拿到过了）。
     FightNoRelic,
+    /// §288：**下一场战斗**的金币**就是** `n`（加法之外的另一种：`The Colosseum` 的 100 不是
+    /// "区间再加"，它把区间整个换掉）。
+    FightGoldSet(i32),
+    /// §288：**下一场战斗**那件遗物的稀有度被锁定。
+    FightRelicRarity(Rarity),
+    /// §288：**下一场战斗**再给一件该稀有度的遗物（`black_star` 走的是同一条"直接进包"的路）。
+    FightExtraRelic(Rarity),
     /// §285：**随机一件遗物**（`relic_random`）。运行层**不**抽 —— 它没有遗物池。
     /// 由 `rd-wasm` 在调用前解析成 `GainRelic` + 具体 id（与 `curse:`/`relic:` 的载荷同一条路）。
     GainRandomRelic,
@@ -877,6 +887,8 @@ pub struct EventMove<'a> {
     pub fight: u8,
     /// §287：这一场战斗用哪个遭遇池（空 = 按档位用本幕标准池）。
     pub fight_pool: &'a str,
+    /// §288：打赢之后**回到事件**的哪一段（空 = 战斗结算整个房间，§286 的老路）。
+    pub fight_after: &'a str,
 }
 
 impl<'a> EventMove<'a> {
@@ -890,6 +902,7 @@ impl<'a> EventMove<'a> {
             entry: &[],
             fight: 0,
             fight_pool: "",
+            fight_after: "",
         }
     }
 
@@ -920,6 +933,8 @@ impl EventEffect {
             // 为什么是"欠账"而不是当场给：wiki 说这些奖励由**那场战斗**补发。
             "fight_gold_bonus" => (Self::FightGoldBonus(amount), None),
             "fight_no_relic" => (Self::FightNoRelic, None),
+            // §288：`The Colosseum` 的 VICTORY 奖励是**定数**（100 金币 + 一稀有 + 一罕见）。
+            "fight_gold_set" => (Self::FightGoldSet(amount), None),
             // §285/§286：`relic_random` **没有载荷**（抽哪件由内容池 + 稀有度权重决定，那在
             // `rd-wasm` 手里）。⚠️ 它必须在**裸词**这一支：写进下面 `split_once(':')` 那一支
             // 会让它永远解析不出来（没有冒号 ⇒ `?` 直接 `None`）—— §285 真踩了这个坑，
@@ -964,6 +979,22 @@ impl EventEffect {
                         _ => return None,
                     },
                     // §285：`gold_random:20:50` —— 两端都是**整数金币**（区间不是百分比）。
+                    // §288：稀有度写在词里（`fight_relic_rarity:rare`）。
+                    "fight_relic_rarity" | "fight_extra_relic" => {
+                        let rarity = match payload {
+                            "common" => Rarity::Common,
+                            "uncommon" => Rarity::Uncommon,
+                            "rare" => Rarity::Rare,
+                            // 别的稀有度（`Event` / `Shop` / `Boss`）不是"掉落稀有度"，
+                            // 让它当奖励等于凭空造一件抽不到的东西。
+                            _ => return None,
+                        };
+                        if kind == "fight_relic_rarity" {
+                            (Self::FightRelicRarity(rarity), None)
+                        } else {
+                            (Self::FightExtraRelic(rarity), None)
+                        }
+                    }
                     "gold_random" => {
                         let mut parts = payload.split(':');
                         let (Some(low), Some(high), None) =
@@ -1390,6 +1421,45 @@ pub struct ChestOutcome {
     /// The relic, if the pool had one.
     pub relic: Option<RunId>,
 }
+/// §288：`Rarity` 存进运行层的**一个字节**（`0` 留给"没锁定"）。
+///
+/// 为什么不存枚举：`RunState` 是 `Copy` 且逐字段进存档/回放，一个 `u8` 的编码比枚举的
+/// 内存布局稳定得多；而"哪个数对应哪档"只有这两个函数知道。
+#[must_use]
+pub const fn rarity_code(rarity: Rarity) -> u8 {
+    // 码 = 枚举值 + 1（`0` 留给"没锁定"），所以**加一档稀有度必须同时改这两行** ——
+    // 而它们的判据是"每一个变体都有码、且码两两不同"（见 `every_rarity_has_a_distinct_code`）。
+    match rarity {
+        Rarity::Basic => 1,
+        Rarity::Common => 2,
+        Rarity::Uncommon => 3,
+        Rarity::Rare => 4,
+        Rarity::Status => 5,
+        Rarity::Curse => 6,
+        Rarity::Special => 7,
+        Rarity::Event => 8,
+        Rarity::Starter => 9,
+        Rarity::Boss => 10,
+    }
+}
+
+/// [`rarity_code`] 的逆。`0`（没锁定）与不认识的值都回 `Common` —— 调用方只在 `!= 0` 时用它。
+#[must_use]
+pub const fn rarity_of_code(code: u8) -> Rarity {
+    match code {
+        1 => Rarity::Basic,
+        3 => Rarity::Uncommon,
+        4 => Rarity::Rare,
+        5 => Rarity::Status,
+        6 => Rarity::Curse,
+        7 => Rarity::Special,
+        8 => Rarity::Event,
+        9 => Rarity::Starter,
+        10 => Rarity::Boss,
+        _ => Rarity::Common,
+    }
+}
+
 /// The most nodes one step can offer: the first floor is chosen freely among a whole row.
 pub const MAX_STEP_TARGETS: usize = NODES_PER_ROW;
 
@@ -1587,6 +1657,14 @@ pub struct RunState {
     fight_gold_bonus: i16,
     /// §287：下一场战斗**不掉遗物**（那一件已经搜到过；消费后清）。
     fight_no_relic: bool,
+    /// §288：下一场战斗的金币**定数**（`0` = 不覆盖）。
+    fight_gold_set: i16,
+    /// §288：下一场战斗那件遗物的**锁定稀有度**（`0` = 按权重抽；否则是 `Rarity` 的码 + 1）。
+    fight_relic_rarity: u8,
+    /// §288：下一场战斗**额外**给一件该稀有度的遗物（`0` = 没有）。
+    fight_extra_relic: u8,
+    /// §288：战斗之后要**回到的事件段**（空 = 战斗结算整个房间，§286 的老路）。
+    event_resume: RunId,
     /// §278：这一段选完之后要去的那一段，**在等一次牌组编辑的时候**先记在这里。
     ///
     /// 与 `event_follow` 是两件事：一个是"欠哪次编辑"，一个是"编辑完了去哪儿"。
@@ -1719,6 +1797,10 @@ impl RunState {
             event_fight_pool: RunId::EMPTY,
             fight_gold_bonus: 0,
             fight_no_relic: false,
+            fight_gold_set: 0,
+            fight_relic_rarity: 0,
+            fight_extra_relic: 0,
+            event_resume: RunId::EMPTY,
             event_next: RunId::EMPTY,
             last_encounter: RunId::EMPTY,
             // Rolled by `offer_start_choice`; until then the pair is not a choice anyone can take.
@@ -3325,6 +3407,7 @@ impl RunState {
         // 事件那条路只负责**置**它，只有这里清，所以"忘记清"不会变成第二场白给的战斗。
         self.event_fight = 0;
         self.event_fight_pool = RunId::EMPTY;
+        self.event_resume = RunId::EMPTY;
         let node = self.node;
         if node < 0 {
             return;
@@ -4164,11 +4247,37 @@ impl RunState {
 
     /// [`Self::pick_relic`], also skipping `reserved` -- the relics a caller has already put on a
     /// shelf but not yet sold (the shop stocks three, and a picked relic is not in the belt yet).
+    /// §288：**指定稀有度**的遗物（`The Colosseum` 的 "1 Rare Relic"）。
+    ///
+    /// 与 [`Self::pick_relic`] 共用同一段候选扫描；差别只有一处：档位不掷，直接锁死。
+    /// 该稀有度**抽不到**时返回空 id（"没有可给的"），与"池子空"同一个答案 ——
+    /// 不退回按权重抽，否则"1 Rare Relic"会安静地变成"一件随便什么遗物"。
+    pub fn pick_relic_of_rarity(
+        &mut self,
+        stream: RunStream,
+        pool: &[PoolRelic<'_>],
+        reserved: &[RunId],
+        wanted: Rarity,
+    ) -> Result<RunId, RunError> {
+        self.pick_relic_inner(stream, pool, reserved, Some(wanted))
+    }
+
     pub fn pick_relic_avoiding(
         &mut self,
         stream: RunStream,
         pool: &[PoolRelic<'_>],
         reserved: &[RunId],
+    ) -> Result<RunId, RunError> {
+        self.pick_relic_inner(stream, pool, reserved, None)
+    }
+
+    /// [`Self::pick_relic`] 的实体：`forced` = 锁定档位（`None` = 按权重掷）。
+    fn pick_relic_inner(
+        &mut self,
+        stream: RunStream,
+        pool: &[PoolRelic<'_>],
+        reserved: &[RunId],
+        forced: Option<Rarity>,
     ) -> Result<RunId, RunError> {
         // Never a second copy of a held relic (§145) -- the filter every source shares.
         // §160: **not-droppable rarities are not candidates at all.** `Event` (and `Shop`/`Boss`,
@@ -4197,9 +4306,12 @@ impl RunState {
             return Ok(RunId::EMPTY);
         }
         let present = &rarities[..count];
-        let band = self
-            .pick_rarity(stream, &RELIC_RARITY_WEIGHTS, present)?
-            .unwrap_or(pool[candidates[0]].rarity);
+        let band = match forced {
+            Some(wanted) => wanted,
+            None => self
+                .pick_rarity(stream, &RELIC_RARITY_WEIGHTS, present)?
+                .unwrap_or(pool[candidates[0]].rarity),
+        };
         let mut band_slots = [0usize; MAX_POOL];
         let mut band_count = 0usize;
         for slot in &candidates[..count] {
@@ -4209,6 +4321,10 @@ impl RunState {
             }
         }
         let chosen = if band_count == 0 {
+            if forced.is_some() {
+                // §288：锁定的档位抽不到 ⇒ **没有**，不退回别的档位。
+                return Ok(RunId::EMPTY);
+            }
             candidates[0]
         } else {
             let pick = self.rng.roll(stream, band_count as u32)? as usize;
@@ -4664,6 +4780,9 @@ impl RunState {
         // §287：战斗奖励的"欠账"属于**一个**事件；开新事件就清掉（否则它会漏进下一场战斗）。
         self.fight_gold_bonus = 0;
         self.fight_no_relic = false;
+        self.fight_gold_set = 0;
+        self.fight_relic_rarity = 0;
+        self.fight_extra_relic = 0;
         self.event = id;
         self.event_step = entry;
         self.event_next = RunId::EMPTY;
@@ -4693,6 +4812,25 @@ impl RunState {
     #[must_use]
     pub fn event_fight_pool(&self) -> &str {
         self.event_fight_pool.as_str()
+    }
+
+    /// §288：战斗结束后**回到事件**（`The Colosseum`）。`false` = 这一场没有"回去"的地方
+    /// （§286 的老路：战斗结算整个房间）。
+    ///
+    /// 调用方（`rd-wasm` 的 `apply_fight_outcome`）在**胜利**分支里问一次：
+    /// `true` ⇒ **不发战斗奖励**（wiki 说那场战斗 "gives no rewards"，奖励就是事件继续），
+    /// 事件重新摆到 `After` 那一段、`pending` 回到 `Event`。
+    pub fn resume_event_after_fight(&mut self) -> bool {
+        if self.event_resume.as_str().is_empty() {
+            return false;
+        }
+        self.event_step = self.event_resume;
+        self.event_resume = RunId::EMPTY;
+        self.event_fight = 0;
+        self.event_fight_pool = RunId::EMPTY;
+        self.event_next = RunId::EMPTY;
+        self.pending = Pending::Event;
+        true
     }
 
     /// §278：事件**当前所在的那一段**（`EVND.Id`）。空 = 这个事件只有一段（或还没开）。
@@ -4759,6 +4897,7 @@ impl RunState {
             entry,
             fight,
             fight_pool,
+            fight_after,
         } = event_move;
         if self.pending != Pending::Event {
             return Err(RunError::WrongPhase);
@@ -4841,9 +4980,17 @@ impl RunState {
                 *self = before;
                 return Err(RunError::TwoDeckChanges);
             }
-            self.event = RunId::EMPTY;
+            // §288：`After` 存在 ⇒ 事件**不收尾**（打完回来），只是暂时没有选项可点。
+            if fight_after.is_empty() {
+                self.event = RunId::EMPTY;
+            }
             self.event_step = RunId::EMPTY;
             self.event_next = RunId::EMPTY;
+            self.event_resume = if fight_after.is_empty() {
+                RunId::EMPTY
+            } else {
+                RunId::new(fight_after).map_err(|_| RunError::NoSuchEvent)?
+            };
             self.event_fight = fight;
             self.event_fight_pool = if fight_pool.is_empty() {
                 RunId::EMPTY
@@ -4964,6 +5111,15 @@ impl RunState {
             }
             EventEffect::FightNoRelic => {
                 self.fight_no_relic = true;
+            }
+            EventEffect::FightGoldSet(n) => {
+                self.fight_gold_set = i16::try_from(n).unwrap_or(i16::MAX);
+            }
+            EventEffect::FightRelicRarity(rarity) => {
+                self.fight_relic_rarity = rarity_code(rarity);
+            }
+            EventEffect::FightExtraRelic(rarity) => {
+                self.fight_extra_relic = rarity_code(rarity);
             }
             EventEffect::GainRandomRelic => {
                 // §285：运行层**没有遗物池**，所以这条必须已经被调用方解析成 `GainRelic` +
@@ -5147,13 +5303,37 @@ impl RunState {
         // 单消费点：读一次就清，所以它不可能漏进下一场战斗。
         let bonus = i32::from(self.fight_gold_bonus);
         let no_relic = self.fight_no_relic;
+        let gold_set = i32::from(self.fight_gold_set);
+        let relic_rarity = self.fight_relic_rarity;
+        let extra_rarity = self.fight_extra_relic;
         self.fight_gold_bonus = 0;
         self.fight_no_relic = false;
+        self.fight_gold_set = 0;
+        self.fight_relic_rarity = 0;
+        self.fight_extra_relic = 0;
+        if gold_set > 0 {
+            // §288：**定数**赢过区间（`The Colosseum` 的 100 不是"区间再加"）。
+            paid = gold_set;
+        }
         if bonus != 0 {
             paid = paid.saturating_add(bonus);
         }
         if no_relic {
             relic = RunId::EMPTY;
+        }
+        // §288：锁定稀有度（`The Colosseum` 的"1 Rare Relic"）。抽不到该稀有度就是**没有**
+        // 遗物 —— 与"池子里没有可掉的"同一条路，而不是退回按权重抽。
+        if relic_rarity != 0 {
+            let wanted = rarity_of_code(relic_rarity);
+            relic = self.pick_relic_of_rarity(RunStream::Reward, relic_pool, &[], wanted)?;
+        }
+        // §288：**第二件**遗物（"1 Uncommon Relic"）。直接进包，与 `black_star` 同一条路。
+        if extra_rarity != 0 && !no_relic {
+            let wanted = rarity_of_code(extra_rarity);
+            let extra = self.pick_relic_of_rarity(RunStream::Reward, relic_pool, &[relic], wanted)?;
+            if !extra.as_str().is_empty() {
+                let _ = self.push_relic(extra.as_str(), card_pool);
+            }
         }
         // §269：`black_star` —— "Elites now drop an additional relic when defeated"。
         // ⚠️ 第二件**直接进包**（奖励屏只有一个遗物槽）。这不是"更省事"，是**代价最小**：
@@ -9836,6 +10016,124 @@ mod tests {
         )
         .expect("the range resolves");
         assert_eq!(run.gold(), 0, "a 20-50 loss from 10 gold leaves zero, not negative");
+    }
+
+    /// §288：`After` —— 战斗打完之后**回到事件**，而且房间**还没**结算
+    /// （`The Colosseum` 的第一场：wiki 说它 "gives no rewards"，奖励是事件继续）。
+    #[test]
+    fn a_fight_can_return_to_the_event() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        assert!(walk_to(&mut run, NodeKind::Unknown), "a `?` node must exist");
+        run.begin_node(&pool, &[]).expect("the node opens");
+        run.begin_event("the_colosseum", "the_colosseum").expect("the event");
+
+        run.resolve_event_effects(
+            &EventMove {
+                fight: 1,
+                fight_pool: "ColosseumSlavers",
+                fight_after: "the_colosseum.after",
+                ..EventMove::none()
+            },
+            &pool,
+        )
+        .expect("the first fight starts");
+
+        assert_eq!(run.event_fight(), 1, "the band is recorded");
+        assert_eq!(
+            run.event(),
+            "the_colosseum",
+            "the event is **not** over: the fight comes back to it"
+        );
+        assert_eq!(run.event_step(), "", "no step is open while the fight runs");
+        assert!(!run.node_resolved(), "the node still owes the rest of the event");
+        assert_eq!(run.event_fight_pool(), "ColosseumSlavers");
+
+        // 战斗结束（由 wasm 在**胜利**分支调用）⇒ 事件回到 `After` 那一段。
+        assert!(run.resume_event_after_fight(), "there is a step to return to");
+        assert_eq!(run.event_step(), "the_colosseum.after", "we are back in the event");
+        assert_eq!(run.pending(), Pending::Event, "the event wants a choice again");
+        assert_eq!(run.event_fight(), 0, "the fight is over");
+        assert_eq!(run.event_fight_pool(), "", "and its pool with it");
+        // 再问一次：没有第二次"回去"（否则一场战斗能被回两次）。
+        assert!(!run.resume_event_after_fight(), "the resume is a one-shot");
+    }
+
+    /// §288：**定数奖励**（`The Colosseum` 的 `100 Gold, 1 Rare Relic, 1 Uncommon Relic`）。
+    #[test]
+    fn the_fight_reward_overrides_are_exact() {
+        let cards = curse_pool();
+        let relics = [
+            PoolRelic { id: "anchor", rarity: Rarity::Common },
+            PoolRelic { id: "vajra", rarity: Rarity::Common },
+            PoolRelic { id: "meat_on_the_bone", rarity: Rarity::Uncommon },
+            PoolRelic { id: "ice_cream", rarity: Rarity::Rare },
+        ];
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("the_colosseum", "the_colosseum.after").expect("the event");
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[
+                    (EventEffect::FightGoldSet(100), None),
+                    (EventEffect::FightRelicRarity(Rarity::Rare), None),
+                    (EventEffect::FightExtraRelic(Rarity::Uncommon), None),
+                ],
+                fight: 2,
+                fight_pool: "ColosseumChampions",
+                ..EventMove::none()
+            },
+            &cards,
+        )
+        .expect("the victory fight starts");
+
+        run.roll_reward(&cards, &[], &relics, FightKind::Elite)
+            .expect("the rewards land");
+        assert_eq!(run.reward_gold(), 100, "`fight_gold_set` **replaces** the band");
+        assert_eq!(
+            run.reward_relic(),
+            Some("ice_cream"),
+            "the reward relic is locked to Rare (only one is in the pool)"
+        );
+        assert!(
+            run.relics().iter().any(|held| held.as_str() == "meat_on_the_bone"),
+            "the extra Uncommon relic went straight into the belt: {:?}",
+            run.relics().iter().map(|held| held.as_str()).collect::<std::vec::Vec<_>>()
+        );
+
+        // 只付一次：第二场是普通结算。
+        run.roll_reward(&cards, &[], &relics, FightKind::Elite)
+            .expect("the second payout");
+        let (low, high) = reward_bands(FightKind::Elite, run.rarity_offset());
+        assert!(
+            run.reward_gold() >= low && run.reward_gold() <= high,
+            "no override left: {} must be inside {low}..={high}",
+            run.reward_gold()
+        );
+    }
+
+    /// §288：稀有度的**码**——每个变体码不同，而且 `code`/`of_code` 互为逆。
+    #[test]
+    fn every_rarity_has_a_distinct_code() {
+        let all = [
+            Rarity::Basic,
+            Rarity::Common,
+            Rarity::Uncommon,
+            Rarity::Rare,
+            Rarity::Status,
+            Rarity::Curse,
+            Rarity::Special,
+            Rarity::Event,
+            Rarity::Starter,
+            Rarity::Boss,
+        ];
+        let mut seen: std::vec::Vec<u8> = std::vec::Vec::new();
+        for rarity in all {
+            let code = rarity_code(rarity);
+            assert_ne!(code, 0, "0 means `unset`, so no rarity may own it");
+            assert!(!seen.contains(&code), "two rarities share code {code}");
+            assert_eq!(rarity_of_code(code), rarity, "code round trip for {rarity:?}");
+            seen.push(code);
+        }
     }
 
     /// §286：**进入效果**在**到达**目标段时兑，而且和选项效果同一个事务。
