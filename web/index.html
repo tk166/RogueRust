@@ -903,6 +903,9 @@ function runSnapshot() {
     /// §272：`?` 房掷出了什么（0 = 还没掷 / 不是 `?` 房，1 事件 / 2 怪物 / 3 商人 / 4 宝箱）。
     /// 页面上"这一格要不要显示开始战斗"就靠它 —— kind 5 + unknownRoom 2。
     unknownRoom: ex.rd_run_observe(18),
+    /// §286：事件把房间变成的那一场战斗的档位（0 没有 / 1 普通 / 2 精英）。
+    /// `Dead Adventurer` 的伏击选完 `[Fight]` 之后，事件已经收尾，这一格才是"接下来干什么"。
+    eventFight: ex.rd_run_event_fight(),
     /// §274：遗物欠着几次牌组编辑（`empty_cage` = 2、`astrolabe` = 3），以及是哪一种。
     /// 它们是**独立于 `pending`** 的一对字段 —— 见 `ui_panels.js::describePickupCard`。
     pickupPicks: ex.rd_run_pickup_picks(),

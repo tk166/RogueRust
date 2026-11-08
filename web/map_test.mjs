@@ -103,6 +103,9 @@ const settleHere = () => {
       if (slot < 0) break;                       // 没有可用选项：留给调用方报错
       if (ex.rd_run_choose(slot) !== 0) break;   // 内核拒了：同上
       if (ex.rd_run_event_needs() > 0) ex.rd_run_pick_event_card(0);
+      // §286：某个选项可能是 `[Fight]`（`Dead Adventurer` 的伏击）—— 事件**收尾**，
+      // 房间由那一场战斗结算。不在这里打，节点就永远不结算，下一格报"step refused"。
+      if (ex.rd_run_event_fight() > 0) { ex.rd_run_fight_begin(); ex.rd_run_fight_end(); }
     }
   }
   else if (pending === 7 || pending === 8) ex.rd_run_pick_event_card(0);

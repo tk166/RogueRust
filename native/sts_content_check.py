@@ -4426,6 +4426,118 @@ def check_event_vocabulary(doc):
               "options": 0, "steps": 0, "conditional": 0, "conditions": 0,
               "cost": 0}
     reached = set()
+
+    def check_effects(label, effects, kind_label):
+        """一条效果列表。返回**改牌效果**的条数（调用方判"两个"）。
+
+        §286：抽出来是因为**段的进入效果**要用同一份词表。另写一份 = 两份词表漂。
+        """
+        if effects is None:
+            effects = []
+        if not isinstance(effects, list):
+            fail(label, "not a list: %r" % (effects,))
+            return 0
+        if len(effects) > 4:
+            fail(label, "more than 4 effects (the kernel's MAX_EVENT_EFFECTS)")
+        edits = 0
+        for entry in effects:
+                effect = entry.get("Effect")
+                where = "%s%s.%s" % (label, kind_label, effect)
+                if not isinstance(effect, str):
+                    fail(where, "Effect is not a string: %r" % (effect,))
+                    continue
+                counts["effects"] += 1
+                if kind_label:
+                    counts["asc"] += 1
+                if effect in EVENT_BARE_EFFECTS:
+                    counts["bare"] += 1
+                    if effect in EVENT_DECK_EDITS:
+                        edits += 1
+                    continue
+                kind, _, payload = effect.partition(":")
+                if kind == "curse" and payload:
+                    counts["curse"] += 1
+                    if payload not in cards:
+                        fail(where, "curse:%s 不是内容里的卡" % payload)
+                    elif cards[payload] != "Curse":
+                        fail(where, "curse:%s 的 Rarity 是 %s，不是 Curse"
+                             % (payload, cards[payload]))
+                    continue
+                if kind == "relic_lose" and payload:
+                    # §279：**失去**一件遗物（`Forgotten Altar` 的金像换血像）。
+                    # 必须是**内容里真的有**的遗物；"失去一件不该有的" 由运行层拒
+                    # （`RunError::NoSuchRelic`），但那要等到玩家点下去 —— 这里先拦。
+                    counts["relic"] += 1
+                    if payload not in relics:
+                        fail(where, "relic_lose:%s 不在 Relics 表里" % payload)
+                    continue
+                if kind == "relic" and payload:
+                    counts["relic"] += 1
+                    if payload not in relics:
+                        fail(where, "relic:%s 不在 Relics 表里" % payload)
+                    elif payload not in IMPLEMENTED_RELICS:
+                        fail(where, "relic:%s 的效果内核没实现（%s）"
+                             % (payload, " / ".join(IMPLEMENTED_RELICS)))
+                    continue
+                if kind in ("damage_pct", "max_hp_pct", "heal_pct"):
+                    counts["percent"] += 1
+                    # §280：百分比允许**一位小数**（真内容里有 12.5%）。解析规则与
+                    # `rd-run::state::parse_permille` 逐条一致：1..=100、可选一位小数、
+                    # 无符号。两边漂了会变成"内容门说 12.5 合法、内核当成非法"。
+                    if not PERCENT_RE.match(payload or ""):
+                        fail(where, "百分比 %r 不是 1..=100 的百分数（可带一位小数）"
+                             % (payload,))
+                    elif float(payload) <= 0 or float(payload) > 100:
+                        fail(where, "百分比 %r 不在 1..=100" % (payload,))
+                    if kind == "heal_pct" and entry.get("Amount") not in (0, None):
+                        fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
+                    if kind != "heal_pct" and entry.get("Amount") not in (0, None):
+                        fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
+                    continue
+                if kind == "relic_random":
+                    # §285：随机一件遗物（Scrap Ooze）。不带载荷 —— 抽哪件由内容池与
+                    # 稀有度权重决定，那在 `rd-wasm` 手里。
+                    if payload:
+                        fail(where, "relic_random takes no payload, got %r" % (payload,))
+                    counts["relic"] += 1
+                    continue
+                if kind == "gold_random":
+                    # §285：`gold_random:<min>:<max>` —— 区间金币（负区间 = 扣钱）。
+                    parts = payload.split(":") if payload else []
+                    if len(parts) != 2:
+                        fail(where, "gold_random needs a `min:max` payload, got %r"
+                             % (payload,))
+                    else:
+                        try:
+                            low, high = int(parts[0]), int(parts[1])
+                        except ValueError:
+                            fail(where, "gold_random payload is not two integers: %r"
+                                 % (payload,))
+                        else:
+                            # 负区间是"扣钱"：内容写成 `-20:-50`（先小后大，与
+                            # `20:50` 同一个读法），所以比较的是**绝对值**。
+                            if low == 0 or high == 0 or (low < 0) != (high < 0):
+                                fail(where, "gold_random range %d..%d must not straddle zero"
+                                     % (low, high))
+                            elif abs(low) > abs(high):
+                                fail(where, "gold_random range %d..%d is inverted"
+                                     % (low, high))
+                            if low == 0 and high == 0:
+                                fail(where, "gold_random 0:0 does nothing -- that is a "
+                                            "decorative roll")
+                            if abs(low) > 999 or abs(high) > 999:
+                                fail(where, "gold_random range is absurd: %r" % (payload,))
+                    continue
+                if kind == "gold_cost":
+                    counts["cost"] += 1
+                    if not PAY_GOLD_RE.match(payload or ""):
+                        fail(where, "gold_cost:%r 必须是正整数金币" % (payload,))
+                    if entry.get("Amount") not in (0, None):
+                        fail(where, "gold_cost 的 Amount 必须是 0（数字在词里）")
+                    continue
+                fail(where, "词表外的效果 %r" % (effect,))
+        return edits
+
     for room in rooms:
         entry = room.get("Entry")
         if not entry:
@@ -4451,6 +4563,22 @@ def check_event_vocabulary(doc):
         # （wiki 的后续屏就是单个 `[Leave]`，以及 `The Ssssserpent` 的 `[Continue]`）。
         # §278 第一版把"至少两个"套在了每一段上，于是真事件一进来就红。
         entry_id = {room.get('Entry') for room in rooms if room.get('Entry')}
+        # §286：段的**进入效果**（`Effects` / `EffectsAsc`）。词表与选项共用一套检查，
+        # 所以这里先把它们当作"一个没有选项的虚拟选项"过一遍词表 —— 但**改牌禁止**。
+        for kind_label, key in (("", "Effects"), ("Asc", "EffectsAsc")):
+            entry = node.get(key)
+            if entry is None:
+                continue
+            if not isinstance(entry, list) or not entry:
+                fail("%s.%s" % (label_root, key), "must be a non-empty list")
+                continue
+            # 同一份词表（`check_effects`），外加一条：**进入效果不许改牌** ——
+            # 改牌会变成待答问题，而问题队列只有一个位置，那个位置属于选项。
+            edits = check_effects("%s.<entry>" % label_root, entry, kind_label)
+            if edits:
+                fail("%s.%s" % (label_root, key),
+                     "a step-entry effect cannot change the deck (the answer queue has one "
+                     "slot and the option already used it)")
         # §285：入口段通常要两个选项（那才是一个"选择"），但**纯过场**的入口只有一个
         # `[Continue]`（`The Joust` 的第一屏就是这样）—— 允许一，禁止零。
         if len(options) < 1:
@@ -4461,128 +4589,56 @@ def check_event_vocabulary(doc):
             label = "%s.Options%d" % (label_root, index)
             if not option.get("Label"):
                 fail(label, "empty Label (an unlabeled button)")
-            # §285：`Chance` 与 `NextFail` **必须成对**，而且两条边都要算可达。
-            chance = option.get("Chance")
-            fail_to = option.get("NextFail") or ""
-            if (chance is None) != (fail_to == ""):
-                fail(label, "`Chance` and `NextFail` must come together (Chance=%r, NextFail=%r)"
-                     % (chance, fail_to))
-            if chance is not None and not (isinstance(chance, int) and 1 <= chance <= 100):
-                fail(label + ".Chance", "must be 1..=100, got %r" % (chance,))
-            for key in ("Next", "NextFail"):
-                nxt = option.get(key) or ""
-                if not nxt:
+            # §286：`Branches`（权重表）取代了 §285 的 `Chance`/`NextFail`。
+            # 旧形状**必须报错**而不是被忽略：留着它的人以为概率还在，而内核只看 `Branches`。
+            for dead in ("Chance", "NextFail"):
+                if dead in option:
+                    fail(label, "`%s` is gone (§286) -- use `Branches`" % dead)
+            # §286：`Fight` 与后继**互斥** —— 战斗结算整个房间，之后不回到事件。
+            fight = option.get("Fight")
+            if fight is not None:
+                if fight not in ("monster", "elite"):
+                    fail(label + ".Fight", "must be `monster` or `elite`, got %r" % (fight,))
+                if (option.get("Next") or "") or option.get("Branches"):
+                    fail(label, "`Fight` ends the event, so it cannot also have Next/Branches")
+            for key in ("Branches", "BranchesAsc"):
+                table = option.get(key)
+                if table is None:
                     continue
+                if not isinstance(table, list) or not (2 <= len(table) <= 4):
+                    fail("%s.%s" % (label, key), "must be a list of 2..=4 branches")
+                    continue
+                total = 0
+                for index, branch in enumerate(table):
+                    where = "%s.%s[%d]" % (label, key, index)
+                    if not isinstance(branch, dict):
+                        fail(where, "must be an object {Weight, Next}")
+                        continue
+                    weight = branch.get("Weight")
+                    if not isinstance(weight, int) or not (1 <= weight <= 100):
+                        fail(where + ".Weight", "must be 1..=100, got %r" % (weight,))
+                        continue
+                    total += weight
+                    nxt = branch.get("Next") or ""
+                    if not nxt:
+                        fail(where + ".Next", "is required")
+                    elif nxt not in node_ids:
+                        fail(where + ".Next", "names %r, which is not in EventNodes" % (nxt,))
+                    else:
+                        reached.add(nxt)
+                if total != 100:
+                    # 和不是 100 时，掷骰的最后一档会吸收零头 —— 那不是"接近"，是
+                    # 一个概率表和它写的数字不一致。
+                    fail("%s.%s" % (label, key),
+                         "weights must sum to exactly 100, got %d" % total)
+            nxt = option.get("Next") or ""
+            if nxt:
                 if nxt not in node_ids:
-                    fail("%s.%s" % (label, key), "names %r, which is not in EventNodes" % (nxt,))
+                    fail(label + ".Next", "names %r, which is not in EventNodes" % (nxt,))
                 else:
                     reached.add(nxt)
             for kind_label, key in (("", "Effects"), ("Asc", "EffectsAsc")):
-                effects = option.get(key)
-                if effects is None:
-                    effects = []
-                if not isinstance(effects, list):
-                    fail(label + "." + key, "not a list: %r" % (effects,))
-                    continue
-                if len(effects) > 4:
-                    fail(label + "." + key, "more than 4 effects (the kernel's MAX_EVENT_EFFECTS)")
-                edits = 0
-                for entry in effects:
-                    effect = entry.get("Effect")
-                    where = "%s%s.%s" % (label, kind_label, effect)
-                    if not isinstance(effect, str):
-                        fail(where, "Effect is not a string: %r" % (effect,))
-                        continue
-                    counts["effects"] += 1
-                    if kind_label:
-                        counts["asc"] += 1
-                    if effect in EVENT_BARE_EFFECTS:
-                        counts["bare"] += 1
-                        if effect in EVENT_DECK_EDITS:
-                            edits += 1
-                        continue
-                    kind, _, payload = effect.partition(":")
-                    if kind == "curse" and payload:
-                        counts["curse"] += 1
-                        if payload not in cards:
-                            fail(where, "curse:%s 不是内容里的卡" % payload)
-                        elif cards[payload] != "Curse":
-                            fail(where, "curse:%s 的 Rarity 是 %s，不是 Curse"
-                                 % (payload, cards[payload]))
-                        continue
-                    if kind == "relic_lose" and payload:
-                        # §279：**失去**一件遗物（`Forgotten Altar` 的金像换血像）。
-                        # 必须是**内容里真的有**的遗物；"失去一件不该有的" 由运行层拒
-                        # （`RunError::NoSuchRelic`），但那要等到玩家点下去 —— 这里先拦。
-                        counts["relic"] += 1
-                        if payload not in relics:
-                            fail(where, "relic_lose:%s 不在 Relics 表里" % payload)
-                        continue
-                    if kind == "relic" and payload:
-                        counts["relic"] += 1
-                        if payload not in relics:
-                            fail(where, "relic:%s 不在 Relics 表里" % payload)
-                        elif payload not in IMPLEMENTED_RELICS:
-                            fail(where, "relic:%s 的效果内核没实现（%s）"
-                                 % (payload, " / ".join(IMPLEMENTED_RELICS)))
-                        continue
-                    if kind in ("damage_pct", "max_hp_pct", "heal_pct"):
-                        counts["percent"] += 1
-                        # §280：百分比允许**一位小数**（真内容里有 12.5%）。解析规则与
-                        # `rd-run::state::parse_permille` 逐条一致：1..=100、可选一位小数、
-                        # 无符号。两边漂了会变成"内容门说 12.5 合法、内核当成非法"。
-                        if not PERCENT_RE.match(payload or ""):
-                            fail(where, "百分比 %r 不是 1..=100 的百分数（可带一位小数）"
-                                 % (payload,))
-                        elif float(payload) <= 0 or float(payload) > 100:
-                            fail(where, "百分比 %r 不在 1..=100" % (payload,))
-                        if kind == "heal_pct" and entry.get("Amount") not in (0, None):
-                            fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
-                        if kind != "heal_pct" and entry.get("Amount") not in (0, None):
-                            fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
-                        continue
-                    if kind == "relic_random":
-                        # §285：随机一件遗物（Scrap Ooze）。不带载荷 —— 抽哪件由内容池与
-                        # 稀有度权重决定，那在 `rd-wasm` 手里。
-                        if payload:
-                            fail(where, "relic_random takes no payload, got %r" % (payload,))
-                        counts["relic"] += 1
-                        continue
-                    if kind == "gold_random":
-                        # §285：`gold_random:<min>:<max>` —— 区间金币（负区间 = 扣钱）。
-                        parts = payload.split(":") if payload else []
-                        if len(parts) != 2:
-                            fail(where, "gold_random needs a `min:max` payload, got %r"
-                                 % (payload,))
-                        else:
-                            try:
-                                low, high = int(parts[0]), int(parts[1])
-                            except ValueError:
-                                fail(where, "gold_random payload is not two integers: %r"
-                                     % (payload,))
-                            else:
-                                # 负区间是"扣钱"：内容写成 `-20:-50`（先小后大，与
-                                # `20:50` 同一个读法），所以比较的是**绝对值**。
-                                if low == 0 or high == 0 or (low < 0) != (high < 0):
-                                    fail(where, "gold_random range %d..%d must not straddle zero"
-                                         % (low, high))
-                                elif abs(low) > abs(high):
-                                    fail(where, "gold_random range %d..%d is inverted"
-                                         % (low, high))
-                                if low == 0 and high == 0:
-                                    fail(where, "gold_random 0:0 does nothing -- that is a "
-                                                "decorative roll")
-                                if abs(low) > 999 or abs(high) > 999:
-                                    fail(where, "gold_random range is absurd: %r" % (payload,))
-                        continue
-                    if kind == "gold_cost":
-                        counts["cost"] += 1
-                        if not PAY_GOLD_RE.match(payload or ""):
-                            fail(where, "gold_cost:%r 必须是正整数金币" % (payload,))
-                        if entry.get("Amount") not in (0, None):
-                            fail(where, "gold_cost 的 Amount 必须是 0（数字在词里）")
-                        continue
-                    fail(where, "词表外的效果 %r" % (effect,))
+                edits = check_effects(label, option.get(key), kind_label)
                 if edits > 1:
                     fail(label + kind_label,
                          "%d 个改牌效果（待答选牌只有一个位置）" % edits)

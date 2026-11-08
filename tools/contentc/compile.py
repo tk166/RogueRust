@@ -786,9 +786,31 @@ def prune_children(doc):
 # 5.  driver
 # ===========================================================================
 
+def register_extra_shapes(doc, d):
+    """§286：`extra` 格把**没被 schema 消费的字段**打包成一个对象。
+
+    那个对象在文档里从不**字面**出现（它是行编码的产物），所以 `Deriver.scan()` 永远扫不到
+    它的形状 ⇒ `Encoder.obj()` 抛 `KeyError`。今天踩到的就是这个：`EVND` 行的
+    `Effects`（进入效果）。登记方式与扫描完全一致（同样的 `vclass` 计数），所以派生出的
+    布局与"文档里真有这种对象"时一模一样。
+    """
+    for sname, sec in ENTITY_SECTIONS:
+        schema = F.ROW_SCHEMAS[sname]
+        keys = set(k for k, _, _ in schema if k != "extra")
+        for rec in doc.get(sec) or []:
+            leftover = sorted(k for k in rec if k not in keys)
+            if not leftover:
+                continue
+            shape = tuple(leftover)
+            d.obj_n[shape] += 1
+            for k in shape:
+                d.obj_fields[shape][k][vclass(rec[k])] += 1
+
+
 def compile_doc(doc):
     t0 = time.perf_counter()
     d = Deriver(doc)
+    register_extra_shapes(doc, d)
     ir_lays, obj_lays = d.layouts()
     t_derive = time.perf_counter() - t0
 

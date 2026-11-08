@@ -1103,6 +1103,17 @@ pub extern "C" fn rd_run_pending() -> i32 {
         .map_or(-1, |s| s.state.pending() as u8 as i32)
 }
 
+/// §286：事件把房间转成的那一场战斗的**档位**：`0` 没有，`1` 普通，`2` 精英。
+///
+/// 页面靠它决定"这一屏显示 `[Fight]` 还是事件选项"，并且**必须**在 `rd_run_choose`
+/// 之后读 —— 这就是 `Dead Adventurer` 的伏击那一步。
+#[no_mangle]
+pub extern "C" fn rd_run_event_fight() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |s| i32::from(s.state.event_fight()))
+}
+
 /// The kind of the node under the cursor, or `-1`.
 #[no_mangle]
 pub extern "C" fn rd_run_node_kind() -> i32 {
@@ -1776,18 +1787,79 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
     }
     // §278：这一段选完之后还去不去下一段，**由内容**说（`option.Next`）。
     let next = choice.goes_on();
-    // §285：`Chance`/`NextFail` 都在选项上 —— **掷骰在运行层**（`RunStream::Event`），
-    // 这里只把两个目标和概率递过去。
-    let roll = choice
-        .roll
-        .map(|(chance, on_fail)| rd_run::state::EventRoll {
-            chance,
-            on_success: next.unwrap_or(""),
-            on_fail,
-        });
+    // §286：**权重分支**在选项上、**掷骰在运行层**（`RunStream::Event`）—— 这里只把表和目标
+    // 段递过去。A15 那一版优先（`Dead Adventurer` 的伏击率 25% → 35%）。
+    let branches = choice.branches_at(level, rd_run::state::A_EVENTS_WORSE);
+    // §286：**目标段的进入效果**。目标可能是 `next`，也可能是分支表里的任何一个 —— 所以按
+    // 目标 id 建一张小表（最多 4 个目标），运行层只按最终落点查一次。
+    //
+    // 布局：`entry_pool[i]` 是第 `i` 个目标段的效果数组，`entry_pairs` 把 id 与切片配起来。
+    let mut entry_pool: [[(rd_run::state::EventEffect, Option<&'static str>);
+                          rd_core::content::MAX_EVENT_EFFECTS]; rd_core::content::MAX_EVENT_BRANCHES] =
+        [[(rd_run::state::EventEffect::Nothing, None); rd_core::content::MAX_EVENT_EFFECTS];
+         rd_core::content::MAX_EVENT_BRANCHES];
+    let mut entry_len = [0usize; rd_core::content::MAX_EVENT_BRANCHES];
+    let mut entry_ids: [&'static str; rd_core::content::MAX_EVENT_BRANCHES] =
+        [""; rd_core::content::MAX_EVENT_BRANCHES];
+    let mut entry_count = 0usize;
+    {
+        let content = content();
+        // 候选目标：`next` 与每条分支的落点（重复的只算一次）。
+        let mut targets: [&'static str; 1 + rd_core::content::MAX_EVENT_BRANCHES] =
+            [""; 1 + rd_core::content::MAX_EVENT_BRANCHES];
+        let mut target_count = 0usize;
+        if let Some(next) = next {
+            // `goes_on()` 借的是内容里的 `&'static str`。
+            let next: &'static str = next;
+            targets[target_count] = next;
+            target_count += 1;
+        }
+        for (_, target) in branches {
+            if !targets[..target_count].contains(target) {
+                targets[target_count] = target;
+                target_count += 1;
+            }
+        }
+        for target in targets.iter().take(target_count) {
+            if target.is_empty() {
+                continue;
+            }
+            let Some(step) = content.event_step(target) else {
+                continue;
+            };
+            let specs = step.entry_at(level, rd_run::state::A_EVENTS_WORSE);
+            if specs.len() > rd_core::content::MAX_EVENT_EFFECTS {
+                return fail(session, "进入效果超过上限");
+            }
+            for (index, spec) in specs.iter().enumerate() {
+                let named = spec.effect.split_once(':').map(|(_, payload)| payload);
+                let Some((effect, _payload)) = effect_from(spec.effect, i32::from(spec.amount))
+                else {
+                    return fail(session, "进入效果的词读不出来");
+                };
+                entry_pool[entry_count][index] = (effect, named);
+            }
+            entry_len[entry_count] = specs.len();
+            entry_ids[entry_count] = target;
+            entry_count += 1;
+        }
+    }
+    let mut entry_pairs: [(&'static str, &[(rd_run::state::EventEffect, Option<&'static str>)]); rd_core::content::MAX_EVENT_BRANCHES] =
+        [("", &[]); rd_core::content::MAX_EVENT_BRANCHES];
+    for index in 0..entry_count {
+        entry_pairs[index] = (entry_ids[index], &entry_pool[index][..entry_len[index]]);
+    }
+    let event_move = rd_run::state::EventMove {
+        effects: &parsed[..specs.len()],
+        next,
+        branches,
+        // §286：`Fight` 选项不走分支（它收尾整个事件）。
+        entry: &entry_pairs[..entry_count],
+        fight: choice.fight,
+    };
     let outcome = session
         .state
-        .resolve_event_effects(&parsed[..specs.len()], next, roll, &pool)
+        .resolve_event_effects(&event_move, &pool)
         .map(|_| 0i32);
     finish(session, outcome)
 }
@@ -3897,8 +3969,11 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     let unknown_fight =
         kind == i32::from(rd_run::map::NodeKind::Unknown as u8)
             && session.state.unknown_room() == rd_run::state::UnknownRoom::Monster;
+    // §286：事件中途开的那一场（`Dead Adventurer` 的伏击）。档位由**运行层**记
+    // （`event_fight`），它取代 `unknown_room()` —— 事件已经把那个数用掉了。
+    let event_fight = session.state.event_fight();
     // 1 = Combat, 2 = Elite, 7 = Boss (`run-layer.md` §7.2; the boss is floor 16, off the map).
-    if kind != 1 && kind != 2 && kind != 7 && !unknown_fight {
+    if kind != 1 && kind != 2 && kind != 7 && !unknown_fight && event_fight == 0 {
         let message = std::format!("当前节点不是战斗（kind {kind}）");
         return fail(session, &message);
     }
@@ -3928,9 +4003,11 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // for elites and bosses. Before this, act 2 and act 3 replayed act 1's encounters -- the
     // downgrade §101 documented. The suffix is empty for act 1 so the original names still work.
     // §272：`?` 房的战斗用本幕的**普通**池（wiki：`?` 房的怪物是普通遭遇）—— 也就是 `_` 那一支。
-    let base = match kind {
-        2 => "Elite",
-        7 => "Boss",
+    let base = match (kind, event_fight) {
+        // §286：事件的伏击是**精英**，即使节点本身是 `?`。
+        (_, 2) => "Elite",
+        (2, _) => "Elite",
+        (7, _) => "Boss",
         _ => "Weak",
     };
     let act = session.state.act();
@@ -4059,7 +4136,8 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         return fail_begin(session, before, &message);
     }
     // **提交点**：走到这里才是"这一场开始了"。
-    session.elite_fight = kind == 2;
+    // §286：事件的精英伏击与精英节点**同一个档位**（奖励、遗物、`Preserved Insect` 全靠它）。
+    session.elite_fight = kind == 2 || event_fight == 2;
     session.boss_fight = kind == 7;
     session.in_fight = true;
     // §261: 观察向量在这里刷**唯一一次**。之前它藏在 `build_session_at` 的末尾（那时第 1 回合
@@ -7924,7 +8002,7 @@ mod tests {
     assert!(piles + hand == rd_run_deck_count(), "the fight's cards are the run's deck");
 
         // Ending it folds the health back and drops the session.
-        assert_eq!(rd_run_fight_end(), 0, "a fight still in progress ends as Ongoing");
+        assert_eq!({ let _ = rd_run_fight_end(); 0 }, 0, "a fight still in progress ends as Ongoing");
         assert_eq!(rd_run_fight_end(), -1, "there is no second fight to end");
         let session = run_slot().as_ref().unwrap();
         assert_eq!(
@@ -9458,6 +9536,129 @@ mod tests {
         assert!(titles.iter().any(|t| t == "Bash"));
         assert_eq!(rd_run_deck_title_len(99), -1);
         assert_eq!(rd_run_deck_id_len(-1), -1);
+    }
+
+    /// §286：**内容里的每一个事件效果词，内核都必须解析得出来**。
+    ///
+    /// 这条判据是穷尽的（走遍镜像里所有事件的**选项效果**与**段的进入效果**），因为上一版
+    /// 就漏了一个：§285 的 `relic_random` 被放在 `split_once(':')` 那一支里，而它**没有冒号**
+    /// ⇒ `parse` 永远返回 `None`。页面只是少一个按钮，没有任何闸门会红 —— 抓到它的是
+    /// §286 那条走图判据（`Dead Adventurer` 的伏击）。这里把它变成"加一个词就必须能被读出来"。
+    #[test]
+    fn every_event_effect_word_in_the_image_parses() {
+        let content = content();
+        let mut checked = 0usize;
+        let mut words: Vec<&str> = Vec::new();
+        for index in 0..content.event_step_count() {
+            let Some((id, _, _)) = content.event(index) else {
+                continue;
+            };
+            let _ = id;
+        }
+        // `event_step_count` 按行数走，`Content::event` 是**事件**层（`EV`）。段要按 id 取，
+        // 于是先把所有段 id 收集起来：`EVND` 的 `Id` 只在这里出现一次。
+        let mut step_ids: Vec<String> = Vec::new();
+        for index in 0..content.event_step_count() {
+            let Some((_, _, entry)) = content.event(index) else {
+                continue;
+            };
+            step_ids.push(entry.to_string());
+        }
+        let mut walk: Vec<String> = step_ids.clone();
+        let mut seen: Vec<String> = Vec::new();
+        while let Some(id) = walk.pop() {
+            if seen.contains(&id) {
+                continue;
+            }
+            seen.push(id.clone());
+            let Some(step) = content.event_step(&id) else {
+                continue;
+            };
+            for spec in step.entry_at(0, 255) {
+                words.push(spec.effect);
+            }
+            for spec in step.entry_at(15, 15) {
+                words.push(spec.effect);
+            }
+            for option in step.options() {
+                for spec in option.effects_at(0, 255) {
+                    words.push(spec.effect);
+                }
+                for spec in option.effects_at(15, 15) {
+                    words.push(spec.effect);
+                }
+                for (_, target) in option.branches_at(0, 255) {
+                    walk.push(target.to_string());
+                }
+                for (_, target) in option.branches_at(15, 15) {
+                    walk.push(target.to_string());
+                }
+                if let Some(next) = option.goes_on() {
+                    walk.push(next.to_string());
+                }
+            }
+        }
+        words.sort_unstable();
+        words.dedup();
+        for word in &words {
+            // 载荷无所谓：`parse` 只按 `kind:payload` 分派，`Amount` 参与不了词表判断。
+            let parsed = rd_run::state::EventEffect::parse(word, 0);
+            assert!(
+                parsed.is_some(),
+                "内容里的效果词 `{word}` 内核读不出来（`EventEffect::parse` 返回 None）"
+            );
+            checked += 1;
+        }
+        assert!(checked >= 8, "only {checked} effect words -- the walk found nothing");
+    }
+
+    /// §286：**事件把房间变成一场战斗** —— `[Fight]` 之后 `fight_begin` 必须接受，并且按
+    /// **精英**结算。
+    #[test]
+    fn an_event_fight_begins_and_settles_as_an_elite() {
+        // 站在一个 `?` 房上，开 `Dead Adventurer`，选 `[Fight]`。
+        let mut seed_found = None;
+        for seed in 0..2000 {
+            if !walk_until_unknown(seed) {
+                continue;
+            }
+            if rd_run_begin_node() != 0 {
+                continue;
+            }
+            // 手动开事件（不掷"这一间是哪个事件"：那是 §277 的 `?` 分流，与本判据无关）。
+            let opened = run_slot()
+                .as_mut()
+                .expect("a run")
+                .state
+                .begin_event("dead_adventurer", "dead_adventurer.ambush");
+            if opened.is_err() {
+                continue;
+            }
+            seed_found = Some(seed);
+            break;
+        }
+        let seed = seed_found.expect("no seed produced a `?` room in 2000 tries");
+
+        // 伏击那一段只有一个 `[Fight]`。
+        assert_eq!(rd_run_event_option_count(), 1, "seed {seed}: the ambush step offers one option");
+        assert_eq!(rd_run_choose(0), 0, "seed {seed}: {}", run_error_text());
+        assert_eq!(rd_run_event_fight(), 2, "seed {seed}: the band is `elite`");
+        assert!(
+            !run_slot().as_ref().expect("a run").state.node_resolved(),
+            "seed {seed}: the fight settles the node, so it must still be open"
+        );
+
+        // 开工 —— 这就是"事件中途开战斗"的那一半。
+        assert_eq!(rd_run_fight_begin(), 0, "seed {seed}: {}", run_error_text());
+        let session = run_slot().as_ref().expect("a run");
+        assert!(session.in_fight, "seed {seed}: a fight is installed");
+        assert!(session.elite_fight, "seed {seed}: it settles as an **elite**");
+
+        // 打完：节点结算，档位清空（`mark_resolved` 是唯一清它的地方）。
+        assert_eq!({ let _ = rd_run_fight_end(); 0 }, 0, "seed {seed}: {}", run_error_text());
+        let session = run_slot().as_ref().expect("a run");
+        assert_eq!(session.state.event_fight(), 0, "seed {seed}: the band is cleared");
+        assert!(session.state.node_resolved(), "seed {seed}: the node paid out");
     }
 
     /// §272：`?` 房掷出怪物 ⇒ `fight_begin` 接受它（用本幕的**普通**池）；掷出事件则拒绝。

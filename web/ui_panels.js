@@ -139,7 +139,7 @@ const RD_PANELS = (() => {
         : s.kind === 2
           ? "精英节点（3 × Sentry）"
           : s.kind === 5
-            ? "? 房 · 普通战斗"
+            ? (s.eventFight > 0 ? "? 房 · 事件引来的伏击" : "? 房 · 普通战斗")
             : "战斗节点";
     return {
       title: name,
@@ -382,6 +382,9 @@ const RD_PANELS = (() => {
         // §272：`?` 房（5）掷出怪物（`unknownRoom === 2`）时是战斗。
         if (s.kind === 1 || s.kind === 2 || s.kind === 7) return describeFight(s);
         if (s.kind === 5 && s.unknownRoom === 2) return describeFight(s);
+        // §286：事件把房间变成了一场战斗（`Dead Adventurer` 的伏击）。判据是内核记下的
+        // **档位**，不是"kind 是 5 就该打" —— 事件、宝箱、商人都还是 kind 5。
+        if (s.eventFight > 0) return describeFight(s);
         if (s.kind >= 0 && s.actionCount === 0) {
           // No moves and nothing to settle: the act has run out of map (the last row, with no way
           // onward). Saying so beats an empty panel that looks like a bug.

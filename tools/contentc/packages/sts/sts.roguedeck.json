@@ -65151,6 +65151,11 @@
       "Id": "the_joust",
       "NameKey": "The Joust",
       "Entry": "the_joust"
+    },
+    {
+      "Id": "dead_adventurer",
+      "NameKey": "Dead Adventurer",
+      "Entry": "dead_adventurer"
     }
   ],
   "Potions": [
@@ -65447,6 +65452,9 @@
       },
       {
         "Id": "wing_statue"
+      },
+      {
+        "Id": "dead_adventurer"
       }
     ],
     "Events2": [
@@ -66242,9 +66250,16 @@
               "Amount": 5
             }
           ],
-          "Next": "scrap_pile.found",
-          "Chance": 25,
-          "NextFail": "scrap_pile.try2"
+          "Branches": [
+            {
+              "Weight": 25,
+              "Next": "scrap_pile.found"
+            },
+            {
+              "Weight": 75,
+              "Next": "scrap_pile.try2"
+            }
+          ]
         },
         {
           "Label": "Leave",
@@ -66276,9 +66291,16 @@
               "Amount": 6
             }
           ],
-          "Next": "scrap_pile.found",
-          "Chance": 35,
-          "NextFail": "scrap_pile.try3"
+          "Branches": [
+            {
+              "Weight": 35,
+              "Next": "scrap_pile.found"
+            },
+            {
+              "Weight": 65,
+              "Next": "scrap_pile.try3"
+            }
+          ]
         },
         {
           "Label": "Leave",
@@ -66310,9 +66332,16 @@
               "Amount": 7
             }
           ],
-          "Next": "scrap_pile.found",
-          "Chance": 45,
-          "NextFail": "scrap_pile.try4"
+          "Branches": [
+            {
+              "Weight": 45,
+              "Next": "scrap_pile.found"
+            },
+            {
+              "Weight": 55,
+              "Next": "scrap_pile.try4"
+            }
+          ]
         },
         {
           "Label": "Leave",
@@ -66344,9 +66373,16 @@
               "Amount": 8
             }
           ],
-          "Next": "scrap_pile.found",
-          "Chance": 55,
-          "NextFail": "scrap_pile.try5"
+          "Branches": [
+            {
+              "Weight": 55,
+              "Next": "scrap_pile.found"
+            },
+            {
+              "Weight": 45,
+              "Next": "scrap_pile.try5"
+            }
+          ]
         },
         {
           "Label": "Leave",
@@ -66378,9 +66414,16 @@
               "Amount": 9
             }
           ],
-          "Next": "scrap_pile.found",
-          "Chance": 65,
-          "NextFail": "scrap_pile.try6"
+          "Branches": [
+            {
+              "Weight": 65,
+              "Next": "scrap_pile.found"
+            },
+            {
+              "Weight": 35,
+              "Next": "scrap_pile.try6"
+            }
+          ]
         },
         {
           "Label": "Leave",
@@ -66412,9 +66455,16 @@
               "Amount": 10
             }
           ],
-          "Next": "scrap_pile.found",
-          "Chance": 75,
-          "NextFail": "scrap_pile.try7"
+          "Branches": [
+            {
+              "Weight": 75,
+              "Next": "scrap_pile.found"
+            },
+            {
+              "Weight": 25,
+              "Next": "scrap_pile.try7"
+            }
+          ]
         },
         {
           "Label": "Leave",
@@ -66446,9 +66496,16 @@
               "Amount": 11
             }
           ],
-          "Next": "scrap_pile.found",
-          "Chance": 85,
-          "NextFail": "scrap_pile.try8"
+          "Branches": [
+            {
+              "Weight": 85,
+              "Next": "scrap_pile.found"
+            },
+            {
+              "Weight": 15,
+              "Next": "scrap_pile.try8"
+            }
+          ]
         },
         {
           "Label": "Leave",
@@ -66480,9 +66537,16 @@
               "Amount": 12
             }
           ],
-          "Next": "scrap_pile.found",
-          "Chance": 95,
-          "NextFail": "scrap_pile.try9"
+          "Branches": [
+            {
+              "Weight": 95,
+              "Next": "scrap_pile.found"
+            },
+            {
+              "Weight": 5,
+              "Next": "scrap_pile.try9"
+            }
+          ]
         },
         {
           "Label": "Leave",
@@ -66536,11 +66600,17 @@
           "Label": "Leave",
           "Effects": [
             {
-              "Effect": "relic_random",
+              "Effect": "nothing",
               "Amount": 0
             }
           ],
           "Next": ""
+        }
+      ],
+      "Effects": [
+        {
+          "Effect": "relic_random",
+          "Amount": 0
         }
       ]
     },
@@ -66707,9 +66777,16 @@
               "Amount": 0
             }
           ],
-          "Chance": 70,
-          "Next": "the_joust.murderer_won",
-          "NextFail": "the_joust.murderer_lost"
+          "Branches": [
+            {
+              "Weight": 70,
+              "Next": "the_joust.murderer_won"
+            },
+            {
+              "Weight": 30,
+              "Next": "the_joust.murderer_lost"
+            }
+          ]
         },
         {
           "Label": "Owner (bet 50)",
@@ -66719,9 +66796,16 @@
               "Amount": 0
             }
           ],
-          "Chance": 30,
-          "Next": "the_joust.owner_won",
-          "NextFail": "the_joust.owner_lost"
+          "Branches": [
+            {
+              "Weight": 30,
+              "Next": "the_joust.owner_won"
+            },
+            {
+              "Weight": 70,
+              "Next": "the_joust.owner_lost"
+            }
+          ]
         }
       ]
     },
@@ -66733,11 +66817,17 @@
           "Label": "Leave",
           "Effects": [
             {
-              "Effect": "gold",
-              "Amount": 100
+              "Effect": "nothing",
+              "Amount": 0
             }
           ],
           "Next": ""
+        }
+      ],
+      "Effects": [
+        {
+          "Effect": "gold",
+          "Amount": 100
         }
       ]
     },
@@ -66765,11 +66855,17 @@
           "Label": "Leave",
           "Effects": [
             {
-              "Effect": "gold",
-              "Amount": 250
+              "Effect": "nothing",
+              "Amount": 0
             }
           ],
           "Next": ""
+        }
+      ],
+      "Effects": [
+        {
+          "Effect": "gold",
+          "Amount": 250
         }
       ]
     },
@@ -66785,6 +66881,727 @@
               "Amount": 0
             }
           ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer",
+      "TextKey": "You come across a dead adventurer on the floor. His pants have been stolen! Though his possessions are still intact, you're in no mind to find out what happened here...",
+      "Options": [
+        {
+          "Label": "Search",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Branches": [
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.1.g.rn"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.1.r.gn"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.1.n.gr"
+            }
+          ],
+          "BranchesAsc": [
+            {
+              "Weight": 35,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 21,
+              "Next": "dead_adventurer.found.1.g.rn"
+            },
+            {
+              "Weight": 21,
+              "Next": "dead_adventurer.found.1.r.gn"
+            },
+            {
+              "Weight": 23,
+              "Next": "dead_adventurer.found.1.n.gr"
+            }
+          ]
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.1.g.rn",
+      "TextKey": "You found some gold! Continue searching?",
+      "Effects": [
+        {
+          "Effect": "gold",
+          "Amount": 30
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "dead_adventurer.2.rn"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.1.r.gn",
+      "TextKey": "You found a relic! Continue searching?",
+      "Effects": [
+        {
+          "Effect": "relic_random",
+          "Amount": 0
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "dead_adventurer.2.gn"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.1.n.gr",
+      "TextKey": "Hmm, couldn't find anything... Continue searching?",
+      "Effects": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "dead_adventurer.2.gr"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.2.gr",
+      "TextKey": "Continue searching?",
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Branches": [
+            {
+              "Weight": 50,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.2.g.r"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.2.r.g"
+            }
+          ],
+          "BranchesAsc": [
+            {
+              "Weight": 60,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 20,
+              "Next": "dead_adventurer.found.2.g.r"
+            },
+            {
+              "Weight": 20,
+              "Next": "dead_adventurer.found.2.r.g"
+            }
+          ]
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.2.g.r",
+      "TextKey": "You found some gold! Continue searching?",
+      "Effects": [
+        {
+          "Effect": "gold",
+          "Amount": 30
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "dead_adventurer.3.r"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.2.r.g",
+      "TextKey": "You found a relic! Continue searching?",
+      "Effects": [
+        {
+          "Effect": "relic_random",
+          "Amount": 0
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "dead_adventurer.3.g"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.2.gn",
+      "TextKey": "Continue searching?",
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Branches": [
+            {
+              "Weight": 50,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.2.g.n"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.2.n.g"
+            }
+          ],
+          "BranchesAsc": [
+            {
+              "Weight": 60,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 20,
+              "Next": "dead_adventurer.found.2.g.n"
+            },
+            {
+              "Weight": 20,
+              "Next": "dead_adventurer.found.2.n.g"
+            }
+          ]
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.2.g.n",
+      "TextKey": "You found some gold! Continue searching?",
+      "Effects": [
+        {
+          "Effect": "gold",
+          "Amount": 30
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "dead_adventurer.3.n"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.2.n.g",
+      "TextKey": "Hmm, couldn't find anything... Continue searching?",
+      "Effects": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "dead_adventurer.3.g"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.2.rn",
+      "TextKey": "Continue searching?",
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Branches": [
+            {
+              "Weight": 50,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.2.r.n"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.2.n.r"
+            }
+          ],
+          "BranchesAsc": [
+            {
+              "Weight": 60,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 20,
+              "Next": "dead_adventurer.found.2.r.n"
+            },
+            {
+              "Weight": 20,
+              "Next": "dead_adventurer.found.2.n.r"
+            }
+          ]
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.2.r.n",
+      "TextKey": "You found a relic! Continue searching?",
+      "Effects": [
+        {
+          "Effect": "relic_random",
+          "Amount": 0
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "dead_adventurer.3.n"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.2.n.r",
+      "TextKey": "Hmm, couldn't find anything... Continue searching?",
+      "Effects": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "dead_adventurer.3.r"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.3.g",
+      "TextKey": "Continue searching?",
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Branches": [
+            {
+              "Weight": 75,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.3.g.none"
+            }
+          ],
+          "BranchesAsc": [
+            {
+              "Weight": 85,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 15,
+              "Next": "dead_adventurer.found.3.g.none"
+            }
+          ]
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.3.g.none",
+      "TextKey": "You found some gold! Continue searching?",
+      "Effects": [
+        {
+          "Effect": "gold",
+          "Amount": 30
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.3.r",
+      "TextKey": "Continue searching?",
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Branches": [
+            {
+              "Weight": 75,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.3.r.none"
+            }
+          ],
+          "BranchesAsc": [
+            {
+              "Weight": 85,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 15,
+              "Next": "dead_adventurer.found.3.r.none"
+            }
+          ]
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.3.r.none",
+      "TextKey": "You found a relic! Continue searching?",
+      "Effects": [
+        {
+          "Effect": "relic_random",
+          "Amount": 0
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.3.n",
+      "TextKey": "Continue searching?",
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Branches": [
+            {
+              "Weight": 75,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 25,
+              "Next": "dead_adventurer.found.3.n.none"
+            }
+          ],
+          "BranchesAsc": [
+            {
+              "Weight": 85,
+              "Next": "dead_adventurer.ambush"
+            },
+            {
+              "Weight": 15,
+              "Next": "dead_adventurer.found.3.n.none"
+            }
+          ]
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.found.3.n.none",
+      "TextKey": "Hmm, couldn't find anything... Continue searching?",
+      "Effects": [
+        {
+          "Effect": "nothing",
+          "Amount": 0
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.ambush",
+      "TextKey": "While searching the adventurer you are caught off guard!",
+      "Options": [
+        {
+          "Label": "Fight",
+          "Effects": [],
+          "Fight": "elite",
           "Next": ""
         }
       ]

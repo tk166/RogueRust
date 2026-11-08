@@ -77,6 +77,8 @@ const REQUIRED = [
   "rd_run_last_error_into", "rd_run_kind_name_len", "rd_run_kind_name_into",
   "rd_run_relic_name_len", "rd_run_relic_name_into", "rd_run_relic_id_len", "rd_run_relic_id_into",
   "rd_run_pending", "rd_run_node_kind", "rd_run_begin_node", "rd_run_rest", "rd_run_smith",
+  // §286：事件把房间变成的那一场战斗的档位（页面靠它决定画不画"开始战斗"）。
+  "rd_run_event_fight",
   // §259: 篝火四选项 + 位掩码 + Girya 计数
   "rd_run_campfire_options", "rd_run_lift", "rd_run_toke", "rd_run_dig", "rd_run_recall",
   "rd_run_girya_lifts",

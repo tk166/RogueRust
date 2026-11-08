@@ -4,32 +4,32 @@
   "magic": "0x46434452",
   "source": {
     "path": "D:\\Vibe\\sts-tui\\tools\\contentc\\packages\\sts\\sts.roguedeck.json",
-    "raw_bytes": 1922988,
-    "content_hash_fnv1a32": "0x44CBFB7D",
+    "raw_bytes": 1940451,
+    "content_hash_fnv1a32": "0x626CF72C",
     "schema_version": 1,
-    "compact_json_bytes": 837904,
-    "compact_json_without_redundant_children": 837904
+    "compact_json_bytes": 845791,
+    "compact_json_without_redundant_children": 845791
   },
   "totals": {
-    "content.sts.rdcf": 157164,
-    "content.sts.core.rdcf": 123132
+    "content.sts.rdcf": 159476,
+    "content.sts.core.rdcf": 125444
   },
   "header_bytes": 32,
   "directory_bytes": 252,
   "tables": {
     "strings": {
-      "count": 2698,
-      "blob_bytes": 70681,
-      "offset_table_bytes": 10796
+      "count": 2728,
+      "blob_bytes": 71608,
+      "offset_table_bytes": 10916
     },
     "opcodes": {
-      "count": 171,
+      "count": 176,
       "ir_kinds": 82,
-      "object_shapes": 81
+      "object_shapes": 86
     },
     "terms": {
-      "distinct": 3122,
-      "aux_cells": 2688
+      "distinct": 3201,
+      "aux_cells": 2786
     },
     "cards": {
       "count": 293,
@@ -52,11 +52,11 @@
       "stride": 12
     },
     "events": {
-      "count": 16,
+      "count": 17,
       "stride": 8
     },
     "event_nodes": {
-      "count": 46,
+      "count": 66,
       "stride": 8
     },
     "potions": {
@@ -73,104 +73,104 @@
   "variants": {
     "full": {
       "file": "content.sts.rdcf",
-      "bytes": 157164,
+      "bytes": 159476,
       "flags": 0,
       "sections": [
         {
           "id": 0,
           "name": "STR",
           "offset": 284,
-          "bytes": 70681,
-          "count": 2698
+          "bytes": 71608,
+          "count": 2728
         },
         {
           "id": 1,
           "name": "STRO",
-          "offset": 70968,
-          "bytes": 10796,
-          "count": 2699
+          "offset": 71892,
+          "bytes": 10916,
+          "count": 2729
         },
         {
           "id": 2,
           "name": "OPD",
-          "offset": 81764,
-          "bytes": 1432,
-          "count": 179
+          "offset": 82808,
+          "bytes": 1472,
+          "count": 184
         },
         {
           "id": 3,
           "name": "OPF",
-          "offset": 83196,
-          "bytes": 2840,
-          "count": 710
+          "offset": 84280,
+          "bytes": 2884,
+          "count": 721
         },
         {
           "id": 4,
           "name": "TRM",
-          "offset": 86036,
-          "bytes": 33888,
-          "count": 3122
+          "offset": 87164,
+          "bytes": 34548,
+          "count": 3201
         },
         {
           "id": 5,
           "name": "TRW",
-          "offset": 119924,
-          "bytes": 6244,
-          "count": 3122
+          "offset": 121712,
+          "bytes": 6402,
+          "count": 3201
         },
         {
           "id": 6,
           "name": "AUX",
-          "offset": 126168,
-          "bytes": 5376,
-          "count": 2688
+          "offset": 128116,
+          "bytes": 5572,
+          "count": 2786
         },
         {
           "id": 7,
           "name": "CARD",
-          "offset": 131544,
+          "offset": 133688,
           "bytes": 9376,
           "count": 293
         },
         {
           "id": 8,
           "name": "STAT",
-          "offset": 140920,
+          "offset": 143064,
           "bytes": 5120,
           "count": 128
         },
         {
           "id": 9,
           "name": "EACT",
-          "offset": 146040,
+          "offset": 148184,
           "bytes": 2208,
           "count": 138
         },
         {
           "id": 10,
           "name": "ENCT",
-          "offset": 148248,
+          "offset": 150392,
           "bytes": 704,
           "count": 44
         },
         {
           "id": 11,
           "name": "REL",
-          "offset": 148952,
+          "offset": 151096,
           "bytes": 1392,
           "count": 116
         },
         {
           "id": 12,
           "name": "ROOT",
-          "offset": 150344,
+          "offset": 152488,
           "bytes": 28,
           "count": 7
         },
         {
           "id": 13,
           "name": "IDX",
-          "offset": 150372,
+          "offset": 152516,
           "bytes": 5768,
           "count": 721
         },
@@ -184,126 +184,126 @@
         {
           "id": 15,
           "name": "EV",
-          "offset": 156140,
-          "bytes": 128,
-          "count": 16
+          "offset": 158284,
+          "bytes": 136,
+          "count": 17
         },
         {
           "id": 16,
           "name": "POT",
-          "offset": 156268,
+          "offset": 158420,
           "bytes": 528,
           "count": 33
         },
         {
           "id": 17,
           "name": "EVND",
-          "offset": 156796,
-          "bytes": 368,
-          "count": 46
+          "offset": 158948,
+          "bytes": 528,
+          "count": 66
         }
       ]
     },
     "core": {
       "file": "content.sts.core.rdcf",
-      "bytes": 123132,
+      "bytes": 125444,
       "flags": 1,
       "sections": [
         {
           "id": 0,
           "name": "STR",
           "offset": 284,
-          "bytes": 42180,
-          "count": 1678
+          "bytes": 43107,
+          "count": 1708
         },
         {
           "id": 1,
           "name": "STRO",
-          "offset": 42464,
-          "bytes": 6716,
-          "count": 1679
+          "offset": 43392,
+          "bytes": 6836,
+          "count": 1709
         },
         {
           "id": 2,
           "name": "OPD",
-          "offset": 49180,
-          "bytes": 1424,
-          "count": 178
+          "offset": 50228,
+          "bytes": 1464,
+          "count": 183
         },
         {
           "id": 3,
           "name": "OPF",
-          "offset": 50604,
-          "bytes": 2720,
-          "count": 680
+          "offset": 51692,
+          "bytes": 2764,
+          "count": 691
         },
         {
           "id": 4,
           "name": "TRM",
-          "offset": 53324,
-          "bytes": 32824,
-          "count": 2993
+          "offset": 54456,
+          "bytes": 33484,
+          "count": 3072
         },
         {
           "id": 5,
           "name": "TRW",
-          "offset": 86148,
-          "bytes": 5986,
-          "count": 2993
+          "offset": 87940,
+          "bytes": 6144,
+          "count": 3072
         },
         {
           "id": 6,
           "name": "AUX",
-          "offset": 92136,
-          "bytes": 5376,
-          "count": 2688
+          "offset": 94084,
+          "bytes": 5572,
+          "count": 2786
         },
         {
           "id": 7,
           "name": "CARD",
-          "offset": 97512,
+          "offset": 99656,
           "bytes": 9376,
           "count": 293
         },
         {
           "id": 8,
           "name": "STAT",
-          "offset": 106888,
+          "offset": 109032,
           "bytes": 5120,
           "count": 128
         },
         {
           "id": 9,
           "name": "EACT",
-          "offset": 112008,
+          "offset": 114152,
           "bytes": 2208,
           "count": 138
         },
         {
           "id": 10,
           "name": "ENCT",
-          "offset": 114216,
+          "offset": 116360,
           "bytes": 704,
           "count": 44
         },
         {
           "id": 11,
           "name": "REL",
-          "offset": 114920,
+          "offset": 117064,
           "bytes": 1392,
           "count": 116
         },
         {
           "id": 12,
           "name": "ROOT",
-          "offset": 116312,
+          "offset": 118456,
           "bytes": 28,
           "count": 7
         },
         {
           "id": 13,
           "name": "IDX",
-          "offset": 116340,
+          "offset": 118484,
           "bytes": 5768,
           "count": 721
         },
@@ -317,32 +317,32 @@
         {
           "id": 15,
           "name": "EV",
-          "offset": 122108,
-          "bytes": 128,
-          "count": 16
+          "offset": 124252,
+          "bytes": 136,
+          "count": 17
         },
         {
           "id": 16,
           "name": "POT",
-          "offset": 122236,
+          "offset": 124388,
           "bytes": 528,
           "count": 33
         },
         {
           "id": 17,
           "name": "EVND",
-          "offset": 122764,
-          "bytes": 368,
-          "count": 46
+          "offset": 124916,
+          "bytes": 528,
+          "count": 66
         }
       ]
     }
   },
   "timing_seconds": {
-    "json_load": 0.028,
-    "derive": 0.0525,
-    "encode": 0.0702,
-    "serialize": 0.0296
+    "json_load": 0.0285,
+    "derive": 0.0557,
+    "encode": 0.0745,
+    "serialize": 0.0302
   },
-  "peak_heap_mib": 13.0
+  "peak_heap_mib": 13.2
 }
