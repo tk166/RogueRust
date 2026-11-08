@@ -873,8 +873,16 @@ fn plan_play<'c>(
     // X 费牌不套 `ensure_affordable`：它付的永远是"现有多少付多少"，所以那条校验不可能失败；
     // 而 X 的值就是**这一次真的花掉的量**（读回来而不是另算一遍 —— "X 等于花了多少"正是
     // 这条规则的全部内容）。
+    // §296：`chemical_x` —— "The effects of your cost X cards are increased by 2"。
+    // 加在**效果里用的那个 X**上（`x.cost`），不是付的钱：付 3 点、`whirlwind` 打 5 次。
+    // 与 §263 的三件同一条路：内核认状态 id，数字是 wiki 的常量。
+    let x_bonus = if crate::exec::carries_status(state, &card.source, crate::exec::CHEMICAL_X.0) {
+        crate::exec::CHEMICAL_X.1
+    } else {
+        0
+    };
     let x_cost = {
-        let mut total = 0i32;
+        let mut total = x_bonus;
         for index in 0..paid.len() {
             if let Some(entry) = paid.get(index) {
                 total = total.saturating_add(entry.amount);

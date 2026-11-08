@@ -14529,4 +14529,82 @@ mod tests {
         );
     }
 
+    /// §296：`chemical_x` —— X 费牌的 X 加 2。
+    ///
+    /// 判据用 `whirlwind`（`repeat.Count = x.cost`，每次 5 点）：能量 3 ⇒ 不带遗物打 3 次、
+    /// 带遗物打 5 次。**差 2 次**就是"X 加了 2"的唯一可观察形态 —— 而"打了几次"用敌人掉的
+    /// 血量除以 5 读出来（`whirlwind` 每下 5 点、敌人 100 血 ⇒ 不会被死亡截断）。
+    #[test]
+    fn chemical_x_adds_two_to_the_x_of_an_x_cost_card() {
+        use crate::state::{CombatState, ResourceId};
+
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+
+        // 一次完整的"打 whirlwind"，返回敌人掉了多少血。
+        let play_whirlwind = |host: &mut Host, with_relic: bool| -> i32 {
+            let mut state = arena();
+            // 敌人 100 血：`whirlwind` 每下 5 点，5 下也只有 25 ⇒ 不会被死亡截断。
+            {
+                let foe = state.combatant_mut(&cid("enemy_a")).expect("foe");
+                foe.health_max = 100;
+                foe.health_current = 100;
+            }
+            state
+                .combatant_mut(&cid("hero"))
+                .expect("hero")
+                .set_resource(ResourceId::new("standard.energy").unwrap(), 3, Some(3))
+                .expect("energy");
+            if with_relic {
+                // 遗物在战斗里就是这条状态（`rd-run` 的开战加成挂它）。
+                give(&mut state, "hero", status("st_cx", "standard.chemical_x", 1));
+            }
+            let card = card_in_hand(&mut state, &content, "hero", "whirlwind");
+            let before = state
+                .combatant(&cid("enemy_a"))
+                .expect("foe")
+                .health_current;
+            let request = crate::play::PlayRequest::new(
+                cid("hero"),
+                card,
+                Some(cid("enemy_a")),
+            );
+            crate::play::play_card(&mut state, Some(&content), &request).expect("whirlwind");
+            // `play_card` 自己排空（严格面），但事件触发器（BlockBroken 之类）走宿主循环 ——
+            // 这里没有相关触发器，排空一次只是保证队列干净。
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            before - state.combatant(&cid("enemy_a")).expect("foe").health_current
+        };
+
+        // 3 能量 ⇒ 3 下 = 15 点；带 `chemical_x` ⇒ 5 下 = 25 点。
+        let without = play_whirlwind(&mut host, false);
+        assert_eq!(without, 15, "3 energy -> 3 hits of 5");
+        let with = play_whirlwind(&mut host, true);
+        assert_eq!(with, 25, "chemical_x: X is 3 + 2 -> 5 hits of 5");
+        assert_eq!(with - without, 10, "the difference is exactly two hits");
+
+        // 成对的反面：**不是** X 费牌就不受影响（`strike` 6 点）。
+        let mut state = arena();
+        state
+            .combatant_mut(&cid("hero"))
+            .expect("hero")
+            .set_resource(ResourceId::new("standard.energy").unwrap(), 3, Some(3))
+            .expect("energy");
+        give(&mut state, "hero", status("st_cx", "standard.chemical_x", 1));
+        let card = card_in_hand(&mut state, &content, "hero", "strike");
+        let before = state
+            .combatant(&cid("enemy_a"))
+            .expect("foe")
+            .health_current;
+        let request = crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a")));
+        crate::play::play_card(&mut state, Some(&content), &request).expect("strike");
+        let dealt = before - state.combatant(&cid("enemy_a")).expect("foe").health_current;
+        assert_eq!(dealt, 6, "a non-X card is untouched (`strike` is 6)");
+    }
+
 }

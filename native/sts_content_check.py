@@ -125,8 +125,9 @@ INV_COUNTS = {
     # §282: +1 (`standard.confusion`)；§283: +1 (`standard.snecko_eye`)。
     # §292: +1 (`standard.cursed_key` —— 每回合 +1 能量的载体，与 `busted_crown` 同形状)。
     # §294: +2 (`standard.the_abacus` / `standard.sundial` —— `DeckShuffled` 触发器的头两位)。
-    # §295: +1 (`standard.hand_drill` —— `BlockBroken` 触发器).
-    "statuses": 132,
+    # §295: +1 (`standard.hand_drill` —— `BlockBroken` 触发器)。
+    # §296: +1 (`standard.chemical_x` —— 内核规则的开关，内容那一行是载体).
+    "statuses": 133,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1557,6 +1558,8 @@ INV_STATUSES = {
     "standard.sundial": [],
     # §295：行为全在 `BlockBroken` 触发器里。
     "standard.hand_drill": [],
+    # §296：`chemical_x` 的规则**在内核**（`play.rs` 给 X 加 2），内容这一行是开关。
+    "standard.chemical_x": [],
     # §267：零基建批次。
     "standard.ring_of_the_serpent": [('TurnStartDraw', 'AddFlat', 1, 100, None)],
     "standard.philosophers_stone": [('TurnStartEnergy', 'AddPerStack', 1, 100, None)],
@@ -3629,7 +3632,8 @@ def check_statuses(doc):
                      # §294：`DeckShuffled` 的两个用户。
                      "standard.snecko_eye", "standard.cursed_key",
                      "standard.the_abacus", "standard.sundial",
-                     "standard.hand_drill"):
+                     "standard.hand_drill",
+                     "standard.chemical_x"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -3772,7 +3776,9 @@ def check_statuses(doc):
                         "standard.the_abacus": ["DeckShuffled"],
                         "standard.sundial": ["DeckShuffled"],
                         # §295
-                        "standard.hand_drill": ["BlockBroken"]}[sid]
+                        "standard.hand_drill": ["BlockBroken"],
+                        # §296：`chemical_x` 没有触发器（规则在内核）。
+                        "standard.chemical_x": []}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
@@ -4065,6 +4071,8 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "the_abacus", "sundial",
                       # §295：`BlockBroken` 的第一个用户。
                       "hand_drill",
+                      # §296：X 费牌的 X 加 2。
+                      "chemical_x",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

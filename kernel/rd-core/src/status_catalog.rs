@@ -767,6 +767,9 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.sundial"
             // §295: `hand_drill` —— 行为全在内容的 `BlockBroken` 触发器里。
             | "standard.hand_drill"
+            // §296: `chemical_x` —— 规则**在内核**（`play.rs` 按 id 看"有没有"，给 X 加 2）。
+            // 内容那一行没有修饰器也没有触发器：它像 §231 的 `standard.no_draw`，是个**开关**。
+            | "standard.chemical_x"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

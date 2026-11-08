@@ -9157,6 +9157,22 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.chemical_x",
+      "PackageId": "sts",
+      "NameKey": "Chemical X",
+      "DescriptionKey": "The effects of your cost X cards are increased by 2.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
     }
   ],
   "Cards": [
@@ -65766,6 +65782,13 @@
     {
       "Id": "hand_drill",
       "DisplayName": "Hand Drill",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Shop"
+    },
+    {
+      "Id": "chemical_x",
+      "DisplayName": "Chemical X",
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Shop"

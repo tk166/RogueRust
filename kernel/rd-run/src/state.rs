@@ -3145,6 +3145,8 @@ impl RunState {
             "sundial" => Some(RelicEffect::StartCombatStatus("standard.sundial", 1)),
             // §295：`hand_drill` —— 同样是"开战挂一条内容状态"，规则全在 `BlockBroken` 触发器里。
             "hand_drill" => Some(RelicEffect::StartCombatStatus("standard.hand_drill", 1)),
+            // §296：`chemical_x` —— 同样是开战挂一条内容状态；规则在内核（`x.cost` 上加 2）。
+            "chemical_x" => Some(RelicEffect::StartCombatStatus("standard.chemical_x", 1)),
             _ => None,
         }
     }

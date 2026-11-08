@@ -475,6 +475,9 @@ const BUFFER_STATUS: &str = "standard.buffer";
 ///
 /// 出手方（`the_boot`）→ 承受方（`torii`）→ 掉血（`tungsten_rod`）。这条顺序只在一处可见：
 /// The Boot 把 4 抬到 5、Torii 再把 5 压到 1 —— 反过来则 4 先变 1、The Boot 就无事可做。
+/// §296：`chemical_x` —— "The effects of your cost X cards are increased by 2"。
+/// 与下面三条同族：内核认这个状态 id，数字是 wiki 的常量，内容那一行是"载体 + 页面显示"。
+pub const CHEMICAL_X: (&str, i32) = ("standard.chemical_x", 2);
 const THE_BOOT: (&str, i32, i32) = ("standard.the_boot", 4, 5);
 const TORII: (&str, i32, i32) = ("standard.torii", 5, 1);
 const TUNGSTEN_ROD: (&str, i32) = ("standard.tungsten_rod", 1);
@@ -583,7 +586,7 @@ fn death_prevention_for(
     Ok(None)
 }
 
-fn carries_status(state: &CombatState, id: &CombatantId, definition: &str) -> bool {
+pub fn carries_status(state: &CombatState, id: &CombatantId, definition: &str) -> bool {
     state
         .combatant(id)
         .map(|combatant| {

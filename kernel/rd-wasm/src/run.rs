@@ -10775,4 +10775,42 @@ mod tests {
     }
 
 
+    /// §296：`chemical_x` —— 遗物开战时真的把那条状态挂到英雄身上（内核规则读的就是它）。
+    ///
+    /// 规则本身由 rd-core 的 `chemical_x_adds_two_to_the_x_of_an_x_cost_card` 钉着
+    /// （X 加 2 ⇒ `whirlwind` 的 3 下变 5 下）。这条判据只钉**上半段**：
+    /// "遗物 → 状态"这一跳断了的话，那条内核判据仍然全绿，而玩家身上什么都没有。
+    #[test]
+    fn chemical_x_puts_its_status_on_the_hero_at_combat_start() {
+        let deck = ["strike", "strike", "strike", "strike", "strike",
+                    "defend", "defend", "defend", "defend", "bash"];
+        for (relic, want) in [("chemical_x", Some("standard.chemical_x")), ("", None)] {
+            test_run(7, 80, 80, &deck);
+            if !relic.is_empty() {
+                run_slot()
+                    .as_mut()
+                    .expect("a run")
+                    .state
+                    .push_relic(relic, &[])
+                    .expect("chemical_x");
+            }
+            assert_eq!(rd_run_step(0), 0, "walk onto floor 1");
+            assert_eq!(rd_run_fight_begin(), 0, "a fight begins");
+            let session = crate::slot().as_ref().expect("a fight");
+            let hero = session.hero_id().expect("a hero");
+            let has = session
+                .state
+                .combatant(&hero)
+                .expect("the hero")
+                .statuses()
+                .iter()
+                .any(|status| status.definition_id.as_str() == "standard.chemical_x");
+            match want {
+                Some(id) => assert!(has, "`{relic}` must put `{id}` on the hero"),
+                None => assert!(!has, "without the relic nothing is attached"),
+            }
+            let _ = rd_run_fight_end();
+        }
+    }
+
 }
