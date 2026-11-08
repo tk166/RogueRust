@@ -14745,4 +14745,120 @@ mod tests {
         );
     }
 
+    /// §298：`magic_flower` —— 战斗中治疗 ×150%（四舍五入向下、整数）。
+    ///
+    /// 判据钉两侧 + 一条**上限**：10 → 15、7 → 10（7×1.5=10.5 向下取整）；而没有那条状态时
+    /// 10 → 10。第三侧（上限）用"回满"验：治疗永远不超过最大生命。
+    #[test]
+    fn magic_flower_multiplies_healing_by_one_and_a_half() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+
+        // 把英雄打到 40/80，然后回 `amount` 点血，返回**真的**回了多少。
+        let heal = |host: &mut Host, amount: i32, with_relic: bool| -> i32 {
+            let mut state = arena();
+            {
+                let hero = state.combatant_mut(&cid("hero")).expect("hero");
+                hero.health_max = 80;
+                hero.health_current = 40;
+            }
+            if with_relic {
+                give(&mut state, "hero", status("st_mf", "standard.magic_flower", 1));
+            }
+            state
+                .enqueue_effect_with_owner(
+                    crate::state::EffectRequest::Heal {
+                        target: Some(cid("hero")),
+                        amount,
+                    },
+                    None,
+                )
+                .unwrap();
+            host.try_resolve_pending_queues(&mut state).unwrap();
+            state.combatant(&cid("hero")).expect("hero").health_current - 40
+        };
+
+        assert_eq!(heal(&mut host, 10, false), 10, "no relic: 10 stays 10");
+        assert_eq!(heal(&mut host, 10, true), 15, "magic_flower: 10 -> 15");
+        assert_eq!(heal(&mut host, 7, true), 10, "7 * 1.5 = 10.5 -> 10 (floor)");
+        // 上限仍然成立：回 100 点时只回满（40 -> 80 是 40 点，不是 150 点）。
+        assert_eq!(heal(&mut host, 100, true), 40, "the maximum still caps it");
+    }
+
+    /// §298：`medical_kit` / `blue_candle` —— 放行 `unplayable` 的 Status / Curse 牌，且落**消耗堆**。
+    ///
+    /// 四侧：① 没有遗物 ⇒ 拒（`Unplayable`）；② `medical_kit` ⇒ `wound` 能打、进消耗堆；
+    /// ③ `medical_kit` **不**放行诅咒（`injury` 仍拒）；④ `blue_candle` ⇒ `injury` 能打、
+    /// 并且**失去 1 点生命**（那条是内容触发器）、也进消耗堆。
+    #[test]
+    fn the_two_unplayable_relics_let_their_own_card_kind_through() {
+        use crate::state::{CardZone, ResourceId};
+
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+
+        // 打一张手牌里的 `card_id`，返回 (结果, 这张牌现在在哪一区, 掉了多少血)。
+        let play = |host: &mut Host, card_id: &str, relic: Option<&str>| {
+            let mut state = arena();
+            state
+                .combatant_mut(&cid("hero"))
+                .expect("hero")
+                .set_resource(ResourceId::new("standard.energy").unwrap(), 3, Some(3))
+                .expect("energy");
+            if let Some(relic) = relic {
+                give(&mut state, "hero", status("st", relic, 1));
+            }
+            let card = card_in_hand(&mut state, &content, "hero", card_id);
+            let health_before = state.combatant(&cid("hero")).expect("hero").health_current;
+            let request = crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a")));
+            let outcome = crate::play::play_card(&mut state, Some(&content), &request);
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            let health_after = state.combatant(&cid("hero")).expect("hero").health_current;
+            // 这张牌现在在哪一区（消耗堆 / 弃牌堆）。
+            let zones = state.card_zones(&cid("hero")).expect("zones");
+            // ⚠️ 不按 slot 找那张牌（`CardSlot` 的构造在测试模块里不可见）：改数**消耗堆的张数**。
+            // 手牌里每张牌都是**独立副本**，所以"打出去的这张在消耗堆里"与"消耗堆多了 0 张"
+            // 是同一件事 —— 而那正是要钉的（`ExhaustPile` vs `DiscardPile`）。
+            let exhausted = zones.count(CardZone::ExhaustPile) > 0
+                && zones.count(CardZone::DiscardPile) == 0;
+            (outcome.is_ok(), exhausted, health_before - health_after)
+        };
+
+        // ① 没有遗物：`wound` 与 `injury` 都被拒。
+        let (ok, _, _) = play(&mut host, "wound", None);
+        assert!(!ok, "a wound is unplayable without medical_kit");
+        let (ok, _, _) = play(&mut host, "injury", None);
+        assert!(!ok, "a curse is unplayable without blue_candle");
+
+        // ② `medical_kit`：`wound` 能打、进消耗堆、不掉血。
+        let (ok, exhausted, lost) = play(&mut host, "wound", Some("standard.medical_kit"));
+        assert!(ok, "medical_kit lets a Status through");
+        assert!(exhausted, "and it Exhausts (wiki: \"Exhaust it\")");
+        assert_eq!(lost, 0, "playing a Status costs no HP");
+
+        // ③ `medical_kit` **不**放行诅咒。
+        let (ok, _, _) = play(&mut host, "injury", Some("standard.medical_kit"));
+        assert!(!ok, "medical_kit only covers Status cards, not Curses");
+
+        // ④ `blue_candle`：`injury` 能打、进消耗堆、**失去 1 点生命**（内容触发器）。
+        let (ok, exhausted, lost) = play(&mut host, "injury", Some("standard.blue_candle"));
+        assert!(ok, "blue_candle lets a Curse through");
+        assert!(exhausted, "and it Exhausts");
+        assert_eq!(lost, 1, "and it costs exactly 1 HP (the content trigger)");
+
+        // 成对：`blue_candle` 也**不**放行 Status 牌。
+        let (ok, _, _) = play(&mut host, "wound", Some("standard.blue_candle"));
+        assert!(!ok, "blue_candle only covers Curses, not Status cards");
+    }
+
 }

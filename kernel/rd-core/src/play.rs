@@ -508,6 +508,12 @@ const ONE_ATTACK_PER_TURN_STATUS: &str = "standard.one_attack_per_turn";
 pub const VELVET_CHOKER_CAP: i32 = 6;
 /// `velvet_choker` 在身上时挂的那条状态（`rd-run` 的开战加成挂它，规则在这里）。
 pub const VELVET_CHOKER_STATUS: &str = "standard.velvet_choker";
+/// §298：`medical_kit` / `blue_candle` —— 放行 `unplayable` 的 Status / Curse 牌。
+pub const MEDICAL_KIT_STATUS: &str = "standard.medical_kit";
+pub const BLUE_CANDLE_STATUS: &str = "standard.blue_candle";
+/// 内容的 `CARD.Tags` 里那三个名字（`status` / `curse` / `unplayable`）。
+const STATUS_TAG: &str = "status";
+const CURSE_TAG: &str = "curse";
 /// §196：Red Slaver 的 `Entangled` —— "本回合不能打出 Attack"。
 ///
 /// 参考实现把它写在 `AbstractCard.canUse()` 里（`type == ATTACK && player.hasPower("Entangled")`），
@@ -913,6 +919,10 @@ fn plan_play<'c>(
     // 所以这里只剩卡定义自己的 `PlayedCardDestinationZone`。
     let destination = match req.override_destination {
         Some(zone) => zone,
+        // §298：`medical_kit` / `blue_candle` 放行的那张牌**必然消耗**（wiki 两句话都写了
+        // "Exhaust it"）。否则"打一张 wound"会把它塞进弃牌堆 —— 玩家能反复打同一张，
+        // 与 wiki 的"打掉就没了"相反，而且没有任何东西会红。
+        None if unplayable_is_free(state, &card)? => CardZone::ExhaustPile,
         // §242: `Corruption` overrides a Skill's landing zone (exhaust after play).
         None => corruption_destination(state, &card, played_card_destination(&card)?),
     };
@@ -1526,7 +1536,7 @@ fn validate_card_play(state: &CombatState, card: &CardOnTable<'_>) -> Result<(),
             Validator::PlayCondition => play_condition_validator(state, card),
             Validator::CardLimit => card_limit_validator(state, card),
             Validator::OneAttackPerTurn => one_attack_per_turn_validator(state, card),
-            Validator::Unplayable => unplayable_validator(card),
+            Validator::Unplayable => unplayable_validator(state, card),
         };
         verdict?;
     }
@@ -1772,16 +1782,33 @@ fn entangled_validator(
 ///
 /// `Cards/CardPlayValidators.cs:23-35`：卡带 `unplayable` 标签即拒。
 /// 本内容 2 张（`red_tape` / `unsigned_form`，都是 0 费咒卡，§1.4 实测）。
-fn unplayable_validator(card: &CardOnTable<'_>) -> Result<(), PlayError> {
+fn unplayable_validator(
+    state: &CombatState,
+    card: &CardOnTable<'_>,
+) -> Result<(), PlayError> {
     // §253：`Wish` 那条路会明确越过这一道（请求上的 `ignore_unplayable`）。
     // 其余四道门（stun / 法令 / `PlayCondition` / one_attack）**不受它影响**。
     if card.ignore_unplayable {
         return Ok(());
     }
-    if card_has_tag(card.content, card.row, UNPLAYABLE_TAG)? {
-        return Err(PlayError::Refused(Refusal::Unplayable));
+    if !card_has_tag(card.content, card.row, UNPLAYABLE_TAG)? {
+        return Ok(());
     }
-    Ok(())
+    // §298：`medical_kit`（Status 牌）与 `blue_candle`（Curse 牌）各自放行**自己那一类**。
+    //
+    // 为什么按**标签**而不是"稀有度"：内容里这些牌带的是 `status` / `curse` 标签
+    // （`wound` / `dazed` / `injury` / `doubt` …），而 `Rarity` 是**奖励池**的桶 ——
+    // 两件事在这里恰好同形，但标签才是参考实现读的东西（`card.hasTag.curse` 也用它）。
+    let source = source_of(state, &card.source)?;
+    if card_has_tag(card.content, card.row, STATUS_TAG)?
+        && has_status(source, MEDICAL_KIT_STATUS)
+    {
+        return Ok(());
+    }
+    if card_has_tag(card.content, card.row, CURSE_TAG)? && has_status(source, BLUE_CANDLE_STATUS) {
+        return Ok(());
+    }
+    Err(PlayError::Refused(Refusal::Unplayable))
 }
 
 /// **§146：`x_cost` 不再是拒绝，而是一条真正的费用形态。**
@@ -2309,6 +2336,22 @@ fn corruption_destination(
         Some(source) if has_status(source, CORRUPTION_STATUS) => CardZone::ExhaustPile,
         _ => current,
     }
+}
+
+/// §298：这张牌是不是被 `medical_kit` / `blue_candle` **放行**的 `unplayable` 牌
+/// （放行的那一类 ⇒ 落区强制 `ExhaustPile`）。
+fn unplayable_is_free(state: &CombatState, card: &CardOnTable<'_>) -> Result<bool, PlayError> {
+    if !card_has_tag(card.content, card.row, UNPLAYABLE_TAG)? {
+        return Ok(false);
+    }
+    let source = source_of(state, &card.source)?;
+    if card_has_tag(card.content, card.row, STATUS_TAG)? && has_status(source, MEDICAL_KIT_STATUS) {
+        return Ok(true);
+    }
+    if card_has_tag(card.content, card.row, CURSE_TAG)? && has_status(source, BLUE_CANDLE_STATUS) {
+        return Ok(true);
+    }
+    Ok(false)
 }
 
 fn played_card_destination(card: &CardOnTable<'_>) -> Result<CardZone, PlayError> {

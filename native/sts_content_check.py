@@ -127,8 +127,9 @@ INV_COUNTS = {
     # §294: +2 (`standard.the_abacus` / `standard.sundial` —— `DeckShuffled` 触发器的头两位)。
     # §295: +1 (`standard.hand_drill` —— `BlockBroken` 触发器)。
     # §296: +1 (`standard.chemical_x` —— 内核规则的开关，内容那一行是载体)。
-    # §297: +3 (`strike_dummy` 的内容程序 + `velvet_choker` / `runic_dome` 的开关).
-    "statuses": 136,
+    # §297: +3 (`strike_dummy` 的内容程序 + `velvet_choker` / `runic_dome` 的开关)。
+    # §298: +3 (`magic_flower` / `medical_kit` / `blue_candle`).
+    "statuses": 139,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1566,6 +1567,10 @@ INV_STATUSES = {
     # `velvet_choker` / `runic_dome` 的每回合 +1 能量（其余规则在内核）。
     "standard.velvet_choker": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
     "standard.runic_dome": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
+    # §298：三件都**没有**被动修饰器 —— 前两件的规则在内核，第三件在触发器里。
+    "standard.magic_flower": [],
+    "standard.medical_kit": [],
+    "standard.blue_candle": [],
     # §267：零基建批次。
     "standard.ring_of_the_serpent": [('TurnStartDraw', 'AddFlat', 1, 100, None)],
     "standard.philosophers_stone": [('TurnStartEnergy', 'AddPerStack', 1, 100, None)],
@@ -3643,7 +3648,9 @@ def check_statuses(doc):
                      "standard.hand_drill",
                      "standard.chemical_x",
                      "standard.strike_dummy", "standard.velvet_choker",
-                     "standard.runic_dome"):
+                     "standard.runic_dome",
+                     "standard.magic_flower", "standard.medical_kit",
+                     "standard.blue_candle"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -3792,7 +3799,12 @@ def check_statuses(doc):
                         # §297：三件都没有触发器（一件靠修饰器，两件靠内核规则）。
                         "standard.strike_dummy": [],
                         "standard.velvet_choker": [],
-                        "standard.runic_dome": []}[sid]
+                        "standard.runic_dome": [],
+                        # §298
+                        "standard.magic_flower": [],
+                        "standard.medical_kit": [],
+                        # `blue_candle` 的"失去 1 生命"是一条 `CardPlayed` 触发器。
+                        "standard.blue_candle": ["CardPlayed"]}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
@@ -4089,6 +4101,8 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "chemical_x",
                       # §297：三件（`strike_dummy` 内容规则 + 两件开关）。
                       "strike_dummy", "velvet_choker", "runic_dome",
+                      # §298：最后三件。
+                      "magic_flower", "medical_kit", "blue_candle",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

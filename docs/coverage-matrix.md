@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 853 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 859 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -39,14 +39,14 @@
 | 怪物 | 50 | 42 | 0 | 8 | 49 | 1 | 11 | 0 |
 | 敌人动作 | 138 | 73 | 65 | 0 | 135 | 3 | 53 | 0 |
 | 卡牌 | 293 | 165 | 128 | 0 | 281 | 12 | 18 | 0 |
-| 状态 | 136 | 127 | 6 | 3 | 0 | 136 | 1 | 0 |
+| 状态 | 139 | 130 | 6 | 3 | 0 | 139 | 1 | 0 |
 | 遭遇 | 47 | 36 | 11 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 19 | 19 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 遗物 | 137 | 129 | 8 | 0 | 0 | 0 | 0 | 0 |
+| 遗物 | 140 | 129 | 11 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 853 | 624 | 218 | 11 | 465 | 152 | 83 | 0 |
+| **合计** | 859 | 627 | 221 | 11 | 465 | 155 | 83 | 0 |
 
-扫描到的具名测试：**1127** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
+扫描到的具名测试：**1129** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
 
 事件：池里有 **22** 个位次、**19** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -393,7 +393,7 @@
 | infernal_blade+ | yes | infernal_blade_adds_a_random_attack_that_really_costs_zero | — | wiki:wiki_cards/infernal_blade.txt (via infernal_blade) | — | INV_CARDS/infernal_blade_adds_a_random_attack_that_really_costs_zero |
 | inflame | yes | the_zero_infrastructure_tail_lights_up_the_existing_channels | — | wiki:wiki_cards/inflame.txt | — | CARD_WIKI+INV_CARDS/the_zero_infrastructure_tail_lights_up_the_existing_channels |
 | inflame+ | yes | — | CARD_DIFF | wiki:wiki_cards/inflame.txt (via inflame) | — | INV_CARDS |
-| injury | yes | evolve_and_fire_breathing_only_answer_to_the_right_tags, every_kind_answers_both_sides …(+6) | — | wiki:wiki_cards/injury.txt | — | §143/CARD_WIKI+INV_CARDS/evolve_and_fire_breathing_only_answer_to_the_right_tags |
+| injury | yes | evolve_and_fire_breathing_only_answer_to_the_right_tags, the_two_unplayable_relics_let_their_own_card_kind_through …(+7) | — | wiki:wiki_cards/injury.txt | — | §143/CARD_WIKI+INV_CARDS/evolve_and_fire_breathing_only_answer_to_the_right_tags |
 | insight | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/insight.txt | — | CARD_WIKI+INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
 | insight+ | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/insight.txt (via insight) | — | INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
 | intimidate | yes | — | CARD_DIFF | wiki:wiki_cards/intimidate.txt | — | CARD_WIKI+INV_CARDS |
@@ -545,10 +545,10 @@
 | wild_strike+ | yes | — | CARD_DIFF | wiki:wiki_cards/wild_strike.txt (via wild_strike) | — | INV_CARDS |
 | wish | yes | wish_offers_three_cards_and_plays_the_pick_at_once | — | wiki:wiki_cards/wish.txt | — | §254/§255/CARD_WIKI+INV_CARDS/wish_offers_three_cards_and_plays_the_pick_at_once |
 | wish+ | yes | wish_plus_offers_the_upgraded_options | — | wiki:wiki_cards/wish.txt (via wish) | — | INV_CARDS/wish_plus_offers_the_upgraded_options |
-| wound | yes | the_new_red_skills_do_what_their_pages_say, painful_stabs_shuffles_a_wound_only_on_unblocked_damage …(+3) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
+| wound | yes | the_new_red_skills_do_what_their_pages_say, painful_stabs_shuffles_a_wound_only_on_unblocked_damage …(+4) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
-## 状态（136）
+## 状态（139）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -561,6 +561,7 @@
 | standard.barricade | yes | barricade_keeps_block_forever_and_blur_only_for_one_turn | — | spec:INV_STATUSES | — | §197/INV_STATUSES/barricade_keeps_block_forever_and_blur_only_for_one_turn |
 | standard.berserk | yes | berserk_adds_one_energy_per_stack_at_turn_start | — | spec:INV_STATUSES | — | §199/§210/INV_STATUSES/berserk_adds_one_energy_per_stack_at_turn_start |
 | standard.bird_faced_urn | yes | the_zero_infrastructure_tail_wires_its_carriers, the_zero_infrastructure_tail_lights_up_the_existing_channels | — | spec:INV_STATUSES | — | §268/INV_STATUSES/the_zero_infrastructure_tail_wires_its_carriers |
+| standard.blue_candle | yes | the_two_unplayable_relics_let_their_own_card_kind_through | — | spec:INV_STATUSES | — | §298/INV_STATUSES/the_two_unplayable_relics_let_their_own_card_kind_through |
 | standard.blur | yes | blur_gives_five_or_eight_block_and_the_status, barricade_keeps_block_forever_and_blur_only_for_one_turn | — | spec:INV_STATUSES | — | §197/§218/INV_STATUSES/blur_gives_five_or_eight_block_and_the_status |
 | standard.brimstone | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_reaction_relics_fire_the_right_number_of_times | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.brutality | yes | losing_hp_is_not_damage_but_it_is_hp_loss, the_lose_hp_cards_do_what_their_pages_say | — | spec:INV_STATUSES | — | §235/§236/INV_STATUSES/losing_hp_is_not_damage_but_it_is_hp_loss |
@@ -618,9 +619,11 @@
 | standard.lizard_tail | yes | the_zero_infrastructure_tail_wires_its_carriers, the_zero_infrastructure_tail_lights_up_the_existing_channels | — | spec:INV_STATUSES | — | §268/INV_STATUSES/the_zero_infrastructure_tail_wires_its_carriers |
 | standard.lose_dexterity | yes | the_reaction_relics_fire_the_right_number_of_times | — | spec:INV_STATUSES | — | §158/INV_STATUSES/the_reaction_relics_fire_the_right_number_of_times |
 | standard.lose_strength | yes | flex_potion_gives_strength_and_takes_it_back | — | spec:INV_STATUSES | — | §158/§230/INV_STATUSES/flex_potion_gives_strength_and_takes_it_back |
+| standard.magic_flower | yes | magic_flower_multiplies_healing_by_one_and_a_half | — | spec:INV_STATUSES | — | §298/INV_STATUSES/magic_flower_multiplies_healing_by_one_and_a_half |
 | standard.magnetism | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §242/§244/INV_STATUSES |
 | standard.mark_of_pain | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.mayhem | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §242/§244/INV_STATUSES |
+| standard.medical_kit | yes | the_two_unplayable_relics_let_their_own_card_kind_through | — | spec:INV_STATUSES | — | §298/INV_STATUSES/the_two_unplayable_relics_let_their_own_card_kind_through |
 | standard.mercury_hourglass | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §257/§260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
 | standard.metallicize | yes | metallicize_grants_block_at_the_end_of_the_turn, plated_armor_and_metallicize_both_pay_block_at_turn_end …(+1) | — | spec:INV_STATUSES | — | §107/§194/INV_STATUSES/metallicize_grants_block_at_the_end_of_the_turn |
 | standard.mode_shift | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost | — | spec:INV_STATUSES | — | §195.1/INV_STATUSES/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
@@ -765,7 +768,7 @@
 | wing_statue | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | world_of_goop | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 
-## 遗物（137）
+## 遗物（140）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -781,6 +784,7 @@
 | black_star | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §269 |
 | blood_vial | yes | the_relic_pool_fires_at_the_three_hooks_it_has | — | — | — | the_relic_pool_fires_at_the_three_hooks_it_has |
 | bloody_idol | yes | every_kind_answers_both_sides, the_gold_and_shop_relics_change_only_their_own_number …(+1) | — | — | — | §270/every_kind_answers_both_sides |
+| blue_candle | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §297/§298 |
 | brimstone | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | bronze_scales | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §156 |
 | burning_blood | yes | capacity_is_an_error_not_a_truncation, burning_blood_heals_six_at_the_end_of_a_fight …(+8) | — | — | — | capacity_is_an_error_not_a_truncation |
@@ -828,6 +832,7 @@
 | lees_waffle | yes | the_pickup_number_relics_change_only_their_own_number | — | — | — | §273/§274/the_pickup_number_relics_change_only_their_own_number |
 | letter_opener | yes | the_every_nth_card_relics_wire_their_own_carrier | — | — | — | §261/§262/the_every_nth_card_relics_wire_their_own_carrier |
 | lizard_tail | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
+| magic_flower | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §297/§298 |
 | mango | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | mark_of_pain | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | mark_of_the_bloom | yes | campfire_options_follow_the_relics_the_wiki_names | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
@@ -835,6 +840,7 @@
 | maw_bank | yes | the_gold_and_shop_relics_change_only_their_own_number, a_discounted_purchase_charges_the_discounted_price | — | — | — | §270/the_gold_and_shop_relics_change_only_their_own_number |
 | meal_ticket | yes | an_unknown_room_that_becomes_a_shop_pays_the_shop_entry_relics, the_node_relics_pay_on_the_right_kind_of_room | — | — | — | §271/an_unknown_room_that_becomes_a_shop_pays_the_shop_entry_relics |
 | meat_on_the_bone | yes | the_fight_reward_overrides_are_exact | — | — | — | §156/the_fight_reward_overrides_are_exact |
+| medical_kit | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §297/§298 |
 | membership_card | yes | the_courier_restocks_the_slot_it_sells, the_gold_and_shop_relics_change_only_their_own_number …(+1) | — | — | — | §270/the_courier_restocks_the_slot_it_sells |
 | mercury_hourglass | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
 | molten_egg | yes | the_add_card_relics_fire_at_the_one_add_point | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |

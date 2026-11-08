@@ -9253,6 +9253,94 @@
         }
       ],
       "Triggers": []
+    },
+    {
+      "Id": "standard.magic_flower",
+      "PackageId": "sts",
+      "NameKey": "Magic Flower",
+      "DescriptionKey": "During combat, healing is 50% more effective.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.medical_kit",
+      "PackageId": "sts",
+      "NameKey": "Medical Kit",
+      "DescriptionKey": "Unplayable Status cards can now be played. Whenever you play a Status card, Exhaust it.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
+    },
+    {
+      "Id": "standard.blue_candle",
+      "PackageId": "sts",
+      "NameKey": "Blue Candle",
+      "DescriptionKey": "Unplayable Curse cards can now be played. Whenever you play a Curse, lose 1 HP and Exhaust it.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": [
+        {
+          "Event": "CardPlayed",
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.conditional",
+              "value": {
+                "Condition": {
+                  "kind": "event.bool",
+                  "value": {
+                    "FieldKey": "card.hasTag.curse"
+                  }
+                },
+                "Then": {
+                  "kind": "node.loseHp",
+                  "value": {
+                    "TargetSelector": {
+                      "kind": "sel.source",
+                      "value": {
+                        "Cardinality": "ZeroOrOne",
+                        "RequiredContextCapabilities": "Source"
+                      }
+                    },
+                    "Amount": {
+                      "kind": "const",
+                      "value": {
+                        "Value": 1
+                      }
+                    },
+                    "ResultKey": null
+                  }
+                },
+                "Else": null
+              }
+            }
+          }
+        }
+      ]
     }
   ],
   "Cards": [
@@ -65893,6 +65981,27 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Boss"
+    },
+    {
+      "Id": "magic_flower",
+      "DisplayName": "Magic Flower",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "medical_kit",
+      "DisplayName": "Medical Kit",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Shop"
+    },
+    {
+      "Id": "blue_candle",
+      "DisplayName": "Blue Candle",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Uncommon"
     }
   ],
   "Start": {

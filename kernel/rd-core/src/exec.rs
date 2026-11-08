@@ -478,6 +478,9 @@ const BUFFER_STATUS: &str = "standard.buffer";
 /// §296：`chemical_x` —— "The effects of your cost X cards are increased by 2"。
 /// 与下面三条同族：内核认这个状态 id，数字是 wiki 的常量，内容那一行是"载体 + 页面显示"。
 pub const CHEMICAL_X: (&str, i32) = ("standard.chemical_x", 2);
+/// §298：`magic_flower` —— "During combat, healing is 50% more effective"。
+/// 与上面几条同族（内核认状态 id、数字是 wiki 常量），落点是 `heal_for` **唯一**那一处。
+pub const MAGIC_FLOWER: (&str, i32) = ("standard.magic_flower", 150);
 const THE_BOOT: (&str, i32, i32) = ("standard.the_boot", 4, 5);
 const TORII: (&str, i32, i32) = ("standard.torii", 5, 1);
 const TUNGSTEN_ROD: (&str, i32) = ("standard.tungsten_rod", 1);
@@ -3918,6 +3921,16 @@ fn heal_node(
 /// [`heal_node`] 的实体（`DamageEffects.cs:331-377`）：`long` 中间量防溢出，
 /// **没有**任何修饰器/拦截器挂钩。
 fn heal_for(ctx: &mut ExecContext<'_>, target: &CombatantId, amount: i32) -> Result<(), ExecError> {
+    // §298：`magic_flower` —— 接受治疗的人身上有那条状态 ⇒ 治疗 ×150%。
+    //
+    // ⚠️ 乘在**这一个**函数里，不是每个 `Heal` 请求的入队处：入队处有七八个（药水、卡牌、
+    // `dealDamageAndHealByLoss`、事件给的回复……），漏一处就是"某条路的治疗不翻倍"，
+    // 而那看起来完全正常。整数乘除（先乘后除）与 wiki 的 "50% more" 一致。
+    let amount = if carries_status(ctx.state, target, MAGIC_FLOWER.0) {
+        amount.saturating_mul(MAGIC_FLOWER.1) / 100
+    } else {
+        amount
+    };
     let snapshot = *ctx.state.combatant(target).ok_or(ExecError::MissingCombatant)?;
     let requested = i64::from(snapshot.health_current) + i64::from(amount);
     let capped = if requested > i64::from(snapshot.health_max) {

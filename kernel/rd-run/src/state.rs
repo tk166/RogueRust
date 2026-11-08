@@ -3152,6 +3152,11 @@ impl RunState {
             "strike_dummy" => Some(RelicEffect::StartCombatStatus("standard.strike_dummy", 1)),
             "velvet_choker" => Some(RelicEffect::StartCombatStatus("standard.velvet_choker", 1)),
             "runic_dome" => Some(RelicEffect::StartCombatStatus("standard.runic_dome", 1)),
+            // §298：最后三件 —— `magic_flower` / `medical_kit` 的规则在内核，
+            // `blue_candle` 的"失去 1 生命"是内容触发器（`&mut 内核只放行`）。
+            "magic_flower" => Some(RelicEffect::StartCombatStatus("standard.magic_flower", 1)),
+            "medical_kit" => Some(RelicEffect::StartCombatStatus("standard.medical_kit", 1)),
+            "blue_candle" => Some(RelicEffect::StartCombatStatus("standard.blue_candle", 1)),
             _ => None,
         }
     }

@@ -775,6 +775,10 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.velvet_choker"
             | "standard.runic_dome"
             | "standard.strike_dummy"
+            // §298: `magic_flower`（治疗 ×150%）与两件放行 `unplayable` 的遗物。
+            | "standard.magic_flower"
+            | "standard.medical_kit"
+            | "standard.blue_candle"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"
