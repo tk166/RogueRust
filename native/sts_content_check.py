@@ -4139,6 +4139,8 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "enchiridion", "orange_pellets", "dead_branch",
                       # §300：三个新原子各自解锁的那一件。
                       "nilrys_codex", "warped_tongs", "mummified_hand",
+                      # §301：`neows_lament`（规则在运行层：前 3 场敌人 1 血）。
+                      "neows_lament",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

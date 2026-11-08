@@ -565,6 +565,33 @@ pub(crate) fn combat_set_mark(
 ///
 /// Needed because the fight is built at the hero's **maximum** (`build_fight_from_content` uses
 /// `PlanCombatant.max_health` and starts there), while a run's hero usually enters wounded.
+/// §301：把**每个敌人**的血量与上限都写成 `value`（`neows_lament`：前 3 场只有 1 点血）。
+///
+/// 两者都写：只写当前血的话，血条会是 `1/45`，而且任何"上限"逻辑都能把这场仗变回去 ——
+/// wiki 的承诺是"它们**只有 1 点血**"。
+///
+/// 与 [`set_combat_hero_health`] 同一个位置（装好战斗之后）、同样**重新观察**一次：
+/// 页面读的是发布出去的向量，而它的战斗日志是两次观察的差。
+pub(crate) fn set_enemy_health(value: i32) {
+    if let Some(session) = slot().as_mut() {
+        let hero = CombatantId::new(HERO).ok();
+        for index in 0..session.state.combatants().len() {
+            let Some(combatant) = session.state.combatants().get(index) else {
+                continue;
+            };
+            if Some(combatant.id) == hero {
+                continue;
+            }
+            let id = combatant.id;
+            if let Some(combatant) = session.state.combatant_mut(&id) {
+                combatant.health_max = value;
+                combatant.health_current = value;
+            }
+        }
+        session.reobserve_after_external_change();
+    }
+}
+
 pub(crate) fn set_combat_hero_health(value: i32) {
     if let Some(session) = slot().as_mut() {
         if let Ok(id) = CombatantId::new(HERO) {

@@ -4407,8 +4407,15 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         ) {
             Ok(combat) => {
                 crate::install_session(combat);
+                // §301：**这一场开始了** —— 先记账，再问"要不要压血"（顺序是语义：
+                // 第 1 场开战时 `fights` 已经是 1，于是"前 3 场"包含这一场）。
+                session.state.note_fight_started();
                 // The fight is built at the hero's maximum; a run usually enters wounded.
                 crate::set_combat_hero_health(session.state.health());
+                // §301：`neows_lament` —— 前 3 场的敌人只有 1 点血。
+                if let Some(health) = session.state.enemy_health_override() {
+                    crate::set_enemy_health(health);
+                }
                 // §253：把运行层的每副本数据写进**对应的那一份**战斗实例。
                 if let Err(message) = apply_run_marks(session) {
                     return fail(session, &message);
@@ -10858,6 +10865,88 @@ mod tests {
             "without the relic the intent is real, got `{without_relic}`"
         );
         assert_ne!(with_relic, without_relic, "the two must differ");
+    }
+
+    /// §301：`neows_lament` —— 真的开 4 场，前 3 场的敌人**血量与上限**都是 1。
+    ///
+    /// 判据读的是**战斗里的那份状态**（不是运行层的标志）：只验 `enemy_health_override()`
+    /// 的话，"有人问了但没人写"这一跳断了也全绿。
+    ///
+    /// 驱动形状抄 `walk_calm_nodes`：`step` → `begin_node` → 按节点种类结算 → 清掉奖励屏。
+    /// 少这两步，第 2 场 `step` 就会 `-1`（"当前节点没结算"），而那不是遗物的问题。
+    #[test]
+    fn neows_lament_gives_the_first_three_fights_one_hp_enemies() {
+        let deck = ["strike", "strike", "defend", "defend", "bash"];
+        test_run(7, 80, 80, &deck);
+        run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .push_relic("neows_lament", &[])
+            .expect("neows_lament");
+
+        let enemy_health = || -> Vec<(i32, i32)> {
+            let session = crate::slot().as_ref().expect("a fight");
+            let hero = session.hero_id().expect("a hero");
+            session
+                .state
+                .combatants()
+                .iter()
+                .filter(|combatant| combatant.id != hero)
+                .map(|combatant| (combatant.health_current, combatant.health_max))
+                .collect()
+        };
+
+        let mut fights = 0u32;
+        for hop in 0..12 {
+            if rd_run_action_count() == 0 {
+                break;
+            }
+            assert_eq!(rd_run_step(0), 0, "hop {hop}: {}", run_error_text());
+            let kind = rd_run_node_kind();
+            assert_eq!(rd_run_begin_node(), 0, "hop {hop}: kind {kind}");
+            match kind {
+                1 | 2 | 7 => {
+                    assert_eq!(rd_run_fight_begin(), 0, "hop {hop}: {}", run_error_text());
+                    let healths = enemy_health();
+                    assert!(!healths.is_empty(), "hop {hop}: the fight has enemies");
+                    if fights < 3 {
+                        assert!(
+                            healths.iter().all(|(current, max)| *current == 1 && *max == 1),
+                            "fight {} must have 1/1 enemies, got {healths:?}",
+                            fights + 1
+                        );
+                    } else if fights == 3 {
+                        assert!(
+                            healths.iter().any(|(current, _)| *current > 1),
+                            "the 4th fight is back to normal, got {healths:?}"
+                        );
+                    }
+                    fights += 1;
+                    assert!(rd_run_fight_end() >= 0, "hop {hop}: {}", run_error_text());
+                }
+                3 => {
+                    let _ = rd_run_rest();
+                }
+                5 | 6 => {
+                    if kind == 6 {
+                        let _ = rd_run_open_chest();
+                    }
+                    let _ = rd_run_leave();
+                }
+                _ => {}
+            }
+            while rd_run_pending() == 4 {
+                let _ = rd_run_skip_reward();
+            }
+            if rd_run_action_count() == 0 && rd_run_pending() != 0 {
+                let _ = rd_run_leave();
+            }
+            if fights >= 4 {
+                break;
+            }
+        }
+        assert_eq!(fights, 4, "the map walk reached four fights");
     }
 
 }

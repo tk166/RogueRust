@@ -67011,6 +67011,13 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Uncommon"
+    },
+    {
+      "Id": "neows_lament",
+      "DisplayName": "Neow's Lament",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Event"
     }
   ],
   "Start": {

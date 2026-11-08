@@ -62,6 +62,11 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
         .str("maw_bank=")
         .u32(u32::from(state.maw_bank_broken()))
         .str("\n");
+    // §301：已经打过几场 —— `neows_lament` 的"前 3 场"就靠这个数。
+    writer
+        .str("fights=")
+        .u32(u32::from(state.fights()))
+        .str("\n");
     // §271：`ancient_tea_set` 欠着的那一场（进篝火之后、下一场战斗之前）。
     writer
         .str("tea_set=")

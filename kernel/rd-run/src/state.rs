@@ -115,6 +115,9 @@ pub const BURNING_BLOOD_HEAL: i32 = 6;
 /// §293：`tiny_house` 的四件事（wiki: *"obtain 1 Potion, gain 50 Gold, raise your Max HP by 5,
 /// obtain 1 card"*）。四个数写在一处，因为它们是**同一句 wiki**。
 pub const TINY_HOUSE_GOLD: i32 = 50;
+/// §301：`neows_lament` —— "Enemies in your first **3** combats will have **1** HP"。
+pub const NEOWS_LAMENT_FIGHTS: u8 = 3;
+pub const NEOWS_LAMENT_HEALTH: i32 = 1;
 pub const TINY_HOUSE_MAX_HEALTH: i32 = 5;
 
 // =============================================================================================
@@ -368,6 +371,17 @@ pub enum RelicEffect {
     PickupAddCards(u8),
     /// §293：`tiny_house` —— +50 金币、上限 +5、一瓶药水、一张牌。四件事一件遗物。
     PickupTinyHouse,
+    /// §301：`neows_lament` —— 前 `fights` 场战斗里敌人的血量被**覆盖**成 `health`。
+    ///
+    /// 绝对值而不是百分比：wiki 说的是 *"Enemies in your first 3 combats will have 1 HP"*，
+    /// 与它们原本多少血无关。`enemy_health_percent` 那条通道是乘法（`A7/A8/A9`），混用会让
+    /// "1 血"变成"1% 血"。
+    EnemyHealthInFirstFights {
+        /// 生效几场（wiki: 3）。
+        fights: u8,
+        /// 那些场次里敌人的血量（wiki: 1）。
+        health: i32,
+    },
     /// §293：`singing_bowl` —— 加牌时**可以**改拿 +`amount` 上限（wiki: *"you may raise your Max
     /// HP by 2 instead"*）。它自己不给牌，只在两个"加牌"的问句上多一个按钮。
     SingingBowl(i32),
@@ -1827,6 +1841,11 @@ pub struct RunState {
     /// §293：这一次可以挑的那几张（`pickup_add > 0` 时有意义）。
     pickup_offer: [RunId; MAX_REWARD_CARDS],
     pickup_offer_len: u8,
+    /// §301：这一局**已经打过几场**（开战时 +1）。`neows_lament` 用它数"前 3 场"。
+    ///
+    /// 数的是**开始**过的战斗，不是赢过的：「前 3 场」里输掉的那一场也占一格 —— 否则
+    /// 输了一场之后遗物会变成"再送你三场"。
+    fights: u8,
 }
 
 impl Pending {
@@ -1957,6 +1976,7 @@ impl RunState {
             pickup_add: 0,
             pickup_offer: [RunId::EMPTY; MAX_REWARD_CARDS],
             pickup_offer_len: 0,
+            fights: 0,
         };
         for id in starting_deck {
             state.push_card(PoolCard::plain(id))?;
@@ -2702,6 +2722,8 @@ impl RunState {
             | RelicEffect::ChestAddsCurse
             | RelicEffect::RareCardChanceMultiplier(_)
             | RelicEffect::PotionEffectPercent(_)
+            // §301：`neows_lament` 在**开战那一刻**生效（由调用方问 `enemy_health_override`）。
+            | RelicEffect::EnemyHealthInFirstFights { .. }
             | RelicEffect::RestCardReward => {}
         }
         self.relics[slot] = id;
@@ -2876,6 +2898,8 @@ impl RunState {
                     | RelicEffect::PickupCurseAndRelics { .. }
                     | RelicEffect::PickupPotions(_)
                     | RelicEffect::PickupDuplicate(_)
+                    // §301：`neows_lament` 在**开战那一刻**生效，不是回合末。
+                    | RelicEffect::EnemyHealthInFirstFights { .. }
                     | RelicEffect::RareCardChanceMultiplier(_)
                     | RelicEffect::PotionEffectPercent(_)
                     // §293：加牌的问句走自己的通道，不在这三个钩子上。
@@ -3170,6 +3194,11 @@ impl RunState {
             "mummified_hand" => {
                 Some(RelicEffect::StartCombatStatus("standard.mummified_hand", 1))
             }
+            // §301：`neows_lament` —— 运行层规则（没有内容状态：它不是战斗内的状态）。
+            "neows_lament" => Some(RelicEffect::EnemyHealthInFirstFights {
+                fights: NEOWS_LAMENT_FIGHTS,
+                health: NEOWS_LAMENT_HEALTH,
+            }),
             _ => None,
         }
     }
@@ -3237,6 +3266,41 @@ impl RunState {
         match self.first_relic_effect_of(RelicEffect::PotionEffectPercent(200)) {
             Some(RelicEffect::PotionEffectPercent(percent)) if percent > 0 => percent,
             _ => 100,
+        }
+    }
+
+    /// §301：这一局已经打过几场（开战时 +1）。
+    #[must_use]
+    pub const fn fights(&self) -> u8 {
+        self.fights
+    }
+
+    /// §301：**一场战斗开始了** —— 记一次。由调用方在开战那一刻调（`rd-wasm` 的
+    /// `fight_begin`），因为"开战"这件事只有它知道。
+    pub fn note_fight_started(&mut self) {
+        self.fights = self.fights.saturating_add(1);
+    }
+
+    /// §301：`neows_lament` —— 这一场敌人的血量要不要被**覆盖**成某个绝对值。
+    ///
+    /// `None` = 不覆盖（绝大多数战斗走这一支）。数的是**已经开始**的场次：开战时先
+    /// `note_fight_started` 再问这里，所以第 1 场读到的是 1。
+    #[must_use]
+    pub fn enemy_health_override(&self) -> Option<i32> {
+        let Some(RelicEffect::EnemyHealthInFirstFights { fights, health }) =
+            self.first_relic_effect_of(RelicEffect::EnemyHealthInFirstFights {
+                fights: NEOWS_LAMENT_FIGHTS,
+                health: NEOWS_LAMENT_HEALTH,
+            })
+        else {
+            return None;
+        };
+        // `fights >= 1`：**还没开战**时不该给覆盖值（否则"这一场要不要压血"在那之前就有答案了，
+        // 而那时战斗还不存在）。窗口是"第 1..=3 场"。
+        if self.fights >= 1 && self.fights <= fights {
+            Some(health)
+        } else {
+            None
         }
     }
 
@@ -3607,7 +3671,9 @@ impl RunState {
                 // §293：加牌的问句走自己的通道，不在这三个钩子上。
                 | RelicEffect::PickupAddCards(_)
                 | RelicEffect::PickupTinyHouse
-                | RelicEffect::SingingBowl(_),
+                | RelicEffect::SingingBowl(_)
+                // §301：`neows_lament` 也不是这两个钩子上的事。
+                | RelicEffect::EnemyHealthInFirstFights { .. },
                 )
                 | None => {}
             }
@@ -4179,7 +4245,9 @@ impl RunState {
                 // §293：加牌的问句走自己的通道，不在这三个钩子上。
                 | RelicEffect::PickupAddCards(_)
                 | RelicEffect::PickupTinyHouse
-                | RelicEffect::SingingBowl(_),
+                | RelicEffect::SingingBowl(_)
+                // §301：`neows_lament` 也不是这两个钩子上的事。
+                | RelicEffect::EnemyHealthInFirstFights { .. },
                 )
                 | None => {}
             }
@@ -12057,6 +12125,34 @@ mod tests {
         let owed = run.pickup_add();
         assert_eq!(run.pickup_add_card(0, &pool), Err(RunError::Capacity));
         assert_eq!(run.pickup_add(), owed, "the debt survives a refused pick");
+    }
+
+    /// §301：`neows_lament` —— 前 3 场覆盖成 1 血，第 4 场不再覆盖；没有遗物时从不覆盖。
+    ///
+    /// ⚠️ 边界两侧都要验：只验"前 3 场是 Some(1)"的话，一条"永远 Some(1)"的实现也全绿。
+    #[test]
+    fn neows_lament_covers_exactly_the_first_three_fights() {
+        let deck = ["strike", "defend"];
+        let mut run = RunState::new(11, 80, 99, &deck).expect("a run");
+        assert_eq!(run.enemy_health_override(), None, "no relic, no override");
+        run.push_relic("neows_lament", &[]).expect("pickup");
+        assert_eq!(run.enemy_health_override(), None, "the fight has not started yet");
+        for fight in 1..=3u8 {
+            run.note_fight_started();
+            assert_eq!(
+                run.enemy_health_override(),
+                Some(1),
+                "fight {fight} is inside the first three"
+            );
+        }
+        run.note_fight_started();
+        assert_eq!(
+            run.enemy_health_override(),
+            None,
+            "the 4th fight is outside the window"
+        );
+        // 计数本身也要对（它不是"剩下的场次"，是"已经打的场次"）。
+        assert_eq!(run.fights(), 4);
     }
 
 }
