@@ -180,11 +180,11 @@ contains no raw JSON text at all.
 
 | step | seconds |
 |---|---|
-| `json.loads` of 1.9 MiB source | 0.029 |
+| `json.loads` of 1.9 MiB source | 0.034 |
 | derive | 0.057 |
-| encode | 0.076 |
+| encode | 0.077 |
 | serialize | 0.031 |
-| total, one build | 0.192 |
+| total, one build | 0.199 |
 
 Peak Python heap during the whole run (both builds, tracemalloc): **13.8 MiB**.
 The document is parsed once and never copied; the encoder holds the parsed

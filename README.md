@@ -7,7 +7,7 @@
 移植的硬约束是三条：**能在 ESP32-P4 裸机上跑**（`no_std`、零分配、纯整数、`forbid(unsafe_code)`）、
 **能多开当强化学习训练环境**（确定性、可快照、可回放）、**与参考实现逐字节一致的状态指纹**（对拍可证）。
 
-> 主计划在 `docs/port-plan.md`（§1–§233，每一轮都留数字、记下被推翻的结论）。
+> 主计划在 `docs/port-plan.md`（§1–§306，每一轮都留数字、记下被推翻的结论）。
 > 这份 README 只交代**仓库现在是什么样、以及怎么把它跑起来玩**；为什么变成这样，在计划里。
 
 ---
@@ -103,6 +103,8 @@ python -m http.server 8000
 | `RD_DEBUG.settle()` | 把当前节点一次性结算掉（调试用） |
 | `RD_DEBUG.view()` | 把页面看到的整份状态打成对象（对照观察向量） |
 | `RD_DEBUG.givePotion("fire_potion")` | 往腰带里塞一瓶指定药水（测试掉落抽签太慢时的替代） |
+| `RD_DEBUG.giveRelic("runic_pyramid")` | 按 id 塞一件遗物（有的遗物只在商人/事件里有，靠种子碰不到） |
+| `RD_DEBUG.startAnEvent("forgotten_altar")` | 直接打开一条事件（同上；面板的写者是 `renderNode`） |
 | `RD_DEBUG.dropPotions()` | 清空腰带 |
 
 这些入口**只存在于 `?debug`**：它们是给闸门和排查用的，不是作弊命令。
@@ -126,9 +128,9 @@ python -m http.server 8000
 
 | 层 | 现状 |
 |---|---|
-| **战斗内核** | `rd-core` 21 个源文件、约 57k 行。出牌/结算/状态/意图/修饰器管线/效果程序 IR（栈式）/选择与目标/金色指纹；**零分配、纯整数、`forbid(unsafe_code)`** |
-| **运行层** | `rd-run` 约 7.9k 行。地图（15 行 × 7 列 + Boss）、幕、牌组、金币、遗物、药水、奖励屏、商店、事件、篝火、**Ascension 0–20（20/20 条都有机制）**、**存档（单行文本 + CRC）**、**回放（动作序列 + 每步哈希）** |
-| **内容** | **49 怪 / 43 遭遇 / 293 条卡行（154 张基础 + 139 条升级行）/ 124 状态 / 130 敌人动作 / 115 遗物 / 33 药水（满池）/ 14 事件（三幕 6+4+4）/ 10 张起始牌**；**79 个动作有升阶变体**（91 个变体）。编译成 144,872 B 的 `rdcf` 镜像（core 镜像 111,528 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
+| **战斗内核** | `rd-core` **22** 个源文件、约 **75k** 行。出牌/结算/状态/意图/修饰器管线/效果程序 IR（栈式）/选择与目标/金色指纹；**零分配、纯整数、`forbid(unsafe_code)`** |
+| **运行层** | `rd-run` 约 **16.3k** 行。地图（15 行 × 7 列 + Boss）、幕、牌组、金币、遗物、药水、奖励屏、商店、事件、篝火、**Ascension 0–20（20/20 条都有机制）**、**存档（单行文本 + CRC）**、**回放（动作序列 + 每步哈希）** |
+| **内容** | **50 怪 / 47 遭遇 / 293 条卡行（154 张基础 + 139 条升级行）/ 146 状态 / 138 敌人动作 / 152 遗物 / 33 药水（满池）/ 19 个事件（三幕池 10+8+4 = 22 条，跨幕复用 3 条）/ 10 张起始牌**；**85 个动作有升阶变体**（98 个变体）。编译成 168,008 B 的 `rdcf` 镜像（core 镜像 132,044 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
 | **前端** | `index.html`（战斗 + 运行层 + 存档 + 回放）、`map.html`（地图页）；`wasm32` + **148** 个 `i32` 的战斗观察向量（另有 19 个 slot 的运行层观察）、一组 `rd_env_*` / `rd_run_*` 导出（`web/smoke.mjs` 有一张手抄的 `REQUIRED` 表**逐条**对账，加导出必须同时改两处） |
 | **RL 环境** | `rd_env_*` ABI（`docs/spec/env-abi.md`）+ Python `ctypes` 封装（多进程、批量观察） |
 | **裸机** | `riscv32imac-unknown-none-elf` 真链接成 ELF，镜像占用有闸门 |
@@ -148,25 +150,38 @@ python -m http.server 8000
   最多 3 次、之后每场战斗带这些力量）/ **Toke**（`Peace Pipe`，删牌免费）/ **Dig**（`Shovel`，
   只抽 Common/Uncommon/Rare）；`Coffee Dripper` / `Mark of the Bloom` 关 Rest、`Fusion Hammer` 关
   Smith、`Dream Catcher` 让休息额外给一次卡牌奖励。仍缺的是**第四幕本身**（红钥匙的用处）。
-* **遗物**：**115 / 193**（`native/audit_relic_gap.py` 的账，`IMPLEMENTED: … 内核不认识` 必须为 0；
-  逐条清单在 `docs/relic-inventory.md`，193 行、标明"有/缺"）。
+* **遗物**：**152 / 193**（`native/audit_relic_gap.py` 的账：`MISSING: 41`、
+  `METADATA（两边都有但写错）: 0`、`IMPLEMENTED: … 内核不认识: 0`；逐条清单在
+  `docs/relic-inventory.md`，193 行、标明"有/缺"）。**缺的 41 件里 18 件是别的角色的球/姿态/毒、
+  13 件是无尽模式 `Blight`、2 件 `circlet`、1 件 `necronomicon`（明确不做）**，
+  铁甲战士这条线上真正的缺口只剩 `tingsha` / `tough_bandages`（缺 `CardDiscarded` 事实）、
+  `golden_eye`（缺 `Scry`）与三件 `bottled_*`（拾取时绑牌）。
   分档、载体决策树与已实现规则清单见 **`docs/sts-wiki-gap.md` §D.2**；
   方法论见 **`docs/function_scaling_up_for_relics.md`**。
-* **事件**：14 个（三幕 6+4+4，与 wiki 的池子对齐），选项支持**一串**效果；A15 的 10/11 个房间有
-  变体。仍是压缩过的：真实事件的**剧情分支**被合并（例：Golden Idol 的 Outrun / Smash / Hide
-  三选一在我们这里只有两选项）。
+* **事件**：**19 个**（三幕池 10+8+4 = 22 条；`golden_idol` / `ancient_forge` /
+  `purification_shrine` 跨幕复用）。**剧情分支已经是真树**（`EVND` 段表 + `EV.Entry`，选项数不固定，
+  `golden_idol` 的两段三选一、`dead_adventurer` 的 21 个分支屏都在），选项支持条件
+  （`Requires` / `RequiresAsc`）与一串效果。**仍缺**：事件级条件（"这条事件出不出现"）、
+  "从手上任选一件遗物失去"（`N'loth`）、以及 Act 2 的 5 条事件
+  （`vampires` / `masked_bandits` / `knowing_skull` / `council_of_ghosts` / `cursed_tome`）——
+  逐条见 `docs/event-gaps.md`。
 * **状态**：缺"下一回合**多**抽 / **多**能量"（`Draw` / `Energized`）—— 现在只有本回合的
   `combat_draw` / `combat_energy`，以及"下一回合**少**抽"的 `standard.draw_reduction`。
 * **Ascension**：**20/20 条都有机制**（14 条运行层规则 + 6 条走 `EACT.ProgramAsc`）；A7/A8/A9 的
   生命值按 wiki 的 `AscHP` 逐条钉住（§206，`INV_ASC_HP`）。数据侧：**79 个动作有升档变体
   （91 个变体）**，其余 **51 个**动作没有 wiki 出处（`gap_check.py` 打印 `without a variant: 51`）；
   逐条对账用 `python -X utf8 native/audit_asc_gap.py`（§258 起有脚本，不再靠人眼）。
-* **敌人**：47 怪 / 35 遭遇，三幕的弱/精英/Boss 池都是 wiki 的三选一。已知的**简化**（写明在
+* **敌人**：**50 怪 / 47 遭遇**；三幕的**精英与 Boss 池**都是 wiki 的三选一（各 3 条），
+  **Act 1 普通池 17 条**（wiki 是 Easy 5 + Hard 8 的分子，我们用单池近似）。已知的**简化**（写明在
   `AiNote` 里，不是漏）：`giant_head` 是 320 HP 的简化版（招式表跟着简化）、`EncounterTables`
   的组成是**固定行**（wiki 的"红或绿虱子"这种随机组成靠多条同权行近似）、
-  少数招式的 A17/A18 附加规则只做到"禁令"那一层。
-* **仍缺的机制**（不是内容行，是载体）：可变伤害已能表达（开局 `Rolls` + 计数器，§193/§258），
-  但**战斗中随机**（每回合重掷）没有值节点；Boss 分裂/相位（除 Slime Boss）、
+  少数招式的 A17/A18 附加规则只做到"禁令"那一层；**Act 2 普通池只有 3 条**
+  （`shelled_parasite` / `chosen` / `snecko`，wiki 是 13 种组合）—— 这是当前最大的敌人侧缺口，
+  其中 3 条要新怪物（`spheric_guardian` / `snake_plant` / `centurion` + `mystic`）。
+* **仍缺的机制**（不是内容行，是载体）：~~战斗中的随机~~（§281 已做：`expr::randomInt` +
+  `CombatState::draw_in_range`，唯一入口）、~~事件剧情分支~~（§278/§279 已做）——
+  剩下的是**事件级条件**（"这条事件出不出现"，会重掷 `?` 房每一次抽取，所以单独做）、
+  **"任选一件遗物失去"**的问句（`N'loth`）、Boss 分裂/相位（除 Slime Boss）、
   A2/3/4 之外的招式表替换（A17/18/19 的动作级覆盖已是 `ProgramAsc`）、
   药水差 0 瓶但**整手牌改费 / 自动打出 / 死亡拦截**仍然只有部分路径、逃跑（见 `docs/sts-wiki-gap.md` §2）。
 * **第四幕与钥匙**：没有。`Recall` 就挂在它上面。
@@ -183,14 +198,14 @@ python -m http.server 8000
 | `kernel/rd-firmware/` | 裸机启动壳（独立的 `[workspace]`，只在 riscv 目标上存在）——**只为证明链接得过** |
 | `kernel/rd-hashdump` `rd-rngdump` `rd-sizeprobe` `rd-fightdump` | 诊断二进制：哈希对拍、洗牌序列对拍、RISC-V 代码体积、把一局战斗逐步打出来 |
 | `tools/contentc/` | **Python 内容编译器**：JSON 源 → `rdcf` 二进制镜像（段目录 + 字符串池 + 效果程序 IR） |
-| `tools/acceptance.ps1` | **聚合验收**：21 道闸门，一道红就整体红 |
+| `tools/acceptance.ps1` | **聚合验收**：21 道闸门（含 `coverage-matrix`），一道红就整体红 |
 | `tools/rdcf_verify.py` `rdcf_terms.py` | 内容镜像的**独立**字节级校验（段目录 / count×stride / term 表形状） |
 | `web/` | 前端（零构建、零 CDN）：`index.html` + `ui_render.js`（战斗语义）+ `ui_panels.js`（14 个节点状态）+ `map.html` + `pixels.mjs`（像素度量）+ 门 13–20 的脚本 |
 | `native/RogueDeck.Oracle` `RogueDeck.Native` | C# 侧：对拍导出（NativeAOT）与 RL 环境 ABI |
 | `native/*.py` | 三类：**对拍/校验驱动**（`fight_diff.py`、`gap_check.py`、`sts_content_check.py`…）、**`doc_*.py`**（每一节往 `port-plan.md` 追加章节的脚本，与正文一一对应）、**`patch_*.py` / `negctl_*.py`**（那一节改动源码与**反证**的脚本，留作记录） |
 | `py/roguedeck_env/` | RL 环境的 Python 封装（`ctypes`，多进程 + 批量观察 + 吞吐基准） |
 | `corpus/` | 对拍语料：`golden_v1.jsonl`、`hash_cases/*.txt`、`coverage.json`（份数以闸门输出为准） |
-| `docs/` | `port-plan.md`（主计划 §1–§233）、`spec/`（21 份规格书）、`sts-wiki-gap.md`（缺口清单；"我们有多少"由 `native/gap_check.py` 重算，"还差哪些牌"由 `native/audit_card_gap.py` 与 wiki 卡表对账）、`coverage-matrix.md`（**生成物**：每个实体的 Implemented / TestNamed / HarnessOnly / SourceTie / DeclaredDeviation / Evidence，闸门 13；带 `--selftest` 的五个对抗性夹具） |
+| `docs/` | `port-plan.md`（主计划 §1–§306）、`spec/`（19 份规格书）、`sts-wiki-gap.md`（缺口清单；"我们有多少"由 `native/gap_check.py` 重算，"还差哪些牌"由 `native/audit_card_gap.py` 与 wiki 卡表对账）、`coverage-matrix.md`（**生成物**：每个实体的 Implemented / TestNamed / HarnessOnly / SourceTie / DeclaredDeviation / Evidence，闸门 21；带 `--selftest` 的五个对抗性夹具）、`event-gaps.md`（事件侧缺口，§306 全面核对）、`mechanism-gaps-analysis.md`（两个机制缺口的分析记录与**关闭状态**） |
 | `ref/` | 参考实现的浅克隆位置（**不在本仓库**，见 §9） |
 | `sts/` | **早期 Python 原型**，已被 Rust 内核取代，保留作参照（不参与任何闸门） |
 
@@ -225,7 +240,7 @@ python tools/contentc/build.py --package sts                           # 改内�
 
 `acceptance.ps1` 有**真参数块**（`-SkipSlow`、`-UnitsFloor`），不是位置参数。
 
-### 5.2 20 道闸门
+### 5.2 21 道闸门
 
 下表写的是每道闸门**必须打印出来的证据串**（`Invoke-Gate -MustMatch`），不是某次运行的数字。
 数字每次跑都不同，抄进文档就会过期（§169）；要看数字就自己跑一遍。
@@ -252,6 +267,7 @@ python tools/contentc/build.py --package sts                           # 改内�
 | 18 | `web-soak` | `SOAK_TEST PASS`（随机点每个启用中的控件） |
 | 19 | `web-slice` | `ACT1_SLICE PASS`（自己算路线走遍每种节点，Boss 场景**重试到赢**） |
 | 20 | `web-pixel` | `PIXEL_TEST PASS`（像素判据 + 故障注入自检） |
+| 21 | `coverage-matrix` | `COVERAGE_MATRIX PASS (rows=N, tests=N, fresh)` + `SELFTEST PASS (5 fixtures)`（生成物必须与盘上一致；孤儿行 / 偏差表漂移 / 扫描器自坏都是红） |
 
 闸门的共同要求是**拿到证据串**，而不是只看退出码 —— 一个 `exit 0` 的闸门可能什么都没跑。
 每道闸门存在的理由写在 `tools/acceptance.ps1` 的注释里，逐条来历在 `docs/port-plan.md`。
@@ -260,7 +276,7 @@ python tools/contentc/build.py --package sts                           # 改内�
 
 ## 6. 四条对拍（不在验收里）
 
-与 C# 参考实现逐字节比状态。它们不进 20 道闸门，因为需要那份约 111 MB 的第三方克隆和一份 NativeAOT 构建：
+与 C# 参考实现逐字节比状态。它们**不进那 21 道闸门**，因为需要那份约 111 MB 的第三方克隆和一份 NativeAOT 构建：
 
 ```powershell
 python native/fight_diff.py      # 一场一场比：FIGHT_DIFF n/n

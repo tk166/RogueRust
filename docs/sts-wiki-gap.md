@@ -36,13 +36,14 @@
 |---|---|---|
 | 战斗内核 | 出牌 / 结算 / 状态 / 意图 / 修饰器管线 / 效果程序 IR / 选择与目标 / 金色指纹 | `SEMANTICS-v1.md`，§1–§128 |
 | 卡牌关键词 | Exhaust / Ethereal / Innate / Retain / Unplayable / X 费 全部有载体 | §144 / §146 |
-| 状态 | 内容里每一条状态要么有内核规则、要么**显式声明为 inert**（`is_declared_inert()`，**18 条**，`gap_check.py` 打印全名）。⚠️ "在 inert 名单上"只说明"内核没有硬编码规则" —— 它的行为在内容的触发器里，**这不等价于"StS 语义全对"**（审阅 §4.2） | §147 / §149 / §158 / §180 / §181 / §195.1–§195.7 |
+| 状态 | **146 条**；每一条要么有内核规则、要么**显式声明为 inert**（`is_declared_inert()`，**37 条**，`gap_check.py` 打印全名）。⚠️ "在 inert 名单上"只说明"内核没有硬编码规则" —— 它的行为在内容的触发器里，**这不等价于"StS 语义全对"**（审阅 §4.2） | §147 / §149 / §158 / §180 / §181 / §195.1–§195.7 |
 | 三幕骨架 | 地图 15 行 × 7 列 + Boss 行、每幕独立的遭遇/事件池、幕间切换 | §130 / §131 / §133 / §137 |
 | 战斗流程 | 召唤随从（敌人槽上限 6）、Boss 分裂、半血换招、**销毁战斗员**（§178） | §121 / §124 / §138–§140 / §178 |
 | 运行层 | 商店（卡/遗物/药水/删卡 + 价格）、篝火（休息/打铁）、宝箱、事件、奖励屏、**脱战**（§179） | §143 / §161.8 / §179 |
 | 药水 | **全部 33 瓶**（Ironclad 口径）都能喝，效果词表见 `gap_check.py` | §152 / §158 / §179–§185 |
-| 卡牌（**数量**） | **117 行 = 61 张基础 + 56 条升级行**；其中 Red（铁甲战士）**40 / 75**，Colorless **14 / 70**（含诅咒与衍生牌）。**逐张盘点见 §A.1** | §218–§233 / `audit_card_gap.py` |
-| Ascension | **20 / 20 条都有机制**，但分成两半：**14 条是 `rd-run` 的规则常量**（A1 A5–A16 A20，`gap_check.py` 打印），**6 条走内容数据**（A2/A3/A4 与 A17/18/19 的 `EACT.ProgramAsc`）。数值侧：**89 条变体 / 80 个动作** + 事件列表的 A15 变体。逐条见 §E | §159 / §187–§192、`gap_check.py` |
+| 遗物 | **152 / 193**；分桶与载体清单见 §D.2，逐条清单在 `docs/relic-inventory.md` | §259–§274 / §292–§305 |
+| 卡牌（**数量**） | **293 行 = 154 张基础 + 139 条升级行**；口径内 **147 / 220（齐的 147 张里 Red 75/75 + Colorless 70/70 + 诅咒/状态）**，**缺的 73 张全是观者**。**逐张盘点见 §A.1** | §218–§233 / §306 核对 / `audit_card_gap.py` |
+| Ascension | **20 / 20 条都有机制**，但分成两半：**14 条是 `rd-run` 的规则常量**（A1 A5–A16 A20，`gap_check.py` 打印），**6 条走内容数据**（A2/A3/A4 与 A17/18/19 的 `EACT.ProgramAsc`）。数值侧：**98 条变体 / 85 个动作**（**53 个动作仍无 wiki 出处**，`audit_asc_gap.py` 打印）+ 事件列表的 A15 变体。逐条见 §E | §159 / §187–§192 / §306 核对、`gap_check.py` |
 | 存档 / 回放 | 单行文本 + CRC（`RDA1`）；动作序列 + 每步哈希（`RDR1`）；内容指纹 | §161.9 / §163 / §164 / §166 |
 | 前端 | 战斗 + 运行层 + 存档 + 回放；真浏览器闸门（真指针点击 + 像素判据 + 切片五场景） | §165 / §168 / §185 |
 | 诊断 | 一步之内的有序事件（beats）、**拒绝码**与**宿主失败原文**导出（§177） | `env-abi.md` §12 |
@@ -55,16 +56,18 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 47 / encounters 34 / cards 117 (base 61 + plus 56) / statuses 46 /
-enemy actions 130 / relics 15 / potions 33 / events 14 (6+4+4) / start deck 10
-ascension variants 89 over 80 actions
-image full   content.sts.rdcf             92644 B
-image core   content.sts.core.rdcf        76448 B
+monsters 50 / encounters 47 / cards 293 (base 154 + plus 139) / statuses 146 /
+enemy actions 138 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
+ascension variants 98 over 85 actions
+image full   content.sts.rdcf            168008 B
+image core   content.sts.core.rdcf       132044 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
 > —— 而且其中包含状态/诅咒牌与多档升级行（`searing_blow+`…`++++++`）；
-> `89 / 80` 是**变体 / 动作**；`14` 是三个幕的事件池之和（`6+4+4`），不是单池大小。
+> `98 / 85` 是**变体 / 动作**；`22` 是三个幕的事件池之和（`10+8+4`），**不是**不同事件数 ——
+> `golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用，去重之后是 **19 条**（§F.25）。
+> `relics 152` 是**内容行**；wiki 有 193 条，缺 41 条（§D.2）。
 ---
 
 ## 2. 缺口
@@ -98,6 +101,17 @@ Red + Colorless + Curse + Status 算进范围**；其它颜色只统计、不算
 ```
 python -X utf8 native/audit_card_gap.py --write     # 需要代理；写 native/wiki_card_index.json
 python -X utf8 native/audit_card_gap.py --offline   # 只读索引，CI/无网时用
+```
+
+**§306 核对的最新账**（`--offline`，wiki 索引 `native/wiki_card_index.json`，990 行）：
+
+```
+in-scope missing: 73   (have 147 of 220)
+Red     75 / 75   （齐）
+Colorless 70 / 70 （齐）
+Purple  0 / 72    （缺 73 里的一张是 Purple Power；这 73 张全部属于观者）
+content-only: blur, buffer, malaise, nightmare, patient_guard, rip_and_tear, skewer
+             （wiki 归在别的颜色下，或本移植自有）
 ```
 
 当前结果（`audit_card_gap.py --offline` 的输出，**数字照抄脚本**，别手写）：
@@ -230,7 +244,7 @@ wiki 常见而我们**没有**的：
 > 核对时还抓到我们自己的一个内容错误（`blind` 的稀有度与 Exhaust），说明**词表对了不等于每条
 > 数据都对** —— 所以这一节的每一行都应该能点回 wiki 页面。
 
-### D.2 遗物：**115 / 193** —— 已实现的规则与剩下的分档（§259–§274）
+### D.2 遗物：**152 / 193** —— 已实现的规则与剩下的分档（§259–§274，§292–§305）
 
 > 这一节原先长在 `README.md` 里。搬到这里的理由：README 只留**统计数字**，
 > "某件遗物靠哪条管线成立"属于缺口/载体文档。方法论另有
@@ -240,15 +254,21 @@ wiki 常见而我们**没有**的：
 
 | 桶 | 有 / 总 | 说明 |
 |---|---|---|
-| Common | 34 / 36 | 普通池 |
-| Uncommon | 23 / 36 | 普通池 |
-| Rare | 26 / 34 | 普通池 |
-| Boss | 16 / 30 | 只从 Boss 奖励来 |
-| Shop | 5 / 20 | 只从商人来 |
-| Event | 14 / 18 | 只从事件来 |
-| Starter | 4 / 4 | 开局自带 |
-| Special | 0 / 2 | `circlet` 一类 |
+| Common | 34 / 36 | 缺 `damaru` / `data_disk`（Defect 专属） |
+| Uncommon | 29 / 36 | 缺 7 件，**6 件是别的角色专属**（`bottled_*` 三件 + `gold_plated_cables` / `symbiotic_virus` / `teardrop_locket`）与静默的 `ninja_scroll` |
+| Rare | 30 / 34 | 缺 `emotion_chip` / `golden_eye` / `tingsha` / `tough_bandages` |
+| Boss | 23 / 30 | 缺 7 件，**全是别的角色的能量/球**（`frozen_core` `holy_water` `hovering_kite` `inserter` `nuclear_battery` `violet_lotus` `wrist_blade`） |
+| Shop | 17 / 20 | 缺 `melange` / `prismatic_shard` / `runic_capacitor` |
+| Event | 17 / 18 | 只差 `necronomicon`（**明确不做**：打两次） |
+| Starter | 2 / 4 | 铁甲战士的 `burning_blood` + 通用的 `black_blood`；缺 `cracked_core` / `pure_water` |
+| Special | 0 / 2 | `circlet` 一类，**不做**（wiki 自己也标无用） |
 | Blight | 0 / 13 | **无尽模式，不做** |
+
+> 口径（§306 核对）：`native/audit_relic_gap.py` → `内容 152 条（152 条内核认识）`、
+> `MISSING: 41`、`METADATA（两边都有但写错）: 0`、`IMPLEMENTED: … 内核不认识: 0`。
+> 41 件里 **13 件 Blight + 2 件 Special + 约 18 件别的角色专属** ⇒ 铁甲战士这条线上真正
+> 可做的只有 `necronomicon`（不做）、`tingsha` / `tough_bandages`（缺 `CardDiscarded` 事实）、
+> `golden_eye` / `bottled_*`（拾取时绑牌）这几类。
 
 **效果怎么实现的**（不是"每件一个 if"，而是按载体归类）：
 
@@ -270,42 +290,54 @@ wiki 常见而我们**没有**的：
 | **拾取那一刻**（`push_relic`，§274） | `old_coin` `lees_waffle` `war_paint` `whetstone` `astrolabe` `pandoras_box` `empty_cage` |
 | 篝火六选项（§259） | `girya` `peace_pipe` `shovel` `dream_catcher` `coffee_dripper` `fusion_hammer` `mark_of_the_bloom` |
 
-**内容门要求"内容里的每件遗物内核都实现"**，所以缺的那 78 件不会半吊子地出现在池子里
+**内容门要求"内容里的每件遗物内核都实现"**，所以缺的那 41 件不会半吊子地出现在池子里
 （`audit_relic_gap.py` 的 `IMPLEMENTED: … 内核不认识` 必须为 0）。
 
-**§292 之后是 66 件**（Wave 1 做了 11 件 + 修了 `Shop` 档的静默缺口；逐件清单见
-`port-plan.md` §292.6）。按"缺哪块载体"分档（细节见方法论文档 §3 / §8）：
+**§292 之后又做了 37 件**（§292–§305 逐节清单见 `port-plan.md` 对应小节）。剩下的 41 件按
+"缺哪块载体"分档：
 
 | 档 | 件数 | 缺什么 | 例子 |
 |---|---|---|---|
-| 轻资产 | ~20 | 有钩子、缺一条判断 | `face_of_cleric` `sacred_bark` `golden_eye` `wing_boots` |
-| 中资产 | ~30 | 缺一个**事实/事件** | `tough_bandages` `tingsha`（缺 `CardDiscarded`）、`bottled_*`（拾取时绑牌）、`gambling_chip`（§293–§295 之后的余项） |
-| 不做 | 13 | 无尽模式 `Blight` 桶 | `accursed` `hauntings` `muzzle` |
-| 其他角色 | ~15 | `Watcher`/`Silent`/`Defect` 专属 | `pure_water` `cracked_core` `ninja_scroll` `emotion_chip` |
+| 别的角色的语言 | ~18 | 球 / 姿态 / 毒 / 弃牌事实 | `frozen_core` `nuclear_battery` `teardrop_locket` `emotion_chip` `tingsha` |
+| 拾取时绑牌 | 3 | "选一张**攻击/技能/能力**牌绑进遗物" | `bottled_flame` / `bottled_lightning` / `bottled_tornado` |
+| 静默的 | ~5 | 有钩子、缺一条判断 | `golden_eye`（`Scry`）`tough_bandages`（`CardDiscarded`）`ninja_scroll`（手上全是攻击） |
+| 明确不做 | 15 | 无尽模式 / 无意义 | `necronomicon` + 13 件 `Blight` + 2 件 `circlet` |
 
-### D.3 遭遇：Act 1 的池子与还缺的三件（§275）
+### D.3 遭遇：三幕的池子（§275 / §287 / §306 核对）
 
-Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有一个 `Weak`（既有简化）。
-§275 补了"只用现有怪物"的三场（`3 Louses` / `2 Fungi Beasts` / `Blue Slaver` solo），
-现在 `Weak` 池 12 条、遭遇 38 个。
+当前事实（`sts.roguedeck.json` 的 `EncounterTables`，数字直接读出来）：
 
-还缺三件，各缺一块**别的东西**（不是"抄一条遭遇"）：
+| 幕 | 普通池 | 精英池 | Boss 池 |
+|---|---|---|---|
+| 1 | **17** | 3（`three_sentries` / `gremlin_nob` / `lagavulin`） | 3（Slime Boss / Guardian / Hexaghost） |
+| 2 | **3**（`shelled_parasite` / `chosen` / `snecko`） | 3（`gremlin_leader` / `book_of_stabbing` / `slavers`） | 3（Champ / Automaton / Collector） |
+| 3 | **6**（`byrds` / `orb_walker` / `spiker` / `darklings` / `maw` / `spire_growth`） | 3（`giant_head` / `nemesis` / `reptomancer`） | 3（Time Eater / Awakened One / Donu & Deca） |
 
-| 缺的 | 缺什么载体 |
+另外两处专用池：`EliteEvent`（3 条，`Dead Adventurer` 的伏击；Lagavulin 用**醒着的**变体，§287）
+与 `ColosseumSlavers` / `ColosseumChampions`（各 1 条，`The Colosseum` 的两场，§286）。
+
+**★ 最大的内容缺口在 Act 2 的普通池**：wiki 的 City 是 **Easy 5 + Hard 8 = 13** 种组合
+（Easy：Spheric Guardian / Chosen / Shelled Parasite / 3 Byrds / 2 Thieves；Hard：Chosen+Byrds、
+Cultist+Chosen、Sentry+Spheric Guardian、Snake Plant、Snecko、Centurion and Mystic、3 Cultists、
+Shelled Parasite and Fungi —— `slaythespire.wiki.gg/wiki/The_City`），我们只有 **3** 条。
+缺的组合里有 3 条要**新怪物**：`spheric_guardian`、`snake_plant`、`centurion` / `mystic`
+（其余用现有怪物就能拼：`chosen` + `byrds`、`cultist` + `chosen`、`sentry` + 需要 Spheric、
+`three_cultists`、`shelled_parasite` + 需要 Snake Plant 之外的那条可以拼）。
+
+⚠️ 旧版本这一节写着"还缺三件"（Act 1 的三条组合遭遇），**那三条 §276/§277 已经做完**；
+五个精英（Lagavulin / Book of Stabbing / Slavers / Nemesis / Reptomancer）也都做完了 ——
+`Elite` / `Elite2` / `Elite3` 各 3 条就是证据。留着过期条目比漏写更坏。
+
+### D.4 两个机制缺口：**都已关闭**（§277 提，§278–§281 关）
+
+| 缺口 | 状态 |
 |---|---|
-| ~~`Swarm of Slimes`~~ | **§276 已做**：`MAX_ENEMY_SLOTS` 与内核上限**早就是 6**，卡住的只是内容门里的镜像（4）。 |
-| ~~Large Slime（Spike L / Acid L）~~ | **§276 已做**：两只 L 史莱姆 + **50% 分裂**（阈值 = 一半最大血，血量继承当前血）。 |
-| ~~Exordium Thugs / Wildlife~~ | **§277 已做**：组合槽（`Candidates` 加权候选表）+ 两条遭遇。 |
+| 真实事件的**剧情分支**被合并 + 条件选项 | ✅ **已关**：`EVND` 段表（选项数不固定）+ `EV.Entry` + `Requires`/`RequiresAsc`（闭词表，6 数值 kind / 2 存在 kind）+ `relic_lose` / `gold_cost` / `gold_all` / `card:<id>` / `heal_pct` / `heal_full` / 小数百分比（千分）。**事件级条件（"这个事件出不出现"）仍未做**，但它不是"表达不了"，而是"会重掷 `?` 房的每一次抽取" —— 见 `docs/event-gaps.md` §3.1。 |
+| 战斗中**每回合重掷**的随机没有值节点 | ✅ **已关**：`expr::randomInt{Min,Max}` + `CombatState::draw_in_range`（唯一入口，`random_step` 推进、`seed` 不动）。★ 当年的担心（"预检也求值会吃掉两次"）经核对是**错的**：`preflight` 只查结构不求值 —— 真正的约束是"求值器只读"，所以取数只能在派发点。§281 有记录。 |
 
-⚠️ 五个**精英**遭遇（Lagavulin / Book of Stabbing / Slavers / Nemesis / Reptomancer）
-**早就在内容里**且各有具名运行时判据 —— 旧文档说"缺这五个"是过期信息（§275.1）。
+⚠️ **这一节原先叫"两个表达不了"，现在是"两个已关闭"**：留在这里是因为它记录了当年
+"内容表达不了"的判断如何被推翻（也包括两条**当时以为是坑、其实是误判**的结论）。
 
-### D.4 两个**表达不了**的机制缺口（分析见 `docs/mechanism-gaps-analysis.md`）
-
-| 缺口 | 缺什么载体 | 方案 |
-|---|---|---|
-| ~~真实事件的**剧情分支**被合并 + 条件选项~~ | **§278/§279/§280 已做**：`EVND` 段表（选项数不固定）+ `EV.Entry` + `Requires`/`RequiresAsc`（闭词表，6 数值 kind / 2 存在 kind）+ `relic_lose` / `gold_cost` / `heal_pct` / `heal_full` / 小数百分比（千分）。**事件级条件（"这个事件出不出现"）仍未做** —— 见 `docs/event-gaps.md` §3.1。 |
-| 战斗中**每回合重掷**的随机没有值节点 | 一个"从程序里问随机数"的表达式 | `randomInt(Min,Max)` 走 `CombatState` 现有 RNG；★ 结果要在计划里固化（预检也会求值） |
 
 ### F.4 Snecko（§282）
 
@@ -654,7 +686,7 @@ Sentry 的 Bolt 塞的就是它。
 * 改了内容或内核规则之后，**跑一遍脚本**，把正文里对不上的句子改掉 —— 或者干脆改成"见脚本"。
   一句"我们有 26/33 瓶药水"如果没人重算，它会在下一次内容变更后变成谎话，而**没有任何闸门会红**。
 * **逐实体的账在 `docs/coverage-matrix.md`（生成物，闸门 13）**：它把"每个实体被验证到哪一步"写成 360 行 —— `Implemented` / `RuntimeTested`（`test:` 还是只有 `harness:`）/ `WikiVerified`（`wiki:<dump>` 还是只有 `spec:<TABLE>`）/ `Deviation` / `Evidence`。本文档 §G、§H 的两张表**被它直接解析**（改了这里而不改内容，那条闸门会点名是哪个 id 漂了）。`WikiVerified = —` 的那几类就是"还没回到 wiki 页看过"的清单。
-* ⚠️ **闸门看不见 wiki**：本轮重核抓到 `blind` 的稀有度与 Exhaust 都写错了，而 20 道闸门全绿
+* ⚠️ **闸门看不见 wiki**：本轮重核抓到 `blind` 的稀有度与 Exhaust 都写错了，而当时的 20 道闸门全绿
   （内容门对照的是 `docs/spec/` 的清单，清单本身也是人抄的）。⇒ 新内容落地时，**至少把稀有度
   与"是否 Exhaust"这两列回到单卡页看一眼**，它们是最容易"顺手抄邻居"的两格。
 

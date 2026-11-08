@@ -4,18 +4,18 @@
   "src": {
     "path": "tools/contentc/packages/sts/sts.roguedeck.json",
     "bytes": 2025083,
-    "sha256": "a070df74739388aab5393af636442e3207ddc540cc8cd70a949a523171eb88c5"
+    "sha256": "9f542dbf7eda6eaab9f0bc1d4fee7322f32151935abefc5d15689194047ff21f"
   },
   "images": {
     "full": {
       "file": "content.sts.rdcf",
       "bytes": 168008,
-      "sha256": "5e54353ed6f7468775a4f31c913338d91db27889c2976523d61265b78b0669ce"
+      "sha256": "e1a84e3a626e03f50d14c252764772121fff02ae4ce089ab7c143f731feedf43"
     },
     "core": {
       "file": "content.sts.core.rdcf",
       "bytes": 132044,
-      "sha256": "8ee60437fc66a96bdb7a4c24bf954a19cbcea3baa04cb6fe1b24d8decc77f82f"
+      "sha256": "3576bf6fac89189286a66072d7759380d1c6a12623f7cee4db602a070ba6b2c9"
     }
   },
   "compiler": {
