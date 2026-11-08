@@ -1185,6 +1185,80 @@ async function realStart(seed, trail) {
 }
 report.pointer = pointer;
 
+// §305 放在**最后**：这一段结束时页面停在战斗中（`pointer` 段需要它停在别处，反过来也一样），
+// 而它之后没有别的段落再读页面了 —— 只有 `page.close()`。
+report.eye = await evaluate(`(async () => {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const panel = () => document.getElementById("nodePanel");
+  const text = (el) => el.innerText.replace(/\s+/g, " ").trim();
+  const out = {};
+  // §305: frozen_eye 是视图，不是状态。
+  // 同一份状态两种视图：没有遗物时抽牌堆面板**有序**（看得出有哪些牌、看不出顺序），
+  // 有遗物时**等于**内核的顺序。两件事都要读 DOM —— 内核那侧只说明"标志是 0/1"，
+  // 而"页面对标志做了什么"只有这里能钉。
+  window.RD_DEBUG.startWithSeed(97, 0);
+  await sleep(0);
+  panel().querySelector("[data-panel-action]").click();
+  await sleep(0);
+  if (ex.rd_run_pending() === 7) {
+    panel().querySelector("[data-panel-action]").click();
+    await sleep(0);
+    const pick = document.querySelector("#modalBody [data-pick]");
+    if (pick) { pick.click(); await sleep(0); }
+  }
+  const litNodes = [...document.querySelectorAll("#mapbox g.node.reachable")];
+  if (litNodes.length) {
+    litNodes[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await sleep(40);
+  }
+  const fightButton = panel().querySelector("[data-panel-action]");
+  if (fightButton) { fightButton.click(); await sleep(80); }
+  out.eyeInFight = !document.getElementById("handPanel").hidden;
+
+  // 内核的真顺序（页面的 pileId(0, i) 与它同源）。
+  const kernelOrder = () => {
+    const ids = [];
+    for (let index = 0; index < ex.rd_env_pile_len(0); index++) {
+      const len = ex.rd_env_pile_card_id_len(0, index);
+      const at = ex.rd_env_scratch_buf();
+      ex.rd_env_pile_card_id_into(0, index, at);
+      ids.push(new TextDecoder().decode(new Uint8Array(ex.memory.buffer, at, len)));
+    }
+    return ids;
+  };
+  const shownOrder = () => {
+    document.getElementById("drawBtn").onclick();
+    const rows = [...document.querySelectorAll("#modalBody .card")]
+      .map((el) => el.getAttribute("data-card-id"));
+    document.getElementById("modalClose").click();
+    return rows;
+  };
+
+  out.eyeFlagBefore = ex.rd_env_frozen_eye();
+  out.eyeKernelBefore = kernelOrder();
+  out.eyeShownBefore = shownOrder();
+  // "有序"：按 id 排，与内核顺序**不同**（内核顺序是洗过的）。
+  out.eyeSortedBefore = JSON.stringify(out.eyeShownBefore) ===
+    JSON.stringify([...out.eyeKernelBefore].sort());
+  out.eyeDiffersBefore = JSON.stringify(out.eyeShownBefore) !==
+    JSON.stringify(out.eyeKernelBefore);
+  out.eyeGranted = window.RD_DEBUG.giveRelic("frozen_eye");
+  out.eyeFlagAfter = ex.rd_env_frozen_eye();
+  out.eyeKernelAfter = kernelOrder();
+  out.eyeShownAfter = shownOrder();
+  out.eyeMatchesAfter = JSON.stringify(out.eyeShownAfter) ===
+    JSON.stringify(out.eyeKernelAfter);
+  out.eyePileUnchanged = JSON.stringify(out.eyeKernelBefore) ===
+    JSON.stringify(out.eyeKernelAfter);
+  // 这一段单独跑（在 pointer 之后），所以不用担心弹窗影响别人；仍然关掉，免得 §305 自己漏一个出口。
+  document.getElementById("modalClose").click();
+  await sleep(20);
+  out.eyeModalEnd = document.getElementById("modal").hidden;
+
+
+  return out;
+})()`);
+
 await page.close();
 
 
@@ -1326,6 +1400,22 @@ want(report.condPendingAfterRefusal === 5,
   `§279: a refused click must leave the event open, pending ${report.condPendingAfterRefusal}`);
 
 
+want(report.eye.eyeInFight === true, "§305: the fight never started, so the draw pile was never shown");
+want(report.eye.eyeFlagBefore === 0 && report.eye.eyeFlagAfter === 1,
+  `§305: frozen_eye flag went ${report.eye.eyeFlagBefore} -> ${report.eye.eyeFlagAfter}`);
+want(report.eye.eyeDiffersBefore === true,
+  "§305: without the relic the panel showed the kernel's draw order (it must NOT)");
+want(report.eye.eyeSortedBefore === true,
+  "§305: without the relic the panel is not the sorted view");
+want(report.eye.eyeMatchesAfter === true,
+  "§305: with the relic the panel must equal the kernel's draw order");
+want(report.eye.eyeModalEnd === true, `§305: the modal was left open (${report.eye.eyeModalEnd}), which covers #seedInput`);
+want(report.eye.eyePileUnchanged === true,
+  "§305: granting the relic reordered the draw pile itself (it is a view, not state)");
+want(report.eye.eyeShownAfter.length === report.eye.eyeKernelAfter.length,
+  `§305: the panel showed ${report.eye.eyeShownAfter.length} of ` +
+  `${report.eye.eyeKernelAfter.length} card(s)`);
+
 if (problems.length) {
   for (const problem of problems) console.error("  - " + problem);
   fail(`${problems.length} assertion(s) failed`);
@@ -1379,4 +1469,9 @@ console.log("  act 3 (daggers)   " + JSON.stringify({
 console.log("  §293 add cards    owed " + report.addOwed + " -> " + report.addOwedAfter +
   " · offer " + report.addOffer + " · rows " + report.addRows.length +
   " · deck +" + report.addDeckGrew + " · bowl +" + report.addMaxHpGrew + " max HP");
+console.log("  §305 frozen eye  flag " + report.eye.eyeFlagBefore + " -> " +
+  report.eye.eyeFlagAfter + " · sorted " + report.eye.eyeSortedBefore +
+  " · differs " + report.eye.eyeDiffersBefore + " · matches after " +
+  report.eye.eyeMatchesAfter + " · pile unchanged " + report.eye.eyePileUnchanged +
+  " · shown " + report.eye.eyeShownAfter.length + "/" + report.eye.eyeKernelAfter.length);
 console.log("BROWSER_TEST PASS");

@@ -67062,6 +67062,13 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Rare"
+    },
+    {
+      "Id": "frozen_eye",
+      "DisplayName": "Frozen Eye",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Shop"
     }
   ],
   "Start": {

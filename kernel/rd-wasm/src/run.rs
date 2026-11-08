@@ -1404,6 +1404,18 @@ pub extern "C" fn rd_run_campfire_options() -> i32 {
 ///
 /// 单独一个导出（而不是塞进 `rd_run_observe` 的某个格子）：观察向量是**冻结的 ABI**，
 /// 加一格要动 `smoke.mjs` 的长度对账与页面所有偏移。这是一次点击才读一次的标量。
+/// §305：`frozen_eye` —— 抽牌堆视图要不要按**真实顺序**显示（`1` 要，`0` 排序显示）。
+///
+/// 没有局 ⇒ `0`：`rd_env` 的单场战斗没有遗物，所以它的抽牌堆视图就是"排序"的那一版
+/// （与"没有这件遗物"逐字同形 —— 这正是它该有的样子）。
+#[no_mangle]
+pub extern "C" fn rd_env_frozen_eye() -> i32 {
+    match run_slot().as_ref() {
+        Some(session) if session.state.shows_draw_order() => 1,
+        _ => 0,
+    }
+}
+
 /// §303：`wing_boots` 还能飞几次（0..=3）。没有局 ⇒ `-1`，没有遗物 ⇒ `0`。
 ///
 /// 与 `rd_run_girya_lifts` 同一个理由单独导出：观察向量是冻结的 ABI。
@@ -11319,6 +11331,42 @@ mod tests {
         assert_eq!(crate::rd_env_choice_pick(1, 1), 0);
         assert_eq!(crate::rd_env_choice_confirm(), 0, "{}", run_error_text());
         assert_eq!(crate::rd_env_choice_pending(), 0, "both answered");
+    }
+
+    /// §305：`frozen_eye` —— 标志是 0/1，而**抽牌堆本身不变**。
+    ///
+    /// 后半句是这条判据的重点：排序若发生在内核里，"视图"就变成了状态 —— 之后任何一次
+    /// `draw_cards` 都会按排序后的顺序发牌，而那是**改了规则**。所以这里逐张比对
+    /// `rd_env_pile_card_id(0, i)` 在拿遗物前后的序列。
+    #[test]
+    fn frozen_eye_is_a_view_flag_and_never_reorders_the_pile() {
+        // 牌组要够大：起手抓 5 张，5 张的牌组会让抽牌堆**空**（那就没什么可看的）。
+        let deck = [
+            "strike", "strike", "strike", "defend", "defend", "defend", "bash", "bash",
+            "strike", "defend",
+        ];
+        test_run(53, 80, 80, &deck);
+        assert_eq!(rd_run_step(0), 0, "walk onto a node");
+        assert_eq!(rd_run_fight_begin(), 0, "a fight begins");
+        assert_eq!(rd_env_frozen_eye(), 0, "no relic, sorted view");
+
+        let before: Vec<std::string::String> = (0..crate::rd_env_pile_len(0))
+            .map(|index| crate::pile_card_id(0, index).expect("a draw-pile card"))
+            .collect();
+
+        run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .push_relic("frozen_eye", &[])
+            .expect("frozen_eye");
+        assert_eq!(rd_env_frozen_eye(), 1, "the relic flips the flag");
+
+        let after: Vec<std::string::String> = (0..crate::rd_env_pile_len(0))
+            .map(|index| crate::pile_card_id(0, index).expect("a draw-pile card"))
+            .collect();
+        assert_eq!(before, after, "the pile is not reordered by the flag");
+        assert!(!before.is_empty(), "the draw pile has cards to look at");
     }
 
 }

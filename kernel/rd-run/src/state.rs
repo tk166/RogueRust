@@ -378,6 +378,12 @@ pub enum RelicEffect {
     PickupAddCards(u8),
     /// §293：`tiny_house` —— +50 金币、上限 +5、一瓶药水、一张牌。四件事一件遗物。
     PickupTinyHouse,
+    /// §305：`frozen_eye` —— "When viewing your Draw Pile, the cards are now shown **in order**."
+    ///
+    /// 独立的变体而不是 [`Self::Nothing`]：`Nothing` 的意思是"这件遗物什么也不做"，而这件有
+    /// 明确的一件事 —— 只是它发生在**视图**里。有了这个变体，`rd_env_frozen_eye` 问的是
+    /// "这个变体在不在"，而不是再抄一遍遗物 id（抄第二份就会漂）。
+    FrozenEye,
     /// §304：`gambling_chip` —— 开战那一刻问"弃任意张手牌，然后抽同样多张"。
     CombatOpenDiscardThenDraw,
     /// §304：`toolbox` —— 开战那一刻问"从 `count` 张随机**无色**牌里选一张加进手牌"。
@@ -2752,6 +2758,8 @@ impl RunState {
             // §304：两件"开战问一句"的遗物也都不在"拿到那一刻"里。
             | RelicEffect::CombatOpenDiscardThenDraw
             | RelicEffect::CombatOpenOfferColorless { .. }
+            // §305：`frozen_eye` 只改视图，两个钩子都不参与。
+            | RelicEffect::FrozenEye
             | RelicEffect::RestCardReward => {}
         }
         self.relics[slot] = id;
@@ -2939,6 +2947,7 @@ impl RunState {
                     // §304：两件"开战问一句"的遗物也不是回合末效果（问句在开战那一刻发）。
                     | RelicEffect::CombatOpenDiscardThenDraw
                     | RelicEffect::CombatOpenOfferColorless { .. }
+                    | RelicEffect::FrozenEye
                     | RelicEffect::RestCardReward,
                 ) => {}
                 None => {
@@ -3227,6 +3236,8 @@ impl RunState {
             "mummified_hand" => {
                 Some(RelicEffect::StartCombatStatus("standard.mummified_hand", 1))
             }
+            // §305：`frozen_eye` —— 规则全在视图里（页面读 `rd_env_frozen_eye`）。
+            "frozen_eye" => Some(RelicEffect::FrozenEye),
             // §304：两件"开战问一句"的遗物（问句在 `rd-wasm` 发起，内核只认形态）。
             "gambling_chip" => Some(RelicEffect::CombatOpenDiscardThenDraw),
             "toolbox" => Some(RelicEffect::CombatOpenOfferColorless {
@@ -3311,6 +3322,17 @@ impl RunState {
             Some(RelicEffect::PotionEffectPercent(percent)) if percent > 0 => percent,
             _ => 100,
         }
+    }
+
+    /// §305：`frozen_eye` —— 抽牌堆视图要不要**按真实顺序**显示。
+    ///
+    /// 没有它就返回 `false`：那时视图按 id 排序（"有哪些牌"是公开信息，"顺序"不是）。
+    #[must_use]
+    pub fn shows_draw_order(&self) -> bool {
+        matches!(
+            self.first_relic_effect_of(RelicEffect::FrozenEye),
+            Some(RelicEffect::FrozenEye)
+        )
     }
 
     /// §304：这一场开战时要问玩家哪些话 —— 位掩码（`0b01` = `gambling_chip`，
@@ -3789,7 +3811,9 @@ impl RunState {
                 | RelicEffect::WingBoots { .. }
                 // §304：两件"开战问一句"的遗物同样不属于这两个钩子。
                 | RelicEffect::CombatOpenDiscardThenDraw
-                | RelicEffect::CombatOpenOfferColorless { .. },
+                | RelicEffect::CombatOpenOfferColorless { .. }
+                // §305：`frozen_eye` 只改视图。
+                | RelicEffect::FrozenEye,
                 )
                 | None => {}
             }
@@ -4433,7 +4457,9 @@ impl RunState {
                 | RelicEffect::WingBoots { .. }
                 // §304：两件"开战问一句"的遗物同样不属于这两个钩子。
                 | RelicEffect::CombatOpenDiscardThenDraw
-                | RelicEffect::CombatOpenOfferColorless { .. },
+                | RelicEffect::CombatOpenOfferColorless { .. }
+                // §305：`frozen_eye` 只改视图。
+                | RelicEffect::FrozenEye,
                 )
                 | None => {}
             }
@@ -12530,6 +12556,19 @@ mod tests {
             "both relics are owed"
         );
         assert_eq!(offer, 3, "toolbox offers three candidates (wiki)");
+    }
+
+    /// §305：`frozen_eye` —— 抽牌堆视图按真实顺序显示。
+    ///
+    /// 两侧都要验：没有遗物时是 `false`（视图排序），有遗物时才是 `true`。只验"有遗物为真"的话，
+    /// 一条永远返回 `true` 的实现也全绿 —— 而那正好等于"这件遗物不存在"。
+    #[test]
+    fn frozen_eye_decides_whether_the_draw_pile_is_shown_in_order() {
+        let deck = ["strike", "defend"];
+        let mut run = RunState::new(37, 80, 99, &deck).expect("a run");
+        assert!(!run.shows_draw_order(), "no relic ⇒ the view is sorted");
+        run.push_relic("frozen_eye", &[]).expect("frozen_eye");
+        assert!(run.shows_draw_order(), "the relic turns the view into draw order");
     }
 
 }

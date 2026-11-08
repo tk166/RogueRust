@@ -1513,10 +1513,28 @@ function deckEntries() {
   return out;
 }
 
+// §305: the draw pile is a **view**, and `frozen_eye` decides which one.
+//
+// Without the relic the panel still shows *which* cards are in the pile (that is public
+// information) but not the **order** they will come back in -- so the list is sorted by id, which
+// is deterministic and leaks nothing. With the relic it is the kernel's own order (`index` into
+// `DrawPile`). One reader, two views, and the hint says which one you are looking at: a list that
+// merely *looks* authoritative is the worse failure.
 function pileEntries(zone) {
   const out = [];
-  for (let index = 0; index < ex.rd_env_pile_len(zone); index++) {
-    out.push(`<div class="card">${esc(pileTitle(zone, index))}</div>`);
+  const count = Math.max(0, ex.rd_env_pile_len(zone));
+  const entries = [];
+  for (let index = 0; index < count; index++) {
+    entries.push({ index, title: pileTitle(zone, index), id: pileId(zone, index) });
+  }
+  if (zone === 0 && ex.rd_env_frozen_eye() !== 1 && entries.length > 1) {
+    entries.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    out.push(`<div class="dim">没有 <b>Frozen Eye</b>：这里只显示**有哪些**牌，顺序按名称排序</div>`);
+  }
+  for (const entry of entries) {
+    // `data-card-id` 是给**判据**读的（视图上仍然只显示标题）：§305 要比较"页面显示的序列"
+    // 与"内核的 DrawPile 顺序"，而两者都是 id 的语言 —— 从标题反推 id 会变成猜。
+    out.push(`<div class="card" data-card-id="${esc(entry.id)}">${esc(entry.title)}</div>`);
   }
   return out;
 }
