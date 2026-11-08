@@ -723,6 +723,74 @@ impl<'a> NodeRef<'a> {
     }
 }
 
+/// §287：程序里**单次**伤害的最大值（`dealDamage` 的 `const` Amount）。
+///
+/// `None` = 静态答不出：Amount 不是 `const`（依赖状态），或者伤害藏在
+/// `conditional` / `forEachTarget` / `forEachCardInZone` 后面 —— 那些要状态才能求值，
+/// 猜一个数会让"牌组里有一张 ≥10 伤害的牌"变成一句随实现而变的话。
+///
+/// 与 `rd-wasm::program_damage` 的区别：那个求**一次动作的伤害总和**（给 `EACT` 预览用），
+/// 这个求**单次命中的最大值**（给 `Wing Statue` 那种"per hit"的条件用）。两个问题，两个函数 ——
+/// 把它们合成一个"伤害"会让其中一边悄悄变成错的。
+#[must_use]
+pub fn max_hit_damage(root: NodeRef<'_>) -> Option<i32> {
+    let mut best = 0i32;
+    if walk_max_hit(root, 0, &mut best) {
+        Some(best)
+    } else {
+        None
+    }
+}
+
+/// [`max_hit_damage`] 的深度优先遍历；`false` = "答不出"。
+fn walk_max_hit(node: NodeRef<'_>, depth: usize, best: &mut i32) -> bool {
+    const MAX_DEPTH: usize = 8;
+    const MAX_CHILDREN: usize = 32;
+    if depth > MAX_DEPTH {
+        return false;
+    }
+    let Ok(kind) = node.kind_str() else {
+        return false;
+    };
+    match kind {
+        "node.dealDamage" => {
+            let Some(amount) = node.node_field("Amount").ok().flatten() else {
+                return false;
+            };
+            if amount.kind_str() != Ok("const") {
+                return false; // 依赖状态 ⇒ 不猜
+            }
+            let Ok(Some(value)) = amount.int_field("Value") else {
+                return false;
+            };
+            if value > *best {
+                *best = value;
+            }
+            true
+        }
+        "node.sequence" => {
+            let mut ids = [0u16; 32];
+            let Ok(count) = node.term_list_field("Children", &mut ids) else {
+                return false;
+            };
+            if count > MAX_CHILDREN {
+                return false;
+            }
+            for id in ids.iter().take(count) {
+                if !walk_max_hit(node.child(*id), depth + 1, best) {
+                    return false;
+                }
+            }
+            true
+        }
+        // 伤害可能藏在这三种后面 ⇒ 不静态回答。
+        "node.conditional" | "node.forEachTarget" | "node.forEachCardInZone" => false,
+        // 其余节点不会造成伤害（`applyStatus` / `gainBlock` / `heal` / `drawCards` …）：
+        // 贡献 0，这是**确定的**，不是猜。
+        _ => true,
+    }
+}
+
 /// 内容镜像 + IR 读取的入口。
 #[derive(Debug, Clone, Copy)]
 pub struct Ir<'a> {

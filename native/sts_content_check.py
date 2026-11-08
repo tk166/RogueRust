@@ -47,6 +47,7 @@ no source, stale image).
 """
 
 import argparse
+import copy
 import json
 import os
 import re
@@ -1396,6 +1397,19 @@ INV_ACT_TABLES = {
     "Boss3": ["enc_time_eater", "enc_awakened_one", "enc_donu_and_deca"],
 }
 
+# §287：**事件变体**遭遇 —— 同一个怪物、不同的开场（今天只有一条：
+# `Dead Adventurer` 的伏击里 Lagavulin 不睡觉，wiki 明写它"does not enter combat Asleep"）。
+#
+# 登记在这里而不是放进上面三张池子：那三张是 **wiki 清单**（"精英池里有哪三个"），
+# 而这是"清单里那一个怪物的另一种开场"。两边都写清楚，才不会被当成"凭空多了一个遭遇"。
+INV_EVENT_VARIANTS = {
+    # 变体 id： (清单里的原型 id, 这一条与原型**唯一的**差别)
+    "enc_lagavulin_awake": (
+        "enc_lagavulin",
+        "no `standard.lagavulin_asleep`; `lagavulin_step` starts at 2 (Siphon Soul on turn 1)",
+    ),
+}
+
 INV_BOSS_POOL = {
     # Act 1.
     "enc_slime_boss": ["slime_boss"],
@@ -2114,7 +2128,9 @@ def check_quantities(doc):
     print("[1] quantities (from inv:§1 / §2 / §3.3 / §5.2 / §10)")
     got = {
         "monsters": len(doc.get("Monsters") or []),
-        "encounters": len(doc.get("Encounters") or []),
+        # §287：事件**变体**不算进 wiki 的遭遇数（它们由 `INV_EVENT_VARIANTS` 单独盯着）。
+        "encounters": len([e for e in doc.get("Encounters") or []
+                           if e["Id"]["Value"] not in INV_EVENT_VARIANTS]),
         "deck": len((doc.get("Start") or {}).get("Deck") or []),
         "statuses": len(doc.get("Statuses") or []),
     }
@@ -2134,11 +2150,16 @@ def check_quantities(doc):
         fail("roster.ids", "roster %s != inv %s" % (roster_ids, inv_ids))
     # Both pools: the weak one (`inv:§5.2`) and the elite one (`inv:§5.3`).
     declared = sorted(set(INV_WEAK_POOL) | set(INV_ELITE_POOL) | set(INV_BOSS_POOL))
-    if sorted(doc.get("Encounters") and [e["Id"]["Value"] for e in doc["Encounters"]]) \
-            != declared:
+    actual_ids = sorted(e["Id"]["Value"] for e in doc.get("Encounters") or [])
+    # §287：事件**变体**不算进 wiki 清单，但**必须**在 `INV_EVENT_VARIANTS` 里登记过 ——
+    # 否则"凭空多了一个遭遇"会被这条判据放过。
+    stray = sorted(set(actual_ids) - set(declared) - set(INV_EVENT_VARIANTS))
+    if stray:
+        fail("encounters.ids", "undeclared encounter ids %s (neither a pool member nor an "
+                               "`INV_EVENT_VARIANTS` entry)" % stray)
+    if sorted(set(actual_ids) - set(INV_EVENT_VARIANTS)) != declared:
         fail("encounters.ids", "encounter ids %s != inv %s"
-             % (sorted(e["Id"]["Value"] for e in doc["Encounters"]),
-                declared))
+             % (sorted(set(actual_ids) - set(INV_EVENT_VARIANTS)), declared))
     if sorted(s["Id"] for s in doc.get("Statuses") or []) != sorted(INV_STATUSES):
         fail("statuses.ids", "%s != %s"
              % (sorted(s["Id"] for s in doc["Statuses"] or []), sorted(INV_STATUSES)))
@@ -2947,6 +2968,8 @@ def check_ascension_health(doc):
     unpinned = set()
     for encounter in doc.get("Encounters") or []:
         eid = encounter["Id"]["Value"] if isinstance(encounter["Id"], dict) else encounter["Id"]
+        if eid in INV_EVENT_VARIANTS:
+            continue                      # 变体的 HP/开场由那条变体判据盯着
         level = level_of.get(eid, 7)
         for enemy in encounter_enemy_records(encounter):
             monster = enemy["Id"]
@@ -3225,7 +3248,16 @@ def check_spawn_rolls(doc):
         fail("roll.unknown", "inventory names enemies that are not in the content: %s" % unknown)
 
     # ①b §195.1：固定计数器的形态 + 数字（`Counters: [{Key, Value, AscensionMin?}]`）。
+    # §287：事件变体的开场计数**故意**与原型不同（`lagavulin_step = 2`），
+    # 那一条由 `INV_EVENT_VARIANTS` 的检查盯着，这里跳过。
+    variant_monsters = set()
+    for encounter in doc.get("Encounters") or []:
+        if encounter["Id"]["Value"] in INV_EVENT_VARIANTS:
+            for record in encounter_enemy_records(encounter):
+                variant_monsters.add(record["Id"])
     for record_id, group in records.items():
+        if record_id in variant_monsters:
+            continue
         for record in group:
             entries = record.get("Counters")
             if entries is None:
@@ -3796,8 +3828,34 @@ def check_relations(doc):
                 fail("monster." + mid, "action %r has no EACT row" % ref["value"])
 
     # every encounter's inline enemy record must equal the roster's, field by field
+    variants = {enc["Id"]["Value"]: enc for enc in doc.get("Encounters") or []
+                if enc["Id"]["Value"] in INV_EVENT_VARIANTS}
+    for eid, (proto_id, note) in sorted(INV_EVENT_VARIANTS.items()):
+        proto = next((e for e in doc.get("Encounters") or []
+                      if e["Id"]["Value"] == proto_id), None)
+        variant = variants.get(eid)
+        if proto is None or variant is None:
+            fail("encounter." + eid, "the variant or its prototype (%s) is missing" % proto_id)
+            continue
+        # 差别的**形状**是固定的：敌人列表与招表必须一模一样，只有开场状态/计数可以不同。
+        a = copy.deepcopy(proto)
+        b = copy.deepcopy(variant)
+        for side in (a, b):
+            side.pop("Id", None)
+            for enemy in side.get("Enemies") or []:
+                enemy.pop("StartingStatuses", None)
+                enemy.pop("Counters", None)
+        if a != b:
+            fail("encounter." + eid,
+                 "an event variant may differ from %s only in StartingStatuses/Counters (%s)"
+                 % (proto_id, note))
+        if variant.get("Enemies") == proto.get("Enemies"):
+            fail("encounter." + eid, "the variant is identical to its prototype -- dead weight")
+
     for enc in doc.get("Encounters") or []:
         eid = enc["Id"]["Value"]
+        if eid in INV_EVENT_VARIANTS:
+            continue                      # 变体由上面那条检查盯着
         if eid in INV_WEAK_POOL:
             pool = INV_WEAK_POOL
         elif eid in INV_ELITE_POOL:
@@ -3916,8 +3974,11 @@ def check_weak_pool_table(doc):
 # 不一致时判据在这里红，而如果只在求值器里漂，"点下去与画出来"就会判成两个不同的答案。
 REQUIRES_MAX = 4
 REQUIRES_KINDS = ("gold", "health", "max_health", "health_percent", "deck_count", "ascension",
-                  "relic", "card")
-REQUIRES_NUMERIC = ("gold", "health", "max_health", "health_percent", "deck_count", "ascension")
+                  "relic", "card",
+                  # §287：`card_damage` —— "牌组里有一张**单次** ≥ N 伤害的牌"（`Wing Statue`）。
+                  "card_damage")
+REQUIRES_NUMERIC = ("gold", "health", "max_health", "health_percent", "deck_count", "ascension",
+                    "card_damage")
 REQUIRES_NUMERIC_OPS = ("at_least", "at_most")
 REQUIRES_PRESENCE_OPS = ("has", "lacks")
 
@@ -4494,6 +4555,17 @@ def check_event_vocabulary(doc):
                     if kind != "heal_pct" and entry.get("Amount") not in (0, None):
                         fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
                     continue
+                if kind in ("fight_gold_bonus", "fight_no_relic"):
+                    # §287：**下一场战斗**的奖励修正（Dead Adventurer 的战后补偿）。
+                    if kind == "fight_gold_bonus":
+                        amount = entry.get("Amount")
+                        if not isinstance(amount, int) or not (1 <= amount <= 999):
+                            fail(where, "fight_gold_bonus needs a positive Amount, got %r"
+                                 % (amount,))
+                    elif entry.get("Amount") not in (0, None):
+                        fail(where, "fight_no_relic takes no Amount")
+                    counts["effects"] += 1
+                    continue
                 if kind == "relic_random":
                     # §285：随机一件遗物（Scrap Ooze）。不带载荷 —— 抽哪件由内容池与
                     # 稀有度权重决定，那在 `rd-wasm` 手里。
@@ -4569,8 +4641,11 @@ def check_event_vocabulary(doc):
             entry = node.get(key)
             if entry is None:
                 continue
-            if not isinstance(entry, list) or not entry:
-                fail("%s.%s" % (label_root, key), "must be a non-empty list")
+            if not isinstance(entry, list):
+                fail("%s.%s" % (label_root, key), "must be a list")
+                continue
+            if not entry:
+                # 空列表 = "这一段没有进入效果"（与缺省同义）：显式写空是**方便生成器**的。
                 continue
             # 同一份词表（`check_effects`），外加一条：**进入效果不许改牌** ——
             # 改牌会变成待答问题，而问题队列只有一个位置，那个位置属于选项。

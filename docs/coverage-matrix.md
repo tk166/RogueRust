@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 819 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 820 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -40,13 +40,13 @@
 | 敌人动作 | 138 | 73 | 65 | 0 | 135 | 3 | 53 | 0 |
 | 卡牌 | 293 | 164 | 129 | 0 | 281 | 12 | 18 | 0 |
 | 状态 | 128 | 120 | 6 | 2 | 0 | 128 | 1 | 0 |
-| 遭遇 | 44 | 33 | 11 | 0 | 0 | 0 | 0 | 0 |
+| 遭遇 | 45 | 34 | 11 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 17 | 17 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 116 | 110 | 6 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 819 | 592 | 217 | 10 | 465 | 144 | 83 | 0 |
+| **合计** | 820 | 593 | 217 | 10 | 465 | 144 | 83 | 0 |
 
-扫描到的具名测试：**1087** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
+扫描到的具名测试：**1090** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
 
 事件：池里有 **20** 个位次、**17** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -79,7 +79,7 @@
 | gremlin_wizard | yes | — | — | wiki:wiki_asc/gremlin_wizard.txt | — | §130/§138/INV_ASC_HP+INV_MONSTERS |
 | hexaghost | yes | hexaghost_plays_the_wikis_seven_move_pattern_after_its_two_openers, the_boss_is_offered_at_floor_16_and_clears_the_act | — | wiki:wiki_asc/hexaghost.txt | gap §H: Sear 后续塞的 Burn 不自动升级（wiki："for the rest of combat"）；Divider 读结算时 HP | §282/INV_ASC_HP+INV_MONSTERS/hexaghost_plays_the_wikis_seven_move_pattern_after_its_two_openers |
 | jaw_worm | yes | spot_weakness_follows_the_enemy_intent, a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it …(+2) | — | wiki:wiki_asc/jaw_worm.txt | — | §5.2/INV_ASC_HP+INV_MONSTERS/spot_weakness_follows_the_enemy_intent |
-| lagavulin | yes | the_five_elite_encounters_match_the_wiki_numbers, lagavulin_wakes_when_it_loses_health_and_loses_a_turn …(+2) | — | wiki:wiki_asc/lagavulin.txt | — | §173/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
+| lagavulin | yes | the_five_elite_encounters_match_the_wiki_numbers, lagavulin_wakes_when_it_loses_health_and_loses_a_turn …(+3) | — | wiki:wiki_asc/lagavulin.txt | — | §173/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
 | looter | yes | ascension_two_makes_the_looter_mug_hit_for_eleven, a_looter_steals_thievery_gold_on_every_attack_and_carries_it_away …(+5) | — | wiki:wiki_asc/thieves.txt | — | §201/§282/INV_ASC_HP+INV_MONSTERS/ascension_two_makes_the_looter_mug_hit_for_eleven |
 | louse_green | yes | the_act_one_hard_pool_encounters_match_the_wiki_numbers, the_composed_encounters_pick_from_their_candidates …(+2) | — | wiki:wiki_asc/louses.txt | — | §258/§275/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/the_act_one_hard_pool_encounters_match_the_wiki_numbers |
 | louse_red | yes | a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action, an_encounter_without_rolls_draws_nothing …(+5) | — | wiki:wiki_asc/louses.txt | — | §258/§275/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action |
@@ -178,8 +178,8 @@
 | jaw_worm.chomp | yes | a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it | — | wiki:wiki_asc/jaw_worm.txt (via jaw_worm) | — | INV_ACTIONS+INV_ASC_VARIANTS/a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it |
 | jaw_worm.thrash | yes | a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it | — | wiki:wiki_asc/jaw_worm.txt (via jaw_worm) · 仅基础值 | 无升档：wiki Jaw Worm: Thrash has no A-row | INV_ACTIONS+INV_NO_ASC/a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it |
 | lagavulin.attack | yes | an_ascension_variant_replaces_the_program_at_its_threshold, lagavulin_wakes_when_it_loses_health_and_loses_a_turn …(+1) | — | wiki:wiki_asc/lagavulin.txt (via lagavulin) | — | §173/§257/INV_ACTIONS+INV_ASC_VARIANTS/an_ascension_variant_replaces_the_program_at_its_threshold |
-| lagavulin.siphon_soul | yes | an_ascension_variant_is_picked_on_the_threshold_and_only_changes_its_number, lagavulin_wakes_on_its_own_unstunned_and_cycles_attack_attack_siphon | — | wiki:wiki_asc/lagavulin.txt (via lagavulin) | — | §174/§204/INV_ACTIONS+INV_ASC_VARIANTS/an_ascension_variant_is_picked_on_the_threshold_and_only_changes_its_number |
-| lagavulin.sleep | yes | lagavulin_wakes_when_it_loses_health_and_loses_a_turn, lagavulin_wakes_on_its_own_unstunned_and_cycles_attack_attack_siphon | — | wiki:wiki_asc/lagavulin.txt (via lagavulin) · 仅基础值 | 无升档：wiki Lagavulin: Sleep does nothing | §173/§193/INV_ACTIONS+INV_NO_ASC/lagavulin_wakes_when_it_loses_health_and_loses_a_turn |
+| lagavulin.siphon_soul | yes | an_ascension_variant_is_picked_on_the_threshold_and_only_changes_its_number, lagavulin_wakes_on_its_own_unstunned_and_cycles_attack_attack_siphon …(+1) | — | wiki:wiki_asc/lagavulin.txt (via lagavulin) | — | §174/§204/INV_ACTIONS+INV_ASC_VARIANTS/an_ascension_variant_is_picked_on_the_threshold_and_only_changes_its_number |
+| lagavulin.sleep | yes | lagavulin_wakes_when_it_loses_health_and_loses_a_turn, lagavulin_wakes_on_its_own_unstunned_and_cycles_attack_attack_siphon …(+1) | — | wiki:wiki_asc/lagavulin.txt (via lagavulin) · 仅基础值 | 无升档：wiki Lagavulin: Sleep does nothing | §173/§193/INV_ACTIONS+INV_NO_ASC/lagavulin_wakes_when_it_loses_health_and_loses_a_turn |
 | lagavulin.stunned | yes | lagavulin_wakes_when_it_loses_health_and_loses_a_turn | — | wiki:wiki_asc/lagavulin.txt (via lagavulin) · 仅基础值 | 无升档：wiki Lagavulin: Stunned does nothing (a lost turn, no numbers) | §173/§257/INV_ACTIONS+INV_NO_ASC/lagavulin_wakes_when_it_loses_health_and_loses_a_turn |
 | looter.escape | yes | a_looter_steals_thievery_gold_on_every_attack_and_carries_it_away, escaping_moves_the_counter_instead_of_copying_it …(+1) | — | wiki:wiki_asc/thieves.txt (via looter) · 仅基础值 | 无升档：wiki Thieves: Escape has no numbers | §201/§282/INV_ACTIONS+INV_NO_ASC/a_looter_steals_thievery_gold_on_every_attack_and_carries_it_away |
 | looter.lunge | yes | an_ascension_variant_is_picked_on_the_threshold_and_only_changes_its_number, the_looter_mugs_twice_then_bombs_then_escapes | — | wiki:wiki_asc/thieves.txt (via looter) | — | §201/INV_ACTIONS+INV_ASC_VARIANTS/an_ascension_variant_is_picked_on_the_threshold_and_only_changes_its_number |
@@ -267,7 +267,7 @@
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
 | bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+19) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
-| bash+ | yes | the_upgrade_eggs_upgrade_two_of_their_own_kind, pandoras_box_transforms_every_staple_and_nothing_else …(+2) | — | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS/the_upgrade_eggs_upgrade_two_of_their_own_kind |
+| bash+ | yes | the_unknown_room_events_are_readable, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+3) | — | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS/the_unknown_room_events_are_readable |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
 | become_almighty | yes | the_wish_options_are_unplayable_by_hand, play_card_from_program_respects_unplayable_unless_told_otherwise …(+1) | — | wiki:wiki_cards/become_almighty.txt | — | §254/§255/CARD_WIKI+INV_CARDS/the_wish_options_are_unplayable_by_hand |
@@ -322,7 +322,7 @@
 | decay | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/decay.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+55) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+56) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+2) | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -510,7 +510,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+133) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+136) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+11) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -609,7 +609,7 @@
 | standard.intangible | yes | the_damage_pipeline_honours_intangible_buffer_and_plated_armor, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §210/§223/INV_STATUSES/the_damage_pipeline_honours_intangible_buffer_and_plated_armor |
 | standard.juggernaut | yes | juggernaut_punishes_every_block_gain | — | spec:INV_STATUSES | — | §263/§276/INV_STATUSES/juggernaut_punishes_every_block_gain |
 | standard.kunai | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §261/§262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
-| standard.lagavulin_asleep | yes | lagavulin_wakes_when_it_loses_health_and_loses_a_turn | — | spec:INV_STATUSES | — | §256/§257/INV_STATUSES/lagavulin_wakes_when_it_loses_health_and_loses_a_turn |
+| standard.lagavulin_asleep | yes | lagavulin_wakes_when_it_loses_health_and_loses_a_turn, the_ambush_lagavulin_starts_awake_with_siphon_soul | — | spec:INV_STATUSES | — | §256/§257/INV_STATUSES/lagavulin_wakes_when_it_loses_health_and_loses_a_turn |
 | standard.lantern | yes | the_five_combat_start_relics_wire_their_own_carrier, the_combat_start_relics_change_the_right_step_of_the_turn | — | spec:INV_STATUSES | — | §261/INV_STATUSES/the_five_combat_start_relics_wire_their_own_carrier |
 | standard.letter_opener | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
 | standard.lizard_tail | yes | the_zero_infrastructure_tail_wires_its_carriers, the_zero_infrastructure_tail_lights_up_the_existing_channels | — | spec:INV_STATUSES | — | §268/INV_STATUSES/the_zero_infrastructure_tail_wires_its_carriers |
@@ -681,7 +681,7 @@
 | standard.vulnerable | yes | the_def_table_is_a_side_table_not_a_copy_per_beat, clear_wipes_the_names_too …(+25) | — | spec:INV_STATUSES | — | §282/§283/INV_STATUSES/the_def_table_is_a_side_table_not_a_copy_per_beat |
 | standard.weak | yes | the_def_table_is_a_side_table_not_a_copy_per_beat, clear_wipes_the_names_too …(+33) | — | spec:INV_STATUSES | — | §263/§265/INV_STATUSES/the_def_table_is_a_side_table_not_a_copy_per_beat |
 
-## 遭遇（44）
+## 遭遇（45）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -704,7 +704,8 @@
 | enc_gremlin_nob | yes | an_ascension_health_row_applies_at_its_own_level_and_not_below, the_every_nth_card_relics_count_the_right_kind_of_card | — | — | — | §152/§282/an_ascension_health_row_applies_at_its_own_level_and_not_below |
 | enc_hexaghost | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter, hexaghost_plays_the_wikis_seven_move_pattern_after_its_two_openers | — | — | — | §194/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
 | enc_jaw_worm | yes | a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it, uppercut_hurts_the_enemy_and_not_the_hero …(+3) | — | — | — | §5.2/§130/a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it |
-| enc_lagavulin | yes | the_five_elite_encounters_match_the_wiki_numbers, lagavulin_wakes_when_it_loses_health_and_loses_a_turn …(+2) | — | — | — | §173/§282/the_five_elite_encounters_match_the_wiki_numbers |
+| enc_lagavulin | yes | the_five_elite_encounters_match_the_wiki_numbers, lagavulin_wakes_when_it_loses_health_and_loses_a_turn …(+3) | — | — | — | §173/§282/the_five_elite_encounters_match_the_wiki_numbers |
+| enc_lagavulin_awake | yes | the_ambush_lagavulin_starts_awake_with_siphon_soul | — | — | — | the_ambush_lagavulin_starts_awake_with_siphon_soul |
 | enc_looter | yes | an_ascension_health_row_applies_at_its_own_level_and_not_below, the_looter_mugs_twice_then_bombs_then_escapes | — | — | — | §175/§201/an_ascension_health_row_applies_at_its_own_level_and_not_below |
 | enc_louse | yes | a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action, an_encounter_without_rolls_draws_nothing …(+2) | — | — | — | §130/§152/a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action |
 | enc_maw | yes | nom_nom_hits_five_damage_ceil_round_over_two_times, the_maw_follows_the_wikis_transition_table | — | — | — | §147/§282/nom_nom_hits_five_damage_ceil_round_over_two_times |
@@ -736,12 +737,12 @@
 |---|---|---|---|---|---|---|
 | ancient_forge | yes | the_unknown_room_events_are_readable, an_event_that_edits_the_deck_owes_a_pick_first …(+3) | — | — | — | the_unknown_room_events_are_readable |
 | ancient_writing | yes | the_unknown_room_events_are_readable, an_event_choice_that_edits_the_deck_owes_a_pick | — | — | — | the_unknown_room_events_are_readable |
-| dead_adventurer | yes | the_unknown_room_events_are_readable, an_event_can_turn_the_room_into_a_fight …(+1) | — | — | — | the_unknown_room_events_are_readable |
+| dead_adventurer | yes | the_unknown_room_events_are_readable, an_event_can_turn_the_room_into_a_fight …(+4) | — | — | — | the_unknown_room_events_are_readable |
 | forgotten_altar | yes | the_unknown_room_events_are_readable, an_event_choice_that_edits_the_deck_owes_a_pick | — | — | — | the_unknown_room_events_are_readable |
 | golden_idol | yes | the_unknown_room_events_are_readable, every_kind_answers_both_sides …(+14) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
 | old_shrine | yes | the_unknown_room_events_are_readable, an_event_can_give_a_relic_only_if_the_kernel_can_run_it | — | — | — | the_unknown_room_events_are_readable |
 | purification_shrine | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
-| scrap_pile | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
+| scrap_pile | yes | the_unknown_room_events_are_readable, opening_an_event_clears_the_debt | — | — | — | the_unknown_room_events_are_readable |
 | shining_light | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | the_cleric | yes | the_unknown_room_events_are_readable, paying_more_gold_than_you_have_is_refused_not_clamped …(+1) | — | — | — | the_unknown_room_events_are_readable |
 | the_joust | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
@@ -757,7 +758,7 @@
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
 | akabeko | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
-| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+7) | — | — | — | the_same_state_hashes_the_same_and_a_change_moves_it |
+| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+9) | — | — | — | the_same_state_hashes_the_same_and_a_change_moves_it |
 | ancient_tea_set | yes | the_node_relics_pay_on_the_right_kind_of_room, the_tea_set_charge_is_spent_by_the_next_fight | — | — | — | §271/the_node_relics_pay_on_the_right_kind_of_room |
 | art_of_war | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | astrolabe | yes | the_pickup_picks_do_not_take_over_the_screen | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
@@ -868,7 +869,7 @@
 | turnip | yes | the_status_application_relics_wire_their_own_carrier | — | — | — | §264/§265/the_status_application_relics_wire_their_own_carrier |
 | twisted_funnel | yes | the_status_application_relics_wire_their_own_carrier, the_status_application_relics_change_what_lands_on_the_target | — | — | — | §264/§265/the_status_application_relics_wire_their_own_carrier |
 | unceasing_top | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
-| vajra | yes | every_invariant_names_itself_when_violated, a_relic_you_already_hold_is_not_offered_again …(+5) | — | — | — | every_invariant_names_itself_when_violated |
+| vajra | yes | every_invariant_names_itself_when_violated, a_relic_you_already_hold_is_not_offered_again …(+6) | — | — | — | every_invariant_names_itself_when_violated |
 | war_paint | yes | the_upgrade_eggs_upgrade_two_of_their_own_kind | — | — | — | §273/§274/the_upgrade_eggs_upgrade_two_of_their_own_kind |
 | whetstone | yes | the_upgrade_eggs_upgrade_two_of_their_own_kind | — | — | — | §273/§274/the_upgrade_eggs_upgrade_two_of_their_own_kind |
 | white_beast_statue | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §269 |

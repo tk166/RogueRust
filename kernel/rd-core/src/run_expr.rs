@@ -52,6 +52,12 @@ pub struct RunFacts<'a> {
     pub relics: &'a [&'a str],
     /// 牌组里的卡 id（重复的算多次：`deck_count` 数的是**张数**）。
     pub deck: &'a [&'a str],
+    /// §287：牌组里**单次**伤害的最高值（由调用方从卡的效果程序里读出来，
+    /// 见 [`crate::content::Content::max_deck_hit_damage`]）。
+    ///
+    /// 为什么由调用方给：`run_expr` 只做**判定**，而"某张牌打多少"要读内容 —— 这一层
+    /// 不该为了一个数字把整个内容表拖进来。
+    pub max_hit_damage: i32,
 }
 
 /// 一个条件原子的 kind（`Requires[i].Kind`）。**闭集**，认不出的响亮失败。
@@ -64,6 +70,8 @@ const KINDS: &[&str] = &[
     "ascension",
     "relic",
     "card",
+    // §287：`card_damage` —— "牌组里有一张**单次** ≥ N 伤害的牌"（`Wing Statue` 的 `[Destroy]`）。
+    "card_damage",
 ];
 
 /// 数值型 kind 允许的比较（`AtLeast` = `x >= n`，`AtMost` = `x <= n`）。
@@ -243,6 +251,8 @@ pub fn decide(
             "max_health" => facts.health_max,
             "ascension" => i32::from(facts.ascension),
             "deck_count" => i32::try_from(facts.deck.len()).unwrap_or(i32::MAX),
+            // §287：单次最高伤害。阈值 `at_least 10` 就是 wiki 的 "10 or more damage per hit"。
+            "card_damage" => facts.max_hit_damage,
             _ => return Err(RequirementError::UnknownKind),
         };
         return Ok(if at_least { value >= amount } else { value <= amount });
@@ -260,7 +270,7 @@ pub fn decide(
 
 /// 数值型 kind（`Amount` 是数字，不是 id）。
 const NUMERIC_KINDS: &[&str] = &["gold", "health", "max_health", "health_percent", "deck_count",
-                                "ascension"];
+                                "ascension", "card_damage"];
 
 /// 与 §278 的 `percent_of` 同一个取整：`floor(base × percent / 100)`。
 fn percent_of(base: i32, percent: i32) -> i32 {
@@ -307,6 +317,8 @@ mod tests {
             ascension: 10,
             relics: &relics,
             deck: &deck,
+            // §287：牌组里单次伤害的最高值。测试里给一个显式的数（`0` = 没有）。
+            max_hit_damage: 0,
         };
         // (kind, op, amount, id) —— 每一条都成对出现（成立 / 不成立）。
         let cases: &[(&str, &str, i32, &str, bool)] = &[
@@ -358,6 +370,8 @@ mod tests {
             ascension: 0,
             relics: &[],
             deck: &[],
+            // §287：牌组里单次伤害的最高值。测试里给一个显式的数（`0` = 没有）。
+            max_hit_damage: 0,
         };
         assert_eq!(
             decide("no_such_kind", "at_least", 1, "", &facts),
@@ -396,6 +410,7 @@ mod tests {
             ascension: 0,
             relics,
             deck,
+            max_hit_damage: 0,
         }
     }
 

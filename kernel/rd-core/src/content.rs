@@ -3061,9 +3061,37 @@ impl<'a> Content<'a> {
             "Elite3" => "EncounterTables.Elite3",
             "Boss2" => "EncounterTables.Boss2",
             "Boss3" => "EncounterTables.Boss3",
+            // §287：**事件**引来的精英池（`Dead Adventurer` 的伏击要用"醒着的 Lagavulin"）。
+            // 不加幕后缀：它不是本幕的标准池，是事件自己的池。
+            "EliteEvent" => "EncounterTables.EliteEvent",
             _ => return None,
         };
         self.id_pool("EncounterTables", pool, hop)
+    }
+
+    /// §287：牌组里**单次**伤害的最高值（`Wing Statue` 的 `[Destroy]` 要 "10 or more per hit"）。
+    ///
+    /// 读的是每张牌的**效果程序**（与执行器同一份数据），不是描述文本。
+    /// 静态答不出的牌按 0 计（见 [`crate::ir::max_hit_damage`]）—— 宁可少点亮一个按钮，
+    /// 也不要让一条条件凭"看着像"成立。
+    #[must_use]
+    pub fn max_deck_hit_damage(&self, deck: &[&str]) -> i32 {
+        let ir = crate::ir::Ir::new(self);
+        let mut best = 0i32;
+        for id in deck {
+            let Some(entry) = self.lookup_in(id, EK_CARD) else {
+                continue;
+            };
+            let Ok(root) = ir.card_program_root(u32::from(entry.index)) else {
+                continue;
+            };
+            if let Some(amount) = crate::ir::max_hit_damage(root) {
+                if amount > best {
+                    best = amount;
+                }
+            }
+        }
+        best
     }
 
     /// The `?`-room event ids of one act (`port-plan.md` §133).
@@ -3177,6 +3205,9 @@ impl<'a> Content<'a> {
             "Elite3" => "EncounterTables.Elite3",
             "Boss2" => "EncounterTables.Boss2",
             "Boss3" => "EncounterTables.Boss3",
+            // §287：**事件**引来的精英池（`Dead Adventurer` 的伏击要用"醒着的 Lagavulin"）。
+            // 不加幕后缀：它不是本幕的标准池，是事件自己的池。
+            "EliteEvent" => "EncounterTables.EliteEvent",
             _ => return None,
         };
         let root = self.root_by_name("EncounterTables")?;
@@ -3291,6 +3322,8 @@ pub struct EventOption<'a> {
     pub branches_asc: [(u8, &'a str); MAX_EVENT_BRANCHES],
     /// A15 版有效条数。
     pub branches_asc_len: u8,
+    /// §287：这一场战斗用哪个**遭遇池**（`Encounter`；空 = 按档位用本幕的标准池）。
+    pub fight_pool: &'a str,
     /// §286：**这个选项是一场战斗**。`0` = 不是，`1` = 普通怪，`2` = 精英。
     /// 选了它，事件就**收尾**（房间由那一场战斗结算），战后不回到事件。
     pub fight: u8,
@@ -3392,6 +3425,7 @@ impl<'a> EventStep<'a> {
             branches_len: 0,
             branches_asc: [(0, ""); MAX_EVENT_BRANCHES],
             branches_asc_len: 0,
+            fight_pool: "",
             fight: 0,
             term: ABSENT16,
         }; MAX_EVENT_OPTIONS],
@@ -3519,6 +3553,7 @@ impl<'a> Content<'a> {
                 branches_asc: [(0, ""); MAX_EVENT_BRANCHES],
                 branches_asc_len: 0,
                 // §286：`Fight: "elite"` ⇒ 2，`"monster"` ⇒ 1。别的字 ⇒ 0（内容门拦）。
+                fight_pool: node.str_field("Encounter").ok().flatten().unwrap_or(""),
                 fight: match node.str_field("Fight").ok().flatten().unwrap_or("") {
                     "monster" => 1,
                     "elite" => 2,
@@ -5118,6 +5153,10 @@ mod tests {
         const POOLS: [&str; 9] = [
             "Weak", "Elite", "Boss", "Weak2", "Elite2", "Boss2", "Weak3", "Elite3", "Boss3",
         ];
+        // §287：**事件**的池。它与上面九个的性质不同 —— 事件可以**复用**本幕的遭遇
+        // （`Dead Adventurer` 的伏击就是"三个精英之一"，其中一个换了开场），所以它不参与
+        // "一个遭遇只属于一个池"那条不变式；它参与的是"每个 ENCT 行都可达"。
+        const EVENT_POOLS: [&str; 1] = ["EliteEvent"];
         let mut seen: Vec<&str> = Vec::new();
         for name in POOLS {
             let pool = content
@@ -5137,6 +5176,25 @@ mod tests {
                     "`{id}` is in two pools -- an encounter belongs to exactly one"
                 );
                 seen.push(id);
+            }
+        }
+        for name in EVENT_POOLS {
+            let pool = content
+                .encounter_pool(name)
+                .unwrap_or_else(|| panic!("the content has no `{name}` pool"));
+            let ids: Vec<&str> = pool.iter().filter(|id| !id.is_empty()).copied().collect();
+            assert!(!ids.is_empty(), "{name} is empty");
+            for id in ids {
+                assert!(
+                    (0..content.rows(Table::Encounter).count()).any(|index| {
+                        content.entity_id(Table::Encounter, index as u32) == Some(id)
+                    }),
+                    "{name} names `{id}`, which is not an ENCT row"
+                );
+                // 复用是**允许**的（事件池就是这么用的），但必须真的记进可达集合。
+                if !seen.contains(&id) {
+                    seen.push(id);
+                }
             }
         }
         let total = content.rows(Table::Encounter).count();
@@ -5421,12 +5479,51 @@ mod tests {
                 100,
                 "weights must sum to 100"
             );
+            // §287：伏击段按"还剩下哪些奖励"分叉（7 种，与搜索段一一对应），所以第一档
+            // 不再是**一个** id，而是"这一段的剩余集合"那一个。
             assert_eq!(
-                table[0].1, "dead_adventurer.ambush",
-                "the ambush is the first branch (and it is `[Fight]`)",
+                table[0].1, "dead_adventurer.ambush.grn",
+                "the ambush is the first branch, keyed by what is still un-found",
             );
-            let ambush = content.event_step("dead_adventurer.ambush").expect("the ambush");
-            assert_eq!(ambush.options()[0].fight, 2, "the ambush is an **elite** fight");
+            // 每一个伏击段都是 `[Fight]` + 事件自己的精英池，而且**欠账对得上**：
+            // 金币还没搜到 ⇒ +30；遗物已经搜到 ⇒ 不掉遗物。
+            let mut checked_ambush = 0;
+            for attempt in 1..=3u8 {
+                for remaining in ["grn", "gr", "gn", "rn", "g", "r", "n"] {
+                    let id = if attempt == 1 {
+                        format!("dead_adventurer.ambush.{remaining}")
+                    } else {
+                        continue;
+                    };
+                    let Some(ambush) = content.event_step(&id) else {
+                        continue;
+                    };
+                    let option = ambush.options()[0];
+                    assert_eq!(option.fight, 2, "{id}: the ambush is an **elite** fight");
+                    assert_eq!(
+                        option.fight_pool, "EliteEvent",
+                        "{id}: the ambush names its own pool (the awake Lagavulin lives there)"
+                    );
+                    let entry = ambush.entry_at(0, 255);
+                    // `remaining` = **还没搜到**的奖励：金币还没搜到 ⇒ 这一场补发。
+                    let wants_gold = remaining.contains('g');
+                    let has_gold = entry.iter().any(|effect| effect.effect == "fight_gold_bonus"
+                        && effect.amount == 30);
+                    let has_no_relic =
+                        entry.iter().any(|effect| effect.effect == "fight_no_relic");
+                    assert_eq!(
+                        has_gold, wants_gold,
+                        "{id}: the 30-gold debt follows what is still un-found ({entry:?})"
+                    );
+                    assert_eq!(
+                        // 遗物**已经**搜到（不在 remaining 里）⇒ 这一场不掉遗物。
+                        has_no_relic, !remaining.contains('r'),
+                        "{id}: the fight drops no relic when the search already found one"
+                    );
+                    checked_ambush += 1;
+                }
+            }
+            assert_eq!(checked_ambush, 7, "seven ambush steps, one per remaining set");
             // A15 那一版：伏击率 25% → 35%（wiki 的 `35% 15`）。
             let table_asc = search.branches_at(15, 15);
             assert_eq!(table_asc[0].0, 35, "A15 raises the ambush chance to 35%");
@@ -5458,6 +5555,49 @@ mod tests {
             );
         }
 
+
+        // §287：`Wing Statue` 的 `[Destroy]` 要有"牌组里有一张**单次** ≥10 伤害的牌"。
+        // 两侧都要验：`bash+`（10）在、`strike+`（9）不在。只验一侧的话，
+        // "条件永远成立"与"条件永远不成立"都能通过。
+        {
+            let wing = content.event_step("wing_statue").expect("the statue");
+            let destroy = wing.options()[1];
+            assert_eq!(destroy.label, "Destroy");
+            let facts = |deck: &'static [&'static str], max_hit: i32| {
+                crate::run_expr::RunFacts {
+                    gold: 0,
+                    health: 80,
+                    health_max: 80,
+                    ascension: 0,
+                    relics: &[],
+                    deck,
+                    max_hit_damage: max_hit,
+                }
+            };
+            // 镜像里读出来的"单次最高伤害"：`bash+` = 10、`strike+` = 9、`defend` = 0。
+            let with_bash = content.max_deck_hit_damage(&["strike", "defend", "bash+"]);
+            let with_strike = content.max_deck_hit_damage(&["strike", "defend"]);
+            assert_eq!(with_bash, 10, "bash+ deals 10 per hit");
+            assert_eq!(with_strike, 6, "strike deals 6");
+            assert!(
+                crate::run_expr::option_is_available(
+                    &content,
+                    destroy.term,
+                    &facts(&["strike", "defend", "bash+"], with_bash)
+                )
+                .expect("the condition reads"),
+                "a deck holding bash+ must show [Destroy]"
+            );
+            assert!(
+                !crate::run_expr::option_is_available(
+                    &content,
+                    destroy.term,
+                    &facts(&["strike", "defend"], with_strike)
+                )
+                .expect("the condition reads"),
+                "a deck whose best hit is 6 must hide [Destroy]"
+            );
+        }
         // ★ 没有孤儿段：`EVND` 里每一行都要被某个 `EV.Entry` 或某个 `Next` 指到。
         // 传递闭包（`walk`）与表里的行数必须相等：少一个就是一段谁也看不见的剧情。
         walk.sort_unstable();
@@ -5561,6 +5701,8 @@ mod tests {
             ascension: 0,
             relics: &["golden_idol"],
             deck: &["strike"],
+            // §287：牌组里单次伤害的最高值。测试里给一个显式的数（`0` = 没有）。
+            max_hit_damage: 0,
         };
         let facts_without = crate::run_expr::RunFacts {
             relics: &[],

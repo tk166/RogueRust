@@ -58714,6 +58714,163 @@
       "HeroStartingStatuses": [],
       "TriggeredEffects": [],
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_lagavulin_awake"
+      },
+      "Enemies": [
+        {
+          "Id": "lagavulin",
+          "MaxHealth": 109,
+          "Actions": [
+            {
+              "value": "lagavulin.siphon_soul"
+            },
+            {
+              "value": "lagavulin.attack"
+            },
+            {
+              "value": "lagavulin.sleep"
+            },
+            {
+              "value": "lagavulin.stunned"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.metallicize"
+              },
+              "Stacks": 8
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "lagavulin_woken"
+                  },
+                  "Op": "GreaterOrEqual",
+                  "Value": 1
+                }
+              },
+              "Action": {
+                "value": "lagavulin.stunned"
+              },
+              "Priority": 90
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "LessOrEqual",
+                        "Round": 3
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasStatus",
+                      "value": {
+                        "Status": {
+                          "value": "standard.lagavulin_asleep"
+                        },
+                        "MinStacks": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Action": {
+                "value": "lagavulin.sleep"
+              },
+              "Priority": 60
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "lagavulin_step"
+                  },
+                  "Op": "Equal",
+                  "Value": 0
+                }
+              },
+              "Action": {
+                "value": "lagavulin.attack"
+              },
+              "Priority": 50
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "lagavulin_step"
+                  },
+                  "Op": "Equal",
+                  "Value": 1
+                }
+              },
+              "Action": {
+                "value": "lagavulin.attack"
+              },
+              "Priority": 50
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "lagavulin_step"
+                  },
+                  "Op": "Equal",
+                  "Value": 2
+                }
+              },
+              "Action": {
+                "value": "lagavulin.siphon_soul"
+              },
+              "Priority": 50
+            }
+          ],
+          "DisplayName": "Lagavulin",
+          "Rolls": [],
+          "Counters": [
+            {
+              "Key": "lagavulin_step",
+              "Value": 2
+            }
+          ],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 112
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -63881,7 +64038,7 @@
         "Weight": 10
       }
     ],
-    "Note": "§194：三幕的 Boss 池各自补齐到 wiki 的『三选一』（Boss = Slime Boss / The Guardian / Hexaghost；Boss2 = The Champ / Bronze Automaton / The Collector；Boss3 = Time Eater / Awakened One / Donu & Deca）。A20 的两场 Boss 因此可以是不同的一对。",
+    "Note": "§194：三幕的 Boss 池各自补齐到 wiki 的『三选一』（Boss = Slime Boss / The Guardian / Hexaghost；Boss2 = The Champ / Bronze Automaton / The Collector；Boss3 = Time Eater / Awakened One / Donu & Deca）。A20 的两场 Boss 因此可以是不同的一对。 §287：`EliteEvent` 是**事件**引来的精英（今天的唯一用户是 `Dead Adventurer` 的伏击），其中的 Lagavulin 用醒着的变体（wiki：这场伏击里它不进入睡眠，第一回合 Siphon Soul）。",
     "Elite": [
       {
         "Id": "enc_three_sentries",
@@ -64004,6 +64161,20 @@
       {
         "Id": "enc_donu_and_deca",
         "Weight": 100
+      }
+    ],
+    "EliteEvent": [
+      {
+        "Id": "enc_three_sentries",
+        "Weight": 1
+      },
+      {
+        "Id": "enc_gremlin_nob",
+        "Weight": 1
+      },
+      {
+        "Id": "enc_lagavulin_awake",
+        "Weight": 1
       }
     ]
   },
@@ -66708,7 +66879,14 @@
               "Amount": 0
             }
           ],
-          "Next": "wing_statue.destroyed"
+          "Next": "wing_statue.destroyed",
+          "Requires": [
+            {
+              "Kind": "card_damage",
+              "Op": "at_least",
+              "Amount": 10
+            }
+          ]
         },
         {
           "Label": "Leave",
@@ -66900,7 +67078,7 @@
           "Branches": [
             {
               "Weight": 25,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.grn"
             },
             {
               "Weight": 25,
@@ -66918,7 +67096,7 @@
           "BranchesAsc": [
             {
               "Weight": 35,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.grn"
             },
             {
               "Weight": 21,
@@ -67057,7 +67235,7 @@
           "Branches": [
             {
               "Weight": 50,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.gr"
             },
             {
               "Weight": 25,
@@ -67071,7 +67249,7 @@
           "BranchesAsc": [
             {
               "Weight": 60,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.gr"
             },
             {
               "Weight": 20,
@@ -67174,7 +67352,7 @@
           "Branches": [
             {
               "Weight": 50,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.gn"
             },
             {
               "Weight": 25,
@@ -67188,7 +67366,7 @@
           "BranchesAsc": [
             {
               "Weight": 60,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.gn"
             },
             {
               "Weight": 20,
@@ -67291,7 +67469,7 @@
           "Branches": [
             {
               "Weight": 50,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.rn"
             },
             {
               "Weight": 25,
@@ -67305,7 +67483,7 @@
           "BranchesAsc": [
             {
               "Weight": 60,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.rn"
             },
             {
               "Weight": 20,
@@ -67408,7 +67586,7 @@
           "Branches": [
             {
               "Weight": 75,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.g"
             },
             {
               "Weight": 25,
@@ -67418,7 +67596,7 @@
           "BranchesAsc": [
             {
               "Weight": 85,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.g"
             },
             {
               "Weight": 15,
@@ -67475,7 +67653,7 @@
           "Branches": [
             {
               "Weight": 75,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.r"
             },
             {
               "Weight": 25,
@@ -67485,7 +67663,7 @@
           "BranchesAsc": [
             {
               "Weight": 85,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.r"
             },
             {
               "Weight": 15,
@@ -67542,7 +67720,7 @@
           "Branches": [
             {
               "Weight": 75,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.n"
             },
             {
               "Weight": 25,
@@ -67552,7 +67730,7 @@
           "BranchesAsc": [
             {
               "Weight": 85,
-              "Next": "dead_adventurer.ambush"
+              "Next": "dead_adventurer.ambush.n"
             },
             {
               "Weight": 15,
@@ -67595,13 +67773,132 @@
       ]
     },
     {
-      "Id": "dead_adventurer.ambush",
+      "Id": "dead_adventurer.ambush.grn",
       "TextKey": "While searching the adventurer you are caught off guard!",
+      "Effects": [
+        {
+          "Effect": "fight_gold_bonus",
+          "Amount": 30
+        }
+      ],
       "Options": [
         {
           "Label": "Fight",
           "Effects": [],
           "Fight": "elite",
+          "Encounter": "EliteEvent",
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.ambush.gr",
+      "TextKey": "While searching the adventurer you are caught off guard!",
+      "Effects": [
+        {
+          "Effect": "fight_gold_bonus",
+          "Amount": 30
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Fight",
+          "Effects": [],
+          "Fight": "elite",
+          "Encounter": "EliteEvent",
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.ambush.gn",
+      "TextKey": "While searching the adventurer you are caught off guard!",
+      "Effects": [
+        {
+          "Effect": "fight_gold_bonus",
+          "Amount": 30
+        },
+        {
+          "Effect": "fight_no_relic",
+          "Amount": 0
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Fight",
+          "Effects": [],
+          "Fight": "elite",
+          "Encounter": "EliteEvent",
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.ambush.rn",
+      "TextKey": "While searching the adventurer you are caught off guard!",
+      "Effects": [],
+      "Options": [
+        {
+          "Label": "Fight",
+          "Effects": [],
+          "Fight": "elite",
+          "Encounter": "EliteEvent",
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.ambush.g",
+      "TextKey": "While searching the adventurer you are caught off guard!",
+      "Effects": [
+        {
+          "Effect": "fight_gold_bonus",
+          "Amount": 30
+        },
+        {
+          "Effect": "fight_no_relic",
+          "Amount": 0
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Fight",
+          "Effects": [],
+          "Fight": "elite",
+          "Encounter": "EliteEvent",
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.ambush.r",
+      "TextKey": "While searching the adventurer you are caught off guard!",
+      "Effects": [],
+      "Options": [
+        {
+          "Label": "Fight",
+          "Effects": [],
+          "Fight": "elite",
+          "Encounter": "EliteEvent",
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "dead_adventurer.ambush.n",
+      "TextKey": "While searching the adventurer you are caught off guard!",
+      "Effects": [
+        {
+          "Effect": "fight_no_relic",
+          "Amount": 0
+        }
+      ],
+      "Options": [
+        {
+          "Label": "Fight",
+          "Effects": [],
+          "Fight": "elite",
+          "Encounter": "EliteEvent",
           "Next": ""
         }
       ]

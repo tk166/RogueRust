@@ -113,7 +113,7 @@
 127  2  2   8 OBJ _obj(AscensionMin,Stacks)                                    : AscensionMin:INT Stacks:INT
 128  3  3   8 OBJ _obj(AscensionMin,Stacks,StatusDefinitionId)                 : AscensionMin:INT Stacks:INT StatusDefinitionId:STR(wrap)
 129  9 14  32 OBJ _obj(AuthoringConventions,Deviations,InvariantSource,KernelGapsFound,NotYetAuthored,PackageId,Scope,SingleSourceAndInferred,StatusNamespace) : AuthoringConventions:STRLIST Deviations:TERMLIST InvariantSource:STR KernelGapsFound:TERMLIST NotYetAuthored:STRLIST PackageId:STR Scope:STR SingleSourceAndInferred:TERMLIST StatusNamespace:STR
-130 11 20  44 OBJ _obj(Boss,Boss2,Boss3,Elite,Elite2,Elite3,Note,PackageId,Weak,Weak2,Weak3) : Boss:TERMLIST Boss2:TERMLIST Boss3:TERMLIST Elite:TERMLIST Elite2:TERMLIST Elite3:TERMLIST Note:STR PackageId:STR Weak:TERMLIST Weak2:TERMLIST Weak3:TERMLIST
+130 12 22  48 OBJ _obj(Boss,Boss2,Boss3,Elite,Elite2,Elite3,EliteEvent,Note,PackageId,Weak,Weak2,Weak3) : Boss:TERMLIST Boss2:TERMLIST Boss3:TERMLIST Elite:TERMLIST Elite2:TERMLIST Elite3:TERMLIST EliteEvent:TERMLIST Note:STR PackageId:STR Weak:TERMLIST Weak2:TERMLIST Weak3:TERMLIST
 131  4  7  16 OBJ _obj(Branches,BranchesAsc,Effects,Label)                     : Branches:TERMLIST BranchesAsc:TERMLIST Effects:TERMLIST Label:STR
 132  4  7  16 OBJ _obj(Branches,Effects,EffectsAsc,Label)                      : Branches:TERMLIST Effects:TERMLIST EffectsAsc:TERMLIST Label:STR
 133  3  5  12 OBJ _obj(Branches,Effects,Label)                                 : Branches:TERMLIST Effects:TERMLIST Label:STR
@@ -142,7 +142,7 @@
 156  1  2   8 OBJ _obj(Effects)                                                : Effects:TERMLIST
 157  4  6  16 OBJ _obj(Effects,EffectsAsc,Label,Next)                          : Effects:TERMLIST EffectsAsc:TERMLIST Label:STR Next:STR
 158  6 10  24 OBJ _obj(Effects,EffectsAsc,Label,Next,Requires,RequiresAsc)     : Effects:TERMLIST EffectsAsc:TERMLIST Label:STR Next:STR Requires:TERMLIST RequiresAsc:TERMLIST
-159  4  5  12 OBJ _obj(Effects,Fight,Label,Next)                               : Effects:STRLIST Fight:STR Label:STR Next:STR
+159  5  6  16 OBJ _obj(Effects,Encounter,Fight,Label,Next)                     : Effects:STRLIST Encounter:STR Fight:STR Label:STR Next:STR
 160  4  6  16 OBJ _obj(Effects,Id,Options,TextKey)                             : Effects:TERMLIST Id:STR Options:TERMLIST TextKey:STR
 161  3  4  12 OBJ _obj(Effects,Label,Next)                                     : Effects:TERMLIST Label:STR Next:STR
 162  4  6  16 OBJ _obj(Effects,Label,Next,Requires)                            : Effects:TERMLIST Label:STR Next:STR Requires:TERMLIST

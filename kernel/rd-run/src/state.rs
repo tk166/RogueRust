@@ -736,6 +736,8 @@ pub const START_OFFERS: [StartOffer; 8] = [
 /// | `max_hp_pct:<n>` | lose `max(1, floor(max HP × n / 100))` **max** HP (the wiki's *Hide*) |
 /// | `gold_cost:<n>` | **pay** `n` gold; refused when short (the wiki's *Cleric*) |
 /// | `gold_random:<min>:<max>` | gain `runif(min, max)` gold (the Goop's "lose 20-50 Gold") |
+/// | `fight_gold_bonus` | the **next** fight pays `Amount` extra gold (`Dead Adventurer`'s 30) |
+/// | `fight_no_relic` | the **next** fight pays no relic (that search already found one) |
 /// | `relic_random` | grant a **random** relic (Scrap Ooze). 运行层只认 `relic:<id>` —— 抽样由
 ///   **有内容池的那一层**（`rd-wasm`）先解析成具体 id，理由同 `curse:` 的载荷 |
 /// | `heal_pct:<n>` | heal `floor(max HP × n / 100)` HP (the Cleric's *Heal*) |
@@ -773,6 +775,10 @@ pub enum EventEffect {
     LoseMaxHealthPercent(i32),
     /// §280：**付** `n` 金币（`gold_cost`）。不够就拒绝 —— 不是"扣到 0 为止"。
     GoldCost(i32),
+    /// §287：**下一场战斗**多付 `n` 金币（`Dead Adventurer` 的"30 金币还没搜到"）。
+    FightGoldBonus(i32),
+    /// §287：**下一场战斗**不掉遗物（那一件已经在搜索里拿到过了）。
+    FightNoRelic,
     /// §285：**随机一件遗物**（`relic_random`）。运行层**不**抽 —— 它没有遗物池。
     /// 由 `rd-wasm` 在调用前解析成 `GainRelic` + 具体 id（与 `curse:`/`relic:` 的载荷同一条路）。
     GainRandomRelic,
@@ -869,6 +875,8 @@ pub struct EventMove<'a> {
     /// 选了它事件就收尾：房间由那一场战斗结算（`event_fight` 记住档位，`fight_end` 才
     /// `mark_resolved`）。这样"节点只付一次"仍然成立 —— 反复按"开打"不会刷出第二场。
     pub fight: u8,
+    /// §287：这一场战斗用哪个遭遇池（空 = 按档位用本幕标准池）。
+    pub fight_pool: &'a str,
 }
 
 impl<'a> EventMove<'a> {
@@ -881,6 +889,7 @@ impl<'a> EventMove<'a> {
             branches: &[],
             entry: &[],
             fight: 0,
+            fight_pool: "",
         }
     }
 
@@ -907,6 +916,10 @@ impl EventEffect {
             "damage" => (Self::LoseHealth(amount), None),
             "max_hp" => (Self::GainMaxHealth(amount), None),
             "nothing" => (Self::Nothing, None),
+            // §287：**下一场战斗**的奖励修正（`Dead Adventurer` 的战后补偿）。
+            // 为什么是"欠账"而不是当场给：wiki 说这些奖励由**那场战斗**补发。
+            "fight_gold_bonus" => (Self::FightGoldBonus(amount), None),
+            "fight_no_relic" => (Self::FightNoRelic, None),
             // §285/§286：`relic_random` **没有载荷**（抽哪件由内容池 + 稀有度权重决定，那在
             // `rd-wasm` 手里）。⚠️ 它必须在**裸词**这一支：写进下面 `split_once(':')` 那一支
             // 会让它永远解析不出来（没有冒号 ⇒ `?` 直接 `None`）—— §285 真踩了这个坑，
@@ -1568,6 +1581,12 @@ pub struct RunState {
     /// `1` = 普通怪，`2` = 精英。它在 `fight_end` 收尾时清掉 —— 也就是"这个节点的账由那一场
     /// 战斗付"，所以它必须**留着**到战斗结束（`node_resolved` 才能一直是 false）。
     event_fight: u8,
+    /// §287：这一场战斗用哪个**遭遇池**（空 = 按档位用本幕的标准池）。
+    event_fight_pool: RunId,
+    /// §287：下一场战斗的金币加成（`Dead Adventurer` 的 30；由 `roll_reward` 消费后清 0）。
+    fight_gold_bonus: i16,
+    /// §287：下一场战斗**不掉遗物**（那一件已经搜到过；消费后清）。
+    fight_no_relic: bool,
     /// §278：这一段选完之后要去的那一段，**在等一次牌组编辑的时候**先记在这里。
     ///
     /// 与 `event_follow` 是两件事：一个是"欠哪次编辑"，一个是"编辑完了去哪儿"。
@@ -1697,6 +1716,9 @@ impl RunState {
             event: RunId::EMPTY,
             event_step: RunId::EMPTY,
             event_fight: 0,
+            event_fight_pool: RunId::EMPTY,
+            fight_gold_bonus: 0,
+            fight_no_relic: false,
             event_next: RunId::EMPTY,
             last_encounter: RunId::EMPTY,
             // Rolled by `offer_start_choice`; until then the pair is not a choice anyone can take.
@@ -3302,6 +3324,7 @@ impl RunState {
         // §286：节点结清 = "这一场事件战斗的账付过了" ⇒ 档位在这里清。**一个写者**：
         // 事件那条路只负责**置**它，只有这里清，所以"忘记清"不会变成第二场白给的战斗。
         self.event_fight = 0;
+        self.event_fight_pool = RunId::EMPTY;
         let node = self.node;
         if node < 0 {
             return;
@@ -4638,6 +4661,9 @@ impl RunState {
         }
         let id = RunId::new(id).map_err(|_| RunError::NoSuchEvent)?;
         let entry = RunId::new(entry).map_err(|_| RunError::NoSuchEvent)?;
+        // §287：战斗奖励的"欠账"属于**一个**事件；开新事件就清掉（否则它会漏进下一场战斗）。
+        self.fight_gold_bonus = 0;
+        self.fight_no_relic = false;
         self.event = id;
         self.event_step = entry;
         self.event_next = RunId::EMPTY;
@@ -4658,6 +4684,15 @@ impl RunState {
     #[must_use]
     pub fn event_fight(&self) -> u8 {
         self.event_fight
+    }
+
+    /// §287：事件引来的那一场战斗该用哪个**遭遇池**（空 = 按档位用本幕的标准池）。
+    ///
+    /// 存在的理由只有一个：`Dead Adventurer` 的 Lagavulin **不睡觉**，而"睡觉"写在遭遇里
+    /// （`ENCT` 的 `StartingStatuses`）—— 改遭遇会连普通精英战一起改，所以改成"这一次用另一个池"。
+    #[must_use]
+    pub fn event_fight_pool(&self) -> &str {
+        self.event_fight_pool.as_str()
     }
 
     /// §278：事件**当前所在的那一段**（`EVND.Id`）。空 = 这个事件只有一段（或还没开）。
@@ -4723,6 +4758,7 @@ impl RunState {
             branches,
             entry,
             fight,
+            fight_pool,
         } = event_move;
         if self.pending != Pending::Event {
             return Err(RunError::WrongPhase);
@@ -4809,6 +4845,11 @@ impl RunState {
             self.event_step = RunId::EMPTY;
             self.event_next = RunId::EMPTY;
             self.event_fight = fight;
+            self.event_fight_pool = if fight_pool.is_empty() {
+                RunId::EMPTY
+            } else {
+                RunId::new(fight_pool).map_err(|_| RunError::NoSuchEvent)?
+            };
             self.pending = Pending::None;
             return Ok(());
         }
@@ -4917,6 +4958,13 @@ impl RunState {
                 // `curse:` 载荷按定义就是诅咒（上面刚验过池子里它是 `Rarity::Curse`）。
                 self.push_card(PoolCard { kind: CardKind::Curse, ..PoolCard::plain(id) })?;
             }
+            // §287：记在运行层，由 `roll_reward` 消费（一场战斗的账）。
+            EventEffect::FightGoldBonus(n) => {
+                self.fight_gold_bonus = self.fight_gold_bonus.saturating_add(n as i16);
+            }
+            EventEffect::FightNoRelic => {
+                self.fight_no_relic = true;
+            }
             EventEffect::GainRandomRelic => {
                 // §285：运行层**没有遗物池**，所以这条必须已经被调用方解析成 `GainRelic` +
                 // 具体 id。走到这里说明有人直接把它递了进来 —— 响亮拒绝，绝不静默给一件。
@@ -5006,7 +5054,7 @@ impl RunState {
         // reward's own `gold` is what the player was actually given.
         // §159: Ascension 13 makes a **boss** pay 25% less. Both multipliers are applied to the roll
         // and the order is fixed (idol first, then the ascension tax) so the number is reproducible.
-        let paid = if matches!(kind, FightKind::Boss) && self.at_least(A_BOSS_GOLD) {
+        let mut paid = if matches!(kind, FightKind::Boss) && self.at_least(A_BOSS_GOLD) {
             base_gold * self.fight_gold_percent() / 100 * ASCENDED_BOSS_GOLD_PERCENT / 100
         } else {
             base_gold * self.fight_gold_percent() / 100
@@ -5094,6 +5142,18 @@ impl RunState {
         let mut relic = RunId::EMPTY;
         if matches!(kind, FightKind::Elite | FightKind::Boss) {
             relic = self.pick_relic(RunStream::Reward, relic_pool)?;
+        }
+        // §287：**这一场**战斗的奖励欠账（`Dead Adventurer`）：金币加成与"不掉遗物"。
+        // 单消费点：读一次就清，所以它不可能漏进下一场战斗。
+        let bonus = i32::from(self.fight_gold_bonus);
+        let no_relic = self.fight_no_relic;
+        self.fight_gold_bonus = 0;
+        self.fight_no_relic = false;
+        if bonus != 0 {
+            paid = paid.saturating_add(bonus);
+        }
+        if no_relic {
+            relic = RunId::EMPTY;
         }
         // §269：`black_star` —— "Elites now drop an additional relic when defeated"。
         // ⚠️ 第二件**直接进包**（奖励屏只有一个遗物槽）。这不是"更省事"，是**代价最小**：
@@ -9886,6 +9946,81 @@ mod tests {
         run.mark_resolved();
         assert_eq!(run.event_fight(), 0, "settling the node clears the band");
         assert!(run.node_resolved());
+    }
+
+    /// §287：**战后补偿**（`Dead Adventurer`）—— 金币欠账 +30、遗物欠账"不掉"，
+    /// 而且**只消费一次**（第二场战斗不再受影响）。
+    #[test]
+    fn the_fight_reward_debt_is_paid_once() {
+        let cards = curse_pool();
+        let relics = [
+            PoolRelic { id: "anchor", rarity: Rarity::Common },
+            PoolRelic { id: "vajra", rarity: Rarity::Common },
+        ];
+        let mut run = RunState::new(7, 80, 100, &["strike"; 5]).expect("a run");
+        run.begin_event("dead_adventurer", "dead_adventurer").expect("the event");
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[
+                    (EventEffect::FightGoldBonus(30), None),
+                    (EventEffect::FightNoRelic, None),
+                ],
+                ..EventMove::none()
+            },
+            &cards,
+        )
+        .expect("the debt is recorded");
+
+        let (low, high) = reward_bands(FightKind::Elite, run.rarity_offset());
+        // 第一场：欠账**就在这一场**付掉。
+        run.roll_reward(&cards, &[], &relics, FightKind::Elite)
+            .expect("the elite pays out");
+        let gold = run.reward_gold();
+        assert!(
+            gold >= low + 30 && gold <= high + 30,
+            "the elite's {low}..={high} plus the 30-gold debt, got {gold}"
+        );
+        assert_eq!(run.reward_relic(), None, "the relic debt says `no relic`");
+
+        // 第二场：欠账已经付过 ⇒ 一次正常结算（有遗物、没有 +30）。
+        run.roll_reward(&cards, &[], &relics, FightKind::Elite)
+            .expect("the second elite pays out");
+        assert!(run.reward_relic().is_some(), "the second fight pays its relic");
+        let (low2, high2) = reward_bands(FightKind::Elite, run.rarity_offset());
+        assert!(
+            run.reward_gold() >= low2 && run.reward_gold() <= high2,
+            "no debt left: {} must be inside {low2}..={high2}",
+            run.reward_gold()
+        );
+    }
+
+    /// §287：**开一个事件就清掉欠账** —— 否则上一次事件的金币会漏进下一场战斗。
+    #[test]
+    fn opening_an_event_clears_the_debt() {
+        let cards = curse_pool();
+        let relics = [PoolRelic { id: "anchor", rarity: Rarity::Common }];
+        let mut run = RunState::new(7, 80, 100, &["strike"; 5]).expect("a run");
+        run.begin_event("dead_adventurer", "dead_adventurer").expect("the event");
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::FightGoldBonus(30), None)],
+                ..EventMove::none()
+            },
+            &cards,
+        )
+        .expect("the debt is recorded");
+        // 另一个事件开始了：欠账属于**上一个**事件。
+        run.begin_event("scrap_pile", "scrap_pile").expect("the next event");
+        run
+            .roll_reward(&cards, &[], &relics, FightKind::Elite)
+            .expect("the elite pays out");
+        let (low, high) = reward_bands(FightKind::Elite, run.rarity_offset());
+        assert!(
+            run.reward_gold() <= high,
+            "the old debt must not leak: {} is above {high}",
+            run.reward_gold()
+        );
+        assert!(run.reward_gold() >= low);
     }
 
     /// §278：事件是**一棵树** —— 走完一段不结算，走完最后一段才结算。

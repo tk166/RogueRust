@@ -1856,6 +1856,8 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
         // §286：`Fight` 选项不走分支（它收尾整个事件）。
         entry: &entry_pairs[..entry_count],
         fight: choice.fight,
+        // §287：`Encounter`（池名）。空 = 按档位用本幕的标准池。
+        fight_pool: choice.fight_pool,
     };
     let outcome = session
         .state
@@ -2004,6 +2006,8 @@ fn run_facts<'a>(
         ascension: session.state.ascension(),
         relics,
         deck,
+        // §287：从卡的效果程序里读出"单次最高伤害"（`Wing Statue` 的条件要它）。
+        max_hit_damage: content().max_deck_hit_damage(deck),
     }
 }
 
@@ -3208,7 +3212,11 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::LoseRelic
         // §285：`relic_random` 在 `rd_run_choose` 里已经被解析成 `GainRelic`，永远到不了这里；
         // 真到了也只可能是"别人直接调 ABI"，答 `-1` 而不是猜一个码。
-        | EventEffect::GainRandomRelic => -1,
+        | EventEffect::GainRandomRelic
+        // §287：这两条是"下一场战斗的欠账"，不是看不见的效果 —— 但它们的**落点**在战斗
+        // 结算里，所以页面这一侧没有码可画（`-1`），与 `relic_random` 同一条规矩。
+        | EventEffect::FightGoldBonus(_)
+        | EventEffect::FightNoRelic => -1,
     }
 }
 
@@ -3227,10 +3235,13 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::GoldCost(n) => n,
         // §285：区间金币的"数量"取**上界**（页面写"最多 N"）；下界在词里，页面不需要它。
         EventEffect::GoldRandom(_, high) => high,
+        // §287：欠账金币的"数量"就是它本身（页面写"下一场战斗多得 N 金币"）。
+        EventEffect::FightGoldBonus(n) => n,
         EventEffect::Nothing
         | EventEffect::RemoveCard
         | EventEffect::UpgradeCard
         | EventEffect::TransformCard
+        | EventEffect::FightNoRelic
         | EventEffect::GainCurse
         | EventEffect::GainRelic
         | EventEffect::LoseRelic
@@ -3972,6 +3983,8 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     // §286：事件中途开的那一场（`Dead Adventurer` 的伏击）。档位由**运行层**记
     // （`event_fight`），它取代 `unknown_room()` —— 事件已经把那个数用掉了。
     let event_fight = session.state.event_fight();
+    // §287：事件点名了一个遭遇池（`Dead Adventurer` 的伏击要用"醒着的 Lagavulin"）。
+    let event_pool = session.state.event_fight_pool().to_string();
     // 1 = Combat, 2 = Elite, 7 = Boss (`run-layer.md` §7.2; the boss is floor 16, off the map).
     if kind != 1 && kind != 2 && kind != 7 && !unknown_fight && event_fight == 0 {
         let message = std::format!("当前节点不是战斗（kind {kind}）");
@@ -4011,7 +4024,10 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         _ => "Weak",
     };
     let act = session.state.act();
-    let pool_name: String = if act <= 1 {
+    let pool_name: String = if !event_pool.is_empty() {
+        // §287：事件点名的池**不加幕后缀** —— 它是事件自己的池，不是本幕的标准池。
+        event_pool
+    } else if act <= 1 {
         base.to_string()
     } else {
         std::format!("{base}{act}")
@@ -9538,7 +9554,113 @@ mod tests {
         assert_eq!(rd_run_deck_id_len(-1), -1);
     }
 
-    /// §286：**内容里的每一个事件效果词，内核都必须解析得出来**。
+        /// §287：`Dead Adventurer` 的伏击用的是**醒着**的 Lagavulin —— wiki："This event's
+    /// Lagavulin does not enter combat Asleep. It instead starts the fight with Siphon Soul."
+    ///
+    /// 判据钉的是**两件**事，因为任意一件单独都能"看着对"：
+    /// ① 开场的敌人身上**没有** `standard.lagavulin_asleep`；
+    /// ② 第一回合的意图是 `lagavulin.siphon_soul`（不是攻击 —— 计数器初值必须是 2）。
+    ///
+    /// **反向**（普通精英池里那份仍然睡着）由内容门钉着：它会拿每条 `ENCT` 记录的
+    /// `StartingStatuses` 去对 wiki 清单，把睡眠状态从 `enc_lagavulin` 删掉会立刻红。
+    #[test]
+    fn the_ambush_lagavulin_starts_awake_with_siphon_soul() {
+        test_run(7, 80, 80, &["strike"; 10]);
+        assert_eq!(rd_run_step(0), 0, "floor 1 ({})", run_error_text());
+        assert_eq!(rd_run_begin_node(), 0);
+        // 直接把房间变成这一场战斗（不走地图：这里测的是"事件点名了哪个池"）。
+        let session = run_slot().as_mut().expect("a run");
+        assert!(
+            session.state.begin_event("dead_adventurer", "dead_adventurer.ambush.grn").is_ok(),
+            "the ambush step"
+        );
+        assert_eq!(rd_run_choose(0), 0, "{}", run_error_text());
+        assert_eq!(rd_run_event_fight(), 2);
+        // 池子里三个精英，把骰子压到 Lagavulin 那一档太难 ⇒ 直接问内容：池里那一行是变体。
+        let content = content();
+        let pool = content.encounter_pool("EliteEvent").expect("the event pool");
+        let ids: Vec<&str> = pool.iter().filter(|id| !id.is_empty()).copied().collect();
+        assert!(
+            ids.contains(&"enc_lagavulin_awake"),
+            "the event pool must name the awake Lagavulin: {ids:?}"
+        );
+        assert!(
+            !ids.iter().any(|id| *id == "enc_lagavulin"),
+            "the sleeping Lagavulin must **not** be in the event pool: {ids:?}"
+        );
+
+        // ② 真的打这一场：先让骰子落到 Lagavulin 那一档太难，所以**逐个种子**开工，
+        // 直到抽到它为止；抽到了就必须"醒着、第一回合抽魂"。
+        let mut found = false;
+        for seed in 0..400 {
+            test_run(seed, 80, 80, &["strike"; 10]);
+            if rd_run_step(0) != 0 || rd_run_begin_node() != 0 {
+                continue;
+            }
+            let session = run_slot().as_mut().expect("a run");
+            if session.state.begin_event("dead_adventurer", "dead_adventurer.ambush.grn").is_err() {
+                continue;
+            }
+            let chosen = rd_run_choose(0);
+            let began = rd_run_fight_begin();
+            let _ = &chosen;
+            if chosen != 0 || began != 0 {
+                continue;
+            }
+            // 这一场是不是 Lagavulin？看开场的敌人 id（`combatants()` 的第一个就是它）。
+            let session = crate::slot().as_ref().expect("a fight");
+            // ⚠️ `combatants()[0]` 是**英雄**；敌人的 definition id 里带 `lagavulin` 才算抽到。
+            let is_lagavulin = session
+                .state
+                .combatants()
+                .iter()
+                .any(|combatant| combatant.definition_id.as_str() == "lagavulin");
+            if !is_lagavulin {
+                crate::take_session();
+                continue;
+            }
+            found = true;
+            let asleep = session
+                .state
+                .combatants()
+                .iter()
+                .filter(|combatant| combatant.definition_id.as_str() == "lagavulin")
+                .any(|combatant| {
+                    combatant
+                        .statuses()
+                        .iter()
+                        .any(|status| {
+                            status.definition_id.as_str() == "standard.lagavulin_asleep"
+                        })
+                });
+            assert!(
+                !asleep,
+                "seed {seed}: the ambush Lagavulin must not start Asleep"
+            );
+            let len = crate::rd_env_intent_len(0);
+            let mut bytes = std::vec![0u8; len.max(0) as usize];
+            if len > 0 {
+                unsafe { crate::rd_env_intent_into(0, bytes.as_mut_ptr()) };
+            }
+            let text = std::string::String::from_utf8(bytes).expect("intent text is UTF-8");
+            // 意图文本以**动作 id** 开头（`lagavulin.siphon_soul | Debuff | 0 dmg`）。
+            assert!(
+                text.contains("lagavulin.siphon_soul"),
+                "seed {seed}: turn 1 must be Siphon Soul, got {text:?}"
+            );
+            // 反面：**睡着**的那一份（普通精英池）第一回合必须是 `sleep`，否则这条判据
+            // 只是在说"意图存在"，而不是"醒着的那一份不一样"。
+            assert!(
+                !text.contains("lagavulin.sleep"),
+                "seed {seed}: an awake Lagavulin must not announce sleep: {text:?}"
+            );
+            let _ = rd_run_fight_end();
+            break;
+        }
+        assert!(found, "400 seeds never rolled the awake Lagavulin out of the event pool");
+    }
+
+/// §286：**内容里的每一个事件效果词，内核都必须解析得出来**。
     ///
     /// 这条判据是穷尽的（走遍镜像里所有事件的**选项效果**与**段的进入效果**），因为上一版
     /// 就漏了一个：§285 的 `relic_random` 被放在 `split_once(':')` 那一支里，而它**没有冒号**
@@ -9630,7 +9752,8 @@ mod tests {
                 .as_mut()
                 .expect("a run")
                 .state
-                .begin_event("dead_adventurer", "dead_adventurer.ambush");
+                // §287：伏击段按"还剩下哪些奖励"分叉，随便挑一个变体即可（接线判据）。
+                .begin_event("dead_adventurer", "dead_adventurer.ambush.grn");
             if opened.is_err() {
                 continue;
             }

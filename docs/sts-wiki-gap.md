@@ -335,6 +335,16 @@ Act 1 在 wiki 里是**两个**池（Easy 前三场 + Hard），本移植只有�
 | 奖赏时机（§285 的偏差） | 到达结果屏就生效 | **已修**：段落进入效果（§286） | 一致 |
 | 伏击的档位 | 精英 | 精英（同一套 `elite_fight`） | 一致 |
 
+### F.7 事件尾巴（§287）
+
+| 项 | wiki | 我们 | 性质 |
+|---|---|---|---|
+| `Wing Statue` `[Destroy]` 的条件 | 牌组里有单次 ≥10 伤害的牌 | **已做**（`Requires: card_damage at_least 10`，从效果程序读） | 一致 |
+| `Wing Statue` 条件的口径 | "printed damage per hit" | 基础伤害（力量/附魔不算） | 一致（与 wiki 的措辞同义） |
+| `Dead Adventurer` 战后补偿 | 补发"还没搜到"的奖励，且已搜到的从战斗奖励里去掉 | **已做**（`fight_gold_bonus` / `fight_no_relic`） | 一致 |
+| `Dead Adventurer` 的 Lagavulin | 这场伏击**不睡**，第一回合 Siphon Soul | **已做**（`Encounter: "EliteEvent"` + `enc_lagavulin_awake`） | 一致 |
+| `Dead Adventurer` 的出现楼层 | 第 7 层之后 | 事件池无按楼层筛 | 缺 |
+
 ### G. ★ 基础值偏差：§191 修掉了 8 条，剩 3 条是写明了的简化
 
 §190 补 A 数值时发现"有招式的基础值就和 wiki 不一致"。**这些不能加升档变体**（在错的地基上加层

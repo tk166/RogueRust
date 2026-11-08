@@ -387,6 +387,25 @@ const report = await evaluate(`(async () => {
   out.condPendingAfterRefusal = ex.rd_run_pending();
   await sleep(0);
 
+  // (l2) **§287: [Destroy] 只在牌组里有"单次 >=10 伤害"的牌时出现。**
+  // 起始牌组最好的单次是 bash 的 8，所以这一屏必须画 **2** 个按钮（[Pray] 与 [Leave]），
+  // [Destroy] 不在 DOM 里。内核那一侧的两侧（bash+ 在 / strike 不在）由
+  // rd-core 的 the_unknown_room_events_are_readable 用真实镜像钉着。
+  window.RD_DEBUG.startWithSeed(4321, 0);
+  await sleep(0);
+  out.wingOpened = window.RD_DEBUG.startAnEvent("wing_statue");
+  out.wingOptions = ex.rd_run_event_option_count();
+  out.wingAvailable = [];
+  for (let slot = 0; slot < out.wingOptions; slot++) {
+    out.wingAvailable.push(ex.rd_run_event_option_available(slot));
+  }
+  out.wingButtons = [...panel().querySelectorAll("[data-panel-action]")].map((el) => text(el));
+  out.wingDestroyDrawn = out.wingButtons.some((label) => /Destroy/.test(label));
+  // 点那个被藏起来的槽：内核必须拒（-2），屏幕不变。
+  out.wingRefused = ex.rd_run_choose(1);
+  out.wingPendingAfter = ex.rd_run_pending();
+  await sleep(0);
+
   // (k) **§161.9: the one-line archive.**
   window.RD_DEBUG.startWithSeed(4321, 0);
   await sleep(0);
@@ -1209,6 +1228,24 @@ want(typeof act3.leftCount === "number" && act3.leftCount < 3,
   `inFight ${act3.inFight} msg ${JSON.stringify(act3.msg)})`);
 want(!act3.errorEnd, `act 3: a step threw: ${act3.errorEnd}`);
 
+// §287：`Wing Statue` 的 `[Destroy]` —— 起始牌组的单次最高是 8 ⇒ 它必须**不**被画出来，
+// 另外两个（`[Pray]` / `[Leave]`）必须照着画。
+want(report.wingOpened === 0, `§287: \`wing_statue\` did not open (${report.wingOpened})`);
+want(report.wingOptions === 3, `§287: expected 3 options, got ${report.wingOptions}`);
+want(JSON.stringify(report.wingAvailable) === JSON.stringify([1, 0, 1]),
+  `§287: availability must be [1,0,1] on the starting deck, got ` +
+  `${JSON.stringify(report.wingAvailable)}`);
+want(report.wingButtons.length === 2,
+  `§287: 3 options with 1 locked must draw **2** buttons, got ` +
+  `${report.wingButtons.length} ${JSON.stringify(report.wingButtons)}`);
+want(!report.wingDestroyDrawn,
+  `§287: \`[Destroy]\` is drawn although the deck's best hit is 8: ` +
+  `${JSON.stringify(report.wingButtons)}`);
+want(report.wingRefused === -2,
+  `§287: clicking the hidden \`[Destroy]\` must be refused with -2, got ${report.wingRefused}`);
+want(report.wingPendingAfter === 5,
+  `§287: a refused click must leave the event open, pending ${report.wingPendingAfter}`);
+
 // §279：条件选项的 DOM 半 —— 4 个选项、1 个锁着 ⇒ 3 个按钮，且锁着的那个**不在** DOM 里。
 want(report.condOpened === 0, `§279: \`forgotten_altar\` did not open (${report.condOpened})`);
 want(report.condPending === 5, `§279: the event screen is not open (pending ${report.condPending})`);
@@ -1267,6 +1304,9 @@ console.log("  act 2 (orbs)      " + JSON.stringify(report.act2 && report.act2.a
 console.log("  §279 locked       " + report.condOptions + " option(s) · available " +
   JSON.stringify(report.condAvailable) + " · drawn " + report.condButtons.length +
   " · locked drawn " + report.condLockedDrawn + " · refused " + report.condRefused);
+console.log("  §287 wing statue  " + report.wingOptions + " option(s) · available " +
+  JSON.stringify(report.wingAvailable) + " · drawn " + report.wingButtons.length +
+  " · [Destroy] drawn " + report.wingDestroyDrawn + " · refused " + report.wingRefused);
 console.log("  act 3 (daggers)   " + JSON.stringify({
   opening: report.act3 && report.act3.openingCount, left: report.act3 && report.act3.leftCount,
   done: report.act3 && report.act3.done, result: report.act3 && report.act3.result,
