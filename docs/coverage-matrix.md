@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 872 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 875 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -39,14 +39,14 @@
 | 怪物 | 50 | 42 | 0 | 8 | 49 | 1 | 11 | 0 |
 | 敌人动作 | 138 | 73 | 65 | 0 | 135 | 3 | 53 | 0 |
 | 卡牌 | 293 | 165 | 128 | 0 | 281 | 12 | 18 | 0 |
-| 状态 | 145 | 136 | 6 | 3 | 0 | 145 | 1 | 0 |
+| 状态 | 146 | 136 | 6 | 4 | 0 | 146 | 1 | 0 |
 | 遭遇 | 47 | 36 | 11 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 19 | 19 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 遗物 | 147 | 130 | 17 | 0 | 0 | 0 | 0 | 0 |
+| 遗物 | 149 | 131 | 18 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 872 | 634 | 227 | 11 | 465 | 161 | 83 | 0 |
+| **合计** | 875 | 635 | 228 | 12 | 465 | 162 | 83 | 0 |
 
-扫描到的具名测试：**1137** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
+扫描到的具名测试：**1140** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
 
 事件：池里有 **22** 个位次、**19** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -263,7 +263,7 @@
 | armaments | yes | armaments_gains_block_then_upgrades_the_chosen_card, an_armaments_question_makes_the_page_layer_modal | — | wiki:wiki_cards/armaments.txt | — | §227/CARD_WIKI+INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | armaments+ | yes | armaments_gains_block_then_upgrades_the_chosen_card | — | wiki:wiki_cards/armaments.txt (via armaments) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | ascenders_bane | yes | — | CARD_DIFF | wiki:wiki_cards/ascenders_bane.txt | — | §183/§189/CARD_WIKI+INV_CARDS |
-| bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
+| bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, strange_spoon_turns_about_half_of_the_exhausts_into_discards …(+1) | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
 | bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+33) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
@@ -322,7 +322,7 @@
 | decay | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/decay.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+73) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+74) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+2) | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -510,7 +510,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+164) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+166) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+11) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -548,7 +548,7 @@
 | wound | yes | the_new_red_skills_do_what_their_pages_say, painful_stabs_shuffles_a_wound_only_on_unblocked_damage …(+4) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
-## 状态（145）
+## 状态（146）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -678,8 +678,9 @@
 | standard.stasis | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.1/§195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stone_calendar | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
+| standard.strange_spoon | yes | — | — | spec:INV_STATUSES | — | §296/§302/INV_STATUSES |
 | standard.strength | yes | dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not, modifier_rows_match_exactly_and_through_the_documented_namespace_bridge …(+70) | — | spec:INV_STATUSES | — | §242/§252/INV_STATUSES/dot_slips_past_the_standard_pack_rows_that_direct_hits_do_not |
-| standard.strike_dummy | yes | strike_dummy_only_boosts_cards_that_carry_the_strike_tag | — | spec:INV_STATUSES | — | §296/§297/INV_STATUSES/strike_dummy_only_boosts_cards_that_carry_the_strike_tag |
+| standard.strike_dummy | yes | strike_dummy_only_boosts_cards_that_carry_the_strike_tag | — | spec:INV_STATUSES | — | §297/§302/INV_STATUSES/strike_dummy_only_boosts_cards_that_carry_the_strike_tag |
 | standard.sundial | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | spec:INV_STATUSES | — | §292/§294/INV_STATUSES/the_shuffle_trigger_pays_the_abacus_and_sundial |
 | standard.the_abacus | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | spec:INV_STATUSES | — | §292/§294/INV_STATUSES/the_shuffle_trigger_pays_the_abacus_and_sundial |
 | standard.the_bomb | yes | the_bomb_explodes_on_the_third_turn_end_only | — | spec:INV_STATUSES | — | §244/§249/INV_STATUSES/the_bomb_explodes_on_the_third_turn_end_only |
@@ -711,7 +712,7 @@
 | enc_chosen | yes | hex_shuffles_a_dazed_only_for_non_attack_cards, chosen_swaps_its_opener_at_a17 | — | — | — | §276/§277/hex_shuffles_a_dazed_only_for_non_attack_cards |
 | enc_colosseum_champions | yes | enc_colosseum_slavers_and_champions_are_the_event_fights | — | — | — | enc_colosseum_slavers_and_champions_are_the_event_fights |
 | enc_colosseum_slavers | yes | enc_colosseum_slavers_and_champions_are_the_event_fights | — | — | — | enc_colosseum_slavers_and_champions_are_the_event_fights |
-| enc_cultist | yes | an_encounter_without_rolls_draws_nothing, building_a_louse_fight_draws_its_bite_and_a_cultist_fight_does_not …(+10) | — | — | — | §5.2/§130/an_encounter_without_rolls_draws_nothing |
+| enc_cultist | yes | an_encounter_without_rolls_draws_nothing, building_a_louse_fight_draws_its_bite_and_a_cultist_fight_does_not …(+12) | — | — | — | §5.2/§130/an_encounter_without_rolls_draws_nothing |
 | enc_darklings | yes | an_encounter_with_two_records_of_the_same_id_builds | — | — | — | §282/an_encounter_with_two_records_of_the_same_id_builds |
 | enc_donu_and_deca | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter | — | — | — | §194/§195.8/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
 | enc_exordium_thugs | yes | the_composed_encounters_pick_from_their_candidates | — | — | — | §276/§277/the_composed_encounters_pick_from_their_candidates |
@@ -774,7 +775,7 @@
 | wing_statue | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | world_of_goop | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 
-## 遗物（147）
+## 遗物（149）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -902,6 +903,7 @@
 | spirit_poop | yes | the_flavor_only_relics_are_known_and_change_nothing | — | — | — | §283/§292/the_flavor_only_relics_are_known_and_change_nothing |
 | ssserpent_head | yes | the_node_relics_pay_on_the_right_kind_of_room | — | — | — | §271/the_node_relics_pay_on_the_right_kind_of_room |
 | stone_calendar | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
+| strange_spoon | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §301/§302 |
 | strawberry | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §156 |
 | strike_dummy | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §296/§297 |
 | sundial | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | — | — | §293/§294/the_shuffle_trigger_pays_the_abacus_and_sundial |
@@ -925,6 +927,7 @@
 | warped_tongs | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §299/§300 |
 | whetstone | yes | the_upgrade_eggs_upgrade_two_of_their_own_kind | — | — | — | §273/§274/the_upgrade_eggs_upgrade_two_of_their_own_kind |
 | white_beast_statue | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §269 |
+| wing_boots | yes | wing_boots_lets_you_fly_three_times_and_never_charges_the_free_paths | — | — | — | §302/§303/wing_boots_lets_you_fly_three_times_and_never_charges_the_free_paths |
 
 ## 药水（33）
 

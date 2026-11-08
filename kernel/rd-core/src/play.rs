@@ -511,6 +511,10 @@ pub const VELVET_CHOKER_STATUS: &str = "standard.velvet_choker";
 /// §298：`medical_kit` / `blue_candle` —— 放行 `unplayable` 的 Status / Curse 牌。
 pub const MEDICAL_KIT_STATUS: &str = "standard.medical_kit";
 pub const BLUE_CANDLE_STATUS: &str = "standard.blue_candle";
+/// §302：`strange_spoon` —— "Cards which Exhaust when played will instead discard 50% of the time."
+pub const STRANGE_SPOON_STATUS: &str = "standard.strange_spoon";
+/// §302：那 50%。**只影响"打出即消耗"那一类**（见 [`strange_spoon_destination`]）。
+pub const STRANGE_SPOON_PERCENT: i32 = 50;
 /// 内容的 `CARD.Tags` 里那三个名字（`status` / `curse` / `unplayable`）。
 const STATUS_TAG: &str = "status";
 const CURSE_TAG: &str = "curse";
@@ -1012,6 +1016,13 @@ fn apply_plan_in_chain(
     ensure_affordable(state, &plan.source, &plan.paid)?;
     pay_costs(state, &plan.source, &plan.paid)?;
 
+    // ── §302：**这一张牌最终去哪儿** —— 在这里解析一次（付款之后、节目之前）。
+    //
+    // 三个理由：① `plan_play` 是纯读，掷骰会污染被拒的出牌；② 付不起的牌没被打出，不该
+    // 消耗随机流；③ 下面两条分支（无节目 / 有节目）都必须用**同一个**答案，否则
+    // "有节目的牌"和"没节目的牌"会走两条不同的规则。
+    let destination = strange_spoon_destination(state, plan);
+
     // `Cards/CardPlay.cs:176-183`：*"A per-copy price is a promise to ONE card and is kept once:
     // the play has been paid for by now, so the mark is spent here rather than lingering into the
     // next time this card is drawn."*
@@ -1086,7 +1097,7 @@ fn apply_plan_in_chain(
         state.enqueue_effect(EffectRequest::MoveCardToZone {
             owner: plan.source,
             card: plan.instance,
-            to_zone: plan.destination,
+            to_zone: destination,
             placement: ZonePlacement::Bottom,
         })?;
         state.enqueue_continuation(Continuation::CloseAction {
@@ -1108,7 +1119,7 @@ fn apply_plan_in_chain(
     let hook = ProgramTerminalHook::CardPlay {
         player: plan.source,
         card,
-        destination: plan.destination,
+        destination,
         program: root.id(),
         target: plan.target,
         x_cost: plan.x_cost,
@@ -2335,6 +2346,34 @@ fn corruption_destination(
     match state.combatant(&card.source) {
         Some(source) if has_status(source, CORRUPTION_STATUS) => CardZone::ExhaustPile,
         _ => current,
+    }
+}
+
+/// §302：`strange_spoon` —— 本来要进消耗堆的那张牌，50% 概率改去弃牌堆。
+///
+/// **只改落区，不改别的任何东西**：不进消耗堆 ⇒ `Exhausted` 通知不发（消耗触发器的
+/// 反协同是 wiki 写明的），而"进弃牌堆"也不发丢弃事件（wiki：*"its discard is more similar
+/// to the automatic discarding of the player's hand"*）。两件事都是**免费**的 —— 因为落区
+/// 本来就是"这张牌最终去哪儿"的唯一答案。
+///
+/// 边界由调用点决定：只有**真的走完出牌计划**的牌会到这里（见模块头那张表）。
+fn strange_spoon_destination(state: &mut CombatState, plan: &PlayPlan<'_>) -> CardZone {
+    if plan.destination != CardZone::ExhaustPile {
+        return plan.destination;
+    }
+    // 先读状态再掷骰：`draw_in_range` 要 `&mut`，而状态读的是同一个 `state`。
+    let carries = match state.combatant(&plan.source) {
+        Some(source) => has_status(source, STRANGE_SPOON_STATUS),
+        None => false,
+    };
+    if !carries {
+        return plan.destination;
+    }
+    // 一次出牌**一次**掷骰（`draw_in_range` 自己推进 `random_step`）。
+    if state.draw_in_range(1, 100) <= STRANGE_SPOON_PERCENT {
+        CardZone::DiscardPile
+    } else {
+        CardZone::ExhaustPile
     }
 }
 
@@ -4408,6 +4447,13 @@ mod tests {
             "终态在顶层 ⇒ 收尾那一笔发号"
         );
     }
+
+
+    // §302：`strange_spoon` 的判据在 `rd-wasm`（`strange_spoon_turns_about_half_of_the_exhausts_into_discards`）。
+    //
+    // 为什么不在这一层：本模块的测试镜像是 `content.core.rdcf` —— **冻结的参考基线**
+    // （`expected_sha.txt` 钉住），里面没有 `standard.strange_spoon` 那一行 STAT。
+    // 给它造一条会改基线字节；而"状态行不存在"这件事本身也不是遗物的规则。
 
 }
 

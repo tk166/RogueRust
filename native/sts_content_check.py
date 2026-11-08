@@ -131,7 +131,7 @@ INV_COUNTS = {
     # §298: +3 (`magic_flower` / `medical_kit` / `blue_candle`)。
     # §299: +3 (C 类三件 —— 行为全在内容程序里)。
     # §300: +3 (三个新原子各自解锁的那一件).
-    "statuses": 145,
+    "statuses": 146,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1564,6 +1564,8 @@ INV_STATUSES = {
     "standard.hand_drill": [],
     # §296：`chemical_x` 的规则**在内核**（`play.rs` 给 X 加 2），内容这一行是开关。
     "standard.chemical_x": [],
+    # §302：`strange_spoon` 的规则在内核（`play.rs` 的落区那一格），内容这一行是开关。
+    "standard.strange_spoon": [],
     # §297：`strike_dummy` 是**真的内容程序**（`DamageDealt` + 来源卡标签门）。
     "standard.strike_dummy": [("DamageDealt", "AddFlat", 3, 100, None)],
     # `velvet_choker` / `runic_dome` 的每回合 +1 能量（其余规则在内核）。
@@ -4141,6 +4143,10 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "nilrys_codex", "warped_tongs", "mummified_hand",
                       # §301：`neows_lament`（规则在运行层：前 3 场敌人 1 血）。
                       "neows_lament",
+                      # §302：`strange_spoon`（落区那一格读状态）。
+                      "strange_spoon",
+                      # §303：`wing_boots`（运行层的地图规则）。
+                      "wing_boots",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

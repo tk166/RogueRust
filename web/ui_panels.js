@@ -68,9 +68,12 @@ const RD_PANELS = (() => {
   }
 
   function statsLine(s) {
+    // §303: `wing_boots` 的剩余次数只在还有次数时出现 —— 没有这件遗物时这一行与从前
+    // **逐字相同**（既有页面判据比的是字符串，多一个字就会红）。
+    const boots = s.wingBoots > 0 ? ` · 飞行 ${s.wingBoots}` : "";
     return (
       `floor ${s.floor} · hp ${s.hp}/${s.hpMax} · gold ${s.gold} · ` +
-      `deck ${s.deckCount} · relics ${s.relicCount}`
+      `deck ${s.deckCount} · relics ${s.relicCount}${boots}`
     );
   }
 

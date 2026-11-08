@@ -938,10 +938,14 @@ function runSnapshot() {
     // §259: 篝火的六个选项（位掩码，见 `rd_run_campfire_options`）与 Girya 已用次数。
     campfire: 0,
     giryaLifts: 0,
+    // §303: `wing_boots` 还能飞几次（0..=3）—— 顶栏用，其余状态不看它。
+    wingBoots: 0,
     removePrice: 0,
     rewardGold: 0,
     eventText: "",
   };
+  // §303：`wing_boots` 的次数与"哪个房间"无关（地图上每一步都能用），所以每一屏都读。
+  snapshot.wingBoots = Math.max(0, ex.rd_run_wing_boots());
   switch (pending) {
     case 6:
       for (let slot = 0; slot < 2; slot++) {

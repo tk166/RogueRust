@@ -115,6 +115,8 @@ pub const BURNING_BLOOD_HEAL: i32 = 6;
 /// §293：`tiny_house` 的四件事（wiki: *"obtain 1 Potion, gain 50 Gold, raise your Max HP by 5,
 /// obtain 1 card"*）。四个数写在一处，因为它们是**同一句 wiki**。
 pub const TINY_HOUSE_GOLD: i32 = 50;
+/// §303：`wing_boots` —— "select any room on the next floor … a maximum of **3** times"。
+pub const WING_BOOTS_USES: u8 = 3;
 /// §301：`neows_lament` —— "Enemies in your first **3** combats will have **1** HP"。
 pub const NEOWS_LAMENT_FIGHTS: u8 = 3;
 pub const NEOWS_LAMENT_HEALTH: i32 = 1;
@@ -371,6 +373,12 @@ pub enum RelicEffect {
     PickupAddCards(u8),
     /// §293：`tiny_house` —— +50 金币、上限 +5、一瓶药水、一张牌。四件事一件遗物。
     PickupTinyHouse,
+    /// §303：`wing_boots` —— 地图上可以**忽略路径**、直接选下一层的任意房间，
+    /// 一共 `uses` 次（wiki 两处来源都写 3，都没提"每幕重置" ⇒ 这是全局次数）。
+    WingBoots {
+        /// 这一局能飞几次。
+        uses: u8,
+    },
     /// §301：`neows_lament` —— 前 `fights` 场战斗里敌人的血量被**覆盖**成 `health`。
     ///
     /// 绝对值而不是百分比：wiki 说的是 *"Enemies in your first 3 combats will have 1 HP"*，
@@ -1841,6 +1849,8 @@ pub struct RunState {
     /// §293：这一次可以挑的那几张（`pickup_add > 0` 时有意义）。
     pickup_offer: [RunId; MAX_REWARD_CARDS],
     pickup_offer_len: u8,
+    /// §303：`wing_boots` **已经飞过几次**（只数真的"忽略路径"的那几步）。
+    wing_boots_used: u8,
     /// §301：这一局**已经打过几场**（开战时 +1）。`neows_lament` 用它数"前 3 场"。
     ///
     /// 数的是**开始**过的战斗，不是赢过的：「前 3 场」里输掉的那一场也占一格 —— 否则
@@ -1976,6 +1986,7 @@ impl RunState {
             pickup_add: 0,
             pickup_offer: [RunId::EMPTY; MAX_REWARD_CARDS],
             pickup_offer_len: 0,
+            wing_boots_used: 0,
             fights: 0,
         };
         for id in starting_deck {
@@ -2724,6 +2735,8 @@ impl RunState {
             | RelicEffect::PotionEffectPercent(_)
             // §301：`neows_lament` 在**开战那一刻**生效（由调用方问 `enemy_health_override`）。
             | RelicEffect::EnemyHealthInFirstFights { .. }
+            // §303：`wing_boots` 只改地图的 `reachable()`，不参与任何"拿到那一刻"的效果。
+            | RelicEffect::WingBoots { .. }
             | RelicEffect::RestCardReward => {}
         }
         self.relics[slot] = id;
@@ -2900,6 +2913,8 @@ impl RunState {
                     | RelicEffect::PickupDuplicate(_)
                     // §301：`neows_lament` 在**开战那一刻**生效，不是回合末。
                     | RelicEffect::EnemyHealthInFirstFights { .. }
+                    // §303：`wing_boots` 也不是这个钩子上的事。
+                    | RelicEffect::WingBoots { .. }
                     | RelicEffect::RareCardChanceMultiplier(_)
                     | RelicEffect::PotionEffectPercent(_)
                     // §293：加牌的问句走自己的通道，不在这三个钩子上。
@@ -3194,6 +3209,12 @@ impl RunState {
             "mummified_hand" => {
                 Some(RelicEffect::StartCombatStatus("standard.mummified_hand", 1))
             }
+            // §303：`wing_boots` —— 运行层的地图规则（没有内容状态）。
+            "wing_boots" => Some(RelicEffect::WingBoots {
+                uses: WING_BOOTS_USES,
+            }),
+            // §302：`strange_spoon` —— 战斗内的开关（`plan` 的落区那一格读它）。
+            "strange_spoon" => Some(RelicEffect::StartCombatStatus("standard.strange_spoon", 1)),
             // §301：`neows_lament` —— 运行层规则（没有内容状态：它不是战斗内的状态）。
             "neows_lament" => Some(RelicEffect::EnemyHealthInFirstFights {
                 fights: NEOWS_LAMENT_FIGHTS,
@@ -3267,6 +3288,47 @@ impl RunState {
             Some(RelicEffect::PotionEffectPercent(percent)) if percent > 0 => percent,
             _ => 100,
         }
+    }
+
+    /// §303：`wing_boots` 还能飞几次（没有遗物时恒 0）。
+    #[must_use]
+    pub fn wing_boots_left(&self) -> u8 {
+        let Some(RelicEffect::WingBoots { uses }) = self.first_relic_effect_of(RelicEffect::WingBoots {
+            uses: WING_BOOTS_USES,
+        }) else {
+            return 0;
+        };
+        uses.saturating_sub(self.wing_boots_used)
+    }
+
+    /// §303：这一步**能不能飞** —— 也就是"站在地图里、还有次数、下一层真的有房间"。
+    ///
+    /// Boss（第 16 层哨兵）不算：它不在"下一层的房间"里，只有一条路，飞过去等于白烧一次。
+    #[must_use]
+    fn may_ignore_paths(&self) -> bool {
+        self.wing_boots_left() > 0
+            && self.node >= 0
+            && self.node != i32::from(crate::map::BOSS_NODE)
+            && self.floor < ROWS as i32
+    }
+
+    /// §303：下一层的**全部**房间（不分连不连着）。`wing_boots` 用。
+    fn all_next_row_nodes(&self) -> Reachable {
+        let mut out = Reachable::default();
+        let target_row = self.floor as usize;
+        if target_row >= ROWS {
+            return out;
+        }
+        let Some(row) = self.map.row(target_row) else {
+            return out;
+        };
+        let Some(first) = self.map.row_first(target_row) else {
+            return out;
+        };
+        for local in 0..row.len() {
+            out.push(first + local as u8);
+        }
+        out
     }
 
     /// §301：这一局已经打过几场（开战时 +1）。
@@ -3673,7 +3735,9 @@ impl RunState {
                 | RelicEffect::PickupTinyHouse
                 | RelicEffect::SingingBowl(_)
                 // §301：`neows_lament` 也不是这两个钩子上的事。
-                | RelicEffect::EnemyHealthInFirstFights { .. },
+                | RelicEffect::EnemyHealthInFirstFights { .. }
+                // §303：`wing_boots` 也不是这两个钩子上的事。
+                | RelicEffect::WingBoots { .. },
                 )
                 | None => {}
             }
@@ -3786,6 +3850,49 @@ impl RunState {
     /// Before the first step, that is **every node on floor 1** (`inv:§7.2`: the player picks a
     /// start). Afterwards, it is the current node's out-edges.
     #[must_use]
+    /// §303：与当前节点**真的连着**的下一层房间（`wing_boots` 之外的正常路径）。
+    ///
+    /// 从 [`Self::reachable`] 里抽出来，是因为 [`Self::enter_node`] 需要"这一步是免费还是
+    /// 飞行"这个区分，而**两个答案必须来自同一处** —— 否则"能点的"和"免费的"会漂。
+    fn connected_nodes(&self) -> Reachable {
+        let mut out = Reachable::default();
+        if self.pending != Pending::None {
+            return out;
+        }
+        // 开局：第 0 层整层都可以进（`inv:§7.1`）—— 这**不**算飞行，`wing_boots` 不扣次数。
+        if self.node < 0 {
+            let Some(first) = self.map.row_first(0) else {
+                return out;
+            };
+            for local in 0..self.map.row(0).map_or(0, |row| row.len()) {
+                out.push(first + local as u8);
+            }
+            return out;
+        }
+        let target_row = self.floor as usize;
+        if target_row >= ROWS {
+            if !self.boss_beaten && self.node != i32::from(crate::map::BOSS_NODE) {
+                out.push(crate::map::BOSS_NODE);
+            }
+            return out;
+        }
+        let Some(row) = self.map.row(target_row - 1) else {
+            return out;
+        };
+        let Some((row_index, local)) = self.map.locate(self.node as u8) else {
+            return out;
+        };
+        let Some(source) = row.node(local) else {
+            return out;
+        };
+        for &edge in source.out_targets() {
+            if let Some(global) = self.map.global_of(row_index + 1, edge as usize) {
+                out.push(global);
+            }
+        }
+        out
+    }
+
     pub fn reachable(&self) -> Reachable {
         let mut out = Reachable::default();
         // **Nothing is legal while a choice is pending** -- the pre-run blessing (inv:§7.1), a won
@@ -3831,6 +3938,18 @@ impl RunState {
                 out.push(global);
             }
         }
+        // ── §303：`wing_boots` —— 追加"下一层**其它**的房间"（真的连着的那些已经在上面、
+        // 下标不变）。位置是**最后**：既有测试与页面最常点的 `reachable()[0]` 必须还是同一个节点。
+        if self.may_ignore_paths() {
+            let all = self.all_next_row_nodes();
+            for index in 0..all.len() {
+                if let Some(target) = all.get(index) {
+                    if !out.contains(target) {
+                        out.push(target);
+                    }
+                }
+            }
+        }
         out
     }
 
@@ -3838,7 +3957,13 @@ impl RunState {
     /// `docs/spec/env-abi.md` §11.5), and a target that is not reachable is an error rather than a
     /// silent stay-put.
     pub fn enter_node(&mut self, target: u8) -> Result<(), RunError> {
-        if !self.reachable().contains(target) {
+        // §303：`wing_boots` 让"下一层不相连的房间"也合法 —— 但那一步要**扣一次**。
+        //
+        // 判断顺序：先看它是不是本来就通（免费），再看能不能飞（扣一次），都不行才拒绝。
+        // 这样"能飞"永远不会让免费的路开始收费。
+        let free = self.connected_nodes().contains(target);
+        let flying = !free && self.may_ignore_paths() && self.all_next_row_nodes().contains(target);
+        if !free && !flying {
             return Err(RunError::NotReachable);
         }
         // **You settle a node before you walk on.** A fight is settled by `mark_resolved()` when it
@@ -3868,6 +3993,10 @@ impl RunState {
             probe.floor = row as i32 + 1;
         }
         probe.check_invariants()?;
+        // §303：飞行这一步**现在才算数**（前面所有校验都过了、游标真的要动）。
+        if flying {
+            self.wing_boots_used = self.wing_boots_used.saturating_add(1);
+        }
         let climbed = probe.floor > self.floor;
         self.node = probe.node;
         self.floor = probe.floor;
@@ -4247,7 +4376,9 @@ impl RunState {
                 | RelicEffect::PickupTinyHouse
                 | RelicEffect::SingingBowl(_)
                 // §301：`neows_lament` 也不是这两个钩子上的事。
-                | RelicEffect::EnemyHealthInFirstFights { .. },
+                | RelicEffect::EnemyHealthInFirstFights { .. }
+                // §303：`wing_boots` 也不是这两个钩子上的事。
+                | RelicEffect::WingBoots { .. },
                 )
                 | None => {}
             }
@@ -12153,6 +12284,171 @@ mod tests {
         );
         // 计数本身也要对（它不是"剩下的场次"，是"已经打的场次"）。
         assert_eq!(run.fights(), 4);
+    }
+
+
+    /// §303：`wing_boots` —— 免费的路不扣、飞一次扣一次、3 次之后回到普通地图、Boss 不扣。
+    ///
+    /// 一条判据走完所有分支，是因为它们共享同一份 `reachable()`：分开写会让"两个答案各来自
+    /// 一处"（同一个词表两处认识的那种腐烂）看不出来。
+    #[test]
+    fn wing_boots_lets_you_fly_three_times_and_never_charges_the_free_paths() {
+        let deck = ["strike", "defend"];
+        let mut run = RunState::new(21, 80, 99, &deck).expect("a run");
+        let first = run.reachable().get(0).expect("a first node");
+        run.enter_node(first).expect("onto row 0");
+        run.mark_resolved();
+
+        let neighbours: Vec<u8> = (0..run.reachable().len())
+            .filter_map(|index| run.reachable().get(index))
+            .collect();
+        assert!(!neighbours.is_empty(), "the map has edges");
+        assert_eq!(run.wing_boots_left(), 0, "no relic, no charges");
+
+        let row_one: Vec<u8> = (0..run.map().row(1).map_or(0, |row| row.len()))
+            .filter_map(|local| run.map().global_of(1, local))
+            .collect();
+        let stranger = row_one
+            .iter()
+            .copied()
+            .find(|node| !neighbours.contains(node))
+            .expect("row 1 has a node the edges do not reach");
+        // 没有遗物：下一层里不相连的房间被拒。
+        assert_eq!(run.enter_node(stranger), Err(RunError::NotReachable));
+
+        run.push_relic("wing_boots", &[]).expect("wing_boots");
+        assert_eq!(run.wing_boots_left(), 3);
+        let wide: Vec<u8> = (0..run.reachable().len())
+            .filter_map(|index| run.reachable().get(index))
+            .collect();
+        for node in &row_one {
+            assert!(wide.contains(node), "row 1 node {node} becomes selectable");
+        }
+        // ⚠️ 真连着的仍排在**最前面**（下标是页面的动作号）。
+        for (index, node) in neighbours.iter().enumerate() {
+            assert_eq!(
+                wide.get(index),
+                Some(node),
+                "free path {index} keeps its action index"
+            );
+        }
+
+        // 走一次免费的路：不扣。
+        run.enter_node(neighbours[0]).expect("the free walk");
+        assert_eq!(run.wing_boots_left(), 3, "a real edge is free");
+        run.mark_resolved();
+
+        // 飞三次：每次扣一次。
+        //
+        // ⚠️ "哪些是**真的**连着的"不能问 `reachable()` —— 拿到遗物之后它包含**整层**，
+        // 于是每一行都会被判成"全通"。这里从地图自己重算一遍（独立 oracle）：
+        // 内核说"能点"、图说"真连着"，两个来源比对。
+        fn free_edges(run: &RunState) -> Vec<u8> {
+            let mut out = Vec::new();
+            let target_row = run.floor as usize;
+            if target_row >= ROWS {
+                return out;
+            }
+            let Some((row_index, local)) = run.map().locate(run.node as u8) else {
+                return out;
+            };
+            let Some(source) = run.map().row(row_index).and_then(|row| row.node(local)) else {
+                return out;
+            };
+            for &edge in source.out_targets() {
+                if let Some(global) = run.map().global_of(row_index + 1, edge as usize) {
+                    out.push(global);
+                }
+            }
+            out
+        }
+
+        let mut flights = 0u8;
+        let mut expected_left = 3u8;
+        let mut rows_walked = 0;
+        while flights < 3 {
+            rows_walked += 1;
+            assert!(rows_walked < ROWS, "the map ran out of rows before three flights");
+            let row = run.floor as usize;
+            assert!(row < ROWS, "still on the map");
+            let row_nodes: Vec<u8> = (0..run.map().row(row).map_or(0, |line| line.len()))
+                .filter_map(|local| run.map().global_of(row, local))
+                .collect();
+            // 图上真连着的那些，按 **`reachable()` 的下标顺序**排好（免费的在前）。
+            let free = free_edges(&run);
+            match row_nodes.iter().copied().find(|node| !free.contains(node)) {
+                Some(far) => {
+                    run.enter_node(far).expect("a flight");
+                    flights += 1;
+                    expected_left -= 1;
+                    assert_eq!(
+                        run.wing_boots_left(),
+                        expected_left,
+                        "flight {flights} costs exactly one"
+                    );
+                }
+                None => {
+                    // 整行都通：走免费的路（这一步**不**扣次数）。
+                    run.enter_node(free[0]).expect("a free walk");
+                    assert_eq!(run.wing_boots_left(), expected_left, "a real edge is free");
+                }
+            }
+            run.mark_resolved();
+        }
+        assert_eq!(run.wing_boots_left(), 0, "three flights, no charges left");
+
+        // 用完：不相连的房间再次被拒（`reachable()` 缩回普通地图）。
+        let row = run.floor as usize;
+        if row < ROWS {
+            let free = free_edges(&run);
+            let row_nodes: Vec<u8> = (0..run.map().row(row).map_or(0, |line| line.len()))
+                .filter_map(|local| run.map().global_of(row, local))
+                .collect();
+            if let Some(far) = row_nodes.iter().copied().find(|n| !free.contains(n)) {
+                assert_eq!(
+                    run.enter_node(far),
+                    Err(RunError::NotReachable),
+                    "spent charges mean the ordinary map again"
+                );
+            }
+        }
+
+        // Boss 那一步不是飞行：站在最后一层时 `reachable()` 给的是哨兵，次数一点不动。
+        run.floor = ROWS as i32;
+        run.node = i32::from(run.map().global_of(ROWS - 1, 0).expect("a last-row node"));
+        run.mark_resolved();
+        // 用完了就是"变得没用"（wiki：*"before the relic becomes unusable"*）——
+        // 再拿一份**不**会补次数：次数记在局上（`wing_boots_used`），不在每一份遗物上。
+        let used_after_flights = run.wing_boots_used;
+        run.push_relic("wing_boots", &[]).expect("a duplicate is allowed");
+        assert_eq!(run.wing_boots_used, used_after_flights, "a duplicate adds nothing");
+        assert_eq!(run.wing_boots_left(), 0, "still unusable");
+        assert_eq!(
+            run.reachable().get(0),
+            Some(crate::map::BOSS_NODE),
+            "the boss is the only way forward"
+        );
+
+        // Boss 那一步**不是**飞行：另起一局（次数还没用），把光标放到最后一层，
+        // 然后确认 `reachable()` 给的是哨兵、次数一点没动。
+        let mut boss_run = RunState::new(21, 80, 99, &deck).expect("a second run");
+        boss_run.push_relic("wing_boots", &[]).expect("wing_boots");
+        boss_run.floor = ROWS as i32;
+        boss_run.node = i32::from(boss_run.map().global_of(ROWS - 1, 0).expect("a last-row node"));
+        assert_eq!(boss_run.wing_boots_left(), 3);
+        boss_run.mark_resolved();
+        assert_eq!(
+            boss_run.reachable().get(0),
+            Some(crate::map::BOSS_NODE),
+            "the boss is the sentinel, not a room on the next floor"
+        );
+        // **真的走进去**：Boss 步要按"本来就通"收费（0），而不是按飞行收费。
+        boss_run.enter_node(crate::map::BOSS_NODE).expect("step onto the boss");
+        assert_eq!(
+            boss_run.wing_boots_left(),
+            3,
+            "the boss step is not a flight"
+        );
     }
 
 }

@@ -10308,6 +10308,22 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.strange_spoon",
+      "PackageId": "sts",
+      "NameKey": "Strange Spoon",
+      "DescriptionKey": "Cards which Exhaust when played will instead discard 50% of the time.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff"
+      ],
+      "PassiveModifiers": [],
+      "Triggers": []
     }
   ],
   "Cards": [
@@ -67018,6 +67034,20 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Event"
+    },
+    {
+      "Id": "strange_spoon",
+      "DisplayName": "Strange Spoon",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Shop"
+    },
+    {
+      "Id": "wing_boots",
+      "DisplayName": "Wing Boots",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Rare"
     }
   ],
   "Start": {

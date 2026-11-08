@@ -779,6 +779,9 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.magic_flower"
             | "standard.medical_kit"
             | "standard.blue_candle"
+            // §302: `strange_spoon` —— 规则在内核（`play.rs` 的落区那一格掷一次骰），
+            // 内容那一行是开关（与 `medical_kit` 同形状：无修饰器、无触发器）。
+            | "standard.strange_spoon"
             // §299: C 类三件 —— 行为全在内容触发器里。
             | "standard.enchiridion"
             | "standard.orange_pellets"

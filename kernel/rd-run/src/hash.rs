@@ -62,6 +62,11 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
         .str("maw_bank=")
         .u32(u32::from(state.maw_bank_broken()))
         .str("\n");
+    // §303：`wing_boots` 还能飞几次（它会改变后面每一次 `reachable()`）。
+    writer
+        .str("wb=")
+        .u32(u32::from(state.wing_boots_left()))
+        .str("\n");
     // §301：已经打过几场 —— `neows_lament` 的"前 3 场"就靠这个数。
     writer
         .str("fights=")

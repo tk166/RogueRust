@@ -82,6 +82,7 @@ const REQUIRED = [
   // §259: 篝火四选项 + 位掩码 + Girya 计数
   "rd_run_campfire_options", "rd_run_lift", "rd_run_toke", "rd_run_dig", "rd_run_recall",
   "rd_run_girya_lifts",
+  "rd_run_wing_boots",
   "rd_run_open_chest", "rd_run_leave", "rd_run_shop_card_count", "rd_run_shop_card_id_len",
   "rd_run_shop_card_id_into", "rd_run_shop_card_price", "rd_run_shop_relic_count",
   "rd_run_shop_relic_id_len", "rd_run_shop_relic_id_into", "rd_run_shop_relic_price",

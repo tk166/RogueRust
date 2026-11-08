@@ -1390,6 +1390,17 @@ pub extern "C" fn rd_run_campfire_options() -> i32 {
 ///
 /// 单独一个导出（而不是塞进 `rd_run_observe` 的某个格子）：观察向量是**冻结的 ABI**，
 /// 加一格要动 `smoke.mjs` 的长度对账与页面所有偏移。这是一次点击才读一次的标量。
+/// §303：`wing_boots` 还能飞几次（0..=3）。没有局 ⇒ `-1`，没有遗物 ⇒ `0`。
+///
+/// 与 `rd_run_girya_lifts` 同一个理由单独导出：观察向量是冻结的 ABI。
+#[no_mangle]
+pub extern "C" fn rd_run_wing_boots() -> i32 {
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    i32::from(session.state.wing_boots_left())
+}
+
 #[no_mangle]
 pub extern "C" fn rd_run_girya_lifts() -> i32 {
     let Some(session) = run_slot().as_mut() else {
