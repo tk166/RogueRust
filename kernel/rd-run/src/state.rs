@@ -115,6 +115,11 @@ pub const BURNING_BLOOD_HEAL: i32 = 6;
 /// §293：`tiny_house` 的四件事（wiki: *"obtain 1 Potion, gain 50 Gold, raise your Max HP by 5,
 /// obtain 1 card"*）。四个数写在一处，因为它们是**同一句 wiki**。
 pub const TINY_HOUSE_GOLD: i32 = 50;
+/// §304：`toolbox` —— "At the start of each combat, choose 1 of **3** random Colorless cards"。
+/// §304：`combat_open_choices` 的两位（顺序 = 问句顺序）。
+pub const COMBAT_OPEN_GAMBLING_CHIP: u8 = 1 << 0;
+pub const COMBAT_OPEN_TOOLBOX: u8 = 1 << 1;
+pub const TOOLBOX_OFFER: u8 = 3;
 /// §303：`wing_boots` —— "select any room on the next floor … a maximum of **3** times"。
 pub const WING_BOOTS_USES: u8 = 3;
 /// §301：`neows_lament` —— "Enemies in your first **3** combats will have **1** HP"。
@@ -373,6 +378,13 @@ pub enum RelicEffect {
     PickupAddCards(u8),
     /// §293：`tiny_house` —— +50 金币、上限 +5、一瓶药水、一张牌。四件事一件遗物。
     PickupTinyHouse,
+    /// §304：`gambling_chip` —— 开战那一刻问"弃任意张手牌，然后抽同样多张"。
+    CombatOpenDiscardThenDraw,
+    /// §304：`toolbox` —— 开战那一刻问"从 `count` 张随机**无色**牌里选一张加进手牌"。
+    CombatOpenOfferColorless {
+        /// 给几张候选（wiki: 3）。
+        count: u8,
+    },
     /// §303：`wing_boots` —— 地图上可以**忽略路径**、直接选下一层的任意房间，
     /// 一共 `uses` 次（wiki 两处来源都写 3，都没提"每幕重置" ⇒ 这是全局次数）。
     WingBoots {
@@ -2737,6 +2749,9 @@ impl RunState {
             | RelicEffect::EnemyHealthInFirstFights { .. }
             // §303：`wing_boots` 只改地图的 `reachable()`，不参与任何"拿到那一刻"的效果。
             | RelicEffect::WingBoots { .. }
+            // §304：两件"开战问一句"的遗物也都不在"拿到那一刻"里。
+            | RelicEffect::CombatOpenDiscardThenDraw
+            | RelicEffect::CombatOpenOfferColorless { .. }
             | RelicEffect::RestCardReward => {}
         }
         self.relics[slot] = id;
@@ -2921,6 +2936,9 @@ impl RunState {
                     | RelicEffect::PickupAddCards(_)
                     | RelicEffect::PickupTinyHouse
                     | RelicEffect::SingingBowl(_)
+                    // §304：两件"开战问一句"的遗物也不是回合末效果（问句在开战那一刻发）。
+                    | RelicEffect::CombatOpenDiscardThenDraw
+                    | RelicEffect::CombatOpenOfferColorless { .. }
                     | RelicEffect::RestCardReward,
                 ) => {}
                 None => {
@@ -3209,6 +3227,11 @@ impl RunState {
             "mummified_hand" => {
                 Some(RelicEffect::StartCombatStatus("standard.mummified_hand", 1))
             }
+            // §304：两件"开战问一句"的遗物（问句在 `rd-wasm` 发起，内核只认形态）。
+            "gambling_chip" => Some(RelicEffect::CombatOpenDiscardThenDraw),
+            "toolbox" => Some(RelicEffect::CombatOpenOfferColorless {
+                count: TOOLBOX_OFFER,
+            }),
             // §303：`wing_boots` —— 运行层的地图规则（没有内容状态）。
             "wing_boots" => Some(RelicEffect::WingBoots {
                 uses: WING_BOOTS_USES,
@@ -3288,6 +3311,32 @@ impl RunState {
             Some(RelicEffect::PotionEffectPercent(percent)) if percent > 0 => percent,
             _ => 100,
         }
+    }
+
+    /// §304：这一场开战时要问玩家哪些话 —— 位掩码（`0b01` = `gambling_chip`，
+    /// `0b10` = `toolbox`）与候选张数。
+    ///
+    /// 为什么是位掩码而不是 `Option<…>`：**两件可以同时在身上**，而内核一次只允许一个问题。
+    /// 顺序固定（低位先问），所以同一颗种子的问句序列是确定的。
+    #[must_use]
+    pub fn combat_open_choices(&self) -> (u8, u8) {
+        let mut mask = 0u8;
+        if matches!(
+            self.first_relic_effect_of(RelicEffect::CombatOpenDiscardThenDraw),
+            Some(RelicEffect::CombatOpenDiscardThenDraw)
+        ) {
+            mask |= COMBAT_OPEN_GAMBLING_CHIP;
+        }
+        let mut offer = 0u8;
+        if let Some(RelicEffect::CombatOpenOfferColorless { count }) =
+            self.first_relic_effect_of(RelicEffect::CombatOpenOfferColorless {
+                count: TOOLBOX_OFFER,
+            })
+        {
+            mask |= COMBAT_OPEN_TOOLBOX;
+            offer = count;
+        }
+        (mask, offer)
     }
 
     /// §303：`wing_boots` 还能飞几次（没有遗物时恒 0）。
@@ -3737,7 +3786,10 @@ impl RunState {
                 // §301：`neows_lament` 也不是这两个钩子上的事。
                 | RelicEffect::EnemyHealthInFirstFights { .. }
                 // §303：`wing_boots` 也不是这两个钩子上的事。
-                | RelicEffect::WingBoots { .. },
+                | RelicEffect::WingBoots { .. }
+                // §304：两件"开战问一句"的遗物同样不属于这两个钩子。
+                | RelicEffect::CombatOpenDiscardThenDraw
+                | RelicEffect::CombatOpenOfferColorless { .. },
                 )
                 | None => {}
             }
@@ -4378,7 +4430,10 @@ impl RunState {
                 // §301：`neows_lament` 也不是这两个钩子上的事。
                 | RelicEffect::EnemyHealthInFirstFights { .. }
                 // §303：`wing_boots` 也不是这两个钩子上的事。
-                | RelicEffect::WingBoots { .. },
+                | RelicEffect::WingBoots { .. }
+                // §304：两件"开战问一句"的遗物同样不属于这两个钩子。
+                | RelicEffect::CombatOpenDiscardThenDraw
+                | RelicEffect::CombatOpenOfferColorless { .. },
                 )
                 | None => {}
             }
@@ -12449,6 +12504,32 @@ mod tests {
             3,
             "the boss step is not a flight"
         );
+    }
+
+    /// §304：两件"开战问一句"的遗物 —— 位掩码与候选张数。
+    ///
+    /// 位掩码而不是 `Option`：两件**可以同时在身上**，而内核一次只允许一个问题挂着
+    /// （`begin_choice` 拒绝嵌套）。顺序由位的顺序定，所以同一颗种子的问句序列是确定的。
+    #[test]
+    fn the_combat_open_relics_are_a_bitmask_and_absent_without_the_relics() {
+        let deck = ["strike", "defend"];
+        let mut run = RunState::new(31, 80, 99, &deck).expect("a run");
+        assert_eq!(run.combat_open_choices(), (0, 0), "no relics, no questions");
+
+        run.push_relic("gambling_chip", &[]).expect("gambling_chip");
+        assert_eq!(
+            run.combat_open_choices(),
+            (COMBAT_OPEN_GAMBLING_CHIP, 0)
+        );
+
+        run.push_relic("toolbox", &[]).expect("toolbox");
+        let (mask, offer) = run.combat_open_choices();
+        assert_eq!(
+            mask,
+            COMBAT_OPEN_GAMBLING_CHIP | COMBAT_OPEN_TOOLBOX,
+            "both relics are owed"
+        );
+        assert_eq!(offer, 3, "toolbox offers three candidates (wiki)");
     }
 
 }

@@ -4147,6 +4147,8 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "strange_spoon",
                       # §303：`wing_boots`（运行层的地图规则）。
                       "wing_boots",
+                      # §304：两件"开战问一句"的遗物。
+                      "gambling_chip", "toolbox",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

@@ -2886,6 +2886,9 @@ pub extern "C" fn rd_env_choice_kind() -> i32 {
             // §254: `Wish` -- "pick one, and **it is played at once**". A new number because the
             // sentence is unlike every other one ("拿进手牌" vs "立刻打出").
             ChoiceThen::PlayChosen => 9,
+            // §304: `toolbox` —— "take it into your hand at its **printed** price". A new number
+            // because the page must not reuse `2:3`, whose sentence promises "免费".
+            ChoiceThen::ToHandPrinted => 10,
         },
         None => 0,
     }
@@ -3060,14 +3063,23 @@ pub extern "C" fn rd_env_choice_confirm() -> i32 {
         let Ok(offered) = session.state.choice_offered() else {
             return refuse_with_text("候选清单读不出来");
         };
+        // §304：只有**写价格**的变体才算差价。`PlayChosen`（Wish）/`ToHandPrinted`（toolbox）
+        // 不写价格，而"顺手算一下"会让 X 费牌在这里被拒（`priced_delta` 对它说不出口），
+        // 于是"选它就被拒绝"—— 那不是规则，是这一行多算了一次。
+        let takes_a_price = matches!(
+            choice.then,
+            ChoiceThen::ToHand | ChoiceThen::ToHandFree | ChoiceThen::ToDrawPileBottomFree
+        );
         let mut total = 0i32;
-        for index in &indices {
-            let Some(definition) = offered.get(*index) else {
-                return refuse_with_text(&std::format!("候选 {index} 不存在"));
-            };
-            match priced_delta(session, definition.as_str()) {
-                Ok(delta) => total = total.saturating_add(delta),
-                Err(message) => return refuse_with_text(&message),
+        if takes_a_price {
+            for index in &indices {
+                let Some(definition) = offered.get(*index) else {
+                    return refuse_with_text(&std::format!("候选 {index} 不存在"));
+                };
+                match priced_delta(session, definition.as_str()) {
+                    Ok(delta) => total = total.saturating_add(delta),
+                    Err(message) => return refuse_with_text(&message),
+                }
             }
         }
         return match session.state.resolve_choice(
@@ -3077,6 +3089,8 @@ pub extern "C" fn rd_env_choice_confirm() -> i32 {
             Ok(_) => {
                 session.choice_picks.clear();
                 session.reobserve_after_external_change();
+                // §304：一个问句答完之后接着问下一句（`gambling_chip` → `toolbox`）。
+                crate::run::after_choice_resolved();
                 0
             }
             Err(e) => refuse_with_text(&std::format!("选牌被拒：{e}")),
@@ -3145,6 +3159,8 @@ pub extern "C" fn rd_env_choice_confirm() -> i32 {
                 // the page says so, and a gate that silently accepted it would hide a reshuffle bug.
                 session.error = std::format!("弃了 {} 张只抽到 {}", done.picked, done.drawn);
             }
+            // §304：同上 —— 答完这一句再问下一句。
+            crate::run::after_choice_resolved();
             0
         }
         Err(e) => refuse_with_text(&std::format!("选牌被拒：{e}")),

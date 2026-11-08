@@ -67048,6 +67048,20 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Rare"
+    },
+    {
+      "Id": "gambling_chip",
+      "DisplayName": "Gambling Chip",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Rare"
+    },
+    {
+      "Id": "toolbox",
+      "DisplayName": "Toolbox",
+      "RunPrograms": null,
+      "CombatRules": null,
+      "Rarity": "Rare"
     }
   ],
   "Start": {

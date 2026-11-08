@@ -1811,6 +1811,16 @@ pub enum ChoiceThen {
         /// 副本落在哪个牌区（Dual Wield = 手牌，Nightmare = `SetAsidePile`）。
         into: CardZone,
     },
+    /// §304：**搬进手牌，价格一点不动**（`toolbox` 的三选一）。
+    ///
+    /// 与 [`Self::ToHand`] 的差别只有价格那一半，但那一半必须由**变体**表达：`ToHand` 承诺
+    /// "调用方会给一个每副本价格"，页面的文案也是从它推出来的（`2:3` = "它这次免费"）。
+    /// 让 `toolbox` 复用 `ToHand` 再传 0，行为对、**话是谎** —— 而屏幕说"免费"、内核收印刷价
+    /// 正是 §250 那条判据的镜像。
+    ///
+    /// `resolve_choice` 对任何非零 `cost_delta` 报 [`ChoiceError::DeltaNotApplicable`]：
+    /// "价格不动"是变体的一部分，不是调用方要记得的事。
+    ToHandPrinted,
     /// **原地升级**选中的牌（§227，Armaments）：定义 id 变成 `<id>+`，牌**不动**。
     ///
     /// 内核只守**机械**那半（"`+` 只能加一次、id 不能超长"）；"这张牌有没有 `+` 行"是内容的
@@ -1857,6 +1867,8 @@ impl ChoiceThen {
             Self::Exhaust => CardZone::ExhaustPile,
             Self::DiscardThenDraw => CardZone::DiscardPile,
             Self::ToHand => CardZone::Hand,
+            // §304：搬进手牌，不写价格。
+            Self::ToHandPrinted => CardZone::Hand,
             // 副本落在 `into`（**原件不搬**）；这个返回值的用途是给容量判据当"新卡落在哪儿"。
             Self::Copy { into, .. } => into,
             // 升级**不动牌**（`resolve_from_pile` 的 `Upgrade` 分支在搬牌之前就分流出去了），
@@ -5403,6 +5415,7 @@ impl CombatState {
             choice.then,
             ChoiceThen::ToHandFree | ChoiceThen::ToDrawPileBottomFree
         ) || (choice.then == ChoiceThen::ToHand && cost_delta != 0);
+        // §304：`ToHandPrinted` 刻意**不**在这里 —— 它一个字都不写（价格不动）。
         if writes_a_price {
             for &slot in &slots[..picked] {
                 let Some(card) = self.card(slot) else {

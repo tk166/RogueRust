@@ -35,8 +35,21 @@ const NODE_FIELD_EDGE1: i32 = 5;
 const NODE_FIELD_EDGE2: i32 = 6;
 const NODE_FIELD_REACHABLE: i32 = 7;
 
+/// §304：开战时欠着的问句（位掩码，`rd_run` 的 `COMBAT_OPEN_*`）。
+///
+/// 不是"一共几次"，是"**还没问出口**的那几位"：`ask_next_open_choice` 每问一个清一位，
+/// 而"已经有问句挂着"时它一位都不清（谁来问只有一个来源）。
+#[derive(Default)]
+struct OpenChoices {
+    mask: u8,
+    /// `toolbox` 给几张候选（`0` = 没有 `toolbox`）。
+    offer: u8,
+}
+
 struct RunSession {
     state: Box<RunState>,
+    /// §304：这一场开战时欠着的问句（见 [`OpenChoices`]）。
+    open_choices: OpenChoices,
     /// Human-readable reason for the last non-`Ok` return.
     error: String,
     /// Was this fight started from the **boss**? Same reason as `elite_fight`, and it also decides
@@ -881,6 +894,7 @@ pub extern "C" fn rd_run_start(seed: i32, ascension: i32) -> i32 {
         return -12;
     }
     *run_slot() = Some(RunSession {
+        open_choices: OpenChoices::default(),
         state,
         error: String::new(),
         elite_fight: false,
@@ -4448,6 +4462,18 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
                         .map_err(|e| std::format!("start_first_turn: {}", crate::detail(&e)))
                 })
                 .and_then(|()| apply_combat_bonus_block(bonus))
+                .and_then(|()| {
+                    // §304：两件"开战问一句"的遗物。时点是**第 1 回合已经开始之后** ——
+                    // `gambling_chip` 弃的是起手牌、`toolbox` 加的是起手牌之外的一张。
+                    let Some(session) = run_slot().as_mut() else {
+                        return Ok(());
+                    };
+                    let (mask, offer) = session.state.combat_open_choices();
+                    session.open_choices.mask = mask;
+                    session.open_choices.offer = offer;
+                    // 第一个问句现在就问；失败属于内容错误（池子凑不出候选等）。
+                    ask_next_open_choice().map(|_| ())
+                })
                 .err()
             }
             Err(message) => Some(message),
@@ -4472,6 +4498,162 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
         combat.reobserve_after_external_change();
     }
     0
+}
+
+/// §304：问**下一个**欠着的问句。`Ok(true)` = 真的问了（页面会看到待决）。
+///
+/// 三个前置条件，一个都不能省：
+/// 1. 有欠着的位（没有就是没事做）；
+/// 2. 内核**现在没有**问句挂着（`begin_choice` 会拒绝嵌套，而"先挂了别人的问题"这件事
+///    §261 的触发器和药水都做得到 —— 那时不清位，等它答完再来）；
+/// 3. 战斗会话在（`fail_begin` 之后没有会话）。
+pub(crate) fn ask_next_open_choice() -> Result<bool, std::string::String> {
+    let Some(run) = run_slot().as_mut() else {
+        return Ok(false);
+    };
+    if run.open_choices.mask == 0 {
+        return Ok(false);
+    }
+    let Some(combat) = crate::slot() else {
+        return Ok(false);
+    };
+    if combat.state.pending_choice().is_some() {
+        return Ok(false);
+    }
+    let Some(hero) = combat.hero_id() else {
+        return Ok(false);
+    };
+    if run.open_choices.mask & rd_run::state::COMBAT_OPEN_GAMBLING_CHIP != 0 {
+        run.open_choices.mask &= !rd_run::state::COMBAT_OPEN_GAMBLING_CHIP;
+        let hand = combat
+            .state
+            .card_zones(&hero)
+            .map_or(0, |zones| zones.count(rd_core::state::CardZone::Hand));
+        if hand > 0 {
+            let question = rd_core::state::PendingChoice {
+                chooser: hero,
+                source: rd_core::state::ChoiceSource::Hand,
+                // wiki: "discard **any number** of cards, then draw that many" —— 0 是合法答案，
+                // 所以这个问句永远可以"什么都不选"地答完（与 Gambler's Brew 逐字同形）。
+                min: 0,
+                max: hand.min(u8::MAX as usize) as u8,
+                then: rd_core::state::ChoiceThen::DiscardThenDraw,
+                offered: rd_core::state::Bounded::new(),
+                candidates: rd_core::state::Bounded::new(),
+            };
+            if let Err(e) = combat.state.begin_choice(question) {
+                return Err(std::format!("`gambling_chip` 的问句问不出口：{e}"));
+            }
+            combat.choice_picks.clear();
+            combat.reobserve_after_external_change();
+            return Ok(true);
+        }
+    }
+    if run.open_choices.mask & rd_run::state::COMBAT_OPEN_TOOLBOX != 0 {
+        let count = usize::from(run.open_choices.offer);
+        run.open_choices.mask &= !rd_run::state::COMBAT_OPEN_TOOLBOX;
+        if count == 0 {
+            return Ok(false);
+        }
+        let pool = colorless_card_pool()?;
+        if pool.len() < count {
+            return Err(std::format!(
+                "无色牌只有 {} 张，凑不出 {count} 张候选",
+                pool.len()
+            ));
+        }
+        let Some(run) = run_slot().as_mut() else {
+            return Ok(false);
+        };
+        let mut picked = [rd_run::state::RunId::EMPTY; 3];
+        let drawn = run
+            .state
+            .draw_distinct(&pool, count.min(picked.len()), &mut picked)
+            .map_err(|e| std::format!("从无色牌池抽候选失败：{e:?}"))?;
+        if drawn < count {
+            return Err("抽不出足够的候选牌".to_string());
+        }
+        let Some(combat) = crate::slot() else {
+            return Ok(false);
+        };
+        let mut offered = rd_core::state::Bounded::new();
+        for id in &picked[..drawn] {
+            let definition = rd_core::state::CardDefinitionId::new(id.as_str())
+                .map_err(|_| std::format!("候选牌的 id 不合法：{}", id.as_str()))?;
+            offered
+                .push(definition, rd_core::state::Container::ChoiceOptions)
+                .map_err(|_| "候选表装不下".to_string())?;
+        }
+        let question = rd_core::state::PendingChoice {
+            chooser: hero,
+            source: rd_core::state::ChoiceSource::Offered,
+            min: 1,
+            max: 1,
+            // §304：`ToHandPrinted` —— **按印刷价格**进手牌（与药水的 `ToHand` 不同）。
+            then: rd_core::state::ChoiceThen::ToHandPrinted,
+            offered,
+            candidates: rd_core::state::Bounded::new(),
+        };
+        if let Err(e) = combat.state.begin_choice(question) {
+            return Err(std::format!("`toolbox` 的问句问不出口：{e}"));
+        }
+        combat.choice_picks.clear();
+        combat.reobserve_after_external_change();
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+/// §304：**内容里的无色牌池**（`CARD.Tags` 含 `colorless`、跳过 `+` 行）。
+///
+/// 与 `choice_offered` 那个药水池同一套规矩，只有一条不同：**不排除 X 费牌**。
+/// 药水要给"本回合 0 费"，那要靠每副本绝对价，X 费牌对它不可见（§246）；
+/// `toolbox` 一个字都不写价格，所以 X 费牌在这里是合法的候选。
+fn colorless_card_pool() -> Result<Vec<rd_run::state::PoolCard<'static>>, std::string::String> {
+    let image = content();
+    let mut pool: Vec<rd_run::state::PoolCard<'static>> = Vec::new();
+    let mut index = 0u32;
+    while let Some(row) = image.card(index) {
+        index += 1;
+        let Some(id) = image.string(row.id()) else {
+            continue;
+        };
+        if id.ends_with('+') {
+            continue;
+        }
+        if image.card_has_tag(id, "colorless") != Some(true) {
+            continue;
+        }
+        let Some(rarity) =
+            rd_run::state::Rarity::from_name(image.string(row.rarity()).unwrap_or(""))
+        else {
+            return Err(std::format!("`{id}` 的稀有度认不出来"));
+        };
+        pool.push(rd_run::state::PoolCard {
+            id,
+            rarity,
+            kind: rd_run::state::CardKind::Other,
+            upgraded: None,
+        });
+    }
+    Ok(pool)
+}
+
+/// §304：一个问句答完之后接着问下一句（`rd_env_choice_confirm` 的两条成功分支都走这里）。
+///
+/// 失败**不**回滚已经答完的那一句：那句是真的答完了，下一句问不出口是一条内容/容量错误，
+/// 记进错误缓冲（页面会显示），而不是把玩家的选择吞掉。
+pub(crate) fn after_choice_resolved() {
+    match ask_next_open_choice() {
+        Ok(true) => {}
+        Ok(false) => {}
+        Err(message) => {
+            if let Some(combat) = crate::slot().as_mut() {
+                combat.error.clear();
+                combat.error.push_str(&message);
+            }
+        }
+    }
 }
 
 /// §170 `P1-1`: 一次失败的 `fight_begin` 必须**什么都没改**。
@@ -5441,6 +5623,7 @@ mod tests {
         let mut state = state;
         state.adjust_health(health - max_health);
         *run_slot() = Some(RunSession {
+        open_choices: OpenChoices::default(),
             state: Box::new(state),
             error: String::new(),
             elite_fight: false,
@@ -7994,6 +8177,7 @@ mod tests {
             assert_eq!(state.ascension(), level, "the run knows its level");
             state.begin_event("golden_idol", "golden_idol").expect("open the event");
             *run_slot() = Some(RunSession {
+        open_choices: OpenChoices::default(),
                 state: Box::new(state),
                 error: String::new(),
                 elite_fight: false,
@@ -8091,6 +8275,7 @@ mod tests {
             )
             .expect("a run");
             *run_slot() = Some(RunSession {
+        open_choices: OpenChoices::default(),
                 state: Box::new(state),
                 error: String::new(),
                 elite_fight: false,
@@ -8134,6 +8319,7 @@ mod tests {
             "the event opens"
         );
         *run_slot() = Some(RunSession {
+        open_choices: OpenChoices::default(),
             state: Box::new(state),
             error: String::new(),
             elite_fight: false,
@@ -10958,6 +11144,181 @@ mod tests {
             }
         }
         assert_eq!(fights, 4, "the map walk reached four fights");
+    }
+
+    /// §304 判据用的两个小工具：四个牌区的手牌/弃牌/抽牌数，以及一张候选牌的 id。
+    fn pile_counts() -> (usize, usize, usize) {
+        let session = crate::slot().as_ref().expect("a fight");
+        let hero = session.hero_id().expect("a hero");
+        let zones = session.state.card_zones(&hero).expect("zones");
+        (
+            zones.count(rd_core::state::CardZone::Hand),
+            zones.count(rd_core::state::CardZone::DiscardPile),
+            zones.count(rd_core::state::CardZone::DrawPile),
+        )
+    }
+
+    fn choice_option_title(index: i32) -> std::string::String {
+        let session = crate::slot().as_ref().expect("a fight");
+        let offered = session.state.choice_offered().expect("an offered question");
+        offered
+            .get(index as usize)
+            .map(|definition| std::string::String::from(definition.as_str()))
+            .expect("the candidate")
+    }
+
+    /// §304：`gambling_chip` —— 开战那一刻问"弃任意张，然后抽同样多张"。
+    ///
+    /// 判据要的三件事：① 问句**自己**出现（不是页面猜的）；② `min = 0`（wiki 的 "any number"
+    /// 与 Gambler's Brew 同一句话，所以"取消"永远可用）；③ 答完之后**手牌数不变**、弃牌堆 +2、
+    /// 抽牌堆 -2（弃 2 抽 2）。
+    #[test]
+    fn gambling_chip_asks_at_combat_start_and_discards_then_draws() {
+        // ⚠️ 牌组要**够大**：起手 5 张 + 弃 2 再抽 2，若抽牌堆不够就会把刚弃的洗回去
+        // （第一版用 5 张牌组，弃牌堆变成 0 —— 那不是 bug，是洗牌）。
+        let deck = [
+            "strike", "strike", "strike", "defend", "defend", "defend", "bash", "bash",
+            "strike", "defend",
+        ];
+        test_run(41, 80, 80, &deck);
+        run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .push_relic("gambling_chip", &[])
+            .expect("gambling_chip");
+        assert_eq!(rd_run_step(0), 0, "walk onto a node");
+        assert_eq!(rd_run_fight_begin(), 0, "a fight begins");
+
+        assert_eq!(crate::rd_env_choice_pending(), 1, "the relic asks its question");
+        assert_eq!(crate::rd_env_choice_source(), 1, "from the hand");
+        assert_eq!(crate::rd_env_choice_kind(), 2, "discard then draw (Gambler's Brew's shape)");
+        assert_eq!(crate::rd_env_choice_min(), 0, "any number, including zero");
+        let max = crate::rd_env_choice_max();
+        let hand = crate::rd_env_choice_count();
+        assert_eq!(max as i32, hand, "every card in hand is on offer");
+
+        let (hand_before, discard_before, draw_before) = pile_counts();
+        // 选前两张，确认。
+        assert_eq!(crate::rd_env_choice_pick(0, 1), 0);
+        assert_eq!(crate::rd_env_choice_pick(1, 1), 0);
+        assert_eq!(crate::rd_env_choice_confirm(), 0, "{}", run_error_text());
+        assert_eq!(crate::rd_env_choice_pending(), 0, "answered");
+
+        let (hand_after, discard_after, draw_after) = pile_counts();
+        assert_eq!(hand_after, hand_before, "discarded two, drew two");
+        assert_eq!(discard_after, discard_before + 2, "two went to the discard pile");
+        assert_eq!(draw_after, draw_before - 2, "two came off the draw pile");
+    }
+
+    /// §304：`toolbox` —— 三选一拿进手牌，**按它的印刷价格**（不是免费）。
+    ///
+    /// 后半句是这条判据的重点：如果实现误用 `ChoiceThen::ToHand` 再传 `delta = 0`，行为"看起来"
+    /// 一样，但页面的文案会承诺免费；反过来传 `-printed` 就会真的免费。这里直接读那张新牌的
+    /// `card_cost_delta` 标记（"没有标记" = 价格不动）。
+    #[test]
+    fn toolbox_offers_three_colorless_cards_and_charges_the_printed_price() {
+        let deck = ["strike", "strike", "defend", "defend", "bash"];
+        test_run(43, 80, 80, &deck);
+        run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .push_relic("toolbox", &[])
+            .expect("toolbox");
+        assert_eq!(rd_run_step(0), 0, "walk onto a node");
+        assert_eq!(rd_run_fight_begin(), 0, "a fight begins");
+
+        assert_eq!(crate::rd_env_choice_pending(), 1, "the relic asks its question");
+        assert_eq!(crate::rd_env_choice_source(), 2, "three offered candidates");
+        assert_eq!(crate::rd_env_choice_kind(), 10, "`ToHandPrinted`: into hand, price untouched");
+        assert_eq!(crate::rd_env_choice_min(), 1);
+        assert_eq!(crate::rd_env_choice_max(), 1);
+        assert_eq!(crate::rd_env_choice_count(), 3, "three candidates (wiki)");
+        // 每一张候选都得是**无色**牌（内容是 `CARD.Tags` 的事，这里用同一个来源核对）。
+        let image = content();
+        for index in 0..crate::rd_env_choice_count() {
+            let id = choice_option_title(index);
+            assert!(
+                image.card_has_tag(&id, "colorless") == Some(true),
+                "`{id}` is not a colorless card"
+            );
+        }
+
+        let hand_before = pile_counts().0;
+        assert_eq!(crate::rd_env_choice_pick(0, 1), 0);
+        assert_eq!(crate::rd_env_choice_confirm(), 0, "{}", run_error_text());
+        assert_eq!(crate::rd_env_choice_pending(), 0, "answered");
+
+        let session = crate::slot().as_ref().expect("a fight");
+        let hero = session.hero_id().expect("a hero");
+        assert_eq!(
+            pile_counts().0,
+            hand_before + 1,
+            "the chosen card went into the hand"
+        );
+        // 挑出那张新牌：它不在开局牌组里（牌组只有 strike/defend/bash）。
+        let mut priced = 0;
+        let mut found = false;
+        for index in 0..session
+            .state
+            .card_zones(&hero)
+            .map_or(0, |zones| zones.count(rd_core::state::CardZone::Hand))
+        {
+            let Some(slot) = session
+                .state
+                .card_zones(&hero)
+                .and_then(|zones| zones.slot_at(rd_core::state::CardZone::Hand, index))
+            else {
+                continue;
+            };
+            let Some(card) = session.state.card(slot) else {
+                continue;
+            };
+            let definition = card.definition_id.as_str();
+            if definition == "strike" || definition == "defend" || definition == "bash" {
+                continue;
+            }
+            found = true;
+            for counter in card.mark_counters() {
+                if counter.key.as_str() == "standard.card_cost_delta" && counter.value != 0 {
+                    priced += 1;
+                }
+                if counter.key.as_str() == "standard.card_cost_override" {
+                    priced += 1;
+                }
+            }
+        }
+        assert!(found, "a colorless card is in the hand");
+        assert_eq!(priced, 0, "toolbox must not write a price (it is not free)");
+    }
+
+    /// §304：两件同时在身上 —— 先问 `gambling_chip`，答完之后 `toolbox` 的问句才出现。
+    ///
+    /// 内核的 `begin_choice` 拒绝嵌套，所以"两个问句"只能靠**答完一个再问下一个**。这条判据
+    /// 钉住的是那条链：`crate::rd_env_choice_confirm` 成功后必须接着问。
+    #[test]
+    fn both_open_relics_ask_one_question_at_a_time() {
+        let deck = ["strike", "strike", "defend", "defend", "bash"];
+        test_run(47, 80, 80, &deck);
+        {
+            let run = run_slot().as_mut().expect("a run");
+            run.state.push_relic("gambling_chip", &[]).expect("chip");
+            run.state.push_relic("toolbox", &[]).expect("toolbox");
+        }
+        assert_eq!(rd_run_step(0), 0, "walk onto a node");
+        assert_eq!(rd_run_fight_begin(), 0, "a fight begins");
+
+        assert_eq!(crate::rd_env_choice_pending(), 1);
+        assert_eq!(crate::rd_env_choice_source(), 1, "chip first (it is the low bit)");
+        assert_eq!(crate::rd_env_choice_confirm(), 0, "answer with nothing: {}", run_error_text());
+
+        assert_eq!(crate::rd_env_choice_pending(), 1, "the second question follows");
+        assert_eq!(crate::rd_env_choice_source(), 2, "and it is `toolbox`");
+        assert_eq!(crate::rd_env_choice_kind(), 10);
+        assert_eq!(crate::rd_env_choice_pick(1, 1), 0);
+        assert_eq!(crate::rd_env_choice_confirm(), 0, "{}", run_error_text());
+        assert_eq!(crate::rd_env_choice_pending(), 0, "both answered");
     }
 
 }
