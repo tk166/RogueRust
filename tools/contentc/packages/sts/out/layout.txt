@@ -154,21 +154,22 @@
 168  1  1   4 OBJ _obj(Id)                                                     : Id:STR
 169  3  3   8 OBJ _obj(Id,Intent,Program)                                      : Id:STR Intent:TERM Program:TERM
 170  3  3   8 OBJ _obj(Id,Kind,Op)                                             : Id:STR Kind:STR Op:STR
-171  4  4  12 OBJ _obj(Id,MaxNodeDepth,MaxProgramSteps,Root)                   : Id:TERM MaxNodeDepth:INT MaxProgramSteps:INT Root:TERM
-172  2  2   8 OBJ _obj(Id,MinFloor)                                            : Id:STR MinFloor:INT
-173  3  4  12 OBJ _obj(Id,Options,TextKey)                                     : Id:STR Options:TERMLIST TextKey:STR
-174  2  2   8 OBJ _obj(Id,Root)                                                : Id:STR(Wrap) Root:TERM
-175  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
-176  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
-177  3  3   8 OBJ _obj(Key,Max,Min)                                            : Key:STR Max:INT Min:INT
-178  2  2   8 OBJ _obj(Key,Value)                                              : Key:STR Value:INT
-179  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
-180  2  2   8 OBJ _obj(Next,Weight)                                            : Next:STR Weight:INT
-181  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
-182  3  3   8 OBJ _obj(Percent,Repeating,SurvivingHealth)                      : Percent:INT Repeating:BOOL SurvivingHealth:INT
-183  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
-184  1  1   4 OBJ _obj(TurnEndInHand)                                          : TurnEndInHand:TERM
-185  1  1   4 OBJ _obj(gold)                                                   : gold:INT
+171  2  2   8 OBJ _obj(Id,MaxFloor)                                            : Id:STR MaxFloor:INT
+172  4  4  12 OBJ _obj(Id,MaxNodeDepth,MaxProgramSteps,Root)                   : Id:TERM MaxNodeDepth:INT MaxProgramSteps:INT Root:TERM
+173  2  2   8 OBJ _obj(Id,MinFloor)                                            : Id:STR MinFloor:INT
+174  3  4  12 OBJ _obj(Id,Options,TextKey)                                     : Id:STR Options:TERMLIST TextKey:STR
+175  2  2   8 OBJ _obj(Id,Root)                                                : Id:STR(Wrap) Root:TERM
+176  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
+177  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
+178  3  3   8 OBJ _obj(Key,Max,Min)                                            : Key:STR Max:INT Min:INT
+179  2  2   8 OBJ _obj(Key,Value)                                              : Key:STR Value:INT
+180  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
+181  2  2   8 OBJ _obj(Next,Weight)                                            : Next:STR Weight:INT
+182  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
+183  3  3   8 OBJ _obj(Percent,Repeating,SurvivingHealth)                      : Percent:INT Repeating:BOOL SurvivingHealth:INT
+184  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
+185  1  1   4 OBJ _obj(TurnEndInHand)                                          : TurnEndInHand:TERM
+186  1  1   4 OBJ _obj(gold)                                                   : gold:INT
 
 # reserved opcodes:
   0 reserved : (no fields)

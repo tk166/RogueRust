@@ -3225,7 +3225,10 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         // §288：同理 —— 落点在战斗结算里（`The Colosseum` 的定数奖励）。
         | EventEffect::FightGoldSet(_)
         | EventEffect::FightRelicRarity(_)
-        | EventEffect::FightExtraRelic(_) => -1,
+        | EventEffect::FightExtraRelic(_)
+        // §289：指名遗物与独立药水概率，落点同样在战斗结算里。
+        | EventEffect::FightRelic
+        | EventEffect::FightPotionChance(_) => -1,
     }
 }
 
@@ -3248,6 +3251,8 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         EventEffect::FightGoldBonus(n) => n,
         // §288：定数金币同理。
         EventEffect::FightGoldSet(n) => n,
+        // §289：独立药水概率的"数量"就是那个百分比。
+        EventEffect::FightPotionChance(pct) => i32::from(pct),
         EventEffect::Nothing
         | EventEffect::RemoveCard
         | EventEffect::UpgradeCard
@@ -3255,6 +3260,7 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::FightNoRelic
         | EventEffect::FightRelicRarity(_)
         | EventEffect::FightExtraRelic(_)
+        | EventEffect::FightRelic
         | EventEffect::GainCurse
         | EventEffect::GainRelic
         | EventEffect::LoseRelic

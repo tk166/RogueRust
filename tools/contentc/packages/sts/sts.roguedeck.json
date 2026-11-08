@@ -66080,7 +66080,8 @@
         "Id": "the_joust"
       },
       {
-        "Id": "the_colosseum"
+        "Id": "the_colosseum",
+        "MaxFloor": 7
       }
     ],
     "Events3": [
@@ -68374,6 +68375,10 @@
             },
             {
               "Effect": "fight_extra_relic:uncommon",
+              "Amount": 0
+            },
+            {
+              "Effect": "fight_potion_chance:40",
               "Amount": 0
             }
           ],

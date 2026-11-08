@@ -3147,6 +3147,8 @@ impl<'a> Content<'a> {
             let mut offset = 0usize;
             let mut id = "";
             let mut min_floor = 0i32;
+            // §289：上界（`The Colosseum` 只在第二幕上半场）。缺席 = 没有上界。
+            let mut max_floor = 0i32;
             for slot in 0..element_opcode.nfields() {
                 let sub = element_opcode.field(slot)?;
                 let sub_width = usize::from(sub.slots()?);
@@ -3157,16 +3159,13 @@ impl<'a> Content<'a> {
                     id = self.string(element_term.slot(offset)?)?;
                 } else if sub_name == "MinFloor" && sub.kind() == F_INT {
                     // 槽编码与 `Row::cell` 一样：`ABSENT_INT` / `NULL_INT` 都是"没有"。
-                    let raw = element_term.slot(offset)?;
-                    min_floor = if raw == ABSENT_INT || raw == NULL_INT {
-                        0
-                    } else {
-                        i32::from(raw as i16)
-                    };
+                    min_floor = slot_int(element_term.slot(offset)?);
+                } else if sub_name == "MaxFloor" && sub.kind() == F_INT {
+                    max_floor = slot_int(element_term.slot(offset)?);
                 }
                 offset = offset.checked_add(sub_width)?;
             }
-            if id.is_empty() || floor < min_floor {
+            if id.is_empty() || floor < min_floor || (max_floor != 0 && floor > max_floor) {
                 continue;
             }
             if count == MAX_POOL_IDS {
@@ -3901,6 +3900,18 @@ fn deck_root<'a>(
 /// ⚠️ 空列表在镜像里是**个数 = 哨兵**（`LIST_ABSENT` / `LIST_NULL`），不是 `count == 0`：
 /// 与 [`EnemySpec::list`] 同一条读法（那边 149 条记录里 146 条是哨兵）。两种拼法都收，
 /// 因为参考的"空 = 没声明"必须两种都能表达，否则一份合法内容会被当成形态坏了。
+/// §289：`F_INT` 槽 → 数字（`ABSENT_INT` / `NULL_INT` 都是"没有" ⇒ `0`）。
+///
+/// 抽出来是因为 `MinFloor` 与 `MaxFloor` 两条都要它 —— 抄两份就会有一条把 `NULL_INT`
+/// 当成 -32767，而"上界 = -32767"会让那个事件永远不出现（静默）。
+fn slot_int(raw: u16) -> i32 {
+    if raw == ABSENT_INT || raw == NULL_INT {
+        0
+    } else {
+        i32::from(raw as i16)
+    }
+}
+
 fn slot_list<'a>(
     content: &'a Content<'a>,
     term: &Term<'a>,
@@ -5501,6 +5512,9 @@ mod tests {
                 // 的定数奖励）。词法的检查交给内容门，这里只回答"这个镜像里有没有它"。
                 || prefix(effect, "fight_relic_rarity:")
                 || prefix(effect, "fight_extra_relic:")
+                // §289：指名遗物与独立药水概率。
+                || prefix(effect, "fight_relic:")
+                || prefix(effect, "fight_potion_chance:")
         };
         for node in &walk {
             let step = content.event_step(*node).expect("step");
@@ -5763,6 +5777,33 @@ mod tests {
             for id in &at_six {
                 assert!(all.contains(id), "{id} must also be on the unfiltered list");
             }
+        }
+
+        // §289：`The Colosseum` 只在**上半场**（`MaxFloor`）—— 两侧都要验。
+        {
+            let at_3 = content.event_pool_at("Events2", 3).expect("act-2 pool");
+            let ids: std::vec::Vec<&str> =
+                at_3.iter().filter(|id| !id.is_empty()).copied().collect();
+            assert!(
+                ids.contains(&"the_colosseum"),
+                "floor 3 is the top half: {ids:?}"
+            );
+            let at_9 = content.event_pool_at("Events2", 9).expect("act-2 pool");
+            let ids: std::vec::Vec<&str> =
+                at_9.iter().filter(|id| !id.is_empty()).copied().collect();
+            assert!(
+                !ids.contains(&"the_colosseum"),
+                "floor 9 is the bottom half: {ids:?}"
+            );
+            // 只有它被上界筛掉（其余事件在两层都在）。
+            let all: std::vec::Vec<&str> = content
+                .event_pool("Events2")
+                .expect("the whole act-2 pool")
+                .iter()
+                .filter(|id| !id.is_empty())
+                .copied()
+                .collect();
+            assert_eq!(all.len(), ids.len() + 1, "exactly one event has an upper bound");
         }
 
         // ★ 没有孤儿段：`EVND` 里每一行都要被某个 `EV.Entry` 或某个 `Next` 指到。

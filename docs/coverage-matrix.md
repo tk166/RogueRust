@@ -46,7 +46,7 @@
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
 | **合计** | 823 | 597 | 216 | 10 | 465 | 144 | 83 | 0 |
 
-扫描到的具名测试：**1095** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
+扫描到的具名测试：**1097** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
 
 事件：池里有 **21** 个位次、**18** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -510,7 +510,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+139) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+141) | — | wiki:wiki_cards/strike.txt | — | §72.5/§221/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+11) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -761,7 +761,7 @@
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
 | akabeko | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
-| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+10) | — | — | — | the_same_state_hashes_the_same_and_a_change_moves_it |
+| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+12) | — | — | — | the_same_state_hashes_the_same_and_a_change_moves_it |
 | ancient_tea_set | yes | the_node_relics_pay_on_the_right_kind_of_room, the_tea_set_charge_is_spent_by_the_next_fight | — | — | — | §271/the_node_relics_pay_on_the_right_kind_of_room |
 | art_of_war | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | astrolabe | yes | the_pickup_picks_do_not_take_over_the_screen | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
@@ -841,7 +841,7 @@
 | prayer_wheel | yes | the_reward_layer_relics_change_the_payout | — | — | — | §269/the_reward_layer_relics_change_the_payout |
 | preserved_insect | yes | the_kind_gated_relics_only_fire_in_their_own_kinds | — | — | — | §268/§269/the_kind_gated_relics_only_fire_in_their_own_kinds |
 | question_card | yes | the_reward_layer_relics_change_the_payout | — | — | — | §269/the_reward_layer_relics_change_the_payout |
-| red_mask | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
+| red_mask | yes | the_zero_infrastructure_batch_wires_the_right_carrier, a_named_relic_is_paid_exactly_or_not_at_all | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | red_skull | yes | the_conditional_modifier_relics_wire_their_own_carrier | — | — | — | §265/§266/the_conditional_modifier_relics_wire_their_own_carrier |
 | regal_pillow | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §156 |
 | ring_of_the_serpent | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
@@ -898,7 +898,7 @@
 | explosive_potion | yes | the_potions_are_readable, the_new_potion_shapes_all_do_something | — | — | — | the_potions_are_readable |
 | fairy_in_a_bottle | yes | the_potions_are_readable | — | — | — | the_potions_are_readable |
 | fear_potion | yes | the_potions_are_readable | — | — | — | the_potions_are_readable |
-| fire_potion | yes | the_potions_are_readable, the_same_state_hashes_the_same_and_a_change_moves_it …(+11) | — | — | — | the_potions_are_readable |
+| fire_potion | yes | the_potions_are_readable, the_same_state_hashes_the_same_and_a_change_moves_it …(+12) | — | — | — | the_potions_are_readable |
 | flex_potion | yes | the_potions_are_readable, flex_potion_gives_strength_and_takes_it_back | — | — | — | the_potions_are_readable |
 | fruit_juice | yes | the_potions_are_readable, fruit_juice_works_outside_a_fight | — | — | — | the_potions_are_readable |
 | gamblers_brew | yes | the_potions_are_readable, every_potion_in_the_table_classifies_as_known …(+1) | — | — | — | the_potions_are_readable |

@@ -4587,6 +4587,21 @@ def check_event_vocabulary(doc):
                     if kind != "heal_pct" and entry.get("Amount") not in (0, None):
                         fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
                     continue
+                if kind in ("fight_relic", "fight_potion_chance"):
+                    # §289：指名遗物（载荷是遗物 id）与独立药水概率（0..=100）。
+                    if kind == "fight_relic":
+                        if payload not in relics:
+                            fail(where, "fight_relic:%s 不在 Relics 表里" % payload)
+                        elif payload not in IMPLEMENTED_RELICS:
+                            fail(where, "fight_relic:%s 的效果内核没实现" % payload)
+                        counts["relic"] += 1
+                    else:
+                        if not payload or not payload.isdigit() or int(payload) > 100:
+                            fail(where, "fight_potion_chance 需要 0..=100 的整数，got %r"
+                                 % (payload,))
+                        if entry.get("Amount") not in (0, None):
+                            fail(where, "fight_potion_chance 的 Amount 必须是 0（数字在词里）")
+                    continue
                 if kind in ("fight_gold_set", "fight_relic_rarity", "fight_extra_relic"):
                     # §288：`The Colosseum` 的定数奖励。
                     if kind == "fight_gold_set":
@@ -4841,6 +4856,19 @@ def check_event_vocabulary(doc):
         for row in rows:
             if row.get("Id") not in known:
                 fail("EventTables." + name, "%r is not in UnknownRooms" % (row.get("Id"),))
+            # §288/§289：**楼层门槛**（缺席 = 无界）。层号是**本幕内**的行号（`1..=ROWS`），
+            # 所以"上界超过地图长度"是内容错误：那条事件永远出不来，而屏幕上一切正常。
+            low = row.get("MinFloor", 0)
+            high = row.get("MaxFloor", 0)
+            where = "EventTables.%s.%s" % (name, row.get("Id"))
+            for key, value in (("MinFloor", low), ("MaxFloor", high)):
+                if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                    fail(where + "." + key, "must be a non-negative int, got %r" % (value,))
+            if high and high > 15:
+                fail(where + ".MaxFloor", "%d is past the act's 15 rows (that event never "
+                                          "appears)" % high)
+            if high and low and high < low:
+                fail(where, "MaxFloor %d is below MinFloor %d" % (high, low))
     ok("event pools", "act1=%d act2=%d act3=%d"
        % (len(tables.get("Events") or []), len(tables.get("Events2") or []),
           len(tables.get("Events3") or [])))

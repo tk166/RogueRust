@@ -98,6 +98,10 @@ pub const BASE_POTION_SLOTS: u8 = 3;
 /// modelled because there is one act).
 /// The wiki's **starting** potion drop chance (§157). It moves: -10 after a drop, +10 after a
 /// miss, reset at the start of each act. A flat 40% was wrong in the way that matters over a run.
+/// §289：`fight_potion_chance` 的"没有覆盖"。`0..=100` 都是合法概率，所以哨兵必须在这一段之外
+/// —— `255` 让"0%"（永远不掉）与"没设"两件事都说得清。
+pub const NO_POTION_OVERRIDE: u8 = 255;
+
 pub const POTION_DROP_START: i32 = 40;
 
 /// How much the chance moves per fight (`+10` on a miss, `-10` on a drop).
@@ -741,6 +745,9 @@ pub const START_OFFERS: [StartOffer; 8] = [
 /// | `fight_gold_set:<n>` | the **next** fight pays exactly `n` gold (`The Colosseum`'s 100) |
 /// | `fight_relic_rarity:<rarity>` | the **next** fight's relic is locked to that rarity |
 /// | `fight_extra_relic:<rarity>` | the **next** fight pays a **second** relic of that rarity |
+/// | `fight_relic:<relic id>` | the **next** fight pays **exactly** that relic |
+/// | `fight_potion_chance:<pct>` | the **next** fight rolls its potion at `pct`, independent of the
+///   act's moving chance (which it also leaves untouched) |
 /// | `relic_random` | grant a **random** relic (Scrap Ooze). 运行层只认 `relic:<id>` —— 抽样由
 ///   **有内容池的那一层**（`rd-wasm`）先解析成具体 id，理由同 `curse:` 的载荷 |
 /// | `heal_pct:<n>` | heal `floor(max HP × n / 100)` HP (the Cleric's *Heal*) |
@@ -789,6 +796,11 @@ pub enum EventEffect {
     FightRelicRarity(Rarity),
     /// §288：**下一场战斗**再给一件该稀有度的遗物（`black_star` 走的是同一条"直接进包"的路）。
     FightExtraRelic(Rarity),
+    /// §289：**下一场战斗**那件遗物**指名**（`fight_relic:<id>`）。`Masked Bandits` 的
+    /// `Red Mask` 就是"就是这一件"，不是"随便一件稀有遗物"。
+    FightRelic,
+    /// §289：**下一场战斗**的药水概率**独立**于那一幕的移动概率（`fight_potion_chance:<pct>`）。
+    FightPotionChance(u8),
     /// §285：**随机一件遗物**（`relic_random`）。运行层**不**抽 —— 它没有遗物池。
     /// 由 `rd-wasm` 在调用前解析成 `GainRelic` + 具体 id（与 `curse:`/`relic:` 的载荷同一条路）。
     GainRandomRelic,
@@ -980,6 +992,13 @@ impl EventEffect {
                     },
                     // §285：`gold_random:20:50` —— 两端都是**整数金币**（区间不是百分比）。
                     // §288：稀有度写在词里（`fight_relic_rarity:rare`）。
+                    // §289：`fight_relic:<id>` —— 载荷是**遗物 id**（内容门查它在不在 `REL` 表里）。
+                    "fight_relic" => (Self::FightRelic, Some(payload)),
+                    // §289：`fight_potion_chance:<pct>` —— 0..=100 的整数。
+                    "fight_potion_chance" => match payload.parse::<u8>() {
+                        Ok(pct) if pct <= 100 => (Self::FightPotionChance(pct), None),
+                        _ => return None,
+                    },
                     "fight_relic_rarity" | "fight_extra_relic" => {
                         let rarity = match payload {
                             "common" => Rarity::Common,
@@ -1665,6 +1684,10 @@ pub struct RunState {
     fight_extra_relic: u8,
     /// §288：战斗之后要**回到的事件段**（空 = 战斗结算整个房间，§286 的老路）。
     event_resume: RunId,
+    /// §289：下一场战斗那件遗物的**指名**（空 = 按稀有度/权重抽）。
+    fight_relic: RunId,
+    /// §289：下一场战斗的**独立药水概率**（`255` = 不覆盖，所以 0..=100 都能表达）。
+    fight_potion_chance: u8,
     /// §278：这一段选完之后要去的那一段，**在等一次牌组编辑的时候**先记在这里。
     ///
     /// 与 `event_follow` 是两件事：一个是"欠哪次编辑"，一个是"编辑完了去哪儿"。
@@ -1801,6 +1824,8 @@ impl RunState {
             fight_relic_rarity: 0,
             fight_extra_relic: 0,
             event_resume: RunId::EMPTY,
+            fight_relic: RunId::EMPTY,
+            fight_potion_chance: NO_POTION_OVERRIDE,
             event_next: RunId::EMPTY,
             last_encounter: RunId::EMPTY,
             // Rolled by `offer_start_choice`; until then the pair is not a choice anyone can take.
@@ -4783,6 +4808,8 @@ impl RunState {
         self.fight_gold_set = 0;
         self.fight_relic_rarity = 0;
         self.fight_extra_relic = 0;
+        self.fight_relic = RunId::EMPTY;
+        self.fight_potion_chance = NO_POTION_OVERRIDE;
         self.event = id;
         self.event_step = entry;
         self.event_next = RunId::EMPTY;
@@ -5121,6 +5148,18 @@ impl RunState {
             EventEffect::FightExtraRelic(rarity) => {
                 self.fight_extra_relic = rarity_code(rarity);
             }
+            EventEffect::FightRelic => {
+                // 载荷是**内容里的遗物 id**；`relic:` 那一条同样在这里校验它（`apply_event_effect`
+                // 的 `GainRelic` 分支会查池子）。这里只把名字记下来，验在 `roll_reward` 里
+                // —— 「不在池里 ⇒ 没有遗物」比"事件点不动"更接近 wiki（奖励是那场战斗发的）。
+                let Some(id) = named else {
+                    return Err(RunError::UnsupportedEventEffect);
+                };
+                self.fight_relic = RunId::new(id).map_err(|_| RunError::BadId)?;
+            }
+            EventEffect::FightPotionChance(pct) => {
+                self.fight_potion_chance = pct;
+            }
             EventEffect::GainRandomRelic => {
                 // §285：运行层**没有遗物池**，所以这条必须已经被调用方解析成 `GainRelic` +
                 // 具体 id。走到这里说明有人直接把它递了进来 —— 响亮拒绝，绝不静默给一件。
@@ -5220,16 +5259,27 @@ impl RunState {
         // §157: the wiki's **moving** chance -- 40% to start, -10 after a drop, +10 after a miss.
         // The roll happens even when the belt is full (the wiki's Colosseum note relies on that),
         // so the chance keeps moving; only the **offer** is suppressed below.
-        let chance = self.potion_chance.clamp(0, 100) as u32;
+        // §289：这一场可以**独立**掷（事件里的战斗不属于那一幕的药水荒节奏）。
+        let potion_override = self.fight_potion_chance;
+        let independent = potion_override != NO_POTION_OVERRIDE;
+        let chance = if independent {
+            u32::from(potion_override)
+        } else {
+            self.potion_chance.clamp(0, 100) as u32
+        };
         // §269：`white_beast_statue` —— "Potions always appear in combat rewards"。
         // 掷骰照旧（随机流的位置不动，回放才稳定），只把**结果** OR 成真。
         let always = self.holds_relic_effect(RelicEffect::PotionAlwaysDrops);
         let rolled = always || self.rng.roll(RunStream::Potion, 100)? < chance;
-        self.potion_chance = if rolled {
-            (self.potion_chance - POTION_DROP_STEP).max(0)
-        } else {
-            (self.potion_chance + POTION_DROP_STEP).min(100)
-        };
+        // §289：独立概率的那一场**不移动**追踪值 —— 这正是"独立"的意思：
+        // 这一场既不欠也不还那一幕的账（`The Colosseum` 的第二场就是这种）。
+        if !independent {
+            self.potion_chance = if rolled {
+                (self.potion_chance - POTION_DROP_STEP).max(0)
+            } else {
+                (self.potion_chance + POTION_DROP_STEP).min(100)
+            };
+        }
         // §271：`sozu` —— 奖励屏上根本不该出现药水那一格。掷骰照旧（随机流的位置不动），
         // 只把"要不要给"按成 false。⚠️ 与 `push_potion` 的拒绝是**两件事**：这里是不发，
         // 那里是"别的路（事件/商店/调试）递过来的也收不了"。
@@ -5306,11 +5356,14 @@ impl RunState {
         let gold_set = i32::from(self.fight_gold_set);
         let relic_rarity = self.fight_relic_rarity;
         let extra_rarity = self.fight_extra_relic;
+        let named_relic = self.fight_relic;
         self.fight_gold_bonus = 0;
         self.fight_no_relic = false;
         self.fight_gold_set = 0;
         self.fight_relic_rarity = 0;
         self.fight_extra_relic = 0;
+        self.fight_relic = RunId::EMPTY;
+        self.fight_potion_chance = NO_POTION_OVERRIDE;
         if gold_set > 0 {
             // §288：**定数**赢过区间（`The Colosseum` 的 100 不是"区间再加"）。
             paid = gold_set;
@@ -5321,9 +5374,21 @@ impl RunState {
         if no_relic {
             relic = RunId::EMPTY;
         }
+        // §289：**指名**的遗物（`Masked Bandits` 的 `Red Mask`）。与稀有度那一条互斥：
+        // 指名更具体，所以它先说话。抽不到（不在池里 / 已持有）⇒ **没有遗物**。
+        if !named_relic.as_str().is_empty() {
+            let wanted = named_relic.as_str();
+            let available = relic_pool.iter().any(|entry| entry.id == wanted)
+                && !self.relics().iter().any(|held| held.as_str() == wanted);
+            relic = if available {
+                RunId::new(wanted).map_err(|_| RunError::BadId)?
+            } else {
+                RunId::EMPTY
+            };
+        }
         // §288：锁定稀有度（`The Colosseum` 的"1 Rare Relic"）。抽不到该稀有度就是**没有**
         // 遗物 —— 与"池子里没有可掉的"同一条路，而不是退回按权重抽。
-        if relic_rarity != 0 {
+        if relic_rarity != 0 && named_relic.as_str().is_empty() {
             let wanted = rarity_of_code(relic_rarity);
             relic = self.pick_relic_of_rarity(RunStream::Reward, relic_pool, &[], wanted)?;
         }
@@ -10057,6 +10122,112 @@ mod tests {
         assert_eq!(run.event_fight_pool(), "", "and its pool with it");
         // 再问一次：没有第二次"回去"（否则一场战斗能被回两次）。
         assert!(!run.resume_event_after_fight(), "the resume is a one-shot");
+    }
+
+    /// §289：**指名遗物**（`fight_relic:<id>`）—— 命中 / 不在池里 / 已持有，三种都要答得清。
+    ///
+    /// `Event` 稀有度（`red_mask`）的**不可掉落**属性意味着按权重/按稀有度都永远抽不到它，
+    /// 所以"就是这一件"是唯一能给它的形状 —— 这条判据也顺手钉住了那件事。
+    #[test]
+    fn a_named_relic_is_paid_exactly_or_not_at_all() {
+        let cards = curse_pool();
+        let relics = [
+            PoolRelic { id: "red_mask", rarity: Rarity::Event },
+            PoolRelic { id: "anchor", rarity: Rarity::Common },
+        ];
+        // ① 命中：指名的那一件就是奖励，不看稀有度。
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("probe", "probe").expect("the event");
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::FightRelic, Some("red_mask"))],
+                ..EventMove::none()
+            },
+            &cards,
+        )
+        .expect("the named relic is recorded");
+        run.roll_reward(&cards, &[], &relics, FightKind::Normal)
+            .expect("the fight pays out");
+        assert_eq!(run.reward_relic(), Some("red_mask"), "the named one, not a weighted one");
+
+        // ② 不在池里 ⇒ **没有遗物**（不退回按权重抽 —— 那会把"就是这一件"变成"随便一件"）。
+        let relics_small = [PoolRelic { id: "anchor", rarity: Rarity::Common }];
+        let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        run.begin_event("probe", "probe").expect("the event");
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::FightRelic, Some("red_mask"))],
+                ..EventMove::none()
+            },
+            &cards,
+        )
+        .expect("recorded");
+        run.roll_reward(&cards, &[], &relics_small, FightKind::Normal)
+            .expect("the fight pays out");
+        assert_eq!(run.reward_relic(), None, "not in the pool ⇒ nothing, not a substitute");
+
+        // ③ 已经持有 ⇒ 也没有（"再给一件"对遗物是重复）。
+        let mut held = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+        held.push_relic("red_mask", &cards).expect("already held");
+        held.begin_event("probe", "probe").expect("the event");
+        held.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::FightRelic, Some("red_mask"))],
+                ..EventMove::none()
+            },
+            &cards,
+        )
+        .expect("recorded");
+        held.roll_reward(&cards, &[], &relics, FightKind::Normal)
+            .expect("the fight pays out");
+        assert_eq!(held.reward_relic(), None, "already held ⇒ no duplicate");
+    }
+
+    /// §289：**独立药水概率** —— 这一场按给定的 pct 掷，而且**不动**那一幕的追踪值。
+    ///
+    /// 判据的写法：不用"把追踪值顶到 100"（它会被 -10 拉回来，取不到确定状态），而用
+    /// **同一颗种子的两个方向**：`0` ⇒ 一定不掉、`100` ⇒ 一定掉 —— 两种都断言追踪值不变。
+    #[test]
+    fn an_independent_potion_chance_leaves_the_tracker_alone() {
+        let cards = curse_pool();
+        let relics = [PoolRelic { id: "anchor", rarity: Rarity::Common }];
+        // ⚠️ **药水池不能是空的**：空的池子 ⇒ `potion` 恒空 —— 第一版就是 `&[]`，
+        // 于是"100% 也不掉"，判据在验一个不可能成立的东西。
+        let potions = [PoolPotion { id: "fire_potion", rarity: Rarity::Common }];
+        let pay = |pct: u8| {
+            let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
+            run.begin_event("probe", "probe").expect("the event");
+            run.resolve_event_effects(
+                &EventMove {
+                    effects: &[(EventEffect::FightPotionChance(pct), None)],
+                    ..EventMove::none()
+                },
+                &cards,
+            )
+            .expect("the override is recorded");
+            let tracker_before = run.potion_drop_chance();
+            run.roll_reward(&cards, &potions, &relics, FightKind::Normal)
+                .expect("the fight pays out");
+            (
+                run.reward_potion().map(|id| std::string::String::from(id)),
+                tracker_before,
+                run.potion_drop_chance(),
+            )
+        };
+
+        let (zero, before_zero, after_zero) = pay(0);
+        assert_eq!(zero, None, "0% must not drop");
+        assert_eq!(after_zero, before_zero, "0% must not move the tracker either");
+
+        let (hundred, before_hundred, after_hundred) = pay(100);
+        assert!(
+            hundred.is_some(),
+            "100% must drop -- otherwise the 0% check above proves nothing"
+        );
+        assert_eq!(
+            after_hundred, before_hundred,
+            "100% must not move the tracker either"
+        );
     }
 
     /// §288：**定数奖励**（`The Colosseum` 的 `100 Gold, 1 Rare Relic, 1 Uncommon Relic`）。
