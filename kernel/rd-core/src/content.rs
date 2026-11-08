@@ -3273,6 +3273,11 @@ pub struct EventOption<'a> {
     pub asc_count: u8,
     /// §278：下一段的节点 id。**空串 = 这一段是终点**（选项生效后事件收尾）。
     pub next: &'a str,
+    /// §285：**概率分支**。`Some((chance, fail_step))` = 这个选项要掷一次骰：
+    /// `chance`% 成功（走 `next`），否则去 `fail_step`。`None` = 一定成功（绝大多数选项）。
+    ///
+    /// 为什么放在选项上而不是效果里：掷骰决定的是"**去哪一段**"，那是树的结构，不是效果。
+    pub roll: Option<(u8, &'a str)>,
     /// §279/§280：这个选项在镜像里的 term —— 条件（`Requires` / `RequiresAsc`）由
     /// [`crate::run_expr::option_is_available`] 按它读。`ABSENT16` = 没有 term（不该出现）。
     pub term: u16,
@@ -3334,6 +3339,7 @@ impl<'a> EventStep<'a> {
             }; MAX_EVENT_EFFECTS],
             asc_count: 0,
             next: "",
+            roll: None,
             term: ABSENT16,
         }; MAX_EVENT_OPTIONS],
         count: 0,
@@ -3436,6 +3442,17 @@ impl<'a> Content<'a> {
                 asc: [crate::state::Empty::EMPTY; MAX_EVENT_EFFECTS],
                 asc_count: 0,
                 next: node.str_field("Next").ok().flatten().unwrap_or(""),
+                // §285：`Chance` 与 `NextFail` 必须**成对**出现（一条有概率却没有失败分支的
+                // 选项是内容错误，交给内容门拦；这里只在两者都读得出来时才算"要掷骰"）。
+                roll: match (
+                    node.int_field("Chance").ok().flatten(),
+                    node.str_field("NextFail").ok().flatten(),
+                ) {
+                    (Some(chance), Some(fail)) if (1..=100).contains(&chance) && !fail.is_empty() => {
+                        Some((chance as u8, fail))
+                    }
+                    _ => None,
+                },
                 // §279：条件要按 term 读（`Requires` 是嵌套列表，读成 `&str` 就丢结构了）。
                 term: element,
             };
@@ -5106,8 +5123,9 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            13,
-            "§280 补了 `the_cleric` 与 `the_moai_head`（两条都带条件选项）。pools 的**位次**比
+            16,
+            "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
+             `the_joust`（`scrap_pile` 改成 Scrap Ooze 的 9 段链）。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5119,11 +5137,13 @@ mod tests {
                 .event_step(entry)
                 .unwrap_or_else(|| panic!("{id}: entry `{entry}` names no step"));
             assert!(!step.text.is_empty(), "{id} has no body text");
-            // §279：**入口段**至少两个选项（它才是一个"选择"）；**后续段**可以只有一个
-            // （wiki 的后续屏就是单个 `[Leave]`）。§278 第一版把"至少两个"套在每一段上。
+            // §279：**入口段**通常至少两个选项（它才是一个"选择"）；**后续段**可以只有一个
+            // （wiki 的后续屏就是单个 `[Leave]`）。
+            // §285：**纯过场**的入口只有一个 `[Continue]`（`The Joust` 第一屏就是这样），
+            // 所以下限是 1 —— 0 才是错误（那样房间没有按钮）。
             assert!(
-                step.count >= 2,
-                "{id}: {} option(s) -- an entry step needs at least two",
+                step.count >= 1,
+                "{id}: {} option(s) -- a step must offer at least one",
                 step.count
             );
             let choices = step.options;
@@ -5145,6 +5165,18 @@ mod tests {
             let step = content.event_step(walk[at]).expect("a reachable step");
             assert!(!step.text.is_empty(), "step `{}` has no body text", walk[at]);
             for option in step.options() {
+                // §285：`Chance`/`NextFail` 是**第二条边** —— 只沿 `Next` 走会把整个失败链
+                // 判成"孤儿段"（Scrap Ooze 的 try2..try9 就是这么红的）。
+                if let Some((_, fail_step)) = option.roll {
+                    let step = content.event_step(fail_step).unwrap_or_else(|| {
+                        panic!("step `{}`: option `{}` NextFail `{fail_step}` is not a step",
+                               walk[at], option.label)
+                    });
+                    assert!(step.count >= 1, "step `{fail_step}` has no option at all");
+                    if !walk.contains(&fail_step) {
+                        walk.push(fail_step);
+                    }
+                }
                 if let Some(next) = option.goes_on() {
                     let step = content.event_step(next).unwrap_or_else(|| {
                         panic!("step `{}`: option `{}` points at `{next}`", walk[at],
@@ -5189,6 +5221,9 @@ mod tests {
                 // §280：付钱 / 按上限百分比回血；`heal_full` 是裸词，在 `bare` 里。
                 || prefix(effect, "gold_cost:")
                 || prefix(effect, "heal_pct:")
+                // §285：区间金币（可负）与"随机一件遗物"（裸词）。
+                || prefix(effect, "gold_random:")
+                || effect == "relic_random"
         };
         for node in &walk {
             let step = content.event_step(*node).expect("step");
@@ -5222,14 +5257,57 @@ mod tests {
                 "purification_shrine",
                 "scrap_pile",
                 "shining_light",
-                // §221: the two rooms added with the second event batch
                 "the_cleric",
+                "the_joust",
                 "the_mausoleum",
                 "the_moai_head",
                 "the_ssssserpent",
-                "wandering_merchant"
+                "wandering_merchant",
+                "wing_statue",
+                "world_of_goop",
             ]
         );
+        // §285：`Scrap Ooze` 的 9 段链 —— **每一段的代价与概率都必须递进**。
+        // 只验"有 9 段"是不够的：把同一段复制 9 次也满足它，而那张表的意义正是升级。
+        let mut hp_seen: std::vec::Vec<i16> = std::vec::Vec::new();
+        let mut chance_seen: std::vec::Vec<u8> = std::vec::Vec::new();
+        let mut cursor = content
+            .event_step("scrap_pile")
+            .map(|step| step.text.len())
+            .map(|_| "scrap_pile");
+        for _ in 0..9 {
+            let Some(node_id) = cursor else { break };
+            let step = content.event_step(node_id).expect("an ooze step");
+            // 第一个选项是 `[Reach Inside]` / `[Deeper]`。
+            let reach = step.options()[0];
+            hp_seen.push(reach.effects[0].amount);
+            match reach.roll {
+                Some((chance, next_fail)) => {
+                    chance_seen.push(chance);
+                    cursor = Some(if next_fail.starts_with("scrap_pile.found") {
+                        next_fail
+                    } else {
+                        next_fail
+                    });
+                }
+                // 最后一段**必然成功**（wiki 的 105%）⇒ 没有 `Chance`，链到这里结束。
+                None => {
+                    cursor = None;
+                }
+            }
+        }
+        assert_eq!(hp_seen.len(), 9, "the wiki's table has nine rows: {hp_seen:?}");
+        assert_eq!(
+            hp_seen,
+            std::vec![3, 4, 5, 6, 7, 8, 9, 10, 11],
+            "each attempt costs one more HP"
+        );
+        assert_eq!(
+            chance_seen,
+            std::vec![25u8, 35, 45, 55, 65, 75, 85, 95],
+            "each failure adds 10% (the ninth row is the guaranteed one)"
+        );
+
         // ★ 没有孤儿段：`EVND` 里每一行都要被某个 `EV.Entry` 或某个 `Next` 指到。
         // 传递闭包（`walk`）与表里的行数必须相等：少一个就是一段谁也看不见的剧情。
         walk.sort_unstable();

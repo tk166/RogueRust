@@ -65088,11 +65088,6 @@
       "Entry": "old_shrine"
     },
     {
-      "Id": "scrap_pile",
-      "NameKey": "Scrap Pile",
-      "Entry": "scrap_pile"
-    },
-    {
       "Id": "ancient_forge",
       "NameKey": "Ancient Forge",
       "Entry": "ancient_forge"
@@ -65136,6 +65131,26 @@
       "Id": "the_moai_head",
       "NameKey": "The Moai Head",
       "Entry": "the_moai_head"
+    },
+    {
+      "Id": "scrap_pile",
+      "NameKey": "Scrap Ooze",
+      "Entry": "scrap_pile"
+    },
+    {
+      "Id": "world_of_goop",
+      "NameKey": "World of Goop",
+      "Entry": "world_of_goop"
+    },
+    {
+      "Id": "wing_statue",
+      "NameKey": "Wing Statue",
+      "Entry": "wing_statue"
+    },
+    {
+      "Id": "the_joust",
+      "NameKey": "The Joust",
+      "Entry": "the_joust"
     }
   ],
   "Potions": [
@@ -65416,9 +65431,6 @@
         "Id": "old_shrine"
       },
       {
-        "Id": "scrap_pile"
-      },
-      {
         "Id": "ancient_writing"
       },
       {
@@ -65426,6 +65438,15 @@
       },
       {
         "Id": "the_cleric"
+      },
+      {
+        "Id": "scrap_pile"
+      },
+      {
+        "Id": "world_of_goop"
+      },
+      {
+        "Id": "wing_statue"
       }
     ],
     "Events2": [
@@ -65443,6 +65464,9 @@
       },
       {
         "Id": "forgotten_altar"
+      },
+      {
+        "Id": "the_joust"
       }
     ],
     "Events3": [
@@ -65536,38 +65560,6 @@
             {
               "Effect": "heal",
               "Amount": 8
-            }
-          ]
-        },
-        {
-          "Label": "Leave",
-          "Effects": [
-            {
-              "Effect": "nothing",
-              "Amount": 0
-            }
-          ],
-          "Next": ""
-        }
-      ]
-    },
-    {
-      "Id": "scrap_pile",
-      "TextKey": "A heap of bent metal.",
-      "Options": [
-        {
-          "Label": "Dig through",
-          "Effects": [
-            {
-              "Effect": "gold",
-              "Amount": 45
-            }
-          ],
-          "Next": "",
-          "EffectsAsc": [
-            {
-              "Effect": "gold",
-              "Amount": 20
             }
           ]
         },
@@ -66219,6 +66211,571 @@
     {
       "Id": "the_moai_head.leave",
       "TextKey": "You leave, wondering what could have been.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "scrap_pile",
+      "TextKey": "As you walk into the room you hear a gurgling and the grinding of metals. Before you is a slime-like creature that ate too much scrap for its own good.",
+      "Options": [
+        {
+          "Label": "Reach Inside",
+          "Effects": [
+            {
+              "Effect": "damage",
+              "Amount": 3
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "damage",
+              "Amount": 5
+            }
+          ],
+          "Next": "scrap_pile.found",
+          "Chance": 25,
+          "NextFail": "scrap_pile.try2"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "scrap_pile.try2",
+      "TextKey": "Ouch! All you find is corroded metal and a bit of burning pain. However, you are still convinced there is a relic in there.",
+      "Options": [
+        {
+          "Label": "Deeper",
+          "Effects": [
+            {
+              "Effect": "damage",
+              "Amount": 4
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "damage",
+              "Amount": 6
+            }
+          ],
+          "Next": "scrap_pile.found",
+          "Chance": 35,
+          "NextFail": "scrap_pile.try3"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "scrap_pile.try3",
+      "TextKey": "Ouch! All you find is corroded metal and a bit of burning pain. However, you are still convinced there is a relic in there.",
+      "Options": [
+        {
+          "Label": "Deeper",
+          "Effects": [
+            {
+              "Effect": "damage",
+              "Amount": 5
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "damage",
+              "Amount": 7
+            }
+          ],
+          "Next": "scrap_pile.found",
+          "Chance": 45,
+          "NextFail": "scrap_pile.try4"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "scrap_pile.try4",
+      "TextKey": "Ouch! All you find is corroded metal and a bit of burning pain. However, you are still convinced there is a relic in there.",
+      "Options": [
+        {
+          "Label": "Deeper",
+          "Effects": [
+            {
+              "Effect": "damage",
+              "Amount": 6
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "damage",
+              "Amount": 8
+            }
+          ],
+          "Next": "scrap_pile.found",
+          "Chance": 55,
+          "NextFail": "scrap_pile.try5"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "scrap_pile.try5",
+      "TextKey": "Ouch! All you find is corroded metal and a bit of burning pain. However, you are still convinced there is a relic in there.",
+      "Options": [
+        {
+          "Label": "Deeper",
+          "Effects": [
+            {
+              "Effect": "damage",
+              "Amount": 7
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "damage",
+              "Amount": 9
+            }
+          ],
+          "Next": "scrap_pile.found",
+          "Chance": 65,
+          "NextFail": "scrap_pile.try6"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "scrap_pile.try6",
+      "TextKey": "Ouch! All you find is corroded metal and a bit of burning pain. However, you are still convinced there is a relic in there.",
+      "Options": [
+        {
+          "Label": "Deeper",
+          "Effects": [
+            {
+              "Effect": "damage",
+              "Amount": 8
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "damage",
+              "Amount": 10
+            }
+          ],
+          "Next": "scrap_pile.found",
+          "Chance": 75,
+          "NextFail": "scrap_pile.try7"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "scrap_pile.try7",
+      "TextKey": "Ouch! All you find is corroded metal and a bit of burning pain. However, you are still convinced there is a relic in there.",
+      "Options": [
+        {
+          "Label": "Deeper",
+          "Effects": [
+            {
+              "Effect": "damage",
+              "Amount": 9
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "damage",
+              "Amount": 11
+            }
+          ],
+          "Next": "scrap_pile.found",
+          "Chance": 85,
+          "NextFail": "scrap_pile.try8"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "scrap_pile.try8",
+      "TextKey": "Ouch! All you find is corroded metal and a bit of burning pain. However, you are still convinced there is a relic in there.",
+      "Options": [
+        {
+          "Label": "Deeper",
+          "Effects": [
+            {
+              "Effect": "damage",
+              "Amount": 10
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "damage",
+              "Amount": 12
+            }
+          ],
+          "Next": "scrap_pile.found",
+          "Chance": 95,
+          "NextFail": "scrap_pile.try9"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "scrap_pile.try9",
+      "TextKey": "Ouch! All you find is corroded metal and a bit of burning pain. However, you are still convinced there is a relic in there.",
+      "Options": [
+        {
+          "Label": "Deeper",
+          "Effects": [
+            {
+              "Effect": "damage",
+              "Amount": 11
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "damage",
+              "Amount": 13
+            }
+          ],
+          "Next": "scrap_pile.found"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "scrap_pile.found",
+      "TextKey": "Success! After rummaging through the metal and burning acid, you finally grab hold of a relic and yank it out.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "relic_random",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "world_of_goop",
+      "TextKey": "You fall into a puddle. IT'S MADE OF SLIME GOOP!! Frantically, you claw yourself out over several minutes as you feel the goop starting to burn. Some of your gold is missing.",
+      "Options": [
+        {
+          "Label": "Gather Gold",
+          "Effects": [
+            {
+              "Effect": "gold",
+              "Amount": 75
+            },
+            {
+              "Effect": "damage",
+              "Amount": 11
+            }
+          ],
+          "Next": "world_of_goop.gathered"
+        },
+        {
+          "Label": "Leave It",
+          "Effects": [
+            {
+              "Effect": "gold_random:-20:-50",
+              "Amount": 0
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "gold_random:-35:-75",
+              "Amount": 0
+            }
+          ],
+          "Next": "world_of_goop.left"
+        }
+      ]
+    },
+    {
+      "Id": "world_of_goop.gathered",
+      "TextKey": "Feeling the sting of the goop, you manage to fish out the gold.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "world_of_goop.left",
+      "TextKey": "You decide that mess is not worth it.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "wing_statue",
+      "TextKey": "A winged statue waits in the dark, wings folded over a stone basin.",
+      "Options": [
+        {
+          "Label": "Pray",
+          "Effects": [
+            {
+              "Effect": "remove_card",
+              "Amount": 0
+            },
+            {
+              "Effect": "damage",
+              "Amount": 7
+            }
+          ],
+          "Next": "wing_statue.prayed"
+        },
+        {
+          "Label": "Destroy",
+          "Effects": [
+            {
+              "Effect": "gold_random:50:80",
+              "Amount": 0
+            }
+          ],
+          "Next": "wing_statue.destroyed"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "wing_statue.prayed",
+      "TextKey": "The wings close. Something in you is lighter.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "wing_statue.destroyed",
+      "TextKey": "Gold spills out of the broken basin.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_joust",
+      "TextKey": "As you make your way through the large buildings you come across a long narrow bridge and spot knights on either side, facing one another.",
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [],
+          "Next": "the_joust.offer"
+        }
+      ]
+    },
+    {
+      "Id": "the_joust.offer",
+      "TextKey": "\"Today is the day I must settle the score with the murderer of my beloved pet, Noodles. Fellow witness, why don't you bet on who you think will emerge victorious?\"",
+      "Options": [
+        {
+          "Label": "Murderer (bet 50)",
+          "Effects": [
+            {
+              "Effect": "gold_cost:50",
+              "Amount": 0
+            }
+          ],
+          "Chance": 70,
+          "Next": "the_joust.murderer_won",
+          "NextFail": "the_joust.murderer_lost"
+        },
+        {
+          "Label": "Owner (bet 50)",
+          "Effects": [
+            {
+              "Effect": "gold_cost:50",
+              "Amount": 0
+            }
+          ],
+          "Chance": 30,
+          "Next": "the_joust.owner_won",
+          "NextFail": "the_joust.owner_lost"
+        }
+      ]
+    },
+    {
+      "Id": "the_joust.murderer_won",
+      "TextKey": "CRASH!!! KLAAAANG! POW! The owner died. You win the bet.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "gold",
+              "Amount": 100
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_joust.murderer_lost",
+      "TextKey": "CRASH!!! KLAAAANG! POW! The nemesis was slain. You lost the bet.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_joust.owner_won",
+      "TextKey": "CRASH!!! KLAAAANG! POW! The nemesis was slain. You win the bet.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "gold",
+              "Amount": 250
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_joust.owner_lost",
+      "TextKey": "CRASH!!! KLAAAANG! POW! The owner died. You lost the bet.",
       "Options": [
         {
           "Label": "Leave",

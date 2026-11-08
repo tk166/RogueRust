@@ -735,6 +735,9 @@ pub const START_OFFERS: [StartOffer; 8] = [
 /// | `damage_pct:<n>` | lose `floor(max HP × n / 100)` HP (the wiki's *Smash*, A15 rides in the `...Asc` list) |
 /// | `max_hp_pct:<n>` | lose `max(1, floor(max HP × n / 100))` **max** HP (the wiki's *Hide*) |
 /// | `gold_cost:<n>` | **pay** `n` gold; refused when short (the wiki's *Cleric*) |
+/// | `gold_random:<min>:<max>` | gain `runif(min, max)` gold (the Goop's "lose 20-50 Gold") |
+/// | `relic_random` | grant a **random** relic (Scrap Ooze). 运行层只认 `relic:<id>` —— 抽样由
+///   **有内容池的那一层**（`rd-wasm`）先解析成具体 id，理由同 `curse:` 的载荷 |
 /// | `heal_pct:<n>` | heal `floor(max HP × n / 100)` HP (the Cleric's *Heal*) |
 /// | `heal_full` | heal to the maximum (the Moai Head's *Jump Inside*) |
 ///
@@ -770,6 +773,13 @@ pub enum EventEffect {
     LoseMaxHealthPercent(i32),
     /// §280：**付** `n` 金币（`gold_cost`）。不够就拒绝 —— 不是"扣到 0 为止"。
     GoldCost(i32),
+    /// §285：**随机一件遗物**（`relic_random`）。运行层**不**抽 —— 它没有遗物池。
+    /// 由 `rd-wasm` 在调用前解析成 `GainRelic` + 具体 id（与 `curse:`/`relic:` 的载荷同一条路）。
+    GainRandomRelic,
+    /// §285：**区间金币**（`gold_random:<min>:<max>`）。负区间 = 扣钱，而
+    /// `adjust_gold` 会把结果夹在 0（正好是 wiki 那句 "never more than the Gold you are
+    /// carrying"），所以 `[Leave It]` 掉 20-50 金币不需要第二套规则。
+    GoldRandom(i32, i32),
     /// §280：按**最大 HP 的千分比**回血（`heal_pct`）。`The Cleric` 的 Heal 25%。
     HealPercent(i32),
     /// §280：回满血（`heal_full`）。`The Moai Head` 的 Jump Inside。
@@ -837,6 +847,20 @@ fn parse_permille(text: &str) -> Option<i32> {
     Some(total)
 }
 
+/// §285：一次**事件掷骰** —— 成功去 `on_success`，失败去 `on_fail`。
+///
+/// 传进 [`RunState::resolve_event_effects`]，由**运行层**掷（`RunStream::Event`）：
+/// 事件的随机是一局的账，不该消耗战斗的 `(seed, step)`。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EventRoll<'a> {
+    /// 成功概率（1..=100）。
+    pub chance: u8,
+    /// 成功时去的段（与选项的 `Next` 同一个 id 空间）。
+    pub on_success: &'a str,
+    /// 失败时去的段。
+    pub on_fail: &'a str,
+}
+
 impl EventEffect {
     /// Parse the content's closed vocabulary. `None` = **outside** it, and the caller must refuse
     /// rather than guess (see the table on [`Self`]).
@@ -888,6 +912,28 @@ impl EventEffect {
                         }
                         _ => return None,
                     },
+                    // §285：`gold_random:20:50` —— 两端都是**整数金币**（区间不是百分比）。
+                    // §285：`relic_random` 不带载荷 —— 抽哪一件由内容池 + 稀有度权重决定，
+                    // 那在 `rd-wasm` 手里（运行层没有池）。
+                    "relic_random" => (Self::GainRandomRelic, None),
+                    "gold_random" => {
+                        let mut parts = payload.split(':');
+                        let (Some(low), Some(high), None) =
+                            (parts.next(), parts.next(), parts.next())
+                        else {
+                            return None;
+                        };
+                        match (low.parse::<i32>(), high.parse::<i32>()) {
+                            // 端点必须有序，且两端都不为 0（`0:0` 是一条什么都不做的效果，
+                            // 而是"看起来在掷骰"的装饰 —— 那正是这一节要避免的形状）。
+                            (Ok(low), Ok(high))
+                                if low <= high && !(low == 0 && high == 0) =>
+                            {
+                                (Self::GoldRandom(low, high), None)
+                            }
+                            _ => return None,
+                        }
+                    }
                     "heal_pct" => match parse_permille(payload) {
                         Some(tenths) => (Self::HealPercent(tenths), None),
                         None => return None,
@@ -4613,13 +4659,31 @@ impl RunState {
         &mut self,
         effects: &[(EventEffect, Option<&str>)],
         next: Option<&str>,
+        roll: Option<EventRoll<'_>>,
         pool: &[PoolCard<'_>],
     ) -> Result<(), RunError> {
         if self.pending != Pending::Event {
             return Err(RunError::WrongPhase);
         }
         // `next` 在动手之前就要验：一个坏 id 必须在**一个字节都没改**之前被拒。
-        let next_id = match next {
+        //
+        // §285：带 `roll` 时，先去**掷一次**（同样是"写之前"）—— 掷骰本身会推进随机流，
+        // 所以它必须在所有 `self` 写入之前，和 `roll_unknown_room` 同一条纪律。
+        let target = match roll {
+            Some(roll) => {
+                let rolled = self
+                    .rng
+                    .roll(RunStream::Event, 100)
+                    .map_err(|_| RunError::Capacity)?;
+                Some(if rolled < u32::from(roll.chance) {
+                    roll.on_success
+                } else {
+                    roll.on_fail
+                })
+            }
+            None => next,
+        };
+        let next_id = match target {
             Some(next) => RunId::new(next).map_err(|_| RunError::NoSuchEvent)?,
             None => RunId::EMPTY,
         };
@@ -4693,6 +4757,17 @@ impl RunState {
                 let full = self.health_max;
                 self.heal_after_combat(full);
             }
+            EventEffect::GoldRandom(low, high) => {
+                // §285：与战斗随机**同一个取模偏置形态**，但走运行层的流 —— 一局的
+                // 金币掷骰不该消耗战斗的 `(seed, step)`。
+                let span = i64::from(high) - i64::from(low) + 1;
+                let roll = self
+                    .rng
+                    .roll(RunStream::Event, u32::try_from(span).unwrap_or(1))
+                    .map_err(|_| RunError::Capacity)?;
+                let delta = low.saturating_add(roll as i32);
+                self.adjust_gold(delta);
+            }
             EventEffect::GoldCost(cost) => {
                 if self.gold < cost {
                     // **响亮**：夹到 0 会让"花 75 只有 50"变成"白拿服务"，而屏幕上一切正常。
@@ -4736,6 +4811,11 @@ impl RunState {
                 }
                 // `curse:` 载荷按定义就是诅咒（上面刚验过池子里它是 `Rarity::Curse`）。
                 self.push_card(PoolCard { kind: CardKind::Curse, ..PoolCard::plain(id) })?;
+            }
+            EventEffect::GainRandomRelic => {
+                // §285：运行层**没有遗物池**，所以这条必须已经被调用方解析成 `GainRelic` +
+                // 具体 id。走到这里说明有人直接把它递了进来 —— 响亮拒绝，绝不静默给一件。
+                return Err(RunError::UnsupportedEventEffect);
             }
             EventEffect::LoseRelic => {
                 // §279：**必须真的持有**才允许"失去"。一条 `relic_lose:` 指向一件不在手上的
@@ -9488,6 +9568,7 @@ mod tests {
                 (EventEffect::Gold(7), None),
             ],
             None,
+            None,
             &pool,
         )
         .expect("the list applies");
@@ -9499,6 +9580,103 @@ mod tests {
             "the deck holds the curse"
         );
         assert_eq!(run.pending(), Pending::None, "no pick is owed");
+    }
+
+    /// §285：**概率分支**的两侧 + 同种子可复现。
+    ///
+    /// `Chance = 1` ⇒ 永远失败；`Chance = 100` ⇒ 永远成功；中间的 50 ⇒ 扫 32 个种子必须
+    /// **两侧都出现**（只测一侧的话，"永远成功"与"永远失败"都能通过）。
+    #[test]
+    fn an_event_roll_takes_both_branches() {
+        let pool = curse_pool();
+        // 事件的段 id 不需要真的存在于内容里：运行层只把它们当**名字**（§278 的纪律：
+        // run 层不读内容）。所以这里能直接摆一个两段事件。
+        let run_to = |seed: i32, chance: u8| -> std::string::String {
+            let mut run = RunState::new(seed, 80, 0, &["strike"; 5]).expect("a run");
+            run.begin_event("probe", "probe").expect("the event opens");
+            run.resolve_event_effects(
+                &[],
+                Some("probe.success"),
+                Some(EventRoll {
+                    chance,
+                    on_success: "probe.success",
+                    on_fail: "probe.fail",
+                }),
+                &pool,
+            )
+            .expect("the roll resolves");
+            std::string::String::from(run.event_step())
+        };
+
+        for seed in 0..8 {
+            assert_eq!(run_to(seed, 1), "probe.fail", "1% never succeeds (seed {seed})");
+            assert_eq!(run_to(seed, 100), "probe.success", "100% always succeeds (seed {seed})");
+        }
+
+        let mut successes = 0;
+        let mut failures = 0;
+        for seed in 0..32 {
+            if run_to(seed, 50) == "probe.success" {
+                successes += 1;
+            } else {
+                failures += 1;
+            }
+        }
+        assert!(
+            successes > 0 && failures > 0,
+            "50% over 32 seeds must take **both** branches, got {successes} success / {failures} fail"
+        );
+        // 同种子 ⇒ 同结果（掷骰走的是 RunState 自己的流，跟着种子走）。
+        assert_eq!(run_to(7, 50), run_to(7, 50), "the same seed must roll the same way");
+    }
+
+    /// §285：`gold_random:<min>:<max>` —— 区间**两端都到过**，且同种子同一个数。
+    #[test]
+    fn gold_random_stays_inside_its_range_and_covers_it() {
+        let pool = curse_pool();
+        let gained = |seed: i32| -> i32 {
+            let mut run = RunState::new(seed, 80, 0, &["strike"; 5]).expect("a run");
+            run.begin_event("probe", "probe").expect("the event opens");
+            let before = run.gold();
+            run.resolve_event_effects(
+                &[(EventEffect::GoldRandom(20, 50), None)],
+                None,
+                None,
+                &pool,
+            )
+            .expect("the range resolves");
+            run.gold() - before
+        };
+        let mut seen_low = false;
+        let mut seen_high = false;
+        for seed in 0..64 {
+            let amount = gained(seed);
+            assert!(
+                (20..=50).contains(&amount),
+                "seed {seed} gained {amount}, outside 20..=50"
+            );
+            if amount == 20 {
+                seen_low = true;
+            }
+            if amount >= 48 {
+                seen_high = true;
+            }
+        }
+        assert!(seen_low, "the low end of the range never came up");
+        assert!(seen_high, "the high end of the range never came up");
+        assert_eq!(gained(7), gained(7), "the same seed must give the same amount");
+
+        // 负区间 = 扣钱，且被 clamps 在 0（wiki: "never more than the Gold you are carrying"）。
+        let mut run = RunState::new(7, 80, 10, &["strike"; 5]).expect("a run with 10 gold");
+        run.begin_event("probe", "probe").expect("the event opens");
+        run.resolve_event_effects(
+            &[(EventEffect::GoldRandom(-20, -50), None)],
+            None,
+            None,
+            &pool,
+        )
+        .expect("the range resolves");
+        assert_eq!(run.gold(), 0, "a 20-50 loss from 10 gold leaves zero, not negative");
     }
 
     /// §278：事件是**一棵树** —— 走完一段不结算，走完最后一段才结算。
@@ -9514,6 +9692,7 @@ mod tests {
         run.resolve_event_effects(
             &[(EventEffect::GainRelic, Some("golden_idol"))],
             Some("golden_idol.boulder"),
+            None,
             &pool,
         )
         .expect("taking the idol");
@@ -9539,6 +9718,7 @@ mod tests {
         run.resolve_event_effects(
             &[(EventEffect::LoseHealthPercent(250), None)],
             None,
+            None,
             &pool,
         )
         .expect("smashing the boulder");
@@ -9552,7 +9732,7 @@ mod tests {
         assert_eq!(run.pending(), Pending::None, "nothing is owed");
         // 「收尾了」的判据是**相位关了**：再选一次必须被拒（无节点的会话问不出 `node_resolved`）。
         assert_eq!(
-            run.resolve_event_effects(&[], None, &pool),
+            run.resolve_event_effects(&[], None, None, &pool),
             Err(RunError::WrongPhase),
             "a second choice after the tree ended is a phase error"
         );
@@ -9565,7 +9745,7 @@ mod tests {
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
         run.begin_event("golden_idol", "golden_idol.boulder").expect("the boulder");
         let before = run.health_max();
-        run.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(80), None)], None, &pool)
+        run.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(80), None)], None, None, &pool)
             .expect("hiding");
         assert_eq!(run.health_max(), before - (before * 8 / 100), "8% of max, floored");
         assert!(
@@ -9575,7 +9755,7 @@ mod tests {
         // 1 HP 的上限也只会掉 1（下限 1），不会掉到 0 或负数。
         let mut tiny = RunState::new(7, 1, 0, &["strike"; 5]).expect("a 1 HP run");
         tiny.begin_event("golden_idol", "golden_idol.boulder").expect("the boulder");
-        tiny.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(500), None)], None, &pool)
+        tiny.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(500), None)], None, None, &pool)
             .expect("hiding");
         // 损失 = max(1, floor(1 × 50%)) = 1，但上限**夹在 1**（0 上限会让下一次百分比
         // 永远算出 0 伤害）。
@@ -9596,6 +9776,7 @@ mod tests {
         let outcome = run.resolve_event_effects(
             &[(EventEffect::GoldCost(35), None), (EventEffect::HealPercent(250), None)],
             None,
+            None,
             &pool,
         );
         assert_eq!(
@@ -9611,6 +9792,7 @@ mod tests {
         rich.resolve_event_effects(
             &[(EventEffect::GoldCost(35), None), (EventEffect::HealPercent(250), None)],
             None,
+            None,
             &pool,
         )
         .expect("35 gold is affordable");
@@ -9625,7 +9807,7 @@ mod tests {
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
         run.adjust_health(-50);                       // 30/80
         run.begin_event("the_moai_head", "the_moai_head").expect("the event");
-        run.resolve_event_effects(&[(EventEffect::HealFull, None)], None, &pool)
+        run.resolve_event_effects(&[(EventEffect::HealFull, None)], None, None, &pool)
             .expect("jump inside");
         assert_eq!(run.health(), run.health_max, "heal_full reaches the maximum");
     }
@@ -9640,7 +9822,7 @@ mod tests {
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
         run.begin_event("the_moai_head", "the_moai_head").expect("the event");
         let before = run.health_max();
-        run.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(125), None)], None, &pool)
+        run.resolve_event_effects(&[(EventEffect::LoseMaxHealthPercent(125), None)], None, None, &pool)
             .expect("the moai head");
         assert_eq!(run.health_max(), before - 10, "12.5% of 80 is exactly 10");
         // 解析层：`12.5` 与 `12` 必须是两个不同的数（一个拼写错误不该被悄悄接受成整数）。
@@ -9669,6 +9851,7 @@ mod tests {
             // `Ident::new` 只拒两种东西：**非 ASCII** 与**超长**（空格、点、大写都合法）。
             // 所以"形状不合法"这条判据只能用非 ASCII 的例子。
             Some("巨石"),
+            None,
             &pool,
         );
         assert_eq!(outcome, Err(RunError::NoSuchEvent), "a malformed step id is refused");
@@ -9692,6 +9875,7 @@ mod tests {
                 (EventEffect::GainCurse, Some("no_such_curse")),
             ],
             None,
+            None,
             &pool,
         );
         assert!(outcome.is_err(), "an unknown curse must be refused");
@@ -9709,6 +9893,7 @@ mod tests {
         let before = run;
         let outcome = run.resolve_event_effects(
             &[(EventEffect::RemoveCard, None), (EventEffect::UpgradeCard, None)],
+            None,
             None,
             &pool,
         );

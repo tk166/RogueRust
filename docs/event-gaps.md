@@ -58,7 +58,12 @@ wiki 对 `The Cleric` / `The Moai Head` / `The Joust` / `Tomb of Lord Red Mask` 
 在该分流上加一层过滤会改变每一次 `?` 房的抽取结果，于是所有跑法（`ACT1_SLICE` /
 `SOAK`）的覆盖会整片重掷。要么单独一节、单独一组数字，要么等 `?` 房本身再改一次时顺手做。
 
-### 3.2 随机结果（`The Joust` 的 70/30）
+### 3.2 随机结果（`The Joust` 的 70/30）—— **§285 已做**
+
+选项带 `Chance`/`NextFail`，掷骰走 `RunStream::Event`；`The Joust` 的 70/30 与
+`Scrap Ooze` 的 9 段升级链都已落地。下面保留原文。
+
+#### （原文）
 
 **战斗侧**已经做了（§281：`randomInt` + 统一入口），但 `The Joust` 要的是**运行层**的
 概率（70/30 的胜负），走 `RunStream::Event` 那条流 —— 那是事件那一节的活，与战斗随机不同流。

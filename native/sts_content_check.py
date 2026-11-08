@@ -4451,19 +4451,30 @@ def check_event_vocabulary(doc):
         # （wiki 的后续屏就是单个 `[Leave]`，以及 `The Ssssserpent` 的 `[Continue]`）。
         # §278 第一版把"至少两个"套在了每一段上，于是真事件一进来就红。
         entry_id = {room.get('Entry') for room in rooms if room.get('Entry')}
-        if len(options) < (2 if node_id in entry_id else 1):
-            fail(label_root,
-                 "%d option(s) -- an entry step needs two, a follow-up needs one" % len(options))
+        # §285：入口段通常要两个选项（那才是一个"选择"），但**纯过场**的入口只有一个
+        # `[Continue]`（`The Joust` 的第一屏就是这样）—— 允许一，禁止零。
+        if len(options) < 1:
+            fail(label_root, "0 option(s) -- a step must offer at least one")
         if len(options) > 4:
             fail(label_root, "%d options (the kernel's MAX_EVENT_OPTIONS is 4)" % len(options))
         for index, option in enumerate(options):
             label = "%s.Options%d" % (label_root, index)
             if not option.get("Label"):
                 fail(label, "empty Label (an unlabeled button)")
-            nxt = option.get("Next") or ""
-            if nxt:
+            # §285：`Chance` 与 `NextFail` **必须成对**，而且两条边都要算可达。
+            chance = option.get("Chance")
+            fail_to = option.get("NextFail") or ""
+            if (chance is None) != (fail_to == ""):
+                fail(label, "`Chance` and `NextFail` must come together (Chance=%r, NextFail=%r)"
+                     % (chance, fail_to))
+            if chance is not None and not (isinstance(chance, int) and 1 <= chance <= 100):
+                fail(label + ".Chance", "must be 1..=100, got %r" % (chance,))
+            for key in ("Next", "NextFail"):
+                nxt = option.get(key) or ""
+                if not nxt:
+                    continue
                 if nxt not in node_ids:
-                    fail(label + ".Next", "names %r, which is not in EventNodes" % (nxt,))
+                    fail("%s.%s" % (label, key), "names %r, which is not in EventNodes" % (nxt,))
                 else:
                     reached.add(nxt)
             for kind_label, key in (("", "Effects"), ("Asc", "EffectsAsc")):
@@ -4529,6 +4540,40 @@ def check_event_vocabulary(doc):
                             fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
                         if kind != "heal_pct" and entry.get("Amount") not in (0, None):
                             fail(where, "百分比效果的 Amount 必须是 0（数字在词里）")
+                        continue
+                    if kind == "relic_random":
+                        # §285：随机一件遗物（Scrap Ooze）。不带载荷 —— 抽哪件由内容池与
+                        # 稀有度权重决定，那在 `rd-wasm` 手里。
+                        if payload:
+                            fail(where, "relic_random takes no payload, got %r" % (payload,))
+                        counts["relic"] += 1
+                        continue
+                    if kind == "gold_random":
+                        # §285：`gold_random:<min>:<max>` —— 区间金币（负区间 = 扣钱）。
+                        parts = payload.split(":") if payload else []
+                        if len(parts) != 2:
+                            fail(where, "gold_random needs a `min:max` payload, got %r"
+                                 % (payload,))
+                        else:
+                            try:
+                                low, high = int(parts[0]), int(parts[1])
+                            except ValueError:
+                                fail(where, "gold_random payload is not two integers: %r"
+                                     % (payload,))
+                            else:
+                                # 负区间是"扣钱"：内容写成 `-20:-50`（先小后大，与
+                                # `20:50` 同一个读法），所以比较的是**绝对值**。
+                                if low == 0 or high == 0 or (low < 0) != (high < 0):
+                                    fail(where, "gold_random range %d..%d must not straddle zero"
+                                         % (low, high))
+                                elif abs(low) > abs(high):
+                                    fail(where, "gold_random range %d..%d is inverted"
+                                         % (low, high))
+                                if low == 0 and high == 0:
+                                    fail(where, "gold_random 0:0 does nothing -- that is a "
+                                                "decorative roll")
+                                if abs(low) > 999 or abs(high) > 999:
+                                    fail(where, "gold_random range is absurd: %r" % (payload,))
                         continue
                     if kind == "gold_cost":
                         counts["cost"] += 1

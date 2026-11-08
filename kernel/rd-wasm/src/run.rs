@@ -1738,11 +1738,56 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
         Ok(pool) => pool,
         Err(message) => return fail(session, &message),
     };
+    // §285：`relic_random`（Scrap Ooze 的"a random relic"）—— **池子在内容里**，所以在这里
+    // 解析成"`GainRelic` + 具体 id"，运行层只认 `relic:<id>`（它没有池）。
+    // 抽样走 `pick_relic`：按稀有度权重（50/33/17）、跳过已持有的 —— 与宝箱/精英同一套。
+    if parsed[..specs.len()]
+        .iter()
+        .any(|(effect, _)| matches!(effect, rd_run::state::EventEffect::GainRandomRelic))
+    {
+        let relics = relic_pool(content());
+        let picked = match session
+            .state
+            .pick_relic(rd_run::streams::RunStream::Event, &relics)
+        {
+            Ok(picked) => picked,
+            Err(error) => {
+                let message = describe(&error);
+                return fail(session, &message);
+            }
+        };
+        // id 必须借到 `'static`：`relics` 的元素来自镜像的字符串池（`Box::leak`）。
+        let stable = relics
+            .iter()
+            .find(|entry| entry.id == picked.as_str())
+            .map(|entry| entry.id);
+        let Some(stable) = stable else {
+            // 抽到了池子外的东西，或者池子里一件都没有（全持有）—— 两种都不该静默。
+            if picked.as_str().is_empty() {
+                return fail(session, "没有可给的遗物（池子空或全已持有）");
+            }
+            return fail(session, "抽到的遗物不在池子里");
+        };
+        for entry in parsed[..specs.len()].iter_mut() {
+            if matches!(entry.0, rd_run::state::EventEffect::GainRandomRelic) {
+                *entry = (rd_run::state::EventEffect::GainRelic, Some(stable));
+            }
+        }
+    }
     // §278：这一段选完之后还去不去下一段，**由内容**说（`option.Next`）。
     let next = choice.goes_on();
+    // §285：`Chance`/`NextFail` 都在选项上 —— **掷骰在运行层**（`RunStream::Event`），
+    // 这里只把两个目标和概率递过去。
+    let roll = choice
+        .roll
+        .map(|(chance, on_fail)| rd_run::state::EventRoll {
+            chance,
+            on_success: next.unwrap_or(""),
+            on_fail,
+        });
     let outcome = session
         .state
-        .resolve_event_effects(&parsed[..specs.len()], next, &pool)
+        .resolve_event_effects(&parsed[..specs.len()], next, roll, &pool)
         .map(|_| 0i32);
     finish(session, outcome)
 }
@@ -1986,6 +2031,8 @@ fn effect_code(effect: &str) -> i32 {
                     // §280：付钱 / 按上限百分比回血 / 回满血。
                     "gold_cost" => 13,
                     "heal_pct" => 14,
+                    // §285：区间金币（`gold_random:20:50`）。码 16 留给它，15 是 `heal_full`。
+                    "gold_random" => 16,
                     _ => -1,
                 };
             }
@@ -3079,11 +3126,17 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         // §280
         EventEffect::GoldCost(_) => 13,
         EventEffect::HealPercent(_) => 14,
+        EventEffect::GoldRandom(_, _) => 16,
         EventEffect::HealFull => 15,
         // §279：失去遗物只有**事件**会用（`relic_lose:<id>`），与 `GainCurse`/`GainRelic`
         // 同一条规矩：这两个码是"这个选项点名了一件遗物"，只有**内容字符串**知道 id，
         // 而 `effect_code_of` 拿到的是已经解析过的枚举 —— 所以答 `-1` 而不是复用 10/13。
-        EventEffect::GainCurse | EventEffect::GainRelic | EventEffect::LoseRelic => -1,
+        EventEffect::GainCurse
+        | EventEffect::GainRelic
+        | EventEffect::LoseRelic
+        // §285：`relic_random` 在 `rd_run_choose` 里已经被解析成 `GainRelic`，永远到不了这里；
+        // 真到了也只可能是"别人直接调 ABI"，答 `-1` 而不是猜一个码。
+        | EventEffect::GainRandomRelic => -1,
     }
 }
 
@@ -3100,6 +3153,8 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::LoseMaxHealthPercent(n)
         | EventEffect::HealPercent(n)
         | EventEffect::GoldCost(n) => n,
+        // §285：区间金币的"数量"取**上界**（页面写"最多 N"）；下界在词里，页面不需要它。
+        EventEffect::GoldRandom(_, high) => high,
         EventEffect::Nothing
         | EventEffect::RemoveCard
         | EventEffect::UpgradeCard
@@ -3107,6 +3162,7 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::GainCurse
         | EventEffect::GainRelic
         | EventEffect::LoseRelic
+        | EventEffect::GainRandomRelic
         | EventEffect::HealFull => 0,
     }
 }
