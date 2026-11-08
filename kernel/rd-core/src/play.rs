@@ -253,6 +253,17 @@ pub enum Refusal {
         /// 本回合已经出了几张（`CardPlayTurnStats.CardsPlayedThisTurn`）。
         played: i32,
     },
+    /// §297：`velvet_choker` —— "You cannot play more than 6 cards per turn"。
+    ///
+    /// 与 [`Self::DecreeMaxCardsPerTurn`] 同形但**不是法令**：那一条来自 `CombatRules`
+    /// （本内容 23/23 全是 `ABSENT16`，而 `refuse_if_any_decree` 一票否决），借它表达
+    /// "遗物限制"会让"法令"与"遗物"两件事共用一个名字 —— 而页面要把原因显示给玩家看。
+    CardLimitReached {
+        /// 上限（`VELVET_CHOKER_CAP`）。
+        cap: i32,
+        /// 本回合已经出了几张。
+        played: i32,
+    },
     /// 同名法令的**第二条**规则：不许拿一张带 `tag` 的牌接续"上一张也带这个 tag"的牌
     /// （Priority 150，`CombatDecrees.cs:160-174`；消息
     /// `"... may not follow a '{tag}' card with another by decree."`）。
@@ -490,6 +501,13 @@ const HP_LOSS_COST_TAG: &str = "hp_loss_cost";
 const CAP_COST_AT_STATUS: &str = "standard.cap_cost_at";
 /// `StandardCombatIds.OneAttackPerTurnStatus`（`:35`）。
 const ONE_ATTACK_PER_TURN_STATUS: &str = "standard.one_attack_per_turn";
+/// §297：`velvet_choker` 的每回合出牌上限（wiki: "You cannot play more than 6 cards per turn"）。
+///
+/// 数字住在内核（与 `exec::THE_BOOT` / `exec::CHEMICAL_X` 同族）：它是**这件遗物的定义**，
+/// 不是"能力值"，而且今天只有它一个用户。有第二件同类遗物时再改成内容给的数。
+pub const VELVET_CHOKER_CAP: i32 = 6;
+/// `velvet_choker` 在身上时挂的那条状态（`rd-run` 的开战加成挂它，规则在这里）。
+pub const VELVET_CHOKER_STATUS: &str = "standard.velvet_choker";
 /// §196：Red Slaver 的 `Entangled` —— "本回合不能打出 Attack"。
 ///
 /// 参考实现把它写在 `AbstractCard.canUse()` 里（`type == ATTACK && player.hasPower("Entangled")`），
@@ -1450,6 +1468,7 @@ enum Validator {
     Entangled,
     PlayCondition,
     OneAttackPerTurn,
+    CardLimit,
     Unplayable,
 }
 
@@ -1463,7 +1482,7 @@ impl Validator {
         match self {
             Validator::Stun => 100,
             Validator::Decree | Validator::Entangled | Validator::PlayCondition => 150,
-            Validator::OneAttackPerTurn | Validator::Unplayable => 200,
+            Validator::OneAttackPerTurn | Validator::CardLimit | Validator::Unplayable => 200,
         }
     }
 
@@ -1477,17 +1496,22 @@ impl Validator {
             Validator::Entangled => "standard.entangled_validator",
             Validator::PlayCondition => "standard.play_condition_validator",
             Validator::OneAttackPerTurn => "standard.one_attack_per_turn_validator",
+            // §297：`card_limit` 按 id 字节序排在 `one_attack_per_turn` **前**（同是 200）。
+            Validator::CardLimit => "standard.card_limit_validator",
             Validator::Unplayable => "standard.unplayable_validator",
         }
     }
 }
 
 /// 执行序 = 升序后的固定表。**顺序就是语义**：第一个说不的为止。
-const VALIDATOR_ORDER: [Validator; 6] = [
+const VALIDATOR_ORDER: [Validator; 7] = [
     Validator::Stun,
     Validator::Decree,
     Validator::Entangled,
     Validator::PlayCondition,
+    // §297：`standard.card_limit_validator` < `standard.one_attack_per_turn_validator`
+    // （同优先级 200，按 id 字节序）—— 顺序是语义，所以它排在这里而不是末尾。
+    Validator::CardLimit,
     Validator::OneAttackPerTurn,
     Validator::Unplayable,
 ];
@@ -1500,6 +1524,7 @@ fn validate_card_play(state: &CombatState, card: &CardOnTable<'_>) -> Result<(),
             Validator::Decree => decree_validator(card),
             Validator::Entangled => entangled_validator(state, card),
             Validator::PlayCondition => play_condition_validator(state, card),
+            Validator::CardLimit => card_limit_validator(state, card),
             Validator::OneAttackPerTurn => one_attack_per_turn_validator(state, card),
             Validator::Unplayable => unplayable_validator(card),
         };
@@ -1689,6 +1714,28 @@ fn hand_is_all_attacks(state: &CombatState, card: &CardOnTable<'_>) -> bool {
 ///   而它**不进哈希**（§6.3），对拍永远看不出来。
 ///
 /// ⇒ [`Refusal::OneAttackPerTurn`] 今天**不可达**（如实报告）。
+/// §297 `card_limit`（Priority 200，`standard.card_limit_validator`）—— `velvet_choker`。
+///
+/// "You cannot play more than 6 cards per turn"：**任意**牌都受限（不分攻击/技能），
+/// 所以这条校验器不看 `card.is_attack`。计数用 `CombatState::cards_played_this_turn`
+/// （内核自己的账，`CardPlayed` 触发器与"每次掉血减 1 费"读的是同一个数）。
+///
+/// 没有那条状态 ⇒ 放行（绝大多数战斗走这一支，所以它必须**最便宜**的早退）。
+fn card_limit_validator(state: &CombatState, card: &CardOnTable<'_>) -> Result<(), PlayError> {
+    let source = source_of(state, &card.source)?;
+    if !has_status(source, VELVET_CHOKER_STATUS) {
+        return Ok(());
+    }
+    // `>=` 而不是 `>`：这一张就是第 7 张（`played` 是**已经**打出的张数）。
+    if state.cards_played_this_turn >= VELVET_CHOKER_CAP {
+        return Err(PlayError::Refused(Refusal::CardLimitReached {
+            cap: VELVET_CHOKER_CAP,
+            played: state.cards_played_this_turn,
+        }));
+    }
+    Ok(())
+}
+
 fn one_attack_per_turn_validator(
     state: &CombatState,
     card: &CardOnTable<'_>,
@@ -3633,10 +3680,12 @@ mod tests {
                 // §196: (150, "standard.entangled_validator") -- 'e' sits between 'd' and 'p'.
                 "standard.entangled_validator",
                 "standard.play_condition_validator",
+                // §297: (200, "standard.card_limit_validator") -- 'c' 排在 'o' 之前。
+                "standard.card_limit_validator",
                 "standard.one_attack_per_turn_validator",
                 "standard.unplayable_validator",
             ],
-            "§2.2 的六条执行序（150 档 'd' < 'e' < 'p'，200 档 'o' < 'u'）"
+            "§2.2 的六条 + §297 的第七条（150 档 'd' < 'e' < 'p'，200 档 'c' < 'o' < 'u'）"
         );
 
         // §3.3：六个费用修饰器的执行序同理。

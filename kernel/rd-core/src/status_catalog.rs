@@ -770,6 +770,11 @@ pub fn has_behaviour(status_id: &str) -> bool {
             // §296: `chemical_x` —— 规则**在内核**（`play.rs` 按 id 看"有没有"，给 X 加 2）。
             // 内容那一行没有修饰器也没有触发器：它像 §231 的 `standard.no_draw`，是个**开关**。
             | "standard.chemical_x"
+            // §297: `velvet_choker` / `runic_dome` —— 规则在内核（`play.rs` 的出牌上限、
+            // `rd-wasm` 的意图观测），内容那一行是开关；`strike_dummy` 则**全是内容**。
+            | "standard.velvet_choker"
+            | "standard.runic_dome"
+            | "standard.strike_dummy"
             // A **host step**, not a modifier: `Host::grant_end_of_turn_block` (see
             // `try_run_turn_ended_triggers`). Ported from the wiki's Lagavulin.
             | "standard.metallicize"

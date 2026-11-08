@@ -10813,4 +10813,51 @@ mod tests {
         }
     }
 
+    /// §297：`runic_dome` —— "You can no longer see enemy intents"。
+    ///
+    /// 判据的口径是**观测里就没有**（不是"画了再藏"）：带遗物时每个敌人的意图文本都是
+    /// `runic_dome` 那句说明，不带时是真意图（这条对照是为了防止"意图**永远**是 unknown"也绿）。
+    #[test]
+    fn runic_dome_blinds_the_intent_observation() {
+        let deck = ["strike", "strike", "strike", "strike", "strike",
+                    "defend", "defend", "defend", "defend", "bash"];
+        let mut seen = Vec::new();
+        for relic in ["runic_dome", ""] {
+            test_run(7, 80, 80, &deck);
+            if !relic.is_empty() {
+                run_slot()
+                    .as_mut()
+                    .expect("a run")
+                    .state
+                    .push_relic(relic, &[])
+                    .expect("runic_dome");
+            }
+            assert_eq!(rd_run_step(0), 0, "walk onto floor 1");
+            assert_eq!(rd_run_fight_begin(), 0, "a fight begins");
+            // ⚠️ 意图是**观测**里缓存的（`reobserve` 才算）—— 开战之后必须先观察一次，
+            // 否则读到的是开战前那一份。第一版没有这一句，于是"带遗物"那边拿到的是真意图。
+            let mut observation = std::vec![0i32; 64];
+            unsafe { crate::rd_env_observe_into(observation.as_mut_ptr()) };
+            // 读到第一个敌人的意图文本。
+            let len = crate::rd_env_intent_len(0);
+            assert!(len > 0, "the intent is rendered at all");
+            let mut bytes = std::vec![0u8; len as usize];
+            let written = unsafe { crate::rd_env_intent_into(0, bytes.as_mut_ptr()) };
+            assert_eq!(written, len);
+            let text = std::string::String::from_utf8(bytes).expect("utf-8");
+            seen.push(text);
+            let _ = rd_run_fight_end();
+        }
+        let (with_relic, without_relic) = (&seen[0], &seen[1]);
+        assert!(
+            with_relic.contains("runic_dome"),
+            "runic_dome must replace the intent, got `{with_relic}`"
+        );
+        assert!(
+            !without_relic.contains("runic_dome"),
+            "without the relic the intent is real, got `{without_relic}`"
+        );
+        assert_ne!(with_relic, without_relic, "the two must differ");
+    }
+
 }

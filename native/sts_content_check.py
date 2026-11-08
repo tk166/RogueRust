@@ -126,8 +126,9 @@ INV_COUNTS = {
     # §292: +1 (`standard.cursed_key` —— 每回合 +1 能量的载体，与 `busted_crown` 同形状)。
     # §294: +2 (`standard.the_abacus` / `standard.sundial` —— `DeckShuffled` 触发器的头两位)。
     # §295: +1 (`standard.hand_drill` —— `BlockBroken` 触发器)。
-    # §296: +1 (`standard.chemical_x` —— 内核规则的开关，内容那一行是载体).
-    "statuses": 133,
+    # §296: +1 (`standard.chemical_x` —— 内核规则的开关，内容那一行是载体)。
+    # §297: +3 (`strike_dummy` 的内容程序 + `velvet_choker` / `runic_dome` 的开关).
+    "statuses": 136,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1560,6 +1561,11 @@ INV_STATUSES = {
     "standard.hand_drill": [],
     # §296：`chemical_x` 的规则**在内核**（`play.rs` 给 X 加 2），内容这一行是开关。
     "standard.chemical_x": [],
+    # §297：`strike_dummy` 是**真的内容程序**（`DamageDealt` + 来源卡标签门）。
+    "standard.strike_dummy": [("DamageDealt", "AddFlat", 3, 100, None)],
+    # `velvet_choker` / `runic_dome` 的每回合 +1 能量（其余规则在内核）。
+    "standard.velvet_choker": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
+    "standard.runic_dome": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
     # §267：零基建批次。
     "standard.ring_of_the_serpent": [('TurnStartDraw', 'AddFlat', 1, 100, None)],
     "standard.philosophers_stone": [('TurnStartEnergy', 'AddPerStack', 1, 100, None)],
@@ -3491,6 +3497,8 @@ SPEC_PARAMS = {
     "standard.akabeko": (None, "attack"),
     # §262 的翻倍现在只对攻击牌生效（§264 解开了那个参数）。
     "standard.double_damage": (None, "attack"),
+    # §297：`strike_dummy` 的 +3 只对**带 `strike` 标签**的牌（wiki: "Cards containing Strike"）。
+    "standard.strike_dummy": (None, "strike"),
 }
 
 
@@ -3633,7 +3641,9 @@ def check_statuses(doc):
                      "standard.snecko_eye", "standard.cursed_key",
                      "standard.the_abacus", "standard.sundial",
                      "standard.hand_drill",
-                     "standard.chemical_x"):
+                     "standard.chemical_x",
+                     "standard.strike_dummy", "standard.velvet_choker",
+                     "standard.runic_dome"):
             expected = {"standard.thorns": ["DamageTaken"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
@@ -3778,7 +3788,11 @@ def check_statuses(doc):
                         # §295
                         "standard.hand_drill": ["BlockBroken"],
                         # §296：`chemical_x` 没有触发器（规则在内核）。
-                        "standard.chemical_x": []}[sid]
+                        "standard.chemical_x": [],
+                        # §297：三件都没有触发器（一件靠修饰器，两件靠内核规则）。
+                        "standard.strike_dummy": [],
+                        "standard.velvet_choker": [],
+                        "standard.runic_dome": []}[sid]
             if triggers != expected:
                 fail("status." + sid, "expected exactly %s, got %s" % (expected, triggers))
         elif sid != "ritual" and triggers:
@@ -4073,6 +4087,8 @@ IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", 
                       "hand_drill",
                       # §296：X 费牌的 X 加 2。
                       "chemical_x",
+                      # §297：三件（`strike_dummy` 内容规则 + 两件开关）。
+                      "strike_dummy", "velvet_choker", "runic_dome",
                       # §221/§224: `oddly_smooth_stone` = 1 Dexterity **on the hero** at combat
                       # start; `bag_of_marbles` = 1 Vulnerable **on every enemy** -- the latter needs
                       # `RelicEffect::StartCombatStatusOnEnemies` (the hero-shaped variant made the

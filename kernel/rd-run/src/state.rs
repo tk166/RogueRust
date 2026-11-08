@@ -3147,6 +3147,11 @@ impl RunState {
             "hand_drill" => Some(RelicEffect::StartCombatStatus("standard.hand_drill", 1)),
             // §296：`chemical_x` —— 同样是开战挂一条内容状态；规则在内核（`x.cost` 上加 2）。
             "chemical_x" => Some(RelicEffect::StartCombatStatus("standard.chemical_x", 1)),
+            // §297：三件。`strike_dummy` 的规则**全在内容**（`DamageDealt` + 来源卡标签门），
+            // 另外两件是"开战挂开关，规则在内核"。
+            "strike_dummy" => Some(RelicEffect::StartCombatStatus("standard.strike_dummy", 1)),
+            "velvet_choker" => Some(RelicEffect::StartCombatStatus("standard.velvet_choker", 1)),
+            "runic_dome" => Some(RelicEffect::StartCombatStatus("standard.runic_dome", 1)),
             _ => None,
         }
     }

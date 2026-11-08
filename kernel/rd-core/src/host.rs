@@ -14607,4 +14607,142 @@ mod tests {
         assert_eq!(dealt, 6, "a non-X card is untouched (`strike` is 6)");
     }
 
+    /// §297：`strike_dummy` —— "Cards containing Strike deal 3 additional damage."
+    ///
+    /// 规则**全在内容**（`DamageDealt / AddFlat 3 / RestrictSourceCardTag: strike`），所以这条判据
+    /// 钉的其实是那扇**标签门**：`strike`（6 点）→ 9 点，`defend`/`bash` 一分不多。
+    /// 少了后半句，"所有牌都 +3" 也会全绿。
+    #[test]
+    fn strike_dummy_only_boosts_cards_that_carry_the_strike_tag() {
+        use crate::state::ResourceId;
+
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+
+        // 打一张牌，返回敌人掉了多少血。
+        let play = |host: &mut Host, card_id: &str, with_relic: bool| -> i32 {
+            let mut state = arena();
+            {
+                let foe = state.combatant_mut(&cid("enemy_a")).expect("foe");
+                foe.health_max = 200;
+                foe.health_current = 200;
+            }
+            state
+                .combatant_mut(&cid("hero"))
+                .expect("hero")
+                .set_resource(ResourceId::new("standard.energy").unwrap(), 3, Some(3))
+                .expect("energy");
+            if with_relic {
+                give(&mut state, "hero", status("st_sd", "standard.strike_dummy", 1));
+            }
+            let card = card_in_hand(&mut state, &content, "hero", card_id);
+            let before = state.combatant(&cid("enemy_a")).expect("foe").health_current;
+            let request = crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a")));
+            crate::play::play_card(&mut state, Some(&content), &request)
+                .unwrap_or_else(|e| panic!("{card_id}: {e:?}"));
+            host.try_resolve_pending_queues(&mut state).expect("drain");
+            before - state.combatant(&cid("enemy_a")).expect("foe").health_current
+        };
+
+        // `strike` 6 → 9（+3）；`bash` 8 → 8（不带 `strike` 标签）。
+        assert_eq!(play(&mut host, "strike", false), 6, "strike is 6 without the relic");
+        assert_eq!(play(&mut host, "strike", true), 9, "and 9 with it");
+        assert_eq!(play(&mut host, "bash", true), 8, "bash carries no strike tag -> untouched");
+    }
+
+    /// §297：`velvet_choker` —— "You cannot play more than 6 cards per turn"。
+    ///
+    /// 三侧：① 前 6 张全放行；② **第 7 张**被拒（理由是 `CardLimitReached`，上限 6、已出 6）；
+    /// ③ **没有那条状态**时第 7 张照打（否则这条判据在"限制永远生效"时也绿）。
+    #[test]
+    fn velvet_choker_stops_the_seventh_card_of_the_turn() {
+        use crate::state::ResourceId;
+
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+
+        // 手牌里塞 8 张 `defend`（技能牌：不会被 Entangled 之类挡住），能量给足。
+        let mut state = arena();
+        {
+            let foe = state.combatant_mut(&cid("enemy_a")).expect("foe");
+            foe.health_max = 400;
+            foe.health_current = 400;
+        }
+        state
+            .combatant_mut(&cid("hero"))
+            .expect("hero")
+            .set_resource(ResourceId::new("standard.energy").unwrap(), 20, Some(20))
+            .expect("energy");
+
+        // 一条"打第 N 张"的助手：每次都从手牌取一张新牌。
+        let mut play_one = |state: &mut crate::state::CombatState, host: &mut Host| {
+            let card = card_in_hand(state, &content, "hero", "defend");
+            let request = crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a")));
+            let outcome = crate::play::play_card(state, Some(&content), &request);
+            host.try_resolve_pending_queues(state).expect("drain");
+            outcome
+        };
+
+        // ① 前 6 张放行。
+        for index in 1..=6 {
+            let outcome = play_one(&mut state, &mut host);
+            assert!(outcome.is_ok(), "card {index} of the turn must be playable: {outcome:?}");
+        }
+        assert_eq!(state.cards_played_this_turn, 6, "six cards played");
+
+        // ③ 先验"没有状态时第 7 张照打"（另开一场干净的战斗做对照）。
+        let mut without = arena();
+        without
+            .combatant_mut(&cid("hero"))
+            .expect("hero")
+            .set_resource(ResourceId::new("standard.energy").unwrap(), 20, Some(20))
+            .expect("energy");
+        without.cards_played_this_turn = 6;
+        let card = card_in_hand(&mut without, &content, "hero", "defend");
+        let request = crate::play::PlayRequest::new(cid("hero"), card, Some(cid("enemy_a")));
+        assert!(
+            crate::play::play_card(&mut without, Some(&content), &request).is_ok(),
+            "without the status the 7th card is fine"
+        );
+
+        // ② 有状态 ⇒ 第 7 张被拒，理由是 `CardLimitReached`。
+        give(&mut state, "hero", status("st_vc", "standard.velvet_choker", 1));
+        let outcome = play_one(&mut state, &mut host);
+        match outcome {
+            Err(crate::play::PlayError::Refused(refusal)) => assert_eq!(
+                refusal,
+                crate::play::Refusal::CardLimitReached { cap: 6, played: 6 },
+                "the refusal carries the cap and how many were played"
+            ),
+            other => panic!("the 7th card must be refused, got {other:?}"),
+        }
+        assert_eq!(state.cards_played_this_turn, 6, "a refused card does not count");
+        // ABI 上的那个数（页面靠它显示原因）。
+        assert_eq!(
+            crate::battle::play_code(&crate::battle::BattleError::Play(
+                crate::play::PlayError::Refused(crate::play::Refusal::CardLimitReached {
+                    cap: 6,
+                    played: 6,
+                })
+            )),
+            19,
+            "the page shows this number"
+        );
+        assert_eq!(
+            crate::battle::play_code_name(19),
+            "Refused(CardLimitReached)",
+            "and this name"
+        );
+    }
+
 }

@@ -1217,6 +1217,26 @@ impl Session {
     /// (hero turn-end, then the enemy's turn-start: block cleared, DoT eaten) can flip a
     /// condition, so a preview is a prediction and not a promise. Nothing here caches it — the
     /// reference recomputes on every ask, and so does this.
+    /// §297：`runic_dome` 在英雄身上时是这个状态 id（`rd-run` 的开战加成挂它）。
+    const RUNIC_DOME_STATUS: &'static str = "standard.runic_dome";
+
+    /// §297：某个战斗员身上有没有这条状态（按 definition id，看层数 > 0）。
+    fn combatant_has_status(
+        state: &rd_core::state::CombatState,
+        who: &rd_core::state::CombatantId,
+        definition: &str,
+    ) -> bool {
+        state
+            .combatant(who)
+            .map(|combatant| {
+                combatant
+                    .statuses()
+                    .iter()
+                    .any(|status| status.definition_id.as_str() == definition && status.stacks > 0)
+            })
+            .unwrap_or(false)
+    }
+
     fn refresh_intents(&mut self) {
         let content = self.content;
         let round = self.state.current_round;
@@ -1228,6 +1248,22 @@ impl Session {
                 intents.push(Intent::unknown("combatant id 不合法"));
                 continue;
             };
+            // §297：`runic_dome` —— "You can no longer see enemy intents"。
+            // 在**观测**里就把它变成 unknown（不是"画了再藏"：后者会漏 —— `?debug`、测试、
+            // 截图都能看见，而玩家看不见的规则就等于不存在）。
+            // 判据用**战斗里那条状态**（`rd-run` 开战挂它），不用运行层遗物：这本来就是一场
+            // 战斗内的规则，而状态是它的载体（与 `chemical_x` 同一个理由）。
+            // ⚠️ 状态在**英雄**身上，而这个循环的 `id` 是**敌人** —— 第一版写成 `&id`，
+            // 于是这条规则一次都没生效（而"意图永远是 unknown"那条对照会红，救了我一次）。
+            let blinded = self
+                .hero_id()
+                .is_some_and(|hero| {
+                    Self::combatant_has_status(&self.state, &hero, Self::RUNIC_DOME_STATUS)
+                });
+            if blinded {
+                intents.push(Intent::unknown("runic_dome：看不穿敌人的意图"));
+                continue;
+            }
             // §2.4 fork 3: the reference asks the selector about dead enemies too (`EnemyIntentRules`
             // 的 lambda 不检查 IsAlive), so this does too. The page decides whether to show it.
             let choice: Result<Option<ActionChoice<'static>>, _> =
