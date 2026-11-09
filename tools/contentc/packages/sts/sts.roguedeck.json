@@ -66338,6 +66338,196 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_sentry_and_spheric"
+      },
+      "Enemies": [
+        {
+          "Id": "sentry_1",
+          "MaxHealth": 38,
+          "Actions": [
+            {
+              "value": "sentry.bolt"
+            },
+            {
+              "value": "sentry.beam"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.artifact"
+              },
+              "Stacks": 1
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [],
+          "DisplayName": "Sentry",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 8,
+              "MaxHealth": 39
+            }
+          ]
+        },
+        {
+          "Id": "spheric_guardian",
+          "MaxHealth": 20,
+          "Actions": [
+            {
+              "value": "spheric_guardian.activate"
+            },
+            {
+              "value": "spheric_guardian.debuff_attack"
+            },
+            {
+              "value": "spheric_guardian.slam"
+            },
+            {
+              "value": "spheric_guardian.harden"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.artifact"
+              },
+              "Stacks": 3
+            },
+            {
+              "StatusDefinitionId": {
+                "value": "standard.barricade"
+              },
+              "Stacks": 1
+            }
+          ],
+          "Position": 1,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 96,
+              "Action": {
+                "value": "spheric_guardian.activate"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 95,
+              "Action": {
+                "value": "spheric_guardian.debuff_attack"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 90,
+              "Action": {
+                "value": "spheric_guardian.harden"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 4
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 89,
+              "Action": {
+                "value": "spheric_guardian.slam"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 10,
+              "Action": {
+                "value": "spheric_guardian.slam"
+              }
+            }
+          ],
+          "DisplayName": "Spheric Guardian",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "StartingBlock": 40
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -72421,6 +72611,10 @@
       },
       {
         "Id": "enc_two_thieves",
+        "Weight": 10
+      },
+      {
+        "Id": "enc_sentry_and_spheric",
         "Weight": 10
       }
     ],

@@ -90,7 +90,7 @@ INV_COUNTS = {
     # §282: +1 (`enc_snecko`).
     # §311: +5（Act 2 的五条 —— `enc_spheric_guardian` / `enc_chosen_and_byrd` /
     # `enc_cultist_and_chosen` / `enc_three_cultists` / `enc_parasite_and_fungi`）。
-    "encounters": 53,
+    "encounters": 54,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -1380,6 +1380,9 @@ INV_WEAK_POOL = {
     "enc_snake_plant": ["snake_plant"],
     # §313：Centurion 在前、Mystic 在后（wiki 的 Details 列：1 Centurion + 1 Mystic）。
     "enc_centurion_and_mystic": ["centurion", "mystic"],
+    # §315：1 Sentry + 1 Spheric Guardian。Sentry 的 `MaxHealthAsc` 与精英遭遇里那条**相同**
+    # （A8 39）—— 这只怪跨了 Act 1 精英 / Act 2 普通两个档位，所以档位按它自己钉。
+    "enc_sentry_and_spheric": ["sentry_1", "spheric_guardian"],
     # §314：wiki 的 Details 列 —— 1 Looter 在左、1 Mugger 在右。
     "enc_two_thieves": ["looter", "mugger"],
     # `enc_two_thieves`（1 Looter + 1 Mugger）还没做：Mugger 是**新怪物**，它的行动序列在 wiki
@@ -1466,7 +1469,8 @@ INV_ACT_TABLES = {
               "enc_chosen_and_byrd", "enc_cultist_and_chosen",
               # §282: Act 2 的普通怪 Snecko（`Confusion` 的载体）。
               "enc_snecko", "enc_three_cultists", "enc_parasite_and_fungi",
-              "enc_snake_plant", "enc_centurion_and_mystic", "enc_two_thieves"],
+              "enc_snake_plant", "enc_centurion_and_mystic", "enc_sentry_and_spheric",
+              "enc_two_thieves"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
     "Elite": ["enc_gremlin_nob", "enc_lagavulin", "enc_three_sentries"],
@@ -3139,6 +3143,16 @@ def check_starting_status_ascension(doc):
     ok("starting-status ascension", "%d rows pinned (A2/A17/A19)" % len(seen))
 
 
+# §315: 钉的档位与**池子档位**不一致的怪物（默认按池子推：普通 A7 / 精英 A8 / Boss A9）。
+#
+# `Sentry` 是唯一的一个：wiki 「38-42，**A8** 起 39-45」—— 它在 Act 1 是**精英**（A8 对得上），
+# 在 Act 2 又是**普通**敌人（池子档位 A7）。同一只怪、同一张表，所以档位只能按**它自己**钉。
+INV_ASC_HP_LEVEL = {
+    'sentry_1': 8,
+    'sentry_2': 8,
+    'sentry_3': 8,
+}
+
 # §207: monsters whose ENCT record has **no** `MaxHealthAsc`, with the wiki reason.
 INV_NO_ASC_HP = {
     # wiki `The Maw`: "The Maw is the only enemy whose Max HP does not change based on Ascension
@@ -3179,18 +3193,21 @@ def check_ascension_health(doc):
                     fail("asc.hp." + monster, "no pinned row and no wiki reason")
                 unpinned.add(monster)
                 continue
+            # §315：**档位来自 wiki 的那张表，不来自池子**（见 `INV_ASC_HP_LEVEL` 的注释）。
+            # 默认仍按池子推，于是存量记录一个字都不用改；只有"同一只怪跨档位"的那几个才要写。
+            pin_level = INV_ASC_HP_LEVEL.get(monster, level)
             rows = enemy.get("MaxHealthAsc")
             if not rows:
                 fail("asc.hp." + monster, "no MaxHealthAsc (the row still uses the +10% model)")
                 continue
             if len(rows) != 1:
-                fail("asc.hp." + monster, "expected exactly one A%d row, got %r" % (level, rows))
+                fail("asc.hp." + monster, "expected exactly one A%d row, got %r" % (pin_level, rows))
                 continue
             row = rows[0]
-            if row.get("AscensionMin") != level:
+            if row.get("AscensionMin") != pin_level:
                 fail("asc.hp." + monster,
-                     "pinned at A%s, but this encounter pays A%d"
-                     % (row.get("AscensionMin"), level))
+                     "pinned at A%s, the wiki's `AscHP` row is A%d"
+                     % (row.get("AscensionMin"), pin_level))
             if row.get("MaxHealth") != want:
                 fail("asc.hp." + monster,
                      "MaxHealthAsc %r, wiki says %d" % (row.get("MaxHealth"), want))

@@ -56,11 +56,11 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 55 / encounters 56 / cards 293 (base 154 + plus 139) / statuses 147 /
+monsters 55 / encounters 57 / cards 293 (base 154 + plus 139) / statuses 147 /
 enemy actions 154 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
 ascension variants 114 over 98 actions
-image full   content.sts.rdcf            174928 B
-image core   content.sts.core.rdcf       138140 B
+image full   content.sts.rdcf            175108 B
+image core   content.sts.core.rdcf       138320 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
@@ -327,20 +327,21 @@ wiki 常见而我们**没有**的：
 | 2 Thieves | Easy | 2 | ✅ §314（`mugger` + 1 Looter 在左、1 Mugger 在右） |
 | Chosen and Byrds | Hard | 2 | ✅ §311（1 Chosen + **1** Byrd） |
 | Cultist and Chosen | Hard | 3 | ✅ §311 |
-| Sentry and Spheric Guardian | Hard | 2 | ⛔ 见下面的"跨档位" |
+| Sentry and Spheric Guardian | Hard | 2 | ✅ §315（`(monster, tier)` 的 HP 建模） |
 | Snake Plant | Hard | 6 | ✅ §312（`standard.malleable` + 新怪物） |
 | Snecko | Hard | 4 | ✅ |
 | Centurion and Mystic | Hard | 6 | ✅ §313（`sel.alliesWithDefinition` + `intent.allyMissingHealth`） |
 | 3 Cultists | Hard | 3 | ✅ §311 |
 | Shelled Parasite and Fungi | Hard | 3 | ✅ §311 |
 
-**没有缺口了。** 上一版这里写着"`mugger` 的招式序列在 wiki 上只有一张表，照 Looter 的骨架写
-等于发明一条规则" —— **那句话是错的**：`Thieves` 页原文就是 *"**Mugger** has the same pattern
-as **Looter**."*。照抄不是发明，是**按出处抄**（§314）。留下的教训：把"我没找到出处"写成
-"没有出处"，会让一条本来很便宜的内容永远排不上队。
+**13 条全都在池子里了。** 曾经的两次误判都留在这里当记号：
 
-⚠️ 唯一仍然例外的是 `Sentry and Spheric Guardian`（见下），它卡在"同一只怪物跨档位"的
-**建模**上，不是内容没写。
+1. `mugger` 被记成"wiki 上只有一张表，照 Looter 写等于发明规则" —— **错**：`Thieves` 页原文
+   就是 *"Mugger has the same pattern as Looter."*（§314）。**把"我没找到出处"写成"没有出处"，
+   会让一条本来很便宜的内容永远排不上队。**
+2. `Sentry and Spheric Guardian` 被记成"要等跨档位建模" —— 那一条是真的（§315），
+   但**卡住的是判据模型，不是内容**：`MaxHealthAsc` 的档位原先按**池子**推（精英 A8 / 普通 A7），
+   而 Sentry 同一只怪跨两个池子。改法是"档位按**怪物自己**钉"。
 
 ### D.3.1b Mugger = Looter 的规则表 + Act 2 的数字（§314）
 
@@ -355,6 +356,22 @@ as **Looter**."*。照抄不是发明，是**按出处抄**（§314）。留下�
 
 顺手补上两个贼的 **Thievery A17 = 20**：它不是新规则，只是 `stolen_gold += X` 的第二个阈值
 （wiki 两处表都写 `15 (20 17)`）。
+
+### D.3.1c `MaxHealthAsc` 的档位按**怪物**钉，不按池子（§315）
+
+判据原先这样推档位：精英池 ⇒ A8、Boss 池 ⇒ A9、其余 ⇒ A7。多数怪物确实如此 —— 但
+**Sentry** 是 Act 1 的精英（wiki：38-42，**A8** 起 39-45）**同时**是 Act 2 的普通敌人：
+同一只怪、同一张 wiki 表。按池子推，同一条记录会被要求**同时**是 A7 与 A8，两条不可能同时
+成立 —— 这就是 `Sentry and Spheric Guardian` 一直做不了的真实原因（**不是内容没写**）。
+
+改法：档位来自 wiki 那张表，用 `INV_ASC_HP_LEVEL` 显式写出"Sentry 是 A8"，
+其余怪物仍按池子推（存量 100 多条记录一个字都不用改）。于是同一条 `{A8, 39}` 在精英池与
+普通池的**两处记录里都是正确答案**；A7 时没有可用的行 ⇒ 血量仍是 38（内核取"≤ ascension 的
+最大阈值"，`+10%` 回退在跑层是 0）。
+
+判据 `the_sentry_keeps_one_hp_table_across_two_tiers`：两处记录的 `MaxHealthAsc` **一字不差**，
+且 A7 时 38、A8 时 39（在**普通**遭遇里也一样）。负控 2/2 红：把 `INV_ASC_HP_LEVEL` 清空
+⇒ 清单判据红；把 Act 2 那条记录写成 `{A7, 39}` ⇒ A7 的断言红。
 
 ### D.3.2 Malleable（§312）
 
