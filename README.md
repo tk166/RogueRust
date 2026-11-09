@@ -239,6 +239,9 @@ python tools/contentc/build.py --package sts                           # 改内�
 ```
 
 `acceptance.ps1` 有**真参数块**（`-SkipSlow`、`-UnitsFloor`），不是位置参数。
+`cargo test -p rd-wasm` **必须**带 `--test-threads=1`：它的测试共享一份全局 session（裸指针
+写进去），并行跑会以 `STATUS_HEAP_CORRUPTION` / `STATUS_STACK_BUFFER_OVERRUN` 退出。
+`acceptance.ps1` 就是这么跑的 —— 手工复现时别漏了它。
 
 ### 5.2 22 道闸门
 

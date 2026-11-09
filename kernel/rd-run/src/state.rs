@@ -433,8 +433,19 @@ pub struct CampfireOptions {
     pub dig: bool,
 }
 
-/// `CombatBonus` 最多能带几种"开战时给的状态"（遗物数量远小于它）。
-pub const MAX_COMBAT_STATUSES: usize = 4;
+/// `CombatBonus` 最多能带几种"开战时给的状态"。
+///
+/// §309：**等于腰带容量**，不是拍的 4。
+///
+/// 为什么：每件带战斗程序的遗物都会推一条 `standard.<relic>` **标记状态**（内核靠它知道
+/// "这件遗物在身上"，`runic_pyramid` / `lantern` / `ice_cream` / `calipers` 都是这样），
+/// 而主表里有 **80 件**这种遗物。`4` 意味着"拿着 5 件这类遗物，第 5 件的效果**静默消失**"。
+///
+/// 结构上界：一个 match 臂只给一件遗物一条效果，`RELIC_SECOND_HALVES` 里的 5 条又不与主表的
+/// hero 效果重叠 ⇒ 最坏 = 腰带容量 [`MAX_RUN_RELICS`]（48）。三个桶的实测上界分别是
+/// 48 / 3 / 1（`native/p309_bound.py`），而判据
+/// `the_combat_status_capacity_covers_every_bucket` 每次都从**表本身**重算一遍。
+pub const MAX_COMBAT_STATUSES: usize = MAX_RUN_RELICS;
 
 /// 开战时挂到英雄身上的一条状态。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -545,6 +556,38 @@ impl CombatBonus {
         self.enemy_status_count += 1;
         true
     }
+}
+
+/// §309：**"同一条状态相加，否则追加"—— 只此一处**。
+///
+/// 改之前这条规则在 `combat_bonus_for` 里写了六遍（英雄表 ×3、敌人表、每诅咒表、
+/// `RELIC_SECOND_HALVES` 又一遍），而"表满了怎么办"藏在六个不同的地方：三处 `let _ =`、
+/// 一处 `debug_assert!`（release 里等于没有）、一处静默。
+/// 同一份规则写六遍必然漂 —— 而且漂的方向正好是"某一件遗物在某一种组合下不生效"。
+///
+/// 满了 ⇒ **断言**：这是"调用方破坏了前提"（内容里不可能凑出比腰带容量还多的这类遗物），
+/// 与本仓 `Reachable::push` 同款裁决 —— 响亮，而不是丢一件遗物。
+fn add_status(
+    list: &mut [Option<CombatStatus>; MAX_COMBAT_STATUSES],
+    count: &mut usize,
+    id: &'static str,
+    stacks: i32,
+    what: &str,
+) {
+    for entry in list.iter_mut().take(*count) {
+        if let Some(existing) = entry {
+            if existing.id == id {
+                existing.stacks += stacks;
+                return;
+            }
+        }
+    }
+    assert!(
+        *count < MAX_COMBAT_STATUSES,
+        "too many combat-start statuses ({what}): capacity is MAX_RUN_RELICS = {MAX_COMBAT_STATUSES}"
+    );
+    list[*count] = Some(CombatStatus { id, stacks });
+    *count += 1;
 }
 
 /// Card slots a merchant shows (`inv:§8.2`: five coloured cards; the two colourless ones are not
@@ -2563,6 +2606,22 @@ impl RunState {
         relic_id: &str,
         pool: &[PoolCard<'_>],
     ) -> Result<(), RunError> {
+        // §309：**失败 ⇒ 一个字节都不改**。§274/§293 的拾取类遗物会先动金币/上限/欠账，再抽
+        // 一手牌（`roll_pickup_offer` 可以失败）；不回滚的话，一次被拒的拾取会留下"钱加了、
+        // 遗物没到手"的局面。`RunState` 是 `Copy`，所以回滚是一次结构体赋值，不是一套事务框架。
+        let snapshot = *self;
+        let outcome = self.push_relic_inner(relic_id, pool);
+        if outcome.is_err() {
+            *self = snapshot;
+        }
+        outcome
+    }
+
+    fn push_relic_inner(
+        &mut self,
+        relic_id: &str,
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
         let Some(effect) = Self::relic_effect(relic_id) else {
             return Err(RunError::UnsupportedRelic {
                 index: self.relics_len,
@@ -3598,6 +3657,21 @@ impl RunState {
         slot: usize,
         pool: &[PoolCard<'_>],
     ) -> Result<(), RunError> {
+        // §309：同 [`Self::push_relic`] —— 加一张牌之后再抽下一手，抽失败必须整体回滚，
+        // 否则"那张牌进了牌组、欠账却没按规矩走"（§274 的 `pickup_card` 踩过同一个坑）。
+        let snapshot = *self;
+        let outcome = self.pickup_add_card_inner(slot, pool);
+        if outcome.is_err() {
+            *self = snapshot;
+        }
+        outcome
+    }
+
+    fn pickup_add_card_inner(
+        &mut self,
+        slot: usize,
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
         if self.pickup_add == 0 {
             return Err(RunError::WrongPhase);
         }
@@ -3731,62 +3805,34 @@ impl RunState {
             match Self::relic_effect(self.relics[slot].as_str()) {
                 Some(RelicEffect::StartCombatBlock(amount)) => bonus.block += amount,
                 Some(RelicEffect::StartCombatStatusOnEnemies(id, stacks)) => {
-                    // §224: 给**敌人**的那张表。合并规则与英雄那张相同（两件遗物给同一条状态
-                    // 要相加，不是覆盖）。
-                    let mut merged = false;
-                    for entry in bonus.enemy_statuses.iter_mut().take(bonus.enemy_status_count) {
-                        if let Some(existing) = entry {
-                            if existing.id == id {
-                                existing.stacks += stacks;
-                                merged = true;
-                                break;
-                            }
-                        }
-                    }
-                    if !merged && !bonus.push_enemy_status(id, stacks) {
-                        // 表满 = 内容的一次冲突，不能静默丢。
-                        // `combat_bonus` 没有 Result 通道（它是纯读），所以这里的"响亮"是
-                        // 一条断言级的事实：内容里最多 4 件这类遗物。
-                        debug_assert!(false, "too many enemy combat-start statuses");
-                    }
+                    // §224：给**敌人**的那张表。§309：合并 + 容量走同一处（`add_status`）。
+                    add_status(
+                        &mut bonus.enemy_statuses,
+                        &mut bonus.enemy_status_count,
+                        id,
+                        stacks,
+                        "enemy",
+                    );
                 }
                 // §259：`Girya` 的力量**不是常量**，而是"用过几次 Lift"。
                 // 这里把它折成与 `StartCombatStatus` 同一张表，于是后面的合并规则、去重规则、
                 // 与 `Vajra` 相加的规则全都自动成立（用过 2 次 Lift + Vajra = 3 层）。
                 Some(RelicEffect::CampfireLift) => {
                     if self.girya_lifts > 0 {
-                        let stacks = i32::from(self.girya_lifts);
-                        let mut merged = false;
-                        for entry in bonus.statuses.iter_mut().take(bonus.status_count) {
-                            if let Some(existing) = entry {
-                                if existing.id == "standard.strength" {
-                                    existing.stacks += stacks;
-                                    merged = true;
-                                    break;
-                                }
-                            }
-                        }
-                        if !merged {
-                            let _ = bonus.push_status("standard.strength", stacks);
-                        }
+                        // 与 `Vajra` 相加，不覆盖：`Girya` 2 次 + `Vajra` = 3 层。
+                        add_status(
+                            &mut bonus.statuses,
+                            &mut bonus.status_count,
+                            "standard.strength",
+                            i32::from(self.girya_lifts),
+                            "hero",
+                        );
                     }
                 }
                 Some(RelicEffect::StartCombatStatusInKinds(id, stacks, kinds)) => {
                     // §269：掩码不覆盖这一场 ⇒ 这条遗物今天不存在。
                     if kinds.covers(kind) {
-                        let mut merged = false;
-                        for entry in bonus.statuses.iter_mut().take(bonus.status_count) {
-                            if let Some(existing) = entry {
-                                if existing.id == id {
-                                    existing.stacks += stacks;
-                                    merged = true;
-                                    break;
-                                }
-                            }
-                        }
-                        if !merged {
-                            let _ = bonus.push_status(id, stacks);
-                        }
+                        add_status(&mut bonus.statuses, &mut bonus.status_count, id, stacks, "hero");
                     }
                 }
                 Some(RelicEffect::StartCombatHealInKinds(amount, kinds)) => {
@@ -3795,38 +3841,19 @@ impl RunState {
                     }
                 }
                 Some(RelicEffect::StartCombatStatusPerCurse(id, stacks)) => {
-                    // §261：与上一支同样的合并规则（两件遗物给同一条状态要相加）。
-                    let mut merged = false;
-                    for entry in bonus.per_curse_statuses.iter_mut().take(bonus.per_curse_status_count)
-                    {
-                        if let Some(existing) = entry {
-                            if existing.id == id {
-                                existing.stacks += stacks;
-                                merged = true;
-                                break;
-                            }
-                        }
-                    }
-                    if !merged {
-                        let _ = bonus.push_per_curse_status(id, stacks);
-                    }
+                    // §261/§309：同一处规则（相加，不覆盖）。
+                    add_status(
+                        &mut bonus.per_curse_statuses,
+                        &mut bonus.per_curse_status_count,
+                        id,
+                        stacks,
+                        "per-curse",
+                    );
                 }
                 Some(RelicEffect::StartCombatStatus(id, stacks)) => {
                     // Two relics granting the same status must **merge**, not overwrite: the same
-                    // rule the kernel uses when a status is applied twice.
-                    let mut merged = false;
-                    for entry in bonus.statuses.iter_mut().take(bonus.status_count) {
-                        if let Some(existing) = entry {
-                            if existing.id == id {
-                                existing.stacks += stacks;
-                                merged = true;
-                                break;
-                            }
-                        }
-                    }
-                    if !merged {
-                        let _ = bonus.push_status(id, stacks);
-                    }
+                    // rule the kernel uses when a status is applied twice. §309: one place only.
+                    add_status(&mut bonus.statuses, &mut bonus.status_count, id, stacks, "hero");
                 }
                 Some(
                     RelicEffect::EndOfCombatHeal(_)
@@ -3911,19 +3938,7 @@ impl RunState {
                     1,
                 ))
             {
-                let mut merged = false;
-                for entry in bonus.statuses.iter_mut().take(bonus.status_count) {
-                    if let Some(existing) = entry {
-                        if existing.id == id {
-                            existing.stacks += stacks;
-                            merged = true;
-                            break;
-                        }
-                    }
-                }
-                if !merged {
-                    let _ = bonus.push_status(id, stacks);
-                }
+                add_status(&mut bonus.statuses, &mut bonus.status_count, id, stacks, "hero");
             }
         }
         // §270：`RELIC_SECOND_HALVES` 里属于"开战加成"的那一类（`ectoplasm` 的每回合 +1 能量）。
@@ -3935,19 +3950,7 @@ impl RunState {
             if !self.holds_relic(relic) {
                 continue;
             }
-            let mut merged = false;
-            for entry in bonus.statuses.iter_mut().take(bonus.status_count) {
-                if let Some(existing) = entry {
-                    if existing.id == id {
-                        existing.stacks += stacks;
-                        merged = true;
-                        break;
-                    }
-                }
-            }
-            if !merged {
-                let _ = bonus.push_status(id, stacks);
-            }
+            add_status(&mut bonus.statuses, &mut bonus.status_count, id, stacks, "hero");
         }
         bonus
     }
@@ -7596,6 +7599,105 @@ mod tests {
         assert_eq!(run.removed_cards(), 0, "Toke is not a paid removal (no price step)");
     }
 
+
+
+    /// §309：**五件开战状态遗物 ⇒ 五条状态**（审阅报告的最小复现）。
+    ///
+    /// 旧容量是 4，而每件带战斗程序的遗物都推一条 `standard.<relic>` 标记 —— 所以拿着
+    /// `vajra` + `oddly_smooth_stone` + `thread_and_needle` + `bronze_scales` + `orichalcum`
+    /// 这五件**合法且常见**的遗物，第 5 件的效果会**静默消失**（release 里没有任何痕迹）。
+    #[test]
+    fn a_run_with_five_status_relics_keeps_all_five() {
+        let mut run = ironclad();
+        let five = [
+            ("vajra", "standard.strength", 1),
+            ("oddly_smooth_stone", "standard.dexterity", 1),
+            ("thread_and_needle", "standard.plated_armor", 4),
+            ("bronze_scales", "standard.thorns", 3),
+            ("orichalcum", "standard.orichalcum", 1),
+        ];
+        for (relic, _, _) in five {
+            run.push_relic(relic, &[]).expect("a relic with no pickup effect");
+        }
+        let bonus = run.combat_bonus();
+        assert_eq!(bonus.status_count, five.len(), "五件各一条，一条都不许丢");
+        for (relic, id, stacks) in five {
+            let found = bonus
+                .statuses
+                .iter()
+                .flatten()
+                .find(|entry| entry.id == id)
+                .unwrap_or_else(|| panic!("{relic} 的状态 {id} 丢了"));
+            assert_eq!(found.stacks, stacks, "{relic} 的层数");
+        }
+    }
+
+    /// §309：拾取类遗物**失败 ⇒ 一个字节都不改**（与 `archive::restore` 同一条纪律）。
+    ///
+    /// `tiny_house` 会先加金币 / 上限 / 当前血 / 欠一瓶药水 / 欠一张牌，再抽一手候选；
+    /// 池子不合格时（空池）抽牌失败 —— 旧实现把前面那些改动留在原地，而遗物没进腰带。
+    #[test]
+    fn a_refused_tiny_house_changes_nothing_and_a_good_pool_does_everything() {
+        let mut run = ironclad();
+        let before = run;
+        assert!(
+            run.push_relic("tiny_house", &[]).is_err(),
+            "an empty card pool cannot offer anything"
+        );
+        assert!(run == before, "a refused pickup changed the run");
+        // 反向的一半：同样的遗物、合格的池子必须**真的**生效（否则上面那条可以被"永远拒绝"满足）。
+        assert_eq!(run.push_relic("tiny_house", &TYPED_CARDS), Ok(()));
+        assert_eq!(run.gold(), before.gold() + TINY_HOUSE_GOLD, "50 gold");
+        assert_eq!(
+            run.health_max(),
+            before.health_max() + TINY_HOUSE_MAX_HEALTH,
+            "5 max HP"
+        );
+        assert_eq!(run.pickup_potions(), 1, "one potion owed");
+        assert_eq!(run.pickup_add(), 1, "one card owed");
+        assert!(
+            !run.deck().iter().any(|card| card.as_str() == "tiny_house"),
+            "sanity: a relic is not a card"
+        );
+    }
+
+    /// §309：`orrery` 同理 —— 先记 5 次欠账再抽一手，抽失败必须整体回滚。
+    #[test]
+    fn a_refused_orrery_changes_nothing_and_a_good_pool_does_everything() {
+        let mut run = ironclad();
+        let before = run;
+        assert!(run.push_relic("orrery", &[]).is_err(), "an empty pool cannot offer");
+        assert!(run == before, "a refused pickup changed the run");
+        assert_eq!(run.push_relic("orrery", &TYPED_CARDS), Ok(()));
+        assert_eq!(run.pickup_add(), 5, "five cards owed");
+        // 三选一：`TYPED_CARDS` 里非 `Special` 的只有 3 张（`ritual_dagger` 被过滤掉）。
+        assert_eq!(run.pickup_offer().len(), 3, "one three-choice offer is in hand");
+    }
+
+    /// §309：`pickup_add_card` 的"加了一张、再抽下一手失败"路径。
+    ///
+    /// 触发方式是**池子超过容量**（`MAX_POOL`）：那张牌找得到（所以 `push_card` 成功）、
+    /// 但下一次抽候选会在 `pool_fits` 上失败 —— 旧实现会留下"牌进了牌组、欠账没按规矩走"。
+    #[test]
+    fn a_pickup_add_that_cannot_roll_again_rolls_back_the_card_it_added() {
+        // 一个比 `MAX_POOL` 多一格的池子：第一张就是候选里的那张牌。
+        let mut oversized = [PoolCard::plain("strike"); MAX_POOL + 1];
+        oversized[1] = TYPED_CARDS[2];
+        let mut run = ironclad();
+        run.push_relic("orrery", &TYPED_CARDS).expect("orrery");
+        assert_eq!(run.pickup_add(), 5, "five to go");
+        // 先把这一手换成"必定能挑到 anger"（池子里的第三张有类型）。
+        run.pickup_offer[0] = RunId::new("anger").expect("an id");
+        run.pickup_offer[1] = RunId::EMPTY;
+        run.pickup_offer[2] = RunId::EMPTY;
+        run.pickup_offer_len = 1;
+        let before = run;
+        assert!(
+            run.pickup_add_card(0, &oversized).is_err(),
+            "the next offer cannot be rolled from an oversized pool"
+        );
+        assert!(run == before, "the card that was added must be rolled back");
+    }
 
     /// §308：删掉一张带成长的牌，**尾槽的 mark 必须归零**。
     ///
