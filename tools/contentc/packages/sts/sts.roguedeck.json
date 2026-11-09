@@ -69801,6 +69801,102 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_two_orb_walkers"
+      },
+      "Enemies": [
+        {
+          "Id": "orb_walker",
+          "MaxHealth": 90,
+          "Actions": [
+            {
+              "value": "orb_walker.laser"
+            },
+            {
+              "value": "orb_walker.claw"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.strength"
+              },
+              "Stacks": 3,
+              "Asc": [
+                {
+                  "AscensionMin": 17,
+                  "Stacks": 5
+                }
+              ]
+            }
+          ],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Orb Walker",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 92
+            }
+          ]
+        },
+        {
+          "Id": "orb_walker",
+          "MaxHealth": 90,
+          "Actions": [
+            {
+              "value": "orb_walker.laser"
+            },
+            {
+              "value": "orb_walker.claw"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.strength"
+              },
+              "Stacks": 3,
+              "Asc": [
+                {
+                  "AscensionMin": 17,
+                  "Stacks": 5
+                }
+              ]
+            }
+          ],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Orb Walker",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 92
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -76176,6 +76272,11 @@
         "Id": "enc_colosseum_champions",
         "Weight": 1
       }
+    ],
+    "MysteriousSphere": [
+      {
+        "Id": "enc_two_orb_walkers"
+      }
     ]
   },
   "Relics": [
@@ -77589,6 +77690,16 @@
       "Id": "the_nest",
       "NameKey": "The Nest",
       "Entry": "the_nest"
+    },
+    {
+      "Id": "winding_halls",
+      "NameKey": "Winding Halls",
+      "Entry": "winding_halls"
+    },
+    {
+      "Id": "mysterious_sphere",
+      "NameKey": "Mysterious Sphere",
+      "Entry": "mysterious_sphere"
     }
   ],
   "Potions": [
@@ -77931,6 +78042,12 @@
       },
       {
         "Id": "the_moai_head"
+      },
+      {
+        "Id": "winding_halls"
+      },
+      {
+        "Id": "mysterious_sphere"
       }
     ]
   },
@@ -80305,6 +80422,163 @@
       "Options": [
         {
           "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "winding_halls",
+      "TextKey": "The twisting pathways keep folding back on themselves. The whispers suggest three ways out.",
+      "Options": [
+        {
+          "Label": "Embrace Madness",
+          "Effects": [
+            {
+              "Effect": "card:madness",
+              "Amount": 2
+            },
+            {
+              "Effect": "damage_pct:12.5",
+              "Amount": 0
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "card:madness",
+              "Amount": 2
+            },
+            {
+              "Effect": "damage_pct:18",
+              "Amount": 0
+            }
+          ],
+          "Next": "winding_halls.madness"
+        },
+        {
+          "Label": "Focus",
+          "Effects": [
+            {
+              "Effect": "curse:writhe",
+              "Amount": 1
+            },
+            {
+              "Effect": "heal_pct:25",
+              "Amount": 0
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "curse:writhe",
+              "Amount": 1
+            },
+            {
+              "Effect": "heal_pct:20",
+              "Amount": 0
+            }
+          ],
+          "Next": "winding_halls.focus"
+        },
+        {
+          "Label": "Retrace Your Steps",
+          "Effects": [
+            {
+              "Effect": "max_hp_pct:5",
+              "Amount": 0
+            }
+          ],
+          "Next": "winding_halls.retrace"
+        }
+      ]
+    },
+    {
+      "Id": "winding_halls.madness",
+      "TextKey": "Something in you cracks. The chattering voices finally make sense — and the way out is obvious.",
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "winding_halls.focus",
+      "TextKey": "You stop and stare at the shifting walls until they hold still. Your head clears; something still itches under your skin.",
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "winding_halls.retrace",
+      "TextKey": "You spend what seems like an eternity lost, then retrace your steps out of the passages. You feel drained.",
+      "Options": [
+        {
+          "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "mysterious_sphere",
+      "TextKey": "A bony sphere surrounds a mysterious glowing object. Sentries keep an eye on it.",
+      "Options": [
+        {
+          "Label": "Open Sphere",
+          "Effects": [
+            {
+              "Effect": "fight_relic_rarity:rare",
+              "Amount": 0
+            }
+          ],
+          "Fight": "monster",
+          "Encounter": "MysteriousSphere",
+          "After": "mysterious_sphere.after",
+          "Next": ""
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "mysterious_sphere.after",
+      "TextKey": "The sentries collapse. Inside the broken sphere something old and valuable is still humming.",
+      "Options": [
+        {
+          "Label": "Continue",
           "Effects": [
             {
               "Effect": "nothing",

@@ -56,17 +56,17 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 58 / encounters 61 / cards 293 (base 154 + plus 139) / statuses 148 /
-enemy actions 159 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
+monsters 58 / encounters 62 / cards 293 (base 154 + plus 139) / statuses 148 /
+enemy actions 159 / relics 152 / potions 33 / events 24 (10+8+6) / start deck 10
 ascension variants 117 over 101 actions
-image full   content.sts.rdcf            177908 B
-image core   content.sts.core.rdcf       140968 B
+image full   content.sts.rdcf            179288 B
+image core   content.sts.core.rdcf       142344 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
 > —— 而且其中包含状态/诅咒牌与多档升级行（`searing_blow+`…`++++++`）；
-> `98 / 85` 是**变体 / 动作**；`22` 是三个幕的事件池之和（`10+8+4`），**不是**不同事件数 ——
-> `golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用，去重之后是 **19 条**（§F.25）。
+> `117 / 101` 是**变体 / 动作**；`24` 是三个幕的事件池之和（`10+8+6`），**不是**不同事件数 ——
+> `golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用，去重之后是 **21 条**（§F.25）。
 > `relics 152` 是**内容行**；wiki 有 193 条，缺 41 条（§D.2）。
 ---
 

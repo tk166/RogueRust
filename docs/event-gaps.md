@@ -56,7 +56,7 @@
 |---|---|---|---|
 | 1（Exordium，11 条） | Big Fish / The Cleric / Dead Adventurer / Golden Idol / Living Wall / Hypnotizing Colored Mushrooms / Scrap Ooze / Shining Light / The Ssssserpent / Wing Statue / World of Goop | **8** | `big_fish` / `living_wall` / `mushrooms` |
 | 2（The City，13 条） | Ancient Writing / Augmenter / The Colosseum / Council of Ghosts / Cursed Tome / Forgotten Altar / The Library / Masked Bandits / The Mausoleum / The Nest / Pleading Vagrant / Old Beggar / Vampires | **5**（另有 `the_joust`：wiki 这一版页面没列它，我们按 2 幕放） | `augmenter` / `council_of_ghosts` / `cursed_tome` / `the_library` / `masked_bandits` / `pleading_vagrant` / `old_beggar` / `vampires` |
-| 3（The Beyond，7 条） | Falling / Mind Bloom / The Moai Head / Mysterious Sphere / Sensory Stone / Tomb of Lord Red Mask / Winding Halls | **1** | 其余 **6**（`secret_portal` / `designer_in_spire` 属 shrine 池，也未做） |
+| 3（The Beyond，7 条） | Falling / Mind Bloom / The Moai Head / Mysterious Sphere / Sensory Stone / Tomb of Lord Red Mask / Winding Halls | **3**（§318 补了 `Mysterious Sphere` / `Winding Halls`） | 其余 **4**：`falling` 要"按**类型**删牌"、`sensory_stone` 要"无色牌三选一"、`tomb_of_lord_red_mask` 要事件级遗物条件、`mind_bloom` 要 `upgrade_all` + `Normality` + "不能治疗"的载体 |
 
 ★ **结论**：**Act 1 基本齐（8/11），Act 2 与 Act 3 是主要缺口（5/13、1/7）**。
 旧版本文档写"13 条已做"，其中 3 条（`old_shrine` / `ancient_forge` / `purification_shrine`）
@@ -78,8 +78,8 @@
 | `the_library` | 2 | "从 20 张里选一张" 需要 **N 选 1 的候选问句** | 中（`Offered` 问句只有 3 张的上限语义，需要"20 张任选"） |
 | `pleading_vagrant` | 2 | `gold_cost` / 给诅咒 / 给两层虚弱 | 小 |
 | `old_beggar` | 2 | 事件级"≥75 金币" + 给遗物 / 给诅咒 | 小（`MinGold` 已能筛池） |
-| `winding_halls` | 3 | 精神错乱 / 掉血 / 拿诅咒 | 小 |
-| `mysterious_sphere` | 3 | "打一场（两只球体守卫）" + 遗物 | 中（缺 `spheric_guardian` 怪物） |
+| ~~`winding_halls`~~ | 3 | **§318 已做**：Madness ×2 + 12.5%（A15 18%）掉血 / Writhe + 25%（A15 20%）回血 / 5% 最大生命 | — |
+| ~~`mysterious_sphere`~~ | 3 | **§318 已做**：`[Open Sphere]` 打**两只 Orb Walker**（`enc_two_orb_walkers`），Rare 遗物 + 普通战斗奖励 | — |
 | `sensory_stone` | 3 | "从一堆**无色**牌里选一张" | 中（同 `the_library`） |
 | `mind_bloom` | 3 | **wiki 的四个选项**（§311 更正：旧版这一格写错过）：① *I am War* —— 打一场第 1 幕 Boss，得稀有遗物 + 50（A15 25）金币；② *I am Awake* —— 升级所有牌 + `Mark of the Bloom`（**不能治疗**）；③ *I am Rich* —— 999 金币 + 2 张 `Normality`；④ *I am Healthy* —— 回满血 + `Doubt`；第三项按血量在 Rich / Healthy 之间换 | 大：要 `upgrade_all`、两条新诅咒、`mark_of_the_bloom`（"不能治疗"的载体）与"打一场**第 1 幕** Boss"（事件开战斗有了，**指定 Boss 池**还没有） |
 

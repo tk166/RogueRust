@@ -22532,3 +22532,53 @@ wiki（`Transient` 页 + 两个攻略页，三处数字一致）：HP **999**（
 镜像 **177,908 B**（core 140,968 B）；**三幕普通池：Act 1 17 条 / Act 2 13/13 / Act 3 10/10**。
 
 `rd-core` 809 / `rd-run` 194 / `rd-wasm` **162**（+1）；聚合闸门 **22/22**（`rust-units 1165`）。
+
+---
+
+## §318 Act 3 的事件：`Winding Halls` + `Mysterious Sphere`（1/7 → 3/7）
+
+第三幕原来只有 `The Moai Head` 一条事件。这一节补两条，都只用既有原子。
+
+### 318.1 `Winding Halls`（纯内容）
+
+wiki（`Winding Halls` 页 + `SlaySpireDB`）三个选项：
+
+| 选项 | 效果 | A15 |
+|---|---|---|
+| Embrace Madness | 2 张 **Madness**，失去 12.5% 最大生命 | **18%** |
+| Focus | 得诅咒 **Writhe**，回复 25% 最大生命 | **20%** |
+| Retrace Your Steps | 失去 5% **最大**生命 | 同 |
+
+三处都是既有原子（`card:<id>` / `damage_pct` / `heal_pct` / `curse:<id>` / `max_hp_pct`）；
+A15 用既有的 `EffectsAsc`。⚠️ 注意两条 A15 的**方向相反**（一个更糟、一个更少）——
+这正是检查器那条"`EffectsAsc` 与基础一模一样 ⇒ A15 什么都没做"要抓的形状。
+
+### 318.2 `Mysterious Sphere`（事件中途开战斗）
+
+wiki（`Mysterious Sphere` 页 + Fandom 页）：`[Open Sphere]` 打**两只 Orb Walker**，
+奖励是 **Rare 遗物** + 45-55 金币 + 一张卡（+ 可能药水）—— 也就是"一场普通战斗的奖励 +
+指定稀有度的遗物"。用 §286 的 `Fight`/`Encounter`/`After` + §288 的 `fight_relic_rarity:rare`。
+
+它带来两处**载体**上的补丁：
+
+1. **事件战斗的池名是内核里的一个闭集**（`content.rs` 的 `encounter_pool_name` 两处 match +
+   一个测试用的 `EVENT_POOLS` 列表）。加 `"MysteriousSphere"` 就是把这条池子接上 ——
+   与 `ColosseumSlavers` 当初一样，**不是**新机制。
+2. 事件本身要在 `UnknownRooms` 里登记（`{Id, NameKey, Entry}`），否则 `?` 房分不到它。
+
+### 318.3 判据与负控
+
+`the_act_three_events_state_the_wiki_s_numbers`（rd-core，读镜像）：`Winding Halls` 三项的
+效果串与 A15 变体逐条对（12.5→18、25→20、5% 最大生命），`Mysterious Sphere` 的
+`fight = 1` / `fight_pool = MysteriousSphere` / `fight_after` / `fight_relic_rarity:rare`。
+
+**负控**：把 `Embrace Madness` 的 A15 写成跟基础一样的 12.5% ⇒ 检查器红，报的正是
+"The A15 list equals the base -- this ascension does nothing"。
+
+### 318.4 账
+
+内容：**58 怪 / 62 遭遇 / 148 状态 / 159 敌人动作 / 21 个事件（三幕池 10+8+6 = 24 条）**；
+镜像 **179,288 B**（core 142,344 B）；**第三幕事件 3 / 7**（缺 `falling` / `sensory_stone` /
+`tomb_of_lord_red_mask` / `mind_bloom`，逐条缺什么写在 `docs/event-gaps.md`）。
+
+`rd-core` **810**（+1）/ `rd-run` 194 / `rd-wasm` 162；聚合闸门 **22/22**（`rust-units 1166`）。

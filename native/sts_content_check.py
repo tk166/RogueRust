@@ -1539,6 +1539,12 @@ INV_EVENT_ONLY = {
         ["taskmaster", "gremlin_nob"],
         "The Colosseum `[VICTORY]`: \"a Taskmaster and a Gremlin Nob\"",
     ),
+    # §318：`Mysterious Sphere` 的 `[Open Sphere]` —— "The player enters combat with the 2 Orb
+    # Walkers"，奖励是 Rare 遗物 + 普通战斗奖励。
+    "enc_two_orb_walkers": (
+        ["orb_walker", "orb_walker"],
+        "Mysterious Sphere `[Open Sphere]`: \"the player enters combat with the 2 Orb Walkers\"",
+    ),
 }
 
 INV_BOSS_POOL = {

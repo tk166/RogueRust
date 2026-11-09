@@ -3067,6 +3067,8 @@ impl<'a> Content<'a> {
             // §288：`The Colosseum` 的两场战斗（都在事件里，没有别的入口）。
             "ColosseumSlavers" => "EncounterTables.ColosseumSlavers",
             "ColosseumChampions" => "EncounterTables.ColosseumChampions",
+            // §318：`Mysterious Sphere` 的两只 Orb Walker。
+            "MysteriousSphere" => "EncounterTables.MysteriousSphere",
             _ => return None,
         };
         self.id_pool("EncounterTables", pool, hop)
@@ -3313,6 +3315,8 @@ impl<'a> Content<'a> {
             // §288：`The Colosseum` 的两场战斗（都在事件里，没有别的入口）。
             "ColosseumSlavers" => "EncounterTables.ColosseumSlavers",
             "ColosseumChampions" => "EncounterTables.ColosseumChampions",
+            // §318：`Mysterious Sphere` 的两只 Orb Walker。
+            "MysteriousSphere" => "EncounterTables.MysteriousSphere",
             _ => return None,
         };
         let root = self.root_by_name("EncounterTables")?;
@@ -5281,7 +5285,8 @@ mod tests {
         // §287：**事件**的池。它与上面九个的性质不同 —— 事件可以**复用**本幕的遭遇
         // （`Dead Adventurer` 的伏击就是"三个精英之一"，其中一个换了开场），所以它不参与
         // "一个遭遇只属于一个池"那条不变式；它参与的是"每个 ENCT 行都可达"。
-        const EVENT_POOLS: [&str; 3] = ["EliteEvent", "ColosseumSlavers", "ColosseumChampions"];
+        const EVENT_POOLS: [&str; 4] = ["EliteEvent", "ColosseumSlavers", "ColosseumChampions",
+                                        "MysteriousSphere"];
         let mut seen: Vec<&str> = Vec::new();
         for name in POOLS {
             let pool = content
@@ -5398,6 +5403,80 @@ mod tests {
         assert_eq!(content.card_has_tag("strike", "x_cost"), Some(false));
     }
 
+
+    /// §318：`Winding Halls` 与 `Mysterious Sphere` —— 选项、效果与 A15 变体，从镜像里读。
+    ///
+    /// 这两条事件是**纯内容**，所以判据钉的是"镜像里到底写了什么"：
+    /// * `Winding Halls` 三项：Madness ×2 + 12.5% 掉血 / Writhe + 25% 回血 / 5% 最大生命；
+    ///   A15 把前两项改成 18% 与 20%（**方向相反**：一个变糟、一个变少 —— 这正是
+    ///   "EffectsAsc 与基础一模一样"那条判据要抓的东西）。
+    /// * `Mysterious Sphere` 的 `[Open Sphere]`：`fight = 1`、池 `MysteriousSphere`、
+    ///   `After` 指回收尾段、奖励覆盖里带 `fight_relic_rarity:rare`。
+    #[test]
+    fn the_act_three_events_state_the_wiki_s_numbers() {
+        let bytes = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&bytes).expect("the image parses");
+
+        // ── Winding Halls ────────────────────────────────────────────────────────────────
+        let step = content
+            .event_step("winding_halls")
+            .expect("winding_halls is a step");
+        let options = step.options();
+        assert_eq!(options.len(), 3, "three ways out (wiki)");
+        // 两个小函数而不是闭包：闭包在这里借不出 `'a`（返回的 `&str` 借自 content）。
+        fn effects<'a>(option: &EventOption<'a>) -> Vec<&'a str> {
+            option.effects[..usize::from(option.count)]
+                .iter()
+                .map(|spec| spec.effect)
+                .collect()
+        }
+        fn asc_effects<'a>(option: &EventOption<'a>) -> Vec<&'a str> {
+            option.asc[..usize::from(option.asc_count)]
+                .iter()
+                .map(|spec| spec.effect)
+                .collect()
+        }
+        assert_eq!(
+            effects(&options[0]),
+            vec!["card:madness", "damage_pct:12.5"],
+            "Embrace Madness: two Madness and 12.5% of max HP"
+        );
+        assert_eq!(
+            asc_effects(&options[0]),
+            vec!["card:madness", "damage_pct:18"],
+            "A15 makes the HP loss worse (18%)"
+        );
+        assert_eq!(
+            effects(&options[1]),
+            vec!["curse:writhe", "heal_pct:25"],
+            "Focus: Writhe and 25% of max HP"
+        );
+        assert_eq!(
+            asc_effects(&options[1]),
+            vec!["curse:writhe", "heal_pct:20"],
+            "A15 makes the heal **smaller** (20%)"
+        );
+        assert_eq!(effects(&options[2]), vec!["max_hp_pct:5"], "Retrace: 5% max HP");
+
+        // ── Mysterious Sphere ────────────────────────────────────────────────────────────
+        let sphere = content
+            .event_step("mysterious_sphere")
+            .expect("mysterious_sphere is a step");
+        let open = &sphere.options()[0];
+        assert_eq!(open.fight, 1, "a normal-monster fight");
+        assert_eq!(open.fight_pool, "MysteriousSphere");
+        assert_eq!(open.fight_after, "mysterious_sphere.after");
+        assert_eq!(
+            effects(open),
+            vec!["fight_relic_rarity:rare"],
+            "wiki: the reward is a Rare relic"
+        );
+    }
+
     /// The `?` room's events, read out of the image: ids, body text, and both choices.
     #[test]
     fn the_unknown_room_events_are_readable() {
@@ -5409,9 +5488,10 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            19,
+            21,
             "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
-             `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`，§290 补了 `the_nest`（`scrap_pile` 改成 Scrap Ooze 的 9 段链）。pools 的**位次**比
+             `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`，§290 补了 `the_nest`，
+             §318 补了 `winding_halls` / `mysterious_sphere`（`scrap_pile` 改成 Scrap Ooze 的 9 段链）。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5567,6 +5647,8 @@ mod tests {
                 "dead_adventurer",
                 "forgotten_altar",
                 "golden_idol",
+                // §318
+                "mysterious_sphere",
                 "old_shrine",
                 "purification_shrine",
                 "scrap_pile",
@@ -5579,6 +5661,8 @@ mod tests {
                 "the_nest",
                 "the_ssssserpent",
                 "wandering_merchant",
+                // §318
+                "winding_halls",
                 "wing_statue",
                 "world_of_goop",
             ]
