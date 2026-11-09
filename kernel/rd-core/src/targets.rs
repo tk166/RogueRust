@@ -185,6 +185,11 @@ pub enum SelectorNode {
     Leaf(LeafSelector),
     Unary { op: UnaryOp, inner: u16 },
     StatusFilter { op: StatusFilter, inner: u16, status_id: IdRef },
+    /// §313：`DefinitionFilter { inner, definition_id }` —— inner 里**定义 id 等于它**的那些。
+    ///
+    /// 与 `StatusFilter` 同一类（先取子树、再筛一遍），所以不新造叶子选择器：那个位置
+    /// 属于"从哪里开始选"，而"按定义筛"是在**已经选出来的集合**上做减法。
+    DefinitionFilter { inner: u16, definition_id: IdRef },
     StatusPick { op: StatusPick, inner: u16, status_id: IdRef },
     Binary { op: BinaryOp, lhs: u16, rhs: u16 },
 }
@@ -783,6 +788,16 @@ fn eval_node(
                 StatusFilter::WithIncludingFallen => filter(state, set, |c| has_status(c, status)),
             })
         }
+        SelectorNode::DefinitionFilter { inner, definition_id } => {
+            // 定义 id 与状态 id 同样：**进子树之前**校验，坏 id 是表自己的结构错误。
+            let definition = id_bytes(id_pool, definition_id)?;
+            let set = eval(table, ctx, id_pool, inner, on_path, depth + 1)?;
+            // 存活过滤放在这里是有意的：`Protect`/`Heal` 只认活着的友军；倒下的那只
+            // 已经不在战场上（`AllAlliesOfSource` 自己也筛过一次，这里幂等）。
+            Ok(filter(state, set, |c| {
+                is_alive(c) && c.definition_id.as_str().as_bytes() == definition
+            }))
+        }
         SelectorNode::StatusPick { op, inner, status_id } => {
             let status = id_bytes(id_pool, status_id)?;
             let set = eval(table, ctx, id_pool, inner, on_path, depth + 1)?;
@@ -859,6 +874,8 @@ fn node_cardinality(node: SelectorNode) -> Cardinality {
         // `:303` WithStatus（含 `IncludeFallen: true` 的那一半，同一个类、同一个默认值）/
         // `:437` WithoutStatus —— 都吃默认值 ZeroOrMore。
         SelectorNode::StatusFilter { .. } => Cardinality::ZeroOrMore,
+        // §313：按定义筛是"筛"不是"选" —— 基数只会变小，所以与 `StatusFilter` 同一个默认值。
+        SelectorNode::DefinitionFilter { .. } => Cardinality::ZeroOrMore,
         // `:363` LowestStatusStacks / `:378` HighestStatusStacks —— 都 ZeroOrOne。
         SelectorNode::StatusPick { .. } => Cardinality::ZeroOrOne,
         // `:507` Union / `:552` Except —— 都吃默认值 ZeroOrMore。

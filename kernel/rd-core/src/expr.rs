@@ -453,6 +453,9 @@ const INT_KINDS: &[&str] = &[
     // 不认识的区名 ⇒ `Missing("Zone")`，绝不"当成 0"—— 0 是一个**合法**答案（空牌区），
     // 拼错的区名与"空牌区"必须分得开。
     "combatantZoneCount",
+    // §313：选择器解出几个战斗员（`Protect` 的"独自时自保"）。**允许多个目标** ——
+    // 与 `currentHealth` 那些单目标读相反，数的就是个数。
+    "combatantCount",
 ];
 
 /// 求值为**卡实例**的 kind（参考里 `ICombatExpression<_, CardInstance>` 的那些）。
@@ -549,6 +552,36 @@ pub fn eval_int<'c>(node: NodeRef<'c>, ctx: &ExprContext<'_>) -> Result<i32, Exp
         // 自己抽一次（`exec::eval_amount`）；走到这里说明它被**嵌套**在别的表达式里，
         // 而那是我明确不做的一种形状 —— 响亮拒绝而不是猜一个数。
         "randomInt" => Err(ExprError::RandomNeedsADraw),
+
+        // §313: 选择器解出几个战斗员（`AliveOnly` 缺省 true）。
+        //
+        // 为什么是**表达式**而不是意图条件：`Protect` 的"独自 vs 有 Mystic"写在**动作程序**里，
+        // 而 `intent.enemyAliveCount` 只在意图规则的条件求值器里存在 —— 程序里用它会被
+        // `expr.rs` 判成 `UnsupportedKind`（这一轮实测撞过一次）。
+        "combatantCount" => {
+            let alive_only = node.bool_field("AliveOnly")?.unwrap_or(true);
+            let selector = child(node, "Selector")?;
+            let mut buf = [CombatantId::EMPTY; MAX_COMBATANTS];
+            let compiled = CompiledSelector::compile(selector)?;
+            let selection = ctx.selection();
+            let count = compiled
+                .resolve(&selection, &mut buf)
+                .map_err(|_| ExprError::Sel(SelError::TableFull))?;
+            if !alive_only {
+                return Ok(i32::try_from(count).unwrap_or(i32::MAX));
+            }
+            let mut alive = 0;
+            for id in buf.iter().take(count) {
+                if ctx
+                    .state
+                    .combatant(id)
+                    .is_some_and(|c| c.lifecycle_state == crate::state::CombatantLifecycleState::Alive)
+                {
+                    alive += 1;
+                }
+            }
+            Ok(alive)
+        }
 
         // §247: how many cards are in a zone right now (Mind Blast).
         "combatantZoneCount" => {

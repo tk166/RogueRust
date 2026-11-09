@@ -82,7 +82,7 @@ INV_COUNTS = {
     # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster); §175: +3 (Nemesis / Reptomancer / Dagger).
     # §201: +1 (Looter).
     # §282: +1 (`snecko`, Act 2's normal enemy carrying `Confusion`).
-    "monsters": 52,
+    "monsters": 54,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
@@ -90,7 +90,7 @@ INV_COUNTS = {
     # §282: +1 (`enc_snecko`).
     # §311: +5（Act 2 的五条 —— `enc_spheric_guardian` / `enc_chosen_and_byrd` /
     # `enc_cultist_and_chosen` / `enc_three_cultists` / `enc_parasite_and_fungi`）。
-    "encounters": 51,
+    "encounters": 52,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -872,6 +872,9 @@ INV_CARDS = {
 MAX_ENEMIES_IN_FIGHT = 6
 
 INV_MONSTERS = [
+    # §313: Act 2 的 Centurion / Mystic（wiki 76-80 / 48-56，A7 78-83 / 50-58）。
+    ("centurion", 76, 80, ["centurion.slash", "centurion.protect", "centurion.fury"]),
+    ("mystic", 48, 56, ["mystic.attack", "mystic.buff", "mystic.heal"]),
     # §312: Act 2 的 Snake Plant —— 75-79 血（A7 78-82），Malleable 3，两招。
     ("snake_plant", 75, 79,
      ["snake_plant.chomp_chomp", "snake_plant.enfeebling_spores"]),
@@ -1002,6 +1005,20 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    # §313: Centurion。`Protect` 的两个分支各是一条事实：给 Mystic 15 块 / 独自时给自己 15 块。
+    "centurion.slash": ("Attack", [("damage", 12, "event")]),
+    # `Protect` 的两个分支各是一条 `when` 事实（条件不可静态求值 ⇒ `when None`，
+    # 与 `impatience` 同一种写法）。
+    "centurion.protect": ("Defend", [("when", None, "block", 15, "source"),
+                                     ("when", None, "block", 15,
+                                      "alliesWithDefinition:mystic")]),
+    "centurion.fury": ("Attack", [("damage", 6, "event"), ("damage", 6, "event"),
+                                  ("damage", 6, "event")]),
+    # §313: Mystic。`Buff`/`Heal` 目标是**全体敌人**（含自己）。
+    "mystic.attack": ("Attack", [("damage", 8, "event"),
+                                 ("status", "standard.frail", 2, "event")]),
+    "mystic.buff": ("Buff", [("status", "standard.strength", 2, "allAllies")]),
+    "mystic.heal": ("Buff", [("heal", 16, "allAllies")]),
     # §312: Snake Plant（wiki `Snake Plant` 页 + `SlaySpireDB`）。
     "snake_plant.chomp_chomp": ("Attack", [("damage", 7, "event"), ("damage", 7, "event"),
                                           ("damage", 7, "event")]),
@@ -1351,6 +1368,8 @@ INV_WEAK_POOL = {
     "enc_spheric_guardian": ["spheric_guardian"],
     # §312：Snake Plant 独自出现（wiki Hard 池，权重 6）。
     "enc_snake_plant": ["snake_plant"],
+    # §313：Centurion 在前、Mystic 在后（wiki 的 Details 列：1 Centurion + 1 Mystic）。
+    "enc_centurion_and_mystic": ["centurion", "mystic"],
     # `enc_two_thieves`（1 Looter + 1 Mugger）还没做：Mugger 是**新怪物**，它的行动序列在 wiki
     # 上只有一张表（没有像 Looter 那样的逐步文字规则），所以留到下一节把 Mugger 的规则核对清楚。
     "enc_chosen_and_byrd": ["chosen", "byrd"],
@@ -1435,7 +1454,7 @@ INV_ACT_TABLES = {
               "enc_chosen_and_byrd", "enc_cultist_and_chosen",
               # §282: Act 2 的普通怪 Snecko（`Confusion` 的载体）。
               "enc_snecko", "enc_three_cultists", "enc_parasite_and_fungi",
-              "enc_snake_plant"],
+              "enc_snake_plant", "enc_centurion_and_mystic"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
     "Elite": ["enc_gremlin_nob", "enc_lagavulin", "enc_three_sentries"],
@@ -1866,6 +1885,16 @@ def diff(expected, actual, path="", out=None):
 def tgt(selector):
     """`TargetSelector` -> a short label.  Unknown selectors raise (never guess)."""
     kind = selector.get("kind")
+    # §313：按**定义**挑一只友军。标签带上定义 id —— `block 15 ...:mystic` 与
+    # `...:centurion` 是两条不同的承诺，只写选择器类型会把它们合成一个事实。
+    #
+    # ⚠️ 这一条**必须写在下面的 `mapping` 之前**，而且不能放进那个字典：字典字面量是
+    # 急求值的，每次调用都会把所有值算一遍，于是一个 `sel.source` 也会去读
+    # `CombatantDefinitionId` —— 第一版就是这么炸的（KeyError，而且报在别的选择器上）。
+    if kind == "sel.alliesWithDefinition":
+        value = selector.get("value") or {}
+        assert "CombatantDefinitionId" in value, selector
+        return "alliesWithDefinition:%s" % value["CombatantDefinitionId"]
     mapping = {
         "sel.eventTarget": "event",
         "sel.source": "source",
@@ -2316,6 +2345,8 @@ def check_monsters(doc):
 
 # §148: the intent-rule vocabulary (`intent.rs::ConditionKind`) and its operators.
 INTENT_CONDITIONS = ("intent.healthPercent", "intent.round", "intent.selfHasStatus",
+                     # §313：谁会治疗 —— "自己的阵营里有人缺了 ≥ N 血"。
+                     "intent.allyMissingHealth",
                      "intent.opponentHasStatus", "intent.selfHasCounter", "intent.selfResource",
                      "intent.opponentCardsPlayed", "intent.allOf", "intent.anyOf", "intent.not",
                      # §187 / §257：本移植自己的两条。`ascensionAtLeast` 早就在用，清单里一直
@@ -2481,6 +2512,19 @@ def check_cards_and_actions(doc):
 # `native/patch_187_content.py` 的表头），而不是从内容拄过来的 --
 # "从内容生成期望值"等于没有期望值。
 INV_ASC_VARIANTS = {
+    # §313: Centurion（A2 伤害 +2/+1，A17 Protect 15→20）与 Mystic（A2 Attack 9 / Buff 3，
+    # A17 Buff 4 / Heal 20）。
+    'centurion.slash': [(2, [('damage', 14, 'event')])],
+    'centurion.protect': [(17, [('when', None, 'block', 20, 'source'),
+                                ('when', None, 'block', 20,
+                                 'alliesWithDefinition:mystic')])],
+    'centurion.fury': [(2, [('damage', 7, 'event'), ('damage', 7, 'event'),
+                            ('damage', 7, 'event')])],
+    'mystic.attack': [(2, [('damage', 9, 'event'),
+                           ('status', 'standard.frail', 2, 'event')])],
+    'mystic.buff': [(2, [('status', 'standard.strength', 3, 'allAllies')]),
+                    (17, [('status', 'standard.strength', 4, 'allAllies')])],
+    'mystic.heal': [(17, [('heal', 20, 'allAllies')])],
     # §312: Snake Plant 的 Chomp Chomp 在 A2 起是 8×3（wiki `{{Asc|2|8×3}}`）。
     'snake_plant.chomp_chomp': [(2, [('damage', 8, 'event'), ('damage', 8, 'event'),
                                     ('damage', 8, 'event')])],
@@ -3003,6 +3047,8 @@ INV_ASC_HP = {
     'spike_slime_s': 11, 'fat_gremlin': 14, 'sneaky_gremlin': 11, 'blue_slaver': 48,
     'acid_slime_s': 9, 'acid_slime_m': 29, 'spike_slime_m': 29, 'jaw_worm': 42,
     'cultist': 50, 'gremlin_wizard': 22, 'sentry_1': 39, 'sentry_2': 39, 'sentry_3': 39,
+    # §313: Centurion 78-83 / Mystic 50-58（下界 78 / 50）。
+    'centurion': 78, 'mystic': 50,
     # §312: Snake Plant 的 wiki `AscHP` 是 78-82（下界 78）。
     'snake_plant': 78,
     'spike_slime_l': 67, 'acid_slime_l': 68, 'slime_boss': 150, 'time_eater': 480, 'shelled_parasite': 70, 'chosen': 98, 'byrd': 26,

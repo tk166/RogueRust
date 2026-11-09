@@ -56,11 +56,11 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 52 / encounters 54 / cards 293 (base 154 + plus 139) / statuses 147 /
-enemy actions 144 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
-ascension variants 102 over 89 actions
-image full   content.sts.rdcf            171180 B
-image core   content.sts.core.rdcf       134744 B
+monsters 54 / encounters 55 / cards 293 (base 154 + plus 139) / statuses 147 /
+enemy actions 150 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
+ascension variants 109 over 95 actions
+image full   content.sts.rdcf            173808 B
+image core   content.sts.core.rdcf       137088 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
@@ -316,7 +316,7 @@ wiki 常见而我们**没有**的：
 另外两处专用池：`EliteEvent`（3 条，`Dead Adventurer` 的伏击）与 `ColosseumSlavers` /
 `ColosseumChampions`（各 1 条，`The Colosseum` 的两场）。
 
-### D.3.1 Act 2：wiki 的 13 条，做了 10 条（§311）
+### D.3.1 Act 2：wiki 的 13 条，做了 12 条（§311–§313）
 
 | wiki（`The_City`） | 池 | 权重 | 状态 |
 |---|---|---|---|
@@ -330,18 +330,15 @@ wiki 常见而我们**没有**的：
 | Sentry and Spheric Guardian | Hard | 2 | ⛔ 见下面的"跨档位" |
 | Snake Plant | Hard | 6 | ✅ §312（`standard.malleable` + 新怪物） |
 | Snecko | Hard | 4 | ✅ |
-| Centurion and Mystic | Hard | 6 | ❌ 要"指定某一只友军"的选择器 |
+| Centurion and Mystic | Hard | 6 | ✅ §313（`sel.alliesWithDefinition` + `intent.allyMissingHealth`） |
 | 3 Cultists | Hard | 3 | ✅ §311 |
 | Shelled Parasite and Fungi | Hard | 3 | ✅ §311 |
 
-两条缺口各缺什么（**不是"没抄"**）：
+只剩一条缺口：
 
-1. **`mugger`** —— 全新怪物。它和 Looter 共享 `stolen_gold` / `carryAwayStolenGold`，但它的
-   招式序列在 wiki 上只有一张表（没有 Looter 那样逐步的文字规则）；照 Looter 的骨架写等于
-   **发明**一条规则，所以等到能核对清楚时再做。
-2. **`centurion` + `mystic`** —— `Protect` 要给 **Mystic**（不是自己、也不是全体）挂 15 块；
-   `Mystic` 的 `Heal` 要给全体敌人回 16（这条已有：`sel.allAllies` + `heal`）。前者缺
-   "按定义挑一只友军"的选择器 —— `sel.allAllies` 会把 Centurion 自己也算上。
+**`mugger`**（`2 Thieves` 用）—— 全新怪物。它和 Looter 共享 `stolen_gold` /
+`carryAwayStolenGold`，但它的招式序列在 wiki 上只有一张表（没有 Looter 那样逐步的文字规则）；
+照 Looter 的骨架写等于**发明**一条规则，所以等到能核对清楚时再做。
 
 ### D.3.2 Malleable（§312）
 
@@ -371,6 +368,18 @@ X 随着触发**+1**，每回合开始**重置**"。它**可以纯内容实现**
 > ⚠️ **与 wiki 的已知偏差**：wiki 是 Easy（前两场）/ Hard（其余）两段式；我们每幕只有一个
 > **带权重**的单池（`EncounterTables.Weak2` 的 `Weight` 已经是 wiki 的数字 ×5）。所以
 > "前两场一定简单"这条规则没有 —— 与 Act 1 是同一条偏差。
+
+### D.3.3 Centurion + Mystic 带来的三块新零件（§313）
+
+| 零件 | 形状 | 为什么不能复用旧的 |
+|---|---|---|
+| `sel.alliesWithDefinition` | 叶子 `AllAlliesOfSource` + 一层 `DefinitionFilter` | `Protect` 要给 **Mystic**（按**定义**）。`sel.lowestHealthAlly` 在 Centurion 掉到 10 血时会返回 Centurion —— 那是另一个行为，负控就是把它换上去，判据当场红 |
+| `intent.allyMissingHealth` | `{Op, Value}`，数**自己阵营**里缺 ≥ Value 血的人 | `intent.healthPercent` 只看出手者自己；Mystic 是后排奶妈，"自己缺 16 血"几乎是另一条规则 |
+| `combatantCount`（表达式） | `{Selector, AliveOnly}` | `Protect` 的"独自时自保"要在**动作程序**里数活着的友军。`intent.enemyAliveCount` 只活在**意图规则**的条件求值器里 —— 写进程序会 `Expr(UnsupportedKind)`（实测撞过） |
+
+⚠️ 一条**踩过两次**的坑：`intent.not` 的内层必须是 `intent.allOf`，不能写表达式的 `and`
+（那是**表达式**的布尔与，条件求值器不认识 ⇒ `UnknownConditionKind`）。第一次改的时候只在
+`Monsters` 里改、忘了 `Encounters` 里那份**敌人记录副本**还在用旧规则，于是"改完还是红"。
 
 ### D.4 两个机制缺口：**都已关闭**（§277 提，§278–§281 关）
 

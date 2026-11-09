@@ -291,6 +291,24 @@ impl Builder {
                     },
                 )
             }
+            // §313：`AllAlliesOfSourceWithDefinitionCombatantTargetSelector` ——
+            // "按**定义**挑一只友军"（`Centurion` 的 `Protect` 给 `Mystic`）。
+            // 与 `alliesWithStatus` 同一形状：固定叶子 + 一层过滤，只是过滤键是**定义 id**。
+            "sel.alliesWithDefinition" => {
+                let definition = node
+                    .str_field("CombatantDefinitionId")?
+                    .ok_or(SelError::MissingStatusId)?;
+                let child = self.alloc()?;
+                self.set(child, SelectorNode::Leaf(LeafSelector::AllAlliesOfSource))?;
+                let definition_id = self.intern(definition)?;
+                self.set(
+                    slot,
+                    SelectorNode::DefinitionFilter {
+                        inner: child,
+                        definition_id,
+                    },
+                )
+            }
             // 剩下两种下场，**没有第三种**（尤其没有"当成空集"）：
             // * 还是 `sel.*` ⇒ 卡选择器/玩家选择（`deckCards`/`matching`/`random`/`choose`），
             //   或者是我们没见过的选择器 —— 都报"这一类我们不做"，由调用方决定怎么收场；

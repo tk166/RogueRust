@@ -326,6 +326,13 @@ pub enum ConditionKind {
     /// 可声明的表，是每只怪 `getMove` 里的一段 `if`。内核不给每只怪写代码，所以把那个
     /// `if` 交给内容：`AscensionMin` 管"同一个招式换数值"，这个条件管"哪条规则先生效"。
     AscensionAtLeast,
+    /// `intent.allyMissingHealth`（`Op, Value`）：**出手者自己的阵营里有没有人缺了 ≥ Value 血**。
+    ///
+    /// 本移植自己的条件（§313），为 `Mystic` 的 "If an enemy is missing 16 or more HP, use Heal"
+    /// 而加。为什么不复用 `intent.healthPercent`：那条只看出手者**自己**，而 `Mystic` 是在
+    /// 后排的奶妈 —— 写成"自己缺 16 血"几乎是另一条规则（它自己被打了才治疗）。
+    /// `Value` 是**绝对血量**（wiki 的 16 / A21 那种数字），不是百分比。
+    AllyMissingHealth,
     /// `intent.enemyAliveCount`（`Op, Value`）：**敌方阵营里还活着的战斗员个数**，**含出手者**。
     ///
     /// 本移植自己的条件（§257），为 `Reptomancer` 的"最多 4 把匕首，满了就改用 Snake Strike"
@@ -339,7 +346,7 @@ pub enum ConditionKind {
 
 impl ConditionKind {
     /// 全部成员（顺序 = 规格书 §3.5 那张表的顺序）。
-    pub const ALL: [ConditionKind; 12] = [
+    pub const ALL: [ConditionKind; 13] = [
         ConditionKind::HealthPercent,
         ConditionKind::Round,
         ConditionKind::SelfHasStatus,
@@ -352,6 +359,7 @@ impl ConditionKind {
         ConditionKind::Not,
         ConditionKind::AscensionAtLeast,
         ConditionKind::EnemyAliveCount,
+        ConditionKind::AllyMissingHealth,
     ];
 
     /// 判别串（= `OPD[op].name`，也 = `RunJson.cs:141-151` 注册的那个键）。
@@ -370,6 +378,7 @@ impl ConditionKind {
             ConditionKind::Not => "intent.not",
             ConditionKind::AscensionAtLeast => "intent.ascensionAtLeast",
             ConditionKind::EnemyAliveCount => "intent.enemyAliveCount",
+            ConditionKind::AllyMissingHealth => "intent.allyMissingHealth",
         }
     }
 
@@ -779,6 +788,36 @@ pub fn condition_matches(
                 .int_field("Value")?
                 .ok_or(IntentError::Missing("Value"))?;
             Ok(ascension_at_least(state.ascension(), value))
+        }
+        // §313：**自己的阵营里有没有人缺了 ≥ Value 血**（含出手者自己）。
+        //
+        // 存活才算：倒下的那只的 health_current 是 0，把它算进来会让"缺了 ≥ N 血"永远为真，
+        // 于是 Mystic 会一直治疗一具尸体。
+        ConditionKind::AllyMissingHealth => {
+            let op = compare_op(condition)?;
+            let value = condition.int_field("Value")?.ok_or(IntentError::Missing("Value"))?;
+            let Some(actor) = state.combatant(actor) else {
+                return Ok(false);
+            };
+            let team = actor.team_id;
+            let mut missing = 0;
+            let mut found = false;
+            for combatant in state.combatants() {
+                if combatant.team_id != team
+                    || combatant.lifecycle_state != crate::state::CombatantLifecycleState::Alive
+                {
+                    continue;
+                }
+                missing = combatant.health_max - combatant.health_current;
+                if op.apply(missing, value) {
+                    found = true;
+                    break;
+                }
+            }
+            // `missing` 在这里只为了让"没有任何存活友军"时也走一遍比较 —— 那不可能发生
+            // （出手者自己就在这个集合里），所以直接返回 found。
+            let _ = missing;
+            Ok(found)
         }
         // `intent.enemyAliveCount`（§257）：敌方阵营里**还活着**的战斗员个数（含出手者）。
         //
@@ -2611,7 +2650,7 @@ mod tests {
     // ---------------------------------------------------------------- 词表
 
     #[test]
-    fn condition_kinds_are_the_twelve_registered_wire_names() {
+    fn condition_kinds_are_the_registered_wire_names() {
         // 名字来自 `Run\Serialization\RunJson.cs:141-151` 的注册表（规格书 §3.5 逐条读过）。
         let names = [
             "intent.healthPercent",
@@ -2628,6 +2667,8 @@ mod tests {
             "intent.ascensionAtLeast",
             // §257：敌方阵营里还活着的战斗员个数（`Reptomancer` 的 4 把匕首上限）。
             "intent.enemyAliveCount",
+            // §313：自己的阵营里有没有人缺了 ≥ N 血（`Mystic` 的 Heal 优先级）。
+            "intent.allyMissingHealth",
         ];
         assert_eq!(ConditionKind::ALL.len(), names.len());
         for (kind, name) in ConditionKind::ALL.into_iter().zip(names) {
@@ -2644,7 +2685,7 @@ mod tests {
             .into_iter()
             .filter(|kind| kind.is_supported())
             .collect();
-        // **12/12 全部实现**（`opponentCardsPlayed` 在 §128 补上，靠回合级出牌统计；
+        // **13/13 全部实现**（`opponentCardsPlayed` 在 §128 补上，靠回合级出牌统计；
         // `ascensionAtLeast` 在 §187 补上，读 `CombatState::ascension()`；
         // `enemyAliveCount` 在 §257 补上，读 `CombatState::combatants()`）。
         assert_eq!(
@@ -2662,6 +2703,8 @@ mod tests {
                 ConditionKind::Not,
                 ConditionKind::AscensionAtLeast,
                 ConditionKind::EnemyAliveCount,
+                // §313
+                ConditionKind::AllyMissingHealth,
             ]
         );
     }
