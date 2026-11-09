@@ -56,11 +56,11 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 51 / encounters 53 / cards 293 (base 154 + plus 139) / statuses 146 /
-enemy actions 142 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
-ascension variants 101 over 88 actions
-image full   content.sts.rdcf            169820 B
-image core   content.sts.core.rdcf       133660 B
+monsters 52 / encounters 54 / cards 293 (base 154 + plus 139) / statuses 147 /
+enemy actions 144 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
+ascension variants 102 over 89 actions
+image full   content.sts.rdcf            171180 B
+image core   content.sts.core.rdcf       134744 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
@@ -328,22 +328,40 @@ wiki 常见而我们**没有**的：
 | Chosen and Byrds | Hard | 2 | ✅ §311（1 Chosen + **1** Byrd） |
 | Cultist and Chosen | Hard | 3 | ✅ §311 |
 | Sentry and Spheric Guardian | Hard | 2 | ⛔ 见下面的"跨档位" |
-| Snake Plant | Hard | 6 | ❌ 要 `standard.malleable` |
+| Snake Plant | Hard | 6 | ✅ §312（`standard.malleable` + 新怪物） |
 | Snecko | Hard | 4 | ✅ |
 | Centurion and Mystic | Hard | 6 | ❌ 要"指定某一只友军"的选择器 |
 | 3 Cultists | Hard | 3 | ✅ §311 |
 | Shelled Parasite and Fungi | Hard | 3 | ✅ §311 |
 
-三条缺口各缺什么（**不是"没抄"**）：
+两条缺口各缺什么（**不是"没抄"**）：
 
 1. **`mugger`** —— 全新怪物。它和 Looter 共享 `stolen_gold` / `carryAwayStolenGold`，但它的
    招式序列在 wiki 上只有一张表（没有 Looter 那样逐步的文字规则）；照 Looter 的骨架写等于
    **发明**一条规则，所以等到能核对清楚时再做。
-2. **`snake_plant`** —— 要 `standard.malleable`：受到**攻击**伤害时获得 X 块、且每次触发 X
-   变大、回合开始重置。内核今天没有这条"会变的反应式状态"，是**新机制**。
-3. **`centurion` + `mystic`** —— `Protect` 要给 **Mystic**（不是自己、也不是全体）挂 15 块；
+2. **`centurion` + `mystic`** —— `Protect` 要给 **Mystic**（不是自己、也不是全体）挂 15 块；
    `Mystic` 的 `Heal` 要给全体敌人回 16（这条已有：`sel.allAllies` + `heal`）。前者缺
    "按定义挑一只友军"的选择器 —— `sel.allAllies` 会把 Centurion 自己也算上。
+
+### D.3.2 Malleable（§312）
+
+`Malleable X`（wiki 两处：`Malleable` 页与 `Snake Plant` 页）= "受到**攻击伤害**时获得 X 块，
+X 随着触发**+1**，每回合开始**重置**"。它**可以纯内容实现**，因为零件都已有：
+
+| 需要 | 已有的东西 |
+|---|---|
+| 只在挨攻击时触发 | `DamageTaken` 触发器 + `damage.isAttack`（Flying / Plated Armor 在用） |
+| 只有**掉血**才算 | `eventAmount > 0`（与 Plated Armor 同一口径） |
+| "X 每次 +1" | 每战斗员计数器 `malleable_bonus`（Looter 的 `stolen_gold` 同一种机制） |
+| 每回合重置 | `TurnStarted` 触发器把计数器置 0 |
+| 给块 | `node.gainBlock` + `add(combatantStatusStacks, combatantCounter)` |
+
+判据 `malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts` 四侧：给 3/4/5、回合
+开始后又给 3、毒（`DamageKind::Dot`）只吃块不给块。**负控两条**（计数器不递增 / 去掉回合清零）
+都红 —— 只测"会长"会放过"不清零"的实现，反之亦然。
+
+⚠️ **已知偏差**：wiki 的 A17 "第一次 Spores 之后改成固定 Chomp/Chomp/Spores 序列"**没做**。
+本移植的 A17 在其他怪物上一律只做到"禁令"那一层（§187–§192），这条也是同一类。
 
 **⛔ `Sentry and Spheric Guardian` 是另一个问题**：判据 `check_ascension_health` 按**池子的
 档位**钉一条 `MaxHealthAsc`（精英 A8 / 普通 A7），而一只怪物只允许**一条**。Sentry 的 wiki

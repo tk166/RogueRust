@@ -849,6 +849,11 @@ pub fn has_behaviour(status_id: &str) -> bool {
             | "standard.fairy_in_a_bottle"
             // §181: read in play.rs when a card program is about to start (played twice).
             | "standard.duplication"
+            // §312: Malleable 的两条规则**全在内容触发器里**（`DamageTaken` 给块 + 递增、
+            // `TurnStarted` 清零）。内核不再需要新分支 —— 它只要跑触发器，并把
+            // `combatantStatusStacks` / `combatantCounter` / `add` 求值（三样都已有）。
+            // 收进这张清单的理由同 `standard.malleable` 的邻居：这条判据要一个"谁读它"的说法。
+            | "standard.malleable"
     )
 }
 

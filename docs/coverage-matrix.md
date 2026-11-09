@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 889 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 894 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -36,27 +36,27 @@
 
 | 类别 | 行数 | TestNamed | HarnessOnly | 两层都没有 | SourceTie:wiki | SourceTie:spec | 有偏差声明 | orphan |
 |---|---|---|---|---|---|---|---|---|
-| 怪物 | 51 | 43 | 0 | 8 | 49 | 2 | 12 | 0 |
-| 敌人动作 | 142 | 74 | 68 | 0 | 135 | 7 | 54 | 0 |
+| 怪物 | 52 | 44 | 0 | 8 | 49 | 3 | 12 | 0 |
+| 敌人动作 | 144 | 74 | 70 | 0 | 135 | 9 | 55 | 0 |
 | 卡牌 | 293 | 165 | 128 | 0 | 281 | 12 | 18 | 0 |
-| 状态 | 146 | 136 | 6 | 4 | 0 | 146 | 1 | 0 |
-| 遭遇 | 53 | 37 | 16 | 0 | 0 | 0 | 0 | 0 |
+| 状态 | 147 | 136 | 6 | 5 | 0 | 147 | 1 | 0 |
+| 遭遇 | 54 | 38 | 16 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 19 | 19 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 152 | 135 | 17 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 889 | 642 | 235 | 12 | 465 | 167 | 85 | 0 |
+| **合计** | 894 | 644 | 237 | 13 | 465 | 171 | 86 | 0 |
 
-扫描到的具名测试：**1158** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
+扫描到的具名测试：**1159** 条；wiki dump：**45** 份（其中 49 只怪有 dump）。
 
 事件：池里有 **22** 个位次、**19** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
 同一页面的早期副本（内容同源，矩阵只用 `wiki_asc/` 那一份）：`wiki_book_of_stabbing.txt`、`wiki_lagavulin.txt`、`wiki_nemesis.txt`、`wiki_reptomancer.txt`、`wiki_slavers.txt`、`wiki_taskmaster.txt`
 
-## 怪物（51）
+## 怪物（52）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
-| acid_slime_l | yes | — | — | wiki:wiki_asc/acid_slime.txt | — | §276/INV_ASC_HP+INV_MONSTERS |
+| acid_slime_l | yes | — | — | wiki:wiki_asc/acid_slime.txt | — | §276/§312/INV_ASC_HP+INV_MONSTERS |
 | acid_slime_m | yes | a_large_slime_splits_at_half_health_with_its_current_hp, a_split_spawns_two_combatants_when_the_boss_dies …(+2) | — | wiki:wiki_asc/acid_slime.txt | — | §276/INV_ASC_HP+INV_MONSTERS/a_large_slime_splits_at_half_health_with_its_current_hp |
 | acid_slime_s | yes | — | — | wiki:wiki_asc/acid_slime.txt | — | §276/INV_ASC_HP+INV_MONSTERS |
 | awakened_one | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, the_awakened_one_draws_phase_one_by_weight_and_flips_on_the_guard …(+3) | — | wiki:wiki_asc/awakened_one.txt | gap §H: 二阶段"不能连续三次 Tackle/Sludge"未做（规则预算 8 条已满）；Regenerate/Curiosity 层数不随 A19 变 | §195.8/§282/INV_ASC_HP+INV_MONSTERS/the_awakened_one_survives_its_first_death_and_then_really_dies |
@@ -64,51 +64,52 @@
 | book_of_stabbing | yes | the_five_elite_encounters_match_the_wiki_numbers, book_of_stabbing_multistab_starts_at_two_hits | — | wiki:wiki_asc/book_of_stabbing.txt | — | §173/§257/INV_ASC_HP+INV_MONSTERS+INV_SPAWN_COUNTERS/the_five_elite_encounters_match_the_wiki_numbers |
 | bronze_automaton | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+5) | — | wiki:wiki_asc/bronze_automaton.txt | gap §H: Orb 的 `Stasis` 用"最高稀有度"（并列随机），与 wiki 一致；"同一招不能三次"已做 | §194/§282/INV_ASC_HP+INV_MONSTERS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | bronze_orb | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, a_minion_is_not_on_the_field_until_its_summon_lands …(+1) | — | wiki:wiki_asc/bronze_automaton.txt | gap §H: Orb 的 `Stasis` 用"最高稀有度"（并列随机），与 wiki 一致；"同一招不能三次"已做 | §195.6/§282/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
-| byrd | yes | three_byrds_each_start_with_their_own_flying, flying_halves_attack_damage_and_loses_a_stack_per_hit | — | wiki:wiki_asc/byrd.txt | — | §213/§311/INV_ASC_HP+INV_MONSTERS/three_byrds_each_start_with_their_own_flying |
-| chosen | yes | hex_shuffles_a_dazed_only_for_non_attack_cards, chosen_swaps_its_opener_at_a17 …(+1) | — | wiki:wiki_asc/chosen.txt | — | §213/§311/INV_ASC_HP+INV_MONSTERS/hex_shuffles_a_dazed_only_for_non_attack_cards |
+| byrd | yes | three_byrds_each_start_with_their_own_flying, flying_halves_attack_damage_and_loses_a_stack_per_hit | — | wiki:wiki_asc/byrd.txt | — | §311/§312/INV_ASC_HP+INV_MONSTERS/three_byrds_each_start_with_their_own_flying |
+| chosen | yes | hex_shuffles_a_dazed_only_for_non_attack_cards, chosen_swaps_its_opener_at_a17 …(+1) | — | wiki:wiki_asc/chosen.txt | — | §213/§312/INV_ASC_HP+INV_MONSTERS/hex_shuffles_a_dazed_only_for_non_attack_cards |
 | cultist | yes | building_a_fight_keeps_the_ascension_but_not_the_last_fights_gold, a_fight_built_from_the_content_deck_can_play_a_strike …(+8) | — | wiki:wiki_asc/cultist.txt | — | §5.2/§195.8/INV_ASC_HP+INV_MONSTERS/building_a_fight_keeps_the_ascension_but_not_the_last_fights_gold |
 | dagger | yes | the_five_elite_encounters_match_the_wiki_numbers, reptomancer_switches_to_snake_strike_when_four_daggers_are_out | — | wiki:wiki_asc/dagger.txt | — | §175/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
-| darkling | yes | an_encounter_with_two_records_of_the_same_id_builds | — | wiki:wiki_asc/darkling.txt | — | §129/§137/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/an_encounter_with_two_records_of_the_same_id_builds |
+| darkling | yes | an_encounter_with_two_records_of_the_same_id_builds | — | wiki:wiki_asc/darkling.txt | — | §137/§312/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/an_encounter_with_two_records_of_the_same_id_builds |
 | deca | yes | donus_circle_of_power_buffs_the_enemy_team_and_not_the_player | — | wiki:wiki_asc/donu_and_deca.txt | gap §H: Artifact 层数不随 A19 变（`StartingStatuses` 没有升档轴） | §195.8/§282/INV_ASC_HP+INV_MONSTERS/donus_circle_of_power_buffs_the_enemy_team_and_not_the_player |
 | donu | yes | donus_circle_of_power_buffs_the_enemy_team_and_not_the_player | — | wiki:wiki_asc/donu_and_deca.txt | gap §H: Artifact 层数不随 A19 变（`StartingStatuses` 没有升档轴） | §195.8/§282/INV_ASC_HP+INV_MONSTERS/donus_circle_of_power_buffs_the_enemy_team_and_not_the_player |
 | fat_gremlin | yes | — | — | wiki:wiki_asc/fat_gremlin.txt | — | §138/§214/INV_ASC_HP+INV_MONSTERS |
-| fungi_beast | yes | the_act_one_hard_pool_encounters_match_the_wiki_numbers, act_two_fights_act_two_enemies | — | wiki:wiki_asc/fungi_beast.txt | — | §258/INV_ASC_HP+INV_MONSTERS/the_act_one_hard_pool_encounters_match_the_wiki_numbers |
-| giant_head | yes | giant_head_counts_down_then_only_its_time, it_is_time_escalates_by_five_and_respects_its_cap | — | wiki:wiki_asc/giant_head.txt | — | §134/§211/INV_ASC_HP+INV_MONSTERS+INV_SPAWN_COUNTERS/giant_head_counts_down_then_only_its_time |
-| gremlin_leader | yes | the_summon_cap_is_a_loud_failure | — | wiki:wiki_asc/gremlin_leader.txt | — | §134/§212/INV_ASC_HP+INV_MONSTERS/the_summon_cap_is_a_loud_failure |
+| fungi_beast | yes | the_act_one_hard_pool_encounters_match_the_wiki_numbers, act_two_fights_act_two_enemies | — | wiki:wiki_asc/fungi_beast.txt | — | §258/§312/INV_ASC_HP+INV_MONSTERS/the_act_one_hard_pool_encounters_match_the_wiki_numbers |
+| giant_head | yes | giant_head_counts_down_then_only_its_time, it_is_time_escalates_by_five_and_respects_its_cap | — | wiki:wiki_asc/giant_head.txt | — | §211/§312/INV_ASC_HP+INV_MONSTERS+INV_SPAWN_COUNTERS/giant_head_counts_down_then_only_its_time |
+| gremlin_leader | yes | the_summon_cap_is_a_loud_failure | — | wiki:wiki_asc/gremlin_leader.txt | — | §212/§312/INV_ASC_HP+INV_MONSTERS/the_summon_cap_is_a_loud_failure |
 | gremlin_nob | yes | — | — | wiki:wiki_asc/gremlin_nob.txt | — | §152/INV_ASC_HP+INV_MONSTERS |
 | gremlin_wizard | yes | — | — | wiki:wiki_asc/gremlin_wizard.txt | — | §130/§138/INV_ASC_HP+INV_MONSTERS |
 | hexaghost | yes | hexaghost_plays_the_wikis_seven_move_pattern_after_its_two_openers, the_boss_is_offered_at_floor_16_and_clears_the_act | — | wiki:wiki_asc/hexaghost.txt | gap §H: Sear 后续塞的 Burn 不自动升级（wiki："for the rest of combat"）；Divider 读结算时 HP | §282/INV_ASC_HP+INV_MONSTERS/hexaghost_plays_the_wikis_seven_move_pattern_after_its_two_openers |
 | jaw_worm | yes | spot_weakness_follows_the_enemy_intent, a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it …(+2) | — | wiki:wiki_asc/jaw_worm.txt | — | §5.2/INV_ASC_HP+INV_MONSTERS/spot_weakness_follows_the_enemy_intent |
 | lagavulin | yes | the_five_elite_encounters_match_the_wiki_numbers, lagavulin_wakes_when_it_loses_health_and_loses_a_turn …(+3) | — | wiki:wiki_asc/lagavulin.txt | — | §173/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
 | looter | yes | ascension_two_makes_the_looter_mug_hit_for_eleven, a_looter_steals_thievery_gold_on_every_attack_and_carries_it_away …(+5) | — | wiki:wiki_asc/thieves.txt | — | §201/§282/INV_ASC_HP+INV_MONSTERS/ascension_two_makes_the_looter_mug_hit_for_eleven |
-| louse_green | yes | the_act_one_hard_pool_encounters_match_the_wiki_numbers, the_composed_encounters_pick_from_their_candidates …(+2) | — | wiki:wiki_asc/louses.txt | — | §258/§275/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/the_act_one_hard_pool_encounters_match_the_wiki_numbers |
-| louse_red | yes | a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action, an_encounter_without_rolls_draws_nothing …(+5) | — | wiki:wiki_asc/louses.txt | — | §258/§275/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action |
+| louse_green | yes | the_act_one_hard_pool_encounters_match_the_wiki_numbers, the_composed_encounters_pick_from_their_candidates …(+2) | — | wiki:wiki_asc/louses.txt | — | §275/§312/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/the_act_one_hard_pool_encounters_match_the_wiki_numbers |
+| louse_red | yes | a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action, an_encounter_without_rolls_draws_nothing …(+5) | — | wiki:wiki_asc/louses.txt | — | §275/§312/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action |
 | maw | yes | nom_nom_hits_five_damage_ceil_round_over_two_times, the_maw_follows_the_wikis_transition_table | — | wiki:wiki_asc/the_maw.txt | 无 AscHP：wiki The Maw: max HP does not change with ascension | §207/§212/INV_MONSTERS+INV_NO_ASC_HP/nom_nom_hits_five_damage_ceil_round_over_two_times |
 | nemesis | yes | the_five_elite_encounters_match_the_wiki_numbers, nemesis_never_repeats_burn_or_scythe_and_never_triple_attacks | — | wiki:wiki_asc/nemesis.txt | — | §175/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
-| orb_walker | yes | — | — | wiki:wiki_asc/orb_walker.txt | — | §208/§214/INV_ASC_HP+INV_MONSTERS |
+| orb_walker | yes | — | — | wiki:wiki_asc/orb_walker.txt | — | §214/§312/INV_ASC_HP+INV_MONSTERS |
 | reptomancer | yes | the_five_elite_encounters_match_the_wiki_numbers, reptomancer_switches_to_snake_strike_when_four_daggers_are_out …(+1) | — | wiki:wiki_asc/reptomancer.txt | — | §175/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
 | sentry_1 | yes | a_turn_boundary_leaves_no_chain_referenced, dexterity_from_the_content_scales_a_real_defend …(+2) | — | wiki:wiki_asc/sentry.txt | — | §4.2/§134/INV_ASC_HP+INV_MONSTERS/a_turn_boundary_leaves_no_chain_referenced |
 | sentry_2 | yes | a_long_fight_never_reports_a_step_problem | — | wiki:wiki_asc/sentry.txt | — | §4.2/§134/INV_ASC_HP+INV_MONSTERS/a_long_fight_never_reports_a_step_problem |
 | sentry_3 | yes | a_long_fight_never_reports_a_step_problem | — | wiki:wiki_asc/sentry.txt | — | §134/INV_ASC_HP+INV_MONSTERS/a_long_fight_never_reports_a_step_problem |
-| shelled_parasite | yes | act_two_fights_act_two_enemies | — | wiki:wiki_asc/shelled_parasite.txt | — | §130/INV_ASC_HP+INV_MONSTERS/act_two_fights_act_two_enemies |
+| shelled_parasite | yes | act_two_fights_act_two_enemies | — | wiki:wiki_asc/shelled_parasite.txt | — | §130/§312/INV_ASC_HP+INV_MONSTERS/act_two_fights_act_two_enemies |
 | slaver_red | yes | the_five_elite_encounters_match_the_wiki_numbers, the_composed_encounters_pick_from_their_candidates …(+1) | — | wiki:wiki_asc/slavers.txt | — | §258/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
-| slime_boss | yes | a_phase_split_happens_once_even_under_three_hits, the_boss_is_offered_at_floor_16_and_clears_the_act | — | wiki:wiki_asc/slime_boss.txt | — | §4.3/INV_ASC_HP+INV_MONSTERS/a_phase_split_happens_once_even_under_three_hits |
+| slime_boss | yes | a_phase_split_happens_once_even_under_three_hits, the_boss_is_offered_at_floor_16_and_clears_the_act | — | wiki:wiki_asc/slime_boss.txt | — | §4.3/§312/INV_ASC_HP+INV_MONSTERS/a_phase_split_happens_once_even_under_three_hits |
+| snake_plant | yes | malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts | — | spec:INV_ASC_HP+INV_MONSTERS | — | §311/§312/INV_ASC_HP+INV_MONSTERS/malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts |
 | sneaky_gremlin | yes | — | — | wiki:wiki_asc/sneaky_gremlin.txt | — | §130/§138/INV_ASC_HP+INV_MONSTERS |
 | snecko | yes | act_two_fights_act_two_enemies | — | spec:INV_ASC_HP+INV_MONSTERS | — | §147/§282/INV_ASC_HP+INV_MONSTERS/act_two_fights_act_two_enemies |
 | spheric_guardian | yes | the_spheric_guardian_starts_with_block_artifact_and_barricade | — | spec:INV_MONSTERS+INV_NO_ASC_HP | 无 AscHP：wiki Spheric Guardian: HP 20, no AscHP column | §282/§311/INV_MONSTERS+INV_NO_ASC_HP/the_spheric_guardian_starts_with_block_artifact_and_barricade |
-| spike_slime_l | yes | — | — | wiki:wiki_asc/spike_slime.txt | — | §276/INV_ASC_HP+INV_MONSTERS |
+| spike_slime_l | yes | — | — | wiki:wiki_asc/spike_slime.txt | — | §276/§312/INV_ASC_HP+INV_MONSTERS |
 | spike_slime_m | yes | a_large_slime_splits_at_half_health_with_its_current_hp, the_composed_encounters_pick_from_their_candidates | — | wiki:wiki_asc/spike_slime.txt | — | INV_ASC_HP+INV_MONSTERS/a_large_slime_splits_at_half_health_with_its_current_hp |
 | spike_slime_s | yes | a_minion_flees_when_its_master_falls, the_summon_cap_is_a_loud_failure | — | wiki:wiki_asc/spike_slime.txt | — | §276/§282/INV_ASC_HP+INV_MONSTERS/a_minion_flees_when_its_master_falls |
-| spiker | yes | spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times, starting_statuses_follow_their_ascension_rows | — | wiki:wiki_asc/shapes.txt | — | §207/§214/INV_ASC_HP+INV_MONSTERS/spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times |
-| spire_growth | yes | spire_growth_smashes_instead_of_choosing | — | wiki:wiki_asc/spire_growth.txt | — | §148/§214/INV_ASC_HP+INV_MONSTERS/spire_growth_smashes_instead_of_choosing |
+| spiker | yes | spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times, starting_statuses_follow_their_ascension_rows | — | wiki:wiki_asc/shapes.txt | — | §214/§312/INV_ASC_HP+INV_MONSTERS/spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times |
+| spire_growth | yes | spire_growth_smashes_instead_of_choosing | — | wiki:wiki_asc/spire_growth.txt | — | §214/§312/INV_ASC_HP+INV_MONSTERS/spire_growth_smashes_instead_of_choosing |
 | taskmaster | yes | the_five_elite_encounters_match_the_wiki_numbers | — | wiki:wiki_asc/taskmaster.txt | — | INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
-| the_champ | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half …(+1) | — | wiki:wiki_asc/the_champ.txt | gap §H: A19 的 "Gloat 换成 Defensive Stance" 未实现；Anger 按名清 debuff；第二阶段只做第一次 Execute | §194/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
+| the_champ | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half …(+1) | — | wiki:wiki_asc/the_champ.txt | gap §H: A19 的 "Gloat 换成 Defensive Stance" 未实现；Anger 按名清 debuff；第二阶段只做第一次 Execute | §194/§312/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | the_collector | yes | the_collector_draws_by_weight_and_never_buffs_twice_in_a_row, a_minion_is_not_on_the_field_until_its_summon_lands | — | wiki:wiki_asc/the_collector.txt | gap §H: 25/45/30（0-1 只 Torch Head 时的权重）未分档 | §138/§282/INV_ASC_HP+INV_MONSTERS/the_collector_draws_by_weight_and_never_buffs_twice_in_a_row |
 | the_guardian | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost, building_a_guardian_fight_seeds_its_mode_shift_budget_by_ascension …(+1) | — | wiki:wiki_asc/the_guardian.txt | — | §194/INV_ASC_HP+INV_MONSTERS+INV_SPAWN_COUNTERS/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
-| time_eater | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, time_eater_head_slam_reaches_32_at_a4 | — | wiki:wiki_asc/time_eater.txt | gap §H: Haste 不清 debuff（没有"清空状态"节点）；`Draw Reduction` 已实现但 wiki 的"A19 另加 2 Slimed"没做 | §138/§211/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
+| time_eater | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, time_eater_head_slam_reaches_32_at_a4 | — | wiki:wiki_asc/time_eater.txt | gap §H: Haste 不清 debuff（没有"清空状态"节点）；`Draw Reduction` 已实现但 wiki 的"A19 另加 2 Slimed"没做 | §211/§312/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | torch_head | yes | a_minion_is_not_on_the_field_until_its_summon_lands | — | wiki:wiki_asc/torch_head.txt | gap §H: 25/45/30（0-1 只 Torch Head 时的权重）未分档 | §195.3/§282/INV_ASC_HP+INV_MONSTERS/a_minion_is_not_on_the_field_until_its_summon_lands |
 
-## 敌人动作（142）
+## 敌人动作（144）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -212,12 +213,14 @@
 | slime_boss.goop_spray | yes | — | ENEMY_DIFF | wiki:wiki_asc/slime_boss.txt (via slime_boss) | — | §4.3/INV_ACTIONS+INV_ASC_VARIANTS |
 | slime_boss.preparing | yes | — | ENEMY_DIFF | wiki:wiki_asc/slime_boss.txt (via slime_boss) · 仅基础值 | 无升档：wiki Slime Boss: Preparing has no numbers | §4.3/INV_ACTIONS+INV_NO_ASC |
 | slime_boss.slam | yes | a_combinator_rule_switches_the_boss_move | — | wiki:wiki_asc/slime_boss.txt (via slime_boss) | — | §4.3/INV_ACTIONS+INV_ASC_VARIANTS/a_combinator_rule_switches_the_boss_move |
+| snake_plant.chomp_chomp | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §4.1/§312/INV_ACTIONS+INV_ASC_VARIANTS |
+| snake_plant.enfeebling_spores | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_NO_ASC | 无升档：wiki Snake Plant: Spores have no A-row | §312/INV_ACTIONS+INV_NO_ASC |
 | sneaky_gremlin.puncture | yes | — | ENEMY_DIFF | wiki:wiki_asc/sneaky_gremlin.txt (via sneaky_gremlin) | — | INV_ACTIONS+INV_ASC_VARIANTS |
 | snecko.bite | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §282/INV_ACTIONS+INV_ASC_VARIANTS |
 | snecko.perplexing_glare | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_NO_ASC | 无升档：wiki Snecko: Perplexing Glare has no A-row (it only applies Confused) | §282/INV_ACTIONS+INV_NO_ASC |
 | snecko.tail_whip | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §282/§283/INV_ACTIONS+INV_ASC_VARIANTS |
-| spheric_guardian.activate | yes | the_spheric_guardian_starts_with_block_artifact_and_barricade | — | spec:INV_ACTIONS+INV_NO_ASC | 无升档：wiki Spheric Guardian: Activate has no A-row | §4.1/§311/INV_ACTIONS+INV_NO_ASC/the_spheric_guardian_starts_with_block_artifact_and_barricade |
-| spheric_guardian.debuff_attack | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §311/INV_ACTIONS+INV_ASC_VARIANTS |
+| spheric_guardian.activate | yes | the_spheric_guardian_starts_with_block_artifact_and_barricade | — | spec:INV_ACTIONS+INV_NO_ASC | 无升档：wiki Spheric Guardian: Activate has no A-row | §311/§312/INV_ACTIONS+INV_NO_ASC/the_spheric_guardian_starts_with_block_artifact_and_barricade |
+| spheric_guardian.debuff_attack | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §311/§312/INV_ACTIONS+INV_ASC_VARIANTS |
 | spheric_guardian.harden | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §311/INV_ACTIONS+INV_ASC_VARIANTS |
 | spheric_guardian.slam | yes | — | ENEMY_DIFF | spec:INV_ACTIONS+INV_ASC_VARIANTS | — | §311/INV_ACTIONS+INV_ASC_VARIANTS |
 | spike_slime_l.flame_tackle | yes | — | ENEMY_DIFF | wiki:wiki_asc/spike_slime.txt (via spike_slime_l) | — | §192/§276/INV_ACTIONS+INV_ASC_VARIANTS |
@@ -553,7 +556,7 @@
 | wound | yes | the_new_red_skills_do_what_their_pages_say, painful_stabs_shuffles_a_wound_only_on_unblocked_damage …(+4) | — | wiki:wiki_cards/wound.txt | — | §173/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
-## 状态（146）
+## 状态（147）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -598,7 +601,7 @@
 | standard.duplication | yes | duplication_plays_the_program_twice_but_pays_and_counts_once | — | spec:INV_STATUSES | — | §181/INV_STATUSES/duplication_plays_the_program_twice_but_pays_and_counts_once |
 | standard.ectoplasm | yes | the_gold_and_shop_relics_change_only_their_own_number | — | spec:INV_STATUSES | — | §269/§270/INV_STATUSES/the_gold_and_shop_relics_change_only_their_own_number |
 | standard.enchiridion | yes | enchiridion_adds_a_free_power_card_on_the_first_turn | — | spec:INV_STATUSES | — | §299/INV_STATUSES/enchiridion_adds_a_free_power_card_on_the_first_turn |
-| standard.enrage | yes | a_card_play_leaves_no_chain_referenced, enrage_answers_only_a_skill | — | spec:INV_STATUSES | — | §117/INV_STATUSES/a_card_play_leaves_no_chain_referenced |
+| standard.enrage | yes | a_card_play_leaves_no_chain_referenced, enrage_answers_only_a_skill | — | spec:INV_STATUSES | — | §117/§312/INV_STATUSES/a_card_play_leaves_no_chain_referenced |
 | standard.entangle_ready | yes | — | ENEMY_DIFF | spec:INV_STATUSES | — | §196/INV_STATUSES |
 | standard.entangled | yes | entangled_refuses_attacks_but_not_skills_and_expires_at_turn_end | — | spec:INV_STATUSES | — | §196/§263/INV_STATUSES/entangled_refuses_attacks_but_not_skills_and_expires_at_turn_end |
 | standard.evolve | yes | evolve_and_fire_breathing_only_answer_to_the_right_tags | — | spec:INV_STATUSES | — | §263/§276/INV_STATUSES/evolve_and_fire_breathing_only_answer_to_the_right_tags |
@@ -607,7 +610,7 @@
 | standard.fire_breathing | yes | evolve_and_fire_breathing_only_answer_to_the_right_tags | — | spec:INV_STATUSES | — | §237/§276/INV_STATUSES/evolve_and_fire_breathing_only_answer_to_the_right_tags |
 | standard.flame_barrier | yes | flame_barrier_hits_back_and_combust_burns_everyone, the_new_red_skills_do_what_their_pages_say | — | spec:INV_STATUSES | — | §119/INV_STATUSES/flame_barrier_hits_back_and_combust_burns_everyone |
 | standard.flying | yes | three_byrds_each_start_with_their_own_flying, flying_halves_attack_damage_and_loses_a_stack_per_hit | — | spec:INV_STATUSES | — | §208/§216/INV_STATUSES/three_byrds_each_start_with_their_own_flying |
-| standard.frail | yes | entrench_doubles_the_block_it_already_has, the_turn_end_curses_do_their_own_thing …(+8) | — | spec:INV_STATUSES | — | §276/§311/INV_STATUSES/entrench_doubles_the_block_it_already_has |
+| standard.frail | yes | entrench_doubles_the_block_it_already_has, the_turn_end_curses_do_their_own_thing …(+8) | — | spec:INV_STATUSES | — | §311/§312/INV_STATUSES/entrench_doubles_the_block_it_already_has |
 | standard.ginger | yes | the_status_application_relics_wire_their_own_carrier, the_status_application_relics_change_what_lands_on_the_target | — | spec:INV_STATUSES | — | §265/INV_STATUSES/the_status_application_relics_wire_their_own_carrier |
 | standard.gremlin_horn | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/§264/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.hand_drill | yes | breaking_a_block_applies_vulnerable_on_the_target_only | — | spec:INV_STATUSES | — | §294/§295/INV_STATUSES/breaking_a_block_applies_vulnerable_on_the_target_only |
@@ -628,6 +631,7 @@
 | standard.lose_strength | yes | flex_potion_gives_strength_and_takes_it_back | — | spec:INV_STATUSES | — | §158/§230/INV_STATUSES/flex_potion_gives_strength_and_takes_it_back |
 | standard.magic_flower | yes | magic_flower_multiplies_healing_by_one_and_a_half | — | spec:INV_STATUSES | — | §298/INV_STATUSES/magic_flower_multiplies_healing_by_one_and_a_half |
 | standard.magnetism | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §242/§244/INV_STATUSES |
+| standard.malleable | yes | — | — | spec:INV_STATUSES | — | §312/INV_STATUSES |
 | standard.mark_of_pain | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.mayhem | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §242/§244/INV_STATUSES |
 | standard.medical_kit | yes | the_two_unplayable_relics_let_their_own_card_kind_through | — | spec:INV_STATUSES | — | §298/INV_STATUSES/the_two_unplayable_relics_let_their_own_card_kind_through |
@@ -660,7 +664,7 @@
 | standard.rage | yes | rage_gives_block_only_for_an_attack, the_new_red_skills_do_what_their_pages_say …(+3) | — | spec:INV_STATUSES | — | §119/INV_STATUSES/rage_gives_block_only_for_an_attack |
 | standard.red_skull | yes | the_conditional_modifier_relics_wire_their_own_carrier, the_conditional_and_self_scoped_modifiers_change_the_right_number | — | spec:INV_STATUSES | — | §266/INV_STATUSES/the_conditional_modifier_relics_wire_their_own_carrier |
 | standard.regain_strength | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable | — | spec:INV_STATUSES | — | §219/INV_STATUSES/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
-| standard.regen | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, regen_heals_at_the_end_of_the_turn …(+1) | — | spec:INV_STATUSES | — | §119/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
+| standard.regen | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, regen_heals_at_the_end_of_the_turn …(+1) | — | spec:INV_STATUSES | — | §119/§312/INV_STATUSES/the_awakened_one_survives_its_first_death_and_then_really_dies |
 | standard.ring_of_the_serpent | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §264/§267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.ring_of_the_snake | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_turn_axis_relics_move_draw_energy_and_periods | — | spec:INV_STATUSES | — | §264/§267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.runic_cube | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_reaction_relics_fire_the_right_number_of_times | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
@@ -679,7 +683,7 @@
 | standard.split | yes | a_spawned_enemy_joins_the_turn_order_after_the_current_actor, a_phase_split_happens_once_even_under_three_hits …(+1) | — | spec:INV_STATUSES | — | §121/INV_STATUSES/a_spawned_enemy_joins_the_turn_order_after_the_current_actor |
 | standard.split_acid_l | yes | a_large_slime_splits_at_half_health_with_its_current_hp | — | spec:INV_STATUSES | — | §269/§276/INV_STATUSES/a_large_slime_splits_at_half_health_with_its_current_hp |
 | standard.split_spike_l | yes | a_large_slime_splits_at_half_health_with_its_current_hp, a_large_slime_above_half_health_does_not_split | — | spec:INV_STATUSES | — | §269/§276/INV_STATUSES/a_large_slime_splits_at_half_health_with_its_current_hp |
-| standard.spore_cloud | yes | spore_cloud_weakens_the_killer_on_death | — | spec:INV_STATUSES | — | §116/§117/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
+| standard.spore_cloud | yes | spore_cloud_weakens_the_killer_on_death | — | spec:INV_STATUSES | — | §117/§312/INV_STATUSES/spore_cloud_weakens_the_killer_on_death |
 | standard.stasis | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.1/§195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stasis_ready | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+2) | — | spec:INV_STATUSES | — | §195.4/INV_STATUSES/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
 | standard.stone_calendar | yes | the_eight_turn_shaped_relics_wire_their_own_status, the_turn_shaped_relic_statuses_fire_on_the_turn_the_wiki_names | — | spec:INV_STATUSES | — | §260/INV_STATUSES/the_eight_turn_shaped_relics_wire_their_own_status |
@@ -692,7 +696,7 @@
 | standard.the_bomb_damage | yes | the_bomb_explodes_on_the_third_turn_end_only | — | spec:INV_STATUSES | — | INV_STATUSES/the_bomb_explodes_on_the_third_turn_end_only |
 | standard.the_boot | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.the_specimen | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
-| standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, orange_pellets_removes_every_debuff_and_keeps_the_buffs …(+6) | — | spec:INV_STATUSES | — | §207/§214/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |
+| standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, orange_pellets_removes_every_debuff_and_keeps_the_buffs …(+6) | — | spec:INV_STATUSES | — | §214/§312/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |
 | standard.time_warp | yes | the_twelfth_card_asks_for_the_turn_to_end | — | spec:INV_STATUSES | — | §122/§125/INV_STATUSES/the_twelfth_card_asks_for_the_turn_to_end |
 | standard.torii | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.tungsten_rod | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
@@ -702,9 +706,9 @@
 | standard.velvet_choker | yes | velvet_choker_stops_the_seventh_card_of_the_turn | — | spec:INV_STATUSES | — | §296/§297/INV_STATUSES/velvet_choker_stops_the_seventh_card_of_the_turn |
 | standard.vulnerable | yes | the_def_table_is_a_side_table_not_a_copy_per_beat, clear_wipes_the_names_too …(+26) | — | spec:INV_STATUSES | — | §282/§283/INV_STATUSES/the_def_table_is_a_side_table_not_a_copy_per_beat |
 | standard.warped_tongs | yes | warped_tongs_upgrades_a_random_card_not_the_first_one | — | spec:INV_STATUSES | — | §300/INV_STATUSES/warped_tongs_upgrades_a_random_card_not_the_first_one |
-| standard.weak | yes | the_def_table_is_a_side_table_not_a_copy_per_beat, clear_wipes_the_names_too …(+34) | — | spec:INV_STATUSES | — | §263/§265/INV_STATUSES/the_def_table_is_a_side_table_not_a_copy_per_beat |
+| standard.weak | yes | the_def_table_is_a_side_table_not_a_copy_per_beat, clear_wipes_the_names_too …(+34) | — | spec:INV_STATUSES | — | §265/§312/INV_STATUSES/the_def_table_is_a_side_table_not_a_copy_per_beat |
 
-## 遭遇（53）
+## 遭遇（54）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -715,7 +719,7 @@
 | enc_bronze_automaton | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter, the_automaton_swaps_stunned_for_boost_only_at_a19 …(+3) | — | — | — | §138/§194/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
 | enc_byrds | yes | three_byrds_each_start_with_their_own_flying, flying_halves_attack_damage_and_loses_a_stack_per_hit | — | — | — | §282/§311/three_byrds_each_start_with_their_own_flying |
 | enc_chosen | yes | hex_shuffles_a_dazed_only_for_non_attack_cards, chosen_swaps_its_opener_at_a17 | — | — | — | §277/§311/hex_shuffles_a_dazed_only_for_non_attack_cards |
-| enc_chosen_and_byrd | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §311 |
+| enc_chosen_and_byrd | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §311/§312 |
 | enc_city_byrds | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §277/§311 |
 | enc_colosseum_champions | yes | enc_colosseum_slavers_and_champions_are_the_event_fights | — | — | — | enc_colosseum_slavers_and_champions_are_the_event_fights |
 | enc_colosseum_slavers | yes | enc_colosseum_slavers_and_champions_are_the_event_fights | — | — | — | enc_colosseum_slavers_and_champions_are_the_event_fights |
@@ -729,10 +733,10 @@
 | enc_giant_head | yes | a_summoned_minion_resolves_through_the_image_not_the_encounter, giant_head_counts_down_then_only_its_time …(+1) | — | — | — | §134/a_summoned_minion_resolves_through_the_image_not_the_encounter |
 | enc_gremlin_gang | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §138/§153 |
 | enc_gremlin_leader | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §5.3/§134 |
-| enc_gremlin_nob | yes | an_ascension_health_row_applies_at_its_own_level_and_not_below, the_every_nth_card_relics_count_the_right_kind_of_card | — | — | — | §152/§282/an_ascension_health_row_applies_at_its_own_level_and_not_below |
+| enc_gremlin_nob | yes | an_ascension_health_row_applies_at_its_own_level_and_not_below, the_every_nth_card_relics_count_the_right_kind_of_card | — | — | — | §152/an_ascension_health_row_applies_at_its_own_level_and_not_below |
 | enc_hexaghost | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter, hexaghost_plays_the_wikis_seven_move_pattern_after_its_two_openers | — | — | — | §194/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
 | enc_jaw_worm | yes | a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it, uppercut_hurts_the_enemy_and_not_the_hero …(+3) | — | — | — | §5.2/§130/a_round_one_rule_beats_the_cycle_and_the_cycle_takes_over_after_it |
-| enc_lagavulin | yes | the_five_elite_encounters_match_the_wiki_numbers, lagavulin_wakes_when_it_loses_health_and_loses_a_turn …(+3) | — | — | — | §173/§282/the_five_elite_encounters_match_the_wiki_numbers |
+| enc_lagavulin | yes | the_five_elite_encounters_match_the_wiki_numbers, lagavulin_wakes_when_it_loses_health_and_loses_a_turn …(+3) | — | — | — | §173/the_five_elite_encounters_match_the_wiki_numbers |
 | enc_lagavulin_awake | yes | the_ambush_lagavulin_starts_awake_with_siphon_soul | — | — | — | the_ambush_lagavulin_starts_awake_with_siphon_soul |
 | enc_looter | yes | an_ascension_health_row_applies_at_its_own_level_and_not_below, the_looter_mugs_twice_then_bombs_then_escapes | — | — | — | §175/§201/an_ascension_health_row_applies_at_its_own_level_and_not_below |
 | enc_louse | yes | a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action, an_encounter_without_rolls_draws_nothing …(+2) | — | — | — | §130/§152/a_spawn_roll_is_drawn_once_per_fight_and_read_by_the_action |
@@ -746,6 +750,7 @@
 | enc_slavers | yes | the_five_elite_encounters_match_the_wiki_numbers, blue_slaver_never_rakes_twice_in_a_row_at_a17 …(+1) | — | — | — | the_five_elite_encounters_match_the_wiki_numbers |
 | enc_slime_boss | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter, a_combinator_rule_switches_the_boss_move …(+1) | — | — | — | §194/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
 | enc_small_slimes | yes | a_spawned_combatant_still_resolves_to_its_enemy_record | — | — | — | §130/a_spawned_combatant_still_resolves_to_its_enemy_record |
+| enc_snake_plant | yes | malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts | — | — | — | §311/§312/malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts |
 | enc_snecko | yes | snecko_never_bites_three_times_in_a_row | — | — | — | §147/§282/snecko_never_bites_three_times_in_a_row |
 | enc_spheric_guardian | yes | the_spheric_guardian_starts_with_block_artifact_and_barricade | — | — | — | §282/§311/the_spheric_guardian_starts_with_block_artifact_and_barricade |
 | enc_spike_slime_l | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §276 |
@@ -757,7 +762,7 @@
 | enc_the_guardian | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost, every_act_has_three_bosses_and_each_one_is_a_buildable_encounter …(+1) | — | — | — | §194/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
 | enc_three_cultists | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §282 |
 | enc_three_louses | yes | the_act_one_hard_pool_encounters_match_the_wiki_numbers | — | — | — | §258/§275/the_act_one_hard_pool_encounters_match_the_wiki_numbers |
-| enc_three_sentries | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §134/§282 |
+| enc_three_sentries | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §134 |
 | enc_time_eater | yes | every_act_has_three_bosses_and_each_one_is_a_buildable_encounter, a_weighted_boss_never_repeats_the_move_the_wiki_forbids …(+2) | — | — | — | §138/§194/every_act_has_three_bosses_and_each_one_is_a_buildable_encounter |
 | enc_two_fungi_beasts | yes | the_act_one_hard_pool_encounters_match_the_wiki_numbers | — | — | — | §258/§275/the_act_one_hard_pool_encounters_match_the_wiki_numbers |
 | enc_two_louses | yes | louse_bites_are_rolled_at_spawn_and_the_green_one_reads_its_roll, the_two_louses_have_the_moves_the_wiki_gives_them …(+1) | — | — | — | §201/§258/louse_bites_are_rolled_at_spawn_and_the_green_one_reads_its_roll |

@@ -82,7 +82,7 @@ INV_COUNTS = {
     # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster); §175: +3 (Nemesis / Reptomancer / Dagger).
     # §201: +1 (Looter).
     # §282: +1 (`snecko`, Act 2's normal enemy carrying `Confusion`).
-    "monsters": 51,
+    "monsters": 52,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
@@ -90,7 +90,7 @@ INV_COUNTS = {
     # §282: +1 (`enc_snecko`).
     # §311: +5（Act 2 的五条 —— `enc_spheric_guardian` / `enc_chosen_and_byrd` /
     # `enc_cultist_and_chosen` / `enc_three_cultists` / `enc_parasite_and_fungi`）。
-    "encounters": 50,
+    "encounters": 51,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -133,7 +133,8 @@ INV_COUNTS = {
     # §298: +3 (`magic_flower` / `medical_kit` / `blue_candle`)。
     # §299: +3 (C 类三件 —— 行为全在内容程序里)。
     # §300: +3 (三个新原子各自解锁的那一件).
-    "statuses": 146,
+    # §312: +1 (`standard.malleable`).
+    "statuses": 147,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -871,6 +872,9 @@ INV_CARDS = {
 MAX_ENEMIES_IN_FIGHT = 6
 
 INV_MONSTERS = [
+    # §312: Act 2 的 Snake Plant —— 75-79 血（A7 78-82），Malleable 3，两招。
+    ("snake_plant", 75, 79,
+     ["snake_plant.chomp_chomp", "snake_plant.enfeebling_spores"]),
     # §311: Act 2 的 Spheric Guardian —— 20 血（wiki 的 `Powers` 列另有三条：Artifact 3 /
     # Block 40 / Barricade；后两条不进这张表 —— Block 走 encounter 的 `StartingBlock`，
     # Barricade 是状态）。
@@ -998,6 +1002,11 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    # §312: Snake Plant（wiki `Snake Plant` 页 + `SlaySpireDB`）。
+    "snake_plant.chomp_chomp": ("Attack", [("damage", 7, "event"), ("damage", 7, "event"),
+                                          ("damage", 7, "event")]),
+    "snake_plant.enfeebling_spores": ("Debuff", [("status", "standard.frail", 2, "event"),
+                                                 ("status", "standard.weak", 2, "event")]),
     # §311: Spheric Guardian（wiki `Spheric Guardian` 页 + `Module:Enemies/data`）。
     # Activate 25 Block；Debuff Attack 10 + 5 Frail；Slam 10×2；Harden 10 + 15 Block。
     "spheric_guardian.activate": ("Defend", [("block", 25, "source")]),
@@ -1340,6 +1349,8 @@ INV_WEAK_POOL = {
     "enc_snecko": ["snecko"],
     # §311：Act 2 的其余六条（`The_City` 页的 Easy/Hard 池，两处来源核对）。
     "enc_spheric_guardian": ["spheric_guardian"],
+    # §312：Snake Plant 独自出现（wiki Hard 池，权重 6）。
+    "enc_snake_plant": ["snake_plant"],
     # `enc_two_thieves`（1 Looter + 1 Mugger）还没做：Mugger 是**新怪物**，它的行动序列在 wiki
     # 上只有一张表（没有像 Looter 那样的逐步文字规则），所以留到下一节把 Mugger 的规则核对清楚。
     "enc_chosen_and_byrd": ["chosen", "byrd"],
@@ -1423,7 +1434,8 @@ INV_ACT_TABLES = {
     "Weak2": ["enc_spheric_guardian", "enc_chosen", "enc_shelled_parasite", "enc_city_byrds",
               "enc_chosen_and_byrd", "enc_cultist_and_chosen",
               # §282: Act 2 的普通怪 Snecko（`Confusion` 的载体）。
-              "enc_snecko", "enc_three_cultists", "enc_parasite_and_fungi"],
+              "enc_snecko", "enc_three_cultists", "enc_parasite_and_fungi",
+              "enc_snake_plant"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
     "Elite": ["enc_gremlin_nob", "enc_lagavulin", "enc_three_sentries"],
@@ -1490,6 +1502,8 @@ INV_BOSS_POOL = {
 # because a content image **disables** that catalog (exec.rs:2421-2426): with
 # content present the candidate rows come only from STAT.PassiveModifiers.
 INV_STATUSES = {
+    # §312: Malleable —— 行为全在触发器里（`DamageTaken` + `TurnStarted`），没有被动修饰器。
+    "standard.malleable": [],
     # §227: Nightmare 的"下一回合把留存的副本拿进手牌" —— 一条 TurnStarted 触发器，
     # 没有任何修饰器（和 `standard.thorns` 一样属于"行为全在触发器里"）。
     # §282: `standard.confusion` —— **行为全在内核**（`exec::draw_for` 里按 id 看"有没有"，
@@ -2467,6 +2481,9 @@ def check_cards_and_actions(doc):
 # `native/patch_187_content.py` 的表头），而不是从内容拄过来的 --
 # "从内容生成期望值"等于没有期望值。
 INV_ASC_VARIANTS = {
+    # §312: Snake Plant 的 Chomp Chomp 在 A2 起是 8×3（wiki `{{Asc|2|8×3}}`）。
+    'snake_plant.chomp_chomp': [(2, [('damage', 8, 'event'), ('damage', 8, 'event'),
+                                    ('damage', 8, 'event')])],
     # §311: Spheric Guardian 的三招从 A2 起伤害 +1（wiki 的 `{{Asc|2|11}}`）。
     'spheric_guardian.debuff_attack': [(2, [('damage', 11, 'event'),
                                             ('status', 'standard.frail', 5, 'event')])],
@@ -2986,6 +3003,8 @@ INV_ASC_HP = {
     'spike_slime_s': 11, 'fat_gremlin': 14, 'sneaky_gremlin': 11, 'blue_slaver': 48,
     'acid_slime_s': 9, 'acid_slime_m': 29, 'spike_slime_m': 29, 'jaw_worm': 42,
     'cultist': 50, 'gremlin_wizard': 22, 'sentry_1': 39, 'sentry_2': 39, 'sentry_3': 39,
+    # §312: Snake Plant 的 wiki `AscHP` 是 78-82（下界 78）。
+    'snake_plant': 78,
     'spike_slime_l': 67, 'acid_slime_l': 68, 'slime_boss': 150, 'time_eater': 480, 'shelled_parasite': 70, 'chosen': 98, 'byrd': 26,
     'spiker': 44, 'orb_walker': 92, 'the_champ': 440, 'gremlin_leader': 145, 'giant_head': 520,
     'darkling': 50, 'spire_growth': 190, 'louse_red': 11, 'louse_green': 12, 'fungi_beast': 24,
@@ -3171,6 +3190,8 @@ def check_ascension_variants(doc):
 # "the wiki has no A-row here" is a decision, and a decision has to be written down or the next
 # reader cannot tell it from "nobody looked".
 INV_NO_ASC = {
+    # §312: `Enfeebling Spores` 只有 "2 Frail and 2 Weak" 一行，没有 A 档。
+    'snake_plant.enfeebling_spores': 'wiki Snake Plant: Spores have no A-row', 
     # §311: wiki 的 `Activate | Gains 25 Block` 只有一行，没有 A 档。
     'spheric_guardian.activate': 'wiki Spheric Guardian: Activate has no A-row', 
     # §276: `acid_slime_l.lick` 本身没有升阶数字 —— wiki 的 A17 改的是**招式权重**
@@ -3724,8 +3745,12 @@ def check_statuses(doc):
                      "standard.enchiridion", "standard.orange_pellets",
                      "standard.dead_branch",
                      "standard.nilrys_codex", "standard.warped_tongs",
-                     "standard.mummified_hand"):
+                     "standard.mummified_hand",
+                     # §312
+                     "standard.malleable"):
             expected = {"standard.thorns": ["DamageTaken"],
+                        # §312: 挨打长格挡（`DamageTaken`）+ 每回合清零（`TurnStarted`）。
+                        "standard.malleable": ["DamageTaken", "TurnStarted"],
                         "standard.spore_cloud": ["Downed"],
                         "standard.enrage": ["CardPlayed"],
                         "standard.regen": ["TurnEnded"],

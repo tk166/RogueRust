@@ -8886,6 +8886,96 @@ fn the_zero_infrastructure_tail_lights_up_the_existing_channels() {
     }
 
 
+
+    /// §312：Snake Plant 的 `Malleable 3` —— 每次**掉血的攻击**多给 1 块，回合开始清零。
+    ///
+    /// 这是本轮唯一一个"纯内容实现的反应式状态"：`DamageTaken` 触发器 + `damage.isAttack` +
+    /// 一个每战斗员计数器（`malleable_bonus`）。判据要同时证明"会长"和"会清"——只测会长，
+    /// 一个忘了清零的实现也全绿（它只是每回合越来越猛）。
+    #[test]
+    fn malleable_grows_by_one_per_hit_and_resets_when_the_turn_starts() {
+        use rd_core::status_bind::DamageKind;
+        let session = build_session_at(17, "enc_snake_plant", 200, None, 0, 0)
+            .expect("the snake plant fight builds");
+        install_session(session);
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+        let block = |state: &rd_core::state::CombatState| -> i32 {
+            state
+                .combatant(&cid_in("snake_plant"))
+                .map(|combatant| {
+                    combatant
+                        .defensive_pools()
+                        .iter()
+                        .find(|pool| pool.key.as_str() == "standard.block")
+                        .map_or(0, |pool| pool.pool.current)
+                })
+                .unwrap_or(-1)
+        };
+        let deal = |kind: DamageKind, amount: i32| {
+            let session = slot().as_mut().expect("session");
+            let mut host = rd_core::host::Host::new(&content);
+            let mut ctx = rd_core::exec::ExecContext::new(
+                &mut session.state,
+                Some(cid_in("hero")),
+                Some(cid_in("snake_plant")),
+                None,
+                1024,
+            )
+            .with_content(&content);
+            rd_core::exec::resolve_damage_of_kind(
+                &mut ctx,
+                &cid_in("snake_plant"),
+                amount,
+                false,
+                kind,
+            )
+            .expect("damage lands");
+            rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+            host.resolve_pending_queues_with(&mut session.state, rd_core::host::QueueLimits::DEFAULT)
+                .expect("dispatch DamageTaken");
+        };
+        // 12 点：打穿已有的块（每次 3/4/5），但三下不会把 75 血的蛇草打死。
+        let hit = |kind: DamageKind| deal(kind, 12);
+        let hit_dot = |amount: i32| deal(DamageKind::Dot, amount);
+
+        // 1 + 2: 三下攻击（12/12/12）⇒ 每一击**给的**块是 3 / 4 / 5。
+        // ⚠️ 读数就是"这次给的那一块"：上一次的块会被这一击吃掉，所以**不是累加值**
+        // （第一版在这里写了 [3, 7, 12]，那是把格挡当成了不消耗的）。
+        let mut seen = Vec::new();
+        for _ in 0..3 {
+            hit(DamageKind::Direct);
+            let session = slot().as_ref().expect("session");
+            seen.push(block(&session.state));
+        }
+        assert_eq!(seen, vec![3, 4, 5], "Malleable pays 3, then 4, then 5");
+
+        // 3: 回合开始 ⇒ 增量清零，下一回合第一下又是 3。
+        {
+            let session = slot().as_mut().expect("session");
+            session.state.current_round += 1;
+            let mut host = rd_core::host::Host::new(&content);
+            host.try_run_turn_started_triggers(&mut session.state, &cid_in("snake_plant"))
+                .expect("turn started");
+            host.try_resolve_pending_queues(&mut session.state).expect("drain");
+        }
+        hit(DamageKind::Direct);
+        let session = slot().as_ref().expect("session");
+        let after_reset = block(&session.state);
+        assert_eq!(
+            after_reset, 3,
+            "the counter reset, so the next hit pays the base 3 again (not 6)"
+        );
+
+        // 4: 毒**不**让它长大（`damage.isAttack` 为假）。用 1 点毒：先吃掉 1 块（3 → 2），
+        // 若它误触发就会变成 2 + 4 = 6 —— 两种读数分得开。
+        {
+            hit_dot(1);
+            let session = slot().as_ref().expect("session");
+            assert_eq!(block(&session.state), 2, "DoT eats block but never pays Malleable");
+        }
+        take_session();
+    }
+
     /// §311：**三只 byrd 各自的 Flying**。
     ///
     /// 这条判据存在的理由：把 `enc_byrds` 从 1 只改成 3 只之后，`flying_...` 那一条当场红
