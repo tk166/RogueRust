@@ -56,11 +56,11 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 50 / encounters 47 / cards 293 (base 154 + plus 139) / statuses 146 /
-enemy actions 138 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
-ascension variants 98 over 85 actions
-image full   content.sts.rdcf            167996 B
-image core   content.sts.core.rdcf       132044 B
+monsters 51 / encounters 53 / cards 293 (base 154 + plus 139) / statuses 146 /
+enemy actions 142 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
+ascension variants 101 over 88 actions
+image full   content.sts.rdcf            169820 B
+image core   content.sts.core.rdcf       133660 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
@@ -303,30 +303,56 @@ wiki 常见而我们**没有**的：
 | 静默的 | ~5 | 有钩子、缺一条判断 | `golden_eye`（`Scry`）`tough_bandages`（`CardDiscarded`）`ninja_scroll`（手上全是攻击） |
 | 明确不做 | 15 | 无尽模式 / 无意义 | `necronomicon` + 13 件 `Blight` + 2 件 `circlet` |
 
-### D.3 遭遇：三幕的池子（§275 / §287 / §306 核对）
+### D.3 遭遇：三幕的池子（§275 / §287 / §306 / §311 核对）
 
 当前事实（`sts.roguedeck.json` 的 `EncounterTables`，数字直接读出来）：
 
 | 幕 | 普通池 | 精英池 | Boss 池 |
 |---|---|---|---|
-| 1 | **17** | 3（`three_sentries` / `gremlin_nob` / `lagavulin`） | 3（Slime Boss / Guardian / Hexaghost） |
-| 2 | **3**（`shelled_parasite` / `chosen` / `snecko`） | 3（`gremlin_leader` / `book_of_stabbing` / `slavers`） | 3（Champ / Automaton / Collector） |
-| 3 | **6**（`byrds` / `orb_walker` / `spiker` / `darklings` / `maw` / `spire_growth`） | 3（`giant_head` / `nemesis` / `reptomancer`） | 3（Time Eater / Awakened One / Donu & Deca） |
+| 1 | **17** | 3 | 3（Slime Boss / Guardian / Hexaghost） |
+| 2 | **10** | 3（`gremlin_leader` / `book_of_stabbing` / `slavers`） | 3（Champ / Automaton / Collector） |
+| 3 | **6** | 3（`giant_head` / `nemesis` / `reptomancer`） | 3（Time Eater / Awakened One / Donu & Deca） |
 
-另外两处专用池：`EliteEvent`（3 条，`Dead Adventurer` 的伏击；Lagavulin 用**醒着的**变体，§287）
-与 `ColosseumSlavers` / `ColosseumChampions`（各 1 条，`The Colosseum` 的两场，§286）。
+另外两处专用池：`EliteEvent`（3 条，`Dead Adventurer` 的伏击）与 `ColosseumSlavers` /
+`ColosseumChampions`（各 1 条，`The Colosseum` 的两场）。
 
-**★ 最大的内容缺口在 Act 2 的普通池**：wiki 的 City 是 **Easy 5 + Hard 8 = 13** 种组合
-（Easy：Spheric Guardian / Chosen / Shelled Parasite / 3 Byrds / 2 Thieves；Hard：Chosen+Byrds、
-Cultist+Chosen、Sentry+Spheric Guardian、Snake Plant、Snecko、Centurion and Mystic、3 Cultists、
-Shelled Parasite and Fungi —— `slaythespire.wiki.gg/wiki/The_City`），我们只有 **3** 条。
-缺的组合里有 3 条要**新怪物**：`spheric_guardian`、`snake_plant`、`centurion` / `mystic`
-（其余用现有怪物就能拼：`chosen` + `byrds`、`cultist` + `chosen`、`sentry` + 需要 Spheric、
-`three_cultists`、`shelled_parasite` + 需要 Snake Plant 之外的那条可以拼）。
+### D.3.1 Act 2：wiki 的 13 条，做了 10 条（§311）
 
-⚠️ 旧版本这一节写着"还缺三件"（Act 1 的三条组合遭遇），**那三条 §276/§277 已经做完**；
-五个精英（Lagavulin / Book of Stabbing / Slavers / Nemesis / Reptomancer）也都做完了 ——
-`Elite` / `Elite2` / `Elite3` 各 3 条就是证据。留着过期条目比漏写更坏。
+| wiki（`The_City`） | 池 | 权重 | 状态 |
+|---|---|---|---|
+| Spheric Guardian | Easy | 2 | ✅ §311（新怪物） |
+| Chosen | Easy | 2 | ✅ |
+| Shelled Parasite | Easy | 2 | ✅ |
+| 3 Byrds | Easy | 2 | ✅ §311（顺手修了 `enc_byrds` 只有 1 只的 bug） |
+| 2 Thieves | Easy | 2 | ❌ 要 `mugger` |
+| Chosen and Byrds | Hard | 2 | ✅ §311（1 Chosen + **1** Byrd） |
+| Cultist and Chosen | Hard | 3 | ✅ §311 |
+| Sentry and Spheric Guardian | Hard | 2 | ⛔ 见下面的"跨档位" |
+| Snake Plant | Hard | 6 | ❌ 要 `standard.malleable` |
+| Snecko | Hard | 4 | ✅ |
+| Centurion and Mystic | Hard | 6 | ❌ 要"指定某一只友军"的选择器 |
+| 3 Cultists | Hard | 3 | ✅ §311 |
+| Shelled Parasite and Fungi | Hard | 3 | ✅ §311 |
+
+三条缺口各缺什么（**不是"没抄"**）：
+
+1. **`mugger`** —— 全新怪物。它和 Looter 共享 `stolen_gold` / `carryAwayStolenGold`，但它的
+   招式序列在 wiki 上只有一张表（没有 Looter 那样逐步的文字规则）；照 Looter 的骨架写等于
+   **发明**一条规则，所以等到能核对清楚时再做。
+2. **`snake_plant`** —— 要 `standard.malleable`：受到**攻击**伤害时获得 X 块、且每次触发 X
+   变大、回合开始重置。内核今天没有这条"会变的反应式状态"，是**新机制**。
+3. **`centurion` + `mystic`** —— `Protect` 要给 **Mystic**（不是自己、也不是全体）挂 15 块；
+   `Mystic` 的 `Heal` 要给全体敌人回 16（这条已有：`sel.allAllies` + `heal`）。前者缺
+   "按定义挑一只友军"的选择器 —— `sel.allAllies` 会把 Centurion 自己也算上。
+
+**⛔ `Sentry and Spheric Guardian` 是另一个问题**：判据 `check_ascension_health` 按**池子的
+档位**钉一条 `MaxHealthAsc`（精英 A8 / 普通 A7），而一只怪物只允许**一条**。Sentry 的 wiki
+数字是"38-42，**A8** 起 39-45"，它同时出现在 Act 1 的**精英**池与 Act 2 的**普通**池 —— 两条
+要求不可能同时成立。要做这一条，先得让"同一只怪物跨档位"被建模（按 (monster, tier) 钉 HP）。
+
+> ⚠️ **与 wiki 的已知偏差**：wiki 是 Easy（前两场）/ Hard（其余）两段式；我们每幕只有一个
+> **带权重**的单池（`EncounterTables.Weak2` 的 `Weight` 已经是 wiki 的数字 ×5）。所以
+> "前两场一定简单"这条规则没有 —— 与 Act 1 是同一条偏差。
 
 ### D.4 两个机制缺口：**都已关闭**（§277 提，§278–§281 关）
 

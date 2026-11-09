@@ -634,6 +634,28 @@ fn build_session_with(
     build_session_at(seed, encounter_name, hero_hp, deck, 0, 0)
 }
 
+/// 一个敌人实例的战斗员 id：第一次是 `id`，重复的加 `#2` / `#3` ……
+///
+/// §311：这条规则**只有一处**。构建战斗（`PlanCombatant.id`）与挂起始状态
+/// （[`apply_starting_statuses`]）都必须用它 —— 旧实现里后者拿的是 **plain** id，于是
+/// "三只 byrd"的三份 `StartingStatuses` 全叠到第一只身上（实测 9 层 Flying 在 `byrd` 上、
+/// 另外两只 0 层；`enc_three_sentries` 的 Artifact 同样是 3 层叠在一只身上）。
+fn unique_instance_id(id: &'static str, seen: &mut Vec<&'static str>) -> &'static str {
+    let unique: &'static str = if seen.contains(&id) {
+        let mut count = 2usize;
+        let mut text = std::format!("{id}#{count}");
+        while seen.iter().any(|entry| *entry == text.as_str()) {
+            count += 1;
+            text = std::format!("{id}#{count}");
+        }
+        Box::leak(text.into_boxed_str())
+    } else {
+        id
+    };
+    seen.push(unique);
+    unique
+}
+
 /// Put every enemy's `StartingStatuses` onto it (§175b).
 ///
 /// `ENCT[*].Enemies[j].StartingStatuses` is a list of `{Status, Stacks, DurationTurns, Charges}`
@@ -692,6 +714,7 @@ fn apply_starting_statuses(
     let enemies = content
         .encounter_enemies(encounter)
         .map_err(|e| format!("encounter_enemies: {}", detail(&e)))?;
+    let mut seen: Vec<&'static str> = Vec::new();
     for (slot, spec) in enemies.iter().enumerate() {
         let mut spec = spec.map_err(|e| format!("ENCT enemy record: {}", detail(&e)))?;
         // §277：组合槽要读**挑中的那条候选**（起始状态/格挡都挂在它身上）。决策由构建方做，
@@ -716,8 +739,17 @@ fn apply_starting_statuses(
             }
         }
         let id = spec.id().map_err(|e| format!("ENCT enemy id: {}", detail(&e)))?;
-        let Ok(target) = rd_core::state::CombatantId::new(id) else {
-            return Err(format!("`{id}` is not a usable combatant id"));
+        // §195.6/§311: 与构建方**同一条顺序**：`Spawn: false` 的占位记录不生成实例，
+        // 因此也不消耗一个 `#n`。
+        if !spec
+            .spawn()
+            .map_err(|e| format!("ENCT enemy Spawn: {}", detail(&e)))?
+        {
+            continue;
+        }
+        let unique = unique_instance_id(id, &mut seen);
+        let Ok(target) = rd_core::state::CombatantId::new(unique) else {
+            return Err(format!("`{unique}` is not a usable combatant id"));
         };
         // §208: `StartingBlock` -- an enemy can **start with block on it**, and `StartingStatuses`
         // cannot say that (block is a defensive pool, not a status). The wiki states it as a power
@@ -967,19 +999,9 @@ fn build_session_at_with(
         if !spec.spawn().map_err(|e| format!("ENCT enemy Spawn: {}", detail(&e)))? {
             continue;
         }
-        // The id this combatant will actually carry: `id` the first time, `id#2`, `id#3` after that.
-        let unique: &'static str = if seen_ids.contains(&id) {
-            let mut count = 2usize;
-            let mut text = std::format!("{id}#{count}");
-            while seen_ids.iter().any(|seen| *seen == text.as_str()) {
-                count += 1;
-                text = std::format!("{id}#{count}");
-            }
-            Box::leak(text.into_boxed_str())
-        } else {
-            id
-        };
-        seen_ids.push(unique);
+        // The id this combatant will actually carry (`id` / `id#2` / …). §311: the rule lives in
+        // **one** function because the starting-status pass needs the same answer.
+        let unique: &'static str = unique_instance_id(id, &mut seen_ids);
         if let Some(master) = spec.owner().map_err(|e| format!("ENCT enemy Owner: {}", detail(&e)))? {
             owners.push((unique, Box::leak(std::string::String::from(master).into_boxed_str())));
         }
@@ -8860,6 +8882,92 @@ fn the_zero_infrastructure_tail_lights_up_the_existing_channels() {
         assert!(gloat18 > 0, "A18 must still be able to choose Gloat (got {gloat18})");
         assert_eq!(gloat19, 0, "A19 must never choose Gloat");
         assert!(stance19 > 0, "A19 turns that slot into Defensive Stance (got {stance19})");
+        take_session();
+    }
+
+
+    /// §311：**三只 byrd 各自的 Flying**。
+    ///
+    /// 这条判据存在的理由：把 `enc_byrds` 从 1 只改成 3 只之后，`flying_...` 那一条当场红
+    /// （读到 8 层），根因是 `apply_starting_statuses` 拿 **plain** id 去挂状态 —— 三份
+    /// `StartingStatuses` 全叠到 `byrd` 身上，`byrd#2` / `byrd#3` 一层都没有。
+    /// 只读一只的判据区分不了"每只各 3 层"与"一只 9 层"，所以这里**逐只**读。
+    #[test]
+    fn three_byrds_each_start_with_their_own_flying() {
+        let session = build_session_at(11, "enc_byrds", 200, None, 0, 0)
+            .expect("the byrd fight builds");
+        install_session(session);
+        let session = slot().as_ref().expect("session");
+        let flying = |name: &str| -> Option<i32> {
+            session.state.combatant(&cid_in(name)).map(|combatant| {
+                combatant
+                    .statuses()
+                    .iter()
+                    .filter(|status| status.definition_id.as_str() == "standard.flying")
+                    .map(|status| status.stacks)
+                    .sum()
+            })
+        };
+        assert_eq!(flying("byrd"), Some(3), "the first byrd");
+        assert_eq!(flying("byrd#2"), Some(3), "the second byrd is its own instance");
+        assert_eq!(flying("byrd#3"), Some(3), "the third byrd too");
+        take_session();
+    }
+
+    /// §311：Spheric Guardian 的开场 —— 40 Block / Artifact 3 / Barricade 1，第一招 Activate。
+    ///
+    /// 三样里有一样是**新基建**（`StartingBlock`），两样是状态；wiki 把三条都写在 `Powers` 列。
+    #[test]
+    fn the_spheric_guardian_starts_with_block_artifact_and_barricade() {
+        let session = build_session_at(13, "enc_spheric_guardian", 200, None, 0, 0)
+            .expect("the spheric guardian fight builds");
+        install_session(session);
+        let session = slot().as_ref().expect("session");
+        let combatant = session.state.combatant(&cid_in("spheric_guardian"))
+            .expect("the guardian is on the field");
+        let block = combatant
+            .defensive_pools()
+            .iter()
+            .find(|pool| pool.key.as_str() == "standard.block")
+            .map_or(0, |pool| pool.pool.current);
+        assert_eq!(block, 40, "wiki: Block 40");
+        let stacks = |status_id: &str| -> i32 {
+            combatant
+                .statuses()
+                .iter()
+                .filter(|status| status.definition_id.as_str() == status_id)
+                .map(|status| status.stacks)
+                .sum()
+        };
+        assert_eq!(stacks("standard.artifact"), 3, "wiki: Artifact 3");
+        assert_eq!(stacks("standard.barricade"), 1, "wiki: Barricade");
+        // 第一招必须是 Activate（wiki: "always starts with Activate"）。
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+        let action = {
+            let session = slot().as_mut().expect("session");
+            let row = content
+                .lookup_in("enc_spheric_guardian", rd_core::content::EK_ENCOUNTER)
+                .expect("enc_spheric_guardian")
+                .index;
+            let at = rd_core::intent::locate_enemy(
+                &content,
+                u32::from(row),
+                &cid_in("spheric_guardian"),
+            )
+            .expect("locate")
+            .expect("the guardian is in this encounter");
+            rd_core::intent::select_action(
+                &session.state,
+                &content,
+                at,
+                &cid_in("spheric_guardian"),
+                1,
+            )
+            .expect("intent")
+            .expect("an action")
+            .action_id
+        };
+        assert_eq!(action, "spheric_guardian.activate", "round 1 is Activate");
         take_session();
     }
 

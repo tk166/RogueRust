@@ -33,7 +33,7 @@
 | `golden_idol` | 1, 2 | 2 | 0 | 1 | 两段三选一（§278） |
 | `shining_light` | 1 | 2 | 0 | 0 | |
 | `old_shrine` | 1 | 2 | 0 | 0 | 本移植自有（shrine 类：Pray / Leave） |
-| `ancient_writing` | 1 | 2 | 0 | 0 | 本移植自有（升一张牌） |
+| `ancient_writing` | 1 | 2 | 0 | 0 | **同名但不是 wiki 的那条**：我们用"升级一张牌"，wiki 的 Ancient Writing 是另一条事件（§311 记下这个命名冲突） |
 | `the_ssssserpent` | 1 | 2 | 0 | 2 | 两段 + A15 金币 150（§279） |
 | `the_cleric` | 1 | **3** | **2**（35 / 50·A15 75 金币） | 3 | §280：`gold_cost` + `heal_pct` + `RequiresAsc` |
 | `scrap_pile` | 1 | 2 | 0 | 9 | 9 段升级链（§285：`Chance` + `NextFail`） |
@@ -81,7 +81,7 @@
 | `winding_halls` | 3 | 精神错乱 / 掉血 / 拿诅咒 | 小 |
 | `mysterious_sphere` | 3 | "打一场（两只球体守卫）" + 遗物 | 中（缺 `spheric_guardian` 怪物） |
 | `sensory_stone` | 3 | "从一堆**无色**牌里选一张" | 中（同 `the_library`） |
-| `mind_bloom` | 3 | "三选一：打一场 Boss / 复制整副牌 / 升级所有牌，代价是金币或掉血" | 大（要 `dup_deck` / `upgrade_all`，且"打一场 Boss"要运行层指定遭遇） |
+| `mind_bloom` | 3 | **wiki 的四个选项**（§311 更正：旧版这一格写错过）：① *I am War* —— 打一场第 1 幕 Boss，得稀有遗物 + 50（A15 25）金币；② *I am Awake* —— 升级所有牌 + `Mark of the Bloom`（**不能治疗**）；③ *I am Rich* —— 999 金币 + 2 张 `Normality`；④ *I am Healthy* —— 回满血 + `Doubt`；第三项按血量在 Rich / Healthy 之间换 | 大：要 `upgrade_all`、两条新诅咒、`mark_of_the_bloom`（"不能治疗"的载体）与"打一场**第 1 幕** Boss"（事件开战斗有了，**指定 Boss 池**还没有） |
 
 ### 2.2 缺机制
 

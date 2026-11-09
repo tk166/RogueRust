@@ -82,13 +82,15 @@ INV_COUNTS = {
     # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster); §175: +3 (Nemesis / Reptomancer / Dagger).
     # §201: +1 (Looter).
     # §282: +1 (`snecko`, Act 2's normal enemy carrying `Confusion`).
-    "monsters": 50,
+    "monsters": 51,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
     # §258: +1 (`enc_two_louses` -- the green louse was unreachable).
     # §282: +1 (`enc_snecko`).
-    "encounters": 44,
+    # §311: +5（Act 2 的五条 —— `enc_spheric_guardian` / `enc_chosen_and_byrd` /
+    # `enc_cultist_and_chosen` / `enc_three_cultists` / `enc_parasite_and_fungi`）。
+    "encounters": 50,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -869,6 +871,12 @@ INV_CARDS = {
 MAX_ENEMIES_IN_FIGHT = 6
 
 INV_MONSTERS = [
+    # §311: Act 2 的 Spheric Guardian —— 20 血（wiki 的 `Powers` 列另有三条：Artifact 3 /
+    # Block 40 / Barricade；后两条不进这张表 —— Block 走 encounter 的 `StartingBlock`，
+    # Barricade 是状态）。
+    ("spheric_guardian", 20, 20,
+     ["spheric_guardian.activate", "spheric_guardian.debuff_attack",
+      "spheric_guardian.slam", "spheric_guardian.harden"]),
     # §282: Act 2 的普通怪 Snecko —— 114-120 血（表里是下界），三个动作。
     ("snecko", 114, 120, ["snecko.perplexing_glare", "snecko.bite", "snecko.tail_whip"]),
     ("spike_slime_s", 10, 14, ["spike_slime_s.tackle"]),
@@ -990,6 +998,13 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    # §311: Spheric Guardian（wiki `Spheric Guardian` 页 + `Module:Enemies/data`）。
+    # Activate 25 Block；Debuff Attack 10 + 5 Frail；Slam 10×2；Harden 10 + 15 Block。
+    "spheric_guardian.activate": ("Defend", [("block", 25, "source")]),
+    "spheric_guardian.debuff_attack": ("Attack", [("damage", 10, "event"),
+                                                  ("status", "standard.frail", 5, "event")]),
+    "spheric_guardian.slam": ("Attack", [("damage", 10, "event"), ("damage", 10, "event")]),
+    "spheric_guardian.harden": ("Attack", [("damage", 10, "event"), ("block", 15, "source")]),
     # §282: Snecko（wiki `Module:Enemies/data`）。Bite 15 / Tail Whip 8 + 2 易伤；
     # A 档在 `INV_ASC_VARIANTS` 里。Perplexing Glare 只挂 Confused（没有伤害）。
     "snecko.perplexing_glare": ("Debuff", [("status", "standard.confusion", 1, "event")]),
@@ -1303,7 +1318,11 @@ INV_WEAK_POOL = {
     "enc_chosen": ["chosen"],
     # §138: the gang exists so that a **summoned** gremlin has a record to point at.
     "enc_gremlin_gang": ["fat_gremlin", "sneaky_gremlin", "gremlin_wizard"],
-    "enc_byrds": ["byrd"],
+    # §311：wiki 的 "3 Byrds" 是**三只**（这一条内容原先只写了一只，同时影响第三幕的池子）。
+    "enc_byrds": ["byrd", "byrd", "byrd"],
+    # 两幕都有 "3 Byrds"，而内核要求"一条遭遇只属于一个池" ⇒ Act 2 用自己的一条
+    # （敌人记录从 `enc_byrds` 复制，HP/升阶数字因此一致）。
+    "enc_city_byrds": ["byrd", "byrd", "byrd"],
     "enc_spiker": ["spiker"],
     "enc_orb_walker": ["orb_walker"],
     "enc_darklings": ["darkling", "darkling"],
@@ -1319,8 +1338,17 @@ INV_WEAK_POOL = {
     "enc_maw": ["maw"],
     # §282: Snecko —— Act 2 的**普通**敌人，独自出现（wiki: "always alone"，114-120 血）。
     "enc_snecko": ["snecko"],
+    # §311：Act 2 的其余六条（`The_City` 页的 Easy/Hard 池，两处来源核对）。
+    "enc_spheric_guardian": ["spheric_guardian"],
+    # `enc_two_thieves`（1 Looter + 1 Mugger）还没做：Mugger 是**新怪物**，它的行动序列在 wiki
+    # 上只有一张表（没有像 Looter 那样的逐步文字规则），所以留到下一节把 Mugger 的规则核对清楚。
+    "enc_chosen_and_byrd": ["chosen", "byrd"],
+    "enc_cultist_and_chosen": ["cultist", "chosen"],
+    "enc_three_cultists": ["cultist", "cultist", "cultist"],
+    "enc_parasite_and_fungi": ["shelled_parasite", "fungi_beast"],
 }
-INV_WEAK_WEIGHT = 100  # inv:§5.2 权重之和 100（6 个遭遇按 20/16/16/16/16/16 分）
+INV_WEAK_WEIGHT = 100  # inv:§5.2 Act 1 的权重之和 100（6 个遭遇按 20/16/16/16/16/16 分）
+# §311：Act 2 的权重是 wiki 的 Easy 2 / Hard 2,3,2,6,4,6,3,3 乘 5 取整（缺的两条不占位）。
 
 # inv:§5.3 -- the elite pool. One entry, so there is no weight question yet; `EncounterTables.Elite`
 # in the document carries it, and this is what the check compares that against.
@@ -1390,9 +1418,12 @@ INV_ACT_TABLES = {
              "enc_spike_slime_l", "enc_acid_slime_l",
              # §277：组合槽的两条。
              "enc_exordium_thugs", "enc_exordium_wildlife"],
-    "Weak2": ["enc_chosen", "enc_shelled_parasite",
+    # §311：Act 2 的 13 条里做了 10 条（`snake_plant` / `centurion + mystic` 还要新机制，
+    # 见 `docs/sts-wiki-gap.md` §D.3）。权重是 wiki 的（×5 取整）。
+    "Weak2": ["enc_spheric_guardian", "enc_chosen", "enc_shelled_parasite", "enc_city_byrds",
+              "enc_chosen_and_byrd", "enc_cultist_and_chosen",
               # §282: Act 2 的普通怪 Snecko（`Confusion` 的载体）。
-              "enc_snecko"],
+              "enc_snecko", "enc_three_cultists", "enc_parasite_and_fungi"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
     "Elite": ["enc_gremlin_nob", "enc_lagavulin", "enc_three_sentries"],
@@ -2436,6 +2467,11 @@ def check_cards_and_actions(doc):
 # `native/patch_187_content.py` 的表头），而不是从内容拄过来的 --
 # "从内容生成期望值"等于没有期望值。
 INV_ASC_VARIANTS = {
+    # §311: Spheric Guardian 的三招从 A2 起伤害 +1（wiki 的 `{{Asc|2|11}}`）。
+    'spheric_guardian.debuff_attack': [(2, [('damage', 11, 'event'),
+                                            ('status', 'standard.frail', 5, 'event')])],
+    'spheric_guardian.slam': [(2, [('damage', 11, 'event'), ('damage', 11, 'event')])],
+    'spheric_guardian.harden': [(2, [('damage', 11, 'event'), ('block', 15, 'source')])],
     # action id: [(AscensionMin, facts), ...] —— §192 起是**列表**：一个动作可以有两个档位
     # （`jaw_worm.bellow` 的 Strength 在 A2 升、Block 在 A17 升）。单档位的动作仍然只写一项。
     # 每一行都是 wiki 的数字；出处见 `native/wiki_asc/<monster>.txt`。
@@ -3019,6 +3055,9 @@ INV_NO_ASC_HP = {
     # wiki `The Maw`: "The Maw is the only enemy whose Max HP does not change based on Ascension
     # level." (native/wiki_asc/the_maw.txt) -- pinning a number here would be inventing one.
     'maw': 'wiki The Maw: max HP does not change with ascension',
+    # §311：wiki 的 Spheric Guardian 只有 `HP 20` 一个数（没有 `78-83 7` 那样的第二列），
+    # 所以它的血量不随升阶变 —— 给它钉一个数等于发明一个数。
+    'spheric_guardian': 'wiki Spheric Guardian: HP 20, no AscHP column',
 }
 
 
@@ -3132,6 +3171,8 @@ def check_ascension_variants(doc):
 # "the wiki has no A-row here" is a decision, and a decision has to be written down or the next
 # reader cannot tell it from "nobody looked".
 INV_NO_ASC = {
+    # §311: wiki 的 `Activate | Gains 25 Block` 只有一行，没有 A 档。
+    'spheric_guardian.activate': 'wiki Spheric Guardian: Activate has no A-row', 
     # §276: `acid_slime_l.lick` 本身没有升阶数字 —— wiki 的 A17 改的是**招式权重**
     # （30/40/30 → 30/30/40）与"Lick 不能连两次"，两条都在 IntentRules 里，不在动作里。
     'acid_slime_l.lick': 'wiki Slimes: A17 moves the weights and the no-repeat rule, not the stacks',

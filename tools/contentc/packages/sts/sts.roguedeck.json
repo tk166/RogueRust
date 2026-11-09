@@ -50957,6 +50957,787 @@
           }
         }
       ]
+    },
+    {
+      "Id": "spheric_guardian.activate",
+      "PackageId": "sts",
+      "NameKey": "Activate",
+      "DescriptionKey": "Activate — 25 Block",
+      "Intent": {
+        "Kind": "Defend",
+        "Label": "Activate — 25 Block"
+      },
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 25
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "spheric_guardian.debuff_attack",
+      "PackageId": "sts",
+      "NameKey": "Debuff Attack",
+      "DescriptionKey": "Debuff Attack — 10 damage, 5 Frail",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Debuff Attack — 10 damage, 5 Frail"
+      },
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.frail"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 5
+                    }
+                  },
+                  "Duration": null,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 11
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.frail"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 5
+                        }
+                      },
+                      "Duration": null,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "spheric_guardian.slam",
+      "PackageId": "sts",
+      "NameKey": "Slam",
+      "DescriptionKey": "Slam — 10×2 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Slam — 10×2 damage"
+      },
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 3
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 11
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 11
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "spheric_guardian.harden",
+      "PackageId": "sts",
+      "NameKey": "Harden",
+      "DescriptionKey": "Harden — 10 damage, 15 Block",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Harden — 10 damage, 15 Block"
+      },
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 15
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 4
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 11
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.gainBlock",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 15
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 4
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Encounters": [
@@ -51894,7 +52675,83 @@
               ]
             }
           ],
-          "Position": 0,
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Byrd",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 26
+            }
+          ]
+        },
+        {
+          "Id": "byrd",
+          "MaxHealth": 25,
+          "Actions": [
+            {
+              "value": "byrd.peck"
+            },
+            {
+              "value": "byrd.swoop"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.flying"
+              },
+              "Stacks": 3,
+              "Asc": [
+                {
+                  "AscensionMin": 17,
+                  "Stacks": 4
+                }
+              ]
+            }
+          ],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Byrd",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 26
+            }
+          ]
+        },
+        {
+          "Id": "byrd",
+          "MaxHealth": 25,
+          "Actions": [
+            {
+              "value": "byrd.peck"
+            },
+            {
+              "value": "byrd.swoop"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.flying"
+              },
+              "Stacks": 3,
+              "Asc": [
+                {
+                  "AscensionMin": 17,
+                  "Stacks": 4
+                }
+              ]
+            }
+          ],
+          "Position": null,
           "IntentRules": [],
           "DisplayName": "Byrd",
           "Rolls": [],
@@ -60584,6 +61441,1074 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_spheric_guardian"
+      },
+      "Enemies": [
+        {
+          "Id": "spheric_guardian",
+          "MaxHealth": 20,
+          "Actions": [
+            {
+              "value": "spheric_guardian.activate"
+            },
+            {
+              "value": "spheric_guardian.debuff_attack"
+            },
+            {
+              "value": "spheric_guardian.slam"
+            },
+            {
+              "value": "spheric_guardian.harden"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.artifact"
+              },
+              "Stacks": 3
+            },
+            {
+              "StatusDefinitionId": {
+                "value": "standard.barricade"
+              },
+              "Stacks": 1
+            }
+          ],
+          "Position": null,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 96,
+              "Action": {
+                "value": "spheric_guardian.activate"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 95,
+              "Action": {
+                "value": "spheric_guardian.debuff_attack"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 90,
+              "Action": {
+                "value": "spheric_guardian.harden"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 4
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 89,
+              "Action": {
+                "value": "spheric_guardian.slam"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 10,
+              "Action": {
+                "value": "spheric_guardian.slam"
+              }
+            }
+          ],
+          "DisplayName": "Spheric Guardian",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "StartingBlock": 40
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_chosen_and_byrd"
+      },
+      "Enemies": [
+        {
+          "Id": "chosen",
+          "MaxHealth": 95,
+          "Actions": [
+            {
+              "value": "chosen.poke"
+            },
+            {
+              "value": "chosen.hex"
+            },
+            {
+              "value": "chosen.debilitate"
+            },
+            {
+              "value": "chosen.drain"
+            },
+            {
+              "value": "chosen.zap"
+            }
+          ],
+          "StartingStatuses": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 17
+                      }
+                    },
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 96,
+              "Action": {
+                "value": "chosen.hex"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 17
+                      }
+                    },
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 95,
+              "Action": {
+                "value": "chosen.poke"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 94,
+              "Action": {
+                "value": "chosen.poke"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 93,
+              "Action": {
+                "value": "chosen.hex"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 4
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 80,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "chosen.poke"
+                  },
+                  "Weight": 60
+                },
+                {
+                  "Action": {
+                    "value": "chosen.zap"
+                  },
+                  "Weight": 40
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 5
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 80,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "chosen.poke"
+                  },
+                  "Weight": 60
+                },
+                {
+                  "Action": {
+                    "value": "chosen.zap"
+                  },
+                  "Weight": 40
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 60,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "chosen.debilitate"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "chosen.drain"
+                  },
+                  "Weight": 50
+                }
+              ]
+            }
+          ],
+          "DisplayName": "Chosen",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 98
+            }
+          ],
+          "HpMin": 95,
+          "HpMax": 99,
+          "Position": 0
+        },
+        {
+          "Id": "byrd",
+          "MaxHealth": 25,
+          "Actions": [
+            {
+              "value": "byrd.peck"
+            },
+            {
+              "value": "byrd.swoop"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.flying"
+              },
+              "Stacks": 3,
+              "Asc": [
+                {
+                  "AscensionMin": 17,
+                  "Stacks": 4
+                }
+              ]
+            }
+          ],
+          "IntentRules": [],
+          "DisplayName": "Byrd",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 26
+            }
+          ],
+          "Position": 1
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_cultist_and_chosen"
+      },
+      "Enemies": [
+        {
+          "Id": "cultist",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "cultist.incantation"
+            },
+            {
+              "value": "cultist.dark_strike"
+            }
+          ],
+          "StartingStatuses": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "ritual_owner_turns"
+                  },
+                  "Op": "GreaterOrEqual",
+                  "Value": 1
+                }
+              },
+              "Action": {
+                "value": "cultist.dark_strike"
+              },
+              "Priority": 10
+            }
+          ],
+          "DisplayName": "Cultist",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 50
+            }
+          ],
+          "Position": 0
+        },
+        {
+          "Id": "chosen",
+          "MaxHealth": 95,
+          "Actions": [
+            {
+              "value": "chosen.poke"
+            },
+            {
+              "value": "chosen.hex"
+            },
+            {
+              "value": "chosen.debilitate"
+            },
+            {
+              "value": "chosen.drain"
+            },
+            {
+              "value": "chosen.zap"
+            }
+          ],
+          "StartingStatuses": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 17
+                      }
+                    },
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 96,
+              "Action": {
+                "value": "chosen.hex"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.ascensionAtLeast",
+                      "value": {
+                        "Value": 17
+                      }
+                    },
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 95,
+              "Action": {
+                "value": "chosen.poke"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 94,
+              "Action": {
+                "value": "chosen.poke"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 93,
+              "Action": {
+                "value": "chosen.hex"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 4
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 80,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "chosen.poke"
+                  },
+                  "Weight": 60
+                },
+                {
+                  "Action": {
+                    "value": "chosen.zap"
+                  },
+                  "Weight": 40
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 5
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 80,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "chosen.poke"
+                  },
+                  "Weight": 60
+                },
+                {
+                  "Action": {
+                    "value": "chosen.zap"
+                  },
+                  "Weight": 40
+                }
+              ]
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 60,
+              "Choice": [
+                {
+                  "Action": {
+                    "value": "chosen.debilitate"
+                  },
+                  "Weight": 50
+                },
+                {
+                  "Action": {
+                    "value": "chosen.drain"
+                  },
+                  "Weight": 50
+                }
+              ]
+            }
+          ],
+          "DisplayName": "Chosen",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 98
+            }
+          ],
+          "HpMin": 95,
+          "HpMax": 99,
+          "Position": 1
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_three_cultists"
+      },
+      "Enemies": [
+        {
+          "Id": "cultist",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "cultist.incantation"
+            },
+            {
+              "value": "cultist.dark_strike"
+            }
+          ],
+          "StartingStatuses": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "ritual_owner_turns"
+                  },
+                  "Op": "GreaterOrEqual",
+                  "Value": 1
+                }
+              },
+              "Action": {
+                "value": "cultist.dark_strike"
+              },
+              "Priority": 10
+            }
+          ],
+          "DisplayName": "Cultist",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 50
+            }
+          ],
+          "Position": null
+        },
+        {
+          "Id": "cultist",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "cultist.incantation"
+            },
+            {
+              "value": "cultist.dark_strike"
+            }
+          ],
+          "StartingStatuses": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "ritual_owner_turns"
+                  },
+                  "Op": "GreaterOrEqual",
+                  "Value": 1
+                }
+              },
+              "Action": {
+                "value": "cultist.dark_strike"
+              },
+              "Priority": 10
+            }
+          ],
+          "DisplayName": "Cultist",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 50
+            }
+          ],
+          "Position": null
+        },
+        {
+          "Id": "cultist",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "cultist.incantation"
+            },
+            {
+              "value": "cultist.dark_strike"
+            }
+          ],
+          "StartingStatuses": [],
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "ritual_owner_turns"
+                  },
+                  "Op": "GreaterOrEqual",
+                  "Value": 1
+                }
+              },
+              "Action": {
+                "value": "cultist.dark_strike"
+              },
+              "Priority": 10
+            }
+          ],
+          "DisplayName": "Cultist",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 50
+            }
+          ],
+          "Position": null
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_parasite_and_fungi"
+      },
+      "Enemies": [
+        {
+          "Id": "shelled_parasite",
+          "MaxHealth": 68,
+          "Actions": [
+            {
+              "value": "shelled_parasite.suck"
+            },
+            {
+              "value": "shelled_parasite.double_strike"
+            }
+          ],
+          "StartingStatuses": [],
+          "IntentRules": [],
+          "DisplayName": "Shelled Parasite",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 70
+            }
+          ],
+          "Position": 0
+        },
+        {
+          "Id": "fungi_beast",
+          "MaxHealth": 22,
+          "Actions": [
+            {
+              "value": "fungi_beast.bite"
+            },
+            {
+              "value": "fungi_beast.grow"
+            }
+          ],
+          "StartingStatuses": [],
+          "IntentRules": [],
+          "DisplayName": "Fungi Beast",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 24
+            }
+          ],
+          "Position": 1
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_city_byrds"
+      },
+      "Enemies": [
+        {
+          "Id": "byrd",
+          "MaxHealth": 25,
+          "Actions": [
+            {
+              "value": "byrd.peck"
+            },
+            {
+              "value": "byrd.swoop"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.flying"
+              },
+              "Stacks": 3,
+              "Asc": [
+                {
+                  "AscensionMin": 17,
+                  "Stacks": 4
+                }
+              ]
+            }
+          ],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Byrd",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 26
+            }
+          ]
+        },
+        {
+          "Id": "byrd",
+          "MaxHealth": 25,
+          "Actions": [
+            {
+              "value": "byrd.peck"
+            },
+            {
+              "value": "byrd.swoop"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.flying"
+              },
+              "Stacks": 3,
+              "Asc": [
+                {
+                  "AscensionMin": 17,
+                  "Stacks": 4
+                }
+              ]
+            }
+          ],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Byrd",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 26
+            }
+          ]
+        },
+        {
+          "Id": "byrd",
+          "MaxHealth": 25,
+          "Actions": [
+            {
+              "value": "byrd.peck"
+            },
+            {
+              "value": "byrd.swoop"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.flying"
+              },
+              "Stacks": 3,
+              "Asc": [
+                {
+                  "AscensionMin": 17,
+                  "Stacks": 4
+                }
+              ]
+            }
+          ],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Byrd",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 26
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -65677,6 +67602,146 @@
       ],
       "Rolls": [],
       "Counters": []
+    },
+    {
+      "Id": "spheric_guardian",
+      "NameKey": "Spheric Guardian",
+      "HpMin": 20,
+      "HpMax": 20,
+      "MaxHealth": 20,
+      "Actions": [
+        {
+          "value": "spheric_guardian.activate"
+        },
+        {
+          "value": "spheric_guardian.debuff_attack"
+        },
+        {
+          "value": "spheric_guardian.slam"
+        },
+        {
+          "value": "spheric_guardian.harden"
+        }
+      ],
+      "StartingStatuses": [
+        {
+          "StatusDefinitionId": {
+            "value": "standard.artifact"
+          },
+          "Stacks": 3
+        },
+        {
+          "StatusDefinitionId": {
+            "value": "standard.barricade"
+          },
+          "Stacks": 1
+        }
+      ],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.round",
+                  "value": {
+                    "Op": "Equal",
+                    "Round": 1
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 96,
+          "Action": {
+            "value": "spheric_guardian.activate"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.round",
+                  "value": {
+                    "Op": "Equal",
+                    "Round": 2
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 95,
+          "Action": {
+            "value": "spheric_guardian.debuff_attack"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 3
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 90,
+          "Action": {
+            "value": "spheric_guardian.harden"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 4
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 89,
+          "Action": {
+            "value": "spheric_guardian.slam"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 10,
+          "Action": {
+            "value": "spheric_guardian.slam"
+          }
+        }
+      ],
+      "Tier": "Normal",
+      "InvRef": "wiki:The_City#Hard_Pool",
+      "AiNote": "wiki 的 `Powers` 列是 Artifact 3 / Block 40 / Barricade；Block 走 `StartingBlock`（§208），不是状态。模式：Activate → Debuff Attack → Slam/Harden 交替（§311）。",
+      "Counters": [],
+      "Spawn": true
     }
   ],
   "EncounterTables": {
@@ -65782,16 +67847,40 @@
     ],
     "Weak2": [
       {
-        "Id": "enc_shelled_parasite",
-        "Weight": 50
+        "Id": "enc_spheric_guardian",
+        "Weight": 10
       },
       {
         "Id": "enc_chosen",
-        "Weight": 50
+        "Weight": 10
+      },
+      {
+        "Id": "enc_shelled_parasite",
+        "Weight": 10
+      },
+      {
+        "Id": "enc_city_byrds",
+        "Weight": 10
+      },
+      {
+        "Id": "enc_chosen_and_byrd",
+        "Weight": 10
+      },
+      {
+        "Id": "enc_cultist_and_chosen",
+        "Weight": 15
       },
       {
         "Id": "enc_snecko",
-        "Weight": 50
+        "Weight": 20
+      },
+      {
+        "Id": "enc_three_cultists",
+        "Weight": 15
+      },
+      {
+        "Id": "enc_parasite_and_fungi",
+        "Weight": 15
       }
     ],
     "Weak3": [
