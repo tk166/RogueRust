@@ -52,6 +52,12 @@ pub struct RunFacts<'a> {
     pub relics: &'a [&'a str],
     /// 牌组里的卡 id（重复的算多次：`deck_count` 数的是**张数**）。
     pub deck: &'a [&'a str],
+    /// §319：与 [`Self::deck`] **逐位对应**的类型名（`attack` / `skill` / `power` / `curse` /
+    /// `status` / `other`），给条件原子 `card_tag` 用（`falling` 的三个选项各自按类型上锁）。
+    ///
+    /// 为什么由调用方给：类型是**内容**的事（tag 位图 → `CardKind` 的映射在 `rd-wasm` 的
+    /// `card_kind`，拼写只有 `CardKind::wire_name` 一份）。这一层只数“表里有没有”。
+    pub deck_tags: &'a [&'a str],
     /// §287：牌组里**单次**伤害的最高值（由调用方从卡的效果程序里读出来，
     /// 见 [`crate::content::Content::max_deck_hit_damage`]）。
     ///
@@ -72,6 +78,8 @@ const KINDS: &[&str] = &[
     "card",
     // §287：`card_damage` —— "牌组里有一张**单次** ≥ N 伤害的牌"（`Wing Statue` 的 `[Destroy]`）。
     "card_damage",
+    // §319：`card_tag` —— "牌组里有一张 <tag> 牌"（`Falling` 的三个选项各自按类型上锁）。
+    "card_tag",
 ];
 
 /// 数值型 kind 允许的比较（`AtLeast` = `x >= n`，`AtMost` = `x <= n`）。
@@ -263,6 +271,8 @@ pub fn decide(
     let present = match kind {
         "relic" => facts.relics.contains(&id),
         "card" => facts.deck.contains(&id),
+        // §319：按**类型**。`deck_tags` 与 `deck` 逐位对应，所以“有一张”就是“表里有”。
+        "card_tag" => facts.deck_tags.contains(&id),
         _ => return Err(RequirementError::UnknownKind),
     };
     Ok(if at_least { present } else { !present })
@@ -310,6 +320,8 @@ mod tests {
     fn every_kind_answers_both_sides() {
         let deck = ["strike", "defend", "strike", "regret"];
         let relics = ["golden_idol"];
+        // §319：与 `deck` 逐位对应（`strike`/`strike` 攻击、`defend` 技能、`regret` 诅咒）。
+        let tags = ["attack", "skill", "attack", "curse"];
         let facts = RunFacts {
             gold: 100,
             health: 40,
@@ -318,6 +330,7 @@ mod tests {
             relics: &relics,
             deck: &deck,
             // §287：牌组里单次伤害的最高值。测试里给一个显式的数（`0` = 没有）。
+            deck_tags: &tags,
             max_hit_damage: 0,
         };
         // (kind, op, amount, id) —— 每一条都成对出现（成立 / 不成立）。
@@ -348,6 +361,15 @@ mod tests {
             ("card", "has", 0, "injury", false),
             ("card", "lacks", 0, "injury", true),
             ("card", "lacks", 0, "strike", false),
+            // §319：按**类型**。牌组里有攻击/技能/诅咒、**没有能力** —— `power` 那一对正是
+            // `Falling` 的 `[Channel]` 在本内容里的处境（0 张 power 牌）。
+            ("card_tag", "has", 0, "attack", true),
+            ("card_tag", "has", 0, "power", false),
+            ("card_tag", "lacks", 0, "power", true),
+            ("card_tag", "lacks", 0, "attack", false),
+            // 大小写都**不成立**（不是退回成 "any"）。空名字是**错误**：
+            // 与 `relic`/`card` 同一个形状（`MissingId`）—— 没有 id 的存在型条件是在问"有没有任一"。
+            ("card_tag", "has", 0, "Attack", false),
         ];
         for (kind, op, amount, id, want) in cases {
             assert_eq!(
@@ -371,6 +393,7 @@ mod tests {
             relics: &[],
             deck: &[],
             // §287：牌组里单次伤害的最高值。测试里给一个显式的数（`0` = 没有）。
+            deck_tags: &[],
             max_hit_damage: 0,
         };
         assert_eq!(
@@ -392,6 +415,11 @@ mod tests {
             decide("relic", "has", 0, "", &facts),
             Err(RequirementError::MissingId)
         );
+        // §319：`card_tag` 同一形状 —— 空 id 是错误，不是“有没有任一类型”。
+        assert_eq!(
+            decide("card_tag", "has", 0, "", &facts),
+            Err(RequirementError::MissingId)
+        );
         // 百分比越界：0% 永远不成立、150% 永远成立 —— 两种都是"看起来在跑"的装饰。
         for bad in [0, 101, -5] {
             assert_eq!(
@@ -410,6 +438,7 @@ mod tests {
             ascension: 0,
             relics,
             deck,
+            deck_tags: &[],
             max_hit_damage: 0,
         }
     }

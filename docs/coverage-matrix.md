@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 926 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 927 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -41,14 +41,14 @@
 | 卡牌 | 293 | 165 | 128 | 0 | 281 | 12 | 18 | 0 |
 | 状态 | 148 | 137 | 6 | 5 | 0 | 148 | 1 | 0 |
 | 遭遇 | 62 | 43 | 19 | 0 | 0 | 0 | 0 | 0 |
-| 事件 | 21 | 21 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 事件 | 22 | 22 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 152 | 135 | 17 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 926 | 665 | 248 | 13 | 476 | 182 | 91 | 0 |
+| **合计** | 927 | 666 | 248 | 13 | 476 | 182 | 91 | 0 |
 
-扫描到的具名测试：**1168** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1172** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
-事件：池里有 **24** 个位次、**21** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
+事件：池里有 **25** 个位次、**22** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
 同一页面的早期副本（内容同源，矩阵只用 `wiki_asc/` 那一份）：`wiki_book_of_stabbing.txt`、`wiki_lagavulin.txt`、`wiki_nemesis.txt`、`wiki_reptomancer.txt`、`wiki_slavers.txt`、`wiki_taskmaster.txt`
 
@@ -295,7 +295,7 @@
 | bandage_up | yes | exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable, strange_spoon_turns_about_half_of_the_exhausts_into_discards …(+1) | — | wiki:wiki_cards/bandage_up.txt | wiki 偏差：wiki 升级版治疗 6；内容没有 `bandage_up+` 这一行。（`Exhaust` 本身不是偏差：§219 起它由落区 `PlayedCardDestinationZone` 表达。） | §191/CARD_WIKI+INV_CARDS/exhaust_on_play_is_a_zone_and_the_cards_that_use_it_are_playable |
 | barricade | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt | — | CARD_WIKI+INV_CARDS |
 | barricade+ | yes | — | CARD_DIFF | wiki:wiki_cards/barricade.txt (via barricade) | — | INV_CARDS |
-| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+38) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
+| bash | yes | card_rarity_is_readable_and_the_schema_moved_the_version, warcry_draws_one_then_puts_the_chosen_card_on_top …(+41) | — | wiki:wiki_cards/bash.txt | — | §2/§2.1/CARD_WIKI+INV_CARDS/card_rarity_is_readable_and_the_schema_moved_the_version |
 | bash+ | yes | the_unknown_room_events_are_readable, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+3) | — | wiki:wiki_cards/bash.txt (via bash) | — | INV_CARDS/the_unknown_room_events_are_readable |
 | battle_trance | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | wiki:wiki_cards/battle_trance.txt | — | CARD_WIKI+INV_CARDS/battle_trance_blocks_further_draws_only_this_turn |
 | battle_trance+ | yes | — | CARD_DIFF | wiki:wiki_cards/battle_trance.txt (via battle_trance) | — | INV_CARDS |
@@ -351,7 +351,7 @@
 | decay | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/decay.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+80) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+83) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+2) | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -539,7 +539,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+175) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+178) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+11) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -797,13 +797,14 @@
 | enc_two_orb_walkers | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §318 |
 | enc_two_thieves | yes | the_mugger_mugs_steals_fifteen_gold_and_escapes_with_it | — | — | — | §314/§315/the_mugger_mugs_steals_fifteen_gold_and_escapes_with_it |
 
-## 事件（21）
+## 事件（22）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
 | ancient_forge | yes | the_unknown_room_events_are_readable, an_event_that_edits_the_deck_owes_a_pick_first …(+3) | — | — | — | the_unknown_room_events_are_readable |
 | ancient_writing | yes | the_unknown_room_events_are_readable, an_event_choice_that_edits_the_deck_owes_a_pick | — | — | — | the_unknown_room_events_are_readable |
 | dead_adventurer | yes | the_unknown_room_events_are_readable, an_event_can_turn_the_room_into_a_fight …(+4) | — | — | — | the_unknown_room_events_are_readable |
+| falling | yes | the_unknown_room_events_are_readable, falling_removes_a_card_of_the_named_kind …(+2) | — | — | — | the_unknown_room_events_are_readable |
 | forgotten_altar | yes | the_unknown_room_events_are_readable, an_event_choice_that_edits_the_deck_owes_a_pick | — | — | — | the_unknown_room_events_are_readable |
 | golden_idol | yes | the_unknown_room_events_are_readable, every_kind_answers_both_sides …(+14) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
 | mysterious_sphere | yes | the_act_three_events_state_the_wiki_s_numbers, the_unknown_room_events_are_readable | — | — | — | the_act_three_events_state_the_wiki_s_numbers |

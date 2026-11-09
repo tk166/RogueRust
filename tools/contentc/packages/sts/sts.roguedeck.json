@@ -77700,6 +77700,11 @@
       "Id": "mysterious_sphere",
       "NameKey": "Mysterious Sphere",
       "Entry": "mysterious_sphere"
+    },
+    {
+      "Id": "falling",
+      "NameKey": "Falling",
+      "Entry": "falling"
     }
   ],
   "Potions": [
@@ -78048,6 +78053,9 @@
       },
       {
         "Id": "mysterious_sphere"
+      },
+      {
+        "Id": "falling"
       }
     ]
   },
@@ -80579,6 +80587,90 @@
       "Options": [
         {
           "Label": "Continue",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "falling",
+      "TextKey": "Hopping from one floating shape to another, you slip. The void opens beneath you and there is just a moment to choose how you meet it.",
+      "Options": [
+        {
+          "Label": "Land (lose a random Skill)",
+          "Requires": [
+            {
+              "Kind": "card_tag",
+              "Op": "has",
+              "Id": "skill"
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "remove_card_random:skill",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Channel (lose a random Power)",
+          "Requires": [
+            {
+              "Kind": "card_tag",
+              "Op": "has",
+              "Id": "power"
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "remove_card_random:power",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Strike (lose a random Attack)",
+          "Requires": [
+            {
+              "Kind": "card_tag",
+              "Op": "has",
+              "Id": "attack"
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "remove_card_random:attack",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Land",
+          "Requires": [
+            {
+              "Kind": "card_tag",
+              "Op": "lacks",
+              "Id": "attack"
+            },
+            {
+              "Kind": "card_tag",
+              "Op": "lacks",
+              "Id": "skill"
+            },
+            {
+              "Kind": "card_tag",
+              "Op": "lacks",
+              "Id": "power"
+            }
+          ],
           "Effects": [
             {
               "Effect": "nothing",

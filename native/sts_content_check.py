@@ -4325,7 +4325,10 @@ REQUIRES_MAX = 4
 REQUIRES_KINDS = ("gold", "health", "max_health", "health_percent", "deck_count", "ascension",
                   "relic", "card",
                   # §287：`card_damage` —— "牌组里有一张**单次** ≥ N 伤害的牌"（`Wing Statue`）。
-                  "card_damage")
+                  "card_damage",
+                  # §319：`card_tag` —— "牌组里有一张 <tag> 牌"（`Falling` 的三个选项各自
+                  # 按类型上锁）。`Id` 必须是下面 `CARD_KIND_NAMES` 里的一个。
+                  "card_tag")
 REQUIRES_NUMERIC = ("gold", "health", "max_health", "health_percent", "deck_count", "ascension",
                     "card_damage")
 REQUIRES_NUMERIC_OPS = ("at_least", "at_most")
@@ -4338,6 +4341,9 @@ PAY_GOLD_RE = re.compile(r"^(?!0)[0-9]{1,3}$")
 
 # §278: `damage_pct:<n>` / `max_hp_pct:<n>` 的 kind（数字在词里，不在 Amount 格）。
 EVENT_PERCENT_EFFECTS = ("damage_pct", "max_hp_pct")
+# §319：`remove_card_random:<kind>` 的载荷词表 —— 与 `rd-run::state::CardKind::from_wire`
+# 逐字对应（那是第一份；这一份是第二意见）。
+CARD_KIND_NAMES = ("attack", "skill", "power", "status", "curse", "other")
 EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing", "heal_full",
                       "remove_card", "upgrade_card", "transform_card")
 # Mirrors `rd_run::state::RunState::relic_effect`. Kept as a literal list on purpose: this file is
@@ -4992,6 +4998,16 @@ def check_event_vocabulary(doc):
                         fail(where, "fight_no_relic takes no Amount")
                     counts["effects"] += 1
                     continue
+                if kind == "remove_card_random":
+                    # §319：`falling` —— "Lose (a random <type> card)"。载荷是**类型**，
+                    # 不是卡 id：拼错的类型在内核里会解析失败（内容报错），这里先拦。
+                    if payload not in CARD_KIND_NAMES:
+                        fail(where, "remove_card_random 的类型 %r 不在 %s 里"
+                             % (payload, " / ".join(CARD_KIND_NAMES)))
+                    if entry.get("Amount") not in (0, None):
+                        fail(where, "remove_card_random 的 Amount 必须是 0（类型在词里）")
+                    counts["effects"] += 1
+                    continue
                 if kind == "relic_random":
                     # §285：随机一件遗物（Scrap Ooze）。不带载荷 —— 抽哪件由内容池与
                     # 稀有度权重决定，那在 `rd-wasm` 手里。
@@ -5270,6 +5286,30 @@ def check_event_vocabulary(doc):
     ok("event pools", "act1=%d act2=%d act3=%d"
        % (len(tables.get("Events") or []), len(tables.get("Events2") or []),
           len(tables.get("Events3") or [])))
+
+    # §319：`card_tag` 条件与 `remove_card_random:` 效果**必须指同一个类型**。
+    # 两者写岔不会在别处红（条件只是"画不画按钮"，效果由内核按自己的载荷办），
+    # 页面上表现为"点了 Land 掉了一张攻击"。
+    paired = 0
+    for node in doc.get("EventNodes") or []:
+        for index, option in enumerate(node.get("Options") or []):
+            where = "EventNodes.%s.Options%d" % (node.get("Id"), index)
+            wants = set()
+            for atom in option.get("Requires") or []:
+                if isinstance(atom, dict) and atom.get("Kind") == "card_tag"                         and atom.get("Op") == "has":
+                    wants.add(atom.get("Id"))
+            kinds = set()
+            for atom in option.get("Effects") or []:
+                text = atom.get("Effect") if isinstance(atom, dict) else None
+                if isinstance(text, str) and text.startswith("remove_card_random:"):
+                    kinds.add(text.split(":", 1)[1])
+            if kinds and wants != kinds:
+                fail(where, "条件要 %s，效果却删 %s —— 两组类型必须逐个相等"
+                     % (sorted(wants) or "无", sorted(kinds)))
+            if kinds:
+                paired += len(kinds)
+    ok("remove_card_random pairing", "%d option(s) pair a `card_tag` condition with the "
+                                     "same type in its effect" % paired)
 
 
 # =============================================================================

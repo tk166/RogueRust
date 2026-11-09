@@ -5488,10 +5488,11 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            21,
+            22,
             "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
              `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`，§290 补了 `the_nest`，
-             §318 补了 `winding_halls` / `mysterious_sphere`（`scrap_pile` 改成 Scrap Ooze 的 9 段链）。pools 的**位次**比
+             §318 补了 `winding_halls` / `mysterious_sphere`（`scrap_pile` 改成 Scrap Ooze 的 9 段链），
+             §319 补了 `falling`。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5609,6 +5610,8 @@ mod tests {
                 || prefix(effect, "heal_pct:")
                 // §285：区间金币（可负）与"随机一件遗物"（裸词）。
                 || prefix(effect, "gold_random:")
+                // §319：按**类型**随机删一张（`falling` 的 `remove_card_random:skill`）。
+                || prefix(effect, "remove_card_random:")
                 || effect == "relic_random"
                 // §287/§288：下一场战斗的奖励修正（`Dead Adventurer` 的欠账、`The Colosseum`
                 // 的定数奖励）。词法的检查交给内容门，这里只回答"这个镜像里有没有它"。
@@ -5645,6 +5648,8 @@ mod tests {
                 "ancient_forge",
                 "ancient_writing",
                 "dead_adventurer",
+                // §319
+                "falling",
                 "forgotten_altar",
                 "golden_idol",
                 // §318
@@ -5809,6 +5814,7 @@ mod tests {
                     ascension: 0,
                     relics: &[],
                     deck,
+                    deck_tags: &[],
                     max_hit_damage: max_hit,
                 }
             };
@@ -5971,6 +5977,7 @@ mod tests {
                 ascension: 0,
                 relics: &[],
                 deck: &[],
+                deck_tags: &[],
                 max_hit_damage: 0,
             };
             for option in offer.options() {
@@ -6091,6 +6098,7 @@ mod tests {
             relics: &["golden_idol"],
             deck: &["strike"],
             // §287：牌组里单次伤害的最高值。测试里给一个显式的数（`0` = 没有）。
+            deck_tags: &[],
             max_hit_damage: 0,
         };
         let facts_without = crate::run_expr::RunFacts {

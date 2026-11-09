@@ -978,6 +978,10 @@ pub enum EventEffect {
     UpgradeCard,
     /// Replace a named deck card with a random one.
     TransformCard,
+    /// §319：**按类型随机删一张**（`remove_card_random:<kind>`）。`falling` 的
+    /// `[Land] Lose (a random Skill)` —— wiki 明写 random，所以它**不是** `DeckChange`：
+    /// 没有问句，应用时就地掷一次（`RunStream::Event`）。
+    RemoveCardRandom(CardKind),
     /// Add the card named beside this effect (a curse, in practice).
     GainCurse,
     /// Grant the relic named beside this effect.
@@ -1125,6 +1129,12 @@ impl EventEffect {
                     return None;
                 }
                 match kind {
+                    // §319：`falling` —— `remove_card_random:<kind>`（载荷是**类型**，不是卡 id）。
+                    "remove_card_random" => match CardKind::from_wire(payload) {
+                        Some(kind) => (Self::RemoveCardRandom(kind), None),
+                        // 拼错的类型**不是** `Other`：那会"删一张不知道什么类型的牌"。
+                        None => return None,
+                    },
                     "curse" => (Self::GainCurse, Some(payload)),
                     // §290：`card:<id>` —— 与 `curse:` 同一个形状，只是不要求诅咒。
                     "card" => (Self::GainCard, Some(payload)),
@@ -1318,6 +1328,42 @@ pub enum CardKind {
     /// 类型未知（开局牌组、测试里的裸 id）。**三个蛋与两条诅咒规则都不会对它生效** ——
     /// 这是刻意的：宁可"这件遗物对这张牌没反应"，也不要按名字猜类型。
     Other,
+}
+
+impl CardKind {
+    /// §319：内容/线缆上的拼写（`attack` / `skill` / `power` / `curse` / `status` / `other`）。
+    ///
+    /// **唯一一份**：`remove_card_random:<kind>` 的解析、`rd-wasm` 填 `RunFacts::deck_tags`、
+    /// 以及条件原子 `card_tag` 的 `Id` 都用它。抄第二份的代价是"事件能删、条件认不出"，
+    /// 而这种漂不会让任何判据变红（§161 的 `known` 表就是这么漏的）。
+    #[must_use]
+    pub fn wire_name(self) -> &'static str {
+        match self {
+            Self::Attack => "attack",
+            Self::Skill => "skill",
+            Self::Power => "power",
+            Self::Status => "status",
+            Self::Curse => "curse",
+            Self::Other => "other",
+        }
+    }
+
+    /// 反解析。`None` = 词表外（调用方**拒绝**，绝不退回 `Other`）。
+    ///
+    /// 退回 `Other` 会让 `remove_card_random:powerr` 变成"删一张类型未知的牌"，
+    /// 也就是一条拼错的内容**安静地**删错牌。
+    #[must_use]
+    pub fn from_wire(name: &str) -> Option<Self> {
+        Some(match name {
+            "attack" => Self::Attack,
+            "skill" => Self::Skill,
+            "power" => Self::Power,
+            "status" => Self::Status,
+            "curse" => Self::Curse,
+            "other" => Self::Other,
+            _ => return None,
+        })
+    }
 }
 
 /// A card as the reward roll sees it.
@@ -6184,6 +6230,34 @@ impl RunState {
                 self.push_relic(id, pool)?;
             }
             // Deck edits never reach here: `resolve_event` turns them into a pending pick.
+            // §319：`falling` —— "Lose (a random <type> card)"。候选是**牌组里该类型的牌**，
+            // 类型由内容池的 `PoolCard::kind` 决定（`rd-wasm` 的 `card_kind` 填的）。
+            //
+            // 一条候选都没有 ⇒ **拒绝**（`NoEligibleCard`），不是"什么都不做"：内容层面那条
+            // 选项本来会被 `card_tag` 条件藏起来，所以走到这里说明条件与效果**对不上**，
+            // 那正是应该响的地方。
+            EventEffect::RemoveCardRandom(kind) => {
+                let mut eligible = [0u8; MAX_RUN_DECK];
+                let mut found = 0usize;
+                for index in 0..self.deck_len as usize {
+                    let id = self.deck[index].as_str();
+                    let Some(facts) = pool.iter().find(|entry| entry.id == id) else {
+                        continue;
+                    };
+                    if facts.kind == kind {
+                        eligible[found] = index as u8;
+                        found += 1;
+                    }
+                }
+                if found == 0 {
+                    return Err(RunError::NoEligibleCard);
+                }
+                let roll = self
+                    .rng
+                    .roll(RunStream::Event, found as u32)
+                    .map_err(|_| RunError::EmptyRange)? as usize;
+                self.remove_at(eligible[roll] as usize);
+            }
             EventEffect::RemoveCard | EventEffect::UpgradeCard | EventEffect::TransformCard => {
                 if named.is_some() {
                     return Err(RunError::UnsupportedEventEffect);
@@ -11920,6 +11994,118 @@ mod tests {
         );
         assert_eq!(outcome, Err(RunError::NoSuchEvent), "a malformed step id is refused");
         assert!(run == before, "not one byte moved (the gold did not land either)");
+    }
+
+    /// §319：一张带**真类型**的池子 —— 既有的 `basic_pool()` / `curse_pool()` 全是
+    /// `CardKind::Other`，而 `falling` 判的就是类型，用它们等于判"删了一张牌"。
+    fn kind_pool() -> [PoolCard<'static>; 4] {
+        [
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: None },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: None },
+            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: None },
+            PoolCard { id: "ascenders_bane", rarity: Rarity::Curse, kind: CardKind::Curse, upgraded: None },
+        ]
+    }
+
+    fn count_of(run: &RunState, id: &str) -> usize {
+        run.deck().iter().filter(|card| card.as_str() == id).count()
+    }
+
+    /// §319：`falling` 的 `[Land] Lose (a random Skill)` —— 删掉的是**那个类型**的一张。
+    ///
+    /// 为什么判"是技能"而不是"少了一张"：`remove_at(0)` 也能让尺寸变，那正是这个原子
+    /// 最可能退化成的东西（把 `kind` 忽略掉）。牌组里两种类型都有，所以退化的实现在这里红。
+    #[test]
+    fn falling_removes_a_card_of_the_named_kind() {
+        let pool = kind_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike", "defend", "bash", "defend"])
+            .expect("a run");
+        run.begin_event("falling", "falling").expect("opening the event");
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::RemoveCardRandom(CardKind::Skill), None)],
+                ..EventMove::none()
+            },
+            &pool,
+        )
+        .expect("losing a random Skill");
+
+        assert_eq!(run.deck_len, 3, "one card is gone");
+        assert_eq!(count_of(&run, "defend"), 1, "exactly one Skill was removed");
+        assert_eq!(count_of(&run, "strike") + count_of(&run, "bash"), 2, "no Attack was touched");
+        for card in run.deck() {
+            assert!(
+                pool.iter().any(|entry| entry.id == card.as_str()),
+                "the deck holds {:?}, which is not in the pool",
+                card.as_str()
+            );
+        }
+    }
+
+    /// §319：牌组里一张该类型的牌都没有 ⇒ **拒绝**，并且一个字节都不改。
+    ///
+    /// 这是 `[Channel]` 在本内容里的处境（0 张 power 牌）：内容那条选项会被
+    /// `card_tag` 条件藏起来，所以走到这里只有一种解释 —— 条件与效果对不上。
+    #[test]
+    fn falling_refuses_when_the_kind_is_absent() {
+        let pool = kind_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike", "defend", "bash"])
+            .expect("a run");
+        run.begin_event("falling", "falling").expect("opening the event");
+        let before = run;
+
+        assert_eq!(
+            run.resolve_event_effects(
+                &EventMove {
+                    effects: &[(EventEffect::RemoveCardRandom(CardKind::Power), None)],
+                    ..EventMove::none()
+                },
+                &pool,
+            ),
+            Err(RunError::NoEligibleCard),
+            "no Power in the deck -- the effect must refuse, not silently do nothing"
+        );
+        assert!(run == before, "not one byte moved");
+    }
+
+    /// §319：同一个种子 ⇒ 同一张牌被删（掷的是 `RunStream::Event`，是可复现的）。
+    #[test]
+    fn falling_is_deterministic_for_a_seed() {
+        let pool = kind_pool();
+        let deck = ["strike", "defend", "defend", "bash", "defend"];
+        let mut first = RunState::new(11, 80, 0, &deck).expect("a run");
+        let mut second = RunState::new(11, 80, 0, &deck).expect("a run");
+        for run in [&mut first, &mut second] {
+            run.begin_event("falling", "falling").expect("the event");
+            run.resolve_event_effects(
+                &EventMove {
+                    effects: &[(EventEffect::RemoveCardRandom(CardKind::Skill), None)],
+                    ..EventMove::none()
+                },
+                &pool,
+            )
+            .expect("losing a random Skill");
+        }
+        assert!(first == second, "the same seed must lose the same card");
+    }
+
+    /// §319：词表 —— 拼错的类型**解析失败**，不退回 `Other`。
+    #[test]
+    fn remove_card_random_takes_a_kind_and_refuses_a_typo() {
+        assert_eq!(
+            EventEffect::parse("remove_card_random:skill", 0),
+            Some((EventEffect::RemoveCardRandom(CardKind::Skill), None))
+        );
+        assert_eq!(
+            EventEffect::parse("remove_card_random:power", 0),
+            Some((EventEffect::RemoveCardRandom(CardKind::Power), None))
+        );
+        // 拼错 / 空载荷 / 陌生名字：三种都必须 `None`（`Other` 会让它删错牌）。
+        assert_eq!(EventEffect::parse("remove_card_random:powerr", 0), None);
+        assert_eq!(EventEffect::parse("remove_card_random:", 0), None);
+        assert_eq!(EventEffect::parse("remove_card_random:", 0), None);
+        // 裸词仍然是**改牌问句**，不是这个原子（两者不是同一条路）。
+        assert_eq!(EventEffect::parse("remove_card", 0), Some((EventEffect::RemoveCard, None)));
     }
 
     /// §188: a list that fails **in the middle** must not half-apply.

@@ -2242,6 +2242,9 @@ fn run_facts<'a>(
     session: &'a RunSession,
     relics: &'a [&'a str],
     deck: &'a [&'a str],
+    // §319：与 `deck` 逐位对应的类型名（条件原子 `card_tag` 要它）。**由调用方持有** ——
+    // 在这里建的 `Vec` 不能穿过返回值（`E0515`），与 `relics`/`deck` 同一条规矩。
+    deck_tags: &'a [&'a str],
 ) -> rd_core::run_expr::RunFacts<'a> {
     rd_core::run_expr::RunFacts {
         gold: session.state.gold(),
@@ -2250,6 +2253,7 @@ fn run_facts<'a>(
         ascension: session.state.ascension(),
         relics,
         deck,
+        deck_tags: &deck_tags,
         // §287：从卡的效果程序里读出"单次最高伤害"（`Wing Statue` 的条件要它）。
         max_hit_damage: content().max_deck_hit_damage(deck),
     }
@@ -2267,7 +2271,13 @@ fn option_available(session: &RunSession, slot: i32) -> Option<Result<bool, rd_c
     let option = *step.options.get(slot as usize)?;
     let relics: Vec<&str> = session.state.relics().iter().map(|id| id.as_str()).collect();
     let deck: Vec<&str> = session.state.deck().iter().map(|id| id.as_str()).collect();
-    let facts = run_facts(session, &relics, &deck);
+    // §319：类型名的来源只有两处 —— `card_kind`（tag 位图的唯一读者）与
+    // `CardKind::wire_name`（拼写的唯一一份）。这里不再有第三份类型词表。
+    let deck_tags: Vec<&str> = deck
+        .iter()
+        .map(|id| card_kind(content(), id).wire_name())
+        .collect();
+    let facts = run_facts(session, &relics, &deck, &deck_tags);
     Some(rd_core::run_expr::option_is_available(content(), option.term, &facts))
 }
 
@@ -3481,7 +3491,10 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         // §290：`gold_all` 与 `card:<id>` 的落点是"金币清零 / 牌组加一张"，
         // 页面上没有一条"效果码"能画它们（`-1` 与 `relic_random` 同一条规矩）。
         | EventEffect::LoseAllGold
-        | EventEffect::GainCard => -1,
+        | EventEffect::GainCard
+        // §319：`remove_card_random:<kind>` 也一样 —— 类型名在**内容字符串**里（`Land` /
+        // `Channel` / `Strike` 三个按钮的名字已经把它写在脸上了），枚举这边只剩下一个类。
+        | EventEffect::RemoveCardRandom(_) => -1,
     }
 }
 
@@ -3520,6 +3533,8 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::GainRelic
         | EventEffect::LoseRelic
         | EventEffect::GainRandomRelic
+        // §319：类型不是"数量"。
+        | EventEffect::RemoveCardRandom(_)
         | EventEffect::HealFull => 0,
     }
 }

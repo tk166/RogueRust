@@ -199,6 +199,13 @@ pub enum RunError {
     /// An effect that needs a deck index while the deck is empty. There is nothing to point at, so
     /// "pick a card" would be a screen with no way forward.
     DeckEmpty,
+    /// §319: an effect that acts on "a card of type X" found no such card in the deck
+    /// (`falling`'s `remove_card_random:power` in a deck with no Powers).
+    ///
+    /// Its own variant rather than `DeckEmpty`: the deck is not empty, the **content** is wrong
+    /// (the option's `card_tag` condition should have hidden it). Reusing `DeckEmpty` would make
+    /// the two indistinguishable in a log.
+    NoEligibleCard,
     /// §189 `A10`：这张牌不能被删（Ascender's Bane："Cannot be removed"）。
     CannotRemove,
     /// §188：一个事件选项里出现了**两个**改牌效果（`remove_card` / `upgrade_card` /

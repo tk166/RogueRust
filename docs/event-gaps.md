@@ -56,7 +56,7 @@
 |---|---|---|---|
 | 1（Exordium，11 条） | Big Fish / The Cleric / Dead Adventurer / Golden Idol / Living Wall / Hypnotizing Colored Mushrooms / Scrap Ooze / Shining Light / The Ssssserpent / Wing Statue / World of Goop | **8** | `big_fish` / `living_wall` / `mushrooms` |
 | 2（The City，13 条） | Ancient Writing / Augmenter / The Colosseum / Council of Ghosts / Cursed Tome / Forgotten Altar / The Library / Masked Bandits / The Mausoleum / The Nest / Pleading Vagrant / Old Beggar / Vampires | **5**（另有 `the_joust`：wiki 这一版页面没列它，我们按 2 幕放） | `augmenter` / `council_of_ghosts` / `cursed_tome` / `the_library` / `masked_bandits` / `pleading_vagrant` / `old_beggar` / `vampires` |
-| 3（The Beyond，7 条） | Falling / Mind Bloom / The Moai Head / Mysterious Sphere / Sensory Stone / Tomb of Lord Red Mask / Winding Halls | **3**（§318 补了 `Mysterious Sphere` / `Winding Halls`） | 其余 **4**：`falling` 要"按**类型**删牌"、`sensory_stone` 要"无色牌三选一"、`tomb_of_lord_red_mask` 要事件级遗物条件、`mind_bloom` 要 `upgrade_all` + `Normality` + "不能治疗"的载体 |
+| 3（The Beyond，7 条） | Falling / Mind Bloom / The Moai Head / Mysterious Sphere / Sensory Stone / Tomb of Lord Red Mask / Winding Halls | **4**（§318 补了 `Mysterious Sphere` / `Winding Halls`，§319 补了 `Falling`） | 其余 **3**：`sensory_stone` 要"无色牌 N 选 1"、`tomb_of_lord_red_mask` 要事件级遗物条件、`mind_bloom` 要 `upgrade_all` + `Normality` + "不能治疗"的载体 |
 
 ★ **结论**：**Act 1 基本齐（8/11），Act 2 与 Act 3 是主要缺口（5/13、1/7）**。
 旧版本文档写"13 条已做"，其中 3 条（`old_shrine` / `ancient_forge` / `purification_shrine`）
@@ -91,7 +91,7 @@
 | `n'loth` | 2 | "从自己的**遗物**里任选一件失去" —— 现在的 `PendingChoice` 只选**牌** |
 | `masked_bandits` | 2 | 三名册外敌人（Pointy / Romeo / Bear）+ **金币区间**（25–35，今天只有定数） |
 | `tomb_of_lord_red_mask` | 3 | 事件级"有红面具" + `gold_all`（**§300 已做**）⇒ 现在只差事件级条件与内容 |
-| `falling` | 3 | "失去一张**能力/技能/攻击**牌"（按类型删）—— `remove_card` 有，按 tag 删没有 |
+| ~~`falling`~~ | 3 | **§319 已做**：`remove_card_random:<kind>`（随机删一张该类型）+ 条件原子 `card_tag`（没有该类型 ⇒ 按钮不画；三种都没有 ⇒ wiki 那条兜底 `[Land]`） |
 | `council_of_ghosts` | 2 | `card:<id>` ×5 + 最大生命 -X% ⇒ 两个原子都有（`card:<id>` §300） |
 | `cursed_tome` | 2 | "从三本里选一本，读几次掉血，最后给`necronomicon`" —— `necronomicon` **明确不做**，所以这条也不做 |
 | `secret_portal` | 3 | "直接传送进 Boss 房"（跳过本幕剩余地图） |
