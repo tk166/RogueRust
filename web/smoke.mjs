@@ -58,6 +58,10 @@ const ex = instance.exports;
 // The exports `web/index.html` touches (kept in sync with its boot list by hand -- a missing one
 // must be a loud failure here rather than a `undefined is not a function` in the page).
 const REQUIRED = [
+  // §320：事件候选列表（`The Library` / `Sensory Stone`）。页面用了这六个，所以在这里抄第二遍。
+  "rd_run_event_offer_len", "rd_run_event_offer_id_len", "rd_run_event_offer_id_into",
+  "rd_run_event_offer_title_len", "rd_run_event_offer_title_into",
+  "rd_run_event_offer_take",
   "memory", "rd_env_observe_len", "rd_env_observe_buf", "rd_env_action_count",
   "rd_env_action_kind", "rd_env_action_arg", "rd_env_step", "rd_env_done", "rd_env_result",
   "rd_env_reset", "rd_env_reward", "rd_env_selfcheck", "rd_env_scratch_buf",

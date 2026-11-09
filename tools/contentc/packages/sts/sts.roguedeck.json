@@ -77705,6 +77705,16 @@
       "Id": "falling",
       "NameKey": "Falling",
       "Entry": "falling"
+    },
+    {
+      "Id": "the_library",
+      "NameKey": "The Library",
+      "Entry": "the_library"
+    },
+    {
+      "Id": "sensory_stone",
+      "NameKey": "Sensory Stone",
+      "Entry": "sensory_stone"
     }
   ],
   "Potions": [
@@ -78033,6 +78043,9 @@
       },
       {
         "Id": "the_nest"
+      },
+      {
+        "Id": "the_library"
       }
     ],
     "Events3": [
@@ -78056,6 +78069,9 @@
       },
       {
         "Id": "falling"
+      },
+      {
+        "Id": "sensory_stone"
       }
     ]
   },
@@ -80674,6 +80690,130 @@
           "Effects": [
             {
               "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "the_library",
+      "TextKey": "A plaque lies face down on the floor: THE LIBRARY. Inside, rows of scrolls and chairs out of a better century.",
+      "Options": [
+        {
+          "Label": "Sleep",
+          "Effects": [
+            {
+              "Effect": "heal_pct:33",
+              "Amount": 0
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "heal_pct:20",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Read (1 of 20)",
+          "Effects": [
+            {
+              "Effect": "offer_cards:20:any",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "sensory_stone",
+      "TextKey": "A glowing tesseract turns slowly in the air, humming a memory that is not yours.",
+      "Options": [
+        {
+          "Label": "Recall (1 card)",
+          "Effects": [
+            {
+              "Effect": "offer_cards:1:colorless",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Recall (2 cards, 5 HP)",
+          "Effects": [
+            {
+              "Effect": "damage",
+              "Amount": 5
+            },
+            {
+              "Effect": "offer_cards:1:colorless",
+              "Amount": 0
+            }
+          ],
+          "Next": "sensory_stone.again1"
+        },
+        {
+          "Label": "Recall (3 cards, 10 HP)",
+          "Effects": [
+            {
+              "Effect": "damage",
+              "Amount": 10
+            },
+            {
+              "Effect": "offer_cards:1:colorless",
+              "Amount": 0
+            }
+          ],
+          "Next": "sensory_stone.again2"
+        }
+      ]
+    },
+    {
+      "Id": "sensory_stone.again1",
+      "TextKey": "The memory unfolds further; it wants to be looked at again.",
+      "Options": [
+        {
+          "Label": "Recall (2nd card)",
+          "Effects": [
+            {
+              "Effect": "offer_cards:1:colorless",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "sensory_stone.again2",
+      "TextKey": "A second memory arrives before the first has faded.",
+      "Options": [
+        {
+          "Label": "Recall (2nd card)",
+          "Effects": [
+            {
+              "Effect": "offer_cards:1:colorless",
+              "Amount": 0
+            }
+          ],
+          "Next": "sensory_stone.again3"
+        }
+      ]
+    },
+    {
+      "Id": "sensory_stone.again3",
+      "TextKey": "The tesseract dims as the last of it settles into your hands.",
+      "Options": [
+        {
+          "Label": "Recall (3rd card)",
+          "Effects": [
+            {
+              "Effect": "offer_cards:1:colorless",
               "Amount": 0
             }
           ],

@@ -5488,11 +5488,11 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            22,
+            24,
             "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
              `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`，§290 补了 `the_nest`，
              §318 补了 `winding_halls` / `mysterious_sphere`（`scrap_pile` 改成 Scrap Ooze 的 9 段链），
-             §319 补了 `falling`。pools 的**位次**比
+             §319 补了 `falling`，§320 补了 `the_library` / `sensory_stone`。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5612,6 +5612,8 @@ mod tests {
                 || prefix(effect, "gold_random:")
                 // §319：按**类型**随机删一张（`falling` 的 `remove_card_random:skill`）。
                 || prefix(effect, "remove_card_random:")
+                // §320：事件候选列表（`The Library` 的 20 选 1、`Sensory Stone` 的无色牌）。
+                || prefix(effect, "offer_cards:")
                 || effect == "relic_random"
                 // §287/§288：下一场战斗的奖励修正（`Dead Adventurer` 的欠账、`The Colosseum`
                 // 的定数奖励）。词法的检查交给内容门，这里只回答"这个镜像里有没有它"。
@@ -5657,10 +5659,14 @@ mod tests {
                 "old_shrine",
                 "purification_shrine",
                 "scrap_pile",
+                // §320
+                "sensory_stone",
                 "shining_light",
                 "the_cleric",
                 "the_colosseum",
                 "the_joust",
+                // §320
+                "the_library",
                 "the_mausoleum",
                 "the_moai_head",
                 "the_nest",

@@ -586,6 +586,9 @@ fn full_pool(
             // **整个池子**里找，而池子正是这一趟在攒的。
             kind: rd_run::state::CardKind::Other,
             upgraded: None,
+            // §320：`Sensory Stone` 的候选只从带这个 tag 的行里抽。事实来自内容，
+            // 所以只能在这里填（`rd-run` 不读内容）。
+            colorless: content.card_has_tag(id, "colorless") == Some(true),
         });
     }
     // 第二趟：把 `kind` 与 `upgraded` 填上。`upgraded` 走 `rd_run::state::upgraded_id` ——
@@ -2712,6 +2715,9 @@ pub extern "C" fn rd_env_use_potion(slot: i32, target: i32) -> i32 {
                     rarity,
                     kind: rd_run::state::CardKind::Other,
                     upgraded: None,
+                    // §320：这个池子按 `attack`/`skill` 过滤，而 `swift_strike` 这类牌
+                    // 同时带 `colorless` —— 标记照内容填，别按"这个池子大概没有"猜。
+                    colorless: image.card_has_tag(id, "colorless") == Some(true),
                 });
             }
             // 三张是**规则**，不是上限：少于三张时这瓶药给不出它承诺的东西。
@@ -3494,7 +3500,10 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::GainCard
         // §319：`remove_card_random:<kind>` 也一样 —— 类型名在**内容字符串**里（`Land` /
         // `Channel` / `Strike` 三个按钮的名字已经把它写在脸上了），枚举这边只剩下一个类。
-        | EventEffect::RemoveCardRandom(_) => -1,
+        | EventEffect::RemoveCardRandom(_)
+        // §320：候选列表的落点是**候选面板**（`rd_run_event_offer_*`），不是效果码 ——
+        // 张数与口径走 `effect_amount`（下面）与内容字符串。
+        | EventEffect::OfferCards(_, _) => -1,
     }
 }
 
@@ -3519,6 +3528,8 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         EventEffect::FightGoldSet(n) => n,
         // §289：独立药水概率的"数量"就是那个百分比。
         EventEffect::FightPotionChance(pct) => i32::from(pct),
+        // §320：候选的张数就是"数量"（页面写"20 张里选一张"）。
+        EventEffect::OfferCards(count, _) => i32::from(count),
         EventEffect::Nothing
         | EventEffect::RemoveCard
         | EventEffect::UpgradeCard
@@ -3575,6 +3586,111 @@ pub unsafe extern "C" fn rd_run_potion_id_into(index: i32, ptr: *mut u8) -> i32 
         Some(id) => write_out(id.as_str(), ptr),
         None => 0,
     }
+}
+
+/// §320：事件摊开的候选有几张（没有候选 ⇒ `0`；没有 run ⇒ `-1`）。
+///
+/// 页面用它决定**画不画**候选面板 —— 与 `rd_run_event_option_count` 同一条规矩：数量由运行层
+/// 说，页面不猜。
+#[no_mangle]
+pub extern "C" fn rd_run_event_offer_len() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |session| session.state.event_offer_len() as i32)
+}
+
+/// §320：候选 `slot` 的牌 id 长度（`-1` = 没有这个槽）。
+#[no_mangle]
+pub extern "C" fn rd_run_event_offer_id_len(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    if slot < 0 {
+        return -1;
+    }
+    match session.state.event_offer_card(slot as usize) {
+        Some(id) => id.len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_event_offer_id_len(slot)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_event_offer_id_into(slot: i32, ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return 0;
+    };
+    if slot < 0 {
+        return 0;
+    }
+    match session.state.event_offer_card(slot as usize) {
+        Some(id) => write_out(id, ptr),
+        None => 0,
+    }
+}
+
+/// §320：候选 `slot` 的**显示名**长度（内容里的 `CARD` 行标题）。
+#[no_mangle]
+pub extern "C" fn rd_run_event_offer_title_len(slot: i32) -> i32 {
+    if slot < 0 {
+        return -1;
+    }
+    let Some(run) = run_slot().as_ref() else {
+        return -1;
+    };
+    let Some(id) = run.state.event_offer_card(slot as usize) else {
+        return -1;
+    };
+    // 与奖励屏/加牌候选同一个取名字函数 —— 两处各写一份就会漂。
+    deck_title(content(), id).unwrap_or(id).len() as i32
+}
+
+/// §320：把候选 `slot` 的显示名写进 `ptr`（`rd_run_event_offer_title_len(slot)` 个字节）。
+///
+/// # Safety
+///
+/// `ptr` must point at that many writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_event_offer_title_into(slot: i32, ptr: *mut u8) -> i32 {
+    if slot < 0 || ptr.is_null() {
+        return -1;
+    }
+    let Some(run) = run_slot().as_ref() else {
+        return -1;
+    };
+    let Some(id) = run.state.event_offer_card(slot as usize) else {
+        return -1;
+    };
+    write_out(deck_title(content(), id).unwrap_or(id), ptr)
+}
+
+/// §320：从候选里取走一张（`The Library` 的 20 选 1、`Sensory Stone` 的每次 Recall）。
+///
+/// `0` = 拿到，`-1` = 没有这个槽 / 没有 run，`-2` = 相位不对**或**牌组满了（`fail` 带原因）。
+///
+/// ⚠️ 池子必须**含无色牌**：`Sensory Stone` 的候选**就是**无色牌，用 `reward_pool`
+/// （它按 §183/§185 剔掉无色）会在这里报 `NoSuchCard` —— 一个"池子选错了"的错，
+/// 而屏幕上只会显示"取牌失败"。
+#[no_mangle]
+pub extern "C" fn rd_run_event_offer_take(slot: i32) -> i32 {
+    if slot < 0 {
+        return -1;
+    }
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_EVENT_CARD, slot, -1, "offer");
+    let pool = match full_pool(content(), true) {
+        Ok(pool) => pool,
+        Err(message) => return fail(session, &message),
+    };
+    let outcome = session
+        .state
+        .pick_event_offer(slot as usize, &pool)
+        .map(|_| 0i32);
+    finish(session, outcome)
 }
 
 /// The Ascension level this run is played at (`0`..=`20`, §159); `-1` when there is no run.
@@ -4661,6 +4777,8 @@ fn colorless_card_pool() -> Result<Vec<rd_run::state::PoolCard<'static>>, std::s
             rarity,
             kind: rd_run::state::CardKind::Other,
             upgraded: None,
+            // 这个池子**只**装带 `colorless` tag 的行（上面刚筛过）。
+            colorless: true,
         });
     }
     Ok(pool)

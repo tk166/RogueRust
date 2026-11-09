@@ -22630,3 +22630,49 @@ Requires: Power Card"*）。所以这一条需要的不是"带筛选的选牌问
 
 数字：事件 **22**（三幕池 10+8+7 = 25）、`rd-core 810 / rd-run 198 / rd-wasm 162`、
 镜像 179,896 / core 142,956 B。Act 3 事件 3/7 → **4/7**。
+
+## §320 事件候选列表（`the_library` / `sensory_stone`）
+
+两条事件要的是同一件东西：**事件窗口里摊开 `n` 张新牌，玩家取一张进牌组**。
+
+| 事件 | 内容 |
+|---|---|
+| `The Library`（2 幕） | `[Sleep]` 回 33%（A15 20%）/ `[Read]` **20 选 1** |
+| `Sensory Stone`（3 幕） | `[Recall]` 1 张无色 / 2 张 + 5 HP / 3 张 + 10 HP |
+
+### 形状
+
+| 件 | 位置 | 说明 |
+|---|---|---|
+| `EventEffect::OfferCards(u8, OfferFilter)` | `rd-run` | `offer_cards:<n>:<any|colorless>`；应用时从**池子**抽 `n` 张互不相同的候选（`RunStream::Event`），摊进 `event_offer` |
+| `Pending::EventOffer = 9` | `rd-run` | 新的待答屏；`event_next` 复用既有尾巴，所以"三次 Recall"是内容把三段 `Next` 串起来 |
+| `PoolCard::colorless` | `rd-run` | 内容事实（`CARD.Tags`），由 `rd-wasm` 填 —— `rd-run` 不读内容（§133） |
+| `rd_run_event_offer_len / _id_* / _title_* / _take` | `rd-wasm` | 页面读候选、按**内核槽号**取牌 |
+| `describeEventOffer` | `web/ui_panels.js` | 一行一张候选，按钮带内核槽号；张数不写死（20 与 3 走同一份代码） |
+
+### 三条纪律
+
+1. **候选与改牌抢同一个位置**：一条选项里既有 `offer_cards` 又有 `DeckChange` ⇒
+   `TwoDeckChanges`（`pending` 只有一个），并且**整个 `RunState` 不变**。
+2. **池子凑不出 `n` 张 ⇒ `PoolTooSmall`**（不是"少给几张"）。内容门也在写的时候就拦：
+   `offer_cards:<n>:<filter>` 的 `n` 必须在 1..=20，且 `colorless` 池子真的够。
+3. **取牌那一刻才进牌组**（`push_card`），所以三个蛋（`molten_egg` 等）在**进组时**生效 ——
+   wiki："All card choices … are non-upgraded unless you have Toxic Egg, Molten Egg, or
+   Frozen Egg"。
+
+### 判据
+
+`rd-run` 六条：候选互不相同且口径正确（无色池里抽不出有色牌）、`Any` 不筛、超额候选被拒且
+状态不变、候选与改牌不能同处、**候选进存档**（含 `Pending::EventOffer`，读回来还能接着选）
+且进指纹、取牌时蛋生效（`strike` → `strike+`）。
+`rd-core`：事件数 22 → 24、闭词表加 `offer_cards:`。内容门：词表 + 张数上界 + 池子够不够。
+页面：`ui_test.mjs` 用 20 与 3 两种快照各跑一遍（写死任一数字都会红），并验"槽号不是下标"。
+
+三条负控各红在预期位置：面板写死 3 行 / 内核忽略过滤（无色池抽出有色牌）/ 内容写 21 张。
+
+⚠️ **没有覆盖到的两处**（老实写在这里）：`browser_test.mjs` 里**没有**这条的 DOM 场景
+（`?` 房抽到指定事件不可控，页面那条路的证据只有 `ui_test` 的纯函数 + `smoke` 的导出对账）；
+`hash_golden` 仍然不含 `PendingChoice`（§320 只保证候选在规范文本里，Golden 对拍没跑到这条路径）。
+
+数字：事件 **24**（三幕池 10+9+8 = 27）、`rd-core 810 / rd-run 204 / rd-wasm 162`、
+units 1176、镜像 180,936 / core 144,004 B。Act 2 事件 5/13 → **6/13**，Act 3 4/7 → **5/7**。

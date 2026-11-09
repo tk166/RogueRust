@@ -4346,6 +4346,8 @@ EVENT_PERCENT_EFFECTS = ("damage_pct", "max_hp_pct")
 CARD_KIND_NAMES = ("attack", "skill", "power", "status", "curse", "other")
 EVENT_BARE_EFFECTS = ("heal", "gold", "damage", "max_hp", "nothing", "heal_full",
                       "remove_card", "upgrade_card", "transform_card")
+# §320：`offer_cards:<n>:<filter>` 的口径 —— 与 `rd-run::state::OfferFilter::from_wire` 逐字对应。
+OFFER_FILTERS = ("any", "colorless")
 # Mirrors `rd_run::state::RunState::relic_effect`. Kept as a literal list on purpose: this file is
 # the **second opinion** -- if the two disagree, one of them is wrong and the gate says so.
 IMPLEMENTED_RELICS = ("burning_blood", "anchor", "vajra", "pear", "blood_vial", "thread_and_needle",
@@ -4867,6 +4869,9 @@ def check_event_vocabulary(doc):
     nodes = doc.get("EventNodes") or []
     node_ids = [node.get("Id") for node in nodes]
     cards = {c["Id"]: c.get("Rarity") for c in doc.get("Cards") or []}
+    # §320：哪些牌带 `colorless` tag（`Sensory Stone` 的候选池）。
+    colorless_ids = {c["Id"] for c in doc.get("Cards") or []
+                     if any(t.get("value") == "colorless" for t in c.get("Tags") or [])}
     relics = {r["Id"] for r in doc.get("Relics") or []}
     counts = {"bare": 0, "curse": 0, "relic": 0, "percent": 0, "effects": 0, "asc": 0,
               "options": 0, "steps": 0, "conditional": 0, "conditions": 0,
@@ -5006,6 +5011,28 @@ def check_event_vocabulary(doc):
                              % (payload, " / ".join(CARD_KIND_NAMES)))
                     if entry.get("Amount") not in (0, None):
                         fail(where, "remove_card_random 的 Amount 必须是 0（类型在词里）")
+                    counts["effects"] += 1
+                    continue
+                if kind == "offer_cards":
+                    # §320：候选列表（`The Library` 的 20 选 1、`Sensory Stone` 的无色牌）。
+                    # `n:filter` 都在词里，`Amount` 无关。
+                    parts = (payload or "").split(":")
+                    if len(parts) != 2:
+                        fail(where, "offer_cards 需要 `<n>:<any|colorless>`，got %r"
+                             % (payload,))
+                    else:
+                        want, pool_name = parts
+                        if not want.isdigit() or not (1 <= int(want) <= 20):
+                            fail(where, "offer_cards 的张数 %r 不在 1..=20" % (want,))
+                        elif pool_name not in OFFER_FILTERS:
+                            fail(where, "offer_cards 的池子口径 %r 不是 any / colorless"
+                                 % (pool_name,))
+                        elif pool_name == "colorless":
+                            if len(colorless_ids) < int(want):
+                                fail(where, "offer_cards 要 %s 张无色牌，池子只有 %d 张"
+                                     % (want, len(colorless_ids)))
+                    if entry.get("Amount") not in (0, None):
+                        fail(where, "offer_cards 的 Amount 必须是 0（张数与口径在词里）")
                     counts["effects"] += 1
                     continue
                 if kind == "relic_random":

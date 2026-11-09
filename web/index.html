@@ -913,6 +913,9 @@ function runSnapshot() {
     /// §293：还欠几张牌要**加**进牌组（`orrery` = 5、`tiny_house` = 1），以及这一手是哪几张。
     /// 与 `pickupPicks` 是**两件事**（那个是"改已有的一张"，这个是"从候选里加一张"）。
     pickupAdd: ex.rd_run_pickup_add(),
+    /// §320：事件摊开的候选（`Pending::EventOffer` = 9）—— `The Library` 的 20 选 1、
+    /// `Sensory Stone` 的无色牌。每一项带**内核槽号**，按钮送回去的就是它。
+    eventOffer: [],
     pickupOffer: [],
     /// §293：`singing_bowl` 在身上吗（奖励屏与加牌问句各多一个"换成 +2 上限"的按钮）。
     singingBowl: false,
@@ -1026,6 +1029,24 @@ function runSnapshot() {
         );
       }
       break;
+    // §320：事件候选列表。与奖励屏/加牌候选同一个形状：数量与显示名都问内核。
+    case 9:
+      for (let slot = 0, n = ex.rd_run_event_offer_len(); slot < n; slot++) {
+        snapshot.eventOffer.push({
+          slot,
+          id: readText(
+            (k) => ex.rd_run_event_offer_id_len(k),
+            (ptr, k) => ex.rd_run_event_offer_id_into(k, ptr),
+            slot
+          ),
+          title: readText(
+            (k) => ex.rd_run_event_offer_title_len(k),
+            (ptr, k) => ex.rd_run_event_offer_title_into(k, ptr),
+            slot
+          ),
+        });
+      }
+      break;
     case 5:
       snapshot.eventText = eventText();
       // §278：选项数**由内容**决定（Golden Idol 的巨石那段是三选一）；页面不再假定 2。
@@ -1101,6 +1122,10 @@ const PANEL_ACTIONS = {
     showDeckPicker("选一张牌", (index) => act(() => ex.rd_run_pickup_card(index), "拾取")),
   // §293：加牌问句的四个动作。
   pickup_add_card: (a) => act(() => ex.rd_run_pickup_add_card(a.slot), "加牌"),
+  // §320：事件候选 —— 拿这一张（槽号是内核给的，不是数组下标）。
+  event_offer_take: (a) => act(() => ex.rd_run_event_offer_take(a.slot), "选牌"),
+  /// §320：事件候选面板里的"跳过"（`Sensory Stone` 的 1 张也允许不拿吗？不 —— wiki 是
+  /// "add N cards"，所以这里**不提供**跳过；按钮表里没有它。
   pickup_add_skip: () => act(() => ex.rd_run_pickup_add_skip(), "跳过加牌"),
   pickup_add_max_hp: () => act(() => ex.rd_run_pickup_add_max_hp(), "换成上限"),
   take_max_hp_instead: () => act(() => ex.rd_run_take_max_hp_instead(), "换成上限"),

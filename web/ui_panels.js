@@ -386,6 +386,27 @@ const RD_PANELS = (() => {
     };
   }
 
+  /// §320: an event that offered a **list of new cards** (`Pending::EventOffer` = 9).
+  ///
+  /// `The Library` 的 `[Read]` 是 20 选 1、`Sensory Stone` 的每次 `[Recall]` 是 3 选 1；
+  /// 两者在运行层是同一件事，所以面板也只有这一份 —— 标题只说"从候选里拿一张"，
+  /// 具体几张由内核给的 `rows` 决定（页面不写死 3，也不写死 20）。
+  function describeEventOffer(s) {
+    const rows = (s.eventOffer || []).map((card) => ({
+      label: card.title || card.id || `#${card.slot}`,
+      sub: "",
+      value: "",
+      disabled: false,
+      button: { label: "拿这张", action: { kind: "event_offer_take", slot: card.slot } },
+    }));
+    return {
+      title: "未知房间 · 从 " + rows.length + " 张里选一张加入牌组",
+      lines: [],
+      rows,
+      buttons: [],
+    };
+  }
+
   function describeIdle(s) {
     if (s.kind < 0) {
       return { title: "", lines: ["还没出发 · 点亮的节点可以走"], rows: [], buttons: [] };
@@ -410,6 +431,10 @@ const RD_PANELS = (() => {
         return describeBlessingCard(s);
       case 8:
         return describeEventCard(s);
+      // §320：候选列表（事件摊开的新牌）。与 `EventCard` 分开：那一个收**牌组下标**，
+      // 这一个收**候选槽号**，两个调用不同。
+      case 9:
+        return describeEventOffer(s);
       case 4:
         return describeReward(s);
       case 5:

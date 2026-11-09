@@ -57,7 +57,7 @@
 
 ```
 monsters 58 / encounters 62 / cards 293 (base 154 + plus 139) / statuses 148 /
-enemy actions 159 / relics 152 / potions 33 / events 25 (10+8+7) / start deck 10
+enemy actions 159 / relics 152 / potions 33 / events 27 (10+9+8) / start deck 10
 ascension variants 117 over 101 actions
 image full   content.sts.rdcf            179288 B
 image core   content.sts.core.rdcf       142344 B
@@ -65,7 +65,7 @@ image core   content.sts.core.rdcf       142344 B
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
 > —— 而且其中包含状态/诅咒牌与多档升级行（`searing_blow+`…`++++++`）；
-> `117 / 101` 是**变体 / 动作**；`25` 是三个幕的事件池之和（`10+8+7`），**不是**不同事件数 ——
+> `117 / 101` 是**变体 / 动作**；`27` 是三个幕的事件池之和（`10+9+8`），**不是**不同事件数 ——
 > `golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用，去重之后是 **21 条**（§F.25）。
 > `relics 152` 是**内容行**；wiki 有 193 条，缺 41 条（§D.2）。
 ---

@@ -694,6 +694,11 @@ pub const RARITY_OFFSET_CAP: i32 = 40;
 /// 所以抬数不改变任何语义，也不欠任何东西。真约束只有两条：`>= 内容行数`，以及"离 `u8` 远得很"。
 pub const MAX_POOL: usize = 320;
 
+/// §320：事件候选列表的容量 —— wiki 的 `The Library` 是"从 **20 张**里选 1 张"。
+///
+/// 容量是**语义**：超了要**响亮失败**（`RunError::Capacity`），绝不截断成"少几张候选"。
+pub const MAX_EVENT_OFFER: usize = 20;
+
 /// §272：`?` 房的结果（wiki `Unknown Location`）。
 ///
 /// 结果是**运行期状态**：`Event` 由调用方去开事件、`Monster` 由调用方开一场普通战斗，
@@ -756,6 +761,12 @@ pub enum Pending {
     /// Its own variant rather than a flag on `BlessingCard`: the two are finished by two different
     /// calls, and a shared variant would make "which picker is this?" a condition inside both.
     EventCard = 8,
+    /// §320: [`RunState::pick_event_offer`] -- an event offered a **list of new cards** and waits
+    /// for one of them (`The Library`'s 20, `Sensory Stone`'s colorless trio).
+    ///
+    /// 与 `EventCard` 分开的理由与上一段相同：两条路由两个不同的调用收尾（一个收下标、
+    /// 一个收候选槽），合成一个变体会让"这是哪个选择器"变成两处都要判的条件。
+    EventOffer = 9,
 }
 
 /// The pre-run choice (StS's Neow, `inv:§7.1`): the player picks one blessing from a rolled pair.
@@ -982,6 +993,13 @@ pub enum EventEffect {
     /// `[Land] Lose (a random Skill)` —— wiki 明写 random，所以它**不是** `DeckChange`：
     /// 没有问句，应用时就地掷一次（`RunStream::Event`）。
     RemoveCardRandom(CardKind),
+    /// §320：**候选列表**（`offer_cards:<n>:<filter>`）—— 抽 `n` 张互不相同的牌摆在玩家面前，
+    /// 他取一张进牌组（`The Library` 的 `[Read]` 20 选 1、`Sensory Stone` 的无色牌）。
+    ///
+    /// 与 `DeckChange` 的区别是**问的是什么**：`DeckChange` 问"你牌组里的哪一张"，
+    /// 这一条问"这几张新的里要哪一张"。两条路都占同一个"待答"位置（`pending`），
+    /// 所以内容里一条选项不能**同时**有它们（`resolve_event_effects` 会拒）。
+    OfferCards(u8, OfferFilter),
     /// Add the card named beside this effect (a curse, in practice).
     GainCurse,
     /// Grant the relic named beside this effect.
@@ -1130,6 +1148,18 @@ impl EventEffect {
                 }
                 match kind {
                     // §319：`falling` —— `remove_card_random:<kind>`（载荷是**类型**，不是卡 id）。
+                    // §320：`offer_cards:<n>:<filter>` —— 数字与口径**都在词里**（`Amount` 无关）。
+                    "offer_cards" => {
+                        let (count, filter) = payload.split_once(':')?;
+                        let count: u8 = count.parse().ok()?;
+                        if count == 0 || usize::from(count) > MAX_EVENT_OFFER {
+                            return None;
+                        }
+                        match OfferFilter::from_wire(filter) {
+                            Some(filter) => (Self::OfferCards(count, filter), None),
+                            None => return None,
+                        }
+                    }
                     "remove_card_random" => match CardKind::from_wire(payload) {
                         Some(kind) => (Self::RemoveCardRandom(kind), None),
                         // 拼错的类型**不是** `Other`：那会"删一张不知道什么类型的牌"。
@@ -1330,6 +1360,48 @@ pub enum CardKind {
     Other,
 }
 
+/// §320：事件候选列表的**池子口径**（`offer_cards:<n>:<filter>` 的第二个载荷）。
+///
+/// 两个值就是两条内容事实，不多不少：`The Library` 抽角色的整张卡池，`Sensory Stone`
+/// 只抽带 `colorless` tag 的那一半。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum OfferFilter {
+    /// 整个池子（`any`）。
+    Any,
+    /// 只要带 `colorless` tag 的行（`colorless`）。
+    Colorless,
+}
+
+impl OfferFilter {
+    /// §320：内容/线缆上的拼写。**唯一一份**（解析、`rd-wasm` 的日志、判据都用它）。
+    #[must_use]
+    pub fn wire_name(self) -> &'static str {
+        match self {
+            Self::Any => "any",
+            Self::Colorless => "colorless",
+        }
+    }
+
+    /// 反解析。`None` = 词表外（调用方拒绝，绝不退回 `Any`）。
+    #[must_use]
+    pub fn from_wire(name: &str) -> Option<Self> {
+        Some(match name {
+            "any" => Self::Any,
+            "colorless" => Self::Colorless,
+            _ => return None,
+        })
+    }
+
+    /// 这一张能进这个池子吗。
+    #[must_use]
+    fn admits(self, card: &PoolCard<'_>) -> bool {
+        match self {
+            Self::Any => true,
+            Self::Colorless => card.colorless,
+        }
+    }
+}
+
 impl CardKind {
     /// §319：内容/线缆上的拼写（`attack` / `skill` / `power` / `curse` / `status` / `other`）。
     ///
@@ -1378,6 +1450,11 @@ pub struct PoolCard<'a> {
     /// §270：its `+` row, if the content has one. Resolved by [`upgraded_id`] in `full_pool`,
     /// **not** by string concatenation at the point of use.
     pub upgraded: Option<&'a str>,
+    /// §320：内容给它打了 `colorless` tag 吗（`Sensory Stone` 的候选**只**从这一半里抽）。
+    ///
+    /// 为什么是字段而不是"运行层按名字猜"：`rd-run` 不读内容（§133），"哪些牌算无色"写在
+    /// `CARD.Tags` 里，只有 `rd-wasm` 看得见。所以这是**调用方填的事实**，与 `kind` 同一条规矩。
+    pub colorless: bool,
 }
 
 impl<'a> PoolCard<'a> {
@@ -1388,7 +1465,7 @@ impl<'a> PoolCard<'a> {
     /// at types can fire before the first relic is picked up.
     #[must_use]
     pub const fn plain(id: &'a str) -> Self {
-        Self { id, rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None }
+        Self { id, rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None, colorless: false }
     }
 }
 
@@ -1849,6 +1926,11 @@ pub struct RunState {
     /// 会把那一屏顶掉 —— 玩家会丢掉还没拿的卡牌奖励。所以欠的这几步走自己的通道。
     pickup_change: Option<DeckChange>,
     pickup_picks: u8,
+    /// §320：事件摊开的候选（`Pending::EventOffer` 时有效；`len` 之外是空 id）。
+    ///
+    /// 只在"这一段事件已经摊牌、玩家还没选"的窗口里有值；取走一张之后清空。
+    event_offer: [RunId; MAX_EVENT_OFFER],
+    event_offer_len: u8,
     deck: [RunId; MAX_RUN_DECK],
     /// §253：与 `deck` **同下标**的每副本数据（`RunMark::NONE` = 没有）。
     /// 牌组重排时必须跟着搬（`remove_card` 里那条 `deck[i] = deck[i+1]` 旁边的同一行）。
@@ -1977,7 +2059,7 @@ impl Pending {
             Self::Rest => NodeKind::Rest,
             Self::Shop => NodeKind::Shop,
             Self::Chest => NodeKind::Treasure,
-            Self::Event | Self::EventCard => NodeKind::Unknown,
+            Self::Event | Self::EventCard | Self::EventOffer => NodeKind::Unknown,
             Self::None | Self::Reward | Self::Start | Self::BlessingCard => return None,
         })
     }
@@ -2050,6 +2132,8 @@ impl RunState {
             unknown_room: UnknownRoom::Unresolved,
             tiny_chest_rooms: 0,
             pickup_change: None,
+            event_offer: [RunId::EMPTY; MAX_EVENT_OFFER],
+            event_offer_len: 0,
             pickup_picks: 0,
             deck: [RunId::EMPTY; MAX_RUN_DECK],
             marks: [RunMark::NONE; MAX_RUN_DECK],
@@ -5725,6 +5809,57 @@ impl RunState {
         Ok(())
     }
 
+    /// §320：这一段的候选有几张（没有候选 ⇒ `0`）。
+    #[must_use]
+    pub const fn event_offer_len(&self) -> usize {
+        self.event_offer_len as usize
+    }
+
+    /// §320：候选槽 `slot` 的牌 id（越界或空槽 ⇒ `None`）。
+    #[must_use]
+    pub fn event_offer_card(&self, slot: usize) -> Option<&str> {
+        if slot >= self.event_offer_len as usize {
+            return None;
+        }
+        Some(self.event_offer[slot].as_str())
+    }
+
+    /// §320：从候选里取走一张（`The Library` 的 20 选 1、`Sensory Stone` 的每次 Recall）。
+    ///
+    /// 收尾与 [`Self::pick_event_card`] 逐字相同：有 `event_next` 就去下一段（房间不结算），
+    /// 没有就结算这一段。**不同的一点**：这里要把那一行从池子里找出来再交给 `push_card` ——
+    /// 三个蛋（`molten_egg` 等）要在**进牌组那一刻**生效，而它需要 `PoolCard`（类型 + `+` 行）。
+    pub fn pick_event_offer(
+        &mut self,
+        slot: usize,
+        pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
+        if self.pending != Pending::EventOffer {
+            return Err(RunError::WrongPhase);
+        }
+        if slot >= self.event_offer_len as usize {
+            return Err(RunError::EmptyOffer(slot as u8));
+        }
+        let id = self.event_offer[slot].as_str();
+        let Some(row) = pool.iter().find(|card| card.id == id).copied() else {
+            return Err(RunError::NoSuchCard);
+        };
+        // 牌组满了 ⇒ `push_card` 的 `Capacity`（响亮，不静默丢牌）。
+        self.push_card(row)?;
+        self.event_offer = [RunId::EMPTY; MAX_EVENT_OFFER];
+        self.event_offer_len = 0;
+        if !self.event_next.as_str().is_empty() {
+            self.event_step = self.event_next;
+            self.event_next = RunId::EMPTY;
+            self.pending = Pending::Event;
+            return Ok(());
+        }
+        self.pending = Pending::None;
+        self.event_step = RunId::EMPTY;
+        self.mark_resolved();
+        Ok(())
+    }
+
     pub fn pick_event_card(
         &mut self,
         index: usize,
@@ -5981,6 +6116,10 @@ impl RunState {
             None => RunId::EMPTY,
         };
         let before = *self;
+        // §320：上一轮可能已经有过一段候选（正常情况下没有：取走一张就清空）。
+        // 进这一段之前先清，否则"漏清"会表现成"上一段的候选又冒出来"。
+        self.event_offer = [RunId::EMPTY; MAX_EVENT_OFFER];
+        self.event_offer_len = 0;
         let mut follow: Option<DeckChange> = None;
         for (effect, named) in effects {
             if let Some(change) = effect.deck_change() {
@@ -6021,8 +6160,18 @@ impl RunState {
                 }
             }
         }
+        // §320：候选与改牌问句**抢同一个位置**（`pending` 只有一个），所以两个都有
+        // 或者"要问 + 要开打"都是内容错误 —— 与两条改牌效果同一条规矩。
+        if self.event_offer_len > 0 && follow.is_some() {
+            *self = before;
+            return Err(RunError::TwoDeckChanges);
+        }
         // §286：这一段的选项是**一场战斗** ⇒ 事件收尾、房间**不**结算（战斗结算它）。
         if fight != 0 {
+            if self.event_offer_len > 0 {
+                *self = before;
+                return Err(RunError::TwoDeckChanges);
+            }
             if follow.is_some() {
                 // 改牌待答 + 战斗同时发生是不可能的：问句之后事件就收尾了，而收尾的
                 // 责任在战斗。内容门也不许这样写。
@@ -6047,6 +6196,13 @@ impl RunState {
                 RunId::new(fight_pool).map_err(|_| RunError::NoSuchEvent)?
             };
             self.pending = Pending::None;
+            return Ok(());
+        }
+        // §320：候选列表是这一段的**待答**。与改牌那条完全同一条尾巴（`event_next`），
+        // 所以"三次 Recall"是内容把三段 `Next` 串起来，不需要第二个状态机。
+        if self.event_offer_len > 0 {
+            self.event_next = next_id;
+            self.pending = Pending::EventOffer;
             return Ok(());
         }
         match follow {
@@ -6236,6 +6392,49 @@ impl RunState {
             // 一条候选都没有 ⇒ **拒绝**（`NoEligibleCard`），不是"什么都不做"：内容层面那条
             // 选项本来会被 `card_tag` 条件藏起来，所以走到这里说明条件与效果**对不上**，
             // 那正是应该响的地方。
+            // §320：`[Read]` / `[Recall]` —— 抽 `n` 张**互不相同**的候选摊开。
+            //
+            // 走 `RunStream::Event`（与 `falling` 的随机删牌同一条流：这是一段事件的掷骰，
+            // 不该消耗战斗的 `(seed, step)`）。候选**只在这里抽一次**，之后摊在
+            // `event_offer` 里等玩家选 —— 重渲染不会重新掷。
+            EventEffect::OfferCards(count, filter) => {
+                let mut candidates = [0u8; MAX_POOL];
+                let mut found = 0usize;
+                for (index, card) in pool.iter().enumerate() {
+                    if !filter.admits(card) {
+                        continue;
+                    }
+                    if found >= MAX_POOL {
+                        return Err(RunError::PoolTooLarge {
+                            pool: found + 1,
+                            max: MAX_POOL,
+                        });
+                    }
+                    candidates[found] = index as u8;
+                    found += 1;
+                }
+                let wanted = usize::from(count);
+                if found < wanted {
+                    // 池子凑不出它承诺的张数 ⇒ 拒绝（不是"少给几张"）。内容门在
+                    // `sts_content_check` 里也用同一条规则先拦一次。
+                    return Err(RunError::PoolTooSmall {
+                        pool: found,
+                        need: wanted,
+                    });
+                }
+                // 不放回抽样：把这个子集洗一遍再取前 `wanted` 张。洗的是**池子下标**，
+                // 所以同一张牌不会出现两次（`draw_distinct` 的既有语义）。
+                self.rng
+                    .shuffle(RunStream::Event, &mut candidates[..found]);
+                for slot in 0..wanted {
+                    let card = &pool[candidates[slot] as usize];
+                    self.event_offer[slot] = RunId::new(card.id).map_err(|_| RunError::BadId)?;
+                }
+                for slot in wanted..MAX_EVENT_OFFER {
+                    self.event_offer[slot] = RunId::EMPTY;
+                }
+                self.event_offer_len = count;
+            }
             EventEffect::RemoveCardRandom(kind) => {
                 let mut eligible = [0u8; MAX_RUN_DECK];
                 let mut found = 0usize;
@@ -7011,26 +7210,37 @@ mod tests {
     /// §273：**比货架多**的一份池子（7 张 vs `MAX_SHOP_CARDS` = 5）—— 补货判据要它，否则
     /// "买走一格再补一格"根本补不出来（3 张的池子被 3 格货架一次用尽）。
     const SHOP_CARDS: [PoolCard<'static>; 7] = [
-        PoolCard { id: "strike", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
-        PoolCard { id: "defend", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None },
-        PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
-        PoolCard { id: "bash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
-        PoolCard { id: "clash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
-        PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None },
-        PoolCard { id: "havoc", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None },
+        PoolCard { id: "strike", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None,
+                     colorless: false },
+        PoolCard { id: "defend", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None,
+                     colorless: false },
+        PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None,
+                     colorless: false },
+        PoolCard { id: "bash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None,
+                     colorless: false },
+        PoolCard { id: "clash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None,
+                     colorless: false },
+        PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None,
+                     colorless: false },
+        PoolCard { id: "havoc", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None,
+                     colorless: false },
     ];
 
     /// §270：带**类型**的一份小卡池（几条判据要"加一张 Attack / Skill"）。
     /// 名字不叫 `CARDS`：那个已经是"七张 `&str`"的老常量。
     const TYPED_CARDS: [PoolCard<'static>; 4] = [
-        PoolCard { id: "strike", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
-        PoolCard { id: "defend", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None },
-        PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None },
+        PoolCard { id: "strike", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None,
+                     colorless: false },
+        PoolCard { id: "defend", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: None,
+                     colorless: false },
+        PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: None,
+                     colorless: false },
         // §290：`The Nest` 给的那张牌（`Special` 稀有度 ⇒ `curse:` 给不了它，只能走 `card:`）。
         PoolCard {
             id: "ritual_dagger",
             rarity: Rarity::Special,
             kind: CardKind::Attack,
+             colorless: false,
             upgraded: Some("ritual_dagger+"),
         },
     ];
@@ -7098,6 +7308,7 @@ mod tests {
                 id: "strike",
                 rarity: Rarity::Common,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             }];
             match run.node_at_cursor() {
@@ -7905,10 +8116,14 @@ mod tests {
     #[test]
     fn dream_catcher_turns_rest_into_a_card_reward_and_only_with_the_relic() {
         let pool = [
-            PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "uppercut", rarity: Rarity::Uncommon, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "bludgeon", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None },
+            PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "uppercut", rarity: Rarity::Uncommon, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "bludgeon", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
         ];
 
         // 没有遗物：休息完就结束，节点已结算。
@@ -8027,12 +8242,18 @@ mod tests {
     fn the_upgrade_eggs_upgrade_two_of_their_own_kind() {
         // 池子里给足"可升的攻击/技能"，并让它们都有 `+` 行。
         const POOL: [PoolCard<'static>; 6] = [
-            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("strike+") },
-            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("bash+") },
-            PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("anger+") },
-            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: Some("defend+") },
-            PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: Some("flex+") },
-            PoolCard { id: "clash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("clash+") },
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("strike+"),
+                         colorless: false },
+            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("bash+"),
+                         colorless: false },
+            PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("anger+"),
+                         colorless: false },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: Some("defend+"),
+                         colorless: false },
+            PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: Some("flex+"),
+                         colorless: false },
+            PoolCard { id: "clash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("clash+"),
+                         colorless: false },
         ];
         let attacks = |run: &RunState| {
             run.deck()
@@ -8083,11 +8304,14 @@ mod tests {
     #[test]
     fn pandoras_box_transforms_every_staple_and_nothing_else() {
         const POOL: [PoolCard<'static>; 3] = [
-            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("strike+") },
-            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: Some("defend+") },
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("strike+"),
+                         colorless: false },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: Some("defend+"),
+                         colorless: false },
             // 改造的**来源**：内容里能抽出什么。`bash` 不是 Strike/Defend，所以它只会**出现**
             // 在结果里，不会被当成目标。
-            PoolCard { id: "bash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("bash+") },
+            PoolCard { id: "bash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("bash+"),
+                         colorless: false },
         ];
         let mut run = RunState::new(7, 80, i32::MAX, &["strike", "strike", "defend", "bash", "clash"]).expect("a run");
         run.push_relic("pandoras_box", &POOL).expect("pandoras_box");
@@ -8147,10 +8371,14 @@ mod tests {
 
         // ---- `astrolabe`：欠 3 次"改造并升级"，而且**改造出来的那张被升级了**。
         const POOL: [PoolCard<'static>; 4] = [
-            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("strike+") },
-            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: Some("defend+") },
-            PoolCard { id: "bash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("bash+") },
-            PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: Some("flex+") },
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: Some("strike+"),
+                         colorless: false },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: Some("defend+"),
+                         colorless: false },
+            PoolCard { id: "bash", rarity: Rarity::Common, kind: CardKind::Attack, upgraded: Some("bash+"),
+                         colorless: false },
+            PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Skill, upgraded: Some("flex+"),
+                         colorless: false },
         ];
         let mut run = RunState::new(7, 80, i32::MAX, &["strike", "strike", "defend", "bash", "clash"]).expect("a run");
         run.push_relic("astrolabe", &POOL).expect("astrolabe");
@@ -8727,6 +8955,7 @@ mod tests {
                 id: "bash",
                 rarity: Rarity::Common,
                 kind,
+                 colorless: false,
                 upgraded: Some("bash+"),
             };
             let before = run.deck().len();
@@ -8741,6 +8970,7 @@ mod tests {
                 id: "bash",
                 rarity: Rarity::Common,
                 kind: other,
+                 colorless: false,
                 upgraded: Some("bash+"),
             };
             run.push_card(wrong).expect("other type");
@@ -8759,6 +8989,7 @@ mod tests {
             id: "bash",
             rarity: Rarity::Common,
             kind: CardKind::Attack,
+             colorless: false,
             upgraded: None,
         })
         .expect("no `+` row");
@@ -9651,8 +9882,10 @@ mod tests {
     fn a_pool_too_small_for_three_distinct_cards_is_loud() {
         let mut run = RunState::new(3, 80, 0, &DECK).expect("a run");
         let two: [PoolCard<'_>; 2] = [
-            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None },
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
         ];
         assert_eq!(
             run.roll_reward(&two, &[], &[], FightKind::Normal),
@@ -9665,37 +9898,53 @@ mod tests {
     /// This image's pool: three Basics plus the junk card (which must be filtered out).
     fn basic_pool() -> [PoolCard<'static>; 5] {
         [
-            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "slimed", rarity: Rarity::Status, kind: CardKind::Other, upgraded: None },
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "slimed", rarity: Rarity::Status, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
             // §229: `upgrade_at` now **looks up** the next row instead of appending `+` blindly, so a
             // fixture without `strike+` would make "upgrade" a silent no-op. That is the point of the
             // change -- and the pool below is what a real caller passes (the whole `CARD` table).
-            PoolCard { id: "strike+", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None },
+            PoolCard { id: "strike+", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
         ]
     }
 
     /// Five Commons: a full shelf, all in one price band.
     fn common_pool() -> [PoolCard<'static>; 5] {
         [
-            PoolCard { id: "c1", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "c2", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "c3", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "c4", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "c5", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None },
+            PoolCard { id: "c1", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "c2", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "c3", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "c4", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "c5", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
         ]
     }
 
     /// A pool with all three rarities, for the band arithmetic the real content cannot exercise yet.
     fn mixed_pool() -> [PoolCard<'static>; 6] {
         [
-            PoolCard { id: "c1", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "c2", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "u1", rarity: Rarity::Uncommon, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "u2", rarity: Rarity::Uncommon, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "r1", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "r2", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None },
+            PoolCard { id: "c1", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "c2", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "u1", rarity: Rarity::Uncommon, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "u2", rarity: Rarity::Uncommon, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "r1", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "r2", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
         ]
     }
 
@@ -9840,18 +10089,21 @@ mod tests {
                 id: "strike",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
             PoolCard {
                 id: "defend",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
             PoolCard {
                 id: "anger",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
         ];
@@ -9902,18 +10154,21 @@ mod tests {
                 id: "strike",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
             PoolCard {
                 id: "defend",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
             PoolCard {
                 id: "anger",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
         ];
@@ -10159,10 +10414,14 @@ mod tests {
     fn a_special_card_is_known_and_never_put_in_a_reward() {
         assert_eq!(Rarity::from_name("Special"), Some(Rarity::Special));
         let pool = [
-            PoolCard { id: "apparition", rarity: Rarity::Special, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "blur", rarity: Rarity::Uncommon, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None },
+            PoolCard { id: "apparition", rarity: Rarity::Special, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "blur", rarity: Rarity::Uncommon, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
         ];
         for seed in 0..40 {
             let mut run = RunState::new(seed, 80, 0, &DECK).expect("a run");
@@ -10244,6 +10503,7 @@ mod tests {
                 id: "strike",
                 rarity: Rarity::Common,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             })
             .collect();
@@ -10252,6 +10512,7 @@ mod tests {
                 id: "strike",
                 rarity: Rarity::Common,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             })
             .collect();
@@ -10454,18 +10715,21 @@ mod tests {
                 id: "strike",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
             PoolCard {
                 id: "defend",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
             PoolCard {
                 id: "anger",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
         ];
@@ -10565,18 +10829,21 @@ mod tests {
                 id: "strike",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
             PoolCard {
                 id: "defend",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
             PoolCard {
                 id: "anger",
                 rarity: Rarity::Basic,
                 kind: CardKind::Other,
+                 colorless: false,
                 upgraded: None,
             },
         ];
@@ -10662,9 +10929,12 @@ mod tests {
 
         // A boss reward is always Rare, so every card resets it back to the floor.
         let rare_pool: [PoolCard<'_>; 3] = [
-            PoolCard { id: "a", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "b", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "c", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None },
+            PoolCard { id: "a", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "b", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "c", rarity: Rarity::Rare, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
         ];
         run.skip_reward().unwrap();
         run.roll_reward(&rare_pool, &[], &[], FightKind::Boss).unwrap();
@@ -11102,14 +11372,21 @@ mod tests {
     /// plausibly name, and the difference the check has to see.
     fn curse_pool() -> [PoolCard<'static>; 7] {
         [
-            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "injury", rarity: Rarity::Curse, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "slimed", rarity: Rarity::Status, kind: CardKind::Other, upgraded: None },
-            PoolCard { id: "c1", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None },
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "injury", rarity: Rarity::Curse, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "slimed", rarity: Rarity::Status, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "c1", rarity: Rarity::Common, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
             // §229: an upgrade looks the next row up in the pool (no more blind `+` append).
-            PoolCard { id: "strike+", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None },
+            PoolCard { id: "strike+", rarity: Rarity::Basic, kind: CardKind::Other, upgraded: None,
+                         colorless: false },
         ]
     }
 
@@ -12000,10 +12277,14 @@ mod tests {
     /// `CardKind::Other`，而 `falling` 判的就是类型，用它们等于判"删了一张牌"。
     fn kind_pool() -> [PoolCard<'static>; 4] {
         [
-            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: None },
-            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: None },
-            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: None },
-            PoolCard { id: "ascenders_bane", rarity: Rarity::Curse, kind: CardKind::Curse, upgraded: None },
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Attack, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "ascenders_bane", rarity: Rarity::Curse, kind: CardKind::Curse, upgraded: None,
+                         colorless: false },
         ]
     }
 
@@ -12106,6 +12387,211 @@ mod tests {
         assert_eq!(EventEffect::parse("remove_card_random:", 0), None);
         // 裸词仍然是**改牌问句**，不是这个原子（两者不是同一条路）。
         assert_eq!(EventEffect::parse("remove_card", 0), Some((EventEffect::RemoveCard, None)));
+    }
+
+    /// §320：一张带 `colorless` 标记的池子 —— `Sensory Stone` 只从这一半抽。
+    ///
+    /// 8 张：5 张无色（三种稀有度）、3 张不是。候选张数取 3 时，"抽到有色牌"会当场红。
+    fn offer_pool() -> [PoolCard<'static>; 8] {
+        [
+            PoolCard { id: "swift_strike", rarity: Rarity::Uncommon, kind: CardKind::Attack,
+                       upgraded: None, colorless: true },
+            PoolCard { id: "apparition", rarity: Rarity::Rare, kind: CardKind::Skill,
+                       upgraded: None, colorless: true },
+            PoolCard { id: "blind", rarity: Rarity::Uncommon, kind: CardKind::Skill,
+                       upgraded: None, colorless: true },
+            PoolCard { id: "dark_shackles", rarity: Rarity::Uncommon, kind: CardKind::Skill,
+                       upgraded: None, colorless: true },
+            PoolCard { id: "purity", rarity: Rarity::Uncommon, kind: CardKind::Skill,
+                       upgraded: None, colorless: true },
+            PoolCard { id: "strike", rarity: Rarity::Basic, kind: CardKind::Attack,
+                       upgraded: Some("strike+"), colorless: false },
+            PoolCard { id: "defend", rarity: Rarity::Basic, kind: CardKind::Skill,
+                       upgraded: None, colorless: false },
+            PoolCard { id: "bash", rarity: Rarity::Basic, kind: CardKind::Attack,
+                       upgraded: None, colorless: false },
+        ]
+    }
+
+    fn colorless_of(pool: &[PoolCard<'static>]) -> Vec<&'static str> {
+        pool.iter().filter(|card| card.colorless).map(|card| card.id).collect()
+    }
+
+    /// §320：`[Recall]` 摊开 3 张**无色**候选；取走一张 ⇒ 进牌组。
+    #[test]
+    fn an_event_offer_shows_distinct_cards_of_the_named_pool() {
+        let pool = offer_pool();
+        let allowed = colorless_of(&pool);
+        let mut run = RunState::new(7, 80, 0, &["strike", "defend"]).expect("a run");
+        run.begin_event("sensory_stone", "sensory_stone").expect("the event");
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::OfferCards(3, OfferFilter::Colorless), None)],
+                ..EventMove::none()
+            },
+            &pool,
+        )
+        .expect("offering three colorless cards");
+
+        assert_eq!(run.pending(), Pending::EventOffer, "the run waits for a pick");
+        assert_eq!(run.event_offer_len(), 3, "three candidates");
+        // ⚠️ 存 `String` 而不是 `&str`：`event_offer_card` 借的是 `run`，而下面要
+        // `pick_event_offer(&mut run)` —— 借用冲突在编译期就挡住了（这正是想要的）。
+        let mut seen: Vec<String> = Vec::new();
+        for slot in 0..run.event_offer_len() {
+            let id = run.event_offer_card(slot).expect("a candidate").to_string();
+            assert!(allowed.contains(&id.as_str()), "{id} is not colorless");
+            assert!(!seen.contains(&id), "{id} appears twice");
+            seen.push(id);
+        }
+
+        let deck_before = run.deck_len;
+        let first = seen[0].clone();
+        run.pick_event_offer(0, &pool).expect("taking the first candidate");
+        assert_eq!(run.deck_len, deck_before + 1, "it went into the deck");
+        assert_eq!(run.pending(), Pending::None, "and the choice is done");
+        assert_eq!(run.event_offer_len(), 0, "the offer is cleared");
+        let last = run.deck()[run.deck_len as usize - 1].as_str();
+        assert_eq!(last, first, "the card taken is the one that was shown");
+    }
+
+    /// §320：`OfferFilter::Any` 不筛（`The Library`），而且**互不相同**（同一张不许给两次）。
+    #[test]
+    fn the_any_filter_takes_the_whole_pool_without_repeats() {
+        let pool = offer_pool();
+        let mut run = RunState::new(3, 80, 0, &["strike"]).expect("a run");
+        run.begin_event("the_library", "the_library").expect("the event");
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::OfferCards(7, OfferFilter::Any), None)],
+                ..EventMove::none()
+            },
+            &pool,
+        )
+        .expect("offering the whole pool");
+        assert_eq!(run.event_offer_len(), 7, "seven of the eight");
+        let mut seen: Vec<String> = Vec::new();
+        for slot in 0..7 {
+            let id = run.event_offer_card(slot).expect("a candidate").to_string();
+            assert!(!seen.contains(&id), "{id} appears twice");
+            seen.push(id);
+        }
+    }
+
+    /// §320：池子凑不出承诺的张数 ⇒ **拒绝**，一个字节不改。
+    ///
+    /// 这是"内容写错了"的形状：`offer_cards:20:colorless` 在只有 5 张无色牌的池子上
+    /// 必须响亮地失败，而不是摊出 5 张然后让玩家以为"就是这些"。
+    #[test]
+    fn an_offer_larger_than_the_pool_is_refused() {
+        let pool = offer_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"]).expect("a run");
+        run.begin_event("the_library", "the_library").expect("the event");
+        let before = run;
+        assert_eq!(
+            run.resolve_event_effects(
+                &EventMove {
+                    effects: &[(EventEffect::OfferCards(9, OfferFilter::Colorless), None)],
+                    ..EventMove::none()
+                },
+                &pool,
+            ),
+            Err(RunError::PoolTooSmall { pool: 5, need: 9 }),
+            "only five colorless cards exist in the fixture"
+        );
+        assert!(run == before, "not one byte moved");
+    }
+
+    /// §320：候选与改牌**抢同一个位置** ⇒ 一条选项里两个都有就是内容错误。
+    #[test]
+    fn an_offer_and_a_deck_edit_cannot_share_one_choice() {
+        let pool = offer_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"]).expect("a run");
+        run.begin_event("the_library", "the_library").expect("the event");
+        let before = run;
+        assert_eq!(
+            run.resolve_event_effects(
+                &EventMove {
+                    effects: &[
+                        (EventEffect::RemoveCard, None),
+                        (EventEffect::OfferCards(3, OfferFilter::Any), None),
+                    ],
+                    ..EventMove::none()
+                },
+                &pool,
+            ),
+            Err(RunError::TwoDeckChanges),
+            "one waiting question, one slot"
+        );
+        assert!(run == before, "not one byte moved");
+    }
+
+    /// §320：候选表**进存档**（含 `Pending::EventOffer`）—— 读回来还能接着选。
+    #[test]
+    fn the_offer_survives_a_save_and_a_hash() {
+        use crate::map::NodeKind;
+        let pool = offer_pool();
+        // ⚠️ 存档的 `restore` 会核 `check_invariants` 里那条"问句与房间一致"
+        // （`Pending::Event*` 只可能站在 `?` 房上），所以这条局必须**真的走到 `?` 房**。
+        let mut run = ironclad();
+        assert!(walk_to(&mut run, NodeKind::Unknown), "a `?` room on the map");
+        run.pending = Pending::Event;
+        run.begin_event("sensory_stone", "sensory_stone").expect("the event");
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::OfferCards(2, OfferFilter::Colorless), None)],
+                ..EventMove::none()
+            },
+            &pool,
+        )
+        .expect("offering two");
+        let shown = [run.event_offer_card(0).expect("first"), run.event_offer_card(1).expect("second")];
+        let baseline = crate::hash::run_hash(&run).expect("a hash");
+
+        let mut buf = [0u8; crate::state::archive::MAX_ARCHIVE];
+        let len = crate::state::archive::write(&run, 7, &mut buf).expect("write");
+        let text = std::str::from_utf8(&buf[..len]).expect("ascii");
+        let mut restored = ironclad();
+        crate::state::archive::restore(text, 7, &mut restored).expect("read");
+        assert_eq!(restored.pending(), Pending::EventOffer, "the offer is still open");
+        assert_eq!(restored.event_offer_len(), 2, "two candidates come back");
+        assert_eq!(restored.event_offer_card(0), Some(shown[0]));
+        assert_eq!(restored.event_offer_card(1), Some(shown[1]));
+        assert_eq!(crate::hash::run_hash(&restored).expect("a hash"), baseline, "hash round-trips");
+
+        // 反过来：换掉一张候选 ⇒ 指纹必须不同（"忘了把候选写进规范文本"会看不出来）。
+        let mut other = restored.clone();
+        other.event_offer[0] = RunId::new("strike").expect("an id");
+        assert_ne!(
+            crate::hash::run_hash(&other).expect("a hash"),
+            baseline,
+            "the candidate list is part of the fingerprint"
+        );
+    }
+
+    /// §320：取牌时**三个蛋**生效 —— `molten_egg` 让 Attack 以 `+` 行进牌组（wiki 明写）。
+    #[test]
+    fn taking_an_offer_applies_the_egg_relics() {
+        let pool = offer_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"]).expect("a run");
+        run.push_relic("molten_egg", &TYPED_CARDS).expect("molten egg");
+        run.begin_event("the_library", "the_library").expect("the event");
+        // 只摊一张，而且是 `strike`（Attack，池子里有 `strike+`）。
+        run.resolve_event_effects(
+            &EventMove {
+                effects: &[(EventEffect::OfferCards(1, OfferFilter::Any), None)],
+                ..EventMove::none()
+            },
+            &[pool[5]],
+        )
+        .expect("offering the attack");
+        assert_eq!(run.event_offer_card(0), Some("strike"));
+        run.pick_event_offer(0, &pool).expect("taking it");
+        assert_eq!(
+            run.deck()[run.deck_len as usize - 1].as_str(),
+            "strike+",
+            "molten_egg upgrades an offered Attack as it enters the deck"
+        );
     }
 
     /// §188: a list that fails **in the middle** must not half-apply.
@@ -12267,12 +12753,14 @@ mod tests {
                 id,
                 rarity: Rarity::Common,
                 kind: CardKind::Attack,
+                 colorless: false,
                 upgraded: None,
             });
             pool.push(PoolCard {
                 id: std::boxed::Box::leak(std::format!("{id}+").into_boxed_str()),
                 rarity: Rarity::Common,
                 kind: CardKind::Attack,
+                 colorless: false,
                 upgraded: None,
             });
         }
@@ -12491,8 +12979,10 @@ mod tests {
         );
         // 第二半：非 Boss 宝箱里多一张**随机诅咒**（池子里那一条）。
         let curses = [
-            PoolCard { id: "injury", kind: CardKind::Curse, rarity: Rarity::Curse, upgraded: None },
-            PoolCard { id: "wound", kind: CardKind::Status, rarity: Rarity::Status, upgraded: None },
+            PoolCard { id: "injury", kind: CardKind::Curse, rarity: Rarity::Curse, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "wound", kind: CardKind::Status, rarity: Rarity::Status, upgraded: None,
+                         colorless: false },
         ];
         let mut run = run_with(&["cursed_key"]);
         let deck_before = run.deck().len();
@@ -12516,6 +13006,7 @@ mod tests {
             id: "curse_of_the_bell",
             kind: CardKind::Curse,
             rarity: Rarity::Curse,
+             colorless: false,
             upgraded: None,
         }];
         let mut run = run_with(&[]);
@@ -12568,6 +13059,7 @@ mod tests {
             id: "strike",
             kind: CardKind::Attack,
             rarity: Rarity::Basic,
+             colorless: false,
             upgraded: None,
         }];
         let mut run = run_with(&[]);
@@ -12649,10 +13141,14 @@ mod tests {
     #[test]
     fn orrery_owes_five_cards_and_rolls_a_new_hand_each_time() {
         let pool = [
-            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
-            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None },
-            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
-            PoolCard { id: "anger", kind: CardKind::Attack, rarity: Rarity::Common, upgraded: None },
+            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "anger", kind: CardKind::Attack, rarity: Rarity::Common, upgraded: None,
+                         colorless: false },
         ];
         let mut run = run_with(&[]);
         let deck_before = run.deck().len();
@@ -12699,9 +13195,12 @@ mod tests {
     #[test]
     fn tiny_house_does_all_four_things() {
         let pool = [
-            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
-            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None },
-            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
         ];
         let mut run = run_with(&[]);
         let (gold, health, max, potions) =
@@ -12723,9 +13222,12 @@ mod tests {
     #[test]
     fn singing_bowl_trades_a_card_for_two_max_hp_in_both_places() {
         let pool = [
-            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
-            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None },
-            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
         ];
         // ① 加牌问句上的那一个。
         let mut run = run_with(&["singing_bowl"]);
@@ -12770,9 +13272,12 @@ mod tests {
     #[test]
     fn a_full_deck_refuses_the_pick_without_eating_the_debt() {
         let pool = [
-            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
-            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None },
-            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None },
+            PoolCard { id: "strike", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "defend", kind: CardKind::Skill, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
+            PoolCard { id: "bash", kind: CardKind::Attack, rarity: Rarity::Basic, upgraded: None,
+                         colorless: false },
         ];
         let mut run = run_with(&[]);
         run.push_relic("orrery", &pool).expect("pickup");

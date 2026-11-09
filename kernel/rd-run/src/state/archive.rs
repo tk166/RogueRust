@@ -34,7 +34,8 @@ use crate::map::{MapNode, MapRow, NodeKind, RunMap, MAX_OUT_EDGES, NODES_PER_ROW
 use super::RunId;
 use crate::state::{
     BlessingFollowUp, DeckChange, Offer, Pending, Reward, RunMark, RunState, ShopStock,
-    MAX_REWARD_CARDS, MAX_RUN_DECK, MAX_RUN_POTIONS, MAX_RUN_RELICS, MAX_SHOP_CARDS, MAX_SHOP_RELICS,
+    MAX_EVENT_OFFER, MAX_REWARD_CARDS, MAX_RUN_DECK, MAX_RUN_POTIONS, MAX_RUN_RELICS,
+    MAX_SHOP_CARDS, MAX_SHOP_RELICS,
 };
 use crate::streams::{RunRng, RunStream};
 
@@ -409,6 +410,8 @@ const fn pending_to_u8(pending: Pending) -> u8 {
         Pending::Start => 6,
         Pending::BlessingCard => 7,
         Pending::EventCard => 8,
+        // §320：事件候选列表。
+        Pending::EventOffer => 9,
     }
 }
 
@@ -423,6 +426,8 @@ fn pending_from_u8(value: u8) -> Result<Pending, ArchiveError> {
         6 => Pending::Start,
         7 => Pending::BlessingCard,
         8 => Pending::EventCard,
+        // §320：事件候选列表。
+        9 => Pending::EventOffer,
         _ => return Err(ArchiveError::BadField("pending")),
     })
 }
@@ -659,6 +664,12 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
         None => u8::MAX,
         Some(change) => deck_change_to_u8(change),
     })?;
+    // §320：事件候选列表（`0` = 没有候选，也是绝大多数时候）。
+    writer.byte(state.event_offer_len() as u8)?;
+    for slot in 0..state.event_offer_len() {
+        let id = state.event_offer_card(slot).unwrap_or("");
+        writer.id(RunId::new(id).map_err(|_| ArchiveError::BadField("event_offer"))?)?;
+    }
 
     for counter in state.rng.counters() {
         writer.int(*counter)?;
@@ -844,6 +855,15 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     } else {
         Some(deck_change_from_u8(event_byte)?)
     };
+    // §320：事件候选表（写侧在 `event_follow` 之后）。
+    let offer_len = reader.byte()?;
+    if offer_len as usize > MAX_EVENT_OFFER {
+        return Err(ArchiveError::BadField("event_offer_len"));
+    }
+    let mut offer_ids = [RunId::EMPTY; MAX_EVENT_OFFER];
+    for slot in offer_ids.iter_mut().take(offer_len as usize) {
+        *slot = reader.id()?;
+    }
 
     let mut counters = [0i32; RunStream::COUNT];
     for slot in &mut counters {
@@ -967,6 +987,21 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     restored.start_offers = start_offers;
     restored.blessing_follow = blessing_follow;
     restored.event_follow = event_follow;
+    // §320：候选表（`len` 之后恒为空，与 `deck` 的尾槽同一条纪律 —— 读的时候也验一遍）。
+    let offer_len = offer_len as usize;
+    if offer_len > MAX_EVENT_OFFER {
+        return Err(ArchiveError::BadField("event_offer_len"));
+    }
+    for slot in 0..offer_len {
+        let id = offer_ids[slot];
+        if id.as_str().is_empty() {
+            return Err(ArchiveError::BadField("event_offer"));
+        }
+        restored.event_offer[slot] = id;
+    }
+    // ⚠️ 少了这一行读回来就是"有候选但没有长度" —— 长度是**读出来**的，不是 id 表推的
+    // （空槽也是合法值），这正是那半行漏掉时 `event_offer_len()` 仍是 0 的原因。
+    restored.event_offer_len = offer_len as u8;
     restored.rarity_offset = rarity_offset;
     restored.ascension = ascension;
     Ok(restored)

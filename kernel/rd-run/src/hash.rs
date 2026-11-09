@@ -233,6 +233,12 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
     }
     writer.str("blessing=").str(follow_code(state.blessing_follow())).str("\n");
     writer.str("event_follow=").str(deck_change_code(state.event_follow())).str("\n");
+    // §320：事件候选列表。**不写**会让"同一局的两条分支"（20 选 1 的不同候选）哈希成同一串 ——
+    // 而候选是玩家看得见的局面（选哪张由它决定）。
+    writer.str("event_offer=").u32(state.event_offer_len() as u32).str("\n");
+    for slot in 0..state.event_offer_len() {
+        writer.str("of=").str(state.event_offer_card(slot).unwrap_or("")).str("\n");
+    }
 
     // 已结算位图：两个 u64 按十六进制（十进制也能，但十六进制能一眼看出哪一位）。
     for word in state.resolved_words() {
@@ -300,6 +306,8 @@ const fn pending_code(pending: Pending) -> u8 {
         Pending::Start => 6,
         Pending::BlessingCard => 7,
         Pending::EventCard => 8,
+        // §320：候选列表（`The Library` / `Sensory Stone`）。
+        Pending::EventOffer => 9,
     }
 }
 
