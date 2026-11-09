@@ -56,11 +56,11 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 54 / encounters 55 / cards 293 (base 154 + plus 139) / statuses 147 /
-enemy actions 150 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
-ascension variants 109 over 95 actions
-image full   content.sts.rdcf            173808 B
-image core   content.sts.core.rdcf       137088 B
+monsters 55 / encounters 56 / cards 293 (base 154 + plus 139) / statuses 147 /
+enemy actions 154 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
+ascension variants 114 over 98 actions
+image full   content.sts.rdcf            174928 B
+image core   content.sts.core.rdcf       138140 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
@@ -316,7 +316,7 @@ wiki 常见而我们**没有**的：
 另外两处专用池：`EliteEvent`（3 条，`Dead Adventurer` 的伏击）与 `ColosseumSlavers` /
 `ColosseumChampions`（各 1 条，`The Colosseum` 的两场）。
 
-### D.3.1 Act 2：wiki 的 13 条，做了 12 条（§311–§313）
+### D.3.1 Act 2：wiki 的 13 条，**13 条齐了**（§311–§314）
 
 | wiki（`The_City`） | 池 | 权重 | 状态 |
 |---|---|---|---|
@@ -324,7 +324,7 @@ wiki 常见而我们**没有**的：
 | Chosen | Easy | 2 | ✅ |
 | Shelled Parasite | Easy | 2 | ✅ |
 | 3 Byrds | Easy | 2 | ✅ §311（顺手修了 `enc_byrds` 只有 1 只的 bug） |
-| 2 Thieves | Easy | 2 | ❌ 要 `mugger` |
+| 2 Thieves | Easy | 2 | ✅ §314（`mugger` + 1 Looter 在左、1 Mugger 在右） |
 | Chosen and Byrds | Hard | 2 | ✅ §311（1 Chosen + **1** Byrd） |
 | Cultist and Chosen | Hard | 3 | ✅ §311 |
 | Sentry and Spheric Guardian | Hard | 2 | ⛔ 见下面的"跨档位" |
@@ -334,11 +334,27 @@ wiki 常见而我们**没有**的：
 | 3 Cultists | Hard | 3 | ✅ §311 |
 | Shelled Parasite and Fungi | Hard | 3 | ✅ §311 |
 
-只剩一条缺口：
+**没有缺口了。** 上一版这里写着"`mugger` 的招式序列在 wiki 上只有一张表，照 Looter 的骨架写
+等于发明一条规则" —— **那句话是错的**：`Thieves` 页原文就是 *"**Mugger** has the same pattern
+as **Looter**."*。照抄不是发明，是**按出处抄**（§314）。留下的教训：把"我没找到出处"写成
+"没有出处"，会让一条本来很便宜的内容永远排不上队。
 
-**`mugger`**（`2 Thieves` 用）—— 全新怪物。它和 Looter 共享 `stolen_gold` /
-`carryAwayStolenGold`，但它的招式序列在 wiki 上只有一张表（没有 Looter 那样逐步的文字规则）；
-照 Looter 的骨架写等于**发明**一条规则，所以等到能核对清楚时再做。
+⚠️ 唯一仍然例外的是 `Sentry and Spheric Guardian`（见下），它卡在"同一只怪物跨档位"的
+**建模**上，不是内容没写。
+
+### D.3.1b Mugger = Looter 的规则表 + Act 2 的数字（§314）
+
+| 项 | Looter | Mugger |
+|---|---|---|
+| HP | 44-48（A7 46-50） | 48-52（A7 50-54） |
+| Mug | 10（A2 11） | 10（A2 11） |
+| Lunge | 12（A2 14） | 16（A2 18） |
+| Smoke Bomb | 6 Block | 11 Block（A17 17） |
+| Thievery | 15（A17 20） | 15（A17 20） |
+| Escape | 带钱跑 | 同 |
+
+顺手补上两个贼的 **Thievery A17 = 20**：它不是新规则，只是 `stolen_gold += X` 的第二个阈值
+（wiki 两处表都写 `15 (20 17)`）。
 
 ### D.3.2 Malleable（§312）
 

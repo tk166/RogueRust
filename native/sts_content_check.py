@@ -82,7 +82,7 @@ INV_COUNTS = {
     # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster); §175: +3 (Nemesis / Reptomancer / Dagger).
     # §201: +1 (Looter).
     # §282: +1 (`snecko`, Act 2's normal enemy carrying `Confusion`).
-    "monsters": 54,
+    "monsters": 55,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
@@ -90,7 +90,7 @@ INV_COUNTS = {
     # §282: +1 (`enc_snecko`).
     # §311: +5（Act 2 的五条 —— `enc_spheric_guardian` / `enc_chosen_and_byrd` /
     # `enc_cultist_and_chosen` / `enc_three_cultists` / `enc_parasite_and_fungi`）。
-    "encounters": 52,
+    "encounters": 53,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -872,6 +872,9 @@ INV_CARDS = {
 MAX_ENEMIES_IN_FIGHT = 6
 
 INV_MONSTERS = [
+    # §314: Act 2 的 Mugger —— wiki `Thieves`："Mugger has the same pattern as Looter."
+    # 数字：HP 48-52（A7 50-54）、Mug 10（A2 11）、Lunge 16（A2 18）、Smoke Bomb 11（A17 17）。
+    ("mugger", 48, 52, ["mugger.mug", "mugger.lunge", "mugger.smoke_bomb", "mugger.escape"]),
     # §313: Act 2 的 Centurion / Mystic（wiki 76-80 / 48-56，A7 78-83 / 50-58）。
     ("centurion", 76, 80, ["centurion.slash", "centurion.protect", "centurion.fury"]),
     ("mystic", 48, 56, ["mystic.attack", "mystic.buff", "mystic.heal"]),
@@ -1005,6 +1008,13 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    # §314: Mugger —— 与 Looter 同一套形状（`stolen_gold` 每次都 +15，A17 起 +20 在下面那张表里）。
+    "mugger.mug": ("Attack", [("damage", 10, "event"),
+                              ("counter", "stolen_gold", 15, True, "source")]),
+    "mugger.lunge": ("Attack", [("damage", 16, "event"),
+                                ("counter", "stolen_gold", 15, True, "source")]),
+    "mugger.smoke_bomb": ("Defend", [("block", 11, "source")]),
+    "mugger.escape": ("Special", [("carry", "stolen_gold", "source"), ("destroy", "source")]),
     # §313: Centurion。`Protect` 的两个分支各是一条事实：给 Mystic 15 块 / 独自时给自己 15 块。
     "centurion.slash": ("Attack", [("damage", 12, "event")]),
     # `Protect` 的两个分支各是一条 `when` 事实（条件不可静态求值 ⇒ `when None`，
@@ -1370,6 +1380,8 @@ INV_WEAK_POOL = {
     "enc_snake_plant": ["snake_plant"],
     # §313：Centurion 在前、Mystic 在后（wiki 的 Details 列：1 Centurion + 1 Mystic）。
     "enc_centurion_and_mystic": ["centurion", "mystic"],
+    # §314：wiki 的 Details 列 —— 1 Looter 在左、1 Mugger 在右。
+    "enc_two_thieves": ["looter", "mugger"],
     # `enc_two_thieves`（1 Looter + 1 Mugger）还没做：Mugger 是**新怪物**，它的行动序列在 wiki
     # 上只有一张表（没有像 Looter 那样的逐步文字规则），所以留到下一节把 Mugger 的规则核对清楚。
     "enc_chosen_and_byrd": ["chosen", "byrd"],
@@ -1454,7 +1466,7 @@ INV_ACT_TABLES = {
               "enc_chosen_and_byrd", "enc_cultist_and_chosen",
               # §282: Act 2 的普通怪 Snecko（`Confusion` 的载体）。
               "enc_snecko", "enc_three_cultists", "enc_parasite_and_fungi",
-              "enc_snake_plant", "enc_centurion_and_mystic"],
+              "enc_snake_plant", "enc_centurion_and_mystic", "enc_two_thieves"],
     "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
               "enc_spire_growth"],
     "Elite": ["enc_gremlin_nob", "enc_lagavulin", "enc_three_sentries"],
@@ -2567,6 +2579,16 @@ INV_ASC_VARIANTS = {
     'snecko.tail_whip': [(2, [('damage', 10, 'event'), ('status', 'standard.vulnerable', 2, 'event')]),
                         (17, [('damage', 10, 'event'), ('status', 'standard.vulnerable', 2, 'event'),
                               ('status', 'standard.weak', 2, 'event')])],
+    # §314: Mugger —— 与 Looter 同一组阈值（A2 伤害、A17 偷钱），数字是 wiki 的。
+    'mugger.mug': [(2, [('damage', 11, 'event'),
+                        ('counter', 'stolen_gold', 15, True, 'source')]),
+                   (17, [('damage', 11, 'event'),
+                         ('counter', 'stolen_gold', 20, True, 'source')])],
+    'mugger.lunge': [(2, [('damage', 18, 'event'),
+                          ('counter', 'stolen_gold', 15, True, 'source')]),
+                     (17, [('damage', 18, 'event'),
+                           ('counter', 'stolen_gold', 20, True, 'source')])],
+    'mugger.smoke_bomb': [(17, [('block', 17, 'source')])],
     'looter.mug': [(2, [('damage', 11, 'event'),
                         ('counter', 'stolen_gold', 15, True, 'source')]),
                    (17, [('damage', 11, 'event'),
@@ -3047,6 +3069,8 @@ INV_ASC_HP = {
     'spike_slime_s': 11, 'fat_gremlin': 14, 'sneaky_gremlin': 11, 'blue_slaver': 48,
     'acid_slime_s': 9, 'acid_slime_m': 29, 'spike_slime_m': 29, 'jaw_worm': 42,
     'cultist': 50, 'gremlin_wizard': 22, 'sentry_1': 39, 'sentry_2': 39, 'sentry_3': 39,
+    # §314: Mugger 50-54（下界 50）。
+    'mugger': 50,
     # §313: Centurion 78-83 / Mystic 50-58（下界 78 / 50）。
     'centurion': 78, 'mystic': 50,
     # §312: Snake Plant 的 wiki `AscHP` 是 78-82（下界 78）。
@@ -3249,6 +3273,8 @@ INV_NO_ASC = {
     'snecko.perplexing_glare': 'wiki Snecko: Perplexing Glare has no A-row (it only applies Confused)',
     'looter.smoke_bomb': 'wiki Thieves: 6 Block, no A-row',
     'looter.escape': 'wiki Thieves: Escape has no numbers',
+    # §314
+    'mugger.escape': 'wiki Thieves: Escape has no numbers',
     # `Cultist`: Dark Strike "Deals 6 damage." -- the Ritual stack is what ascension moves (already
     # an `Incantation` variant).
     'cultist.dark_strike': 'wiki Cultist: 6 damage, no A-row',
