@@ -54705,6 +54705,586 @@
         "MaxNodeDepth": 64,
         "MaxProgramSteps": 1024
       }
+    },
+    {
+      "Id": "repulsor.daze",
+      "PackageId": "sts",
+      "NameKey": "Daze",
+      "DescriptionKey": "Daze — 2 Dazed into your draw pile",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Daze — 2 Dazed into your draw pile"
+      },
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.createCardInstance",
+                "value": {
+                  "CardDefinitionId": {
+                    "value": "dazed"
+                  },
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "ToZone": "DrawPile",
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "repulsor.attack",
+      "PackageId": "sts",
+      "NameKey": "Attack",
+      "DescriptionKey": "Attack - 11 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Attack - 11 damage"
+      },
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 11
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 13
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "exploder.attack",
+      "PackageId": "sts",
+      "NameKey": "Attack",
+      "DescriptionKey": "Attack - 9 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Attack - 9 damage"
+      },
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 9
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 11
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": false
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "exploder.explode",
+      "PackageId": "sts",
+      "NameKey": "Explode",
+      "DescriptionKey": "Explode - 30 damage, dies",
+      "Intent": {
+        "Kind": "Unknown",
+        "Label": "Explode - 30 damage, dies"
+      },
+      "Program": {
+        "Id": {
+          "value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 30
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.destroyCombatant",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  }
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
     }
   ],
   "Encounters": [
@@ -55596,274 +56176,6 @@
           ],
           "HpMin": 95,
           "HpMax": 99
-        }
-      ],
-      "HeroResources": [
-        {
-          "Resource": {
-            "value": "standard.energy"
-          },
-          "Current": 3,
-          "Max": 3
-        }
-      ],
-      "HeroStartingStatuses": [],
-      "TriggeredEffects": [],
-      "HeroDisplayName": null,
-      "CardsDrawnPerTurn": null
-    },
-    {
-      "Id": {
-        "Value": "enc_byrds"
-      },
-      "Enemies": [
-        {
-          "Id": "byrd",
-          "MaxHealth": 25,
-          "Actions": [
-            {
-              "value": "byrd.peck"
-            },
-            {
-              "value": "byrd.swoop"
-            }
-          ],
-          "StartingStatuses": [
-            {
-              "StatusDefinitionId": {
-                "value": "standard.flying"
-              },
-              "Stacks": 3,
-              "Asc": [
-                {
-                  "AscensionMin": 17,
-                  "Stacks": 4
-                }
-              ]
-            }
-          ],
-          "Position": null,
-          "IntentRules": [],
-          "DisplayName": "Byrd",
-          "Rolls": [],
-          "Counters": [],
-          "Spawn": true,
-          "MaxHealthAsc": [
-            {
-              "AscensionMin": 7,
-              "MaxHealth": 26
-            }
-          ]
-        },
-        {
-          "Id": "byrd",
-          "MaxHealth": 25,
-          "Actions": [
-            {
-              "value": "byrd.peck"
-            },
-            {
-              "value": "byrd.swoop"
-            }
-          ],
-          "StartingStatuses": [
-            {
-              "StatusDefinitionId": {
-                "value": "standard.flying"
-              },
-              "Stacks": 3,
-              "Asc": [
-                {
-                  "AscensionMin": 17,
-                  "Stacks": 4
-                }
-              ]
-            }
-          ],
-          "Position": null,
-          "IntentRules": [],
-          "DisplayName": "Byrd",
-          "Rolls": [],
-          "Counters": [],
-          "Spawn": true,
-          "MaxHealthAsc": [
-            {
-              "AscensionMin": 7,
-              "MaxHealth": 26
-            }
-          ]
-        },
-        {
-          "Id": "byrd",
-          "MaxHealth": 25,
-          "Actions": [
-            {
-              "value": "byrd.peck"
-            },
-            {
-              "value": "byrd.swoop"
-            }
-          ],
-          "StartingStatuses": [
-            {
-              "StatusDefinitionId": {
-                "value": "standard.flying"
-              },
-              "Stacks": 3,
-              "Asc": [
-                {
-                  "AscensionMin": 17,
-                  "Stacks": 4
-                }
-              ]
-            }
-          ],
-          "Position": null,
-          "IntentRules": [],
-          "DisplayName": "Byrd",
-          "Rolls": [],
-          "Counters": [],
-          "Spawn": true,
-          "MaxHealthAsc": [
-            {
-              "AscensionMin": 7,
-              "MaxHealth": 26
-            }
-          ]
-        }
-      ],
-      "HeroResources": [
-        {
-          "Resource": {
-            "value": "standard.energy"
-          },
-          "Current": 3,
-          "Max": 3
-        }
-      ],
-      "HeroStartingStatuses": [],
-      "TriggeredEffects": [],
-      "HeroDisplayName": null,
-      "CardsDrawnPerTurn": null
-    },
-    {
-      "Id": {
-        "Value": "enc_spiker"
-      },
-      "Enemies": [
-        {
-          "Id": "spiker",
-          "MaxHealth": 42,
-          "Actions": [
-            {
-              "value": "spiker.cut"
-            },
-            {
-              "value": "spiker.spike"
-            }
-          ],
-          "StartingStatuses": [
-            {
-              "StatusDefinitionId": {
-                "value": "standard.thorns"
-              },
-              "Stacks": 3,
-              "Asc": [
-                {
-                  "AscensionMin": 2,
-                  "Stacks": 4
-                },
-                {
-                  "AscensionMin": 17,
-                  "Stacks": 7
-                }
-              ]
-            }
-          ],
-          "Position": 0,
-          "IntentRules": [
-            {
-              "Condition": {
-                "kind": "intent.allOf",
-                "value": {
-                  "Conditions": [
-                    {
-                      "kind": "intent.selfHasCounter",
-                      "value": {
-                        "Counter": {
-                          "value": "thorns_buffs"
-                        },
-                        "Op": "GreaterOrEqual",
-                        "Value": 6
-                      }
-                    }
-                  ]
-                }
-              },
-              "Priority": 90,
-              "Action": {
-                "value": "spiker.cut"
-              }
-            },
-            {
-              "Condition": {
-                "kind": "intent.allOf",
-                "value": {
-                  "Conditions": [
-                    {
-                      "kind": "intent.selfHasCounter",
-                      "value": {
-                        "Counter": {
-                          "value": "last_move"
-                        },
-                        "Op": "Equal",
-                        "Value": 1
-                      }
-                    }
-                  ]
-                }
-              },
-              "Priority": 80,
-              "Action": {
-                "value": "spiker.spike"
-              }
-            },
-            {
-              "Condition": {
-                "kind": "intent.allOf",
-                "value": {
-                  "Conditions": []
-                }
-              },
-              "Priority": 60,
-              "Choice": [
-                {
-                  "Action": {
-                    "value": "spiker.cut"
-                  },
-                  "Weight": 50
-                },
-                {
-                  "Action": {
-                    "value": "spiker.spike"
-                  },
-                  "Weight": 50
-                }
-              ]
-            }
-          ],
-          "DisplayName": "Spiker",
-          "Rolls": [],
-          "Counters": [],
-          "Spawn": true,
-          "MaxHealthAsc": [
-            {
-              "AscensionMin": 7,
-              "MaxHealth": 44
-            }
-          ],
-          "HpMin": 42,
-          "HpMax": 56
         }
       ],
       "HeroResources": [
@@ -56774,7 +57086,7 @@
               "Stacks": 5
             }
           ],
-          "Position": 0,
+          "Position": null,
           "IntentRules": [],
           "DisplayName": "Darkling",
           "Rolls": [
@@ -56818,7 +57130,51 @@
               "Stacks": 5
             }
           ],
-          "Position": 1,
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Darkling",
+          "Rolls": [
+            {
+              "Key": "roll.nip",
+              "Min": 7,
+              "Max": 11
+            },
+            {
+              "Key": "roll.nip",
+              "Min": 9,
+              "Max": 13,
+              "AscensionMin": 2
+            }
+          ],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 50
+            }
+          ]
+        },
+        {
+          "Id": "darkling",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "darkling.nip"
+            },
+            {
+              "value": "darkling.chomp"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.regen"
+              },
+              "Stacks": 5
+            }
+          ],
+          "Position": null,
           "IntentRules": [],
           "DisplayName": "Darkling",
           "Rolls": [
@@ -66528,6 +66884,2650 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_darklings_hard"
+      },
+      "Enemies": [
+        {
+          "Id": "darkling",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "darkling.nip"
+            },
+            {
+              "value": "darkling.chomp"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.regen"
+              },
+              "Stacks": 5
+            }
+          ],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Darkling",
+          "Rolls": [
+            {
+              "Key": "roll.nip",
+              "Min": 7,
+              "Max": 11
+            },
+            {
+              "Key": "roll.nip",
+              "Min": 9,
+              "Max": 13,
+              "AscensionMin": 2
+            }
+          ],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 50
+            }
+          ]
+        },
+        {
+          "Id": "darkling",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "darkling.nip"
+            },
+            {
+              "value": "darkling.chomp"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.regen"
+              },
+              "Stacks": 5
+            }
+          ],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Darkling",
+          "Rolls": [
+            {
+              "Key": "roll.nip",
+              "Min": 7,
+              "Max": 11
+            },
+            {
+              "Key": "roll.nip",
+              "Min": 9,
+              "Max": 13,
+              "AscensionMin": 2
+            }
+          ],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 50
+            }
+          ]
+        },
+        {
+          "Id": "darkling",
+          "MaxHealth": 48,
+          "Actions": [
+            {
+              "value": "darkling.nip"
+            },
+            {
+              "value": "darkling.chomp"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.regen"
+              },
+              "Stacks": 5
+            }
+          ],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Darkling",
+          "Rolls": [
+            {
+              "Key": "roll.nip",
+              "Min": 7,
+              "Max": 11
+            },
+            {
+              "Key": "roll.nip",
+              "Min": 9,
+              "Max": 13,
+              "AscensionMin": 2
+            }
+          ],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 50
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_jaw_worm_horde"
+      },
+      "Enemies": [
+        {
+          "Id": "jaw_worm",
+          "MaxHealth": 40,
+          "Actions": [
+            {
+              "value": "jaw_worm.chomp"
+            },
+            {
+              "value": "jaw_worm.thrash"
+            },
+            {
+              "value": "jaw_worm.bellow"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Jaw Worm",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 42
+            }
+          ],
+          "StartingBlock": 6,
+          "StartingBlockAsc": [
+            {
+              "AscensionMin": 17,
+              "Amount": 9
+            }
+          ]
+        },
+        {
+          "Id": "jaw_worm",
+          "MaxHealth": 40,
+          "Actions": [
+            {
+              "value": "jaw_worm.chomp"
+            },
+            {
+              "value": "jaw_worm.thrash"
+            },
+            {
+              "value": "jaw_worm.bellow"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Jaw Worm",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 42
+            }
+          ],
+          "StartingBlock": 6,
+          "StartingBlockAsc": [
+            {
+              "AscensionMin": 17,
+              "Amount": 9
+            }
+          ]
+        },
+        {
+          "Id": "jaw_worm",
+          "MaxHealth": 40,
+          "Actions": [
+            {
+              "value": "jaw_worm.chomp"
+            },
+            {
+              "value": "jaw_worm.thrash"
+            },
+            {
+              "value": "jaw_worm.bellow"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Jaw Worm",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 42
+            }
+          ],
+          "StartingBlock": 6,
+          "StartingBlockAsc": [
+            {
+              "AscensionMin": 17,
+              "Amount": 9
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_three_shapes"
+      },
+      "Enemies": [
+        {
+          "Position": 0,
+          "Candidates": [
+            {
+              "Id": "repulsor",
+              "MaxHealth": 29,
+              "Actions": [
+                {
+                  "value": "repulsor.daze"
+                },
+                {
+                  "value": "repulsor.attack"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 95,
+                  "Action": {
+                    "value": "repulsor.daze"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "repulsor.daze"
+                      },
+                      "Weight": 80
+                    },
+                    {
+                      "Action": {
+                        "value": "repulsor.attack"
+                      },
+                      "Weight": 20
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Repulsor",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 31
+                }
+              ]
+            },
+            {
+              "Id": "exploder",
+              "MaxHealth": 30,
+              "Actions": [
+                {
+                  "value": "exploder.attack"
+                },
+                {
+                  "value": "exploder.explode"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.round",
+                          "value": {
+                            "Op": "LessOrEqual",
+                            "Round": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "exploder.attack"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "exploder.explode"
+                  }
+                }
+              ],
+              "DisplayName": "Exploder",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true
+            },
+            {
+              "Id": "spiker",
+              "MaxHealth": 42,
+              "Actions": [
+                {
+                  "value": "spiker.cut"
+                },
+                {
+                  "value": "spiker.spike"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.thorns"
+                  },
+                  "Stacks": 3,
+                  "Asc": [
+                    {
+                      "AscensionMin": 2,
+                      "Stacks": 4
+                    },
+                    {
+                      "AscensionMin": 17,
+                      "Stacks": 7
+                    }
+                  ]
+                }
+              ],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "thorns_buffs"
+                            },
+                            "Op": "GreaterOrEqual",
+                            "Value": 6
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "spiker.cut"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "spiker.spike"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 60,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "spiker.cut"
+                      },
+                      "Weight": 50
+                    },
+                    {
+                      "Action": {
+                        "value": "spiker.spike"
+                      },
+                      "Weight": 50
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Spiker",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 44
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "Position": 1,
+          "Candidates": [
+            {
+              "Id": "repulsor",
+              "MaxHealth": 29,
+              "Actions": [
+                {
+                  "value": "repulsor.daze"
+                },
+                {
+                  "value": "repulsor.attack"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 95,
+                  "Action": {
+                    "value": "repulsor.daze"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "repulsor.daze"
+                      },
+                      "Weight": 80
+                    },
+                    {
+                      "Action": {
+                        "value": "repulsor.attack"
+                      },
+                      "Weight": 20
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Repulsor",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 31
+                }
+              ]
+            },
+            {
+              "Id": "exploder",
+              "MaxHealth": 30,
+              "Actions": [
+                {
+                  "value": "exploder.attack"
+                },
+                {
+                  "value": "exploder.explode"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.round",
+                          "value": {
+                            "Op": "LessOrEqual",
+                            "Round": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "exploder.attack"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "exploder.explode"
+                  }
+                }
+              ],
+              "DisplayName": "Exploder",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true
+            },
+            {
+              "Id": "spiker",
+              "MaxHealth": 42,
+              "Actions": [
+                {
+                  "value": "spiker.cut"
+                },
+                {
+                  "value": "spiker.spike"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.thorns"
+                  },
+                  "Stacks": 3,
+                  "Asc": [
+                    {
+                      "AscensionMin": 2,
+                      "Stacks": 4
+                    },
+                    {
+                      "AscensionMin": 17,
+                      "Stacks": 7
+                    }
+                  ]
+                }
+              ],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "thorns_buffs"
+                            },
+                            "Op": "GreaterOrEqual",
+                            "Value": 6
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "spiker.cut"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "spiker.spike"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 60,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "spiker.cut"
+                      },
+                      "Weight": 50
+                    },
+                    {
+                      "Action": {
+                        "value": "spiker.spike"
+                      },
+                      "Weight": 50
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Spiker",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 44
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "Position": 2,
+          "Candidates": [
+            {
+              "Id": "repulsor",
+              "MaxHealth": 29,
+              "Actions": [
+                {
+                  "value": "repulsor.daze"
+                },
+                {
+                  "value": "repulsor.attack"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 95,
+                  "Action": {
+                    "value": "repulsor.daze"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "repulsor.daze"
+                      },
+                      "Weight": 80
+                    },
+                    {
+                      "Action": {
+                        "value": "repulsor.attack"
+                      },
+                      "Weight": 20
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Repulsor",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 31
+                }
+              ]
+            },
+            {
+              "Id": "exploder",
+              "MaxHealth": 30,
+              "Actions": [
+                {
+                  "value": "exploder.attack"
+                },
+                {
+                  "value": "exploder.explode"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.round",
+                          "value": {
+                            "Op": "LessOrEqual",
+                            "Round": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "exploder.attack"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "exploder.explode"
+                  }
+                }
+              ],
+              "DisplayName": "Exploder",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true
+            },
+            {
+              "Id": "spiker",
+              "MaxHealth": 42,
+              "Actions": [
+                {
+                  "value": "spiker.cut"
+                },
+                {
+                  "value": "spiker.spike"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.thorns"
+                  },
+                  "Stacks": 3,
+                  "Asc": [
+                    {
+                      "AscensionMin": 2,
+                      "Stacks": 4
+                    },
+                    {
+                      "AscensionMin": 17,
+                      "Stacks": 7
+                    }
+                  ]
+                }
+              ],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "thorns_buffs"
+                            },
+                            "Op": "GreaterOrEqual",
+                            "Value": 6
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "spiker.cut"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "spiker.spike"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 60,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "spiker.cut"
+                      },
+                      "Weight": 50
+                    },
+                    {
+                      "Action": {
+                        "value": "spiker.spike"
+                      },
+                      "Weight": 50
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Spiker",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 44
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_four_shapes"
+      },
+      "Enemies": [
+        {
+          "Position": 0,
+          "Candidates": [
+            {
+              "Id": "repulsor",
+              "MaxHealth": 29,
+              "Actions": [
+                {
+                  "value": "repulsor.daze"
+                },
+                {
+                  "value": "repulsor.attack"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 95,
+                  "Action": {
+                    "value": "repulsor.daze"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "repulsor.daze"
+                      },
+                      "Weight": 80
+                    },
+                    {
+                      "Action": {
+                        "value": "repulsor.attack"
+                      },
+                      "Weight": 20
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Repulsor",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 31
+                }
+              ]
+            },
+            {
+              "Id": "exploder",
+              "MaxHealth": 30,
+              "Actions": [
+                {
+                  "value": "exploder.attack"
+                },
+                {
+                  "value": "exploder.explode"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.round",
+                          "value": {
+                            "Op": "LessOrEqual",
+                            "Round": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "exploder.attack"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "exploder.explode"
+                  }
+                }
+              ],
+              "DisplayName": "Exploder",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true
+            },
+            {
+              "Id": "spiker",
+              "MaxHealth": 42,
+              "Actions": [
+                {
+                  "value": "spiker.cut"
+                },
+                {
+                  "value": "spiker.spike"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.thorns"
+                  },
+                  "Stacks": 3,
+                  "Asc": [
+                    {
+                      "AscensionMin": 2,
+                      "Stacks": 4
+                    },
+                    {
+                      "AscensionMin": 17,
+                      "Stacks": 7
+                    }
+                  ]
+                }
+              ],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "thorns_buffs"
+                            },
+                            "Op": "GreaterOrEqual",
+                            "Value": 6
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "spiker.cut"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "spiker.spike"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 60,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "spiker.cut"
+                      },
+                      "Weight": 50
+                    },
+                    {
+                      "Action": {
+                        "value": "spiker.spike"
+                      },
+                      "Weight": 50
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Spiker",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 44
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "Position": 1,
+          "Candidates": [
+            {
+              "Id": "repulsor",
+              "MaxHealth": 29,
+              "Actions": [
+                {
+                  "value": "repulsor.daze"
+                },
+                {
+                  "value": "repulsor.attack"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 95,
+                  "Action": {
+                    "value": "repulsor.daze"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "repulsor.daze"
+                      },
+                      "Weight": 80
+                    },
+                    {
+                      "Action": {
+                        "value": "repulsor.attack"
+                      },
+                      "Weight": 20
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Repulsor",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 31
+                }
+              ]
+            },
+            {
+              "Id": "exploder",
+              "MaxHealth": 30,
+              "Actions": [
+                {
+                  "value": "exploder.attack"
+                },
+                {
+                  "value": "exploder.explode"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.round",
+                          "value": {
+                            "Op": "LessOrEqual",
+                            "Round": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "exploder.attack"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "exploder.explode"
+                  }
+                }
+              ],
+              "DisplayName": "Exploder",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true
+            },
+            {
+              "Id": "spiker",
+              "MaxHealth": 42,
+              "Actions": [
+                {
+                  "value": "spiker.cut"
+                },
+                {
+                  "value": "spiker.spike"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.thorns"
+                  },
+                  "Stacks": 3,
+                  "Asc": [
+                    {
+                      "AscensionMin": 2,
+                      "Stacks": 4
+                    },
+                    {
+                      "AscensionMin": 17,
+                      "Stacks": 7
+                    }
+                  ]
+                }
+              ],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "thorns_buffs"
+                            },
+                            "Op": "GreaterOrEqual",
+                            "Value": 6
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "spiker.cut"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "spiker.spike"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 60,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "spiker.cut"
+                      },
+                      "Weight": 50
+                    },
+                    {
+                      "Action": {
+                        "value": "spiker.spike"
+                      },
+                      "Weight": 50
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Spiker",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 44
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "Position": 2,
+          "Candidates": [
+            {
+              "Id": "repulsor",
+              "MaxHealth": 29,
+              "Actions": [
+                {
+                  "value": "repulsor.daze"
+                },
+                {
+                  "value": "repulsor.attack"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 95,
+                  "Action": {
+                    "value": "repulsor.daze"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "repulsor.daze"
+                      },
+                      "Weight": 80
+                    },
+                    {
+                      "Action": {
+                        "value": "repulsor.attack"
+                      },
+                      "Weight": 20
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Repulsor",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 31
+                }
+              ]
+            },
+            {
+              "Id": "exploder",
+              "MaxHealth": 30,
+              "Actions": [
+                {
+                  "value": "exploder.attack"
+                },
+                {
+                  "value": "exploder.explode"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.round",
+                          "value": {
+                            "Op": "LessOrEqual",
+                            "Round": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "exploder.attack"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "exploder.explode"
+                  }
+                }
+              ],
+              "DisplayName": "Exploder",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true
+            },
+            {
+              "Id": "spiker",
+              "MaxHealth": 42,
+              "Actions": [
+                {
+                  "value": "spiker.cut"
+                },
+                {
+                  "value": "spiker.spike"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.thorns"
+                  },
+                  "Stacks": 3,
+                  "Asc": [
+                    {
+                      "AscensionMin": 2,
+                      "Stacks": 4
+                    },
+                    {
+                      "AscensionMin": 17,
+                      "Stacks": 7
+                    }
+                  ]
+                }
+              ],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "thorns_buffs"
+                            },
+                            "Op": "GreaterOrEqual",
+                            "Value": 6
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "spiker.cut"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "spiker.spike"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 60,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "spiker.cut"
+                      },
+                      "Weight": 50
+                    },
+                    {
+                      "Action": {
+                        "value": "spiker.spike"
+                      },
+                      "Weight": 50
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Spiker",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 44
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "Position": 3,
+          "Candidates": [
+            {
+              "Id": "repulsor",
+              "MaxHealth": 29,
+              "Actions": [
+                {
+                  "value": "repulsor.daze"
+                },
+                {
+                  "value": "repulsor.attack"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 95,
+                  "Action": {
+                    "value": "repulsor.daze"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "repulsor.daze"
+                      },
+                      "Weight": 80
+                    },
+                    {
+                      "Action": {
+                        "value": "repulsor.attack"
+                      },
+                      "Weight": 20
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Repulsor",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 31
+                }
+              ]
+            },
+            {
+              "Id": "exploder",
+              "MaxHealth": 30,
+              "Actions": [
+                {
+                  "value": "exploder.attack"
+                },
+                {
+                  "value": "exploder.explode"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.round",
+                          "value": {
+                            "Op": "LessOrEqual",
+                            "Round": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "exploder.attack"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "exploder.explode"
+                  }
+                }
+              ],
+              "DisplayName": "Exploder",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true
+            },
+            {
+              "Id": "spiker",
+              "MaxHealth": 42,
+              "Actions": [
+                {
+                  "value": "spiker.cut"
+                },
+                {
+                  "value": "spiker.spike"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.thorns"
+                  },
+                  "Stacks": 3,
+                  "Asc": [
+                    {
+                      "AscensionMin": 2,
+                      "Stacks": 4
+                    },
+                    {
+                      "AscensionMin": 17,
+                      "Stacks": 7
+                    }
+                  ]
+                }
+              ],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "thorns_buffs"
+                            },
+                            "Op": "GreaterOrEqual",
+                            "Value": 6
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "spiker.cut"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "spiker.spike"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 60,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "spiker.cut"
+                      },
+                      "Weight": 50
+                    },
+                    {
+                      "Action": {
+                        "value": "spiker.spike"
+                      },
+                      "Weight": 50
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Spiker",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 44
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_spheric_and_two_shapes"
+      },
+      "Enemies": [
+        {
+          "Id": "spheric_guardian",
+          "MaxHealth": 20,
+          "Actions": [
+            {
+              "value": "spheric_guardian.activate"
+            },
+            {
+              "value": "spheric_guardian.debuff_attack"
+            },
+            {
+              "value": "spheric_guardian.slam"
+            },
+            {
+              "value": "spheric_guardian.harden"
+            }
+          ],
+          "StartingStatuses": [
+            {
+              "StatusDefinitionId": {
+                "value": "standard.artifact"
+              },
+              "Stacks": 3
+            },
+            {
+              "StatusDefinitionId": {
+                "value": "standard.barricade"
+              },
+              "Stacks": 1
+            }
+          ],
+          "Position": 0,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 1
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 96,
+              "Action": {
+                "value": "spheric_guardian.activate"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.round",
+                      "value": {
+                        "Op": "Equal",
+                        "Round": 2
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 95,
+              "Action": {
+                "value": "spheric_guardian.debuff_attack"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 3
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 90,
+              "Action": {
+                "value": "spheric_guardian.harden"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "last_move"
+                        },
+                        "Op": "Equal",
+                        "Value": 4
+                      }
+                    }
+                  ]
+                }
+              },
+              "Priority": 89,
+              "Action": {
+                "value": "spheric_guardian.slam"
+              }
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": []
+                }
+              },
+              "Priority": 10,
+              "Action": {
+                "value": "spheric_guardian.slam"
+              }
+            }
+          ],
+          "DisplayName": "Spheric Guardian",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "StartingBlock": 40
+        },
+        {
+          "Position": 1,
+          "Candidates": [
+            {
+              "Id": "repulsor",
+              "MaxHealth": 29,
+              "Actions": [
+                {
+                  "value": "repulsor.daze"
+                },
+                {
+                  "value": "repulsor.attack"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 95,
+                  "Action": {
+                    "value": "repulsor.daze"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "repulsor.daze"
+                      },
+                      "Weight": 80
+                    },
+                    {
+                      "Action": {
+                        "value": "repulsor.attack"
+                      },
+                      "Weight": 20
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Repulsor",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 31
+                }
+              ]
+            },
+            {
+              "Id": "exploder",
+              "MaxHealth": 30,
+              "Actions": [
+                {
+                  "value": "exploder.attack"
+                },
+                {
+                  "value": "exploder.explode"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.round",
+                          "value": {
+                            "Op": "LessOrEqual",
+                            "Round": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "exploder.attack"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "exploder.explode"
+                  }
+                }
+              ],
+              "DisplayName": "Exploder",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true
+            },
+            {
+              "Id": "spiker",
+              "MaxHealth": 42,
+              "Actions": [
+                {
+                  "value": "spiker.cut"
+                },
+                {
+                  "value": "spiker.spike"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.thorns"
+                  },
+                  "Stacks": 3,
+                  "Asc": [
+                    {
+                      "AscensionMin": 2,
+                      "Stacks": 4
+                    },
+                    {
+                      "AscensionMin": 17,
+                      "Stacks": 7
+                    }
+                  ]
+                }
+              ],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "thorns_buffs"
+                            },
+                            "Op": "GreaterOrEqual",
+                            "Value": 6
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "spiker.cut"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "spiker.spike"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 60,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "spiker.cut"
+                      },
+                      "Weight": 50
+                    },
+                    {
+                      "Action": {
+                        "value": "spiker.spike"
+                      },
+                      "Weight": 50
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Spiker",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 44
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "Position": 2,
+          "Candidates": [
+            {
+              "Id": "repulsor",
+              "MaxHealth": 29,
+              "Actions": [
+                {
+                  "value": "repulsor.daze"
+                },
+                {
+                  "value": "repulsor.attack"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 95,
+                  "Action": {
+                    "value": "repulsor.daze"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 10,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "repulsor.daze"
+                      },
+                      "Weight": 80
+                    },
+                    {
+                      "Action": {
+                        "value": "repulsor.attack"
+                      },
+                      "Weight": 20
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Repulsor",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 31
+                }
+              ]
+            },
+            {
+              "Id": "exploder",
+              "MaxHealth": 30,
+              "Actions": [
+                {
+                  "value": "exploder.attack"
+                },
+                {
+                  "value": "exploder.explode"
+                }
+              ],
+              "StartingStatuses": [],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.round",
+                          "value": {
+                            "Op": "LessOrEqual",
+                            "Round": 2
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "exploder.attack"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "exploder.explode"
+                  }
+                }
+              ],
+              "DisplayName": "Exploder",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true
+            },
+            {
+              "Id": "spiker",
+              "MaxHealth": 42,
+              "Actions": [
+                {
+                  "value": "spiker.cut"
+                },
+                {
+                  "value": "spiker.spike"
+                }
+              ],
+              "StartingStatuses": [
+                {
+                  "StatusDefinitionId": {
+                    "value": "standard.thorns"
+                  },
+                  "Stacks": 3,
+                  "Asc": [
+                    {
+                      "AscensionMin": 2,
+                      "Stacks": 4
+                    },
+                    {
+                      "AscensionMin": 17,
+                      "Stacks": 7
+                    }
+                  ]
+                }
+              ],
+              "Position": null,
+              "IntentRules": [
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "thorns_buffs"
+                            },
+                            "Op": "GreaterOrEqual",
+                            "Value": 6
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 90,
+                  "Action": {
+                    "value": "spiker.cut"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": [
+                        {
+                          "kind": "intent.selfHasCounter",
+                          "value": {
+                            "Counter": {
+                              "value": "last_move"
+                            },
+                            "Op": "Equal",
+                            "Value": 1
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "Priority": 80,
+                  "Action": {
+                    "value": "spiker.spike"
+                  }
+                },
+                {
+                  "Condition": {
+                    "kind": "intent.allOf",
+                    "value": {
+                      "Conditions": []
+                    }
+                  },
+                  "Priority": 60,
+                  "Choice": [
+                    {
+                      "Action": {
+                        "value": "spiker.cut"
+                      },
+                      "Weight": 50
+                    },
+                    {
+                      "Action": {
+                        "value": "spiker.spike"
+                      },
+                      "Weight": 50
+                    }
+                  ]
+                }
+              ],
+              "DisplayName": "Spiker",
+              "Rolls": [],
+              "Counters": [],
+              "Spawn": true,
+              "MaxHealthAsc": [
+                {
+                  "AscensionMin": 7,
+                  "MaxHealth": 44
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -72461,6 +75461,136 @@
       "AiNote": "wiki `Thieves` 原话：**\"Mugger has the same pattern as Looter.\"** ⇒ 规则表从 Looter 逐条复制（只换 action id）。数字：HP 48-52（A7 50-54）、Mug 10（A2 11）、Lunge 16（A2 18）、Smoke Bomb 11（A17 17）、Thievery 15（A17 20）。",
       "Counters": [],
       "Spawn": true
+    },
+    {
+      "Id": "repulsor",
+      "NameKey": "Repulsor",
+      "HpMin": 29,
+      "HpMax": 35,
+      "MaxHealth": 29,
+      "MaxHealthAsc": [
+        {
+          "AscensionMin": 7,
+          "MaxHealth": 31
+        }
+      ],
+      "Actions": [
+        {
+          "value": "repulsor.daze"
+        },
+        {
+          "value": "repulsor.attack"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "last_move"
+                    },
+                    "Op": "Equal",
+                    "Value": 2
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 95,
+          "Action": {
+            "value": "repulsor.daze"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 10,
+          "Choice": [
+            {
+              "Action": {
+                "value": "repulsor.daze"
+              },
+              "Weight": 80
+            },
+            {
+              "Action": {
+                "value": "repulsor.attack"
+              },
+              "Weight": 20
+            }
+          ]
+        }
+      ],
+      "Tier": "Normal",
+      "InvRef": "wiki:Shapes#Repulsor",
+      "AiNote": "wiki：HP 29-35（A7 31-38）；Daze 往抽牌堆塞 2 张 Dazed / Attack 11（A2 13）；80% Daze、20% Attack，且 Attack 不能连两次（§316）。",
+      "Counters": [],
+      "Spawn": true
+    },
+    {
+      "Id": "exploder",
+      "NameKey": "Exploder",
+      "HpMin": 30,
+      "HpMax": 30,
+      "MaxHealth": 30,
+      "Actions": [
+        {
+          "value": "exploder.attack"
+        },
+        {
+          "value": "exploder.explode"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.round",
+                  "value": {
+                    "Op": "LessOrEqual",
+                    "Round": 2
+                  }
+                }
+              ]
+            }
+          },
+          "Priority": 90,
+          "Action": {
+            "value": "exploder.attack"
+          }
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": []
+            }
+          },
+          "Priority": 80,
+          "Action": {
+            "value": "exploder.explode"
+          }
+        }
+      ],
+      "Tier": "Normal",
+      "InvRef": "wiki:Shapes#Exploder",
+      "AiNote": "wiki：HP **30**（A7 那列是 30-35，下界仍是 30 ⇒ 不钉升阶行）；固定 Attack / Attack / Explode（9 点，A2 11；爆炸 30 点后自己死）。\"Explosive 3\" 这条 power 不单独建模 —— 固定序列就是它的可观察行为（§316）。",
+      "Counters": [],
+      "Spawn": true
     }
   ],
   "EncounterTables": {
@@ -72620,28 +75750,40 @@
     ],
     "Weak3": [
       {
-        "Id": "enc_byrds",
-        "Weight": 50
+        "Id": "enc_darklings",
+        "Weight": 20
       },
       {
         "Id": "enc_orb_walker",
-        "Weight": 50
+        "Weight": 20
       },
       {
-        "Id": "enc_spiker",
-        "Weight": 50
+        "Id": "enc_three_shapes",
+        "Weight": 20
       },
       {
-        "Id": "enc_darklings",
-        "Weight": 33
+        "Id": "enc_four_shapes",
+        "Weight": 10
       },
       {
         "Id": "enc_maw",
-        "Weight": 33
+        "Weight": 10
+      },
+      {
+        "Id": "enc_spheric_and_two_shapes",
+        "Weight": 10
+      },
+      {
+        "Id": "enc_darklings_hard",
+        "Weight": 10
       },
       {
         "Id": "enc_spire_growth",
-        "Weight": 33
+        "Weight": 10
+      },
+      {
+        "Id": "enc_jaw_worm_horde",
+        "Weight": 10
       }
     ],
     "Elite2": [

@@ -82,7 +82,7 @@ INV_COUNTS = {
     # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster); §175: +3 (Nemesis / Reptomancer / Dagger).
     # §201: +1 (Looter).
     # §282: +1 (`snecko`, Act 2's normal enemy carrying `Confusion`).
-    "monsters": 55,
+    "monsters": 57,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
@@ -90,7 +90,9 @@ INV_COUNTS = {
     # §282: +1 (`enc_snecko`).
     # §311: +5（Act 2 的五条 —— `enc_spheric_guardian` / `enc_chosen_and_byrd` /
     # `enc_cultist_and_chosen` / `enc_three_cultists` / `enc_parasite_and_fungi`）。
-    "encounters": 54,
+    # §316: +4（`enc_three_shapes` / `enc_four_shapes` / `enc_spheric_and_two_shapes` /
+    # `enc_jaw_worm_horde` / `enc_darklings_hard` 五条，减掉挂错幕的 `enc_byrds` ⇒ 净 +4）。
+    "encounters": 57,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -872,6 +874,9 @@ INV_CARDS = {
 MAX_ENEMIES_IN_FIGHT = 6
 
 INV_MONSTERS = [
+    # §316：Act 3 的 Shapes（wiki `Shapes`）：Repulsor 29-35（A7 31-38）、Exploder **30**。
+    ("repulsor", 29, 35, ["repulsor.daze", "repulsor.attack"]),
+    ("exploder", 30, 30, ["exploder.attack", "exploder.explode"]),
     # §314: Act 2 的 Mugger —— wiki `Thieves`："Mugger has the same pattern as Looter."
     # 数字：HP 48-52（A7 50-54）、Mug 10（A2 11）、Lunge 16（A2 18）、Smoke Bomb 11（A17 17）。
     ("mugger", 48, 52, ["mugger.mug", "mugger.lunge", "mugger.smoke_bomb", "mugger.escape"]),
@@ -1008,6 +1013,11 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    # §316：Shapes。Daze 往**抽牌堆**塞 2 张 Dazed；Explode 打完 30 点自己死。
+    "repulsor.daze": ("Debuff", [("card", "dazed", 2, "DrawPile", "event")]),
+    "repulsor.attack": ("Attack", [("damage", 11, "event")]),
+    "exploder.attack": ("Attack", [("damage", 9, "event")]),
+    "exploder.explode": ("Unknown", [("damage", 30, "event"), ("destroy", "source")]),
     # §314: Mugger —— 与 Looter 同一套形状（`stolen_gold` 每次都 +15，A17 起 +20 在下面那张表里）。
     "mugger.mug": ("Attack", [("damage", 10, "event"),
                               ("counter", "stolen_gold", 15, True, "source")]),
@@ -1354,14 +1364,13 @@ INV_WEAK_POOL = {
     "enc_chosen": ["chosen"],
     # §138: the gang exists so that a **summoned** gremlin has a record to point at.
     "enc_gremlin_gang": ["fat_gremlin", "sneaky_gremlin", "gremlin_wizard"],
-    # §311：wiki 的 "3 Byrds" 是**三只**（这一条内容原先只写了一只，同时影响第三幕的池子）。
-    "enc_byrds": ["byrd", "byrd", "byrd"],
     # 两幕都有 "3 Byrds"，而内核要求"一条遭遇只属于一个池" ⇒ Act 2 用自己的一条
     # （敌人记录从 `enc_byrds` 复制，HP/升阶数字因此一致）。
     "enc_city_byrds": ["byrd", "byrd", "byrd"],
-    "enc_spiker": ["spiker"],
+    # §316：`enc_spiker` 删掉了 —— wiki 的第三幕池子里没有单独的 Spiker，
+    # 它只在 Shapes 组里出现（`Candidates`）。挂着它就是一条走不到的孤儿遭遇。
     "enc_orb_walker": ["orb_walker"],
-    "enc_darklings": ["darkling", "darkling"],
+    "enc_darklings": ["darkling", "darkling", "darkling"],
     # §152: the rest of act 1's weak pool, wiki numbers (see patch_152_enemies.py).
     "enc_louse": ["louse_red"],
     # §258: wiki act-1 easy pool has both "1 Louse" and "2 Louses"; the 2-louse row is also the
@@ -1378,6 +1387,15 @@ INV_WEAK_POOL = {
     "enc_spheric_guardian": ["spheric_guardian"],
     # §312：Snake Plant 独自出现（wiki Hard 池，权重 6）。
     "enc_snake_plant": ["snake_plant"],
+    # §316：Act 3 的池子（wiki `The_Beyond`）。组合槽写成排序后的 `a|b|c`。
+    "enc_three_shapes": ["exploder|repulsor|spiker", "exploder|repulsor|spiker",
+                         "exploder|repulsor|spiker"],
+    "enc_four_shapes": ["exploder|repulsor|spiker", "exploder|repulsor|spiker",
+                        "exploder|repulsor|spiker", "exploder|repulsor|spiker"],
+    "enc_spheric_and_two_shapes": ["spheric_guardian", "exploder|repulsor|spiker",
+                                   "exploder|repulsor|spiker"],
+    "enc_jaw_worm_horde": ["jaw_worm", "jaw_worm", "jaw_worm"],
+    "enc_darklings_hard": ["darkling", "darkling", "darkling"],
     # §313：Centurion 在前、Mystic 在后（wiki 的 Details 列：1 Centurion + 1 Mystic）。
     "enc_centurion_and_mystic": ["centurion", "mystic"],
     # §315：1 Sentry + 1 Spheric Guardian。Sentry 的 `MaxHealthAsc` 与精英遭遇里那条**相同**
@@ -1471,8 +1489,11 @@ INV_ACT_TABLES = {
               "enc_snecko", "enc_three_cultists", "enc_parasite_and_fungi",
               "enc_snake_plant", "enc_centurion_and_mystic", "enc_sentry_and_spheric",
               "enc_two_thieves"],
-    "Weak3": ["enc_byrds", "enc_darklings", "enc_maw", "enc_orb_walker", "enc_spiker",
-              "enc_spire_growth"],
+    # §316：wiki `The_Beyond` 的 Easy（权重 2）+ Hard（权重 1），×10 取整。
+    # `Transient` 未做（要"Fading"与伤害递增两条新机制），见 `docs/sts-wiki-gap.md` §D.5。
+    "Weak3": ["enc_darklings", "enc_orb_walker", "enc_three_shapes",
+              "enc_four_shapes", "enc_maw", "enc_spheric_and_two_shapes",
+              "enc_darklings_hard", "enc_spire_growth", "enc_jaw_worm_horde"],
     "Elite": ["enc_gremlin_nob", "enc_lagavulin", "enc_three_sentries"],
     "Elite2": ["enc_book_of_stabbing", "enc_gremlin_leader", "enc_slavers"],
     "Elite3": ["enc_giant_head", "enc_nemesis", "enc_reptomancer"],
@@ -2528,6 +2549,9 @@ def check_cards_and_actions(doc):
 # `native/patch_187_content.py` 的表头），而不是从内容拄过来的 --
 # "从内容生成期望值"等于没有期望值。
 INV_ASC_VARIANTS = {
+    # §316：Repulsor Attack 11→13、Exploder Attack 9→11（wiki 的 `{{Asc|2|…}}`）。
+    'repulsor.attack': [(2, [('damage', 13, 'event')])],
+    'exploder.attack': [(2, [('damage', 11, 'event')])],
     # §313: Centurion（A2 伤害 +2/+1，A17 Protect 15→20）与 Mystic（A2 Attack 9 / Buff 3，
     # A17 Buff 4 / Heal 20）。
     'centurion.slash': [(2, [('damage', 14, 'event')])],
@@ -3075,6 +3099,8 @@ INV_ASC_HP = {
     'cultist': 50, 'gremlin_wizard': 22, 'sentry_1': 39, 'sentry_2': 39, 'sentry_3': 39,
     # §314: Mugger 50-54（下界 50）。
     'mugger': 50,
+    # §316: Repulsor 29-35 → A7 31-38（下界 31）。
+    'repulsor': 31,
     # §313: Centurion 78-83 / Mystic 50-58（下界 78 / 50）。
     'centurion': 78, 'mystic': 50,
     # §312: Snake Plant 的 wiki `AscHP` 是 78-82（下界 78）。
@@ -3161,6 +3187,10 @@ INV_NO_ASC_HP = {
     # §311：wiki 的 Spheric Guardian 只有 `HP 20` 一个数（没有 `78-83 7` 那样的第二列），
     # 所以它的血量不随升阶变 —— 给它钉一个数等于发明一个数。
     'spheric_guardian': 'wiki Spheric Guardian: HP 20, no AscHP column',
+    # §316：Exploder 的 wiki 是 `HP 30 | 30-35 7` —— A7 那一列是**范围**，下界仍是 30，
+    # 所以"钉一条 A7 行"只会把 30 再写一遍（判据会拒："identical to the base"）。
+    'exploder': 'wiki Shapes: Exploder HP 30, the A7 column is a 30-35 range',
+    
 }
 
 
@@ -3277,6 +3307,9 @@ def check_ascension_variants(doc):
 # "the wiki has no A-row here" is a decision, and a decision has to be written down or the next
 # reader cannot tell it from "nobody looked".
 INV_NO_ASC = {
+    # §316：Daze 只有 "Adds 2 Dazed"，Explode 只有 "Deals 30 damage. Dies." —— 都没有 A 档。
+    'repulsor.daze': 'wiki Shapes: Daze has no A-row',
+    'exploder.explode': 'wiki Shapes: Explode has no A-row', 
     # §312: `Enfeebling Spores` 只有 "2 Frail and 2 Weak" 一行，没有 A 档。
     'snake_plant.enfeebling_spores': 'wiki Snake Plant: Spores have no A-row', 
     # §311: wiki 的 `Activate | Gains 25 Block` 只有一行，没有 A 档。

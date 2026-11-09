@@ -56,11 +56,11 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 55 / encounters 57 / cards 293 (base 154 + plus 139) / statuses 147 /
-enemy actions 154 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
-ascension variants 114 over 98 actions
-image full   content.sts.rdcf            175108 B
-image core   content.sts.core.rdcf       138320 B
+monsters 57 / encounters 60 / cards 293 (base 154 + plus 139) / statuses 147 /
+enemy actions 158 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
+ascension variants 116 over 100 actions
+image full   content.sts.rdcf            176864 B
+image core   content.sts.core.rdcf       139956 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
@@ -413,6 +413,26 @@ X 随着触发**+1**，每回合开始**重置**"。它**可以纯内容实现**
 ⚠️ 一条**踩过两次**的坑：`intent.not` 的内层必须是 `intent.allOf`，不能写表达式的 `and`
 （那是**表达式**的布尔与，条件求值器不认识 ⇒ `UnknownConditionKind`）。第一次改的时候只在
 `Monsters` 里改、忘了 `Encounters` 里那份**敌人记录副本**还在用旧规则，于是"改完还是红"。
+
+### D.3.5 Act 3：wiki 的 10 条里做了 9 条（§316）
+
+| wiki（`The_Beyond`） | 池 | 权重 | 状态 |
+|---|---|---|---|
+| 3 Darklings | Easy | 2 | ✅ §316（**顺带修了只有 2 只的 bug**） |
+| Orb Walker | Easy | 2 | ✅ |
+| 3 Shapes | Easy | 2 | ✅ §316（`Repulsor` / `Exploder` 两个新怪） |
+| 4 Shapes | Hard | 1 | ✅ §316 |
+| The Maw | Hard | 1 | ✅ |
+| Spheric Guardian + 2 Shapes | Hard | 1 | ✅ §316 |
+| 3 Darklings | Hard | 1 | ✅ §316（克隆一条 `enc_darklings_hard`：内核要求"一条遭遇只属于一个池"） |
+| Spire Growth | Hard | 1 | ✅ |
+| Jaw Worm Horde | Hard | 1 | ✅ §316（3 只 `jaw_worm`） |
+| Transient | Hard | 1 | ❌ 要做 `Fading`（层数到 0 自己消失）与"伤害随回合涨"两条 |
+
+⚠️ **两条已知偏差**（都写进内容的 `AiNote`）：① wiki 的 Shapes 是"2×Repulsor / 2×Exploder /
+2×Spiker 的袋子里抽 3（不放回）"，我们的组合槽是**逐槽独立按权重挑** ⇒ 会出现三只同一个；
+② 上一版挂在第三幕的 `enc_byrds` 删掉了 —— wiki 的第三幕回归名单里没有 Byrd（它是第二幕的），
+而第二幕已经有 `enc_city_byrds`。
 
 ### D.4 两个机制缺口：**都已关闭**（§277 提，§278–§281 关）
 

@@ -4116,7 +4116,11 @@ mod tests {
             .filter(|combatant| combatant.team_id.as_str() == "enemy")
             .map(|combatant| combatant.id.as_str())
             .collect();
-        assert_eq!(names, vec!["darkling", "darkling#2"], "the second one is suffixed");
+        assert_eq!(
+            names,
+            vec!["darkling", "darkling#2", "darkling#3"],
+            "each duplicate gets the next `#<n>` suffix"
+        );
         // And both still resolve to the record (through the definition part, §123).
         for name in names {
             let id = rd_core::state::CombatantId::new(name).expect("a usable id");
@@ -5095,6 +5099,38 @@ mod card_text_tests {
         assert!(failures.is_empty(), "{failures:#?}");
     }
 
+
+    /// §316：Spiker 现在只作为 Shapes 组的一员出现（wiki 的第三幕池子里没有单独的一只）。
+    ///
+    /// 组合槽（`Candidates`）是**逐槽独立按权重**挑的，所以"某个种子下这组里恰好没有 Spiker"
+    /// 是正常的：这里循环种子，直到真的建出一只来。找不到就让测试**响亮地**失败
+    /// （"永远找不到"必须能被看见，否则这条判据会退化成"什么都不检查"）。
+    fn shapes_session_with(seed_start: i32, monster: &str, ascension: u8)
+        -> rd_core::state::CombatantId
+    {
+        // 从 `seed_start` 往后找：**随机选择本身也要能被测试驱动** —— 固定从 0 开始会让
+        // "无约束时两招都能出"那条判据每次都拿到同一个种子（于是只看见一招）。
+        for step in 0..64 {
+            let seed = seed_start + step;
+            let session = build_session_at(seed, "enc_three_shapes", 200, None, 0, ascension)
+                .unwrap_or_else(|e| panic!("seed {seed}: {e}"));
+            let found = session
+                .state
+                .combatants()
+                .iter()
+                .find(|combatant| {
+                    combatant.team_id.as_str() == "enemy"
+                        && combatant.id.as_str().split('#').next() == Some(monster)
+                })
+                .map(|combatant| combatant.id.as_str().to_string());
+            install_session(session);
+            if let Some(id) = found {
+                return rd_core::state::CombatantId::new(&id).expect("a usable id");
+            }
+        }
+        panic!("no seed from {seed_start} in the next 64 put a `{monster}` into 3 Shapes");
+    }
+
     /// §207: a `CombatantId` from a literal, for the tests below.
     fn cid_in(name: &str) -> rd_core::state::CombatantId {
         rd_core::state::CombatantId::new(name).expect("a short id")
@@ -5114,16 +5150,14 @@ mod card_text_tests {
         let content = rd_core::content::Content::parse(blob).expect("image");
         let row = u32::from(
             content
-                .lookup_in("enc_spiker", rd_core::content::EK_ENCOUNTER)
-                .expect("enc_spiker")
+                .lookup_in("enc_three_shapes", rd_core::content::EK_ENCOUNTER)
+                .expect("enc_three_shapes")
                 .index,
         );
         let ask = |last: i32, buffs: i32, seed: i32| -> String {
-            let session = build_session_at(seed, "enc_spiker", 200, None, 0, 0)
-                .unwrap_or_else(|e| panic!("seed {seed}: {e}"));
-            install_session(session);
+            // §316：Spiker 只出现在 Shapes 组里；这个 helper 会找一个真的含它的种子。
+            let id = shapes_session_with(seed, "spiker", 0);
             let session = slot().as_mut().expect("session");
-            let id = cid_in("spiker");
             for (key, value) in [("last_move", last), ("thorns_buffs", buffs)] {
                 let _ = session
                     .state
@@ -8890,6 +8924,94 @@ fn the_zero_infrastructure_tail_lights_up_the_existing_channels() {
 
 
 
+
+    /// §316：Exploder 的 `Explode` —— 30 点伤害之后**自己死**（wiki："Deals 30 damage. Dies."）。
+    #[test]
+    fn the_exploder_hits_for_thirty_and_then_dies() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+        let id = shapes_session_with(0, "exploder", 0);
+        let hero_before = {
+            let session = slot().as_ref().expect("session");
+            session.state.combatant(&cid_in("hero")).expect("hero").health_current
+        };
+        {
+            let session = slot().as_mut().expect("session");
+            let row = u32::from(
+                content
+                    .lookup_in("exploder.explode", rd_core::content::EK_EACTION)
+                    .expect("the row")
+                    .index,
+            );
+            rd_core::intent::execute_action(
+                &mut session.state,
+                &content,
+                &id,
+                row,
+                Some(cid_in("hero")),
+            )
+            .expect("Explode");
+            rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+        }
+        let session = slot().as_ref().expect("session");
+        let hero_after = session.state.combatant(&cid_in("hero")).expect("hero").health_current;
+        assert_eq!(hero_before - hero_after, 30, "Explode deals 30");
+        let alive = session
+            .state
+            .combatant(&id)
+            .is_some_and(|combatant| {
+                combatant.lifecycle_state == rd_core::state::CombatantLifecycleState::Alive
+            });
+        assert!(!alive, "and then it dies");
+        take_session();
+    }
+
+    /// §316：Repulsor 的 `Daze` —— 2 张 `dazed` 进的是**抽牌堆**（不是弃牌堆）。
+    #[test]
+    fn the_repulsor_puts_two_dazed_into_the_draw_pile() {
+        use rd_core::state::CardZone;
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+        let id = shapes_session_with(0, "repulsor", 0);
+        let count = |state: &rd_core::state::CombatState, zone: CardZone| -> usize {
+            let owner = state.combatant(&cid_in("hero")).expect("hero").id;
+            state.card_zones(&owner).map_or(0, |zones| zones.count(zone))
+        };
+        let (draw_before, disc_before) = {
+            let session = slot().as_ref().expect("session");
+            (count(&session.state, CardZone::DrawPile),
+             count(&session.state, CardZone::DiscardPile))
+        };
+        {
+            let session = slot().as_mut().expect("session");
+            let row = u32::from(
+                content
+                    .lookup_in("repulsor.daze", rd_core::content::EK_EACTION)
+                    .expect("the row")
+                    .index,
+            );
+            rd_core::intent::execute_action(
+                &mut session.state,
+                &content,
+                &id,
+                row,
+                Some(cid_in("hero")),
+            )
+            .expect("Daze");
+            rd_core::exec::drain(&mut session.state, Some(&content), None).expect("drain");
+        }
+        let session = slot().as_ref().expect("session");
+        assert_eq!(
+            count(&session.state, CardZone::DrawPile) - draw_before,
+            2,
+            "two Dazed land in the **draw** pile"
+        );
+        assert_eq!(
+            count(&session.state, CardZone::DiscardPile),
+            disc_before,
+            "not in the discard pile"
+        );
+        take_session();
+    }
+
     /// §315：**同一只怪、两个档位** —— Sentry 在 Act 1 精英池与 Act 2 普通池里 HP 表相同。
     ///
     /// 这条判据钉的是"建模"而不是"这一条遭遇"：
@@ -9325,13 +9447,14 @@ fn the_zero_infrastructure_tail_lights_up_the_existing_channels() {
 
     /// §311：**三只 byrd 各自的 Flying**。
     ///
-    /// 这条判据存在的理由：把 `enc_byrds` 从 1 只改成 3 只之后，`flying_...` 那一条当场红
+    /// 这条判据存在的理由：把三只 byrd 的那条遭遇从 1 只改成 3 只之后，`flying_...` 那一条当场红
+    /// （§316 之后它的 id 是第二幕的 `enc_city_byrds` —— 第三幕那条 `enc_byrds` 删掉了）。
     /// （读到 8 层），根因是 `apply_starting_statuses` 拿 **plain** id 去挂状态 —— 三份
     /// `StartingStatuses` 全叠到 `byrd` 身上，`byrd#2` / `byrd#3` 一层都没有。
     /// 只读一只的判据区分不了"每只各 3 层"与"一只 9 层"，所以这里**逐只**读。
     #[test]
     fn three_byrds_each_start_with_their_own_flying() {
-        let session = build_session_at(11, "enc_byrds", 200, None, 0, 0)
+        let session = build_session_at(11, "enc_city_byrds", 200, None, 0, 0)
             .expect("the byrd fight builds");
         install_session(session);
         let session = slot().as_ref().expect("session");
@@ -9418,7 +9541,7 @@ fn the_zero_infrastructure_tail_lights_up_the_existing_channels() {
     #[test]
     fn flying_halves_attack_damage_and_loses_a_stack_per_hit() {
         use rd_core::status_bind::DamageKind;
-        let session = build_session_at(7, "enc_byrds", 200, None, 0, 0)
+        let session = build_session_at(7, "enc_city_byrds", 200, None, 0, 0)
             .expect("the byrd fight builds");
         install_session(session);
         let blob = crate::IMAGE;
@@ -9710,21 +9833,27 @@ fn the_zero_infrastructure_tail_lights_up_the_existing_channels() {
     #[test]
     fn starting_statuses_follow_their_ascension_rows() {
         // (encounter, combatant, status, [(ascension, stacks), …])
+        // §316：Spiker 只在 Shapes 组里 —— `enc_three_shapes` 的候选记录带着同一组 `Asc` 行。
         let cases: [(&str, &str, &str, [(u8, i32); 4]); 2] = [
-            ("enc_spiker", "spiker", "standard.thorns", [(0, 3), (2, 4), (16, 4), (17, 7)]),
+            ("enc_three_shapes", "spiker", "standard.thorns", [(0, 3), (2, 4), (16, 4), (17, 7)]),
             ("enc_awakened_one", "awakened_one", "standard.regen",
              [(0, 10), (2, 10), (18, 10), (19, 15)]),
         ];
         for (encounter, who, status, points) in cases {
             for (ascension, expected) in points {
-                let session = build_session_at(7, encounter, 200, None, 0, ascension)
-                    .unwrap_or_else(|e| panic!("{encounter} at A{ascension}: {e}"));
-                install_session(session);
+                let who_id = if encounter == "enc_three_shapes" {
+                    shapes_session_with(0, who, ascension)
+                } else {
+                    let session = build_session_at(7, encounter, 200, None, 0, ascension)
+                        .unwrap_or_else(|e| panic!("{encounter} at A{ascension}: {e}"));
+                    install_session(session);
+                    cid_in(who)
+                };
                 let stacks = slot()
                     .as_ref()
                     .expect("session")
                     .state
-                    .combatant(&cid_in(who))
+                    .combatant(&who_id)
                     .map(|combatant| {
                         combatant
                             .statuses()
