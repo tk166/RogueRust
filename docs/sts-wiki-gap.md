@@ -56,11 +56,11 @@
 而且没有任何闸门会红）。
 
 ```
-monsters 57 / encounters 60 / cards 293 (base 154 + plus 139) / statuses 147 /
-enemy actions 158 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
-ascension variants 116 over 100 actions
-image full   content.sts.rdcf            176864 B
-image core   content.sts.core.rdcf       139956 B
+monsters 58 / encounters 61 / cards 293 (base 154 + plus 139) / statuses 148 /
+enemy actions 159 / relics 152 / potions 33 / events 22 (10+8+4) / start deck 10
+ascension variants 117 over 101 actions
+image full   content.sts.rdcf            177908 B
+image core   content.sts.core.rdcf       140968 B
 ```
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
@@ -427,12 +427,30 @@ X 随着触发**+1**，每回合开始**重置**"。它**可以纯内容实现**
 | 3 Darklings | Hard | 1 | ✅ §316（克隆一条 `enc_darklings_hard`：内核要求"一条遭遇只属于一个池"） |
 | Spire Growth | Hard | 1 | ✅ |
 | Jaw Worm Horde | Hard | 1 | ✅ §316（3 只 `jaw_worm`） |
-| Transient | Hard | 1 | ❌ 要做 `Fading`（层数到 0 自己消失）与"伤害随回合涨"两条 |
+| Transient | Hard | 1 | ✅ §317（`Fading` + 伤害递增；**`Shifting` 没做**，见 §D.6） |
 
 ⚠️ **两条已知偏差**（都写进内容的 `AiNote`）：① wiki 的 Shapes 是"2×Repulsor / 2×Exploder /
 2×Spiker 的袋子里抽 3（不放回）"，我们的组合槽是**逐槽独立按权重挑** ⇒ 会出现三只同一个；
 ② 上一版挂在第三幕的 `enc_byrds` 删掉了 —— wiki 的第三幕回归名单里没有 Byrd（它是第二幕的），
 而第二幕已经有 `enc_city_byrds`。
+
+### D.6 **负的力量**：`Shifting` 做不了的那一条（§317）
+
+`Transient` 的 `Shifting`（wiki：*"Upon losing HP, loses that much Strength until the end of the
+turn."*）**没做**，而这不是"懒" —— 是今天的载体里**负层数不可表达**：
+
+| 想用的原子 | 为什么不行 |
+|---|---|
+| `node.applyStatus(strength, -N)` | 负层数被拒（实测 `Exec(Modifier)`）——参考只让"施加"是正的 |
+| `node.modifyStatusStacks(strength, -N)` | 在 `0` 处**夹断**，而且目标**没有这条状态时是 no-op**（参考 `:860-865` 的原样移植） |
+
+所以"受伤时临时失去等量力量"要么给 `applyStatus` 开一个"允许负层数"的口子（会动到一条
+120+ 动作都在走的路径，得配一整轮判据），要么加一个专门的原子。两者都超出"补一只怪"的范围，
+所以这一轮只记在这里。
+
+⚠️ 顺带记一笔：同一个缺口让 **`dark_shackles`（-9 力量）在"目标当前力量 ≤ 9"时也退化成
+"减到 0 为止"**（wiki 是会到负数的）。它在 §219 落地时用的是 `modifyStatusStacks`，
+所以同样是"夹断"而不是"负数"。
 
 ### D.4 两个机制缺口：**都已关闭**（§277 提，§278–§281 关）
 

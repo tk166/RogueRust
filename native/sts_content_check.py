@@ -82,7 +82,7 @@ INV_COUNTS = {
     # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster); §175: +3 (Nemesis / Reptomancer / Dagger).
     # §201: +1 (Looter).
     # §282: +1 (`snecko`, Act 2's normal enemy carrying `Confusion`).
-    "monsters": 57,
+    "monsters": 58,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
@@ -92,7 +92,7 @@ INV_COUNTS = {
     # `enc_cultist_and_chosen` / `enc_three_cultists` / `enc_parasite_and_fungi`）。
     # §316: +4（`enc_three_shapes` / `enc_four_shapes` / `enc_spheric_and_two_shapes` /
     # `enc_jaw_worm_horde` / `enc_darklings_hard` 五条，减掉挂错幕的 `enc_byrds` ⇒ 净 +4）。
-    "encounters": 57,
+    "encounters": 58,
     "deck": 10,          # inv:§2   "10 张：strike x5、defend x4、bash x1"
     # §175: +1 -- `standard.phantom_veil`, the carrier for Nemesis's "intangible every other turn".
     # It is the first content row that uses a `TurnStarted` trigger.
@@ -136,7 +136,7 @@ INV_COUNTS = {
     # §299: +3 (C 类三件 —— 行为全在内容程序里)。
     # §300: +3 (三个新原子各自解锁的那一件).
     # §312: +1 (`standard.malleable`).
-    "statuses": 147,
+    "statuses": 148,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -874,6 +874,8 @@ INV_CARDS = {
 MAX_ENEMIES_IN_FIGHT = 6
 
 INV_MONSTERS = [
+    # §317：Act 3 的 Transient —— HP 999（不随升阶变），一招（伤害随回合递增）。
+    ("transient", 999, 999, ["transient.attack"]),
     # §316：Act 3 的 Shapes（wiki `Shapes`）：Repulsor 29-35（A7 31-38）、Exploder **30**。
     ("repulsor", 29, 35, ["repulsor.daze", "repulsor.attack"]),
     ("exploder", 30, 30, ["exploder.attack", "exploder.explode"]),
@@ -1013,6 +1015,10 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    # §317：`20 + 10 × roundNumber`（第 1 回合 30、第 2 回合 40……）。
+    "transient.attack": ("Attack",
+                         [("damage", ('add', 20, ('multiply', ('expr', 'roundNumber'), 10)),
+                           'event')]),
     # §316：Shapes。Daze 往**抽牌堆**塞 2 张 Dazed；Explode 打完 30 点自己死。
     "repulsor.daze": ("Debuff", [("card", "dazed", 2, "DrawPile", "event")]),
     "repulsor.attack": ("Attack", [("damage", 11, "event")]),
@@ -1395,6 +1401,8 @@ INV_WEAK_POOL = {
     "enc_spheric_and_two_shapes": ["spheric_guardian", "exploder|repulsor|spiker",
                                    "exploder|repulsor|spiker"],
     "enc_jaw_worm_horde": ["jaw_worm", "jaw_worm", "jaw_worm"],
+    # §317：Transient 单独出现（wiki："always alone"）。
+    "enc_transient": ["transient"],
     "enc_darklings_hard": ["darkling", "darkling", "darkling"],
     # §313：Centurion 在前、Mystic 在后（wiki 的 Details 列：1 Centurion + 1 Mystic）。
     "enc_centurion_and_mystic": ["centurion", "mystic"],
@@ -1493,7 +1501,8 @@ INV_ACT_TABLES = {
     # `Transient` 未做（要"Fading"与伤害递增两条新机制），见 `docs/sts-wiki-gap.md` §D.5。
     "Weak3": ["enc_darklings", "enc_orb_walker", "enc_three_shapes",
               "enc_four_shapes", "enc_maw", "enc_spheric_and_two_shapes",
-              "enc_darklings_hard", "enc_spire_growth", "enc_jaw_worm_horde"],
+              "enc_darklings_hard", "enc_spire_growth", "enc_jaw_worm_horde",
+              "enc_transient"],
     "Elite": ["enc_gremlin_nob", "enc_lagavulin", "enc_three_sentries"],
     "Elite2": ["enc_book_of_stabbing", "enc_gremlin_leader", "enc_slavers"],
     "Elite3": ["enc_giant_head", "enc_nemesis", "enc_reptomancer"],
@@ -1558,6 +1567,9 @@ INV_BOSS_POOL = {
 # because a content image **disables** that catalog (exec.rs:2421-2426): with
 # content present the candidate rows come only from STAT.PassiveModifiers.
 INV_STATUSES = {
+    # §317：Transient 的 `Fading` —— 行为全在触发器里。
+    # （`Shifting` 没做：负力量不可表达，见 `docs/sts-wiki-gap.md` §D.6。）
+    "standard.fading": [],
     # §312: Malleable —— 行为全在触发器里（`DamageTaken` + `TurnStarted`），没有被动修饰器。
     "standard.malleable": [],
     # §227: Nightmare 的"下一回合把留存的副本拿进手牌" —— 一条 TurnStarted 触发器，
@@ -1957,7 +1969,10 @@ def _has_dynamic_size(expr):
     """
     if not isinstance(expr, dict):
         return False
-    if expr.get("kind") in ("card.counter", "combatantDefensivePool"):
+    # §317：`roundNumber` 也是"内核要从状态里读的尺寸"（伤害随回合涨）。加进来之后，
+    # `20 + 10×round` 这一族会被拆成事实，于是"基础档 20 / A2 档 30"是**两条不同的事实** ——
+    # 否则两者都渲染成 (`expr`, 'add')，判据会说"这一档什么都没做"。
+    if expr.get("kind") in ("card.counter", "combatantDefensivePool", "roundNumber"):
         return True
     value = expr.get("value")
     if isinstance(value, dict):
@@ -2549,6 +2564,9 @@ def check_cards_and_actions(doc):
 # `native/patch_187_content.py` 的表头），而不是从内容拄过来的 --
 # "从内容生成期望值"等于没有期望值。
 INV_ASC_VARIANTS = {
+    # §317：Transient 的 Attack 在 A2 起整条 +10（第 1 回合 40）。
+    'transient.attack': [(2, [('damage', ('add', 30, ('multiply', ('expr', 'roundNumber'), 10)),
+                                'event')])],
     # §316：Repulsor Attack 11→13、Exploder Attack 9→11（wiki 的 `{{Asc|2|…}}`）。
     'repulsor.attack': [(2, [('damage', 13, 'event')])],
     'exploder.attack': [(2, [('damage', 11, 'event')])],
@@ -3086,6 +3104,8 @@ def check_card_wiki(doc):
 TIME_VARIABLES = ("turnNumber", "roundNumber")
 INV_TIME_VARIABLES = {
     "maw.nom_nom": ("roundNumber",),
+    # §317：Transient 的伤害是 `20 + 10×回合`（第 1 回合 30、第 2 回合 40……）。
+    "transient.attack": ("roundNumber",),
 }
 
 
@@ -3124,6 +3144,8 @@ INV_ASC_HP_LEVEL = {'Elite': 8, 'Boss': 9}
 INV_STATUS_ASC = {
     # `Shapes` (Spiker): Thorns 3 (A2: 4 | A17: 7).
     'spiker': {'standard.thorns': [(2, 4), (17, 7)]},
+    # §317：`Fading 5`（A17: 6）。
+    'transient': {'standard.fading': [(17, 6)]},
     # `Byrd`: Flying 3 (A17: 4). §208 added `standard.flying` (half damage from attacks, one stack
     # per hit) **and** the `damage.isAttack` event fact, so the §207 "not expressible" note is gone.
     # `Jaw Worm`: Strength 3 (A2/A17) is a status; its Block 6 (A17: 9) is a **defensive pool** --
@@ -3190,6 +3212,9 @@ INV_NO_ASC_HP = {
     # §316：Exploder 的 wiki 是 `HP 30 | 30-35 7` —— A7 那一列是**范围**，下界仍是 30，
     # 所以"钉一条 A7 行"只会把 30 再写一遍（判据会拒："identical to the base"）。
     'exploder': 'wiki Shapes: Exploder HP 30, the A7 column is a 30-35 range',
+    # §317：wiki Transient 只有一个数 999（"HP: 999 (always)"）。
+    'transient': 'wiki Transient: HP 999 always',
+    
     
 }
 
@@ -3868,9 +3893,13 @@ def check_statuses(doc):
                      "standard.dead_branch",
                      "standard.nilrys_codex", "standard.warped_tongs",
                      "standard.mummified_hand",
+                     # §317
+                     "standard.fading",
                      # §312
                      "standard.malleable"):
             expected = {"standard.thorns": ["DamageTaken"],
+                        # §317：`Fading` 是"层数就是时钟"（TurnEnded 自减 / 剩 1 层自己消失）。
+                        "standard.fading": ["TurnEnded"],
                         # §312: 挨打长格挡（`DamageTaken`）+ 每回合清零（`TurnStarted`）。
                         "standard.malleable": ["DamageTaken", "TurnStarted"],
                         "standard.spore_cloud": ["Downed"],
