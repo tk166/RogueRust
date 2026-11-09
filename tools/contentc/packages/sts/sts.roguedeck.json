@@ -9446,7 +9446,7 @@
       "Id": "standard.orange_pellets",
       "PackageId": "sts",
       "NameKey": "Orange Pellets",
-      "DescriptionKey": "Whenever you play a Power, Attack, and Skill in the same turn, gain 3 Strength and 3 Dexterity.",
+      "DescriptionKey": "Whenever you play a Power, Attack, and Skill in the same turn, remove all debuffs.",
       "Polarity": "Buff",
       "UsesStacks": true,
       "UsesDuration": false,
@@ -9565,7 +9565,7 @@
                                   "value": {
                                     "Children": [
                                       {
-                                        "kind": "node.applyStatus",
+                                        "kind": "node.removeDebuffs",
                                         "value": {
                                           "TargetSelector": {
                                             "kind": "sel.source",
@@ -9573,41 +9573,7 @@
                                               "Cardinality": "ZeroOrOne",
                                               "RequiredContextCapabilities": "Source"
                                             }
-                                          },
-                                          "StatusDefinitionId": {
-                                            "value": "standard.strength"
-                                          },
-                                          "Stacks": {
-                                            "kind": "const",
-                                            "value": {
-                                              "Value": 3
-                                            }
-                                          },
-                                          "Duration": null,
-                                          "ResultKey": null
-                                        }
-                                      },
-                                      {
-                                        "kind": "node.applyStatus",
-                                        "value": {
-                                          "TargetSelector": {
-                                            "kind": "sel.source",
-                                            "value": {
-                                              "Cardinality": "ZeroOrOne",
-                                              "RequiredContextCapabilities": "Source"
-                                            }
-                                          },
-                                          "StatusDefinitionId": {
-                                            "value": "standard.dexterity"
-                                          },
-                                          "Stacks": {
-                                            "kind": "const",
-                                            "value": {
-                                              "Value": 3
-                                            }
-                                          },
-                                          "Duration": null,
-                                          "ResultKey": null
+                                          }
                                         }
                                       },
                                       {
@@ -9786,7 +9752,7 @@
                                   "value": {
                                     "Children": [
                                       {
-                                        "kind": "node.applyStatus",
+                                        "kind": "node.removeDebuffs",
                                         "value": {
                                           "TargetSelector": {
                                             "kind": "sel.source",
@@ -9794,41 +9760,7 @@
                                               "Cardinality": "ZeroOrOne",
                                               "RequiredContextCapabilities": "Source"
                                             }
-                                          },
-                                          "StatusDefinitionId": {
-                                            "value": "standard.strength"
-                                          },
-                                          "Stacks": {
-                                            "kind": "const",
-                                            "value": {
-                                              "Value": 3
-                                            }
-                                          },
-                                          "Duration": null,
-                                          "ResultKey": null
-                                        }
-                                      },
-                                      {
-                                        "kind": "node.applyStatus",
-                                        "value": {
-                                          "TargetSelector": {
-                                            "kind": "sel.source",
-                                            "value": {
-                                              "Cardinality": "ZeroOrOne",
-                                              "RequiredContextCapabilities": "Source"
-                                            }
-                                          },
-                                          "StatusDefinitionId": {
-                                            "value": "standard.dexterity"
-                                          },
-                                          "Stacks": {
-                                            "kind": "const",
-                                            "value": {
-                                              "Value": 3
-                                            }
-                                          },
-                                          "Duration": null,
-                                          "ResultKey": null
+                                          }
                                         }
                                       },
                                       {
@@ -10007,7 +9939,7 @@
                                   "value": {
                                     "Children": [
                                       {
-                                        "kind": "node.applyStatus",
+                                        "kind": "node.removeDebuffs",
                                         "value": {
                                           "TargetSelector": {
                                             "kind": "sel.source",
@@ -10015,41 +9947,7 @@
                                               "Cardinality": "ZeroOrOne",
                                               "RequiredContextCapabilities": "Source"
                                             }
-                                          },
-                                          "StatusDefinitionId": {
-                                            "value": "standard.strength"
-                                          },
-                                          "Stacks": {
-                                            "kind": "const",
-                                            "value": {
-                                              "Value": 3
-                                            }
-                                          },
-                                          "Duration": null,
-                                          "ResultKey": null
-                                        }
-                                      },
-                                      {
-                                        "kind": "node.applyStatus",
-                                        "value": {
-                                          "TargetSelector": {
-                                            "kind": "sel.source",
-                                            "value": {
-                                              "Cardinality": "ZeroOrOne",
-                                              "RequiredContextCapabilities": "Source"
-                                            }
-                                          },
-                                          "StatusDefinitionId": {
-                                            "value": "standard.dexterity"
-                                          },
-                                          "Stacks": {
-                                            "kind": "const",
-                                            "value": {
-                                              "Value": 3
-                                            }
-                                          },
-                                          "Duration": null,
-                                          "ResultKey": null
+                                          }
                                         }
                                       },
                                       {

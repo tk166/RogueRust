@@ -1979,6 +1979,13 @@ def program_facts(root):
         elif kind == "node.applyStatus":
             out.append(("status", body["StatusDefinitionId"]["value"],
                           amount(body["Stacks"]), tgt(body["TargetSelector"])))
+        elif kind == "node.removeDebuffs":
+            # §310：**“清掉所有负面状态”是一个事实，不是 N 次 applyStatus(-1)**。
+            # 写成 `cleanse` 而不是把它展开成若干个 `status` 事实，理由与 `repeat` 同：
+            # 展开后“清掉 Weak 2”与“给 Weak -2 层”就分不开了，而那两件事不一样
+            # （前者删实例，后者把层数减到 0 并把 0 层实例留在表里）。
+            assert body.get("StatusDefinitionId") is None, body
+            out.append(("cleanse", tgt(body["TargetSelector"])))
         elif kind == "node.createCardInstance":
             out.append(("card", body["CardDefinitionId"]["value"],
                           amount(body["Count"]), body["ToZone"],

@@ -15014,11 +15014,17 @@ mod tests {
         );
     }
 
-    /// §299：`orange_pellets` —— 一回合里 Power / Attack / Skill 各打一张 ⇒ +3 力量、+3 敏捷。
+    /// §310：`orange_pellets` —— 一回合里 Power / Attack / Skill 各打一张 ⇒ **清除所有负面状态**。
     ///
-    /// 三侧：① 只有两类 ⇒ 不付；② 三类齐 ⇒ +3/+3；③ 第四张牌**不重复付**（计数器已清零）。
+    /// wiki（两个独立来源）：*"Whenever you play a Power, Attack, and Skill in the same turn,
+    /// **remove all debuffs**"*。旧实现在这里给 +3 力量/+3 敏捷 —— 那是**另一条规则**
+    /// （`docs/sts-wiki-gap.md` §F.19 的"wiki"列也跟着抄错了）。
+    ///
+    /// 四侧：① 只有两类 ⇒ 不清；② 三类齐 ⇒ Weak / Frail / Vulnerable 都没了；
+    /// ③ **Buff 必须留着**（Strength / Dexterity / Thorns 一条都不许掉 —— 这是"清 Debuff"
+    ///    与"清全部状态"的分界）；④ 第四张牌不重复付（计数器已清零，且没有 debuff 时无事发生）。
     #[test]
-    fn orange_pellets_pays_once_all_three_card_kinds_were_played() {
+    fn orange_pellets_removes_every_debuff_and_keeps_the_buffs() {
         use crate::state::ResourceId;
 
         let blob = std::fs::read(concat!(
@@ -15041,7 +15047,8 @@ mod tests {
                 })
                 .unwrap_or(0)
         };
-        let play_all = |host: &mut Host, cards: &[&str]| -> (i32, i32) {
+        // 起手：两个负面（Weak 2 / Frail 2）、三个正面（Strength 2 / Dexterity 2 / Thorns 3）。
+        let play_all = |host: &mut Host, cards: &[&str]| -> (i32, i32, i32, i32, i32) {
             let mut state = arena();
             {
                 let foe = state.combatant_mut(&cid("enemy_a")).expect("foe");
@@ -15054,6 +15061,11 @@ mod tests {
                 .set_resource(ResourceId::new("standard.energy").unwrap(), 20, Some(20))
                 .expect("energy");
             give(&mut state, "hero", status("st_op", "standard.orange_pellets", 1));
+            give(&mut state, "hero", status("st_weak", "standard.weak", 2));
+            give(&mut state, "hero", status("st_frail", "standard.frail", 2));
+            give(&mut state, "hero", status("st_str", "standard.strength", 2));
+            give(&mut state, "hero", status("st_dex", "standard.dexterity", 2));
+            give(&mut state, "hero", status("st_thorns", "standard.thorns", 3));
             for id in cards {
                 let card = card_in_hand(&mut state, &content, "hero", id);
                 let request =
@@ -15063,28 +15075,31 @@ mod tests {
                 host.try_resolve_pending_queues(&mut state).expect("triggers");
             }
             (
+                stacks(&state, "standard.weak"),
+                stacks(&state, "standard.frail"),
                 stacks(&state, "standard.strength"),
                 stacks(&state, "standard.dexterity"),
+                stacks(&state, "standard.thorns"),
             )
         };
 
-        // ① 只有 Attack + Skill。
+        // ① 只有 Attack + Skill：两个负面都还在。
         assert_eq!(
             play_all(&mut host, &["strike", "defend"]),
-            (0, 0),
+            (2, 2, 2, 2, 3),
             "two kinds is not enough"
         );
-        // ② 三类齐（`metallicize` 是纯 Power，自己不加力量，判据读起来干净）。
+        // ② 三类齐（`metallicize` 是纯 Power）：负面清空，正面**一条都不许动**。
         assert_eq!(
             play_all(&mut host, &["strike", "defend", "metallicize"]),
-            (3, 3),
-            "Power + Attack + Skill pays 3 Strength and 3 Dexterity"
+            (0, 0, 2, 2, 3),
+            "Power + Attack + Skill cleanses Weak and Frail and keeps the buffs"
         );
-        // ③ 第四张不重复付。
+        // ③ 第四张牌不重复付：清过之后没有负面，正面仍然是原值。
         assert_eq!(
             play_all(&mut host, &["strike", "defend", "metallicize", "strike"]),
-            (3, 3),
-            "the counters reset, so a fourth card does not pay again"
+            (0, 0, 2, 2, 3),
+            "the counters reset, so a fourth card does not fire again"
         );
     }
 

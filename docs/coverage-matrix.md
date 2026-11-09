@@ -420,7 +420,7 @@
 | master_of_strategy+ | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/master_of_strategy.txt (via master_of_strategy) | — | INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
 | mayhem | yes | — | CARD_DIFF | wiki:wiki_cards/mayhem.txt | — | §244/CARD_WIKI+INV_CARDS |
 | mayhem+ | yes | — | CARD_DIFF | wiki:wiki_cards/mayhem.txt (via mayhem) | — | INV_CARDS |
-| metallicize | yes | orange_pellets_pays_once_all_three_card_kinds_were_played, mummified_hand_makes_one_random_card_free_after_a_power …(+2) | — | wiki:wiki_cards/metallicize.txt | — | CARD_WIKI+INV_CARDS/orange_pellets_pays_once_all_three_card_kinds_were_played |
+| metallicize | yes | orange_pellets_removes_every_debuff_and_keeps_the_buffs, mummified_hand_makes_one_random_card_free_after_a_power …(+2) | — | wiki:wiki_cards/metallicize.txt | — | CARD_WIKI+INV_CARDS/orange_pellets_removes_every_debuff_and_keeps_the_buffs |
 | metallicize+ | yes | — | CARD_DIFF | wiki:wiki_cards/metallicize.txt (via metallicize) | — | INV_CARDS |
 | metamorphosis | yes | — | CARD_DIFF | wiki:wiki_cards/metamorphosis.txt | — | CARD_WIKI+INV_CARDS |
 | metamorphosis+ | yes | — | CARD_DIFF | wiki:wiki_cards/metamorphosis.txt (via metamorphosis) | — | INV_CARDS |
@@ -585,7 +585,7 @@
 | standard.dark_embrace | yes | exhausting_a_card_feeds_feel_no_pain_and_dark_embrace | — | spec:INV_STATUSES | — | §237/§276/INV_STATUSES/exhausting_a_card_feeds_feel_no_pain_and_dark_embrace |
 | standard.dead_branch | yes | dead_branch_adds_a_random_base_card_when_a_card_is_exhausted | — | spec:INV_STATUSES | — | §299/INV_STATUSES/dead_branch_adds_a_random_base_card_when_a_card_is_exhausted |
 | standard.demon_form | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §231/§235/INV_STATUSES |
-| standard.dexterity | yes | dexterity_from_the_content_scales_a_real_defend, orange_pellets_pays_once_all_three_card_kinds_were_played …(+10) | — | spec:INV_STATUSES | — | §174/§204/INV_STATUSES/dexterity_from_the_content_scales_a_real_defend |
+| standard.dexterity | yes | dexterity_from_the_content_scales_a_real_defend, orange_pellets_removes_every_debuff_and_keeps_the_buffs …(+10) | — | spec:INV_STATUSES | — | §174/§204/INV_STATUSES/dexterity_from_the_content_scales_a_real_defend |
 | standard.double_damage | yes (test-only) | the_status_parameter_infrastructure_changes_the_right_number, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §264/§267/INV_STATUSES/the_status_parameter_infrastructure_changes_the_right_number |
 | standard.double_tap | yes | double_tap_only_covers_the_next_attack | — | spec:INV_STATUSES | — | §231/§238/INV_STATUSES/double_tap_only_covers_the_next_attack |
 | standard.draw_reduction | yes | draw_reduction_costs_exactly_one_turns_draw_and_then_expires | — | spec:INV_STATUSES | — | §10/§195.7/INV_STATUSES/draw_reduction_costs_exactly_one_turns_draw_and_then_expires |
@@ -602,7 +602,7 @@
 | standard.fire_breathing | yes | evolve_and_fire_breathing_only_answer_to_the_right_tags | — | spec:INV_STATUSES | — | §237/§276/INV_STATUSES/evolve_and_fire_breathing_only_answer_to_the_right_tags |
 | standard.flame_barrier | yes | flame_barrier_hits_back_and_combust_burns_everyone, the_new_red_skills_do_what_their_pages_say | — | spec:INV_STATUSES | — | §119/INV_STATUSES/flame_barrier_hits_back_and_combust_burns_everyone |
 | standard.flying | yes | flying_halves_attack_damage_and_loses_a_stack_per_hit | — | spec:INV_STATUSES | — | §208/§216/INV_STATUSES/flying_halves_attack_damage_and_loses_a_stack_per_hit |
-| standard.frail | yes | entrench_doubles_the_block_it_already_has, the_turn_end_curses_do_their_own_thing …(+7) | — | spec:INV_STATUSES | — | §265/§276/INV_STATUSES/entrench_doubles_the_block_it_already_has |
+| standard.frail | yes | entrench_doubles_the_block_it_already_has, the_turn_end_curses_do_their_own_thing …(+8) | — | spec:INV_STATUSES | — | §265/§276/INV_STATUSES/entrench_doubles_the_block_it_already_has |
 | standard.ginger | yes | the_status_application_relics_wire_their_own_carrier, the_status_application_relics_change_what_lands_on_the_target | — | spec:INV_STATUSES | — | §265/INV_STATUSES/the_status_application_relics_wire_their_own_carrier |
 | standard.gremlin_horn | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/§264/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.hand_drill | yes | breaking_a_block_applies_vulnerable_on_the_target_only | — | spec:INV_STATUSES | — | §294/§295/INV_STATUSES/breaking_a_block_applies_vulnerable_on_the_target_only |
@@ -638,7 +638,7 @@
 | standard.nunchaku | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
 | standard.odd_mushroom | yes | the_conditional_modifier_relics_wire_their_own_carrier, the_conditional_and_self_scoped_modifiers_change_the_right_number | — | spec:INV_STATUSES | — | §266/INV_STATUSES/the_conditional_modifier_relics_wire_their_own_carrier |
 | standard.omega | yes | omega_hits_every_enemy_at_the_end_of_the_turn | — | spec:INV_STATUSES | — | §244/§249/INV_STATUSES/omega_hits_every_enemy_at_the_end_of_the_turn |
-| standard.orange_pellets | yes | orange_pellets_pays_once_all_three_card_kinds_were_played | — | spec:INV_STATUSES | — | §299/INV_STATUSES/orange_pellets_pays_once_all_three_card_kinds_were_played |
+| standard.orange_pellets | yes | orange_pellets_removes_every_debuff_and_keeps_the_buffs | — | spec:INV_STATUSES | — | §299/INV_STATUSES/orange_pellets_removes_every_debuff_and_keeps_the_buffs |
 | standard.orichalcum | yes | a_run_with_five_status_relics_keeps_all_five, the_eight_turn_shaped_relics_wire_their_own_status …(+1) | — | spec:INV_STATUSES | — | §257/§260/INV_STATUSES/a_run_with_five_status_relics_keeps_all_five |
 | standard.ornamental_fan | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §261/§262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
 | standard.painful_stabs | yes | painful_stabs_shuffles_a_wound_only_on_unblocked_damage | — | spec:INV_STATUSES | — | §248/§256/INV_STATUSES/painful_stabs_shuffles_a_wound_only_on_unblocked_damage |
@@ -687,7 +687,7 @@
 | standard.the_bomb_damage | yes | the_bomb_explodes_on_the_third_turn_end_only | — | spec:INV_STATUSES | — | INV_STATUSES/the_bomb_explodes_on_the_third_turn_end_only |
 | standard.the_boot | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.the_specimen | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
-| standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, standard_status_ids_are_byte_ordered_not_registration_ordered …(+5) | — | spec:INV_STATUSES | — | §207/§214/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |
+| standard.thorns | yes | thorns_hurts_whoever_hits_its_owner, orange_pellets_removes_every_debuff_and_keeps_the_buffs …(+6) | — | spec:INV_STATUSES | — | §207/§214/INV_STATUSES/thorns_hurts_whoever_hits_its_owner |
 | standard.time_warp | yes | the_twelfth_card_asks_for_the_turn_to_end | — | spec:INV_STATUSES | — | §122/§125/INV_STATUSES/the_twelfth_card_asks_for_the_turn_to_end |
 | standard.torii | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | standard.tungsten_rod | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier, the_enemy_death_and_damage_rewrite_relics_change_the_right_number | — | spec:INV_STATUSES | — | §263/INV_STATUSES/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
@@ -697,7 +697,7 @@
 | standard.velvet_choker | yes | velvet_choker_stops_the_seventh_card_of_the_turn | — | spec:INV_STATUSES | — | §296/§297/INV_STATUSES/velvet_choker_stops_the_seventh_card_of_the_turn |
 | standard.vulnerable | yes | the_def_table_is_a_side_table_not_a_copy_per_beat, clear_wipes_the_names_too …(+26) | — | spec:INV_STATUSES | — | §282/§283/INV_STATUSES/the_def_table_is_a_side_table_not_a_copy_per_beat |
 | standard.warped_tongs | yes | warped_tongs_upgrades_a_random_card_not_the_first_one | — | spec:INV_STATUSES | — | §300/INV_STATUSES/warped_tongs_upgrades_a_random_card_not_the_first_one |
-| standard.weak | yes | the_def_table_is_a_side_table_not_a_copy_per_beat, clear_wipes_the_names_too …(+33) | — | spec:INV_STATUSES | — | §263/§265/INV_STATUSES/the_def_table_is_a_side_table_not_a_copy_per_beat |
+| standard.weak | yes | the_def_table_is_a_side_table_not_a_copy_per_beat, clear_wipes_the_names_too …(+34) | — | spec:INV_STATUSES | — | §263/§265/INV_STATUSES/the_def_table_is_a_side_table_not_a_copy_per_beat |
 
 ## 遭遇（47）
 

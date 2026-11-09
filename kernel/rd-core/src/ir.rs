@@ -96,6 +96,13 @@ pub enum NodeKind {
     Heal,
     /// `node.applyStatus`。
     ApplyStatus,
+    /// §310：`node.removeDebuffs` —— **清掉目标身上所有负面状态**（`Orange Pellets`）。
+    ///
+    /// 为什么单独一个节点而不是"给每条 debuff 发一次 applyStatus(-)`"：负层数在参考里不是
+    /// "清除"（`RemoveStatus` 删的是实例，不是把层数减到 0），而 `applyStatus` 还要过拦截器
+    /// （Artifact 会吃掉一次）。移除没有任何拦截点 —— 参考的 `RemoveDebuff` 就是逐条
+    /// `RemoveStatus`，所以这里也直接删，不进请求队列。
+    RemoveDebuffs,
     /// `node.modifyStatusStacks`。
     ModifyStatusStacks,
     /// `node.setCombatantCounter`。
@@ -299,6 +306,7 @@ impl NodeKind {
             NodeKind::GainBlock => "node.gainBlock",
             NodeKind::Heal => "node.heal",
             NodeKind::ApplyStatus => "node.applyStatus",
+            NodeKind::RemoveDebuffs => "node.removeDebuffs",
             NodeKind::ModifyStatusStacks => "node.modifyStatusStacks",
             NodeKind::SetCombatantCounter => "node.setCombatantCounter",
             NodeKind::DrawCards => "node.drawCards",
@@ -339,7 +347,7 @@ impl NodeKind {
     /// 从判别串解析。**不认识就返回 `None`**，由调用方转成 `IrError::UnknownKind`。
     #[must_use]
     pub fn from_wire_name(name: &str) -> Option<Self> {
-        const ALL: [NodeKind; 42] = [
+        const ALL: [NodeKind; 43] = [
             NodeKind::Sequence,
             NodeKind::Conditional,
             NodeKind::ForEachTarget,
@@ -394,6 +402,8 @@ impl NodeKind {
             // §233：把防御池设成某个值（Entrench）。
             NodeKind::SetDefensivePool,
             NodeKind::Repeat,
+            // §310：清负面状态（`Orange Pellets`）。
+            NodeKind::RemoveDebuffs,
         ];
         let mut i = 0;
         while i < ALL.len() {

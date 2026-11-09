@@ -2510,6 +2510,8 @@ fn preflight(node: NodeRef<'_>, max_steps: u32, walk: &mut Walk) -> Result<(), E
         | NodeKind::DealDamage
         | NodeKind::GainBlock
         | NodeKind::ApplyStatus
+        // §310：清负面状态是直接写状态的节点（不进请求队列），所以预检时算"立即生效"。
+        | NodeKind::RemoveDebuffs
         | NodeKind::Heal
         // 本内核自己的第 16 种（分裂 / 召唤，`port-plan.md` §121）。
         | NodeKind::CreateCombatant
@@ -2728,6 +2730,7 @@ fn dispatch_node(
         NodeKind::OfferRandomCards => offer_random_cards_node(node, ctx, frame, slot, stats),
         NodeKind::GainBlock => gain_block_node(node, ctx, frame, slot, stats),
         NodeKind::ApplyStatus => apply_status_node(node, ctx, frame, slot, stats),
+        NodeKind::RemoveDebuffs => remove_debuffs_node(node, ctx, frame, slot, stats),
         NodeKind::Heal => heal_node(node, ctx, frame, slot, stats),
     NodeKind::EndTurn => end_turn_node(node, ctx, frame, slot, stats),
     NodeKind::ExtraTurn => extra_turn_node(node, ctx, frame, slot, stats),
@@ -3638,6 +3641,60 @@ fn apply_status_node(
             Some(frame),
         )?;
         stats.effects = stats.effects.saturating_add(1);
+    }
+    resume_later(ctx.state, frame, slot)
+}
+
+
+/// `node.removeDebuffs`：**清掉目标身上所有负面状态**（`Orange Pellets`，§310）。
+///
+/// 与 `applyStatus` 的两处不同，都是按参考来的：
+/// * **不进请求队列**：参考的 `RemoveDebuff` 就是逐个 `RemoveStatus`，没有拦截点
+///   （Artifact 只拦"施加"，不拦"移除"）；
+/// * **删实例，不是把层数减到 0**：0 层实例会留在状态表里（`remove_status` 的文档讲过为什么
+///   那不是等价物），而"移除"意味着它不再存在 —— 所以这里用 `remove_status`。
+///
+/// 倒着删：`remove_status` 会把后面的前移，正着删会跳过每一个间隔的实例。
+fn remove_debuffs_node(
+    node: NodeRef<'_>,
+    ctx: &mut ExecContext<'_>,
+    frame: ProgramExecutionSlot,
+    slot: u16,
+    _stats: &mut ExecStats,
+) -> Result<(), ExecError> {
+    let selector = node
+        .node_field("TargetSelector")?
+        .ok_or(IrError::Missing("TargetSelector"))?;
+    let mut targets = [CombatantId::EMPTY; MAX_COMBATANTS];
+    let count = resolve_targets(selector, ctx, &mut targets)?;
+    for target in targets.iter().take(count) {
+        // 极性查**定义**而不是实例字段：实例上的那个值是 `applyStatus` 那一刻抄进去的，
+        // 谁都可能把它写成别的（测试助手就是）。`status_polarity` 是内核里的唯一入口
+        // （内容 `STAT.Polarity` 优先、目录兜底），Artifact 的判定也用它。
+        let mut doomed = [0usize; crate::state::MAX_STATUSES_PER_COMBATANT];
+        let mut doomed_len = 0;
+        {
+            let Some(combatant) = ctx.state.combatant(target) else {
+                continue;
+            };
+            for (index, instance) in combatant.statuses().iter().enumerate() {
+                if status_polarity(instance.definition_id.as_str(), ctx.content)?
+                    == crate::state::StatusPolarity::Debuff
+                {
+                    doomed[doomed_len] = index;
+                    doomed_len += 1;
+                }
+            }
+        }
+        if doomed_len == 0 {
+            continue;
+        }
+        let Some(combatant) = ctx.state.combatant_mut(target) else {
+            continue;
+        };
+        for offset in 0..doomed_len {
+            combatant.remove_status(doomed[doomed_len - 1 - offset]);
+        }
     }
     resume_later(ctx.state, frame, slot)
 }
