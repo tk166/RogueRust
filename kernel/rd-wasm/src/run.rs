@@ -4628,6 +4628,9 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
                 session.state.note_fight_started();
                 // The fight is built at the hero's maximum; a run usually enters wounded.
                 crate::set_combat_hero_health(session.state.health());
+                // §326：`mark_of_the_bloom` —— 战斗内的治疗也要挡（药水、卡牌、状态触发都走
+                // `exec::heal_for`）。**第 1 回合之前**写，否则回合初的治疗已经漏过去了。
+                crate::set_combat_heal_blocked(session.state.blocks_healing());
                 // §301：`neows_lament` —— 前 3 场的敌人只有 1 点血。
                 if let Some(health) = session.state.enemy_health_override() {
                     crate::set_enemy_health(health);
@@ -10734,6 +10737,57 @@ mod tests {
             state.deck().iter().filter(|card| card.as_str() == "parasite").count(),
             1,
             "seed {seed}: infected"
+        );
+    }
+
+    /// §326：`mark_of_the_bloom` ⇒ 战斗状态里的 `heal_blocked` 为真（没有这件遗物时为假）。
+    ///
+    /// 为什么在**这一层**验这个一位字段：位本身由 `rd-core` 的判据证明"真的挡住 3 条 heal
+    /// 节点"，而"它有没有被接进战斗"只有这一层看得见 —— 两半各测一次，中间那根线才不会被
+    /// 漏掉（`set_combat_heal_blocked` 没被调用时，`rd-core` 的判据照样绿）。
+    #[test]
+    fn mark_of_the_bloom_reaches_the_combat_state() {
+        // ① 没有遗物：开战后 `heal_blocked` 为假。
+        let mut seed_found = None;
+        for seed in 0..2000 {
+            if !walk_until_unknown(seed) || rd_run_begin_node() != 0 {
+                continue;
+            }
+            if rd_run_fight_begin() != 0 {
+                continue;
+            }
+            seed_found = Some(seed);
+            break;
+        }
+        let seed = seed_found.expect("no  room produced a fight in 2000 tries");
+        assert!(
+            !crate::slot().as_ref().expect("a fight").state.heal_blocked,
+            "a plain run may heal (seed {seed})"
+        );
+        let _ = rd_run_fight_end();
+
+        // ② 带遗物：为真。（同一个种子、同一张图，只多一件遗物。）
+        let mut seed_found = None;
+        for seed in 0..2000 {
+            if !walk_until_unknown(seed) || rd_run_begin_node() != 0 {
+                continue;
+            }
+            run_slot()
+                .as_mut()
+                .expect("a run")
+                .state
+                .push_relic("mark_of_the_bloom", &[])
+                .expect("mark of the bloom");
+            if rd_run_fight_begin() != 0 {
+                continue;
+            }
+            seed_found = Some(seed);
+            break;
+        }
+        let seed = seed_found.expect("no fight with the relic either");
+        assert!(
+            crate::slot().as_ref().expect("a fight").state.heal_blocked,
+            "Mark of the Bloom blocks healing inside the fight too (seed {seed})"
         );
     }
 

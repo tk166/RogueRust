@@ -3646,6 +3646,9 @@ pub struct CombatState {
     /// （`snapshot.rs`），所以加它**不移动任何基线**。`u32::MAX` = "没有遭遇"（纯内核测试的默认值）
     /// ⇒ 意图查询一律解不出，`intent.*` 事实为假 —— 响亮而安全的那一侧。
     pub encounter: u32,
+    /// §326：这一场战斗里**治疗无效**（`mark_of_the_bloom`）。model-only，见
+    /// [`CombatState::set_heal_blocked`]。
+    pub heal_blocked: bool,
     pub current_turn: i32,
     pub turn_phase: CombatTurnPhase,
     pub active_combatant_id: Option<CombatantId>,
@@ -3866,6 +3869,8 @@ impl Empty for CombatState {
         current_round: 0,
         // §242：空槽没有遭遇。
         encounter: u32::MAX,
+        // §326：默认未被挡（崩一样不可见的改动在这里）。
+        heal_blocked: false,
         current_turn: 0,
         turn_phase: CombatTurnPhase::WaitingToStartTurn,
         active_combatant_id: None,
@@ -3984,7 +3989,9 @@ impl CombatState {
             result: CombatResult::Ongoing,
             current_round: 0,
             // §242：纯内核测试没有遭遇 ⇒ 意图查询一律解不出（见字段文档）。
-            encounter: u32::MAX, 
+            encounter: u32::MAX,
+            // §326：没有  的局 —— 行为不变。
+            heal_blocked: false,
             current_turn: 0,
             turn_phase: CombatTurnPhase::WaitingToStartTurn,
             active_combatant_id: None,
@@ -4623,6 +4630,15 @@ impl CombatState {
     /// "整场一致"。做成 `pub` 字段是为了让 `build` 之后能写；不提供"中途修改"的入口。
     pub fn set_ascension(&mut self, level: u8) {
         self.ascension = level;
+    }
+
+    /// §326：`mark_of_the_bloom` —— "You can no longer heal"，**战斗内**也要挡。
+    ///
+    /// ⚠️ **model-only**：参考没有这个字段（它的 `MarkOfTheBloom` 是遗物侧的
+    /// `canHeal` 钩子），所以它不进 `hash_golden`、也不进快照 —— 与 `encounter` 同一条规矩。
+    /// 默认 `false`：没被设置过的局面（纯内核测试）行为**不变**。
+    pub fn set_heal_blocked(&mut self, blocked: bool) {
+        self.heal_blocked = blocked;
     }
 
     /// Adds a combatant: appends to the turn order, creates its (empty) piles, and makes it the

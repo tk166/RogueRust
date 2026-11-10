@@ -592,6 +592,16 @@ pub(crate) fn set_enemy_health(value: i32) {
     }
 }
 
+/// §326：`mark_of_the_bloom` —— 这一场战斗里治疗一律无效。
+///
+/// 单独一个函数而不是塞进 `set_combat_hero_health`：那个函数是"把血量搬进战斗"，
+/// 这个是"把一条规则搬进战斗"，两件事写在两个地方才好各自被引用（判据也各问一次）。
+pub(crate) fn set_combat_heal_blocked(blocked: bool) {
+    if let Some(session) = slot().as_mut() {
+        session.state.set_heal_blocked(blocked);
+    }
+}
+
 pub(crate) fn set_combat_hero_health(value: i32) {
     if let Some(session) = slot().as_mut() {
         if let Ok(id) = CombatantId::new(HERO) {

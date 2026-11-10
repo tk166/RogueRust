@@ -715,7 +715,7 @@ Sentry 的 Bolt 塞的就是它。
 > Second Wind 给 5（wiki 5）、Fiend Fire 打 14（wiki 14）。`archive_the_evidence` 那条参考契约
 > 一个字节都没动 —— 它不看这个位。
 
-| `doubt` | 回合末给 1 层 Weak，但它**在同一回合末就被自己的衰减吃掉** | 原版里 Doubt 的 Weak 会留到下一回合 | 我们的 `standard.weak` 衰减是一条 `TurnEnded` **触发器**（第 ③ 步），而卡牌生命周期节目在第 ① 步 —— 同一次回合末里刚上的 Weak 当场被扣。参考把衰减放在 `decrease_timed_statuses`，与卡程序的关系不同。要修得动回合末的处理器顺序（影响 Burn 等所有生命周期节目），留作单独一节 |
+| ~~`doubt`~~ | **§326 已修**：回合末顺序改成 ③④①②（TurnEnded 触发/时长衰减 → 牌在手生命周期 → 弃手牌），所以 Doubt 给的 Weak 落在衰减**之后**、留到下一回合；`Burn`/`Regret` 仍在弃手牌之前 | — | 我们的 `standard.weak` 衰减是一条 `TurnEnded` **触发器**（第 ③ 步），而卡牌生命周期节目在第 ① 步 —— 同一次回合末里刚上的 Weak 当场被扣。参考把衰减放在 `decrease_timed_statuses`，与卡程序的关系不同。要修得动回合末的处理器顺序（影响 Burn 等所有生命周期节目），留作单独一节 |
 | `standard.slow` | 放大**任何直接伤害**（`RestrictDamageKind: Direct`） | 只放大"**打出攻击牌**造成的伤害" | 要精确到卡牌标签需要 `RestrictSourceCardTag` 进镜像格式（`status_bind` 目前对非空值**响亮拒绝**），留作格式升级。基线（本回合牌数、每回合归零、不复合）已与 wiki 一致（§216） |
 
 **两条"模型表达不了"的现在都能表达了**（§192/§193），所以它们不再是缺口：

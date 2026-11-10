@@ -179,6 +179,16 @@ pub const A_DOUBLE_BOSS: u8 = 20;
 /// 写在这张卡**自己**的代码里（它不是一个通用标签）。
 pub const ASCENDERS_BANE: &str = "ascenders_bane";
 
+/// §326：`parasite` —— *"If transformed or removed from your deck, lose 3 Max HP."*
+///
+/// 与 [`ASCENDERS_BANE`] 同一个形状：一条**点名某张卡**的规则写在运行层，因为它在
+/// `remove_at`（牌离开牌组的唯一入口）里就必须生效，而运行层不读内容（§133）。
+/// 常量在这儿、规则也在这儿 —— 抄到第二处就会有一处漏掉。
+pub const PARASITE: &str = "parasite";
+
+/// §326：`parasite` 被移出牌组时代价的上限损失。
+pub const PARASITE_MAX_HP_LOSS: i32 = 3;
+
 /// `A14`: the Ironclad loses 5 maximum health (`-4` for the other three characters).
 pub const ASCENDED_MAX_HEALTH_LOSS: i32 = 5;
 /// `A6`: "lose 10% health at the start of each run" -- of the maximum, rounded down.
@@ -5805,6 +5815,18 @@ impl RunState {
     /// Splice deck entry `index` out. **Not** `remove_card`: that action belongs to the shop and
     /// refuses outside it; this is the same list move it performs.
     fn remove_at(&mut self, index: usize) {
+        // §326：`parasite` —— "If transformed or removed from your deck, lose 3 Max HP."
+        //
+        // 放在这里而不是 `apply_deck_change`：删牌、改造、`remove_all`、商店、烟斗**都**从
+        // 这一个函数离开牌组，写在别处就会有一条路漏掉（而漏掉的那条看起来完全正常）。
+        // 上限至少留 1：`parasite` 不该把一局的上限打到 0（那会让 `health_max` 变成负值，
+        // 后面每一条按上限算的效果都跟着错）。
+        let id = self.deck[index].as_str();
+        let base = id.strip_suffix('+').unwrap_or(id);
+        if base == PARASITE {
+            self.health_max = (self.health_max - PARASITE_MAX_HP_LOSS).max(1);
+            self.health = self.health.min(self.health_max);
+        }
         let last = self.deck_len as usize - 1;
         for slot in index..last {
             self.deck[slot] = self.deck[slot + 1];
@@ -12946,6 +12968,69 @@ mod tests {
                 .unwrap_or(true)),
             "a run without the relic has no such carrier"
         );
+    }
+
+    /// §326：`parasite` —— "If transformed or removed from your deck, lose 3 Max HP."
+    ///
+    /// 四条路径一起验：删牌 / 改造 / 按种类全删 / **删别的牌不该掉上限**。
+    /// 最后一条是负向对照 —— 少了它，"每删一张都 -3"的实现也会绿。
+    #[test]
+    fn parasite_costs_max_health_whenever_it_leaves_the_deck() {
+        let pool = basic_pool();
+        // ① 删牌。
+        let mut run = RunState::new(7, 80, 0, &["parasite", "strike", "defend"])
+            .expect("a run");
+        run.begin_event("old_beggar", "old_beggar").expect("the event");
+        run.begin_event("old_beggar", "old_beggar").expect("the event");
+        let before = run.health_max();
+        run.resolve_event(EventEffect::RemoveCard, None, &pool).expect("remove");
+        run.pick_event_card(0, &pool).expect("the parasite");
+        assert_eq!(run.health_max(), before - 3, "removing the Parasite costs 3 max HP");
+
+        // ② 改造（remove + 随机给一张）。
+        let mut run = RunState::new(7, 80, 0, &["parasite", "strike", "defend"])
+            .expect("a run");
+        run.begin_event("living_wall", "living_wall").expect("the event");
+        let before = run.health_max();
+        run.resolve_event(EventEffect::TransformCard, None, &pool).expect("transform");
+        run.pick_event_card(0, &pool).expect("the parasite");
+        assert_eq!(run.health_max(), before - 3, "transforming it costs the same 3");
+
+        // ③ 按种类全删（两张 parasite ⇒ -6）。
+        let mut run = RunState::new(7, 80, 0, &["parasite", "parasite", "strike"])
+            .expect("a run");
+        run.begin_event("vampires", "vampires").expect("the event");
+        let before = run.health_max();
+        run.resolve_event(EventEffect::RemoveAllCards, Some("parasite"), &pool)
+            .expect("removing every Parasite");
+        assert_eq!(run.health_max(), before - 6, "each copy costs 3");
+
+        // ④ 负向对照：删别的牌，上限不变。
+        let mut run = RunState::new(7, 80, 0, &["strike", "defend"])
+            .expect("a run");
+        run.begin_event("old_beggar", "old_beggar").expect("the event");
+        let before = run.health_max();
+        run.resolve_event(EventEffect::RemoveCard, None, &pool).expect("remove");
+        run.pick_event_card(0, &pool).expect("a strike");
+        assert_eq!(run.health_max(), before, "removing an ordinary card is free");
+    }
+
+    /// §326：上限被 `parasite` 打到 1 就停 —— 不是"打到 0 甚至负数"。
+    ///
+    /// 负数上限会让**每一条**按上限算的效果都跟着错（`heal_pct`、`permille_of`、页面血条），
+    /// 而那些错都不会响。
+    #[test]
+    fn parasite_never_takes_the_max_health_below_one() {
+        let pool = basic_pool();
+        let mut run = RunState::new(7, 80, 0, &["parasite", "strike"]).expect("a run");
+        // 直接把上限压到 2，再删一次。
+        run.health_max = 2;
+        run.health = 2;
+        run.begin_event("old_beggar", "old_beggar").expect("the event");
+        run.resolve_event(EventEffect::RemoveCard, None, &pool).expect("remove");
+        run.pick_event_card(0, &pool).expect("the parasite");
+        assert_eq!(run.health_max(), 1, "the floor is 1");
+        assert_eq!(run.health(), 1, "and the current health follows it down");
     }
 
     /// §188: a list that fails **in the middle** must not half-apply.

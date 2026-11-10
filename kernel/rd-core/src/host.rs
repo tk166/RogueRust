@@ -13964,11 +13964,11 @@ mod tests {
             "the program runs: at the end of your turn, gain 1 Weak"
         );
 
-        // ② 走**完整回合末**：节目在 ①（卡牌生命周期）跑，而 `standard.weak` 的衰减触发器在
-        //    ③（`TurnEnded`）—— 同一次回合末里刚上的 Weak 当场被扣掉。
-        //    ⚠️ 这是**已知的顺序偏差**（写进 `docs/sts-wiki-gap.md` §G.2 与偏差表）：参考里
-        //    Weak 的衰减在 `decrease_timed_statuses`（第 ④ 步）之前/之后与卡程序的关系不同，
-        //    所以原版里 Doubt 的 Weak 会留到下一回合。判据因此断言"被吃掉"，而不是假装它留着。
+        // ② 走**完整回合末**：§326 之后顺序是 **③④①②**，所以「本次回合末刚上的
+        //    Weak」不再被同一次衰减吃掉 —— 它留到下一回合，与 wiki 一致。
+        //    旧行为（① 在 ③ 之前）当时被写成了**已知偏差**，这条判据当时的断言是
+        //    "被吃掉"（它当时是对的）。§326 把顺序修正之后，**同一条判据反过来钉
+        //    住了新的顺序** —— 这正是"判据写在行为上、不写在实现上"的价值。
         let mut host = Host::new(&content);
         let mut state = arena();
         give_card(&mut state, "hero", CardZone::Hand, "card_doubt2", "doubt", None);
@@ -13976,8 +13976,8 @@ mod tests {
         turn::end_current_turn(&mut state, &config(), &mut host).unwrap();
         assert_eq!(
             stacks_of(&state, "hero", "standard.weak"),
-            0,
-            "known order deviation: the same turn-end decay eats the Weak it just applied"
+            1,
+            "Doubt's Weak survives its own turn end (§326 order fix: the decay runs before it)"
         );
 
         // `writhe`：没有节目 ⇒ Weak 仍然是 0（成对，否则上面那条可能来自别处）。

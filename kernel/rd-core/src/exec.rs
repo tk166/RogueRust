@@ -3992,9 +3992,30 @@ fn heal_node(
     resume_later(ctx.state, frame, slot)
 }
 
+/// §326：被 `heal_blocked` 挡住的那一次治疗 —— 记一条 `a = 0` 的动画并返回。
+///
+/// 与 [`heal_for`] 分开只是为了"挡住的理由只有一处"：`heal_for` 只问一次
+/// [`CombatState::heal_blocked`]。
+fn log_blocked_heal(
+    ctx: &mut ExecContext<'_>,
+    _target: &CombatantId,
+) -> Result<(), ExecError> {
+    // 不记 beat："回了 0 点"与"没有这回事"在动画上一样，而记一条 a=0 的 beat 会让
+    // 页面渲染一次空血条闪动（§142 的 beat 是给动画用的）。真正的可观察差异在**血量没变**，
+    // 而那是判据的事。
+    Ok(())
+}
+
 /// [`heal_node`] 的实体（`DamageEffects.cs:331-377`）：`long` 中间量防溢出，
 /// **没有**任何修饰器/拦截器挂钩。
 fn heal_for(ctx: &mut ExecContext<'_>, target: &CombatantId, amount: i32) -> Result<(), ExecError> {
+    // §326：`mark_of_the_bloom` —— 战斗内**一律**不回血（药水、卡牌、状态触发都走这里）。
+    //
+    // 放在修饰器**之前**：被挡住时连 `magic_flower` 的 ×150% 都不该算（没有治疗发生）。
+    // 仍然记一条动画（`a = 0`），否则屏幕上"喝了药水什么都没发生"与"按钮坏了"分不开。
+    if ctx.state.heal_blocked {
+        return log_blocked_heal(ctx, target);
+    }
     // §298：`magic_flower` —— 接受治疗的人身上有那条状态 ⇒ 治疗 ×150%。
     //
     // ⚠️ 乘在**这一个**函数里，不是每个 `Heal` 请求的入队处：入队处有七八个（药水、卡牌、
@@ -9342,6 +9363,40 @@ mod tests {
     // =========================================================================================
     // heal：镜像里只有 3 条（都在 relic 的 run 程序里），仍然是真的 `node.heal` term
     // =========================================================================================
+
+    /// §326：`mark_of_the_bloom` —— 战斗内**一律**不回血（`heal_for` 是唯一汇）。
+    ///
+    /// 两侧：置位时 3 条 `node.heal` 都回 0；**不置位**时它们真的回血 —— 少了后半句，
+    /// "把 heal 全禁了"的实现也会绿。
+    #[test]
+    fn a_blocked_fight_heals_nothing_on_any_heal_node() {
+        let blob = core_image();
+        let content = parse(&blob);
+        let heals = terms_of_kind(&content, "node.heal");
+        assert!(!heals.is_empty(), "镜像里要真的有 heal 节点");
+
+        for tid in heals {
+            let node = NodeRef::new(&content, tid);
+
+            // ① 不挡：会回血（先记下回了多少）。
+            let mut open_state = arena();
+            open_state.combatant_mut(&cid("hero")).unwrap().health_current = 10;
+            run_program(&mut open_state, node, Some("hero"), None, 1024).unwrap();
+            let healed = open_state.combatant(&cid("hero")).unwrap().health_current;
+            assert!(healed > 10, "an unblocked heal must actually heal (node {tid})");
+
+            // ② 挡：血量一点不动。
+            let mut blocked = arena();
+            blocked.set_heal_blocked(true);
+            blocked.combatant_mut(&cid("hero")).unwrap().health_current = 10;
+            run_program(&mut blocked, node, Some("hero"), None, 1024).unwrap();
+            assert_eq!(
+                blocked.combatant(&cid("hero")).unwrap().health_current,
+                10,
+                "a blocked heal leaves the health alone (node {tid})"
+            );
+        }
+    }
 
     #[test]
     fn heal_heals_up_to_max_but_never_past_it() {

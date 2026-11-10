@@ -19029,7 +19029,7 @@
  ],
  "format": 2,
  "image": "tools/contentc/out/content.core.rdcf",
- "image_bytes": 85616,
+ "image_bytes": 85628,
  "statuses": [
   {
    "id": "bookworm",

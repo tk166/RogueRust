@@ -864,22 +864,33 @@ pub fn end_current_turn<H: TurnHost>(
     //   ④ 按时长的状态减 1（`Effects/StatusEffects.cs:390-404`）
     //
     // ⚠️ ① 在参考里是**同一个事件的分发**里的一个处理器，所以它不花链号（整批只花事件那一个）；
-    // 本内核把 ② ③ ④ 拆成了钩子/直接调用，① 仍然排在最前（Burn 的伤害因此在弃手牌**之前**
-    // 就进了效果队列 —— 与参考"before the end-of-turn discard, which is deferred"同构）。
+    // 本内核把 ② ③ ④ 拆成了钩子/直接调用。
+    // §326：**实际执行序是 ③④①②**，与上面参考的注册序不同 —— 差的是 `Doubt` 的时序
+    // （详见下面那段注释与 `docs/port-plan.md §326`）。`Burn`/`Regret` 仍在弃手牌之前，
+    // 那一条与参考一致。
+    // §326：顺序从 ①②③④ 改成 **③④①②**（见文件里"TurnEndedCombatEvent 顺序"那段注释）。
+    //
+    // 为什么：`Doubt` 的 `TurnEndInHand`（①）给 1 层 Weak，而 `standard.weak` 的衰减是 ③。
+    // ① 在 ③ 之前 ⇒ 那一层 Weak 在**同一次**回合末被吃掉，而参考里它留到下一回合
+    // （StS 把 Doubt 的 `ApplyPowerAction` 排到队尾，衰减先跑）。
+    //
+    // 三条既有契约都保住：`Burn`/`Regret` 仍在**弃手牌之前**（Regret 数完整手牌 ——
+    // 参考原话 "before the end-of-turn discard, which is deferred"）；敌人给玩家上的
+    // 回合末状态也不会被同一次回合末吃掉。
     if let Some(actor) = actor {
-        host.hand_turn_end_lifecycle(state, &actor)?;
-        if stopped(state) {
-            return Ok(());
-        }
-        discard_hand(state, &actor, host)?;
-        if stopped(state) {
-            return Ok(());
-        }
         host.run_turn_ended_triggers(state, &actor)?;
         if stopped(state) {
             return Ok(());
         }
         host.decrease_timed_statuses(state, &actor)?;
+        if stopped(state) {
+            return Ok(());
+        }
+        host.hand_turn_end_lifecycle(state, &actor)?;
+        if stopped(state) {
+            return Ok(());
+        }
+        discard_hand(state, &actor, host)?;
         if stopped(state) {
             return Ok(());
         }

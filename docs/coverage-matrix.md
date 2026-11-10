@@ -46,7 +46,7 @@
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
 | **合计** | 954 | 685 | 256 | 13 | 476 | 194 | 92 | 0 |
 
-扫描到的具名测试：**1199** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1203** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **38** 个位次、**35** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -361,7 +361,7 @@
 | decay | yes | the_turn_end_curses_do_their_own_thing | — | wiki:wiki_cards/decay.txt | — | CARD_WIKI+INV_CARDS/the_turn_end_curses_do_their_own_thing |
 | deep_breath | yes | deep_breath_shuffles_the_discard_pile_back_first | — | wiki:wiki_cards/deep_breath.txt | — | CARD_WIKI+INV_CARDS/deep_breath_shuffles_the_discard_pile_back_first |
 | deep_breath+ | yes | — | CARD_DIFF | wiki:wiki_cards/deep_breath.txt (via deep_breath) | — | INV_CARDS |
-| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+89) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
+| defend | yes | dexterity_from_the_content_scales_a_real_defend, card_tags_are_readable_and_a_junk_card_is_not_a_reward …(+90) | — | wiki:wiki_cards/defend.txt | — | §2.1/§6.5/CARD_WIKI+INV_CARDS/dexterity_from_the_content_scales_a_real_defend |
 | defend+ | yes | armaments_gains_block_then_upgrades_the_chosen_card, the_upgrade_eggs_upgrade_two_of_their_own_kind …(+2) | — | wiki:wiki_cards/defend.txt (via defend) | — | INV_CARDS/armaments_gains_block_then_upgrades_the_chosen_card |
 | demon_form | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt | — | CARD_WIKI+INV_CARDS/demon_form_grows_strength_at_every_turn_start |
 | demon_form+ | yes | demon_form_grows_strength_at_every_turn_start | — | wiki:wiki_cards/demon_form.txt (via demon_form) | — | INV_CARDS/demon_form_grows_strength_at_every_turn_start |
@@ -371,7 +371,7 @@
 | discovery+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
 | double_tap | yes | — | CARD_DIFF | wiki:wiki_cards/double_tap.txt | — | §238/CARD_WIKI+INV_CARDS |
 | double_tap+ | yes | — | CARD_DIFF | wiki:wiki_cards/double_tap.txt (via double_tap) | — | INV_CARDS |
-| doubt | yes | e2e_7e_a_block_gain_spec_in_the_image_truncates_the_block_like_frail, e2e_8_strong_binder_gains_seven_block_then_applies_one_doubt …(+30) | — | wiki:wiki_cards/doubt.txt | ours 回合末给 1 层 Weak，但它在同一回合末就被自己的衰减吃掉 / wiki 原版里 Doubt 的 Weak 会留到下一回合 —— 我们的 `standard.weak` 衰减是一条 `TurnEnded` 触发器（第 ③ 步），而卡牌生命周期节目在第 ① 步 —— 同一次回合末里刚上的 Weak 当场被扣。参考把衰减放在 `decrease_timed_statuses`，与卡程序的关系不同。要修得动回合末的处理器顺序（影响 Burn 等所有生命周期节目），留作单独一节 | §220/§221/CARD_WIKI+INV_CARDS/e2e_7e_a_block_gain_spec_in_the_image_truncates_the_block_like_frail |
+| doubt | yes | e2e_7e_a_block_gain_spec_in_the_image_truncates_the_block_like_frail, e2e_8_strong_binder_gains_seven_block_then_applies_one_doubt …(+30) | — | wiki:wiki_cards/doubt.txt | ours §326 已修：回合末顺序改成 ③④①②（TurnEnded 触发/时长衰减 → 牌在手生命周期 → 弃手牌），所以 Doubt 给的 Weak 落在衰减之后、留到下一回合；`Burn`/`Regret` 仍在弃手牌之前 / wiki — —— 我们的 `standard.weak` 衰减是一条 `TurnEnded` 触发器（第 ③ 步），而卡牌生命周期节目在第 ① 步 —— 同一次回合末里刚上的 Weak 当场被扣。参考把衰减放在 `decrease_timed_statuses`，与卡程序的关系不同。要修得动回合末的处理器顺序（影响 Burn 等所有生命周期节目），留作单独一节 | §220/§221/CARD_WIKI+INV_CARDS/e2e_7e_a_block_gain_spec_in_the_image_truncates_the_block_like_frail |
 | dramatic_entrance | yes | — | CARD_DIFF | wiki:wiki_cards/dramatic_entrance.txt | — | CARD_WIKI+INV_CARDS |
 | dramatic_entrance+ | yes | the_zero_cost_utility_batch_matches_its_pages | — | wiki:wiki_cards/dramatic_entrance.txt (via dramatic_entrance) | — | INV_CARDS/the_zero_cost_utility_batch_matches_its_pages |
 | dropkick | yes | the_new_red_attacks_do_what_their_pages_say | — | wiki:wiki_cards/dropkick.txt | — | CARD_WIKI+INV_CARDS/the_new_red_attacks_do_what_their_pages_say |
@@ -484,7 +484,7 @@
 | panache+ | yes | — | CARD_DIFF | wiki:wiki_cards/panache.txt (via panache) | — | INV_CARDS |
 | panic_button | yes | — | CARD_DIFF | wiki:wiki_cards/panic_button.txt | — | CARD_WIKI+INV_CARDS |
 | panic_button+ | yes | — | CARD_DIFF | wiki:wiki_cards/panic_button.txt (via panic_button) | — | INV_CARDS |
-| parasite | yes | mushrooms_eat_heals_and_infects | — | wiki:wiki_cards/parasite.txt | — | CARD_WIKI+INV_CARDS/mushrooms_eat_heals_and_infects |
+| parasite | yes | parasite_costs_max_health_whenever_it_leaves_the_deck, parasite_never_takes_the_max_health_below_one …(+1) | — | wiki:wiki_cards/parasite.txt | — | CARD_WIKI+INV_CARDS/parasite_costs_max_health_whenever_it_leaves_the_deck |
 | patient_guard | yes | the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/the_keyword_cells_are_in_the_image |
 | patient_guard+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
 | perfected_strike | yes | perfected_strike_counts_the_tagged_cards_in_hand | — | wiki:wiki_cards/perfected_strike.txt | — | CARD_WIKI+INV_CARDS/perfected_strike_counts_the_tagged_cards_in_hand |
@@ -551,7 +551,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+192) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+194) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+14) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -824,12 +824,12 @@
 | falling | yes | the_unknown_room_events_are_readable, falling_removes_a_card_of_the_named_kind …(+2) | — | — | — | the_unknown_room_events_are_readable |
 | forgotten_altar | yes | the_unknown_room_events_are_readable, an_event_choice_that_edits_the_deck_owes_a_pick | — | — | — | the_unknown_room_events_are_readable |
 | golden_idol | yes | the_unknown_room_events_are_readable, every_kind_answers_both_sides …(+14) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
-| living_wall | yes | the_unknown_room_events_are_readable, living_wall_forget_asks_which_card | — | — | — | the_unknown_room_events_are_readable |
+| living_wall | yes | the_unknown_room_events_are_readable, parasite_costs_max_health_whenever_it_leaves_the_deck …(+1) | — | — | — | the_unknown_room_events_are_readable |
 | masked_bandits | yes | the_unknown_room_events_are_readable, masked_bandits_fight_brings_three_named_bandits | — | — | — | the_unknown_room_events_are_readable |
 | mind_bloom | yes | the_unknown_room_events_are_readable, upgrade_all_upgrades_every_card_that_has_a_plus_row …(+2) | — | — | — | the_unknown_room_events_are_readable |
 | mushrooms | yes | the_unknown_room_events_are_readable, mushrooms_stomp_fights_three_fungi_and_pays_the_odd_mushroom …(+1) | — | — | — | the_unknown_room_events_are_readable |
 | mysterious_sphere | yes | the_act_three_events_state_the_wiki_s_numbers, the_unknown_room_events_are_readable | — | — | — | the_act_three_events_state_the_wiki_s_numbers |
-| old_beggar | yes | the_unknown_room_events_are_readable, old_beggar_takes_the_gold_and_asks_which_card | — | — | — | the_unknown_room_events_are_readable |
+| old_beggar | yes | the_unknown_room_events_are_readable, parasite_costs_max_health_whenever_it_leaves_the_deck …(+2) | — | — | — | the_unknown_room_events_are_readable |
 | old_shrine | yes | the_unknown_room_events_are_readable, an_event_can_give_a_relic_only_if_the_kernel_can_run_it | — | — | — | the_unknown_room_events_are_readable |
 | pleading_vagrant | yes | the_unknown_room_events_are_readable, pleading_vagrant_rob_gives_a_relic_and_a_curse_then_moves_on | — | — | — | the_unknown_room_events_are_readable |
 | purification_shrine | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
@@ -845,7 +845,7 @@
 | the_nest | yes | the_unknown_room_events_are_readable, a_named_card_goes_through_the_one_add_card_path …(+1) | — | — | — | the_unknown_room_events_are_readable |
 | the_ssssserpent | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | tomb_of_lord_red_mask | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
-| vampires | yes | the_unknown_room_events_are_readable, remove_all_deletes_every_copy_including_plus_rows …(+1) | — | — | — | the_unknown_room_events_are_readable |
+| vampires | yes | the_unknown_room_events_are_readable, remove_all_deletes_every_copy_including_plus_rows …(+2) | — | — | — | the_unknown_room_events_are_readable |
 | wandering_merchant | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | winding_halls | yes | the_act_three_events_state_the_wiki_s_numbers, the_unknown_room_events_are_readable | — | — | — | the_act_three_events_state_the_wiki_s_numbers |
 | wing_statue | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
@@ -922,7 +922,7 @@
 | magic_flower | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §297/§298 |
 | mango | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | mark_of_pain | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
-| mark_of_the_bloom | yes | campfire_options_follow_the_relics_the_wiki_names, mark_of_the_bloom_blocks_every_run_layer_heal | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
+| mark_of_the_bloom | yes | campfire_options_follow_the_relics_the_wiki_names, mark_of_the_bloom_blocks_every_run_layer_heal …(+1) | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
 | matryoshka | yes | matryoshka_queues_two_chests_and_pays_a_second_relic | — | — | — | §283/§292/matryoshka_queues_two_chests_and_pays_a_second_relic |
 | maw_bank | yes | the_gold_and_shop_relics_change_only_their_own_number, a_discounted_purchase_charges_the_discounted_price | — | — | — | §270/the_gold_and_shop_relics_change_only_their_own_number |
 | meal_ticket | yes | an_unknown_room_that_becomes_a_shop_pays_the_shop_entry_relics, the_node_relics_pay_on_the_right_kind_of_room | — | — | — | §271/an_unknown_room_that_becomes_a_shop_pays_the_shop_entry_relics |
