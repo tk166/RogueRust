@@ -57,7 +57,7 @@
 
 ```
 monsters 61 / encounters 64 / cards 295 (base 155 + plus 140) / statuses 148 /
-enemy actions 166 / relics 152 / potions 33 / events 38 (13+15+10) / start deck 10
+enemy actions 166 / relics 152 / potions 33 / events 39 (13+16+10) / start deck 10
 ascension variants 128 over 107 actions
 image full   content.sts.rdcf            189024 B
 image core   content.sts.core.rdcf       151460 B
@@ -65,9 +65,10 @@ image core   content.sts.core.rdcf       151460 B
 
 > ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`295` 是**卡行**（155 基础 + 140 升级行），不是 295 张不同的牌
 > —— 而且其中包含状态/诅咒牌与多档升级行（`searing_blow+`…`++++++`）；
-> `128 / 107` 是**变体 / 动作**；`38` 是三个幕的事件池之和（`13+15+10`），**不是**不同事件数 ——
-> `golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用，去重之后是 **35 条**
-> （§318–§325 把 Act 1/2/3 补到 11/12/7，与 wiki 的 31 条比是 **28 条**，只差 `cursed_tome`）。
+> `128 / 107` 是**变体 / 动作**；`39` 是三个幕的事件池之和（`13+16+10`），**不是**不同事件数 ——
+> `golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用，去重之后是 **36 条**
+> （§318–§325 把 Act 1/2/3 补到 11/12/7，§331 又补了 `nloth` ⇒ Act 2 到 **13/13**，
+> 与 wiki 的 31 条比是 **29 条**，只差 `cursed_tome`）。
 > `relics 152` 是**内容行**（§330 之前这里是 153 —— 那多出来的一行是 `mutagenic_strength`
 > 的**重复行**，现在有闸门 `[7g]` 挡着）；wiki 有 193 条，缺 41 条（§D.2）。
 ---
@@ -197,7 +198,7 @@ wiki 常见而我们**没有**的：
 | 遗物 | **152 / 193**（`audit_relic_gap.py` 的账：`MISSING: 41`、`METADATA: 0`、`IMPLEMENTED: 内核不认识 0`）。分档、载体决策树与逐条清单见 §D.2 与 `docs/relic-inventory.md` | 内容（缺的 41 件：Blight 13 / 别的角色 20 / `bottled_*` 3 / `necronomicon` / `circlet` 2 / 其余 2） |
 | 篝火选项 | **六个全通**（§259）：Rest / Smith / **Recall**（红钥匙）/ **Lift**（`Girya`，最多 3 次、之后每场战斗带这些力量）/ **Toke**（`Peace Pipe`，删牌免费）/ **Dig**（`Shovel`，只抽 Common/Uncommon/Rare）；`Coffee Dripper` / `Mark of the Bloom` 关 Rest、`Fusion Hammer` 关 Smith、`Dream Catcher` 让休息额外给一次卡牌奖励 | — （`Recall` 的用处是第四幕，见最后一行） |
 | 商店 | **有**（卡/遗物/药水/删卡，价格按稀有度；A16 加价；`the_courier` 刷新货架、`membership_card` 打折）。⚠️ **无色牌仍不出售**：没有 StS 的无色货架 —— 内容侧的无色池已经 **70/70**（§243–§252），缺的只是**商店里那一排**（`stock_shop` 加一排即可） | 内核（无色货架） |
-| 事件 | **35 条**（三幕池 13+15+10 = 38 条，110 个 `EVND` 段）。剧情分支是**真树**（`EVND` 段表 + `EV.Entry`，选项数不固定），选项支持 `Requires` / `RequiresAsc`、按类型的选牌问句（`the_library` / `sensory_stone` / `falling`）、事件中途开战斗（`dead_adventurer` / `mysterious_sphere` / `colosseum`）与 A15 的糟化分支。与 wiki 的 31 条比是 **28 条**（Act 1 11/11、Act 2 12/13、Act 3 7/7） | 内容（`cursed_tome` 明确不做 —— `necronomicon` 不在范围）。机制侧仍缺**事件级条件**与"任选一件遗物失去"（`N'loth`），见 §2 与 `docs/event-gaps.md` |
+| 事件 | **36 条**（三幕池 13+16+10 = 39 条，111 个 `EVND` 段）。剧情分支是**真树**（`EVND` 段表 + `EV.Entry`，选项数不固定），选项支持 `Requires` / `RequiresAsc`、按类型的选牌问句（`the_library` / `sensory_stone` / `falling`）、事件中途开战斗（`dead_adventurer` / `mysterious_sphere` / `colosseum`）与 A15 的糟化分支。与 wiki 的 31 条比是 **29 条**（Act 1 11/11、Act 2 13/13、Act 3 7/7） | 内容（`cursed_tome` 明确不做 —— `necronomicon` 不在范围）。机制侧的事件级条件与 `N'loth` 已做（§331） |
 | 塔底 Neow | **9 项**祝福 | 内容（缺"用初始遗物换 Boss 遗物"这类交易） |
 | **钥匙（红/蓝/绿）与第四幕** | 没有 | 内核 + 内容 |
 | **Ascension 1–20** | **20 / 20 条有机制**：14 条是运行层规则常量（A1 A5–A16 A20，`gap_check.py` 打印），A2/A3/A4 与 A17/18/19 走内容的 `EACT.ProgramAsc`。**wiki 写了 `{{Asc|N|` 而内容缺档的动作是 0 条**（闸门 `[7b]`，§328），档位按**怪物**钉（§315/§327） | — （`without a variant: 59` 是 wiki 本来就没写升档的动作） |

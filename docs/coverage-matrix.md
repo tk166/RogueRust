@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 954 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 955 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -41,14 +41,14 @@
 | 卡牌 | 295 | 167 | 128 | 0 | 281 | 14 | 18 | 0 |
 | 状态 | 148 | 137 | 6 | 5 | 0 | 148 | 1 | 0 |
 | 遭遇 | 64 | 46 | 18 | 0 | 0 | 0 | 0 | 0 |
-| 事件 | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 事件 | 36 | 36 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 152 | 135 | 17 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 954 | 694 | 248 | 12 | 476 | 194 | 85 | 0 |
+| **合计** | 955 | 695 | 248 | 12 | 476 | 194 | 85 | 0 |
 
-扫描到的具名测试：**1207** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1210** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
-事件：池里有 **38** 个位次、**35** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
+事件：池里有 **39** 个位次、**36** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
 同一页面的早期副本（内容同源，矩阵只用 `wiki_asc/` 那一份）：`wiki_book_of_stabbing.txt`、`wiki_lagavulin.txt`、`wiki_nemesis.txt`、`wiki_reptomancer.txt`、`wiki_slavers.txt`、`wiki_taskmaster.txt`
 
@@ -551,7 +551,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+194) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+196) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+14) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -811,7 +811,7 @@
 | enc_two_orb_walkers | yes | — | entity_tables_decode_row_by_row …(+11) | — | — | §318 |
 | enc_two_thieves | yes | the_mugger_mugs_steals_fifteen_gold_and_escapes_with_it | — | — | — | §314/§315/the_mugger_mugs_steals_fifteen_gold_and_escapes_with_it |
 
-## 事件（35）
+## 事件（36）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -829,6 +829,7 @@
 | mind_bloom | yes | the_unknown_room_events_are_readable, upgrade_all_upgrades_every_card_that_has_a_plus_row …(+2) | — | — | — | the_unknown_room_events_are_readable |
 | mushrooms | yes | the_unknown_room_events_are_readable, mushrooms_stomp_fights_three_fungi_and_pays_the_odd_mushroom …(+1) | — | — | — | the_unknown_room_events_are_readable |
 | mysterious_sphere | yes | the_act_three_events_state_the_wiki_s_numbers, the_unknown_room_events_are_readable | — | — | — | the_act_three_events_state_the_wiki_s_numbers |
+| nloth | yes | the_unknown_room_events_are_readable, nloth_offers_two_of_the_held_relics_and_takes_the_one_you_pick …(+1) | — | — | — | the_unknown_room_events_are_readable |
 | old_beggar | yes | the_unknown_room_events_are_readable, parasite_costs_max_health_whenever_it_leaves_the_deck …(+2) | — | — | — | the_unknown_room_events_are_readable |
 | old_shrine | yes | the_unknown_room_events_are_readable, an_event_can_give_a_relic_only_if_the_kernel_can_run_it | — | — | — | the_unknown_room_events_are_readable |
 | pleading_vagrant | yes | the_unknown_room_events_are_readable, pleading_vagrant_rob_gives_a_relic_and_a_curse_then_moves_on | — | — | — | the_unknown_room_events_are_readable |
@@ -841,13 +842,13 @@
 | the_joust | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | the_library | yes | the_unknown_room_events_are_readable, the_any_filter_takes_the_whole_pool_without_repeats …(+3) | — | — | — | the_unknown_room_events_are_readable |
 | the_mausoleum | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
-| the_moai_head | yes | the_unknown_room_events_are_readable, heal_full_reaches_the_current_maximum …(+1) | — | — | — | the_unknown_room_events_are_readable |
+| the_moai_head | yes | the_unknown_room_events_are_readable, event_level_requirements_filter_the_pool_before_the_roll …(+2) | — | — | — | the_unknown_room_events_are_readable |
 | the_nest | yes | the_unknown_room_events_are_readable, a_named_card_goes_through_the_one_add_card_path …(+1) | — | — | — | the_unknown_room_events_are_readable |
 | the_ssssserpent | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
-| tomb_of_lord_red_mask | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
+| tomb_of_lord_red_mask | yes | the_unknown_room_events_are_readable, event_level_requirements_filter_the_pool_before_the_roll | — | — | — | the_unknown_room_events_are_readable |
 | vampires | yes | the_unknown_room_events_are_readable, remove_all_deletes_every_copy_including_plus_rows …(+2) | — | — | — | the_unknown_room_events_are_readable |
 | wandering_merchant | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
-| winding_halls | yes | the_act_three_events_state_the_wiki_s_numbers, the_unknown_room_events_are_readable | — | — | — | the_act_three_events_state_the_wiki_s_numbers |
+| winding_halls | yes | the_act_three_events_state_the_wiki_s_numbers, the_unknown_room_events_are_readable …(+1) | — | — | — | the_act_three_events_state_the_wiki_s_numbers |
 | wing_statue | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 | world_of_goop | yes | the_unknown_room_events_are_readable | — | — | — | the_unknown_room_events_are_readable |
 
@@ -856,7 +857,7 @@
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
 | akabeko | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
-| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+14) | — | — | — | §320/the_same_state_hashes_the_same_and_a_change_moves_it |
+| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+15) | — | — | — | §320/the_same_state_hashes_the_same_and_a_change_moves_it |
 | ancient_tea_set | yes | the_node_relics_pay_on_the_right_kind_of_room, the_tea_set_charge_is_spent_by_the_next_fight | — | — | — | §271/the_node_relics_pay_on_the_right_kind_of_room |
 | art_of_war | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | astrolabe | yes | the_pickup_picks_do_not_take_over_the_screen | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
@@ -870,7 +871,7 @@
 | blue_candle | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §297/§298 |
 | brimstone | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | bronze_scales | yes | a_run_with_five_status_relics_keeps_all_five | — | — | — | §156/a_run_with_five_status_relics_keeps_all_five |
-| burning_blood | yes | capacity_is_an_error_not_a_truncation, burning_blood_heals_six_at_the_end_of_a_fight …(+8) | — | — | — | §320/capacity_is_an_error_not_a_truncation |
+| burning_blood | yes | capacity_is_an_error_not_a_truncation, burning_blood_heals_six_at_the_end_of_a_fight …(+9) | — | — | — | §320/capacity_is_an_error_not_a_truncation |
 | busted_crown | yes | the_reward_layer_relics_change_the_payout | — | — | — | §269/the_reward_layer_relics_change_the_payout |
 | calipers | yes | the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |
 | calling_bell | yes | calling_bell_pays_a_curse_and_owes_three_relics, the_pickup_debts_are_paid_and_cleared | — | — | — | §292/calling_bell_pays_a_curse_and_owes_three_relics |
@@ -935,7 +936,7 @@
 | mutagenic_strength | yes | the_zero_infrastructure_batch_wires_the_right_carrier, mutagenic_strength_rides_its_own_carrier_status | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | neows_lament | yes | neows_lament_covers_exactly_the_first_three_fights, neows_lament_gives_the_first_three_fights_one_hp_enemies | — | — | — | §300/§301/neows_lament_covers_exactly_the_first_three_fights |
 | nilrys_codex | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §299/§300 |
-| nloths_gift | yes | nloths_gift_triples_the_rare_band_and_never_passes_uncommon | — | — | — | §292/nloths_gift_triples_the_rare_band_and_never_passes_uncommon |
+| nloths_gift | yes | nloths_gift_triples_the_rare_band_and_never_passes_uncommon, nloth_offers_two_of_the_held_relics_and_takes_the_one_you_pick | — | — | — | §292/nloths_gift_triples_the_rare_band_and_never_passes_uncommon |
 | nloths_hungry_face | yes | nloths_hungry_face_empties_exactly_one_chest | — | — | — | §292/nloths_hungry_face_empties_exactly_one_chest |
 | nunchaku | yes | the_every_nth_card_relics_wire_their_own_carrier | — | — | — | §261/§262/the_every_nth_card_relics_wire_their_own_carrier |
 | odd_mushroom | yes | the_conditional_modifier_relics_wire_their_own_carrier | — | — | — | §265/§266/the_conditional_modifier_relics_wire_their_own_carrier |
@@ -959,11 +960,11 @@
 | prayer_wheel | yes | the_reward_layer_relics_change_the_payout | — | — | — | §269/the_reward_layer_relics_change_the_payout |
 | preserved_insect | yes | the_kind_gated_relics_only_fire_in_their_own_kinds | — | — | — | §268/§269/the_kind_gated_relics_only_fire_in_their_own_kinds |
 | question_card | yes | the_reward_layer_relics_change_the_payout | — | — | — | §269/the_reward_layer_relics_change_the_payout |
-| red_mask | yes | the_zero_infrastructure_batch_wires_the_right_carrier, a_named_relic_is_paid_exactly_or_not_at_all | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
+| red_mask | yes | event_level_requirements_filter_the_pool_before_the_roll, the_zero_infrastructure_batch_wires_the_right_carrier …(+1) | — | — | — | §266/§267/event_level_requirements_filter_the_pool_before_the_roll |
 | red_skull | yes | the_conditional_modifier_relics_wire_their_own_carrier | — | — | — | §265/§266/the_conditional_modifier_relics_wire_their_own_carrier |
 | regal_pillow | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+5) | — | — | §156 |
 | ring_of_the_serpent | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
-| ring_of_the_snake | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
+| ring_of_the_snake | yes | the_zero_infrastructure_batch_wires_the_right_carrier, nloth_stays_out_of_the_pool_below_two_relics | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | runic_cube | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | runic_dome | yes | runic_dome_blinds_the_intent_observation | — | — | — | §296/§297/runic_dome_blinds_the_intent_observation |
 | runic_pyramid | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |

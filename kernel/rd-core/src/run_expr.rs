@@ -85,6 +85,8 @@ const KINDS: &[&str] = &[
     "card_tag",
     // §321：`floor` —— 本幕内的层号（`mind_bloom` 的第三个选项按它换）。
     "floor",
+    // §331：`relic_count` —— 身上有几件遗物（`N'loth` 的"至少 2 件才出现"）。
+    "relic_count",
 ];
 
 /// 数值型 kind 允许的比较（`AtLeast` = `x >= n`，`AtMost` = `x <= n`）。
@@ -266,6 +268,8 @@ pub fn decide(
             // §321：层号（本幕内，`0` = 还没出发）。
             "floor" => facts.floor,
             "deck_count" => i32::try_from(facts.deck.len()).unwrap_or(i32::MAX),
+            // §331：遗物件数。与 `deck_count` 同一个形状（"有几件"是数量，不是"有没有某一件"）。
+            "relic_count" => i32::try_from(facts.relics.len()).unwrap_or(i32::MAX),
             // §287：单次最高伤害。阈值 `at_least 10` 就是 wiki 的 "10 or more damage per hit"。
             "card_damage" => facts.max_hit_damage,
             _ => return Err(RequirementError::UnknownKind),
@@ -287,7 +291,7 @@ pub fn decide(
 
 /// 数值型 kind（`Amount` 是数字，不是 id）。
 const NUMERIC_KINDS: &[&str] = &["gold", "health", "max_health", "health_percent", "deck_count",
-                                "ascension", "card_damage", "floor"];
+                                "ascension", "card_damage", "floor", "relic_count"];
 
 /// 与 §278 的 `percent_of` 同一个取整：`floor(base × percent / 100)`。
 fn percent_of(base: i32, percent: i32) -> i32 {

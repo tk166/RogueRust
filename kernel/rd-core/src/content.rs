@@ -3120,6 +3120,24 @@ impl<'a> Content<'a> {
         floor: i32,
         gold: i32,
     ) -> Option<[&'a str; MAX_POOL_IDS]> {
+        self.event_pool_at_with_facts(pool, floor, gold, None)
+    }
+
+    /// §331：与 [`Self::event_pool_at`] 同一段解码，多筛一格 **`Requires`**（事件级条件）。
+    ///
+    /// `facts = None` ⇒ 不筛（存量行为，`event_pool_at` 就是这么调的）。
+    ///
+    /// ⚠️ 为什么条件求值放在**这里**而不是调用方：`Requires` 的原子词表只有一份
+    /// （[`crate::run_expr::option_is_available`]），而"池条目的 `Requires`"与"选项的 `Requires`"
+    /// 是**同一个字段名、同一串原子**。放在两处就会有两份"什么算成立"。
+    #[must_use]
+    pub fn event_pool_at_with_facts(
+        &'a self,
+        pool: &str,
+        floor: i32,
+        gold: i32,
+        facts: Option<&crate::run_expr::RunFacts<'_>>,
+    ) -> Option<[&'a str; MAX_POOL_IDS]> {
         let hop = match pool {
             "Events" => "EventTables.Events",
             "Events2" => "EventTables.Events2",
@@ -3167,6 +3185,7 @@ impl<'a> Content<'a> {
             let mut max_floor = 0i32;
             // §291：金币门槛（`The Joust` 只在 >50 金币时出现）。
             let mut min_gold = 0i32;
+
             for slot in 0..element_opcode.nfields() {
                 let sub = element_opcode.field(slot)?;
                 let sub_width = usize::from(sub.slots()?);
@@ -3191,6 +3210,20 @@ impl<'a> Content<'a> {
                 || gold < min_gold
             {
                 continue;
+            }
+            // §331：事件级条件。`option_is_available` 自己从**这个节点**上读 `Requires`
+            // （与选项是同一个字段名、同一串原子），没有该字段 ⇒ 无条件成立。
+            //
+            // ⚠️ 传的是**池条目自己的 term id**，不是它 `Requires` 那一格的列表 id ——
+            // 后者是"列表节点"，再往里读 `Requires` 只会读到空（第一版就是这么错的：
+            // 整池都变成 `None`，而 `None` 在调用方读作"内容里没有这个池"）。
+            //
+            // 读不出来 ⇒ **整池拒绝**（`None`）而不是"这条放行"：条件坏了却让事件照常出现，
+            // 是"看起来在跑"的死内容里最难发现的一种。
+            if let Some(facts) = facts {
+                if !crate::run_expr::option_is_available(self, element, facts).ok()? {
+                    continue;
+                }
             }
             if count == MAX_POOL_IDS {
                 // 池子比读得下的还长 ⇒ 拒绝，不截断（与 `id_pool` 同一条纪律）。
@@ -3497,11 +3530,19 @@ pub struct EventStep<'a> {
     pub entry_asc: [EffectSpec<'a>; MAX_EVENT_EFFECTS],
     /// A15 版有效条数。
     pub entry_asc_count: u8,
+    /// §331：这一段要掷几件**遗物候选**（`N'loth` 的两件）。`0` = 没有。
+    pub relic_offer: u8,
     /// 选项（前 [`EventStep::count`] 条有效）。
     pub options: [EventOption<'a>; MAX_EVENT_OPTIONS],
     /// 选项条数。
     pub count: u8,
 }
+
+/// §331：一个事件最多掷几件**遗物候选**（`N'loth` 的两件）。
+///
+/// 定义在 `rd-core`：读 `RelicOffer` 的那一格在 `content.rs` 里，而 `rd-run` 存候选的数组
+/// 也要用同一个数 —— **一个数一处定义**，`rd-run` 直接 `pub use` 它。
+pub const MAX_EVENT_RELIC_OFFER: usize = 2;
 
 impl<'a> EventStep<'a> {
     /// 有效的选项切片。
@@ -3527,6 +3568,7 @@ impl<'a> EventStep<'a> {
         entry_count: 0,
         entry_asc: [EffectSpec { effect: "nothing", amount: 0 }; MAX_EVENT_EFFECTS],
         entry_asc_count: 0,
+        relic_offer: 0,
         options: [EventOption {
             label: "",
             effects: [EffectSpec {
@@ -3617,6 +3659,14 @@ impl<'a> Content<'a> {
                 .unwrap_or("");
             let mut step = EventStep::EMPTY;
             step.text = text;
+            // §331：`RelicOffer` 与 `Effects` 一样落在 `extra` 格里（schema 没消费的键被打包）。
+            step.relic_offer = crate::ir::NodeRef::new(self, row.extra())
+                .int_field("RelicOffer")
+                .ok()
+                .flatten()
+                .and_then(|count| u8::try_from(count).ok())
+                .unwrap_or(0)
+                .min(crate::content::MAX_EVENT_RELIC_OFFER as u8);
             // ⚠️ `option_list` **只填数组**，条数要在这里记 —— 第一版写了句"它已经把条数写进
             // `count`"，而它没有，于是每一段都是"有正文、0 个选项"，测试立刻报红。
             step.count = self.option_list(row.options(), &mut step.options)?;
@@ -5503,14 +5553,14 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            35,
+            36,
             "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
              `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`，§290 补了 `the_nest`，
              §318 补了 `winding_halls` / `mysterious_sphere`（`scrap_pile` 改成 Scrap Ooze 的 9 段链），
              §319 补了 `falling`，§320 补了 `the_library` / `sensory_stone`，§321 补了 `mind_bloom` /
              `tomb_of_lord_red_mask`，§322 补了 `council_of_ghosts` / `pleading_vagrant` /
              `old_beggar` / `vampires`，§323 补了 `masked_bandits`，§324 补了 `augmenter`，§325 补了 `big_fish` / `living_wall` /
-             `mushrooms`。pools 的**位次**比
+             `mushrooms`，§331 补了 `nloth`（事件级条件 + 两件候选遗物）。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5690,6 +5740,8 @@ mod tests {
                 "mind_bloom",
                 "mushrooms",
                 "mysterious_sphere",
+                // §331
+                "nloth",
                 // §322
                 "old_beggar",
                 "old_shrine",
@@ -6180,6 +6232,68 @@ mod tests {
         let core = std::fs::read(CORE_IMAGE).expect("the roguedeck image");
         let core = Content::parse(&core).expect("parses");
         assert_eq!(core.event_count(), 0, "roguedeck has no events");
+    }
+
+    /// §331：**事件级条件** —— `EventTables` 条目的 `Requires` 在**掷之前**筛池。
+    ///
+    /// 两条真实用户：`The Moai Head`（HP ≤ 50% 才出现）与 `Tomb of Lord Red Mask`（要有红面具）。
+    /// 两侧各一次：条件成立时它在池子里、不成立时它**不在** —— 少了后半句，"条件没接上"
+    /// （永远在池子里）也会绿。
+    #[test]
+    fn event_level_requirements_filter_the_pool_before_the_roll() {
+        // ⚠️ 用 **sts** 包的镜像：`tools/contentc/out/content.rdcf` 是 `roguedeck` 那一份，
+        // 它没有 `UnknownRooms`（也就没有事件）—— 拿它跑这条判据会在第一行 panic，
+        // 而报错是 "the act-3 pool"，看起来像"池子读不出来"。
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = Content::parse(&blob).expect("parses");
+        let base = crate::run_expr::RunFacts {
+            gold: 0,
+            health: 40,
+            health_max: 80,
+            ascension: 0,
+            relics: &[],
+            deck: &["strike"],
+            floor: 0,
+            deck_tags: &[],
+            max_hit_damage: 0,
+        };
+        let pool_has = |facts: &crate::run_expr::RunFacts<'_>, id: &str| {
+            let pool = content
+                .event_pool_at_with_facts("Events3", 12, 0, Some(facts))
+                .expect("the act-3 pool");
+            pool.iter().any(|entry| !entry.is_empty() && *entry == id)
+        };
+
+        // ① Moai Head：40/80 = 50% ⇒ 在；41/80 > 50% ⇒ 不在。
+        let at_half = crate::run_expr::RunFacts { health: 40, ..base };
+        let above_half = crate::run_expr::RunFacts { health: 41, ..base };
+        assert!(pool_has(&at_half, "the_moai_head"), "at 50% the Moai Head can appear");
+        assert!(
+            !pool_has(&above_half, "the_moai_head"),
+            "above 50% the Moai Head must not appear (wiki: only below half HP)"
+        );
+
+        // ② Tomb of Lord Red Mask：有红面具 ⇒ 在；没有 ⇒ 不在。
+        let with_mask = crate::run_expr::RunFacts { relics: &["red_mask"], ..base };
+        assert!(pool_has(&with_mask, "tomb_of_lord_red_mask"), "holding the mask opens the tomb");
+        assert!(
+            !pool_has(&base, "tomb_of_lord_red_mask"),
+            "without the Red Mask the tomb is not in the pool at all"
+        );
+
+        // ③ 没有 `Requires` 的事件不受影响（否则"全池都被筛掉"也会让上面两条绿）。
+        assert!(pool_has(&base, "winding_halls"), "an unconditional event stays in the pool");
+
+        // ④ `event_pool_at`（不带 facts）**不筛** —— 存量调用与测试的语义没变。
+        let unfiltered = content.event_pool_at("Events3", 12, 0).expect("the act-3 pool");
+        assert!(
+            unfiltered.iter().any(|entry| *entry == "tomb_of_lord_red_mask"),
+            "without facts nothing is filtered out"
+        );
     }
 
     /// The twenty potions, read out of the image, with the **closed effect vocabulary** enforced:

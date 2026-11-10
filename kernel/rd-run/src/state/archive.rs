@@ -34,7 +34,8 @@ use crate::map::{MapNode, MapRow, NodeKind, RunMap, MAX_OUT_EDGES, NODES_PER_ROW
 use super::RunId;
 use crate::state::{
     BlessingFollowUp, DeckChange, Offer, Pending, Reward, RunMark, RunState, ShopStock,
-    MAX_EVENT_OFFER, MAX_REWARD_CARDS, MAX_RUN_DECK, MAX_RUN_POTIONS, MAX_RUN_RELICS,
+    MAX_EVENT_OFFER, MAX_EVENT_RELIC_OFFER, MAX_REWARD_CARDS, MAX_RUN_DECK, MAX_RUN_POTIONS,
+    MAX_RUN_RELICS,
     MAX_SHOP_CARDS, MAX_SHOP_RELICS,
 };
 use crate::streams::{RunRng, RunStream};
@@ -670,6 +671,11 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
         let id = state.event_offer_card(slot).unwrap_or("");
         writer.id(RunId::new(id).map_err(|_| ArchiveError::BadField("event_offer"))?)?;
     }
+    // §331：事件掷出的**遗物候选**（`N'loth` 的两件）。与上面同一形状：长度 + 每个一件。
+    writer.byte(state.event_relic_offer_len)?;
+    for slot in 0..usize::from(state.event_relic_offer_len) {
+        writer.id(state.event_relic_offer_ids[slot])?;
+    }
 
     for counter in state.rng.counters() {
         writer.int(*counter)?;
@@ -864,6 +870,15 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     for slot in offer_ids.iter_mut().take(offer_len as usize) {
         *slot = reader.id()?;
     }
+    // §331：遗物候选（与上面同一条纪律：长度在范围内、已声明的槽非空）。
+    let relic_offer_len = reader.byte()?;
+    if relic_offer_len as usize > MAX_EVENT_RELIC_OFFER {
+        return Err(ArchiveError::BadField("event_relic_offer_len"));
+    }
+    let mut relic_offer_ids = [RunId::EMPTY; MAX_EVENT_RELIC_OFFER];
+    for slot in relic_offer_ids.iter_mut().take(relic_offer_len as usize) {
+        *slot = reader.id()?;
+    }
 
     let mut counters = [0i32; RunStream::COUNT];
     for slot in &mut counters {
@@ -1002,6 +1017,9 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     // ⚠️ 少了这一行读回来就是"有候选但没有长度" —— 长度是**读出来**的，不是 id 表推的
     // （空槽也是合法值），这正是那半行漏掉时 `event_offer_len()` 仍是 0 的原因。
     restored.event_offer_len = offer_len as u8;
+    // §331：遗物候选。空槽也是合法值（没有掷过），所以长度单独存。
+    restored.event_relic_offer_ids = relic_offer_ids;
+    restored.event_relic_offer_len = relic_offer_len;
     restored.rarity_offset = rarity_offset;
     restored.ascension = ascension;
     Ok(restored)

@@ -130,7 +130,7 @@ python -m http.server 8000
 |---|---|
 | **战斗内核** | `rd-core` **22** 个源文件、约 **75k** 行。出牌/结算/状态/意图/修饰器管线/效果程序 IR（栈式）/选择与目标/金色指纹；**零分配、纯整数、`forbid(unsafe_code)`** |
 | **运行层** | `rd-run` 约 **16.3k** 行。地图（15 行 × 7 列 + Boss）、幕、牌组、金币、遗物、药水、奖励屏、商店、事件、篝火、**Ascension 0–20（20/20 条都有机制）**、**存档（单行文本 + CRC）**、**回放（动作序列 + 每步哈希）** |
-| **内容** | **61 怪 / 64 遭遇 / 295 条卡行（155 张基础 + 140 条升级行）/ 148 状态 / 166 敌人动作 / 152 遗物 / 33 药水（满池）/ **35 个事件**（三幕池 13+15+10 = 38 条，跨幕复用 3 条；110 个 `EVND` 段）/ 10 张起始牌**；**107 个动作有升阶变体**（128 个变体）。编译成 189,024 B 的 `rdcf` 镜像（core 镜像 151,460 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
+| **内容** | **61 怪 / 64 遭遇 / 295 条卡行（155 张基础 + 140 条升级行）/ 148 状态 / 166 敌人动作 / 152 遗物 / 33 药水（满池）/ **36 个事件**（三幕池 13+16+10 = 39 条，跨幕复用 3 条；111 个 `EVND` 段）/ 10 张起始牌**；**107 个动作有升阶变体**（128 个变体）。编译成 189,024 B 的 `rdcf` 镜像（core 镜像 151,460 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
 | **前端** | `index.html`（战斗 + 运行层 + 存档 + 回放）、`map.html`（地图页）；`wasm32` + **122** 个 `i32` 的战斗观察向量（另有 19 个 slot 的运行层观察）、一组 `rd_env_*` / `rd_run_*` 导出（`web/smoke.mjs` 有一张手抄的 `REQUIRED` 表**逐条**对账，加导出必须同时改两处） |
 | **RL 环境** | `rd_env_*` ABI（`docs/spec/env-abi.md`）+ Python `ctypes` 封装（多进程、批量观察） |
 | **裸机** | `riscv32imac-unknown-none-elf` 真链接成 ELF，镜像占用有闸门 |
@@ -160,14 +160,14 @@ python -m http.server 8000
   `golden_eye`（缺 `Scry`）。
   分档、载体决策树与已实现规则清单见 **`docs/sts-wiki-gap.md` §D.2**；
   方法论见 **`docs/function_scaling_up_for_relics.md`**。
-* **事件**：**35 条**（三幕池 13+15+10 = 38 条；`golden_idol` / `ancient_forge` /
-  `purification_shrine` 跨幕复用，110 个 `EVND` 段）。**剧情分支是真树**（`EVND` 段表 + `EV.Entry`，
+* **事件**：**36 条**（三幕池 13+16+10 = 39 条；`golden_idol` / `ancient_forge` /
+  `purification_shrine` 跨幕复用，111 个 `EVND` 段）。**剧情分支是真树**（`EVND` 段表 + `EV.Entry`，
   选项数不固定），选项支持条件（`Requires` / `RequiresAsc`）、按类型的选牌问句
   （`the_library` 20 选 1、`sensory_stone`、`falling` 的按类型删牌）、事件中途开战斗
   （`dead_adventurer` / `mysterious_sphere` / `colosseum`）、以及 A15 的糟化分支。
-  **与 wiki 的 31 条相比是 28 条**：Act 1 **11/11**、Act 2 **12/13**、Act 3 **7/7** ——
-  唯一明确不做的是 `cursed_tome`（`necronomicon` 不在范围）。**仍缺**：事件级条件
-  （"这条事件出不出现"）与"从手上任选一件遗物失去"（`N'loth`）。逐条见 `docs/event-gaps.md`。
+  **与 wiki 的 31 条相比是 29 条**：Act 1 **11/11**、Act 2 **13/13**、Act 3 **7/7** ——
+  唯一明确不做的是 `cursed_tome`（`necronomicon` 不在范围）。**事件级条件**（"这条事件出不出
+  现"）与 `N'loth` 的两件**随机候选遗物**都已做（§331）。逐条见 `docs/event-gaps.md`。
 * **状态**：缺"下一回合**多**抽 / **多**能量"（`Draw` / `Energized`）—— 现在只有本回合的
   `combat_draw` / `combat_energy`，以及"下一回合**少**抽"的 `standard.draw_reduction`。
 * **Ascension**：**20/20 条都有机制**（14 条运行层规则 + 6 条走 `EACT.ProgramAsc`）；A7/A8/A9 的

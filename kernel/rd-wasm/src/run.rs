@@ -1282,7 +1282,17 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
         let floor = session.state.floor();
         // §291：`MinGold` 与楼层同一个筛子（`The Joust` 只在 >50 金币时出现）。
         let gold = session.state.gold();
-        let Some(pool) = image.event_pool_at(pool_name, floor, gold) else {
+        // §331：事件级条件（"这条事件出不出现"）要在**掷之前**参与筛选 —— 与楼层/金币同一个
+        // 筛子，所以"池子里有几个"仍然不改变筛掉几个之后的随机流位置。
+        let relics: Vec<&str> = session.state.relics().iter().map(|id| id.as_str()).collect();
+        let deck: Vec<&str> = session.state.deck().iter().map(|id| id.as_str()).collect();
+        let deck_tags: Vec<&str> = deck
+            .iter()
+            .map(|id| card_kind(image, id).wire_name())
+            .collect();
+        let facts = run_facts(session, &relics, &deck, &deck_tags);
+        let Some(pool) = image.event_pool_at_with_facts(pool_name, floor, gold, Some(&facts))
+        else {
             let message = std::format!("内容里没有 `EventTables.{pool_name}` 池（第 {act} 幕）");
             return fail(session, &message);
         };
@@ -1313,8 +1323,80 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
             let message = describe(&e);
             return fail(session, &message);
         }
+        // §331：`N'loth` 的候选遗物 —— 开事件那一刻掷定（wiki: 从**当前持有**的遗物里随机挑两件）。
+        // 用 `RunStream::Event`：与事件抽取同一条流，不开新流（多开一条只会让 `run_hash`
+        // 的随机计数多一格，而语义没变）。
+        let offer = image.event_step(entry).map_or(0, |step| step.relic_offer);
+        if offer > 0 {
+            if let Err(message) = roll_event_relic_offer(session, u8::from(offer)) {
+                return fail(session, &message);
+            }
+        }
     }
     0
+}
+
+/// §331：给事件掷 `count` 件**互不相同**的遗物候选（`N'loth` 的两件）。
+///
+/// 从**当前持有**的遗物里挑（wiki 原话），所以持有不足 `count` 件时是内容/条件错 —— 那种事件
+/// 本来就不该出现（`N'loth` 的 `Requires` 是 `relic_count at_least 2`）。这里**响亮拒绝**，
+/// 不静默少给一件：少给一件会让两个按钮指向同一件遗物，而屏幕上看起来一切正常。
+fn roll_event_relic_offer(session: &mut RunSession, count: u8) -> Result<(), String> {
+    // ⚠️ 先把遗物**拷进定长缓冲**：`relics()` 借的是 `session.state`，而下面要 `rng_mut()`
+    // 与 `set_event_relic_offer()`（都是可变借）。`RunId` 是 `Copy`，所以拷贝不花什么。
+    let mut held = [rd_run::state::RunId::EMPTY; rd_run::state::MAX_RUN_RELICS];
+    let held_len = session.state.relics().len();
+    if held_len > held.len() {
+        return Err("遗物数超过容量".to_string());
+    }
+    held[..held_len].copy_from_slice(session.state.relics());
+    if held_len < usize::from(count) {
+        return Err(std::format!(
+            "事件要 {count} 件遗物候选，手上只有 {held_len} 件"
+        ));
+    }
+    let mut picked = [rd_run::state::RunId::EMPTY; rd_core::content::MAX_EVENT_RELIC_OFFER];
+    for slot in 0..usize::from(count) {
+        // 拒绝采样：只从"还没被选中"的那些里掷 —— 于是"两件不同"由掷法保证，
+        // 而不是掷完再去重（后者会让分布偏向列表靠前的遗物）。
+        let mut remaining = [rd_run::state::RunId::EMPTY; rd_run::state::MAX_RUN_RELICS];
+        let mut width = 0usize;
+        for candidate in held.iter().take(held_len) {
+            if picked[..slot].contains(candidate) {
+                continue;
+            }
+            remaining[width] = *candidate;
+            width += 1;
+        }
+        let width = u32::try_from(width).map_err(|_| "遗物太多".to_string())?;
+        let pick = session
+            .state
+            .rng_mut()
+            .roll(rd_run::streams::RunStream::Event, width)
+            .map_err(|e| crate::detail(&e))?;
+        let Some(id) = remaining.get(pick as usize).copied() else {
+            return Err("遗物候选掷不出来".to_string());
+        };
+        session
+            .state
+            .set_event_relic_offer(slot, id.as_str())
+            .map_err(|e| crate::detail(&e))?;
+        picked[slot] = id;
+    }
+    Ok(())
+}
+
+/// §331（**仅测试**）：把掷候选那一步单独暴露出来。
+///
+/// 生产路径是 `rd_run_begin_node` 里的一段（那里拿得到 `entry`），而测试要"先开事件、
+/// 再单独看候选"，所以留一个只编译进 test 的入口 —— **不复制掷法**
+/// （复制出来的第二份一定会漂，`FACT.md` §4.20）。
+#[cfg(test)]
+pub(crate) fn test_roll_event_relic_offer(count: u8) -> Result<(), String> {
+    let Some(session) = run_slot().as_mut() else {
+        return Err("no session".to_string());
+    };
+    roll_event_relic_offer(session, count)
 }
 
 /// Rest: heal 30% of maximum HP. Returns the health restored, or `-2`.
@@ -1722,11 +1804,50 @@ pub unsafe extern "C" fn rd_run_event_text_into(ptr: *mut u8) -> i32 {
     }
 }
 
+/// §331：把选项标签里的 `{0}` / `{1}` 换成那一件**候选遗物**的显示名（`N'loth` 的
+/// `[Offer: Relic A]`）。
+///
+/// 替换放在这里而不是页面：页面本来就是"读一段字节当按钮文字"，所以页面零改动；
+/// 而"页面自己拼文案"是 §274 记过的那类重复（两处认识同一个词表）。
+///
+/// 没有 `{n}` 的标签原样返回；候选缺席时保留原文（**不**悄悄换成空串 —— 那会让
+/// "候选没掷出来"变成"按钮没有名字"，而后者看起来像样式问题）。
+fn event_label_text(choice: rd_core::content::EventOption<'static>) -> std::string::String {
+    let label = choice.label;
+    if !label.contains('{') {
+        return std::string::String::from(label);
+    }
+    let mut out = std::string::String::from(label);
+    let Some(session) = run_slot().as_ref() else {
+        return out;
+    };
+    let image = content();
+    for slot in 0..rd_core::content::MAX_EVENT_RELIC_OFFER {
+        let placeholder = std::format!("{{{slot}}}");
+        if !out.contains(&placeholder) {
+            continue;
+        }
+        let Some(relic_id) = session.state.event_relic_offer(slot) else {
+            continue;
+        };
+        // `RelRow::display_name()` 给的是**串号**（`u16`），不是 `Option` —— 与
+        // `encounter.hero_display_name()` 同一个形状，所以这里自己 `string()` 一次。
+        let name = image
+            .lookup_in(relic_id, rd_core::content::EK_RELIC)
+            .and_then(|entry| image.relic(u32::from(entry.index)))
+            .and_then(|row| image.string(row.display_name()))
+            .filter(|name| !name.is_empty())
+            .unwrap_or(relic_id);
+        out = out.replace(&placeholder, name);
+    }
+    out
+}
+
 /// Choice `slot`'s button text.
 #[no_mangle]
 pub extern "C" fn rd_run_event_label_len(slot: i32) -> i32 {
     match event_choice(slot) {
-        Some(choice) => choice.label.len() as i32,
+        Some(choice) => event_label_text(choice).len() as i32,
         None => -1,
     }
 }
@@ -1737,7 +1858,7 @@ pub extern "C" fn rd_run_event_label_len(slot: i32) -> i32 {
 #[no_mangle]
 pub unsafe extern "C" fn rd_run_event_label_into(slot: i32, ptr: *mut u8) -> i32 {
     match event_choice(slot) {
-        Some(choice) => write_out(choice.label, ptr),
+        Some(choice) => write_out(&event_label_text(choice), ptr),
         None => 0,
     }
 }
@@ -10738,6 +10859,117 @@ mod tests {
             1,
             "seed {seed}: infected"
         );
+    }
+
+    /// §331：`N'loth` —— 两件**随机候选**、标签替换、点下去真的失去那一件。
+    ///
+    /// wiki：*"It will only appear if the player has at least 2 Relics. Relic A and Relic B will be
+    /// randomly chosen from the player's currently held Relics. [Offer: Relic A] Lose this relic.
+    /// Obtain a special relic."*
+    #[test]
+    fn nloth_offers_two_of_the_held_relics_and_takes_the_one_you_pick() {
+        reset(11);
+        // 起始只带 1 件遗物（`burning_blood`），而 wiki 的 N'loth 要至少 2 件 ——
+        // 所以先给一件（用一件纯被动的，不引入别的行为）。
+        run_slot()
+            .as_mut()
+            .expect("a run")
+            .state
+            .push_relic("anchor", &[])
+            .expect("anchor");
+        let held: Vec<&'static str> = {
+            let session = run_slot().as_ref().expect("a run");
+            session.state.relics().iter().map(|id| id.as_str()).collect()
+        };
+        assert!(held.len() >= 2, "the starter run holds at least two relics: {held:?}");
+
+        // 直接开事件（跳过 `?` 房的掷骰：那条路已经由 `event_level_requirements...` 钉住）。
+        {
+            let session = run_slot().as_mut().expect("a run");
+            session
+                .state
+                .begin_event("nloth", "nloth")
+                .expect("nloth opens");
+        }
+        // §331：掷两件候选 —— 与 `rd_run_begin_node` 里那一段同一段逻辑。
+        assert!(test_roll_event_relic_offer(2).is_ok(), "the offer rolls");
+        let (first, second) = {
+            let session = run_slot().as_ref().expect("a run");
+            (
+                std::string::String::from(session.state.event_relic_offer(0).expect("candidate 0")),
+                std::string::String::from(session.state.event_relic_offer(1).expect("candidate 1")),
+            )
+        };
+        assert_ne!(first, second, "the two candidates must differ");
+        assert!(held.contains(&first.as_str()), "{first} is one of the held relics");
+        assert!(held.contains(&second.as_str()), "{second} is one of the held relics");
+
+        // 标签里的 `{0}` 换成了那件遗物的**显示名**（不是 id）。
+        let label0 = {
+            let len = rd_run_event_label_len(0);
+            assert!(len > 0, "choice 0 has a label");
+            let mut buffer = vec![0u8; len as usize];
+            unsafe { rd_run_event_label_into(0, buffer.as_mut_ptr()) };
+            String::from_utf8(buffer).expect("utf-8")
+        };
+        assert!(
+            label0.starts_with("Offer: ") && !label0.contains('{'),
+            "the placeholder is substituted: {label0:?}"
+        );
+        assert!(
+            !label0.contains(&first) || !first.contains('_'),
+            "the label shows a display name, not the raw id: {label0:?}"
+        );
+
+        // 点第一个：失去候选 0，拿到 N'loth's Gift。
+        assert_eq!(rd_run_choose(0), 0, "{}", run_error_text());
+        let after: Vec<&'static str> = {
+            let session = run_slot().as_ref().expect("a run");
+            session.state.relics().iter().map(|id| id.as_str()).collect()
+        };
+        assert!(
+            !after.contains(&first.as_str()),
+            "{first} must be gone (took {after:?})"
+        );
+        assert!(after.contains(&"nloths_gift"), "N'loth's Gift arrives: {after:?}");
+        assert_eq!(
+            after.len(),
+            held.len(),
+            "one relic left, one arrived -- the count is unchanged"
+        );
+    }
+
+    /// §331：只有 1 件遗物时 `N'loth` **不在池子里**（`relic_count at_least 2`）。
+    ///
+    /// 这是 Phase 1 的事件级条件在真实内容上的第一个用户 —— 判据直接问池子，
+    /// 因为"事件屏上按钮被锁"与"事件根本不出现"是两件事，而 wiki 要的是后者。
+    #[test]
+    fn nloth_stays_out_of_the_pool_below_two_relics() {
+        let content = rd_core::content::Content::parse(crate::IMAGE).expect("image");
+        let one = rd_core::run_expr::RunFacts {
+            gold: 0,
+            health: 70,
+            health_max: 80,
+            ascension: 0,
+            relics: &["burning_blood"],
+            deck: &["strike"],
+            floor: 0,
+            deck_tags: &[],
+            max_hit_damage: 0,
+        };
+        let two = rd_core::run_expr::RunFacts {
+            relics: &["burning_blood", "ring_of_the_snake"],
+            ..one
+        };
+        let has = |facts: &rd_core::run_expr::RunFacts<'_>| {
+            content
+                .event_pool_at_with_facts("Events2", 5, 0, Some(facts))
+                .expect("the act-2 pool")
+                .iter()
+                .any(|entry| *entry == "nloth")
+        };
+        assert!(!has(&one), "with one relic N'loth must not be in the pool");
+        assert!(has(&two), "with two relics it is");
     }
 
     /// §326：`mark_of_the_bloom` ⇒ 战斗状态里的 `heal_blocked` 为真（没有这件遗物时为假）。

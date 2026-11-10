@@ -115,6 +115,12 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
     // §278：事件的**第几段**。同一句 `event=golden_idol` 可以是两个完全不同的屏幕
     // （"拿走神像" vs "巨石追来，三选一"），而只有这一段文字能把它俩分开。
     writer.str("event_step=").str(state.event_step()).str("\n");
+    // §331：事件掷出的遗物候选。它决定"点哪个按钮会失去哪件遗物"，所以是**会改变以后**的事实。
+    writer.str("event_relics=");
+    for slot in 0..usize::from(state.event_relic_offer_len) {
+        writer.str(state.event_relic_offer_ids[slot].as_str()).str(",");
+    }
+    writer.str("\n");
     // ══ §308：审阅报告 §2 的另一半 —— 上面那些字段进了存档，**也必须进指纹**。
     // 理由只有一个：它们都改变"以后会怎样"。`Ritual Dagger` 的成长尤其明显：
     // 不入指纹的话，"同一串动作"能长出两种牌组（伤害不同、哈希相同），

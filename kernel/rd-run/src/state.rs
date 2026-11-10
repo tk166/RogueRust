@@ -179,6 +179,10 @@ pub const A_DOUBLE_BOSS: u8 = 20;
 /// 写在这张卡**自己**的代码里（它不是一个通用标签）。
 pub const ASCENDERS_BANE: &str = "ascenders_bane";
 
+/// §331：一个事件最多掷几件**遗物候选** —— 定义在 `rd-core::content`（读 `RelicOffer`
+/// 的那一格与这里存候选的数组必须用**同一个数**），这里只是把它转出来给 `hash.rs` 用。
+pub use rd_core::content::MAX_EVENT_RELIC_OFFER;
+
 /// §326：`parasite` —— *"If transformed or removed from your deck, lose 3 Max HP."*
 ///
 /// 与 [`ASCENDERS_BANE`] 同一个形状：一条**点名某张卡**的规则写在运行层，因为它在
@@ -1981,6 +1985,13 @@ pub struct RunState {
     /// 为什么是运行期字段、而不是"在篝火那一刻直接加能量"：那时没有战斗，能量无处可加
     /// （能量是战斗状态的资源）。所以只记"欠一场"，开战那一刻兑现、然后清掉。
     tea_set_pending: bool,
+    /// §331：事件掷出的遗物候选（`N'loth`）。空 = 没有。
+    ///
+    /// `pub(crate)` 是为了 `hash.rs`：它与 `state` 是**平级模块**（不是子模块），
+    /// 而 §308 的 `state-fields` 闸门要求指纹里出现**字面** `state.<字段>`。
+    pub(crate) event_relic_offer_ids: [RunId; MAX_EVENT_RELIC_OFFER],
+    /// 有效件数。
+    pub(crate) event_relic_offer_len: u8,
     /// §272：光标下那个 `?` 房**掷出了什么**（`begin_node` 之前是 `Unresolved`）。
     ///
     /// 为什么要有这个字段：`begin_node` 只能返回 `NodeKind`，而"事件"与"普通战斗"都是
@@ -2199,6 +2210,8 @@ impl RunState {
             omamori_charges: 0,
             maw_bank_broken: false,
             tea_set_pending: false,
+            event_relic_offer_ids: [RunId::EMPTY; MAX_EVENT_RELIC_OFFER],
+            event_relic_offer_len: 0,
             unknown_room: UnknownRoom::Unresolved,
             tiny_chest_rooms: 0,
             pickup_change: None,
@@ -6076,6 +6089,9 @@ impl RunState {
         self.fight_potion_chance = NO_POTION_OVERRIDE;
         self.event = id;
         self.event_step = entry;
+        // §331：候选属于**一个**事件，开新事件就清掉。
+        self.event_relic_offer_ids = [RunId::EMPTY; MAX_EVENT_RELIC_OFFER];
+        self.event_relic_offer_len = 0;
         self.event_next = RunId::EMPTY;
         self.pending = Pending::Event;
         Ok(())
@@ -6085,6 +6101,42 @@ impl RunState {
     #[must_use]
     pub fn event(&self) -> &str {
         self.event.as_str()
+    }
+
+    /// §331：事件掷出的**遗物候选**（`N'loth` 的两件）。
+    ///
+    /// 为什么存下来而不是每次现掷：两个选项的**身份**由它决定（`relic_lose:@0`），
+    /// 而"哪两件"必须在一个事件里**不变**（重渲染、存档、回放都要同一份答案）。
+    pub fn event_relic_offer(&self, slot: usize) -> Option<&str> {
+        if slot >= usize::from(self.event_relic_offer_len) {
+            return None;
+        }
+        // `RunId` **就是** `Ident<CAP>`（`&str` 在里头），所以直接取引用，不要经局部变量 ——
+        // 经过局部变量会把返回值的生命周期绑在函数体上（`E0515`）。
+        let id = &self.event_relic_offer_ids[slot];
+        if id.is_empty() {
+            return None;
+        }
+        Some(id.as_str())
+    }
+
+    /// §331：写下第 `slot` 件候选（`rd-wasm` 在 `begin_event` 之后立刻调）。
+    pub fn set_event_relic_offer(&mut self, slot: usize, id: &str) -> Result<(), RunError> {
+        if slot >= MAX_EVENT_RELIC_OFFER {
+            return Err(RunError::BadId);
+        }
+        let id = RunId::new(id).map_err(|_| RunError::BadId)?;
+        // 重复的候选等于"两个选项一模一样"，那是内容/掷法的错 —— 响亮拒绝。
+        for index in 0..usize::from(self.event_relic_offer_len) {
+            if index != slot && self.event_relic_offer_ids[index] == id {
+                return Err(RunError::BadId);
+            }
+        }
+        self.event_relic_offer_ids[slot] = id;
+        if self.event_relic_offer_len as usize <= slot {
+            self.event_relic_offer_len = (slot + 1) as u8;
+        }
+        Ok(())
     }
 
     /// §286：事件把房间转成的那一场战斗的**档位**（`0` / `1` 普通 / `2` 精英）。
@@ -6225,8 +6277,11 @@ impl RunState {
         let before = *self;
         // §320：上一轮可能已经有过一段候选（正常情况下没有：取走一张就清空）。
         // 进这一段之前先清，否则"漏清"会表现成"上一段的候选又冒出来"。
+        //
+        // ⚠️ §331：**只清卡牌候选**。遗物候选（`event_relic_offer_*`）是在 `begin_event`
+        // 之后、**这一段开着的时候**才掷出来的 —— 在这里清掉它，`relic_lose:@0` 就永远
+        // 解析不到候选，玩家点下去只会看到 `UnsupportedEventEffect`（第一版就是这样）。
         self.event_offer = [RunId::EMPTY; MAX_EVENT_OFFER];
-        self.event_offer_len = 0;
         let mut follow: Option<DeckChange> = None;
         for (effect, named) in effects {
             if let Some(change) = effect.deck_change() {
@@ -6481,6 +6536,21 @@ impl RunState {
                 // 条件（`Requires`）写错的第一征兆 —— 让它在事件屏上就响亮。
                 let Some(id) = named else {
                     return Err(RunError::UnsupportedEventEffect);
+                };
+                // §331：`@N` = "这一掷的第 N 件候选"（`N'loth`）。解析在**应用时**做，
+                // 因为候选是开事件那一刻才有的（内容里写不出具体 id）。
+                let owned;
+                let id = if let Some(slot) = id.strip_prefix('@') {
+                    let Ok(slot) = slot.parse::<usize>() else {
+                        return Err(RunError::UnsupportedEventEffect);
+                    };
+                    let Some(candidate) = self.event_relic_offer(slot) else {
+                        return Err(RunError::UnsupportedEventEffect);
+                    };
+                    owned = RunId::new(candidate).map_err(|_| RunError::BadId)?;
+                    owned.as_str()
+                } else {
+                    id
                 };
                 self.remove_relic(id)?;
             }

@@ -80622,6 +80622,11 @@
       "Id": "mushrooms",
       "NameKey": "Mushrooms",
       "Entry": "mushrooms"
+    },
+    {
+      "Id": "nloth",
+      "NameKey": "N'loth",
+      "Entry": "nloth"
     }
   ],
   "Potions": [
@@ -80982,6 +80987,16 @@
       },
       {
         "Id": "augmenter"
+      },
+      {
+        "Id": "nloth",
+        "Requires": [
+          {
+            "Kind": "relic_count",
+            "Op": "at_least",
+            "Amount": 2
+          }
+        ]
       }
     ],
     "Events3": [
@@ -80995,7 +81010,14 @@
         "Id": "purification_shrine"
       },
       {
-        "Id": "the_moai_head"
+        "Id": "the_moai_head",
+        "Requires": [
+          {
+            "Kind": "health_percent",
+            "Op": "at_most",
+            "Amount": 50
+          }
+        ]
       },
       {
         "Id": "winding_halls"
@@ -81010,7 +81032,14 @@
         "Id": "sensory_stone"
       },
       {
-        "Id": "tomb_of_lord_red_mask"
+        "Id": "tomb_of_lord_red_mask",
+        "Requires": [
+          {
+            "Kind": "relic",
+            "Op": "has",
+            "Id": "red_mask"
+          }
+        ]
       },
       {
         "Id": "mind_bloom"
@@ -84418,6 +84447,51 @@
       "Id": "mushrooms.ate",
       "TextKey": "You wake up some time later. Everything looks a little larger.",
       "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "nloth",
+      "TextKey": "An odd creature with a hunched back sprouting several tentacles is scrounging through a pile of trash and debris in front of you. As you approach, he shuffles towards you in a non-threatening manner. \"N'loth hungry. Feed N'loth.\"",
+      "RelicOffer": 2,
+      "Options": [
+        {
+          "Label": "Offer: {0}",
+          "Effects": [
+            {
+              "Effect": "relic_lose:@0",
+              "Amount": 0
+            },
+            {
+              "Effect": "relic:nloths_gift",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Offer: {1}",
+          "Effects": [
+            {
+              "Effect": "relic_lose:@1",
+              "Amount": 0
+            },
+            {
+              "Effect": "relic:nloths_gift",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        },
         {
           "Label": "Leave",
           "Effects": [

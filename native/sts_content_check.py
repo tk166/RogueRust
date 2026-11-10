@@ -5185,6 +5185,16 @@ def check_event_vocabulary(doc):
                     # §279：**失去**一件遗物（`Forgotten Altar` 的金像换血像）。
                     # 必须是**内容里真的有**的遗物；"失去一件不该有的" 由运行层拒
                     # （`RunError::NoSuchRelic`），但那要等到玩家点下去 —— 这里先拦。
+                    #
+                    # §331：`@N` 是**候选占位符**（`N'loth` 的 `Relic A` / `Relic B`）——
+                    # 具体 id 在开事件那一刻才掷出来，所以内容里查不到它，也不该查。
+                    # 只验**下标在范围内**：越界是内容错（那一段根本没掷那么多件）。
+                    if payload.startswith("@"):
+                        counts["relic"] += 1
+                        slot = payload[1:]
+                        if not slot.isdigit() or int(slot) >= 2:
+                            fail(where, "relic_lose:%s 的候选下标越界（只有 0/1）" % payload)
+                        continue
                     counts["relic"] += 1
                     if payload not in relics:
                         fail(where, "relic_lose:%s 不在 Relics 表里" % payload)
