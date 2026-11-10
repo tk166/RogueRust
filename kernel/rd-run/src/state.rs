@@ -4708,15 +4708,22 @@ impl RunState {
     /// 函数，所以没有传播成本。
     #[must_use]
     pub fn remove_card_price(&self) -> i32 {
+        // §342：`smiling_mask` 是**硬价** —— 既不涨价也不折扣，直接 50。
+        //
+        // wiki.gg：*"Smiling Mask **overrides** the reduced price of the Card Removal Service to 50
+        // Gold **even with Membership Card**"*；Courier 页：*"Smiling Mask will **negate** The
+        // Courier's price reduction … always locked at a price of 50 gold"*。
+        //
+        // 旧实现在这里 `shop_price(marked_up(50))`：A16 → 55、Membership Card → 25、
+        // 两件都在 → 20。三条全错，而**每一条都只有一个数**，屏幕上看起来毫无异常。
+        //
+        // ⚠️ "删卡在 A16 是否加价"是**另一件事**（下面那条 `marked_up`），没有可靠来源
+        // （wiki 只给 75，teemo.dev 标 "exact / Variance: None"），所以不动，记成待核偏差。
+        if self.holds_relic_effect(RelicEffect::RemovePriceFlat(50)) {
+            return SHOP_REMOVE_FLAT;
+        }
         // §159 `A16`: the removal service is a shop price too, so it carries the same markup.
-        let base = if self.holds_relic_effect(RelicEffect::RemovePriceFlat(50)) {
-            // §270：`smiling_mask` —— "The merchant's card removal service now always costs 50
-            // Gold"。**固定**：`removed_cards` 的 +25/次 对它失效（那是"服务涨价"，而它的原话是
-            // "always costs 50"）。折扣仍然在（`Membership Card` 是另一件遗物）。
-            SHOP_REMOVE_FLAT
-        } else {
-            SHOP_REMOVE_BASE + SHOP_REMOVE_STEP * self.removed_cards
-        };
+        let base = SHOP_REMOVE_BASE + SHOP_REMOVE_STEP * self.removed_cards;
         self.shop_price(self.marked_up(base))
     }
 
@@ -5288,10 +5295,15 @@ impl RunState {
         let mut eligible_len = 0usize;
         Self::pool_fits(card_pool.len())?;
         for index in 0..card_pool.len() {
-            if matches!(
-                card_pool[index].rarity,
-                Rarity::Status | Rarity::Curse | Rarity::Special
-            ) {
+            // §342：**无色牌不进有色格**（补货也一样）。调用方现在传的是**带无色**的池子
+            // （无色那一排要用它），所以这一条必须显式写在这里 —— 否则持 Courier 时
+            // 买一张有色牌、补出一张无色牌，而"无色牌永不进牌组"（§183/§185）就破了。
+            if card_pool[index].colorless
+                || matches!(
+                    card_pool[index].rarity,
+                    Rarity::Status | Rarity::Curse | Rarity::Special
+                )
+            {
                 continue;
             }
             let mut on_shelf = false;
@@ -5353,7 +5365,16 @@ impl RunState {
             };
             return Ok(());
         }
-        let price = 143 + self.rng.roll(RunStream::Shop, 15)? as i32;
+        // §342：**按补出来的那一件的稀有度定价**。原来这里硬编码 Common 档（143-157），
+        // 于是 Uncommon / Rare 的补货也按 Common 卖 —— fandom 的补丁记录写着
+        // "Relics and Potions in the shop now correctly set their prices when restocked with the
+        // Courier"，说明这曾经是**官方**的 bug。
+        let rarity = relic_pool
+            .iter()
+            .find(|entry| entry.id == picked.as_str())
+            .map_or(Rarity::Common, |entry| entry.rarity);
+        let (low, high) = relic_price_band(rarity);
+        let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
         self.shop.relics[slot] = Offer {
             id: picked,
             // §340：补货不受 A16 涨价（见 `restock_card_slot` 的同一条注释）。
@@ -10133,6 +10154,23 @@ mod tests {
         run.buy_card(0, PoolCard::plain(first_id.as_str()), &pool)
             .expect("buy a card");
         assert_eq!(live(&run).0, before.0, "the coloured shelf must not shrink");
+        // §342：补货**不许**把无色牌补进有色格 —— 调用方现在传的是**带无色**的池子
+        // （无色那一排要用它），所以这条不变量必须显式钉住。§183/§185 的原话：
+        // "colorless cards never enter a deck"，而商人卖一张就进去了。
+        for offer in run.shop().cards() {
+            if offer.price < 0 {
+                continue;
+            }
+            let colorless = pool
+                .iter()
+                .find(|card| card.id == offer.id.as_str())
+                .is_some_and(|card| card.colorless);
+            assert!(
+                !colorless,
+                "the coloured shelf must never restock a colourless card ({:?})",
+                offer.id.as_str()
+            );
+        }
         // ② 无色卡
         run.buy_colorless(0, &pool).expect("buy a colourless card");
         assert_eq!(live(&run).1, before.1, "the colourless shelf must not shrink");
@@ -10189,6 +10227,117 @@ mod tests {
              (got {})",
             restocked.price
         );
+    }
+
+    /// §342（第九轮 Review P1-2）：补出来的遗物按**它自己的稀有度**定价。
+    ///
+    /// 旧实现硬编码 Common 档（143-157），于是 Uncommon / Rare 的补货也按 Common 卖。
+    /// fandom 的补丁记录写着 "Relics and Potions in the shop now correctly set their prices when
+    /// restocked with the Courier" —— 这曾经是**官方**的 bug。
+    ///
+    /// 判据要求三档**都出现过**：只断言"价带对"的话，一个"永远只补 Common"的实现也会绿。
+    #[test]
+    fn restocked_relics_are_priced_by_their_own_rarity() {
+        let pool: [PoolRelic<'static>; 9] = [
+            PoolRelic { id: "anchor", rarity: Rarity::Common },
+            PoolRelic { id: "bag_of_prep", rarity: Rarity::Common },
+            PoolRelic { id: "blood_vial", rarity: Rarity::Common },
+            PoolRelic { id: "blue_candle", rarity: Rarity::Uncommon },
+            PoolRelic { id: "darkstone_periapt", rarity: Rarity::Uncommon },
+            PoolRelic { id: "meal_ticket", rarity: Rarity::Uncommon },
+            PoolRelic { id: "calipers", rarity: Rarity::Rare },
+            PoolRelic { id: "ice_cream", rarity: Rarity::Rare },
+            PoolRelic { id: "tungsten_rod", rarity: Rarity::Rare },
+        ];
+        let mut run = ironclad();
+        run.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
+        run.adjust_gold(100_000);
+        run.pending = Pending::Shop;
+        run.stock_shop(&TYPED_CARDS, &pool, &POTIONS).expect("stock the shop");
+
+        let mut seen_common = false;
+        let mut seen_uncommon = false;
+        let mut seen_rare = false;
+        for round in 0..80 {
+            // 第 0 格：买走 ⇒ 立刻补一件。
+            if run.shop().relics()[0].price < 0 {
+                break;
+            }
+            let bought = run.shop().relics()[0].id.as_str().to_string();
+            run.buy_relic(0, &TYPED_CARDS, &pool).expect("buy the relic");
+            let restocked = run.shop().relics()[0];
+            if restocked.price < 0 {
+                break; // 池子空了：这一格留空是允许的
+            }
+            let id = restocked.id.as_str().to_string();
+            let rarity = pool
+                .iter()
+                .find(|entry| entry.id == id.as_str())
+                .map_or_else(
+                    || panic!("round {round}: restocked {:?} is not in the pool", id),
+                    |entry| entry.rarity,
+                );
+            let (low, high) = relic_price_band(rarity);
+            assert!(
+                (low..=high).contains(&restocked.price),
+                "round {round}: {id:?} ({rarity:?}) restocked at {} but its band is {low}..={high} \
+                 (bought {bought:?})",
+                restocked.price
+            );
+            match rarity {
+                Rarity::Uncommon => seen_uncommon = true,
+                Rarity::Rare => seen_rare = true,
+                _ => seen_common = true,
+            }
+        }
+        assert!(
+            seen_common && seen_uncommon && seen_rare,
+            "the fixture must restock all three rarities (common {seen_common}, \
+             uncommon {seen_uncommon}, rare {seen_rare})"
+        );
+    }
+
+    /// §342（第九轮 Review P2）：`smiling_mask` 是**硬价 50** —— 既不涨价也不折扣。
+    ///
+    /// wiki.gg：*"Smiling Mask **overrides** the reduced price of the Card Removal Service to 50
+    /// Gold **even with Membership Card**"*；Courier 页：*"Smiling Mask will **negate** The
+    /// Courier's price reduction … always locked at a price of 50 gold"*。
+    ///
+    /// 旧实现 `shop_price(marked_up(50))`：A16 → 55、MC → 25、两件都在 → 20。三条全错，
+    /// 而每一条都只是**一个数**，屏幕上毫无异常。
+    #[test]
+    fn smiling_mask_locks_removal_at_fifty_whatever_the_discounts() {
+        // 2×2×2：Membership Card × Courier × A16 ⇒ 全是 50。
+        for membership in [false, true] {
+            for courier in [false, true] {
+                for ascension in [0u8, 16u8] {
+                    let mut run = RunState::new_with_ascension(7, 80, 99, &DECK, ascension)
+                        .expect("a run");
+                    run.push_relic("smiling_mask", &TYPED_CARDS).expect("smiling_mask");
+                    if membership {
+                        run.push_relic("membership_card", &TYPED_CARDS).expect("membership_card");
+                    }
+                    if courier {
+                        run.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
+                    }
+                    // 用掉几次，确认"+25/次"对它也失效（wiki: "will no longer increase"）。
+                    run.removed_cards = 3;
+                    assert_eq!(
+                        run.remove_card_price(),
+                        SHOP_REMOVE_FLAT,
+                        "smiling_mask: mc={membership} courier={courier} a{ascension} must all be 50"
+                    );
+                }
+            }
+        }
+
+        // 对照组：**没有** Smiling Mask 时才走折扣（否则上面那 8 格证明不了任何事）。
+        let mut plain = ironclad();
+        assert_eq!(plain.remove_card_price(), SHOP_REMOVE_BASE, "the base price");
+        plain.push_relic("membership_card", &TYPED_CARDS).expect("membership_card");
+        assert_eq!(plain.remove_card_price(), 38, "75 * 0.5 = 37.5 -> 38 (ceil)");
+        plain.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
+        assert_eq!(plain.remove_card_price(), 30, "75 * 0.4 = 30 (multiplicative)");
     }
 
     /// §340：补货失败 ⇒ **整笔交易回滚**（金币、牌、货架一起），不留半个提交。

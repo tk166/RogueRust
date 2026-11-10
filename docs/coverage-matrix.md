@@ -42,11 +42,11 @@
 | 状态 | 150 | 139 | 6 | 5 | 0 | 150 | 1 | 0 |
 | 遭遇 | 64 | 46 | 18 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 36 | 36 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 遗物 | 152 | 135 | 17 | 0 | 0 | 0 | 0 | 0 |
+| 遗物 | 152 | 136 | 16 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 957 | 698 | 247 | 12 | 476 | 196 | 85 | 0 |
+| **合计** | 957 | 699 | 246 | 12 | 476 | 196 | 85 | 0 |
 
-扫描到的具名测试：**1225** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1228** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **39** 个位次、**36** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -859,7 +859,7 @@
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
 | akabeko | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
-| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+18) | — | — | — | §320/the_same_state_hashes_the_same_and_a_change_moves_it |
+| anchor | yes | the_same_state_hashes_the_same_and_a_change_moves_it, every_invariant_names_itself_when_violated …(+19) | — | — | — | §320/the_same_state_hashes_the_same_and_a_change_moves_it |
 | ancient_tea_set | yes | the_node_relics_pay_on_the_right_kind_of_room, the_tea_set_charge_is_spent_by_the_next_fight | — | — | — | §271/the_node_relics_pay_on_the_right_kind_of_room |
 | art_of_war | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | astrolabe | yes | the_pickup_picks_do_not_take_over_the_screen | — | — | — | §273/§274/the_pickup_picks_do_not_take_over_the_screen |
@@ -868,14 +868,14 @@
 | bird_faced_urn | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
 | black_blood | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
 | black_star | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+6) | — | — | §269 |
-| blood_vial | yes | the_relic_pool_fires_at_the_three_hooks_it_has, mark_of_the_bloom_blocks_every_run_layer_heal | — | — | — | §320/the_relic_pool_fires_at_the_three_hooks_it_has |
+| blood_vial | yes | the_relic_pool_fires_at_the_three_hooks_it_has, restocked_relics_are_priced_by_their_own_rarity …(+1) | — | — | — | §320/the_relic_pool_fires_at_the_three_hooks_it_has |
 | bloody_idol | yes | every_kind_answers_both_sides, the_gold_and_shop_relics_change_only_their_own_number …(+1) | — | — | — | §270/every_kind_answers_both_sides |
-| blue_candle | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+6) | — | — | §297/§298 |
+| blue_candle | yes | restocked_relics_are_priced_by_their_own_rarity | — | — | — | §297/§298/restocked_relics_are_priced_by_their_own_rarity |
 | brimstone | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | bronze_scales | yes | a_run_with_five_status_relics_keeps_all_five | — | — | — | §156/a_run_with_five_status_relics_keeps_all_five |
 | burning_blood | yes | capacity_is_an_error_not_a_truncation, burning_blood_heals_six_at_the_end_of_a_fight …(+9) | — | — | — | §320/capacity_is_an_error_not_a_truncation |
 | busted_crown | yes | the_reward_layer_relics_change_the_payout | — | — | — | §269/the_reward_layer_relics_change_the_payout |
-| calipers | yes | the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |
+| calipers | yes | restocked_relics_are_priced_by_their_own_rarity, the_five_combat_start_relics_wire_their_own_carrier | — | — | — | §261/restocked_relics_are_priced_by_their_own_rarity |
 | calling_bell | yes | calling_bell_pays_a_curse_and_owes_three_relics, the_pickup_debts_are_paid_and_cleared | — | — | — | §292/calling_bell_pays_a_curse_and_owes_three_relics |
 | captains_wheel | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
 | cauldron | yes | a_shop_stocks_all_four_shelves_with_the_wikis_composition, cauldron_owes_five_potions_and_the_belt_caps_it …(+2) | — | — | — | §292/a_shop_stocks_all_four_shelves_with_the_wikis_composition |
@@ -889,7 +889,7 @@
 | coffee_dripper | yes | campfire_options_follow_the_relics_the_wiki_names, dig_only_rolls_common_uncommon_or_rare | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
 | cultist_headpiece | yes | the_flavor_only_relics_are_known_and_change_nothing | — | — | — | §283/§292/the_flavor_only_relics_are_known_and_change_nothing |
 | cursed_key | yes | cursed_key_carries_its_energy_and_its_chest_curse | — | — | — | §292/cursed_key_carries_its_energy_and_its_chest_curse |
-| darkstone_periapt | yes | the_add_card_relics_fire_at_the_one_add_point | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |
+| darkstone_periapt | yes | the_add_card_relics_fire_at_the_one_add_point, restocked_relics_are_priced_by_their_own_rarity | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |
 | dead_branch | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+6) | — | — | §298/§299 |
 | dollys_mirror | yes | dollys_mirror_duplicates_the_chosen_card_and_refuses_a_full_deck | — | — | — | §292/dollys_mirror_duplicates_the_chosen_card_and_refuses_a_full_deck |
 | dream_catcher | yes | dream_catcher_turns_rest_into_a_card_reward_and_only_with_the_relic | — | — | — | dream_catcher_turns_rest_into_a_card_reward_and_only_with_the_relic |
@@ -913,7 +913,7 @@
 | hand_drill | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+6) | — | — | §294/§295 |
 | happy_flower | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | horn_cleat | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
-| ice_cream | yes | the_five_combat_start_relics_wire_their_own_carrier, the_fight_reward_overrides_are_exact | — | — | — | §261/the_five_combat_start_relics_wire_their_own_carrier |
+| ice_cream | yes | restocked_relics_are_priced_by_their_own_rarity, the_five_combat_start_relics_wire_their_own_carrier …(+1) | — | — | — | §261/restocked_relics_are_priced_by_their_own_rarity |
 | incense_burner | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
 | ink_bottle | yes | the_every_nth_card_relics_wire_their_own_carrier | — | — | — | §262/the_every_nth_card_relics_wire_their_own_carrier |
 | juzu_bracelet | yes | the_unknown_room_odds_walk_the_wikis_base_values, tiny_chest_and_juzu_bracelet_change_the_roll | — | — | — | §271/§272/the_unknown_room_odds_walk_the_wikis_base_values |
@@ -928,10 +928,10 @@
 | mark_of_the_bloom | yes | campfire_options_follow_the_relics_the_wiki_names, mark_of_the_bloom_blocks_every_run_layer_heal …(+1) | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
 | matryoshka | yes | matryoshka_queues_two_chests_and_pays_a_second_relic | — | — | — | §283/§292/matryoshka_queues_two_chests_and_pays_a_second_relic |
 | maw_bank | yes | the_gold_and_shop_relics_change_only_their_own_number, a_discounted_purchase_charges_the_discounted_price | — | — | — | §270/the_gold_and_shop_relics_change_only_their_own_number |
-| meal_ticket | yes | an_unknown_room_that_becomes_a_shop_pays_the_shop_entry_relics, the_node_relics_pay_on_the_right_kind_of_room | — | — | — | §271/an_unknown_room_that_becomes_a_shop_pays_the_shop_entry_relics |
+| meal_ticket | yes | an_unknown_room_that_becomes_a_shop_pays_the_shop_entry_relics, the_node_relics_pay_on_the_right_kind_of_room …(+1) | — | — | — | §271/an_unknown_room_that_becomes_a_shop_pays_the_shop_entry_relics |
 | meat_on_the_bone | yes | the_fight_reward_overrides_are_exact | — | — | — | §156/the_fight_reward_overrides_are_exact |
 | medical_kit | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+6) | — | — | §297/§298 |
-| membership_card | yes | the_courier_restocks_the_slot_it_sells, the_gold_and_shop_relics_change_only_their_own_number …(+4) | — | — | — | §270/the_courier_restocks_the_slot_it_sells |
+| membership_card | yes | the_courier_restocks_the_slot_it_sells, the_gold_and_shop_relics_change_only_their_own_number …(+6) | — | — | — | §270/the_courier_restocks_the_slot_it_sells |
 | mercury_hourglass | yes | the_eight_turn_shaped_relics_wire_their_own_status | — | — | — | §260/the_eight_turn_shaped_relics_wire_their_own_status |
 | molten_egg | yes | the_add_card_relics_fire_at_the_one_add_point, taking_an_offer_applies_the_egg_relics | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |
 | mummified_hand | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+6) | — | — | §299/§300 |
@@ -977,7 +977,7 @@
 | singing_bowl | yes | singing_bowl_trades_a_card_for_two_max_hp_in_both_places, singing_bowl_trades_a_reward_card_through_the_abi | — | — | — | §293/singing_bowl_trades_a_card_for_two_max_hp_in_both_places |
 | slavers_collar | yes | the_kind_gated_relics_only_fire_in_their_own_kinds | — | — | — | §268/§269/the_kind_gated_relics_only_fire_in_their_own_kinds |
 | sling_of_courage | yes | the_kind_gated_relics_only_fire_in_their_own_kinds | — | — | — | §268/§269/the_kind_gated_relics_only_fire_in_their_own_kinds |
-| smiling_mask | yes | the_gold_and_shop_relics_change_only_their_own_number | — | — | — | §270/the_gold_and_shop_relics_change_only_their_own_number |
+| smiling_mask | yes | the_gold_and_shop_relics_change_only_their_own_number, smiling_mask_locks_removal_at_fifty_whatever_the_discounts | — | — | — | §270/the_gold_and_shop_relics_change_only_their_own_number |
 | snecko_eye | yes | snecko_eye_draws_two_more_and_confuses_at_the_start | — | — | — | §157/§283/snecko_eye_draws_two_more_and_confuses_at_the_start |
 | snecko_skull | yes | the_status_application_relics_wire_their_own_carrier | — | — | — | §264/§265/the_status_application_relics_wire_their_own_carrier |
 | sozu | yes | sozu_refuses_potions_at_both_doors | — | — | — | §271/sozu_refuses_potions_at_both_doors |
@@ -990,7 +990,7 @@
 | sundial | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | — | — | §293/§294/the_shuffle_trigger_pays_the_abacus_and_sundial |
 | the_abacus | yes | the_shuffle_trigger_pays_the_abacus_and_sundial | — | — | — | §293/§294/the_shuffle_trigger_pays_the_abacus_and_sundial |
 | the_boot | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier | — | — | — | §262/§263/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
-| the_courier | yes | the_courier_restocks_the_slot_it_sells, shop_discounts_stack_multiplicatively_and_round_up …(+3) | — | — | — | §272/§273/the_courier_restocks_the_slot_it_sells |
+| the_courier | yes | the_courier_restocks_the_slot_it_sells, shop_discounts_stack_multiplicatively_and_round_up …(+5) | — | — | — | §272/§273/the_courier_restocks_the_slot_it_sells |
 | the_specimen | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier | — | — | — | §262/§263/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | thread_and_needle | yes | the_relic_pool_fires_at_the_three_hooks_it_has, a_run_with_five_status_relics_keeps_all_five …(+1) | — | — | — | §320/the_relic_pool_fires_at_the_three_hooks_it_has |
 | tiny_chest | yes | tiny_chest_and_juzu_bracelet_change_the_roll | — | — | — | §271/§272/tiny_chest_and_juzu_bracelet_change_the_roll |
@@ -999,7 +999,7 @@
 | torii | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier | — | — | — | §262/§263/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | toxic_egg | yes | the_add_card_relics_fire_at_the_one_add_point | — | — | — | §270/the_add_card_relics_fire_at_the_one_add_point |
 | toy_ornithopter | yes | the_potion_relics_carry_their_own_numbers, drinking_a_potion_heals_five_with_the_toy_ornithopter | — | — | — | §271/the_potion_relics_carry_their_own_numbers |
-| tungsten_rod | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier | — | — | — | §262/§263/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
+| tungsten_rod | yes | restocked_relics_are_priced_by_their_own_rarity, the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier | — | — | — | §262/§263/restocked_relics_are_priced_by_their_own_rarity |
 | turnip | yes | the_status_application_relics_wire_their_own_carrier | — | — | — | §264/§265/the_status_application_relics_wire_their_own_carrier |
 | twisted_funnel | yes | the_status_application_relics_wire_their_own_carrier, the_status_application_relics_change_what_lands_on_the_target | — | — | — | §264/§265/the_status_application_relics_wire_their_own_carrier |
 | unceasing_top | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |

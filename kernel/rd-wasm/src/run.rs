@@ -1297,14 +1297,21 @@ pub extern "C" fn rd_run_begin_node() -> i32 {
     };
     session.log(K_BEGIN, -1, -1, "");
     let content = content();
-    let cards = match full_pool(content, false) {
+    // §342：**`true`** —— 商店的**无色那一排**要从这个池子里抽。§183/§185 的 `false` 是
+    // "无色牌永不进牌组"的过滤器，而 `stock_shop` 的有色那一排本来就 `if card.colorless { continue }`
+    // （§332），所以把无色牌放进来不会让商人把它当有色牌卖。
+    let cards = match full_pool(content, true) {
         Ok(cards) => cards,
         Err(message) => return fail(session, &message),
     };
     let relics = relic_pool(content);
+    // §342：**药水池也要传**。这里原来调的是旧签名 `begin_node(&cards, &relics)`，它委托给
+    // `begin_node_stocked(.., &[])` ⇒ **药水货架永远是空的**，而页面按 `count()` 画行，0 就是没画，
+    // 屏幕上完全看不出来（§332 的注释原话："忘了传池子不会编译不过、但会看得见"）。
+    let potions = potion_pool_of(content);
     // The kind comes back from `begin_node` itself: calling `rd_run_node_kind()` here would take the
     // run slot a second time while `session` is already borrowed (the aliasing bug from round 51).
-    let kind = match session.state.begin_node(&cards, &relics) {
+    let kind = match session.state.begin_node_stocked(&cards, &relics, &potions) {
         Ok(kind) => kind,
         Err(e) => {
             let message = describe(&e);
@@ -1465,7 +1472,7 @@ pub extern "C" fn rd_run_rest() -> i32 {
     if let Ok(healed) = outcome {
         if session.state.pending() == rd_run::state::Pending::Reward {
             // 卡池的形状（`PoolCard`，带稀有度）由 `full_pool` 给 —— 与战斗奖励同一条来路。
-            match full_pool(content(), false) {
+            match full_pool(content(), true) {
                 Ok(pool) => {
                     if let Err(error) = session.state.roll_rest_card_reward(&pool) {
                         set_error(&describe(&error));
@@ -1632,7 +1639,7 @@ pub extern "C" fn rd_run_open_chest() -> i32 {
     };
     session.log(K_CHEST, -1, -1, "");
     let relics = relic_pool(content());
-    let pool = match full_pool(content(), false) {
+    let pool = match full_pool(content(), true) {
         Ok(pool) => pool,
         Err(_) => return -1,
     };
@@ -1805,7 +1812,15 @@ pub extern "C" fn rd_run_shop_colorless_price(slot: i32) -> i32 {
         .shop()
         .colorless()
         .get(slot.max(0) as usize)
-        .map_or(-1, |offer| offer.price)
+        .map_or(-1, |offer| {
+            // §342：**与有色卡、遗物同一个规矩** —— 页面看到的价格就是付款时的价格。
+            // 售罄的 `-1` 不过折扣（`shop_price` 会原样穿过去，这里再挡一次是为了让
+            // "哨兵"这件事在调用点也读得出来）。
+            if offer.price < 0 {
+                return offer.price;
+            }
+            session.state.shop_price(offer.price)
+        })
 }
 
 /// §332：买无色货架第 `slot` 张。
@@ -1882,7 +1897,13 @@ pub extern "C" fn rd_run_shop_potion_price(slot: i32) -> i32 {
         .shop()
         .potions()
         .get(slot.max(0) as usize)
-        .map_or(-1, |offer| offer.price)
+        .map_or(-1, |offer| {
+            // §342：同上（无色那一排的同一条注释）。
+            if offer.price < 0 {
+                return offer.price;
+            }
+            session.state.shop_price(offer.price)
+        })
 }
 
 /// §332：买药水货架第 `slot` 瓶。
@@ -1947,7 +1968,7 @@ pub extern "C" fn rd_run_buy_relic(slot: i32) -> i32 {
     }
     // §273/§274：补货要**遗物**池子，拾取类遗物要**卡**池子。两个都绑定一次再借出去。
     let relics = relic_pool(content());
-    let pool = match full_pool(content(), false) {
+    let pool = match full_pool(content(), true) {
         Ok(pool) => pool,
         Err(_) => return -1,
     };
@@ -2456,7 +2477,7 @@ pub extern "C" fn rd_run_pickup_add_card(slot: i32) -> i32 {
         return -1;
     };
     session.log(K_PICKUP_ADD_CARD, slot, -1, "");
-    let pool = match full_pool(content(), false) {
+    let pool = match full_pool(content(), true) {
         Ok(pool) => pool,
         Err(_) => return -1,
     };
@@ -2511,7 +2532,7 @@ pub extern "C" fn rd_run_pickup_card(index: i32) -> i32 {
         return -1;
     };
     session.log(K_EVENT_CARD, index, -1, "");
-    let pool = match full_pool(content(), false) {
+    let pool = match full_pool(content(), true) {
         Ok(pool) => pool,
         Err(message) => return fail(session, &message),
     };
@@ -4477,7 +4498,7 @@ pub extern "C" fn rd_run_take_relic() -> i32 {
         return -1;
     };
     session.log(K_TAKE_RELIC, -1, -1, "");
-    let pool = match full_pool(content(), false) {
+    let pool = match full_pool(content(), true) {
         Ok(pool) => pool,
         Err(_) => return -1,
     };
@@ -6671,7 +6692,7 @@ mod tests {
     fn the_elite_relic_reward_round_trips_through_the_abi() {
         reset(7);
         let relics = relic_pool(content());
-        let pool = match full_pool(content(), false) {
+        let pool = match full_pool(content(), true) {
             Ok(pool) => pool,
             Err(message) => panic!("{message}"),
         };
@@ -7646,6 +7667,156 @@ mod tests {
             }
         }
         assert!(begun, "the fixture must reach a fight within 24 hops");
+    }
+
+    /// §342（第九轮 Review P1-1）：**页面看到的价格就是内核收的价格**，四排都一样。
+    ///
+    /// 为什么这条必须住在 ABI 层：§338 的判据 `every_purchase_charges_the_price_the_page_shows`
+    /// 只测到 `RunState` —— 它证明了"校验/扣款/错误消息三处一个数"，但**没证明"内核告诉页面的数"
+    /// 是那一个数**。无色与药水两排的导出当时返回挂牌价，于是持 Membership Card 时
+    /// 页面把买得起的商品**禁用**了（`price > gold` ⇒ disabled），玩家根本点不到。
+    ///
+    /// 判据的两个方向：
+    /// * `p <= g` ⇒ 买必须成功，金币正好少 `p`（抓"显示比实收高"）；
+    /// * `p > g` ⇒ 必须被拒（抓"显示比实收低/高到判断反了"）。
+    #[test]
+    fn the_page_price_is_the_price_the_kernel_charges() {
+        // 走到一个商店。商店在随机地图上，所以按种子找第一个能到的。
+        let mut reached = false;
+        for seed in 0..400 {
+            reset(seed);
+            for _hop in 0..24 {
+                if rd_run_pending() == 2 {
+                    reached = true;
+                    break;
+                }
+                if rd_run_step(0) != 0 {
+                    break;
+                }
+                if rd_run_begin_node() != 0 {
+                    break;
+                }
+                match rd_run_pending() {
+                    1 => {
+                        let _ = rd_run_rest();
+                    }
+                    3 => {
+                        let _ = rd_run_open_chest();
+                        let _ = rd_run_leave();
+                    }
+                    5 => {
+                        let _ = rd_run_choose(0);
+                    }
+                    8 => {
+                        let _ = rd_run_pick_event_card(0);
+                    }
+                    4 => {
+                        let _ = rd_run_skip_reward();
+                    }
+                    _ => {
+                        // 战斗节点：开打、立刻收（这条判据不关心战果）。
+                        if rd_run_fight_begin() == 0 {
+                            let _ = rd_run_fight_end();
+                        }
+                    }
+                }
+                while rd_run_pending() == 4 {
+                    let _ = rd_run_skip_reward();
+                }
+            }
+            if reached {
+                break;
+            }
+        }
+        assert!(reached, "no seed reached a shop within 24 hops");
+
+        // 持 Membership Card：于是"挂牌价"与"实付价"**不相等**，判据才有分辨力。
+        assert_eq!(
+            unsafe { rd_run_grant_relic(b"membership_card".as_ptr(), 15) },
+            0,
+            "grant membership_card: {}",
+            run_error_text()
+        );
+        assert_eq!(rd_run_in_fight(), 0, "we are standing in the shop, not in a fight");
+
+        // §342 的**回归守卫**：四排货架必须从**入口**就摆满。
+        //
+        // 加它是因为 P1-1 的负控**抓不到**：打印出来才发现无色与药水两排 `count() == 0` ——
+        // `rd_run_begin_node` 用的是 `full_pool(content, false)`（无色牌被过滤掉）与旧签名
+        // `begin_node`（药水池为空）。§332 的判据直接调 `stock_shop` 并传了两个池子，
+        // **绕过了入口**，所以一直是绿的。屏幕上的表现只是"那两排没画"，谁都看不出来。
+        assert_eq!(rd_run_shop_card_count(), 5, "§332: 5 coloured cards");
+        assert_eq!(rd_run_shop_colorless_count(), 2, "§332: 2 colourless cards");
+        assert_eq!(rd_run_shop_potion_count(), 3, "§332: 3 potions");
+        assert_eq!(rd_run_shop_relic_count(), 3, "§332: 3 relics");
+
+        let gold = || rd_run_observe(4);
+        let mut checked = 0usize;
+
+        // 四排：(名字, 计数导出, 价格导出, 购买导出)。遗物放最后 —— 它可能带"欠账"改变 pending。
+        // 四个导出都是 `extern "C" fn`，所以数组的元素类型必须照写（写成 `fn(..)` 会 E0605）。
+        type Count = extern "C" fn() -> i32;
+        type Price = extern "C" fn(i32) -> i32;
+        type Buy = extern "C" fn(i32) -> i32;
+        let shelves: [(&str, Count, Price, Buy); 4] = [
+            ("cards", rd_run_shop_card_count, rd_run_shop_card_price, rd_run_buy_card),
+            (
+                "colorless",
+                rd_run_shop_colorless_count,
+                rd_run_shop_colorless_price,
+                rd_run_buy_colorless,
+            ),
+            (
+                "potions",
+                rd_run_shop_potion_count,
+                rd_run_shop_potion_price,
+                rd_run_buy_potion,
+            ),
+            ("relics", rd_run_shop_relic_count, rd_run_shop_relic_price, rd_run_buy_relic),
+        ];
+        for (name, count, price, buy) in shelves {
+            for slot in 0..count() {
+                let before = gold();
+                let shown = price(slot);
+                if shown < 0 {
+                    continue; // 那一格本来就空着（池子不够）
+                }
+                let code = buy(slot);
+                if shown <= before {
+                    assert_eq!(
+                        code, 0,
+                        "{name}[{slot}]: the page shows {shown} and we hold {before}, so the \
+                         purchase must succeed (kernel said {code}: {})",
+                        run_error_text()
+                    );
+                    assert_eq!(
+                        gold(),
+                        before - shown,
+                        "{name}[{slot}]: the page shows {shown}, so exactly {shown} must be charged"
+                    );
+                    checked += 1;
+                } else {
+                    assert_eq!(
+                        code, -2,
+                        "{name}[{slot}]: the page shows {shown} but we only hold {before} -- the \
+                         kernel must refuse too (it said {code})"
+                    );
+                }
+                // 买走之后那一格必须是**售罄哨兵**，不是 0（`shop_price` 的 `.max(0)` 曾把它
+                // 变成"0 金可买"）。
+                if code == 0 {
+                    assert_eq!(
+                        price(slot),
+                        -1,
+                        "{name}[{slot}]: a sold slot must read -1, not a price"
+                    );
+                }
+            }
+        }
+        assert!(
+            checked >= 1,
+            "the fixture must actually buy something at a discount (checked {checked})"
+        );
     }
 
     /// §336：`fight_begin` 那一条记录的第 5 列是**战斗状态**的 `hash_full`。
@@ -12044,7 +12215,7 @@ mod tests {
         let deck = ["strike", "strike", "strike", "strike", "strike",
                     "defend", "defend", "defend", "defend", "bash"];
         test_run(7, 80, 80, &deck);
-        let pool = crate::run::full_pool(content(), false).expect("the card pool");
+        let pool = crate::run::full_pool(content(), true).expect("the card pool");
         // ① `calling_bell`：诅咒当场进牌组，三件遗物记成欠账。
         let deck_before = run_slot().as_ref().expect("a run").state.deck().len();
         run_slot()
@@ -12143,7 +12314,7 @@ mod tests {
         let deck = ["strike", "strike", "strike", "strike", "strike",
                     "defend", "defend", "defend", "defend", "bash"];
         test_run(7, 80, 80, &deck);
-        let pool = crate::run::full_pool(content(), false).expect("the card pool");
+        let pool = crate::run::full_pool(content(), true).expect("the card pool");
         run_slot()
             .as_mut()
             .expect("a run")
@@ -12203,7 +12374,7 @@ mod tests {
                     .push_relic("singing_bowl", &[])
                     .expect("singing_bowl");
             }
-            let pool = crate::run::full_pool(content(), false).expect("the card pool");
+            let pool = crate::run::full_pool(content(), true).expect("the card pool");
             assert_eq!(rd_run_step(0), 0, "walk onto floor 1");
             assert_eq!(rd_run_fight_begin(), 0, "a fight begins");
             // 赢不了也无所谓：奖励屏是 `roll_reward` 的事，这里直接造一个。
