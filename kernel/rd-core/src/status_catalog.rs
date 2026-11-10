@@ -964,11 +964,12 @@ pub fn is_declared_inert(status_id: &str) -> bool {
         // the status is present). The turn-start draw is deliberately not affected: that is not an
         // "additional" card. The status removes itself with a content `TurnEnded` trigger.
         "standard.no_draw" |
-        // §231: "You cannot draw additional cards this turn" -- the kernel rule lives in
-        // `exec::draw_cards_node` (it zeroes the count of an **effect-driven** draw, and only while
-        // the status is present). The turn-start draw is deliberately not affected: that is not an
-        // "additional" card. The status removes itself with a content `TurnEnded` trigger.
-        "standard.no_draw"
+        // §333: `Energized` / `Draw Card` —— wiki 的"**只**下一回合 +X 能量 / +X 抽牌"。
+        // 行为全在内容的一行 `PassiveModifiers`（`TurnStartEnergy` / `TurnStartDraw`），
+        // 而"读完就摘"由内核在**抽牌之后**做（`Host::expire_one_shot_turn_start`，按标签
+        // `one_shot_turn_start` 找）—— 所以它们自己没有触发器，`has_behaviour` 看不见它们。
+        "standard.energized" |
+        "standard.draw_card_next_turn"
     )
 }
 

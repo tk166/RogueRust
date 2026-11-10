@@ -8810,7 +8810,18 @@
       "Tags": [
         "buff"
       ],
-      "PassiveModifiers": [],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartDraw",
+          "Operation": "AddFlat",
+          "Magnitude": 2,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null,
+          "Condition": null
+        }
+      ],
       "Triggers": [
         {
           "Event": "TurnStarted",
@@ -8897,24 +8908,6 @@
                         }
                       },
                       "Relative": false
-                    }
-                  },
-                  {
-                    "kind": "node.drawCards",
-                    "value": {
-                      "TargetSelector": {
-                        "kind": "sel.source",
-                        "value": {
-                          "Cardinality": "ZeroOrOne",
-                          "RequiredContextCapabilities": "Source"
-                        }
-                      },
-                      "Count": {
-                        "kind": "const",
-                        "value": {
-                          "Value": 2
-                        }
-                      }
                     }
                   }
                 ]
@@ -10488,6 +10481,62 @@
           }
         }
       ]
+    },
+    {
+      "Id": "standard.energized",
+      "PackageId": "sts",
+      "NameKey": "Energized",
+      "DescriptionKey": "Gain X additional Energy next turn.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "one_shot_turn_start"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartEnergy",
+          "Operation": "AddPerStack",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null,
+          "Condition": null
+        }
+      ],
+      "Triggers": null
+    },
+    {
+      "Id": "standard.draw_card_next_turn",
+      "PackageId": "sts",
+      "NameKey": "Draw Card",
+      "DescriptionKey": "Draw X additional cards next turn.",
+      "Polarity": "Buff",
+      "UsesStacks": true,
+      "UsesDuration": false,
+      "UsesCharges": false,
+      "StackingBehavior": "MergeWithExistingInstance",
+      "Tags": [
+        "buff",
+        "one_shot_turn_start"
+      ],
+      "PassiveModifiers": [
+        {
+          "Pipeline": "TurnStartDraw",
+          "Operation": "AddPerStack",
+          "Magnitude": 1,
+          "Priority": 100,
+          "RestrictDamageKind": null,
+          "AppliesToStatusId": null,
+          "RestrictSourceCardTag": null,
+          "Condition": null
+        }
+      ],
+      "Triggers": null
     }
   ],
   "Cards": [

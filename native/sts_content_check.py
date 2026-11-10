@@ -137,7 +137,7 @@ INV_COUNTS = {
     # §299: +3 (C 类三件 —— 行为全在内容程序里)。
     # §300: +3 (三个新原子各自解锁的那一件).
     # §312: +1 (`standard.malleable`).
-    "statuses": 148,
+    "statuses": 150,
 }
 
 # inv:§2 / §2.1 -- the hero.
@@ -1630,10 +1630,15 @@ INV_STATUSES = {
     # 像 §231 的 `standard.no_draw`）。所以内容这一行没有任何修饰器与触发器：它是个**开关**，
     # 不是一段程序。这正是 `no_draw` 那条注释说过的同一类载体。
     "standard.confusion": [],
-    # §283: `standard.snecko_eye` —— 两条规则全在**触发器**里（`TurnStarted`：首回合挂
-    # Confused、每回合 `drawCards 2`），所以内容这一行的被动修饰器是空的。
-    "standard.snecko_eye": [],
+    # §283: `standard.snecko_eye`。§333：“每回合多抽 2”从**触发器里的 `drawCards 2`** 改成了
+    # `TurnStartDraw/AddFlat 2`—— wiki 的话是 "Draw 2 additional cards each turn"，那就是管线的语义；
+    # 旧写法在**正常抽 5 之前**先抽 2（重洗时机与 `no_draw` 的交互都不对）。
+    "standard.snecko_eye": [("TurnStartDraw", "AddFlat", 2, 100, None)],
     "standard.nightmare_pending": [],
+    # §333：一次性的“下回合多能量 / 多抽”（wiki `Energized` / `Draw Card`）。
+    # 过期在内核抽牌之后（标签 `one_shot_turn_start`）。
+    "standard.energized": [("TurnStartEnergy", "AddPerStack", 1, 100, None)],
+    "standard.draw_card_next_turn": [("TurnStartDraw", "AddPerStack", 1, 100, None)],
     # §276：两条 50% 分裂（L 史莱姆）。行为全在 `DamageTaken` 触发器里，没有被动修饰器
     # （触发器清单在下面那张专门的表里）。
     "standard.split_spike_l": [],

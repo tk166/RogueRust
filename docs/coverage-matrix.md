@@ -4,7 +4,7 @@
 > 手改这一页会让闸门红 —— 这是故意的：一张"人维护的覆盖表"活不过下一次内容变更。
 
 回答一个问题：**每一个实体（怪/动作/卡/状态/遭遇/事件/遗物/药水）被验证到哪里了？**
-下面这张 955 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
+下面这张 957 行的表靠记性是维护不了的，所以每一列都是派生的（口径见 `native/coverage_matrix.py` 顶部）：
 
 **⚠️ 这七列没有一列声称"行为正确"。** 它们回答的是三个更弱、但可以被机器检查的问题：
 *这个实体有没有出处？有没有被任何测试引用？有没有人写下"它和 wiki 不一样"？*
@@ -39,14 +39,14 @@
 | 怪物 | 61 | 54 | 0 | 7 | 52 | 9 | 7 | 0 |
 | 敌人动作 | 166 | 87 | 79 | 0 | 143 | 23 | 59 | 0 |
 | 卡牌 | 295 | 168 | 127 | 0 | 281 | 14 | 18 | 0 |
-| 状态 | 148 | 137 | 6 | 5 | 0 | 148 | 1 | 0 |
+| 状态 | 150 | 139 | 6 | 5 | 0 | 150 | 1 | 0 |
 | 遭遇 | 64 | 46 | 18 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 36 | 36 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 152 | 135 | 17 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 955 | 696 | 247 | 12 | 476 | 194 | 85 | 0 |
+| **合计** | 957 | 698 | 247 | 12 | 476 | 196 | 85 | 0 |
 
-扫描到的具名测试：**1211** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1212** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **39** 个位次、**36** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -551,7 +551,7 @@
 | smite+ | yes | — | CARD_DIFF | wiki:wiki_cards/smite.txt (via smite) | — | INV_CARDS |
 | spot_weakness | yes | spot_weakness_follows_the_enemy_intent | — | wiki:wiki_cards/spot_weakness.txt | — | §242/CARD_WIKI+INV_CARDS/spot_weakness_follows_the_enemy_intent |
 | spot_weakness+ | yes | — | CARD_DIFF | wiki:wiki_cards/spot_weakness.txt (via spot_weakness) | — | INV_CARDS |
-| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+197) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
+| strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, a_card_play_leaves_no_chain_referenced …(+198) | — | wiki:wiki_cards/strike.txt | — | §264/§297/CARD_WIKI+INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | strike+ | yes | card_tags_are_readable_and_a_junk_card_is_not_a_reward, armaments_gains_block_then_upgrades_the_chosen_card …(+14) | — | wiki:wiki_cards/strike.txt (via strike) | — | INV_CARDS/card_tags_are_readable_and_a_junk_card_is_not_a_reward |
 | swift_strike | yes | an_innate_card_is_pulled_to_the_top_of_the_draw_pile, the_keyword_cells_are_in_the_image | — | spec:INV_CARDS | — | INV_CARDS/an_innate_card_is_pulled_to_the_top_of_the_draw_pile |
 | swift_strike+ | yes | — | CARD_DIFF | spec:INV_CARDS | — | INV_CARDS |
@@ -589,7 +589,7 @@
 | wound | yes | the_new_red_skills_do_what_their_pages_say, painful_stabs_shuffles_a_wound_only_on_unblocked_damage …(+4) | — | wiki:wiki_cards/wound.txt | — | §173/§327/CARD_WIKI+INV_CARDS/the_new_red_skills_do_what_their_pages_say |
 | writhe | yes | the_two_event_curses_behave_as_their_pages_say | — | wiki:wiki_cards/writhe.txt | — | §220/§221/CARD_WIKI+INV_CARDS/the_two_event_curses_behave_as_their_pages_say |
 
-## 状态（148）
+## 状态（150）
 
 | Entity | Implemented | TestNamed | HarnessOnly | SourceTie | DeclaredDeviation | Evidence |
 |---|---|---|---|---|---|---|
@@ -629,11 +629,13 @@
 | standard.dexterity | yes | dexterity_from_the_content_scales_a_real_defend, orange_pellets_removes_every_debuff_and_keeps_the_buffs …(+10) | — | spec:INV_STATUSES | — | §174/§204/INV_STATUSES/dexterity_from_the_content_scales_a_real_defend |
 | standard.double_damage | yes (test-only) | the_status_parameter_infrastructure_changes_the_right_number, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §264/§267/INV_STATUSES/the_status_parameter_infrastructure_changes_the_right_number |
 | standard.double_tap | yes | double_tap_only_covers_the_next_attack | — | spec:INV_STATUSES | — | §231/§238/INV_STATUSES/double_tap_only_covers_the_next_attack |
+| standard.draw_card_next_turn | yes (test-only) | the_one_shot_turn_start_statuses_apply_once_and_then_go_away | — | spec:INV_STATUSES | — | §333/INV_STATUSES/the_one_shot_turn_start_statuses_apply_once_and_then_go_away |
 | standard.draw_reduction | yes | draw_reduction_costs_exactly_one_turns_draw_and_then_expires | — | spec:INV_STATUSES | — | §10/§195.7/INV_STATUSES/draw_reduction_costs_exactly_one_turns_draw_and_then_expires |
 | standard.duality | yes | the_zero_infrastructure_batch_wires_the_right_carrier, the_reaction_relics_fire_the_right_number_of_times | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
 | standard.duplication | yes | duplication_plays_the_program_twice_but_pays_and_counts_once | — | spec:INV_STATUSES | — | §181/INV_STATUSES/duplication_plays_the_program_twice_but_pays_and_counts_once |
 | standard.ectoplasm | yes | the_gold_and_shop_relics_change_only_their_own_number | — | spec:INV_STATUSES | — | §269/§270/INV_STATUSES/the_gold_and_shop_relics_change_only_their_own_number |
 | standard.enchiridion | yes | enchiridion_adds_a_free_power_card_on_the_first_turn | — | spec:INV_STATUSES | — | §299/INV_STATUSES/enchiridion_adds_a_free_power_card_on_the_first_turn |
+| standard.energized | yes (test-only) | the_one_shot_turn_start_statuses_apply_once_and_then_go_away | — | spec:INV_STATUSES | — | §333/INV_STATUSES/the_one_shot_turn_start_statuses_apply_once_and_then_go_away |
 | standard.enrage | yes | a_card_play_leaves_no_chain_referenced, enrage_answers_only_a_skill | — | spec:INV_STATUSES | — | §117/§312/INV_STATUSES/a_card_play_leaves_no_chain_referenced |
 | standard.entangle_ready | yes | — | ENEMY_DIFF | spec:INV_STATUSES | — | §196/INV_STATUSES |
 | standard.entangled | yes | entangled_refuses_attacks_but_not_skills_and_expires_at_turn_end | — | spec:INV_STATUSES | — | §196/§263/INV_STATUSES/entangled_refuses_attacks_but_not_skills_and_expires_at_turn_end |
@@ -674,7 +676,7 @@
 | standard.mode_shift | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost | — | spec:INV_STATUSES | — | §195.1/INV_STATUSES/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
 | standard.mummified_hand | yes | mummified_hand_makes_one_random_card_free_after_a_power | — | spec:INV_STATUSES | — | §300/INV_STATUSES/mummified_hand_makes_one_random_card_free_after_a_power |
 | standard.mutagenic_strength | yes | the_zero_infrastructure_batch_wires_the_right_carrier, mutagenic_strength_rides_its_own_carrier_status …(+2) | — | spec:INV_STATUSES | — | §267/INV_STATUSES/the_zero_infrastructure_batch_wires_the_right_carrier |
-| standard.nightmare_pending | yes | nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive | — | spec:INV_STATUSES | — | §227/§283/INV_STATUSES/nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive |
+| standard.nightmare_pending | yes | nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive | — | spec:INV_STATUSES | — | §283/§333/INV_STATUSES/nightmare_copies_into_the_aside_pile_and_next_turn_they_arrive |
 | standard.nilrys_codex | yes | nilrys_codex_asks_at_turn_end_and_sends_the_pick_to_the_draw_pile | — | spec:INV_STATUSES | — | §300/INV_STATUSES/nilrys_codex_asks_at_turn_end_and_sends_the_pick_to_the_draw_pile |
 | standard.no_block_from_cards | yes | — | CARD_DIFF | spec:INV_STATUSES | — | §244/§245/INV_STATUSES |
 | standard.no_draw | yes | battle_trance_blocks_further_draws_only_this_turn, the_ten_cards_added_in_221_do_what_the_wiki_says | — | spec:INV_STATUSES | — | §227/§231/INV_STATUSES/battle_trance_blocks_further_draws_only_this_turn |
@@ -711,7 +713,7 @@
 | standard.shuriken | yes | the_every_nth_card_relics_wire_their_own_carrier, the_every_nth_card_relics_count_the_right_kind_of_card | — | spec:INV_STATUSES | — | §261/§262/INV_STATUSES/the_every_nth_card_relics_wire_their_own_carrier |
 | standard.slavers_collar | yes (test-only) | the_kind_gated_relics_only_fire_in_their_own_kinds | — | spec:INV_STATUSES | — | §268/§269/INV_STATUSES/the_kind_gated_relics_only_fire_in_their_own_kinds |
 | standard.slow | yes | a_card_play_leaves_no_chain_referenced, a_slow_spec_on_a_pipeline_without_a_card_count_is_refused …(+1) | — | spec:INV_STATUSES | ours 放大任何直接伤害（`RestrictDamageKind: Direct`） / wiki 只放大"打出攻击牌造成的伤害" —— 要精确到卡牌标签需要 `RestrictSourceCardTag` 进镜像格式（`status_bind` 目前对非空值响亮拒绝），留作格式升级。基线（本回合牌数、每回合归零、不复合）已与 wiki 一致（§216） | §216/INV_STATUSES/a_card_play_leaves_no_chain_referenced |
-| standard.snecko_eye | yes | — | — | spec:INV_STATUSES | — | §292/§294/INV_STATUSES |
+| standard.snecko_eye | yes | — | — | spec:INV_STATUSES | — | §294/§333/INV_STATUSES |
 | standard.snecko_skull | yes | the_status_application_relics_wire_their_own_carrier, the_status_application_relics_change_what_lands_on_the_target | — | spec:INV_STATUSES | — | §265/INV_STATUSES/the_status_application_relics_wire_their_own_carrier |
 | standard.sozu | yes | sozu_refuses_potions_at_both_doors | — | spec:INV_STATUSES | — | §270/§271/INV_STATUSES/sozu_refuses_potions_at_both_doors |
 | standard.split | yes | a_spawned_enemy_joins_the_turn_order_after_the_current_actor, a_phase_split_happens_once_even_under_three_hits …(+1) | — | spec:INV_STATUSES | — | §121/INV_STATUSES/a_spawned_enemy_joins_the_turn_order_after_the_current_actor |

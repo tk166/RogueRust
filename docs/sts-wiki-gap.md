@@ -155,7 +155,7 @@ wiki 常见而我们**没有**的：
 
 | 状态 | wiki 语义 | 需要 |
 |---|---|---|
-| **Draw / Energized（**下一回合**多抽 / 多能量）** | 回合开始结算 | 内核（回合开始的发牌/能量）—— 现在只有**本回合**的 `combat_draw` / `combat_energy`，以及"下一回合**少**抽"的 `standard.draw_reduction` |
+| ~~**Draw / Energized（**下一回合**多抽 / 多能量）**~~ | 回合开始结算 | ✅ **§333 已做**：两条管线（`TurnStartDraw` 第 6 步 / `TurnStartEnergy` 第 2 步）本来就在，缺的是**一次性** —— 现在有 `standard.energized` 与 `standard.draw_card_next_turn`（修饰器 + 标签 `one_shot_turn_start`，内核在**抽牌之后**摘掉）。⚠️ 旧版这条写"需要内核（回合开始的发牌/能量）"，那是**过时**的：当时已有 13 个消费者（`art_of_war` / `snecko_eye` / `ring_of_the_serpent` / `berserk` …） |
 | **Poison / Focus / Orbs / Stance / Scry** | 其他角色的语言 | **不做**（口径之外） |
 
 > §233 修正：上一版把 **Barricade / Blur / Entangled / Slow** 列在这里 —— 四条**都已经实现了**

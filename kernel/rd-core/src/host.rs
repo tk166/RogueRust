@@ -158,6 +158,14 @@ pub const TAG_RETAIN_HAND: &str = "retain_hand";
 ///
 /// §197：`Barricade` 用它（永久），`Blur` 用下面那个**一次性**的兄弟。
 pub const TAG_RETAIN_BLOCK_ONCE: &str = "retain_block_once";
+
+/// §333：`one_shot_turn_start` —— "这一回合开始结算完就摘掉"。
+///
+/// 用它的状态是 wiki 的 `Energized` / `Draw Card`（"**只**下一回合 +X 能量 / +X 抽牌"）：
+/// 它们的修饰器在回合开始被 `TurnStartEnergy`（第 2 步）与 `TurnStartDraw`（第 6 步）读，
+/// 读完就该消失。**抽牌在第 6 步、`TurnStarted` 触发器在第 4 步**，所以内容自己摘不掉
+/// （见 [`Host::expire_one_shot_turn_start`]）。
+pub const TAG_ONE_SHOT_TURN_START: &str = "one_shot_turn_start";
 ///
 /// 镜像 23/23 状态都不带它 ⇒ [`Host::block_is_retained`] 恒 `false`。
 pub const TAG_RETAIN_BLOCK: &str = "retain_block";
@@ -1948,6 +1956,52 @@ impl<'a> Host<'a> {
     /// 所以由调用方在"决定了保留"之后调这一句。
     ///
     /// 一次只摘**一层**：`Blur 2` 就撑两次回合开始（StS 的 Blur 可以叠）。
+    /// §333：摘掉 `one_shot_turn_start` 的状态（`Energized` / `Draw Card`）。
+    ///
+    /// 调用点在 `turn.rs` 的**抽牌之后**：那时 `TurnStartEnergy`（第 2 步）与
+    /// `TurnStartDraw`（第 6 步）都已经把它们算进去了。
+    ///
+    /// 与 [`Self::consume_one_shot_block_retainers`] 同形（先收集定义再摘，避免在遍历
+    /// 状态表时改它），也同一条纪律：**只摘"活的"**（pending 的那些还没生效，不该被摘）。
+    pub fn expire_one_shot_turn_start(&mut self, state: &mut CombatState, actor: &CombatantId) {
+        let mut definitions = [crate::state::StatusDefinitionId::EMPTY; 8];
+        let mut count = 0usize;
+        {
+            let Some(combatant) = state.combatant(actor) else {
+                return;
+            };
+            for instance in combatant.statuses() {
+                if count == definitions.len() || !is_active(instance) || instance.stacks <= 0 {
+                    continue;
+                }
+                let Ok(true) = status_bind::has_tag(
+                    self.content,
+                    instance.definition_id.as_str(),
+                    TAG_ONE_SHOT_TURN_START,
+                ) else {
+                    continue;
+                };
+                definitions[count] = instance.definition_id;
+                count += 1;
+            }
+        }
+        // 与 `consume_one_shot_block_retainers` 同一段收尾：**删掉整条实例**（不是把层数减到 0）。
+        // `Energized` / `Draw Card` 是一次性的，留着 0 层实例会让它继续出现在状态栏上。
+        for definition in definitions.iter().take(count) {
+            let index = state.combatant(actor).and_then(|combatant| {
+                combatant
+                    .statuses()
+                    .iter()
+                    .position(|status| status.definition_id == *definition && status.stacks > 0)
+            });
+            let Some(index) = index else { continue };
+            let Some(combatant) = state.combatant_mut(actor) else {
+                return;
+            };
+            combatant.remove_status(index);
+        }
+    }
+
     pub fn consume_one_shot_block_retainers(&mut self, state: &mut CombatState, actor: &CombatantId) {
         let mut definitions = [crate::state::StatusDefinitionId::EMPTY; 8];
         let mut count = 0usize;
@@ -2969,6 +3023,10 @@ impl TurnHost for Host<'_> {
     /// that).
     fn consume_one_shot_block_retainers(&mut self, state: &mut CombatState, actor: &CombatantId) {
         Host::consume_one_shot_block_retainers(self, state, actor);
+    }
+
+    fn expire_one_shot_turn_start(&mut self, state: &mut CombatState, actor: &CombatantId) {
+        Host::expire_one_shot_turn_start(self, state, actor);
     }
 
     fn turn_start_draw_count(&self, state: &CombatState, actor: &CombatantId, base: i32) -> i32 {
@@ -13928,6 +13986,8 @@ mod tests {
     /// `writhe` 只是 `Innate` + `Unplayable`（没有节目 ⇒ 回合末什么都不发生）。
     #[test]
     fn the_two_event_curses_behave_as_their_pages_say() {
+
+    /// §222：两张事件诅咒 —— `doubt` 的”回合末 +1 Weak“是 `LifecyclePrograms[TurnEndInHand]`，
         let blob = std::fs::read(concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
@@ -13991,6 +14051,73 @@ mod tests {
             0,
             "writhe has no lifecycle program"
         );
+    }
+
+    /// §333：`standard.energized` / `standard.draw_card_next_turn` —— **只**下一回合。
+    ///
+    /// 三条一起验（见文件头的理由）：生效一次、下一回合回到基础、状态真的被摘掉。
+    #[test]
+    fn the_one_shot_turn_start_statuses_apply_once_and_then_go_away() {
+        let blob = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tools/contentc/packages/sts/out/content.sts.rdcf"
+        ))
+        .expect("the sts image");
+        let content = parse(&blob);
+        let mut host = Host::new(&content);
+        let mut state = CombatState::new(CombatId::new("c1").unwrap(), 11);
+        state.add_combatant(unit("hero", "player", 70, 70)).expect("hero");
+        state.add_combatant(unit("enemy_a", "enemy", 40, 40)).expect("enemy");
+        // 一副够抽的牌：每回合抽 5，两回合要 10 张以上。
+        for index in 0..24 {
+            give_card(
+                &mut state,
+                "hero",
+                CardZone::DrawPile,
+                &std::format!("c{index}"),
+                "strike",
+                None,
+            );
+        }
+        for entry in [
+            status("st_energized", "standard.energized", 2),
+            status("st_draw", "standard.draw_card_next_turn", 3),
+        ] {
+            give(&mut state, "hero", entry);
+        }
+
+        let config = config();
+        turn::start_current_turn(&mut state, &config, &mut host).expect("turn 1");
+        // ① 生效：能量 = 3 + 2、手牌 = 5 + 3。
+        assert_eq!(energy_of(&state, "hero"), config.energy_refill + 2, "Energized 2 pays out once");
+        assert_eq!(zone_count(&state, "hero", CardZone::Hand), 8, "Draw Card 3 draws three extra");
+        // ③ 状态真的消失（不是留一条 0 层的）。
+        for name in ["standard.energized", "standard.draw_card_next_turn"] {
+            assert_eq!(stacks_of(&state, "hero", name), 0, "{name} is spent");
+        }
+
+        // ② 下一回合回到基础值：先结束这一回合。
+        //    ⚠️ 必须把能量**花掉**：补能是"补到 max"不是"加"（`refill_resource`），所以留着
+        //    5 点不花，第二回合补到 3 之后仍然显示 5 —— 那不是"加成还在"，而是补能语义。
+        state
+            .combatant_mut(&cid("hero"))
+            .expect("hero")
+            .set_resource(ResourceId::new("standard.energy").unwrap(), 0, None)
+            .expect("spend it");
+        //    回合序是 hero → enemy → hero，所以要推**两格**才回到英雄的第 2 回合。
+        turn::end_current_turn_and_start_next(&mut state, &config, &mut host).expect("end 1");
+        turn::end_current_turn_and_start_next(&mut state, &config, &mut host).expect("end 2");
+        assert_eq!(
+            state.active_combatant_id,
+            Some(cid("hero")),
+            "back to the hero's turn"
+        );
+        assert_eq!(
+            energy_of(&state, "hero"),
+            config.energy_refill,
+            "the turn after must be back to the plain refill"
+        );
+        assert_eq!(zone_count(&state, "hero", CardZone::Hand), 5, "and the plain five cards");
     }
 
     /// §220：`LifecyclePrograms[Drawn]` —— wiki 的 "Whenever this card is drawn, lose 1 Energy."

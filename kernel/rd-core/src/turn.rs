@@ -294,6 +294,15 @@ pub trait TurnHost {
         base
     }
 
+    /// §333：摘掉 `one_shot_turn_start` 的状态（`Energized` / `Draw Card`）。
+    ///
+    /// 默认**什么都不做**：只有 `Host` 有内容，而"哪些状态带那个标签"只能从内容读。
+    /// 与 [`Self::turn_start_draw_count`] 的默认实现同一条理由 —— 测试宿主没有内容，
+    /// 对它们"不做"就是正确答案。
+    fn expire_one_shot_turn_start(&mut self, state: &mut CombatState, actor: &CombatantId) {
+        let _ = (state, actor);
+    }
+
     /// §199：回合开始**补给多少能量**（`TurnStartEnergy` 管线之后的数）。默认 `base`。
     ///
     /// 判据与折叠全在 [`crate::exec::fold_turn_start_energy`]（复用 `exec.rs` 已经交付的候选表 +
@@ -801,6 +810,15 @@ pub fn start_current_turn<H: TurnHost>(
             }
         }
     }
+    if stopped(state) {
+        return Ok(());
+    }
+
+    // 6b. §333：`one_shot_turn_start` 的状态在这里过期。
+    //     位置是**语义**：`TurnStartEnergy` 在第 2 步、`TurnStartDraw` 在第 6 步都已经读过它们，
+    //     所以"读完就摘"必须落在这两步之后。放在第 4 步（`TurnStarted` 触发器）会把**抽牌**那份
+    //     加成提前摘掉 —— 而那正是这条机制此前做不到的原因。
+    host.expire_one_shot_turn_start(state, &actor);
     if stopped(state) {
         return Ok(());
     }
