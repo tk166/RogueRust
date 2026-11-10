@@ -77725,6 +77725,26 @@
       "Id": "mind_bloom",
       "NameKey": "Mind Bloom",
       "Entry": "mind_bloom"
+    },
+    {
+      "Id": "council_of_ghosts",
+      "NameKey": "Council Of Ghosts",
+      "Entry": "council_of_ghosts"
+    },
+    {
+      "Id": "pleading_vagrant",
+      "NameKey": "Pleading Vagrant",
+      "Entry": "pleading_vagrant"
+    },
+    {
+      "Id": "old_beggar",
+      "NameKey": "Old Beggar",
+      "Entry": "old_beggar"
+    },
+    {
+      "Id": "vampires",
+      "NameKey": "Vampires",
+      "Entry": "vampires"
     }
   ],
   "Potions": [
@@ -78056,6 +78076,19 @@
       },
       {
         "Id": "the_library"
+      },
+      {
+        "Id": "council_of_ghosts"
+      },
+      {
+        "Id": "pleading_vagrant"
+      },
+      {
+        "Id": "vampires"
+      },
+      {
+        "Id": "old_beggar",
+        "MinGold": 75
       }
     ],
     "Events3": [
@@ -80973,6 +81006,257 @@
             {
               "Effect": "curse:doubt",
               "Amount": 1
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "council_of_ghosts",
+      "TextKey": "Three hooded shapes fade into being, offering a shard of themselves. It costs a piece of you.",
+      "Options": [
+        {
+          "Label": "Accept (5 Apparitions)",
+          "Effects": [
+            {
+              "Effect": "card:apparition",
+              "Amount": 5
+            },
+            {
+              "Effect": "max_hp_pct:50",
+              "Amount": 0
+            }
+          ],
+          "EffectsAsc": [
+            {
+              "Effect": "card:apparition",
+              "Amount": 3
+            },
+            {
+              "Effect": "max_hp_pct:50",
+              "Amount": 0
+            }
+          ],
+          "Next": "council_of_ghosts.after"
+        },
+        {
+          "Label": "Refuse",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "council_of_ghosts.after"
+        }
+      ]
+    },
+    {
+      "Id": "council_of_ghosts.after",
+      "TextKey": "The hooded shapes thin out and are gone. The corridor is just a corridor.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "pleading_vagrant",
+      "TextKey": "A shrouded figure steps out of the group ahead. \"Got anything for me, friend? Coin, maybe? I have treasures to trade...\"",
+      "Options": [
+        {
+          "Label": "Give 85 Gold",
+          "Requires": [
+            {
+              "Kind": "gold",
+              "Op": "at_least",
+              "Amount": 85
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "gold_cost:85",
+              "Amount": 0
+            },
+            {
+              "Effect": "relic_random",
+              "Amount": 0
+            }
+          ],
+          "Next": "pleading_vagrant.thanks"
+        },
+        {
+          "Label": "Rob",
+          "Effects": [
+            {
+              "Effect": "relic_random",
+              "Amount": 0
+            },
+            {
+              "Effect": "curse:shame",
+              "Amount": 1
+            }
+          ],
+          "Next": "pleading_vagrant.shame"
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "pleading_vagrant.thanks",
+      "TextKey": "\"Oh yes, yes! Here here, a fair trade!\"",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "pleading_vagrant.shame",
+      "TextKey": "You snatch the relic from his clutches and walk on. Behind you: \"Have you no shame? HAVE YOU NO SHAAAAAME?!\" You do, a little.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "old_beggar",
+      "TextKey": "An old beggar holds out a bowl. \"Seventy-five for a look at your deck, friend. I know old tricks.\"",
+      "Options": [
+        {
+          "Label": "Offer 75 Gold",
+          "Requires": [
+            {
+              "Kind": "gold",
+              "Op": "at_least",
+              "Amount": 75
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "gold_cost:75",
+              "Amount": 0
+            },
+            {
+              "Effect": "remove_card",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        },
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "vampires",
+      "TextKey": "Hooded figures circle something on the ground, and one of them turns. \"Join us, and feel the warmth of the Spire.\"",
+      "Options": [
+        {
+          "Label": "Offer: Blood Vial",
+          "Requires": [
+            {
+              "Kind": "relic",
+              "Op": "has",
+              "Id": "blood_vial"
+            }
+          ],
+          "Effects": [
+            {
+              "Effect": "relic_lose:blood_vial",
+              "Amount": 0
+            },
+            {
+              "Effect": "remove_all:strike",
+              "Amount": 0
+            },
+            {
+              "Effect": "card:bite",
+              "Amount": 5
+            }
+          ],
+          "Next": "vampires.after"
+        },
+        {
+          "Label": "Accept (30% max HP)",
+          "Effects": [
+            {
+              "Effect": "remove_all:strike",
+              "Amount": 0
+            },
+            {
+              "Effect": "card:bite",
+              "Amount": 5
+            },
+            {
+              "Effect": "max_hp_pct:30",
+              "Amount": 0
+            }
+          ],
+          "Next": "vampires.after"
+        },
+        {
+          "Label": "Refuse",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": "vampires.after"
+        }
+      ]
+    },
+    {
+      "Id": "vampires.after",
+      "TextKey": "The circle closes, then opens again. Whatever they were doing, it is done.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
             }
           ],
           "Next": ""

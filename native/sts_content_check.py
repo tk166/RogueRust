@@ -5007,6 +5007,19 @@ def check_event_vocabulary(doc):
                         fail(where, "fight_no_relic takes no Amount")
                     counts["effects"] += 1
                     continue
+                if kind == "remove_all":
+                    # §322：`vampires` 的 "Remove all Strikes"。载荷是**卡 id**（必须在这张镜像里），
+                    # `Amount` 无关（它删的是"这一种"，不是一个数）。
+                    if payload not in cards:
+                        fail(where, "remove_all:%s 不在 Cards 表里" % (payload,))
+                    elif payload.endswith("+"):
+                        # `+` 行是**同一张牌的升级版**，内核按去尾 `+` 后的 id 比较 —— 写 `+` 会
+                        # 变成"永远删不到"。
+                        fail(where, "remove_all 的载荷取基础 id（不要 `+`），got %r" % (payload,))
+                    if entry.get("Amount") not in (0, None):
+                        fail(where, "remove_all 的 Amount 必须是 0（种类在词里）")
+                    counts["effects"] += 1
+                    continue
                 if kind == "remove_card_random":
                     # §319：`falling` —— "Lose (a random <type> card)"。载荷是**类型**，
                     # 不是卡 id：拼错的类型在内核里会解析失败（内容报错），这里先拦。

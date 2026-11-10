@@ -14,7 +14,7 @@
 
 param(
   [switch]$SkipSlow,
-  [int]$UnitsFloor = 1179
+  [int]$UnitsFloor = 1186
 )
 
 $ErrorActionPreference = 'Stop'

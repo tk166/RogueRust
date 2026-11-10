@@ -3479,7 +3479,7 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         // §279：失去遗物只有**事件**会用（`relic_lose:<id>`），与 `GainCurse`/`GainRelic`
         // 同一条规矩：这两个码是"这个选项点名了一件遗物"，只有**内容字符串**知道 id，
         // 而 `effect_code_of` 拿到的是已经解析过的枚举 —— 所以答 `-1` 而不是复用 10/13。
-        EventEffect::GainCurse
+        EventEffect::GainCurse(_)
         | EventEffect::GainRelic
         | EventEffect::LoseRelic
         // §285：`relic_random` 在 `rd_run_choose` 里已经被解析成 `GainRelic`，永远到不了这里；
@@ -3499,7 +3499,7 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         // §290：`gold_all` 与 `card:<id>` 的落点是"金币清零 / 牌组加一张"，
         // 页面上没有一条"效果码"能画它们（`-1` 与 `relic_random` 同一条规矩）。
         | EventEffect::LoseAllGold
-        | EventEffect::GainCard
+        | EventEffect::GainCard(_)
         // §319：`remove_card_random:<kind>` 也一样 —— 类型名在**内容字符串**里（`Land` /
         // `Channel` / `Strike` 三个按钮的名字已经把它写在脸上了），枚举这边只剩下一个类。
         | EventEffect::RemoveCardRandom(_)
@@ -3508,7 +3508,9 @@ fn effect_code_of(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::OfferCards(_, _)
         // §321：`upgrade_all` 的落点是**牌组每一张**，页面上没有效果码能画它（与 `card:<id>`
         // 同一条规矩：真正的信息在内容字符串里）。
-        | EventEffect::UpgradeAll => -1,
+        | EventEffect::UpgradeAll
+        // §322：`remove_all:<id>` 同理 —— 哪一种牌在内容字符串里（且不是问句）。
+        | EventEffect::RemoveAllCards => -1,
     }
 }
 
@@ -3543,14 +3545,15 @@ fn effect_amount(effect: rd_run::state::EventEffect) -> i32 {
         | EventEffect::FightRelicRarity(_)
         | EventEffect::FightExtraRelic(_)
         | EventEffect::FightRelic
-        | EventEffect::GainCard
+        | EventEffect::GainCard(_)
         | EventEffect::LoseAllGold
-        | EventEffect::GainCurse
+        | EventEffect::GainCurse(_)
         | EventEffect::GainRelic
         | EventEffect::LoseRelic
         | EventEffect::GainRandomRelic
         // §319：类型不是"数量"。
         | EventEffect::UpgradeAll
+        | EventEffect::RemoveAllCards
         | EventEffect::RemoveCardRandom(_)
         | EventEffect::HealFull => 0,
     }
@@ -10555,6 +10558,182 @@ mod tests {
 
     /// §286：**事件把房间变成一场战斗** —— `[Fight]` 之后 `fight_begin` 必须接受，并且按
     /// **精英**结算。
+    /// §322：`Pleading Vagrant` 的 `[Rob]` —— 随机遗物 + `Shame` + 走到下一段。
+    #[test]
+    fn pleading_vagrant_rob_gives_a_relic_and_a_curse_then_moves_on() {
+        let mut seed_found = None;
+        for seed in 0..2000 {
+            if !walk_until_unknown(seed) {
+                continue;
+            }
+            if rd_run_begin_node() != 0 {
+                continue;
+            }
+            if run_slot()
+                .as_mut()
+                .expect("a run")
+                .state
+                .begin_event("pleading_vagrant", "pleading_vagrant")
+                .is_err()
+            {
+                continue;
+            }
+            seed_found = Some(seed);
+            break;
+        }
+        let seed = seed_found.expect("no `?` room in 2000 seeds");
+
+        let relics_before = run_slot().as_ref().expect("a run").state.relics().len();
+        let deck_before = rd_run_deck_count();
+        assert_eq!(rd_run_event_option_count(), 3, "seed {seed}: three options");
+        assert_eq!(rd_run_choose(1), 0, "seed {seed}: Rob -- {}", run_error_text());
+
+        let state = &run_slot().as_ref().expect("a run").state;
+        assert_eq!(state.relics().len(), relics_before + 1, "seed {seed}: a random relic");
+        assert_eq!(rd_run_deck_count(), deck_before + 1, "seed {seed}: Shame went in");
+        // `[Rob]` 的 `Next` 是一段"Leave"，所以事件**还没**收尾。
+        assert_eq!(rd_run_event_option_count(), 1, "seed {seed}: the leave screen");
+        assert_eq!(rd_run_choose(0), 0, "seed {seed}: {}", run_error_text());
+        assert!(run_slot().as_ref().expect("a run").state.node_resolved(),
+                "seed {seed}: the room settles after Leave");
+    }
+
+    /// §322：`Old Beggar` 的 `[Offer 75 Gold]` —— 付 75、然后**问玩家要删哪一张**。
+    #[test]
+    fn old_beggar_takes_the_gold_and_asks_which_card() {
+        let mut seed_found = None;
+        for seed in 0..2000 {
+            if !walk_until_unknown(seed) {
+                continue;
+            }
+            if rd_run_begin_node() != 0 {
+                continue;
+            }
+            // 这条事件的选项要 75 金币，而走图用的局是 0 金币 —— 先给它钱（内容层面
+            // `MinGold: 75` 与选项的 `gold at_least 75` 是同一件事，见 `sts_content_check`）。
+            let session = run_slot().as_mut().expect("a run");
+            session.state.adjust_gold(200);
+            let ok = session.state.begin_event("old_beggar", "old_beggar").is_ok();
+            if !ok {
+                continue;
+            }
+            seed_found = Some(seed);
+            break;
+        }
+        let seed = seed_found.expect("no `?` room in 2000 seeds");
+        // 80 金币的局：付得起 75。
+        let gold_before = run_slot().as_ref().expect("a run").state.gold();
+        assert!(gold_before >= 75, "seed {seed}: the fixture starts with {gold_before} gold");
+        let deck_before = rd_run_deck_count();
+        assert_eq!(rd_run_choose(0), 0, "seed {seed}: {}", run_error_text());
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.gold(),
+            gold_before - 75,
+            "seed {seed}: 75 gold is gone"
+        );
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.pending(),
+            rd_run::state::Pending::EventCard,
+            "seed {seed}: it asks which card"
+        );
+        assert_eq!(rd_run_pick_event_card(0), 0, "seed {seed}: {}", run_error_text());
+        assert_eq!(rd_run_deck_count(), deck_before - 1, "seed {seed}: one card removed");
+    }
+
+    /// §322：`Vampires` 的 `[Accept]` —— 删掉**所有**打击、给 **5** 张 Bite、失去 30% 上限。
+    #[test]
+    fn vampires_swaps_every_strike_for_five_bites() {
+        let mut seed_found = None;
+        for seed in 0..2000 {
+            if !walk_until_unknown(seed) {
+                continue;
+            }
+            if rd_run_begin_node() != 0 {
+                continue;
+            }
+            if run_slot()
+                .as_mut()
+                .expect("a run")
+                .state
+                .begin_event("vampires", "vampires")
+                .is_err()
+            {
+                continue;
+            }
+            seed_found = Some(seed);
+            break;
+        }
+        let seed = seed_found.expect("no `?` room in 2000 seeds");
+        let before = *run_slot().as_ref().expect("a run").state;
+        let strikes_before = before
+            .deck()
+            .iter()
+            .filter(|card| card.as_str().trim_end_matches('+') == "strike")
+            .count();
+        assert!(strikes_before > 0, "seed {seed}: the fixture has Strikes");
+        // 0 = `[Offer: Blood Vial]`（没有血瓶时**不可选**）、1 = `[Accept]`、2 = `[Refuse]`。
+        assert_eq!(rd_run_choose(1), 0, "seed {seed}: Accept -- {}", run_error_text());
+        let after = &run_slot().as_ref().expect("a run").state;
+        assert_eq!(
+            after
+                .deck()
+                .iter()
+                .filter(|card| card.as_str().trim_end_matches('+') == "strike")
+                .count(),
+            0,
+            "seed {seed}: every Strike is gone"
+        );
+        assert_eq!(
+            after.deck().iter().filter(|card| card.as_str() == "bite").count(),
+            5,
+            "seed {seed}: five Bites"
+        );
+        assert_eq!(
+            after.health_max(),
+            before.health_max() - before.health_max() * 30 / 100,
+            "seed {seed}: 30% of max HP"
+        );
+    }
+
+    /// §322：`Council of Ghosts` 的 `[Accept]` —— 5 张 Apparition + 50% 上限。
+    #[test]
+    fn council_of_ghosts_gives_five_apparitions() {
+        let mut seed_found = None;
+        for seed in 0..2000 {
+            if !walk_until_unknown(seed) {
+                continue;
+            }
+            if rd_run_begin_node() != 0 {
+                continue;
+            }
+            if run_slot()
+                .as_mut()
+                .expect("a run")
+                .state
+                .begin_event("council_of_ghosts", "council_of_ghosts")
+                .is_err()
+            {
+                continue;
+            }
+            seed_found = Some(seed);
+            break;
+        }
+        let seed = seed_found.expect("no `?` room in 2000 seeds");
+        let before = *run_slot().as_ref().expect("a run").state;
+        assert_eq!(rd_run_choose(0), 0, "seed {seed}: Accept -- {}", run_error_text());
+        let after = &run_slot().as_ref().expect("a run").state;
+        assert_eq!(
+            after.deck().iter().filter(|card| card.as_str() == "apparition").count(),
+            5,
+            "seed {seed}: five Apparitions"
+        );
+        assert_eq!(
+            after.health_max(),
+            before.health_max() - before.health_max() * 50 / 100,
+            "seed {seed}: half of max HP"
+        );
+    }
+
     #[test]
     fn an_event_fight_begins_and_settles_as_an_elite() {
         // 站在一个 `?` 房上，开 `Dead Adventurer`，选 `[Fight]`。

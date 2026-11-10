@@ -970,9 +970,11 @@ pub enum EventEffect {
     FightRelic,
     /// §289：**下一场战斗**的药水概率**独立**于那一幕的移动概率（`fight_potion_chance:<pct>`）。
     FightPotionChance(u8),
-    /// §290：给**指定**的一张牌（`card:<id>`）。与 `GainCurse` 的区别只有一条：
+    /// §290：给**指定**的一张牌（`card:<id>`），`n` = 张数（`Amount`，1..=5）。
+    /// §322：`Amount` 以前被**静默丢掉**（写 2 张只给 1 张），现在它是这个字段。
+    /// 与 `GainCurse` 的区别只有一条：
     /// 它不要求 `Rarity::Curse`（`Ritual Dagger` 是 `Special`）。
-    GainCard,
+    GainCard(u8),
     /// §290：失去**全部**金币（`gold_all`）—— `Masked Bandits` 的 `[Pay]`。
     /// 没有金额：金额就是"现在有多少"。
     LoseAllGold,
@@ -1014,9 +1016,16 @@ pub enum EventEffect {
     /// 所以内容里一条选项不能**同时**有它们（`resolve_event_effects` 会拒）。
     OfferCards(u8, OfferFilter),
     /// Add the card named beside this effect (a curse, in practice).
-    GainCurse,
+    /// §322：诅咒的张数（`Amount`，1..=5）。`mind_bloom` 的 `[I am Rich]` 是 **2 张** Normality。
+    GainCurse(u8),
     /// Grant the relic named beside this effect.
     GainRelic,
+    /// §322：**按 id 把牌组里那一种牌全删掉**（`remove_all:<id>`）。`vampires` 的
+    /// "Remove all Strikes"。载荷是卡 id（与 `curse:` / `card:` 同一种形状）。
+    ///
+    /// 为什么不是一个 `DeckChange`：它不问"哪一张"，它问"这一种"，所以没有选牌屏
+    /// （`remove_card` 那一条才需要）。
+    RemoveAllCards,
     /// §279：**失去**旁边那件遗物（`relic_lose:<id>`）。`Forgotten Altar` 的
     /// `[Offer: Golden Idol]` 就是"失去金像、得到血像"。
     LoseRelic,
@@ -1029,6 +1038,18 @@ pub enum EventEffect {
 /// 是那种"看着对、算出来差十倍"的错。
 fn permille_of(base: i32, tenths: i32) -> i32 {
     base.saturating_mul(tenths) / 1000
+}
+
+/// §322：`card:<id>` / `curse:<id>` 的**张数**（`Amount`）。
+///
+/// `0`（以及缺省的 0）读作 1 —— 内容里绝大多数这两个原子都不用 `Amount`；但**别的**数字必须落在
+/// `1..=5`：真内容里最多的是 `vampires` / `council_of_ghosts` 的 5 张，写 6 张是内容错误。
+fn card_count(amount: i32) -> Option<u8> {
+    match amount {
+        0 => Some(1),
+        1..=5 => u8::try_from(amount).ok(),
+        _ => None,
+    }
 }
 
 /// §280：把 `"25"` / `"12.5"` 这样的**百分字符串**解成千分值（`250` / `125`）。
@@ -1180,10 +1201,21 @@ impl EventEffect {
                         // 拼错的类型**不是** `Other`：那会"删一张不知道什么类型的牌"。
                         None => return None,
                     },
-                    "curse" => (Self::GainCurse, Some(payload)),
+                    // §322：张数在 `Amount` 里（1..=5）。0 / 负数 / > 5 ⇒ **解析失败**
+                    // （不截断、也不当 1 —— 一条写错的 `Amount` 应该响亮）。
+                    "curse" => match card_count(amount) {
+                        Some(count) => (Self::GainCurse(count), Some(payload)),
+                        None => return None,
+                    },
                     // §290：`card:<id>` —— 与 `curse:` 同一个形状，只是不要求诅咒。
-                    "card" => (Self::GainCard, Some(payload)),
+                    "card" => match card_count(amount) {
+                        Some(count) => (Self::GainCard(count), Some(payload)),
+                        None => return None,
+                    },
                     "relic" => (Self::GainRelic, Some(payload)),
+                    // §322：`remove_all:<id>` —— 把这一种牌**全**删掉（`vampires` 的 "Remove all
+                    // Strikes"）。载荷是卡 id，与 `curse:` / `card:` 同一个形状。
+                    "remove_all" => (Self::RemoveAllCards, Some(payload)),
                     "relic_lose" => (Self::LoseRelic, Some(payload)),
                     // §278：`damage_pct:25` —— **数字在词里**（`Amount` 那一格与它无关），
                     // 因为 A15 的 35% 是另一条效果，而不是同一个数字换了值。
@@ -1276,7 +1308,7 @@ impl EventEffect {
     /// Does this effect need a payload supplied beside it?
     #[must_use]
     pub fn needs_payload(self) -> bool {
-        matches!(self, Self::GainCurse | Self::GainRelic)
+        matches!(self, Self::GainCurse(_) | Self::GainRelic | Self::RemoveAllCards)
     }
 }
 
@@ -6331,7 +6363,7 @@ impl RunState {
                 self.adjust_health(n);
             }
             EventEffect::Nothing => {}
-            EventEffect::GainCurse => {
+            EventEffect::GainCurse(count) => {
                 // The id must name a card this run can actually hold. Without this check a typo in
                 // the content puts a phantom id in the deck, and it stays invisible until that card
                 // is drawn in a fight.
@@ -6348,9 +6380,12 @@ impl RunState {
                     return Err(RunError::NoSuchCard);
                 }
                 // `curse:` 载荷按定义就是诅咒（上面刚验过池子里它是 `Rarity::Curse`）。
-                self.push_card(PoolCard { kind: CardKind::Curse, ..PoolCard::plain(id) })?;
+                // §322：张数（`omamori` 每张各挡一次 —— 那是 `push_card` 的规则，别在这里另记一套）。
+                for _ in 0..count {
+                    self.push_card(PoolCard { kind: CardKind::Curse, ..PoolCard::plain(id) })?;
+                }
             }
-            EventEffect::GainCard => {
+            EventEffect::GainCard(count) => {
                 // 载荷必须是**这张镜像里真的存在**的卡：一个拼错的 id 会变成牌组里一张
                 // 幽灵卡，直到某场战斗抽到它才暴露。稀有度**不限制**（`Ritual Dagger` 是 Special）。
                 let Some(id) = named else {
@@ -6359,8 +6394,12 @@ impl RunState {
                 let Some(row) = pool.iter().find(|card| card.id == id) else {
                     return Err(RunError::NoSuchCard);
                 };
-                self.push_card(*row)?;
+                // §322：张数。牌组满了 ⇒ `push_card` 的 `Capacity`（响亮，不静默丢牌）。
+                for _ in 0..count {
+                    self.push_card(*row)?;
+                }
             }
+            // §279：**失去**旁边那件遗物
             EventEffect::LoseAllGold => {
                 // §290：`[Pay]` —— 永远付得起（金额就是现有金币），所以这里**不会**报
                 // `NotEnoughGold`。`adjust_gold` 走的是"失去"那一条，`ectoplasm`
@@ -6474,6 +6513,26 @@ impl RunState {
                     self.event_offer[slot] = RunId::EMPTY;
                 }
                 self.event_offer_len = count;
+            }
+            // §322：`remove_all:<id>` —— 把这一种牌全删掉（`vampires` 的 "Remove all Strikes"）。
+            //
+            // "这一种" = **同一个定义**：`strike` 与 `strike+` 都算（去掉尾部 `+` 再比），
+            // 因为 `+` 行在我们的内容里是**另一张卡**，而玩家眼里那就是同一张牌的升级版。
+            // ⚠️ 倒着删：`remove_at` 会把后面的牌前移，正着遍历会跳过相邻的那一张。
+            EventEffect::RemoveAllCards => {
+                let Some(id) = named else {
+                    return Err(RunError::UnsupportedEventEffect);
+                };
+                let base = id.strip_suffix('+').unwrap_or(id);
+                let mut index = self.deck_len as usize;
+                while index > 0 {
+                    index -= 1;
+                    let card = self.deck[index].as_str();
+                    let card_base = card.strip_suffix('+').unwrap_or(card);
+                    if card_base == base {
+                        self.remove_at(index);
+                    }
+                }
             }
             EventEffect::RemoveCardRandom(kind) => {
                 let mut eligible = [0u8; MAX_RUN_DECK];
@@ -11463,7 +11522,7 @@ mod tests {
         // The two that name something.
         assert_eq!(
             E::parse("curse:injury", 0),
-            Some((E::GainCurse, Some("injury")))
+            Some((E::GainCurse(1), Some("injury")))
         );
         assert_eq!(
             E::parse("relic:burning_blood", 0),
@@ -11485,7 +11544,7 @@ mod tests {
                 // nobody has. The *parse* accepts it; the pool check is what refuses it.
                 assert_eq!(
                     E::parse(bad, 0),
-                    Some((E::GainCurse, Some("injury:x"))),
+                    Some((E::GainCurse(1), Some("injury:x"))),
                     "only the first ':' splits"
                 );
                 continue;
@@ -11557,7 +11616,7 @@ mod tests {
             &EventMove {
                 effects: &[
                     (EventEffect::GainRelic, Some("golden_idol")),
-                    (EventEffect::GainCurse, Some("injury")),
+                    (EventEffect::GainCurse(1), Some("injury")),
                     (EventEffect::Gold(7), None),
                 ],
                 ..EventMove::none()
@@ -11752,7 +11811,7 @@ mod tests {
         let gold_before = run.gold();
         run.resolve_event_effects(
             &EventMove {
-                effects: &[(EventEffect::GainCard, Some("ritual_dagger")),
+                effects: &[(EventEffect::GainCard(1), Some("ritual_dagger")),
                            (EventEffect::LoseHealth(6), None)],
                 ..EventMove::none()
             },
@@ -11778,7 +11837,7 @@ mod tests {
         assert_eq!(
             typo.resolve_event_effects(
                 &EventMove {
-                    effects: &[(EventEffect::GainCard, Some("ritual_daggr"))],
+                    effects: &[(EventEffect::GainCard(1), Some("ritual_daggr"))],
                     ..EventMove::none()
                 },
                 &pool,
@@ -12713,6 +12772,71 @@ mod tests {
         assert_eq!(run.health(), 40, "a relic payout heals nothing either");
     }
 
+    /// §322：`curse:<id>` 的 `Amount` 是**张数**（1 与 3 两侧）。
+    #[test]
+    fn a_curse_payload_is_granted_as_many_times_as_its_amount() {
+        let pool = curse_pool();
+        for (amount, expect) in [(1i32, 1u8), (3, 3)] {
+            // `Amount` 0 读作 1（内容里大多数 `curse:` 不写 Amount）。
+            let parsed = EventEffect::parse("curse:injury", amount).expect("parses");
+            assert_eq!(parsed, (EventEffect::GainCurse(expect), Some("injury")));
+            let mut run = RunState::new(7, 80, 0, &["strike"]).expect("a run");
+            run.begin_event("mind_bloom", "mind_bloom").expect("the event");
+            run.resolve_event(
+                EventEffect::GainCurse(expect),
+                Some("injury"),
+                &pool,
+            )
+            .expect("cursed");
+            let injuries = run.deck().iter().filter(|card| card.as_str() == "injury").count();
+            assert_eq!(injuries, usize::from(expect), "Amount {amount} ⇒ {expect} curse(s)");
+        }
+        // 0 与 > 5 以外的数字是**内容错误**：解析失败（不截断，也不当 1）。
+        assert_eq!(EventEffect::parse("curse:injury", 6), None);
+        assert_eq!(EventEffect::parse("curse:injury", -1), None);
+        assert_eq!(EventEffect::parse("card:madness", 6), None);
+    }
+
+    /// §322：`card:<id>` 的张数同理（`vampires` 的 5 张 Bite、`council_of_ghosts` 的 5 张 Apparition）。
+    #[test]
+    fn a_card_payload_is_granted_as_many_times_as_its_amount() {
+        let pool = curse_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike"]).expect("a run");
+        run.begin_event("council_of_ghosts", "council_of_ghosts").expect("the event");
+        let before = run.deck_len;
+        run.resolve_event(EventEffect::GainCard(3), Some("defend"), &pool)
+            .expect("three cards");
+        assert_eq!(run.deck_len, before + 3, "three copies, not one");
+        let defends = run.deck().iter().filter(|card| card.as_str() == "defend").count();
+        assert_eq!(defends, 3, "and they are the named card");
+    }
+
+    /// §322：`remove_all:<id>` —— 把**这一种**牌全删掉，`+` 行算同一张（`vampires` 的
+    /// "Remove all Strikes"）。
+    ///
+    /// 两侧：`strike` 与 `strike+` 都被删，而 `defend` / `bash` 一张不动。
+    /// ⚠️ 相邻的两张 Strike 必须都删掉 —— 正着遍历会跳过第二张（`remove_at` 前移），
+    /// 所以牌组里**故意**放两张相邻的。
+    #[test]
+    fn remove_all_deletes_every_copy_including_plus_rows() {
+        let pool = basic_pool();
+        let mut run = RunState::new(7, 80, 0, &["strike", "strike", "defend", "bash", "strike+"])
+            .expect("a run");
+        run.begin_event("vampires", "vampires").expect("the event");
+        run.resolve_event(EventEffect::RemoveAllCards, Some("strike"), &pool)
+            .expect("removing every Strike");
+        let deck: Vec<&str> = run.deck().iter().map(|card| card.as_str()).collect();
+        assert_eq!(deck, vec!["defend", "bash"], "three Strikes (one of them `+`) are gone");
+        assert_eq!(run.deck_len, 2);
+
+        // 一种都没有 ⇒ 成功（没有可删的），不是错误：`vampires` 在"牌组里没有打击"时仍给 Bite。
+        // （上一句已经把这个房间结算了，所以重新开一段事件再来一次。）
+        run.begin_event("vampires", "vampires").expect("the event again");
+        run.resolve_event(EventEffect::RemoveAllCards, Some("strike"), &pool)
+            .expect("nothing left to remove");
+        assert_eq!(run.deck_len, 2);
+    }
+
     /// §188: a list that fails **in the middle** must not half-apply.
     ///
     /// The second entry is a curse naming a card the pool does not know, which `apply_event_effect`
@@ -12728,7 +12852,7 @@ mod tests {
             &EventMove {
                 effects: &[
                     (EventEffect::Gold(30), None),
-                    (EventEffect::GainCurse, Some("no_such_curse")),
+                    (EventEffect::GainCurse(1), Some("no_such_curse")),
                 ],
                 ..EventMove::none()
             },
@@ -12760,7 +12884,7 @@ mod tests {
         let pool = curse_pool();
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
         run.begin_event("golden_idol", "golden_idol").expect("opening the event");
-        run.resolve_event(EventEffect::GainCurse, Some("injury"), &pool)
+        run.resolve_event(EventEffect::GainCurse(1), Some("injury"), &pool)
             .expect("an event may hand you a curse");
         assert_eq!(run.deck_len, 6);
         assert_eq!(run.deck[5].as_str(), "injury");
@@ -12771,19 +12895,19 @@ mod tests {
         let mut run = RunState::new(7, 80, 0, &["strike"; 5]).expect("a run");
         run.begin_event("golden_idol", "golden_idol").expect("opening the event");
         assert_eq!(
-            run.resolve_event(EventEffect::GainCurse, Some("regret"), &pool),
+            run.resolve_event(EventEffect::GainCurse(1), Some("regret"), &pool),
             Err(RunError::NoSuchCard)
         );
         assert_eq!(run.deck_len, 5, "a refused effect changes nothing");
 
         // A `curse:` payload naming a card that is **not** a curse: same refusal.
         assert_eq!(
-            run.resolve_event(EventEffect::GainCurse, Some("strike"), &pool),
+            run.resolve_event(EventEffect::GainCurse(1), Some("strike"), &pool),
             Err(RunError::NoSuchCard)
         );
         // No payload at all: outside the vocabulary.
         assert_eq!(
-            run.resolve_event(EventEffect::GainCurse, None, &pool),
+            run.resolve_event(EventEffect::GainCurse(1), None, &pool),
             Err(RunError::UnsupportedEventEffect)
         );
     }

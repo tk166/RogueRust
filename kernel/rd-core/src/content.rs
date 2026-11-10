@@ -5491,12 +5491,13 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            26,
+            30,
             "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
              `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`，§290 补了 `the_nest`，
              §318 补了 `winding_halls` / `mysterious_sphere`（`scrap_pile` 改成 Scrap Ooze 的 9 段链），
              §319 补了 `falling`，§320 补了 `the_library` / `sensory_stone`，§321 补了 `mind_bloom` /
-             `tomb_of_lord_red_mask`。pools 的**位次**比
+             `tomb_of_lord_red_mask`，§322 补了 `council_of_ghosts` / `pleading_vagrant` /
+             `old_beggar` / `vampires`。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5620,6 +5621,8 @@ mod tests {
                 || prefix(effect, "offer_cards:")
                 // §321：升级**所有**牌（`mind_bloom` 的 `[I am Awake]`）。
                 || effect == "upgrade_all"
+                // §322：按 id 全删（`vampires`。词法检查交给内容门）。
+                || prefix(effect, "remove_all:")
                 || effect == "relic_random"
                 // §287/§288：下一场战斗的奖励修正（`Dead Adventurer` 的欠账、`The Colosseum`
                 // 的定数奖励）。词法的检查交给内容门，这里只回答"这个镜像里有没有它"。
@@ -5655,15 +5658,20 @@ mod tests {
             vec![
                 "ancient_forge",
                 "ancient_writing",
+                // §322
+                "council_of_ghosts",
                 "dead_adventurer",
                 // §319
                 "falling",
                 "forgotten_altar",
                 "golden_idol",
-                // §318
+                // §321
                 "mind_bloom",
                 "mysterious_sphere",
+                // §322
+                "old_beggar",
                 "old_shrine",
+                "pleading_vagrant",
                 "purification_shrine",
                 "scrap_pile",
                 // §320
@@ -5679,6 +5687,7 @@ mod tests {
                 "the_nest",
                 "the_ssssserpent",
                 "tomb_of_lord_red_mask",
+                "vampires",
                 "wandering_merchant",
                 // §318
                 "winding_halls",
@@ -5931,12 +5940,12 @@ mod tests {
                 .filter(|id| !id.is_empty())
                 .copied()
                 .collect();
-            // §291：第 9 层同时筛掉两件 —— `the_colosseum`（`MaxFloor: 7`）与 `the_joust`
-            // （`MinGold: 51`，而这条判据喂的是 0 金币）。
+            // §291/§322：第 9 层同时筛掉**三**件 —— `the_colosseum`（`MaxFloor: 7`）、
+            // `the_joust`（`MinGold: 51`）与 `old_beggar`（`MinGold: 75`）；而这条判据喂的是 0 金币。
             assert_eq!(
                 all.len(),
-                ids.len() + 2,
-                "two act-2 events are gated (upper floor + min gold)"
+                ids.len() + 3,
+                "three act-2 events are gated (upper floor + two min-gold)"
             );
         }
 
