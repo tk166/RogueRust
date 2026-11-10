@@ -1,0 +1,1443 @@
+{
+ "note": "P0 raw ABI dumps. Values are exactly what the wasm said; nothing here is interpreted.",
+ "contentFingerprint": "0x54af44dd",
+ "runObserveLen": 19,
+ "combatObserveLen": 148,
+ "scenes": [
+  {
+   "label": "SC-00-no-run",
+   "note": "no session at all",
+   "facts": {
+    "noRun": true,
+    "inFight": false,
+    "runOver": false,
+    "runOverWhy": -1,
+    "cleared": false,
+    "pending": -1,
+    "kind": -1,
+    "unknownRoom": -2147483648,
+    "eventFight": -1,
+    "pickupPicks": -1,
+    "pickupAdd": -1,
+    "actionCount": 0,
+    "floor": -2147483648,
+    "hp": -2147483648,
+    "hpMax": -2147483648,
+    "gold": -2147483648
+   },
+   "raw": {
+    "runExists": 0,
+    "seed": -2147483648,
+    "act": -1,
+    "ascension": -1,
+    "inFight": -1,
+    "over": -1,
+    "overWhy": -1,
+    "bossBeaten": -1,
+    "nodeResolved": -1,
+    "restHeal": -1,
+    "removalAvailable": -1,
+    "bossId": null,
+    "eventId": null,
+    "encounterId": null,
+    "startOfferCount": 0,
+    "deckCount": 0,
+    "relicCount": -2147483648,
+    "potionCount": -1,
+    "wingBoots": -1,
+    "campfire": -1,
+    "giryaLifts": -1,
+    "removePrice": -1,
+    "observe": [
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648,
+     -2147483648
+    ],
+    "actions": [],
+    "map": {
+     "len": -1,
+     "rows": 15
+    },
+    "shop": {
+     "cards": 0,
+     "colorless": -1,
+     "potions": -1,
+     "relics": 0,
+     "prices": [
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    "reward": {
+     "gold": 0,
+     "cards": 0
+    },
+    "event": {
+     "text": null,
+     "options": -1
+    },
+    "pickup": {
+     "picks": -1,
+     "add": -1,
+     "offer": -1
+    }
+   },
+   "scene": {
+    "base": "SC-00",
+    "overlays": [],
+    "unknownPending": null
+   }
+  },
+  {
+   "label": "SC-01-blessing",
+   "note": "pending 6 right after start",
+   "facts": {
+    "noRun": false,
+    "inFight": false,
+    "runOver": false,
+    "runOverWhy": 0,
+    "cleared": false,
+    "pending": 6,
+    "kind": -1,
+    "unknownRoom": 0,
+    "eventFight": 0,
+    "pickupPicks": 0,
+    "pickupAdd": 0,
+    "actionCount": 0,
+    "floor": 0,
+    "hp": 80,
+    "hpMax": 80,
+    "gold": 99
+   },
+   "raw": {
+    "runExists": 1,
+    "seed": 7,
+    "act": 1,
+    "ascension": 0,
+    "inFight": 0,
+    "over": 0,
+    "overWhy": 0,
+    "bossBeaten": 0,
+    "nodeResolved": -1,
+    "restHeal": 24,
+    "removalAvailable": 1,
+    "bossId": "",
+    "eventId": "",
+    "encounterId": "",
+    "startOfferCount": 2,
+    "deckCount": 10,
+    "relicCount": 1,
+    "potionCount": 0,
+    "wingBoots": 0,
+    "campfire": 7,
+    "giryaLifts": 0,
+    "removePrice": 75,
+    "observe": [
+     0,
+     -1,
+     80,
+     80,
+     99,
+     10,
+     1,
+     0,
+     65,
+     135,
+     0,
+     0,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "actions": [],
+    "map": {
+     "len": 65,
+     "rows": 15
+    },
+    "shop": {
+     "cards": 0,
+     "colorless": 0,
+     "potions": 0,
+     "relics": 0,
+     "prices": [
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    "reward": {
+     "gold": 0,
+     "cards": 0
+    },
+    "event": {
+     "text": null,
+     "options": -1
+    },
+    "pickup": {
+     "picks": 0,
+     "add": 0,
+     "offer": 0
+    }
+   },
+   "scene": {
+    "base": "SC-01",
+    "overlays": [],
+    "unknownPending": null
+   }
+  },
+  {
+   "label": "SC-02-map",
+   "note": "blessing done, standing on floor 1",
+   "facts": {
+    "noRun": false,
+    "inFight": false,
+    "runOver": false,
+    "runOverWhy": 0,
+    "cleared": false,
+    "pending": 0,
+    "kind": -1,
+    "unknownRoom": 0,
+    "eventFight": 0,
+    "pickupPicks": 0,
+    "pickupAdd": 0,
+    "actionCount": 5,
+    "floor": 0,
+    "hp": 80,
+    "hpMax": 80,
+    "gold": 99
+   },
+   "raw": {
+    "runExists": 1,
+    "seed": 7,
+    "act": 1,
+    "ascension": 0,
+    "inFight": 0,
+    "over": 0,
+    "overWhy": 0,
+    "bossBeaten": 0,
+    "nodeResolved": -1,
+    "restHeal": 24,
+    "removalAvailable": 1,
+    "bossId": "",
+    "eventId": "",
+    "encounterId": "",
+    "startOfferCount": 0,
+    "deckCount": 9,
+    "relicCount": 1,
+    "potionCount": 0,
+    "wingBoots": 0,
+    "campfire": 7,
+    "giryaLifts": 0,
+    "removePrice": 75,
+    "observe": [
+     0,
+     -1,
+     80,
+     80,
+     99,
+     9,
+     1,
+     0,
+     65,
+     135,
+     0,
+     0,
+     2,
+     0,
+     0,
+     0,
+     5,
+     0,
+     0
+    ],
+    "actions": [
+     {
+      "index": 0,
+      "kind": 0,
+      "node": 0
+     },
+     {
+      "index": 1,
+      "kind": 0,
+      "node": 1
+     },
+     {
+      "index": 2,
+      "kind": 0,
+      "node": 2
+     },
+     {
+      "index": 3,
+      "kind": 0,
+      "node": 3
+     },
+     {
+      "index": 4,
+      "kind": 0,
+      "node": 4
+     }
+    ],
+    "map": {
+     "len": 65,
+     "rows": 15
+    },
+    "shop": {
+     "cards": 0,
+     "colorless": 0,
+     "potions": 0,
+     "relics": 0,
+     "prices": [
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    "reward": {
+     "gold": 0,
+     "cards": 0
+    },
+    "event": {
+     "text": null,
+     "options": -1
+    },
+    "pickup": {
+     "picks": 0,
+     "add": 0,
+     "offer": 0
+    }
+   },
+   "scene": {
+    "base": "SC-02",
+    "overlays": [],
+    "unknownPending": null
+   }
+  },
+  {
+   "label": "SC-03-pre-fight",
+   "note": "seed 1, standing on a fight node",
+   "facts": {
+    "noRun": false,
+    "inFight": false,
+    "runOver": false,
+    "runOverWhy": 0,
+    "cleared": false,
+    "pending": 0,
+    "kind": 1,
+    "unknownRoom": 0,
+    "eventFight": 0,
+    "pickupPicks": 0,
+    "pickupAdd": 0,
+    "actionCount": 1,
+    "floor": 1,
+    "hp": 80,
+    "hpMax": 80,
+    "gold": 99
+   },
+   "raw": {
+    "runExists": 1,
+    "seed": 1,
+    "act": 1,
+    "ascension": 0,
+    "inFight": 0,
+    "over": 0,
+    "overWhy": 0,
+    "bossBeaten": 0,
+    "nodeResolved": 0,
+    "restHeal": 24,
+    "removalAvailable": 1,
+    "bossId": "",
+    "eventId": "",
+    "encounterId": "",
+    "startOfferCount": 0,
+    "deckCount": 10,
+    "relicCount": 1,
+    "potionCount": 0,
+    "wingBoots": 0,
+    "campfire": 7,
+    "giryaLifts": 0,
+    "removePrice": 75,
+    "observe": [
+     1,
+     0,
+     80,
+     80,
+     99,
+     10,
+     1,
+     0,
+     70,
+     173,
+     0,
+     0,
+     2,
+     0,
+     0,
+     0,
+     1,
+     0,
+     0
+    ],
+    "actions": [
+     {
+      "index": 0,
+      "kind": 0,
+      "node": 4
+     }
+    ],
+    "map": {
+     "len": 70,
+     "rows": 15
+    },
+    "shop": {
+     "cards": 0,
+     "colorless": 0,
+     "potions": 0,
+     "relics": 0,
+     "prices": [
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    "reward": {
+     "gold": 0,
+     "cards": 0
+    },
+    "event": {
+     "text": null,
+     "options": -1
+    },
+    "pickup": {
+     "picks": 0,
+     "add": 0,
+     "offer": 0
+    }
+   },
+   "scene": {
+    "base": "SC-03",
+    "overlays": [],
+    "unknownPending": null
+   }
+  },
+  {
+   "label": "SC-03b-combat",
+   "note": "seed 1, first turn",
+   "raw": {
+    "observeLen": 148,
+    "observe": [
+     1,
+     1,
+     1,
+     0,
+     80,
+     80,
+     0,
+     -1,
+     3,
+     3,
+     5,
+     2,
+     0,
+     0,
+     0,
+     0,
+     0,
+     1,
+     28,
+     28,
+     0,
+     -1,
+     1,
+     7,
+     1,
+     1,
+     10,
+     10,
+     0,
+     -1,
+     1,
+     5,
+     1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     1,
+     1,
+     1,
+     0,
+     1,
+     1,
+     1,
+     0,
+     1,
+     1,
+     0,
+     0,
+     1,
+     1,
+     4,
+     0,
+     1,
+     1,
+     0,
+     0,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     5,
+     5,
+     0,
+     0,
+     0,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1,
+     -1
+    ],
+    "actions": [
+     {
+      "index": 0,
+      "kind": 0,
+      "arg0": 0,
+      "arg1": 0
+     },
+     {
+      "index": 1,
+      "kind": 0,
+      "arg0": 0,
+      "arg1": 1
+     },
+     {
+      "index": 2,
+      "kind": 0,
+      "arg0": 1,
+      "arg1": 0
+     },
+     {
+      "index": 3,
+      "kind": 0,
+      "arg0": 1,
+      "arg1": 1
+     },
+     {
+      "index": 4,
+      "kind": 0,
+      "arg0": 2,
+      "arg1": 0
+     },
+     {
+      "index": 5,
+      "kind": 0,
+      "arg0": 2,
+      "arg1": 1
+     },
+     {
+      "index": 6,
+      "kind": 0,
+      "arg0": 3,
+      "arg1": 0
+     },
+     {
+      "index": 7,
+      "kind": 0,
+      "arg0": 3,
+      "arg1": 1
+     },
+     {
+      "index": 8,
+      "kind": 0,
+      "arg0": 4,
+      "arg1": 0
+     },
+     {
+      "index": 9,
+      "kind": 0,
+      "arg0": 4,
+      "arg1": 1
+     },
+     {
+      "index": 10,
+      "kind": 1,
+      "arg0": -1,
+      "arg1": -1
+     }
+    ],
+    "beatCount": 3,
+    "beatsDropped": 0,
+    "choicePending": 0,
+    "activeSlot": -1,
+    "done": 0,
+    "result": 0,
+    "piles": [
+     5,
+     0,
+     0
+    ]
+   }
+  },
+  {
+   "label": "SC-03b-run-facts",
+   "note": "run-layer facts while the fight runs",
+   "facts": {
+    "noRun": false,
+    "inFight": true,
+    "runOver": false,
+    "runOverWhy": 0,
+    "cleared": false,
+    "pending": 0,
+    "kind": 1,
+    "unknownRoom": 0,
+    "eventFight": 0,
+    "pickupPicks": 0,
+    "pickupAdd": 0,
+    "actionCount": 1,
+    "floor": 1,
+    "hp": 80,
+    "hpMax": 80,
+    "gold": 99
+   },
+   "raw": {
+    "runExists": 1,
+    "seed": 1,
+    "act": 1,
+    "ascension": 0,
+    "inFight": 1,
+    "over": 0,
+    "overWhy": 0,
+    "bossBeaten": 0,
+    "nodeResolved": 0,
+    "restHeal": 24,
+    "removalAvailable": 1,
+    "bossId": "",
+    "eventId": "",
+    "encounterId": "enc_small_slimes",
+    "startOfferCount": 0,
+    "deckCount": 10,
+    "relicCount": 1,
+    "potionCount": 0,
+    "wingBoots": 0,
+    "campfire": 7,
+    "giryaLifts": 0,
+    "removePrice": 75,
+    "observe": [
+     1,
+     0,
+     80,
+     80,
+     99,
+     10,
+     1,
+     0,
+     70,
+     173,
+     2,
+     0,
+     2,
+     0,
+     0,
+     0,
+     1,
+     0,
+     0
+    ],
+    "actions": [
+     {
+      "index": 0,
+      "kind": 0,
+      "node": 4
+     }
+    ],
+    "map": {
+     "len": 70,
+     "rows": 15
+    },
+    "shop": {
+     "cards": 0,
+     "colorless": 0,
+     "potions": 0,
+     "relics": 0,
+     "prices": [
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    "reward": {
+     "gold": 0,
+     "cards": 0
+    },
+    "event": {
+     "text": null,
+     "options": -1
+    },
+    "pickup": {
+     "picks": 0,
+     "add": 0,
+     "offer": 0
+    }
+   },
+   "scene": {
+    "base": "SC-03b",
+    "overlays": [],
+    "unknownPending": null
+   }
+  },
+  {
+   "label": "SC-04-reward",
+   "note": "fight result 1 (1 = victory)",
+   "facts": {
+    "noRun": false,
+    "inFight": false,
+    "runOver": false,
+    "runOverWhy": 0,
+    "cleared": false,
+    "pending": 4,
+    "kind": 1,
+    "unknownRoom": 0,
+    "eventFight": 0,
+    "pickupPicks": 0,
+    "pickupAdd": 0,
+    "actionCount": 0,
+    "floor": 1,
+    "hp": 66,
+    "hpMax": 80,
+    "gold": 117
+   },
+   "raw": {
+    "runExists": 1,
+    "seed": 1,
+    "act": 1,
+    "ascension": 0,
+    "inFight": 0,
+    "over": 0,
+    "overWhy": 0,
+    "bossBeaten": 0,
+    "nodeResolved": 1,
+    "restHeal": 24,
+    "removalAvailable": 1,
+    "bossId": "",
+    "eventId": "",
+    "encounterId": "enc_small_slimes",
+    "startOfferCount": 0,
+    "deckCount": 10,
+    "relicCount": 1,
+    "potionCount": 0,
+    "wingBoots": 0,
+    "campfire": 7,
+    "giryaLifts": 0,
+    "removePrice": 75,
+    "observe": [
+     1,
+     0,
+     66,
+     80,
+     117,
+     10,
+     1,
+     0,
+     70,
+     173,
+     2,
+     7,
+     2,
+     1,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "actions": [],
+    "map": {
+     "len": 70,
+     "rows": 15
+    },
+    "shop": {
+     "cards": 0,
+     "colorless": 0,
+     "potions": 0,
+     "relics": 0,
+     "prices": [
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    "reward": {
+     "gold": 18,
+     "cards": 3
+    },
+    "event": {
+     "text": null,
+     "options": -1
+    },
+    "pickup": {
+     "picks": 0,
+     "add": 0,
+     "offer": 0
+    }
+   },
+   "scene": {
+    "base": "SC-04",
+    "overlays": [],
+    "unknownPending": null
+   }
+  },
+  {
+   "label": "SC-12b-defeat",
+   "note": "seed 1, lost on purpose",
+   "facts": {
+    "noRun": false,
+    "inFight": false,
+    "runOver": true,
+    "runOverWhy": 1,
+    "cleared": false,
+    "pending": 0,
+    "kind": 1,
+    "unknownRoom": 0,
+    "eventFight": 0,
+    "pickupPicks": 0,
+    "pickupAdd": 0,
+    "actionCount": 1,
+    "floor": 1,
+    "hp": 0,
+    "hpMax": 80,
+    "gold": 99
+   },
+   "raw": {
+    "runExists": 1,
+    "seed": 1,
+    "act": 1,
+    "ascension": 0,
+    "inFight": 0,
+    "over": 1,
+    "overWhy": 1,
+    "bossBeaten": 0,
+    "nodeResolved": 1,
+    "restHeal": 24,
+    "removalAvailable": 1,
+    "bossId": "",
+    "eventId": "",
+    "encounterId": "enc_small_slimes",
+    "startOfferCount": 0,
+    "deckCount": 10,
+    "relicCount": 1,
+    "potionCount": 0,
+    "wingBoots": 0,
+    "campfire": 7,
+    "giryaLifts": 0,
+    "removePrice": 75,
+    "observe": [
+     1,
+     0,
+     0,
+     80,
+     99,
+     10,
+     1,
+     0,
+     70,
+     173,
+     2,
+     0,
+     2,
+     0,
+     0,
+     0,
+     1,
+     0,
+     0
+    ],
+    "actions": [
+     {
+      "index": 0,
+      "kind": 0,
+      "node": 4
+     }
+    ],
+    "map": {
+     "len": 70,
+     "rows": 15
+    },
+    "shop": {
+     "cards": 0,
+     "colorless": 0,
+     "potions": 0,
+     "relics": 0,
+     "prices": [
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    "reward": {
+     "gold": 0,
+     "cards": 0
+    },
+    "event": {
+     "text": null,
+     "options": -1
+    },
+    "pickup": {
+     "picks": 0,
+     "add": 0,
+     "offer": 0
+    }
+   },
+   "scene": {
+    "base": "SC-12b",
+    "overlays": [],
+    "unknownPending": null
+   }
+  },
+  {
+   "label": "SC-12a-act-clear",
+   "note": "SYNTHETIC -- clearing an act needs the boss fight; the 18 synthetic fixtures in --check cover it",
+   "raw": null
+  },
+  {
+   "label": "SC-05-shop",
+   "note": "seed 4, pending 2",
+   "facts": {
+    "noRun": false,
+    "inFight": false,
+    "runOver": false,
+    "runOverWhy": 0,
+    "cleared": false,
+    "pending": 2,
+    "kind": 4,
+    "unknownRoom": 0,
+    "eventFight": 0,
+    "pickupPicks": 0,
+    "pickupAdd": 0,
+    "actionCount": 0,
+    "floor": 2,
+    "hp": 80,
+    "hpMax": 80,
+    "gold": 116
+   },
+   "raw": {
+    "runExists": 1,
+    "seed": 4,
+    "act": 1,
+    "ascension": 0,
+    "inFight": 0,
+    "over": 0,
+    "overWhy": 0,
+    "bossBeaten": 0,
+    "nodeResolved": 0,
+    "restHeal": 24,
+    "removalAvailable": 1,
+    "bossId": "",
+    "eventId": "",
+    "encounterId": "enc_three_louses",
+    "startOfferCount": 0,
+    "deckCount": 10,
+    "relicCount": 1,
+    "potionCount": 0,
+    "wingBoots": 0,
+    "campfire": 7,
+    "giryaLifts": 0,
+    "removePrice": 75,
+    "observe": [
+     2,
+     5,
+     80,
+     80,
+     116,
+     10,
+     1,
+     0,
+     69,
+     114,
+     2,
+     7,
+     2,
+     1,
+     30,
+     0,
+     0,
+     0,
+     0
+    ],
+    "actions": [],
+    "map": {
+     "len": 69,
+     "rows": 15
+    },
+    "shop": {
+     "cards": 5,
+     "colorless": 2,
+     "potions": 3,
+     "relics": 3,
+     "prices": [
+      46,
+      95,
+      52,
+      249
+     ]
+    },
+    "reward": {
+     "gold": 17,
+     "cards": 3
+    },
+    "event": {
+     "text": null,
+     "options": -1
+    },
+    "pickup": {
+     "picks": 0,
+     "add": 0,
+     "offer": 0
+    }
+   },
+   "scene": {
+    "base": "SC-05",
+    "overlays": [],
+    "unknownPending": null
+   }
+  },
+  {
+   "label": "SC-07-treasure",
+   "note": "seed 1, pending 3",
+   "facts": {
+    "noRun": false,
+    "inFight": false,
+    "runOver": false,
+    "runOverWhy": 0,
+    "cleared": false,
+    "pending": 3,
+    "kind": 5,
+    "unknownRoom": 4,
+    "eventFight": 0,
+    "pickupPicks": 0,
+    "pickupAdd": 0,
+    "actionCount": 0,
+    "floor": 2,
+    "hp": 66,
+    "hpMax": 80,
+    "gold": 117
+   },
+   "raw": {
+    "runExists": 1,
+    "seed": 1,
+    "act": 1,
+    "ascension": 0,
+    "inFight": 0,
+    "over": 0,
+    "overWhy": 0,
+    "bossBeaten": 0,
+    "nodeResolved": 0,
+    "restHeal": 24,
+    "removalAvailable": 1,
+    "bossId": "",
+    "eventId": "",
+    "encounterId": "enc_small_slimes",
+    "startOfferCount": 0,
+    "deckCount": 10,
+    "relicCount": 1,
+    "potionCount": 0,
+    "wingBoots": 0,
+    "campfire": 7,
+    "giryaLifts": 0,
+    "removePrice": 75,
+    "observe": [
+     2,
+     4,
+     66,
+     80,
+     117,
+     10,
+     1,
+     0,
+     70,
+     173,
+     2,
+     7,
+     3,
+     1,
+     0,
+     0,
+     0,
+     0,
+     4
+    ],
+    "actions": [],
+    "map": {
+     "len": 70,
+     "rows": 15
+    },
+    "shop": {
+     "cards": 0,
+     "colorless": 0,
+     "potions": 0,
+     "relics": 0,
+     "prices": [
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    "reward": {
+     "gold": 18,
+     "cards": 3
+    },
+    "event": {
+     "text": null,
+     "options": -1
+    },
+    "pickup": {
+     "picks": 0,
+     "add": 0,
+     "offer": 0
+    }
+   },
+   "scene": {
+    "base": "SC-07",
+    "overlays": [],
+    "unknownPending": null
+   }
+  },
+  {
+   "label": "SC-08-event",
+   "note": "seed 3, pending 5",
+   "facts": {
+    "noRun": false,
+    "inFight": false,
+    "runOver": false,
+    "runOverWhy": 0,
+    "cleared": false,
+    "pending": 5,
+    "kind": 5,
+    "unknownRoom": 1,
+    "eventFight": 0,
+    "pickupPicks": 0,
+    "pickupAdd": 0,
+    "actionCount": 0,
+    "floor": 2,
+    "hp": 72,
+    "hpMax": 80,
+    "gold": 261
+   },
+   "raw": {
+    "runExists": 1,
+    "seed": 3,
+    "act": 1,
+    "ascension": 0,
+    "inFight": 0,
+    "over": 0,
+    "overWhy": 0,
+    "bossBeaten": 0,
+    "nodeResolved": 0,
+    "restHeal": 24,
+    "removalAvailable": 1,
+    "bossId": "",
+    "eventId": "shining_light",
+    "encounterId": "enc_louse",
+    "startOfferCount": 0,
+    "deckCount": 10,
+    "relicCount": 1,
+    "potionCount": 0,
+    "wingBoots": 0,
+    "campfire": 7,
+    "giryaLifts": 0,
+    "removePrice": 75,
+    "observe": [
+     2,
+     4,
+     72,
+     80,
+     261,
+     10,
+     1,
+     0,
+     70,
+     133,
+     2,
+     7,
+     4,
+     1,
+     0,
+     0,
+     0,
+     0,
+     1
+    ],
+    "actions": [],
+    "map": {
+     "len": 70,
+     "rows": 15
+    },
+    "shop": {
+     "cards": 0,
+     "colorless": 0,
+     "potions": 0,
+     "relics": 0,
+     "prices": [
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    "reward": {
+     "gold": 12,
+     "cards": 3
+    },
+    "event": {
+     "text": "shining_light — A shaft of light falls through the ceiling.",
+     "options": 2
+    },
+    "pickup": {
+     "picks": 0,
+     "add": 0,
+     "offer": 0
+    }
+   },
+   "scene": {
+    "base": "SC-08",
+    "overlays": [],
+    "unknownPending": null
+   }
+  },
+  {
+   "label": "SC-11a-pickup-debt",
+   "note": "the kernel owes deck edits after the grant",
+   "facts": {
+    "noRun": false,
+    "inFight": false,
+    "runOver": false,
+    "runOverWhy": 0,
+    "cleared": false,
+    "pending": 0,
+    "kind": -1,
+    "unknownRoom": 0,
+    "eventFight": 0,
+    "pickupPicks": 2,
+    "pickupAdd": 0,
+    "actionCount": 5,
+    "floor": 0,
+    "hp": 80,
+    "hpMax": 80,
+    "gold": 99
+   },
+   "raw": {
+    "runExists": 1,
+    "seed": 7,
+    "act": 1,
+    "ascension": 0,
+    "inFight": 0,
+    "over": 0,
+    "overWhy": 0,
+    "bossBeaten": 0,
+    "nodeResolved": -1,
+    "restHeal": 24,
+    "removalAvailable": 1,
+    "bossId": "",
+    "eventId": "",
+    "encounterId": "",
+    "startOfferCount": 0,
+    "deckCount": 9,
+    "relicCount": 2,
+    "potionCount": 0,
+    "wingBoots": 0,
+    "campfire": 7,
+    "giryaLifts": 0,
+    "removePrice": 75,
+    "observe": [
+     0,
+     -1,
+     80,
+     80,
+     99,
+     9,
+     2,
+     0,
+     65,
+     135,
+     0,
+     0,
+     2,
+     0,
+     0,
+     0,
+     5,
+     0,
+     0
+    ],
+    "actions": [
+     {
+      "index": 0,
+      "kind": 0,
+      "node": 0
+     },
+     {
+      "index": 1,
+      "kind": 0,
+      "node": 1
+     },
+     {
+      "index": 2,
+      "kind": 0,
+      "node": 2
+     },
+     {
+      "index": 3,
+      "kind": 0,
+      "node": 3
+     },
+     {
+      "index": 4,
+      "kind": 0,
+      "node": 4
+     }
+    ],
+    "map": {
+     "len": 65,
+     "rows": 15
+    },
+    "shop": {
+     "cards": 0,
+     "colorless": 0,
+     "potions": 0,
+     "relics": 0,
+     "prices": [
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    "reward": {
+     "gold": 0,
+     "cards": 0
+    },
+    "event": {
+     "text": null,
+     "options": -1
+    },
+    "pickup": {
+     "picks": 2,
+     "add": 0,
+     "offer": 0
+    }
+   },
+   "scene": {
+    "base": "SC-02",
+    "overlays": [
+     "SC-11a"
+    ],
+    "unknownPending": null
+   }
+  }
+ ]
+}
