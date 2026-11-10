@@ -103,10 +103,14 @@
 > 优先级**；`classifyScene(snapshot)` 取第一条命中的，`describe()` 按它分派（不再有第二份顺序）。
 > `web/ui_test.mjs` 有 **18 个夹具**，每个断言"命中预期的那一个"+"恰好命中一个"（覆盖层例外）。
 > 下面每一行的判定式就是数组里那条 `test`。
+>
+> **§349（P2-A）**：`classifyScene()` 返回**一个** id，但覆盖层是**叠在**底屏上的。3D 要用
+> `resolveScene(s)` → `{ base, overlays[], unknownPending }`：`classifyScene` 只报 `SC-11a` 时，
+> `resolveScene` 会同时给出 `base: "SC-04"`。两者共用同一份 `RAW`，判据不会漂。
 
 | # | id | 场景 | 判定式 | 主层 | 唯一写者 | 主要出口 |
 |---:|---|---|---|---|---|---|
-| 1 | **SC-00** | 未开局 | `rd_run_seed() == i32::MIN`（`R.obs(0)` 也是 `i32::MIN`） | 节点面板 | `renderNode` | `rd_run_start(seed, asc)` → SC-01 |
+| 1 | **SC-00** | 未开局 | `rd_run_exists() == 0`（§348 —— **不要**用 seed 哨兵：`i32::MIN` 是一个合法 seed） | 节点面板 | `renderNode` | `rd_run_start(seed, asc)` → SC-01 |
 | 2 | **SC-03b** | 战斗中 | `rd_run_in_fight() == 1`（§341） | 战斗层 | `render()` | `fight_end` → SC-04 / SC-12b |
 | 3 | **SC-11a** | 遗物欠账·改牌 | `rd_run_pickup_picks() > 0` | 弹窗 | `renderNode` | 选完回到**原来那一屏** |
 | 4 | **SC-11b** | 遗物欠账·加牌 | `rd_run_pickup_add() > 0` | 弹窗 | `renderNode` | 同上 |
@@ -308,7 +312,8 @@
 ### 3.2 SC-00 未开局
 
 全部 run 侧导出返回 `-1` / `i32::MIN`。**3D 里这是一个真实的场景**（标题画面），
-不需要任何新接口；判据是 `rd_run_seed() == i32::MIN`。
+判据是 **`rd_run_exists() == 0`**（§348）。⚠️ **不要**用 seed 哨兵：`i32::MIN` 是一个
+**合法 seed**，用那一局开局会被误判成"未开局"。
 
 **动作**：`rd_run_start(seed, ascension)` → `0` / `-2`（拒绝，原因在 `R.txt(last_error)`）。
 
@@ -327,7 +332,20 @@
 | `resolved` | `rd_run_node_resolved()` | `1` ⇒ 这一格已结算，面板只说"往前走" |
 | `eventFight` | `rd_run_event_fight()` | ⚠️ 必须在 `rd_run_choose` **之后**读 |
 | `kind` | `rd_run_node_kind()` | Boss 返回 `7`（哨兵 `100` 已折算） |
-| `bossName` | **无导出** | 页面写死 `"Slime Boss"`（§6-G5） |
+| `bossId` | 敌人 id / **空串** | `R.txt(boss_id)` = `rd_run_boss_id_len` / `rd_run_boss_id_into` | §345 起有导出；**§348 起只在"已经确定"时给值**：站在 Boss 节点上还没开打 ⇒ 空串（不猜池子第一条） |
+| `bossName` | 标签（`displayName(bossId)`） | 同上 + `RD_UI.displayName()` | §349（P2-B）：快照**两个都留** —— 只留名字的话，下游没法按身份绑定美术/音效 |
+
+> **§349：Boss 身份的三种时间语义**（第十一轮 Review P1-1）。"上一只 Boss"与"即将挑战的 Boss"
+> 不是同一个问题，A20 第三幕会把它们分开：
+>
+> | 时刻 | `rd_run_boss_id_len` / `rd_run_boss_id_into` |
+> |---|---|
+> | 正在打 | 就是这一场（`last_encounter`） |
+> | **双 Boss 之间**（第一只已倒、第二只还没掷、还没通关） | **空串**（不知道） |
+> | 最后一幕 Boss 已倒（通关屏） | 还是它 —— 刚打完的那只 |
+>
+> ⚠️ 与 StS1 的**已知偏差**：原版**进幕时**就定下本幕 Boss（地图顶上画着它），我们是**开战时**
+> 才掷。所以"站在 Boss 节点上还没开打"时我们只能显示"本幕 Boss"。见 `docs/sts-wiki-gap.md`。
 
 **动作**：`rd_run_fight_begin()` → `0` / `-2`。拒绝的三种：不是战斗节点、节点已结算、
 已经有一场在打（`P1-2`）。
@@ -782,7 +800,7 @@
 
 1. **`pending` 是优先级很高的一项输入，但它不是唯一的判别式。** 场景由三类**权威事实**共同
    决定：
-   * **有没有局**（`rd_run_seed() == i32::MIN`）；
+   * **有没有局**（`rd_run_exists() == 0`，§348）；
    * **有没有一场正在打的战斗**（`rd_run_in_fight()`，§341）；
    * **节点的 `pending` 与"要不要打"**（`rd_run_pending()` + `kind` + `unknownRoom` + `eventFight`）。
 

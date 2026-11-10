@@ -473,7 +473,8 @@ const RD_PANELS = (() => {
   ///
   /// 每条只写**自己的**条件；"前面没人命中"由下面的 `SCENES` 统一加上（构造即互斥）。
   const RAW = [
-    // 1 未开局：没有局。`noRun` 来自 `rd_run_seed() == i32::MIN`。
+    // 1 未开局：没有局。`noRun` 来自 **`rd_run_exists()`**（§348）—— **不是** seed 哨兵：
+    // `i32::MIN` 是一个合法 seed，拿它当"无值"会让那一局被判成未开局。
     { id: "SC-00", overlay: false, test: (s) => !!s.noRun },
     // 2 战斗中：内核说"有一场在打"（§341 的 `rd_run_in_fight`）。它必须排在"预备战斗"之前，
     //   否则站在战斗节点上时两个屏都会命中，而顺序会替你选一个。
@@ -530,6 +531,27 @@ const RD_PANELS = (() => {
     }
     // 走到这里说明 `pending` 是一个表外的值（`-1` 没有局、或以后新增的待决态）。
     return "SC-??";
+  }
+
+  /// **复合**状态：基础场景与覆盖层**分开**（§349，第十一轮 Review P2-A）。
+  ///
+  /// `classifyScene` 返回的是"第一个命中的 id"，所以"奖励屏 + 遗物选牌欠账"只报 `SC-11a`，
+  /// 底下那一屏（`SC-04`）就丢了。DOM 面板"用覆盖层暂时替换正文"是合理权衡，但 3D 需要知道
+  /// **两层都在**（覆盖层画在底屏之上）。
+  ///
+  /// | 字段 | 含义 |
+  /// |---|---|
+  /// | `base` | 第一个命中的**非覆盖层**场景；一条都没命中 ⇒ `"SC-??"` |
+  /// | `overlays` | 命中的覆盖层（按优先级），可以为空、也可以是两个 |
+  /// | `unknownPending` | 只在 `base === "SC-??"` 时有值：那个表外的 `pending` |
+  function resolveScene(s) {
+    const overlays = RAW.filter((entry) => entry.overlay && entry.test(s)).map((entry) => entry.id);
+    const base = SCENES.find((entry) => !entry.overlay && entry.test(s));
+    return {
+      base: base ? base.id : "SC-??",
+      overlays,
+      unknownPending: base ? null : s.pending,
+    };
   }
 
   /// **所有**命中的场景 id（按优先级）。判据用它验"唯一命中"：多重命中会被顺序藏起来，
@@ -607,7 +629,7 @@ const RD_PANELS = (() => {
   return {
     describe, effectText, KIND_NAMES, EFFECT_LABELS, statsLine, tone,
     // §347：场景表本身（数组即优先级）+ 分类器 + 判据用的"全部命中"
-    SCENES, classifyScene, scenesMatching, isOverlay, preFight, mapExhausted,
+    SCENES, classifyScene, resolveScene, scenesMatching, isOverlay, preFight, mapExhausted,
   };
 })();
 

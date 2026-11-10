@@ -972,8 +972,10 @@ function runSnapshot() {
     gold: ex.rd_run_observe(4),
     deckCount: ex.rd_run_deck_count(),
     relicCount: ex.rd_run_observe(6),
-    // §345（缺口 G5）：本幕 Boss 的**敌人 id**（`slime_boss` / `the_guardian` / …）经显示层。
-    // 原来是写死的 "Slime Boss" —— 第二、三幕会显示错的 Boss 名。
+    // §345（缺口 G5）：本幕 Boss 的**敌人 id**（`slime_boss` / …）。
+    // §349（P2-B）：快照**两个都留** —— `bossId` 给 3D/美术按身份绑定（图标、音效、本地化），
+    // `bossName` 只是**标签**。只留名字的话，下游没法可靠地反查身份（§0.5 的原则）。
+    bossId: readText(() => ex.rd_run_boss_id_len(), (ptr) => ex.rd_run_boss_id_into(ptr)),
     bossName: RD_UI.displayName(
       readText(() => ex.rd_run_boss_id_len(), (ptr) => ex.rd_run_boss_id_into(ptr)),
       ""

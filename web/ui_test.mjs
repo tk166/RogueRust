@@ -281,6 +281,17 @@ const PANEL_STATES = [
 // The page must actually use it, or this whole file is testing dead code.
 const page = await readFile(new URL("./index.html", HERE), "utf8");
 
+// §349（第十一轮 Review P2-B）：**快照必须同时留 id 与标签**。
+//
+// 只留 `bossName`（已经过 `displayName()`）的话，下游没法按**身份**绑定 3D 美术/音效/本地化 ——
+// 而那正是"内核给 id、显示层给名字"（§0.5）要避免的事。这条是静态检查：页面源码里
+// `bossId:` 必须真的从 `rd_run_boss_id_*` 读，而不是留空或从名字反推。
+{
+  if (!/bossId:\s*readText\(\s*\(\)\s*=>\s*ex\.rd_run_boss_id_len\(\)/.test(page)) {
+    fail("the run snapshot must keep `bossId` read from rd_run_boss_id_* (not only a display name)");
+  }
+}
+
 // **A button the page cannot wire is a dead button.** The comment in the panel loop above claimed
 // this was checked "below"; until §143 it was not -- `event_card` could have been added to
 // `RD_PANELS` alone and the only symptom would be a throw on click, in the browser, for a player.
@@ -1234,6 +1245,33 @@ console.log(`  enemy statuses    count cell == obs[base+7], and bash makes it no
     }
   }
 
+  // §349（P2-A）：`resolveScene` 把**基础场景**与**覆盖层**分开。
+  // "奖励屏 + 遗物选牌欠账"必须同时表达两层 —— `classifyScene` 只报覆盖层，底屏就丢了。
+  {
+    const layered = { ...BASE, pending: 4, pickupPicks: 2,
+      rewardCards: [{ slot: 0, id: "anger", title: "Anger", chip: "" }] };
+    const resolved = P.resolveScene(layered);
+    if (resolved.base !== "SC-04") fail(`layered base must be SC-04, got ${resolved.base}`);
+    if (JSON.stringify(resolved.overlays) !== JSON.stringify(["SC-11a"])) {
+      fail(`layered overlays must be ["SC-11a"], got ${JSON.stringify(resolved.overlays)}`);
+    }
+    if (resolved.unknownPending !== null) fail("a known base must not report unknownPending");
+    // 而 `classifyScene`（旧页面用）仍然报覆盖层 —— 两者不矛盾，只是回答不同的问题。
+    if (P.classifyScene(layered) !== "SC-11a") fail("classifyScene must keep returning the overlay");
+
+    // 无覆盖层时：base 就是它自己，overlays 为空。
+    const plain = P.resolveScene({ ...BASE, kind: 4, actionCount: 2 });
+    if (plain.base !== "SC-02" || plain.overlays.length !== 0) {
+      fail(`plain scene: ${JSON.stringify(plain)}`);
+    }
+
+    // 表外 pending：base 是 SC-??，并把那个值带出来。
+    const unknown = P.resolveScene({ ...BASE, pending: 99 });
+    if (unknown.base !== "SC-??" || unknown.unknownPending !== 99) {
+      fail(`unknown pending: ${JSON.stringify(unknown)}`);
+    }
+  }
+
   // §348（P2-2）：**表外的 `pending` 必须显性化**，不能静默落地图。
   // 兜底原来是无条件的，于是 `SC-??` 不可达 —— 将来内核新增一个 `Pending`，页面会把它画成
   // 普通地图，而屏幕上一切正常。这条夹具钉住"它落到 `SC-??` 且说得出那个值"。
@@ -1277,6 +1315,7 @@ console.log(`  enemy statuses    count cell == obs[base+7], and bash makes it no
 
 console.log(`  scene table       classifyScene: 18 fixtures, base scenes unique, overlays stack`);
 console.log(`  unknown pending   pending=99 => SC-?? with an explicit panel (not the map)`);
+console.log(`  resolveScene      base scene + overlays separately (reward screen + relic pick)`);
 console.log(`  display names     prettifyId rules; table > kernel name > prettified id`);
 console.log(`  cell-for-cell     every printed quantity == its observation cell, at 5 moments`);
 console.log(`  energy below max  checked after paying a cost (the only moment they differ)`);

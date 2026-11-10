@@ -1070,16 +1070,41 @@ pub unsafe extern "C" fn rd_run_encounter_id_into(ptr: *mut u8) -> i32 {
 /// 通过映射表实现）。所以这一层只负责"是哪一只"，名字由显示层决定 —— 见
 /// `web/ui_render.js` 的 `displayName()`。
 ///
-/// 来路：本幕的 Boss 池（`EncounterTables.Boss` / `Boss2` / `Boss3`，§130 按幕分池）→ 第一条遭遇
+/// 来路：**`last_encounter`**（`rd_run_fight_begin` 写的那一格）→ 它必须落在**本幕** Boss 池里
 /// → `ENCT.Enemies[0].Id`。Boss 遭遇都是单只敌人（`Slime Boss` / `The Guardian` / …），
-/// 所以"第一条遭遇的第一个敌人"就是那个 Boss。
-fn boss_enemy_id<'a>(content: &'a Content<'a>, act: u8, last_encounter: &str) -> Option<&'a str> {
+/// 所以"这场遭遇的第一个敌人"就是那个 Boss。
+///
+/// # 三种时间语义（§349，第十一轮 Review P1-1）
+///
+/// "上一只 Boss"与"即将挑战的 Boss"**不是同一个问题**，A20 第三幕会把它们分开：
+///
+/// | 时刻 | 回答 |
+/// |---|---|
+/// | 正在打（`in_fight`） | `last_encounter` —— 它就是这一场 |
+/// | 双 Boss 之间（第一只已倒、第二只**还没掷**、还没通关） | **未知**（`None`） |
+/// | 其余（含最后一幕 Boss 已倒的通关屏） | `last_encounter`（若在本幕池里） |
+///
+/// ⚠️ 第二只倒下之后 `bosses_fought` 仍然是 1，但那时我们**知道**它是谁（就是刚打完的那只）
+/// —— 所以 `boss_beaten` 必须排在"双 Boss 之间"前面。
+fn boss_enemy_id<'a>(
+    content: &'a Content<'a>,
+    act: u8,
+    last_encounter: &str,
+    in_fight: bool,
+    bosses_fought: u8,
+    boss_beaten: bool,
+) -> Option<&'a str> {
     let pool = match act {
         1 => "Boss",
         2 => "Boss2",
         3 => "Boss3",
         _ => return None,
     };
+    // §349：A20 第三幕的**第二只还没掷** —— 那时 `last_encounter` 仍是第一只，
+    // 把它当成"即将挑战的那只"是错的（第十一轮 Review P1-1）。
+    if !in_fight && !boss_beaten && bosses_fought == 1 {
+        return None;
+    }
     // §348：**只回答已经确定的那一只**。
     //
     // 之前这里取的是"本幕 Boss 池的第一条"，而 `pick_encounter` 是**开战时**才从池里掷的
@@ -1109,6 +1134,9 @@ pub extern "C" fn rd_run_boss_id_len() -> i32 {
         content(),
         session.state.act(),
         session.state.last_encounter().as_str(),
+        session.in_fight,
+        session.state.bosses_fought(),
+        session.state.boss_beaten(),
     )
     .map_or(0, |id| id.len() as i32)
 }
@@ -1125,6 +1153,9 @@ pub unsafe extern "C" fn rd_run_boss_id_into(ptr: *mut u8) -> i32 {
         content(),
         session.state.act(),
         session.state.last_encounter().as_str(),
+        session.in_fight,
+        session.state.bosses_fought(),
+        session.state.boss_beaten(),
     ) {
         Some(id) => write_out(id, ptr),
         None => 0,
@@ -8045,45 +8076,54 @@ mod tests {
     fn the_boss_id_names_the_actual_boss_not_the_pool_head() {
         let content = content();
 
+        // `calm` = "不在战斗中、不是双 Boss 之间、还没通关" —— 也就是最常见的那个时刻。
+        let calm = |act: u8, encounter: &'static str| {
+            boss_enemy_id(content, act, encounter, false, 0, false)
+        };
+
         // ① 本幕池里的**每一个** Boss 都要 nameable —— 这正是"取第一条"过不了的一条。
-        assert_eq!(
-            boss_enemy_id(content, 1, "enc_slime_boss"),
-            Some("slime_boss")
-        );
-        assert_eq!(
-            boss_enemy_id(content, 1, "enc_the_guardian"),
-            Some("the_guardian")
-        );
-        assert_eq!(
-            boss_enemy_id(content, 1, "enc_hexaghost"),
-            Some("hexaghost")
-        );
-        assert_eq!(boss_enemy_id(content, 2, "enc_the_champ"), Some("the_champ"));
-        assert_eq!(
-            boss_enemy_id(content, 3, "enc_time_eater"),
-            Some("time_eater")
-        );
+        assert_eq!(calm(1, "enc_slime_boss"), Some("slime_boss"));
+        assert_eq!(calm(1, "enc_the_guardian"), Some("the_guardian"));
+        assert_eq!(calm(1, "enc_hexaghost"), Some("hexaghost"));
+        assert_eq!(calm(2, "enc_the_champ"), Some("the_champ"));
+        assert_eq!(calm(3, "enc_time_eater"), Some("time_eater"));
         // 多敌人的 Boss 取第一个（`Awakened One` 带两个 Cultist）。
-        assert_eq!(
-            boss_enemy_id(content, 3, "enc_awakened_one"),
-            Some("awakened_one")
-        );
+        assert_eq!(calm(3, "enc_awakened_one"), Some("awakened_one"));
 
         // ② 池外的一律 `None`：普通遭遇、**别幕**的 Boss、空串。
         assert_eq!(
-            boss_enemy_id(content, 1, "enc_cultist"),
+            calm(1, "enc_cultist"),
             None,
             "a normal encounter is not a boss"
         );
         assert_eq!(
-            boss_enemy_id(content, 2, "enc_slime_boss"),
+            calm(2, "enc_slime_boss"),
             None,
             "act 1's boss is not act 2's"
         );
+        assert_eq!(calm(1, ""), None, "nothing fought yet: we do not know");
+
+        // ③ §349（第十一轮 Review P1-1）：A20 第三幕的**双 Boss 窗口**。
+        //
+        //    `(act, last_encounter, in_fight, bosses_fought, boss_beaten)`
+        //
+        //    (a) 第一只已倒、第二只**还没掷** ⇒ **未知**。这是这次修复的行为：
+        //        `last_encounter` 还是第一只，把它当成"即将挑战的那只"是错的。
         assert_eq!(
-            boss_enemy_id(content, 1, ""),
+            boss_enemy_id(content, 3, "enc_time_eater", false, 1, false),
             None,
-            "nothing fought yet: we do not know"
+            "between the two A20 bosses we do NOT know the next one"
+        );
+        //    (b) 第二只正在打 ⇒ 就是它。
+        assert_eq!(
+            boss_enemy_id(content, 3, "enc_awakened_one", true, 1, false),
+            Some("awakened_one")
+        );
+        //    (c) 第二只已倒（通关屏）⇒ **还是它** —— `bosses_fought` 仍是 1，但我们知道它是谁。
+        assert_eq!(
+            boss_enemy_id(content, 3, "enc_awakened_one", false, 1, true),
+            Some("awakened_one"),
+            "the victory screen must still name the boss that was just beaten"
         );
 
         // ③ ABI 三态：没有局 `-1`、有局但还没打 Boss ⇒ `0`（空串，**不猜**）。

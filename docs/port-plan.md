@@ -24431,3 +24431,89 @@ RNG 消耗顺序（`corpus` / 存档 / 回放都对它敏感）⇒ 记进 `docs/
 
 `rd-wasm 189`、`rd-run 225`、`rd-core 819`、units **1233**（判据重写，条数不变）；
 导出 233 → **234**；四条对拍不动；`WEB_SMOKE` / `UI_RENDER` / `BROWSER_TEST` PASS；23/23 闸门。
+
+## §349 A20 双 Boss 的身份窗口 + 文档同步 + 复合场景（第十一轮 Review）
+
+第十一轮是"UI 就绪性"审查：结论是 **GO for 新 UI 架构，NOT YET for 冻结全部 ABI**。四条发现全部成立。
+
+### P1-1：A20 第三幕的"上一只"与"下一只"
+
+`boss_enemy_id` 只看"`last_encounter` 是否落在本幕 Boss 池里"。而 A20 第一只 Boss 倒下后：
+
+```rust
+if self.at_least(A_DOUBLE_BOSS) && self.bosses_fought == 0 {
+    self.bosses_fought = 1;
+    self.resolved = [0; 2];   // 节点重新开放
+    return;                   // 不换幕、不清 last_encounter
+}
+```
+
+⇒ **第二只还没掷**（要到下一次 `fight_begin`），而 `last_encounter` 仍是**第一只** ——
+页面在"第二场开打前"报的是上一只。**"上一只 Boss 的身份"与"即将挑战的 Boss 的身份"被合并了。**
+
+修法：把时间语义拆开，三条判据（**顺序有意义**）：
+
+| 时刻 | 判据 | 回答 |
+|---|---|---|
+| 正在打 | `in_fight` | 就是 `last_encounter` |
+| 双 Boss 之间（第一只已倒、第二只没掷、**还没通关**） | `!in_fight && !boss_beaten && bosses_fought == 1` | **未知**（空串） |
+| 其余（含最后一幕 Boss 已倒的通关屏） | 落在本幕池里 | `last_encounter` |
+
+⚠️ `boss_beaten` 必须排在"双 Boss 之间"**前面**：第二只倒下之后 `bosses_fought` 仍然是 1，
+但那时我们**知道**它是谁（刚打完的那只）。写成 `bosses_fought == 1` 而不排除 `boss_beaten`，
+通关屏会退化成"本幕 Boss 已击败" —— 负控 ② 钉的就是这一条。
+
+### P1-2：代码改了、注释没改
+
+四处陈旧文字（"比没写更糟"：下一个人会照注释理解实现）：
+
+1. `run.rs` 的 `boss_enemy_id` 文档仍写"本幕的 Boss 池 → **第一条遭遇**"（与实现相反）；
+2. `ui_panels.js` 的 SC-00 注释仍写 `noRun` 来自 seed 哨兵；
+3. `ui-state-model.md` §1 / §3.2 / §5 三处仍写 `rd_run_seed() == i32::MIN`；
+4. 同一份文档 §3.3 的 `bossName` 仍写"无导出 / 页面写死 Slime Boss"。
+
+⇒ 全部改掉，并在 §3.3 补上**三种时间语义**与"进幕即定 vs 开战才掷"的已知偏差。
+
+### P2-A：`classifyScene` 把两层合成一个 id
+
+`SC-11a/11b` 是**模态覆盖层**，而 `classifyScene` 返回"第一个命中的 id" ⇒ "奖励屏 + 遗物选牌
+欠账"只报 `SC-11a`，底下那一屏（`SC-04`）丢了。DOM 面板"用覆盖层暂时替换正文"是合理权衡，
+但 3D 需要**复合**状态。
+
+⇒ 新增 `resolveScene(s)` → `{ base, overlays[], unknownPending }`，**保留** `classifyScene`
+（旧页面用它）。两者共用同一份 `RAW`，判据不会漂。
+
+### P2-B：`bossName` 过早变成显示名
+
+`runSnapshot()` 直接把 Boss 的 id 交给 `displayName()`，于是下游只能拿到格式化后的名字，
+不能按 id 绑定美术/音效/本地化 —— 与 §0.5"内核给 id、显示层给名字"的边界不一致。
+⇒ 快照**两个都留**：`bossId`（原样 id）+ `bossName`（标签）。`ui_test` 用静态检查钉住
+"`bossId:` 必须真的从 `rd_run_boss_id_*` 读"。
+
+### 判据与负控
+
+| 判据 | 钉住什么 |
+|---|---|
+| `the_boss_id_names_the_actual_boss_not_the_pool_head`（扩写） | 池里每个 Boss 都 nameable / 池外 `None` / **A20 三种时间语义各一行** / `i32::MIN` 是合法 seed |
+| `ui_test` 的 `resolveScene` 段 | "奖励 + 遗物选牌"两层同时存在（`base: SC-04`、`overlays: [SC-11a]`）；表外 pending 带出那个值 |
+| `ui_test` 的 `bossId` 静态检查 | 快照必须留 id，不能只留名字 |
+
+负控 **4/4**（`native/p349_negative.py`）：去掉 A20 窗口判据 / 判据里去掉 `boss_beaten` /
+`resolveScene` 把覆盖层算进 base / 快照只留名字。
+
+### ⚠️ 一个自己造的事故（记下来）
+
+负控脚本末尾我写了"把页面原样写回"的一行：
+
+```python
+io.open(PAGE, 'w', ...).write(io.open(PAGE, ...).read())
+```
+
+`open('w')` **先截断**，所以它读到空、写回空 —— `web/index.html` 被清成 0 字节（2629 行）。
+恢复靠 `git checkout -- web/index.html` + 重打 P2-B 补丁。**"为了保险"加的一行，恰好是唯一
+破坏数据的一行**；负控脚本的收尾只该做 `finally` 里那一件事。
+
+### 数字
+
+`rd-wasm 189`、`rd-run 225`、`rd-core 819`、units **1233**；导出 234（不变）；
+四条对拍不动；`WEB_SMOKE` / `UI_RENDER` / `MAP_RENDER` / `BROWSER_TEST` PASS；23/23 闸门。
