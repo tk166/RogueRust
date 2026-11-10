@@ -933,6 +933,10 @@ function runSnapshot() {
   const pending = ex.rd_run_pending();
   const snapshot = {
     mode,
+    // §347：`classifyScene` 要的两个**内核事实**（都不是页面历史）。
+    // `noRun`：SC-00 的判据（原来靠 `pending === -1` 间接判断）；`inFight`：SC-03 与 SC-03b 的分界。
+    noRun: ex.rd_run_seed() === -2147483648,
+    inFight: ex.rd_run_in_fight() === 1,
     runOver: runOver(),
     runOverWhy: runEndWhy(),
     cleared: !runOver() && ex.rd_run_boss_beaten() === 1,
