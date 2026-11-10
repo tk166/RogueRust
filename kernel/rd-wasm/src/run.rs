@@ -265,6 +265,32 @@ pub extern "C" fn rd_content_fingerprint() -> i32 {
     content_fingerprint()
 }
 
+/// §336：**战斗状态**的 `hash_full` 前缀（`write_full_hash_input` 的 SHA-256 前 8 字节）。
+///
+/// 为什么不是 `write_hash_input`（`hash_golden`）：那一个看不见 `ascension` / `heal_blocked` /
+/// `encounter` 这些 model-only 事实，而"同一串动作、不同一局"正是从这些地方来的（§334）。
+///
+/// `None` = 没有战斗会话，或者规范文本超出缓冲（**响亮**：不返回 0 假装算过）。
+fn combat_full_hash_prefix() -> Option<u64> {
+    let session = crate::slot().as_ref()?;
+    // 战斗规范文本实测几 KB；给 **1 MiB** 留足 —— 与 `hash_golden` 的测试同一个量级
+    // （`snapshot.rs` 的 `state_hash` 用 `1 << 20`）。第一版给 64 KiB，`full` 段比 `golden`
+    // 长不少（每个状态实例多一行 `status_src`），一局后期就溢出了。
+    let mut buffer = std::vec![0u8; 1 << 20];
+    let text_len = {
+        let mut writer = rd_core::writer::TextWriter::new(&mut buffer);
+        rd_core::snapshot::write_full_hash_input(&mut writer, &session.state);
+        if writer.overflowed() {
+            return None;
+        }
+        writer.len()
+    };
+    let digest = rd_core::hash::sha256(&buffer[..text_len]);
+    Some(u64::from_be_bytes([
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6], digest[7],
+    ]))
+}
+
 fn hash_prefix(state: &rd_run::state::RunState) -> Option<u64> {
     let digest = rd_run::hash::run_hash(state)?;
     Some(u64::from_be_bytes([
@@ -280,8 +306,10 @@ impl RunSession {
         }
         // **懒上戳**：每条导出都在**动手之前**调 `log`，所以此刻的哈希就是"上一次调用之后"的哈希。
         // 这样不必要求每个导出都从 `finish` 回来（`rd_run_step` 就不是）。
-        if let Some(last) = self.journal.last() {
-            if last.hash == 0 {
+        let stale = self.journal.last().is_some_and(|last| last.hash == 0);
+        let stale_kind = self.journal.last().map(|last| last.kind);
+        if stale {
+            if true {
                 // §170 `P1-4`: 算不出来就**记下来**，不写 0 假装算过。
                 let hash = self.state_hash();
                 if let Some(last) = self.journal.last_mut() {
@@ -4961,6 +4989,27 @@ pub extern "C" fn rd_run_fight_begin() -> i32 {
     if let Some(combat) = crate::slot().as_mut() {
         combat.reobserve_after_external_change();
     }
+    // §336：**这里**记下战斗状态的 `hash_full`（第 5 列）。
+    //
+    // 为什么必须在这一刻、而不是 `log` 的"懒上戳"里：`rd_run_fight_end` 在它自己的 `log`
+    // **之前**就 `take_session()` 了（金币/每副本数据要在会话消失前读回运行层），所以下一次
+    // `log` 发生时战斗已经不在 —— 第一版把这段放进 `log`，判据报"第 5 列是空的"，而调试打印
+    // 是 `DEBUG combat_full: no session`。
+    //
+    // 时点也在**提交点之后**：失败路径（`fail_begin`）什么都记不下，脚本里不会有这一格。
+    if let Some(prefix) = combat_full_hash_prefix() {
+        let text = std::format!("{prefix:016x}");
+        if let Some(session) = run_slot().as_mut() {
+            if let Some(last) = session.journal.last_mut() {
+                if last.kind == K_FIGHT_BEGIN {
+                    last.text = text;
+                }
+            }
+        }
+    } else if let Some(session) = run_slot().as_mut() {
+        // 算不出来 ⇒ 留空 = "这一格没有可比的东西"，回放那边据此跳过（不是比对 0）。
+        session.hash_failed = true;
+    }
     0
 }
 
@@ -5839,6 +5888,27 @@ pub unsafe extern "C" fn rd_run_replay_from(ptr: *const u8, len: i32) -> i32 {
             }
             K_FIGHT_BEGIN => {
                 let _ = rd_run_fight_begin();
+                // §336：重搭出来的那场战斗必须与当初那场**逐位相同**。
+                //
+                // 旧脚本的第 5 列是空串 ⇒ 不比对（不是"比对 0"）：那些脚本录制时还没有这一格，
+                // 拿 0 去比会让它们**全部**报分叉 —— 那是"加判据把旧证据全废掉"。
+                if !payload.is_empty() {
+                    let want_fight = u64::from_str_radix(payload, 16).ok();
+                    let now_fight = combat_full_hash_prefix();
+                    if want_fight != now_fight {
+                        session_clear_replay(checked, (index + 1) as i32);
+                        set_error(&std::format!(
+                            "第 {} 步之后**战斗**不同（期望 {}，回放得到 {}）· 这一场是从运行层重搭的，\
+                             差别在敌人/起始状态/每副本 mark 或 model-only 事实（§336）",
+                            index + 1,
+                            payload,
+                            now_fight.map_or(std::string::String::from("none"), |h| {
+                                std::format!("{h:016x}")
+                            })
+                        ));
+                        return (index + 1) as i32;
+                    }
+                }
             }
             K_GRANT_POTION => {
                 let _ = rd_run_grant_potion(payload.as_ptr(), payload.len() as i32);
@@ -7477,6 +7547,155 @@ mod tests {
     }
 
     /// 把第 `n`（0 基）条记录的哈希换成垃圾，其余原样。
+    /// §336：`fight_begin` 那一条记录的第 5 列是**战斗状态**的 `hash_full`。
+    ///
+    /// 为什么这一格值得单独一条判据：回放此前只比**运行层**哈希，而运行层只覆盖
+    /// `last_encounter` 一格 —— 敌人 HP、起始状态、每副本 mark、`ascension` / `heal_blocked`
+    /// 这些"同一串动作、不同一局"的来源**全看不见**（`hash_golden` 也看不见后两个，
+    /// 那是 §334 做 `hash_full` 的理由）。
+    #[test]
+    fn the_replay_verifies_the_combat_that_fight_begin_rebuilds() {
+        // 录一段**含战斗**的脚本。循环体照抄 `the_same_seed_and_the_same_actions_replay_to_the_same_run`
+        // 的那一份（按 `pending` 结算，不按 `kind` 猜）—— 换一套走法只会让"没撞到战斗"变成
+        // 夹具问题，而这条判据要问的是"撞到之后指纹有没有被记下来"。
+        reset(7);
+        let _ = rd_run_choose_start(1);
+        for hop in 0..24 {
+            if rd_run_step(0) != 0 {
+                break;
+            }
+            let kind = rd_run_node_kind();
+            assert!(kind >= 0, "hop {hop}: the run has a node ({})", run_error_text());
+            assert_eq!(rd_run_begin_node(), 0, "hop {hop}: begin ({})", run_error_text());
+            match rd_run_pending() {
+                1 => {
+                    let _ = rd_run_rest();
+                }
+                2 => {
+                    let _ = rd_run_leave();
+                }
+                3 => {
+                    let _ = rd_run_open_chest();
+                    let _ = rd_run_leave();
+                }
+                _ => {
+                    let fight = kind == 1
+                        || kind == 2
+                        || kind == 7
+                        || (kind == 5
+                            && run_slot().as_ref().expect("a run").state.unknown_room()
+                                == rd_run::state::UnknownRoom::Monster);
+                    if fight {
+                        assert_eq!(rd_run_fight_begin(), 0, "hop {hop}: begin the fight");
+                        assert!(rd_run_fight_end() >= 0, "hop {hop}: end the fight");
+                    }
+                }
+            }
+            if kind == 4 {
+                let _ = rd_run_choose(0);
+            }
+            while rd_run_pending() == 4 {
+                let _ = rd_run_skip_reward();
+            }
+            while rd_run_pending() == 8 {
+                let _ = rd_run_pick_event_card(0);
+            }
+            if rd_run_action_count() == 0 && rd_run_pending() != 0 {
+                let _ = rd_run_leave();
+            }
+        }
+        let script = script_text_now();
+        // 找到 `fight_begin` 那一条，确认第 5 列非空（16 位十六进制）。
+        let fight_records: Vec<&str> = script
+            .split(';')
+            .filter(|record| record.starts_with("fight_begin,"))
+            .collect();
+        assert!(
+            !fight_records.is_empty(),
+            "the fixture must record at least one fight: {}",
+            &script[..script.len().min(200)]
+        );
+        for record in &fight_records {
+            let cells: Vec<&str> = record.split(',').collect();
+            let payload = cells.get(4).copied().unwrap_or("");
+            assert_eq!(
+                payload.len(),
+                16,
+                "fight_begin must carry the combat hash_full (16 hex): {record}"
+            );
+            assert!(
+                u64::from_str_radix(payload, 16).is_ok(),
+                "and it must be hex: {record}"
+            );
+        }
+
+        let (head, body) = script.split_once(';').expect("a head");
+
+        // (3) 旧脚本（第 5 列为空）⇒ 不比对、照常通过。
+        let mut legacy = String::new();
+        legacy.push_str(head);
+        legacy.push(';');
+        for record in body.split(';').filter(|r| !r.is_empty()) {
+            let mut cells: Vec<&str> = record.split(',').collect();
+            if record.starts_with("fight_begin,") && cells.len() > 4 {
+                cells[4] = "";
+            }
+            legacy.push_str(&cells.join(","));
+            legacy.push(';');
+        }
+        assert_eq!(
+            unsafe { rd_run_replay_from(legacy.as_ptr(), legacy.len() as i32) },
+            0,
+            "a record without the combat hash must still replay (no comparison, not a zero \
+             comparison): {}",
+            run_error_text()
+        );
+
+        // (1) 原样回放：通过。
+        assert_eq!(
+            unsafe { rd_run_replay_from(script.as_ptr(), script.len() as i32) },
+            0,
+            "the recorded script must replay: {}",
+            run_error_text()
+        );
+
+        // (2) 把**战斗指纹**改掉 ⇒ 报那一步的"战斗不同"。
+        let mut broken = String::new();
+        broken.push_str(head);
+        broken.push(';');
+        let mut fight_index = None;
+        for (index, record) in body.split(';').filter(|r| !r.is_empty()).enumerate() {
+            let mut cells: Vec<&str> = record.split(',').collect();
+            if record.starts_with("fight_begin,") && fight_index.is_none() {
+                fight_index = Some(index);
+                if cells.len() > 4 {
+                    cells[4] = "00000000deadbeef";
+                }
+            }
+            broken.push_str(&cells.join(","));
+            broken.push(';');
+        }
+        let fight_index = fight_index.expect("a fight record");
+        assert!(
+            unsafe { rd_run_replay_from(broken.as_ptr(), broken.len() as i32) } > 0,
+            "a changed combat hash must diverge: {}",
+            run_error_text()
+        );
+        assert_eq!(
+            rd_run_replay_diverged() as usize,
+            fight_index + 1,
+            "and it must name the fight step ({}), not some later one: {}",
+            fight_index + 1,
+            run_error_text()
+        );
+        assert!(
+            run_error_text().contains("战斗"),
+            "the message must say the **fight** differed: {}",
+            run_error_text()
+        );
+
+    }
+
     fn replace_nth_hash(script: &str, n: usize) -> String {
         let (head, body) = script.split_once(';').expect("a head");
         let mut out = std::format!("{head};");
