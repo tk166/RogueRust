@@ -4720,23 +4720,55 @@ impl RunState {
         self.shop_price(self.marked_up(base))
     }
 
-    /// §270：商店的**实付价** —— 所有 `ShopDiscountPercent` 相加（`membership_card` 50%）。
+    /// §270 / §338：商店的**实付价** —— 折扣**乘法叠加**，最后**向上取整一次**。
     ///
     /// ⚠️ 货架上存的是**挂牌价**（`roll_shop` 在陈列时就把 A16 的涨价算进去了，见那里的注释）。
     /// 折扣**只在付款时**算，所以"页面显示的数"与"真的扣的数"必须是**同一个函数** ——
     /// `rd_run_shop_card_price` / `rd_run_shop_relic_price` / `buy_*` / `remove_card_price`
     /// 全部走这里。两条路各算一次，就会变成"显示 45 扣 90"。
+    ///
+    /// # 为什么是乘法，不是加法（§338）
+    ///
+    /// wiki 的原文把公式写了出来：*"Having both this and Membership Card will reduce prices by a
+    /// total 60%. (**0.5 * 0.8 = 0.4**) 40% price is a 60% reduction."* —— `100 → 40`，不是
+    /// `100 - 50 - 20 = 30`。旧实现是加法，而**旧测试把这个错公式写成了规范**
+    /// （`assert_eq!(shop_price(100), 30)`），所以只改实现不改测试会"修完反而红"。
+    ///
+    /// # 为什么只 ceil 一次
+    ///
+    /// wiki 另有一句：*"For prices which are an odd number before purchasing Membership Card, the
+    /// new price will round **up**"*（`101 * 0.5 = 50.5 → 51`）。所以取整方向是 `ceil`，不是截断。
+    /// 而"每个折扣各 ceil 一次"与"乘完只 ceil 一次"在 `107` 上会差 1：
+    /// `ceil(ceil(107*0.5)*0.8) = 44`，`ceil(107*0.4) = 43`。wiki 把公式写成一次性的 `0.4`，
+    /// 所以这里是**分子分母各自相乘、最后 ceil 一次**。
+    ///
+    /// ⚠️ 待核偏差：fandom 说 Courier 与 Membership Card 在**删卡服务**上"取更好的那一个折扣"
+    /// （⇒ 50%），wiki.gg 说 Courier 对删卡"照常"生效（⇒ 40%）。两源互斥，单源不足以定规则，
+    /// 所以这里**不**为删卡开特例，按统一公式算。见 `docs/port-plan.md` §338。
     #[must_use]
     pub fn shop_price(&self, base: i32) -> i32 {
-        let mut percent = 100i32;
+        // 售罄哨兵（`-1`）不参与折扣：`-1` 必须原样穿过去。`.max(0)` 那版会把它变成 0，
+        // 于是页面把卖掉的格子画成"0 金可买"（§276 在 ABI 那一侧也挡了一次，这里是第二道）。
+        if base < 0 {
+            return base;
+        }
+        let mut numerator = 1i64;
+        let mut denominator = 1i64;
         for slot in 0..self.relics_len as usize {
             if let Some(RelicEffect::ShopDiscountPercent(discount)) =
                 Self::relic_effect(self.relics[slot].as_str())
             {
-                percent -= discount;
+                // `discount` 是"便宜多少个百分点"，所以留下的是 `100 - discount`。
+                numerator *= i64::from(100 - discount.clamp(0, 100));
+                denominator *= 100;
             }
         }
-        (base * percent / 100).max(0)
+        if denominator == 1 {
+            return base;
+        }
+        let scaled = i64::from(base) * numerator;
+        // ceil：`(a + b - 1) / b`，全为正数，不需要处理负数分支。
+        ((scaled + denominator - 1) / denominator) as i32
     }
 
     /// §259：篝火上有哪些选项（wiki `Rest Sites`）。
@@ -5869,9 +5901,16 @@ impl RunState {
         if offer.price < 0 {
             return Err(RunError::EmptyOffer(slot as u8));
         }
-        if self.gold < offer.price {
+        // §338：**实付价在这里冻结一次**，校验 / 错误消息 / 扣款全用它。
+        //
+        // 三件事都靠这一行：
+        // ① 校验用挂牌价、扣款用折后价 ⇒ 页面按折后价启用按钮、内核按挂牌价拒绝（审阅 1.1）；
+        // ② 错误消息里报的数必须与屏幕上的数相同，否则玩家看到"50 买不起，你有 60"；
+        // ③ 冻结发生在任何 `push_*` **之前** ⇒ 买 Membership Card 本身不打折（审阅 1.3）。
+        let due = self.shop_price(offer.price);
+        if self.gold < due {
             return Err(RunError::NotEnoughGold {
-                price: offer.price,
+                price: due,
                 gold: self.gold,
             });
         }
@@ -5885,7 +5924,7 @@ impl RunState {
             return Err(RunError::EmptyOffer(slot as u8));
         }
         self.push_card(card)?;
-        self.adjust_gold(-self.shop_price(offer.price));
+        self.adjust_gold(-due);
         self.maw_bank_broken = true;
         self.shop.cards[slot].price = -1;
         // §273：`the_courier` —— "The Merchant restocks cards, relics, and potions"：买走的那一格
@@ -5916,15 +5955,19 @@ impl RunState {
         if offer.price < 0 {
             return Err(RunError::EmptyOffer(slot as u8));
         }
-        if self.gold < offer.price {
+        // §338：与 `buy_card` 同一个 `due` 纪律，而且这里**必须**先冻结 ——
+        // `push_relic` 之后 `shop_price` 会看到刚入库的那件遗物：买 `membership_card`
+        // 时它给自己打 5 折，而 wiki 的原话是 "**the rest of** the items … will benefit"。
+        let due = self.shop_price(offer.price);
+        if self.gold < due {
             return Err(RunError::NotEnoughGold {
-                price: offer.price,
+                price: due,
                 gold: self.gold,
             });
         }
         // §160: the same commit-point rule as `buy_card` -- the failing half must come first.
         self.push_relic(offer.id.as_str(), card_pool)?;
-        self.adjust_gold(-self.shop_price(offer.price));
+        self.adjust_gold(-due);
         // §270：`maw_bank` "No longer works when you spend any Gold at a shop"。
         self.maw_bank_broken = true;
         self.shop.relics[slot].price = -1;
@@ -5952,9 +5995,11 @@ impl RunState {
         if offer.price < 0 {
             return Err(RunError::EmptyOffer(slot as u8));
         }
-        if self.gold < offer.price {
+        // §338：同一个 `due` 纪律（校验 / 消息 / 扣款三处一个数）。
+        let due = self.shop_price(offer.price);
+        if self.gold < due {
             return Err(RunError::NotEnoughGold {
-                price: offer.price,
+                price: due,
                 gold: self.gold,
             });
         }
@@ -5963,7 +6008,7 @@ impl RunState {
             return Err(RunError::NoSuchCard);
         };
         self.push_card(row)?;
-        self.adjust_gold(-self.shop_price(offer.price));
+        self.adjust_gold(-due);
         self.maw_bank_broken = true;
         self.shop.colorless[slot].price = -1;
         Ok(())
@@ -5985,14 +6030,16 @@ impl RunState {
         if offer.price < 0 {
             return Err(RunError::EmptyOffer(slot as u8));
         }
-        if self.gold < offer.price {
+        // §338：同一个 `due` 纪律。
+        let due = self.shop_price(offer.price);
+        if self.gold < due {
             return Err(RunError::NotEnoughGold {
-                price: offer.price,
+                price: due,
                 gold: self.gold,
             });
         }
         self.push_potion(offer.id.as_str())?;
-        self.adjust_gold(-self.shop_price(offer.price));
+        self.adjust_gold(-due);
         self.maw_bank_broken = true;
         self.shop.potions[slot].price = -1;
         Ok(())
@@ -9073,13 +9120,15 @@ mod tests {
     /// §273：`the_courier` —— 半价之外的"买完补货"。
     #[test]
     fn the_courier_restocks_the_slot_it_sells() {
-        // ---- 折扣：20%（与 `membership_card` 的 50% 相加）。
+        // ---- 折扣：20%（与 `membership_card` 的 50% **相乘**，§338）。
         let mut run = ironclad();
         assert_eq!(run.shop_price(100), 100);
         run.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
         assert_eq!(run.shop_price(100), 80, "the_courier: 20% off");
         run.push_relic("membership_card", &TYPED_CARDS).expect("membership_card");
-        assert_eq!(run.shop_price(100), 30, "the two discounts add up (50 + 20)");
+        // §338：wiki 的公式是 `0.5 * 0.8 = 0.4` ⇒ 100 → 40（总折扣 60%），不是加法 30。
+        // 这条断言原来写的是 30 —— **它把错公式写成了规范**，所以修实现时必须同时修它。
+        assert_eq!(run.shop_price(100), 40, "the two discounts multiply (0.5 * 0.8 = 0.4)");
 
         // ---- 补货：**货架不缩水**。这才是 wiki 那句 "The Merchant restocks …" 的意思 ——
         // 它没说"一定给你另一张"（同一张回来是允许的），所以判据不钉那件事。
@@ -9689,10 +9738,184 @@ mod tests {
         assert_eq!(run.shop_price(100), 50, "membership_card: 50% off");
         // ⚠️ `remove_card_price()` **本身已经**含折扣（它内部就调 `shop_price`），所以这里不能再
         // 套一层 —— 第一版套了，得到 18 而不是 37（"半价的半价"）。
+        // §338：取整方向是**向上**（wiki：删卡服务"每次 +12.5，rounded up"），
+        // 所以 75 * 0.5 = 37.5 → 38，不是截断的 37。
         assert_eq!(
             run.remove_card_price(),
-            SHOP_REMOVE_BASE / 2,
-            "the removal service is a product too"
+            (SHOP_REMOVE_BASE + 1) / 2,
+            "the removal service is a product too, rounded up"
+        );
+    }
+
+    /// §338：折扣**乘法叠加**，且最后**向上取整一次**。
+    ///
+    /// 全部是**字面量**：预期值不许用 `shop_price` 自己生成 —— 那样"公式错了"和"公式对了"
+    /// 会一起绿（旧测试就是拿生产函数的加法结果当预期，于是加法被写成了规范）。
+    ///
+    /// 两处最容易写错的地方：
+    /// * `107` 是"一次 ceil"与"每次 ceil"的分水岭：`ceil(107*0.4) = 43`，
+    ///   而 `ceil(ceil(107*0.5)*0.8) = ceil(54*0.8) = 44`。wiki 把公式写成一次性的 `0.4`。
+    /// * `101` 是 wiki 自己举的例子（`101 * 0.5 = 50.5 → 51`），奇数价**向上**而不是截断。
+    #[test]
+    fn shop_discounts_stack_multiplicatively_and_round_up() {
+        let mut run = ironclad();
+        assert_eq!(run.shop_price(100), 100, "no discount relic ⇒ the shelf price");
+        assert_eq!(run.shop_price(-1), -1, "the sold-out sentinel must pass through");
+
+        run.push_relic("membership_card", &TYPED_CARDS).expect("membership_card");
+        assert_eq!(run.shop_price(100), 50, "membership_card: 50% off");
+        assert_eq!(run.shop_price(101), 51, "odd prices round **up** (wiki's own example)");
+        assert_eq!(run.shop_price(99), 50, "99 * 0.5 = 49.5 → 50");
+        assert_eq!(
+            run.shop_price(SHOP_REMOVE_BASE),
+            38,
+            "75 * 0.5 = 37.5 → 38 (the removal service rounds up too)"
+        );
+
+        let mut courier = ironclad();
+        courier.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
+        assert_eq!(courier.shop_price(100), 80, "the_courier: 20% off");
+
+        let mut both = ironclad();
+        both.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
+        both.push_relic("membership_card", &TYPED_CARDS).expect("membership_card");
+        assert_eq!(
+            both.shop_price(100),
+            40,
+            "wiki: 0.5 * 0.8 = 0.4 ⇒ 40 (a 60% reduction, not 70%)"
+        );
+        assert_eq!(
+            both.shop_price(107),
+            43,
+            "ceil once at the end: ceil(107*0.4) = 43, not ceil(ceil(107*0.5)*0.8) = 44"
+        );
+    }
+
+    /// §338：**页面显示的价格就是扣款的价格**，四排货架都一样。
+    ///
+    /// 旧实现的形状：校验用**挂牌价**、扣款用**折后价**。于是持有 Membership Card、金币 60、
+    /// 货架 100 时，页面按 50 判断"买得起"⇒ 按钮是启用的，点下去却被拒，还回一句
+    /// `NotEnoughGold { price: 100, gold: 60 }` —— **屏幕上写着 50，内核说 100 不够**。
+    ///
+    /// 判据用 `gold = due - 1` 与 `gold = due` 两档夹住它：旧实现在第一档就报 `price: 挂牌价`
+    /// （数字不对），第二档直接拒绝（成交不了）。
+    #[test]
+    fn every_purchase_charges_the_price_the_page_shows() {
+        // 四排各挑一格，用**手工摆出来**的货架（不走 `stock_shop`：价格要可预期）。
+        let mut run = ironclad();
+        run.push_relic("membership_card", &TYPED_CARDS).expect("membership_card");
+        run.pending = Pending::Shop;
+        run.shop = ShopStock::empty();
+        let card = TYPED_CARDS
+            .iter()
+            .find(|card| card.id == "strike")
+            .copied()
+            .expect("a strike in the pool");
+        run.shop.cards[0] = Offer {
+            id: RunId::new("strike").expect("id"),
+            price: 100,
+        };
+        run.shop.cards_len = 1;
+        run.shop.colorless[0] = Offer {
+            id: RunId::new("strike").expect("id"),
+            price: 100,
+        };
+        run.shop.colorless_len = 1;
+        run.shop.potions[0] = Offer {
+            id: RunId::new("fire_potion").expect("id"),
+            price: 100,
+        };
+        run.shop.potions_len = 1;
+        run.shop.relics[0] = Offer {
+            id: RunId::new("anchor").expect("id"),
+            price: 100,
+        };
+        run.shop.relics_len = 1;
+
+        // `due` 是**页面看到的那个数**（`rd_run_shop_*_price` 走的就是 `shop_price`）。
+        let due = run.shop_price(100);
+        assert_eq!(due, 50, "membership_card halves the shelf price");
+
+        // ---- 每一排：`due - 1` 被拒，且**错误里的数 == due**。
+        for (name, buy) in [
+            ("cards", 0usize),
+            ("colorless", 1usize),
+            ("potions", 2usize),
+            ("relics", 3usize),
+        ] {
+            let mut short = run;
+            short.adjust_gold(-short.gold() + due - 1);
+            let refused = match buy {
+                0 => short.buy_card(0, card, &TYPED_CARDS),
+                1 => short.buy_colorless(0, &TYPED_CARDS),
+                2 => short.buy_potion(0),
+                _ => short.buy_relic(0, &TYPED_CARDS, &RELICS),
+            };
+            assert_eq!(
+                refused,
+                Err(RunError::NotEnoughGold { price: due, gold: due - 1 }),
+                "{name}: the refusal must quote the price the page shows ({due}), not the shelf price"
+            );
+            // 被拒 ⇒ 一个字节都不改。
+            assert_eq!(short.gold(), due - 1, "{name}: a refused purchase spends nothing");
+            assert_eq!(short.deck().len(), run.deck().len(), "{name}: …and adds nothing");
+        }
+
+        // ---- 每一排：`due` 刚好够 ⇒ 成交，金币归零，扣的正好是 `due`。
+        for (name, buy) in [
+            ("cards", 0usize),
+            ("colorless", 1usize),
+            ("potions", 2usize),
+            ("relics", 3usize),
+        ] {
+            let mut exact = run;
+            exact.adjust_gold(-exact.gold() + due);
+            let bought = match buy {
+                0 => exact.buy_card(0, card, &TYPED_CARDS),
+                1 => exact.buy_colorless(0, &TYPED_CARDS),
+                2 => exact.buy_potion(0),
+                _ => exact.buy_relic(0, &TYPED_CARDS, &RELICS),
+            };
+            assert_eq!(bought, Ok(()), "{name}: exactly `due` gold must be enough");
+            assert_eq!(exact.gold(), 0, "{name}: the charge is exactly `due`");
+        }
+    }
+
+    /// §338：买 **Membership Card 本身**不打折 —— `due` 必须在 `push_relic` **之前**冻结。
+    ///
+    /// wiki 的原话是 *"Membership Card immediately applies its discount to ALL Shops on purchase,
+    /// meaning **the rest of** the items in the same Shop … will benefit"* —— "the rest of" 就是
+    /// 自身不享受。旧实现先 `push_relic` 再算价，于是那一次交易自己给自己打了 5 折。
+    #[test]
+    fn buying_the_discount_relic_does_not_discount_itself() {
+        let mut run = ironclad();
+        run.pending = Pending::Shop;
+        run.shop = ShopStock::empty();
+        run.shop.relics[0] = Offer {
+            id: RunId::new("membership_card").expect("id"),
+            price: 100,
+        };
+        run.shop.relics_len = 1;
+        // 第二格留一件普通遗物，用来证明"**后续**购买享受折扣"。
+        run.shop.relics[1] = Offer {
+            id: RunId::new("anchor").expect("id"),
+            price: 100,
+        };
+        run.shop.relics_len = 2;
+        run.adjust_gold(-run.gold() + 150);
+
+        assert_eq!(run.shop_price(100), 100, "no discount before the purchase");
+        assert_eq!(
+            run.buy_relic(0, &TYPED_CARDS, &RELICS),
+            Ok(()),
+            "100 gold buys a 100-gold relic when there is no discount yet"
+        );
+        assert_eq!(run.gold(), 50, "the full shelf price was charged (no self-discount)");
+        assert!(run.holds_relic("membership_card"), "…and the relic is now held");
+        assert_eq!(
+            run.shop_price(100),
+            50,
+            "the discount applies to the **rest** of the shop"
         );
     }
 
