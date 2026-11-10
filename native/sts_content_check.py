@@ -1569,6 +1569,11 @@ INV_EVENT_ONLY = {
     # §323：`Masked Bandits` 的 `[Fight!]` —— "the three bandits (Pointy, Romeo, and Bear)"。
     # ⚠️ wiki 明写它**不算精英**（对 Preserved Insect / Sling of Courage / Black Star /
     # Slaver's Collar 而言），所以事件里写的是 `Fight: "monster"`。
+    # §325：`Hypnotizing Colored Mushrooms` 的 `[Stomp]` —— "a battle against 3 Fungi Beasts"。
+    "enc_three_fungi_beasts": (
+        ["fungi_beast", "fungi_beast", "fungi_beast"],
+        'Hypnotizing Colored Mushrooms `[Stomp]`: "a battle against 3 Fungi Beasts"',
+    ),
     "enc_masked_bandits": (
         ["pointy", "romeo", "bear"],
         "Masked Bandits `[Fight!]`: \"the three bandits (Pointy, Romeo, and Bear)\"",

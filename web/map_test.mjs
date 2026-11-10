@@ -75,48 +75,61 @@ const settleHere = () => {
   if (ex.rd_run_node_kind() < 0) return;
   const kind = ex.rd_run_node_kind();
   if (ex.rd_run_begin_node() !== 0) return;
-  // §272: a `?` room now **rolls** its outcome (event / fight / merchant / treasure), so settling
-  // by node kind is a stale assumption -- a `?` merchant leaves its shelf open and the next step is
-  // refused. Dispatch on `pending` (what the node actually wants) and keep `kind` only for
-  // "no pending, but it is a fight" (a combat node, or a `?` room that rolled one).
-  const pending = ex.rd_run_pending();
-  if (pending === 1) ex.rd_run_rest();
-  else if (pending === 2) ex.rd_run_leave();
-  else if (pending === 3) ex.rd_run_open_chest();
-  else if (pending === 5) {
-    // §143: an event choice may **owe a deck index**. A helper that stops at `rd_run_choose` leaves
-    // the run in `Pending::EventCard`, where `reachable()` is empty -- so the *next* step is refused
-    // and the failure points at the map instead of at this line. (`rd-wasm`'s Rust test helper had
-    // the same hole; both were found by the same walk.)
-    //
-    // §279：★ 不能盲选槽 0 —— 它可能是一条**条件选项**（`forgotten_altar` 的 `[Offer: Golden Idol]`
-    // 要有金像）。盲选会点一条锁着的路，内核拒（-2），屏幕上却什么都没变，于是下一格
-    // 报"step refused"，指到地图而不是这里。选**第一个可用的**槽。
-    // 同时 §278 的事件是**多段**的：走完一段还留在 `Pending::Event`，所以这里要一路点到收尾。
-    let guard = 0;
-    while (ex.rd_run_pending() === 5 && guard < 8) {
-      guard++;
+  // 每轮做**一件事**，直到节点结算（§325：写成循环而不是 if/else 链 —— 一次收尾之后
+  // 可能又出现新的待决：`After` 段回到事件、奖励屏、事件把这一格变成战斗、拾取欠账）。
+  for (let round = 0; round < 16; round++) {
+    // 已结算就停：再"打一场"只会被拒（那是一次**假**失败，会把真因淹掉）。
+    if (ex.rd_run_node_resolved() === 1) return;
+    const pending = ex.rd_run_pending();
+    // §320：事件摊开的候选面板（"从 n 张里选一张"）。
+    if (pending === 9) {
+      if (ex.rd_run_event_offer_take(0) !== 0) return;
+      continue;
+    }
+    // §143：事件选项可能**欠一个牌组下标**（`Pending::EventCard`）。
+    if (pending === 7 || pending === 8) {
+      if (ex.rd_run_pick_event_card(0) !== 0) return;
+      continue;
+    }
+    if (pending === 5) {
+      // §279：★ 不能盲选槽 0 —— 它可能是一条**条件选项**（`forgotten_altar` 的
+      // `[Offer: Golden Idol]` 要有金像）。盲选会点一条锁着的路，内核拒（-2），
+      // 屏幕上什么都没变，于是下一格报 "step refused" 并指到地图。
       let slot = -1;
       for (let candidate = 0, n = ex.rd_run_event_option_count(); candidate < n; candidate++) {
         if (ex.rd_run_event_option_available(candidate) === 1) { slot = candidate; break; }
       }
-      if (slot < 0) break;                       // 没有可用选项：留给调用方报错
-      if (ex.rd_run_choose(slot) !== 0) break;   // 内核拒了：同上
-      if (ex.rd_run_event_needs() > 0) ex.rd_run_pick_event_card(0);
-      // §286：某个选项可能是 `[Fight]`（`Dead Adventurer` 的伏击）—— 事件**收尾**，
-      // 房间由那一场战斗结算。不在这里打，节点就永远不结算，下一格报"step refused"。
-      if (ex.rd_run_event_fight() > 0) { ex.rd_run_fight_begin(); ex.rd_run_fight_end(); }
+      if (slot < 0) return;
+      if (ex.rd_run_choose(slot) !== 0) return;
+      continue;
     }
+    if (pending === 1) { ex.rd_run_rest(); continue; }
+    if (pending === 2) { ex.rd_run_leave(); continue; }
+    if (pending === 3) { ex.rd_run_open_chest(); continue; }
+    // §263：一场战斗付的是**奖励屏**，它挡着下一步（"action index out of range"）。
+    if (pending === 4) { ex.rd_run_skip_reward(); continue; }
+    // 没有待决：还剩什么就是"这一格本身要做的事"。
+    if (pending === 0) {
+      // §324：拾取欠账（`transform_choose` / `empty_cage` / `astrolabe`）不占 `pending`。
+      if (ex.rd_run_pickup_picks() > 0) {
+        if (ex.rd_run_pickup_card(0) !== 0) return;
+        continue;
+      }
+      // §286/§325：事件把这一格变成了一场战斗（`dead_adventurer` 的伏击、`mushrooms` 的
+      // `[Stomp]`）。不打完它，节点永远不结算。
+      const isFight = ex.rd_run_event_fight() > 0 || kind === 1 || kind === 2 || kind === 7 ||
+        // 掷出怪物的 `?` 房：`pending` 是 0，但脚下是 kind 5。
+        // §272：掷出怪物的 `?` 房 —— 那个数在观察向量第 18 格（2 = 怪物）。
+        (kind === 5 && ex.rd_run_observe(18) === 2);
+      if (isFight) {
+        if (ex.rd_run_fight_begin() !== 0) return;
+        if (ex.rd_run_fight_end() !== 0) return;
+        continue;
+      }
+    }
+    return;   // 无事可做（已结算）
   }
-  else if (pending === 7 || pending === 8) ex.rd_run_pick_event_card(0);
-  else if (kind === 1 || kind === 2 || kind === 7) { ex.rd_run_fight_begin(); ex.rd_run_fight_end(); }
-  else if (kind === 5) { ex.rd_run_fight_begin(); ex.rd_run_fight_end(); }
-  // §263: a fight pays out a **reward screen**, and a pending reward blocks the next step
-  // (`action index out of range`). The map walk has no interest in rewards, so skip them the way
-  // the Rust helper does (`rd-wasm`'s `run::tests` loops on `pending == 4` too).
-  while (ex.rd_run_pending() === 4) ex.rd_run_skip_reward();
 };
-
 const view = () => M.describeMap(io);
 
 if (ex.rd_run_start(7, 0) !== 0) {

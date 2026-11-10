@@ -1884,33 +1884,18 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
     // §285：`relic_random`（Scrap Ooze 的"a random relic"）—— **池子在内容里**，所以在这里
     // 解析成"`GainRelic` + 具体 id"，运行层只认 `relic:<id>`（它没有池）。
     // 抽样走 `pick_relic`：按稀有度权重（50/33/17）、跳过已持有的 —— 与宝箱/精英同一套。
+    // §325：**一次事件只抽一次**。选项效果与进入效果都可能写 `relic_random`，而它们是同一段
+    // 事件的同一件事 —— 各抽一次会给出两件不同的遗物（玩家只会看到两件里的一件）。
+    let mut random_relic: Option<&'static str> = None;
     if parsed[..specs.len()]
         .iter()
         .any(|(effect, _)| matches!(effect, rd_run::state::EventEffect::GainRandomRelic))
     {
-        let relics = relic_pool(content());
-        let picked = match session
-            .state
-            .pick_relic(rd_run::streams::RunStream::Event, &relics)
-        {
-            Ok(picked) => picked,
-            Err(error) => {
-                let message = describe(&error);
-                return fail(session, &message);
-            }
+        let stable = match pick_event_relic(session) {
+            Ok(stable) => stable,
+            Err(message) => return fail(session, &message),
         };
-        // id 必须借到 `'static`：`relics` 的元素来自镜像的字符串池（`Box::leak`）。
-        let stable = relics
-            .iter()
-            .find(|entry| entry.id == picked.as_str())
-            .map(|entry| entry.id);
-        let Some(stable) = stable else {
-            // 抽到了池子外的东西，或者池子里一件都没有（全持有）—— 两种都不该静默。
-            if picked.as_str().is_empty() {
-                return fail(session, "没有可给的遗物（池子空或全已持有）");
-            }
-            return fail(session, "抽到的遗物不在池子里");
-        };
+        random_relic = Some(stable);
         for entry in parsed[..specs.len()].iter_mut() {
             if matches!(entry.0, rd_run::state::EventEffect::GainRandomRelic) {
                 *entry = (rd_run::state::EventEffect::GainRelic, Some(stable));
@@ -1969,6 +1954,23 @@ pub extern "C" fn rd_run_choose(slot: i32) -> i32 {
                 else {
                     return fail(session, "进入效果的词读不出来");
                 };
+                // §325：进入效果里的 `relic_random` 与选项效果**同一件事** —— 用已经抽好的那件。
+                if matches!(effect, rd_run::state::EventEffect::GainRandomRelic) {
+                    // §325：`Search` 这类选项本身是 `nothing`，`relic_random` 在**分支目标的
+                    // 进入效果**里 —— 所以这里要能当场抽（同一段事件仍然只抽一次）。
+                    if random_relic.is_none() {
+                        match pick_event_relic(session) {
+                            Ok(stable) => random_relic = Some(stable),
+                            Err(message) => return fail(session, &message),
+                        }
+                    }
+                    let Some(stable) = random_relic else {
+                        return fail(session, "进入效果要随机遗物，但抽不出来");
+                    };
+                    entry_pool[entry_count][index] =
+                        (rd_run::state::EventEffect::GainRelic, Some(stable));
+                    continue;
+                }
                 entry_pool[entry_count][index] = (effect, named);
             }
             entry_len[entry_count] = specs.len();
@@ -2200,6 +2202,32 @@ pub extern "C" fn rd_run_pickup_card(index: i32) -> i32 {
 }
 
 /// The open event's choices, from the content.
+/// §285/§325：抽一件"随机遗物"，并把 id 借成 `'static`。
+///
+/// 池子在**内容**里（运行层没有遗物池），抽样走 `pick_relic`：按稀有度权重、跳过已持有的 ——
+/// 与宝箱/精英同一套。事件里 `relic_random` 可能出现两次（选项效果一次、分支目标的进入效果
+/// 一次），两次必须给**同一件**，所以调用方负责只在第一次调用它。
+fn pick_event_relic(
+    session: &mut RunSession,
+) -> Result<&'static str, std::string::String> {
+    let relics = relic_pool(content());
+    let picked = session
+        .state
+        .pick_relic(rd_run::streams::RunStream::Event, &relics)
+        .map_err(|error| describe(&error))?;
+    relics
+        .iter()
+        .find(|entry| entry.id == picked.as_str())
+        .map(|entry| entry.id)
+        .ok_or_else(|| {
+            if picked.as_str().is_empty() {
+                std::string::String::from("没有可给的遗物（池子空或全已持有）")
+            } else {
+                std::string::String::from("抽到的遗物不在池子里")
+            }
+        })
+}
+
 fn event_choice(slot: i32) -> Option<rd_core::content::EventOption<'static>> {
     let session = run_slot().as_ref()?;
     if slot < 0 {
@@ -8998,8 +9026,18 @@ mod tests {
     /// 各出现一次 —— 所以只有这一个助手。
     fn settle_event() {
         let mut guard = 0;
-        while rd_run_pending() == 5 && guard < 8 {
+        // §320/§324：一段事件现在可以留下**三种**待决：选牌问句（5）、
+        // 候选面板（9）、以及“欠几次改牌”的拾取通道（不改 `pending`）。
+        // 只认 5 的话，一遇到 `sensory_stone` / `augmenter` 就会停在半途，而下一步
+        // `rd_run_step` 报的是“这一格还没结算”—— 错误信息看不出真因。
+        while (rd_run_pending() == 5 || rd_run_pending() == 9) && guard < 8 {
             guard += 1;
+            if rd_run_pending() == 9 {
+                if rd_run_event_offer_take(0) != 0 {
+                    break;
+                }
+                continue;
+            }
             let mut slot = -1;
             for candidate in 0..rd_run_event_option_count() {
                 if rd_run_event_option_available(candidate) == 1 {
@@ -9016,6 +9054,15 @@ mod tests {
             }
             if rd_run_event_needs() > 0 {
                 let _ = rd_run_pick_event_card(0);
+            }
+        }
+        // 拾取欠账（`empty_cage` / `astrolabe` / `transform_choose`）：它不占 `pending`，
+        // 但不还完就不能继续走图。
+        let mut owed = 0;
+        while rd_run_pickup_picks() > 0 && owed < 8 {
+            owed += 1;
+            if rd_run_pickup_card(0) != 0 {
+                break;
             }
         }
     }
@@ -9047,10 +9094,23 @@ mod tests {
                     let _ = rd_run_skip_reward();
                 }
                 5 => settle_event(),
+                // §320：候选面板（`sensory_stone` / `the_library`）。
+                9 => {
+                    let _ = rd_run_event_offer_take(0);
+                }
                 7 | 8 => {
                     let _ = rd_run_pick_event_card(0);
                 }
                 _ => {}
+            }
+            // §325：事件可能把这一格变成一场战斗（`mushrooms` 的 `[Stomp]`、
+            // `dead_adventurer` 的伏击……）。不打完它，下一步就是“这一格还没结算”
+            // （而那句话看不出真因）。
+            if rd_run_event_fight() > 0 {
+                let _ = rd_run_fight_begin();
+                let _ = rd_run_fight_end();
+                // 打完可能回到事件的 `After` 段。
+                settle_event();
             }
             // 待决解完之后可能又出现一个新的待决（`Dream Catcher` 的奖励屏）。
             while rd_run_pending() == 4 {
@@ -9824,16 +9884,27 @@ mod tests {
             String::from_utf8(buffer).unwrap()
         };
         assert!(text.contains(" — "), "event text should read `id - body`: {text:?}");
-        for slot in 0..2 {
+        // §325：**不再假定"恰好两个选项、效果码 ≤ 10"** —— 那份假定是内容普查的副本，
+        // 加一条事件就会假红（§325 就是这样红的：一个合法的事件给出了码 16）。
+        // 这里只断言对**任何**事件都成立的契约：
+        //   * 槽数 ≥ 2，且每个槽都有标签；
+        //   * 效果码在 ABI 的闭集里（`-1` = "没有码可画"，或者 1..=16 的显式码）；
+        //   * 越过槽数就是 `-1`。
+        let count = rd_run_event_option_count();
+        assert!(count >= 2, "an event offers at least two options, got {count}");
+        for slot in 0..count {
             assert!(rd_run_event_label_len(slot) > 0, "choice {slot} has no label");
             let effect = rd_run_event_effect(slot);
-            // `1..=5` number effects, `6..=8` deck edits, `9` curse, `10` relic (§143).
             assert!(
-                (1..=10).contains(&effect),
-                "choice {slot} effect {effect} is outside the vocabulary"
+                effect == -1 || (1..=16).contains(&effect),
+                "choice {slot} effect {effect} is outside the ABI's vocabulary"
+            );
+            assert!(
+                rd_run_event_option_available(slot) == 0 || rd_run_event_option_available(slot) == 1,
+                "choice {slot}: availability is 0/1"
             );
         }
-        assert_eq!(rd_run_event_label_len(2), -1, "only two choices");
+        assert_eq!(rd_run_event_label_len(count), -1, "no slot past the count");
 
         let gold_before = rd_run_observe(4);
         let hp_before = rd_run_observe(2);
@@ -9854,7 +9925,6 @@ mod tests {
                     "the room is not paid until the card is named"
                 );
                 assert_eq!(rd_run_pick_event_card(0), 0, "finishing the pick");
-                assert_eq!(rd_run_pending(), 0, "the room is settled now");
                 if effect == 6 {
                     assert_eq!(rd_run_deck_count(), deck_before - 1, "remove shrinks the deck");
                 } else {
@@ -9867,26 +9937,35 @@ mod tests {
                 deck_before + 1,
                 "a curse goes into the deck"
             ),
-            10 => assert_eq!(rd_run_pending(), 0, "a relic needs no pick"),
-            _ => {
-                assert_eq!(rd_run_pending(), 0, "the room is settled");
-                match effect {
-                    1 => assert_eq!(
-                        rd_run_observe(2),
-                        (hp_before + amount).min(hp_max_before),
-                        "heal"
-                    ),
-                    2 => assert_eq!(rd_run_observe(4), gold_before + amount, "gold"),
-                    3 => assert_eq!(rd_run_observe(2), hp_before - amount, "damage"),
-                    4 => assert_eq!(rd_run_observe(3), hp_max_before + amount, "max hp"),
-                    5 => {
-                        assert_eq!(rd_run_observe(2), hp_before, "nothing heals");
-                        assert_eq!(rd_run_observe(4), gold_before, "nothing pays");
-                    }
-                    other => panic!("unexpected effect code {other}"),
-                }
+            // §325：**简单数字效果**仍然在这里逐个数（这是这条判据最初的目的）；
+            // 其它码（遗物/随机遗物/百分比/区间金币/无码）由各自事件的判据覆盖 ——
+            // 在这里逐个写一遍只会把一份内容普查抄成第二份。
+            1 => assert_eq!(
+                rd_run_observe(2),
+                (hp_before + amount).min(hp_max_before),
+                "heal"
+            ),
+            2 => assert_eq!(rd_run_observe(4), gold_before + amount, "gold"),
+            3 => assert_eq!(rd_run_observe(2), hp_before - amount, "damage"),
+            4 => assert_eq!(rd_run_observe(3), hp_max_before + amount, "max hp"),
+            5 => {
+                assert_eq!(rd_run_observe(2), hp_before, "nothing heals");
+                assert_eq!(rd_run_observe(4), gold_before, "nothing pays");
             }
+            _ => {}
         }
+        // §325：选完可能还有**下一段**（`[Leave]`）、候选、欠账或一场事件战斗。
+        // 一直收到节点结算 —— 这条判据要的是"这一段事件能走完"，不是"一步就完"。
+        settle_event();
+        if rd_run_event_fight() > 0 {
+            assert_eq!(rd_run_fight_begin(), 0, "{}", run_error_text());
+            assert_eq!(rd_run_fight_end(), 0, "{}", run_error_text());
+            settle_event();
+        }
+        while rd_run_pending() == 4 {
+            assert_eq!(rd_run_skip_reward(), 0, "{}", run_error_text());
+        }
+        assert_eq!(rd_run_pending(), 0, "the event is over");
         assert_eq!(rd_run_node_resolved(), 1, "the room paid once");
         // A second choice is a **wrong-phase** refusal (-2 with text), not "no such
         // choice" (-1): the event is still on record, it is the phase that is gone.
@@ -10562,6 +10641,102 @@ mod tests {
 
     /// §286：**事件把房间变成一场战斗** —— `[Fight]` 之后 `fight_begin` 必须接受，并且按
     /// **精英**结算。
+    /// 站在 `?` 房上、手动开 `event`，返回种子；开不起来就换下一个种子。
+    fn open_event_at(event: &str, entry: &str, range: std::ops::Range<i32>) -> i32 {
+        for seed in range {
+            if !walk_until_unknown(seed) || rd_run_begin_node() != 0 {
+                continue;
+            }
+            if run_slot()
+                .as_mut()
+                .expect("a run")
+                .state
+                .begin_event(event, entry)
+                .is_ok()
+            {
+                return seed;
+            }
+        }
+        panic!("no `?` room produced `{event}` in the range");
+    }
+
+    /// §325：`big_fish` 的 `[Box]` —— 随机遗物 + `Regret`。
+    #[test]
+    fn big_fish_box_pays_a_relic_and_a_regret() {
+        let seed = open_event_at("big_fish", "big_fish", 0..2000);
+        let relics_before = run_slot().as_ref().expect("a run").state.relics().len();
+        assert_eq!(rd_run_choose(2), 0, "seed {seed}: Box -- {}", run_error_text());
+        let state = &run_slot().as_ref().expect("a run").state;
+        assert_eq!(state.relics().len(), relics_before + 1, "seed {seed}: a random relic");
+        assert_eq!(
+            state.deck().iter().filter(|card| card.as_str() == "regret").count(),
+            1,
+            "seed {seed}: and a Regret"
+        );
+        // Wiki：三个选项之后都给一个 `[Leave]`。
+        assert_eq!(rd_run_event_option_count(), 1, "seed {seed}: the leave screen");
+    }
+
+    /// §325：`living_wall` 的 `[Forget]` —— 进改牌问句，选一张后牌组 -1。
+    #[test]
+    fn living_wall_forget_asks_which_card() {
+        let seed = open_event_at("living_wall", "living_wall", 0..2000);
+        let before = rd_run_deck_count();
+        assert_eq!(rd_run_choose(0), 0, "seed {seed}: Forget -- {}", run_error_text());
+        assert_eq!(
+            run_slot().as_ref().expect("a run").state.pending(),
+            rd_run::state::Pending::EventCard,
+            "seed {seed}: it asks which card"
+        );
+        assert_eq!(rd_run_pick_event_card(0), 0, "seed {seed}: {}", run_error_text());
+        assert_eq!(rd_run_deck_count(), before - 1, "seed {seed}: one card removed");
+    }
+
+    /// §325：`mushrooms` 的 `[Stomp]` —— **3 只** Fungus Beast，战后拿 `odd_mushroom`。
+    #[test]
+    fn mushrooms_stomp_fights_three_fungi_and_pays_the_odd_mushroom() {
+        let seed = open_event_at("mushrooms", "mushrooms", 0..2000);
+        assert_eq!(rd_run_choose(0), 0, "seed {seed}: Stomp -- {}", run_error_text());
+        assert_eq!(rd_run_event_fight(), 1, "seed {seed}: a normal fight");
+        assert_eq!(rd_run_fight_begin(), 0, "seed {seed}: {}", run_error_text());
+        let mut names: Vec<String> = Vec::new();
+        let mut index = 0;
+        while rd_env_enemy_name_len(index) >= 0 {
+            let n = rd_env_enemy_name_len(index);
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_env_enemy_name_into(index, buffer.as_mut_ptr()) };
+            names.push(String::from_utf8(buffer).unwrap_or_default());
+            index += 1;
+        }
+        assert_eq!(names.len(), 3, "seed {seed}: three beasts, got {names:?}");
+        assert!(
+            names.iter().all(|name| name.to_ascii_lowercase().contains("fungi")),
+            "seed {seed}: all three are Fungi Beasts, got {names:?}"
+        );
+    }
+
+    /// §325：`mushrooms` 的 `[Eat]` —— 回 25% 上限 + `Parasite`。
+    #[test]
+    fn mushrooms_eat_heals_and_infects() {
+        let seed = open_event_at("mushrooms", "mushrooms", 0..2000);
+        let before = *run_slot().as_ref().expect("a run").state;
+        // 先掉点血，否则"回了 25%"看不出来。
+        run_slot().as_mut().expect("a run").state.adjust_health(-20);
+        let hurt = run_slot().as_ref().expect("a run").state.health();
+        assert_eq!(rd_run_choose(1), 0, "seed {seed}: Eat -- {}", run_error_text());
+        let state = &run_slot().as_ref().expect("a run").state;
+        assert_eq!(
+            state.health(),
+            hurt + before.health_max() * 25 / 100,
+            "seed {seed}: 25% of max HP"
+        );
+        assert_eq!(
+            state.deck().iter().filter(|card| card.as_str() == "parasite").count(),
+            1,
+            "seed {seed}: infected"
+        );
+    }
+
     /// §324：`augmenter` —— 三个选项各走一遍（`?` 房上手动开事件）。
     ///
     /// ⚠️ 这三条**必须单线程跑**（验收就是 `--test-threads=1`）：
@@ -10657,8 +10832,26 @@ mod tests {
             break;
         }
         let seed = seed_found.expect("no `?` room in 2000 seeds");
-        // 0 = `[Pay]`、1 = `[Fight!]`。
         assert_eq!(rd_run_choose(1), 0, "seed {seed}: Fight! -- {}", run_error_text());
+        // §325：**池名与遭遇 id 写成字面量** —— 这两个串是「这条判据证明了这个实体」
+        // 的唯一记录（覆盖矩阵按测试体里的字面量建证据列）。顺带钉住：池里就是这一条。
+        assert_eq!(
+            run_slot()
+                .as_ref()
+                .expect("a run")
+                .state
+                .event_fight_pool(),
+            "MaskedBandits",
+            "seed {seed}: the event names its own pool"
+        );
+        let bandits = content()
+            .encounter_pool("MaskedBandits")
+            .expect("the pool");
+        assert_eq!(
+            bandits[0], "enc_masked_bandits",
+            "seed {seed}: the pool holds the three-bandit encounter"
+        );
+        // 0 = `[Pay]`、1 = `[Fight!]`。
         assert_eq!(
             rd_run_event_fight(),
             1,

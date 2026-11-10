@@ -71731,6 +71731,101 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_three_fungi_beasts"
+      },
+      "Enemies": [
+        {
+          "Id": "fungi_beast",
+          "MaxHealth": 22,
+          "Actions": [
+            {
+              "value": "fungi_beast.bite"
+            },
+            {
+              "value": "fungi_beast.grow"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Fungi Beast",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 24
+            }
+          ]
+        },
+        {
+          "Id": "fungi_beast",
+          "MaxHealth": 22,
+          "Actions": [
+            {
+              "value": "fungi_beast.bite"
+            },
+            {
+              "value": "fungi_beast.grow"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Fungi Beast",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 24
+            }
+          ]
+        },
+        {
+          "Id": "fungi_beast",
+          "MaxHealth": 22,
+          "Actions": [
+            {
+              "value": "fungi_beast.bite"
+            },
+            {
+              "value": "fungi_beast.grow"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Fungi Beast",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 24
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -78294,6 +78389,11 @@
       {
         "Id": "enc_masked_bandits"
       }
+    ],
+    "Mushrooms": [
+      {
+        "Id": "enc_three_fungi_beasts"
+      }
     ]
   },
   "Relics": [
@@ -79779,6 +79879,21 @@
       "Id": "augmenter",
       "NameKey": "Augmenter",
       "Entry": "augmenter"
+    },
+    {
+      "Id": "big_fish",
+      "NameKey": "Big Fish",
+      "Entry": "big_fish"
+    },
+    {
+      "Id": "living_wall",
+      "NameKey": "Living Wall",
+      "Entry": "living_wall"
+    },
+    {
+      "Id": "mushrooms",
+      "NameKey": "Mushrooms",
+      "Entry": "mushrooms"
     }
   ],
   "Potions": [
@@ -80078,6 +80193,16 @@
       },
       {
         "Id": "dead_adventurer",
+        "MinFloor": 7
+      },
+      {
+        "Id": "big_fish"
+      },
+      {
+        "Id": "living_wall"
+      },
+      {
+        "Id": "mushrooms",
         "MinFloor": 7
       }
     ],
@@ -83397,6 +83522,179 @@
           "Effects": [
             {
               "Effect": "relic:mutagenic_strength",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "big_fish",
+      "TextKey": "A banana, a donut and a box float in the corridor, tied to strings from holes in the ceiling. Somewhere above, something giggles.",
+      "Options": [
+        {
+          "Label": "Banana (heal 1/3)",
+          "Effects": [
+            {
+              "Effect": "heal_pct:33",
+              "Amount": 0
+            }
+          ],
+          "Next": "big_fish.after"
+        },
+        {
+          "Label": "Donut (max HP +5)",
+          "Effects": [
+            {
+              "Effect": "max_hp",
+              "Amount": 5
+            }
+          ],
+          "Next": "big_fish.after"
+        },
+        {
+          "Label": "Box (random relic + Regret)",
+          "Effects": [
+            {
+              "Effect": "relic_random",
+              "Amount": 0
+            },
+            {
+              "Effect": "curse:regret",
+              "Amount": 1
+            }
+          ],
+          "Next": "big_fish.after"
+        }
+      ]
+    },
+    {
+      "Id": "big_fish.after",
+      "TextKey": "Whatever you picked, the strings go slack and the cackling stops.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "living_wall",
+      "TextKey": "Walls slam down from the ceiling. Three faces form in the stone: \"Forget what you know.\" \"I require change.\" \"You must grow.\"",
+      "Options": [
+        {
+          "Label": "Forget (remove a card)",
+          "Effects": [
+            {
+              "Effect": "remove_card",
+              "Amount": 0
+            }
+          ],
+          "Next": "living_wall.after"
+        },
+        {
+          "Label": "Change (transform a card)",
+          "Effects": [
+            {
+              "Effect": "transform_card",
+              "Amount": 0
+            }
+          ],
+          "Next": "living_wall.after"
+        },
+        {
+          "Label": "Grow (upgrade a card)",
+          "Effects": [
+            {
+              "Effect": "upgrade_card",
+              "Amount": 0
+            }
+          ],
+          "Next": "living_wall.after"
+        }
+      ]
+    },
+    {
+      "Id": "living_wall.after",
+      "TextKey": "Satisfied, the faces sink back into the stone and a path opens.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "mushrooms",
+      "TextKey": "A corridor of hypnotizing colored mushrooms. You cannot name a single one of them, and yet you are suddenly very hungry.",
+      "Options": [
+        {
+          "Label": "Stomp (fight 3 Fungi Beasts)",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Fight": "monster",
+          "Encounter": "Mushrooms",
+          "After": "mushrooms.after",
+          "Next": ""
+        },
+        {
+          "Label": "Eat (heal 25%, Parasite)",
+          "Effects": [
+            {
+              "Effect": "heal_pct:25",
+              "Amount": 0
+            },
+            {
+              "Effect": "curse:parasite",
+              "Amount": 1
+            }
+          ],
+          "Next": "mushrooms.ate"
+        }
+      ]
+    },
+    {
+      "Id": "mushrooms.after",
+      "TextKey": "The rodents stop moving. One of the mushrooms on them is oddly familiar, and it fits in your pocket.",
+      "Options": [
+        {
+          "Label": "Take the Odd Mushroom",
+          "Effects": [
+            {
+              "Effect": "relic:odd_mushroom",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "mushrooms.ate",
+      "TextKey": "You wake up some time later. Everything looks a little larger.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
               "Amount": 0
             }
           ],

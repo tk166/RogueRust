@@ -22877,3 +22877,42 @@ J.A.X. 真的进牌组、`[Become Test Subject]` 欠 2 次且 `rd_run_pickup_car
 数字：卡 **295**（155 + 140，镜像 186,856 B）、遗物 **153**、事件 **32**（三幕池
 10+15+10 = 35）、`rd-core 811 / rd-run 212 / rd-wasm 170`、units 1193（下限 1187 → 1193）。
 **Act 2 事件 11/13 → 12/13**（第 13 条 `cursed_tome` 因 `necronomicon` 明确不做而不做）。
+
+## §325 Act 1 三条：`big_fish` / `living_wall` / `mushrooms`
+
+| 事件 | 内容 |
+|---|---|
+| `big_fish` | `[Banana]` `heal_pct:33` / `[Donut]` `max_hp:5` / `[Box]` `relic_random` + `curse:regret`，三个都去 `[Leave]` |
+| `living_wall` | `[Forget]` / `[Change]` / `[Grow]` —— 三个既有的 `DeckChange`（Remove / Transform / Upgrade） |
+| `mushrooms` | 池子 `MinFloor: 7`；`[Stomp]` 打 **3 只 Fungus Beast**（新遭遇 `enc_three_fungi_beasts`）→ `After` 段给 `relic:odd_mushroom`；`[Eat]` `heal_pct:25` + `curse:parasite` |
+
+`big_fish` 与 `living_wall` 是**纯内容**。`mushrooms` 需要三样：
+
+1. **三只真菌的遭遇**（事件专属，登记进 `INV_EVENT_ONLY`），
+2. **事件池名的 hop 拼写**（`"Mushrooms" => "EncounterTables.Mushrooms"`，`rd-core` 两处字面量），
+3. `odd_mushroom` —— **早就实现了**（§264 的 `OverrideScope: Self` 易伤幅值改写：
+   "When Vulnerable, take 25% more attack damage rather than 50%"），一句内核都没改。
+
+### 两个连带修好的共用助手
+
+加内容之后 **两条既有判据红了**，两条都是"助手只认识旧世界的形状"：
+
+1. `settle_here` / `settle_event` 只认 `Pending::Event`（5）与选牌（7/8）。§320 的候选面板（9）
+   与§324 的"欠几次改牌"通道都不认识 ⇒ 走到一半，下一步 `rd_run_step` 报的是"这一格还没结算"
+   （那句话看不出真因）。同时补上**事件变成战斗**那一条（`mushrooms` 的 `[Stomp]`、
+   `dead_adventurer` 的伏击）—— 不打完它，节点永远不结算。
+2. **`an_unknown_room_opens_an_event_and_resolves_it` 把内容普查抄成了断言**：
+   "恰好两个选项、效果码 ≤ 10"。加一条正常事件（合法地给出码 16）它就假红。改成对**任何**
+   事件都成立的契约：槽数 ≥ 2、每槽有标签、效果码 ∈ `-1 ∪ 1..=16`、越界为 `-1`；
+   简单数字效果（1..=5）仍逐个验，其余码交给各自事件的判据。
+
+### 已知偏差（如实记）
+
+`parasite` 的**程序是空的**："被变形/移除时 -3 上限"**没有**实现。理论上它属于
+`remove_at`（牌离开牌组的唯一入口），但把卡 id 写进 `rd-run` 会违反 §133 的分层
+（运行层不读内容），所以这条先记成偏差 —— 现在它是一张纯 inert 的不可打出诅咒。
+
+数字：事件 **35**（三幕池 13+15+10 = 38）、遭遇 **64**、镜像 188,528 · core 151,092 B、
+`rd-core 811 / rd-run 212 / rd-wasm 174`、units 1197（下限 1193 → 1197）。
+**Act 1 事件 8/11 → 11/11**；三幕合计 **28/31**（余下三条：`cursed_tome` 明确不做、
+`secret_portal` 与 `designer_in_spire` 不在本版清单口径内）。

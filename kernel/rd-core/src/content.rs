@@ -3071,6 +3071,8 @@ impl<'a> Content<'a> {
             "MysteriousSphere" => "EncounterTables.MysteriousSphere",
             // §323：`Masked Bandits` 的 `[Fight!]` 用事件自己的池（三名 bandit）。
             "MaskedBandits" => "EncounterTables.MaskedBandits",
+            // §325：`Hypnotizing Colored Mushrooms` 的 `[Stomp]`（3 只 Fungus Beast）。
+            "Mushrooms" => "EncounterTables.Mushrooms",
             _ => return None,
         };
         self.id_pool("EncounterTables", pool, hop)
@@ -3321,6 +3323,8 @@ impl<'a> Content<'a> {
             "MysteriousSphere" => "EncounterTables.MysteriousSphere",
             // §323：`Masked Bandits` 的 `[Fight!]` 用事件自己的池（三名 bandit）。
             "MaskedBandits" => "EncounterTables.MaskedBandits",
+            // §325：`Hypnotizing Colored Mushrooms` 的 `[Stomp]`（3 只 Fungus Beast）。
+            "Mushrooms" => "EncounterTables.Mushrooms",
             _ => return None,
         };
         let root = self.root_by_name("EncounterTables")?;
@@ -5292,10 +5296,12 @@ mod tests {
         // §287：**事件**的池。它与上面九个的性质不同 —— 事件可以**复用**本幕的遭遇
         // （`Dead Adventurer` 的伏击就是"三个精英之一"，其中一个换了开场），所以它不参与
         // "一个遭遇只属于一个池"那条不变式；它参与的是"每个 ENCT 行都可达"。
-        const EVENT_POOLS: [&str; 5] = ["EliteEvent", "ColosseumSlavers", "ColosseumChampions",
+        const EVENT_POOLS: [&str; 6] = ["EliteEvent", "ColosseumSlavers", "ColosseumChampions",
                                         "MysteriousSphere",
                                         // §323：`Masked Bandits` 的 `[Fight!]`。
-                                        "MaskedBandits"];
+                                        "MaskedBandits",
+                                        // §325：`Hypnotizing Colored Mushrooms` 的 `[Stomp]`。
+                                        "Mushrooms"];
         let mut seen: Vec<&str> = Vec::new();
         for name in POOLS {
             let pool = content
@@ -5497,13 +5503,14 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            32,
+            35,
             "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
              `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`，§290 补了 `the_nest`，
              §318 补了 `winding_halls` / `mysterious_sphere`（`scrap_pile` 改成 Scrap Ooze 的 9 段链），
              §319 补了 `falling`，§320 补了 `the_library` / `sensory_stone`，§321 补了 `mind_bloom` /
              `tomb_of_lord_red_mask`，§322 补了 `council_of_ghosts` / `pleading_vagrant` /
-             `old_beggar` / `vampires`，§323 补了 `masked_bandits`，§324 补了 `augmenter`。pools 的**位次**比
+             `old_beggar` / `vampires`，§323 补了 `masked_bandits`，§324 补了 `augmenter`，§325 补了 `big_fish` / `living_wall` /
+             `mushrooms`。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5667,6 +5674,8 @@ mod tests {
                 "ancient_forge",
                 "ancient_writing",
                 "augmenter",
+                // §325
+                "big_fish",
                 // §322
                 "council_of_ghosts",
                 "dead_adventurer",
@@ -5674,9 +5683,12 @@ mod tests {
                 "falling",
                 "forgotten_altar",
                 "golden_idol",
+                // §325
+                "living_wall",
                 // §321
                 "masked_bandits",
                 "mind_bloom",
+                "mushrooms",
                 "mysterious_sphere",
                 // §322
                 "old_beggar",
@@ -5912,14 +5924,25 @@ mod tests {
                 ids.contains(&"dead_adventurer"),
                 "floor 7 must offer Dead Adventurer: {ids:?}"
             );
-            // 门槛只影响那一个：其余事件在两层都在（否则"门槛"其实是"整张表变短了"）。
+            // §325：第 7 层起的事件现在有**两**个：`dead_adventurer`（§288）与
+            // `mushrooms`（wiki `Hypnotizing Colored Mushrooms`: "only appear if the player is on
+            // floor 7 or above"）。门槛只影响这两个：其余事件在两层都在
+            // （否则"门槛"其实是"整张表变短了"）。
             let all: std::vec::Vec<&str> =
                 content.event_pool("Events").expect("the whole pool")
                     .iter().filter(|id| !id.is_empty()).copied().collect();
             assert_eq!(
                 all.len(),
-                at_six.len() + 1,
-                "exactly one event is gated: {all:?} vs {at_six:?}"
+                at_six.len() + 2,
+                "exactly two events are gated: {all:?} vs {at_six:?}"
+            );
+            assert!(
+                ids.contains(&"mushrooms"),
+                "floor 7 must offer the mushrooms: {ids:?}"
+            );
+            assert!(
+                !at_six.contains(&"mushrooms"),
+                "floor 6 must not offer them: {at_six:?}"
             );
             for id in &at_six {
                 assert!(all.contains(id), "{id} must also be on the unfiltered list");
