@@ -1137,11 +1137,15 @@ INV_ACTIONS = {
     "orb_walker.laser": ("Attack", [("damage", 10, "event"),
                                     ("status", "standard.weak", 2, "event")]),
     "orb_walker.claw": ("Attack", [("damage", 15, "event")]),
-    "the_champ.heavy_slash": ("Attack", [("damage", 16, "event")]),
+    # §330：`champ_exec` 是二阶段"两招一次 Execute"的循环计数器（相对 +1），见 port-plan §330。
+    "the_champ.heavy_slash": ("Attack", [("damage", 16, "event"),
+                                         ("counter", "champ_exec", 1, True, "source")]),
     # §194: Metallicize is 5 (wiki); A9 -> 18 Block / 6, A19 -> 20 / 7.
     "the_champ.defensive_stance": ("Defend", [("block", 15, "source"),
-                                              ("status", "standard.metallicize", 5, "source")]),
-    "the_champ.execute": ("Attack", [("damage", 10, "event"), ("damage", 10, "event")]),
+                                              ("status", "standard.metallicize", 5, "source"),
+                                        ("counter", "champ_exec", 1, True, "source")]),
+    "the_champ.execute": ("Attack", [("damage", 10, "event"), ("damage", 10, "event"),
+                                     ("counter", "champ_exec", 0, False, "source")]),
     # §194: Haste -- "when reduced to below half HP, heals to 50% (A19: also 32 Block), once".
     "time_eater.haste": ("Buff", [("heal", ("expr", "max"), "source"),
                                   ("cleanse", "source"),
@@ -1318,8 +1322,10 @@ INV_ACTIONS = {
     #     Taunt 2 Weak + 2 Vuln, Anger clears debuffs + 6 Str) -----------------------------------
     "the_champ.face_slap": ("Attack", [("damage", 12, "event"),
                                        ("status", "standard.frail", 2, "event"),
-                                       ("status", "standard.vulnerable", 2, "event")]),
-    "the_champ.gloat": ("Buff", [("status", "standard.strength", 2, "source")]),
+                                       ("status", "standard.vulnerable", 2, "event"),
+                                        ("counter", "champ_exec", 1, True, "source")]),
+    "the_champ.gloat": ("Buff", [("status", "standard.strength", 2, "source"),
+                                        ("counter", "champ_exec", 1, True, "source")]),
     "the_champ.taunt": ("Debuff", [("status", "standard.weak", 2, "event"),
                                    ("status", "standard.vulnerable", 2, "event")]),
     "the_champ.anger": ("Buff", [("modify", "standard.weak", -99, "source"),
@@ -1327,7 +1333,7 @@ INV_ACTIONS = {
                                  ("modify", "standard.frail", -99, "source"),
                                  ("status", "standard.strength", 6, "source"),
                                  ("counter", "champ_phase", 1, False, "source"),
-                                 ("counter", "champ_exec", 0, False, "source")]),
+                                 ("counter", "champ_exec", -1, False, "source")]),
     # --- Bronze Automaton (wiki: Flail 7x2, Boost 3 Str + 9 Block, HYPER BEAM 45, Stunned) --------
     # §195.6: "Spawn Orbs" is two summons (two nodes, because each minted combatant needs its own id).
     "bronze_automaton.spawn_orbs": ("Special", [("spawn", "bronze_orb", 52),
@@ -2614,6 +2620,7 @@ def check_cards_and_actions(doc):
     # §328：上一条比的是**人抄的清单**；这一条比的是 **wiki 快照**里的 
     # ——两份独立来源，一份只能证明它自己。
     check_wiki_asc_levels(doc)
+    check_unique_ids(doc)
     check_ascension_health(doc)
     check_starting_status_ascension(doc)
     check_spawn_rolls(doc)
@@ -3366,15 +3373,9 @@ def check_ascension_health(doc):
 
 # §328: 升档等级**由 wiki 快照驱动**的那一份（`INV_ASC_VARIANTS` 是人抄的清单，这一份读 dump）。
 #
-# 键是动作 id，值是**理由**（空字符串不允许：白名单条目必须解释"哪一档由什么机制表达"）。
-INV_ASC_LEVELS_BY_OTHER_MEANS = {
-    'darkling.nip':
-        "A2 lives in the encounter's `Rolls` (`roll.nip` 9-13), not in a `ProgramAsc` row",
-    'book_of_stabbing.multi_stab':
-        "A18 is the `book_stab_single_bump` counter on the encounter, not a `ProgramAsc` row",
-    'the_guardian.twin_slam':
-        "A9/A19 are the `mode_shift_budget` counter rows on the encounter, not `ProgramAsc`",
-}
+# §330：白名单（"这一档由别的机制表达"）挪到 `native/asc_other_means.py` —— 因为
+# `native/audit_asc_gap.py` 也要读同一张表，而"同一个词表被两处认识就一定漂"。
+from asc_other_means import BY_OTHER_MEANS as INV_ASC_LEVELS_BY_OTHER_MEANS  # noqa: E402
 
 WIKI_ASC_DIR = "native/wiki_asc"
 
@@ -3478,6 +3479,46 @@ def check_wiki_asc_levels(doc):
              % (gap, sorted(have)))
     ok("ascension levels from the wiki", "%d intent rows compared, %d missing"
        % (checked, problems))
+
+
+# §330: 每个内容段的 `Id` 都必须唯一。
+#
+# 键是"段名 → 取 id 的方式"；值只用来打印。`Cards` 的 id 是裸串，`Monsters`/`Encounters`
+# 是 `{"Value": …}`，所以两种形状都要认（这也是 §1.2 那条"两种 Id 形状"的延续）。
+def check_unique_ids(doc):
+    """§330: 同一个段里 `Id` 不许出现两次。"""
+    import collections
+    print("[7g] unique ids per section (port-plan.md §330)")
+
+    def ident(row):
+        raw = row.get("Id")
+        if isinstance(raw, dict):
+            return raw.get("Value")
+        return raw
+
+    sections = (
+        ("Cards", doc.get("Cards")),
+        ("Statuses", doc.get("Statuses")),
+        ("Relics", doc.get("Relics")),
+        ("Potions", doc.get("Potions")),
+        ("EnemyActions", doc.get("EnemyActions")),
+        ("Monsters", doc.get("Monsters")),
+        ("Encounters", doc.get("Encounters")),
+        ("EventNodes", doc.get("EventNodes")),
+    )
+    total = 0
+    problems = 0
+    for name, rows in sections:
+        if not rows:
+            continue
+        counts = collections.Counter(ident(row) for row in rows)
+        total += len(counts)
+        for key, count in sorted(counts.items(), key=lambda kv: str(kv[0])):
+            if count > 1:
+                problems += 1
+                fail("unique.%s" % name, "%r appears %d times" % (key, count))
+    ok("unique ids", "%d ids over %d sections, %d duplicated"
+       % (total, sum(1 for _name, rows in sections if rows), problems))
 
 
 def check_ascension_variants(doc):

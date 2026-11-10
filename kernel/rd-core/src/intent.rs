@@ -2081,15 +2081,59 @@ mod tests {
             boss.health_current = boss.health_max / 2;
         }
         assert_eq!(pick(&mut state, 6), "the_champ.anger", "phase two opens with Anger");
-        // Anger sets the two counters; the fight would run the program, so set them the same way.
+
+        // §330 —— **写入侧**：这些计数器必须由**程序**写，不是判据手设的。
+        //
+        // 旧版在这里手设 `champ_exec`，于是"`the_champ.execute` 从不回写它 ⇒ 二阶段每回合
+        // 都 Execute"这个 bug 活了很久（wiki 的循环是 Anger → Execute → 随机 → 随机 → Execute）。
+        let row_of = |action_id: &str| {
+            u32::from(
+                content
+                    .lookup_in(action_id, crate::content::EK_EACTION)
+                    .unwrap_or_else(|| panic!("{action_id}"))
+                    .index,
+            )
+        };
+        let run_fresh = |action_id: &str, before: i32| {
+            let mut fresh = arena("the_champ");
+            set_counter(&mut fresh, &actor, "champ_exec", before);
+            execute_action(&mut fresh, &content, &actor, row_of(action_id), Some(cid("hero")))
+                .unwrap_or_else(|e| panic!("{action_id}: {e:?}"));
+            crate::exec::drain(&mut fresh, Some(&content), None).expect("drain");
+            fresh
+                .combatant(&actor)
+                .expect("the champ")
+                .counters()
+                .iter()
+                .find(|c| c.key.as_str() == "champ_exec")
+                .map_or(0, |c| c.value)
+        };
+
+        // Anger 欠一次 Execute；Execute 用掉它并从 0 重新数；四个随机招各 +1。
+        assert_eq!(run_fresh("the_champ.anger", 7), -1, "Anger owes an Execute");
+        assert_eq!(run_fresh("the_champ.execute", -1), 0, "Execute clears the debt");
+        for action_id in [
+            "the_champ.heavy_slash",
+            "the_champ.face_slap",
+            "the_champ.defensive_stance",
+            "the_champ.gloat",
+        ] {
+            assert_eq!(run_fresh(action_id, 1), 2, "{action_id} counts toward the cycle");
+        }
+
+        // §330 —— **读取侧**：1 还不该 Execute，2 必须 Execute。
         set_counter(&mut state, &actor, "champ_phase", 1);
-        set_counter(&mut state, &actor, "champ_exec", 0);
-        assert_eq!(pick(&mut state, 7), "the_champ.execute", "then Execute");
         set_counter(&mut state, &actor, "champ_exec", 1);
-        // ⚠️ 第 8 回合**还是** Taunt（每 4 回合一次），所以"循环恢复"要看第 9 回合:
-        // `(9-1) % 4 = 0` ⇒ Heavy Slash。这一条是负控的旁证 —— 少写一个数就会在 8 上撞 Taunt。
-        assert_eq!(pick(&mut state, 8), "the_champ.taunt", "every 4th round, phase two or not");
-        assert_eq!(pick(&mut state, 9), "the_champ.heavy_slash", "afterwards the cycle resumes");
+        assert_ne!(pick(&mut state, 9), "the_champ.execute", "one random move is not enough");
+        set_counter(&mut state, &actor, "champ_exec", 2);
+        assert_eq!(
+            pick(&mut state, 10),
+            "the_champ.execute",
+            "after two random moves the cycle owes an Execute"
+        );
+        // 欠账（-1）也必须是 Execute —— 那是 Anger 之后的那一次。
+        set_counter(&mut state, &actor, "champ_exec", -1);
+        assert_eq!(pick(&mut state, 11), "the_champ.execute", "the owed Execute comes first");
     }
 
     // ---------------------------------------------------------------- 补丁工具

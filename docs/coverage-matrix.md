@@ -36,15 +36,15 @@
 
 | 类别 | 行数 | TestNamed | HarnessOnly | 两层都没有 | SourceTie:wiki | SourceTie:spec | 有偏差声明 | orphan |
 |---|---|---|---|---|---|---|---|---|
-| 怪物 | 61 | 54 | 0 | 7 | 52 | 9 | 14 | 0 |
-| 敌人动作 | 166 | 86 | 80 | 0 | 143 | 23 | 59 | 0 |
+| 怪物 | 61 | 54 | 0 | 7 | 52 | 9 | 7 | 0 |
+| 敌人动作 | 166 | 87 | 79 | 0 | 143 | 23 | 59 | 0 |
 | 卡牌 | 295 | 167 | 128 | 0 | 281 | 14 | 18 | 0 |
 | 状态 | 148 | 137 | 6 | 5 | 0 | 148 | 1 | 0 |
 | 遭遇 | 64 | 46 | 18 | 0 | 0 | 0 | 0 | 0 |
 | 事件 | 35 | 35 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 遗物 | 152 | 135 | 17 | 0 | 0 | 0 | 0 | 0 |
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
-| **合计** | 954 | 693 | 249 | 12 | 476 | 194 | 92 | 0 |
+| **合计** | 954 | 694 | 248 | 12 | 476 | 194 | 85 | 0 |
 
 扫描到的具名测试：**1207** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
@@ -59,20 +59,20 @@
 | acid_slime_l | yes | — | — | wiki:wiki_asc/acid_slime.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS |
 | acid_slime_m | yes | a_large_slime_splits_at_half_health_with_its_current_hp, a_split_spawns_two_combatants_when_the_boss_dies …(+2) | — | wiki:wiki_asc/acid_slime.txt | — | §276/§323/INV_ASC_HP+INV_MONSTERS/a_large_slime_splits_at_half_health_with_its_current_hp |
 | acid_slime_s | yes | — | — | wiki:wiki_asc/acid_slime.txt | — | §276/§323/INV_ASC_HP+INV_MONSTERS |
-| awakened_one | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, the_awakened_one_draws_phase_one_by_weight_and_flips_on_the_guard …(+4) | — | wiki:wiki_asc/awakened_one.txt | gap §H: 二阶段"不能连续三次 Tackle/Sludge"未做（规则预算 8 条已满）；Regenerate/Curiosity 层数不随 A19 变 | §195.8/§282/INV_ASC_HP+INV_MONSTERS/the_awakened_one_survives_its_first_death_and_then_really_dies |
+| awakened_one | yes | the_awakened_one_survives_its_first_death_and_then_really_dies, the_awakened_one_draws_phase_one_by_weight_and_flips_on_the_guard …(+4) | — | wiki:wiki_asc/awakened_one.txt | gap §H: ⚠️ `Curiosity` 的触发器（`card.hasTag.power`）在本内容里永不触发 —— 因为卡池 0 张 `power` 牌（§A.1 的观者缺口） | §195.8/§282/INV_ASC_HP+INV_MONSTERS/the_awakened_one_survives_its_first_death_and_then_really_dies |
 | bear | yes | masked_bandits_fight_brings_three_named_bandits | — | spec:INV_ASC_HP+INV_MONSTERS | — | §323/INV_ASC_HP+INV_MONSTERS/masked_bandits_fight_brings_three_named_bandits |
 | blue_slaver | yes | the_five_elite_encounters_match_the_wiki_numbers, the_act_one_hard_pool_encounters_match_the_wiki_numbers …(+2) | — | wiki:wiki_asc/slavers.txt | — | §323/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
 | book_of_stabbing | yes | the_five_elite_encounters_match_the_wiki_numbers, book_of_stabbing_multistab_starts_at_two_hits | — | wiki:wiki_asc/book_of_stabbing.txt | — | §173/§257/INV_ASC_HP+INV_MONSTERS+INV_SPAWN_COUNTERS/the_five_elite_encounters_match_the_wiki_numbers |
-| bronze_automaton | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+5) | — | wiki:wiki_asc/bronze_automaton.txt | gap §H: Orb 的 `Stasis` 用"最高稀有度"（并列随机），与 wiki 一致；"同一招不能三次"已做 | §194/§282/INV_ASC_HP+INV_MONSTERS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
-| bronze_orb | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, a_minion_is_not_on_the_field_until_its_summon_lands …(+1) | — | wiki:wiki_asc/bronze_automaton.txt | gap §H: Orb 的 `Stasis` 用"最高稀有度"（并列随机），与 wiki 一致；"同一招不能三次"已做 | §195.6/§282/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
+| bronze_automaton | yes | stasis_steals_the_best_card_and_returns_it_when_the_orb_dies, a_96_card_pile_still_reaches_the_best_card_at_the_end …(+5) | — | wiki:wiki_asc/bronze_automaton.txt | — | §194/§282/INV_ASC_HP+INV_MONSTERS/stasis_steals_the_best_card_and_returns_it_when_the_orb_dies |
+| bronze_orb | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, a_minion_is_not_on_the_field_until_its_summon_lands …(+1) | — | wiki:wiki_asc/bronze_automaton.txt | — | §195.6/§282/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | byrd | yes | three_byrds_each_start_with_their_own_flying, flying_halves_attack_damage_and_loses_a_stack_per_hit | — | wiki:wiki_asc/byrd.txt | — | §313/§314/INV_ASC_HP+INV_MONSTERS/three_byrds_each_start_with_their_own_flying |
 | centurion | yes | protect_gives_the_block_to_the_mystic_even_when_the_centurion_is_hurt, protect_falls_back_to_the_centurion_when_the_mystic_is_downed …(+1) | — | spec:INV_ASC_HP+INV_MONSTERS | — | §316/§317/INV_ASC_HP+INV_MONSTERS/protect_gives_the_block_to_the_mystic_even_when_the_centurion_is_hurt |
 | chosen | yes | hex_shuffles_a_dazed_only_for_non_attack_cards, chosen_swaps_its_opener_at_a17 …(+1) | — | wiki:wiki_asc/chosen.txt | — | §313/§314/INV_ASC_HP+INV_MONSTERS/hex_shuffles_a_dazed_only_for_non_attack_cards |
 | cultist | yes | building_a_fight_keeps_the_ascension_but_not_the_last_fights_gold, a_fight_built_from_the_content_deck_can_play_a_strike …(+9) | — | wiki:wiki_asc/cultist.txt | — | §195.8/§323/INV_ASC_HP+INV_MONSTERS/building_a_fight_keeps_the_ascension_but_not_the_last_fights_gold |
 | dagger | yes | the_five_elite_encounters_match_the_wiki_numbers, reptomancer_switches_to_snake_strike_when_four_daggers_are_out | — | wiki:wiki_asc/dagger.txt | — | §175/INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
 | darkling | yes | an_encounter_with_two_records_of_the_same_id_builds | — | wiki:wiki_asc/darkling.txt | — | §316/§317/INV_ASC_HP+INV_MONSTERS+INV_ROLLS/an_encounter_with_two_records_of_the_same_id_builds |
-| deca | yes | donus_circle_of_power_buffs_the_enemy_team_and_not_the_player | — | wiki:wiki_asc/donu_and_deca.txt | gap §H: Artifact 层数不随 A19 变（`StartingStatuses` 没有升档轴） | §195.8/§282/INV_ASC_HP+INV_MONSTERS/donus_circle_of_power_buffs_the_enemy_team_and_not_the_player |
-| donu | yes | donus_circle_of_power_buffs_the_enemy_team_and_not_the_player | — | wiki:wiki_asc/donu_and_deca.txt | gap §H: Artifact 层数不随 A19 变（`StartingStatuses` 没有升档轴） | §195.8/§282/INV_ASC_HP+INV_MONSTERS/donus_circle_of_power_buffs_the_enemy_team_and_not_the_player |
+| deca | yes | donus_circle_of_power_buffs_the_enemy_team_and_not_the_player | — | wiki:wiki_asc/donu_and_deca.txt | — | §195.8/§282/INV_ASC_HP+INV_MONSTERS/donus_circle_of_power_buffs_the_enemy_team_and_not_the_player |
+| donu | yes | donus_circle_of_power_buffs_the_enemy_team_and_not_the_player | — | wiki:wiki_asc/donu_and_deca.txt | — | §195.8/§282/INV_ASC_HP+INV_MONSTERS/donus_circle_of_power_buffs_the_enemy_team_and_not_the_player |
 | exploder | yes | the_exploder_hits_for_thirty_and_then_dies | — | wiki:wiki_asc/shapes.txt | 无 AscHP：wiki Shapes: Exploder HP 30, the A7 column is a 30-35 range | §316/§317/INV_MONSTERS+INV_NO_ASC_HP/the_exploder_hits_for_thirty_and_then_dies |
 | fat_gremlin | yes | the_three_a17_move_rows_take_effect_in_the_fight | — | wiki:wiki_asc/fat_gremlin.txt | — | §214/§323/INV_ASC_HP+INV_MONSTERS/the_three_a17_move_rows_take_effect_in_the_fight |
 | fungi_beast | yes | the_act_one_hard_pool_encounters_match_the_wiki_numbers, the_three_a17_move_rows_take_effect_in_the_fight …(+1) | — | wiki:wiki_asc/fungi_beast.txt | — | §312/§325/INV_ASC_HP+INV_MONSTERS/the_act_one_hard_pool_encounters_match_the_wiki_numbers |
@@ -111,11 +111,11 @@
 | spiker | yes | spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times, starting_statuses_follow_their_ascension_rows | — | wiki:wiki_asc/shapes.txt | — | §214/§312/INV_ASC_HP+INV_MONSTERS/spiker_never_repeats_its_attack_and_buffs_thorns_at_most_six_times |
 | spire_growth | yes | spire_growth_smashes_instead_of_choosing | — | wiki:wiki_asc/spire_growth.txt | — | §214/§312/INV_ASC_HP+INV_MONSTERS/spire_growth_smashes_instead_of_choosing |
 | taskmaster | yes | the_five_elite_encounters_match_the_wiki_numbers, taskmaster_scouring_whip_scales_wounds_and_strength_by_ascension | — | wiki:wiki_asc/taskmaster.txt | — | INV_ASC_HP+INV_MONSTERS/the_five_elite_encounters_match_the_wiki_numbers |
-| the_champ | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half …(+1) | — | wiki:wiki_asc/the_champ.txt | gap §H: A19 的 "Gloat 换成 Defensive Stance" 未实现；Anger 按名清 debuff；第二阶段只做第一次 Execute | §194/§312/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
-| the_collector | yes | the_collector_draws_by_weight_and_never_buffs_twice_in_a_row, a_minion_is_not_on_the_field_until_its_summon_lands …(+1) | — | wiki:wiki_asc/the_collector.txt | gap §H: 25/45/30（0-1 只 Torch Head 时的权重）未分档 | §138/§282/INV_ASC_HP+INV_MONSTERS/the_collector_draws_by_weight_and_never_buffs_twice_in_a_row |
+| the_champ | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half …(+1) | — | wiki:wiki_asc/the_champ.txt | gap §H: Taunt 在二阶段仍每 4 回合触发（wiki 的 "Random Move (Same chances as Phase One)" 措辞含糊，我们按"包含 Taunt"实现） | §194/§312/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
+| the_collector | yes | the_collector_draws_by_weight_and_never_buffs_twice_in_a_row, a_minion_is_not_on_the_field_until_its_summon_lands …(+1) | — | wiki:wiki_asc/the_collector.txt | — | §138/§282/INV_ASC_HP+INV_MONSTERS/the_collector_draws_by_weight_and_never_buffs_twice_in_a_row |
 | the_guardian | yes | mode_shift_is_a_budget_drained_by_the_health_actually_lost, building_a_guardian_fight_seeds_its_mode_shift_budget_by_ascension …(+1) | — | wiki:wiki_asc/the_guardian.txt | — | §194/INV_ASC_HP+INV_MONSTERS+INV_SPAWN_COUNTERS/mode_shift_is_a_budget_drained_by_the_health_actually_lost |
-| time_eater | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, time_eater_head_slam_reaches_32_at_a4 …(+1) | — | wiki:wiki_asc/time_eater.txt | gap §H: Haste 不清 debuff（没有"清空状态"节点）；`Draw Reduction` 已实现但 wiki 的"A19 另加 2 Slimed"没做 | §312/§313/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
-| torch_head | yes | a_minion_is_not_on_the_field_until_its_summon_lands, the_collector_summons_only_up_to_two_torch_heads | — | wiki:wiki_asc/torch_head.txt | gap §H: 25/45/30（0-1 只 Torch Head 时的权重）未分档 | §282/§329/INV_ASC_HP+INV_MONSTERS/a_minion_is_not_on_the_field_until_its_summon_lands |
+| time_eater | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, time_eater_head_slam_reaches_32_at_a4 …(+1) | — | wiki:wiki_asc/time_eater.txt | — | §312/§313/INV_ASC_HP+INV_MONSTERS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
+| torch_head | yes | a_minion_is_not_on_the_field_until_its_summon_lands, the_collector_summons_only_up_to_two_torch_heads | — | wiki:wiki_asc/torch_head.txt | — | §282/§329/INV_ASC_HP+INV_MONSTERS/a_minion_is_not_on_the_field_until_its_summon_lands |
 | transient | yes | the_transient_scales_its_attack_and_fades_away | — | spec:INV_MONSTERS+INV_NO_ASC_HP | 无 AscHP：wiki Transient: HP 999 always | §316/§317/INV_MONSTERS+INV_NO_ASC_HP/the_transient_scales_its_attack_and_fades_away |
 
 ## 敌人动作（166）
@@ -166,7 +166,7 @@
 | dagger.explode | yes | a_dagger_that_explodes_removes_itself_and_hands_the_seat_on | — | wiki:wiki_asc/dagger.txt (via dagger) · 仅基础值 | 无升档：wiki Reptomancer: Explode 25, no A-row | §200/INV_ACTIONS+INV_NO_ASC/a_dagger_that_explodes_removes_itself_and_hands_the_seat_on |
 | dagger.wound | yes | — | ENEMY_DIFF | wiki:wiki_asc/dagger.txt (via dagger) · 仅基础值 | 无升档：wiki Reptomancer: dagger moves have no A-row | INV_ACTIONS+INV_NO_ASC |
 | darkling.chomp | yes | — | ENEMY_DIFF | wiki:wiki_asc/darkling.txt (via darkling) | — | §193/§328/INV_ACTIONS+INV_ASC_VARIANTS |
-| darkling.nip | yes | — | ENEMY_DIFF | wiki:wiki_asc/darkling.txt (via darkling) · 仅基础值 | 无升档：wiki Darkling: Nip is rolled at spawn (A2 changes the roll, §193) | §193/§328/INV_ACTIONS+INV_NO_ASC |
+| darkling.nip | yes | — | ENEMY_DIFF | wiki:wiki_asc/darkling.txt (via darkling) · 仅基础值 | 无升档：wiki Darkling: Nip is rolled at spawn (A2 changes the roll, §193) | §137/§193/INV_ACTIONS+INV_NO_ASC |
 | deca.beam | yes | — | ENEMY_DIFF | wiki:wiki_asc/donu_and_deca.txt (via deca) | — | INV_ACTIONS+INV_ASC_VARIANTS |
 | deca.square_of_protection | yes | — | ENEMY_DIFF | wiki:wiki_asc/donu_and_deca.txt (via deca) | — | INV_ACTIONS+INV_ASC_VARIANTS |
 | donu.beam | yes | — | ENEMY_DIFF | wiki:wiki_asc/donu_and_deca.txt (via donu) | — | INV_ACTIONS+INV_ASC_VARIANTS |
@@ -265,11 +265,11 @@
 | spire_growth.strategic | yes | — | ENEMY_DIFF | wiki:wiki_asc/spire_growth.txt (via spire_growth) | — | §147/§214/INV_ACTIONS+INV_ASC_VARIANTS |
 | taskmaster.scouring_whip | yes | taskmaster_scouring_whip_scales_wounds_and_strength_by_ascension | — | wiki:wiki_asc/taskmaster.txt (via taskmaster) | — | §327/INV_ACTIONS+INV_ASC_VARIANTS/taskmaster_scouring_whip_scales_wounds_and_strength_by_ascension |
 | the_champ.anger | yes | the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half | — | wiki:wiki_asc/the_champ.txt (via the_champ) | — | INV_ACTIONS+INV_ASC_VARIANTS/the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half |
-| the_champ.defensive_stance | yes | the_champ_swaps_gloat_for_defensive_stance_at_a19 | — | wiki:wiki_asc/the_champ.txt (via the_champ) | — | §194/INV_ACTIONS+INV_ASC_VARIANTS/the_champ_swaps_gloat_for_defensive_stance_at_a19 |
+| the_champ.defensive_stance | yes | the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half, the_champ_swaps_gloat_for_defensive_stance_at_a19 | — | wiki:wiki_asc/the_champ.txt (via the_champ) | — | §194/§330/INV_ACTIONS+INV_ASC_VARIANTS/the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half |
 | the_champ.execute | yes | the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half | — | wiki:wiki_asc/the_champ.txt (via the_champ) · 仅基础值 | 无升档：wiki The Champ: Execute is 10x2, no A-row | §194/INV_ACTIONS+INV_NO_ASC/the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half |
-| the_champ.face_slap | yes | — | ENEMY_DIFF | wiki:wiki_asc/the_champ.txt (via the_champ) | — | INV_ACTIONS+INV_ASC_VARIANTS |
-| the_champ.gloat | yes | the_champ_swaps_gloat_for_defensive_stance_at_a19 | — | wiki:wiki_asc/the_champ.txt (via the_champ) | — | INV_ACTIONS+INV_ASC_VARIANTS/the_champ_swaps_gloat_for_defensive_stance_at_a19 |
-| the_champ.heavy_slash | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half | — | wiki:wiki_asc/the_champ.txt (via the_champ) | — | INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
+| the_champ.face_slap | yes | the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half | — | wiki:wiki_asc/the_champ.txt (via the_champ) | — | INV_ACTIONS+INV_ASC_VARIANTS/the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half |
+| the_champ.gloat | yes | the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half, the_champ_swaps_gloat_for_defensive_stance_at_a19 | — | wiki:wiki_asc/the_champ.txt (via the_champ) | — | INV_ACTIONS+INV_ASC_VARIANTS/the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half |
+| the_champ.heavy_slash | yes | a_weighted_boss_never_repeats_the_move_the_wiki_forbids, the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half | — | wiki:wiki_asc/the_champ.txt (via the_champ) | — | §330/INV_ACTIONS+INV_ASC_VARIANTS/a_weighted_boss_never_repeats_the_move_the_wiki_forbids |
 | the_champ.taunt | yes | the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half | — | wiki:wiki_asc/the_champ.txt (via the_champ) · 仅基础值 | 无升档：wiki The Champ: Taunt has no A-row | INV_ACTIONS+INV_NO_ASC/the_champ_taunts_every_fourth_round_and_enters_phase_two_below_half |
 | the_collector.buff | yes | the_collector_draws_by_weight_and_never_buffs_twice_in_a_row | — | wiki:wiki_asc/the_collector.txt (via the_collector) | — | INV_ACTIONS+INV_ASC_VARIANTS/the_collector_draws_by_weight_and_never_buffs_twice_in_a_row |
 | the_collector.fireball | yes | the_collector_draws_by_weight_and_never_buffs_twice_in_a_row | — | wiki:wiki_asc/the_collector.txt (via the_collector) | — | INV_ACTIONS+INV_ASC_VARIANTS/the_collector_draws_by_weight_and_never_buffs_twice_in_a_row |

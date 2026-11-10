@@ -130,8 +130,8 @@ python -m http.server 8000
 |---|---|
 | **战斗内核** | `rd-core` **22** 个源文件、约 **75k** 行。出牌/结算/状态/意图/修饰器管线/效果程序 IR（栈式）/选择与目标/金色指纹；**零分配、纯整数、`forbid(unsafe_code)`** |
 | **运行层** | `rd-run` 约 **16.3k** 行。地图（15 行 × 7 列 + Boss）、幕、牌组、金币、遗物、药水、奖励屏、商店、事件、篝火、**Ascension 0–20（20/20 条都有机制）**、**存档（单行文本 + CRC）**、**回放（动作序列 + 每步哈希）** |
-| **内容** | **61 怪 / 64 遭遇 / 295 条卡行（155 张基础 + 140 条升级行）/ 148 状态 / 166 敌人动作 / 153 遗物 / 33 药水（满池）/ **35 个事件**（三幕池 13+15+10 = 38 条，跨幕复用 3 条）/ 10 张起始牌**；**107 个动作有升阶变体**（124 个变体）。编译成 188,528 B 的 `rdcf` 镜像（core 镜像 151,092 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
-| **前端** | `index.html`（战斗 + 运行层 + 存档 + 回放）、`map.html`（地图页）；`wasm32` + **148** 个 `i32` 的战斗观察向量（另有 19 个 slot 的运行层观察）、一组 `rd_env_*` / `rd_run_*` 导出（`web/smoke.mjs` 有一张手抄的 `REQUIRED` 表**逐条**对账，加导出必须同时改两处） |
+| **内容** | **61 怪 / 64 遭遇 / 295 条卡行（155 张基础 + 140 条升级行）/ 148 状态 / 166 敌人动作 / 152 遗物 / 33 药水（满池）/ **35 个事件**（三幕池 13+15+10 = 38 条，跨幕复用 3 条；110 个 `EVND` 段）/ 10 张起始牌**；**107 个动作有升阶变体**（128 个变体）。编译成 189,024 B 的 `rdcf` 镜像（core 镜像 151,460 B）。⚠️ 这些数字由 `native/gap_check.py` 的 pastable 区块生成，**别手抄**；"还差哪些**牌**"由 `native/audit_card_gap.py` 与 wiki 卡表逐张对账（见 `docs/sts-wiki-gap.md` §A.1） |
+| **前端** | `index.html`（战斗 + 运行层 + 存档 + 回放）、`map.html`（地图页）；`wasm32` + **122** 个 `i32` 的战斗观察向量（另有 19 个 slot 的运行层观察）、一组 `rd_env_*` / `rd_run_*` 导出（`web/smoke.mjs` 有一张手抄的 `REQUIRED` 表**逐条**对账，加导出必须同时改两处） |
 | **RL 环境** | `rd_env_*` ABI（`docs/spec/env-abi.md`）+ Python `ctypes` 封装（多进程、批量观察） |
 | **裸机** | `riscv32imac-unknown-none-elf` 真链接成 ELF，镜像占用有闸门 |
 
@@ -152,41 +152,66 @@ python -m http.server 8000
   Smith、`Dream Catcher` 让休息额外给一次卡牌奖励。仍缺的是**第四幕本身**（红钥匙的用处）。
 * **遗物**：**152 / 193**（`native/audit_relic_gap.py` 的账：`MISSING: 41`、
   `METADATA（两边都有但写错）: 0`、`IMPLEMENTED: … 内核不认识: 0`；逐条清单在
-  `docs/relic-inventory.md`，193 行、标明"有/缺"）。**缺的 41 件里 18 件是别的角色的球/姿态/毒、
-  13 件是无尽模式 `Blight`、2 件 `circlet`、1 件 `necronomicon`（明确不做）**，
-  铁甲战士这条线上真正的缺口只剩 `tingsha` / `tough_bandages`（缺 `CardDiscarded` 事实）、
-  `golden_eye`（缺 `Scry`）与三件 `bottled_*`（拾取时绑牌）。
+  `docs/relic-inventory.md`，193 行、标明"有/缺"）。**缺的 41 件按稀有度分**：
+  Common 2 / Uncommon 7 / Rare 4 / Boss 7 / Shop 3 / Starter 2 / Event 1 / Special 2 /
+  **Blight 13**（无尽模式，不做）。其中 **20 件是别的角色的球/姿态/Scry**（Defect 9 / Silent 4 /
+  Watcher 7）、3 件是 `bottled_*`（拾取时绑牌）、`necronomicon` 明确不做、`circlet` 两件是无尽模式；
+  铁甲战士这条线上真正的缺口只剩 `tingsha` / `tough_bandages`（缺 `CardDiscarded` 事实）与
+  `golden_eye`（缺 `Scry`）。
   分档、载体决策树与已实现规则清单见 **`docs/sts-wiki-gap.md` §D.2**；
   方法论见 **`docs/function_scaling_up_for_relics.md`**。
-* **事件**：**19 个**（三幕池 10+8+4 = 22 条；`golden_idol` / `ancient_forge` /
-  `purification_shrine` 跨幕复用）。**剧情分支已经是真树**（`EVND` 段表 + `EV.Entry`，选项数不固定，
-  `golden_idol` 的两段三选一、`dead_adventurer` 的 21 个分支屏都在），选项支持条件
-  （`Requires` / `RequiresAsc`）与一串效果。**仍缺**：事件级条件（"这条事件出不出现"）、
-  "从手上任选一件遗物失去"（`N'loth`）、以及 Act 2 的 5 条事件
-  （`vampires` / `masked_bandits` / `knowing_skull` / `council_of_ghosts` / `cursed_tome`）——
-  逐条见 `docs/event-gaps.md`。
+* **事件**：**35 条**（三幕池 13+15+10 = 38 条；`golden_idol` / `ancient_forge` /
+  `purification_shrine` 跨幕复用，110 个 `EVND` 段）。**剧情分支是真树**（`EVND` 段表 + `EV.Entry`，
+  选项数不固定），选项支持条件（`Requires` / `RequiresAsc`）、按类型的选牌问句
+  （`the_library` 20 选 1、`sensory_stone`、`falling` 的按类型删牌）、事件中途开战斗
+  （`dead_adventurer` / `mysterious_sphere` / `colosseum`）、以及 A15 的糟化分支。
+  **与 wiki 的 31 条相比是 28 条**：Act 1 **11/11**、Act 2 **12/13**、Act 3 **7/7** ——
+  唯一明确不做的是 `cursed_tome`（`necronomicon` 不在范围）。**仍缺**：事件级条件
+  （"这条事件出不出现"）与"从手上任选一件遗物失去"（`N'loth`）。逐条见 `docs/event-gaps.md`。
 * **状态**：缺"下一回合**多**抽 / **多**能量"（`Draw` / `Energized`）—— 现在只有本回合的
   `combat_draw` / `combat_energy`，以及"下一回合**少**抽"的 `standard.draw_reduction`。
 * **Ascension**：**20/20 条都有机制**（14 条运行层规则 + 6 条走 `EACT.ProgramAsc`）；A7/A8/A9 的
-  生命值按 wiki 的 `AscHP` 逐条钉住（§206，`INV_ASC_HP`）。数据侧：**79 个动作有升档变体
-  （91 个变体）**，其余 **51 个**动作没有 wiki 出处（`gap_check.py` 打印 `without a variant: 51`）；
-  逐条对账用 `python -X utf8 native/audit_asc_gap.py`（§258 起有脚本，不再靠人眼）。
-* **敌人**：**58 怪 / 62 遭遇**；三幕的**精英与 Boss 池**都是 wiki 的三选一（各 3 条），
+  生命值按 wiki 的 `AscHP` 逐条钉住（§206，`INV_ASC_HP`），**档位属于怪物、不属于池子**
+  （§315/§327：`Sentry` 钉 A8，两只 Slaver 钉 A7）。数据侧：**107 个动作有升档变体
+  （128 个变体）**，其余 **59 个**动作 wiki 没有出处（`gap_check.py` 打印 `without a variant: 59`）。
+  **wiki 写了 `{{Asc|N|` 而内容缺档的动作是 0 条** —— 这条由验收闸门 `[7b]`
+  （`sts_content_check.py` 的 `check_wiki_asc_levels`）每次重比一遍；人跑的对账是
+  `python -X utf8 native/audit_asc_gap.py`（§330 修好了它"只读第一个档位"的解析 bug，
+  现在 MISSING/MISMATCH 都是 0，剩下的 4 条 EXTRA 是 `Thievery` 的 A17 写在招式计数器里）。
+* **敌人**：**61 怪 / 64 遭遇**；三幕的**精英与 Boss 池**都是 wiki 的三选一（各 3 条），
   **Act 1 普通池 17 条**、**Act 2 普通池 13 条**（wiki 13/13）、**Act 3 普通池 10 条**
   （wiki 10/10）—— 我们**没有** Easy/Hard 的两段式，只用一个带权重的单池，
   这是与 wiki 的已知偏差。已知的**简化**（写明在
   `AiNote` 里，不是漏）：`giant_head` 是 320 HP 的简化版（招式表跟着简化）、`EncounterTables`
-  的组成是**固定行**（wiki 的"红或绿虱子"这种随机组成靠多条同权行近似）、
-  少数招式的 A17/A18 附加规则只做到"禁令"那一层；**Act 2 普通池 13 / 13**（含
-  `Sentry and Spheric Guardian` —— 它带来了 `(monster, tier)` 的 HP 建模）。逐条见
-  `docs/sts-wiki-gap.md` §D.3.1。
+  的组成是**固定行**（wiki 的"红或绿虱子"这种随机组成靠多条同权行近似）；A17/A18 的附加效果
+  （多一层 Frail / 多 1 张 Wound / 多 1 力量）已经逐条落地并由闸门 `[7b]` 钉住。逐条见
+  `docs/sts-wiki-gap.md` §D.3。
 * **仍缺的机制**（不是内容行，是载体）：~~战斗中的随机~~（§281 已做：`expr::randomInt` +
   `CombatState::draw_in_range`，唯一入口）、~~事件剧情分支~~（§278/§279 已做）——
   剩下的是**事件级条件**（"这条事件出不出现"，会重掷 `?` 房每一次抽取，所以单独做）、
-  **"任选一件遗物失去"**的问句（`N'loth`）、Boss 分裂/相位（除 Slime Boss）、
-  A2/3/4 之外的招式表替换（A17/18/19 的动作级覆盖已是 `ProgramAsc`）、
-  药水差 0 瓶但**整手牌改费 / 自动打出 / 死亡拦截**仍然只有部分路径、逃跑（见 `docs/sts-wiki-gap.md` §2）。
+  **"任选一件遗物失去"**的问句（`N'loth`）、**"下一回合多抽 / 多能量"**（只有
+  `draw_reduction` / `no_draw`，没有反向的两条）、以及敌人侧的**逃跑**（运行层的脱战已有）。
+  Boss 分裂/相位与 A17/18/19 的招式表**已收口**（§327–§329：六个 Boss 的相位规则逐条对过 wiki，
+  `[7b]` 每次验收重比档位）。见 `docs/sts-wiki-gap.md` §2。
 * **第四幕与钥匙**：没有。`Recall` 就挂在它上面。
+
+### 2.1 最近这一轮改了什么（§308–§330，`094d34e^..7b32823`）
+
+这一轮是**流程与保真**，不是新内容层：
+
+* **运行层**：`RunState` 的 18 个漏网字段补齐 + 一条 `state-fields` 闸门（§308）；
+  拾取类遗物的原子性（§309）；`orange_pellets` 的"清负面状态"（§310）。
+* **遭遇与怪物**：Act 2 普通池 3 → **13/13**（§311–§314）、Act 3 **10/10**（§316–§317）、
+  Act 1 硬池三场（§275）、组合槽（§277）、`(monster, tier)` 的 HP 建模（§315）。
+* **事件**：`EVND` 段表 + 概率 + 条件 + 按类型的选牌问句 + 事件中途开战斗，
+  三幕 **28/31**（§318–§325，逐条见 `docs/event-gaps.md`）。
+* **战斗语义的三处偏差收口**（§326）：`parasite` 的移除惩罚、`mark_of_the_bloom` 的**战斗内**
+  治疗拦截、`Doubt` 的回合末时序（顺序改成 ③④①②，Weak 留到下一回合）。
+* **敌人保真**：四条精英组合遭遇的升档数值（§327）、A17/18/19 招式表（§328，
+  现在有闸门 `[7b]` 每次重比 wiki 的 `{{Asc|N|`）、六个 Boss 的相位规则（§329–§330）。
+* **这一轮挖出的两个真 bug**：`The Champ` 二阶段**每回合都 Execute**（`champ_exec` 从没被程序
+  回写过，判据手设了它 —— §330）；`Relics` 里 `mutagenic_strength` **重复一行**（§330，
+  顺带加了一道"段内 id 不许重复"的闸门 `[7g]`）。
 
 ---
 

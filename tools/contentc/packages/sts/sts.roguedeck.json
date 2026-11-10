@@ -35077,6 +35077,29 @@
                     }
                   },
                   "CounterId": {
+                    "value": "champ_exec"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": true,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
                     "value": "prev_move"
                   },
                   "Amount": {
@@ -35276,6 +35299,29 @@
                   },
                   "DurationTurns": 0,
                   "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "champ_exec"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": true,
                   "ResultKey": null
                 }
               },
@@ -35624,6 +35670,29 @@
                   "ResultKey": null,
                   "IgnoresBlock": false,
                   "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "champ_exec"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 0
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
                 }
               },
               {
@@ -46036,6 +46105,29 @@
                     }
                   },
                   "CounterId": {
+                    "value": "champ_exec"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": true,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
                     "value": "prev_move"
                   },
                   "Amount": {
@@ -46264,6 +46356,29 @@
                   },
                   "DurationTurns": 0,
                   "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "champ_exec"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": true,
                   "ResultKey": null
                 }
               },
@@ -46785,7 +46900,7 @@
                   "Amount": {
                     "kind": "const",
                     "value": {
-                      "Value": 0
+                      "Value": -1
                     }
                   },
                   "Relative": false,
@@ -58704,8 +58819,41 @@
                         "Counter": {
                           "value": "champ_exec"
                         },
-                        "Op": "LessOrEqual",
+                        "Op": "Less",
                         "Value": 0
+                      }
+                    }
+                  ]
+                }
+              },
+              "Action": {
+                "value": "the_champ.execute"
+              },
+              "Priority": 86
+            },
+            {
+              "Condition": {
+                "kind": "intent.allOf",
+                "value": {
+                  "Conditions": [
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "champ_phase"
+                        },
+                        "Op": "GreaterOrEqual",
+                        "Value": 1
+                      }
+                    },
+                    {
+                      "kind": "intent.selfHasCounter",
+                      "value": {
+                        "Counter": {
+                          "value": "champ_exec"
+                        },
+                        "Op": "GreaterOrEqual",
+                        "Value": 2
                       }
                     }
                   ]
@@ -73714,8 +73862,41 @@
                     "Counter": {
                       "value": "champ_exec"
                     },
-                    "Op": "LessOrEqual",
+                    "Op": "Less",
                     "Value": 0
+                  }
+                }
+              ]
+            }
+          },
+          "Action": {
+            "value": "the_champ.execute"
+          },
+          "Priority": 86
+        },
+        {
+          "Condition": {
+            "kind": "intent.allOf",
+            "value": {
+              "Conditions": [
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "champ_phase"
+                    },
+                    "Op": "GreaterOrEqual",
+                    "Value": 1
+                  }
+                },
+                {
+                  "kind": "intent.selfHasCounter",
+                  "value": {
+                    "Counter": {
+                      "value": "champ_exec"
+                    },
+                    "Op": "GreaterOrEqual",
+                    "Value": 2
                   }
                 }
               ]
@@ -80014,13 +80195,6 @@
       "RunPrograms": null,
       "CombatRules": null,
       "Rarity": "Shop"
-    },
-    {
-      "Id": "mutagenic_strength",
-      "DisplayName": "Mutagenic Strength",
-      "Rarity": "Event",
-      "RunPrograms": null,
-      "CombatRules": null
     }
   ],
   "Start": {

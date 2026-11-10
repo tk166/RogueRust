@@ -36,14 +36,14 @@
 |---|---|---|
 | 战斗内核 | 出牌 / 结算 / 状态 / 意图 / 修饰器管线 / 效果程序 IR / 选择与目标 / 金色指纹 | `SEMANTICS-v1.md`，§1–§128 |
 | 卡牌关键词 | Exhaust / Ethereal / Innate / Retain / Unplayable / X 费 全部有载体 | §144 / §146 |
-| 状态 | **146 条**；每一条要么有内核规则、要么**显式声明为 inert**（`is_declared_inert()`，**37 条**，`gap_check.py` 打印全名）。⚠️ "在 inert 名单上"只说明"内核没有硬编码规则" —— 它的行为在内容的触发器里，**这不等价于"StS 语义全对"**（审阅 §4.2） | §147 / §149 / §158 / §180 / §181 / §195.1–§195.7 |
+| 状态 | **148 条**；每一条要么有内核规则、要么**显式声明为 inert**（`is_declared_inert()`，**37 条**，`gap_check.py` 打印全名）。⚠️ "在 inert 名单上"只说明"内核没有硬编码规则" —— 它的行为在内容的触发器里，**这不等价于"StS 语义全对"**（审阅 §4.2） | §147 / §149 / §158 / §180 / §181 / §195.1–§195.7 |
 | 三幕骨架 | 地图 15 行 × 7 列 + Boss 行、每幕独立的遭遇/事件池、幕间切换 | §130 / §131 / §133 / §137 |
 | 战斗流程 | 召唤随从（敌人槽上限 6）、Boss 分裂、半血换招、**销毁战斗员**（§178） | §121 / §124 / §138–§140 / §178 |
 | 运行层 | 商店（卡/遗物/药水/删卡 + 价格）、篝火（休息/打铁）、宝箱、事件、奖励屏、**脱战**（§179） | §143 / §161.8 / §179 |
 | 药水 | **全部 33 瓶**（Ironclad 口径）都能喝，效果词表见 `gap_check.py` | §152 / §158 / §179–§185 |
 | 遗物 | **152 / 193**；分桶与载体清单见 §D.2，逐条清单在 `docs/relic-inventory.md` | §259–§274 / §292–§305 |
-| 卡牌（**数量**） | **293 行 = 154 张基础 + 139 条升级行**；口径内 **147 / 220（齐的 147 张里 Red 75/75 + Colorless 70/70 + 诅咒/状态）**，**缺的 73 张全是观者**。**逐张盘点见 §A.1** | §218–§233 / §306 核对 / `audit_card_gap.py` |
-| Ascension | **20 / 20 条都有机制**，但分成两半：**14 条是 `rd-run` 的规则常量**（A1 A5–A16 A20，`gap_check.py` 打印），**6 条走内容数据**（A2/A3/A4 与 A17/18/19 的 `EACT.ProgramAsc`）。数值侧：**98 条变体 / 85 个动作**（**53 个动作仍无 wiki 出处**，`audit_asc_gap.py` 打印）+ 事件列表的 A15 变体。逐条见 §E | §159 / §187–§192 / §306 核对、`gap_check.py` |
+| 卡牌（**数量**） | **295 行 = 155 张基础 + 140 条升级行**；口径内 **147 / 220（齐的 147 张里 Red 75/75 + Colorless 70/70 + 诅咒/状态）**，**缺的 73 张全是观者**。**逐张盘点见 §A.1** | §218–§233 / §306 核对 / `audit_card_gap.py` |
+| Ascension | **20 / 20 条都有机制**，但分成两半：**14 条是 `rd-run` 的规则常量**（A1 A5–A16 A20，`gap_check.py` 打印），**6 条走内容数据**（A2/A3/A4 与 A17/18/19 的 `EACT.ProgramAsc`）。数值侧：**128 条变体 / 107 个动作**（**59 个动作仍无 wiki 出处**，`gap_check.py` 打印 `without a variant: 59`）+ 事件列表的 A15 变体。⚠️ §328 起有**闸门**：wiki 写了 `{{Asc|N|` 而内容缺档的动作必须是 **0** 条（`sts_content_check.py` 的 `[7b]`）；人跑的对账是 `audit_asc_gap.py`（§330 修好了它只读第一个档位的解析 bug）。逐条见 §E | §159 / §187–§192 / §306 / §328–§330 |
 | 存档 / 回放 | 单行文本 + CRC（`RDA1`）；动作序列 + 每步哈希（`RDR1`）；内容指纹 | §161.9 / §163 / §164 / §166 |
 | 前端 | 战斗 + 运行层 + 存档 + 回放；真浏览器闸门（真指针点击 + 像素判据 + 切片五场景） | §165 / §168 / §185 |
 | 诊断 | 一步之内的有序事件（beats）、**拒绝码**与**宿主失败原文**导出（§177） | `env-abi.md` §12 |
@@ -57,17 +57,19 @@
 
 ```
 monsters 61 / encounters 64 / cards 295 (base 155 + plus 140) / statuses 148 /
-enemy actions 166 / relics 153 / potions 33 / events 38 (13+15+10) / start deck 10
-ascension variants 117 over 101 actions
-image full   content.sts.rdcf            179288 B
-image core   content.sts.core.rdcf       142344 B
+enemy actions 166 / relics 152 / potions 33 / events 38 (13+15+10) / start deck 10
+ascension variants 128 over 107 actions
+image full   content.sts.rdcf            189024 B
+image core   content.sts.core.rdcf       151460 B
 ```
 
-> ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`117` 是**卡行**（61 基础 + 56 升级行），不是 117 张不同的牌
+> ⚠️ **单位必须写清**（审阅 §8 第 5 条）：`295` 是**卡行**（155 基础 + 140 升级行），不是 295 张不同的牌
 > —— 而且其中包含状态/诅咒牌与多档升级行（`searing_blow+`…`++++++`）；
-> `117 / 101` 是**变体 / 动作**；`38` 是三个幕的事件池之和（`13+15+10`），**不是**不同事件数 ——
-> `golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用，去重之后是 **21 条**（§F.25）。
-> `relics 152` 是**内容行**；wiki 有 193 条，缺 41 条（§D.2）。
+> `128 / 107` 是**变体 / 动作**；`38` 是三个幕的事件池之和（`13+15+10`），**不是**不同事件数 ——
+> `golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用，去重之后是 **35 条**
+> （§318–§325 把 Act 1/2/3 补到 11/12/7，与 wiki 的 31 条比是 **28 条**，只差 `cursed_tome`）。
+> `relics 152` 是**内容行**（§330 之前这里是 153 —— 那多出来的一行是 `mutagenic_strength`
+> 的**重复行**，现在有闸门 `[7g]` 挡着）；wiki 有 193 条，缺 41 条（§D.2）。
 ---
 
 ## 2. 缺口
@@ -114,53 +116,26 @@ content-only: blur, buffer, malaise, nightmare, patient_guard, rip_and_tear, ske
              （wiki 归在别的颜色下，或本移植自有）
 ```
 
-当前结果（`audit_card_gap.py --offline` 的输出，**数字照抄脚本**，别手写）：
+**现状（§252 之后没再变过）**：口径内 **147 / 220**，**缺的 73 张全是观者（紫）** ——
+Red **75 / 75**、Colorless **70 / 70**、诅咒与状态齐。上面那段 pastable 区块里的
+`cards 295 (base 155 + plus 140)` 是**卡行**，与这里的"张数"不是一个单位。
 
-| 桶（颜色 / 类型 / 稀有度） | wiki | 有 | 缺 |
-|---|---:|---:|---:|
-| Red · Attack · Basic | 2 | 2 | 0 |
-| Red · Attack · Common | 14 | 12 | 2 |
-| Red · Attack · Uncommon | 11 | 9 | 2 |
-| Red · Attack · Rare | 5 | 4 | 1 |
-| Red · Skill · Basic | 1 | 1 | 0 |
-| Red · Skill · Common | 6 | 5 | 1 |
-| Red · Skill · Uncommon | 17 | 13 | 4 |
-| Red · Skill · Rare | 5 | 2 | 3 |
-| Red · Power · Uncommon | 8 | 3 | 5 |
-| Red · Power · Rare | 6 | 3 | 3 |
-| **Red 小计** | **75** | **75** | **0** ✅ |
-| Colorless · Attack（Uncommon / Rare / Special） | 11 | 1 | 10 |
-| Colorless · Skill（Uncommon / Rare / Special） | 33 | 4 | 29 |
-| Colorless · Power（Rare / Special） | 7 | 0 | 7 |
-| Colorless · Curse | 14 | 4 | 10 |
-| Colorless · Status 牌 | 5 | 5 | 0 |
-| **Colorless 小计** | **70** | **14** | **56** |
-| **合计（口径内）** | **145** | **116** | **29** |
+观者的 73 张不是"一张张补"能收的：它们成堆挂在**姿态系统**（`calm` / `wrath` / `divinity`，
+约 30 张）、**Mantra / Divinity**、**Scry**、**Retain + `Establishment`**、
+**`Alpha` → `Beta` → `Omega`** 上。所以下一批要按**基建**聚类做（先做姿态机与 Scry 两条载体，
+再成批补牌），而不是照 §A.1 的清单从上往下写。
 
-**§246：红卡 75/75 齐；无色 38/70**，按"要什么载体"分组（这是下一批的施工单）：
+> ⚠️ **已删掉的一段**（§330）：这里原来是 §246 时期的"施工单"，按"需要什么载体"列了 30 多张
+> 红卡与无色牌（`exhume` 要 `ExhaustPile` 问句、`clash` 要 `PlayCondition` 读整手牌、
+> `double_tap` 要"下一张 Attack 打两次"、`havoc` / `infernal_blade` 要随机生成与强制打出、
+> `burning_pact` 要"问完再继续"、`spot_weakness` 要读敌人意图……）。那些载体在 §247–§252
+> 全部补齐了，无色也从 38/70 做到了 70/70 —— 留着那张单子会让人以为还得再做一遍，
+> 而且它与同一页的"Colorless 70 / 70（齐）"直接矛盾。
 
-| 需要的载体 | 牌 |
-|---|---|
-| **触发器接钩子**（`BlockGained` / `CardsDrawn` / 卡被消耗 三个事件名都在词表里，但声明为 `NotHandled`） | `juggernaut` `evolve` `fire_breathing` `dark_embrace` `feel_no_pain` |
-| **`ChoiceSource::ExhaustPile`**（现在只有 Hand / DiscardPile / Offered） | `exhume` |
-| **动态费用 / 力量倍率 / Fatal / 技能 0 费 + 打出即消耗** | `blood_for_blood` `heavy_blade` `feed` `corruption` |
-| **"下一张 Attack 打两次"**（`standard.duplication` 不限牌型） | `double_tap` |
-| **"手牌全是攻击才能打"**（`PlayCondition` 目前只是 bool 表达式，读不到整手牌） | `clash` |
-| **随机生成/打出手牌** | `havoc` `infernal_blade` |
-| **"问完再继续"**（问句是异步的，程序没法在答案之后接着跑） | `burning_pact` |
-| **读敌人意图** | `spot_weakness` |
-
-> ⚠️ 注意 `flame_barrier` / `rage` / `evolve` 这类：它们的**状态**（`standard.flame_barrier` /
-> `standard.rage`）早就在内容里、触发器和管线都对，缺的只是**那张 Power 卡**本身 —— 也就是说
-> 这批红卡里有一半只差内容行。
-
-> ⚠️ **"缺 91 张"不等于"91 张都要写"**：其中 12 张是别的角色的衍生牌（口径外），
-> 31 张无色牌需要**无色货架**（商店）作为入口 —— 这两块在 §D 里单列。
-> 铁甲战士本体缺的 **35 张**才是"内容工作量"的主干，且多数只差内容行（载体在 §218–§233 已经补齐）。
-
-> ⚠️ 同一张牌在我们的内容里也可能挂在别的颜色下（`malaise` / `nightmare` / `rip_and_tear` /
-> `skewer` 是静默猎手牌、`blur` / `buffer` 是故障机器人牌，都在本内容里做过）。脚本把它们列成
-> "content-only"，这是**有意的**：口径是"能玩的机制"，不是"只抄一个职业"。
+> ⚠️ **口径**：只把 Red + Colorless + Curse + Status 算进范围；别的颜色只统计。同一张牌在我们
+> 的内容里也可能挂在别的颜色下（`malaise` / `nightmare` / `rip_and_tear` / `skewer` 是静默猎手牌、
+> `blur` / `buffer` 是故障机器人牌，都在本内容里做过）。脚本把它们列成 "content-only"，
+> 这是**有意的**：口径是"能玩的机制"，不是"只抄一个职业"。
 
 ### B. 状态 —— wiki 常见而我们没有的
 
@@ -195,7 +170,7 @@ wiki 常见而我们**没有**的：
 | 机制 | 状态 | 需要 |
 |---|---|---|
 | 敌人召唤随从 | **有**（槽上限 6、主人死则随从逃） | — |
-| Boss 分裂 | **有**，但目前**只有 Slime Boss**（`destroyCombatant` 到位后，"消失 + 两只顶替"才第一次能正确表达，§178） | 内容（另两只 Boss 各有新东西） |
+| Boss 分裂 | **有**，但目前**只有 Slime Boss**（`destroyCombatant` 到位后，"消失 + 两只顶替"才第一次能正确表达，§178）。⚠️ "相位"是另一件事，六个 Boss 的相位规则已在 §329–§330 逐条对过 wiki | 内容（另两只 Boss 各有新东西） |
 | Boss 半血换招 | **有**（`intent.healthPercent`） | — |
 | **销毁战斗员** | **有**（`node.destroyCombatant`，§178）：名册 / 回合序 / 牌堆表一起移位 | — |
 | **死亡拦截** | **有**（`STAT.DeathPrevention` + PreDown 拦截，§180）：`Percent` 是本移植的扩展 | — |
@@ -213,19 +188,19 @@ wiki 常见而我们**没有**的：
 | 项 | 状态 | 需要 |
 |---|---|---|
 | 地图 6 种节点 + Boss 行 / 每幕独立地图 | **有** | — |
-| 遭遇池按幕分 | **有**（`gap_check.py` 打印每幕的数量） | 内容（第二幕的普通池只有 2 个） |
+| 遭遇池按幕分 | **有**（`gap_check.py` 打印每幕的数量）：普通池 Act 1 **17** / Act 2 **13/13** / Act 3 **10/10** | — |
 | **精英池** | 每幕 **3 个**：Act1 `three_sentries / gremlin_nob / lagavulin`、Act2 `gremlin_leader / book_of_stabbing / slavers`、Act3 `giant_head / nemesis / reptomancer` | — （wiki 的每幕 3 个齐了；§327 补了升档数值：Slaver 的 HP 档位 A7、Taskmaster 的 Whip A2/A18） |
 | **招式表升档** | §328：wiki 写了 `{{Asc\|N\|` 而内容缺档的动作 **0** 条（审计 115/166 条意图行；3 条由别的机制表达：`darkling.nip` 走 `Rolls`、`book_of_stabbing.multi_stab` 走 A18 计数器、`the_guardian.twin_slam` 走 `mode_shift_budget` 计数器） | — （`native/sts_content_check.py` 的 `[7b]` 每次验收都重比一遍） |
 | **Boss 相位** | §329：六个 Boss 的相位规则逐条对过 wiki —— Champ 的 Anger/Execute、Awakened One 的 unawakened→Rebirth、Collector 的两条召唤分支、Automaton 的 A19 Boost 顶替 Stunned、Time Eater 的一次性 Haste、Donu/Deca 的交替；本轮补了 Rebirth/Haste 的 **清 Debuff**与 Collector 的 **再召唤 + up to 2** | — （余下只有"A19 的具体数值"这类，已由 `[7]`/`[7b]` 钉住） |
 | ~~Boss 池~~ | ✅ **每幕三只**（§194）：Slime Boss / Guardian / Hexaghost，Champ / Automaton / Collector，Time Eater / Awakened One / Donu & Deca | — |
 | 药水 | **33 / 33**（Ironclad 口径） | — （见 §D.1，全部落地） |
-| 遗物 | **15 件**（9 Common / 4 Uncommon / 1 Rare / 1 Event，`gap_check.py` 打印）。效果是 `rd-run` 里的**手写规则**，不是数据 | 内容 + 内核（每件一条规则）。⚠️ 总数**仍未核对**（wiki 的 `Relics List` 是模板生成的；`Relics` 的 Cargo 表可以像卡表那样查，但还没做 —— 下一轮补 `audit_relic_gap.py`） |
-| 篝火选项 | **只有 Rest / Smith**。wiki 的 `Rest Sites` 页有三组：① 标准 = Rest（30%，`Coffee Dripper`/`Mark of the Bloom` 灰掉，满血也可用）/ Smith（`Fusion Hammer` 或全升完则灰）/ **Recall**（拿 Ruby Key，只在 Act 4 已解锁且本幕没拿过时出现）；② 遗物开启 = `Girya`→**Lift**（每次 +1 力量、最多 3 次，之后**每场战斗开始**都带这些力量）/ `Peace Pipe`→**Toke**（删一张）/ `Shovel`→**Dig**（随机遗物，只要 Common/Uncommon/Rare）；③ 被动 = `Regal Pillow`（休息 +15，**已有**）/ `Eternal Feather`（进篝火按牌数回血，**已有**）/ `Dream Catcher`（休息后给一张卡奖励，**没有**） | 内核（新选项类型 + "每场战斗开始加力量"的跨层传递）+ 内容（`girya` / `peace_pipe` / `shovel` / `coffee_dripper` / `fusion_hammer` / `dream_catcher` 六件遗物） |
-| 商店 | **有**（卡/遗物/药水/删卡，价格按稀有度；A16 加价）。⚠️ **无色牌不出售**：没有 StS 的无色货架，无色牌的唯一来源是 Colorless Potion（§185）。**且内容里只有 3 张 `colorless` tag 的牌**（`audit_card_gap.py` 说 Colorless 桶 14/70） | 内核（无色货架：`stock_shop` 再加一排）+ 内容（31 张商店三档无色牌，见 §A.1） |
-| 事件 | **14 个**（三幕 6+4+4，`gap_check.py` 打印），每个选项是**一串**效果（§188），从 A15 起换用 `Effects*Asc` 的糟版本。词表仍是闭集：`heal / gold / damage / max_hp / nothing / remove_card / upgrade_card / transform_card / curse:<id> / relic:<id>` | 内容（缺真实事件的剧情分支：Golden Idol 的 Outrun/Smash/Hide 三选一在我们这里压成两选项，见 inventory §7） |
+| 遗物 | **152 / 193**（`audit_relic_gap.py` 的账：`MISSING: 41`、`METADATA: 0`、`IMPLEMENTED: 内核不认识 0`）。分档、载体决策树与逐条清单见 §D.2 与 `docs/relic-inventory.md` | 内容（缺的 41 件：Blight 13 / 别的角色 20 / `bottled_*` 3 / `necronomicon` / `circlet` 2 / 其余 2） |
+| 篝火选项 | **六个全通**（§259）：Rest / Smith / **Recall**（红钥匙）/ **Lift**（`Girya`，最多 3 次、之后每场战斗带这些力量）/ **Toke**（`Peace Pipe`，删牌免费）/ **Dig**（`Shovel`，只抽 Common/Uncommon/Rare）；`Coffee Dripper` / `Mark of the Bloom` 关 Rest、`Fusion Hammer` 关 Smith、`Dream Catcher` 让休息额外给一次卡牌奖励 | — （`Recall` 的用处是第四幕，见最后一行） |
+| 商店 | **有**（卡/遗物/药水/删卡，价格按稀有度；A16 加价；`the_courier` 刷新货架、`membership_card` 打折）。⚠️ **无色牌仍不出售**：没有 StS 的无色货架 —— 内容侧的无色池已经 **70/70**（§243–§252），缺的只是**商店里那一排**（`stock_shop` 加一排即可） | 内核（无色货架） |
+| 事件 | **35 条**（三幕池 13+15+10 = 38 条，110 个 `EVND` 段）。剧情分支是**真树**（`EVND` 段表 + `EV.Entry`，选项数不固定），选项支持 `Requires` / `RequiresAsc`、按类型的选牌问句（`the_library` / `sensory_stone` / `falling`）、事件中途开战斗（`dead_adventurer` / `mysterious_sphere` / `colosseum`）与 A15 的糟化分支。与 wiki 的 31 条比是 **28 条**（Act 1 11/11、Act 2 12/13、Act 3 7/7） | 内容（`cursed_tome` 明确不做 —— `necronomicon` 不在范围）。机制侧仍缺**事件级条件**与"任选一件遗物失去"（`N'loth`），见 §2 与 `docs/event-gaps.md` |
 | 塔底 Neow | **9 项**祝福 | 内容（缺"用初始遗物换 Boss 遗物"这类交易） |
 | **钥匙（红/蓝/绿）与第四幕** | 没有 | 内核 + 内容 |
-| **Ascension 1–20** | **20 / 20 条有机制**：14 条是运行层规则常量（A1 A5–A16 A20，`gap_check.py` 打印），A2/A3/A4 与 A17/18/19 走内容的 `EACT.ProgramAsc`。⚠️ A17/18/19 仍是**部分覆盖**（还有动作没有 wiki 出处），见 §E 与 §A.1 的说明 | 内容（补 17/18/19 的剩余动作） |
+| **Ascension 1–20** | **20 / 20 条有机制**：14 条是运行层规则常量（A1 A5–A16 A20，`gap_check.py` 打印），A2/A3/A4 与 A17/18/19 走内容的 `EACT.ProgramAsc`。**wiki 写了 `{{Asc|N|` 而内容缺档的动作是 0 条**（闸门 `[7b]`，§328），档位按**怪物**钉（§315/§327） | — （`without a variant: 59` 是 wiki 本来就没写升档的动作） |
 
 #### D.1 药水池：**7 瓶全部落地**（留档，不再算缺口）
 
@@ -311,9 +286,9 @@ wiki 常见而我们**没有**的：
 
 | 幕 | 普通池 | 精英池 | Boss 池 |
 |---|---|---|---|
-| 1 | **17** | 3 | 3（Slime Boss / Guardian / Hexaghost） |
-| 2 | **10** | 3（`gremlin_leader` / `book_of_stabbing` / `slavers`） | 3（Champ / Automaton / Collector） |
-| 3 | **6** | 3（`giant_head` / `nemesis` / `reptomancer`） | 3（Time Eater / Awakened One / Donu & Deca） |
+| 1 | **17** | 3（`three_sentries` / `gremlin_nob` / `lagavulin`） | 3（Slime Boss / Guardian / Hexaghost） |
+| 2 | **13**（wiki 13/13，§311–§314） | 3（`gremlin_leader` / `book_of_stabbing` / `slavers`） | 3（Champ / Automaton / Collector） |
+| 3 | **10**（wiki 10/10，§316–§317） | 3（`giant_head` / `nemesis` / `reptomancer`） | 3（Time Eater / Awakened One / Donu & Deca） |
 
 另外两处专用池：`EliteEvent`（3 条，`Dead Adventurer` 的伏击）与 `ColosseumSlavers` /
 `ColosseumChampions`（各 1 条，`The Colosseum` 的两场）。
@@ -416,7 +391,7 @@ X 随着触发**+1**，每回合开始**重置**"。它**可以纯内容实现**
 （那是**表达式**的布尔与，条件求值器不认识 ⇒ `UnknownConditionKind`）。第一次改的时候只在
 `Monsters` 里改、忘了 `Encounters` 里那份**敌人记录副本**还在用旧规则，于是"改完还是红"。
 
-### D.3.5 Act 3：wiki 的 10 条里做了 9 条（§316）
+### D.3.5 Act 3：wiki 的 10 条，**10 条齐了**（§316–§317）
 
 | wiki（`The_Beyond`） | 池 | 权重 | 状态 |
 |---|---|---|---|
@@ -736,7 +711,9 @@ Sentry 的 Bolt 塞的就是它。
 
 `Module:Ascension`（wiki）列了 20 条，全部**累计**。**14 条**运行层规则各自在阈值两侧各有一条测试
 （`gap_check.py` 的 "consulted somewhere: 14"），**另 6 条**（A2/A3/A4/A17/18/19）靠内容的
-`EACT.ProgramAsc` 变体实现 —— 所以机制层面是 **20/20**，但 17/18/19 的**动作覆盖**还不全。
+`EACT.ProgramAsc` 变体实现 —— 所以机制层面是 **20/20**。§328 起，"wiki 写了 `{{Asc|N|` 而内容
+缺档"的动作数是 **0**（闸门 `[7b]` 每次验收重比）；`without a variant: 59` 是 wiki 本来就没写升档的
+动作，不是缺口。
 
 | # | wiki 效果 | 状态 | 若要做，卡在哪 |
 |---|---|---|---|
@@ -756,9 +733,9 @@ Sentry 的 Bolt 塞的就是它。
 | 14 | 最大生命 −5 | **有** | — |
 | 15 | 事件更糟 | **有**（每个选项带 `Effects*Asc`，从 A15 起换成更糟的列表，§188） | — |
 | 16 | 商店贵 10% | **有** | — |
-| 17 | 普通敌人换招式表 | **有**（同一批变体里含 Slaver 的 Weak/Vulnerable 层数） | 内容：还有 33 个动作没有 wiki 出处 |
-| 18 | 精英换招式表 | **有**（Book of Stabbing 的 `N = turn + 1`） | 同上 |
-| 19 | Boss 换招式表 | **有**（Nemesis 5 张 Burn、Reptomancer 2 只匕首） | 同上 |
+| 17 | 普通敌人换招式表 | **有**（同一批变体里含 Slaver 的 Weak/Vulnerable 层数、Frail、`Fat Gremlin` 的 A17 附 1 Frail） | — |
+| 18 | 精英换招式表 | **有**（Book of Stabbing 的 `N = turn + 1`、Reptomancer 召 2 只、Nemesis 5 张 Burn、Taskmaster 3 Wound + 1 力量） | — |
+| 19 | Boss 换招式表 | **有**（Champ 的 Gloat→Defensive Stance、Collector 的 Buff 5 力量、Time Eater 的 32 Block / 2 Slimed / 1 Frail） | — |
 | 20 | 双 Boss（第三幕两只） | **有**（第一只倒下后节点重开，第二只才算赢，§189） | §194 起 `Boss3` 池有 3 只，所以两场可以是不同的一对 |
 
 **A2/3/4 与 A17/18/19 的机制已经落地**（§187）：`EACT` 有一个 `ProgramAsc` 变体列表
@@ -809,14 +786,12 @@ Sentry 的 Bolt 塞的就是它。
 4. ~~**"行动者可以自毁"**（内核）~~ ✅ **已完成**（§200：`vacated_seat` 交接 + `dagger.explode` 自毁）。
    ~~**Looter 的偷钱逃走**~~ ✅ **已完成**（§201：`node.carryAwayStolenGold` +
    `CombatState::gold_carried_away` + `fight_end` 结算）。**工作包 B 到这里全部完成。**
-5. **篝火选项**（运行层 + 内容，§233 之后的第一件事）：`Lift` / `Toke` / `Dig` + 开它们的
-   `girya` / `peace_pipe` / `shovel` 三件遗物，外加 `coffee_dripper` / `fusion_hammer` /
-   `dream_catcher` 三个"关闭/追加选项"的遗物。**`Recall` 与红钥匙**属于第四幕，跟着第 7 条。
-   *成本*：`toke`/`dig` 是既有能力的复用（删牌、抽遗物），`lift` 要多一条"每场战斗开始加力量"的
-   跨层传递 —— 那是这个包里唯一的新东西。
-6. **卡池规模**（§A.1 的 35 张红卡 + 31 张商店无色牌）—— 纯量，不阻塞机制；**不要**当 P1
-   （见审阅报告 §10.4 的反对意见）。但**无色货架**（商店里那一排）是内核的小改动 + 那 31 张的内容，
-   可以整批做。
+5. ~~**篝火选项**~~ ✅ **已完成**（§259：六个选项全通 + `Dream Catcher`）。**`Recall` 与红钥匙**
+   本身也做了，缺的是第四幕（第 7 条）。
+6. **卡池规模**：红卡与无色都**齐了**（`audit_card_gap.py`：Red 75/75、Colorless 70/70），
+   剩下的 **73 张全是观者**（§A.1），它们成堆挂在姿态 / Mantra / Scry / Retain / `Alpha`→`Omega` 上，
+   所以下一批要按**基建**聚类做。**无色货架**（商店里那一排）仍然没有 —— 那是内核的小改动
+   （`stock_shop` 加一排），内容侧已经就绪。
 7. **第四幕与钥匙**（运行层）—— 明确的范围外，等前面清完再说；`Recall` 挂在它上面。
 
 ---
@@ -825,6 +800,15 @@ Sentry 的 Bolt 塞的就是它。
 
 * 数字：`python -X utf8 native/gap_check.py`（内容/规则）与
   `python -X utf8 native/sts_content_check.py`（内容自洽）。
+* **新增的两道闸门**（都在 `sts_content_check.py` 里，验收时自动跑）：
+  * `[7b]`（§328）：读 `native/wiki_asc/*.txt` 的意图行，要求内容的 `ProgramAsc` **覆盖** wiki 的
+    `{{Asc|N|` —— "别的机制表达"的那几条走 `native/asc_other_means.py`（**只此一份**，审计脚本也读它）；
+  * `[7g]`（§330）：**段内 id 不许重复**。它是被一条真 bug 逼出来的：`Relics` 里
+    `mutagenic_strength` 重复了一行，22 道闸门一条都没红（`SEC_IDX` 照样索引得到、audit 用 `set`
+    自动吃掉重复），只有把 `gap_check` 的 153 与 audit 的 152 放在一起读才看得出来。
+* **工具自身也会说谎**（§330）：`audit_asc_gap.py` 的 `ROW` 正则非贪婪，遇到 `{{Asc|2|4}}` 的 `}}`
+  就截断，于是每行只读到第一个档位 —— 它报了 18 条假 MISMATCH / 3 条假 MISSING。修好之后
+  MISSING/MISMATCH 都是 0。**改工具时先问"它凭什么知道"**，别拿它的输出当证据。
 * wiki 侧引用（`slaythespire.wiki.gg`，最近核对 **2026-11-03**）：`Potions_List`、`Module:Potions/data`、
   `Colorless_Cards`、`Blind` / `Bandage_Up` / `Dark_Shackles` 单卡页、`Module:Ascension`、
   `Keywords`、`Rest Sites`、`Relics`、`Acts`、`Lagavulin` / `Book_of_Stabbing` / `Nemesis` /
@@ -838,20 +822,23 @@ Sentry 的 Bolt 塞的就是它。
 
 ## H. Boss 机制：**当前**与 wiki 的剩余差异（§194 → §195.9）
 
-数字全部来自 `native/wiki_asc/<boss>.txt`（`action=raw`）。这一张表**只写现在的差异**，
+数字全部来自 `native/wiki_asc/<boss>.txt`（`action=raw`）。这一张表**只写现在的差异** ——
+§328–§330 逐条对过之后，"剩余差异"那一列基本是空的（这就是它该有的样子）。
+
 历史降级（"Guardian 只按 HP 切形态""Awakened One 没有死亡拦截 / 没有 Cultist""Bronze Orb 没有
-Stasis""小兵预置"）已在 §195.1–§195.8 逐条修掉，过程见 `port-plan.md` 那几节。
+Stasis""小兵预置""Collector 死光后不再召唤""Champ 二阶段每回合 Execute"）都在
+§195.1–§195.8 与 §329–§330 逐条修掉了，过程见 `port-plan.md` 那几节。
 
 | Boss | 现在的行为 | 与 wiki 的**剩余**差异 |
 |---|---|---|
 | The Guardian | 进攻 4 循环；Sharp Hide（`CardPlayed` + `hasTag.attack`）；**Mode Shift = 累计受伤**（`Counters` 种 30/35/40，`eventAmount` 扣减，切防御态 +10）；防御态 Roll → Twin Slam → Whirlwind | 无（switch 落在"下一次选意图"，敌人只在自己回合动作） |
 | Hexaghost | Activate / Divider 两个开场规则 + 7 招轮转；Divider = `(HP/12 + 1) × 6`；**Inferno 升级所有已有 Burn**（`node.upgradeCards`） | Sear 后续塞的 Burn **不**自动升级（wiki："for the rest of combat"）；Divider 读结算时 HP |
-| The Champ | 420 HP；**45/25/15/15 带权抽签** + 任何一招不能连续两次 + 每 4 回合 Taunt；≤50% 后 Anger → Execute | A19 的 "Gloat 换成 Defensive Stance" 未实现；Anger 按名清 debuff；第二阶段只做第一次 Execute |
-| Bronze Automaton | 300 HP + Artifact 3；第 1 回合 **真召唤 2 Orb**（`Spawn: false`）；6 招循环；A19 用 Boost 顶替 Stunned | Orb 的 `Stasis` 用"最高稀有度"（并列随机），与 wiki 一致；"同一招不能三次"已做 |
-| The Collector | 282 HP；第 1 回合 **真召唤 2 Torch Head**；70/30 带权 + 不能连 Buff + 不能三次 Fireball；第 4 回合 Mega Debuff | 25/45/30（0-1 只 Torch Head 时的权重）未分档 |
-| Time Eater | 456 HP；45/35/20 带权 + 三次/两次的排除规则；≤50% 的 Haste 回血一次 | Haste 不清 debuff（没有"清空状态"节点）；`Draw Reduction` 已实现但 wiki 的"A19 另加 2 Slimed"没做 |
-| Awakened One | 300 HP；`DeathPrevention` 真复活；一阶段 75/25 + Slash 不能三次；二阶段 Dark Echo 一次后 50/50；**带两只 Cultist，主人倒下时逃跑** | 二阶段"不能连续三次 Tackle/Sludge"未做（规则预算 8 条已满）；Regenerate/Curiosity 层数不随 A19 变 |
-| Donu & Deca | 一对（250 HP 各 + Artifact 2）；Donu 交替 Circle / Beam；Deca 交替 Beam / Square | Artifact 层数不随 A19 变（`StartingStatuses` 没有升档轴） |
+| The Champ | 420 HP；**45/25/15/15 带权抽签** + 任何一招不能连续两次 + 每 4 回合 Taunt；≤50% 后 Anger（清三种 Debuff + 力量）→ Execute；二阶段按 **随机 / 随机 / Execute** 循环（`champ_exec` 计数器）；A19 把 Gloat 换成 Defensive Stance 且连用则回退 | **Taunt 在二阶段仍每 4 回合触发**（wiki 的 "Random Move (Same chances as Phase One)" 措辞含糊，我们按"包含 Taunt"实现） |
+| Bronze Automaton | 300 HP + Artifact 3；第 1 回合 **真召唤 2 Orb**（`Spawn: false`）；6 招循环；A19 用 Boost 顶替 Stunned；Orb 的 `Stasis` 按"最高稀有度"抓牌 | 无 |
+| The Collector | 282 HP；第 1 回合 **真召唤**（**up to 2**：两只都在时不加、只剩一只时补一只）；第 4 回合 Mega Debuff；两条分支的权重 **25/45/30**（0-1 只）与 **70/30**（两只都在）；不能连 Buff、不能三次 Fireball | 无（§329 收口） |
+| Time Eater | 456 HP；45/35/20 带权 + 三次/两次的排除规则；≤50% 的 Haste **回 50% 血 + 清所有 Debuff**（一次性，A19 另加 32 Block）；A19 的 Head Slam 另塞 2 张 Slimed、Ripple 另加 1 Frail | 无（§329 收口） |
+| Awakened One | 300 HP；`DeathPrevention` 真复活 → **Rebirth（回满血 + 清所有 Debuff + 失 Curiosity）**；一阶段 75/25 + Slash 不能三次；二阶段 Dark Echo 一次后 50/50 + Tackle/Sludge 不能三次；**带两只 Cultist，主人倒下时逃跑**；Regenerate/Curiosity 的 A19 层数已钉（15/2） | ⚠️ `Curiosity` 的触发器（`card.hasTag.power`）在**本内容里永不触发** —— 因为卡池 0 张 `power` 牌（§A.1 的观者缺口） |
+| Donu & Deca | 一对（250 HP 各 + Artifact 2，**A19 变 3**）；Donu 交替 Circle / Beam；Deca 交替 Beam / Square | 无 |
 
 **两条全局的**（都不在 Boss 里）：
 
