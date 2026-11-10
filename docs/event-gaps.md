@@ -56,7 +56,7 @@
 |---|---|---|---|
 | 1（Exordium，11 条） | Big Fish / The Cleric / Dead Adventurer / Golden Idol / Living Wall / Hypnotizing Colored Mushrooms / Scrap Ooze / Shining Light / The Ssssserpent / Wing Statue / World of Goop | **11 = 全部**（§325 补了 `big_fish` / `living_wall` / `mushrooms`） | — |
 | 2（The City，13 条） | Ancient Writing / Augmenter / The Colosseum / Council of Ghosts / Cursed Tome / Forgotten Altar / The Library / Masked Bandits / The Mausoleum / The Nest / Pleading Vagrant / Old Beggar / Vampires | **10**（§320 `the_library`，§322 `council_of_ghosts` / `pleading_vagrant` / `old_beggar` / `vampires`；另有 `the_joust`：wiki 这一版页面没列它，我们按 2 幕放） | 其余 **1**：`cursed_tome`（`necronomicon` **明确不做**，所以这条也不做） |
-| 3（The Beyond，7 条） | Falling / Mind Bloom / The Moai Head / Mysterious Sphere / Sensory Stone / Tomb of Lord Red Mask / Winding Halls | **7 = 全部**（§318 `Mysterious Sphere` / `Winding Halls`，§319 `Falling`，§320 `Sensory Stone`，§321 `Mind Bloom` / `Tomb of Lord Red Mask`） | — |
+| 3（The Beyond，7 条） | Falling / Mind Bloom / The Moai Head / Mysterious Sphere / Sensory Stone / Tomb of Lord Red Mask / Winding Halls | **7 = 全部**（§318 `Mysterious Sphere` / `Winding Halls`，§319 `Falling`，§320 `Sensory Stone`，§321 `Mind Bloom` / `Tomb of Lord Red Mask`）。⚠️ §339 修了两处**资格**：`The Moai Head` 的出现条件是 "Golden Idol **或** HP ≤ 50%"（原来只有后半，满血带 Idol 遇不到）；`Tomb of Lord Red Mask` **无条件**出现（原来要求"已持有红面具"，把唯一的获取途径挡掉了），互斥改到**选项**上（有面具 ⇒ `[Don the Red Mask]`，没面具 ⇒ `[Offer all Gold]`） | — |
 
 ★ **结论**：**Act 1 基本齐（8/11），Act 2 与 Act 3 是主要缺口（5/13、1/7）**。
 旧版本文档写"13 条已做"，其中 3 条（`old_shrine` / `ancient_forge` / `purification_shrine`）

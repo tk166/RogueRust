@@ -4581,9 +4581,14 @@ REQUIRES_KINDS = ("gold", "health", "max_health", "health_percent", "deck_count"
                   # 按类型上锁）。`Id` 必须是下面 `CARD_KIND_NAMES` 里的一个。
                   "card_tag",
                   # §321：`floor` —— **本幕内的层号**（`mind_bloom` 的第三个选项按它换）。
-                  "floor")
+                  "floor",
+                  # §331：`relic_count` —— 身上有几件遗物（`N'loth` 的"至少 2 件才出现"）。
+                  # ⚠️ 这一条是 §339 补的：§331 只把它加进了 `rd-core::run_expr` 的 `KINDS`，
+                  # 这份手抄表漏了。当时没红，是因为这份表只查**选项级** `Requires`，
+                  # 而 `relic_count` 只出现在**事件级** —— 见下面第 ② 条。
+                  "relic_count")
 REQUIRES_NUMERIC = ("gold", "health", "max_health", "health_percent", "deck_count", "ascension",
-                    "card_damage", "floor")
+                    "card_damage", "floor", "relic_count")
 REQUIRES_NUMERIC_OPS = ("at_least", "at_most")
 REQUIRES_PRESENCE_OPS = ("has", "lacks")
 
@@ -5130,7 +5135,9 @@ def check_event_vocabulary(doc):
     relics = {r["Id"] for r in doc.get("Relics") or []}
     counts = {"bare": 0, "curse": 0, "relic": 0, "percent": 0, "effects": 0, "asc": 0,
               "options": 0, "steps": 0, "conditional": 0, "conditions": 0,
-              "cost": 0}
+              "cost": 0,
+              # §339：事件级两组条件同时出现的条目数（AND && OR）。它不是错误，只是评审时值得看一眼。
+              "both_groups": 0}
     reached = set()
 
     def check_effects(label, effects, kind_label):
@@ -5597,9 +5604,30 @@ def check_event_vocabulary(doc):
                 fail(where + ".MinGold", "must be 1..=999, got %r" % (min_gold,))
             if high and low and high < low:
                 fail(where, "MaxFloor %d is below MinFloor %d" % (high, low))
-    ok("event pools", "act1=%d act2=%d act3=%d"
+            # ── §339：事件级条件（`Requires` = AND 组，`RequiresAny` = OR 组）────────────
+            # 原来这一格**没人查**：写个词表外的 Kind 只会在掷到它时让 `event_pool_at_with_facts`
+            # 返回 `None`（整池拒绝），而屏幕上是"`?` 房不出事件"。静态能查的不该留到运行时。
+            for req_key in ("Requires", "RequiresAny"):
+                atoms = row.get(req_key)
+                if atoms is None:
+                    continue
+                if not isinstance(atoms, list) or not atoms:
+                    # 空列表是**笔误**（"没有这一组"应该是**不写这个键**）。OR 组尤其危险：
+                    # 空的 OR 组按"没有要求"处理，写的人以为它"永不成立"。
+                    fail(where + "." + req_key, "must be a non-empty list, got %r" % (atoms,))
+                    continue
+                if len(atoms) > REQUIRES_MAX:
+                    fail(where + "." + req_key,
+                         "%d atoms, the kernel keeps %d" % (len(atoms), REQUIRES_MAX))
+                    continue
+                check_requirement_atom(atoms, where + "." + req_key, relics, cards, counts)
+            if row.get("Requires") and row.get("RequiresAny"):
+                # 两组同时出现是**允许**的（AND && OR），但它意味着作者想表达
+                # "(A 且 B) 且 (C 或 D)" —— 这种情况值得在评审时看一眼，不是错误。
+                counts["both_groups"] += 1
+    ok("event pools", "act1=%d act2=%d act3=%d (both groups: %d)"
        % (len(tables.get("Events") or []), len(tables.get("Events2") or []),
-          len(tables.get("Events3") or [])))
+          len(tables.get("Events3") or []), counts["both_groups"]))
 
     # §319：`card_tag` 条件与 `remove_card_random:` 效果**必须指同一个类型**。
     # 两者写岔不会在别处红（条件只是"画不画按钮"，效果由内核按自己的载荷办），

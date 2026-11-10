@@ -28,8 +28,26 @@
 //! `Requires:` 行只有一句），而一棵树要一套解析器、一套求值器、一套"这张表里有但没实现"
 //! 的判据。一串原子两个循环就够了，而且**闭集**意味着内容门可以逐条判。
 //!
-//! 缺 `or` 是**已知的表达力缺口**，不是遗漏：真出现"要么有 X 要么有 Y"的选项时再加一棵树，
-//! 那时它值一次单独一节（与 §278 的 `EVND` 同一档）。
+//! # §339：`RequiresAny` —— 组内 OR、组间 AND
+//!
+//! ```json
+//! "RequiresAny": [
+//!   {"Kind": "health_percent", "Op": "at_most", "Amount": 50},
+//!   {"Kind": "relic", "Op": "has", "Id": "golden_idol"}
+//! ]
+//! ```
+//!
+//! 语义是 `AND(Requires) && (RequiresAny 为空 || OR(RequiresAny))`。它存在的理由是一个
+//! **真实的内容缺口**：`The Moai Head` 的出现条件是 "either has Golden Idol, **or** their HP
+//! is at or below 50%"（wiki），而一串 AND 原子表达不了 —— 写两条会变成"两个都要满足"，
+//! 于是满血 + 持有 Golden Idol 的玩家永远遇不到这个事件。
+//!
+//! 为什么仍然是**两个平铺列表**而不是布尔树：真实内容里的需求只有"AND 一组、OR 一组"这一种
+//! 形状；一棵树要一套解析器、一套求值器、一套"表里有但没实现"的判据，而两个循环就够了。
+//! 树留到真的需要嵌套时再说 —— 那时它值单独一节。
+//!
+//! ⚠️ **没有** `RequiresAnyAsc`：Moai 的条件与 Ascension 无关。`RequiresAsc` 之所以存在，
+//! 是因为 A15 真的改了价目（`The Cleric` 的 Purify 50 → 75）。"以后可能需要"不是加接口的理由。
 
 use crate::content::Content;
 use crate::ir::{IrError, NodeRef, Value};
@@ -161,9 +179,45 @@ pub fn option_is_available<'a>(
     } else {
         "Requires"
     };
+    // ── 组间 AND：`Requires`（或 A15 的 `RequiresAsc`）全部成立 ────────────────
     let mut terms = [0u16; MAX_REQUIREMENTS + 1];
+    let count = read_atoms(node, key, &mut terms)?;
+    for term in terms.iter().take(count) {
+        let atom = NodeRef::new(content, *term);
+        if !atom_holds(content, atom, facts)? {
+            return Ok(false);
+        }
+    }
+
+    // ── 组内 OR：`RequiresAny` 只要一条成立（§339）────────────────────────────
+    //
+    // 空列表 = "这一组没要求"，**不是**"永不成立"。这条区分很重要：绝大多数选项没有这个字段，
+    // 把它们判成 false 会让整个内容变成死按钮，而且没有任何闸门会红（事件池只是变小）。
+    let mut any = [0u16; MAX_REQUIREMENTS + 1];
+    let any_count = read_atoms(node, "RequiresAny", &mut any)?;
+    if any_count == 0 {
+        return Ok(true);
+    }
+    for term in any.iter().take(any_count) {
+        let atom = NodeRef::new(content, *term);
+        if atom_holds(content, atom, facts)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// 读一串条件原子（镜像里是 `F_TERMLIST`）到 `terms`，返回条数。
+///
+/// 抽出来是因为 §339 之后有**两组**（`Requires` / `RequiresAny`），而"超容量 vs 形状坏了"
+/// 这两个错误分支写两遍就会有一遍写错。
+fn read_atoms<'a>(
+    node: NodeRef<'a>,
+    key: &str,
+    terms: &mut [u16; MAX_REQUIREMENTS + 1],
+) -> Result<usize, RequirementError> {
     let count = node
-        .term_list_field_or_empty(key, &mut terms)
+        .term_list_field_or_empty(key, terms)
         .map_err(|error| match error {
             // 列表比缓冲还长 ⇒ 超容量（不是"形状坏了"）。
             IrError::List => RequirementError::TooMany,
@@ -172,13 +226,7 @@ pub fn option_is_available<'a>(
     if count > MAX_REQUIREMENTS {
         return Err(RequirementError::TooMany);
     }
-    for term in terms.iter().take(count) {
-        let atom = NodeRef::new(content, *term);
-        if !atom_holds(content, atom, facts)? {
-            return Ok(false);
-        }
-    }
-    Ok(true)
+    Ok(count)
 }
 
 /// 一条原子。`Kind` 必须在 [`KINDS`] 里；`Op` 必须与 kind 配套。

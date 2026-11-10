@@ -825,7 +825,7 @@
 | dead_adventurer | yes | the_unknown_room_events_are_readable, an_event_can_turn_the_room_into_a_fight …(+4) | — | — | — | the_unknown_room_events_are_readable |
 | falling | yes | the_unknown_room_events_are_readable, falling_removes_a_card_of_the_named_kind …(+2) | — | — | — | the_unknown_room_events_are_readable |
 | forgotten_altar | yes | the_unknown_room_events_are_readable, an_event_choice_that_edits_the_deck_owes_a_pick | — | — | — | the_unknown_room_events_are_readable |
-| golden_idol | yes | the_unknown_room_events_are_readable, every_kind_answers_both_sides …(+14) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
+| golden_idol | yes | the_unknown_room_events_are_readable, event_level_requirements_filter_the_pool_before_the_roll …(+15) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
 | living_wall | yes | the_unknown_room_events_are_readable, parasite_costs_max_health_whenever_it_leaves_the_deck …(+1) | — | — | — | the_unknown_room_events_are_readable |
 | masked_bandits | yes | the_unknown_room_events_are_readable, masked_bandits_fight_brings_three_named_bandits | — | — | — | the_unknown_room_events_are_readable |
 | mind_bloom | yes | the_unknown_room_events_are_readable, upgrade_all_upgrades_every_card_that_has_a_plus_row …(+2) | — | — | — | the_unknown_room_events_are_readable |
@@ -907,7 +907,7 @@
 | gambling_chip | yes | the_combat_open_relics_are_a_bitmask_and_absent_without_the_relics, gambling_chip_asks_at_combat_start_and_discards_then_draws …(+1) | — | — | — | §303/§304/the_combat_open_relics_are_a_bitmask_and_absent_without_the_relics |
 | ginger | yes | the_status_application_relics_wire_their_own_carrier | — | — | — | §264/§265/the_status_application_relics_wire_their_own_carrier |
 | girya | yes | campfire_options_follow_the_relics_the_wiki_names, dig_only_rolls_common_uncommon_or_rare …(+2) | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
-| golden_idol | yes | the_unknown_room_events_are_readable, every_kind_answers_both_sides …(+14) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
+| golden_idol | yes | the_unknown_room_events_are_readable, event_level_requirements_filter_the_pool_before_the_roll …(+15) | — | — | — | §156/§157/the_unknown_room_events_are_readable |
 | gremlin_horn | yes | the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier | — | — | — | §262/§263/the_enemy_death_and_damage_rewrite_relics_wire_their_own_carrier |
 | gremlin_visage | yes | the_zero_infrastructure_batch_wires_the_right_carrier | — | — | — | §266/§267/the_zero_infrastructure_batch_wires_the_right_carrier |
 | hand_drill | yes | — | an_id_that_is_a_card_and_a_relic_is_not_an_encounter …(+6) | — | — | §294/§295 |

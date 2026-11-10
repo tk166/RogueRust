@@ -171,19 +171,20 @@
 185  4  5  12 OBJ _obj(Id,Options,RelicOffer,TextKey)                          : Id:STR Options:TERMLIST RelicOffer:INT TextKey:STR
 186  3  4  12 OBJ _obj(Id,Options,TextKey)                                     : Id:STR Options:TERMLIST TextKey:STR
 187  2  3   8 OBJ _obj(Id,Requires)                                            : Id:STR Requires:TERMLIST
-188  2  2   8 OBJ _obj(Id,Root)                                                : Id:STR(Wrap) Root:TERM
-189  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
-190  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
-191  3  3   8 OBJ _obj(Key,Max,Min)                                            : Key:STR Max:INT Min:INT
-192  2  2   8 OBJ _obj(Key,Value)                                              : Key:STR Value:INT
-193  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
-194  2  2   8 OBJ _obj(Next,Weight)                                            : Next:STR Weight:INT
-195  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
-196  3  3   8 OBJ _obj(Percent,Repeating,SurvivingHealth)                      : Percent:INT Repeating:BOOL SurvivingHealth:INT
-197  1  1   4 OBJ _obj(RelicOffer)                                             : RelicOffer:INT
-198  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
-199  1  1   4 OBJ _obj(TurnEndInHand)                                          : TurnEndInHand:TERM
-200  1  1   4 OBJ _obj(gold)                                                   : gold:INT
+188  2  3   8 OBJ _obj(Id,RequiresAny)                                         : Id:STR RequiresAny:TERMLIST
+189  2  2   8 OBJ _obj(Id,Root)                                                : Id:STR(Wrap) Root:TERM
+190  3  3   8 OBJ _obj(Id,Start,UnlockFlag)                                    : Id:STR Start:TERM UnlockFlag:TERM
+191  2  2   8 OBJ _obj(Id,Weight)                                              : Id:STR Weight:INT
+192  3  3   8 OBJ _obj(Key,Max,Min)                                            : Key:STR Max:INT Min:INT
+193  2  2   8 OBJ _obj(Key,Value)                                              : Key:STR Value:INT
+194  2  2   8 OBJ _obj(Kind,Label)                                             : Kind:STR Label:STR
+195  2  2   8 OBJ _obj(Next,Weight)                                            : Next:STR Weight:INT
+196  2  2   8 OBJ _obj(Path,Why)                                               : Path:STR Why:STR
+197  3  3   8 OBJ _obj(Percent,Repeating,SurvivingHealth)                      : Percent:INT Repeating:BOOL SurvivingHealth:INT
+198  1  1   4 OBJ _obj(RelicOffer)                                             : RelicOffer:INT
+199  2  2   8 OBJ _obj(Stacks,StatusDefinitionId)                              : Stacks:INT StatusDefinitionId:STR(wrap)
+200  1  1   4 OBJ _obj(TurnEndInHand)                                          : TurnEndInHand:TERM
+201  1  1   4 OBJ _obj(gold)                                                   : gold:INT
 
 # reserved opcodes:
   0 reserved : (no fields)

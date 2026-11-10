@@ -81060,11 +81060,16 @@
       },
       {
         "Id": "the_moai_head",
-        "Requires": [
+        "RequiresAny": [
           {
             "Kind": "health_percent",
             "Op": "at_most",
             "Amount": 50
+          },
+          {
+            "Kind": "relic",
+            "Op": "has",
+            "Id": "golden_idol"
           }
         ]
       },
@@ -81081,14 +81086,7 @@
         "Id": "sensory_stone"
       },
       {
-        "Id": "tomb_of_lord_red_mask",
-        "Requires": [
-          {
-            "Kind": "relic",
-            "Op": "has",
-            "Id": "red_mask"
-          }
-        ]
+        "Id": "tomb_of_lord_red_mask"
       },
       {
         "Id": "mind_bloom"
@@ -83869,6 +83867,11 @@
               "Kind": "gold",
               "Op": "at_least",
               "Amount": 1
+            },
+            {
+              "Kind": "relic",
+              "Op": "lacks",
+              "Id": "red_mask"
             }
           ],
           "Effects": [
