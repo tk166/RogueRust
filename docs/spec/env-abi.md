@@ -212,7 +212,7 @@ int rd_run_step(int action_index); /* 0 接受；负值拒绝且**状态逐字�
 | 9..15 | 七条 RNG 流的计数器，**按 stream id 1..=7 升序**（`run-layer.md` §3.2） |
 | 16 | `reachable_count`（本步可进入的节点数） |
 | 17 | `removed_cards` |
-| 18 | 保留（置 0） |
+| 18 | `unknown_room`：`0` 未掷/非 `?` 房 · `1` 事件 · `2` 怪物 · `3` 商人 · `4` 宝箱（§272） |
 
 ### 11.4 动作
 
