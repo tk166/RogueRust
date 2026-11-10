@@ -10558,6 +10558,58 @@ mod tests {
 
     /// §286：**事件把房间变成一场战斗** —— `[Fight]` 之后 `fight_begin` 必须接受，并且按
     /// **精英**结算。
+    /// §323：`Masked Bandits` 的 `[Fight!]` —— 三名 bandit（Pointy / Romeo / Bear）真的上场。
+    #[test]
+    fn masked_bandits_fight_brings_three_named_bandits() {
+        let mut seed_found = None;
+        for seed in 0..2000 {
+            if !walk_until_unknown(seed) {
+                continue;
+            }
+            if rd_run_begin_node() != 0 {
+                continue;
+            }
+            if run_slot()
+                .as_mut()
+                .expect("a run")
+                .state
+                .begin_event("masked_bandits", "masked_bandits")
+                .is_err()
+            {
+                continue;
+            }
+            seed_found = Some(seed);
+            break;
+        }
+        let seed = seed_found.expect("no `?` room in 2000 seeds");
+        // 0 = `[Pay]`、1 = `[Fight!]`。
+        assert_eq!(rd_run_choose(1), 0, "seed {seed}: Fight! -- {}", run_error_text());
+        assert_eq!(
+            rd_run_event_fight(),
+            1,
+            "seed {seed}: wiki says this fight is **not** an elite"
+        );
+        assert_eq!(rd_run_fight_begin(), 0, "seed {seed}: {}", run_error_text());
+        // 敌人名走**观察 ABI**（与 `act_two_fights_act_two_enemies` 同一套），不直接摸状态：
+        // 判据要验的是"玩家看到的三个是谁"。
+        let mut names: Vec<String> = Vec::new();
+        let mut index = 0;
+        while rd_env_enemy_name_len(index) >= 0 {
+            let n = rd_env_enemy_name_len(index);
+            let mut buffer = vec![0u8; n as usize];
+            unsafe { rd_env_enemy_name_into(index, buffer.as_mut_ptr()) };
+            names.push(String::from_utf8(buffer).unwrap_or_default());
+            index += 1;
+        }
+        assert_eq!(names.len(), 3, "seed {seed}: three bandits, got {names:?}");
+        assert!(
+            names.iter().any(|name| name.eq_ignore_ascii_case("pointy"))
+                && names.iter().any(|name| name.eq_ignore_ascii_case("romeo"))
+                && names.iter().any(|name| name.eq_ignore_ascii_case("bear")),
+            "seed {seed}: the three bandits by name, got {names:?}"
+        );
+    }
+
     /// §322：`Pleading Vagrant` 的 `[Rob]` —— 随机遗物 + `Shame` + 走到下一段。
     #[test]
     fn pleading_vagrant_rob_gives_a_relic_and_a_curse_then_moves_on() {

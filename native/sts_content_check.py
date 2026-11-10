@@ -82,7 +82,8 @@ INV_COUNTS = {
     # §173: +3 (Lagavulin / Book of Stabbing / Taskmaster); §175: +3 (Nemesis / Reptomancer / Dagger).
     # §201: +1 (Looter).
     # §282: +1 (`snecko`, Act 2's normal enemy carrying `Confusion`).
-    "monsters": 58,
+    # §323: +3（Masked Bandits 的 Pointy / Romeo / Bear —— 册外敌人）。
+    "monsters": 61,
     # 3 weak-pool encounters + 1 elite (`enc_three_sentries`) + 1 boss (`enc_slime_boss`).
     # §173: +3 (lagavulin / book of stabbing / slavers); §175: +2 (nemesis / reptomancer).
     # §201: +1 (`enc_looter`, the solo Looter).
@@ -874,6 +875,11 @@ INV_CARDS = {
 MAX_ENEMIES_IN_FIGHT = 6
 
 INV_MONSTERS = [
+    # §323：Masked Bandits 的三名册外敌人（wiki `Masked_Bandits`）。HP 是**下界**：
+    # Pointy 30（A7 34）/ Romeo 35-39（A7 37-41）/ Bear 38-42（A7 40-44）。
+    ("pointy", 30, 30, ["pointy.special"]),
+    ("romeo", 35, 39, ["romeo.mock", "romeo.agonizing_slash", "romeo.cross_slash"]),
+    ("bear", 38, 42, ["bear.bear_hug", "bear.lunge", "bear.maul"]),
     # §317：Act 3 的 Transient —— HP 999（不随升阶变），一招（伤害随回合递增）。
     ("transient", 999, 999, ["transient.attack"]),
     # §316：Act 3 的 Shapes（wiki `Shapes`）：Repulsor 29-35（A7 31-38）、Exploder **30**。
@@ -1015,6 +1021,16 @@ INV_MONSTERS = [
 
 # inv:§4.1 -- every enemy action, as mechanically derived facts.
 INV_ACTIONS = {
+    # §323：Masked Bandits。Pointy 5×2；Romeo Mock 什么都不做 → Agonizing（10 + 2 Weak）/
+    # Cross（15）交替；Bear Bear Hug（-2 敏捷）→ Lunge（9 + 9 格挡）/ Maul（18）交替。
+    "pointy.special": ("Attack", [("repeat", 2, "damage", 5, "event")]),
+    "romeo.mock": ("Unknown", []),
+    "romeo.agonizing_slash": ("Attack", [("damage", 10, "event"),
+                                         ("status", "standard.weak", 2, "event")]),
+    "romeo.cross_slash": ("Attack", [("damage", 15, "event")]),
+    "bear.bear_hug": ("Debuff", [("modify", "standard.dexterity", -2, "event")]),
+    "bear.lunge": ("Attack", [("damage", 9, "event"), ("block", 9, "source")]),
+    "bear.maul": ("Attack", [("damage", 18, "event")]),
     # §317：`20 + 10 × roundNumber`（第 1 回合 30、第 2 回合 40……）。
     "transient.attack": ("Attack",
                          [("damage", ('add', 20, ('multiply', ('expr', 'roundNumber'), 10)),
@@ -1544,6 +1560,13 @@ INV_EVENT_ONLY = {
     "enc_two_orb_walkers": (
         ["orb_walker", "orb_walker"],
         "Mysterious Sphere `[Open Sphere]`: \"the player enters combat with the 2 Orb Walkers\"",
+    ),
+    # §323：`Masked Bandits` 的 `[Fight!]` —— "the three bandits (Pointy, Romeo, and Bear)"。
+    # ⚠️ wiki 明写它**不算精英**（对 Preserved Insect / Sling of Courage / Black Star /
+    # Slaver's Collar 而言），所以事件里写的是 `Fight: "monster"`。
+    "enc_masked_bandits": (
+        ["pointy", "romeo", "bear"],
+        "Masked Bandits `[Fight!]`: \"the three bandits (Pointy, Romeo, and Bear)\"",
     ),
 }
 
@@ -2413,6 +2436,10 @@ INTENT_CONDITIONS = ("intent.healthPercent", "intent.round", "intent.selfHasStat
                      "intent.ascensionAtLeast", "intent.enemyAliveCount")
 INTENT_OPS = ("Equal", "NotEqual", "Less", "LessOrEqual", "Greater", "GreaterOrEqual")
 
+# §323：内核的 **6** 种意图（`rd-core::intent::IntentKind`）。这张表不是“第二意见”，
+# 而是“内核的副本”—— 内容与 `INV_ACTIONS` 可以互相一致地一起错（实测过）。
+INTENT_KINDS = ("Unknown", "Attack", "Defend", "Buff", "Debuff", "Special")
+
 
 def check_intent_rules(doc):
     """§148: every `IntentRules` entry must be **executable**.
@@ -2545,9 +2572,15 @@ def check_cards_and_actions(doc):
         if action is None:
             fail("action." + aid, "missing")
             continue
-        if (action.get("Intent") or {}).get("Kind") != intent:
-            fail("action." + aid, "intent %r, inv says %r"
-                 % ((action.get("Intent") or {}).get("Kind"), intent))
+        kind = (action.get("Intent") or {}).get("Kind")
+        # §323：**先**与内核的闭集对一次。这个洞是真踩过的：内容与这张表都写了
+        # `AttackDefend`，“两个乞丐一起错”—— 内容门全绿，而内核在**第 6 回合**才
+        # 抛 `UnknownIntentKind`。词表只有一份（`rd-core::intent::IntentKind`）。
+        if kind not in INTENT_KINDS:
+            fail("action." + aid, "intent kind %r is outside the kernel's %d"
+                 % (kind, len(INTENT_KINDS)))
+        elif kind != intent:
+            fail("action." + aid, "intent %r, inv says %r" % (kind, intent))
         got, _code = split_history(program_facts(action["Program"]["Root"]))
         if got != facts:
             fail("action." + aid, "facts %s, inv says %s" % (got, facts))
@@ -2570,6 +2603,17 @@ def check_cards_and_actions(doc):
 # `native/patch_187_content.py` 的表头），而不是从内容拄过来的 --
 # "从内容生成期望值"等于没有期望值。
 INV_ASC_VARIANTS = {
+    # §323：Masked Bandits。Pointy 5×2 → A2 6×2；Romeo Agonizing 10→12（A2）、Weak 2→3（A17）、
+    # Cross 15→17；Bear Lunge 9→10、Maul 18→20、Bear Hug 敏捷 -2 → A17 -4。
+    'pointy.special': [(2, [('repeat', 2, 'damage', 6, 'event')])],
+    'romeo.agonizing_slash': [
+        (2, [('damage', 12, 'event'), ('status', 'standard.weak', 2, 'event')]),
+        (17, [('damage', 12, 'event'), ('status', 'standard.weak', 3, 'event')]),
+    ],
+    'romeo.cross_slash': [(2, [('damage', 17, 'event')])],
+    'bear.bear_hug': [(17, [('modify', 'standard.dexterity', -4, 'event')])],
+    'bear.lunge': [(2, [('damage', 10, 'event'), ('block', 9, 'source')])],
+    'bear.maul': [(2, [('damage', 20, 'event')])],
     # §317：Transient 的 Attack 在 A2 起整条 +10（第 1 回合 40）。
     'transient.attack': [(2, [('damage', ('add', 30, ('multiply', ('expr', 'roundNumber'), 10)),
                                 'event')])],
@@ -3120,6 +3164,8 @@ INV_TIME_VARIABLES = {
 # content is what the kernel reads, this table is what the wiki said, and the check is that they
 # match. `maw` is absent on purpose -- its wiki page 404s, so that record keeps the old `+10%` model.
 INV_ASC_HP = {
+    # §323：Pointy 30 → A7 34；Romeo 35-39 → 37-41；Bear 38-42 → 40-44（表里是下界）。
+    'pointy': 34, 'romeo': 37, 'bear': 40,
     'spike_slime_s': 11, 'fat_gremlin': 14, 'sneaky_gremlin': 11, 'blue_slaver': 48,
     'acid_slime_s': 9, 'acid_slime_m': 29, 'spike_slime_m': 29, 'jaw_worm': 42,
     'cultist': 50, 'gremlin_wizard': 22, 'sentry_1': 39, 'sentry_2': 39, 'sentry_3': 39,
@@ -3338,6 +3384,8 @@ def check_ascension_variants(doc):
 # "the wiki has no A-row here" is a decision, and a decision has to be written down or the next
 # reader cannot tell it from "nobody looked".
 INV_NO_ASC = {
+    # §323：Romeo 的 Mock 是 "Does nothing."，wiki 没有 A 档。
+    'romeo.mock': 'wiki Masked Bandits: Mock does nothing, no A-row',
     # §316：Daze 只有 "Adds 2 Dazed"，Explode 只有 "Deals 30 damage. Dies." —— 都没有 A 档。
     'repulsor.daze': 'wiki Shapes: Daze has no A-row',
     'exploder.explode': 'wiki Shapes: Explode has no A-row', 

@@ -3069,6 +3069,8 @@ impl<'a> Content<'a> {
             "ColosseumChampions" => "EncounterTables.ColosseumChampions",
             // §318：`Mysterious Sphere` 的两只 Orb Walker。
             "MysteriousSphere" => "EncounterTables.MysteriousSphere",
+            // §323：`Masked Bandits` 的 `[Fight!]` 用事件自己的池（三名 bandit）。
+            "MaskedBandits" => "EncounterTables.MaskedBandits",
             _ => return None,
         };
         self.id_pool("EncounterTables", pool, hop)
@@ -3317,6 +3319,8 @@ impl<'a> Content<'a> {
             "ColosseumChampions" => "EncounterTables.ColosseumChampions",
             // §318：`Mysterious Sphere` 的两只 Orb Walker。
             "MysteriousSphere" => "EncounterTables.MysteriousSphere",
+            // §323：`Masked Bandits` 的 `[Fight!]` 用事件自己的池（三名 bandit）。
+            "MaskedBandits" => "EncounterTables.MaskedBandits",
             _ => return None,
         };
         let root = self.root_by_name("EncounterTables")?;
@@ -5288,8 +5292,10 @@ mod tests {
         // §287：**事件**的池。它与上面九个的性质不同 —— 事件可以**复用**本幕的遭遇
         // （`Dead Adventurer` 的伏击就是"三个精英之一"，其中一个换了开场），所以它不参与
         // "一个遭遇只属于一个池"那条不变式；它参与的是"每个 ENCT 行都可达"。
-        const EVENT_POOLS: [&str; 4] = ["EliteEvent", "ColosseumSlavers", "ColosseumChampions",
-                                        "MysteriousSphere"];
+        const EVENT_POOLS: [&str; 5] = ["EliteEvent", "ColosseumSlavers", "ColosseumChampions",
+                                        "MysteriousSphere",
+                                        // §323：`Masked Bandits` 的 `[Fight!]`。
+                                        "MaskedBandits"];
         let mut seen: Vec<&str> = Vec::new();
         for name in POOLS {
             let pool = content
@@ -5491,13 +5497,13 @@ mod tests {
         let content = Content::parse(&bytes).expect("the image parses");
         assert_eq!(
             content.event_count(),
-            30,
+            31,
             "§280 补了 `the_cleric` / `the_moai_head`，§285 补了 `world_of_goop` / `wing_statue` /
              `the_joust`，§286 补了 `dead_adventurer`，§288 补了 `the_colosseum`，§290 补了 `the_nest`，
              §318 补了 `winding_halls` / `mysterious_sphere`（`scrap_pile` 改成 Scrap Ooze 的 9 段链），
              §319 补了 `falling`，§320 补了 `the_library` / `sensory_stone`，§321 补了 `mind_bloom` /
              `tomb_of_lord_red_mask`，§322 补了 `council_of_ghosts` / `pleading_vagrant` /
-             `old_beggar` / `vampires`。pools 的**位次**比
+             `old_beggar` / `vampires`，§323 补了 `masked_bandits`。pools 的**位次**比
              id 多，因为 `EventTables` 让 `purification_shrine` / `golden_idol` / `ancient_forge`
              跨幕复用（§133 / §143）"
         );
@@ -5666,6 +5672,7 @@ mod tests {
                 "forgotten_altar",
                 "golden_idol",
                 // §321
+                "masked_bandits",
                 "mind_bloom",
                 "mysterious_sphere",
                 // §322

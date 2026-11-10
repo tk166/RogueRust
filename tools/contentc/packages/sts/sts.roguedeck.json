@@ -55509,6 +55509,1456 @@
           }
         }
       ]
+    },
+    {
+      "Id": "pointy.special",
+      "PackageId": "sts",
+      "NameKey": "Pointy Special",
+      "DescriptionKey": "Pointy Special - 5x2 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Pointy Special - 5x2 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.repeat",
+                "value": {
+                  "Count": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Body": {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 5
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  "MaxCount": 32
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 0
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.repeat",
+                    "value": {
+                      "Count": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "Body": {
+                        "kind": "node.dealDamage",
+                        "value": {
+                          "TargetSelector": {
+                            "kind": "sel.eventTarget",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "EventTarget"
+                            }
+                          },
+                          "Amount": {
+                            "kind": "const",
+                            "value": {
+                              "Value": 6
+                            }
+                          },
+                          "ResultKey": null,
+                          "IgnoresBlock": false,
+                          "Element": null
+                        }
+                      },
+                      "MaxCount": 32
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 0
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "romeo.mock",
+      "PackageId": "sts",
+      "NameKey": "Mock",
+      "DescriptionKey": "Mock - nothing",
+      "Intent": {
+        "Kind": "Unknown",
+        "Label": "Mock"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 0
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      }
+    },
+    {
+      "Id": "romeo.agonizing_slash",
+      "PackageId": "sts",
+      "NameKey": "Agonizing Slash",
+      "DescriptionKey": "Agonizing Slash - 10 damage, 2 Weak",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Agonizing Slash - 11 damage, 2 Weak"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 10
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.applyStatus",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.weak"
+                  },
+                  "Stacks": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "DurationTurns": 0,
+                  "Charges": 0,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 12
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.weak"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        },
+        {
+          "AscensionMin": 17,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 12
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.applyStatus",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.weak"
+                      },
+                      "Stacks": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 3
+                        }
+                      },
+                      "DurationTurns": 0,
+                      "Charges": 0,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "romeo.cross_slash",
+      "PackageId": "sts",
+      "NameKey": "Cross Slash",
+      "DescriptionKey": "Cross Slash - 15 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Cross Slash - 16 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 15
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 17
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "bear.bear_hug",
+      "PackageId": "sts",
+      "NameKey": "Bear Hug",
+      "DescriptionKey": "Bear Hug - -2 Dexterity",
+      "Intent": {
+        "Kind": "Debuff",
+        "Label": "Bear Hug - -2 Dexterity"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.modifyStatusStacks",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "StatusDefinitionId": {
+                    "value": "standard.dexterity"
+                  },
+                  "Delta": {
+                    "kind": "const",
+                    "value": {
+                      "Value": -2
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 0
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 17,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.modifyStatusStacks",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "StatusDefinitionId": {
+                        "value": "standard.dexterity"
+                      },
+                      "Delta": {
+                        "kind": "const",
+                        "value": {
+                          "Value": -4
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 0
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "bear.lunge",
+      "PackageId": "sts",
+      "NameKey": "Lunge",
+      "DescriptionKey": "Lunge - 9 damage, 9 Block",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Lunge - 10 damage, 9 Block"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 9
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.gainBlock",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 9
+                    }
+                  },
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 1
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 10
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.gainBlock",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 9
+                        }
+                      },
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 1
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
+    },
+    {
+      "Id": "bear.maul",
+      "PackageId": "sts",
+      "NameKey": "Maul",
+      "DescriptionKey": "Maul - 18 damage",
+      "Intent": {
+        "Kind": "Attack",
+        "Label": "Maul - 19 damage"
+      },
+      "Program": {
+        "Id": {
+          "Value": "(unnamed)"
+        },
+        "Root": {
+          "kind": "node.sequence",
+          "value": {
+            "Children": [
+              {
+                "kind": "node.dealDamage",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.eventTarget",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "EventTarget"
+                    }
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 18
+                    }
+                  },
+                  "ResultKey": null,
+                  "IgnoresBlock": false,
+                  "Element": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "prev_move"
+                  },
+                  "Amount": {
+                    "kind": "combatantCounter",
+                    "value": {
+                      "Selector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": "last_move"
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              },
+              {
+                "kind": "node.setCombatantCounter",
+                "value": {
+                  "TargetSelector": {
+                    "kind": "sel.source",
+                    "value": {
+                      "Cardinality": "ZeroOrOne",
+                      "RequiredContextCapabilities": "Source"
+                    }
+                  },
+                  "CounterId": {
+                    "value": "last_move"
+                  },
+                  "Amount": {
+                    "kind": "const",
+                    "value": {
+                      "Value": 2
+                    }
+                  },
+                  "Relative": false,
+                  "ResultKey": null
+                }
+              }
+            ]
+          }
+        },
+        "MaxNodeDepth": 64,
+        "MaxProgramSteps": 1024
+      },
+      "ProgramAsc": [
+        {
+          "AscensionMin": 2,
+          "Program": {
+            "Id": {
+              "Value": "(unnamed)"
+            },
+            "Root": {
+              "kind": "node.sequence",
+              "value": {
+                "Children": [
+                  {
+                    "kind": "node.dealDamage",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.eventTarget",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "EventTarget"
+                        }
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 20
+                        }
+                      },
+                      "ResultKey": null,
+                      "IgnoresBlock": false,
+                      "Element": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "prev_move"
+                      },
+                      "Amount": {
+                        "kind": "combatantCounter",
+                        "value": {
+                          "Selector": {
+                            "kind": "sel.source",
+                            "value": {
+                              "Cardinality": "ZeroOrOne",
+                              "RequiredContextCapabilities": "Source"
+                            }
+                          },
+                          "CounterId": "last_move"
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  },
+                  {
+                    "kind": "node.setCombatantCounter",
+                    "value": {
+                      "TargetSelector": {
+                        "kind": "sel.source",
+                        "value": {
+                          "Cardinality": "ZeroOrOne",
+                          "RequiredContextCapabilities": "Source"
+                        }
+                      },
+                      "CounterId": {
+                        "value": "last_move"
+                      },
+                      "Amount": {
+                        "kind": "const",
+                        "value": {
+                          "Value": 2
+                        }
+                      },
+                      "Relative": false,
+                      "ResultKey": null
+                    }
+                  }
+                ]
+              }
+            },
+            "MaxNodeDepth": 64,
+            "MaxProgramSteps": 1024
+          }
+        }
+      ]
     }
   ],
   "Encounters": [
@@ -69897,6 +71347,228 @@
       "TriggeredEffects": [],
       "HeroDisplayName": null,
       "CardsDrawnPerTurn": null
+    },
+    {
+      "Id": {
+        "Value": "enc_masked_bandits"
+      },
+      "Enemies": [
+        {
+          "Id": "pointy",
+          "MaxHealth": 30,
+          "Actions": [
+            {
+              "value": "pointy.special"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [],
+          "DisplayName": "Pointy",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 34
+            }
+          ]
+        },
+        {
+          "Id": "romeo",
+          "MaxHealth": 35,
+          "Actions": [
+            {
+              "value": "romeo.mock"
+            },
+            {
+              "value": "romeo.agonizing_slash"
+            },
+            {
+              "value": "romeo.cross_slash"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.round",
+                "value": {
+                  "Op": "Equal",
+                  "Round": 1
+                }
+              },
+              "Action": {
+                "value": "romeo.mock"
+              },
+              "Priority": 75
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 0
+                }
+              },
+              "Action": {
+                "value": "romeo.agonizing_slash"
+              },
+              "Priority": 60
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 1
+                }
+              },
+              "Action": {
+                "value": "romeo.cross_slash"
+              },
+              "Priority": 60
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 2
+                }
+              },
+              "Action": {
+                "value": "romeo.agonizing_slash"
+              },
+              "Priority": 60
+            }
+          ],
+          "DisplayName": "Romeo",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 37
+            }
+          ]
+        },
+        {
+          "Id": "bear",
+          "MaxHealth": 38,
+          "Actions": [
+            {
+              "value": "bear.bear_hug"
+            },
+            {
+              "value": "bear.lunge"
+            },
+            {
+              "value": "bear.maul"
+            }
+          ],
+          "StartingStatuses": [],
+          "Position": null,
+          "IntentRules": [
+            {
+              "Condition": {
+                "kind": "intent.round",
+                "value": {
+                  "Op": "Equal",
+                  "Round": 1
+                }
+              },
+              "Action": {
+                "value": "bear.bear_hug"
+              },
+              "Priority": 75
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 0
+                }
+              },
+              "Action": {
+                "value": "bear.lunge"
+              },
+              "Priority": 60
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 1
+                }
+              },
+              "Action": {
+                "value": "bear.maul"
+              },
+              "Priority": 60
+            },
+            {
+              "Condition": {
+                "kind": "intent.selfHasCounter",
+                "value": {
+                  "Counter": {
+                    "value": "last_move"
+                  },
+                  "Op": "Equal",
+                  "Value": 2
+                }
+              },
+              "Action": {
+                "value": "bear.lunge"
+              },
+              "Priority": 60
+            }
+          ],
+          "DisplayName": "Bear",
+          "Rolls": [],
+          "Counters": [],
+          "Spawn": true,
+          "MaxHealthAsc": [
+            {
+              "AscensionMin": 7,
+              "MaxHealth": 40
+            }
+          ]
+        }
+      ],
+      "HeroResources": [
+        {
+          "Resource": {
+            "value": "standard.energy"
+          },
+          "Current": 3,
+          "Max": 3
+        }
+      ],
+      "HeroStartingStatuses": [],
+      "TriggeredEffects": [],
+      "HeroDisplayName": null,
+      "CardsDrawnPerTurn": null
     }
   ],
   "Monsters": [
@@ -75992,6 +77664,184 @@
       "AiNote": "wiki：HP **999**（不随升阶变）；`Fading 5`（A17: 6）；Attack 第 1 回合 30（A2: 40），每回合 +10（§317）。⚠️ **`Shifting` 没做**：它要求\"受伤时临时失去等量力量\"，而今天的载体里**负力量不可表达**（`applyStatus` 拒负层数、`modifyStatusStacks` 在 0 处夹断且对\"没有这条状态\"是 no-op）。记在 `docs/sts-wiki-gap.md` §D.6。",
       "Counters": [],
       "Spawn": true
+    },
+    {
+      "Id": "pointy",
+      "NameKey": "Pointy",
+      "HpMin": 30,
+      "HpMax": 30,
+      "MaxHealth": 30,
+      "Actions": [
+        {
+          "value": "pointy.special"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": []
+    },
+    {
+      "Id": "romeo",
+      "NameKey": "Romeo",
+      "HpMin": 35,
+      "HpMax": 39,
+      "MaxHealth": 35,
+      "Actions": [
+        {
+          "value": "romeo.mock"
+        },
+        {
+          "value": "romeo.agonizing_slash"
+        },
+        {
+          "value": "romeo.cross_slash"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.round",
+            "value": {
+              "Op": "Equal",
+              "Round": 1
+            }
+          },
+          "Action": {
+            "value": "romeo.mock"
+          },
+          "Priority": 75
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 0
+            }
+          },
+          "Action": {
+            "value": "romeo.agonizing_slash"
+          },
+          "Priority": 60
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 1
+            }
+          },
+          "Action": {
+            "value": "romeo.cross_slash"
+          },
+          "Priority": 60
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 2
+            }
+          },
+          "Action": {
+            "value": "romeo.agonizing_slash"
+          },
+          "Priority": 60
+        }
+      ]
+    },
+    {
+      "Id": "bear",
+      "NameKey": "Bear",
+      "HpMin": 38,
+      "HpMax": 42,
+      "MaxHealth": 38,
+      "Actions": [
+        {
+          "value": "bear.bear_hug"
+        },
+        {
+          "value": "bear.lunge"
+        },
+        {
+          "value": "bear.maul"
+        }
+      ],
+      "StartingStatuses": [],
+      "IntentRules": [
+        {
+          "Condition": {
+            "kind": "intent.round",
+            "value": {
+              "Op": "Equal",
+              "Round": 1
+            }
+          },
+          "Action": {
+            "value": "bear.bear_hug"
+          },
+          "Priority": 75
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 0
+            }
+          },
+          "Action": {
+            "value": "bear.lunge"
+          },
+          "Priority": 60
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 1
+            }
+          },
+          "Action": {
+            "value": "bear.maul"
+          },
+          "Priority": 60
+        },
+        {
+          "Condition": {
+            "kind": "intent.selfHasCounter",
+            "value": {
+              "Counter": {
+                "value": "last_move"
+              },
+              "Op": "Equal",
+              "Value": 2
+            }
+          },
+          "Action": {
+            "value": "bear.lunge"
+          },
+          "Priority": 60
+        }
+      ]
     }
   ],
   "EncounterTables": {
@@ -76276,6 +78126,11 @@
     "MysteriousSphere": [
       {
         "Id": "enc_two_orb_walkers"
+      }
+    ],
+    "MaskedBandits": [
+      {
+        "Id": "enc_masked_bandits"
       }
     ]
   },
@@ -77745,6 +79600,11 @@
       "Id": "vampires",
       "NameKey": "Vampires",
       "Entry": "vampires"
+    },
+    {
+      "Id": "masked_bandits",
+      "NameKey": "Masked Bandits",
+      "Entry": "masked_bandits"
     }
   ],
   "Potions": [
@@ -78089,6 +79949,9 @@
       {
         "Id": "old_beggar",
         "MinGold": 75
+      },
+      {
+        "Id": "masked_bandits"
       }
     ],
     "Events3": [
@@ -81256,6 +83119,71 @@
           "Effects": [
             {
               "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "masked_bandits",
+      "TextKey": "Three figures in oversized red masks block the path. \"Pay up to pass! A reasonable fee... all of it, ha ha!\"",
+      "Options": [
+        {
+          "Label": "Pay (all Gold)",
+          "Effects": [
+            {
+              "Effect": "gold_all",
+              "Amount": 0
+            }
+          ],
+          "Next": "masked_bandits.paid"
+        },
+        {
+          "Label": "Fight!",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Fight": "monster",
+          "Encounter": "MaskedBandits",
+          "After": "masked_bandits.won",
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "masked_bandits.paid",
+      "TextKey": "\"Hehehe.. thanks for the gold! Oh, I love gold.\" They count it twice and let you by.",
+      "Options": [
+        {
+          "Label": "Leave",
+          "Effects": [
+            {
+              "Effect": "nothing",
+              "Amount": 0
+            }
+          ],
+          "Next": ""
+        }
+      ]
+    },
+    {
+      "Id": "masked_bandits.won",
+      "TextKey": "The masks lie in the dust. One of them still fits.",
+      "Options": [
+        {
+          "Label": "Take the mask",
+          "Effects": [
+            {
+              "Effect": "gold_random:25:35",
+              "Amount": 0
+            },
+            {
+              "Effect": "relic:red_mask",
               "Amount": 0
             }
           ],
