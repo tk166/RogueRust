@@ -46,7 +46,7 @@
 | 药水 | 33 | 33 | 0 | 0 | 0 | 0 | 0 | 0 |
 | **合计** | 957 | 700 | 245 | 12 | 476 | 196 | 85 | 0 |
 
-扫描到的具名测试：**1234** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
+扫描到的具名测试：**1235** 条；wiki dump：**45** 份（其中 52 只怪有 dump）。
 
 事件：池里有 **39** 个位次、**36** 个不同 id（`golden_idol` / `ancient_forge` / `purification_shrine` 跨幕复用）。
 
@@ -974,7 +974,7 @@
 | self_forming_clay | yes | the_zero_infrastructure_tail_wires_its_carriers | — | — | — | §267/§268/the_zero_infrastructure_tail_wires_its_carriers |
 | shovel | yes | campfire_options_follow_the_relics_the_wiki_names, dig_only_rolls_common_uncommon_or_rare | — | — | — | §259/campfire_options_follow_the_relics_the_wiki_names |
 | shuriken | yes | the_every_nth_card_relics_wire_their_own_carrier | — | — | — | §261/§262/the_every_nth_card_relics_wire_their_own_carrier |
-| singing_bowl | yes | singing_bowl_trades_a_card_for_two_max_hp_in_both_places, singing_bowl_trades_a_reward_card_through_the_abi | — | — | — | §293/singing_bowl_trades_a_card_for_two_max_hp_in_both_places |
+| singing_bowl | yes | singing_bowl_trades_a_card_for_two_max_hp_in_both_places, the_run_facts_the_ui_asks_about …(+1) | — | — | — | §293/singing_bowl_trades_a_card_for_two_max_hp_in_both_places |
 | slavers_collar | yes | the_kind_gated_relics_only_fire_in_their_own_kinds | — | — | — | §268/§269/the_kind_gated_relics_only_fire_in_their_own_kinds |
 | sling_of_courage | yes | the_kind_gated_relics_only_fire_in_their_own_kinds | — | — | — | §268/§269/the_kind_gated_relics_only_fire_in_their_own_kinds |
 | smiling_mask | yes | the_gold_and_shop_relics_change_only_their_own_number, smiling_mask_locks_removal_at_fifty_whatever_the_discounts | — | — | — | §270/the_gold_and_shop_relics_change_only_their_own_number |

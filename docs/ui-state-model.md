@@ -155,7 +155,9 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 | `enemyOverflow` | `0/1` | 开战时定死 | `rd_env_enemy_overflow()` | T1 | `1` ⇒ 观察向量装不下，必须**说出来**，不许静默只画 6 个 |
 | `forcedTurns` | `0..` | 回合被强行结束 | `rd_env_forced_turns()` | T2 | 变大 ⇒ 报"时间扭曲"。观察向量**故意不携带**这个事实 |
 | `contentPin` | 8 位十六进制 | 构建时定死 | `rd_content_fingerprint()` | T0 | 与 `packages/sts/out/build.json` 的镜像 sha 同源 |
-| `bossId` | 敌人 id（`slime_boss` / …） | 换幕 | `R.txt(boss_id)` = `rd_run_boss_id_len` / `rd_run_boss_id_into` | T1 | §345：**给 id**，屏幕上的名字由 `displayName()` 决定（原来是写死的 `"Slime Boss"`） |
+| `bossId` | 敌人 id（`slime_boss` / …） | 换幕 | `R.txt(boss_id)` = `rd_run_boss_id_len` / `rd_run_boss_id_into` | T1 |
+| `encounterId` | 遭遇 id（`enc_...`） | 开战 | `R.txt(encounter_id)` = `rd_run_encounter_id_len` / `rd_run_encounter_id_into` | T1 | §346：**运行层**字段（`last_encounter`）；挂在 `#enemies` 的 `data-encounter-id` 上 |
+| `activeSlot` | `-1` 英雄 / `0..5` 敌人 / `-2` 没人 / `-3` 没有会话 | 每回合 | `rd_env_active_slot()` | T2 | §346：挂在 `#enemies` 的 `data-active-slot` 上（DOM 版靠 `next up` 表达，高亮交给渲染层） | §345：**给 id**，屏幕上的名字由 `displayName()` 决定（原来是写死的 `"Slime Boss"`） |
 | `runOver` | `0/1` | 血量归零 / 幕尽 / 通关 | `rd_run_over()` | T2 | §344：**不要自己记**（曾经是页面的一对模块级变量） |
 | `runEndWhy` | `0` 进行中 / `1` 战败 / `2` 通关 / `3` 地图走完了 | 同上 | `rd_run_over_why()` | T2 | 数值是 `RunEnd` 的判别值，**不要重排** |
 
@@ -164,7 +166,8 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 | 字段 | 接口 | 备注 |
 |---|---|---|
 | `relicName(i)` | `R.txt(relic_name, i)` | 显示名（`REL.DisplayName`，回退 id） |
-| `relicId(i)` | `R.txt(relic_id, i)` | 规则键；**`singing_bowl` 的判据必须用它**（§6-G3） |
+| `relicId(i)` | `R.txt(relic_id, i)` | 规则键；`singing_bowl` 的判据曾经用它 |
+| `hasRelic(id)` | `rd_run_has_relic(ptr, len)` → `1/0/-1` | §346：**"有没有这件遗物"只问内核** —— 页面原来在两处各写了一遍"遍历 + 比字符串" |
 
 **药水腰带**（3 格，`rd_run_potion_count()` 个）：
 
@@ -468,7 +471,7 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 
 | 字段 | 域 | 接口 | 备注 |
 |---|---|---|---|
-| `offerCount` | 恒 `2` | **无导出**（页面写 `0..1`） | §6-G7：内容若变 3 选 1，页面会静默少画一个 |
+| `offerCount` | `0..` | `rd_run_start_offer_count()` | §346：**已关闭 G7**（原来页面写死 `0..2`；内容若变 3 选 1 会静默少画一个） |
 | `offerName(slot)` | 字符串 | `R.txt(start_offer, slot)` | 形如 `max_hp` / `gold` / `heal` |
 | `gain(slot)` | `0..15` 效果码 | `rd_run_start_gain(slot)` | |
 | `gainAmount(slot)` | `0..` | `rd_run_start_gain_amount(slot)` | |
@@ -563,7 +566,8 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 
 | 字段 | 域 | 接口 | 备注 |
 |---|---|---|---|
-| `text` | 字符串 | `R.txt(event_text)` | 一行描述（3D 需要**事件 id** 才能选背景，§6-G6） |
+| `text` | 字符串 | `R.txt(event_text)` | 一行描述 |
+| `id` | 事件 id（`golden_idol` / …） | `R.txt(event_id)` = `rd_run_event_id_len` / `rd_run_event_id_into` | §346：**美术按 id 选背景**，文本会随文案改动。没有事件时是**空串**（不是 `-1`） |
 | `optionCount` | `0..` | `rd_run_event_option_count()` | **由内容决定**，不假定 2 |
 | `label(slot)` | 字符串 | `R.txt(event_label, slot)` | |
 | `available(slot)` | `0/1` | `rd_run_event_option_available(slot)` | `0` ⇒ **不画**（没有锁标） |
@@ -793,18 +797,18 @@ SC-03/SC-03b 做不到，因为"未开始"是页面自己记的标志）。
 |---|---|---|---|---|
 | ~~**G1**~~ | ~~"这一局结束了"没有内核判据~~ | — | **已关闭（§344）**：`rd_run_over()` → `1/0/-1`，`rd_run_over_why()` → `0` 进行中 / `1` 战败 / `2` 通关 / `3` 地图走完了 | 已完成 |
 | ~~**G2**~~ | ~~幕尽头没有动作~~ | — | **已关闭（§344）**：`rd_run_end_act()`（`0` 接受 / `-2` 拒绝）。三条前提：没有待决问句 / 脚下节点已结算 / `reachable()` 为空 | 已完成。⚠️ 当前内容里**几乎不可达**（最后一排的唯一前进方向是 Boss 哨兵）—— 见 §6 末尾 |
-| **G3** | **"我有没有某件遗物"要遍历 id** | `for i in 0..relic_count { relicId(i) }`（`singingBowl` 就这样） | `rd_run_has_relic(idPtr, len)` → `0/1`，或一个遗物**位掩码** | 小，但位掩码要随内容增长 ⇒ 用 id 查询更稳 |
+| ~~**G3**~~ | ~~"我有没有某件遗物"要遍历 id~~ | — | **已关闭（§346）**：`rd_run_has_relic(ptr, len)` → `1/0/-1` | 已完成。页面原来在**两处**各写了一遍遍历（漏一处不会红），现在一条查询。§346 还顺带把祝福条数交给 `rd_run_start_offer_count()`（缺口 G7） |
 | ~~**G4**~~ | ~~药水没有显示名~~ | — | **已关闭（§345）**：**不需要新导出** —— `rd_run_potion_id_*` 早就在，缺的是显示层。`displayName()` 把 `entropic_brew` 念成 "Entropic Brew"，要改名就进 `NAMES` 表 | 已完成（架构原则见 §0.5） |
 | ~~**G5**~~ | ~~Boss 名字写死~~ | — | **已关闭（§345）**：`rd_run_boss_id_len/into` → 本幕 Boss 的**敌人 id**（`slime_boss` / `the_guardian` / …），显示层决定怎么念 | 已完成。这是唯一真缺的导出（内核连 id 都没给） |
-| **G6** | **没有"事件 id / 遭遇 id"** | 事件只有一行文本；战斗只有敌人名 | `rd_run_event_id_len/into`、`rd_env_encounter_id_len/into` | 中：`EV`/`ENCT` 段有 id，只是没导出 |
-| **G7** | **祝福只有 2 个 offer（写死）** | `for slot in 0..2` | `rd_run_start_offer_count()` | 很小 |
+| ~~**G6**~~ | ~~没有"事件 id / 遭遇 id"~~ | — | **已关闭（§346）**：`rd_run_event_id_len/into`（当前事件）、`rd_run_encounter_id_len/into`（这一场/刚打完那一场的遭遇） | 已完成。**都在运行层**：`last_encounter` 本来就是运行层字段（§153）；放 `rd_env_*` 会假装它是战斗状态 |
+| ~~**G7**~~ | ~~祝福只有 2 个 offer（写死）~~ | — | **已关闭（§346）**：`rd_run_start_offer_count()` | 已完成 |
 | ~~**G8**~~ | ~~商店四排都没有标题~~ | — | **已关闭（§345）**：同 G4 —— 四排 id 早就在，显示层负责名字 | 已完成 |
 | ~~**G9**~~ | ~~`restHeal` 的 30% 住在渲染层~~ | — | **已关闭（§344）**：`rd_run_rest_heal()` | 已完成。⚠️ 它不只是分层问题：`rest_heal()` 还含 `regal_pillow`（+15）与 `eternal_feather`（每 5 张 +3），页面自己算**显示的数字是错的** |
 | **G10** | **没有连续量**（T4） | 没有时长/位置/缓动 | 不必加：3D 自己定，但要**记下来**这是渲染层的自由度 | 0（约定） |
 | ~~**G11**~~ | ~~beat kind 13 无 ABI 常量~~ | — | **已关闭（§344）**：`BEAT_DESTROYED = 13`，并且有一条**穷尽**判据（`1..=13` 每个都有常量、`14` 不在闭集里） | 已完成。⚠️ 页面**根本不消费 beat**（动画走 `diffObservations`）—— 所以"页面 switch 落空"是本文档当初的推断，真实缺口是"消费者无法命名它" |
-| **G12** | **"现在是谁的回合"只有文本** | `rd_env_active_len()` 返回 `Exec(...)` 那种诊断串 | `rd_env_active_slot()` → 墙位（`-1` 英雄 / `0..5`） | 小 |
-| **G13** | **手牌没有 id 导出** | 只有 `def_slot` + 名字/标题/文本 | 3D 图集按 `def_slot` 建表即可 | 0（够用，但要知道 `def_slot` 是**内容行号**，跨版本会变） |
-| **G14** | **费用的"未修饰 vs 修饰"不分离** | 只有最终价；每副本 delta 不可见 | 若要演"这张牌降价了"，需要 `rd_env_card_cost_printed(slot)` | 小 |
+| ~~**G12**~~ | ~~"现在是谁的回合"只有文本~~ | — | **已关闭（§346）**：`rd_env_active_slot()` → 墙位（`-1` 英雄 / `0..5` 敌人 / `-2` 没人 / `-3` 没有会话）。诊断串 `rd_env_active_len()` **留着** —— 它能说出"卡在哪个节点"，而墙位说不出 | 已完成 |
+| ~~**G13**~~ | ~~手牌没有 id 导出~~ | — | **不做（§346 判定）**：`def_slot` 是**内容行号**，跨版本会变 —— 但 3D 图集要的就是"这一份内容里的第几行"，而 id 反而是第二把键。手牌有 `name`/`title`/`text`/`kind` 四份文本，够画一张牌 | 0（不做的理由已写清，不再当"待办"） |
+| ~~**G14**~~ | ~~费用的"未修饰 vs 修饰"不分离~~ | — | **不做（§346 判定）**：观察向量给的是**最终价**，而"演一次降价动画"需要知道原价。但那件事今天**没有消费者**（动画走 `diffObservations`，它只看最终价变没变）；真要做时再加 `rd_env_card_cost_printed(slot)` | 0（同上） |
 | **G15** | **`E.obs(140..147)` 恒 `-1`（保留）** | — | 3D **不要**读这 8 格 | 0（约定） |
 | ~~**G16**~~ | ~~"有没有一场正在打的战斗"没有内核判据~~ | — | **已关闭（§341）**：`rd_run_in_fight()` → `1/0/-1` | 已完成 |
 

@@ -127,6 +127,9 @@ const REQUIRED = [
   "rd_run_reward_card_id_into", "rd_run_reward_card_title_len", "rd_run_reward_card_title_into",
   "rd_run_take_card", "rd_run_skip_reward",
   "rd_env_card_kind", "rd_run_card_kind", "rd_run_node_resolved", "rd_run_boss_beaten",
+  // §346: 缺口 G3 / G6 / G7 / G12 —— 遗物查询、事件/遭遇 id、祝福数量、活跃墙位。
+  "rd_run_has_relic", "rd_run_start_offer_count", "rd_run_event_id_len", "rd_run_event_id_into",
+  "rd_run_encounter_id_len", "rd_run_encounter_id_into", "rd_env_active_slot",
   // §345: 本幕 Boss 的**敌人 id**（显示层决定怎么念）。
   "rd_run_boss_id_len", "rd_run_boss_id_into",
   // §344: 缺口 G1/G2/G9 —— 局终判据、幕尽动作、篝火回复量。

@@ -508,6 +508,18 @@ function readObservation() {
   return memI32(ex.rd_env_observe_buf(), len);
 }
 
+/// §346（缺口 G3）：**身上有没有这件遗物** —— 一条查询，取代"遍历遗物比字符串"。
+///
+/// 文本走 `rd_env_scratch_buf()`：那是 1 KiB 的暂存区，文档原话就是"让 JS 不必自带 malloc
+/// 就能交变长文本"。一次 `set` + 一次调用，读完就还（id 只有十几个字节）。
+/// ⚠️ 不要猜 `__heap_base` —— 它不一定被导出，猜错就是写坏内存。
+function hasRelic(id) {
+  const bytes = new TextEncoder().encode(id);
+  const ptr = Number(ex.rd_env_scratch_buf());
+  new Uint8Array(ex.memory.buffer, ptr, bytes.length).set(bytes);
+  return ex.rd_run_has_relic(ptr, bytes.length) === 1;
+}
+
 function readText(lenFn, intoFn, index) {
   const scratch = ex.rd_env_scratch_buf();
   const n = lenFn(index);
@@ -856,6 +868,7 @@ function renderTopBar() {
     };
   });
   document.getElementById("deckCount").textContent = String(Math.max(0, deck));
+
   // The piles belong to a fight; in the run there is no draw / discard / exhaust.
   const inFight = mode === "fight";
   for (const [id, zone] of [["pileDraw", 0], ["pileDiscard", 1], ["pileExhaust", 2]]) {
@@ -985,7 +998,8 @@ function runSnapshot() {
   snapshot.wingBoots = Math.max(0, ex.rd_run_wing_boots());
   switch (pending) {
     case 6:
-      for (let slot = 0; slot < 2; slot++) {
+      // §346：条数由内核给（原来写死 2 —— 内容一变就静默少画一个按钮）。
+      for (let slot = 0, offers = ex.rd_run_start_offer_count(); slot < offers; slot++) {
         snapshot.offers.push({
           name: offerName(startOffer(slot)),
           gain: ex.rd_run_start_gain(slot),
@@ -1146,18 +1160,11 @@ function runSnapshot() {
     }
     // ⚠️ 这条判据必须是"**我持有的遗物里有没有** `singing_bowl`"，不是"有没有欠账"：
     // 见 `describePickupAdd` 的注释 —— 一个永远画出来的 +2 按钮就是死按钮。
-    for (let i = 0, n = ex.rd_run_observe(6); i < n; i++) {
-      const id = readText((k) => ex.rd_run_relic_id_len(k),
-                          (ptr, k) => ex.rd_run_relic_id_into(k, ptr), i);
-      if (id === "singing_bowl") snapshot.singingBowl = true;
-    }
+    // §346：一条查询取代了"遍历遗物比字符串"（这段原来在下面还有一份 —— 两处漏一处不会红）。
+    snapshot.singingBowl = hasRelic("singing_bowl");
   }
   if (snapshot.pending === 4 && !snapshot.singingBowl) {
-    for (let i = 0, n = ex.rd_run_observe(6); i < n; i++) {
-      const id = readText((k) => ex.rd_run_relic_id_len(k),
-                          (ptr, k) => ex.rd_run_relic_id_into(k, ptr), i);
-      if (id === "singing_bowl") snapshot.singingBowl = true;
-    }
+    snapshot.singingBowl = hasRelic("singing_bowl");
   }
   return snapshot;
 }
@@ -1225,6 +1232,11 @@ const PANEL_ACTIONS = {
 function renderNode() {
   const panel = document.getElementById("nodePanel");
   const description = RD_PANELS.describe(runSnapshot());
+  // §346（缺口 G6）：事件的 **id** 挂在面板上 —— DOM 版不用它（正文已经画好了），
+  // 但 3D/美术层要按 id 选背景，而事件文本会随文案改动。没有事件时是空串。
+  panel.dataset.eventId = ex.rd_run_pending() === 5
+    ? readText(() => ex.rd_run_event_id_len(), (ptr) => ex.rd_run_event_id_into(ptr))
+    : "";
   const parts = [];
   // Actions are held **by index**, not serialised into the markup: `esc()` would double-escape the
   // JSON and `JSON.parse` would then choke on the entity text.
@@ -1921,7 +1933,14 @@ function render(verdict, reward) {
       </div>`;
   });
   // A flex row with a gap does the separating now; the `<hr>` was there to divide a column.
-  document.getElementById("enemies").innerHTML = enemies.join("");
+  const enemiesEl = document.getElementById("enemies");
+  enemiesEl.innerHTML = enemies.join("");
+  // §346（缺口 G6 / G12）：两个**给渲染层读**的钩子，挂在战斗容器上（`render()` 是它的唯一写者）。
+  // 放在这里而不是 `renderTopBar()`：那个不在战斗重绘路径上 —— 第一版就是这么让
+  // `data-encounter-id` 在战斗中恒为空串的（判据当场抓到）。
+  enemiesEl.dataset.encounterId =
+    readText(() => ex.rd_run_encounter_id_len(), (ptr) => ex.rd_run_encounter_id_into(ptr));
+  enemiesEl.dataset.activeSlot = String(ex.rd_env_active_slot());
 
   // Hand. A card is a button iff the action table contains a play action for that hand slot;
   // otherwise it is greyed out — that greying-out *is* the ABI's affordability gate showing.

@@ -969,6 +969,88 @@ pub extern "C" fn rd_run_in_fight() -> i32 {
     run_slot().as_ref().map_or(-1, |s| i32::from(s.in_fight))
 }
 
+/// §346（缺口 G3）：身上有没有这件遗物 —— `1` 有 / `0` 没有 / `-1` 没有局。
+///
+/// 为什么值得一个导出：页面靠**遍历**遗物、逐个读 id、比字符串来回答这个问题，而且写了两遍
+/// （奖励屏的 `singing_bowl` 与加牌屏的同一件）。那不是错，是**第二份知识**：
+/// "哪件遗物决定哪个按钮"在内核里有一份（`holds_relic`），在页面里又有一份（字符串相等）。
+/// 两份里漏一处不会红 —— 只会有一个不出现的按钮。
+///
+/// # Safety
+///
+/// `ptr` must point at `len` readable bytes (the id, as UTF-8).
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_has_relic(ptr: *const u8, len: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    if ptr.is_null() || len <= 0 {
+        return 0;
+    }
+    let bytes = std::slice::from_raw_parts(ptr, len as usize);
+    let Ok(id) = std::str::from_utf8(bytes) else {
+        return 0;
+    };
+    i32::from(session.state.holds_relic(id))
+}
+
+/// §346（缺口 G7）：开局祝福**掷出了几个**。
+///
+/// 页面原来写死 `for slot in 0..2` —— 内容一变就静默少画一个按钮（而"少一个按钮"看起来
+/// 就像"这一屏就这样"）。条数由内核给，页面按它循环。
+#[no_mangle]
+pub extern "C" fn rd_run_start_offer_count() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(0, |s| s.state.start_offers().map_or(0, |offers| offers.len() as i32))
+}
+
+/// §346（缺口 G6）：**光标下那个事件**的 id（`golden_idol` / …）；空串 = 现在没有事件。
+///
+/// 为什么给 id：3D/美术要按 id 选背景与立绘，而事件文本只是一行描述 —— 拿它当键会随文案改动
+/// 而失效。名字由显示层决定（§345）。
+#[no_mangle]
+pub extern "C" fn rd_run_event_id_len() -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    session.state.event().len() as i32
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_event_id_len()` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_event_id_into(ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return 0;
+    };
+    write_out(session.state.event(), ptr)
+}
+
+/// §346（缺口 G6）：**这一场**（或刚打完的那一场）的遭遇 id（`enc_slime_boss` / …）。
+///
+/// 为什么在运行层而不是战斗层：`last_encounter` 是运行层的字段（§153：下一场避免重复）。
+/// 战斗期间它就是这一场的遭遇；战斗结束后它仍然保留，正好给"刚才打的是谁"用。
+/// 放 `rd_env_*` 会假装它是战斗状态，其实不是。
+#[no_mangle]
+pub extern "C" fn rd_run_encounter_id_len() -> i32 {
+    run_slot()
+        .as_ref()
+        .map_or(-1, |s| s.state.last_encounter().as_str().len() as i32)
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_encounter_id_len()` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_encounter_id_into(ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return 0;
+    };
+    write_out(session.state.last_encounter().as_str(), ptr)
+}
+
 /// §345：本幕 Boss 的**敌人 id**（`slime_boss` / `the_guardian` / …），`None` = 查不到。
 ///
 /// 为什么给 **id** 而不是显示名：**UI 显示的名字可以和内核的名字不一样**（规避版权等用途，
@@ -7788,6 +7870,135 @@ mod tests {
             }
         }
         assert!(begun, "the fixture must reach a fight within 24 hops");
+    }
+
+    /// §346：缺口 G3 / G6 / G7 / G12 的五个导出。
+    ///
+    /// 每条都测**两侧**（有 / 没有），因为"永远返回同一个值"的实现会全绿：
+    /// `has_relic` 恒 1、`event_id` 恒空、`active_slot` 恒 -1 —— 每一种都看起来像在工作。
+    #[test]
+    fn the_run_facts_the_ui_asks_about() {
+        crate::take_session();
+        *run_slot() = None;
+        // 无局：`has_relic` 是 `-1`（"问不了"），不是 0（"没有"）。
+        assert_eq!(unsafe { rd_run_has_relic(b"x".as_ptr(), 1) }, -1, "no run");
+        assert_eq!(rd_run_start_offer_count(), 0, "no run");
+        assert_eq!(rd_run_event_id_len(), -1, "no run");
+        assert_eq!(rd_run_encounter_id_len(), -1, "no run");
+        assert_eq!(crate::rd_env_active_slot(), -3, "no combat session");
+
+        // ⚠️ 用 `rd_run_start` 而不是 `reset(7)`：`reset` 会**顺手把祝福选掉**，而
+        // `start_offers()` 在 `pending != Start` 时返回 `None`（条数 0）—— 第一版就是这么
+        // 红在"must offer at least two, got 0"上的，而规则本身是对的。
+        assert_eq!(rd_run_start(7, 0), 0, "start: {}", run_error_text());
+
+        // G3：没有那件遗物 ⇒ 0；授了 ⇒ 1。**两侧都测**（恒 1 或恒 0 的实现会各红一次）。
+        assert_eq!(
+            unsafe { rd_run_has_relic(b"singing_bowl".as_ptr(), 12) },
+            0,
+            "we do not hold singing_bowl"
+        );
+        assert_eq!(
+            unsafe { rd_run_grant_relic(b"singing_bowl".as_ptr(), 12) },
+            0,
+            "grant: {}",
+            run_error_text()
+        );
+        assert_eq!(
+            unsafe { rd_run_has_relic(b"singing_bowl".as_ptr(), 12) },
+            1,
+            "now we do"
+        );
+        // 空指针不是崩溃，是"没有"。
+        assert_eq!(unsafe { rd_run_has_relic(std::ptr::null(), 12) }, 0, "null id");
+
+        // G7：条数由内核给。开局祝福屏一定有 >= 2 个槽（内容就是两个），而且**每个槽都有名字** ——
+        // 只断言条数的话，"条数对了但槽是空的"也会绿。
+        let offers = rd_run_start_offer_count();
+        assert!(offers >= 2, "the blessing screen must offer at least two, got {offers}");
+        for slot in 0..offers {
+            assert!(
+                rd_run_start_offer_len(slot) > 0,
+                "slot {slot} of {offers} must have a name"
+            );
+        }
+
+        // G6：没有事件时是**空串**（不是 -1、不是垃圾）。
+        assert_eq!(rd_run_event_id_len(), 0, "no event open");
+        // 遭遇：还没打 ⇒ 空串；开打之后 ⇒ 非空（与 `last_encounter` 同源）。
+        assert_eq!(rd_run_encounter_id_len(), 0, "no fight yet");
+        assert_eq!(
+            rd_run_choose_start(0),
+            0,
+            "finish the blessing: {}",
+            run_error_text()
+        );
+        // 祝福可能还欠一次选牌（`Pending::BlessingCard` = 7）。不把它走完，下面第一步就被拒，
+        // 循环会以"24 跳里没遇到战斗"收场 —— 而那是夹具的事，不是规则的事。
+        while rd_run_pending() == 7 {
+            let _ = rd_run_pick_blessing_card(0);
+        }
+
+        // 走到一个战斗节点、开打，然后读遭遇 id 与活跃墙位。
+        let mut fought = false;
+        for _hop in 0..24 {
+            if rd_run_step(0) != 0 {
+                break;
+            }
+            let kind = rd_run_node_kind();
+            if kind < 0 || rd_run_begin_node() != 0 {
+                break;
+            }
+            let fight = kind == 1
+                || kind == 2
+                || kind == 7
+                || (kind == 5
+                    && run_slot().as_ref().expect("a run").state.unknown_room()
+                        == rd_run::state::UnknownRoom::Monster);
+            if fight {
+                assert_eq!(rd_run_encounter_id_len(), 0, "not picked yet");
+                assert_eq!(rd_run_fight_begin(), 0, "begin: {}", run_error_text());
+                assert!(
+                    rd_run_encounter_id_len() > 0,
+                    "a running fight knows its encounter"
+                );
+                // G12：开局是英雄的回合 ⇒ `-1`。
+                assert_eq!(crate::rd_env_active_slot(), -1, "the hero acts first");
+                fought = true;
+                break;
+            }
+            match rd_run_pending() {
+                1 => {
+                    let _ = rd_run_rest();
+                }
+                3 => {
+                    let _ = rd_run_open_chest();
+                    let _ = rd_run_leave();
+                }
+                5 => {
+                    let _ = rd_run_choose(0);
+                }
+                8 => {
+                    let _ = rd_run_pick_event_card(0);
+                }
+                7 => {
+                    let _ = rd_run_pick_blessing_card(0);
+                }
+                2 => {
+                    let _ = rd_run_leave();
+                }
+                4 => {
+                    let _ = rd_run_skip_reward();
+                }
+                _ => {}
+            }
+            while rd_run_pending() == 4 {
+                let _ = rd_run_skip_reward();
+            }
+        }
+        assert!(fought, "the fixture must reach a fight within 24 hops");
+        // 结束战斗，让下一个测试拿到干净的会话（这个模块的测试共用全局槽）。
+        let _ = rd_run_fight_end();
     }
 
     /// §345（缺口 G5）：`rd_run_boss_id_*` 按**幕**给不同的 id。

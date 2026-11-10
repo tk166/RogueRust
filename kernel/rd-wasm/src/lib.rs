@@ -2257,6 +2257,33 @@ pub extern "C" fn rd_env_reset() -> i32 {
     }
 }
 
+/// §346（缺口 G12）：**现在是谁的回合**，作为**墙位** —— `-1` 英雄 / `0..5` 敌人槽 /
+/// `-2` 墙外或没人 / `-3` 没有会话。
+///
+/// 与 `rd_env_active_len()` 的区别：那个返回的是**诊断串**（`Exec(...)` 那种），
+/// 给人看的；这个是给渲染层用的**数**（"高亮哪一格"）。两者都留着 —— 诊断串能说出
+/// "卡在哪个节点"，而数说不出；墙位能直接索引，而串不能。
+///
+/// 墙位的编码与 observation / beat 完全一致（`env-abi.md` §10：槽位从不移动）。
+#[no_mangle]
+pub extern "C" fn rd_env_active_slot() -> i32 {
+    // ⚠️ 用 `slot()` 而不是 `ensure_session()`：那个会**懒建**一个会话，于是"没有会话"永远
+    // 到不了，`-3` 就是一个说谎的哨兵。**查询不该创建状态。**
+    let Some(session) = slot().as_ref() else {
+        return -3;
+    };
+    let Some(active) = session.state.active_combatant_id else {
+        return -2;
+    };
+    // `wall_slot_of_ordinal` 要的是**序号**，而 `active_combatant_id` 是 id —— 扫一遍名册。
+    for (ordinal, combatant) in session.state.combatants().iter().enumerate() {
+        if combatant.id == active {
+            return session.wall_slot_of_ordinal(ordinal as u8);
+        }
+    }
+    -2
+}
+
 /// How many times a turn has been cut short so far (`node.endTurn`), or `-1` with no session.
 ///
 /// The page polls this: a value bigger than the last one it saw means "your turn was ended by

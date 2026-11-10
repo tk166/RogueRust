@@ -24239,3 +24239,66 @@ displayName(id, kernelName) =
 
 `rd-wasm 188`（187 + 1）、`rd-run 225`、`rd-core 819`、units **1232**（下限 1231 → 1232）；
 导出 224 → **226**；四条对拍不动；`WEB_SMOKE PASS` / `UI_RENDER PASS` / `BROWSER_TEST PASS`；23/23 闸门。
+
+## §346 四条小缺口：G3 / G6 / G7 / G12（+ G13/G14 正式不做）
+
+`ui-state-model.md` §6 里剩下的四条"做不好看"那一档的缺口，加两个**判定不做**。
+
+| 缺口 | 导出 | 为什么值得加 |
+|---|---|---|
+| **G3** 页面靠遍历遗物找 `singing_bowl` | `rd_run_has_relic(ptr, len)` → `1/0/-1` | 页面有**两处**各写了一遍循环（漏一处不会红）—— 而"哪件遗物决定哪个按钮"在内核里已经有一份 |
+| **G6** 没有事件/遭遇 id | `rd_run_event_id_*`、`rd_run_encounter_id_*` | 3D/美术要按 id 选背景；文本（一行描述）做不到 |
+| **G7** 祝福数量写死 2 | `rd_run_start_offer_count()` | 内容一变就静默少画一个按钮 |
+| **G12** "现在是谁的回合"只有诊断串 | `rd_env_active_slot()` → 墙位 | `Exec(...)` 那种串不是给渲染层索引的 |
+
+### 两处放对位置的决定
+
+1. **遭遇 id 放运行层**（`rd_run_*` 而不是 `rd_env_*`）：`last_encounter` 本来就是运行层字段
+   （§153：下一场避免重复）。战斗期间它就是这一场的遭遇，战斗结束后它仍然保留。放 `rd_env_*`
+   会假装它是战斗状态 —— 而它不是。
+2. **`rd_env_active_len()` 留着**：那是**诊断串**（能说出"卡在哪个节点"），新导出是**墙位**
+   （能直接索引）。两个都留着，因为两件事都要有人能问。
+
+### 页面接线：三个 `data-*` 钩子
+
+`data-event-id`（`#nodePanel`）、`data-encounter-id` 与 `data-active-slot`（`#enemies`）。
+DOM 版**自己不消费**它们（正文与 `next up` 已经画好了），它们是给 3D/美术层读的 ——
+而"写了但没人读"正是本项目最恨的形态之一，所以浏览器判据要断言它们在真实局面里**有值**。
+
+⚠️ 两个坑，都是判据当场抓出来的：
+
+* **`data-encounter-id` 挂在 `renderTopBar()` 里时战斗中恒为空串** —— 那个函数不在战斗重绘路径上。
+  挪进 `render()`（战斗容器的唯一写者）才对。
+* **act 2 那一场是 `rd_env_start_encounter` 直接建的**（不经过运行层）⇒ `last_encounter` 是空的
+  ⇒ 钩子**应当是空串**。第一版断言"必须有值"，红在 `got ""` —— 而那恰恰是正确行为。
+  现在判据把它写成"应当为空"，等于把"这个钩子反映的是**运行层**的遭遇"这件事写进判据。
+
+### `rd_env_active_slot` 的一个哨兵差点说谎
+
+第一版用了 `ensure_session()` —— 那个函数会**懒建**一个会话，于是"没有会话"永远到不了，
+`-3` 就是一个永远不出现的哨兵。**查询不该创建状态**，改用 `slot()`。
+
+### G13 / G14：正式不做（理由写清，而不是留着"以后再说"）
+
+* **G13 手牌 id**：`def_slot` 是**内容行号**，跨版本会变 —— 但 3D 图集要的就是"这一份内容里的
+  第几行"，id 反而是第二把键。手牌已有 `name`/`title`/`text`/`kind` 四份文本，够画一张牌。
+* **G14 费用拆分**：观察向量给的是**最终价**，而"演一次降价动画"需要原价 —— 但那件事今天
+  **没有消费者**（动画走 `diffObservations`，只看最终价变没变）。真要做时再加
+  `rd_env_card_cost_printed(slot)`。
+
+### 判据与负控
+
+| 判据 | 钉住什么 |
+|---|---|
+| `the_run_facts_the_ui_asks_about`（rd-wasm） | 五个导出各测**两侧**（恒 1 / 恒空 / 恒 -1 的实现都会各红一次） |
+| 浏览器 `act 1` 段 | 走运行层开的那一场，`data-encounter-id` / `data-active-slot` **有值** |
+| 浏览器 `act 2` 段 | 直接建的那一场，`data-encounter-id` **是空串**（钩子反映的是运行层的遭遇） |
+
+负控 **5/5**（`native/p346_negative.py`）：`has_relic` 恒 1 / `offer_count` 恒 0 /
+`event_id` 没事件时返回垃圾 / `active_slot` 用回 `ensure_session()` / 遭遇 id 挂回 `renderTopBar`。
+
+### 数字
+
+`rd-wasm 189`（188 + 1）、`rd-run 225`、`rd-core 819`、units **1233**（下限 1232 → 1233）；
+导出 226 → **233**；四条对拍不动；`WEB_SMOKE` / `UI_RENDER` / `MAP_RENDER` / `BROWSER_TEST` PASS；
+23/23 闸门。

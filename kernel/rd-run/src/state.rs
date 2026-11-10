@@ -2832,8 +2832,10 @@ impl RunState {
     /// 与 `holds_relic_effect` 的区别：那个按**效果值**找（"有没有哪件遗物给我 +10 格挡"），
     /// 这个按**名字**找。`RELIC_SECOND_HALVES` 的消费者必需后者 —— 表里的第二半**不是**那件
     /// 遗物的 `relic_effect`，按值永远匹配不上。
+    ///
+    /// §346：改成 `pub` —— ABI 的 `rd_run_has_relic` 要它，而"页面遍历遗物比字符串"是第二份知识。
     #[must_use]
-    fn holds_relic(&self, id: &str) -> bool {
+    pub fn holds_relic(&self, id: &str) -> bool {
         for slot in 0..self.relics_len as usize {
             if self.relics[slot].as_str() == id {
                 return true;

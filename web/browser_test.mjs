@@ -70,6 +70,9 @@ const report = await evaluate(`(async () => {
   const fight = panel().querySelector("[data-panel-action]");
   if (fight) { fight.click(); await sleep(0); }
   out.fight = { inFight: !document.getElementById("handPanel").hidden, energy: cell(8) };
+  // §346：**走运行层**开的那一场，两个钩子必须有值（见下面 782 行附近的断言）。
+  out.fight.encounterId = document.getElementById("enemies").dataset.encounterId || "";
+  out.fight.activeSlot = document.getElementById("enemies").dataset.activeSlot || "";
 
   // (d) Shift+click a card: the detail modal must name it and show its text
   const card = document.querySelector("#hand button.card");
@@ -705,6 +708,10 @@ const report = await evaluate(`(async () => {
       await fightFor(6);
       out.act2.after = enemySlots();
       out.act2.afterIds = enemyIds();
+      // §346：三个 DOM 钩子在**真实局面**里必须有值 —— "写了但没人读"是本项目最恨的形态之一，
+      // 而它们恰好是"DOM 版自己不消费、只给渲染层读"的那种，所以只能在这里钉。
+      out.act2.encounterId = document.getElementById("enemies").dataset.encounterId || "";
+      out.act2.activeSlot = document.getElementById("enemies").dataset.activeSlot || "";
       out.act2.threw = lastError();
     }
   }
@@ -776,6 +783,12 @@ want(
   `an unreachable node said ${JSON.stringify(report.refusal)}`
 );
 want(report.fight.inFight, "the fight did not start");
+// §346：**走运行层**开的那一场，遭遇 id 与活跃墙位都必须有值。
+// 遭遇 id 是运行层的 `last_encounter`（`rd_run_fight_begin` 写它），所以这一场读得到。
+want(/^enc_/.test(report.fight.encounterId || ""),
+  `a run-driven fight must expose data-encounter-id, got ${JSON.stringify(report.fight.encounterId)}`);
+want(/^-?\d+$/.test(report.fight.activeSlot || ""),
+  `a run-driven fight must expose data-active-slot, got ${JSON.stringify(report.fight.activeSlot)}`);
 want(report.card?.open === true, "Shift+click did not open the card detail");
 want((report.card?.body || "").length > 3, "the card detail has no text");
 want(report.card?.closed === true, "the card detail cannot be closed by a click (§151)");
@@ -1342,6 +1355,14 @@ want(summonedIds.filter((id) => id === "bronze_orb").length === 2,
   `act 2: both summoned orbs must carry the id bronze_orb; got ${JSON.stringify(summonedIds)}`);
 want(!summonedIds.some((id) => id === "" || id === null),
   `act 2: a summoned enemy still has no id: ${JSON.stringify(summonedIds)}`);
+// §346：`data-encounter-id` / `data-active-slot` 必须在战斗中**有值**（不是空串、不是 "undefined"）。
+// §346：act 2 的这一场是 `rd_env_start_encounter` **直接建**的（不经过运行层），所以运行层的
+// `last_encounter` 是空的 ⇒ 钩子**应当是空串**。这条断言把"这个钩子反映的是**运行层**的遭遇"
+// 写下来 —— 第一版断言"必须有值"，红在 `got ""`，而那恰恰是正确行为。
+want(act2.encounterId === "",
+  `act 2: a directly-built fight has no run-layer encounter, got ${JSON.stringify(act2.encounterId)}`);
+want(/^-?\d+$/.test(act2.activeSlot || ""),
+  `act 2: data-active-slot must be a wall slot, got ${JSON.stringify(act2.activeSlot)}`);
 want(act3.build === 0, `act 3: the reptomancer fight did not build (${act3.build}) ${act3.error || ""}`);
 want((act3.opening || []).length === 3,
   `act 3: boss + two preset daggers; got ${JSON.stringify(act3.opening)}`);
