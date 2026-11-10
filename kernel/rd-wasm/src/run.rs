@@ -134,6 +134,10 @@ const K_DIG: u8 = 24;
 const K_RECALL: u8 = 25;
 // §279：打开**指定**事件（调试入口，理由同 `K_GRANT_POTION`）。
 const K_BEGIN_EVENT: u8 = 26;
+/// §332：买**无色卡**与买**药水**。与 `K_BUY_CARD`/`K_BUY_RELIC` 分开是因为脚本里
+/// 它们是**不同的动作**（回放时要按同一排找）。
+const K_BUY_COLORLESS: u8 = 27;
+const K_BUY_POTION: u8 = 28;
 
 const fn rec_kind_name(kind: u8) -> &'static str {
     match kind {
@@ -1707,6 +1711,151 @@ pub extern "C" fn rd_run_remove_price() -> i32 {
 }
 
 /// Buy shop card `slot`.
+/// §332：无色货架有几张（wiki：1 Uncommon + 1 Rare）。
+#[no_mangle]
+pub extern "C" fn rd_run_shop_colorless_count() -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    session.state.shop().colorless().len() as i32
+}
+
+/// §332：无色货架第 `slot` 张的 id 长度。
+#[no_mangle]
+pub extern "C" fn rd_run_shop_colorless_id_len(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    match session.state.shop().colorless().get(slot.max(0) as usize) {
+        Some(offer) => offer.id.as_str().len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_shop_colorless_id_len(slot)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_shop_colorless_id_into(slot: i32, ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return 0;
+    };
+    match session.state.shop().colorless().get(slot.max(0) as usize) {
+        Some(offer) => write_out(offer.id.as_str(), ptr),
+        None => 0,
+    }
+}
+
+/// §332：无色货架第 `slot` 张的**挂牌价**（`-1` = 已售）。
+#[no_mangle]
+pub extern "C" fn rd_run_shop_colorless_price(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    session
+        .state
+        .shop()
+        .colorless()
+        .get(slot.max(0) as usize)
+        .map_or(-1, |offer| offer.price)
+}
+
+/// §332：买无色货架第 `slot` 张。
+#[no_mangle]
+pub extern "C" fn rd_run_buy_colorless(slot: i32) -> i32 {
+    if slot < 0 {
+        return -1;
+    }
+    let cards = match full_pool(content(), true) {
+        Ok(cards) => cards,
+        Err(message) => {
+            let Some(session) = run_slot().as_mut() else {
+                return -1;
+            };
+            return fail(session, &message);
+        }
+    };
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_BUY_COLORLESS, slot, -1, "");
+    match session.state.buy_colorless(slot as usize, &cards) {
+        Ok(()) => 0,
+        Err(e) => {
+            let message = describe(&e);
+            fail(session, &message)
+        }
+    }
+}
+
+/// §332：药水货架有几瓶（wiki：3）。
+#[no_mangle]
+pub extern "C" fn rd_run_shop_potion_count() -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    session.state.shop().potions().len() as i32
+}
+
+/// §332：药水货架第 `slot` 瓶的 id 长度。
+#[no_mangle]
+pub extern "C" fn rd_run_shop_potion_id_len(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    match session.state.shop().potions().get(slot.max(0) as usize) {
+        Some(offer) => offer.id.as_str().len() as i32,
+        None => -1,
+    }
+}
+
+/// # Safety
+///
+/// `ptr` must point at `rd_run_shop_potion_id_len(slot)` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rd_run_shop_potion_id_into(slot: i32, ptr: *mut u8) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return 0;
+    };
+    match session.state.shop().potions().get(slot.max(0) as usize) {
+        Some(offer) => write_out(offer.id.as_str(), ptr),
+        None => 0,
+    }
+}
+
+/// §332：药水货架第 `slot` 瓶的挂牌价（`-1` = 已售）。
+#[no_mangle]
+pub extern "C" fn rd_run_shop_potion_price(slot: i32) -> i32 {
+    let Some(session) = run_slot().as_ref() else {
+        return -1;
+    };
+    session
+        .state
+        .shop()
+        .potions()
+        .get(slot.max(0) as usize)
+        .map_or(-1, |offer| offer.price)
+}
+
+/// §332：买药水货架第 `slot` 瓶。
+#[no_mangle]
+pub extern "C" fn rd_run_buy_potion(slot: i32) -> i32 {
+    if slot < 0 {
+        return -1;
+    }
+    let Some(session) = run_slot().as_mut() else {
+        return -1;
+    };
+    session.log(K_BUY_POTION, slot, -1, "");
+    match session.state.buy_potion(slot as usize) {
+        Ok(()) => 0,
+        Err(e) => {
+            let message = describe(&e);
+            fail(session, &message)
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn rd_run_buy_card(slot: i32) -> i32 {
     let Some(session) = run_slot().as_mut() else {

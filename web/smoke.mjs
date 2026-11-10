@@ -91,6 +91,11 @@ const REQUIRED = [
   "rd_run_open_chest", "rd_run_leave", "rd_run_shop_card_count", "rd_run_shop_card_id_len",
   "rd_run_shop_card_id_into", "rd_run_shop_card_price", "rd_run_shop_relic_count",
   "rd_run_shop_relic_id_len", "rd_run_shop_relic_id_into", "rd_run_shop_relic_price",
+  // §332：无色货架与药水货架（两组各 5 个导出）。
+  "rd_run_shop_colorless_count", "rd_run_shop_colorless_id_len",
+  "rd_run_shop_colorless_id_into", "rd_run_shop_colorless_price", "rd_run_buy_colorless",
+  "rd_run_shop_potion_count", "rd_run_shop_potion_id_len",
+  "rd_run_shop_potion_id_into", "rd_run_shop_potion_price", "rd_run_buy_potion",
   "rd_run_remove_price", "rd_run_buy_card", "rd_run_buy_relic", "rd_run_remove_card",
   "rd_run_deck_count", "rd_run_deck_id_len", "rd_run_deck_id_into", "rd_run_deck_title_len",
   "rd_run_deck_title_into", "rd_run_fight_begin", "rd_run_fight_end",

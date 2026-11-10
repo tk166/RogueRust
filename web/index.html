@@ -664,6 +664,10 @@ const deckId = (i) =>
   readText((k) => ex.rd_run_deck_id_len(k), (p, k) => ex.rd_run_deck_id_into(k, p), i);
 const shopCardId = (slot) =>
   readText((k) => ex.rd_run_shop_card_id_len(k), (p, k) => ex.rd_run_shop_card_id_into(k, p), slot);
+const shopColorlessId = (slot) =>
+  readText((k) => ex.rd_run_shop_colorless_id_len(k), (p, k) => ex.rd_run_shop_colorless_id_into(k, p), slot);
+const shopPotionId = (slot) =>
+  readText((k) => ex.rd_run_shop_potion_id_len(k), (p, k) => ex.rd_run_shop_potion_id_into(k, p), slot);
 const shopRelicId = (slot) =>
   readText((k) => ex.rd_run_shop_relic_id_len(k), (p, k) => ex.rd_run_shop_relic_id_into(k, p), slot);
 // The open `?`-room event: one line of text and two choices, all out of the content (`EV`).
@@ -930,6 +934,9 @@ function runSnapshot() {
     bossName: "Slime Boss",
     offers: [],
     shopCards: [],
+    // §332：无色货架与药水货架（与上面两排同一形状）。
+    shopColorless: [],
+    shopPotions: [],
     shopRelics: [],
     rewardCards: [],
     choices: [],
@@ -984,6 +991,21 @@ function runSnapshot() {
           title: "",
           chip: kindChip(runKind(2, slot)),
           price: ex.rd_run_shop_card_price(slot),
+        });
+      }
+      // §332：无色货架与药水货架（与上面两排同一形状）。
+      for (let slot = 0; slot < ex.rd_run_shop_colorless_count(); slot++) {
+        snapshot.shopColorless.push({
+          id: shopColorlessId(slot),
+          title: "",
+          price: ex.rd_run_shop_colorless_price(slot),
+        });
+      }
+      for (let slot = 0; slot < ex.rd_run_shop_potion_count(); slot++) {
+        snapshot.shopPotions.push({
+          id: shopPotionId(slot),
+          title: "",
+          price: ex.rd_run_shop_potion_price(slot),
         });
       }
       for (let slot = 0; slot < ex.rd_run_shop_relic_count(); slot++) {
@@ -1143,6 +1165,9 @@ const PANEL_ACTIONS = {
   open_chest: () => act(() => ex.rd_run_open_chest(), "开箱"),
   buy_card: (a) => act(() => ex.rd_run_buy_card(a.slot), "买卡"),
   buy_relic: (a) => act(() => ex.rd_run_buy_relic(a.slot), "买遗物"),
+  // §332：无色卡与药水两排（与上面两个同一形状）。
+  buy_colorless: (a) => act(() => ex.rd_run_buy_colorless(a.slot), "买无色牌"),
+  buy_potion: (a) => act(() => ex.rd_run_buy_potion(a.slot), "买药水"),
   remove_card: () =>
     showDeckPicker("删卡：选一张移除", (index) => act(() => ex.rd_run_remove_card(index), "删卡")),
   take_card: (a) => act(() => ex.rd_run_take_card(a.slot), "拿牌"),

@@ -35,7 +35,7 @@ use super::RunId;
 use crate::state::{
     BlessingFollowUp, DeckChange, Offer, Pending, Reward, RunMark, RunState, ShopStock,
     MAX_EVENT_OFFER, MAX_EVENT_RELIC_OFFER, MAX_REWARD_CARDS, MAX_RUN_DECK, MAX_RUN_POTIONS,
-    MAX_RUN_RELICS,
+    MAX_RUN_RELICS, MAX_SHOP_COLORLESS, MAX_SHOP_POTIONS,
     MAX_SHOP_CARDS, MAX_SHOP_RELICS,
 };
 use crate::streams::{RunRng, RunStream};
@@ -637,6 +637,17 @@ fn write_payload(state: &RunState, content: i32, payload: &mut [u8]) -> Result<u
         writer.id(offer.id)?;
         writer.int(offer.price)?;
     }
+    // §332：无色货架与药水货架（与上面两排同一形状）。
+    writer.byte(state.shop.colorless_len)?;
+    for offer in &state.shop.colorless {
+        writer.id(offer.id)?;
+        writer.int(offer.price)?;
+    }
+    writer.byte(state.shop.potions_len)?;
+    for offer in &state.shop.potions {
+        writer.id(offer.id)?;
+        writer.int(offer.price)?;
+    }
     writer.byte(state.shop.relics_len)?;
     for offer in &state.shop.relics {
         writer.id(offer.id)?;
@@ -821,6 +832,19 @@ fn read_payload(payload: &[u8], expected_content: i32) -> Result<RunState, Archi
     }; MAX_SHOP_CARDS];
     shop.cards_len = read_offers(&mut reader, &mut shop_cards)?;
     shop.cards = shop_cards;
+    // §332：无色货架与药水货架（顺序必须与写侧**逐字对应**）。
+    let mut shop_colorless = [Offer {
+        id: RunId::EMPTY,
+        price: 0,
+    }; MAX_SHOP_COLORLESS];
+    shop.colorless_len = read_offers(&mut reader, &mut shop_colorless)?;
+    shop.colorless = shop_colorless;
+    let mut shop_potions = [Offer {
+        id: RunId::EMPTY,
+        price: 0,
+    }; MAX_SHOP_POTIONS];
+    shop.potions_len = read_offers(&mut reader, &mut shop_potions)?;
+    shop.potions = shop_potions;
     let mut shop_relics = [Offer {
         id: RunId::EMPTY,
         price: 0,

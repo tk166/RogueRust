@@ -191,6 +191,26 @@ const RD_PANELS = (() => {
         button: { label: "买", action: { kind: "buy_card", slot } },
       });
     }
+    // §332：无色货架与药水货架。价格规则与上面两排相同（买不起就不给按钮）。
+    for (const [slot, card] of (s.shopColorless || []).entries()) {
+      rows.push({
+        label: card.title || card.id,
+        sub: "无色",
+        value: card.price < 0 ? "已售" : `${card.price} 金`,
+        disabled: card.price < 0 || (card.price >= 0 && card.price > s.gold),
+        card: `shop_colorless:${slot}`,
+        button: { label: "买", action: { kind: "buy_colorless", slot } },
+      });
+    }
+    for (const [slot, potion] of (s.shopPotions || []).entries()) {
+      rows.push({
+        label: potion.title || potion.id,
+        sub: "药水",
+        value: potion.price < 0 ? "已售" : `${potion.price} 金`,
+        disabled: potion.price < 0 || (potion.price >= 0 && potion.price > s.gold),
+        button: { label: "买", action: { kind: "buy_potion", slot } },
+      });
+    }
     for (const [slot, relic] of (s.shopRelics || []).entries()) {
       rows.push({
         label: relic.title || relic.id,

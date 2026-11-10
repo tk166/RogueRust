@@ -116,6 +116,19 @@ pub fn write_run_input(writer: &mut TextWriter<'_>, state: &RunState) {
     // （"拿走神像" vs "巨石追来，三选一"），而只有这一段文字能把它俩分开。
     writer.str("event_step=").str(state.event_step()).str("\n");
     // §331：事件掷出的遗物候选。它决定"点哪个按钮会失去哪件遗物"，所以是**会改变以后**的事实。
+    // §332：商店四排（价格也是事实：打折/加价都改"以后会怎样"）。
+    for (label, offers) in [
+        ("shop_cards", state.shop.cards()),
+        ("shop_colorless", state.shop.colorless()),
+        ("shop_potions", state.shop.potions()),
+        ("shop_relics", state.shop.relics()),
+    ] {
+        writer.str(label).str("=");
+        for offer in offers {
+            writer.str(offer.id.as_str()).str(":").u32(offer.price as u32).str(",");
+        }
+        writer.str("\n");
+    }
     writer.str("event_relics=");
     for slot in 0..usize::from(state.event_relic_offer_len) {
         writer.str(state.event_relic_offer_ids[slot].as_str()).str(",");

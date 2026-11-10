@@ -617,6 +617,44 @@ fn add_status(
 pub const MAX_SHOP_CARDS: usize = 5;
 /// Relic slots a merchant shows (`inv:§8.2`: three).
 pub const MAX_SHOP_RELICS: usize = 3;
+/// §332：无色货架**两格**（wiki：一张 Uncommon + 一张 Rare）。
+pub const MAX_SHOP_COLORLESS: usize = 2;
+/// §332：药水货架**三格**。
+pub const MAX_SHOP_POTIONS: usize = 3;
+
+/// §332：无色牌的价目（wiki：*"Colorless cards cost 20% more than normal cards"*）。
+///
+/// 直接写 wiki 的两段而不是"基础价 ×1.2 再取整"：`68..=82` ×1.2 = `81.6..=98.4`，而 wiki 写
+/// `81-99` —— 取整规则（下取上取各一处）会让两个来源对不上，而这两段是**抄来的定值**。
+pub const fn colorless_price_band(rarity: Rarity) -> (i32, i32) {
+    match rarity {
+        Rarity::Rare => (162, 198),
+        // 其余一律 Uncommon 档：无色池只有 Uncommon / Rare 两档，走到这里说明池子被喂了别的。
+        _ => (81, 99),
+    }
+}
+
+/// §332：药水价目（wiki：Common 48-53、Uncommon 71-79、Rare 95-105）。
+pub const fn potion_price_band(rarity: Rarity) -> (i32, i32) {
+    match rarity {
+        Rarity::Rare => (95, 105),
+        Rarity::Uncommon => (71, 79),
+        _ => (48, 53),
+    }
+}
+
+/// §332：遗物价目（wiki：Shop/Common 143-158、Uncommon 238-263、Rare 285-315）。
+///
+/// ⚠️ 这条修的是一个**经济偏差**：原来三格一律 `143 + roll(15)`，于是稀有遗物（285-315）
+/// 和普通遗物一个价 —— 玩家在商店里永远优先买稀有，而那让商店的稀有度权重失去意义。
+pub const fn relic_price_band(rarity: Rarity) -> (i32, i32) {
+    match rarity {
+        Rarity::Rare => (285, 315),
+        Rarity::Uncommon => (238, 263),
+        // `Shop` 与 `Common` 同价（wiki 的两行是同一个区间）。
+        _ => (143, 158),
+    }
+}
 /// What a card costs by rarity (`inv:§8.2`): Common 45–55, Uncommon 68–82, Rare 135–165.
 ///
 /// `Basic` / `Status` / `Curse` are not things a merchant sells; if one reaches the shelf it is
@@ -1769,6 +1807,12 @@ impl Offer {
 pub struct ShopStock {
     cards: [Offer; MAX_SHOP_CARDS],
     cards_len: u8,
+    /// §332：无色货架（1 Uncommon + 1 Rare）。
+    colorless: [Offer; MAX_SHOP_COLORLESS],
+    colorless_len: u8,
+    /// §332：药水货架（3 瓶，65/25/10）。
+    potions: [Offer; MAX_SHOP_POTIONS],
+    potions_len: u8,
     relics: [Offer; MAX_SHOP_RELICS],
     relics_len: u8,
 }
@@ -1780,6 +1824,10 @@ impl ShopStock {
         Self {
             cards: [Offer::EMPTY; MAX_SHOP_CARDS],
             cards_len: 0,
+            colorless: [Offer::EMPTY; MAX_SHOP_COLORLESS],
+            colorless_len: 0,
+            potions: [Offer::EMPTY; MAX_SHOP_POTIONS],
+            potions_len: 0,
             relics: [Offer::EMPTY; MAX_SHOP_RELICS],
             relics_len: 0,
         }
@@ -1789,6 +1837,18 @@ impl ShopStock {
     #[must_use]
     pub fn cards(&self) -> &[Offer] {
         &self.cards[..self.cards_len as usize]
+    }
+
+    /// §332：无色货架的报价。
+    #[must_use]
+    pub fn colorless(&self) -> &[Offer] {
+        &self.colorless[..self.colorless_len as usize]
+    }
+
+    /// §332：药水货架的报价。
+    #[must_use]
+    pub fn potions(&self) -> &[Offer] {
+        &self.potions[..self.potions_len as usize]
     }
 
     /// The relic offers.
@@ -2033,7 +2093,8 @@ pub struct RunState {
     /// What the node under the cursor is waiting for.
     pending: Pending,
     /// The merchant's stock while standing in a shop.
-    shop: ShopStock,
+    /// §332：四排货架。`pub(crate)` 是为了 `hash.rs`（平级模块）能把价格也写进指纹。
+    pub(crate) shop: ShopStock,
     /// The card choice after a won fight.
     reward: Reward,
     /// Has the act been **cleared**? Set when the boss dies (`inv:§7.2`: the boss is the end of the
@@ -4905,6 +4966,20 @@ impl RunState {
         card_pool: &[PoolCard<'_>],
         relic_pool: &[PoolRelic<'_>],
     ) -> Result<crate::map::NodeKind, RunError> {
+        self.begin_node_stocked(card_pool, relic_pool, &[])
+    }
+
+    /// §332：带**药水池**的 （商店要它摆第三排）。
+    ///
+    /// 为什么新开一个而不是改签名： 有 40 个调用点，而其中绝大多数与商店无关。
+    /// 旧签名委托给这一个（空药水池 ⇒ 药水货架空着），于是忘了传池子不会编译不过、
+    /// 但会**看得见**（商店少一排）—— 由  那条判据钉住。
+    pub fn begin_node_stocked(
+        &mut self,
+        card_pool: &[PoolCard<'_>],
+        relic_pool: &[PoolRelic<'_>],
+        potion_pool: &[PoolPotion<'_>],
+    ) -> Result<crate::map::NodeKind, RunError> {
         if self.node < 0 {
             return Err(RunError::WrongPhase);
         }
@@ -4950,7 +5025,7 @@ impl RunState {
             NodeKind::Treasure => Pending::Chest,
             NodeKind::Shop => {
                 // §273：与 `?` 房掷出商人时**同一条路**（摆货架 + `meal_ticket`）。
-                self.enter_shop(card_pool, relic_pool)?;
+                self.enter_shop(card_pool, relic_pool, potion_pool)?;
                 Pending::Shop
             }
             // An elite is a fight like any other: what differs is the pool it draws from and what
@@ -4976,7 +5051,7 @@ impl RunState {
                     UnknownRoom::Shop => {
                         // §273：**同一个** `enter_shop` —— `?` 房变成商店也要触发 `meal_ticket`
                         // （wiki 的 Planisphere 页：*"a ? that turns into a shop triggers both"*）。
-                        self.enter_shop(card_pool, relic_pool)?;
+                        self.enter_shop(card_pool, relic_pool, potion_pool)?;
                         Pending::Shop
                     }
                     UnknownRoom::Monster | UnknownRoom::Event | UnknownRoom::Unresolved => {
@@ -5154,8 +5229,9 @@ impl RunState {
         &mut self,
         card_pool: &[PoolCard<'_>],
         relic_pool: &[PoolRelic<'_>],
+        potion_pool: &[PoolPotion<'_>],
     ) -> Result<(), RunError> {
-        self.stock_shop(card_pool, relic_pool)?;
+        self.stock_shop(card_pool, relic_pool, potion_pool)?;
         // `meal_ticket` —— "Whenever you enter a shop, heal 15 HP"。与 `Eternal Feather`
         // 同一条规矩：**进门就付**，不是"买了东西才付"。
         if let Some(RelicEffect::ShopEntryHeal(amount)) =
@@ -5251,49 +5327,210 @@ impl RunState {
         Ok(())
     }
 
-    fn stock_shop(&mut self, card_pool: &[PoolCard<'_>], relic_pool: &[PoolRelic<'_>]) -> Result<(), RunError> {
+    /// §332：按 wiki 的**四排**铺货。
+    ///
+    /// | 排 | 构成 | 价目 |
+    /// |---|---|---|
+    /// | 有色卡 5 | 2 攻 / 2 技 / 1 能力，**随机一张 5 折** | `card_price_band` |
+    /// | 无色卡 2 | 1 Uncommon + 1 Rare | `colorless_price_band`（贵 20%） |
+    /// | 药水 3 | 稀有度权重 65/25/10 | `potion_price_band` |
+    /// | 遗物 3 | **最右一格锁 `Shop` 档**，其余按 50/33/17 | `relic_price_band` |
+    ///
+    /// ⚠️ 有色卡那排**排除无色牌**：`full_pool` 里两者混在一起，而"无色牌也能出现在有色格里"
+    /// 会让无色货架看起来只是"多两格"，同时把 wiki 的 2/2/1 构成打乱。
+    fn stock_shop(
+        &mut self,
+        card_pool: &[PoolCard<'_>],
+        relic_pool: &[PoolRelic<'_>],
+        potion_pool: &[PoolPotion<'_>],
+    ) -> Result<(), RunError> {
         if card_pool.is_empty() {
             return Err(RunError::EmptyPool("cards"));
         }
         Self::pool_fits(card_pool.len())?;
         self.shop = ShopStock::empty();
-        let mut order = [0u8; MAX_POOL];
-        let n = card_pool.len();
-        for (index, slot) in order.iter_mut().take(n).enumerate() {
-            *slot = index as u8;
+
+        // ── 有色卡：2 攻 / 2 技 / 1 能力 ────────────────────────────────────────
+        // 先把"这一类有几张"数出来，再在**类内**洗牌取前 N 张 —— 分类是构成，洗牌是随机。
+        let wanted = [(CardKind::Attack, 2usize), (CardKind::Skill, 2), (CardKind::Power, 1)];
+        let mut shelved_cards = 0usize;
+        for (kind, count) in wanted {
+            let mut members = [0u8; MAX_POOL];
+            let mut found = 0usize;
+            for (index, card) in card_pool.iter().enumerate() {
+                if card.colorless || card.kind != kind {
+                    continue;
+                }
+                if found == MAX_POOL {
+                    return Err(RunError::EmptyPool("cards"));
+                }
+                members[found] = index as u8;
+                found += 1;
+            }
+            // ⚠️ `shuffle` 洗的是**位置表**（它先把切片写成 `0..n`），所以这里洗 `pos` 而不是
+            // `members` —— 直接洗 `members` 会把它重写成"池子的前 N 张"（§332 踩过）。
+            let mut pos = [0u8; MAX_POOL];
+            for (slot, entry) in pos.iter_mut().take(found).enumerate() {
+                *entry = slot as u8;
+            }
+            self.rng.shuffle(RunStream::Shop, &mut pos[..found]);
+            for slot in 0..count.min(found) {
+                let card = card_pool[members[pos[slot] as usize] as usize];
+                let (low, high) = card_price_band(card.rarity);
+                let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
+                self.shop.cards[shelved_cards] = Offer {
+                    id: RunId::new(card.id).map_err(|_| RunError::BadId)?,
+                    price: self.marked_up(price),
+                };
+                shelved_cards += 1;
+                if shelved_cards == MAX_SHOP_CARDS {
+                    break;
+                }
+            }
+            if shelved_cards == MAX_SHOP_CARDS {
+                break;
+            }
         }
-        self.rng.shuffle(RunStream::Shop, &mut order[..n]);
-        let cards = MAX_SHOP_CARDS.min(n);
-        for slot in 0..cards {
-            let card = card_pool[order[slot] as usize];
-            // `inv:§8.2`: the band follows the card's rarity.
-            let (low, high) = card_price_band(card.rarity);
+        // 分类不足时**补位**：内容里某一类（通常是 Power）不够 2 张、或池子里的牌没有类型标签时，
+        // 从其余的**非无色**牌里补齐。空着整排不是"更忠实"，而是"商店没东西卖"。
+        if shelved_cards < MAX_SHOP_CARDS {
+            let mut rest = [0u8; MAX_POOL];
+            let mut found = 0usize;
+            for (index, card) in card_pool.iter().enumerate() {
+                if card.colorless {
+                    continue;
+                }
+                let already = self.shop.cards[..shelved_cards]
+                    .iter()
+                    .any(|offer| offer.id.as_str() == card.id);
+                if already {
+                    continue;
+                }
+                if found == MAX_POOL {
+                    return Err(RunError::EmptyPool("cards"));
+                }
+                rest[found] = index as u8;
+                found += 1;
+            }
+            let mut pos = [0u8; MAX_POOL];
+            for (slot, entry) in pos.iter_mut().take(found).enumerate() {
+                *entry = slot as u8;
+            }
+            self.rng.shuffle(RunStream::Shop, &mut pos[..found]);
+            for slot in 0..found {
+                if shelved_cards == MAX_SHOP_CARDS {
+                    break;
+                }
+                let card = card_pool[rest[pos[slot] as usize] as usize];
+                let (low, high) = card_price_band(card.rarity);
+                let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
+                self.shop.cards[shelved_cards] = Offer {
+                    id: RunId::new(card.id).map_err(|_| RunError::BadId)?,
+                    price: self.marked_up(price),
+                };
+                shelved_cards += 1;
+            }
+        }
+        // wiki: *"One random card will have a 50% discount applied."* —— 挂牌价直接减半，
+        // 于是"页面显示的数"与"真的扣的数"仍然是同一个数（§270 的规矩）。
+        if shelved_cards > 0 {
+            let slot = self.rng.roll(RunStream::Shop, shelved_cards as u32)? as usize;
+            self.shop.cards[slot].price = self.shop.cards[slot].price / 2;
+        }
+        self.shop.cards_len = shelved_cards as u8;
+
+        // ── 无色卡：1 Uncommon + 1 Rare ─────────────────────────────────────────
+        let mut colorless = 0usize;
+        for rarity in [Rarity::Uncommon, Rarity::Rare] {
+            let mut members = [0u8; MAX_POOL];
+            let mut found = 0usize;
+            for (index, card) in card_pool.iter().enumerate() {
+                if !card.colorless || card.rarity != rarity {
+                    continue;
+                }
+                if found == MAX_POOL {
+                    return Err(RunError::EmptyPool("cards"));
+                }
+                members[found] = index as u8;
+                found += 1;
+            }
+            if found == 0 {
+                // 内容里没有这一档无色牌 ⇒ 这一格空着（不是错误：无色池是内容的事）。
+                continue;
+            }
+            let pick = self.rng.roll(RunStream::Shop, found as u32)? as usize;
+            let card = card_pool[members[pick] as usize];
+            let (low, high) = colorless_price_band(card.rarity);
             let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
-            self.shop.cards[slot] = Offer {
+            self.shop.colorless[colorless] = Offer {
                 id: RunId::new(card.id).map_err(|_| RunError::BadId)?,
-                // §159 `A16`: "everything costs 10% more". Applied **at stock time**, so the price
-                // the page shows and the price the purchase charges are the same number -- a markup
-                // applied at purchase time would need a second rule and the two would drift.
                 price: self.marked_up(price),
             };
+            colorless += 1;
         }
-        self.shop.cards_len = cards as u8;
+        self.shop.colorless_len = colorless as u8;
 
-        // §145/§156: the merchant refuses to sell what you already wear, and draws by rarity weight
-        // (both via `pick_relic`, the one function the chest and the elite reward share).
-        let mut shelved: [RunId; MAX_SHOP_RELICS] = [RunId::EMPTY; MAX_SHOP_RELICS];
-        for slot in 0..MAX_SHOP_RELICS {
-            // §292：商店还要卖 **Shop 稀有度** 的那批（`cauldron` / `dollys_mirror` / …）。
-            let picked = self.pick_shop_relic_avoiding(
-                RunStream::Shop,
-                relic_pool,
-                &shelved[..slot],
-            )?;
+        // ── 药水：3 瓶，稀有度权重 65/25/10 ──────────────────────────────────────
+        // `pick_potion` 已经按权重掷档位（`POTION_RARITY_WEIGHTS`），这里只补价目。
+        // 三瓶**互不相同**：wiki 没有明说，但同一瓶摆三次是明显的重复（而且玩家会以为看错了）。
+        let mut shelved_potions: [RunId; MAX_SHOP_POTIONS] = [RunId::EMPTY; MAX_SHOP_POTIONS];
+        for slot in 0..MAX_SHOP_POTIONS {
+            if potion_pool.is_empty() {
+                break;
+            }
+            let picked = self.pick_potion_avoiding(potion_pool, &shelved_potions[..slot])?;
             if picked.as_str().is_empty() {
                 break;
             }
-            // Common 143–157.
-            let price = 143 + self.rng.roll(RunStream::Shop, 15)? as i32;
+            let rarity = potion_pool
+                .iter()
+                .find(|entry| entry.id == picked.as_str())
+                .map_or(Rarity::Common, |entry| entry.rarity);
+            let (low, high) = potion_price_band(rarity);
+            let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
+            self.shop.potions[slot] = Offer {
+                id: picked,
+                price: self.marked_up(price),
+            };
+            shelved_potions[slot] = picked;
+            self.shop.potions_len = (slot + 1) as u8;
+        }
+
+        // ── 遗物：3 件，最右一格锁 `Shop` 档 ────────────────────────────────────
+        // wiki: *"The rightmost slot will always be a Shop Relic."*
+        let mut shelved: [RunId; MAX_SHOP_RELICS] = [RunId::EMPTY; MAX_SHOP_RELICS];
+        for slot in 0..MAX_SHOP_RELICS {
+            let last = slot + 1 == MAX_SHOP_RELICS;
+            let picked = if last {
+                // 最右：只在 `Shop` 档里挑；挑不到（内容没有 Shop 遗物了）就退回按权重。
+                let mut found = false;
+                let forced = self.pick_shop_relic_of_rarity(
+                    RunStream::Shop,
+                    relic_pool,
+                    &shelved[..slot],
+                    Rarity::Shop,
+                )?;
+                if !forced.as_str().is_empty() {
+                    found = true;
+                }
+                if found {
+                    forced
+                } else {
+                    self.pick_shop_relic_no_shop(RunStream::Shop, relic_pool, &shelved[..slot])?
+                }
+            } else {
+                // §332：前三格**排除** `Shop` 档（wiki：只有最右那一格能拿到 Shop 遗物）。
+                self.pick_shop_relic_no_shop(RunStream::Shop, relic_pool, &shelved[..slot])?
+            };
+            if picked.as_str().is_empty() {
+                break;
+            }
+            let rarity = relic_pool
+                .iter()
+                .find(|entry| entry.id == picked.as_str())
+                .map_or(Rarity::Common, |entry| entry.rarity);
+            let (low, high) = relic_price_band(rarity);
+            let price = low + self.rng.roll(RunStream::Shop, (high - low + 1) as u32)? as i32;
             self.shop.relics[slot] = Offer {
                 id: picked,
                 price: self.marked_up(price),
@@ -5302,6 +5539,47 @@ impl RunState {
             self.shop.relics_len = (slot + 1) as u8;
         }
         Ok(())
+    }
+
+    /// §332：在**指定稀有度**里挑一件遗物（`Shop` 货架最右那一格用）。
+    ///
+    /// 与 `pick_shop_relic_avoiding` 分开：那一个是"按权重掷档位"，这个是"档位已经定了"。
+    /// 挑不到 ⇒ 空 id（调用方退回按权重），**不报错** —— 内容里没有 Shop 遗物不是运行层的错。
+    fn pick_shop_relic_of_rarity(
+        &mut self,
+        stream: RunStream,
+        pool: &[PoolRelic<'_>],
+        reserved: &[RunId],
+        rarity: Rarity,
+    ) -> Result<RunId, RunError> {
+        self.pick_relic_inner_with(stream, pool, reserved, Some(rarity), true)
+    }
+
+    /// §332：与 [`Self::pick_potion`] 相同，但跳过已经在货架上的那几瓶。
+    fn pick_potion_avoiding(
+        &mut self,
+        pool: &[PoolPotion<'_>],
+        reserved: &[RunId],
+    ) -> Result<RunId, RunError> {
+        let mut filtered = [PoolPotion {
+            id: "",
+            rarity: Rarity::Common,
+        }; MAX_POOL];
+        let mut count = 0usize;
+        for entry in pool {
+            if reserved.iter().any(|id| id.as_str() == entry.id) {
+                continue;
+            }
+            if count == MAX_POOL {
+                return Err(RunError::EmptyPool("potions"));
+            }
+            filtered[count] = *entry;
+            count += 1;
+        }
+        if count == 0 {
+            return Ok(RunId::EMPTY);
+        }
+        self.pick_potion(RunStream::Shop, &filtered[..count])
     }
 
     /// 从 `pool` 里**不重复**地抽 `count` 张，把 id 写进 `out`，返回实际抽出几张。
@@ -5478,6 +5756,19 @@ impl RunState {
         self.pick_relic_inner_with(stream, pool, reserved, None, true)
     }
 
+    /// §332：商店的**前三格**（最右之外）—— **不许出 `Shop` 档**。
+    ///
+    /// wiki：*"The rightmost slot will always be a Shop Relic. **This is the only way to access
+    /// Shop relics.**"* —— 所以 `Shop` 档只走最右那一格（`pick_shop_relic_of_rarity`）。
+    fn pick_shop_relic_no_shop(
+        &mut self,
+        stream: RunStream,
+        pool: &[PoolRelic<'_>],
+        reserved: &[RunId],
+    ) -> Result<RunId, RunError> {
+        self.pick_relic_inner_with(stream, pool, reserved, None, false)
+    }
+
     /// [`Self::pick_relic`] 的实体：`forced` = 锁定档位（`None` = 按权重掷）。
     fn pick_relic_inner(
         &mut self,
@@ -5641,6 +5932,69 @@ impl RunState {
         if self.holds_relic("the_courier") {
             self.restock_relic_slot(slot, relic_pool)?;
         }
+        Ok(())
+    }
+
+    /// §332：买无色货架上的第 `slot` 张（与 [`Self::buy_card`] 同一形状，池子是**无色**那一半）。
+    pub fn buy_colorless(
+        &mut self,
+        slot: usize,
+        card_pool: &[PoolCard<'_>],
+    ) -> Result<(), RunError> {
+        if self.pending != Pending::Shop {
+            return Err(RunError::WrongPhase);
+        }
+        let offer = *self
+            .shop
+            .colorless()
+            .get(slot)
+            .ok_or(RunError::EmptyOffer(slot as u8))?;
+        if offer.price < 0 {
+            return Err(RunError::EmptyOffer(slot as u8));
+        }
+        if self.gold < offer.price {
+            return Err(RunError::NotEnoughGold {
+                price: offer.price,
+                gold: self.gold,
+            });
+        }
+        let Some(row) = card_pool.iter().find(|card| card.id == offer.id.as_str()).copied()
+        else {
+            return Err(RunError::NoSuchCard);
+        };
+        self.push_card(row)?;
+        self.adjust_gold(-self.shop_price(offer.price));
+        self.maw_bank_broken = true;
+        self.shop.colorless[slot].price = -1;
+        Ok(())
+    }
+
+    /// §332：买药水货架上的第 `slot` 瓶。
+    ///
+    /// 与 `buy_relic` 同一条**提交点**纪律：`push_potion`（会失败的那一半 —— 腰带满了）在
+    /// `adjust_gold` **之前**。反过来的话，"腰带满 + 钱够"会变成"扣了钱没拿到药水"。
+    pub fn buy_potion(&mut self, slot: usize) -> Result<(), RunError> {
+        if self.pending != Pending::Shop {
+            return Err(RunError::WrongPhase);
+        }
+        let offer = *self
+            .shop
+            .potions()
+            .get(slot)
+            .ok_or(RunError::EmptyOffer(slot as u8))?;
+        if offer.price < 0 {
+            return Err(RunError::EmptyOffer(slot as u8));
+        }
+        if self.gold < offer.price {
+            return Err(RunError::NotEnoughGold {
+                price: offer.price,
+                gold: self.gold,
+            });
+        }
+        self.push_potion(offer.id.as_str())?;
+        self.adjust_gold(-self.shop_price(offer.price));
+        self.maw_bank_broken = true;
+        self.shop.potions[slot].price = -1;
         Ok(())
     }
 
@@ -7920,7 +8274,7 @@ mod tests {
         // The merchant: same filter, and the shelves only hold un-held relics.
         let mut run = ironclad();
         run.push_relic("anchor", &TYPED_CARDS).expect("anchor");
-        run.stock_shop(&basic_pool(), &pool).expect("a shop");
+        run.stock_shop(&basic_pool(), &pool, &[]).expect("a shop");
         for offer in run.shop().relics() {
             assert_ne!(
                 offer.id.as_str(),
@@ -8710,7 +9064,7 @@ mod tests {
         run.adjust_health(-30);
         let before = run.health();
         run.pending = Pending::Shop;
-        run.stock_shop(&TYPED_CARDS, &RELICS).expect("stock");
+        run.stock_shop(&TYPED_CARDS, &RELICS, &POTIONS).expect("stock");
         // `stock_shop` 本身**不**回血（回血在 `enter_shop` 里）—— 这条断言把"两个函数的分工"
         // 钉住：想验 `enter_shop` 就得走 `begin_node`，而不是直接调它。
         assert_eq!(run.health(), before, "stocking alone does not pay the entry heal");
@@ -8733,7 +9087,7 @@ mod tests {
         run.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
         run.adjust_gold(2000);
         run.pending = Pending::Shop;
-        run.enter_shop(&SHOP_CARDS, &RELICS).expect("enter the shop");
+        run.enter_shop(&SHOP_CARDS, &RELICS, &POTIONS).expect("enter the shop");
         let live = |run: &RunState| {
             run.shop()
                 .cards()
@@ -8769,7 +9123,7 @@ mod tests {
         let mut plain = ironclad();
         plain.adjust_gold(2000);
         plain.pending = Pending::Shop;
-        plain.enter_shop(&SHOP_CARDS, &RELICS).expect("enter the shop");
+        plain.enter_shop(&SHOP_CARDS, &RELICS, &POTIONS).expect("enter the shop");
         buy_card_at(&mut plain, 0).expect("buy the first card");
         assert_eq!(
             plain.shop().cards()[0].price,
@@ -8782,7 +9136,7 @@ mod tests {
         run.push_relic("the_courier", &TYPED_CARDS).expect("the_courier");
         run.adjust_gold(2000);
         run.pending = Pending::Shop;
-        run.enter_shop(&TYPED_CARDS, &RELICS).expect("enter the shop");
+        run.enter_shop(&TYPED_CARDS, &RELICS, &POTIONS).expect("enter the shop");
         if run.shop().relics().first().is_some_and(|o| o.price >= 0) {
             buy_relic_at(&mut run, 0).expect("buy the relic");
             let slot = run.shop().relics()[0];
@@ -9353,7 +9707,7 @@ mod tests {
         run.push_relic("maw_bank", &TYPED_CARDS).expect("maw_bank");
         run.adjust_gold(2000);
         run.pending = Pending::Shop;
-        run.stock_shop(&TYPED_CARDS, &RELICS).expect("stock the shop");
+        run.stock_shop(&TYPED_CARDS, &RELICS, &POTIONS).expect("stock the shop");
         assert!(!run.maw_bank_broken(), "nothing spent yet");
 
         let offer = run.shop().cards()[0];
@@ -9937,6 +10291,189 @@ mod tests {
         assert_eq!(run.open_chest(&TYPED_CARDS, &RELICS), Err(RunError::WrongPhase));
     }
 
+    /// §332：商店的四排**构成**与**价目**（wiki `The_Merchant`）。
+    ///
+    /// 一份按 wiki 构造的小池子：2 攻 / 2 技 / 1 能力的有色牌、1 张 Uncommon + 1 张 Rare 的无色牌、
+    /// 三档药水、四档遗物。断言：
+    ///
+    /// * 有色 5 张，且**恰好** 2 攻 / 2 技 / 1 能力（分类是构成，不是随机）；
+    /// * 无色 2 张 = 1 Uncommon + 1 Rare，价目落在 `colorless_price_band`（贵 20%）；
+    /// * 药水 3 瓶，价目落在 `potion_price_band`，且**互不相同**；
+    /// * 遗物 3 件，**最右那件是 `Shop` 档**，价目按稀有度（原来一律 143-157 是错的）。
+    #[test]
+    fn a_shop_stocks_all_four_shelves_with_the_wikis_composition() {
+        const POOL: [PoolCard<'static>; 7] = [
+            PoolCard { id: "strike", rarity: Rarity::Common, kind: CardKind::Attack,
+                       upgraded: None, colorless: false },
+            PoolCard { id: "anger", rarity: Rarity::Common, kind: CardKind::Attack,
+                       upgraded: None, colorless: false },
+            PoolCard { id: "defend", rarity: Rarity::Common, kind: CardKind::Skill,
+                       upgraded: None, colorless: false },
+            PoolCard { id: "flex", rarity: Rarity::Common, kind: CardKind::Skill,
+                       upgraded: None, colorless: false },
+            PoolCard { id: "demon_form", rarity: Rarity::Rare, kind: CardKind::Power,
+                       upgraded: None, colorless: false },
+            PoolCard { id: "bandage_up", rarity: Rarity::Uncommon, kind: CardKind::Skill,
+                       upgraded: None, colorless: true },
+            PoolCard { id: "apotheosis", rarity: Rarity::Rare, kind: CardKind::Skill,
+                       upgraded: None, colorless: true },
+        ];
+        const RELIC_POOL: [PoolRelic<'static>; 4] = [
+            PoolRelic { id: "anchor", rarity: Rarity::Common },
+            PoolRelic { id: "pen_nib", rarity: Rarity::Uncommon },
+            PoolRelic { id: "runic_pyramid", rarity: Rarity::Rare },
+            PoolRelic { id: "cauldron", rarity: Rarity::Shop },
+        ];
+        const POTION_POOL: [PoolPotion<'static>; 3] = [
+            PoolPotion { id: "fire_potion", rarity: Rarity::Common },
+            PoolPotion { id: "block_potion", rarity: Rarity::Common },
+            PoolPotion { id: "energy_potion", rarity: Rarity::Uncommon },
+        ];
+        let mut run = RunState::new(5, 80, 0, &DECK).expect("a run");
+        assert!(walk_to(&mut run, NodeKind::Shop), "the map has no merchant");
+        assert_eq!(
+            run.begin_node_stocked(&POOL, &RELIC_POOL, &POTION_POOL),
+            Ok(NodeKind::Shop)
+        );
+
+        // §332：**价目表的独立副本**。上面那些"落在区间里"的断言用的是同一个函数，
+        // 所以它们只能证明"货架与函数一致"，证明不了"函数与 wiki 一致" —— 这两句才是。
+        assert_eq!(colorless_price_band(Rarity::Uncommon), (81, 99), "wiki: 81-99");
+        assert_eq!(colorless_price_band(Rarity::Rare), (162, 198), "wiki: 162-198");
+        assert_eq!(potion_price_band(Rarity::Common), (48, 53), "wiki: 48-53");
+        assert_eq!(potion_price_band(Rarity::Uncommon), (71, 79), "wiki: 71-79");
+        assert_eq!(potion_price_band(Rarity::Rare), (95, 105), "wiki: 95-105");
+        assert_eq!(relic_price_band(Rarity::Common), (143, 158), "wiki: 143-158");
+        assert_eq!(relic_price_band(Rarity::Shop), (143, 158), "wiki: Shop = 143-158");
+        assert_eq!(relic_price_band(Rarity::Uncommon), (238, 263), "wiki: 238-263");
+        assert_eq!(relic_price_band(Rarity::Rare), (285, 315), "wiki: 285-315");
+
+        // ── 有色卡：5 张，2 攻 / 2 技 / 1 能力 ──────────────────────────────────
+        let cards = run.shop().cards();
+        assert_eq!(cards.len(), MAX_SHOP_CARDS);
+        let mut attacks = 0usize;
+        let mut skills = 0usize;
+        let mut powers = 0usize;
+        for offer in cards {
+            let kind = POOL
+                .iter()
+                .find(|card| card.id == offer.id.as_str())
+                .map(|card| card.kind)
+                .expect("the offer came from the pool");
+            assert!(
+                !POOL
+                    .iter()
+                    .find(|card| card.id == offer.id.as_str())
+                    .expect("from the pool")
+                    .colorless,
+                "a colorless card must not sit on the colored shelf"
+            );
+            match kind {
+                CardKind::Attack => attacks += 1,
+                CardKind::Skill => skills += 1,
+                CardKind::Power => powers += 1,
+                CardKind::Other | CardKind::Status | CardKind::Curse => {
+                    panic!("only attack/skill/power belong on the colored shelf")
+                }
+            }
+        }
+        assert_eq!((attacks, skills, powers), (2, 2, 1), "wiki: 2 attacks, 2 skills, 1 power");
+
+        // ── 无色货架：1 Uncommon + 1 Rare，价目贵 20% ──────────────────────────
+        let colorless = run.shop().colorless();
+        assert_eq!(colorless.len(), MAX_SHOP_COLORLESS);
+        let mut rarities: Vec<Rarity> = colorless
+            .iter()
+            .map(|offer| {
+                POOL.iter()
+                    .find(|card| card.id == offer.id.as_str())
+                    .expect("from the pool")
+                    .rarity
+            })
+            .collect();
+        rarities.sort_by_key(|rarity| *rarity as u8);
+        assert_eq!(rarities, vec![Rarity::Uncommon, Rarity::Rare], "one of each");
+        for offer in colorless {
+            let rarity = POOL
+                .iter()
+                .find(|card| card.id == offer.id.as_str())
+                .expect("from the pool")
+                .rarity;
+            let (low, high) = colorless_price_band(rarity);
+            assert!(
+                (low..=high).contains(&offer.price),
+                "colorless {} costs {} (band {low}-{high})",
+                offer.id.as_str(),
+                offer.price
+            );
+        }
+
+        // ── 药水货架：3 瓶，价目按档，互不相同 ──────────────────────────────────
+        let potions = run.shop().potions();
+        assert_eq!(potions.len(), MAX_SHOP_POTIONS);
+        let mut seen: Vec<&str> = Vec::new();
+        for offer in potions {
+            assert!(!seen.contains(&offer.id.as_str()), "no duplicate potion");
+            seen.push(offer.id.as_str());
+            let rarity = POTION_POOL
+                .iter()
+                .find(|entry| entry.id == offer.id.as_str())
+                .map_or(Rarity::Common, |entry| entry.rarity);
+            let (low, high) = potion_price_band(rarity);
+            assert!(
+                (low..=high).contains(&offer.price),
+                "potion {} costs {} (band {low}-{high})",
+                offer.id.as_str(),
+                offer.price
+            );
+        }
+
+        // ── 遗物货架：3 件，**最右那件是 `Shop` 档**，价目按稀有度 ────────────────
+        let relics = run.shop().relics();
+        assert_eq!(relics.len(), MAX_SHOP_RELICS);
+        let last = relics.last().expect("three relics");
+        let last_rarity = RELIC_POOL
+            .iter()
+            .find(|entry| entry.id == last.id.as_str())
+            .expect("from the pool")
+            .rarity;
+        assert_eq!(
+            last_rarity,
+            Rarity::Shop,
+            "wiki: the rightmost slot is always a Shop relic (got {:?})",
+            last.id.as_str()
+        );
+        // §332：**只有**最右那一格能出 `Shop` 档（wiki: "This is the only way to access Shop
+        // relics"）。少了这一句，"三格都允许 Shop"照样绿 —— 而那样一来"最右必为 Shop"就没意义了。
+        for offer in &relics[..relics.len() - 1] {
+            let rarity = RELIC_POOL
+                .iter()
+                .find(|entry| entry.id == offer.id.as_str())
+                .expect("from the pool")
+                .rarity;
+            assert_ne!(
+                rarity,
+                Rarity::Shop,
+                "only the rightmost slot may hold a Shop relic (got {:?})",
+                offer.id.as_str()
+            );
+        }
+        for offer in relics {
+            let rarity = RELIC_POOL
+                .iter()
+                .find(|entry| entry.id == offer.id.as_str())
+                .expect("from the pool")
+                .rarity;
+            let (low, high) = relic_price_band(rarity);
+            assert!(
+                (low..=high).contains(&offer.price),
+                "relic {} ({rarity:?}) costs {} (band {low}-{high})",
+                offer.id.as_str(),
+                offer.price
+            );
+        }
+    }
+
     #[test]
     fn a_shop_stocks_five_cards_and_three_relics_with_prices_in_range() {
         let mut run = ironclad();
@@ -9946,20 +10483,38 @@ mod tests {
         assert_eq!(run.pending(), Pending::Shop);
         assert_eq!(run.shop().cards().len(), MAX_SHOP_CARDS);
         assert_eq!(run.shop().relics().len(), MAX_SHOP_RELICS.min(RELICS.len()));
+        // §332：wiki 的 *"One random card will have a 50% discount applied"* —— 于是**恰好一张**
+        // 落在半价带、其余落在原价带。只测"都在原价带"会让"没有打折"也绿（§332 之前就是那样）。
+        let (low, high) = card_price_band(Rarity::Common);
+        let mut discounted = 0usize;
         for offer in run.shop().cards() {
-            // All five are Commons, so they sit in the Common band (`inv:§8.2`) -- no more
-            // `[推断]`: the band now comes from the card's rarity.
-            let (low, high) = card_price_band(Rarity::Common);
+            let full = (low..=high).contains(&offer.price);
+            let half = (low / 2..=high / 2).contains(&offer.price);
             assert!(
-                (low..=high).contains(&offer.price),
-                "card {} costs {}",
+                full || half,
+                "card {} costs {} (neither the {low}-{high} band nor its half)",
                 offer.id.as_str(),
                 offer.price
             );
+            if half {
+                discounted += 1;
+            }
             assert!(common_pool().iter().any(|card| card.id == offer.id.as_str()));
         }
+        assert_eq!(discounted, 1, "exactly one card is on sale");
         for offer in run.shop().relics() {
-            assert!((143..=157).contains(&offer.price), "relic price {}", offer.price);
+            // §332：遗物价目按**稀有度**（`relic_price_band`），不再一律 143-157。
+            let rarity = RELICS
+                .iter()
+                .find(|entry| entry.id == offer.id.as_str())
+                .map_or(Rarity::Common, |entry| entry.rarity);
+            let (low, high) = relic_price_band(rarity);
+            assert!(
+                (low..=high).contains(&offer.price),
+                "relic {} costs {} (band {low}-{high})",
+                offer.id.as_str(),
+                offer.price
+            );
         }
     }
 
@@ -11197,6 +11752,8 @@ mod tests {
         assert!(walk_to(&mut run, NodeKind::Shop), "the map has no merchant");
         run.begin_node(&mixed_pool(), &RELICS).expect("a shop");
         assert_eq!(run.shop().cards().len(), MAX_SHOP_CARDS.min(mixed_pool().len()));
+        // §332：五张里**恰好一张** 5 折（wiki），所以那一张落在半价带。
+        let mut discounted = 0usize;
         for offer in run.shop().cards() {
             let rarity = mixed_pool()
                 .iter()
@@ -11204,13 +11761,19 @@ mod tests {
                 .map(|card| card.rarity)
                 .expect("the offer came from the pool");
             let (low, high) = card_price_band(rarity);
+            let full = offer.price >= low && offer.price <= high;
+            let half = offer.price >= low / 2 && offer.price <= high / 2;
             assert!(
-                offer.price >= low && offer.price <= high,
-                "{} ({rarity:?}) costs {}, outside {low}..={high}",
+                full || half,
+                "{} ({rarity:?}) costs {}, outside {low}..={high} (or its half)",
                 offer.id.as_str(),
                 offer.price
             );
+            if half {
+                discounted += 1;
+            }
         }
+        assert_eq!(discounted, 1, "exactly one card is on sale");
     }
 
     /// Smith and removal take an **index**, and the UI now passes the one the player clicked. The
